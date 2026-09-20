@@ -70,19 +70,19 @@ no boot.
 
 | Variant | gnome | kde | cosmic | niri | xfce |
 |---|:--:|:--:|:--:|:--:|:--:|
-| **albacore** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35429236550#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35429236550#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35345401504#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35345401504#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35429236550#artifacts) |
-| **bonito** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35359692288#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35359692288#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35345401504#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35345401504#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35359692288#artifacts) |
-| **bonito-rawhide** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35380714788#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35380714788#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35345401504#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35345401504#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35380714788#artifacts) |
-| **flounder** | — | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35405361282#artifacts) | — | — | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35405361282#artifacts) |
+| **albacore** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35497842705#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35497842705#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35442182531#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35442182531#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35497842705#artifacts) |
+| **bonito** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35448763740#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35448763740#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35442182531#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35442182531#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35448763740#artifacts) |
+| **bonito-rawhide** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35460078209#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35460078209#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35442182531#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35442182531#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35460078209#artifacts) |
+| **flounder** | — | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35475484450#artifacts) | — | — | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35475484450#artifacts) |
 | **flounder-sid** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35170584390#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35294709107#artifacts) | — | — | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35294709107#artifacts) |
-| **grouper** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35387082460#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35387082460#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35345401504#artifacts) | — | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35387082460#artifacts) |
-| **guppy** | — | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35339250074#artifacts) | — | — | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35339250074#artifacts) |
-| **hummingbird** | ⬜ | — | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35345401504#artifacts) | — | — |
-| **marlin** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35372378906#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35372378906#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35345401504#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35345401504#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35372378906#artifacts) |
-| **sailfin** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35398219331#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35398219331#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35345401504#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35345401504#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35398219331#artifacts) |
-| **skipjack** | ⬜ | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35351369196#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35345401504#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35345401504#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35351369196#artifacts) |
-| **wahoo** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/34690922548#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/34690922548#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35345401504#artifacts) | — | — |
-| **yellowfin** | ❌ | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35421937774#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35345401504#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35345401504#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35421937774#artifacts) |
+| **grouper** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35464015822#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35464015822#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35442182531#artifacts) | — | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35464015822#artifacts) |
+| **guppy** | — | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35439153040#artifacts) | — | — | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35439153040#artifacts) |
+| **hummingbird** | ⬜ | — | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35442182531#artifacts) | — | — |
+| **marlin** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35455277833#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35455277833#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35442182531#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35442182531#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35455277833#artifacts) |
+| **sailfin** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35470547567#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35470547567#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35442182531#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35442182531#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35470547567#artifacts) |
+| **skipjack** | ⬜ | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35445052910#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35442182531#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35442182531#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35445052910#artifacts) |
+| **wahoo** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/34690922548#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/34690922548#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35442182531#artifacts) | — | — |
+| **yellowfin** | ❌ | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35490390405#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35442182531#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35442182531#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35490390405#artifacts) |
 
 Cells outside the desktop columns (base, hwe, nvidia and friends) are in the count above but not the table; only `builds` applies to them today.
 
@@ -185,7 +185,7 @@ The sweep pulls the **published** image and runs the contract script against it 
 
 The most recent sweep left 1 cell(s) outside the counts above. A cell lands there when it has no published image, when the registry or the runner fails, or when its job produces no result. That sweep's own `desktop-contract-baseline` artifact names them.
 
-Newest result 2026-09-18.
+Newest result 2026-09-19.
 
 ## Bootc Lifecycle
 
@@ -245,7 +245,7 @@ The run that last asserted each verdict above. A re-run of a cell moves a row he
 
 | Date | Run | Cells |
 |---|---|---|
-| 2026-09-18 | [35345401504](https://github.com/tuna-os/tunaOS/actions/runs/35345401504) | 50 |
+| 2026-09-19 | [35442182531](https://github.com/tuna-os/tunaOS/actions/runs/35442182531) | 50 |
 | 2026-09-17 | [35206509107](https://github.com/tuna-os/tunaOS/actions/runs/35206509107) | 111 |
 | 2026-09-10 | [34487443208](https://github.com/tuna-os/tunaOS/actions/runs/34487443208) | 5 |
 | 2026-09-10 | [34483972155](https://github.com/tuna-os/tunaOS/actions/runs/34483972155) | 1 |
