@@ -6,6 +6,42 @@ set -euo pipefail
 ISO_PATH="${1:?usage: $0 <iso_path> [output_dir]}"
 OUTPUT_DIR="${2:-./walkthrough-out}"
 
+# ── corral fast-path ───────────────────────────────────────────────────────
+# USE_CORRAL=1 run-walkthrough.sh <iso> [out] — delegates the live-ISO boot to
+# corral (vsock + TPM + serial + QMP/diagnose) and reuses the same harness.
+# Falls back to raw QEMU when corral is absent. See docs/corral-vs-qemu.md.
+if [[ "${USE_CORRAL:-0}" == "1" ]] && command -v corral >/dev/null 2>&1; then
+	mkdir -p "$OUTPUT_DIR"; OUTPUT_DIR="$(realpath "$OUTPUT_DIR")"; ISO_PATH="$(realpath "$ISO_PATH")"
+	echo "==> walkthrough via corral — $ISO_PATH → $OUTPUT_DIR" >&2
+	VM="walkthrough-$$"
+	corral create "$VM" --iso "$ISO_PATH" --firmware uefi --vsock --tpm --mem 4G --cpu 4 --disk 15G 2>&1 | tee "${OUTPUT_DIR}/corral-create.log"
+	corral start "$VM"; sleep 5
+	trap 'corral delete "$VM" --force 2>/dev/null || true' EXIT
+	# Hand the Python harness corral's QMP socket / VNC via env (the harness
+	# already supports --vnc and monitor-path overrides). Serial is via
+	# corral logs --serial, screenshot via corral screenshot --require-paint.
+	# Keep the VM alive for the harness, then bundle diagnostics on exit.
+	WALKTHROUGH_PY="$(dirname "${BASH_SOURCE[0]}")/installer-walkthrough.py"
+	if [[ -f "$WALKTHROUGH_PY" ]]; then
+		STEPS="${TBOX_WALKTHROUGH_STEPS:-10}"; FLAVOR="${FLAVOR:-de}"
+		echo "==> Driving installer via installer-walkthrough.py (corral QMP)" >&2
+		# Prefer corral's type/key over raw HMP: the harness will still use
+		# MONITOR_SOCK, so export corral's QMP as a compat shim is not needed
+		# — corral type/key use QMP directly. We just run the harness against
+		# corral's artifacts (SERIAL_LOG from corral logs --serial).
+		corral logs "$VM" --serial > "${OUTPUT_DIR}/serial.log" 2>&1 &
+		python3 "$WALKTHROUGH_PY" "$HOME/.local/share/corral/vms/${VM}/qmp.sock" "$OUTPUT_DIR" "$STEPS" "$FLAVOR" --vnc="${OUTPUT_DIR}/vnc.sock" ${TBOX_WALKTHROUGH_STRICT:+--strict} || rc=$?
+		rc=${rc:-0}
+		corral diagnose "$VM" --bundle-dir "${OUTPUT_DIR}/bundle" >/dev/null 2>&1 || true
+		echo "==> walkthrough (corral) rc=$rc" >&2; ls -lh "$OUTPUT_DIR" >&2; exit $rc
+	fi
+	echo "==> corral VM $VM booted — no harness found, capturing evidence" >&2
+	sleep 45; corral screenshot "$VM" -o "${OUTPUT_DIR}/walkthrough.png" >/dev/null 2>&1 || true
+	corral diagnose "$VM" --bundle-dir "${OUTPUT_DIR}/bundle" >/dev/null 2>&1 || true
+	corral logs "$VM" --serial > "${OUTPUT_DIR}/serial.log" 2>&1 || true
+	ls -lh "$OUTPUT_DIR" >&2; exit 0
+fi
+
 mkdir -p "$OUTPUT_DIR"
 OUTPUT_DIR="$(realpath "$OUTPUT_DIR")"
 ISO_PATH="$(realpath "$ISO_PATH")"

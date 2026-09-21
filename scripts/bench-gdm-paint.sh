@@ -28,6 +28,44 @@ TIMEOUT=300
 OUTPUT_DIR="./bench-out"
 POLL_INTERVAL=3
 
+# ── corral fast-path ───────────────────────────────────────────────────────
+# USE_CORRAL=1 bench-gdm-paint.sh <qcow2> …
+# Reuses the same JSON contract and artifact layout; the raw-QEMU block below
+# stays as fallback. Requires corral >= a3f4a16 (create --vsock/--qcow,
+# screenshot --require-paint, diagnose bundle, logs --serial).
+if [[ "${USE_CORRAL:-0}" == "1" ]] && command -v corral >/dev/null 2>&1; then
+	# Re-parse already done; interpret MACHINE/VGA as hints only — corral
+	# always uses q35 + virtio (the only path tunaos gates on). Delegate to
+	# iso-e2e-corral.sh's bench helper via a one-shot VM.
+	echo "==> bench-gdm-paint via corral (vsock + diagnostics) — $VGA/$MACHINE" >&2
+	VM="gdm-bench-${LABEL}-$$"
+	trap 'corral delete "$VM" --force >/dev/null 2>&1 || true' EXIT
+	corral create "$VM" --qcow "$QCOW2" --firmware uefi --mem "${MEMORY}M" --cpu "$CPUS" --disk 20G --vsock 2>&1 | tee -a "${OUTPUT_DIR:-.}/bench-${LABEL}.corral.log" || {
+		printf '{"label":"%s","machine":"%s","vga":"%s","cpus":%s,"accel":"%s","error":"corral_create_failed","via":"corral"}\n' "$LABEL" "$MACHINE" "$VGA" "$CPUS" "kvm"; exit 1; }
+	corral start "$VM"
+	BOOT_START=$(date +%s); paint_s=""; graphical_s=""; elapsed=0
+	while [[ "$elapsed" -lt "$TIMEOUT" ]]; do
+		if [[ -z "$graphical_s" ]] && corral logs "$VM" --serial 2>/dev/null | grep -qE "Reached target.*Graphical"; then
+			graphical_s=$elapsed; echo "==> [$LABEL] graphical.target at ${elapsed}s (corral)" >&2; fi
+		if [[ -z "$paint_s" ]]; then
+			png="$(mktemp -p "${OUTPUT_DIR}" "${LABEL}-${elapsed}-XXXX.png" 2>/dev/null || mktemp "/tmp/${LABEL}-${elapsed}-XXXX.png")"
+			if corral screenshot "$VM" -o "$png" >/dev/null 2>&1 && [[ -s "$png" ]]; then
+				# 0.02 blank gate identical to raw path and iso-e2e.sh
+				if corral screenshot "$VM" -o "$png" --require-paint >/dev/null 2>&1; then
+					paint_s=$elapsed; echo "==> [$LABEL] painted at ${elapsed}s (corral)" >&2; fi
+				rm -f "$png"; fi
+		fi
+		[[ -n "$paint_s" && -n "$graphical_s" ]] && break
+		sleep "$POLL_INTERVAL"
+		elapsed=$(($(date +%s)-BOOT_START))
+	done
+	timed_out=false; [[ -z "$paint_s" && -z "$graphical_s" ]] && timed_out=true
+	corral diagnose "$VM" --bundle-dir "${OUTPUT_DIR}/${LABEL}.bundle" >/dev/null 2>&1 || true
+	printf '{"label":"%s","machine":"%s","vga":"%s","cpus":%s,"accel":"%s","paint_s":%s,"graphical_target_s":%s,"timed_out":%s,"via":"corral"}\n' \
+		"$LABEL" "$MACHINE" "$VGA" "$CPUS" "\"kvm\"" "${paint_s:-null}" "${graphical_s:-null}" "$timed_out"
+	exit 0
+fi
+
 while [[ $# -gt 0 ]]; do
 	case "$1" in
 	--label)

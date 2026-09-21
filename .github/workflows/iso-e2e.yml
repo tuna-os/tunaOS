@@ -483,6 +483,15 @@ jobs:
             echo "FLAVOR=${FLAVOR}"
           } >> "$GITHUB_ENV"
 
+      - name: Install corral (for VSOCK/TPM/diagnostics parity)
+        if: steps.filter.outputs.skip != 'true'
+        run: |
+          go install github.com/tuna-os/corral@latest 2>&1 | tail -5 || {
+            curl -fsSL https://github.com/tuna-os/corral/releases/latest/download/corral-linux-amd64 -o /tmp/corral
+            sudo install -m 0755 /tmp/corral /usr/local/bin/corral
+          }
+          corral doctor 2>&1 | sed 's/^/corral doctor: /' || true
+
       - name: Run readiness e2e
         id: e2e
         if: steps.filter.outputs.skip != 'true'
@@ -494,16 +503,28 @@ jobs:
           KVM_FLAG=""
           [[ -r /dev/kvm && -w /dev/kvm ]] || KVM_FLAG="--no-kvm"
           set +e
-          sudo --preserve-env=KVM_FLAG \
-            ./scripts/iso-e2e.sh "${ISO_PATH}" \
-              --output iso-e2e-out \
-              --timeout 600 \
-              ${KVM_FLAG}
-          rc=$?
+          if command -v corral >/dev/null 2>&1 && corral doctor 2>&1 | grep -q "VSOCK host support.*✓"; then
+            echo "==> Using corral (vsock + TPM + diagnose) — see docs/corral-vs-qemu.md" >&2
+            sudo --preserve-env=KVM_FLAG env USE_CORRAL=1 \
+              ./scripts/iso-e2e-corral.sh "${ISO_PATH}" \
+                --output iso-e2e-out \
+                --timeout 600 \
+                ${KVM_FLAG:+--no-tpm}
+            rc=$?
+          else
+            sudo --preserve-env=KVM_FLAG \
+              ./scripts/iso-e2e.sh "${ISO_PATH}" \
+                --output iso-e2e-out \
+                --timeout 600 \
+                ${KVM_FLAG}
+            rc=$?
+          fi
           set -e
           echo "rc=${rc}" >> "$GITHUB_OUTPUT"
           # Make the artifact dir readable so upload-artifact can stage it.
           sudo chown -R "$USER:$(id -gn)" iso-e2e-out || true
+          # Also stash corral bundle when present (same evidence-bundle.sh layout)
+          if [[ -d iso-e2e-out/bundle ]]; then sudo chown -R "$USER:$(id -gn)" iso-e2e-out/bundle || true; fi
 
       - name: Convert screenshots to PNG
         if: always() && steps.filter.outputs.skip != 'true'

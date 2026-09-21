@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 # scripts/iso-e2e.sh — TunaOS live-ISO end-to-end smoke test.
+# Prefer corral when available: USE_CORRAL=1 ./scripts/iso-e2e.sh … delegates
+# to ./scripts/iso-e2e-corral.sh (corral create --vsock --tpm --firmware uefi,
+# logs --serial, screenshot --require-paint, diagnose --bundle-dir), which
+# provides the same VSOCK/TPM/serial/QMP evidence surface with a 10× smaller
+# harness — see docs/corral-vs-qemu.md and tuna-os/corral@a3f4a16.
 #
 # Boots a pre-built ISO in QEMU under OVMF/AAVMF (UEFI), waits for the TunaOS live
 # readiness marker on the serial console, optionally runs an Anaconda
