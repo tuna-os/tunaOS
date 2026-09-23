@@ -143,6 +143,39 @@ RUN KERNEL_PKG="linux"; \
 # mainstream video. Asserted by verify-desktop-experience.sh's codec
 # baseline.
 
+# Generate the en_US.UTF-8 locale the desktop session boots into.
+#
+# The stock archlinux/archlinux base ships only C / C.UTF-8 / POSIX (`locale
+# -a` on the raw base lists exactly those three). Arch defers locale
+# generation to the installer's `locale-gen`, which a container image never
+# runs, so the base arrives with no en_US.UTF-8 in its locale archive. Every
+# other TunaOS base inherits it for free — Fedora/RHEL via glibc-langpack-en,
+# openSUSE via glibc-locale, Debian/Ubuntu via the locales package — which is
+# why marlin was the lone variant that shipped without it.
+#
+# marlin's GNOME session sets LANG=en_US.UTF-8 (accountsservice's default and
+# what GDM exports for a fresh user), so a stock booted marlin printed, before
+# falling back to C:
+#
+#   locale: Cannot set LC_CTYPE to default locale: No such file or directory
+#   locale: Cannot set LC_MESSAGES to default locale: No such file or directory
+#   locale: Cannot set LC_COLLATE to default locale: No such file or directory
+#
+# Sorting, number/date/currency formatting and translated messages all revert
+# to C. The image is immutable (composefs, /usr mounted ro and fs-verity
+# sealed), so a user cannot localedef their way out at runtime — this is the
+# only place the locale can be created.
+#
+# We both GENERATE the locale (so the archive actually contains it) and write
+# a default /etc/locale.conf (so nothing is left depending on a session-level
+# LANG pointing at a locale glibc might lack). No `|| true`: an image whose
+# advertised default locale is absent from its own archive is broken, and the
+# failure is silent at build time and loud on every user's first boot.
+RUN echo 'en_US.UTF-8 UTF-8' >> /etc/locale.gen && \
+    locale-gen && \
+    echo 'LANG=en_US.UTF-8' > /etc/locale.conf && \
+    locale -a | grep -q '^en_US.utf8$'
+
 # NOTE: this MUST precede the dracut step below. dracut-config.sh derives the
 # driver set from prepare-root.conf — written at the end of this block — so
 # running dracut first would read no composefs declaration and silently build an
