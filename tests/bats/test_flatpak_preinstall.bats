@@ -35,6 +35,18 @@ run_script() {
   [ "$status" -eq 0 ]
   grep -q '^\[Flatpak Preinstall io.github.kolunmi.Bazaar\]' "${PRE_DIR}/tunaos-gnome.preinstall"
   grep -q '^\[Flatpak Preinstall org.mozilla.firefox\]' "${PRE_DIR}/tunaos-gnome.preinstall"
+  grep -q '^\[Flatpak Preinstall com.mattjakeman.ExtensionManager\]' "${PRE_DIR}/tunaos-gnome.preinstall"
+}
+
+@test "offers Extension Manager only on GNOME" {
+  touch "${UNIT_DIR}/flatpak-preinstall.service"
+  PATH="${BATS_TEST_TMPDIR}/bin:$PATH" \
+    TUNAOS_PREINSTALL_DIR="$PRE_DIR" \
+    TUNAOS_SYSTEMD_SYSTEM_DIR="$UNIT_DIR" \
+    DESKTOP_FLAVOR="kde" \
+    run bash "$SCRIPT"
+  [ "$status" -eq 0 ]
+  ! grep -rq 'com.mattjakeman.ExtensionManager' "$PRE_DIR"
 }
 
 @test "is idempotent — a second run adds no duplicate declarations" {

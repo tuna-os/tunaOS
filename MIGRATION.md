@@ -199,6 +199,23 @@ flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flat
 
 ## Image changes that affect existing installs
 
+### GNOME images no longer bundle shell extensions (all GNOME variants)
+
+The GNOME images used to carry these extensions in `/usr/share`: AppIndicator,
+Blur my Shell, Caffeine, Dash to Dock, Gradia, GSConnect, Logo Menu and Search
+Light. They also carried the GNOME Classic session. None of these are in the
+image now.
+
+After `bootc upgrade`:
+
+- The extensions you had turned on go away, and GNOME stops loading them.
+  Your settings for them stay in dconf.
+- You cannot log in to GNOME Classic. Log in to the standard GNOME session.
+- To get an extension back, install it from Extension Manager
+  (`com.mattjakeman.ExtensionManager`). New installs get it as a Flatpak.
+  On an existing install, run
+  `flatpak install flathub com.mattjakeman.ExtensionManager`.
+
 ### tunaOS removes `alarm` on Arch ARM (marlin, arm64)
 
 The stock rootfs of Arch Linux ARM ships an `alarm` account at UID 1000, and

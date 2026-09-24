@@ -198,9 +198,9 @@ jobs:
               # Derived from the variant id, one line apart, so neither can
               # drift from the other or from the build job's pair.
               is_hb=false
-              [[ "${{ matrix.variant }}" == hummingbird* ]] && is_hb=true
+              [[ "$VARIANT" == hummingbird* ]] && is_hb=true
               is_eln=false
-              [[ "${{ matrix.variant }}" == wahoo* ]] && is_eln=true
+              [[ "$VARIANT" == wahoo* ]] && is_eln=true
 
               out=$(sudo podman run --rm \
                 -v "$PWD/build_scripts/checks/verify-desktop-experience.sh:/vde.sh:z" \
@@ -249,7 +249,7 @@ jobs:
               # images skip the gate there, so they skip it here, for the
               # same recorded reason.
               is_hb=false
-              [[ "${{ matrix.variant }}" == hummingbird* ]] && is_hb=true
+              [[ "$VARIANT" == hummingbird* ]] && is_hb=true
               wl_out=$(sudo podman run --rm \
                 -v "$PWD/build_scripts/checks/verify-package-wishlist.sh:/vpw.sh:z" \
                 -v "$PWD/build_scripts/checks/package-miss-allowlist.txt:/allow.txt:z" \

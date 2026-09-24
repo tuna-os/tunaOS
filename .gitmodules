@@ -1,4 +1,0 @@
-[submodule "system_files/usr/share/gnome-shell/extensions/gradia-integration@alexandervanhee.github.io"]
-	path = system_files/usr/share/gnome-shell/extensions/gradia-integration@alexandervanhee.github.io
-	url = https://github.com/AlexanderVanhee/gradia-capture.git
-	branch = master
