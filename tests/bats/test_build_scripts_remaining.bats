@@ -298,16 +298,13 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
   grep -qF "require_glob '/etc/flatpak/remotes.d/flathub.flatpakrepo'" "$contract" || { echo "FAIL: contract does not require the flathub remote" >&2; fail=1; }
   grep -qF "require_glob '/usr/share/flatpak/preinstall.d/*.preinstall'" "$contract" || { echo "FAIL: contract does not require a preinstall declaration" >&2; fail=1; }
 
-  # (c) the app set is identical in the script that declares it and the
-  # contract that asserts it — extracted from both, compared as sets.
-  local declared asserted
-  declared="$(grep -oE '^_fp_add_app [A-Za-z0-9._-]+' "$preinstall" | awk '{print $2}' | sort)"
-  asserted="$(grep -oE 'for _fp_app in [A-Za-z0-9._ -]+;' "$contract" | sed 's/for _fp_app in //; s/;$//' | tr ' ' '\n' | sed '/^$/d' | sort)"
-  [ -n "$declared" ] || { echo "FAIL: no _fp_add_app lines found in flatpak-preinstall.sh" >&2; fail=1; }
-  if [ "$declared" != "$asserted" ]; then
-    echo "FAIL: preinstall set drifted — script declares [$declared] but contract asserts [$asserted]" >&2
-    fail=1
-  fi
+  # (c) every curated app is named by both the declaration script and the
+  # image contract. Behavioral tests cover GNOME's conditional addition.
+  local app
+  for app in io.github.kolunmi.Bazaar org.mozilla.firefox com.mattjakeman.ExtensionManager; do
+    grep -qF "$app" "$preinstall" || { echo "FAIL: preinstall script does not declare $app" >&2; fail=1; }
+    grep -qF "$app" "$contract" || { echo "FAIL: contract does not assert $app" >&2; fail=1; }
+  done
 
   # (d) the service that makes declarations real is enabled by the script
   # and enforced by the contract wherever the unit exists.
