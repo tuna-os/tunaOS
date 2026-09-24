@@ -1,0 +1,27 @@
+schema: 3
+written_by: 0.20.0
+skills_version: 0.20.0
+name: tunaos
+command: spektacular
+agent: claude
+spec_trigger_threshold: moderate
+auto_commit: "off"
+debug:
+    enabled: false
+spec:
+    provider: file
+    id_method: timestamp
+    config:
+        directory: specs
+plan:
+    provider: file
+    strict_spec_changes: false
+    config:
+        directory: plans
+changelog:
+    provider: file
+    config:
+        directory: changelog
+repos:
+    - name: tunaos
+      location: .

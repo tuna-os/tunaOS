@@ -25,8 +25,13 @@ out.ociarchive
 *.qcow2
 .lima-home/
 
-# Local tooling / agent state (not project content)
-.claude/
+# Local tooling / agent state (not project content). The Spektacular skills
+# are project content (RFC 011): every Claude session needs them to follow
+# the spec, plan and build workflows.
+.claude/*
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/spek-*/
 .antigravitycli/
 .pi/
 .gemini/
