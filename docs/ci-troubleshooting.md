@@ -1442,3 +1442,31 @@ upload step and `prune-r2.yml` already do for forks.
 unread one. When a gate shows red on every run it ever had, doubt the question
 before the answer. Delete such a gate only after the intent behind it has
 somewhere true to live.
+
+---
+
+### 32. SELinux policy upgrade leaves runtime contexts unreadable to dbus-broker (`yellowfin:gnome`, 2026-09-20, #2326)
+
+**Symptom:**
+In `serial.log` during the Yellowfin GNOME boot Gate:
+```
+[FAILED] Failed to start dbus-broker.service - D-Bus System Message Bus.
+[FAILED] Failed to start systemd-logind.service - User Login Management.
+[FAILED] Failed to start gdm.service - GNOME Display Manager.
+```
+And in boot diagnostics:
+```
+dbus-broker-launch: Access denied in /etc/selinux/targeted/contexts/dbus_contexts
+systemd-logind: Failed to initialize SELinux labeling handle: Permission denied
+```
+
+**Root cause:**
+RPM policy upgrades (e.g. `selinux-policy{,-targeted}` upgrade during GNOME installation) happen while container builds run with SELinux disabled. The newly installed policy context files in `/etc/selinux/targeted/contexts` retain labels assigned by the base policy. On boot in enforcing mode, `dbus-broker-launch` and `systemd-logind` fail to read `dbus_contexts` under the newly loaded policy.
+
+**Fix:**
+Add a tmpfiles rule in `system_files/usr/lib/tmpfiles.d/tunaos-selinux-policy.conf`:
+```
+Z /etc/selinux/targeted/contexts - - - -
+```
+`systemd-tmpfiles-setup.service` runs during `sysinit.target` after PID 1 loads the active policy and before `basic.target` starts D-Bus. The uppercase `Z` recursively applies the active policy's contexts to `/etc/selinux/targeted/contexts` while preserving file permissions and ownership.
+
