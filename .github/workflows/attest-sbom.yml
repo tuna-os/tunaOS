@@ -191,6 +191,7 @@ jobs:
           missing=0
           failed=0
           skipped=0
+          over_budget=0
           outage=""
           budget_end=$(( $(date +%s) + ATTEST_BUDGET_MINUTES * 60 ))
 
@@ -217,7 +218,7 @@ jobs:
             fi
             if (( $(date +%s) >= budget_end )); then
               echo "::warning::attestation budget (${ATTEST_BUDGET_MINUTES}m) exhausted before ${stem}"
-              skipped=$((skipped + 1))
+              over_budget=$((over_budget + 1))
               continue
             fi
 
@@ -260,6 +261,7 @@ jobs:
             echo "- Attested: ${attested}"
             echo "- Failed: ${failed}"
             echo "- Skipped after outage: ${skipped}"
+            echo "- Skipped over budget: ${over_budget}"
             echo "- Missing SBOM: ${missing}"
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -269,7 +271,13 @@ jobs:
           if (( missing > 0 )); then
             echo "::error::${missing} platform image(s) had no SBOM to attest" >&2
           fi
-          if (( failed > 0 || missing > 0 )); then
+          # Running out of budget leaves images unattested just as surely as a
+          # failure does. Exiting 0 would hide that from the run's conclusion
+          # and from rerun-infra-failures.yml, which only acts on red runs.
+          if (( over_budget > 0 )); then
+            echo "::error::attestation budget (${ATTEST_BUDGET_MINUTES}m) ran out; ${over_budget} image(s) left unattested" >&2
+          fi
+          if (( failed > 0 || missing > 0 || over_budget > 0 )); then
             exit 1
           fi
           echo "Attested ${attested} SPDX SBOM(s)."

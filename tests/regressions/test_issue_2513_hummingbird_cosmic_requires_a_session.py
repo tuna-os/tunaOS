@@ -8,6 +8,10 @@ published tag.
 
 Keep the bootstrap waiver for the other desktops, but never apply it to
 COSMIC's minimum session contract.
+
+Falsification: behavioural -- drop the `desktop != cosmic` guard from any
+waiver branch of verify-desktop-experience.sh and the missing-session run for
+COSMIC passes again, which fails this test as the unfixed tree did.
 """
 
 from __future__ import annotations
