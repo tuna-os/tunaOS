@@ -191,10 +191,25 @@ if [[ "$IMAGE_NAME" == "yellowfin" || "$IMAGE_NAME" == "skipjack" ]]; then
 	for package in "${libselinux_packages[@]}"; do
 		libselinux_nevrs+=("${package}-${LIBSELINUX_PIN}")
 	done
+	# dnf downgrades only what is installed. python3-libselinux is absent from
+	# the yellowfin and skipjack bases ("available, but not installed"), so it
+	# is skipped here, and a later stage may install it.
 	dnf -y downgrade "${libselinux_nevrs[@]}"
-	dnf versionlock add "${libselinux_packages[@]}"
+	# Lock the exact NEVRs, not the names. A name locks the installed version,
+	# and for a package that is not installed it locks EVERY available version
+	# (3.9 through 3.11), which holds nothing. The NEVR form makes a later
+	# install of python3-libselinux resolve to the pin as well.
+	dnf versionlock add "${libselinux_nevrs[@]}"
 
+	# libselinux itself must be installed and pinned. The other two are
+	# checked only when present: `rpm -q` exits 1 for a package that is not
+	# installed, which under `set -e` failed every yellowfin and skipjack
+	# build (run 36054709367).
 	for package in "${libselinux_packages[@]}"; do
+		if [[ "$package" != libselinux ]] && ! rpm -q --quiet "$package"; then
+			echo "libselinux ceiling: $package is not installed; the versionlock holds it at $LIBSELINUX_PIN"
+			continue
+		fi
 		installed="$(rpm -q --queryformat '%{VERSION}-%{RELEASE}' "$package")"
 		if [[ "$installed" != "$LIBSELINUX_PIN" ]]; then
 			echo "ERROR: $package resolved to $installed, expected $LIBSELINUX_PIN" >&2
