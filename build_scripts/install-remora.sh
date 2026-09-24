@@ -33,11 +33,11 @@
 set -xeuo pipefail
 
 # renovate: datasource=github-releases depName=tuna-os/remora
-REMORA_VERSION="v0.4.2"
+REMORA_VERSION="v0.4.3"
 REMORA_ARCH="$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"
 case "${REMORA_ARCH}" in
-amd64) REMORA_SHA256="87e2bb91e532da8c6f2fb426ae0fccc6cd3f6c04acd3ff3e421f5e0ed30a2570" ;;
-arm64) REMORA_SHA256="2e248ca3e2ec855113ca8e0e7d4857a1ef6f6f3ad77a023ad037a51052f602f8" ;;
+amd64) REMORA_SHA256="b39b3a6157bfb990f3d4bc4e75eafe216d57f3e394059a05a7ed828c4476364e" ;;
+arm64) REMORA_SHA256="50892952515e985e1f084cb867c4fdeb959b5cc6464cbb21f78ddb48f08bd058" ;;
 *)
 	echo "ERROR: unsupported Remora architecture: ${REMORA_ARCH}" >&2
 	exit 1
