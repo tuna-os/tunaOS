@@ -66,7 +66,7 @@ no boot.
 
 `.github/green-criteria.yml` sets the bar. A cell is green only when every criterion that blocks it, and applies to it, has a current affirmative result. A criterion that nobody ran, nobody asserted, or that CI skipped renders ⬜, and it does not count as satisfied. These criteria block today: `builds`, `desktop`, `boots`, `no_silent_omissions`. These are advisory — the sections below measure them, and they do not block yet: `install`, `lifecycle`, `parity`, `rebuildable`, `arch_honesty`. Unimplemented: `iso`. To graduate a criterion, edit `enforcement:` in that file. This table and the README count then tighten with no code change.
 
-**124 of 135** published cells are composite-green.
+**127 of 135** published cells are composite-green.
 
 | Variant | gnome | kde | cosmic | niri | xfce |
 |---|:--:|:--:|:--:|:--:|:--:|
@@ -75,12 +75,12 @@ no boot.
 | **bonito-rawhide** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35907017239#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35907017239#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35907017239#artifacts) |
 | **flounder** | — | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35935233505#artifacts) | — | — | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35935233505#artifacts) |
 | **flounder-sid** | ⬜ | ⬜ | — | — | ⬜ |
-| **grouper** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35915759974#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35915759974#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts) | — | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35915759974#artifacts) |
+| **grouper** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36055414104#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36055414104#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts) | — | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36055414104#artifacts) |
 | **guppy** | — | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35995602092#artifacts) | — | — | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35995602092#artifacts) |
 | **hummingbird** | ❌ | — | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts) | — | — |
 | **marlin** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36037339339#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36037339339#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36037339339#artifacts) |
 | **sailfin** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35927889455#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35927889455#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35927889455#artifacts) |
-| **skipjack** | ❌ | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36011325363#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36011325363#artifacts) |
+| **skipjack** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36059887457#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36011325363#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36011325363#artifacts) |
 | **wahoo** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36047128286#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36047128286#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts) | — | — |
 | **yellowfin** | ❌ | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35957716969#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35957716969#artifacts) |
 
