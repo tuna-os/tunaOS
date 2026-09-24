@@ -1411,6 +1411,38 @@ screenshot_compare() {
 	fi
 }
 
+# A desktop image runs BOTH contracts: tunaos-base-contract.service at
+# multi-user and the desktop contract at graphical. The disk Gate waited for
+# the desktop marker alone, so a machine whose base contract had already
+# failed still passed. yellowfin:kde (run 35957716969) and skipjack:kde (run
+# 34705564876) promoted with dbus-broker and dbus.socket failed: SDDM starts
+# without the system bus, so the desktop contract printed OK anyway
+# (tunaOS#2664, #2485). verify-base-contract.sh fails on narrow, machine-level
+# faults only (no system bus, `bootc status` broken, maintenance/offline), so
+# a FAIL from it is never a per-variant opinion.
+#
+# Returns 0 when the base contract FAILED on this boot, 1 otherwise. The base
+# unit can still be running when the desktop marker lands (both are in the
+# boot transaction), so wait up to a grace period for its verdict. No marker
+# at all is a warning, not a failure: an image built before the unit existed
+# has none.
+base_contract_failed_on_serial() {
+	local serial="$1" grace="${2:-120}" deadline
+	deadline=$(($(date +%s) + grace))
+	while ! grep -qE "TUNAOS_BASE_CONTRACT_(OK|FAIL)" "$serial" 2>/dev/null; do
+		if (($(date +%s) >= deadline)); then
+			echo "WARN: no TUNAOS_BASE_CONTRACT_* marker within ${grace}s of the desktop marker; system bus unverified" >&2
+			return 1
+		fi
+		sleep "${DISK_POLL_INTERVAL:-1}"
+	done
+	if grep -q "TUNAOS_BASE_CONTRACT_FAIL" "$serial" 2>/dev/null; then
+		grep "TUNAOS_BASE_CONTRACT_FAIL" "$serial" | tr -d '\r' >&2
+		return 0
+	fi
+	return 1
+}
+
 # Did the serial log say, in so many words, that the boot failed?
 #
 # The screenshot fallback below exists because bootc base kernels ship
@@ -3673,6 +3705,12 @@ disk)
 			if grep -q "${CONTRACT_PREFIX}_OK" "$SERIAL_LOG" 2>/dev/null; then
 				echo "==> ${DISK_CONTRACT} contract passed (serial)"
 				rc=0
+				if [[ "$DISK_CONTRACT" == desktop ]] &&
+					base_contract_failed_on_serial "$SERIAL_LOG" "${BASE_CONTRACT_GRACE:-120}"; then
+					echo "ERROR: the desktop contract passed, but the base contract FAILED on the same boot." >&2
+					echo "       A desktop with no system bus is not a working desktop (tunaOS#2664)." >&2
+					rc=1
+				fi
 				harvest_install_checks || rc=1
 			else
 				echo "ERROR: ${DISK_CONTRACT} contract FAILED:" >&2
