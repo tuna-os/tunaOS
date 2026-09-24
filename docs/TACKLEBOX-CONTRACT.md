@@ -52,6 +52,50 @@ Tacklebox changes that alter the accepted recipe fields or the meaning of
 these invariants need updating this document and the adapter's tests in
 the same change.
 
+## Environment contract
+
+Tacklebox also reads per-build settings from its environment.
+`TBOX_CUSTOMIZE_TIMEOUT` sets the limit for the live-customize script.
+`TBOX_CUSTOMIZE_COMMIT_TIMEOUT` sets the limit for the `podman commit` after
+that script. `TBOX_CUSTOMIZE_NETWORK=host` gives the script container the host
+network.
+TunaOS runs Tacklebox in two ways:
+
+- With `TACKLEBOX_FROM_SOURCE=1`, the adapter builds Tacklebox at the SHA in
+  `image-versions.yaml` and runs it as a host binary. The binary is a child
+  process, so it gets the environment of the caller.
+- Otherwise, `tunaos_run_tacklebox` runs the published container image.
+  `podman run` starts from the environment of the image, not of the caller.
+
+`scripts/lib/tacklebox.sh` sends each **exported** variable whose name starts
+with `TBOX_` into the container with an explicit `--env`. The filter uses only
+the prefix. Thus a new Tacklebox setting gets to TunaOS builds with no change
+here. The workflow of each job sets the values for that job. Obey these rules:
+
+1. Export the setting. If you only assign it, neither path gets it.
+2. Do not put a secret in a `TBOX_` variable. The adapter writes the names and
+   values to the build log.
+
+The adapter does not use `--env-host`. That option sends the full runner
+environment into the container, including `GITHUB_TOKEN` and registry
+logins.
+
+### Commit deadline
+
+Tacklebox sets a 600-second limit on the post-customize commit. On CI, some
+large desktop layers need more time than that, also with native `overlay`
+storage (tunaOS#1893). Thus the adapter sets `TBOX_CUSTOMIZE_COMMIT_TIMEOUT`
+to 1800 seconds when the caller does not set it. The rules are:
+
+- A caller can set a different whole number of seconds. `0` removes the
+  limit on the commit.
+- The adapter stops with exit status 2 on a value that is not a whole number.
+  Tacklebox itself ignores such a value and uses 600.
+- `TUNAOS_TACKLEBOX_TIMEOUT_SECONDS` stays the limit for the full build. Thus
+  a commit without its own limit cannot make the build run without end.
+- The pin in `image-versions.yaml` must be at `ae93e9b` or later. Older
+  revisions do not read the setting.
+
 ## Validation boundary
 
 The adapter's shell tests validate the generated recipe shape without pulling

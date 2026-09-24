@@ -101,10 +101,15 @@ downloads:
   # runs, and the boot dies in emergency on `overlayfs: failed to resolve
   # '/run/rootfsbase'`. Proven both ways by named runs: broken at
   # tacklebox 30629145076, booting to login at 30630284339.
-  tacklebox: "f3dd168bf15b235b554e497e7192a64a6563c4a4"
-  # f3dd168 carries the k8s-file log-driver fix for all podman runs
-  # (tunaOS#1893): the runner images lack journald for the container,
-  # and the customize/initramfs/commit steps otherwise die in conmon.
+  tacklebox: "ae93e9b5bacef49746cb1b08dc805c3149d7c9c8"
+  # ae93e9b (tuna-os/tacklebox#300) makes the post-customize commit deadline
+  # settable with TBOX_CUSTOMIZE_COMMIT_TIMEOUT; before it, a literal 600s
+  # killed multi-GB desktop commits on CI (tunaOS#1893), and
+  # scripts/lib/tacklebox.sh now passes 1800 by default. It descends from
+  # fd95174, 4fa6041 and f3dd168 (checked with git merge-base
+  # --is-ancestor), so it keeps f3dd168's k8s-file log-driver fix: the runner
+  # images lack journald for the container, and the customize/initramfs/commit
+  # steps otherwise die in conmon.
 
   # AvengeMedia's EL10 dms-greeter 1.6 RPM is a runtime-sync launcher and
   # carries no QML. Keep the same source payload and checksum as the pending
