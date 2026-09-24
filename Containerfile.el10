@@ -204,12 +204,6 @@ RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=bind,from=utah-packages,source=/repository,target=/run/utah-packages \
   --mount=type=bind,from=gnome50-el10-packages,source=/repository,target=/run/gnome50-el10-packages \
   /run/context/build_scripts/desktop/install-desktop.sh gnome
-# Extensions are a separate layer so DE package install caches independently
-# of submodule updates to extension sources.
-RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
-  --mount=type=tmpfs,dst=/boot \
-  --mount=type=bind,from=context,source=/,target=/run/context \
-  /run/context/build_scripts/desktop/gnome-extensions.sh
 # Desktop packages (e.g. redhat-release / almalinux-release / centos-stream-release)
 # can overwrite /usr/lib/os-release during install-desktop.sh, blowing away
 # VERSION_CODENAME written by 90-image-info.sh in base-no-de. Re-run it here

@@ -89,7 +89,7 @@ def test_the_manifests_actually_declare_hooks():
     vacuously true (tunaOS#1730)."""
     hooks = _hooks()
     assert hooks, "no post_install hooks parsed out of manifests/desktops/*.yaml"
-    for known in ("flatpak-preinstall.sh", "gnome-extensions.sh"):
+    for known in ("flatpak-preinstall.sh", "tuna-flatpak-remote.sh"):
         assert known in hooks, f"expected {known} among {sorted(hooks)}"
 
 

@@ -337,13 +337,8 @@ gnome)
 	require_any_glob '/usr/bin/gnome-keyring-daemon'
 	# User systemd units: audio (pipewire/wireplumber) user unit definitions.
 	require_any_user_unit pipewire wireplumber
-	# GNOME Shell extensions assertion: verified presence of system extensions under /usr/share/gnome-shell/extensions.
-	if compgen -G "/usr/share/gnome-shell/extensions/*" >/dev/null 2>&1; then
-		:
-	else
-		echo "missing required GNOME Shell extensions under /usr/share/gnome-shell/extensions" >&2
-		exit 1
-	fi
+	# Extensions are deliberately user-managed. Extension Manager is offered
+	# below, but the image does not require or build a system extension.
 	# dconf compiled database: every keyfile dir /etc/dconf/db/<name>.d/ must have
 	# a compiled /etc/dconf/db/<name>. Iterate instead of hardcoding local/gdm —
 	# distros ship their own keyfile dirs (ibus.d on Arch) already compiled by
@@ -777,17 +772,21 @@ else
 	# ── Flatpak baseline (store + browser + a remote that can serve them) ──
 	# Asserts exactly what the build now lays down, nothing aspirational:
 	# tuna-flatpak-remote.sh bakes the Flathub remote on every base, and
-	# flatpak-preinstall.sh declares the curated set (io.github.kolunmi.Bazaar
-	# as the store, org.mozilla.firefox as the browser — Bluefin's choices)
-	# and enables flatpak-preinstall.service where the base's flatpak ships
-	# it. Guarded on flatpak existing so a hypothetical flatpak-less image is
+	# flatpak-preinstall.sh declares the common curated set
+	# (io.github.kolunmi.Bazaar and org.mozilla.firefox), plus Extension
+	# Manager on GNOME. It enables flatpak-preinstall.service where available.
+	# Guarded on flatpak existing so a hypothetical flatpak-less image is
 	# out of scope rather than red. The per-app grep list below is kept in
 	# lockstep with flatpak-preinstall.sh by
 	# tests/bats/test_build_scripts_remaining.bats — change both together.
 	if command -v flatpak >/dev/null 2>&1; then
 		require_glob '/etc/flatpak/remotes.d/flathub.flatpakrepo'
 		require_glob '/usr/share/flatpak/preinstall.d/*.preinstall'
-		for _fp_app in io.github.kolunmi.Bazaar org.mozilla.firefox; do
+		_fp_apps=(io.github.kolunmi.Bazaar org.mozilla.firefox)
+		if [[ "$desktop" == "gnome" ]]; then
+			_fp_apps+=(com.mattjakeman.ExtensionManager)
+		fi
+		for _fp_app in "${_fp_apps[@]}"; do
 			if ! grep -rqs "^\[Flatpak Preinstall ${_fp_app}\]" /usr/share/flatpak/preinstall.d; then
 				echo "missing flatpak preinstall declaration: ${_fp_app}" >&2
 				if [[ "${IS_HUMMINGBIRD:-false}" != "true" ]]; then
