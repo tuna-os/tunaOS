@@ -1,8 +1,8 @@
 #!/usr/bin/env bats
 
 REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
-CANONICAL="system_files/usr/share/backgrounds/tunaos/tunaos-default.png"
-PLASMA="system_files/usr/share/wallpapers/TunaOS/contents/images/tunaos-default.png"
+CANONICAL="system_files/usr/share/backgrounds/tunaos/tunaos-default.jpg"
+PLASMA="system_files/usr/share/wallpapers/TunaOS/contents/images/tunaos-default.jpg"
 
 @test "Plasma wallpaper path resolves to the canonical desktop asset" {
   [ -f "${REPO_ROOT}/${CANONICAL}" ]

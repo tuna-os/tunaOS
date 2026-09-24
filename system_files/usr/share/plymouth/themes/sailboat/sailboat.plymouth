@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=TunaOS Sailboat
+Description=TunaOS boot animation (Sailboat)
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/sailboat
+ScriptFile=/usr/share/plymouth/themes/sailboat/sailboat.script

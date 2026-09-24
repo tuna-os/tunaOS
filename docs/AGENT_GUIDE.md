@@ -91,9 +91,9 @@ Defined in `.github/build-config.yml`. The workflow is `build-variant.yml` → `
 | `skipjack` | 🍣 | CentOS Stream 10 | dnf | Beta |
 | `bonito` | 🎣 | Fedora 44 | dnf | Beta |
 | `bonito-rawhide` | 🐉 | Fedora Rawhide (rolling) | dnf | Beta |
-| `sailfin` | 🦈 | openSUSE Tumbleweed (rolling) | zypper | Beta |
+| `sailfin` | ⛵ | openSUSE Tumbleweed (rolling) | zypper | Beta |
 | `guppy` | 🌈 | Gentoo Linux (source-based) | portage | Beta |
-| `grouper` | 🐟 | Ubuntu 26.04 | apt | Beta |
+| `grouper` | 🪸 | Ubuntu 26.04 | apt | Beta |
 | `marlin` | 🚀 | Arch Linux (rolling), CachyOS kernel overlay | pacman | Beta |
 | `flounder` | 🐡 | Debian 13 Trixie (stable) | apt | Beta |
 | `flounder-sid` | ☢️ | Debian Sid (unstable, rolling) | apt | Beta |

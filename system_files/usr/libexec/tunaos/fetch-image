@@ -1,0 +1,8 @@
+#!/bin/sh
+# The image this system boots, for fastfetch's "image" line. bootc knows the
+# followed tag; image-info.json only has the compose-time one.
+ref="$(bootc status --json 2>/dev/null | jq -r '.status.booted.image.image.image // .spec.image.image // empty' 2>/dev/null)"
+if [ -z "$ref" ] && [ -r /usr/share/ublue-os/image-info.json ]; then
+	ref="$(sed -n 's/.*"image-ref": *"\([^"]*\)".*/\1/p' /usr/share/ublue-os/image-info.json | sed 's#^ostree-image-signed:docker://##')"
+fi
+printf '%s\n' "${ref:-unknown}"

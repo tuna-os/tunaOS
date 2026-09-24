@@ -210,7 +210,11 @@ RUN mkdir -p /usr/lib/systemd/system/initrd-root-fs.target.wants && \
 # leaves the standalone CLI out. Asserting on `sbin/cryptsetup` therefore failed
 # a perfectly good initramfs (run 30735665323); verified against the real
 # lsinitrd output for Tumbleweed's dracut 110+suse.45.
-RUN set -eu; \
+#
+# plymouth-set-theme.sh first: the variant's boot animation has to be chosen
+# before dracut copies the theme in. It never fails the build.
+RUN --mount=type=bind,from=context,source=/,target=/run/context set -eu; \
+    /run/context/build_scripts/plymouth-set-theme.sh || true; \
     kver="$(ls /usr/lib/modules | head -1)"; \
     img="/usr/lib/modules/${kver}/initramfs.img"; \
     dracut --force --no-hostonly --reproducible --zstd --omit "tpm2-tss pcsc" \

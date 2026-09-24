@@ -26,7 +26,7 @@ output "eDP-1" {
 
 // TunaOS branded wallpaper via swaybg. niri draws no wallpaper itself;
 // swaybg is the lightweight daemon the image ships for that.
-spawn-at-startup "swaybg" "-i" "/usr/share/backgrounds/tunaos/tunaos-default.png" "-m" "fill"
+spawn-at-startup "swaybg" "-i" "/usr/share/backgrounds/tunaos/tunaos-default.jpg" "-m" "fill"
 
 // Session infrastructure.
 spawn-at-startup "waybar"

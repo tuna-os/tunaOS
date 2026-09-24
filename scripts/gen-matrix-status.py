@@ -485,8 +485,9 @@ def build_stage_results() -> dict[str, dict]:
     hat: "this run did not assert the cell" is not "the cell regressed".
 
     Nothing stale is laundered green. Runs are walked newest first and a cell
-    is fixed by the FIRST conclusive Promote it finds, so a fresh failure
-    always beats an older success; only cells no recent run asserted reach
+    is fixed by the FIRST conclusive Promote -- or failed Gate, which is what
+    skips a Promote -- it finds, so a fresh failure always beats an older
+    success; only cells no recent run asserted reach
     further back. The Gate is read from that same run, so one cell's builds
     and boots verdicts always describe one image.
     """
@@ -534,12 +535,24 @@ def build_stage_results() -> dict[str, dict]:
                     continue
                 per_run[key] = conclusion
             for flavor in flavors - set(cell_run):
-                if per_run.get((flavor, "Promote")) not in ("success", "failure"):
+                promote = per_run.get((flavor, "Promote"))
+                gate = per_run.get((flavor, "Gate"))
+                # A failed Gate is a verdict too, and it is the one that
+                # SKIPS Promote. Requiring a conclusive Promote alone meant a
+                # cell whose Gate fails every night was never scored: the walk
+                # stepped past each red run and the cell read untested with no
+                # run at all (hummingbird:gnome, run 35938968035 -- Gate
+                # failure, Promote skipped, provenance empty). Worse, an
+                # older green Promote inside the 10-run window would have been
+                # read instead of the newer red Gate. A skipped Promote behind a PASSING or skipped Gate
+                # is still not a verdict, and the walk keeps going.
+                if promote not in ("success", "failure") and gate != "failure":
                     continue
                 cell_run[flavor] = (run["createdAt"][:10], str(run["databaseId"]))
-                jobs[(flavor, "Promote")] = per_run[(flavor, "Promote")]
+                if promote in ("success", "failure"):
+                    jobs[(flavor, "Promote")] = promote
                 if (flavor, "Gate") in per_run:
-                    jobs[(flavor, "Gate")] = per_run[(flavor, "Gate")]
+                    jobs[(flavor, "Gate")] = gate
         out[variant] = {
             "jobs": jobs,
             # The variant's newest conclusive run, for cells that no run
