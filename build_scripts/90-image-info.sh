@@ -255,6 +255,19 @@ if 'completed' in tour:
 
 recipe['tour'] = new_tour
 
+# The variant is the name people see; the installer's stock slides say
+# TunaOS (e.g. your new TunaOS workstation). Swap it in every text value,
+# leaving image references alone.
+def rename(v):
+    if isinstance(v, dict):
+        return {k: (x if k in ('imgref', 'image', 'distro_logo') else rename(x)) for k, x in v.items()}
+    if isinstance(v, list):
+        return [rename(x) for x in v]
+    if isinstance(v, str):
+        return v.replace('TunaOS', '${IMAGE_PRETTY_NAME}')
+    return v
+recipe = rename(recipe)
+
 with open('${RECIPE_FILE}', 'w') as f:
     json.dump(recipe, f, indent=2)
 " || true
@@ -290,9 +303,6 @@ VARIANT_LOGO="/usr/share/tunaos/logos/${VARIANT_KEY}.svg"
 if [[ -f "${VARIANT_LOGO}" ]]; then
 	install -Dm0644 "${VARIANT_LOGO}" /usr/share/pixmaps/tunaos.svg
 	install -Dm0644 "${VARIANT_LOGO}" /usr/share/icons/hicolor/scalable/apps/tunaos.svg
-	for splash in /usr/share/plasma/look-and-feel/org.tunaos*.desktop/contents/splash/images/tunaos_logo.svgz; do
-		[[ -f "${splash}" ]] && gzip -9nc "${VARIANT_LOGO}" >"${splash}"
-	done
 	echo "Variant logo: ${VARIANT_LOGO}"
 else
 	echo "No variant logo for ${VARIANT_KEY}; keeping the generic TunaOS mark"
@@ -340,6 +350,27 @@ EOF
 		install -m0644 "${VARIANT_WALLPAPER}" /usr/share/backgrounds/tunaos/tunaos-default.jpg
 	fi
 
+	# The lettermark (scripts/branding/make-lettermarks.py): the variant's
+	# emoji and name. The variant is the brand, so this is what the login
+	# screen and the Plasma splash show, never "TunaOS".
+	LETTERMARK="/usr/share/tunaos/lettermarks/${VARIANT_KEY}.svg"
+	if [[ -f "${LETTERMARK}" ]]; then
+		install -m0644 "${LETTERMARK}" /usr/share/pixmaps/tunaos-lettermark.svg
+		install -m0644 "${LETTERMARK%.svg}-dark.svg" /usr/share/pixmaps/tunaos-lettermark-dark.svg
+		for splash in /usr/share/plasma/look-and-feel/org.tunaos*.desktop/contents/splash/images/tunaos_logo.svgz; do
+			[[ -f "${splash}" ]] && gzip -9nc "${LETTERMARK}" >"${splash}"
+		done
+	fi
+
+	# Names people can see in settings: the Plasma global theme and wallpaper
+	# are called after the variant, not "TunaOS".
+	for meta in /usr/share/plasma/look-and-feel/org.tunaos.desktop/metadata.json \
+		/usr/share/plasma/look-and-feel/org.tunaos.light.desktop/metadata.json \
+		/usr/share/wallpapers/TunaOS/metadata.json; do
+		[[ -f "${meta}" ]] || continue
+		sed -i -E "s/(\"Name\": *\")TunaOS( Light)?\"/\\1${IMAGE_PRETTY_NAME}\\2\"/" "${meta}"
+	done
+
 	# Console login banner. Upstream's names the upstream distro ("Ubuntu
 	# 26.04 LTS \n \l", "Arch Linux \r (\l)"); \S{PRETTY_NAME} is agetty's
 	# own os-release lookup, so this stays right if the name ever changes.
@@ -349,23 +380,56 @@ EOF
 		"\\r (\\l)" \
 		"" >/etc/issue
 
-	# fastfetch: a TunaOS fish in the variant's colour instead of the base
-	# distro's ASCII logo, which fastfetch otherwise picks from ID=.
+	# fastfetch, in the spirit of Bluefin's and Bazzite's: the variant's name
+	# as a big two-tone lettermark (scripts/branding/make-fastfetch-logos.py)
+	# in its accent, then the system grouped underneath. This is one of the two
+	# places TunaOS is named at all (the other is the About page); everywhere
+	# else the variant is the brand. Only keys Bluefin's own config uses, so
+	# an older fastfetch on a stable base does not reject it. profile.d and
+	# fish aliases (system_files) point `fastfetch` here, ahead of ublue's.
+	BUILD_DATE="$(date -u '+%b %d %Y')"
+	FF_ACCENT="38;2;${ACCENT_R};${ACCENT_G};${ACCENT_B}"
+	FF_LOGO="/usr/share/tunaos/fastfetch/${VARIANT_KEY}.txt"
+	[[ -f "${FF_LOGO}" ]] || FF_LOGO="/usr/share/tunaos/fastfetch/albacore.txt"
 	install -d /etc/xdg/fastfetch
 	cat >/etc/xdg/fastfetch/config.jsonc <<EOF
-// Written by build_scripts/90-image-info.sh: ${VARIANT_KEY}, in ${HOMAGE}.
+// Written by build_scripts/90-image-info.sh for ${VARIANT_KEY} (${HOMAGE}).
 {
   "\$schema": "https://github.com/fastfetch-cli/fastfetch/raw/dev/doc/json_schema.json",
   "logo": {
     "type": "file",
-    "source": "/usr/share/tunaos/fastfetch-logo.txt",
-    "color": { "1": "38;2;${ACCENT_R};${ACCENT_G};${ACCENT_B}" },
-    "padding": { "top": 1, "right": 3 }
+    "source": "${FF_LOGO}",
+    "position": "top",
+    "color": { "1": "${FF_ACCENT}", "2": "90" },
+    "padding": { "top": 1, "left": 2 }
   },
-  "display": { "color": { "keys": "38;2;${ACCENT_R};${ACCENT_G};${ACCENT_B}" } },
+  "display": {
+    "separator": "  ",
+    "color": { "keys": "${FF_ACCENT}", "title": "${FF_ACCENT}" }
+  },
   "modules": [
-    "title", "separator", "os", "host", "kernel", "uptime", "packages",
-    "shell", "de", "wm", "terminal", "cpu", "gpu", "memory", "disk", "break", "colors"
+    "title",
+    "separator",
+    { "type": "os", "key": "system  ", "format": "{pretty-name}  ·  part of TunaOS, built on ${BASE_LABEL}" },
+    { "type": "command", "key": "image   ", "text": "/usr/libexec/tunaos/fetch-image", "shell": "/bin/sh" },
+    { "type": "custom", "key": "forged  ", "format": "${BUILD_DATE}" },
+    { "type": "kernel", "key": "kernel  ", "format": "{release}" },
+    { "type": "uptime", "key": "uptime  " },
+    "break",
+    { "type": "de", "key": "desktop " },
+    { "type": "wm", "key": "wm      " },
+    { "type": "shell", "key": "shell   " },
+    { "type": "terminal", "key": "terminal" },
+    { "type": "packages", "key": "packages" },
+    "break",
+    { "type": "host", "key": "host    " },
+    { "type": "cpu", "key": "cpu     " },
+    { "type": "gpu", "key": "gpu     " },
+    { "type": "memory", "key": "memory  " },
+    { "type": "disk", "key": "disk    ", "hideFS": "overlay" },
+    { "type": "battery", "key": "battery " },
+    "break",
+    { "type": "colors", "paddingLeft": 2 }
   ]
 }
 EOF

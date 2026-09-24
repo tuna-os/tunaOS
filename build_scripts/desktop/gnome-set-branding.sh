@@ -45,6 +45,12 @@ root="${1:-}"
 
 WALLPAPER=/usr/share/backgrounds/tunaos/tunaos-default.jpg
 LOGO=/usr/share/pixmaps/tunaos.svg
+# The login screen shows the variant's lettermark (its emoji and name, e.g.
+# "🚀 Marlin"), installed by 90-image-info.sh; the variant is the brand.
+# Images built before lettermarks existed keep the square mark.
+if [[ -f "${root}/usr/share/pixmaps/tunaos-lettermark.svg" ]]; then
+	LOGO=/usr/share/pixmaps/tunaos-lettermark.svg
+fi
 
 local_d="${root}/etc/dconf/db/local.d"
 gdm_d="${root}/etc/dconf/db/gdm.d"

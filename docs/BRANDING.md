@@ -56,6 +56,16 @@ the session to use it, and that something differs per desktop.
 | XFCE | an autostart entry sets the wallpaper at the first login | done |
 | Pantheon | `zzzz-tunaos.gschema.override` | done |
 
+## The variant is the brand
+
+The user sees the variant name: Marlin, Sailfin, Albacore. The name
+"TunaOS" shows in two places only:
+
+- the About page of the desktop (KDE shows "part of TunaOS")
+- fastfetch
+
+Do not add "TunaOS" to a login screen, a splash, a wallpaper or the installer.
+
 ## Each variant has its own look
 
 A variant is TunaOS first. It also shows the distro it is built on.
@@ -66,6 +76,8 @@ grouper, openSUSE green for sailfin. The mark is the variant's Noto Emoji.
 | surface | what the variant gets |
 |---|---|
 | logo | its emoji, in `/usr/share/tunaos/logos/<variant>.svg` |
+| lettermark | its emoji and name, on GDM and the Plasma splash |
+| boot splash | an animation of its emoji |
 | wallpaper | a scene around its emoji, in its accent colour |
 | GNOME, KDE | the accent colour |
 | `ANSI_COLOR`, `/etc/issue`, fastfetch | the accent colour |
@@ -80,11 +92,27 @@ from `scripts/branding/wallpaper.svg.mjs`. The output is in the repository,
 so the build does not draw anything. Run the script again when you change a
 scene, a colour or an emoji.
 
+The scenes are placeholders. We want art from people: see the call for
+artwork in the issue tracker. Until then, art from an image model can fill a
+slot.
+
 Painted art can replace a scene for one desktop. Put it at
 `system_files/usr/share/backgrounds/tunaos/<variant>-<desktop>.jpg`.
 `select-wallpaper.sh` uses that file first. `scripts/branding/art-prompts.mjs`
 prints a prompt for each variant and desktop. The prompt joins the emoji, the
 colour of the base and the style of the desktop.
+
+### Generated assets
+
+These scripts make files that are in the repository. The build does not run
+them.
+
+| script | output |
+|---|---|
+| `scripts/branding/make-lettermarks.py` | `/usr/share/tunaos/lettermarks/` |
+| `scripts/branding/make-fastfetch-logos.py` | `/usr/share/tunaos/fastfetch/` |
+| `scripts/branding/make-plymouth-theme.py` | `/usr/share/plymouth/themes/<theme>/` |
+| `scripts/branding/render-wallpapers.mjs` | `/usr/share/backgrounds/tunaos/` |
 
 ## The rule
 

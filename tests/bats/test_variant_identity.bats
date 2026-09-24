@@ -118,3 +118,52 @@ rows() { grep -v '^#' "$TSV" | grep -v '^$'; }
     grep -q "cosmic-set-branding.sh" "${REPO_ROOT}/${p}" || { echo "${p} never calls cosmic-set-branding.sh" >&2; return 1; }
   done
 }
+
+@test "kde-set-look-and-feel names TunaOS once, on the About page" {
+  local f="${BATS_TEST_TMPDIR}/kdeglobals" about="${BATS_TEST_TMPDIR}/kcm-about-distrorc"
+  : >"$f"
+  TUNAOS_IDENTITY=/nonexistent TUNAOS_KCM_ABOUT="$about" \
+    "${REPO_ROOT}/build_scripts/desktop/kde-set-look-and-feel.sh" "$f"
+  grep -qx 'Variant=part of TunaOS' "$about"
+  grep -qx 'LogoPath=/usr/share/pixmaps/tunaos.svg' "$about"
+}
+
+@test "gnome-set-branding puts the variant lettermark on the login screen" {
+  local root="${BATS_TEST_TMPDIR}/root"
+  mkdir -p "${root}/usr/share/pixmaps"
+  echo svg >"${root}/usr/share/pixmaps/tunaos-lettermark.svg"
+  "${REPO_ROOT}/build_scripts/desktop/gnome-set-branding.sh" "$root"
+  grep -q "^logo='/usr/share/pixmaps/tunaos-lettermark.svg'" "${root}/etc/dconf/db/gdm.d/10-tunaos-branding"
+}
+
+@test "every variant has a lettermark and a fastfetch logo, and they parse" {
+  command -v xmllint >/dev/null || skip "xmllint not installed"
+  local id
+  while IFS=$'\t' read -r id _; do
+    for f in "${id}.svg" "${id}-dark.svg"; do
+      xmllint --noout "${REPO_ROOT}/system_files/usr/share/tunaos/lettermarks/${f}" ||
+        { echo "FAIL: lettermark ${f}" >&2; return 1; }
+    done
+    [ -s "${REPO_ROOT}/system_files/usr/share/tunaos/fastfetch/${id}.txt" ] ||
+      { echo "FAIL: no fastfetch logo for ${id}" >&2; return 1; }
+  done < <(rows)
+}
+
+@test "the vendored emoji and logos are plain XML a strict parser accepts" {
+  # Noto's Illustrator exports carried undeclared i: attributes and an 80 KB
+  # binary blob; librsvg refuses the one, and the other is dead weight.
+  command -v xmllint >/dev/null || skip "xmllint not installed"
+  local f
+  for f in "${REPO_ROOT}"/system_files/usr/share/tunaos/logos/*.svg "${REPO_ROOT}"/scripts/branding/emoji/*.svg; do
+    xmllint --noout "$f" || { echo "FAIL: ${f}" >&2; return 1; }
+    ! grep -q 'adobe_illustrator_pgf' "$f" || { echo "FAIL: Illustrator blob in ${f}" >&2; return 1; }
+  done
+}
+
+@test "fastfetch is aliased to the variant config, after ublue's alias" {
+  local d="${REPO_ROOT}/system_files/etc/profile.d"
+  [ -f "${d}/zz-tunaos-fastfetch.sh" ]
+  # profile.d runs in glob order; ours must sort after ublue-fastfetch.sh.
+  [[ "zz-tunaos-fastfetch.sh" > "ublue-fastfetch.sh" ]]
+  grep -q -- '--config /etc/xdg/fastfetch/config.jsonc' "${d}/zz-tunaos-fastfetch.sh"
+}
