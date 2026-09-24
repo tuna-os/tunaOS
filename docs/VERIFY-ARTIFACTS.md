@@ -32,13 +32,18 @@ an unrestricted regular expression.
 
 ## Verify the SPDX SBOM attestation
 
-Each published platform image has a signed SPDX JSON attestation:
+Each published platform image has a signed SPDX JSON attestation. A
+**different workflow** signs it: `attest-sbom.yml` runs after the build run
+finishes. So an outage of Sigstore gives that run its own result, not the
+result of the nightly ([#2282](https://github.com/tuna-os/tunaOS/issues/2282)).
+The identity below shows this. The identity of the image signature, above,
+stays the same.
 
 ```bash
 cosign verify-attestation "${ref}" \
   --type spdxjson \
   --certificate-identity \
-    "https://github.com/tuna-os/tunaOS/.github/workflows/reusable-build-image.yml@refs/heads/main" \
+    "https://github.com/tuna-os/tunaOS/.github/workflows/attest-sbom.yml@refs/heads/main" \
   --certificate-oidc-issuer \
     "https://token.actions.githubusercontent.com"
 ```
@@ -52,7 +57,8 @@ that platform image.
 The accepted identity is intentionally narrow:
 
 - repository: `tuna-os/tunaOS`;
-- workflow: `.github/workflows/reusable-build-image.yml`;
+- workflow: `.github/workflows/reusable-build-image.yml` for image signatures,
+  `.github/workflows/attest-sbom.yml` for SBOM attestations;
 - ref: protected `refs/heads/main`;
 - OIDC issuer: GitHub Actions.
 

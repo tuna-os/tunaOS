@@ -2117,10 +2117,13 @@ start_guest_heartbeat() {
 
 # E2E-only kargs on the installed system's BLS entries (the live env can
 # still mount the unencrypted ESP/boot). console=ttyS0 puts kernel output on
-# the serial the gate reads; plymouth.enable=0 makes the initramfs
-# cryptsetup PASSWORD PROMPT appear as serial text instead of a graphical
-# plymouth prompt — without it luks-first-boot.py never sees the prompt
-# (run 29670982740). Also dumps the ESP: whether the install produced a
+# the serial the gate reads; systemd.journald.forward_to_console=1 puts the
+# failed unit's actual error there too. This matters when a dead system bus
+# also takes down logind and NetworkManager, leaving no SSH route for journal
+# collection. plymouth.enable=0 makes the initramfs cryptsetup PASSWORD PROMPT
+# appear as serial text instead of a graphical plymouth prompt — without it
+# luks-first-boot.py never sees the prompt (run 29670982740). Also dumps the
+# ESP: whether the install produced a
 # *bootable* disk is only knowable from the ESP, and the ESP is gone the
 # moment this VM powers off. sailfin (composefs + systemd-boot) gets no
 # NVRAM entry — bootctl refuses to touch efivars from inside the install
@@ -2130,7 +2133,7 @@ start_guest_heartbeat() {
 # no matter what the boot order says, and from the serial log alone the
 # failure looks identical to a boot-order bug.
 append_installed_serial_kargs() {
-	echo "==> Appending console=ttyS0 + plymouth.enable=0 to installed BLS entries..."
+	echo "==> Appending serial, journal, and text-prompt kargs to installed BLS entries..."
 	"${GUEST_SSH[@]}" 'sudo bash -s' <<-'BLSEOF' 2>&1 | tee -a "$SERIAL_LOG" || echo "WARN: BLS karg append failed (continuing)"
 		for p in /dev/vda1 /dev/vda2 /dev/vda3; do
 			[ -b "$p" ] || continue
@@ -2139,8 +2142,14 @@ append_installed_serial_kargs() {
 			found=0
 			for f in /mnt/tbx-bls/loader/entries/*.conf /mnt/tbx-bls/boot/loader/entries/*.conf; do
 				[ -f "$f" ] || continue
-				grep -q "console=ttyS0" "$f" || sed -i "s/^options \(.*\)$/options \1 console=ttyS0,115200n8 rd.plymouth=0 plymouth.enable=0/" "$f"
-				echo "karg appended: $f"
+				for karg in \
+					console=ttyS0,115200n8 \
+					rd.plymouth=0 \
+					plymouth.enable=0 \
+					systemd.journald.forward_to_console=1; do
+					grep -Fqw -- "$karg" "$f" || sed -i "s|^options .*|& $karg|" "$f"
+				done
+				echo "kargs ensured: $f"
 				found=1
 			done
 			if [ "$found" = 1 ]; then

@@ -66,6 +66,28 @@ SRC="${_roots[0]}mkosi.extra"
 # Factory etc -> /etc (greetd, profile.d, kmscon, taidan.toml).
 cp -av "$SRC/usr/share/factory/etc/." /etc/
 
+# Two of those profile.d scripts call zirconium's own tools, which the explicit
+# /usr list below does not ship. zmotd.sh runs /usr/bin/zmotd in every login
+# shell ("No such file or directory" on each login), and zfetch.sh aliases
+# fastfetch and neofetch to /usr/bin/zfetch, so `fastfetch` itself broke and the
+# variant's fastfetch config never showed. Drop both (tunaOS#2664).
+rm -f /etc/profile.d/zmotd.sh /etc/profile.d/zfetch.sh
+
+# zprompt.sh calls tput when it is sourced. A login shell with no terminal
+# (serial console, `ssh -T`, a systemd unit) has no usable TERM, so each call
+# prints an error. The prompt only matters in an interactive terminal, so the
+# script returns early everywhere else. POSIX, because /etc/profile can source
+# it from sh.
+ZPROMPT_GUARD='case $- in *i*) ;; *) return 0 ;; esac; case "${TERM:-dumb}" in dumb) return 0 ;; esac'
+if [[ -f /etc/profile.d/zprompt.sh ]]; then
+	{
+		echo "# Added by build_scripts/install-zirconium.sh: interactive terminals only."
+		echo "$ZPROMPT_GUARD"
+		cat /etc/profile.d/zprompt.sh
+	} >"$TMP/zprompt.sh"
+	install -m0644 "$TMP/zprompt.sh" /etc/profile.d/zprompt.sh
+fi
+
 # The greeter's own niri config, which the factory tree does NOT contain.
 #
 # /etc/greetd/config.toml (just copied above) launches:

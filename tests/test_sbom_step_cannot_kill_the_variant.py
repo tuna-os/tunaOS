@@ -41,6 +41,7 @@ yaml = pytest.importorskip("yaml")
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/reusable-build-image.yml"
+ATTEST_WORKFLOW = ROOT / ".github/workflows/attest-sbom.yml"
 
 
 @pytest.fixture(scope="module")
@@ -133,12 +134,11 @@ def test_the_soft_failure_is_not_converted_straight_back_into_a_hard_one(build_p
 def test_a_missing_sbom_is_still_reported_somewhere(build_push):
     """Soft must not mean silent.
 
-    attest_sbom is the backstop: it is continue-on-error, so it cannot fail
-    the run, but it must still say the SBOM is missing.
+    attest-sbom.yml is the backstop. It is a separate `workflow_run` workflow
+    since #2282, so it cannot fail the build's run whatever it concludes --
+    but it must still say the SBOM is missing.
     """
-    workflow = yaml.safe_load(WORKFLOW.read_text())
-    attest = workflow["jobs"]["attest_sbom"]
-    assert attest.get("continue-on-error") is True
+    attest = yaml.safe_load(ATTEST_WORKFLOW.read_text())["jobs"]["attest"]
     body = next(s for s in attest["steps"] if s.get("name") == "Attest SPDX SBOMs")["run"]
     assert "::error::missing SPDX SBOM" in body
 

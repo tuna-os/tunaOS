@@ -46,6 +46,10 @@ on:
       - 'renovate.json'
       - 'Justfile'
       - 'just/**'
+      # Read by tests/bats/test_niri_dms_payload.bats: zirconium's factory
+      # profile.d scripts, which install-zirconium.sh copies whole. A snapshot
+      # refresh that adds a script calling a tool we do not ship must fail here.
+      - '_upstream-snapshots/**'
       # Read as a spec by the CI contract test, not as prose. The rest of
       # docs/ is prose and generated content, gated by `ste` and `regenerate`;
       # see the test named above for why docs/** is deliberately absent.

@@ -2,6 +2,35 @@
 
 > The authoritative agent guide lives at [`docs/AGENT_GUIDE.md`](docs/AGENT_GUIDE.md). Read that file for complete architecture, setup, and troubleshooting.
 
+## Spec-driven work (Spektacular)
+
+tunaOS plans larger changes with [Spektacular](https://github.com/hivecommons/spektacular)
+([RFC 011](docs/rfc/rfc011-spektacular.md)). Use it by the size of the change:
+
+| Change | Spektacular |
+|---|---|
+| Needs an RFC under [RFC-PROCESS.md](RFC-PROCESS.md) | Required: spec and plan |
+| Touches more than one area, or ports work between branches | Recommended |
+| A single script fix or manifest edit | Not needed |
+
+- **Start.** In Claude Code, use the `spek-new`, `spek-plan` and `spek-implement`
+  skills in `.claude/skills/`. Other agents drive the same state machines with
+  `spektacular spec|plan|implement`. Run `spektacular version check` first; the
+  pinned version is `spektacular` in `image-versions.yaml`.
+- **Knowledge.** `.spektacular/knowledge/` loads into every plan. When you find a
+  new gotcha or convention, add it with `spektacular knowledge write` and cite the
+  file it comes from. A stale entry is worse than none.
+- **Tests.** The `test` and `verify` steps suggest Go tooling (`*_test.go`,
+  `make test`). Ignore that: tunaOS tests with `just check`, `tests/bats/` and
+  `tests/` (pytest), as the rest of this file says.
+- **No person present.** Several steps wait for a user to confirm. When you run
+  alone, approve the step yourself, record that in the plan's working context,
+  and say so in the PR.
+- **Where the code is.** This repository. `.spektacular/` is its project folder,
+  not a separate project.
+- **Worked example.** `.spektacular/specs/` and `.spektacular/plans/` hold the
+  #1893 spec and plan (PR #2682).
+
 ## Quick Reference
 
 ```bash
