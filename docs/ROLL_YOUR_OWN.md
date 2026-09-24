@@ -603,7 +603,6 @@ tunaos/
 │   ├── HWE.sh                       #   HWE kernel installer
 │   ├── nvidia.sh                    #   NVIDIA driver installer
 │   ├── cachyos.sh                   #   CachyOS kernel overlay
-│   ├── gnome-extensions.sh          #   GNOME extensions compiler
 │   ├── copy-files.sh                #   system_files → image
 │   ├── cleanup.sh                   #   final cleanup
 │   └── ...

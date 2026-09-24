@@ -141,7 +141,7 @@ ABI-skewed: the `GLIBC_2.44` row above shows that skew already. Do not add one.
 
 Until then, the Gate stops the publication of the empty image. The status
 page must report that as red. It must not report it as untested (see
-`docs/ci-troubleshooting.md` row 42).
+`docs/ci-troubleshooting.md` row 44).
 
 ### Measured state of the snapshot (2026-08-25)
 

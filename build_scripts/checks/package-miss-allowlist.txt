@@ -65,17 +65,6 @@ greetd
 greetd-selinux
 gtkgreet
 
-# ── build_scripts/desktop/gnome-extensions.sh — extension build tooling.
-#    A miss here fails the build later at compile time (set -e), so these
-#    are tolerated only to keep THIS gate's failure from shadowing the
-#    clearer compile error.
-glib2-devel
-meson
-sassc
-cmake
-dbus-devel
-unzip
-
 # ── manifests/desktops/*.yaml `optional:` tiers (install-desktop.sh) ──
 # cosmic.yaml el10
 #   brightnessctl / playerctl already listed above

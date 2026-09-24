@@ -81,3 +81,5 @@ post_install:
   # Curated Flatpak set (store + browser) + preinstall service — see the
   # script header; asserts live in verify-desktop-experience.sh.
   - flatpak-preinstall.sh
+  # Last: pin only the COSMIC apps that actually got installed (tunaOS#2192).
+  - cosmic-dock.sh
