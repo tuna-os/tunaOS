@@ -154,3 +154,49 @@ _code() { grep -v '^[[:space:]]*#' "$1"; }
   local script="${REPO_ROOT}/build_scripts/desktop/install-desktop.sh"
   _code "$script" | grep -qF '${#_TD_COPR_PKGS[@]} == 0'
 }
+
+@test "no shipped zirconium profile.d script calls a zirconium tool we do not ship" {
+  # The factory /etc tree is copied whole, but its /usr tools are copied by an
+  # explicit list. zmotd.sh ran /usr/bin/zmotd on every login and zfetch.sh
+  # aliased fastfetch to /usr/bin/zfetch; neither binary ships (tunaOS#2664).
+  local script="${REPO_ROOT}/build_scripts/install-zirconium.sh"
+  local pd="${REPO_ROOT}/_upstream-snapshots/zirconium/mkosi.extra/usr/share/factory/etc/profile.d"
+  [ -d "$pd" ]
+
+  local removed
+  removed="$(_code "$script" | grep -E '^[[:space:]]*rm -f .*/etc/profile\.d/' || true)"
+
+  local f name tool
+  for f in "$pd"/*.sh; do
+    name="$(basename "$f")"
+    grep -qF "/etc/profile.d/${name}" <<<"$removed" && continue
+    # Every /usr/bin/<z-tool> a kept script names must be installed by the script.
+    for tool in $(grep -oE '/usr/bin/z[a-z]+' "$f" | sort -u); do
+      _code "$script" | grep -qF "$tool" || {
+        echo "${name} calls ${tool}, which install-zirconium.sh does not ship" >&2
+        return 1
+      }
+    done
+  done
+}
+
+@test "zprompt.sh is silent in a login shell with no terminal" {
+  local script="${REPO_ROOT}/build_scripts/install-zirconium.sh"
+  local zprompt="${REPO_ROOT}/_upstream-snapshots/zirconium/mkosi.extra/usr/share/factory/etc/profile.d/zprompt.sh"
+  [ -f "$zprompt" ]
+
+  # Take the guard the build writes, prepend it the way the build does, and
+  # source the result in a non-interactive shell with TERM unset.
+  local guard
+  guard="$(grep -E "^ZPROMPT_GUARD='" "$script" | sed -E "s/^ZPROMPT_GUARD='(.*)'$/\1/")"
+  [ -n "$guard" ]
+  { echo "$guard"; cat "$zprompt"; } >"${BATS_TEST_TMPDIR}/zprompt.sh"
+
+  run env -u TERM bash -c ". '${BATS_TEST_TMPDIR}/zprompt.sh'; echo sourced-ok" 2>&1
+  [ "$status" -eq 0 ]
+  [ "$output" = "sourced-ok" ]
+
+  # Premise: without the guard the same source is noisy, or this proves nothing.
+  run env -u TERM bash -c ". '${zprompt}'" 2>&1
+  [ -n "$output" ]
+}
