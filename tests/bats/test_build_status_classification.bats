@@ -94,6 +94,27 @@ run_generator() {
   grep -q '2 never reached' "$README"
 }
 
+@test "a failed Gate that skipped Promote is failing, not unreached" {
+  # tunaOS#2513: hummingbird:gnome's Gate fails nightly and skips Promote
+  # (run 35938968035). Scoring only on Promote reported it "never reached".
+  export GH_JOBS=$'sailfin / green / Promote\tsuccess\nsailfin / broken / Promote\tfailure\nsailfin / skipped / Promote\tskipped\nsailfin / skipped / Gate\tfailure\n'
+  run_generator
+  [ "$status" -eq 0 ]
+  local row
+  row=$(grep '`sailfin`' "$README")
+  [[ "$row" == *"| broken,skipped | absent |"* ]]
+  grep -q '2 failures' "$README"
+}
+
+@test "a skipped Promote behind a passing Gate is still unreached" {
+  export GH_JOBS=$'sailfin / green / Promote\tsuccess\nsailfin / broken / Promote\tfailure\nsailfin / skipped / Promote\tskipped\nsailfin / skipped / Gate\tsuccess\n'
+  run_generator
+  [ "$status" -eq 0 ]
+  local row
+  row=$(grep '`sailfin`' "$README")
+  [[ "$row" == *"| broken | skipped,absent |"* ]]
+}
+
 @test "a cancelled run is skipped in favour of the newest conclusive one" {
   # docs/MATRIX-STATUS.md: "a superseded run is not a broken build".
   export GH_RUNS='[{"databaseId":9,"conclusion":"cancelled","createdAt":"2026-08-15T03:00:00Z","url":"https://example/9"},{"databaseId":1,"conclusion":"success","createdAt":"2026-08-14T03:00:00Z","url":"https://example/1"}]'

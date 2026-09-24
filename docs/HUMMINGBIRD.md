@@ -107,6 +107,42 @@ tunaos-packages now builds in the same Fedora 44 + public-hummingbird root
 The decision and the numbers behind it are in tunaos-packages'
 `docs/HUMMINGBIRD-TARGET.md` and tuna-os/tunaos-packages#629.
 
+### utah does not close the GNOME closure yet (measured 2026-09-24)
+
+`hummingbird:gnome` builds nightly and fails its boot Gate nightly. The image
+has no `gdm` and no `gnome-shell`. The serial log reaches `graphical.target`
+at 13.6s with no display manager behind it, and ends at a text `login:`
+prompt. The Gate waits its full 900s for `TUNAOS_DESKTOP_CONTRACT_OK`, which
+never arrives (run 35938968035, job 107462243052). The
+cause is the dnf solver output in the same run's `gnome / linux-amd64` job
+(107444576868). `gnome-shell-51~beta` from utah-packages and from
+`tunaos-hummingbird` needs sonames that no loaded repository provides:
+
+| missing | needed by |
+|---|---|
+| `libecal-2.0.so.3`, `libedataserver-1.2.so.27/28` (evolution-data-server) | `gnome-shell` → `gdm`, `gnome-session-wayland-session` |
+| `webkitgtk6.0` | `gnome-shell`, `gnome-initial-setup`, `yelp` |
+| `libvorbis.so.0`, `libvorbisenc.so.2` | `libsndfile` → `pipewire-libs`; `gstreamer1-plugins-base` → `gtk4` (`libgstplay`) |
+| `libsmbclient.so.0` (samba-client-libs) | `gnome-control-center`, `gvfs-smb` |
+| `libcanberra.so.0`, `libcanberra-gtk3.so.0` | `gnome-settings-daemon`, `gnome-disk-utility` |
+| `libreport-filesystem` | `mdadm` → `libblockdev-mdraid` → `udisks2` → `gvfs` |
+| `libm.so.6(GLIBC_2.44)` | `libavutil-free` → `libheif` → `glycin-loaders` → `gdk-pixbuf2` |
+
+The live `tunaos-hummingbird` index at `repo.tunaos.org/hummingbird/20251124-x86_64`
+(13992 packages, repomd revision 1790212643) has 0 packages named
+`libvorbis`, `webkitgtk6.0`, `evolution-data-server`, `libcanberra`,
+`samba-client-libs`, `libreport-filesystem` or `fprintd`.
+
+This is a package-factory gap, in tuna-os/tunaos-packages or
+projectbluefin/utah-packages. A change in this repository cannot close it. No
+sanctioned source in `PACKAGE-SOURCING.md` carries hummingbird builds of these
+packages. A Fedora Rawhide repo would be an unlisted source. It is also
+ABI-skewed: the `GLIBC_2.44` row above shows that skew already. Do not add one.
+
+Until then, the Gate stops the publication of the empty image. The status
+page must report that as red. It must not report it as untested (see
+`docs/ci-troubleshooting.md` row 42).
+
 ### Measured state of the snapshot (2026-08-25)
 
 Against the live index that `build_scripts/10-base-packages.sh` configures,
