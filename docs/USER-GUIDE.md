@@ -67,10 +67,10 @@ A TunaOS image is named `<variant>:<desktop>[-hardware]`.
 | 🐉 **bonito-rawhide** | Fedora Rawhide | Fedora's dev branch; expect breakage |
 | 🐡 **flounder** | Debian 13 (Trixie) | Debian stable |
 | ☢️ **flounder-sid** | Debian Sid | Debian unstable |
-| 🐟 **grouper** | Ubuntu 26.04 | Ubuntu LTS-next |
-| 🐟 **gurnard** | Ubuntu 24.04 + Pantheon | Experimental |
+| 🪸 **grouper** | Ubuntu 26.04 | Ubuntu LTS-next |
+| 🤖 **gurnard** | Ubuntu 24.04 + Pantheon | Experimental |
 | 🚀 **marlin** | Arch Linux | Rolling |
-| 🦈 **sailfin** | openSUSE Tumbleweed | Rolling |
+| ⛵ **sailfin** | openSUSE Tumbleweed | Rolling |
 | 🌈 **guppy** | Gentoo | Binary-package Gentoo, the adventurous pick |
 | 🐦 **hummingbird** | Fedora Hummingbird | Experimental next-gen Fedora base |
 | 🎏 **wahoo** | Fedora ELN | Experimental EL11 preview — what c11s/Kitten 11 will be like, months early. **No H.264/H.265**: ELN ships no working video decoder, so this is a testing lane, not a daily driver |

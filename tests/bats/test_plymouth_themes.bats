@@ -1,51 +1,50 @@
 #!/usr/bin/env bats
-# Test per-variant Plymouth boot theme assets and selection logic.
+# Every variant boots into its own emoji animation, and that theme is complete.
 #
-# Each variant gets a themed boot animation matching its build-config.yml
-# emoji (extracted Noto animated emoji frames, or a static single frame for
-# emoji with no animated GIF — see build_scripts/26-packages-post.sh).
+# Until plymouth-set-theme.sh, only the EL10 path selected a theme; marlin,
+# grouper, flounder, sailfin and guppy booted with the distro splash although
+# the themes were in the image.
 
-SCRIPT="build_scripts/26-packages-post.sh"
-THEMES_DIR="system_files/usr/share/plymouth/themes"
+REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
+SET="${REPO_ROOT}/build_scripts/plymouth-set-theme.sh"
+THEMES="${REPO_ROOT}/system_files/usr/share/plymouth/themes"
+CONFIG="${REPO_ROOT}/.github/build-config.yml"
 
-@test "26-packages-post.sh maps every build-config variant to a theme" {
-    for variant in yellowfin albacore skipjack bonito sailfin guppy bonito-rawhide grouper marlin flounder flounder-sid; do
-        grep -q "^${variant})" "$SCRIPT"
+@test "every build-config variant maps to a theme that exists" {
+  command -v yq >/dev/null || skip "yq not installed"
+  local v t
+  while read -r v; do
+    t="$("$SET" --print "$v")"
+    [ -f "${THEMES}/${t}/${t}.plymouth" ] || { echo "FAIL: ${v} -> ${t}, which has no theme" >&2; return 1; }
+  done < <(yq -r '.variants[].id' "$CONFIG")
+}
+
+@test "only albacore falls back to the generic fish" {
+  command -v yq >/dev/null || skip "yq not installed"
+  local v
+  while read -r v; do
+    [[ "$v" == albacore ]] && continue
+    [ "$("$SET" --print "$v")" != tunaos ] || { echo "FAIL: ${v} boots the generic fish" >&2; return 1; }
+  done < <(yq -r '.variants[].id' "$CONFIG")
+}
+
+@test "each theme ships the frames its script loads" {
+  local d t n i
+  for d in "${THEMES}"/*/; do
+    t="$(basename "$d")"
+    [ -f "${d}${t}.script" ] || { echo "FAIL: ${t} has no script" >&2; return 1; }
+    n="$(sed -n 's/^FRAME_COUNT = \([0-9]*\);.*/\1/p' "${d}${t}.script")"
+    for ((i = 1; i <= n; i++)); do
+      compgen -G "${d}*-$(printf '%04d' "$i").png" >/dev/null ||
+        { echo "FAIL: ${t} script wants ${n} frames, frame ${i} is missing" >&2; return 1; }
     done
+  done
 }
 
-@test "every mapped theme has a .plymouth descriptor and .script file" {
-    for theme in tunaos tropical-fish sushi fishing-pole shark rainbow dragon rocket pufferfish radioactive; do
-        [ -f "${THEMES_DIR}/${theme}/${theme}.plymouth" ]
-        [ -f "${THEMES_DIR}/${theme}/${theme}.script" ]
-    done
-}
-
-@test "every theme has at least one numbered frame matching its script prefix" {
-    # tunaos predates the per-variant themes and uses "fish-" as its frame
-    # prefix (not "tunaos-"); the rest use their own theme name as the prefix.
-    declare -A prefix=(
-        [tunaos]=fish [tropical-fish]=tropical-fish [sushi]=sushi
-        [fishing-pole]=fishing-pole [shark]=shark [rainbow]=rainbow
-        [dragon]=dragon [rocket]=rocket [pufferfish]=pufferfish
-        [radioactive]=radioactive
-    )
-    for theme in "${!prefix[@]}"; do
-        run bash -c "ls '${THEMES_DIR}/${theme}/${prefix[$theme]}-'*.png 2>/dev/null | wc -l"
-        [ "$output" -gt 0 ]
-    done
-}
-
-@test "unmapped/unknown variant falls back to the tunaos theme" {
-    run bash -c "grep -A2 'PLYMOUTH_THEME=\"tunaos\"' '$SCRIPT' | head -1"
-    [[ "$output" == *'PLYMOUTH_THEME="tunaos"'* ]]
-}
-
-@test "26-packages-post.sh still calls plymouth-set-default-theme with the resolved variable" {
-    grep -q 'plymouth-set-default-theme "\$PLYMOUTH_THEME"' "$SCRIPT"
-}
-
-@test "26-packages-post.sh passes shellcheck" {
-    run shellcheck -x "$SCRIPT"
-    [ "$status" -eq 0 ]
+@test "every non-EL10 base selects the theme before dracut" {
+  grep -q 'plymouth-set-theme.sh' "${REPO_ROOT}/build_scripts/bootc/dracut-config.sh"
+  grep -q 'plymouth-set-theme.sh' "${REPO_ROOT}/build_scripts/bootc/finalize.sh"
+  grep -q 'plymouth-set-theme.sh' "${REPO_ROOT}/build_scripts/26-packages-post.sh"
+  # openSUSE calls dracut itself: the selection must come first in that RUN.
+  awk '/plymouth-set-theme.sh/ { seen = 1 } /dracut --force/ && !seen { exit 1 }' "${REPO_ROOT}/Containerfile.opensuse"
 }

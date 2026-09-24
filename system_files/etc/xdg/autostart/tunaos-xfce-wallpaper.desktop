@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=TunaOS wallpaper
+Comment=Set the TunaOS wallpaper on first login
+Exec=/usr/libexec/tunaos/xfce-wallpaper
+OnlyShowIn=XFCE;
+NoDisplay=true
+X-GNOME-Autostart-enabled=true

@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   build:
-    name: 🐟-grouper
+    name: 🪸-grouper
     uses: ./.github/workflows/build-variant.yml
     with:
       variant: 'grouper'

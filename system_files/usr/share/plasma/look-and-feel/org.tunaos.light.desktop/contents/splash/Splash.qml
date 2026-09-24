@@ -39,8 +39,9 @@ Rectangle {
             asynchronous: true
             source: "images/tunaos_logo.svgz"
 
-            sourceSize.width: size
-            sourceSize.height: size
+            // The logo is the variant's lettermark ("🚀 Marlin"), which is
+            // wide: fix only the height, so the width follows its shape.
+            sourceSize.height: size * 0.6
         }
 
         // TODO: port to PlasmaComponents3.BusyIndicator

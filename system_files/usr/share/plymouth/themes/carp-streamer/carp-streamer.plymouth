@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=TunaOS Carp Streamer
+Description=TunaOS boot animation (Carp Streamer)
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/carp-streamer
+ScriptFile=/usr/share/plymouth/themes/carp-streamer/carp-streamer.script
