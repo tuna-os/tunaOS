@@ -24,7 +24,7 @@ import importlib.util
 import sys
 import unittest
 from pathlib import Path
-from unittest import mock
+import unittest.mock
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "gen-matrix-status.py"
 
@@ -57,14 +57,14 @@ def _gh(list_result, view_result):
 
 class AFailedQueryIsNotAbsenceOfRuns(unittest.TestCase):
     def setUp(self):
-        patcher = mock.patch.object(
+        patcher = unittest.mock.patch.object(
             gms, "_matrix", return_value={"bonito": {"gnome"}}
         )
         patcher.start()
         self.addCleanup(patcher.stop)
 
     def _results(self, list_result, view_result):
-        with mock.patch.object(gms, "gh_json", _gh(list_result, view_result)):
+        with unittest.mock.patch.object(gms, "gh_json", _gh(list_result, view_result)):
             return gms.build_stage_results()["bonito"]
 
     def test_a_failed_run_list_raises_instead_of_scoring_untested(self):
@@ -93,9 +93,9 @@ class GhJsonSaysWhatFailed(unittest.TestCase):
         err = gms.subprocess.CalledProcessError(
             1, "gh", stderr="HTTP 502: Bad Gateway"
         )
-        with mock.patch.object(gms.subprocess, "run", side_effect=err), \
-                mock.patch.object(gms.time, "sleep"), \
-                mock.patch.object(gms.sys, "stderr") as stderr:
+        with unittest.mock.patch.object(gms.subprocess, "run", side_effect=err), \
+                unittest.mock.patch.object(gms.time, "sleep"), \
+                unittest.mock.patch.object(gms.sys, "stderr") as stderr:
             self.assertIsNone(gms.gh_json("run", "list"))
         written = "".join(c.args[0] for c in stderr.write.call_args_list)
         self.assertIn("gh run list", written)
