@@ -29,7 +29,7 @@ stub_env() {
 	cat >"${STUB_DIR}/systemctl" <<EOF
 #!/usr/bin/env bash
 case "\$*" in
-  "is-system-running --wait") echo running ;;
+  "is-system-running")        echo running ;;
   "show -P Id dbus.service")  echo "${resolved}" ;;
   "is-active --quiet ${resolved}") [[ "${bus_state}" == active ]] && exit 0 || exit 3 ;;
   "is-active ${resolved}")    echo "${bus_state}" ;;
@@ -92,99 +92,34 @@ teardown() { [[ -n "${STUB_DIR:-}" ]] && rm -rf "${STUB_DIR}"; return 0; }
 	[ "$status" -eq 0 ]
 }
 
-# ── The settle wait must be bounded ─────────────────────────────────────────
+# ── The bus assertion is reachable on a boot that has not settled ─────────
 #
-# Every assertion above sits BELOW `systemctl is-system-running --wait`, and
-# that wait was unbounded. A machine whose startup never settles never supplies
-# a terminal state, so the script hung for the unit's full 300s TimeoutStartSec
-# and was killed without printing a line:
-#
-#   Starting tunaos-base-contract.service - Verify TunaOS base boot contract...
-#   [ 314.604325] tunaos-base-contract.service: start operation timed out.
-#
-# skipjack:gnome, run 34760890405 — and identically in 34705564876, which
-# predates the bus assertion, so the hang is older than that check rather than
-# caused by it. The cost was double: the gate said "timeout" where the machine
-# had a nameable defect, and the bus assertion written for this very failure
-# could never reach it.
+# Every assertion above sat below `systemctl is-system-running --wait`, and
+# that wait was on this unit's own job (tunaOS#2514), so the bus check never
+# ran on any cell. The contract now samples the state once. `starting` is what
+# a base cell samples, because the unit is a job in the boot transaction, and
+# the bus assertion has to fire from there.
 
-# A systemctl whose --wait never returns, so the bound is what ends the call.
-stub_hanging_settle() {
+@test "a dead bus fails the contract while the boot is still starting" {
 	STUB_DIR="$(mktemp -d)"
 	cat >"${STUB_DIR}/systemctl" <<'EOF'
 #!/usr/bin/env bash
 case "$*" in
   "is-system-running --wait") sleep 600 ;;
-  "is-system-running")        echo starting ;;
+  "is-system-running")        echo starting; exit 1 ;;
   "show -P Id dbus.service")  echo dbus-broker.service ;;
   "is-active --quiet dbus-broker.service") exit 3 ;;
-  "is-active dbus-broker.service")         echo inactive ;;
+  "is-active dbus-broker.service")         echo failed ;;
   *) exit 0 ;;
 esac
 EOF
 	printf '#!/usr/bin/env bash\nexit 0\n' >"${STUB_DIR}/bootc"
 	chmod +x "${STUB_DIR}/systemctl" "${STUB_DIR}/bootc"
 	export PATH="${STUB_DIR}:${PATH}"
-}
-
-@test "a settle wait that never returns is bounded, not left to the unit timeout" {
-	stub_hanging_settle
-	# Drive it with a 2s bound rather than the production 240s, so the test
-	# proves the bound exists without spending four minutes to do it.
-	TUNAOS_SETTLE_WAIT_SECONDS=2 run timeout 60s bash "$SCRIPT" --runtime
-	[ "$status" -ne 124 ]
-	rm -rf "${STUB_DIR}"
-}
-
-@test "the production bound leaves the unit room to report" {
-	# 40-services.sh gives the unit TimeoutStartSec=300 and starts it after
-	# multi-user.target, around 13s in. The bound has to clear the slowest
-	# real settle AND leave time for the checks below it to print a verdict.
-	#
-	# 120s did neither: hummingbird:gnome settles after 2min 7s of userspace,
-	# and run 34775725935 caught the bound expiring 14ms before the machine
-	# became healthy — failing an image that was about to pass.
-	local want
-	want="$(grep -oE ': "\$\{TUNAOS_SETTLE_WAIT_SECONDS:=[0-9]+\}"' "$SCRIPT" |
-		grep -oE '[0-9]+')"
-	[ -n "$want" ]
-	[ "$want" -ge 200 ]   # clears the 127s settle with real margin
-	[ "$want" -le 280 ]   # leaves room under the unit's 300s to say why
-}
-
-@test "a hung settle still yields a named verdict, not silence" {
-	stub_hanging_settle
-	TUNAOS_SETTLE_WAIT_SECONDS=2 run timeout 60s bash "$SCRIPT" --runtime
-	# It says the wait timed out AND what it found when it asked again.
-	[[ "$output" == *"settle-wait-timed-out"* ]]
-	# And it fails on the state, by name, instead of being killed mid-hang.
-	[[ "$output" == *"TUNAOS_BASE_CONTRACT_FAIL"* ]]
+	# The outer timeout only stops a regression to `--wait` from hanging the
+	# suite; the stub's `--wait` never returns.
+	run timeout 20s bash "$SCRIPT" --runtime
 	[ "$status" -eq 1 ]
-	rm -rf "${STUB_DIR}"
-}
-
-@test "degraded is not mistaken for a hang" {
-	# `is-system-running` exits non-zero for `degraded`, which this contract
-	# ALLOWS. Only timeout(1)'s own 124 means the wait ran out, so a bare
-	# `if !` here would have called every degraded boot a hang.
-	STUB_DIR="$(mktemp -d)"
-	cat >"${STUB_DIR}/systemctl" <<'EOF'
-#!/usr/bin/env bash
-case "$*" in
-  "is-system-running --wait") echo degraded; exit 1 ;;
-  "is-system-running")        echo SHOULD_NOT_BE_CALLED ;;
-  "show -P Id dbus.service")  echo dbus-broker.service ;;
-  "is-active --quiet dbus-broker.service") exit 0 ;;
-  *) exit 0 ;;
-esac
-EOF
-	printf '#!/usr/bin/env bash\nexit 0\n' >"${STUB_DIR}/bootc"
-	chmod +x "${STUB_DIR}/systemctl" "${STUB_DIR}/bootc"
-	export PATH="${STUB_DIR}:${PATH}"
-	run bash "$SCRIPT" --runtime
-	[ "$status" -eq 0 ]
-	[[ "$output" != *"settle-wait-timed-out"* ]]
-	[[ "$output" != *"SHOULD_NOT_BE_CALLED"* ]]
-	[[ "$output" == *"TUNAOS_BASE_CONTRACT_OK"* ]]
-	rm -rf "${STUB_DIR}"
+	[[ "$output" == *"TUNAOS_BASE_CONTRACT_FAIL reason=system-bus-inactive"* ]]
+	[[ "$output" != *"system-state="* ]]
 }

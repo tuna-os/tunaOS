@@ -1013,37 +1013,42 @@ Between those two lines the contract printed nothing. It had run for the unit's 
 
 **The expensive part:** every check after that line was unreachable on exactly the images those checks exist to judge. The contract asserts `bootc status`. It also asserts that the system message bus is alive. #2484 added that check for `skipjack`, whose dbus-broker dies on an SELinux denial and takes the bus down with it. That is the same class of machine whose startup never settles, so the assertion written for the failure could never run on it. The gate said `timeout`; the defect had a name, and nobody heard it.
 
-**Fix (#2501):** bound the wait, then ask again without `--wait`.
+**First fix (#2501, #2506), now withdrawn:** bound the wait at 120s, then at 240s, and ask again without `--wait` when the bound expires. That turned a silent kill into a named verdict. It did not make the checks below reachable.
+
+**The real cause (#2514):** the wait was on the unit's own job, so no bound can be correct. Three facts close the loop:
+
+- `systemctl is-system-running --wait` returns when the manager leaves `starting`.
+- The manager leaves `starting` when the initial boot transaction completes.
+- `tunaos-base-contract.service` is `Type=oneshot` and `WantedBy=multi-user.target`, so its job is in that transaction until the script exits.
+
+The contract waited for a state that the contract itself held back. The serial log shows it. On `hummingbird:gnome`, `Startup finished` came 10-14 ms after the wait gave up, at both bounds:
+
+| bound | wait gave up | `Startup finished` | userspace |
+|---|---|---|---|
+| 120s | `133.320660` | `133.334844` | 2min 7.074s |
+| 240s | `252.338862` | `252.351227` | 4min 7.191s |
+
+The userspace time tracked the bound, not the image. The value "2min 7s" looked like a slow image, and it caused the move to 240s. That move doubled the value.
+
+Desktop cells lost the verdict in a different way. `scripts/iso-e2e.sh` sees `TUNAOS_DESKTOP_CONTRACT_OK` and stops the VM while the base contract is still in the wait:
 
 ```
-_settle_rc=0
-state=$(timeout "${TUNAOS_SETTLE_WAIT_SECONDS}s" systemctl is-system-running --wait 2>/dev/null) || _settle_rc=$?
-if [[ ${_settle_rc} -eq 124 ]]; then
-	state=$(systemctl is-system-running 2>/dev/null || true)
-	echo "TUNAOS_BASE_CONTRACT_NOTE settle-wait-timed-out state=${state:-unknown}" >&2
-fi
+[ 30.170663] systemd[1]: tunaos-base-contract.service: Main process exited, code=killed, status=15/TERM
 ```
 
-The second query turns a silent kill into a named verdict, and the checks below finally run.
+That is `bonito:gnome-t2`, run 34768771243. So no cell ran `bootc status` or the system-bus check.
 
-**The choice of bound is the hard half, and the first value was wrong.** 120s looked generous and was not. `hummingbird:gnome` needs 2min 7s of userspace to settle. Run 34775725935 caught the bound expire **fourteen milliseconds** before the machine became healthy:
+**Fix (#2514):** take one sample of the state and do not wait. `checks/e2e-runtime-checks.sh` already samples this way.
 
-```
-[ 133.320660 ] TUNAOS_BASE_CONTRACT_NOTE settle-wait-timed-out state=starting
-[ 133.321714 ] TUNAOS_BASE_CONTRACT_FAIL reason=system-state=starting
-[ 133.334844 ] Startup finished in 1.159s (kernel) + 5.100s (initrd)
-               + 2min 7.074s (userspace) = 2min 13.334s
-```
+| state | verdict |
+|---|---|
+| `maintenance`, `stopping`, `offline`, no answer | fail |
+| `initializing`, `starting` | pass; the unit starts after `multi-user.target`, so multi-user was reached |
+| `running`, `degraded` | pass |
 
-A gate that fails an image which was about to pass is worse than one that hangs. The bound is now 240s, and two numbers set it. It must clear the slowest settle observed on real hardware. It must also leave the unit enough of its `TimeoutStartSec` for the checks below to run and print a verdict. `40-services.sh` allows 300s and starts the unit around 13s in, so 240s nearly doubles the slowest settle and still keeps about 60s to report.
+The contract also prints the names of the failed units in a `TUNAOS_BASE_CONTRACT_NOTE` line. That line is evidence, not a verdict. `TUNAOS_SETTLE_WAIT_SECONDS` and its bound tests are gone. `tests/bats/test_no_settle_wait_inside_boot_transaction.bats` finds each script that a boot unit starts, and fails if one of them waits on `is-system-running`.
 
-`TUNAOS_SETTLE_WAIT_SECONDS` overrides it. Nothing in the image sets it; the tests do, which took that file from about four minutes of wall clock to 4.5 seconds.
-
-**Pin such a value from both sides.** A bound that is too tight will fail a healthy image. One that is too loose leaves no time to report, and restores the silent kill the bound exists to remove. A test that only checks one direction lets the other regress.
-
-Only `timeout(1)`'s own exit 124 counts as a hang. `systemctl is-system-running` exits non-zero for `degraded`, a state this contract deliberately allows, so a bare `if !` here would report every degraded boot as a hang.
-
-**Lesson:** a gate that waits must bound the wait. Without a bound, the harness timeout becomes the timeout. A harness timeout is the least informative failure available: it names the job, never the defect. It also swallows every assertion after the wait. So the checks you most want on a sick machine are the ones that never run.
+**Lesson:** a gate that waits must bound the wait, and #2501 was correct about that. But first make sure that the wait can end. A check that runs as a job in the boot transaction cannot wait for that transaction to complete. If a measured duration moves when you change the bound, the bound is the thing you measure.
 
 ### 22. Two reports that both mistook silence for a verdict (2026-09-13)
 

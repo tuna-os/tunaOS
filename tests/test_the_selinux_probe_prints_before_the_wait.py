@@ -15,9 +15,8 @@ that could answer is the one that cannot be asked:
 Serial survives all of that. Two properties make the probe useful, and both are
 easy to lose in a later edit:
 
-  * it prints ABOVE the settle wait. Everything below that wait is unreachable
-    on exactly these images (tunaOS#2514), so a probe below it would describe
-    only the machines that were never the problem.
+  * it prints ABOVE the first assertion. Each assertion exits on failure, so
+    a probe below one would describe only the machines that passed it.
   * it cannot fail the contract. A diagnostic that turns a red boot into a
     differently-red boot has made the gate worse, not better.
 """
@@ -47,13 +46,13 @@ class TheProbeRunsBeforeAnythingCanBlock(unittest.TestCase):
         self.assertNotEqual(i, -1, f"{needle!r} is gone from {SCRIPT.name}")
         return i
 
-    def test_it_is_invoked_above_the_settle_wait(self):
+    def test_it_is_invoked_above_the_first_assertion(self):
         probe = self._index("\n_selinux_probe 2>&1")
-        wait = self._index("is-system-running --wait")
+        sample = self._index("\nstate=$(systemctl is-system-running")
         self.assertLess(
-            probe, wait,
-            "the probe moved below the settle wait; on the images it exists for "
-            "the wait times out and nothing below it is reached (tunaOS#2514)")
+            probe, sample,
+            "the probe moved below the system-state assertion; on the images it "
+            "exists for, that assertion can exit first and the probe never prints")
 
     def test_it_prints_the_library_version_under_test(self):
         # The one measurement that splits the family: libselinux is 3.10 on
