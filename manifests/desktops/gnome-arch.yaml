@@ -38,6 +38,23 @@ packages:
     - vulkan-icd-loader
     - xdg-user-dirs
 
+    # Fonts. dnf variants get these for free from the "Fonts" group
+    # (gnome.yaml) plus the Nerd Font that build_scripts/26-packages-post.sh
+    # curls in; Containerfile.arch runs neither path (it never sources
+    # 26-packages-post.sh at all -- see the comment above install-remora.sh
+    # in Containerfile.arch for the same gap hitting remora and depmod), and
+    # nothing here compensated for fonts the way those two got hand-fixed.
+    # Measured on a booted marlin:gnome (BUILD_ID=4ace379): /usr/share/fonts
+    # held only Adwaita, encodings and gnu-free; `fc-match monospace`
+    # resolved to FreeMono; `fc-list | grep -i emoji` returned nothing; and
+    # `pacman -Q ttf-dejavu ttf-liberation noto-fonts noto-fonts-emoji
+    # ttf-jetbrains-mono-nerd` reported all five not installed.
+    - ttf-dejavu
+    - ttf-liberation
+    - noto-fonts
+    - noto-fonts-emoji
+    - ttf-jetbrains-mono-nerd
+
   cachyos:
     repos:
       - name: cachyos

@@ -90,10 +90,10 @@ downloads:
   # it at once.
   shfmt: "v3.14.1"
   # renovate: datasource=github-releases depName=twpayne/chezmoi
-  chezmoi: "v2.72.1"
+  chezmoi: "v2.72.2"
   chezmoi_sha256:
-    amd64: "168063d2bbde78522751b27d0c523d41c612640c5b568d156d20a50240c827ba"
-    arm64: "07d136f29d9a37587dd9e950a656983984b98dfbed5b15a76f6447aa51c208e6"
+    amd64: "310a8f141b940e5dbf0fef33fe27804768c977fa1da72112e27f78797225a526"
+    arm64: "3bb492d8c32f3d59c9f2066486e0149345eabf62a01f1ec9477ad04ad1cd99b7"
   # renovate: datasource=git-refs depName=tuna-os/tacklebox
   # This is the fallback every caller that does not set TACKLEBOX_SHA gets
   # (scripts/lib/common.sh:229) — installer-smoke.yml among them.
@@ -144,8 +144,8 @@ downloads:
   # serves every architecture. Re-derive from the .sha256 asset, never from a
   # local sha256sum of whatever arrived, whenever this version moves.
   # renovate: datasource=github-releases depName=AvengeMedia/DankMaterialShell
-  dms_qml: "v1.6.1"
-  dms_qml_sha256: "904ad2709a2075f10dbb089b42a9f4eb39d8f06cb2634fd4c95fa739ef9c4a2d"
+  dms_qml: "v1.6.2"
+  dms_qml_sha256: "305fd67a7321eb884b37d46bd3eada70f41add82c1d822e92c6a9069b5a1826f"
 
   # Zirconium's mkosi.extra payload, fetched as a source tarball by
   # build_scripts/install-zirconium.sh (niri stages only). Pinned to a commit
