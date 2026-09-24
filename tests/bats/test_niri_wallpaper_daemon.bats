@@ -80,7 +80,7 @@ EOF
   # whether anything ever starts it, and that is a separate hole: the config we
   # install as the compositor default names its daemon literally —
   #
-  #   spawn-at-startup "swaybg" "-i" ".../tunaos-default.png" "-m" "fill"
+  #   spawn-at-startup "swaybg" "-i" ".../tunaos-default.jpg" "-m" "fill"
   #
   # niri does not fail a build, exit non-zero, or log anything when a
   # spawn-at-startup binary is absent. So a section that swapped swaybg for

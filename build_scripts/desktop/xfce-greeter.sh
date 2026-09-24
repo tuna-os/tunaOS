@@ -88,8 +88,12 @@ EOF
  * framing are set here — everything else is intentionally left to the theme
  * so retheming the desktop retheme the greeter too.
  */
+/* The variant's wallpaper (select-wallpaper.sh), the same one the session
+ * shows, so logging in does not jump from a stock gradient to the desktop. */
 window {
-	background-image: linear-gradient(to bottom, #2b3d4f, #1b2733);
+	background-image: url("file:///usr/share/backgrounds/tunaos/tunaos-default.jpg");
+	background-size: cover;
+	background-position: center;
 	background-color: #1b2733;
 }
 

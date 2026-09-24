@@ -1,0 +1,30 @@
+# Per-variant identity: what makes each TunaOS variant look like itself.
+#
+# Every variant is TunaOS first, but wears one accent colour borrowed from the
+# distro it is built on, as a nod to that project: Arch blue for marlin,
+# Ubuntu orange for grouper, openSUSE green for sailfin, and so on. The mark is
+# the variant's Noto Emoji (system_files/usr/share/tunaos/logos/<id>.svg,
+# matching .github/build-config.yml).
+#
+# Read by build_scripts/90-image-info.sh at build time and by
+# scripts/branding/render-wallpapers.mjs when the wallpapers are regenerated.
+# tests/bats/test_variant_identity.bats keeps it in step with build-config.
+#
+# gnome_accent is the nearest of GNOME's fixed accent names (blue teal green
+# yellow orange red pink purple slate); GNOME cannot take an arbitrary colour.
+#
+# id	accent	gnome_accent	base	homage
+yellowfin	#FFC702	yellow	AlmaLinux Kitten	the yellow petal of the AlmaLinux flower
+albacore	#0069DA	blue	AlmaLinux	the blue petal of the AlmaLinux flower
+skipjack	#932279	purple	CentOS Stream	CentOS purple
+wahoo	#294172	blue	Fedora ELN	Fedora's deep blue
+bonito	#51A2DA	blue	Fedora	Fedora's light blue
+hummingbird	#1E9E8A	teal	Fedora Hummingbird	a hummingbird's teal
+sailfin	#73BA25	green	openSUSE Tumbleweed	openSUSE green
+guppy	#54487A	purple	Gentoo	Gentoo purple
+bonito-rawhide	#3C6EB4	blue	Fedora Rawhide	Fedora blue
+gurnard	#3689E6	blue	Ubuntu + Pantheon	elementary's blueberry
+grouper	#E95420	orange	Ubuntu	Ubuntu orange
+marlin	#1793D1	blue	Arch Linux	Arch blue
+flounder	#D70751	red	Debian	the Debian swirl
+flounder-sid	#A80030	red	Debian Sid	Debian's darker red

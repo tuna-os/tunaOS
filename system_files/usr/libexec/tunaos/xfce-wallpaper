@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# First-login wallpaper for XFCE.
+#
+# xfdesktop keys its wallpaper on the monitor's connector name
+# (/backdrop/screen0/monitor<eDP-1>/workspace0/last-image), which no build-time
+# file can know, so a shipped xfce4-desktop.xml only ever matches some
+# machines and the rest show the distro default. Set it at login instead,
+# for whatever monitors this session has, exactly once per user: after that
+# the user's own choice stands.
+
+set -u
+marker="${XDG_CONFIG_HOME:-$HOME/.config}/tunaos/xfce-wallpaper-set"
+[[ -e "$marker" ]] && exit 0
+command -v xfconf-query >/dev/null 2>&1 || exit 0
+
+wallpaper=/usr/share/backgrounds/tunaos/tunaos-default.jpg
+[[ -f "$wallpaper" ]] || exit 0
+
+# Give xfdesktop a moment to register its monitors.
+sleep 3
+
+monitors="$(xfconf-query -c xfce4-desktop -l 2>/dev/null | sed -n 's#^/backdrop/screen0/monitor\([^/]*\)/.*#\1#p' | sort -u)"
+if [[ -z "$monitors" ]] && command -v xrandr >/dev/null 2>&1; then
+	monitors="$(xrandr --listmonitors 2>/dev/null | awk 'NR > 1 { print $NF }')"
+fi
+
+for m in $monitors; do
+	for ws in 0 1 2 3; do
+		base="/backdrop/screen0/monitor${m}/workspace${ws}"
+		xfconf-query -c xfce4-desktop -p "${base}/last-image" -n -t string -s "$wallpaper" 2>/dev/null ||
+			xfconf-query -c xfce4-desktop -p "${base}/last-image" -s "$wallpaper"
+		# 5 = zoomed
+		xfconf-query -c xfce4-desktop -p "${base}/image-style" -n -t int -s 5 2>/dev/null ||
+			xfconf-query -c xfce4-desktop -p "${base}/image-style" -s 5
+	done
+done
+
+mkdir -p "$(dirname "$marker")" && touch "$marker"

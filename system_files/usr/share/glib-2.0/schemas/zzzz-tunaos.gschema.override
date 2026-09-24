@@ -1,0 +1,17 @@
+# TunaOS wallpaper as the schema default, under the dconf keyfiles.
+#
+# Pantheon (gurnard) reads org.gnome.desktop.background too, but ships its own
+# override from elementary-default-settings naming elementary's wallpaper, and
+# no dconf keyfile of ours runs there. Overrides apply in filename order, so
+# the zzzz- prefix sorts after every distro's (10_ubuntu-settings, elementary,
+# ...) and wins. On GNOME this is a floor: gnome-set-branding.sh's dconf
+# keyfile sits above it. See docs/BRANDING.md.
+
+[org.gnome.desktop.background]
+picture-uri='file:///usr/share/backgrounds/tunaos/tunaos-default.jpg'
+picture-uri-dark='file:///usr/share/backgrounds/tunaos/tunaos-default.jpg'
+picture-options='zoom'
+
+[org.gnome.desktop.screensaver]
+picture-uri='file:///usr/share/backgrounds/tunaos/tunaos-default.jpg'
+picture-options='zoom'
