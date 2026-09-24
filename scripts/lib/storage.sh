@@ -25,9 +25,19 @@ tunaos_import_to_root_storage() {
 
 	local xdg_dir="/run/user/${real_uid}"
 	if [[ ! -d "$xdg_dir" ]]; then
-		xdg_dir="/tmp/tbox-xdg-${real_user}"
+		# Unpredictable name: a fixed /tmp/tbox-xdg-<user> is a path any local
+		# user can pre-create and then have us chown to the real user.
+		xdg_dir=$(mktemp -d "/tmp/tbox-xdg-${real_user}-XXXXXX") || {
+			echo "ERROR: cannot create a runtime dir for ${real_user}" >&2
+			return 1
+		}
+		# This directory is the function's product, not scratch space: the
+		# caller keeps doing rootless podman work under it after we return
+		# (podman's pause process lives there), so it is never removed here.
+		# Cleanup belongs to whoever owns the whole pipeline.
 		install -d -o "$real_user" -g "$(id -g "$real_user")" -m 700 "$xdg_dir" || {
-			echo "ERROR: cannot create a runtime dir for ${real_user} at ${xdg_dir}" >&2
+			echo "ERROR: cannot set permissions on runtime dir for ${real_user} at ${xdg_dir}" >&2
+			rm -rf "$xdg_dir"
 			return 1
 		}
 	fi
