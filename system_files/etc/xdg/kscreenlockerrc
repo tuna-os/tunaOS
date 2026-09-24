@@ -1,0 +1,4 @@
+# The Plasma lock screen keeps its own wallpaper, separate from the desktop's;
+# left unset it shows the upstream default. See docs/BRANDING.md.
+[Greeter][Wallpaper][org.kde.image][General]
+Image=file:///usr/share/wallpapers/TunaOS

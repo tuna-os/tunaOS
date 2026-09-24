@@ -227,6 +227,8 @@ gnome | kde | niri | cosmic | xfce | pantheon)
 	/run/context/build_scripts/checks/verify-branding.sh "${IMAGE_NAME:-$desktop}"
 	install -Dm0755 /run/context/build_scripts/checks/verify-branding.sh \
 		/usr/libexec/tunaos/verify-branding
+	# Per-desktop artwork, when a variant has some (docs/BRANDING.md).
+	/run/context/build_scripts/desktop/select-wallpaper.sh "$desktop"
 	BRANDING_EXTRA=""
 	case "$desktop" in
 	gnome)
@@ -249,6 +251,11 @@ gnome | kde | niri | cosmic | xfce | pantheon)
 		install -Dm0755 /run/context/build_scripts/checks/verify-branding-kde.sh \
 			/usr/libexec/tunaos/verify-branding-kde
 		BRANDING_EXTRA="ExecStart=-/usr/libexec/tunaos/verify-branding-kde ${IMAGE_NAME:-$desktop} --runtime"
+		;;
+	cosmic)
+		# cosmic-bg's package ships its default background config, naming the
+		# stock wallpaper, so this has to run after the install.
+		/run/context/build_scripts/desktop/cosmic-set-branding.sh
 		;;
 	niri)
 		/run/context/build_scripts/checks/verify-branding-niri.sh "${IMAGE_NAME:-$desktop}"

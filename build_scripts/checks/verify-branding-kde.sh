@@ -93,8 +93,10 @@ echo "== login screen =="
 #
 # Reference decision: ublue-os/aurora ships NO custom SDDM/plasmalogin theme —
 # the greeter is stock, and branding lives in the look-and-feel package +
-# wallpaper. TunaOS KDE derives from Aurora, so stock greeter is acceptable;
-# the check only enforces that a greeter is installed/configured.
+# wallpaper. TunaOS goes further where the Breeze greeter theme is installed:
+# kde-set-look-and-feel.sh gives it the variant's wallpaper and lettermark.
+# Where it is not (Debian's sddm ships no themes), the stock greeter stays
+# acceptable; the check only enforces that a greeter is installed/configured.
 #
 # KDE 6.5+ renames SDDM to plasma-login-manager, and the theme and config
 # directories move with it (/usr/share/plasmalogin/themes,

@@ -154,4 +154,14 @@ command -v pcscd >/dev/null 2>&1 || OMIT_MODULES="${OMIT_MODULES} pcsc"
 
 echo "--- ${CONF_DIR}/30-bootc-container-build.conf ---"
 cat "${CONF_DIR}/30-bootc-container-build.conf"
+
+# ── 5. boot splash ───────────────────────────────────────────────────────────
+# The variant's Plymouth theme has to be selected before dracut runs, and this
+# is the one step the Arch, Debian and Gentoo Containerfiles all run right
+# before it. Skipped under TUNAOS_SYSROOT (tests): it writes the real /etc.
+# Never fatal: a missing splash is not worth a failed image.
+if [[ -z "$R" ]]; then
+	"$(dirname "$(readlink -f "$0")")/../plymouth-set-theme.sh" ||
+		echo "WARNING: plymouth-set-theme.sh failed; the distro boot splash stays" >&2
+fi
 printf "::endgroup::\n"

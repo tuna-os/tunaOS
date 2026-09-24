@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# First-login wallpaper for niri + DankMaterialShell.
+#
+# niri draws no background; DMS does, from its own per-user state, which
+# starts empty: a first login is a flat colour however much artwork the image
+# carries. Set the variant's wallpaper through DMS's IPC once per user; after
+# that the user's own choice stands.
+
+set -u
+marker="${XDG_STATE_HOME:-$HOME/.local/state}/tunaos/dms-wallpaper-set"
+[[ -e "$marker" ]] && exit 0
+command -v dms >/dev/null 2>&1 || exit 0
+wallpaper=/usr/share/backgrounds/tunaos/tunaos-default.jpg
+[[ -f "$wallpaper" ]] || exit 0
+
+# The shell takes a few seconds to start answering IPC after login.
+for _ in $(seq 1 30); do
+	if dms ipc call wallpaper set "$wallpaper" >/dev/null 2>&1; then
+		mkdir -p "$(dirname "$marker")" && touch "$marker"
+		exit 0
+	fi
+	sleep 2
+done
+echo "tunaos-dms-wallpaper: DMS did not answer IPC; wallpaper left unset" >&2
