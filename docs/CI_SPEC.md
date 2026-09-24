@@ -16,6 +16,7 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 
 | Workflow | Lane | Assertion | Cadence | Freshness SLA |
 |---|---|---|---|---|
+| `add-help-wanted.yml` | post-merge | Add Help Wanted | issues | — |
 | `arm64-ulimit-probe.yml` | PR-deterministic + post-merge | arm64 ulimit probe (diagnostic) | each PR, manual | — |
 | `asahi-hw-nightly-one.yml` | post-merge + scheduled | Asahi hardware smoke (one) | caller cadence | — |
 | `asahi-hw-nightly.yml` | post-merge + scheduled | Asahi hardware smoke (Tier 2 rental) | `0 6 * * *`, manual | — |
