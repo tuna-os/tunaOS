@@ -78,6 +78,11 @@ downloads:
   # `just fix && just check` mandatory before every commit, so everyone hits
   # it at once.
   shfmt: "v3.14.1"
+  # renovate: datasource=github-releases depName=hivecommons/spektacular
+  # The spec, plan and build workflows (RFC 011, ADR 0010). Its version must
+  # match `written_by` in .spektacular/config.yaml; `spektacular version check`
+  # reports a mismatch, and `spektacular migrate` upgrades the project files.
+  spektacular: "v0.20.0"
   # renovate: datasource=github-releases depName=twpayne/chezmoi
   chezmoi: "v2.72.2"
   chezmoi_sha256:
