@@ -96,7 +96,7 @@ flowchart LR
     M --> GT["Gate<br/>qcow2 via bootc install<br/>boot + verify in QEMU"]
     S --> PR["Promote<br/>:tag-testing → :tag"]
     GT -.->|"advisory today"| PR
-    PR --> AT["Attest SBOM<br/>in-toto attestation"]
+    PR -.->|"run completes"| AT["attest-sbom.yml<br/>separate workflow_run<br/>in-toto attestation"]
 ```
 
 The important details, each one paid for with a real incident:
@@ -121,6 +121,16 @@ The important details, each one paid for with a real incident:
 - **Retries with judgement**: promotion `skopeo` copies, GHCR pushes and
   cosign calls retry with backoff. A Sigstore outage downgrades the
   attestation; it does not block Promote (#1560).
+- **SBOM attestation is a separate run**, not a job. When a build workflow
+  completes, a `workflow_run` trigger starts `attest-sbom.yml`. It reads the
+  digest and SBOM artifacts of that run and attests them. Before, the job ran
+  inside the build. `continue-on-error` kept the job from failing, but the
+  caller still reported the result of the whole reusable workflow. So one
+  outage of the transparency log made a nightly with 27 of 30 images green
+  report `failure`, and the README matrix showed those images as unbuilt
+  (#2282). A separate workflow has its own result. Recovery stays the same:
+  `rerun-infra-failures.yml` finds the `SIGSTORE_OUTAGE` marker and runs the
+  job again once.
 
 ### Inside the image build
 

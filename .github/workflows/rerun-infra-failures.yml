@@ -40,6 +40,12 @@ on:
       # sat unnoticed for four days because nothing triaged it (W2). Same
       # rule as above: one classified re-run, never a loop.
       - Bootc Lifecycle
+      # SBOM attestation moved out of the build run into its own workflow so a
+      # transparency-log outage cannot colour the nightly (#2282). That took it
+      # out of this classifier's reach at the same time -- the re-run it needs
+      # is the one thing that got it attested after an outage -- so name it
+      # here, and see the `workflow_run` clause in the job condition below.
+      - Attest SBOMs
     types: [completed]
   workflow_dispatch:
     inputs:
@@ -61,11 +67,21 @@ jobs:
     name: Classify and re-run
     # run_attempt > 1 means this run IS a re-run: one recovery attempt, never
     # a loop. A run that fails twice on the same fault is not transient.
+    #
+    # The originating event is restricted to the unattended paths. `schedule`
+    # is the nightly fleet. `workflow_run` is attest-sbom.yml, which is itself
+    # triggered by those nightlies finishing (#2282) and so can never carry
+    # `schedule` as its own event -- without this clause the workflow that
+    # exists precisely to absorb Sigstore outages would be the one thing the
+    # outage classifier could not recover. Still one attempt, still only for
+    # failures it can positively attribute to infra: a re-run of a re-run is
+    # excluded by run_attempt above, whichever event started it.
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.conclusion == 'failure' &&
        github.event.workflow_run.run_attempt == 1 &&
-       github.event.workflow_run.event == 'schedule')
+       (github.event.workflow_run.event == 'schedule' ||
+        github.event.workflow_run.event == 'workflow_run'))
     runs-on: ubuntu-latest
     permissions:
       contents: read

@@ -554,8 +554,9 @@ jobs:
         # An image signature gates promotion; an SBOM does not. That is the
         # same line drawn for SBOM *attestation* in #1560/#1766, applied one
         # step earlier to SBOM *generation*. A missing SBOM is still reported
-        # loudly by attest_sbom ("::error::missing SPDX SBOM"), which is
-        # continue-on-error and therefore visible without being fatal.
+        # loudly by attest-sbom.yml ("::error::missing SPDX SBOM"), which runs
+        # as its own `workflow_run` and therefore says so without being able
+        # to fail this build.
         continue-on-error: true
         timeout-minutes: 20
         env:
@@ -779,15 +780,48 @@ jobs:
           mkdir -p /tmp/outputs/digests
           echo "${DIGEST}" > "/tmp/outputs/digests/${IMAGE_NAME}-${DEFAULT_TAG}-${SAFE_PLATFORM}.txt"
 
+      - name: Record Attestation Target
+        # The fully-qualified pullable reference, written beside the digest so
+        # attest-sbom.yml can reconstruct it. That workflow runs on a
+        # `workflow_run` event and never sees `inputs.image-name`, and the
+        # digest filename cannot be parsed back into one: it is
+        # `<image-name>-<tag>-<platform>.txt` and both of the first two fields
+        # contain hyphens, so `yellowfin-gnome-latest-linux-amd64` splits a
+        # dozen ways and only one of them is right. Naming the ref outright is
+        # cheaper than teaching a second workflow to guess.
+        #
+        # A separate step, not a line inside `Create Job Outputs`, because
+        # that step must stay free of any SBOM condition -- gating it on the
+        # SBOM is what cost a whole variant in #1796, and
+        # tests/test_sbom_step_cannot_kill_the_variant.py holds that line.
+        # Here the condition is wanted: no SBOM was asked for means there is
+        # nothing to attest, and a ref file would make attest-sbom.yml go
+        # looking for an SBOM that was never meant to exist.
+        if: ${{ inputs.publish && inputs.sbom && github.event_name != 'pull_request' }}
+        env:
+          IMAGE_NAME: ${{ env.IMAGE_NAME }}
+          IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
+          SAFE_PLATFORM: ${{ matrix.safeplatform }}
+          DIGEST: ${{ steps.push.outputs.remote_image_digest }}
+        run: |
+          mkdir -p /tmp/outputs/digests
+          echo "${IMAGE_REGISTRY}/${IMAGE_NAME}@${DIGEST}" \
+            > "/tmp/outputs/digests/${IMAGE_NAME}-${DEFAULT_TAG}-${SAFE_PLATFORM}.ref"
+
       - name: Upload Output Artifacts
         if: ${{ inputs.publish }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ env.IMAGE_NAME }}-${{ env.DEFAULT_TAG }}-${{ matrix.safeplatform }}-${{ github.run_id }}
-          retention-days: 1
+          # Bumped from 1 day: attest-sbom.yml reads these artifacts from a
+          # separate run, and a re-run of that workflow after an overnight
+          # Sigstore outage must still find them. `Manifest` consumes them
+          # within the same run either way.
+          retention-days: 7
           if-no-files-found: error
           path: |
             /tmp/outputs/digests/*.txt
+            /tmp/outputs/digests/*.ref
   manifest:
     name: Manifest
     # Temporarily off RunsOn: the tuna-os AWS account is capped to Free Tier,
@@ -1136,10 +1170,11 @@ jobs:
   # records the event: there is no private key, password, or repository secret.
   # This can run beside the boot gate; both must pass before promotion.
   #
-  # SBOM attestation deliberately does NOT happen here — it is its own job
-  # (attest_sbom) off the critical path, the shape projectbluefin/dakota uses
-  # (publish-image signs; publish-sbom attaches and signs the SBOM with
-  # continue-on-error, and promote needs only publish-image). Reason, measured:
+  # SBOM attestation deliberately does NOT happen here — it is its own
+  # workflow (.github/workflows/attest-sbom.yml) off the critical path, the
+  # shape projectbluefin/dakota uses (publish-image signs; publish-sbom
+  # attaches and signs the SBOM, and promote needs only publish-image), with
+  # the split taken as far as a separate run. Reason, measured:
   # on the 08-15 nightly every albacore flavor built, pushed and passed its
   # gates, and all twelve Promote jobs were skipped because `cosign attest`
   # could not reach Rekor. Image signatures are a promotion precondition; an
@@ -1219,124 +1254,28 @@ jobs:
 
           echo "Signed index plus ${signed} platform image(s)." >> "$GITHUB_STEP_SUMMARY"
 
-  # Attach and sign the SPDX SBOMs. Off the critical path on purpose: this job
-  # is not in Promote's `needs`, and continue-on-error keeps a Sigstore outage
-  # here from turning the run red. Same split as projectbluefin/dakota's
-  # publish-sbom job. A missed attestation is recoverable -- rerun-infra-
-  # failures.yml re-runs the job, and the SBOM artifacts are retained -- while
-  # a blocked promotion costs a whole day of matrix state (tuna-os/tunaOS#1731).
-  attest_sbom:
-    name: Attest SBOM
-    needs: [manifest, sign]
-    if: >-
-      inputs.publish && inputs.sbom && github.event_name != 'pull_request' &&
-      needs.manifest.result == 'success' && needs.sign.result == 'success'
-    continue-on-error: true
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
-    env:
-      IMAGE_NAME: ${{ inputs.image-name }}
-      IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY || format('ghcr.io/{0}', github.repository_owner) }}
-      DEFAULT_TAG: ${{ inputs.default-tag }}
-      COSIGN_YES: "true"
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Install Cosign
-        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
-        with:
-          cosign-release: v3.1.3
-
-      - name: Login to GitHub Container Registry
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: echo "$GITHUB_TOKEN" | cosign login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
-
-      - name: Fetch platform digests
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          pattern: ${{ env.IMAGE_NAME }}-${{ env.DEFAULT_TAG }}-*
-          merge-multiple: true
-          path: supply-chain/digests
-
-      - name: Fetch SPDX SBOMs
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          pattern: sbom-${{ env.IMAGE_NAME }}-${{ env.DEFAULT_TAG }}-*
-          merge-multiple: true
-          path: supply-chain/sboms
-
-      - name: Attest SPDX SBOMs
-        # A hard ceiling on the whole step, because SIGN_DEADLINE_MINUTES is a
-        # budget PER cosign INVOCATION, not per step: the loop below runs
-        # `cosign attest` + `cosign verify-attestation` for every platform
-        # digest, and each call starts its own deadline (see cosign_retry --
-        # `deadline` is a local, recomputed on entry). Under `set -e` a
-        # *failing* call aborts the step after one deadline, which is what
-        # gurnard run 31891742138 did: 21 Rekor 502s over 39m19s, then
-        # SIGSTORE_OUTAGE. The unbounded case is calls that SUCCEED slowly --
-        # nothing aborts, and a three-platform variant can reach 40m x 6.
-        # That case has not been observed in production; this ceiling is
-        # here so it cannot be, since the env deadline structurally cannot
-        # bound the step.
-        timeout-minutes: 20
-        env:
-          # Deliberately much shorter than Sign's 40m. Splitting this job off
-          # (#1560) took SBOM attestation off Promote's critical path, but not
-          # off the *clock*: build-variant.yml's stage 2 waits for the whole
-          # reusable-workflow call to finish, and this job is part of it. On
-          # the run above `pantheon` had still not started 48 minutes after
-          # base's images were built, signed and manifested -- held up purely
-          # by an attestation the pipeline is explicitly allowed to do without.
-          #
-          # 10m is far longer than any successful attestation (image signing
-          # completed in 19s on that same run) so genuine flakes are absorbed;
-          # what it stops absorbing is a sustained outage, which is exactly the
-          # case where continuing without the attestation is the intended
-          # behaviour.
-          SIGN_DEADLINE_MINUTES: "10"
-          SIGN_BACKOFF_CAP_SECONDS: "120"
-        run: |
-          set -euo pipefail
-          identity="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/reusable-build-image.yml@${GITHUB_REF}"
-          issuer="https://token.actions.githubusercontent.com"
-
-          source "${GITHUB_WORKSPACE}/.github/scripts/cosign-retry.sh"
-
-          attested=0
-          missing=0
-          shopt -s nullglob
-          for digest_file in supply-chain/digests/*.txt; do
-            filename="$(basename "$digest_file" .txt)"
-            safeplatform="${filename#${IMAGE_NAME}-${DEFAULT_TAG}-}"
-            digest="$(<"$digest_file")"
-            ref="${IMAGE_REGISTRY}/${IMAGE_NAME}@${digest}"
-            sbom="supply-chain/sboms/sbom-${IMAGE_NAME}-${DEFAULT_TAG}-${safeplatform}.spdx.json"
-
-            if [[ ! -f "$sbom" ]]; then
-              echo "::error::missing SPDX SBOM for ${safeplatform}"
-              missing=$((missing + 1))
-              continue
-            fi
-
-            cosign_retry cosign attest --type spdxjson --predicate "$sbom" "$ref"
-            cosign_retry cosign verify-attestation "$ref" \
-              --type spdxjson \
-              --certificate-identity "$identity" \
-              --certificate-oidc-issuer "$issuer" >/dev/null
-            attested=$((attested + 1))
-          done
-
-          echo "Attested ${attested} SPDX SBOM(s)." >> "$GITHUB_STEP_SUMMARY"
-          if (( missing > 0 )); then
-            echo "::error::${missing} platform image(s) had no SBOM to attest"
-            exit 1
-          fi
-          (( attested > 0 )) || { echo "::error::no platform digests found"; exit 1; }
+  # SBOM attestation does not live in this workflow at all any more. It is
+  # .github/workflows/attest-sbom.yml, a `workflow_run` job that fires once
+  # the build run has finished.
+  #
+  # #1560 took it off Promote's critical path with `continue-on-error: true`
+  # and no `needs:` edge, and that half works -- Promote succeeded on the
+  # 2026-09-02 yellowfin nightly while `base / Attest SBOM` was failing
+  # against a Rekor that answered 502. What `continue-on-error` does NOT do
+  # is stop the job from deciding the RUN's conclusion across a reusable-
+  # workflow boundary: the caller's `uses:` job reports the called workflow's
+  # aggregate result, so run 33591594151 concluded `failure` with 27 of 30
+  # jobs green, every platform of every flavor built, signed, manifested and
+  # promoted. That conclusion is load-bearing -- `.github/scripts/update-
+  # build-status.sh` renders the variant's "Latest run" column from it, and
+  # rerun-infra-failures.yml only fires on a failed run -- so an unreachable
+  # transparency log read as a failed nightly and the README matrix reported
+  # 47/143 built for a fleet that had built (tuna-os/tunaOS#2282).
+  #
+  # A separate workflow is the only placement where an SBOM attestation
+  # cannot colour the build: it has its own run, its own conclusion, and its
+  # own entry in the re-run classifier. This is dakota's publish-sbom split
+  # taken one step further than #1560 took it.
 
   # ── Boot gate ───────────────────────────────────────────────────────────────
   # Pull the just-pushed :<tag>-testing manifest, install it to a qcow2 with
@@ -1473,6 +1412,21 @@ jobs:
           fi
           sudo apt-get install -y "${pkgs[@]}"
 
+      # This runs before the candidate image is touched. A missing render node,
+      # KVM, or QEMU GL backend is runner infrastructure, not a desktop boot
+      # failure. GPU-routed cells require virgl; hosted cells still record the
+      # plain display path so every Gate has the same fingerprint in its
+      # summary and evidence bundle (tuna-os/tunaOS#1888).
+      - name: Record GPU/DRM runner capability
+        env:
+          REQUIRE_VIRGL: ${{ (startsWith(inputs.flavor, 'cosmic') || startsWith(inputs.flavor, 'niri') || startsWith(inputs.flavor, 'xfwl4')) && '1' || '0' }}
+        run: |
+          args=(--output runner-capability.txt)
+          if [[ "$REQUIRE_VIRGL" == "1" ]]; then
+            args+=(--require-virgl)
+          fi
+          scripts/gpu-drm-preflight.sh "${args[@]}"
+
       - name: Build qcow2 from testing image
         env:
           TEST_IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}-testing
@@ -1499,6 +1453,10 @@ jobs:
           just qcow2 "${TEST_IMAGE}"
 
       - name: Boot and verify
+        env:
+          # Do not let a GPU-routed gate silently fall back to plain virtio.
+          # The preflight above has already proved this mode is available.
+          TBOX_E2E_GPU: ${{ (startsWith(inputs.flavor, 'cosmic') || startsWith(inputs.flavor, 'niri') || startsWith(inputs.flavor, 'xfwl4')) && 'virgl' || 'auto' }}
         run: |
           QCOW2=$(find . -maxdepth 1 -name "*.qcow2" | head -1)
           mkdir -p verify-out
@@ -1531,6 +1489,10 @@ jobs:
         shell: bash
         run: |
           sudo chown -R "$USER:$(id -gn)" verify-out 2>/dev/null || true
+          if [[ -f runner-capability.txt ]]; then
+            mkdir -p verify-out
+            mv runner-capability.txt verify-out/runner-capability.txt
+          fi
           if [[ -r verify-out/serial.log ]]; then
             echo "serial=true" >> "$GITHUB_OUTPUT"
           else
@@ -1588,6 +1550,7 @@ jobs:
           path: |
             verify-out/serial.log
             verify-out/boot-diagnostics.txt
+            verify-out/runner-capability.txt
             verify-out/*.png
             evidence/${{ inputs.image-variant }}/${{ inputs.flavor }}/amd64/
           if-no-files-found: warn

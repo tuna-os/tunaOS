@@ -12,6 +12,12 @@ The skills speak in terms of five canonical triage roles. This file maps those r
 
 When a skill mentions a role (e.g. "apply the AFK-ready triage label"), use the corresponding label string from this table.
 
+When you add `ready-for-agent` or `ready-for-human` to an unassigned issue,
+`.github/workflows/add-help-wanted.yml` adds `help wanted`. The maintainer
+decides that an issue is ready. The workflow only tells contributors, and it
+makes no triage decisions. It does not change an issue that has an assignee,
+or that already has `help wanted` or `good first issue`.
+
 Edit the right-hand column to match whatever vocabulary you use.
 
 For queue-level policy (SLA tiers, when to close a bot-filed finding, milestone-vs-backlog signal) see [TRIAGE-POLICY.md](../../TRIAGE-POLICY.md) — this file only maps individual-issue labels.

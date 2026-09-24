@@ -35,6 +35,10 @@ yaml = pytest.importorskip("yaml")
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/reusable-build-image.yml"
+# SBOM attestation is no longer a job in the build workflow: it is its own
+# `workflow_run` workflow, so that a transparency-log outage gets its own run
+# conclusion instead of the nightly's (#2282).
+ATTEST_WORKFLOW = ROOT / ".github/workflows/attest-sbom.yml"
 HELPER = ROOT / ".github/scripts/cosign-retry.sh"
 
 COSIGN_SUBCOMMANDS = ("sign", "verify", "verify-attestation", "attest")
@@ -43,6 +47,11 @@ COSIGN_SUBCOMMANDS = ("sign", "verify", "verify-attestation", "attest")
 @pytest.fixture(scope="module")
 def workflow():
     return yaml.safe_load(WORKFLOW.read_text())
+
+
+@pytest.fixture(scope="module")
+def attest_workflow():
+    return yaml.safe_load(ATTEST_WORKFLOW.read_text())
 
 
 def _cosign_run_blocks(workflow):
@@ -61,8 +70,12 @@ def test_the_retry_helper_is_a_shared_script():
     assert "cosign_retry()" in HELPER.read_text(), "no cosign_retry helper defined"
 
 
-def test_every_cosign_invocation_goes_through_the_retry_helper(workflow):
-    blocks = _cosign_run_blocks(workflow)
+@pytest.mark.parametrize("which", ["build", "attest"])
+def test_every_cosign_invocation_goes_through_the_retry_helper(
+    which, workflow, attest_workflow
+):
+    doc = workflow if which == "build" else attest_workflow
+    blocks = _cosign_run_blocks(doc)
     assert blocks, "no cosign invocations found -- has the workflow moved?"
 
     for job_name, step_name, run in blocks:
@@ -96,14 +109,18 @@ def _deadline(workflow, job_name, step_name) -> int:
     return int(env["SIGN_DEADLINE_MINUTES"])
 
 
-def test_the_retry_budget_is_a_deadline_not_an_attempt_count(workflow):
+@pytest.mark.parametrize("which", ["build", "attest"])
+def test_the_retry_budget_is_a_deadline_not_an_attempt_count(
+    which, workflow, attest_workflow
+):
     """An attempt count silently changes duration whenever a call gets slower.
 
     Run 31858324517 is the counter-example: six attempts read like a long
     budget and delivered 16 minutes against a longer outage.
     """
-    for job_name, step_name, _ in _cosign_run_blocks(workflow):
-        _deadline(workflow, job_name, step_name)
+    doc = workflow if which == "build" else attest_workflow
+    for job_name, step_name, _ in _cosign_run_blocks(doc):
+        _deadline(doc, job_name, step_name)
 
 
 def test_a_blocking_cosign_step_waits_out_a_real_outage(workflow):
@@ -114,46 +131,49 @@ def test_a_blocking_cosign_step_waits_out_a_real_outage(workflow):
     )
 
 
-def test_a_non_blocking_cosign_step_gives_up_much_sooner(workflow):
+def test_a_non_blocking_cosign_step_gives_up_much_sooner(workflow, attest_workflow):
     """Off the critical path still costs wall-clock, and that has to be cheap.
 
-    attest_sbom is continue-on-error and absent from Promote's needs, but
-    build-variant.yml's stage 2 waits for the entire reusable-workflow call --
-    this job included. On gurnard run 31891742138 `pantheon` sat idle while a
-    non-blocking attestation burned its budget against a Rekor outage. With a
-    40m deadline a four-stage chain spends ~2h40m per variant waiting for an
-    artifact it is explicitly allowed to do without.
+    Attestation no longer shares a run with the build (#2282), so it no longer
+    holds stage 2 up -- but the budget stays short for the reason that did not
+    change: on 2026-09-02 Rekor 502ed for well over an hour, and a longer
+    deadline buys a longer red job, not a green one. Recovery is
+    rerun-infra-failures.yml re-running the workflow once the log is back.
     """
-    attest = _deadline(workflow, "attest_sbom", "Attest SPDX SBOMs")
+    attest = _deadline(attest_workflow, "attest", "Attest SPDX SBOMs")
     sign = _deadline(workflow, "sign", "Sign images")
     assert attest < sign, (
-        f"attest_sbom waits {attest}m, as long as blocking signing -- a "
-        "transparency-log outage stalls every downstream stage for it"
+        f"attestation waits {attest}m, as long as blocking signing -- for an "
+        "artifact the pipeline is explicitly allowed to do without"
     )
     assert attest <= 15, (
-        f"attest_sbom's {attest}m deadline is charged to every later stage's "
-        "wall clock during an outage"
+        f"a {attest}m deadline per cosign call is a long red job during an "
+        "outage, not a green one"
     )
     # Long enough that an ordinary flake is still absorbed: image signing
     # completed in 19s on the run above.
     assert attest >= 5, f"{attest}m is too short to ride out an ordinary flake"
 
 
-def test_the_non_blocking_step_has_a_ceiling_the_env_deadline_cannot_give_it(workflow):
+def test_the_non_blocking_step_has_a_ceiling_the_env_deadline_cannot_give_it(
+    attest_workflow,
+):
     """SIGN_DEADLINE_MINUTES bounds one cosign call, not the step.
 
     The attest loop runs `cosign attest` + `cosign verify-attestation` per
     platform digest and each call starts its own deadline, so the step's worst
-    case is deadline x 2 x platforms.
+    case is deadline x 2 x platforms -- and since #2282 put a whole variant's
+    flavors in one job, "platforms" is now two dozen rather than three.
 
     That worst case is a code property, not a measured one, and the
     distinction matters. On run 31891742138 the step took 39m19s -- 21 Rekor
     502s against a single 40-minute deadline, then SIGSTORE_OUTAGE -- because
     `set -e` aborts the loop on the first *failing* call. Multiplication needs
-    calls that succeed slowly, one after another, which nothing aborts. Only a
-    step-level timeout bounds the thing stage 2 is actually waiting on.
+    calls that succeed slowly, one after another, which nothing aborts. So the
+    loop bounds itself (ATTEST_BUDGET_MINUTES) and the step carries a ceiling
+    for the case where the script is not the thing doing the enforcing.
     """
-    attest = workflow["jobs"]["attest_sbom"]
+    attest = attest_workflow["jobs"]["attest"]
     step = next(s for s in attest["steps"] if s.get("name") == "Attest SPDX SBOMs")
     ceiling = step.get("timeout-minutes")
     assert ceiling, (
@@ -164,6 +184,18 @@ def test_the_non_blocking_step_has_a_ceiling_the_env_deadline_cannot_give_it(wor
     assert per_call <= int(ceiling), (
         f"a {per_call}m per-call deadline cannot fit inside a {ceiling}m step "
         "ceiling, so even one slow call trips the timeout"
+    )
+    budget = step["env"].get("ATTEST_BUDGET_MINUTES")
+    assert budget, (
+        "the loop sets no wall-clock budget of its own, so the only bound on "
+        "a variant's worth of platforms is the runner agent killing the step"
+    )
+    assert per_call <= int(budget) <= int(ceiling), (
+        f"the loop's {budget}m budget does not sit between the {per_call}m "
+        f"per-call deadline and the {ceiling}m step ceiling"
+    )
+    assert int(attest.get("timeout-minutes", 0)) >= int(ceiling), (
+        "the job ceiling is lower than the step ceiling it is meant to back up"
     )
 
 
@@ -195,20 +227,32 @@ def test_promote_does_not_wait_on_sbom_attestation(workflow):
 
 
 def test_sbom_attestation_does_not_fail_the_run(workflow):
-    attest = workflow["jobs"]["attest_sbom"]
-    assert attest.get("continue-on-error") is True, (
-        "attest_sbom is not continue-on-error, so a transparency-log outage "
-        "still turns the whole variant red"
+    """No SBOM attestation anywhere in the build workflow, at any strength.
+
+    `continue-on-error: true` was the old answer and it was not enough: it
+    keeps a job's failure from failing the run it is DEFINED in, and across a
+    reusable-workflow boundary the caller's `uses:` job still reports the
+    aggregate. Run 33591594151 concluded `failure` with 27 of 30 jobs green
+    and every image built, signed and promoted (#2282). Only a separate run
+    has a separate conclusion.
+    """
+    assert "attest_sbom" not in workflow["jobs"], (
+        "SBOM attestation is a job in the build workflow again -- its failure "
+        "decides the nightly's conclusion however it is marked"
     )
+    for job_name, step_name, run in _cosign_run_blocks(workflow):
+        assert "cosign attest" not in run, (
+            f"{job_name}/{step_name} attests an SBOM inside the build run"
+        )
 
 
-def test_sbom_attestation_still_runs_and_still_reports(workflow):
+def test_sbom_attestation_still_runs_and_still_reports(attest_workflow):
     """Off the critical path is not the same as optional.
 
     A missing SBOM must still be an error inside the job, or "non-blocking"
     quietly becomes "never happens".
     """
-    attest = workflow["jobs"]["attest_sbom"]
+    attest = attest_workflow["jobs"]["attest"]
     step = next(s for s in attest["steps"] if s.get("name") == "Attest SPDX SBOMs")
     assert "::error::missing SPDX SBOM" in step["run"]
     assert "cosign attest" in step["run"]

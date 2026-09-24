@@ -229,6 +229,49 @@ teardown() {
   local dir
   dir=$(grep -o 'XDG_RUNTIME_DIR=[^ ]*' "$spy" | head -1 | cut -d= -f2)
   [ -d "$dir" ]
+  [[ "$dir" == /tmp/tbox-xdg-* ]] && rm -rf "$dir"
+  return 0
+}
+
+# The dir this function makes for itself has two properties, and a fix for
+# either one has already cost us the other: #2483 made the name unpredictable
+# and paid for it by deleting the dir on the way out, which left the caller
+# holding a path that no longer existed. Both are asserted here so neither can
+# be traded away again. Only reachable where /run/user/<uid> is absent -- i.e.
+# no logind session -- which is exactly the fallback this code exists for.
+@test "tunaos_import_to_root_storage: its own runtime dir is unguessable and outlives the call" {
+  local spy="${BATS_TEST_TMPDIR}/sudo-args"
+  run bash -c '
+    set +e
+    source "'"${BATS_TEST_DIRNAME}"'/../../scripts/lib/common.sh"
+    SUDO_USER=$(id -un)
+    sudo() { echo "$*" >>"'"${spy}"'"; return 0; }
+    install() { command install "$@"; }
+    _calls=0
+    podman() {
+      if [[ "$1 $2" == "image exists" ]]; then
+        _calls=$((_calls + 1))
+        [[ $_calls -gt 1 ]] && return 0
+        return 1
+      fi
+      cat >/dev/null 2>&1
+      return 0
+    }
+    tunaos_import_to_root_storage "localhost/yellowfin:cosmic"
+  '
+  [ "$status" -eq 0 ]
+  local dir
+  dir=$(grep -o 'XDG_RUNTIME_DIR=[^ ]*' "$spy" | head -1 | cut -d= -f2)
+  if [[ "$dir" == /run/user/* ]]; then
+    skip "this host has a logind runtime dir, so the fallback never ran"
+  fi
+  # Unguessable: never the fixed /tmp/tbox-xdg-<user> a local user can plant
+  # first and have us chown to them.
+  [ "$dir" != "/tmp/tbox-xdg-$(id -un)" ]
+  [[ "$dir" == /tmp/tbox-xdg-$(id -un)-?????? ]]
+  # Outlives the call: the caller runs more rootless podman under it.
+  [ -d "$dir" ]
+  rm -rf "$dir"
 }
 
 @test "tunaos_import_to_root_storage: returns 0 when image already exists" {

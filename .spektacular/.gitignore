@@ -1,0 +1,14 @@
+*.tmp
+*.log
+
+# Backups an upgrade (`migrate`) keeps of the settings it rewrites.
+*.old
+.env
+
+# Materialized member-repo clones must never enter the project's history.
+repos/
+# Per-session workflow state: which step this checkout's agent is on.
+state.json
+working-context.md
+tmp/
+work/
