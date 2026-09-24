@@ -370,6 +370,198 @@ JSON
 	grep -q 'must be a positive integer' "$SCRIPT_PATH"
 }
 
+# ── TBOX_* environment passthrough (tunaOS#2034) ───────────────────────────
+#
+# The container path has to forward tacklebox's knobs explicitly; the
+# host-binary path inherits them. These pin both halves of that.
+
+# Run the real tunaos_run_tacklebox on the container path with a stub podman
+# that records its argv. Extra shell statements (exports, assignments) come in
+# as $2 and run before the call, so each test controls the caller environment;
+# optional statements in $3 run after it returns, in the same shell.
+_run_container_adapter() {
+	local script_path="$1" setup="$2" after="${3:-}"
+	local stub_dir="${TEST_ROOT}/bin"
+	mkdir -p "$stub_dir"
+	printf '#!/bin/sh\nprintf "%%s\\n" "$*" >>"$PODMAN_LOG"\n' >"${stub_dir}/podman"
+	chmod +x "${stub_dir}/podman"
+	printf '{}\n' >"${TEST_ROOT}/recipe.json"
+	mkdir -p "${TEST_ROOT}/out"
+	PODMAN_LOG="${TEST_ROOT}/podman.log"
+	export PODMAN_LOG
+	: >"$PODMAN_LOG"
+	run env -u TBOX_CUSTOMIZE_COMMIT_TIMEOUT \
+		PATH="${stub_dir}:${PATH}" TUNAOS_TACKLEBOX_TIMEOUT_SECONDS=30 \
+		TACKLEBOX_FROM_SOURCE=0 \
+		bash -c '
+			set -euo pipefail
+			source "$1"
+			eval "$2"
+			tunaos_run_tacklebox "$3/recipe.json" "$3/out" "$3/out/test.iso"
+			eval "$4"
+		' _ "$script_path" "$setup" "$TEST_ROOT" "$after"
+}
+
+@test "tacklebox env: exported TBOX_* names reach the container invocation" {
+	SCRIPT_PATH="${REPO_ROOT:-$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)}/scripts/lib/tacklebox.sh"
+	# Run the library's own collection loop, not a copy of it, so a change to
+	# the filter cannot pass here while breaking the build.
+	run bash -c '
+		loop=$(awk "/^\tfor _tbox_name in/,/^\tdone\$/" "$1")
+		[[ -n "$loop" ]] || { echo "collection loop not found" >&2; exit 1; }
+		export TBOX_CUSTOMIZE_NETWORK=host
+		export TBOX_CUSTOMIZE_TIMEOUT=1800
+		export TBOX_CUSTOMIZE_COMMIT_TIMEOUT=1800
+		export PATH_LOOKALIKE_TBOX=nope
+		tbox_env=() tbox_names=()
+		eval "$loop"
+		printf "%s\n" "${tbox_env[@]}"
+	' _ "$SCRIPT_PATH"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"--env"* ]]
+	[[ "$output" == *"TBOX_CUSTOMIZE_NETWORK=host"* ]]
+	[[ "$output" == *"TBOX_CUSTOMIZE_TIMEOUT=1800"* ]]
+	[[ "$output" == *"TBOX_CUSTOMIZE_COMMIT_TIMEOUT=1800"* ]]
+	# Prefix match only: a name that merely contains TBOX_ is not a knob.
+	[[ "$output" != *"PATH_LOOKALIKE_TBOX"* ]]
+}
+
+@test "tacklebox env: passthrough is name-agnostic, so a new knob needs no change here" {
+	SCRIPT_PATH="${REPO_ROOT:-$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)}/scripts/lib/tacklebox.sh"
+	# Future knobs must arrive without editing this library.
+	run bash -c '
+		loop=$(awk "/^\tfor _tbox_name in/,/^\tdone\$/" "$1")
+		export TBOX_A_KNOB_INVENTED_TODAY=900
+		tbox_env=() tbox_names=()
+		eval "$loop"
+		printf "%s\n" "${tbox_names[@]}"
+	' _ "$SCRIPT_PATH"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"TBOX_A_KNOB_INVENTED_TODAY=900"* ]]
+	# No literal knob name in the filter itself.
+	! grep -q -- '--env "TBOX_[A-Z]' "$SCRIPT_PATH"
+}
+
+@test "tacklebox env: forwarded array is spliced into the podman run args" {
+	SCRIPT_PATH="${REPO_ROOT:-$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)}/scripts/lib/tacklebox.sh"
+	# Between the volume mounts and the image ref, or podman reads it as an
+	# argument to tacklebox instead of a flag to itself.
+	tbox_line=$(grep -nF '"${tbox_env[@]}"' "$SCRIPT_PATH" | cut -d: -f1)
+	image_line=$(grep -nF '"$tacklebox_image")' "$SCRIPT_PATH" | cut -d: -f1)
+	[ -n "$tbox_line" ]
+	[ -n "$image_line" ]
+	[ "$tbox_line" -lt "$image_line" ]
+}
+
+@test "tacklebox env: whole runner environment is never handed to the container" {
+	SCRIPT_PATH="${REPO_ROOT:-$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)}/scripts/lib/tacklebox.sh"
+	# --env-host would carry GITHUB_TOKEN and registry credentials in with it.
+	# Comment lines may name it; no code line may use it.
+	run bash -c 'grep -vE "^[[:space:]]*#" "$1" | grep -F -- "--env-host"' _ "$SCRIPT_PATH"
+	[ "$status" -ne 0 ]
+}
+
+@test "tacklebox env: the real container invocation forwards exported knobs only" {
+	SCRIPT_PATH="${REPO_ROOT:-$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)}/scripts/lib/tacklebox.sh"
+	_run_container_adapter "$SCRIPT_PATH" '
+		export TBOX_FOO=bar
+		TBOX_UNEXPORTED=x
+		export GITHUB_TOKEN=must-not-leak
+	'
+	[ "$status" -eq 0 ]
+	run_log=$(grep '^run ' "$PODMAN_LOG")
+	[[ "$run_log" == *"--env TBOX_FOO=bar "* ]]
+	# The knob precedes the image ref, so podman parses it as its own flag.
+	[[ "$run_log" == *"--env TBOX_FOO=bar ghcr.io/tuna-os/tacklebox:latest build "* ]]
+	[[ "$run_log" != *"TBOX_UNEXPORTED"* ]]
+	[[ "$run_log" != *"GITHUB_TOKEN"* ]]
+	[[ "$run_log" != *"must-not-leak"* ]]
+	[[ "$output" == *"==> Tacklebox environment: "*"TBOX_FOO=bar"* ]]
+}
+
+# ── Post-customize commit deadline (tunaOS#1893) ──────────────────────────
+#
+# Tacklebox's own default is 600s and it silently ignores a value it cannot
+# parse, so the adapter supplies 1800 and rejects bad input itself.
+
+@test "tacklebox commit gets a longer inner deadline but remains overrideable" {
+	SCRIPT_PATH="${REPO_ROOT:-$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)}/scripts/lib/tacklebox.sh"
+	grep -q 'TBOX_CUSTOMIZE_COMMIT_TIMEOUT:-1800' "$SCRIPT_PATH"
+	grep -q 'local TBOX_CUSTOMIZE_COMMIT_TIMEOUT=' "$SCRIPT_PATH"
+	grep -q 'export TBOX_CUSTOMIZE_COMMIT_TIMEOUT' "$SCRIPT_PATH"
+	grep -q 'must be a non-negative integer' "$SCRIPT_PATH"
+}
+
+@test "commit deadline: container path gets 1800 when the caller sets none" {
+	SCRIPT_PATH="${REPO_ROOT:-$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)}/scripts/lib/tacklebox.sh"
+	_run_container_adapter "$SCRIPT_PATH" ''
+	[ "$status" -eq 0 ]
+	grep -q -- '--env TBOX_CUSTOMIZE_COMMIT_TIMEOUT=1800 ' "$PODMAN_LOG"
+}
+
+@test "commit deadline: host-binary path gets 1800 when the caller sets none" {
+	SCRIPT_PATH="${REPO_ROOT:-$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)}/scripts/lib/tacklebox.sh"
+	# A fake tacklebox binary already "built" at the requested SHA, so the
+	# adapter runs it directly and never clones or compiles.
+	cache="${TEST_ROOT}/cache"
+	mkdir -p "$cache" "${TEST_ROOT}/out"
+	printf '{}\n' >"${TEST_ROOT}/recipe.json"
+	cat >"${cache}/tacklebox" <<'FAKE'
+#!/bin/sh
+case "$1" in
+version) echo "tacklebox deadbeef" ;;
+build) env | grep '^TBOX_' >"$FAKE_ENV_LOG" ;;
+esac
+FAKE
+	chmod +x "${cache}/tacklebox"
+	run env -u TBOX_CUSTOMIZE_COMMIT_TIMEOUT \
+		FAKE_ENV_LOG="${TEST_ROOT}/env.log" TACKLEBOX_FROM_SOURCE=1 \
+		TACKLEBOX_SHA=deadbeef TACKLEBOX_CACHE="$cache" \
+		TUNAOS_TACKLEBOX_TIMEOUT_SECONDS=30 \
+		bash -c 'set -euo pipefail; source "$1"
+			tunaos_run_tacklebox "$2/recipe.json" "$2/out" "$2/out/test.iso"' \
+		_ "$SCRIPT_PATH" "$TEST_ROOT"
+	[ "$status" -eq 0 ]
+	grep -qx 'TBOX_CUSTOMIZE_COMMIT_TIMEOUT=1800' "${TEST_ROOT}/env.log"
+	[[ "$output" == *"Tacklebox environment: TBOX_CUSTOMIZE_COMMIT_TIMEOUT=1800"* ]]
+}
+
+@test "commit deadline: 0 and other non-negative overrides pass through unchanged" {
+	SCRIPT_PATH="${REPO_ROOT:-$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)}/scripts/lib/tacklebox.sh"
+	for value in 0 2400; do
+		_run_container_adapter "$SCRIPT_PATH" "export TBOX_CUSTOMIZE_COMMIT_TIMEOUT=${value}"
+		[ "$status" -eq 0 ]
+		grep -q -- "--env TBOX_CUSTOMIZE_COMMIT_TIMEOUT=${value} " "$PODMAN_LOG"
+		! grep -q -- '--env TBOX_CUSTOMIZE_COMMIT_TIMEOUT=1800' "$PODMAN_LOG"
+	done
+}
+
+@test "commit deadline: a malformed value fails with exit 2 before tacklebox starts" {
+	SCRIPT_PATH="${REPO_ROOT:-$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)}/scripts/lib/tacklebox.sh"
+	for value in abc -5 1.5; do
+		_run_container_adapter "$SCRIPT_PATH" "export TBOX_CUSTOMIZE_COMMIT_TIMEOUT='${value}'"
+		[ "$status" -eq 2 ]
+		[[ "$output" == *"TBOX_CUSTOMIZE_COMMIT_TIMEOUT must be a non-negative integer"* ]]
+		# Neither the pull nor the run happened.
+		[ ! -s "$PODMAN_LOG" ]
+	done
+}
+
+@test "commit deadline: the caller's environment is unchanged after the call" {
+	SCRIPT_PATH="${REPO_ROOT:-$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)}/scripts/lib/tacklebox.sh"
+	# Unset before -> unset after (not left at the 1800 default).
+	_run_container_adapter "$SCRIPT_PATH" '' \
+		'[[ -z "${TBOX_CUSTOMIZE_COMMIT_TIMEOUT+set}" ]] || { echo "leaked: $TBOX_CUSTOMIZE_COMMIT_TIMEOUT" >&2; exit 9; }'
+	[ "$status" -eq 0 ]
+	# A caller's own unexported value is used, and stays unexported afterwards.
+	_run_container_adapter "$SCRIPT_PATH" 'TBOX_CUSTOMIZE_COMMIT_TIMEOUT=2400' '
+		[[ "$TBOX_CUSTOMIZE_COMMIT_TIMEOUT" == 2400 ]] || exit 8
+		[[ "$(declare -p TBOX_CUSTOMIZE_COMMIT_TIMEOUT)" != *"-x"* ]] || { echo "export leaked" >&2; exit 7; }
+	'
+	[ "$status" -eq 0 ]
+	grep -q -- '--env TBOX_CUSTOMIZE_COMMIT_TIMEOUT=2400 ' "$PODMAN_LOG"
+}
+
 @test "tacklebox library is side-effect-free when sourced directly" {
 	SCRIPT_PATH="${REPO_ROOT:-$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)}/scripts/lib/tacklebox.sh"
 	run bash -c '

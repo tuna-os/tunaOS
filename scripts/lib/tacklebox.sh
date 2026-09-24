@@ -31,6 +31,47 @@ tunaos_run_tacklebox() {
 	local tacklebox_image="${TACKLEBOX_IMAGE:-ghcr.io/tuna-os/tacklebox:latest}"
 	local from_source="${TACKLEBOX_FROM_SOURCE:-0}"
 
+	# Tacklebox defaults its post-customize `podman commit` to 600 seconds.
+	# skipjack:xfce and marlin:gnome/kde CI builds ended that commit at exactly
+	# 600.0s, with native overlay storage too (tunaOS#1893), so give it 30
+	# minutes; the outer deadline above still catches a real wedge. Validate
+	# here because tacklebox silently falls back to 600 on a value it cannot
+	# parse. Keep it local so the caller's environment is unchanged after the
+	# function returns, and export it so both the host binary and the container
+	# forwarding below receive the same value.
+	local TBOX_CUSTOMIZE_COMMIT_TIMEOUT="${TBOX_CUSTOMIZE_COMMIT_TIMEOUT:-1800}"
+	[[ "$TBOX_CUSTOMIZE_COMMIT_TIMEOUT" =~ ^(0|[1-9][0-9]*)$ ]] || {
+		echo "ERROR: TBOX_CUSTOMIZE_COMMIT_TIMEOUT must be a non-negative integer" \
+			"(got '${TBOX_CUSTOMIZE_COMMIT_TIMEOUT}'); 0 disables the inner deadline" >&2
+		return 2
+	}
+	export TBOX_CUSTOMIZE_COMMIT_TIMEOUT
+
+	# Make the two execution paths agree about the environment.
+	#
+	# The host-binary path (TACKLEBOX_FROM_SOURCE=1) runs tacklebox as an
+	# ordinary child process, so it inherits every exported TBOX_* knob. The
+	# container path does not: `podman run <image>` starts from the image's own
+	# environment and drops the caller's. weekly-desktop-screenshots.yml lost a
+	# debugging cycle to exactly that with TBOX_CUSTOMIZE_NETWORK=host. Forward
+	# the exported TBOX_* names explicitly so a knob set for a build takes effect
+	# however tacklebox runs (tunaOS#2034).
+	#
+	# The filter matches the prefix and nothing else. tunaOS does not need to
+	# know which knobs tacklebox understands, so a knob added there reaches it
+	# with no change on this side. That includes the commit deadline above,
+	# added upstream in tuna-os/tacklebox#300 for tunaOS#2034.
+	#
+	# Not --env-host: that hands the container the runner's entire
+	# environment, GITHUB_TOKEN and registry credentials included.
+	local -a tbox_env=() tbox_names=()
+	local _tbox_name
+	for _tbox_name in $(compgen -e); do
+		[[ "$_tbox_name" == TBOX_* ]] || continue
+		tbox_env+=(--env "${_tbox_name}=${!_tbox_name}")
+		tbox_names+=("${_tbox_name}=${!_tbox_name}")
+	done
+
 	local -a tb
 	if [[ "$from_source" == "1" ]]; then
 		# Pin the source SHA so CI doesn't silently track a moving HEAD.
@@ -79,7 +120,16 @@ tunaos_run_tacklebox() {
 			-v /dev:/dev
 			-v "$(realpath "$out_dir"):$(realpath "$out_dir")"
 			-v "$(realpath "$recipe_file"):$(realpath "$recipe_file"):ro"
+			"${tbox_env[@]}"
 			"$tacklebox_image")
+	fi
+
+	# Say which knobs are in play on either path: on the host path the
+	# inheritance is invisible, and a knob that was never set is the first thing
+	# to check when a build behaves as though it were unset. Values are logged,
+	# so the TBOX_ prefix must never carry a secret.
+	if ((${#tbox_names[@]})); then
+		echo "==> Tacklebox environment: ${tbox_names[*]}" >&2
 	fi
 
 	local -a build_cmd=("${tb[@]}" build "$(realpath "$recipe_file")"
