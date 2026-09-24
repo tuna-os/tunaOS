@@ -278,4 +278,23 @@ osr_set IMAGE_VERSION "${IMAGE_FLAVOR}-${SHA_HEAD_SHORT:-testing}"
 # the verify-branding.sh asset check passes too.
 osr_set LOGO "tunaos"
 
+# Each variant wears its own Noto Emoji (the ones in .github/build-config.yml:
+# marlin 🚀, yellowfin 🐠, ...), not one generic fish. system_files ships them
+# all under /usr/share/tunaos/logos; install this variant's over the tunaos
+# icon every consumer already points at (os-release LOGO, the GDM logo key,
+# the KDE splash), so none of those paths change. Runs after system_files is
+# laid down in every Containerfile, including the overlay re-copy. A variant
+# with no mark keeps the 🐟 that system_files ships as tunaos.svg.
+VARIANT_LOGO="/usr/share/tunaos/logos/${VARIANT_KEY}.svg"
+if [[ -f "${VARIANT_LOGO}" ]]; then
+	install -Dm0644 "${VARIANT_LOGO}" /usr/share/pixmaps/tunaos.svg
+	install -Dm0644 "${VARIANT_LOGO}" /usr/share/icons/hicolor/scalable/apps/tunaos.svg
+	for splash in /usr/share/plasma/look-and-feel/org.tunaos*.desktop/contents/splash/images/tunaos_logo.svgz; do
+		[[ -f "${splash}" ]] && gzip -9nc "${VARIANT_LOGO}" >"${splash}"
+	done
+	echo "Variant logo: ${VARIANT_LOGO}"
+else
+	echo "No variant logo for ${VARIANT_KEY}; keeping the generic TunaOS mark"
+fi
+
 printf "::endgroup::\n"
