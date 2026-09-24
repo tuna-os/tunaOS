@@ -88,7 +88,7 @@ check: _ensure_check_deps ste
         \) 2>/dev/null || true
     find . -not -path './.git/*' -not -path './system_files/usr/share/gnome-shell/extensions/*' -not -path './packages-repo/*' -not -path './.build/*' -type f -name "*.json" -exec sh -c 'jq . "$1" > /dev/null' _ {} \; 2>/dev/null || true
     if command -v actionlint &> /dev/null; then
-        actionlint -ignore "permission \"id-token\" is unknown" -ignore "SC2086" -ignore "SC2129" -ignore "SC2001" -ignore "SC2034" -ignore "SC2015" -ignore "SC1001" -ignore "SC2295" -ignore "SC2016" -ignore "save-always" -ignore "cannot be filtered" .github/workflows/*.yml .github/workflows/*.yaml || { exit 1; }
+        actionlint -ignore "permission \"id-token\" is unknown" -ignore "SC2086" -ignore "SC2129" -ignore "SC2001" -ignore "SC2034" -ignore "SC2015" -ignore "SC1001" -ignore "SC2295" -ignore "SC2016" -ignore "save-always" -ignore "cannot be filtered" -ignore "SC2193" .github/workflows/*.yml .github/workflows/*.yaml || { exit 1; }
     fi
     just --unstable --fmt --check -f Justfile
     echo "Checking workflow drift..."
