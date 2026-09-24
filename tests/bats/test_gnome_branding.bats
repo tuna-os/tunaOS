@@ -29,7 +29,7 @@ teardown() {
 _fixture() {
   "$SET" "$ROOT" >/dev/null
   mkdir -p "${ROOT}/usr/share/backgrounds/tunaos" "${ROOT}/usr/share/pixmaps"
-  echo png >"${ROOT}/usr/share/backgrounds/tunaos/tunaos-default.png"
+  echo png >"${ROOT}/usr/share/backgrounds/tunaos/tunaos-default.jpg"
   echo svg >"${ROOT}/usr/share/pixmaps/tunaos.svg"
   # `dconf update` is not available here and is not what is under test; the
   # contract asserts a non-empty compiled database, so supply one.
@@ -50,7 +50,7 @@ _check() {
   local kf="${ROOT}/etc/dconf/db/local.d/10-tunaos-branding"
   [ -f "$kf" ]
   grep -q "^\[org/gnome/desktop/background\]" "$kf"
-  grep -q "^picture-uri='file:///usr/share/backgrounds/tunaos/tunaos-default.png'" "$kf"
+  grep -q "^picture-uri='file:///usr/share/backgrounds/tunaos/tunaos-default.jpg'" "$kf"
 }
 
 # Setting only picture-uri leaves every dark-style session on the distro
@@ -100,7 +100,7 @@ _check() {
 @test "contract FAILS an image with the assets but no keyfile" {
   mkdir -p "${ROOT}/etc/dconf/db/local.d" "${ROOT}/etc/dconf/db/gdm.d" \
     "${ROOT}/usr/share/backgrounds/tunaos" "${ROOT}/usr/share/pixmaps"
-  echo png >"${ROOT}/usr/share/backgrounds/tunaos/tunaos-default.png"
+  echo png >"${ROOT}/usr/share/backgrounds/tunaos/tunaos-default.jpg"
   echo svg >"${ROOT}/usr/share/pixmaps/tunaos.svg"
   _check
   [ "$status" -ne 0 ]
@@ -110,7 +110,7 @@ _check() {
 
 @test "contract FAILS when picture-uri names a file not in the image" {
   _fixture
-  rm "${ROOT}/usr/share/backgrounds/tunaos/tunaos-default.png"
+  rm "${ROOT}/usr/share/backgrounds/tunaos/tunaos-default.jpg"
   _check
   [ "$status" -ne 0 ]
   echo "$output" | grep -q "which is not in the image"
@@ -147,12 +147,12 @@ _check() {
 @test "contract passes on branding written by something other than our script" {
   mkdir -p "${ROOT}/etc/dconf/db/local.d" "${ROOT}/etc/dconf/db/gdm.d" \
     "${ROOT}/usr/share/backgrounds/tunaos" "${ROOT}/usr/share/pixmaps"
-  echo png >"${ROOT}/usr/share/backgrounds/tunaos/tunaos-default.png"
+  echo png >"${ROOT}/usr/share/backgrounds/tunaos/tunaos-default.jpg"
   echo svg >"${ROOT}/usr/share/pixmaps/tunaos.svg"
   cat >"${ROOT}/etc/dconf/db/local.d/99-somebody-elses-defaults" <<'EOF'
 [org/gnome/desktop/background]
-picture-uri='file:///usr/share/backgrounds/tunaos/tunaos-default.png'
-picture-uri-dark='file:///usr/share/backgrounds/tunaos/tunaos-default.png'
+picture-uri='file:///usr/share/backgrounds/tunaos/tunaos-default.jpg'
+picture-uri-dark='file:///usr/share/backgrounds/tunaos/tunaos-default.jpg'
 EOF
   cat >"${ROOT}/etc/dconf/db/gdm.d/99-somebody-elses-defaults" <<'EOF'
 [org/gnome/login-screen]

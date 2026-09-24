@@ -59,3 +59,23 @@ fi
 for _f in "${files[@]}"; do
 	kde_set_lnf "$_f"
 done
+
+# The variant's accent (build_scripts/lib/variant-identity.tsv): Breeze tints
+# selections, focus rings and the panel highlight with AccentColor, so each
+# variant carries its base distro's colour. Same section-aware rewrite as the
+# look-and-feel key; skipped on an image with no identity file.
+identity="${TUNAOS_IDENTITY:-/usr/share/tunaos/identity.env}"
+accent_rgb=""
+if [[ -f "$identity" ]]; then
+	accent_rgb="$(sed -n 's/^TUNAOS_ACCENT_RGB=//p' "$identity" | tr -d "'\"")"
+fi
+if [[ -n "$accent_rgb" ]]; then
+	for _f in "${files[@]}"; do
+		awk -v want="$accent_rgb" '
+			/^\[/ { if (insec && !set) { print "AccentColor=" want; set=1 } insec = ($0 == "[General]") }
+			/^[ \t]*AccentColor[ \t]*=/ { if (insec) { print "AccentColor=" want; set=1; next } }
+			{ print }
+			END { if (!set) { if (!insec) print "[General]"; print "AccentColor=" want } }
+		' "$_f" >"${_f}.tunaos.tmp" && mv "${_f}.tunaos.tmp" "$_f"
+	done
+fi

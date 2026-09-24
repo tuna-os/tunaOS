@@ -1,0 +1,4 @@
+These SVGs are from Noto Emoji (https://github.com/googlefonts/noto-emoji),
+fetched from https://fonts.gstatic.com/s/e/notoemoji/latest/<codepoint>/emoji.svg.
+The images are licensed under the Apache License, Version 2.0.
+scripts/branding/wallpaper.svg.mjs composes them into the wallpaper scenes.

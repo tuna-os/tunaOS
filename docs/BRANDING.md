@@ -38,8 +38,8 @@ variant gets these whether or not anything uses them:
 | asset | path |
 |---|---|
 | logo | `/usr/share/pixmaps/tunaos.svg` |
-| wallpaper | `/usr/share/backgrounds/tunaos/tunaos-default.png` |
-| boot splash | `/usr/share/plymouth/themes/shark/`, via `default.plymouth` |
+| wallpaper | `/usr/share/backgrounds/tunaos/tunaos-default.jpg` |
+| boot splash | `/usr/share/plymouth/themes/tunaos/`, via `default.plymouth` |
 
 ### 3. Application — what a user sees
 
@@ -52,8 +52,39 @@ the session to use it, and that something differs per desktop.
 | GNOME | dconf keyfiles in `/etc/dconf/db/local.d` and `gdm.d` | added 2026-09-17 |
 | KDE | `LookAndFeelPackage=org.tunaos.desktop` in `kdeglobals` | done |
 | niri | greeter QML, compositor config, a wallpaper daemon | greeter only |
-| COSMIC | `experiences/cosmic/files/` | **not done** — the directory holds a README |
-| XFCE | `experiences/xfce/files/` | **not done** — the directory holds a README |
+| COSMIC | `cosmic-set-branding.sh` writes the cosmic-bg default | done |
+| XFCE | an autostart entry sets the wallpaper at the first login | done |
+| Pantheon | `zzzz-tunaos.gschema.override` | done |
+
+## Each variant has its own look
+
+A variant is TunaOS first. It also shows the distro it is built on.
+`build_scripts/lib/variant-identity.tsv` gives each variant an accent colour.
+The colour comes from that distro: Arch blue for marlin, Ubuntu orange for
+grouper, openSUSE green for sailfin. The mark is the variant's Noto Emoji.
+
+| surface | what the variant gets |
+|---|---|
+| logo | its emoji, in `/usr/share/tunaos/logos/<variant>.svg` |
+| wallpaper | a scene around its emoji, in its accent colour |
+| GNOME, KDE | the accent colour |
+| `ANSI_COLOR`, `/etc/issue`, fastfetch | the accent colour |
+
+`90-image-info.sh` writes `/usr/share/tunaos/identity.env` from the table.
+The desktop scripts read that file.
+
+### Wallpapers
+
+`scripts/branding/render-wallpapers.mjs` draws one scene for each variant,
+from `scripts/branding/wallpaper.svg.mjs`. The output is in the repository,
+so the build does not draw anything. Run the script again when you change a
+scene, a colour or an emoji.
+
+Painted art can replace a scene for one desktop. Put it at
+`system_files/usr/share/backgrounds/tunaos/<variant>-<desktop>.jpg`.
+`select-wallpaper.sh` uses that file first. `scripts/branding/art-prompts.mjs`
+prints a prompt for each variant and desktop. The prompt joins the emoji, the
+colour of the base and the style of the desktop.
 
 ## The rule
 
@@ -95,7 +126,9 @@ unbranded.
 
 ## What is still open
 
-COSMIC and XFCE apply nothing. Their `experiences/` directories contain a README
-and copy that README into `/etc/skel`, so a new user gets a README in
-`~/.config` and stock artwork on screen. niri draws no wallpaper at all, which
-`verify-branding-niri.sh` documents against a measured image.
+- Plymouth: only the EL10 bases set the theme of the variant. The other bases
+  build the initramfs before `90-image-info.sh` runs.
+- Login screens: SDDM, cosmic-greeter and LightDM show the upstream look.
+- niri draws no wallpaper. `verify-branding-niri.sh` records this for a
+  measured image.
+- COSMIC, XFCE and Pantheon have no `verify-branding-<desktop>.sh`.

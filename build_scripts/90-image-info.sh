@@ -192,6 +192,7 @@ if [[ -f "${RECIPE_FILE}" ]]; then
 	if [[ "${IMAGE_FLAVOR}" == "cosmic" || "${IMAGE_FLAVOR}" == *"cosmic"* ]]; then DESKTOP_PRETTY_NAME="COSMIC"; fi
 	if [[ "${IMAGE_FLAVOR}" == "niri" || "${IMAGE_FLAVOR}" == *"niri"* ]]; then DESKTOP_PRETTY_NAME="Niri"; fi
 	if [[ "${IMAGE_FLAVOR}" == "xfce" || "${IMAGE_FLAVOR}" == *"xfce"* ]]; then DESKTOP_PRETTY_NAME="XFCE"; fi
+	if [[ "${IMAGE_FLAVOR}" == "pantheon" || "${IMAGE_FLAVOR}" == *"pantheon"* ]]; then DESKTOP_PRETTY_NAME="Pantheon"; fi
 
 	# Pick the variant mark that ACTUALLY EXISTS in the installer's GResource.
 	#
@@ -295,6 +296,82 @@ if [[ -f "${VARIANT_LOGO}" ]]; then
 	echo "Variant logo: ${VARIANT_LOGO}"
 else
 	echo "No variant logo for ${VARIANT_KEY}; keeping the generic TunaOS mark"
+fi
+
+# ── Variant identity: TunaOS first, with a nod to the base ──────────────────
+#
+# build_scripts/lib/variant-identity.tsv gives each variant one accent colour
+# borrowed from its base distro (Arch blue, Ubuntu orange, openSUSE green...).
+# Everything below spends it: the wallpaper scene (rendered in that colour),
+# os-release ANSI_COLOR (systemd's "Welcome to Marlin!" at boot), the console
+# login banner and fastfetch. The desktop hooks (gnome-set-branding.sh,
+# kde-set-look-and-feel.sh, cosmic-set-branding.sh) read the identity file
+# written here, because on most bases they run after this script and after
+# the desktop's own packages, which would overwrite anything set this early.
+IDENTITY_TSV="/run/context/build_scripts/lib/variant-identity.tsv"
+IDENTITY_ROW=""
+if [[ -f "${IDENTITY_TSV}" ]]; then
+	IDENTITY_ROW="$(awk -F'\t' -v id="${VARIANT_KEY}" '$1 == id' "${IDENTITY_TSV}")"
+fi
+if [[ -n "${IDENTITY_ROW}" ]]; then
+	IFS=$'\t' read -r _ ACCENT GNOME_ACCENT BASE_LABEL HOMAGE <<<"${IDENTITY_ROW}"
+	ACCENT_HEX="${ACCENT#\#}"
+	ACCENT_R=$((16#${ACCENT_HEX:0:2}))
+	ACCENT_G=$((16#${ACCENT_HEX:2:2}))
+	ACCENT_B=$((16#${ACCENT_HEX:4:2}))
+
+	osr_set ANSI_COLOR "38;2;${ACCENT_R};${ACCENT_G};${ACCENT_B}"
+
+	install -d /usr/share/tunaos
+	cat >/usr/share/tunaos/identity.env <<EOF
+# Written by build_scripts/90-image-info.sh from variant-identity.tsv.
+TUNAOS_VARIANT='${VARIANT_KEY}'
+TUNAOS_ACCENT='${ACCENT}'
+TUNAOS_ACCENT_RGB='${ACCENT_R},${ACCENT_G},${ACCENT_B}'
+TUNAOS_GNOME_ACCENT='${GNOME_ACCENT}'
+TUNAOS_BASE='${BASE_LABEL}'
+TUNAOS_HOMAGE='${HOMAGE}'
+EOF
+
+	# The variant's scene becomes the default wallpaper every desktop points
+	# at. All fourteen stay installed, so a user can pick a sibling's.
+	VARIANT_WALLPAPER="/usr/share/backgrounds/tunaos/${VARIANT_KEY}.jpg"
+	if [[ -f "${VARIANT_WALLPAPER}" ]]; then
+		install -m0644 "${VARIANT_WALLPAPER}" /usr/share/backgrounds/tunaos/tunaos-default.jpg
+	fi
+
+	# Console login banner. Upstream's names the upstream distro ("Ubuntu
+	# 26.04 LTS \n \l", "Arch Linux \r (\l)"); \S{PRETTY_NAME} is agetty's
+	# own os-release lookup, so this stays right if the name ever changes.
+	ESC=$'\e'
+	printf '%s\n' \
+		"${ESC}[1;38;2;${ACCENT_R};${ACCENT_G};${ACCENT_B}m\\S{PRETTY_NAME}${ESC}[0m - TunaOS, built on ${BASE_LABEL}" \
+		"\\r (\\l)" \
+		"" >/etc/issue
+
+	# fastfetch: a TunaOS fish in the variant's colour instead of the base
+	# distro's ASCII logo, which fastfetch otherwise picks from ID=.
+	install -d /etc/xdg/fastfetch
+	cat >/etc/xdg/fastfetch/config.jsonc <<EOF
+// Written by build_scripts/90-image-info.sh: ${VARIANT_KEY}, in ${HOMAGE}.
+{
+  "\$schema": "https://github.com/fastfetch-cli/fastfetch/raw/dev/doc/json_schema.json",
+  "logo": {
+    "type": "file",
+    "source": "/usr/share/tunaos/fastfetch-logo.txt",
+    "color": { "1": "38;2;${ACCENT_R};${ACCENT_G};${ACCENT_B}" },
+    "padding": { "top": 1, "right": 3 }
+  },
+  "display": { "color": { "keys": "38;2;${ACCENT_R};${ACCENT_G};${ACCENT_B}" } },
+  "modules": [
+    "title", "separator", "os", "host", "kernel", "uptime", "packages",
+    "shell", "de", "wm", "terminal", "cpu", "gpu", "memory", "disk", "break", "colors"
+  ]
+}
+EOF
+	echo "Variant identity: ${VARIANT_KEY} accent=${ACCENT} (${HOMAGE})"
+else
+	echo "No identity row for ${VARIANT_KEY} in variant-identity.tsv; generic TunaOS look"
 fi
 
 printf "::endgroup::\n"
