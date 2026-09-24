@@ -1,0 +1,283 @@
+name: Attest SBOMs
+
+# Attach and sign the SPDX SBOMs of a finished build run.
+#
+# This used to be the `attest_sbom` job inside reusable-build-image.yml. It was
+# already `continue-on-error: true` and already outside Promote's `needs:`
+# (#1560), and both of those hold: on the 2026-09-02 yellowfin nightly
+# (run 33591594151) every platform of every flavor built, signed, manifested
+# and promoted while `base / Attest SBOM` was failing against a Rekor that
+# answered 502.
+#
+# The run still concluded `failure`. `continue-on-error` keeps a job's failure
+# from failing the run it is DEFINED in; across a reusable-workflow boundary
+# the caller's `uses:` job reports the called workflow's aggregate result, and
+# that is what the nightly's conclusion comes from. So 27 green jobs out of 30
+# published a red run, and the red run is load-bearing:
+#
+#   - `.github/scripts/update-build-status.sh` renders the variant's "Latest
+#     run" column straight from the run conclusion, so the README matrix read
+#     47/143 built for a fleet that had, in fact, built;
+#   - rerun-infra-failures.yml only fires on a failed run, so every one of
+#     these nights entered the recovery path for nothing.
+#
+# A transparency-log outage is not a property of the images. Giving the
+# attestation its own workflow gives it its own run, its own conclusion and
+# its own entry in the re-run classifier, which is the only placement where it
+# cannot colour the build (tuna-os/tunaOS#2282).
+#
+# The budget is deliberately NOT raised to compensate: on 2026-09-02 Rekor was
+# 502ing for well over an hour, and a longer deadline buys a longer red job,
+# not a green one. Recovery is rerun-infra-failures.yml re-running this
+# workflow once the log is back.
+
+on:
+  workflow_run:
+    # Every workflow that reaches reusable-build-image.yml with `sbom: true`,
+    # i.e. every caller of build-variant.yml. A variant missing from this list
+    # silently stops being attested, which is the kind of gap nobody notices,
+    # so tests/test_sbom_attestation_cannot_colour_the_build.py derives the
+    # list from the callers and fails when one is absent.
+    workflows:
+      - Build Albacore
+      - Build Bonito
+      - Build Bonito-rawhide
+      - Build Flavor
+      - Build Flounder
+      - Build Flounder-sid
+      - Build Grouper
+      - Build Guppy
+      - Build Gurnard
+      - Build Hummingbird
+      - Build Marlin
+      - Build Sailfin
+      - Build Skipjack
+      - "Build Wahoo [experimental]"
+      - Build Yellowfin
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Build run ID whose SBOMs should be attested"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  # Keyed on the build run, so the same run is never attested twice at once.
+  group: attest-sbom-${{ github.event.workflow_run.id || inputs.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  attest:
+    name: Attest SBOM
+    # A failed build run is still worth attesting: the whole point of #1560 is
+    # that images reach GHCR and get promoted while something off the critical
+    # path is red, and those images have SBOMs. Only two cases have nothing to
+    # act on -- a cancelled run (no verdict on anything, tunaOS#1730) and a
+    # pull request, which never publishes and never uploads a digest artifact.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion != 'cancelled' &&
+       github.event.workflow_run.conclusion != 'skipped' &&
+       github.event.workflow_run.event != 'pull_request')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      # Reading another run's artifacts.
+      actions: read
+    # A whole variant's flavors are attested by this one job, where the old
+    # per-flavor job handled one. The ceiling has to cover the widest fleet
+    # (yellowfin: 8 flavors x 3 platforms) at the ~20s a healthy attestation
+    # takes, with room for the single outage deadline the loop is allowed to
+    # burn before it stops trying. The loop's own ATTEST_BUDGET_MINUTES is the
+    # real bound; this is the backstop for the case the runner agent, not the
+    # script, is the thing that has to enforce it.
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+      RUN_ID: ${{ github.event.workflow_run.id || inputs.run_id }}
+      COSIGN_YES: "true"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Fetch build outputs
+        id: fetch
+        # `gh run download` rather than actions/download-artifact: the
+        # artifacts belong to a different run, and a run with nothing to
+        # attest (a build that died before any platform pushed) must be a
+        # no-op, not a red run. gh exits non-zero when no artifact matches,
+        # which is information, not a failure -- the count below decides.
+        run: |
+          set -uo pipefail
+          mkdir -p supply-chain/digests supply-chain/sboms
+
+          # The digest artifact is the only one suffixed with the run id, so
+          # this pattern cannot pick up packages-*, boot-gate-* or the
+          # pr-boot-verify-* bundles.
+          gh run download "${RUN_ID}" --repo "${REPO}" \
+            --pattern "*-${RUN_ID}" --dir supply-chain/digests || true
+          gh run download "${RUN_ID}" --repo "${REPO}" \
+            --pattern "sbom-*" --dir supply-chain/sboms || true
+
+          refs="$(find supply-chain/digests -name '*.ref' | wc -l)"
+          echo "refs=${refs}" >> "$GITHUB_OUTPUT"
+          echo "Found ${refs} platform image(s) to attest in run ${RUN_ID}."
+
+      - name: Nothing to attest
+        if: steps.fetch.outputs.refs == '0'
+        run: |
+          echo "::notice::run ${RUN_ID} published no SBOM-bearing platform image; nothing to attest."
+          {
+            echo "### Attest SBOM"
+            echo
+            echo "Run [${RUN_ID}](https://github.com/${REPO}/actions/runs/${RUN_ID}) published no SBOM-bearing platform image."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Install Cosign
+        if: steps.fetch.outputs.refs != '0'
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: v3.1.3
+
+      - name: Login to GitHub Container Registry
+        if: steps.fetch.outputs.refs != '0'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$GITHUB_TOKEN" | cosign login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
+
+      - name: Attest SPDX SBOMs
+        if: steps.fetch.outputs.refs != '0'
+        # A ceiling the env deadline structurally cannot give this step:
+        # SIGN_DEADLINE_MINUTES is a budget per cosign INVOCATION and the loop
+        # makes two per platform image. ATTEST_BUDGET_MINUTES below is the
+        # bound the script enforces on itself; this is the one the runner
+        # agent enforces if the script somehow cannot.
+        timeout-minutes: 40
+        env:
+          # Per cosign invocation, unchanged from the job this replaces. 10m is
+          # far longer than any successful attestation (image signing completed
+          # in 19s on the run that motivated it) so genuine flakes are absorbed;
+          # what it stops absorbing is a sustained outage, which is exactly the
+          # case where continuing without the attestation is the point.
+          SIGN_DEADLINE_MINUTES: "10"
+          SIGN_BACKOFF_CAP_SECONDS: "120"
+          # Wall clock for the whole loop. SIGN_DEADLINE_MINUTES is a budget
+          # PER invocation -- `deadline` is a local in cosign_retry, recomputed
+          # on entry -- so with a variant's worth of platforms in one job it
+          # bounds nothing on its own: 24 refs x 2 calls x 10m is four hours of
+          # red. This is the bound that actually holds.
+          ATTEST_BUDGET_MINUTES: "30"
+        run: |
+          set -uo pipefail
+
+          # GITHUB_WORKFLOW_REF is `owner/repo/.github/workflows/attest-sbom.yml@refs/heads/main`
+          # -- exactly the certificate subject Fulcio issues for this job. Read
+          # rather than assembled, so moving or renaming this file can never
+          # leave `verify-attestation` checking an identity nothing signs.
+          identity="https://github.com/${GITHUB_WORKFLOW_REF}"
+          issuer="https://token.actions.githubusercontent.com"
+          echo "Signing identity: ${identity}"
+
+          source "${GITHUB_WORKSPACE}/.github/scripts/cosign-retry.sh"
+
+          attested=0
+          missing=0
+          failed=0
+          skipped=0
+          over_budget=0
+          outage=""
+          budget_end=$(( $(date +%s) + ATTEST_BUDGET_MINUTES * 60 ))
+
+          # `gh run download` lays each artifact out in its own directory, so
+          # the files are nested one level deeper than they were uploaded.
+          while IFS= read -r ref_file; do
+            stem="$(basename "$ref_file" .ref)"
+            ref="$(<"$ref_file")"
+            sbom="$(find supply-chain/sboms -name "sbom-${stem}.spdx.json" -print -quit)"
+
+            if [[ -z "$sbom" ]]; then
+              echo "::error::missing SPDX SBOM for ${stem}"
+              missing=$((missing + 1))
+              continue
+            fi
+
+            # Once the transparency log has told us it is down, the remaining
+            # refs will hear the same thing. Spending a fresh 10m deadline on
+            # each of them turns one outage into hours of runner time and
+            # delays the re-run that is the actual recovery path.
+            if [[ -n "$outage" ]]; then
+              skipped=$((skipped + 1))
+              continue
+            fi
+            if (( $(date +%s) >= budget_end )); then
+              echo "::warning::attestation budget (${ATTEST_BUDGET_MINUTES}m) exhausted before ${stem}"
+              over_budget=$((over_budget + 1))
+              continue
+            fi
+
+            ok=1
+            for attempt in attest verify; do
+              case "$attempt" in
+                attest)
+                  out="$(cosign_retry cosign attest --type spdxjson --predicate "$sbom" "$ref" 2>&1)" || ok=0
+                  ;;
+                verify)
+                  out="$(cosign_retry cosign verify-attestation "$ref" \
+                    --type spdxjson \
+                    --certificate-identity "$identity" \
+                    --certificate-oidc-issuer "$issuer" 2>&1)" || ok=0
+                  ;;
+              esac
+              # Re-emit either way: SIGSTORE_OUTAGE is a marker
+              # rerun-infra-failures.yml greps these job logs for, and it only
+              # exists in cosign_retry's output.
+              printf '%s\n' "$out" >&2
+              if (( ok == 0 )); then
+                grep -q 'SIGSTORE_OUTAGE' <<<"$out" && outage="yes"
+                break
+              fi
+            done
+
+            if (( ok == 0 )); then
+              echo "::error::could not attest ${ref}"
+              failed=$((failed + 1))
+              continue
+            fi
+            attested=$((attested + 1))
+            echo "Attested ${ref}"
+          done < <(find supply-chain/digests -name '*.ref' | sort)
+
+          {
+            echo "### Attest SBOM"
+            echo
+            echo "- Build run: [${RUN_ID}](https://github.com/${REPO}/actions/runs/${RUN_ID})"
+            echo "- Attested: ${attested}"
+            echo "- Failed: ${failed}"
+            echo "- Skipped after outage: ${skipped}"
+            echo "- Skipped over budget: ${over_budget}"
+            echo "- Missing SBOM: ${missing}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [[ -n "$outage" ]]; then
+            echo "::error::SIGSTORE_OUTAGE: the transparency log was unavailable; ${skipped} image(s) left unattested. The images themselves are built, signed and promoted." >&2
+          fi
+          if (( missing > 0 )); then
+            echo "::error::${missing} platform image(s) had no SBOM to attest" >&2
+          fi
+          # Running out of budget leaves images unattested just as surely as a
+          # failure does. Exiting 0 would hide that from the run's conclusion
+          # and from rerun-infra-failures.yml, which only acts on red runs.
+          if (( over_budget > 0 )); then
+            echo "::error::attestation budget (${ATTEST_BUDGET_MINUTES}m) ran out; ${over_budget} image(s) left unattested" >&2
+          fi
+          if (( failed > 0 || missing > 0 || over_budget > 0 )); then
+            exit 1
+          fi
+          echo "Attested ${attested} SPDX SBOM(s)."

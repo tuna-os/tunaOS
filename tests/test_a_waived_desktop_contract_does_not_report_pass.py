@@ -98,7 +98,7 @@ def test_every_hummingbird_exemption_counts_what_it_waives():
     # count to 0 and failed a test whose subject had not changed at all.
     # (shfmt does exactly that; see the .editorconfig fix in this PR.)
     exemption_re = re.compile(
-        r'IS_HUMMINGBIRD:-false\}" == "true" \]\]; then(.*?)\n\s*fi\b',
+        r'IS_HUMMINGBIRD:-false\}" == "true"[^\n]*\]\]; then(.*?)\n\s*fi\b',
         re.S,
     )
     blocks = exemption_re.findall(src)

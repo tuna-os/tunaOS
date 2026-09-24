@@ -154,6 +154,17 @@ packages:
       # is in the 20251124 hummingbird index. Listed in BOTH sections so the
       # wiring test's pinned diff (exactly cosmic-settings-daemon) holds.
       - dconf
+      # Laptop hardware baseline. Hummingbird inherits this list and does not
+      # ship these in its desktop-less base (#2064). Keep the firmware binary
+      # names explicit: linux-firmware's device packages are weak dependencies,
+      # and install_available disables weak dependencies on its fallback path.
+      - NetworkManager-wifi
+      - linux-firmware
+      - amd-gpu-firmware
+      - intel-gpu-firmware
+      - iwlwifi-mvm-firmware
+      - wireless-regdb
+      - iw
       - cosmic-session
       - cosmic-comp
       - cosmic-panel

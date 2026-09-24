@@ -16,9 +16,11 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 
 | Workflow | Lane | Assertion | Cadence | Freshness SLA |
 |---|---|---|---|---|
+| `add-help-wanted.yml` | post-merge | Add Help Wanted | issues | — |
 | `arm64-ulimit-probe.yml` | PR-deterministic + post-merge | arm64 ulimit probe (diagnostic) | each PR, manual | — |
 | `asahi-hw-nightly-one.yml` | post-merge + scheduled | Asahi hardware smoke (one) | caller cadence | — |
 | `asahi-hw-nightly.yml` | post-merge + scheduled | Asahi hardware smoke (Tier 2 rental) | `0 6 * * *`, manual | — |
+| `attest-sbom.yml` | post-merge | Attest SBOMs | workflow completion, manual | — |
 | `audit-nvidia-release-assets.yml` | post-merge + scheduled | Audit NVIDIA release assets | `30 0 * * *`, manual | — |
 | `bootc-lifecycle.yml` | post-merge + scheduled | `lifecycle` | `0 5 * * 4`, manual | `lifecycle`: 8d |
 | `build-albacore.yml` | post-merge + scheduled | Build Albacore | `20 2 * * *`, manual | — |
