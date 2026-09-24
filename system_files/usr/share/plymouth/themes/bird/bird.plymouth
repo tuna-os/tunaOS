@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=TunaOS Bird
+Description=TunaOS boot animation (Bird)
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/bird
+ScriptFile=/usr/share/plymouth/themes/bird/bird.script

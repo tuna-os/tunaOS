@@ -126,8 +126,7 @@ unbranded.
 
 ## What is still open
 
-- Plymouth: only the EL10 bases set the theme of the variant. The other bases
-  build the initramfs before `90-image-info.sh` runs.
+- Plymouth: `verify-branding.sh` does not check which theme dracut used.
 - Login screens: SDDM, cosmic-greeter and LightDM show the upstream look.
 - niri draws no wallpaper. `verify-branding-niri.sh` records this for a
   measured image.

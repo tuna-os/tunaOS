@@ -345,7 +345,7 @@ EOF
 	# own os-release lookup, so this stays right if the name ever changes.
 	ESC=$'\e'
 	printf '%s\n' \
-		"${ESC}[1;38;2;${ACCENT_R};${ACCENT_G};${ACCENT_B}m\\S{PRETTY_NAME}${ESC}[0m - TunaOS, built on ${BASE_LABEL}" \
+		"${ESC}[1;38;2;${ACCENT_R};${ACCENT_G};${ACCENT_B}m\\S{PRETTY_NAME}${ESC}[0m - built on ${BASE_LABEL}" \
 		"\\r (\\l)" \
 		"" >/etc/issue
 
