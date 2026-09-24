@@ -1,23 +1,11 @@
 # Quality dashboard
 
-TunaOS doesn't have a separate quality dashboard app — the quality signal
-lives in [`.github/green-criteria.yml`](../.github/green-criteria.yml)
-(prose companion: [`docs/GREEN-CRITERIA.md`](GREEN-CRITERIA.md)), which is
-the source of truth for what "green" means for a given (variant, flavor)
-cell, kept honest by `tests/test_green_criteria.py`.
+TunaOS does not have a separate quality dashboard. The quality signal lives in [`.github/green-criteria.yml`](../.github/green-criteria.yml) (prose companion: [`docs/GREEN-CRITERIA.md`](GREEN-CRITERIA.md)). That file is the source of truth for green status for each cell. `tests/test_green_criteria.py` verifies this state.
 
 Each criterion in that file records:
 
-- `enforcement` — `blocking` (a cell cannot be green without it), `advisory`
-  (measured and reported, not yet blocking), or `unimplemented` (no
-  automated assertion exists yet).
-- a `status_<date>` history, so progress since the bar was raised
-  (`raised_on: 2026-08-17`) is measurable instead of remembered.
-- which workflow asserts it (`asserted_by`), so a criterion always
-  traces back to a real, runnable check instead of an aspiration.
+- `enforcement` — `blocking` (a cell needs this to pass), `advisory` (measured and reported, but not required), or `unimplemented` (no automated test exists yet).
+- a `status_<date>` history, so the team can measure progress since the date of change (`raised_on: 2026-08-17`).
+- which workflow asserts it (`asserted_by`), so a criterion always traces back to a real check.
 
-The composite rule that makes the list mean something: a cell is green only
-if every blocking criterion has an affirmative, *current* result — never
-tested, skipped, or stale evidence does not count as satisfied. See
-`skills/check-green-criteria/SKILL.md` for how to read it when
-investigating a specific cell.
+A composite rule sets the requirements: a cell passes only when each `blocking` criterion has a current affirmative result. Never-tested, skipped, or stale evidence does not count. See `skills/check-green-criteria/SKILL.md` to inspect a specific cell.

@@ -1,3 +1,5 @@
+<!-- ste-disable-file: verbatim Contributor Covenant v2.1 -->
+
 # Contributor Covenant Code of Conduct
 
 ## Our Pledge

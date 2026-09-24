@@ -26,11 +26,11 @@ difference matters:
 1. **mkosi as a bootc/OCI build backend** — plausible, low-risk *if* proven.
    The reference project's own output is a plain OCI image. That image should
    be a drop-in replacement for what `buildah build` produces today. See
-   "Finding 1" below.
+   "Result 1" below.
 2. **mkosi DDI output** — not a drop-in second artifact. The reference
    project's own DDI profile is a *different model for OS deployment*
    (`systemd-sysupdate` + dm-verity + UKI, not ostree/bootc). Its own
-   maintainers flag it "should not be used by default." See "Finding 2."
+   maintainers flag it "should not be used by default." See "Result 2."
 
 ## What I checked, and how
 
@@ -47,7 +47,7 @@ assume them from memory:
 - `ublue-os/aurora` — repo contents, branch list, and an org-wide code search
   for `mkosi`.
 
-## Finding 1: mkosi's bootc/ostree output is a plain OCI image, not a new artifact type
+## Result 1: mkosi's bootc/ostree output is a plain OCI image, not a new artifact type
 
 `mkosi.profiles/bootc-ostree/mkosi.conf` in zirconium:
 
@@ -98,11 +98,11 @@ The two build backends would be interchangeable at exactly the point this repo
 already treats as a boundary: a tagged OCI image.
 
 This directly de-risks constraint #1 in the issue ("`just iso`/tacklebox ISO
-path must keep working... mkosi roots must remain container-installable") —
+path must continue to work... mkosi roots must remain container-installable") —
 they would. The mkosi output already *is* a container image. It is not a root
 tree that tacklebox would need new code to understand.
 
-## Finding 2: mkosi's DDI output is a different OS model, not an alternate packaging
+## Result 2: mkosi's DDI output is a different OS model, not an alternate packaging
 
 `mkosi.profiles/sysupdate/mkosi.conf` — the actual disk-image (`Format=disk`)
 profile in the same repo. I quote it here because its first line carries more
@@ -215,7 +215,7 @@ not discover it mid-build.
   mkosi output, cosign keyless). `docs/build-pipeline.md` confirms that cosign
   already signs this repo's *current* (buildah-built) images. Nobody has
   tested whether an mkosi-produced OCI image gets the same signature through
-  the same `reusable-build-image.yml` step. Finding 1 suggests it should,
+  the same `reusable-build-image.yml` step. Result 1 suggests it should,
   since it is the same OCI format at the point where cosign signs.
 - **No RHSM / overlay-stage (hwe/nvidia/cachyos/asahi) compatibility check.**
   The issue calls these out as open questions. This investigation did not
@@ -234,16 +234,16 @@ run it through this repo's *unmodified* `bootc container lint`, rechunk step,
 and `iso-e2e.sh`/LUKS E2E harness, exactly as if it were a buildah build.
 
 Suppose that spike boots and passes the existing gate unmodified. That
-confirms Finding 1 in practice, and a hybrid becomes a reasonable follow-up
+confirms Result 1 in practice, and a hybrid becomes a reasonable follow-up
 proposal. That hybrid is mkosi as an alternate backend for one variant, behind
 a flag, with Containerfiles everywhere else. A DDI POC is a separate, later
 piece of work. It should not block this one, and nobody should bundle it with
-this one — see Finding 2.
+this one — see Result 2.
 
 ## Alignment with Image Factory Completion Gate (#1283)
 
-Any eventual POC or adoption of an mkosi-built variant must pass the unified
-[Image Factory Completion Gate](IMAGE-FACTORY-GATE.md) (`docs/IMAGE-FACTORY-GATE.md`).
+Any eventual POC or adoption of an mkosi-built variant must pass the
+[completion gate](IMAGE-FACTORY-GATE.md) of the Image Factory (`docs/IMAGE-FACTORY-GATE.md`).
 Specifically:
 - OCI Build & Publish reproducibility with keyless Cosign signatures and SPDX SBOMs.
 - Full LUKS install-to-disk and bootc update/rebase/rollback verification (`bootc-lifecycle.yml`).

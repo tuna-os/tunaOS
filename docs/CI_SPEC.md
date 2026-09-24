@@ -2,17 +2,17 @@
 
 > **⚠️ This is a target/aspirational specification — the current implementation differs.**
 > The pipeline has evolved during implementation. See [`build-pipeline.md`](build-pipeline.md)
-> for the currently deployed architecture. Key differences from this spec:
-> - **Orchestrator**: \`build-variant.yml\` (not \`main-build.yml\`)
-> - **Matrix generation**: \`generate_matrix\` job (not \`detect_changes\`)
-> - **Artifact jobs**: Per-stage \`build_artifacts_s{2,3,4}\` (not single \`build_artifacts\`)
-> - **Composite actions**: Single \`build-artifacts\` action (not three separate actions)
+> for the deployed architecture now. Key differences from this spec:
+> - **Orchestrator**: `build-variant.yml` (not `main-build.yml`)
+> - **Matrix generation**: `generate_matrix` job (not `detect_changes`)
+> - **Artifact jobs**: Per-stage `build_artifacts_s{2,3,4}` (not single `build_artifacts`)
+> - **Composite actions**: Single `build-artifacts` action (not three separate actions)
 
 <!-- BEGIN GENERATED CI LANES — scripts/gen-ci-lanes.py -->
 
 ## Executing workflow lanes
 
-This inventory is generated from workflow triggers and `.github/green-criteria.yml`; run `scripts/gen-ci-lanes.py` after changing either. **PR-deterministic** is fast contributor feedback. **Post-merge** publishes or reacts to trusted repository events. **Scheduled** independently revalidates state and freshness.
+Workflow triggers and `.github/green-criteria.yml` generate this inventory. Run `scripts/gen-ci-lanes.py` after you change either source. **PR-deterministic** is fast contributor feedback. **Post-merge** publishes or reacts to trusted repository events. **Scheduled** independently revalidates state and freshness.
 
 | Workflow | Lane | Assertion | Cadence | Freshness SLA |
 |---|---|---|---|---|
@@ -95,8 +95,7 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 <!-- END GENERATED CI LANES -->
 
 ## Overview
-This specification defines the target design for the matrix-driven CI/CD pipeline
-for TunaOS, consolidating redundant workflows and optimizing the build process.
+This specification defines the target design for the matrix CI/CD pipeline for TunaOS. It consolidates redundant workflows and improves the build process.
 
 ## Central Configuration (`.github/build-config.yml`)
 A single YAML file will serve as the source of truth for all buildable variants, flavors, and platforms.
@@ -126,7 +125,7 @@ variants:
 ## Workflow Architecture (`.github/workflows/main-build.yml`)
 
 ### Jobs:
-1. **`detect_changes`**: Analyzes commit paths to determine which variants and flavors require rebuilding.
+1. **`detect_changes`**: Analyzes commit paths to determine which variants and flavors need a rebuild.
 2. **`generate_matrix`**:
     - Reads `.github/build-config.yml`.
     - Merges with manual inputs (for `workflow_dispatch`).
@@ -144,9 +143,9 @@ variants:
 ## Composite Actions
 - **`actions/setup-tunaos`**: Handles `just`, `podman`, and `yq` installation.
 - **`actions/build-image`**: Executes the `just build` command with proper arguments.
-- **`actions/publish-image`**: Manages rechunking, SBOM generation, and signing.
+- **`actions/publish-image`**: Manages image chunks, SBOM generation, and signatures.
 
 ## Benefits
-- **Maintainability**: Adding a new variant or flavor only requires updating the YAML config.
-- **Efficiency**: Parallel matrix builds reduce total CI time.
-- **Consistency**: All flavors use the same underlying build and publish logic.
+- **Maintainability**: Add a new variant or flavor by an update to the YAML config.
+- **Efficiency**: Parallel matrix builds reduce the total time in CI.
+- **Consistency**: All flavors use the same build and publish logic.

@@ -1,7 +1,7 @@
 # CNCF Ecosystem Showcase — TunaOS as a Bootable Container (bootc) Reference Implementation
 
 > Status: **draft** — for maintainer review and community engagement.
-> Issue that tracks this work: [#1340](https://github.com/tuna-os/tunaOS/issues/1340) (CNCF bootc ecosystem showcase — TunaOS as a bootc).
+> Issue that tracks this work: [#1340](https://github.com/tuna-os/tunaOS/issues/1340) (showcase for the CNCF `bootc` ecosystem — TunaOS as a `bootc`).
 > Target: CNCF Blog, bootc-dev community channels, Cloud Native Computing Foundation ecosystem landscape.
 > Prepared: 2026-08-29.
 

@@ -255,7 +255,7 @@ target cannot supply. Measured 2026-08-18 (`docs/factory-status.json`):
 
 The third-party dependency to retire is COPR `jreilly1821/c10s-gnome-50` /
 `c10s-gnome-49` (#391 SPOF) — the `build-order*.yml` files still carry
-`copr_name` entries ("already registered in COPR; just trigger build-package").
+`copr_name` entries ("already registered in COPR; trigger build-package").
 
 - [x] RFC 011 accepted; Phase 0 catalog (928 entries + completeness tests)
       landed (tunaos-packages#419); the unified factory (#430) replaced the
@@ -284,8 +284,7 @@ bonito/bonito-rawhide/marlin/flounder/flounder-sid share **#1725**
 
 *Re-classified 08-18 for EL10 (albacore run 32090745718, posted on #1725):
 the current failure is not semodule. All five nvidia legs of albacore die in
-the overlay kernel swap with rpmdb sqlite corruption. The log says "database
-disk image is malformed" on every INSERT while it installs
+the overlay kernel swap with rpmdb sqlite corruption. The log says `database disk image is malformed` on every INSERT while it installs
 kernel-6.12.0-257.el10. This is the same rpmdb-under-buildah-overlay class
 as #1823, on a second variant surface. Count the EL10 nvidia cells under
 #1823 until it resolves.*

@@ -1,7 +1,7 @@
 # README & Landing Page Hero Demo Technical Specification
 
 > Status: **draft** — for maintainer review and asset capture.  
-> Tracking issue: [#1760](https://github.com/tuna-os/tunaOS/issues/1760).  
+> Issue: [#1760](https://github.com/tuna-os/tunaOS/issues/1760).  
 > Supports: [#1333](https://github.com/tuna-os/tunaOS/issues/1333) (DistroWatch),
 > [#1346](https://github.com/tuna-os/tunaOS/issues/1346) (Reddit/Lemmy),
 > [#1534](https://github.com/tuna-os/tunaOS/issues/1534) (Tech Press),
@@ -12,9 +12,9 @@
 
 ## 1. Objective & Value Proposition
 
-First-time visitors to the GitHub repository (`README.md`) and the project website (`tunaos.org`) now encounter text descriptions and build matrices without immediate visual proof of the user experience.
+First-time visitors to the GitHub repository (`README.md`) and the project website (`tunaos.org`) encounter text descriptions and build matrices without immediate visual proof of the user experience.
 
-A concise, high-polish **25–30 second boot-to-desktop demo** (available as a lightweight animated WebP/GIF and an embedded high-definition MP4/WebM video) serves as the top-of-funnel conversion asset for onboarding new users, contributors, and media reviewers.
+A concise **25–30 second boot-to-desktop demo** shows the desktop in action. It is available as an animated WebP/GIF and an MP4/WebM video. This asset introduces new users, contributors, and reviewers to TunaOS.
 
 ---
 
@@ -49,21 +49,21 @@ sequenceDiagram
 ```
 
 ### Timeline & Actions:
-- **0:00 – 0:05 | System Boot:** Fast UEFI boot sequence displaying the TunaOS Plymouth boot splash.
-- **0:05 – 0:12 | Desktop Launch:** Seamless auto-login to GNOME 51 / clean modern desktop wallpaper and top bar.
-- **0:12 – 0:20 | Terminal & Diagnostics:** Opening a terminal to execute:
+- **0:00 – 0:05 | System Boot:** Fast UEFI boot sequence with the TunaOS Plymouth boot splash.
+- **0:05 – 0:12 | Desktop Launch:** Automatic login to GNOME 51 with clean wallpaper and top bar.
+- **0:12 – 0:20 | Terminal:** Run terminal commands:
   ```bash
   fastfetch
   bootc status
   ```
-  *(Highlights the active container image hash, keyless Sigstore signature status, and AlmaLinux 10 base).*
-- **0:20 – 0:28 | Atomic Operations:** Short command showcase:
+  *(Shows image digest and AlmaLinux base).*
+- **0:20 – 0:28 | Atomic Operations:** Run atomic commands:
   ```bash
   sudo bootc upgrade
   sudo bootc rollback
   ```
-  *(Demonstrates zero-risk updates and single-transaction rollback safety).*
-- **0:28 – 0:30 | Title Card Fade:** Short fade with TunaOS emblem and URL: `https://tunaos.org`.
+  *(Demonstrates updates and rollback safety).*
+- **0:28 – 0:30 | Title Card Fade:** Short fade with TunaOS emblem and website link.
 
 ---
 
@@ -97,12 +97,12 @@ gifsicle -O3 --lossy=80 -o docs/images/hero-demo.gif /tmp/hero-demo.gif
 
 ---
 
-## 5. Deployment & Integration Locations
+## 5. Deployment Locations
 
-1. **README.md Hero Section:** Insert immediately beneath the main project badge row:
+1. **`README.md`:** Insert below badges:
    ```markdown
    [![TunaOS Boot & Desktop Demo](docs/images/hero-demo.gif)](https://tunaos.org)
    ```
-2. **Landing Page (`tunaos.org`):** Embed responsive HTML5 video with autoplay, loop, muted attributes.
-3. **Gallery Index:** Register the asset in `docs/SCREENSHOTS.md` under a new `## Hero Demos & Video Previews` section.
-4. **Media Kits:** Reference the MP4 asset in `docs/PRESSKIT.md` and `docs/YOUTUBER-REVIEW-KIT.md`.
+2. **Website:** Embed HTML5 video on `tunaos.org`.
+3. **Gallery Index:** Add the asset to `docs/SCREENSHOTS.md`.
+4. **Media Kits:** Cite the asset in `docs/PRESSKIT.md`.

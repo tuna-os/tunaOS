@@ -1,7 +1,7 @@
 # Verify TunaOS artifacts
 
-TunaOS OCI images are signed with Sigstore Cosign's keyless GitHub Actions
-identity. No project signing key or password is required. Verification checks
+The pipeline in CI signs images for TunaOS with Sigstore Cosign and a keyless identity
+from GitHub Actions. Verification needs no project key or password. Verification checks
 both the artifact digest and the identity of the protected workflow that built
 it.
 
@@ -12,7 +12,7 @@ verify the Cosign binary before using it.
 
 ## Verify an OCI image
 
-Always resolve and verify an immutable digest, even when starting from a
+Always resolve and verify an immutable digest, even when you start from a
 friendly tag:
 
 ```bash
@@ -32,7 +32,7 @@ an unrestricted regular expression.
 
 ## Verify the SPDX SBOM attestation
 
-Each published platform image has a signed SPDX JSON attestation:
+Each published platform image has a signed attestation in SPDX JSON format:
 
 ```bash
 cosign verify-attestation "${ref}" \
@@ -89,14 +89,14 @@ The payload is the checksum because `cosign sign-blob` reads what it signs into
 memory, and an ISO above roughly 7 GiB exhausts the runner. Fedora, Debian and
 Arch publish signatures over checksums for the same reason.
 
-Scheduled combined/deduplicated media is produced directly by
-`publish-iso-groups.yml`. For those ISOs, use this exact identity instead:
+The `publish-iso-groups.yml` workflow creates combined media directly.
+For those ISOs, use this exact identity instead:
 
 ```text
 https://github.com/tuna-os/tunaOS/.github/workflows/publish-iso-groups.yml@refs/heads/main
 ```
 
-The reusable artifact workflow signs only after the ISO passes its QEMU boot
-gate; the grouped workflow follows the same ordering. The verified ISO,
-checksum, and bundle are then uploaded together. A signing or local
+The workflow for reusable artifacts signs only after the ISO passes its QEMU
+boot gate. The grouped workflow follows the same order. The pipeline then
+uploads the verified ISO, checksum, and bundle together. Any signature or local
 verification failure prevents publication.

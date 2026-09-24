@@ -2,7 +2,7 @@
 
 **Status**: ACCEPTED  
 **Date**: 2026-08-31  
-**Tracks**: [#508](https://github.com/tuna-os/tunaos/issues/508) (Cross-repo Justfile inflation), [#1977](https://github.com/tuna-os/tunaos/issues/1977) (Decide the delivery contract for shared Just modules)  
+**Tracks**: [#508](https://github.com/tuna-os/tunaos/issues/508) (Cross-repo `Justfile` inflation), [#1977](https://github.com/tuna-os/tunaos/issues/1977) (Decide the delivery contract for shared `just` modules)  
 **Authors**: tuna-os team  
 
 ---

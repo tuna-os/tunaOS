@@ -291,11 +291,11 @@ screen columns only, and tags them.
 
 ᶜ = GPU-less offscreen capture in the frontend's own repo.
 **It attests to screen parity only.** It drives pages in-process.
-So it cannot observe three things: whether the app launches under
-the real desktop, whether a compositor without GL can draw it, or
-whether a keypress advances the wizard. The first three columns of
-the matrix above stay the job of the VM walkthrough, and a green
-row here does not replace one.
+It does not check three properties. It does not verify if the
+app launches under the desktop, whether a compositor without GL
+draws it, or if a keypress advances the wizard. The first three
+columns of the matrix above stay the job of the VM walkthrough, and
+a green row here does not replace one.
 
 - **KDE** — 6 pages, 6 passed the pixel audit, 5 transitions. Text from `qml-item-tree`.
 - **COSMIC** — no parity report imported (no run carried a parity report).
@@ -336,8 +336,8 @@ only thing that changes is the clock. 0/8 transitions, 1 visual state, and OCR
 matched no screen at all — not even `welcome`. Filed as
 tuna-os/tuna-installer-cosmic#4.
 
-This exposed a flaw in check 3. It was called "installer renders actual
-content", but it measured stddev over the **whole framebuffer**. So a booted
+This exposed a flaw in check 3. The check was named "installer renders the actual
+content", but it measured stddev across the **whole framebuffer**. So a booted
 desktop with no installer window passes it — cosmic scored 9/9. It is now named
 "screen is not blank", which is what it measures. Checks 4 and 5 are the ones
 that prove the compositor mapped the installer window, and here they correctly

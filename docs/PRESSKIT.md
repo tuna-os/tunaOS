@@ -149,7 +149,7 @@ image, BuildStream-built).
   post is the map)
 - **The Linux Experiment**: GNOME 51 on EL10 + the ARM story
 - **Chris Titus Tech**: bootc-migrate (Bluefin → Dakota) + keyless signatures
-- Screen/ISO assets: tuna-os/branding SVGs; screenshots in blog posts
+- Screen/ISO assets: `tuna-os/branding` SVGs; screenshots in blog posts
   (license: repo-specific, CC0 unless noted — check each asset)
 
 ---

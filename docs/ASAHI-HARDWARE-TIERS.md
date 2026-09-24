@@ -55,7 +55,7 @@ undo.
 
 ## Tier 2 — Scaleway Mac mini M2 Pro rental
 
-Scaleway offers bare metal rentals of the Mac mini M2 Pro with Asahi Linux
+Scaleway offers bare metal rentals of the Mac mini with M2 Pro and Asahi Linux
 preinstalled (`~EUR 0.21/h`, 24h minimum unit of charge, provisionable via
 their API). Ephemeral by design: rent it, run the nightly/release smoke pass,
 tear it down. This is the tier that can exercise real m1n1 boot and the

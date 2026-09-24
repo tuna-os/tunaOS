@@ -38,7 +38,7 @@ reference, and gnome is the simplest desktop to validate.
 
 The DDI produced here is a **plain disk image** (`Format=disk`,
 `Bootable=yes`, `Bootloader=systemd-boot`), **not** the sysupdate/verity
-profile. See Finding 2 in the investigation doc: a particleOS-style DDI is a
+profile. See item 2 in the investigation doc: a particleOS-style DDI is a
 separate, much larger task.
 
 Concretely: one `mkosi/` directory that contains `mkosi.conf`,
@@ -267,7 +267,7 @@ sudo ./scripts/iso-e2e.sh bonito.qcow2 --disk --output verify-out --timeout 300
 ```
 
 If the mkosi-built image passes the existing LUKS E2E gate without changes,
-**that result confirms Finding 1 from the investigation in practice**. mkosi
+**that result confirms conclusion 1 from the investigation in practice**. mkosi
 and buildah are interchangeable as OCI producers for this repo's
 pipeline.
 

@@ -76,7 +76,7 @@ scheduled build matrix. The rest of the contributor contract:
 A bug that let an unusable or wrongly-promoted image ship stays open until a
 test proves the old failure mode can never recur in silence. Put that test in
 [`tests/regressions/`](tests/regressions/README.md), named after the issue
-(`test_issue_<number>_<what_must_not_recur>.py`), with a docstring that cites
+(`test_issue_<number>_<what_must_not_recur>.py`), with a `docstring` that cites
 the issue and the run or log that measured the failure. The seed example is
 #858 (marlin:kde shipped with no Wayland session). The regression test runs
 the desktop contract's own check against a filesystem with no session file,

@@ -1,24 +1,9 @@
 # PR review rubric
 
-What a reviewer (human or agent) checks before approving a PR here, beyond
-"CI is green":
+What a reviewer (human or agent) checks before approval of a PR here, beyond green CI status:
 
-1. **Checks ran, and ran on the real change.** `just fix && just
-   check` and `just test` are mandatory per `CONTRIBUTING.md` — verify the
-   PR's CI ran them on the current head, not a stale commit.
-2. **Green-criteria impact.** If the change touches build, desktop, or boot
-   behavior, check whether it moves any cell's status in
-   `.github/green-criteria.yml` — a PR that silently regresses a
-   `blocking` criterion (see `docs/quality.md`) needs that called out
-   explicitly, not discovered later in a nightly sweep.
-3. **Scope matches the issue.** The smallest change that satisfies the
-   linked issue's acceptance criteria, per `CONTRIBUTING.md`'s fork→PR loop
-   — flag unrelated changes bundled into the same PR.
-4. **Known landmines.** Check the PR against `AGENTS.md`'s documented
-   gotchas (e.g. "know your base before reasoning about its packages") —
-   a fix that looks right in isolation can still repeat a mistake that's
-   already been made and recorded once.
-5. **CI failures are diagnosed, not silenced.** A failing check should come
-   with either a fix or a clear explanation of why it's unrelated
-   (pre-existing, infra) — never a skip, disable, or retry-until-green with
-   no root cause.
+1. **Checks ran on the real change.** The `just fix && just check` and `just test` recipes are mandatory. Verify that CI ran them on the current head, not a stale commit.
+2. **Green-criteria impact.** Check if the change moves any cell status in `.github/green-criteria.yml`. A PR must state any regression to a `blocking` criterion explicitly.
+3. **Scope matches the issue.** Make the smallest change that satisfies the issue criteria. Flag unrelated changes in the PR.
+4. **Known landmines.** Check the PR against documented gotchas in `AGENTS.md`. Do not repeat recorded mistakes.
+5. **Diagnose CI failures.** A broken check must include a fix or a clear reason. Never disable checks or retry without a root cause.

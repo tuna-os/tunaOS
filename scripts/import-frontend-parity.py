@@ -149,11 +149,11 @@ def render(results):
             f"Text from `{data.get('text_source', 'unknown')}`.")
     lines += ["", "ᶜ = GPU-less offscreen capture in the frontend's own repo.",
               "**It attests to screen parity only.** It drives pages in-process.",
-              "So it cannot observe three things: whether the app launches under",
-              "the real desktop, whether a compositor without GL can draw it, or",
-              "whether a keypress advances the wizard. The first three columns of",
-              "the matrix above stay the job of the VM walkthrough, and a green",
-              "row here does not replace one.", ""]
+              "It does not check three properties. It does not verify if the",
+              "app launches under the desktop, whether a compositor without GL",
+              "draws it, or if a keypress advances the wizard. The first three",
+              "columns of the matrix above stay the job of the VM walkthrough, and",
+              "a green row here does not replace one.", ""]
     lines += notes + ["", END]
     return "\n".join(lines)
 

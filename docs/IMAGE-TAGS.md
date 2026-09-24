@@ -1,6 +1,6 @@
 # Image tag reference
 
-Image tags are constructed as `<desktop>[-hardware]`, against the variant's
+Image tags follow the pattern `<desktop>[-hardware]`, against the variant's
 registry path (see the variant table in the [README](../README.md)).
 
 ## Desktop suffixes
@@ -28,4 +28,4 @@ Append to any desktop suffix:
 Some variants also publish stream-suffixed tags on a sibling variant's path:
 `ghcr.io/tuna-os/bonito:*-rawhide` (Fedora Rawhide) and
 `ghcr.io/tuna-os/flounder:*-sid` (Debian Sid). The full tag scheme and
-stability tiers are in [VERSIONING.md](../VERSIONING.md).
+stability tiers are in [`VERSIONING.md`](../VERSIONING.md).

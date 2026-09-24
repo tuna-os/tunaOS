@@ -1,20 +1,18 @@
 # AlmaLinux Community Engagement & Atomic SIG Showcase Playbook
 
-> Status: **draft** — for maintainer review. Do **not** post externally without
-> maintainer sign-off.  
-> Tracking: [#1757](https://github.com/tuna-os/tunaOS/issues/1757).  
-> Fact-checked 2026-08-30 against `README.md`, `ROADMAP.md`, and `ADOPTERS.md`
-> per the maintainer's press-claim guard ([#1667](https://github.com/tuna-os/tunaOS/issues/1667)).
+> Status: **draft** — for maintainer review. Do **not** post externally without maintainer sign-off.  
+> Tracks: [#1757](https://github.com/tuna-os/tunaOS/issues/1757).  
+> Fact-checked 2026-08-30 against `README.md`, `ROADMAP.md`, and `ADOPTERS.md` per the press-claim guard ([#1667](https://github.com/tuna-os/tunaOS/issues/1667)).
 
 ---
 
 ## 1. Context & Strategic Alignment
 
-TunaOS's flagship variants are founded directly on AlmaLinux:
-- **Albacore:** Enterprise Linux desktop founded on **AlmaLinux 10 / RHEL 10** (GNOME, KDE Plasma, COSMIC, Niri flavors; x86_64 and arm64).
-- **Yellowfin:** Next-generation enterprise desktop founded on **AlmaLinux Kitten 10** (CentOS Stream 10 tracking).
+TunaOS builds its flagship variants directly on AlmaLinux:
+- **Albacore:** Enterprise desktop based on **AlmaLinux 10 / RHEL 10** (GNOME, KDE Plasma, COSMIC, Niri flavors; x86_64 and arm64).
+- **Yellowfin:** Modern desktop based on **AlmaLinux Kitten 10** (tracks CentOS Stream 10).
 
-AlmaLinux maintains an active **Atomic SIG** dedicated to advancing container-native, image-mode `bootc` systems. While server and edge deployments are well-represented in the SIG, TunaOS provides the missing showcase: a complete, daily-rebuilt, daily-tested immutable workstation and desktop built on AlmaLinux 10.
+AlmaLinux maintains an active **Atomic SIG** to develop container-native, image-mode `bootc` systems. Server and edge deployments are prominent in the SIG. TunaOS provides a desktop showcase: a daily-tested immutable workstation built on AlmaLinux 10.
 
 ---
 
@@ -31,7 +29,7 @@ graph TD
 **Goal:** Introduce TunaOS to the wider AlmaLinux user and sysadmin community.
 
 **Draft Post Copy:**
-```markdown
+````markdown
 **Title:** TunaOS: A Container-Native Immutable Desktop on AlmaLinux 10
 
 Hello AlmaLinux Community,
@@ -56,7 +54,7 @@ We would love to collaborate closely with the AlmaLinux community and gather you
 
 - GitHub Repository: https://github.com/tuna-os/tunaOS
 - Docs & Guides: https://tunaos.org
-```
+````
 
 ---
 
@@ -64,9 +62,9 @@ We would love to collaborate closely with the AlmaLinux community and gather you
 **Goal:** Position TunaOS as a flagship reference implementation for the Atomic SIG.
 
 - **Action Items:**
-  1. Join the official Atomic SIG communication channel (`chat.almalinux.org/almalinux/channels/sigatomic`).
-  2. Share TunaOS's Containerfile patterns, DDI smoke testing workflows, and custom initramfs generation learnings.
-  3. Offer TunaOS as an upstream-adjacent testbed for testing `bootc`, `composefs`, and keyless container validation on EL10.
+  1. Join the communication channel of the Atomic SIG (`chat.almalinux.org/almalinux/channels/sigatomic`).
+  2. Share Containerfile patterns and custom initramfs notes.
+  3. Offer TunaOS as an upstream testbed for `bootc` and `composefs` on EL10.
 
 ---
 
@@ -74,18 +72,15 @@ We would love to collaborate closely with the AlmaLinux community and gather you
 **Goal:** Deliver a 10-minute presentation and live demo at an AlmaLinux Community Call.
 
 **Talk Outline (10 Minutes):**
-1. **Introduction (2 min):** The evolution of image-based desktops and why AlmaLinux 10 is the ideal foundation.
-2. **Architecture (3 min):** Bootc container lifecycle, image layers, and immutable `/usr`.
-3. **Live Demo (3 min):**
-   - Booting Albacore GNOME on AlmaLinux 10.
-   - Performing a transactional `bootc upgrade`.
-   - Demonstrating instant reboot rollback (`bootc rollback`).
-4. **Q&A and Call for Contributors (2 min):** Connecting through GitHub Discussions and Matrix.
+1. **Introduction (2 min):** Evolution of image-based desktops on AlmaLinux 10.
+2. **Architecture (3 min):** Bootc container lifecycle and immutable `/usr`.
+3. **Live Demo (3 min):** Boot Albacore GNOME, run `bootc upgrade`, and show `bootc rollback`.
+4. **Q&A (2 min):** Connect through GitHub Discussions and Matrix.
 
 ---
 
 ## 3. Governance & Fact-Check Guardrails (per #1667)
 
-- **Relationship Integrity:** AlmaLinux is TunaOS's upstream base dependency. Do not claim formal organizational partnership or commercial endorsement from the AlmaLinux OS Foundation unless officially formalized.
-- **Sign-Off:** Review post copy with project maintainers before publishing on Discourse or joining the community call.
-- **Logging:** Update `docs/ADOPTION-OUTREACH-STATUS.md` with thread URLs and SIG meeting notes.
+- **Relationship Integrity:** AlmaLinux is TunaOS's upstream base dependency. Do not claim a formal partnership with the AlmaLinux OS Foundation.
+- **Sign-Off:** Review post copy with project maintainers before you publish on Discourse or join the call.
+- **Logging:** Update `docs/ADOPTION-OUTREACH-STATUS.md` with thread URLs and SIG notes.

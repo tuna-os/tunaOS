@@ -1,8 +1,8 @@
 # Matrix Weekly Digest Template
 
 > Status: **draft** — for maintainer review before first post.
-> Tracking issue: [#1136](https://github.com/tuna-os/tunaOS/issues/1136) (Matrix community growth campaign).
-> Prepared: 2026-08-12. Cadence: Friday, mirroring the weekly boot-report run.
+> Tracks issue: [#1136](https://github.com/tuna-os/tunaOS/issues/1136) (growth campaign for the Matrix community).
+> Prepared: 2026-08-12. Cadence: Friday, on the schedule of the weekly boot report.
 
 ## How to use
 
@@ -10,7 +10,7 @@
    (`generate-changelog-release.yml` produces them daily).
 2. Fill the three sections below (release summary, community, links).
 3. Post in `#tunaos:reilly.asia` as the maintainer account, Friday ~17:00 UTC.
-4. Pin or link the previous digest; keep a rolling thread (`!todos` / thread
+4. Pin or link the previous digest. Keep a continuous thread (`!todos` / thread
    replies) so newcomers can scroll the history.
 
 ---
@@ -27,9 +27,9 @@
 ### 🌱 Community
 
 - New good-first-issue tasks: [#NNNN](https://github.com/tuna-os/tunaOS/issues/NNNN) — _one-line scope_
-- Discussion thread worth reading: [title](link) — _one-line why_
+- Discussion thread of note: [title](link) — _one-line why_
 - New contributor shout-out (if any): @handle merged _x_ PR(s)
-- Adoption call (once published): [Who's running TunaOS?](DISCUSSION_URL) —
+- Adoption call (once published): [Who uses TunaOS?](DISCUSSION_URL) —
   _voluntary, consent-confirmed reports for ADOPTERS.md; do not infer use from
   downloads or image pulls_
 
@@ -48,12 +48,11 @@
 - **Monthly** office hours (30 min, announced 1 week ahead in the room)
 - **Ad hoc** only for: variant launches, conference talks, Hacktoberfest
   start, release-week events (e.g., GNOME 51, Fedora 45)
-- Always end with one **call to action** (try the ISO, pick up a GFI,
-  join office hours, or self-identify through the [adoption call](ADOPTION-CALL.md))
-  — a digest without an ask does not grow the room
+- End with one **call to action** (try the ISO, take a GFI, or join office hours).
+  You can also self-identify through the [adoption call](ADOPTION-CALL.md).
 
 ## First post candidates
 
 - Q3 checkpoint recap (08-22) — summarize + point to the blog post
-- GNOME 51 release week (~09-12) — packaging status + how to test
+- GNOME 51 release week (~09-12) — package status + how to test
 - Hacktoberfest start (~10-01) — GFI backlog + contributor page

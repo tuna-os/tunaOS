@@ -266,7 +266,7 @@ verification pass.
 
 Optional but improves the bus factor:
 
-- Update `docs/AGENT_GUIDE.md` Troubleshooting section with the
+- Update `docs/AGENT_GUIDE.md` `Troubleshooting` section with the
   `dnf_retry` behaviour and where to look in `.build-logs/`.
 - Add `docs/TESTING.md` to explain the Phase 2 e2e harness. It must tell
   the reader how to run `just iso-e2e <variant> <flavor>` locally, how to
@@ -314,7 +314,7 @@ Most impactful items first:
    them. The `.build-logs/` snapshot is from March 2026; later commits
    to `cleanup.sh` may have already resolved these. Verify against a
    fresh build before you remove the mask.
-7. **Phase 5 — docs polish.** ✅ COMPLETE (PR #319 + follow-up commit `a7c87f0`). AGENT_GUIDE Troubleshooting updated with dnf_retry, flavor table modernized to 4-stage DAG. Key Files expanded with Containerfile.hwe, Commands examples fixed (dx/nvidia→gnome/gnome-nvidia). `docs/TESTING.md` and `tests/README.md` added. build-pipeline.md fully rewritten: 5 variants, unified build-variant.yml, tacklebox, iso-e2e.
+7. **Phase 5 — docs polish.** ✅ COMPLETE (PR #319 + follow-up commit `a7c87f0`). `AGENT_GUIDE` `Troubleshooting` updated with dnf_retry, flavor table modernized to 4-stage DAG. Key Files expanded with Containerfile.hwe, Commands examples fixed (dx/nvidia→gnome/gnome-nvidia). `docs/TESTING.md` and `tests/README.md` added. build-pipeline.md fully rewritten: 5 variants, unified build-variant.yml, tacklebox, iso-e2e.
 
 ## Upstream work (separate repos)
 

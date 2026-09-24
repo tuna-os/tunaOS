@@ -11,7 +11,7 @@ desktop-parity audit against:
   source [`tuna-os/docs` `static/iso-index.json`](https://github.com/tuna-os/docs/blob/main/static/iso-index.json)
   (generated from the `download.tunaos.org` R2 bucket).
 
-This is the bounded documentation-parity audit requested in
+This checklist provides the parity audit for documentation requested in
 [tuna-os/tunaos#1308](https://github.com/tuna-os/tunaos/issues/1308) (context:
 [tuna-os/tunaos#1294](https://github.com/tuna-os/tunaos/issues/1294)).
 
@@ -28,22 +28,21 @@ This is the bounded documentation-parity audit requested in
 
 ## The audit's edition count (37 vs 40)
 
-The #133 title reads "24 of 37 published editions". Its size matrix enumerates
-**40 published desktop images** (the `–` cells are not published), of which
-**24 are flagged suspect** (bold in the matrix). The matrix is the audit's
-primary data, so this checklist follows it and enumerates all 40.
+The #133 title reads `24 of 37 published editions`. The size matrix lists
+**40 published desktop images** (the `–` cells show unbuilt images). It marks
+**24 images as suspect** (bold in the matrix). The matrix is the primary audit
+data, so this checklist follows it and lists all 40.
 
-The 3-image difference between the headline "37" and the matrix's 40 coincides
-with the three EL10 XFCE images (`albacore:xfce`, `yellowfin:xfce`,
-`skipjack:xfce`): they were measured on GHCR and flagged thin, and they are the
-three editions the tunaos.org catalog does **not** list — `variants.ts` filters
-XFCE out of the EL10 trio pending
+The 3-image difference between `37` and `40` comes from the three XFCE images
+on EL10 (`albacore:xfce`, `yellowfin:xfce`, `skipjack:xfce`). The audit measured
+them on GHCR and flagged them as thin. The tunaos.org catalog does **not** list
+them. `variants.ts` filters XFCE out of the EL10 trio until the team resolves
 [tunaos-packages#65](https://github.com/tuna-os/tunaos-packages/issues/65).
-They are marked in the checklist below.
+The checklist below marks these editions.
 
 ## Audit matrix (source of truth)
 
-Reproduced verbatim from tunaos-packages#133 (GB, summed compressed layer
+Reproduced verbatim from tunaos-packages#133 (GB, sum of compressed layer
 sizes, amd64, 2026-07-30). **Bold** = desktop adds < 0.45 GB over its own
 `:base` (the audit's suspect flag).
 

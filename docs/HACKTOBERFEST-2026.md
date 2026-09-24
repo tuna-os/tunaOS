@@ -45,8 +45,8 @@ review separate from the promotional label.
 exist yet. tunaos [#1798](https://github.com/tuna-os/tunaos/issues/1798),
 [#1799](https://github.com/tuna-os/tunaos/issues/1799) and
 [#1800](https://github.com/tuna-os/tunaos/issues/1800) already carry the
-`hacktoberfest` label. `COMMUNITY.md` opens with "**Hacktoberfest 2026**:
-We are participating!" above a link to the org-wide `good first issue` search.
+`hacktoberfest` label. `COMMUNITY.md` opens with `**Hacktoberfest 2026**: We are participating!`
+above a link to the org-wide `good first issue` search.
 That search returned a total of six issues on 2026-09-02 (see the census
 below); three of them share the same task type.
 

@@ -4,7 +4,7 @@
 - Date: 2026-06-08
 - Last updated: 2026-08-13
 - Issue: [#274](https://github.com/tuna-os/tunaOS/issues/274)
-- Policy: [VERSIONING.md](../../VERSIONING.md) (merged via #338)
+- Policy: [`VERSIONING.md`](../../VERSIONING.md) (merged via #338)
 
 ## Context
 
@@ -72,8 +72,8 @@ newer than 1.9?") the way SemVer does. Consumers must compare dates or rely on
 the tier label instead. Migration guidance for users who move from
 SemVer-versioned projects (Fedora Silverblue/Kinoite) has to explain the tier
 scheme. It cannot map the tiers onto a familiar major/minor number.
-VERSIONING.md's Migration section does this with an explicit `rebase` example
+[`VERSIONING.md`](../../VERSIONING.md)'s Migration section does this with an explicit `rebase` example
 instead of a comparison of version numbers.
 
 ---
-*Backfilled per RFC-PROCESS.md / #1094 (ADR coverage gap) — source: VERSIONING.md, #274 (closed via PR #338, merged 2026-06-08).*
+*Backfilled per [`RFC-PROCESS.md`](../../RFC-PROCESS.md) / #1094 (ADR coverage gap) — source: [`VERSIONING.md`](../../VERSIONING.md), #274 (closed via PR #338, merged 2026-06-08).*

@@ -182,7 +182,7 @@ each one from scratch.
 | 23 | Local `just build <variant> <flavor>` dies at Pass 3 with `writing blob to file "/tmp/container_images_storage.../35": no space left on device`, after the image itself built fine | Not a repo bug — a workstation one. `scripts/build-image-inner.sh` honours `TMPDIR` for both the chunkah scratch dir and `podman load`, and on an atomic desktop (Bluefin here) `/tmp` is a 7.7 GB RAM-backed tmpfs, which a ~4 GB rechunked OCI archive plus podman's staging copy overruns. CI runners have a disk-backed `/tmp`, which is why this never appears there | Build with a disk-backed scratch: `TMPDIR=/var/tmp/tunaos-build just build ...`. Note the failing step runs `podman system prune -af` just before it, so a failure here costs the whole build cache — set `TMPDIR` on the first attempt, not the second |
 | 24 | `marlin:kde`'s live session started only intermittently — sometimes the installer, sometimes a black screen with **stddev exactly 0** and no `TUNAOS_LIVE_READY` marker — and SSH into the live env was ALWAYS refused (`kex_exchange_identification: Connection reset by peer`, TCP and vsock alike). LUKS E2E stayed green throughout, because `--luks` drives fisherman over SSH and never looks at the screen | **Two independent causes, both named by the guest's own diagnostics dump** (`tunaos-live-debug`, captured on a boot with `ready=0`). (1) `flatpak-preinstall.service` is `Type=oneshot` + `WantedBy=multi-user.target`, so the target waits for a flatpak download and `graphical.target` waits on the target — at 40s the dump showed it `start running` with `multi-user.target`, `graphical.target` and `tunaos-live-ready.service` all `start waiting`. One blocker, three symptoms, and intermittent purely because it tracked the download (markers observed at 9s, 98s, and never). (2) The Justfile runs the ISO build under `sudo -E`, which preserves `HOME`, and podman picks its store from `HOME` — so the build read images from the invoking user's *rootless* store while `mksquashfs` ran as real root outside that namespace, recording uid 1000 for every file in the live root (`/usr`, `/usr/bin/sshd`, `/usr/share/empty.sshd` all `755 james:james`). sshd refuses its privsep directory outright (`must be owned by root`), exits 255 and restart-loops. It also silently defeated `tunaos_import_to_root_storage`, whose `podman image exists` probe found the image in the user's store and returned early | **Fixed and verified.** `customize-live.sh` masks `flatpak-preinstall.service` in the live squash (installed systems keep the curated app set); `build-iso-tacklebox.sh` pins `HOME=/root` and clears `XDG_DATA_HOME`/`XDG_CONFIG_HOME` in the root context. Rebuilt ISO measures `755 root:root` on `/usr/share/empty.sshd` and `flatpak-preinstall.service -> /dev/null`; the boot then reached `TUNAOS_LIVE_READY uptime=6.97` (was 98s or never), `ok - ssh daemon is active`, and the harness completed its in-guest smoke suite over SSH for the first time. Both pinned by bats tests. Remaining nit, not a product fault: KDE composites through llvmpipe, so the installer lands on screen well after the Plasma splash — the checkpoint runner re-captures for `TBOX_E2E_CHECKPOINT_SETTLE` (240s) rather than judging the splash frame |
 | 25 | `marlin:cosmic`'s live ISO shows no desktop and no installer, while looking healthy by every usual check: greetd active, autologin succeeded (`pam_unix(greetd:session): session opened for user liveuser`), `graphical.target` active, **zero failed units**, `cosmic-greeter` inactive (correct — the live adapter masks it deliberately) | greetd's `source_profile` defaults to true, so it does not exec the session command — it wraps it in `/bin/sh -c '[ -f /etc/profile ] && . /etc/profile; ...; exec cosmic-session'`. MEASURED inside the guest over SSH: `859 S+ do_wait /bin/sh -c ... exec cosmic-session` with child `882 Sl+ wait_woken umotd`. `umotd` (from `/etc/profile.d/umotd.sh`, shipped by the ublue common payload) blocks in a non-interactive session, so the shell waits forever and `exec` is never reached. Nothing logs an error | `source_profile = false` in the `[general]` section of every live greetd config — cosmic, niri **and xfce**, all three of which autologin through greetd (a bats test pins it, and is what caught xfce missing it). Verified on a rebuilt ISO: `cosmic-session`, `cosmic-comp`, `cosmic-panel` and `bwrap ... tuna-installer-cosmic` all running, framebuffer stddev 0.13, and the calibrated cosmic checkpoint passes 4/4. Two corrections worth keeping: cosmic does NOT need virgl to start OR to render (it drew fine on a host with no `virtio-vga-gl`), and the blank frames seen before this fix were the hang, not the GPU |
-| 26 | The fixes for rows 24 and 25 each landed in ONE place, but neither defect lives in one place. Asked directly: *do these propagate to the other variants?* | `source_profile = false` reached live cosmic/niri/xfce only. gnome and kde do not use greetd. The **installed-system** greetd configs (`build_scripts/desktop/greetd-gtkgreet.sh`, `xfce-greeter.sh`) run their greeter through the same shell that sources the profile, with no such setting. An installed niri/xfce box therefore risks the identical hang. Separately, `build-iso-tacklebox.sh` pins `HOME`. But `.github/workflows/live-overlay.yml` invokes the tacklebox **binary** directly under `sudo -E` and never sources that script, so it continued to publish overlays built against the runner's rootless store. | Fixed one level up instead: `build_scripts/40-services.sh` rewrites `/etc/profile.d/umotd.sh` with an interactive guard (`case $- in *i*`). It is one of only three build scripts that **all six** Containerfiles invoke. So it covers every variant, every desktop, live media **and** installed systems. `01-workarounds.sh`, the obvious home, runs for el10 and ubuntu only and would have missed Arch, the variant we measured this on. The guard is POSIX shell because dash sources `/etc/profile.d` on the Debian and Ubuntu variants. Measured cost of the guard: a login shell adds only `LANG`, `DEBUGINFOD_URLS`, perl paths, and `XDG_DATA_DIRS`. `/usr/local/bin` (fisherman) is on PATH either way, and the flatpak exports come back via the `60-flatpak` user-environment-generator, so a session loses nothing. `live-overlay.yml` now pins `HOME=/root` itself, and a bats test fails any *direct* root tacklebox call that does not | 
+| 26 | The fixes for rows 24 and 25 each landed in ONE place, but neither defect lives in one place. Asked directly: *do these propagate to the other variants?* | `source_profile = false` reached live cosmic/niri/xfce only. gnome and kde do not use greetd. The **installed-system** greetd configs (`build_scripts/desktop/greetd-gtkgreet.sh`, `xfce-greeter.sh`) run their greeter through the same shell that sources the profile, with no such setting. An installed niri/xfce box therefore risks the identical hang. Separately, `build-iso-tacklebox.sh` pins `HOME`. But `.github/workflows/live-overlay.yml` invokes the tacklebox **binary** directly under `sudo -E` and never sources that script, so it continued to publish overlays built against the runner's rootless store. | Fixed one level up instead: `build_scripts/40-services.sh` rewrites `/etc/profile.d/umotd.sh` with an interactive guard (`case $- in *i*`). It is one of only three build scripts that **all six** Containerfiles invoke. So it covers every variant, every desktop, live media **and** installed systems. `01-workarounds.sh`, the obvious home, runs for el10 and ubuntu only and would have missed Arch, the variant we measured this on. The guard is POSIX shell because dash sources `/etc/profile.d` on the Debian and Ubuntu variants. Measured cost of the guard: a login shell adds only `LANG`, `DEBUGINFOD_URLS`, perl paths, and `XDG_DATA_DIRS`. `/usr/local/bin` (fisherman) is on PATH either way, and the flatpak exports come back via the `60-flatpak` user-environment-generator, so a session loses nothing. `live-overlay.yml` now pins `HOME=/root` itself, and a bats test fails any *direct* root tacklebox call that does not |
 | 27 | `installer GUI checks reported 127 failure(s)` on marlin:kde and marlin:cosmic alike — on healthy images and broken ones, before and after the row 25 fix | Not a count. `scripts/e2e-installer-gui-checks.sh` resolved its helper as `${TEST_LIB_DIR}/lib/e2e-assert.sh` while `iso-e2e.sh` uploads it to `${TEST_LIB_DIR}/e2e-assert.sh` (`e2e-smoke-checks.sh` has the `/lib` *inside* the default and was always right). `source` failed, `check` was undefined, every assertion was a no-op, and 127 was bash's command-not-found status. A gate that can neither pass nor fail — and therefore could not report the bug in itself | Path corrected; a bats test now pins all three check scripts against the upload destination. **Consequence worth stating:** this gate has never asserted anything, so no historical run of it is evidence of anything. With `check()` restored it immediately failed on `installer readiness stamp present` — see row 28 |
 | 28 | With the row 27 fix in place, `not ok - installer readiness stamp present` on a marlin:cosmic ISO whose compositor and installer were both confirmed running | A false negative this repo had already diagnosed once. installer-smoke runs 63-68 failed identically until run 32445454947 found the stamp at `/run/user/<uid>/.flatpak/<app-id>/xdg-run/tuna-installer-ready`: inside the sandbox `$XDG_RUNTIME_DIR` reads as `/run/user/<uid>`, but it is a bind mount and the host path differs. `installer-smoke.yml` was fixed and pinned by `tests/test_readiness_stamp_lookup.py`; `e2e-installer-gui-checks.sh` is the second copy of that lookup and kept the two-path version, invisibly, because its assertions had never executed. What makes it durable: flatpak still *creates* the empty `app/<app-id>/` directory, so listing it reads as confirmation that nothing was written rather than as a wrong path | Sandbox host path added first, and the failure branch now `find`s the stamp rather than re-listing the directories it already assumes are right. The pytest pins **both** copies together. Gate now 4/4 on marlin:cosmic: compositor `cosmic-comp`, frontend `org.tunaos.InstallerCosmic`, stamp present, app_id matches, `signal: first-frame` |
 | 29 | `not ok - hostname is set` on every marlin ISO e2e run | A check bug, never an image defect — and the evidence was in the same serial log twice. `scripts/e2e-smoke-checks.sh` asserted `test -n "$(hostname)"` over SSH; `build_scripts/checks/e2e-runtime-checks.sh` asserted the same thing **with** a `/proc/sys/kernel/hostname` fallback on the console of the SAME boot and passed at 6.77s. `hostname` is a net-tools/inetutils binary the Arch-based variants do not ship, so only the copy without the fallback saw an empty string. Measured: hostname `archlinux`, `DEFAULT_HOSTNAME=marlin` | Smoke copy brought in line, and a bats test pins the two byte-identical — two copies of one assertion returning different verdicts on one boot is what kept this unexplained rather than obvious. Benign artifact noticed while tracing it: the live squashfs carries an empty `/etc/hostname` the OS image does not have (podman's bind-mount placeholder, captured when the live rootfs is squashed); systemd falls back correctly |
@@ -190,7 +190,7 @@ each one from scratch.
 | 31 | After debugging an image with `sudo podman image mount`, ROOTLESS `podman` on the workstation dies with `open /run/user/1000/containers/overlay-layers/mountpoints.json: permission denied` — and earlier, `open .../storage/overlay-images/images.json: permission denied` | The same HOME/XDG leak as rows 24 and 26, one level down. `sudo` here resets `HOME` to `/root` (so root podman does use root's *storage*), but it still passes `XDG_RUNTIME_DIR` through — so root podman writes its runtime state into the invoking user's `/run/user/1000/containers`, leaving one root-owned file that locks the user out of their own store. `sudo -E` is worse: it preserves `HOME` too, and then root podman writes into `~/.local/share/containers` as well | Repair with a targeted `find … ! -user <you> -exec chown <you>:<you> {} +` over BOTH `~/.local/share/containers/storage` and `/run/user/<uid>/containers` — not a blanket recursive chown, which flattens the subuid-mapped ownership a rootless store depends on. Note the count of "foreign-owned" files *rises* after the repair: chowning the directories makes previously untraversable subuid-mapped files visible, which is normal and not damage. Avoid it in the first place with `sudo env -u XDG_RUNTIME_DIR podman …` (options before assignments — see row 26) |
 | 32 | **Preventing rows 30–31 from recurring.** The fisherman drift lasted ~2 months and nothing reported it | Nothing that existed could have. The Flatpaks were *rebuilt daily*, so publish dates looked healthy — the package was fresh and the SOURCE was stale. Renovate has nothing to bump when a git source points at a repository that no longer moves. Binary inspection could date four of five but not gnome, whose Flatpak builds fisherman from a `type: dir` source with no VCS stamp. And the source of truth lives in five OTHER repositories, so no check inside tunaOS was looking at it | `scripts/check-installer-fisherman-pins.py` reads the fisherman source out of all five installers — the four Flatpak manifests and gnome's `.gitmodules` — and fails any that is not `tuna-os/fisherman`. Run daily by `installer-fisherman-pins.yml` (drift here happens over months, so per-PR would be noise), plus on any PR touching the check itself, so a PR that breaks the guard is caught by the guard. Three deliberate design calls: (1) it asserts the **repository, not the revision** — pinning an older revision of a live repo is a visible, reviewable choice, while sourcing a dead repo is the silent one, and a noisy check gets switched off; (2) revision *divergence* across desktops is a warning, because that is the exact shape the drift took — kde moved, nobody else did; (3) a missing/unparseable source is a hard **failure**, not a skip — the gate in row 27 could neither pass nor fail for months, so "found nothing" must never read as "nothing wrong". Ten unit tests exercise the pure audit with no network, including the literal broken configurations that shipped. A network error warns rather than reddening the build: this guards against drift over months, not a flaky minute |
 | 33 | `not ok - graphical.target is active` and `not ok - systemd unit graph verifies (graphical.target)` on **every** installed-system run, on **every** desktop — including LUKS installs that pass end-to-end (measured: marlin:cosmic at 11.7s under greetd, marlin:kde at 12.4s under sddm, both `TUNAOS_LUKS_E2E_PASS`) | Two different causes, same shape — an assertion that could never pass. (1) `e2e-runtime-checks.sh` runs from `tunaos-desktop-contract.service`, which is `WantedBy=graphical.target`, so it executes **inside that target's own startup transaction**; a target is not `active` until every unit wanting it has finished, so `is-active` reports `activating` there and structurally always will. **The obvious fix is a trap**: polling until `active` deadlocks — the target waits on this unit, the unit waits on the target — until `TimeoutStartSec=90` fires, adding a 90s stall to every boot. (2) `systemd-analyze verify --recursive-errors=yes` returns non-zero when **any transitively reachable** unit warns, including upstream units we neither ship nor can fix; measured on a dev host, `flatpak-appstream-refresh.service:7: Unknown key 'ExecCondition'` alone is enough | (1) Assert `ActiveState` is one of `active`/`activating`/`reloading` — healthy *including* the in-transaction case — and add `systemctl get-default == graphical.target`, which is the stable half of the original intent because unlike `ActiveState` it does not depend on when in the boot you ask. Verified the predicate still fails `inactive`, `failed`, `deactivating` and empty, so it was not merely softened into always passing. (2) Gate on `--recursive-errors=no` (our unit, which is what the assertion claims) and keep the transitive sweep as **information**, printed rather than discarded into `/dev/null`. **The rule this shares with rows 27 and 29:** an assertion that always says the same thing cannot report a regression, so a permanently-red check is not a known-issue — it is a dead gate |
-| 34 | **Build Marlin red on every run for 18+ consecutive days**, both arches, and `just build marlin <flavor>` fails identically locally: `error: failed to run custom build command for 'selinux-sys v0.6.15'` → `selinux-sys: Failed to find 'selinux/selinux.h'` | Renovate bumped `downloads.bootc` to **v1.16.11** on 2026-09-03. That release added `selinux = { workspace = true }` to `crates/lib/Cargo.toml` as a **hard, non-optional** dependency — no feature flag to turn it off. Confirmed against the tags: `selinux-sys` is absent from v1.16.8/9/10's `Cargo.lock` and present in v1.16.11's. `selinux-sys`'s build script needs `selinux/selinux.h`. **Arch does not ship it: `libselinux` is not in the official repos at all** (`pacman -Si libselinux` → "package not found"). So there is nothing to add to `Containerfile.arch`'s bootc-builder stage. Not a tunaOS regression: an upstream dependency change that is unbuildable on a non-SELinux distro. Note also that the failures predate 09-03, so at least one *earlier* cause is still unidentified. This row explains the current one, not the whole 18-day streak. | Pinned back to **v1.16.10** as a **CEILING**. It is the opposite of the FLOOR pin for tacklebox directly below it in the same file, and the comment says so. A reader who takes one for the other reintroduces this with a well-meant bump. We verified this: `Containerfile.arch`'s bootc-builder stage builds on a clean `archlinux:latest` at **both** versions — v1.16.11 fails as above, v1.16.10 completes. A full `just build marlin niri` then reached `BUILD_EXIT=0`. **A pin alone would not have held** — Renovate would re-bump it next run, which is how it arrived. So `renovate.json` carries a matching `allowedVersions: "<=1.16.10"`, and `tests/test_bootc_version_ceiling.py` pins both files and requires them to agree. The rule's description must name the exit condition (bootc makes selinux optional, or Arch ships libselinux), because a ceiling with no stated way out becomes permanent by accident |
+| 34 | **Build Marlin red on every run for 18+ consecutive days**, both arches, and `just build marlin <flavor>` fails identically locally: `error: failed to run custom build command for 'selinux-sys v0.6.15'` → `selinux-sys: Failed to find 'selinux/selinux.h'` | Renovate bumped `downloads.bootc` to **v1.16.11** on 2026-09-03. That release added `selinux = { workspace = true }` to `crates/lib/Cargo.toml` as a **hard, non-optional** dependency — no feature flag to turn it off. Confirmed against the tags: `selinux-sys` is absent from v1.16.8/9/10's `Cargo.lock` and present in v1.16.11's. `selinux-sys`'s build script needs `selinux/selinux.h`. **Arch does not ship it: `libselinux` is not in the official repos at all** (`pacman -Si libselinux` → "package not found"). So there is nothing to add to `Containerfile.arch`'s bootc-builder stage. Not a tunaOS regression: an upstream dependency change that is unbuildable on a non-SELinux distro. Note also that the failures predate 09-03, so at least one *earlier* cause is still unidentified. This row explains the current one, not the whole 18-day streak. | Pinned back to **v1.16.10** as a **CEILING**. It is the opposite of the FLOOR pin for tacklebox directly below it in the same file, and the comment says so. A reader who takes one for the other reintroduces this with a well-meant bump. We verified this: `Containerfile.arch`'s bootc-builder stage builds on a clean `archlinux:latest` at **both** versions — v1.16.11 fails as above, v1.16.10 completes. A full `just build marlin niri` then reached `BUILD_EXIT=0`. **A pin alone would not have held** — Renovate would re-bump it next run, which is how it arrived. So `renovate.json` carries a matching `allowedVersions: "&lt;=1.16.10"`, and `tests/test_bootc_version_ceiling.py` pins both files and requires them to agree. The rule's description must name the exit condition (bootc makes selinux optional, or Arch ships libselinux), because a ceiling with no stated way out becomes permanent by accident |
 | 35 | `not ok - SSH host keys were generated` on **every** installed system, on **every** flavor — measured on all five marlin flavors at ~11s, each on a LUKS install that otherwise passed end to end | Not a timing artifact, unlike rows 33's pair. The guard was `systemctl list-unit-files sshd.service ssh.service`, which matches a unit that is **present but DISABLED**. Production images ship openssh and then deliberately turn it off (the `safe_disable sshd.service`/`ssh.service`/`.socket` calls in `40-services.sh`), so `sshd-keygen` never runs and `/etc/ssh/ssh_host_*_key` legitimately does not exist. The assertion was asserting against the image's own design | Gate on whether sshd actually **runs** — `is-enabled` or `is-active` on any of the four unit spellings — rather than on whether it is installed. That keeps the check meaningful exactly where it matters: the dev ISOs, where `ENABLE_SSHD=1` and that daemon is the harness's only way into the guest, so a missing host key is fatal. A skipped check now **says so** in the serial log, because a production image with sshd off and a dev ISO whose sshd failed to enable both end up with no host keys and only that line separates them. **Third assertion in this one file found permanently red for a reason unrelated to what it claims to test** (see rows 33 and 29): a check that always says the same thing cannot report a regression, so a permanently-red check is not a known issue — it is a dead gate, and the file now has tests pinning all three against returning to that state |
 | 36 | `systemd-analyze verify graphical.target` reports an ordering cycle through `rechunker-group-fix.service` on every variant (surfaced by the informational sweep added in row 33) | The ublue common payload ships `rechunker-group-fix.service`, which is `After=local-fs.target` **and** `Before=systemd-sysusers.service` — a genuine cycle in the unit graph, back through `systemd-tmpfiles-setup-dev` → `local-fs-pre.target`. Upstream `projectbluefin/common:latest` still ships it that way; our own `_upstream-snapshots/aurora` copy has that `Before=` commented out, so someone upstream already hit it. **But the unit is irrelevant to tunaOS regardless:** its header says it exists for images built with `ublue-os/legacy-rechunk`, which prunes `/usr/lib/group` and `/usr/lib/gshadow`. tunaOS rechunks with **chunkah** (`coreos-chunkah`), and a built `marlin:niri` confirms it — neither file exists, so the damage the unit repairs was never done | Masked in `40-services.sh` (above the package-manager branching, so every family reaches it). **State the evidence precisely:** the cycle is a **STATIC** `systemd-analyze` finding — PID 1 logged no cycle and no deleted job on either a pre-mask or post-mask boot, and masking does **not** silence `systemd-analyze`, which reads unit files rather than enablement state. So the sweep still reports it after this change, and that is not a regression. The justification for masking is that we should not ship repairs for tools we do not use — it runs `systemd-sysusers`, `rechunker-group-fix` and `systemd-tmpfiles` on every boot of every variant for a problem we do not have — **not** an observed runtime failure. Masked rather than deleted so it survives a re-copy of the common payload; do not unmask without first checking the image is still chunkah-built |
 | 37 | Thirteen bats tests fail on a developer workstation and pass in CI — the whole `OS detection` / `detected_os` / `print_debug_info` / `warn_on_fail` cluster in `test_lib.bats`, reporting e.g. `ALMALINUX: true` for a **fedora** `BASE_IMAGE` | Two faults, and the suite was not hermetic. (1) `test_lib.bats`'s `setup()` stubbed `jq` to print `almalinuxorg/almalinux-bootc` **unconditionally** — meant for one image-info.json test, but applied to every test in the file. (2) `lib.sh` read that answer straight into `BASE_IMAGE`. On any **ublue-derived workstation** `/usr/share/ublue-os/image-info.json` exists, so `lib.sh` consulted it, the stub answered "almalinux" regardless of the file, and each test's own `BASE_IMAGE` was overridden. In CI the file is absent, `jq` is never called, and everything passed — so the failures looked like developer-environment noise and were dismissed as such (by me, repeatedly, as "pre-existing on main") | Both fixed. The jq shim now delegates to the real `jq` — the one test that needed a canned answer writes a real JSON with a `base-image` key and never needed one — and `setup()` defaults `_IMAGE_INFO` to a path that does not exist, so host state cannot leak in. **And a genuine library bug behind it:** `lib.sh` assigned the lookup straight into `BASE_IMAGE`, so an `image-info.json` that exists but carries **no** `base-image` key set it to the empty string, destroying a caller-provided value — `// empty` returns "" and the fallback below then cannot tell "nobody told us" from "we just threw it away". Our own `90-image-info.sh` writes the key, but it runs late, so any stage sourcing `lib.sh` on a base that already ships a partial file loses what the Containerfile passed in. Now read into a scratch var and applied only when non-empty, with a regression test confirmed to fail without the fix. **Lesson:** a test that fails only on developer machines is not automatically environment noise — here it was the suite reading the developer's own OS, and a real library defect underneath |
@@ -199,15 +199,12 @@ each one from scratch.
 | 40 | The published **gurnard-pantheon** ISO boots to a **black screen** — `stddev=0` on every captured frame across three `--published` harness runs, including one with a 420s boot settle. No sshd on production media to diagnose from inside | `live-iso/common/src/customize-live.sh`'s desktop detection has branches for plasma, niri, cosmic and xfce, and `DESKTOP` **defaults to `gnome`** — there was no pantheon branch. So a Pantheon image ran `desktop-gnome.sh`, which writes **GDM** autologin. Verified by mounting the published ISO: `/etc/gdm/custom.conf` is present carrying `AutomaticLoginEnable=True` / `AutomaticLogin=liveuser`; **no gdm, gdm3, sddm or greetd is shipped at all**; `lightdm` is the only display manager and `/etc/systemd/system/display-manager.service` → `lightdm.service`; `/etc/lightdm/` has **no autologin** anywhere; and `liveuser` **does** exist. The account was fine — nothing logged it in, so no session ever started | Added a `pantheon` detection branch (matches `wayland-sessions/pantheon-wayland.desktop` or `xsessions/pantheon.desktop`) and a `desktop-pantheon.sh` adapter that writes **LightDM** autologin to `/etc/lightdm/lightdm.conf.d/`, picks `autologin-session` from a session file that actually exists (pointing it at a missing session reproduces the same black screen by another route), and installs the standard installer autostart entry. Nine tests drive the **real** detection block against fake session roots and were confirmed to fail when the branch is reverted; one asserts the adapter's *code* never writes gdm config while its header may still explain the mistake. **The shape to remember:** a detection default is a silent fallback — an unrecognised desktop does not fail, it becomes gnome, and every downstream assumption follows from that wrong answer |
 | 41 | `just fix` reformats the whole tree again, on a repo where `.editorconfig` and the code already agree | **shfmt itself was unpinned.** `just/utilities.just` and `lint.yml` both did `brew install shfmt`, which installs whatever is current. shfmt is a **formatter**, so its version *is* the formatting: two contributors on different versions produce different trees, each sees the other's as unformatted, and `AGENTS.md` makes `just fix && just check` mandatory before every commit — so everyone hits it at once, on a release nobody in the repo made. This is the same failure as row 40's `.editorconfig` mismatch, waiting on an upstream release instead of a config edit | Pinned `shfmt: "v3.14.1"` in `image-versions.yaml` beside the other tool pins, with a Renovate `depName=mvdan/sh` comment so it is tracked rather than frozen. `_check_shfmt_version` in `just/utilities.just` compares the running shfmt against that pin and **both `just fix` and `just check` depend on it** — guarding only `check` would let a wrong-version `fix` rewrite the tree and then report the result as drift. On mismatch it names both versions and the exact `go install` line, and `TUNAOS_ALLOW_SHFMT_DRIFT=1` exists because a hard stop with no way past it gets deleted by the next person. CI installs the pinned version over brew's. **The rule:** a formatter you do not pin is a formatter that will reformat the tree on somebody else's release schedule |
 
-**Pattern to notice (bugs #1-14):** almost every bug here was a live-squash-specific
-environment gap (missing package, missing locale, missing remote, wrong
-storage driver) that a *normal* container build never hits — the live ISO's
-minimal customize-time container and its overlayfs-on-overlayfs runtime
-environment are much less forgiving than either a regular build or an
-already-installed system. When adding new live-squash logic, assume nothing
-beyond what `10-base-packages.sh` explicitly installs, and test the actual
-QEMU boot — a build-time success proves nothing about the live-boot
-environment.
+**Pattern to observe (bugs #1-14):** Most bugs stemmed from live-squash
+environment gaps (missing packages, locales, remotes, or storage drivers). The
+live ISO build environment has strict constraints compared to regular builds or
+installed systems. When you add live-squash logic, assume nothing beyond what
+`10-base-packages.sh` installs. Test the QEMU boot because build success does
+not prove runtime health.
 
 ---
 
@@ -215,8 +212,8 @@ environment.
 
 **Affected:** every cosmic cell where both `greetd` and `cosmic-greeter` are
 installed. Measured on `skipjack:cosmic` (run 31136849989) and
-`albacore:cosmic` (run 31100129320). **Both are ticked green on
-`docs/MATRIX-STATUS.md`.**
+`albacore:cosmic` (run 31100129320). **The status table shows both green in
+[`docs/MATRIX-STATUS.md`](./MATRIX-STATUS.md).**
 
 **Symptom.** The gate passes outright —
 
@@ -257,7 +254,7 @@ Ubuntu FAILED THE BUILD on this (greetd.service there carries
 `[Install] Alias=display-manager.service` and no `WantedBy=`, so
 `systemctl enable greetd` collides with the existing alias). Fedora/EL ship
 `WantedBy=` and no `Alias=`, so there is no collision, the build SUCCEEDS, and
-the race ships. Succeeding is the worse outcome.
+the race ships. A false success causes more harm.
 
 **Controls** — same EL10 base, same headless QEMU, same harness:
 
@@ -269,25 +266,22 @@ the race ships. Succeeding is the worse outcome.
 | skipjack:xfce | greetd.service | ok |
 | bonito-rawhide:kde | plasmalogin.service | ok |
 
-So the contract is a working check that a desktop can pass, and cosmic is the
-outlier. Two hypotheses were killed getting here and are recorded so nobody
-re-runs them: it is **not** the contract racing its own `graphical.target`
-(the unit reaches `auto-restart` with `ExecMainStatus=1` — it starts and
-dies), and `rendered=absent` is **not** a signal of a broken desktop — it
-appears on niri and xfce cells whose contract passes, because the harness runs
-headless with no render node (`GPU: -vga virtio headless (no
-render node/virgl)`). Only Plasma draws in this environment.
+The contract check works for valid desktops, and cosmic is the outlier. We
+rejected two hypotheses during investigation: the contract does not race its own
+`graphical.target` (the unit reaches `auto-restart` with `ExecMainStatus=1`).
+Also, `rendered=absent` does not show a broken desktop. It appears on green niri
+and xfce cells because the harness runs without a render node (`GPU: -vga
+virtio headless (no render node/virgl)`). Only Plasma draws in this environment.
 
-**Fix.** Both halves key off the symlink, never off whether cosmic-greeter is
-installed: `configure-desktop-runtime.sh` picks whichever greeter already owns
-the alias, and `install-desktop.sh` stops force-linking greetd beside it.
+**Fix.** Both halves check the symlink instead of installed packages. The
+`configure-desktop-runtime.sh` script selects the greeter owning the alias. The
+`install-desktop.sh` script does not enable greetd beside it.
 
-**Why it stayed invisible.** `desktop_contract` is `fatal=0`. The LUKS gate
-asserts encryption, passphrase unlock and installed boot — all genuinely true
-here — and `docs/MATRIX-STATUS.md` §1 already states that LUKS "does not
-prove ... that a desktop session starts". Nothing was lying; there was simply
-no axis reporting the contract, so a dead greeter and a working one look
-identical from the board.
+**Why it stayed invisible.** `desktop_contract` is `fatal=0`. The test for LUKS
+validates encryption, passphrase unlock, and installed boot. Section 1 of
+[`docs/MATRIX-STATUS.md`](./MATRIX-STATUS.md) notes that LUKS does not prove session start.
+No component reported the contract result, so dead and active greeters appeared
+the same.
 
 ### 6. `FISHERMAN_OVERRIDE` never installed on images that ship no fisherman (2026-08-07)
 
@@ -303,17 +297,16 @@ ERROR: and TBOX_E2E_IMAGE is unset, so the generic bootc path cannot name
 exit code 3
 ```
 
-**The misleading part.** The run spans 23:34 to 01:44, which reads exactly
-like a 65-minute Gentoo build plus the 3600s `TUNAOS_E2E_INSTALL_TIMEOUT`. It
-is not: the LUKS step ran for **55 seconds**. Everything before it was the
-build. Check the step's own start/end times before concluding a timeout.
+**Time anomaly.** The run spans 23:34 to 01:44. This timeline looks like a
+65-minute Gentoo build plus the 3600s `TUNAOS_E2E_INSTALL_TIMEOUT`. It is not:
+the LUKS step ran for **55 seconds**. Everything before it was the build. Check
+the step start and end times before you determine a timeout.
 
-**Root cause.** `run_install()` in `scripts/iso-e2e.sh` had two statements
-~260 lines apart: a hard `return 3` if `/usr/local/bin/fisherman` is absent,
-and — far below it — the `scp` + `install` that puts `FISHERMAN_OVERRIDE`
-at exactly that path. The check ran first, so an image shipping no fisherman
-died without ever installing the binary the workflow had just built for it,
-with "Build fisherman in a golang container" green immediately above.
+**Root cause.** `run_install()` in `scripts/iso-e2e.sh` had two statements ~260
+lines apart: a hard `return 3` if `/usr/local/bin/fisherman` is absent, and —
+far below it — the `scp` + `install` that puts `FISHERMAN_OVERRIDE` at that path.
+The check ran first. An image with no fisherman failed before the step copied
+the built binary.
 
 **Fix.** Install the override before the check. That is also what the flag
 means: *use this fisherman*, not *use this fisherman provided the image
@@ -321,26 +314,22 @@ already had one*. The error path now also distinguishes "the override path
 does not exist on the runner" from "the file exists, so the scp/install
 failed".
 
-**What the reorder took with it.** The generic (non-tunaOS) bootc path keyed
-off that same check — *no fisherman on the image* **and** `TBOX_E2E_IMAGE` set.
-Once the override lands first, the first half is never true again, so a caller
-naming a generic image would have taken the fisherman path and installed a
-tunaOS ref resolved from `VARIANT`/`FLAVOR` instead. The image is therefore
-probed **once, before** the override, and that probe is what the diversion
-reads; the check after the override is only there to prove the override landed.
+**Consequence of the reorder.** The generic fallback checked for *no
+fisherman on the image* and `TBOX_E2E_IMAGE`. When the override installs first,
+that check becomes false. A caller naming a generic image would take the
+fisherman path and install a resolved tunaOS ref. The script now probes the
+image **once, before** the override. The second check confirms that the
+override landed.
 
-**Two more consequences of an image that ships nothing.** `install -D` cannot
-create `/usr/local/bin` on the ostree layout: `-D` uses `mkdir -p`, `/usr/local`
-is a symlink to a `../var/usrlocal` the image does not contain, and `mkdir -p`
-refuses to create *through* a dangling symlink (`cannot create directory
-'/usr/local': File exists` — the same failure `customize-live.sh` documents at
-the symlink it makes at build time). Canonicalise with `readlink -m` first.
+**Two more consequences.** First, `install -D` cannot create `/usr/local/bin` on
+the ostree layout. `-D` uses `mkdir -p`, `/usr/local` is a symlink to
+`../var/usrlocal`, and `mkdir -p` fails on broken links (`cannot create directory
+'/usr/local': File exists`). Resolve the path with `readlink -m` first.
 
-And the missing fisherman is itself a defect worth naming: the flatpak carrying
-it carries the installer GUI, so that ISO has no installer a human could use —
-`customize-live.sh` only downgrades the failed install to a warning because the
-media is dev/E2E. The cell continues on the caller's binary and emits a
-`::warning::` saying it did **not** cover that ISO's own installer.
+Second, a missing fisherman binary shows a missing installer GUI. The ISO lacks
+an installer for users. The `customize-live.sh` script logs a warning because
+the media is dev/E2E. The test continues with the override binary and logs a
+warning.
 
 ---
 
@@ -360,37 +349,31 @@ qemu-system-x86_64: cannot create PID file: Cannot lock pid file: Resource tempo
 ##[error]Process completed with exit code 1
 ```
 
-**The misleading part.** The install had already logged `Installation
-complete!` and the encrypted-disk evidence had already passed. The cell died
-70 seconds later with no `ERROR:` line of its own — just qemu's one-liner and
-a bare `exit 1` — which reads like a harness bug in whatever ran last (here,
-the timelapse, which was merely the next thing to print).
+**False clue.** The install logged `Installation complete!` and verified the
+encrypted disk. The cell terminated 70 seconds later with no error log beyond
+the QEMU status line. This symptom looks like a bug in the timelapse script,
+which ran next.
 
-**Root cause.** `poweroff_and_wait_vm` waited 30 × 2s and then returned
-regardless. Its callers immediately launch the installed-disk boot on the
-**same** `-pidfile`, and QEMU holds an exclusive lock on that file for its
-entire life, so a guest still running at the end of the window does not delay
-the gate, it forbids it. Two lines earlier in that run fisherman had reported
-`cryptsetup luksClose: Device fisherman-root is still in use`, and a busy dm
-device is exactly what `systemd-shutdown` spends its shutdown retrying — on
-top of systemd's own 90s `DefaultTimeoutStopSec`, which 70s cannot outlast.
-The generic path has a second stake in this: `swtpm` only exits when its QEMU
-disconnects, and the TPM gate restarts it.
+**Root cause.** `poweroff_and_wait_vm` waited 60 seconds and returned. Callers
+launch the next boot on the **same** `-pidfile`. QEMU locks that file
+exclusively, so an active guest blocks the next launch. Earlier in the run,
+fisherman reported `cryptsetup luksClose: Device fisherman-root is still in use`.
+The `systemd-shutdown` process retries shutdown on busy device-mapper targets
+and exceeds the 70-second wait. Also, `swtpm` exits only after QEMU
+disconnects.
 
-**Fix.** Wait long enough for a slow-but-healthy shutdown
-(`TUNAOS_E2E_POWEROFF_WAIT`, default 180s), then stop asking: ACPI
-`system_powerdown` over the monitor, then `SIGTERM`, then `SIGKILL`, and do
-not return until the process is actually gone. The install is finished and its
-target filesystem is already unmounted, frozen and flushed by then, so ending
-the guest ourselves costs the following boot nothing. If it survives `SIGKILL`
-the function now fails with that as the reason, and the passphrase gate's own
-launch names a QEMU it could not start instead of exiting silently.
+**Fix.** Wait for shutdown (`TUNAOS_E2E_POWEROFF_WAIT`, default 180s). Then send
+ACPI `system_powerdown`, followed by `SIGTERM` and `SIGKILL`. Do not return until
+the process stops. The installer already unmounted and flushed target
+filesystems, so a forced VM stop does not corrupt data. If the process
+survives `SIGKILL`, the function fails explicitly. The passphrase gate reports
+the start failure instead of silent exit.
 
 ### 8. `guppy` shipped skopeo instead of podman, so its offline store read as empty (2026-08-07)
 
 **Affected:** both `guppy` cells (Gentoo). Measured on `guppy:gnome`, run
-31134373523 — 2h30m in, after a complete and correct image build, a green live
-squash and 13 passing live-ISO checks.
+31134373523 — 2h30m in, after image build, a green live squash, and 13
+successful live-ISO checks.
 
 **Symptom:**
 
@@ -405,27 +388,22 @@ scp: write remote "/home/liveuser/luks-image-guppy-gnome.tar": Failure
 ERROR: image transfer to guest timed out or failed
 ```
 
-**The contradiction is the whole clue.** The dump prints the store's own index,
-recording the exact ref the very next line fails to find. Fifteen lines above
-it, twice: `sudo: podman: command not found`.
+**Key contradiction.** The dump prints the store index, which contains the exact
+ref that fails lookup. Earlier lines contain `sudo: podman: command not found`.
 
 **Root cause, two layers.**
 
-*The image.* `Containerfile.gentoo` emerged `app-containers/skopeo` and never
-`app-containers/podman`. Skopeo looks like coverage — it is what bootc's
-containers-image-proxy shells out to — but it cannot *start* a container, and
-`guppy` probes `BACKEND=composefs-native`, whose install path cannot take
-fisherman's `bootcDirect` shortcut: bootc runs inside a container podman
-starts. Every other base has podman (the rpm and apt ones via
-`build_scripts/10-base-packages.sh`, `Containerfile.arch` and `.debian` by
-name) and Gentoo runs none of those scripts. Third time Gentoo was the last
-base without something — see `sudo` (§ `test_live_sudo_every_base.bats`) and
-flatpak before it.
+*The image.* `Containerfile.gentoo` installed `skopeo` and not `podman`. Skopeo
+cannot *start* a container. The `guppy` variant uses `BACKEND=composefs-native`,
+where bootc runs inside a podman container instead of using `bootcDirect`. Other
+bases include podman via package scripts or Containerfiles. Gentoo omitted this
+dependency.
 
-*The harness.* Both offline-store probes were answered **inside** the guest:
-`sudo podman image exists <ref>`, then `sudo jq -e ... images.json` as the
-fallback. guppy has neither binary, so both exited 127 and the harness
-concluded "image absent". It then fell through to the SSH image transfer.
+*The harness.* The guest executed both store probes: `sudo podman image exists
+<ref>`, followed by `sudo jq -e ... images.json`. The guppy image lacks both
+binaries, so commands exited with code 127. The harness inferred an absent image
+and attempted SSH transfer, which failed due to RAM limits (#941). The missing
+tool caused a false report of a missing image.
 `scripts/iso-e2e.sh` documents that transfer at length as physically impossible:
 a ~4.9G tar into a tmpfs upperdir on a 4096M guest, #941. A missing tool read as
 a missing image.
@@ -821,7 +799,7 @@ An experimental variant (`experimental: true`) is eligible for promotion to the 
 **Symptom & Defect Class:**
 Published container images built green in CI but shipped missing essential desktop components:
 - `flounder:niri`: Missing `niri` compositor (no apt branch).
-- `sailfin:gnome`: Missing `nautilus`, file manager, keyring (minimal pattern skeleton).
+- `sailfin:gnome`: Missing `nautilus`, file manager, `keyring` (minimal pattern skeleton).
 - `flounder:cosmic` & `flounder-sid:cosmic`: Missing `cosmic-comp` (Debian skips the Ubuntu PPA condition).
 - `grouper:gnome`: Missing `gnome-keyring` (absent from apt list).
 - `KDE on PlasmaLogin`: The build skipped enablement of the display manager unit, because of a hardcoded DM name or base-stage timing.
@@ -1130,7 +1108,7 @@ nothing else. So `/home` in the published image points at nothing.
 **Who it hits.** Only the bases where cleanup runs after layout:
 `Containerfile.arch`, `.debian` and `.gentoo`. The bases with no layout step
 take their layout from the parent and never show it. That list names the
-failing cells exactly, which is what confirmed the mechanism.
+failed cells exactly, which is what confirmed the mechanism.
 
 **Why nothing caught it.** tunaOS already carries this fix. `customize-live.sh`
 holds `mkdir -p "$(readlink -f /home)"`, under a comment that describes this
@@ -1172,18 +1150,18 @@ architecture failed and the other did not.
 
 **Why nothing caught it.** This repo had already solved it. A block in
 `01-workarounds.sh` removes the cloud account that `docker.io/library/ubuntu`
-ships at the same UID, and its comment states the reason: the real error lands
+ships at the same UID. Its comment states the reason: the real error lands
 "an hour downstream, in another repo's code, with no mention of this image".
 The guard was `IS_UBUNTU`. The diagnostic that block prints for this failure
 sat inside the same branch, so Arch ARM hit the identical bug in silence.
 
 **Fix.** Remove the `alarm` account on the same terms as the Ubuntu one: only
 when it is still named `alarm` and still at exactly 1000. Move the warning out
-of the per-base branch, so the next base to ship an account at 1000 reports
-itself in the build that causes it.
+of the per-base branch. The next base that ships an account at 1000 will report
+itself in the build.
 
-**Lesson:** when a workaround names one base, ask which other bases have the
-same shape. A guard is a claim about who is affected, and this one was a guess
+**Lesson:** when a workaround names a single base, ask which other bases have the
+same shape. A guard is a claim about what variant the bug affects. This was a guess
 that nobody revisited when a second base arrived.
 
 ### 26. The fix the build never ran (`marlin:gnome` arm64, 2026-09-17)

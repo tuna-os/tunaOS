@@ -21,7 +21,7 @@ This document outlines the shared technical alignment, existing usage, and colla
 
 ### 1. Hardened Builder Images (`wolfi-base`)
 - TunaOS uses `cgr.dev/chainguard/wolfi-base` as the minimal, hardened base image for auxiliary build tools, SBOM generation scripts, and CI validation containers.
-- Renovate automation strictly pins the digests of Wolfi base images, and refreshes them continuously. This keeps the builder environments at zero CVEs.
+- Jobs in Renovate pin the digests of Wolfi base images, and refresh them continuously. This keeps the builder environments at zero CVEs.
 
 ### 2. Sigstore & Keyless Verification Architecture
 - TunaOS signs all published container images on GHCR and native repository artifacts using Sigstore/cosign keyless workflows.
@@ -50,24 +50,26 @@ This document outlines the shared technical alignment, existing usage, and colla
 
 ## Outreach Pitch Template
 
-**Subject**: Collaboration on secure bootable desktop OS supply chains (TunaOS & Chainguard)
+**Subject**: Collaboration on supply chain security for bootable desktop systems (TunaOS & Chainguard)
 
-> Hi Chainguard Team,
->
-> We are the maintainers of **TunaOS** (https://github.com/tuna-os/tunaOS), an open-source, container-native desktop operating system built on `bootc` and Enterprise Linux bases.
->
-> In our build and release pipeline, we rely on Chainguard's `wolfi-base` images and Sigstore keyless signing to enforce strict software supply-chain integrity and zero-CVE build stages.
->
-> We would love to explore a joint collaboration or technical case study highlighting how Chainguard's minimal base image philosophy and Sigstore provenance extend to bootable, container-native host systems.
->
-> Key points of interest:
-> 1. Hardening immutable OS builder pipelines with Wolfi images.
-> 2. End-to-end provenance verification from OCI container registries down to bare-metal bootc systems.
->
-> Please let us know if you'd be open to a brief chat or async discussion on GitHub.
->
-> Best regards,
-> The TunaOS Team
+```text
+Hi Chainguard Team,
+
+We maintain TunaOS (https://github.com/tuna-os/tunaOS), an open-source, container-native desktop OS built on bootc.
+
+Our release pipeline uses Chainguard wolfi-base images and Sigstore keyless signatures.
+
+We want to explore a joint case study on how Wolfi and Sigstore protect bootable systems.
+
+Key topics:
+1. Hardened builder pipelines with Wolfi images.
+2. Full provenance from OCI registries to bare-metal systems.
+
+Please let us know if you want to discuss this on GitHub.
+
+Best regards,
+The TunaOS Team
+```
 
 ---
 
