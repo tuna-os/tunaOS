@@ -108,16 +108,25 @@ while IFS=$'\t' read -r variant emoji; do
 			[[ -n "${promo_of[$flavor]:-}" ]] && continue
 			promotion=$(awk -F '\t' -v suffix="/ ${flavor} / Promote" \
 				'index($1, suffix) == length($1) - length(suffix) + 1 { result=$2 } END { print result }' <<<"$stage_jobs")
-			[[ "$promotion" == "success" || "$promotion" == "failure" ]] || continue
-			promo_of[$flavor]=$promotion
 			# Two jobs can render as "<flavor> / Gate" (the desktop Gate
 			# skipped on base, the base Gate skipped on desktops) -- prefer a
 			# real verdict over its skipped twin, matching gen-matrix-status.py.
-			gate_of[$flavor]=$(awk -F '\t' -v suffix="/ ${flavor} / Gate" \
+			gate=$(awk -F '\t' -v suffix="/ ${flavor} / Gate" \
 				'index($1, suffix) == length($1) - length(suffix) + 1 {
 					if ($2 == "success" || $2 == "failure") { result=$2 }
 					else if (result == "") { result=$2 }
 				} END { print result }' <<<"$stage_jobs")
+			# A failed Gate is what SKIPS Promote, so it scores the cell too.
+			# Without this, a cell whose Gate fails nightly was stepped past on
+			# every run and reported "never reached" (hummingbird:gnome, run
+			# 35938968035). A skipped Promote behind a passing Gate is still no
+			# verdict; keep walking.
+			if [[ "$promotion" != "success" && "$promotion" != "failure" ]]; then
+				[[ "$gate" == "failure" ]] || continue
+				promotion=gate_failure
+			fi
+			promo_of[$flavor]=$promotion
+			gate_of[$flavor]=$gate
 			unscored=$((unscored - 1))
 		done
 	done < <(jq -r '.[] | select(.conclusion == "success" or .conclusion == "failure") | .databaseId' <<<"$runs")
@@ -139,7 +148,7 @@ while IFS=$'\t' read -r variant emoji; do
 		gate=${gate_of[$flavor]:-missing}
 		case "$promotion" in
 		success) green=$((green + 1)) ;;
-		failure) failing+=("$flavor") ;;
+		failure | gate_failure) failing+=("$flavor") ;;
 		# skipped / missing / cancelled / null: nothing asserted this cell.
 		*) unreached+=("$flavor") ;;
 		esac

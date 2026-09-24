@@ -1125,7 +1125,7 @@ variants:
   # ── Sailfin ──────────────────────────────────────────────────────────────
   # Sailfin Tumbleweed: rolling-release, zypper-based.
   - id: sailfin
-    emoji: "🦈"
+    emoji: "⛵"
     upstream_track: rolling
     description: "Based on openSUSE Tumbleweed (rolling)"
     # NOT digest-pinned, for the same reason as bonito-rawhide below.
@@ -1458,7 +1458,7 @@ variants:
   #
   # Revisit collapsing this into grouper when elementary publishes for 26.04.
   - id: gurnard
-    emoji: "🐟"
+    emoji: "🤖"
     description: "Based on Ubuntu 24.04 Noble Numbat with the Pantheon desktop"
     base_image: "docker.io/library/ubuntu:noble@sha256:561618e2c15bf2397621dd04f96926663a3b5616c189cf7e38db7e82f5c538ea"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
@@ -1476,7 +1476,7 @@ variants:
         build_iso: true
 
   - id: grouper
-    emoji: "🐟"
+    emoji: "🪸"
     description: "Based on Ubuntu 26.04 Resolute Raccoon"
     base_image: "docker.io/library/ubuntu:resolute@sha256:678c6550cc43645e08669028bc177f50be4e7c5b8cca677067b1914d4afc7a03"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>

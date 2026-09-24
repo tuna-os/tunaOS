@@ -968,6 +968,8 @@ if [[ "${_TD_DESKTOP}" == gnome || "${_TD_DESKTOP}" == kde || "${_TD_DESKTOP}" =
 	"${_TD_CTX}/build_scripts/checks/verify-branding.sh" "${IMAGE_NAME:-${_TD_DESKTOP}}"
 	install -Dm0755 "${_TD_CTX}/build_scripts/checks/verify-branding.sh" \
 		/usr/libexec/tunaos/verify-branding
+	# Per-desktop artwork, when a variant has some (docs/BRANDING.md).
+	"${_TD_CTX}/build_scripts/desktop/select-wallpaper.sh" "${_TD_DESKTOP}"
 	BRANDING_EXTRA=""
 	case "${_TD_DESKTOP}" in
 	gnome)
@@ -991,6 +993,11 @@ if [[ "${_TD_DESKTOP}" == gnome || "${_TD_DESKTOP}" == kde || "${_TD_DESKTOP}" =
 		install -Dm0755 "${_TD_CTX}/build_scripts/checks/verify-branding-kde.sh" \
 			/usr/libexec/tunaos/verify-branding-kde
 		BRANDING_EXTRA="ExecStart=-/usr/libexec/tunaos/verify-branding-kde ${IMAGE_NAME:-${_TD_DESKTOP}} --runtime"
+		;;
+	cosmic)
+		# cosmic-bg's package ships its default background config, naming the
+		# stock wallpaper, so this has to run after the install.
+		"${_TD_CTX}/build_scripts/desktop/cosmic-set-branding.sh"
 		;;
 	niri)
 		"${_TD_CTX}/build_scripts/checks/verify-branding-niri.sh" "${IMAGE_NAME:-${_TD_DESKTOP}}"

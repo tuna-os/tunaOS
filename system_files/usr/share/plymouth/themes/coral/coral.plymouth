@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=TunaOS Coral
+Description=TunaOS boot animation (Coral)
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/coral
+ScriptFile=/usr/share/plymouth/themes/coral/coral.script

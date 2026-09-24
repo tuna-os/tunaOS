@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   build:
-    name: 🐟-gurnard
+    name: 🤖-gurnard
     uses: ./.github/workflows/build-variant.yml
     with:
       variant: 'gurnard'

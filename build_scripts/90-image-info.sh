@@ -192,6 +192,7 @@ if [[ -f "${RECIPE_FILE}" ]]; then
 	if [[ "${IMAGE_FLAVOR}" == "cosmic" || "${IMAGE_FLAVOR}" == *"cosmic"* ]]; then DESKTOP_PRETTY_NAME="COSMIC"; fi
 	if [[ "${IMAGE_FLAVOR}" == "niri" || "${IMAGE_FLAVOR}" == *"niri"* ]]; then DESKTOP_PRETTY_NAME="Niri"; fi
 	if [[ "${IMAGE_FLAVOR}" == "xfce" || "${IMAGE_FLAVOR}" == *"xfce"* ]]; then DESKTOP_PRETTY_NAME="XFCE"; fi
+	if [[ "${IMAGE_FLAVOR}" == "pantheon" || "${IMAGE_FLAVOR}" == *"pantheon"* ]]; then DESKTOP_PRETTY_NAME="Pantheon"; fi
 
 	# Pick the variant mark that ACTUALLY EXISTS in the installer's GResource.
 	#
@@ -254,6 +255,19 @@ if 'completed' in tour:
 
 recipe['tour'] = new_tour
 
+# The variant is the name people see; the installer's stock slides say
+# TunaOS (e.g. your new TunaOS workstation). Swap it in every text value,
+# leaving image references alone.
+def rename(v):
+    if isinstance(v, dict):
+        return {k: (x if k in ('imgref', 'image', 'distro_logo') else rename(x)) for k, x in v.items()}
+    if isinstance(v, list):
+        return [rename(x) for x in v]
+    if isinstance(v, str):
+        return v.replace('TunaOS', '${IMAGE_PRETTY_NAME}')
+    return v
+recipe = rename(recipe)
+
 with open('${RECIPE_FILE}', 'w') as f:
     json.dump(recipe, f, indent=2)
 " || true
@@ -277,5 +291,151 @@ osr_set IMAGE_VERSION "${IMAGE_FLAVOR}-${SHA_HEAD_SHORT:-testing}"
 # We ship the asset at /usr/share/pixmaps/tunaos.svg (repo system_files), so
 # the verify-branding.sh asset check passes too.
 osr_set LOGO "tunaos"
+
+# Each variant wears its own Noto Emoji (the ones in .github/build-config.yml:
+# marlin 🚀, yellowfin 🐠, ...), not one generic fish. system_files ships them
+# all under /usr/share/tunaos/logos; install this variant's over the tunaos
+# icon every consumer already points at (os-release LOGO, the GDM logo key,
+# the KDE splash), so none of those paths change. Runs after system_files is
+# laid down in every Containerfile, including the overlay re-copy. A variant
+# with no mark keeps the 🐟 that system_files ships as tunaos.svg.
+VARIANT_LOGO="/usr/share/tunaos/logos/${VARIANT_KEY}.svg"
+if [[ -f "${VARIANT_LOGO}" ]]; then
+	install -Dm0644 "${VARIANT_LOGO}" /usr/share/pixmaps/tunaos.svg
+	install -Dm0644 "${VARIANT_LOGO}" /usr/share/icons/hicolor/scalable/apps/tunaos.svg
+	echo "Variant logo: ${VARIANT_LOGO}"
+else
+	echo "No variant logo for ${VARIANT_KEY}; keeping the generic TunaOS mark"
+fi
+
+# ── Variant identity: TunaOS first, with a nod to the base ──────────────────
+#
+# build_scripts/lib/variant-identity.tsv gives each variant one accent colour
+# borrowed from its base distro (Arch blue, Ubuntu orange, openSUSE green...).
+# Everything below spends it: the wallpaper scene (rendered in that colour),
+# os-release ANSI_COLOR (systemd's "Welcome to Marlin!" at boot), the console
+# login banner and fastfetch. The desktop hooks (gnome-set-branding.sh,
+# kde-set-look-and-feel.sh, cosmic-set-branding.sh) read the identity file
+# written here, because on most bases they run after this script and after
+# the desktop's own packages, which would overwrite anything set this early.
+IDENTITY_TSV="/run/context/build_scripts/lib/variant-identity.tsv"
+IDENTITY_ROW=""
+if [[ -f "${IDENTITY_TSV}" ]]; then
+	IDENTITY_ROW="$(awk -F'\t' -v id="${VARIANT_KEY}" '$1 == id' "${IDENTITY_TSV}")"
+fi
+if [[ -n "${IDENTITY_ROW}" ]]; then
+	IFS=$'\t' read -r _ ACCENT GNOME_ACCENT BASE_LABEL HOMAGE <<<"${IDENTITY_ROW}"
+	ACCENT_HEX="${ACCENT#\#}"
+	ACCENT_R=$((16#${ACCENT_HEX:0:2}))
+	ACCENT_G=$((16#${ACCENT_HEX:2:2}))
+	ACCENT_B=$((16#${ACCENT_HEX:4:2}))
+
+	osr_set ANSI_COLOR "38;2;${ACCENT_R};${ACCENT_G};${ACCENT_B}"
+
+	install -d /usr/share/tunaos
+	cat >/usr/share/tunaos/identity.env <<EOF
+# Written by build_scripts/90-image-info.sh from variant-identity.tsv.
+TUNAOS_VARIANT='${VARIANT_KEY}'
+TUNAOS_ACCENT='${ACCENT}'
+TUNAOS_ACCENT_RGB='${ACCENT_R},${ACCENT_G},${ACCENT_B}'
+TUNAOS_GNOME_ACCENT='${GNOME_ACCENT}'
+TUNAOS_BASE='${BASE_LABEL}'
+TUNAOS_HOMAGE='${HOMAGE}'
+EOF
+
+	# The variant's scene becomes the default wallpaper every desktop points
+	# at. All fourteen stay installed, so a user can pick a sibling's.
+	VARIANT_WALLPAPER="/usr/share/backgrounds/tunaos/${VARIANT_KEY}.jpg"
+	if [[ -f "${VARIANT_WALLPAPER}" ]]; then
+		install -m0644 "${VARIANT_WALLPAPER}" /usr/share/backgrounds/tunaos/tunaos-default.jpg
+	fi
+
+	# The lettermark (scripts/branding/make-lettermarks.py): the variant's
+	# emoji and name. The variant is the brand, so this is what the login
+	# screen and the Plasma splash show, never "TunaOS".
+	LETTERMARK="/usr/share/tunaos/lettermarks/${VARIANT_KEY}.svg"
+	if [[ -f "${LETTERMARK}" ]]; then
+		install -m0644 "${LETTERMARK}" /usr/share/pixmaps/tunaos-lettermark.svg
+		install -m0644 "${LETTERMARK%.svg}-dark.svg" /usr/share/pixmaps/tunaos-lettermark-dark.svg
+		for splash in /usr/share/plasma/look-and-feel/org.tunaos*.desktop/contents/splash/images/tunaos_logo.svgz; do
+			[[ -f "${splash}" ]] && gzip -9nc "${LETTERMARK}" >"${splash}"
+		done
+	fi
+
+	# Names people can see in settings: the Plasma global theme and wallpaper
+	# are called after the variant, not "TunaOS".
+	for meta in /usr/share/plasma/look-and-feel/org.tunaos.desktop/metadata.json \
+		/usr/share/plasma/look-and-feel/org.tunaos.light.desktop/metadata.json \
+		/usr/share/wallpapers/TunaOS/metadata.json; do
+		[[ -f "${meta}" ]] || continue
+		sed -i -E "s/(\"Name\": *\")TunaOS( Light)?\"/\\1${IMAGE_PRETTY_NAME}\\2\"/" "${meta}"
+	done
+
+	# Console login banner. Upstream's names the upstream distro ("Ubuntu
+	# 26.04 LTS \n \l", "Arch Linux \r (\l)"); \S{PRETTY_NAME} is agetty's
+	# own os-release lookup, so this stays right if the name ever changes.
+	ESC=$'\e'
+	printf '%s\n' \
+		"${ESC}[1;38;2;${ACCENT_R};${ACCENT_G};${ACCENT_B}m\\S{PRETTY_NAME}${ESC}[0m - built on ${BASE_LABEL}" \
+		"\\r (\\l)" \
+		"" >/etc/issue
+
+	# fastfetch, in the spirit of Bluefin's and Bazzite's: the variant's name
+	# as a big two-tone lettermark (scripts/branding/make-fastfetch-logos.py)
+	# in its accent, then the system grouped underneath. This is one of the two
+	# places TunaOS is named at all (the other is the About page); everywhere
+	# else the variant is the brand. Only keys Bluefin's own config uses, so
+	# an older fastfetch on a stable base does not reject it. profile.d and
+	# fish aliases (system_files) point `fastfetch` here, ahead of ublue's.
+	BUILD_DATE="$(date -u '+%b %d %Y')"
+	FF_ACCENT="38;2;${ACCENT_R};${ACCENT_G};${ACCENT_B}"
+	FF_LOGO="/usr/share/tunaos/fastfetch/${VARIANT_KEY}.txt"
+	[[ -f "${FF_LOGO}" ]] || FF_LOGO="/usr/share/tunaos/fastfetch/albacore.txt"
+	install -d /etc/xdg/fastfetch
+	cat >/etc/xdg/fastfetch/config.jsonc <<EOF
+// Written by build_scripts/90-image-info.sh for ${VARIANT_KEY} (${HOMAGE}).
+{
+  "\$schema": "https://github.com/fastfetch-cli/fastfetch/raw/dev/doc/json_schema.json",
+  "logo": {
+    "type": "file",
+    "source": "${FF_LOGO}",
+    "position": "top",
+    "color": { "1": "${FF_ACCENT}", "2": "90" },
+    "padding": { "top": 1, "left": 2 }
+  },
+  "display": {
+    "separator": "  ",
+    "color": { "keys": "${FF_ACCENT}", "title": "${FF_ACCENT}" }
+  },
+  "modules": [
+    "title",
+    "separator",
+    { "type": "os", "key": "system  ", "format": "{pretty-name}  ·  part of TunaOS, built on ${BASE_LABEL}" },
+    { "type": "command", "key": "image   ", "text": "/usr/libexec/tunaos/fetch-image", "shell": "/bin/sh" },
+    { "type": "custom", "key": "forged  ", "format": "${BUILD_DATE}" },
+    { "type": "kernel", "key": "kernel  ", "format": "{release}" },
+    { "type": "uptime", "key": "uptime  " },
+    "break",
+    { "type": "de", "key": "desktop " },
+    { "type": "wm", "key": "wm      " },
+    { "type": "shell", "key": "shell   " },
+    { "type": "terminal", "key": "terminal" },
+    { "type": "packages", "key": "packages" },
+    "break",
+    { "type": "host", "key": "host    " },
+    { "type": "cpu", "key": "cpu     " },
+    { "type": "gpu", "key": "gpu     " },
+    { "type": "memory", "key": "memory  " },
+    { "type": "disk", "key": "disk    ", "hideFS": "overlay" },
+    { "type": "battery", "key": "battery " },
+    "break",
+    { "type": "colors", "paddingLeft": 2 }
+  ]
+}
+EOF
+	echo "Variant identity: ${VARIANT_KEY} accent=${ACCENT} (${HOMAGE})"
+else
+	echo "No identity row for ${VARIANT_KEY} in variant-identity.tsv; generic TunaOS look"
+fi
 
 printf "::endgroup::\n"
