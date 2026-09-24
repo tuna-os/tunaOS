@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   build:
-    name: 🦈-sailfin
+    name: ⛵-sailfin
     uses: ./.github/workflows/build-variant.yml
     with:
       variant: 'sailfin'

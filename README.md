@@ -44,13 +44,13 @@ TunaOS builds **bootc-based desktop operating systems** with atomic updates and 
 | 🐦 **Hummingbird** | Fedora Hummingbird (experimental) | `ghcr.io/tuna-os/hummingbird` | Base, GNOME, COSMIC | x86_64 (see note) |
 | 🎏 **Wahoo** | Fedora ELN — EL11 preview (experimental, no codecs) | `ghcr.io/tuna-os/wahoo` | Base, GNOME, KDE, COSMIC | x86_64, arm64 |
 | 🔒 **Redfin** | Red Hat Enterprise Linux 10 | *Local-Build Only* | GNOME, KDE, COSMIC, Niri, XFCE | x86_64, arm64 |
-| 🐟 **Grouper** | Ubuntu 26.04 | `ghcr.io/tuna-os/grouper` | GNOME, KDE, COSMIC, XFCE | x86_64 |
-| 🐟 **Gurnard** | Ubuntu 24.04 (Noble Numbat, experimental) | `ghcr.io/tuna-os/gurnard` | Base, Pantheon | x86_64, arm64 |
+| 🪸 **Grouper** | Ubuntu 26.04 | `ghcr.io/tuna-os/grouper` | GNOME, KDE, COSMIC, XFCE | x86_64 |
+| 🤖 **Gurnard** | Ubuntu 24.04 (Noble Numbat, experimental) | `ghcr.io/tuna-os/gurnard` | Base, Pantheon | x86_64, arm64 |
 | 🚀 **Marlin** | Arch Linux (Rolling) | `ghcr.io/tuna-os/marlin` | GNOME, KDE, COSMIC, Niri, XFCE | x86_64 |
 | 🐡 **Flounder** | Debian 13 (Trixie) | `ghcr.io/tuna-os/flounder` | KDE, XFCE | x86_64 |
 | ☢️ **Flounder Sid** | Debian Sid (Unstable) | `ghcr.io/tuna-os/flounder:*-sid` | GNOME, KDE, XFCE | x86_64 |
 | 🐉 **Bonito Rawhide** | Fedora Rawhide | `ghcr.io/tuna-os/bonito:*-rawhide` | GNOME, KDE, COSMIC, Niri, XFCE | x86_64, arm64 |
-| 🦈 **Sailfin** | openSUSE Tumbleweed | `ghcr.io/tuna-os/sailfin` | GNOME, KDE, COSMIC, Niri, XFCE | x86_64 |
+| ⛵ **Sailfin** | openSUSE Tumbleweed | `ghcr.io/tuna-os/sailfin` | GNOME, KDE, COSMIC, Niri, XFCE | x86_64 |
 | 🌈 **Guppy** | Gentoo Linux | `ghcr.io/tuna-os/guppy` | KDE, XFCE | x86_64 |
 | 🏔️ **Tromsø** | freedesktop-sdk (BuildStream), built in [tuna-os/tromso](https://github.com/tuna-os/tromso) | `ghcr.io/tuna-os/tromso` | KDE | x86_64 |
 | 🐭 **XFCE Linux** | freedesktop-sdk (BuildStream), built in [tuna-os/xfce-linux](https://github.com/tuna-os/xfce-linux) | `ghcr.io/tuna-os/xfce-linux` | XFCE | x86_64 |
@@ -88,11 +88,11 @@ _Each cell reports the newest conclusive main-branch run that asserted it, so a 
 | 🎏 `wahoo` | **4/4** | [✅ 2026-09-12](https://github.com/tuna-os/tunaOS/actions/runs/34690922548) | — | — |
 | 🎣 `bonito` | **16/16** | [✅ 2026-09-22](https://github.com/tuna-os/tunaOS/actions/runs/35747970991) | — | — |
 | 🐦 `hummingbird` | **2/3** | [❌ 2026-09-23](https://github.com/tuna-os/tunaOS/actions/runs/35803090636) | — | gnome |
-| 🦈 `sailfin` | **6/6** | [✅ 2026-09-22](https://github.com/tuna-os/tunaOS/actions/runs/35791569836) | — | — |
+| ⛵ `sailfin` | **6/6** | [✅ 2026-09-22](https://github.com/tuna-os/tunaOS/actions/runs/35791569836) | — | — |
 | 🌈 `guppy` | **3/3** | [✅ 2026-09-23](https://github.com/tuna-os/tunaOS/actions/runs/35856216204) | — | — |
 | 🐉 `bonito-rawhide` | **14/14** | [❌ 2026-09-22](https://github.com/tuna-os/tunaOS/actions/runs/35770702623) | — | — |
-| 🐟 `gurnard` | **2/2** | [✅ 2026-09-23](https://github.com/tuna-os/tunaOS/actions/runs/35842528141) | — | — |
-| 🐟 `grouper` | **7/7** | [✅ 2026-09-22](https://github.com/tuna-os/tunaOS/actions/runs/35778736161) | — | — |
+| 🤖 `gurnard` | **2/2** | [✅ 2026-09-23](https://github.com/tuna-os/tunaOS/actions/runs/35842528141) | — | — |
+| 🪸 `grouper` | **7/7** | [✅ 2026-09-22](https://github.com/tuna-os/tunaOS/actions/runs/35778736161) | — | — |
 | 🚀 `marlin` | **16/16** | [❌ 2026-09-22](https://github.com/tuna-os/tunaOS/actions/runs/35762117493) | — | — |
 | 🐡 `flounder` | **5/5** | [✅ 2026-09-22](https://github.com/tuna-os/tunaOS/actions/runs/35798272262) | — | — |
 | ☢️ `flounder-sid` | **7/7** | [❌ 2026-09-23](https://github.com/tuna-os/tunaOS/actions/runs/35806584628) | — | — |
