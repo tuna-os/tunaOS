@@ -12,8 +12,8 @@
 #
 # What FAILS the contract (deliberately narrow — variants legitimately differ
 # in unit sets, so "zero degraded units" would be flaky theater):
-#   * the system lands in `maintenance`/`offline`/`starting` after the wait —
-#     it never actually reached multi-user
+#   * the system is in `maintenance`/`stopping`/`offline`, or gives no state
+#     at all — the boot landed somewhere broken
 #   * `bootc status` cannot report a booted deployment — the thing that makes
 #     the image updatable/rollbackable is broken, which for a bootc OS is the
 #     product (criterion 6's reasoning)
@@ -60,9 +60,8 @@ fi
 # StandardOutput=journal+console, so it survives a machine with no working bus,
 # no logind and no SSH.
 #
-# It sits ABOVE the settle wait deliberately. Everything below that wait is
-# unreachable on exactly the images this exists to describe (tunaOS#2514), and
-# evidence that only prints on healthy machines is not evidence.
+# It sits ABOVE every assertion deliberately. The first failing assertion
+# exits, and evidence that only prints on healthy machines is not evidence.
 #
 # Every command is guarded. A diagnostic must never be the reason a contract
 # fails, and `set -e` is off here precisely so a missing tool stays a missing
@@ -113,60 +112,50 @@ _selinux_probe() {
 }
 _selinux_probe 2>&1 || true
 
-# --wait blocks until startup settles, so a slow unit cannot race this check
-# into a false `starting` verdict on a 2-vCPU runner. BOUND it, though: --wait
-# waits for a terminal state, and a machine whose startup never settles never
-# supplies one. skipjack:gnome hung here for the unit's full 300s
-# TimeoutStartSec and was killed without printing a single line:
+# ── System state, sampled once and never waited on ──────────────────────────
 #
-#   Starting tunaos-base-contract.service - Verify TunaOS base boot contract...
-#   [ 314.604325] tunaos-base-contract.service: start operation timed out. Terminating.
-#   [ 314.635751] Failed to start tunaos-base-contract.service
+# This was `systemctl is-system-running --wait`, first unbounded (#2484), then
+# bounded at 120s (#2501) and 240s (#2506). No bound could work, because the
+# wait was on this unit's own job:
 #
-# (run 34760890405, and identically in 34705564876 before the bus assertion
-# below existed — so the hang is older than that check, not caused by it.)
+#   * `--wait` returns when the manager leaves `starting`.
+#   * The manager leaves `starting` when the initial transaction drains.
+#   * This unit is a job IN that transaction (WantedBy=multi-user.target),
+#     and a Type=oneshot job stays running until its ExecStart exits.
 #
-# Two things were lost to that. The gate reported "timeout" where the machine
-# had a specific, nameable defect, and every check BELOW this line became
-# unreachable on precisely the images they exist to judge — including the
-# system-bus assertion, which was written for this exact failure and has never
-# once been able to fire on it.
+# Measured in tunaOS#2514, hummingbird:gnome, at two bounds:
 #
-# So: bound the wait, then fall back to an unblocking query. Asking again
-# without --wait turns a silent kill into a named verdict and lets the rest of
-# the contract run.
+#   120s: settle-wait-timed-out at 133.320660, Startup finished at 133.334844
+#   240s: settle-wait-timed-out at 252.338862, Startup finished at 252.351227
 #
-# The bound was 120s and that was far too tight. hummingbird:gnome takes
-# 2min 7s of userspace to settle, and run 34775725935 caught the bound
-# expiring FOURTEEN MILLISECONDS before the machine became healthy:
+# `Startup finished` came 10-14ms AFTER this unit gave up, both times, and the
+# userspace settle time tracked the bound (2min 7s, then 4min 7s), not the
+# image. On desktop cells the harness saw the desktop marker and powered the
+# VM off mid-wait (bonito:gnome-t2, run 34768771243: `status=15/TERM`, no
+# verdict). So every check below this line, `bootc status` and the system
+# bus, was unreachable on every cell.
 #
-#   [ 133.320660 ] TUNAOS_BASE_CONTRACT_NOTE settle-wait-timed-out state=starting
-#   [ 133.334844 ] Startup finished in 1.159s (kernel) + 5.100s (initrd)
-#                  + 2min 7.074s (userspace) = 2min 13.334s
-#
-# A contract that fails an image which was about to pass is worse than no
-# contract. The unit allows TimeoutStartSec=300 (40-services.sh) and starts
-# after multi-user.target at roughly 13s, so 240s leaves about 60s for the
-# checks below to run and print a verdict before systemd kills the service.
-# That is nearly double the slowest settle measured, and still bounded.
-#
-# Overridable so the tests can use a short bound instead of two minutes of
-# real time; nothing in the image sets it.
-: "${TUNAOS_SETTLE_WAIT_SECONDS:=240}"
-
-# Only exit 124 — timeout(1)'s own code — means the wait ran out. `degraded`
-# is an ALLOWED state here and `is-system-running` exits non-zero for it, so a
-# bare `if !` would have called every degraded boot a hang.
-_settle_rc=0
-state=$(timeout "${TUNAOS_SETTLE_WAIT_SECONDS}s" systemctl is-system-running --wait 2>/dev/null) || _settle_rc=$?
-if [[ ${_settle_rc} -eq 124 ]]; then
-	state=$(systemctl is-system-running 2>/dev/null || true)
-	echo "TUNAOS_BASE_CONTRACT_NOTE settle-wait-timed-out state=${state:-unknown}" >&2
-fi
-case "$state" in
-running | degraded) ;;
+# Sample once, the same way checks/e2e-runtime-checks.sh does. What fails is
+# a state that is broken whenever you ask: `maintenance` (emergency/rescue),
+# `stopping`, `offline`, or no answer. `starting`/`initializing` are what a
+# healthy in-transaction sample looks like, and this unit runs
+# After=multi-user.target, so reaching it already proves multi-user was
+# reached. `running`/`degraded` are a healthy settled sample.
+state=$(systemctl is-system-running 2>/dev/null || true)
+case "${state:-unknown}" in
+running | degraded | initializing | starting) ;;
 *) fail "system-state=${state:-unknown}" ;;
 esac
+
+# `degraded` passes on purpose: which units a variant may fail is per-variant
+# knowledge, not a boot gate's call. But "degraded" with no names is not
+# something anyone can act on, and this marker is the only per-boot health
+# evidence a base cell puts on the serial console. Name the units, as
+# evidence and never as a verdict. Guarded: a diagnostic must not fail the
+# contract.
+failed_units=$(systemctl list-units --state=failed --no-legend --plain 2>/dev/null |
+	awk '{ print $1 }' | paste -sd, - 2>/dev/null) || failed_units=""
+echo "TUNAOS_BASE_CONTRACT_NOTE state=${state:-unknown} failed-units=${failed_units:-none}" >&2
 
 if ! bootc status >/dev/null 2>&1; then
 	fail "bootc-status-failed"
