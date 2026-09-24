@@ -58,8 +58,8 @@
    },
    "desktop": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "install": {
@@ -82,8 +82,8 @@
    },
    "no_silent_omissions": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "parity": {
@@ -142,9 +142,9 @@
    },
    "desktop": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
-    "verdict": "pass"
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
+    "verdict": "fail"
    },
    "install": {
     "date": "2026-09-01",
@@ -166,8 +166,8 @@
    },
    "no_silent_omissions": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "parity": {
@@ -226,8 +226,8 @@
    },
    "desktop": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "install": {
@@ -250,8 +250,8 @@
    },
    "no_silent_omissions": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "parity": {
@@ -310,8 +310,8 @@
    },
    "desktop": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "install": {
@@ -334,8 +334,8 @@
    },
    "no_silent_omissions": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "parity": {
@@ -394,8 +394,8 @@
    },
    "desktop": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "install": {
@@ -418,8 +418,8 @@
    },
    "no_silent_omissions": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "parity": {
@@ -520,8 +520,8 @@
    },
    "desktop": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "install": {
@@ -544,8 +544,8 @@
    },
    "no_silent_omissions": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "parity": {
@@ -590,9 +590,9 @@
    },
    "desktop": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
-    "verdict": "pass"
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
+    "verdict": "fail"
    },
    "install": {
     "date": "2026-09-01",
@@ -614,8 +614,8 @@
    },
    "no_silent_omissions": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "parity": {
@@ -674,8 +674,8 @@
    },
    "desktop": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "install": {
@@ -698,8 +698,8 @@
    },
    "no_silent_omissions": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "parity": {
@@ -744,8 +744,8 @@
    },
    "desktop": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "install": {
@@ -768,8 +768,8 @@
    },
    "no_silent_omissions": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "parity": {
@@ -814,8 +814,8 @@
    },
    "desktop": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "install": {
@@ -838,8 +838,8 @@
    },
    "no_silent_omissions": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "parity": {
@@ -871,63 +871,63 @@
   },
   "bonito:base": {
    "boots": {
-    "date": "2026-09-23",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275",
+    "date": "2026-09-24",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521",
     "verdict": "untested"
    },
    "builds": {
-    "date": "2026-09-23",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275",
+    "date": "2026-09-24",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521",
     "verdict": "pass"
    }
   },
   "bonito:base-hwe": {
    "boots": {
-    "date": "2026-09-23",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275",
+    "date": "2026-09-24",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521",
     "verdict": "untested"
    },
    "builds": {
-    "date": "2026-09-23",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275",
+    "date": "2026-09-24",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521",
     "verdict": "pass"
    }
   },
   "bonito:base-nvidia": {
    "boots": {
-    "date": "2026-09-23",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275",
+    "date": "2026-09-24",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521",
     "verdict": "untested"
    },
    "builds": {
-    "date": "2026-09-23",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275",
+    "date": "2026-09-24",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521",
     "verdict": "pass"
    }
   },
   "bonito:cosmic": {
    "boots": {
-    "date": "2026-09-23",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275",
+    "date": "2026-09-24",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521",
     "verdict": "untested"
    },
    "builds": {
-    "date": "2026-09-23",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275",
+    "date": "2026-09-24",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521",
     "verdict": "pass"
    },
    "desktop": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "install": {
@@ -950,8 +950,8 @@
    },
    "no_silent_omissions": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "parity": {
@@ -963,15 +963,15 @@
   },
   "bonito:cosmic-nvidia": {
    "boots": {
-    "date": "2026-09-23",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275",
+    "date": "2026-09-24",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521",
     "verdict": "untested"
    },
    "builds": {
-    "date": "2026-09-23",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275",
+    "date": "2026-09-24",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521",
     "verdict": "pass"
    },
    "iso": {
@@ -983,22 +983,22 @@
   },
   "bonito:gnome": {
    "boots": {
-    "date": "2026-09-23",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275",
+    "date": "2026-09-24",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521",
     "verdict": "pass"
    },
    "builds": {
-    "date": "2026-09-23",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275",
+    "date": "2026-09-24",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521",
     "verdict": "pass"
    },
    "desktop": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
-    "verdict": "pass"
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
+    "verdict": "fail"
    },
    "install": {
     "date": "2026-09-01",
@@ -1020,8 +1020,8 @@
    },
    "no_silent_omissions": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "parity": {
@@ -1033,43 +1033,43 @@
   },
   "bonito:gnome-asahi": {
    "boots": {
-    "date": "2026-09-23",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275",
+    "date": "2026-09-24",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521",
     "verdict": "untested"
    },
    "builds": {
-    "date": "2026-09-23",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275",
+    "date": "2026-09-24",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521",
     "verdict": "pass"
    }
   },
   "bonito:gnome-hwe": {
    "boots": {
-    "date": "2026-09-23",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275",
+    "date": "2026-09-24",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521",
     "verdict": "pass"
    },
    "builds": {
-    "date": "2026-09-23",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275",
+    "date": "2026-09-24",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521",
     "verdict": "pass"
    }
   },
   "bonito:gnome-nvidia": {
    "boots": {
-    "date": "2026-09-23",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275",
+    "date": "2026-09-24",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521",
     "verdict": "pass"
    },
    "builds": {
-    "date": "2026-09-23",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275",
+    "date": "2026-09-24",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521",
     "verdict": "pass"
    },
    "iso": {
@@ -1081,35 +1081,35 @@
   },
   "bonito:gnome-t2": {
    "boots": {
-    "date": "2026-09-23",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275",
+    "date": "2026-09-24",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521",
     "verdict": "pass"
    },
    "builds": {
-    "date": "2026-09-23",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275",
+    "date": "2026-09-24",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521",
     "verdict": "pass"
    }
   },
   "bonito:kde": {
    "boots": {
-    "date": "2026-09-23",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275",
+    "date": "2026-09-24",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521",
     "verdict": "pass"
    },
    "builds": {
-    "date": "2026-09-23",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275",
+    "date": "2026-09-24",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521",
     "verdict": "pass"
    },
    "desktop": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "install": {
@@ -1132,8 +1132,8 @@
    },
    "no_silent_omissions": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "parity": {
@@ -1145,15 +1145,15 @@
   },
   "bonito:kde-nvidia": {
    "boots": {
-    "date": "2026-09-23",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275",
+    "date": "2026-09-24",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521",
     "verdict": "pass"
    },
    "builds": {
-    "date": "2026-09-23",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275",
+    "date": "2026-09-24",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521",
     "verdict": "pass"
    },
    "iso": {
@@ -1165,21 +1165,21 @@
   },
   "bonito:niri": {
    "boots": {
-    "date": "2026-09-23",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275",
+    "date": "2026-09-24",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521",
     "verdict": "untested"
    },
    "builds": {
-    "date": "2026-09-23",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275",
+    "date": "2026-09-24",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521",
     "verdict": "pass"
    },
    "desktop": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "install": {
@@ -1202,8 +1202,8 @@
    },
    "no_silent_omissions": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "parity": {
@@ -1215,15 +1215,15 @@
   },
   "bonito:niri-nvidia": {
    "boots": {
-    "date": "2026-09-23",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275",
+    "date": "2026-09-24",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521",
     "verdict": "untested"
    },
    "builds": {
-    "date": "2026-09-23",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275",
+    "date": "2026-09-24",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521",
     "verdict": "pass"
    },
    "iso": {
@@ -1235,21 +1235,21 @@
   },
   "bonito:xfce": {
    "boots": {
-    "date": "2026-09-23",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275",
+    "date": "2026-09-24",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521",
     "verdict": "pass"
    },
    "builds": {
-    "date": "2026-09-23",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275",
+    "date": "2026-09-24",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521",
     "verdict": "pass"
    },
    "desktop": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "install": {
@@ -1272,8 +1272,8 @@
    },
    "no_silent_omissions": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "parity": {
@@ -1285,15 +1285,15 @@
   },
   "bonito:xfce-nvidia": {
    "boots": {
-    "date": "2026-09-23",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275",
+    "date": "2026-09-24",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521",
     "verdict": "pass"
    },
    "builds": {
-    "date": "2026-09-23",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/35881676275",
+    "date": "2026-09-24",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36022977521",
     "verdict": "pass"
    },
    "iso": {
@@ -1332,9 +1332,9 @@
    },
    "desktop": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
-    "verdict": "pass"
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
+    "verdict": "fail"
    },
    "install": {
     "date": "2026-09-01",
@@ -1350,8 +1350,8 @@
    },
    "no_silent_omissions": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "parity": {
@@ -1390,8 +1390,8 @@
    },
    "desktop": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "install": {
@@ -1408,8 +1408,8 @@
    },
    "no_silent_omissions": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "parity": {
@@ -1448,8 +1448,8 @@
    },
    "desktop": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "install": {
@@ -1466,8 +1466,8 @@
    },
    "no_silent_omissions": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "parity": {
@@ -1520,8 +1520,8 @@
    },
    "desktop": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "install": {
@@ -1544,8 +1544,8 @@
    },
    "no_silent_omissions": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "parity": {
@@ -1590,8 +1590,8 @@
    },
    "desktop": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "install": {
@@ -1608,8 +1608,8 @@
    },
    "no_silent_omissions": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "parity": {
@@ -1662,8 +1662,8 @@
    },
    "desktop": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "install": {
@@ -1680,8 +1680,8 @@
    },
    "no_silent_omissions": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "parity": {
@@ -1706,8 +1706,8 @@
    },
    "desktop": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "install": {
@@ -1730,8 +1730,8 @@
    },
    "no_silent_omissions": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "parity": {
@@ -1784,8 +1784,8 @@
    },
    "desktop": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "install": {
@@ -1808,8 +1808,8 @@
    },
    "no_silent_omissions": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "parity": {
@@ -1834,8 +1834,8 @@
    },
    "desktop": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "install": {
@@ -1858,8 +1858,8 @@
    },
    "no_silent_omissions": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "parity": {
@@ -1898,8 +1898,8 @@
    },
    "desktop": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "install": {
@@ -1916,8 +1916,8 @@
    },
    "no_silent_omissions": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "parity": {
@@ -1942,8 +1942,8 @@
    },
    "desktop": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "install": {
@@ -1960,8 +1960,8 @@
    },
    "no_silent_omissions": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "parity": {
@@ -2040,9 +2040,9 @@
    },
    "desktop": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
-    "verdict": "pass"
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
+    "verdict": "fail"
    },
    "install": {
     "date": "2026-09-01",
@@ -2064,8 +2064,8 @@
    },
    "no_silent_omissions": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "parity": {
@@ -2154,8 +2154,8 @@
    },
    "desktop": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "install": {
@@ -2172,8 +2172,8 @@
    },
    "no_silent_omissions": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "parity": {
@@ -2226,9 +2226,9 @@
    },
    "desktop": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
-    "verdict": "pass"
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
+    "verdict": "fail"
    },
    "install": {
     "date": "2026-09-01",
@@ -2250,8 +2250,8 @@
    },
    "no_silent_omissions": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "parity": {
@@ -2310,8 +2310,8 @@
    },
    "desktop": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "install": {
@@ -2334,8 +2334,8 @@
    },
    "no_silent_omissions": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "parity": {
@@ -2394,8 +2394,8 @@
    },
    "desktop": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "install": {
@@ -2412,8 +2412,8 @@
    },
    "no_silent_omissions": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "parity": {
@@ -2466,8 +2466,8 @@
    },
    "desktop": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "install": {
@@ -2484,8 +2484,8 @@
    },
    "no_silent_omissions": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "parity": {
@@ -2525,35 +2525,35 @@
   },
   "sailfin:base": {
    "boots": {
-    "date": "2026-09-23",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/35927889455#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/35927889455",
+    "date": "2026-09-24",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36067760296#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36067760296",
     "verdict": "untested"
    },
    "builds": {
-    "date": "2026-09-23",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/35927889455#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/35927889455",
+    "date": "2026-09-24",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36067760296#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36067760296",
     "verdict": "pass"
    }
   },
   "sailfin:cosmic": {
    "boots": {
-    "date": "2026-09-23",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/35927889455#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/35927889455",
+    "date": "2026-09-24",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36067760296#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36067760296",
     "verdict": "untested"
    },
    "builds": {
-    "date": "2026-09-23",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/35927889455#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/35927889455",
+    "date": "2026-09-24",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36067760296#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36067760296",
     "verdict": "pass"
    },
    "desktop": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "install": {
@@ -2570,8 +2570,8 @@
    },
    "no_silent_omissions": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "parity": {
@@ -2583,21 +2583,21 @@
   },
   "sailfin:gnome": {
    "boots": {
-    "date": "2026-09-23",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/35927889455#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/35927889455",
+    "date": "2026-09-24",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36067760296#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36067760296",
     "verdict": "pass"
    },
    "builds": {
-    "date": "2026-09-23",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/35927889455#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/35927889455",
+    "date": "2026-09-24",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36067760296#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36067760296",
     "verdict": "pass"
    },
    "desktop": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "install": {
@@ -2614,8 +2614,8 @@
    },
    "no_silent_omissions": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "parity": {
@@ -2640,8 +2640,8 @@
    },
    "desktop": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "install": {
@@ -2658,8 +2658,8 @@
    },
    "no_silent_omissions": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "parity": {
@@ -2671,21 +2671,21 @@
   },
   "sailfin:niri": {
    "boots": {
-    "date": "2026-09-23",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/35927889455#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/35927889455",
+    "date": "2026-09-24",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36067760296#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36067760296",
     "verdict": "untested"
    },
    "builds": {
-    "date": "2026-09-23",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/35927889455#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/35927889455",
+    "date": "2026-09-24",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36067760296#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36067760296",
     "verdict": "pass"
    },
    "desktop": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "install": {
@@ -2702,8 +2702,8 @@
    },
    "no_silent_omissions": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "parity": {
@@ -2715,21 +2715,21 @@
   },
   "sailfin:xfce": {
    "boots": {
-    "date": "2026-09-23",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/35927889455#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/35927889455",
+    "date": "2026-09-24",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36067760296#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36067760296",
     "verdict": "pass"
    },
    "builds": {
-    "date": "2026-09-23",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/35927889455#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/35927889455",
+    "date": "2026-09-24",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36067760296#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36067760296",
     "verdict": "pass"
    },
    "desktop": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "install": {
@@ -2746,8 +2746,8 @@
    },
    "no_silent_omissions": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "parity": {
@@ -2814,8 +2814,8 @@
    },
    "desktop": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "install": {
@@ -2838,8 +2838,8 @@
    },
    "no_silent_omissions": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "parity": {
@@ -2898,8 +2898,8 @@
    },
    "desktop": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "install": {
@@ -2922,8 +2922,8 @@
    },
    "no_silent_omissions": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "parity": {
@@ -2950,15 +2950,15 @@
   "skipjack:gnome-nvidia": {
    "boots": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36011325363#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36011325363",
-    "verdict": "fail"
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36064521567#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36064521567",
+    "verdict": "pass"
    },
    "builds": {
-    "date": "",
-    "evidence": "",
-    "run": "",
-    "verdict": "untested"
+    "date": "2026-09-24",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36064521567#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36064521567",
+    "verdict": "pass"
    },
    "iso": {
     "date": "2026-08-19",
@@ -2982,8 +2982,8 @@
    },
    "desktop": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "install": {
@@ -3006,8 +3006,8 @@
    },
    "no_silent_omissions": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "parity": {
@@ -3066,8 +3066,8 @@
    },
    "desktop": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "install": {
@@ -3090,8 +3090,8 @@
    },
    "no_silent_omissions": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "parity": {
@@ -3150,8 +3150,8 @@
    },
    "desktop": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "install": {
@@ -3174,8 +3174,8 @@
    },
    "no_silent_omissions": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "parity": {
@@ -3214,8 +3214,8 @@
    },
    "desktop": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "install": {
@@ -3232,8 +3232,8 @@
    },
    "no_silent_omissions": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "parity": {
@@ -3258,8 +3258,8 @@
    },
    "desktop": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "install": {
@@ -3276,8 +3276,8 @@
    },
    "no_silent_omissions": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "parity": {
@@ -3302,8 +3302,8 @@
    },
    "desktop": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "install": {
@@ -3320,8 +3320,8 @@
    },
    "no_silent_omissions": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "parity": {
@@ -3388,8 +3388,8 @@
    },
    "desktop": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "install": {
@@ -3412,8 +3412,8 @@
    },
    "no_silent_omissions": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "parity": {
@@ -3472,9 +3472,9 @@
    },
    "desktop": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
-    "verdict": "fail"
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
+    "verdict": "pass"
    },
    "install": {
     "date": "2026-09-10",
@@ -3496,8 +3496,8 @@
    },
    "no_silent_omissions": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "parity": {
@@ -3524,15 +3524,15 @@
   "yellowfin:gnome-nvidia": {
    "boots": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/35957716969#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/35957716969",
-    "verdict": "fail"
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36064959906#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36064959906",
+    "verdict": "pass"
    },
    "builds": {
-    "date": "",
-    "evidence": "",
-    "run": "",
-    "verdict": "untested"
+    "date": "2026-09-24",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36064959906#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36064959906",
+    "verdict": "pass"
    },
    "iso": {
     "date": "2026-08-19",
@@ -3556,8 +3556,8 @@
    },
    "desktop": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "install": {
@@ -3580,8 +3580,8 @@
    },
    "no_silent_omissions": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "parity": {
@@ -3640,8 +3640,8 @@
    },
    "desktop": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "install": {
@@ -3664,8 +3664,8 @@
    },
    "no_silent_omissions": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "parity": {
@@ -3724,8 +3724,8 @@
    },
    "desktop": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "install": {
@@ -3748,8 +3748,8 @@
    },
    "no_silent_omissions": {
     "date": "2026-09-24",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36003211419",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/36069044544",
     "verdict": "pass"
    },
    "parity": {
