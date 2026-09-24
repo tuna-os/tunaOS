@@ -115,11 +115,40 @@ def gh_json(*args: str):
                 ["gh", *args], capture_output=True, text=True, check=True
             ).stdout
             return json.loads(out) if out.strip() else None
-        except (subprocess.CalledProcessError, json.JSONDecodeError):
+        except (subprocess.CalledProcessError, json.JSONDecodeError) as err:
             if attempt == 2:
+                # Name the call and gh's own reason. The job log of the
+                # 2026-09-24 refresh (run 35990117734) that blanked every
+                # bonito cell carried no line at all about which call failed.
+                detail = getattr(err, "stderr", "") or str(err)
+                print(
+                    f"warning: gh {' '.join(args)}: {detail.strip()}",
+                    file=sys.stderr,
+                )
                 return None
             time.sleep(2)
     return None
+
+
+def gh_json_required(*args: str):
+    """gh_json for queries whose failure must not read as "no runs".
+
+    gh_json returns None both for "gh failed three times" and for empty
+    output, and callers that write `gh_json(...) or []` turn the first into
+    "this workflow has never run". On 2026-09-24 that is what happened to
+    build-bonito.yml: the refresh (run 35990117734) scored all 16 bonito cells
+    untested with no run named, although every one of them had promoted in
+    run 35881676275 the day before, and 16/16 still re-derive from that run
+    today. The module docstring promises that an API failure raises rather
+    than degrading a cell to unknown; this is the call that keeps it.
+    """
+    out = gh_json(*args)
+    if out is None:
+        raise RuntimeError(
+            f"gh {' '.join(args)} returned nothing after 3 attempts; refusing "
+            "to score the cells it covers as untested"
+        )
+    return out
 
 
 def load_build_config(config_path: Path = CONFIG) -> dict:
@@ -494,12 +523,14 @@ def build_stage_results() -> dict[str, dict]:
     out: dict[str, dict] = {}
     configured = _matrix("build_image", desktops_only=False)
     for variant in sorted(configured):
-        runs = gh_json(
+        # Required, not `or []`: a failed list is not "no runs" (see
+        # gh_json_required). A variant with genuinely no runs returns [].
+        runs = gh_json_required(
             "run", "list", "--repo", REPO,
             "--workflow", f"build-{variant}.yml",
             "--branch", "main", "--limit", "10",
             "--json", "databaseId,conclusion,createdAt",
-        ) or []
+        )
         conclusive = [
             r for r in runs if r.get("conclusion") in ("success", "failure")
         ]
@@ -512,10 +543,10 @@ def build_stage_results() -> dict[str, dict]:
         for run in conclusive:
             if flavors <= set(cell_run):
                 break
-            detail = gh_json(
+            detail = gh_json_required(
                 "run", "view", str(run["databaseId"]), "--repo", REPO,
                 "--json", "jobs",
-            ) or {}
+            )
             per_run: dict[tuple[str, str], str] = {}
             for job in detail.get("jobs", []):
                 m = re.search(
