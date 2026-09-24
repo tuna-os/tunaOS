@@ -1,0 +1,11 @@
+[Unit]
+Description=Set the variant wallpaper in DankMaterialShell on first login (no-op without dms)
+After=dms.service
+PartOf=graphical-session.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/tunaos/dms-wallpaper
+
+[Install]
+WantedBy=graphical-session.target

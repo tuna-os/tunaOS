@@ -51,10 +51,12 @@ the session to use it, and that something differs per desktop.
 |---|---|---|
 | GNOME | dconf keyfiles in `/etc/dconf/db/local.d` and `gdm.d` | added 2026-09-17 |
 | KDE | `LookAndFeelPackage=org.tunaos.desktop` in `kdeglobals` | done |
-| niri | greeter QML, compositor config, a wallpaper daemon | greeter only |
+| niri | the DMS shell sets the wallpaper at the first login | done |
 | COSMIC | `cosmic-set-branding.sh` writes the cosmic-bg default | done |
 | XFCE | an autostart entry sets the wallpaper at the first login | done |
 | Pantheon | `zzzz-tunaos.gschema.override` | done |
+| SDDM | `kde-set-look-and-feel.sh` selects Breeze and writes `theme.conf.user` | done |
+| LightDM, gtkgreet | the wallpaper of the variant | done |
 
 ## The variant is the brand
 
@@ -155,7 +157,8 @@ unbranded.
 ## What is still open
 
 - Plymouth: `verify-branding.sh` does not check which theme dracut used.
-- Login screens: SDDM, cosmic-greeter and LightDM show the upstream look.
-- niri draws no wallpaper. `verify-branding-niri.sh` records this for a
-  measured image.
-- COSMIC, XFCE and Pantheon have no `verify-branding-<desktop>.sh`.
+- GDM keeps its grey background. Only its logo is ours.
+- cosmic-greeter and the Pantheon greeter use the wallpaper default. Nobody
+  has checked them on a built image.
+- COSMIC, XFCE, Pantheon and the login screens have no
+  `verify-branding-<desktop>.sh`.

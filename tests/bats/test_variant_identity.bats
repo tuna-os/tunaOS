@@ -167,3 +167,37 @@ rows() { grep -v '^#' "$TSV" | grep -v '^$'; }
   [[ "zz-tunaos-fastfetch.sh" > "ublue-fastfetch.sh" ]]
   grep -q -- '--config /etc/xdg/fastfetch/config.jsonc' "${d}/zz-tunaos-fastfetch.sh"
 }
+
+@test "kde-set-look-and-feel brands the SDDM and PlasmaLogin screens with the variant" {
+  local t="${BATS_TEST_TMPDIR}" f="${BATS_TEST_TMPDIR}/kdeglobals" dm
+  mkdir -p "${t}/root/usr/share/sddm/themes/breeze" "${t}/root/usr/share/plasmalogin/themes/breeze"
+  : >"$f"
+  echo "TUNAOS_ACCENT='#1793D1'" >"${t}/identity.env"
+  TUNAOS_IDENTITY="${t}/identity.env" TUNAOS_KCM_ABOUT="${t}/about" TUNAOS_DM_ROOT="${t}/root" \
+    "${REPO_ROOT}/build_scripts/desktop/kde-set-look-and-feel.sh" "$f"
+  for dm in sddm plasmalogin; do
+    grep -qx 'Current=breeze' "${t}/root/etc/${dm}.conf.d/zz-tunaos-theme.conf"
+    local user="${t}/root/usr/share/${dm}/themes/breeze/theme.conf.user"
+    grep -qx 'background=/usr/share/backgrounds/tunaos/tunaos-default.jpg' "$user"
+    grep -qx 'logo=/usr/share/pixmaps/tunaos-lettermark.svg' "$user"
+    grep -qx 'showlogo=shown' "$user"
+    grep -qx 'color=#1793D1' "$user"
+  done
+}
+
+@test "the greeters show the variant wallpaper, not a stock background" {
+  grep -q 'url("file:///usr/share/backgrounds/tunaos/tunaos-default.jpg")' "${REPO_ROOT}/build_scripts/desktop/greetd-gtkgreet.sh"
+  grep -q 'url("file:///usr/share/backgrounds/tunaos/tunaos-default.jpg")' "${REPO_ROOT}/build_scripts/desktop/xfce-greeter.sh"
+  grep -qx 'background=/usr/share/backgrounds/tunaos/tunaos-default.jpg' \
+    "${REPO_ROOT}/system_files/usr/share/lightdm/lightdm-gtk-greeter.conf.d/90-tunaos.conf"
+}
+
+@test "niri's DMS shell gets the variant wallpaper at first login" {
+  local u="${REPO_ROOT}/system_files/usr/lib/systemd/user"
+  [ -L "${u}/graphical-session.target.wants/tunaos-dms-wallpaper.service" ]
+  [ "$(readlink "${u}/graphical-session.target.wants/tunaos-dms-wallpaper.service")" = ../tunaos-dms-wallpaper.service ]
+  grep -qx 'ExecStart=/usr/libexec/tunaos/dms-wallpaper' "${u}/tunaos-dms-wallpaper.service"
+  # Without dms, and on every later login, it must do nothing and succeed.
+  HOME="${BATS_TEST_TMPDIR}" PATH=/usr/bin:/bin run "${REPO_ROOT}/system_files/usr/libexec/tunaos/dms-wallpaper"
+  [ "$status" -eq 0 ]
+}

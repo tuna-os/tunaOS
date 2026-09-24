@@ -96,3 +96,35 @@ Website=https://github.com/tuna-os/tunaos
 Variant=part of TunaOS
 ABOUT
 fi
+
+# The login screen: SDDM, or PlasmaLogin, its Plasma 6.6 successor (EL10;
+# same layout under /usr/share/plasmalogin and /etc/plasmalogin.conf.d, see
+# tests/bats/test_kde_display_manager.bats). Left alone it shows the distro's
+# pick (Fedora's 01-breeze-fedora with a Fedora logo, or the stock theme where
+# none is set), so select Breeze and point it at the variant: its wallpaper,
+# its lettermark as the logo, its accent as the fallback colour.
+# theme.conf.user is the greeter's own override file beside the theme, so the
+# package's theme.conf stays untouched. zz- sorts after the distro's drop-in.
+if [[ $# -eq 0 || -n "${TUNAOS_DM_ROOT:-}" ]]; then
+	accent_hex=""
+	if [[ -f "$identity" ]]; then
+		accent_hex="$(sed -n 's/^TUNAOS_ACCENT=//p' "$identity" | tr -d "'\"")"
+	fi
+	for dm in sddm plasmalogin; do
+		theme_dir="${TUNAOS_DM_ROOT:-}/usr/share/${dm}/themes/breeze"
+		[[ -d "$theme_dir" ]] || continue
+		conf_d="${TUNAOS_DM_ROOT:-}/etc/${dm}.conf.d"
+		mkdir -p "$conf_d"
+		printf '[Theme]\nCurrent=breeze\n' >"${conf_d}/zz-tunaos-theme.conf"
+		{
+			echo "[General]"
+			echo "type=image"
+			echo "background=/usr/share/backgrounds/tunaos/tunaos-default.jpg"
+			echo "showlogo=shown"
+			echo "logo=/usr/share/pixmaps/tunaos-lettermark.svg"
+			if [[ -n "$accent_hex" ]]; then
+				echo "color=${accent_hex}"
+			fi
+		} >"${theme_dir}/theme.conf.user"
+	done
+fi
