@@ -49,7 +49,7 @@ on:
 jobs:
   parity:
     name: ${{ inputs.variant }}:${{ inputs.flavor }} browser/CI LUKS parity
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 90
     permissions:
       contents: read

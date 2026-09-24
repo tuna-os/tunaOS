@@ -40,7 +40,7 @@ permissions:
 
 jobs:
   canary:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     env:
       IMAGE: ${{ inputs.image || 'ghcr.io/tuna-os/yellowfin:gnome' }}
     steps:
