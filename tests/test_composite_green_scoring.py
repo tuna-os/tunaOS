@@ -82,6 +82,39 @@ def test_composite_scores_a_promoted_gated_cell_green_iff_blocking_pass() -> Non
         assert green == 0
 
 
+def test_composite_scores_stale_verdict_as_untested() -> None:
+    """A cell whose only desktop verdict is 5 days old (SLA 2) is not composite-green."""
+    today = "2026-09-10"
+    stage = {
+        "albacore": {
+            "jobs": {
+                ("gnome", "Promote"): "success",
+                ("gnome", "Gate"): "success",
+            },
+            "date": "2026-09-10",
+        }
+    }
+    omissions = {"albacore:gnome": ("success", "2026-09-10", "34459513536")}
+    # Desktop verdict is 5 days old (2026-09-05), SLA is 2 days -> stale -> ⬜
+    contract_stale = {"albacore:gnome": ("success", "2026-09-05", "33629919067")}
+
+    lines, green_stale, total, prov = gms.composite_section(
+        CRITERIA, stage, contract_stale, {}, {}, {}, omissions, {}, today=today
+    )
+    assert green_stale == 0, (
+        "a cell whose desktop verdict is 5 days old (SLA 2) must not be composite-green"
+    )
+
+    # When desktop verdict is fresh (e.g. 1 day old, 2026-09-09), it is composite-green
+    contract_fresh = {"albacore:gnome": ("success", "2026-09-09", "33629919067")}
+    lines, green_fresh, total, prov = gms.composite_section(
+        CRITERIA, stage, contract_fresh, {}, {}, {}, omissions, {}, today=today
+    )
+    assert green_fresh == 1, (
+        "a cell with all fresh blocking verdicts must be composite-green"
+    )
+
+
 def test_readme_updater_guards_the_composite_number() -> None:
     body = (ROOT / ".github" / "scripts" / "update-build-status.sh").read_text()
     assert 'select(.enforcement == "blocking")' in body
