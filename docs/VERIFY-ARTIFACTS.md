@@ -50,7 +50,10 @@ cosign verify-attestation "${ref}" \
 
 Cosign prints the verified in-toto statement. Its `subject[].digest.sha256`
 must match the digest in `ref`. The predicate contains the SPDX document for
-that platform image.
+that platform image. The document lists the packages and the relationships
+between them. It does not list the files of each package. With the files, the
+document was 38-123 MB, and Rekor refuses a request over 24 MiB
+([#2697](https://github.com/tuna-os/tunaOS/issues/2697)).
 
 ## Trust boundary
 
