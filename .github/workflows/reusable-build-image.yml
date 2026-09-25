@@ -889,9 +889,38 @@ jobs:
     steps:
       - name: Install dependencies
         run: |
-          apk update
+          # Retry the install, because apk.cgr.dev sometimes refuses a single
+          # package download. apk-tools 2.14 reports an HTTP 401/403 as
+          # EACCES, so the log says "Permission denied", but no file
+          # permission is involved:
+          #
+          #   (56/69) Installing libgpg-error (1.61-r3)
+          #   ERROR: libgpg-error-1.61-r3: Permission denied
+          #   2 errors; 257 MiB in 88 packages     (exit 2)
+          #
+          # Each refused package fails 50-90 ms after its "Installing" line,
+          # before any download. The packages differ on every run: bonito-rawhide
+          # base 36046888245 (linux-pam, libgpg-error), flounder-sid kde
+          # 36083457907 (5 packages), yellowfin gnome-hwe 35957716969. When
+          # this hits `base`, the whole variant is lost. A second `apk add`
+          # fetches only the packages that the first one did not install
+          # (tuna-os/tunaOS#2693).
+          # tests/regressions/test_issue_2693_manifest_apk_install_retries_a_refused_download.py
+          # runs this function against a stub apk.
+          apk_install() {
+            attempt=1
+            until apk update && apk add "$@"; do
+              if [ "$attempt" -ge 4 ]; then
+                echo "::error::apk add failed $attempt times; giving up."
+                return 1
+              fi
+              echo "::warning::apk add failed (attempt $attempt of 4); retrying in $((attempt * 5))s."
+              sleep $((attempt * 5))
+              attempt=$((attempt + 1))
+            done
+          }
           # Install necessary packages for building and pushing the image
-          apk add jq git podman uutils bash conmon crun netavark fuse-overlayfs libstdc++ yq
+          apk_install jq git podman uutils bash conmon crun netavark fuse-overlayfs libstdc++ yq
           # Point /bin/sh at bash WITHOUT `ln -sf`.
           #
           # This step installs uutils, which replaces coreutils in PATH, so the
