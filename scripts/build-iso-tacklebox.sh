@@ -37,6 +37,8 @@ fi
 
 # shellcheck source=lib/common.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
+# shellcheck source=lib/squashfs-compat.sh
+. "$(dirname "${BASH_SOURCE[0]}")/lib/squashfs-compat.sh"
 
 # Source registry resolution for TUNA_REGISTRY mirror overrides.
 # Falls back to hardcoded ref if _registry.sh is unavailable.
@@ -215,6 +217,19 @@ EOF
 # ── Invoke tacklebox ────────────────────────────────────────────────────────
 
 ISO_OUT="${OUT_DIR}/tunaos-${VARIANT}-${FLAVOR}.iso"
+
+# A kernel without CONFIG_SQUASHFS_ZSTD cannot mount tacklebox's zstd live
+# squashfs, so its ISO never boots (marlin arm64, tunaOS#2705). Such an image
+# gets xz squashfs through a mksquashfs wrapper for this build only, and the
+# finished ISO is checked below.
+SQUASHFS_XZ=0
+if tunaos_pkgbase_lacks_squashfs_zstd "$(tunaos_image_kernel_pkgbases "$IMAGE_REF")"; then
+	SQUASHFS_XZ=1
+	echo "==> ${IMAGE_REF}: kernel cannot mount zstd squashfs; building the live images with xz"
+	# Keep the XDG cleanup above: this trap replaces it.
+	trap 'tunaos_remove_mksquashfs_xz_shim; [[ -n "${SUDO_USER:-}" && "${SUDO_USER}" != root && -n "${XDG_RUNTIME_DIR:-}" ]] && rm -rf "$XDG_RUNTIME_DIR"' EXIT
+	tunaos_install_mksquashfs_xz_shim
+fi
 echo "==> Building ISO with tacklebox..."
 echo "    image:  ${IMAGE_REF}"
 echo "    payload: ${PAYLOAD_REF} (embedded offline ref)"
@@ -222,6 +237,12 @@ echo "    recipe: ${RECIPE_FILE}"
 echo "    output: ${ISO_OUT}"
 
 tunaos_run_tacklebox "$RECIPE_FILE" "$OUT_DIR" "$ISO_OUT"
+
+if [[ "$SQUASHFS_XZ" == 1 ]]; then
+	tunaos_remove_mksquashfs_xz_shim
+	echo "==> Checking the live squashfs compressors in ${ISO_OUT}"
+	tunaos_assert_iso_squashfs_mountable "$ISO_OUT"
+fi
 
 # Hand ownership back to the invoking user so the ISO is usable without sudo.
 if [[ -n "${SUDO_USER:-}" ]]; then
