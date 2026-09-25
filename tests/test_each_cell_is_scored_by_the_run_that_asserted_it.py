@@ -47,6 +47,8 @@ def _jobs(*specs):
 
 def _fake(runs, views):
     def gh_json(*args):
+        if args[0] == "api":  # main_runs' newest-run cross-check
+            return {"workflow_runs": [{"id": runs[0]["databaseId"]}] if runs else []}
         if args[0] == "run" and args[1] == "list":
             return runs
         if args[0] == "run" and args[1] == "view":
@@ -147,6 +149,8 @@ class OneRunIsNotAVerdictOnEveryCell(unittest.TestCase):
         seen = []
 
         def gh_json(*args):
+            if args[0] == "api":  # main_runs' newest-run cross-check
+                return {"workflow_runs": [{"id": self.runs[0]["databaseId"]}] if self.runs else []}
             if args[0] == "run" and args[1] == "list":
                 return self.runs
             seen.append(args[2])
