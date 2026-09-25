@@ -75,6 +75,13 @@ cat /etc/apt/sources.list.d/*.sources /etc/apt/sources.list 2>/dev/null || true
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
 
+# Swap the kernel down when the archive's nvidia-kernel-dkms cannot build on
+# the one the image ships (sid 7.2 vs 550.163.01, tunaOS#2696); a no-op on
+# trixie. Must precede the headers install, and KVER is re-read after it.
+/run/context/build_scripts/overlay/debian-nvidia-kernel-hold.sh "$KVER"
+KVER="$(basename "$(find /usr/lib/modules -maxdepth 1 -mindepth 1 -type d ! -name '*.img' 2>/dev/null | sort -V | tail -1)")"
+echo "==> dkms target kernel: ${KVER}"
+
 # linux-headers-${KVER} matches the base layer's baked kernel version.
 # On sid / rolling archives where the archive has moved past the cached base
 # layer's kernel (e.g. base kernel 7.1.7 vs archive headers 7.1.8), installing
