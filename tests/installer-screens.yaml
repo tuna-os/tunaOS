@@ -73,8 +73,7 @@ screens:
     # above forbids. It gives the welcome screen a second, independent
     # phrase to be recognised by, in the body copy rather than in a heading
     # that animates.
-    keywords: ["welcome", "get started", "let's get", "begin",
-               "will guide you through"]
+    keywords: ["welcome", "get started", "let's get", "begin"]
 
   - id: disk
     title: Disk / target selection
