@@ -179,29 +179,48 @@ def test_a_screen_that_is_not_a_welcome_screen_still_does_not_match():
     assert summary["screens"]["welcome"] is False, proc.stdout
 
 
-def test_the_added_keyword_is_what_does_the_work():
+def test_the_added_keyword_is_what_does_the_work(tmp_path):
     """Mutation: drop it from the list and KDE goes back to unmatched.
 
     Guarded by asserting the substitution actually applied -- a mutation that
     silently matches nothing "passes" and proves the opposite of what it
     claims, which this repository has now produced twice.
+
+    The mutated spec goes to a scratch copy passed with --spec, never over
+    tests/installer-screens.yaml itself: a run killed mid-test (a CI timeout,
+    an agent's 10-minute limit) skipped the old in-place restore, left the
+    keyword deleted in the working tree, and it was committed with an
+    unrelated change (#2699).
     """
     original = SPEC.read_text(encoding="utf-8")
     mutated = original.replace(
         '"begin",\n               "will guide you through"]', '"begin"]')
     assert mutated != original, "the mutation matched nothing; it proves nothing"
-    try:
-        SPEC.write_text(mutated, encoding="utf-8")
-        proc, summary = run_walkthrough(
-            {"00": KDE_WELCOME_BODY, "01": DISK, "02": DISK},
+    spec = tmp_path / "installer-screens.yaml"
+    spec.write_text(mutated, encoding="utf-8")
+    proc, summary = run_walkthrough(
+        {"00": KDE_WELCOME_BODY, "01": DISK, "02": DISK}, spec=spec,
+    )
+    assert summary is not None, proc.stdout + proc.stderr
+    assert summary["screens"]["welcome"] is False, (
+        "KDE matched without the added keyword, so the keyword is not "
+        "what fixed it"
+    )
+    assert SPEC.read_text(encoding="utf-8") == original, (
+        "the test changed the tracked spec"
+    )
+
+
+def test_no_test_writes_the_tracked_screen_spec():
+    """Nothing in tests/ may write tests/installer-screens.yaml in place."""
+    # Built in two halves so this test does not match its own source.
+    forbidden = "SPEC" + ".write_text("
+    for path in (ROOT / "tests").rglob("*.py"):
+        text = path.read_text(encoding="utf-8")
+        assert forbidden not in text, (
+            f"{path.relative_to(ROOT)} writes the tracked screen spec; "
+            "mutate a copy and pass it with --spec"
         )
-        assert summary is not None, proc.stdout + proc.stderr
-        assert summary["screens"]["welcome"] is False, (
-            "KDE matched without the added keyword, so the keyword is not "
-            "what fixed it"
-        )
-    finally:
-        SPEC.write_text(original, encoding="utf-8")
 
 
 class TestTheDiagnosisPrintsWhatItRead:

@@ -95,20 +95,24 @@ def test_it_does_not_credit_an_install_to_a_disk_screen():
     assert summary["screens"]["disk"] is True, proc.stdout
 
 
-def test_the_added_keyword_is_what_does_the_work():
-    """Mutation, with the substitution asserted before it is trusted."""
+def test_the_added_keyword_is_what_does_the_work(tmp_path):
+    """Mutation, with the substitution asserted before it is trusted.
+
+    The mutation is written to a scratch copy passed with --spec. Writing it
+    over the tracked spec left the keyword deleted whenever a run was killed
+    before the restore.
+    """
     original = SPEC.read_text(encoding="utf-8")
     mutated = original.replace(
         '"installing image", "do not power off"]', '"installing image"]')
     assert mutated != original, "the mutation matched nothing; it proves nothing"
-    try:
-        SPEC.write_text(mutated, encoding="utf-8")
-        proc, summary = run_walkthrough(
-            {"00": WELCOME, "01": KDE_PROGRESS, "02": KDE_PROGRESS},
-        )
-        assert summary is not None, proc.stdout + proc.stderr
-        assert summary["screens"]["install"] is False, (
-            "kde matched without the added keyword, so it is not what fixed it"
-        )
-    finally:
-        SPEC.write_text(original, encoding="utf-8")
+    spec = tmp_path / "installer-screens.yaml"
+    spec.write_text(mutated, encoding="utf-8")
+    proc, summary = run_walkthrough(
+        {"00": WELCOME, "01": KDE_PROGRESS, "02": KDE_PROGRESS}, spec=spec,
+    )
+    assert summary is not None, proc.stdout + proc.stderr
+    assert summary["screens"]["install"] is False, (
+        "kde matched without the added keyword, so it is not what fixed it"
+    )
+    assert SPEC.read_text(encoding="utf-8") == original

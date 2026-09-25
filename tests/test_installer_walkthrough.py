@@ -132,7 +132,8 @@ class FakeQEMUMonitor:
 
 
 def run_walkthrough(tess, magick_ae=5000, magick_stddev=0.5, steps="2",
-                    flavor="de", strict=False, timeout=120, tess_neg=None):
+                    flavor="de", strict=False, timeout=120, tess_neg=None,
+                    spec=None):
     """Run the script against the fake monitor + stubs.
 
     *tess* maps frame number (str) -> OCR text. *tess_neg* is the same for the
@@ -166,6 +167,8 @@ def run_walkthrough(tess, magick_ae=5000, magick_stddev=0.5, steps="2",
         cmd = [sys.executable, str(SCRIPT), sock, str(outdir), steps, flavor]
         if strict:
             cmd.append("--strict")
+        if spec is not None:
+            cmd.append(f"--spec={spec}")
         proc = subprocess.run(cmd, capture_output=True, text=True, env=env,
                               timeout=timeout)
 
