@@ -725,8 +725,30 @@ install_available() {
 			dnf -y install --skip-broken --setopt=install_weak_deps=False \
 				"${enablerepo_args[@]}" \
 				"${available[@]}" || {
+			# Keep dnf's reason when a package fails here. The repoquery
+			# above proved each name is IN the repos, so a failure here is a
+			# dependency or rpm-level problem. Later, record_package_wishlist
+			# reports it as "not in the active repos", which is wrong for
+			# these names. Build Hummingbird run 35938968035 dropped
+			# cosmic-comp (present in the index) at this step because of
+			#   file /usr/lib64/libxml2.so.16 from install of
+			#   libxml2-2.15.4-1.hum1 conflicts with file from package
+			#   libxml2-16-2.15.3-0.1.2.hum1
+			# The step discarded stderr, so the image shipped with no
+			# compositor and the only annotation said the package was missing.
+			local single_out single_reason
 			for single_pkg in "${available[@]}"; do
-				dnf -y install --skip-broken "${enablerepo_args[@]}" "$single_pkg" 2>/dev/null || true
+				single_out="$(dnf -y install --skip-broken "${enablerepo_args[@]}" "$single_pkg" 2>&1)" || true
+				printf '%s\n' "$single_out"
+				command -v rpm >/dev/null 2>&1 || continue
+				rpm -q --quiet "$single_pkg" 2>/dev/null && continue
+				rpm -q --quiet --whatprovides "$single_pkg" 2>/dev/null && continue
+				single_reason="$(grep -m1 -E 'conflicts with file|nothing provides' <<<"$single_out" ||
+					grep -m1 -E 'Transaction failed|Skipping packages with broken dependencies|Problem' <<<"$single_out" ||
+					echo 'dnf gave no reason')"
+				single_reason="${single_reason#"${single_reason%%[![:space:]-]*}"}"
+				printf '::warning title=Package in repos but not installed (%s)::%s resolves in the active repos but did not install: %s\n' \
+					"${IMAGE_NAME:-?}" "$single_pkg" "$single_reason"
 			done
 		}
 	fi
