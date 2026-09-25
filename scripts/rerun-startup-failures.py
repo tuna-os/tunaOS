@@ -41,9 +41,12 @@ from __future__ import annotations
 
 import argparse
 import json
-import subprocess
 import sys
+from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from lib.gh import GhError
+from lib.gh import gh as _gh
 
 # Only the per-variant nightlies. Deliberately not every scheduled workflow:
 # re-dispatching an arbitrary workflow because it failed to start is a much
@@ -106,29 +109,6 @@ def needs_redispatch(runs, job_count):
     return not has_newer_run(runs, run)
 
 
-class GhError(RuntimeError):
-    """A gh invocation that failed, carrying what gh actually said."""
-
-
-def _gh(args):
-    """Run gh, and on failure raise with its stderr attached.
-
-    The first live sweep failed on a dispatch and the traceback carried only
-    `CalledProcessError: ... returned non-zero exit status 1` -- because
-    capture_output swallowed the one line that explains why. That is the same
-    defect as a capture step that tails past its own diagnostic: the helper
-    discarded the message it existed to surface.
-    """
-    proc = subprocess.run(["gh", *args], capture_output=True, text=True)
-    if proc.returncode != 0:
-        raise GhError(
-            f"gh {' '.join(args)} exited {proc.returncode}\n"
-            f"  stdout: {proc.stdout.strip() or '(empty)'}\n"
-            f"  stderr: {proc.stderr.strip() or '(empty)'}"
-        )
-    return proc.stdout
-
-
 def runs_for(repo, workflow, limit=20):
     out = _gh([
         "api",
@@ -173,7 +153,7 @@ def main(argv=None):
     for workflow in WORKFLOWS:
         try:
             runs = runs_for(args.repo, workflow)
-        except subprocess.CalledProcessError as exc:
+        except GhError as exc:
             # One unreadable workflow must not stop the sweep: the whole
             # point is recovering the OTHER twelve.
             print(f"  {workflow}: could not list runs ({exc}); skipping")
