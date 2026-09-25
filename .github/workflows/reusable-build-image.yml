@@ -162,7 +162,7 @@ jobs:
         if: ${{ startsWith(inputs.flavor, 'base') }}
 
       - name: Setup runner
-        uses: projectbluefin/actions/bootc-build/setup-runner@4441ecec75c618ab0260e27e21c5aab22f750810 # v1 as of 2026-07-02
+        uses: projectbluefin/actions/bootc-build/setup-runner@38cebd91cf786404252fa184414a51b689d53aa3 # v1 as of 2026-07-02
         with:
           storage-backend: btrfs
           update-podman: "true"
@@ -701,6 +701,16 @@ jobs:
         # Either producer will do. They write the same filename, and the
         # fallback is held to the same validation, so nothing downstream
         # needs to know which one ran.
+        #
+        # continue-on-error for the reason `Generate SBOM` has it (#1796). A
+        # failed upload failed build_push, and the jobs after Manifest are
+        # skipped when an upstream job failed. In Build Albacore 35970880514
+        # niri-hwe linux-amd64-v2 lost this upload to `getaddrinfo EAI_AGAIN
+        # results-receiver.actions.githubusercontent.com` (job 107608521404).
+        # Manifest found all 3 platforms, but Sign, Gate and Promote were
+        # skipped. attest-sbom.yml still reports the missing SBOM
+        # (tuna-os/tunaOS#2697).
+        continue-on-error: true
         if: >-
           inputs.sbom && github.event_name != 'pull_request'
           && (steps.sbom.outcome == 'success' || steps.sbom_fallback.outcome == 'success')
