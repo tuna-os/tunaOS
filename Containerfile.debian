@@ -209,8 +209,16 @@ RUN --mount=type=bind,from=context,source=/,target=/run/context \
 RUN --mount=type=bind,from=context,source=/,target=/run/context \
     /run/context/build_scripts/install-remora.sh
 
-# Copy kernel to modules directory (Debian puts it in /boot)
-RUN cp /boot/vmlinuz-* "$(find /usr/lib/modules -maxdepth 1 -type d | tail -1)/vmlinuz"
+# Copy kernel to modules directory (Debian puts it in /boot). Debian sid's
+# kernel package now installs /usr/lib/modules/<kver>/vmlinuz itself, as the
+# same file as /boot/vmlinuz-<kver>, and `cp` exits 1 when asked to copy a file
+# onto itself ("are the same file"). That failed every flounder-sid build
+# (tunaOS#2616). Copy only when the destination is missing or differs.
+RUN dest="$(find /usr/lib/modules -maxdepth 1 -type d | tail -1)/vmlinuz" && \
+    for src in /boot/vmlinuz-*; do \
+        cmp -s "$src" "$dest" || cp "$src" "$dest"; \
+    done && \
+    test -s "$dest"
 
 # Set up bootc/ostree filesystem layout. The shared layout (the /var wipe, the
 # alias symlinks, tmpfiles.d and prepare-root.conf) lives in ostree-layout.sh;
