@@ -58,6 +58,8 @@ def _stage(views):
     ]
 
     def gh_json(*args):
+        if args[0] == "api":  # main_runs' newest-run cross-check
+            return {"workflow_runs": [{"id": runs[0]["databaseId"]}] if runs else []}
         if args[:2] == ("run", "list"):
             return runs
         if args[:2] == ("run", "view"):

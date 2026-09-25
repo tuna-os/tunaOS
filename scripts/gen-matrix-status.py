@@ -151,6 +151,52 @@ def gh_json_required(*args: str):
     return out
 
 
+
+def _newest_main_run(workflow: str) -> str | None:
+    """Id of the workflow's newest run on main, from a query of its own."""
+    out = gh_json_required(
+        "api", f"repos/{REPO}/actions/workflows/{workflow}/runs?branch=main&per_page=1",
+    )
+    runs = (out or {}).get("workflow_runs") or []
+    return str(runs[0]["id"]) if runs else None
+
+
+def main_runs(workflow: str, limit: int = 10) -> list[dict]:
+    """The workflow's newest runs on main, checked to actually start at the newest.
+
+    The Matrix Status refreshes of 2026-09-25 08:10 and 08:45 each scored one
+    variant from a run about ten runs back: skipjack from 35351369196
+    (2026-09-18), then albacore from 35429236550 (2026-09-19). Neither
+    variant had changed; the other refresh read both from 2026-09-24 runs.
+    The nine newer runs contributed nothing, the old run fell outside the
+    freshness SLA, and 16 cells a refresh went from green to untested with no
+    warning in the log. A list that does not contain the workflow's newest run
+    is not the newest runs, so it is re-fetched, and the refresh fails rather
+    than publish cells scored from a stale page.
+    """
+    newest = _newest_main_run(workflow)
+    for attempt in range(3):
+        runs = gh_json_required(
+            "run", "list", "--repo", REPO,
+            "--workflow", workflow,
+            "--branch", "main", "--limit", str(limit),
+            "--json", "databaseId,conclusion,createdAt",
+        )
+        if newest is None or any(str(r["databaseId"]) == newest for r in runs):
+            return runs
+        print(
+            f"warning: gh run list {workflow} did not contain its newest run "
+            f"{newest} (attempt {attempt + 1}/3); fetching again",
+            file=sys.stderr,
+        )
+        time.sleep(5)
+        # A run can start between the two queries; take the newest again.
+        newest = _newest_main_run(workflow)
+    raise RuntimeError(
+        f"gh run list {workflow} never contained the newest run on main "
+        f"({newest}); refusing to score its cells from an older page"
+    )
+
 def load_build_config(config_path: Path = CONFIG) -> dict:
     """Load .github/build-config.yml using PyYAML or internal fallback parser."""
     try:
@@ -525,12 +571,7 @@ def build_stage_results() -> dict[str, dict]:
     for variant in sorted(configured):
         # Required, not `or []`: a failed list is not "no runs" (see
         # gh_json_required). A variant with genuinely no runs returns [].
-        runs = gh_json_required(
-            "run", "list", "--repo", REPO,
-            "--workflow", f"build-{variant}.yml",
-            "--branch", "main", "--limit", "10",
-            "--json", "databaseId,conclusion,createdAt",
-        )
+        runs = main_runs(f"build-{variant}.yml")
         conclusive = [
             r for r in runs if r.get("conclusion") in ("success", "failure")
         ]
@@ -547,6 +588,14 @@ def build_stage_results() -> dict[str, dict]:
                 "run", "view", str(run["databaseId"]), "--repo", REPO,
                 "--json", "jobs",
             )
+            # A completed build run always has jobs (generate_matrix at the
+            # least). An empty list is a bad answer, not a run that built
+            # nothing, and reading it as one skips to an older run.
+            if not detail.get("jobs"):
+                raise RuntimeError(
+                    f"gh run view {run['databaseId']} returned no jobs for a "
+                    f"completed build-{variant}.yml run; refusing to skip it"
+                )
             per_run: dict[tuple[str, str], str] = {}
             for job in detail.get("jobs", []):
                 m = re.search(

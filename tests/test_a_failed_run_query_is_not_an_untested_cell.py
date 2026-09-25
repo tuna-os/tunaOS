@@ -47,6 +47,9 @@ JOBS = {"jobs": [
 
 def _gh(list_result, view_result):
     def fake(*args):
+        if args[0] == "api":  # main_runs' newest-run cross-check
+            runs = list_result or []
+            return {"workflow_runs": [{"id": runs[0]["databaseId"]}] if runs else []}
         if args[:2] == ("run", "list"):
             return list_result
         if args[:2] == ("run", "view"):
