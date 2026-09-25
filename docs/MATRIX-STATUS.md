@@ -66,11 +66,11 @@ no boot.
 
 `.github/green-criteria.yml` sets the bar. A cell is green only when every criterion that blocks it, and applies to it, has a current affirmative result. A criterion that nobody ran, nobody asserted, or that CI skipped renders ⬜, and it does not count as satisfied. These criteria block today: `builds`, `desktop`, `boots`, `no_silent_omissions`. These are advisory — the sections below measure them, and they do not block yet: `install`, `lifecycle`, `parity`, `rebuildable`, `arch_honesty`. Unimplemented: `iso`. To graduate a criterion, edit `enforcement:` in that file. This table and the README count then tighten with no code change.
 
-**115 of 135** published cells are composite-green.
+**133 of 135** published cells are composite-green.
 
 | Variant | gnome | kde | cosmic | niri | xfce |
 |---|:--:|:--:|:--:|:--:|:--:|
-| **albacore** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| **albacore** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36075104353#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35970880514#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36080124683#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36080124683#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35970880514#artifacts) |
 | **bonito** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36075106327#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36022977521#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36080124683#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36080124683#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36022977521#artifacts) |
 | **bonito-rawhide** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36075108229#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35907017239#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36080124683#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36080124683#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35907017239#artifacts) |
 | **flounder** | — | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36075027636#artifacts) | — | — | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36075027636#artifacts) |
@@ -82,7 +82,7 @@ no boot.
 | **sailfin** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36067760296#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36067760296#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36080124683#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36080124683#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36067760296#artifacts) |
 | **skipjack** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36059887457#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36011325363#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36080124683#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36080124683#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36011325363#artifacts) |
 | **wahoo** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36047128286#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36047128286#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36080124683#artifacts) | — | — |
-| **yellowfin** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36059882152#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35957716969#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36080124683#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36080124683#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/35957716969#artifacts) |
+| **yellowfin** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36096766331#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36096766331#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36080124683#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36080124683#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/36096766331#artifacts) |
 
 Cells outside the desktop columns (base, hwe, nvidia and friends) are in the count above but not the table; only `builds` applies to them today.
 
