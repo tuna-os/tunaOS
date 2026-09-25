@@ -222,11 +222,23 @@ jobs:
               continue
             fi
 
+            # The full Syft SBOM is 38-123 MB, and Rekor refuses a request
+            # over 24 MiB with a 502. Attest the package-level SBOM. Too large
+            # is a product failure, not an outage, so it does not set
+            # $outage (tuna-os/tunaOS#2697).
+            predicate="supply-chain/rekor/sbom-${stem}.spdx.json"
+            mkdir -p supply-chain/rekor
+            if ! "${GITHUB_WORKSPACE}/.github/scripts/sbom-for-rekor.sh" "$sbom" "$predicate"; then
+              echo "::error::could not attest ${ref}"
+              failed=$((failed + 1))
+              continue
+            fi
+
             ok=1
             for attempt in attest verify; do
               case "$attempt" in
                 attest)
-                  out="$(cosign_retry cosign attest --type spdxjson --predicate "$sbom" "$ref" 2>&1)" || ok=0
+                  out="$(cosign_retry cosign attest --type spdxjson --predicate "$predicate" "$ref" 2>&1)" || ok=0
                   ;;
                 verify)
                   out="$(cosign_retry cosign verify-attestation "$ref" \
