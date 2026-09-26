@@ -1484,3 +1484,18 @@ That image is an experiment, not a production repair.
 
 The RPM exposed the schema in an offline chroot but did not repair the boot:
 composefs still exposed the original `/usr`. Rebuild the OCI image and install it.
+
+## 31. Installed runtime report rejects a working desktop with `starting`
+
+**Symptom:** `TUNAOS_INSTALL_CHECKS_RESULT pass=15 fail=1` with
+`system state: starting`, followed by a working authenticated GNOME session.
+
+**Cause:** The runtime script runs inside the initial boot transaction. Its
+oneshot job can keep the manager in `starting` until the script exits. The
+2026-09-26 wootc 32 GiB target / 16 GiB scratch trial showed this failure, then
+`systemctl is-system-running` returned `running` in the user's terminal.
+
+**Fix (#2756):** Sample once and accept valid boot states, as the base contract
+already does. Reject maintenance, stopping, offline, empty, and unknown results.
+Do not wait for the transaction from inside it. This check reports manager
+state; the separate display-manager and user-session checks prove more.
