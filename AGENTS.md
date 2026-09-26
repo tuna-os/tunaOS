@@ -178,6 +178,9 @@ Six more, each measured while fixing the live-ISO and install path
   six Containerfiles *invoke* the script, which was true and not
   sufficient. Assert the line number precedes the first `exit`, or assert
   the effect in a built image.
+- **Load the data the desktop uses.** The GNOME binary passed the contract
+  without its schema RPM (Yellowfin, #2750). Query the compiled schema with
+  GLib. The XML can exist without a compiled schema.
 - **Verify a fix in the built artifact, not in the source tree.** The guard
   above was present in the script, committed, reviewed and merged, and
   absent from every image. `just build` then `podman run --rm <image>` to

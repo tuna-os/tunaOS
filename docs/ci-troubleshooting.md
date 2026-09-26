@@ -1460,3 +1460,27 @@ upload step and `prune-r2.yml` already do for forks.
 unread one. When a gate shows red on every run it ever had, doubt the question
 before the answer. Delete such a gate only after the intent behind it has
 somewhere true to live.
+
+### 30. GNOME is installed but GDM reports a missing shell schema (#2750)
+
+**Symptom:** GDM exits before login with `Settings schema 'org.gnome.shell' is not installed`.
+The wootc experiment reproduced this in a VM with Yellowfin digest `ed95623a` on 2026-09-26.
+
+**Cause:** `gnome-shell-50.0-3` provided the name of its own dependency,
+`gnome-shell-common`. DNF omitted that RPM, which owns the schema XML.
+The image contract checked the GNOME binary and version but never loaded the schema.
+
+**Fix:** [Package PR #748](https://github.com/tuna-os/tunaos-packages/pull/748)
+removes the false provider. The image contract now runs
+`gsettings list-keys org.gnome.shell` in both build and runtime checks.
+This detects missing XML and absent or unreadable compiled schemas.
+It does not prove a user can log in; that still needs a boot and session test.
+
+The check ran in two real containers with the network disabled. The original
+Yellowfin image returned exit 1 and named the absent schema. The derived image
+returned exit 0 after installation of only the matching common RPM. Its digest is
+`sha256:4562f4f0fde8cc0ba49e7ce627be2ba35d803c9aa768e79220a1a58c3b0d148b`.
+That image is an experiment, not a production repair.
+
+The RPM exposed the schema in an offline chroot but did not repair the boot:
+composefs still exposed the original `/usr`. Rebuild the OCI image and install it.
