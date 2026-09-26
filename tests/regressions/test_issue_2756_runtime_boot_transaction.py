@@ -1,4 +1,9 @@
-"""A boot-transaction check must not wait for, or reject, its own running job."""
+"""Regression test for tunaOS#2756: startup must accept valid in-transaction states.
+
+Falsification: Before the fix, the production check rejects `starting` even though
+this test supplies it from the actual state predicate. The state parameter makes
+the test fail if acceptance of startup state is removed.
+"""
 
 import os
 from pathlib import Path
