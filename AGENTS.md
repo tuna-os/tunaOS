@@ -170,6 +170,9 @@ Six more, each measured while fixing the live-ISO and install path
   SSH host-key assertion fired on images that deliberately ship sshd
   disabled. Each had been passed over as background noise for months. When
   you see a failure that "always fails", that is the bug.
+- **A boot job cannot wait for its own transaction.** The runtime check
+  saw `starting` before its oneshot exited (#2756). Sample valid manager
+  states without claiming a settled desktop; reject broken and unknown states.
 - **Being invoked is not being reached.** A guard placed after an early
   `exit 0` runs on nothing. `40-services.sh` has three package-manager
   paths and the first two end in `exit 0`; a login-banner guard added at

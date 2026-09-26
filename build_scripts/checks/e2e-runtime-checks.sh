@@ -11,8 +11,8 @@
 #
 # Unlike snosi (which SSHes into the test VM), the installed TunaOS system
 # has no login user CI can reach — the only channel out is the serial
-# console. So this script is baked into the image, runs once graphical.target
-# is reached, and emits TAP lines bracketed by grep-able markers that
+# console. This script runs inside the graphical.target startup transaction
+# and emits TAP lines bracketed by grep-able markers that
 # scripts/iso-e2e.sh harvests from the serial log:
 #
 #   TUNAOS_INSTALL_CHECKS_BEGIN
@@ -52,12 +52,22 @@ emit "TUNAOS_INSTALL_CHECKS_BEGIN desktop=${DESKTOP}"
 
 # ── Installation validation (snosi 01) ─────────────────────────────────────
 
-# Unit ordering (After=display-manager.service, WantedBy=graphical.target)
-# means the system is mostly settled; accept degraded like snosi does.
+# This oneshot is part of the initial boot transaction. The manager may
+# remain starting until this script exits; waiting here would wait on itself.
+# The 2026-09-26 wootc 32/16 VM trial reported starting here, then running
+# from an authenticated desktop. Match verify-base-contract.sh: reject broken
+# states, but do not claim a settled system or a usable desktop from this probe.
+# Called by check, which executes its remaining arguments.
+# shellcheck disable=SC2329
+valid_boot_state() {
+	case "$1" in
+	running | degraded | initializing | starting) return 0 ;;
+	*) return 1 ;;
+	esac
+}
 sys_state=$(systemctl is-system-running 2>/dev/null || true)
 emit "# system state: ${sys_state}"
-check "system has booted (running or degraded)" \
-	test "$sys_state" = "running" -o "$sys_state" = "degraded"
+check "system manager is in a valid boot state" valid_boot_state "$sys_state"
 
 # bootc deployments mount the deployment root immutably — either literally
 # ro in /proc/mounts or via a composefs/overlay stack. Accept any of those;
