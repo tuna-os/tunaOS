@@ -286,11 +286,28 @@ require_gnome_at_least() {
 	echo "GNOME ${major} meets the floor of ${floor}"
 }
 
+# Yellowfin ed95623a shipped gnome-shell 50.0-3 without its common RPM
+# (tunaOS#2750). GDM crashed before login despite the binary/version checks.
+# Ask GLib to load the compiled schema: an XML file alone is insufficient.
+require_gnome_shell_schema() {
+	if command -v gsettings >/dev/null 2>&1 &&
+		gsettings list-keys org.gnome.shell >/dev/null; then
+		return 0
+	fi
+	echo "missing or unreadable compiled GSettings schema: org.gnome.shell; GNOME cannot start its greeter or desktop" >&2
+	if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${desktop:-}" != cosmic ]]; then
+		waive
+		return 0
+	fi
+	exit 1
+}
+
 case "$desktop" in
 gnome)
 	experience="projectbluefin/bluefin-lts"
 	require_command gnome-shell
 	require_gnome_at_least "$GNOME_MINIMUM_MAJOR"
+	require_gnome_shell_schema
 	# Ubuntu names its GNOME session `ubuntu.desktop`, not `gnome*.desktop`.
 	# Measured on the published grouper:gnome: /usr/share/wayland-sessions
 	# contains exactly `ubuntu.desktop`, /usr/share/xsessions does not exist,
