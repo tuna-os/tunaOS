@@ -123,6 +123,7 @@ jobs:
           fi
 
           sudo qemu-system-x86_64 \
+            -smbios type=1,product=tunaos-countme-disabled \
             -machine type=q35,accel=kvm \
             -cpu host \
             -m 4G \

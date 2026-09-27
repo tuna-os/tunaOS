@@ -1,0 +1,23 @@
+{
+  "name": "tunaos-countme",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "build": "esbuild src/worker.js --bundle --format=esm --outfile=dist/worker.js",
+    "deploy": "WRANGLER_SEND_METRICS=false wrangler deploy",
+    "test:site": "node --test scripts/site-integration.test.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "miniflare": "4.20260730.0",
+    "wrangler": "4.141.0"
+  },
+  "overrides": {
+    "miniflare@4.20260730.0": {
+      "sharp": "0.35.4",
+      "undici": "7.29.0",
+      "ws": "8.22.0"
+    }
+  }
+}

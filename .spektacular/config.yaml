@@ -25,3 +25,5 @@ changelog:
 repos:
     - name: tunaos
       location: .
+    - name: docs
+      location: ../../docs/.spektacular

@@ -1,0 +1,13 @@
+[Unit]
+Description=Check eligibility for a weekly TunaOS adoption report
+Documentation=https://tunaos.org/metrics
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+RandomizedDelaySec=1h
+AccuracySec=1h
+Unit=tunaos-countme.service
+
+[Install]
+WantedBy=timers.target

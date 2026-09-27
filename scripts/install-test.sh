@@ -143,6 +143,7 @@ fi
 
 # ── Build QEMU command ───────────────────────────────────────────────────────────
 QEMU_ARGS=(
+	-smbios "type=1,product=tunaos-countme-disabled"
 	-name "tuna-install-test"
 	-machine "type=q35,accel=kvm"
 	-cpu host

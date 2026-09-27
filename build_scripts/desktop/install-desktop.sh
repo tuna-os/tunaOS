@@ -1035,6 +1035,8 @@ EOF
 	safe_enable tunaos-desktop-contract.service
 fi
 
+"${_TD_CTX}/build_scripts/install-countme.sh"
+
 emit_packages_manifest
 
 printf "::endgroup::\n"

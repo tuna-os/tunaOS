@@ -86,6 +86,7 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
     BASE_FOR_BUILD=""
     ENABLE_SSHD="{{ enable_sshd_var }}"
     FLAVOR="{{ flavor }}"
+    export TUNAOS_IMAGE_FLAVOR="${FLAVOR}"
 
     if [[ "${FLAVOR}" == "all" ]]; then
         readarray -t FLAVORS < <({{ yq }} -r '.variants[] | select(.id == "{{ variant }}") | .flavors[].id' "$BUILD_CONFIG")

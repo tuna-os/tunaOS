@@ -24,12 +24,19 @@ create)
 	# Version probe: the gate requires --bootc in `corral create --help`.
 	if [[ "$*" == *"--help"* ]]; then
 		echo "  --bootc  Bootc container image to run"
+		[[ "${CORRAL_NO_CREATE_KARG:-0}" == 1 ]] || echo "  --karg Kernel argument"
 		exit 0
 	fi
 	# First arg after subcommand is the VM name; --bootc means the gate path.
 	exit "${CORRAL_CREATE_RC:-0}"
 	;;
-bootc) exit "${CORRAL_BOOTC_RC:-0}" ;;
+bootc)
+	if [[ "$*" == *"--help"* ]]; then
+		[[ "${CORRAL_NO_RESUME_KARG:-0}" == 1 ]] || echo "  --karg Kernel argument"
+		exit 0
+	fi
+	exit "${CORRAL_BOOTC_RC:-0}"
+	;;
 start) exit 0 ;;
 ssh)
 	# Desktop checks probe `systemctl is-active ...`; answer active.
@@ -88,4 +95,36 @@ teardown() {
 	run bash "${GATE_SCRIPT}" yellowfin gnome
 	[ "$status" -ne 0 ]
 	[[ "$output" == *"SSH not reachable after --resume"* ]]
+}
+
+@test "boot-gate.sh: fresh guest is excluded with a preboot kernel argument" {
+	run bash "${GATE_SCRIPT}" yellowfin base
+	[ "$status" -eq 0 ]
+	grep -q -- 'create .* --bootc .* --karg tunaos.countme=0' "${CORRAL_LOG}"
+}
+
+@test "boot-gate.sh: resume repeats the preboot kernel exclusion before start" {
+	export CORRAL_CREATE_RC=1
+	run bash "${GATE_SCRIPT}" yellowfin base
+	[ "$status" -eq 0 ]
+	grep -q -- 'bootc create .* --resume --karg tunaos.countme=0' "${CORRAL_LOG}"
+}
+
+@test "boot-gate.sh: missing fresh kernel arguments skips before creating a guest" {
+	export CORRAL_NO_CREATE_KARG=1
+	run bash "${GATE_SCRIPT}" yellowfin base
+	[ "$status" -eq 77 ]
+	[[ "$output" == *"skipping gate to exclude CI telemetry"* ]]
+	! grep -q -- '--bootc ghcr.io/' "${CORRAL_LOG}"
+	! grep -q -- '--resume' "${CORRAL_LOG}"
+	! grep -q '^corral start' "${CORRAL_LOG}"
+}
+
+@test "boot-gate.sh: missing resume kernel arguments skips before creating a guest" {
+	export CORRAL_NO_RESUME_KARG=1
+	run bash "${GATE_SCRIPT}" yellowfin base
+	[ "$status" -eq 77 ]
+	! grep -q -- '--bootc ghcr.io/' "${CORRAL_LOG}"
+	! grep -q -- '--resume' "${CORRAL_LOG}"
+	! grep -q '^corral start' "${CORRAL_LOG}"
 }

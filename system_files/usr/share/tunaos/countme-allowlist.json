@@ -1,0 +1,957 @@
+[
+  {
+    "variant": "albacore",
+    "flavor": "base",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "albacore",
+    "flavor": "base",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "albacore",
+    "flavor": "base-hwe",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "albacore",
+    "flavor": "base-hwe",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "albacore",
+    "flavor": "base-nvidia",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "albacore",
+    "flavor": "cosmic",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "albacore",
+    "flavor": "cosmic",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "albacore",
+    "flavor": "cosmic-hwe",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "albacore",
+    "flavor": "cosmic-hwe",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "albacore",
+    "flavor": "cosmic-nvidia",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "albacore",
+    "flavor": "gnome",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "albacore",
+    "flavor": "gnome-hwe",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "albacore",
+    "flavor": "gnome-nvidia",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "albacore",
+    "flavor": "kde",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "albacore",
+    "flavor": "kde",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "albacore",
+    "flavor": "kde-hwe",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "albacore",
+    "flavor": "kde-hwe",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "albacore",
+    "flavor": "kde-nvidia",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "albacore",
+    "flavor": "niri",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "albacore",
+    "flavor": "niri",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "albacore",
+    "flavor": "niri-hwe",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "albacore",
+    "flavor": "niri-hwe",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "albacore",
+    "flavor": "niri-nvidia",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "albacore",
+    "flavor": "xfce",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "albacore",
+    "flavor": "xfce-hwe",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "albacore",
+    "flavor": "xfce-nvidia",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "bonito",
+    "flavor": "base",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "bonito",
+    "flavor": "base",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "bonito",
+    "flavor": "base-hwe",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "bonito",
+    "flavor": "base-hwe",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "bonito",
+    "flavor": "base-nvidia",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "bonito",
+    "flavor": "cosmic",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "bonito",
+    "flavor": "cosmic",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "bonito",
+    "flavor": "cosmic-nvidia",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "bonito",
+    "flavor": "gnome",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "bonito",
+    "flavor": "gnome",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "bonito",
+    "flavor": "gnome-asahi",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "bonito",
+    "flavor": "gnome-hwe",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "bonito",
+    "flavor": "gnome-hwe",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "bonito",
+    "flavor": "gnome-nvidia",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "bonito",
+    "flavor": "gnome-t2",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "bonito",
+    "flavor": "kde",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "bonito",
+    "flavor": "kde",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "bonito",
+    "flavor": "kde-nvidia",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "bonito",
+    "flavor": "niri",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "bonito",
+    "flavor": "niri",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "bonito",
+    "flavor": "niri-nvidia",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "bonito",
+    "flavor": "xfce",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "bonito",
+    "flavor": "xfce",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "bonito",
+    "flavor": "xfce-nvidia",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "bonito-rawhide",
+    "flavor": "base",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "bonito-rawhide",
+    "flavor": "base",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "bonito-rawhide",
+    "flavor": "base-hwe",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "bonito-rawhide",
+    "flavor": "base-hwe",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "bonito-rawhide",
+    "flavor": "base-nvidia",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "bonito-rawhide",
+    "flavor": "cosmic",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "bonito-rawhide",
+    "flavor": "cosmic",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "bonito-rawhide",
+    "flavor": "cosmic-nvidia",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "bonito-rawhide",
+    "flavor": "gnome",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "bonito-rawhide",
+    "flavor": "gnome",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "bonito-rawhide",
+    "flavor": "gnome-hwe",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "bonito-rawhide",
+    "flavor": "gnome-hwe",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "bonito-rawhide",
+    "flavor": "gnome-nvidia",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "bonito-rawhide",
+    "flavor": "kde",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "bonito-rawhide",
+    "flavor": "kde",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "bonito-rawhide",
+    "flavor": "kde-nvidia",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "bonito-rawhide",
+    "flavor": "niri",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "bonito-rawhide",
+    "flavor": "niri",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "bonito-rawhide",
+    "flavor": "niri-nvidia",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "bonito-rawhide",
+    "flavor": "xfce",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "bonito-rawhide",
+    "flavor": "xfce",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "bonito-rawhide",
+    "flavor": "xfce-nvidia",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "flounder",
+    "flavor": "base",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "flounder",
+    "flavor": "base",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "flounder",
+    "flavor": "kde",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "flounder",
+    "flavor": "kde-nvidia",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "flounder",
+    "flavor": "xfce",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "flounder",
+    "flavor": "xfce-nvidia",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "flounder-sid",
+    "flavor": "base",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "flounder-sid",
+    "flavor": "gnome",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "flounder-sid",
+    "flavor": "gnome-nvidia",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "flounder-sid",
+    "flavor": "kde",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "flounder-sid",
+    "flavor": "kde-nvidia",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "flounder-sid",
+    "flavor": "xfce",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "flounder-sid",
+    "flavor": "xfce-nvidia",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "grouper",
+    "flavor": "base",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "grouper",
+    "flavor": "base",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "grouper",
+    "flavor": "cosmic",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "grouper",
+    "flavor": "gnome",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "grouper",
+    "flavor": "gnome",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "grouper",
+    "flavor": "gnome-asahi",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "grouper",
+    "flavor": "gnome-zfs",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "grouper",
+    "flavor": "gnome-zfs",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "grouper",
+    "flavor": "kde",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "grouper",
+    "flavor": "kde",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "grouper",
+    "flavor": "xfce",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "grouper",
+    "flavor": "xfce",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "guppy",
+    "flavor": "base",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "guppy",
+    "flavor": "kde",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "guppy",
+    "flavor": "xfce",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "gurnard",
+    "flavor": "base",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "gurnard",
+    "flavor": "base",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "gurnard",
+    "flavor": "pantheon",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "gurnard",
+    "flavor": "pantheon",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "hummingbird",
+    "flavor": "base",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "hummingbird",
+    "flavor": "cosmic",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "hummingbird",
+    "flavor": "gnome",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "marlin",
+    "flavor": "base",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "marlin",
+    "flavor": "base",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "marlin",
+    "flavor": "cosmic",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "marlin",
+    "flavor": "cosmic-cachyos",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "marlin",
+    "flavor": "cosmic-nvidia",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "marlin",
+    "flavor": "gnome",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "marlin",
+    "flavor": "gnome",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "marlin",
+    "flavor": "gnome-cachyos",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "marlin",
+    "flavor": "gnome-nvidia",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "marlin",
+    "flavor": "kde",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "marlin",
+    "flavor": "kde-cachyos",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "marlin",
+    "flavor": "kde-nvidia",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "marlin",
+    "flavor": "niri",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "marlin",
+    "flavor": "niri-cachyos",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "marlin",
+    "flavor": "niri-nvidia",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "marlin",
+    "flavor": "xfce",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "marlin",
+    "flavor": "xfce-cachyos",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "marlin",
+    "flavor": "xfce-nvidia",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "sailfin",
+    "flavor": "base",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "sailfin",
+    "flavor": "base",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "sailfin",
+    "flavor": "cosmic",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "sailfin",
+    "flavor": "gnome",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "sailfin",
+    "flavor": "gnome",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "sailfin",
+    "flavor": "kde",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "sailfin",
+    "flavor": "niri",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "sailfin",
+    "flavor": "xfce",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "skipjack",
+    "flavor": "base",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "skipjack",
+    "flavor": "base",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "skipjack",
+    "flavor": "base-hwe",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "skipjack",
+    "flavor": "base-hwe",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "skipjack",
+    "flavor": "base-nvidia",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "skipjack",
+    "flavor": "cosmic",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "skipjack",
+    "flavor": "cosmic",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "skipjack",
+    "flavor": "cosmic-hwe",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "skipjack",
+    "flavor": "cosmic-hwe",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "skipjack",
+    "flavor": "cosmic-nvidia",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "skipjack",
+    "flavor": "gnome",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "skipjack",
+    "flavor": "gnome-hwe",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "skipjack",
+    "flavor": "gnome-nvidia",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "skipjack",
+    "flavor": "kde",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "skipjack",
+    "flavor": "kde",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "skipjack",
+    "flavor": "kde-hwe",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "skipjack",
+    "flavor": "kde-hwe",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "skipjack",
+    "flavor": "kde-nvidia",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "skipjack",
+    "flavor": "niri",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "skipjack",
+    "flavor": "niri",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "skipjack",
+    "flavor": "niri-hwe",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "skipjack",
+    "flavor": "niri-hwe",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "skipjack",
+    "flavor": "niri-nvidia",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "skipjack",
+    "flavor": "xfce",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "wahoo",
+    "flavor": "base",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "wahoo",
+    "flavor": "base",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "wahoo",
+    "flavor": "cosmic",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "wahoo",
+    "flavor": "cosmic",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "wahoo",
+    "flavor": "gnome",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "wahoo",
+    "flavor": "gnome",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "wahoo",
+    "flavor": "kde",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "wahoo",
+    "flavor": "kde",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "yellowfin",
+    "flavor": "base",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "yellowfin",
+    "flavor": "base",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "yellowfin",
+    "flavor": "base-hwe",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "yellowfin",
+    "flavor": "base-hwe",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "yellowfin",
+    "flavor": "base-nvidia",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "yellowfin",
+    "flavor": "cosmic",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "yellowfin",
+    "flavor": "cosmic",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "yellowfin",
+    "flavor": "cosmic-hwe",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "yellowfin",
+    "flavor": "cosmic-hwe",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "yellowfin",
+    "flavor": "cosmic-nvidia",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "yellowfin",
+    "flavor": "gnome",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "yellowfin",
+    "flavor": "gnome-hwe",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "yellowfin",
+    "flavor": "gnome-nvidia",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "yellowfin",
+    "flavor": "kde",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "yellowfin",
+    "flavor": "kde",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "yellowfin",
+    "flavor": "kde-hwe",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "yellowfin",
+    "flavor": "kde-hwe",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "yellowfin",
+    "flavor": "kde-nvidia",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "yellowfin",
+    "flavor": "niri",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "yellowfin",
+    "flavor": "niri",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "yellowfin",
+    "flavor": "niri-hwe",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "yellowfin",
+    "flavor": "niri-hwe",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "yellowfin",
+    "flavor": "niri-nvidia",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "yellowfin",
+    "flavor": "xfce",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "yellowfin",
+    "flavor": "xfce-hwe",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "yellowfin",
+    "flavor": "xfce-nvidia",
+    "arch": "x86_64"
+  }
+]

@@ -125,6 +125,8 @@ just fix && just check
 
 ## Testing
 
+Test the absence of a command with an isolated PATH and an absolute shell path. The host can already have that command.
+
 ```bash
 just test          # bats + pytest
 just test-bats     # shell script tests only

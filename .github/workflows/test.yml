@@ -37,6 +37,7 @@ on:
       - 'manifests/**'
       - 'live-iso/**'
       - 'system_files/**'
+      - 'services/countme/**'
       - 'system_files_overrides/**'
       - 'custom/**'
       - 'files/**'
@@ -118,6 +119,13 @@ jobs:
         run: |
           echo "=== pytest Tests ==="
           python3 -m pytest tests/ tests/pytest/ -v --tb=short --cov=. --cov-report=term --cov-report=xml:coverage-python.xml
+
+      - name: Test countme collector with D1
+        run: |
+          python3 scripts/generate-countme-allowlist.py --check
+          npm ci --ignore-scripts --prefix services/countme
+          npm test --prefix services/countme
+          npm run build --prefix services/countme
 
       - name: Test summary
         if: always()
