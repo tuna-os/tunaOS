@@ -133,23 +133,11 @@ just iso yellowfin gnome               # build ISO via tacklebox
 
 ## Tooling
 
-### Corral (Boot-Gate Runner)
+### Boot gates
 
-Corral (`tuna-os/corral`) serves as the unified boot-gate runner for both local QEMU execution and KubeVirt cluster verification.
+The PR image gate uses `just qcow2` and `scripts/iso-e2e.sh --disk`. QEMU sets the CI product marker before boot, so automated guests do not send adoption reports. The CI contract declares this gate in `.github/green-criteria.yml`.
 
-- **CI / Local Gate Execution**:
-  ```bash
-  corral create gate --bootc $IMAGE:$TAG-testing --wait-ssh --timeout 900
-  ```
-- **Declarative Verification**: `tests/corral/verify.yaml` provides the canonical Lima-style YAML scenario configuration for boot verification.
-- **Local Parity**:
-  ```bash
-  corral create -f tests/corral/verify.yaml
-  ```
-- **KubeVirt Cluster Parity**:
-  ```bash
-  corral create -f tests/corral/verify.yaml --kubevirt
-  ```
+For Corral, `scripts/boot-gate.sh` checks for `--karg` support in both fresh and resumed guests. It passes `tunaos.countme=0` before boot, or exits 77 before it creates a guest. Corral main `4c59a6be` lacks those options. See the [measured cause and test](ci-troubleshooting.md#automated-corral-guests-could-enter-adoption-counts).
 
 ---
 
