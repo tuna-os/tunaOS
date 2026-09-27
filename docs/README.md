@@ -54,6 +54,7 @@ user-facing site:
 | [CFP-DEMO-SCRIPT.md](CFP-DEMO-SCRIPT.md) | Shot list for the 3–5 min CFP demo video, shared by both 2027 submissions |
 | [CFP-SCALE-24X.md](CFP-SCALE-24X.md) | SCaLE 24x CFP draft, adapted from the FOSDEM abstract |
 | [CFP-SEAGL-2026.md](CFP-SEAGL-2026.md) | SeaGL 2026 CFP proposal and submission checklist |
+| [DESIGN-CONTRIBUTIONS.md](DESIGN-CONTRIBUTIONS.md) | Wallpaper/artwork design brief and submission guidelines for the 18 fish-themed variants (#2742) |
 | [PRESSKIT.md](PRESSKIT.md) | Project facts, descriptions, screenshots, and media contacts |
 | [DISTROWATCH-SUBMISSION.md](DISTROWATCH-SUBMISSION.md) | DistroWatch project submission draft |
 | [GNOME-51-RELEASE-CONTENT.md](GNOME-51-RELEASE-CONTENT.md) | GNOME 51.0 release-week content and packaging hook (#1334) |

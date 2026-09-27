@@ -42,6 +42,10 @@ External contributor onboarding is actively supported via the fork→PR loop,
 curated `good first issue` tasks, and weekly maintainer triage documented in
 [CONTRIBUTING.md](CONTRIBUTING.md) and [docs/HACKTOBERFEST-2026.md](docs/HACKTOBERFEST-2026.md).
 
+Not a developer? [docs/DESIGN-CONTRIBUTIONS.md](docs/DESIGN-CONTRIBUTIONS.md)
+covers wallpaper and artwork contributions for TunaOS's 18 fish-themed
+variants — no code required.
+
 ### Communication
 
 - **GitHub Issues**: Bug reports, feature requests, discussion
