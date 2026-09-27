@@ -16,6 +16,10 @@
 
 set -exo pipefail
 
+# This persistent live-only marker survives /run becoming a tmpfs at boot.
+mkdir -p "${TUNA_SESSION_ROOT:-}/etc/tunaos"
+touch "${TUNA_SESSION_ROOT:-}/etc/tunaos/live-session"
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # ── 1. Desktop detection ──────────────────────────────────────────────────────

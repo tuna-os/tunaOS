@@ -126,6 +126,7 @@ criteria:
       - workflow: .github/workflows/reusable-build-image.yml
         jobs:
           verify_boot: Boot and verify
+          build_push: Boot-verify image (PR gate)
         scripts:
           - scripts/iso-e2e.sh
     # Which cells the criterion is scored on. Cells outside the scope are not

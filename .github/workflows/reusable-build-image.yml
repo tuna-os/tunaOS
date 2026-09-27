@@ -354,14 +354,6 @@ jobs:
           sudo udevadm trigger --name-match=kvm || true
           sudo apt-get install -y qemu-system-x86 qemu-utils ovmf socat imagemagick
 
-      - name: Install corral
-        if: github.event_name == 'pull_request' && contains(matrix.platform, 'amd64')
-        run: |
-          go install github.com/tuna-os/corral/cmd/corral@latest || {
-            curl -fsSL https://github.com/tuna-os/corral/releases/latest/download/corral-linux-amd64 -o /usr/local/bin/corral
-            chmod +x /usr/local/bin/corral
-          }
-
       - name: Boot-verify image (PR gate)
         if: github.event_name == 'pull_request' && contains(matrix.platform, 'amd64')
         shell: bash
@@ -371,13 +363,15 @@ jobs:
         run: |
           mkdir -p verify-out
           IMAGE="localhost/${IMAGE_VARIANT}:${DEFAULT_TAG}"
-          sudo -E corral create gate --bootc "$IMAGE" --wait-ssh --timeout 900
+          # Use the same disk/QEMU path as the release gate. iso-e2e.sh sets
+          # the explicit CI SMBIOS marker before the first guest boot.
+          just qcow2 "$IMAGE"
           # No `|| true` here (tuna-os/tunaos#1533): a PR whose image fails to
           # boot must fail the PR gate, not just warn on missing evidence. The
           # evidence-upload step below already runs under `if: always()`, so
           # dropping the swallow doesn't lose any diagnostics — it just makes
           # the check red when the boot actually failed.
-          sudo ./scripts/iso-e2e.sh "$IMAGE" --disk --output verify-out --timeout 300
+          sudo ./scripts/iso-e2e.sh "${IMAGE_VARIANT}.qcow2" --disk --output verify-out --timeout 300
 
       - name: Upload PR verification evidence
         if: always() && github.event_name == 'pull_request' && contains(matrix.platform, 'amd64')

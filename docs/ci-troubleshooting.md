@@ -1499,3 +1499,38 @@ oneshot job can keep the manager in `starting` until the script exits. The
 already does. Reject maintenance, stopping, offline, empty, and unknown results.
 Do not wait for the transaction from inside it. This check reports manager
 state; the separate display-manager and user-session checks prove more.
+
+
+### Adoption reports show `desktop` or `latest` for different images
+
+**Symptom:** Image info reports `desktop` or `latest` for different images. It does not identify each flavor or the actual update tag.
+
+**Measured cause:** On main `7c9efe4f`, `scripts/resolve-flavor.sh` sets `DESKTOP_FLAVOR=desktop` for overlays and `build_scripts/90-image-info.sh` writes `image-tag=latest`. These values describe build defaults. The build passes the canonical variant apart from its publish name. Preserve it for Rawhide/Sid reports.
+
+**Fix:** Do not infer adoption categories from these defaults. Preserve the original variant and requested full flavor in separate metadata and verify each final image after desktop/overlay copies. See the [countme proposal](rfc/countme-proposal.md). `tests/test_countme_images.py` checks metadata and masks in installer output for every matrix flavor. The original flavor travels through `TUNAOS_IMAGE_FLAVOR`, apart from the stage name.
+
+
+### Missing-tool test fails when the tool exists on the host
+
+**Symptom:** `qemu-img: detects when qemu-img is missing` fails in the local Bats suite.
+
+**Measured cause:** The test checked the host PATH. `/usr/bin/qemu-img` exists here, but the assertion expected no tool.
+
+**Fix:** Run the absence check with an empty fixture PATH and the absolute Bash path. `bats tests/bats/test_build_qcow2.bats` passes all 33 cases with that fixture.
+
+
+### Automated Corral guests could enter adoption counts
+
+**Symptom:** A CI guest could send an adoption report before SSH checks can disable its timer.
+
+**Measured cause:** [Corral 4c59a6be](https://github.com/tuna-os/corral/blob/4c59a6be9ea6532aa79c6407bab471b4202c1484/pkg/kubevirt/bootc.go#L536) has no kernel argument option for both fresh and resumed guests. The custom script uses a chroot in the raw root partition. Its KubeVirt path ignores a script failure. A command after SSH starts cannot prevent the first report.
+
+**Fix:** The PR gate uses the existing QCOW2/QEMU path; `iso-e2e.sh` sets the CI marker before boot. The helper for Corral exits 77 before guest creation unless both paths support the exclusion argument. `bats tests/bats/test_boot_gate_resume.bats` passes eight cases. This session booted no Corral guest.
+
+### Adoption dashboard API returns HTTP 503
+
+**Symptom:** `/api/adoption` returns HTTP 503, but the collector returns HTTP 200.
+
+**Measured cause:** On 2026-09-27, the live site Worker rejected `redirect: "error"` with `TypeError: Invalid redirect value`. Node fetch accepts that option. The Node test passed and the live request failed.
+
+**Fix:** The site uses `redirect: "manual"` and rejects a redirect response. The `COUNTME` service binding connects the site to the collector. `npm run test:site` now tests the site proxy in native workerd. The live API returned HTTP 200 after the fix; the browser check found no page errors or axe violations.

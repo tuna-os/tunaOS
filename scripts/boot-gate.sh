@@ -33,10 +33,20 @@ command -v corral >/dev/null || {
 	echo "corral not installed: cd ../corral && just install" >&2
 	exit 77
 }
-corral create --help 2>&1 | grep -q -- '--bootc' || {
+CORRAL_CREATE_HELP="$(corral create --help 2>&1)"
+grep -q -- '--bootc' <<<"$CORRAL_CREATE_HELP" || {
 	echo "corral too old (no --bootc): cd ../corral && just install" >&2
 	exit 77
 }
+
+# Corral 4c59a6be cannot reliably provision the deployed root before boot:
+# its KubeVirt builder ignores failed chroot provisioning. Require kernel
+# arguments on both fresh and resumed guests before creating either one.
+CORRAL_RESUME_HELP="$(corral bootc create --help 2>&1 || true)"
+if ! grep -q -- '--karg' <<<"$CORRAL_CREATE_HELP" || ! grep -q -- '--karg' <<<"$CORRAL_RESUME_HELP"; then
+	echo "corral lacks preboot --karg on create and resume; skipping gate to exclude CI telemetry" >&2
+	exit 77
+fi
 
 # Display manager to assert per desktop family. Space-separated candidates:
 # the same DE ships different DM units per base (KDE 6.5+ renamed sddm to
@@ -53,7 +63,7 @@ cleanup() { corral delete "$NAME" -f >/dev/null 2>&1 || true; }
 trap cleanup EXIT
 
 echo "==> boot-gate ${IMG}  (vm=${NAME}${CORRAL_NODE:+ node=$CORRAL_NODE})"
-if ! corral create "$NAME" --bootc "$IMG" --disk "$DISK" --wait-ssh --timeout "$TIMEOUT" "${NODE_ARGS[@]}"; then
+if ! corral create "$NAME" --bootc "$IMG" --karg tunaos.countme=0 --disk "$DISK" --wait-ssh --timeout "$TIMEOUT" "${NODE_ARGS[@]}"; then
 	# tuna-os/tunaOS#627: KubeVirt virt-launcher teardown can destroy the
 	# builder's serial log before corral reads the build-success marker, so a
 	# build that actually finished reports "builder VM ended (Succeeded)
@@ -63,7 +73,7 @@ if ! corral create "$NAME" --bootc "$IMG" --disk "$DISK" --wait-ssh --timeout "$
 	# when there is genuinely nothing to resume (no completed builder + disk
 	# PVC), so attempting it on any bootc-build failure is safe.
 	echo "==> corral build failed; attempting --resume from the completed disk (#627)"
-	if ! corral bootc create "$NAME" --image "$IMG" --resume "${NODE_ARGS[@]}"; then
+	if ! corral bootc create "$NAME" --image "$IMG" --resume --karg tunaos.countme=0 "${NODE_ARGS[@]}"; then
 		echo "FAIL: bootc build failed and no resumable build was found" >&2
 		exit 1
 	fi
@@ -89,7 +99,7 @@ check() { corral ssh "$NAME" -u root -c "$1"; }
 # Give the desktop a moment to finish activating after SSH answers —
 # graphical.target (GDM/SDDM) can take 30-60s longer than sshd on virtual
 # hardware without GPU acceleration.
-for i in 1 2 3 4 5 6; do
+for _ in 1 2 3 4 5 6; do
 	STATE=$(check 'systemctl is-active graphical.target' 2>/dev/null | tr -d '[:space:]')
 	[[ "$STATE" == "active" ]] && break
 	sleep 10

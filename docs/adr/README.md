@@ -27,3 +27,4 @@ When an architectural change, significant refactoring, or policy is adopted:
 | [0008](0008-shell-python-boundary.md) | Where shell ends and Python begins | Accepted | 2026-08-14 | [#1651](https://github.com/tuna-os/tunaOS/issues/1651) |
 | [0009](0009-suite-common-namespace-ownership.md) | Clarify suite-common namespace ownership | Accepted | 2026-08-19 | [#1585](https://github.com/tuna-os/tunaOS/pull/1585) |
 | [0010](0010-spec-driven-work-with-spektacular.md) | Spec-driven work with Spektacular | Accepted | 2026-09-24 | [RFC 011](../rfc/rfc011-spektacular.md), [#2673](https://github.com/tuna-os/tunaOS/issues/2673) |
+| [0011](0011-private-adoption-metrics.md) | Private adoption metrics | Accepted | 2026-09-27 | [RFC 012](../rfc/rfc012-private-adoption-metrics.md), [#2775](https://github.com/tuna-os/tunaOS/issues/2775) |
