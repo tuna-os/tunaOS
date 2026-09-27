@@ -95,7 +95,9 @@ The pipeline relies on several helper scripts in the `scripts/` directory and Ju
 - **`generate_matrix`** (in `build-variant.yml`): `yq` + `jq` pipeline that reads `build-config.yml`, keeps the flavors marked `build_image: true`, and emits per-stage JSON matrices.
 - **`build-iso-tacklebox.sh`** + `just iso-tacklebox`: Go-based bootc→ISO builder using `ghcr.io/tuna-os/tacklebox`. Replaces the legacy anaconda-based ISO path.
 - **`iso-e2e.sh`**: QEMU+OVMF+KVM end-to-end harness for ISO and installed-disk
-  checks; it captures screenshots and serial logs and validates readiness.
+  checks; it captures screenshots and serial logs and validates readiness. The
+  PR image gate builds a QCOW2 and uses this harness. QEMU sets the marker
+  for CI before boot to exclude adoption reports.
 - **`dnf_retry`** (in `build_scripts/lib.sh`): Retries transient EPEL/RPM fetch failures up to 4 attempts with exponential backoff.
 
 ---
