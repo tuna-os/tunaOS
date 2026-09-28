@@ -162,7 +162,7 @@ jobs:
         if: ${{ startsWith(inputs.flavor, 'base') }}
 
       - name: Setup runner
-        uses: projectbluefin/actions/bootc-build/setup-runner@52c87987ba73e7359b25e2e8010fb1de7b619bd9 # v1 as of 2026-07-02
+        uses: projectbluefin/actions/bootc-build/setup-runner@0642c0d2a58c8e7bf4f426d41ed76a33bbd9559f # v1 as of 2026-07-02
         with:
           storage-backend: btrfs
           update-podman: "true"
@@ -838,7 +838,7 @@ jobs:
     needs:
       - build_push
     container:
-      image: cgr.dev/chainguard/wolfi-base@sha256:13ecca0cd6ee68809c95676fbe2b5bd65878ab8974dab5059ea6dc4db4de6909  # :latest linux/amd64 as of 2026-06-13
+      image: cgr.dev/chainguard/wolfi-base@sha256:e8e298b29205076e647b29be8edf3c2c1a3c811c33c1ceeb22c93886a0caf50a  # :latest linux/amd64 as of 2026-06-13
       # This job only performs registry/API operations (podman login and
       # manifest create/add/annotate/push). It does not run or build a
       # container or mount a host filesystem -- but podman itself needs
