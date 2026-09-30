@@ -1,0 +1,87 @@
+name: Fork simulation
+
+# Weekly dynamic simulation: execute every pull_request workflow under simulated
+# fork conditions (read-only GITHUB_TOKEN, empty repository secrets, synthetic branch).
+#
+# Part of #2250 (item 13, priority 3). The static half lives in
+# tests/test_fork_safe_workflows.py. This dynamic half simulates every PR workflow
+# across three contributor personas (external contributor, same-repo contributor,
+# Renovate) and proves every job and step either succeeds or skips cleanly without
+# attempting unguarded writes (403) or missing secrets.
+#
+# When a simulation fails, this workflow opens — or refreshes — a single tracking
+# issue (same shape as graduation-check.yml).
+
+on:
+  schedule:
+    - cron: "0 8 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  actions: read
+
+jobs:
+  simulate:
+    name: simulate fork PRs across personas
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install PyYAML
+        run: pip3 install pyyaml --break-system-packages 2>/dev/null || pip3 install pyyaml --user
+
+      - name: Run fork simulation
+        id: simulate
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          python3 scripts/fork-simulation.py > report.md
+          python3 scripts/fork-simulation.py --json > report.json
+          {
+            echo "### Fork simulation"
+            echo ""
+            cat report.md
+          } >> "$GITHUB_STEP_SUMMARY"
+          failed="$(python3 -c 'import json; print(",".join(json.load(open("report.json"))["failed"]))')"
+          echo "failed=${failed}" >> "$GITHUB_OUTPUT"
+          echo "failed: ${failed:-none}"
+
+      - name: Open or refresh the tracking issue
+        if: steps.simulate.outputs.failed != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          FAILED: ${{ steps.simulate.outputs.failed }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          title="[ci] fork simulation failures: ${FAILED}"
+          marker='<!-- fork-simulation -->'
+          body_file="$(mktemp)"
+          {
+            echo "$marker"
+            echo "The weekly fork simulation detected pull_request workflows that fail when run against"
+            echo "a fork PR (read-only GITHUB_TOKEN, empty repository secrets), run: ${RUN_URL}"
+            echo ""
+            cat report.md
+            echo ""
+            echo "To fix: make the failing steps fork-aware (guard by \`head.repo.fork\`, deliver a diff or"
+            echo "summary to \$GITHUB_STEP_SUMMARY instead of pushing/commenting, or check for empty secrets)."
+          } > "$body_file"
+          # One open issue at a time: refresh it rather than filing a new one each week.
+          search='in:title "[ci] fork simulation failures"'
+          existing="$(gh issue list --state open --search "$search" --json number --jq '.[0].number // empty')"
+          if [[ -n "$existing" ]]; then
+            gh issue edit "$existing" --title "$title" --body-file "$body_file"
+            echo "refreshed #$existing"
+          else
+            gh issue create --title "$title" --body-file "$body_file" --label "ci"
+          fi
