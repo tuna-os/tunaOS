@@ -23,7 +23,6 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import ast
 import json
 import re
 import sys
