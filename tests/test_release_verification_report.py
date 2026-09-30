@@ -4,7 +4,6 @@ import importlib.util
 from pathlib import Path
 import subprocess
 import sys
-import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "generate-release-verification.py"

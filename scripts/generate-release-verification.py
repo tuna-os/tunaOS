@@ -53,8 +53,8 @@ def generate_report(
     if provenance_path.exists():
         try:
             prov_data = json.loads(provenance_path.read_text(encoding="utf-8")).get("cells", {})
-        except Exception:
-            pass
+        except (json.JSONDecodeError, OSError) as err:
+            sys.stderr.write(f"warning: failed to load provenance data from {provenance_path}: {err}\n")
 
     criteria_data = []
     if criteria_path.exists():
