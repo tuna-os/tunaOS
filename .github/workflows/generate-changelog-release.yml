@@ -329,6 +329,39 @@ jobs:
             gh release view "$TAG" --repo "$REPO" --json body -q .body
           } > "$BODY_FILE"
           gh release edit "$TAG" --repo "$REPO" --notes-file "$BODY_FILE"
+
+      # ── Release verification report (tunaOS#2262) ─────────────────────────
+      # Renders images built/signed/SBOM, cells booted/contract/installer,
+      # lifecycle, supply chain, regressions from matrix-provenance.json into
+      # the release body.
+      - name: Append release verification report
+        if: |
+          steps.release.outcome == 'success' &&
+          inputs.dry_run != true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ steps.vars.outputs.tag }}
+          STREAM: ${{ steps.vars.outputs.stream }}
+          VARIANT: ${{ steps.vars.outputs.variant }}
+          DIGEST: ${{ steps.digest.outputs.digest }}
+          SBOM_PACKAGES: ${{ steps.sbom.outputs.packages }}
+        run: |
+          set -euo pipefail
+          REPORT=$(python3 scripts/generate-release-verification.py \
+            --stream "${STREAM}" \
+            --variant "${VARIANT}" \
+            --tag "${TAG}" \
+            --digest "${DIGEST}" \
+            --sbom-packages "${SBOM_PACKAGES}")
+          BODY_FILE=$(mktemp)
+          CURRENT_BODY=$(gh release view "${TAG}" --repo "${REPO}" --json body -q .body)
+          {
+            echo "${CURRENT_BODY}"
+            echo ""
+            echo "${REPORT}"
+          } > "${BODY_FILE}"
+          gh release edit "${TAG}" --repo "${REPO}" --notes-file "${BODY_FILE}"
       # A successful action invocation is not proof that GitHub received the
       # release payload. Keep an empty release from looking healthy (#1186).
       - name: Verify release assets
