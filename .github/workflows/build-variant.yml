@@ -98,6 +98,16 @@ jobs:
             exit 1
           fi
 
+      - name: Verify Base Image Pin
+        env:
+          FILTER_VARIANT: ${{ inputs.variant || 'all' }}
+        run: |
+          if [ "$FILTER_VARIANT" != "all" ]; then
+            ./scripts/check-base-image-pins.sh "$FILTER_VARIANT"
+          else
+            ./scripts/check-base-image-pins.sh
+          fi
+
       - name: Generate Matrix
         id: set-matrix
         env:
