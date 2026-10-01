@@ -1485,6 +1485,17 @@ That image is an experiment, not a production repair.
 The RPM exposed the schema in an offline chroot but did not repair the boot:
 composefs still exposed the original `/usr`. Rebuild the OCI image and install it.
 
+**Build-side fix (#1753):** the new gate then failed every EL10 GNOME cell
+at Build Image, because the pinned tier still ships `gnome-shell-50.0-3`
+(albacore run 36840489732, yellowfin run 36822471546, skipjack run
+36892338904). The tier also ships the real
+`gnome-shell-common-50.0-3.noarch`. `packages.el10.packages` in
+`manifests/desktops/gnome.yaml` now names `gnome-shell-common`. DNF matches a
+package name before a provide, so it installs the real RPM. The line stays
+correct after the package PR lands.
+`tests/regressions/test_issue_2750_el10_gnome_installs_the_shell_common_rpm.py`
+holds it.
+
 ## 31. Installed runtime report rejects a working desktop with `starting`
 
 **Symptom:** `TUNAOS_INSTALL_CHECKS_RESULT pass=15 fail=1` with
