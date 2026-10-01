@@ -26,7 +26,6 @@ import re
 from pathlib import Path
 from typing import Any
 
-import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -99,15 +98,15 @@ def scan_workflow_content(
     if not isinstance(jobs, dict):
         return violations
 
+    ai_jobs: set[str] = set()
+    job_helper_violations: dict[str, list[str]] = {}
+
     for job_id, job in jobs.items():
         if not isinstance(job, dict):
             continue
         job_yaml_str = yaml.dump(job)
 
-        # Check if job directly references an AI agent
         has_direct_ai = bool(AI_AGENT_PATTERN.search(job_yaml_str))
-
-        # Check if job calls a local helper script that uses AI agents
         helper_matches = AI_HELPER_SCRIPT_CALL.findall(job_yaml_str)
         helper_violations: list[str] = []
         for helper_name in helper_matches:
@@ -120,16 +119,21 @@ def scan_workflow_content(
                     )
                 )
 
-        if not has_direct_ai and not helper_violations:
-            continue
-
         if helper_violations:
-            violations.extend(
-                f"{wf_name} job '{job_id}' calls insecure helper: {hv}"
-                for hv in helper_violations
-            )
+            job_helper_violations[job_id] = helper_violations
+        if has_direct_ai or helper_violations:
+            ai_jobs.add(job_id)
 
-        # If job runs an AI agent or AI helper, check permissions and credentials
+    # If no AI agents or AI helpers are present in this workflow, no AI write violations
+    if not ai_jobs:
+        return violations
+
+    # Inspect all jobs in workflows containing AI agents
+    for job_id, job in jobs.items():
+        if not isinstance(job, dict):
+            continue
+        job_yaml_str = yaml.dump(job)
+
         if "permissions" in job:
             effective_perms: Any = job["permissions"]
         elif "permissions" in doc:
@@ -137,36 +141,73 @@ def scan_workflow_content(
         else:
             effective_perms = None
 
-        if effective_perms is None:
-            violations.append(
-                f"{wf_name} job '{job_id}' uses AI agent/helper with omitted permissions (inherits repo defaults)"
-            )
-        elif effective_perms == "write-all":
-            violations.append(
-                f"{wf_name} job '{job_id}' uses AI agent/helper with write-all permissions"
-            )
-        elif isinstance(effective_perms, dict):
-            if effective_perms.get("contents") == "write":
-                violations.append(
-                    f"{wf_name} job '{job_id}' uses AI agent/helper with contents: write permission"
-                )
-            if effective_perms.get("pull-requests") == "write":
-                violations.append(
-                    f"{wf_name} job '{job_id}' uses AI agent/helper with pull-requests: write permission"
-                )
-
-        # Check for custom write secrets (e.g. COPILOT_PAT)
+        is_ai_job = job_id in ai_jobs
         custom_secrets = CUSTOM_WRITE_SECRET_PATTERN.findall(job_yaml_str)
-        if custom_secrets:
-            violations.append(
-                f"{wf_name} job '{job_id}' passes custom write credentials: {', '.join(custom_secrets)}"
-            )
+        has_git_push = "git push" in job_yaml_str
 
-        # Check for git push in AI agent job
-        if "git push" in job_yaml_str:
-            violations.append(
-                f"{wf_name} job '{job_id}' executes git push in AI agent job"
-            )
+        if is_ai_job:
+            if job_id in job_helper_violations:
+                violations.extend(
+                    f"{wf_name} job '{job_id}' calls insecure helper: {hv}"
+                    for hv in job_helper_violations[job_id]
+                )
+
+            if effective_perms is None:
+                violations.append(
+                    f"{wf_name} job '{job_id}' uses AI agent/helper with omitted permissions (inherits repo defaults)"
+                )
+            elif effective_perms == "write-all":
+                violations.append(
+                    f"{wf_name} job '{job_id}' uses AI agent/helper with write-all permissions"
+                )
+            elif isinstance(effective_perms, dict):
+                if effective_perms.get("contents") == "write":
+                    violations.append(
+                        f"{wf_name} job '{job_id}' uses AI agent/helper with contents: write permission"
+                    )
+                if effective_perms.get("pull-requests") == "write":
+                    violations.append(
+                        f"{wf_name} job '{job_id}' uses AI agent/helper with pull-requests: write permission"
+                    )
+
+            if custom_secrets:
+                violations.append(
+                    f"{wf_name} job '{job_id}' passes custom write credentials: {', '.join(custom_secrets)}"
+                )
+
+            if has_git_push:
+                violations.append(
+                    f"{wf_name} job '{job_id}' executes git push in AI agent job"
+                )
+        else:
+            # Downstream or companion job in an AI workflow
+            if effective_perms is None:
+                violations.append(
+                    f"{wf_name} job '{job_id}' runs in AI workflow with omitted permissions (inherits repo defaults)"
+                )
+            elif effective_perms == "write-all":
+                violations.append(
+                    f"{wf_name} job '{job_id}' runs in AI workflow with write-all permissions"
+                )
+            elif isinstance(effective_perms, dict):
+                if effective_perms.get("contents") == "write":
+                    violations.append(
+                        f"{wf_name} job '{job_id}' has contents: write permission in AI workflow (unsafe cross-job write)"
+                    )
+                if effective_perms.get("pull-requests") == "write":
+                    violations.append(
+                        f"{wf_name} job '{job_id}' has pull-requests: write permission in AI workflow (unsafe cross-job write)"
+                    )
+
+            if custom_secrets:
+                violations.append(
+                    f"{wf_name} job '{job_id}' passes custom write credentials in AI workflow: {', '.join(custom_secrets)}"
+                )
+
+            if has_git_push:
+                violations.append(
+                    f"{wf_name} job '{job_id}' executes git push downstream/alongside AI agent in automated workflow"
+                )
 
     return violations
 
@@ -308,7 +349,7 @@ def assign():
 """
     violations = scan_script_content(insecure_script, "insecure_helper.py")
     assert any("copilot-swe-agent" in v for v in violations)
-    assert any("agentAssignment" in v or "replaceActorsForAssignable" in insecure_script for v in violations)
+    assert any("GraphQL mutation" in v or "agentAssignment" in v for v in violations)
 
 
 def test_detector_falsifies_on_workflow_calling_ai_helper(tmp_path: Path) -> None:
@@ -334,3 +375,43 @@ jobs:
     violations = scan_workflow_content(wf, "helper-dispatch.yml", scripts_dir=scripts_dir)
     assert any("contents: write" in v for v in violations)
     assert any("custom-batch.py" in v for v in violations)
+
+
+def test_detector_falsifies_on_split_job_ai_write_pipeline() -> None:
+    """Falsification: assert detector catches split-job pipeline where read-only AI job feeds a write job."""
+    split_wf = """
+name: Split AI Port
+on:
+  schedule:
+    - cron: '0 8 * * 1'
+jobs:
+  ai-generate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/run-gemini-cli@v0.1.22
+        with:
+          prompt: "Port upstream commit"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ai-patch
+          path: patch.diff
+  publish:
+    needs: [ai-generate]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: ai-patch
+      - run: git apply patch.diff && git push origin main
+"""
+    violations = scan_workflow_content(split_wf, "split-ai-port.yml")
+    assert any("publish" in v and ("contents: write" in v or "unsafe cross-job write" in v) for v in violations)
+    assert any("publish" in v and "git push" in v for v in violations)
+
