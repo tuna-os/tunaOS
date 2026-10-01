@@ -49,7 +49,8 @@ user-install evidence in its PR.
 > checkpoint (#1299) decides staff vs. descope. README coverage is tracked in
 > [#1298](https://github.com/tuna-os/tunaos/issues/1298). Hardware/kernel profiles
 > (e.g. `bonito:gnome-t2`, Apple Silicon Asahi, HWE) are in-scope under the
-> admission gate (#1270).
+> admission gate (#1270), and rebuild-based variants must satisfy the
+> rebuild-config completeness precondition (#1763).
 
 ### Build Health
 
@@ -199,7 +200,7 @@ See [SECURITY.md](./SECURITY.md) for vulnerability reporting.
 | Fedora 45 base readiness | ci-maintainer | #1171 — [FEDORA-BASE-POLICY.md](./FEDORA-BASE-POLICY.md) adopted 08-13: N+rawhide model, Fedora 45 planning sequenced after Bonito (#272) GA, not parallel |
 | Adoption metrics / usage telemetry | strategist | #1174 |
 | **Adoption evidence (ADOPTERS.md production entries)** | strategist | #1348 — zero public production adopters vs "Mature" claim; first entries at 2026-11-01 snapshot |
-| Variant lifecycle policy (admission + Beta→Stable exit criteria) | strategist | #1196, #1175, #1270, #1254, #1294 — [VARIANT-LIFECYCLE.md](./VARIANT-LIFECYCLE.md) |
+| Variant lifecycle policy (admission + Beta→Stable exit criteria) | strategist | #1196, #1175, #1270, #1254, #1294, #1763 — [VARIANT-LIFECYCLE.md](./VARIANT-LIFECYCLE.md) |
 | **Windows conversion channel (wootc) — beta gate + winget** | strategist / wootc maintainer | #1988, wootc#211, wootc#221 — Q3 carryover. Q4 scope: full-tier matrix green (wootc#222), BitLocker path (wootc#223), winget package live, and wootc's adoption numbers folded into the #1174 metrics snapshot and #1743 Q4 sequencing. This is the org's only adoption channel that reaches users not already running Linux |
 
 **Milestone fidelity (#1307, 2026-08-12)**: 7 of the 9 goal trackers above were
