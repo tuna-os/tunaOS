@@ -1542,4 +1542,4 @@ state; the separate display-manager and user-session checks prove more.
 
 **Measured cause:** Security finding tunaOS#2071 identified mutable `latest` release downloads in CI workflow steps, exposing runners executing with root privileges to supply-chain tampering if upstream assets change.
 
-**Fix:** Pin all `yq` downloads in CI workflows and composite actions to the repository-aligned `v4.53.3` release (`https://github.com/mikefarah/yq/releases/download/v4.53.3/yq_linux_amd64`) and enforce with `tests/regressions/test_issue_2071_yq_downloads_are_pinned.py`.
+**Fix:** Route CI workflows and composite actions through the verified `.github/actions/setup-yq` action (or verify pinned SHA-256 checksums before installation) pinned to `v4.53.3`, and enforce with `tests/regressions/test_issue_2071_yq_downloads_are_pinned.py`.

@@ -1,0 +1,42 @@
+name: Setup yq
+description: Installs verified yq binary with SHA-256 checksum verification.
+
+runs:
+  using: composite
+  steps:
+    - name: Install yq
+      run: |
+        if ! command -v yq &> /dev/null; then
+          set -euo pipefail
+          YQ_VERSION="v4.53.3"
+          case "$(uname -m)" in
+            x86_64)
+              YQ_ARCH="amd64"
+              YQ_SHA256="fa52a4e758c63d38299163fbdd1edfb4c4963247918bf9c1c5d31d84789eded4"
+              ;;
+            aarch64)
+              YQ_ARCH="arm64"
+              YQ_SHA256="578648e463a11c1b6db6010cbf41eafed6bee79466fcffa1bb446672cf7945ea"
+              ;;
+            *)
+              echo "::error::no pinned yq checksum for $(uname -m)" >&2
+              exit 1
+              ;;
+          esac
+
+          fetch() { # url dest
+            local i
+            for i in 1 2 3; do
+              curl -fsSL -o "$2" "$1" && return 0
+              sleep $((i * 2))
+            done
+            echo "::error::failed to download $1 after 3 attempts" >&2
+            return 1
+          }
+
+          fetch "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_${YQ_ARCH}" /tmp/yq
+          echo "${YQ_SHA256}  /tmp/yq" | sha256sum -c -
+          sudo install -m 0755 /tmp/yq /usr/bin/yq
+          rm -f /tmp/yq
+        fi
+      shell: bash

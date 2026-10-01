@@ -43,11 +43,8 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install yq
-        run: |
-          sudo curl -fsSL -o /usr/local/bin/yq \
-            https://github.com/mikefarah/yq/releases/download/v4.53.3/yq_linux_amd64
-          sudo chmod +x /usr/local/bin/yq
+      - name: Setup yq
+        uses: ./.github/actions/setup-yq
 
       - name: Generate matrix from build-config.yml
         id: gen
