@@ -120,6 +120,16 @@ jobs:
           echo "=== pytest Tests ==="
           python3 -m pytest tests/ tests/pytest/ -v --tb=short --cov=. --cov-report=term --cov-report=xml:coverage-python.xml
 
+      # npm 10 (the runner image default) and npm 11 (what Renovate uses to
+      # write services/countme/package-lock.json) disagree on the lockfile once
+      # an override is scoped to a nested dependency: since wrangler 4.143.0
+      # npm 10 `npm ci` rejects the npm 11 lockfile with "Missing: ws@8.21.0".
+      # Use the same npm major that writes the lockfile.
+      - name: Setup Node.js for countme
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: "24"
+
       - name: Test countme collector with D1
         run: |
           python3 scripts/generate-countme-allowlist.py --check
