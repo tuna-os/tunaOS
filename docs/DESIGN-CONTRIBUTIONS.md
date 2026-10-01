@@ -8,15 +8,15 @@ See [`docs/BRANDING.md`](BRANDING.md) for how that one asset gets applied
 across desktops (GNOME dconf keyfiles, KDE `LookAndFeelPackage`, the niri DMS
 shell, COSMIC, XFCE, Pantheon, SDDM, LightDM).
 
-This is a contribution path that needs no code experience: a wallpaper, a
-variant mascot illustration, or a themed icon set. If you can use image
-editing software and want to contribute to open source, this is a real gap
-you can help close.
+This contribution path needs no code experience: a wallpaper, a variant
+mascot illustration, or a themed icon set. If you can use image editing
+software and want to contribute to open source, this is a real gap you can
+help close.
 
 ## What's needed
 
-Per-variant wallpapers for any of the fish below. You do not need to cover
-every variant — even one accepted wallpaper is a useful contribution.
+Submit per-variant wallpapers for any of the fish below. You need not cover
+every variant — even one accepted wallpaper contributes meaningfully.
 
 | Variant | Base OS | Fish |
 |---|---|---|
@@ -54,10 +54,10 @@ For each wallpaper submission, include:
 - **Color palette**: 3-5 representative colors (hex codes are helpful but not
   required)
 
-There's no mandated style — abstract, illustrated, photographic, and
-gradient-based wallpapers have all worked well for other Linux distributions.
-Keep in mind the wallpaper needs to work behind desktop icons and a top bar
-or panel, so avoid busy detail in the corners and top edge.
+No mandated style exists — abstract, illustrated, photographic, and
+gradient-based wallpapers all work well. Keep in mind the wallpaper must
+work behind desktop icons and a top bar or panel, so avoid busy detail in
+the corners and top edge.
 
 ## Submission guidelines
 
@@ -67,14 +67,14 @@ or panel, so avoid busy detail in the corners and top edge.
    service's terms restrict commercial use or redistribution — check before
    submitting.
 2. **Attribution**: optional. If you want credit, include your name or handle
-   in the PR description; we'll add it to a contributors list.
-3. **Where to submit**: open a PR against this repository adding your image
-   under `docs/design/wallpapers/<variant>/` (create the directory if it
-   doesn't exist yet) along with a short `SOURCE.md` noting the license and
-   your attribution preference. A maintainer will handle wiring an accepted
-   wallpaper into `system_files/usr/share/backgrounds/tunaos/` and the
-   per-desktop mechanisms in `BRANDING.md` — you do not need to touch build
-   scripts or Containerfiles.
+   in the PR description; we will add it to a contributors list.
+3. **Where to submit**: open a PR adding your image under
+   `docs/design/wallpapers/<variant>/` (create the directory if needed)
+   along with a short `SOURCE.md` noting the license and your attribution
+   preference. A maintainer wires accepted wallpapers into
+   `system_files/usr/share/backgrounds/tunaos/` and the per-desktop
+   mechanisms in `BRANDING.md` — you need not modify build scripts or
+   Containerfiles.
 4. **Review**: since this changes what every user of a variant sees by
    default, wallpaper submissions get a visual review pass in addition to
    the usual PR review. Expect to iterate on crop, contrast, or file size.
