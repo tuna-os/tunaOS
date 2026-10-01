@@ -55,18 +55,47 @@ def test_no_workflow_runs_ai_agents_with_write_tokens_on_untrusted_diffs() -> No
 
     for wf_path in WORKFLOWS_DIR.glob("*.y*ml"):
         content = wf_path.read_text(encoding="utf-8")
-        doc = yaml.safe_load(content) or {}
+        if not ai_actions.search(content):
+            continue
 
-        # Check for AI coding actions
-        if ai_actions.search(content):
-            # If an AI agent action is ever used, assert it does NOT hold write permissions
-            perms = doc.get("permissions", {})
-            if isinstance(perms, dict):
-                assert perms.get("contents") != "write", (
-                    f"{wf_path.name} uses an AI coding agent with contents: write permission"
+        doc = yaml.safe_load(content) or {}
+        wf_perms = doc.get("permissions")
+        jobs = doc.get("jobs", {})
+
+        if wf_perms == "write-all":
+            assert False, (
+                f"{wf_path.name} uses an AI coding agent with workflow-level write-all permissions"
+            )
+
+        for job_id, job in (jobs.items() if isinstance(jobs, dict) else []):
+            if not isinstance(job, dict):
+                continue
+            if not ai_actions.search(yaml.dump(job)):
+                continue
+
+            # Resolve job permissions over workflow defaults
+            if "permissions" in job:
+                effective_perms = job["permissions"]
+            elif "permissions" in doc:
+                effective_perms = wf_perms
+            else:
+                effective_perms = None
+
+            assert effective_perms is not None, (
+                f"{wf_path.name} job '{job_id}' uses an AI coding agent with omitted permissions "
+                f"(inherits repository defaults)"
+            )
+
+            if isinstance(effective_perms, str):
+                assert effective_perms != "write-all", (
+                    f"{wf_path.name} job '{job_id}' uses an AI coding agent with write-all permissions"
                 )
-                assert perms.get("pull-requests") != "write", (
-                    f"{wf_path.name} uses an AI coding agent with pull-requests: write permission"
+            elif isinstance(effective_perms, dict):
+                assert effective_perms.get("contents") != "write", (
+                    f"{wf_path.name} job '{job_id}' uses an AI coding agent with contents: write permission"
+                )
+                assert effective_perms.get("pull-requests") != "write", (
+                    f"{wf_path.name} job '{job_id}' uses an AI coding agent with pull-requests: write permission"
                 )
 
 
