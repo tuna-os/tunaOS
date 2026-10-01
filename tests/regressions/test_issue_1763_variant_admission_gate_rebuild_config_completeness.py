@@ -17,16 +17,16 @@ completeness precondition (VARIANT-LIFECYCLE.md §1 #1763):
 3. Historical broken admissions (e.g. declaring Hummingbird KDE/Niri without
    manifest sections, or declaring arm64 when only amd64 package sources exist)
    fail the completeness gate.
+4. Unknown variant IDs fail closed rather than defaulting to unrelated sections.
 
 Falsification: behavioural -- pass a candidate variant configuration with a
-missing desktop manifest section or undeclared architecture source to the
-admission validator and verify that it rejects the candidate with an error.
+missing desktop manifest section, undeclared architecture source, or unknown
+variant ID to the admission validator and verify that it rejects the candidate.
 """
 
 from __future__ import annotations
 
 import pathlib
-import pytest
 import yaml
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -54,7 +54,9 @@ def _get_os_section_for_variant(variant_id: str) -> str:
         return "el10"
     if variant_id in ("flounder", "flounder-sid"):
         return "apt"
-    return "el10"
+    raise ValueError(
+        f"Unknown variant ID '{variant_id}': cannot determine manifest OS section"
+    )
 
 
 def get_manifest_packages(
@@ -104,8 +106,11 @@ def check_variant_manifest_completeness(
 ) -> list[str]:
     """Check that all declared desktop flavors for a variant have manifest package sets."""
     errors = []
-    variant_id = variant["id"]
-    os_sec = _get_os_section_for_variant(variant_id)
+    variant_id = variant.get("id", "")
+    try:
+        os_sec = _get_os_section_for_variant(variant_id)
+    except ValueError as exc:
+        return [str(exc)]
 
     for flavor in variant.get("flavors", []):
         if not flavor.get("build_image"):
@@ -179,3 +184,16 @@ def test_rejection_of_unimplemented_desktop_flavor_in_admission_check():
     assert len(errors) == 1
     assert "packages.hummingbird section" in errors[0]
     assert "kde" in errors[0]
+
+
+def test_unknown_variant_fails_closed():
+    unknown_variant = {
+        "id": "unknown_future_variant",
+        "platforms": ["linux/amd64"],
+        "flavors": [
+            {"id": "gnome", "build_image": True},
+        ],
+    }
+    errors = check_variant_manifest_completeness(unknown_variant, MANIFESTS)
+    assert len(errors) == 1
+    assert "Unknown variant ID 'unknown_future_variant'" in errors[0]
