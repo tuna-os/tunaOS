@@ -15,9 +15,11 @@ helper scripts remain decommissioned in favor of snapshot-upstreams.yml
 
 Falsification: behavioural — synthetic workflow and script fixtures reproducing
 the historical Gemini CLI write-token job, PAT-backed Copilot batch dispatch,
-omitted-permission inheritance, and renamed local helpers are evaluated against
-the security detectors, asserting each insecure pattern is rejected; structural
-for the repository tree where all active workflows and scripts are validated.
+generic Copilot/Codex/OpenAI write agents, top-level workflow env PATs,
+non-contents write permissions, omitted-permission inheritance, and renamed/nested
+local helpers are evaluated against the security detectors, asserting each insecure
+pattern is rejected; structural for the repository tree where all active workflows
+and scripts are validated.
 """
 
 from __future__ import annotations
@@ -53,7 +55,7 @@ DECOMMISSIONED_PROMPTS = [
 ]
 
 AI_AGENT_PATTERN = re.compile(
-    r"(run-gemini-cli|copilot-swe-agent|gemini-cli|claude-code)",
+    r"(run-gemini-cli|copilot-swe-agent|gemini-cli|claude-code|\bcopilot\b|github/copilot|copilot-cli|\bcodex\b|\bopenai\b|\bclaude\b|\bgemini\b)",
     re.IGNORECASE,
 )
 
@@ -65,7 +67,7 @@ SAFE_AI_SECRETS = {
 }
 
 AI_HELPER_SCRIPT_CALL = re.compile(
-    r"(?:\./)?\.github/scripts/([a-zA-Z0-9_/\-]+\.(?:py|sh|bash))"
+    r"(?:\./)?(?:\.github/)?scripts/([a-zA-Z0-9_/\-]+\.(?:py|sh|bash))"
 )
 
 
@@ -106,6 +108,10 @@ def scan_workflow_content(
         return violations
 
     wf_perms = doc.get("permissions")
+    wf_env = doc.get("env", {})
+    wf_env_str = yaml.dump(wf_env) if wf_env else ""
+    wf_secrets = set(re.findall(r"secrets\.([A-Za-z0-9_]+)", wf_env_str, re.IGNORECASE))
+
     jobs = doc.get("jobs", {})
     if not isinstance(jobs, dict):
         return violations
@@ -154,8 +160,8 @@ def scan_workflow_content(
             effective_perms = None
 
         is_ai_job = job_id in ai_jobs
-        referenced_secrets = set(re.findall(r"secrets\.([A-Za-z0-9_]+)", job_yaml_str, re.IGNORECASE))
-        unapproved_secrets = sorted([s for s in referenced_secrets if s.upper() not in SAFE_AI_SECRETS])
+        job_secrets = wf_secrets | set(re.findall(r"secrets\.([A-Za-z0-9_]+)", job_yaml_str, re.IGNORECASE))
+        unapproved_secrets = sorted([s for s in job_secrets if s.upper() not in SAFE_AI_SECRETS])
         has_git_push = "git push" in job_yaml_str
 
         if is_ai_job:
@@ -174,14 +180,11 @@ def scan_workflow_content(
                     f"{wf_name} job '{job_id}' uses AI agent/helper with write-all permissions"
                 )
             elif isinstance(effective_perms, dict):
-                if effective_perms.get("contents") == "write":
-                    violations.append(
-                        f"{wf_name} job '{job_id}' uses AI agent/helper with contents: write permission"
-                    )
-                if effective_perms.get("pull-requests") == "write":
-                    violations.append(
-                        f"{wf_name} job '{job_id}' uses AI agent/helper with pull-requests: write permission"
-                    )
+                for scope, perm in effective_perms.items():
+                    if perm == "write":
+                        violations.append(
+                            f"{wf_name} job '{job_id}' uses AI agent/helper with {scope}: write permission"
+                        )
 
             if unapproved_secrets:
                 violations.append(
@@ -203,14 +206,11 @@ def scan_workflow_content(
                     f"{wf_name} job '{job_id}' runs in AI workflow with write-all permissions"
                 )
             elif isinstance(effective_perms, dict):
-                if effective_perms.get("contents") == "write":
-                    violations.append(
-                        f"{wf_name} job '{job_id}' has contents: write permission in AI workflow (unsafe cross-job write)"
-                    )
-                if effective_perms.get("pull-requests") == "write":
-                    violations.append(
-                        f"{wf_name} job '{job_id}' has pull-requests: write permission in AI workflow (unsafe cross-job write)"
-                    )
+                for scope, perm in effective_perms.items():
+                    if perm == "write":
+                        violations.append(
+                            f"{wf_name} job '{job_id}' has {scope}: write permission in AI workflow (unsafe cross-job write)"
+                        )
 
             if unapproved_secrets:
                 violations.append(
@@ -353,6 +353,86 @@ jobs:
 """
     violations = scan_workflow_content(neutral_secret_wf, "neutral-secret.yml")
     assert any("AGENT_CREDENTIAL" in v for v in violations)
+
+
+def test_detector_falsifies_on_workflow_level_env_pat() -> None:
+    """Falsification: assert detector catches PAT credential in workflow-level env inherited by AI job."""
+    workflow_env_pat_wf = """
+name: Workflow Level Env PAT
+on:
+  schedule:
+    - cron: '0 8 * * 1'
+env:
+  GH_TOKEN: ${{ secrets.COPILOT_PAT }}
+jobs:
+  ai-job:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: google-github-actions/run-gemini-cli@v0.1.22
+        with:
+          prompt: "Port commit"
+"""
+    violations = scan_workflow_content(workflow_env_pat_wf, "wf-env-pat.yml")
+    assert any("COPILOT_PAT" in v for v in violations)
+
+
+def test_detector_falsifies_on_non_contents_write_permission() -> None:
+    """Falsification: assert detector catches AI agent with any write permission (e.g. issues: write)."""
+    issues_write_wf = """
+name: Issues Write AI Job
+on:
+  workflow_dispatch:
+jobs:
+  ai-job:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - run: copilot explain error
+"""
+    violations = scan_workflow_content(issues_write_wf, "issues-write.yml")
+    assert any("issues: write" in v for v in violations)
+
+
+def test_detector_falsifies_on_copilot_cli_with_write_permission() -> None:
+    """Falsification: assert detector catches generic Copilot CLI with write permissions."""
+    copilot_cli_wf = """
+name: Copilot CLI Write
+on:
+  workflow_dispatch:
+jobs:
+  copilot-job:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - run: copilot --prompt "fix things"
+"""
+    violations = scan_workflow_content(copilot_cli_wf, "copilot-cli.yml")
+    assert any("contents: write" in v for v in violations)
+
+
+def test_detector_falsifies_on_openai_codex_with_write_permission() -> None:
+    """Falsification: assert detector catches OpenAI/Codex agent with write permissions."""
+    openai_wf = """
+name: OpenAI Codex Write
+on:
+  workflow_dispatch:
+jobs:
+  codex-job:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: openai/codex-action@v1
+        with:
+          openai_api_key: ${{ secrets.OPENAI_API_KEY }}
+"""
+    violations = scan_workflow_content(openai_wf, "openai-codex.yml")
+    assert any("contents: write" in v for v in violations)
 
 
 def test_detector_falsifies_on_omitted_permissions_ai_job() -> None:
@@ -509,4 +589,3 @@ jobs:
     violations = scan_workflow_content(split_wf, "split-ai-port.yml")
     assert any("publish" in v and ("contents: write" in v or "unsafe cross-job write" in v) for v in violations)
     assert any("publish" in v and "git push" in v for v in violations)
-
