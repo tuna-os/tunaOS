@@ -35,17 +35,9 @@ transaction with automatic rollback on failure — the same operational model
 platform teams already use for container fleets, applied to the desktop
 estate.
 
-This talk covers the manifest-driven build pipeline that turns a YAML
-definition into a published, multi-arch (amd64+arm64) desktop image; the
-keyless (Sigstore/cosign) signing and Rekor-verified supply chain behind every
-published artifact; and Corral, a Kubernetes-native VM manager that
-declares desktop VMs as cluster resources — schedule, snapshot, and GPU
-passthrough as code, same as any other workload.
+The talk demonstrates the manifest-driven build pipeline: how YAML definitions become published, multi-arch (amd64+arm64) desktop images. It covers keyless signing (Sigstore/cosign) and Rekor-verified supply chains for every artifact, then introduces Corral, a Kubernetes-native VM manager that declares desktop VMs as cluster resources — enabling schedule, snapshot, and GPU passthrough as code, like any other workload.
 
-Attendees leave with a working model for image-based enterprise desktops,
-concrete manifest/podman patterns they can reuse, and an honest comparison
-against Silverblue, uBlue, NixOS, and MicroOS — no vendor pitch, an
-open-source project's architecture talk with a live demo.
+Attendees gain a working model for image-based enterprise desktops, concrete manifest and podman patterns they can reuse, and an honest comparison to Silverblue, uBlue, NixOS, and MicroOS — delivered as an open-source project architecture talk with a live demo, not a vendor pitch.
 
 ## Demo outline (attach to CFP; reuses the FOSDEM/SCaLE recording)
 
@@ -113,5 +105,4 @@ from this doc.
 
 ---
 
-*Draft prepared by the outreach agent. Review, edit, and confirm the actual
-CFP dates before submitting.*
+Before submitting, review the draft content, edit as needed, and confirm the actual CFP dates and portal requirements with the Linux Foundation event site.
