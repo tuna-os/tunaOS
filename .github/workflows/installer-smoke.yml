@@ -75,7 +75,7 @@ jobs:
       - name: Install yq
         run: |
           sudo curl -fsSL -o /usr/local/bin/yq \
-            https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+            https://github.com/mikefarah/yq/releases/download/v4.53.3/yq_linux_amd64
           sudo chmod +x /usr/local/bin/yq
 
       - id: gen
@@ -172,7 +172,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y just podman jq golang-go git \
             systemd-boot-efi xorriso mtools squashfs-tools dosfstools gdisk
-          sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
+          sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/download/v4.53.3/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
 
       # Both runner images ship podman 5.8.4, which cannot run/commit the
       # build containers (tunaOS#1893); install the Kubic podman and drop any
@@ -273,7 +273,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y jq socat imagemagick sshpass tesseract-ocr \
             qemu-system-x86 qemu-utils ovmf
-          sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
+          sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/download/v4.53.3/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
 
       - name: Download dev ISO
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1

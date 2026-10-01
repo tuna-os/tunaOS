@@ -1534,3 +1534,12 @@ state; the separate display-manager and user-session checks prove more.
 **Measured cause:** On 2026-09-27, the live site Worker rejected `redirect: "error"` with `TypeError: Invalid redirect value`. Node fetch accepts that option. The Node test passed and the live request failed.
 
 **Fix:** The site uses `redirect: "manual"` and rejects a redirect response. The `COUNTME` service binding connects the site to the collector. `npm run test:site` now tests the site proxy in native workerd. The live API returned HTTP 200 after the fix; the browser check found no page errors or axe violations.
+
+
+### CI steps download mutable unverified yq latest binary
+
+**Symptom:** CI workflow steps download `mikefarah/yq/releases/latest/download/yq_linux_amd64` directly into `/usr/bin` or `/usr/local/bin` without an explicit version pin.
+
+**Measured cause:** Security finding tunaOS#2071 identified mutable `latest` release downloads in CI workflow steps, exposing runners executing with root privileges to supply-chain tampering if upstream assets change.
+
+**Fix:** Pin all `yq` downloads in CI workflows and composite actions to the repository-aligned `v4.53.3` release (`https://github.com/mikefarah/yq/releases/download/v4.53.3/yq_linux_amd64`) and enforce with `tests/regressions/test_issue_2071_yq_downloads_are_pinned.py`.

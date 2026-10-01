@@ -63,7 +63,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Install yq
-        run: sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
+        run: sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/download/v4.53.3/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
       - id: gen
         env:
           WANT_VARIANT: ${{ inputs.variant || 'all' }}
@@ -105,7 +105,7 @@ jobs:
           persist-credentials: false
 
       - name: Install yq
-        run: sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
+        run: sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/download/v4.53.3/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
 
       # Same disk-space reclaim as reusable-build-artifacts.yml — the ISO is
       # assembled under .build/ on the main disk, and xorriso can overflow

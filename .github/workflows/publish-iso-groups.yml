@@ -64,7 +64,7 @@ jobs:
 
       - name: Install yq + skopeo
         run: |
-          sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
+          sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/download/v4.53.3/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
           sudo apt-get update -q && sudo apt-get install -y skopeo
 
       - name: Build matrix from iso_groups ∩ variant flavors
@@ -172,7 +172,7 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y just podman jq rclone golang-go git systemd-boot-efi xorriso mtools squashfs-tools dosfstools gdisk
-          sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
+          sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/download/v4.53.3/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
 
       # The runner image ships podman 5.8.4, which wedges committing a
       # live-customized rootfs (#1893). installer-smoke.yml builds ISOs on

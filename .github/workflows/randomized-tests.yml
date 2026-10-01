@@ -53,7 +53,7 @@ jobs:
       - name: Install test dependencies
         run: |
           brew install bats-core just
-          sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
+          sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/download/v4.53.3/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
           pip3 install pytest pillow requests pyyaml --break-system-packages 2>/dev/null || pip3 install pytest pillow requests pyyaml --user
 
       - name: Draw the seed

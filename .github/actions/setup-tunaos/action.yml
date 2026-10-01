@@ -14,7 +14,7 @@ runs:
     - name: Install yq
       run: |
         if ! command -v yq &> /dev/null; then
-          sudo wget https://github.com/mikefarah/yq/releases/download/v4.44.5/yq_linux_amd64 -O /usr/bin/yq
+          sudo wget https://github.com/mikefarah/yq/releases/download/v4.53.3/yq_linux_amd64 -O /usr/bin/yq
           sudo chmod +x /usr/bin/yq
         fi
       shell: bash

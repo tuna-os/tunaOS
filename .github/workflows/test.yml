@@ -90,7 +90,7 @@ jobs:
         run: brew install just
 
       - name: Install yq
-        run: sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
+        run: sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/download/v4.53.3/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
 
       - name: Install test dependencies
         run: |
