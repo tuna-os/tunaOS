@@ -1534,3 +1534,14 @@ state; the separate display-manager and user-session checks prove more.
 **Measured cause:** On 2026-09-27, the live site Worker rejected `redirect: "error"` with `TypeError: Invalid redirect value`. Node fetch accepts that option. The Node test passed and the live request failed.
 
 **Fix:** The site uses `redirect: "manual"` and rejects a redirect response. The `COUNTME` service binding connects the site to the collector. `npm run test:site` now tests the site proxy in native workerd. The live API returned HTTP 200 after the fix; the browser check found no page errors or axe violations.
+
+
+### AI porting agent executes untrusted upstream diffs with write token
+
+**Symptom:** Scheduled watch workflows send third-party commit diffs to LLM agents with write permissions. The agent commits and pushes branches without review.
+
+**Measured cause:** In #1740, `watch-upstream.yml` read commit text and diffs from third-party repositories. It embedded the diffs into `GEMINI_TASK.md` without checks. A malicious commit diff could inject instructions to write code or exfiltrate tokens (`GH_TOKEN`, `GEMINI_API_KEY`, `COPILOT_PAT`).
+
+**Fix:** Delete the legacy watch workflows and helper scripts. Upstream sync uses `snapshot-upstreams.yml`. That workflow vendors files into `_upstream-snapshots/` and creates pull requests for review. `tests/regressions/test_issue_1740_no_untrusted_upstream_diff_ai_write_pipeline.py` prevents new AI workflows with write tokens on untrusted diffs.
+
+
