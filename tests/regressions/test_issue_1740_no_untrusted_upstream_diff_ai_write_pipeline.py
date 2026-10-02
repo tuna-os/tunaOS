@@ -33,6 +33,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS_DIR = ROOT / ".github" / "workflows"
 SCRIPTS_DIR = ROOT / ".github" / "scripts"
+ROOT_SCRIPTS_DIR = ROOT / "scripts"
 PROMPTS_DIR = ROOT / ".github" / "prompts"
 
 DECOMMISSIONED_WORKFLOWS = [
@@ -66,17 +67,36 @@ SAFE_AI_SECRETS = {
     "GITHUB_TOKEN",
 }
 
+# Group 1 is set for .github/scripts/ helpers and empty for repository-root
+# scripts/ helpers; group 2 is the path relative to that directory.
 AI_HELPER_SCRIPT_CALL = re.compile(
-    r"(?:\./)?(?:\.github/)?scripts/([a-zA-Z0-9_/\-]+\.(?:py|sh|bash))"
+    r"(?:\./)?(\.github/)?scripts/([a-zA-Z0-9_/\-]+\.(?:py|sh|bash))"
 )
+
+# GitHub expressions accept both `secrets.NAME` and `secrets['NAME']` /
+# `secrets["NAME"]`; either form hands the credential to the job.
+SECRET_REF = re.compile(
+    r"secrets(?:\.([A-Za-z0-9_]+)|\[\s*['\"]([A-Za-z0-9_]+)['\"]\s*\])",
+    re.IGNORECASE,
+)
+
+
+def extract_secret_names(text: str) -> set[str]:
+    """Return every secret name referenced with dot or index syntax."""
+    return {dot or index for dot, index in SECRET_REF.findall(text)}
 
 
 def scan_script_content(content: str, script_name: str = "script") -> list[str]:
     """Inspect a script for AI agent assignments or custom write credentials."""
     violations: list[str] = []
 
-    # Check for AI agent references using the shared AI_AGENT_PATTERN
-    ai_matches = sorted(set(m.group(0) for m in AI_AGENT_PATTERN.finditer(content)))
+    # Check for AI agent references using the shared AI_AGENT_PATTERN. Whole-line
+    # shell/Python comments are skipped: prose such as "burned Gemini API calls"
+    # in sync-upstream-snapshots.sh documents history and invokes nothing.
+    code = "\n".join(
+        line for line in content.splitlines() if not line.lstrip().startswith("#")
+    )
+    ai_matches = sorted(set(m.group(0) for m in AI_AGENT_PATTERN.finditer(code)))
     for match in ai_matches:
         violations.append(f"{script_name}: invokes or references AI agent '{match}'")
 
@@ -84,7 +104,7 @@ def scan_script_content(content: str, script_name: str = "script") -> list[str]:
         violations.append(f"{script_name}: performs agentAssignment GraphQL mutation")
 
     # Check for secrets outside safe allowlist
-    referenced_secrets = set(re.findall(r"secrets\.([A-Za-z0-9_]+)", content, re.IGNORECASE))
+    referenced_secrets = extract_secret_names(content)
     for s in sorted(referenced_secrets):
         if s.upper() not in SAFE_AI_SECRETS:
             violations.append(f"{script_name}: references unapproved credential secrets.{s}")
@@ -99,10 +119,12 @@ def scan_workflow_content(
     content: str,
     wf_name: str = "workflow.yml",
     scripts_dir: Path | None = None,
+    root_scripts_dir: Path | None = None,
 ) -> list[str]:
     """Inspect workflow YAML for AI coding agents with write permissions or custom PATs."""
     violations: list[str] = []
     effective_scripts_dir = scripts_dir or SCRIPTS_DIR
+    effective_root_scripts_dir = root_scripts_dir or ROOT_SCRIPTS_DIR
     doc = yaml.safe_load(content) or {}
     if not isinstance(doc, dict):
         return violations
@@ -110,7 +132,7 @@ def scan_workflow_content(
     wf_perms = doc.get("permissions")
     wf_env = doc.get("env", {})
     wf_env_str = yaml.dump(wf_env) if wf_env else ""
-    wf_secrets = set(re.findall(r"secrets\.([A-Za-z0-9_]+)", wf_env_str, re.IGNORECASE))
+    wf_secrets = extract_secret_names(wf_env_str)
 
     jobs = doc.get("jobs", {})
     if not isinstance(jobs, dict):
@@ -127,8 +149,9 @@ def scan_workflow_content(
         has_direct_ai = bool(AI_AGENT_PATTERN.search(job_yaml_str))
         helper_matches = AI_HELPER_SCRIPT_CALL.findall(job_yaml_str)
         helper_violations: list[str] = []
-        for helper_rel_path in helper_matches:
-            helper_path = effective_scripts_dir / helper_rel_path
+        for github_prefix, helper_rel_path in helper_matches:
+            base_dir = effective_scripts_dir if github_prefix else effective_root_scripts_dir
+            helper_path = base_dir / helper_rel_path
             if helper_path.exists() and helper_path.is_file():
                 helper_violations.extend(
                     scan_script_content(
@@ -160,7 +183,7 @@ def scan_workflow_content(
             effective_perms = None
 
         is_ai_job = job_id in ai_jobs
-        job_secrets = wf_secrets | set(re.findall(r"secrets\.([A-Za-z0-9_]+)", job_yaml_str, re.IGNORECASE))
+        job_secrets = wf_secrets | extract_secret_names(job_yaml_str)
         unapproved_secrets = sorted([s for s in job_secrets if s.upper() not in SAFE_AI_SECRETS])
         has_git_push = "git push" in job_yaml_str
 
@@ -589,3 +612,66 @@ jobs:
     violations = scan_workflow_content(split_wf, "split-ai-port.yml")
     assert any("publish" in v and ("contents: write" in v or "unsafe cross-job write" in v) for v in violations)
     assert any("publish" in v and "git push" in v for v in violations)
+
+
+def test_detector_falsifies_on_bracket_style_secret_reference() -> None:
+    """Falsification: assert detector catches PATs referenced with secrets['NAME'] index syntax."""
+    bracket_wf = """
+name: Bracket Secret AI Port
+on:
+  workflow_dispatch:
+env:
+  WF_TOKEN: ${{ secrets["WORKFLOW_PAT"] }}
+jobs:
+  ai-port:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Run agent
+        env:
+          GH_TOKEN: ${{ secrets['COPILOT_PAT'] }}
+        uses: google-github-actions/run-gemini-cli@v0.1.22
+        with:
+          prompt: "Port commit"
+"""
+    violations = scan_workflow_content(bracket_wf, "bracket-secret.yml")
+    assert any("COPILOT_PAT" in v for v in violations)
+    assert any("WORKFLOW_PAT" in v for v in violations)
+
+    script_violations = scan_script_content(
+        "token = '${{ secrets[\"AGENT_PAT\"] }}'", "bracket_helper.sh"
+    )
+    assert any("AGENT_PAT" in v for v in script_violations)
+
+
+def test_detector_falsifies_on_repository_root_scripts_helper(tmp_path: Path) -> None:
+    """Falsification: assert detector resolves scripts/ helpers against the repository-root scripts directory."""
+    github_scripts_dir = tmp_path / ".github" / "scripts"
+    github_scripts_dir.mkdir(parents=True)
+    root_scripts_dir = tmp_path / "scripts"
+    root_scripts_dir.mkdir()
+    (root_scripts_dir / "port-upstream.sh").write_text(
+        "# Ports the upstream diff.\ngemini-cli --prompt 'port upstream diff'\n"
+    )
+
+    wf = """
+name: Root Script Helper
+on:
+  workflow_dispatch:
+jobs:
+  port:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - run: bash scripts/port-upstream.sh
+"""
+    violations = scan_workflow_content(
+        wf,
+        "root-helper.yml",
+        scripts_dir=github_scripts_dir,
+        root_scripts_dir=root_scripts_dir,
+    )
+    assert any("contents: write" in v for v in violations)
+    assert any("port-upstream.sh" in v for v in violations)
