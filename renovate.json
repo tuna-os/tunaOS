@@ -68,6 +68,18 @@
       "datasourceTemplate": "docker",
       "registryUrlTemplate": "https://quay.io",
       "depNameTemplate": "{{{packageName}}}"
+    },
+    {
+      "customType": "regex",
+      "description": "Update base image digests in .github/build-config.yml. Automates freshness for digest-pinned base images so Renovate opens freshness bumps before upstream garbage collection causes manifest-unknown build failures (tunaOS#2113).",
+      "managerFilePatterns": [
+        "/^\\.github/build-config\\.yml$/"
+      ],
+      "matchStrings": [
+        "base_image:\\s*\"(?<depName>(?<packageName>[^:]+)):(?<currentValue>[^@\\n\"]+)@(?<currentDigest>sha256:[a-f0-9]+)\""
+      ],
+      "datasourceTemplate": "docker",
+      "depNameTemplate": "{{{packageName}}}"
     }
   ],
   "packageRules": [
