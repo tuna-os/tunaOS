@@ -1236,7 +1236,7 @@ variants:
     # while the Containerfile built from the pinned digest, so the pre-pull
     # fetched an image the build never used and the workaround silently did
     # nothing for guppy. Keep the two in lockstep when bumping.
-    base_image: "docker.io/gentoo/stage3:latest@sha256:9d03b48eda632da09f469d384ce77ec05618060ed4e9ac295f8192a196e7539a"
+    base_image: "docker.io/gentoo/stage3:latest@sha256:cd15c74d77bfe98d1d20807a491d0a615741239ff609c38a8cda9bebe4f4bca6"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [gentoo]
     platforms: ["linux/amd64"]
@@ -1824,7 +1824,7 @@ variants:
     emoji: "☢️"
     upstream_track: rolling
     description: "Based on Debian Sid (unstable, rolling)"
-    base_image: "docker.io/library/debian:sid@sha256:24c766c06ebdbda66a026e92361ede7d9212819701b2fca82e347ef0c240cb2c"
+    base_image: "docker.io/library/debian:sid@sha256:a2aa46262453eba3f464d8b1c7a8c31db85eb15af180ae34dd400615d7208547"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [debian]
     platforms: ["linux/amd64"]
