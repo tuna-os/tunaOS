@@ -1460,7 +1460,7 @@ variants:
   - id: gurnard
     emoji: "🤖"
     description: "Based on Ubuntu 24.04 Noble Numbat with the Pantheon desktop"
-    base_image: "docker.io/library/ubuntu:noble@sha256:561618e2c15bf2397621dd04f96926663a3b5616c189cf7e38db7e82f5c538ea"
+    base_image: "docker.io/library/ubuntu:noble@sha256:a853f94d226358a79c740cfc7bce0c289748f3fe3488d921d038ccd752c61b60"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [elementary]
     platforms:
