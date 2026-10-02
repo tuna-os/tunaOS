@@ -6,9 +6,14 @@ runs:
   steps:
     - name: Install yq
       run: |
-        if ! command -v yq &> /dev/null; then
-          set -euo pipefail
-          YQ_VERSION="v4.53.3"
+        set -euo pipefail
+        YQ_VERSION="v4.53.3"
+        # Skip only when the exact pinned release is already installed. The
+        # runner image ships its own (newer, unpinned) yq; reusing that would
+        # bypass the pin this action exists to enforce.
+        if command -v yq &> /dev/null && yq --version 2>/dev/null | grep -qF "version ${YQ_VERSION}"; then
+          echo "yq ${YQ_VERSION} already installed"
+        else
           case "$(uname -m)" in
             x86_64)
               YQ_ARCH="amd64"
@@ -38,5 +43,11 @@ runs:
           echo "${YQ_SHA256}  /tmp/yq" | sha256sum -c -
           sudo install -m 0755 /tmp/yq /usr/bin/yq
           rm -f /tmp/yq
+          # A yq earlier on PATH would shadow /usr/bin/yq; fail instead of
+          # silently running the unpinned one.
+          if ! yq --version | grep -qF "version ${YQ_VERSION}"; then
+            echo "::error::yq on PATH ($(command -v yq)) is not ${YQ_VERSION}" >&2
+            exit 1
+          fi
         fi
       shell: bash

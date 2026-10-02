@@ -1536,10 +1536,10 @@ state; the separate display-manager and user-session checks prove more.
 **Fix:** The site uses `redirect: "manual"` and rejects a redirect response. The `COUNTME` service binding connects the site to the collector. `npm run test:site` now tests the site proxy in native workerd. The live API returned HTTP 200 after the fix; the browser check found no page errors or axe violations.
 
 
-### CI steps download mutable unverified yq latest binary
+### CI steps download an unpinned yq binary
 
-**Symptom:** CI workflow steps download `mikefarah/yq/releases/latest/download/yq_linux_amd64` directly into `/usr/bin` or `/usr/local/bin` without an explicit version pin.
+**Symptom:** A CI step downloads `releases/latest/download/yq_linux_amd64` from `mikefarah/yq` into `/usr/bin` or `/usr/local/bin`. The step does not pin a version.
 
-**Measured cause:** Security finding tunaOS#2071 identified mutable `latest` release downloads in CI workflow steps, exposing runners executing with root privileges to supply-chain tampering if upstream assets change.
+**Measured cause:** Issue tunaOS#2071 found these downloads in CI workflows. The `latest` link can change at any time. The step installs the file as root, and no step checks the file. A changed upstream file thus runs as root on the runner.
 
-**Fix:** Route CI workflows and composite actions through the verified `.github/actions/setup-yq` action (or verify pinned SHA-256 checksums before installation) pinned to `v4.53.3`, and enforce with `tests/regressions/test_issue_2071_yq_downloads_are_pinned.py`.
+**Fix:** Workflows and composite actions use the `.github/actions/setup-yq` action. That action downloads yq `v4.53.3` and checks its SHA-256 value before it installs the file. It also replaces the yq that the runner image supplies, because that yq has a different version. The test `tests/regressions/test_issue_2071_yq_downloads_are_pinned.py` checks each yq download in the workflows and actions.
