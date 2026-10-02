@@ -27,11 +27,75 @@ variant ID to the admission validator and verify that it rejects the candidate.
 from __future__ import annotations
 
 import pathlib
+import re
 import yaml
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 BUILD_CONFIG = ROOT / ".github" / "build-config.yml"
 MANIFESTS = ROOT / "manifests" / "desktops"
+REPO_SOURCES = [ROOT / "build_scripts", ROOT / "manifests", ROOT / ".github"]
+
+# Architectures each variant-named rebuild repository publishes, as measured.
+# This is the in-repo record the platform check reads; the live repository is
+# not fetched (tests run offline), so a change to what a repository serves
+# must update this table in the same PR that changes `platforms`.
+#   hummingbird: repo.tunaos.org/hummingbird/20251124-x86_64 is live; the
+#   aarch64 snapshot returned 404 (#1755). utah-packages is x86_64 only
+#   (image-versions.yaml).
+REBUILD_REPO_ARCHES: dict[str, set[str]] = {
+    "hummingbird": {"x86_64"},
+}
+
+PLATFORM_TO_ARCH = {
+    "linux/amd64": "x86_64",
+    "linux/amd64/v2": "x86_64",
+    "linux/arm64": "aarch64",
+}
+
+_REBUILD_REPO_RE = re.compile(r"repo\.tunaos\.org/([a-z0-9-]+)/")
+
+
+def find_variant_rebuild_repos(variant_ids: set[str]) -> set[str]:
+    """Return variant IDs that pull packages from a repo.tunaos.org/<variant>/ repository."""
+    found: set[str] = set()
+    for base in REPO_SOURCES:
+        for path in base.rglob("*"):
+            if not path.is_file() or path.suffix not in (".sh", ".yml", ".yaml"):
+                continue
+            for name in _REBUILD_REPO_RE.findall(
+                path.read_text(encoding="utf-8", errors="replace")
+            ):
+                if name in variant_ids:
+                    found.add(name)
+    return found
+
+
+def check_variant_platforms_have_repo_sources(
+    variant: dict, uses_rebuild_repo: bool, repo_arches: dict[str, set[str]]
+) -> list[str]:
+    """Check declared platforms against the architectures the rebuild repo publishes."""
+    if not uses_rebuild_repo:
+        return []
+    variant_id = variant.get("id", "")
+    arches = repo_arches.get(variant_id)
+    if arches is None:
+        return [
+            f"Variant '{variant_id}' uses a rebuild repository but no published "
+            f"architectures are recorded for it in REBUILD_REPO_ARCHES"
+        ]
+    errors = []
+    for platform in variant.get("platforms", []):
+        arch = PLATFORM_TO_ARCH.get(platform)
+        if arch is None:
+            errors.append(
+                f"Variant '{variant_id}' declares unknown platform '{platform}'"
+            )
+        elif arch not in arches:
+            errors.append(
+                f"Variant '{variant_id}' declares '{platform}' but its rebuild "
+                f"repository publishes no {arch} packages"
+            )
+    return errors
 
 
 def _get_os_section_for_variant(variant_id: str) -> str:
@@ -197,3 +261,37 @@ def test_unknown_variant_fails_closed():
     errors = check_variant_manifest_completeness(unknown_variant, MANIFESTS)
     assert len(errors) == 1
     assert "Unknown variant ID 'unknown_future_variant'" in errors[0]
+
+
+def test_rebuild_repo_variants_declare_only_published_architectures():
+    config = yaml.safe_load(BUILD_CONFIG.read_text(encoding="utf-8"))
+    variant_ids = {v["id"] for v in config["variants"]}
+    rebuild = find_variant_rebuild_repos(variant_ids)
+    assert "hummingbird" in rebuild, "rebuild-repo discovery found no hummingbird repo"
+
+    all_errors = []
+    for variant in config["variants"]:
+        all_errors.extend(
+            check_variant_platforms_have_repo_sources(
+                variant, variant["id"] in rebuild, REBUILD_REPO_ARCHES
+            )
+        )
+    assert not all_errors, "\n".join(all_errors)
+
+
+def test_rejection_of_arm64_without_rebuild_repo_source():
+    broken_variant = {"id": "hummingbird", "platforms": ["linux/amd64", "linux/arm64"]}
+    errors = check_variant_platforms_have_repo_sources(
+        broken_variant, True, REBUILD_REPO_ARCHES
+    )
+    assert len(errors) == 1
+    assert "linux/arm64" in errors[0] and "aarch64" in errors[0]
+
+
+def test_unrecorded_rebuild_repo_fails_closed():
+    new_variant = {"id": "newrebuild", "platforms": ["linux/amd64"]}
+    errors = check_variant_platforms_have_repo_sources(
+        new_variant, True, REBUILD_REPO_ARCHES
+    )
+    assert len(errors) == 1
+    assert "no published architectures are recorded" in errors[0]

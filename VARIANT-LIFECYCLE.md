@@ -118,7 +118,8 @@ must not be promoted or gain additional ISO coverage.
 | `flounder:gnome-nvidia` | #1191 | ci-maintainer | 1 image + 1 ISO (amd64) | NVIDIA driver load, boot gate, LUKS E2E, desktop contract | Held pending capacity sign-off |
 | `bonito:gnome-t2` | #1270 | ci-maintainer | 1 image; 0 ISO (amd64) | T2 kernel/hardware modules, boot gate, desktop contract | Held pending capacity sign-off |
 | `flounder-sid:gnome-nvidia` | #1191 | ci-maintainer | 1 image; 0 ISO (amd64) | NVIDIA driver load, boot gate, LUKS E2E, desktop contract | Held pending capacity sign-off |
-| `hummingbird` (Fedora Rawhide rebuild) — `base`, `gnome`, `cosmic` | #1341, #1755, #1763 | hanthor / strategist | 3 images (amd64); 3 ISOs | Rebuild repo measured (`20251124-x86_64`, `utah-packages` OCI). GNOME + COSMIC manifest sections present; arm64 excluded until aarch64 rebuild repo carries mandatory xfsprogs/packages; KDE/Niri excluded until package sets exist | Admitted as experimental (#1755/#1763) |
+| `hummingbird` (Fedora Rawhide rebuild) — `base`, `cosmic` | #1341, #1755, #1763 | hanthor / strategist | 2 images (amd64); 2 ISOs | Rebuild repo measured (`20251124-x86_64`). COSMIC manifest section present. The project excludes arm64 until the aarch64 rebuild repo has `xfsprogs` and the other mandatory packages. The project excludes KDE and Niri until their package sets exist | Admitted as experimental (#1755/#1763) |
+| `hummingbird:gnome` | #1755, #1763 | hanthor / strategist | 1 image (amd64); 1 ISO | Manifest section present, but item 5 fails: on 2026-09-24 the image had no `gdm` and no `gnome-shell`, and the boot Gate failed each night ([docs/HUMMINGBIRD.md](docs/HUMMINGBIRD.md)). Admission needs both packages in the image and a green Gate run | Held: essential desktop packages missing |
 
 | Addition (opened 2026-08-25) | Tracker | Owner | Incremental cells | Acceptance evidence | Status |
 |---|---|---|---:|---|---|
