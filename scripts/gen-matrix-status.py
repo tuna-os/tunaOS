@@ -36,6 +36,17 @@ import urllib.request
 from collections import defaultdict
 from pathlib import Path
 
+# The scoring rules live in a pure module beside this script (tunaOS#2532).
+# Tests load this file by path, so its directory is not always on sys.path.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import matrix_evaluator  # noqa: E402
+from matrix_evaluator import (  # noqa: E402,F401  (re-exported for callers)
+    composite_verdict,
+    criterion_scope_allows,
+    green_axes_without_evidence,
+    is_stale,
+)
+
 REPO = "tuna-os/tunaOS"
 DOC = Path("docs/MATRIX-STATUS.md")
 PROV = Path("docs/matrix-provenance.json")
@@ -645,18 +656,8 @@ def build_stage_results() -> dict[str, dict]:
     return out
 
 
-def _stage_verdict(conclusion: str | None) -> str:
-    """success → pass, failure → fail, anything else → untested.
-
-    Skipped and missing are deliberately NOT failures: "no job asserted this
-    cell" is absence of evidence (tunaOS#1730), and green-criteria.yml's rule
-    already refuses to count it as green (skipped_is_not_green) — ⬜ says both.
-    """
-    if conclusion == "success":
-        return "pass"
-    if conclusion == "failure":
-        return "fail"
-    return "untested"
+# Kept under its old name: the collectors and tests call it here.
+_stage_verdict = matrix_evaluator.stage_verdict
 
 
 def _axis_from_results(results: dict, key: str) -> str:
@@ -694,217 +695,40 @@ def lifecycle_results() -> dict[str, tuple[str, str, str]]:
     return merged
 
 
-def composite_verdict(verdicts: list[str]) -> str:
-    """Compose per-criterion verdicts under green-criteria.yml's rule.
-
-    fail outranks untested for the glyph — a demonstrated failure is more
-    information than an absence — but neither is green: the count below only
-    ever admits cells where every applicable blocking criterion says pass.
-    """
-    if any(v == "fail" for v in verdicts):
-        return "fail"
-    if any(v == "untested" for v in verdicts):
-        return "untested"
-    return "pass"
-
-
-def criterion_scope_allows(criterion: dict, flavor: str) -> bool:
-    """Whether a criterion is scored on this flavor at all.
-
-    A scope entry in green-criteria.yml is a REVIEWED declaration that CI
-    cannot assert the criterion for that cell (asahi has no aarch64 KVM;
-    base-hwe/base-nvidia are unbooted derivations). Out-of-scope cells are
-    not judged on the criterion — which is different from ⬜: untested counts
-    against green, out-of-scope simply isn't part of that cell's bar.
-    """
-    scope = criterion.get("scope") or {}
-    if flavor in (scope.get("excludes_flavors") or []):
-        return False
-    if any(
-        flavor.startswith(prefix)
-        for prefix in (scope.get("excludes_flavor_prefixes") or [])
-    ):
-        # Prefix rather than exact, because the workflow that routes a cell to
-        # a runner does the same: reusable-build-image.yml selects the GPU
-        # group with startsWith(inputs.flavor, ...). Matching on the same shape
-        # keeps the scope and the routing from disagreeing about which cells a
-        # gate can even reach -- and a test pins the two lists equal.
-        return False
-    return not any(
-        flavor.endswith(suffix)
-        for suffix in (scope.get("excludes_flavor_suffixes") or [])
-    )
-
-
-def is_stale(
-    date_str: str,
-    sla_days: int | float | None,
-    today: datetime.date | str | None = None,
-) -> bool:
-    """True if evidence date_str is older than sla_days relative to today."""
-    if not date_str or sla_days is None:
-        return False
-    try:
-        ev_date = datetime.date.fromisoformat(date_str)
-    except (ValueError, TypeError):
-        return False
-    if today is None:
-        ref = datetime.date.today()
-    elif isinstance(today, str):
-        try:
-            ref = datetime.date.fromisoformat(today)
-        except (ValueError, TypeError):
-            ref = datetime.date.today()
-    elif isinstance(today, datetime.date):
-        ref = today
-    else:
-        ref = datetime.date.today()
-    return (ref - ev_date).days > sla_days
-
-
 def composite_section(criteria, stage, contract, luks, smoke, lifecycle,
                       omissions, parity, today: datetime.date | str | None = None):
     """The bar itself: one table scored against the blocking criteria.
 
-    Per-criterion applicability follows each axis's own denominator, exactly
-    like the sections below — builds applies to every published cell, the
-    desktop/boot/install axes to the desktops set, iso to the ISO set. A
-    criterion with no per-cell assertion wired here scores untested, which the
-    rule turns into "not green": making such a criterion blocking turns the
-    whole board ⬜ loudly instead of silently passing it.
+    This function does the I/O and the Markdown. It reads the cell matrices
+    from build-config.yml, hands them with the collected evidence to the pure
+    evaluator in scripts/matrix_evaluator.py, and renders what comes back. The
+    scoring rules (applicability, freshness, scope, the composite rule) are
+    in matrix_evaluator.evaluate_composite().
     """
     desktops = _matrix("build_image", desktops_only=True)
-    everything = _matrix("build_image", desktops_only=False)
-    isos = iso_matrix()
-
-    # W1's last box: which run asserted which criterion, when. Every axis
-    # source already carries (conclusion, date, run_id) — the glyphs threw
-    # that away. Recorded here, as a side product of the same wiring that
-    # scores the composite, so the provenance can never disagree with the
-    # board it explains.
-    provenance: dict[str, dict[str, dict[str, str]]] = {}
-
-    def _run_url(run_id: str) -> str:
-        return f"https://github.com/{REPO}/actions/runs/{run_id}" if run_id else ""
-
-    def scorers(variant: str, flavor: str) -> dict[str, str]:
-        vstage = stage.get(variant, {})
-        jobs = vstage.get("jobs", {})
-        entry = provenance.setdefault(f"{variant}:{flavor}", {})
-
-        def stage_axis(axis: str, stage_name: str) -> str:
-            v = _stage_verdict(jobs.get((flavor, stage_name)))
-            asserted = (flavor, stage_name) in jobs
-            # Provenance is per cell now, not per variant: cells of one
-            # variant can legitimately come from different runs.
-            date, rid = vstage.get("cell_run", {}).get(
-                flavor, (vstage.get("date", ""), vstage.get("run_id", ""))
-            )
-            run = _run_url(rid) if asserted else ""
-            entry[axis] = {
-                "verdict": v,
-                "date": date if asserted else "",
-                "run": run,
-                "evidence": f"{run}#artifacts" if run else "",
-            }
-            return v
-
-        def result_axis(axis: str, results: dict, key: str) -> str:
-            hit = results.get(key)
-            v = _stage_verdict(hit[0] if hit else None)
-            run = _run_url(hit[2]) if hit else ""
-            entry[axis] = {
-                "verdict": v,
-                "date": hit[1] if hit else "",
-                "run": run,
-                "evidence": f"{run}#artifacts" if run else "",
-            }
-            return v
-
-        per_cell = {
-            "builds": stage_axis("builds", "Promote"),
-            # Every cell has a Gate verdict slot — desktops from the desktop
-            # Gate, plain base from the base Gate (W3); whether it BINDS is
-            # the criterion's scope, applied in verdict() below.
-            "boots": stage_axis("boots", "Gate"),
-        }
-        if flavor in desktops.get(variant, set()):
-            per_cell["desktop"] = result_axis(
-                "desktop", contract, f"{variant}:{flavor}"
-            )
-            per_cell["install"] = result_axis(
-                "install", luks, f"LUKS {variant}:{flavor}"
-            )
-            per_cell["lifecycle"] = result_axis(
-                "lifecycle", lifecycle, f"{variant}:{flavor}"
-            )
-            per_cell["no_silent_omissions"] = result_axis(
-                "no_silent_omissions", omissions, f"{variant}:{flavor}"
-            )
-            per_cell["parity"] = result_axis(
-                "parity", parity, f"{variant}:{flavor}"
-            )
-        if flavor in isos.get(variant, set()):
-            per_cell["iso"] = result_axis(
-                "iso", smoke, f"{variant}:{flavor}"
-            )
-        return per_cell
-
-    blocking_criteria = [c for c in criteria if c["enforcement"] == "blocking"]
-    blocking = [c["id"] for c in blocking_criteria]
-    advisory = [c["id"] for c in criteria if c["enforcement"] == "advisory"]
-    unimplemented = [
-        c["id"] for c in criteria if c["enforcement"] == "unimplemented"
-    ]
-
-    def verdict(variant: str, flavor: str) -> str:
-        per_cell = scorers(variant, flavor)
-        entry = provenance.get(f"{variant}:{flavor}", {})
-        applicable = []
-        for criterion in blocking_criteria:
-            if not criterion_scope_allows(criterion, flavor):
-                continue
-            cid = criterion["id"]
-            sla = criterion.get("freshness_sla_days")
-            axis_entry = entry.get(cid, {})
-            v = axis_entry.get("verdict", "untested")
-            d = axis_entry.get("date", "")
-            if is_stale(d, sla, today):
-                v = "untested"
-            if cid in ("builds", "boots"):
-                # Universal criteria: absence of a verdict is ⬜, it never
-                # silently drops out of the bar (skipped_is_not_green).
-                applicable.append(v)
-            elif cid in per_cell:
-                # Axis-scoped criteria (desktop/install/iso/...): judged only
-                # where their own denominator schedules the cell.
-                applicable.append(v)
-        return composite_verdict(applicable or ["untested"])
-
-    green = total = 0
-    for variant, flavors in everything.items():
-        for flavor in flavors:
-            total += 1
-            if verdict(variant, flavor) == "pass":
-                green += 1
+    matrices = matrix_evaluator.CellMatrices(
+        published=_matrix("build_image", desktops_only=False),
+        desktops=desktops,
+        isos=iso_matrix(),
+    )
+    evidence = matrix_evaluator.AxisEvidence(
+        stage=stage, contract=contract, luks=luks, smoke=smoke,
+        lifecycle=lifecycle, omissions=omissions, parity=parity,
+    )
+    result = matrix_evaluator.evaluate_composite(
+        criteria, matrices, evidence, REPO, today
+    )
+    blocking, advisory = result.blocking, result.advisory
+    unimplemented = result.unimplemented
+    green, total = result.green, result.total
 
     glyph = {"pass": PASS, "fail": FAIL, "untested": UNTESTED}
 
     def rendered_verdict(variant: str, flavor: str) -> str:
-        value = verdict(variant, flavor)
-        symbol = glyph[value]
-        if value != "pass":
-            return symbol
-        entry = provenance[f"{variant}:{flavor}"]
-        # Prefer runtime evidence over build metadata when both assert green.
-        for axis in ("boots", "desktop", "no_silent_omissions", "builds"):
-            axis_entry = entry.get(axis, {})
-            sla = next((c.get("freshness_sla_days") for c in criteria if c.get("id") == axis), None)
-            if axis_entry.get("verdict") == "pass" and not is_stale(axis_entry.get("date", ""), sla, today):
-                url = axis_entry.get("evidence", "")
-                if url:
-                    return f"[{symbol}]({url})"
-        return symbol
+        cell = f"{variant}:{flavor}"
+        symbol = glyph[result.verdicts[cell]]
+        url = result.evidence.get(cell)
+        return f"[{symbol}]({url})" if url else symbol
 
     rows = ["| Variant | " + " | ".join(DESKTOPS) + " |",
             "|---|" + ":--:|" * len(DESKTOPS)]
@@ -954,17 +778,7 @@ def composite_section(criteria, stage, contract, luks, smoke, lifecycle,
     ]
     # The escaped square renders literally otherwise.
     lines = [l.replace("\u2b1c", UNTESTED) for l in lines]
-    return lines, green, total, provenance
-
-
-def green_axes_without_evidence(provenance: dict) -> list[str]:
-    """Name green per-cell axes that cannot lead a reviewer to evidence."""
-    return sorted(
-        f"{cell}:{axis}"
-        for cell, axes in provenance.items()
-        for axis, result in axes.items()
-        if result.get("verdict") == "pass" and not result.get("evidence")
-    )
+    return lines, green, total, result.provenance
 
 
 def omissions_section(lmatrix, omissions) -> list[str]:
