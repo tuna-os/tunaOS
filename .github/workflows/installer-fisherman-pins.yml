@@ -43,6 +43,8 @@ jobs:
       # SHA-pinned: .github/scripts/check-action-pins.py rejects mutable
       # refs, and Lint (action-pins) is a required check.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       # No pytest step here on purpose. test.yml already installs pytest and
       # runs the whole tests/ tree, which includes
