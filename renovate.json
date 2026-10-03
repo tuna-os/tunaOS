@@ -2,7 +2,6 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "local>tuna-os/.github",
-    "local>tuna-os/.github",
     "config:best-practices"
   ],
   "automergeType": "pr",
@@ -12,6 +11,17 @@
     "enabled": true
   },
   "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Update the Renovate validator used by its own config gate",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/validate-renovate\\.yaml$/"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=npm depName=(?<depName>[^\\s]+)\\n\\s+RENOVATE_VERSION: \\\"(?<currentValue>[^\\\"]+)\\\""
+      ],
+      "datasourceTemplate": "npm"
+    },
     {
       "customType": "regex",
       "description": "Update image digests in image-versions.yaml",

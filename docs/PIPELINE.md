@@ -143,10 +143,17 @@ For Corral, `scripts/boot-gate.sh` checks for `--karg` support in both fresh and
 
 ## Renovate (Automated Updates)
 
-All dependency updates automerge via `renovate.json`:
-- Image digest pins (image-versions.yaml)
+`renovate.json` extends the shared `tuna-os/.github` policy and tracks:
+
+- image digest pins (`image-versions.yaml`)
 - GitHub Actions SHA pins
 - Git submodules
-- Download versions (uupd, kcm_ublue, tacklebox)
+- pinned download versions
 
-No human review required — CI is the gate.
+Routine minor, patch, pin, and digest updates may automerge only after required
+CI and branch protection pass. Major updates and repository-specific holds
+require human review. The config gate runs both Renovate's schema validator
+and `scripts/check-renovate-automerge-policy.py`, because schema-valid rules
+can still violate the org automerge boundary. See
+[DEPENDENCY-FRESHNESS.md](DEPENDENCY-FRESHNESS.md) for the org policy,
+Dependabot coordination, and monthly health check.
