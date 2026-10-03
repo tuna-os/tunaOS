@@ -21,6 +21,14 @@ whose omissions are visible to CI and whose published output is verifiable.
 - **Fail-on-drop**: when a build ran but no usable SBOM can be found, the
   release job fails (`reason=no-sbom`). This distinguishes a dropped release
   from a legitimate no-build day and keeps the signal required by #1147.
+- **Stream parity**: after the scheduled matrix, the `release-parity` job
+  runs `scripts/check-release-parity.py`. The tier-1 desktop streams are
+  gnome, kde, xfce, cosmic and niri. Each stream must have a release for the
+  newest date that any stream has. That release must have both release cards and the
+  SBOM of the stream. If one stream does not have this release, the run
+  fails. When the query for build runs fails, the workflow records
+  `reason=lookup-failed` and the job fails. It does not record a no-build
+  day (#2550).
 - **Traceability**: the release tag follows
   `<stream>-<YYYYMMDD>`, and the release summary records the stream, tag,
   source build run, and SBOM package count.
