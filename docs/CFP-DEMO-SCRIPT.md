@@ -1,8 +1,8 @@
 # CFP demo video — recording script
 
-The one recordable artifact both 2027 conference proposals depend on (#1135 action 2).
-[FOSDEM](./CFP-FOSDEM-2027.md) attaches it; the SCaLE 24x draft explicitly
-reuses the same recording instead of shooting a second one.
+This reusable video supports the 2027 conference proposals.
+[FOSDEM](./CFP-FOSDEM-2027.md) can link to it if the selected devroom accepts
+media. The SCaLE 24x draft uses the same video.
 
 ## Why this file exists
 
@@ -131,8 +131,9 @@ live in the talk instead.
 
 ## After recording
 
-- Attach to the FOSDEM submission (see the checklist in
-  [CFP-FOSDEM-2027.md](./CFP-FOSDEM-2027.md)).
+- Upload the video to a stable public location. If the selected FOSDEM devroom
+  accepts media, add its link to the proposal. See the checklist in
+  [CFP-FOSDEM-2027.md](./CFP-FOSDEM-2027.md).
 - Reuse the same file for SCaLE 24x — its draft is written to match this
   running order, so no reshoot is needed unless the talk changes.
 - If a command here drifted during the dry run, fix it in this file in the same
