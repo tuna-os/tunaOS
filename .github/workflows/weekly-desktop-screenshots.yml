@@ -87,6 +87,10 @@ jobs:
           sudo udevadm trigger --name-match=kvm
           ls -la /dev/kvm 2>/dev/null && echo "KVM available" || echo "Warning: no /dev/kvm — QEMU uses TCG"
 
+      - name: Setup yq
+        if: steps.filter.outputs.skip != 'true'
+        uses: ./.github/actions/setup-yq
+
       - name: Install dependencies
         if: steps.filter.outputs.skip != 'true'
         run: |
@@ -94,7 +98,6 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             just podman jq golang-go git rclone \
             qemu-system-x86 qemu-utils ovmf socat imagemagick
-          sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
 
       # The runner image ships podman 5.8.4, which wedges committing a
       # live-customized rootfs (#1893). Every ISO build needs the Kubic one

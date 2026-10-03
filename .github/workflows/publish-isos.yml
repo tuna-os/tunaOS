@@ -50,8 +50,8 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install yq
-        run: sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
+      - name: Setup yq
+        uses: ./.github/actions/setup-yq
 
       - name: Build matrix from build-config.yml
         id: build

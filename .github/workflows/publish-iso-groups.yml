@@ -62,10 +62,11 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install yq + skopeo
-        run: |
-          sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
-          sudo apt-get update -q && sudo apt-get install -y skopeo
+      - name: Setup yq
+        uses: ./.github/actions/setup-yq
+
+      - name: Install skopeo
+        run: sudo apt-get update -q && sudo apt-get install -y skopeo
 
       - name: Build matrix from iso_groups ∩ variant flavors
         id: build
@@ -168,11 +169,13 @@ jobs:
 
       - uses: ublue-os/container-storage-action@dc1f4c8f17b672069e921f001132f7cf98a423a6 # main as of 2026-02-11
 
+      - name: Setup yq
+        uses: ./.github/actions/setup-yq
+
       - name: Install dependencies
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y just podman jq rclone golang-go git systemd-boot-efi xorriso mtools squashfs-tools dosfstools gdisk
-          sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
 
       # The runner image ships podman 5.8.4, which wedges committing a
       # live-customized rootfs (#1893). installer-smoke.yml builds ISOs on

@@ -133,11 +133,8 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install yq
-        run: |
-          sudo curl -fsSL -o /usr/local/bin/yq \
-            https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
-          sudo chmod +x /usr/local/bin/yq
+      - name: Setup yq
+        uses: ./.github/actions/setup-yq
 
       - name: Generate matrix
         id: gen
@@ -437,13 +434,9 @@ jobs:
       # scripts/published-image-ref.sh, which needs yq. Without it the script
       # falls back to a guessed ref that is wrong for bonito-rawhide and
       # flounder-sid. The matrix job installs yq the same way.
-      - name: Install yq
+      - name: Setup yq
         timeout-minutes: 5
-        run: |
-          sudo curl -fsSL -o /usr/local/bin/yq \
-            https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
-          sudo chmod +x /usr/local/bin/yq
-          yq --version
+        uses: ./.github/actions/setup-yq
 
       # The runner image ships podman 5.8.4, which wedges committing a
       # live-customized rootfs (#1893). Every ISO build needs the Kubic one
