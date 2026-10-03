@@ -1,0 +1,129 @@
+{
+  "adopters": {
+    "evaluation": 0,
+    "external_total": 0,
+    "production": 0
+  },
+  "as_of": "2026-10-03",
+  "community": {
+    "discussion_numbers": [],
+    "discussions_created": 0,
+    "external_nonbot_contributors": [
+      "HuntedRaven7",
+      "KiKaraage",
+      "castrojo",
+      "eseiker"
+    ],
+    "external_nonbot_prs": [
+      {
+        "author": "HuntedRaven7",
+        "merged_at": "2026-09-12T21:20:52Z",
+        "number": 21,
+        "repository": "compass"
+      },
+      {
+        "author": "HuntedRaven7",
+        "merged_at": "2026-09-13T01:18:48Z",
+        "number": 23,
+        "repository": "compass"
+      },
+      {
+        "author": "HuntedRaven7",
+        "merged_at": "2026-09-13T05:48:03Z",
+        "number": 25,
+        "repository": "compass"
+      },
+      {
+        "author": "HuntedRaven7",
+        "merged_at": "2026-09-17T07:46:30Z",
+        "number": 47,
+        "repository": "compass"
+      },
+      {
+        "author": "HuntedRaven7",
+        "merged_at": "2026-09-17T17:19:42Z",
+        "number": 82,
+        "repository": "compass"
+      },
+      {
+        "author": "KiKaraage",
+        "merged_at": "2026-09-19T07:44:31Z",
+        "number": 104,
+        "repository": "compass"
+      },
+      {
+        "author": "eseiker",
+        "merged_at": "2026-09-18T00:24:42Z",
+        "number": 225,
+        "repository": "corral"
+      },
+      {
+        "author": "HuntedRaven7",
+        "merged_at": "2026-09-06T19:41:26Z",
+        "number": 380,
+        "repository": "docs"
+      },
+      {
+        "author": "KiKaraage",
+        "merged_at": "2026-09-07T14:00:24Z",
+        "number": 164,
+        "repository": "dualcut"
+      },
+      {
+        "author": "castrojo",
+        "merged_at": "2026-09-16T00:45:36Z",
+        "number": 220,
+        "repository": "fisherman"
+      },
+      {
+        "author": "KiKaraage",
+        "merged_at": "2026-09-28T13:03:20Z",
+        "number": 338,
+        "repository": "protota"
+      }
+    ],
+    "external_nonbot_prs_merged": 11
+  },
+  "release_assets": {
+    "classes": {
+      "iso": {
+        "assets": 3,
+        "downloads": 0
+      },
+      "other": {
+        "assets": 0,
+        "downloads": 0
+      },
+      "release_card": {
+        "assets": 352,
+        "downloads": 675
+      },
+      "sbom": {
+        "assets": 176,
+        "downloads": 185
+      }
+    },
+    "counter_semantics": "cumulative as of snapshot; subtract consecutive snapshots for interval activity",
+    "release_count": 232
+  },
+  "repository": {
+    "forks": 5,
+    "stars": 57,
+    "watchers": 1
+  },
+  "schema_version": 1,
+  "sources": {
+    "adopters": "ADOPTERS.md",
+    "github": "https://api.github.com/repos/tuna-os/tunaOS",
+    "github_api_timestamp": "Sat, 03 Oct 2026 19:00:47 GMT"
+  },
+  "unavailable": {
+    "docs_visits": "We have not connected the Web Analytics export from Cloudflare",
+    "installs": "No install telemetry by design; the consent decision remains open",
+    "r2_iso_downloads": "We have not connected an export from R2; the counters for release assets cannot replace it"
+  },
+  "window": {
+    "end_exclusive": "2026-10-01",
+    "start": "2026-09-01"
+  }
+}

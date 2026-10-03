@@ -1,0 +1,68 @@
+name: Adoption metrics snapshot
+
+on:
+  schedule:
+    # The first run publishes the preceding calendar month's public signals.
+    - cron: "17 7 1 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: adoption-metrics
+  cancel-in-progress: false
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: true
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.14"
+
+      - name: Collect public signals
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/generate-adoption-snapshot.py
+
+      - name: Open the monthly snapshot pull request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: automation/adoption-metrics
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- docs/adoption-metrics; then
+            echo "The snapshot is unchanged."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add docs/adoption-metrics
+          git commit -s -m "docs: refresh adoption metrics ($(date -u +%Y-%m-%d))"
+
+          push_ok=0
+          for i in 1 2 3; do
+            if git push --force origin "$BRANCH"; then
+              push_ok=1
+              break
+            fi
+            sleep $((5 * i))
+          done
+          if [[ "$push_ok" -ne 1 ]]; then
+            echo "::error::could not push the snapshot after three attempts"
+            exit 1
+          fi
+
+          if [[ -z "$(gh pr list --head "$BRANCH" --state open --json number --jq '.[].number')" ]]; then
+            gh pr create --base main --head "$BRANCH" \
+              --title "docs: refresh monthly adoption metrics" \
+              --body "Generated from public GitHub counters by scripts/generate-adoption-snapshot.py."
+          fi
