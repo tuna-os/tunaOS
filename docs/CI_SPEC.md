@@ -86,10 +86,6 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 | `validate-renovate.yaml` | PR-deterministic + post-merge | Validate Renovate Config | each PR, push | — |
 | `verify-asahi-one.yml` | post-merge + scheduled | Verify Asahi image (one) | caller cadence | — |
 | `verify-asahi.yml` | post-merge + scheduled | Verify Asahi image | `40 5 * * *`, manual | — |
-| `watch-aurora.yml` | post-merge + scheduled | Watch Aurora Upstream | `0 8 * * 1`, manual | — |
-| `watch-bluefin-lts.yml` | post-merge + scheduled | Watch bluefin-lts Upstream | `0 8 * * 1`, manual | — |
-| `watch-upstream.yml` | post-merge + scheduled | Watch upstream (reusable) | caller cadence | — |
-| `watch-zirconium.yml` | post-merge + scheduled | Watch Zirconium Upstream | `0 8 * * 1`, manual | — |
 | `weekly-boot-report.yml` | post-merge + scheduled | Weekly Boot Screenshot Report | `0 10 * * 1`, manual | — |
 | `weekly-desktop-screenshots.yml` | post-merge + scheduled | Weekly Desktop Screenshots | `0 2 * * 1`, manual | — |
 | `weekly-qcow2-screenshots.yml` | post-merge + scheduled | Weekly QCOW2 Boot Screenshots | `0 20 * * 0`, manual | — |
