@@ -207,6 +207,22 @@ No new shell script needed. `install-desktop.sh` handles it.
 
 ## Community & Outreach Initiatives (#687)
 
+### Required preflight for a new outreach issue
+
+Run this check before you create an issue for an ecosystem partnership,
+conference, or content campaign:
+
+```bash
+scripts/check-outreach-duplicate.sh "specific target or campaign"
+```
+
+The command checks `docs/ADOPTION-OUTREACH-STATUS.md` and the docs index. It
+also checks all issues with the `outreach` label. If it exits with status 1,
+inspect the evidence and update the canonical tracker. Do not create another
+issue. Repeat the search with the target's name if the campaign title differs.
+Include closed issues in this check. A closed tracker can point to a complete
+draft that still needs maintainer approval or delivery.
+
 Outreach and community growth initiatives are tracked centrally in [#687](https://github.com/tuna-os/tunaOS/issues/687):
 
 - **Prerequisites & Gating**: Community outreach is gated on working ISO downloads (#561), which is confirmed operational.

@@ -18,6 +18,9 @@ listed as a TunaOS adopter without consent-confirmed public evidence in
 
 ## Update rules
 
+- Run `scripts/check-outreach-duplicate.sh "specific target or campaign"`
+  before you create a campaign issue. If the command finds a match, inspect
+  it and update the canonical tracker. Do not file the campaign again.
 - Replace **No** only with a date and a durable public evidence link.
 - Record no-response and declined outreach without converting it into an
   adopter count.

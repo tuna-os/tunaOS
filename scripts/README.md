@@ -25,6 +25,7 @@ Invoked by:
 | `installer-walkthrough.py` | Drives the installer frontend with `sendkey` and asserts its pages against `tests/installer-screens.yaml` |
 | `check-upstream-snapshot-size.sh` | Fails refreshes that exceed the snapshot size or change budget |
 | `audit-git-blobs.py` | Inventories oversized blobs reachable from selected Git refs; see the [rewrite runbook](../docs/GIT-HISTORY-REWRITE.md) |
+| `check-outreach-duplicate.sh` | Searches the outreach ledger, docs index, and open/closed outreach issues before a campaign issue is filed |
 
 See `docs/AGENT_GUIDE.md`'s Key Files table for the fuller list and how
 these fit into the overall build pipeline (`docs/PIPELINE.md`,
