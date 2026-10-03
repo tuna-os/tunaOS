@@ -82,12 +82,13 @@ def test_parity_results_maps_verdicts() -> None:
     }, "ok passes; BROKEN and suspect fail; unmeasured renders ⬜"
 
 
-def test_criterion_is_advisory_with_the_cadence_named() -> None:
+def test_criterion_is_blocking_with_the_cadence_named() -> None:
     criteria = yaml.safe_load(
         (ROOT / ".github" / "green-criteria.yml").read_text()
     )["criteria"]
     c = next(c for c in criteria if c["id"] == "parity")
-    assert c["enforcement"] == "advisory"
+    # Graduated 2026-10-03 (#2388): 20 consecutive scheduled passes on main.
+    assert c["enforcement"] == "blocking"
     assert "package-parity.yml" in c["asserted_by"]
 
 
