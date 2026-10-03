@@ -2,7 +2,7 @@
 
 **Status**: DRAFT — proposed 2026-08-09 by the strategist agent for review
 **Owner**: tuna-os (hanthor) / strategist
-**Tracks**: #1175 (promotion/exit), #1196 (admission/entry)
+**Tracks**: #1175 (promotion/exit), #1196 (admission/entry), #1763 (rebuild-config completeness)
 
 ## Purpose
 
@@ -80,6 +80,23 @@ A new base variant or flavor needs, **before any build work starts**:
    essential components like `zorin-appearance` and session definitions are not
    published).
 4. **A tracking issue** filed with the `roadmap` label before the first commit.
+5. **Rebuild-config and manifest completeness** (#1763) — for any variant
+   relying on a custom/rebuild package repository or non-standard desktop staging:
+   - **Rebuild repository reachable for all declared architectures**: any custom
+     or rebuild package repository must exist, return HTTP 200 (no 404 or missing
+     repodata), and publish packages for all declared platforms (`linux/amd64`,
+     `linux/arm64`). If an architecture lacks package sources, it must be
+     explicitly excluded from the variant's `platforms` in
+     `.github/build-config.yml` (e.g. hummingbird amd64-only until aarch64
+     repodata converges).
+   - **Essential desktop packages present**: the repository or base must carry
+     essential desktop packages (compositor/session, display manager, core shell
+     components, and required filesystem tooling like `xfsprogs`).
+   - **Manifest sections defined for every declared desktop**:
+     `manifests/desktops/<flavor>.yaml` must contain a concrete OS/variant
+     section (e.g. `hummingbird:`, `eln:`) with a valid package list for every
+     desktop flavor enabled with `build_image: true` in `.github/build-config.yml`.
+     Declaring flavors without manifest sections is prohibited.
 
 New **output architectures** (e.g. a mkosi DDI sidecar per variant, #999/#1227)
 count as proposals too: they multiply the boot/publish/signing surface (#1187,
@@ -101,6 +118,8 @@ must not be promoted or gain additional ISO coverage.
 | `flounder:gnome-nvidia` | #1191 | ci-maintainer | 1 image + 1 ISO (amd64) | NVIDIA driver load, boot gate, LUKS E2E, desktop contract | Held pending capacity sign-off |
 | `bonito:gnome-t2` | #1270 | ci-maintainer | 1 image; 0 ISO (amd64) | T2 kernel/hardware modules, boot gate, desktop contract | Held pending capacity sign-off |
 | `flounder-sid:gnome-nvidia` | #1191 | ci-maintainer | 1 image; 0 ISO (amd64) | NVIDIA driver load, boot gate, LUKS E2E, desktop contract | Held pending capacity sign-off |
+| `hummingbird` (Fedora Rawhide rebuild) — `base`, `cosmic` | #1341, #1755, #1763 | hanthor / strategist | 2 images (amd64); 2 ISOs | Rebuild repo measured (`20251124-x86_64`). COSMIC manifest section present. The project excludes arm64 until the aarch64 rebuild repo has `xfsprogs` and the other mandatory packages. The project excludes KDE and Niri until their package sets exist | Admitted as experimental (#1755/#1763) |
+| `hummingbird:gnome` | #1755, #1763 | hanthor / strategist | 1 image (amd64); 1 ISO | Manifest section present, but item 5 fails: on 2026-09-24 the image had no `gdm` and no `gnome-shell`, and the boot Gate failed each night ([docs/HUMMINGBIRD.md](docs/HUMMINGBIRD.md)). Admission needs both packages in the image and a green Gate run | Held: essential desktop packages missing |
 
 | Addition (opened 2026-08-25) | Tracker | Owner | Incremental cells | Acceptance evidence | Status |
 |---|---|---|---:|---|---|
@@ -263,4 +282,4 @@ milestone planning (next: Q4 2026 kickoff). Criteria changes are filed as
 issues on the roadmap tracker (#1159).
 
 ---
-*Drafted by strategist agent (ACMM L6 — full mode). Tracks #1175, #1196, #1254, #1270, and #1294.*
+*Drafted by strategist agent (ACMM L6 — full mode). Tracks #1175, #1196, #1254, #1270, #1294, and #1763.*
