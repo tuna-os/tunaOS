@@ -1,6 +1,6 @@
 # tunaOS Roadmap
 
-**Last updated**: 2026-08-23 (Windows conversion channel added to Q3 + Q4 after wootc `v0.1.0-alpha.1` shipped 08-22 — #1988) | **Maintainer**: tuna-os (hanthor)
+**Last updated**: 2026-09-25 (Build Health section refreshed — 08-14 CI crisis resolved, see #1753; Q3/Q4 narrative below still reflects the 08-23 snapshot pending a full pass, see #2724) | **Maintainer**: tuna-os (hanthor)
 
 ---
 
@@ -53,7 +53,7 @@ user-install evidence in its PR.
 
 ### Build Health
 
-⚠️ **CORRECTION (2026-08-14)**: the prior "CI pipeline builds are green" claim is **stale** — **all 13 variant workflows were red on 08-14** (#1570, consolidated root-cause diagnosis: yellowfin, albacore, skipjack, bonito, bonito-rawhide, sailfin, guppy, grouper, marlin, flounder, flounder-sid, gurnard, hummingbird). Every failed job maps to a known root cause (no unexplained failures); fixes are fixable but stranded: the hive GitHub App **lacks `workflows` permission** (#1557), so every `.github/workflows/*.yml` fix PR is rejected at push. **CI recovery is now the Q3 critical path** (strategist #1571) — flavor equality (#1316), NVIDIA family (#1383), and release parity (#1254) staff tests all depend on a green matrix. 08-22 checkpoint decision required: STAFF CI-recovery with first-PR-by-09-01, plus maintainer grant of the App `workflows` permission.
+✅ **RECOVERED (2026-09-24)**: the 08-14 all-red crisis (#1570) and its `workflows`-permission blocker (#1557) are both closed. Current status per #1753 (the live build-health tracker for the 7 non-rolling variants — 89 pinned-release cells; 6 rolling/experimental variants are intermittently red by design and out of scope for a "green" target): albacore 18/18, bonito 16/16, grouper 7/7, flounder 5/5, gurnard 2/2, yellowfin 15/18, skipjack 13/16. The only remaining red cells (`gnome`, `gnome-hwe`, `gnome-nvidia` on yellowfin and skipjack) share one root cause — a `dbus_contexts` SELinux denial on the rolling EL10 bases (#2326, #2485) — with fixes already open in #2658 and #2608.
 
 ✅ **Downloads VERIFIED WORKING** (2026-08-08): tunaos.org/download serves 179 ISOs from R2 (newest 08-07, HTTP 200 GB-scale). ✅ **GitHub Releases RESUMED 2026-08-09**: `gnome-20260809` published 11:38 UTC with assets (incl. SBOM spdx, 52.5 MB) — first release since 07-12; the `a4b147f8` fix (build-run selection, not artifact name — see #1106) and the #1147 cadence backstop are confirmed effective. #936 (tacklebox pin) is **not** a live-boot fix hold: the `image-versions.yaml` fallback was moved to the live-boot fix (tacklebox `4fa6041`) on 07-31 by #937. What is left is a separate, narrower thing — `publish-iso-groups.yml` sets its own `TACKLEBOX_SHA: a105d6d3` (61 commits older, pre-dating the appended-overlay live path), and since `publish-isos.yml` is disabled that override is the SHA every scheduled ISO is actually built with. Those ISOs boot-gate green (run 30773566969, 08-03), so this is a divergence to close deliberately with its own boot evidence, not a hold to lift.
 
