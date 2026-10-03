@@ -1,4 +1,5 @@
 name: Image
+permissions: {}
 on:
   workflow_call:
     inputs:
@@ -1597,6 +1598,9 @@ jobs:
   # these images remain available as -testing but cannot become catalog tags.
   verify_asahi:
     name: Asahi manifest gate
+    permissions:
+      contents: read
+      packages: read
     needs: manifest
     if: >-
       inputs.publish && github.event_name != 'pull_request' &&
