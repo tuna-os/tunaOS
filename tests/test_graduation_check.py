@@ -58,40 +58,40 @@ def test_only_advisory_criteria_are_evaluated():
 def test_a_streak_at_the_bar_is_ready():
     # Three fresh passes, one old failure in a window of twenty (5%).
     rows = grad.evaluate(SPEC, _fixture(**{
-        "package-parity.yml": _runs("success", "success", "success", "failure", *["success"] * 16),
+        "bootc-lifecycle.yml": _runs("success", "success", "success", "failure", *["success"] * 16),
     }))
-    parity = next(r for r in rows if r["id"] == "parity")
-    assert parity["ready"], parity["reason"]
-    assert "3 consecutive passes" in parity["reason"]
-    assert "1/20 failed" in parity["reason"]
+    lifecycle = next(r for r in rows if r["id"] == "lifecycle")
+    assert lifecycle["ready"], lifecycle["reason"]
+    assert "3 consecutive passes" in lifecycle["reason"]
+    assert "1/20 failed" in lifecycle["reason"]
 
 
 def test_a_streak_below_the_bar_is_not_ready():
     rows = grad.evaluate(SPEC, _fixture(**{
-        "package-parity.yml": _runs("success", "success", "failure", "success"),
+        "bootc-lifecycle.yml": _runs("success", "success", "failure", "success"),
     }))
-    parity = next(r for r in rows if r["id"] == "parity")
-    assert not parity["ready"]
-    assert "streak 2 < 3" in parity["reason"]
+    lifecycle = next(r for r in rows if r["id"] == "lifecycle")
+    assert not lifecycle["ready"]
+    assert "streak 2 < 3" in lifecycle["reason"]
 
 
 def test_a_cancelled_run_breaks_the_streak():
     """A run that produced no verdict has proven nothing — the same rule as
     skipped_is_not_green, applied to the gate itself."""
     rows = grad.evaluate(SPEC, _fixture(**{
-        "package-parity.yml": _runs("success", "cancelled", "success", "success", "success"),
+        "bootc-lifecycle.yml": _runs("success", "cancelled", "success", "success", "success"),
     }))
-    parity = next(r for r in rows if r["id"] == "parity")
-    assert not parity["ready"], parity["reason"]
-    assert parity["measured"][".github/workflows/package-parity.yml"]["streak"] == 1
+    lifecycle = next(r for r in rows if r["id"] == "lifecycle")
+    assert not lifecycle["ready"], lifecycle["reason"]
+    assert lifecycle["measured"][".github/workflows/bootc-lifecycle.yml"]["streak"] == 1
 
 
 def test_a_flaky_window_is_not_ready_even_with_a_fresh_streak():
     runs = _runs("success", "success", "success", *(["failure", "success"] * 8))
-    rows = grad.evaluate(SPEC, _fixture(**{"package-parity.yml": runs}))
-    parity = next(r for r in rows if r["id"] == "parity")
-    assert not parity["ready"]
-    assert "failure rate" in parity["reason"]
+    rows = grad.evaluate(SPEC, _fixture(**{"bootc-lifecycle.yml": runs}))
+    lifecycle = next(r for r in rows if r["id"] == "lifecycle")
+    assert not lifecycle["ready"]
+    assert "failure rate" in lifecycle["reason"]
 
 
 def test_unavailable_history_is_never_ready():
@@ -111,19 +111,19 @@ def test_a_monthly_gate_can_lower_its_bar_per_criterion():
 
 def test_the_report_names_the_ready_ones_and_asks_a_human_to_flip(tmp_path):
     fixture = tmp_path / "runs.json"
-    fixture.write_text(json.dumps({"package-parity.yml": _runs("success", "success", "success")}))
+    fixture.write_text(json.dumps({"bootc-lifecycle.yml": _runs("success", "success", "success")}))
     import io
     import contextlib
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
         assert grad.main(["--runs", str(fixture)]) == 0
     out = buf.getvalue()
-    assert "`parity`" in out and "✅ yes" in out
+    assert "`lifecycle`" in out and "✅ yes" in out
     assert "A human flips `enforcement`" in out
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
         grad.main(["--runs", str(fixture), "--json"])
-    assert json.loads(buf.getvalue())["ready"] == ["parity"]
+    assert json.loads(buf.getvalue())["ready"] == ["lifecycle"]
 
 
 def test_the_weekly_workflow_runs_the_script_and_only_opens_an_issue_when_ready():
