@@ -1546,3 +1546,20 @@ state; the separate display-manager and user-session checks prove more.
 **Measured cause:** On 2026-09-27, the live site Worker rejected `redirect: "error"` with `TypeError: Invalid redirect value`. Node fetch accepts that option. The Node test passed and the live request failed.
 
 **Fix:** The site uses `redirect: "manual"` and rejects a redirect response. The `COUNTME` service binding connects the site to the collector. `npm run test:site` now tests the site proxy in native workerd. The live API returned HTTP 200 after the fix; the browser check found no page errors or axe violations.
+
+### Codecov project and patch targets never appear on a pull request
+
+**Symptom:** `codecov.yml` declares project and patch targets, but no Codecov
+result or coverage trend appears after the `Unit Tests` job; only a downloadable
+`coverage-python.xml` artifact exists.
+
+**Measured cause:** On main at `957d9ec6`, a repository-wide search found no
+`codecov/codecov-action` or Codecov CLI invocation. `test.yml` generated the XML
+and passed it only to `actions/upload-artifact`, which does not send reports to
+Codecov or evaluate `codecov.yml`.
+
+**Fix (#2301):** Keep the artifact for debugging and also upload the same XML
+with the SHA-pinned Codecov action, the `python` flag, and GitHub OIDC. The BATS
+contract in `tests/bats/test_test_yml_pytest_always_runs.bats` holds the upload
+path and authentication mode. This report is Python-only; BATS and QEMU E2E
+coverage are behavior gates, not line-coverage inputs.
