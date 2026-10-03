@@ -3,8 +3,10 @@
 > A list of organizations and projects that use TunaOS in production, development, or evaluation.
 >
 > If you or your organization is using TunaOS, we'd love to add you to this list!
-> See the [adoption call](docs/ADOPTION-CALL.md) to self-identify in the public
-> Show-and-tell Discussion, or submit a PR with the same consent details.
+> Open the [adoption-request form](https://github.com/tuna-os/.github/issues/new?template=adoption.yml)
+> or submit a PR with the consent details in the [adoption call](docs/ADOPTION-CALL.md).
+> The public Show-and-tell Discussion from that call is not published yet;
+> this line will link it when a maintainer publishes it.
 
 **Evidence baseline (2026-08-14):** 0 named production users and 2 named
 development/evaluation entries. The ecosystem table below records projects

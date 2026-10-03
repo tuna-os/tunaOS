@@ -31,6 +31,7 @@ publish, and *how* the snapshot feeds roadmap decisions.
 | Install | Installs / successful boots | opt-in telemetry or boot-report gating | **not measured** | Q4 design decision (#577 GUI gate, #763) |
 | Community | Merged PRs from external human contributors | GitHub API | **3 merged contributions from 3 verified humans** (docs#234, docs#239 on 08-14; one bootc-migrate contribution on 08-05) | ≥5 merged PRs from ≥3 humans, including one repeat contributor |
 | Community | Discussion posts, `good first issue` pickups | GitHub API | 0 starter issues (dead label, #1308) | ≥5 starter issues picked up |
+| Community | Discussions Q&A first-response time ([COMMUNITY.md](./COMMUNITY.md#discussions-response-target)) | GitHub GraphQL API (`discussions` in the Q&A category: `createdAt`, first comment `createdAt`, `answer`) | 1 outside question (#93, 2026-04-20) with no reply after 135 days, verified 2026-09-02 (#2294) | Each new Q&A thread gets a first reply within 7 days; no thread older than 7 days with no reply |
 | Community | **External** public adopters (production or evaluation), [ADOPTERS.md](./ADOPTERS.md) — excludes the maintainer and TunaOS's own infrastructure | Manual — PR from the adopting org, or outreach asking permission to list | 0 external entries (#1348) | ≥2–3 external evaluator/production entries |
 | Community | Adoption-call conversion | GitHub Discussion + follow-up PRs | **not measured** | Record responses, consent-confirmed named entries, anonymous reports, and ADOPTERS.md PRs |
 
@@ -58,7 +59,9 @@ publish, and *how* the snapshot feeds roadmap decisions.
   [ADOPTERS.md](./ADOPTERS.md) EXTERNAL production/evaluation entry count
   (the two self-entries — maintainer and TunaOS CI — are excluded; counting
   them would have met the >=2 target on the day it was written, #1348),
-  adoption-call responses/conversion, and a one-line "variant ranking" that
+  adoption-call responses/conversion, Discussions Q&A first-response counts
+  (new threads, threads replied to within 7 days, age of the oldest thread
+  with no reply), and a one-line "variant ranking" that
   flags under-/over-performing editions.
 - Ownership: **strategist** compiles; **ci-maintainer** supplies R2/Releases
   exports; **guide** publishes on tunaos.org/blog.
