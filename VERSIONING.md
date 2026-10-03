@@ -1,5 +1,9 @@
 # Versioning Policy
 
+This policy covers TunaOS operating-system images. Tools, libraries, reusable
+workflows, package factories, and other cross-repository infrastructure follow
+[INFRASTRUCTURE-RELEASE-POLICY.md](INFRASTRUCTURE-RELEASE-POLICY.md).
+
 ## Scheme
 
 tunaOS follows a **date-based versioning** scheme with variant prefix:
