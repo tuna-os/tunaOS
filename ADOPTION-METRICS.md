@@ -1,7 +1,8 @@
 # TunaOS Adoption Metrics Plan
 
-**Last updated**: 2026-08-14 | **Owner**: strategist (snapshot), ci-maintainer (R2/Releases data), guide (publishing)
-**Tracking**: [tunaos#1174](https://github.com/tuna-os/tunaos/issues/1174)
+**Last updated**: 2026-10-03 | **Owner**: strategist (snapshot), ci-maintainer (R2/Releases data), guide (publishing)
+**Tracking**: [tunaos#1174](https://github.com/tuna-os/tunaos/issues/1174), [tunaos#2819](https://github.com/tuna-os/tunaos/issues/2819)
+**Snapshots**: [latest report and dated source data](docs/adoption-metrics/README.md)
 
 ---
 
@@ -21,39 +22,46 @@ publish, and *how* the snapshot feeds roadmap decisions.
 
 ## Metric tiers (funnel)
 
-| Tier | Metric | Source | Current baseline (08-10) | Target (Q4 2026, "Mature") |
-|------|--------|--------|--------------------------|------------------------------|
-| Discovery | GitHub stars / forks | GitHub API | 56 / 3 | ≥100 stars |
-| Discovery | Docs site visits, top variant pages | Cloudflare analytics on tunaos.org | not measured | ≥1k visits/mo, variant-page ranking |
-| Discovery | DistroWatch referral traffic | Cloudflare analytics referrer field, tunaos.org | not submitted yet — draft ready ([docs/DISTROWATCH-SUBMISSION.md](./docs/DISTROWATCH-SUBMISSION.md), tunaos#1333) | Submission live; referral share visible in the monthly snapshot |
-| Download | ISO downloads by variant+desktop | R2 access logs (tunaos.org/download) | **not measured** | ≥1k ISO downloads/mo; variant ranking |
-| Download | GitHub Release asset downloads | Releases API (resumed 08-09, #1106) | 0 (assets were empty shells) | assets present on all flavors; downloads counted |
-| Install | Installs / successful boots | opt-in telemetry or boot-report gating | **not measured** | Q4 design decision (#577 GUI gate, #763) |
-| Community | Merged PRs from external human contributors | GitHub API | **3 merged contributions from 3 verified humans** (docs#234, docs#239 on 08-14; one bootc-migrate contribution on 08-05) | ≥5 merged PRs from ≥3 humans, including one repeat contributor |
-| Community | Discussion posts, `good first issue` pickups | GitHub API | 0 starter issues (dead label, #1308) | ≥5 starter issues picked up |
-| Community | **External** public adopters (production or evaluation), [ADOPTERS.md](./ADOPTERS.md) — excludes the maintainer and TunaOS's own infrastructure | Manual — PR from the adopting org, or outreach asking permission to list | 0 external entries (#1348) | ≥2–3 external evaluator/production entries |
-| Community | Adoption-call conversion | GitHub Discussion + follow-up PRs | **not measured** | Record responses, consent-confirmed named entries, anonymous reports, and ADOPTERS.md PRs |
+| Tier | Metric | Source | Baseline source | Target (Q4 2026, "Mature") |
+|------|--------|--------|-----------------|------------------------------|
+| Discovery | GitHub stars / forks | GitHub API | [generated snapshot](docs/adoption-metrics/README.md) | ≥100 stars |
+| Discovery | Docs site visits, top variant pages | Cloudflare analytics on tunaos.org | export not connected | ≥1k visits/mo, variant-page ranking |
+| Discovery | DistroWatch referral traffic | Cloudflare analytics referrer field, tunaos.org | export not connected | Submission live; referral share visible in the monthly snapshot |
+| Download | ISO downloads by variant+desktop | R2 access logs (tunaos.org/download) | export not connected | ≥1k ISO downloads/mo; variant ranking |
+| Download | GitHub Release asset downloads | Releases API | [generated snapshot by asset class](docs/adoption-metrics/README.md) | ISO assets present and downloads counted without including cards or SBOMs |
+| Install | Installs / successful boots | opt-in telemetry or boot-report gating | not collected | Q4 design decision (#577 GUI gate, #763) |
+| Community | Merged PRs from external human contributors across tuna-os | GitHub API | [generated non-bot-account proxy](docs/adoption-metrics/README.md); GitHub account type does not verify human authorship | ≥5 merged PRs from ≥3 humans, including one repeat contributor |
+| Community | Discussion posts | GitHub API | [generated previous-month snapshot](docs/adoption-metrics/README.md) | sustained monthly activity |
+| Community | **External** public adopters (production or evaluation), [ADOPTERS.md](./ADOPTERS.md) — excludes the maintainer and TunaOS's own infrastructure | ADOPTERS.md | [generated snapshot](docs/adoption-metrics/README.md) | ≥2–3 external evaluator/production entries |
+| Community | Adoption-call conversion | GitHub Discussion + follow-up PRs | not yet attributable by the public APIs | Record responses, consent-confirmed named entries, anonymous reports, and ADOPTERS.md PRs |
 
 **Instrumentation order** (cheapest first):
 
-1. **GitHub Releases download counts** — free API counter; needs non-gnome
-   flavors to publish assets too (#1254 parity gap — scheduled matrix now
-   covers gnome/kde/xfce/cosmic/niri, PR pending; watch the next few
-   scheduled runs to confirm kde/xfce/cosmic/niri publish before
-   counting this instrumentation step done).
-2. **R2/Cloudflare access-log analytics** on tunaos.org/download — R2 already
-   serves the ISOs; enable access logs + a dashboard (owner: ci-maintainer).
-3. **Docs analytics** — Cloudflare Web Analytics on the Docusaurus site
-   (one script tag; owner: guide).
-4. **Install telemetry** — deferred to Q4 design decision; do not block 1–3.
+1. **GitHub Releases download counts** — automated monthly by
+   `scripts/generate-adoption-snapshot.py`. The collector separates ISO, SBOM,
+   release-card, and other assets so an SBOM fetch cannot inflate the download
+   proxy. Counters are cumulative; consecutive snapshots provide the monthly
+   delta.
+2. **R2/Cloudflare access-log analytics** on tunaos.org/download — **not
+   connected**. R2 serves the ISOs, while the baseline found only three old
+   ISO assets across 232 GitHub Releases. Until the account owner supplies an access-log export,
+   neither total ISO downloads nor variant ranking can be reported.
+3. **Docs analytics** — **not connected**. Cloudflare Web Analytics needs an
+   account-owner export before the monthly collector can include visits or
+   referral fields.
+4. **Install telemetry** — deferred to the Q4 consent decision; do not infer
+   installs from downloads.
 
 ---
 
 ## Cadence & publication
 
-- **Monthly snapshot**, published in the ROADMAP **Community** section (first:
-  **2026-11-01**, covering October — aligns with Q4 "Mature" opening).
-- Snapshot format: downloads by variant × desktop (top 10), stars/forks,
+- **Monthly snapshot**, generated on the first day of each month in
+  [`docs/adoption-metrics/`](docs/adoption-metrics/). The 2026-10-03 baseline
+  covers September community activity and establishes cumulative counters;
+  the 2026-11-01 run will provide the first counter delta while covering
+  October activity.
+- Snapshot format: downloads by variant × desktop (top 10) when the R2 export is available, stars/forks,
   external-contributor PRs, release-asset presence per flavor,
   [ADOPTERS.md](./ADOPTERS.md) EXTERNAL production/evaluation entry count
   (the two self-entries — maintainer and TunaOS CI — are excluded; counting

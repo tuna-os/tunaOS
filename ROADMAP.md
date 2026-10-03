@@ -64,7 +64,7 @@ user-install evidence in its PR.
 - Discussions enabled
 - Multi-agent development active (architect, guide, sec-check, quality, CI, outreach)
 - 34+ community outreach issues filed; product-readiness gate (#563) resolved
-- ⚠️ Adoption metrics untracked — no usage/telemetry data on the 179 downloadable ISOs (#1174); **plan published 08-10** ([ADOPTION-METRICS.md](./ADOPTION-METRICS.md)) — first monthly download/usage snapshot targeted 2026-11-01 (Q4 "Mature")
+- ⚠️ Adoption metrics baseline published 2026-10-03 ([latest report](./docs/adoption-metrics/README.md), #2819): public GitHub and community signals now refresh monthly, but R2 ISO downloads and docs analytics remain unconnected; the 2026-11-01 snapshot will provide the first cumulative-counter delta
 - 🟡 ROADMAP coverage improving — **16/37 active authorized repos now carry a ROADMAP.md** (2026-08-14): tunaos, tromso, tacklebox, docs, xfce-linux, bluefin-cli, Tavern, corral, tunaos-packages, **bootc-installer** (ROADMAP moved to default branch via PR #14, 08-14 — #1361 resolved), bootc-migrate, dualcut, gtk-office-suite, iso-builder, protota, wootc; template merged into .github project-starter (#13). Excluded from planning scope: ubuntu + letters (**archived** 2026-08-12). Still unplanned (21 active): .github, flatpak-index, bootc-installer-asahi, branding, bst-ci, changelog-action, debian-copr, finupdate, fisherman, homebrew-tap, kde-build-meta, mandelbrot, mariner, remora, scoop-bucket, suite-common, suite-common-rust, tuna-installer-cosmic/kde/niri/xfce (#1295)
 <!-- BEGIN GENERATED — scripts/gen-roadmap-coverage.py -->
 
