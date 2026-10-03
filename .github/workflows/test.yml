@@ -77,7 +77,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup TunaOS Build Environment
-        uses: projectbluefin/actions/bootc-build/setup-runner@ab62f2774eb465d912b61b5c0cd9cd230c811768 # v1 as of 2026-07-02
+        uses: projectbluefin/actions/bootc-build/setup-runner@59df69d574d2cb811eb27a73eeaafe87c1beb64a # v1 as of 2026-07-02
         with:
           storage-backend: ""
           update-podman: "false"
@@ -119,6 +119,16 @@ jobs:
         run: |
           echo "=== pytest Tests ==="
           python3 -m pytest tests/ tests/pytest/ -v --tb=short --cov=. --cov-report=term --cov-report=xml:coverage-python.xml
+
+      # npm 10 (the runner image default) and npm 11 (what Renovate uses to
+      # write services/countme/package-lock.json) disagree on the lockfile once
+      # an override is scoped to a nested dependency: since wrangler 4.143.0
+      # npm 10 `npm ci` rejects the npm 11 lockfile with "Missing: ws@8.21.0".
+      # Use the same npm major that writes the lockfile.
+      - name: Setup Node.js for countme
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: "24"
 
       - name: Test countme collector with D1
         run: |

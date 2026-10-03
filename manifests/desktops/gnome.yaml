@@ -354,6 +354,14 @@ packages:
       - gnome-session-wayland-session
       - gnome-settings-daemon
       - gnome-shell
+      # Named explicitly because gnome-shell-50.0-3 in the pinned tier
+      # declares `Provides: gnome-shell-common = 50.0-3`. That satisfies its
+      # own dependency, so DNF never pulls the real noarch RPM that owns
+      # org.gnome.shell.gschema.xml. GDM then dies before login (#2750), and
+      # the schema gate fails every EL10 GNOME cell, for example albacore run
+      # 36840489732. A name match beats a provide, so this line installs the
+      # real RPM. Keep it after tunaos-packages#748 lands; it is then a no-op.
+      - gnome-shell-common
       - gnome-user-docs
       - gvfs-fuse
       - gvfs-goa
