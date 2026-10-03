@@ -65,19 +65,18 @@ user-install evidence in its PR.
 - Multi-agent development active (architect, guide, sec-check, quality, CI, outreach)
 - 34+ community outreach issues filed; product-readiness gate (#563) resolved
 - ⚠️ Adoption metrics untracked — no usage/telemetry data on the 179 downloadable ISOs (#1174); **plan published 08-10** ([ADOPTION-METRICS.md](./ADOPTION-METRICS.md)) — first monthly download/usage snapshot targeted 2026-11-01 (Q4 "Mature")
-- 🟡 ROADMAP coverage improving — **16/37 active authorized repos now carry a ROADMAP.md** (2026-08-14): tunaos, tromso, tacklebox, docs, xfce-linux, bluefin-cli, Tavern, corral, tunaos-packages, **bootc-installer** (ROADMAP moved to default branch via PR #14, 08-14 — #1361 resolved), bootc-migrate, dualcut, gtk-office-suite, iso-builder, protota, wootc; template merged into .github project-starter (#13). Excluded from planning scope: ubuntu + letters (**archived** 2026-08-12). Still unplanned (21 active): .github, flatpak-index, bootc-installer-asahi, branding, bst-ci, changelog-action, debian-copr, finupdate, fisherman, homebrew-tap, kde-build-meta, mandelbrot, mariner, remora, scoop-bucket, suite-common, suite-common-rust, tuna-installer-cosmic/kde/niri/xfce (#1295)
 <!-- BEGIN GENERATED — scripts/gen-roadmap-coverage.py -->
 
-- 🟡 **Per-repo ROADMAP coverage — 40 of 45 active repos (89%)**, measured 2026-09-17 by [`scripts/gen-roadmap-coverage.py`](./scripts/gen-roadmap-coverage.py).
+- 🟡 **Per-repo ROADMAP coverage — 36 of 44 active repos (82%)**, measured 2026-10-03 by [`scripts/gen-roadmap-coverage.py`](./scripts/gen-roadmap-coverage.py).
   Scope is every non-archived, non-private repo in the `tuna-os` org; a repo counts as
   planned when `ROADMAP.md` is at the root of its **default branch**. Archived repos are out
   of scope because a read-only repo cannot be planned.
 
-  **Planned (40)**: .github, bluefin-cli, blueshell, bootc-installer, bootc-installer-asahi, bootc-migrate, branding, bst-ci, changelog-action, corral, debian-copr, docs, dualcut, finupdate, fisherman, flatpak-index, gnome-hive-monitor, gtk-office-suite, hive, homebrew-tap, iso-builder, mandelbrot, mariner, protota, remora, scoop-bucket, spindle, suite-common, suite-common-rust, tacklebox, Tavern, tromso, tuna-installer-cosmic, tuna-installer-kde, tuna-installer-niri, tuna-installer-xfce, tunaOS, tunaos-packages, wootc, xfce-linux.
+  **Planned (36)**: .github, bluefin-cli, blueshell, bootc-installer, bootc-installer-asahi, bootc-migrate, branding, bst-ci, changelog-action, corral, docs, dualcut, finupdate, fisherman, flatpak-index, gnome-hive-monitor, gtk-office-suite, hive, homebrew-tap, iced, iso-builder, mandelbrot, mariner, protota, remora, scoop-bucket, spindle, suite-common, suite-common-rust, tacklebox, Tavern, tromso, tunaOS, tunaos-packages, wootc, xfce-linux.
 
-  Counted on a non-`main` default branch: `blueshell` on `ptyxis-port`, `bootc-installer` on `dev`, `changelog-action` on `master`, `fisherman` on `dev`, `hive` on `v4`, `mariner` on `master` — these are the repos' own default branches, not strandings.
+  Counted on a non-`main` default branch: `blueshell` on `ptyxis-port`, `bootc-installer` on `dev`, `changelog-action` on `master`, `fisherman` on `dev`, `hive` on `v4`, `iced` on `master`, `mariner` on `master` — these are the repos' own default branches, not strandings.
 
-  **Unplanned (5)**: compass, hive-operator, kde-build-meta, quickcast, rdocx. Tracked by #1295.
+  **Unplanned (8)**: ccleft, compass, hive-operator, libcosmic, PaperWM, quickcast, rdocx, rust-atomicwrites. Tracked by #2820.
 
 <!-- END GENERATED -->
 - ⚪ **"First external contributor" claim retracted (#1317, corrected 2026-08-13)**: the shimonenator commits (EL10/OBS design fixing #777, image-factory completion gate) are **not** a human contribution — maintainer confirmed the account is misattributed by GitHub because the Google Antigravity agent is listed as commit author; `git log` shows `commit.author.name: antigravity` on every one of that account's commits. **Superseded 2026-08-14**: the **first external human contributions landed and merged the same day** — docs #234 (QEMU/KVM guide, dchaudhari7177) and docs #239 (Gurnard Pantheon fix, Elonon901001), both verified human GitHub accounts (created 2022, real-name profiles). These are docs-repo contributions, not core-code: bus-factor risk (#1095) for core repos is unchanged, but the onboarding loop (seed → PR → merge) is now demonstrably end-to-end, which materially strengthens the Hacktoberfest seeding case (#1537).
