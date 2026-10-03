@@ -1,0 +1,62 @@
+# Keep the cross-repository release audit derived from GitHub rather than
+# transcribed into planning documents. OCI and Flatpak need separate inventory
+# credentials, so this workflow reports only tags, GitHub Releases, and assets.
+name: Organization Release Inventory
+
+on:
+  schedule:
+    - cron: "15 7 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: org-release-inventory
+  cancel-in-progress: false
+
+jobs:
+  regenerate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: true
+
+      - name: Regenerate GitHub release inventory
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/gen-org-release-inventory.py
+
+      - name: Open refresh pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: automation/org-release-inventory
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- docs/ORG-RELEASE-INVENTORY.md; then
+            echo "The release inventory is current."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add docs/ORG-RELEASE-INVENTORY.md
+          git commit -s -m "docs: refresh organization release inventory"
+          git push --force origin "$BRANCH"
+
+          if [[ -z "$(gh pr list --head "$BRANCH" --state open --json number --jq '.[].number')" ]]; then
+            body=$(printf '%s\n' \
+              'Regenerated from the GitHub API by' \
+              '`scripts/gen-org-release-inventory.py`. This reports Git tags,' \
+              'GitHub Releases, and release assets for every active public' \
+              'organization repository.')
+            gh pr create --base main --head "$BRANCH" \
+              --title "docs: refresh organization release inventory" \
+              --body "$body"
+          else
+            echo "Refresh PR already open; its branch now contains the latest inventory."
+          fi
