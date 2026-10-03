@@ -95,7 +95,7 @@ downloads:
   # reports a mismatch, and `spektacular migrate` upgrades the project files.
   spektacular: "v0.20.0"
   # renovate: datasource=github-releases depName=twpayne/chezmoi
-  chezmoi: "v2.72.2"
+  chezmoi: "v2.73.0"
   chezmoi_sha256:
     amd64: "310a8f141b940e5dbf0fef33fe27804768c977fa1da72112e27f78797225a526"
     arm64: "3bb492d8c32f3d59c9f2066486e0149345eabf62a01f1ec9477ad04ad1cd99b7"
