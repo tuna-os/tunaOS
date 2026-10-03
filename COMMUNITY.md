@@ -45,7 +45,7 @@ curated `good first issue` tasks, and weekly maintainer triage documented in
 ### Communication
 
 - **GitHub Issues**: Bug reports, feature requests, discussion
-- **GitHub Discussions**: General topics, ideas, Q&A
+- **GitHub Discussions**: General topics, ideas, Q&A (first response target: 7 days, see below)
 - **PR Reviews**: All contributions reviewed within 48 hours
 - **Matrix**: [#tunaos:reilly.asia](https://matrix.to/#/%23tunaos:reilly.asia) — real-time chat, weekly release notes, monthly office hours (see below)
 
@@ -91,6 +91,37 @@ keep going (#1136).
   engagement (multiple replies, a maintainer answer, a decision), drop a
   one-line summary + link into the room. Keeps the room aware of
   async-first conversations without duplicating them live.
+
+### Discussions response target
+
+GitHub Discussions is a public channel. A question that gets no reply tells
+every later visitor that nobody reads it (#2294). This section sets a target so
+that maintainers can see and count a missed reply.
+
+- **Target.** Each new thread in the **Q&A** category gets a first public reply
+  from a maintainer within **7 days**. Threads in other categories get a reply
+  within 30 days, on a best-effort basis. A reply is an answer, a link to the
+  right issue or document, or a statement that the project does not know yet.
+  It is not necessarily a fix.
+- **Close the thread.** When a reply answers a Q&A question, mark it as the
+  answer. A resolved Q&A thread shows the next visitor that the channel works.
+- **Notifications.** The repository has very few watchers, so a new
+  Discussion can notify nobody. Each maintainer sets **Watch → Custom →
+  Discussions** (or **All Activity**) on
+  [tuna-os/tunaOS](https://github.com/tuna-os/tunaOS).
+- **Weekly check.** During weekly triage
+  ([TRIAGE-POLICY.md](TRIAGE-POLICY.md)), open the
+  [unanswered Q&A list](https://github.com/tuna-os/tunaOS/discussions/categories/q-a?discussions_q=is%3Aunanswered)
+  and reply to each thread that is older than the target or close to it.
+- **Matrix.** Post a link to each Q&A thread that is still open after 7 days in
+  the Matrix room, so that a person who knows the answer can see it.
+- **Report.** The monthly adoption snapshot
+  ([ADOPTION-METRICS.md](ADOPTION-METRICS.md)) records the number of new Q&A
+  threads, how many got a first reply within 7 days, and the age of the oldest
+  thread with no reply.
+
+This target does not automate replies. A person writes each reply, because the
+answer is public and speaks for the project.
 
 ### Adoption Metrics
 
