@@ -150,6 +150,7 @@ Start here:
 - [Installation](docs/INSTALL.md) — media builds, verification, and registry access
 - [Hardware Support](docs/HARDWARE.md) — requirements and ARM laptop status
 - [Matrix Status](docs/MATRIX-STATUS.md) — quality status for each variant×desktop cell
+- [Adoption Readiness](docs/ADOPTION-READINESS.md) — Q4 criteria and live cross-variant assessment
 - [Roadmap](ROADMAP.md) — project direction and feature status
 - [Vision](VISION.md) — project philosophy
 
