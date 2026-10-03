@@ -39,9 +39,12 @@ import argparse
 import json
 import os
 import re
-import subprocess
 import sys
 import tempfile
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from lib.gh import run as gh_run
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DOC = os.path.join(REPO, "docs", "INSTALLER-FRONTENDS.md")
@@ -60,19 +63,10 @@ SCREENS = ["welcome", "disk", "encryption", "summary", "install", "done"]
 REQUIRED = {"welcome", "disk", "summary"}
 
 
-class _Failed:
-    """A gh invocation that could not happen. Shaped like CompletedProcess so
-    callers need no special case — a missing gh degrades to 'unfetched', which
-    the matrix renders as ⬜, rather than taking the import down with a
-    traceback."""
-    returncode, stdout, stderr = 1, "", "gh CLI not found on PATH"
-
-
-def gh(*args, **kw):
-    try:
-        return subprocess.run(["gh", *args], capture_output=True, text=True, **kw)
-    except FileNotFoundError:
-        return _Failed()
+def gh(*args):
+    """Thin adapter over the shared lib.gh.run(), keeping this module's
+    original varargs call signature (`gh("run", "list", ...)`)."""
+    return gh_run(list(args))
 
 
 def fetch(repo, flavor, dest):
