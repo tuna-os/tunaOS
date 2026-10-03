@@ -1546,3 +1546,14 @@ state; the separate display-manager and user-session checks prove more.
 **Measured cause:** On 2026-09-27, the live site Worker rejected `redirect: "error"` with `TypeError: Invalid redirect value`. Node fetch accepts that option. The Node test passed and the live request failed.
 
 **Fix:** The site uses `redirect: "manual"` and rejects a redirect response. The `COUNTME` service binding connects the site to the collector. `npm run test:site` now tests the site proxy in native workerd. The live API returned HTTP 200 after the fix; the browser check found no page errors or axe violations.
+
+### Workflow token scope depends on repository defaults
+
+**Symptom:** A workflow does not set `permissions:`. Its token can then receive
+scopes that the workflow does not use.
+
+**Measured cause:** The audit for tunaOS#2767 found 27 workflows that used the
+repository defaults for token scope.
+
+**Fix:** Set a narrow scope for each workflow. Give write access only to a job
+that changes GitHub state. The regression test for #2767 checks each workflow.

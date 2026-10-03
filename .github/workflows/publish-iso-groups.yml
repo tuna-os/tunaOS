@@ -8,6 +8,9 @@ name: Publish Grouped Dedup ISOs to R2
 # Runs separately from publish-isos.yml (the legacy per-flavor path) so the two
 # can be compared before the old one is retired.
 
+permissions:
+  contents: read
+
 on:
   workflow_dispatch:
     inputs:
