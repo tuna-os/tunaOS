@@ -17,8 +17,12 @@ on:
     # block, and catches the generator breaking on a build-config change.
     paths:
       - "scripts/gen-matrix-status.py"
+      - "scripts/gen-adoption-readiness.py"
       - ".github/build-config.yml"
+      - ".github/green-criteria.yml"
       - "docs/MATRIX-STATUS.md"
+      - "docs/matrix-provenance.json"
+      - "docs/ADOPTION-READINESS.md"
 
 permissions:
   contents: write
@@ -67,6 +71,7 @@ jobs:
           # job fails loudly. Silently rewriting cells to "never tested" would
           # be worse than not updating at all.
           ./scripts/gen-matrix-status.py
+          ./scripts/gen-adoption-readiness.py
 
       # Byte-exact drift is enforced on the scheduled run (which pushes the
       # refresh PR), NOT here: the cells, tallies and provenance rows are a
@@ -81,7 +86,9 @@ jobs:
         if: github.event_name == 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: ./scripts/gen-matrix-status.py --check-structure
+        run: |
+          ./scripts/gen-matrix-status.py --check-structure
+          ./scripts/gen-adoption-readiness.py --check
 
       # `main` is protected by a "changes must be made through the merge queue"
       # rule, so the direct `git push origin HEAD:main` this used to do was
@@ -105,7 +112,7 @@ jobs:
           BRANCH: automation/matrix-status
         run: |
           set -euo pipefail
-          if git diff --quiet -- docs/MATRIX-STATUS.md docs/matrix-provenance.json; then
+          if git diff --quiet -- docs/MATRIX-STATUS.md docs/matrix-provenance.json docs/ADOPTION-READINESS.md; then
             echo "No cells moved — nothing to commit."
             exit 0
           fi
@@ -117,7 +124,7 @@ jobs:
           # add noise. Reusing the name also keeps this to a single open PR
           # instead of one per day.
           git checkout -b "$BRANCH"
-          git add docs/MATRIX-STATUS.md docs/matrix-provenance.json
+          git add docs/MATRIX-STATUS.md docs/matrix-provenance.json docs/ADOPTION-READINESS.md
           git commit -m "docs: refresh matrix status ($(date -u +%Y-%m-%d))"
           git push --force origin "$BRANCH"
 
