@@ -124,10 +124,10 @@ The important details, each one paid for with a real incident:
 - **SBOM attestation is a separate run**, not a job. When a build workflow
   completes, a `workflow_run` trigger starts `attest-sbom.yml`. It reads the
   digest and SBOM artifacts of that run and attests them. Before, the job ran
-  inside the build. `continue-on-error` kept the job from failing, but the
+  inside the build. `continue-on-error` let the job itself pass, but the
   caller still reported the result of the whole reusable workflow. So one
-  outage of the transparency log made a nightly with 27 of 30 images green
-  report `failure`, and the README matrix showed those images as unbuilt
+  outage of the transparency log caused a nightly with 27 of 30 images green
+  to report `failure`. The README matrix then showed those images as unbuilt
   (#2282). A separate workflow has its own result. Recovery stays the same:
   `rerun-infra-failures.yml` finds the `SIGSTORE_OUTAGE` marker and runs the
   job again once.
