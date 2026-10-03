@@ -83,7 +83,80 @@ SWEEP="${REPO_ROOT}/scripts/gfi-pool-report.sh"
   # number nobody chose.
   run bash "$SWEEP" not-a-number
   [ "$status" -eq 2 ]
-  [[ "$output" == *"must be a number"* ]]
+  [[ "$output" == *"thresholds must be numbers"* ]]
+}
+
+@test "the sweep requires both labels and checks repository breadth" {
+  local mock_bin="$BATS_TEST_TMPDIR/bin"
+  mkdir -p "$mock_bin"
+  cat >"$mock_bin/gh" <<'EOF'
+#!/usr/bin/env bash
+cat <<'JSON'
+{
+  "total_count": 3,
+  "items": [
+    {
+      "repository_url": "https://api.github.com/repos/tuna-os/docs",
+      "number": 1,
+      "title": "ready docs task",
+      "labels": [{"name": "good first issue"}, {"name": "help wanted"}],
+      "assignees": []
+    },
+    {
+      "repository_url": "https://api.github.com/repos/tuna-os/tunaOS",
+      "number": 2,
+      "title": "ready core task",
+      "labels": [{"name": "good first issue"}, {"name": "help wanted"}],
+      "assignees": []
+    },
+    {
+      "repository_url": "https://api.github.com/repos/tuna-os/docs",
+      "number": 3,
+      "title": "missing paired label",
+      "labels": [{"name": "good first issue"}],
+      "assignees": []
+    }
+  ]
+}
+JSON
+EOF
+  chmod +x "$mock_bin/gh"
+
+  run env PATH="$mock_bin:$PATH" bash "$SWEEP" 2 2
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"launch-ready: 2 (minimum 2)"* ]]
+  [[ "$output" == *"repository breadth: 2 (minimum 2)"* ]]
+  [[ "$output" == *"tuna-os/docs#3"* ]]
+
+  run env PATH="$mock_bin:$PATH" bash "$SWEEP" 2 3
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"1 more repository/repositories"* ]]
+}
+
+@test "assigned issues do not count as launch-ready" {
+  local mock_bin="$BATS_TEST_TMPDIR/assigned-bin"
+  mkdir -p "$mock_bin"
+  cat >"$mock_bin/gh" <<'EOF'
+#!/usr/bin/env bash
+cat <<'JSON'
+{
+  "total_count": 1,
+  "items": [{
+    "repository_url": "https://api.github.com/repos/tuna-os/docs",
+    "number": 4,
+    "title": "claimed task",
+    "labels": [{"name": "good first issue"}, {"name": "help wanted"}],
+    "assignees": [{"login": "contributor"}]
+  }]
+}
+JSON
+EOF
+  chmod +x "$mock_bin/gh"
+
+  run env PATH="$mock_bin:$PATH" bash "$SWEEP" 1 1
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"launch-ready: 0 (minimum 1)"* ]]
+  [[ "$output" == *"Assigned GFI (not available)"* ]]
 }
 
 @test "the plan points at the sweep rather than asking for a manual count" {

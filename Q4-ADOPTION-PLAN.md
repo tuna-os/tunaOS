@@ -18,7 +18,7 @@ Without sequencing, Hacktoberfest momentum dissipates into Q4 backlog noise and 
 
 | Date | Milestone | Owner | Evidence |
 |------|-----------|-------|----------|
-| **09-15** | Hacktoberfest seeding complete — 15–20 usable GFI across ≥6 repos | strategist + guide | HACKTOBERFEST tracker (#1537); zero-GFI repos (gtk-office-suite, tunaos-packages, wootc) closed |
+| **09-15** | Hacktoberfest seeding complete — 15–20 usable GFI across ≥6 repos | strategist + guide | Live completeness check (`scripts/gfi-pool-report.sh 15 6`, #2835); historical seeding tracker #1537 |
 | 09-22 | Q3 checkpoint decisions integrated into Q4 rows — every descope has owner + first-PR date | strategist | Q4-ADOPTION-PLAN updated; #1299 close-out |
 | **10-01** | Hacktoberfest launch — curated GFI live, welcome docs linked, conversion target: ≥10 merged PRs from new contributors | outreach + strategist | GitHub Events / PR census |
 | 10-15 | Mid-Hacktoberfest check — conversion rate vs target; re-seed weak repos | outreach | tracker refresh |
@@ -30,7 +30,7 @@ Without sequencing, Hacktoberfest momentum dissipates into Q4 backlog noise and 
 
 | Lever | Tracker | Owner |
 |-------|---------|-------|
-| Hacktoberfest seeding + conversion | #1537 | strategist / guide |
+| Hacktoberfest seeding + conversion | #2835 (#1537 historical) | strategist / guide |
 | DistroWatch exposure + referral metric | #1491 | outreach |
 | ADOPTERS.md production entries | #1348 | strategist |
 | Adoption metrics monthly snapshot | #1174 | strategist |

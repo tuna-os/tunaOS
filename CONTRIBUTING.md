@@ -12,9 +12,9 @@ just fix && just check
 
 ## Contributor onboarding
 
-New here? Start with an **[org-wide good first issue](https://github.com/issues?q=org%3Atuna-os+is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)** — a curated, maintainer-sized task for documentation parity, a small script fix, or test coverage. Before you start, leave a comment to say you take the issue, so that nobody duplicates the work. The [Hacktoberfest 2026 contributor plan](docs/HACKTOBERFEST-2026.md) tracks the current pool and census. The [weekly contributor triage](#weekly-contributor-triage) below labels new bounded tasks `good first issue`.
+New here? Start with an **[org-wide starter task](https://github.com/issues?q=org%3Atuna-os+is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22+label%3A%22help+wanted%22+archived%3Afalse)** — an open task with both curation labels, sized for documentation parity, a small script fix, or test coverage. Before you start, leave a comment to say you take the issue, so that nobody duplicates the work. The [Hacktoberfest 2026 contributor plan](docs/HACKTOBERFEST-2026.md) tracks the current pool and census. The [weekly contributor triage](#weekly-contributor-triage) below labels new bounded tasks `good first issue`.
 
-The current starter runway lives in the **[org-wide good first issue](https://github.com/issues?q=org%3Atuna-os+is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)** pool. Most of it is in `tuna-os/docs` (docs-parity and guide tasks — e.g. desktop quick-starts, verification guides, cheat sheets). These tasks are intentionally independent of the image build pipeline, and maintainers curate them for first-time contributors. If another contributor claims one, or if it closes, pick another bounded task from the same search.
+The current starter runway lives in the **[org-wide starter-task](https://github.com/issues?q=org%3Atuna-os+is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22+label%3A%22help+wanted%22+archived%3Afalse)** pool. Most of it is in `tuna-os/docs` (docs-parity and guide tasks — e.g. desktop quick-starts, verification guides, cheat sheets). These tasks are intentionally independent of the image build pipeline, and maintainers curate them for first-time contributors. If another contributor claims one, or if it closes, pick another bounded task from the same search.
 
 ### Fork → PR loop
 
