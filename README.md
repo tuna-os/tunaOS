@@ -46,7 +46,7 @@ TunaOS builds **bootc-based desktop operating systems** with atomic updates and 
 | 🔒 **Redfin** | Red Hat Enterprise Linux 10 | *Local-Build Only* | GNOME, KDE, COSMIC, Niri, XFCE | x86_64, arm64 |
 | 🪸 **Grouper** | Ubuntu 26.04 | `ghcr.io/tuna-os/grouper` | GNOME, KDE, COSMIC, XFCE | x86_64 |
 | 🤖 **Gurnard** | Ubuntu 24.04 (Noble Numbat, experimental) | `ghcr.io/tuna-os/gurnard` | Base, Pantheon | x86_64, arm64 |
-| 🚀 **Marlin** | Arch Linux (Rolling) | `ghcr.io/tuna-os/marlin` | GNOME, KDE, COSMIC, Niri, XFCE | x86_64 |
+| 🚀 **Marlin** | Arch Linux (Rolling) | `ghcr.io/tuna-os/marlin` | GNOME, KDE, COSMIC, Niri, Roost, XFCE | x86_64 |
 | 🐡 **Flounder** | Debian 13 (Trixie) | `ghcr.io/tuna-os/flounder` | KDE, XFCE | x86_64 |
 | ☢️ **Flounder Sid** | Debian Sid (Unstable) | `ghcr.io/tuna-os/flounder:*-sid` | GNOME, KDE, XFCE | x86_64 |
 | 🐉 **Bonito Rawhide** | Fedora Rawhide | `ghcr.io/tuna-os/bonito:*-rawhide` | GNOME, KDE, COSMIC, Niri, XFCE | x86_64, arm64 |
@@ -103,6 +103,8 @@ _Each cell reports the newest conclusive main-branch run that asserted it, so a 
 | :--- | :--- | :--- | :--- |
 | 🏔️ `ghcr.io/tuna-os/tromso` | [tromso](https://github.com/tuna-os/tromso) | KDE | [❌ 2026-10-03](https://github.com/tuna-os/tromso/actions/runs/37102603548) |
 | 🐭 `ghcr.io/tuna-os/xfce-linux` | [xfce-linux](https://github.com/tuna-os/xfce-linux) | XFCE | [✅ 2026-10-03](https://github.com/tuna-os/xfce-linux/actions/runs/37088890437) |
+
+The configured matrix now has 136 image cells, including one Roost cell for amd64 Marlin. The status snapshot below is from before that addition and does not prove image publication or a successful boot. Roost adds no ISO or LUKS cells.
 
 **Built 133/135 · composite green 125/135 (98% built)** — The remainder has **1 failure** and **1 never reached** (stale: 4); no job asserted the latter. We show the two values separately. A cell with no job has no test, but it can still work.
 

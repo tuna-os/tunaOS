@@ -66,6 +66,8 @@ no boot.
 
 `.github/green-criteria.yml` sets the bar. A cell is green only when every criterion that blocks it, and applies to it, has a current affirmative result. A criterion that nobody ran, nobody asserted, or that CI skipped renders ⬜, and it does not count as satisfied. These criteria block today: `builds`, `desktop`, `boots`, `no_silent_omissions`. These are advisory — the sections below measure them, and they do not block yet: `install`, `lifecycle`, `parity`, `rebuildable`, `arch_honesty`. Unimplemented: `iso`. To graduate a criterion, edit `enforcement:` in that file. This table and the README count then tighten with no code change.
 
+The configured image matrix now has 136 cells after adding one Roost cell for amd64 Marlin. This status snapshot is from before its addition and does not mark it green; it needs its own image, desktop and boot evidence.
+
 **125 of 135** published cells are composite-green.
 
 | Variant | gnome | kde | cosmic | niri | xfce |
