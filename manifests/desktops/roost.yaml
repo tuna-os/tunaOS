@@ -1,0 +1,44 @@
+# Experimental Marlin only; admission tunaOS#2990 / roost-desktop#69.
+# Roost is absent from Arch's repos. The Containerfile installs the in-house
+# Tideforge key/repository; qualify this package so official packages stay first.
+display_manager: greetd
+
+packages:
+  pacman:
+    - tunaos/roost
+    - greetd
+    - greetd-gtkgreet
+    - cage
+    - xorg-xwayland
+    - ibus
+    - gnome-shell
+    - gnome-settings-daemon
+    - gnome-control-center
+    - gnome-keyring
+    - evolution-data-server
+    - xdg-desktop-portal-gnome
+    - xdg-desktop-portal-gtk
+    - xdg-user-dirs
+    - gvfs
+    - nautilus
+    - ptyxis
+    - networkmanager
+    - libsecret
+    - pipewire
+    - wireplumber
+    - gst-plugin-pipewire
+    - gst-plugins-good
+    - power-profiles-daemon
+    - upower
+    - flatpak
+    - plymouth
+    - adwaita-icon-theme
+    - noto-fonts
+    - noto-fonts-emoji
+    - ttf-dejavu
+    - ttf-liberation
+
+versionlock: []
+post_install:
+  - tuna-flatpak-remote.sh
+  - greetd-gtkgreet.sh

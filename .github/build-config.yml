@@ -1616,6 +1616,13 @@ variants:
         stage: 2
         build_image: true
         build_iso: true
+      # Experimental admission #2990; enable after capacity and package publication.
+      - id: roost
+        stage: 2
+        platforms: ["linux/amd64"]
+        build_image: false
+        build_iso: false
+        build_qcow2: false
       - id: cosmic
         stage: 2
         build_image: true

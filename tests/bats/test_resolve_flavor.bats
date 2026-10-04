@@ -150,3 +150,10 @@ get_var() {
     [[ "$CONTAINERFILE" == "Containerfile.ubuntu" ]]
     [[ "$DESKTOP_FLAVOR" == "kde-hwe" ]]
 }
+
+@test "marlin roost resolves to its Arch desktop stage" {
+    eval "$("$SCRIPT" marlin roost)"
+    [[ "$CONTAINERFILE" == "Containerfile.arch" ]]
+    [[ "$DESKTOP_FLAVOR" == "roost" ]]
+    [[ "$PARENT_FLAVOR" == "" ]]
+}

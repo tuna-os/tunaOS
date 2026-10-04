@@ -51,6 +51,12 @@ user-install evidence in its PR.
 > (e.g. `bonito:gnome-t2`, Apple Silicon Asahi, HWE) are in-scope under the
 > admission gate (#1270).
 
+### Proposed flavors
+
+| Flavor | Owner | Stage | Acceptance / tracker |
+|--------|-------|-------|----------------------|
+| Marlin Roost (amd64, rolling) | @hanthor | Proposal, best effort; build disabled pending capacity and signed package publication | Signed Tideforge package, greetd session picker, desktop contract and VM boot, then GHCR publication and bootc switch; [#2990](https://github.com/tuna-os/tunaOS/issues/2990), [upstream #69](https://github.com/hanthor/roost-desktop/issues/69). One image/boot cell; no new ISO or LUKS cells. |
+
 ### Build Health
 
 ⚠️ **CORRECTION (2026-08-14)**: the prior "CI pipeline builds are green" claim is **stale** — **all 13 variant workflows were red on 08-14** (#1570, consolidated root-cause diagnosis: yellowfin, albacore, skipjack, bonito, bonito-rawhide, sailfin, guppy, grouper, marlin, flounder, flounder-sid, gurnard, hummingbird). Every failed job maps to a known root cause (no unexplained failures); fixes are fixable but stranded: the hive GitHub App **lacks `workflows` permission** (#1557), so every `.github/workflows/*.yml` fix PR is rejected at push. **CI recovery is now the Q3 critical path** (strategist #1571) — flavor equality (#1316), NVIDIA family (#1383), and release parity (#1254) staff tests all depend on a green matrix. 08-22 checkpoint decision required: STAFF CI-recovery with first-PR-by-09-01, plus maintainer grant of the App `workflows` permission.
