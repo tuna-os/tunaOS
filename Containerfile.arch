@@ -329,6 +329,10 @@ RUN --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
   /run/context/build_scripts/90-image-info.sh
+RUN --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/92-variant-customizations.sh
+RUN bootc install print-configuration | jq -e \
+    '.filesystem.root.type == "ext4" and .bootloader == "systemd"'
 RUN --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
