@@ -1616,7 +1616,7 @@ variants:
         stage: 2
         build_image: true
         build_iso: true
-      # Experimental admission #2990; enable after capacity and package publication.
+      # Experimental admission #2990; capacity confirmed, enable after signed package publication.
       - id: roost
         stage: 2
         platforms: ["linux/amd64"]
