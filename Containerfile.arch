@@ -41,6 +41,7 @@ COPY system_files /files
 COPY system_files_overrides /overrides
 COPY build_scripts /build_scripts
 COPY manifests /manifests
+COPY experiences /experiences
 
 FROM ${COMMON_IMAGE_REF} AS common
 
@@ -374,6 +375,17 @@ FROM base-no-de AS niri
 RUN --mount=type=bind,from=context,source=/,target=/run/context \
     /run/context/build_scripts/desktop/install-desktop.sh niri
 RUN ln -sf /var/opt /opt 2>/dev/null || true
+
+# Experimental Roost session: in-house signed packages (upstream #69).
+FROM base-no-de AS roost
+RUN --mount=type=bind,from=context,source=/,target=/run/context \
+    pacman-key --init && \
+    pacman-key --add /run/context/experiences/roost/tideforge-public.gpg && \
+    pacman-key --lsign-key 4E5CC9F8B3B521793D95266E629BE6EA45188366 && \
+    printf '\n[tunaos]\nSigLevel = Required DatabaseOptional\nServer = https://repo.tunaos.org/pacman/arch/$arch\n' >> /etc/pacman.conf && \
+    pacman -Sy --noconfirm && \
+    /run/context/build_scripts/desktop/install-desktop.sh roost
+RUN bootc container lint
 
 FROM base-no-de AS xfce
 RUN --mount=type=bind,from=context,source=/,target=/run/context \

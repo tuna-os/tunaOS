@@ -368,6 +368,30 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
   [[ "$output" == *"R=pixman"* ]]
 }
 
+@test "Cage launches the greeter through xdg-shell rather than layer-shell" {
+  local script="${REPO_ROOT}/build_scripts/desktop/greetd-gtkgreet.sh"
+  local wrapper="${BATS_TEST_TMPDIR}/greetd-session"
+  local stub="${BATS_TEST_TMPDIR}/bin"
+  local dri="${BATS_TEST_TMPDIR}/dri"
+  mkdir -p "$stub" "$dri"
+  touch "$dri/card0" "$dri/renderD128"
+  awk '/<<.SESSION_EOF.$/{f=1;next} /^SESSION_EOF$/{f=0} f' "$script" \
+    | sed -e "s|/dev/dri/renderD\*|${dri}/renderD*|" \
+      -e "s|/dev/dri/card\*|${dri}/card*|" > "$wrapper"
+  cat > "$stub/cage" <<'STUB'
+#!/bin/bash
+# Model the unsupported protocol option observed on the actual AWS guest.
+for argument in "$@"; do
+  [[ "$argument" != "-l" && "$argument" != "--layer-shell" ]] || exit 65
+done
+printf '%s\n' "$@"
+STUB
+  chmod +x "$stub/cage"
+  run env PATH="$stub:$PATH" bash "$wrapper"
+  [ "$status" -eq 0 ]
+  [ "$output" = $'-s\n--\ngtkgreet\n-s\n/etc/greetd/gtkgreet.css' ]
+}
+
 @test "greetd greeter account is resolved, not hardcoded" {
   # greetd getpwnam()s the configured user and chowns its socket to it during
   # startup, so a name that does not resolve kills it in milliseconds: "unable

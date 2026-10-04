@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-desktop="${1:?usage: verify-desktop-experience.sh <gnome|kde|niri|cosmic|xfce|pantheon> [--runtime]}"
+desktop="${1:?usage: verify-desktop-experience.sh <gnome|kde|niri|cosmic|xfce|pantheon|roost> [--runtime]}"
 mode="${2:-build}"
 
 # At runtime the E2E gate greps ttyS0 for a contract marker; a silent early
@@ -397,6 +397,30 @@ kde)
 	require_command dolphin
 	require_command konsole
 	dm_pattern='^(sddm|plasmalogin)\.service$'
+	;;
+roost)
+	experience="tunaos/roost"
+	for binary in roost-compositor roost-session roost-shell-host roost-shell-gtk roost-ibus-bridge roost-greeter; do
+		require_command "$binary"
+		"$binary" --version
+	done
+	require_glob '/usr/share/wayland-sessions/roost.desktop'
+	grep -qx 'Exec=roost-session' /usr/share/wayland-sessions/roost.desktop
+	require_glob '/etc/pam.d/roost-lock'
+	require_glob '/usr/lib/systemd/user/roost-session.target'
+	require_glob '/etc/greetd/environments'
+	grep -qx 'roost-session' /etc/greetd/environments
+	require_glob '/usr/share/xdg-desktop-portal/roost-portals.conf'
+	require_glob '/usr/lib/gnome-shell-calendar-server'
+	require_command ibus-daemon
+	require_command gnome-keyring-daemon
+	require_command wpctl
+	require_command gtkgreet
+	require_command cage
+	require_any_glob '/usr/libexec/xdg-desktop-portal-gnome' '/usr/lib/xdg-desktop-portal-gnome'
+	require_any_glob '/usr/libexec/xdg-desktop-portal-gtk' '/usr/lib/xdg-desktop-portal-gtk'
+	require_unit greetd
+	dm_pattern='^greetd\.service$'
 	;;
 niri)
 	experience="zirconium-dev/zirconium"
