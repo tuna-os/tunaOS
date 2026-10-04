@@ -76,6 +76,8 @@ Hardware requirements and ARM laptop status: [docs/HARDWARE.md](docs/HARDWARE.md
 
 ## Live build matrix
 
+The configured matrix now has 136 image cells, including one Roost cell for amd64 Marlin. The status snapshot below is from before that addition and does not prove image publication or a successful boot. Roost adds no ISO or LUKS cells.
+
 <!-- build-status:start -->
 
 _Each cell reports the newest conclusive main-branch run that asserted it, so a flavor-filtered rebuild does not blank the cells it never scheduled. This table omits cancelled runs. **Latest run** names the variant's newest conclusive run. A green cell has a successful promotion to the published tag. **Failed** means that a job ran and failed. **Not reached** means that no recent run asserted the cell, usually because an earlier stage stopped it._
@@ -103,8 +105,6 @@ _Each cell reports the newest conclusive main-branch run that asserted it, so a 
 | :--- | :--- | :--- | :--- |
 | 🏔️ `ghcr.io/tuna-os/tromso` | [tromso](https://github.com/tuna-os/tromso) | KDE | [❌ 2026-10-03](https://github.com/tuna-os/tromso/actions/runs/37102603548) |
 | 🐭 `ghcr.io/tuna-os/xfce-linux` | [xfce-linux](https://github.com/tuna-os/xfce-linux) | XFCE | [✅ 2026-10-03](https://github.com/tuna-os/xfce-linux/actions/runs/37088890437) |
-
-The configured matrix now has 136 image cells, including one Roost cell for amd64 Marlin. The status snapshot below is from before that addition and does not prove image publication or a successful boot. Roost adds no ISO or LUKS cells.
 
 **Built 133/135 · composite green 125/135 (98% built)** — The remainder has **1 failure** and **1 never reached** (stale: 4); no job asserted the latter. We show the two values separately. A cell with no job has no test, but it can still work.
 

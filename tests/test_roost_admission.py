@@ -38,3 +38,8 @@ def test_roost_contract_is_a_known_desktop_with_session_and_pam_requirements():
     case = script.split("\nroost)\n", 1)[1].split("\n\t;;", 1)[0]
     for requirement in ("Exec=roost-session", "/etc/pam.d/roost-lock", "roost-shell-gtk", "require_unit greetd", "roost-portals.conf"):
         assert requirement in case
+
+
+def test_roost_is_a_selectable_greetd_session():
+    environments = ROOT / "experiences/roost/files/etc/greetd/environments"
+    assert environments.read_text().splitlines() == ["roost-session"]
