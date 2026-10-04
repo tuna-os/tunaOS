@@ -1616,13 +1616,15 @@ variants:
         stage: 2
         build_image: true
         build_iso: true
-      # Experimental admission #2990; capacity confirmed, enable after signed package publication.
+      # Experimental admission #2990; signed served install verified 2026-10-04.
       - id: roost
         stage: 2
         platforms: ["linux/amd64"]
-        build_image: false
+        build_image: true
         build_iso: false
         build_qcow2: false
+        # #2990 admission covers image/boot only, not installer expansion.
+        luks_e2e: false
       - id: cosmic
         stage: 2
         build_image: true
