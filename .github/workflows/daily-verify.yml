@@ -81,7 +81,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup TunaOS Build Environment
-        uses: projectbluefin/actions/bootc-build/setup-runner@59df69d574d2cb811eb27a73eeaafe87c1beb64a # v1 as of 2026-07-02
+        uses: projectbluefin/actions/bootc-build/setup-runner@e1e7f38c35e681f309fee7893f6f6780c23e3bb4 # v1 as of 2026-07-02
         with:
           storage-backend: ""
           update-podman: "false"
