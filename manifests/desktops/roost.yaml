@@ -42,3 +42,4 @@ versionlock: []
 post_install:
   - tuna-flatpak-remote.sh
   - greetd-gtkgreet.sh
+  - flatpak-preinstall.sh

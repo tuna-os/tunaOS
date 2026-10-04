@@ -407,6 +407,9 @@ roost)
 	require_glob '/usr/share/wayland-sessions/roost.desktop'
 	grep -qx 'Exec=roost-session' /usr/share/wayland-sessions/roost.desktop
 	require_glob '/etc/pam.d/roost-lock'
+	require_glob '/usr/lib/systemd/user/roost-session.target'
+	require_glob '/etc/greetd/environments'
+	grep -qx 'roost-session' /etc/greetd/environments
 	require_glob '/usr/share/xdg-desktop-portal/roost-portals.conf'
 	require_glob '/usr/lib/gnome-shell-calendar-server'
 	require_command ibus-daemon
