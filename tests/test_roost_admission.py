@@ -23,7 +23,10 @@ def test_roost_is_one_arch_cell_without_iso_expansion():
 def test_roost_package_signatures_cannot_be_silently_disabled():
     key = (ROOT / "experiences/roost/tideforge-public.gpg").read_bytes()
     assert hashlib.sha256(key).hexdigest() == "4de5dfede473d4d56d79719a23e7b0925336719adfc142ea638735118039a82e"
-    stage = (ROOT / "Containerfile.arch").read_text().split("FROM base-no-de AS roost\n", 1)[1].split("FROM ", 1)[0]
+    containerfile = (ROOT / "Containerfile.arch").read_text()
+    context = containerfile.split("FROM scratch AS context\n", 1)[1].split("FROM ", 1)[0]
+    assert "COPY experiences /experiences" in context, "public key is missing from the mounted build context"
+    stage = containerfile.split("FROM base-no-de AS roost\n", 1)[1].split("FROM ", 1)[0]
     assert "SigLevel = Required DatabaseOptional" in stage
     assert "pacman-key --lsign-key 4E5CC9F8B3B521793D95266E629BE6EA45188366" in stage
     assert "install-desktop.sh roost" in stage
