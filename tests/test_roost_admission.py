@@ -43,3 +43,24 @@ def test_roost_contract_is_a_known_desktop_with_session_and_pam_requirements():
 def test_roost_is_a_selectable_greetd_session():
     environments = ROOT / "experiences/roost/files/etc/greetd/environments"
     assert environments.read_text().splitlines() == ["roost-session"]
+
+
+def test_installed_portal_contract_rejects_missing_or_ambiguous_consent_routing(tmp_path):
+    import subprocess
+
+    script = (ROOT / "build_scripts/checks/verify-desktop-experience.sh").read_text()
+    function = script.split("require_portal_preference() {", 1)[1].split("\nrequire_unit()", 1)[0]
+    command = "require_portal_preference() {" + function + "\nrequire_portal_preference \"$1\" org.freedesktop.impl.portal.Access gtk"
+    shipped = (ROOT / "experiences/roost/files/usr/share/xdg-desktop-portal/roost-portals.conf").read_text()
+    for content, accepted in (
+        (shipped, True),
+        (shipped.replace("org.freedesktop.impl.portal.Access=gtk;\n", ""), False),
+        (shipped.replace("Access=gtk;", "Access=gnome;"), False),
+        (shipped.replace("Access=gtk;", "Access=gtk;gnome;"), False),
+        (shipped + "org.freedesktop.impl.portal.Access=gnome;\n", False),
+        (shipped.replace("[preferred]", "[unrelated]"), False),
+    ):
+        config = tmp_path / "roost-portals.conf"
+        config.write_text(content)
+        result = subprocess.run(["bash", "-c", command, "portal-contract", str(config)], capture_output=True)
+        assert (result.returncode == 0) is accepted, result.stderr.decode()
