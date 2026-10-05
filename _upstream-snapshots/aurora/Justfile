@@ -182,7 +182,7 @@ build $image=default_image $tag=default_tag $flavor=default_flavor $rechunk="fal
     fi
 
     if [[ -z "${kernel_pin:-}" ]]; then
-        kernel_release=$(skopeo inspect --retry-times 3 docker://ghcr.io/ublue-os/akmods:"${akmods_flavor}"-"${fedora_version}" | jq -r '.Labels["ostree.linux"]')
+        kernel_release=$(skopeo inspect --no-tags --retry-times 3 docker://ghcr.io/ublue-os/akmods:"${akmods_flavor}"-"${fedora_version}" | jq -r '.Labels["ostree.linux"]')
     else
         kernel_release="${kernel_pin}"
     fi
@@ -191,11 +191,6 @@ build $image=default_image $tag=default_tag $flavor=default_flavor $rechunk="fal
 
     AKMODS="${BASENAME_AKMODS}:${akmods_flavor}-${fedora_version}-${kernel_release}"
     ALL_IMAGES+=("${AKMODS}")
-
-    if [[ "${akmods_flavor}" =~ coreos ]]; then
-        AKMODS_ZFS="${BASENAME_AKMODS}-zfs:${akmods_flavor}-${fedora_version}-${kernel_release}"
-        ALL_IMAGES+=("${AKMODS_ZFS}")
-    fi
 
     if [[ "${flavor}" =~ nvidia-open ]]; then
         AKMODS_NVIDIA_OPEN="${BASENAME_AKMODS}-nvidia-open:${akmods_flavor}-${fedora_version}-${kernel_release}"
@@ -285,10 +280,6 @@ build $image=default_image $tag=default_tag $flavor=default_flavor $rechunk="fal
         LABELS+=("--label" "org.opencontainers.image.revision=deadbeef")
     fi
     LABELS+=("--label" "ostree.linux=${kernel_release}")
-
-    case "${akmods_flavor}" in
-    "coreos-stable") BUILD_ARGS+=("--cpp-flag=-DZFS") ;;
-    esac
 
     if [[ "${image_name}" =~ nvidia ]]; then
         BUILD_ARGS+=("--cpp-flag=-DNVIDIA")
@@ -633,7 +624,6 @@ generate-build-tags $image=default_image $tag=default_tag $flavor=default_flavor
     # No special handling here for testing for now
     if [[ "{{ tag }}" == stable ]]; then
       # Legacy Compatibility Tag so stable-daily points to stable, do not remove this
-      # TODO: Move this to :latest after the ZFS removal to get daily updates again
       BUILD_TAGS+=("{{ tag }}-daily")
       BUILD_TAGS+=("${version}")
       BUILD_TAGS+=("{{ tag }}-daily-${version}")
@@ -748,6 +738,43 @@ gen-sbom $image=default_image $tag=default_tag $flavor=default_flavor $syft_cmd=
     du -sh "${SBOM}"
 
     rm -rf "${ROOTFS}"
+
+# Attach sbom to exisitng image
+[arg("digest", long="digest")]
+[arg("flavor", long="flavor", short="f")]
+[arg("image", long="image", short="i")]
+[arg("registry", long="registry")]
+[arg("tag", long="tag", short="t")]
+[group('Utility')]
+attach-sbom $image=default_image $tag=default_tag $flavor=default_flavor $registry="" $digest="":
+    #!/usr/bin/env bash
+    set -eoux pipefail
+
+    {{ just }} validate --image "${image}" --tag "${tag}" --flavor "${flavor}"
+    image_name=$({{ just }} image_name --image "${image}" --tag "${tag}" --flavor "${flavor}")
+
+    OUT_DIR="sbom_out/${image_name}"
+    SBOM="sbom.json"
+    FULL_SBOM_PATH="${OUT_DIR}/${SBOM}"
+    IMAGE="${registry}/${image_name}:${tag}@${digest}"
+
+    # we need to be in the directory of the sbom json file or else we end up having the directories in the oci artifact
+    pushd "${OUT_DIR}"
+
+    oras attach \
+      --artifact-type application/vnd.spdx+json \
+      --annotation filename="${SBOM}" \
+      "${IMAGE}" \
+      "${SBOM}"
+
+    popd
+
+    SBOM_DIGEST="$(oras discover --format json "${IMAGE}" | jq -r '.referrers[] | select(.artifactType == "application/vnd.spdx+json") | .digest')"
+
+    echo "${SBOM_DIGEST}" > /tmp/sbom-digestfile
+
+    # debugging
+    echo "oras pull ${registry}/${image_name}:${tag}@${SBOM_DIGEST}"
 
 # We are not using https://github.com/actions/cache because of:
 # https://github.com/ublue-os/aurora/issues/2351

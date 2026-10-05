@@ -1,7 +1,7 @@
 {
   "upstream": "https://github.com/ublue-os/aurora.git",
   "branch": "main",
-  "sha": "068506b1422d8aa8b5760e630eaf5586904e95a1",
-  "synced_at": "2026-09-21T15:27:19Z",
+  "sha": "7c04dcf68d7e369d25351d5db85eb99a4a3e3e94",
+  "synced_at": "2026-10-05T17:33:33Z",
   "paths": "build_files:system_files:Containerfile.in:Justfile:image-versions.yml"
 }
