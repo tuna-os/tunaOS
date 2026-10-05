@@ -1236,7 +1236,7 @@ variants:
     # while the Containerfile built from the pinned digest, so the pre-pull
     # fetched an image the build never used and the workaround silently did
     # nothing for guppy. Keep the two in lockstep when bumping.
-    base_image: "docker.io/gentoo/stage3:latest@sha256:cd15c74d77bfe98d1d20807a491d0a615741239ff609c38a8cda9bebe4f4bca6"
+    base_image: "docker.io/gentoo/stage3:latest@sha256:289abc94c521fdce95dc49f6fe9d5fd2a41c476d083b4620053f5c0b3db71f8e"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [gentoo]
     platforms: ["linux/amd64"]
