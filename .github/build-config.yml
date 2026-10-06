@@ -316,7 +316,7 @@ variants:
   - id: albacore
     emoji: "🐟"
     description: "Based on AlmaLinux 10"
-    base_image: "quay.io/almalinuxorg/almalinux-bootc:10@sha256:801ae1a2e8a8abfa86e0849b0c2bf7af40358ae0615e5bd53dc95c384e135ef1"
+    base_image: "quay.io/almalinuxorg/almalinux-bootc:10@sha256:1bf84d0720dca762a9b1e3cf7143a3dad2b0f85ea7848a3e9405b37472510371"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [almalinux]
     platforms: ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
@@ -789,7 +789,7 @@ variants:
     upstream_track: experimental
     description: "Based on Fedora ELN (EL11 preview, rolling)"
     experimental: true
-    base_image: "registry.fedoraproject.org/eln-bootc:latest@sha256:239d9162d1f24a153fce7ff785dc431f05f34e45197cca942dfeea2ad590341c"
+    base_image: "registry.fedoraproject.org/eln-bootc:latest@sha256:fa0783c2f708f765e68d1d04ce5bbc3d5e6d24bbd585a015ff51711bab090e00"
     # No alias: `eln` is Fedora's identifier for a moving development target,
     # and an alias tag is a stability promise this lane deliberately does not
     # make. Revisit if/when ELN gains a versioned publish.
@@ -1033,7 +1033,7 @@ variants:
     # not a rebuild of an existing one. Read docs/HUMMINGBIRD.md before
     # reasoning about what its package set should contain.
     description: "Fedora Hummingbird (hardened rolling Rawhide fork, bootc)"
-    base_image: "quay.io/hummingbird-community/bootc-os:latest@sha256:f7d105f3a84222deda796f0a7aee5d0d2edc04bcf2232ce92aa55fea0919dd79"
+    base_image: "quay.io/hummingbird-community/bootc-os:latest@sha256:d4f6387e07514e54d45ca0ac3cf8660c8b8a51b868a6d87bc08ab16aa4da95dd"
     # amd64 only, because aarch64 has nothing to build FROM yet: the base
     # stage's mandatory xfsprogs guard (build_scripts/10-base-packages.sh) has
     # no repository that can satisfy it on arm64, so every hummingbird arm64
@@ -1236,7 +1236,7 @@ variants:
     # while the Containerfile built from the pinned digest, so the pre-pull
     # fetched an image the build never used and the workaround silently did
     # nothing for guppy. Keep the two in lockstep when bumping.
-    base_image: "docker.io/gentoo/stage3:latest@sha256:cd15c74d77bfe98d1d20807a491d0a615741239ff609c38a8cda9bebe4f4bca6"
+    base_image: "docker.io/gentoo/stage3:latest@sha256:289abc94c521fdce95dc49f6fe9d5fd2a41c476d083b4620053f5c0b3db71f8e"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [gentoo]
     platforms: ["linux/amd64"]
@@ -1575,7 +1575,7 @@ variants:
     emoji: "🚀"
     upstream_track: rolling
     description: "Based on Arch Linux (rolling)"
-    base_image: "docker.io/archlinux/archlinux:latest@sha256:11d01905726c79e96cb796a6e299683325433a3f63468c435fcf6e31c649b4b1"
+    base_image: "docker.io/archlinux/archlinux:latest@sha256:1f56be0674957b8aed6efd49a033f66960c6dbf38c3c71141282d6260460cd06"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [arch, archlinux]
     # arm64 legs use ghcr.io/tuna-os/archlinuxarm instead (docker.io/archlinux
@@ -1698,7 +1698,7 @@ variants:
   - id: flounder
     emoji: "🐡"
     description: "Based on Debian 13 Trixie (stable)"
-    base_image: "docker.io/library/debian:trixie@sha256:34cd9e9fd437c0a095ec39cb2e73422c9f30821b0d0848ed74fd0d43bae4d958"
+    base_image: "docker.io/library/debian:trixie@sha256:9cc080028c43b27d2074d63a5f9caf7166d731494965616c1a6d2827a004585c"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [debian]
     platforms: ["linux/amd64"]
@@ -1833,7 +1833,7 @@ variants:
     emoji: "☢️"
     upstream_track: rolling
     description: "Based on Debian Sid (unstable, rolling)"
-    base_image: "docker.io/library/debian:sid@sha256:a2aa46262453eba3f464d8b1c7a8c31db85eb15af180ae34dd400615d7208547"
+    base_image: "docker.io/library/debian:sid@sha256:c53e050391cca6c8517c4a075230b798a0f980faa5d3ed0a912249ea882e40b5"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [debian]
     platforms: ["linux/amd64"]
