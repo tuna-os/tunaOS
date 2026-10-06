@@ -1552,3 +1552,14 @@ state; the separate display-manager and user-session checks prove more.
 On 2026-10-04 the Corral builder on AWS failed with `bootupd is required for ostree-based installs`. The Marlin image had bootupctl and systemd-boot but no GRUB update payload. Its shared installer configuration also reported an XFS root although prepare-root.conf enabled composefs.
 
 The Marlin override `50-marlin.toml` selects systemd-boot and ext4. Containerfile.arch now applies the variant overrides and checks bootc's merged configuration before release. External installers must also select `--composefs-backend` when the image has systemd-boot without a GRUB update payload; the bootupctl executable alone does not identify an OSTree installation. Corral's corrected image probe reports composefs/ext4. The AWS boot result remains a separate qualification gate.
+
+
+### Roost Screenshot consent cannot open its Access dialog
+
+**Symptom:** A Screenshot request reaches GNOME but cannot complete its consent dialog.
+
+**Measured cause:** [Roost job 111453682195](https://github.com/hanthor/roost-desktop/actions/runs/37207282677/job/111453682195) exercised GNOME 51 with GTK for Access. Allow returned a readable 1280×800 PNG. Deny returned response 2 without a URI. Locked admission returned no image. The fixture for Roost selected `org.freedesktop.impl.portal.Access=gtk;`. TunaOS omitted that preference in its experience configuration.
+
+The image had both backends; the default preferred GNOME for Access.
+
+**Fix:** Select GTK for Access, and GNOME for Screenshot and ScreenCast. The contract for the installed desktop rejects missing, wrong, duplicate, or out-of-section preferences. The admission test runs the shell validator against the shipped configuration and broken variants. Verify the final image in its separate boot gate.
