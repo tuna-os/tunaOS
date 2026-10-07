@@ -40,12 +40,12 @@ from pathlib import Path
 # Tests load this file by path, so its directory is not always on sys.path.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import matrix_evaluator  # noqa: E402
-from matrix_evaluator import (  # noqa: E402,F401  (re-exported for callers)
-    composite_verdict,
-    criterion_scope_allows,
-    green_axes_without_evidence,
-    is_stale,
-)
+
+# Re-exported for backwards-compatibility with callers (tunaOS#2532).
+composite_verdict = matrix_evaluator.composite_verdict
+criterion_scope_allows = matrix_evaluator.criterion_scope_allows
+green_axes_without_evidence = matrix_evaluator.green_axes_without_evidence
+is_stale = matrix_evaluator.is_stale
 
 REPO = "tuna-os/tunaOS"
 DOC = Path("docs/MATRIX-STATUS.md")
