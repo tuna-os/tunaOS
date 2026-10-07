@@ -280,7 +280,7 @@ jobs:
           steps.existing.outputs.exists == 'false' &&
           inputs.dry_run != true &&
           (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
-        uses: projectbluefin/actions/bootc-build/create-release@59df69d574d2cb811eb27a73eeaafe87c1beb64a # v1
+        uses: projectbluefin/actions/bootc-build/create-release@ae7d740d261d56354aeaf0a72af6f87e442e0472 # v1
         with:
           sbom-path:          ${{ steps.sbom.outputs.path }}
           tag:                ${{ steps.vars.outputs.tag }}
