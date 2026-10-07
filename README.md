@@ -84,29 +84,29 @@ _Each cell reports the newest conclusive main-branch run that asserted it, so a 
 
 | Variant | Green image cells | Latest run | Failing | Not reached |
 | :--- | ---: | :--- | :--- | :--- |
-| 🐠 `yellowfin` | **18/18** | [✅ 2026-10-06](https://github.com/tuna-os/tunaOS/actions/runs/37423589432) | — | — |
-| 🐟 `albacore` | **18/18** | [✅ 2026-10-06](https://github.com/tuna-os/tunaOS/actions/runs/37440734236) | — | — |
-| 🍣 `skipjack` | **16/16** | [❌ 2026-10-05](https://github.com/tuna-os/tunaOS/actions/runs/37356625199) | — | — |
+| 🐠 `yellowfin` | **18/18** | [❌ 2026-10-07](https://github.com/tuna-os/tunaOS/actions/runs/37579509730) | — | — |
+| 🐟 `albacore` | **18/18** | [❌ 2026-10-07](https://github.com/tuna-os/tunaOS/actions/runs/37596695817) | — | — |
+| 🍣 `skipjack` | **16/16** | [❌ 2026-10-06](https://github.com/tuna-os/tunaOS/actions/runs/37492079163) | — | — |
 | 🎏 `wahoo` | **4/4** | [❌ 2026-09-27](https://github.com/tuna-os/tunaOS/actions/runs/36310655873) | — | — |
-| 🎣 `bonito` | **16/16** | [✅ 2026-10-04](https://github.com/tuna-os/tunaOS/actions/runs/37214374678) | — | — |
-| 🐦 `hummingbird` | **1/3** | [❌ 2026-10-06](https://github.com/tuna-os/tunaOS/actions/runs/37403653602) | gnome | cosmic |
-| ⛵ `sailfin` | **6/6** | [✅ 2026-09-16](https://github.com/tuna-os/tunaOS/actions/runs/35156548081) | — | — |
-| 🌈 `guppy` | **3/3** | [✅ 2026-10-06](https://github.com/tuna-os/tunaOS/actions/runs/37470327269) | — | — |
-| 🐉 `bonito-rawhide` | **14/14** | [❌ 2026-10-05](https://github.com/tuna-os/tunaOS/actions/runs/37379947890) | — | — |
-| 🤖 `gurnard` | **2/2** | [✅ 2026-10-06](https://github.com/tuna-os/tunaOS/actions/runs/37455829492) | — | — |
-| 🪸 `grouper` | **7/7** | [✅ 2026-10-05](https://github.com/tuna-os/tunaOS/actions/runs/37386932010) | — | — |
-| 🚀 `marlin` | **17/17** | [✅ 2026-10-05](https://github.com/tuna-os/tunaOS/actions/runs/37373982623) | — | — |
-| 🐡 `flounder` | **5/5** | [✅ 2026-10-06](https://github.com/tuna-os/tunaOS/actions/runs/37400874051) | — | — |
-| ☢️ `flounder-sid` | **7/7** | [❌ 2026-10-06](https://github.com/tuna-os/tunaOS/actions/runs/37406814585) | — | — |
+| 🎣 `bonito` | **16/16** | [✅ 2026-10-06](https://github.com/tuna-os/tunaOS/actions/runs/37501774102) | — | — |
+| 🐦 `hummingbird` | **2/3** | [❌ 2026-10-07](https://github.com/tuna-os/tunaOS/actions/runs/37558103928) | — | cosmic |
+| ⛵ `sailfin` | **6/6** | [❌ 2026-10-06](https://github.com/tuna-os/tunaOS/actions/runs/37544652819) | — | — |
+| 🌈 `guppy` | **3/3** | [✅ 2026-10-07](https://github.com/tuna-os/tunaOS/actions/runs/37629055485) | — | — |
+| 🐉 `bonito-rawhide` | **14/14** | [❌ 2026-10-06](https://github.com/tuna-os/tunaOS/actions/runs/37525874390) | — | — |
+| 🤖 `gurnard` | **2/2** | [✅ 2026-10-07](https://github.com/tuna-os/tunaOS/actions/runs/37612155910) | — | — |
+| 🪸 `grouper` | **7/7** | [✅ 2026-10-06](https://github.com/tuna-os/tunaOS/actions/runs/37535357754) | — | — |
+| 🚀 `marlin` | **17/17** | [❌ 2026-10-07](https://github.com/tuna-os/tunaOS/actions/runs/37674052925) | — | — |
+| 🐡 `flounder` | **5/5** | [✅ 2026-10-07](https://github.com/tuna-os/tunaOS/actions/runs/37553798842) | — | — |
+| ☢️ `flounder-sid` | **4/7** | [❌ 2026-10-07](https://github.com/tuna-os/tunaOS/actions/runs/37561800857) | — | gnome-nvidia,kde-nvidia,xfce-nvidia |
 
 **Sibling images from separate repositories.** These TunaOS-family bootc images use BuildStream on freedesktop-sdk. They do not use packages from a distribution. Thus, the matrix above has no cells for them, and `green-criteria.yml` does not score them. Each repository runs its own checks for the build, live ISO, plain installation, and LUKS installation. The status shows the latest complete build from the main branch of that repository.
 
 | Image | Built by | Desktop | Latest main build |
 | :--- | :--- | :--- | :--- |
-| 🏔️ `ghcr.io/tuna-os/tromso` | [tromso](https://github.com/tuna-os/tromso) | KDE | [❌ 2026-08-15](https://github.com/tuna-os/tromso/actions/runs/31857853218) |
-| 🐭 `ghcr.io/tuna-os/xfce-linux` | [xfce-linux](https://github.com/tuna-os/xfce-linux) | XFCE | [✅ 2026-10-04](https://github.com/tuna-os/xfce-linux/actions/runs/37172157959) |
+| 🏔️ `ghcr.io/tuna-os/tromso` | [tromso](https://github.com/tuna-os/tromso) | KDE | [✅ 2026-10-07](https://github.com/tuna-os/tromso/actions/runs/37580695717) |
+| 🐭 `ghcr.io/tuna-os/xfce-linux` | [xfce-linux](https://github.com/tuna-os/xfce-linux) | XFCE | [✅ 2026-10-07](https://github.com/tuna-os/xfce-linux/actions/runs/37562557637) |
 
-**Built 134/136 · composite green 124/136 (98% built)** — The remainder has **1 failure** and **1 never reached** (stale: 10); no job asserted the latter. We show the two values separately. A cell with no job has no test, but it can still work.
+**Built 132/136 · composite green 124/136 (97% built)** — The remainder has **0 failures** and **4 never reached** (stale: 4); no job asserted the latter. We show the two values separately. A cell with no job has no test, but it can still work.
 
 The score for composite green uses published cells, per [docs/MATRIX-STATUS.md](docs/MATRIX-STATUS.md). [`.github/green-criteria.yml`](.github/green-criteria.yml) provides the score. Today, these criteria prevent publication: `boots`, `builds`, `desktop`, `no_silent_omissions`. A cell must satisfy each criterion.
 
