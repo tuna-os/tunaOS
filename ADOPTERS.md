@@ -89,4 +89,4 @@ Questions? Reach out on [Matrix](https://matrix.to/#/%23tunaos:reilly.asia) or o
 
 ---
 
-*Maintained by the TunaOS community. Last updated: 2026-08-11.*
+*Maintained by the TunaOS community. Last updated: 2026-10-07.*
