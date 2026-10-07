@@ -71,7 +71,7 @@ Legend:
 
 ## Current automated candidates
 
-Among 33 ISO cells for desktops, **0** meet every automated adoption gate. 25 have a current failure. 8 lack current evidence for at least one gate.
+Among 33 ISO cells for desktops, **0** meet every automated adoption gate. 24 have a current failure. 9 lack current evidence for at least one gate.
 
 A ✅ is only an **automated candidate**, not an adoption-ready declaration. Before promotion, add evidence for physical hardware, a plain install, the support owner, and the limits of that cell.
 
@@ -81,7 +81,7 @@ A ✅ is only an **automated candidate**, not an adoption-ready declaration. Bef
 | **bonito** | ❌ | ⬜ | ⬜ | ❌ | ⬜ |
 | **bonito-rawhide** | ❌ | ❌ | ❌ | ❌ | ❌ |
 | **flounder** | — | ❌ | — | — | — |
-| **grouper** | ❌ | ❌ | — | — | ❌ |
+| **grouper** | ❌ | ⬜ | — | — | ❌ |
 | **hummingbird** | ❌ | — | ❌ | — | — |
 | **marlin** | ❌ | ❌ | — | — | — |
 | **skipjack** | ❌ | ❌ | ⬜ | ❌ | ⬜ |
@@ -92,7 +92,7 @@ A ✅ is only an **automated candidate**, not an adoption-ready declaration. Bef
 | Desktop | Ready candidates | Current failures | Unverified | ISO cells |
 |---|---:|---:|---:|---:|
 | Gnome | 0 | 8 | 0 | 8 |
-| Kde | 0 | 6 | 2 | 8 |
+| Kde | 0 | 5 | 3 | 8 |
 | Cosmic | 0 | 3 | 3 | 6 |
 | Niri | 0 | 5 | 0 | 5 |
 | XFCE | 0 | 3 | 3 | 6 |

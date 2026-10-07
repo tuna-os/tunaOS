@@ -103,8 +103,10 @@ def build(today: datetime.date | None = None) -> str:
     out = [
         BEGIN,
         "",
-        "*Generated from `.github/build-config.yml`, `.github/green-criteria.yml`, "
-        "and `matrix-provenance.json`; do not edit this block by hand.*",
+        (
+            "*Generated from `.github/build-config.yml`, `.github/green-criteria.yml`, "
+            + "and `matrix-provenance.json`; do not edit this block by hand.*"
+        ),
         "",
         "## Current automated candidates",
         "",
@@ -115,9 +117,11 @@ def build(today: datetime.date | None = None) -> str:
             f"{counts['unverified']} lack current evidence for at least one gate."
         ),
         "",
-        "A ✅ is only an **automated candidate**, not an adoption-ready declaration. "
-        "Before promotion, add evidence for physical hardware, a plain install, "
-        "the support owner, and the limits of that cell.",
+        (
+            "A ✅ is only an **automated candidate**, not an adoption-ready declaration. "
+            + "Before promotion, add evidence for physical hardware, a plain install, "
+            + "the support owner, and the limits of that cell."
+        ),
         "",
         "| Variant | " + " | ".join(DESKTOPS) + " |",
         "|---|" + ":--:|" * len(DESKTOPS),
@@ -162,8 +166,10 @@ def build(today: datetime.date | None = None) -> str:
         "",
         "### Availability track",
         "",
-        "This is the support promise declared by `.github/build-config.yml`, not a "
-        "quality score. Failure remains fail-closed on every track.",
+        (
+            "This is the support promise declared by `.github/build-config.yml`, not a "
+            + "quality score. Failure remains fail-closed on every track."
+        ),
         "",
         "| Track | Variants with published desktop ISOs | Promise |",
         "|---|---|---|",
@@ -179,9 +185,11 @@ def build(today: datetime.date | None = None) -> str:
 
     out += [
         "",
-        "The per-axis verdict, evidence run, and measurement date for every cell "
-        "remain in [MATRIX-STATUS.md](MATRIX-STATUS.md) and "
-        "[matrix-provenance.json](matrix-provenance.json).",
+        (
+            "The per-axis verdict, evidence run, and measurement date for every cell "
+            + "remain in [MATRIX-STATUS.md](MATRIX-STATUS.md) and "
+            + "[matrix-provenance.json](matrix-provenance.json)."
+        ),
         "",
         END,
     ]
