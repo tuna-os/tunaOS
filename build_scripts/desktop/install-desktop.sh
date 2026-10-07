@@ -946,7 +946,7 @@ fi
 # runs the snosi-derived installed-system TAP checks (e2e-runtime-checks.sh)
 # as a second, non-fatal ExecStart — their markers are harvested from the
 # serial console by scripts/iso-e2e.sh.
-if [[ "${_TD_DESKTOP}" == gnome || "${_TD_DESKTOP}" == kde || "${_TD_DESKTOP}" == niri || "${_TD_DESKTOP}" == cosmic || "${_TD_DESKTOP}" == xfce ]]; then
+if [[ "${_TD_DESKTOP}" == gnome || "${_TD_DESKTOP}" == kde || "${_TD_DESKTOP}" == niri || "${_TD_DESKTOP}" == cosmic || "${_TD_DESKTOP}" == xfce || "${_TD_DESKTOP}" == roost ]]; then
 	# Compile dconf databases now so verify-desktop-experience.sh doesn't
 	# fail on uncompiled keyfiles. dconf-update.service handles this at
 	# first boot and 40-services.sh runs `dconf update` in the base stage,

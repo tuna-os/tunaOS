@@ -134,3 +134,22 @@ def test_timelapse_publication_is_only_enabled_for_the_full_matrix(tmp_path):
     proc, output = run_generator(filtered, variant="yellowfin")
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert output_values(output)["publish_latest"] == "false"
+
+
+def test_roost_image_admission_does_not_expand_luks_matrix(tmp_path, monkeypatch):
+    # Run the actual generator with Roost enabled, not the currently held row.
+    config = yaml.safe_load((ROOT / ".github/build-config.yml").read_text())
+    marlin = next(v for v in config["variants"] if v["id"] == "marlin")
+    roost = next(f for f in marlin["flavors"] if f["id"] == "roost")
+    roost["build_image"] = True
+    fixture = tmp_path / "fixture.yml"
+    fixture.write_text(yaml.safe_dump(config))
+    original = generator_script()
+    monkeypatch.setattr(__import__(__name__, fromlist=["generator_script"]),
+                        "generator_script", lambda: original.replace(".github/build-config.yml", str(fixture)))
+    proc, output = run_generator(tmp_path)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    cells = matrix_from(output)
+    assert {"variant": "marlin", "flavor": "gnome"} in cells
+    assert {"variant": "marlin", "flavor": "roost"} not in cells
+    assert "roost" not in json.loads(output_values(output)["base_desktops"])
