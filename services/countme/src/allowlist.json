@@ -611,6 +611,11 @@
   },
   {
     "variant": "marlin",
+    "flavor": "roost",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "marlin",
     "flavor": "xfce",
     "arch": "x86_64"
   },
