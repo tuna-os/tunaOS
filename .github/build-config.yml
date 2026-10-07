@@ -91,7 +91,7 @@ variants:
   - id: yellowfin
     emoji: "🐠"
     description: "Based on AlmaLinux Kitten 10"
-    base_image: "quay.io/almalinuxorg/almalinux-bootc:10-kitten@sha256:95d73b4e20fd6562593272e8b1630b9376b4a34507ed10bdf5f56ae10f7d7438"
+    base_image: "quay.io/almalinuxorg/almalinux-bootc:10-kitten@sha256:49c1c6f1f1d962e27d14e563b7158e074daeb2f5defc2ca1536dcff455ec6fba"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [almalinux-kitten]
     platforms: ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
@@ -316,7 +316,7 @@ variants:
   - id: albacore
     emoji: "🐟"
     description: "Based on AlmaLinux 10"
-    base_image: "quay.io/almalinuxorg/almalinux-bootc:10@sha256:5a1c306cd49c33294a70ef542538fa2bca7b2a905471b89b1f40e123e9370ac5"
+    base_image: "quay.io/almalinuxorg/almalinux-bootc:10@sha256:1bf84d0720dca762a9b1e3cf7143a3dad2b0f85ea7848a3e9405b37472510371"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [almalinux]
     platforms: ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
@@ -541,7 +541,7 @@ variants:
   - id: skipjack
     emoji: "🍣"
     description: "Based on CentOS Stream 10"
-    base_image: "quay.io/centos-bootc/centos-bootc:stream10@sha256:2b7e3b1abf8db094d1efb083721dc0f72e6feeef2355fc16ea010d0266b2bb95"
+    base_image: "quay.io/centos-bootc/centos-bootc:stream10@sha256:f1f9f8029edbd7de0cb4e1520befebe0dbd5dbd173ff5722f0f95a80087cb3fd"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [centos]
     # Note: linux/amd64/v2 intentionally omitted — verify builder support before adding.
@@ -789,7 +789,7 @@ variants:
     upstream_track: experimental
     description: "Based on Fedora ELN (EL11 preview, rolling)"
     experimental: true
-    base_image: "registry.fedoraproject.org/eln-bootc:latest@sha256:1909ffb6ae0c51c0ac831878f0778d7127f38e8bbfddf90d4a14afb281a05748"
+    base_image: "registry.fedoraproject.org/eln-bootc:latest@sha256:c00cd2c678397a111022a7de45590e6c23dbebeb5c925c283fd622fc5835b133"
     # No alias: `eln` is Fedora's identifier for a moving development target,
     # and an alias tag is a stability promise this lane deliberately does not
     # make. Revisit if/when ELN gains a versioned publish.
@@ -1033,7 +1033,7 @@ variants:
     # not a rebuild of an existing one. Read docs/HUMMINGBIRD.md before
     # reasoning about what its package set should contain.
     description: "Fedora Hummingbird (hardened rolling Rawhide fork, bootc)"
-    base_image: "quay.io/hummingbird-community/bootc-os:latest@sha256:c5539f9ed4d93aab6bd41e4f5aef8ab83055f3f9e855a47b69fadb7420d0d1df"
+    base_image: "quay.io/hummingbird-community/bootc-os:latest@sha256:d4f6387e07514e54d45ca0ac3cf8660c8b8a51b868a6d87bc08ab16aa4da95dd"
     # amd64 only, because aarch64 has nothing to build FROM yet: the base
     # stage's mandatory xfsprogs guard (build_scripts/10-base-packages.sh) has
     # no repository that can satisfy it on arm64, so every hummingbird arm64
@@ -1236,7 +1236,7 @@ variants:
     # while the Containerfile built from the pinned digest, so the pre-pull
     # fetched an image the build never used and the workaround silently did
     # nothing for guppy. Keep the two in lockstep when bumping.
-    base_image: "docker.io/gentoo/stage3:latest@sha256:9d03b48eda632da09f469d384ce77ec05618060ed4e9ac295f8192a196e7539a"
+    base_image: "docker.io/gentoo/stage3:latest@sha256:289abc94c521fdce95dc49f6fe9d5fd2a41c476d083b4620053f5c0b3db71f8e"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [gentoo]
     platforms: ["linux/amd64"]
@@ -1460,7 +1460,7 @@ variants:
   - id: gurnard
     emoji: "🤖"
     description: "Based on Ubuntu 24.04 Noble Numbat with the Pantheon desktop"
-    base_image: "docker.io/library/ubuntu:noble@sha256:561618e2c15bf2397621dd04f96926663a3b5616c189cf7e38db7e82f5c538ea"
+    base_image: "docker.io/library/ubuntu:noble@sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d7e595d9a9dc9834884ff530eb55"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [elementary]
     platforms:
@@ -1478,7 +1478,7 @@ variants:
   - id: grouper
     emoji: "🪸"
     description: "Based on Ubuntu 26.04 Resolute Raccoon"
-    base_image: "docker.io/library/ubuntu:resolute@sha256:678c6550cc43645e08669028bc177f50be4e7c5b8cca677067b1914d4afc7a03"
+    base_image: "docker.io/library/ubuntu:resolute@sha256:f144425ff09be612d6d9ad965196e9cdc23dae1f42110a8a11a3e9a8198759f7"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [ubuntu]
     # Built directly from stock Ubuntu and bootcified in Containerfile.ubuntu
@@ -1575,7 +1575,7 @@ variants:
     emoji: "🚀"
     upstream_track: rolling
     description: "Based on Arch Linux (rolling)"
-    base_image: "docker.io/archlinux/archlinux:latest@sha256:71810bb6f8bece3e2172e458dd8c0793fec139a6b6a7e5da2c832f96d1b9a0a6"
+    base_image: "docker.io/archlinux/archlinux:latest@sha256:1f56be0674957b8aed6efd49a033f66960c6dbf38c3c71141282d6260460cd06"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [arch, archlinux]
     # arm64 legs use ghcr.io/tuna-os/archlinuxarm instead (docker.io/archlinux
@@ -1616,6 +1616,15 @@ variants:
         stage: 2
         build_image: true
         build_iso: true
+      # Experimental admission #2990; signed served install verified 2026-10-04.
+      - id: roost
+        stage: 2
+        platforms: ["linux/amd64"]
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+        # #2990 admission covers image/boot only, not installer expansion.
+        luks_e2e: false
       - id: cosmic
         stage: 2
         build_image: true
@@ -1689,7 +1698,7 @@ variants:
   - id: flounder
     emoji: "🐡"
     description: "Based on Debian 13 Trixie (stable)"
-    base_image: "docker.io/library/debian:trixie@sha256:34cd9e9fd437c0a095ec39cb2e73422c9f30821b0d0848ed74fd0d43bae4d958"
+    base_image: "docker.io/library/debian:trixie@sha256:9cc080028c43b27d2074d63a5f9caf7166d731494965616c1a6d2827a004585c"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [debian]
     platforms: ["linux/amd64"]
@@ -1824,7 +1833,7 @@ variants:
     emoji: "☢️"
     upstream_track: rolling
     description: "Based on Debian Sid (unstable, rolling)"
-    base_image: "docker.io/library/debian:sid@sha256:24c766c06ebdbda66a026e92361ede7d9212819701b2fca82e347ef0c240cb2c"
+    base_image: "docker.io/library/debian:sid@sha256:c53e050391cca6c8517c4a075230b798a0f980faa5d3ed0a912249ea882e40b5"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [debian]
     platforms: ["linux/amd64"]

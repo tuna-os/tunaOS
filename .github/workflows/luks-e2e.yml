@@ -159,6 +159,8 @@ jobs:
           fi
           echo "tpm_autounlock=${TPM_AUTOUNLOCK}" >> "$GITHUB_OUTPUT"
 
+          # Explicit image-only admissions (luks_e2e:false) do not add
+          # installer cells until capacity/qualification is approved.
           # Plain desktop flavors are the install videos we publish. The
           # suffixes below are overlay or hardware variants, not separate
           # base-DE walkthroughs; keeping this derived from build-config.yml
@@ -166,6 +168,7 @@ jobs:
           BASE_DESKTOPS="$(echo "$json" | jq -c '
             [.variants[].flavors[]
              | select(.build_image == true)
+             | select(.luks_e2e != false)
              | .id
              | select(. != "base")
              | select(test("-(hwe|nvidia|asahi|t2|zfs|cachyos)$") | not)]
@@ -204,6 +207,7 @@ jobs:
                    | select($skiplist | index($v) | not)
                    | ([$variant.flavors[]
                        | select(.build_image == true)
+             | select(.luks_e2e != false)
                        # Headless base derivatives (base-hwe/base-nvidia) have
                        # no login target, just like base itself.
                        | select(.id | test("^base(?:-|$)") | not)
@@ -227,6 +231,7 @@ jobs:
               --arg fv "$FILTER_VARIANT" --arg ff "$FILTER_FLAVOR" \
               '{include: [ .variants[] | . as $variant | .id as $v | .flavors[]
                  | select(.build_image == true)
+             | select(.luks_e2e != false)
                  | select(.id | test("^base(?:-|$)") | not)
                  | select((.platforms // $variant.platforms // []) | index("linux/amd64"))
                  | {variant: $v, flavor: .id}
@@ -263,6 +268,7 @@ jobs:
               .variants[] | . as $variant
               | [.id, ([.flavors[]
                  | select(.build_image == true)
+             | select(.luks_e2e != false)
                  | select(.id | test("^base(?:-|$)") | not)
                  | select((.platforms // $variant.platforms // []) | index("linux/amd64"))
                  | .id] | join(", "))]
@@ -275,6 +281,7 @@ jobs:
               [.variants[] | . as $variant
                | select([.flavors[]
                  | select(.build_image == true)
+             | select(.luks_e2e != false)
                  | select(.id | test("^base(?:-|$)") | not)
                  | select((.platforms // $variant.platforms // []) | index("linux/amd64"))] | length == 0)
                | "- `\(.id)`: no amd64 graphical image (`build_image: true`)"]

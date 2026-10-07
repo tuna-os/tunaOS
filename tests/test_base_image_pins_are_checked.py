@@ -37,7 +37,7 @@ def _exe(path: Path, body: str) -> None:
     path.chmod(path.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
 
 
-def run_check(tmp_path, refs, *, codes=None):
+def run_check(tmp_path, refs, *, codes=None, args=None):
     """Run the script with a stubbed registry.
 
     `codes` maps a digest substring to the HTTP code the fake curl returns;
@@ -81,8 +81,11 @@ exit 0
     env["CONFIG"] = str(tmp_path / "config.yml")
     (tmp_path / "config.yml").write_text("variants: []\n", encoding="utf-8")
 
+    cmd = ["bash", str(SCRIPT)]
+    if args:
+        cmd.extend(args)
     proc = subprocess.run(
-        ["bash", str(SCRIPT)], capture_output=True, text=True, env=env, cwd=ROOT
+        cmd, capture_output=True, text=True, env=env, cwd=ROOT
     )
     urls = (tmp_path / "urls.txt").read_text() if (tmp_path / "urls.txt").exists() else ""
     return proc, urls
@@ -306,3 +309,23 @@ def test_the_pin_extraction_uses_no_jq_only_syntax():
         "the jq `empty` fallback is rejected by the pinned mikefarah yq "
         "(v4.53.3: 'lexer: invalid input text'); use `.base_image // \"\"`"
     )
+
+
+def test_variant_filter_validates_argument_syntax(tmp_path):
+    proc, _ = run_check(tmp_path, [GOOD], args=["invalid;name"])
+    assert proc.returncode == 2
+    assert "usage:" in proc.stderr
+
+
+def test_variant_filter_rejects_extra_arguments(tmp_path):
+    proc, _ = run_check(tmp_path, [GOOD], args=["bonito", "extra"])
+    assert proc.returncode == 2
+    assert "usage:" in proc.stderr
+
+
+def test_variant_filter_scopes_base_and_arch_queries():
+    body = SCRIPT.read_text(encoding="utf-8")
+    assert 'VARIANT_FILTER="${1:-}"' in body
+    assert "select(.id ==" in body
+    assert "^[a-z0-9-]+$" in body
+
