@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-desktop="${1:?usage: verify-desktop-experience.sh <gnome|kde|niri|cosmic|xfce|pantheon> [--runtime]}"
+desktop="${1:?usage: verify-desktop-experience.sh <gnome|kde|niri|cosmic|xfce|pantheon|roost> [--runtime]}"
 mode="${2:-build}"
 
 # At runtime the E2E gate greps ttyS0 for a contract marker; a silent early
@@ -69,6 +69,28 @@ require_glob() { compgen -G "$1" >/dev/null || {
 	fi
 	exit 1
 }; }
+# Roost Screenshot consent in GNOME 51 needs GTK Access routing (Roost
+# portal job 111453682195). Check the installed configuration, not only
+# whether a configuration file was copied into the image.
+require_portal_preference() {
+	local config="$1" interface="$2" backend="$3"
+	awk -v interface="$interface" -v backend="$backend" '
+		/^[[:space:]]*\[/ { preferred = ($0 ~ /^[[:space:]]*\[preferred\][[:space:]]*$/); next }
+		preferred {
+			line = $0
+			sub(/[[:space:]]*#.*$/, "", line)
+			split(line, pair, "=")
+			gsub(/^[[:space:]]+|[[:space:]]+$/, "", pair[1])
+			gsub(/^[[:space:]]+|[[:space:]]+$/, "", pair[2])
+			sub(/;$/, "", pair[2])
+			if (pair[1] == interface) { found++; valid = (pair[2] == backend) }
+		}
+		END { exit !(found == 1 && valid) }
+	' "$config" || {
+		echo "missing or ambiguous portal preference: $interface=$backend in $config" >&2
+		return 1
+	}
+}
 require_unit() { systemctl list-unit-files "$1.service" --no-legend 2>/dev/null | grep -q "^$1.service" || {
 	echo "missing unit: $1.service" >&2
 	if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${desktop:-}" != cosmic ]]; then
@@ -397,6 +419,34 @@ kde)
 	require_command dolphin
 	require_command konsole
 	dm_pattern='^(sddm|plasmalogin)\.service$'
+	;;
+roost)
+	experience="tunaos/roost"
+	for binary in roost-compositor roost-session roost-shell-host roost-shell-gtk roost-ibus-bridge roost-greeter; do
+		require_command "$binary"
+		"$binary" --version
+	done
+	require_glob '/usr/share/wayland-sessions/roost.desktop'
+	grep -qx 'Exec=roost-session' /usr/share/wayland-sessions/roost.desktop
+	require_glob '/etc/pam.d/roost-lock'
+	require_glob '/usr/lib/systemd/user/roost-session.target'
+	require_glob '/etc/greetd/environments'
+	grep -qx 'roost-session' /etc/greetd/environments
+	require_glob '/usr/share/xdg-desktop-portal/roost-portals.conf'
+	for portal in ScreenCast Screenshot; do
+		require_portal_preference /usr/share/xdg-desktop-portal/roost-portals.conf "org.freedesktop.impl.portal.$portal" gnome
+	done
+	require_portal_preference /usr/share/xdg-desktop-portal/roost-portals.conf org.freedesktop.impl.portal.Access gtk
+	require_glob '/usr/lib/gnome-shell-calendar-server'
+	require_command ibus-daemon
+	require_command gnome-keyring-daemon
+	require_command wpctl
+	require_command gtkgreet
+	require_command cage
+	require_any_glob '/usr/libexec/xdg-desktop-portal-gnome' '/usr/lib/xdg-desktop-portal-gnome'
+	require_any_glob '/usr/libexec/xdg-desktop-portal-gtk' '/usr/lib/xdg-desktop-portal-gtk'
+	require_unit greetd
+	dm_pattern='^greetd\.service$'
 	;;
 niri)
 	experience="zirconium-dev/zirconium"
