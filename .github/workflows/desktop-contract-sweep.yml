@@ -287,7 +287,7 @@ jobs:
 
       - name: Upload cell result
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: contract-${{ matrix.variant }}-${{ matrix.desktop }}
           path: |
@@ -420,7 +420,7 @@ jobs:
       # failed; they had all measured their image and said so. A failing gate
       # is exactly when the per-cell measurements matter most, so publish them
       # and let the gate fail the run on its own.
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: desktop-contract-baseline
