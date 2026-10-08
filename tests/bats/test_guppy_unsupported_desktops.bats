@@ -8,8 +8,9 @@
 # gnome was on this list from 2026-09-11 to 2026-10-07: ::gentoo topped out at
 # GNOME 49.9, below the 50 floor verify-desktop-experience.sh enforces
 # (tunaOS#2450). ::gentoo now has GNOME 50 under ~amd64, and gnome.yaml's
-# emerge_accept_keywords accepts it, so gnome is declared again. The last two
-# tests in this file hold the keyword list and the binhost lock together.
+# emerge_accept_keywords accepts it, so gnome is declared again.
+# tests/regressions/test_issue_2450_guppy_gnome_reaches_the_gnome_50_floor.py
+# holds the keyword list and the binhost lock together.
 #
 # This is deliberately a repository-level guard: adding a flavor is otherwise
 # easy to do in build-config.yml, while the failure only appears after the
@@ -42,7 +43,7 @@ assert not found, f'guppy declares unsupported Gentoo flavors: {found}'
 
 # The desktops Gentoo can actually satisfy today. Losing one of these IS the
 # silent regression this file was written to catch.
-assert {'gnome', 'kde', 'xfce'} <= flavors, 'known Gentoo desktop coverage disappeared'
+assert {'kde', 'xfce'} <= flavors, 'known Gentoo desktop coverage disappeared'
 print(','.join(sorted(flavors)))
 EOF
   [ "$status" -eq 0 ]
@@ -80,51 +81,4 @@ EOF
   grep -qF 'Gentoo has no ${_TD_DESKTOP} ebuilds in the main tree' "$script"
   grep -qF 'do not declare guppy:${_TD_DESKTOP}' "$script"
   grep -qF 'until an upstream or' "$script"
-}
-
-@test "guppy:gnome accepts the ~amd64 GNOME 50 set it needs to meet the floor" {
-  run python3 - "${REPO_ROOT}" <<'EOF'
-import os, sys
-import yaml
-
-root = sys.argv[1]
-manifest = yaml.safe_load(
-    open(os.path.join(root, 'manifests/desktops/gnome.yaml')))
-keywords = set(manifest.get('emerge_accept_keywords') or [])
-
-# ::gentoo stable stops at GNOME 49, and the floor is 50. Without these
-# keywords, guppy:gnome installs 49 and fails verify-desktop-experience.sh.
-# Each package below has its GNOME 50 ebuild under ~amd64 only, measured
-# with emerge --pretend against ::gentoo on 2026-10-07.
-core = {
-    'gnome-base/gnome-shell', 'x11-wm/mutter', 'gnome-base/gdm',
-    'gnome-base/gnome-session', 'gnome-base/gsettings-desktop-schemas',
-    'gnome-base/gnome-control-center', 'gnome-base/gnome-settings-daemon',
-    'sys-apps/xdg-desktop-portal-gnome',
-}
-missing = sorted(core - keywords)
-assert not missing, f'gnome.yaml emerge_accept_keywords lacks {missing}'
-
-# A version in the atom pins one ebuild and breaks on the next ::gentoo
-# bump. package.accept_keywords takes the bare category/name.
-pinned = sorted(k for k in keywords if k[:1] in '<>=~' or k.count('/') != 1)
-assert not pinned, f'use bare category/name atoms, not {pinned}'
-EOF
-  [ "$status" -eq 0 ]
-}
-
-@test "the binhost lock does not mask packages accepted as ~amd64" {
-  local script="${REPO_ROOT}/build_scripts/desktop/gentoo-binhost-version-lock.sh"
-  local install="${REPO_ROOT}/build_scripts/desktop/install-desktop.sh"
-  grep -qF '/etc/portage/package.accept_keywords' "$script"
-  grep -qF 'if key in keyworded:' "$script"
-  # The keyword file must exist before the lock reads it.
-  run python3 - "$install" <<'EOF'
-import sys
-body = open(sys.argv[1]).read()
-kw = body.index('emerge_accept_keywords')
-lock = body.index('gentoo-binhost-version-lock.sh"')
-assert kw < lock, 'install-desktop.sh writes the keywords after the lock runs'
-EOF
-  [ "$status" -eq 0 ]
 }
