@@ -338,7 +338,7 @@ jobs:
 
       - name: Upload signed ISO artifact
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: iso-${{ inputs.variant }}-${{ inputs.flavor }}-${{ inputs.safeplatform }}
           path: |
@@ -379,7 +379,7 @@ jobs:
 
       - name: Upload e2e artifacts
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: e2e-${{ inputs.variant }}-${{ inputs.flavor }}-${{ inputs.safeplatform }}
           path: |
