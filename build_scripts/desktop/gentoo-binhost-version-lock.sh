@@ -33,6 +33,14 @@
 # inside the meta package then has nowhere to resolve but the version the
 # binhost actually built, instead of whatever the tree sync just pulled.
 #
+# Packages accepted as ~amd64 in /etc/portage/package.accept_keywords are
+# not locked. The binhost builds only stable versions, so a keyworded package
+# is never on it, and a lock to the binhost version would undo the keyword.
+# guppy:gnome keywords the GNOME 50 set to meet the version floor
+# (tunaOS#2450): without this exception, the lock masks gnome-shell above the
+# binhost's 49.7, the --pretend check below still resolves (to 49), and the
+# image fails verify-desktop-experience.sh.
+#
 # Safety
 # ------
 # Best-effort and fails open at every step: no binhost configured, no
@@ -53,6 +61,7 @@ _GBL_EMERGE_PKGS=("$@")
 
 _GBL_MASK_FILE="/etc/portage/package.mask/gentoo-binhost-version-lock"
 _GBL_BINREPO_CONF="/etc/portage/binrepos.conf"
+_GBL_KEYWORDS="/etc/portage/package.accept_keywords"
 
 if [[ ! -d "${_GBL_BINREPO_CONF}" ]] || ! grep -rhq '^sync-uri' "${_GBL_BINREPO_CONF}" 2>/dev/null; then
 	echo "gentoo-binhost-version-lock: no binrepos.conf sync-uri configured, skipping" >&2
@@ -70,11 +79,12 @@ fi
 
 mkdir -p "$(dirname "${_GBL_MASK_FILE}")"
 
-if ! python3 - "${_GBL_ANCHOR_CAT}" "${_GBL_PKGIDX}" >"${_GBL_MASK_FILE}.tmp" 2>/tmp/gentoo-binhost-version-lock.err <<'PYEOF'
+if ! python3 - "${_GBL_ANCHOR_CAT}" "${_GBL_PKGIDX}" "${_GBL_KEYWORDS}" >"${_GBL_MASK_FILE}.tmp" 2>/tmp/gentoo-binhost-version-lock.err <<'PYEOF'
+import os
 import re
 import sys
 
-anchor_cat, pkgidx_path = sys.argv[1], sys.argv[2]
+anchor_cat, pkgidx_path, keywords_path = sys.argv[1], sys.argv[2], sys.argv[3]
 
 # PMS version grammar (simplified): digits.digits..., optional letter,
 # optional _alpha/_beta/_pre/_rc/_p suffix, optional -rN revision.
@@ -98,6 +108,36 @@ def version_key(v):
     return [int(x) if x.isdigit() else x for x in re.split(r"[.\-]", v)]
 
 
+def keyworded_packages(path):
+    """category/name of every entry in package.accept_keywords (a file or a
+    directory of files). Version operators are stripped: an atom like
+    =gnome-base/gnome-shell-50.5 still exempts gnome-base/gnome-shell."""
+    if os.path.isdir(path):
+        files = [os.path.join(path, n) for n in sorted(os.listdir(path))]
+    elif os.path.isfile(path):
+        files = [path]
+    else:
+        return set()
+    names = set()
+    for name in files:
+        if not os.path.isfile(name):
+            continue
+        with open(name, errors="replace") as f:
+            for line in f:
+                fields = line.split("#", 1)[0].split()
+                if not fields:
+                    continue
+                atom = re.sub(r"^[<>=~]+", "", fields[0])
+                atom = re.split(r"[:\[]", atom, maxsplit=1)[0]
+                cat, sep, rest = atom.partition("/")
+                if not sep:
+                    continue
+                pn, pv = split_pn_pv(rest)
+                names.add(f"{cat}/{pn if pn else rest}")
+    return names
+
+
+keyworded = keyworded_packages(keywords_path)
 versions_by_pkg = {}
 with open(pkgidx_path, errors="replace") as f:
     for line in f:
@@ -113,6 +153,8 @@ with open(pkgidx_path, errors="replace") as f:
         versions_by_pkg.setdefault(f"{cat}/{pn}", set()).add(pv)
 
 for key in sorted(versions_by_pkg):
+    if key in keyworded:
+        continue
     versions = versions_by_pkg[key]
     try:
         newest = sorted(versions, key=version_key)[-1]
