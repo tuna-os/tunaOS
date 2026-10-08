@@ -1563,3 +1563,12 @@ The Marlin override `50-marlin.toml` selects systemd-boot and ext4. Containerfil
 The image had both backends; the default preferred GNOME for Access.
 
 **Fix:** Select GTK for Access, and GNOME for Screenshot and ScreenCast. The contract for the installed desktop rejects missing, wrong, duplicate, or out-of-section preferences. The admission test runs the shell validator against the shipped configuration and broken variants. Verify the final image in its separate boot gate.
+
+
+### CI steps download an unpinned yq binary
+
+**Symptom:** A CI step downloads `releases/latest/download/yq_linux_amd64` from `mikefarah/yq` into `/usr/bin` or `/usr/local/bin`. The step does not pin a version.
+
+**Measured cause:** Issue tunaOS#2071 found these downloads in CI workflows. The `latest` link can change at any time. The step installs the file as root, and no step checks the file. A changed upstream file thus runs as root on the runner.
+
+**Fix:** Workflows and composite actions use the `.github/actions/setup-yq` action. That action downloads yq `v4.53.3` and checks its SHA-256 value before it installs the file. It also replaces the yq that the runner image supplies, because that yq has a different version. The test `tests/regressions/test_issue_2071_yq_downloads_are_pinned.py` checks each yq download in the workflows and actions.

@@ -50,10 +50,12 @@ jobs:
       - name: Setup Homebrew
         uses: Homebrew/actions/setup-homebrew@f830e99d47c69efee99f1ddbf18a8e3144d1b93e
 
+      - name: Setup yq
+        uses: ./.github/actions/setup-yq
+
       - name: Install test dependencies
         run: |
           brew install bats-core just
-          sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
           pip3 install pytest pillow requests pyyaml --break-system-packages 2>/dev/null || pip3 install pytest pillow requests pyyaml --user
 
       - name: Draw the seed

@@ -23,13 +23,8 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Install yq
-        run: |
-          if ! command -v yq &> /dev/null; then
-            sudo wget -q --tries=3 --waitretry=5 https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/bin/yq
-            sudo chmod +x /usr/bin/yq
-          fi
-        shell: bash
+      - name: Setup yq
+        uses: ./.github/actions/setup-yq
       - name: Generate matrix
         id: set-matrix
         env:
@@ -93,8 +88,8 @@ jobs:
       - name: Install just
         run: brew install just
 
-      - name: Install yq
-        run: sudo wget -q --tries=3 --waitretry=5 -O /usr/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
+      - name: Setup yq
+        uses: ./.github/actions/setup-yq
 
       - name: Verify image
         id: run_verify

@@ -37,10 +37,11 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install oras and yq
+      - name: Setup yq
+        uses: ./.github/actions/setup-yq
+
+      - name: Install oras
         run: |
-          sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/download/v4.53.3/yq_linux_amd64
-          sudo chmod +x /usr/bin/yq
           curl -fsSL https://github.com/oras-project/oras/releases/download/v1.3.0/oras_1.3.0_linux_amd64.tar.gz \
             | sudo tar -xz -C /usr/local/bin oras
 
@@ -98,10 +99,11 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install oras and yq
+      - name: Setup yq
+        uses: ./.github/actions/setup-yq
+
+      - name: Install oras
         run: |
-          sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/download/v4.53.3/yq_linux_amd64
-          sudo chmod +x /usr/bin/yq
           curl -fsSL https://github.com/oras-project/oras/releases/download/v1.3.0/oras_1.3.0_linux_amd64.tar.gz \
             | sudo tar -xz -C /usr/local/bin oras
 
