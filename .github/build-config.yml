@@ -1033,7 +1033,7 @@ variants:
     # not a rebuild of an existing one. Read docs/HUMMINGBIRD.md before
     # reasoning about what its package set should contain.
     description: "Fedora Hummingbird (hardened rolling Rawhide fork, bootc)"
-    base_image: "quay.io/hummingbird-community/bootc-os:latest@sha256:c1b785e5a38b1834580b62b175fa807116c6e3a94b5d719ce3b43a194bbfe886"
+    base_image: "quay.io/hummingbird-community/bootc-os:latest@sha256:7bc8675d5c6230462facd8f51fef3860a25f8737b9a4ed977650a3310dcdc4b0"
     # amd64 only, because aarch64 has nothing to build FROM yet: the base
     # stage's mandatory xfsprogs guard (build_scripts/10-base-packages.sh) has
     # no repository that can satisfy it on arm64, so every hummingbird arm64
