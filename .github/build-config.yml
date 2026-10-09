@@ -1617,9 +1617,17 @@ variants:
         build_image: true
         build_iso: true
       # Experimental admission #2990; signed served install verified 2026-10-04.
-      - id: roost
+      # Tuna Desktop, formerly Roost: this flavor was `roost` until
+      # tuna-os/tuna-desktop#536 renamed the project.
+      - id: tuna
         stage: 2
         platforms: ["linux/amd64"]
+        # Keep publishing the old flavor's tags (marlin:roost, roost-amd64,
+        # roost-<date>) as the same digest, so installs that `bootc switch`ed
+        # to ghcr.io/tuna-os/marlin:roost keep receiving updates. The
+        # tuna-desktop package's compat layer (roost.desktop, roost-lock,
+        # roost-* links) keeps those sessions working.
+        tag_aliases: [roost]
         build_image: true
         build_iso: false
         build_qcow2: false

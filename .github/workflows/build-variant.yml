@@ -151,6 +151,9 @@ jobs:
                 image_name:    ($v.publish_name // $v.id),
                 image_aliases: (($v.aliases // []) | join(",")),
                 published_tag: (.id + (if ($v.tag_suffix // "") == "" then "" else "-" + $v.tag_suffix end)),
+                # Old flavor names still published as the same digest
+                # (the marlin tuna flavor keeps :roost), suffixed like the tag.
+                tag_aliases:   ((.tag_aliases // []) | map(. + (if ($v.tag_suffix // "") == "" then "" else "-" + $v.tag_suffix end)) | join(",")),
                 variant_emoji: ($v.emoji // "❓"),
                 description:   ($v.description // ""),
                 base_image:    $v.base_image,
@@ -172,6 +175,7 @@ jobs:
                 variant:       .variant,
                 image_name:    .image_name,
                 image_aliases: .image_aliases,
+                tag_aliases:   .tag_aliases,
                 published_tag: .published_tag,
                 variant_emoji: .variant_emoji,
                 description:   .description,
@@ -254,6 +258,7 @@ jobs:
     with:
       image-name: ${{ matrix.image_name }}
       image-aliases: ${{ matrix.image_aliases }}
+      tag-aliases: ${{ matrix.tag_aliases }}
       image-variant: ${{ matrix.variant }}
       image-desc: ${{ matrix.description }}
       flavor: ${{ matrix.flavor }}
@@ -302,6 +307,7 @@ jobs:
     with:
       image-name: ${{ matrix.image_name }}
       image-aliases: ${{ matrix.image_aliases }}
+      tag-aliases: ${{ matrix.tag_aliases }}
       image-variant: ${{ matrix.variant }}
       image-desc: ${{ matrix.description }}
       flavor: ${{ matrix.flavor }}
@@ -337,6 +343,7 @@ jobs:
     with:
       image-name: ${{ matrix.image_name }}
       image-aliases: ${{ matrix.image_aliases }}
+      tag-aliases: ${{ matrix.tag_aliases }}
       image-variant: ${{ matrix.variant }}
       image-desc: ${{ matrix.description }}
       flavor: ${{ matrix.flavor }}
@@ -366,6 +373,7 @@ jobs:
     with:
       image-name: ${{ matrix.image_name }}
       image-aliases: ${{ matrix.image_aliases }}
+      tag-aliases: ${{ matrix.tag_aliases }}
       image-variant: ${{ matrix.variant }}
       image-desc: ${{ matrix.description }}
       flavor: ${{ matrix.flavor }}

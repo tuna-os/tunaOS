@@ -98,7 +98,7 @@ def test_no_disabled_flavor_is_the_parent_of_an_enabled_one():
 
 
 def test_the_filtered_matrix_is_the_cell_count_we_publish():
-    """The active matrix includes the authorized amd64 Roost image cell.
+    """The active matrix includes the authorized amd64 Tuna Desktop image cell.
 
     Not a coincidence worth leaving implicit: if this number drifts from
     docs/MATRIX-STATUS.md and the README, one of the two is wrong about what

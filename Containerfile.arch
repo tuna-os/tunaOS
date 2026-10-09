@@ -376,15 +376,16 @@ RUN --mount=type=bind,from=context,source=/,target=/run/context \
     /run/context/build_scripts/desktop/install-desktop.sh niri
 RUN ln -sf /var/opt /opt 2>/dev/null || true
 
-# Experimental Roost session: in-house signed packages (upstream #69).
-FROM base-no-de AS roost
+# Experimental Tuna Desktop session (formerly Roost): in-house signed packages
+# (upstream tuna-desktop#69, renamed in #536).
+FROM base-no-de AS tuna
 RUN --mount=type=bind,from=context,source=/,target=/run/context \
     pacman-key --init && \
-    pacman-key --add /run/context/experiences/roost/tideforge-public.gpg && \
+    pacman-key --add /run/context/experiences/tuna/tideforge-public.gpg && \
     pacman-key --lsign-key 4E5CC9F8B3B521793D95266E629BE6EA45188366 && \
     printf '\n[tunaos]\nSigLevel = Required DatabaseOptional\nServer = https://repo.tunaos.org/pacman/arch/$arch\n' >> /etc/pacman.conf && \
     pacman -Sy --noconfirm && \
-    /run/context/build_scripts/desktop/install-desktop.sh roost
+    /run/context/build_scripts/desktop/install-desktop.sh tuna
 RUN bootc container lint
 
 FROM base-no-de AS xfce
