@@ -1563,3 +1563,20 @@ The Marlin override `50-marlin.toml` selects systemd-boot and ext4. Containerfil
 The image had both backends; the default preferred GNOME for Access.
 
 **Fix:** Select GTK for Access, and GNOME for Screenshot and ScreenCast. The contract for the installed desktop rejects missing, wrong, duplicate, or out-of-section preferences. The admission test runs the shell validator against the shipped configuration and broken variants. Verify the final image in its separate boot gate.
+
+### gtkgreet clock and prompt labels disappear into the wallpaper
+
+**Symptom:** The acceptance screenshot for tunaOS#3110 on Marlin shows the
+Tuna Desktop clock and `Username:` label as dark text over the dark wallpaper.
+
+**Measured cause:** Both TunaOS gtkgreet stylesheets put the intended panel on
+`box#window-box`. gtkgreet's `window.c` names that outer GtkBox `window`, its
+clock label `clock`, and its prompt container `body`, so GTK matched no panel
+rule. The screenshot consequently shows the wallpaper immediately behind the
+labels.
+
+**Fix:** Target the real `box#window` widget with an opaque panel and explicitly
+set light text on `label#clock` and `box#body label`. The foreground and panel
+colours have a 15.2:1 contrast ratio. The tunaOS#3110 regression test
+extracts both emitted stylesheets, rejects the nonexistent selector, and
+computes a minimum 7:1 ratio.
