@@ -1,0 +1,300 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.tunaos.org/build-health.schema.json",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "integer"
+    },
+    "kind": {
+      "const": "build-health",
+      "type": "string"
+    },
+    "generatedAt": {
+      "$ref": "identity.schema.json#/$defs/utcTimestamp"
+    },
+    "sourceRevision": {
+      "$ref": "identity.schema.json#/$defs/revision"
+    },
+    "coverageDigest": {
+      "$ref": "identity.schema.json#/$defs/digest"
+    },
+    "collection": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "enum": [
+            "available",
+            "degraded",
+            "failed"
+          ]
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "$ref": "identity.schema.json#/$defs/identifier"
+              },
+              "repository": {
+                "type": "string",
+                "minLength": 1
+              },
+              "status": {
+                "enum": [
+                  "available",
+                  "unavailable",
+                  "stale",
+                  "unknown"
+                ]
+              },
+              "evidence": {
+                "type": "array",
+                "items": {
+                  "$ref": "identity.schema.json#/$defs/evidence"
+                },
+                "minItems": 0
+              }
+            },
+            "required": [
+              "id",
+              "repository",
+              "status",
+              "evidence"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "status",
+        "sources"
+      ],
+      "additionalProperties": false
+    },
+    "freshnessPolicy": {
+      "type": "object",
+      "properties": {
+        "buildSeconds": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "feedSeconds": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "buildSeconds",
+        "feedSeconds"
+      ],
+      "additionalProperties": false
+    },
+    "targets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "target": {
+            "$ref": "identity.schema.json#/$defs/target"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "scheduled": {
+            "type": "boolean"
+          },
+          "latestAttempt": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "identity": {
+                    "$ref": "identity.schema.json#/$defs/attemptIdentity"
+                  },
+                  "status": {
+                    "enum": [
+                      "success",
+                      "running",
+                      "failed",
+                      "blocked",
+                      "missing",
+                      "stale",
+                      "unknown"
+                    ]
+                  },
+                  "imageDigest": {
+                    "anyOf": [
+                      {
+                        "$ref": "identity.schema.json#/$defs/digest"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "measuredAt": {
+                    "$ref": "identity.schema.json#/$defs/utcTimestamp"
+                  },
+                  "evidence": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "identity.schema.json#/$defs/evidence"
+                    },
+                    "minItems": 0
+                  }
+                },
+                "required": [
+                  "identity",
+                  "status",
+                  "measuredAt",
+                  "evidence"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lastVerifiedPublication": {
+            "anyOf": [
+              {
+                "$ref": "identity.schema.json#/$defs/publication"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "packageReadiness": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "enum": [
+                  "healthy",
+                  "running",
+                  "failed",
+                  "blocked",
+                  "missing",
+                  "stale",
+                  "unknown"
+                ]
+              },
+              "factoryDigest": {
+                "anyOf": [
+                  {
+                    "$ref": "identity.schema.json#/$defs/digest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "contractDigest": {
+                "anyOf": [
+                  {
+                    "$ref": "identity.schema.json#/$defs/digest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "measuredAt": {
+                "anyOf": [
+                  {
+                    "$ref": "identity.schema.json#/$defs/utcTimestamp"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "evidence": {
+                "type": "array",
+                "items": {
+                  "$ref": "identity.schema.json#/$defs/evidence"
+                },
+                "minItems": 0
+              }
+            },
+            "required": [
+              "status",
+              "measuredAt",
+              "evidence"
+            ],
+            "additionalProperties": false
+          },
+          "contractStatus": {
+            "enum": [
+              "pass",
+              "fail",
+              "running",
+              "blocked",
+              "missing",
+              "stale",
+              "unknown"
+            ]
+          },
+          "status": {
+            "enum": [
+              "healthy",
+              "running",
+              "failed",
+              "blocked",
+              "missing",
+              "stale",
+              "unknown"
+            ]
+          },
+          "reasons": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "minItems": 0
+          },
+          "measuredAt": {
+            "anyOf": [
+              {
+                "$ref": "identity.schema.json#/$defs/utcTimestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "target",
+          "required",
+          "scheduled",
+          "latestAttempt",
+          "lastVerifiedPublication",
+          "packageReadiness",
+          "contractStatus",
+          "status",
+          "reasons"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 1
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "kind",
+    "generatedAt",
+    "sourceRevision",
+    "coverageDigest",
+    "collection",
+    "freshnessPolicy",
+    "targets"
+  ],
+  "additionalProperties": false
+}
