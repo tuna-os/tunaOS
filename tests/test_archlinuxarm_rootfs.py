@@ -188,3 +188,12 @@ def test_workflow_verifies_before_extraction_and_never_updates_production_tags()
     assert '"$REF:latest"' not in text
     assert 'subject-digest: ${{ steps.candidate.outputs.digest }}' in text
     assert 'predicate-path: rootfs-evidence/producer-receipt.json' in text
+
+
+def test_repository_probe_cannot_consume_remaining_loop_input():
+    # CI 38074478233 processed core only: buildah inherited the repository list
+    # stdin and consumed extra/alarm/aur, leaving required proof files absent.
+    text = (Path(__file__).parents[1] / '.github/workflows/build-archlinuxarm-base.yml').read_text()
+    probe = text.split('while IFS= read -r repo; do', 1)[1].split('done <', 1)[0]
+    assert 'pacman-conf --repo "$repo" SigLevel' in probe
+    assert '</dev/null' in probe
