@@ -245,7 +245,8 @@ def test_verified_receipt_reconciliation_rejects_substitutions(tmp_path, field, 
 def test_workflow_runs_crypto_verification_with_exact_ci_policy():
     text = (Path(__file__).parents[1] / '.github/workflows/build-archlinuxarm-base.yml').read_text()
     step = text.split('name: Verify published candidate attestations', 1)[1].split('- name:', 1)[0]
-    for required in ('gh attestation verify', '--signer-workflow', '--cert-identity',
+    assert '--signer-workflow' not in step  # Mutually exclusive with exact certificate identity.
+    for required in ('gh attestation verify', '--cert-identity',
                      '--source-digest "$GITHUB_SHA"', '--source-ref "$GITHUB_REF"',
                      '--bundle-from-oci', '--deny-self-hosted-runners',
                      '--predicate-type https://tunaos.org/attestations/archlinuxarm-base/v1'):
