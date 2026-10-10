@@ -31,9 +31,11 @@ ARTIFACTS_WF="${REPO_ROOT}/.github/workflows/reusable-build-artifacts.yml"
 }
 
 @test "scheduled runs still publish, so documented download URLs stay current" {
-  run grep -c "upload-r2: \${{ github.event_name == 'schedule' || inputs.publish-isos }}" "$VARIANT_WF"
+  run grep -F -c "upload-r2: \${{ github.repository == 'tuna-os/tunaOS' && github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || inputs.publish-isos) }}" "$VARIANT_WF"
   [ "$status" -eq 0 ]
-  [ "$output" -ge 1 ]
+  local calls
+  calls=$(grep -c 'uses: ./.github/workflows/reusable-build-artifacts.yml' "$VARIANT_WF")
+  [ "$output" -eq "$calls" ]
 }
 
 @test "publish-isos exists as an opt-in and is off by default" {
