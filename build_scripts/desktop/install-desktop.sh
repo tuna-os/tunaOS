@@ -653,6 +653,12 @@ if [[ "${_TD_OS}" == "el10" || "${_TD_OS}" == "fedora" || "${_TD_OS}" == "hummin
 				_TD_PKGS[$_TD_PKG_INDEX]=NetworkManager-libreswan-gnome
 			fi
 		done
+		# Rawhide no longer pulls the keyring through the GNOME stack. Both
+		# credential storage and password-unlocked PAM integration are required
+		# (candidate run 38084904583 failed the missing-daemon contract).
+		if [[ "${_TD_DESKTOP}" == gnome ]]; then
+			_TD_PKGS+=(gnome-keyring gnome-keyring-pam)
+		fi
 	fi
 	readarray -t _TD_EXCLUDES < <($YQ -r ".packages.${_TD_OS}.exclude[]" "${_TD_MANIFEST}" 2>/dev/null || true)
 
