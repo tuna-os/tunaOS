@@ -223,6 +223,45 @@ def signature_policy(directory):
     (directory / 'native-signature-policy.txt').write_text('\n'.join(lines) + '\n')
 
 
+def verified_attestations(directory):
+    """Reconcile outputs of the preceding CI gh cryptographic verification.
+
+    This function is not a signature verifier. The workflow must first run
+    gh attestation verify with exact repository/workflow/source policy; raw
+    JSON supplied by a caller alone never establishes that trust boundary.
+    """
+    receipt_document = read_json(directory / 'producer-receipt.json')
+    image_digest = receipt_document['imageDigest'].removeprefix('sha256:')
+    image_repository = receipt_document['imageRepository']
+    for filename, predicate_type in [('build-attestation-verification.json', 'https://slsa.dev/provenance/v1'),
+                                     ('receipt-attestation-verification.json', 'https://tunaos.org/attestations/archlinuxarm-base/v1')]:
+        path = directory / filename
+        sha256(path, 16 * MAX_SMALL)
+        rows = json.loads(path.read_text())
+        if not isinstance(rows, list) or not rows:
+            raise VerificationError('missing-verified-attestation-statements')
+        for row in rows:
+            if not isinstance(row, dict) or not isinstance(row.get('verificationResult'), dict):
+                raise VerificationError('malformed-verified-attestation')
+            statement = row['verificationResult'].get('statement')
+            if not isinstance(statement, dict) or statement.get('predicateType') != predicate_type:
+                raise VerificationError('verified-attestation-predicate-mismatch')
+            subjects = statement.get('subject')
+            if (not isinstance(subjects, list) or len(subjects) != 1 or
+                    subjects[0] != {'name': image_repository, 'digest': {'sha256': image_digest}}):
+                raise VerificationError('verified-attestation-subject-mismatch')
+            if predicate_type.endswith('archlinuxarm-base/v1') and statement.get('predicate') != receipt_document:
+                raise VerificationError('verified-receipt-content-mismatch')
+    write_json(directory / 'attestation-reconciliation.json', {
+        'schemaVersion': 1, 'kind': 'archlinuxarm-attestation-reconciliation',
+        'imageDigest': receipt_document['imageDigest'],
+        'producerIdentity': receipt_document['producerIdentity'],
+        'receiptDigest': 'sha256:' + sha256(directory / 'producer-receipt.json', MAX_SMALL)[0],
+        'verificationResultDigests': ['sha256:' + sha256(directory / name, 16 * MAX_SMALL)[0]
+                                      for name in ('build-attestation-verification.json', 'receipt-attestation-verification.json')],
+        'readiness': False, 'cpuBaselineVerified': False})
+
+
 def fetch_verify(directory):
     directory.mkdir(parents=True, exist_ok=False)
     sources = [fetch(ROOTFS_URL, directory / 'rootfs.tar.gz', MAX_ROOTFS),
@@ -293,7 +332,7 @@ def receipt(directory, args):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('operation', choices=['fetch-verify', 'verify-local', 'signature-policy', 'receipt'])
+    parser.add_argument('operation', choices=['fetch-verify', 'verify-local', 'signature-policy', 'verified-attestations', 'receipt'])
     parser.add_argument('--directory', required=True)
     for name in ('source-revision', 'repository', 'workflow-ref', 'run-id', 'run-attempt',
                  'image-digest-file', 'image-repository', 'manifest-file', 'runtime-arch-file', 'inventory-file', 'signature-policy-file'):
@@ -307,6 +346,8 @@ def main():
             verify(directory)
         elif args.operation == 'signature-policy':
             signature_policy(directory)
+        elif args.operation == 'verified-attestations':
+            verified_attestations(directory)
         else:
             if any(getattr(args, name) is None for name in ('source_revision', 'repository', 'workflow_ref', 'run_id',
                     'run_attempt', 'image_digest_file', 'image_repository', 'manifest_file', 'runtime_arch_file', 'inventory_file', 'signature_policy_file')):
