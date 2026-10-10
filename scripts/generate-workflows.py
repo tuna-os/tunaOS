@@ -2,8 +2,26 @@
 import yaml
 import os
 import sys
+import json
+import argparse
+
+from contracts.targets import coverage_document
 
 def main():
+    parser = argparse.ArgumentParser(description='Generate build wrappers and required coverage')
+    parser.add_argument('--check', action='store_true', help='Reject generated file drift')
+    args = parser.parse_args()
+    changed = []
+
+    def emit(path, body):
+        if args.check:
+            if not os.path.isfile(path) or open(path).read() != body:
+                changed.append(path)
+        else:
+            with open(path, 'w') as output:
+                output.write(body)
+            print(f"Generated {path}")
+
     config_file = '.github/build-config.yml'
     if not os.path.exists(config_file):
         print(f"Error: {config_file} not found", file=sys.stderr)
@@ -11,6 +29,12 @@ def main():
 
     with open(config_file, 'r') as f:
         config = yaml.safe_load(f)
+
+    # Generate commitments independently of actual workflow execution coverage.
+    # PR narrowing and package-supply restrictions must remain visible gaps.
+    coverage = coverage_document(config)
+    coverage_path = 'required-targets.json'
+    emit(coverage_path, json.dumps(coverage, indent=2, sort_keys=True) + '\n')
 
     # Nightly schedule registry: keep this in lockstep with the
     # "Nightly schedule registry" comment block at the top of
@@ -118,9 +142,11 @@ jobs:
             )
 
         file_path = f'.github/workflows/build-{name}.yml'
-        with open(file_path, 'w') as f:
-            f.write(workflow_content)
-        print(f"Generated {file_path}")
+        emit(file_path, workflow_content)
+
+    if changed:
+        print('Generated files are stale: ' + ', '.join(changed), file=sys.stderr)
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()

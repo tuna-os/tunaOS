@@ -1,0 +1,4042 @@
+{
+  "coverageDigest": "sha256:82adc58ab02f40c0eee2274502014c56faa365caecd682b92207fec71d47bb69",
+  "kind": "required-targets",
+  "schemaVersion": 1,
+  "targets": [
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/albacore",
+        "tag": "base-hwe"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64-v2",
+        "flavor": "base-hwe",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64/v2",
+        "variant": "albacore"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/albacore",
+        "tag": "base-hwe"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "base-hwe",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "albacore"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/albacore",
+        "tag": "base-nvidia"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "x86-64-v2",
+        "flavor": "base-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64/v2",
+        "variant": "albacore"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/albacore",
+        "tag": "base-nvidia"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "base-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "albacore"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/albacore",
+        "tag": "base"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64-v2",
+        "flavor": "base",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64/v2",
+        "variant": "albacore"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/albacore",
+        "tag": "base"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "base",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "albacore"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/albacore",
+        "tag": "cosmic-hwe"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64-v2",
+        "flavor": "cosmic-hwe",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64/v2",
+        "variant": "albacore"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/albacore",
+        "tag": "cosmic-hwe"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "cosmic-hwe",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "albacore"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/albacore",
+        "tag": "cosmic-nvidia"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "x86-64-v2",
+        "flavor": "cosmic-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64/v2",
+        "variant": "albacore"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/albacore",
+        "tag": "cosmic-nvidia"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "cosmic-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "albacore"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/albacore",
+        "tag": "cosmic"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64-v2",
+        "flavor": "cosmic",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64/v2",
+        "variant": "albacore"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/albacore",
+        "tag": "cosmic"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "cosmic",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "albacore"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/albacore",
+        "tag": "gnome-hwe"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64-v2",
+        "flavor": "gnome-hwe",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64/v2",
+        "variant": "albacore"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/albacore",
+        "tag": "gnome-hwe"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "gnome-hwe",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "albacore"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/albacore",
+        "tag": "gnome-nvidia"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "x86-64-v2",
+        "flavor": "gnome-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64/v2",
+        "variant": "albacore"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/albacore",
+        "tag": "gnome-nvidia"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "gnome-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "albacore"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/albacore",
+        "tag": "gnome"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64-v2",
+        "flavor": "gnome",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64/v2",
+        "variant": "albacore"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/albacore",
+        "tag": "gnome"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "gnome",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "albacore"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/albacore",
+        "tag": "kde-hwe"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64-v2",
+        "flavor": "kde-hwe",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64/v2",
+        "variant": "albacore"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/albacore",
+        "tag": "kde-hwe"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "kde-hwe",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "albacore"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/albacore",
+        "tag": "kde-nvidia"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "x86-64-v2",
+        "flavor": "kde-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64/v2",
+        "variant": "albacore"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/albacore",
+        "tag": "kde-nvidia"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "kde-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "albacore"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/albacore",
+        "tag": "kde"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64-v2",
+        "flavor": "kde",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64/v2",
+        "variant": "albacore"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/albacore",
+        "tag": "kde"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "kde",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "albacore"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/albacore",
+        "tag": "niri-hwe"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64-v2",
+        "flavor": "niri-hwe",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64/v2",
+        "variant": "albacore"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/albacore",
+        "tag": "niri-hwe"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "niri-hwe",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "albacore"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/albacore",
+        "tag": "niri-nvidia"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "x86-64-v2",
+        "flavor": "niri-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64/v2",
+        "variant": "albacore"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/albacore",
+        "tag": "niri-nvidia"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "niri-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "albacore"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/albacore",
+        "tag": "niri"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64-v2",
+        "flavor": "niri",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64/v2",
+        "variant": "albacore"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/albacore",
+        "tag": "niri"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "niri",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "albacore"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/albacore",
+        "tag": "xfce-hwe"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64-v2",
+        "flavor": "xfce-hwe",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64/v2",
+        "variant": "albacore"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/albacore",
+        "tag": "xfce-hwe"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "xfce-hwe",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "albacore"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/albacore",
+        "tag": "xfce-nvidia"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "x86-64-v2",
+        "flavor": "xfce-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64/v2",
+        "variant": "albacore"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/albacore",
+        "tag": "xfce-nvidia"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "xfce-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "albacore"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/albacore",
+        "tag": "xfce"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64-v2",
+        "flavor": "xfce",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64/v2",
+        "variant": "albacore"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/albacore",
+        "tag": "xfce"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "xfce",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "albacore"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/bonito",
+        "tag": "base-hwe-rawhide"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "base-hwe",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "bonito-rawhide"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/bonito",
+        "tag": "base-hwe-rawhide"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "base-hwe",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "bonito-rawhide"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/bonito",
+        "tag": "base-nvidia-rawhide"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "base-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "bonito-rawhide"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/bonito",
+        "tag": "base-nvidia-rawhide"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "base-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "bonito-rawhide"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/bonito",
+        "tag": "base-rawhide"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "base",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "bonito-rawhide"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/bonito",
+        "tag": "base-rawhide"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "base",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "bonito-rawhide"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/bonito",
+        "tag": "cosmic-nvidia-rawhide"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "cosmic-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "bonito-rawhide"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/bonito",
+        "tag": "cosmic-nvidia-rawhide"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "cosmic-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "bonito-rawhide"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/bonito",
+        "tag": "cosmic-rawhide"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "cosmic",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "bonito-rawhide"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/bonito",
+        "tag": "cosmic-rawhide"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "cosmic",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "bonito-rawhide"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/bonito",
+        "tag": "gnome-hwe-rawhide"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "gnome-hwe",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "bonito-rawhide"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/bonito",
+        "tag": "gnome-hwe-rawhide"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "gnome-hwe",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "bonito-rawhide"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/bonito",
+        "tag": "gnome-nvidia-rawhide"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "gnome-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "bonito-rawhide"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/bonito",
+        "tag": "gnome-nvidia-rawhide"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "gnome-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "bonito-rawhide"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/bonito",
+        "tag": "gnome-rawhide"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "gnome",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "bonito-rawhide"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/bonito",
+        "tag": "gnome-rawhide"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "gnome",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "bonito-rawhide"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/bonito",
+        "tag": "kde-nvidia-rawhide"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "kde-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "bonito-rawhide"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/bonito",
+        "tag": "kde-nvidia-rawhide"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "kde-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "bonito-rawhide"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/bonito",
+        "tag": "kde-rawhide"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "kde",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "bonito-rawhide"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/bonito",
+        "tag": "kde-rawhide"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "kde",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "bonito-rawhide"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/bonito",
+        "tag": "niri-nvidia-rawhide"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "niri-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "bonito-rawhide"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/bonito",
+        "tag": "niri-nvidia-rawhide"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "niri-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "bonito-rawhide"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/bonito",
+        "tag": "niri-rawhide"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "niri",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "bonito-rawhide"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/bonito",
+        "tag": "niri-rawhide"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "niri",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "bonito-rawhide"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/bonito",
+        "tag": "xfce-nvidia-rawhide"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "xfce-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "bonito-rawhide"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/bonito",
+        "tag": "xfce-nvidia-rawhide"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "xfce-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "bonito-rawhide"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/bonito",
+        "tag": "xfce-rawhide"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "xfce",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "bonito-rawhide"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/bonito",
+        "tag": "xfce-rawhide"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "xfce",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "bonito-rawhide"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/bonito",
+        "tag": "base-hwe"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "base-hwe",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "bonito"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/bonito",
+        "tag": "base-hwe"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "base-hwe",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "bonito"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/bonito",
+        "tag": "base-nvidia"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "base-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "bonito"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/bonito",
+        "tag": "base-nvidia"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "base-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "bonito"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/bonito",
+        "tag": "base"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "base",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "bonito"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/bonito",
+        "tag": "base"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "base",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "bonito"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/bonito",
+        "tag": "cosmic-nvidia"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "cosmic-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "bonito"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/bonito",
+        "tag": "cosmic-nvidia"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "cosmic-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "bonito"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/bonito",
+        "tag": "cosmic"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "cosmic",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "bonito"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/bonito",
+        "tag": "cosmic"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "cosmic",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "bonito"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/bonito",
+        "tag": "gnome-asahi"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "gnome-asahi",
+        "hardwareScope": "apple-silicon",
+        "platform": "linux/arm64",
+        "variant": "bonito"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/bonito",
+        "tag": "gnome-hwe"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "gnome-hwe",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "bonito"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/bonito",
+        "tag": "gnome-hwe"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "gnome-hwe",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "bonito"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/bonito",
+        "tag": "gnome-nvidia"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "gnome-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "bonito"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/bonito",
+        "tag": "gnome-nvidia"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "gnome-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "bonito"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/bonito",
+        "tag": "gnome-t2"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "gnome-t2",
+        "hardwareScope": "apple-t2",
+        "platform": "linux/amd64",
+        "variant": "bonito"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/bonito",
+        "tag": "gnome"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "gnome",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "bonito"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/bonito",
+        "tag": "gnome"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "gnome",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "bonito"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/bonito",
+        "tag": "kde-nvidia"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "kde-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "bonito"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/bonito",
+        "tag": "kde-nvidia"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "kde-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "bonito"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/bonito",
+        "tag": "kde"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "kde",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "bonito"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/bonito",
+        "tag": "kde"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "kde",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "bonito"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/bonito",
+        "tag": "niri-nvidia"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "niri-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "bonito"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/bonito",
+        "tag": "niri-nvidia"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "niri-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "bonito"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/bonito",
+        "tag": "niri"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "niri",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "bonito"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/bonito",
+        "tag": "niri"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "niri",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "bonito"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/bonito",
+        "tag": "xfce-nvidia"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "xfce-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "bonito"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/bonito",
+        "tag": "xfce-nvidia"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "xfce-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "bonito"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/bonito",
+        "tag": "xfce"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "xfce",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "bonito"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/bonito",
+        "tag": "xfce"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "xfce",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "bonito"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/flounder",
+        "tag": "base-sid"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "base",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "flounder-sid"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/flounder",
+        "tag": "base-sid"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "base",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "flounder-sid"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/flounder",
+        "tag": "gnome-nvidia-sid"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "gnome-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "flounder-sid"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/flounder",
+        "tag": "gnome-nvidia-sid"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "gnome-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "flounder-sid"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/flounder",
+        "tag": "gnome-sid"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "gnome",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "flounder-sid"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/flounder",
+        "tag": "gnome-sid"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "gnome",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "flounder-sid"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/flounder",
+        "tag": "kde-nvidia-sid"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "kde-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "flounder-sid"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/flounder",
+        "tag": "kde-nvidia-sid"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "kde-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "flounder-sid"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/flounder",
+        "tag": "kde-sid"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "kde",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "flounder-sid"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/flounder",
+        "tag": "kde-sid"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "kde",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "flounder-sid"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/flounder",
+        "tag": "xfce-nvidia-sid"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "xfce-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "flounder-sid"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/flounder",
+        "tag": "xfce-nvidia-sid"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "xfce-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "flounder-sid"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/flounder",
+        "tag": "xfce-sid"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "xfce",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "flounder-sid"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/flounder",
+        "tag": "xfce-sid"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "xfce",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "flounder-sid"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/flounder",
+        "tag": "base"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "base",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "flounder"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/flounder",
+        "tag": "base"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "base",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "flounder"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/flounder",
+        "tag": "kde-nvidia"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "kde-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "flounder"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/flounder",
+        "tag": "kde-nvidia"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "kde-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "flounder"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/flounder",
+        "tag": "kde"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "kde",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "flounder"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/flounder",
+        "tag": "kde"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "kde",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "flounder"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/flounder",
+        "tag": "xfce-nvidia"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "xfce-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "flounder"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/flounder",
+        "tag": "xfce-nvidia"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "xfce-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "flounder"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/flounder",
+        "tag": "xfce"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "xfce",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "flounder"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/flounder",
+        "tag": "xfce"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "xfce",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "flounder"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/grouper",
+        "tag": "base"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "base",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "grouper"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/grouper",
+        "tag": "base"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "base",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "grouper"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/grouper",
+        "tag": "cosmic"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "cosmic",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "grouper"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/grouper",
+        "tag": "cosmic"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "cosmic",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "grouper"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/grouper",
+        "tag": "gnome-asahi"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "gnome-asahi",
+        "hardwareScope": "apple-silicon",
+        "platform": "linux/arm64",
+        "variant": "grouper"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/grouper",
+        "tag": "gnome-zfs"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "gnome-zfs",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "grouper"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/grouper",
+        "tag": "gnome-zfs"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "gnome-zfs",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "grouper"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/grouper",
+        "tag": "gnome"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "gnome",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "grouper"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/grouper",
+        "tag": "gnome"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "gnome",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "grouper"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/grouper",
+        "tag": "kde"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "kde",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "grouper"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/grouper",
+        "tag": "kde"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "kde",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "grouper"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/grouper",
+        "tag": "xfce"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "xfce",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "grouper"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/grouper",
+        "tag": "xfce"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "xfce",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "grouper"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/guppy",
+        "tag": "base"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "base",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "guppy"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/guppy",
+        "tag": "base"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "base",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "guppy"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/guppy",
+        "tag": "kde"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "kde",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "guppy"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/guppy",
+        "tag": "kde"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "kde",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "guppy"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/guppy",
+        "tag": "xfce"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "xfce",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "guppy"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/guppy",
+        "tag": "xfce"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "xfce",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "guppy"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/gurnard",
+        "tag": "base"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "base",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "gurnard"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/gurnard",
+        "tag": "base"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "base",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "gurnard"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/gurnard",
+        "tag": "pantheon"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "pantheon",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "gurnard"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/gurnard",
+        "tag": "pantheon"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "pantheon",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "gurnard"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/hummingbird",
+        "tag": "base"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "base",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "hummingbird"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/hummingbird",
+        "tag": "base"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "base",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "hummingbird"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/hummingbird",
+        "tag": "cosmic"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "cosmic",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "hummingbird"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/hummingbird",
+        "tag": "cosmic"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "cosmic",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "hummingbird"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/hummingbird",
+        "tag": "gnome"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "gnome",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "hummingbird"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/hummingbird",
+        "tag": "gnome"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "gnome",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "hummingbird"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/marlin",
+        "tag": "base"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "base",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "marlin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/marlin",
+        "tag": "base"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "base",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "marlin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/marlin",
+        "tag": "cosmic-cachyos"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "cosmic-cachyos",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "marlin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/marlin",
+        "tag": "cosmic-cachyos"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "cosmic-cachyos",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "marlin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/marlin",
+        "tag": "cosmic-nvidia"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "cosmic-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "marlin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/marlin",
+        "tag": "cosmic-nvidia"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "cosmic-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "marlin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/marlin",
+        "tag": "cosmic"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "cosmic",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "marlin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/marlin",
+        "tag": "cosmic"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "cosmic",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "marlin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/marlin",
+        "tag": "gnome-cachyos"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "gnome-cachyos",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "marlin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/marlin",
+        "tag": "gnome-cachyos"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "gnome-cachyos",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "marlin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/marlin",
+        "tag": "gnome-nvidia"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "gnome-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "marlin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/marlin",
+        "tag": "gnome-nvidia"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "gnome-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "marlin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/marlin",
+        "tag": "gnome"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "gnome",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "marlin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/marlin",
+        "tag": "gnome"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "gnome",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "marlin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/marlin",
+        "tag": "kde-cachyos"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "kde-cachyos",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "marlin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/marlin",
+        "tag": "kde-cachyos"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "kde-cachyos",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "marlin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/marlin",
+        "tag": "kde-nvidia"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "kde-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "marlin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/marlin",
+        "tag": "kde-nvidia"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "kde-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "marlin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/marlin",
+        "tag": "kde"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "kde",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "marlin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/marlin",
+        "tag": "kde"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "kde",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "marlin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/marlin",
+        "tag": "niri-cachyos"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "niri-cachyos",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "marlin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/marlin",
+        "tag": "niri-cachyos"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "niri-cachyos",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "marlin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/marlin",
+        "tag": "niri-nvidia"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "niri-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "marlin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/marlin",
+        "tag": "niri-nvidia"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "niri-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "marlin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/marlin",
+        "tag": "niri"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "niri",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "marlin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/marlin",
+        "tag": "niri"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "niri",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "marlin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/marlin",
+        "tag": "roost"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "roost",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "marlin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/marlin",
+        "tag": "roost"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "roost",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "marlin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/marlin",
+        "tag": "xfce-cachyos"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "xfce-cachyos",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "marlin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/marlin",
+        "tag": "xfce-cachyos"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "xfce-cachyos",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "marlin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/marlin",
+        "tag": "xfce-nvidia"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "xfce-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "marlin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/marlin",
+        "tag": "xfce-nvidia"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "xfce-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "marlin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/marlin",
+        "tag": "xfce"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "xfce",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "marlin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/marlin",
+        "tag": "xfce"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "xfce",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "marlin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/sailfin",
+        "tag": "base"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "base",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "sailfin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/sailfin",
+        "tag": "base"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "base",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "sailfin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/sailfin",
+        "tag": "cosmic"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "cosmic",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "sailfin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/sailfin",
+        "tag": "cosmic"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "cosmic",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "sailfin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/sailfin",
+        "tag": "gnome"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "gnome",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "sailfin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/sailfin",
+        "tag": "gnome"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "gnome",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "sailfin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/sailfin",
+        "tag": "kde"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "kde",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "sailfin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/sailfin",
+        "tag": "kde"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "kde",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "sailfin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/sailfin",
+        "tag": "niri"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "niri",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "sailfin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/sailfin",
+        "tag": "niri"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "niri",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "sailfin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/sailfin",
+        "tag": "xfce"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "xfce",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "sailfin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/sailfin",
+        "tag": "xfce"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "xfce",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "sailfin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/skipjack",
+        "tag": "base-hwe"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "base-hwe",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "skipjack"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/skipjack",
+        "tag": "base-hwe"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "base-hwe",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "skipjack"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/skipjack",
+        "tag": "base-nvidia"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "base-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "skipjack"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/skipjack",
+        "tag": "base-nvidia"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "base-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "skipjack"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/skipjack",
+        "tag": "base"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "base",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "skipjack"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/skipjack",
+        "tag": "base"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "base",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "skipjack"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/skipjack",
+        "tag": "cosmic-hwe"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "cosmic-hwe",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "skipjack"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/skipjack",
+        "tag": "cosmic-hwe"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "cosmic-hwe",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "skipjack"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/skipjack",
+        "tag": "cosmic-nvidia"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "cosmic-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "skipjack"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/skipjack",
+        "tag": "cosmic-nvidia"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "cosmic-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "skipjack"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/skipjack",
+        "tag": "cosmic"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "cosmic",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "skipjack"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/skipjack",
+        "tag": "cosmic"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "cosmic",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "skipjack"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/skipjack",
+        "tag": "gnome-hwe"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "gnome-hwe",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "skipjack"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/skipjack",
+        "tag": "gnome-hwe"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "gnome-hwe",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "skipjack"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/skipjack",
+        "tag": "gnome-nvidia"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "gnome-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "skipjack"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/skipjack",
+        "tag": "gnome-nvidia"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "gnome-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "skipjack"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/skipjack",
+        "tag": "gnome"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "gnome",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "skipjack"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/skipjack",
+        "tag": "gnome"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "gnome",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "skipjack"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/skipjack",
+        "tag": "kde-hwe"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "kde-hwe",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "skipjack"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/skipjack",
+        "tag": "kde-hwe"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "kde-hwe",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "skipjack"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/skipjack",
+        "tag": "kde-nvidia"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "kde-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "skipjack"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/skipjack",
+        "tag": "kde-nvidia"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "kde-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "skipjack"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/skipjack",
+        "tag": "kde"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "kde",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "skipjack"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/skipjack",
+        "tag": "kde"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "kde",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "skipjack"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/skipjack",
+        "tag": "niri-hwe"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "niri-hwe",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "skipjack"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/skipjack",
+        "tag": "niri-hwe"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "niri-hwe",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "skipjack"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/skipjack",
+        "tag": "niri-nvidia"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "niri-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "skipjack"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/skipjack",
+        "tag": "niri-nvidia"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "niri-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "skipjack"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/skipjack",
+        "tag": "niri"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "niri",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "skipjack"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/skipjack",
+        "tag": "niri"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "niri",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "skipjack"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/skipjack",
+        "tag": "xfce"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "xfce",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "skipjack"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/skipjack",
+        "tag": "xfce"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "xfce",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "skipjack"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/wahoo",
+        "tag": "base"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "base",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "wahoo"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/wahoo",
+        "tag": "base"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "base",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "wahoo"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/wahoo",
+        "tag": "cosmic"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "cosmic",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "wahoo"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/wahoo",
+        "tag": "cosmic"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "cosmic",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "wahoo"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/wahoo",
+        "tag": "gnome"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "gnome",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "wahoo"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/wahoo",
+        "tag": "gnome"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "gnome",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "wahoo"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/wahoo",
+        "tag": "kde"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64",
+        "flavor": "kde",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64",
+        "variant": "wahoo"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/wahoo",
+        "tag": "kde"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "kde",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "wahoo"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/yellowfin",
+        "tag": "base-hwe"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64-v2",
+        "flavor": "base-hwe",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64/v2",
+        "variant": "yellowfin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/yellowfin",
+        "tag": "base-hwe"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "base-hwe",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "yellowfin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/yellowfin",
+        "tag": "base-nvidia"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "x86-64-v2",
+        "flavor": "base-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64/v2",
+        "variant": "yellowfin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/yellowfin",
+        "tag": "base-nvidia"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "base-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "yellowfin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/yellowfin",
+        "tag": "base"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64-v2",
+        "flavor": "base",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64/v2",
+        "variant": "yellowfin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/yellowfin",
+        "tag": "base"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "base",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "yellowfin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/yellowfin",
+        "tag": "cosmic-hwe"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64-v2",
+        "flavor": "cosmic-hwe",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64/v2",
+        "variant": "yellowfin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/yellowfin",
+        "tag": "cosmic-hwe"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "cosmic-hwe",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "yellowfin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/yellowfin",
+        "tag": "cosmic-nvidia"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "x86-64-v2",
+        "flavor": "cosmic-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64/v2",
+        "variant": "yellowfin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/yellowfin",
+        "tag": "cosmic-nvidia"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "cosmic-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "yellowfin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/yellowfin",
+        "tag": "cosmic"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64-v2",
+        "flavor": "cosmic",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64/v2",
+        "variant": "yellowfin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/yellowfin",
+        "tag": "cosmic"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "cosmic",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "yellowfin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/yellowfin",
+        "tag": "gnome-hwe"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64-v2",
+        "flavor": "gnome-hwe",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64/v2",
+        "variant": "yellowfin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/yellowfin",
+        "tag": "gnome-hwe"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "gnome-hwe",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "yellowfin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/yellowfin",
+        "tag": "gnome-nvidia"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "x86-64-v2",
+        "flavor": "gnome-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64/v2",
+        "variant": "yellowfin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/yellowfin",
+        "tag": "gnome-nvidia"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "gnome-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "yellowfin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/yellowfin",
+        "tag": "gnome"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64-v2",
+        "flavor": "gnome",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64/v2",
+        "variant": "yellowfin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/yellowfin",
+        "tag": "gnome"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "gnome",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "yellowfin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/yellowfin",
+        "tag": "kde-hwe"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64-v2",
+        "flavor": "kde-hwe",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64/v2",
+        "variant": "yellowfin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/yellowfin",
+        "tag": "kde-hwe"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "kde-hwe",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "yellowfin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/yellowfin",
+        "tag": "kde-nvidia"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "x86-64-v2",
+        "flavor": "kde-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64/v2",
+        "variant": "yellowfin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/yellowfin",
+        "tag": "kde-nvidia"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "kde-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "yellowfin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/yellowfin",
+        "tag": "kde"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64-v2",
+        "flavor": "kde",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64/v2",
+        "variant": "yellowfin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/yellowfin",
+        "tag": "kde"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "kde",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "yellowfin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/yellowfin",
+        "tag": "niri-hwe"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64-v2",
+        "flavor": "niri-hwe",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64/v2",
+        "variant": "yellowfin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/yellowfin",
+        "tag": "niri-hwe"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "niri-hwe",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "yellowfin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/yellowfin",
+        "tag": "niri-nvidia"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "x86-64-v2",
+        "flavor": "niri-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64/v2",
+        "variant": "yellowfin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/yellowfin",
+        "tag": "niri-nvidia"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "niri-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "yellowfin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/yellowfin",
+        "tag": "niri"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64-v2",
+        "flavor": "niri",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64/v2",
+        "variant": "yellowfin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/yellowfin",
+        "tag": "niri"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "niri",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "yellowfin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/yellowfin",
+        "tag": "xfce-hwe"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64-v2",
+        "flavor": "xfce-hwe",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64/v2",
+        "variant": "yellowfin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/yellowfin",
+        "tag": "xfce-hwe"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "xfce-hwe",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "yellowfin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/yellowfin",
+        "tag": "xfce-nvidia"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "x86-64-v2",
+        "flavor": "xfce-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64/v2",
+        "variant": "yellowfin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/yellowfin",
+        "tag": "xfce-nvidia"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "xfce-nvidia",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "yellowfin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/yellowfin",
+        "tag": "xfce"
+      },
+      "required": true,
+      "scheduled": true,
+      "target": {
+        "cpuBaseline": "x86-64-v2",
+        "flavor": "xfce",
+        "hardwareScope": "generic",
+        "platform": "linux/amd64/v2",
+        "variant": "yellowfin"
+      }
+    },
+    {
+      "publication": {
+        "repository": "ghcr.io/tuna-os/yellowfin",
+        "tag": "xfce"
+      },
+      "required": true,
+      "scheduled": false,
+      "target": {
+        "cpuBaseline": "armv8-a",
+        "flavor": "xfce",
+        "hardwareScope": "generic",
+        "platform": "linux/arm64",
+        "variant": "yellowfin"
+      }
+    }
+  ]
+}

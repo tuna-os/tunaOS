@@ -103,6 +103,12 @@ jobs:
           # Pillow + requests for desktop-verify.py tests
           pip3 install pillow requests --break-system-packages 2>/dev/null || pip3 install pillow requests --user
 
+          # Contract schema validation and required target resolution.
+          python3 -m pip install \
+            "jsonschema==$(yq -r '.python_packages.jsonschema' image-versions.yaml)" \
+            "PyYAML==$(yq -r '.python_packages.PyYAML' image-versions.yaml)" \
+            --break-system-packages
+
       - name: Run BATS tests
         run: |
           echo "=== BATS Tests ==="

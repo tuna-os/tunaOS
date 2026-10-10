@@ -221,11 +221,14 @@ peak_concurrency() { cat "${STUB_LOGDIR}/max" 2>/dev/null || echo 0; }
 }
 
 @test "matrix: with no GATE_NODES and no kubectl, gates run with no node pin" {
-	# PATH only contains our stub-bin (plus system PATH via setup, which may
-	# still have kubectl); force the auto-detect branch to see an empty pool
-	# by asserting on an explicitly empty GATE_NODES instead, which takes
-	# the same code path as "no nodes discovered".
-	GATE_NODES="" run bash "${MATRIX}" yellowfin:gnome yellowfin:kde
+	# Expose only the tools the matrix and gate stub need. Installed kubectl
+	# must not influence the no-node-discovery case.
+	local shell_path tool
+	shell_path="$(command -v bash)"
+	for tool in bash dirname mktemp flock cat sleep; do
+		ln -s "$(command -v "${tool}")" "${STUB_BIN}/${tool}"
+	done
+	run /usr/bin/env PATH="${STUB_BIN}" GATE_NODES="" "${shell_path}" "${MATRIX}" yellowfin:gnome yellowfin:kde
 	[ "$status" -eq 0 ]
 	calls | grep "^yellowfin:gnome " | grep -q "node= "
 	calls | grep "^yellowfin:kde " | grep -q "node= "
@@ -273,7 +276,12 @@ peak_concurrency() { cat "${STUB_LOGDIR}/max" 2>/dev/null || echo 0; }
 
 @test "matrix: exits 77 when corral is not installed" {
 	rm -f "${STUB_BIN}/corral"
-	run bash "${MATRIX}" yellowfin:gnome
+	# Keep host-installed corral out of command lookup while retaining the
+	# dirname needed before the script's dependency preflight.
+	local shell_path
+	shell_path="$(command -v bash)"
+	ln -s "$(command -v dirname)" "${STUB_BIN}/dirname"
+	run /usr/bin/env PATH="${STUB_BIN}" "${shell_path}" "${MATRIX}" yellowfin:gnome
 	[ "$status" -eq 77 ]
 	[[ "$output" == *"corral not installed"* ]]
 }
