@@ -27,29 +27,9 @@ trap emit_fail_on_early_exit EXIT
 source /run/context/build_scripts/lib.sh 2>/dev/null || true
 detected_os 2>/dev/null || true
 
-# How many requirements the hummingbird exemption let through.
-#
-# Every require_* below returns 0 instead of exiting when IS_HUMMINGBIRD is
-# set, so hummingbird can bootstrap against incomplete repos. COSMIC is the
-# exception: its boot Gate cannot currently prove that the session starts, so
-# waiving this contract too would let an image with no session or greeter reach
-# the published tag (tunaOS#2513). Other hummingbird desktops retain the
-# bootstrap waiver and are stopped by their boot Gate when unusable.
-#
-# The waiver counter also prevents an exempt image from being reported as
-# passed. The script once printed "desktop experience contract passed" after
-# listing ten unmet requirements, which is how hummingbird:gnome shipped with
-# no GNOME in it for weeks and no one noticed.
-#
-# Measured on tunaOS run 32813037866 (2026-08-25): the image carried 410
-# packages -- gnome-backgrounds and gnome-user-docs, no gnome-shell, no gdm,
-# no mutter, no gtk4 -- and this check called it passed. The boot gate then
-# failed 15 minutes later on a marker that could never be emitted, because
-# the packages were dropped upstream (tunaos-packages#519).
-#
-# Exit status is deliberately unchanged: turning the waiver into a hard
-# failure would red-line every hummingbird build, which is a policy call for
-# a human, not a side effect of a logging fix.
+# Collect Hummingbird's missing native inputs so one build reports the
+# complete deficiency list. The final verdict fails when any are missing;
+# an incomplete desktop cannot proceed to publication or a boot gate.
 TUNAOS_CONTRACT_WAIVED=0
 waive() { TUNAOS_CONTRACT_WAIVED=$((TUNAOS_CONTRACT_WAIVED + 1)); }
 
@@ -931,6 +911,8 @@ else
 			>"/usr/share/tunaos/experience-contracts/${desktop}"
 		echo "::warning::desktop experience contract WAIVED: ${desktop} (${experience}) — ${TUNAOS_CONTRACT_WAIVED} requirement(s) unmet; this image is NOT a verified ${desktop} desktop"
 		echo "TUNAOS_DESKTOP_CONTRACT_WAIVED desktop=${desktop} missing=${TUNAOS_CONTRACT_WAIVED}"
+		echo "ERROR: desktop native dependency closure is incomplete; refusing an unusable ${desktop} image" >&2
+		exit 1
 	else
 		printf 'desktop=%s\nexperience=%s\nvalidated_at_build=true\n' "$desktop" "$experience" \
 			>"/usr/share/tunaos/experience-contracts/${desktop}"
