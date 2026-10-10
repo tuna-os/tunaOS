@@ -1,0 +1,68 @@
+name: Build Health
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/build-health.yml"
+      - ".github/build-config.yml"
+      - "image-versions.yaml"
+      - "scripts/gen-build-health.py"
+      - "scripts/contracts/**"
+      - "tests/test_build_health*.py"
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: build-health-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.14"
+      - name: Install pinned dependencies
+        run: |
+          python - <<'PY'
+          import subprocess
+          import sys
+          import re
+          from pathlib import Path
+          # Read only the exact scalar pins before installing the YAML parser.
+          text = Path("image-versions.yaml").read_text()
+          pins = {}
+          for name in ("PyYAML", "jsonschema"):
+              matches = re.findall(r'^  ' + re.escape(name) + r': "([0-9.]+)"$', text, re.M)
+              if len(matches) != 1:
+                  raise ValueError("missing or ambiguous central dependency pin")
+              pins[name] = matches[0]
+          subprocess.run([sys.executable, "-m", "pip", "install", *[
+              f"{name}=={pins[name]}" for name in ("PyYAML", "jsonschema")
+          ]], check=True)
+          PY
+      - name: Collect required target observations
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p health
+          api_version=$(python -c 'import yaml; print(yaml.safe_load(open("image-versions.yaml"))["github_api_version"])')
+          python scripts/gen-build-health.py \
+            --source-revision "$GITHUB_SHA" --api-version "$api_version" \
+            --output health/build-health.json --markdown health/BUILD-HEALTH.md
+          cat health/BUILD-HEALTH.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Preserve observed health
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: build-health-${{ github.run_id }}-${{ github.run_attempt }}
+          path: health/
+          if-no-files-found: error
