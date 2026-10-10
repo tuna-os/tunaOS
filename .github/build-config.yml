@@ -1575,7 +1575,7 @@ variants:
     emoji: "🚀"
     upstream_track: rolling
     description: "Based on Arch Linux (rolling)"
-    base_image: "docker.io/archlinux/archlinux:latest@sha256:67f575e6ae9319883231be5e32468bb88d4afcfab281b5ac014bd03f0571f3bc"
+    base_image: "docker.io/archlinux/archlinux:latest@sha256:d15a9b5548b8dd19bc8bf3e5a38265646c903d4d3b88c09c97b68227809fa925"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [arch, archlinux]
     # arm64 legs use ghcr.io/tuna-os/archlinuxarm instead (docker.io/archlinux
