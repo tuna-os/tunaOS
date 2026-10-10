@@ -144,7 +144,7 @@ jobs:
         run: |
           set -euo pipefail
           git add docs/MATRIX-STATUS.md docs/matrix-provenance.json docs/BUILD-HEALTH.md docs/build-health.json
-          if git diff --cached --quiet; then
+          if git diff --cached --quiet -- docs/MATRIX-STATUS.md docs/matrix-provenance.json docs/BUILD-HEALTH.md docs/build-health.json; then
             echo "No cells moved — nothing to commit."
             exit 0
           fi
