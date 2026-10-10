@@ -109,3 +109,10 @@ def test_actual_sid_config_and_jq_matrix_consume_parent_platform_selection(monke
     assert all(row["platforms"] == "linux/amd64" for row in rows)
     assert all(json.loads(row["platforms_json"]) == [{"platform": "linux/amd64", "safeplatform": "linux-amd64"}]
                for row in rows)
+
+
+def test_matrix_step_explicitly_supplies_event_identity():
+    workflow = yaml.safe_load((ROOT / ".github/workflows/build-variant.yml").read_text())
+    step = next(step for step in workflow["jobs"]["generate_matrix"]["steps"]
+                if step.get("id") == "set-matrix")
+    assert step["env"]["EVENT_NAME"] == "${{ github.event_name }}"

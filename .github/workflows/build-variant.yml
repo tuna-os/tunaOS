@@ -111,6 +111,7 @@ jobs:
       - name: Generate Matrix
         id: set-matrix
         env:
+          EVENT_NAME: ${{ github.event_name }}
           FILTER_VARIANT: ${{ inputs.variant || 'all' }}
           FILTER_FLAVOR: ${{ inputs.flavor || 'all' }}
         run: |
