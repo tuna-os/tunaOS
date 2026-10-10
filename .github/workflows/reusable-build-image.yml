@@ -16,17 +16,6 @@ on:
         required: false
         default: ""
         type: string
-      tag-aliases:
-        description: >-
-          Comma-separated extra tags of the same image to publish the same
-          digest under, for a renamed flavor whose old tag installs still
-          track (marlin's `tuna` flavor keeps publishing `roost`). Each gets
-          the bare, -<date> and -<arch> tags the canonical tag gets. Written
-          only in the promote step, after the canonical tags, like
-          image-aliases.
-        required: false
-        default: ""
-        type: string
       image-desc:
         description: "The description of the image to build"
         required: false
@@ -1797,7 +1786,6 @@ jobs:
         env:
           IMAGE_NAME: ${{ env.IMAGE_NAME }}
           IMAGE_ALIASES: ${{ inputs.image-aliases }}
-          TAG_ALIASES: ${{ inputs.tag-aliases }}
           IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
           DEFAULT_TAG: ${{ env.DEFAULT_TAG }}
           MAJOR_VERSION: ${{ env.MAJOR_VERSION }}
@@ -1873,26 +1861,6 @@ jobs:
                 echo "Publishing alias ${alias_name}:${DEFAULT_TAG}"
                 copy_retry "${IMAGE_REGISTRY}/${alias_name}:${DEFAULT_TAG}"
                 copy_retry "${IMAGE_REGISTRY}/${alias_name}:${DEFAULT_TAG}-${DATE_TAG}"
-              done
-            fi
-
-            # Renamed flavors: the old tag names under the same image, so a
-            # `bootc switch`ed install tracking the old tag keeps updating.
-            # Same placement rule as the friendly aliases above.
-            if [ -n "${TAG_ALIASES}" ]; then
-              IFS=',' read -r -a OLD_TAGS <<< "${TAG_ALIASES}"
-              for old_tag in "${OLD_TAGS[@]}"; do
-                old_tag="$(echo "${old_tag}" | tr -d '[:space:]')"
-                [ -n "${old_tag}" ] || continue
-                [ "${old_tag}" != "${DEFAULT_TAG}" ] || continue
-                echo "Publishing tag alias ${IMAGE_NAME}:${old_tag}"
-                copy_retry "${IMAGE_REGISTRY}/${IMAGE_NAME}:${old_tag}"
-                copy_retry "${IMAGE_REGISTRY}/${IMAGE_NAME}:${old_tag}-${DATE_TAG}"
-                for platform in "${PLATFORMS[@]}"; do
-                  arch="${platform#linux/}"
-                  arch="${arch//\//-}"
-                  copy_retry "${IMAGE_REGISTRY}/${IMAGE_NAME}:${old_tag}-${arch}"
-                done
               done
             fi
 

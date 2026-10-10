@@ -79,7 +79,7 @@ def test_nothing_in_the_image_still_requires_the_roost_package():
 
 
 def test_upgrades_from_the_roost_flavor_are_covered():
-    """Users of the roost flavor keep a working session and keep updating."""
+    """Users of the roost flavor retain session compatibility after an explicit switch."""
     script = (ROOT / "build_scripts/checks/verify-desktop-experience.sh").read_text()
     case = script.split("\ntuna)\n", 1)[1].split("\n\t;;", 1)[0]
     for requirement in ("/usr/share/wayland-sessions/roost.desktop", "NoDisplay=true", "/etc/pam.d/roost-lock", '/usr/bin/roost-$name', "grep -qx 'tuna-desktop'"):
@@ -89,5 +89,23 @@ def test_upgrades_from_the_roost_flavor_are_covered():
     config = yaml.safe_load((ROOT / ".github/build-config.yml").read_text())
     variant = next(v for v in config["variants"] if v["id"] == "marlin")
     flavor = next(f for f in variant["flavors"] if f["id"] == "tuna")
-    assert flavor["tag_aliases"] == ["roost"]
+    assert not flavor.get("tag_aliases")
     assert not any(f["id"] == "roost" for f in variant["flavors"])
+
+
+def test_retired_roost_tags_cannot_be_promoted_by_the_rename():
+    for name in ("build-variant.yml", "reusable-build-image.yml"):
+        workflow = (ROOT / ".github/workflows" / name).read_text()
+        assert "tag-aliases" not in workflow
+        assert "tag_aliases" not in workflow
+        assert "TAG_ALIASES" not in workflow
+
+
+def test_retired_flavor_has_an_explicit_switch_and_recovery_procedure():
+    guide = (ROOT / "experiences/tuna/README.md").read_text()
+    assert "stop publishing" in guide
+    assert "sudo bootc switch --enforce-container-sigpolicy ghcr.io/tuna-os/marlin:tuna" in guide
+    assert "sudo bootc status" in guide
+    assert "sudo bootc rollback" in guide
+    assert "/var/home" in guide
+    assert "must still prove" in guide

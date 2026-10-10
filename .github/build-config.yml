@@ -1622,12 +1622,7 @@ variants:
       - id: tuna
         stage: 2
         platforms: ["linux/amd64"]
-        # Keep publishing the old flavor's tags (marlin:roost, roost-amd64,
-        # roost-<date>) as the same digest, so installs that `bootc switch`ed
-        # to ghcr.io/tuna-os/marlin:roost keep receiving updates. The
-        # tuna-desktop package's compat layer (roost.desktop, roost-lock,
-        # roost-* links) keeps those sessions working.
-        tag_aliases: [roost]
+        # Owner decision: stop publishing the former roost tag immediately.
         build_image: true
         build_iso: false
         build_qcow2: false

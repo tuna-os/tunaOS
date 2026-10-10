@@ -76,7 +76,7 @@ Hardware requirements and ARM laptop status: [docs/HARDWARE.md](docs/HARDWARE.md
 
 ## Live build matrix
 
-The configured matrix now has 136 image cells, including one Tuna Desktop (formerly Roost) cell for amd64 Marlin, `marlin:tuna`, which also keeps publishing the old `marlin:roost` tag. The status snapshot below is from before that addition and does not prove image publication or a successful boot. Tuna Desktop adds no ISO or LUKS cells.
+The configured matrix now has 136 image cells, including one Tuna Desktop (formerly Roost) cell for amd64 Marlin, `marlin:tuna`. The former `marlin:roost` tags stop receiving updates; existing installs must follow the [explicit switch and recovery procedure](experiences/tuna/README.md#switch-an-existing-roost-install). The status snapshot below is from before that addition and does not prove image publication or a successful boot. Tuna Desktop adds no ISO or LUKS cells.
 
 <!-- build-status:start -->
 
