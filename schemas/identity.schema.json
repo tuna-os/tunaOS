@@ -1,0 +1,305 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.tunaos.org/identity.schema.json",
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "revision": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]*$"
+    },
+    "utcTimestamp": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$",
+      "format": "date-time"
+    },
+    "url": {
+      "type": "string",
+      "pattern": "^https://[^\\s]+$",
+      "format": "uri"
+    },
+    "attemptIdentity": {
+      "type": "object",
+      "properties": {
+        "repository": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+        },
+        "workflow": {
+          "type": "string",
+          "minLength": 1
+        },
+        "runId": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "runAttempt": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "sourceRevision": {
+          "$ref": "identity.schema.json#/$defs/revision"
+        },
+        "startedAt": {
+          "$ref": "identity.schema.json#/$defs/utcTimestamp"
+        }
+      },
+      "required": [
+        "repository",
+        "workflow",
+        "runId",
+        "runAttempt",
+        "sourceRevision",
+        "startedAt"
+      ],
+      "additionalProperties": false
+    },
+    "publication": {
+      "type": "object",
+      "properties": {
+        "repository": {
+          "type": "string",
+          "minLength": 1
+        },
+        "digest": {
+          "$ref": "identity.schema.json#/$defs/digest"
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "identity.schema.json#/$defs/url"
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "repository",
+        "digest",
+        "evidence"
+      ],
+      "additionalProperties": false
+    },
+    "evidence": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "$ref": "identity.schema.json#/$defs/url"
+        },
+        "digest": {
+          "$ref": "identity.schema.json#/$defs/digest"
+        },
+        "mediaType": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "url"
+      ],
+      "additionalProperties": false
+    },
+    "check": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "$ref": "identity.schema.json#/$defs/identifier"
+        },
+        "status": {
+          "enum": [
+            "pass",
+            "fail",
+            "blocked",
+            "missing",
+            "unavailable",
+            "running",
+            "skipped"
+          ]
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "identity.schema.json#/$defs/evidence"
+          },
+          "minItems": 0
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "name",
+        "status",
+        "evidence"
+      ],
+      "additionalProperties": false
+    },
+    "package": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "architecture": {
+          "type": "string",
+          "minLength": 1
+        },
+        "digest": {
+          "$ref": "identity.schema.json#/$defs/digest"
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "actionKey": {
+          "$ref": "identity.schema.json#/$defs/digest"
+        }
+      },
+      "required": [
+        "name",
+        "version",
+        "architecture",
+        "digest"
+      ],
+      "additionalProperties": false
+    },
+    "provenance": {
+      "type": "object",
+      "properties": {
+        "sourceRevision": {
+          "$ref": "identity.schema.json#/$defs/revision"
+        },
+        "buildrootDigest": {
+          "$ref": "identity.schema.json#/$defs/digest"
+        },
+        "sourceArtifacts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "url": {
+                "$ref": "identity.schema.json#/$defs/url"
+              },
+              "digest": {
+                "$ref": "identity.schema.json#/$defs/digest"
+              },
+              "mediaType": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "url",
+              "digest"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 1
+        },
+        "buildrootInventory": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "version": {
+                "type": "string",
+                "minLength": 1
+              },
+              "architecture": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "name",
+              "version",
+              "architecture"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 0
+        },
+        "compilerFlags": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 0
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "identity.schema.json#/$defs/evidence"
+          },
+          "minItems": 0
+        }
+      },
+      "required": [
+        "sourceRevision",
+        "buildrootDigest",
+        "sourceArtifacts",
+        "buildrootInventory",
+        "compilerFlags",
+        "evidence"
+      ],
+      "additionalProperties": false
+    },
+    "target": {
+      "type": "object",
+      "properties": {
+        "variant": {
+          "$ref": "identity.schema.json#/$defs/identifier"
+        },
+        "flavor": {
+          "$ref": "identity.schema.json#/$defs/identifier"
+        },
+        "platform": {
+          "enum": [
+            "linux/amd64",
+            "linux/amd64/v2",
+            "linux/arm64"
+          ]
+        },
+        "cpuBaseline": {
+          "enum": [
+            "x86-64",
+            "x86-64-v2",
+            "x86-64-v3",
+            "armv8-a"
+          ]
+        },
+        "hardwareScope": {
+          "enum": [
+            "generic",
+            "apple-silicon",
+            "apple-t2"
+          ]
+        }
+      },
+      "required": [
+        "variant",
+        "flavor",
+        "platform",
+        "cpuBaseline",
+        "hardwareScope"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

@@ -1,5 +1,9 @@
 config:
   global_platforms: ["linux/amd64", "linux/arm64"]
+  # Support commitments are independent of temporary scheduler restrictions.
+  # Asahi targets ARM Macs; T2 targets Intel Macs. Missing ordinary targets
+  # remain required and are reported by contracts and build health.
+  required_platforms: ["linux/amd64", "linux/arm64"]
 
 # ── Grouped dedup ISOs (issue #455) ───────────────────────────────────────────
 # Per-desktop-per-flavor ISOs are wasteful: all desktops on a variant share the
@@ -89,6 +93,7 @@ sibling_images:
 #   stage: 4  → build_stage4    (needs: build_stage3)
 variants:
   - id: yellowfin
+    required_platforms: ["linux/amd64/v2", "linux/arm64"]
     emoji: "🐠"
     description: "Based on AlmaLinux Kitten 10"
     base_image: "quay.io/almalinuxorg/almalinux-bootc:10-kitten@sha256:49c1c6f1f1d962e27d14e563b7158e074daeb2f5defc2ca1536dcff455ec6fba"
@@ -314,6 +319,7 @@ variants:
         platforms: ["linux/amd64"]
 
   - id: albacore
+    required_platforms: ["linux/amd64/v2", "linux/arm64"]
     emoji: "🐟"
     description: "Based on AlmaLinux 10"
     base_image: "quay.io/almalinuxorg/almalinux-bootc:10@sha256:7a80a51c0890f5ed736a8517e13adfa7dc6d882ac9838b6d8d60cd5207fbb69f"

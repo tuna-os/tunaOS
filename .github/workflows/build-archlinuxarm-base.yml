@@ -3,22 +3,10 @@ name: Build Arch Linux ARM base
 # Builds ghcr.io/tuna-os/archlinuxarm from the official Arch Linux ARM
 # aarch64 rootfs tarball — the marlin arm64 / asahi (#778) base.
 # docker.io/archlinux is x86_64-only and ALARM publishes no OCI image,
-# so we make our own from their canonical tarball, verified against
-# their published MD5 (all they sign tarballs with; the pacman keyring
-# takes over from first sync onward).
-#
-# Fetched from fl.us.mirror.archlinuxarm.org over HTTPS rather than
-# os.archlinuxarm.org: the redirector at os.archlinuxarm.org only
-# serves plain HTTP (it 302s to a geo-routed mirror over HTTP too) and
-# has no valid TLS certificate for its own hostname, so pinning to a
-# named mirror with a valid cert is what actually gets us an
-# authenticated channel. ALARM does not publish a sha256 or a detached
-# signature for this rolling "-latest" tarball, only MD5 — MD5 is kept
-# here purely as a corruption check, not a security boundary; the
-# HTTPS mirror connection is what stops in-transit tampering (#1710).
-#
-# Weekly rebuild keeps the snapshot fresh; consumers run pacman -Syu at
-# build time anyway, so staleness only costs download time.
+# so we build the canonical tarball after detached-signature verification.
+# Official downloads declare signer 68B3537F39A313B3E574D06777193F152BDBE6A6.
+# The exact HTTPS mirror signature verified against that key on 2026-10-10.
+# This workflow publishes candidates only; production :latest awaits review.
 
 on:
   workflow_dispatch:
@@ -28,6 +16,8 @@ on:
     branches: [main]
     paths:
       - .github/workflows/build-archlinuxarm-base.yml
+      - scripts/verify-archlinuxarm-rootfs.py
+      - tests/test_archlinuxarm_rootfs.py
 
 concurrency:
   group: build-archlinuxarm-base-${{ github.ref }}
@@ -36,6 +26,8 @@ concurrency:
 permissions:
   contents: read
   packages: write
+  id-token: write
+  attestations: write
 
 jobs:
   build:
@@ -49,23 +41,17 @@ jobs:
       - name: Fetch and verify ALARM rootfs
         run: |
           set -euo pipefail
-          curl -fsSL -o rootfs.tar.gz \
-            "https://fl.us.mirror.archlinuxarm.org/os/ArchLinuxARM-aarch64-latest.tar.gz"
-          curl -fsSL -o rootfs.tar.gz.md5 \
-            "https://fl.us.mirror.archlinuxarm.org/os/ArchLinuxARM-aarch64-latest.tar.gz.md5"
-          # The .md5 references the canonical filename. MD5 is only a
-          # corruption check (ALARM publishes no sha256/signature for
-          # this tarball) — HTTPS above is what authenticates the mirror.
-          sed 's/ArchLinuxARM-aarch64-latest.tar.gz/rootfs.tar.gz/' rootfs.tar.gz.md5 | md5sum -c -
+          python3 scripts/verify-archlinuxarm-rootfs.py fetch-verify --directory rootfs-evidence
 
       - name: Build image from rootfs
         env:
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
+          python3 scripts/verify-archlinuxarm-rootfs.py verify-local --directory rootfs-evidence
           ctr=$(sudo buildah from scratch)
           mnt=$(sudo buildah mount "$ctr")
-          sudo tar -xpf rootfs.tar.gz -C "$mnt" --numeric-owner
+          sudo tar -xpf rootfs-evidence/rootfs.tar.gz -C "$mnt" --numeric-owner
           # The tarball is a device rootfs: drop the board bits a container
           # never uses; alarm/root users stay (standard ALARM accounts).
           sudo rm -rf "$mnt/boot"/* "$mnt/etc/fstab"
@@ -78,7 +64,20 @@ jobs:
           # Initialize pacman inside the rootfs (native arm64 runner).
           sudo buildah run "$ctr" -- pacman-key --init
           sudo buildah run "$ctr" -- pacman-key --populate archlinuxarm
-          sudo buildah run "$ctr" -- pacman -Syu --noconfirm
+          # Verify effective policy for every enabled native repository before
+          # the transaction. Package signatures are distinct from rootfs proof.
+          sudo buildah run "$ctr" -- pacman-conf SigLevel > rootfs-evidence/native-global-siglevel.txt
+          sudo buildah run "$ctr" -- pacman-conf --repo-list > rootfs-evidence/native-repositories.txt
+          while IFS= read -r repo; do
+            [[ "$repo" =~ ^[A-Za-z0-9_.-]+$ ]]
+            sudo buildah run "$ctr" -- pacman-conf --repo "$repo" SigLevel \
+              </dev/null > "rootfs-evidence/native-repo-$repo.siglevel.txt"
+          done < rootfs-evidence/native-repositories.txt
+          python3 scripts/verify-archlinuxarm-rootfs.py signature-policy --directory rootfs-evidence
+          sudo buildah run "$ctr" -- pacman -Syu --noconfirm 2>&1 | tee rootfs-evidence/native-transaction.txt
+          sudo buildah run "$ctr" -- pacman -Q | sort > rootfs-evidence/native-package-inventory.txt
+          sudo buildah run "$ctr" -- pacman -Qi > rootfs-evidence/native-package-details.txt
+          sudo buildah run "$ctr" -- uname -m > rootfs-evidence/native-architecture.txt
           sudo buildah run "$ctr" -- pacman -Scc --noconfirm
           sudo buildah config \
             --arch arm64 --os linux \
@@ -87,6 +86,7 @@ jobs:
             --label org.opencontainers.image.title="Arch Linux ARM base" \
             --label org.opencontainers.image.description="Arch Linux ARM aarch64 rootfs as an OCI base image (marlin arm64/asahi prerequisite)" \
             --label org.opencontainers.image.source="https://github.com/${GITHUB_REPOSITORY}" \
+            --label org.opencontainers.image.revision="${GITHUB_SHA}" \
             "$ctr"
           sudo buildah commit --format oci "$ctr" archlinuxarm:build
 
@@ -96,7 +96,8 @@ jobs:
           sudo podman run --rm archlinuxarm:build bash -c \
             'pacman -Q base >/dev/null && [ "$(uname -m)" = aarch64 ] && pacman -Sp --noconfirm linux-aarch64 >/dev/null'
 
-      - name: Push to GHCR
+      - name: Push candidate to GHCR
+        id: candidate
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_ACTOR: ${{ github.actor }}
@@ -105,7 +106,78 @@ jobs:
           set -euo pipefail
           echo "${GITHUB_TOKEN}" | sudo podman login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
           REF="ghcr.io/${GITHUB_REPOSITORY_OWNER}/archlinuxarm"
-          DATE=$(date -u +%Y%m%d)
-          sudo podman tag archlinuxarm:build "$REF:latest" "$REF:$DATE"
-          sudo podman push "$REF:latest"
-          sudo podman push "$REF:$DATE"
+          TAG="candidate-${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          sudo podman tag archlinuxarm:build "$REF:$TAG"
+          sudo podman push --digestfile rootfs-evidence/image-digest.txt "$REF:$TAG"
+          sudo chown "$(id -u):$(id -g)" rootfs-evidence/image-digest.txt
+          sudo skopeo inspect --raw "docker://$REF@$(cat rootfs-evidence/image-digest.txt)" \
+            > rootfs-evidence/published-manifest.json
+          python3 scripts/verify-archlinuxarm-rootfs.py receipt \
+            --directory rootfs-evidence \
+            --source-revision "$GITHUB_SHA" --repository "$GITHUB_REPOSITORY" \
+            --workflow-ref "$GITHUB_WORKFLOW_REF" \
+            --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --image-digest-file rootfs-evidence/image-digest.txt --image-repository "$REF" \
+            --manifest-file rootfs-evidence/published-manifest.json \
+            --runtime-arch-file rootfs-evidence/native-architecture.txt \
+            --inventory-file rootfs-evidence/native-package-inventory.txt \
+            --signature-policy-file rootfs-evidence/native-signature-policy.txt
+          echo "name=$REF" >> "$GITHUB_OUTPUT"
+          echo "digest=$(cat rootfs-evidence/image-digest.txt)" >> "$GITHUB_OUTPUT"
+
+      - name: Authenticate attestation registry client
+        # sudo Podman's credential store used for pushing is not the Docker
+        # credential store read by the unprivileged attestation action.
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Attest candidate build provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ steps.candidate.outputs.name }}
+          subject-digest: ${{ steps.candidate.outputs.digest }}
+          push-to-registry: true
+
+      - name: Attest candidate source and native inventory
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ steps.candidate.outputs.name }}
+          subject-digest: ${{ steps.candidate.outputs.digest }}
+          predicate-type: https://tunaos.org/attestations/archlinuxarm-base/v1
+          predicate-path: rootfs-evidence/producer-receipt.json
+          push-to-registry: true
+
+      - name: Verify published candidate attestations
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_NAME: ${{ steps.candidate.outputs.name }}
+          CANDIDATE_DIGEST: ${{ steps.candidate.outputs.digest }}
+        run: |
+          set -euo pipefail
+          SUBJECT="oci://$CANDIDATE_NAME@$CANDIDATE_DIGEST"
+          POLICY=(--repo "$GITHUB_REPOSITORY"
+            --cert-identity "https://github.com/$GITHUB_WORKFLOW_REF"
+            --source-digest "$GITHUB_SHA" --source-ref "$GITHUB_REF"
+            --deny-self-hosted-runners --bundle-from-oci --format json)
+          gh attestation verify "$SUBJECT" "${POLICY[@]}" \
+            --predicate-type https://slsa.dev/provenance/v1 \
+            > rootfs-evidence/build-attestation-verification.json
+          gh attestation verify "$SUBJECT" "${POLICY[@]}" \
+            --predicate-type https://tunaos.org/attestations/archlinuxarm-base/v1 \
+            > rootfs-evidence/receipt-attestation-verification.json
+          python3 scripts/verify-archlinuxarm-rootfs.py verified-attestations --directory rootfs-evidence
+
+      - name: Preserve candidate verification evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: archlinuxarm-base-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            rootfs-evidence/*.json
+            rootfs-evidence/*.sig
+            rootfs-evidence/*.asc
+            rootfs-evidence/*.txt
+          if-no-files-found: error

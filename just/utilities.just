@@ -63,7 +63,7 @@ check: _ensure_check_deps ste
     #!/usr/bin/env bash
     cd {{ justfile_directory() }}
     echo "Checking syntax of shell scripts..."
-    find . -not -path './.git/*' -not -path './system_files/usr/share/gnome-shell/extensions/*' -not -path './packages-repo/*' -not -path './.build/*' -iname "*.sh" -type f -exec shellcheck --exclude=SC1091 "{}" ";"
+    find . -not -path './.spektacular/repos/*' -not -path './.git/*' -not -path './system_files/usr/share/gnome-shell/extensions/*' -not -path './packages-repo/*' -not -path './.build/*' -iname "*.sh" -type f -exec shellcheck --exclude=SC1091 "{}" ";"
     # `just fix` WROTE shell formatting and nothing ever CHECKED it, so the
     # .editorconfig could disagree with every file in the repo indefinitely --
     # and did. A formatter you do not verify is a formatter that drifts.
@@ -74,25 +74,25 @@ check: _ensure_check_deps ste
     # shfmt --diff on a bad file exits 1, the same command under find -exec
     # exits 0.
     echo "Checking shell formatting (shfmt)..."
-    unformatted="$(find . -not -path './.git/*' -not -path './system_files/usr/share/gnome-shell/extensions/*' -not -path './packages-repo/*' -not -path './.build/*' -not -path './_upstream-snapshots/*' -iname "*.sh" -type f -print0 | xargs -0 shfmt -l 2>/dev/null || true)"
+    unformatted="$(find . -not -path './.spektacular/repos/*' -not -path './.git/*' -not -path './system_files/usr/share/gnome-shell/extensions/*' -not -path './packages-repo/*' -not -path './.build/*' -not -path './_upstream-snapshots/*' -iname "*.sh" -type f -print0 | xargs -0 shfmt -l 2>/dev/null || true)"
     if [[ -n "$unformatted" ]]; then
         echo "::error::Shell formatting drift. Run 'just fix' and commit the result."
         echo "$unformatted"
         exit 1
     fi
-    find . -path './.git' -prune -o \
+    find . -path './.git' -prune -o -path './.spektacular/repos' -prune -o \
         -not -path './system_files/usr/share/gnome-shell/extensions/*' \
         -not -path './packages-repo/*' -not -path './.build/*' -type f \( \
         -name "*.yaml" -exec yamllint -c ./.yamllint.yml {} \; -o \
         -name "*.yml" -exec yamllint {} \; \
         \) 2>/dev/null || true
-    find . -not -path './.git/*' -not -path './system_files/usr/share/gnome-shell/extensions/*' -not -path './packages-repo/*' -not -path './.build/*' -type f -name "*.json" -exec sh -c 'jq . "$1" > /dev/null' _ {} \; 2>/dev/null || true
+    find . -not -path './.spektacular/repos/*' -not -path './.git/*' -not -path './system_files/usr/share/gnome-shell/extensions/*' -not -path './packages-repo/*' -not -path './.build/*' -type f -name "*.json" -exec sh -c 'jq . "$1" > /dev/null' _ {} \; 2>/dev/null || true
     if command -v actionlint &> /dev/null; then
         actionlint -ignore "permission \"id-token\" is unknown" -ignore "SC2086" -ignore "SC2129" -ignore "SC2001" -ignore "SC2034" -ignore "SC2015" -ignore "SC1001" -ignore "SC2295" -ignore "SC2016" -ignore "save-always" -ignore "cannot be filtered" .github/workflows/*.yml .github/workflows/*.yaml || { exit 1; }
     fi
     just --unstable --fmt --check -f Justfile
     echo "Checking workflow drift..."
-    python3 {{ justfile_directory() }}/scripts/generate-workflows.py
+    python3 {{ justfile_directory() }}/scripts/generate-workflows.py --check
     python3 {{ justfile_directory() }}/scripts/gen-ci-lanes.py --check
     if ! git diff --exit-code .github/workflows/build-*.yml; then
         echo "::error::Generated workflow files are stale. Run 'just generate-workflows' and commit the changes."
@@ -203,17 +203,19 @@ generate-workflows:
 fix: _check_shfmt_version
     #!/usr/bin/env bash
     cd {{ justfile_directory() }}
+    # Spektacular reference checkouts are research inputs, not our source.
+    # The pinned formatter changes 63 of their 67 shell files; preserve them.
     # _upstream-snapshots is VENDORED upstream code kept for reference. Its
     # value is being byte-identical to what upstream ships, so reformatting it
     # destroys the only reason it exists -- and it was 14 of the files `just
     # fix` rewrote on a clean main.
-    find . -not -path './system_files/usr/share/gnome-shell/extensions/*' -not -path './packages-repo/*' -not -path './_upstream-snapshots/*' -iname "*.sh" -type f -exec shfmt --write "{}" ";"
+    find . -not -path './.spektacular/repos/*' -not -path './system_files/usr/share/gnome-shell/extensions/*' -not -path './packages-repo/*' -not -path './_upstream-snapshots/*' -iname "*.sh" -type f -exec shfmt --write "{}" ";"
     # Same exclusion as the shell loop above, and for the same reason. Without
     # it the automation bot reformats vendored .just files and opens a PR for
     # the change on every run: #2421, #2422 and #2423 were three identical
     # rewrites of the same _upstream-snapshots/zirconium/.../67-gamerslop.just,
     # regenerated as fast as they were rejected.
-    find . -not -path './_upstream-snapshots/*' -not -path './packages-repo/*' -type f -name "*.just" -exec just --unstable --fmt -f {} \;
+    find . -not -path './.spektacular/repos/*' -not -path './_upstream-snapshots/*' -not -path './packages-repo/*' -type f -name "*.just" -exec just --unstable --fmt -f {} \;
     just --unstable --fmt -f Justfile || { exit 1; }
 
 clean:

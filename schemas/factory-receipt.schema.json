@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.tunaos.org/factory-receipt.schema.json",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "integer"
+    },
+    "kind": {
+      "const": "factory-receipt",
+      "type": "string"
+    },
+    "target": {
+      "$ref": "identity.schema.json#/$defs/target"
+    },
+    "contractDigest": {
+      "$ref": "identity.schema.json#/$defs/digest"
+    },
+    "baseDigest": {
+      "$ref": "identity.schema.json#/$defs/digest"
+    },
+    "attemptIdentity": {
+      "$ref": "identity.schema.json#/$defs/attemptIdentity"
+    },
+    "checks": {
+      "type": "array",
+      "items": {
+        "$ref": "identity.schema.json#/$defs/check"
+      },
+      "minItems": 1
+    },
+    "factoryDigest": {
+      "$ref": "identity.schema.json#/$defs/digest"
+    },
+    "inventory": {
+      "type": "array",
+      "items": {
+        "$ref": "identity.schema.json#/$defs/package"
+      },
+      "minItems": 1
+    },
+    "provenance": {
+      "$ref": "identity.schema.json#/$defs/provenance"
+    },
+    "publication": {
+      "$ref": "identity.schema.json#/$defs/publication"
+    },
+    "promotionStatus": {
+      "enum": [
+        "promoted",
+        "blocked",
+        "failed",
+        "pending"
+      ]
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "kind",
+    "target",
+    "contractDigest",
+    "baseDigest",
+    "attemptIdentity",
+    "checks",
+    "factoryDigest",
+    "inventory",
+    "provenance",
+    "publication",
+    "promotionStatus"
+  ],
+  "additionalProperties": false
+}

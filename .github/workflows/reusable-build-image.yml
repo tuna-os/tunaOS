@@ -70,7 +70,7 @@ on:
         type: boolean
         default: true
       publish:
-        description: "Publish this image"
+        description: "Push this source's image for verification; only upstream main can promote production tags"
         required: false
         type: boolean
         default: true
@@ -85,9 +85,18 @@ on:
         type: string
         default: ""
     outputs:
+      candidate_reference:
+        description: "Exact built manifest reference for candidate verification; empty when no image was pushed"
+        value: ${{ jobs.manifest.outputs.image != '' && format('{0}@{1}', jobs.manifest.outputs.image, jobs.manifest.outputs.digest) || '' }}
+      production_promoted:
+        description: "True only when upstream main completed the production promotion job"
+        value: ${{ jobs.tag-image.result == 'success' }}
+      iso_scope:
+        description: "Production ISO media is built only from upstream main; candidate boot QCOW2 gates still run"
+        value: ${{ github.repository == 'tuna-os/tunaOS' && github.ref == 'refs/heads/main' && 'production' || 'candidate-iso-not-run' }}
       manifest_published:
         description: >-
-          "true" once a :<flavor>-testing manifest exists in GHCR for at
+          "true" once this source's testing manifest exists in GHCR for at
           least one platform. Callers gate dependent stages on this rather
           than on the workflow's own conclusion: a single platform leg
           failing still leaves a usable base for the platforms that did
@@ -139,7 +148,7 @@ jobs:
       IMAGE_NAME: ${{ inputs.image-name }}
       IMAGE_DESC: ${{ inputs.image-desc }}
       IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY || format('ghcr.io/{0}', github.repository_owner) }}
-      DEFAULT_TAG: ${{ inputs.default-tag }}
+      DEFAULT_TAG: ${{ github.repository == 'tuna-os/tunaOS' && github.ref == 'refs/heads/main' && inputs.default-tag || format('candidate-{0}-{1}-{2}', github.run_id, github.run_attempt, inputs.default-tag) }}
       MAJOR_VERSION: ${{ inputs.major-version }}
       PLATFORMS: ${{ inputs.platforms }}
 
@@ -236,7 +245,7 @@ jobs:
       # buildah "local cache" whose env sudo stripped and whose buildx-only
       # type=local syntax buildah doesn't even parse.
       - name: Login to GitHub Container Registry (cache + push)
-        if: ${{ inputs.publish }}
+        if: ${{ inputs.publish && github.event_name != 'pull_request' }}
         uses: ./.github/actions/ghcr-login
 
       - name: Configure buildah registry layer cache
@@ -251,16 +260,65 @@ jobs:
           fi
           echo "BUILDAH_CACHE_FLAGS=${FLAGS}" >> "$GITHUB_ENV"
 
+      - name: Resolve candidate parent artifact
+        id: candidate-parent
+        if: ${{ github.event_name != 'pull_request' && !(github.repository == 'tuna-os/tunaOS' && github.ref == 'refs/heads/main') }}
+        shell: bash
+        env:
+          VARIANT: ${{ inputs.image-variant }}
+          FLAVOR: ${{ inputs.flavor }}
+          IMAGE_NAME: ${{ inputs.image-name }}
+          SAFE_PLATFORM: ${{ matrix.safeplatform }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          eval "$(./scripts/resolve-flavor.sh "$VARIANT" "$FLAVOR" 1)"
+          if [[ -n "$PARENT_FLAVOR" ]]; then
+            parent_ref=$(./scripts/published-image-ref.sh "$VARIANT" "$PARENT_FLAVOR" ghcr)
+            parent_tag=${parent_ref##*:}
+            tag="candidate-${RUN_ID}-${RUN_ATTEMPT}-${parent_tag}"
+            echo "artifact=${IMAGE_NAME}-${tag}-${SAFE_PLATFORM}-${RUN_ID}" >> "$GITHUB_OUTPUT"
+            echo "stem=${IMAGE_NAME}-${tag}-${SAFE_PLATFORM}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download current run candidate parent
+        if: ${{ steps.candidate-parent.outputs.artifact != '' }}
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ steps.candidate-parent.outputs.artifact }}
+          path: ${{ runner.temp }}/candidate-parent
+
+      - name: Bind immutable candidate parent
+        id: bound-parent
+        if: ${{ steps.candidate-parent.outputs.artifact != '' }}
+        shell: bash
+        env:
+          STEM: ${{ steps.candidate-parent.outputs.stem }}
+          PARENT_DIRECTORY: ${{ runner.temp }}/candidate-parent
+          IMAGE_NAME: ${{ inputs.image-name }}
+        run: |
+          set -euo pipefail
+          ref_file="${PARENT_DIRECTORY}/${STEM}.ref"
+          digest_file="${PARENT_DIRECTORY}/${STEM}.txt"
+          [[ -f "$ref_file" && ! -L "$ref_file" && -f "$digest_file" && ! -L "$digest_file" ]]
+          [[ $(wc -c < "$ref_file") -le 512 && $(wc -c < "$digest_file") -le 72 ]]
+          digest=$(cat "$digest_file")
+          ref=$(cat "$ref_file")
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          [[ "$ref" == "${IMAGE_REGISTRY}/${IMAGE_NAME}@${digest}" ]]
+          echo "reference=$ref" >> "$GITHUB_OUTPUT"
+
       - name: Build Image
         id: build-image
         shell: bash
         env:
           FLAVOR: ${{ inputs.flavor }}
           IMAGE_VARIANT: ${{ inputs.image-variant }}
-          DEFAULT_TAG: ${{ inputs.default-tag }}
+          DEFAULT_TAG: ${{ github.repository == 'tuna-os/tunaOS' && github.ref == 'refs/heads/main' && inputs.default-tag || format('candidate-{0}-{1}-{2}', github.run_id, github.run_attempt, inputs.default-tag) }}
           PUBLIC_IMAGE_NAME: ${{ inputs.image-name }}
           PLATFORM: ${{ matrix.platform }}
-          CHAIN_BASE_IMAGE: ${{ inputs.chain-base-image }}
+          CHAIN_BASE_IMAGE: ${{ steps.bound-parent.outputs.reference || inputs.chain-base-image }}
           # PR builds never publish; skip the two-pass chunkah rechunk +
           # relabel (~10 min) and validate the plain build instead.
           SKIP_RECHUNK: ${{ github.event_name == 'pull_request' && '1' || '0' }}
@@ -330,7 +388,7 @@ jobs:
         if: always()
         env:
           IMAGE_VARIANT: ${{ inputs.image-variant }}
-          DEFAULT_TAG: ${{ inputs.default-tag }}
+          DEFAULT_TAG: ${{ github.repository == 'tuna-os/tunaOS' && github.ref == 'refs/heads/main' && inputs.default-tag || format('candidate-{0}-{1}-{2}', github.run_id, github.run_attempt, inputs.default-tag) }}
           PLATFORM: ${{ matrix.platform }}
         run: |
           IMAGE="localhost/${IMAGE_VARIANT}:${DEFAULT_TAG}"
@@ -359,7 +417,7 @@ jobs:
         shell: bash
         env:
           IMAGE_VARIANT: ${{ inputs.image-variant }}
-          DEFAULT_TAG: ${{ inputs.default-tag }}
+          DEFAULT_TAG: ${{ github.repository == 'tuna-os/tunaOS' && github.ref == 'refs/heads/main' && inputs.default-tag || format('candidate-{0}-{1}-{2}', github.run_id, github.run_attempt, inputs.default-tag) }}
         run: |
           mkdir -p verify-out
           IMAGE="localhost/${IMAGE_VARIANT}:${DEFAULT_TAG}"
@@ -385,13 +443,13 @@ jobs:
           retention-days: 7
 
       - name: Push to GHCR
-        if: ${{ inputs.publish }}
+        if: ${{ inputs.publish && github.event_name != 'pull_request' }}
         id: push
         env:
           IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
           IMAGE_NAME: ${{ env.IMAGE_NAME }}
           IMAGE_VARIANT: ${{ inputs.image-variant }}
-          DEFAULT_TAG: ${{ inputs.default-tag }}
+          DEFAULT_TAG: ${{ github.repository == 'tuna-os/tunaOS' && github.ref == 'refs/heads/main' && inputs.default-tag || format('candidate-{0}-{1}-{2}', github.run_id, github.run_attempt, inputs.default-tag) }}
           PLATFORM: ${{ matrix.platform }}
           SAFE_PLATFORM: ${{ matrix.safeplatform }}
           MAX_RETRIES: 3
@@ -420,11 +478,11 @@ jobs:
           echo "digest=${IMAGE_DIGEST}" >> $GITHUB_OUTPUT
 
       - name: Verify rechunk metadata preserved
-        if: ${{ inputs.publish }}
+        if: ${{ inputs.publish && github.event_name != 'pull_request' }}
         env:
           IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
           IMAGE_NAME: ${{ env.IMAGE_NAME }}
-          DEFAULT_TAG: ${{ inputs.default-tag }}
+          DEFAULT_TAG: ${{ github.repository == 'tuna-os/tunaOS' && github.ref == 'refs/heads/main' && inputs.default-tag || format('candidate-{0}-{1}-{2}', github.run_id, github.run_attempt, inputs.default-tag) }}
           SAFE_PLATFORM: ${{ matrix.safeplatform }}
         run: |
           # chunkah packs layers with ostree component annotations; if a
@@ -463,7 +521,7 @@ jobs:
         env:
           IMAGE_NAME: ${{ env.IMAGE_NAME }}
           IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
-          DEFAULT_TAG: ${{ inputs.default-tag }}
+          DEFAULT_TAG: ${{ github.repository == 'tuna-os/tunaOS' && github.ref == 'refs/heads/main' && inputs.default-tag || format('candidate-{0}-{1}-{2}', github.run_id, github.run_attempt, inputs.default-tag) }}
           SAFE_PLATFORM: ${{ matrix.safeplatform }}
         run: |
           set -euo pipefail
@@ -557,7 +615,7 @@ jobs:
           SYFT_CMD: ${{ steps.setup-syft.outputs.cmd }}
           IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
           IMAGE_NAME: ${{ env.IMAGE_NAME }}
-          DEFAULT_TAG: ${{ inputs.default-tag }}
+          DEFAULT_TAG: ${{ github.repository == 'tuna-os/tunaOS' && github.ref == 'refs/heads/main' && inputs.default-tag || format('candidate-{0}-{1}-{2}', github.run_id, github.run_attempt, inputs.default-tag) }}
           SAFE_PLATFORM: ${{ matrix.safeplatform }}
           GOMEMLIMIT: 3GiB
           GOGC: "25"
@@ -659,7 +717,7 @@ jobs:
         env:
           IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
           IMAGE_NAME: ${{ env.IMAGE_NAME }}
-          DEFAULT_TAG: ${{ inputs.default-tag }}
+          DEFAULT_TAG: ${{ github.repository == 'tuna-os/tunaOS' && github.ref == 'refs/heads/main' && inputs.default-tag || format('candidate-{0}-{1}-{2}', github.run_id, github.run_attempt, inputs.default-tag) }}
           SAFE_PLATFORM: ${{ matrix.safeplatform }}
         run: |
           set -euo pipefail
@@ -775,7 +833,7 @@ jobs:
           comment_tag: diff-${{ env.IMAGE_NAME }}
 
       - name: Create Job Outputs
-        if: ${{ inputs.publish }}
+        if: ${{ inputs.publish && github.event_name != 'pull_request' }}
         env:
           IMAGE_NAME: ${{ env.IMAGE_NAME }}
           SAFE_PLATFORM: ${{ matrix.safeplatform }}
@@ -813,7 +871,7 @@ jobs:
             > "/tmp/outputs/digests/${IMAGE_NAME}-${DEFAULT_TAG}-${SAFE_PLATFORM}.ref"
 
       - name: Upload Output Artifacts
-        if: ${{ inputs.publish }}
+        if: ${{ inputs.publish && github.event_name != 'pull_request' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ env.IMAGE_NAME }}-${{ env.DEFAULT_TAG }}-${{ matrix.safeplatform }}-${{ github.run_id }}
@@ -877,7 +935,7 @@ jobs:
       IMAGE_NAME: ${{ inputs.image-name }}
       IMAGE_DESC: ${{ inputs.image-desc }}
       IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY || format('ghcr.io/{0}', github.repository_owner) }}
-      DEFAULT_TAG: ${{ inputs.default-tag }}
+      DEFAULT_TAG: ${{ github.repository == 'tuna-os/tunaOS' && github.ref == 'refs/heads/main' && inputs.default-tag || format('candidate-{0}-{1}-{2}', github.run_id, github.run_attempt, inputs.default-tag) }}
       MAJOR_VERSION: ${{ inputs.major-version }}
       PLATFORMS: ${{ inputs.platforms }}
     steps:
@@ -1017,7 +1075,7 @@ jobs:
             containers.bootc=1
 
       - name: Fetch Build Outputs
-        if: ${{ inputs.publish }}
+        if: ${{ inputs.publish && github.event_name != 'pull_request' }}
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: ${{ env.IMAGE_NAME }}-${{ env.DEFAULT_TAG }}-*
@@ -1025,7 +1083,7 @@ jobs:
           path: /tmp/artifacts
 
       - name: Load Outputs
-        if: ${{ inputs.publish }}
+        if: ${{ inputs.publish && github.event_name != 'pull_request' }}
         id: load-outputs
         env:
           IMAGE_NAME: ${{ env.IMAGE_NAME }}
@@ -1050,7 +1108,7 @@ jobs:
       # build_push leg failed and there is nothing to publish, which is a
       # genuine failure and must stay red.
       - name: Require at least one platform
-        if: ${{ inputs.publish }}
+        if: ${{ inputs.publish && github.event_name != 'pull_request' }}
         env:
           DIGESTS_JSON: ${{ steps.load-outputs.outputs.DIGESTS_JSON }}
         run: |
@@ -1063,7 +1121,7 @@ jobs:
           echo "${count} platform digest(s) available for the manifest."
 
       - name: Check Platform Completeness
-        if: ${{ inputs.publish }}
+        if: ${{ inputs.publish && github.event_name != 'pull_request' }}
         id: check_platforms
         env:
           DIGESTS_JSON: ${{ steps.load-outputs.outputs.DIGESTS_JSON }}
@@ -1112,7 +1170,7 @@ jobs:
           echo "all_platforms_built=${all_platforms_built}" >> "${GITHUB_OUTPUT}"
 
       - name: Create Manifest
-        if: ${{ inputs.publish }}
+        if: ${{ inputs.publish && github.event_name != 'pull_request' }}
         id: create-manifest
         env:
           IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
@@ -1123,7 +1181,7 @@ jobs:
           echo "MANIFEST=${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}" >> $GITHUB_OUTPUT
 
       - name: Populate Manifest
-        if: ${{ inputs.publish }}
+        if: ${{ inputs.publish && github.event_name != 'pull_request' }}
         env:
           MANIFEST: ${{ steps.create-manifest.outputs.MANIFEST }}
           DIGESTS_JSON: ${{ steps.load-outputs.outputs.DIGESTS_JSON }} # Already confirmed valid JSON
@@ -1162,7 +1220,7 @@ jobs:
           done <<< "${LABELS}"
 
       - name: Login to GitHub Container Registry
-        if: ${{ inputs.publish }}
+        if: ${{ inputs.publish && github.event_name != 'pull_request' }}
         env:
           REGISTRY: ghcr.io
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -1171,7 +1229,7 @@ jobs:
           echo "${{ env.GITHUB_TOKEN }}" | podman login -u "${GITHUB_ACTOR}" --password-stdin "${REGISTRY}"
 
       - name: Push Manifest
-        if: github.event_name != 'pull_request'
+        if: inputs.publish && github.event_name != 'pull_request'
         id: push_manifest
         env:
           MANIFEST: ${{ steps.create-manifest.outputs.MANIFEST }}
@@ -1227,7 +1285,7 @@ jobs:
     env:
       IMAGE_NAME: ${{ inputs.image-name }}
       IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY || format('ghcr.io/{0}', github.repository_owner) }}
-      DEFAULT_TAG: ${{ inputs.default-tag }}
+      DEFAULT_TAG: ${{ github.repository == 'tuna-os/tunaOS' && github.ref == 'refs/heads/main' && inputs.default-tag || format('candidate-{0}-{1}-{2}', github.run_id, github.run_attempt, inputs.default-tag) }}
       INDEX_DIGEST: ${{ needs.manifest.outputs.digest }}
       COSIGN_YES: "true"
     steps:
@@ -1395,7 +1453,7 @@ jobs:
     env:
       IMAGE_NAME: ${{ inputs.image-name }}
       IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY || format('ghcr.io/{0}', github.repository_owner) }}
-      DEFAULT_TAG: ${{ inputs.default-tag }}
+      DEFAULT_TAG: ${{ github.repository == 'tuna-os/tunaOS' && github.ref == 'refs/heads/main' && inputs.default-tag || format('candidate-{0}-{1}-{2}', github.run_id, github.run_attempt, inputs.default-tag) }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -1462,7 +1520,7 @@ jobs:
 
       - name: Build qcow2 from testing image
         env:
-          TEST_IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}-testing
+          TEST_IMAGE: ${{ needs.manifest.outputs.image }}@${{ needs.manifest.outputs.digest }}
           # hummingbird probes BACKEND=ostree SEALED=0, so it takes the xfs
           # default and `bootc install to-disk` ABORTS installing the
           # bootloader: BIOS grub2-install cannot read the xfs this base's
@@ -1603,7 +1661,7 @@ jobs:
       endsWith(inputs.flavor, '-asahi')
     uses: ./.github/workflows/verify-asahi-one.yml
     with:
-      image: ${{ vars.IMAGE_REGISTRY || format('ghcr.io/{0}', github.repository_owner) }}/${{ inputs.image-name }}:${{ inputs.default-tag }}-testing
+      image: ${{ needs.manifest.outputs.image }}@${{ needs.manifest.outputs.digest }}
     # No `secrets:` block: verify-asahi-one.yml's workflow_call declares no
     # explicit secrets input (it only uses the auto-provided GITHUB_TOKEN),
     # so `secrets: inherit` was passing every repo/org secret for nothing
@@ -1645,7 +1703,7 @@ jobs:
     env:
       IMAGE_NAME: ${{ inputs.image-name }}
       IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY || format('ghcr.io/{0}', github.repository_owner) }}
-      DEFAULT_TAG: ${{ inputs.default-tag }}
+      DEFAULT_TAG: ${{ github.repository == 'tuna-os/tunaOS' && github.ref == 'refs/heads/main' && inputs.default-tag || format('candidate-{0}-{1}-{2}', github.run_id, github.run_attempt, inputs.default-tag) }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -1667,14 +1725,14 @@ jobs:
 
       - name: Pull Candidate Image
         env:
-          TEST_IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}-testing
+          TEST_IMAGE: ${{ needs.manifest.outputs.image }}@${{ needs.manifest.outputs.digest }}
         run: |
           set -euo pipefail
           sudo podman pull "${TEST_IMAGE}"
 
       - name: Verify desktop experience
         env:
-          TEST_IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}-testing
+          TEST_IMAGE: ${{ needs.manifest.outputs.image }}@${{ needs.manifest.outputs.digest }}
           FLAVOR: ${{ inputs.flavor }}
           IMAGE_VARIANT: ${{ inputs.image-variant }}
         run: |
@@ -1724,7 +1782,7 @@ jobs:
 
       - name: Verify package wishlist
         env:
-          TEST_IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}-testing
+          TEST_IMAGE: ${{ needs.manifest.outputs.image }}@${{ needs.manifest.outputs.digest }}
           IMAGE_VARIANT: ${{ inputs.image-variant }}
         run: |
           set -euo pipefail
@@ -1742,7 +1800,8 @@ jobs:
     name: Promote
     needs: [manifest, sign, verify_desktop, verify_boot, verify_asahi]
     if: >-
-      !cancelled() && github.event_name != 'pull_request' &&
+      !cancelled() && inputs.publish && github.event_name != 'pull_request' &&
+      github.repository == 'tuna-os/tunaOS' && github.ref == 'refs/heads/main' &&
       needs.manifest.result == 'success' &&
       needs.sign.result == 'success' &&
       (needs.verify_desktop.result == 'success' || needs.verify_desktop.result == 'skipped') &&
@@ -1762,7 +1821,7 @@ jobs:
       IMAGE_NAME: ${{ inputs.image-name }}
       IMAGE_DESC: ${{ inputs.image-desc }}
       IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY || format('ghcr.io/{0}', github.repository_owner) }}
-      DEFAULT_TAG: ${{ inputs.default-tag }}
+      DEFAULT_TAG: ${{ github.repository == 'tuna-os/tunaOS' && github.ref == 'refs/heads/main' && inputs.default-tag || format('candidate-{0}-{1}-{2}', github.run_id, github.run_attempt, inputs.default-tag) }}
       MAJOR_VERSION: ${{ inputs.major-version }}
       PLATFORMS: ${{ inputs.platforms }}
     steps:
@@ -1791,12 +1850,13 @@ jobs:
           MAJOR_VERSION: ${{ env.MAJOR_VERSION }}
           ALL_PLATFORMS_BUILT: ${{ needs.manifest.outputs.all_platforms_built }}
           INPUT_PLATFORMS: ${{ inputs.platforms }}
+          INDEX_DIGEST: ${{ needs.manifest.outputs.digest }}
           MAX_RETRIES: 4
         run: |
           set -ex
           # Promote the verified -testing manifest to the bare tags users
           # pull. This is the ONLY place the bare :<flavor> tag is written.
-          SOURCE_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-testing"
+          SOURCE_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}@${INDEX_DIGEST}"
 
           DATE_TAG="$(date +%Y%m%d)"
 

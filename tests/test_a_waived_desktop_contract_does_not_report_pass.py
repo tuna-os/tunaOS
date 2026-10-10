@@ -1,9 +1,7 @@
 """A waived desktop contract must not report itself as passed.
 
-hummingbird is exempted from every require_* in
-build_scripts/checks/verify-desktop-experience.sh so it can bootstrap against
-incomplete repos. That exemption is deliberate and these tests do not
-challenge it. What they hold is the REPORT.
+Hummingbird records missing native inputs while checking its bootstrap
+repository. Its final verdict must fail when those inputs are missing.
 
 On tunaOS run 32813037866 the check printed, in order:
 
@@ -54,7 +52,7 @@ def _run_report(tmp_path, waived):
         + "\n"
     )
     p = subprocess.run(["bash", str(script)], capture_output=True, text=True)
-    assert p.returncode == 0, p.stdout + p.stderr
+    assert p.returncode == (1 if waived else 0), p.stdout + p.stderr
     written = (contracts / "gnome").read_text()
     return p.stdout + p.stderr, written
 
@@ -109,3 +107,9 @@ def test_every_hummingbird_exemption_counts_what_it_waives():
         f"{exemptions} require_* exemptions but only {counted} call waive() — "
         "an uncounted exemption can still report a pass over a broken image"
     )
+
+
+def test_incomplete_hummingbird_desktop_stops_before_publication(tmp_path):
+    out, written = _run_report(tmp_path, 1)
+    assert 'refusing an unusable gnome image' in out
+    assert 'validated_at_build=false' in written
