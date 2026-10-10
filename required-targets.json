@@ -1,5 +1,5 @@
 {
-  "coverageDigest": "sha256:82adc58ab02f40c0eee2274502014c56faa365caecd682b92207fec71d47bb69",
+  "coverageDigest": "sha256:b18eb495d710513cda36b490f8ae65312896b045ce521b6ea35a2f1f2858d475",
   "kind": "required-targets",
   "schemaVersion": 1,
   "targets": [
@@ -2906,7 +2906,7 @@
       "required": true,
       "scheduled": true,
       "target": {
-        "cpuBaseline": "x86-64",
+        "cpuBaseline": "x86-64-v3",
         "flavor": "base-hwe",
         "hardwareScope": "generic",
         "platform": "linux/amd64",
@@ -2936,7 +2936,7 @@
       "required": true,
       "scheduled": true,
       "target": {
-        "cpuBaseline": "x86-64",
+        "cpuBaseline": "x86-64-v3",
         "flavor": "base-nvidia",
         "hardwareScope": "generic",
         "platform": "linux/amd64",
@@ -2966,7 +2966,7 @@
       "required": true,
       "scheduled": true,
       "target": {
-        "cpuBaseline": "x86-64",
+        "cpuBaseline": "x86-64-v3",
         "flavor": "base",
         "hardwareScope": "generic",
         "platform": "linux/amd64",
@@ -2996,7 +2996,7 @@
       "required": true,
       "scheduled": true,
       "target": {
-        "cpuBaseline": "x86-64",
+        "cpuBaseline": "x86-64-v3",
         "flavor": "cosmic-hwe",
         "hardwareScope": "generic",
         "platform": "linux/amd64",
@@ -3026,7 +3026,7 @@
       "required": true,
       "scheduled": true,
       "target": {
-        "cpuBaseline": "x86-64",
+        "cpuBaseline": "x86-64-v3",
         "flavor": "cosmic-nvidia",
         "hardwareScope": "generic",
         "platform": "linux/amd64",
@@ -3056,7 +3056,7 @@
       "required": true,
       "scheduled": true,
       "target": {
-        "cpuBaseline": "x86-64",
+        "cpuBaseline": "x86-64-v3",
         "flavor": "cosmic",
         "hardwareScope": "generic",
         "platform": "linux/amd64",
@@ -3086,7 +3086,7 @@
       "required": true,
       "scheduled": true,
       "target": {
-        "cpuBaseline": "x86-64",
+        "cpuBaseline": "x86-64-v3",
         "flavor": "gnome-hwe",
         "hardwareScope": "generic",
         "platform": "linux/amd64",
@@ -3116,7 +3116,7 @@
       "required": true,
       "scheduled": true,
       "target": {
-        "cpuBaseline": "x86-64",
+        "cpuBaseline": "x86-64-v3",
         "flavor": "gnome-nvidia",
         "hardwareScope": "generic",
         "platform": "linux/amd64",
@@ -3146,7 +3146,7 @@
       "required": true,
       "scheduled": true,
       "target": {
-        "cpuBaseline": "x86-64",
+        "cpuBaseline": "x86-64-v3",
         "flavor": "gnome",
         "hardwareScope": "generic",
         "platform": "linux/amd64",
@@ -3176,7 +3176,7 @@
       "required": true,
       "scheduled": true,
       "target": {
-        "cpuBaseline": "x86-64",
+        "cpuBaseline": "x86-64-v3",
         "flavor": "kde-hwe",
         "hardwareScope": "generic",
         "platform": "linux/amd64",
@@ -3206,7 +3206,7 @@
       "required": true,
       "scheduled": true,
       "target": {
-        "cpuBaseline": "x86-64",
+        "cpuBaseline": "x86-64-v3",
         "flavor": "kde-nvidia",
         "hardwareScope": "generic",
         "platform": "linux/amd64",
@@ -3236,7 +3236,7 @@
       "required": true,
       "scheduled": true,
       "target": {
-        "cpuBaseline": "x86-64",
+        "cpuBaseline": "x86-64-v3",
         "flavor": "kde",
         "hardwareScope": "generic",
         "platform": "linux/amd64",
@@ -3266,7 +3266,7 @@
       "required": true,
       "scheduled": true,
       "target": {
-        "cpuBaseline": "x86-64",
+        "cpuBaseline": "x86-64-v3",
         "flavor": "niri-hwe",
         "hardwareScope": "generic",
         "platform": "linux/amd64",
@@ -3296,7 +3296,7 @@
       "required": true,
       "scheduled": true,
       "target": {
-        "cpuBaseline": "x86-64",
+        "cpuBaseline": "x86-64-v3",
         "flavor": "niri-nvidia",
         "hardwareScope": "generic",
         "platform": "linux/amd64",
@@ -3326,7 +3326,7 @@
       "required": true,
       "scheduled": true,
       "target": {
-        "cpuBaseline": "x86-64",
+        "cpuBaseline": "x86-64-v3",
         "flavor": "niri",
         "hardwareScope": "generic",
         "platform": "linux/amd64",
@@ -3356,7 +3356,7 @@
       "required": true,
       "scheduled": true,
       "target": {
-        "cpuBaseline": "x86-64",
+        "cpuBaseline": "x86-64-v3",
         "flavor": "xfce",
         "hardwareScope": "generic",
         "platform": "linux/amd64",
@@ -3386,7 +3386,7 @@
       "required": true,
       "scheduled": true,
       "target": {
-        "cpuBaseline": "x86-64",
+        "cpuBaseline": "x86-64-v3",
         "flavor": "base",
         "hardwareScope": "generic",
         "platform": "linux/amd64",
@@ -3416,7 +3416,7 @@
       "required": true,
       "scheduled": true,
       "target": {
-        "cpuBaseline": "x86-64",
+        "cpuBaseline": "x86-64-v3",
         "flavor": "cosmic",
         "hardwareScope": "generic",
         "platform": "linux/amd64",
@@ -3446,7 +3446,7 @@
       "required": true,
       "scheduled": true,
       "target": {
-        "cpuBaseline": "x86-64",
+        "cpuBaseline": "x86-64-v3",
         "flavor": "gnome",
         "hardwareScope": "generic",
         "platform": "linux/amd64",
@@ -3476,7 +3476,7 @@
       "required": true,
       "scheduled": true,
       "target": {
-        "cpuBaseline": "x86-64",
+        "cpuBaseline": "x86-64-v3",
         "flavor": "kde",
         "hardwareScope": "generic",
         "platform": "linux/amd64",

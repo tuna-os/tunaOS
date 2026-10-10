@@ -21,6 +21,10 @@ PLATFORMS = {
     "linux/arm64": ("linux", "arm64", None, "armv8-a"),
 }
 ALMA_VARIANTS = frozenset({"albacore", "yellowfin"})
+# Native EL10/ELN support requires v3 even when OCI architecture is amd64.
+# https://www.centos.org/centos10/ documents the Stream 10 requirement.
+# ELN compiler policy: fedora-eln/eln-docs, modules/ROOT/pages/buildroot.adoc.
+NATIVE_V3_VARIANTS = frozenset({"skipjack", "wahoo"})
 IDENTIFIER = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*\Z")
 
 
@@ -29,6 +33,13 @@ def split_platform(platform: str) -> tuple[str, str, str | None]:
     if not isinstance(platform, str) or platform not in PLATFORMS:
         raise ValueError(f"unsupported platform: {platform!r}")
     return PLATFORMS[platform][:3]
+
+
+def cpu_baseline(variant: str, platform: str) -> str:
+    split_platform(platform)
+    if platform == "linux/amd64" and variant in NATIVE_V3_VARIANTS:
+        return "x86-64-v3"
+    return PLATFORMS[platform][3]
 
 
 def platform_slug(platform: str) -> str:
@@ -86,7 +97,7 @@ def validate_target(target: dict[str, Any]) -> None:
     split_platform(platform)
     if target["hardwareScope"] != scope:
         raise ValueError("hardware scope does not match flavor")
-    if target["cpuBaseline"] != PLATFORMS[platform][3]:
+    if target["cpuBaseline"] != cpu_baseline(variant, platform):
         raise ValueError("CPU baseline does not match platform")
     if platform == "linux/amd64/v2" and variant not in ALMA_VARIANTS:
         raise ValueError("AMD64/v2 is restricted to Alma variants")
@@ -169,7 +180,7 @@ def resolve_required_targets(config: dict[str, Any]) -> list[dict[str, Any]]:
                     "variant": variant_id,
                     "flavor": flavor_id,
                     "platform": platform,
-                    "cpuBaseline": PLATFORMS[platform][3],
+                    "cpuBaseline": cpu_baseline(variant_id, platform),
                     "hardwareScope": scope,
                 }
                 validate_target(target)

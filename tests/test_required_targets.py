@@ -156,7 +156,7 @@ def test_alma_t2_requires_v2_intel():
 
 def test_identity_rejects_unknown_or_missing_fields():
     target = {'variant': 'skipjack', 'flavor': 'base', 'platform': 'linux/amd64',
-              'cpuBaseline': 'x86-64', 'hardwareScope': 'generic'}
+              'cpuBaseline': 'x86-64-v3', 'hardwareScope': 'generic'}
     with pytest.raises(ValueError):
         targets.validate_target({**target, 'architecture': 'amd64'})
     del target['cpuBaseline']
@@ -172,3 +172,18 @@ def test_coverage_digest_is_deterministic_and_binds_scheduling():
     changed = config()
     changed['variants'][0]['platforms'] = ['linux/amd64/v2', 'linux/arm64']
     assert targets.coverage_document(changed)['coverageDigest'] != first['coverageDigest']
+
+
+@pytest.mark.parametrize('variant', ['skipjack', 'wahoo'])
+def test_native_v3_baseline_keeps_ordinary_oci_amd64_identity(variant):
+    data = {'variants': [{'id': variant, 'platforms': ['linux/amd64'],
+                         'flavors': [{'id': 'cosmic', 'build_image': True}]}]}
+    rows = targets.resolve_required_targets(data)
+    assert [row['target'] for row in rows] == [
+        {'variant': variant, 'flavor': 'cosmic', 'platform': 'linux/amd64',
+         'cpuBaseline': 'x86-64-v3', 'hardwareScope': 'generic'},
+        {'variant': variant, 'flavor': 'cosmic', 'platform': 'linux/arm64',
+         'cpuBaseline': 'armv8-a', 'hardwareScope': 'generic'}]
+    for baseline in ['x86-64', 'x86-64-v2']:
+        with pytest.raises(ValueError):
+            targets.validate_target({**rows[0]['target'], 'cpuBaseline': baseline})

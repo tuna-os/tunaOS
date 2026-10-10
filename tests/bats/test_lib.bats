@@ -16,6 +16,8 @@ REPO_ROOT="${REPO_ROOT:-$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)}"
 
 setup() {
   TEST_ROOT="$(mktemp -d)"
+  # lib.sh sources its recorder helper even when recording is disabled.
+  cp "${REPO_ROOT}/build_scripts/package-recording.sh" "${TEST_ROOT}/package-recording.sh"
   # Clear lib.sh OS detection cache between tests
   rm -f /tmp/tunaos-build-env 2>/dev/null || true
   # Create a minimal filesystem for tests
