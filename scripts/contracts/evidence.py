@@ -109,9 +109,13 @@ def _semantic(value: Any, now: dt.datetime) -> None:
                 except (ValueError, TypeError) as exc:
                     raise EvidenceError(f"invalid UTC timestamp: {item}") from exc
             _semantic(item, now)
-        for field, identity in [("checks", "name"), ("packageRequirements", "name"), ("approvedSources", "id"), ("targets", "target"), ("sources", "id")]:
+        for field, identity in [("checks", "name"), ("approvedSources", "id"), ("targets", "target"), ("sources", "id")]:
             if field in value:
                 _unique(value[field], identity, field)
+        if "packageRequirements" in value:
+            keys = [(item["nativeExpression"], item["manager"], item["scope"], item.get("requestedSource"))
+                    for item in value["packageRequirements"]]
+            _unique(keys, None, "packageRequirements")
         if "requiredChecks" in value:
             _unique(value["requiredChecks"], None, "requiredChecks")
         if "inventory" in value:
@@ -127,6 +131,19 @@ def _document_semantics(document: dict[str, Any]) -> None:
     if kind == "consumer-contract":
         if document["baseReference"].rsplit("@", 1)[-1] != document["baseDigest"]:
             raise EvidenceError("base reference and base digest disagree")
+        base = document["baseResolution"]
+        if (base["reference"] != document["baseReference"]
+            or base["childDigest"] != document["baseDigest"]
+            or base["platform"] != document["target"]["platform"]
+            or base["cpuBaseline"] != document["target"]["cpuBaseline"]):
+            raise EvidenceError("consumer base resolution disagrees with contract identity")
+        from .targets import split_platform
+        os_name, architecture, variant = split_platform(document["target"]["platform"])
+        observed = base["observedPlatform"]
+        observed_variant = observed.get("variant")
+        if (observed["os"] != os_name or observed["architecture"] != architecture
+            or not (observed_variant == variant or architecture == "arm64" and variant is None and observed_variant == "v8")):
+            raise EvidenceError("consumer base observed platform disagrees with target")
     if kind in {"factory-receipt", "image-receipt"}:
         for check in document["checks"]:
             if check["status"] == "pass" and not any(item.get("digest") for item in check["evidence"]):

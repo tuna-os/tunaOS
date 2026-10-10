@@ -28,6 +28,10 @@
       "items": {
         "type": "object",
         "properties": {
+          "nativeExpression": {
+            "type": "string",
+            "minLength": 1
+          },
           "name": {
             "type": "string",
             "minLength": 1
@@ -36,17 +40,93 @@
             "type": "string",
             "minLength": 1
           },
+          "manager": {
+            "enum": [
+              "dnf",
+              "apt",
+              "pacman",
+              "zypper",
+              "portage"
+            ]
+          },
+          "scope": {
+            "enum": [
+              "final",
+              "transient"
+            ]
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "origins": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "phase": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "line": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "required": [
+                "path",
+                "phase"
+              ],
+              "additionalProperties": false
+            },
+            "minItems": 1
+          },
+          "requestedSource": {
+            "type": "string",
+            "minLength": 1
+          },
           "provider": {
             "type": "string",
             "minLength": 1
+          },
+          "providerEvidence": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "url": {
+                  "$ref": "identity.schema.json#/$defs/url"
+                },
+                "digest": {
+                  "$ref": "identity.schema.json#/$defs/digest"
+                },
+                "mediaType": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "url",
+                "digest"
+              ],
+              "additionalProperties": false
+            },
+            "minItems": 1
           }
         },
         "required": [
-          "name"
+          "nativeExpression",
+          "manager",
+          "scope",
+          "required",
+          "origins"
         ],
         "additionalProperties": false
       },
-      "minItems": 1
+      "minItems": 0
     },
     "approvedSources": {
       "type": "array",
@@ -74,7 +154,7 @@
         ],
         "additionalProperties": false
       },
-      "minItems": 1
+      "minItems": 0
     },
     "requiredChecks": {
       "type": "array",
@@ -98,6 +178,443 @@
     "baseReference": {
       "type": "string",
       "pattern": "^[^\\s@]+@sha256:[0-9a-f]{64}$"
+    },
+    "baseResolution": {
+      "type": "object",
+      "properties": {
+        "configuredReference": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reference": {
+          "type": "string",
+          "minLength": 1
+        },
+        "indexDigest": {
+          "$ref": "identity.schema.json#/$defs/digest"
+        },
+        "childDigest": {
+          "$ref": "identity.schema.json#/$defs/digest"
+        },
+        "platform": {
+          "enum": [
+            "linux/amd64",
+            "linux/amd64/v2",
+            "linux/arm64"
+          ]
+        },
+        "cpuBaseline": {
+          "$ref": "identity.schema.json#/$defs/target/properties/cpuBaseline"
+        },
+        "baselineEvidence": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "url": {
+                "$ref": "identity.schema.json#/$defs/url"
+              },
+              "digest": {
+                "$ref": "identity.schema.json#/$defs/digest"
+              }
+            },
+            "required": [
+              "url",
+              "digest"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 1
+        },
+        "configDigest": {
+          "$ref": "identity.schema.json#/$defs/digest"
+        },
+        "observedPlatform": {
+          "type": "object",
+          "properties": {
+            "os": {
+              "const": "linux"
+            },
+            "architecture": {
+              "enum": [
+                "amd64",
+                "arm64"
+              ]
+            },
+            "variant": {
+              "enum": [
+                "v2",
+                "v8"
+              ]
+            }
+          },
+          "required": [
+            "os",
+            "architecture"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "configuredReference",
+        "reference",
+        "indexDigest",
+        "childDigest",
+        "platform",
+        "cpuBaseline",
+        "baselineEvidence",
+        "configDigest",
+        "observedPlatform"
+      ],
+      "additionalProperties": false
+    },
+    "adapter": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sourceDeclarations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "declarationType": {
+            "enum": [
+              "repos",
+              "ppa",
+              "copr"
+            ]
+          },
+          "declaration": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "uri": {
+                "type": "string",
+                "minLength": 1
+              },
+              "suite": {
+                "type": "string",
+                "minLength": 1
+              },
+              "keyring_url": {
+                "type": "string",
+                "minLength": 1
+              },
+              "condition": {
+                "type": "string",
+                "minLength": 1
+              },
+              "repo": {
+                "type": "string",
+                "minLength": 1
+              },
+              "options": {
+                "type": "string",
+                "minLength": 1
+              },
+              "baseurl": {
+                "type": "string",
+                "minLength": 1
+              },
+              "gpgkey": {
+                "type": "string",
+                "minLength": 1
+              },
+              "priority": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ]
+              },
+              "url": {
+                "type": "string",
+                "minLength": 1
+              },
+              "packages": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "minItems": 0
+              },
+              "unsigned": {
+                "type": "boolean"
+              }
+            },
+            "required": [],
+            "additionalProperties": false
+          },
+          "origin": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "declarationType",
+          "declaration",
+          "origin"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 0
+    },
+    "nativeGroups": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "nativeId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "options": {
+            "type": "string",
+            "minLength": 0
+          },
+          "excludes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "minItems": 0
+          },
+          "origins": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "phase": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "line": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "required": [
+                "path",
+                "phase"
+              ],
+              "additionalProperties": false
+            },
+            "minItems": 1
+          }
+        },
+        "required": [
+          "nativeId",
+          "options",
+          "excludes",
+          "origins"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 0
+    },
+    "nativeExcludes": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 0
+    },
+    "nativeVersionLocks": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 0
+    },
+    "hooks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "commandDigest": {
+            "$ref": "identity.schema.json#/$defs/digest"
+          },
+          "script": {
+            "type": "string",
+            "minLength": 1
+          },
+          "scriptDigest": {
+            "$ref": "identity.schema.json#/$defs/digest"
+          },
+          "origin": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "origin"
+        ],
+        "additionalProperties": false,
+        "anyOf": [
+          {
+            "required": [
+              "commandDigest"
+            ]
+          },
+          {
+            "required": [
+              "script",
+              "scriptDigest"
+            ]
+          }
+        ]
+      },
+      "minItems": 0
+    },
+    "inputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "digest": {
+            "$ref": "identity.schema.json#/$defs/digest"
+          }
+        },
+        "required": [
+          "path",
+          "digest"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 1
+    },
+    "resolution": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "enum": [
+            "blocked",
+            "incomplete",
+            "complete"
+          ]
+        },
+        "unresolved": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "$ref": "identity.schema.json#/$defs/identifier"
+              },
+              "origin": {
+                "type": "string",
+                "minLength": 1
+              },
+              "detail": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "code",
+              "origin",
+              "detail"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 0
+        }
+      },
+      "required": [
+        "status",
+        "unresolved"
+      ],
+      "additionalProperties": false
+    },
+    "requestLedgerDigest": {
+      "$ref": "identity.schema.json#/$defs/digest"
+    },
+    "resolutionEvidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "$ref": "identity.schema.json#/$defs/url"
+          },
+          "digest": {
+            "$ref": "identity.schema.json#/$defs/digest"
+          },
+          "mediaType": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "url",
+          "digest"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 1
+    },
+    "sourcePolicy": {
+      "type": "object",
+      "properties": {
+        "inherited": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "forbiddenNew": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "policyRevision": {
+          "anyOf": [
+            {
+              "$ref": "identity.schema.json#/$defs/revision"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "baselineDigest": {
+          "anyOf": [
+            {
+              "$ref": "identity.schema.json#/$defs/digest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "inherited",
+        "forbiddenNew",
+        "policyRevision",
+        "baselineDigest"
+      ],
+      "additionalProperties": false
     }
   },
   "required": [
@@ -111,7 +628,74 @@
     "approvedSources",
     "requiredChecks",
     "packageManager",
-    "baseReference"
+    "baseReference",
+    "baseResolution",
+    "adapter",
+    "sourceDeclarations",
+    "nativeGroups",
+    "nativeExcludes",
+    "nativeVersionLocks",
+    "hooks",
+    "inputs",
+    "resolution",
+    "sourcePolicy"
   ],
-  "additionalProperties": false
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "resolution": {
+            "properties": {
+              "status": {
+                "const": "complete"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "requestLedgerDigest",
+          "resolutionEvidence"
+        ],
+        "properties": {
+          "resolution": {
+            "properties": {
+              "unresolved": {
+                "maxItems": 0
+              }
+            }
+          },
+          "approvedSources": {
+            "minItems": 1,
+            "items": {
+              "required": [
+                "snapshotDigest"
+              ]
+            }
+          },
+          "packageRequirements": {
+            "minItems": 1,
+            "items": {
+              "required": [
+                "provider",
+                "providerEvidence"
+              ]
+            }
+          },
+          "sourcePolicy": {
+            "properties": {
+              "forbiddenNew": {
+                "maxItems": 0
+              },
+              "policyRevision": {
+                "$ref": "identity.schema.json#/$defs/revision"
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
 }
