@@ -6,10 +6,10 @@
 test_contract_evidence` ([run 38080136643](https://github.com/tuna-os/tunaOS/actions/runs/38080136643)).
 
 **Cause:** The health test added the repository root to Python's search path,
-but imported a sibling test as a top-level module. CI imports tests through
-the configured pytest package path.
+but imported a sibling test as a top-level module. Pytest uses its configured
+path in CI.
 
-**Fix:** Add the fixture's actual parent directory before importing it.
+**Fix:** Add the fixture's actual parent directory, then import it.
 Keep the full CI suite as the acceptance gate.
 
 Last updated: 2026-07-16 (by `fix/r2-cost-reduction` investigation)
