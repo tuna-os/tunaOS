@@ -49,7 +49,7 @@ jobs:
           ]], check=True)
           PY
       - name: Verify health and native platform boundaries
-        run: python -m pytest tests/test_build_health.py tests/test_build_health_fetch.py tests/test_build_health_receipts.py tests/test_consumer_contract.py tests/test_selected_display_manager_survives_first_boot.py tests/test_rawhide_gnome_vpn_replacement.py tests/test_eln_fwupd_family_upgrade.py tests/test_asahi_native_kernel_evidence.py tests/test_a_waived_desktop_contract_does_not_report_pass.py tests/test_candidate_image_publication.py tests/test_debian_nvidia_snapshot.py tests/regressions/test_issue_2696_debian_nvidia_holds_a_kernel_the_driver_builds_on.py
+        run: python -m pytest tests/test_build_health.py tests/test_build_health_fetch.py tests/test_build_health_receipts.py tests/test_consumer_contract.py tests/test_selected_display_manager_survives_first_boot.py tests/test_rawhide_gnome_vpn_replacement.py tests/test_eln_fwupd_family_upgrade.py tests/test_asahi_native_kernel_evidence.py tests/test_a_waived_desktop_contract_does_not_report_pass.py tests/test_candidate_image_publication.py tests/test_debian_nvidia_snapshot.py tests/regressions/test_issue_2696_debian_nvidia_holds_a_kernel_the_driver_builds_on.py tests/test_candidate_flavor_selection.py
       - name: Collect required target observations
         env:
           GH_TOKEN: ${{ github.token }}
