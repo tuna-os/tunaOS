@@ -120,6 +120,15 @@ def evaluate_row(required: dict[str, Any], attempt: dict | None,
         readiness.update(status=package_status, measuredAt=package_observation.get("measuredAt"),
                          factoryDigest=package["factoryDigest"], contractDigest=package["contractDigest"])
         readiness["evidence"] = [item for check in checks for item in check["evidence"]]
+        latest_factory = package_observation.get("latestAttempt")
+        if not isinstance(latest_factory, dict):
+            readiness["status"] = "unknown"
+        elif latest_factory.get("status") != "success":
+            readiness["status"] = (latest_factory["status"] if latest_factory.get("status")
+                                    in {"failed", "blocked", "running", "missing", "stale", "unknown"} else "unknown")
+            readiness["measuredAt"] = latest_factory.get("measuredAt")
+        elif latest_factory.get("identity") != package["attemptIdentity"]:
+            readiness["status"] = "blocked"
     if image is not None:
         checks = image["checks"]
         statuses = {check["status"] for check in checks}
@@ -147,7 +156,8 @@ def evaluate_row(required: dict[str, Any], attempt: dict | None,
         reasons.append(receipt_error)
         return row
     if readiness["status"] != "healthy" or contract != "pass":
-        row["status"] = "failed" if readiness["status"] == "failed" or contract == "fail" else "blocked"
+        row["status"] = ("failed" if readiness["status"] == "failed" or contract == "fail" else
+                         readiness["status"] if readiness["status"] in {"running", "stale", "unknown"} else "blocked")
         reasons.append("package-or-image-contract-" + row["status"])
         return row
     if (publication is None or not attempt.get("imageDigest")
@@ -163,7 +173,8 @@ def evaluate_row(required: dict[str, Any], attempt: dict | None,
     try:
         times = [timestamp(item, now) for item in
                  (attempt["measuredAt"], publication_time,
-                  image_observation.get("measuredAt"), package_observation.get("measuredAt"))]
+                  image_observation.get("measuredAt"), package_observation.get("measuredAt"),
+                  package_observation["latestAttempt"].get("measuredAt"))]
     except (EvidenceError, KeyError):
         row["status"] = "unknown"
         reasons.append("invalid-evidence-time")

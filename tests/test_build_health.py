@@ -64,7 +64,9 @@ def observations():
             "attempt": {"identity": copy.deepcopy(ATTEMPT), "status": "success",
                         "imageDigest": image["imageDigest"], "measuredAt": "2026-10-10T11:00:00Z", "evidence": []},
             "publication": copy.deepcopy(PUBLICATION),
-            "package": {"receipt": factory, "measuredAt": "2026-10-10T10:30:00Z"},
+            "package": {"receipt": factory, "measuredAt": "2026-10-10T10:30:00Z",
+                        "latestAttempt": {"identity": copy.deepcopy(ATTEMPT), "status": "success",
+                                          "measuredAt": "2026-10-10T10:30:00Z"}},
             "image": {"receipt": image, "measuredAt": "2026-10-10T11:00:00Z"}}
 
 
@@ -102,6 +104,20 @@ def test_last_good_publication_cannot_hide_latest_result(observations, status):
 def test_no_attempt_remains_missing_with_old_publication(observations):
     observations["attempt"] = None
     assert evaluate(observations)["status"] == "missing"
+
+
+@pytest.mark.parametrize('status', ['failed', 'blocked', 'running', 'stale', 'unknown'])
+def test_retained_factory_supply_does_not_hide_latest_factory_attempt(observations, status):
+    observations['package']['latestAttempt']['status'] = status
+    row = evaluate(observations)
+    assert row['packageReadiness']['status'] == status
+    assert row['status'] == status
+    assert row['packageReadiness']['factoryDigest'] == FACTORY['factoryDigest']
+
+
+def test_factory_receipt_must_match_the_latest_successful_factory_attempt(observations):
+    observations['package']['latestAttempt']['identity']['runAttempt'] += 1
+    assert evaluate(observations)['status'] == 'blocked'
 
 
 def test_incomplete_collection_cannot_report_health(observations):
