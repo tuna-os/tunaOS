@@ -643,6 +643,17 @@ if [[ "${_TD_OS}" == "el10" || "${_TD_OS}" == "fedora" || "${_TD_OS}" == "hummin
 
 	# Install packages
 	readarray -t _TD_PKGS < <($YQ -r ".packages.${_TD_OS}.packages[]" "${_TD_MANIFEST}" 2>/dev/null || true)
+	# Rawhide retired the unmaintained vpnc plugin. Install the maintained
+	# native IPsec plugin strictly, including its GNOME editor. Scope this to
+	# Fedora Rawhide: Hummingbird shares the manifest list but has its own repo.
+	# https://discourse.gnome.org/t/networkmanager-vpn-plugins-maintenance-status-update/38676
+	if [[ "${_TD_OS}" == fedora && "$(detect_fedora_ver)" == rawhide ]]; then
+		for _TD_PKG_INDEX in "${!_TD_PKGS[@]}"; do
+			if [[ "${_TD_PKGS[$_TD_PKG_INDEX]}" == NetworkManager-vpnc-gnome ]]; then
+				_TD_PKGS[$_TD_PKG_INDEX]=NetworkManager-libreswan-gnome
+			fi
+		done
+	fi
 	readarray -t _TD_EXCLUDES < <($YQ -r ".packages.${_TD_OS}.exclude[]" "${_TD_MANIFEST}" 2>/dev/null || true)
 
 	if ((${#_TD_PKGS[@]} > 0)); then
@@ -832,6 +843,18 @@ if [[ "${_TD_DM}" == "greetd" ]]; then
 	fi
 fi
 
+# First boot applies vendor preset policy, which can remove links created by
+# systemctl enable during the build. Preserve the one actual selected greeter.
+write_display_manager_preset() {
+	local unit="$1"
+	case "$unit" in
+	gdm.service | gdm3.service | sddm.service | plasmalogin.service | lightdm.service | greetd.service | cosmic-greeter.service) ;;
+	*) echo "ERROR: unsupported selected display-manager unit: $unit" >&2; return 1 ;;
+	esac
+	mkdir -p /usr/lib/systemd/system-preset
+	printf 'enable %s\n' "$unit" > /usr/lib/systemd/system-preset/50-tunaos-desktop.preset
+}
+
 if [[ -n "${_TD_DM}" && "${_TD_DM}" != "null" ]]; then
 	safe_enable "${_TD_DM}.service"
 	# openSUSE's gdm.service ships only `[Install] Alias=display-manager.service`
@@ -896,6 +919,10 @@ if [[ -n "${_TD_DM}" && "${_TD_DM}" != "null" ]]; then
 		else
 			echo "display-manager.service already points at $(basename "${_TD_ALIAS_TARGET}"); leaving it"
 		fi
+		# Follow the resolved alias rather than enabling a competing manifest
+		# greeter when native packaging selected a different real manager.
+		_TD_PRESET_DM="$(basename "$(readlink -f "${_TD_ALIAS}")")"
+		write_display_manager_preset "${_TD_PRESET_DM}"
 	fi
 	# Server-oriented bootc bases such as AlmaLinux default to
 	# multi-user.target. Enabling a display manager alone does not change the
