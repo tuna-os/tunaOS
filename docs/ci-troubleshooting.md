@@ -1563,3 +1563,13 @@ The Marlin override `50-marlin.toml` selects systemd-boot and ext4. Containerfil
 The image had both backends; the default preferred GNOME for Access.
 
 **Fix:** Select GTK for Access, and GNOME for Screenshot and ScreenCast. The contract for the installed desktop rejects missing, wrong, duplicate, or out-of-section preferences. The admission test runs the shell validator against the shipped configuration and broken variants. Verify the final image in its separate boot gate.
+
+
+### Admitted variant with missing rebuild repository fails CI
+
+**Symptom:** A new variant fails nightly builds for declared desktops (e.g. 10+ red nights for Hummingbird).
+
+**Measured cause (#1755, #1763):** The project admitted Hummingbird without a check for desktop packages or aarch64 repodata. Declared desktops had no manifest sections.
+
+**Fix (#1763):** Extend `VARIANT-LIFECYCLE.md` with a completeness check. Verify repo reachability across declared arches. Add manifest sections before setting `build_image: true`. Exclude unbuilt arches until package sources exist.
+

@@ -38,8 +38,8 @@ For every supported `variant × flavor × platform` cell:
    - Browser ISO generator (`publish-iso-groups.yml`) aligns with on-demand tacklebox builds.
 5. **Supply Chain Enforcement (`#1187`, `#1193`)**:
    - Cosign keyless OIDC signing, SPDX SBOM attestations, and ISO verification bundles ([VERIFY-ARTIFACTS.md](VERIFY-ARTIFACTS.md)).
-6. **Release Currency & Lifecycle Admission (`#1254`, `#1175`, `#1196`, `#1270`)**:
-   - Strict admission criteria for new variants, desktop flavors, and hardware/kernel profiles (T2/Asahi/HWE) before matrix expansion (#1270).
+6. **Release Currency & Lifecycle Admission (`#1254`, `#1175`, `#1196`, `#1270`, `#1763`)**:
+   - Strict admission criteria for new variants, desktop flavors, and hardware/kernel profiles (T2/Asahi/HWE) before matrix expansion (#1270), including rebuild-config and manifest completeness (#1763).
    - Scheduled release currency and flavor parity enforcement across all published flavors (#1254).
 7. **Desktop Parity & Completeness Gate (`#1294`)**:
    - Verification of desktop completeness and minimum package/size floors across non-RPM and RPM bases to prevent thin-desktop releases.
