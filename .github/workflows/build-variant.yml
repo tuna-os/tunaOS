@@ -138,12 +138,15 @@ jobs:
           # runners and colouring runs red.
           # All inputs are in env vars — no direct interpolation of workflow
           # inputs into the script body, to prevent shell injection.
-          FULL_MATRIX=$(yq -o=json '.' .github/build-config.yml | jq -c --arg event "${EVENT_NAME}" '
+          # A filtered candidate overlay must build its immutable parents in
+          # this run. The resolver is authoritative; never pull main as fallback.
+          CANDIDATE_SELECTION=$(yq -o=json '.' .github/build-config.yml | python3 scripts/candidate-flavor-selection.py)
+          FULL_MATRIX=$(yq -o=json '.' .github/build-config.yml | jq -c --arg event "${EVENT_NAME}" --argjson selection "$CANDIDATE_SELECTION" '
             .variants[]
             | select(env.FILTER_VARIANT == "all" or .id == env.FILTER_VARIANT)
             | . as $v
             | .flavors[]
-            | select(env.FILTER_FLAVOR == "all" or .id == env.FILTER_FLAVOR)
+            | select(($selection == null and (env.FILTER_FLAVOR == "all" or .id == env.FILTER_FLAVOR)) or $selection[$v.id][.id] != null)
             | select(.build_image // false)
             | select($event != "pull_request" or .id == "gnome")
             | {
@@ -154,8 +157,8 @@ jobs:
                 variant_emoji: ($v.emoji // "❓"),
                 description:   ($v.description // ""),
                 base_image:    $v.base_image,
-                platforms:     (if $event == "pull_request" then "linux/amd64" else ((.platforms // $v.platforms) | join(",")) end),
-                platforms_json: ((if $event == "pull_request" then ["linux/amd64"] else (.platforms // $v.platforms) end)
+                platforms:     (if $event == "pull_request" then "linux/amd64" else (($selection[$v.id][.id] // .platforms // $v.platforms) | join(",")) end),
+                platforms_json: ((if $event == "pull_request" then ["linux/amd64"] else ($selection[$v.id][.id] // .platforms // $v.platforms) end)
                                  | map({platform: ., safeplatform: (gsub("/"; "-"))}) | tostring),
                 flavor:        .id,
                 stage:         (if $event == "pull_request" then 1 else .stage end),
