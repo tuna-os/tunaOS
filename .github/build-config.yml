@@ -789,7 +789,7 @@ variants:
     upstream_track: experimental
     description: "Based on Fedora ELN (EL11 preview, rolling)"
     experimental: true
-    base_image: "registry.fedoraproject.org/eln-bootc:latest@sha256:d64a79d42e02f4cd13f3e15c578016b06ddc66cceca1bf051bffc68b5ac1b550"
+    base_image: "registry.fedoraproject.org/eln-bootc:latest@sha256:0e3dfdc5128599e9820c281369939b51ad482aa652eb196487a649ca31fb5dc7"
     # No alias: `eln` is Fedora's identifier for a moving development target,
     # and an alias tag is a stability promise this lane deliberately does not
     # make. Revisit if/when ELN gains a versioned publish.
