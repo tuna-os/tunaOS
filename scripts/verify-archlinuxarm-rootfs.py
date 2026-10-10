@@ -185,6 +185,44 @@ def read_json(path):
     return value
 
 
+def effective_siglevel(global_value, repository_value):
+    """Apply documented ordered SigLevel inheritance and Package/Database scopes.
+
+    pacman.conf(5): repository values start from [options]; the built-in default
+    is Required TrustedOnly. pacman-conf can print nothing for a repository
+    without an explicit override, as observed in CI run 38074201833.
+    """
+    policy = {'Package': {'check': 'Required', 'trust': 'TrustedOnly'},
+              'Database': {'check': 'Required', 'trust': 'TrustedOnly'}}
+    for token in (global_value + ' ' + repository_value).split():
+        match = re.fullmatch(r'(Package|Database)?(Required|Optional|Never|TrustedOnly|TrustAll)', token)
+        if not match:
+            raise VerificationError('unknown-native-signature-policy')
+        scope, value = match.groups()
+        for target in ([scope] if scope else ['Package', 'Database']):
+            policy[target]['check' if value in ('Required', 'Optional', 'Never') else 'trust'] = value
+    if policy['Package'] != {'check': 'Required', 'trust': 'TrustedOnly'}:
+        raise VerificationError('native-package-signature-policy-not-required')
+    return ' '.join(scope + policy[scope][field] for scope in ('Package', 'Database') for field in ('check', 'trust'))
+
+
+def signature_policy(directory):
+    global_file = directory / 'native-global-siglevel.txt'
+    repos_file = directory / 'native-repositories.txt'
+    sha256(global_file, MAX_SMALL)
+    sha256(repos_file, MAX_SMALL)
+    repositories = repos_file.read_text().splitlines()
+    if (not repositories or len(repositories) != len(set(repositories)) or
+            any(not re.fullmatch('[A-Za-z0-9_.-]+', repo) for repo in repositories)):
+        raise VerificationError('invalid-native-repository-list')
+    lines = []
+    for repo in repositories:
+        path = directory / ('native-repo-' + repo + '.siglevel.txt')
+        sha256(path, MAX_SMALL)
+        lines.append(repo + ' ' + effective_siglevel(global_file.read_text(), path.read_text()))
+    (directory / 'native-signature-policy.txt').write_text('\n'.join(lines) + '\n')
+
+
 def fetch_verify(directory):
     directory.mkdir(parents=True, exist_ok=False)
     sources = [fetch(ROOTFS_URL, directory / 'rootfs.tar.gz', MAX_ROOTFS),
@@ -255,7 +293,7 @@ def receipt(directory, args):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('operation', choices=['fetch-verify', 'verify-local', 'receipt'])
+    parser.add_argument('operation', choices=['fetch-verify', 'verify-local', 'signature-policy', 'receipt'])
     parser.add_argument('--directory', required=True)
     for name in ('source-revision', 'repository', 'workflow-ref', 'run-id', 'run-attempt',
                  'image-digest-file', 'image-repository', 'manifest-file', 'runtime-arch-file', 'inventory-file', 'signature-policy-file'):
@@ -267,6 +305,8 @@ def main():
             fetch_verify(directory)
         elif args.operation == 'verify-local':
             verify(directory)
+        elif args.operation == 'signature-policy':
+            signature_policy(directory)
         else:
             if any(getattr(args, name) is None for name in ('source_revision', 'repository', 'workflow_ref', 'run_id',
                     'run_attempt', 'image_digest_file', 'image_repository', 'manifest_file', 'runtime_arch_file', 'inventory_file', 'signature_policy_file')):

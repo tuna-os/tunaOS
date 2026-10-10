@@ -66,14 +66,14 @@ jobs:
           sudo buildah run "$ctr" -- pacman-key --populate archlinuxarm
           # Verify effective policy for every enabled native repository before
           # the transaction. Package signatures are distinct from rootfs proof.
-          sudo buildah run "$ctr" -- bash -euo pipefail -c '
-            for repo in $(pacman-conf --repo-list); do
-              policy=$(pacman-conf --repo "$repo" SigLevel | tr "\n" " ")
-              printf "%s %s\n" "$repo" "$policy"
-              grep -qw PackageRequired <<< "$policy"
-              ! grep -Eq "PackageNever|PackageOptional" <<< "$policy"
-            done
-          ' > rootfs-evidence/native-signature-policy.txt
+          sudo buildah run "$ctr" -- pacman-conf SigLevel > rootfs-evidence/native-global-siglevel.txt
+          sudo buildah run "$ctr" -- pacman-conf --repo-list > rootfs-evidence/native-repositories.txt
+          while IFS= read -r repo; do
+            [[ "$repo" =~ ^[A-Za-z0-9_.-]+$ ]]
+            sudo buildah run "$ctr" -- pacman-conf --repo "$repo" SigLevel \
+              > "rootfs-evidence/native-repo-$repo.siglevel.txt"
+          done < rootfs-evidence/native-repositories.txt
+          python3 scripts/verify-archlinuxarm-rootfs.py signature-policy --directory rootfs-evidence
           sudo buildah run "$ctr" -- pacman -Syu --noconfirm 2>&1 | tee rootfs-evidence/native-transaction.txt
           sudo buildah run "$ctr" -- pacman -Q | sort > rootfs-evidence/native-package-inventory.txt
           sudo buildah run "$ctr" -- pacman -Qi > rootfs-evidence/native-package-details.txt
