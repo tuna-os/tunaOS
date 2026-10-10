@@ -197,3 +197,12 @@ def test_repository_probe_cannot_consume_remaining_loop_input():
     probe = text.split('while IFS= read -r repo; do', 1)[1].split('done <', 1)[0]
     assert 'pacman-conf --repo "$repo" SigLevel' in probe
     assert '</dev/null' in probe
+
+
+def test_attestation_has_unprivileged_docker_registry_credentials():
+    text = (Path(__file__).parents[1] / '.github/workflows/build-archlinuxarm-base.yml').read_text()
+    assert text.index('docker/login-action@') < text.index('Attest candidate build provenance')
+    login = text.split('name: Authenticate attestation registry client', 1)[1].split('- name:', 1)[0]
+    assert 'registry: ghcr.io' in login
+    assert 'username: ${{ github.actor }}' in login
+    assert 'password: ${{ github.token }}' in login

@@ -125,6 +125,15 @@ jobs:
           echo "name=$REF" >> "$GITHUB_OUTPUT"
           echo "digest=$(cat rootfs-evidence/image-digest.txt)" >> "$GITHUB_OUTPUT"
 
+      - name: Authenticate attestation registry client
+        # sudo Podman's credential store used for pushing is not the Docker
+        # credential store read by the unprivileged attestation action.
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
       - name: Attest candidate build provenance
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
