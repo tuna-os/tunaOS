@@ -139,6 +139,11 @@ variants:
         build_iso: true
         build_qcow2: true
       - id: cosmic
+        # COSMIC on EL10 comes from the Tideforge tier at
+        # repo.tunaos.org/repo/10-stream-x86_64 (manifests/desktops/
+        # cosmic.yaml), which publishes x86_64 only -- same shape as xfce.
+        platforms:
+          - linux/amd64
         stage: 2
         build_image: true
         build_iso: true
@@ -241,6 +246,10 @@ variants:
         build_iso: false
         build_qcow2: false
       - id: cosmic-hwe
+        # Layers on cosmic, which is amd64-only while the Tideforge COSMIC
+        # tier has no aarch64 index (see cosmic above).
+        platforms:
+          - linux/amd64
         stage: 3
         build_image: true
         build_iso: false
@@ -365,6 +374,11 @@ variants:
         build_qcow2: true
 
       - id: cosmic
+        # COSMIC on EL10 comes from the Tideforge tier at
+        # repo.tunaos.org/repo/10-stream-x86_64 (manifests/desktops/
+        # cosmic.yaml), which publishes x86_64 only -- same shape as xfce.
+        platforms:
+          - linux/amd64
         stage: 2
         build_image: true
         build_iso: true
@@ -466,6 +480,10 @@ variants:
         build_iso: false
         build_qcow2: false
       - id: cosmic-hwe
+        # Layers on cosmic, which is amd64-only while the Tideforge COSMIC
+        # tier has no aarch64 index (see cosmic above).
+        platforms:
+          - linux/amd64
         stage: 3
         build_image: true
         build_iso: false
@@ -590,6 +608,11 @@ variants:
         build_iso: true
         build_qcow2: true
       - id: cosmic
+        # COSMIC on EL10 comes from the Tideforge tier at
+        # repo.tunaos.org/repo/10-stream-x86_64 (manifests/desktops/
+        # cosmic.yaml), which publishes x86_64 only -- same shape as xfce.
+        platforms:
+          - linux/amd64
         stage: 2
         build_image: true
         build_iso: true
@@ -695,6 +718,10 @@ variants:
         build_iso: false
         build_qcow2: false
       - id: cosmic-hwe
+        # Layers on cosmic, which is amd64-only while the Tideforge COSMIC
+        # tier has no aarch64 index (see cosmic above).
+        platforms:
+          - linux/amd64
         stage: 3
         build_image: true
         build_iso: false

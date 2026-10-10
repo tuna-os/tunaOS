@@ -283,35 +283,19 @@ packages:
       - name: tuna-os-fprintd
         baseurl: https://repo.tunaos.org/fprintd/10-stream-aarch64/
         priority: 10
-    copr:
-      - repo: yselkowitz/cosmic-epel
-        packages:
-          - cosmic-comp
-          - cosmic-panel
-          - cosmic-app-library
-          - cosmic-applets
-          - cosmic-bg
-          - cosmic-files
-          - cosmic-idle
-          - cosmic-launcher
-          - cosmic-notifications
-          - cosmic-osd
-          - cosmic-randr
-          - cosmic-screenshot
-          - cosmic-settings
-          - cosmic-settings-daemon
-          - cosmic-term
-          - cosmic-wallpapers
-          - cosmic-workspaces
-          - cosmic-icon-theme
-          - xdg-desktop-portal-cosmic
-          - adw-gtk3-theme
-      - repo: yselkowitz/cosmic-epel
-        packages:
-          - cosmic-session
-          - greetd
-          - cosmic-greeter
-        options: "--nobest --allowerasing"
+      # COSMIC from our own Tideforge builds (tuna-os/tunaos-packages,
+      # phases 0-3 published 2026-10-10), replacing COPR
+      # yselkowitz/cosmic-epel, which no longer publishes usable EL10
+      # builds. x86_64 only: the tier publishes no symmetric aarch64 index
+      # (aarch64 RPMs live at rpm/el10/aarch64/, a different tree, and
+      # install-desktop.sh renders one baseurl per entry with
+      # skip_if_unavailable=False), so the cosmic flavors are pinned to
+      # linux/amd64 in .github/build-config.yml -- same shape as the
+      # xfce/gnome50 tiers. The RPMs carry the tuna-os signature (verified
+      # against https://repo.tunaos.org/public.gpg), so gpgcheck=1 applies.
+      - name: tunaos-cosmic
+        baseurl: https://repo.tunaos.org/repo/10-stream-x86_64/
+        priority: 10
     packages:
       - flatpak
       - pipewire
@@ -319,6 +303,32 @@ packages:
       - wl-clipboard
       - xdg-user-dirs
       - zram-generator
+      # COSMIC stack, from the tunaos-cosmic repo above (was COPR
+      # yselkowitz/cosmic-epel). adw-gtk3-theme is intentionally absent: no
+      # EL10 provider outside the retired COPR, and nothing in the Tideforge
+      # recipes Requires it anymore.
+      - cosmic-session
+      - cosmic-comp
+      - cosmic-panel
+      - cosmic-app-library
+      - cosmic-applets
+      - cosmic-bg
+      - cosmic-files
+      - cosmic-idle
+      - cosmic-launcher
+      - cosmic-notifications
+      - cosmic-osd
+      - cosmic-randr
+      - cosmic-screenshot
+      - cosmic-settings
+      - cosmic-settings-daemon
+      - cosmic-term
+      - cosmic-wallpapers
+      - cosmic-workspaces
+      - cosmic-icon-theme
+      - xdg-desktop-portal-cosmic
+      - cosmic-greeter
+      - greetd
       # Keyring is essential: the greetd PAM patch below wires gnome-keyring into
       # the login flow. Both are in EL10 appstream, so require (not best-effort).
       - gnome-keyring
