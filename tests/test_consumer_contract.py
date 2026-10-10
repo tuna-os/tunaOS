@@ -129,6 +129,34 @@ def test_ubuntu_arm64_retains_v8_descriptor_without_becoming_amd64():
     assert result["observedPlatform"] == {"os": "linux", "architecture": "arm64", "variant": "v8"}
 
 
+@pytest.mark.parametrize("platform,baseline", [("linux/amd64", "x86-64"), ("linux/arm64", "armv8-a")])
+def test_single_manifest_root_binds_actual_native_platform(platform, baseline):
+    target = dict(TARGET, variant="marlin", platform=platform, cpuBaseline=baseline)
+    record = base_record(target)
+    record.update(indexBytes=record["childBytes"], indexDigest=record["childDigest"],
+                  configuredReference=record["reference"])
+    result = base.validate_base(record, target, record["configuredReference"])
+    assert result["indexDigest"] == result["childDigest"]
+    assert result["observedPlatform"] == {"os": "linux", "architecture": platform.split('/')[1]}
+
+
+def test_single_manifest_cannot_invent_v2_variant_from_baseline_claim():
+    record = base_record()
+    record.update(indexBytes=record["childBytes"], indexDigest=record["childDigest"],
+                  configuredReference=record["reference"])
+    with pytest.raises(evidence.EvidenceError):
+        base.validate_base(record, TARGET, record["configuredReference"])
+
+
+def test_single_manifest_cannot_hide_a_different_selected_child():
+    target = dict(TARGET, variant="marlin", platform="linux/arm64", cpuBaseline="armv8-a")
+    record = base_record(target)
+    record.update(indexBytes=record["childBytes"], indexDigest=record["childDigest"],
+                  configuredReference=record["reference"], childBytes=base64.b64encode(b'{}').decode())
+    with pytest.raises(evidence.EvidenceError):
+        base.validate_base(record, target, record["configuredReference"])
+
+
 @pytest.mark.parametrize("variant,section,manager,expression,platform,baseline", [
     ("yellowfin", "el10", "dnf", "cosmic-session-1:1.0-2.el10", "linux/amd64/v2", "x86-64-v2"),
     ("grouper", "apt", "apt", "cosmic-session=1:1.0-2ubuntu1", "linux/arm64", "armv8-a"),
@@ -353,3 +381,106 @@ def test_unknown_top_level_manifest_field_blocks_instead_of_disappearing(tmp_pat
     assert doc["resolution"]["status"] == "blocked"
     assert any(gap["code"].startswith("unsupported-") and "mystery_required_behavior" in gap["detail"]
                for gap in doc["resolution"]["unresolved"])
+
+
+@pytest.fixture
+def public_registry(monkeypatch):
+    """Substitute only HTTP transport; exercise the actual public resolver."""
+    import io
+    import urllib.request
+    documents = {}
+    requests = []
+    class Registry:
+        def open(self, request, timeout):
+            requests.append((request.full_url, timeout, dict(request.header_items())))
+            assert request.full_url in documents, 'unexpected metadata or layer request'
+            return io.BytesIO(documents[request.full_url])
+    monkeypatch.setattr(urllib.request, 'build_opener', lambda *handlers: Registry())
+    return documents, requests
+
+
+def registry_bytes(public_registry, target, *, single=True, config_platform=None):
+    documents, requests = public_registry
+    record = base_record(target, config_platform=config_platform)
+    root_bytes = base64.b64decode(record['childBytes' if single else 'indexBytes'])
+    reference = 'quay.io/example/base:stable'
+    documents['https://quay.io/v2/example/base/manifests/stable'] = root_bytes
+    if not single:
+        documents['https://quay.io/v2/example/base/manifests/' + record['childDigest']] = base64.b64decode(record['childBytes'])
+    documents['https://quay.io/v2/example/base/blobs/' + record['configDigest']] = base64.b64decode(record['configBytes'])
+    return reference, record, root_bytes
+
+
+@pytest.mark.parametrize('single', [True, False])
+@pytest.mark.parametrize('platform,baseline,config', [
+    ('linux/amd64', 'x86-64', {}),
+    ('linux/arm64', 'armv8-a', {}),
+    ('linux/arm64', 'armv8-a', {'variant': 'v8'}),
+    ('linux/amd64/v2', 'x86-64-v2', {'variant': 'v2'}),
+])
+def test_public_resolver_fetches_exact_root_child_config_no_layers(public_registry, single, platform, baseline, config):
+    target = dict(TARGET, variant='yellowfin' if platform.endswith('/v2') else 'marlin',
+                  platform=platform, cpuBaseline=baseline)
+    reference, fixture, root = registry_bytes(public_registry, target, single=single, config_platform=config)
+    result = base.resolve_public_base(reference, target, [PROOF])
+    assert result['reference'] == 'quay.io/example/base@' + fixture['childDigest']
+    assert result['configBytes'] == fixture['configBytes']
+    assert result['indexBytes'] == base64.b64encode(root).decode()
+    assert result['indexDigest'] == 'sha256:' + hashlib.sha256(root).hexdigest()
+    assert result['childDigest'] == fixture['childDigest']
+    assert (result['indexBytes'] == result['childBytes']) is single
+    assert len(public_registry[1]) == (2 if single else 3)
+    assert all(request[1] == 30 for request in public_registry[1])
+
+
+def test_public_single_root_missing_v2_is_rejected(public_registry):
+    reference, _, _ = registry_bytes(public_registry, TARGET)
+    with pytest.raises(evidence.EvidenceError):
+        base.resolve_public_base(reference, TARGET, [PROOF])
+
+
+@pytest.mark.parametrize('config', [
+    {'os': 'windows'}, {'architecture': 'amd64'}, {'variant': 'v9'},
+    {'architecture': True}, {'os': None}, {'variant': []},
+])
+def test_public_single_root_rejects_actual_config_platform_mismatch(public_registry, config):
+    target = dict(TARGET, variant='marlin', platform='linux/arm64', cpuBaseline='armv8-a')
+    reference, _, _ = registry_bytes(public_registry, target, config_platform=config)
+    with pytest.raises(evidence.EvidenceError):
+        base.resolve_public_base(reference, target, [PROOF])
+
+
+@pytest.mark.parametrize('change', [
+    {'schemaVersion': True}, {'schemaVersion': 2.0}, {'mediaType': []}, {'mediaType': {}},
+    {'layers': None}, {'config': {'mediaType': OCI_CONFIG, 'digest': 'sha256:' + 'a' * 64, 'size': True}},
+])
+def test_public_single_root_rejects_malformed_manifest_types(public_registry, change):
+    target = dict(TARGET, variant='marlin', platform='linux/amd64', cpuBaseline='x86-64')
+    reference, _, raw = registry_bytes(public_registry, target)
+    document = json.loads(raw); document.update(change)
+    public_registry[0]['https://quay.io/v2/example/base/manifests/stable'] = json.dumps(document).encode()
+    with pytest.raises(evidence.EvidenceError):
+        base.resolve_public_base(reference, target, [PROOF])
+
+
+@pytest.mark.parametrize('failure', ['size', 'config-digest', 'root-pin', 'duplicate', 'oversize', 'utf8'])
+def test_public_single_root_rejects_unbound_or_unreadable_metadata(public_registry, failure):
+    target = dict(TARGET, variant='marlin', platform='linux/amd64', cpuBaseline='x86-64')
+    reference, fixture, raw = registry_bytes(public_registry, target)
+    url = 'https://quay.io/v2/example/base/manifests/stable'
+    if failure == 'size':
+        doc = json.loads(raw); doc['config']['size'] += 1
+        public_registry[0][url] = json.dumps(doc).encode()
+    elif failure == 'config-digest':
+        public_registry[0]['https://quay.io/v2/example/base/blobs/' + fixture['configDigest']] = b'{}'
+    elif failure == 'root-pin':
+        reference = 'quay.io/example/base@sha256:' + 'f' * 64
+        public_registry[0]['https://quay.io/v2/example/base/manifests/sha256:' + 'f' * 64] = raw
+    elif failure == 'duplicate':
+        public_registry[0][url] = b'{"schemaVersion":2,"schemaVersion":2}'
+    elif failure == 'oversize':
+        public_registry[0][url] = b' ' * (4 * 1024 * 1024 + 1)
+    else:
+        public_registry[0][url] = b'\xff'
+    with pytest.raises(evidence.EvidenceError):
+        base.resolve_public_base(reference, target, [PROOF])

@@ -193,3 +193,10 @@ def test_running_build_precedes_old_completed_success():
 def test_queued_no_jobs_does_not_invent_flavor_dispatch():
     result = collector.collect(configuration(), SOURCE, fetcher(run(status='queued'), []), now=NOW)
     assert all(r['latestAttempt']['status'] == 'unknown' for r in result['targets'])
+
+
+def test_daily_feed_has_one_hour_refresh_grace_without_relaxing_build_freshness():
+    result = collector.collect(configuration(), SOURCE, fetcher(), now=NOW)
+    assert result['freshnessPolicy'] == {'buildSeconds': 172800, 'feedSeconds': 90000}
+    workflow = (ROOT / '.github/workflows/matrix-status.yml').read_text()
+    assert 'cron: "0 6 * * *"' in workflow

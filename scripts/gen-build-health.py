@@ -222,7 +222,7 @@ def normalized_jobs(jobs: list[dict], target: dict):
 
 
 def collect(config: dict, source_revision: str, fetch: Callable, *, now=None,
-            build_seconds=172800, feed_seconds=3600):
+            build_seconds=172800, feed_seconds=90000):
     if not isinstance(source_revision, str) or not SHA.fullmatch(source_revision):
         raise CollectionError("collector source revision must be immutable")
     now = now or datetime.now(timezone.utc)
