@@ -308,7 +308,7 @@ jobs:
       platforms: ${{ matrix.platforms }}
       platforms-json: ${{ matrix.platforms_json }}
       default-tag: ${{ matrix.published_tag }}
-      publish: true
+      publish: ${{ github.event_name != 'pull_request' }}
       sbom: true
 
   # ── Stage 3: Desktop HWE and nvidia flavors ───────────────────────────────────
@@ -343,7 +343,7 @@ jobs:
       platforms: ${{ matrix.platforms }}
       platforms-json: ${{ matrix.platforms_json }}
       default-tag: ${{ matrix.published_tag }}
-      publish: true
+      publish: ${{ github.event_name != 'pull_request' }}
       sbom: true
 
   # ── Stage 4: Combined nvidia+HWE flavors ──────────────────────────────────────
@@ -372,7 +372,7 @@ jobs:
       platforms: ${{ matrix.platforms }}
       platforms-json: ${{ matrix.platforms_json }}
       default-tag: ${{ matrix.published_tag }}
-      publish: true
+      publish: ${{ github.event_name != 'pull_request' }}
       sbom: true
 
   # ── Artifact builds per stage (ISO + QCOW2) ───────────────────────────────
@@ -400,6 +400,7 @@ jobs:
       !cancelled() && needs.generate_matrix.result == 'success' &&
       needs.build_stage2.result != 'cancelled' &&
       github.event_name != 'pull_request' &&
+      github.repository == 'tuna-os/tunaOS' && github.ref == 'refs/heads/main' &&
       needs.generate_matrix.outputs.artifact_s2_count != '0'
     strategy:
       fail-fast: false
@@ -428,7 +429,7 @@ jobs:
       # download URLs current and the NVIDIA download audit honest. Deliberate
       # manual publishing has its own workflow (publish-isos.yml), and
       # publish-isos above forces it here.
-      upload-r2: ${{ github.event_name == 'schedule' || inputs.publish-isos }}
+      upload-r2: ${{ github.repository == 'tuna-os/tunaOS' && github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || inputs.publish-isos) }}
       # Names the artifact this cell's OWN image leg uploads after a
       # successful push. Its existence is what makes the relaxed gate above
       # safe; see the provenance gate in reusable-build-artifacts.yml.
@@ -448,6 +449,7 @@ jobs:
       !cancelled() && needs.generate_matrix.result == 'success' &&
       needs.build_stage3.result != 'cancelled' &&
       github.event_name != 'pull_request' &&
+      github.repository == 'tuna-os/tunaOS' && github.ref == 'refs/heads/main' &&
       needs.generate_matrix.outputs.artifact_s3_count != '0'
     strategy:
       fail-fast: false
@@ -476,7 +478,7 @@ jobs:
       # download URLs current and the NVIDIA download audit honest. Deliberate
       # manual publishing has its own workflow (publish-isos.yml), and
       # publish-isos above forces it here.
-      upload-r2: ${{ github.event_name == 'schedule' || inputs.publish-isos }}
+      upload-r2: ${{ github.repository == 'tuna-os/tunaOS' && github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || inputs.publish-isos) }}
       # Names the artifact this cell's OWN image leg uploads after a
       # successful push. Its existence is what makes the relaxed gate above
       # safe; see the provenance gate in reusable-build-artifacts.yml.
@@ -494,6 +496,7 @@ jobs:
       !cancelled() && needs.generate_matrix.result == 'success' &&
       needs.build_stage4.result != 'cancelled' &&
       github.event_name != 'pull_request' &&
+      github.repository == 'tuna-os/tunaOS' && github.ref == 'refs/heads/main' &&
       needs.generate_matrix.outputs.artifact_s4_count != '0'
     strategy:
       fail-fast: false
@@ -522,7 +525,7 @@ jobs:
       # download URLs current and the NVIDIA download audit honest. Deliberate
       # manual publishing has its own workflow (publish-isos.yml), and
       # publish-isos above forces it here.
-      upload-r2: ${{ github.event_name == 'schedule' || inputs.publish-isos }}
+      upload-r2: ${{ github.repository == 'tuna-os/tunaOS' && github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || inputs.publish-isos) }}
       # Names the artifact this cell's OWN image leg uploads after a
       # successful push. Its existence is what makes the relaxed gate above
       # safe; see the provenance gate in reusable-build-artifacts.yml.
