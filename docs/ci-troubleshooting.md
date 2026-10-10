@@ -1,5 +1,17 @@
 # CI Troubleshooting Playbook
 
+### Health test collection cannot import shared fixtures
+
+**Symptom:** Pytest stops during collection with `No module named
+test_contract_evidence` ([run 38080136643](https://github.com/tuna-os/tunaOS/actions/runs/38080136643)).
+
+**Cause:** The health test added the repository root to Python's search path,
+but imported a sibling test as a top-level module. CI imports tests through
+the configured pytest package path.
+
+**Fix:** Add the fixture's actual parent directory before importing it.
+Keep the full CI suite as the acceptance gate.
+
 Last updated: 2026-07-16 (by `fix/r2-cost-reduction` investigation)
 
 Quick reference to diagnose CI failures that recur. A branch-integration push
