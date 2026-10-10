@@ -78,6 +78,8 @@ python_packages:
   jsonschema: "4.23.0"
   # renovate: datasource=pypi depName=PyYAML
   PyYAML: "6.0.2"
+  # renovate: datasource=pypi depName=pytest
+  pytest: "9.1.1"
 
 # Pinned binary downloads (managed by Renovate)
 downloads:
