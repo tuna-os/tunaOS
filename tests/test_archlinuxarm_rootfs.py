@@ -43,6 +43,35 @@ def test_proof_json_cannot_override_duplicate_identity(tmp_path):
         alarm.read_json(path)
 
 
+def test_ci_empty_repository_override_inherits_required_global_policy():
+    assert alarm.effective_siglevel('Required DatabaseOptional', '') == (
+        'PackageRequired PackageTrustedOnly DatabaseOptional DatabaseTrustedOnly')
+
+
+def test_repository_database_override_preserves_global_package_requirement():
+    assert 'PackageRequired' in alarm.effective_siglevel('Required DatabaseOptional', 'DatabaseRequired')
+
+
+@pytest.mark.parametrize('global_value,override', [('Required', 'PackageOptional'),
+                                                 ('Required', 'Never'), ('Optional', ''),
+                                                 ('Required', 'PackageTrustAll'),
+                                                 ('Required', 'unexpected')])
+def test_policy_inheritance_never_blesses_unsigned_or_untrusted_packages(global_value, override):
+    with pytest.raises(alarm.VerificationError):
+        alarm.effective_siglevel(global_value, override)
+
+
+def test_raw_ci_policy_files_emit_canonical_effective_requirements(tmp_path):
+    (tmp_path / 'native-global-siglevel.txt').write_text('Required\nDatabaseOptional\n')
+    (tmp_path / 'native-repositories.txt').write_text('core\nextra\n')
+    (tmp_path / 'native-repo-core.siglevel.txt').write_text('')
+    (tmp_path / 'native-repo-extra.siglevel.txt').write_text('DatabaseRequired\n')
+    alarm.signature_policy(tmp_path)
+    lines = (tmp_path / 'native-signature-policy.txt').read_text().splitlines()
+    assert lines[0] == 'core PackageRequired PackageTrustedOnly DatabaseOptional DatabaseTrustedOnly'
+    assert lines[1] == 'extra PackageRequired PackageTrustedOnly DatabaseRequired DatabaseTrustedOnly'
+
+
 def test_download_bound_blocks_before_retaining_oversize_source(tmp_path, monkeypatch):
     class Response:
         headers = {}
