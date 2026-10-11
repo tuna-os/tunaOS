@@ -41,6 +41,12 @@ them.
 
 The `scripts/iso-e2e.sh` script boots a TunaOS live ISO in QEMU with OVMF (UEFI), waits for the live environment to be ready, captures screenshots, and collects serial logs.
 
+Framebuffer capture and paint verification live in `scripts/lib/e2e-visual.sh`.
+The top-level harness supplies its output directory, monitor socket, and image
+identity, then calls the module's `screenshot`, `screenshot_compare`,
+`screenshot_sane`, and `wait_for_paint` interface. Keep visual-policy changes
+in that module; `tests/bats/test_e2e_visual.bats` exercises it without QEMU.
+
 ### Running Locally
 
 ```bash
@@ -87,6 +93,7 @@ Test outputs are uploaded as GitHub Actions artifacts:
 | `tests/lima-template.yaml` | Lima VM template for macOS testing |
 | `tests/live-iso-verify.yaml` | Live ISO verification manifest |
 | `scripts/iso-e2e.sh` | Main QEMU-based end-to-end test runner |
+| `scripts/lib/e2e-visual.sh` | Screenshot capture, comparison, blank-frame detection, and bounded paint polling |
 | `.github/workflows/iso-e2e.yml` | CI workflow for automated ISO testing |
 | `tests/functional/run.sh` | Tier-1 functional checks for a booted image (per-desktop SSH assertions, tuna-os/tunaos#576) |
 | `tests/bats/test_functional_run.bats` | Unit tests for the functional-check dispatcher (stubbed systemctl/bootc/flatpak) |

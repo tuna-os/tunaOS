@@ -9,6 +9,7 @@
 
 REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
 SCRIPT="${REPO_ROOT}/scripts/iso-e2e.sh"
+VISUAL_LIB="${REPO_ROOT}/scripts/lib/e2e-visual.sh"
 
 setup() {
   # Test arg parsing, env detection, and path resolution in isolation
@@ -667,9 +668,9 @@ setup_runtime_check_stubs() {
 # never flip a healthy-but-slow boot into a failed gate.
 
 @test "paint-wait: wait_for_paint helper exists and defaults to a 120s cap" {
-  grep -q '^wait_for_paint()' "$SCRIPT"
-  awk '/^wait_for_paint\(\)/,/^}/' "$SCRIPT" | grep -q 'TBOX_E2E_PAINT_TIMEOUT:-120'
-  awk '/^wait_for_paint\(\)/,/^}/' "$SCRIPT" | grep -q 'screenshot_sane'
+  grep -q '^wait_for_paint()' "$VISUAL_LIB"
+  awk '/^wait_for_paint\(\)/,/^}/' "$VISUAL_LIB" | grep -q 'TBOX_E2E_PAINT_TIMEOUT:-120'
+  awk '/^wait_for_paint\(\)/,/^}/' "$VISUAL_LIB" | grep -q 'screenshot_sane'
 }
 
 @test "paint-wait: disk-mode gate polls for paint instead of the fixed 30s sleep" {
