@@ -1,5 +1,6 @@
 ---
 name: Watch upstream (reusable)
+permissions: {}
 
 # Reusable workflow consolidating the three previously-duplicated
 # watch-aurora.yml / watch-bluefin-lts.yml / watch-zirconium.yml files.

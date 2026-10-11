@@ -1,5 +1,8 @@
 name: Publish Live ISOs to R2
 
+permissions:
+  contents: read
+
 on:
   # DISABLED: per-flavor ISOs superseded by grouped dedup ISO pipeline
   # (publish-iso-groups.yml). Kept for emergency manual use only.
@@ -84,20 +87,71 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
     permissions:
-      contents: write
+      contents: read
       packages: read
       id-token: write
     # Builds the ISO from the promoted :<flavor> image, boot-gates it in
-    # QEMU, and only publishes (R2 + GitHub Release) if the gate passes.
+    # QEMU, and only publishes to R2 if the gate passes.
     uses: ./.github/workflows/reusable-build-artifacts.yml
     with:
       variant: ${{ matrix.variant }}
       flavor: ${{ matrix.flavor }}
       image-tag: ${{ matrix.flavor }}
       upload-r2: ${{ inputs.skip_upload != true }}
-      attach-release: ${{ inputs.skip_upload != true }}
     secrets:
       R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
       R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
       R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
       R2_BUCKET: ${{ secrets.R2_BUCKET }}
+
+  attach-release:
+    name: Release ${{ matrix.variant }}:${{ matrix.flavor }}
+    needs: [generate-matrix, build-and-publish]
+    if: ${{ !cancelled() && inputs.skip_upload != true && needs.generate-matrix.outputs.count != '0' }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download signed ISO
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: iso-${{ matrix.variant }}-${{ matrix.flavor }}-linux-amd64
+          path: release-assets
+
+      - name: Attach ISO to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VARIANT: ${{ matrix.variant }}
+          FLAVOR: ${{ matrix.flavor }}
+        run: |
+          DATE=$(date +%Y%m%d)
+          TAG="${FLAVOR}-${DATE}"
+          ISO=$(find release-assets -maxdepth 1 -name "*.iso" | head -1)
+          if [[ -z "$ISO" ]]; then
+            echo "::error::No ISO found to attach"
+            exit 1
+          fi
+          if ! gh release view "$TAG" --repo "${GITHUB_REPOSITORY}" &>/dev/null; then
+            gh release create "$TAG" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --title "TunaOS ${FLAVOR} (${DATE})" \
+              --notes "Live ISO for ${VARIANT}:${FLAVOR}. Built from ghcr.io/tuna-os/${VARIANT}:${FLAVOR}."
+          fi
+          # Delete existing assets explicitly: gh release upload --clobber can
+          # return HTTP 422 for an asset uploaded in the same API session.
+          ISO_NAME=$(basename "$ISO")
+          ASSETS=("$ISO_NAME" "${ISO_NAME}.sha256" "${ISO_NAME}.sigstore.json")
+          EXISTING=$(gh release view "$TAG" --repo "${GITHUB_REPOSITORY}" --json assets \
+            | python3 -c "import json,sys; assets=json.load(sys.stdin)['assets']; [print(a['name']) for a in assets]")
+          for asset in "${ASSETS[@]}"; do
+            if grep -qxF "$asset" <<< "$EXISTING"; then
+              echo "==> Deleting existing asset ${asset} from release ${TAG}..."
+              gh release delete-asset "$TAG" "$asset" --repo "${GITHUB_REPOSITORY}" --yes
+            fi
+          done
+          gh release upload "$TAG" --repo "${GITHUB_REPOSITORY}" \
+            "$ISO" "${ISO}.sha256" "${ISO}.sigstore.json"
+          echo "==> Attached ${ISO_NAME} plus checksum and Sigstore bundle to release $TAG"

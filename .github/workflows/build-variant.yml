@@ -1,4 +1,6 @@
 name: Unified Build
+permissions:
+  contents: read
 # ── Nightly schedule registry ────────────────────────────────────────────────
 # The org has a 20-concurrent-job ceiling. One variant's full build alone
 # demands more than that, so the per-variant nightlies (in build-<variant>.yml)
@@ -245,6 +247,10 @@ jobs:
   # Nothing else may start until all base images are published.
   build_base:
     name: "${{ matrix.flavor }}"
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
     needs: generate_matrix
     if: fromJson(needs.generate_matrix.outputs.stage1_matrix).include[0]
     strategy:
@@ -273,6 +279,10 @@ jobs:
   # All of these run in parallel within stage 2.
   build_stage2:
     name: "${{ matrix.flavor }}"
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
     needs: [generate_matrix, build_base]
     # build_base is SKIPPED (not failed) when a flavor-filtered dispatch
     # leaves stage 1 empty (e.g. `-f flavor=xfce`); without !cancelled() a
@@ -325,6 +335,10 @@ jobs:
   # their own without taking the rest down.
   build_stage3:
     name: "${{ matrix.flavor }}"
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
     needs: [generate_matrix, build_stage2]
     if: >-
       !cancelled() && needs.generate_matrix.result == 'success' &&
@@ -354,6 +368,10 @@ jobs:
   # single stage-3 failure doesn't skip stage 4.
   build_stage4:
     name: "${{ matrix.flavor }}"
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
     needs: [generate_matrix, build_stage3]
     if: >-
       !cancelled() && needs.generate_matrix.result == 'success' &&

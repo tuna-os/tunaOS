@@ -1563,3 +1563,16 @@ The Marlin override `50-marlin.toml` selects systemd-boot and ext4. Containerfil
 The image had both backends; the default preferred GNOME for Access.
 
 **Fix:** Select GTK for Access, and GNOME for Screenshot and ScreenCast. The contract for the installed desktop rejects missing, wrong, duplicate, or out-of-section preferences. The admission test runs the shell validator against the shipped configuration and broken variants. Verify the final image in its separate boot gate.
+
+
+### Workflow token scope depends on repository defaults
+
+**Symptom:** A workflow does not set `permissions:`. Its token can then receive
+scopes that the workflow does not use.
+
+**Measured cause:** The audit for tunaOS#2767 found 27 workflows that used the
+repository defaults for token scope.
+
+**Fix:** Set a narrow scope for each workflow. Give write access only to a job
+that changes GitHub state. The regression test for #2767 checks each workflow.
+

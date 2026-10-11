@@ -1,4 +1,5 @@
 name: Live ISOs (Tacklebox)
+permissions: {}
 on:
   workflow_dispatch:
     inputs:

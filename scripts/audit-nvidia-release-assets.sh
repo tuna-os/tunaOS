@@ -7,10 +7,9 @@
 # "<flavor>-<date>", carrying at least one asset. It was red on all 15 runs it
 # ever had, because this repository does not publish ISOs that way:
 #
-#   * reusable-build-artifacts.yml takes `attach-release` as an input and it
-#     DEFAULTS TO FALSE, so "Attach ISO to GitHub Release" is skipped on every
-#     cell. A successful nvidia ISO job shows exactly that, with
-#     "Upload ISO to Cloudflare R2" succeeding beside it.
+#   * routine reusable-build-artifacts.yml callers publish to R2. The
+#     emergency publish-isos.yml workflow owns a separate release job, so a
+#     successful nightly nvidia ISO job only uploads to R2.
 #   * The releases that do exist are per DESKTOP, not per flavor
 #     (gnome-20260916, kde-20260916, ...), so no tag ever started with
 #     "gnome-nvidia-".
