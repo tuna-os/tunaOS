@@ -51,6 +51,43 @@ user-install evidence in its PR.
 > (e.g. `bonito:gnome-t2`, Apple Silicon Asahi, HWE) are in-scope under the
 > admission gate (#1270).
 
+<!-- BEGIN GENERATED — scripts/gen-platform-coverage.py -->
+
+### Platform Coverage Matrix
+
+This matrix is generated from [`.github/build-config.yml`](./.github/build-config.yml). It records the desktop/platform combinations the image factory commits to build; it does not infer support from registry tags.
+
+- **S — Supported:** an active standard OCI-image cell (`build_image: true`). Runtime evidence and current failures remain visible in [MATRIX-STATUS.md](docs/MATRIX-STATUS.md).
+- **E — Experimental:** an active Apple Silicon/Asahi cell. Static boot-chain verification exists, but the installer and real-hardware gates have not graduated it.
+- **U — Unsupported:** no active image cell and no release or maintenance commitment.
+
+| Variant | x86_64 | aarch64 | Apple Silicon (M1/M2, Asahi) |
+|---|---|---|---|
+| **yellowfin** | **S:** GNOME, KDE, COSMIC, Niri, XFCE | **S:** KDE, COSMIC, Niri; <br>**U:** GNOME, XFCE | **U:** GNOME, KDE, COSMIC, Niri, XFCE |
+| **albacore** | **S:** GNOME, KDE, COSMIC, Niri, XFCE | **S:** KDE, COSMIC, Niri; <br>**U:** GNOME, XFCE | **U:** GNOME, KDE, COSMIC, Niri, XFCE |
+| **skipjack** | **S:** GNOME, KDE, COSMIC, Niri, XFCE | **S:** KDE, COSMIC, Niri; <br>**U:** GNOME, XFCE | **U:** GNOME, KDE, COSMIC, Niri, XFCE |
+| **wahoo** | **S:** GNOME, KDE, COSMIC; <br>**U:** Niri, XFCE | **S:** GNOME, KDE, COSMIC; <br>**U:** Niri, XFCE | **U:** GNOME, KDE, COSMIC, Niri, XFCE |
+| **bonito** | **S:** GNOME, KDE, COSMIC, Niri, XFCE | **S:** GNOME, KDE, COSMIC, Niri, XFCE | **E:** GNOME; <br>**U:** KDE, COSMIC, Niri, XFCE |
+| **hummingbird** | **S:** GNOME, COSMIC; <br>**U:** KDE, Niri, XFCE | **U:** GNOME, KDE, COSMIC, Niri, XFCE | **U:** GNOME, KDE, COSMIC, Niri, XFCE |
+| **sailfin** | **S:** GNOME, KDE, COSMIC, Niri, XFCE | **S:** GNOME; <br>**U:** KDE, COSMIC, Niri, XFCE | **U:** GNOME, KDE, COSMIC, Niri, XFCE |
+| **guppy** | **S:** KDE, XFCE; <br>**U:** GNOME, COSMIC, Niri | **U:** GNOME, KDE, COSMIC, Niri, XFCE | **U:** GNOME, KDE, COSMIC, Niri, XFCE |
+| **bonito-rawhide** | **S:** GNOME, KDE, COSMIC, Niri, XFCE | **S:** GNOME, KDE, COSMIC, Niri, XFCE | **U:** GNOME, KDE, COSMIC, Niri, XFCE |
+| **gurnard** | **U:** GNOME, KDE, COSMIC, Niri, XFCE | **U:** GNOME, KDE, COSMIC, Niri, XFCE | **U:** GNOME, KDE, COSMIC, Niri, XFCE |
+| **grouper** | **S:** GNOME, KDE, COSMIC, XFCE; <br>**U:** Niri | **S:** GNOME, KDE, XFCE; <br>**U:** COSMIC, Niri | **E:** GNOME; <br>**U:** KDE, COSMIC, Niri, XFCE |
+| **marlin** | **S:** GNOME, KDE, COSMIC, Niri, XFCE | **S:** GNOME; <br>**U:** KDE, COSMIC, Niri, XFCE | **U:** GNOME, KDE, COSMIC, Niri, XFCE |
+| **flounder** | **S:** KDE, XFCE; <br>**U:** GNOME, COSMIC, Niri | **U:** GNOME, KDE, COSMIC, Niri, XFCE | **U:** GNOME, KDE, COSMIC, Niri, XFCE |
+| **flounder-sid** | **S:** GNOME, KDE, XFCE; <br>**U:** COSMIC, Niri | **U:** GNOME, KDE, COSMIC, Niri, XFCE | **U:** GNOME, KDE, COSMIC, Niri, XFCE |
+
+#### Platform parity commitment
+
+Standard aarch64 support is a per-variant commitment, not a claim that every desktop works on every base. The flavor-equality mandate applies to cells marked **S**; it does not turn a missing package stack into a supported cell.
+
+Apple Silicon has **2 active experimental desktop cell(s)**, all derived from enabled `*-asahi` flavors. GNOME is the only current Apple Silicon desktop target. KDE, COSMIC, Niri, and XFCE are **U — Unsupported** on Apple Silicon, with no parity date or release commitment. Expansion is gated rather than assumed: GNOME must first pass a real-Mac boot/session gate and the installer must ship; then each additional desktop needs its own enabled `-asahi` flavor and the same static and hardware evidence.
+
+The scheduled Asahi sweep may continue to inspect old promoted tags after their build cell is disabled. A tag or sweep entry is historical test inventory, not support. See [Asahi hardware CI tiers](docs/ASAHI-HARDWARE-TIERS.md) for the missing hardware evidence.
+
+<!-- END GENERATED — scripts/gen-platform-coverage.py -->
+
 ### Proposed flavors
 
 | Flavor | Owner | Stage | Acceptance / tracker |
