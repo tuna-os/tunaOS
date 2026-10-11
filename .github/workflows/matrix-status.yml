@@ -17,6 +17,7 @@ on:
     # block, and catches the generator breaking on a build-config change.
     paths:
       - "scripts/gen-matrix-status.py"
+      - "scripts/matrix_evaluator.py"
       - ".github/build-config.yml"
       - "docs/MATRIX-STATUS.md"
 
