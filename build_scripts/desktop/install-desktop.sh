@@ -322,6 +322,17 @@ if [[ "${_TD_OS}" == "emerge" ]]; then
 		exit 1
 	fi
 
+	# Per-desktop ~amd64 keywords (emerge_accept_keywords in the manifest).
+	# guppy:gnome needs them to reach the GNOME 50 floor: ::gentoo has GNOME 50
+	# only under ~amd64 (tunaOS#2450). The file is written before the binhost
+	# lock below, which reads it and does not mask these packages.
+	readarray -t _TD_EMERGE_KEYWORDS < <($YQ -r '.emerge_accept_keywords // [] | .[]' "${_TD_MANIFEST}" 2>/dev/null || true)
+	if ((${#_TD_EMERGE_KEYWORDS[@]} > 0)); then
+		mkdir -p /etc/portage/package.accept_keywords
+		printf '%s ~amd64\n' "${_TD_EMERGE_KEYWORDS[@]}" \
+			>"/etc/portage/package.accept_keywords/tunaos-${_TD_DESKTOP}"
+	fi
+
 	# Binhost version lock — tuna-os/tunaOS#1802. getbinpkg is configured
 	# (Containerfile.gentoo, base stage) but only substitutes a binary on an
 	# exact CPV match; a bare `emerge --sync` races ahead of the binhost's own

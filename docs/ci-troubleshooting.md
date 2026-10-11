@@ -1563,3 +1563,15 @@ The Marlin override `50-marlin.toml` selects systemd-boot and ext4. Containerfil
 The image had both backends; the default preferred GNOME for Access.
 
 **Fix:** Select GTK for Access, and GNOME for Screenshot and ScreenCast. The contract for the installed desktop rejects missing, wrong, duplicate, or out-of-section preferences. The admission test runs the shell validator against the shipped configuration and broken variants. Verify the final image in its separate boot gate.
+
+### guppy:gnome installs GNOME 49 and fails the version floor (#2450)
+
+**Symptom:** The `gnome` build of `guppy` (Gentoo) stops in `verify-desktop-experience.sh` with this error:
+
+```
+GNOME 49 is below the floor: nothing below GNOME 50 ships
+```
+
+**Measured cause:** On 2026-10-07, stable amd64 in `::gentoo` stops at `gnome-shell-49.7`. The GNOME 50 ebuilds (`gnome-shell-50.5`, `mutter-50.5`, `gdm-50.3-r2`) have only the `~amd64` keyword. The official binhost builds only stable versions. Also, `gentoo-binhost-version-lock.sh` masks all `gnome-base` versions that are newer than the binhost. Thus a keyword for `gnome-shell` alone does not have an effect: the lock masks 50.5, the `--pretend` check resolves to 49.7, and the lock stays.
+
+**Fix:** The `emerge_accept_keywords` list in `manifests/desktops/gnome.yaml` gives the GNOME 50 core set. `install-desktop.sh` writes that list to `/etc/portage/package.accept_keywords` before the lock runs. The lock does not mask the packages in that file. These packages compile from source. If `emerge --pretend` shows a mixed 49/50 desktop, add the 49 package to the list. Do not add `gnome-base/nautilus`: `::gentoo` masks `>=nautilus-50` (bug 982084).
