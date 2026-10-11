@@ -3,7 +3,7 @@
 > Status: **draft** — maintainer review and contributor availability are required
 > before committing to dates or external outreach.
 > Tracking issues: [#1166](https://github.com/tuna-os/tunaOS/issues/1166),
-> [#1135](https://github.com/tuna-os/tunaOS/issues/1135) (Q1 2027 CFP prep).
+> [#2838](https://github.com/tuna-os/tunaOS/issues/2838) (FOSDEM 2027 CFP prep).
 > Planning window: September–November 2026.
 
 This calendar turns the Fedora 45, Hacktoberfest, All Things Open, and KubeCon + CloudNativeCon
@@ -26,7 +26,7 @@ open inside it, which is the actionable part now.
 | **October 13–15** | All Things Open 2026, Raleigh | Treat this as an attendance and informal-demo window, not a CFP. If a contributor attends, offer a short Bonito or bootc demo and record questions and contacts for follow-up. | Named attendee; portable demo and stable download URL. | Attendance note, demo links, and follow-up queue. |
 | **October 16–30** | Post-ATO follow-up | Publish a short event recap or Fedora post amplification. Route technical questions to the relevant project issues and avoid implying an official booth or talk. | Attendee plus outreach coordinator. | Recap, answered questions, and attributed referral links where practical. |
 | **November 9–13** | KubeCon + CloudNativeCon North America 2026 | Use the event as a hallway-track and blog-tie-in opportunity, not a submission. Lead with Corral (Kubernetes-native VMs), bootc’s CNCF Sandbox context, and the desktop/container-fleet connection. | Named attendee; current Corral and bootc references. | One-page conversation brief, demo links, and qualified follow-ups. |
-| **~October 2026** | FOSDEM 2027 CFP opens (event: Brussels, Feb 6–7 2027) | Finalize and submit the CFP abstract already drafted in [docs/CFP-FOSDEM-2027.md](./CFP-FOSDEM-2027.md) — confirm the exact portal-open date, record the demo video outlined there, and submit to the Containers devroom first. | Speaker/maintainer-designate; demo video and reviewed abstract. | Submitted CFP, tracked in [#1135](https://github.com/tuna-os/tunaOS/issues/1135). |
+| **October 20–27, 2026** | FOSDEM 2027 talk CFP preparation (event: Brussels, Jan 30–31 2027) | Check the accepted devrooms on October 20; around October 27, choose the best-fit room and copy its talk deadline and format into [docs/CFP-FOSDEM-2027.md](./CFP-FOSDEM-2027.md). The current form is for devroom organizers, not speakers. | Named primary and backup speakers; reviewed abstract, demo video, and confirmed travel. | Speaker-submitted CFP and evidence URL, tracked in [#2838](https://github.com/tuna-os/tunaOS/issues/2838). |
 | **August 1–November 1, 2026** | SCaLE 24x CFP (event: Pasadena, April 1–4, 2027) | Review and submit the existing [SCaLE 24x draft](./CFP-SCALE-24X.md), adapted for SCaLE's broader open-source and platform-engineering audience. | Speaker/maintainer-designate. | Submitted CFP, tracked in [#1135](https://github.com/tuna-os/tunaOS/issues/1135). |
 | **November 1** | Hacktoberfest close-out | Count merged Hacktoberfest PRs, thank contributors, and feed conversion numbers into Q4 metrics snapshot. | Outreach coordinator. | Thank-you posts, metrics update, and contributor recognition. |
 | **November 16–20** | KubeCon follow-up | Publish a concise recap or technical tie-in, with links to Corral and the relevant TunaOS documentation. Capture questions that should become docs or issues. | Attendee plus Corral maintainer. | Recap, documentation/issues backlog, and referral summary. |

@@ -1,18 +1,31 @@
 # FOSDEM 2027 — CFP Draft
 
-> Status: **draft** — for maintainer review before submission.
-> Event: FOSDEM 2027, Brussels, 6–7 Feb 2027. CFP typically opens ~October 2026.
-> Tracking issue: [#1135](https://github.com/tuna-os/tunaOS/issues/1135) (Q1 2027 CFP season).
+> Status: **speaker package prepared; talk CFP not open yet** — for maintainer
+> review before submission.
+> Event: FOSDEM 2027, Brussels, **30–31 January 2027**
+> ([official announcement](https://fosdem.org/2027/news/fosdem-2027-dates/)).
+> Tracking issue: [#2838](https://github.com/tuna-os/tunaOS/issues/2838).
 
 ## Talk title (working)
 
 **The Immutable Enterprise Desktop: bootc, Corral, and the case for cloud-native desktops**
 
-## Suggested track / devroom
+## Candidate track / devroom
 
-- **Containers devroom** (primary) — bootc/OSTree-based image model
-- **Desktops devroom** (secondary) — desktop UX angle
-- **Virtualization / infrastructure** (fallback) — Corral + KubeVirt
+Do not select a room until FOSDEM publishes the accepted devrooms on
+**20 October**. The current call is for devroom organizers, not for individual
+talks. FOSDEM expects the talk calls to open around **27 October**. Follow the
+[official devroom timeline](https://fosdem.org/2027/news/call-for-devrooms/)
+and choose a room from the published list.
+
+If accepted for 2027, these themes are the best fits:
+
+- **Containers** — bootc/OSTree-based image model
+- **Desktops** — desktop UX angle
+- **Virtualization / infrastructure** — Corral + KubeVirt
+
+The speaker must submit through the selected room's talk CFP. Do **not** use
+the current devroom-organizer form for this proposal.
 
 ## Abstract (≈250 words, submission-ready)
 
@@ -42,7 +55,7 @@ concrete YAML/podman recipes they can run, and an honest comparison of where
 this fits versus Silverblue, uBlue, NixOS, and MicroOS. No vendor pitch —
 this is an open-source project's architecture talk with live demos.
 
-## Demo video outline (3–5 min, attach to CFP)
+## Demo video outline (3–5 min, link from the CFP if permitted)
 
 The beats, in order:
 
@@ -60,8 +73,15 @@ twice.
 
 ## Logistics
 
-- Length: 30 min (25 + Q&A) — fits FOSDEM devroom format
-- Speaker: maintainer or maintainer-designate (travel: FOSDEM is free to attend; Brussels transit from most of Europe)
+- Length: request 30 min (25 + Q&A) if the selected devroom offers that format.
+  Copy its published duration into the final submission.
+- Speaker: maintainer or maintainer-designate. FOSDEM asks each speaker to
+  submit their proposal. The primary speaker must confirm their account,
+  availability, and travel plan before submission.
+- Backup speaker: name one person who can deliver the same session. Confirm
+  their Brussels availability before the deadline.
+- Attendance is free and needs no registration. Speakers pay for travel and
+  hotels.
 - Materials: laptop + demo VMs pre-built (bootc images exist in GHCR; Corral runs anywhere with KubeVirt)
 
 ## bootc / CNCF ecosystem angle (#1340)
@@ -98,15 +118,39 @@ that pitch, this CFP abstract and the ADOPTERS.md ecosystem table (which
 already lists bootc-dev/bootc as an upstream dependency) are the supporting
 material to point to.
 
-## Submission checklist
+## Official timeline and submission checklist
 
-- [ ] CFP portal opens (~Oct 2026) — confirm exact date
-- [ ] Finalize title + abstract (this draft)
-- [ ] Record demo video (3–5 min) — follow [CFP-DEMO-SCRIPT.md](./CFP-DEMO-SCRIPT.md);
-      its "Before you record" table is the concrete version of "needs a spare laptop/VM"
-- [ ] Ask 1–2 community members to proof the abstract (FOSDEM reviewers like demos + no-vendor-pitch)
-- [ ] Submit to Containers devroom first; fall back to Desktops if categories allow
-- [ ] (Optional, maintainer call) Pitch a bootc-ecosystem case-study feature to bootc-dev/CNCF channels — see #1340
+The [FOSDEM 2027 devroom call](https://fosdem.org/2027/news/call-for-devrooms/)
+publishes the dates that constrain this talk proposal:
+
+- **4 October 2026:** devroom-organizer proposals close
+- **20 October 2026:** accepted devrooms announced
+- **Around 27 October 2026:** devrooms issue their talk Calls for Participation
+- **7 December 2026 or earlier:** complete devroom schedules are due
+- **30–31 January 2027:** FOSDEM 2027
+
+Before the talk CFP opens:
+
+- [x] Verify event dates and the official participation timeline
+- [ ] Maintainer approves the title and abstract
+- [ ] Name a primary speaker and backup; both confirm availability and travel
+- [ ] Record the 3–5 minute demo — follow
+      [CFP-DEMO-SCRIPT.md](./CFP-DEMO-SCRIPT.md); its "Before you record" table
+      is the concrete version of "needs a spare laptop/VM"
+- [ ] Ask 1–2 community members to proof the abstract
+
+After FOSDEM announces the accepted devrooms:
+
+- [ ] Select the best-fit accepted room; do not assume a Containers or Desktops
+      room exists until it appears in the 2027 list
+- [ ] Copy that room's exact deadline, duration, required fields, and submission
+      URL into this document
+- [ ] Let the named speaker submit the proposal; FOSDEM asks speakers to do this
+- [ ] Record the submission date and public proposal URL in
+      [ADOPTION-OUTREACH-STATUS.md](./ADOPTION-OUTREACH-STATUS.md)
+- [ ] Record acceptance or rejection in the same ledger and in #2838
+- [ ] (Optional, maintainer call) Pitch a bootc-ecosystem case-study feature to
+      bootc-dev/CNCF channels — see #1340
 
 ## Supporting material (for reviewers / talk page)
 
@@ -119,4 +163,6 @@ material to point to.
 
 ---
 
-*Draft prepared by outreach agent (ACMM L6 — full mode). Review, edit, and submit when the CFP portal opens.*
+*Draft prepared by outreach agent (ACMM L6 — full mode). Official dates and
+participation sequence verified against fosdem.org on 2026-10-03; review, edit,
+and submit when the selected devroom's talk CFP opens.*
