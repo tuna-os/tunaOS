@@ -36,6 +36,7 @@ user-facing site:
 | [R2-COST-VISIBILITY.md](R2-COST-VISIBILITY.md) | Cloudflare R2 cost, retention, and ownership runbook (#1618) |
 | [TESTING.md](TESTING.md) | ISO end-to-end test harness |
 | [MATRIX-STATUS.md](MATRIX-STATUS.md) | Which variant×desktop combinations are actually verified — and which have never been tested |
+| [ADOPTION-READINESS.md](ADOPTION-READINESS.md) | Q4 adoption criteria and generated cross-variant readiness assessment |
 | [EDITION-VARIANT-PAGE-CHECKLIST.md](EDITION-VARIANT-PAGE-CHECKLIST.md) | Every published edition from the tunaos-packages#133 audit vs its tunaos.org variant page & download link (#1308) |
 | [ASAHI-HARDWARE-TIERS.md](ASAHI-HARDWARE-TIERS.md) | Real Apple Silicon hardware CI: rented Scaleway rental + personal-machine tiers, and the m1n1/boot.bin safety rule both must follow |
 | [ASAHI-EL10-OBS-PROJECT.md](ASAHI-EL10-OBS-PROJECT.md) | Open Build Service project for EL10 Asahi packages (#777) |
