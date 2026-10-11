@@ -44,7 +44,11 @@ An automated finding is admissible only when all of these are true:
   as `<specific description>` or empty required sections.
 - **Distinct**: the creator searched the current issue/PR queue for the same
   repository, component, and root cause. If an existing tracker covers the
-  finding, add evidence there instead of opening another issue.
+  finding, add evidence there instead of opening another issue. Outreach
+  findings must also search closed issues and the prepared-material ledger;
+  use `scripts/check-outreach-duplicate.sh "specific target or campaign"`.
+  A closed campaign tracker may have delivered material that is awaiting a
+  maintainer send, so closed does not mean the opportunity is new again.
 - **Measured**: the body cites at least one reproducible repository fact,
   current CI run, release, or API result and states when it was verified.
 - **Actionable**: the proposed next step names a decision or first action;

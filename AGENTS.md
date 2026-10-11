@@ -219,5 +219,17 @@ Six more, each measured while fixing the live-ISO and install path
 ### Issue tracker
 GitHub Issues for `tuna-os/tunaos`, operated via `gh` CLI.
 
+Before filing an outreach, ecosystem-partnership, conference, or content-
+campaign issue, run:
+
+```bash
+scripts/check-outreach-duplicate.sh "specific target or campaign"
+```
+
+Exit 1 means the status ledger, docs index, or an open **or closed** outreach
+issue already matches. Inspect the result and update the canonical tracker;
+do not re-file the campaign. Try the target's distinctive name as well as the
+campaign wording when they differ.
+
 ### Triage labels
 `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`.

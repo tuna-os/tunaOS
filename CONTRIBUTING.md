@@ -31,6 +31,8 @@ For the Hacktoberfest 2026 backlog, see the [contributor plan](docs/HACKTOBERFES
 
 Work through the [pre-write claim checklist](docs/CONTENT-CLAIM-CHECKLIST.md) before you write a guide or a campaign post. Do the same for any text that names an image reference, a shipped tool, hardware support, or readiness. Maintainers closed a run of five guide PRs for the same two defects. The first is an image reference the project does not publish; the second is toolchains the images do not ship. The checklist is those defects written down.
 
+Run `scripts/check-outreach-duplicate.sh "specific target or campaign"` before you create an outreach, ecosystem-partnership, conference, or content-campaign issue. It searches the outreach status ledger, docs index, and both open and closed outreach issues. If it reports a match, update the canonical tracker. Do not file the prepared work again.
+
 Ways to contribute without changes to the build pipeline:
 
 - **Docs & guides** — the [docs site](https://github.com/tuna-os/docs) has its own `good first issue` backlog and takes content PRs for guides, FAQs, and variant pages. Run the [claim checklist](docs/CONTENT-CLAIM-CHECKLIST.md) before you write
