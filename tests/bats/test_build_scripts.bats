@@ -34,8 +34,8 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
   [ "$status" -eq 0 ]
 }
 
-@test "build_scripts/lib.sh: defines emit_packages_manifest function" {
-  run grep 'emit_packages_manifest()' "${REPO_ROOT}/build_scripts/lib.sh"
+@test "build_scripts/lib/reporting.sh: defines emit_packages_manifest function" {
+  run grep 'emit_packages_manifest()' "${REPO_ROOT}/build_scripts/lib/reporting.sh"
   [ "$status" -eq 0 ]
 }
 
