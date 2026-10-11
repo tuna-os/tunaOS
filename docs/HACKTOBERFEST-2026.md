@@ -5,21 +5,20 @@ This runbook prepares the tuna-os organization for Hacktoberfest 2026
 contributors arrive at a useful, reviewed backlog instead of an empty label
 search.
 
-Tracker issue: [tunaos#1331](https://github.com/tuna-os/tunaos/issues/1331)
-— **closed**, so it is a historical reference, not a live tracker.
-Current open trackers for this work are
-[tunaos#1537](https://github.com/tuna-os/tunaos/issues/1537) (seed rate),
-[tunaos#1780](https://github.com/tuna-os/tunaos/issues/1780) (pool
-composition) and
-[tunaos#2304](https://github.com/tuna-os/tunaos/issues/2304) (pool
-consumption).
+Maintainers closed the original tracker
+[tunaos#1331](https://github.com/tuna-os/tunaos/issues/1331) and its follow-ups:
+[tunaos#1537](https://github.com/tuna-os/tunaos/issues/1537),
+[tunaos#1780](https://github.com/tuna-os/tunaos/issues/1780), and
+[tunaos#2304](https://github.com/tuna-os/tunaos/issues/2304). They remain
+historical references. The live completeness review is
+[tunaos#2835](https://github.com/tuna-os/tunaos/issues/2835).
 
 ## Launch target
 
-Before October 1, maintainers should publish 10–15 open issues that are both
-`good first issue` and `help wanted` in the repositories that take part. The
-backlog should include at least three repositories and no repository should
-account for more than half of the tasks.
+The Q4 adoption plan sets the launch contract at 15–20 open issues that are
+both `good first issue` and `help wanted`, spread across at least six
+repositories. Assigned issues do not count as available, and no repository
+should account for more than half of the tasks.
 
 The initial participation scope is:
 
@@ -79,15 +78,35 @@ Remaining steps before adding it to the participation scope:
 Until those checks pass, count `bootc-installer` as an unseeded candidate.
 It is not one of the repositories that take part, and not part of the
 launch-task quota. It now has an open issue channel and zero other starter
-tasks. So it is the cheapest place to add repository breadth toward the
-"at least three repositories" rule.
+tasks. So it is the cheapest place to add breadth toward the six-repository
+target.
 
-## Current TunaOS candidates
+## Live completeness check
 
-Re-verified live on 2026-09-02 with
-[`scripts/gfi-pool-report.sh`](../scripts/gfi-pool-report.sh), which applies
-`archived:false` and drops assigned issues. It reports **6 contributable
-`good first issue` tasks org-wide, below its threshold of 8**:
+Do not copy a live count into this runbook. Generate it from GitHub. This
+prevents closed, assigned, or relabeled tasks from leaving a false pool claim:
+
+```bash
+# Q4 launch contract: at least 15 ready tasks across at least 6 repositories
+scripts/gfi-pool-report.sh 15 6
+```
+
+The report excludes archived repositories and assigned issues. A ready task
+needs both `good first issue` and `help wanted`. The check fails if one
+repository holds more than half of the ready pool. The weekly maintenance
+floor remains `scripts/gfi-pool-report.sh` (8 tasks across 3 repositories).
+
+The repositories explicitly covered by the completeness review are `tunaos`,
+`tromso`, `tacklebox`, `docs`, `bootc-installer`, and `iso-builder`.
+`corral`, `gtk-office-suite`, `wootc`, `Tavern`, `tunaos-packages`, and
+`protota` are additional candidate repositories. Each of the six review
+repositories has a `CONTRIBUTING.md`. This gives new contributors guidance,
+but an empty pool is not ready.
+
+## Historical 2026-09-02 snapshot
+
+The 2026-09-02 run of the report found **6 unassigned `good first issue`
+tasks org-wide, below the weekly floor of 8**:
 
 | repo | contributable GFI | share | also `help wanted` |
 |---|---|---|---|
@@ -95,9 +114,9 @@ Re-verified live on 2026-09-02 with
 | `tuna-os/docs` | 2 ([#231](https://github.com/tuna-os/docs/issues/231), [#275](https://github.com/tuna-os/docs/issues/275)) | 33% | 1 (#231) |
 | `tuna-os/spindle` | 1 ([#174](https://github.com/tuna-os/spindle/issues/174)) | 17% | 0 |
 
-The launch target above counts only issues that carry **both** `good first
-issue` and `help wanted`. So the number that matters is **4 against a target
-of 10–15**, spread over two repositories instead of the three the rule needs.
+At the time of this snapshot, the launch target counted only issues with
+**both** `good first issue` and `help wanted`. The result was **4 against the
+then-current target of 10–15**, across two repositories instead of three.
 `tunaOS` holds 3 of those 4 — 75%, past the "no more than half" rule. All
 three are the same task type: unit tests for a shell script. A contributor
 who does not want to write Bats tests sees one option org-wide.
@@ -129,8 +148,8 @@ in [tunaos#2304](https://github.com/tuna-os/tunaos/issues/2304).
 Seed rate alone does not fix this: the 08-14 snapshot met the threshold and
 the pool still fell below it in under three weeks.
 
-Re-run this census at the 09-08 audit; each table here is a snapshot with a
-date, not a static promise.
+This table is evidence from 2026-09-02, not a current promise. Use the live
+completeness command above for decisions.
 
 | Target repo | Open `good first issue` (2026-09-02) | Counts toward the launch target? | Next action |
 |---|---|---|---|
@@ -209,7 +228,7 @@ Work that needs access to organization secrets is also out.
 | Date | Deliverable | Owner |
 |---|---|---|
 | By 2026-09-01 | Confirm registration and label guidance | strategist — **overdue as of 2026-09-02**, while `hacktoberfest` labels and the `COMMUNITY.md` banner are already public |
-| By 2026-09-08 | Audit the six repositories and select 10–15 tasks plus two alternates — **re-check net pool vs consumption** and preserve the proven docs conversion loop (#1537, #1714) | guide + repository maintainers |
+| By 2026-09-08 | Audit the six repositories and select 15–20 tasks plus two alternates — **re-check net pool vs consumption** and preserve the proven docs conversion loop (#1537, #1714) | guide + repository maintainers |
 | Before any reseeding | Agree how agent scanners avoid consuming curated starter tasks (#2304) — reseeding without this refills a pool that drains again | strategist + repository maintainers |
 | By 2026-09-15 | Apply final labels, add missing acceptance criteria, and publish the backlog | guide |
 | 2026-09-15–30 | Announce participation on the blog and Matrix; link directly to the filtered issue view | outreach |
@@ -233,9 +252,9 @@ Measured 2026-08-14: 13 results without the filter, 12 with it. Re-measured
 still inflates the unfiltered count, and the pool itself is now half what it
 was.
 
-Re-run [`scripts/gfi-pool-report.sh`](../scripts/gfi-pool-report.sh) for the
-Monday sweep instead of a count by hand. It applies the same filter, splits
-the pool by repository, and flags issues that are already claimed.
+Use [`scripts/gfi-pool-report.sh`](../scripts/gfi-pool-report.sh) for the
+Monday sweep. Do not count by hand. It applies the same filter and checks the
+paired launch labels, claimed issues, repository breadth, and concentration.
 
 ## Measurement
 
