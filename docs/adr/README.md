@@ -1,17 +1,17 @@
 # Architecture Decision Records (ADRs)
 
-This directory contains the durable Architecture Decision Records for tunaOS.
+This directory contains the Architecture Decision Records for tunaOS. These records are durable.
 
-ADRs document significant architectural and process decisions made throughout the project's evolution, capturing context, rationale, trade-offs, and consequences.
+In ADRs, we document significant architectural and process decisions that the project made throughout its evolution. Each ADR captures context, rationale, trade-offs, and consequences.
 
 ## Lifecycle & Governance
 
-The ADR process is governed by [RFC-PROCESS.md](../../RFC-PROCESS.md) (established in [ADR 0004](0004-rfc-lifecycle.md) and tracking [#1093](https://github.com/tuna-os/tunaOS/issues/1093) / [#1094](https://github.com/tuna-os/tunaOS/issues/1094)).
+[RFC-PROCESS.md](../../RFC-PROCESS.md) governs the ADR process ([ADR 0004](0004-rfc-lifecycle.md) established it; the tracker issues are [#1093](https://github.com/tuna-os/tunaOS/issues/1093) / [#1094](https://github.com/tuna-os/tunaOS/issues/1094)).
 
-When an architectural change, significant refactoring, or policy is adopted:
-1. An RFC is drafted and reviewed per [RFC-PROCESS.md](../../RFC-PROCESS.md).
-2. Upon maintainer sign-off and merge, an ADR is recorded in `docs/adr/` with the format `NNNN-short-title.md`.
-3. Historical decisions are backfilled as needed to ensure decision transparency.
+When the project adopts an architectural change, significant refactor, or policy:
+1. We draft and review an RFC per [RFC-PROCESS.md](../../RFC-PROCESS.md).
+2. Upon maintainer sign-off and merge, we record an ADR in `docs/adr/` with the format `NNNN-short-title.md`.
+3. We backfill historical decisions as needed to ensure decision transparency.
 
 ## ADR Index
 

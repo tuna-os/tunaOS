@@ -11,7 +11,7 @@
 
 ## Decision Process
 
-We use a **lazy-consensus** model. When a PR or RFC is proposed, if no objections are raised within 72 hours, it is considered approved (assuming CI passes and it meets our guidelines). If objections arise, they must be resolved through discussion. If consensus cannot be reached, the Project Lead resolves the dispute.
+We use a **lazy-consensus** model. When someone proposes a PR or RFC and nobody raises an objection within 72 hours, we consider it approved. This applies only if CI passes and the change meets our guidelines. If objections arise, the participants must resolve them through discussion. If they cannot reach consensus, the Project Lead resolves the dispute.
 
 ## RFC Lifecycle Integration
 
@@ -22,4 +22,4 @@ Major architectural changes must go through an RFC process.
 
 ## Per-Repo CODEOWNERS Policy
 
-Each repository must have a `CODEOWNERS` file defining who has review and merge authority over specific paths. Code changes cannot be merged without approval from a designated code owner.
+Each repository must have a `CODEOWNERS` file that defines who has review and merge authority over specific paths. Nobody can merge code changes without approval from a designated code owner.
