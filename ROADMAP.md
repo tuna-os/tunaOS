@@ -55,7 +55,7 @@ user-install evidence in its PR.
 
 | Flavor | Owner | Stage | Acceptance / tracker |
 |--------|-------|-------|----------------------|
-| Marlin Roost (amd64, rolling) | @hanthor | Proposal, best effort; capacity confirmed and signed served package install verified 2026-10-04; experimental image build enabled | Signed Tideforge package, greetd session picker, desktop contract and VM boot, then GHCR publication and bootc switch; [#2990](https://github.com/tuna-os/tunaOS/issues/2990), [upstream #69](https://github.com/hanthor/roost-desktop/issues/69). One image/boot cell; no new ISO or LUKS cells. |
+| Marlin Tuna Desktop, formerly Roost (amd64, rolling) | @hanthor | Proposal, best effort; capacity confirmed and signed served `tuna-desktop` package install verified 2026-10-09 (tunaos-packages run 37881967008); experimental image build enabled; flavor renamed `roost` → `tuna` after [tuna-desktop#536](https://github.com/tuna-os/tuna-desktop/pull/536); the old `marlin:roost` tag remains frozen at its last published image and is no longer updated | Signed Tideforge `tuna-desktop` package, greetd session picker, desktop contract and VM boot, then GHCR publication and bootc switch; [#2990](https://github.com/tuna-os/tunaOS/issues/2990), [upstream #69](https://github.com/tuna-os/tuna-desktop/issues/69). One image/boot cell; no new ISO or LUKS cells. |
 
 ### Build Health
 

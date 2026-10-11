@@ -1616,10 +1616,14 @@ variants:
         stage: 2
         build_image: true
         build_iso: true
-      # Experimental admission #2990; signed served install verified 2026-10-04.
-      - id: roost
+      # Experimental admission #2990; signed tuna-desktop served install verified
+      # 2026-10-09 (tunaos-packages run 37881967008).
+      # Tuna Desktop, formerly Roost: this flavor was `roost` until
+      # tuna-os/tuna-desktop#536 renamed the project.
+      - id: tuna
         stage: 2
         platforms: ["linux/amd64"]
+        # Owner decision: stop publishing the former roost tag immediately.
         build_image: true
         build_iso: false
         build_qcow2: false

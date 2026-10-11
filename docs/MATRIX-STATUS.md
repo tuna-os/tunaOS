@@ -58,7 +58,7 @@ no boot.
 
 ---
 
-The configured image matrix now has 136 cells after adding one Roost cell for amd64 Marlin. This status snapshot is from before its addition and does not mark it green; it needs its own image, desktop and boot evidence.
+The configured image matrix now has 136 cells after adding one Tuna Desktop (formerly Roost) cell for amd64 Marlin. This status snapshot is from before its addition and does not mark it green; it needs its own image, desktop and boot evidence.
 
 <!-- BEGIN GENERATED — scripts/gen-matrix-status.py -->
 
