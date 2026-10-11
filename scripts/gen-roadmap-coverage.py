@@ -71,7 +71,7 @@ END = "<!-- END GENERATED -->"
 
 # Issues tracking the residual gap, cited in the generated block so a reader
 # who spots an unplanned repo knows where the work is queued.
-TRACKING = "#1295"
+TRACKING = "#2820"
 
 
 class ProbeError(RuntimeError):
