@@ -1,0 +1,65 @@
+[
+  {
+    "name": "alpha",
+    "url": "https://github.com/tuna-os/alpha",
+    "isArchived": false,
+    "isPrivate": false,
+    "tags": [{"name": "v1.2.3"}],
+    "releases": [{
+      "tag_name": "v1.2.3",
+      "html_url": "https://github.com/tuna-os/alpha/releases/tag/v1.2.3",
+      "draft": false,
+      "prerelease": false,
+      "assets": [
+        {"name": "alpha-linux.tar.gz"},
+        {"name": "alpha-checksums.sha256"},
+        {"name": "alpha.spdx.json"},
+        {"name": "alpha.intoto.jsonl"}
+      ]
+    }]
+  },
+  {
+    "name": "bravo",
+    "url": "https://github.com/tuna-os/bravo",
+    "isArchived": false,
+    "isPrivate": false,
+    "tags": [{"name": "gnome-20261003"}],
+    "releases": []
+  },
+  {
+    "name": "charlie",
+    "url": "https://github.com/tuna-os/charlie",
+    "isArchived": false,
+    "isPrivate": false,
+    "tags": [],
+    "releases": []
+  },
+  {
+    "name": "delta",
+    "url": "https://github.com/tuna-os/delta",
+    "isArchived": false,
+    "isPrivate": false,
+    "tags": [{"name": "preview"}],
+    "releases": [{
+      "tag_name": "v0.2.0-rc.1",
+      "html_url": "https://github.com/tuna-os/delta/releases/tag/v0.2.0-rc.1",
+      "draft": false,
+      "prerelease": true,
+      "assets": [{"name": "delta.dmg"}]
+    }]
+  },
+  {
+    "name": "archived",
+    "isArchived": true,
+    "isPrivate": false,
+    "tags": [{"name": "v9.9.9"}],
+    "releases": []
+  },
+  {
+    "name": "private",
+    "isArchived": false,
+    "isPrivate": true,
+    "tags": [{"name": "v9.9.9"}],
+    "releases": []
+  }
+]
