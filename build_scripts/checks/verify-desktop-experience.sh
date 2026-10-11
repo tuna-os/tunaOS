@@ -449,10 +449,20 @@ tuna)
 	# entry display managers remember, and the PAM service a session started
 	# before the upgrade still asks for.
 	for name in compositor session shell-host shell-gtk ibus-bridge greeter; do
-		[[ "$(readlink "/usr/bin/roost-$name")" == "tuna-$name" ]] || {
-			echo "/usr/bin/roost-$name is not a compat link to tuna-$name" >&2
-			exit 1
-		}
+		compat_link="/usr/bin/roost-$name"
+		require_glob "$compat_link"
+		# require_glob permits the documented Hummingbird waiver. Only inspect
+		# the target when the path exists; otherwise preserve that waiver.
+		if compgen -G "$compat_link" >/dev/null; then
+			compat_target="$(readlink -- "$compat_link")" || {
+				echo "cannot read compatibility link: $compat_link" >&2
+				exit 1
+			}
+			[[ "$compat_target" == "tuna-$name" ]] || {
+				echo "/usr/bin/roost-$name is not a compat link to tuna-$name" >&2
+				exit 1
+			}
+		fi
 	done
 	require_glob '/usr/share/wayland-sessions/roost.desktop'
 	grep -qx 'Exec=tuna-session' /usr/share/wayland-sessions/roost.desktop

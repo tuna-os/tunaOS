@@ -84,6 +84,10 @@ def test_upgrades_from_the_roost_flavor_are_covered():
     case = script.split("\ntuna)\n", 1)[1].split("\n\t;;", 1)[0]
     for requirement in ("/usr/share/wayland-sessions/roost.desktop", "NoDisplay=true", "/etc/pam.d/roost-lock", '/usr/bin/roost-$name', "grep -qx 'tuna-desktop'"):
         assert requirement in case
+    assert 'require_glob "$compat_link"' in case
+    assert 'if compgen -G "$compat_link" >/dev/null' in case
+    assert 'readlink -- "$compat_link"' in case
+    assert 'cannot read compatibility link' in case
     # pacman -Q resolves provides, so the old name must be compared exactly.
     assert "pacman -Q roost" not in case and "pacman -Qq roost" not in case
     config = yaml.safe_load((ROOT / ".github/build-config.yml").read_text())
