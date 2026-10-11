@@ -1563,3 +1563,22 @@ The Marlin override `50-marlin.toml` selects systemd-boot and ext4. Containerfil
 The image had both backends; the default preferred GNOME for Access.
 
 **Fix:** Select GTK for Access, and GNOME for Screenshot and ScreenCast. The contract for the installed desktop rejects missing, wrong, duplicate, or out-of-section preferences. The admission test runs the shell validator against the shipped configuration and broken variants. Verify the final image in its separate boot gate.
+
+
+### Codecov project and patch targets never appear on a pull request
+
+**Symptom:** `codecov.yml` declares project and patch targets, but no Codecov
+result or coverage trend appears after the `Unit Tests` job; only a downloadable
+`coverage-python.xml` artifact exists.
+
+**Measured cause:** On main at `957d9ec6`, a repository-wide search found no
+`codecov/codecov-action` or Codecov CLI invocation. `test.yml` generated the XML
+and passed it only to `actions/upload-artifact`, which does not send reports to
+Codecov or evaluate `codecov.yml`.
+
+**Fix (#2301):** Keep the artifact for debugging and also upload the same XML
+with the SHA-pinned Codecov action, the `python` flag, and GitHub OIDC. The BATS
+contract in `tests/bats/test_test_yml_pytest_always_runs.bats` holds the upload
+path and authentication mode. This report is Python-only; BATS and QEMU E2E
+coverage are behavior gates, not line-coverage inputs.
+

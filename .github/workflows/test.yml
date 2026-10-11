@@ -61,6 +61,9 @@ on:
 
 permissions:
   contents: read
+  # Codecov authenticates uploads with GitHub OIDC; no long-lived repository
+  # token is exposed to pull-request jobs.
+  id-token: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -149,9 +152,18 @@ jobs:
           echo "| Top-level pytest | $(find tests -maxdepth 1 -name 'test_*.py' -type f | wc -l) |" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "Run locally: \`just test\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Python coverage | xml artifact uploaded |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Python coverage | Codecov + xml artifact |" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload Python coverage
+      - name: Upload Python coverage to Codecov
+        if: always()
+        uses: codecov/codecov-action@0fb7174895f61a3b6b78fc075e0cd60383518dac # v5
+        with:
+          use_oidc: true
+          files: coverage-python.xml
+          flags: python
+          fail_ci_if_error: false
+
+      - name: Archive Python coverage
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

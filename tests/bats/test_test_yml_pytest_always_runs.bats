@@ -15,7 +15,18 @@ WORKFLOW="${REPO_ROOT}/.github/workflows/test.yml"
   [[ "$block" == *"if: always()"* ]]
 }
 
-@test "test.yml: Upload Python coverage step ignores a missing coverage file" {
-  block="$(awk '/- name: Upload Python coverage/,0' "$WORKFLOW")"
+@test "test.yml: Python coverage is uploaded to Codecov" {
+  block="$(awk '/- name: Upload Python coverage to Codecov/,/- name: Archive Python coverage/' "$WORKFLOW")"
+  [[ "$block" == *"if: always()"* ]]
+  [[ "$block" =~ codecov/codecov-action@[0-9a-f]{40} ]]
+  [[ "$block" == *"use_oidc: true"* ]]
+  [[ "$block" == *"files: coverage-python.xml"* ]]
+  [[ "$block" == *"flags: python"* ]]
+  [[ "$block" == *"fail_ci_if_error: false"* ]]
+  grep -q '^  id-token: write$' "$WORKFLOW"
+}
+
+@test "test.yml: archived Python coverage ignores a missing coverage file" {
+  block="$(awk '/- name: Archive Python coverage/,0' "$WORKFLOW")"
   [[ "$block" == *"if-no-files-found: ignore"* ]]
 }
