@@ -3,14 +3,18 @@ name: Validate Renovate Config
 on:
   pull_request:
     paths:
-      - ".github/renovate.json5"
-      - ".github/workflows/renovate.yml"
+      - "renovate.json"
+      - "scripts/check-renovate-automerge-policy.py"
+      - "tests/test_renovate_automerge_policy.py"
+      - ".github/workflows/validate-renovate.yaml"
   push:
     branches:
       - main
     paths:
-      - ".github/renovate.json5"
-      - ".github/workflows/renovate.yml"
+      - "renovate.json"
+      - "scripts/check-renovate-automerge-policy.py"
+      - "tests/test_renovate_automerge_policy.py"
+      - ".github/workflows/validate-renovate.yaml"
 
 # Read-only on purpose: the job only validates a file. Declared so the
 # read-only downgrade on fork PRs changes nothing (tests/test_fork_safe_workflows.py).
@@ -34,9 +38,14 @@ jobs:
       - name: Install dependencies
         shell: bash
         env:
-          RENOVATE_VERSION: latest
+          # renovate: datasource=npm depName=renovate
+          RENOVATE_VERSION: "44.132.5"
         run: npm install -g renovate@${RENOVATE_VERSION}
 
       - name: Validate Renovate config
         shell: bash
-        run: renovate-config-validator --strict
+        run: renovate-config-validator --strict --no-global renovate.json
+
+      - name: Enforce org automerge policy
+        shell: bash
+        run: python3 scripts/check-renovate-automerge-policy.py renovate.json
