@@ -27,17 +27,7 @@
   {
     "variant": "albacore",
     "flavor": "cosmic",
-    "arch": "aarch64"
-  },
-  {
-    "variant": "albacore",
-    "flavor": "cosmic",
     "arch": "x86_64"
-  },
-  {
-    "variant": "albacore",
-    "flavor": "cosmic-hwe",
-    "arch": "aarch64"
   },
   {
     "variant": "albacore",
@@ -697,17 +687,7 @@
   {
     "variant": "skipjack",
     "flavor": "cosmic",
-    "arch": "aarch64"
-  },
-  {
-    "variant": "skipjack",
-    "flavor": "cosmic",
     "arch": "x86_64"
-  },
-  {
-    "variant": "skipjack",
-    "flavor": "cosmic-hwe",
-    "arch": "aarch64"
   },
   {
     "variant": "skipjack",
@@ -857,17 +837,7 @@
   {
     "variant": "yellowfin",
     "flavor": "cosmic",
-    "arch": "aarch64"
-  },
-  {
-    "variant": "yellowfin",
-    "flavor": "cosmic",
     "arch": "x86_64"
-  },
-  {
-    "variant": "yellowfin",
-    "flavor": "cosmic-hwe",
-    "arch": "aarch64"
   },
   {
     "variant": "yellowfin",
