@@ -63,6 +63,24 @@ publish, and *how* the snapshot feeds roadmap decisions.
 - Ownership: **strategist** compiles; **ci-maintainer** supplies R2/Releases
   exports; **guide** publishes on tunaos.org/blog.
 
+### Hacktoberfest conversion report
+
+Run the live report during the October check-ins and save its JSON output for
+the November snapshot:
+
+```bash
+scripts/hacktoberfest-conversion-report.py
+scripts/hacktoberfest-conversion-report.py --json >hacktoberfest-2026.json
+```
+
+The report counts an **external human** only when GitHub does not identify the
+author as an organization owner, member, repository collaborator, or bot. A
+**new contributor** has no merged pull request in any non-archived `tuna-os`
+repository before 2026-10-01. This definition keeps maintainer and automation
+volume out of the ≥10 merged-PR target, while the returning-contributor count
+measures the retention side of the funnel. The command derives both values
+from the GitHub API; do not copy a live count into this plan between snapshots.
+
 ## Outreach evidence
 
 The current outreach record is kept in
