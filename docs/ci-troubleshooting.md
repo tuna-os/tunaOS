@@ -1563,3 +1563,13 @@ The Marlin override `50-marlin.toml` selects systemd-boot and ext4. Containerfil
 The image had both backends; the default preferred GNOME for Access.
 
 **Fix:** Select GTK for Access, and GNOME for Screenshot and ScreenCast. The contract for the installed desktop rejects missing, wrong, duplicate, or out-of-section preferences. The admission test runs the shell validator against the shipped configuration and broken variants. Verify the final image in its separate boot gate.
+
+
+### AI porting agent executes untrusted upstream diffs with write token
+
+**Symptom:** Scheduled watch workflows send third-party commit diffs to LLM agents with write permissions. The agent commits and pushes branches without review.
+
+**Measured cause:** In #1740, `watch-upstream.yml` read commit text and diffs from third-party repositories. It embedded the diffs into `GEMINI_TASK.md` without checks. A malicious commit diff could inject instructions to write code or exfiltrate tokens (`GH_TOKEN`, `GEMINI_API_KEY`, `COPILOT_PAT`).
+
+**Fix:** Delete the legacy watch workflows and helper scripts. Upstream sync uses `snapshot-upstreams.yml`. That workflow vendors files into `_upstream-snapshots/` and creates pull requests for review. `tests/regressions/test_issue_1740_no_untrusted_upstream_diff_ai_write_pipeline.py` prevents new AI workflows with write tokens on untrusted diffs.
+

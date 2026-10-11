@@ -1,0 +1,677 @@
+"""tunaOS#1740: AI porting agent auto-commits/pushes on untrusted upstream diffs.
+
+The legacy watch-* workflows (watch-upstream.yml, watch-aurora.yml,
+watch-bluefin-lts.yml, watch-zirconium.yml) fetched raw commit messages and
+diffs from third-party repositories and fed them directly into Gemini CLI and
+Copilot coding agents holding write tokens (contents: write, pull-requests:
+write, and COPILOT_PAT). This created a remote code execution and credential
+exfiltration vector via prompt injection on upstream diffs.
+
+This regression test verifies that no workflow or helper script executes AI
+coding agents with write credentials (ephemeral write permissions or custom
+PATs) on untrusted diffs, and that the legacy per-commit watch workflows and
+helper scripts remain decommissioned in favor of snapshot-upstreams.yml
+(human-reviewed content diffs).
+
+Falsification: behavioural — synthetic workflow and script fixtures reproducing
+the historical Gemini CLI write-token job, PAT-backed Copilot batch dispatch,
+generic Copilot/Codex/OpenAI write agents, top-level workflow env PATs,
+non-contents write permissions, omitted-permission inheritance, and renamed/nested
+local helpers are evaluated against the security detectors, asserting each insecure
+pattern is rejected; structural for the repository tree where all active workflows
+and scripts are validated.
+"""
+
+from __future__ import annotations
+
+import re
+from pathlib import Path
+from typing import Any
+
+import yaml
+
+ROOT = Path(__file__).resolve().parents[2]
+WORKFLOWS_DIR = ROOT / ".github" / "workflows"
+SCRIPTS_DIR = ROOT / ".github" / "scripts"
+ROOT_SCRIPTS_DIR = ROOT / "scripts"
+PROMPTS_DIR = ROOT / ".github" / "prompts"
+
+DECOMMISSIONED_WORKFLOWS = [
+    "watch-upstream.yml",
+    "watch-aurora.yml",
+    "watch-bluefin-lts.yml",
+    "watch-zirconium.yml",
+]
+
+DECOMMISSIONED_SCRIPTS = [
+    "write-gemini-task.py",
+    "fire-copilot-batch.py",
+    "check-el10-packages.py",
+]
+
+DECOMMISSIONED_PROMPTS = [
+    "aurora-port.md",
+    "bluefin-lts-port.md",
+    "zirconium-port.md",
+]
+
+AI_AGENT_PATTERN = re.compile(
+    r"(run-gemini-cli|copilot-swe-agent|gemini-cli|claude-code|\bcopilot\b|github/copilot|copilot-cli|\bcodex\b|\bopenai\b|\bclaude\b|\bgemini\b)",
+    re.IGNORECASE,
+)
+
+SAFE_AI_SECRETS = {
+    "GEMINI_API_KEY",
+    "ANTHROPIC_API_KEY",
+    "OPENAI_API_KEY",
+    "GITHUB_TOKEN",
+}
+
+# Group 1 is set for .github/scripts/ helpers and empty for repository-root
+# scripts/ helpers; group 2 is the path relative to that directory.
+AI_HELPER_SCRIPT_CALL = re.compile(
+    r"(?:\./)?(\.github/)?scripts/([a-zA-Z0-9_/\-]+\.(?:py|sh|bash))"
+)
+
+# GitHub expressions accept both `secrets.NAME` and `secrets['NAME']` /
+# `secrets["NAME"]`; either form hands the credential to the job.
+SECRET_REF = re.compile(
+    r"secrets(?:\.([A-Za-z0-9_]+)|\[\s*['\"]([A-Za-z0-9_]+)['\"]\s*\])",
+    re.IGNORECASE,
+)
+
+
+def extract_secret_names(text: str) -> set[str]:
+    """Return every secret name referenced with dot or index syntax."""
+    return {dot or index for dot, index in SECRET_REF.findall(text)}
+
+
+def scan_script_content(content: str, script_name: str = "script") -> list[str]:
+    """Inspect a script for AI agent assignments or custom write credentials."""
+    violations: list[str] = []
+
+    # Check for AI agent references using the shared AI_AGENT_PATTERN. Whole-line
+    # shell/Python comments are skipped: prose such as "burned Gemini API calls"
+    # in sync-upstream-snapshots.sh documents history and invokes nothing.
+    code = "\n".join(
+        line for line in content.splitlines() if not line.lstrip().startswith("#")
+    )
+    ai_matches = sorted(set(m.group(0) for m in AI_AGENT_PATTERN.finditer(code)))
+    for match in ai_matches:
+        violations.append(f"{script_name}: invokes or references AI agent '{match}'")
+
+    if "agentAssignment" in content or "replaceActorsForAssignable" in content:
+        violations.append(f"{script_name}: performs agentAssignment GraphQL mutation")
+
+    # Check for secrets outside safe allowlist
+    referenced_secrets = extract_secret_names(content)
+    for s in sorted(referenced_secrets):
+        if s.upper() not in SAFE_AI_SECRETS:
+            violations.append(f"{script_name}: references unapproved credential secrets.{s}")
+
+    if "COPILOT_PAT" in content and not any("COPILOT_PAT" in v for v in violations):
+        violations.append(f"{script_name}: references COPILOT_PAT credential")
+
+    return violations
+
+
+def scan_workflow_content(
+    content: str,
+    wf_name: str = "workflow.yml",
+    scripts_dir: Path | None = None,
+    root_scripts_dir: Path | None = None,
+) -> list[str]:
+    """Inspect workflow YAML for AI coding agents with write permissions or custom PATs."""
+    violations: list[str] = []
+    effective_scripts_dir = scripts_dir or SCRIPTS_DIR
+    effective_root_scripts_dir = root_scripts_dir or ROOT_SCRIPTS_DIR
+    doc = yaml.safe_load(content) or {}
+    if not isinstance(doc, dict):
+        return violations
+
+    wf_perms = doc.get("permissions")
+    wf_env = doc.get("env", {})
+    wf_env_str = yaml.dump(wf_env) if wf_env else ""
+    wf_secrets = extract_secret_names(wf_env_str)
+
+    jobs = doc.get("jobs", {})
+    if not isinstance(jobs, dict):
+        return violations
+
+    ai_jobs: set[str] = set()
+    job_helper_violations: dict[str, list[str]] = {}
+
+    for job_id, job in jobs.items():
+        if not isinstance(job, dict):
+            continue
+        job_yaml_str = yaml.dump(job)
+
+        has_direct_ai = bool(AI_AGENT_PATTERN.search(job_yaml_str))
+        helper_matches = AI_HELPER_SCRIPT_CALL.findall(job_yaml_str)
+        helper_violations: list[str] = []
+        for github_prefix, helper_rel_path in helper_matches:
+            base_dir = effective_scripts_dir if github_prefix else effective_root_scripts_dir
+            helper_path = base_dir / helper_rel_path
+            if helper_path.exists() and helper_path.is_file():
+                helper_violations.extend(
+                    scan_script_content(
+                        helper_path.read_text(encoding="utf-8", errors="ignore"),
+                        script_name=str(helper_rel_path),
+                    )
+                )
+
+        if helper_violations:
+            job_helper_violations[job_id] = helper_violations
+        if has_direct_ai or helper_violations:
+            ai_jobs.add(job_id)
+
+    # If no AI agents or AI helpers are present in this workflow, no AI write violations
+    if not ai_jobs:
+        return violations
+
+    # Inspect all jobs in workflows containing AI agents
+    for job_id, job in jobs.items():
+        if not isinstance(job, dict):
+            continue
+        job_yaml_str = yaml.dump(job)
+
+        if "permissions" in job:
+            effective_perms: Any = job["permissions"]
+        elif "permissions" in doc:
+            effective_perms = wf_perms
+        else:
+            effective_perms = None
+
+        is_ai_job = job_id in ai_jobs
+        job_secrets = wf_secrets | extract_secret_names(job_yaml_str)
+        unapproved_secrets = sorted([s for s in job_secrets if s.upper() not in SAFE_AI_SECRETS])
+        has_git_push = "git push" in job_yaml_str
+
+        if is_ai_job:
+            if job_id in job_helper_violations:
+                violations.extend(
+                    f"{wf_name} job '{job_id}' calls insecure helper: {hv}"
+                    for hv in job_helper_violations[job_id]
+                )
+
+            if effective_perms is None:
+                violations.append(
+                    f"{wf_name} job '{job_id}' uses AI agent/helper with omitted permissions (inherits repo defaults)"
+                )
+            elif effective_perms == "write-all":
+                violations.append(
+                    f"{wf_name} job '{job_id}' uses AI agent/helper with write-all permissions"
+                )
+            elif isinstance(effective_perms, dict):
+                for scope, perm in effective_perms.items():
+                    if perm == "write":
+                        violations.append(
+                            f"{wf_name} job '{job_id}' uses AI agent/helper with {scope}: write permission"
+                        )
+
+            if unapproved_secrets:
+                violations.append(
+                    f"{wf_name} job '{job_id}' passes unapproved custom credentials outside safe allowlist: {', '.join(unapproved_secrets)}"
+                )
+
+            if has_git_push:
+                violations.append(
+                    f"{wf_name} job '{job_id}' executes git push in AI agent job"
+                )
+        else:
+            # Downstream or companion job in an AI workflow
+            if effective_perms is None:
+                violations.append(
+                    f"{wf_name} job '{job_id}' runs in AI workflow with omitted permissions (inherits repo defaults)"
+                )
+            elif effective_perms == "write-all":
+                violations.append(
+                    f"{wf_name} job '{job_id}' runs in AI workflow with write-all permissions"
+                )
+            elif isinstance(effective_perms, dict):
+                for scope, perm in effective_perms.items():
+                    if perm == "write":
+                        violations.append(
+                            f"{wf_name} job '{job_id}' has {scope}: write permission in AI workflow (unsafe cross-job write)"
+                        )
+
+            if unapproved_secrets:
+                violations.append(
+                    f"{wf_name} job '{job_id}' passes custom write credentials in AI workflow: {', '.join(unapproved_secrets)}"
+                )
+
+            if has_git_push:
+                violations.append(
+                    f"{wf_name} job '{job_id}' executes git push downstream/alongside AI agent in automated workflow"
+                )
+
+    return violations
+
+
+def test_legacy_watch_workflows_and_scripts_are_removed() -> None:
+    """Ensure legacy watch-* workflows, helper scripts, and prompts do not exist."""
+    for wf in DECOMMISSIONED_WORKFLOWS:
+        assert not (WORKFLOWS_DIR / wf).exists(), f"Legacy workflow {wf} must not exist"
+
+    for script in DECOMMISSIONED_SCRIPTS:
+        assert not (SCRIPTS_DIR / script).exists(), f"Legacy script {script} must not exist"
+
+    for prompt in DECOMMISSIONED_PROMPTS:
+        assert not (PROMPTS_DIR / prompt).exists(), f"Legacy prompt {prompt} must not exist"
+
+
+def test_no_active_workflow_runs_ai_agents_with_write_credentials() -> None:
+    """Ensure no workflow in .github/workflows executes AI agents with write tokens or PATs."""
+    all_violations: list[str] = []
+    for wf_path in WORKFLOWS_DIR.glob("*.y*ml"):
+        content = wf_path.read_text(encoding="utf-8")
+        violations = scan_workflow_content(content, wf_name=wf_path.name)
+        all_violations.extend(violations)
+
+    assert not all_violations, "Found workflows with insecure AI write configurations:\n" + "\n".join(all_violations)
+
+
+def test_no_active_scripts_contain_ai_agent_assignments_or_pats() -> None:
+    """Ensure no script in .github/scripts/ contains AI agent dispatch or PAT references."""
+    all_violations: list[str] = []
+    if SCRIPTS_DIR.exists():
+        for script_path in SCRIPTS_DIR.rglob("*"):
+            if not script_path.is_file():
+                continue
+            if script_path.suffix in {".pyc", ".pyo"} or "__pycache__" in script_path.parts:
+                continue
+            content = script_path.read_text(encoding="utf-8", errors="ignore")
+            violations = scan_script_content(content, script_name=str(script_path.relative_to(SCRIPTS_DIR)))
+            all_violations.extend(violations)
+
+    assert not all_violations, "Found scripts with insecure AI agent patterns:\n" + "\n".join(all_violations)
+
+
+def test_snapshot_upstreams_is_the_canonical_upstream_tracker() -> None:
+    """Ensure snapshot-upstreams.yml is used for tracking upstreams safely."""
+    snapshot_wf = WORKFLOWS_DIR / "snapshot-upstreams.yml"
+    assert snapshot_wf.exists(), "snapshot-upstreams.yml must exist as the safe upstream sync mechanism"
+    content = snapshot_wf.read_text(encoding="utf-8")
+    assert "sync-upstream-snapshots.sh" in content
+    assert "run-gemini-cli" not in content
+    assert "copilot-swe-agent" not in content
+    assert "COPILOT_PAT" not in content
+    assert scan_workflow_content(content, wf_name="snapshot-upstreams.yml") == []
+
+
+# ── Falsification Fixtures (behavioural verification of detectors) ───────────
+
+def test_detector_falsifies_on_legacy_gemini_write_workflow() -> None:
+    """Falsification: assert detector catches Gemini CLI running with contents: write."""
+    legacy_gemini_wf = """
+name: Watch Aurora
+on:
+  schedule:
+    - cron: '0 8 * * 1'
+jobs:
+  port:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: google-github-actions/run-gemini-cli@v0.1.22
+        with:
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          prompt: "Port upstream commit"
+      - run: git push origin main
+"""
+    violations = scan_workflow_content(legacy_gemini_wf, "legacy-watch.yml")
+    assert any("contents: write" in v for v in violations)
+    assert any("pull-requests: write" in v for v in violations)
+    assert any("git push" in v for v in violations)
+
+
+def test_detector_falsifies_on_pat_backed_ai_job() -> None:
+    """Falsification: assert detector catches PAT credential passed to AI agent even with contents: read."""
+    pat_backed_wf = """
+name: Copilot Batch
+on:
+  schedule:
+    - cron: '0 8 * * 1'
+jobs:
+  port-copilot:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run agent
+        env:
+          GH_TOKEN: ${{ secrets.COPILOT_PAT }}
+        uses: google-github-actions/run-gemini-cli@v0.1.22
+        with:
+          prompt: "Port commit"
+"""
+    violations = scan_workflow_content(pat_backed_wf, "pat-watch.yml")
+    assert any("COPILOT_PAT" in v for v in violations)
+
+
+def test_detector_falsifies_on_neutral_name_pat_in_ai_job() -> None:
+    """Falsification: assert detector catches neutral-named custom secrets in AI job."""
+    neutral_secret_wf = """
+name: Neutral Secret AI Port
+on:
+  schedule:
+    - cron: '0 8 * * 1'
+jobs:
+  ai-port:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run agent with neutral secret name
+        env:
+          GH_TOKEN: ${{ secrets.AGENT_CREDENTIAL }}
+        uses: google-github-actions/run-gemini-cli@v0.1.22
+        with:
+          prompt: "Port commit"
+"""
+    violations = scan_workflow_content(neutral_secret_wf, "neutral-secret.yml")
+    assert any("AGENT_CREDENTIAL" in v for v in violations)
+
+
+def test_detector_falsifies_on_workflow_level_env_pat() -> None:
+    """Falsification: assert detector catches PAT credential in workflow-level env inherited by AI job."""
+    workflow_env_pat_wf = """
+name: Workflow Level Env PAT
+on:
+  schedule:
+    - cron: '0 8 * * 1'
+env:
+  GH_TOKEN: ${{ secrets.COPILOT_PAT }}
+jobs:
+  ai-job:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: google-github-actions/run-gemini-cli@v0.1.22
+        with:
+          prompt: "Port commit"
+"""
+    violations = scan_workflow_content(workflow_env_pat_wf, "wf-env-pat.yml")
+    assert any("COPILOT_PAT" in v for v in violations)
+
+
+def test_detector_falsifies_on_non_contents_write_permission() -> None:
+    """Falsification: assert detector catches AI agent with any write permission (e.g. issues: write)."""
+    issues_write_wf = """
+name: Issues Write AI Job
+on:
+  workflow_dispatch:
+jobs:
+  ai-job:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - run: copilot explain error
+"""
+    violations = scan_workflow_content(issues_write_wf, "issues-write.yml")
+    assert any("issues: write" in v for v in violations)
+
+
+def test_detector_falsifies_on_copilot_cli_with_write_permission() -> None:
+    """Falsification: assert detector catches generic Copilot CLI with write permissions."""
+    copilot_cli_wf = """
+name: Copilot CLI Write
+on:
+  workflow_dispatch:
+jobs:
+  copilot-job:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - run: copilot --prompt "fix things"
+"""
+    violations = scan_workflow_content(copilot_cli_wf, "copilot-cli.yml")
+    assert any("contents: write" in v for v in violations)
+
+
+def test_detector_falsifies_on_openai_codex_with_write_permission() -> None:
+    """Falsification: assert detector catches OpenAI/Codex agent with write permissions."""
+    openai_wf = """
+name: OpenAI Codex Write
+on:
+  workflow_dispatch:
+jobs:
+  codex-job:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: openai/codex-action@v1
+        with:
+          openai_api_key: ${{ secrets.OPENAI_API_KEY }}
+"""
+    violations = scan_workflow_content(openai_wf, "openai-codex.yml")
+    assert any("contents: write" in v for v in violations)
+
+
+def test_detector_falsifies_on_omitted_permissions_ai_job() -> None:
+    """Falsification: assert detector catches AI agent with omitted permissions."""
+    omitted_perms_wf = """
+name: AI Port
+on:
+  workflow_dispatch:
+jobs:
+  ai-task:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: google-github-actions/run-gemini-cli@v0.1.22
+        with:
+          prompt: "Fix code"
+"""
+    violations = scan_workflow_content(omitted_perms_wf, "omitted-perms.yml")
+    assert any("omitted permissions" in v for v in violations)
+
+
+def test_detector_falsifies_on_script_assigning_copilot_agent() -> None:
+    """Falsification: assert detector catches helper script assigning copilot-swe-agent."""
+    insecure_script = """
+import os, subprocess, json
+GH_TOKEN = os.environ.get("GH_TOKEN")
+def assign():
+    mutation = '''
+    mutation {
+      replaceActorsForAssignable(input: {
+        actorLogins: ["copilot-swe-agent"]
+      }) { assignable { number } }
+    }
+    '''
+"""
+    violations = scan_script_content(insecure_script, "insecure_helper.py")
+    assert any("copilot-swe-agent" in v for v in violations)
+    assert any("GraphQL mutation" in v or "agentAssignment" in v for v in violations)
+
+
+def test_detector_falsifies_on_workflow_calling_ai_helper(tmp_path: Path) -> None:
+    """Falsification: assert detector catches workflow calling local script that uses copilot-swe-agent."""
+    scripts_dir = tmp_path / "scripts"
+    scripts_dir.mkdir()
+    helper = scripts_dir / "custom-batch.py"
+    helper.write_text("replaceActorsForAssignable(copilot-swe-agent)")
+
+    wf = """
+name: Helper Dispatch
+on:
+  schedule:
+    - cron: '0 8 * * 1'
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - run: python3 .github/scripts/custom-batch.py
+"""
+    violations = scan_workflow_content(wf, "helper-dispatch.yml", scripts_dir=scripts_dir)
+    assert any("contents: write" in v for v in violations)
+    assert any("custom-batch.py" in v for v in violations)
+
+
+def test_detector_falsifies_on_nested_and_direct_executable_helper(tmp_path: Path) -> None:
+    """Falsification: assert detector catches directly invoked nested executable helper scripts."""
+    scripts_dir = tmp_path / "scripts"
+    agents_dir = scripts_dir / "agents"
+    agents_dir.mkdir(parents=True)
+    helper = agents_dir / "dispatch.py"
+    helper.write_text("print('running copilot-swe-agent')\nreplaceActorsForAssignable()\n")
+
+    wf = """
+name: Direct Executable Helper
+on:
+  schedule:
+    - cron: '0 8 * * 1'
+jobs:
+  port:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - run: ./.github/scripts/agents/dispatch.py
+"""
+    violations = scan_workflow_content(wf, "nested-helper.yml", scripts_dir=scripts_dir)
+    assert any("contents: write" in v for v in violations)
+    assert any("agents/dispatch.py" in v for v in violations)
+
+
+def test_detector_falsifies_on_script_invoking_gemini_or_claude_cli(tmp_path: Path) -> None:
+    """Falsification: assert detector catches helper scripts calling gemini-cli and claude-code."""
+    gemini_script = "gemini-cli --prompt 'fix bug'"
+    claude_script = "claude-code --task 'resolve issue'"
+
+    assert any("gemini-cli" in v for v in scan_script_content(gemini_script, "gemini_helper.sh"))
+    assert any("claude-code" in v for v in scan_script_content(claude_script, "claude_helper.sh"))
+
+    scripts_dir = tmp_path / "scripts"
+    scripts_dir.mkdir()
+    (scripts_dir / "gemini-runner.sh").write_text(gemini_script)
+
+    wf = """
+name: Gemini Script Runner
+on:
+  workflow_dispatch:
+jobs:
+  run-ai:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - run: bash .github/scripts/gemini-runner.sh
+"""
+    violations = scan_workflow_content(wf, "gemini-script.yml", scripts_dir=scripts_dir)
+    assert any("contents: write" in v for v in violations)
+    assert any("gemini-runner.sh" in v for v in violations)
+
+
+def test_detector_falsifies_on_split_job_ai_write_pipeline() -> None:
+    """Falsification: assert detector catches split-job pipeline where read-only AI job feeds a write job."""
+    split_wf = """
+name: Split AI Port
+on:
+  schedule:
+    - cron: '0 8 * * 1'
+jobs:
+  ai-generate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/run-gemini-cli@v0.1.22
+        with:
+          prompt: "Port upstream commit"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ai-patch
+          path: patch.diff
+  publish:
+    needs: [ai-generate]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: ai-patch
+      - run: git apply patch.diff && git push origin main
+"""
+    violations = scan_workflow_content(split_wf, "split-ai-port.yml")
+    assert any("publish" in v and ("contents: write" in v or "unsafe cross-job write" in v) for v in violations)
+    assert any("publish" in v and "git push" in v for v in violations)
+
+
+def test_detector_falsifies_on_bracket_style_secret_reference() -> None:
+    """Falsification: assert detector catches PATs referenced with secrets['NAME'] index syntax."""
+    bracket_wf = """
+name: Bracket Secret AI Port
+on:
+  workflow_dispatch:
+env:
+  WF_TOKEN: ${{ secrets["WORKFLOW_PAT"] }}
+jobs:
+  ai-port:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Run agent
+        env:
+          GH_TOKEN: ${{ secrets['COPILOT_PAT'] }}
+        uses: google-github-actions/run-gemini-cli@v0.1.22
+        with:
+          prompt: "Port commit"
+"""
+    violations = scan_workflow_content(bracket_wf, "bracket-secret.yml")
+    assert any("COPILOT_PAT" in v for v in violations)
+    assert any("WORKFLOW_PAT" in v for v in violations)
+
+    script_violations = scan_script_content(
+        "token = '${{ secrets[\"AGENT_PAT\"] }}'", "bracket_helper.sh"
+    )
+    assert any("AGENT_PAT" in v for v in script_violations)
+
+
+def test_detector_falsifies_on_repository_root_scripts_helper(tmp_path: Path) -> None:
+    """Falsification: assert detector resolves scripts/ helpers against the repository-root scripts directory."""
+    github_scripts_dir = tmp_path / ".github" / "scripts"
+    github_scripts_dir.mkdir(parents=True)
+    root_scripts_dir = tmp_path / "scripts"
+    root_scripts_dir.mkdir()
+    (root_scripts_dir / "port-upstream.sh").write_text(
+        "# Ports the upstream diff.\ngemini-cli --prompt 'port upstream diff'\n"
+    )
+
+    wf = """
+name: Root Script Helper
+on:
+  workflow_dispatch:
+jobs:
+  port:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - run: bash scripts/port-upstream.sh
+"""
+    violations = scan_workflow_content(
+        wf,
+        "root-helper.yml",
+        scripts_dir=github_scripts_dir,
+        root_scripts_dir=root_scripts_dir,
+    )
+    assert any("contents: write" in v for v in violations)
+    assert any("port-upstream.sh" in v for v in violations)
