@@ -97,12 +97,18 @@ window {
 	background-color: #1b2733;
 }
 
-/* The login box: lift it off the background, otherwise the themed widgets
- * float on the gradient with no visual container. */
-box#window-box {
-	background-color: @theme_bg_color;
+/* gtkgreet names its outer GtkBox "window" (not "window-box"). Keep an
+ * opaque, high-contrast panel behind both its #clock label and #body prompt:
+ * the system theme can otherwise render dark labels over the dark wallpaper. */
+box#window {
+	background-color: #222226;
 	border-radius: 8px;
 	padding: 24px;
+}
+
+label#clock,
+box#body label {
+	color: #fafafa;
 }
 EOF
 	# greetd runs the greeter as its own unprivileged user; it must be
