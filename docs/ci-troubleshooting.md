@@ -1563,3 +1563,20 @@ The Marlin override `50-marlin.toml` selects systemd-boot and ext4. Containerfil
 The image had both backends; the default preferred GNOME for Access.
 
 **Fix:** Select GTK for Access, and GNOME for Screenshot and ScreenCast. The contract for the installed desktop rejects missing, wrong, duplicate, or out-of-section preferences. The admission test runs the shell validator against the shipped configuration and broken variants. Verify the final image in its separate boot gate.
+
+## Tuna installed package checks and privacy portal routing
+
+**Symptom:** A non-Arch Tuna image fails on `pacman`, or its installed portal
+configuration routes privacy lockdown through the GNOME backend.
+
+**Cause:** The Tuna case queried only pacman. The experience overlay is copied
+at the end of `install-desktop.sh`, replacing the package's portal configuration;
+its older copy omitted `org.freedesktop.impl.portal.Lockdown=tuna;`.
+
+**Fix:** Query installed package names and binary ownership with the package
+manager selected from the image's `os-release`. Keep the explicit Tuna lockdown
+route in the experience overlay and require one unambiguous routing entry.
+`tests/test_tuna_target_neutral_package_contract.py` executes the query functions
+for pacman, RPM, dpkg and Portage, and rejects failed queries, wrong owners,
+legacy names and missing or ambiguous privacy routing. These source tests do
+not establish installed image, authentication or portal runtime qualification.

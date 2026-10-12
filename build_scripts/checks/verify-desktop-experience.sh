@@ -50,6 +50,60 @@ detected_os 2>/dev/null || true
 # Exit status is deliberately unchanged: turning the waiver into a hard
 # failure would red-line every hummingbird build, which is a policy call for
 # a human, not a side effect of a logging fix.
+# Query installed names, not virtual provides or availability in a repository.
+# os-release remains available after /run/context is removed at image boot.
+tuna_package_backend() {
+	local ID="" ID_LIKE=""
+	source /etc/os-release
+	case "$ID" in
+	arch | archlinux) echo pacman ;;
+	ubuntu | debian) echo dpkg ;;
+	gentoo) echo portage ;;
+	almalinux | centos | fedora | eln | rhel | hummingbird | opensuse*) echo rpm ;;
+	*)
+		case " $ID_LIKE " in
+		*" debian "*) echo dpkg ;;
+		*" rhel "* | *" fedora "* | *" suse "*) echo rpm ;;
+		*)
+			echo "unknown Tuna package backend: $ID" >&2
+			return 1
+			;;
+		esac
+		;;
+	esac
+}
+
+tuna_installed_package_names() {
+	case "$1" in
+	pacman) pacman -Qq ;;
+	rpm) rpm -qa --qf '%{NAME}\n' ;;
+	dpkg)
+		dpkg-query -W -f '${binary:Package}\t${db:Status-Status}\n' |
+			awk -F '\t' '$2 == "installed" { sub(/:[^:]+$/, "", $1); print $1 }'
+		;;
+	portage) qlist -ICF '%[PN]' ;;
+	*) return 1 ;;
+	esac
+}
+
+tuna_installed_file_owner() {
+	local owner
+	case "$1" in
+	pacman) pacman -Qqo "$2" ;;
+	rpm) rpm -qf --qf '%{NAME}\n' "$2" ;;
+	dpkg)
+		owner="$(dpkg-query -S "$2")" || return 1
+		# Architecture qualifiers are allowed; diversions or multiple owners
+		# remain ambiguous and cannot pass the exact owner comparison below.
+		[[ "$owner" != *$'\n'* && "$owner" == *": $2" ]] || return 1
+		owner=${owner%": $2"}
+		printf '%s\n' "${owner%%:*}"
+		;;
+	portage) qfile -CqPF '%[PN]' "$2" ;;
+	*) return 1 ;;
+	esac
+}
+
 TUNAOS_CONTRACT_WAIVED=0
 waive() { TUNAOS_CONTRACT_WAIVED=$((TUNAOS_CONTRACT_WAIVED + 1)); }
 
@@ -427,7 +481,8 @@ tuna)
 	# be what is installed, and nothing may still need the old package name.
 	# Compare exact names: `pacman -Q` on the old name would match
 	# tuna-desktop through its provides=roost and pass for the wrong reason.
-	installed_packages="$(pacman -Qq)"
+	tuna_backend="$(tuna_package_backend)"
+	installed_packages="$(tuna_installed_package_names "$tuna_backend")"
 	grep -qx 'tuna-desktop' <<<"$installed_packages" || {
 		echo "the tuna-desktop package is not installed" >&2
 		exit 1
@@ -439,6 +494,10 @@ tuna)
 	for binary in tuna-compositor tuna-session tuna-shell-host tuna-shell-gtk tuna-ibus-bridge tuna-greeter; do
 		require_command "$binary"
 		"$binary" --version
+		[[ "$(tuna_installed_file_owner "$tuna_backend" "/usr/bin/$binary")" == tuna-desktop ]] || {
+			echo "Tuna binary is not owned by the installed tuna-desktop package: $binary" >&2
+			exit 1
+		}
 	done
 	require_glob '/usr/share/wayland-sessions/tuna.desktop'
 	grep -qx 'Exec=tuna-session' /usr/share/wayland-sessions/tuna.desktop
@@ -471,11 +530,15 @@ tuna)
 	require_glob '/etc/greetd/environments'
 	grep -qx 'tuna-session' /etc/greetd/environments
 	require_glob '/usr/share/xdg-desktop-portal/tuna-portals.conf'
+	require_glob '/usr/share/xdg-desktop-portal/portals/tuna.portal'
+	grep -qx 'DBusName=org.freedesktop.impl.portal.desktop.tuna' /usr/share/xdg-desktop-portal/portals/tuna.portal
+	grep -qx 'Interfaces=org.freedesktop.impl.portal.Lockdown;' /usr/share/xdg-desktop-portal/portals/tuna.portal
+	require_portal_preference /usr/share/xdg-desktop-portal/tuna-portals.conf org.freedesktop.impl.portal.Lockdown tuna
 	for portal in ScreenCast Screenshot; do
 		require_portal_preference /usr/share/xdg-desktop-portal/tuna-portals.conf "org.freedesktop.impl.portal.$portal" gnome
 	done
 	require_portal_preference /usr/share/xdg-desktop-portal/tuna-portals.conf org.freedesktop.impl.portal.Access gtk
-	require_glob '/usr/lib/gnome-shell-calendar-server'
+	require_any_glob '/usr/lib/gnome-shell-calendar-server' '/usr/libexec/gnome-shell-calendar-server'
 	require_command ibus-daemon
 	require_command gnome-keyring-daemon
 	require_command wpctl
