@@ -1566,7 +1566,7 @@ The image had both backends; the default preferred GNOME for Access.
 
 ## Tuna packages and privacy portals
 
-The Tuna contract previously queried only pacman. Other distributions need their native package database.
+Before this fix, the Tuna contract queried only pacman. Other distributions need their native package database.
 
 The installer copies the experience overlay after package installation. The overlay replaces the portal config from the package.
 Its older copy omitted `org.freedesktop.impl.portal.Lockdown=tuna;`.
