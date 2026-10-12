@@ -1564,19 +1564,15 @@ The image had both backends; the default preferred GNOME for Access.
 
 **Fix:** Select GTK for Access, and GNOME for Screenshot and ScreenCast. The contract for the installed desktop rejects missing, wrong, duplicate, or out-of-section preferences. The admission test runs the shell validator against the shipped configuration and broken variants. Verify the final image in its separate boot gate.
 
-## Tuna installed package checks and privacy portal routing
+## Tuna packages and privacy portals
 
-**Symptom:** A non-Arch Tuna image fails on `pacman`, or its installed portal
-configuration routes privacy lockdown through the GNOME backend.
+The Tuna contract previously queried only pacman. Other distributions need their native package database.
 
-**Cause:** The Tuna case queried only pacman. The experience overlay is copied
-at the end of `install-desktop.sh`, replacing the package's portal configuration;
-its older copy omitted `org.freedesktop.impl.portal.Lockdown=tuna;`.
+The installer copies the experience overlay after package installation. The overlay replaces the portal config from the package.
+Its older copy omitted `org.freedesktop.impl.portal.Lockdown=tuna;`.
 
-**Fix:** Query installed package names and binary ownership with the package
-manager selected from the image's `os-release`. Keep the explicit Tuna lockdown
-route in the experience overlay and require one unambiguous routing entry.
-`tests/test_tuna_target_neutral_package_contract.py` executes the query functions
-for pacman, RPM, dpkg and Portage, and rejects failed queries, wrong owners,
-legacy names and missing or ambiguous privacy routing. These source tests do
-not establish installed image, authentication or portal runtime qualification.
+The contract selects the package manager from `os-release`. It checks package names and owners of binaries.
+The overlay now selects Tuna for Lockdown. The contract rejects absent or ambiguous entries.
+
+The tests exercise pacman, RPM, dpkg and Portage queries. They reject query errors, wrong owners and legacy names.
+Real images still need authentication and portal runtime checks.
