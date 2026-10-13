@@ -91,7 +91,7 @@ variants:
   - id: yellowfin
     emoji: "🐠"
     description: "Based on AlmaLinux Kitten 10"
-    base_image: "quay.io/almalinuxorg/almalinux-bootc:10-kitten@sha256:49c1c6f1f1d962e27d14e563b7158e074daeb2f5defc2ca1536dcff455ec6fba"
+    base_image: "quay.io/almalinuxorg/almalinux-bootc:10-kitten@sha256:fabe22d605a5638cb1fbf2df38d6d9b9ace35f15cb1c10c7db87d475a039d58a"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [almalinux-kitten]
     platforms: ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
