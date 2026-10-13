@@ -1,0 +1,283 @@
+# Tuna v1 candidate matrix: the 13 absent Tuna cells plus the Marlin reference.
+#
+# CANDIDATE-ONLY. This file stages admission inputs and never publishes,
+# promotes, or marks any variant supported. It is not read by any production
+# workflow: generate_matrix, the reusable image build, and the desktop
+# contract sweep consume .github/build-config.yml only, which still carries
+# no tuna flavor for any of the 13 cells below. tests/ holds this file to
+# that rule: any supported/promoted/media/pin claim fails the suite.
+#
+# Every cell is bound to its actual variant qualification issue
+# (tuna-os/tunaOS#3195-3207, all OPEN) and its package-author prerequisite
+# (tuna-os/tunaos-packages#828-838, all OPEN). Gate language is quoted from
+# those issues, never invented. Per-cell Containerfile and base strings are
+# verbatim from the owning issue, including the four EL10-stage rows for
+# wahoo, bonito, hummingbird and bonito-rawhide: if an issue names the wrong
+# stage file, the issue is corrected, not this record.
+#
+# Authored against tunaOS e4e2a8fa53322772b02d18705d10a3efea034202. Source
+# pins below stay pending until each cell's issue gates pass; the user
+# approves publishing all variants only when working. Draft tunaOS#3194
+# (target-neutral Lockdown/package-owner preparation) and tunaos-packages
+# tooling greens are explicitly NOT admission for any cell here.
+version: 1
+status: candidate-only
+parent_epic: https://github.com/tuna-os/tuna-desktop/issues/577
+authored_against: e4e2a8fa53322772b02d18705d10a3efea034202
+
+# Shared gate set, quoted from the bounded-implementation and acceptance
+# checklists identical across issues 3195-3207. G1-G6 are implementation
+# gates, A1-A3 are acceptance gates. No cell here claims any of them.
+gates:
+  provenance:
+    - https://github.com/tuna-os/tunaOS/issues/3195
+    - https://github.com/tuna-os/tunaOS/issues/3196
+    - https://github.com/tuna-os/tunaOS/issues/3197
+    - https://github.com/tuna-os/tunaOS/issues/3198
+    - https://github.com/tuna-os/tunaOS/issues/3199
+    - https://github.com/tuna-os/tunaOS/issues/3200
+    - https://github.com/tuna-os/tunaOS/issues/3201
+    - https://github.com/tuna-os/tunaOS/issues/3202
+    - https://github.com/tuna-os/tunaOS/issues/3203
+    - https://github.com/tuna-os/tunaOS/issues/3204
+    - https://github.com/tuna-os/tunaOS/issues/3205
+    - https://github.com/tuna-os/tunaOS/issues/3206
+    - https://github.com/tuna-os/tunaOS/issues/3207
+  implementation:
+    - id: G1-native-package-stage
+      requires: >-
+        Prerequisite native package/repository with exact
+        signature/trust/source/vendor/architecture identity, plus the
+        per-cell Containerfile Tuna stage and native dependency mapping;
+        existing non-Tuna stages preserved. No Arch archive, foreign-suite
+        package or GNOME-session fallback.
+    - id: G2-session-payload-ownership
+      requires: >-
+        Settings schemas/services, XWayland/IME, sound dependencies,
+        private cursor assets, portal descriptor/config and
+        permission/consent providers. Package overlays must not overwrite
+        the Tuna Lockdown route. Every session binary and payload must
+        have actual native package ownership.
+    - id: G3-explicit-cell-platforms
+      requires: >-
+        Explicit tuna matrix cell and platform list. Every admitted
+        platform qualified independently; unsupported inherited
+        ARM/amd64-v2 cells stay excluded and tracked, never silently
+        counted as passing. Resolved mutable base digests recorded.
+    - id: G4-boot-dm-session-auth
+      requires: >-
+        Boot the installed exact image and deliver the real
+        desktop-manager session: rendered login, actual authentication
+        failure/success, session/lock/unlock/logout/restart. Keep
+        gtkgreet/cage until the native Tuna greeter has real wired
+        authentication qualification; binary installation alone cannot
+        switch the production greeter. Shared gate: tuna-desktop#584/#366.
+    - id: G5-installed-journeys-negatives
+      requires: >-
+        Native installed-window, settings/scale/cursor, IME,
+        screenshot/portal consent and lock privacy journeys with full
+        frames, logs and executable/package/image identity. Negative
+        cases must catch missing dependency/schema/portal route, wrong
+        package owner, authentication failure and compositor/session
+        failure without GNOME fallback.
+    - id: G6-installer-artifact-paths
+      requires: >-
+        After the native image passes, enable the variant's supported
+        installer/artifact paths with actual installation,
+        upgrade/recovery and preserved user data. ISO/qcow2/LUKS/
+        native-hardware support needs explicit evidence; do not copy
+        the Marlin image-only waiver into a final release claim.
+  acceptance:
+    - id: A1-exact-head-evidence-bundle
+      requires: >-
+        Exact-head CI for the reviewed image and package commits,
+        resolved base digest, signed served package hash/build
+        ActionResult, installed native package database/file owners,
+        all six binary hashes and image digest recorded together.
+        Cached success from another source/target is rejected.
+    - id: A2-installed-arch-evidence
+      requires: >-
+        Real installed boot/session/authentication/portal/visual and
+        install/upgrade/recovery evidence passes for every admitted
+        architecture. Nested-only screenshots, desired settings and
+        version output cannot qualify the cell. Retain failure
+        receipts and verify owned VM/resource cleanup.
+    - id: A3-epic-gated-publication
+      requires: >-
+        Match the published image to those bytes only after the whole
+        v1 epic release gate is approved. The qualification ticket
+        does not claim publication readiness or completion.
+
+# The 13 absent cells. declared_platforms is copied from
+# .github/build-config.yml at the authored_against commit and cross-checked
+# by tests/; it is scope context, not admission. admitted_platforms stays
+# empty until the owning issue's G3 gate passes per platform.
+cells:
+  - variant: yellowfin
+    issue: https://github.com/tuna-os/tunaOS/issues/3195
+    base: AlmaLinux 10 Kitten
+    package_prerequisite: https://github.com/tuna-os/tunaos-packages/issues/828
+    containerfile_stage: Containerfile.el10
+    declared_platforms:
+      - linux/amd64
+      - linux/amd64/v2
+      - linux/arm64
+    admitted_platforms: []
+    status: candidate
+    support: none
+    pins: pending
+  - variant: albacore
+    issue: https://github.com/tuna-os/tunaOS/issues/3196
+    base: AlmaLinux 10
+    package_prerequisite: https://github.com/tuna-os/tunaos-packages/issues/828
+    containerfile_stage: Containerfile.el10
+    declared_platforms:
+      - linux/amd64
+      - linux/amd64/v2
+      - linux/arm64
+    admitted_platforms: []
+    status: candidate
+    support: none
+    pins: pending
+  - variant: skipjack
+    issue: https://github.com/tuna-os/tunaOS/issues/3197
+    base: CentOS Stream 10
+    package_prerequisite: https://github.com/tuna-os/tunaos-packages/issues/828
+    containerfile_stage: Containerfile.el10
+    declared_platforms:
+      - linux/amd64
+      - linux/arm64
+    admitted_platforms: []
+    status: candidate
+    support: none
+    pins: pending
+  - variant: wahoo
+    issue: https://github.com/tuna-os/tunaOS/issues/3198
+    base: Fedora ELN
+    package_prerequisite: https://github.com/tuna-os/tunaos-packages/issues/829
+    containerfile_stage: Containerfile.el10
+    declared_platforms:
+      - linux/amd64
+      - linux/arm64
+    admitted_platforms: []
+    status: candidate
+    support: none
+    pins: pending
+  - variant: bonito
+    issue: https://github.com/tuna-os/tunaOS/issues/3199
+    base: Fedora 44
+    package_prerequisite: https://github.com/tuna-os/tunaos-packages/issues/830
+    containerfile_stage: Containerfile.el10
+    declared_platforms:
+      - linux/amd64
+      - linux/arm64
+    admitted_platforms: []
+    status: candidate
+    support: none
+    pins: pending
+  - variant: hummingbird
+    issue: https://github.com/tuna-os/tunaOS/issues/3200
+    base: Hummingbird pinned bootc base
+    package_prerequisite: https://github.com/tuna-os/tunaos-packages/issues/832
+    containerfile_stage: Containerfile.el10
+    declared_platforms:
+      - linux/amd64
+    admitted_platforms: []
+    status: candidate
+    support: none
+    pins: pending
+  - variant: sailfin
+    issue: https://github.com/tuna-os/tunaOS/issues/3201
+    base: openSUSE Tumbleweed
+    package_prerequisite: https://github.com/tuna-os/tunaos-packages/issues/833
+    containerfile_stage: Containerfile.opensuse
+    declared_platforms:
+      - linux/amd64
+    admitted_platforms: []
+    status: candidate
+    support: none
+    pins: pending
+  - variant: guppy
+    issue: https://github.com/tuna-os/tunaOS/issues/3202
+    base: Gentoo stage3
+    package_prerequisite: https://github.com/tuna-os/tunaos-packages/issues/838
+    containerfile_stage: Containerfile.gentoo
+    declared_platforms:
+      - linux/amd64
+    admitted_platforms: []
+    status: candidate
+    support: none
+    pins: pending
+  - variant: bonito-rawhide
+    issue: https://github.com/tuna-os/tunaOS/issues/3203
+    base: Fedora Rawhide
+    package_prerequisite: https://github.com/tuna-os/tunaos-packages/issues/831
+    containerfile_stage: Containerfile.el10
+    declared_platforms:
+      - linux/amd64
+      - linux/arm64
+    admitted_platforms: []
+    status: candidate
+    support: none
+    pins: pending
+  - variant: gurnard
+    issue: https://github.com/tuna-os/tunaOS/issues/3204
+    base: Ubuntu Noble
+    package_prerequisite: https://github.com/tuna-os/tunaos-packages/issues/834
+    containerfile_stage: Containerfile.ubuntu
+    declared_platforms:
+      - linux/amd64
+      - linux/arm64
+    admitted_platforms: []
+    status: candidate
+    support: none
+    pins: pending
+  - variant: grouper
+    issue: https://github.com/tuna-os/tunaOS/issues/3205
+    base: Ubuntu Resolute
+    package_prerequisite: https://github.com/tuna-os/tunaos-packages/issues/835
+    containerfile_stage: Containerfile.ubuntu
+    declared_platforms:
+      - linux/amd64
+      - linux/arm64
+    admitted_platforms: []
+    status: candidate
+    support: none
+    pins: pending
+  - variant: flounder
+    issue: https://github.com/tuna-os/tunaOS/issues/3206
+    base: Debian Trixie
+    package_prerequisite: https://github.com/tuna-os/tunaos-packages/issues/836
+    containerfile_stage: Containerfile.debian
+    declared_platforms:
+      - linux/amd64
+    admitted_platforms: []
+    status: candidate
+    support: none
+    pins: pending
+  - variant: flounder-sid
+    issue: https://github.com/tuna-os/tunaOS/issues/3207
+    base: Debian Sid
+    package_prerequisite: https://github.com/tuna-os/tunaos-packages/issues/837
+    containerfile_stage: Containerfile.debian
+    declared_platforms:
+      - linux/amd64
+    admitted_platforms: []
+    status: candidate
+    support: none
+    pins: pending
+
+# Reference row, not a claim. Marlin:tuna is the only Tuna cell in
+# .github/build-config.yml: experimental admission (#2990, closed), image
+# only, amd64 only. tests/ cross-checks these four fields against the
+# build config so drift fails loudly instead of silently qualifying media.
+marlin_reference:
+  variant: marlin
+  admission: https://github.com/tuna-os/tunaOS/issues/2990
+  build_image: true
+  build_iso: false
+  build_qcow2: false
+  luks_e2e: false
+  platforms:
+    - linux/amd64
+  pins: pending-final-qualification

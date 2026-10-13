@@ -1,0 +1,226 @@
+# Target-specific Tuna handoffs for the 13 candidate cells.
+#
+# FIXTURES, not manifests. Nothing here is read by install-desktop.sh,
+# the desktop contract sweep, or any image build: those consume
+# manifests/desktops/*.yaml only. Each target below records what is already
+# true in repo sources (session/portal/DM contract paths) and marks every
+# package-author-owned identity as pending. tests/ enforces both halves:
+# the actual constants must match the installed contract, and every
+# package identity value must be the literal `pending`.
+#
+# Provenance per field:
+# - session/portal/DM paths: build_scripts/checks/verify-desktop-experience.sh
+#   tuna branch at e4e2 (tuna.desktop Exec/DesktopNames, tuna-lock PAM,
+#   tuna-session.target, tuna-portals.conf ScreenCast/Screenshot->gnome and
+#   Access->gtk, greetd with gtkgreet/cage).
+# - six binaries + compat/payload list: packages/tuna-desktop/package.yaml
+#   at factory f196 (targets: [arch] only; install/files/verify blocks).
+# - per-target package prerequisite: tunaos-packages#828-838 (all OPEN).
+# - native dependency mapping: pending per-cell G1 gate work; the Marlin
+#   pacman list in manifests/desktops/tuna.yaml is Arch-only and is NOT
+#   reused as any other target's mapping.
+# - Lockdown descriptor/routing checks: pending on draft tunaOS#3194, which
+#   is reviewed and reused, never duplicated here.
+# - production greeter stays gtkgreet/cage until the native Tuna greeter
+#   has real wired authentication proof (tuna-desktop#584/#366).
+version: 1
+status: candidate-handoffs-only
+parent_epic: https://github.com/tuna-os/tuna-desktop/issues/577
+authored_against: e4e2a8fa53322772b02d18705d10a3efea034202
+
+# Actual installed-contract constants, shared by every target. A target
+# whose native delivery cannot carry these exact paths is not a Tuna cell
+# and must not be admitted as one.
+session_contract:
+  wayland_session: /usr/share/wayland-sessions/tuna.desktop
+  session_exec: tuna-session
+  session_desktop_names: Tuna;GNOME;
+  pam_service: /etc/pam.d/tuna-lock
+  user_target: /usr/lib/systemd/user/tuna-session.target
+  binaries:
+    - tuna-compositor
+    - tuna-session
+    - tuna-shell-host
+    - tuna-shell-gtk
+    - tuna-ibus-bridge
+    - tuna-greeter
+  compat_binaries:
+    - roost-compositor
+    - roost-session
+    - roost-shell-host
+    - roost-shell-gtk
+    - roost-ibus-bridge
+    - roost-greeter
+  compat_session: /usr/share/wayland-sessions/roost.desktop
+  compat_pam_service: /etc/pam.d/roost-lock
+
+portal_contract:
+  config: /usr/share/xdg-desktop-portal/tuna-portals.conf
+  screencast_backend: gnome
+  screenshot_backend: gnome
+  access_backend: gtk
+  lockdown_descriptor: pending-on-3194
+  lockdown_routing: pending-on-3194
+
+dm_contract:
+  manager: greetd
+  retained_greeter: gtkgreet/cage
+  native_greeter: pending-wired-auth-proof
+
+targets:
+  - id: el10
+    variants:
+      - yellowfin
+      - albacore
+      - skipjack
+    package_prerequisite: https://github.com/tuna-os/tunaos-packages/issues/828
+    containerfile_stage: Containerfile.el10
+    package_identity: pending
+    repository_identity: pending
+    signature_trust: pending
+    source_vendor_arch: pending
+    native_dependency_mapping: pending
+    media:
+      iso: false
+      qcow2: false
+      luks_e2e: false
+  - id: eln
+    variants:
+      - wahoo
+    package_prerequisite: https://github.com/tuna-os/tunaos-packages/issues/829
+    containerfile_stage: Containerfile.el10
+    package_identity: pending
+    repository_identity: pending
+    signature_trust: pending
+    source_vendor_arch: pending
+    native_dependency_mapping: pending
+    media:
+      iso: false
+      qcow2: false
+      luks_e2e: false
+  - id: fedora44
+    variants:
+      - bonito
+    package_prerequisite: https://github.com/tuna-os/tunaos-packages/issues/830
+    containerfile_stage: Containerfile.el10
+    package_identity: pending
+    repository_identity: pending
+    signature_trust: pending
+    source_vendor_arch: pending
+    native_dependency_mapping: pending
+    media:
+      iso: false
+      qcow2: false
+      luks_e2e: false
+  - id: rawhide
+    variants:
+      - bonito-rawhide
+    package_prerequisite: https://github.com/tuna-os/tunaos-packages/issues/831
+    containerfile_stage: Containerfile.el10
+    package_identity: pending
+    repository_identity: pending
+    signature_trust: pending
+    source_vendor_arch: pending
+    native_dependency_mapping: pending
+    media:
+      iso: false
+      qcow2: false
+      luks_e2e: false
+  - id: hummingbird
+    variants:
+      - hummingbird
+    package_prerequisite: https://github.com/tuna-os/tunaos-packages/issues/832
+    containerfile_stage: Containerfile.el10
+    package_identity: pending
+    repository_identity: pending
+    signature_trust: pending
+    source_vendor_arch: pending
+    native_dependency_mapping: pending
+    media:
+      iso: false
+      qcow2: false
+      luks_e2e: false
+  - id: opensuse
+    variants:
+      - sailfin
+    package_prerequisite: https://github.com/tuna-os/tunaos-packages/issues/833
+    containerfile_stage: Containerfile.opensuse
+    package_identity: pending
+    repository_identity: pending
+    signature_trust: pending
+    source_vendor_arch: pending
+    native_dependency_mapping: pending
+    media:
+      iso: false
+      qcow2: false
+      luks_e2e: false
+  - id: gentoo
+    variants:
+      - guppy
+    package_prerequisite: https://github.com/tuna-os/tunaos-packages/issues/838
+    containerfile_stage: Containerfile.gentoo
+    package_identity: pending
+    repository_identity: pending
+    signature_trust: pending
+    source_vendor_arch: pending
+    native_dependency_mapping: pending
+    media:
+      iso: false
+      qcow2: false
+      luks_e2e: false
+  - id: ubuntu-noble
+    variants:
+      - gurnard
+    package_prerequisite: https://github.com/tuna-os/tunaos-packages/issues/834
+    containerfile_stage: Containerfile.ubuntu
+    package_identity: pending
+    repository_identity: pending
+    signature_trust: pending
+    source_vendor_arch: pending
+    native_dependency_mapping: pending
+    media:
+      iso: false
+      qcow2: false
+      luks_e2e: false
+  - id: ubuntu-resolute
+    variants:
+      - grouper
+    package_prerequisite: https://github.com/tuna-os/tunaos-packages/issues/835
+    containerfile_stage: Containerfile.ubuntu
+    package_identity: pending
+    repository_identity: pending
+    signature_trust: pending
+    source_vendor_arch: pending
+    native_dependency_mapping: pending
+    media:
+      iso: false
+      qcow2: false
+      luks_e2e: false
+  - id: debian-trixie
+    variants:
+      - flounder
+    package_prerequisite: https://github.com/tuna-os/tunaos-packages/issues/836
+    containerfile_stage: Containerfile.debian
+    package_identity: pending
+    repository_identity: pending
+    signature_trust: pending
+    source_vendor_arch: pending
+    native_dependency_mapping: pending
+    media:
+      iso: false
+      qcow2: false
+      luks_e2e: false
+  - id: debian-sid
+    variants:
+      - flounder-sid
+    package_prerequisite: https://github.com/tuna-os/tunaos-packages/issues/837
+    containerfile_stage: Containerfile.debian
+    package_identity: pending
+    repository_identity: pending
+    signature_trust: pending
+    source_vendor_arch: pending
+    native_dependency_mapping: pending
+    media:
+      iso: false
+      qcow2: false
+      luks_e2e: false

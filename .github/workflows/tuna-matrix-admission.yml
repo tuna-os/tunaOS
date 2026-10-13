@@ -1,0 +1,43 @@
+name: Tuna matrix admission (source-only)
+
+# Guards the all14 Tuna candidate record. Source-only by design: it runs the
+# candidate-matrix pytest file and nothing else. No image builds, no
+# promotion, no media, no dispatch inputs. A new Tuna flavor, a support
+# claim, or a flipped pin fails here before it can look qualified.
+#
+# No `paths:` filter on purpose: the check is seconds-cheap, and a guard
+# that skips the PR that needs it is the dead-gate shape this repo keeps
+# finding. Triggers mirror Test (PR, main, dispatch). workflow_dispatch on
+# a new workflow file cannot be exercised until this file reaches the
+# default branch, so dispatch-testability stays honestly pending.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tuna-matrix-admission:
+    name: Tuna matrix admission
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install test dependencies
+        run: |
+          pip3 install pytest pyyaml --break-system-packages 2>/dev/null || pip3 install pytest pyyaml --user
+
+      - name: Run candidate-matrix admission tests
+        run: |
+          python3 -m pytest tests/test_tuna_candidate_matrix_stays_candidate_only.py -v --tb=short

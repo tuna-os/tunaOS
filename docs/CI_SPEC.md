@@ -82,6 +82,7 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 | `snapshot-upstreams.yml` | post-merge + scheduled | Snapshot upstreams | `0 9 * * 1`, manual | — |
 | `ste.yml` | PR-deterministic + post-merge | Prose | each PR, push, manual | — |
 | `test.yml` | PR-deterministic + post-merge | Test | each PR, push, manual | — |
+| `tuna-matrix-admission.yml` | PR-deterministic + post-merge | Tuna matrix admission (source-only) | each PR, push, manual | — |
 | `update-build-status.yml` | post-merge + scheduled | Update README build status | `30 13 * * *`, manual | — |
 | `validate-renovate.yaml` | PR-deterministic + post-merge | Validate Renovate Config | each PR, push | — |
 | `verify-asahi-one.yml` | post-merge + scheduled | Verify Asahi image (one) | caller cadence | — |
