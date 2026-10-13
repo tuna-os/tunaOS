@@ -316,7 +316,7 @@ variants:
   - id: albacore
     emoji: "🐟"
     description: "Based on AlmaLinux 10"
-    base_image: "quay.io/almalinuxorg/almalinux-bootc:10@sha256:7a80a51c0890f5ed736a8517e13adfa7dc6d882ac9838b6d8d60cd5207fbb69f"
+    base_image: "quay.io/almalinuxorg/almalinux-bootc:10@sha256:ca4096d660107c2281d32400b7ee5d714834444c9122620f1eb77f77f56414f0"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [almalinux]
     platforms: ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
