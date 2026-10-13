@@ -541,7 +541,7 @@ variants:
   - id: skipjack
     emoji: "🍣"
     description: "Based on CentOS Stream 10"
-    base_image: "quay.io/centos-bootc/centos-bootc:stream10@sha256:fe31b7a45259893485cfb37f3648e7da70140b16dcc5b06f493f69f11c19e04d"
+    base_image: "quay.io/centos-bootc/centos-bootc:stream10@sha256:9aedf2d189b85c498697f9b83112c893b084d359268da7dd6d5d848478d260de"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [centos]
     # Note: linux/amd64/v2 intentionally omitted — verify builder support before adding.
