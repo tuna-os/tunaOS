@@ -260,7 +260,7 @@ criteria:
       .github/workflows/package-parity.yml (daily) →
       scripts/package-parity.sh --audit; verdicts feed the scoreboard via the
       package-parity-baseline artifact
-    enforcement: advisory
+    enforcement: blocking
     freshness_sla_days: 2
     gates:
       - workflow: .github/workflows/package-parity.yml
@@ -289,6 +289,16 @@ criteria:
       upstream job) measures the diff against the upstream_references map
       above — measurement only, to establish the noise floor; the criterion
       stays advisory at least until per-variant thresholds exist.
+    status_2026_10_03: >-
+      graduated advisory → blocking (#2388). Weekly graduation check (run
+      36439922321): package-parity.yml passed 20 consecutive scheduled runs
+      on main, 0 of 20 failed. The blocking verdict is the first cadence
+      (desktop vs own base); the upstream-reference diff stays
+      measurement-only until per-variant thresholds exist. Composite green
+      drops 119 → 110 (-9), measured from docs/matrix-provenance.json of
+      2026-10-02: six cells have a failing parity verdict (flounder kde and
+      xfce; grouper cosmic, gnome, kde and xfce) and three have none
+      (flounder-sid gnome, kde and xfce).
 
   - id: no_silent_omissions
     name: The build tells the truth about what it shipped
