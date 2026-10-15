@@ -37,6 +37,7 @@ on:
       - 'manifests/**'
       - 'live-iso/**'
       - 'system_files/**'
+      - 'services/countme/**'
       - 'system_files_overrides/**'
       - 'custom/**'
       - 'files/**'
@@ -76,7 +77,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup TunaOS Build Environment
-        uses: projectbluefin/actions/bootc-build/setup-runner@38cebd91cf786404252fa184414a51b689d53aa3 # v1 as of 2026-07-02
+        uses: projectbluefin/actions/bootc-build/setup-runner@be65356ab70aa7753d0197794cdafb4a1a059379 # v1 as of 2026-07-02
         with:
           storage-backend: ""
           update-podman: "false"
@@ -119,6 +120,23 @@ jobs:
           echo "=== pytest Tests ==="
           python3 -m pytest tests/ tests/pytest/ -v --tb=short --cov=. --cov-report=term --cov-report=xml:coverage-python.xml
 
+      # npm 10 (the runner image default) and npm 11 (what Renovate uses to
+      # write services/countme/package-lock.json) disagree on the lockfile once
+      # an override is scoped to a nested dependency: since wrangler 4.143.0
+      # npm 10 `npm ci` rejects the npm 11 lockfile with "Missing: ws@8.21.0".
+      # Use the same npm major that writes the lockfile.
+      - name: Setup Node.js for countme
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+
+      - name: Test countme collector with D1
+        run: |
+          python3 scripts/generate-countme-allowlist.py --check
+          npm ci --ignore-scripts --prefix services/countme
+          npm test --prefix services/countme
+          npm run build --prefix services/countme
+
       - name: Test summary
         if: always()
         run: |
@@ -135,7 +153,7 @@ jobs:
 
       - name: Upload Python coverage
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: coverage-python
           path: coverage-python.xml

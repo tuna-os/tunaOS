@@ -1,0 +1,40 @@
+{
+  "send_metrics": false,
+  "name": "tunaos-countme",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-07-30",
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [
+    {
+      "pattern": "countme.tunaos.org",
+      "custom_domain": true
+    }
+  ],
+  "observability": {
+    "enabled": false,
+    "logs": {
+      "enabled": false,
+      "invocation_logs": false
+    }
+  },
+  "vars": {
+    "COLLECTION_ENABLED": "true",
+    "WEEKLY_REPORT_CAP": "100000"
+  },
+  "triggers": {
+    "crons": [
+      "5 * * * *"
+    ]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "tunaos-countme",
+      "database_id": "9135abf9-8151-4280-bdfa-20acaa78dcc4",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "account_id": "be6724e409f2877081ad17eb20e94563",
+  "logpush": false
+}

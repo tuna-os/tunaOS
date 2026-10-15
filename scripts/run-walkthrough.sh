@@ -104,6 +104,7 @@ fi
 
 echo "==> Booting VM under $ACCEL..."
 "$QEMU" \
+	-smbios type=1,product=tunaos-countme-disabled \
 	-name "tunaos-walkthrough" \
 	-machine pc \
 	-cpu "$CPU_ARG" \

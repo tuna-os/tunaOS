@@ -68,6 +68,12 @@ gtkgreet
 # ── manifests/desktops/*.yaml `optional:` tiers (install-desktop.sh) ──
 # cosmic.yaml el10
 #   brightnessctl / playerctl already listed above
+# cosmic.yaml — every rpm section (Fedora, Hummingbird, ELN, EL10): the
+#   dock apps made best-effort by tunaOS#2676. cosmic-dock.sh pins only the
+#   desktop files that actually installed, so an image without them is
+#   still correct — just a shorter dock. The EL10 COPR carries neither.
+cosmic-edit
+cosmic-store
 # gnome.yaml fedora
 gvfs-afp
 gvfs-archive

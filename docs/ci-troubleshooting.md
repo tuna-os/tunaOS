@@ -211,6 +211,7 @@ each one from scratch.
 | 52 | All three flounder-sid `*-nvidia` builds fail at `Setting up nvidia-kernel-dkms (550.163.01-5.1)` with `Building module(s)...(bad exit status: 2)` for `7.2.7+deb14-amd64`, then `dpkg: error processing package nvidia-kernel-dkms` and exit 100 (run 36083457907) | **sid's kernel outran the only Debian nvidia driver.** `make.log`: `nvidia/os-interface.c:753:5: error: implicit declaration of function 'strncpy'`, since Linux 7.2 dropped it. Measured in debian:sid on 2026-09-25: 550.163.01 builds on 7.1.13 but fails on 7.2.7. The open 550 module (`__vm_flags`, `in_irq`) and experimental 555.58.02 (`VMA_LOCK_OFFSET`) also fail on 7.2.7, and no Debian suite has anything newer. The published parent `flounder:kde-sid` already shipped 7.2.7 | `build_scripts/overlay/debian-nvidia-kernel-hold.sh`, called from `nvidia-debian/20-nvidia.sh`, swaps the nvidia overlay's kernel to the newest archive kernel at or below the driver's measured ceiling (550.x: 7.1). The swap follows the RPM path's `10-kernel-swap.sh`. When the archive has no such kernel, the build exits 1 and names the reason. Add a ceiling row only from a measured dkms build. Regression test: `tests/regressions/test_issue_2696_*` (tunaOS#2696) |
 | 53 | The **marlin arm64** ISO fails `Boot gate: verify ISO readiness` with `readiness marker not seen within 900s` and a blank screen, every night; amd64 marlin and every other arm64 ISO pass (run 36075112992) | **Arch Linux ARM's `linux-aarch64` cannot mount zstd squashfs, and tacklebox writes only zstd.** `serial.log`: `mount: /run/rootfsbase: fsconfig() failed: Filesystem uses "zstd" compression. This is not supported.` 165 times, then `A start job is running for dracut initqueue hook (20min …)`. The ALARM kernel config has `# CONFIG_SQUASHFS_ZSTD is not set` (XZ is `=y`). tacklebox's `live.go` hard-codes `-comp zstd`, and a `return` at the top level of `tbox-live-root.sh` turns the mount failure into an endless retry instead of a fast failure | `scripts/build-iso-tacklebox.sh` reads the image's kernel (`/usr/lib/modules/*/pkgbase` or a `*-aarch64-ARCH` module directory). For a kernel listed in `scripts/lib/squashfs-compat.sh`, it installs a `mksquashfs` wrapper in `/usr/local/bin` for the build, which rewrites `-comp zstd` to `xz`. `/usr/local/bin` is used because tacklebox calls mksquashfs through `sudo -u … podman unshare`, and sudo's secure_path drops a PATH prepend. It then reads each `/LiveOS` superblock out of the ISO and fails the build on zstd. Retire the wrapper when tacklebox takes a compressor in the recipe. Regression test: `tests/regressions/test_issue_2705_*` (tunaOS#2705) |
 | 54 | A Matrix Status refresh turns **every cell of one unchanged variant** from ✅ to ⬜, and the composite drops by 16. The provenance names a run about ten runs back (skipjack from 35351369196, 2026-09-18, in the 08:10 refresh of 2026-09-25; albacore from 35429236550, 2026-09-19, in the next one). The next refresh reads the variant correctly again, and the job log has no warning | **`build_stage_results` scored the variant from a page of runs that did not start at the newest.** None of the nine newer runs contributed, and the old run fell outside the 2-day freshness SLA. The fallback was the 11th run on main, so it cannot be in a correct first page of 10 | `main_runs()` checks each `gh run list` page against the workflow's newest run on main, read with its own API call. It fetches again when that run is missing, and after three stale answers the refresh fails instead of publishing. A completed run whose `run view` has no jobs also fails the refresh instead of being skipped. If a refresh fails with `never contained the newest run`, re-run it. Regression test: `tests/regressions/test_issue_2709_*` (tunaOS#2709) |
+| 55 | Bonito (or other digest-pinned variants) fails on both base architectures with `manifest unknown` / 404 (run 32965043165) | Quay/Docker garbage-collects untagged base image manifests upstream after newer builds land. The repository-wide scheduled check at 22:20 UTC was too far from the 11:20 UTC build to catch midday upstream deletions, and `.github/build-config.yml` lacked Renovate digest automation | (1) Added Renovate `customManager` in `renovate.json` for `.github/build-config.yml` `base_image:` pins; (2) added scoped variant preflight to `scripts/check-base-image-pins.sh`; (3) `build-variant.yml` runs `check-base-image-pins.sh` for the target variant in `generate_matrix` before matrix execution. Regression test: `tests/regressions/test_issue_2113_bonito_checks_its_pin_before_the_matrix.py` (tunaOS#2113) |
 
 **Pattern to notice (bugs #1-14):** almost every bug here was a live-squash-specific
 environment gap (missing package, missing locale, missing remote, wrong
@@ -763,7 +764,7 @@ resolving mountpoints: invalid options "rw, shared, rw, bind", can only specify 
 ```
 
 **Root cause:**
-Older versions of `crun` / `podman` on certain runner environments (e.g. Blacksmith or legacy GitHub runners) have a bug in how they parse mounts. The bug appears when a build passes explicit `rw` options to `--mount=type=cache,rw,...`. Because `type=cache` mounts default to read-write (`rw`) mode automatically, an explicit `rw` flag makes `crun` concatenate duplicate `rw` flags (`rw, shared, rw, bind`), and `crun` then rejects the mount initialization.
+Older versions of `crun` / `podman` on certain runner environments (e.g. third-party or legacy GitHub runners) have a bug in how they parse mounts. The bug appears when a build passes explicit `rw` options to `--mount=type=cache,rw,...`. Because `type=cache` mounts default to read-write (`rw`) mode automatically, an explicit `rw` flag makes `crun` concatenate duplicate `rw` flags (`rw, shared, rw, bind`), and `crun` then rejects the mount initialization.
 
 **Fix & Prevention:**
 1. **Omit explicit `rw` in cache mounts**: In Containerfiles or build scripts, omit the redundant `rw` modifier from buildah/podman cache mounts. For example, use `--mount=type=cache,id=...` instead of `--mount=type=cache,rw,id=...`.
@@ -1460,3 +1461,105 @@ upload step and `prune-r2.yml` already do for forks.
 unread one. When a gate shows red on every run it ever had, doubt the question
 before the answer. Delete such a gate only after the intent behind it has
 somewhere true to live.
+
+### 30. GNOME is installed but GDM reports a missing shell schema (#2750)
+
+**Symptom:** GDM exits before login with `Settings schema 'org.gnome.shell' is not installed`.
+The wootc experiment reproduced this in a VM with Yellowfin digest `ed95623a` on 2026-09-26.
+
+**Cause:** `gnome-shell-50.0-3` provided the name of its own dependency,
+`gnome-shell-common`. DNF omitted that RPM, which owns the schema XML.
+The image contract checked the GNOME binary and version but never loaded the schema.
+
+**Fix:** [Package PR #748](https://github.com/tuna-os/tunaos-packages/pull/748)
+removes the false provider. The image contract now runs
+`gsettings list-keys org.gnome.shell` in both build and runtime checks.
+This detects missing XML and absent or unreadable compiled schemas.
+It does not prove a user can log in; that still needs a boot and session test.
+
+The check ran in two real containers with the network disabled. The original
+Yellowfin image returned exit 1 and named the absent schema. The derived image
+returned exit 0 after installation of only the matching common RPM. Its digest is
+`sha256:4562f4f0fde8cc0ba49e7ce627be2ba35d803c9aa768e79220a1a58c3b0d148b`.
+That image is an experiment, not a production repair.
+
+The RPM exposed the schema in an offline chroot but did not repair the boot:
+composefs still exposed the original `/usr`. Rebuild the OCI image and install it.
+
+**Build-side fix (#1753):** the new gate then failed every EL10 GNOME cell
+at Build Image, because the pinned tier still ships `gnome-shell-50.0-3`
+(albacore run 36840489732, yellowfin run 36822471546, skipjack run
+36892338904). The tier also ships the real
+`gnome-shell-common-50.0-3.noarch`. `packages.el10.packages` in
+`manifests/desktops/gnome.yaml` now names `gnome-shell-common`. DNF matches a
+package name before a provide, so it installs the real RPM. The line stays
+correct after the package PR lands.
+`tests/regressions/test_issue_2750_el10_gnome_installs_the_shell_common_rpm.py`
+holds it.
+
+## 31. Installed runtime report rejects a working desktop with `starting`
+
+**Symptom:** `TUNAOS_INSTALL_CHECKS_RESULT pass=15 fail=1` with
+`system state: starting`, followed by a working authenticated GNOME session.
+
+**Cause:** The runtime script runs inside the initial boot transaction. Its
+oneshot job can keep the manager in `starting` until the script exits. The
+2026-09-26 wootc 32 GiB target / 16 GiB scratch trial showed this failure, then
+`systemctl is-system-running` returned `running` in the user's terminal.
+
+**Fix (#2756):** Sample once and accept valid boot states, as the base contract
+already does. Reject maintenance, stopping, offline, empty, and unknown results.
+Do not wait for the transaction from inside it. This check reports manager
+state; the separate display-manager and user-session checks prove more.
+
+
+### Adoption reports show `desktop` or `latest` for different images
+
+**Symptom:** Image info reports `desktop` or `latest` for different images. It does not identify each flavor or the actual update tag.
+
+**Measured cause:** On main `7c9efe4f`, `scripts/resolve-flavor.sh` sets `DESKTOP_FLAVOR=desktop` for overlays and `build_scripts/90-image-info.sh` writes `image-tag=latest`. These values describe build defaults. The build passes the canonical variant apart from its publish name. Preserve it for Rawhide/Sid reports.
+
+**Fix:** Do not infer adoption categories from these defaults. Preserve the original variant and requested full flavor in separate metadata and verify each final image after desktop/overlay copies. See the [countme proposal](rfc/countme-proposal.md). `tests/test_countme_images.py` checks metadata and masks in installer output for every matrix flavor. The original flavor travels through `TUNAOS_IMAGE_FLAVOR`, apart from the stage name.
+
+
+### Missing-tool test fails when the tool exists on the host
+
+**Symptom:** `qemu-img: detects when qemu-img is missing` fails in the local Bats suite.
+
+**Measured cause:** The test checked the host PATH. `/usr/bin/qemu-img` exists here, but the assertion expected no tool.
+
+**Fix:** Run the absence check with an empty fixture PATH and the absolute Bash path. `bats tests/bats/test_build_qcow2.bats` passes all 33 cases with that fixture.
+
+
+### Automated Corral guests could enter adoption counts
+
+**Symptom:** A CI guest could send an adoption report before SSH checks can disable its timer.
+
+**Measured cause:** [Corral 4c59a6be](https://github.com/tuna-os/corral/blob/4c59a6be9ea6532aa79c6407bab471b4202c1484/pkg/kubevirt/bootc.go#L536) has no kernel argument option for both fresh and resumed guests. The custom script uses a chroot in the raw root partition. Its KubeVirt path ignores a script failure. A command after SSH starts cannot prevent the first report.
+
+**Fix:** The PR gate uses the existing QCOW2/QEMU path; `iso-e2e.sh` sets the CI marker before boot. The helper for Corral exits 77 before guest creation unless both paths support the exclusion argument. `bats tests/bats/test_boot_gate_resume.bats` passes eight cases. This session booted no Corral guest.
+
+### Adoption dashboard API returns HTTP 503
+
+**Symptom:** `/api/adoption` returns HTTP 503, but the collector returns HTTP 200.
+
+**Measured cause:** On 2026-09-27, the live site Worker rejected `redirect: "error"` with `TypeError: Invalid redirect value`. Node fetch accepts that option. The Node test passed and the live request failed.
+
+**Fix:** The site uses `redirect: "manual"` and rejects a redirect response. The `COUNTME` service binding connects the site to the collector. `npm run test:site` now tests the site proxy in native workerd. The live API returned HTTP 200 after the fix; the browser check found no page errors or axe violations.
+
+### Marlin selects OSTree/XFS during disk installation
+
+On 2026-10-04 the Corral builder on AWS failed with `bootupd is required for ostree-based installs`. The Marlin image had bootupctl and systemd-boot but no GRUB update payload. Its shared installer configuration also reported an XFS root although prepare-root.conf enabled composefs.
+
+The Marlin override `50-marlin.toml` selects systemd-boot and ext4. Containerfile.arch now applies the variant overrides and checks bootc's merged configuration before release. External installers must also select `--composefs-backend` when the image has systemd-boot without a GRUB update payload; the bootupctl executable alone does not identify an OSTree installation. Corral's corrected image probe reports composefs/ext4. The AWS boot result remains a separate qualification gate.
+
+
+### Roost Screenshot consent cannot open its Access dialog
+
+**Symptom:** A Screenshot request reaches GNOME but cannot complete its consent dialog.
+
+**Measured cause:** [Roost job 111453682195](https://github.com/hanthor/roost-desktop/actions/runs/37207282677/job/111453682195) exercised GNOME 51 with GTK for Access. Allow returned a readable 1280×800 PNG. Deny returned response 2 without a URI. Locked admission returned no image. The fixture for Roost selected `org.freedesktop.impl.portal.Access=gtk;`. TunaOS omitted that preference in its experience configuration.
+
+The image had both backends; the default preferred GNOME for Access.
+
+**Fix:** Select GTK for Access, and GNOME for Screenshot and ScreenCast. The contract for the installed desktop rejects missing, wrong, duplicate, or out-of-section preferences. The admission test runs the shell validator against the shipped configuration and broken variants. Verify the final image in its separate boot gate.

@@ -170,6 +170,9 @@ Six more, each measured while fixing the live-ISO and install path
   SSH host-key assertion fired on images that deliberately ship sshd
   disabled. Each had been passed over as background noise for months. When
   you see a failure that "always fails", that is the bug.
+- **A boot job cannot wait for its own transaction.** The runtime check
+  saw `starting` before its oneshot exited (#2756). Sample valid manager
+  states without claiming a settled desktop; reject broken and unknown states.
 - **Being invoked is not being reached.** A guard placed after an early
   `exit 0` runs on nothing. `40-services.sh` has three package-manager
   paths and the first two end in `exit 0`; a login-banner guard added at
@@ -178,6 +181,9 @@ Six more, each measured while fixing the live-ISO and install path
   six Containerfiles *invoke* the script, which was true and not
   sufficient. Assert the line number precedes the first `exit`, or assert
   the effect in a built image.
+- **Load the data the desktop uses.** The GNOME binary passed the contract
+  without its schema RPM (Yellowfin, #2750). Query the compiled schema with
+  GLib. The XML can exist without a compiled schema.
 - **Verify a fix in the built artifact, not in the source tree.** The guard
   above was present in the script, committed, reviewed and merged, and
   absent from every image. `just build` then `podman run --rm <image>` to

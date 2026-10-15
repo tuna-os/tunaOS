@@ -112,6 +112,10 @@ test: _ensure_test_deps
     cd {{ justfile_directory() }}
     for f in tests/bats/*.bats; do [[ -f "$f" ]] || continue; bats --formatter tap "$f" || FAILED=1; done
     python3 -m pytest tests/ tests/pytest/ -v --tb=short || FAILED=1
+    python3 {{ justfile_directory() }}/scripts/generate-countme-allowlist.py --check || FAILED=1
+    npm ci --ignore-scripts --prefix services/countme || FAILED=1
+    npm test --prefix services/countme || FAILED=1
+    npm run build --prefix services/countme || FAILED=1
     exit $FAILED
 
 test-bats: _ensure_test_deps

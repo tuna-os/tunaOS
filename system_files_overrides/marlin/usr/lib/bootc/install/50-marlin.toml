@@ -1,0 +1,8 @@
+# Marlin ships systemd-boot and a composefs-sealed root. The shared XFS
+# default cannot provide fs-verity. Keep user installs aligned with the
+# ext4 filesystem already used by the Marlin VM gate.
+[install]
+bootloader = "systemd"
+
+[install.filesystem.root]
+type = "ext4"

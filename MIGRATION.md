@@ -2,6 +2,19 @@
 
 This guide helps you migrate to tunaOS from Windows or other Linux distributions.
 
+## Adoption reports after an image update
+
+Images with [RFC 012](docs/rfc/rfc012-private-adoption-metrics.md) enable one anonymous report per UTC week by default. The payload contains the image variant, flavor, architecture and age bucket. It has no device identifier. See the [public notice](https://tunaos.org/docs/adoption-metrics) for privacy limits and counts.
+
+To opt out before the first boot of an updated image, set this persistent file on your installed system:
+
+```bash
+sudo install -d -m 0755 /etc/tunaos/countme
+sudo touch /etc/tunaos/countme/disabled
+```
+
+After the update, `sudo tunaos-countme disable` also masks the timer and service. Use `sudo tunaos-countme status` to check the choice. Image updates and switches preserve the file, masks and weekly state. These controls affect reports from TunaOS. Metrics for upstream distributions have separate controls.
+
 ## Overview
 
 tunaOS is a collection of bootc-based Atomic desktop operating system images. It uses `bootc` for image-based updates and `rpm-ostree` for package layering (Yellowfin/Albacore variants) or native bootc tooling (Bonito/Skipjack).

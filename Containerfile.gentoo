@@ -9,6 +9,7 @@ ARG IMAGE_VENDOR
 ARG SHA_HEAD_SHORT
 ARG ENABLE_SSHD="${ENABLE_SSHD:-0}"
 ARG DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
+ARG TUNAOS_IMAGE_FLAVOR
 ARG IMAGE_REGISTRY="ghcr.io"
 ARG IMAGE_NAME_VARIANT
 
@@ -268,6 +269,8 @@ ARG IMAGE_NAME_VARIANT
 ARG SHA_HEAD_SHORT
 ARG ENABLE_SSHD="${ENABLE_SSHD:-0}"
 ARG DESKTOP_FLAVOR
+ARG TUNAOS_IMAGE_FLAVOR
+ENV TUNAOS_IMAGE_FLAVOR=${TUNAOS_IMAGE_FLAVOR}
 
 ENV BASE_IMAGE=${BASE_IMAGE} \
     IMAGE_NAME=${IMAGE_NAME} \
@@ -395,6 +398,8 @@ LABEL containers.bootc=1 ostree.bootable=1
 # Desktop stage — manifest-driven; the DESKTOP_FLAVOR build-arg selects the DE.
 FROM builder AS desktop-build
 ARG DESKTOP_FLAVOR
+ARG TUNAOS_IMAGE_FLAVOR
+ENV TUNAOS_IMAGE_FLAVOR=${TUNAOS_IMAGE_FLAVOR}
 ENV DESKTOP_FLAVOR=${DESKTOP_FLAVOR}
 
 # Identity, and branding, BEFORE install-desktop.sh.
@@ -428,6 +433,8 @@ ARG IMAGE_NAME
 ARG IMAGE_VENDOR
 ARG IMAGE_REGISTRY="ghcr.io"
 ARG IMAGE_NAME_VARIANT
+ARG TUNAOS_IMAGE_FLAVOR
+ENV TUNAOS_IMAGE_FLAVOR=${TUNAOS_IMAGE_FLAVOR}
 ARG ENABLE_SSHD="${ENABLE_SSHD:-0}"
 
 ENV BASE_IMAGE=${BASE_IMAGE} \
@@ -632,6 +639,8 @@ ARG IMAGE_NAME_VARIANT
 ARG SHA_HEAD_SHORT
 ARG ENABLE_SSHD="${ENABLE_SSHD:-0}"
 ARG DESKTOP_FLAVOR
+ARG TUNAOS_IMAGE_FLAVOR
+ENV TUNAOS_IMAGE_FLAVOR=${TUNAOS_IMAGE_FLAVOR}
 
 ENV BASE_IMAGE=${BASE_IMAGE} \
     IMAGE_NAME=${IMAGE_NAME} \
@@ -679,6 +688,8 @@ RUN bootc container lint
 # build-arg (target and build-arg always agree — see resolve-flavor.sh).
 FROM desktop AS gnome
 COPY --from=common /system_files/bluefin /
+RUN --mount=type=bind,from=context,source=/,target=/run/context \
+    /run/context/build_scripts/install-countme.sh
 FROM desktop AS kde
 # xfce is declared build_image: true for guppy in build-config.yml and
 # manifests/desktops/xfce.yaml has an emerge section, but this alias was

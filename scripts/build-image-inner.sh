@@ -82,6 +82,7 @@ BUILD_ARGS+=("--build-arg" "ENABLE_HWE=${ENABLE_HWE}")
 BUILD_ARGS+=("--build-arg" "ENABLE_ASAHI=${ENABLE_ASAHI:-0}")
 BUILD_ARGS+=("--build-arg" "ENABLE_NVIDIA=${ENABLE_NVIDIA}")
 BUILD_ARGS+=("--build-arg" "DESKTOP_FLAVOR=${DESKTOP_FLAVOR}")
+BUILD_ARGS+=("--build-arg" "TUNAOS_IMAGE_FLAVOR=${TUNAOS_IMAGE_FLAVOR:?original image flavor is required}")
 BUILD_ARGS+=("--build-arg" "ENABLE_SSHD=${ENABLE_SSHD}")
 BUILD_ARGS+=("--build-arg" "IMAGE_NAME_VARIANT=${VARIANT}")
 BOOTC_VERSION=$($YQ -r '.downloads.bootc' image-versions.yaml)
@@ -176,7 +177,7 @@ build_primary_image() {
 # Retry the whole build on failure. Two distinct transients, both of which
 # reliably succeed on a fresh invocation of the same inputs:
 #
-#   * Blacksmith's amd64/v2 runners intermittently fail before a Buildah build
+#   * Some amd64/v2 runners intermittently fail before a Buildah build
 #     starts with `open out/index.json: no such file or directory`.
 #   * Pulling the base image dies mid-blob against the registry CDN:
 #

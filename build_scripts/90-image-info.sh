@@ -438,4 +438,6 @@ else
 	echo "No identity row for ${VARIANT_KEY} in variant-identity.tsv; generic TunaOS look"
 fi
 
+IMAGE_NAME_VARIANT="${VARIANT_KEY}" /run/context/build_scripts/install-countme.sh
+
 printf "::endgroup::\n"

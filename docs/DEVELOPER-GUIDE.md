@@ -54,12 +54,12 @@ flowchart LR
   installs; [INSTALLER-FRONTENDS.md](INSTALLER-FRONTENDS.md) tracks their
   parity matrix.
 
-## 2. The build matrix: 135 cells
+## 2. The build matrix: 136 cells
 
 **`.github/build-config.yml`** drives everything CI does: 14 variants ×
 their flavors (5 desktops + `base` + hardware tiers) × declared platforms
 (amd64 / amd64-v2 / arm64). A **cell** is one `(variant, flavor)` pair —
-`yellowfin:gnome`, `bonito:kde-nvidia` — and there are 135 of them with
+`yellowfin:gnome`, `bonito:kde-nvidia` — and there are 136 of them with
 `build_image: true`. Every scoreboard, gate, and denominator in the project
 derives from this file, on purpose. A flavor that isn't declared here doesn't
 exist. Tests enforce that the workflows regenerate from this file, and do not
@@ -268,7 +268,7 @@ flowchart LR
     CRIT[".github/green-criteria.yml<br/>enforcement per criterion"]
     GEN["scripts/gen-matrix-status.py<br/>composite scorer"]
     MS["docs/MATRIX-STATUS.md<br/>Composite green — the bar"]
-    RM["README<br/>Built X/135 · composite green Y/135"]
+    RM["README<br/>Built X/136 · composite green Y/136"]
 
     evidence --> GEN
     CRIT --> GEN

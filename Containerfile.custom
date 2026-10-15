@@ -1,4 +1,4 @@
-ARG BASE_IMAGE=ghcr.io/tuna-os/yellowfin:gnome@sha256:ec25299007f227c0a9580ed3b72678adf7b17e63677c0c4b21a471f65281df99
+ARG BASE_IMAGE=ghcr.io/tuna-os/yellowfin:gnome@sha256:7a0cb2f0f952c78c11b8c32579828735d124b88784dfaccc8ee721aa6c86559c
 FROM scratch AS ctx
 COPY custom /custom
 COPY build_scripts /build_scripts

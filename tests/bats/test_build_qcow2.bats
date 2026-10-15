@@ -293,7 +293,8 @@ teardown() {
 # ── qemu-img conversion ──────────────────────────────────────────────────
 
 @test "qemu-img: detects when qemu-img is missing" {
-  run bash -c '
+  # Exercise absence even on developer hosts with QEMU installed.
+  run env PATH="${TEST_ROOT}" "${BASH}" -c '
     command -v qemu-img &>/dev/null || { echo "Error: qemu-img not found" >&2; exit 1; }
     echo "found"
   '

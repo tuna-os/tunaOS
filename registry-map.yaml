@@ -91,7 +91,7 @@ images:
     # and the only consumer hardcoded :latest. A pin that nothing bumps and
     # nothing reads rots; renovate.json now has a manager for this file.
     # Verified a manifest list covering amd64 + arm64, the two arches built here.
-    digest: sha256:ff8b8b466a942ec6000445d4001fc661e2fc5a952ad9ee29b4de9ab09d1d1708
+    digest: sha256:71e593421c5de7dcc7c8c5c50e98d3bac572055a76f399f61a491d123c20a523
     tag: latest
 
   # --- Tool images (build infra) ---

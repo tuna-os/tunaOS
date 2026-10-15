@@ -135,6 +135,7 @@ trap cleanup EXIT
 echo "==> [$LABEL] machine=$MACHINE vga=$VGA cpus=$CPUS accel=$ACCEL timeout=${TIMEOUT}s" >&2
 BOOT_START=$(date +%s)
 "$QEMU" \
+	-smbios type=1,product=tunaos-countme-disabled \
 	-name "gdm-bench-${LABEL}" \
 	-machine "$MACHINE" \
 	-cpu "$CPU_ARG" \

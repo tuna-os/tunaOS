@@ -181,7 +181,7 @@ while IFS=$'\t' read -r variant emoji; do
 		run_epoch=$(date -u -d "$run_date" +%s 2>/dev/null || echo 0)
 		today_epoch=$(date -u -d "$today" +%s 2>/dev/null || echo 0)
 		if [[ "$run_epoch" -gt 0 && "$today_epoch" -ge "$run_epoch" ]]; then
-			run_age=$(( (today_epoch - run_epoch) / 86400 ))
+			run_age=$(((today_epoch - run_epoch) / 86400))
 		fi
 	fi
 	if [[ "$run_age" -gt "$builds_sla" ]]; then

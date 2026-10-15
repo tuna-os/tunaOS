@@ -1217,6 +1217,7 @@ boot_live_iso() {
 	# shellcheck disable=SC2086  # TPM_ARGS is intentionally word-split (empty unless --luks)
 	reset_qemu_sockets
 	"$QEMU" \
+		-smbios type=1,product=tunaos-countme-disabled \
 		-name "tunaos-iso-e2e" \
 		-machine "$QEMU_MACHINE" \
 		-cpu "$CPU_ARG" \
@@ -2143,6 +2144,7 @@ append_installed_serial_kargs() {
 			for f in /mnt/tbx-bls/loader/entries/*.conf /mnt/tbx-bls/boot/loader/entries/*.conf; do
 				[ -f "$f" ] || continue
 				for karg in \
+					tunaos.countme=0 \
 					console=ttyS0,115200n8 \
 					rd.plymouth=0 \
 					plymouth.enable=0 \
@@ -2394,7 +2396,7 @@ run_install_generic() {
 		--security-opt label=type:unconfined_t \
 		${imgref} \
 		bootc install to-disk --wipe ${block_setup} \
-		--karg console=ttyS0,115200n8 --karg rd.plymouth=0 --karg plymouth.enable=0 \
+		--karg tunaos.countme=0 --karg console=ttyS0,115200n8 --karg rd.plymouth=0 --karg plymouth.enable=0 \
 		--karg systemd.journald.forward_to_console=1 \
 		/dev/vda 2>&1" 2>&1 | tee -a "${SERIAL_LOG}"; then
 		echo "ERROR: bootc install to-disk failed or timed out" >&2
@@ -2450,7 +2452,7 @@ run_install_generic() {
 	e2e_phase "Booting installed disk (TPM auto-unlock), expecting a login prompt..."
 	# shellcheck disable=SC2086  # TPM_ARGS is intentionally word-split (empty unless --luks)
 	reset_qemu_sockets
-	"$QEMU" -name "tunaos-iso-e2e-installed" -machine "$QEMU_MACHINE" -cpu "$CPU_ARG" \
+	"$QEMU" -smbios type=1,product=tunaos-countme-disabled -name "tunaos-iso-e2e-installed" -machine "$QEMU_MACHINE" -cpu "$CPU_ARG" \
 		-accel "$ACCEL" -m "$MEMORY" -smp "$CPUS" \
 		${TPM_ARGS} \
 		-drive "if=pflash,format=raw,readonly=on,file=${UEFI_CODE}" \
@@ -3217,7 +3219,7 @@ EOF
 			INSTALLED_HOSTFWD=",hostfwd=tcp::${SSH_PORT}-:22"
 
 		# shellcheck disable=SC2086  # TPM_ARGS is intentionally word-split (empty unless --luks)
-		"$QEMU" -name "tunaos-iso-e2e-installed" -machine "$QEMU_MACHINE" -cpu "$CPU_ARG" \
+		"$QEMU" -smbios type=1,product=tunaos-countme-disabled -name "tunaos-iso-e2e-installed" -machine "$QEMU_MACHINE" -cpu "$CPU_ARG" \
 			-accel "$ACCEL" -m "$MEMORY" -smp "$CPUS" \
 			${TPM_ARGS} \
 			-drive "if=pflash,format=raw,readonly=on,file=${UEFI_CODE}" \
@@ -3441,7 +3443,7 @@ EOF
 			# TPM auto-unlock gate uses.
 			reset_qemu_sockets
 			# shellcheck disable=SC2086  # TPM_ARGS is intentionally word-split (empty unless --luks)
-			"$QEMU" -name "tunaos-iso-e2e-installed" -machine "$QEMU_MACHINE" -cpu "$CPU_ARG" \
+			"$QEMU" -smbios type=1,product=tunaos-countme-disabled -name "tunaos-iso-e2e-installed" -machine "$QEMU_MACHINE" -cpu "$CPU_ARG" \
 				-accel "$ACCEL" -m "$MEMORY" -smp "$CPUS" \
 				${TPM_ARGS} \
 				-drive "if=pflash,format=raw,readonly=on,file=${UEFI_CODE}" \
@@ -3505,6 +3507,7 @@ EOF
 	# shellcheck disable=SC2086  # TPM_ARGS is intentionally word-split (empty unless --luks)
 	reset_qemu_sockets
 	"$QEMU" \
+		-smbios type=1,product=tunaos-countme-disabled \
 		-name "tunaos-iso-e2e-installed" \
 		-machine "$QEMU_MACHINE" \
 		-cpu "$CPU_ARG" \
@@ -3646,6 +3649,7 @@ boot_disk_image() {
 
 	reset_qemu_sockets
 	"$QEMU" \
+		-smbios type=1,product=tunaos-countme-disabled \
 		-name "tunaos-disk-e2e" \
 		-machine "$QEMU_MACHINE" \
 		-cpu "$CPU_ARG" \

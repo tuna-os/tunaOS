@@ -2,7 +2,7 @@ images:
   - name: centos-bootc
     image: quay.io/centos-bootc/centos-bootc
     tag: c10s
-    digest: sha256:a5aaa4a1c3049abaa9ad11f50eb891dc1541fbcf8c8fc2160156acaf1c3ad9b5
+    digest: sha256:9aedf2d189b85c498697f9b83112c893b084d359268da7dd6d5d848478d260de
   - name: common
     image: ghcr.io/projectbluefin/common
     tag: latest
@@ -10,14 +10,14 @@ images:
   - name: brew
     image: ghcr.io/ublue-os/brew
     tag: latest
-    digest: sha256:e9a72571b7644b6277f0638b6a3c5e497e265e1098ab91224567acbdeb8b74ea
+    digest: sha256:5bdf54dc7c21c22db29df6550e3711788719c5123549ea6dc5645d5af47795e3
 
   # RFC 010: pre-built Zirconium image for DMS/Niri system files
   # on grouper (Ubuntu) — not available from Ubuntu apt.
   - name: zirconium
     image: ghcr.io/zirconium-dev/zirconium
     tag: latest
-    digest: sha256:0c0a69dad2531d871edd8440769b0acb733edcf9fc08c77e4c8b860bc007578d
+    digest: sha256:cf148db4bc2ebdf42c1d7666c1c398f501eacac2353327bdf2f565908117844f
 
   # Bluefin's GNOME 51 for Hummingbird (projectbluefin/utah-packages): a
   # createrepo_c repository shipped as an OCI image (`/repository`), signed
@@ -31,7 +31,7 @@ images:
   - name: utah-packages
     image: ghcr.io/projectbluefin/utah-packages
     tag: latest
-    digest: sha256:9cb667291a1a0b112c39d3c6a69116bb52cb1a10c7df12290b9c298b5682426c
+    digest: sha256:07b6bd82b14aab474a1ba9c4d468b0aae73e8055c1f4771f5d7dbbb93808e67b
 
   # tunaOS' own GNOME 50 for EL10, from the gnome50-el10-x86_64 build chain in
   # tuna-os/tunaos-packages: a createrepo_c repository shipped as an OCI image
@@ -72,7 +72,7 @@ packages:
 # Pinned binary downloads (managed by Renovate)
 downloads:
   # renovate: datasource=github-releases depName=ublue-os/uupd
-  uupd: "v1.4.0"
+  uupd: "v1.5.0"
   # renovate: datasource=github-releases depName=ledif/kcm_ublue
   kcm_ublue: "v0.6.1"
   # renovate: datasource=github-releases depName=mvdan/sh
