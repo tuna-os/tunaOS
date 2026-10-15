@@ -27,9 +27,11 @@ import argparse
 import collections
 import json
 import re
-import subprocess
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from lib.gh import run as gh_run
 
 # Real TAP arrives on a guest serial console, so the line is prefixed with a
 # kernel timestamp and the emitting unit:
@@ -52,15 +54,13 @@ def parse_tap(text: str) -> dict[str, set[str]]:
 
 
 def gh_run_logs(workflow: str, limit: int) -> list[str]:
-    ids = subprocess.run(
-        ["gh", "run", "list", "--workflow", workflow, "--limit", str(limit),
+    ids = gh_run(
+        ["run", "list", "--workflow", workflow, "--limit", str(limit),
          "--json", "databaseId", "-q", ".[].databaseId"],
-        capture_output=True, text=True, check=False,
     ).stdout.split()
     out = []
     for rid in ids:
-        r = subprocess.run(["gh", "run", "view", rid, "--log"],
-                           capture_output=True, text=True, check=False)
+        r = gh_run(["run", "view", rid, "--log"])
         if r.stdout:
             out.append(r.stdout)
     return out
