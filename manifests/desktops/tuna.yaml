@@ -1,11 +1,14 @@
-# Experimental Marlin only; admission tunaOS#2990 / roost-desktop#69.
-# Roost is absent from Arch's repos. The Containerfile installs the in-house
-# Tideforge key/repository; qualify this package so official packages stay first.
+# Experimental Marlin only; admission tunaOS#2990 / tuna-desktop#69.
+# Tuna Desktop (formerly Roost, renamed in tuna-desktop#536) is absent from
+# Arch's repos. The Containerfile installs the in-house Tideforge
+# key/repository; qualify this package so official packages stay first.
+# tuna-desktop provides roost and ships its compat names, so nothing here may
+# name the old `roost` package.
 display_manager: greetd
 
 packages:
   pacman:
-    - tunaos/roost
+    - tunaos/tuna-desktop
     - greetd
     - greetd-gtkgreet
     - cage
