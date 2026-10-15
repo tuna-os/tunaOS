@@ -134,6 +134,14 @@ jobs:
             echo "::error::No ISO found to attach"
             exit 1
           fi
+          # The bundle is only produced after the boot gate passes; the artifact
+          # upload runs if: always(), so a failed cell can still ship a bare ISO.
+          for sidecar in "${ISO}.sha256" "${ISO}.sigstore.json"; do
+            if [[ ! -f "$sidecar" ]]; then
+              echo "::error::Missing ${sidecar}: boot gate or signing did not pass"
+              exit 1
+            fi
+          done
           if ! gh release view "$TAG" --repo "${GITHUB_REPOSITORY}" &>/dev/null; then
             gh release create "$TAG" \
               --repo "${GITHUB_REPOSITORY}" \
