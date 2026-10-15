@@ -59,7 +59,8 @@ def test_ci_does_not_boot_guests_through_unprotected_corral_path():
     assert "pull_request" in STEP["if"]
     assert not STEP.get("continue-on-error", False)
     assert "--karg tunaos.countme=0" in GATE
-    assert len(re.findall(r'"\$CORRAL" vmtest ', GATE)) == 1, "every guest the gate boots must take the same kernel arguments"
+    boots = re.findall(r'"\$CORRAL" vmtest (?!--help)', GATE)
+    assert len(boots) == 1, "every guest the gate boots must take the same kernel arguments"
     disk_boot = (ROOT / "scripts/iso-e2e.sh").read_text()
     start = disk_boot.index("boot_disk_image()")
     end = disk_boot.index("\n}", start)
