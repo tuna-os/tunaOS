@@ -81,7 +81,7 @@ A new base variant or flavor needs, **before any build work starts**:
    published).
 4. **A tracking issue** filed with the `roadmap` label before the first commit.
 5. **Rebuild-config and manifest completeness** (#1763) — for any variant
-   relying on a custom/rebuild package repository or non-standard desktop staging:
+   that uses a custom/rebuild package repository or a non-standard desktop stage:
    - **Rebuild repository reachable for all declared architectures**: any custom
      or rebuild package repository must exist, return HTTP 200 (no 404 or missing
      repodata), and publish packages for all declared platforms (`linux/amd64`,
@@ -89,7 +89,7 @@ A new base variant or flavor needs, **before any build work starts**:
      explicitly excluded from the variant's `platforms` in
      `.github/build-config.yml` (e.g. hummingbird amd64-only until aarch64
      repodata converges).
-   - **Essential desktop packages present**: the repository or base must carry
+   - **Essential packages for the desktop**: the repository or base must carry
      essential desktop packages (compositor/session, display manager, core shell
      components, and required filesystem tooling like `xfsprogs`).
    - **Manifest sections defined for every declared desktop**:
