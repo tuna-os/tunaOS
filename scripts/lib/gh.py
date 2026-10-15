@@ -1,14 +1,12 @@
 """Shared `gh` CLI subprocess wrapper for scripts/*.py.
 
-Consolidates four independently-hardened wrappers
-(import-frontend-parity.py, rerun-startup-failures.py, gen-matrix-status.py,
-detect-dead-gates.py) that each rediscovered part of the same lesson: a
-`gh` call that fails silently or drops stderr turns into an incident that
-looks like "no data" instead of "the query failed." See
-tuna-os/tunaOS#2716.
+Replaces the independently-hardened wrappers in import-frontend-parity.py,
+rerun-startup-failures.py and detect-dead-gates.py, which each rediscovered
+part of the same lesson: a `gh` call that fails silently or drops stderr
+turns into an incident that looks like "no data" instead of "the query
+failed." See tuna-os/tunaOS#2716.
 
-Two layers, matching the two ways the four original call sites actually used
-their wrappers:
+Two layers, matching the two ways those call sites use `gh`:
 
   * `run(args)` -- never raises, never retries. Returns a CompletedProcess
     (or a `_Failed` stand-in shaped like one if `gh` itself is missing from
@@ -17,23 +15,18 @@ their wrappers:
     frontend as "unfetched" rather than aborting the whole import; a
     best-effort log fetch that skips an unreadable run).
 
-  * `gh(args, retries=1, backoff=2.0)` / `gh_json(...)` -- raises `GhError`
-    (with full stdout+stderr) after retries are exhausted. For callers
-    where a failed query must not be silently read as "empty" or "no
-    runs" -- the actual defect a 2026-09-24 incident traced to `gen_json(...)
-    or []` (tuna-os/tunaOS#2716).
+  * `gh(args, retries=1, backoff=2.0)` -- raises `GhError` (with full
+    stdout+stderr) after retries are exhausted. For callers where a failed
+    query must not be silently read as "empty" or "no runs".
 
 Usage:
-    from lib.gh import run, gh, gh_json, GhError
+    from lib.gh import run, gh, GhError
 
     r = run(["run", "list", "--limit", "10"])           # never raises
     out = gh(["run", "list", "--limit", "10"])          # raises GhError
-    data = gh_json(["run", "list", "--json", "..."])    # raises GhError; None on empty output
-    data = gh_json(["run", "list", "--json", "..."], retries=3)
 """
 from __future__ import annotations
 
-import json
 import subprocess
 import time
 
@@ -84,17 +77,3 @@ def gh(args: list[str], retries: int = 1, backoff: float = 2.0) -> str:
         f"  stdout: {last.stdout.strip() or '(empty)'}\n"
         f"  stderr: {last.stderr.strip() or '(empty)'}"
     )
-
-
-def gh_json(args: list[str], retries: int = 1, backoff: float = 2.0):
-    """gh() plus JSON parsing. Returns None for genuinely empty output.
-
-    Raises GhError on failure after retries are exhausted -- callers that
-    need to distinguish "no runs" (empty output) from "the query failed"
-    should catch GhError explicitly rather than writing
-    `gh_json(...) or []`, which conflates the two (see tuna-os/tunaOS#2716,
-    citing the 2026-09-24 incident where exactly that conflation scored a
-    healthy workflow's cells as untested).
-    """
-    out = gh(args, retries=retries, backoff=backoff)
-    return json.loads(out) if out.strip() else None
