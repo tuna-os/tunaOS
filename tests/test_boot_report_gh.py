@@ -421,6 +421,32 @@ variants:
         # headless flavor sets neither flag → skipped
         self.assertEqual(len(combos), 2)
 
+    def test_weekly_qcow2_matrix_enables_artifact_lookup_without_release_flag(self):
+        workflow = """\
+jobs:
+  screenshot:
+    strategy:
+      matrix:
+        include:
+          - {variant: yellowfin, flavor: gnome}
+"""
+        config = mock.MagicMock()
+        config.read_text.return_value = self.YAML
+        screenshot = mock.MagicMock()
+        screenshot.read_text.return_value = workflow
+
+        def path_for(name):
+            if str(name).endswith("weekly-qcow2-screenshots.yml"):
+                return screenshot
+            return config
+
+        with mock.patch.object(gbr.pathlib, "Path", side_effect=path_for):
+            combos = gbr.load_combos()
+
+        gnome = next(c for c in combos if c.flavor == "gnome")
+        self.assertFalse(gnome.build_qcow2)
+        self.assertTrue(gnome.qcow2_screenshot)
+
     def test_yaml_missing_falls_back_to_pip_install(self):
         def pip_install(cmd, *a, **kw):
             # Simulate a successful pip install making yaml importable again.
@@ -469,6 +495,32 @@ class TestPruneScreenshotsBranchExtra(unittest.TestCase):
 
 
 class TestMain(unittest.TestCase):
+    def test_weekly_capture_is_fetched_when_release_qcow2_is_disabled(self):
+        import io
+        combo = gbr.Combo(
+            variant="yellowfin",
+            flavor="kde",
+            build_iso=False,
+            build_qcow2=False,
+            qcow2_screenshot=True,
+        )
+        with tempfile.TemporaryDirectory() as td:
+            work = Path(td) / "work"
+            work.mkdir()
+            with mock.patch.object(gbr, "load_combos", return_value=[combo]), \
+                 mock.patch.object(gbr.tempfile, "mkdtemp", return_value=str(work)), \
+                 mock.patch.object(gbr, "build_status_for", return_value=None), \
+                 mock.patch.object(gbr, "e2e_status_for", return_value=None), \
+                 mock.patch.object(gbr, "fetch_latest_artifact", return_value=None) as fetch, \
+                 mock.patch.object(gbr, "extract_wishlist", return_value=[]), \
+                 mock.patch.object(gbr, "prune_screenshots_branch"), \
+                 mock.patch.object(sys, "stdout", new_callable=io.StringIO), \
+                 mock.patch.object(sys, "stderr", new_callable=io.StringIO):
+                rc = gbr.main()
+
+        self.assertEqual(rc, 0)
+        fetch.assert_called_once_with("yellowfin-kde-qcow2-boot-screenshot", work)
+
     def test_full_run_returns_zero(self):
         import io
         combo = _combo()

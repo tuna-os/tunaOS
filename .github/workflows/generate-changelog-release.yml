@@ -122,17 +122,34 @@ jobs:
           echo "Looking for '${ARTIFACT_NAME}' in the ${MAX_BUILD_RUNS} most recent"
           echo "completed ${WORKFLOW} runs on main (at most ${SBOM_LOOKBACK_DAYS} days old)."
 
-          RUNS=$(gh api \
-            "repos/${REPO}/actions/workflows/${WORKFLOW}/runs" \
-            --method GET \
-            -f branch=main \
-            -f status=completed \
-            -f per_page="${MAX_BUILD_RUNS}" \
-            --jq '.workflow_runs[]
-                  | select(.head_branch == "main")
-                  | [.id, .created_at, .conclusion]
-                  | @tsv' \
-            2>/dev/null || echo "")
+          # A failed runs query must not read as "no build ran" (#2550).
+          # On 2026-10-02 (run 37034962525) this call came back empty for
+          # cosmic and xfce while gnome, seconds apart, found build run
+          # 36970112862. The old `2>/dev/null || echo ""` turned the error
+          # into CANDIDATES=0, the check step called it a legitimate
+          # no-build day, and two tier-1 releases were dropped on a green
+          # run. Retry, and report a lookup that never succeeded as such.
+          RUNS=""
+          LOOKUP=failed
+          for ATTEMPT in 1 2 3; do
+            if RUNS=$(gh api \
+                "repos/${REPO}/actions/workflows/${WORKFLOW}/runs" \
+                --method GET \
+                -f branch=main \
+                -f status=completed \
+                -f per_page="${MAX_BUILD_RUNS}" \
+                --jq '.workflow_runs[]
+                      | select(.head_branch == "main")
+                      | [.id, .created_at, .conclusion]
+                      | @tsv'); then
+              LOOKUP=ok
+              break
+            fi
+            echo "::warning::runs query for ${WORKFLOW} failed (attempt ${ATTEMPT}/3)"
+            RUNS=""
+            sleep $(( ATTEMPT * 10 ))
+          done
+          echo "lookup=${LOOKUP}" >> "$GITHUB_OUTPUT"
 
           CANDIDATES=0
           FOUND=false
@@ -220,11 +237,16 @@ jobs:
           SBOM_FOUND: ${{ steps.sbom.outputs.found }}
           CANDIDATES: ${{ steps.sbom.outputs.candidates }}
           ARTIFACT:   ${{ steps.sbom.outputs.artifact }}
+          LOOKUP:     ${{ steps.sbom.outputs.lookup }}
         run: |
           set -euo pipefail
           if [[ "${SBOM_FOUND}" == "true" ]]; then
             echo "skip=false" >> "$GITHUB_OUTPUT"
             echo "reason=ok"  >> "$GITHUB_OUTPUT"
+          elif [[ "${LOOKUP}" != "ok" ]]; then
+            echo "skip=true"            >> "$GITHUB_OUTPUT"
+            echo "reason=lookup-failed" >> "$GITHUB_OUTPUT"
+            echo "::error::could not list build runs — cannot tell a no-build day from a dropped release"
           elif [[ "${CANDIDATES}" == "0" ]]; then
             echo "skip=true"       >> "$GITHUB_OUTPUT"
             echo "reason=no-build" >> "$GITHUB_OUTPUT"
@@ -431,6 +453,11 @@ jobs:
                 fi
               fi
               ;;
+            lookup-failed)
+              OUTCOME="the build-runs query for ${VARIANT} failed on every attempt — release"
+              OUTCOME="${OUTCOME} ${TAG} was not attempted, so it is dropped until a re-run"
+              STATUS="fail"
+              ;;
             no-sbom)
               OUTCOME="${CANDIDATES} ${VARIANT} build run(s) available but none carried a usable"
               OUTCOME="${OUTCOME} '${ARTIFACT}' — a release was dropped, not skipped"
@@ -457,3 +484,31 @@ jobs:
             exit 1
           fi
           echo "${OUTCOME}"
+
+  # ── Cross-stream release parity (#2550) ───────────────────────────────
+  # Each matrix cell above judges only its own stream, so a stream can drop
+  # a day while the run stays green — cosmic and xfce did exactly that on
+  # 2026-10-02. This job compares the streams against each other: every
+  # tier-1 stream must have a release for the newest date any stream
+  # reached, with its release cards and SBOM attached.
+  release-parity:
+    needs: generate-release
+    if: ${{ !cancelled() && github.event_name == 'schedule' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check tier-1 release parity
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO:     ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          python3 scripts/check-release-parity.py \
+            --repo "${REPO}" \
+            --summary "$GITHUB_STEP_SUMMARY"

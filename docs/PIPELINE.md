@@ -39,7 +39,7 @@ Stage 3:  gnome-hwe, kde-hwe, niri-hwe, cosmic-hwe     (layer on DE image)
 Stage 4:  gnome-nvidia-hwe                              (layer on gnome-hwe)
 ```
 
-**Key insight**: HWE/nvidia layers are applied ON TOP of DE images (not the other way around). `gnome-hwe` = `yellowfin:gnome` + HWE kernel. The DE is never duplicated.
+**Key insight**: the overlay stage applies HWE/nvidia layers ON TOP of DE images (not the other way around). `gnome-hwe` = `yellowfin:gnome` + HWE kernel. The DE is never duplicated.
 
 ---
 
@@ -60,7 +60,7 @@ Stage 4:  gnome-nvidia-hwe                              (layer on gnome-hwe)
 2. **Stage 1** — builds `base` (Containerfile `base-no-de` target)
 3. **Stage 2** — builds DE images via `install-desktop.sh <de>` (reads YAML manifests)
 4. **Stage 3-4** — layers HWE/nvidia via `Containerfile.overlay`
-5. **Rechunk** — chunkah produces ostree-optimized layers for delta updates
+5. **Rechunk** — chunkah makes ostree-optimized layers for delta updates
 6. **Boot gate** — Corral boots the `-testing` image under QEMU, and Promote waits for the result (see [Boot gates](#boot-gates))
 7. **Publish** — multi-arch manifest pushed to GHCR, signed with cosign
 
@@ -155,10 +155,17 @@ For a KubeVirt cluster, `scripts/boot-gate.sh` checks for `--karg` support in bo
 
 ## Renovate (Automated Updates)
 
-All dependency updates automerge via `renovate.json`:
-- Image digest pins (image-versions.yaml)
-- GitHub Actions SHA pins
-- Git submodules
-- Download versions (uupd, kcm_ublue, tacklebox)
+`renovate.json` extends the shared `tuna-os/.github` policy and tracks:
 
-No human review required — CI is the gate.
+- image digest pins (`image-versions.yaml`)
+- SHA pins of GitHub Actions
+- Git submodules
+- pinned download versions
+
+Routine minor, patch, pin, and digest updates may automerge only after required
+CI and branch protection pass. Major updates and repository-specific holds
+require human review. The config gate runs both Renovate's schema validator
+and `scripts/check-renovate-automerge-policy.py`, because schema-valid rules
+can still violate the org automerge boundary. See
+[DEPENDENCY-FRESHNESS.md](DEPENDENCY-FRESHNESS.md) for the org policy,
+Dependabot coordination, and monthly health check.
