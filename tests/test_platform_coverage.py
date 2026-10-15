@@ -68,7 +68,7 @@ class TestRenderedPolicy(unittest.TestCase):
 
     def test_apple_policy_is_gnome_only_without_a_parity_date(self):
         block = gpc.build(fixture())
-        self.assertIn("GNOME is the only current Apple Silicon desktop target", block)
+        self.assertIn("GNOME is the only Apple Silicon target for a desktop now", block)
         self.assertIn("no parity date or release commitment", block)
 
     def test_committed_roadmap_block_is_current(self):

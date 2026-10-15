@@ -55,10 +55,10 @@ user-install evidence in its PR.
 
 ### Platform Coverage Matrix
 
-This matrix is generated from [`.github/build-config.yml`](./.github/build-config.yml). It records the desktop/platform combinations the image factory commits to build; it does not infer support from registry tags.
+`scripts/gen-platform-coverage.py` makes this matrix from [`.github/build-config.yml`](./.github/build-config.yml). It records the desktop/platform combinations the image factory commits to build; it does not infer support from registry tags.
 
-- **S — Supported:** an active standard OCI-image cell (`build_image: true`). Runtime evidence and current failures remain visible in [MATRIX-STATUS.md](docs/MATRIX-STATUS.md).
-- **E — Experimental:** an active Apple Silicon/Asahi cell. Static boot-chain verification exists, but the installer and real-hardware gates have not graduated it.
+- **S — Supported:** an active cell for a standard OCI image (`build_image: true`). Runtime evidence and current failures remain visible in [MATRIX-STATUS.md](docs/MATRIX-STATUS.md).
+- **E — Experimental:** an active Apple Silicon/Asahi cell. The boot chain has static verification, but the installer and real-hardware gates have not graduated it.
 - **U — Unsupported:** no active image cell and no release or maintenance commitment.
 
 | Variant | x86_64 | aarch64 | Apple Silicon (M1/M2, Asahi) |
@@ -82,9 +82,9 @@ This matrix is generated from [`.github/build-config.yml`](./.github/build-confi
 
 Standard aarch64 support is a per-variant commitment, not a claim that every desktop works on every base. The flavor-equality mandate applies to cells marked **S**; it does not turn a missing package stack into a supported cell.
 
-Apple Silicon has **2 active experimental desktop cell(s)**, all derived from enabled `*-asahi` flavors. GNOME is the only current Apple Silicon desktop target. KDE, COSMIC, Niri, and XFCE are **U — Unsupported** on Apple Silicon, with no parity date or release commitment. Expansion is gated rather than assumed: GNOME must first pass a real-Mac boot/session gate and the installer must ship; then each additional desktop needs its own enabled `-asahi` flavor and the same static and hardware evidence.
+Apple Silicon has **2 active experimental desktop cell(s)**, all derived from enabled `*-asahi` flavors. GNOME is the only Apple Silicon target for a desktop now. KDE, COSMIC, Niri, and XFCE are **U — Unsupported** on Apple Silicon, with no parity date or release commitment. Gates control expansion. First, GNOME must pass a gate for boot and session on a real Mac, and the installer must ship. Then each additional desktop needs its own enabled `-asahi` flavor and the same static and hardware evidence.
 
-The scheduled Asahi sweep may continue to inspect old promoted tags after their build cell is disabled. A tag or sweep entry is historical test inventory, not support. See [Asahi hardware CI tiers](docs/ASAHI-HARDWARE-TIERS.md) for the missing hardware evidence.
+The scheduled Asahi sweep can continue to inspect old tags after a build cell is disabled. A tag or sweep entry is historical test inventory, not support. See [the hardware tiers for Asahi CI](docs/ASAHI-HARDWARE-TIERS.md) for the missing hardware evidence.
 
 <!-- END GENERATED — scripts/gen-platform-coverage.py -->
 
