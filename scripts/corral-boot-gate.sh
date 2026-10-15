@@ -133,6 +133,16 @@ if [[ "$rc" -eq 0 && "${DISK_CONTRACT:-desktop}" == desktop ]]; then
 	fi
 fi
 
+# Corral's ready.png is the screen at the marker, and the greeter can paint
+# after it. Like iso-e2e.sh's wait_for_paint, poll for a painted frame as
+# evidence only: a slow or absent paint cannot change the verdict.
+if [[ "$rc" -eq 0 ]]; then
+	for _ in $(seq 1 12); do
+		"$CORRAL" screenshot "$NAME" -o "${OUT}/10-ready.png" --require-paint >/dev/null 2>&1 && break
+		sleep 5
+	done
+fi
+
 cp -f "$SERIAL" "${OUT}/serial.log" 2>/dev/null || true
 for f in ready.png failure.png timelapse.webm; do
 	[[ -f "${OUT}/corral/${f}" ]] && cp -f "${OUT}/corral/${f}" "${OUT}/${f}"
