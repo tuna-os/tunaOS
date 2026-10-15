@@ -18,6 +18,7 @@ on:
     paths:
       - "scripts/gen-matrix-status.py"
       - "scripts/gen-platform-coverage.py"
+      - "scripts/matrix_evaluator.py"
       - ".github/build-config.yml"
       - "docs/MATRIX-STATUS.md"
       - "ROADMAP.md"
@@ -53,7 +54,7 @@ jobs:
 
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
-          python-version: "3.14"
+          python-version: "3.15"
 
       - name: Install deps
         run: pip install --quiet pyyaml
