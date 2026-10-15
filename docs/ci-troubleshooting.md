@@ -1577,6 +1577,7 @@ labels.
 
 **Fix:** Target the real `box#window` widget with an opaque panel and explicitly
 set light text on `label#clock` and `box#body label`. The foreground and panel
-colours have a 15.2:1 contrast ratio. The tunaOS#3110 regression test
-extracts both emitted stylesheets, rejects the nonexistent selector, and
-computes a minimum 7:1 ratio.
+colours have an 18.2:1 contrast ratio, and gtkgreet's inline red error markup
+keeps 4.7:1 on the panel. The tunaOS#3110 regression test extracts both
+emitted stylesheets, rejects the nonexistent selector, and requires at least
+7:1 for the clock and prompt rule and 4.5:1 for the error red.

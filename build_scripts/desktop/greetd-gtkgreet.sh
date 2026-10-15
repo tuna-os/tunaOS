@@ -135,9 +135,10 @@ window {
 
 /* gtkgreet names its outer GtkBox "window" (not "window-box"). Keep an
  * opaque, high-contrast panel behind both its #clock label and #body prompt:
- * the system theme can otherwise render dark labels over the dark wallpaper. */
+ * the system theme can otherwise render dark labels over the dark wallpaper.
+ * Dark enough that gtkgreet's inline red error markup stays >= 4.5:1. */
 box#window {
-	background-color: #222226;
+	background-color: #101014;
 	border-radius: 8px;
 	padding: 24px;
 }

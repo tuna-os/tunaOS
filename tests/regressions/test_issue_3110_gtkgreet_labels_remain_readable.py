@@ -32,11 +32,18 @@ def _stylesheet(script: Path) -> str:
 
 
 def _hex_colour(css: str, selector: str, property_name: str) -> str:
-    block = re.search(rf"{re.escape(selector)}\s*\{{(?P<body>.*?)\}}", css, re.DOTALL)
-    assert block, f"missing gtkgreet selector {selector!r}"
-    value = re.search(rf"{re.escape(property_name)}:\s*(#[0-9a-fA-F]{{6}})", block.group("body"))
-    assert value, f"{selector!r} does not set {property_name} to an opaque colour"
-    return value.group(1)
+    """Colour set by the last rule whose selector list contains ``selector``
+    (the one GTK applies), so each selector is measured on its own."""
+    found = None
+    for rule in re.finditer(r"(?P<selectors>[^{}]+)\{(?P<body>[^{}]*)\}", css):
+        selectors = re.sub(r"/\*.*?\*/", "", rule.group("selectors"), flags=re.DOTALL)
+        if selector not in (s.strip() for s in selectors.split(",")):
+            continue
+        value = re.search(rf"{re.escape(property_name)}:\s*(#[0-9a-fA-F]{{6}})", rule.group("body"))
+        if value:
+            found = value.group(1)
+    assert found, f"{selector!r} does not set {property_name} to an opaque colour"
+    return found
 
 
 def _relative_luminance(colour: str) -> float:
@@ -50,11 +57,17 @@ def _contrast(first: str, second: str) -> float:
     return (light + 0.05) / (dark + 0.05)
 
 
+# gtkgreet renders authentication errors as <span color="red"> Pango markup,
+# which overrides the CSS foreground, so the panel must contrast with it too.
+GTKGREET_ERROR_RED = "#ff0000"
+
+
 def test_gtkgreet_clock_and_prompt_have_a_high_contrast_panel():
     for script in GREETER_SCRIPTS:
         css = _stylesheet(script)
         assert "box#window-box" not in css
         panel = _hex_colour(css, "box#window", "background-color")
-        text = _hex_colour(css, "box#body label", "color")
-        assert "label#clock," in css
-        assert _contrast(text, panel) >= 7, f"{script}: gtkgreet text contrast is below WCAG AAA"
+        for selector in ("label#clock", "box#body label"):
+            text = _hex_colour(css, selector, "color")
+            assert _contrast(text, panel) >= 7, f"{script}: {selector} contrast is below WCAG AAA"
+        assert _contrast(GTKGREET_ERROR_RED, panel) >= 4.5, f"{script}: gtkgreet error text is below WCAG AA"
