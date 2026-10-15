@@ -177,7 +177,7 @@ build_primary_image() {
 # Retry the whole build on failure. Two distinct transients, both of which
 # reliably succeed on a fresh invocation of the same inputs:
 #
-#   * Blacksmith's amd64/v2 runners intermittently fail before a Buildah build
+#   * Some amd64/v2 runners intermittently fail before a Buildah build
 #     starts with `open out/index.json: no such file or directory`.
 #   * Pulling the base image dies mid-blob against the registry CDN:
 #
