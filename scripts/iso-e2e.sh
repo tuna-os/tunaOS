@@ -1795,11 +1795,25 @@ run_installer_gui_checks() {
 	return 0
 }
 
-# Type at the QEMU monitor: one HMP command, no reply needed.
+# Type at the QEMU monitor: one HMP command, no reply needed. socat when
+# present, else python3's socket module (as luks-first-boot.py does), so the
+# harness-owned system_powerdown on the LUKS path is not silently skipped
+# on a host without socat.
 monitor_cmd() {
 	[[ -S "$MONITOR_SOCK" ]] || return 1
-	command -v socat &>/dev/null || return 1
-	echo "$1" | socat - "UNIX-CONNECT:${MONITOR_SOCK}" >/dev/null 2>&1 || return 1
+	if command -v socat &>/dev/null; then
+		echo "$1" | socat - "UNIX-CONNECT:${MONITOR_SOCK}" >/dev/null 2>&1 || return 1
+		return 0
+	fi
+	command -v python3 &>/dev/null || return 1
+	python3 - "$MONITOR_SOCK" "$1" >/dev/null 2>&1 <<'PY' || return 1
+import socket, sys
+s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+s.settimeout(5)
+s.connect(sys.argv[1])
+s.sendall(sys.argv[2].encode() + b"\n")
+s.close()
+PY
 }
 
 # Type a string as hardware key events. Compositor-agnostic: a greeter cannot
