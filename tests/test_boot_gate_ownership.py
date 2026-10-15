@@ -1,6 +1,7 @@
 """The Gate job's evidence must be readable before anything reads it.
 
-scripts/iso-e2e.sh runs under sudo, so verify-out and everything in it comes
+The boot harness (scripts/corral-boot-gate.sh, or scripts/iso-e2e.sh on the
+virgl path) runs under sudo, so verify-out and everything in it comes
 back root-owned. Every later step in the Gate job runs as the runner user.
 
 That ownership gap is not a cosmetic problem. GitHub evaluates a step's `if:`
@@ -54,7 +55,7 @@ def test_the_gate_job_still_exists(gate_steps):
 def test_something_chowns_the_evidence_directory(gate_steps):
     assert _index_of(gate_steps, _chowns_evidence) is not None, (
         f"no step in {GATE_JOB} hands {EVIDENCE_DIR} back to the runner user; "
-        "iso-e2e.sh runs under sudo, so it is root-owned"
+        "the boot harness runs under sudo, so it is root-owned"
     )
 
 
@@ -63,10 +64,11 @@ def test_the_chown_precedes_every_step_that_reads_the_evidence(gate_steps):
     assert first_chown is not None
 
     for i, step in enumerate(gate_steps[:first_chown]):
-        # The step that produces the evidence runs under sudo itself, so it is
-        # allowed to touch verify-out before the chown. Nothing else is.
+        # The steps that produce the evidence run under sudo themselves, so
+        # they are allowed to touch verify-out before the chown. Nothing else
+        # is.
         run = step.get("run", "")
-        produces = "iso-e2e.sh" in run
+        produces = "iso-e2e.sh" in run or "corral-boot-gate.sh" in run
         if produces:
             continue
         assert EVIDENCE_DIR not in run, (
