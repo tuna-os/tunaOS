@@ -162,6 +162,8 @@ jobs:
           fi
           echo "tpm_autounlock=${TPM_AUTOUNLOCK}" >> "$GITHUB_OUTPUT"
 
+          # Explicit image-only admissions (luks_e2e:false) do not add
+          # installer cells until capacity/qualification is approved.
           # Plain desktop flavors are the install videos we publish. The
           # suffixes below are overlay or hardware variants, not separate
           # base-DE walkthroughs; keeping this derived from build-config.yml
@@ -169,6 +171,7 @@ jobs:
           BASE_DESKTOPS="$(echo "$json" | jq -c '
             [.variants[].flavors[]
              | select(.build_image == true)
+             | select(.luks_e2e != false)
              | .id
              | select(. != "base")
              | select(test("-(hwe|nvidia|asahi|t2|zfs|cachyos)$") | not)]
@@ -207,6 +210,7 @@ jobs:
                    | select($skiplist | index($v) | not)
                    | ([$variant.flavors[]
                        | select(.build_image == true)
+             | select(.luks_e2e != false)
                        # Headless base derivatives (base-hwe/base-nvidia) have
                        # no login target, just like base itself.
                        | select(.id | test("^base(?:-|$)") | not)
@@ -230,6 +234,7 @@ jobs:
               --arg fv "$FILTER_VARIANT" --arg ff "$FILTER_FLAVOR" \
               '{include: [ .variants[] | . as $variant | .id as $v | .flavors[]
                  | select(.build_image == true)
+             | select(.luks_e2e != false)
                  | select(.id | test("^base(?:-|$)") | not)
                  | select((.platforms // $variant.platforms // []) | index("linux/amd64"))
                  | {variant: $v, flavor: .id}
@@ -266,6 +271,7 @@ jobs:
               .variants[] | . as $variant
               | [.id, ([.flavors[]
                  | select(.build_image == true)
+             | select(.luks_e2e != false)
                  | select(.id | test("^base(?:-|$)") | not)
                  | select((.platforms // $variant.platforms // []) | index("linux/amd64"))
                  | .id] | join(", "))]
@@ -278,6 +284,7 @@ jobs:
               [.variants[] | . as $variant
                | select([.flavors[]
                  | select(.build_image == true)
+             | select(.luks_e2e != false)
                  | select(.id | test("^base(?:-|$)") | not)
                  | select((.platforms // $variant.platforms // []) | index("linux/amd64"))] | length == 0)
                | "- `\(.id)`: no amd64 graphical image (`build_image: true`)"]
@@ -349,7 +356,7 @@ jobs:
             /usr/local/share/boost /opt/hostedtoolcache/CodeQL || true
           df -h /
 
-      # Blacksmith runners provide no systemd user session, so rootless
+      # Some runners provide no systemd user session, so rootless
       # podman's default cgroup manager cannot create a scope and every
       # container build dies before running anything:
       #
@@ -660,7 +667,7 @@ jobs:
 
       - name: Upload LUKS evidence
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: luks-e2e-${{ matrix.variant }}-${{ matrix.flavor }}
           path: |
@@ -723,7 +730,7 @@ jobs:
           persist-credentials: true
 
       - name: Download passing-cell artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: luks-e2e-*
           path: timelapses

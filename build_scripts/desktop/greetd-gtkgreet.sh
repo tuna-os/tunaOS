@@ -96,7 +96,9 @@ if [[ -e /run/tunaos-software-gl ]] ||
 	export WLR_RENDERER=pixman
 	export LIBGL_ALWAYS_SOFTWARE=1
 fi
-exec cage -s -- gtkgreet -l -s /etc/greetd/gtkgreet.css
+# Cage hosts an xdg-toplevel; its server does not implement layer-shell.
+# Upstream gtkgreet documents `cage gtkgreet` for this path.
+exec cage -s -- gtkgreet -s /etc/greetd/gtkgreet.css
 SESSION_EOF
 
 	mkdir -p /etc/greetd

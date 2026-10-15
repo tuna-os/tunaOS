@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-desktop="${1:?usage: verify-desktop-experience.sh <gnome|kde|niri|cosmic|xfce|pantheon> [--runtime]}"
+desktop="${1:?usage: verify-desktop-experience.sh <gnome|kde|niri|cosmic|xfce|pantheon|tuna> [--runtime]}"
 mode="${2:-build}"
 
 # At runtime the E2E gate greps ttyS0 for a contract marker; a silent early
@@ -69,6 +69,29 @@ require_glob() { compgen -G "$1" >/dev/null || {
 	fi
 	exit 1
 }; }
+# Tuna Desktop (formerly Roost) Screenshot consent in GNOME 51 needs GTK
+# Access routing (Roost portal job 111453682195). Check the installed
+# configuration, not only whether a configuration file was copied into the
+# image.
+require_portal_preference() {
+	local config="$1" interface="$2" backend="$3"
+	awk -v interface="$interface" -v backend="$backend" '
+		/^[[:space:]]*\[/ { preferred = ($0 ~ /^[[:space:]]*\[preferred\][[:space:]]*$/); next }
+		preferred {
+			line = $0
+			sub(/[[:space:]]*#.*$/, "", line)
+			split(line, pair, "=")
+			gsub(/^[[:space:]]+|[[:space:]]+$/, "", pair[1])
+			gsub(/^[[:space:]]+|[[:space:]]+$/, "", pair[2])
+			sub(/;$/, "", pair[2])
+			if (pair[1] == interface) { found++; valid = (pair[2] == backend) }
+		}
+		END { exit !(found == 1 && valid) }
+	' "$config" || {
+		echo "missing or ambiguous portal preference: $interface=$backend in $config" >&2
+		return 1
+	}
+}
 require_unit() { systemctl list-unit-files "$1.service" --no-legend 2>/dev/null | grep -q "^$1.service" || {
 	echo "missing unit: $1.service" >&2
 	if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${desktop:-}" != cosmic ]]; then
@@ -397,6 +420,71 @@ kde)
 	require_command dolphin
 	require_command konsole
 	dm_pattern='^(sddm|plasmalogin)\.service$'
+	;;
+tuna)
+	experience="tunaos/tuna"
+	# The package is tuna-desktop (formerly roost, tuna-desktop#536). It must
+	# be what is installed, and nothing may still need the old package name.
+	# Compare exact names: `pacman -Q` on the old name would match
+	# tuna-desktop through its provides=roost and pass for the wrong reason.
+	installed_packages="$(pacman -Qq)"
+	grep -qx 'tuna-desktop' <<<"$installed_packages" || {
+		echo "the tuna-desktop package is not installed" >&2
+		exit 1
+	}
+	if grep -qx 'roost' <<<"$installed_packages"; then
+		echo "the old roost package is installed beside tuna-desktop" >&2
+		exit 1
+	fi
+	for binary in tuna-compositor tuna-session tuna-shell-host tuna-shell-gtk tuna-ibus-bridge tuna-greeter; do
+		require_command "$binary"
+		"$binary" --version
+	done
+	require_glob '/usr/share/wayland-sessions/tuna.desktop'
+	grep -qx 'Exec=tuna-session' /usr/share/wayland-sessions/tuna.desktop
+	grep -qx 'DesktopNames=Tuna;GNOME;' /usr/share/wayland-sessions/tuna.desktop
+	require_glob '/etc/pam.d/tuna-lock'
+	require_glob '/usr/lib/systemd/user/tuna-session.target'
+	# Upgrades from the roost flavor: the old binary names, the hidden session
+	# entry display managers remember, and the PAM service a session started
+	# before the upgrade still asks for.
+	for name in compositor session shell-host shell-gtk ibus-bridge greeter; do
+		compat_link="/usr/bin/roost-$name"
+		require_glob "$compat_link"
+		# require_glob permits the documented Hummingbird waiver. Only inspect
+		# the target when the path exists; otherwise preserve that waiver.
+		if compgen -G "$compat_link" >/dev/null; then
+			compat_target="$(readlink -- "$compat_link")" || {
+				echo "cannot read compatibility link: $compat_link" >&2
+				exit 1
+			}
+			[[ "$compat_target" == "tuna-$name" ]] || {
+				echo "/usr/bin/roost-$name is not a compat link to tuna-$name" >&2
+				exit 1
+			}
+		fi
+	done
+	require_glob '/usr/share/wayland-sessions/roost.desktop'
+	grep -qx 'Exec=tuna-session' /usr/share/wayland-sessions/roost.desktop
+	grep -qx 'NoDisplay=true' /usr/share/wayland-sessions/roost.desktop
+	require_glob '/etc/pam.d/roost-lock'
+	require_glob '/etc/greetd/environments'
+	grep -qx 'tuna-session' /etc/greetd/environments
+	require_glob '/usr/share/xdg-desktop-portal/tuna-portals.conf'
+	for portal in ScreenCast Screenshot; do
+		require_portal_preference /usr/share/xdg-desktop-portal/tuna-portals.conf "org.freedesktop.impl.portal.$portal" gnome
+	done
+	require_portal_preference /usr/share/xdg-desktop-portal/tuna-portals.conf org.freedesktop.impl.portal.Access gtk
+	require_glob '/usr/lib/gnome-shell-calendar-server'
+	require_command ibus-daemon
+	require_command gnome-keyring-daemon
+	require_command wpctl
+	require_command gtkgreet
+	require_command cage
+	require_any_glob '/usr/libexec/xdg-desktop-portal-gnome' '/usr/lib/xdg-desktop-portal-gnome'
+	require_any_glob '/usr/libexec/xdg-desktop-portal-gtk' '/usr/lib/xdg-desktop-portal-gtk'
+	require_unit greetd
+	dm_pattern='^greetd\.service$'
 	;;
 niri)
 	experience="zirconium-dev/zirconium"
