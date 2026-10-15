@@ -18,6 +18,10 @@ if [[ ! "$ref" =~ ^[0-9a-f]{40}$ ]]; then
 	echo "ERROR: downloads.corral in image-versions.yaml is not a 40-character commit: '${ref}'" >&2
 	exit 1
 fi
+command -v go >/dev/null || {
+	echo "ERROR: go is not on PATH; corral is built from source (CI: actions/setup-go first)" >&2
+	exit 1
+}
 
 mkdir -p "$BIN_DIR"
 GOBIN="$(cd "$BIN_DIR" && pwd)" GOTOOLCHAIN=auto go install "github.com/tuna-os/corral@${ref}"

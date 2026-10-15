@@ -22,7 +22,8 @@ def test_pr_gate_boots_the_variant_it_built(tmp_path, variant, flavor):
     scripts = tmp_path / "scripts"
     scripts.mkdir()
     sudo = bindir / "sudo"
-    sudo.write_text('#!/bin/bash\nexec "$@"\n')
+    # Drop sudo's own options (--preserve-env=...) as the real one consumes them.
+    sudo.write_text('#!/bin/bash\nwhile [[ "${1:-}" == -* ]]; do shift; done\nexec "$@"\n')
     boot = scripts / "corral-boot-gate.sh"
     boot.write_text('''#!/bin/bash
 set -euo pipefail

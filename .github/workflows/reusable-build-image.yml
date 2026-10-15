@@ -376,6 +376,10 @@ jobs:
         env:
           IMAGE_VARIANT: ${{ inputs.image-variant }}
           DEFAULT_TAG: ${{ inputs.default-tag }}
+          # As in the Gate's Boot and verify: hummingbird's bootc install
+          # config selects ext4, and the unsealed probe would otherwise pick
+          # xfs, which its GRUB cannot read.
+          TUNAOS_QCOW2_FILESYSTEM: ${{ inputs.image-variant == 'hummingbird' && 'ext4' || '' }}
         run: |
           mkdir -p verify-out
           IMAGE="localhost/${IMAGE_VARIANT}:${DEFAULT_TAG}"
@@ -387,7 +391,8 @@ jobs:
           # evidence-upload step below already runs under `if: always()`, so
           # dropping the swallow doesn't lose any diagnostics — it just makes
           # the check red when the boot actually failed.
-          sudo ./scripts/corral-boot-gate.sh "$IMAGE" verify-out 300
+          sudo --preserve-env=TUNAOS_QCOW2_FILESYSTEM \
+            ./scripts/corral-boot-gate.sh "$IMAGE" verify-out 300
 
       - name: Upload PR verification evidence
         if: always() && github.event_name == 'pull_request' && contains(matrix.platform, 'amd64')
@@ -397,6 +402,9 @@ jobs:
           path: |
             verify-out/serial.log
             verify-out/*.png
+            verify-out/timelapse.webm
+            verify-out/corral/result.json
+            verify-out/corral/diagnostics/
           if-no-files-found: warn
           retention-days: 7
 

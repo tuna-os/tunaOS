@@ -119,7 +119,7 @@ criteria:
       The bus is named because it was the gap: skipjack:kde promoted an image
       whose dbus-broker never started, since its display manager did not
       hard-depend on the socket the way gdm does (run 34705564876).
-    asserted_by: .github/workflows/reusable-build-image.yml (Gate → scripts/iso-e2e.sh --disk)
+    asserted_by: .github/workflows/reusable-build-image.yml (Gate → scripts/corral-boot-gate.sh; GPU-routed flavors → scripts/iso-e2e.sh --disk)
     enforcement: blocking
     freshness_sla_days: 2
     gates:
@@ -128,6 +128,7 @@ criteria:
           verify_boot: Boot and verify
           build_push: Boot-verify image (PR gate)
         scripts:
+          - scripts/corral-boot-gate.sh
           - scripts/iso-e2e.sh
     # Which cells the criterion is scored on. Cells outside the scope are not
     # judged on boots at all (their composite is decided by the remaining

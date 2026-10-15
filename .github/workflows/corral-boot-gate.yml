@@ -23,6 +23,8 @@ on:
       - "scripts/install-corral.sh"
       - "scripts/lib/backend.sh"
       - ".github/workflows/corral-boot-gate.yml"
+      # downloads.corral selects the executable both disk gates run.
+      - "image-versions.yaml"
   workflow_dispatch:
 
 concurrency:

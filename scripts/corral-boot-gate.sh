@@ -144,6 +144,12 @@ if [[ "$rc" -eq 0 ]]; then
 fi
 
 cp -f "$SERIAL" "${OUT}/serial.log" 2>/dev/null || true
+# The verdict is read off the console; a pass with no console to show for it
+# is not evidence of anything.
+if [[ "$rc" -eq 0 && ! -s "${OUT}/serial.log" ]]; then
+	echo "ERROR: corral reported a pass but left no serial log at ${SERIAL}" >&2
+	rc=1
+fi
 for f in ready.png failure.png timelapse.webm; do
 	[[ -f "${OUT}/corral/${f}" ]] && cp -f "${OUT}/corral/${f}" "${OUT}/${f}"
 done
