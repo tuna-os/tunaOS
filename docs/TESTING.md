@@ -37,6 +37,19 @@ See the [latest LUKS install timelapses](https://tuna-os.github.io/tunaOS/e2e/lu
 HWE and NVIDIA overlays stay in the per-cell artifacts. The source run links
 them.
 
+## Code Coverage
+
+The `Unit Tests` job writes `coverage-python.xml` and sends it to Codecov with
+the `python` flag. It also keeps the XML as a workflow artifact for 30 days.
+Codecov applies the project and patch targets in
+[`codecov.yml`](../codecov.yml) to pull requests and pushes to `main`. GitHub
+OIDC authenticates each upload. The workflow does not use a long-lived token.
+
+The report measures Python only. BATS checks how the shell behaves. The QEMU
+suites check built images and the installer. These suites do not emit data
+about line coverage. Thus, the Codecov percentage does not include shell or
+end-to-end coverage.
+
 ## ISO End-to-End Tests
 
 The `scripts/iso-e2e.sh` script boots a TunaOS live ISO in QEMU with OVMF (UEFI), waits for the live environment to be ready, captures screenshots, and collects serial logs.

@@ -1,6 +1,6 @@
 # Triage Labels
 
-The skills speak in terms of five canonical triage roles. This file maps those roles to the actual label strings used in this repo's issue tracker.
+The skills speak in terms of five canonical roles for triage. This file maps those roles to the actual label strings used in this repo's issue tracker.
 
 | Label in mattpocock/skills | Label in our tracker | Meaning                                  |
 | -------------------------- | -------------------- | ---------------------------------------- |
@@ -20,4 +20,4 @@ or that already has `help wanted` or `good first issue`.
 
 Edit the right-hand column to match whatever vocabulary you use.
 
-For queue-level policy (SLA tiers, when to close a bot-filed finding, milestone-vs-backlog signal) see [TRIAGE-POLICY.md](../../TRIAGE-POLICY.md) — this file only maps individual-issue labels.
+For queue-level policy (SLA tiers, when to close a bot-filed result, milestone-vs-backlog signal) see [TRIAGE-POLICY.md](../../TRIAGE-POLICY.md) — this file only maps individual-issue labels.

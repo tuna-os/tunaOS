@@ -61,6 +61,15 @@ The gate's staff test is **zero newly created placeholder issues for 14 days**
 and a week-over-week decline in open automation-created items until the queue
 fits maintainer review capacity.
 
+Placeholders kept arriving after this gate merged on 2026-08-29 (#2406
+and #2407 on 2026-09-08, #2509 on 2026-09-13). A written rule does not stop
+a run that never reads it. The `Issue intake check` workflow is the
+receiving-side backstop: on each bot-filed issue it runs
+`scripts/check-issue-intake.py`, which looks for template text in angle
+brackets and for a body that holds only the hive footer. If it finds one,
+it adds `needs-info` and posts one comment. It removes the label when an
+edit passes the check. It does not check human reports.
+
 Existing placeholders and exact or near-duplicates should receive one
 verification pass. Close only bot-created items with no unique evidence or
 discussion, link to the surviving tracker, and preserve human-authored work.
@@ -125,7 +134,8 @@ flat 100%-violated SLA no longer does.
 ## What this policy does not do
 
 It does not authorize automated closure. No workflow in this repo
-auto-closes issues on this policy's authority; `actions/stale`-style
+auto-closes issues on this policy's authority (the intake check labels and
+comments only); `actions/stale`-style
 automation was evaluated (see "Current state" above) and rejected as the
 wrong mechanism for how this queue behaves. Triage stays a
 verify-then-decide human/agent action per issue, using the criteria above.

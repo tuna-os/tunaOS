@@ -1,7 +1,8 @@
 # Verify TunaOS artifacts
 
-TunaOS OCI images are signed with Sigstore Cosign's keyless GitHub Actions
-identity. No project signing key or password is required. Verification checks
+TunaOS uses Sigstore Cosign to sign its OCI images with a keyless identity from
+GitHub Actions. The project keeps no key or password for signatures, and you need none
+to verify. Verification checks
 both the artifact digest and the identity of the protected workflow that built
 it.
 
@@ -12,7 +13,7 @@ verify the Cosign binary before using it.
 
 ## Verify an OCI image
 
-Always resolve and verify an immutable digest, even when starting from a
+Always resolve and verify an immutable digest, even when you start from a
 friendly tag:
 
 ```bash
@@ -32,7 +33,7 @@ an unrestricted regular expression.
 
 ## Verify the SPDX SBOM attestation
 
-Each published platform image has a signed SPDX JSON attestation. A
+Each published platform image has a signed attestation in SPDX JSON format. A
 **different workflow** signs it: `attest-sbom.yml` runs after the build run
 finishes. So an outage of Sigstore gives that run its own result, not the
 result of the nightly ([#2282](https://github.com/tuna-os/tunaOS/issues/2282)).
@@ -98,14 +99,14 @@ The payload is the checksum because `cosign sign-blob` reads what it signs into
 memory, and an ISO above roughly 7 GiB exhausts the runner. Fedora, Debian and
 Arch publish signatures over checksums for the same reason.
 
-Scheduled combined/deduplicated media is produced directly by
-`publish-iso-groups.yml`. For those ISOs, use this exact identity instead:
+`publish-iso-groups.yml` produces scheduled combined/deduplicated media
+directly. For those ISOs, use this exact identity instead:
 
 ```text
 https://github.com/tuna-os/tunaOS/.github/workflows/publish-iso-groups.yml@refs/heads/main
 ```
 
-The reusable artifact workflow signs only after the ISO passes its QEMU boot
-gate; the grouped workflow follows the same ordering. The verified ISO,
-checksum, and bundle are then uploaded together. A signing or local
-verification failure prevents publication.
+The workflow for reusable artifacts signs only after the ISO passes its QEMU
+boot gate; the grouped workflow uses the same order. The workflow then uploads
+the verified ISO, checksum, and bundle together. A failure of the signature
+step or of local verification prevents publication.

@@ -764,7 +764,7 @@ resolving mountpoints: invalid options "rw, shared, rw, bind", can only specify 
 ```
 
 **Root cause:**
-Older versions of `crun` / `podman` on certain runner environments (e.g. Blacksmith or legacy GitHub runners) have a bug in how they parse mounts. The bug appears when a build passes explicit `rw` options to `--mount=type=cache,rw,...`. Because `type=cache` mounts default to read-write (`rw`) mode automatically, an explicit `rw` flag makes `crun` concatenate duplicate `rw` flags (`rw, shared, rw, bind`), and `crun` then rejects the mount initialization.
+Older versions of `crun` / `podman` on certain runner environments (e.g. third-party or legacy GitHub runners) have a bug in how they parse mounts. The bug appears when a build passes explicit `rw` options to `--mount=type=cache,rw,...`. Because `type=cache` mounts default to read-write (`rw`) mode automatically, an explicit `rw` flag makes `crun` concatenate duplicate `rw` flags (`rw, shared, rw, bind`), and `crun` then rejects the mount initialization.
 
 **Fix & Prevention:**
 1. **Omit explicit `rw` in cache mounts**: In Containerfiles or build scripts, omit the redundant `rw` modifier from buildah/podman cache mounts. For example, use `--mount=type=cache,id=...` instead of `--mount=type=cache,rw,id=...`.
@@ -1572,4 +1572,21 @@ The image had both backends; the default preferred GNOME for Access.
 **Measured cause:** In #1740, `watch-upstream.yml` read commit text and diffs from third-party repositories. It embedded the diffs into `GEMINI_TASK.md` without checks. A malicious commit diff could inject instructions to write code or exfiltrate tokens (`GH_TOKEN`, `GEMINI_API_KEY`, `COPILOT_PAT`).
 
 **Fix:** Delete the legacy watch workflows and helper scripts. Upstream sync uses `snapshot-upstreams.yml`. That workflow vendors files into `_upstream-snapshots/` and creates pull requests for review. `tests/regressions/test_issue_1740_no_untrusted_upstream_diff_ai_write_pipeline.py` prevents new AI workflows with write tokens on untrusted diffs.
+
+### Codecov project and patch targets never appear on a pull request
+
+**Symptom:** `codecov.yml` declares project and patch targets, but no Codecov
+result or coverage trend appears after the `Unit Tests` job; only a downloadable
+`coverage-python.xml` artifact exists.
+
+**Measured cause:** On main at `957d9ec6`, a repository-wide search found no
+`codecov/codecov-action` or Codecov CLI invocation. `test.yml` generated the XML
+and passed it only to `actions/upload-artifact`, which does not send reports to
+Codecov or evaluate `codecov.yml`.
+
+**Fix (#2301):** Keep the artifact for debugging and also upload the same XML
+with the SHA-pinned Codecov action, the `python` flag, and GitHub OIDC. The BATS
+contract in `tests/bats/test_test_yml_pytest_always_runs.bats` holds the upload
+path and authentication mode. This report is Python-only; BATS and QEMU E2E
+coverage are behavior gates, not line-coverage inputs.
 
