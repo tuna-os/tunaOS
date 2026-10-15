@@ -104,7 +104,7 @@ downloads:
   # binaries, and the gate needs `vmtest --fail-marker`/`--karg` and local
   # composefs builds, which no tag carries yet.
   # renovate: datasource=git-refs depName=tuna-os/corral
-  corral: "c713b3746ccf3a8f31fcc9df324bf564d2d2cfcf"
+  corral: "27596762100f5a9a80c5d6820d4446bcef4d8b05"
   # renovate: datasource=git-refs depName=tuna-os/tacklebox
   # This is the fallback every caller that does not set TACKLEBOX_SHA gets
   # (scripts/lib/common.sh:229) — installer-smoke.yml among them.
