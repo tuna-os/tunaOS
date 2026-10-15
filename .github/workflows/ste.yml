@@ -34,6 +34,10 @@ on:
       - .github/workflows/ste.yml
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   ste:
     uses: tuna-os/.github/.github/workflows/ste-lint.yml@eb7ce09bbc1b32937de3ad3a6be37a14a5e4fba2 # main
