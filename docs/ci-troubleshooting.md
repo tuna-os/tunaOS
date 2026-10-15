@@ -764,7 +764,7 @@ resolving mountpoints: invalid options "rw, shared, rw, bind", can only specify 
 ```
 
 **Root cause:**
-Older versions of `crun` / `podman` on certain runner environments (e.g. Blacksmith or legacy GitHub runners) have a bug in how they parse mounts. The bug appears when a build passes explicit `rw` options to `--mount=type=cache,rw,...`. Because `type=cache` mounts default to read-write (`rw`) mode automatically, an explicit `rw` flag makes `crun` concatenate duplicate `rw` flags (`rw, shared, rw, bind`), and `crun` then rejects the mount initialization.
+Older versions of `crun` / `podman` on certain runner environments (e.g. third-party or legacy GitHub runners) have a bug in how they parse mounts. The bug appears when a build passes explicit `rw` options to `--mount=type=cache,rw,...`. Because `type=cache` mounts default to read-write (`rw`) mode automatically, an explicit `rw` flag makes `crun` concatenate duplicate `rw` flags (`rw, shared, rw, bind`), and `crun` then rejects the mount initialization.
 
 **Fix & Prevention:**
 1. **Omit explicit `rw` in cache mounts**: In Containerfiles or build scripts, omit the redundant `rw` modifier from buildah/podman cache mounts. For example, use `--mount=type=cache,id=...` instead of `--mount=type=cache,rw,id=...`.
@@ -1513,6 +1513,24 @@ Do not wait for the transaction from inside it. This check reports manager
 state; the separate display-manager and user-session checks prove more.
 
 
+## 32. Weekly boot report hides successful non-GNOME QCOW2 captures (#2801)
+
+**Symptom:** The 2026-09-28 report listed KDE, Niri, and COSMIC QCOW2
+screenshots as unavailable even though all 12 non-GNOME jobs in workflow run
+[36356753451](https://github.com/tuna-os/tunaOS/actions/runs/36356753451)
+completed successfully and uploaded their named artifacts.
+
+**Measured cause:** `generate-boot-report.py` fetched a QCOW2 screenshot only
+when the flavor's `build_qcow2` value was true. That setting tells the release
+process to publish an artifact, and was true only for GNOME. The separate
+`weekly-qcow2-screenshots.yml` matrix builds temporary disks and captured all
+four desktop flavors for Yellowfin, Albacore, Skipjack, and Bonito.
+
+**Fix:** Derive screenshot coverage from the weekly workflow's matrix in
+addition to the release flags, then fetch each declared artifact. The unit test
+uses the previous defect: the report must query a matrix cell with
+`build_qcow2: false` when the weekly workflow captures it.
+
 ### Adoption reports show `desktop` or `latest` for different images
 
 **Symptom:** Image info reports `desktop` or `latest` for different images. It does not identify each flavor or the actual update tag.
@@ -1572,3 +1590,21 @@ The image had both backends; the default preferred GNOME for Access.
 **Measured cause:** Issue tunaOS#2071 found these downloads in CI workflows. The `latest` link can change at any time. The step installs the file as root, and no step checks the file. A changed upstream file thus runs as root on the runner.
 
 **Fix:** Workflows and composite actions use the `.github/actions/setup-yq` action. That action downloads yq `v4.53.3` and checks its SHA-256 value before it installs the file. It also replaces the yq that the runner image supplies, because that yq has a different version. The test `tests/regressions/test_issue_2071_yq_downloads_are_pinned.py` checks each yq download in the workflows and actions.
+
+### Codecov project and patch targets never appear on a pull request
+
+**Symptom:** `codecov.yml` declares project and patch targets, but no Codecov
+result or coverage trend appears after the `Unit Tests` job; only a downloadable
+`coverage-python.xml` artifact exists.
+
+**Measured cause:** On main at `957d9ec6`, a repository-wide search found no
+`codecov/codecov-action` or Codecov CLI invocation. `test.yml` generated the XML
+and passed it only to `actions/upload-artifact`, which does not send reports to
+Codecov or evaluate `codecov.yml`.
+
+**Fix (#2301):** Keep the artifact for debugging and also upload the same XML
+with the SHA-pinned Codecov action, the `python` flag, and GitHub OIDC. The BATS
+contract in `tests/bats/test_test_yml_pytest_always_runs.bats` holds the upload
+path and authentication mode. This report is Python-only; BATS and QEMU E2E
+coverage are behavior gates, not line-coverage inputs.
+

@@ -1,0 +1,96 @@
+name: Issue intake check
+
+# TRIAGE-POLICY.md section 1 (#2133): an automated finding must be complete
+# before it becomes an issue. Placeholder issues kept arriving after that
+# policy merged (#2406, #2407, #2509), so this checks bot-filed issues on
+# arrival and on every edit.
+#
+# The policy forbids automated closure. This job only adds `needs-info` and
+# leaves one comment that names the template text it found; when an edit
+# fixes the issue, it removes the label again. Human reports are out of
+# scope (the policy does not restrict them), so the job runs for Bot
+# authors only.
+#
+# The title and body are untrusted input. They reach the script through
+# `env:` and are never interpolated into a run block.
+
+on:
+  issues:
+    types: [opened, edited, reopened]
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: issue-intake-check-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    if: github.event.issue.user.type == 'Bot'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: scripts/check-issue-intake.py
+          sparse-checkout-cone-mode: false
+
+      - name: Check title and body
+        id: check
+        env:
+          TITLE: ${{ github.event.issue.title }}
+          BODY: ${{ github.event.issue.body }}
+        run: |
+          set -uo pipefail
+          report=$(python3 scripts/check-issue-intake.py)
+          status=$?
+          {
+            echo "status=${status}"
+            echo "report<<EOF_INTAKE"
+            echo "${report}"
+            echo "EOF_INTAKE"
+          } >> "$GITHUB_OUTPUT"
+          if [ "$status" -ne 0 ]; then
+            echo "::warning::Issue does not pass the intake check"
+            echo "${report}"
+          fi
+
+      - name: Label and comment
+        if: steps.check.outputs.status == '1'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          ISSUE: ${{ github.event.issue.number }}
+          REPORT: ${{ steps.check.outputs.report }}
+          POLICY: ${{ github.server_url }}/${{ github.repository }}/blob/main/TRIAGE-POLICY.md#1-automation-admission-gate-adopts-2133
+        run: |
+          set -euo pipefail
+          gh issue edit "$ISSUE" -R "$REPO" --add-label needs-info || true
+          marker='<!-- issue-intake-check -->'
+          if gh api "repos/${REPO}/issues/${ISSUE}/comments" --paginate \
+               --jq '.[].body' | grep -qF "$marker"; then
+            echo "Intake comment already posted; label refreshed only."
+            exit 0
+          fi
+          body=$(printf '%s\n%s\n\n%s\n\n%s\n' \
+            "$marker" \
+            "This automation-filed issue does not pass the intake check in [TRIAGE-POLICY.md](${POLICY}):" \
+            "$REPORT" \
+            "Fill in the finding (evidence, when it was verified, and a first action) or close this issue. The \`needs-info\` label comes off automatically when an edit passes the check.")
+          gh issue comment "$ISSUE" -R "$REPO" --body "$body" || true
+
+      - name: Clear the label once the issue passes
+        if: steps.check.outputs.status == '0' && github.event.action == 'edited'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          ISSUE: ${{ github.event.issue.number }}
+        run: |
+          set -euo pipefail
+          marker='<!-- issue-intake-check -->'
+          if gh api "repos/${REPO}/issues/${ISSUE}/comments" --paginate \
+               --jq '.[].body' | grep -qF "$marker"; then
+            gh issue edit "$ISSUE" -R "$REPO" --remove-label needs-info || true
+          fi
