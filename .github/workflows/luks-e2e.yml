@@ -356,7 +356,7 @@ jobs:
             /usr/local/share/boost /opt/hostedtoolcache/CodeQL || true
           df -h /
 
-      # Blacksmith runners provide no systemd user session, so rootless
+      # Some runners provide no systemd user session, so rootless
       # podman's default cgroup manager cannot create a scope and every
       # container build dies before running anything:
       #
