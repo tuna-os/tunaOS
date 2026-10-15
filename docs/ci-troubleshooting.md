@@ -1513,6 +1513,24 @@ Do not wait for the transaction from inside it. This check reports manager
 state; the separate display-manager and user-session checks prove more.
 
 
+## 32. Weekly boot report hides successful non-GNOME QCOW2 captures (#2801)
+
+**Symptom:** The 2026-09-28 report listed KDE, Niri, and COSMIC QCOW2
+screenshots as unavailable even though all 12 non-GNOME jobs in workflow run
+[36356753451](https://github.com/tuna-os/tunaOS/actions/runs/36356753451)
+completed successfully and uploaded their named artifacts.
+
+**Measured cause:** `generate-boot-report.py` fetched a QCOW2 screenshot only
+when the flavor's `build_qcow2` value was true. That setting tells the release
+process to publish an artifact, and was true only for GNOME. The separate
+`weekly-qcow2-screenshots.yml` matrix builds temporary disks and captured all
+four desktop flavors for Yellowfin, Albacore, Skipjack, and Bonito.
+
+**Fix:** Derive screenshot coverage from the weekly workflow's matrix in
+addition to the release flags, then fetch each declared artifact. The unit test
+uses the previous defect: the report must query a matrix cell with
+`build_qcow2: false` when the weekly workflow captures it.
+
 ### Adoption reports show `desktop` or `latest` for different images
 
 **Symptom:** Image info reports `desktop` or `latest` for different images. It does not identify each flavor or the actual update tag.
@@ -1575,3 +1593,21 @@ GNOME 49 is below the floor: nothing below GNOME 50 ships
 **Measured cause:** On 2026-10-07, stable amd64 in `::gentoo` stops at `gnome-shell-49.7`. The GNOME 50 ebuilds (`gnome-shell-50.5`, `mutter-50.5`, `gdm-50.3-r2`) have only the `~amd64` keyword. The official binhost builds only stable versions. Also, `gentoo-binhost-version-lock.sh` masks all `gnome-base` versions that are newer than the binhost. Thus a keyword for `gnome-shell` alone does not have an effect: the lock masks 50.5, the `--pretend` check resolves to 49.7, and the lock stays.
 
 **Fix:** The `emerge_accept_keywords` list in `manifests/desktops/gnome.yaml` gives the GNOME 50 core set. `install-desktop.sh` writes that list to `/etc/portage/package.accept_keywords` before the lock runs. The lock does not mask the packages in that file. These packages compile from source. If `emerge --pretend` shows a mixed 49/50 desktop, add the 49 package to the list. Do not add `gnome-base/nautilus`: `::gentoo` masks `>=nautilus-50` (bug 982084).
+
+### Codecov project and patch targets never appear on a pull request
+
+**Symptom:** `codecov.yml` declares project and patch targets, but no Codecov
+result or coverage trend appears after the `Unit Tests` job; only a downloadable
+`coverage-python.xml` artifact exists.
+
+**Measured cause:** On main at `957d9ec6`, a repository-wide search found no
+`codecov/codecov-action` or Codecov CLI invocation. `test.yml` generated the XML
+and passed it only to `actions/upload-artifact`, which does not send reports to
+Codecov or evaluate `codecov.yml`.
+
+**Fix (#2301):** Keep the artifact for debugging and also upload the same XML
+with the SHA-pinned Codecov action, the `python` flag, and GitHub OIDC. The BATS
+contract in `tests/bats/test_test_yml_pytest_always_runs.bats` holds the upload
+path and authentication mode. This report is Python-only; BATS and QEMU E2E
+coverage are behavior gates, not line-coverage inputs.
+
