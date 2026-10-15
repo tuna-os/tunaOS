@@ -26,11 +26,11 @@ difference matters:
 1. **mkosi as a bootc/OCI build backend** — plausible, low-risk *if* proven.
    The reference project's own output is a plain OCI image. That image should
    be a drop-in replacement for what `buildah build` produces today. See
-   "Finding 1" below.
+   `Finding 1` below.
 2. **mkosi DDI output** — not a drop-in second artifact. The reference
    project's own DDI profile is a *different model for OS deployment*
    (`systemd-sysupdate` + dm-verity + UKI, not ostree/bootc). Its own
-   maintainers flag it "should not be used by default." See "Finding 2."
+   maintainers flag it "should not be used by default." See `Finding 2`.
 
 ## What I checked, and how
 
@@ -215,7 +215,7 @@ not discover it mid-build.
   mkosi output, cosign keyless). `docs/build-pipeline.md` confirms that cosign
   already signs this repo's *current* (buildah-built) images. Nobody has
   tested whether an mkosi-produced OCI image gets the same signature through
-  the same `reusable-build-image.yml` step. Finding 1 suggests it should,
+  the same `reusable-build-image.yml` step. `Finding 1` suggests it should,
   since it is the same OCI format at the point where cosign signs.
 - **No RHSM / overlay-stage (hwe/nvidia/cachyos/asahi) compatibility check.**
   The issue calls these out as open questions. This investigation did not
@@ -234,11 +234,11 @@ run it through this repo's *unmodified* `bootc container lint`, rechunk step,
 and `iso-e2e.sh`/LUKS E2E harness, exactly as if it were a buildah build.
 
 Suppose that spike boots and passes the existing gate unmodified. That
-confirms Finding 1 in practice, and a hybrid becomes a reasonable follow-up
+confirms `Finding 1` in practice, and a hybrid becomes a reasonable follow-up
 proposal. That hybrid is mkosi as an alternate backend for one variant, behind
 a flag, with Containerfiles everywhere else. A DDI POC is a separate, later
 piece of work. It should not block this one, and nobody should bundle it with
-this one — see Finding 2.
+this one — see `Finding 2`.
 
 ## Alignment with Image Factory Completion Gate (#1283)
 
