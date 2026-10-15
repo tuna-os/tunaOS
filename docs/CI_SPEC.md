@@ -59,6 +59,7 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 | `installer-smoke.yml` | post-merge | Installer Smoke | manual | — |
 | `iso-builder-parity.yml` | post-merge | ISO Builder Parity | caller cadence | — |
 | `iso-e2e.yml` | PR-deterministic + post-merge + scheduled | `iso` | each PR, `0 6 * * 1`, manual | `iso`: 8d |
+| `issue-intake-check.yml` | post-merge | Issue intake check | issues | — |
 | `just-fix.yml` | PR-deterministic + post-merge | Just Fix | each PR, push | — |
 | `lint.yml` | PR-deterministic + post-merge | Lint and Check | each PR, push | — |
 | `live-initramfs.yml` | post-merge | Live Initramfs Artifacts | manual | — |
