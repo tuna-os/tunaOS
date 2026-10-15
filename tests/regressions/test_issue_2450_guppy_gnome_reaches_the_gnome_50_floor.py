@@ -33,7 +33,9 @@ MANIFEST = ROOT / "manifests" / "desktops" / "gnome.yaml"
 INSTALL = ROOT / "build_scripts" / "desktop" / "install-desktop.sh"
 LOCK = ROOT / "build_scripts" / "desktop" / "gentoo-binhost-version-lock.sh"
 
-# Each of these has its GNOME 50 ebuild under ~amd64 only.
+# The keyworded GNOME 50 set gnome.yaml declares. The first eight have their
+# GNOME 50 ebuild under ~amd64 only; keyring/gtk/libadwaita are pulled to the
+# matching ~amd64 versions by the same set, so all eleven must stay.
 CORE = {
     "gnome-base/gnome-shell",
     "x11-wm/mutter",
@@ -43,6 +45,9 @@ CORE = {
     "gnome-base/gnome-control-center",
     "gnome-base/gnome-settings-daemon",
     "sys-apps/xdg-desktop-portal-gnome",
+    "gnome-base/gnome-keyring",
+    "gui-libs/gtk",
+    "gui-libs/libadwaita",
 }
 
 
@@ -65,8 +70,9 @@ def test_keyword_atoms_are_bare_so_a_50_x_bump_needs_no_edit():
 
 def test_installer_writes_the_keywords_before_the_lock_reads_them():
     body = INSTALL.read_text(encoding="utf-8")
-    kw = body.index("emerge_accept_keywords")
-    lock = body.index('gentoo-binhost-version-lock.sh"')
+    # The concrete write, not the explanatory comment that names the key.
+    kw = body.index(">\"/etc/portage/package.accept_keywords/tunaos-${_TD_DESKTOP}\"")
+    lock = body.index('"${_TD_CTX}/build_scripts/desktop/gentoo-binhost-version-lock.sh"')
     assert kw < lock, "install-desktop.sh writes the keywords after the lock runs"
 
 
