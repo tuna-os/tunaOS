@@ -8,6 +8,8 @@ The key is byte-identical to tuna-os/tunaos-packages `public.gpg` at commit `f56
 
 The existing gtkgreet/cage launcher supplies a graphical greetd session picker and software rendering fallback. The shipped `tuna.desktop` session launches its supervisor (`tuna-session`), and its `tuna-lock` PAM service handles unlock. `XDG_CURRENT_DESKTOP` is `Tuna:GNOME`, so xdg-desktop-portal reads `tuna-portals.conf`.
 
+gtkgreet has no display-name field: it lists `/etc/greetd/environments` verbatim, and greetd runs the chosen line as `exec <line>`. The picker therefore lists the session by its name, `Tuna Desktop`, and that line runs the `Tuna` launcher in this overlay (`/usr/bin/Tuna`), which accepts only the argument `Desktop` and starts `tuna-session` (tunaOS#3110).
+
 Upgrades from the `roost` flavor: the `tuna-desktop` package `provides` `roost` and ships, for one release, `roost-*` links to the `tuna-*` binaries, a hidden `roost.desktop` (`NoDisplay=true`, `Exec=tuna-session`) so a display manager that remembers the "roost" session still starts Tuna Desktop, and a `roost-lock` PAM service for a session started before the upgrade. Nothing in the image installs or requires a package named `roost`.
 
 The desktop contract checks six executable versions, their `roost-*` compatibility links, both session entries, both PAM services, the user session target, the greetd session choice, calendar server, IBus, portal backends, keyring, WirePlumber and greeter. Image and runtime contract results are still required before publication; source checks do not establish boot readiness.
@@ -24,7 +26,7 @@ sudo systemctl reboot
 ```
 
 After reboot, `sudo bootc status` must show the Tuna image as booted. Select
-`tuna-session` at the greeter, verify login and lock/unlock, and check your home
+`Tuna Desktop` at the greeter, verify login and lock/unlock, and check your home
 files against the backup. A bootc switch replaces the image deployment; home
 data remains in `/var/home`. Keep the previous deployment until these checks
 pass. If the new deployment fails, select the previous deployment from the boot

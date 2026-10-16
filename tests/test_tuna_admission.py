@@ -40,9 +40,28 @@ def test_tuna_contract_is_a_known_desktop_with_session_and_pam_requirements():
         assert requirement in case
 
 
-def test_tuna_is_a_selectable_greetd_session():
+def test_tuna_is_a_selectable_greetd_session_listed_by_name(tmp_path):
+    """gtkgreet lists environments lines verbatim and greetd runs the chosen
+    line as `exec <line>` (tunaOS#3110): the picker shows "Tuna Desktop", and
+    that line runs the shipped launcher, which starts tuna-session."""
+    import os
+    import subprocess
+
     environments = ROOT / "experiences/tuna/files/etc/greetd/environments"
-    assert environments.read_text().splitlines() == ["tuna-session"]
+    assert environments.read_text().splitlines() == ["Tuna Desktop"]
+    launcher = ROOT / "experiences/tuna/files/usr/bin/Tuna"
+    assert os.access(launcher, os.X_OK), "cp -a must install the launcher executable"
+    (tmp_path / "tuna-session").write_text("#!/bin/sh\necho \"tuna-session $#\"\n")
+    (tmp_path / "tuna-session").chmod(0o755)
+    env = {**os.environ, "PATH": f"{launcher.parent}:{tmp_path}:{os.environ['PATH']}"}
+    started = subprocess.run(["sh", "-c", f"exec {environments.read_text().strip()}"],
+                             env=env, capture_output=True, text=True)
+    assert started.returncode == 0, started.stderr
+    assert started.stdout == "tuna-session 0\n"
+    for argv in (["Tuna"], ["Tuna", "Desktop", "extra"], ["Tuna", "desktop"]):
+        refused = subprocess.run(argv, env=env, capture_output=True, text=True)
+        assert refused.returncode == 64
+        assert "tuna-session" not in refused.stdout
 
 
 def test_installed_portal_contract_rejects_missing_or_ambiguous_consent_routing(tmp_path):
