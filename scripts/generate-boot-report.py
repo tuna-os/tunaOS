@@ -129,6 +129,7 @@ class Combo:
     flavor: str
     build_iso: bool
     build_qcow2: bool
+    qcow2_screenshot: bool = False
 
     @property
     def key(self) -> str:
@@ -138,8 +139,9 @@ class Combo:
 def load_combos() -> list[Combo]:
     """Read build-config.yml and produce the screenshot matrix.
 
-    We honor the same `build_iso` / `build_qcow2` flags publish-isos.yml uses
-    so the report's matrix matches what's actually built.
+    We honor the same `build_iso` / `build_qcow2` flags publish-isos.yml uses,
+    plus the independent weekly QCOW2 screenshot matrix, so the report covers
+    every cell that can produce screenshot evidence.
     """
     config_path = pathlib.Path(".github/build-config.yml")
     # The runner doesn't have yq pre-installed in every workflow. Use Python
@@ -151,19 +153,46 @@ def load_combos() -> list[Combo]:
         import yaml  # type: ignore[import-untyped]
 
     data = yaml.safe_load(config_path.read_text())
+
+    # `build_qcow2` controls release artifact publication, not the independent
+    # weekly screenshot workflow. That workflow builds temporary QCOW2 disks
+    # for more cells, so derive its coverage from its matrix rather than
+    # silently hiding artifacts for cells whose release flag is false (#2801).
+    screenshot_path = pathlib.Path(".github/workflows/weekly-qcow2-screenshots.yml")
+    screenshot_data = yaml.safe_load(screenshot_path.read_text()) or {}
+    screenshot_entries = (
+        screenshot_data.get("jobs", {})
+        .get("screenshot", {})
+        .get("strategy", {})
+        .get("matrix", {})
+        .get("include", [])
+    )
+    qcow2_screenshot_combos = {
+        (entry.get("variant"), entry.get("flavor"))
+        for entry in screenshot_entries
+        if entry.get("variant") and entry.get("flavor")
+    }
+
     combos: list[Combo] = []
     for variant in data.get("variants", []):
         vid = variant["id"]
         for flavor in variant.get("flavors", []):
-            if not flavor.get("build_iso") and not flavor.get("build_qcow2"):
-                # Skip image-only flavors that don't produce screenshots
+            fid = flavor["id"]
+            qcow2_screenshot = (vid, fid) in qcow2_screenshot_combos
+            if (
+                not flavor.get("build_iso")
+                and not flavor.get("build_qcow2")
+                and not qcow2_screenshot
+            ):
+                # Skip image-only flavors that don't produce screenshots.
                 continue
             combos.append(
                 Combo(
                     variant=vid,
-                    flavor=flavor["id"],
+                    flavor=fid,
                     build_iso=bool(flavor.get("build_iso")),
                     build_qcow2=bool(flavor.get("build_qcow2")),
+                    qcow2_screenshot=qcow2_screenshot,
                 )
             )
     return combos
@@ -578,7 +607,7 @@ def main() -> int:
                 f"{combo.key}-boot-screenshot", work_root
             )
         qcow2_info = None
-        if combo.build_qcow2:
+        if combo.build_qcow2 or combo.qcow2_screenshot:
             qcow2_info = fetch_latest_artifact(
                 f"{combo.key}-qcow2-boot-screenshot", work_root
             )

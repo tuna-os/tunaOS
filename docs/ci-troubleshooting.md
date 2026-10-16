@@ -1513,6 +1513,24 @@ Do not wait for the transaction from inside it. This check reports manager
 state; the separate display-manager and user-session checks prove more.
 
 
+## 32. Weekly boot report hides successful non-GNOME QCOW2 captures (#2801)
+
+**Symptom:** The 2026-09-28 report listed KDE, Niri, and COSMIC QCOW2
+screenshots as unavailable even though all 12 non-GNOME jobs in workflow run
+[36356753451](https://github.com/tuna-os/tunaOS/actions/runs/36356753451)
+completed successfully and uploaded their named artifacts.
+
+**Measured cause:** `generate-boot-report.py` fetched a QCOW2 screenshot only
+when the flavor's `build_qcow2` value was true. That setting tells the release
+process to publish an artifact, and was true only for GNOME. The separate
+`weekly-qcow2-screenshots.yml` matrix builds temporary disks and captured all
+four desktop flavors for Yellowfin, Albacore, Skipjack, and Bonito.
+
+**Fix:** Derive screenshot coverage from the weekly workflow's matrix in
+addition to the release flags, then fetch each declared artifact. The unit test
+uses the previous defect: the report must query a matrix cell with
+`build_qcow2: false` when the weekly workflow captures it.
+
 ### Adoption reports show `desktop` or `latest` for different images
 
 **Symptom:** Image info reports `desktop` or `latest` for different images. It does not identify each flavor or the actual update tag.
