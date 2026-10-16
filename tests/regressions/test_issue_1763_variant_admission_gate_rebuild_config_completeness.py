@@ -83,18 +83,25 @@ def check_variant_platforms_have_repo_sources(
             f"Variant '{variant_id}' uses a rebuild repository but no published "
             f"architectures are recorded for it in REBUILD_REPO_ARCHES"
         ]
+    # Effective platforms per build-variant.yml: an enabled flavor's own
+    # `platforms` overrides the variant's.
+    scopes = [(f"Variant '{variant_id}'", variant.get("platforms", []))]
+    for flavor in variant.get("flavors", []):
+        if flavor.get("build_image") and "platforms" in flavor:
+            scopes.append(
+                (f"Variant '{variant_id}' flavor '{flavor.get('id')}'", flavor["platforms"])
+            )
     errors = []
-    for platform in variant.get("platforms", []):
-        arch = PLATFORM_TO_ARCH.get(platform)
-        if arch is None:
-            errors.append(
-                f"Variant '{variant_id}' declares unknown platform '{platform}'"
-            )
-        elif arch not in arches:
-            errors.append(
-                f"Variant '{variant_id}' declares '{platform}' but its rebuild "
-                f"repository publishes no {arch} packages"
-            )
+    for scope, platforms in scopes:
+        for platform in platforms or []:
+            arch = PLATFORM_TO_ARCH.get(platform)
+            if arch is None:
+                errors.append(f"{scope} declares unknown platform '{platform}'")
+            elif arch not in arches:
+                errors.append(
+                    f"{scope} declares '{platform}' but its rebuild "
+                    f"repository publishes no {arch} packages"
+                )
     return errors
 
 
@@ -132,37 +139,34 @@ def _override_manifest_name(variant_id: str, os_sec: str, base_flavor: str) -> s
     return None
 
 
-def _section_packages(section) -> list[str] | None:
-    if isinstance(section, list):
-        return section
+def _section_packages(section):
+    """Package value of an OS section: the list itself, or a mapping's `packages`."""
     if isinstance(section, dict):
-        return section.get("packages", [])
-    return None
+        return section.get("packages")
+    return section
 
 
-def get_manifest_packages(
-    variant_id: str, flavor_id: str, manifests_dir: pathlib.Path
-) -> list[str] | None:
+def get_manifest_packages(variant_id: str, flavor_id: str, manifests_dir: pathlib.Path):
+    """Package value install-desktop.sh would install, or None if the section is absent.
+
+    The returned value is not type-checked here; the admission check requires
+    a non-empty list.
+    """
     os_sec = _get_os_section_for_variant(variant_id)
     base_flavor = flavor_id.split("-")[0]
 
-    # Priority 1: Distro-specific override manifest (same precedence as
-    # build_scripts/desktop/install-desktop.sh).
+    # A distro-specific override manifest, when it exists, is the only file
+    # install-desktop.sh reads — it never falls back to the generic manifest.
     override = _override_manifest_name(variant_id, os_sec, base_flavor)
     if override is not None and (manifests_dir / override).exists():
-        doc = yaml.safe_load((manifests_dir / override).read_text(encoding="utf-8")) or {}
-        section = (doc.get("packages") or {}).get(os_sec)
-        if section is None:
-            section = doc.get(os_sec)
-        pkgs = _section_packages(section)
-        if pkgs is not None:
-            return pkgs
-
-    # Priority 2: Generic manifest
-    manifest_file = manifests_dir / f"{base_flavor}.yaml"
+        manifest_file = manifests_dir / override
+    else:
+        manifest_file = manifests_dir / f"{base_flavor}.yaml"
     if not manifest_file.exists():
         return None
 
+    # install-desktop.sh reads only `.packages.<os>`; a top-level `<os>:` key
+    # is ignored at build time, so it must not satisfy admission either.
     doc = yaml.safe_load(manifest_file.read_text(encoding="utf-8")) or {}
     return _section_packages((doc.get("packages") or {}).get(os_sec))
 
@@ -186,23 +190,29 @@ def check_variant_manifest_completeness(
             continue
 
         base_flavor = fid.split("-")[0]
-        candidates = [f"{base_flavor}.yaml"]
         override = _override_manifest_name(variant_id, os_sec, base_flavor)
-        if override is not None:
-            candidates.insert(0, override)
-        existing = [n for n in candidates if (manifests_dir / n).exists()]
-        if not existing:
-            errors.append(
-                f"Variant '{variant_id}' declares flavor '{fid}' but no manifest "
-                f"exists (expected one of: {', '.join(candidates)})"
-            )
-            continue
+        if override is not None and (manifests_dir / override).exists():
+            selected = override
+        else:
+            selected = f"{base_flavor}.yaml"
+            if not (manifests_dir / selected).exists():
+                expected = f"{override} or {selected}" if override else selected
+                errors.append(
+                    f"Variant '{variant_id}' declares flavor '{fid}' but manifest "
+                    f"{expected} is missing"
+                )
+                continue
 
         pkgs = get_manifest_packages(variant_id, fid, manifests_dir)
         if pkgs is None:
             errors.append(
                 f"Variant '{variant_id}' declares flavor '{fid}' (routes to '{os_sec}') "
-                f"but {' / '.join(existing)} has no packages.{os_sec} section"
+                f"but '{selected}' has no packages.{os_sec} section"
+            )
+        elif not isinstance(pkgs, list) or not all(isinstance(p, str) for p in pkgs):
+            errors.append(
+                f"Variant '{variant_id}' flavor '{fid}' packages.{os_sec} in "
+                f"'{selected}' is not a list of package names"
             )
         elif len(pkgs) == 0:
             errors.append(
@@ -270,6 +280,25 @@ def test_empty_override_section_is_reported_not_masked(tmp_path):
     assert len(errors) == 1 and "list is empty" in errors[0]
 
 
+def test_override_missing_section_does_not_fall_back_to_generic(tmp_path):
+    # install-desktop.sh picks the override by existence alone and never
+    # falls back, so the generic manifest's apt list cannot rescue it.
+    (tmp_path / "foo-debian.yaml").write_text("packages:\n  zypper: [x]\n")
+    (tmp_path / "foo.yaml").write_text("packages:\n  apt: [foo-session]\n")
+    variant = {"id": "flounder", "flavors": [{"id": "foo", "build_image": True}]}
+    errors = check_variant_manifest_completeness(variant, tmp_path)
+    assert len(errors) == 1 and "'foo-debian.yaml' has no packages.apt" in errors[0]
+
+
+def test_malformed_package_value_is_rejected(tmp_path):
+    (tmp_path / "foo.yaml").write_text(
+        "packages:\n  hummingbird:\n    packages: gnome-shell\n"
+    )
+    variant = {"id": "hummingbird", "flavors": [{"id": "foo", "build_image": True}]}
+    errors = check_variant_manifest_completeness(variant, tmp_path)
+    assert len(errors) == 1 and "not a list of package names" in errors[0]
+
+
 def test_unknown_variant_fails_closed():
     unknown_variant = {
         "id": "unknown_future_variant",
@@ -315,3 +344,20 @@ def test_unrecorded_rebuild_repo_fails_closed():
     )
     assert len(errors) == 1
     assert "no published architectures are recorded" in errors[0]
+
+
+def test_rejection_of_flavor_platform_override_without_rebuild_repo_source():
+    # build-variant.yml schedules `.platforms // $v.platforms`, so a flavor's
+    # own arm64 declaration overrides the amd64-only variant default.
+    broken_variant = {
+        "id": "hummingbird",
+        "platforms": ["linux/amd64"],
+        "flavors": [
+            {"id": "cosmic", "build_image": True, "platforms": ["linux/arm64"]},
+        ],
+    }
+    errors = check_variant_platforms_have_repo_sources(
+        broken_variant, True, REBUILD_REPO_ARCHES
+    )
+    assert len(errors) == 1
+    assert "flavor 'cosmic'" in errors[0] and "aarch64" in errors[0]
