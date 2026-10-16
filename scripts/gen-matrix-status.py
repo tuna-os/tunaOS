@@ -161,6 +161,32 @@ def gh_json_required(*args: str):
         )
     return out
 
+# `gh run view --json jobs` always asks for 100 jobs per page, and for some
+# large runs the jobs endpoint answers that page size with HTTP 502 every
+# time: 31224494825 (LUKS E2E, 113 jobs), 38713238238 (Bootc Lifecycle, 153)
+# and 38592759334 (Build Bonito, 138) on 2026-10-16, while per_page=50 on
+# the same runs answered in seconds. The 502 on 38592759334 failed the
+# regenerate check on every pull request, because the build walk raised on it.
+JOBS_PAGE = 50
+
+
+def run_jobs(run_id: str) -> list[dict] | None:
+    """A run's jobs (latest attempt), or None when no query could read them.
+
+    `gh run view` first; when it keeps failing, the jobs endpoint again in
+    smaller pages. None means the run is unreadable, not that it has no jobs:
+    callers decide whether that is skippable.
+    """
+    detail = gh_json("run", "view", run_id, "--repo", REPO, "--json", "jobs")
+    if detail is not None:
+        return detail.get("jobs") or []
+    pages = gh_json(
+        "api", "--paginate", "--slurp",
+        f"repos/{REPO}/actions/runs/{run_id}/jobs?per_page={JOBS_PAGE}",
+    )
+    if pages is None:
+        return None
+    return [job for page in pages for job in page.get("jobs") or []]
 
 
 def _newest_main_run(workflow: str) -> str | None:
@@ -342,11 +368,9 @@ def latest_results(workflow: str, name_re: str) -> dict[str, tuple[str, str, str
             break
         walked += 1
         run_id, date = str(run["databaseId"]), run["createdAt"][:10]
-        detail = gh_json(
-            "run", "view", run_id, "--repo", REPO, "--json", "jobs"
-        ) or {}
+        jobs = run_jobs(run_id) or []
         deepest_was_new = False
-        for job in detail.get("jobs", []):
+        for job in jobs:
             name, conclusion = job.get("name", ""), job.get("conclusion")
             if not pattern.search(name) or conclusion not in ("success", "failure"):
                 continue
@@ -592,23 +616,36 @@ def build_stage_results() -> dict[str, dict]:
         flavors = set(configured[variant])
         jobs: dict[tuple[str, str], str] = {}
         cell_run: dict[str, tuple[str, str]] = {}
+        unreadable: list[str] = []
         for run in conclusive:
             if flavors <= set(cell_run):
                 break
-            detail = gh_json_required(
-                "run", "view", str(run["databaseId"]), "--repo", REPO,
-                "--json", "jobs",
-            )
+            run_id = str(run["databaseId"])
+            listed = run_jobs(run_id)
+            # A run whose jobs no query can read is skipped, not fatal: the
+            # cells it asserted fall to the next run that asserted them. It
+            # is named in the log, and if any cell is still unscored once the
+            # walk ends, the skipped run may have held its verdict, so the
+            # refresh raises below rather than scoring that cell untested.
+            if listed is None:
+                print(
+                    f"warning: build-{variant}.yml run {run_id}: jobs "
+                    "unreadable after every attempt; skipping it, so its "
+                    "cells are scored from older runs",
+                    file=sys.stderr,
+                )
+                unreadable.append(run_id)
+                continue
             # A completed build run always has jobs (generate_matrix at the
             # least). An empty list is a bad answer, not a run that built
             # nothing, and reading it as one skips to an older run.
-            if not detail.get("jobs"):
+            if not listed:
                 raise RuntimeError(
-                    f"gh run view {run['databaseId']} returned no jobs for a "
+                    f"gh run view {run_id} returned no jobs for a "
                     f"completed build-{variant}.yml run; refusing to skip it"
                 )
             per_run: dict[tuple[str, str], str] = {}
-            for job in detail.get("jobs", []):
+            for job in listed:
                 m = re.search(
                     r" / (?P<flavor>[^/]+) / (?P<stage>Promote|Gate)$",
                     job.get("name", ""),
@@ -644,6 +681,13 @@ def build_stage_results() -> dict[str, dict]:
                     jobs[(flavor, "Promote")] = promote
                 if (flavor, "Gate") in per_run:
                     jobs[(flavor, "Gate")] = gate
+        unscored = flavors - set(cell_run)
+        if unreadable and unscored:
+            raise RuntimeError(
+                f"build-{variant}.yml run(s) {', '.join(unreadable)} could not "
+                f"be read and {', '.join(sorted(unscored))} has no verdict "
+                "from a readable run; refusing to score it as untested"
+            )
         out[variant] = {
             "jobs": jobs,
             # The variant's newest conclusive run, for cells that no run
