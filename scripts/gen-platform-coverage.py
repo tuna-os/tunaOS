@@ -44,11 +44,13 @@ def load_config(path: Path = CONFIG) -> dict:
 
 def flavor_platforms(config: dict, variant: dict, flavor: dict) -> set[str]:
     """Return the platforms the build matrix gives one flavor."""
-    platforms = (
-        flavor.get("platforms")
-        or variant.get("platforms")
-        or config["config"]["global_platforms"]
-    )
+    # By key presence, as build-variant.yml's jq `//` does: an explicit
+    # empty list means no platforms, not "inherit".
+    platforms = flavor.get("platforms")
+    if platforms is None:
+        platforms = variant.get("platforms")
+    if platforms is None:
+        platforms = config["config"]["global_platforms"]
     if not isinstance(platforms, list) or not all(
         isinstance(p, str) for p in platforms
     ):

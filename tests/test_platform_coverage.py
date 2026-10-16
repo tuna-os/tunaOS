@@ -73,6 +73,12 @@ class TestDerivation(unittest.TestCase):
         with self.assertRaises(ValueError):
             gpc.coverage(config)
 
+    def test_empty_flavor_platforms_means_none_not_inherit(self):
+        config = fixture()
+        config["variants"][1]["flavors"][0]["platforms"] = []
+        rows = {row["variant"]: row for row in gpc.coverage(config)}
+        self.assertNotIn("niri", rows["arm"]["arm64"])
+
     def test_pantheon_and_tuna_cells_are_counted(self):
         config = fixture()
         config["variants"].append({
