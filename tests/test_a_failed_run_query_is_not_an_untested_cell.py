@@ -47,6 +47,8 @@ JOBS = {"jobs": [
 
 def _gh(list_result, view_result):
     def fake(*args):
+        if args[:2] == ("api", "--paginate"):  # run_jobs' small-page fallback
+            return None if view_result is None else [view_result]
         if args[0] == "api":  # main_runs' newest-run cross-check
             runs = list_result or []
             return {"workflow_runs": [{"id": runs[0]["databaseId"]}] if runs else []}
