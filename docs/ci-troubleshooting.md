@@ -1582,6 +1582,17 @@ The image had both backends; the default preferred GNOME for Access.
 
 **Fix:** Select GTK for Access, and GNOME for Screenshot and ScreenCast. The contract for the installed desktop rejects missing, wrong, duplicate, or out-of-section preferences. The admission test runs the shell validator against the shipped configuration and broken variants. Verify the final image in its separate boot gate.
 
+### guppy:gnome installs GNOME 49 and fails the version floor (#2450)
+
+**Symptom:** The `gnome` build of `guppy` (Gentoo) stops in `verify-desktop-experience.sh` with this error:
+
+```
+GNOME 49 is below the floor: nothing below GNOME 50 ships
+```
+
+**Measured cause:** On 2026-10-07, stable amd64 in `::gentoo` stops at `gnome-shell-49.7`. The GNOME 50 ebuilds (`gnome-shell-50.5`, `mutter-50.5`, `gdm-50.3-r2`) have only the `~amd64` keyword. The official binhost builds only stable versions. Also, `gentoo-binhost-version-lock.sh` masks all `gnome-base` versions that are newer than the binhost. Thus a keyword for `gnome-shell` alone does not have an effect: the lock masks 50.5, the `--pretend` check resolves to 49.7, and the lock stays.
+
+**Fix:** The `emerge_accept_keywords` list in `manifests/desktops/gnome.yaml` gives the GNOME 50 core set. `install-desktop.sh` writes that list to `/etc/portage/package.accept_keywords` before the lock runs. The lock does not mask the packages in that file. These packages compile from source. If `emerge --pretend` shows a mixed 49/50 desktop, add the 49 package to the list. Do not add `gnome-base/nautilus`: `::gentoo` masks `>=nautilus-50` (bug 982084).
 
 ### CI steps download an unpinned yq binary
 
@@ -1616,3 +1627,18 @@ contract in `tests/bats/test_test_yml_pytest_always_runs.bats` holds the upload
 path and authentication mode. This report is Python-only; BATS and QEMU E2E
 coverage are behavior gates, not line-coverage inputs.
 
+
+### A LUKS cell passes its desktop contract and fails the pixel gate (#979)
+
+**Symptom:** The LUKS path logs `desktop_contract=ok`, but the
+`installed-desktop` capture has `stddev=0` and the pixel gate fails the cell.
+
+**Measured cause:** `luks-first-boot.py` sent `system_powerdown` when it
+returned. `iso-e2e.sh` then took the capture during the shutdown. A guest that
+stopped its display manager in that 8s window left a black framebuffer. Run
+36873532817 failed 33 cells this way (sddm, gdm and lightdm). Cells that
+stopped more slowly passed.
+
+**Fix:** `iso-e2e.sh` always sets `TUNAOS_LUKS_NO_POWEROFF=1`. It takes the
+capture first, then sends the graceful powerdown itself before the kill.
+`tests/bats/test_luks_capture_before_powerdown.bats` holds that order.

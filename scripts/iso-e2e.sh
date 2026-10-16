@@ -1554,11 +1554,25 @@ run_installer_gui_checks() {
 	return 0
 }
 
-# Type at the QEMU monitor: one HMP command, no reply needed.
+# Type at the QEMU monitor: one HMP command, no reply needed. socat when
+# present, else python3's socket module (as luks-first-boot.py does), so the
+# harness-owned system_powerdown on the LUKS path is not silently skipped
+# on a host without socat.
 monitor_cmd() {
 	[[ -S "$MONITOR_SOCK" ]] || return 1
-	command -v socat &>/dev/null || return 1
-	echo "$1" | socat - "UNIX-CONNECT:${MONITOR_SOCK}" >/dev/null 2>&1 || return 1
+	if command -v socat &>/dev/null; then
+		echo "$1" | socat - "UNIX-CONNECT:${MONITOR_SOCK}" >/dev/null 2>&1 || return 1
+		return 0
+	fi
+	command -v python3 &>/dev/null || return 1
+	python3 - "$MONITOR_SOCK" "$1" >/dev/null 2>&1 <<'PY' || return 1
+import socket, sys
+s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+s.settimeout(5)
+s.connect(sys.argv[1])
+s.sendall(sys.argv[2].encode() + b"\n")
+s.close()
+PY
 }
 
 # Type a string as hardware key events. Compositor-agnostic: a greeter cannot
@@ -3000,10 +3014,17 @@ EOF
 		}
 		# 5th arg: keep draining the serial for up to 300s past login waiting
 		# for the desktop contract. See luks-first-boot.py for why.
-		# TUNAOS_LUKS_NO_POWEROFF: luks-first-boot.py powers the guest off
-		# when it is done, which would leave the greeter-login phase below
-		# with nothing to log into. Keep it up when that phase will run.
-		TUNAOS_LUKS_NO_POWEROFF="${TUNAOS_E2E_SESSION_LOGIN:-0}" \
+		# TUNAOS_LUKS_NO_POWEROFF=1, always: by default luks-first-boot.py
+		# powers the guest off when it is done, and this harness photographs
+		# the installed desktop AFTER it returns. With the powerdown already
+		# sent, that capture raced the shutdown: a guest that stopped its DM
+		# within the 8s window left a black framebuffer (stddev=0), and the
+		# pixel gate failed a desktop whose in-guest contract had passed.
+		# Run 36873532817 failed 33 cells exactly that way (sddm, gdm and
+		# lightdm alike), while slower-to-stop cells passed. The greeter-login
+		# phase below needs the live guest too. This function sends the
+		# graceful powerdown itself once both are done.
+		TUNAOS_LUKS_NO_POWEROFF=1 \
 			python3 "$(dirname "${BASH_SOURCE[0]}")/luks-first-boot.py" \
 			"$FB_SERIAL" "$MONITOR_SOCK" "$E2E_LUKS_PASS" 900 300 \
 			2>&1 | tee "${OUTPUT_DIR}/installed-serial.log" || {
@@ -3024,9 +3045,11 @@ EOF
 		# how run 29645108966 reported a green gate over a black console.
 		# A framebuffer capture is the cheapest thing that can contradict it.
 		#
-		# Ordering matters twice: luks-first-boot.py only returns after its
-		# 300s post-login drain, so by here the session has had time to come
-		# up; and the kill below destroys the only surface there is to capture.
+		# Ordering matters three times: luks-first-boot.py only returns after
+		# its 300s post-login drain, so by here the session has had time to
+		# come up; the guest is still running because TUNAOS_LUKS_NO_POWEROFF=1
+		# above deferred the powerdown; and the powerdown and kill below destroy
+		# the only surface there is to capture.
 		screenshot "installed-desktop" || true
 		local _shot="absent"
 		SCREENSHOT_STDDEV=""
@@ -3052,15 +3075,18 @@ EOF
 		if [[ "${TUNAOS_E2E_SESSION_LOGIN:-0}" -eq 1 ]]; then
 			local _sess_rc=0
 			run_installed_session_login || _sess_rc=$?
-			# The graceful powerdown luks-first-boot.py skipped on our behalf,
-			# so swtpm state and LUKS metadata still flush cleanly.
-			monitor_cmd "system_powerdown" || true
-			sleep 8
 			if [[ "$_sess_rc" -ne 0 ]]; then
+				monitor_cmd "system_powerdown" || true
+				sleep 8
 				[[ -s "$QEMU_PIDFILE" ]] && kill "$(cat "$QEMU_PIDFILE")" 2>/dev/null || true
 				return "$_sess_rc"
 			fi
 		fi
+		# The graceful powerdown luks-first-boot.py skipped on our behalf
+		# (TUNAOS_LUKS_NO_POWEROFF=1), so swtpm state and LUKS metadata still
+		# flush cleanly before the kill.
+		monitor_cmd "system_powerdown" || true
+		sleep 8
 		[[ -s "$QEMU_PIDFILE" ]] && kill "$(cat "$QEMU_PIDFILE")" 2>/dev/null || true
 		record_luks_evidence "TUNAOS_LUKS_E2E_PASS encrypted=1 passphrase_unlock=1 installed_boot=1"
 
