@@ -134,8 +134,10 @@ window {
 }
 
 /* The login box: lift it off the background, otherwise the themed widgets
- * float on the gradient with no visual container. */
-box#window-box {
+ * float on the wallpaper with no visual container and the theme's dark
+ * clock and prompt text vanish on a dark wallpaper (tunaOS#3110). gtkgreet
+ * names the box holding its clock and form "window" (window.c). */
+box#window {
 	background-color: @theme_bg_color;
 	border-radius: 8px;
 	padding: 24px;
