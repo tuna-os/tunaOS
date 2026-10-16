@@ -201,6 +201,11 @@ variants:
         build_iso: true
         build_qcow2: true
       - id: cosmic
+        # COSMIC on EL10 comes from the Tideforge tier at
+        # repo.tunaos.org/repo/10-stream-x86_64 (manifests/desktops/
+        # cosmic.yaml), which publishes x86_64 only -- same shape as xfce.
+        platforms:
+          - linux/amd64
         stage: 2
         build_image: true
         build_iso: true
@@ -303,6 +308,10 @@ variants:
         build_iso: false
         build_qcow2: false
       - id: cosmic-hwe
+        # Layers on cosmic, which is amd64-only while the Tideforge COSMIC
+        # tier has no aarch64 index (see cosmic above).
+        platforms:
+          - linux/amd64
         stage: 3
         build_image: true
         build_iso: false
@@ -437,6 +446,11 @@ variants:
         build_qcow2: true
 
       - id: cosmic
+        # COSMIC on EL10 comes from the Tideforge tier at
+        # repo.tunaos.org/repo/10-stream-x86_64 (manifests/desktops/
+        # cosmic.yaml), which publishes x86_64 only -- same shape as xfce.
+        platforms:
+          - linux/amd64
         stage: 2
         build_image: true
         build_iso: true
@@ -538,6 +552,10 @@ variants:
         build_iso: false
         build_qcow2: false
       - id: cosmic-hwe
+        # Layers on cosmic, which is amd64-only while the Tideforge COSMIC
+        # tier has no aarch64 index (see cosmic above).
+        platforms:
+          - linux/amd64
         stage: 3
         build_image: true
         build_iso: false
@@ -672,6 +690,11 @@ variants:
         build_iso: true
         build_qcow2: true
       - id: cosmic
+        # COSMIC on EL10 comes from the Tideforge tier at
+        # repo.tunaos.org/repo/10-stream-x86_64 (manifests/desktops/
+        # cosmic.yaml), which publishes x86_64 only -- same shape as xfce.
+        platforms:
+          - linux/amd64
         stage: 2
         build_image: true
         build_iso: true
@@ -777,6 +800,10 @@ variants:
         build_iso: false
         build_qcow2: false
       - id: cosmic-hwe
+        # Layers on cosmic, which is amd64-only while the Tideforge COSMIC
+        # tier has no aarch64 index (see cosmic above).
+        platforms:
+          - linux/amd64
         stage: 3
         build_image: true
         build_iso: false
@@ -907,9 +934,9 @@ variants:
         build_iso: false
         build_qcow2: false
       # COSMIC 1.6.0 from eln-extras — 23 of 24 manifest packages present
-      # (only cosmic-wallpapers absent). Notably needs NO copr and no
-      # repo.tunaos.org fprintd repo, both of which the el10 section carries:
-      # ELN has fprintd-1.94.5-6.eln158 in eln-appstream (#2049).
+      # (only cosmic-wallpapers absent). Notably needs NO extra repo, unlike
+      # the el10 section's x86_64-only repo.tunaos.org Tideforge tier, so it
+      # keeps arm64: ELN has fprintd-1.94.5-6.eln158 in eln-appstream (#2049).
       - id: cosmic
         stage: 2
         build_image: true
@@ -1643,8 +1670,8 @@ variants:
       # nothing else — no arm64 build of cosmic-session/cosmic-comp/etc exists
       # for any series (Launchpad getPublishedBinaries). grouper otherwise
       # builds both arches, so the arm64 job was the ONLY failure in run
-      # 31088031074 while amd64 built clean. Same shape as the aarch64 cosmic
-      # pin on the EL10 variants for fprintd-pam (tunaOS#732).
+      # 31088031074 while amd64 built clean. Same shape as the amd64 cosmic
+      # pin on the EL10 variants for the x86_64-only Tideforge tier.
       #
       # This PPA dependency is tracked for removal in tunaOS#964 — see the
       # status note at the top of manifests/desktops/cosmic.yaml's apt:
@@ -1666,7 +1693,7 @@ variants:
     emoji: "🚀"
     upstream_track: rolling
     description: "Based on Arch Linux (rolling)"
-    base_image: "docker.io/archlinux/archlinux:latest@sha256:9a795bf1385c5ecde776c2d8355d7e290350b49a24f85fe20f392c1e25b18eb3"
+    base_image: "docker.io/archlinux/archlinux:latest@sha256:830140f42fa7fe08b953c2bca212b68b80f64d9a97d7a52bcd0caa37735c01fa"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [arch, archlinux]
     # arm64 legs use ghcr.io/tuna-os/archlinuxarm instead (docker.io/archlinux

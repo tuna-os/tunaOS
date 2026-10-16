@@ -90,10 +90,18 @@ fi
 # display-manager.service to gdm.service at install time and again at first
 # boot; gdm then holds VT1 and greetd dies with "unable to take controlling
 # terminal: EPERM" (measured on an albacore:tuna VM). Mask gdm so no preset
-# can start it, and point the alias at greetd.
+# can start it, and point the alias at greetd -- unless it already names
+# cosmic-greeter.service, which IS greetd (`ExecStart=greetd --config
+# /etc/greetd/cosmic-greeter.toml`) and is the DM cosmic.yaml selects on
+# EL10, where the factory greetd ships no config.toml for a bare
+# greetd.service to start with.
 if [[ -f /usr/lib/systemd/system/greetd.service && -f /usr/lib/systemd/system/gdm.service ]]; then
-	echo "gdm is installed beside greetd; masking gdm.service and giving display-manager.service to greetd"
+	echo "gdm is installed beside greetd; masking gdm.service"
 	rm -f /etc/systemd/system/graphical.target.wants/gdm.service
 	systemctl mask gdm.service || return 1
-	ln -sf /usr/lib/systemd/system/greetd.service /etc/systemd/system/display-manager.service
+	if [[ "$(readlink -f /etc/systemd/system/display-manager.service 2>/dev/null)" == */cosmic-greeter.service ]]; then
+		echo "display-manager.service already points at cosmic-greeter.service (greetd wrapper); leaving it"
+	else
+		ln -sf /usr/lib/systemd/system/greetd.service /etc/systemd/system/display-manager.service
+	fi
 fi

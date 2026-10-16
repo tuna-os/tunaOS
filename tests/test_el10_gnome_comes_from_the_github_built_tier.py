@@ -158,8 +158,9 @@ def test_el10_gnome_is_amd64_only_until_the_tier_has_aarch64(variants, variant):
 
 
 def test_the_other_desktops_keep_their_arches(variants):
-    """The pin is about the GNOME tier, not the variant: kde/cosmic/niri and
-    base are untouched."""
+    """The pin is about the GNOME tier, not the variant: kde/niri and base
+    are untouched (cosmic carries its own tier pin, see
+    tests/test_el10_cosmic_comes_from_the_tideforge_tier.py)."""
     for variant in PINNED:
         flavors = {f["id"]: f for f in variants[variant]["flavors"]}
         assert "platforms" not in flavors["base"]
