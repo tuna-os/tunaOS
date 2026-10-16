@@ -29,7 +29,7 @@ CRITERIA = yaml.safe_load(
 # (silent) — test_blocking_criteria_are_scoreable below is the tripwire that
 # makes the graduation a conscious wiring decision instead of a surprise.
 SCOREABLE = {"builds", "boots", "desktop", "install", "iso", "lifecycle",
-             "no_silent_omissions"}
+             "no_silent_omissions", "parity"}
 
 
 def test_composite_verdict_orders_fail_over_untested_over_pass() -> None:
@@ -95,11 +95,12 @@ def test_composite_scores_stale_verdict_as_untested() -> None:
         }
     }
     omissions = {"albacore:gnome": ("success", "2026-09-10", "34459513536")}
+    parity = {"albacore:gnome": ("success", "2026-09-10", "36439922321")}
     # Desktop verdict is 5 days old (2026-09-05), SLA is 2 days -> stale -> ⬜
     contract_stale = {"albacore:gnome": ("success", "2026-09-05", "33629919067")}
 
     lines, green_stale, total, prov = gms.composite_section(
-        CRITERIA, stage, contract_stale, {}, {}, {}, omissions, {}, today=today
+        CRITERIA, stage, contract_stale, {}, {}, {}, omissions, parity, today=today
     )
     assert green_stale == 0, (
         "a cell whose desktop verdict is 5 days old (SLA 2) must not be composite-green"
@@ -108,7 +109,7 @@ def test_composite_scores_stale_verdict_as_untested() -> None:
     # When desktop verdict is fresh (e.g. 1 day old, 2026-09-09), it is composite-green
     contract_fresh = {"albacore:gnome": ("success", "2026-09-09", "33629919067")}
     lines, green_fresh, total, prov = gms.composite_section(
-        CRITERIA, stage, contract_fresh, {}, {}, {}, omissions, {}, today=today
+        CRITERIA, stage, contract_fresh, {}, {}, {}, omissions, parity, today=today
     )
     assert green_fresh == 1, (
         "a cell with all fresh blocking verdicts must be composite-green"

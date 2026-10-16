@@ -21,6 +21,17 @@ the issue or the operations log:
 | Egress | R2 dashboard → Egress | confirm the R2 free-egress assumption for the account and traffic path |
 | Object count | R2 usage or an authenticated inventory | `live-isos/`, `screenshots/`, and any unexpected top-level prefix |
 
+The retention job can measure two of these rows without the dashboard: stored
+bytes and object count. The CI credentials of the job can read these values.
+On each scheduled run, `prune-r2.yml` writes an inventory table to its run
+summary. The table shows each top-level prefix in the bucket, its object
+count, its size, and the retention rule for it. Operation counts and egress
+still need the dashboard. The S3 API does not report these values.
+
+The table lists all prefixes in the bucket, not only the two prefixes that
+this repository prunes. A prefix without an owner in the table is an open
+question for items 2-4 of the issue.
+
 Record the measurement date, billing period, bucket, account, and dashboard
 currency/units. Do not infer cost from object count alone: package-repository
 syncs can be operation-heavy while ISOs and screenshots are storage-heavy.
@@ -62,6 +73,14 @@ To publish once, on purpose, use `publish-isos.yml`, which has its own
 
 - Never delete `*-latest` objects as part of dated-object cleanup; download
   documentation and smoke tests use those stable names.
+- Write that rule as `*-latest*`. Do not write a pattern for each extension.
+  Non-amd64 ISOs use a different pointer name:
+  `<variant>-<flavor>-latest-<arch>.iso` (#1378). The old exclude
+  `*-latest.iso*` did not match this name. Thus the prune could delete the
+  arm64 pointer and its two sidecars.
+  `tests/test_r2_retention_never_deletes_a_latest_pointer.py` reads the pointer
+  names from the upload workflows. Then it applies the prune filters to them.
+  A new pointer shape gets the same test automatically.
 - Keep ISO sidecars (`.sha256` and `.sigstore.json`) with their dated ISO. A
   sidecar without its ISO is not useful evidence or a usable download.
 - Prefer a dry run and a bounded age threshold before changing a cleanup job.

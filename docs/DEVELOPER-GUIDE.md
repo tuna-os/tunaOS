@@ -54,12 +54,12 @@ flowchart LR
   installs; [INSTALLER-FRONTENDS.md](INSTALLER-FRONTENDS.md) tracks their
   parity matrix.
 
-## 2. The build matrix: 136 cells
+## 2. The build matrix: 140 cells
 
 **`.github/build-config.yml`** drives everything CI does: 14 variants ×
 their flavors (5 desktops + `base` + hardware tiers) × declared platforms
 (amd64 / amd64-v2 / arm64). A **cell** is one `(variant, flavor)` pair —
-`yellowfin:gnome`, `bonito:kde-nvidia` — and there are 136 of them with
+`yellowfin:gnome`, `bonito:kde-nvidia` — and there are 140 of them with
 `build_image: true`. Every scoreboard, gate, and denominator in the project
 derives from this file, on purpose. A flavor that isn't declared here doesn't
 exist. Tests enforce that the workflows regenerate from this file, and do not
@@ -124,10 +124,10 @@ The important details, each one paid for with a real incident:
 - **SBOM attestation is a separate run**, not a job. When a build workflow
   completes, a `workflow_run` trigger starts `attest-sbom.yml`. It reads the
   digest and SBOM artifacts of that run and attests them. Before, the job ran
-  inside the build. `continue-on-error` kept the job from failing, but the
+  inside the build. `continue-on-error` let the job itself pass, but the
   caller still reported the result of the whole reusable workflow. So one
-  outage of the transparency log made a nightly with 27 of 30 images green
-  report `failure`, and the README matrix showed those images as unbuilt
+  outage of the transparency log caused a nightly with 27 of 30 images green
+  to report `failure`. The README matrix then showed those images as unbuilt
   (#2282). A separate workflow has its own result. Recovery stays the same:
   `rerun-infra-failures.yml` finds the `SIGSTORE_OUTAGE` marker and runs the
   job again once.
@@ -268,7 +268,7 @@ flowchart LR
     CRIT[".github/green-criteria.yml<br/>enforcement per criterion"]
     GEN["scripts/gen-matrix-status.py<br/>composite scorer"]
     MS["docs/MATRIX-STATUS.md<br/>Composite green — the bar"]
-    RM["README<br/>Built X/136 · composite green Y/136"]
+    RM["README<br/>Built X/140 · composite green Y/140"]
 
     evidence --> GEN
     CRIT --> GEN
