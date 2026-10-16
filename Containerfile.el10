@@ -50,6 +50,10 @@ COPY --from=common /system_files/shared /files
 COPY system_files_overrides /overrides
 COPY build_scripts /build_scripts
 COPY manifests /manifests
+# Only Tuna's curated files: install-desktop.sh applies experiences/<desktop>
+# whenever it is present, and the other desktops' trees are not part of the
+# RPM images today.
+COPY experiences/tuna /experiences/tuna
 COPY image-versions.yaml /image-versions.yaml
 
 # ==============================================================================
@@ -267,6 +271,21 @@ RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
   /run/context/build_scripts/desktop/install-desktop.sh xfce
+RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/90-image-info.sh
+RUN rm -rf /opt && ln -s /var/opt /opt
+
+# Tuna Desktop on the RPM bases (tuna-os/tuna-desktop ADR 0008, epic #577):
+# EL10 (yellowfin, albacore, skipjack), Fedora 44 (bonito) and ELN (wahoo).
+# The package and the pieces their bases lack come from the TunaOS factory's
+# signed repositories, declared per target in manifests/desktops/tuna.yaml.
+FROM base-no-de AS tuna
+RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/desktop/install-desktop.sh tuna
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \

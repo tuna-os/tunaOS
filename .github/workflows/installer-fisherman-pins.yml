@@ -41,7 +41,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # SHA-pinned: .github/scripts/check-action-pins.py rejects mutable
-      # refs, and Lint (action-pins) is a required check.
+      # refs, and lint.yml's Lint job runs that check on every PR.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false

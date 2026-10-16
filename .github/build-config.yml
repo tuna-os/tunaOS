@@ -73,6 +73,58 @@ sibling_images:
     workflow: build-multirunner.yml
     desktops: [XFCE]
 
+# ── Tuna Desktop rollout ─────────────────────────────────────────────────────
+# tuna-os/tuna-desktop ADR 0008: every variant gets a `tuna` flavor, or is
+# recorded here as unsupported with its reason; a variant is never silently
+# left out. `package_target` is the TunaOS factory target
+# (tuna-os/tunaos-packages manifests/package-factory.yaml) that must publish
+# tuna-desktop and the session's missing pieces for that base. `admitted`
+# variants carry a `tuna` flavor below; `unsupported` ones must not until
+# the reason is resolved. tests/test_tuna_admission.py enforces both.
+# Per-variant evidence: tunaOS issues #3195-#3207 and tunaOS#2990 (marlin).
+tuna_rollout:
+  marlin: {status: admitted, package_target: arch}
+  yellowfin: {status: admitted, package_target: el10}
+  albacore: {status: admitted, package_target: el10}
+  skipjack: {status: admitted, package_target: el10}
+  bonito: {status: admitted, package_target: fedora}
+  wahoo:
+    status: unsupported
+    package_target: eln
+    reason: "unsupported until package target eln publishes gtkgreet (tunaos-packages#829): tuna-desktop 1.0.0~beta.1-1.eln159 is published, but ELN ships no gtkgreet, the qualified greeter"
+  bonito-rawhide:
+    status: unsupported
+    package_target: rawhide
+    reason: "unsupported until package target rawhide publishes tuna-desktop (tunaos-packages#831)"
+  hummingbird:
+    status: unsupported
+    package_target: hummingbird
+    reason: "unsupported until package target hummingbird publishes tuna-desktop (tunaos-packages#832)"
+  sailfin:
+    status: unsupported
+    package_target: opensuse
+    reason: "unsupported until package target opensuse publishes tuna-desktop (tunaos-packages#833)"
+  gurnard:
+    status: unsupported
+    package_target: noble
+    reason: "unsupported until package target noble publishes tuna-desktop (tunaos-packages#834)"
+  grouper:
+    status: unsupported
+    package_target: ubuntu
+    reason: "unsupported until package target ubuntu publishes tuna-desktop to the factory apt repository (tunaos-packages#835); the v1.0.0-beta.1 .deb release asset is not a signed repository package"
+  flounder:
+    status: unsupported
+    package_target: trixie
+    reason: "unsupported until package target trixie publishes tuna-desktop (tunaos-packages#836); needs a gtk4-layer-shell >= 1.1 backport"
+  flounder-sid:
+    status: unsupported
+    package_target: debian
+    reason: "unsupported until package target debian publishes tuna-desktop (tunaos-packages#837)"
+  guppy:
+    status: unsupported
+    package_target: gentoo
+    reason: "unsupported until package target gentoo publishes tuna-desktop (tunaos-packages#838)"
+
 # Build stages (for reference — enforced by the workflow job graph):
 #
 #   Stage 1:  base
@@ -121,6 +173,16 @@ variants:
         build_image: true
         build_iso: false
         build_qcow2: false
+      # Tuna Desktop (tuna_rollout above, tunaOS#3195): el10 package target.
+      # amd64 only: gtkgreet is published for EL10 x86_64 only, and the
+      # boot gate and session qualification run on amd64.
+      - id: tuna
+        stage: 2
+        platforms: ["linux/amd64"]
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+        luks_e2e: false
       - id: gnome
         # GNOME 50 on EL10 comes from the tunaos-packages tier at
         # repo.tunaos.org/gnome50/10-stream-x86_64 (manifests/desktops/
@@ -346,6 +408,16 @@ variants:
         build_image: true
         build_iso: false
         build_qcow2: false
+      # Tuna Desktop (tuna_rollout above, tunaOS#3196): el10 package target.
+      # amd64 only: gtkgreet is published for EL10 x86_64 only, and the
+      # boot gate and session qualification run on amd64.
+      - id: tuna
+        stage: 2
+        platforms: ["linux/amd64"]
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+        luks_e2e: false
       - id: gnome
         # GNOME 50 on EL10 comes from the tunaos-packages tier at
         # repo.tunaos.org/gnome50/10-stream-x86_64 (manifests/desktops/
@@ -572,6 +644,16 @@ variants:
         build_image: true
         build_iso: false
         build_qcow2: false
+      # Tuna Desktop (tuna_rollout above, tunaOS#3197): el10 package target.
+      # amd64 only: gtkgreet is published for EL10 x86_64 only, and the
+      # boot gate and session qualification run on amd64.
+      - id: tuna
+        stage: 2
+        platforms: ["linux/amd64"]
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+        luks_e2e: false
       - id: gnome
         # GNOME 50 on EL10 comes from the tunaos-packages tier at
         # repo.tunaos.org/gnome50/10-stream-x86_64 (manifests/desktops/
@@ -789,7 +871,7 @@ variants:
     upstream_track: experimental
     description: "Based on Fedora ELN (EL11 preview, rolling)"
     experimental: true
-    base_image: "registry.fedoraproject.org/eln-bootc:latest@sha256:4832038e4835823b7c4b0e0d043c744764aba57b2f68b5177b82bae3c6acd6d2"
+    base_image: "registry.fedoraproject.org/eln-bootc:latest@sha256:c59e091c19ed8b7d0ce0ba7a372f2f892341c4bb45ec7ce989cc3a7d0c538bf9"
     # No alias: `eln` is Fedora's identifier for a moving development target,
     # and an alias tag is a stability promise this lane deliberately does not
     # make. Revisit if/when ELN gains a versioned publish.
@@ -909,6 +991,15 @@ variants:
         build_image: true
         build_iso: false
         build_qcow2: false
+      # Tuna Desktop (tuna_rollout above, tunaOS#3199): fedora package
+      # target, which publishes tuna-desktop for x86_64 only.
+      - id: tuna
+        stage: 2
+        platforms: ["linux/amd64"]
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+        luks_e2e: false
       - id: gnome
         stage: 2
         build_image: true
