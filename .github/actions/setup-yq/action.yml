@@ -49,12 +49,15 @@ runs:
             return 1
           }
 
-          fetch "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_${YQ_ARCH}" /tmp/yq
-          echo "${YQ_SHA256}  /tmp/yq" | sha256sum -c -
+          # A private mktemp dir, not a fixed /tmp path, so nothing can swap
+          # the file between the checksum and the install.
+          YQ_TMP="$(mktemp -d)"
+          trap 'rm -rf "$YQ_TMP"' EXIT
+          fetch "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_${YQ_ARCH}" "$YQ_TMP/yq"
+          echo "${YQ_SHA256}  $YQ_TMP/yq" | sha256sum -c -
           # /usr/local/bin precedes /usr/bin (where the runner image puts its
           # yq) on PATH, so the pinned binary wins.
-          sudo install -m 0755 /tmp/yq /usr/local/bin/yq
-          rm -f /tmp/yq
+          sudo install -m 0755 "$YQ_TMP/yq" /usr/local/bin/yq
           hash -r
           # A yq even earlier on PATH would still shadow it; fail instead of
           # silently running the unpinned one.
