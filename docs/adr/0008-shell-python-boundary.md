@@ -50,7 +50,7 @@ talks to the system, and rewriting that in Python buys nothing.
 manipulation:
 
 - structured input/output — `gen-matrix-status.py`, `generate-workflows.py`
-- HTTP/JSON APIs — `desktop-verify.py` (VLM), `fire-copilot-batch.py`
+- HTTP/JSON APIs — `desktop-verify.py` (VLM)
 - anything needing its own unit tests
 
 The signal is not size. It is whether the code would otherwise parse structured

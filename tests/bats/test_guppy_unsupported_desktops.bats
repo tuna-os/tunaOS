@@ -1,12 +1,16 @@
 #!/usr/bin/env bats
-# Gentoo's main tree does not currently provide what three of the five desktop
-# manifests need, for two different reasons. Keep those flavors out of Guppy's
-# published matrix, and keep the reason for each next to the omission.
+# Gentoo's main tree does not currently provide what two of the five desktop
+# manifests need. Keep those flavors out of Guppy's published matrix, and keep
+# the reason for each next to the omission.
 #
 #   niri, cosmic — no ebuild in ::gentoo at all (tunaOS#923).
-#   gnome        — an ebuild exists, but ::gentoo tops out at GNOME 49.9,
-#                  below the 50 floor verify-desktop-experience.sh enforces,
-#                  so the cell is guaranteed red (tunaOS#2450).
+#
+# gnome was on this list from 2026-09-11 to 2026-10-07: ::gentoo topped out at
+# GNOME 49.9, below the 50 floor verify-desktop-experience.sh enforces
+# (tunaOS#2450). ::gentoo now has GNOME 50 under ~amd64, and gnome.yaml's
+# emerge_accept_keywords accepts it, so gnome is declared again.
+# tests/regressions/test_issue_2450_guppy_gnome_reaches_the_gnome_50_floor.py
+# holds the keyword list and the binhost lock together.
 #
 # This is deliberately a repository-level guard: adding a flavor is otherwise
 # easy to do in build-config.yml, while the failure only appears after the
@@ -33,7 +37,7 @@ cfg = yaml.safe_load(open(os.path.join(root, '.github/build-config.yml')))
 guppy = next(v for v in cfg['variants'] if v['id'] == 'guppy')
 flavors = {f['id'] for f in guppy.get('flavors', [])}
 
-unsupported = {'niri', 'cosmic', 'gnome'}
+unsupported = {'niri', 'cosmic'}
 found = sorted(flavors & unsupported)
 assert not found, f'guppy declares unsupported Gentoo flavors: {found}'
 
@@ -60,7 +64,7 @@ marker = 'NOT declared, and not an oversight:'
 assert marker in block, 'guppy lost its omission block'
 block = block[block.index(marker):]
 
-for flavor in ('gnome', 'niri', 'cosmic'):
+for flavor in ('niri', 'cosmic'):
     entry = re.search(rf'^\s*#\s+{flavor}\s+[-—]\s+(.+)$', block, re.M)
     assert entry, (
         f'guppy omits {flavor} but the omission block does not say why. '

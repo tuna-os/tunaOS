@@ -12,6 +12,8 @@ display_manager: gdm
 # 2026-09-03: Debian trixie (48.7; sid has 50.4) and Gentoo (::gentoo tops out
 # at 49.9). Their gnome cells fail the desktop contract until a source that
 # meets the floor is wired, which is the honest state, not a bug in the check.
+# Gentoo is wired again since 2026-10-07: ::gentoo carries GNOME 50.5 under
+# ~amd64, and emerge_accept_keywords below accepts it (tunaOS#2450).
 minimum_version: 50
 
 packages:
@@ -482,6 +484,33 @@ packages:
   emerge:
     - gnome-base/gnome-light
     - gnome-base/gdm
+
+# Gentoo only: the ~amd64 keywords that lift guppy:gnome over the floor.
+# ::gentoo has GNOME 50 under ~amd64 only. Stable amd64 stops at gnome-shell
+# 49.7, and the official binhost builds only stable versions, so these
+# packages build from source. install-desktop.sh writes this list to
+# /etc/portage/package.accept_keywords before the emerge. It is the whole GNOME
+# 50 core set, not only gnome-shell. With gnome-shell, mutter, gdm,
+# gnome-session and gsettings-desktop-schemas alone, portage resolves (measured
+# 2026-10-07) and keeps gnome-control-center, gnome-settings-daemon and
+# xdg-desktop-portal-gnome at 49. That is a mixed 49/50 desktop. GNOME 50
+# targets gtk 4.22 and libadwaita 1.9, so those two are here too.
+# gnome-base/nautilus is not here: ::gentoo package.masks >=nautilus-50
+# (gexiv2-0.16 fallout, bug 982084), so nautilus stays at 49.
+# Each package name has no version. Portage takes the newest ~amd64 ebuild, so
+# a 50.x bump in ::gentoo does not need an edit here.
+emerge_accept_keywords:
+  - gnome-base/gdm
+  - gnome-base/gnome-control-center
+  - gnome-base/gnome-keyring
+  - gnome-base/gnome-session
+  - gnome-base/gnome-settings-daemon
+  - gnome-base/gnome-shell
+  - gnome-base/gsettings-desktop-schemas
+  - gui-libs/gtk
+  - gui-libs/libadwaita
+  - sys-apps/xdg-desktop-portal-gnome
+  - x11-wm/mutter
 
 versionlock:
   - glib2
