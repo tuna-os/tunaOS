@@ -55,8 +55,10 @@ packages:
   # tier; cage is EPEL. Priority 100 sits behind the distro repositories
   # (99), so these tiers only supply what the base lacks: repo/10 also
   # carries a GNOME 50 pre-release, and a session must not mix it into the
-  # base's GNOME. power-profiles-daemon has no EL10 build. x86_64 only:
-  # the xfce tier publishes no aarch64 gtkgreet.
+  # base's GNOME. Power profiles come from the base's tuned-ppd
+  # (10-base-packages.sh), the provider the EL10 GNOME flavors ship; it
+  # conflicts with power-profiles-daemon, so this list names neither.
+  # x86_64 only: the xfce tier publishes no aarch64 gtkgreet.
   el10:
     display_manager: greetd
     # gnome-shell pulls gdm in as a weak dependency, and gdm's preset then
@@ -140,7 +142,9 @@ packages:
       - wireplumber
       - pipewire-gstreamer
       - gstreamer1-plugins-good
-      - power-profiles-daemon
+      # tuned-ppd, as bonito's GNOME, KDE and XFCE flavors ship. It conflicts
+      # with power-profiles-daemon and answers the same D-Bus API.
+      - tuned-ppd
       - upower
       - flatpak
       - plymouth

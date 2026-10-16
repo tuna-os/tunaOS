@@ -520,6 +520,20 @@ tuna)
 	require_command cage
 	require_any_glob '/usr/libexec/xdg-desktop-portal-gnome' '/usr/lib/xdg-desktop-portal-gnome'
 	require_any_glob '/usr/libexec/xdg-desktop-portal-gtk' '/usr/lib/xdg-desktop-portal-gtk'
+	# Power profiles on the RPM bases come from tuned-ppd, the provider their
+	# GNOME flavors ship; Arch uses power-profiles-daemon. Either one answers
+	# the Quick Settings power-mode API.
+	if [[ "$tuna_backend" == rpm ]]; then
+		grep -qx 'tuned-ppd' <<<"$installed_packages" || {
+			echo "tuned-ppd is not installed; the Tuna power-mode menu has no provider" >&2
+			exit 1
+		}
+	else
+		grep -qx 'power-profiles-daemon' <<<"$installed_packages" || {
+			echo "power-profiles-daemon is not installed; the Tuna power-mode menu has no provider" >&2
+			exit 1
+		}
+	fi
 	# Another display manager's preset (gdm, a weak dependency of gnome-shell
 	# on EL10) takes display-manager.service and VT1, and greetd then dies
 	# with EPERM on the terminal. Catch it at build time, not at the boot gate.

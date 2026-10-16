@@ -53,11 +53,18 @@ def test_rpm_cells_install_the_pinned_beta_from_signed_factory_repositories():
         assert nevr in section["packages"]
         for package in ("greetd", "gtkgreet", "cage", "xdg-desktop-portal-gnome", "xdg-desktop-portal-gtk", "gnome-keyring"):
             assert package in section["packages"], (target, package)
+        # tuned-ppd, as each base's GNOME flavor ships, conflicts with
+        # power-profiles-daemon (the yellowfin/skipjack package-set dry-run).
+        assert "power-profiles-daemon" not in section["packages"], target
         for repo in section["repos"]:
             assert repo["baseurl"].startswith("https://repo.tunaos.org/")
             assert not repo.get("unsigned"), "factory packages must keep gpgcheck"
             # Behind the distro repositories: the factory tiers only fill gaps.
             assert repo["priority"] > 99
+    assert "tuned-ppd" in manifest["packages"]["fedora"]["packages"]
+    base_packages = (ROOT / "build_scripts/10-base-packages.sh").read_text()
+    el10_base = base_packages.split("\nelse\n", 1)[1]
+    assert "\t\ttuned-ppd \\\n" in el10_base, "the EL10 base must keep supplying tuned-ppd"
     assert "eln" not in manifest["packages"], "wahoo is unsupported; an eln section would be dead"
     containerfile = (ROOT / "Containerfile.el10").read_text()
     context = containerfile.split("FROM scratch as context\n", 1)[1].split("FROM ", 1)[0]
