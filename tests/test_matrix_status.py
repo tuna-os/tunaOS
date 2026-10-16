@@ -332,13 +332,17 @@ class UndeclaredCellsAreNotCountedAgainstUs(unittest.TestCase):
             gms.VOLATILE_LINE,
         )
 
-    def test_the_real_build_config_declares_51_luks_cells(self):
+    def test_the_real_build_config_declares_52_luks_cells(self):
         """Ties the unit tests above to the actual denominator on disk.
 
         If this number moves, the LUKS total moves with it, and that should be
         a deliberate build-config edit rather than a surprise.
 
-        52 -> 51 on 2026-09-10: guppy:gnome is off. ::gentoo's main tree tops
+        51 -> 52 on 2026-10-07: guppy:gnome is on again. ::gentoo now has
+        GNOME 50.5 under ~amd64, and manifests/desktops/gnome.yaml
+        emerge_accept_keywords accepts it (tunaOS#2450).
+
+        52 -> 51 on 2026-09-11: guppy:gnome is off. ::gentoo's main tree tops
         out at GNOME 49.9, below the 50 floor
         build_scripts/checks/verify-desktop-experience.sh enforces since
         2026-09-03 -- manifests/desktops/gnome.yaml already documented this
@@ -384,7 +388,7 @@ class UndeclaredCellsAreNotCountedAgainstUs(unittest.TestCase):
         the Niri stack and zero `xfce*`), so they add nothing here.
         """
         matrix = gms.luks_matrix()
-        self.assertEqual(sum(len(v) for v in matrix.values()), 51)
+        self.assertEqual(sum(len(v) for v in matrix.values()), 52)
         # The control that makes the drop specific rather than merely smaller:
         # hummingbird keeps exactly the desktops it has package sets for.
         self.assertEqual(matrix.get("hummingbird"), {"gnome", "cosmic"})
