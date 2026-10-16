@@ -219,18 +219,17 @@ packages:
   # ── Wahoo (Fedora ELN) ─────────────────────────────────────────────────
   # ELN carries COSMIC natively, in eln-extras, at 1.6.0 — and that is the
   # headline finding of the whole lane so far, not just a convenience.
-  # `cosmic.el10` above sources COSMIC from COPR `yselkowitz/cosmic-epel`
-  # (twice) and fprintd from repo.tunaos.org, both tier-3 migration
-  # inventory under PACKAGE-SOURCING.md. On this base neither is needed:
-  # the compose ships cosmic-session/comp/panel/files/greeter/settings and
+  # `cosmic.el10` below sources COSMIC from our own repo.tunaos.org
+  # Tideforge tier (moved off COPR `yselkowitz/cosmic-epel` in #3132,
+  # x86_64 only for now). On this base no tier is needed: the compose ships
+  # cosmic-session/comp/panel/files/greeter/settings and
   # xdg-desktop-portal-cosmic, and `fprintd-1.94.5-6.eln158` resolves from
-  # eln-appstream, so the aarch64 fprintd gap that pinned cosmic off arm64
-  # on EL10 (tunaOS#732) does not reproduce here either.
+  # eln-appstream, so the aarch64 fprintd-pam gap that once pinned cosmic off
+  # arm64 on EL10 (tunaOS#732) does not reproduce here either.
   #
   # Measured with `dnf repoquery` against the pinned eln-bootc digest on
-  # 2026-08-26: 23 of 24 present. If EL11 keeps this, the COSMIC COPR
-  # dependency retires itself at the EL10 -> EL11 transition rather than
-  # needing a Tideforge migration (#2048, #2049).
+  # 2026-08-26: 23 of 24 present. If EL11 keeps this, the EL10 Tideforge
+  # COSMIC tier retires at the EL10 -> EL11 transition (#2048, #2049).
   #
   # NO copr: block here, deliberately — ELN needs none, and a new one
   # fails scripts/check-package-sources.py.
@@ -270,48 +269,41 @@ packages:
       - cosmic-edit
       - cosmic-store
   el10:
-    # cosmic-greeter hard-requires fprintd-pam, which CentOS Stream 10 only
-    # builds for x86_64 -- that gap is why aarch64 cosmic was pinned off in
-    # tunaOS's build-config.yml (tunaOS#732). It's now built
-    # (tuna-os/tunaos-packages#110, same pinned version as x86_64's 1.94.5) and
-    # published at its own R2 path, separate from the main tuna-os.repo.
-    # baseurl is not $basearch-templated (only aarch64 RPMs are published
-    # here), so this is harmless to enable unconditionally on x86_64 --
-    # dnf just finds no matching-arch packages and falls back to CentOS
-    # Stream's own x86_64 fprintd-pam as before.
+    # No fprintd repo any more: the COPR cosmic-greeter hard-required
+    # fprintd-pam, which CentOS Stream 10 only builds for x86_64, so this
+    # section used to carry repo.tunaos.org/fprintd/10-stream-aarch64/
+    # (tunaOS#732, tuna-os/tunaos-packages#110). The Tideforge
+    # cosmic-greeter Requires no fprintd-pam on either arch (x86_64 tier and
+    # rpm/el10/aarch64/ repodata, checked 2026-10-16), and an aarch64-only
+    # repo on these amd64-only flavors was just an extra
+    # skip_if_unavailable=False failure point.
+    #
+    # display_manager: cosmic-greeter, not the global greetd. The factory
+    # greetd ships only /usr/bin/greetd and greetd.service -- no
+    # /etc/greetd/config.toml and no PAM services ("configuration and PAM
+    # policy remain image-owned") -- so a bare greetd.service has nothing to
+    # start. cosmic-greeter.service is greetd with its own config
+    # (`greetd --config /etc/greetd/cosmic-greeter.toml`, service =
+    # "cosmic-greeter"), and unlike the COPR build its RPM has no scriptlet
+    # claiming display-manager.service, so it must be selected here.
+    # greetd-system-integration.sh (post_install) supplies the greeter PAM
+    # service and SELinux labels; post_install_inline swaps the Debian-style
+    # /etc/pam.d/cosmic-greeter for an EL stack.
+    display_manager: cosmic-greeter
     repos:
-      - name: tuna-os-fprintd
-        baseurl: https://repo.tunaos.org/fprintd/10-stream-aarch64/
+      # COSMIC from our own Tideforge builds (tuna-os/tunaos-packages,
+      # phases 0-3 published 2026-10-10), replacing COPR
+      # yselkowitz/cosmic-epel, which no longer publishes usable EL10
+      # builds. x86_64 only: the tier publishes no symmetric aarch64 index
+      # (aarch64 RPMs live at rpm/el10/aarch64/, a different tree, and
+      # install-desktop.sh renders one baseurl per entry with
+      # skip_if_unavailable=False), so the cosmic flavors are pinned to
+      # linux/amd64 in .github/build-config.yml -- same shape as the
+      # xfce/gnome50 tiers. The RPMs carry the tuna-os signature (verified
+      # against https://repo.tunaos.org/public.gpg), so gpgcheck=1 applies.
+      - name: tunaos-cosmic
+        baseurl: https://repo.tunaos.org/repo/10-stream-x86_64/
         priority: 10
-    copr:
-      - repo: yselkowitz/cosmic-epel
-        packages:
-          - cosmic-comp
-          - cosmic-panel
-          - cosmic-app-library
-          - cosmic-applets
-          - cosmic-bg
-          - cosmic-files
-          - cosmic-idle
-          - cosmic-launcher
-          - cosmic-notifications
-          - cosmic-osd
-          - cosmic-randr
-          - cosmic-screenshot
-          - cosmic-settings
-          - cosmic-settings-daemon
-          - cosmic-term
-          - cosmic-wallpapers
-          - cosmic-workspaces
-          - cosmic-icon-theme
-          - xdg-desktop-portal-cosmic
-          - adw-gtk3-theme
-      - repo: yselkowitz/cosmic-epel
-        packages:
-          - cosmic-session
-          - greetd
-          - cosmic-greeter
-        options: "--nobest --allowerasing"
     packages:
       - flatpak
       - pipewire
@@ -319,6 +311,37 @@ packages:
       - wl-clipboard
       - xdg-user-dirs
       - zram-generator
+      # COSMIC stack, from the tunaos-cosmic repo above (was COPR
+      # yselkowitz/cosmic-epel). adw-gtk3-theme is intentionally absent: no
+      # EL10 provider outside the retired COPR, and nothing in the Tideforge
+      # recipes Requires it anymore. The COPR's session/greetd/greeter block
+      # carried `--nobest --allowerasing` against EL10 depsolve conflicts
+      # with the COPR builds; the Tideforge cosmic-session, cosmic-greeter
+      # and greetd declare no Conflicts/Obsoletes and the tier ships no
+      # greetd-selinux (repodata, 2026-10-16), so they install as plain
+      # required names and a real conflict fails the build loudly.
+      - cosmic-session
+      - cosmic-comp
+      - cosmic-panel
+      - cosmic-app-library
+      - cosmic-applets
+      - cosmic-bg
+      - cosmic-files
+      - cosmic-idle
+      - cosmic-launcher
+      - cosmic-notifications
+      - cosmic-osd
+      - cosmic-randr
+      - cosmic-screenshot
+      - cosmic-settings
+      - cosmic-settings-daemon
+      - cosmic-term
+      - cosmic-wallpapers
+      - cosmic-workspaces
+      - cosmic-icon-theme
+      - xdg-desktop-portal-cosmic
+      - cosmic-greeter
+      - greetd
       # Keyring is essential: the greetd PAM patch below wires gnome-keyring into
       # the login flow. Both are in EL10 appstream, so require (not best-effort).
       - gnome-keyring
@@ -424,10 +447,19 @@ packages:
 post_install_inline:
   - "glib-compile-schemas /usr/share/glib-2.0/schemas || true"
   - "if [ -f /etc/pam.d/greetd ]; then sed --sandbox -i -e '/gnome_keyring.so/ s/-auth/auth/ ; /gnome_keyring.so/ s/-session/session/' /etc/pam.d/greetd; fi"
+  # The factory cosmic-greeter ships Debian's PAM file (`@include
+  # common-auth` etc.); EL has no common-* stacks, so password login would
+  # fail. Where that is the case, reuse the EL greetd stack written by
+  # greetd-system-integration.sh (and keyring-patched just above).
+  - "if [ -f /etc/pam.d/cosmic-greeter ] && [ -f /etc/pam.d/greetd ] && [ ! -e /etc/pam.d/common-auth ] && grep -q '^@include common-' /etc/pam.d/cosmic-greeter; then cp /etc/pam.d/greetd /etc/pam.d/cosmic-greeter; fi"
 
 # Post-install scripts to source (relative to build_scripts/)
 post_install:
   - tuna-flatpak-remote.sh
+  # Before greetd-gtkgreet.sh: it needs the greeter account. Gives the
+  # factory greetd (EL10) its PAM services and SELinux labels; a no-op where
+  # the distribution's greetd ships its own (Fedora, openSUSE, Ubuntu).
+  - greetd-system-integration.sh
   # No-op wherever cosmic-greeter is installed (Fedora/EL10/Ubuntu), because it
   # only acts when gtkgreet AND cage are both present. On openSUSE, where
   # cosmic-greeter is not packaged, it is the difference between a login screen

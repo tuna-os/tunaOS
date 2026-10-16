@@ -820,9 +820,11 @@ fi
 #
 # Narrow on purpose, for the same reason as configure-desktop-runtime.sh: keyed
 # on the alias the distro's own packaging has ALREADY set, not on
-# cosmic-greeter.service merely existing. Fedora and EL10 install cosmic-greeter
-# too, and their cosmic cells are green with greetd as the DM, so a
-# package-presence test would repoint them; the symlink test cannot.
+# cosmic-greeter.service merely existing. Fedora installs cosmic-greeter too,
+# and its cosmic cells are green with greetd as the DM, so a package-presence
+# test would repoint them; the symlink test cannot. (EL10 names cosmic-greeter
+# directly via cosmic.yaml's el10 display_manager: its factory greetd ships no
+# config.toml.)
 if [[ "${_TD_DM}" == "greetd" ]]; then
 	_TD_DM_ALIAS_NOW="$(readlink -f /etc/systemd/system/display-manager.service 2>/dev/null || true)"
 	if [[ -n "${_TD_DM_ALIAS_NOW}" && -e "${_TD_DM_ALIAS_NOW}" ]] &&

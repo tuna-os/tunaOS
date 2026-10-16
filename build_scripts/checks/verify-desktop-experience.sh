@@ -593,24 +593,17 @@ cosmic)
 	# GNOME/KDE/XFCE were held to: measure the manifest first, then require.
 	#
 	# cosmic-files and xdg-desktop-portal-cosmic are explicit, non-optional
-	# entries in manifests/desktops/cosmic.yaml's apt, fedora and zypper
+	# entries in manifests/desktops/cosmic.yaml's apt, fedora, el10 and zypper
 	# sections, and in cosmic-arch.yaml's pacman section — the same bar
 	# dolphin/konsole (kde) and thunar (xfce) were required on ("explicit in
 	# every manifest section that builds"). Without a file manager COSMIC is
 	# not merely sparse, it is unusable the same way sailfin:gnome was
 	# (tunaos-packages#132, the issue that started this whole contract).
 	#
-	# el10 (yellowfin/albacore/skipjack/redfin) is deliberately excluded:
-	# there both packages come from the yselkowitz/cosmic-epel COPR
-	# (cosmic.yaml's el10.copr section), and install-desktop.sh installs
-	# every copr block with `|| true` (the exact "COPR packages" step,
-	# distinct from the regular `dnf_retry -y install` used for fedora/apt/
-	# zypper/pacman, which has no such fallback) — a flaky COPR there can
-	# legitimately produce a build that has always shipped correctly. The
-	# condition below reproduces install-desktop.sh's own _TD_OS="el10"
-	# fallback exactly (dnf-based, not Fedora, not Hummingbird) rather than
-	# re-deriving it from a distro-name enumeration that could drift out of
-	# sync with the real branching logic.
+	# el10 used to be excluded because both packages came from the
+	# best-effort yselkowitz/cosmic-epel COPR block; since #3132 they come
+	# from the Tideforge tier repo as plain required packages, so el10 is
+	# held to the same bar.
 	#
 	# Binary path for cosmic-files confirmed live (mdapi.fedoraproject.org
 	# rawhide file list, 2026-08-08): /usr/bin/cosmic-files, so a plain PATH
@@ -626,14 +619,10 @@ cosmic)
 	# so the next person knows which half of this is live-verified and which
 	# is carried over from an already-established pattern, same as this
 	# file's own stated rule asks for.
-	if [[ "${PKG_MGR:-}" == "dnf" && "${IS_FEDORA:-false}" != true && "${IS_HUMMINGBIRD:-false}" != true ]]; then
-		echo "info: skipping cosmic-files/xdg-desktop-portal-cosmic on the el10 family — cosmic.yaml sources them from a best-effort COPR here (tunaOS#916)"
-	else
-		require_command cosmic-files
-		require_any_glob \
-			'/usr/libexec/xdg-desktop-portal-cosmic' \
-			'/usr/lib/xdg-desktop-portal-cosmic'
-	fi
+	require_command cosmic-files
+	require_any_glob \
+		'/usr/libexec/xdg-desktop-portal-cosmic' \
+		'/usr/lib/xdg-desktop-portal-cosmic'
 	# cosmic-greeter.service is accepted alongside greetd.service because it is
 	# greetd: `ExecStart=greetd --config /etc/greetd/cosmic-greeter.toml`, with
 	# `Provides: x-display-manager` and `Pre-Depends: greetd` on the deb. On

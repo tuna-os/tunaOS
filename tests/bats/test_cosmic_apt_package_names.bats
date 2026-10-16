@@ -52,10 +52,10 @@ setup() { command -v yq >/dev/null || skip "yq not available"; }
 @test "the rpm sections keep the rpm spelling" {
 	run yq -r '.packages.fedora.packages[]' "$MANIFEST"
 	grep -qx 'cosmic-icon-theme' <<<"$output"
-	# el10 installs the COSMIC set through COPR, so its names live under
-	# .copr[].packages, not the flat .packages list (which holds only the
-	# stock-repo extras: flatpak, pipewire, and so on).
-	run yq -r '.packages.el10.copr[].packages[]' "$MANIFEST"
+	# el10 installs the COSMIC set from the Tideforge tier repo, so its
+	# names live in the flat .packages list (the COPR block was retired
+	# 2026-10-10 when the tier published all 22 names).
+	run yq -r '.packages.el10.packages[]' "$MANIFEST"
 	grep -qx 'cosmic-icon-theme' <<<"$output"
 }
 
