@@ -342,7 +342,7 @@ class UndeclaredCellsAreNotCountedAgainstUs(unittest.TestCase):
         GNOME 50.5 under ~amd64, and manifests/desktops/gnome.yaml
         emerge_accept_keywords accepts it (tunaOS#2450).
 
-        52 -> 51 on 2026-09-10: guppy:gnome is off. ::gentoo's main tree tops
+        52 -> 51 on 2026-09-11: guppy:gnome is off. ::gentoo's main tree tops
         out at GNOME 49.9, below the 50 floor
         build_scripts/checks/verify-desktop-experience.sh enforces since
         2026-09-03 -- manifests/desktops/gnome.yaml already documented this

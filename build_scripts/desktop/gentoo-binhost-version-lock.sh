@@ -33,9 +33,11 @@
 # inside the meta package then has nowhere to resolve but the version the
 # binhost actually built, instead of whatever the tree sync just pulled.
 #
-# Packages accepted as ~amd64 in /etc/portage/package.accept_keywords are
-# not locked. The binhost builds only stable versions, so a keyworded package
-# is never on it, and a lock to the binhost version would undo the keyword.
+# Packages listed in /etc/portage/package.accept_keywords are not locked,
+# whatever keyword the entry accepts: any entry there asks for a version
+# beyond the profile's stable set. The binhost builds only stable versions,
+# so a keyworded package is never on it, and a lock to the binhost version
+# would undo the keyword.
 # guppy:gnome keywords the GNOME 50 set to meet the version floor
 # (tunaOS#2450): without this exception, the lock masks gnome-shell above the
 # binhost's 49.7, the --pretend check below still resolves (to 49), and the
@@ -110,8 +112,9 @@ def version_key(v):
 
 def keyworded_packages(path):
     """category/name of every entry in package.accept_keywords (a file or a
-    directory of files). Version operators are stripped: an atom like
-    =gnome-base/gnome-shell-50.5 still exempts gnome-base/gnome-shell."""
+    directory of files), whatever keywords follow the atom. Version
+    operators, slots, ::repo and USE deps are stripped: an atom like
+    =gnome-base/gnome-shell-50.5::gentoo still exempts gnome-base/gnome-shell."""
     if os.path.isdir(path):
         files = [os.path.join(path, n) for n in sorted(os.listdir(path))]
     elif os.path.isfile(path):
