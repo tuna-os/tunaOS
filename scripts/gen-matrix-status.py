@@ -624,8 +624,9 @@ def build_stage_results() -> dict[str, dict]:
             listed = run_jobs(run_id)
             # A run whose jobs no query can read is skipped, not fatal: the
             # cells it asserted fall to the next run that asserted them. It
-            # is named in the log, and a variant with NO readable run still
-            # raises below rather than scoring every cell untested.
+            # is named in the log, and if any cell is still unscored once the
+            # walk ends, the skipped run may have held its verdict, so the
+            # refresh raises below rather than scoring that cell untested.
             if listed is None:
                 print(
                     f"warning: build-{variant}.yml run {run_id}: jobs "
@@ -680,11 +681,12 @@ def build_stage_results() -> dict[str, dict]:
                     jobs[(flavor, "Promote")] = promote
                 if (flavor, "Gate") in per_run:
                     jobs[(flavor, "Gate")] = gate
-        if len(unreadable) == len(conclusive):
+        unscored = flavors - set(cell_run)
+        if unreadable and unscored:
             raise RuntimeError(
-                f"no build-{variant}.yml run's jobs could be read "
-                f"({', '.join(unreadable)}); refusing to score its cells "
-                "as untested"
+                f"build-{variant}.yml run(s) {', '.join(unreadable)} could not "
+                f"be read and {', '.join(sorted(unscored))} has no verdict "
+                "from a readable run; refusing to score it as untested"
             )
         out[variant] = {
             "jobs": jobs,

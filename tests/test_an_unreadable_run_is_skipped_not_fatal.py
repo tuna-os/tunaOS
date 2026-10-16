@@ -9,7 +9,9 @@ and the regenerate check failed on every pull request.
 
 Now run_jobs() retries the jobs endpoint in smaller pages, and a run that
 still cannot be read is skipped with a warning: its cells fall to the next run
-that asserted them. A variant with no readable run at all still raises (see
+that asserted them. If a run was skipped and any configured cell is still
+unscored when the walk ends, the skipped run may have held that cell's
+verdict, so the refresh still raises (see also
 test_a_failed_run_query_is_not_an_untested_cell.py).
 
 Falsification: behavioural. Make run_jobs() return None without the
@@ -38,10 +40,10 @@ RUNS = [
 ]
 
 
-def _jobs(promote):
+def _jobs(promote, flavor="gnome"):
     return [
-        {"name": "🎣-bonito / gnome / Promote", "conclusion": promote},
-        {"name": "🎣-bonito / gnome / Gate", "conclusion": "success"},
+        {"name": f"🎣-bonito / {flavor} / Promote", "conclusion": promote},
+        {"name": f"🎣-bonito / {flavor} / Gate", "conclusion": "success"},
     ]
 
 
@@ -103,6 +105,29 @@ class AnUnreadableRunIsSkipped(unittest.TestCase):
     def test_no_readable_run_still_raises(self):
         with self.assertRaises(RuntimeError):
             self._results(views={}, pages={})
+
+    def test_a_cell_only_the_skipped_run_could_score_raises(self):
+        # Full build unreadable, the older run a GNOME-only dispatch: KDE has
+        # no readable verdict, and scoring it untested would erase evidence.
+        with mock.patch.object(gms, "_matrix",
+                               return_value={"bonito": {"gnome", "kde"}}):
+            with self.assertRaises(RuntimeError) as raised:
+                self._results(
+                    views={NEW: None, OLD: {"jobs": _jobs("success")}},
+                    pages={NEW: None},
+                )
+        self.assertIn("kde", str(raised.exception))
+
+    def test_every_cell_scored_from_older_runs_is_not_fatal(self):
+        with mock.patch.object(gms, "_matrix",
+                               return_value={"bonito": {"gnome", "kde"}}):
+            got, _, _ = self._results(
+                views={NEW: None,
+                       OLD: {"jobs": _jobs("success") + _jobs("failure", "kde")}},
+                pages={NEW: None},
+            )
+        self.assertEqual(got["jobs"][("kde", "Promote")], "failure")
+        self.assertEqual(got["cell_run"]["kde"], ("2026-10-13", OLD))
 
 
 class LatestResultsReadsThroughTheFallback(unittest.TestCase):
