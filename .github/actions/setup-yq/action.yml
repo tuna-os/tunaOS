@@ -8,10 +8,20 @@ runs:
       run: |
         set -euo pipefail
         YQ_VERSION="v4.53.3"
+        if [ "$(uname -s)" != "Linux" ]; then
+          echo "::error::setup-yq supports Linux runners only (got $(uname -s))" >&2
+          exit 1
+        fi
+        # True only when the yq resolved on PATH reports exactly YQ_VERSION as
+        # its last `--version` token (rejects e.g. v4.53.30 or v4.53.3-rc1).
+        yq_is_pinned() {
+          command -v yq &> /dev/null &&
+            [ "$(yq --version 2>/dev/null | awk '{print $NF}')" = "${YQ_VERSION}" ]
+        }
         # Skip only when the exact pinned release is already installed. The
         # runner image ships its own (newer, unpinned) yq; reusing that would
         # bypass the pin this action exists to enforce.
-        if command -v yq &> /dev/null && yq --version 2>/dev/null | grep -qF "version ${YQ_VERSION}"; then
+        if yq_is_pinned; then
           echo "yq ${YQ_VERSION} already installed"
         else
           case "$(uname -m)" in
@@ -41,11 +51,14 @@ runs:
 
           fetch "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_${YQ_ARCH}" /tmp/yq
           echo "${YQ_SHA256}  /tmp/yq" | sha256sum -c -
-          sudo install -m 0755 /tmp/yq /usr/bin/yq
+          # /usr/local/bin precedes /usr/bin (where the runner image puts its
+          # yq) on PATH, so the pinned binary wins.
+          sudo install -m 0755 /tmp/yq /usr/local/bin/yq
           rm -f /tmp/yq
-          # A yq earlier on PATH would shadow /usr/bin/yq; fail instead of
+          hash -r
+          # A yq even earlier on PATH would still shadow it; fail instead of
           # silently running the unpinned one.
-          if ! yq --version | grep -qF "version ${YQ_VERSION}"; then
+          if ! yq_is_pinned; then
             echo "::error::yq on PATH ($(command -v yq)) is not ${YQ_VERSION}" >&2
             exit 1
           fi

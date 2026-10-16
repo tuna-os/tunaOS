@@ -9,15 +9,21 @@ runners executing as root. All CI steps now route through the verified
 pinned to the repository-aligned `v4.53.3` release.
 
 Falsification: structural -- reverting any workflow's yq download to an unpinned URL
-or unverified download fails `test_no_workflow_downloads_latest_yq` or
-`test_no_unverified_yq_downloads`, which checks each download
-on its own rather than any `sha256sum` in the same file.
+or unverified download fails `test_no_workflow_downloads_latest_yq`,
+`test_no_action_downloads_latest_yq`, or `test_no_unverified_yq_downloads`
+(which checks each download on its own rather than any `sha256sum` in the same
+file). Loosening the setup-yq version guard fails
+`test_setup_yq_version_guard_is_exact`.
 """
 
 from __future__ import annotations
 
+import os
 import re
+import subprocess
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS_DIR = ROOT / ".github" / "workflows"
@@ -69,9 +75,14 @@ def test_no_action_downloads_latest_yq():
 
 # How far below a download the matching `sha256sum -c` may sit.
 VERIFY_WINDOW = 3
-# Destination of a download: `fetch "<url>" <dest>` or `curl ... -o <dest>`.
+# Destination of a download: `fetch "<url>" <dest>`, `curl ... -o <dest>`, or
+# `wget -O <dest>` / `wget -qO <dest>`.
 FETCH_DEST = re.compile(r"""fetch\s+["']?\S+?["']?\s+["']?([^\s"']+)""")
-CURL_DEST = re.compile(r"""-o\s+["']?([^\s"']+)""")
+CURL_DEST = re.compile(r"""(?:-o|-[a-zA-Z]*O)\s+["']?([^\s"']+)""")
+
+
+def _is_comment(line: str) -> bool:
+    return line.lstrip().startswith("#")
 
 
 def unverified_yq_downloads(content: str) -> list[int]:
@@ -84,7 +95,7 @@ def unverified_yq_downloads(content: str) -> list[int]:
     lines = content.splitlines()
     bad = []
     for idx, line in enumerate(lines):
-        if not YQ_DOWNLOAD.search(line):
+        if _is_comment(line) or not YQ_DOWNLOAD.search(line):
             continue
         dest_match = FETCH_DEST.search(line) or CURL_DEST.search(line)
         if dest_match is None:
@@ -92,7 +103,9 @@ def unverified_yq_downloads(content: str) -> list[int]:
             continue
         dest = dest_match.group(1)
         window = lines[idx + 1 : idx + 1 + VERIFY_WINDOW]
-        if not any("sha256sum -c" in w and dest in w for w in window):
+        if not any(
+            "sha256sum -c" in w and dest in w and not _is_comment(w) for w in window
+        ):
             bad.append(idx + 1)
     return bad
 
@@ -149,8 +162,56 @@ def test_detector_accepts_verified_download():
     assert unverified_yq_downloads(content) == []
 
 
-def test_setup_yq_does_not_reuse_unpinned_runner_yq():
-    """The action may skip the download only for the exact pinned version."""
+def test_detector_flags_commented_out_check():
+    content = "\n".join(
+        [
+            f'fetch "{YQ_URL}" /tmp/yq',
+            '# echo "${YQ_SHA256}  /tmp/yq" | sha256sum -c -',
+        ]
+    )
+    assert unverified_yq_downloads(content) == [1]
+
+
+def test_detector_ignores_commented_download():
+    assert unverified_yq_downloads(f"# see {YQ_URL}") == []
+
+
+@pytest.mark.parametrize("flag", ["-O", "-qO"])
+def test_detector_handles_wget_destination(flag):
+    download = f'wget {flag} /tmp/yq "{YQ_URL}"'
+    verified = "\n".join([download, 'echo "${SHA}  /tmp/yq" | sha256sum -c -'])
+    assert unverified_yq_downloads(verified) == []
+    assert unverified_yq_downloads(download) == [1]
+
+
+def _yq_is_pinned_function() -> tuple[str, str]:
     action = (ACTIONS_DIR / "setup-yq" / "action.yml").read_text(encoding="utf-8")
-    assert "if ! command -v yq" not in action
-    assert 'grep -qF "version ${YQ_VERSION}"' in action
+    version = re.search(r'YQ_VERSION="([^"]+)"', action)
+    func = re.search(r"^( *)yq_is_pinned\(\) \{\n.*?^\1\}$", action, re.M | re.S)
+    assert version and func, "setup-yq must define YQ_VERSION and yq_is_pinned()"
+    return f'YQ_VERSION="{version.group(1)}"\n{func.group(0)}', version.group(1)
+
+
+@pytest.mark.parametrize(
+    ("reported", "pinned"),
+    [
+        ("{v}", True),
+        ("{v}0", False),
+        ("{v}-rc1", False),
+        ("v4.44.1", False),
+    ],
+)
+def test_setup_yq_version_guard_is_exact(tmp_path, reported, pinned):
+    """The action may skip the download only for the exact pinned version."""
+    func, version = _yq_is_pinned_function()
+    fake = tmp_path / "yq"
+    fake.write_text(
+        "#!/bin/sh\n"
+        f"echo 'yq (https://github.com/mikefarah/yq/) version {reported.format(v=version)}'\n"
+    )
+    fake.chmod(0o755)
+    env = {**os.environ, "PATH": f"{tmp_path}{os.pathsep}{os.environ['PATH']}"}
+    result = subprocess.run(
+        ["bash", "-c", f"{func}\nyq_is_pinned"], env=env, check=False
+    )
+    assert (result.returncode == 0) is pinned

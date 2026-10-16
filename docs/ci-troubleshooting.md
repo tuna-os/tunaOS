@@ -1587,9 +1587,9 @@ The image had both backends; the default preferred GNOME for Access.
 
 **Symptom:** A CI step downloads `releases/latest/download/yq_linux_amd64` from `mikefarah/yq` into `/usr/bin` or `/usr/local/bin`. The step does not pin a version.
 
-**Measured cause:** Issue tunaOS#2071 found these downloads in CI workflows. The `latest` link can change at any time. The step installs the file as root, and no step checks the file. A changed upstream file thus runs as root on the runner.
+**Measured cause:** Issue tunaOS#2071 found these downloads in CI workflows. The `latest` link can change at any time. The step installs the file as root, and no step verifies the checksum of the downloaded file. A changed upstream file thus runs as root on the runner.
 
-**Fix:** Workflows and composite actions use the `.github/actions/setup-yq` action. That action downloads yq `v4.53.3` and checks its SHA-256 value before it installs the file. It also replaces the yq that the runner image supplies, because that yq has a different version. The test `tests/regressions/test_issue_2071_yq_downloads_are_pinned.py` checks each yq download in the workflows and actions.
+**Fix:** Workflows and composite actions use the `.github/actions/setup-yq` action. That action downloads yq `v4.53.3` and checks its SHA-256 value before it installs the file. It installs the file to `/usr/local/bin`, which comes before the runner image's `/usr/bin/yq` on `PATH`, and then fails the step if the yq on `PATH` does not report exactly `v4.53.3`. The test `tests/regressions/test_issue_2071_yq_downloads_are_pinned.py` checks each yq download in the workflows and actions.
 
 ### Codecov project and patch targets never appear on a pull request
 
