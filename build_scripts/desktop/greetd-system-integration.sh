@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Give a bare greetd its system integration: greeter account, PAM services,
-# state directory and SELinux labels.
+# state directory and SELinux labels. Then keep a gdm installed beside it
+# from taking the display (see the end of this file).
 #
 # The TunaOS factory's greetd (tuna-os/tunaos-packages packages/greetd, the
 # only greetd an EL10 image may install now that COPRs are retired) ships the
@@ -82,4 +83,17 @@ EOF
 		semanage fcontext -a -t xdm_var_run_t -f s '/run/greetd[^/]*\.sock' || return 1
 		semanage fcontext -a -t xdm_var_run_t -f f '/run/greetd\.run' || return 1
 	fi
+fi
+
+# greetd is this image's display manager, but gnome-shell requires gdm-libs,
+# which gdm provides, so gdm is installed too. Its preset links
+# display-manager.service to gdm.service at install time and again at first
+# boot; gdm then holds VT1 and greetd dies with "unable to take controlling
+# terminal: EPERM" (measured on an albacore:tuna VM). Mask gdm so no preset
+# can start it, and point the alias at greetd.
+if [[ -f /usr/lib/systemd/system/greetd.service && -f /usr/lib/systemd/system/gdm.service ]]; then
+	echo "gdm is installed beside greetd; masking gdm.service and giving display-manager.service to greetd"
+	rm -f /etc/systemd/system/graphical.target.wants/gdm.service
+	systemctl mask gdm.service || return 1
+	ln -sf /usr/lib/systemd/system/greetd.service /etc/systemd/system/display-manager.service
 fi

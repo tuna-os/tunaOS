@@ -56,6 +56,9 @@ def test_rpm_cells_install_the_pinned_beta_from_signed_factory_repositories():
         # tuned-ppd, as each base's GNOME flavor ships, conflicts with
         # power-profiles-daemon (the yellowfin/skipjack package-set dry-run).
         assert "power-profiles-daemon" not in section["packages"], target
+        # beta.1 imports the session environment with
+        # dbus-update-activation-environment (tuna-os/tuna-desktop#691).
+        assert "dbus-tools" in section["packages"], target
         for repo in section["repos"]:
             assert repo["baseurl"].startswith("https://repo.tunaos.org/")
             assert not repo.get("unsigned"), "factory packages must keep gpgcheck"

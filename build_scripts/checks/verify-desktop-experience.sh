@@ -515,6 +515,9 @@ tuna)
 	require_any_glob '/usr/lib/gnome-shell-calendar-server' '/usr/libexec/gnome-shell-calendar-server'
 	require_command ibus-daemon
 	require_command gnome-keyring-daemon
+	# beta.1 starts graphical-session.target only after this import succeeds;
+	# without it every portal fails (tuna-os/tuna-desktop#691).
+	require_command dbus-update-activation-environment
 	require_command wpctl
 	require_command gtkgreet
 	require_command cage
@@ -534,14 +537,21 @@ tuna)
 			exit 1
 		}
 	fi
-	# Another display manager's preset (gdm, a weak dependency of gnome-shell
-	# on EL10) takes display-manager.service and VT1, and greetd then dies
-	# with EPERM on the terminal. Catch it at build time, not at the boot gate.
+	# Another display manager's preset (gdm, installed because gnome-shell
+	# requires its gdm-libs) takes display-manager.service and VT1, and greetd
+	# then dies with EPERM on the terminal. Catch it at build time, not at the
+	# boot gate.
 	tuna_dm="$(readlink -f /etc/systemd/system/display-manager.service 2>/dev/null || true)"
 	[[ "${tuna_dm##*/}" == greetd.service ]] || {
 		echo "display-manager.service is '${tuna_dm:-unset}', not greetd.service" >&2
 		exit 1
 	}
+	if [[ -f /usr/lib/systemd/system/gdm.service ]]; then
+		[[ "$(readlink /etc/systemd/system/gdm.service 2>/dev/null || true)" == /dev/null ]] || {
+			echo "gdm.service is installed beside greetd but not masked; a first-boot preset would start it on VT1" >&2
+			exit 1
+		}
+	fi
 	require_unit greetd
 	dm_pattern='^greetd\.service$'
 	;;

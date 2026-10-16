@@ -61,10 +61,11 @@ packages:
   # x86_64 only: the xfce tier publishes no aarch64 gtkgreet.
   el10:
     display_manager: greetd
-    # gnome-shell pulls gdm in as a weak dependency, and gdm's preset then
-    # owns display-manager.service and VT1: greetd fails with "unable to take
-    # controlling terminal: EPERM" (measured on an albacore:tuna VM).
-    exclude: [gdm]
+    # gnome-shell requires gdm-libs, which gdm provides, so gdm cannot be
+    # excluded (the transaction fails). gdm's preset would then own
+    # display-manager.service and VT1, and greetd fails with "unable to take
+    # controlling terminal: EPERM" (measured on an albacore:tuna VM), so
+    # greetd-system-integration.sh masks gdm.service.
     repos:
       - name: tunaos-el10
         baseurl: https://repo.tunaos.org/repo/10/x86_64/
@@ -77,6 +78,13 @@ packages:
       # fails the build. install-desktop.sh reads a flat list, so the fedora
       # section repeats the session set instead of aliasing it.
       - tuna-desktop-1.0.0~beta.1-1.el10
+      # beta.1's compositor imports the session environment with
+      # dbus-update-activation-environment, which EL and Fedora ship here.
+      # Without it graphical-session.target never starts and every portal
+      # fails (measured on a bonito VM; tuna-os/tuna-desktop#691 drops the
+      # need). Remove with the beta that carries #691.
+      - dbus-tools
+      - orca
       - greetd
       - gtkgreet
       - cage
@@ -113,13 +121,15 @@ packages:
   # cage, gtk4-layer-shell and libseat are Fedora's own.
   fedora:
     display_manager: greetd
-    exclude: [gdm]
     repos:
       - name: tunaos-fedora
         baseurl: https://repo.tunaos.org/xfce/44-x86_64/
         priority: 100
     packages:
       - tuna-desktop-1.0.0~beta.1-1.fc44
+      # See the el10 section: needed by beta.1 until tuna-desktop#691.
+      - dbus-tools
+      - orca
       - greetd
       - gtkgreet
       - cage
