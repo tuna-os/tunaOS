@@ -1619,6 +1619,14 @@ contract in `tests/bats/test_test_yml_pytest_always_runs.bats` holds the upload
 path and authentication mode. This report is Python-only; BATS and QEMU E2E
 coverage are behavior gates, not line-coverage inputs.
 
+### Admitted variant with missing rebuild repository fails CI
+
+**Symptom:** A new variant fails nightly builds for declared desktops (e.g. 10+ red nights for Hummingbird).
+
+**Measured cause (#1755, #1763):** The project admitted Hummingbird without a check for desktop packages or aarch64 repodata. Declared desktops had no manifest sections.
+
+**Fix (#1763):** Extend `VARIANT-LIFECYCLE.md` with a completeness check. Verify repo reachability across declared arches. Add manifest sections before setting `build_image: true`. Exclude unbuilt arches until package sources exist.
+
 
 ### A LUKS cell passes its desktop contract and fails the pixel gate (#979)
 
