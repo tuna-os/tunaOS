@@ -91,6 +91,10 @@ COPY system_files /files
 COPY system_files_overrides /overrides
 COPY build_scripts /build_scripts
 COPY manifests /manifests
+# Only Tuna's curated files: install-desktop.sh applies experiences/<desktop>
+# whenever it is present, and the other desktops' trees are not part of the
+# apt images today.
+COPY experiences/tuna /experiences/tuna
 # Per-file, and correctly so: only the Containerfiles whose build scripts read
 # it carry image-versions.yaml (el10, debian, ubuntu run 10-base-packages.sh;
 # kcm-ublue.sh guards on dnf, so the pacman/zypper/emerge files never reach
@@ -247,6 +251,17 @@ RUN set -eux; \
 # el10's base ships one; Ubuntu's does not, and the difference was never
 # deliberate.
 #
+# Installing it is not enough on Ubuntu: network-manager ships
+# 10-globally-managed-devices.conf (unmanaged-devices=*,except:type:wifi,...),
+# so NM leaves the wired NIC alone unless netplan hands it every device. Ubuntu
+# Desktop does that with ubuntu-settings' /usr/lib/netplan/00-network-manager-
+# all.yaml (renderer: NetworkManager), which grouper:gnome gets through
+# ubuntu-desktop-minimal. grouper:tuna does not install it, booted with no
+# address, and `corral ssh` answered "no route to host". The same file, at the
+# same path and mode 0600 (netplan warns about readable configs), is written
+# below for every flavor; ubuntu-settings replaces it with identical bytes
+# where it is installed.
+#
 # cryptsetup: the LUKS install path needs it on the installing host.
 #
 # sudo: the Ubuntu bootc base ships none, unlike the Fedora/EL ones.
@@ -300,6 +315,9 @@ RUN --mount=type=bind,from=context,source=/,target=/run/context \
         echo "       check which package provides it on this release and add it above." >&2; \
         exit 1; \
     fi && \
+    install -D -m 0600 /dev/null /usr/lib/netplan/00-network-manager-all.yaml && \
+    printf 'network:\n  version: 2\n  renderer: NetworkManager\n' \
+        > /usr/lib/netplan/00-network-manager-all.yaml && \
     # pcsc (smart card daemon) dracut module is part of Ubuntu's default
     # module set but the pcscd package isn't needed for the initramfs.
     echo 'omit_dracutmodules+=" pcsc "' > /etc/dracut.conf.d/omit-pcsc.conf && \
@@ -541,6 +559,18 @@ RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
   /run/context/build_scripts/desktop/zfs.sh
+RUN --mount=type=tmpfs,dst=/tmp \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/bootc/finalize.sh
+
+# Tuna Desktop (tuna-os/tuna-desktop ADR 0008, epic #577; tunaOS#3205).
+# tuna-desktop comes from the signed Tideforge apt index for Ubuntu, declared
+# in manifests/desktops/tuna.yaml; everything else is Ubuntu's.
+FROM base-no-de AS tuna
+RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/desktop/install-desktop.sh tuna
 RUN --mount=type=tmpfs,dst=/tmp \
   --mount=type=bind,from=context,source=/,target=/run/context \
   /run/context/build_scripts/bootc/finalize.sh

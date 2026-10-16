@@ -27,16 +27,19 @@ trap emit_fail_on_early_exit EXIT
 source /run/context/build_scripts/lib.sh 2>/dev/null || true
 detected_os 2>/dev/null || true
 
-# Tuna Desktop ships on Arch (pacman) and on the RPM bases. Query the native
-# database for installed names and file owners, never virtual provides or a
-# repository's availability (adapted from tunaOS#3194).
+# Tuna Desktop ships on Arch (pacman), the RPM bases and the apt bases (dpkg).
+# Query the native database for installed names and file owners, never
+# virtual provides or a repository's availability (adapted from tunaOS#3194).
 tuna_package_backend() {
 	if command -v pacman >/dev/null 2>&1; then
 		echo pacman
-	elif command -v rpm >/dev/null 2>&1; then
+	# An rpm binary alone (installable on Debian) is not an RPM base.
+	elif command -v rpm >/dev/null 2>&1 && rpm -q rpm >/dev/null 2>&1; then
 		echo rpm
+	elif command -v dpkg-query >/dev/null 2>&1; then
+		echo dpkg
 	else
-		echo "no supported Tuna package backend (pacman or rpm) in this image" >&2
+		echo "no supported Tuna package backend (pacman, rpm or dpkg) in this image" >&2
 		return 1
 	fi
 }
@@ -45,6 +48,9 @@ tuna_installed_package_names() {
 	case "$1" in
 	pacman) pacman -Qq ;;
 	rpm) rpm -qa --qf '%{NAME}\n' ;;
+	# Installed only, read from the second (state) character: the first is the
+	# selection, so a held install is `hi`, and removed-but-not-purged is `rc`.
+	dpkg) dpkg-query -W -f '${db:Status-Abbrev} ${Package}\n' | awk 'substr($1, 2, 1) == "i" { print $2 }' ;;
 	*) return 1 ;;
 	esac
 }
@@ -53,6 +59,8 @@ tuna_installed_file_owner() {
 	case "$1" in
 	pacman) pacman -Qqo "$2" ;;
 	rpm) rpm -qf --qf '%{NAME}\n' "$2" ;;
+	# `dpkg -S` prints "<package>[:<arch>]: <path>".
+	dpkg) dpkg -S "$2" | sed -n '1s/[:,].*//p' ;;
 	*) return 1 ;;
 	esac
 }
@@ -517,8 +525,10 @@ tuna)
 		require_portal_preference /usr/share/xdg-desktop-portal/tuna-portals.conf "org.freedesktop.impl.portal.$portal" gnome
 	done
 	require_portal_preference /usr/share/xdg-desktop-portal/tuna-portals.conf org.freedesktop.impl.portal.Access gtk
-	# Arch ships it under /usr/lib, Fedora and EL under /usr/libexec.
-	require_any_glob '/usr/lib/gnome-shell-calendar-server' '/usr/libexec/gnome-shell-calendar-server'
+	# Arch ships it under /usr/lib, Fedora, EL and Debian under /usr/libexec,
+	# openSUSE under /usr/libexec/gnome-shell (gnome-shell-calendar). The
+	# shell reaches it by D-Bus activation, so the path is the package's.
+	require_any_glob '/usr/lib/gnome-shell-calendar-server' '/usr/libexec/gnome-shell-calendar-server' '/usr/libexec/gnome-shell/gnome-shell-calendar-server'
 	require_command ibus-daemon
 	require_command orca
 	require_command gnome-keyring-daemon
@@ -530,10 +540,11 @@ tuna)
 	require_command cage
 	require_any_glob '/usr/libexec/xdg-desktop-portal-gnome' '/usr/lib/xdg-desktop-portal-gnome'
 	require_any_glob '/usr/libexec/xdg-desktop-portal-gtk' '/usr/lib/xdg-desktop-portal-gtk'
-	# Power profiles on the RPM bases come from tuned-ppd, the provider their
-	# GNOME flavors ship; Arch uses power-profiles-daemon. Either one answers
-	# the Quick Settings power-mode API.
-	if [[ "$tuna_backend" == rpm ]]; then
+	# Power profiles on the Fedora and EL bases come from tuned-ppd, the
+	# provider their GNOME flavors ship; Arch, openSUSE and the apt bases use
+	# power-profiles-daemon, as their GNOME flavors do. Either one answers the
+	# Quick Settings power-mode API.
+	if [[ "$tuna_backend" == rpm ]] && ! command -v zypper >/dev/null 2>&1; then
 		grep -qx 'tuned-ppd' <<<"$installed_packages" || {
 			echo "tuned-ppd is not installed; the Tuna power-mode menu has no provider" >&2
 			exit 1
@@ -543,6 +554,13 @@ tuna)
 			echo "power-profiles-daemon is not installed; the Tuna power-mode menu has no provider" >&2
 			exit 1
 		}
+	fi
+	# No SSH host keys baked into the image (tunaOS#3287): every install would
+	# share them. 99-cleanup.sh drops them where the machine regenerates its
+	# own. Build time only; a booted machine has its generated keys.
+	if [[ "$mode" != --runtime ]] && compgen -G '/etc/ssh/ssh_host_*' >/dev/null; then
+		echo "the image ships SSH host keys:" /etc/ssh/ssh_host_* >&2
+		exit 1
 	fi
 	# Another display manager's preset (gdm, installed because gnome-shell
 	# requires its gdm-libs) takes display-manager.service and VT1, and greetd

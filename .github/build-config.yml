@@ -88,38 +88,25 @@ tuna_rollout:
   albacore: {status: admitted, package_target: el10}
   skipjack: {status: admitted, package_target: el10}
   bonito: {status: admitted, package_target: fedora}
-  wahoo:
-    status: unsupported
-    package_target: eln
-    reason: "unsupported until package target eln publishes gtkgreet (tunaos-packages#829): tuna-desktop 1.0.0~beta.1-1.eln159 is published, but ELN ships no gtkgreet, the qualified greeter"
-  bonito-rawhide:
-    status: unsupported
-    package_target: rawhide
-    reason: "unsupported until package target rawhide publishes tuna-desktop (tunaos-packages#831)"
+  wahoo: {status: admitted, package_target: eln}
+  bonito-rawhide: {status: admitted, package_target: rawhide}
   hummingbird:
     status: unsupported
     package_target: hummingbird
     reason: "unsupported until package target hummingbird publishes tuna-desktop (tunaos-packages#832)"
-  sailfin:
-    status: unsupported
-    package_target: opensuse
-    reason: "unsupported until package target opensuse publishes tuna-desktop (tunaos-packages#833)"
+  sailfin: {status: admitted, package_target: opensuse}
   gurnard:
     status: unsupported
     package_target: noble
-    reason: "unsupported until package target noble publishes tuna-desktop (tunaos-packages#834)"
-  grouper:
-    status: unsupported
-    package_target: ubuntu
-    reason: "unsupported until package target ubuntu publishes tuna-desktop to the factory apt repository (tunaos-packages#835); the v1.0.0-beta.1 .deb release asset is not a signed repository package"
-  flounder:
-    status: unsupported
-    package_target: trixie
-    reason: "unsupported until package target trixie publishes tuna-desktop (tunaos-packages#836); needs a gtk4-layer-shell >= 1.1 backport"
-  flounder-sid:
-    status: unsupported
-    package_target: debian
-    reason: "unsupported until package target debian publishes tuna-desktop (tunaos-packages#837)"
+    reason: "unsupported until package target noble publishes tuna-desktop (tunaos-packages#834), which waits for Ubuntu to publish rustc >= 1.92 for noble (gtk4-rs 0.11 needs it; noble's newest is rustc-1.91); the factory vendors no toolchain"
+  # The apt variants run dbus-daemon as the session bus, where activating the
+  # GNOME portal before the graphical session starts hangs instead of failing
+  # fast, and beta.1 then never starts graphical-session.target. Their portal
+  # check is blocked on the tuna-desktop session-start fix until a release
+  # ships it; the per-variant results are on tuna-desktop#577.
+  grouper: {status: admitted, package_target: ubuntu, portals: "blocked on tuna-desktop session-start fix"}
+  flounder: {status: admitted, package_target: trixie, portals: "blocked on tuna-desktop session-start fix"}
+  flounder-sid: {status: admitted, package_target: debian, portals: "blocked on tuna-desktop session-start fix"}
   guppy:
     status: unsupported
     package_target: gentoo
@@ -898,7 +885,7 @@ variants:
     upstream_track: experimental
     description: "Based on Fedora ELN (EL11 preview, rolling)"
     experimental: true
-    base_image: "registry.fedoraproject.org/eln-bootc:latest@sha256:c59e091c19ed8b7d0ce0ba7a372f2f892341c4bb45ec7ce989cc3a7d0c538bf9"
+    base_image: "registry.fedoraproject.org/eln-bootc:latest@sha256:26ea96d7a1c95fd682bc928a14880c98a068de3a92c685a77b750858ff73f404"
     # No alias: `eln` is Fedora's identifier for a moving development target,
     # and an alias tag is a stability promise this lane deliberately does not
     # make. Revisit if/when ELN gains a versioned publish.
@@ -950,6 +937,16 @@ variants:
         build_image: true
         build_iso: false
         build_qcow2: false
+      # Tuna Desktop (tuna_rollout above, tunaOS#3198): eln package target,
+      # which publishes tuna-desktop and gtkgreet; amd64 only, like every
+      # tuna cell.
+      - id: tuna
+        stage: 2
+        platforms: ["linux/amd64"]
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+        luks_e2e: false
 
   - id: bonito
     emoji: "🎣"
@@ -1340,6 +1337,15 @@ variants:
       - id: cosmic
         stage: 2
         build_image: true
+      # Tuna Desktop (tuna_rollout above, tunaOS#3201): opensuse package
+      # target, signed index repo.tunaos.org/rpm/opensuse-tumbleweed.
+      - id: tuna
+        stage: 2
+        platforms: ["linux/amd64"]
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+        luks_e2e: false
 
   # ── Guppy ────────────────────────────────────────────────────────────────
   # Guppy: source-based, emerge/portage. Compiles everything from source.
@@ -1448,6 +1454,16 @@ variants:
         build_image: true
         build_iso: false
         build_qcow2: false
+      # Tuna Desktop (tuna_rollout above, tunaOS#3203): rawhide package
+      # target, repo.tunaos.org/rpm/rawhide (tunaos-packages#870). Published
+      # as bonito:tuna-rawhide.
+      - id: tuna
+        stage: 2
+        platforms: ["linux/amd64"]
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+        luks_e2e: false
       - id: base-hwe
         stage: 2
         build_image: true
@@ -1605,6 +1621,17 @@ variants:
       - id: base
         stage: 1
         build_image: true
+      # Tuna Desktop (tuna_rollout above, tunaOS#3205): ubuntu package
+      # target, signed apt index repo.tunaos.org/tideforge/ubuntu. amd64
+      # only, like every tuna cell: the boot gate and the session
+      # qualification run on amd64.
+      - id: tuna
+        stage: 2
+        platforms: ["linux/amd64"]
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+        luks_e2e: false
       - id: gnome
         stage: 2
         build_image: true
@@ -1912,6 +1939,15 @@ variants:
       - id: xfce
         stage: 2
         build_image: true
+      # Tuna Desktop (tuna_rollout above, tunaOS#3206): trixie package
+      # target, signed apt index repo.tunaos.org/tideforge/debian-trixie.
+      - id: tuna
+        stage: 2
+        platforms: ["linux/amd64"]
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+        luks_e2e: false
       # NVIDIA overlay on the Debian base (tunaOS#624): nvidia-driver via
       # apt (official Debian non-free component, not a third-party repo) +
       # dkms. See build_scripts/overlay/overrides/nvidia-debian/20-nvidia.sh.
@@ -1959,6 +1995,16 @@ variants:
       - id: base
         stage: 1
         build_image: true
+      # Tuna Desktop (tuna_rollout above, tunaOS#3207): debian package
+      # target, signed apt index repo.tunaos.org/tideforge/debian-sid.
+      # Published as flounder:tuna-sid.
+      - id: tuna
+        stage: 2
+        platforms: ["linux/amd64"]
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+        luks_e2e: false
       - id: gnome
         stage: 2
         build_image: true

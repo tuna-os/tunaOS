@@ -346,6 +346,11 @@
   },
   {
     "variant": "bonito-rawhide",
+    "flavor": "tuna",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "bonito-rawhide",
     "flavor": "xfce",
     "arch": "aarch64"
   },
@@ -377,6 +382,11 @@
   {
     "variant": "flounder",
     "flavor": "kde-nvidia",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "flounder",
+    "flavor": "tuna",
     "arch": "x86_64"
   },
   {
@@ -412,6 +422,11 @@
   {
     "variant": "flounder-sid",
     "flavor": "kde-nvidia",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "flounder-sid",
+    "flavor": "tuna",
     "arch": "x86_64"
   },
   {
@@ -472,6 +487,11 @@
   {
     "variant": "grouper",
     "flavor": "kde",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "grouper",
+    "flavor": "tuna",
     "arch": "x86_64"
   },
   {
@@ -671,6 +691,11 @@
   },
   {
     "variant": "sailfin",
+    "flavor": "tuna",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "sailfin",
     "flavor": "xfce",
     "arch": "x86_64"
   },
@@ -827,6 +852,11 @@
   {
     "variant": "wahoo",
     "flavor": "kde",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "wahoo",
+    "flavor": "tuna",
     "arch": "x86_64"
   },
   {
