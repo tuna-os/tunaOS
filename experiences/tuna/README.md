@@ -19,7 +19,9 @@ tuna-os/tuna-desktop ADR 0008 ships Tuna Desktop on every TunaOS variant, or rec
 - EL10 (`yellowfin:tuna`, `albacore:tuna`, `skipjack:tuna`) installs `tuna-desktop-1.0.0~beta.1-1.el10`, `gtk4-layer-shell`, `libseat` and `greetd` from the factory's el10 index (`repo.tunaos.org/repo/10/x86_64`), `gtkgreet` from its xfce tier and `cage` from EPEL.
 - Fedora 44 (`bonito:tuna`) installs `tuna-desktop-1.0.0~beta.1-1.fc44` from the factory's fedora index (`repo.tunaos.org/xfce/44-x86_64`); everything else is Fedora's.
 
-The factory repositories keep `gpgcheck=1` against `https://repo.tunaos.org/public.gpg` and sit at priority 100, behind the distribution repositories, so they only supply what the base lacks. These cells are amd64 only. They use `Containerfile.el10`'s `tuna` stage and the same greetd/gtkgreet launcher, session choice, portal routing and contract as Marlin; the contract reads package ownership from the native pacman or RPM database.
+The factory repositories keep `gpgcheck=1` against `https://repo.tunaos.org/public.gpg` and sit at priority 100, behind the distribution repositories, so they only supply what the base lacks. These cells are amd64 only. They use the `tuna` stage of `Containerfile.el10` and the same greetd/gtkgreet launcher, session choice, portal routing and contract as Marlin. The contract reads package ownership from the native pacman or RPM database.
+
+On the RPM bases, gnome-shell requires `gdm-libs`, so gdm is installed; `greetd-system-integration.sh` masks `gdm.service` and points `display-manager.service` at greetd. Power profiles come from `tuned-ppd`, as on the GNOME flavors of those bases. `dbus-tools` supplies `dbus-update-activation-environment`, which beta.1 needs to start `graphical-session.target` and the portals (tuna-os/tuna-desktop#691 removes that need).
 
 ## Switch an existing Roost install
 

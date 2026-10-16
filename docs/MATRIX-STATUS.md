@@ -58,7 +58,7 @@ no boot.
 
 ---
 
-The configured image matrix now has 140 cells after adding five amd64 Tuna Desktop (formerly Roost) cells: Marlin, Yellowfin, Albacore, Skipjack and Bonito. This status snapshot is from before their addition and does not mark them green; each needs its own image, desktop and boot evidence.
+The configured image matrix now has 140 cells. Five of them are Tuna Desktop (formerly Roost) cells for amd64: Marlin, Yellowfin, Albacore, Skipjack and Bonito. This status snapshot is from before their addition and does not mark them green; each needs its own image, desktop and boot evidence.
 
 <!-- BEGIN GENERATED — scripts/gen-matrix-status.py -->
 
