@@ -1555,7 +1555,7 @@ uses the previous defect: the report must query a matrix cell with
 
 **Measured cause:** [Corral 4c59a6be](https://github.com/tuna-os/corral/blob/4c59a6be9ea6532aa79c6407bab471b4202c1484/pkg/kubevirt/bootc.go#L536) has no kernel argument option for both fresh and resumed guests. The custom script uses a chroot in the raw root partition. Its KubeVirt path ignores a script failure. A command after SSH starts cannot prevent the first report.
 
-**Fix:** The PR gate uses the existing QCOW2/QEMU path; `iso-e2e.sh` sets the CI marker before boot. The helper for Corral exits 77 before guest creation unless both paths support the exclusion argument. `bats tests/bats/test_boot_gate_resume.bats` passes eight cases. This session booted no Corral guest.
+**Fix:** The boot gates use `scripts/corral-boot-gate.sh`. It gives `--karg tunaos.countme=0` to `corral vmtest`, and Corral writes the argument into the boot entry before the first boot. `bats tests/bats/test_corral_boot_gate.bats` checks the argument. The GPU-routed path through `iso-e2e.sh` sets the SMBIOS CI marker before boot. The KubeVirt helper `scripts/boot-gate.sh` exits 77 before guest creation unless both of its paths support the exclusion argument. `bats tests/bats/test_boot_gate_resume.bats` checks that helper.
 
 ### Adoption dashboard API returns HTTP 503
 
@@ -1629,6 +1629,14 @@ repository defaults for token scope.
 
 **Fix:** Set a narrow scope for each workflow. Give write access only to a job
 that changes GitHub state. The regression test for #2767 checks each workflow.
+
+### Admitted variant with missing rebuild repository fails CI
+
+**Symptom:** A new variant fails nightly builds for declared desktops (e.g. 10+ red nights for Hummingbird).
+
+**Measured cause (#1755, #1763):** The project admitted Hummingbird without a check for desktop packages or aarch64 repodata. Declared desktops had no manifest sections.
+
+**Fix (#1763):** Extend `VARIANT-LIFECYCLE.md` with a completeness check. Verify repo reachability across declared arches. Add manifest sections before setting `build_image: true`. Exclude unbuilt arches until package sources exist.
 
 
 ### A LUKS cell passes its desktop contract and fails the pixel gate (#979)

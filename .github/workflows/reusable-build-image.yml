@@ -356,7 +356,20 @@ jobs:
             sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm || true
-          sudo apt-get install -y qemu-system-x86 qemu-utils ovmf socat imagemagick
+          sudo apt-get install -y qemu-system-x86 qemu-utils ovmf ffmpeg
+
+      - name: Set up Go for corral (PR gate)
+        if: github.event_name == 'pull_request' && contains(matrix.platform, 'amd64')
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version: "1.27"
+          cache: false
+
+      - name: Install corral (PR gate)
+        if: github.event_name == 'pull_request' && contains(matrix.platform, 'amd64')
+        run: |
+          scripts/install-corral.sh "$RUNNER_TEMP/corral-bin"
+          sudo install -m 0755 "$RUNNER_TEMP/corral-bin/corral" /usr/local/bin/corral
 
       - name: Boot-verify image (PR gate)
         if: github.event_name == 'pull_request' && contains(matrix.platform, 'amd64')
@@ -364,18 +377,23 @@ jobs:
         env:
           IMAGE_VARIANT: ${{ inputs.image-variant }}
           DEFAULT_TAG: ${{ inputs.default-tag }}
+          # As in the Gate's Boot and verify: hummingbird's bootc install
+          # config selects ext4, and the unsealed probe would otherwise pick
+          # xfs, which its GRUB cannot read.
+          TUNAOS_QCOW2_FILESYSTEM: ${{ inputs.image-variant == 'hummingbird' && 'ext4' || '' }}
         run: |
           mkdir -p verify-out
           IMAGE="localhost/${IMAGE_VARIANT}:${DEFAULT_TAG}"
-          # Use the same disk/QEMU path as the release gate. iso-e2e.sh sets
-          # the explicit CI SMBIOS marker before the first guest boot.
-          just qcow2 "$IMAGE"
+          # The same harness as the release gate: Corral installs the image
+          # from root podman storage and puts tunaos.countme=0 in the boot
+          # entry before the first boot.
           # No `|| true` here (tuna-os/tunaos#1533): a PR whose image fails to
           # boot must fail the PR gate, not just warn on missing evidence. The
           # evidence-upload step below already runs under `if: always()`, so
           # dropping the swallow doesn't lose any diagnostics — it just makes
           # the check red when the boot actually failed.
-          sudo ./scripts/iso-e2e.sh "${IMAGE_VARIANT}.qcow2" --disk --output verify-out --timeout 300
+          sudo --preserve-env=TUNAOS_QCOW2_FILESYSTEM \
+            ./scripts/corral-boot-gate.sh "$IMAGE" verify-out 300
 
       - name: Upload PR verification evidence
         if: always() && github.event_name == 'pull_request' && contains(matrix.platform, 'amd64')
@@ -384,7 +402,10 @@ jobs:
           name: pr-boot-verify-${{ inputs.image-name }}-${{ inputs.default-tag }}-${{ matrix.safeplatform }}
           path: |
             verify-out/serial.log
-            verify-out/*.ppm
+            verify-out/*.png
+            verify-out/timelapse.webm
+            verify-out/corral/result.json
+            verify-out/corral/diagnostics/
           if-no-files-found: warn
           retention-days: 7
 
@@ -1319,9 +1340,9 @@ jobs:
   # taken one step further than #1560 took it.
 
   # ── Boot gate ───────────────────────────────────────────────────────────────
-  # Pull the just-pushed :<tag>-testing manifest, install it to a qcow2 with
-  # bootc, boot it in QEMU, and require a graphical session (serial marker or
-  # screenshot sanity — scripts/iso-e2e.sh --disk). Promotion of the bare
+  # Pull the just-pushed :<tag>-testing manifest, install it to a disk with
+  # bootc, boot it in QEMU, and require the desktop contract marker on the
+  # serial console (scripts/corral-boot-gate.sh, run by Corral). Promotion of the bare
   # tags is blocked while this fails. Skipped for base* flavors (no desktop
   # to verify; they are exercised by every desktop build layered on them).
   verify_boot:
@@ -1447,7 +1468,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          pkgs=(just jq qemu-system-x86 qemu-utils ovmf socat imagemagick)
+          pkgs=(just jq qemu-system-x86 qemu-utils ovmf socat imagemagick ffmpeg)
           if sudo sh -c 'command -v podman' >/dev/null 2>&1; then
             echo "podman already present: $(sudo sh -c 'command -v podman') ($(sudo podman --version))"
           else
@@ -1470,7 +1491,27 @@ jobs:
           fi
           scripts/gpu-drm-preflight.sh "${args[@]}"
 
-      - name: Build qcow2 from testing image
+      # Corral runs the gate (scripts/corral-boot-gate.sh): it installs the
+      # image to a disk, boots it under QEMU/KVM on UEFI, and gates on the
+      # contract markers on the serial console, with the verdict
+      # scripts/iso-e2e.sh --disk gave. The GPU-routed compositors keep the
+      # iso-e2e.sh path below, because Corral has no virgl display; they are
+      # not scheduled today (see the job's `if:`).
+      - name: Set up Go for corral
+        if: ${{ !(startsWith(inputs.flavor, 'cosmic') || startsWith(inputs.flavor, 'niri') || startsWith(inputs.flavor, 'xfwl4')) }}
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version: "1.27"
+          cache: false
+
+      - name: Install corral
+        if: ${{ !(startsWith(inputs.flavor, 'cosmic') || startsWith(inputs.flavor, 'niri') || startsWith(inputs.flavor, 'xfwl4')) }}
+        run: |
+          scripts/install-corral.sh "$RUNNER_TEMP/corral-bin"
+          sudo install -m 0755 "$RUNNER_TEMP/corral-bin/corral" /usr/local/bin/corral
+
+      - name: Boot and verify
+        if: ${{ !(startsWith(inputs.flavor, 'cosmic') || startsWith(inputs.flavor, 'niri') || startsWith(inputs.flavor, 'xfwl4')) }}
         env:
           TEST_IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}-testing
           # hummingbird probes BACKEND=ostree SEALED=0, so it takes the xfs
@@ -1493,13 +1534,23 @@ jobs:
           # exactly as before.
           TUNAOS_QCOW2_FILESYSTEM: ${{ inputs.image-variant == 'hummingbird' && 'ext4' || '' }}
         run: |
+          mkdir -p verify-out
+          sudo --preserve-env=TUNAOS_QCOW2_FILESYSTEM \
+            ./scripts/corral-boot-gate.sh "$TEST_IMAGE" verify-out 900
+
+      - name: Build qcow2 from testing image (virgl)
+        if: ${{ startsWith(inputs.flavor, 'cosmic') || startsWith(inputs.flavor, 'niri') || startsWith(inputs.flavor, 'xfwl4') }}
+        env:
+          TEST_IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}-testing
+        run: |
           just qcow2 "${TEST_IMAGE}"
 
-      - name: Boot and verify
+      - name: Boot and verify (virgl)
+        if: ${{ startsWith(inputs.flavor, 'cosmic') || startsWith(inputs.flavor, 'niri') || startsWith(inputs.flavor, 'xfwl4') }}
         env:
           # Do not let a GPU-routed gate silently fall back to plain virtio.
           # The preflight above has already proved this mode is available.
-          TBOX_E2E_GPU: ${{ (startsWith(inputs.flavor, 'cosmic') || startsWith(inputs.flavor, 'niri') || startsWith(inputs.flavor, 'xfwl4')) && 'virgl' || 'auto' }}
+          TBOX_E2E_GPU: virgl
         run: |
           QCOW2=$(find . -maxdepth 1 -name "*.qcow2" | head -1)
           mkdir -p verify-out
@@ -1507,7 +1558,7 @@ jobs:
             --output verify-out \
             --timeout 900
 
-      # iso-e2e.sh runs under sudo, so everything it drops in verify-out is
+      # The boot step runs under sudo, so everything it drops in verify-out is
       # root-owned. Hand it back to the runner user BEFORE any later step
       # reads it. This chown used to live only in "Collect evidence", which
       # runs AFTER the tier-1 step below, and that ordering failed every
@@ -1595,6 +1646,9 @@ jobs:
             verify-out/boot-diagnostics.txt
             verify-out/runner-capability.txt
             verify-out/*.png
+            verify-out/timelapse.webm
+            verify-out/corral/result.json
+            verify-out/corral/diagnostics/
             evidence/${{ inputs.image-variant }}/${{ inputs.flavor }}/amd64/
           if-no-files-found: warn
           retention-days: 7
