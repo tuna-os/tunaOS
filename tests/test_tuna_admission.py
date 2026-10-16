@@ -15,7 +15,7 @@ def test_tuna_is_one_arch_cell_without_iso_expansion():
     assert not flavor["build_iso"]
     assert not flavor["build_qcow2"]
     manifest = yaml.safe_load((ROOT / "manifests/desktops/tuna.yaml").read_text())
-    assert "tunaos/tuna-desktop" in manifest["packages"]["pacman"]
+    assert "tunaos/tuna-desktop=1.0.0beta.1-1" in manifest["packages"]["pacman"]
     assert manifest["display_manager"] == "greetd"
     assert "greetd-gtkgreet.sh" in manifest["post_install"]
 
