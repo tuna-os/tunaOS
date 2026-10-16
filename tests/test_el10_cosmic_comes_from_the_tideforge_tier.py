@@ -93,3 +93,32 @@ def test_el10_cosmic_is_amd64_only_until_the_tier_has_aarch64(variants, variant)
             "requires an aarch64 Tideforge COSMIC index and removing the "
             "variant from PINNED in the same change"
         )
+
+
+# ── Login integration the COPR packages used to supply ───────────────────────
+#
+# The factory greetd ships only the daemon and greetd.service: no
+# /etc/greetd/config.toml and no PAM services. cosmic-greeter.service carries
+# its own config (`greetd --config /etc/greetd/cosmic-greeter.toml`), but its
+# RPM claims no display-manager.service alias, and its PAM file is Debian's
+# (`@include common-auth`), which EL does not have.
+
+
+def test_el10_selects_cosmic_greeter_as_the_display_manager(el10):
+    assert el10.get("display_manager") == "cosmic-greeter", (
+        "a bare greetd.service has no config.toml on EL10; cosmic-greeter.service "
+        "is the greetd unit that carries one"
+    )
+
+
+def test_the_factory_greetd_gets_its_system_integration():
+    post = yaml.safe_load(COSMIC.read_text()).get("post_install") or []
+    assert "greetd-system-integration.sh" in post, (
+        "nothing installs the greetd-greeter PAM service or the greetd SELinux labels"
+    )
+    assert post.index("greetd-system-integration.sh") < post.index("greetd-gtkgreet.sh")
+
+
+def test_the_debian_pam_file_is_replaced_where_el_lacks_common_auth():
+    inline = " ".join(yaml.safe_load(COSMIC.read_text()).get("post_install_inline") or [])
+    assert "/etc/pam.d/cosmic-greeter" in inline and "common-auth" in inline

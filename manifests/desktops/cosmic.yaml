@@ -277,6 +277,19 @@ packages:
     # rpm/el10/aarch64/ repodata, checked 2026-10-16), and an aarch64-only
     # repo on these amd64-only flavors was just an extra
     # skip_if_unavailable=False failure point.
+    #
+    # display_manager: cosmic-greeter, not the global greetd. The factory
+    # greetd ships only /usr/bin/greetd and greetd.service -- no
+    # /etc/greetd/config.toml and no PAM services ("configuration and PAM
+    # policy remain image-owned") -- so a bare greetd.service has nothing to
+    # start. cosmic-greeter.service is greetd with its own config
+    # (`greetd --config /etc/greetd/cosmic-greeter.toml`, service =
+    # "cosmic-greeter"), and unlike the COPR build its RPM has no scriptlet
+    # claiming display-manager.service, so it must be selected here.
+    # greetd-system-integration.sh (post_install) supplies the greeter PAM
+    # service and SELinux labels; post_install_inline swaps the Debian-style
+    # /etc/pam.d/cosmic-greeter for an EL stack.
+    display_manager: cosmic-greeter
     repos:
       # COSMIC from our own Tideforge builds (tuna-os/tunaos-packages,
       # phases 0-3 published 2026-10-10), replacing COPR
@@ -434,10 +447,19 @@ packages:
 post_install_inline:
   - "glib-compile-schemas /usr/share/glib-2.0/schemas || true"
   - "if [ -f /etc/pam.d/greetd ]; then sed --sandbox -i -e '/gnome_keyring.so/ s/-auth/auth/ ; /gnome_keyring.so/ s/-session/session/' /etc/pam.d/greetd; fi"
+  # The factory cosmic-greeter ships Debian's PAM file (`@include
+  # common-auth` etc.); EL has no common-* stacks, so password login would
+  # fail. Where that is the case, reuse the EL greetd stack written by
+  # greetd-system-integration.sh (and keyring-patched just above).
+  - "if [ -f /etc/pam.d/cosmic-greeter ] && [ -f /etc/pam.d/greetd ] && [ ! -e /etc/pam.d/common-auth ] && grep -q '^@include common-' /etc/pam.d/cosmic-greeter; then cp /etc/pam.d/greetd /etc/pam.d/cosmic-greeter; fi"
 
 # Post-install scripts to source (relative to build_scripts/)
 post_install:
   - tuna-flatpak-remote.sh
+  # Before greetd-gtkgreet.sh: it needs the greeter account. Gives the
+  # factory greetd (EL10) its PAM services and SELinux labels; a no-op where
+  # the distribution's greetd ships its own (Fedora, openSUSE, Ubuntu).
+  - greetd-system-integration.sh
   # No-op wherever cosmic-greeter is installed (Fedora/EL10/Ubuntu), because it
   # only acts when gtkgreet AND cage are both present. On openSUSE, where
   # cosmic-greeter is not packaged, it is the difference between a login screen
