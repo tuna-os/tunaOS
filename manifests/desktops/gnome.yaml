@@ -484,6 +484,14 @@ packages:
   emerge:
     - gnome-base/gnome-light
     - gnome-base/gdm
+    # dconf is explicit, not assumed: Gentoo's gdm ships keyfiles in
+    # /etc/dconf/db/distro.d, and the build-time `dconf update` in
+    # install-desktop.sh / 40-services.sh is guarded on `command -v dconf`.
+    # Neither atom above pulls the gnome-base/dconf CLI, so the guard skipped
+    # and the desktop contract failed on the uncompiled distro database
+    # (run 38894192116). Same shape as the fedora cosmic section above, which
+    # lists dconf for hummingbird's minimal rebuild.
+    - gnome-base/dconf
 
 # Gentoo only: the ~amd64 keywords that lift guppy:gnome over the floor.
 # ::gentoo has GNOME 50 under ~amd64 only. Stable amd64 stops at gnome-shell
