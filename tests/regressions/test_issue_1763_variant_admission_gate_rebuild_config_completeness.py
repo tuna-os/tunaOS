@@ -139,19 +139,23 @@ def _override_manifest_name(variant_id: str, os_sec: str, base_flavor: str) -> s
     return None
 
 
-def _section_packages(section):
-    """Package value of an OS section: the list itself, or a mapping's `packages`."""
-    if isinstance(section, dict):
-        return section.get("packages")
-    return section
+# Section shapes install-desktop.sh can consume per OS: pacman and emerge read
+# `.packages.<os>[]`; apt and zypper branch on `!!seq` vs `!!map`; the dnf path
+# (el10/fedora/eln/hummingbird) reads only `.packages.<os>.packages[]`.
+_SECTION_SHAPES: dict[str, tuple[type, ...]] = {
+    "pacman": (list,),
+    "emerge": (list,),
+    "apt": (list, dict),
+    "zypper": (list, dict),
+    "el10": (dict,),
+    "fedora": (dict,),
+    "eln": (dict,),
+    "hummingbird": (dict,),
+}
 
 
-def get_manifest_packages(variant_id: str, flavor_id: str, manifests_dir: pathlib.Path):
-    """Package value install-desktop.sh would install, or None if the section is absent.
-
-    The returned value is not type-checked here; the admission check requires
-    a non-empty list.
-    """
+def get_manifest_section(variant_id: str, flavor_id: str, manifests_dir: pathlib.Path):
+    """Raw `packages.<os>` value install-desktop.sh would read, or None if absent."""
     os_sec = _get_os_section_for_variant(variant_id)
     base_flavor = flavor_id.split("-")[0]
 
@@ -168,7 +172,7 @@ def get_manifest_packages(variant_id: str, flavor_id: str, manifests_dir: pathli
     # install-desktop.sh reads only `.packages.<os>`; a top-level `<os>:` key
     # is ignored at build time, so it must not satisfy admission either.
     doc = yaml.safe_load(manifest_file.read_text(encoding="utf-8")) or {}
-    return _section_packages((doc.get("packages") or {}).get(os_sec))
+    return (doc.get("packages") or {}).get(os_sec)
 
 
 def check_variant_manifest_completeness(
@@ -203,13 +207,26 @@ def check_variant_manifest_completeness(
                 )
                 continue
 
-        pkgs = get_manifest_packages(variant_id, fid, manifests_dir)
-        if pkgs is None:
+        section = get_manifest_section(variant_id, fid, manifests_dir)
+        if section is None:
             errors.append(
                 f"Variant '{variant_id}' declares flavor '{fid}' (routes to '{os_sec}') "
                 f"but '{selected}' has no packages.{os_sec} section"
             )
-        elif not isinstance(pkgs, list) or not all(isinstance(p, str) for p in pkgs):
+            continue
+        shapes = _SECTION_SHAPES[os_sec]
+        if not isinstance(section, shapes):
+            expected = " or ".join(
+                "a package list" if s is list else "a mapping with `packages:`"
+                for s in shapes
+            )
+            errors.append(
+                f"Variant '{variant_id}' flavor '{fid}' packages.{os_sec} in "
+                f"'{selected}' must be {expected} for install-desktop.sh"
+            )
+            continue
+        pkgs = section.get("packages", []) if isinstance(section, dict) else section
+        if not isinstance(pkgs, list) or not all(isinstance(p, str) for p in pkgs):
             errors.append(
                 f"Variant '{variant_id}' flavor '{fid}' packages.{os_sec} in "
                 f"'{selected}' is not a list of package names"
@@ -361,3 +378,26 @@ def test_rejection_of_flavor_platform_override_without_rebuild_repo_source():
     )
     assert len(errors) == 1
     assert "flavor 'cosmic'" in errors[0] and "aarch64" in errors[0]
+
+
+def test_bare_rpm_list_is_rejected(tmp_path):
+    # The dnf path reads only `.packages.<os>.packages[]`; a bare list installs nothing.
+    (tmp_path / "foo.yaml").write_text("packages:\n  hummingbird: [gnome-shell, gdm]\n")
+    variant = {"id": "hummingbird", "flavors": [{"id": "foo", "build_image": True}]}
+    errors = check_variant_manifest_completeness(variant, tmp_path)
+    assert len(errors) == 1 and "must be a mapping with `packages:`" in errors[0]
+
+
+def test_nested_pacman_and_emerge_mappings_are_rejected(tmp_path):
+    # pacman and emerge read `.packages.<os>[]` directly; a mapping installs nothing.
+    (tmp_path / "foo-arch.yaml").write_text(
+        "packages:\n  pacman:\n    packages: [foo-session]\n"
+    )
+    (tmp_path / "foo.yaml").write_text(
+        "packages:\n  emerge:\n    packages: [foo-session]\n"
+    )
+    for variant_id, os_sec in (("marlin", "pacman"), ("guppy", "emerge")):
+        variant = {"id": variant_id, "flavors": [{"id": "foo", "build_image": True}]}
+        errors = check_variant_manifest_completeness(variant, tmp_path)
+        assert len(errors) == 1, errors
+        assert f"packages.{os_sec}" in errors[0] and "must be a package list" in errors[0]
