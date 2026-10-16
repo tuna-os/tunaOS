@@ -31,7 +31,7 @@ def test_every_variant_has_an_explicit_tuna_rollout_record():
 def test_tuna_cells_are_amd64_images_without_iso_expansion():
     config = rollout()
     admitted = [v for v in config["variants"] if config["tuna_rollout"][v["id"]]["status"] == "admitted"]
-    assert {v["id"] for v in admitted} == {"marlin", "yellowfin", "albacore", "skipjack", "bonito"}
+    assert {v["id"] for v in admitted} == {"marlin", "yellowfin", "albacore", "skipjack", "wahoo", "bonito", "bonito-rawhide", "grouper", "flounder", "flounder-sid", "sailfin"}
     for variant in admitted:
         flavor = next(f for f in variant["flavors"] if f["id"] == "tuna")
         assert flavor["stage"] == 2
@@ -48,7 +48,7 @@ def test_tuna_cells_are_amd64_images_without_iso_expansion():
 
 def test_rpm_cells_install_the_pinned_beta_from_signed_factory_repositories():
     manifest = yaml.safe_load((ROOT / "manifests/desktops/tuna.yaml").read_text())
-    for target, nevr in (("el10", "tuna-desktop-1.0.0~beta.1-1.el10"), ("fedora", "tuna-desktop-1.0.0~beta.1-1.fc44")):
+    for target, nevr in (("el10", "tuna-desktop-1.0.0~beta.1-1.el10"), ("fedora", "tuna-desktop-1.0.0~beta.1-1.fc44"), ("rawhide", "tuna-desktop-1.0.0~beta.1-1.fc46"), ("eln", "tuna-desktop-1.0.0~beta.1-1.eln159")):
         section = manifest["packages"][target]
         assert section["display_manager"] == "greetd"
         assert nevr in section["packages"]
@@ -66,15 +66,73 @@ def test_rpm_cells_install_the_pinned_beta_from_signed_factory_repositories():
             # Behind the distro repositories: the factory tiers only fill gaps.
             assert repo["priority"] > 99
     assert "tuned-ppd" in manifest["packages"]["fedora"]["packages"]
+    assert "tuned-ppd" in manifest["packages"]["rawhide"]["packages"]
+    assert "tuned-ppd" in manifest["packages"]["eln"]["packages"]
+    installer = (ROOT / "build_scripts/desktop/install-desktop.sh").read_text()
+    assert '_TD_OS="rawhide"' in installer, "a Rawhide base must read the rawhide section"
     base_packages = (ROOT / "build_scripts/10-base-packages.sh").read_text()
     el10_base = base_packages.split("\nelse\n", 1)[1]
     assert "\t\ttuned-ppd \\\n" in el10_base, "the EL10 base must keep supplying tuned-ppd"
-    assert "eln" not in manifest["packages"], "wahoo is unsupported; an eln section would be dead"
+    # ELN ships no gtkgreet; the eln factory index fills it (tunaos-packages#874).
+    assert manifest["packages"]["eln"]["repos"] == [{"name": "tunaos-eln", "baseurl": "https://repo.tunaos.org/rpm/eln/x86_64/", "priority": 100}]
     containerfile = (ROOT / "Containerfile.el10").read_text()
     context = containerfile.split("FROM scratch as context\n", 1)[1].split("FROM ", 1)[0]
     assert "COPY experiences/tuna /experiences/tuna" in context
     stage = containerfile.split("FROM base-no-de AS tuna\n", 1)[1]
     assert "install-desktop.sh tuna" in stage
+
+
+def test_apt_cells_install_the_pinned_beta_from_the_signed_tideforge_index_for_their_base():
+    manifest = yaml.safe_load((ROOT / "manifests/desktops/tuna.yaml").read_text())
+    section = manifest["packages"]["apt"]
+    assert "tuna-desktop=1.0.0~beta.1-1" in section["packages"]
+    for package in ("greetd", "gtkgreet", "cage", "xdg-desktop-portal-gnome", "xdg-desktop-portal-gtk", "gnome-keyring", "orca", "power-profiles-daemon"):
+        assert package in section["packages"], package
+    repos = {repo["condition"]: repo for repo in section["repos"]}
+    assert set(repos) == {"ubuntu", "debian-sid", "debian-trixie"}
+    # trixie's tuna-desktop carries a private gtk4-layer-shell; Debian's 1.0
+    # library must not be installed beside it.
+    assert not any(p.startswith("libgtk4-layer-shell") for p in section["packages"])
+    for index in ("ubuntu", "debian-sid", "debian-trixie"):
+        repo = repos[index]
+        assert repo["uri"] == f"https://repo.tunaos.org/tideforge/{index}/"
+        # signed-by: apt refuses the index unless the keyring signs it.
+        assert repo["keyring_url"] == f"https://repo.tunaos.org/tideforge/{index}/tideforge.gpg"
+    installer = (ROOT / "build_scripts/desktop/install-desktop.sh").read_text()
+    assert "deb [signed-by=${_TD_AR_KEYRING_PATH}]" in installer
+    assert "debian-sid) [[" in installer
+    assert "debian-trixie) [[" in installer
+    greeter = (ROOT / "build_scripts/desktop/greetd-gtkgreet.sh").read_text()
+    assert "greetd greeter _greetd" in greeter, "Debian and Ubuntu name the greeter account _greetd"
+    assert "Conflicts=getty@tty1.service" in greeter, "Debian's greetd.service is written for vt 7"
+    for name in ("Containerfile.ubuntu", "Containerfile.debian"):
+        containerfile = (ROOT / name).read_text()
+        context = containerfile.split("FROM scratch AS context\n", 1)[1].split("FROM ", 1)[0]
+        assert "COPY experiences/tuna /experiences/tuna" in context, name
+        stage = containerfile.split("FROM base-no-de AS tuna\n", 1)[1]
+        assert "install-desktop.sh tuna" in stage, name
+
+
+def test_zypper_cell_installs_the_pinned_beta_from_the_signed_factory_index():
+    manifest = yaml.safe_load((ROOT / "manifests/desktops/tuna.yaml").read_text())
+    section = manifest["packages"]["zypper"]
+    assert section["display_manager"] == "greetd"
+    assert "tuna-desktop-1.0.0~beta.1-1" in section["packages"]
+    # dbus-update-activation-environment (tuna-os/tuna-desktop#691) and
+    # Tumbleweed's emoji font name.
+    for package in ("dbus-1-tools", "google-noto-coloremoji-fonts", "greetd", "gtkgreet", "cage", "xdg-desktop-portal-gnome", "xdg-desktop-portal-gtk", "gnome-keyring", "orca", "power-profiles-daemon"):
+        assert package in section["packages"], package
+    (repo,) = section["repos"]
+    assert repo["baseurl"] == "https://repo.tunaos.org/rpm/opensuse-tumbleweed/x86_64/"
+    # No priority: Tumbleweed's newer greetd must win over the factory's.
+    assert "priority" not in repo
+    installer = (ROOT / "build_scripts/desktop/install-desktop.sh").read_text()
+    assert ".packages.zypper.repos[$i].baseurl" in installer
+    assert 'echo "pkg_gpgcheck=1"' in installer
+    containerfile = (ROOT / "Containerfile.opensuse").read_text()
+    context = containerfile.split("FROM scratch AS context\n", 1)[1].split("FROM ", 1)[0]
+    assert "COPY experiences/tuna /experiences/tuna" in context
+    assert "\nFROM desktop AS tuna\n" in containerfile
 
 
 def test_tuna_package_signatures_cannot_be_silently_disabled():
