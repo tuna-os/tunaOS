@@ -48,8 +48,9 @@ tuna_installed_package_names() {
 	case "$1" in
 	pacman) pacman -Qq ;;
 	rpm) rpm -qa --qf '%{NAME}\n' ;;
-	# Installed only: dpkg also lists removed-but-not-purged names.
-	dpkg) dpkg-query -W -f '${db:Status-Abbrev} ${Package}\n' | awk '$1 == "ii" { print $2 }' ;;
+	# Installed only, read from the second (state) character: the first is the
+	# selection, so a held install is `hi`, and removed-but-not-purged is `rc`.
+	dpkg) dpkg-query -W -f '${db:Status-Abbrev} ${Package}\n' | awk 'substr($1, 2, 1) == "i" { print $2 }' ;;
 	*) return 1 ;;
 	esac
 }

@@ -201,6 +201,27 @@ def test_installed_portal_contract_rejects_missing_or_ambiguous_consent_routing(
         assert (result.returncode == 0) is accepted, result.stderr.decode()
 
 
+def test_dpkg_installed_names_keep_held_packages_and_drop_removed_ones(tmp_path):
+    import subprocess
+
+    script = (ROOT / "build_scripts/checks/verify-desktop-experience.sh").read_text()
+    function = script.split("tuna_installed_package_names() {", 1)[1].split("\ntuna_installed_file_owner()", 1)[0]
+    fake = tmp_path / "dpkg-query"
+    fake.write_text(
+        "#!/bin/sh\n"
+        "printf 'ii  tuna-desktop\\nhi  power-profiles-daemon\\nrc  roost\\nun  absent\\n'\n"
+    )
+    fake.chmod(0o755)
+    command = "tuna_installed_package_names() {" + function + "\ntuna_installed_package_names dpkg"
+    result = subprocess.run(
+        ["bash", "-c", command], capture_output=True, text=True,
+        env={"PATH": f"{tmp_path}:/usr/bin:/bin"},
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.split() == ["tuna-desktop", "power-profiles-daemon"]
+
+
+
 def test_nothing_in_the_image_still_requires_the_roost_package():
     """tuna-desktop provides roost; installing or asserting `roost` by name would
     pull the retired package (or fail once it is gone) instead of the rename."""
