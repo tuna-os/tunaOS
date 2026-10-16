@@ -136,7 +136,7 @@ jobs:
     name: ${{ matrix.basename }}
     needs: generate-matrix
     if: ${{ needs.generate-matrix.outputs.count != '0' }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     # The job had no budget at all, so it inherited the 360-minute Actions
     # default -- which is how job 97661993804 sat in a wedged signing step
     # for 45 minutes and would have sat there for six hours. This covers the
