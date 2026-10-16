@@ -33,7 +33,7 @@
 set -xeuo pipefail
 
 # renovate: datasource=github-releases depName=tuna-os/remora
-REMORA_VERSION="v0.4.3"
+REMORA_VERSION="v0.4.4"
 REMORA_ARCH="$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"
 case "${REMORA_ARCH}" in
 amd64) REMORA_SHA256="b39b3a6157bfb990f3d4bc4e75eafe216d57f3e394059a05a7ed828c4476364e" ;;
