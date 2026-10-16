@@ -19,6 +19,10 @@ packages:
     - cage
     - xorg-xwayland
     - ibus
+    # Screen Reader: Tuna Desktop starts and stops Orca from GNOME's
+    # screen-reader-enabled key, as GNOME does; without the package the
+    # key does nothing (published-image qualification, tuna-desktop#273).
+    - orca
     - gnome-shell
     - gnome-settings-daemon
     - gnome-control-center

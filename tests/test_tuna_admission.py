@@ -16,6 +16,7 @@ def test_tuna_is_one_arch_cell_without_iso_expansion():
     assert not flavor["build_qcow2"]
     manifest = yaml.safe_load((ROOT / "manifests/desktops/tuna.yaml").read_text())
     assert "tunaos/tuna-desktop=1.0.0beta.1-1" in manifest["packages"]["pacman"]
+    assert "orca" in manifest["packages"]["pacman"], "the Screen Reader key needs distribution Orca"
     assert manifest["display_manager"] == "greetd"
     assert "greetd-gtkgreet.sh" in manifest["post_install"]
 
@@ -36,7 +37,7 @@ def test_tuna_package_signatures_cannot_be_silently_disabled():
 def test_tuna_contract_is_a_known_desktop_with_session_and_pam_requirements():
     script = (ROOT / "build_scripts/checks/verify-desktop-experience.sh").read_text()
     case = script.split("\ntuna)\n", 1)[1].split("\n\t;;", 1)[0]
-    for requirement in ("Exec=tuna-session", "/etc/pam.d/tuna-lock", "tuna-shell-gtk", "tuna-session.target", "require_unit greetd", "tuna-portals.conf"):
+    for requirement in ("Exec=tuna-session", "/etc/pam.d/tuna-lock", "tuna-shell-gtk", "tuna-session.target", "require_unit greetd", "tuna-portals.conf", "require_command orca"):
         assert requirement in case
 
 
