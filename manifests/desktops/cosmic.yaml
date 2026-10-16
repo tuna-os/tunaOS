@@ -219,14 +219,13 @@ packages:
   # ── Wahoo (Fedora ELN) ─────────────────────────────────────────────────
   # ELN carries COSMIC natively, in eln-extras, at 1.6.0 — and that is the
   # headline finding of the whole lane so far, not just a convenience.
-  # `cosmic.el10` below sources COSMIC and fprintd from our own
-  # repo.tunaos.org Tideforge tiers (COSMIC moved off COPR
-  # `yselkowitz/cosmic-epel` in #3132, x86_64 only for now). On this base
-  # neither is needed: the compose ships
+  # `cosmic.el10` below sources COSMIC from our own repo.tunaos.org
+  # Tideforge tier (moved off COPR `yselkowitz/cosmic-epel` in #3132,
+  # x86_64 only for now). On this base no tier is needed: the compose ships
   # cosmic-session/comp/panel/files/greeter/settings and
   # xdg-desktop-portal-cosmic, and `fprintd-1.94.5-6.eln158` resolves from
-  # eln-appstream, so the aarch64 fprintd gap that pinned cosmic off arm64
-  # on EL10 (tunaOS#732) does not reproduce here either.
+  # eln-appstream, so the aarch64 fprintd-pam gap that once pinned cosmic off
+  # arm64 on EL10 (tunaOS#732) does not reproduce here either.
   #
   # Measured with `dnf repoquery` against the pinned eln-bootc digest on
   # 2026-08-26: 23 of 24 present. If EL11 keeps this, the EL10 Tideforge
@@ -270,19 +269,15 @@ packages:
       - cosmic-edit
       - cosmic-store
   el10:
-    # cosmic-greeter hard-requires fprintd-pam, which CentOS Stream 10 only
-    # builds for x86_64 -- that gap is why aarch64 cosmic was pinned off in
-    # tunaOS's build-config.yml (tunaOS#732). It's now built
-    # (tuna-os/tunaos-packages#110, same pinned version as x86_64's 1.94.5) and
-    # published at its own R2 path, separate from the main tuna-os.repo.
-    # baseurl is not $basearch-templated (only aarch64 RPMs are published
-    # here), so this is harmless to enable unconditionally on x86_64 --
-    # dnf just finds no matching-arch packages and falls back to CentOS
-    # Stream's own x86_64 fprintd-pam as before.
+    # No fprintd repo any more: the COPR cosmic-greeter hard-required
+    # fprintd-pam, which CentOS Stream 10 only builds for x86_64, so this
+    # section used to carry repo.tunaos.org/fprintd/10-stream-aarch64/
+    # (tunaOS#732, tuna-os/tunaos-packages#110). The Tideforge
+    # cosmic-greeter Requires no fprintd-pam on either arch (x86_64 tier and
+    # rpm/el10/aarch64/ repodata, checked 2026-10-16), and an aarch64-only
+    # repo on these amd64-only flavors was just an extra
+    # skip_if_unavailable=False failure point.
     repos:
-      - name: tuna-os-fprintd
-        baseurl: https://repo.tunaos.org/fprintd/10-stream-aarch64/
-        priority: 10
       # COSMIC from our own Tideforge builds (tuna-os/tunaos-packages,
       # phases 0-3 published 2026-10-10), replacing COPR
       # yselkowitz/cosmic-epel, which no longer publishes usable EL10
@@ -306,7 +301,12 @@ packages:
       # COSMIC stack, from the tunaos-cosmic repo above (was COPR
       # yselkowitz/cosmic-epel). adw-gtk3-theme is intentionally absent: no
       # EL10 provider outside the retired COPR, and nothing in the Tideforge
-      # recipes Requires it anymore.
+      # recipes Requires it anymore. The COPR's session/greetd/greeter block
+      # carried `--nobest --allowerasing` against EL10 depsolve conflicts
+      # with the COPR builds; the Tideforge cosmic-session, cosmic-greeter
+      # and greetd declare no Conflicts/Obsoletes and the tier ships no
+      # greetd-selinux (repodata, 2026-10-16), so they install as plain
+      # required names and a real conflict fails the build loudly.
       - cosmic-session
       - cosmic-comp
       - cosmic-panel
