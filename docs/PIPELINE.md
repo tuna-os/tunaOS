@@ -61,7 +61,7 @@ Stage 4:  gnome-nvidia-hwe                              (layer on gnome-hwe)
 3. **Stage 2** — builds DE images via `install-desktop.sh <de>` (reads YAML manifests)
 4. **Stage 3-4** — layers HWE/nvidia via `Containerfile.overlay`
 5. **Rechunk** — chunkah makes ostree-optimized layers for delta updates
-6. **Boot gate** — QEMU verifies the image boots (PR builds only)
+6. **Boot gate** — Corral boots the `-testing` image under QEMU, and Promote waits for the result (see [Boot gates](#boot-gates))
 7. **Publish** — multi-arch manifest pushed to GHCR, signed with cosign
 
 ---
@@ -135,9 +135,21 @@ just iso yellowfin gnome               # build ISO via tacklebox
 
 ### Boot gates
 
-The PR image gate uses `just qcow2` and `scripts/iso-e2e.sh --disk`. QEMU sets the CI product marker before boot, so automated guests do not send adoption reports. The CI contract declares this gate in `.github/green-criteria.yml`.
+Corral runs the boot gate. `scripts/corral-boot-gate.sh` gives the image to `corral vmtest`. Corral installs the image to a disk and boots the disk under QEMU with UEFI. The script then reads the contract markers on the serial console. The Gate job in `reusable-build-image.yml` and the PR gate step use this script. The CI contract declares the PR gate in `.github/green-criteria.yml`.
 
-For Corral, `scripts/boot-gate.sh` checks for `--karg` support in both fresh and resumed guests. It passes `tunaos.countme=0` before boot, or exits 77 before it creates a guest. Corral main `4c59a6be` lacks those options. See the [measured cause and test](ci-troubleshooting.md#automated-corral-guests-could-enter-adoption-counts).
+The verdict is the same as the verdict of `scripts/iso-e2e.sh --disk`:
+
+- **Pass:** `TUNAOS_DESKTOP_CONTRACT_OK` is on the console. Also, `TUNAOS_BASE_CONTRACT_FAIL` does not occur in the next 120 seconds.
+- **Fail:** a contract `FAIL` marker, an emergency shell, or a kernel panic is on the console. Corral stops the wait when one of these occurs.
+- **Fail:** no marker occurs before the timeout.
+
+The disk agrees with `just qcow2`. A sealed image gets ext4, and other images get xfs. `TUNAOS_QCOW2_FILESYSTEM` overrides this choice. The kernel arguments are the same, and the boot entry also gets `tunaos.countme=0`. Thus a gate guest never sends an adoption report, from the first boot.
+
+`image-versions.yaml` pins the Corral commit in `downloads.corral`, and `scripts/install-corral.sh` builds that commit. The workflow `corral-boot-gate.yml` boots one ostree image and one composefs image through the script when a pull request changes the script.
+
+The GPU-routed compositors (cosmic, niri, xfwl4) use `just qcow2` and `scripts/iso-e2e.sh --disk`, because Corral has no virgl display. The Gate does not schedule these flavors at this time.
+
+For a KubeVirt cluster, `scripts/boot-gate.sh` checks for `--karg` support in both fresh and resumed guests. It passes `tunaos.countme=0` before boot, or exits 77 before it creates a guest. See the [measured cause and test](ci-troubleshooting.md#automated-corral-guests-could-enter-adoption-counts).
 
 ---
 

@@ -99,6 +99,12 @@ downloads:
   chezmoi_sha256:
     amd64: "74c239da8b55ae9955a833304b87adc4cf82336647f31d317ccbb7952ad58d46"
     arm64: "4b5df8d925b79abbe265af25e4c585a4da91aadbae573a0dcc8e2bfcf63e6f1a"
+  # The boot gate's harness (scripts/corral-boot-gate.sh, installed by
+  # scripts/install-corral.sh). The commit of the v0.7.0 tag, the first release
+  # with `vmtest --fail-marker`/`--karg` and local composefs builds. corral
+  # publishes no binaries, so install-corral.sh builds this commit from source.
+  # renovate: datasource=git-refs depName=tuna-os/corral
+  corral: "388342bec8a54e4c09e265f41fcea4d92597ea47"
   # renovate: datasource=git-refs depName=tuna-os/tacklebox
   # This is the fallback every caller that does not set TACKLEBOX_SHA gets
   # (scripts/lib/common.sh:229) — installer-smoke.yml among them.
