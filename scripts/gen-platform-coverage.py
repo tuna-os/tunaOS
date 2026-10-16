@@ -42,11 +42,25 @@ def load_config(path: Path = CONFIG) -> dict:
 
 def flavor_platforms(config: dict, variant: dict, flavor: dict) -> set[str]:
     """Return the platforms the build matrix gives one flavor."""
-    return set(
+    platforms = (
         flavor.get("platforms")
         or variant.get("platforms")
         or config["config"]["global_platforms"]
     )
+    if not isinstance(platforms, list) or not all(
+        isinstance(p, str) for p in platforms
+    ):
+        raise ValueError(
+            f"{variant['id']}/{flavor['id']}: platforms must be a list of "
+            f"strings, got {platforms!r}"
+        )
+    return set(platforms)
+
+
+def has_arch(platforms: set[str], arch: str) -> bool:
+    """True if any platform is linux/<arch>, including variant suffixes."""
+    base = f"linux/{arch}"
+    return any(p == base or p.startswith(base + "/") for p in platforms)
 
 
 def coverage(config: dict) -> list[dict]:
@@ -64,19 +78,16 @@ def coverage(config: dict) -> list[dict]:
             standard = flavors.get(desktop)
             if standard and standard.get("build_image"):
                 platforms = flavor_platforms(config, variant, standard)
-                if any(
-                    p == "linux/amd64" or p.startswith("linux/amd64/")
-                    for p in platforms
-                ):
+                if has_arch(platforms, "amd64"):
                     row["amd64"].add(desktop)
-                if "linux/arm64" in platforms:
+                if has_arch(platforms, "arm64"):
                     row["arm64"].add(desktop)
 
             asahi = flavors.get(f"{desktop}-asahi")
             if (
                 asahi
                 and asahi.get("build_image")
-                and "linux/arm64" in flavor_platforms(config, variant, asahi)
+                and has_arch(flavor_platforms(config, variant, asahi), "arm64")
             ):
                 row["asahi"].add(desktop)
         rows.append(row)

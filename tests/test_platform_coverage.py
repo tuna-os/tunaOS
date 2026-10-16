@@ -59,6 +59,20 @@ class TestDerivation(unittest.TestCase):
         self.assertIn("niri", rows["arm"]["arm64"])
         self.assertNotIn("niri", rows["arm"]["asahi"])
 
+    def test_arm64_variant_suffix_counts_as_arm64(self):
+        config = fixture()
+        config["variants"][1]["platforms"] = ["linux/arm64/v8"]
+        config["variants"][0]["flavors"][1]["platforms"] = ["linux/arm64/v8"]
+        rows = {row["variant"]: row for row in gpc.coverage(config)}
+        self.assertEqual(rows["arm"]["arm64"], {"niri"})
+        self.assertEqual(rows["both"]["asahi"], {"gnome"})
+
+    def test_platforms_string_is_rejected(self):
+        config = fixture()
+        config["variants"][1]["platforms"] = "linux/arm64"
+        with self.assertRaises(ValueError):
+            gpc.coverage(config)
+
 
 class TestRenderedPolicy(unittest.TestCase):
     def test_every_missing_desktop_is_explicitly_unsupported(self):
