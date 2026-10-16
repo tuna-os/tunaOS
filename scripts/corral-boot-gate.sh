@@ -34,7 +34,7 @@
 #   BASE_CONTRACT_GRACE    seconds to wait for the base marker after the
 #                          desktop marker (default: 120)
 #   TUNAOS_QCOW2_FILESYSTEM  root filesystem override, as for `just qcow2`
-#   GATE_NAME              VM name (default: tunaos-gate)
+#   GATE_NAME              VM name (default: tunaos-gate-<pid>-<epoch>, unique per run)
 #   GATE_CPUS / GATE_MEMORY / GATE_DISK  (default: 4 / 4G / 40G)
 
 set -euo pipefail
@@ -47,7 +47,7 @@ IMAGE="${1:?usage: $0 <image-ref> <output-dir> [timeout-seconds]}"
 OUT="${2:?usage: $0 <image-ref> <output-dir> [timeout-seconds]}"
 TIMEOUT="${3:-900}"
 CORRAL="${CORRAL:-corral}"
-NAME="${GATE_NAME:-tunaos-gate}"
+NAME="${GATE_NAME:-tunaos-gate-$$-$(date +%s)}"
 GRACE="${BASE_CONTRACT_GRACE:-120}"
 
 case "${DISK_CONTRACT:-desktop}" in
