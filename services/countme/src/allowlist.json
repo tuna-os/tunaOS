@@ -106,6 +106,11 @@
   },
   {
     "variant": "albacore",
+    "flavor": "tuna",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "albacore",
     "flavor": "xfce",
     "arch": "x86_64"
   },
@@ -222,6 +227,11 @@
   {
     "variant": "bonito",
     "flavor": "niri-nvidia",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "bonito",
+    "flavor": "tuna",
     "arch": "x86_64"
   },
   {
@@ -766,6 +776,11 @@
   },
   {
     "variant": "skipjack",
+    "flavor": "tuna",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "skipjack",
     "flavor": "xfce",
     "arch": "x86_64"
   },
@@ -912,6 +927,11 @@
   {
     "variant": "yellowfin",
     "flavor": "niri-nvidia",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "yellowfin",
+    "flavor": "tuna",
     "arch": "x86_64"
   },
   {
