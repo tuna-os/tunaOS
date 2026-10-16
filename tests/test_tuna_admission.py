@@ -51,13 +51,14 @@ def test_tuna_is_a_selectable_greetd_session_listed_by_name(tmp_path):
     assert environments.read_text().splitlines() == ["Tuna Desktop"]
     launcher = ROOT / "experiences/tuna/files/usr/bin/Tuna"
     assert os.access(launcher, os.X_OK), "cp -a must install the launcher executable"
-    (tmp_path / "tuna-session").write_text("#!/bin/sh\necho \"tuna-session $#\"\n")
+    (tmp_path / "tuna-session").write_text("#!/bin/sh\necho \"tuna-session $# $XDG_SESSION_TYPE\"\n")
     (tmp_path / "tuna-session").chmod(0o755)
-    env = {**os.environ, "PATH": f"{launcher.parent}:{tmp_path}:{os.environ['PATH']}"}
+    env = {**os.environ, "PATH": f"{launcher.parent}:{tmp_path}:{os.environ['PATH']}",
+           "XDG_SESSION_TYPE": "tty"}
     started = subprocess.run(["sh", "-c", f"exec {environments.read_text().strip()}"],
                              env=env, capture_output=True, text=True)
     assert started.returncode == 0, started.stderr
-    assert started.stdout == "tuna-session 0\n"
+    assert started.stdout == "tuna-session 0 wayland\n"
     for argv in (["Tuna"], ["Tuna", "Desktop", "extra"], ["Tuna", "desktop"]):
         refused = subprocess.run(argv, env=env, capture_output=True, text=True)
         assert refused.returncode == 64
