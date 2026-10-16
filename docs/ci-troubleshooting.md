@@ -1619,3 +1619,18 @@ contract in `tests/bats/test_test_yml_pytest_always_runs.bats` holds the upload
 path and authentication mode. This report is Python-only; BATS and QEMU E2E
 coverage are behavior gates, not line-coverage inputs.
 
+
+### A LUKS cell passes its desktop contract and fails the pixel gate (#979)
+
+**Symptom:** The LUKS path logs `desktop_contract=ok`, but the
+`installed-desktop` capture has `stddev=0` and the pixel gate fails the cell.
+
+**Measured cause:** `luks-first-boot.py` sent `system_powerdown` when it
+returned. `iso-e2e.sh` then took the capture during the shutdown. A guest that
+stopped its display manager in that 8s window left a black framebuffer. Run
+36873532817 failed 33 cells this way (sddm, gdm and lightdm). Cells that
+stopped more slowly passed.
+
+**Fix:** `iso-e2e.sh` always sets `TUNAOS_LUKS_NO_POWEROFF=1`. It takes the
+capture first, then sends the graceful powerdown itself before the kill.
+`tests/bats/test_luks_capture_before_powerdown.bats` holds that order.
