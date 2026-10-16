@@ -6,19 +6,75 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_tuna_is_one_arch_cell_without_iso_expansion():
-    config = yaml.safe_load((ROOT / ".github/build-config.yml").read_text())
-    variant = next(v for v in config["variants"] if v["id"] == "marlin")
-    flavor = next(f for f in variant["flavors"] if f["id"] == "tuna")
-    assert flavor["stage"] == 2
-    assert flavor["platforms"] == ["linux/amd64"]
-    assert not flavor["build_iso"]
-    assert not flavor["build_qcow2"]
+def rollout():
+    return yaml.safe_load((ROOT / ".github/build-config.yml").read_text())
+
+
+def test_every_variant_has_an_explicit_tuna_rollout_record():
+    """ADR 0008: each variant ships a tuna flavor or is published as unsupported
+    with a recorded reason. Neither may be a silent omission."""
+    config = rollout()
+    records = config["tuna_rollout"]
+    assert set(records) == {v["id"] for v in config["variants"]}
+    for variant in config["variants"]:
+        record = records[variant["id"]]
+        has_cell = any(f["id"] == "tuna" for f in variant["flavors"])
+        assert record["package_target"]
+        if record["status"] == "admitted":
+            assert has_cell, f"{variant['id']} is admitted but has no tuna flavor"
+        else:
+            assert record["status"] == "unsupported"
+            assert record["reason"].startswith(f"unsupported until package target {record['package_target']} ")
+            assert not has_cell, f"{variant['id']} is unsupported but still builds a tuna flavor"
+
+
+def test_tuna_cells_are_amd64_images_without_iso_expansion():
+    config = rollout()
+    admitted = [v for v in config["variants"] if config["tuna_rollout"][v["id"]]["status"] == "admitted"]
+    assert {v["id"] for v in admitted} == {"marlin", "yellowfin", "albacore", "skipjack", "bonito"}
+    for variant in admitted:
+        flavor = next(f for f in variant["flavors"] if f["id"] == "tuna")
+        assert flavor["stage"] == 2
+        assert flavor["platforms"] == ["linux/amd64"]
+        assert not flavor["build_iso"]
+        assert not flavor["build_qcow2"]
+        assert flavor["luks_e2e"] is False
     manifest = yaml.safe_load((ROOT / "manifests/desktops/tuna.yaml").read_text())
     assert "tunaos/tuna-desktop=1.0.0beta.1-1" in manifest["packages"]["pacman"]
     assert "orca" in manifest["packages"]["pacman"], "the Screen Reader key needs distribution Orca"
     assert manifest["display_manager"] == "greetd"
     assert "greetd-gtkgreet.sh" in manifest["post_install"]
+
+
+def test_rpm_cells_install_the_pinned_beta_from_signed_factory_repositories():
+    manifest = yaml.safe_load((ROOT / "manifests/desktops/tuna.yaml").read_text())
+    for target, nevr in (("el10", "tuna-desktop-1.0.0~beta.1-1.el10"), ("fedora", "tuna-desktop-1.0.0~beta.1-1.fc44")):
+        section = manifest["packages"][target]
+        assert section["display_manager"] == "greetd"
+        assert nevr in section["packages"]
+        for package in ("greetd", "gtkgreet", "cage", "xdg-desktop-portal-gnome", "xdg-desktop-portal-gtk", "gnome-keyring"):
+            assert package in section["packages"], (target, package)
+        # tuned-ppd, as each base's GNOME flavor ships, conflicts with
+        # power-profiles-daemon (the yellowfin/skipjack package-set dry-run).
+        assert "power-profiles-daemon" not in section["packages"], target
+        # beta.1 imports the session environment with
+        # dbus-update-activation-environment (tuna-os/tuna-desktop#691).
+        assert "dbus-tools" in section["packages"], target
+        for repo in section["repos"]:
+            assert repo["baseurl"].startswith("https://repo.tunaos.org/")
+            assert not repo.get("unsigned"), "factory packages must keep gpgcheck"
+            # Behind the distro repositories: the factory tiers only fill gaps.
+            assert repo["priority"] > 99
+    assert "tuned-ppd" in manifest["packages"]["fedora"]["packages"]
+    base_packages = (ROOT / "build_scripts/10-base-packages.sh").read_text()
+    el10_base = base_packages.split("\nelse\n", 1)[1]
+    assert "\t\ttuned-ppd \\\n" in el10_base, "the EL10 base must keep supplying tuned-ppd"
+    assert "eln" not in manifest["packages"], "wahoo is unsupported; an eln section would be dead"
+    containerfile = (ROOT / "Containerfile.el10").read_text()
+    context = containerfile.split("FROM scratch as context\n", 1)[1].split("FROM ", 1)[0]
+    assert "COPY experiences/tuna /experiences/tuna" in context
+    stage = containerfile.split("FROM base-no-de AS tuna\n", 1)[1]
+    assert "install-desktop.sh tuna" in stage
 
 
 def test_tuna_package_signatures_cannot_be_silently_disabled():
