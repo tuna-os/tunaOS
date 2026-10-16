@@ -102,9 +102,12 @@ def unverified_yq_downloads(content: str) -> list[int]:
             bad.append(idx + 1)
             continue
         dest = dest_match.group(1)
+        # The whole path, not a substring: `$D/yq.backup` must not pass for `$D/yq`.
+        dest_token = re.compile(r"(?<![^\s\"'])" + re.escape(dest) + r"(?![^\s\"'])")
         window = lines[idx + 1 : idx + 1 + VERIFY_WINDOW]
         if not any(
-            "sha256sum -c" in w and dest in w and not _is_comment(w) for w in window
+            "sha256sum -c" in w and dest_token.search(w) and not _is_comment(w)
+            for w in window
         ):
             bad.append(idx + 1)
     return bad
@@ -147,6 +150,16 @@ def test_detector_flags_check_of_other_file():
         [
             f'curl -fsSL -o /tmp/yq "{YQ_URL}"',
             'echo "${SHA}  /tmp/other" | sha256sum -c -',
+        ]
+    )
+    assert unverified_yq_downloads(content) == [1]
+
+
+def test_detector_flags_check_of_same_prefix_file():
+    content = "\n".join(
+        [
+            f'fetch "{YQ_URL}" "$YQ_TMP/yq"',
+            'echo "${SHA}  $YQ_TMP/yq.backup" | sha256sum -c -',
         ]
     )
     assert unverified_yq_downloads(content) == [1]
