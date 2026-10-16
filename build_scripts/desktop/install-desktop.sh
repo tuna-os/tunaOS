@@ -322,6 +322,17 @@ if [[ "${_TD_OS}" == "emerge" ]]; then
 		exit 1
 	fi
 
+	# Per-desktop ~amd64 keywords (emerge_accept_keywords in the manifest).
+	# guppy:gnome needs them to reach the GNOME 50 floor: ::gentoo has GNOME 50
+	# only under ~amd64 (tunaOS#2450). The file is written before the binhost
+	# lock below, which reads it and does not mask these packages.
+	readarray -t _TD_EMERGE_KEYWORDS < <($YQ -r '.emerge_accept_keywords // [] | .[]' "${_TD_MANIFEST}" 2>/dev/null || true)
+	if ((${#_TD_EMERGE_KEYWORDS[@]} > 0)); then
+		mkdir -p /etc/portage/package.accept_keywords
+		printf '%s ~amd64\n' "${_TD_EMERGE_KEYWORDS[@]}" \
+			>"/etc/portage/package.accept_keywords/tunaos-${_TD_DESKTOP}"
+	fi
+
 	# Binhost version lock — tuna-os/tunaOS#1802. getbinpkg is configured
 	# (Containerfile.gentoo, base stage) but only substitutes a binary on an
 	# exact CPV match; a bare `emerge --sync` races ahead of the binhost's own
@@ -820,9 +831,11 @@ fi
 #
 # Narrow on purpose, for the same reason as configure-desktop-runtime.sh: keyed
 # on the alias the distro's own packaging has ALREADY set, not on
-# cosmic-greeter.service merely existing. Fedora and EL10 install cosmic-greeter
-# too, and their cosmic cells are green with greetd as the DM, so a
-# package-presence test would repoint them; the symlink test cannot.
+# cosmic-greeter.service merely existing. Fedora installs cosmic-greeter too,
+# and its cosmic cells are green with greetd as the DM, so a package-presence
+# test would repoint them; the symlink test cannot. (EL10 names cosmic-greeter
+# directly via cosmic.yaml's el10 display_manager: its factory greetd ships no
+# config.toml.)
 if [[ "${_TD_DM}" == "greetd" ]]; then
 	_TD_DM_ALIAS_NOW="$(readlink -f /etc/systemd/system/display-manager.service 2>/dev/null || true)"
 	if [[ -n "${_TD_DM_ALIAS_NOW}" && -e "${_TD_DM_ALIAS_NOW}" ]] &&

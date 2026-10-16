@@ -29,12 +29,11 @@ before this was changed -- $basearch is only right if both actually exist.
 A broader "no manifest may hardcode an arch" rule sounds better and is wrong.
 Two other pins are deliberate and say so in their own comments:
 
-  * cosmic.yaml el10 `tuna-os-fprintd` -> .../fprintd/10-stream-aarch64/
-    "only aarch64 RPMs are published here, so this is harmless to enable
-    unconditionally on x86_64 -- dnf just finds no matching-arch packages and
-    falls back to CentOS Stream's own x86_64 fprintd-pam". $basearch there
-    would point x86_64 at a prefix that does not exist, and the repo writer
-    sets skip_if_unavailable=False, so it would hard-fail the build.
+  * cosmic.yaml el10 `tunaos-cosmic` -> .../repo/10-stream-x86_64/, the
+    Tideforge COSMIC tier. It publishes no symmetric aarch64 index, so
+    $basearch there would point aarch64 at a prefix that does not exist, and
+    the repo writer sets skip_if_unavailable=False, so it would hard-fail the
+    build; the EL10 cosmic flavors are pinned to linux/amd64 instead.
   * xfce.yaml el10 `tunaos-xfce` -> .../xfce/10-stream-x86_64/, an
     x86_64-only lane.
 

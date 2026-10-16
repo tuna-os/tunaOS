@@ -247,11 +247,10 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
     "kde:dolphin:kde.yaml,kde-arch.yaml,kde-debian.yaml"
     "kde:konsole:kde.yaml,kde-arch.yaml,kde-debian.yaml"
     "xfce:thunar:xfce.yaml,xfce-arch.yaml"
+    "cosmic:cosmic-files:cosmic.yaml,cosmic-arch.yaml"
   )
-  # NB: a plain-list match is the point. cosmic-files is declared inside
-  # cosmic.yaml's el10 COPR block, where installs are best-effort — indentation
-  # alone would match it and wrongly imply the package is guaranteed. That is
-  # why cosmic is absent from this table and from the contract.
+  # NB: a plain-list match is the point: optional/best-effort sections would
+  # match on indentation alone and wrongly imply the package is guaranteed.
   for spec in "${specs[@]}"; do
     local de="${spec%%:*}" rest="${spec#*:}"
     local cmd="${rest%%:*}" manifests="${rest#*:}"
