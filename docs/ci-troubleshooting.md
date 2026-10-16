@@ -1594,6 +1594,14 @@ GNOME 49 is below the floor: nothing below GNOME 50 ships
 
 **Fix:** The `emerge_accept_keywords` list in `manifests/desktops/gnome.yaml` gives the GNOME 50 core set. `install-desktop.sh` writes that list to `/etc/portage/package.accept_keywords` before the lock runs. The lock does not mask the packages in that file. These packages compile from source. If `emerge --pretend` shows a mixed 49/50 desktop, add the 49 package to the list. Do not add `gnome-base/nautilus`: `::gentoo` masks `>=nautilus-50` (bug 982084).
 
+### CI steps download an unpinned yq binary
+
+**Symptom:** A CI step downloads `releases/latest/download/yq_linux_amd64` from `mikefarah/yq` into `/usr/bin` or `/usr/local/bin`. The step does not pin a version.
+
+**Measured cause:** Issue tunaOS#2071 found these downloads in CI workflows. The `latest` link can change at any time. The step installs the file as root, and no step verifies the checksum of the downloaded file. If the upstream file changes, the new file runs as root on the runner.
+
+**Fix:** Workflows and composite actions use the `.github/actions/setup-yq` action. That action downloads yq `v4.53.3` and checks its SHA-256 value before it installs the file. It installs the file to `/usr/local/bin`, which comes before the runner image's `/usr/bin/yq` on `PATH`, and then fails the step if the yq on `PATH` does not report exactly `v4.53.3`. The test `tests/regressions/test_issue_2071_yq_downloads_are_pinned.py` checks each yq download in the workflows and actions.
+
 ### AI porting agent executes untrusted upstream diffs with write token
 
 **Symptom:** Scheduled watch workflows send third-party commit diffs to LLM agents with write permissions. The agent commits and pushes branches without review.

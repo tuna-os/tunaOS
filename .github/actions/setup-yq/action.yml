@@ -1,0 +1,69 @@
+name: Setup yq
+description: Installs verified yq binary with SHA-256 checksum verification.
+
+runs:
+  using: composite
+  steps:
+    - name: Install yq
+      run: |
+        set -euo pipefail
+        YQ_VERSION="v4.53.3"
+        if [ "$(uname -s)" != "Linux" ]; then
+          echo "::error::setup-yq supports Linux runners only (got $(uname -s))" >&2
+          exit 1
+        fi
+        # True only when the yq resolved on PATH reports exactly YQ_VERSION as
+        # its last `--version` token (rejects e.g. v4.53.30 or v4.53.3-rc1).
+        yq_is_pinned() {
+          command -v yq &> /dev/null &&
+            [ "$(yq --version 2>/dev/null | awk '{print $NF}')" = "${YQ_VERSION}" ]
+        }
+        # Skip only when the exact pinned release is already installed. The
+        # runner image ships its own (newer, unpinned) yq; reusing that would
+        # bypass the pin this action exists to enforce.
+        if yq_is_pinned; then
+          echo "yq ${YQ_VERSION} already installed"
+        else
+          case "$(uname -m)" in
+            x86_64)
+              YQ_ARCH="amd64"
+              YQ_SHA256="fa52a4e758c63d38299163fbdd1edfb4c4963247918bf9c1c5d31d84789eded4"
+              ;;
+            aarch64)
+              YQ_ARCH="arm64"
+              YQ_SHA256="578648e463a11c1b6db6010cbf41eafed6bee79466fcffa1bb446672cf7945ea"
+              ;;
+            *)
+              echo "::error::no pinned yq checksum for $(uname -m)" >&2
+              exit 1
+              ;;
+          esac
+
+          fetch() { # url dest
+            local i
+            for i in 1 2 3; do
+              curl -fsSL -o "$2" "$1" && return 0
+              sleep $((i * 2))
+            done
+            echo "::error::failed to download $1 after 3 attempts" >&2
+            return 1
+          }
+
+          # A private mktemp dir, not a fixed /tmp path, so nothing can swap
+          # the file between the checksum and the install.
+          YQ_TMP="$(mktemp -d)"
+          trap 'rm -rf "$YQ_TMP"' EXIT
+          fetch "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_${YQ_ARCH}" "$YQ_TMP/yq"
+          echo "${YQ_SHA256}  $YQ_TMP/yq" | sha256sum -c -
+          # /usr/local/bin precedes /usr/bin (where the runner image puts its
+          # yq) on PATH, so the pinned binary wins.
+          sudo install -m 0755 "$YQ_TMP/yq" /usr/local/bin/yq
+          hash -r
+          # A yq even earlier on PATH would still shadow it; fail instead of
+          # silently running the unpinned one.
+          if ! yq_is_pinned; then
+            echo "::error::yq on PATH ($(command -v yq)) is not ${YQ_VERSION}" >&2
+            exit 1
+          fi
+        fi
+      shell: bash
