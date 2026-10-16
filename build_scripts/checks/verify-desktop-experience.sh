@@ -477,6 +477,7 @@ tuna)
 	require_portal_preference /usr/share/xdg-desktop-portal/tuna-portals.conf org.freedesktop.impl.portal.Access gtk
 	require_glob '/usr/lib/gnome-shell-calendar-server'
 	require_command ibus-daemon
+	require_command orca
 	require_command gnome-keyring-daemon
 	require_command wpctl
 	require_command gtkgreet
