@@ -27,6 +27,36 @@ trap emit_fail_on_early_exit EXIT
 source /run/context/build_scripts/lib.sh 2>/dev/null || true
 detected_os 2>/dev/null || true
 
+# Tuna Desktop ships on Arch (pacman) and on the RPM bases. Query the native
+# database for installed names and file owners, never virtual provides or a
+# repository's availability (adapted from tunaOS#3194).
+tuna_package_backend() {
+	if command -v pacman >/dev/null 2>&1; then
+		echo pacman
+	elif command -v rpm >/dev/null 2>&1; then
+		echo rpm
+	else
+		echo "no supported Tuna package backend (pacman or rpm) in this image" >&2
+		return 1
+	fi
+}
+
+tuna_installed_package_names() {
+	case "$1" in
+	pacman) pacman -Qq ;;
+	rpm) rpm -qa --qf '%{NAME}\n' ;;
+	*) return 1 ;;
+	esac
+}
+
+tuna_installed_file_owner() {
+	case "$1" in
+	pacman) pacman -Qqo "$2" ;;
+	rpm) rpm -qf --qf '%{NAME}\n' "$2" ;;
+	*) return 1 ;;
+	esac
+}
+
 # How many requirements the hummingbird exemption let through.
 #
 # Every require_* below returns 0 instead of exiting when IS_HUMMINGBIRD is
@@ -425,9 +455,11 @@ tuna)
 	experience="tunaos/tuna"
 	# The package is tuna-desktop (formerly roost, tuna-desktop#536). It must
 	# be what is installed, and nothing may still need the old package name.
-	# Compare exact names: `pacman -Q` on the old name would match
-	# tuna-desktop through its provides=roost and pass for the wrong reason.
-	installed_packages="$(pacman -Qq)"
+	# Compare exact names from the native database: `pacman -Q`/`rpm -q` on
+	# the old name would match tuna-desktop through its provides=roost and
+	# pass for the wrong reason.
+	tuna_backend="$(tuna_package_backend)"
+	installed_packages="$(tuna_installed_package_names "$tuna_backend")"
 	grep -qx 'tuna-desktop' <<<"$installed_packages" || {
 		echo "the tuna-desktop package is not installed" >&2
 		exit 1
@@ -439,6 +471,10 @@ tuna)
 	for binary in tuna-compositor tuna-session tuna-shell-host tuna-shell-gtk tuna-ibus-bridge tuna-greeter; do
 		require_command "$binary"
 		"$binary" --version
+		[[ "$(tuna_installed_file_owner "$tuna_backend" "/usr/bin/$binary")" == tuna-desktop ]] || {
+			echo "/usr/bin/$binary is not owned by the installed tuna-desktop package" >&2
+			exit 1
+		}
 	done
 	require_glob '/usr/share/wayland-sessions/tuna.desktop'
 	grep -qx 'Exec=tuna-session' /usr/share/wayland-sessions/tuna.desktop
@@ -475,7 +511,8 @@ tuna)
 		require_portal_preference /usr/share/xdg-desktop-portal/tuna-portals.conf "org.freedesktop.impl.portal.$portal" gnome
 	done
 	require_portal_preference /usr/share/xdg-desktop-portal/tuna-portals.conf org.freedesktop.impl.portal.Access gtk
-	require_glob '/usr/lib/gnome-shell-calendar-server'
+	# Arch ships it under /usr/lib, Fedora and EL under /usr/libexec.
+	require_any_glob '/usr/lib/gnome-shell-calendar-server' '/usr/libexec/gnome-shell-calendar-server'
 	require_command ibus-daemon
 	require_command gnome-keyring-daemon
 	require_command wpctl
@@ -483,6 +520,14 @@ tuna)
 	require_command cage
 	require_any_glob '/usr/libexec/xdg-desktop-portal-gnome' '/usr/lib/xdg-desktop-portal-gnome'
 	require_any_glob '/usr/libexec/xdg-desktop-portal-gtk' '/usr/lib/xdg-desktop-portal-gtk'
+	# Another display manager's preset (gdm, a weak dependency of gnome-shell
+	# on EL10) takes display-manager.service and VT1, and greetd then dies
+	# with EPERM on the terminal. Catch it at build time, not at the boot gate.
+	tuna_dm="$(readlink -f /etc/systemd/system/display-manager.service 2>/dev/null || true)"
+	[[ "${tuna_dm##*/}" == greetd.service ]] || {
+		echo "display-manager.service is '${tuna_dm:-unset}', not greetd.service" >&2
+		exit 1
+	}
 	require_unit greetd
 	dm_pattern='^greetd\.service$'
 	;;
