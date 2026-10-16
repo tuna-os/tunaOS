@@ -468,8 +468,14 @@ tuna)
 	grep -qx 'Exec=tuna-session' /usr/share/wayland-sessions/roost.desktop
 	grep -qx 'NoDisplay=true' /usr/share/wayland-sessions/roost.desktop
 	require_glob '/etc/pam.d/roost-lock'
+	# gtkgreet lists environments lines verbatim, so the picker must show
+	# the session's name, and greetd's `exec <line>` must reach the same
+	# supervisor as tuna.desktop (tunaOS#3110).
 	require_glob '/etc/greetd/environments'
-	grep -qx 'tuna-session' /etc/greetd/environments
+	grep -qx 'Tuna Desktop' /etc/greetd/environments
+	grep -qx 'Name=Tuna Desktop' /usr/share/wayland-sessions/tuna.desktop
+	require_command Tuna
+	grep -qx 'exec tuna-session' "$(command -v Tuna)"
 	require_glob '/usr/share/xdg-desktop-portal/tuna-portals.conf'
 	for portal in ScreenCast Screenshot; do
 		require_portal_preference /usr/share/xdg-desktop-portal/tuna-portals.conf "org.freedesktop.impl.portal.$portal" gnome
