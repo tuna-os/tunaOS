@@ -134,8 +134,9 @@ jobs:
             echo "::error::No ISO found to attach"
             exit 1
           fi
-          # The bundle is only produced after the boot gate passes; the artifact
-          # upload runs if: always(), so a failed cell can still ship a bare ISO.
+          # The bundle only takes its published name after the boot gate passes
+          # and cosign verify-blob succeeds; the artifact upload runs if: always(),
+          # so a failed cell can still ship a bare ISO or a checksum alone.
           for sidecar in "${ISO}.sha256" "${ISO}.sigstore.json"; do
             if [[ ! -f "$sidecar" ]]; then
               echo "::error::Missing ${sidecar}: boot gate or signing did not pass"

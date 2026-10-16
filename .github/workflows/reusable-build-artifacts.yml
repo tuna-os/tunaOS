@@ -327,11 +327,17 @@ jobs:
           sha256sum --check --strict "$CHECKSUM"
 
           # The payload is the checksum file, NOT $ISO. See the note above.
-          timeout 300 cosign sign-blob --bundle "$BUNDLE" "$CHECKSUM"
+          # Sign into a staging name and give the bundle its published name
+          # only after verify-blob passes: the artifact upload below runs
+          # if: always(), and publish-isos.yml's attach-release treats the
+          # bundle's presence as proof that signing AND verification passed.
+          UNVERIFIED="${BUNDLE}.unverified"
+          timeout 300 cosign sign-blob --bundle "$UNVERIFIED" "$CHECKSUM"
           timeout 300 cosign verify-blob "$CHECKSUM" \
-            --bundle "$BUNDLE" \
+            --bundle "$UNVERIFIED" \
             --certificate-identity "$identity" \
             --certificate-oidc-issuer "$issuer"
+          mv "$UNVERIFIED" "$BUNDLE"
 
       - name: Upload signed ISO artifact
         if: always()
