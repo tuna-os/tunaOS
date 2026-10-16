@@ -8,7 +8,12 @@ display_manager: greetd
 
 packages:
   pacman:
-    - tunaos/tuna-desktop
+    # Pinned to the published v1.0.0-beta.1 release (ADR 0008 in
+    # tuna-os/tuna-desktop: image flavors follow beta tags). pacman resolves
+    # the repo-qualified `name=version` target exactly and fails the build if
+    # the served repository no longer carries it, so a new beta is an
+    # explicit bump here, never a silent drift.
+    - tunaos/tuna-desktop=1.0.0beta.1-1
     - greetd
     - greetd-gtkgreet
     - cage
