@@ -36,8 +36,8 @@ set -xeuo pipefail
 REMORA_VERSION="v0.4.5"
 REMORA_ARCH="$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"
 case "${REMORA_ARCH}" in
-amd64) REMORA_SHA256="c75e3724d6bf3d0c85ea9233201168729720e6d608b960460cdf5a8142a10a9b" ;;
-arm64) REMORA_SHA256="b221b5a1481195ac4867f1055ab19a4070e8f7d850aaf0604b7546a0f8d8c345" ;;
+amd64) REMORA_SHA256="1774eca4c1195c8613c2f28bb9d4ad046ac776cf7452c4d9606ad004f91b7144" ;;
+arm64) REMORA_SHA256="4c00185c421b0b1f5ea9e7f8e7561783cbe09617c4923334549bea240fa61c26" ;;
 *)
 	echo "ERROR: unsupported Remora architecture: ${REMORA_ARCH}" >&2
 	exit 1
