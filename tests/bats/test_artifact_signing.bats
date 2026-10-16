@@ -32,8 +32,23 @@ PUBLISH_WORKFLOW="${REPO_ROOT}/.github/workflows/publish-isos.yml"
 }
 
 @test "all reusable artifact callers grant OIDC token access" {
-  [ "$(grep -c 'id-token: write' "${REPO_ROOT}/.github/workflows/build-variant.yml")" -ge 3 ]
-  grep -q 'id-token: write' "${REPO_ROOT}/.github/workflows/publish-isos.yml"
+  command -v yq >/dev/null 2>&1 || skip "yq unavailable"
+  # Per calling job, not a file-wide count: the image-build jobs grant
+  # id-token too, so a count would pass with every artifact caller stripped.
+  # A job's own permissions block replaces the workflow-level one.
+  local wf job grant callers=0 missing=""
+  for wf in "${REPO_ROOT}"/.github/workflows/*.yml; do
+    while IFS=$'\t' read -r job grant; do
+      [ -n "$job" ] || continue
+      callers=$((callers + 1))
+      [ "$grant" = "write" ] || missing="${missing} $(basename "$wf"):${job}=${grant}"
+    done < <(yq -r '.permissions as $top | .jobs // {} | to_entries[]
+      | select(.value.uses == "./.github/workflows/reusable-build-artifacts.yml")
+      | [.key, ((.value.permissions // $top // {})["id-token"] // "none")] | @tsv' "$wf")
+  done
+  echo "callers=${callers} missing:${missing}" >&2
+  [ "$callers" -ge 4 ]
+  [ -z "$missing" ]
 }
 
 @test "scheduled grouped ISOs are also signed with sidecars" {
