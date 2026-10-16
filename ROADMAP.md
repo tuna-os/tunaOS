@@ -63,26 +63,26 @@ user-install evidence in its PR.
 
 | Variant | x86_64 | aarch64 | Apple Silicon (M1/M2, Asahi) |
 |---|---|---|---|
-| **yellowfin** | **S:** GNOME, KDE, COSMIC, Niri, XFCE | **S:** KDE, COSMIC, Niri; <br>**U:** GNOME, XFCE | **U:** GNOME, KDE, COSMIC, Niri, XFCE |
-| **albacore** | **S:** GNOME, KDE, COSMIC, Niri, XFCE | **S:** KDE, COSMIC, Niri; <br>**U:** GNOME, XFCE | **U:** GNOME, KDE, COSMIC, Niri, XFCE |
-| **skipjack** | **S:** GNOME, KDE, COSMIC, Niri, XFCE | **S:** KDE, COSMIC, Niri; <br>**U:** GNOME, XFCE | **U:** GNOME, KDE, COSMIC, Niri, XFCE |
-| **wahoo** | **S:** GNOME, KDE, COSMIC; <br>**U:** Niri, XFCE | **S:** GNOME, KDE, COSMIC; <br>**U:** Niri, XFCE | **U:** GNOME, KDE, COSMIC, Niri, XFCE |
-| **bonito** | **S:** GNOME, KDE, COSMIC, Niri, XFCE | **S:** GNOME, KDE, COSMIC, Niri, XFCE | **E:** GNOME; <br>**U:** KDE, COSMIC, Niri, XFCE |
-| **hummingbird** | **S:** GNOME, COSMIC; <br>**U:** KDE, Niri, XFCE | **U:** GNOME, KDE, COSMIC, Niri, XFCE | **U:** GNOME, KDE, COSMIC, Niri, XFCE |
-| **sailfin** | **S:** GNOME, KDE, COSMIC, Niri, XFCE | **S:** GNOME; <br>**U:** KDE, COSMIC, Niri, XFCE | **U:** GNOME, KDE, COSMIC, Niri, XFCE |
-| **guppy** | **S:** KDE, XFCE; <br>**U:** GNOME, COSMIC, Niri | **U:** GNOME, KDE, COSMIC, Niri, XFCE | **U:** GNOME, KDE, COSMIC, Niri, XFCE |
-| **bonito-rawhide** | **S:** GNOME, KDE, COSMIC, Niri, XFCE | **S:** GNOME, KDE, COSMIC, Niri, XFCE | **U:** GNOME, KDE, COSMIC, Niri, XFCE |
-| **gurnard** | **U:** GNOME, KDE, COSMIC, Niri, XFCE | **U:** GNOME, KDE, COSMIC, Niri, XFCE | **U:** GNOME, KDE, COSMIC, Niri, XFCE |
-| **grouper** | **S:** GNOME, KDE, COSMIC, XFCE; <br>**U:** Niri | **S:** GNOME, KDE, XFCE; <br>**U:** COSMIC, Niri | **E:** GNOME; <br>**U:** KDE, COSMIC, Niri, XFCE |
-| **marlin** | **S:** GNOME, KDE, COSMIC, Niri, XFCE | **S:** GNOME; <br>**U:** KDE, COSMIC, Niri, XFCE | **U:** GNOME, KDE, COSMIC, Niri, XFCE |
-| **flounder** | **S:** KDE, XFCE; <br>**U:** GNOME, COSMIC, Niri | **U:** GNOME, KDE, COSMIC, Niri, XFCE | **U:** GNOME, KDE, COSMIC, Niri, XFCE |
-| **flounder-sid** | **S:** GNOME, KDE, XFCE; <br>**U:** COSMIC, Niri | **U:** GNOME, KDE, COSMIC, Niri, XFCE | **U:** GNOME, KDE, COSMIC, Niri, XFCE |
+| **yellowfin** | **S:** GNOME, KDE, COSMIC, Niri, XFCE, Tuna; <br>**U:** Pantheon | **S:** KDE, COSMIC, Niri; <br>**U:** GNOME, XFCE, Pantheon, Tuna | **U:** GNOME, KDE, COSMIC, Niri, XFCE, Pantheon, Tuna |
+| **albacore** | **S:** GNOME, KDE, COSMIC, Niri, XFCE, Tuna; <br>**U:** Pantheon | **S:** KDE, COSMIC, Niri; <br>**U:** GNOME, XFCE, Pantheon, Tuna | **U:** GNOME, KDE, COSMIC, Niri, XFCE, Pantheon, Tuna |
+| **skipjack** | **S:** GNOME, KDE, COSMIC, Niri, XFCE, Tuna; <br>**U:** Pantheon | **S:** KDE, COSMIC, Niri; <br>**U:** GNOME, XFCE, Pantheon, Tuna | **U:** GNOME, KDE, COSMIC, Niri, XFCE, Pantheon, Tuna |
+| **wahoo** | **S:** GNOME, KDE, COSMIC; <br>**U:** Niri, XFCE, Pantheon, Tuna | **S:** GNOME, KDE, COSMIC; <br>**U:** Niri, XFCE, Pantheon, Tuna | **U:** GNOME, KDE, COSMIC, Niri, XFCE, Pantheon, Tuna |
+| **bonito** | **S:** GNOME, KDE, COSMIC, Niri, XFCE, Tuna; <br>**U:** Pantheon | **S:** GNOME, KDE, COSMIC, Niri, XFCE; <br>**U:** Pantheon, Tuna | **E:** GNOME; <br>**U:** KDE, COSMIC, Niri, XFCE, Pantheon, Tuna |
+| **hummingbird** | **S:** GNOME, COSMIC; <br>**U:** KDE, Niri, XFCE, Pantheon, Tuna | **U:** GNOME, KDE, COSMIC, Niri, XFCE, Pantheon, Tuna | **U:** GNOME, KDE, COSMIC, Niri, XFCE, Pantheon, Tuna |
+| **sailfin** | **S:** GNOME, KDE, COSMIC, Niri, XFCE; <br>**U:** Pantheon, Tuna | **S:** GNOME; <br>**U:** KDE, COSMIC, Niri, XFCE, Pantheon, Tuna | **U:** GNOME, KDE, COSMIC, Niri, XFCE, Pantheon, Tuna |
+| **guppy** | **S:** KDE, XFCE; <br>**U:** GNOME, COSMIC, Niri, Pantheon, Tuna | **U:** GNOME, KDE, COSMIC, Niri, XFCE, Pantheon, Tuna | **U:** GNOME, KDE, COSMIC, Niri, XFCE, Pantheon, Tuna |
+| **bonito-rawhide** | **S:** GNOME, KDE, COSMIC, Niri, XFCE; <br>**U:** Pantheon, Tuna | **S:** GNOME, KDE, COSMIC, Niri, XFCE; <br>**U:** Pantheon, Tuna | **U:** GNOME, KDE, COSMIC, Niri, XFCE, Pantheon, Tuna |
+| **gurnard** | **S:** Pantheon; <br>**U:** GNOME, KDE, COSMIC, Niri, XFCE, Tuna | **S:** Pantheon; <br>**U:** GNOME, KDE, COSMIC, Niri, XFCE, Tuna | **U:** GNOME, KDE, COSMIC, Niri, XFCE, Pantheon, Tuna |
+| **grouper** | **S:** GNOME, KDE, COSMIC, XFCE; <br>**U:** Niri, Pantheon, Tuna | **S:** GNOME, KDE, XFCE; <br>**U:** COSMIC, Niri, Pantheon, Tuna | **E:** GNOME; <br>**U:** KDE, COSMIC, Niri, XFCE, Pantheon, Tuna |
+| **marlin** | **S:** GNOME, KDE, COSMIC, Niri, XFCE, Tuna; <br>**U:** Pantheon | **S:** GNOME; <br>**U:** KDE, COSMIC, Niri, XFCE, Pantheon, Tuna | **U:** GNOME, KDE, COSMIC, Niri, XFCE, Pantheon, Tuna |
+| **flounder** | **S:** KDE, XFCE; <br>**U:** GNOME, COSMIC, Niri, Pantheon, Tuna | **U:** GNOME, KDE, COSMIC, Niri, XFCE, Pantheon, Tuna | **U:** GNOME, KDE, COSMIC, Niri, XFCE, Pantheon, Tuna |
+| **flounder-sid** | **S:** GNOME, KDE, XFCE; <br>**U:** COSMIC, Niri, Pantheon, Tuna | **U:** GNOME, KDE, COSMIC, Niri, XFCE, Pantheon, Tuna | **U:** GNOME, KDE, COSMIC, Niri, XFCE, Pantheon, Tuna |
 
 #### Platform parity commitment
 
 Standard aarch64 support is a per-variant commitment, not a claim that every desktop works on every base. The flavor-equality mandate applies to cells marked **S**; it does not turn a missing package stack into a supported cell.
 
-Apple Silicon has **2 active experimental desktop cell(s)**, all derived from enabled `*-asahi` flavors. GNOME is the only Apple Silicon target for a desktop now. KDE, COSMIC, Niri, and XFCE are **U — Unsupported** on Apple Silicon, with no parity date or release commitment. Gates control expansion. First, GNOME must pass a gate for boot and session on a real Mac, and the installer must ship. Then each additional desktop needs its own enabled `-asahi` flavor and the same static and hardware evidence.
+Apple Silicon has **2 active experimental desktop cell(s)**, all derived from enabled `*-asahi` flavors. GNOME is the only Apple Silicon target for a desktop now. KDE, COSMIC, Niri, XFCE, Pantheon, and Tuna are **U — Unsupported** on Apple Silicon, with no parity date or release commitment. Gates control expansion. First, GNOME must pass a gate for boot and session on a real Mac, and the installer must ship. Then each additional desktop needs its own enabled `-asahi` flavor and the same static and hardware evidence.
 
 The scheduled Asahi sweep can continue to inspect old tags after a build cell is disabled. A tag or sweep entry is historical test inventory, not support. See [the hardware tiers for Asahi CI](docs/ASAHI-HARDWARE-TIERS.md) for the missing hardware evidence.
 

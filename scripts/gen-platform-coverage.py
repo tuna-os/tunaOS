@@ -26,13 +26,15 @@ DOC = ROOT / "ROADMAP.md"
 BEGIN = "<!-- BEGIN GENERATED — scripts/gen-platform-coverage.py -->"
 END = "<!-- END GENERATED — scripts/gen-platform-coverage.py -->"
 
-DESKTOPS = ("gnome", "kde", "cosmic", "niri", "xfce")
+DESKTOPS = ("gnome", "kde", "cosmic", "niri", "xfce", "pantheon", "tuna")
 DISPLAY = {
     "gnome": "GNOME",
     "kde": "KDE",
     "cosmic": "COSMIC",
     "niri": "Niri",
     "xfce": "XFCE",
+    "pantheon": "Pantheon",
+    "tuna": "Tuna",
 }
 
 
@@ -106,6 +108,8 @@ def status_cell(included: set[str], label: str) -> str:
 def build(config: dict) -> str:
     rows = coverage(config)
     apple_cells = sum(len(row["asahi"]) for row in rows)
+    non_gnome = [DISPLAY[d] for d in DESKTOPS if d != "gnome"]
+    non_gnome_text = ", ".join(non_gnome[:-1]) + ", and " + non_gnome[-1]
     out = [
         BEGIN,
         "",
@@ -148,8 +152,8 @@ def build(config: dict) -> str:
         "",
         (
             f"Apple Silicon has **{apple_cells} active experimental desktop cell(s)**, all derived from "
-            + "enabled `*-asahi` flavors. GNOME is the only Apple Silicon target for a desktop now. KDE, "
-            + "COSMIC, Niri, and XFCE are **U — Unsupported** on Apple Silicon, with no parity date or "
+            + "enabled `*-asahi` flavors. GNOME is the only Apple Silicon target for a desktop now. "
+            + f"{non_gnome_text} are **U — Unsupported** on Apple Silicon, with no parity date or "
             + "release commitment. Gates control expansion. First, GNOME must pass a gate for boot and "
             + "session on a real Mac, and the installer must ship. Then each additional desktop needs "
             + "its own enabled `-asahi` flavor and the same static and hardware evidence."

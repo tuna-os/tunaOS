@@ -73,6 +73,22 @@ class TestDerivation(unittest.TestCase):
         with self.assertRaises(ValueError):
             gpc.coverage(config)
 
+    def test_pantheon_and_tuna_cells_are_counted(self):
+        config = fixture()
+        config["variants"].append({
+            "id": "extra",
+            "flavors": [
+                {"id": "pantheon", "build_image": True},
+                {"id": "tuna", "build_image": True,
+                 "platforms": ["linux/amd64"]},
+            ],
+        })
+        rows = {row["variant"]: row for row in gpc.coverage(config)}
+        self.assertEqual(rows["extra"]["amd64"], {"pantheon", "tuna"})
+        self.assertEqual(rows["extra"]["arm64"], {"pantheon"})
+        block = gpc.build(config)
+        self.assertIn("**S:** Pantheon, Tuna", block)
+
 
 class TestRenderedPolicy(unittest.TestCase):
     def test_every_missing_desktop_is_explicitly_unsupported(self):
