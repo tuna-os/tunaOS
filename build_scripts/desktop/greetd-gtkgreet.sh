@@ -33,22 +33,23 @@ if command -v gtkgreet &>/dev/null && command -v cage &>/dev/null; then
 	# `greetd`. openSUSE moved it out into system-user-greeter, which creates
 	# `greeter` (home /var/lib/greetd, member of video) — greetd there
 	# Requires user(greeter) and there is no `greetd` user on Tumbleweed at
-	# all. So resolve the account instead of hardcoding one.
+	# all. Debian and Ubuntu name it `_greetd` (their greetd sysusers.d).
+	# So resolve the account instead of hardcoding one.
 	_GG_USER=""
-	for _GG_CANDIDATE in greetd greeter; do
+	for _GG_CANDIDATE in greetd greeter _greetd; do
 		if getent passwd "${_GG_CANDIDATE}" >/dev/null 2>&1; then
 			_GG_USER="${_GG_CANDIDATE}"
 			break
 		fi
 	done
 	if [[ -z "${_GG_USER}" ]]; then
-		# Every distro that packages greetd creates one of these two. If
-		# neither exists the greeter cannot run at all, and writing a config
+		# Every distro that packages greetd creates one of these. If none
+		# exists the greeter cannot run at all, and writing a config
 		# naming a missing user would ship the restart loop described above.
 		# Fail the build rather than the login screen. (`return`, not `exit`:
 		# this file is sourced by install-desktop.sh, which runs under set -e
 		# and so aborts on a non-zero return.)
-		echo "ERROR: no greetd greeter account found (tried: greetd, greeter)" >&2
+		echo "ERROR: no greetd greeter account found (tried: greetd, greeter, _greetd)" >&2
 		echo "       greetd would exit at startup with 'unable to get user info'." >&2
 		return 1
 	fi
@@ -110,6 +111,23 @@ vt = 1
 command = "/usr/libexec/tunaos/greetd-session"
 user = "${_GG_USER}"
 GREETD_EOF
+
+	# The greeter runs on VT1 (above). Fedora's and Arch's greetd.service
+	# already take tty1 from its getty; Debian's and Ubuntu's are written for
+	# their default vt = 7 (After=/Conflicts=getty@tty7.service), which would
+	# leave getty@tty1 holding the terminal greetd is told to use. Give the
+	# unit the same tty1 ordering where it lacks it.
+	_GG_UNIT=/usr/lib/systemd/system/greetd.service
+	if [[ -f "${_GG_UNIT}" ]] && ! grep -q 'getty@tty1\.service' "${_GG_UNIT}"; then
+		echo "greetd.service does not take tty1 from its getty; adding the VT1 drop-in"
+		install -Dm0644 /dev/stdin /usr/lib/systemd/system/greetd.service.d/10-tunaos-vt1.conf <<'VT_EOF'
+# greetd runs its greeter on VT1 (/etc/greetd/config.toml); stop tty1's getty
+# first, as Fedora's greetd.service does.
+[Unit]
+After=getty@tty1.service
+Conflicts=getty@tty1.service
+VT_EOF
+	fi
 
 	# Greeter styling. Kept deliberately small: gtkgreet is GTK3, so it
 	# already picks up the session's GTK theme, icons, cursor and font — this

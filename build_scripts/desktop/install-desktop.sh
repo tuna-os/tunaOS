@@ -110,6 +110,15 @@ elif [[ "${IS_ELN:-false}" == true ]]; then
 	_TD_OS="eln"
 elif [[ "$IS_FEDORA" == true ]]; then
 	_TD_OS="fedora"
+	# A manifest may give Rawhide its own section when a package is built
+	# per Fedora release (tuna.yaml: the factory's fc44 and fc46 builds live
+	# in different repositories). Manifests without one keep the fedora list.
+	# The base reference is checked as well as os-release, which
+	# 90-image-info.sh rebrands.
+	if [[ "$($YQ -r '.packages.rawhide | type' "${_TD_MANIFEST}" 2>/dev/null)" == "!!map" ]] &&
+		[[ "${BASE_IMAGE,,}" == *:rawhide* || "$(detect_fedora_ver)" == rawhide ]]; then
+		_TD_OS="rawhide"
+	fi
 else
 	_TD_OS="el10"
 fi
@@ -184,6 +193,44 @@ if [[ "${_TD_OS}" == "zypper" ]]; then
 			sleep $((attempt * 5))
 		done
 	}
+	# Map-form sections may name signed repositories, as the dnf sections do
+	# (tuna.yaml: the factory's opensuse-tumbleweed index for tuna-desktop).
+	# Every one is signed by the tuna-os key: import it from the one URL the
+	# dnf path names, then let zypper check each package (pkg_gpgcheck) the
+	# same way. repo_gpgcheck stays off for the reason given on the dnf
+	# path: no repomd.xml.asc is published. No priority unless the manifest
+	# sets one: at zypper's default, the higher version wins, so a factory
+	# build of a package openSUSE also ships cannot shadow a newer Tumbleweed
+	# one.
+	_TD_ZYPPER_REPO_COUNT=0
+	if [[ "$($YQ -r '.packages.zypper | type' "${_TD_MANIFEST}" 2>/dev/null)" == "!!map" ]]; then
+		_TD_ZYPPER_REPO_COUNT=$($YQ -r '.packages.zypper.repos | length // 0' "${_TD_MANIFEST}" 2>/dev/null || echo 0)
+	fi
+	if ((_TD_ZYPPER_REPO_COUNT > 0)); then
+		rpm --import https://repo.tunaos.org/public.gpg
+	fi
+	for ((i = 0; i < _TD_ZYPPER_REPO_COUNT; i++)); do
+		_TD_RN=$($YQ -r ".packages.zypper.repos[$i].name" "${_TD_MANIFEST}")
+		_TD_RB=$($YQ -r ".packages.zypper.repos[$i].baseurl" "${_TD_MANIFEST}")
+		_TD_RP=$($YQ -r ".packages.zypper.repos[$i].priority // \"\"" "${_TD_MANIFEST}")
+		if [[ -z "${_TD_RN}" || "${_TD_RN}" == "null" || -z "${_TD_RB}" || "${_TD_RB}" == "null" ]]; then
+			echo "ERROR: ${_TD_MANIFEST}: zypper repo ${i} needs a name and a baseurl" >&2
+			exit 1
+		fi
+		{
+			echo "[${_TD_RN}]"
+			echo "name=${_TD_RN}"
+			echo "baseurl=${_TD_RB}"
+			echo "enabled=1"
+			echo "autorefresh=1"
+			echo "gpgcheck=1"
+			echo "repo_gpgcheck=0"
+			echo "pkg_gpgcheck=1"
+			echo "gpgkey=https://repo.tunaos.org/public.gpg"
+			[[ -n "${_TD_RP}" && "${_TD_RP}" != "null" ]] && echo "priority=${_TD_RP}"
+		} >"/etc/zypp/repos.d/${_TD_RN}.repo"
+		echo "Added zypper repo ${_TD_RN} -> ${_TD_RB}"
+	done
 	zypper --non-interactive --gpg-auto-import-keys refresh || true
 	_td_zypper_install_retry "${_TD_ZYPPER_PKGS[@]}"
 
@@ -436,6 +483,22 @@ if [[ "${_TD_OS}" == "apt" ]]; then
 	# Handle custom apt repos (e.g. Tideforge — tunaOS#964).
 	# Each entry: name, uri, suite, keyring_url, optional condition.
 	# Added BEFORE PPAs so Tideforge priority beats third-party sources.
+	# A condition names the one base the repository serves: "ubuntu", or
+	# "debian-sid"/"debian-trixie" (Tideforge publishes one index per Debian
+	# suite, and lib.sh's IS_DEBIAN covers both, so the suite comes from the
+	# pinned base image reference).
+	_td_apt_condition_matches() {
+		case "$1" in
+		"") return 0 ;;
+		ubuntu) [[ "$IS_UBUNTU" == true ]] ;;
+		debian-sid) [[ "${IS_DEBIAN:-false}" == true && "${BASE_IMAGE,,}" == *debian:sid* ]] ;;
+		debian-trixie) [[ "${IS_DEBIAN:-false}" == true && "${BASE_IMAGE,,}" == *debian:trixie* ]] ;;
+		*)
+			echo "ERROR: ${_TD_MANIFEST} uses unknown apt condition '$1'" >&2
+			exit 1
+			;;
+		esac
+	}
 	_TD_APT_REPO_COUNT=0
 	if [[ "${_TD_APT_TYPE}" == "!!map" ]]; then
 		_TD_APT_REPO_COUNT=$($YQ -r '.packages.apt.repos | length // 0' "${_TD_MANIFEST}" 2>/dev/null || echo 0)
@@ -446,8 +509,8 @@ if [[ "${_TD_OS}" == "apt" ]]; then
 		_TD_AR_SUITE=$($YQ -r ".packages.apt.repos[$i].suite" "${_TD_MANIFEST}")
 		_TD_AR_KEYRING=$($YQ -r ".packages.apt.repos[$i].keyring_url" "${_TD_MANIFEST}")
 		_TD_AR_COND=$($YQ -r ".packages.apt.repos[$i].condition // \"\"" "${_TD_MANIFEST}")
-		# Only add repo if condition matches (e.g. "ubuntu" only on Ubuntu)
-		if [[ -z "${_TD_AR_COND}" ]] || [[ "$IS_UBUNTU" == true && "${_TD_AR_COND}" == "ubuntu" ]]; then
+		# Only add the repo where its condition matches the base.
+		if _td_apt_condition_matches "${_TD_AR_COND}"; then
 			install -d -m 0755 /etc/apt/keyrings
 			_TD_AR_KEYRING_PATH="/etc/apt/keyrings/${_TD_AR_NAME}.gpg"
 			curl -fsSL --retry 3 "${_TD_AR_KEYRING}" -o "${_TD_AR_KEYRING_PATH}"
@@ -564,7 +627,7 @@ fi
 # differs is only WHICH repository satisfies the names, which the manifest's
 # hummingbird: section supplies. Leaving it out would route a dnf base down
 # the list-style path and produce that same yq error.
-if [[ "${_TD_OS}" == "el10" || "${_TD_OS}" == "fedora" || "${_TD_OS}" == "hummingbird" || "${_TD_OS}" == "eln" ]]; then
+if [[ "${_TD_OS}" == "el10" || "${_TD_OS}" == "fedora" || "${_TD_OS}" == "rawhide" || "${_TD_OS}" == "hummingbird" || "${_TD_OS}" == "eln" ]]; then
 
 	# Plain (non-COPR) baseurl repos — e.g. the tuna-os xfce-wayland repo,
 	# which lives at its own R2 path (repo.tunaos.org/xfce/...), not the main
