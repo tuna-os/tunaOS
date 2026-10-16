@@ -123,31 +123,40 @@ def _get_os_section_for_variant(variant_id: str) -> str:
     )
 
 
+def _override_manifest_name(variant_id: str, os_sec: str, base_flavor: str) -> str | None:
+    """Name of the distro-specific override manifest install-desktop.sh prefers, if any."""
+    if os_sec == "pacman":
+        return f"{base_flavor}-arch.yaml"
+    if os_sec == "apt" and variant_id in ("flounder", "flounder-sid"):
+        return f"{base_flavor}-debian.yaml"
+    return None
+
+
+def _section_packages(section) -> list[str] | None:
+    if isinstance(section, list):
+        return section
+    if isinstance(section, dict):
+        return section.get("packages", [])
+    return None
+
+
 def get_manifest_packages(
     variant_id: str, flavor_id: str, manifests_dir: pathlib.Path
 ) -> list[str] | None:
     os_sec = _get_os_section_for_variant(variant_id)
     base_flavor = flavor_id.split("-")[0]
 
-    # Priority 1: Distro-specific override manifest
-    if os_sec == "pacman":
-        arch_manifest = manifests_dir / f"{base_flavor}-arch.yaml"
-        if arch_manifest.exists():
-            doc = yaml.safe_load(arch_manifest.read_text(encoding="utf-8")) or {}
-            pkgs = (doc.get("packages") or {}).get("pacman") or doc.get("pacman")
-            if isinstance(pkgs, list):
-                return pkgs
-            if isinstance(pkgs, dict):
-                return pkgs.get("packages", [])
-    elif os_sec == "apt" and variant_id in ("flounder", "flounder-sid"):
-        deb_manifest = manifests_dir / f"{base_flavor}-debian.yaml"
-        if deb_manifest.exists():
-            doc = yaml.safe_load(deb_manifest.read_text(encoding="utf-8")) or {}
-            pkgs = (doc.get("packages") or {}).get("apt") or doc.get("apt")
-            if isinstance(pkgs, list):
-                return pkgs
-            if isinstance(pkgs, dict):
-                return pkgs.get("packages", [])
+    # Priority 1: Distro-specific override manifest (same precedence as
+    # build_scripts/desktop/install-desktop.sh).
+    override = _override_manifest_name(variant_id, os_sec, base_flavor)
+    if override is not None and (manifests_dir / override).exists():
+        doc = yaml.safe_load((manifests_dir / override).read_text(encoding="utf-8")) or {}
+        section = (doc.get("packages") or {}).get(os_sec)
+        if section is None:
+            section = doc.get(os_sec)
+        pkgs = _section_packages(section)
+        if pkgs is not None:
+            return pkgs
 
     # Priority 2: Generic manifest
     manifest_file = manifests_dir / f"{base_flavor}.yaml"
@@ -155,14 +164,7 @@ def get_manifest_packages(
         return None
 
     doc = yaml.safe_load(manifest_file.read_text(encoding="utf-8")) or {}
-    pkg_section = (doc.get("packages") or {}).get(os_sec)
-    if pkg_section is None:
-        return None
-    if isinstance(pkg_section, list):
-        return pkg_section
-    if isinstance(pkg_section, dict):
-        return pkg_section.get("packages", [])
-    return None
+    return _section_packages((doc.get("packages") or {}).get(os_sec))
 
 
 def check_variant_manifest_completeness(
@@ -184,10 +186,15 @@ def check_variant_manifest_completeness(
             continue
 
         base_flavor = fid.split("-")[0]
-        manifest_file = manifests_dir / f"{base_flavor}.yaml"
-        if not manifest_file.exists():
+        candidates = [f"{base_flavor}.yaml"]
+        override = _override_manifest_name(variant_id, os_sec, base_flavor)
+        if override is not None:
+            candidates.insert(0, override)
+        existing = [n for n in candidates if (manifests_dir / n).exists()]
+        if not existing:
             errors.append(
-                f"Variant '{variant_id}' declares flavor '{fid}' but manifest '{manifest_file.name}' is missing"
+                f"Variant '{variant_id}' declares flavor '{fid}' but no manifest "
+                f"exists (expected one of: {', '.join(candidates)})"
             )
             continue
 
@@ -195,7 +202,7 @@ def check_variant_manifest_completeness(
         if pkgs is None:
             errors.append(
                 f"Variant '{variant_id}' declares flavor '{fid}' (routes to '{os_sec}') "
-                f"but '{manifest_file.name}' has no packages.{os_sec} section"
+                f"but {' / '.join(existing)} has no packages.{os_sec} section"
             )
         elif len(pkgs) == 0:
             errors.append(
@@ -248,6 +255,19 @@ def test_rejection_of_unimplemented_desktop_flavor_in_admission_check():
     assert len(errors) == 1
     assert "packages.hummingbird section" in errors[0]
     assert "kde" in errors[0]
+
+
+def test_override_only_manifest_is_accepted(tmp_path):
+    (tmp_path / "foo-arch.yaml").write_text("packages:\n  pacman: [foo-session]\n")
+    variant = {"id": "marlin", "flavors": [{"id": "foo", "build_image": True}]}
+    assert check_variant_manifest_completeness(variant, tmp_path) == []
+
+
+def test_empty_override_section_is_reported_not_masked(tmp_path):
+    (tmp_path / "foo-arch.yaml").write_text("packages:\n  pacman: []\npacman: [x]\n")
+    variant = {"id": "marlin", "flavors": [{"id": "foo", "build_image": True}]}
+    errors = check_variant_manifest_completeness(variant, tmp_path)
+    assert len(errors) == 1 and "list is empty" in errors[0]
 
 
 def test_unknown_variant_fails_closed():
