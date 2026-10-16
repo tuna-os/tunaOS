@@ -1,4 +1,6 @@
 name: Daily Image Verification
+permissions:
+  contents: read
 on:
   schedule:
     - cron: '0 4 * * *' # 4 AM UTC daily

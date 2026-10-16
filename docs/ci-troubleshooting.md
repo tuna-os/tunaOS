@@ -1619,6 +1619,17 @@ contract in `tests/bats/test_test_yml_pytest_always_runs.bats` holds the upload
 path and authentication mode. This report is Python-only; BATS and QEMU E2E
 coverage are behavior gates, not line-coverage inputs.
 
+### Workflow token scope depends on repository defaults
+
+**Symptom:** A workflow does not set `permissions:`. Its token can then receive
+scopes that the workflow does not use.
+
+**Measured cause:** The audit for tunaOS#2767 found 27 workflows that used the
+repository defaults for token scope.
+
+**Fix:** Set a narrow scope for each workflow. Give write access only to a job
+that changes GitHub state. The regression test for #2767 checks each workflow.
+
 ### Admitted variant with missing rebuild repository fails CI
 
 **Symptom:** A new variant fails nightly builds for declared desktops (e.g. 10+ red nights for Hummingbird).

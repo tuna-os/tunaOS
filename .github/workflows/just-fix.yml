@@ -1,4 +1,5 @@
 name: Just Fix
+permissions: {}
 on:
   # Restricted to the default branch on purpose. An unfiltered `push` fires on
   # every feature-branch push as well, which produces a second run for the

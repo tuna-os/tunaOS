@@ -1,4 +1,5 @@
 name: Generate Release
+permissions: {}
 
 on:
   schedule:

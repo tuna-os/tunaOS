@@ -16,6 +16,9 @@ name: Prose
 # only ever goes down. Lower it when a batch of prose lands; never raise it to
 # make a PR pass.
 
+permissions:
+  contents: read
+
 on:
   pull_request:
     # .ste-budget and this file are in the filters on purpose: a change to

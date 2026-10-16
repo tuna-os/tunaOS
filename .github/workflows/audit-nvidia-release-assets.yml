@@ -26,9 +26,9 @@ jobs:
       - name: Install rclone
         run: sudo apt-get install -y rclone
 
-      # ISOs are published to R2, not to GitHub Releases: `attach-release` in
-      # reusable-build-artifacts.yml defaults to false. Auditing releases is
-      # what kept this job red on all 15 runs it ever had.
+      # Nightly ISOs are published to R2; only the emergency publish-isos.yml
+      # workflow has a separate release job. Auditing releases is what kept
+      # this job red on all 15 runs it ever had.
       - name: Check every NVIDIA edition is downloadable from R2
         env:
           RCLONE_CONFIG_R2_TYPE: s3
