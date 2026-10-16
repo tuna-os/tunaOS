@@ -491,6 +491,11 @@
   },
   {
     "variant": "guppy",
+    "flavor": "gnome",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "guppy",
     "flavor": "kde",
     "arch": "x86_64"
   },
