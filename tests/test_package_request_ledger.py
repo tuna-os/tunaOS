@@ -84,6 +84,14 @@ def test_unknown_operation_cannot_retain_unclassified_operands():
     assert normalized['coverageGaps'] == ['unknown-manager-operation']
 
 
+@pytest.mark.parametrize('flag', ['-Shunter2', '-Sxyz', '-Rsecret'])
+def test_unknown_compact_pacman_flags_fail_closed(flag):
+    normalized = recorder.normalize('pacman', [flag, 'safe-package'])
+    assert normalized['requests'] == []
+    assert normalized['options'] == []
+    assert normalized['coverageGaps'] == ['unknown-manager-operation', 'unsupported-manager-option']
+
+
 @pytest.mark.parametrize('events', [[event(), event()], [result()], [event(), result(), result()],
                                    [event(), result(finishedAt='2026-10-10T09:00:00Z')],
                                    [event(startedAt='2026-10-11T10:00:00Z')],
@@ -101,6 +109,13 @@ def test_incomplete_or_missing_recording_remains_a_gap(tmp_path):
     (tmp_path / 'requests.jsonl.gaps').write_text('request-recorder-unavailable\n')
     value = read(tmp_path, [event(target=None), result()])
     assert value['coverageGaps'] == ['missing-contract-target', 'request-recording-failed']
+
+
+def test_missing_ledger_file_preserves_recorder_failure_gap(tmp_path):
+    path = tmp_path / 'requests.jsonl'
+    path.with_name(path.name + '.gaps').write_text('request-recorder-unavailable\n')
+    value = ledger.read_ledger(path, TARGET, now=NOW)
+    assert value['coverageGaps'] == ['missing-package-requests', 'request-recording-failed']
 
 
 def test_lifecycle_origins_and_failed_requests_are_preserved(tmp_path):
@@ -197,6 +212,25 @@ def test_measured_lifecycle_reconciliation(tmp_path, scope, required, status):
     assert ledger.reconcile(*reconciliation_fixture(tmp_path, scope, required, status))['status'] == 'complete'
 
 
+def test_requested_source_is_part_of_measurement_identity(tmp_path):
+    args = reconciliation_fixture(tmp_path)
+    base = args[0]['packageRequirements'][0]
+    base['requestedSource'] = 'legacy/a'
+    second = deepcopy(base)
+    second['requestedSource'] = 'legacy/b'
+    args[0]['packageRequirements'].append(second)
+    args[0]['contractDigest'] = evidence.contract_digest(args[0])
+    args[-1]['contractDigest'] = args[0]['contractDigest']
+    first_measurement = args[-1]['requirements'][0]
+    first_measurement.update(requestedSource='legacy/a', provider='legacy/a')
+    second_measurement = deepcopy(first_measurement)
+    second_measurement.update(requestedSource='legacy/b', provider='legacy/b')
+    args[-1]['requirements'].append(second_measurement)
+    assert ledger.reconcile(*args)['status'] == 'complete'
+    args[-1]['requirements'][1]['provider'] = 'legacy/a'
+    assert 'native-provider-mismatch' in ledger.reconcile(*args)['reasons']
+
+
 @pytest.mark.parametrize('binding', ['target', 'sourceRevision', 'baseDigest', 'contractDigest',
                                     'requestLedgerDigest', 'baseInventoryDigest', 'finalInventoryDigest'])
 def test_native_evidence_must_bind_exact_input(tmp_path, binding):
@@ -271,6 +305,14 @@ def test_failed_request_requires_disposition_not_old_installed_package(tmp_path)
     result = ledger.reconcile(*args)
     assert result['status'] == 'blocked'
     assert 'unresolved-package-request' in result['reasons']
+
+
+def test_failed_request_cannot_be_disposed_as_satisfied(tmp_path):
+    args = reconciliation_fixture(tmp_path)
+    args[1]['requests'][0]['result']['exitCode'] = 42
+    assert 'unresolved-package-request' in ledger.reconcile(*args)['reasons']
+    args[-1]['requestDispositions'][REQUEST_ID] = 'approved-replacement'
+    assert ledger.reconcile(*args)['status'] == 'complete'
 
 
 def test_static_unresolved_hook_needs_exact_origin_proof(tmp_path):

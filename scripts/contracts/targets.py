@@ -101,8 +101,9 @@ def validate_target(target: dict[str, Any]) -> None:
         raise ValueError("CPU baseline does not match platform")
     if platform == "linux/amd64/v2" and variant not in ALMA_VARIANTS:
         raise ValueError("AMD64/v2 is restricted to Alma variants")
-    if variant in ALMA_VARIANTS and platform == "linux/amd64":
-        raise ValueError("Alma Intel targets must use AMD64/v2")
+    if (variant in ALMA_VARIANTS and platform == "linux/amd64"
+            and "nvidia" not in target["flavor"].split("-")):
+        raise ValueError("Alma Intel targets must use AMD64/v2 unless the flavor is x86_64-only")
     if scope == "apple-silicon" and platform != "linux/arm64":
         raise ValueError("Asahi requires ARM64")
     if scope == "apple-t2" and platform == "linux/arm64":
@@ -125,8 +126,9 @@ def configured_platforms(variant: dict, flavor: dict) -> list[str]:
 def resolve_required_targets(config: dict[str, Any]) -> list[dict[str, Any]]:
     """Resolve enabled flavors and annotate whether each commitment is scheduled.
 
-    Policy is authored separately from scheduler platforms. Fixed defaults keep
-    older configuration readable; explicit policy cannot weaken accepted support.
+    Scheduler `platforms` never narrows support. A flavor `required_platforms`
+    declares a permanent compatibility limit; NVIDIA flavors default to their
+    intrinsic x86_64-only limit when the declaration is absent.
     """
     if not isinstance(config, dict) or not isinstance(config.get("variants"), list):
         raise ValueError("configuration requires a variants list")
@@ -171,10 +173,25 @@ def resolve_required_targets(config: dict[str, Any]) -> list[dict[str, Any]]:
                 continue
             scheduled = configured_platforms(variant, flavor)
             scope = hardware_scope(flavor_id)
-            required = [p for p in policy if (
-                (scope != "apple-silicon" or p == "linux/arm64")
-                and (scope != "apple-t2" or p != "linux/arm64")
-            )]
+            if scope == "apple-silicon" and any(p != "linux/arm64" for p in scheduled):
+                raise ValueError(f"Asahi scheduler includes a non-ARM64 platform: {variant_id}:{flavor_id}")
+            if scope == "apple-t2" and "linux/arm64" in scheduled:
+                raise ValueError(f"T2 scheduler includes ARM64: {variant_id}:{flavor_id}")
+            permanent = flavor.get("required_platforms")
+            if permanent is None:
+                if "nvidia" in flavor_id.split("-"):
+                    permanent = ["linux/amd64"]
+                elif scope == "apple-silicon":
+                    permanent = ["linux/arm64"]
+                elif scope == "apple-t2":
+                    permanent = [platform for platform in policy if platform != "linux/arm64"]
+                else:
+                    permanent = policy
+            required = _platforms(permanent, f"required {variant_id}:{flavor_id}")
+            if scope == "apple-silicon" and required != ["linux/arm64"]:
+                raise ValueError(f"Asahi support must be ARM64-only: {variant_id}:{flavor_id}")
+            if scope == "apple-t2" and any(p == "linux/arm64" for p in required):
+                raise ValueError(f"T2 support cannot include ARM64: {variant_id}:{flavor_id}")
             for platform in required:
                 target = {
                     "variant": variant_id,

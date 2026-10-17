@@ -61,7 +61,8 @@ def observations():
     factory["promotionStatus"] = "promoted"
     image = copy.deepcopy(IMAGE)
     image["factoryReceiptDigests"] = ["sha256:" + hashlib.sha256(evidence.canonical_json(factory)).hexdigest()]
-    return {"required": {"target": copy.deepcopy(TARGET), "required": True, "scheduled": True},
+    return {"required": {"target": copy.deepcopy(TARGET), "required": True, "scheduled": True,
+                         "publication": {"repository": PUBLICATION["repository"], "tag": PUBLICATION["tag"]}},
             "attempt": {"identity": copy.deepcopy(ATTEMPT), "status": "success",
                         "imageDigest": image["imageDigest"], "measuredAt": "2026-10-10T11:00:00Z", "evidence": []},
             "publication": copy.deepcopy(PUBLICATION),
@@ -144,6 +145,17 @@ def test_artifact_digest_does_not_substitute_for_receipt_digest(observations):
 
 def test_wrong_attempt_identity_does_not_substitute_for_latest_receipt(observations):
     observations["attempt"]["identity"]["runAttempt"] += 1
+    assert evaluate(observations)["status"] == "blocked"
+
+
+@pytest.mark.parametrize("field,value", [
+    ("repository", "ghcr.io/other/yellowfin"),
+    ("tag", "cosmic-candidate"),
+])
+def test_publication_destination_must_match_required_target(observations, field, value):
+    observations["publication"][field] = value
+    observations["image"]["receipt"]["publication"][field] = value
+    observations["package"]["receipt"]["publication"][field] = value
     assert evaluate(observations)["status"] == "blocked"
 
 

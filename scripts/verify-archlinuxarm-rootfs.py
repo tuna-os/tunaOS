@@ -310,9 +310,12 @@ def receipt(directory, args):
     policy = Path(args.signature_policy_file)
     policy_hash, _ = sha256(policy, MAX_SMALL)
     policy_lines = policy.read_text().splitlines()
-    if not policy_lines or any('PackageRequired' not in line.split() or
-                               any(value in line.split() for value in ('PackageOptional', 'PackageNever'))
-                               for line in policy_lines):
+    if not policy_lines or any(
+            'PackageRequired' not in line.split()
+            or 'PackageTrustedOnly' not in line.split()
+            or any(value in line.split() for value in
+                   ('PackageOptional', 'PackageNever', 'PackageTrustAll'))
+            for line in policy_lines):
         raise VerificationError('native-package-signature-policy-not-required')
     result = {'schemaVersion': 1, 'kind': 'archlinuxarm-base-candidate',
               'measuredAt': datetime.now(timezone.utc).isoformat(),

@@ -126,7 +126,7 @@ def _semantic(value: Any, now: dt.datetime) -> None:
             _semantic(item, now)
 
 
-def _document_semantics(document: dict[str, Any]) -> None:
+def _document_semantics(document: dict[str, Any], now: dt.datetime) -> None:
     kind = document["kind"]
     if kind == "consumer-contract":
         if document["baseReference"].rsplit("@", 1)[-1] != document["baseDigest"]:
@@ -148,6 +148,9 @@ def _document_semantics(document: dict[str, Any]) -> None:
         for check in document["checks"]:
             if check["status"] == "pass" and not any(item.get("digest") for item in check["evidence"]):
                 raise EvidenceError("passing check requires immutable evidence")
+        if kind == "factory-receipt" and document["promotionStatus"] == "promoted":
+            if any(check["status"] != "pass" for check in document["checks"]):
+                raise EvidenceError("promoted factory receipt contains a non-passing check")
         expected = document["imageDigest"] if kind == "image-receipt" else document["factoryDigest"]
         if document["publication"]["digest"] != expected:
             raise EvidenceError("publication digest disagrees with receipt artifact")
@@ -159,6 +162,9 @@ def _document_semantics(document: dict[str, Any]) -> None:
                 raise EvidenceError("image and attempt source revisions disagree")
             _unique(document["installedPackages"], None, "installed packages")
     if kind == "build-health":
+        generated = dt.datetime.fromisoformat(document["generatedAt"].replace("Z", "+00:00"))
+        if (now - generated).total_seconds() > document["freshnessPolicy"]["feedSeconds"]:
+            raise EvidenceError("build health feed exceeds freshness policy")
         for row in document["targets"]:
             if row["status"] != "healthy":
                 continue
@@ -170,12 +176,20 @@ def _document_semantics(document: dict[str, Any]) -> None:
                 or row["lastVerifiedPublication"] is None
                 or row.get("measuredAt") is None or attempt.get("measuredAt") is None
                 or readiness.get("measuredAt") is None
+                or not readiness.get("factoryDigest") or not readiness.get("contractDigest")
                 or readiness["status"] != "healthy" or row["contractStatus"] != "pass"):
                 raise EvidenceError("healthy target lacks complete successful evidence")
             if any(source["status"] != "available" for source in document["collection"]["sources"]):
                 raise EvidenceError("healthy target contradicts unavailable collection source")
             if not attempt.get("imageDigest") or attempt["imageDigest"] != row["lastVerifiedPublication"]["digest"]:
                 raise EvidenceError("healthy attempt and publication digest disagree")
+            measured = [
+                dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+                for value in (row["measuredAt"], attempt["measuredAt"], readiness["measuredAt"])
+            ]
+            if any((now - value).total_seconds() > document["freshnessPolicy"]["buildSeconds"]
+                   for value in measured):
+                raise EvidenceError("healthy target evidence exceeds freshness policy")
 
 
 def validate(document: dict[str, Any], expected_kind: str | None = None, *, verify_digest: bool = True, now: dt.datetime | None = None) -> dict[str, Any]:
@@ -189,7 +203,7 @@ def validate(document: dict[str, Any], expected_kind: str | None = None, *, veri
     if now.tzinfo is None or now.utcoffset() != dt.timedelta(0):
         raise EvidenceError("validation time must be UTC")
     _semantic(document, now)
-    _document_semantics(document)
+    _document_semantics(document, now)
     if kind == "consumer-contract" and verify_digest and document["contractDigest"] != contract_digest(document):
         raise EvidenceError("consumer contract digest does not match canonical content")
     return document

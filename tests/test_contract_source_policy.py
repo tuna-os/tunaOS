@@ -9,13 +9,13 @@ sys.path.insert(0, str(ROOT))
 from scripts.contracts.sources import classify_policy, violations
 
 
-@pytest.mark.parametrize('field', ['baseurl', 'uri'])
+@pytest.mark.parametrize('field', ['baseurl', 'gpgkey', 'keyring_url', 'uri', 'url'])
 @pytest.mark.parametrize('url', ['https://repo.tunaos.org/repo/', 'https://tideforge.org/repo/'])
 def test_factory_urls_allow_rpm_and_apt(field, url):
     assert violations({'repo': {field: url}}) == []
 
 
-@pytest.mark.parametrize('field', ['baseurl', 'uri'])
+@pytest.mark.parametrize('field', ['baseurl', 'gpgkey', 'keyring_url', 'uri', 'url'])
 @pytest.mark.parametrize('url', ['https://repo.tunaos.org.attacker.invalid/repo/',
                                  'https://attacker.invalid/repo.tunaos.org/repo/',
                                  'https://repo.tunaos.org@attacker.invalid/repo/',
@@ -26,6 +26,25 @@ def test_lookalike_and_credential_urls_fail_without_retaining_credentials(field,
     assert 'secret' not in str(errors)
     assert 'username' not in str(errors)
 
+
+
+@pytest.mark.parametrize('url', [
+    'http://repo.tunaos.org/repo/', 'ftp://repo.tunaos.org/repo/',
+    'file://remote.invalid/repo', 'file:relative/repo',
+])
+def test_only_approved_https_and_absolute_local_file_endpoints_are_allowed(url):
+    assert violations({'repo': {'uri': url}})
+
+
+def test_absolute_local_file_endpoint_is_allowed():
+    assert violations({'repo': {'baseurl': 'file:///run/local-packages'}}) == []
+
+
+def test_embedded_whitespace_cannot_inject_another_repository():
+    value = 'https://repo.tunaos.org/repo/ stable main\ndeb [trusted=yes] https://foreign.invalid/repo/'
+    errors = violations({'repo': {'uri': value}})
+    assert errors == ['repo.uri: repository endpoint contains whitespace']
+    assert 'foreign.invalid' not in str(errors)
 
 @pytest.mark.parametrize('source', ['copr', 'ppa', 'obs', 'aur', 'PPA'])
 def test_forbidden_source_types_apply_recursively(source):
@@ -59,6 +78,15 @@ def test_adding_provider_inside_legacy_list_is_new():
     baseline = {'el10': {'copr': [{'repo': 'legacy/project'}]}}
     current = {'el10': {'copr': [{'repo': 'legacy/project'}, {'repo': 'attacker/new'}]}}
     assert classify_policy(current, baseline)['forbiddenNew']
+
+
+def test_reordering_legacy_sources_does_not_turn_them_into_new_sources():
+    baseline = {'repos': [{'url': 'https://foreign-a.invalid/repo'},
+                          {'url': 'https://foreign-b.invalid/repo'}]}
+    current = {'repos': list(reversed(baseline['repos']))}
+    result = classify_policy(current, baseline)
+    assert len(result['inherited']) == 2
+    assert result['forbiddenNew'] == []
 
 
 def test_changing_disallowed_repository_endpoint_does_not_inherit_permission():

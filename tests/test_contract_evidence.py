@@ -21,7 +21,7 @@ DIGEST = "sha256:" + "2" * 64
 REVISION = "1" * 40
 ATTEMPT = {"repository": "tuna-os/tunaos", "workflow": "build.yml", "runId": 42,
            "runAttempt": 2, "sourceRevision": REVISION, "startedAt": "2026-10-10T10:00:00Z"}
-PUBLICATION = {"repository": "ghcr.io/tuna-os/yellowfin", "digest": DIGEST,
+PUBLICATION = {"repository": "ghcr.io/tuna-os/yellowfin", "tag": "cosmic", "digest": DIGEST,
                "evidence": ["https://github.com/tuna-os/tunaos/actions/runs/42"]}
 PROVENANCE = {"sourceRevision": REVISION, "buildrootDigest": DIGEST,
               "sourceArtifacts": [{"url": "https://example.org/source.tar.gz", "digest": DIGEST}], "buildrootInventory": [], "compilerFlags": [], "evidence": []}
@@ -248,6 +248,31 @@ def test_healthy_feed_rejects_missing_or_contradictory_inputs(path, value):
         evidence.validate(candidate, now=NOW)
 
 
+@pytest.mark.parametrize("path", [
+    ["targets", 0, "packageReadiness", "factoryDigest"],
+    ["targets", 0, "packageReadiness", "contractDigest"],
+])
+def test_healthy_feed_requires_package_identity_digests(path):
+    candidate = copy.deepcopy(HEALTHY)
+    candidate["targets"][0]["packageReadiness"][path[-1]] = None
+    with pytest.raises(evidence.EvidenceError):
+        evidence.validate(candidate, now=NOW)
+
+
+@pytest.mark.parametrize("field,stamp", [
+    ("generatedAt", "2026-10-09T11:59:59Z"),
+    ("row", "2026-10-09T11:59:59Z"),
+])
+def test_healthy_feed_enforces_feed_and_build_freshness(field, stamp):
+    candidate = copy.deepcopy(HEALTHY)
+    if field == "generatedAt":
+        candidate["generatedAt"] = stamp
+    else:
+        candidate["targets"][0]["measuredAt"] = stamp
+    with pytest.raises(evidence.EvidenceError, match="freshness"):
+        evidence.validate(candidate, now=NOW)
+
+
 @pytest.mark.parametrize("status", ["missing", "unknown"])
 def test_unproven_health_states_allow_explicit_nulls(status):
     candidate = copy.deepcopy(HEALTH)
@@ -292,6 +317,31 @@ def test_receipts_require_immutable_proof_and_consistent_identity(document, path
     parent[path[-1]] = value
     with pytest.raises(evidence.EvidenceError):
         evidence.validate(candidate, now=NOW)
+
+
+def test_promoted_factory_receipt_rejects_nonpassing_check():
+    candidate = copy.deepcopy(FACTORY)
+    candidate["promotionStatus"] = "promoted"
+    candidate["checks"][0]["status"] = "blocked"
+    with pytest.raises(evidence.EvidenceError, match="non-passing"):
+        evidence.validate(candidate, now=NOW)
+
+
+@pytest.mark.parametrize("url", [
+    "https://user:token@example.org/proof",
+    "https://user@example.org/proof",
+])
+def test_evidence_urls_reject_userinfo(url):
+    candidate = copy.deepcopy(IMAGE)
+    candidate["checks"][0]["evidence"][0]["url"] = url
+    with pytest.raises(evidence.EvidenceError):
+        evidence.validate(candidate, now=NOW)
+
+
+def test_evidence_url_allows_at_sign_in_path():
+    candidate = copy.deepcopy(IMAGE)
+    candidate["checks"][0]["evidence"][0]["url"] = "https://example.org/proofs/@current"
+    assert evidence.validate(candidate, now=NOW) == candidate
 
 
 @pytest.mark.parametrize("field,value", [("sourceRevision", "3" * 40), ("installedPackages", []),
