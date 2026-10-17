@@ -11,11 +11,11 @@ WORKFLOW="${BATS_TEST_DIRNAME}/../../.github/workflows/reusable-build-image.yml"
   grep -q '^  verify_asahi:' "$WORKFLOW"
   grep -q 'endsWith(inputs.flavor, '\''-asahi'\'')' "$WORKFLOW"
   grep -q 'uses: ./\.github/workflows/verify-asahi-one.yml' "$WORKFLOW"
-  grep -q 'image: .*default-tag.*-testing' "$WORKFLOW"
+  grep -Fq 'image: ${{ needs.manifest.outputs.image }}@${{ needs.manifest.outputs.digest }}' "$WORKFLOW"
 }
 
 @test "promotion waits for the Asahi gate" {
-  grep -q 'needs: [manifest, sign, verify_boot, verify_asahi]' "$WORKFLOW"
+  grep -Fq 'needs: [manifest, sign, verify_desktop, verify_boot, verify_asahi]' "$WORKFLOW"
   grep -q 'needs.verify_asahi.result == '\''success'\''' "$WORKFLOW"
   grep -q 'needs.verify_asahi.result == '\''skipped'\''' "$WORKFLOW"
 }

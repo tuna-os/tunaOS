@@ -49,6 +49,9 @@ def _run(tmp_path: Path, kver: str, driver: str, archive: list[str]):
         + ["linux-image-amd64", "linux-image-cloud-amd64"]
     )
     headers = " ".join(f"linux-headers-{k}" for k in archive)
+    # This fixture tests the live-archive selector. Snapshot recovery has its
+    # own authenticated-source fixture; never let this stub contact APT.
+    _stub(bindir, "dpkg", "echo arm64\n")
     _stub(
         bindir,
         "apt-cache",

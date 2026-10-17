@@ -33,6 +33,7 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 | `build-grouper.yml` | post-merge + scheduled | Build Grouper | `20 17 * * *`, manual | — |
 | `build-guppy.yml` | post-merge + scheduled | Build Guppy | `20 6 * * *`, manual | — |
 | `build-gurnard.yml` | post-merge + scheduled | Build Gurnard | `20 4 * * *`, manual | — |
+| `build-health.yml` | PR-deterministic + post-merge | Build Health | each PR, manual | — |
 | `build-hummingbird.yml` | post-merge + scheduled | Build Hummingbird | `20 22 * * *`, manual | — |
 | `build-marlin.yml` | post-merge + scheduled | Build Marlin | `20 13 * * *`, manual | — |
 | `build-sailfin.yml` | post-merge + scheduled | Build Sailfin | `20 19 * * *`, manual | — |

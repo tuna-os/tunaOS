@@ -87,10 +87,14 @@ done < <(apt-cache pkgnames linux-image- |
 	sort -V)
 
 if [[ -z "$HELD" ]]; then
-	echo "ERROR: nvidia-kernel-dkms ${DRIVER} does not build on kernel ${SERIES} (ceiling ${CEILING})," >&2
-	echo "       and the archive no longer carries a linux-image-*-${FLAVOUR} at or below ${CEILING}" >&2
-	echo "       with matching headers. Needs a newer Debian nvidia driver; see this script's header." >&2
-	exit 1
+	# Sid retires old ABIs as it rolls. Recover only the exact measured native
+	# pair from Debian's authenticated archive; unsupported identities fail.
+	HELD="$(bash "$(dirname "$0")/debian-nvidia-snapshot.sh" "$DRIVER" "$KVER")" || {
+		echo "ERROR: nvidia-kernel-dkms ${DRIVER} does not build on kernel ${SERIES} (ceiling ${CEILING})," >&2
+		echo "       and the archive no longer carries a linux-image-*-${FLAVOUR} at or below ${CEILING}" >&2
+		echo "       with matching headers. Needs a newer Debian nvidia driver; see this script's header." >&2
+		exit 1
+	}
 fi
 
 echo "==> holding kernel at ${HELD}: ${KVER} is above the ${CEILING} ceiling for ${DRIVER_UPSTREAM}"
@@ -111,4 +115,9 @@ if [[ ! -s "${MODULES_ROOT}/${HELD}/vmlinuz" ]]; then
 	cp "${BOOT_DIR}/vmlinuz-${HELD}" "${MODULES_ROOT}/${HELD}/vmlinuz"
 fi
 test -s "${MODULES_ROOT}/${HELD}/vmlinuz"
+mapfile -t HELD_TREES < <(find "$MODULES_ROOT" -mindepth 1 -maxdepth 1 -type d ! -name '*.img' -printf '%f\n')
+if [[ "${#HELD_TREES[@]}" != 1 || "${HELD_TREES[0]}" != "$HELD" ]]; then
+	echo "ERROR: held kernel must be the sole bootable module tree: expected ${HELD}, found ${HELD_TREES[*]}" >&2
+	exit 1
+fi
 echo "==> kernel trees now: $(ls "$MODULES_ROOT")"

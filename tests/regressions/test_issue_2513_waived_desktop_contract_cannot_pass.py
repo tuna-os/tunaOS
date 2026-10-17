@@ -1,26 +1,11 @@
-"""A waived desktop contract must not report itself as passed.
+"""tunaOS#2513: Hummingbird promoted images without their declared desktop.
 
-hummingbird is exempted from every require_* in
-build_scripts/checks/verify-desktop-experience.sh so it can bootstrap against
-incomplete repos. That exemption is deliberate and these tests do not
-challenge it. What they hold is the REPORT.
+Run 32813037866 measured ten missing GNOME requirements, then printed that the
+desktop contract passed and allowed publication. The behavioral tests execute
+the real report block and require waived contracts to remain unverified.
 
-On tunaOS run 32813037866 the check printed, in order:
-
-    missing required command: gnome-shell
-    missing unit: none of [gdm gdm3] exist
-    missing required command: nautilus
-    ... ten of them ...
-    desktop experience contract passed: gnome (projectbluefin/bluefin-lts)
-
-The image had 410 packages: gnome-backgrounds and gnome-user-docs, no
-gnome-shell, no gdm, no mutter, no gtk4. It was pushed to GHCR, and the first
-thing to notice was the boot gate failing 15 minutes later on a marker that
-could never be emitted. The packages were dropped upstream
-(tunaos-packages#519); the reason it went unnoticed for weeks is this line.
-
-The report block is tested by RUNNING it, because "passed" was printed by
-code that had already seen the failures.
+Falsification: restore the unconditional success report or stop counting any
+Hummingbird exemption; the executed report claims a pass or loses the waiver.
 """
 
 import subprocess
@@ -28,7 +13,7 @@ import textwrap
 import re
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 CHECK = ROOT / "build_scripts" / "checks" / "verify-desktop-experience.sh"
 
 
@@ -54,7 +39,7 @@ def _run_report(tmp_path, waived):
         + "\n"
     )
     p = subprocess.run(["bash", str(script)], capture_output=True, text=True)
-    assert p.returncode == 0, p.stdout + p.stderr
+    assert p.returncode == (1 if waived else 0), p.stdout + p.stderr
     written = (contracts / "gnome").read_text()
     return p.stdout + p.stderr, written
 
@@ -109,3 +94,9 @@ def test_every_hummingbird_exemption_counts_what_it_waives():
         f"{exemptions} require_* exemptions but only {counted} call waive() — "
         "an uncounted exemption can still report a pass over a broken image"
     )
+
+
+def test_incomplete_hummingbird_desktop_stops_before_publication(tmp_path):
+    out, written = _run_report(tmp_path, 1)
+    assert 'refusing an unusable gnome image' in out
+    assert 'validated_at_build=false' in written

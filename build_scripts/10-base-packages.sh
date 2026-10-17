@@ -315,6 +315,10 @@ REPO
 		echo "         no installer app; see tuna-os/tunaOS#1397." >&2
 	fi
 elif [[ ${IS_ELN:-false} == true ]]; then
+	# Keep fwupd and its installed plugins in one native transaction. ELN
+	# can advance fwupd while the pinned base retains exact-version plugins.
+	dnf -y upgrade 'fwupd*'
+	dnf -y check
 	# ── Fedora ELN ───────────────────────────────────────────────────────
 	# ELN takes neither of the branches around it, and both would fail
 	# rather than degrade. Everything below is measured against the pinned

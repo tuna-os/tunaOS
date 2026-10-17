@@ -246,7 +246,8 @@ opensuse* | *suse*)
 	# re-reads the repo metadata, which is usually what clears a stale 404.
 	for attempt in 1 2 3; do
 		zypper --non-interactive install --no-confirm --no-recommends \
-			kernel-asahi m1n1 u-boot-asahi asahi-scripts && break
+			kernel-asahi dtb-apple m1n1 u-boot-asahi asahi-scripts \
+			update-m1n1 asahi-fwupdate && break
 		[ "$attempt" -eq 3 ] && {
 			echo "ERROR: home:mrkcee install failed after 3 attempts" >&2
 			exit 1
@@ -255,6 +256,11 @@ opensuse* | *suse*)
 		sleep $((attempt * 20))
 		zypper --non-interactive --gpg-auto-import-keys refresh
 	done
+	# Native OBS packaging splits these from kernel-asahi/asahi-scripts.
+	# /boot is transient in the overlay RUN; retain U-Boot before it vanishes.
+	# https://api.opensuse.org/public/source/home:mrkcee/u-boot-asahi/u-boot-asahi.spec
+	install -D -m 0644 /boot/u-boot-nodtb.bin /usr/lib/asahi-boot/u-boot-nodtb.bin
+	test -s /usr/lib/asahi-boot/u-boot-nodtb.bin
 	install_best_effort "zypper --non-interactive install --no-confirm --no-recommends" \
 		asahi-fwextract asahi-audio alsa-ucm-conf-asahi speakersafetyd \
 		triforce-lv2 bankstown-lv2 asahi-nvram tiny-dfr
