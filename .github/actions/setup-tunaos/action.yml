@@ -16,6 +16,13 @@ runs:
 
     - name: Setup Homebrew
       uses: Homebrew/actions/setup-homebrew@f830e99d47c69efee99f1ddbf18a8e3144d1b93e
+    - name: Persist Homebrew paths for Docker-based act runners
+      run: |
+        set -euo pipefail
+        brew_prefix="$(brew --prefix)"
+        printf '%s\n' "${brew_prefix}/bin" "${brew_prefix}/sbin" >> "$GITHUB_PATH"
+        printf 'PATH=%s/bin:%s/sbin:%s\n' "$brew_prefix" "$brew_prefix" "$PATH" >> "$GITHUB_ENV"
+      shell: bash
 
     - name: Install Just
       run: |

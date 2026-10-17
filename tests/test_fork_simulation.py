@@ -105,6 +105,13 @@ def test_workflow_runs_real_steps_with_empty_secrets_and_reports_failures() -> N
     assert ".fork-simulation-api.log" not in runner
     assert '--workflow "$workflow"' in runner
 
+def test_act_homebrew_path_is_persisted_for_following_steps() -> None:
+    action = (ROOT / ".github/actions/setup-tunaos/action.yml").read_text(encoding="utf-8")
+    assert 'brew_prefix="$(brew --prefix)"' in action
+    assert '"$GITHUB_PATH"' in action
+    assert '"$GITHUB_ENV"' in action
+
+
 
 def run_fixture(
     tmp_path, persona, *arguments, token="fixture-token", stdin="", workflow="synthetic-workflow.yml"
@@ -168,6 +175,22 @@ def test_fixture_reads_the_file_list_from_the_matching_synthetic_event(tmp_path)
     assert result.returncode == 0, result.stderr
     assert result.stdout.splitlines() == [".github/workflows/pr-nudges.yml"]
     assert calls == ["GET\trepos/tuna-os/tunaos/pulls/1/files"]
+    assert unexpected == ""
+
+def test_fixture_returns_empty_workflow_runs_for_matrix_structure_check(tmp_path) -> None:
+    endpoint = (
+        "repos/tuna-os/tunaos/actions/workflows/build-bonito.yml/runs"
+        "?branch=main&per_page=1"
+    )
+    result, calls, unexpected = run_fixture(
+        tmp_path,
+        "same-repo-contributor",
+        endpoint,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout) == {"workflow_runs": []}
+    assert calls == [f"GET\t{endpoint}"]
     assert unexpected == ""
 
 
