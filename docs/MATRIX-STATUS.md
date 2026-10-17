@@ -58,7 +58,7 @@ no boot.
 
 ---
 
-The configured image matrix now has 147 cells. Eleven of them are Tuna Desktop (formerly Roost) cells for amd64: Marlin, Yellowfin, Albacore, Skipjack, Wahoo, Bonito, Bonito Rawhide, Grouper, Flounder, Flounder Sid and Sailfin. The `guppy:gnome` cell is back (2026-10-07, #2450). This status snapshot is from before these additions and does not mark them green; each needs its own image, desktop and boot evidence.
+The configured image matrix now has 148 cells. Twelve of them are Tuna Desktop (formerly Roost) cells for amd64: Marlin, Yellowfin, Albacore, Skipjack, Wahoo, Bonito, Bonito Rawhide, Grouper, Guppy, Flounder, Flounder Sid and Sailfin. The `guppy:gnome` cell is back (2026-10-07, #2450). This status snapshot is from before these additions and does not mark them green; each needs its own image, desktop and boot evidence.
 
 <!-- BEGIN GENERATED — scripts/gen-matrix-status.py -->
 
@@ -68,7 +68,7 @@ The configured image matrix now has 147 cells. Eleven of them are Tuna Desktop (
 
 `.github/green-criteria.yml` sets the bar. A cell is green only when every criterion that blocks it, and applies to it, has a current affirmative result. A criterion that nobody ran, nobody asserted, or that CI skipped renders ⬜, and it does not count as satisfied. These criteria block today: `builds`, `desktop`, `boots`, `parity`, `no_silent_omissions`. These are advisory — the sections below measure them, and they do not block yet: `install`, `lifecycle`, `rebuildable`, `arch_honesty`. Unimplemented: `iso`. To graduate a criterion, edit `enforcement:` in that file. This table and the README count then tighten with no code change.
 
-**125 of 147** published cells are composite-green.
+**125 of 148** published cells are composite-green.
 
 | Variant | gnome | kde | cosmic | niri | xfce |
 |---|:--:|:--:|:--:|:--:|:--:|

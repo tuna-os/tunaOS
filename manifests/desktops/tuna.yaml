@@ -386,6 +386,70 @@ packages:
       - dejavu-fonts
       - liberation-fonts
 
+  # Gentoo stage3 (guppy, tunaOS#3202). tuna-desktop is the factory's signed
+  # native gpkg; every supporting package remains a Gentoo atom. Cage is not
+  # in ::gentoo, so its exact native ebuild comes from the Gentoo GURU overlay
+  # instead of importing an Arch archive or substituting a GNOME session.
+  #
+  # The TunaOS key follows the same getuto trust path as Gentoo's binhost:
+  # import, verify this fingerprint, locally sign it, update the trustdb and
+  # require a package signature. The package atom pins beta.1 and the tunaos
+  # repository, so a source overlay or a later beta cannot silently replace it.
+  # Sourcing exception: PACKAGE-SOURCING.md admits the GURU Cage ebuild for
+  # `guppy:tuna` only; review it by 2026-12-31 while Tideforge packaging is
+  # tracked under tunaOS#3202.
+  emerge:
+    display_manager: greetd
+    source_repositories:
+      - name: guru
+        sync_uri: https://github.com/gentoo/guru.git
+    binrepos:
+      - name: tunaos
+        priority: 10
+        sync_uri: https://repo.tunaos.org/gentoo/binpkgs/amd64
+        verify_signature: true
+        key: experiences/tuna/tideforge-public.gpg
+        fingerprint: 4E5CC9F8B3B521793D95266E629BE6EA45188366
+    packages:
+      - =gui-wm/tuna-desktop-1.0.0_beta1::tunaos
+      - gui-libs/greetd
+      - gui-apps/gtkgreet
+      - =gui-wm/cage-0.3.1::guru
+      - x11-base/xwayland
+      - app-i18n/ibus
+      - app-accessibility/orca
+      - gnome-base/gnome-shell
+      - gnome-base/gnome-settings-daemon
+      - gnome-base/gnome-control-center
+      - gnome-base/gnome-keyring
+      - gnome-extra/evolution-data-server
+      - sys-apps/xdg-desktop-portal-gnome
+      - sys-apps/xdg-desktop-portal-gtk
+      - x11-misc/xdg-user-dirs
+      - gnome-base/gvfs
+      - gnome-base/nautilus
+      - x11-terms/gnome-terminal
+      - net-misc/networkmanager
+      - app-crypt/libsecret
+      - media-video/pipewire
+      - media-video/wireplumber
+      - sys-power/power-profiles-daemon
+      - sys-power/upower
+      - sys-apps/flatpak
+      - sys-boot/plymouth
+      - x11-themes/adwaita-icon-theme
+      - media-fonts/noto
+      - media-fonts/noto-emoji
+      - media-fonts/dejavu
+      - media-fonts/liberation-fonts
+
+# Gentoo carries gtkgreet and GURU's cage as ~amd64. The exact cage atom above
+# and these explicit keywords keep the greeter path bounded while the native
+# Tuna greeter still lacks real authentication qualification (desktop#584/#366).
+emerge_accept_keywords:
+  - gui-apps/gtkgreet
+  - gui-wm/cage::guru
+
 versionlock: []
 post_install:
   - tuna-flatpak-remote.sh
@@ -393,4 +457,5 @@ post_install:
   # the distribution's greetd ships its own (Arch, Fedora, Debian, Ubuntu).
   - greetd-system-integration.sh
   - greetd-gtkgreet.sh
+  - gentoo-pipewire-user-services.sh
   - flatpak-preinstall.sh

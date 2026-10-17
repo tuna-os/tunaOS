@@ -71,7 +71,7 @@ A repo enters the allowlist only when all of the following hold:
 
 | Repo | Gap covered | Consuming variants | Added | Next review | Justification |
 |------|-------------|--------------------|-------|-------------|---------------|
-| *(pending maintainer sign-off)* | — | — | — | — | Candidates below come from a code audit (2026-08-13); none are formally admitted yet — that decision stays with the maintainer/sec-check per the admission criteria above |
+| Gentoo GURU overlay (`gui-wm/cage`) | Cage greeter ebuild absent from Gentoo main | `guppy:tuna` | 2026-10-17 | 2026-12-31 | Scoped exception for tunaOS#3202; keep the source limited to this cell while Tideforge packaging is evaluated |
 
 ## Audit findings (2026-08-13, ahead of the 08-22 checkpoint)
 
@@ -96,7 +96,7 @@ migration performed by this audit**.
 | `ppa:avengemedia/danklinux`, `ppa:avengemedia/dms` | Niri/DankMaterialShell packages on Ubuntu | `build_scripts/desktop/niri.sh` (Ubuntu Niri) | Tier-3 candidate, variant-scoped | Supplies packages absent from the Ubuntu archive; migrate to Tideforge where feasible, or admit explicitly before adding new consumers |
 | `sharpenedblade/t2linux` COPR | T2 kernel and hardware enablement | `build_scripts/overlay/t2.sh` | Tier-3 candidate, hardware-scoped | Required for Apple T2 hardware support; never enabled on non-T2 images |
 | CachyOS repositories | CachyOS kernel and tuning packages | `build_scripts/overlay/cachyos.sh` | Tier-3 candidate, hardware/performance-scoped | Distribution-owned repositories used only by CachyOS overlays; pin and review independently of generic Arch packages |
-| Gentoo GURU overlay | Niri and related Gentoo ebuilds | `manifests/desktops/niri.yaml` | Tier-3 candidate, variant-scoped | Community overlay supplies packages missing from Gentoo main; build in-house or record maintainer admission before expanding use |
+| Gentoo GURU overlay | Niri and related Gentoo ebuilds | `manifests/desktops/niri.yaml`; `guppy:tuna` Cage | **Tier-3 candidate; Cage scoped exception** | Community overlay supplies packages missing from Gentoo main. Cage is admitted only for `guppy:tuna` through 2026-12-31 under tunaOS#3202; broader Niri use remains a candidate. |
 | openSUSE Virtualization repository | Container tooling on openSUSE | `Containerfile.opensuse` | Tier-3 candidate, base-scoped | Official openSUSE project repository, but separate from the base system repos; verify package necessity and signing before admission |
 
 The follow-up inventory above covers the previously unreviewed apt, Arch,

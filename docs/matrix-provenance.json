@@ -2055,6 +2055,20 @@
     "verdict": "pass"
    }
   },
+  "guppy:tuna": {
+   "boots": {
+    "date": "",
+    "evidence": "",
+    "run": "",
+    "verdict": "untested"
+   },
+   "builds": {
+    "date": "",
+    "evidence": "",
+    "run": "",
+    "verdict": "untested"
+   }
+  },
   "guppy:xfce": {
    "boots": {
     "date": "2026-10-16",
