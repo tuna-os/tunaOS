@@ -39,6 +39,7 @@ from pathlib import Path
 # The scoring rules live in a pure module beside this script (tunaOS#2532).
 # Tests load this file by path, so its directory is not always on sys.path.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from lib.gh import gh_json as _gh_json  # noqa: E402
 import matrix_evaluator  # noqa: E402
 
 # Re-exported for backwards-compatibility with callers (tunaOS#2532).
@@ -120,26 +121,13 @@ PASS, FAIL, UNTESTED, NA = "✅", "❌", "⬜", "—"
 
 
 def gh_json(*args: str):
-    """Run gh and parse JSON. Returns None on missing/failed query after retries."""
-    for attempt in range(3):
-        try:
-            out = subprocess.run(
-                ["gh", *args], capture_output=True, text=True, check=True
-            ).stdout
-            return json.loads(out) if out.strip() else None
-        except (subprocess.CalledProcessError, json.JSONDecodeError) as err:
-            if attempt == 2:
-                # Name the call and gh's own reason. The job log of the
-                # 2026-09-24 refresh (run 35990117734) that blanked every
-                # bonito cell carried no line at all about which call failed.
-                detail = getattr(err, "stderr", "") or str(err)
-                print(
-                    f"warning: gh {' '.join(args)}: {detail.strip()}",
-                    file=sys.stderr,
-                )
-                return None
-            time.sleep(2)
-    return None
+    """Thin adapter over the shared lib.gh.gh_json(), keeping this module's
+    original varargs call signature (`gh_json("run", "view", ...)`).
+
+    Tests patch this module attribute, and every caller below resolves it
+    via module globals, so that keeps working (tunaOS#2716).
+    """
+    return _gh_json(list(args))
 
 
 def gh_json_required(*args: str):
