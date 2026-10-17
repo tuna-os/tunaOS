@@ -117,7 +117,9 @@ def gh_json(args: list[str], retries: int = 3, backoff: float = 2.0):
             else:
                 # A `gh` that cannot even start (missing binary) arrives here as
                 # the `_Failed` stand-in instead of raising FileNotFoundError.
-                detail = proc.stderr
+                # Fall back to the exit status when stderr is empty, the way
+                # str(CalledProcessError) did for the old wrapper.
+                detail = proc.stderr or f"exit status {proc.returncode}"
         if attempt == retries - 1:
             print(
                 f"warning: gh {' '.join(args)}: {(detail or '').strip()}",
