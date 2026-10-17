@@ -36,6 +36,7 @@ def test_tuna_cells_are_amd64_images_without_iso_expansion():
         flavor = next(f for f in variant["flavors"] if f["id"] == "tuna")
         assert flavor["stage"] == 2
         assert flavor["platforms"] == ["linux/amd64"]
+        assert flavor.get("promotion_hold", False) is (variant["id"] == "guppy")
         assert not flavor["build_iso"]
         assert not flavor["build_qcow2"]
         assert flavor["luks_e2e"] is False
@@ -44,6 +45,15 @@ def test_tuna_cells_are_amd64_images_without_iso_expansion():
     assert "orca" in manifest["packages"]["pacman"], "the Screen Reader key needs distribution Orca"
     assert manifest["display_manager"] == "greetd"
     assert "greetd-gtkgreet.sh" in manifest["post_install"]
+
+
+def test_guppy_tuna_promotion_hold_reaches_reusable_workflow():
+    matrix_workflow = (ROOT / ".github/workflows/build-variant.yml").read_text()
+    reusable_workflow = (ROOT / ".github/workflows/reusable-build-image.yml").read_text()
+    assert "promotion_hold: (.promotion_hold // false)" in matrix_workflow
+    assert "promotion_hold: .promotion_hold" in matrix_workflow
+    assert "promote: ${{ !matrix.promotion_hold }}" in matrix_workflow
+    assert "inputs.promote" in reusable_workflow
 
 
 def test_rpm_cells_install_the_pinned_beta_from_signed_factory_repositories():
