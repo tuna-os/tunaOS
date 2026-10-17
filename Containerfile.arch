@@ -97,6 +97,11 @@ RUN KERNEL_PKG="linux"; \
     pacman -Syu --noconfirm && \
     pacman -S --noconfirm --needed \
         base \
+        diffutils \
+        less \
+        usbutils \
+        man-db \
+        fzf \
         dracut \
         ${KERNEL_PKG} \
         ${KERNEL_PKG}-headers \
