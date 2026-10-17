@@ -1032,11 +1032,11 @@ def tally(matrix, results, key_fmt):
     return total, tested, passed
 
 
-def undeclared_tally(matrix, results, key_fmt):
-    """Stale results for cells build-config no longer schedules.
+def undeclared_tally(configured_matrix, results, key_fmt):
+    """Stale results for cells no longer declared by build-config.
 
     Deliberately reported rather than dropped: a flavour that disappears from
-    build-config while red should not simply stop being mentioned. Returns the
+    build-config while red must not simply stop being mentioned. Returns the
     "variant:flavor" names so the disclosure can say which, and so the count
     reaching zero is checkable.
     """
@@ -1048,30 +1048,27 @@ def undeclared_tally(matrix, results, key_fmt):
         if ":" not in cell_key:
             continue
         variant, flavor = cell_key.split(":", 1)
-        if flavor not in matrix.get(variant, set()):
+        if flavor not in configured_matrix.get(variant, set()):
             stale.append(cell_key)
     return sorted(set(stale))
 
 
-def nvidia_tally(matrix, results, key_fmt):
-    """Count NVIDIA cells that still carry a stale result.
-
-    luks-e2e.yml deliberately excludes -nvidia (commit 5c730e9, 2026-07-24):
-    "-nvidia takes the identical LUKS path in headless QEMU (no GPU)". That is
-    a sound scoping decision, so these cells are OUT OF SCOPE, not failing.
-
-    Reporting them as "0 of 24 green" implied a 24-cell gap that nobody was
-    ever going to close, which is its own kind of dishonest status page — the
-    mirror image of the problem this document exists to fix. What is worth
-    surfacing is only how many stale pre-exclusion results are still lying
-    around, so the number shrinks to zero as they age out.
-    """
-    stale = 0
-    for variant, flavors in matrix.items():
-        for f in flavors:
-            if "nvidia" in f and results.get(key_fmt(variant, f)):
-                stale += 1
-    return stale
+def excluded_tally(configured_matrix, scheduled_matrix, results, key_fmt):
+    """Historical results for configured cells filtered from the LUKS matrix."""
+    excluded = []
+    for raw_key, hit in results.items():
+        if not hit:
+            continue
+        cell_key = raw_key.removeprefix("LUKS ")
+        if ":" not in cell_key:
+            continue
+        variant, flavor = cell_key.split(":", 1)
+        if (
+            flavor in configured_matrix.get(variant, set())
+            and flavor not in scheduled_matrix.get(variant, set())
+        ):
+            excluded.append(cell_key)
+    return sorted(set(excluded))
 
 
 def factory_health_summary(
@@ -1264,18 +1261,11 @@ def build() -> str:
 
     # ── LUKS ────────────────────────────────────────────────────────────────
     total, tested, passed = tally(lmatrix, luks, luks_key)
-    # NOT lmatrix: it is desktops_only, so no flavor in it can ever contain
-    # "nvidia" and the stale count would be a permanent 0 — silently deleting
-    # the out-of-scope disclosure below, while section 3 still points at it.
-    # That is exactly the absence-of-evidence failure this document exists to
-    # prevent, so count over every published flavor instead.
-    nv_stale = nvidia_tally(
-        _matrix("build_image", desktops_only=False), luks, luks_key
+    configured_matrix = _matrix("build_image", desktops_only=False)
+    excluded = excluded_tally(
+        configured_matrix, lmatrix, luks, luks_key
     )
-    # lmatrix here, unlike the NVIDIA count above: this asks which of the
-    # DESKTOPS columns the table renders are no longer scheduled, and that is
-    # exactly the desktops_only matrix the table itself is built from.
-    undeclared = undeclared_tally(lmatrix, luks, luks_key)
+    undeclared = undeclared_tally(configured_matrix, luks, luks_key)
     out += [
         "## LUKS E2E",
         "",
@@ -1292,27 +1282,25 @@ def build() -> str:
         "",
     ]
     out += desktop_table(lmatrix, luks, luks_key)
-    # Unconditional: the blank line used to live inside the NVIDIA block, so
-    # when no stale NVIDIA results remained the next paragraph butted straight
-    # up against the table.
+    # Keep historical results visible, but distinguish workflow filtering from
+    # cells that were removed from build-config entirely.
     out += [""]
-    if nv_stale:
+    if excluded:
         out += [
-            f"NVIDIA cells are **out of scope** for this workflow — "
-            f"`luks-e2e.yml` excludes them deliberately, because `-nvidia` "
-            f"takes the identical LUKS path in headless QEMU. "
-            f"{nv_stale} stale pre-exclusion result(s) remain from before "
-            "that change; they are not a gap and will age out.",
+            "Historical results remain for "
+            + ", ".join(f"`{c}`" for c in excluded)
+            + ". These cells are still declared in "
+            + "`.github/build-config.yml` but excluded by current "
+            + "`luks-e2e.yml` filters; they are outside the scheduled matrix, "
+            + "not current coverage.",
             "",
         ]
 
-    # Named, not just counted, and left visible in the table above: a flavour
-    # that leaves build-config while red must not simply stop being mentioned.
-    # It is out of the tally because no run can ever move it, which is a
-    # different statement from "it passed".
+    # Named, not just counted, so historical evidence cannot disappear
+    # silently when a flavor leaves build-config.
     if undeclared:
         out += [
-            "The table above still shows a result for "
+            "Historical results remain for "
             + ", ".join(f"`{c}`" for c in undeclared)
             + ". `.github/build-config.yml` no longer declares "
             + ("that flavour" if len(undeclared) == 1 else "those flavours")
@@ -1322,8 +1310,8 @@ def build() -> str:
             + ("it" if len(undeclared) == 1 else "them")
             + " green. "
             + ("It is" if len(undeclared) == 1 else "They are")
-            + " excluded from the count above — a last-measured verdict kept "
-            "visible, not a gap. Same reasoning as the NVIDIA note.",
+            + " outside the current scheduled matrix; a last-measured verdict "
+            "is kept visible, not current coverage.",
             "",
         ]
 
@@ -1412,7 +1400,7 @@ def build() -> str:
     out += [
         "## Installer smoke",
         "",
-        f"**{tested} of {total}** non-NVIDIA ISO cells have *ever* been "
+        f"**{tested} of {total}** ISO cells have *ever* been "
         f"tested — {pct}% coverage. {passed} of those pass.",
         "",
         "This is the only axis that checks whether a human could install the "
@@ -1460,7 +1448,7 @@ def build() -> str:
             "",
         ]
     else:
-        out += ["Every non-NVIDIA ISO cell has an overlay.", ""]
+        out += ["Every ISO cell has an overlay.", ""]
 
     # ── Provenance ──────────────────────────────────────────────────────────
     # Re-running a cell to the same verdict rewrites this table and nothing
@@ -1498,10 +1486,10 @@ VOLATILE_LINE = re.compile(
     r"^(?:"
     r"\| \d{4}-\d\d-\d\d \| \["          # provenance row
     r"|Newest result "                    # freshness of the LUKS data
-    r"|NVIDIA cells are "                 # present only while stale results remain
-    r"|The table above still shows a result for "  # same: only while they remain
+    r"|Historical results remain for "    # filtered historical LUKS results
+    r"|The table above still shows a result for "  # removed cells
     r"|Missing for "                      # depends on published overlay tags
-    r"|Every non-NVIDIA ISO cell has an overlay"
+    r"|Every ISO cell has an overlay"
     # Present only while the newest sweep has a cell that neither passed nor
     # failed. One sweep finishing mid-review makes this whole paragraph appear
     # or vanish, which broke the gate on tunaOS#2512 for a line no pull request

@@ -38,8 +38,6 @@ BLOCK = """\
 | **guppy** | ⬜ | ⬜ | — | — | ❌ |
 | **marlin** | ✅ | ⬜ | ⬜ | ⬜ | ⬜ |
 
-NVIDIA cells are **out of scope** for this workflow — 25 stale result(s) remain.
-
 Newest result 2026-08-06, oldest still-authoritative result 2026-08-05.
 
 ## Live overlay
@@ -99,19 +97,12 @@ class LiveChurnIsIgnored(unittest.TestCase):
                           "result 2026-08-06.")
         )
 
-    def test_nvidia_stale_note_disappearing(self):
-        # The sentence exists only while stale pre-exclusion results remain, so
-        # it vanishes on its own as they age out.
-        self.assertSameStructure(
-            BLOCK.replace("NVIDIA cells are **out of scope** for this workflow "
-                          "— 25 stale result(s) remain.\n\n", "")
-        )
 
     def test_overlay_inventory_changing(self):
         published = BLOCK.replace("**41** tags published.", "**43** tags published.")
         published = published.replace(
             "Missing for 6 ISO cell(s): `gurnard-pantheon`, `hummingbird-base`",
-            "Every non-NVIDIA ISO cell has an overlay.",
+            "Every ISO cell has an overlay.",
         )
         self.assertSameStructure(published)
 
@@ -258,8 +249,8 @@ class UndeclaredCellsAreNotCountedAgainstUs(unittest.TestCase):
     into the denominator — so the LUKS line read "39 of 54" when the live set
     was 52, with two cells no run could ever turn green.
 
-    That is the failure nvidia_tally() already documents: a gap reported as if
-    someone should close it, which is its own kind of dishonest status page.
+    That is the same stale-result distinction: a gap reported as if someone
+    should close it is its own kind of dishonest status page.
     These tests hold the line in both directions — undeclared cells leave the
     count, and declared ones stay in it however they did.
     """
@@ -299,6 +290,23 @@ class UndeclaredCellsAreNotCountedAgainstUs(unittest.TestCase):
             gms.tally(matrix, results, self.KEY), (2, 2, 1)
         )
 
+    def test_configured_filtered_cell_is_disclosed(self):
+        configured = {"flounder": {"gnome", "base"}}
+        scheduled = {"flounder": {"gnome"}}
+        results = {"LUKS flounder:base": ("success", "2026-08-06")}
+        self.assertEqual(
+            gms.excluded_tally(configured, scheduled, results, self.KEY),
+            ["flounder:base"],
+        )
+
+    def test_scheduled_cell_is_not_disclosed_as_filtered(self):
+        configured = {"flounder": {"gnome"}}
+        scheduled = {"flounder": {"gnome"}}
+        results = {"LUKS flounder:gnome": ("success", "2026-08-06")}
+        self.assertEqual(
+            gms.excluded_tally(configured, scheduled, results, self.KEY), []
+        )
+
 
     def test_the_removed_flavor_is_still_disclosed(self):
         """Dropped from the count, but named — not silently forgotten."""
@@ -323,7 +331,8 @@ class UndeclaredCellsAreNotCountedAgainstUs(unittest.TestCase):
         self.assertEqual(gms.undeclared_tally(self.MATRIX, {}, self.KEY), [])
 
     def test_the_disclosure_does_not_trip_the_drift_gate(self):
-        """It appears and vanishes with the run window, like the NVIDIA note.
+        """It appears and vanishes with the run window, like any
+        filtered-history note.
 
         The pull_request gate compares structure with live-derived content
         masked. A paragraph that exists only while a stale result does is live
@@ -331,7 +340,7 @@ class UndeclaredCellsAreNotCountedAgainstUs(unittest.TestCase):
         while such a result sits in the window, for something no PR caused.
         """
         line = (
-            "The table above still shows a result for `flounder:cosmic`. "
+            "Historical results remain for `flounder:cosmic`. "
             "`.github/build-config.yml` no longer declares that flavour, so "
             "..."
         )
