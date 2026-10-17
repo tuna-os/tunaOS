@@ -100,17 +100,24 @@ def gh_json(args: list[str], retries: int = 3, backoff: float = 2.0):
     about which call failed -- and returns None.
     """
     for attempt in range(retries):
-        proc = run(args)
         detail: str | None = None
-        if proc.returncode == 0:
-            try:
-                return json.loads(proc.stdout) if proc.stdout.strip() else None
-            except json.JSONDecodeError as err:
-                detail = str(err)
+        try:
+            proc = run(args)
+        except subprocess.CalledProcessError as err:
+            # check=False never raises in production, but a failed `gh`
+            # reads the same whatever shape it arrives in: name it and retry.
+            detail = getattr(err, "stderr", "") or str(err)
+            proc = None
         else:
-            # A `gh` that cannot even start (missing binary) arrives here as
-            # the `_Failed` stand-in instead of raising FileNotFoundError.
-            detail = proc.stderr
+            if proc.returncode == 0:
+                try:
+                    return json.loads(proc.stdout) if proc.stdout.strip() else None
+                except json.JSONDecodeError as exc:
+                    detail = str(exc)
+            else:
+                # A `gh` that cannot even start (missing binary) arrives here as
+                # the `_Failed` stand-in instead of raising FileNotFoundError.
+                detail = proc.stderr
         if attempt == retries - 1:
             print(
                 f"warning: gh {' '.join(args)}: {(detail or '').strip()}",
