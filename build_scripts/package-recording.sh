@@ -17,7 +17,9 @@ _tunaos_package_command() {
 		return $?
 	fi
 	local ledger="${TUNAOS_PACKAGE_LEDGER:-/usr/share/tunaos/evidence/package-requests.jsonl}"
-	local recorder="${TUNAOS_PACKAGE_RECORDER:-${CONTEXT_PATH:-/run/context}/build_scripts/package_requests.py}"
+	local helper_dir recorder
+	helper_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+	recorder="${TUNAOS_PACKAGE_RECORDER:-${helper_dir}/package_requests.py}"
 	local request_id="" rc=0
 	local origin="${BASH_SOURCE[2]:-unknown}" line="${BASH_LINENO[1]:-0}"
 	if command -v python3 >/dev/null 2>&1 && [[ -r "$recorder" ]]; then
