@@ -182,6 +182,44 @@ def test_wrapper_runs_real_stub_preserves_rc_and_optin(tmp_path, enabled, rc):
         assert not path.exists()
 
 
+def test_wrapper_default_recorder_is_relative_to_its_source(tmp_path):
+    import shutil
+
+    helper_dir = tmp_path / "context" / "build_scripts"
+    helper_dir.mkdir(parents=True)
+    for name in ("package-recording.sh", "package_requests.py"):
+        shutil.copy(ROOT / "build_scripts" / name, helper_dir / name)
+    binary = tmp_path / "bin"
+    binary.mkdir()
+    native = binary / "dnf"
+    native.write_text("#!/bin/bash\nexit 0\n")
+    native.chmod(0o755)
+    ledger_path = tmp_path / "requests.jsonl"
+    env = {
+        **os.environ,
+        "PATH": f"{binary}:/usr/bin:/bin",
+        "TUNAOS_RECORD_PACKAGE_REQUESTS": "1",
+        "TUNAOS_PACKAGE_LEDGER": str(ledger_path),
+        "TUNAOS_CONTRACT_TARGET": json.dumps(TARGET),
+        "TUNAOS_PACKAGE_PHASE": "desktop",
+    }
+    env.pop("TUNAOS_PACKAGE_RECORDER", None)
+    run = subprocess.run(
+        [
+            "/bin/bash",
+            "-c",
+            'source "$1"; dnf install -y cosmic-session',
+            "test",
+            str(helper_dir / "package-recording.sh"),
+        ],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert run.returncode == 0, run.stderr
+    rows = [json.loads(line) for line in ledger_path.read_text().splitlines()]
+    assert [row["kind"] for row in rows] == ["package-request", "package-result"]
+
 def test_missing_native_tool_stays_unavailable(tmp_path):
     run = subprocess.run(['/bin/bash', '-c', 'source "$1"; command -v zypper', 'test',
                           str(ROOT / 'build_scripts/package-recording.sh')],
