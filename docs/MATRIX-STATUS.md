@@ -92,31 +92,9 @@ Per-cell provenance — which run asserted which criterion, when — is machine-
 
 ## Silent omissions
 
-**52 of 52** cells clean (52 read, 0 never read).
+**0 of 52** cells clean (0 read, 52 never read).
 
 Green criterion 8 (`no_silent_omissions`): the sweep runs `checks/verify-package-wishlist.sh` against every published image it pulls. That is the same gate new builds pass at build time. So an image that drops a package in silence, outside `package-miss-allowlist.txt`, reads ❌ here even when it predates the gate. A cell whose image the sweep never read — no image, a pull error, a lost job — is ⬜, not clean.
-
-| Variant | gnome | kde | cosmic | niri | xfce |
-|---|:--:|:--:|:--:|:--:|:--:|
-| **albacore** | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **bonito** | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **bonito-rawhide** | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **flounder** | — | ✅ | — | — | ✅ |
-| **flounder-sid** | ✅ | ✅ | — | — | ✅ |
-| **grouper** | ✅ | ✅ | ✅ | — | ✅ |
-| **guppy** | ✅ | ✅ | — | — | ✅ |
-| **hummingbird** | ✅ | — | ✅ | — | — |
-| **marlin** | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **sailfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **skipjack** | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **wahoo** | ✅ | ✅ | ✅ | — | — |
-| **yellowfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
-
-## Package parity
-
-**0 of 52** cells at parity (0 measured, 52 never measured).
-
-Green criterion 7 (`parity`), first cadence: `package-parity.yml` runs `scripts/package-parity.sh --audit` daily, and audits every desktop package set against its own base. That shape exposes a build that applies no desktop at all (#858). ❌ covers BROKEN (no more packages than the base) and suspect (fewer than 25 added). A diff against each variant upstream reference comes next, and nothing asserts it yet.
 
 | Variant | gnome | kde | cosmic | niri | xfce |
 |---|:--:|:--:|:--:|:--:|:--:|
@@ -133,6 +111,28 @@ Green criterion 7 (`parity`), first cadence: `package-parity.yml` runs `scripts/
 | **skipjack** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | **wahoo** | ⬜ | ⬜ | ⬜ | — | — |
 | **yellowfin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+
+## Package parity
+
+**43 of 52** cells at parity (49 measured, 3 never measured).
+
+Green criterion 7 (`parity`), first cadence: `package-parity.yml` runs `scripts/package-parity.sh --audit` daily, and audits every desktop package set against its own base. That shape exposes a build that applies no desktop at all (#858). ❌ covers BROKEN (no more packages than the base) and suspect (fewer than 25 added). A diff against each variant upstream reference comes next, and nothing asserts it yet.
+
+| Variant | gnome | kde | cosmic | niri | xfce |
+|---|:--:|:--:|:--:|:--:|:--:|
+| **albacore** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **bonito** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **bonito-rawhide** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **flounder** | ❌ | ❌ | — | — | ❌ |
+| **flounder-sid** | ⬜ | ⬜ | — | — | ⬜ |
+| **grouper** | ❌ | ❌ | ❌ | — | ❌ |
+| **guppy** | ✅ | ✅ | — | — | ✅ |
+| **hummingbird** | ✅ | ❌ | ✅ | ❌ | — |
+| **marlin** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **sailfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **skipjack** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **wahoo** | ✅ | ✅ | ✅ | — | — |
+| **yellowfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 ## LUKS E2E
 
