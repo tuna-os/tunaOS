@@ -349,7 +349,17 @@ fi
 
 # ── Emerge path ────────────────────────────────────────────────────────────────
 if [[ "${_TD_OS}" == "emerge" ]]; then
-	readarray -t _TD_EMERGE_PKGS < <($YQ -r '.packages.emerge[]' "${_TD_MANIFEST}" 2>/dev/null || true)
+	# Like zypper/apt, emerge accepts either the historical package list or a
+	# map with repositories and packages. Tuna Desktop needs the map: its gpkg
+	# is served by TunaOS, while cage is a native ebuild in the Gentoo GURU
+	# repository. Keep repository setup declarative in the manifest so the
+	# package transaction cannot run before its trust/source policy exists.
+	_TD_EMERGE_NODE_TYPE=$($YQ -r '.packages.emerge | type' "${_TD_MANIFEST}" 2>/dev/null)
+	if [[ "${_TD_EMERGE_NODE_TYPE}" == "!!map" ]]; then
+		readarray -t _TD_EMERGE_PKGS < <($YQ -r '.packages.emerge.packages[]' "${_TD_MANIFEST}" 2>/dev/null || true)
+	else
+		readarray -t _TD_EMERGE_PKGS < <($YQ -r '.packages.emerge[]' "${_TD_MANIFEST}" 2>/dev/null || true)
+	fi
 	# Same guard as the zypper/pacman/apt paths, and for the same reason: a
 	# desktop with no emerge section would otherwise install nothing and still
 	# exit 0, publishing a desktop-flavored image with no desktop in it. That
@@ -367,6 +377,90 @@ if [[ "${_TD_OS}" == "emerge" ]]; then
 		fi
 		echo "       This would yield an image tagged ${_TD_DESKTOP} with no desktop in it." >&2
 		exit 1
+	fi
+
+	if [[ "${_TD_EMERGE_NODE_TYPE}" == "!!map" ]]; then
+		_TD_EMERGE_SOURCE_COUNT=$($YQ -r '.packages.emerge.source_repositories // [] | length' "${_TD_MANIFEST}")
+		for ((i = 0; i < _TD_EMERGE_SOURCE_COUNT; i++)); do
+			_TD_ER_NAME=$($YQ -r ".packages.emerge.source_repositories[$i].name" "${_TD_MANIFEST}")
+			_TD_ER_URI=$($YQ -r ".packages.emerge.source_repositories[$i].sync_uri" "${_TD_MANIFEST}")
+			[[ "${_TD_ER_NAME}" =~ ^[a-zA-Z0-9_-]+$ ]] || {
+				echo "ERROR: invalid emerge repository name: ${_TD_ER_NAME}" >&2
+				exit 1
+			}
+			[[ "${_TD_ER_URI}" == https://* ]] || {
+				echo "ERROR: emerge repository ${_TD_ER_NAME} does not use HTTPS: ${_TD_ER_URI}" >&2
+				exit 1
+			}
+			mkdir -p /etc/portage/repos.conf
+			cat >"/etc/portage/repos.conf/${_TD_ER_NAME}.conf" <<EOF
+[${_TD_ER_NAME}]
+location = /var/db/repos/${_TD_ER_NAME}
+sync-type = git
+sync-uri = ${_TD_ER_URI}
+auto-sync = yes
+EOF
+			emaint sync --repo "${_TD_ER_NAME}"
+		done
+
+		_TD_EMERGE_BINREPO_COUNT=$($YQ -r '.packages.emerge.binrepos // [] | length' "${_TD_MANIFEST}")
+		if ((_TD_EMERGE_BINREPO_COUNT > 0)); then
+			# getuto establishes Gentoo's local trust root. Portage verifies
+			# binary packages as an unprivileged user, so importing a valid key
+			# is insufficient: locally sign it, update the trustdb and preserve
+			# the world-readable permissions getuto applies.
+			getuto
+		fi
+		for ((i = 0; i < _TD_EMERGE_BINREPO_COUNT; i++)); do
+			_TD_EB_NAME=$($YQ -r ".packages.emerge.binrepos[$i].name" "${_TD_MANIFEST}")
+			_TD_EB_URI=$($YQ -r ".packages.emerge.binrepos[$i].sync_uri" "${_TD_MANIFEST}")
+			_TD_EB_KEY=$($YQ -r ".packages.emerge.binrepos[$i].key" "${_TD_MANIFEST}")
+			_TD_EB_FINGERPRINT=$($YQ -r ".packages.emerge.binrepos[$i].fingerprint" "${_TD_MANIFEST}")
+			_TD_EB_PRIORITY=$($YQ -r ".packages.emerge.binrepos[$i].priority" "${_TD_MANIFEST}")
+			_TD_EB_VERIFY=$($YQ -r ".packages.emerge.binrepos[$i].verify_signature" "${_TD_MANIFEST}")
+			[[ "${_TD_EB_NAME}" =~ ^[a-zA-Z0-9_-]+$ ]] || {
+				echo "ERROR: invalid emerge binrepo name: ${_TD_EB_NAME}" >&2
+				exit 1
+			}
+			[[ "${_TD_EB_URI}" == https://repo.tunaos.org/* ]] || {
+				echo "ERROR: emerge binrepo ${_TD_EB_NAME} is not a TunaOS HTTPS source: ${_TD_EB_URI}" >&2
+				exit 1
+			}
+			[[ "${_TD_EB_VERIFY}" == "true" ]] || {
+				echo "ERROR: emerge binrepo ${_TD_EB_NAME} must require package signatures" >&2
+				exit 1
+			}
+			_TD_EB_KEY_PATH="${_TD_CTX}/${_TD_EB_KEY#/}"
+			[[ -f "${_TD_EB_KEY_PATH}" ]] || {
+				echo "ERROR: emerge binrepo key is missing: ${_TD_EB_KEY_PATH}" >&2
+				exit 1
+			}
+			_TD_EB_ACTUAL_FINGERPRINT=$(gpg --homedir /etc/portage/gnupg --batch --with-colons \
+				--show-keys "${_TD_EB_KEY_PATH}" | awk -F: '/^fpr:/ {print $10; exit}')
+			[[ "${_TD_EB_ACTUAL_FINGERPRINT}" == "${_TD_EB_FINGERPRINT}" ]] || {
+				echo "ERROR: emerge binrepo key fingerprint ${_TD_EB_ACTUAL_FINGERPRINT} does not match ${_TD_EB_FINGERPRINT}" >&2
+				exit 1
+			}
+			gpg --homedir /etc/portage/gnupg --batch --import "${_TD_EB_KEY_PATH}"
+			gpg --homedir /etc/portage/gnupg --batch --yes --no-tty \
+				--passphrase-file /etc/portage/gnupg/pass --pinentry-mode loopback \
+				--quick-lsign-key "${_TD_EB_FINGERPRINT}"
+			gpg --homedir /etc/portage/gnupg --batch --check-trustdb
+			chmod ugo+r /etc/portage/gnupg/trustdb.gpg /etc/portage/gnupg/pubring.kbx
+			gpgconf --homedir /etc/portage/gnupg --kill all
+			mkdir -p /etc/portage/binrepos.conf
+			cat >"/etc/portage/binrepos.conf/${_TD_EB_NAME}.conf" <<EOF
+[${_TD_EB_NAME}]
+priority = ${_TD_EB_PRIORITY}
+sync-uri = ${_TD_EB_URI}
+verify-signature = true
+EOF
+		done
+		if ((_TD_EMERGE_BINREPO_COUNT > 0)); then
+			# FEATURES is incremental across make.conf lines. This makes a
+			# missing or invalid detached gpkg signature a hard failure.
+			echo 'FEATURES="binpkg-request-signature"' >>/etc/portage/make.conf
+		fi
 	fi
 
 	# Per-desktop ~amd64 keywords (emerge_accept_keywords in the manifest).
@@ -387,8 +481,9 @@ if [[ "${_TD_OS}" == "emerge" ]]; then
 	# in the anchor package's dependency chain (packages.emerge[0] — the
 	# meta/-light/-4-meta package for kde/gnome/xfce) gets served as binary.
 	# Best-effort and fails open; see the script header for the full story.
+	_TD_EMERGE_ANCHOR="${_TD_EMERGE_PKGS[0]#[<>=~]}"
 	"${_TD_CTX}/build_scripts/desktop/gentoo-binhost-version-lock.sh" \
-		"${_TD_EMERGE_PKGS[0]%%/*}" "${_TD_EMERGE_PKGS[@]}" || true
+		"${_TD_EMERGE_ANCHOR%%/*}" "${_TD_EMERGE_PKGS[@]}" || true
 
 	emerge --verbose "${_TD_EMERGE_PKGS[@]}"
 fi

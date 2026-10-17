@@ -107,10 +107,7 @@ tuna_rollout:
   grouper: {status: admitted, package_target: ubuntu, portals: "blocked on tuna-desktop session-start fix"}
   flounder: {status: admitted, package_target: trixie, portals: "blocked on tuna-desktop session-start fix"}
   flounder-sid: {status: admitted, package_target: debian, portals: "blocked on tuna-desktop session-start fix"}
-  guppy:
-    status: unsupported
-    package_target: gentoo
-    reason: "unsupported until package target gentoo publishes tuna-desktop (tunaos-packages#838)"
+  guppy: {status: admitted, package_target: gentoo}
 
 # Build stages (for reference — enforced by the workflow job graph):
 #
@@ -1386,6 +1383,16 @@ variants:
       - id: xfce
         stage: 2
         build_image: true
+      # Tuna Desktop (tuna_rollout above, tunaOS#3202): the signed native
+      # Gentoo gpkg at repo.tunaos.org/gentoo/binpkgs/amd64. amd64 only: that
+      # is the only architecture the package factory publishes and qualifies.
+      - id: tuna
+        stage: 2
+        platforms: ["linux/amd64"]
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+        luks_e2e: false
       # NOT declared, and not an oversight:
       #   niri    — no ebuild in the Gentoo main tree at all. A search returns
       #             only dev-ruby/niceogiri. Declaring it would publish an

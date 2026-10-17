@@ -27,9 +27,10 @@ trap emit_fail_on_early_exit EXIT
 source /run/context/build_scripts/lib.sh 2>/dev/null || true
 detected_os 2>/dev/null || true
 
-# Tuna Desktop ships on Arch (pacman), the RPM bases and the apt bases (dpkg).
-# Query the native database for installed names and file owners, never
-# virtual provides or a repository's availability (adapted from tunaOS#3194).
+# Tuna Desktop ships on Arch (pacman), the RPM bases, the apt bases and Gentoo
+# (Portage). Query the native database for installed names and file owners,
+# never virtual provides or a repository's availability (adapted from
+# tunaOS#3194).
 tuna_package_backend() {
 	if command -v pacman >/dev/null 2>&1; then
 		echo pacman
@@ -38,8 +39,10 @@ tuna_package_backend() {
 		echo rpm
 	elif command -v dpkg-query >/dev/null 2>&1; then
 		echo dpkg
+	elif command -v qlist >/dev/null 2>&1 && command -v qfile >/dev/null 2>&1; then
+		echo portage
 	else
-		echo "no supported Tuna package backend (pacman, rpm or dpkg) in this image" >&2
+		echo "no supported Tuna package backend (pacman, rpm, dpkg or portage) in this image" >&2
 		return 1
 	fi
 }
@@ -51,6 +54,10 @@ tuna_installed_package_names() {
 	# Installed only, read from the second (state) character: the first is the
 	# selection, so a held install is `hi`, and removed-but-not-purged is `rc`.
 	dpkg) dpkg-query -W -f '${db:Status-Abbrev} ${Package}\n' | awk 'substr($1, 2, 1) == "i" { print $2 }' ;;
+	# qlist prints category/package. The Tuna contract compares native package
+	# names across managers, so remove only the category, never versions via an
+	# availability query.
+	portage) qlist -IC | sed 's|.*/||' ;;
 	*) return 1 ;;
 	esac
 }
@@ -61,6 +68,8 @@ tuna_installed_file_owner() {
 	rpm) rpm -qf --qf '%{NAME}\n' "$2" ;;
 	# `dpkg -S` prints "<package>[:<arch>]: <path>".
 	dpkg) dpkg -S "$2" | sed -n '1s/[:,].*//p' ;;
+	# `qfile -q` prints category/package for an installed file owner.
+	portage) qfile -q "$2" | sed -n '1{s|.*/||;p;}' ;;
 	*) return 1 ;;
 	esac
 }
