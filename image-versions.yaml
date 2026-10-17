@@ -19,15 +19,14 @@ images:
     tag: latest
     digest: sha256:cf148db4bc2ebdf42c1d7666c1c398f501eacac2353327bdf2f565908117844f
 
-  # Bluefin's GNOME 51 for Hummingbird (projectbluefin/utah-packages): a
-  # createrepo_c repository shipped as an OCI image (`/repository`), signed
-  # with cosign, built in Hummingbird's own root (Fedora 44 + public-
-  # hummingbird by priority). hummingbird:gnome consumes it by digest the
-  # way every other upstream payload here is consumed, instead of building a
-  # second GNOME 51 for the same base in tunaos-packages
-  # (tuna-os/tunaos-packages#629, docs/HUMMINGBIRD-TARGET.md there).
-  # x86_64 only; hummingbird's desktop flavors are amd64-only in
-  # .github/build-config.yml for the same reason.
+  # Bluefin's GNOME 51 and supporting Hummingbird desktop closure
+  # (projectbluefin/utah-packages): a createrepo_c repository shipped as an
+  # OCI image (`/repository`), signed with cosign, and built in Hummingbird's
+  # own root (Fedora 44 + public-hummingbird by priority). hummingbird:gnome
+  # and hummingbird:cosmic consume it by digest instead of duplicating that
+  # package closure in tunaos-packages (tuna-os/tunaos-packages#629,
+  # tuna-os/tunaOS#2513). x86_64 only; both desktop flavors are pinned to
+  # amd64 in .github/build-config.yml for the same reason.
   - name: utah-packages
     image: ghcr.io/projectbluefin/utah-packages
     tag: latest

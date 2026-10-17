@@ -44,10 +44,10 @@ it leads directly to expecting Fedora 43's package set to be present. It is not.
 tunaOS builds `hummingbird:{base,gnome,cosmic}` (see
 `.github/build-config.yml`), **amd64 only — every flavor, base included**.
 
-That is narrower than this page said before, and the cause moved down a layer.
-GNOME alone was amd64-only, because its utah-packages source is x86_64. COSMIC's
-own package set converged on aarch64 on 2026-09-06. But the *base* does not build
-on arm64. A desktop whose packages resolve has nothing to layer onto.
+That is narrower than this page said before for two reasons. The base cannot
+build on arm64 because the snapshot does not have the mandatory packages.
+Utah publishes its OCI repository only for x86_64, and both desktops use it.
+Each desktop therefore stays explicitly amd64-only if the base gap closes.
 
 `build_scripts/10-base-packages.sh` needs `xfsprogs`. It exits when no repository
 has it, because `bootc install to-disk` cannot format a root without it. No
@@ -84,64 +84,58 @@ variant — but it is a *port*, not a *rebuild*, and the difference matters:
 - Hardening and minimalism are the *point*. A package being absent is often a
   deliberate upstream choice, not an oversight to be reported as a bug.
 
-### GNOME comes from utah-packages (2026-09-02)
+### GNOME and COSMIC consume utah-packages (updated 2026-10-17)
 
-`hummingbird:gnome` no longer waits on the tunaos-packages closure for the
-GNOME stack. Bluefin builds GNOME 51 for Hummingbird in Hummingbird's own
-build root ([projectbluefin/utah-packages](https://github.com/projectbluefin/utah-packages))
-and publishes it as an OCI image carrying a `createrepo_c` repository,
-cosign-signed. tunaOS consumes it the way it consumes `projectbluefin/common`
-and `ublue-os/brew`: pinned by digest in `image-versions.yaml`
-(`utah-packages`), declared as a stage in `Containerfile.el10`, bind-mounted
-at `/run/utah-packages` for the gnome stage's install only, and enabled by
-`manifests/desktops/gnome.yaml`'s hummingbird section as a `file://` repo at
-priority 4, above the `tunaos-hummingbird` prefix (5). The repo is marked
-`unsigned: true`; `install-desktop.sh` allows that only for `file://`
-content, because the image digest is the signature there and nothing fetched
-over the network may skip `gpgcheck` (#1655).
+Bluefin builds GNOME 51 for Hummingbird. The same factory builds the desktop
+dependencies. Both use Hummingbird's own build root
+([projectbluefin/utah-packages](https://github.com/projectbluefin/utah-packages)).
+Bluefin publishes the `createrepo_c` output as a cosign-signed OCI image.
+tunaOS handles this repository as a build input. `image-versions.yaml` pins the
+image by digest. `Containerfile.el10` bind-mounts `/repository` at
+`/run/utah-packages` for each Hummingbird desktop install. The GNOME and COSMIC
+manifests expose it to dnf as a `file://` repository.
 
-What utah does not ship (the fedora list's extras, and the other four
-desktops) still comes from `repo.tunaos.org/hummingbird/<snapshot>`, which
-tunaos-packages now builds in the same Fedora 44 + public-hummingbird root
-(tuna-os/tunaos-packages#630) and gates on a static installability walk.
-The decision and the numbers behind it are in tunaos-packages'
-`docs/HUMMINGBIRD-TARGET.md` and tuna-os/tunaos-packages#629.
+The current pin,
+`sha256:210e8c5ea2ab6f0800116e9c720fe6f81006dc104b20baf4a856e50999899440`,
+contains 1,446 unique names of binary packages. On 2026-10-17, we measured its
+primary metadata:
 
-### utah does not close the GNOME closure yet (measured 2026-09-24)
-
-`hummingbird:gnome` builds nightly and fails its boot Gate nightly. The image
-has no `gdm` and no `gnome-shell`. The serial log reaches `graphical.target`
-at 13.6s with no display manager behind it, and ends at a text `login:`
-prompt. The Gate waits its full 900s for `TUNAOS_DESKTOP_CONTRACT_OK`, which
-never arrives (run 35938968035, job 107462243052). The
-cause is the dnf solver output in the same run's `gnome / linux-amd64` job
-(107444576868). `gnome-shell-51~beta` from utah-packages and from
-`tunaos-hummingbird` needs sonames that no loaded repository provides:
-
-| missing | needed by |
+| package in the pinned Utah repository | desktop dependency it closes |
 |---|---|
-| `libecal-2.0.so.3`, `libedataserver-1.2.so.27/28` (evolution-data-server) | `gnome-shell` → `gdm`, `gnome-session-wayland-session` |
-| `webkitgtk6.0` | `gnome-shell`, `gnome-initial-setup`, `yelp` |
-| `libvorbis.so.0`, `libvorbisenc.so.2` | `libsndfile` → `pipewire-libs`; `gstreamer1-plugins-base` → `gtk4` (`libgstplay`) |
-| `libsmbclient.so.0` (samba-client-libs) | `gnome-control-center`, `gvfs-smb` |
-| `libcanberra.so.0`, `libcanberra-gtk3.so.0` | `gnome-settings-daemon`, `gnome-disk-utility` |
-| `libreport-filesystem` | `mdadm` → `libblockdev-mdraid` → `udisks2` → `gvfs` |
-| `libm.so.6(GLIBC_2.44)` | `libavutil-free` → `libheif` → `glycin-loaders` → `gdk-pixbuf2` |
+| `libvorbis` | `libsndfile`, PipeWire, PulseAudio and GStreamer |
+| `fprintd`, `fprintd-pam`, `libfprint` | `cosmic-greeter` and PAM |
+| `udisks2` | `cosmic-files` storage integration |
+| `webkitgtk6.0`, `evolution-data-server`, `libcanberra`, `samba-client-libs` | GNOME Shell, control center and GVFS |
+| `gnome-shell`, `gnome-session`, `gdm` | the GNOME 51 session |
 
-The live `tunaos-hummingbird` index at `repo.tunaos.org/hummingbird/20251124-x86_64`
-(13992 packages, repomd revision 1790212643) has 0 packages named
-`libvorbis`, `webkitgtk6.0`, `evolution-data-server`, `libcanberra`,
-`samba-client-libs`, `libreport-filesystem` or `fprintd`.
+Build Hummingbird run 38660870261 showed the remaining repository wiring bug.
+The contract for GNOME found GNOME 51. The COSMIC build loaded only
+`public-hummingbird` and `tunaos-hummingbird`. Dnf could not find `libvorbis`,
+`fprintd-pam`, or an installable `udisks2`. The pinned input contained these
+packages, but tunaOS mounted and declared that input only for GNOME.
 
-This is a package-factory gap, in tuna-os/tunaos-packages or
-projectbluefin/utah-packages. A change in this repository cannot close it. No
-sanctioned source in `PACKAGE-SOURCING.md` carries hummingbird builds of these
-packages. A Fedora Rawhide repo would be an unlisted source. It is also
-ABI-skewed: the `GLIBC_2.44` row above shows that skew already. Do not add one.
+Both desktop manifests now declare Utah at priority 4, ahead of the
+`tunaos-hummingbird` snapshot at priority 5. One Hummingbird-native build now
+supplies GNOME and the dependencies shared by both desktops. The tunaOS
+snapshot still supplies COSMIC's session packages and packages that Utah
+lacks. This uses the package factory that the maintainers selected. It does
+not add Fedora Rawhide or another repository with an incompatible ABI.
 
-Until then, the Gate stops the publication of the empty image. The status
-page must report that as red. It must not report it as untested (see
-`docs/ci-troubleshooting.md` row 44).
+TunaOS sets `unsigned: true` because the OCI digest fixes and authenticates
+the local content. `install-desktop.sh` lets only `file://` URLs use that
+exception. Network repositories still need checks of RPM signatures (#1655).
+The Containerfile bind-mounts the repository and does not copy it into the
+image. `install-desktop.sh` removes the temporary `.repo` file before the
+layer commits.
+
+Utah publishes one OCI manifest for x86_64 and no arm64 image.
+`.github/build-config.yml` therefore pins both `hummingbird:gnome` and
+`hummingbird:cosmic` to amd64, independent of the base-level arm64 gap. An
+arm64 claim needs a buildable Hummingbird base and an arm64 image from Utah.
+
+This closes the package-source failure. It does not bypass the normal gates
+for the desktop, boot, signatures, or promotion. Use those gates to diagnose
+any other runtime failure. Do not assume that the desktop packages are absent.
 
 ### Measured state of the snapshot (2026-08-25)
 

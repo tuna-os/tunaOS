@@ -1484,8 +1484,8 @@ STUB
   # if its baseurl is file:// -- content the Containerfile bind-mounted out of
   # an OCI image pinned by digest in image-versions.yaml, where the digest is
   # the signature. The loop must refuse `unsigned: true` on any other URL.
-  # tests/test_hummingbird_gnome_consumes_utah_packages.py runs the loop for
-  # real; this test pins the shape of the block.
+  # tests/test_hummingbird_desktops_consume_utah_packages.py runs the loop
+  # for real; this test pins the shape of the block.
   local script="${REPO_ROOT}/build_scripts/desktop/install-desktop.sh"
   local block
   block="$(awk '/for \(\(i = 0; i < _TD_REPO_COUNT/,/^\tdone$/' "$script")"

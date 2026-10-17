@@ -1,27 +1,24 @@
-"""hummingbird:gnome takes GNOME from projectbluefin/utah-packages, by digest.
+"""Hummingbird desktops take their dependency closure from Utah, by digest.
 
-tuna-os/tunaos-packages#629 and its docs/HUMMINGBIRD-TARGET.md: Bluefin
-builds GNOME 51 for Hummingbird in Hummingbird's own root and publishes it as
-an OCI image carrying a createrepo_c repository (`/repository`), cosign-signed,
-consumed with `COPY --from` by digest. Building a second GNOME 51 for the same
-base in tunaos-packages was the part of the plan not paying back, so this
-repository consumes utah's instead, the way it already consumes
-projectbluefin/common and ublue-os/brew.
+tuna-os/tunaos-packages#629 and tunaOS#2513: Bluefin builds GNOME 51 and its
+supporting Hummingbird desktop closure in Hummingbird's own root, then publishes
+it as a cosign-signed OCI image carrying a createrepo_c repository
+(``/repository``). tunaOS consumes it by digest instead of rebuilding the same
+closure in tunaos-packages.
 
-What these tests hold, and why each is a test rather than a comment:
+What these tests hold:
 
-- the pin is in image-versions.yaml with a digest, so Renovate's existing
-  image-versions block tracks it and check-base-image-pins-style GC does not
-  surprise a nightly;
+- the pin is in image-versions.yaml with a digest, so Renovate tracks it and
+  registry garbage collection cannot surprise a nightly;
 - the build plumbing carries it end to end: resolve-image.sh role, build arg,
-  Containerfile stage, and a bind-mount on the gnome stage only (never a
-  COPY: the repository is ~500 MB and must not land in any image);
-- gnome.yaml's hummingbird section declares the file:// repo at a priority
-  that beats the tunaos-hummingbird prefix, marked `unsigned: true`;
+  Containerfile stage, and bind-mounts on the Hummingbird GNOME and COSMIC
+  stages only (never a COPY: the RPM repository must not land in an image);
+- both desktop manifests declare the file:// repo at a priority that beats the
+  tunaos-hummingbird prefix, marked ``unsigned: true``;
 - install-desktop.sh's repo loop, run for real against a fake yq, writes
-  gpgcheck=0 for that repo and gpgcheck=1 + gpgkey for every other one --
-  and refuses `unsigned: true` on anything that is not file://, because a
-  network repo has no digest standing in for a signature (tunaOS#1655).
+  gpgcheck=0 for that repo and gpgcheck=1 + gpgkey for every other one, and
+  refuses ``unsigned: true`` on anything other than file:// because a network
+  repository has no digest standing in for a signature (tunaOS#1655).
 """
 from __future__ import annotations
 
@@ -43,6 +40,7 @@ RESOLVE = ROOT / "scripts" / "resolve-image.sh"
 INNER = ROOT / "scripts" / "build-image-inner.sh"
 CONTAINERFILE = ROOT / "Containerfile.el10"
 GNOME = ROOT / "manifests" / "desktops" / "gnome.yaml"
+COSMIC = ROOT / "manifests" / "desktops" / "cosmic.yaml"
 INSTALL = ROOT / "build_scripts" / "desktop" / "install-desktop.sh"
 
 MOUNT = "/run/utah-packages"
@@ -103,7 +101,7 @@ def test_the_build_engine_passes_the_ref_as_a_build_arg():
     assert '"UTAH_PACKAGES_IMAGE_REF=${utah_packages_ref}"' in text
 
 
-def test_the_containerfile_declares_the_stage_and_mounts_it_on_gnome_only():
+def test_the_containerfile_declares_the_stage_and_mounts_it_on_hummingbird_desktops():
     text = CONTAINERFILE.read_text()
     assert 'ARG UTAH_PACKAGES_IMAGE_REF="ghcr.io/projectbluefin/utah-packages:unpinned-must-override"' in text, (
         "the default must be a tag that cannot resolve, like COMMON/BREW, so a "
@@ -113,34 +111,36 @@ def test_the_containerfile_declares_the_stage_and_mounts_it_on_gnome_only():
     mount = f"--mount=type=bind,from=utah-packages,source=/repository,target={MOUNT}"
     stages = re.split(r"^FROM ", text, flags=re.M)
     mounted = [s.split("\n", 1)[0] for s in stages if mount in s]
-    assert mounted == ["base-no-de AS gnome"], mounted
+    assert mounted == ["base-no-de AS gnome", "base-no-de AS cosmic"], mounted
     assert "COPY --from=utah-packages" not in text, (
-        "the repository is ~500 MB; it is bind-mounted for one RUN, never copied "
-        "into an image"
+        "the repository is an RPM payload; it is bind-mounted for one RUN, "
+        "never copied into an image"
     )
 
 
 # ── the manifest ───────────────────────────────────────────────────────────
 
 
-def hummingbird_repos() -> list[dict]:
-    return yaml.safe_load(GNOME.read_text())["packages"]["hummingbird"]["repos"]
+def hummingbird_repos(manifest: Path) -> list[dict]:
+    return yaml.safe_load(manifest.read_text())["packages"]["hummingbird"]["repos"]
 
 
-def test_gnome_on_hummingbird_declares_the_mounted_repo_unsigned():
-    repos = {r["name"]: r for r in hummingbird_repos()}
+@pytest.mark.parametrize("manifest", [GNOME, COSMIC], ids=["gnome", "cosmic"])
+def test_hummingbird_desktop_declares_the_mounted_repo_unsigned(manifest):
+    repos = {r["name"]: r for r in hummingbird_repos(manifest)}
     utah = repos["utah-packages"]
     assert utah["baseurl"] == f"file://{MOUNT}"
     assert utah.get("unsigned") is True
     assert utah["priority"] < repos["tunaos-hummingbird"]["priority"], (
         "utah must win the by-name priority filter over the tunaos-hummingbird "
-        "prefix, or the GNOME stack resolves from two builds at once"
+        "prefix, or the desktop closure resolves from two builds at once"
     )
 
 
-def test_the_prefix_repo_is_still_first_and_signed():
+@pytest.mark.parametrize("manifest", [GNOME, COSMIC], ids=["gnome", "cosmic"])
+def test_the_prefix_repo_is_still_first_and_signed(manifest):
     """tests/bats/test_hummingbird_desktop_wiring.bats reads repos[0]."""
-    first = hummingbird_repos()[0]
+    first = hummingbird_repos(manifest)[0]
     assert first["name"] == "tunaos-hummingbird"
     assert not first.get("unsigned")
 
@@ -206,18 +206,12 @@ def run_loop(tmp_path: Path, manifest: dict) -> subprocess.CompletedProcess:
     return subprocess.run(["bash", str(harness)], capture_output=True, text=True)
 
 
-def test_the_loop_writes_gpgcheck_0_only_for_the_unsigned_file_repo(tmp_path):
-    manifest = {"packages": {"hummingbird": {
-        "repos": [
-            {"name": "tunaos-hummingbird",
-             "baseurl": "https://repo.tunaos.org/hummingbird/20251124-$basearch/",
-             "priority": 5},
-            {"name": "utah-packages", "baseurl": f"file://{MOUNT}",
-             "priority": 4, "unsigned": True},
-        ],
-        "packages": ["gnome-shell"],
-    }}}
-    proc = run_loop(tmp_path, manifest)
+@pytest.mark.parametrize("manifest", [GNOME, COSMIC], ids=["gnome", "cosmic"])
+def test_the_loop_writes_gpgcheck_0_only_for_the_unsigned_file_repo(
+    tmp_path, manifest
+):
+    manifest_data = yaml.safe_load(manifest.read_text())
+    proc = run_loop(tmp_path, manifest_data)
     assert proc.returncode == 0, proc.stderr
     signed = (tmp_path / "yum.repos.d" / "tunaos-hummingbird.repo").read_text()
     unsigned = (tmp_path / "yum.repos.d" / "utah-packages.repo").read_text()

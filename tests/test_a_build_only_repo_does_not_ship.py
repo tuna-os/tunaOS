@@ -7,13 +7,12 @@ and a booted host can reach it.
 
 For a file:// repo it is not. Those baseurls are bind mounts of digest-pinned
 OCI images that Containerfile.el10 provides for the duration of ONE RUN
-(/run/utah-packages for hummingbird:gnome, /run/gnome50-el10-packages for
-el10). The .repo file is not scoped to that RUN: 99-cleanup.sh runs in
-base-no-de, BEFORE the desktop stages fork from it, so nothing removed it and
-it shipped. And the write loop emits skip_if_unavailable=False, so the result
-is not a harmless stale entry -- it fails every dnf transaction the user runs
-on the booted host. hummingbird has shipped utah-packages.repo that way since
-8a31ace9.
+(/run/utah-packages for hummingbird:gnome and hummingbird:cosmic,
+/run/gnome50-el10-packages for el10). The .repo file is not scoped to that RUN:
+99-cleanup.sh runs in base-no-de, BEFORE the desktop stages fork from it, so
+nothing removed it and it shipped. And the write loop emits
+skip_if_unavailable=False, so the result is not a harmless stale entry -- it
+fails every dnf transaction the user runs on the booted host.
 
 These tests run the shipped loops themselves, against a fake yq, rather than a
 paraphrase of them.

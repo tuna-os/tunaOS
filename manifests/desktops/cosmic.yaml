@@ -197,22 +197,29 @@ packages:
       - cosmic-edit
       - cosmic-store
 
-  # ── Hummingbird (Fedora rebuild) ───────────────────────────────────
-  # The package factory has now closed the last COSMIC gap from #1755:
-  # cosmic-settings-daemon and every other name in the Fedora list resolve
-  # from both the x86_64 and aarch64 20251124 indexes (measured 2026-09-06;
-  # 8,811 and 3,905 unique package names respectively). Reuse Fedora's package
-  # list so the two Fedora-derived targets cannot drift apart again.
+  # ── Hummingbird (ported desktop + Utah dependency closure) ─────────
+  # Every COSMIC package below is served by tunaos-hummingbird, but Build
+  # Hummingbird run 38660870261 still could not install the session:
+  # libsndfile had no libvorbis provider, cosmic-greeter had no fprintd-pam,
+  # and cosmic-files had no installable udisks2. The digest-pinned
+  # projectbluefin/utah-packages repository now carries those dependencies
+  # in Hummingbird's own build root (1,446 binary names measured in digest
+  # 210e8c5 on 2026-10-17). Priority 4 lets that coherent closure win over
+  # overlapping packages in the supplemental tunaOS snapshot at priority 5;
+  # COSMIC itself still comes from tunaos-hummingbird.
   #
-  # Snapshot pin, not `current/$basearch/`: same status as gnome.yaml's
-  # section — the floating alias does not exist on repo.tunaos.org yet
-  # (tuna-os/tunaos-packages#365). `$basearch` selects the independently
-  # published x86_64 or aarch64 repository.
+  # Both repositories are x86_64 today. The snapshot uses `$basearch`, but
+  # utah-packages is a single-architecture OCI image, so the variant stays
+  # amd64-only until both the Hummingbird base and Utah publish arm64.
   hummingbird:
     repos:
       - name: tunaos-hummingbird
         baseurl: https://repo.tunaos.org/hummingbird/20251124-$basearch/
         priority: 5
+      - name: utah-packages
+        baseurl: file:///run/utah-packages
+        priority: 4
+        unsigned: true
     packages: *fedora_cosmic_packages
     optional: *cosmic_dock_apps
 
