@@ -1602,6 +1602,10 @@ exact `tuna-desktop` package and binary ownership, and accept each packaged
 GNOME calendar-server path. Run the target-neutral package-contract test before
 qualifying the final image in its separate boot and authentication gate.
 
+**Verification:** `python3 -m pytest tests/test_tuna_admission.py
+tests/test_tuna_target_neutral_package_contract.py -q` passes 54 focused
+tests; a real image still requires the separate boot and authentication gate.
+
 ### guppy:gnome installs GNOME 49 and fails the version floor (#2450)
 
 **Symptom:** The `gnome` build of `guppy` (Gentoo) stops in `verify-desktop-experience.sh` with this error:
