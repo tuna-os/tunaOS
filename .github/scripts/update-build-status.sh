@@ -5,6 +5,9 @@ set -euo pipefail
 # latest completed main-branch run of each variant workflow.
 # Requires: gh, jq, yq. GITHUB_TOKEN must be able to read Actions metadata.
 
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd -- "${script_dir}/../.." && pwd)"
+criteria_file="${repo_root}/.github/green-criteria.yml"
 repo="${GITHUB_REPOSITORY:-tuna-os/tunaOS}"
 config="${1:-.github/build-config.yml}"
 readme="${2:-README.md}"
@@ -22,8 +25,8 @@ composite_green=0
 
 # The boots criterion's scope, read from the criteria file so this script and
 # the composite scoreboard cannot disagree about which cells CI can boot.
-mapfile -t boots_excl_flavors < <(yq -r '.criteria[] | select(.id == "boots") | .scope.excludes_flavors[]?' .github/green-criteria.yml)
-mapfile -t boots_excl_suffixes < <(yq -r '.criteria[] | select(.id == "boots") | .scope.excludes_flavor_suffixes[]?' .github/green-criteria.yml)
+mapfile -t boots_excl_flavors < <(yq -r '.criteria[] | select(.id == "boots") | .scope.excludes_flavors[]?' "$criteria_file")
+mapfile -t boots_excl_suffixes < <(yq -r '.criteria[] | select(.id == "boots") | .scope.excludes_flavor_suffixes[]?' "$criteria_file")
 
 # Empty list renders as an em dash rather than a blank cell.
 join_or_dash() {
@@ -173,7 +176,7 @@ while IFS=$'\t' read -r variant emoji; do
 	composite_green=$((composite_green + cgreen))
 	total_unreached=$((total_unreached + ${#unreached[@]}))
 
-	builds_sla=$(yq -r '.criteria[] | select(.id == "builds") | .freshness_sla_days // 2' .github/green-criteria.yml 2>/dev/null || echo 2)
+	builds_sla=$(yq -r '.criteria[] | select(.id == "builds") | .freshness_sla_days // 2' "$criteria_file" 2>/dev/null || echo 2)
 	builds_sla="${builds_sla:-2}"
 	today=$(date -u +%F)
 	run_age=0
@@ -204,7 +207,7 @@ done < <(yq -r '.variants[] | [.id, .emoji] | @tsv' "$config")
 
 # Family images built elsewhere (build-config `sibling_images:`). Rendered
 # after the variant table and OUTSIDE its totals: they are not cells here.
-"$(dirname "${BASH_SOURCE[0]}")/sibling-images-status.sh" "$config" >>"$tmp_table"
+"${script_dir}/sibling-images-status.sh" "$config" >>"$tmp_table"
 
 percent=$((100 * total_green / total_cells))
 total_failing=$((total_cells - total_green - total_unreached))
@@ -226,7 +229,7 @@ failure_word="failures"
 # and so can differ from the table above). Refusing to publish at all was the
 # previous behaviour, and it froze the README block for two weeks after
 # `desktop` and `no_silent_omissions` graduated on 2026-08-19.
-mapfile -t blocking_ids < <(yq -r '.criteria[] | select(.enforcement == "blocking") | .id' .github/green-criteria.yml | sort)
+mapfile -t blocking_ids < <(yq -r '.criteria[] | select(.enforcement == "blocking") | .id' "$criteria_file" | sort)
 blocking=$(
 	IFS=,
 	echo "${blocking_ids[*]}"
@@ -260,7 +263,7 @@ blocking_text=$(sed -E 's/,/`, `/g' <<<"$blocking")
 # The public headline comes from the matrix generator's machine-readable
 # payload. Do not independently reinterpret workflow results here: the README,
 # release notes, and website must all publish the same answer.
-health_json=${FACTORY_HEALTH_JSON:-docs/matrix-provenance.json}
+health_json=${FACTORY_HEALTH_JSON:-${repo_root}/docs/matrix-provenance.json}
 if ! jq -e '.summary.factory_health and .summary.install and .summary.lifecycle and .summary.known_regressions' \
 	"$health_json" >/dev/null; then
 	echo "::error::${health_json} has no generated factory-health summary; run scripts/gen-matrix-status.py first" >&2
