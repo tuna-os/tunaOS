@@ -9,6 +9,7 @@ scripts/gen-matrix-status.py and the graduation guard in
 from __future__ import annotations
 
 import importlib.util
+import json
 import pathlib
 
 import yaml
@@ -185,4 +186,17 @@ def test_provenance_ships_with_the_doc() -> None:
     assert wf.count("docs/matrix-provenance.json") >= 2, (
         "the refresh workflow must both diff-check AND git-add the JSON, or "
         "it regenerates and then silently fails to ship"
+    )
+
+def test_committed_provenance_has_unique_object_keys() -> None:
+    def reject_duplicates(pairs: list[tuple[str, object]]) -> dict[str, object]:
+        result: dict[str, object] = {}
+        for key, value in pairs:
+            assert key not in result, f"duplicate provenance key: {key}"
+            result[key] = value
+        return result
+
+    json.loads(
+        (ROOT / "docs" / "matrix-provenance.json").read_text(),
+        object_pairs_hook=reject_duplicates,
     )
