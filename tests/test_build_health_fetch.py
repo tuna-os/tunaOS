@@ -101,7 +101,22 @@ def test_asahi_uses_asahi_manifest_gate_and_ignores_skipped_generic_gate():
          "conclusion": conclusion}
         for name, conclusion in [
             ("linux-arm64", "success"), ("Gate", "skipped"),
-            ("Asahi manifest gate", "success"), ("Promote", "success"),
+            ("Asahi manifest gate / verify", "success"), ("Promote", "success"),
+        ]
+    ]
+    assert collector.attempt_status(collector.normalized_jobs(rows, target)) == ("success", [])
+
+def test_non_asahi_ignores_asahi_manifest_gate_nested_job():
+    target = {
+        "variant": "bonito", "flavor": "gnome", "platform": "linux/amd64",
+        "cpuBaseline": "x86-64-v2", "hardwareScope": "standard",
+    }
+    rows = [
+        {"name": f"🎣-bonito / gnome / {name}", "status": "completed",
+         "conclusion": conclusion}
+        for name, conclusion in [
+            ("linux-amd64", "success"), ("Gate", "success"),
+            ("Asahi manifest gate / verify", "skipped"), ("Promote", "success"),
         ]
     ]
     assert collector.attempt_status(collector.normalized_jobs(rows, target)) == ("success", [])

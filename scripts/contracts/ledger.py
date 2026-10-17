@@ -135,11 +135,17 @@ def reconcile(contract: dict, ledger: dict, base_inventory: list[dict], final_in
     }
     if len(requirements) != len(contract["packageRequirements"]):
         raise EvidenceError("ambiguous native requirement source intents")
-    requirement_requests = {key[:3] for key in requirements}
+    requirements_by_key: dict[tuple, list[dict]] = {}
+    for item in contract["packageRequirements"]:
+        k = (item["nativeExpression"], item["manager"], item["scope"])
+        requirements_by_key.setdefault(k, []).append(item)
     for item in observed_requirements(ledger):
         key = (item["nativeExpression"], item["manager"], item["scope"])
-        if key not in requirement_requests:
+        contract_reqs = requirements_by_key.get(key)
+        if not contract_reqs:
             gaps.add("unexplained-observed-package-request")
+        elif any(req["required"] != item["required"] for req in contract_reqs):
+            gaps.add("package-requiredness-mismatch")
     measured = native_proof.get("requirements", [])
     if not isinstance(measured, list) or any(not isinstance(item, dict) for item in measured):
         raise EvidenceError("native requirement measurements must be records")
@@ -178,7 +184,8 @@ def reconcile(contract: dict, ledger: dict, base_inventory: list[dict], final_in
         raise EvidenceError("native request dispositions must be a record")
     for event in ledger["requests"]:
         disposition = dispositions.get(event["requestId"])
-        succeeded = event.get("result", {}).get("exitCode") == 0
+        result_event = event.get("result") or {}
+        succeeded = result_event.get("exitCode") == 0
         allowed = {"satisfied", "approved-replacement", "no-package-mutation"} if succeeded else {
             "approved-replacement"
         }

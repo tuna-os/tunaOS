@@ -197,10 +197,15 @@ def normalized_jobs(jobs: list[dict], target: dict):
     asahi = target["hardwareScope"] == "apple-silicon"
     phases = {
         platform_slug(target["platform"]): "build",
-        "Asahi manifest gate" if asahi else "Gate": "gate",
         "Promote": "promote",
     }
-    ignored_gates = {"Gate"} if asahi else {"Asahi manifest gate"}
+    if asahi:
+        phases["Asahi manifest gate"] = "gate"
+        phases["Asahi manifest gate / verify"] = "gate"
+        ignored_gates = {"Gate"}
+    else:
+        phases["Gate"] = "gate"
+        ignored_gates = {"Asahi manifest gate", "Asahi manifest gate / verify"}
     prerequisites = {
         "Manifest": "manifest", "Sign": "sign", "Desktop contract": "desktop-contract",
     }
