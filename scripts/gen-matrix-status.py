@@ -346,6 +346,31 @@ def luks_matrix() -> dict[str, set[str]]:
     return _matrix("build_image", desktops_only=True)
 
 
+def lifecycle_sweep_jobs(config: dict | None = None) -> set[str]:
+    """Exact job names in an unfiltered bootc-lifecycle matrix."""
+    config = config or load_build_config(CONFIG)
+    jobs = set()
+    for variant in config.get("variants", []):
+        variant_id = variant["id"]
+        for flavor in variant.get("flavors", []):
+            flavor_id = flavor["id"]
+            if (not flavor.get("build_image") or flavor_id == "base"
+                    or flavor_id.startswith("base-")):
+                continue
+            platforms = flavor.get("platforms")
+            if platforms is None:
+                platforms = variant.get("platforms") or []
+            beta = (
+                "rawhide" in variant_id or "sid" in variant_id
+                or variant_id == "guppy" or "asahi" in flavor_id or "zfs" in flavor_id
+            )
+            prefix = "BETA " if beta else ""
+            for architecture in ("amd64", "arm64"):
+                if f"linux/{architecture}" in platforms:
+                    jobs.add(f"{prefix}{variant_id}:{flavor_id} ({architecture})")
+    return jobs
+
+
 def _collect_latest_results(
     workflow: str,
     name_re: str,
@@ -1083,26 +1108,23 @@ def build() -> str:
     FULL_SWEEP_DATES.clear()
     matrix = iso_matrix()
     lmatrix = luks_matrix()
-    expected_sweep_cells = {
+    expected_install_cells = {
         f"{variant}:{flavor}"
         for variant, flavors in lmatrix.items()
         for flavor in flavors
     }
+    expected_lifecycle_jobs = lifecycle_sweep_jobs()
     luks, install_sweep = _collect_latest_results(
         "luks-e2e.yml",
         r"^LUKS ",
-        expected_sweep_cells,
+        expected_install_cells,
         lambda name: name.removeprefix("LUKS "),
     )
     lifecycle_raw, lifecycle_sweep = _collect_latest_results(
         "bootc-lifecycle.yml",
         r":",
-        expected_sweep_cells,
-        lambda name: (
-            match.group("cell")
-            if (match := _LIFECYCLE_NAME.match(name))
-            else None
-        ),
+        expected_lifecycle_jobs,
+        lambda name: name if _LIFECYCLE_NAME.match(name) else None,
     )
     lifecycle = lifecycle_results(lifecycle_raw)
     FULL_SWEEP_DATES.update(

@@ -57,3 +57,30 @@ def test_report_covers_release_and_runtime_verification_axes():
     assert "Booted: **1/2 pass (1/2 tested)**" in report
     assert "**1 blocking**, **1 advisory**" in report
     assert report.count(MODULE.BEGIN) == report.count(MODULE.END) == 1
+
+
+def test_stored_release_identity_uses_original_immutable_reference():
+    digest = "sha256:" + "a" * 64
+    body = "\n".join([
+        "release notes",
+        f"  ghcr.io/tuna-os/yellowfin@{digest}",
+        f"  ghcr.io/tuna-os/yellowfin@{digest} \\",
+    ])
+    assert MODULE.stored_image_identity(body) == (
+        "ghcr.io/tuna-os/yellowfin", digest
+    )
+
+
+def test_stored_release_identity_rejects_missing_or_ambiguous_evidence():
+    first = "sha256:" + "a" * 64
+    second = "sha256:" + "b" * 64
+    for body in (
+        "release without immutable identity",
+        f"ghcr.io/tuna-os/yellowfin@{first}\nghcr.io/tuna-os/yellowfin@{second}",
+    ):
+        try:
+            MODULE.stored_image_identity(body)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("ambiguous stored evidence was accepted")

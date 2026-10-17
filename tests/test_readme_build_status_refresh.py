@@ -191,6 +191,15 @@ def test_every_new_release_appends_the_same_generated_verification_data():
     assert "gh release edit" in report_block
     assert "--notes-file" in report_block
     assert RELEASE_REPORT.exists()
+    report_step = next(
+        step for job in workflow["jobs"].values() for step in job["steps"]
+        if step.get("name") == "Append release verification report"
+    )
+    assert "inputs.dry_run != true" in report_step["if"]
+    assert "steps.existing.outputs.exists == 'true'" in report_step["if"]
+    assert "gh release download" in report_block
+    assert "--stored-identity release-body.md" in report_block
+    assert "CURRENT_DIGEST" not in report_block.split('if [[ \"$EXISTING\" == \"true\" ]]', 1)[1]
     renderer = RELEASE_REPORT.read_text()
     assert 'payload["summary"]' in renderer
     assert 'payload["cells"]' in renderer

@@ -26,6 +26,19 @@ def fraction(cells: dict, axis: str) -> str:
     return f"{passed}/{total} pass ({tested}/{total} tested)"
 
 
+
+def stored_image_identity(body: str) -> tuple[str, str]:
+    """Recover the immutable image identity generated into a release card."""
+    matches = set(
+        re.findall(
+            r"(ghcr\.io/[a-z0-9_.-]+/[a-z0-9_.-]+)@(sha256:[0-9a-f]{64})",
+            body,
+        )
+    )
+    if len(matches) != 1:
+        raise ValueError("release body does not contain one immutable image identity")
+    return matches.pop()
+
 def render(payload: dict, image: str, digest: str, sbom_packages: int) -> str:
     summary = payload["summary"]
     cells = payload["cells"]
@@ -77,12 +90,22 @@ def render(payload: dict, image: str, digest: str, sbom_packages: int) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--provenance", type=Path, default=Path("docs/matrix-provenance.json"))
-    parser.add_argument("--image", required=True)
-    parser.add_argument("--digest", default="")
+    parser.add_argument("--image")
+    parser.add_argument("--stored-identity", type=Path)
     parser.add_argument("--sbom-packages", type=int, default=0)
     parser.add_argument("--body", type=Path, help="existing release body to update")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
+    if args.stored_identity:
+        try:
+            repository, digest = stored_image_identity(args.stored_identity.read_text())
+        except ValueError as exc:
+            parser.error(str(exc))
+        print(repository)
+        print(digest)
+        return 0
+    if not args.image:
+        parser.error("--image is required unless --stored-identity is used")
 
     payload = json.loads(args.provenance.read_text())
     if not payload.get("summary") or not payload.get("cells"):
