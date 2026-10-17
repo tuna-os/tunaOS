@@ -117,6 +117,7 @@ RUN KERNEL_PKG="linux"; \
         fuse-overlayfs \
         systemd \
         networkmanager \
+        inetutils \
         pipewire \
         wireplumber \
         flatpak \
