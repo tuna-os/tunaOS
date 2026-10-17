@@ -5,7 +5,7 @@ import sys
 import json
 import argparse
 
-from contracts.targets import coverage_document
+from contracts.targets import catalog_snapshot, coverage_document, validate_catalog_snapshot
 
 def main():
     parser = argparse.ArgumentParser(description='Generate build wrappers and required coverage')
@@ -33,6 +33,7 @@ def main():
     # Generate commitments independently of actual workflow execution coverage.
     # PR narrowing and package-supply restrictions must remain visible gaps.
     coverage = coverage_document(config)
+    validate_catalog_snapshot(catalog_snapshot(config))
     coverage_path = 'required-targets.json'
     emit(coverage_path, json.dumps(coverage, indent=2, sort_keys=True) + '\n')
 

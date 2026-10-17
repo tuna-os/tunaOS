@@ -215,3 +215,435 @@ def test_native_v3_baseline_keeps_ordinary_oci_amd64_identity(variant):
     for baseline in ['x86-64', 'x86-64-v2']:
         with pytest.raises(ValueError):
             targets.validate_target({**rows[0]['target'], 'cpuBaseline': baseline})
+
+
+_sample_config = config
+
+DIGEST_A = 'sha256:' + 'a' * 64
+DIGEST_B = 'sha256:' + 'b' * 64
+DIGEST_C = 'sha256:' + 'c' * 64
+DIGEST_D = 'sha256:' + 'd' * 64
+DIGEST_E = 'sha256:' + 'e' * 64
+DIGEST_F = 'sha256:' + 'f' * 64
+DIGEST_1 = 'sha256:' + '1' * 64
+DIGEST_2 = 'sha256:' + '2' * 64
+
+
+def test_catalog_snapshot_accounts_for_required_and_extra_published_candidates():
+    data = _sample_config()
+    descriptors = {
+        'albacore:cosmic:linux/amd64/v2': {
+            'indexDigest': DIGEST_A,
+            'platformManifestDigest': DIGEST_B,
+            'configDigest': DIGEST_C,
+            'ociPlatform': {'os': 'linux', 'architecture': 'amd64', 'variant': 'v2'},
+            'facts': {
+                'digest': DIGEST_B,
+                'desktop': 'cosmic',
+                'kernelVer': '6.12.0-100.el10.x86_64',
+                'hasSdBoot': True,
+                'pkgManager': 'dnf',
+                'repoFamily': 'el10',
+                'layerCount': 52,
+                'compressedSize': 1987654321,
+                'bootc': True,
+            },
+        },
+        'skipjack:cosmic-hwe:linux/amd64': {
+            'indexDigest': DIGEST_A,
+            'platformManifestDigest': DIGEST_D,
+            'ociPlatform': {'os': 'linux', 'architecture': 'amd64', 'variant': None},
+        },
+        'skipjack:cosmic-hwe:linux/arm64': {
+            'indexDigest': DIGEST_A,
+            'platformManifestDigest': DIGEST_E,
+            'ociPlatform': {'os': 'linux', 'architecture': 'arm64', 'variant': 'v8'},
+        },
+        'skipjack:xfce:linux/amd64': {
+            'platformManifestDigest': DIGEST_F,
+            'ociPlatform': {'os': 'linux', 'architecture': 'amd64', 'variant': None},
+        },
+    }
+    overlays = {
+        'albacore:cosmic:linux/amd64/v2': {
+            'liveOverlayDigest': DIGEST_1,
+            'labels': {
+                'org.tunaos.live-overlay.actual-base-digest': DIGEST_B,
+                'org.tunaos.live-overlay.base-digest': DIGEST_B,
+            },
+        },
+        'skipjack:cosmic-hwe:linux/amd64': {
+            'liveOverlayDigest': DIGEST_2,
+            'liveOverlayBaseDigest': DIGEST_D,
+        },
+        'skipjack:cosmic-hwe:linux/arm64': {
+            'liveOverlayDigest': DIGEST_2,
+            'liveOverlayBaseDigest': DIGEST_E,
+        },
+        'skipjack:xfce:linux/amd64': {
+            'liveOverlayDigest': DIGEST_2,
+            'liveOverlayBaseDigest': DIGEST_F,
+        },
+    }
+    receipts = [
+        {
+            'target': {
+                'variant': 'albacore',
+                'flavor': 'cosmic',
+                'platform': 'linux/amd64/v2',
+                'cpuBaseline': 'x86-64-v2',
+                'hardwareScope': 'generic',
+            },
+            'platformManifestDigest': DIGEST_B,
+            'liveOverlayDigest': DIGEST_1,
+            'qualifiedAt': '2026-10-17T01:02:03Z',
+            'receiptDigest': DIGEST_C,
+        },
+        {
+            'variant': 'skipjack',
+            'flavor': 'cosmic-hwe',
+            'platform': 'linux/amd64',
+            'platformManifestDigest': DIGEST_D,
+            'liveOverlayDigest': DIGEST_2,
+            'localOnly': True,
+            'reason': 'qemu-only-verification',
+            'qualifiedAt': '2026-10-17T02:00:00Z',
+        },
+    ]
+
+    snapshot = targets.catalog_snapshot(
+        data,
+        descriptors=descriptors,
+        overlays=overlays,
+        receipts=receipts,
+        producer_revision='rev-1',
+        generated_at='2026-10-17T03:00:00Z',
+        installer_revision='inst-1',
+        engine_revision='eng-1',
+    )
+    targets.validate_catalog_snapshot(snapshot)
+    assert snapshot['coverageDigest'] == targets.coverage_document(data)['coverageDigest']
+
+    by_key = {entry['targetKey']: entry for entry in snapshot['targets']}
+    assert set(by_key) == {
+        'albacore:cosmic:linux/amd64/v2',
+        'albacore:cosmic:linux/arm64',
+        'skipjack:cosmic-hwe:linux/amd64',
+        'skipjack:cosmic-hwe:linux/arm64',
+        'skipjack:gnome-asahi:linux/arm64',
+        'skipjack:gnome-t2:linux/amd64',
+        'skipjack:xfce:linux/amd64',
+    }
+
+    alma_v2 = by_key['albacore:cosmic:linux/amd64/v2']
+    assert alma_v2['required'] is True
+    assert alma_v2['scheduled'] is False
+    assert alma_v2['availability'] == {
+        'available': True,
+        'ociPlatform': {'os': 'linux', 'architecture': 'amd64', 'variant': 'v2'},
+    }
+    assert alma_v2['qualification']['status'] == 'qualified'
+    assert alma_v2['qualification']['reason'] is None
+    assert alma_v2['qualification']['qualifiedAt'] == '2026-10-17T01:02:03Z'
+    assert alma_v2['qualification']['receiptDigest'] == DIGEST_C
+
+    alma_arm = by_key['albacore:cosmic:linux/arm64']
+    assert alma_arm['required'] is True
+    assert alma_arm['availability']['available'] is False
+    assert alma_arm['qualification']['status'] == 'unqualified'
+    assert alma_arm['qualification']['reason'] == 'missing-platform-descriptor'
+
+    skipjack_local = by_key['skipjack:cosmic-hwe:linux/amd64']
+    assert skipjack_local['qualification']['status'] == 'local-only'
+    assert skipjack_local['qualification']['reason'] == 'qemu-only-verification'
+    assert skipjack_local['qualification']['qualifiedAt'] == '2026-10-17T02:00:00Z'
+    assert skipjack_local['qualification']['receiptDigest'].startswith('sha256:')
+
+    skipjack_untested = by_key['skipjack:cosmic-hwe:linux/arm64']
+    assert skipjack_untested['availability']['available'] is True
+    assert skipjack_untested['qualification']['status'] == 'unqualified'
+    assert skipjack_untested['qualification']['reason'] == 'untested-snapshot'
+
+    for unsupported_key in ('skipjack:gnome-asahi:linux/arm64', 'skipjack:gnome-t2:linux/amd64'):
+        assert by_key[unsupported_key]['required'] is True
+        assert by_key[unsupported_key]['qualification']['status'] == 'unsupported'
+        assert by_key[unsupported_key]['qualification']['reason'] == 'hardware-scope-unsupported'
+
+    extra = by_key['skipjack:xfce:linux/amd64']
+    assert extra['required'] is False
+    assert extra['target'] == {
+        'variant': 'skipjack',
+        'flavor': 'xfce',
+        'platform': 'linux/amd64',
+        'cpuBaseline': 'x86-64-v3',
+        'hardwareScope': 'generic',
+    }
+    assert extra['availability']['available'] is True
+    assert extra['qualification']['status'] == 'unqualified'
+    assert extra['qualification']['reason'] == 'untested-snapshot'
+
+
+def test_catalog_binds_facts_and_customization_inputs_to_platform_manifest_digest():
+    data = _sample_config()
+    descriptors = {
+        'albacore:cosmic:linux/amd64/v2': {
+            'indexDigest': DIGEST_A,
+            'platformManifestDigest': DIGEST_B,
+            'configDigest': DIGEST_C,
+            'facts': {
+                'digest': DIGEST_B,
+                'desktop': 'cosmic',
+                'kernelVer': '6.12.0-100.el10.x86_64',
+                'hasSdBoot': True,
+                'pkgManager': 'dnf',
+                'repoFamily': 'el10',
+                'layerCount': 48,
+                'compressedSize': 123456789,
+                'bootc': True,
+            },
+        },
+        'skipjack:cosmic-hwe:linux/amd64': {
+            'indexDigest': DIGEST_A,
+            'platformManifestDigest': DIGEST_D,
+            'facts': {
+                'digest': DIGEST_E,
+                'desktop': 'cosmic',
+                'kernelVer': 'stale-kernel-from-old-tag',
+                'hasSdBoot': True,
+                'pkgManager': 'dnf',
+                'repoFamily': 'el10',
+                'layerCount': 99,
+                'compressedSize': 999999,
+                'bootc': True,
+            },
+        },
+    }
+    overlays = {
+        'albacore:cosmic:linux/amd64/v2': {
+            'liveOverlayDigest': DIGEST_1,
+            'liveOverlayBaseDigest': DIGEST_B,
+        },
+    }
+    snapshot = targets.catalog_snapshot(
+        data,
+        descriptors=descriptors,
+        overlays=overlays,
+        installer_revision='inst-rev-42',
+        engine_revision='eng-rev-99',
+    )
+    by_key = {entry['targetKey']: entry for entry in snapshot['targets']}
+
+    bound = by_key['albacore:cosmic:linux/amd64/v2']
+    assert bound['resolvedInputs'] == {
+        'platformManifestDigest': DIGEST_B,
+        'indexDigest': DIGEST_A,
+        'configDigest': DIGEST_C,
+        'liveOverlayDigest': DIGEST_1,
+        'liveOverlayBaseDigest': DIGEST_B,
+        'installerRevision': 'inst-rev-42',
+        'engineRevision': 'eng-rev-99',
+    }
+    assert bound['facts'] == {
+        'digest': DIGEST_B,
+        'desktop': 'cosmic',
+        'kernelVer': '6.12.0-100.el10.x86_64',
+        'hasSdBoot': True,
+        'pkgManager': 'dnf',
+        'repoFamily': 'el10',
+        'layerCount': 48,
+        'compressedSize': 123456789,
+        'bootc': True,
+    }
+
+    stale_facts_entry = by_key['skipjack:cosmic-hwe:linux/amd64']
+    assert stale_facts_entry['facts']['digest'] == DIGEST_D
+    assert stale_facts_entry['facts']['kernelVer'] == ''
+    assert stale_facts_entry['facts']['layerCount'] == 0
+    assert stale_facts_entry['facts']['compressedSize'] == 0
+    assert stale_facts_entry['facts']['hasSdBoot'] is False
+
+    with pytest.raises(ValueError, match='conflated'):
+        targets.catalog_snapshot(
+            data,
+            descriptors={
+                'albacore:cosmic:linux/amd64/v2': {
+                    'indexDigest': DIGEST_A,
+                    'platformManifestDigest': DIGEST_A,
+                },
+            },
+        )
+
+
+def test_amd64_descriptor_never_satisfies_alma_amd64_v2_target():
+    data = _sample_config()
+    descriptors = {
+        'albacore:cosmic:linux/amd64/v2': {
+            'platformManifestDigest': DIGEST_B,
+            'ociPlatform': {'os': 'linux', 'architecture': 'amd64', 'variant': None},
+        },
+        'ghcr.io/tuna-os/albacore:cosmic@linux/amd64': {
+            'platformManifestDigest': DIGEST_C,
+            'ociPlatform': {'os': 'linux', 'architecture': 'amd64', 'variant': None},
+        },
+    }
+    snapshot = targets.catalog_snapshot(data, descriptors=descriptors)
+    by_key = {entry['targetKey']: entry for entry in snapshot['targets']}
+
+    alma_v2 = by_key['albacore:cosmic:linux/amd64/v2']
+    assert alma_v2['availability'] == {
+        'available': False,
+        'ociPlatform': {'os': 'linux', 'architecture': 'amd64', 'variant': 'v2'},
+    }
+    assert alma_v2['resolvedInputs']['platformManifestDigest'] is None
+    assert alma_v2['qualification']['status'] == 'unqualified'
+    assert alma_v2['qualification']['reason'] == 'missing-platform-descriptor'
+    assert 'albacore:cosmic:linux/amd64' not in by_key
+
+    bad_entry = deepcopy(alma_v2)
+    bad_entry['availability']['ociPlatform'] = {'os': 'linux', 'architecture': 'amd64', 'variant': None}
+    with pytest.raises(ValueError, match='ociPlatform'):
+        targets.validate_catalog_entry(bad_entry)
+
+
+def test_overlay_base_digest_mismatch_and_label_conflict_block_qualification():
+    data = _sample_config()
+    descriptors = {
+        'albacore:cosmic:linux/amd64/v2': {
+            'platformManifestDigest': DIGEST_B,
+            'ociPlatform': {'os': 'linux', 'architecture': 'amd64', 'variant': 'v2'},
+        },
+        'skipjack:cosmic-hwe:linux/amd64': {
+            'platformManifestDigest': DIGEST_D,
+            'ociPlatform': {'os': 'linux', 'architecture': 'amd64', 'variant': None},
+        },
+        'skipjack:cosmic-hwe:linux/arm64': {
+            'platformManifestDigest': DIGEST_E,
+            'ociPlatform': {'os': 'linux', 'architecture': 'arm64', 'variant': None},
+        },
+    }
+    overlays = {
+        'albacore:cosmic:linux/amd64/v2': {
+            'liveOverlayDigest': DIGEST_1,
+            'labels': {
+                'org.tunaos.live-overlay.actual-base-digest': DIGEST_C,
+                'org.tunaos.live-overlay.base-digest': DIGEST_C,
+            },
+        },
+        'skipjack:cosmic-hwe:linux/amd64': {
+            'liveOverlayDigest': DIGEST_2,
+            'labels': {
+                'org.tunaos.live-overlay.actual-base-digest': DIGEST_D,
+                'org.tunaos.live-overlay.base-digest': DIGEST_C,
+            },
+        },
+    }
+    receipts = {
+        'albacore:cosmic:linux/amd64/v2': {
+            'platformManifestDigest': DIGEST_B,
+            'liveOverlayDigest': DIGEST_1,
+            'qualifiedAt': '2026-10-17T00:00:00Z',
+        },
+        'skipjack:cosmic-hwe:linux/amd64': {
+            'platformManifestDigest': DIGEST_D,
+            'liveOverlayDigest': DIGEST_2,
+            'qualifiedAt': '2026-10-17T00:00:00Z',
+        },
+    }
+
+    snapshot = targets.catalog_snapshot(
+        data,
+        descriptors=descriptors,
+        overlays=overlays,
+        receipts=receipts,
+    )
+    by_key = {entry['targetKey']: entry for entry in snapshot['targets']}
+
+    mismatched_base = by_key['albacore:cosmic:linux/amd64/v2']
+    assert mismatched_base['qualification']['status'] == 'unqualified'
+    assert mismatched_base['qualification']['reason'] == 'overlay-base-digest-mismatch'
+
+    conflicting_labels = by_key['skipjack:cosmic-hwe:linux/amd64']
+    assert conflicting_labels['qualification']['status'] == 'unqualified'
+    assert conflicting_labels['qualification']['reason'] == 'overlay-base-digest-mismatch'
+
+    missing_overlay = by_key['skipjack:cosmic-hwe:linux/arm64']
+    assert missing_overlay['qualification']['status'] == 'unqualified'
+    assert missing_overlay['qualification']['reason'] == 'missing-live-overlay'
+
+
+def test_moving_tag_without_matching_digest_receipt_is_unqualified():
+    data = _sample_config()
+    descriptors = {
+        'albacore:cosmic:linux/amd64/v2': {
+            'platformManifestDigest': DIGEST_B,
+            'ociPlatform': {'os': 'linux', 'architecture': 'amd64', 'variant': 'v2'},
+        },
+        'skipjack:cosmic-hwe:linux/amd64': {
+            'platformManifestDigest': DIGEST_D,
+            'ociPlatform': {'os': 'linux', 'architecture': 'amd64', 'variant': None},
+        },
+    }
+    receipts = {
+        'ghcr.io/tuna-os/albacore:cosmic': {
+            'variant': 'albacore',
+            'flavor': 'cosmic',
+            'platform': 'linux/amd64/v2',
+            'platformManifestDigest': DIGEST_A,
+            'qualifiedAt': '2026-10-16T00:00:00Z',
+            'receiptDigest': DIGEST_C,
+        },
+    }
+
+    stale_snapshot = targets.catalog_snapshot(data, descriptors=descriptors, receipts=receipts)
+    by_key = {entry['targetKey']: entry for entry in stale_snapshot['targets']}
+    assert by_key['albacore:cosmic:linux/amd64/v2']['qualification'] == {
+        'status': 'unqualified',
+        'reason': 'stale-qualification-receipt',
+        'qualifiedAt': None,
+        'receiptDigest': None,
+        'browser': None,
+        'resources': None,
+    }
+    assert by_key['skipjack:cosmic-hwe:linux/amd64']['qualification']['status'] == 'unqualified'
+    assert by_key['skipjack:cosmic-hwe:linux/amd64']['qualification']['reason'] == 'untested-snapshot'
+
+    receipts['ghcr.io/tuna-os/albacore:cosmic']['platformManifestDigest'] = DIGEST_B
+    qualified_snapshot = targets.catalog_snapshot(data, descriptors=descriptors, receipts=receipts)
+    qualified_by_key = {entry['targetKey']: entry for entry in qualified_snapshot['targets']}
+    assert qualified_by_key['albacore:cosmic:linux/amd64/v2']['qualification']['status'] == 'qualified'
+    assert qualified_by_key['albacore:cosmic:linux/amd64/v2']['qualification']['reason'] is None
+    assert qualified_by_key['albacore:cosmic:linux/amd64/v2']['qualification']['qualifiedAt'] == '2026-10-16T00:00:00Z'
+    assert qualified_by_key['albacore:cosmic:linux/amd64/v2']['qualification']['receiptDigest'] == DIGEST_C
+
+
+def test_validate_catalog_snapshot_rejects_schema_and_policy_violations():
+    snapshot = targets.catalog_snapshot(_sample_config())
+    targets.validate_catalog_snapshot(snapshot)
+
+    tampered = deepcopy(snapshot)
+    tampered['snapshotDigest'] = DIGEST_A
+    with pytest.raises(ValueError, match='snapshotDigest'):
+        targets.validate_catalog_snapshot(tampered)
+
+    unsorted = deepcopy(snapshot)
+    unsorted['targets'] = list(reversed(unsorted['targets']))
+    with pytest.raises(ValueError, match='sorted'):
+        targets.validate_catalog_snapshot(unsorted)
+
+    by_key = {entry['targetKey']: entry for entry in snapshot['targets']}
+    unavail_qualified = deepcopy(by_key['albacore:cosmic:linux/amd64/v2'])
+    unavail_qualified['qualification'] = {
+        'status': 'qualified',
+        'reason': None,
+        'qualifiedAt': '2026-10-17T00:00:00Z',
+        'receiptDigest': DIGEST_C,
+        'browser': None,
+        'resources': None,
+    }
+    with pytest.raises(ValueError, match='available platformManifestDigest'):
+        targets.validate_catalog_entry(unavail_qualified)
+
+    missing_reason = deepcopy(by_key['albacore:cosmic:linux/amd64/v2'])
+    missing_reason['qualification']['reason'] = ''
+    with pytest.raises(ValueError, match='blocker reason'):
+        targets.validate_catalog_entry(missing_reason)
