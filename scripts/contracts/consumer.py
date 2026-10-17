@@ -38,6 +38,28 @@ from .base import validate_base
 from .sources import classify_policy
 
 
+def _sanitized_declaration(entry: dict) -> dict:
+    """Drop endpoint values that could persist authored credentials or directives."""
+    from urllib.parse import urlsplit, urlunsplit
+    endpoint_fields = {'baseurl', 'gpgkey', 'keyring_url', 'uri', 'url'}
+    clean = {}
+    for key, value in entry.items():
+        if key not in endpoint_fields or not isinstance(value, str):
+            clean[key] = value
+            continue
+        if any(character.isspace() for character in value):
+            continue
+        parsed = urlsplit(value)
+        if parsed.username is None and parsed.password is None:
+            clean[key] = value
+            continue
+        host = parsed.hostname or ''
+        if parsed.port is not None:
+            host += f':{parsed.port}'
+        clean[key] = urlunsplit((parsed.scheme, host, parsed.path, parsed.query, parsed.fragment))
+    return clean
+
+
 def digest(value: Any) -> str:
     return 'sha256:' + hashlib.sha256(canonical(value)).hexdigest()
 
@@ -142,7 +164,8 @@ def resolve_consumer(target: dict, config: dict, base_resolution: dict, source_r
                 if not _condition(entry.get('condition'), family):
                     continue
                 origin = f'{label}.{field}[{index}]'
-                sources.append({'declarationType': field, 'declaration': entry, 'origin': origin})
+                sources.append({'declarationType': field, 'declaration': _sanitized_declaration(entry),
+                                'origin': origin})
                 gap('source-snapshot-and-signature-unresolved', origin, 'observe enabled repository identity and content')
                 if field == 'copr':
                     for expression in _strings(entry.get('packages'), origin + '.packages'):

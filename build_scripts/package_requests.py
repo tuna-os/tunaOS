@@ -25,6 +25,11 @@ FLAGS = {"-y", "--assumeyes", "--noconfirm", "--needed", "--non-interactive", "-
 SAFE_EXPRESSION = re.compile(r"[A-Za-z0-9@+_.:*?!<>=~^%/-]+\Z")
 SAFE_REPO = re.compile(r"[A-Za-z0-9_.:*,-]+\Z")
 SETOPTS = {"install_weak_deps", "keepcache", "tsflags", "skip_if_unavailable", "gpgcheck", "repo_gpgcheck", "best", "timeout", "retries", "exclude", "module_platform_id"}
+PACMAN_COMPACT = {
+    "-S": "install", "-Sy": "install", "-Syu": "install", "-Syy": "install",
+    "-U": "install", "-R": "remove", "-Rdd": "remove", "-Rns": "remove",
+    "-Scc": "remove",
+}
 
 
 def normalize(manager: str, arguments: list[str]) -> dict | None:
@@ -37,12 +42,16 @@ def normalize(manager: str, arguments: list[str]) -> dict | None:
     options: list[str] = []
     if canonical == "pacman":
         flag = next((a for a in args if a.startswith("-") and not a.startswith("--")), "")
-        if flag.startswith(("-Q", "-F")) or (flag.startswith("-S") and any(c in flag[2:] for c in "islgp")):
+        if flag.startswith(("-Q", "-F")):
             return None
-        operation = "install" if flag.startswith(("-S", "-U")) else "remove" if flag.startswith("-R") else "unknown"
+        operation = PACMAN_COMPACT.get(flag, "unknown")
         if flag in args:
             args.remove(flag)
-        options.append(flag)
+        if operation == "unknown":
+            gaps.add("unsupported-manager-option")
+            args = []
+        else:
+            options.append(flag)
     elif canonical == "rpm":
         if any(a in {"--eval", "--showrc", "--version", "--help"} for a in args):
             return None

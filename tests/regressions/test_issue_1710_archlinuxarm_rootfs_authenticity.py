@@ -1,8 +1,12 @@
-"""Rootfs extraction must require the official detached signature.
+"""tunaOS#1710: Arch Linux ARM rootfs trust accepted same-channel HTTP+MD5.
 
-Falsification: tamper with rootfs, signature, pinned key, producer or published
-manifest identity. Cryptographic verification or receipt creation must fail.
-All commands in these tests execute in CI; no local test run is authorized.
+The issue measured a rootfs and checksum fetched over unauthenticated HTTP,
+allowing one network attacker to replace both. The gate now requires the
+pinned official signing key, detached signature, exact producer identity,
+trusted package signatures, and immutable candidate receipt.
+
+Falsification: tamper with rootfs, signature, pinned key, package trust policy,
+producer identity, or published manifest; verification must fail.
 """
 import hashlib
 import importlib.util
@@ -15,7 +19,7 @@ from types import SimpleNamespace
 import pytest
 
 spec = importlib.util.spec_from_file_location(
-    'alarm_rootfs', Path(__file__).parents[1] / 'scripts/verify-archlinuxarm-rootfs.py')
+    'alarm_rootfs', Path(__file__).parents[2] / 'scripts/verify-archlinuxarm-rootfs.py')
 alarm = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(alarm)
 
@@ -142,7 +146,7 @@ def receipt_fixture(directory, monkeypatch):
     (directory / 'digest.txt').write_text('sha256:' + hashlib.sha256((directory / 'manifest.json').read_bytes()).hexdigest())
     (directory / 'arch.txt').write_text('aarch64\n')
     (directory / 'inventory.txt').write_text('base 3-1\npacman 7.0-1\n')
-    (directory / 'policy.txt').write_text('core PackageRequired DatabaseOptional\n')
+    (directory / 'policy.txt').write_text('core PackageRequired PackageTrustedOnly DatabaseOptional\n')
     return SimpleNamespace(source_revision='d' * 40, repository='tuna-os/tunaOS',
                            workflow_ref='tuna-os/tunaOS/.github/workflows/build-archlinuxarm-base.yml@refs/heads/main',
                            run_id='123', run_attempt='1', image_repository='ghcr.io/tuna-os/archlinuxarm',
@@ -171,8 +175,11 @@ def test_receipt_rejects_invalid_producer_identity(tmp_path, monkeypatch, field,
         alarm.receipt(tmp_path, args)
 
 
-@pytest.mark.parametrize('file,body', [('arch.txt', 'x86_64'), ('policy.txt', 'core PackageOptional'),
-                                     ('digest.txt', 'sha256:' + 'f' * 64), ('inventory.txt', '')])
+@pytest.mark.parametrize('file,body', [
+    ('arch.txt', 'x86_64'), ('policy.txt', 'core PackageOptional PackageTrustedOnly'),
+    ('policy.txt', 'core PackageRequired PackageTrustAll'),
+    ('digest.txt', 'sha256:' + 'f' * 64), ('inventory.txt', ''),
+])
 def test_receipt_rejects_arch_signature_policy_and_digest_contradictions(tmp_path, monkeypatch, file, body):
     args = receipt_fixture(tmp_path, monkeypatch)
     (tmp_path / file).write_text(body)
@@ -181,7 +188,7 @@ def test_receipt_rejects_arch_signature_policy_and_digest_contradictions(tmp_pat
 
 
 def test_workflow_verifies_before_extraction_and_never_updates_production_tags():
-    text = (Path(__file__).parents[1] / '.github/workflows/build-archlinuxarm-base.yml').read_text()
+    text = (Path(__file__).parents[2] / '.github/workflows/build-archlinuxarm-base.yml').read_text()
     assert text.index('fetch-verify') < text.index('sudo tar -xpf')
     assert text.index('verify-local') < text.index('sudo tar -xpf')
     assert 'candidate-${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}' in text
@@ -193,14 +200,16 @@ def test_workflow_verifies_before_extraction_and_never_updates_production_tags()
 def test_repository_probe_cannot_consume_remaining_loop_input():
     # CI 38074478233 processed core only: buildah inherited the repository list
     # stdin and consumed extra/alarm/aur, leaving required proof files absent.
-    text = (Path(__file__).parents[1] / '.github/workflows/build-archlinuxarm-base.yml').read_text()
-    probe = text.split('while IFS= read -r repo; do', 1)[1].split('done <', 1)[0]
+    text = (Path(__file__).parents[2] / '.github/workflows/build-archlinuxarm-base.yml').read_text()
+    probe = text.split('while IFS= read -r repo', 1)[1].split('done <', 1)[0]
+    assert '|| [[ -n "$repo" ]]' in probe
     assert 'pacman-conf --repo "$repo" SigLevel' in probe
+    assert 'native-global-siglevel.txt' in probe
     assert '</dev/null' in probe
 
 
 def test_attestation_has_unprivileged_docker_registry_credentials():
-    text = (Path(__file__).parents[1] / '.github/workflows/build-archlinuxarm-base.yml').read_text()
+    text = (Path(__file__).parents[2] / '.github/workflows/build-archlinuxarm-base.yml').read_text()
     assert text.index('docker/login-action@') < text.index('Attest candidate build provenance')
     login = text.split('name: Authenticate attestation registry client', 1)[1].split('- name:', 1)[0]
     assert 'registry: ghcr.io' in login
@@ -243,7 +252,7 @@ def test_verified_receipt_reconciliation_rejects_substitutions(tmp_path, field, 
 
 
 def test_workflow_runs_crypto_verification_with_exact_ci_policy():
-    text = (Path(__file__).parents[1] / '.github/workflows/build-archlinuxarm-base.yml').read_text()
+    text = (Path(__file__).parents[2] / '.github/workflows/build-archlinuxarm-base.yml').read_text()
     step = text.split('name: Verify published candidate attestations', 1)[1].split('- name:', 1)[0]
     assert '--signer-workflow' not in step  # Mutually exclusive with exact certificate identity.
     for required in ('gh attestation verify', '--cert-identity',

@@ -45,6 +45,34 @@ def test_scheduler_shrink_does_not_remove_required_cells():
     assert after[3]['scheduled'] is False
 
 
+def test_permanent_flavor_limit_is_separate_from_scheduler_narrowing():
+    data = config()
+    data['variants'][0]['flavors'] = [{
+        'id': 'base-nvidia', 'build_image': True,
+        'platforms': ['linux/amd64'],
+        'required_platforms': ['linux/amd64'],
+    }]
+    records = [
+        row for row in targets.resolve_required_targets(data)
+        if row['target']['variant'] == 'albacore'
+    ]
+    assert [row['target']['platform'] for row in records] == ['linux/amd64']
+    assert records[0]['scheduled'] is True
+
+
+@pytest.mark.parametrize('flavor,platforms', [
+    ('gnome-asahi', ['linux/amd64', 'linux/arm64']),
+    ('gnome-t2', ['linux/amd64', 'linux/arm64']),
+])
+def test_hardware_incompatible_scheduler_cells_are_rejected(flavor, platforms):
+    data = config()
+    data['variants'][1]['flavors'] = [{
+        'id': flavor, 'build_image': True, 'platforms': platforms,
+    }]
+    with pytest.raises(ValueError):
+        targets.resolve_required_targets(data)
+
+
 def test_multiline_yaml_and_null_override_inherit_variant():
     loaded = yaml.safe_load('''variants:
   - id: yellowfin

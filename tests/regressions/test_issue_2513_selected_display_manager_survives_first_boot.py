@@ -1,11 +1,19 @@
-"""Hummingbird run38014578380 removed installed GDM links at first boot."""
+"""tunaOS#2513: run 38014578380 removed installed GDM links at first boot.
+
+The image selected GDM successfully, but a later vendor preset disabled its
+alias during the first preset-all. The installer now writes an earlier preset
+for the exact native display-manager unit.
+
+Falsification: remove the TunaOS preset or derive it from a generic alias; the
+behavioral helper no longer preserves the selected native greeter.
+"""
 import re
 import subprocess
 from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 INSTALL = ROOT / 'build_scripts/desktop/install-desktop.sh'
 
 
