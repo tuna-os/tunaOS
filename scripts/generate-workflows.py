@@ -62,8 +62,16 @@ def main():
     - cron: "{cron}"
 """
 
+    # Least-privilege token for the called build-variant.yml: it reads the
+    # repo, pushes images to GHCR, and signs with GitHub OIDC (keyless cosign).
+    permissions_block = """permissions:
+  contents: read
+  packages: write
+  id-token: write
+"""
+
     template = """name: Build {name_cap}
-on:
+{permissions}on:
 {schedule}  workflow_dispatch:
     inputs:
       flavor:
@@ -91,7 +99,7 @@ jobs:
 
     # Experimental variants: manual dispatch only — no cron schedule.
     template_experimental = """name: Build {name_cap} [experimental]
-on:
+{permissions}on:
   workflow_dispatch:
     inputs:
       flavor:
@@ -129,7 +137,8 @@ jobs:
             workflow_content = template_experimental.format(
                 name=name,
                 name_cap=name_cap,
-                emoji=emoji
+                emoji=emoji,
+                permissions=permissions_block
             )
         else:
             cron = SCHEDULES.get(name)
@@ -138,7 +147,8 @@ jobs:
                 name=name,
                 name_cap=name_cap,
                 emoji=emoji,
-                schedule=schedule
+                schedule=schedule,
+                permissions=permissions_block
             )
 
         file_path = f'.github/workflows/build-{name}.yml'

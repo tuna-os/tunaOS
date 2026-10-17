@@ -224,9 +224,10 @@ each one from scratch.
 | 53 | The **marlin arm64** ISO fails `Boot gate: verify ISO readiness` with `readiness marker not seen within 900s` and a blank screen, every night; amd64 marlin and every other arm64 ISO pass (run 36075112992) | **Arch Linux ARM's `linux-aarch64` cannot mount zstd squashfs, and tacklebox writes only zstd.** `serial.log`: `mount: /run/rootfsbase: fsconfig() failed: Filesystem uses "zstd" compression. This is not supported.` 165 times, then `A start job is running for dracut initqueue hook (20min …)`. The ALARM kernel config has `# CONFIG_SQUASHFS_ZSTD is not set` (XZ is `=y`). tacklebox's `live.go` hard-codes `-comp zstd`, and a `return` at the top level of `tbox-live-root.sh` turns the mount failure into an endless retry instead of a fast failure | `scripts/build-iso-tacklebox.sh` reads the image's kernel (`/usr/lib/modules/*/pkgbase` or a `*-aarch64-ARCH` module directory). For a kernel listed in `scripts/lib/squashfs-compat.sh`, it installs a `mksquashfs` wrapper in `/usr/local/bin` for the build, which rewrites `-comp zstd` to `xz`. `/usr/local/bin` is used because tacklebox calls mksquashfs through `sudo -u … podman unshare`, and sudo's secure_path drops a PATH prepend. It then reads each `/LiveOS` superblock out of the ISO and fails the build on zstd. Retire the wrapper when tacklebox takes a compressor in the recipe. Regression test: `tests/regressions/test_issue_2705_*` (tunaOS#2705) |
 | 54 | A Matrix Status refresh turns **every cell of one unchanged variant** from ✅ to ⬜, and the composite drops by 16. The provenance names a run about ten runs back (skipjack from 35351369196, 2026-09-18, in the 08:10 refresh of 2026-09-25; albacore from 35429236550, 2026-09-19, in the next one). The next refresh reads the variant correctly again, and the job log has no warning | **`build_stage_results` scored the variant from a page of runs that did not start at the newest.** None of the nine newer runs contributed, and the old run fell outside the 2-day freshness SLA. The fallback was the 11th run on main, so it cannot be in a correct first page of 10 | `main_runs()` checks each `gh run list` page against the workflow's newest run on main, read with its own API call. It fetches again when that run is missing, and after three stale answers the refresh fails instead of publishing. A completed run whose `run view` has no jobs also fails the refresh instead of being skipped. If a refresh fails with `never contained the newest run`, re-run it. Regression test: `tests/regressions/test_issue_2709_*` (tunaOS#2709) |
 | 55 | Bonito (or other digest-pinned variants) fails on both base architectures with `manifest unknown` / 404 (run 32965043165) | Quay/Docker garbage-collects untagged base image manifests upstream after newer builds land. The repository-wide scheduled check at 22:20 UTC was too far from the 11:20 UTC build to catch midday upstream deletions, and `.github/build-config.yml` lacked Renovate digest automation | (1) Added Renovate `customManager` in `renovate.json` for `.github/build-config.yml` `base_image:` pins; (2) added scoped variant preflight to `scripts/check-base-image-pins.sh`; (3) `build-variant.yml` runs `check-base-image-pins.sh` for the target variant in `generate_matrix` before matrix execution. Regression test: `tests/regressions/test_issue_2113_bonito_checks_its_pin_before_the_matrix.py` (tunaOS#2113) |
-| 56 | Local format checks change upstream reference files after Spektacular registers research repos | The format loops scan the entire checkout. The pinned shfmt lists 63 of 67 shell files under `.spektacular/repos/` as different; those files belong to separate upstream repositories | Exclude `.spektacular/repos/` from local format and lint scans. Keep all TunaOS source checks and the pinned formatter. Required target output is checked with the generator's read-only drift mode |
-| 57 | Boot matrix command-absence tests fail on hosts with corral or kubectl installed | Removing the stub leaves the host command on PATH, so the test does not exercise the intended missing-command branch | Run these cases with an isolated PATH and an absolute shell path. Keep the existing exit code and error message assertions. Check `tests/bats/test_boot_gate_matrix.bats` |
-| 58 | Consumer contracts label Stream 10 and ELN AMD64 as `x86-64` | OCI `amd64` identifies the architecture, not the CPU instruction baseline. [Stream 10](https://www.centos.org/centos10/) requires v3, and the [ELN compiler policy](https://github.com/fedora-eln/eln-docs/blob/0abe5115cfb197a56f27da86ecd96931542eb469/modules/ROOT/pages/buildroot.adoc) uses v3 | Resolve CPU baseline by variant. Keep Skipjack/Wahoo on `linux/amd64` with `x86-64-v3`; Alma stays on `linux/amd64/v2`. Regenerate required targets and reject contradictory identities |
+| 56 | The `regenerate` check (`gen-matrix-status.py --check-structure`) fails on every pull request after about 14 minutes with `RuntimeError: gh run view 38592759334 ... returned nothing after 3 attempts`. The log shows `HTTP 502: Server Error (.../runs/38592759334/jobs?per_page=100)` | `gh run view --json jobs` always asks for 100 jobs per page. For some large runs (31224494825, 38713238238, 38592759334, with 113 to 153 jobs) the API returns HTTP 502 for that page size on every attempt. With `per_page=50` the same runs return in seconds. The build walk raised on the failed query | `run_jobs()` tries `gh run view` first, then `gh api --paginate` with `per_page=50`. If both fail, the build walk skips that run with a warning, and an older run scores its cells. If a cell has no verdict from a readable run after a skip, the refresh still raises. Test: `tests/test_an_unreadable_run_is_skipped_not_fatal.py` |
+| 57 | Local format checks change upstream reference files after Spektacular registers research repos | The format loops scan the entire checkout. The pinned shfmt lists 63 of 67 shell files under `.spektacular/repos/` as different; those files belong to separate upstream repositories | Exclude `.spektacular/repos/` from local format and lint scans. Keep all TunaOS source checks and the pinned formatter. Required target output is checked with the generator's read-only drift mode |
+| 58 | Boot matrix command-absence tests fail on hosts with corral or kubectl installed | Removing the stub leaves the host command on PATH, so the test does not exercise the intended missing-command branch | Run these cases with an isolated PATH and an absolute shell path. Keep the existing exit code and error message assertions. Check `tests/bats/test_boot_gate_matrix.bats` |
+| 59 | Consumer contracts label Stream 10 and ELN AMD64 as `x86-64` | OCI `amd64` identifies the architecture, not the CPU instruction baseline. [Stream 10](https://www.centos.org/centos10/) requires v3, and the [ELN compiler policy](https://github.com/fedora-eln/eln-docs/blob/0abe5115cfb197a56f27da86ecd96931542eb469/modules/ROOT/pages/buildroot.adoc) uses v3 | Resolve CPU baseline by variant. Keep Skipjack/Wahoo on `linux/amd64` with `x86-64-v3`; Alma stays on `linux/amd64/v2`. Regenerate required targets and reject contradictory identities |
 
 **Pattern to notice (bugs #1-14):** almost every bug here was a live-squash-specific
 environment gap (missing package, missing locale, missing remote, wrong
@@ -779,7 +780,7 @@ resolving mountpoints: invalid options "rw, shared, rw, bind", can only specify 
 ```
 
 **Root cause:**
-Older versions of `crun` / `podman` on certain runner environments (e.g. Blacksmith or legacy GitHub runners) have a bug in how they parse mounts. The bug appears when a build passes explicit `rw` options to `--mount=type=cache,rw,...`. Because `type=cache` mounts default to read-write (`rw`) mode automatically, an explicit `rw` flag makes `crun` concatenate duplicate `rw` flags (`rw, shared, rw, bind`), and `crun` then rejects the mount initialization.
+Older versions of `crun` / `podman` on certain runner environments (e.g. third-party or legacy GitHub runners) have a bug in how they parse mounts. The bug appears when a build passes explicit `rw` options to `--mount=type=cache,rw,...`. Because `type=cache` mounts default to read-write (`rw`) mode automatically, an explicit `rw` flag makes `crun` concatenate duplicate `rw` flags (`rw, shared, rw, bind`), and `crun` then rejects the mount initialization.
 
 **Fix & Prevention:**
 1. **Omit explicit `rw` in cache mounts**: In Containerfiles or build scripts, omit the redundant `rw` modifier from buildah/podman cache mounts. For example, use `--mount=type=cache,id=...` instead of `--mount=type=cache,rw,id=...`.
@@ -1528,6 +1529,24 @@ Do not wait for the transaction from inside it. This check reports manager
 state; the separate display-manager and user-session checks prove more.
 
 
+## 32. Weekly boot report hides successful non-GNOME QCOW2 captures (#2801)
+
+**Symptom:** The 2026-09-28 report listed KDE, Niri, and COSMIC QCOW2
+screenshots as unavailable even though all 12 non-GNOME jobs in workflow run
+[36356753451](https://github.com/tuna-os/tunaOS/actions/runs/36356753451)
+completed successfully and uploaded their named artifacts.
+
+**Measured cause:** `generate-boot-report.py` fetched a QCOW2 screenshot only
+when the flavor's `build_qcow2` value was true. That setting tells the release
+process to publish an artifact, and was true only for GNOME. The separate
+`weekly-qcow2-screenshots.yml` matrix builds temporary disks and captured all
+four desktop flavors for Yellowfin, Albacore, Skipjack, and Bonito.
+
+**Fix:** Derive screenshot coverage from the weekly workflow's matrix in
+addition to the release flags, then fetch each declared artifact. The unit test
+uses the previous defect: the report must query a matrix cell with
+`build_qcow2: false` when the weekly workflow captures it.
+
 ### Adoption reports show `desktop` or `latest` for different images
 
 **Symptom:** Image info reports `desktop` or `latest` for different images. It does not identify each flavor or the actual update tag.
@@ -1552,7 +1571,7 @@ state; the separate display-manager and user-session checks prove more.
 
 **Measured cause:** [Corral 4c59a6be](https://github.com/tuna-os/corral/blob/4c59a6be9ea6532aa79c6407bab471b4202c1484/pkg/kubevirt/bootc.go#L536) has no kernel argument option for both fresh and resumed guests. The custom script uses a chroot in the raw root partition. Its KubeVirt path ignores a script failure. A command after SSH starts cannot prevent the first report.
 
-**Fix:** The PR gate uses the existing QCOW2/QEMU path; `iso-e2e.sh` sets the CI marker before boot. The helper for Corral exits 77 before guest creation unless both paths support the exclusion argument. `bats tests/bats/test_boot_gate_resume.bats` passes eight cases. This session booted no Corral guest.
+**Fix:** The boot gates use `scripts/corral-boot-gate.sh`. It gives `--karg tunaos.countme=0` to `corral vmtest`, and Corral writes the argument into the boot entry before the first boot. `bats tests/bats/test_corral_boot_gate.bats` checks the argument. The GPU-routed path through `iso-e2e.sh` sets the SMBIOS CI marker before boot. The KubeVirt helper `scripts/boot-gate.sh` exits 77 before guest creation unless both of its paths support the exclusion argument. `bats tests/bats/test_boot_gate_resume.bats` checks that helper.
 
 ### Adoption dashboard API returns HTTP 503
 
@@ -1578,3 +1597,83 @@ The Marlin override `50-marlin.toml` selects systemd-boot and ext4. Containerfil
 The image had both backends; the default preferred GNOME for Access.
 
 **Fix:** Select GTK for Access, and GNOME for Screenshot and ScreenCast. The contract for the installed desktop rejects missing, wrong, duplicate, or out-of-section preferences. The admission test runs the shell validator against the shipped configuration and broken variants. Verify the final image in its separate boot gate.
+
+### guppy:gnome installs GNOME 49 and fails the version floor (#2450)
+
+**Symptom:** The `gnome` build of `guppy` (Gentoo) stops in `verify-desktop-experience.sh` with this error:
+
+```
+GNOME 49 is below the floor: nothing below GNOME 50 ships
+```
+
+**Measured cause:** On 2026-10-07, stable amd64 in `::gentoo` stops at `gnome-shell-49.7`. The GNOME 50 ebuilds (`gnome-shell-50.5`, `mutter-50.5`, `gdm-50.3-r2`) have only the `~amd64` keyword. The official binhost builds only stable versions. Also, `gentoo-binhost-version-lock.sh` masks all `gnome-base` versions that are newer than the binhost. Thus a keyword for `gnome-shell` alone does not have an effect: the lock masks 50.5, the `--pretend` check resolves to 49.7, and the lock stays.
+
+**Fix:** The `emerge_accept_keywords` list in `manifests/desktops/gnome.yaml` gives the GNOME 50 core set. `install-desktop.sh` writes that list to `/etc/portage/package.accept_keywords` before the lock runs. The lock does not mask the packages in that file. These packages compile from source. If `emerge --pretend` shows a mixed 49/50 desktop, add the 49 package to the list. Do not add `gnome-base/nautilus`: `::gentoo` masks `>=nautilus-50` (bug 982084).
+
+### CI steps download an unpinned yq binary
+
+**Symptom:** A CI step downloads `releases/latest/download/yq_linux_amd64` from `mikefarah/yq` into `/usr/bin` or `/usr/local/bin`. The step does not pin a version.
+
+**Measured cause:** Issue tunaOS#2071 found these downloads in CI workflows. The `latest` link can change at any time. The step installs the file as root, and no step verifies the checksum of the downloaded file. If the upstream file changes, the new file runs as root on the runner.
+
+**Fix:** Workflows and composite actions use the `.github/actions/setup-yq` action. That action downloads yq `v4.53.3` and checks its SHA-256 value before it installs the file. It installs the file to `/usr/local/bin`, which comes before the runner image's `/usr/bin/yq` on `PATH`, and then fails the step if the yq on `PATH` does not report exactly `v4.53.3`. The test `tests/regressions/test_issue_2071_yq_downloads_are_pinned.py` checks each yq download in the workflows and actions.
+
+### AI porting agent executes untrusted upstream diffs with write token
+
+**Symptom:** Scheduled watch workflows send third-party commit diffs to LLM agents with write permissions. The agent commits and pushes branches without review.
+
+**Measured cause:** In #1740, `watch-upstream.yml` read commit text and diffs from third-party repositories. It embedded the diffs into `GEMINI_TASK.md` without checks. A malicious commit diff could inject instructions to write code or exfiltrate tokens (`GH_TOKEN`, `GEMINI_API_KEY`, `COPILOT_PAT`).
+
+**Fix:** Delete the legacy watch workflows and helper scripts. Upstream sync uses `snapshot-upstreams.yml`. That workflow vendors files into `_upstream-snapshots/` and creates pull requests for review. `tests/regressions/test_issue_1740_no_untrusted_upstream_diff_ai_write_pipeline.py` prevents new AI workflows with write tokens on untrusted diffs.
+
+### Codecov project and patch targets never appear on a pull request
+
+**Symptom:** `codecov.yml` declares project and patch targets, but no Codecov
+result or coverage trend appears after the `Unit Tests` job; only a downloadable
+`coverage-python.xml` artifact exists.
+
+**Measured cause:** On main at `957d9ec6`, a repository-wide search found no
+`codecov/codecov-action` or Codecov CLI invocation. `test.yml` generated the XML
+and passed it only to `actions/upload-artifact`, which does not send reports to
+Codecov or evaluate `codecov.yml`.
+
+**Fix (#2301):** Keep the artifact for debugging and also upload the same XML
+with the SHA-pinned Codecov action, the `python` flag, and GitHub OIDC. The BATS
+contract in `tests/bats/test_test_yml_pytest_always_runs.bats` holds the upload
+path and authentication mode. This report is Python-only; BATS and QEMU E2E
+coverage are behavior gates, not line-coverage inputs.
+
+### Workflow token scope depends on repository defaults
+
+**Symptom:** A workflow does not set `permissions:`. Its token can then receive
+scopes that the workflow does not use.
+
+**Measured cause:** The audit for tunaOS#2767 found 27 workflows that used the
+repository defaults for token scope.
+
+**Fix:** Set a narrow scope for each workflow. Give write access only to a job
+that changes GitHub state. The regression test for #2767 checks each workflow.
+
+### Admitted variant with missing rebuild repository fails CI
+
+**Symptom:** A new variant fails nightly builds for declared desktops (e.g. 10+ red nights for Hummingbird).
+
+**Measured cause (#1755, #1763):** The project admitted Hummingbird without a check for desktop packages or aarch64 repodata. Declared desktops had no manifest sections.
+
+**Fix (#1763):** Extend `VARIANT-LIFECYCLE.md` with a completeness check. Verify repo reachability across declared arches. Add manifest sections before setting `build_image: true`. Exclude unbuilt arches until package sources exist.
+
+
+### A LUKS cell passes its desktop contract and fails the pixel gate (#979)
+
+**Symptom:** The LUKS path logs `desktop_contract=ok`, but the
+`installed-desktop` capture has `stddev=0` and the pixel gate fails the cell.
+
+**Measured cause:** `luks-first-boot.py` sent `system_powerdown` when it
+returned. `iso-e2e.sh` then took the capture during the shutdown. A guest that
+stopped its display manager in that 8s window left a black framebuffer. Run
+36873532817 failed 33 cells this way (sddm, gdm and lightdm). Cells that
+stopped more slowly passed.
+
+**Fix:** `iso-e2e.sh` always sets `TUNAOS_LUKS_NO_POWEROFF=1`. It takes the
+capture first, then sends the graceful powerdown itself before the kill.
+`tests/bats/test_luks_capture_before_powerdown.bats` holds that order.

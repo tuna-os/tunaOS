@@ -16,6 +16,9 @@ name: Prose
 # only ever goes down. Lower it when a batch of prose lands; never raise it to
 # make a PR pass.
 
+permissions:
+  contents: read
+
 on:
   pull_request:
     # .ste-budget and this file are in the filters on purpose: a change to
@@ -34,6 +37,10 @@ on:
       - .github/workflows/ste.yml
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   ste:
-    uses: tuna-os/.github/.github/workflows/ste-lint.yml@cde723dc46637f65cf51904bd0cbaeacf53ecea5 # main
+    uses: tuna-os/.github/.github/workflows/ste-lint.yml@5bcb013a3ec3604f937ff5d397fdd051848c4f19 # main

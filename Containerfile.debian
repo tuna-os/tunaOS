@@ -7,7 +7,7 @@
 #   buildah build --build-arg BASE_IMAGE=docker.io/library/debian:trixie \
 #     --target=kde --file Containerfile.debian .
 
-ARG BASE_IMAGE="docker.io/library/debian:trixie@sha256:9cc080028c43b27d2074d63a5f9caf7166d731494965616c1a6d2827a004585c"
+ARG BASE_IMAGE="docker.io/library/debian:trixie@sha256:913f6706df59a68922d1dd08f78c2476560a8d367897200a6005b00e5f67c2d5"
 ARG COMMON_IMAGE_REF="ghcr.io/projectbluefin/common:unpinned-must-override"
 
 ARG DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
@@ -54,6 +54,10 @@ COPY system_files /files
 COPY system_files_overrides /overrides
 COPY build_scripts /build_scripts
 COPY manifests /manifests
+# Only Tuna's curated files: install-desktop.sh applies experiences/<desktop>
+# whenever it is present, and the other desktops' trees are not part of the
+# apt images today.
+COPY experiences/tuna /experiences/tuna
 COPY image-versions.yaml /image-versions.yaml
 
 FROM ${COMMON_IMAGE_REF} AS common
@@ -135,7 +139,15 @@ RUN apt-get update -y && \
         # customize-live.sh now catches its absence at ISO-build time.
         sudo \
         systemd \
+        # systemd-boot alone resolves its EFI binary to the signed
+        # systemd-boot-efi-amd64-signed on trixie and sid, which ships only
+        # systemd-bootx64.efi.signed. Corral's bootc backend probe looks for
+        # the plain systemd-bootx64.efi that systemd-boot-efi ships;
+        # without it `corral bootc create` of flounder:tuna-sid fell back to
+        # the ostree backend and died on "bootupd is required for ostree-based
+        # installs". Containerfile.ubuntu already names both packages.
         systemd-boot \
+        systemd-boot-efi \
         xfsprogs \
         dracut \
         dmsetup \
@@ -346,4 +358,12 @@ RUN ln -sf /var/opt /opt 2>/dev/null || true
 FROM base-no-de AS xfce
 RUN --mount=type=bind,from=context,source=/,target=/run/context \
     /run/context/build_scripts/desktop/install-desktop.sh xfce
+RUN ln -sf /var/opt /opt 2>/dev/null || true
+
+# Tuna Desktop (tuna-os/tuna-desktop ADR 0008, epic #577; tunaOS#3207 for
+# sid). tuna-desktop comes from the signed Tideforge apt index for the base's
+# Debian suite, declared in manifests/desktops/tuna.yaml.
+FROM base-no-de AS tuna
+RUN --mount=type=bind,from=context,source=/,target=/run/context \
+    /run/context/build_scripts/desktop/install-desktop.sh tuna
 RUN ln -sf /var/opt /opt 2>/dev/null || true

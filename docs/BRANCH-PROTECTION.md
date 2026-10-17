@@ -46,7 +46,7 @@ every PR into `main` today:
 
 | Workflow | Job(s) | Trigger |
 |---|---|---|
-| `lint.yml` (Lint and Check) | `lint`, `lint-summary` | every PR |
+| `lint.yml` (Lint and Check) | `lint` | every PR |
 | `test.yml` (Test) | `unit-tests` | every PR (path-filtered) |
 
 Other `pull_request`-triggered workflows (`iso-e2e.yml`, `just-fix.yml`,
@@ -60,7 +60,7 @@ smoke-checked had no packaging and were never wired into a real build.
 `conductor/` itself has since been deleted under the same issue.
 
 **Proposal**: the minimum required-status-checks list for a `main`-targeting
-ruleset should be `lint`, `lint-summary`, and `unit-tests`. Broader coverage
+ruleset should be `lint` and `unit-tests`. Broader coverage
 (ISO E2E, Matrix Status) should be phased in only if their triggers are
 widened to run unconditionally, or added as a separate, narrower ruleset
 scoped to the paths they already filter on.
@@ -76,12 +76,12 @@ must not be silently changed by a code workflow.
 1. Read back `GET /repos/tuna-os/tunaos/rulesets/10437561` and confirm that the
    target is `main` and enforcement is `active`.
 2. Add one `required_status_checks` rule containing exactly these contexts:
-   `lint`, `lint-summary`, and `unit-tests`. Keep the merge-queue rule enabled.
+   `lint` and `unit-tests`. Keep the merge-queue rule enabled.
 3. Decide whether the `OrganizationAdmin` and repository-role bypass actors
    are still necessary. If they remain, document the operational exception;
    if they are removed, verify that the merge queue can still be operated by
    the normal maintainer workflow.
-4. Open a small PR that triggers all three jobs and confirm that the ruleset's
+4. Open a small PR that triggers both jobs and confirm that the ruleset's
    rule-suite evaluation reports success before the PR can merge. A direct
    push or an admin merge is not evidence of enforcement because both can
    bypass the ruleset.

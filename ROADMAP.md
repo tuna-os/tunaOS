@@ -49,13 +49,51 @@ user-install evidence in its PR.
 > checkpoint (#1299) decides staff vs. descope. README coverage is tracked in
 > [#1298](https://github.com/tuna-os/tunaos/issues/1298). Hardware/kernel profiles
 > (e.g. `bonito:gnome-t2`, Apple Silicon Asahi, HWE) are in-scope under the
-> admission gate (#1270).
+> admission gate (#1270), and rebuild-based variants must satisfy the
+> rebuild-config completeness precondition (#1763).
+
+<!-- BEGIN GENERATED — scripts/gen-platform-coverage.py -->
+
+### Platform Coverage Matrix
+
+`scripts/gen-platform-coverage.py` makes this matrix from [`.github/build-config.yml`](./.github/build-config.yml). It records the desktop/platform combinations the image factory commits to build; it does not infer support from registry tags.
+
+- **S — Supported:** an active cell for a standard OCI image (`build_image: true`). Runtime evidence and current failures remain visible in [MATRIX-STATUS.md](docs/MATRIX-STATUS.md).
+- **E — Experimental:** an active Apple Silicon/Asahi cell. The boot chain has static verification, but the installer and real-hardware gates have not graduated it.
+- **U — Unsupported:** no active image cell and no release or maintenance commitment.
+
+| Variant | x86_64 | aarch64 | Apple Silicon (M1/M2, Asahi) |
+|---|---|---|---|
+| **yellowfin** | **S:** GNOME, KDE, COSMIC, Niri, XFCE, Tuna; <br>**U:** Pantheon | **S:** KDE, Niri; <br>**U:** GNOME, COSMIC, XFCE, Pantheon, Tuna | **U:** GNOME, KDE, COSMIC, Niri, XFCE, Pantheon, Tuna |
+| **albacore** | **S:** GNOME, KDE, COSMIC, Niri, XFCE, Tuna; <br>**U:** Pantheon | **S:** KDE, Niri; <br>**U:** GNOME, COSMIC, XFCE, Pantheon, Tuna | **U:** GNOME, KDE, COSMIC, Niri, XFCE, Pantheon, Tuna |
+| **skipjack** | **S:** GNOME, KDE, COSMIC, Niri, XFCE, Tuna; <br>**U:** Pantheon | **S:** KDE, Niri; <br>**U:** GNOME, COSMIC, XFCE, Pantheon, Tuna | **U:** GNOME, KDE, COSMIC, Niri, XFCE, Pantheon, Tuna |
+| **wahoo** | **S:** GNOME, KDE, COSMIC, Tuna; <br>**U:** Niri, XFCE, Pantheon | **S:** GNOME, KDE, COSMIC; <br>**U:** Niri, XFCE, Pantheon, Tuna | **U:** GNOME, KDE, COSMIC, Niri, XFCE, Pantheon, Tuna |
+| **bonito** | **S:** GNOME, KDE, COSMIC, Niri, XFCE, Tuna; <br>**U:** Pantheon | **S:** GNOME, KDE, COSMIC, Niri, XFCE; <br>**U:** Pantheon, Tuna | **E:** GNOME; <br>**U:** KDE, COSMIC, Niri, XFCE, Pantheon, Tuna |
+| **hummingbird** | **S:** GNOME, COSMIC; <br>**U:** KDE, Niri, XFCE, Pantheon, Tuna | **U:** GNOME, KDE, COSMIC, Niri, XFCE, Pantheon, Tuna | **U:** GNOME, KDE, COSMIC, Niri, XFCE, Pantheon, Tuna |
+| **sailfin** | **S:** GNOME, KDE, COSMIC, Niri, XFCE, Tuna; <br>**U:** Pantheon | **S:** GNOME; <br>**U:** KDE, COSMIC, Niri, XFCE, Pantheon, Tuna | **U:** GNOME, KDE, COSMIC, Niri, XFCE, Pantheon, Tuna |
+| **guppy** | **S:** GNOME, KDE, XFCE; <br>**U:** COSMIC, Niri, Pantheon, Tuna | **U:** GNOME, KDE, COSMIC, Niri, XFCE, Pantheon, Tuna | **U:** GNOME, KDE, COSMIC, Niri, XFCE, Pantheon, Tuna |
+| **bonito-rawhide** | **S:** GNOME, KDE, COSMIC, Niri, XFCE, Tuna; <br>**U:** Pantheon | **S:** GNOME, KDE, COSMIC, Niri, XFCE; <br>**U:** Pantheon, Tuna | **U:** GNOME, KDE, COSMIC, Niri, XFCE, Pantheon, Tuna |
+| **gurnard** | **S:** Pantheon; <br>**U:** GNOME, KDE, COSMIC, Niri, XFCE, Tuna | **S:** Pantheon; <br>**U:** GNOME, KDE, COSMIC, Niri, XFCE, Tuna | **U:** GNOME, KDE, COSMIC, Niri, XFCE, Pantheon, Tuna |
+| **grouper** | **S:** GNOME, KDE, COSMIC, XFCE, Tuna; <br>**U:** Niri, Pantheon | **S:** GNOME, KDE, XFCE; <br>**U:** COSMIC, Niri, Pantheon, Tuna | **E:** GNOME; <br>**U:** KDE, COSMIC, Niri, XFCE, Pantheon, Tuna |
+| **marlin** | **S:** GNOME, KDE, COSMIC, Niri, XFCE, Tuna; <br>**U:** Pantheon | **S:** GNOME; <br>**U:** KDE, COSMIC, Niri, XFCE, Pantheon, Tuna | **U:** GNOME, KDE, COSMIC, Niri, XFCE, Pantheon, Tuna |
+| **flounder** | **S:** KDE, XFCE, Tuna; <br>**U:** GNOME, COSMIC, Niri, Pantheon | **U:** GNOME, KDE, COSMIC, Niri, XFCE, Pantheon, Tuna | **U:** GNOME, KDE, COSMIC, Niri, XFCE, Pantheon, Tuna |
+| **flounder-sid** | **S:** GNOME, KDE, XFCE, Tuna; <br>**U:** COSMIC, Niri, Pantheon | **U:** GNOME, KDE, COSMIC, Niri, XFCE, Pantheon, Tuna | **U:** GNOME, KDE, COSMIC, Niri, XFCE, Pantheon, Tuna |
+
+#### Platform parity commitment
+
+Standard aarch64 support is a per-variant commitment, not a claim that every desktop works on every base. The flavor-equality mandate applies to cells marked **S**; it does not turn a missing package stack into a supported cell.
+
+Apple Silicon has **2 active experimental desktop cell(s)**, all derived from enabled `*-asahi` flavors. GNOME is the only Apple Silicon target for a desktop now. KDE, COSMIC, Niri, XFCE, Pantheon, and Tuna are **U — Unsupported** on Apple Silicon, with no parity date or release commitment. Gates control expansion. First, GNOME must pass a gate for boot and session on a real Mac, and the installer must ship. Then each additional desktop needs its own enabled `-asahi` flavor and the same static and hardware evidence.
+
+The scheduled Asahi sweep can continue to inspect old tags after a build cell is disabled. A tag or sweep entry is historical test inventory, not support. See [the hardware tiers for Asahi CI](docs/ASAHI-HARDWARE-TIERS.md) for the missing hardware evidence.
+
+<!-- END GENERATED — scripts/gen-platform-coverage.py -->
 
 ### Proposed flavors
 
 | Flavor | Owner | Stage | Acceptance / tracker |
 |--------|-------|-------|----------------------|
-| Marlin Roost (amd64, rolling) | @hanthor | Proposal, best effort; capacity confirmed and signed served package install verified 2026-10-04; experimental image build enabled | Signed Tideforge package, greetd session picker, desktop contract and VM boot, then GHCR publication and bootc switch; [#2990](https://github.com/tuna-os/tunaOS/issues/2990), [upstream #69](https://github.com/hanthor/roost-desktop/issues/69). One image/boot cell; no new ISO or LUKS cells. |
+| Marlin Tuna Desktop, formerly Roost (amd64, rolling) | @hanthor | Proposal, best effort; capacity confirmed and signed served `tuna-desktop` package install verified 2026-10-09 (tunaos-packages run 37881967008); experimental image build enabled; flavor renamed `roost` → `tuna` after [tuna-desktop#536](https://github.com/tuna-os/tuna-desktop/pull/536); the old `marlin:roost` tag remains frozen at its last published image and is no longer updated | Signed Tideforge `tuna-desktop` package, greetd session picker, desktop contract and VM boot, then GHCR publication and bootc switch; [#2990](https://github.com/tuna-os/tunaOS/issues/2990), [upstream #69](https://github.com/tuna-os/tuna-desktop/issues/69). One image/boot cell; no new ISO or LUKS cells. |
 
 ### Build Health
 
@@ -71,19 +109,18 @@ user-install evidence in its PR.
 - Multi-agent development active (architect, guide, sec-check, quality, CI, outreach)
 - 34+ community outreach issues filed; product-readiness gate (#563) resolved
 - ⚠️ Adoption metrics untracked — no usage/telemetry data on the 179 downloadable ISOs (#1174); **plan published 08-10** ([ADOPTION-METRICS.md](./ADOPTION-METRICS.md)) — first monthly download/usage snapshot targeted 2026-11-01 (Q4 "Mature")
-- 🟡 ROADMAP coverage improving — **16/37 active authorized repos now carry a ROADMAP.md** (2026-08-14): tunaos, tromso, tacklebox, docs, xfce-linux, bluefin-cli, Tavern, corral, tunaos-packages, **bootc-installer** (ROADMAP moved to default branch via PR #14, 08-14 — #1361 resolved), bootc-migrate, dualcut, gtk-office-suite, iso-builder, protota, wootc; template merged into .github project-starter (#13). Excluded from planning scope: ubuntu + letters (**archived** 2026-08-12). Still unplanned (21 active): .github, flatpak-index, bootc-installer-asahi, branding, bst-ci, changelog-action, debian-copr, finupdate, fisherman, homebrew-tap, kde-build-meta, mandelbrot, mariner, remora, scoop-bucket, suite-common, suite-common-rust, tuna-installer-cosmic/kde/niri/xfce (#1295)
 <!-- BEGIN GENERATED — scripts/gen-roadmap-coverage.py -->
 
-- 🟡 **Per-repo ROADMAP coverage — 40 of 45 active repos (89%)**, measured 2026-09-17 by [`scripts/gen-roadmap-coverage.py`](./scripts/gen-roadmap-coverage.py).
+- 🟡 **Per-repo ROADMAP coverage — 36 of 44 active repos (82%)**, measured 2026-10-03 by [`scripts/gen-roadmap-coverage.py`](./scripts/gen-roadmap-coverage.py).
   Scope is every non-archived, non-private repo in the `tuna-os` org; a repo counts as
   planned when `ROADMAP.md` is at the root of its **default branch**. Archived repos are out
   of scope because a read-only repo cannot be planned.
 
-  **Planned (40)**: .github, bluefin-cli, blueshell, bootc-installer, bootc-installer-asahi, bootc-migrate, branding, bst-ci, changelog-action, corral, debian-copr, docs, dualcut, finupdate, fisherman, flatpak-index, gnome-hive-monitor, gtk-office-suite, hive, homebrew-tap, iso-builder, mandelbrot, mariner, protota, remora, scoop-bucket, spindle, suite-common, suite-common-rust, tacklebox, Tavern, tromso, tuna-installer-cosmic, tuna-installer-kde, tuna-installer-niri, tuna-installer-xfce, tunaOS, tunaos-packages, wootc, xfce-linux.
+  **Planned (36)**: .github, bluefin-cli, blueshell, bootc-installer, bootc-installer-asahi, bootc-migrate, branding, bst-ci, changelog-action, corral, docs, dualcut, finupdate, fisherman, flatpak-index, gnome-hive-monitor, gtk-office-suite, hive, homebrew-tap, iced, iso-builder, mandelbrot, mariner, protota, remora, scoop-bucket, spindle, suite-common, suite-common-rust, tacklebox, Tavern, tromso, tunaOS, tunaos-packages, wootc, xfce-linux.
 
-  Counted on a non-`main` default branch: `blueshell` on `ptyxis-port`, `bootc-installer` on `dev`, `changelog-action` on `master`, `fisherman` on `dev`, `hive` on `v4`, `mariner` on `master` — these are the repos' own default branches, not strandings.
+  Counted on a non-`main` default branch: `blueshell` on `ptyxis-port`, `bootc-installer` on `dev`, `changelog-action` on `master`, `fisherman` on `dev`, `hive` on `v4`, `iced` on `master`, `mariner` on `master` — these are the repos' own default branches, not strandings.
 
-  **Unplanned (5)**: compass, hive-operator, kde-build-meta, quickcast, rdocx. Tracked by #1295.
+  **Unplanned (8)**: ccleft, compass, hive-operator, libcosmic, PaperWM, quickcast, rdocx, rust-atomicwrites. Tracked by #2820.
 
 <!-- END GENERATED -->
 - ⚪ **"First external contributor" claim retracted (#1317, corrected 2026-08-13)**: the shimonenator commits (EL10/OBS design fixing #777, image-factory completion gate) are **not** a human contribution — maintainer confirmed the account is misattributed by GitHub because the Google Antigravity agent is listed as commit author; `git log` shows `commit.author.name: antigravity` on every one of that account's commits. **Superseded 2026-08-14**: the **first external human contributions landed and merged the same day** — docs #234 (QEMU/KVM guide, dchaudhari7177) and docs #239 (Gurnard Pantheon fix, Elonon901001), both verified human GitHub accounts (created 2022, real-name profiles). These are docs-repo contributions, not core-code: bus-factor risk (#1095) for core repos is unchanged, but the onboarding loop (seed → PR → merge) is now demonstrably end-to-end, which materially strengthens the Hacktoberfest seeding case (#1537).
@@ -191,7 +228,7 @@ See [SECURITY.md](./SECURITY.md) for vulnerability reporting.
 |------|-------|--------------|
 | Tacklebox decoupling | architect | #1192 (tracker; #306 closed) — audited 2026-08-14: of #306's 4 recommendations, 3 already landed (`TACKLEBOX_SHA`/`TACKLEBOX_IMAGE` version pinning via `scripts/lib/common.sh`; tacklebox runs as a `ghcr.io/tuna-os/tacklebox` container image, not a host-installed binary; the flagged `ghcr.io/hanthor/bluefin:lts` `iso.toml` reference no longer exists in this repo's own build path). Real remaining gap: **the version pin has no single source of truth** — `image-versions.yaml` (`4fa6041`, renovate-tracked) diverges from hardcoded overrides in `publish-iso-groups.yml` (`a105d6d3`) and `luks-e2e.yml` (`fd95174`, the documented floor SHA, not the current pin). Consolidating those onto one pin needs real boot evidence before merging (see Build Health note above on why `publish-iso-groups.yml`'s divergence was left as a deliberate, not accidental, gap) — flagged as the concrete next step, not actioned blind |
 | Upstream snapshot automation | ci-maintainer | #1194 (tracker; #307 closed) — **live (weekly refresh PRs merging; `snapshot-upstreams.yml` runs Mondays 09:00 UTC)** |
-| Branch protection + required CI | strategist | CI health, #1167 — audited 2026-08-13: [BRANCH-PROTECTION.md](./docs/BRANCH-PROTECTION.md), active `main` ruleset has no required-status-checks rule; proposed list is `lint`, `lint-summary`, `unit-tests` |
+| Branch protection + required CI | strategist | CI health, #1167 — audited 2026-08-13: [BRANCH-PROTECTION.md](./docs/BRANCH-PROTECTION.md), active `main` ruleset has no required-status-checks rule; proposed list is `lint`, `unit-tests` |
 | Supply chain hardening | sec-check | #1193 (tracker; #212/#301 closed) — coordinates with #1187 (package signing/SBOM is the largest hardening item, tracked there in detail) |
 | Release automation | ci-maintainer | CI health, VERSIONING.md, #1186 |
 | Community governance model | strategist | #1168 — [docs/GOVERNANCE.md](./docs/GOVERNANCE.md) |
@@ -205,7 +242,7 @@ See [SECURITY.md](./SECURITY.md) for vulnerability reporting.
 | Fedora 45 base readiness | ci-maintainer | #1171 — [FEDORA-BASE-POLICY.md](./FEDORA-BASE-POLICY.md) adopted 08-13: N+rawhide model, Fedora 45 planning sequenced after Bonito (#272) GA, not parallel |
 | Adoption metrics / usage telemetry | strategist | #1174 |
 | **Adoption evidence (ADOPTERS.md production entries)** | strategist | #1348 — zero public production adopters vs "Mature" claim; first entries at 2026-11-01 snapshot |
-| Variant lifecycle policy (admission + Beta→Stable exit criteria) | strategist | #1196, #1175, #1270, #1254, #1294 — [VARIANT-LIFECYCLE.md](./VARIANT-LIFECYCLE.md) |
+| Variant lifecycle policy (admission + Beta→Stable exit criteria) | strategist | #1196, #1175, #1270, #1254, #1294, #1763 — [VARIANT-LIFECYCLE.md](./VARIANT-LIFECYCLE.md) |
 | **Windows conversion channel (wootc) — beta gate + winget** | strategist / wootc maintainer | #1988, wootc#211, wootc#221 — Q3 carryover. Q4 scope: full-tier matrix green (wootc#222), BitLocker path (wootc#223), winget package live, and wootc's adoption numbers folded into the #1174 metrics snapshot and #1743 Q4 sequencing. This is the org's only adoption channel that reaches users not already running Linux |
 
 **Milestone fidelity (#1307, 2026-08-12)**: 7 of the 9 goal trackers above were
