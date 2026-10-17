@@ -201,10 +201,11 @@ packages:
   # Every COSMIC package below is served by tunaos-hummingbird, but Build
   # Hummingbird run 38660870261 still could not install the session:
   # libsndfile had no libvorbis provider, cosmic-greeter had no fprintd-pam,
-  # and cosmic-files had no installable udisks2. The digest-pinned
+  # and cosmic-files had no installable udisks2. The configured
   # projectbluefin/utah-packages repository now carries those dependencies
-  # in Hummingbird's own build root (1,446 binary names measured in digest
-  # 210e8c5 on 2026-10-17). Priority 4 lets that coherent closure win over
+  # in the configured OCI image, pinned in image-versions.yaml at
+  # sha256:fb4ef19676127430af4a7aa5ea5f9ee2cebdcfdf17e665c509eefb6896cdfc76.
+  # Its measured dependency inventory has 1,446 binary names (2026-10-17).
   # overlapping packages in the supplemental tunaOS snapshot at priority 5;
   # COSMIC itself still comes from tunaos-hummingbird.
   #
