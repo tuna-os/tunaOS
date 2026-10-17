@@ -815,6 +815,51 @@
     "arch": "x86_64"
   },
   {
+    "variant": "stingray",
+    "flavor": "base",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "stingray",
+    "flavor": "base",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "stingray",
+    "flavor": "cosmic",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "stingray",
+    "flavor": "gnome",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "stingray",
+    "flavor": "gnome",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "stingray",
+    "flavor": "kde",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "stingray",
+    "flavor": "kde",
+    "arch": "x86_64"
+  },
+  {
+    "variant": "stingray",
+    "flavor": "xfce",
+    "arch": "aarch64"
+  },
+  {
+    "variant": "stingray",
+    "flavor": "xfce",
+    "arch": "x86_64"
+  },
+  {
     "variant": "wahoo",
     "flavor": "base",
     "arch": "aarch64"

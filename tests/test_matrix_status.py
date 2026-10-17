@@ -332,15 +332,15 @@ class UndeclaredCellsAreNotCountedAgainstUs(unittest.TestCase):
             gms.VOLATILE_LINE,
         )
 
-    def test_the_real_build_config_declares_52_luks_cells(self):
+    def test_the_real_build_config_declares_56_luks_cells(self):
         """Ties the unit tests above to the actual denominator on disk.
 
         If this number moves, the LUKS total moves with it, and that should be
         a deliberate build-config edit rather than a surprise.
 
-        51 -> 52 on 2026-10-07: guppy:gnome is on again. ::gentoo now has
-        GNOME 50.5 under ~amd64, and manifests/desktops/gnome.yaml
-        emerge_accept_keywords accepts it (tunaOS#2450).
+        52 -> 56 on 2026-10-17: the dispatch-only Stingray proposal adds its
+        four declared desktops. Like Wahoo below, these cost monthly LUKS
+        sweep cells but no nightly build capacity (tunaOS#3252).
 
         52 -> 51 on 2026-09-11: guppy:gnome is off. ::gentoo's main tree tops
         out at GNOME 49.9, below the 50 floor
@@ -388,13 +388,14 @@ class UndeclaredCellsAreNotCountedAgainstUs(unittest.TestCase):
         the Niri stack and zero `xfce*`), so they add nothing here.
         """
         matrix = gms.luks_matrix()
-        self.assertEqual(sum(len(v) for v in matrix.values()), 52)
+        self.assertEqual(sum(len(v) for v in matrix.values()), 56)
         # The control that makes the drop specific rather than merely smaller:
         # hummingbird keeps exactly the desktops it has package sets for.
         self.assertEqual(matrix.get("hummingbird"), {"gnome", "cosmic"})
         # wahoo carries exactly the desktops ELN composes -- and notably NOT
         # niri or xfce, which is what keeps this an honest denominator.
         self.assertEqual(matrix.get("wahoo"), {"gnome", "cosmic", "kde"})
+        self.assertEqual(matrix.get("stingray"), {"gnome", "cosmic", "kde", "xfce"})
         self.assertNotIn("cosmic", matrix.get("flounder", set()))
         self.assertNotIn("cosmic", matrix.get("flounder-sid", set()))
         # A control: the flavours flounder DOES declare are still there, so

@@ -34,6 +34,7 @@ on:
       - Build Marlin
       - Build Sailfin
       - Build Skipjack
+      - "Build Stingray [experimental]"
       - Build Yellowfin
       # The weekly lifecycle sweep fails the same two infra ways the
       # nightlies do (GHCR/podman on hosted runners), and its 08-13 red run

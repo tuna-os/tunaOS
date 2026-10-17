@@ -53,6 +53,7 @@ on:
       - Build Sailfin
       - Build Skipjack
       - "Build Wahoo [experimental]"
+      - "Build Stingray [experimental]"
       - Build Yellowfin
     types: [completed]
   workflow_dispatch:

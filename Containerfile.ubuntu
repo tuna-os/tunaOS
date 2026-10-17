@@ -1,8 +1,8 @@
-# Containerfile.ubuntu — TunaOS grouper (Ubuntu 26.04 "Resolute Raccoon")
+# Containerfile.ubuntu — TunaOS Ubuntu variants
 #
-# RFC 010. Builds directly from stock docker.io/library/ubuntu:resolute and
-# applies all TunaOS customizations while apt is fully intact, then bootcifies
-# as the final per-variant step.
+# RFC 010. Builds directly from a stock Ubuntu base selected by build-config
+# and applies all TunaOS customizations while apt is fully intact, then
+# bootcifies as the final per-variant step.
 #
 # Key design (mirrors bootc-shindig/ubuntu-bootc-remix):
 #   * No pre-stripped bootc base image, no apt bootstrap hacks — apt just works.
@@ -48,15 +48,17 @@ RUN apt-get update -y && \
 
 # The sid toolchain ships bootc but no libostree, because sid packages one new
 # enough (build-toolchain.yml gives it build_ostree: "0"). That assumption holds
-# on resolute and fails on noble, whose 2024.5 lacks the LIBOSTREE_2025.* symbol
-# versions bootc is linked against — gurnard:pantheon got all the way to
-# `bootc install to-filesystem` inside the VM before finding out.
+# on resolute and stonking and fails on noble, whose 2024.5 lacks the
+# LIBOSTREE_2025.* symbol versions bootc is linked against — gurnard:pantheon
+# got all the way to `bootc install to-filesystem` inside the VM before finding
+# out.
 #
 # So probe it: run the bootc we are about to ship against this base's packaged
 # libostree and, ONLY when it cannot load, build an ABI-matched one from the
-# pinned source into the toolchain tree. A no-op on resolute, and on any future
-# base whose archive catches up. Deciding this behaviourally rather than from a
-# release-name case is what keeps the two releases from needing a table here.
+# pinned source into the toolchain tree. A no-op on resolute, stonking, and any
+# future base whose archive is current enough. Deciding this behaviourally
+# rather than from a release-name case is what keeps the releases from needing
+# a table here.
 #
 # COPY, not the usual context bind mount: a bind mount's content is not part of
 # the layer's cache key (see the BUILD_SCRIPTS_HASH comment below), so editing
@@ -164,10 +166,11 @@ COPY --from=bootc-builder /output /
 #
 #   noble    (24.04, gurnard)   ostree 2024.5-1build2   -> too old
 #   resolute (26.04, grouper)   ostree 2025.7-3build1   -> fine
+#   stonking (26.10, stingray)  ostree 2026.x           -> probed at build time
 #
-# So resolute installs the archive library and noble must not: apt would put
-# 2024.5 on the same path the source-built one occupies, and bootc would be
-# right back to "version LIBOSTREE_2025.2 not found".
+# Current Ubuntu releases install the archive library; noble must not because
+# apt would put 2024.5 on the same path the source-built one occupies, leaving
+# bootc right back at "version LIBOSTREE_2025.2 not found".
 #
 # Containerfile.debian keeps the archive out on trixie with an equivs dummy, and
 # the trap worth writing down is that the dummy is only half of that pattern:
@@ -282,12 +285,13 @@ RUN set -eux; \
 #
 # systemd-cryptenroll, which fisherman requires to enrol the TPM2 keyslot, is
 # handled separately below because WHICH package ships it depends on the
-# release, and this Containerfile serves two:
+# release, and this Containerfile serves three:
 #
-#   noble    (24.04, gurnard)  -> systemd            (no systemd-cryptsetup)
-#   resolute (26.04, grouper)  -> systemd-cryptsetup (systemd no longer has it)
+#   noble    (24.04, gurnard)   -> systemd            (no systemd-cryptsetup)
+#   resolute (26.04, grouper)   -> systemd-cryptsetup
+#   stonking (26.10, stingray)  -> systemd-cryptsetup
 #
-# Naming either one unconditionally breaks the other release.
+# Naming either one unconditionally breaks noble.
 RUN --mount=type=bind,from=context,source=/,target=/run/context \
     apt-get update -y && \
     apt-get install -y --no-install-recommends \

@@ -94,6 +94,7 @@ Defined in `.github/build-config.yml`. The workflow is `build-variant.yml` → `
 | `sailfin` | ⛵ | openSUSE Tumbleweed (rolling) | zypper | Beta |
 | `guppy` | 🌈 | Gentoo Linux (source-based) | portage | Beta |
 | `grouper` | 🪸 | Ubuntu 26.04 | apt | Beta |
+| `stingray` | 🐟 | Ubuntu 26.10 | apt | Experimental |
 | `marlin` | 🚀 | Arch Linux (rolling), CachyOS kernel overlay | pacman | Beta |
 | `flounder` | 🐡 | Debian 13 Trixie (stable) | apt | Beta |
 | `flounder-sid` | ☢️ | Debian Sid (unstable, rolling) | apt | Beta |

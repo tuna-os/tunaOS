@@ -342,6 +342,15 @@ const SCENES = {
     s.emoji('fish', W * 0.4, H * 0.3, 260, { flip: true, filter: 'url(#lift)' });
   },
 
+  // A wide ray-like silhouette gliding over the sand.
+  stingray(s) {
+    s.underwater({ glowAt: [0.5, 0.3], glow: 0.4 }).bubbles(18).seafloor(H * 0.84);
+    s.glowDisc(W * 0.5, H * 0.55, 820, mix(s.accent, '#ffffff', 0.55), 0.18);
+    s.emoji('fish', W * 0.5, H * 0.5, 700, { flip: true, filter: 'url(#lift)' });
+    s.school('fish', 16, { from: [0.08, 0.3], to: [0.92, 0.2], size: [65, 135], depthBias: 1 });
+    for (const [x, sz] of [[0.08, 260], [0.9, 300]]) s.emoji('coral', W * x, H * 0.82 - sz * 0.3, sz, { depth: 0.35 });
+  },
+
   // Liftoff: straight out of the sea into the night.
   marlin(s) {
     const hz = H * 0.66;

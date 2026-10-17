@@ -105,6 +105,10 @@ tuna_rollout:
   # check is blocked on the tuna-desktop session-start fix until a release
   # ships it; the per-variant results are on tuna-desktop#577.
   grouper: {status: admitted, package_target: ubuntu, portals: "blocked on tuna-desktop session-start fix"}
+  stingray:
+    status: unsupported
+    package_target: stonking
+    reason: "unsupported until package target stonking exists and publishes tuna-desktop; the package factory currently targets Ubuntu resolute only"
   flounder: {status: admitted, package_target: trixie, portals: "blocked on tuna-desktop session-start fix"}
   flounder-sid: {status: admitted, package_target: debian, portals: "blocked on tuna-desktop session-start fix"}
   guppy:
@@ -1573,10 +1577,10 @@ variants:
         build_qcow2: false
 
   # ── Ubuntu ───────────────────────────────────────────────────────────────
-  # RFC 010: Ubuntu 26.04 variant. x86_64-only.
-  # Desktops: gnome/kde/niri/xfce via the apt branches in build_scripts/*.sh
-  # (cosmic has no apt branch yet). No HWE/NVIDIA layers — Ubuntu ships its
-  # own kernel stack and the akmods images are RPM-only.
+  # RFC 010: stock Ubuntu bootcification on amd64 and arm64.
+  # Desktops use the apt paths in Containerfile.ubuntu and the manifests.
+  # No HWE/NVIDIA layers — Ubuntu ships its own kernel stack and the akmods
+  # images are RPM-only.
   # ── elementary / Pantheon ──────────────────────────────────────────
   # A SEPARATE variant rather than a grouper flavour, and the base image is
   # why. Pantheon is absent from the Ubuntu archive entirely (verified on
@@ -1707,6 +1711,41 @@ variants:
         stage: 2
         build_image: true
         build_iso: true
+
+  # Ubuntu 26.10 is admitted as an experimental, dispatch-only proposal under
+  # #3252. Reuse the release-agnostic Ubuntu bootcification path, but start with
+  # only the archive-backed desktop set. No Tuna flavor until tunaos-packages
+  # gains a stonking target; no Asahi or ZFS profile until each clears its own
+  # hardware/filesystem admission gate.
+  - id: stingray
+    emoji: "🐟"
+    upstream_track: experimental
+    description: "Based on Ubuntu 26.10 Stonking Stingray"
+    base_image: "docker.io/library/ubuntu:stonking@sha256:93e29beff5257b2cdf1c024d831f6d2997e53655a653ff76a811fc9e6564a719"
+    aliases: [ubuntu-26.10]
+    platforms: ["linux/amd64", "linux/arm64"]
+    experimental: true
+    flavors:
+      - id: base
+        stage: 1
+        build_image: true
+      - id: gnome
+        stage: 2
+        build_image: true
+        build_iso: true
+      - id: kde
+        stage: 2
+        build_image: true
+        build_iso: true
+      - id: cosmic
+        stage: 2
+        platforms: ["linux/amd64"]
+        build_image: true
+      - id: xfce
+        stage: 2
+        build_image: true
+        build_iso: true
+
 
   # ── Arch Linux ─────────────────────────────────────────────────────────────
   # Marlin: rolling-release Arch Linux on bootc. Uses Containerfile.arch
