@@ -424,6 +424,9 @@ class FactoryHealthSummary(unittest.TestCase):
         )
 
         self.assertEqual(got["factory_health"], {"green": 1, "total": 2})
+        self.assertEqual(got["builds"], {"passed": 1, "tested": 2, "total": 2})
+        self.assertEqual(got["boots"], {"passed": 0, "tested": 0, "total": 0})
+        self.assertEqual(got["desktop"], {"passed": 0, "tested": 0, "total": 0})
         self.assertEqual(got["install"], {"passed": 1, "tested": 1, "total": 2})
         self.assertEqual(got["lifecycle"], {"passed": 1, "tested": 2, "total": 2})
         self.assertEqual(got["builds"], {"passed": 1, "tested": 2, "total": 2})
@@ -571,6 +574,29 @@ class LifecycleResultsNormalisation(unittest.TestCase):
                 "bonito-rawhide:gnome (arm64)": (second, "2026-08-17", "1"),
             })
             self.assertEqual(got["bonito-rawhide:gnome"][0], "failure")
+
+    def test_expected_lifecycle_names_match_unprefixed_rawhide_and_sid_jobs(self):
+        config = {
+            "variants": [
+                {
+                    "id": "bonito-rawhide",
+                    "platforms": ["linux/amd64"],
+                    "flavors": [{"id": "gnome", "build_image": True}],
+                },
+                {
+                    "id": "flounder-sid",
+                    "platforms": ["linux/amd64"],
+                    "flavors": [{"id": "kde", "build_image": True}],
+                },
+            ]
+        }
+        assert gms.lifecycle_sweep_jobs(config) == {
+            "bonito-rawhide:gnome (amd64)",
+            "flounder-sid:kde (amd64)",
+        }
+        assert gms.lifecycle_job_key("BETA guppy:gnome (amd64)") == (
+            "guppy:gnome (amd64)"
+        )
 
     def test_non_cell_jobs_are_ignored(self):
         got = self._with_raw({
