@@ -86,12 +86,12 @@ _Each cell reports the newest conclusive main-branch run that asserted it, so a 
 | :--- | ---: | :--- | :--- | :--- |
 | 🐠 `yellowfin` | **19/19** | [✅ 2026-10-17](https://github.com/tuna-os/tunaOS/actions/runs/39002887881) | — | — |
 | 🐟 `albacore` | **19/19** | [✅ 2026-10-17](https://github.com/tuna-os/tunaOS/actions/runs/39012158502) | — | — |
-| 🍣 `skipjack` | **17/17** | [✅ 2026-10-16](https://github.com/tuna-os/tunaOS/actions/runs/38912184041) | — | — |
+| 🍣 `skipjack` | **17/17** | [✅ 2026-10-17](https://github.com/tuna-os/tunaOS/actions/runs/39034746241) | — | — |
 | 🎏 `wahoo` | **4/5** | [❌ 2026-10-16](https://github.com/tuna-os/tunaOS/actions/runs/38906627617) | tuna | — |
 | 🎣 `bonito` | **17/17** | [✅ 2026-10-16](https://github.com/tuna-os/tunaOS/actions/runs/38923430235) | — | — |
 | 🐦 `hummingbird` | **1/3** | [❌ 2026-10-15](https://github.com/tuna-os/tunaOS/actions/runs/38660870261) | gnome | cosmic |
 | ⛵ `sailfin` | **7/7** | [✅ 2026-10-16](https://github.com/tuna-os/tunaOS/actions/runs/38973819810) | — | — |
-| 🌈 `guppy` | **3/4** | [❌ 2026-10-16](https://github.com/tuna-os/tunaOS/actions/runs/38894192116) | — | gnome |
+| 🌈 `guppy` | **3/4** | [❌ 2026-10-17](https://github.com/tuna-os/tunaOS/actions/runs/39026403898) | — | gnome |
 | 🐉 `bonito-rawhide` | **13/15** | [❌ 2026-10-16](https://github.com/tuna-os/tunaOS/actions/runs/38950334306) | tuna | gnome |
 | 🤖 `gurnard` | **2/2** | [✅ 2026-10-17](https://github.com/tuna-os/tunaOS/actions/runs/39018141731) | — | — |
 | 🪸 `grouper` | **8/8** | [✅ 2026-10-16](https://github.com/tuna-os/tunaOS/actions/runs/38958728560) | — | — |
@@ -103,8 +103,8 @@ _Each cell reports the newest conclusive main-branch run that asserted it, so a 
 
 | Image | Built by | Desktop | Latest main build |
 | :--- | :--- | :--- | :--- |
-| 🏔️ `ghcr.io/tuna-os/tromso` | [tromso](https://github.com/tuna-os/tromso) | KDE | [✅ 2026-10-15](https://github.com/tuna-os/tromso/actions/runs/38684318450) |
-| 🐭 `ghcr.io/tuna-os/xfce-linux` | [xfce-linux](https://github.com/tuna-os/xfce-linux) | XFCE | [✅ 2026-10-16](https://github.com/tuna-os/xfce-linux/actions/runs/38835702023) |
+| 🏔️ `ghcr.io/tuna-os/tromso` | [tromso](https://github.com/tuna-os/tromso) | KDE | [❌ 2026-10-17](https://github.com/tuna-os/tromso/actions/runs/39003961947) |
+| 🐭 `ghcr.io/tuna-os/xfce-linux` | [xfce-linux](https://github.com/tuna-os/xfce-linux) | XFCE | [✅ 2026-10-17](https://github.com/tuna-os/xfce-linux/actions/runs/38990653529) |
 
 **Built 138/147 · composite green 125/147 (93% built)** — The remainder has **3 failures** and **6 never reached** (stale: 0); no job asserted the latter. We show the two values separately. A cell with no job has no test, but it can still work.
 
@@ -115,7 +115,6 @@ _Each cell reports the newest conclusive main-branch run that asserted it, so a 
 **Known regressions: 11 `blocking`, 94 advisory**
 
 **Last full sweep: 46 days ago (2026-09-01)**
-
 The score for composite green uses published cells, per [docs/MATRIX-STATUS.md](docs/MATRIX-STATUS.md). [`.github/green-criteria.yml`](.github/green-criteria.yml) provides the score. Today, these criteria prevent publication: `boots`, `builds`, `desktop`, `no_silent_omissions`, `parity`. A cell must satisfy each criterion.
 
 Skipped cells and cells with no test do not count as green. The full per-axis board is [docs/MATRIX-STATUS.md](docs/MATRIX-STATUS.md). This snapshot of CI shows one point in time. It does not promise a support tier.
