@@ -86,7 +86,7 @@ _Each cell reports the newest conclusive main-branch run that asserted it, so a 
 | :--- | ---: | :--- | :--- | :--- |
 | 🐠 `yellowfin` | **19/19** | [✅ 2026-10-17](https://github.com/tuna-os/tunaOS/actions/runs/39002887881) | — | — |
 | 🐟 `albacore` | **19/19** | [✅ 2026-10-17](https://github.com/tuna-os/tunaOS/actions/runs/39012158502) | — | — |
-| 🍣 `skipjack` | **14/17** | [✅ 2026-10-16](https://github.com/tuna-os/tunaOS/actions/runs/38912184041) | — | cosmic,cosmic-hwe,cosmic-nvidia |
+| 🍣 `skipjack` | **17/17** | [✅ 2026-10-16](https://github.com/tuna-os/tunaOS/actions/runs/38912184041) | — | — |
 | 🎏 `wahoo` | **4/5** | [❌ 2026-10-16](https://github.com/tuna-os/tunaOS/actions/runs/38906627617) | tuna | — |
 | 🎣 `bonito` | **17/17** | [✅ 2026-10-16](https://github.com/tuna-os/tunaOS/actions/runs/38923430235) | — | — |
 | 🐦 `hummingbird` | **1/3** | [❌ 2026-10-15](https://github.com/tuna-os/tunaOS/actions/runs/38660870261) | gnome | cosmic |
@@ -103,16 +103,16 @@ _Each cell reports the newest conclusive main-branch run that asserted it, so a 
 
 | Image | Built by | Desktop | Latest main build |
 | :--- | :--- | :--- | :--- |
-| 🏔️ `ghcr.io/tuna-os/tromso` | [tromso](https://github.com/tuna-os/tromso) | KDE | [✅ 2026-10-13](https://github.com/tuna-os/tromso/actions/runs/38359745054) |
+| 🏔️ `ghcr.io/tuna-os/tromso` | [tromso](https://github.com/tuna-os/tromso) | KDE | [✅ 2026-10-15](https://github.com/tuna-os/tromso/actions/runs/38684318450) |
 | 🐭 `ghcr.io/tuna-os/xfce-linux` | [xfce-linux](https://github.com/tuna-os/xfce-linux) | XFCE | [✅ 2026-10-16](https://github.com/tuna-os/xfce-linux/actions/runs/38835702023) |
 
-**Built 135/147 · composite green 89/147 (91% built)** — The remainder has **3 failures** and **9 never reached** (stale: 0); no job asserted the latter. We show the two values separately. A cell with no job has no test, but it can still work.
+**Built 138/147 · composite green 89/147 (93% built)** — The remainder has **3 failures** and **6 never reached** (stale: 0); no job asserted the latter. We show the two values separately. A cell with no job has no test, but it can still work.
 
 **Factory health: 89/147 cells green**
 
-**Install-tested: 13/52 · Lifecycle-tested: 36/52 · Never tested: 186**
+**Install-tested: 52/52 · Lifecycle-tested: 49/52 · Never tested: 178**
 
-**Known regressions: 3 `blocking`, 44 advisory**
+**Known regressions: 3 `blocking`, 52 advisory**
 
 **Last full sweep: 46 days ago (2026-09-01)**
 
