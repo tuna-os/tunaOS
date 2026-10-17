@@ -414,13 +414,20 @@ class FactoryHealthSummary(unittest.TestCase):
                 "install": {"verdict": "untested", "date": ""},
                 "lifecycle": {"verdict": "pass", "date": "2026-08-12"},
             },
+            "albacore:base": {
+                "boots": {"verdict": "untested", "date": ""},
+            },
         }
         generated = "**1 of 2** published cells are composite-green."
-        got = gms.factory_health_summary(provenance, generated)
+        got = gms.factory_health_summary(
+            provenance, generated, ["2026-08-14"]
+        )
 
         self.assertEqual(got["factory_health"], {"green": 1, "total": 2})
         self.assertEqual(got["install"], {"passed": 1, "tested": 1, "total": 2})
         self.assertEqual(got["lifecycle"], {"passed": 1, "tested": 2, "total": 2})
+        # The base flavor's empty boot slot is out of scope, so only marlin's
+        # applicable missing install evidence enters this count.
         self.assertEqual(got["never_tested"], 1)
         self.assertEqual(got["known_regressions"]["blocking"], 1)
         self.assertEqual(got["known_regressions"]["advisory"], 1)

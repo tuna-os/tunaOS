@@ -159,6 +159,36 @@ class RunWalkPicksTheNewestAuthoritativeResult(unittest.TestCase):
         ]}
         self.assertEqual(self._fetch(runs, jobs), {})
 
+    def test_targeted_rerun_does_not_advance_full_sweep_date(self):
+        runs = [
+            {"databaseId": 2, "createdAt": "2026-08-06T00:00:00Z", "status": "completed"},
+            {"databaseId": 1, "createdAt": "2026-08-05T00:00:00Z", "status": "completed"},
+        ]
+        jobs = {
+            "2": [{"name": "cell a", "conclusion": "success"}],
+            "1": [
+                {"name": "cell a", "conclusion": "failure"},
+                {"name": "cell b", "conclusion": "success"},
+            ],
+        }
+
+        def fake(*args):
+            if args[0:2] == ("run", "list"):
+                return runs
+            if args[0:2] == ("run", "view"):
+                return {"jobs": jobs[args[2]]}
+            return None
+
+        with mock.patch.object(gms, "gh_json", side_effect=fake):
+            results, full_sweep = gms._collect_latest_results(
+                "wf.yml",
+                r"^cell ",
+                {"cell a", "cell b"},
+                lambda name: name,
+            )
+        self.assertEqual(results["cell a"], ("success", "2026-08-06", "2"))
+        self.assertEqual(full_sweep, "2026-08-05")
+
 
 class ApiOutageCurrentlyDegradesSilently(unittest.TestCase):
     """Characterises a gap between the module docstring and the behaviour.

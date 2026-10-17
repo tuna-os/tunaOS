@@ -329,14 +329,12 @@ jobs:
             ]
           github-token: ${{ github.token }}
 
-      # create-release owns the changelog/release card, then this repository
-      # appends the verification block from the same generated JSON that feeds
-      # the README. Keeping it as a post-step avoids a second interpretation of
-      # matrix health and preserves the action's generated notes.
+      # create-release owns the changelog/release card. Append verification only
+      # to the release created in this run: an existing release's digest and
+      # attached SPDX inventory are historical evidence and must not be replaced
+      # with today's tag/SBOM data. This also makes dry runs strictly read-only.
       - name: Append release verification report
-        if: >-
-          steps.release.outcome == 'success' ||
-          steps.existing.outputs.exists == 'true'
+        if: steps.release.outcome == 'success'
         env:
           GH_TOKEN:      ${{ github.token }}
           REPO:          ${{ github.repository }}
