@@ -5,7 +5,6 @@ import json
 import subprocess
 import sys
 from pathlib import Path
-
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts/render-release-verification.py"
 SPEC = importlib.util.spec_from_file_location("release_verification", SCRIPT)
@@ -89,7 +88,6 @@ def test_workflow_cli_arguments_render_the_digest(tmp_path):
     )
 
     assert "- Digest: `sha256:abc`" in output.read_text()
-
 
 def test_stored_release_identity_uses_original_immutable_reference():
     digest = "sha256:" + "a" * 64

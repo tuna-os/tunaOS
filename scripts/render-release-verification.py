@@ -20,7 +20,6 @@ def fraction(summary: dict, axis: str) -> str:
     )
 
 
-
 def stored_image_identity(body: str) -> tuple[str, str]:
     """Recover the immutable image identity generated into a release card."""
     matches = set(
@@ -33,9 +32,10 @@ def stored_image_identity(body: str) -> tuple[str, str]:
         raise ValueError("release body does not contain one immutable image identity")
     return matches.pop()
 
+
+
 def render(payload: dict, image: str, digest: str, sbom_packages: int) -> str:
     summary = payload["summary"]
-    cells = payload["cells"]
     health = summary["factory_health"]
     regressions = summary["known_regressions"]
     built = summary["builds"]["passed"]
@@ -80,6 +80,7 @@ def render(payload: dict, image: str, digest: str, sbom_packages: int) -> str:
             END,
         ]
     )
+
 
 
 def main() -> int:

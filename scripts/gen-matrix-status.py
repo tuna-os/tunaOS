@@ -760,12 +760,40 @@ def _axis_from_results(results: dict, key: str) -> str:
     return _stage_verdict(hit[0] if hit else None)
 
 
-# bootc-lifecycle job names carry an arch suffix, and the smoke-tier jobs a
-# BETA prefix: "yellowfin:gnome (amd64)", "BETA guppy:gnome (amd64)". The
-# composite and the Lifecycle section key cells as plain "variant:flavor".
+# bootc-lifecycle job names carry an arch suffix, and the beta lane adds a
+# display-only "BETA " prefix. The collector uses a prefix-neutral identity for
+# full-sweep coverage while lifecycle_results() keys the evidence by cell.
 _LIFECYCLE_NAME = re.compile(
-    r"^(?:BETA\s+)?(?P<cell>[a-z0-9-]+:[a-z0-9-]+)\s+\([a-z0-9]+\)$"
+    r"^(?:BETA\s+)?(?P<cell>[a-z0-9-]+:[a-z0-9-]+)\s+\((?P<arch>[a-z0-9]+)\)$"
 )
+
+
+def lifecycle_job_key(name: str) -> str | None:
+    """Canonical job identity, preserving the architecture and dropping BETA."""
+    match = _LIFECYCLE_NAME.match(name)
+    if not match:
+        return None
+    return f"{match.group('cell')} ({match.group('arch')})"
+
+
+def lifecycle_sweep_jobs(config: dict | None = None) -> set[str]:
+    """Exact prefix-neutral job identities in the lifecycle matrix."""
+    config = config or load_build_config(CONFIG)
+    jobs = set()
+    for variant in config.get("variants", []):
+        variant_id = variant["id"]
+        for flavor in variant.get("flavors", []):
+            flavor_id = flavor["id"]
+            if (not flavor.get("build_image") or flavor_id == "base"
+                    or flavor_id.startswith("base-")):
+                continue
+            platforms = flavor.get("platforms")
+            if platforms is None:
+                platforms = variant.get("platforms") or []
+            for architecture in ("amd64", "arm64"):
+                if f"linux/{architecture}" in platforms:
+                    jobs.add(f"{variant_id}:{flavor_id} ({architecture})")
+    return jobs
 
 
 def lifecycle_results(
@@ -773,21 +801,19 @@ def lifecycle_results(
 ) -> dict[str, tuple[str, str, str]]:
     """Cell-keyed lifecycle verdicts, worst-of-arches.
 
-    The wiring below was written before Bootc Lifecycle had ever run, and
-    the first real sweep (run 32040213366, 168 jobs) proved the raw job
-    names never matched a cell lookup: every cell rendered ⬜ while 133
-    passes sat in the run. Normalise the names here, and merge a cell's
-    arch legs pessimistically — one green leg must not mask a red one, for
-    the same reason never-tested is not green.
+    The wiring below was written before Bootc Lifecycle had ever run, and the
+    first real sweep (run 32040213366, 168 jobs) proved the raw job names never
+    matched a cell lookup. Normalize the names here, and merge a cell's arch
+    legs pessimistically — one green leg must not mask a red one.
     """
     if raw_results is None:
         raw_results = latest_results("bootc-lifecycle.yml", r":")
     merged: dict[str, tuple[str, str, str]] = {}
     for name, hit in raw_results.items():
-        m = _LIFECYCLE_NAME.match(name)
-        if not m:
+        match = _LIFECYCLE_NAME.match(name)
+        if not match:
             continue
-        cell = m.group("cell")
+        cell = match.group("cell")
         prev = merged.get(cell)
         if prev is None or (prev[0] == "success" and hit[0] == "failure"):
             merged[cell] = hit
@@ -1086,7 +1112,7 @@ def factory_health_summary(
 
     if full_sweep_dates is None:
         full_sweep_dates = FULL_SWEEP_DATES.values()
-    return {
+    summary = {
         "factory_health": {
             "green": int(match.group(1)),
             "total": int(match.group(2)),
@@ -1100,6 +1126,7 @@ def factory_health_summary(
         "known_regressions": regressions,
         "last_full_sweep": max((date for date in full_sweep_dates if date), default=""),
     }
+    return summary
 
 
 def build() -> str:
@@ -1127,7 +1154,7 @@ def build() -> str:
         "bootc-lifecycle.yml",
         r":",
         expected_lifecycle_jobs,
-        lambda name: name if _LIFECYCLE_NAME.match(name) else None,
+        lifecycle_job_key,
     )
     lifecycle = lifecycle_results(lifecycle_raw)
     FULL_SWEEP_DATES.update(
