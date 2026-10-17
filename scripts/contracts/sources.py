@@ -11,14 +11,27 @@ ENDPOINT_KEYS = {"baseurl", "gpgkey", "keyring_url", "uri", "url"}
 ALLOWED_REPO_HOSTS = ("repo.tunaos.org", "tideforge.org")
 
 
-def _records(value: object, path: str = "") -> list[tuple[str, tuple[str, str]]]:
-    found: list[tuple[str, tuple[str, str]]] = []
+def _consumer_scope(path: str) -> str:
+    """Return the manifest consumer scope while ignoring list positions."""
+    parts = [component.split("[", 1)[0] for component in path.split(".") if component]
+    if "packages" in parts:
+        index = parts.index("packages")
+        return ".".join(parts[:index + 2])
+    return parts[0] if parts else ""
+
+
+def _records(value: object, path: str = "") -> list[tuple[str, tuple[str, str, str]]]:
+    found: list[tuple[str, tuple[str, str, str]]] = []
     if isinstance(value, dict):
         for key, child in value.items():
             name = str(key)
             key_path = f"{path}.{name}" if path else name
             if name.lower() in FORBIDDEN_KEYS:
-                fingerprint = (name.lower(), json.dumps(child, sort_keys=True, separators=(",", ":")))
+                fingerprint = (
+                    _consumer_scope(key_path),
+                    name.lower(),
+                    json.dumps(child, sort_keys=True, separators=(",", ":")),
+                )
                 found.append((f"{key_path}: {name} is not an approved package source", fingerprint))
             found.extend(_records(child, key_path))
     elif isinstance(value, list):
@@ -26,7 +39,7 @@ def _records(value: object, path: str = "") -> list[tuple[str, tuple[str, str]]]
             found.extend(_records(child, f"{path}[{index}]"))
     elif isinstance(value, str) and path.rsplit(".", 1)[-1] in ENDPOINT_KEYS:
         name = path.rsplit(".", 1)[-1]
-        fingerprint = (name, value)
+        fingerprint = (_consumer_scope(path), name, value)
         if re.search(r"\s", value):
             found.append((f"{path}: repository endpoint contains whitespace", fingerprint))
             return found
