@@ -1390,6 +1390,9 @@ variants:
         stage: 2
         platforms: ["linux/amd64"]
         build_image: true
+        # Build and qualify the testing tag, but hold the public flavor tag
+        # until tuna-desktop#577's parent-release approval is complete.
+        promotion_hold: true
         build_iso: false
         build_qcow2: false
         luks_e2e: false

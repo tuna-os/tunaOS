@@ -157,7 +157,8 @@ jobs:
                 flavor:        .id,
                 stage:         (if $event == "pull_request" then 1 else .stage end),
                 build_iso:     (.build_iso  // false),
-                build_qcow2:   (.build_qcow2 // false)
+                build_qcow2:   (.build_qcow2 // false),
+                promotion_hold: (.promotion_hold // false)
               }
           ' | jq -c -s '.')
 
@@ -175,7 +176,8 @@ jobs:
                 flavor:        .flavor,
                 platforms:     .platforms,
                 platforms_json: .platforms_json,
-                base_image:    .base_image
+                base_image:    .base_image,
+                promotion_hold: .promotion_hold
               })
             }'
           }
@@ -262,6 +264,7 @@ jobs:
       platforms-json: ${{ matrix.platforms_json }}
       default-tag: ${{ matrix.published_tag }}
       publish: ${{ github.event_name != 'pull_request' }}
+      promote: ${{ !matrix.promotion_hold }}
       sbom: ${{ github.event_name != 'pull_request' }}
 
   # ── Stage 2: base-hwe, base-nvidia, and desktop base flavors ──────────────────
@@ -314,6 +317,7 @@ jobs:
       platforms-json: ${{ matrix.platforms_json }}
       default-tag: ${{ matrix.published_tag }}
       publish: true
+      promote: ${{ !matrix.promotion_hold }}
       sbom: true
 
   # ── Stage 3: Desktop HWE and nvidia flavors ───────────────────────────────────
@@ -353,6 +357,7 @@ jobs:
       platforms-json: ${{ matrix.platforms_json }}
       default-tag: ${{ matrix.published_tag }}
       publish: true
+      promote: ${{ !matrix.promotion_hold }}
       sbom: true
 
   # ── Stage 4: Combined nvidia+HWE flavors ──────────────────────────────────────
@@ -386,6 +391,7 @@ jobs:
       platforms-json: ${{ matrix.platforms_json }}
       default-tag: ${{ matrix.published_tag }}
       publish: true
+      promote: ${{ !matrix.promotion_hold }}
       sbom: true
 
   # ── Artifact builds per stage (ISO + QCOW2) ───────────────────────────────

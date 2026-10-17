@@ -75,6 +75,11 @@ on:
         required: false
         type: boolean
         default: true
+      promote:
+        description: "Copy the verified testing tag to the public flavor tag"
+        required: false
+        type: boolean
+        default: true
       remove-unwanted-software:
         description: "Run the remove-unwanted-software action to free up disk space"
         required: false
@@ -1811,7 +1816,7 @@ jobs:
     name: Promote
     needs: [manifest, sign, verify_desktop, verify_boot, verify_asahi]
     if: >-
-      !cancelled() && github.event_name != 'pull_request' &&
+      !cancelled() && inputs.promote && github.event_name != 'pull_request' &&
       needs.manifest.result == 'success' &&
       needs.sign.result == 'success' &&
       (needs.verify_desktop.result == 'success' || needs.verify_desktop.result == 'skipped') &&
