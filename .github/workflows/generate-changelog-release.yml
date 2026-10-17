@@ -329,27 +329,65 @@ jobs:
             ]
           github-token: ${{ github.token }}
 
-      # create-release owns the changelog/release card. Append verification only
-      # to the release created in this run: an existing release's digest and
-      # attached SPDX inventory are historical evidence and must not be replaced
-      # with today's tag/SBOM data. This also makes dry runs strictly read-only.
+      # create-release owns the changelog/release card. A retry may repair a
+      # release whose first report append failed, but it must derive identity
+      # from that release's body and attached SPDX inventory, never today's tag.
       - name: Append release verification report
-        if: steps.release.outcome == 'success'
+        if: >-
+          steps.check.outputs.skip == 'false' &&
+          inputs.dry_run != true &&
+          (steps.release.outcome == 'success' || steps.existing.outputs.exists == 'true')
         env:
           GH_TOKEN:      ${{ github.token }}
           REPO:          ${{ github.repository }}
           TAG:           ${{ steps.vars.outputs.tag }}
           VARIANT:       ${{ steps.vars.outputs.variant }}
           STREAM:        ${{ steps.vars.outputs.stream }}
-          DIGEST:        ${{ steps.digest.outputs.digest }}
-          SBOM_PACKAGES: ${{ steps.sbom.outputs.packages }}
+          CURRENT_DIGEST: ${{ steps.digest.outputs.digest }}
+          CURRENT_SBOM_PACKAGES: ${{ steps.sbom.outputs.packages }}
+          EXISTING:      ${{ steps.existing.outputs.exists }}
         run: |
           set -euo pipefail
           gh release view "$TAG" --repo "$REPO" --json body -q .body > release-body.md
+          if grep -Fq '<!-- release-verification:start -->' release-body.md; then
+            echo "Release ${TAG} already carries its verification snapshot"
+            exit 0
+          fi
+
+          IMAGE="${IMAGE_REGISTRY}/${VARIANT}:${STREAM}"
+          DIGEST="$CURRENT_DIGEST"
+          SBOM_PACKAGES="$CURRENT_SBOM_PACKAGES"
+          if [[ "$EXISTING" == "true" ]]; then
+            rm -rf _release-evidence
+            mkdir _release-evidence
+            gh release download "$TAG" --repo "$REPO" --dir _release-evidence \
+              --pattern '*.spdx.json'
+            mapfile -t SBOMS < <(find _release-evidence -type f -name '*.spdx.json')
+            if [[ "${#SBOMS[@]}" -ne 1 ]]; then
+              echo "::error::release ${TAG} must have exactly one attached SPDX inventory"
+              exit 1
+            fi
+            SBOM_PACKAGES=$(jq '(.packages // []) | length' "${SBOMS[0]}")
+            if [[ "$SBOM_PACKAGES" -lt "$SBOM_MIN_PACKAGES" ]]; then
+              echo "::error::release ${TAG} attached SPDX inventory is an unusable stub"
+              exit 1
+            fi
+            mapfile -t STORED < <(
+              python3 scripts/render-release-verification.py \
+                --stored-identity release-body.md
+            )
+            if [[ "${#STORED[@]}" -ne 2 ]]; then
+              echo "::error::could not recover original image identity from ${TAG}"
+              exit 1
+            fi
+            IMAGE="${STORED[0]}:${STREAM}"
+            DIGEST="${STORED[1]}"
+          fi
+
           python3 scripts/render-release-verification.py \
-            --image "${IMAGE_REGISTRY}/${VARIANT}:${STREAM}" \
-            --digest "${DIGEST}" \
-            --sbom-packages "${SBOM_PACKAGES}" \
+            --image "$IMAGE" \
+            --digest "$DIGEST" \
+            --sbom-packages "$SBOM_PACKAGES" \
             --body release-body.md \
             --output release-body-with-verification.md
           gh release edit "$TAG" --repo "$REPO" \
