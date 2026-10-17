@@ -48,8 +48,7 @@ jobs:
           set -euo pipefail
           MATRIX=$(yq -o=json '.' .github/build-config.yml | jq -c --arg v "$WANT_VARIANT" '{
             include: [ .variants[]
-              | select([.flavors[] | select(.build_image == true)
-                        | select(.id | test("^(gnome|kde|cosmic|niri|xfce)$"))] | length > 0)
+              | select([.flavors[] | select(.build_image == true)] | length > 0)
               | select($v == "all" or .id == $v)
               | {variant: .id} ]
           }')
@@ -81,59 +80,213 @@ jobs:
           WANT_VARIANT: ${{ matrix.variant }}
         run: |
           set -euo pipefail
-          # Same selection the browser catalog offers: published desktop images
-          # (build_image, plain desktop tags — no -nvidia/-hwe, no base).
+          # Probe all enabled flavors (select(.build_image == true)) and their
+          # declared/required platforms for this variant, plus live-overlay labels.
           mapfile -t CELLS < <(yq -o=json '.' .github/build-config.yml | jq -r \
             --arg v "$WANT_VARIANT" '
-              .variants[] | .id as $var | .flavors[]
+              .variants[] | select(.id == $v)
+              | .id as $var
+              | (.publish_name // .id) as $pub
+              | (.tag_suffix // "") as $sfx
+              | (.required_platforms // .platforms // ["linux/amd64", "linux/arm64"]) as $vplats
+              | .flavors[]
               | select(.build_image == true)
-              | select(.id | test("^(gnome|kde|cosmic|niri|xfce)$"))
-              | select($var == $v)
-              | "\($var):\(.id)"')
-          echo "probing ${#CELLS[@]} images for ${WANT_VARIANT}"
+              | .id as $fl
+              | (if $sfx != "" then "\($fl)-\($sfx)" else $fl end) as $tag
+              | ((.platforms // $vplats) + $vplats | unique | join(",")) as $plats
+              | "\($var)|\($fl)|\($pub)|\($tag)|\($plats)"')
+          echo "probing ${#CELLS[@]} flavor cells for ${WANT_VARIANT}"
 
-          echo '{}' > shard.json
-          for CELL in "${CELLS[@]}"; do
-            IMG="ghcr.io/tuna-os/${CELL}"
-            echo "::group::${CELL}"
-            # Digest first: it is what the app validates its cache against, and
-            # a miss means the image is not published — skip rather than emit
-            # a stale entry.
-            DIGEST=$(skopeo inspect --format '{{.Digest}}' "docker://${IMG}" 2>/dev/null || true)
-            if [[ -z "$DIGEST" ]] || ! podman pull -q "$IMG" >/dev/null 2>&1; then
+          echo '{"images":{},"descriptors":{},"overlays":{}}' > shard.json
+          for ENTRY in "${CELLS[@]}"; do
+            IFS='|' read -r VAR FLAVOR PUB TAG PLATS_CSV <<< "$ENTRY"
+            CELL="${VAR}:${FLAVOR}"
+            REPO="ghcr.io/tuna-os/${PUB}"
+            IMG="${REPO}:${TAG}"
+            echo "::group::${CELL} (${IMG})"
+
+            RAW_MANIFEST=$(skopeo inspect --raw "docker://${IMG}" 2>/dev/null || true)
+            if [[ -z "$RAW_MANIFEST" ]]; then
               echo "unavailable; skipping"; echo "::endgroup::"; continue
             fi
+            TOP_DIGEST="sha256:$(printf '%s' "$RAW_MANIFEST" | sha256sum | awk '{print $1}')"
 
-            # Probe the same signals purefs.Introspect derives from the
-            # unpacked tree, so the app shows identical facts.
-            PROBE=$(podman run --rm --entrypoint="" "$IMG" sh -c '
-              echo "kernelVer=$(ls /usr/lib/modules 2>/dev/null | head -1)"
-              if   [ -f /usr/share/wayland-sessions/plasma.desktop ] \
-                || [ -f /usr/share/wayland-sessions/plasmawayland.desktop ]; then echo "desktop=kde"
-              elif [ -f /usr/share/wayland-sessions/niri.desktop ];   then echo "desktop=niri"
-              elif [ -f /usr/share/wayland-sessions/cosmic.desktop ]; then echo "desktop=cosmic"
-              elif ls /usr/share/xsessions/xfce*.desktop >/dev/null 2>&1 \
-                || ls /usr/share/wayland-sessions/xfce*.desktop >/dev/null 2>&1; then echo "desktop=xfce"
-              else echo "desktop=gnome"; fi
-              [ -f /usr/lib/systemd/boot/efi/systemd-bootx64.efi ] && echo "hasSdBoot=true" || echo "hasSdBoot=false"
-              if   command -v dnf >/dev/null 2>&1 || command -v dnf5 >/dev/null 2>&1; then echo "pkgManager=dnf"; echo "repoFamily=fedora"
-              elif command -v zypper >/dev/null 2>&1; then echo "pkgManager=zypper"; echo "repoFamily=opensuse"
-              elif command -v pacman >/dev/null 2>&1; then echo "pkgManager=pacman"; echo "repoFamily=arch"
-              elif command -v apt >/dev/null 2>&1 || command -v apt-get >/dev/null 2>&1; then echo "pkgManager=apt"; echo "repoFamily=debian"
-              elif command -v apk >/dev/null 2>&1; then echo "pkgManager=apk"; echo "repoFamily=alpine"
-              else echo "pkgManager="; echo "repoFamily="; fi
-            ' 2>/dev/null || true)
+            PROBE=""
+            if podman pull -q "$IMG" >/dev/null 2>&1; then
+              PROBE=$(podman run --rm --entrypoint="" "$IMG" sh -c '
+                echo "kernelVer=$(ls /usr/lib/modules 2>/dev/null | head -1)"
+                if   [ -f /usr/share/wayland-sessions/plasma.desktop ] \
+                  || [ -f /usr/share/wayland-sessions/plasmawayland.desktop ]; then echo "desktop=kde"
+                elif [ -f /usr/share/wayland-sessions/niri.desktop ];   then echo "desktop=niri"
+                elif [ -f /usr/share/wayland-sessions/cosmic.desktop ]; then echo "desktop=cosmic"
+                elif ls /usr/share/xsessions/xfce*.desktop >/dev/null 2>&1 \
+                  || ls /usr/share/wayland-sessions/xfce*.desktop >/dev/null 2>&1; then echo "desktop=xfce"
+                else echo "desktop=gnome"; fi
+                if [ -f /usr/lib/systemd/boot/efi/systemd-bootx64.efi ] \
+                  || [ -f /usr/lib/systemd/boot/efi/systemd-bootaa64.efi ]; then
+                  echo "hasSdBoot=true"
+                else
+                  echo "hasSdBoot=false"
+                fi
+                command -v bootc >/dev/null 2>&1 && echo "bootc=true" || echo "bootc=false"
+                if   command -v dnf >/dev/null 2>&1 || command -v dnf5 >/dev/null 2>&1; then echo "pkgManager=dnf"; echo "repoFamily=fedora"
+                elif command -v zypper >/dev/null 2>&1; then echo "pkgManager=zypper"; echo "repoFamily=opensuse"
+                elif command -v pacman >/dev/null 2>&1; then echo "pkgManager=pacman"; echo "repoFamily=arch"
+                elif command -v apt >/dev/null 2>&1 || command -v apt-get >/dev/null 2>&1; then echo "pkgManager=apt"; echo "repoFamily=debian"
+                elif command -v emerge >/dev/null 2>&1; then echo "pkgManager=portage"; echo "repoFamily=gentoo"
+                elif command -v apk >/dev/null 2>&1; then echo "pkgManager=apk"; echo "repoFamily=alpine"
+                else echo "pkgManager="; echo "repoFamily="; fi
+              ' 2>/dev/null || true)
+              podman rmi "$IMG" >/dev/null 2>&1 || true
+            fi
 
             get() { echo "$PROBE" | grep "^$1=" | head -1 | cut -d= -f2-; }
-            jq --arg k "tuna-os/${CELL}" --arg d "$DIGEST" \
-               --arg de "$(get desktop)" --arg kv "$(get kernelVer)" \
-               --arg sb "$(get hasSdBoot)" --arg pm "$(get pkgManager)" \
-               --arg rf "$(get repoFamily)" \
-               '.[$k] = {digest:$d, desktop:$de, kernelVer:$kv,
-                         hasSdBoot:($sb=="true"), pkgManager:$pm, repoFamily:$rf}' \
+            DESKTOP="$(get desktop)"
+            [[ -z "$DESKTOP" ]] && DESKTOP="${FLAVOR%%-*}"
+            KERNEL_VER="$(get kernelVer)"
+            HAS_SDBOOT="$(get hasSdBoot)"
+            BOOTC_FLAG="$(get bootc)"
+            [[ -z "$BOOTC_FLAG" ]] && BOOTC_FLAG="true"
+            PKG_MGR="$(get pkgManager)"
+            REPO_FAM="$(get repoFamily)"
+
+            jq --arg k "tuna-os/${CELL}" --arg d "$TOP_DIGEST" \
+               --arg de "$DESKTOP" --arg kv "$KERNEL_VER" \
+               --arg sb "$HAS_SDBOOT" --arg pm "$PKG_MGR" \
+               --arg rf "$REPO_FAM" \
+               '.images[$k] = {digest:$d, desktop:$de, kernelVer:$kv,
+                               hasSdBoot:($sb=="true"), pkgManager:$pm, repoFamily:$rf}' \
                shard.json > shard.tmp && mv shard.tmp shard.json
 
-            podman rmi "$IMG" >/dev/null 2>&1 || true
+            OVL_REF="ghcr.io/tuna-os/live-overlay:${VAR}-${FLAVOR}"
+            OVL_INSPECT=$(skopeo inspect "docker://${OVL_REF}" 2>/dev/null || true)
+            if [[ -n "$OVL_INSPECT" ]]; then
+              OVL_DIGEST=$(printf '%s' "$OVL_INSPECT" | jq -r '.Digest // empty')
+              OVL_BASE=$(printf '%s' "$OVL_INSPECT" | jq -r '.Labels["org.tunaos.live-overlay.base-digest"] // empty')
+              OVL_ACTUAL_BASE=$(printf '%s' "$OVL_INSPECT" | jq -r '.Labels["org.tunaos.live-overlay.actual-base-digest"] // empty')
+              if [[ -n "$OVL_DIGEST" ]]; then
+                jq --arg k "${VAR}:${FLAVOR}" \
+                   --arg d "$OVL_DIGEST" \
+                   --arg bd "$OVL_BASE" \
+                   --arg abd "$OVL_ACTUAL_BASE" \
+                   '.overlays[$k] = {
+                      liveOverlayDigest: $d,
+                      labels: (
+                        {}
+                        + (if $bd != "" then {"org.tunaos.live-overlay.base-digest": $bd} else {} end)
+                        + (if $abd != "" then {"org.tunaos.live-overlay.actual-base-digest": $abd} else {} end)
+                      )
+                    }' shard.json > shard.tmp && mv shard.tmp shard.json
+              fi
+            fi
+
+            python3 - "$VAR" "$FLAVOR" "$REPO" "$TAG" "$PLATS_CSV" "$TOP_DIGEST" \
+              "$DESKTOP" "$KERNEL_VER" "$HAS_SDBOOT" "$BOOTC_FLAG" "$PKG_MGR" "$REPO_FAM" <<'PY'
+          import json
+          import subprocess
+          import sys
+
+          (
+              var,
+              flavor,
+              repo,
+              tag,
+              plats_csv,
+              top_digest,
+              desktop,
+              kernel_ver,
+              has_sdboot,
+              bootc_flag,
+              pkg_mgr,
+              repo_fam,
+          ) = sys.argv[1:13]
+          raw = subprocess.check_output(
+              ["skopeo", "inspect", "--raw", f"docker://{repo}:{tag}"]
+          )
+          doc = json.loads(raw)
+          shard = json.load(open("shard.json"))
+          manifests = doc.get("manifests")
+          wanted_platforms = [p for p in plats_csv.split(",") if p]
+
+          for plat in wanted_platforms:
+              parts = plat.split("/")
+              want_os = parts[0]
+              want_arch = parts[1]
+              want_var = parts[2] if len(parts) > 2 else None
+              pm_digest = None
+              idx_digest = None
+              cfg_digest = None
+              layer_count = 0
+              comp_size = 0
+
+              if isinstance(manifests, list):
+                  idx_digest = top_digest
+                  for m in manifests:
+                      p = m.get("platform") or {}
+                      m_os = p.get("os")
+                      m_arch = p.get("architecture")
+                      m_var = p.get("variant")
+                      if m_os != want_os or m_arch != want_arch:
+                          continue
+                      if want_arch == "arm64" and want_var is None:
+                          if m_var not in (None, "", "v8"):
+                              continue
+                      elif (m_var or None) != want_var:
+                          continue
+                      pm_digest = m.get("digest")
+                      break
+                  if pm_digest:
+                      try:
+                          child_raw = subprocess.check_output(
+                              ["skopeo", "inspect", "--raw", f"docker://{repo}@{pm_digest}"]
+                          )
+                          child_doc = json.loads(child_raw)
+                          cfg_digest = (child_doc.get("config") or {}).get("digest")
+                          layers = child_doc.get("layers") or []
+                          layer_count = len(layers)
+                          comp_size = sum(int(l.get("size") or 0) for l in layers)
+                      except Exception:
+                          pass
+              else:
+                  if want_arch == "amd64" and want_var is None:
+                      pm_digest = top_digest
+                      cfg_digest = (doc.get("config") or {}).get("digest")
+                      layers = doc.get("layers") or []
+                      layer_count = len(layers)
+                      comp_size = sum(int(l.get("size") or 0) for l in layers)
+
+              if pm_digest:
+                  tkey = f"{var}:{flavor}:{plat}"
+                  shard["descriptors"][tkey] = {
+                      "variant": var,
+                      "flavor": flavor,
+                      "platform": plat,
+                      "repository": repo,
+                      "tag": tag,
+                      "platformManifestDigest": pm_digest,
+                      "indexDigest": idx_digest,
+                      "configDigest": cfg_digest,
+                      "ociPlatform": {
+                          "os": want_os,
+                          "architecture": want_arch,
+                          "variant": want_var,
+                      },
+                      "facts": {
+                          "digest": pm_digest,
+                          "desktop": desktop,
+                          "kernelVer": kernel_ver,
+                          "hasSdBoot": has_sdboot == "true",
+                          "pkgManager": pkg_mgr,
+                          "repoFamily": repo_fam,
+                          "layerCount": layer_count,
+                          "compressedSize": comp_size,
+                          "bootc": bootc_flag == "true",
+                      },
+                  }
+
+          with open("shard.json", "w") as f:
+              json.dump(shard, f, indent=2, sort_keys=True)
+          PY
             echo "::endgroup::"
           done
           jq . shard.json
@@ -161,23 +314,51 @@ jobs:
       - name: Merge shards and validate browser catalog completeness
         run: |
           set -euo pipefail
-          jq -s 'add // {}' shards/*/shard.json > merged.json
-          jq --arg t "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-             '{generated:$t, images:.}' merged.json > catalog-facts.json
+          GENERATED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          jq -s --arg t "$GENERATED_AT" '{
+            generated: $t,
+            images: (map(.images // {}) | add // {}),
+            descriptors: (map(.descriptors // {}) | add // {}),
+            overlays: (map(.overlays // {}) | add // {})
+          }' shards/*/shard.json > catalog-facts.json
           echo "entries: $(jq '.images | length' catalog-facts.json)"
           jq -r '.images | to_entries[] | "  \(.key): \(.value.desktop) \(.value.kernelVer)"' catalog-facts.json
 
-          python3 <<'PY'
+          python3 - "$GENERATED_AT" "${GITHUB_SHA:-}" <<'PY'
+          import hashlib
           import json
           import subprocess
           import sys
 
+          sys.path.insert(0, "scripts")
+          from contracts.targets import catalog_snapshot, validate_catalog_snapshot
+
+          generated_at = sys.argv[1]
+          producer_rev = sys.argv[2]
           config = json.loads(
               subprocess.check_output(
                   ["yq", "-o=json", ".", ".github/build-config.yml"]
               )
           )
-          facts = json.load(open("catalog-facts.json"))["images"]
+          merged = json.load(open("catalog-facts.json"))
+          facts = merged["images"]
+          descriptors = merged.get("descriptors", {})
+          overlays = merged.get("overlays", {})
+
+          snapshot = catalog_snapshot(
+              config,
+              descriptors=descriptors,
+              overlays=overlays,
+              producer_revision=producer_rev,
+              generated_at=generated_at,
+          )
+          validate_catalog_snapshot(snapshot)
+          snapshot_body = json.dumps(snapshot, indent=2, sort_keys=True) + "\n"
+          with open("catalog-snapshot.json", "w") as f:
+              f.write(snapshot_body)
+          snap_sha = hashlib.sha256(snapshot_body.encode("utf-8")).hexdigest()
+          with open("catalog-snapshot.json.sha256", "w") as f:
+              f.write(f"{snap_sha}  catalog-snapshot.json\n")
 
           browser_flavors = set()
           for group in config.get("iso_groups", []):
@@ -197,7 +378,8 @@ jobs:
 
           print(
               f"Catalog completeness check: "
-              f"{len(expected) - len(missing)}/{len(expected)} flavors covered."
+              f"{len(expected) - len(missing)}/{len(expected)} flavors covered; "
+              f"snapshot targets: {len(snapshot['targets'])}."
           )
           if missing:
               print(
@@ -211,4 +393,7 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: catalog-facts
-          path: catalog-facts.json
+          path: |
+            catalog-facts.json
+            catalog-snapshot.json
+            catalog-snapshot.json.sha256
