@@ -362,12 +362,10 @@ class UndeclaredCellsAreNotCountedAgainstUs(unittest.TestCase):
         flounder-sid instead. gnome-nvidia is a stage-3 overlay on it and
         goes with it, but only gnome carries LUKS, hence one cell not two.
 
-        52 -> 53 on 2026-08-25: wahoo (Fedora ELN) declares one desktop
-        flavor, gnome, with build_image: true. luks-e2e.yml builds its matrix
-        from build_image with no experimental filter, so the cell is real and
-        counted rather than quietly excluded — it costs one boot in the
-        monthly sweep (`0 7 1 * *`), and nothing nightly, because the variant
-        is dispatch-only.
+        53 -> 55 on 2026-10-17: dispatch-only Stingray keeps GNOME, KDE
+        and XFCE; COSMIC is deferred until its PPA publishes for Stonking.
+        The removed COSMIC cell was the single amd64-only Stingray desktop
+        entry; its PPA publishes only for Ubuntu Resolute, not Stonking.
 
         53 -> 51 on 2026-08-25: hummingbird stopped declaring kde and niri.
         Neither had a `packages.hummingbird` section in
@@ -388,14 +386,14 @@ class UndeclaredCellsAreNotCountedAgainstUs(unittest.TestCase):
         the Niri stack and zero `xfce*`), so they add nothing here.
         """
         matrix = gms.luks_matrix()
-        self.assertEqual(sum(len(v) for v in matrix.values()), 56)
+        self.assertEqual(sum(len(v) for v in matrix.values()), 55)
         # The control that makes the drop specific rather than merely smaller:
         # hummingbird keeps exactly the desktops it has package sets for.
         self.assertEqual(matrix.get("hummingbird"), {"gnome", "cosmic"})
         # wahoo carries exactly the desktops ELN composes -- and notably NOT
         # niri or xfce, which is what keeps this an honest denominator.
         self.assertEqual(matrix.get("wahoo"), {"gnome", "cosmic", "kde"})
-        self.assertEqual(matrix.get("stingray"), {"gnome", "cosmic", "kde", "xfce"})
+        self.assertEqual(matrix.get("stingray"), {"gnome", "kde", "xfce"})
         self.assertNotIn("cosmic", matrix.get("flounder", set()))
         self.assertNotIn("cosmic", matrix.get("flounder-sid", set()))
         # A control: the flavours flounder DOES declare are still there, so

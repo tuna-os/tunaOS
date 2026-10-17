@@ -23,7 +23,7 @@ Bring a modern, cloud-native experience to the Enterprise Linux Desktop. tunaOS 
 | Sailfin | openSUSE Tumbleweed (rolling) | GNOME, KDE, Niri, XFCE | Beta |
 | Guppy | Gentoo Linux (source-based) | GNOME, KDE, Niri, XFCE | Beta |
 | Grouper | Ubuntu 26.04 | GNOME, KDE, Niri, XFCE | Beta (RFC 010) |
-| Stingray | Ubuntu 26.10 | Base, GNOME, KDE, COSMIC, XFCE | Proposal; experimental and dispatch-only (see #3252) |
+| Stingray | Ubuntu 26.10 | Base, GNOME, KDE, XFCE | Proposal; experimental and dispatch-only (see #3252) |
 | Marlin | Arch Linux (rolling), CachyOS overlay | GNOME, KDE, COSMIC, Niri, XFCE | Beta |
 | Flounder / Flounder Sid | Debian 13 Trixie / Sid | GNOME, KDE, COSMIC, Niri, XFCE | Beta |
 | Hummingbird | Fedora Hummingbird (container-native bootc) | Base, GNOME, COSMIC | Experimental (see #1341) |
@@ -43,7 +43,7 @@ claim must link the per-cell boot-gate, LUKS-E2E, desktop-contract, and
 user-install evidence in its PR.
 
 **Stingray admission record (#3252)** — Owner: hanthor. Dispatch-only capacity:
-9 image cells and 6 ISO-capable cells across amd64/arm64 add no nightly load
+8 image cells and 6 ISO-capable cells across amd64/arm64 add no nightly load
 while the proposal is qualified. Beta acceptance requires every declared image
 to build, each desktop boot gate and desktop contract to pass, the published
 ISOs to complete LUKS E2E, and the results to be recorded before enabling a
