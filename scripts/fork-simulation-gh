@@ -91,6 +91,11 @@ allow_mutation() {
 }
 
 case "$method:$endpoint" in
+"GET:repos/$repo/actions/workflows/"*)
+	[[ "$endpoint" == *"/runs?branch=main&per_page=1" ]] ||
+		unexpected "unsupported workflow run query: $endpoint"
+	printf '%s\n' '{"workflow_runs":[]}'
+	;;
 "GET:repos/$repo/pulls/$pr/files")
 	# The file list is generated into the matching synthetic event, not guessed
 	# from a hard-coded PR fixture.
