@@ -374,7 +374,7 @@ variants:
   - id: albacore
     emoji: "🐟"
     description: "Based on AlmaLinux 10"
-    base_image: "quay.io/almalinuxorg/almalinux-bootc:10@sha256:a08094b0c255d87b2c67304938acd3075c28f05d0998b9916e3082e4e4c34da3"
+    base_image: "quay.io/almalinuxorg/almalinux-bootc:10@sha256:e99bb7fbd7155e1ce45bd99077f3ae0dbe9a13ce9abf0951765f9b0e4470a2b4"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [almalinux]
     platforms: ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
@@ -885,7 +885,7 @@ variants:
     upstream_track: experimental
     description: "Based on Fedora ELN (EL11 preview, rolling)"
     experimental: true
-    base_image: "registry.fedoraproject.org/eln-bootc:latest@sha256:111305c0d37124496a3fe7f0536d1dcbbf0658a44fb042b980a7b173d77a1884"
+    base_image: "registry.fedoraproject.org/eln-bootc:latest@sha256:8d02c09e84acadbd5554665c2d235d7530790478037715b782f2ec2f31ee3277"
     # No alias: `eln` is Fedora's identifier for a moving development target,
     # and an alias tag is a stability promise this lane deliberately does not
     # make. Revisit if/when ELN gains a versioned publish.
@@ -1148,7 +1148,7 @@ variants:
     # not a rebuild of an existing one. Read docs/HUMMINGBIRD.md before
     # reasoning about what its package set should contain.
     description: "Fedora Hummingbird (hardened rolling Rawhide fork, bootc)"
-    base_image: "quay.io/hummingbird-community/bootc-os:latest@sha256:23e3059ba22160c90cac00f562e9b685b46fb36f00a66c7a4ec278d85ccdc6b0"
+    base_image: "quay.io/hummingbird-community/bootc-os:latest@sha256:a3a06793169af39bf14f49f497ad243984343617ef22725507ddc66b4c8e9413"
     # amd64 only, because aarch64 has nothing to build FROM yet: the base
     # stage's mandatory xfsprogs guard (build_scripts/10-base-packages.sh) has
     # no repository that can satisfy it on arm64, so every hummingbird arm64
@@ -1590,7 +1590,7 @@ variants:
   - id: gurnard
     emoji: "🤖"
     description: "Based on Ubuntu 24.04 Noble Numbat with the Pantheon desktop"
-    base_image: "docker.io/library/ubuntu:noble@sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d7e595d9a9dc9834884ff530eb55"
+    base_image: "docker.io/library/ubuntu:noble@sha256:68ee22004a9109b44973313b02ff7b1de250f1de0f5ecb628d73f579aaff33ac"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [elementary]
     platforms:
@@ -1608,7 +1608,7 @@ variants:
   - id: grouper
     emoji: "🪸"
     description: "Based on Ubuntu 26.04 Resolute Raccoon"
-    base_image: "docker.io/library/ubuntu:resolute@sha256:f144425ff09be612d6d9ad965196e9cdc23dae1f42110a8a11a3e9a8198759f7"
+    base_image: "docker.io/library/ubuntu:resolute@sha256:c098726dd9b9733f3e885f8de0ef375206a311b0a317eadc40d347b1115fb944"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [ubuntu]
     # Built directly from stock Ubuntu and bootcified in Containerfile.ubuntu
