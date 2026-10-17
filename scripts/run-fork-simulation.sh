@@ -10,16 +10,18 @@ set -Eeuo pipefail
 
 results="${RESULTS_FILE:-${RUNNER_TEMP}/fork-simulation.tsv}"
 : >"$results"
-
+audit_root="${RUNNER_TEMP}/fork-simulation-audit"
+mkdir -p "$audit_root"
 for persona in "$@"; do
 	mapfile -t workflows < <(python3 scripts/fork-simulation.py matrix |
 		jq -r --arg persona "$persona" '.include[] | select(.persona == $persona) | .workflow')
 	for workflow in "${workflows[@]}"; do
 		worktree="$(mktemp -d "${RUNNER_TEMP}/fork-simulation.XXXXXX")"
+		audit_dir="$(mktemp -d "${audit_root}/XXXXXX")"
 		git clone --quiet --local --no-hardlinks "$GITHUB_WORKSPACE" "$worktree/repo"
 		cd "$worktree/repo"
-		api_log="$worktree/repo/.fork-simulation-api.log"
-		unexpected_log="$worktree/repo/.fork-simulation-unexpected.log"
+		api_log="$audit_dir/api.log"
+		unexpected_log="$audit_dir/unexpected.log"
 		: >"$api_log"
 		: >"$unexpected_log"
 		git config user.name "Fork Simulation"
@@ -39,20 +41,17 @@ for persona in "$@"; do
 		base_sha="$(git rev-parse HEAD^)"
 		python3 scripts/fork-simulation.py event "$persona" \
 			--repository "$REPOSITORY" --head-sha "$head_sha" --base-sha "$base_sha" \
+			--workflow "$workflow" \
 			>"$worktree/event.json"
 
-		# These workflows query or mutate PR state. Mount a strict gh fixture
-		# over the runner binary so their synthetic PR #1 cannot read or modify
-		# an unrelated real PR. Other workflows retain gh for read-only CI data.
-		api_fixture=()
-		case "$workflow" in
-		drop-bot-review-requests.yml | pr-nudges.yml)
-			api_fixture=(
-				--container-options
-				"--volume=${GITHUB_WORKSPACE}/scripts/fork-simulation-gh:/usr/local/bin/gh:ro"
-			)
-			;;
-		esac
+		# The synthetic event carries the isolated PR fixture. Mount both the
+		# fixture executable and a dedicated audit directory into every act
+		# container, so read-only lanes cannot contact GitHub and host checks
+		# observe exactly what the container recorded.
+		api_fixture=(
+			--container-options
+			"--volume=${GITHUB_WORKSPACE}/scripts/fork-simulation-gh:/usr/local/bin/gh:ro --volume=${audit_dir}:/run/fork-simulation-audit"
+		)
 
 		echo "::group::${workflow} — ${persona}"
 		set +e
@@ -62,8 +61,8 @@ for persona in "$@"; do
 			--actor "$(python3 scripts/fork-simulation.py actor "$persona")" \
 			--env "GITHUB_REPOSITORY=${REPOSITORY}" \
 			--env "SIMULATION_PR=1" \
-			--env "SIMULATION_API_LOG=.fork-simulation-api.log" \
-			--env "SIMULATION_UNEXPECTED_LOG=.fork-simulation-unexpected.log" \
+			--env "SIMULATION_API_LOG=/run/fork-simulation-audit/api.log" \
+			--env "SIMULATION_UNEXPECTED_LOG=/run/fork-simulation-audit/unexpected.log" \
 			"${api_fixture[@]}" \
 			--secret-file /dev/null \
 			--secret "GITHUB_TOKEN=${SIMULATION_GITHUB_TOKEN}" \
@@ -116,6 +115,6 @@ for persona in "$@"; do
 		fi
 		printf '%s\t%s\t%s\t%s\n' "$workflow" "$persona" "$status" "$rc" >>"$results"
 		cd "$GITHUB_WORKSPACE"
-		rm -rf "$worktree"
+		rm -rf "$worktree" "$audit_dir"
 	done
 done

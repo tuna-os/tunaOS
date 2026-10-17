@@ -91,13 +91,27 @@ def matrix() -> list[dict[str, str]]:
     ]
 
 
-def event(persona: str, repository: str, head_sha: str, base_sha: str) -> dict:
+def event(
+    persona: str,
+    repository: str,
+    head_sha: str,
+    base_sha: str,
+    workflow: str = "synthetic-workflow.yml",
+) -> dict:
     profile = PERSONAS[persona]
     owner, _ = repository.split("/", 1)
     head_repo = repository if profile["same_repo"] else f"{profile['actor']}/tunaos"
     branch = f"fork-simulation/{persona}"
     user = {"login": profile["actor"], "type": profile["actor_type"]}
     return {
+        "simulation_fixture": {
+            "pull_request": {
+                "number": 1,
+                "files": [f".github/workflows/{workflow}"],
+                "reviewers": ["fork-simulation-reviewer"],
+                "comments": [],
+            }
+        },
         "action": "opened",
         "number": 1,
         "repository": {
@@ -138,6 +152,7 @@ def main() -> None:
     actor_parser = subparsers.add_parser("actor")
     actor_parser.add_argument("persona", choices=PERSONAS)
     event_parser = subparsers.add_parser("event")
+    event_parser.add_argument("--workflow", default="synthetic-workflow.yml")
     event_parser.add_argument("persona", choices=PERSONAS)
     event_parser.add_argument("--repository", required=True)
     event_parser.add_argument("--head-sha", required=True)
@@ -151,7 +166,13 @@ def main() -> None:
     elif args.command == "actor":
         print(PERSONAS[args.persona]["actor"])
     else:
-        print(json.dumps(event(args.persona, args.repository, args.head_sha, args.base_sha)))
+        print(json.dumps(event(
+            args.persona,
+            args.repository,
+            args.head_sha,
+            args.base_sha,
+            args.workflow,
+        )))
 
 
 if __name__ == "__main__":
