@@ -3,13 +3,18 @@
 from __future__ import annotations
 
 import importlib.util
+import json
+import os
+import subprocess
 from pathlib import Path
 
+import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "fork-simulation.yml"
 SCRIPT = ROOT / "scripts" / "fork-simulation.py"
+FIXTURE = ROOT / "scripts" / "fork-simulation-gh"
 
 spec = importlib.util.spec_from_file_location("fork_simulation", SCRIPT)
 fork_simulation = importlib.util.module_from_spec(spec)
@@ -93,6 +98,94 @@ def test_workflow_runs_real_steps_with_empty_secrets_and_reports_failures() -> N
     assert "<!-- fork-simulation -->" in body
     assert "gh issue create" in body and "gh issue edit" in body
     assert "Fail when a simulation failed" in body
+    assert "SIMULATION_UNEXPECTED_LOG" in runner
+    assert "expected synthetic API call was not exercised" in runner
+    assert "external simulation attempted a synthetic API mutation" in runner
+
+
+def run_fixture(tmp_path, persona, *arguments, token="fixture-token", stdin=""):
+    event_path = tmp_path / "event.json"
+    event_path.write_text(
+        json.dumps(fork_simulation.event(persona, "tuna-os/tunaos", "head", "base"))
+    )
+    api_log = tmp_path / "api.log"
+    unexpected_log = tmp_path / "unexpected.log"
+    env = {
+        **os.environ,
+        "GITHUB_REPOSITORY": "tuna-os/tunaos",
+        "SIMULATION_PR": "1",
+        "GITHUB_EVENT_PATH": str(event_path),
+        "SIMULATION_API_LOG": str(api_log),
+        "SIMULATION_UNEXPECTED_LOG": str(unexpected_log),
+    }
+    env.pop("GITHUB_TOKEN", None)
+    env["GH_TOKEN"] = token
+    result = subprocess.run(
+        [str(FIXTURE), "api", *arguments],
+        input=stdin,
+        text=True,
+        capture_output=True,
+        check=False,
+        env=env,
+    )
+    calls = api_log.read_text().splitlines() if api_log.exists() else []
+    unexpected = unexpected_log.read_text() if unexpected_log.exists() else ""
+    return result, calls, unexpected
+
+
+def test_same_repository_comment_delivery_is_exercised(tmp_path) -> None:
+    body = tmp_path / "comment.md"
+    body.write_text("synthetic reminder")
+    result, calls, unexpected = run_fixture(
+        tmp_path,
+        "same-repo-contributor",
+        "repos/tuna-os/tunaos/issues/1/comments",
+        "-F",
+        f"body=@{body}",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert calls == ["POST\trepos/tuna-os/tunaos/issues/1/comments"]
+    assert unexpected == ""
+
+
+@pytest.mark.parametrize(
+    ("persona", "token", "diagnostic"),
+    [
+        ("first-time-external", "read-only-token", "fork mutation"),
+        ("same-repo-contributor", "", "unauthenticated mutation"),
+    ],
+)
+def test_fixture_rejects_unauthorized_reviewer_mutation(
+    tmp_path, persona, token, diagnostic
+) -> None:
+    result, calls, unexpected = run_fixture(
+        tmp_path,
+        persona,
+        "-X",
+        "DELETE",
+        "repos/tuna-os/tunaos/pulls/1/requested_reviewers",
+        "--input",
+        "-",
+        token=token,
+        stdin="{}",
+    )
+
+    assert result.returncode != 0
+    assert calls == ["DELETE\trepos/tuna-os/tunaos/pulls/1/requested_reviewers"]
+    assert diagnostic in unexpected
+
+
+def test_fixture_records_tolerated_unknown_calls_separately(tmp_path) -> None:
+    result, calls, unexpected = run_fixture(
+        tmp_path,
+        "same-repo-contributor",
+        "repos/tuna-os/tunaos/issues/1/unknown",
+    )
+
+    assert result.returncode != 0
+    assert calls == ["GET\trepos/tuna-os/tunaos/issues/1/unknown"]
+    assert "GET repos/tuna-os/tunaos/issues/1/unknown" in unexpected
 
 
 def test_act_and_its_runner_image_are_immutable() -> None:
