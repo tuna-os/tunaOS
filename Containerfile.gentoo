@@ -82,6 +82,7 @@ RUN NPROC="$(nproc)" && \
     # the transaction, and the same flags resolve without a cycle.
     echo "sys-apps/systemd boot" >> /etc/portage/package.use/systemd && \
     echo "media-video/pipewire extra -ffmpeg" >> /etc/portage/package.use/pipewire && \
+    echo "gui-libs/wlroots x11-backend" >> /etc/portage/package.use/wlroots && \
     echo "media-libs/gst-plugins-bad -vulkan" >> /etc/portage/package.use/gst-plugins-bad && \
     echo "sys-libs/minizip-ng compat" >> /etc/portage/package.use/minizip-ng && \
     echo "gui-libs/gtk -vulkan" >> /etc/portage/package.use/gtk && \

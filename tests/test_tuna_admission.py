@@ -189,6 +189,55 @@ def test_gentoo_cell_installs_the_pinned_signed_native_package_and_session_depen
     assert "COPY experiences /experiences" in context
     assert "\nFROM desktop AS tuna\n" in containerfile
 
+def test_gentoo_tuna_configures_wlroots_and_user_audio_services(tmp_path):
+    import subprocess
+
+    manifest = yaml.safe_load((ROOT / "manifests/desktops/tuna.yaml").read_text())
+    assert "gentoo-pipewire-user-services.sh" in manifest["post_install"]
+    containerfile = (ROOT / "Containerfile.gentoo").read_text()
+    wlroots = 'echo "gui-libs/wlroots x11-backend" >> /etc/portage/package.use/wlroots'
+    assert wlroots in containerfile
+    assert containerfile.index(wlroots) < containerfile.index(
+        "RUN emerge --verbose --deep --newuse @world"
+    )
+
+    record = tmp_path / "systemctl-args"
+    systemctl = tmp_path / "systemctl"
+    systemctl.write_text(
+        "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$TUNAOS_SYSTEMCTL_ARGS\"\n"
+    )
+    systemctl.chmod(0o755)
+    env = {
+        "PKG_MGR": "emerge",
+        "PATH": f"{tmp_path}:/usr/bin:/bin",
+        "TUNAOS_SYSTEMCTL_ARGS": str(record),
+    }
+    result = subprocess.run(
+        ["bash", str(ROOT / "build_scripts/desktop/gentoo-pipewire-user-services.sh")],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert record.read_text().splitlines() == [
+        "--global",
+        "enable",
+        "pipewire.socket",
+        "pipewire-pulse.socket",
+        "wireplumber.service",
+    ]
+
+    record.unlink()
+    env["PKG_MGR"] = "dnf"
+    result = subprocess.run(
+        ["bash", str(ROOT / "build_scripts/desktop/gentoo-pipewire-user-services.sh")],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert not record.exists()
+
 
 def test_tuna_package_signatures_cannot_be_silently_disabled():
     key = (ROOT / "experiences/tuna/tideforge-public.gpg").read_bytes()

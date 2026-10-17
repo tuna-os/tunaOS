@@ -454,4 +454,5 @@ post_install:
   # the distribution's greetd ships its own (Arch, Fedora, Debian, Ubuntu).
   - greetd-system-integration.sh
   - greetd-gtkgreet.sh
+  - gentoo-pipewire-user-services.sh
   - flatpak-preinstall.sh
