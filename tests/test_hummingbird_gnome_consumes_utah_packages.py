@@ -14,8 +14,8 @@ What these tests hold, and why each is a test rather than a comment:
   image-versions block tracks it and check-base-image-pins-style GC does not
   surprise a nightly;
 - the build plumbing carries it end to end: resolve-image.sh role, build arg,
-  Containerfile stage, and a bind-mount on the gnome stage only (never a
-  COPY: the repository is ~500 MB and must not land in any image);
+- Containerfile stage, and bind-mounts on the gnome and tuna stages only (never a COPY:
+  the repository is ~500 MB and must not land in any image);
 - gnome.yaml's hummingbird section declares the file:// repo at a priority
   that beats the tunaos-hummingbird prefix, marked `unsigned: true`;
 - install-desktop.sh's repo loop, run for real against a fake yq, writes
@@ -103,7 +103,7 @@ def test_the_build_engine_passes_the_ref_as_a_build_arg():
     assert '"UTAH_PACKAGES_IMAGE_REF=${utah_packages_ref}"' in text
 
 
-def test_the_containerfile_declares_the_stage_and_mounts_it_on_gnome_only():
+def test_the_containerfile_declares_the_stage_and_mounts_it_on_gnome_and_tuna():
     text = CONTAINERFILE.read_text()
     assert 'ARG UTAH_PACKAGES_IMAGE_REF="ghcr.io/projectbluefin/utah-packages:unpinned-must-override"' in text, (
         "the default must be a tag that cannot resolve, like COMMON/BREW, so a "
@@ -113,7 +113,7 @@ def test_the_containerfile_declares_the_stage_and_mounts_it_on_gnome_only():
     mount = f"--mount=type=bind,from=utah-packages,source=/repository,target={MOUNT}"
     stages = re.split(r"^FROM ", text, flags=re.M)
     mounted = [s.split("\n", 1)[0] for s in stages if mount in s]
-    assert mounted == ["base-no-de AS gnome"], mounted
+    assert mounted == ["base-no-de AS gnome", "base-no-de AS tuna"], mounted
     assert "COPY --from=utah-packages" not in text, (
         "the repository is ~500 MB; it is bind-mounted for one RUN, never copied "
         "into an image"
