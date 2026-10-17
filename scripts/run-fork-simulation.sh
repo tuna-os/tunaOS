@@ -25,8 +25,10 @@ for persona in "$@"; do
 		cd "$worktree/repo"
 		api_log="$audit_dir/api.log"
 		unexpected_log="$audit_dir/unexpected.log"
+		summary="$audit_dir/summary.md"
 		: >"$api_log"
 		: >"$unexpected_log"
+		: >"$summary"
 		git config user.name "Fork Simulation"
 		git config user.email "fork-simulation@users.noreply.github.com"
 		git switch --quiet --create "fork-simulation/${persona}"
@@ -63,11 +65,11 @@ for persona in "$@"; do
 			--eventpath "$worktree/event.json" \
 			--actor "$(python3 scripts/fork-simulation.py actor "$persona")" \
 			--env "GITHUB_REPOSITORY=${REPOSITORY}" \
+			--env "GITHUB_STEP_SUMMARY=/run/fork-simulation-audit/summary.md" \
 			--env "PATH=${act_homebrew_path}" \
 			--env "SIMULATION_PR=1" \
 			--env "SIMULATION_API_LOG=/run/fork-simulation-audit/api.log" \
 			--env "SIMULATION_UNEXPECTED_LOG=/run/fork-simulation-audit/unexpected.log" \
-			"${api_fixture[@]}" \
 			--secret-file /dev/null \
 			--secret "GITHUB_TOKEN=${SIMULATION_GITHUB_TOKEN}" \
 			--env-file /dev/null \
@@ -104,6 +106,11 @@ for persona in "$@"; do
 				[[ $rc -ne 0 ]] || rc=65
 			fi
 		done
+		if [[ "$workflow:$persona" == "just-fix.yml:first-time-external" ]] &&
+			! grep -Fq "This pull request comes from a fork" "$summary"; then
+			echo "fork fallback was not reached for the external just-fix simulation" >&2
+			[[ $rc -ne 0 ]] || rc=65
+		fi
 		if [[ "$persona" == first-time-external ]] &&
 			grep -Eq $'^(POST|PUT|PATCH|DELETE)\t' "$api_log"; then
 			echo "external simulation attempted a synthetic API mutation" >&2

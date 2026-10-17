@@ -87,9 +87,9 @@ jobs:
           brew_prefix="$("$brew_bin" --prefix)"
           printf '%s\n' "${brew_prefix}/bin" "${brew_prefix}/sbin" >> "$GITHUB_PATH"
           printf 'PATH=%s/bin:%s/sbin:%s\n' "$brew_prefix" "$brew_prefix" "$PATH" >> "$GITHUB_ENV"
-      - name: Install just
+      - name: Install just and shfmt
         if: steps.check-bot.outputs.last_commit_is_bot != 'true'
-        run: brew install just
+        run: brew install just shfmt
 
       - name: Run just fix
         if: steps.check-bot.outputs.last_commit_is_bot != 'true'

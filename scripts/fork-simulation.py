@@ -43,6 +43,36 @@ EXCLUDED = {
     "validate-renovate.yaml": "read-only configuration validation; no secret or write path",
 }
 
+SIMULATION_JOBS = {
+    "drop-bot-review-requests.yml": "drop",
+    "just-fix.yml": "fix",
+    "matrix-status.yml": "regenerate",
+    "pr-nudges.yml": "remind",
+}
+
+
+def _permissions(value: object) -> dict[str, str]:
+    if not isinstance(value, dict):
+        return {}
+    return {
+        str(scope): str(level)
+        for scope, level in value.items()
+        if isinstance(scope, str) and isinstance(level, str)
+    }
+
+
+def workflow_permissions(workflow: str) -> dict[str, dict[str, str]]:
+    path = WORKFLOWS / workflow
+    if not path.is_file():
+        return {}
+    document = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    top = _permissions(document.get("permissions"))
+    result = {}
+    for job, body in (document.get("jobs") or {}).items():
+        job_permissions = body.get("permissions") if isinstance(body, dict) else None
+        result[job] = _permissions(job_permissions) if job_permissions is not None else dict(top)
+    return result
+
 PERSONAS = {
     "first-time-external": {
         "actor": "fork-simulation-newcomer",
@@ -105,12 +135,14 @@ def event(
     user = {"login": profile["actor"], "type": profile["actor_type"]}
     return {
         "simulation_fixture": {
+            "workflow": workflow,
+            "permissions": workflow_permissions(workflow),
             "pull_request": {
                 "number": 1,
                 "files": [f".github/workflows/{workflow}"],
                 "reviewers": ["fork-simulation-reviewer"],
                 "comments": [],
-            }
+            },
         },
         "action": "opened",
         "number": 1,
