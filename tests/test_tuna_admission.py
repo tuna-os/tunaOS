@@ -128,7 +128,7 @@ def test_hummingbird_cell_uses_the_pinned_native_signed_target():
     }
     assert variant["base_image"] == (
         "quay.io/hummingbird-community/bootc-os:latest@"
-        "sha256:91c0b8e23392ee8d95096820d07b133fcda27cb4e635e66f16ee56e25ceaf922"
+        "sha256:a3a06793169af39bf14f49f497ad243984343617ef22725507ddc66b4c8e9413"
     )
 
     stage = (ROOT / "Containerfile.el10").read_text().split("FROM base-no-de AS tuna\n", 1)[1]
@@ -164,6 +164,30 @@ def test_hummingbird_bootstrap_waiver_excludes_admitted_tuna():
         )
         assert (result.returncode == 0) is accepted, (desktop, result.stderr)
 
+
+def test_hummingbird_tuna_fails_direct_contract_checks():
+    import re
+    import subprocess
+
+    script = (ROOT / "build_scripts/checks/verify-desktop-experience.sh").read_text()
+    guards = re.findall(
+        r'(?m)^\s*((?:if|elif) \[\[ "\$\{IS_HUMMINGBIRD:-false\}" != "true" \|\| "\$\{desktop:-\}" == tuna \]\]; then)$',
+        script,
+    )
+    assert len(guards) >= 5, "the direct Hummingbird failure guards changed"
+    for guard in guards:
+        condition = guard.replace("elif ", "if ", 1)
+        command = (
+            'IS_HUMMINGBIRD=true; desktop="$1"; '
+            f"{condition} exit 0; else exit 1; fi"
+        )
+        for desktop, accepted in (("tuna", True), ("gnome", False)):
+            result = subprocess.run(
+                ["bash", "-c", command, "guard-test", desktop],
+                capture_output=True,
+                text=True,
+            )
+            assert (result.returncode == 0) is accepted, (guard, desktop)
 
 def test_apt_cells_install_the_pinned_beta_from_the_signed_tideforge_index_for_their_base():
     manifest = yaml.safe_load((ROOT / "manifests/desktops/tuna.yaml").read_text())

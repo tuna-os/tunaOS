@@ -984,7 +984,7 @@ else
 		for _fp_app in "${_fp_apps[@]}"; do
 			if ! grep -rqs "^\[Flatpak Preinstall ${_fp_app}\]" /usr/share/flatpak/preinstall.d; then
 				echo "missing flatpak preinstall declaration: ${_fp_app}" >&2
-				if [[ "${IS_HUMMINGBIRD:-false}" != "true" ]]; then
+				if [[ "${IS_HUMMINGBIRD:-false}" != "true" || "${desktop:-}" == tuna ]]; then
 					exit 1
 				fi
 			fi
@@ -994,7 +994,7 @@ else
 		if [[ -f /usr/lib/systemd/system/flatpak-preinstall.service ]]; then
 			if ! systemctl is-enabled flatpak-preinstall.service >/dev/null 2>&1; then
 				echo "flatpak-preinstall.service is shipped but not enabled — the declared flatpaks would never install" >&2
-				if [[ "${IS_HUMMINGBIRD:-false}" != "true" ]]; then
+				if [[ "${IS_HUMMINGBIRD:-false}" != "true" || "${desktop:-}" == tuna ]]; then
 					exit 1
 				fi
 			fi
@@ -1025,7 +1025,7 @@ else
 			_dcf_name="${_dcf_name##*/}"
 			if [[ ! -s "/etc/dconf/db/${_dcf_name}" ]]; then
 				echo "missing compiled dconf database: keyfiles in ${_dcf_dir} but /etc/dconf/db/${_dcf_name} is missing or empty (run dconf update)" >&2
-				if [[ "${IS_HUMMINGBIRD:-false}" != "true" ]]; then
+				if [[ "${IS_HUMMINGBIRD:-false}" != "true" || "${desktop:-}" == tuna ]]; then
 					exit 1
 				fi
 			fi
