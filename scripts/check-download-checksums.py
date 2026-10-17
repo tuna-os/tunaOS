@@ -76,9 +76,30 @@ PINS = [
         version_file="image-versions.yaml",
         version_re=r'^\s+chezmoi:\s*"(v[^"]+)"',
         checksum_file="image-versions.yaml",
-        checksum_re=r'^\s+{arch}:\s*"([0-9a-f]{{64}})"',
+        checksum_re=(
+            r'^  chezmoi_sha256:\n'
+            r'(?:^[ \t]+[A-Za-z0-9_]+:\s*"[0-9a-f]{{64}}"\n)*'
+            r'^[ \t]+{arch}:\s*"([0-9a-f]{{64}})"'
+        ),
         checksums_url="https://github.com/twpayne/chezmoi/releases/download/{version}/chezmoi_{num}_checksums.txt",
         asset="chezmoi_{num}_linux_{arch}.deb",
+    ),
+    Pin(
+        name="uupd",
+        version_file="image-versions.yaml",
+        version_re=r'^\s+uupd:\s*"(v[^"]+)"',
+        checksum_file="image-versions.yaml",
+        checksum_re=(
+            r'^  uupd_sha256:\n'
+            r'(?:^[ \t]+[A-Za-z0-9_]+:\s*"[0-9a-f]{{64}}"\n)*'
+            r'^[ \t]+{arch}:\s*"([0-9a-f]{{64}})"'
+        ),
+        checksums_url=(
+            "https://github.com/ublue-os/uupd/releases/download/"
+            "{version}/uupd_{num}_checksums.txt"
+        ),
+        asset="uupd_Linux_{arch}.tar.gz",
+        arches=("x86_64", "arm64"),
     ),
     # The DMS QML payload, consumed by build_scripts/install-dms-qml-fallback.sh
     # on every EL10 niri image. Added after its pinned checksum turned out to

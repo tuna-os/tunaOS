@@ -73,6 +73,17 @@ packages:
 downloads:
   # renovate: datasource=github-releases depName=ublue-os/uupd
   uupd: "v1.5.0"
+  # The release publishes uupd_1.5.0_checksums.txt. The service units are
+  # fetched from the same release tag, so keep their raw-source hashes here
+  # too; a moved tag must fail the image build rather than changing its
+  # first-boot services.
+  uupd_sha256:
+    x86_64: "1a24d3a87941a24a82a764b339163392516ee83b18c1c8cecf4efcde1dc9f38f"
+    arm64: "bfdb71a2153c903da9c530f3aaf5d6cf398111266f79f608d02768cf895e3342"
+  uupd_service_hashes:
+    uupd.service: "65dd2b64dcb6a9f77227612aa624ef17fe43b32eb835b51d7d22a22755dc21a8"
+    uupd.timer: "bbb5f098ec33d047bdef571e0bc112364df157e0f92d73e0febab703c4a3c099"
+    uupd-manual.service: "54d4bc5913b40463b178176d2654163111ea5ac952f88ede4d977fbb0905b5e6"
   # renovate: datasource=github-releases depName=ledif/kcm_ublue
   kcm_ublue: "v0.6.1"
   # renovate: datasource=github-releases depName=mvdan/sh

@@ -20,6 +20,81 @@ if [[ -f /run/secrets/rhsm ]]; then
 	. /run/secrets/rhsm
 fi
 
+# Download and install uupd only after every release asset is checked against
+# the hashes tracked in image-versions.yaml. The service units are executable
+# systemd configuration, so they are checked too instead of trusting the
+# mutable raw.githubusercontent.com tag.
+install_uupd() {
+	local versions=/run/context/image-versions.yaml
+	local version arch release_base archive tmp unit unit_hash
+
+	version="$(grep '^\s*uupd:' "$versions" | sed 's/.*"\(.*\)".*/\1/')"
+	case "$(uname -m)" in
+	x86_64) arch=x86_64 ;;
+	aarch64) arch=arm64 ;;
+	*)
+		echo "ERROR: unsupported uupd architecture: $(uname -m)" >&2
+		return 1
+		;;
+	esac
+
+	# Keep the manifest as the single source of the expected bytes. awk is used
+	# here because this stage cannot assume yq has already been installed.
+	local archive_hash
+	archive_hash="$(awk -v arch="$arch" '
+		/^  uupd_sha256:/ { in_section=1; next }
+		in_section && /^  [^ ]/ { exit }
+		in_section {
+			key=$1
+			sub(/:$/, "", key)
+			if (key == arch) {
+				gsub(/"/, "", $2)
+				print $2
+				exit
+			}
+		}
+	' "$versions")"
+	[[ "$archive_hash" =~ ^[0-9a-f]{64}$ ]] || {
+		echo "ERROR: no valid uupd checksum for ${arch}" >&2
+		return 1
+	}
+
+	tmp="$(mktemp -d)"
+	archive="${tmp}/uupd.tar.gz"
+	release_base="https://github.com/ublue-os/uupd/releases/download/${version}"
+	curl --retry 3 --fail -sSL -o "$archive" \
+		"${release_base}/uupd_Linux_${arch}.tar.gz"
+	printf '%s  %s\n' "$archive_hash" "$archive" | sha256sum --check --strict
+	tar -xzf "$archive" -C "$tmp" uupd
+	install -Dm0755 "${tmp}/uupd" /usr/bin/uupd
+
+	for unit in uupd.service uupd.timer uupd-manual.service; do
+		unit_hash="$(awk -v unit="$unit" '
+			/^  uupd_service_hashes:/ { in_section=1; next }
+			in_section && /^  [^ ]/ { exit }
+			in_section {
+				key=$1
+				sub(/:$/, "", key)
+				if (key == unit) {
+					gsub(/"/, "", $2)
+					print $2
+					exit
+				}
+			}
+		' "$versions")"
+		[[ "$unit_hash" =~ ^[0-9a-f]{64}$ ]] || {
+			echo "ERROR: no valid uupd checksum for ${unit}" >&2
+			return 1
+		}
+		curl --retry 3 --fail -sSL -o "${tmp}/${unit}" \
+			"https://raw.githubusercontent.com/ublue-os/uupd/${version}/${unit}"
+		printf '%s  %s\n' "$unit_hash" "${tmp}/${unit}" |
+			sha256sum --check --strict
+		install -Dm0644 "${tmp}/${unit}" "/usr/lib/systemd/system/${unit}"
+	done
+	rm -rf "$tmp"
+}
+
 # ── apt (Ubuntu/Debian) path ──────────────────────────────────────────
 if [[ "$PKG_MGR" == "apt" ]]; then
 	# Base packages common to all desktop flavors on apt-based systems.
@@ -85,21 +160,8 @@ if [[ "$PKG_MGR" == "apt" ]]; then
 	# shellcheck disable=SC2015 # intentional: A&&B||true is a guard pattern
 	[[ "$IS_UBUNTU" == true ]] && pkg_remove ubuntu-advantage-tools || true
 
-	# Install uupd from GitHub release (same source as RPM path)
-	UUPD_VERSION=$(grep '^\s*uupd:' /run/context/image-versions.yaml | sed 's/.*"\(.*\)".*/\1/')
-	UUPD_ARCH="$(uname -m | sed 's/x86_64/x86_64/;s/aarch64/arm64/')"
-	UUPD_SRC_BASE="https://raw.githubusercontent.com/ublue-os/uupd/${UUPD_VERSION}"
-
-	# Download binary tarball (separate, so partial download doesn't corrupt)
-	# and systemd units (parallel — small, safe to Z).
-	curl --retry 3 --fail -sSL -o /tmp/uupd.tar.gz \
-		"https://github.com/ublue-os/uupd/releases/download/${UUPD_VERSION}/uupd_Linux_${UUPD_ARCH}.tar.gz"
-	tar -xzf /tmp/uupd.tar.gz -C /usr/bin uupd
-	rm -f /tmp/uupd.tar.gz
-	curl --retry 3 --fail -Z -s \
-		-o /usr/lib/systemd/system/uupd.service "${UUPD_SRC_BASE}/uupd.service" \
-		-o /usr/lib/systemd/system/uupd.timer "${UUPD_SRC_BASE}/uupd.timer" \
-		-o /usr/lib/systemd/system/uupd-manual.service "${UUPD_SRC_BASE}/uupd-manual.service"
+	# Install the same verified payload on apt-based images as on RPM images.
+	install_uupd
 
 	printf "::endgroup::\n"
 	return 0
@@ -606,22 +668,6 @@ fi
 
 dnf -y remove console-login-helper-messages setroubleshoot || true
 
-# Install uupd from GitHub release tarball.
-# The ublue-os/packages COPR dropped epel-10 chroots (~2026-06-08);
-# Bluefin LTS adopted this same approach.
-# Version is pinned in image-versions.yaml and tracked by Renovate.
-UUPD_VERSION=$(grep '^\s*uupd:' /run/context/image-versions.yaml | sed 's/.*"\(.*\)".*/\1/')
-UUPD_ARCH="$(uname -m | sed 's/x86_64/x86_64/;s/aarch64/arm64/')"
-UUPD_SRC_BASE="https://raw.githubusercontent.com/ublue-os/uupd/${UUPD_VERSION}"
-
-# Download binary tarball (separate, so partial download doesn't corrupt)
-# and systemd units (parallel — small, safe to Z).
-curl --retry 3 --fail -sSL -o /tmp/uupd.tar.gz \
-	"https://github.com/ublue-os/uupd/releases/download/${UUPD_VERSION}/uupd_Linux_${UUPD_ARCH}.tar.gz"
-tar -xzf /tmp/uupd.tar.gz -C /usr/bin uupd
-rm -f /tmp/uupd.tar.gz
-curl --retry 3 --fail -Z -s \
-	-o /usr/lib/systemd/system/uupd.service "${UUPD_SRC_BASE}/uupd.service" \
-	-o /usr/lib/systemd/system/uupd.timer "${UUPD_SRC_BASE}/uupd.timer" \
-	-o /usr/lib/systemd/system/uupd-manual.service "${UUPD_SRC_BASE}/uupd-manual.service"
+# Install the same verified payload on RPM images as on apt-based images.
+install_uupd
 printf "::endgroup::\n"

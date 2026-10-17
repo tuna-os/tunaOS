@@ -49,11 +49,43 @@ PINNED_DOWNLOADS = {
         "https://github.com/twpayne/chezmoi/releases/download/{version}/chezmoi_{version_num}_linux_{arch}.deb",
         True,
     ),
+    "uupd": (
+        "uupd",
+        "uupd_sha256",
+        "https://github.com/ublue-os/uupd/releases/download/{version}/uupd_Linux_{arch}.tar.gz",
+        True,
+    ),
 }
 
 
 def _downloads() -> dict:
     return yaml.safe_load((ROOT / "image-versions.yaml").read_text())["downloads"]
+
+UUPD_SERVICE_FILES = ("uupd.service", "uupd.timer", "uupd-manual.service")
+
+
+def test_every_uupd_service_hash_has_a_case_here() -> None:
+    declared = set(_downloads()["uupd_service_hashes"])
+    assert declared == set(UUPD_SERVICE_FILES)
+
+
+@pytest.mark.parametrize("name", UUPD_SERVICE_FILES)
+def test_uupd_service_matches_its_checksum(name: str) -> None:
+    if os.environ.get("TUNAOS_SKIP_NETWORK_TESTS"):
+        pytest.skip("network tests disabled")
+    downloads = _downloads()
+    version = downloads["uupd"]
+    url = f"https://raw.githubusercontent.com/ublue-os/uupd/{version}/{name}"
+    try:
+        with urllib.request.urlopen(url, timeout=180) as resp:
+            digest = hashlib.sha256(resp.read()).hexdigest()
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        pytest.skip(f"cannot reach {url}: {exc}")
+
+    assert digest == downloads["uupd_service_hashes"][name], (
+        f"{name} is pinned to {version} but its checksum is stale; "
+        f"the asset at {url} hashes to {digest}. Bump the version and hash together."
+    )
 
 
 def test_every_sha256_pin_has_a_case_here() -> None:
