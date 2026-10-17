@@ -1,9 +1,9 @@
 """W8 architecture honesty, hummingbird arm64 (#1755 option A).
 
-Desktop flavors stay amd64-only until their complete package source exists
-on aarch64. The Hummingbird package factory has now converged for COSMIC, but
-GNOME still comes from the amd64-only utah-packages OCI repository. Keep that
-remaining pin explicit so adding arm64 is a reviewable availability claim.
+Desktop flavors stay amd64-only until their complete package sources exist on
+aarch64. GNOME and COSMIC both consume the amd64-only utah-packages OCI
+repository, so each flavor keeps an explicit pin independent of the current
+base-level arm64 gap.
 """
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ import yaml
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
-PINNED_AMD64_ONLY = {"gnome"}
+PINNED_AMD64_ONLY = {"gnome", "cosmic"}
 
 
 def _hummingbird() -> dict:
@@ -34,18 +34,6 @@ def test_desktop_flavors_without_aarch64_package_sources_are_amd64_only():
                 f"from PINNED_AMD64_ONLY in the same change")
 
 
-def test_cosmic_does_not_pin_an_arch_the_variant_does_not_offer():
-    """COSMIC's own package set converged on aarch64 (2026-09-06) and the
-    flavor still declares no platforms of its own, so it inherits whatever the
-    variant offers. That is the honest shape: the reason arm64 is unavailable
-    today is one layer below COSMIC, in the base, and this flavor should follow
-    the variant back to arm64 automatically when the base can build there."""
-    hb = _hummingbird()
-    cosmic = next(f for f in hb["flavors"] if f["id"] == "cosmic")
-    assert cosmic.get("platforms") is None, (
-        "hummingbird:cosmic should inherit the variant's platforms — its own "
-        "package set resolves on aarch64, so it must not carry an independent "
-        "pin that would outlive the base's arm64 gap")
 
 
 def test_the_variant_drops_arm64_while_its_base_cannot_resolve_xfsprogs():

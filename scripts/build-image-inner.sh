@@ -50,11 +50,11 @@ common_image_sha=$($YQ -r '.images[] | select(.name == "common") | .digest' imag
 common_image_ref="${common_image}@${common_image_sha}"
 brew_image_sha=$($YQ -r '.images[] | select(.name == "brew") | .digest' image-versions.yaml)
 brew_image_ref="${brew_image}@${brew_image_sha}"
-# Hummingbird's GNOME comes from projectbluefin/utah-packages, an OCI image
-# carrying a dnf repository; Containerfile.el10 bind-mounts it into the gnome
-# stage and manifests/desktops/gnome.yaml's hummingbird section points dnf at
-# it. Resolved for every build so the Containerfile has one contract; only
-# hummingbird's gnome stage reads it.
+# Hummingbird's GNOME stack and shared desktop dependencies come from
+# projectbluefin/utah-packages, an OCI image carrying a dnf repository.
+# Containerfile.el10 bind-mounts it into the Hummingbird gnome and cosmic
+# stages; both manifests point dnf at it. Resolve it for every build so the
+# Containerfile has one contract; only those two Hummingbird stages read it.
 utah_packages_image="${UTAH_PACKAGES_IMAGE:-ghcr.io/projectbluefin/utah-packages}"
 utah_packages_sha=$($YQ -r '.images[] | select(.name == "utah-packages") | .digest' image-versions.yaml)
 utah_packages_ref="${utah_packages_image}@${utah_packages_sha}"

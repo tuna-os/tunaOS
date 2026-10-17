@@ -14,7 +14,7 @@
 #   common     — projectbluefin/common with pinned digest
 #   brew       — ublue-os/brew with pinned digest
 #   zirconium  — zirconium-dev/zirconium with pinned digest
-#   utah-packages — projectbluefin/utah-packages (Hummingbird GNOME repo) with pinned digest
+#   utah-packages — projectbluefin/utah-packages (Hummingbird desktop repo) with pinned digest
 #   gnome50-el10-packages — tuna-os/tunaos-packages (EL10 GNOME 50 repo) with pinned digest
 #   akmods     — akmods-nvidia-open registry base (with mirror support)
 #
