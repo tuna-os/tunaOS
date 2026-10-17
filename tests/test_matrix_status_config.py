@@ -27,9 +27,10 @@ call site, same as tests/test_matrix_status_fetch.py does for gh_json.
 import importlib.util
 import io
 import json
-import subprocess
+import re
 import sys
 import tempfile
+import subprocess
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -373,6 +374,18 @@ class ContractResultsArtifactDownload(unittest.TestCase):
 
         self.assertEqual(got, {"a:b": ("pass", "2026-08-01", "1")})
 
+    def test_completed_runs_without_an_artifact_refuse_empty_snapshot(self):
+        run = self._run()
+        with mock.patch.object(gms, "gh_json", return_value=[run]), \
+                mock.patch.object(
+                    gms.subprocess,
+                    "run",
+                    side_effect=subprocess.CalledProcessError(1, "gh"),
+                ):
+            with self.assertRaisesRegex(RuntimeError, "refusing an empty snapshot"):
+                gms.contract_results()
+
+
 
 # ── desktop_table ───────────────────────────────────────────────────────────
 
@@ -561,6 +574,47 @@ class MainCliDispatch(unittest.TestCase):
                 gms.main()
 
 
+def test_committed_snapshot_counts_match_provenance_and_board():
+    root = SCRIPT.parents[1]
+    payload = json.loads((root / "docs/matrix-provenance.json").read_text())
+    document = (root / "docs/MATRIX-STATUS.md").read_text()
+
+    def axis_counts(axis):
+        verdicts = [
+            axes[axis]["verdict"]
+            for axes in payload["cells"].values()
+            if axis in axes
+        ]
+        return {
+            "passed": verdicts.count("pass"),
+            "tested": sum(verdict != "untested" for verdict in verdicts),
+            "total": len(verdicts),
+        }
+
+    def section(title):
+        body = document.split(f"## {title}\n", 1)[1]
+        return body.split("\n## ", 1)[0]
+
+    patterns = {
+        "LUKS E2E": ("install", r"\*\*(\d+) of (\d+)\*\* cells green \((\d+) tested"),
+        "Desktop Contract Sweep": (
+            "desktop",
+            r"\*\*(\d+) of (\d+)\*\* cells satisfy .+?\((\d+) tested",
+        ),
+        "Bootc Lifecycle": ("lifecycle", r"\*\*(\d+) of (\d+)\*\* cells green \((\d+) tested"),
+        "Package parity": ("parity", r"\*\*(\d+) of (\d+)\*\* cells at parity \((\d+) measured"),
+    }
+    for title, (axis, pattern) in patterns.items():
+        match = re.search(pattern, section(title), re.DOTALL)
+        assert match, f"missing generated headline for {title}"
+        board = {
+            "passed": int(match.group(1)),
+            "total": int(match.group(2)),
+            "tested": int(match.group(3)),
+        }
+        assert board == axis_counts(axis), title
+        if axis in payload["summary"]:
+            assert payload["summary"][axis] == board, axis
 if __name__ == "__main__":
     unittest.main()
 

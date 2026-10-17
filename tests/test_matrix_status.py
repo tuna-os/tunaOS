@@ -289,6 +289,17 @@ class UndeclaredCellsAreNotCountedAgainstUs(unittest.TestCase):
         # xfce is declared and untested: in the total, not in tested.
         self.assertEqual((total, tested, passed), (3, 2, 1))
 
+    def test_declared_image_only_overlay_counts_for_install(self):
+        matrix = {"flounder": {"gnome", "gnome-nvidia"}}
+        results = {
+            "LUKS flounder:gnome": ("success", "2026-08-06"),
+            "LUKS flounder:gnome-nvidia": ("failure", "2026-08-06"),
+        }
+        self.assertEqual(
+            gms.tally(matrix, results, self.KEY), (2, 2, 1)
+        )
+
+
     def test_the_removed_flavor_is_still_disclosed(self):
         """Dropped from the count, but named — not silently forgotten."""
         results = {

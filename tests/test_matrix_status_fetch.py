@@ -189,6 +189,37 @@ class RunWalkPicksTheNewestAuthoritativeResult(unittest.TestCase):
         self.assertEqual(results["cell a"], ("success", "2026-08-06", "2"))
         self.assertEqual(full_sweep, "2026-08-05")
 
+    def test_history_walk_continues_after_full_sweep_coverage(self):
+        runs = [
+            {"databaseId": 3, "createdAt": "2026-08-07T00:00:00Z", "status": "completed"},
+            {"databaseId": 2, "createdAt": "2026-08-06T00:00:00Z", "status": "completed"},
+            {"databaseId": 1, "createdAt": "2026-08-05T00:00:00Z", "status": "completed"},
+        ]
+        jobs = {
+            "3": [{"name": "cell a", "conclusion": "success"}],
+            "2": [
+                {"name": "cell a", "conclusion": "failure"},
+                {"name": "cell b", "conclusion": "success"},
+            ],
+            "1": [{"name": "cell c", "conclusion": "success"}],
+        }
+
+        def fake(*args):
+            if args[0:2] == ("run", "list"):
+                return runs
+            if args[0:2] == ("run", "view"):
+                return {"jobs": jobs[args[2]]}
+            return None
+
+        with mock.patch.object(gms, "gh_json", side_effect=fake):
+            results, full_sweep = gms._collect_latest_results(
+                "wf.yml", r"^cell ", {"cell a", "cell b"},
+                lambda name: name,
+            )
+        self.assertEqual(full_sweep, "2026-08-06")
+        self.assertIn("cell c", results)
+
+
 
     def test_lifecycle_full_sweep_requires_every_architecture_leg(self):
         runs = [

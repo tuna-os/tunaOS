@@ -65,7 +65,7 @@ def render(payload: dict, image: str, digest: str, sbom_packages: int) -> str:
             f"- Installer and encrypted-disk path: **{fraction(summary, 'install')}**",
             "",
             "### Lifecycle",
-            "- Lifecycle validation (install configuration and desktop contract): **{fraction(summary, 'lifecycle')}**",
+            f"- Lifecycle validation (install configuration and desktop contract): **{fraction(summary, 'lifecycle')}**",
             "",
             "### Supply chain",
             f"- Image: `{image}`",
