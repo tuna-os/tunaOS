@@ -161,6 +161,15 @@ def test_guppy_tuna_promotion_hold_reaches_reusable_workflow():
     assert "inputs.promote" in reusable_workflow
 
 
+def test_guppy_tuna_promotion_hold_reaches_reusable_workflow():
+    matrix_workflow = (ROOT / ".github/workflows/build-variant.yml").read_text()
+    reusable_workflow = (ROOT / ".github/workflows/reusable-build-image.yml").read_text()
+    assert "promotion_hold: (.promotion_hold // false)" in matrix_workflow
+    assert "promotion_hold: .promotion_hold" in matrix_workflow
+    assert "promote: ${{ !matrix.promotion_hold }}" in matrix_workflow
+    assert "inputs.promote" in reusable_workflow
+
+
 def test_rpm_cells_install_the_pinned_beta_from_signed_factory_repositories():
     manifest = yaml.safe_load((ROOT / "manifests/desktops/tuna.yaml").read_text())
     for target, nevr in (("el10", "tuna-desktop-1.0.0~beta.2-2.el10"), ("fedora", "tuna-desktop-1.0.0~beta.2-2.fc44"), ("rawhide", "tuna-desktop-1.0.0~beta.2-2.fc46"), ("eln", "tuna-desktop-1.0.0~beta.2-2.eln159")):
