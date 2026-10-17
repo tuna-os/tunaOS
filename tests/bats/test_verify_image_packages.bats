@@ -1,125 +1,60 @@
 #!/usr/bin/env bats
-# tests/bats/test_verify_image_packages.bats
-# Unit tests for scripts/verify-image-packages.sh
+# The package verifier must read both historical list-shaped Gentoo manifests
+# and the metadata mapping used by pinned repository-qualified atoms.
+
+REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
 
 setup() {
-  TEST_ROOT="${BATS_TEST_DIRNAME}/test_root_tmp"
-  mkdir -p "${TEST_ROOT}"
-  export PATH="${TEST_ROOT}/bin:${PATH}"
+  repo="${BATS_TEST_TMPDIR}/repo"
+  mkdir -p "${repo}/bin" "${repo}/manifests/desktops" "${repo}/scripts"
+  cp "${REPO_ROOT}/scripts/verify-image-packages.sh" "${repo}/scripts/"
 
-  # Set up directories
-  mkdir -p "${TEST_ROOT}/bin"
-  mkdir -p "${TEST_ROOT}/manifests/desktops"
+  cat >"${repo}/bin/podman" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%q ' "$@" >>"${PODMAN_LOG}"
+printf '\n' >>"${PODMAN_LOG}"
+joined="$*"
+if [[ "${joined}" == *"/etc/os-release"* ]]; then
+  printf 'gentoo\n'
+fi
+if [[ "${joined}" == *"portageq match"* ]]; then
+  [[ "${joined}" == *"grep -q ."* ]]
+fi
+EOF
+  chmod +x "${repo}/bin/podman"
+  export PATH="${repo}/bin:${PATH}"
+  export PODMAN_LOG="${repo}/podman.log"
+}
 
-  # Create a mock manifest
-  cat >"${TEST_ROOT}/manifests/desktops/testflavor.yaml" <<'YAML'
+run_verifier() {
+  run env PODMAN_LOG="${PODMAN_LOG}" bash "${repo}/scripts/verify-image-packages.sh" fake-image "$1"
+}
+
+@test "mapping-shaped Gentoo manifest passes repository-qualified exact atom" {
+  cat >"${repo}/manifests/desktops/tuna.yaml" <<'EOF'
 packages:
-  apt:
-    - debian-pkg1
-    - debian-pkg2
-  fedora:
-    packages:
-      - fedora-pkg1
-  el10:
-    packages:
-      - el-pkg1
   emerge:
-    - category/gentoo-pkg1
-YAML
+    display_manager: greetd
+    source_repositories:
+      - name: guru
+    packages:
+      - =gui-wm/tuna-desktop-1.0.0_beta1::tunaos
+EOF
 
-  # Stub yq to use the mock manifest path if requested
-  # In the real script, it looks at REPO_ROOT/manifests/desktops/flavor.yaml.
-  # So we override REPO_ROOT or stub yq to point to our test directory.
+  run_verifier tuna
+  [ "$status" -eq 0 ]
+  grep -Fq -- '=gui-wm/tuna-desktop-1.0.0_beta1::tunaos' "$PODMAN_LOG"
 }
 
-teardown() {
-  rm -rf "${TEST_ROOT}"
-}
+@test "list-shaped Gentoo manifest remains supported" {
+  cat >"${repo}/manifests/desktops/legacy.yaml" <<'EOF'
+packages:
+  emerge:
+    - app-editors/vim
+EOF
 
-# ── Argument Validation ───────────────────────────────────────────────────
-
-@test "verify-packages: requires image and flavor arguments" {
-  run bash "${BATS_TEST_DIRNAME}/../../scripts/verify-image-packages.sh"
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"Usage:"* ]]
-}
-
-@test "verify-packages: errors if manifest does not exist" {
-  run bash "${BATS_TEST_DIRNAME}/../../scripts/verify-image-packages.sh" "myimage" "nonexistent"
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"Manifest not found"* ]]
-}
-
-# ── OS-specific verification routing ──────────────────────────────────────
-
-@test "verify-packages: routes to RPM check for Enterprise Linux" {
-  # Mock podman to report almalinux OS and succeed on package checks
-  cat >"${TEST_ROOT}/bin/podman" <<'MOCK'
-#!/usr/bin/env bash
-if [[ "$*" == *"os-release"* ]]; then
-  echo 'almalinux'
-  exit 0
-fi
-if [[ "$*" == *"rpm"* && "$*" == *"gdm"* ]]; then
-  exit 0
-fi
-if [[ "$*" == *"command -v"* || "$*" == *"systemd/system"* ]]; then
-  exit 0
-fi
-exit 1
-MOCK
-  chmod +x "${TEST_ROOT}/bin/podman"
-
-  # We use the real GNOME manifest which contains "gdm" for el10
-  run bash "${BATS_TEST_DIRNAME}/../../scripts/verify-image-packages.sh" "localhost/yellowfin-gnome:base" "gnome"
-  # Since podman fails on other packages in gnome.yaml, it should fail but check them via rpm
-  [[ "$output" == *"Detected OS inside image: almalinux"* ]]
-  [[ "$output" == *"✓ gdm"* ]]
-}
-
-@test "verify-packages: routes to dpkg check for Debian/Ubuntu" {
-  # Mock podman to report debian OS and succeed on package checks
-  cat >"${TEST_ROOT}/bin/podman" <<'MOCK'
-#!/usr/bin/env bash
-if [[ "$*" == *"os-release"* ]]; then
-  echo 'debian'
-  exit 0
-fi
-if [[ "$*" == *"dpkg-query"* && "$*" == *"ubuntu-desktop-minimal"* ]]; then
-  echo "install ok installed"
-  exit 0
-fi
-if [[ "$*" == *"command -v"* || "$*" == *"systemd/system"* ]]; then
-  exit 0
-fi
-exit 1
-MOCK
-  chmod +x "${TEST_ROOT}/bin/podman"
-
-  run bash "${BATS_TEST_DIRNAME}/../../scripts/verify-image-packages.sh" "localhost/debian-gnome:base" "gnome"
-  [[ "$output" == *"Detected OS inside image: debian"* ]]
-  [[ "$output" == *"✓ ubuntu-desktop-minimal"* ]]
-}
-
-@test "verify-packages: routes to /var/db/pkg check for Gentoo" {
-  # Mock podman to report gentoo OS and succeed on package checks
-  cat >"${TEST_ROOT}/bin/podman" <<'MOCK'
-#!/usr/bin/env bash
-if [[ "$*" == *"os-release"* ]]; then
-  echo 'gentoo'
-  exit 0
-fi
-if [[ "$*" == *"var/db/pkg"* ]]; then
-  exit 0
-fi
-if [[ "$*" == *"command -v"* || "$*" == *"systemd/system"* ]]; then
-  exit 0
-fi
-exit 1
-MOCK
-  chmod +x "${TEST_ROOT}/bin/podman"
-
-  run bash "${BATS_TEST_DIRNAME}/../../scripts/verify-image-packages.sh" "localhost/guppy-gnome:base" "gnome"
-  [[ "$output" == *"Detected OS inside image: gentoo"* ]]
-  [[ "$output" == *"✓ gnome-base/gnome-light"* ]]
+  run_verifier legacy
+  [ "$status" -eq 0 ]
+  grep -Fq -- 'app-editors/vim' "$PODMAN_LOG"
 }

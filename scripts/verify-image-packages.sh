@@ -69,10 +69,15 @@ ubuntu | debian)
 	done < <(yq eval '.packages.apt[]' "$MANIFEST" 2>/dev/null || true)
 	;;
 gentoo)
-	# Read emerge packages list from manifest
+	# Gentoo manifests use either a legacy package list or a mapping with
+	# package metadata alongside the package atoms.
+	emerge_packages_query='.packages.emerge[]'
+	if [[ "$(yq eval '.packages.emerge | tag' "$MANIFEST" 2>/dev/null || true)" == "!!map" ]]; then
+		emerge_packages_query='.packages.emerge.packages[]'
+	fi
 	while IFS= read -r pkg; do
 		[[ -n "$pkg" && "$pkg" != "null" ]] && PACKAGES+=("$pkg")
-	done < <(yq eval '.packages.emerge[]' "$MANIFEST" 2>/dev/null || true)
+	done < <(yq eval -r "$emerge_packages_query" "$MANIFEST" 2>/dev/null || true)
 	;;
 *)
 	echo "Warning: Unsupported OS ID '${OS_ID}', trying to read all package lists" >&2
@@ -114,17 +119,25 @@ for pkg in "${PACKAGES[@]}"; do
 			echo "✓ ${pkg}"
 		fi
 		;;
-	gentoo)
-		# Check if package is installed in portage db /var/db/pkg/category/name-*
-		# If package has no category, check under all categories
-		CHECK_CMD=""
-		if [[ "$pkg" == *"/"* ]]; then
-			CHECK_CMD="[ -d /var/db/pkg/${pkg}-* ] || ls -d /var/db/pkg/${pkg}-[0-9]* &>/dev/null"
-		else
-			CHECK_CMD="ls -d /var/db/pkg/*/${pkg}-[0-9]* &>/dev/null"
-		fi
-
-		if ! podman run --rm --entrypoint sh "$IMAGE" -c "${CHECK_CMD}" &>/dev/null; then
+gentoo)
+		# Ask Portage to match the atom, rather than treating an atom as a
+		# filesystem path. This handles repository-qualified and exact-version
+		# atoms such as =gui-wm/tuna-desktop-1.0.0_beta1::tunaos.
+		if ! podman run --rm --entrypoint sh "$IMAGE" -c '
+			set -eu
+			atom=$1
+			case "$atom" in
+				*/*) ;;
+				*) atom="*/${atom}" ;;
+			esac
+			if command -v portageq >/dev/null 2>&1; then
+				portageq match / "$atom" | grep -q .
+			elif command -v equery >/dev/null 2>&1; then
+				equery match "$atom" | grep -q .
+			else
+				exit 127
+			fi
+		' sh "$pkg" &>/dev/null; then
 			echo "❌ Missing package: ${pkg}"
 			FAILED=1
 		else
