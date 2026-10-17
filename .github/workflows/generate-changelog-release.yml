@@ -329,6 +329,34 @@ jobs:
             ]
           github-token: ${{ github.token }}
 
+      # create-release owns the changelog/release card, then this repository
+      # appends the verification block from the same generated JSON that feeds
+      # the README. Keeping it as a post-step avoids a second interpretation of
+      # matrix health and preserves the action's generated notes.
+      - name: Append release verification report
+        if: >-
+          steps.release.outcome == 'success' ||
+          steps.existing.outputs.exists == 'true'
+        env:
+          GH_TOKEN:      ${{ github.token }}
+          REPO:          ${{ github.repository }}
+          TAG:           ${{ steps.vars.outputs.tag }}
+          VARIANT:       ${{ steps.vars.outputs.variant }}
+          STREAM:        ${{ steps.vars.outputs.stream }}
+          DIGEST:        ${{ steps.digest.outputs.digest }}
+          SBOM_PACKAGES: ${{ steps.sbom.outputs.packages }}
+        run: |
+          set -euo pipefail
+          gh release view "$TAG" --repo "$REPO" --json body -q .body > release-body.md
+          python3 scripts/render-release-verification.py \
+            --image "${IMAGE_REGISTRY}/${VARIANT}:${STREAM}" \
+            --digest "${DIGEST}" \
+            --sbom-packages "${SBOM_PACKAGES}" \
+            --body release-body.md \
+            --output release-body-with-verification.md
+          gh release edit "$TAG" --repo "$REPO" \
+            --notes-file release-body-with-verification.md
+
       # projectbluefin/actions/bootc-build/create-release has no note-injection
       # input (tunaos#1398 — a `handwritten:` input here was silently ignored,
       # dropping the note from every release). Prepend it ourselves once the
