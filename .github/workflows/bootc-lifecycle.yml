@@ -276,6 +276,8 @@ jobs:
           echo "${GITHUB_TOKEN}" | \
             podman login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
 
+      # This is an existence probe only. It is deliberately excluded from
+      # lifecycle tallies and full-sweep coverage by gen-matrix-status.py.
       - name: Track beta stream status
         env:
           VARIANT: ${{ matrix.variant }}

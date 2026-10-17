@@ -150,6 +150,27 @@ class LoadBuildConfigFallbackParser(unittest.TestCase):
         # Only `gnome` sets build_iso: true in CONFIG_TEXT.
         self.assertEqual(matrix, {"yellowfin": {"gnome"}})
 
+    def test_luks_matrix_matches_amd64_workflow_filters(self):
+        config = {
+            "variants": [{
+                "id": "yellowfin",
+                "platforms": ["linux/amd64", "linux/arm64"],
+                "flavors": [
+                    {"id": "base", "build_image": True},
+                    {"id": "gnome", "build_image": True},
+                    {"id": "gnome-nvidia", "build_image": True},
+                    {"id": "arm-only", "build_image": True,
+                     "platforms": ["linux/arm64"]},
+                    {"id": "disabled", "build_image": True, "luks_e2e": False},
+                ],
+            }]
+        }
+        with mock.patch.object(gms, "load_build_config", return_value=config):
+            self.assertEqual(
+                gms.luks_matrix(),
+                {"yellowfin": {"gnome", "gnome-nvidia"}},
+            )
+
     def test_matches_pyyaml_on_the_same_input(self):
         """The whole point of the fallback: it must agree with PyYAML.
 
@@ -555,15 +576,17 @@ class LifecycleResultsNormalisation(unittest.TestCase):
         with mock.patch.object(gms, "latest_results", return_value=raw):
             return gms.lifecycle_results()
 
-    def test_newest_prefix_variant_wins_before_arch_merge(self):
+    def test_beta_probe_cannot_replace_unprefixed_validation(self):
         got = self._with_raw({
             "BETA yellowfin:gnome (amd64)": ("success", "2026-08-17", "2"),
             "yellowfin:gnome (amd64)": ("failure", "2026-08-16", "1"),
             "BETA guppy:gnome (amd64)": ("success", "2026-08-17", "2"),
+            "bonito-rawhide:gnome (amd64)": ("failure", "2026-08-17", "1"),
             "flounder:kde-nvidia (amd64)": ("failure", "2026-08-17", "1"),
         })
-        self.assertEqual(got["yellowfin:gnome"][0], "success")
+        self.assertEqual(got["yellowfin:gnome"][0], "failure")
         self.assertNotIn("guppy:gnome", got)
+        self.assertEqual(got["bonito-rawhide:gnome"][0], "failure")
         self.assertEqual(got["flounder:kde-nvidia"][0], "failure")
 
     def test_arch_legs_merge_worst_of(self):

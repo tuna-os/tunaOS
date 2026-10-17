@@ -271,9 +271,9 @@ if ! jq -e '.summary.factory_health and .summary.install and .summary.lifecycle 
 fi
 health_green=$(jq -r '.summary.factory_health.green' "$health_json")
 health_total=$(jq -r '.summary.factory_health.total' "$health_json")
-install_passed=$(jq -r '.summary.install.passed' "$health_json")
+install_passed=$(jq -r '.summary.install.tested' "$health_json")
 install_total=$(jq -r '.summary.install.total' "$health_json")
-lifecycle_passed=$(jq -r '.summary.lifecycle.passed' "$health_json")
+lifecycle_passed=$(jq -r '.summary.lifecycle.tested' "$health_json")
 lifecycle_total=$(jq -r '.summary.lifecycle.total' "$health_json")
 never_tested=$(jq -r '.summary.never_tested' "$health_json")
 blocking_regressions=$(jq -r '.summary.known_regressions.blocking' "$health_json")

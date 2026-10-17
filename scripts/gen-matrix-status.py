@@ -288,6 +288,7 @@ def load_build_config(config_path: Path = CONFIG) -> dict:
                     "build_image": b_img,
                     "build_iso": b_iso,
                     "build_qcow2": b_qcow2,
+                    "luks_e2e": "luks_e2e: false" not in rf,
                     "platforms": f_platforms,
                 })
         variants.append({
@@ -319,19 +320,26 @@ def iso_matrix() -> dict[str, set[str]]:
 
 
 def luks_matrix() -> dict[str, set[str]]:
-    """Cells LUKS E2E actually covers — the denominator for that axis.
-
-    luks-e2e.yml builds its matrix from build_image, NOT build_iso, and says
-    why: the browser ISO builder makes an ISO from any published image, so
-    image-only variants (sailfin, guppy, flounder-sid) need boot+install
-    coverage too. Measuring that axis against build_iso understated the work
-    being done and forced a "promote any result over not-built" special case
-    in cell() to stop sailfin's four tested cells from vanishing.
-
-    Using the workflow's own definition removes the special case: a cell is in
-    the LUKS denominator exactly when luks-e2e.yml would schedule it.
-    """
-    return _matrix("build_image", desktops_only=True)
+    """Cells the default LUKS matrix actually schedules."""
+    cfg = load_build_config(CONFIG)
+    out: dict[str, set[str]] = {}
+    for variant in cfg.get("variants", []):
+        for flavor in variant.get("flavors", []):
+            flavor_id = flavor["id"]
+            if (
+                not flavor.get("build_image")
+                or flavor.get("luks_e2e", True) is False
+                or flavor_id == "base"
+                or flavor_id.startswith("base-")
+            ):
+                continue
+            platforms = flavor.get("platforms")
+            if platforms is None:
+                platforms = variant.get("platforms") or []
+            if "linux/amd64" not in platforms:
+                continue
+            out.setdefault(variant["id"], set()).add(flavor_id)
+    return out
 
 
 def _is_beta_lifecycle_cell(cell: str) -> bool:
@@ -774,29 +782,39 @@ def lifecycle_job_key(name: str) -> str | None:
     return f"{match.group('cell')} ({match.group('arch')})"
 
 
+def lifecycle_sweep_job_key(name: str) -> str | None:
+    """Return only real lifecycle validations for full-sweep coverage."""
+    if name.startswith("BETA "):
+        return None
+    return lifecycle_job_key(name)
+
+
+def _result_order(hit: tuple[str, str, str]) -> tuple[str, int | str]:
+    try:
+        run_id: int | str = int(hit[2])
+    except (TypeError, ValueError):
+        run_id = hit[2]
+    return hit[1], run_id
 
 
 def lifecycle_results(
     raw_results: dict[str, tuple[str, str, str]] | None = None,
 ) -> dict[str, tuple[str, str, str]]:
-    """Newest stable lifecycle result per cell, worst-of-architectures.
-
-    The raw collector is intentionally prefix-preserving for LUKS and therefore
-    can contain both a current ``BETA cell (arch)`` name and an older unprefixed
-    spelling. Deduplicate lifecycle identities before merging architectures so
-    an older failure cannot override a newer result.
-    """
+    """Newest real lifecycle result per cell, worst-of-architectures."""
     if raw_results is None:
         raw_results = latest_results("bootc-lifecycle.yml", r":")
     newest_by_job: dict[str, tuple[str, str, str]] = {}
     for name, hit in raw_results.items():
+        # The BETA lane only probes tag existence. It must not replace a real
+        # validation result, even if a stable cell was mistakenly routed there.
+        if name.startswith("BETA "):
+            continue
         job_key = lifecycle_job_key(name)
         if job_key is None:
             continue
-        cell = job_key.rsplit(" (", 1)[0]
-        if _is_beta_lifecycle_cell(cell):
-            continue
-        newest_by_job.setdefault(job_key, hit)
+        previous = newest_by_job.get(job_key)
+        if previous is None or _result_order(hit) > _result_order(previous):
+            newest_by_job[job_key] = hit
 
     merged: dict[str, tuple[str, str, str]] = {}
     for job_key, hit in newest_by_job.items():
@@ -1141,7 +1159,7 @@ def build() -> str:
         "bootc-lifecycle.yml",
         r":",
         expected_lifecycle_jobs,
-        lifecycle_job_key,
+        lifecycle_sweep_job_key,
     )
     lifecycle = lifecycle_results(lifecycle_raw)
     FULL_SWEEP_DATES.update(
@@ -1252,12 +1270,11 @@ def build() -> str:
         f"({tested} tested, {total - tested} never tested).",
         "",
         (
-            "The denominator is the set `luks-e2e.yml` schedules: every "
-            "published desktop image (`build_image`), not only the ones that "
-            "ship an ISO. That is wider than the ISO matrix below on purpose. "
-            "The browser ISO builder can make an ISO from any image, so the "
-            "image-only variants (`sailfin`, `guppy`, `flounder-sid`) need boot "
-            "and install coverage too."
+            "The denominator is the amd64 graphical image set that "
+            "`luks-e2e.yml` schedules: `build_image` is true, `luks_e2e` is "
+            "not false, and the flavor is not a headless base derivative. It "
+            "includes image-only variants and overlays such as `gnome-nvidia`, "
+            "not only flavors that ship an ISO."
         ),
         "",
     ]
