@@ -203,7 +203,9 @@ def test_every_new_release_appends_the_same_generated_verification_data():
     assert "steps.existing.outputs.exists == 'true'" in report_step["if"]
     assert "gh release download" in report_block
     assert "--stored-identity release-body.md" in report_block
-    assert "CURRENT_DIGEST" not in report_block.split('if [[ \"$EXISTING\" == \"true\" ]]', 1)[1]
+    assert "CURRENT_DIGEST" not in report_block
+    assert "CURRENT_SBOM_PACKAGES" not in report_block
+    assert "EXISTING" not in report_block
     renderer = RELEASE_REPORT.read_text()
     assert 'payload.get("summary")' in renderer
     assert 'payload.get("cells")' in renderer

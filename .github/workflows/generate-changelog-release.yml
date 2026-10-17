@@ -342,14 +342,10 @@ jobs:
           inputs.dry_run != true &&
           (steps.release.outcome == 'success' || steps.existing.outputs.exists == 'true')
         env:
-          GH_TOKEN:      ${{ github.token }}
-          REPO:          ${{ github.repository }}
-          TAG:           ${{ steps.vars.outputs.tag }}
-          VARIANT:       ${{ steps.vars.outputs.variant }}
-          STREAM:        ${{ steps.vars.outputs.stream }}
-          CURRENT_DIGEST: ${{ steps.digest.outputs.digest }}
-          CURRENT_SBOM_PACKAGES: ${{ steps.sbom.outputs.packages }}
-          EXISTING:      ${{ steps.existing.outputs.exists }}
+          GH_TOKEN: ${{ github.token }}
+          REPO:      ${{ github.repository }}
+          TAG:       ${{ steps.vars.outputs.tag }}
+          STREAM:    ${{ steps.vars.outputs.stream }}
         run: |
           set -euo pipefail
           gh release view "$TAG" --repo "$REPO" --json body -q .body > release-body.md
@@ -358,35 +354,34 @@ jobs:
             exit 0
           fi
 
-          IMAGE="${IMAGE_REGISTRY}/${VARIANT}:${STREAM}"
-          DIGEST="$CURRENT_DIGEST"
-          SBOM_PACKAGES="$CURRENT_SBOM_PACKAGES"
-          if [[ "$EXISTING" == "true" ]]; then
-            rm -rf _release-evidence
-            mkdir _release-evidence
-            gh release download "$TAG" --repo "$REPO" --dir _release-evidence \
-              --pattern '*.spdx.json'
-            mapfile -t SBOMS < <(find _release-evidence -type f -name '*.spdx.json')
-            if [[ "${#SBOMS[@]}" -ne 1 ]]; then
-              echo "::error::release ${TAG} must have exactly one attached SPDX inventory"
-              exit 1
-            fi
-            SBOM_PACKAGES=$(jq '(.packages // []) | length' "${SBOMS[0]}")
-            if [[ "$SBOM_PACKAGES" -lt "$SBOM_MIN_PACKAGES" ]]; then
-              echo "::error::release ${TAG} attached SPDX inventory is an unusable stub"
-              exit 1
-            fi
-            mapfile -t STORED < <(
-              python3 scripts/render-release-verification.py \
-                --stored-identity release-body.md
-            )
-            if [[ "${#STORED[@]}" -ne 2 ]]; then
-              echo "::error::could not recover original image identity from ${TAG}"
-              exit 1
-            fi
-            IMAGE="${STORED[0]}:${STREAM}"
-            DIGEST="${STORED[1]}"
+          # Always read the evidence from the published release. A concurrent
+          # create-release invocation can win after the earlier existence check,
+          # so current-build outputs are not authoritative even on the
+          # `steps.existing == false` path.
+          rm -rf _release-evidence
+          mkdir _release-evidence
+          gh release download "$TAG" --repo "$REPO" --dir _release-evidence \
+            --pattern '*.spdx.json'
+          mapfile -t SBOMS < <(find _release-evidence -type f -name '*.spdx.json')
+          if [[ "${#SBOMS[@]}" -ne 1 ]]; then
+            echo "::error::release ${TAG} must have exactly one attached SPDX inventory"
+            exit 1
           fi
+          SBOM_PACKAGES=$(jq '(.packages // []) | length' "${SBOMS[0]}")
+          if [[ "$SBOM_PACKAGES" -lt "$SBOM_MIN_PACKAGES" ]]; then
+            echo "::error::release ${TAG} attached SPDX inventory is an unusable stub"
+            exit 1
+          fi
+          mapfile -t STORED < <(
+            python3 scripts/render-release-verification.py \
+              --stored-identity release-body.md
+          )
+          if [[ "${#STORED[@]}" -ne 2 ]]; then
+            echo "::error::could not recover original image identity from ${TAG}"
+            exit 1
+          fi
+          IMAGE="${STORED[0]}:${STREAM}"
+          DIGEST="${STORED[1]}"
 
           python3 scripts/render-release-verification.py \
             --image "$IMAGE" \

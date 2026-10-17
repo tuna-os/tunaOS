@@ -422,13 +422,12 @@ def _collect_latest_results(
             and full_sweep_cells <= run_cells
         ):
             full_sweep_date = date
-        if (
-            full_sweep_date
-            and full_sweep_cells
-            and full_sweep_cells <= found_cells
-        ):
-            break
 
+        # Keep walking the bounded history after finding a full sweep. Targeted
+        # reruns can make the newest per-cell answers span older runs, including
+        # rawhide and sid cells that were not in the latest sweep. The sweep
+        # date records the newest complete assertion; it is not a reason to
+        # discard older authoritative cell results.
     # Say so when the window is the thing deciding the answer. RUN_DEPTH has now
     # been outgrown twice, and both times the only symptom was cells quietly
     # reading ⬜ "never tested" — the walk stopped mid-discovery and the page
@@ -499,15 +498,18 @@ def _baseline_cells() -> tuple[list[dict], str, str]:
     global _BASELINE_CACHE
     if _BASELINE_CACHE is not None:
         return _BASELINE_CACHE
-    runs = gh_json(
-        "run", "list", "--repo", REPO, "--workflow", "desktop-contract-sweep.yml",
-        "--limit", "10", "--json", "databaseId,createdAt,status,conclusion",
-    ) or []
+    runs = gh_json_required(
+        "run", "list", "--repo", REPO, "--workflow",
+        "desktop-contract-sweep.yml", "--limit", "10",
+        "--json", "databaseId,createdAt,status,conclusion",
+    )
+    eligible = False
     for run in runs:
         if run.get("status") != "completed":
             continue
         if run.get("conclusion") not in ("success", "failure"):
             continue
+        eligible = True
         run_id, date = str(run["databaseId"]), run["createdAt"][:10]
         with tempfile.TemporaryDirectory() as tmp:
             try:
@@ -521,8 +523,16 @@ def _baseline_cells() -> tuple[list[dict], str, str]:
             all_json = Path(tmp) / "all.json"
             if not all_json.exists():
                 continue
-            _BASELINE_CACHE = (json.loads(all_json.read_text()), date, run_id)
+            cells = json.loads(all_json.read_text())
+            if not cells:
+                continue
+            _BASELINE_CACHE = (cells, date, run_id)
             return _BASELINE_CACHE
+    if eligible:
+        raise RuntimeError(
+            "desktop-contract-sweep has completed runs but no usable "
+            "desktop-contract-baseline artifact; refusing an empty snapshot"
+        )
     _BASELINE_CACHE = ([], "", "")
     return _BASELINE_CACHE
 
@@ -559,14 +569,16 @@ def parity_results() -> dict[str, tuple[str, str, str]]:
     """
     global _PARITY_CACHE
     if _PARITY_CACHE is None:
-        runs = gh_json(
+        runs = gh_json_required(
             "run", "list", "--repo", REPO, "--workflow", "package-parity.yml",
             "--limit", "10", "--json", "databaseId,createdAt,status,conclusion",
-        ) or []
+        )
+        eligible = False
         _PARITY_CACHE = ([], "", "")
         for run in runs:
             if run.get("status") != "completed" or run.get("conclusion") != "success":
                 continue
+            eligible = True
             run_id, date = str(run["databaseId"]), run["createdAt"][:10]
             with tempfile.TemporaryDirectory() as tmp:
                 try:
@@ -584,6 +596,11 @@ def parity_results() -> dict[str, tuple[str, str, str]]:
                     json.loads(parity_json.read_text()), date, run_id
                 )
                 break
+        if eligible and not _PARITY_CACHE[0]:
+            raise RuntimeError(
+                "package-parity has completed runs but no usable "
+                "package-parity-baseline artifact; refusing an empty snapshot"
+            )
     cells, date, run_id = _PARITY_CACHE
     out: dict[str, tuple[str, str, str]] = {}
     for c in cells:
@@ -826,7 +843,8 @@ def lifecycle_results(
 
 
 def composite_section(criteria, stage, contract, luks, smoke, lifecycle,
-                      omissions, parity, today: datetime.date | str | None = None):
+                      omissions, parity, today: datetime.date | str | None = None,
+                      install_matrix: dict[str, set[str]] | None = None):
     """The bar itself: one table scored against the blocking criteria.
 
     This function does the I/O and the Markdown. It reads the cell matrices
@@ -840,6 +858,7 @@ def composite_section(criteria, stage, contract, luks, smoke, lifecycle,
         published=_matrix("build_image", desktops_only=False),
         desktops=desktops,
         isos=iso_matrix(),
+        install=install_matrix if install_matrix is not None else desktops,
     )
     evidence = matrix_evaluator.AxisEvidence(
         stage=stage, contract=contract, luks=luks, smoke=smoke,
@@ -994,28 +1013,17 @@ def tally(matrix, results, key_fmt):
     """Count only cells build-config actually schedules.
 
     A stale result for a cell the matrix no longer declares used to be counted,
-    because `hit` alone was enough to enter the denominator. That put
-    flounder:cosmic and flounder-sid:cosmic in the LUKS totals as permanent
-    failures: both flavours were removed on purpose in 491544d1 ("drop the
-    COSMIC flavours Debian cannot build"), so no run will ever turn them green,
-    and the board read 39 of 54 when the live set was 52.
-
-    Two cells is small; the dishonesty is not. It is the same one nvidia_tally
-    below was written to fix — a gap nobody is ever going to close, reported as
-    if someone should. Undeclared cells now get the same treatment: out of the
-    tally, and disclosed by count so the number visibly shrinks as they age out
-    rather than vanishing silently.
+    because `hit` alone was enough to enter the denominator. Iterate every
+    declared flavor rather than only the five desktop columns: install
+    coverage includes image-only overlays.
 
     This does NOT hide a failing cell. A cell build-config still declares is
     counted whether it passes, fails or has never run.
     """
     total = tested = passed = 0
-    for variant in variants_in_scope(matrix, results):
-        flavors = matrix.get(variant, set())
-        for d in DESKTOPS:
-            if d not in flavors:
-                continue
-            hit = results.get(key_fmt(variant, d))
+    for variant, flavors in matrix.items():
+        for flavor in flavors:
+            hit = results.get(key_fmt(variant, flavor))
             total += 1
             if hit:
                 tested += 1
@@ -1033,12 +1041,16 @@ def undeclared_tally(matrix, results, key_fmt):
     reaching zero is checkable.
     """
     stale = []
-    for variant in variants_in_scope(matrix, results):
-        flavors = matrix.get(variant, set())
-        for d in DESKTOPS:
-            if d not in flavors and results.get(key_fmt(variant, d)):
-                stale.append(f"{variant}:{d}")
-    return sorted(stale)
+    for raw_key, hit in results.items():
+        if not hit:
+            continue
+        cell_key = raw_key.removeprefix("LUKS ")
+        if ":" not in cell_key:
+            continue
+        variant, flavor = cell_key.split(":", 1)
+        if flavor not in matrix.get(variant, set()):
+            stale.append(cell_key)
+    return sorted(set(stale))
 
 
 def nvidia_tally(matrix, results, key_fmt):
@@ -1142,6 +1154,7 @@ def build() -> str:
     # happened to touch them.
     FULL_SWEEP_DATES.clear()
     matrix = iso_matrix()
+    desktop_matrix = _matrix("build_image", desktops_only=True)
     lmatrix = luks_matrix()
     expected_install_cells = {
         f"{variant}:{flavor}"
@@ -1241,12 +1254,12 @@ def build() -> str:
     parity = parity_results()
     composite_lines, _, _, provenance = composite_section(
         load_green_criteria(), build_stage_results(), contract, luks, smoke,
-        lifecycle, omissions, parity,
+        lifecycle, omissions, parity, install_matrix=lmatrix,
     )
     out += composite_lines
 
-    out += omissions_section(lmatrix, omissions)
-    out += parity_section(lmatrix, parity)
+    out += omissions_section(desktop_matrix, omissions)
+    out += parity_section(desktop_matrix, parity)
 
 
     # ── LUKS ────────────────────────────────────────────────────────────────
@@ -1333,7 +1346,7 @@ def build() -> str:
     # it is not subject to the "CI cannot test four of five desktops" gap
     # documented in *Known systemic gaps* below — it is the one axis that
     # gap does not apply to.
-    total, tested, passed = tally(lmatrix, contract, contract_key)
+    total, tested, passed = tally(desktop_matrix, contract, contract_key)
     out += [
         "## Desktop Contract Sweep",
         "",
@@ -1344,14 +1357,13 @@ def build() -> str:
         (
             "The sweep pulls the **published** image and runs the contract "
             "script against it directly (`podman run`, with no boot). It uses "
-            "the same denominator as LUKS E2E above: `build_image`, limited to "
-            "the five desktop flavors. This catches a desktop whose packages "
-            "never landed, and it does not depend on whether hosted CI can boot "
-            "the image at all."
+            "the desktop-only `build_image` denominator. This catches a "
+            "desktop whose packages never landed, and it does not depend on "
+            "whether hosted CI can boot the image at all."
         ),
         "",
     ]
-    out += desktop_table(lmatrix, contract, contract_key)
+    out += desktop_table(desktop_matrix, contract, contract_key)
     out += [""]
     if contract_other:
         out += [
@@ -1374,7 +1386,7 @@ def build() -> str:
     # ── Bootc Lifecycle ──────────────────────────────────────────────────────
     # `lifecycle` itself was fetched up top, where the composite scores it.
     lifecycle_key = lambda v, d: f"{v}:{d}"            # noqa: E731
-    total, tested, passed = tally(lmatrix, lifecycle, lifecycle_key)
+    total, tested, passed = tally(desktop_matrix, lifecycle, lifecycle_key)
     out += [
         "## Bootc Lifecycle",
         "",
@@ -1383,11 +1395,12 @@ def build() -> str:
         "",
         (
             "Validates bootc image update, rebase, rollback, alias resolution, "
-            "and post-switch system contracts across published stream deployments."
+            "and post-switch system contracts across published desktop stream "
+            "deployments."
         ),
         "",
     ]
-    out += desktop_table(lmatrix, lifecycle, lifecycle_key)
+    out += desktop_table(desktop_matrix, lifecycle, lifecycle_key)
     out += [""]
     dates = sorted({v[1] for v in lifecycle.values()})
     if dates:

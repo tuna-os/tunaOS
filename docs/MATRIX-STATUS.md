@@ -68,23 +68,23 @@ The configured image matrix now has 147 cells. Eleven of them are Tuna Desktop (
 
 `.github/green-criteria.yml` sets the bar. A cell is green only when every criterion that blocks it, and applies to it, has a current affirmative result. A criterion that nobody ran, nobody asserted, or that CI skipped renders ⬜, and it does not count as satisfied. These criteria block today: `builds`, `desktop`, `boots`, `parity`, `no_silent_omissions`. These are advisory — the sections below measure them, and they do not block yet: `install`, `lifecycle`, `rebuildable`, `arch_honesty`. Unimplemented: `iso`. To graduate a criterion, edit `enforcement:` in that file. This table and the README count then tighten with no code change.
 
-**89 of 147** published cells are composite-green.
+**125 of 147** published cells are composite-green.
 
 | Variant | gnome | kde | cosmic | niri | xfce |
 |---|:--:|:--:|:--:|:--:|:--:|
-| **albacore** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **bonito** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **bonito-rawhide** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **flounder** | — | ⬜ | — | — | ⬜ |
+| **albacore** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/39012158502#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/39012158502#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/39030481433#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/39030481433#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/39012158502#artifacts) |
+| **bonito** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/38923430235#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/38923430235#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/39030481433#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/39030481433#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/38923430235#artifacts) |
+| **bonito-rawhide** | ⬜ | [✅](https://github.com/tuna-os/tunaOS/actions/runs/38950334306#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/39030481433#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/39030481433#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/38950334306#artifacts) |
+| **flounder** | — | ❌ | — | — | ❌ |
 | **flounder-sid** | ⬜ | ⬜ | — | — | ⬜ |
-| **grouper** | ⬜ | ⬜ | ⬜ | — | ⬜ |
-| **guppy** | ⬜ | ⬜ | — | — | ⬜ |
-| **hummingbird** | ❌ | — | ⬜ | — | — |
-| **marlin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **sailfin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **skipjack** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| **grouper** | ❌ | ❌ | ❌ | — | ❌ |
+| **guppy** | ❌ | [✅](https://github.com/tuna-os/tunaOS/actions/runs/38894192116#artifacts) | — | — | [✅](https://github.com/tuna-os/tunaOS/actions/runs/38894192116#artifacts) |
+| **hummingbird** | ❌ | — | ❌ | — | — |
+| **marlin** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/38940177445#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/38940177445#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/39030481433#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/39030481433#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/38940177445#artifacts) |
+| **sailfin** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/38973819810#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/38973819810#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/39030481433#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/39030481433#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/38973819810#artifacts) |
+| **skipjack** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/38912184041#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/38912184041#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/39030481433#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/39030481433#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/38912184041#artifacts) |
 | **wahoo** | ⬜ | ⬜ | ⬜ | — | — |
-| **yellowfin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| **yellowfin** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/39002887881#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/39002887881#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/39030481433#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/39030481433#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/39002887881#artifacts) |
 
 Cells outside the desktop columns (base, hwe, nvidia and friends) are in the count above but not the table; only `builds` applies to them today.
 
@@ -92,53 +92,51 @@ Per-cell provenance — which run asserted which criterion, when — is machine-
 
 ## Silent omissions
 
-**0 of 52** cells clean (0 read, 52 never read).
+**52 of 52** cells clean (52 read, 0 never read).
 
 Green criterion 8 (`no_silent_omissions`): the sweep runs `checks/verify-package-wishlist.sh` against every published image it pulls. That is the same gate new builds pass at build time. So an image that drops a package in silence, outside `package-miss-allowlist.txt`, reads ❌ here even when it predates the gate. A cell whose image the sweep never read — no image, a pull error, a lost job — is ⬜, not clean.
 
 | Variant | gnome | kde | cosmic | niri | xfce |
 |---|:--:|:--:|:--:|:--:|:--:|
-| **albacore** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **bonito** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **bonito-rawhide** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **flounder** | — | ⬜ | — | — | ⬜ |
-| **flounder-sid** | ⬜ | ⬜ | — | — | ⬜ |
-| **grouper** | ⬜ | ⬜ | ⬜ | — | ⬜ |
-| **guppy** | ⬜ | ⬜ | — | — | ⬜ |
-| **gurnard** | — | — | — | — | — |
-| **hummingbird** | ⬜ | — | ⬜ | — | — |
-| **marlin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **sailfin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **skipjack** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **wahoo** | ⬜ | ⬜ | ⬜ | — | — |
-| **yellowfin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| **albacore** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **bonito** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **bonito-rawhide** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **flounder** | — | ✅ | — | — | ✅ |
+| **flounder-sid** | ✅ | ✅ | — | — | ✅ |
+| **grouper** | ✅ | ✅ | ✅ | — | ✅ |
+| **guppy** | ✅ | ✅ | — | — | ✅ |
+| **hummingbird** | ✅ | — | ✅ | — | — |
+| **marlin** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **sailfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **skipjack** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **wahoo** | ✅ | ✅ | ✅ | — | — |
+| **yellowfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 ## Package parity
 
-**0 of 52** cells at parity (0 measured, 52 never measured).
+**43 of 52** cells at parity (49 measured, 3 never measured).
 
 Green criterion 7 (`parity`), first cadence: `package-parity.yml` runs `scripts/package-parity.sh --audit` daily, and audits every desktop package set against its own base. That shape exposes a build that applies no desktop at all (#858). ❌ covers BROKEN (no more packages than the base) and suspect (fewer than 25 added). A diff against each variant upstream reference comes next, and nothing asserts it yet.
 
 | Variant | gnome | kde | cosmic | niri | xfce |
 |---|:--:|:--:|:--:|:--:|:--:|
-| **albacore** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **bonito** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **bonito-rawhide** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **flounder** | — | ⬜ | — | — | ⬜ |
+| **albacore** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **bonito** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **bonito-rawhide** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **flounder** | ❌ | ❌ | — | — | ❌ |
 | **flounder-sid** | ⬜ | ⬜ | — | — | ⬜ |
-| **grouper** | ⬜ | ⬜ | ⬜ | — | ⬜ |
-| **guppy** | ⬜ | ⬜ | — | — | ⬜ |
-| **gurnard** | — | — | — | — | — |
-| **hummingbird** | ⬜ | — | ⬜ | — | — |
-| **marlin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **sailfin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **skipjack** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **wahoo** | ⬜ | ⬜ | ⬜ | — | — |
-| **yellowfin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| **grouper** | ❌ | ❌ | ❌ | — | ❌ |
+| **guppy** | ✅ | ✅ | — | — | ✅ |
+| **hummingbird** | ✅ | ❌ | ✅ | ❌ | — |
+| **marlin** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **sailfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **skipjack** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **wahoo** | ✅ | ✅ | ✅ | — | — |
+| **yellowfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 ## LUKS E2E
 
-**13 of 52** cells green (52 tested, 0 never tested).
+**29 of 110** cells green (110 tested, 0 never tested).
 
 The denominator is the amd64 graphical image set that `luks-e2e.yml` schedules: `build_image` is true, `luks_e2e` is not false, and the flavor is not a headless base derivative. It includes image-only variants and overlays such as `gnome-nvidia`, not only flavors that ship an ISO.
 
@@ -147,7 +145,7 @@ The denominator is the amd64 graphical image set that `luks-e2e.yml` schedules: 
 | **albacore** | ❌ | ❌ | ❌ | ❌ | ❌ |
 | **bonito** | ❌ | ✅ | ✅ | ❌ | ✅ |
 | **bonito-rawhide** | ❌ | ✅ | ✅ | ❌ | ❌ |
-| **flounder** | ❌ | ❌ | — | — | ❌ |
+| **flounder** | ❌ | ❌ | ❌ | — | ❌ |
 | **flounder-sid** | ❌ | ❌ | — | — | ❌ |
 | **grouper** | ❌ | ✅ | ❌ | — | ❌ |
 | **guppy** | ❌ | ❌ | — | — | ❌ |
@@ -161,38 +159,39 @@ The denominator is the amd64 graphical image set that `luks-e2e.yml` schedules: 
 
 NVIDIA cells are **out of scope** for this workflow — `luks-e2e.yml` excludes them deliberately, because `-nvidia` takes the identical LUKS path in headless QEMU. 39 stale pre-exclusion result(s) remain from before that change; they are not a gap and will age out.
 
-The table above still shows a result for `flounder:gnome`. `.github/build-config.yml` no longer declares that flavour, so `luks-e2e.yml` cannot schedule it and no run will ever turn it green. It is excluded from the count above — a last-measured verdict kept visible, not a gap. Same reasoning as the NVIDIA note.
+The table above still shows a result for `albacore:base-hwe`, `albacore:base-nvidia`, `albacore:gnome-nvidia-hwe`, `bonito-rawhide:base-hwe`, `bonito-rawhide:base-nvidia`, `bonito:base-hwe`, `bonito:base-nvidia`, `flounder:cosmic`, `flounder:gnome`, `flounder:gnome-nvidia`, `skipjack:base-hwe`, `skipjack:base-nvidia`, `skipjack:gnome-nvidia-hwe`, `yellowfin:base-hwe`, `yellowfin:base-nvidia`, `yellowfin:gnome-nvidia-hwe`. `.github/build-config.yml` no longer declares those flavours, so `luks-e2e.yml` cannot schedule them and no run will ever turn them green. They are excluded from the count above — a last-measured verdict kept visible, not a gap. Same reasoning as the NVIDIA note.
 
-Newest result 2026-10-01, oldest still-authoritative result 2026-09-01. Results older than the most recent round of fixes are the best available data, not current data.
+Newest result 2026-10-01, oldest still-authoritative result 2026-08-06. Results older than the most recent round of fixes are the best available data, not current data.
 
 ## Desktop Contract Sweep
 
-**0 of 52** cells satisfy `build_scripts/checks/verify-desktop-experience.sh` (0 tested, 52 never tested).
+**50 of 52** cells satisfy `build_scripts/checks/verify-desktop-experience.sh` (52 tested, 0 never tested).
 
-The sweep pulls the **published** image and runs the contract script against it directly (`podman run`, with no boot). It uses the same denominator as LUKS E2E above: `build_image`, limited to the five desktop flavors. This catches a desktop whose packages never landed, and it does not depend on whether hosted CI can boot the image at all.
+The sweep pulls the **published** image and runs the contract script against it directly (`podman run`, with no boot). It uses the desktop-only `build_image` denominator. This catches a desktop whose packages never landed, and it does not depend on whether hosted CI can boot the image at all.
 
 | Variant | gnome | kde | cosmic | niri | xfce |
 |---|:--:|:--:|:--:|:--:|:--:|
-| **albacore** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **bonito** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **bonito-rawhide** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **flounder** | — | ⬜ | — | — | ⬜ |
-| **flounder-sid** | ⬜ | ⬜ | — | — | ⬜ |
-| **grouper** | ⬜ | ⬜ | ⬜ | — | ⬜ |
-| **guppy** | ⬜ | ⬜ | — | — | ⬜ |
-| **gurnard** | — | — | — | — | — |
-| **hummingbird** | ⬜ | — | ⬜ | — | — |
-| **marlin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **sailfin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **skipjack** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **wahoo** | ⬜ | ⬜ | ⬜ | — | — |
-| **yellowfin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| **albacore** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **bonito** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **bonito-rawhide** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **flounder** | — | ✅ | — | — | ✅ |
+| **flounder-sid** | ✅ | ✅ | — | — | ✅ |
+| **grouper** | ✅ | ✅ | ✅ | — | ✅ |
+| **guppy** | ❌ | ✅ | — | — | ✅ |
+| **hummingbird** | ✅ | — | ❌ | — | — |
+| **marlin** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **sailfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **skipjack** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **wahoo** | ✅ | ✅ | ✅ | — | — |
+| **yellowfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
+
+Newest result 2026-10-17.
 
 ## Bootc Lifecycle
 
 **36 of 52** cells green (49 tested, 3 never tested).
 
-Validates bootc image update, rebase, rollback, alias resolution, and post-switch system contracts across published stream deployments.
+Validates bootc image update, rebase, rollback, alias resolution, and post-switch system contracts across published desktop stream deployments.
 
 | Variant | gnome | kde | cosmic | niri | xfce |
 |---|:--:|:--:|:--:|:--:|:--:|
@@ -215,9 +214,9 @@ Newest result 2026-10-15.
 
 ## Installer smoke
 
-**29 of 33** non-NVIDIA ISO cells have *ever* been tested — 88% coverage. 0 of those pass.
+**57 of 62** non-NVIDIA ISO cells have *ever* been tested — 92% coverage. 0 of those pass.
 
-This is the only axis that checks whether a human could install the image. For 4 combinations, nobody has confirmed the installer appears on screen.
+This is the only axis that checks whether a human could install the image. For 5 combinations, nobody has confirmed the installer appears on screen.
 
 | Variant | gnome | kde | cosmic | niri | xfce |
 |---|:--:|:--:|:--:|:--:|:--:|
@@ -246,6 +245,7 @@ The run that last asserted each verdict above. A re-run of a cell moves a row he
 
 | Date | Run | Cells |
 |---|---|---|
+| 2026-10-17 | [39030481433](https://github.com/tuna-os/tunaOS/actions/runs/39030481433) | 52 |
 | 2026-10-15 | [38713238238](https://github.com/tuna-os/tunaOS/actions/runs/38713238238) | 107 |
 | 2026-10-08 | [37771441491](https://github.com/tuna-os/tunaOS/actions/runs/37771441491) | 1 |
 | 2026-10-01 | [36875090451](https://github.com/tuna-os/tunaOS/actions/runs/36875090451) | 11 |
@@ -257,7 +257,6 @@ The run that last asserted each verdict above. A re-run of a cell moves a row he
 | 2026-09-01 | [33506738063](https://github.com/tuna-os/tunaOS/actions/runs/33506738063) | 15 |
 | 2026-08-20 | [32335146969](https://github.com/tuna-os/tunaOS/actions/runs/32335146969) | 2 |
 | 2026-08-19 | [32238167029](https://github.com/tuna-os/tunaOS/actions/runs/32238167029) | 38 |
-| 2026-08-12 | [31585741267](https://github.com/tuna-os/tunaOS/actions/runs/31585741267) | 18 |
 
 <!-- END GENERATED -->
 
