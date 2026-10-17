@@ -15,12 +15,12 @@
    "tested": 52,
    "total": 52
   },
-  "never_tested": 106,
+  "never_tested": 43,
   "known_regressions": {
    "blocking": 8,
    "advisory": 52
   },
-  "last_full_sweep": "2026-10-15"
+  "last_full_sweep": "2026-09-10"
  },
  "cells": {
   "albacore:base": {

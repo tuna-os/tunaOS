@@ -52,6 +52,7 @@ DOC = Path("docs/MATRIX-STATUS.md")
 PROV = Path("docs/matrix-provenance.json")
 CONFIG = Path(".github/build-config.yml")
 GREEN_CRITERIA = Path(".github/green-criteria.yml")
+FULL_SWEEP_DATES: dict[str, str] = {}
 
 BEGIN = "<!-- BEGIN GENERATED — scripts/gen-matrix-status.py -->"
 END = "<!-- END GENERATED -->"
@@ -345,13 +346,13 @@ def luks_matrix() -> dict[str, set[str]]:
     return _matrix("build_image", desktops_only=True)
 
 
-def latest_results(workflow: str, name_re: str) -> dict[str, tuple[str, str, str]]:
-    """Newest result per job name across recent runs.
-
-    Returns {job_name: (conclusion, iso_date, run_id)}. Walking newest-first
-    and keeping the first hit means a cell re-run in isolation correctly
-    supersedes its result from the last full sweep.
-    """
+def _collect_latest_results(
+    workflow: str,
+    name_re: str,
+    full_sweep_cells: set[str] | None = None,
+    cell_name=None,
+) -> tuple[dict[str, tuple[str, str, str]], str]:
+    """Newest per-job results and newest run that covered the full cell set."""
     runs = gh_json(
         "run", "list", "--repo", REPO, "--workflow", workflow,
         "--limit", str(FETCH_DEPTH),
@@ -359,6 +360,8 @@ def latest_results(workflow: str, name_re: str) -> dict[str, tuple[str, str, str
     ) or []
     pattern = re.compile(name_re)
     found: dict[str, tuple[str, str, str]] = {}
+    full_sweep_date = ""
+    found_cells: set[str] = set()
     walked = 0
     deepest_was_new = False
     for run in runs:
@@ -369,6 +372,7 @@ def latest_results(workflow: str, name_re: str) -> dict[str, tuple[str, str, str
         walked += 1
         run_id, date = str(run["databaseId"]), run["createdAt"][:10]
         jobs = run_jobs(run_id) or []
+        run_cells: set[str] = set()
         deepest_was_new = False
         for job in jobs:
             name, conclusion = job.get("name", ""), job.get("conclusion")
@@ -377,6 +381,23 @@ def latest_results(workflow: str, name_re: str) -> dict[str, tuple[str, str, str
             if name not in found:
                 deepest_was_new = True
             found.setdefault(name, (conclusion, date, run_id))
+            if cell_name is not None:
+                normalized = cell_name(name)
+                if normalized:
+                    run_cells.add(normalized)
+                    found_cells.add(normalized)
+        if (
+            not full_sweep_date
+            and full_sweep_cells
+            and full_sweep_cells <= run_cells
+        ):
+            full_sweep_date = date
+        if (
+            full_sweep_date
+            and full_sweep_cells
+            and full_sweep_cells <= found_cells
+        ):
+            break
 
     # Say so when the window is the thing deciding the answer. RUN_DEPTH has now
     # been outgrown twice, and both times the only symptom was cells quietly
@@ -397,7 +418,12 @@ def latest_results(workflow: str, name_re: str) -> dict[str, tuple[str, str, str
             "they have in fact been tested. Raise RUN_DEPTH.",
             file=sys.stderr,
         )
-    return found
+    return found, full_sweep_date
+
+
+def latest_results(workflow: str, name_re: str) -> dict[str, tuple[str, str, str]]:
+    """Newest result per matching job name across recent completed runs."""
+    return _collect_latest_results(workflow, name_re)[0]
 
 
 def overlay_tags() -> set[str]:
@@ -717,7 +743,9 @@ _LIFECYCLE_NAME = re.compile(
 )
 
 
-def lifecycle_results() -> dict[str, tuple[str, str, str]]:
+def lifecycle_results(
+    raw_results: dict[str, tuple[str, str, str]] | None = None,
+) -> dict[str, tuple[str, str, str]]:
     """Cell-keyed lifecycle verdicts, worst-of-arches.
 
     The wiring below was written before Bootc Lifecycle had ever run, and
@@ -727,8 +755,10 @@ def lifecycle_results() -> dict[str, tuple[str, str, str]]:
     arch legs pessimistically — one green leg must not mask a red one, for
     the same reason never-tested is not green.
     """
+    if raw_results is None:
+        raw_results = latest_results("bootc-lifecycle.yml", r":")
     merged: dict[str, tuple[str, str, str]] = {}
-    for name, hit in latest_results("bootc-lifecycle.yml", r":").items():
+    for name, hit in raw_results.items():
         m = _LIFECYCLE_NAME.match(name)
         if not m:
             continue
@@ -976,14 +1006,17 @@ def nvidia_tally(matrix, results, key_fmt):
     return stale
 
 
-def factory_health_summary(provenance: dict, generated: str) -> dict:
+def factory_health_summary(
+    provenance: dict,
+    generated: str,
+    full_sweep_dates=None,
+) -> dict:
     """Public headline numbers derived from the same per-cell evidence board.
 
     Keep this payload in matrix-provenance.json so the README, release notes,
     and website consume one machine-readable answer instead of each
-    reinterpreting workflow state. A regression is one failing cell/criterion
-    assertion; unimplemented criteria are reported by the matrix board but do
-    not count as blocking or advisory regressions.
+    reinterpreting workflow state. A regression is one failing applicable
+    cell/criterion assertion; out-of-scope criteria do not enter any count.
     """
     match = re.search(
         r"\*\*(\d+) of (\d+)\*\* published cells are composite-green", generated
@@ -991,12 +1024,20 @@ def factory_health_summary(provenance: dict, generated: str) -> dict:
     if not match:
         raise RuntimeError("generated matrix has no composite-green headline")
 
-    criteria = {c["id"]: c["enforcement"] for c in load_green_criteria()}
+    criteria = {c["id"]: c for c in load_green_criteria()}
+
+    def applicable_results(axis: str):
+        criterion = criteria.get(axis)
+        for cell_key, axes in provenance.items():
+            if axis not in axes:
+                continue
+            flavor = cell_key.split(":", 1)[-1]
+            if criterion and not criterion_scope_allows(criterion, flavor):
+                continue
+            yield axes[axis]
 
     def axis_tally(axis: str) -> dict[str, int]:
-        verdicts = [
-            axes[axis]["verdict"] for axes in provenance.values() if axis in axes
-        ]
+        verdicts = [result["verdict"] for result in applicable_results(axis)]
         return {
             "passed": sum(verdict == "pass" for verdict in verdicts),
             "tested": sum(verdict != "untested" for verdict in verdicts),
@@ -1004,19 +1045,22 @@ def factory_health_summary(provenance: dict, generated: str) -> dict:
         }
 
     regressions = {"blocking": 0, "advisory": 0}
-    dates: list[str] = []
     never_tested = 0
-    for axes in provenance.values():
+    for cell_key, axes in provenance.items():
+        flavor = cell_key.split(":", 1)[-1]
         for axis, result in axes.items():
+            criterion = criteria.get(axis)
+            if criterion and not criterion_scope_allows(criterion, flavor):
+                continue
             if result["verdict"] == "untested":
                 never_tested += 1
-            elif result["verdict"] == "fail":
-                enforcement = criteria.get(axis)
+            elif result["verdict"] == "fail" and criterion:
+                enforcement = criterion["enforcement"]
                 if enforcement in regressions:
                     regressions[enforcement] += 1
-            if axis in ("install", "lifecycle") and result.get("date"):
-                dates.append(result["date"])
 
+    if full_sweep_dates is None:
+        full_sweep_dates = FULL_SWEEP_DATES.values()
     return {
         "factory_health": {
             "green": int(match.group(1)),
@@ -1026,10 +1070,7 @@ def factory_health_summary(provenance: dict, generated: str) -> dict:
         "lifecycle": axis_tally("lifecycle"),
         "never_tested": never_tested,
         "known_regressions": regressions,
-        # The two full-matrix E2E collectors are install and lifecycle. Their
-        # newest evidence date is the freshest completed sweep represented by
-        # this snapshot; targeted reruns may make individual cells newer.
-        "last_full_sweep": max(dates, default=""),
+        "last_full_sweep": max((date for date in full_sweep_dates if date), default=""),
     }
 
 
@@ -1039,9 +1080,37 @@ def build() -> str:
     # LUKS numbers wrong in both directions: image-only variants were missing
     # from the total, while cells that ship no ISO were counted once a run
     # happened to touch them.
+    FULL_SWEEP_DATES.clear()
     matrix = iso_matrix()
     lmatrix = luks_matrix()
-    luks = latest_results("luks-e2e.yml", r"^LUKS ")
+    expected_sweep_cells = {
+        f"{variant}:{flavor}"
+        for variant, flavors in lmatrix.items()
+        for flavor in flavors
+    }
+    luks, install_sweep = _collect_latest_results(
+        "luks-e2e.yml",
+        r"^LUKS ",
+        expected_sweep_cells,
+        lambda name: name.removeprefix("LUKS "),
+    )
+    lifecycle_raw, lifecycle_sweep = _collect_latest_results(
+        "bootc-lifecycle.yml",
+        r":",
+        expected_sweep_cells,
+        lambda name: (
+            match.group("cell")
+            if (match := _LIFECYCLE_NAME.match(name))
+            else None
+        ),
+    )
+    lifecycle = lifecycle_results(lifecycle_raw)
+    FULL_SWEEP_DATES.update(
+        {
+            "install": install_sweep,
+            "lifecycle": lifecycle_sweep,
+        }
+    )
     # NOT r":" — installer-smoke.yml has TWO jobs per cell and both carry a
     # colon:
     #
@@ -1109,7 +1178,8 @@ def build() -> str:
     # ── Composite ───────────────────────────────────────────────────────────
     # First, because everything below is an input to it: this is the section
     # that composes the axes into the one claim the word "green" now makes.
-    lifecycle = lifecycle_results()
+    # Collected with per-run coverage above so targeted reruns cannot advance
+    # the full-sweep date.
     omissions = omissions_results()
     parity = parity_results()
     composite_lines, _, _, provenance = composite_section(
