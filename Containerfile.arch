@@ -153,6 +153,15 @@ RUN KERNEL_PKG="linux"; \
         gst-plugins-ugly \
         gst-libav && \
     pacman -Scc --noconfirm
+
+# Rootless podman needs setuid newuidmap/newgidmap, and /usr is read-only at
+# runtime, so the bit has to be set here. Stock archlinux/archlinux ships both
+# mode 755 (measured: shadow 4.20.0.arch1-1 in-container `stat`, and the same
+# 755 on a booted marlin:gnome whose /usr is the published image) — which is
+# why rootless `podman unshare` fails there with "should have setuid or have
+# filecaps". No `|| true`: an image whose container workflow needs a helper
+# bit it does not have is broken, and the failure only shows at runtime.
+RUN chmod 4755 /usr/bin/newuidmap /usr/bin/newgidmap
 # gst-libav above is not optional garnish: the ugly set only carries the
 # x264 ENcoder — H.264/H.265 DEcode in GStreamer apps goes through
 # libgstlibav.so (measured: Arch's gst-libav ships
