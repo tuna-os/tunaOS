@@ -1,4 +1,6 @@
 name: Daily Image Verification
+permissions:
+  contents: read
 on:
   schedule:
     - cron: '0 4 * * *' # 4 AM UTC daily
@@ -23,13 +25,8 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Install yq
-        run: |
-          if ! command -v yq &> /dev/null; then
-            sudo wget -q --tries=3 --waitretry=5 https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/bin/yq
-            sudo chmod +x /usr/bin/yq
-          fi
-        shell: bash
+      - name: Setup yq
+        uses: ./.github/actions/setup-yq
       - name: Generate matrix
         id: set-matrix
         env:
@@ -81,7 +78,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup TunaOS Build Environment
-        uses: projectbluefin/actions/bootc-build/setup-runner@a52da5670b9337598cbc80c4d6a9a7b21e770aec # v1 as of 2026-07-02
+        uses: projectbluefin/actions/bootc-build/setup-runner@59f783ed76fd9d449ef6887a6649446801bd5434 # v1 as of 2026-07-02
         with:
           storage-backend: ""
           update-podman: "false"
@@ -93,8 +90,8 @@ jobs:
       - name: Install just
         run: brew install just
 
-      - name: Install yq
-        run: sudo wget -q --tries=3 --waitretry=5 -O /usr/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
+      - name: Setup yq
+        uses: ./.github/actions/setup-yq
 
       - name: Verify image
         id: run_verify

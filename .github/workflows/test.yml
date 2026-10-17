@@ -61,6 +61,9 @@ on:
 
 permissions:
   contents: read
+  # Codecov authenticates uploads with GitHub OIDC; no long-lived repository
+  # token is exposed to pull-request jobs.
+  id-token: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -77,7 +80,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup TunaOS Build Environment
-        uses: projectbluefin/actions/bootc-build/setup-runner@a52da5670b9337598cbc80c4d6a9a7b21e770aec # v1 as of 2026-07-02
+        uses: projectbluefin/actions/bootc-build/setup-runner@59f783ed76fd9d449ef6887a6649446801bd5434 # v1 as of 2026-07-02
         with:
           storage-backend: ""
           update-podman: "false"
@@ -89,8 +92,8 @@ jobs:
       - name: Install just
         run: brew install just
 
-      - name: Install yq
-        run: sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
+      - name: Setup yq
+        uses: ./.github/actions/setup-yq
 
       - name: Install test dependencies
         run: |
@@ -155,9 +158,18 @@ jobs:
           echo "| Top-level pytest | $(find tests -maxdepth 1 -name 'test_*.py' -type f | wc -l) |" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "Run locally: \`just test\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Python coverage | xml artifact uploaded |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Python coverage | Codecov + xml artifact |" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload Python coverage
+      - name: Upload Python coverage to Codecov
+        if: always()
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          use_oidc: true
+          files: coverage-python.xml
+          flags: python
+          fail_ci_if_error: false
+
+      - name: Archive Python coverage
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

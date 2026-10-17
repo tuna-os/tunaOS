@@ -1,4 +1,8 @@
 name: Build Wahoo [experimental]
+permissions:
+  contents: read
+  packages: write
+  id-token: write
 on:
   workflow_dispatch:
     inputs:

@@ -127,16 +127,21 @@ def test_gate_runs_the_preflight_before_building_or_booting_the_image():
     names = [step.get("name") for step in steps]
 
     preflight = names.index("Record GPU/DRM runner capability")
-    assert preflight < names.index("Build qcow2 from testing image")
-    assert preflight < names.index("Boot and verify")
+    for builds_or_boots in ("Boot and verify", "Build qcow2 from testing image (virgl)", "Boot and verify (virgl)"):
+        assert preflight < names.index(builds_or_boots)
 
     preflight_step = steps[preflight]
     assert "--require-virgl" in preflight_step["run"]
     assert "GITHUB_STEP_SUMMARY" in SCRIPT.read_text()
 
-    boot = steps[names.index("Boot and verify")]
-    assert "TBOX_E2E_GPU" in boot["env"]
-    assert "virgl" in boot["env"]["TBOX_E2E_GPU"]
+    # The GPU-routed cells boot through iso-e2e.sh, which must not fall back to
+    # plain virtio; Corral, which boots every other cell, has no virgl path.
+    virgl = steps[names.index("Boot and verify (virgl)")]
+    assert virgl["env"]["TBOX_E2E_GPU"] == "virgl"
+    assert "iso-e2e.sh" in virgl["run"]
+    for gpu in ("cosmic", "niri", "xfwl4"):
+        assert gpu in str(virgl["if"])
+        assert gpu in str(steps[names.index("Boot and verify")]["if"])
 
     upload = steps[names.index("Upload boot evidence")]
     assert "verify-out/runner-capability.txt" in upload["with"]["path"]

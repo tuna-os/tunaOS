@@ -224,7 +224,7 @@ teardown() {
   [ "$status" -eq 0 ]
   # The contract is that a runtime dir is passed AND that it exists. Asserting
   # the literal /run/user/<uid> was wrong: that path only exists where
-  # systemd-logind made a session, which Blacksmith runners do not.
+  # systemd-logind made a session, which some CI runners do not.
   grep -q "XDG_RUNTIME_DIR=" "$spy"
   local dir
   dir=$(grep -o 'XDG_RUNTIME_DIR=[^ ]*' "$spy" | head -1 | cut -d= -f2)

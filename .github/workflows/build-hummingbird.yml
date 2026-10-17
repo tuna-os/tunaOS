@@ -1,4 +1,8 @@
 name: Build Hummingbird
+permissions:
+  contents: read
+  packages: write
+  id-token: write
 on:
   schedule:
     - cron: "20 22 * * *"

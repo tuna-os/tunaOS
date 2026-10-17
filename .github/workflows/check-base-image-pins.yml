@@ -31,10 +31,8 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install yq
-        run: |
-          sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/download/v4.53.3/yq_linux_amd64
-          sudo chmod +x /usr/bin/yq
+      - name: Setup yq
+        uses: ./.github/actions/setup-yq
 
       - name: Verify every base image pin still resolves
         run: ./scripts/check-base-image-pins.sh
