@@ -93,6 +93,7 @@ def test_workflow_runs_real_steps_with_empty_secrets_and_reports_failures() -> N
     assert "--secret-file /dev/null" in runner
     assert '--secret "GITHUB_TOKEN=${SIMULATION_GITHUB_TOKEN}"' in runner
     assert '--actor "$(python3 scripts/fork-simulation.py actor "$persona")"' in runner
+    assert "--env \"PATH=${act_homebrew_path}\"" in runner
     assert "fork-simulation-probe.sh" in runner
     assert "GITHUB_STEP_SUMMARY" in body
     assert "<!-- fork-simulation -->" in body
@@ -107,7 +108,10 @@ def test_workflow_runs_real_steps_with_empty_secrets_and_reports_failures() -> N
 
 def test_act_homebrew_path_is_persisted_for_following_steps() -> None:
     action = (ROOT / ".github/actions/setup-tunaos/action.yml").read_text(encoding="utf-8")
-    assert 'brew_prefix="$(brew --prefix)"' in action
+    assert 'brew_bin="$(command -v brew || true)"' in action
+    assert '/home/linuxbrew/.linuxbrew/bin/brew' in action
+    assert '/root/.linuxbrew/bin/brew' in action
+    assert 'brew_prefix="$("$brew_bin" --prefix)"' in action
     assert '"$GITHUB_PATH"' in action
     assert '"$GITHUB_ENV"' in action
 
