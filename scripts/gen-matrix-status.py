@@ -976,6 +976,63 @@ def nvidia_tally(matrix, results, key_fmt):
     return stale
 
 
+def factory_health_summary(provenance: dict, generated: str) -> dict:
+    """Public headline numbers derived from the same per-cell evidence board.
+
+    Keep this payload in matrix-provenance.json so the README, release notes,
+    and website consume one machine-readable answer instead of each
+    reinterpreting workflow state. A regression is one failing cell/criterion
+    assertion; unimplemented criteria are reported by the matrix board but do
+    not count as blocking or advisory regressions.
+    """
+    match = re.search(
+        r"\*\*(\d+) of (\d+)\*\* published cells are composite-green", generated
+    )
+    if not match:
+        raise RuntimeError("generated matrix has no composite-green headline")
+
+    criteria = {c["id"]: c["enforcement"] for c in load_green_criteria()}
+
+    def axis_tally(axis: str) -> dict[str, int]:
+        verdicts = [
+            axes[axis]["verdict"] for axes in provenance.values() if axis in axes
+        ]
+        return {
+            "passed": sum(verdict == "pass" for verdict in verdicts),
+            "tested": sum(verdict != "untested" for verdict in verdicts),
+            "total": len(verdicts),
+        }
+
+    regressions = {"blocking": 0, "advisory": 0}
+    dates: list[str] = []
+    never_tested = 0
+    for axes in provenance.values():
+        for axis, result in axes.items():
+            if result["verdict"] == "untested":
+                never_tested += 1
+            elif result["verdict"] == "fail":
+                enforcement = criteria.get(axis)
+                if enforcement in regressions:
+                    regressions[enforcement] += 1
+            if axis in ("install", "lifecycle") and result.get("date"):
+                dates.append(result["date"])
+
+    return {
+        "factory_health": {
+            "green": int(match.group(1)),
+            "total": int(match.group(2)),
+        },
+        "install": axis_tally("install"),
+        "lifecycle": axis_tally("lifecycle"),
+        "never_tested": never_tested,
+        "known_regressions": regressions,
+        # The two full-matrix E2E collectors are install and lifecycle. Their
+        # newest evidence date is the freshest completed sweep represented by
+        # this snapshot; targeted reruns may make individual cells newer.
+        "last_full_sweep": max(dates, default=""),
+    }
+
+
 def build() -> str:
     # Two different denominators on purpose — each axis is measured against the
     # set of cells that axis actually schedules. Sharing one matrix made the
@@ -1454,6 +1511,9 @@ def main() -> int:
                       "MATRIX-STATUS.md; evidence links to the asserting "
                       "run's retained artifact bundle; empty run+date means "
                       "the axis has no current assertion for that cell.",
+             "summary": (
+                 factory_health_summary(provenance, generated) if provenance else {}
+             ),
              "cells": provenance},
             indent=1, sort_keys=True) + "\n")
     if updated == text:

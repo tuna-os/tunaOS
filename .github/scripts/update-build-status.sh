@@ -257,9 +257,45 @@ if [[ "$scorable" == false ]]; then
 fi
 blocking_text=$(sed -E 's/,/`, `/g' <<<"$blocking")
 
+# The public headline comes from the matrix generator's machine-readable
+# payload. Do not independently reinterpret workflow results here: the README,
+# release notes, and website must all publish the same answer.
+health_json=${FACTORY_HEALTH_JSON:-docs/matrix-provenance.json}
+if ! jq -e '.summary.factory_health and .summary.install and .summary.lifecycle and .summary.known_regressions' \
+	"$health_json" >/dev/null; then
+	echo "::error::${health_json} has no generated factory-health summary; run scripts/gen-matrix-status.py first" >&2
+	exit 1
+fi
+health_green=$(jq -r '.summary.factory_health.green' "$health_json")
+health_total=$(jq -r '.summary.factory_health.total' "$health_json")
+install_passed=$(jq -r '.summary.install.passed' "$health_json")
+install_total=$(jq -r '.summary.install.total' "$health_json")
+lifecycle_passed=$(jq -r '.summary.lifecycle.passed' "$health_json")
+lifecycle_total=$(jq -r '.summary.lifecycle.total' "$health_json")
+never_tested=$(jq -r '.summary.never_tested' "$health_json")
+blocking_regressions=$(jq -r '.summary.known_regressions.blocking' "$health_json")
+advisory_regressions=$(jq -r '.summary.known_regressions.advisory' "$health_json")
+last_sweep=$(jq -r '.summary.last_full_sweep // empty' "$health_json")
+last_sweep_age="unknown"
+if [[ "$last_sweep" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+	last_sweep_epoch=$(date -u -d "$last_sweep" +%s 2>/dev/null || echo 0)
+	now_epoch=$(date -u +%s)
+	if [[ "$last_sweep_epoch" -gt 0 && "$now_epoch" -ge "$last_sweep_epoch" ]]; then
+		last_sweep_age="$(((now_epoch - last_sweep_epoch) / 86400)) days ago"
+	fi
+fi
+
 {
 	echo
 	echo "**Built ${total_green}/${total_cells} · composite green ${composite_green}/${composite_total} (${percent}% built)** — The remainder has **${total_failing} ${failure_word}** and **${total_unreached} never reached** (stale: ${total_stale}); no job asserted the latter. We show the two values separately. A cell with no job has no test, but it can still work."
+	echo
+	echo "**Factory health: ${health_green}/${health_total} cells green**"
+	echo
+	echo "**Install-tested: ${install_passed}/${install_total} · Lifecycle-tested: ${lifecycle_passed}/${lifecycle_total} · Never tested: ${never_tested}**"
+	echo
+	echo "**Known regressions: ${blocking_regressions} \`blocking\`, ${advisory_regressions} advisory**"
+	echo
+	echo "**Last full sweep: ${last_sweep_age} (${last_sweep:-unknown})**"
 	echo
 	echo "The score for composite green uses ${composite_scope}. [\`.github/green-criteria.yml\`](.github/green-criteria.yml) provides the score. Today, these criteria prevent publication: \`${blocking_text}\`. A cell must satisfy each criterion."
 	echo

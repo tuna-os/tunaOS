@@ -399,6 +399,34 @@ class NvidiaTallyStaleResults(unittest.TestCase):
         self.assertEqual(stale, 0)
 
 
+# ── public summary payload ─────────────────────────────────────────────────
+
+class FactoryHealthSummary(unittest.TestCase):
+    def test_summary_is_derived_from_the_same_cell_evidence(self):
+        provenance = {
+            "yellowfin:gnome": {
+                "builds": {"verdict": "pass", "date": "2026-08-14"},
+                "install": {"verdict": "pass", "date": "2026-08-13"},
+                "lifecycle": {"verdict": "fail", "date": "2026-08-14"},
+            },
+            "marlin:kde": {
+                "builds": {"verdict": "fail", "date": "2026-08-12"},
+                "install": {"verdict": "untested", "date": ""},
+                "lifecycle": {"verdict": "pass", "date": "2026-08-12"},
+            },
+        }
+        generated = "**1 of 2** published cells are composite-green."
+        got = gms.factory_health_summary(provenance, generated)
+
+        self.assertEqual(got["factory_health"], {"green": 1, "total": 2})
+        self.assertEqual(got["install"], {"passed": 1, "tested": 1, "total": 2})
+        self.assertEqual(got["lifecycle"], {"passed": 1, "tested": 2, "total": 2})
+        self.assertEqual(got["never_tested"], 1)
+        self.assertEqual(got["known_regressions"]["blocking"], 1)
+        self.assertEqual(got["known_regressions"]["advisory"], 1)
+        self.assertEqual(got["last_full_sweep"], "2026-08-14")
+
+
 # ── main(): --check / --check-structure / default write ────────────────────
 
 class MainCliDispatch(unittest.TestCase):
