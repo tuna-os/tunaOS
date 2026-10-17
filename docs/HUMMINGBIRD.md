@@ -95,18 +95,25 @@ image by digest. `Containerfile.el10` bind-mounts `/repository` at
 `/run/utah-packages` for each Hummingbird desktop install. The GNOME and COSMIC
 manifests expose it to dnf as a `file://` repository.
 
-The current pin,
-`sha256:210e8c5ea2ab6f0800116e9c720fe6f81006dc104b20baf4a856e50999899440`,
-contains 1,446 unique names of binary packages. On 2026-10-17, we measured its
-primary metadata:
+The configured pin is
+`sha256:fb4ef19676127430af4a7aa5ea5f9ee2cebdcfdf17e665c509eefb6896cdfc76`.
+Registry inspection on 2026-10-17 resolved that exact digest to an amd64 OCI
+manifest created at `2026-10-17T02:39:14Z`, revision
+`7ee7b00c90e2a2c05e5ff9b0f51a996a40f21cc6`, factory run `38991457966`.
+Its embedded factory state records 421 source inputs and no failed source
+builds. The dependency sources relevant to the two desktops include:
 
-| package in the pinned Utah repository | desktop dependency it closes |
+| source in the configured Utah factory state | desktop dependency it closes |
 |---|---|
 | `libvorbis` | `libsndfile`, PipeWire, PulseAudio and GStreamer |
-| `fprintd`, `fprintd-pam`, `libfprint` | `cosmic-greeter` and PAM |
+| `fprintd`, `libfprint` | `cosmic-greeter` and PAM |
 | `udisks2` | `cosmic-files` storage integration |
-| `webkitgtk6.0`, `evolution-data-server`, `libcanberra`, `samba-client-libs` | GNOME Shell, control center and GVFS |
+| `evolution-data-server`, `libcanberra`, `samba` | GNOME Shell, control center and GVFS |
 | `gnome-shell`, `gnome-session`, `gdm` | the GNOME 51 session |
+
+This registry evidence aligns with the configured digest and proves its source
+closure and architecture. It does not replace the Hummingbird COSMIC build and
+installed-session contract, which must prove binary dependency resolution.
 
 Build Hummingbird run 38660870261 showed the remaining repository wiring bug.
 The contract for GNOME found GNOME 51. The COSMIC build loaded only
