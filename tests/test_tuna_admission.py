@@ -154,7 +154,7 @@ def test_tuna_contract_is_a_known_desktop_with_session_and_pam_requirements():
     for requirement in ("Exec=tuna-session", "/etc/pam.d/tuna-lock", "tuna-shell-gtk", "tuna-session.target", "require_unit greetd", "tuna-portals.conf", "require_command orca"):
         assert requirement in case
     portal_config = ROOT / "experiences/tuna/files/usr/share/xdg-desktop-portal/tuna-portals.conf"
-    assert "Lockdown=tuna;" not in portal_config.read_text()
+    assert "Lockdown=tuna;" in portal_config.read_text()
 
 
 def test_tuna_is_a_selectable_greetd_session_listed_by_name(tmp_path):
