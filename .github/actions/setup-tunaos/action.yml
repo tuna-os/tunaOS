@@ -19,7 +19,25 @@ runs:
     - name: Persist Homebrew paths for Docker-based act runners
       run: |
         set -euo pipefail
-        brew_prefix="$(brew --prefix)"
+        brew_bin="$(command -v brew || true)"
+        if [[ -z "$brew_bin" ]]; then
+          for candidate in \
+            /home/linuxbrew/.linuxbrew/bin/brew \
+            /root/.linuxbrew/bin/brew \
+            /opt/homebrew/bin/brew \
+            /usr/local/bin/brew; do
+            if [[ -x "$candidate" ]]; then
+              brew_bin="$candidate"
+              break
+            fi
+          done
+        fi
+        [[ -n "$brew_bin" ]] || {
+          echo "Homebrew was installed but no brew executable was found" >&2
+          exit 1
+        }
+        brew_prefix="$("$brew_bin" --prefix)"
+        export PATH="${brew_prefix}/bin:${brew_prefix}/sbin:${PATH}"
         printf '%s\n' "${brew_prefix}/bin" "${brew_prefix}/sbin" >> "$GITHUB_PATH"
         printf 'PATH=%s/bin:%s/sbin:%s\n' "$brew_prefix" "$brew_prefix" "$PATH" >> "$GITHUB_ENV"
       shell: bash

@@ -11,6 +11,9 @@ set -Eeuo pipefail
 results="${RESULTS_FILE:-${RUNNER_TEMP}/fork-simulation.tsv}"
 : >"$results"
 audit_root="${RUNNER_TEMP}/fork-simulation-audit"
+act_homebrew_path="/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:/root/.linuxbrew/bin:/root/.linuxbrew/sbin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/local/sbin:${PATH}"
+export PATH="$act_homebrew_path"
+
 mkdir -p "$audit_root"
 for persona in "$@"; do
 	mapfile -t workflows < <(python3 scripts/fork-simulation.py matrix |
@@ -60,6 +63,7 @@ for persona in "$@"; do
 			--eventpath "$worktree/event.json" \
 			--actor "$(python3 scripts/fork-simulation.py actor "$persona")" \
 			--env "GITHUB_REPOSITORY=${REPOSITORY}" \
+			--env "PATH=${act_homebrew_path}" \
 			--env "SIMULATION_PR=1" \
 			--env "SIMULATION_API_LOG=/run/fork-simulation-audit/api.log" \
 			--env "SIMULATION_UNEXPECTED_LOG=/run/fork-simulation-audit/unexpected.log" \
