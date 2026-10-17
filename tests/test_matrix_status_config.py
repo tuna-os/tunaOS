@@ -15,7 +15,7 @@ Covers, per tunaOS#1721:
   * contract_results — subprocess-based artifact download, including the
     "no successful run yet" and "artifact expired" fallbacks.
   * desktop_table — the per-desktop row renderer shared by every section.
-  * nvidia_tally's stale-result branch.
+  * excluded_tally and undeclared_tally's filtered-history branches.
   * main()'s --check / --check-structure / default-write dispatch, with
     build() mocked so this exercises argument handling and file I/O only.
 
@@ -411,26 +411,38 @@ class DesktopTableRendering(unittest.TestCase):
         self.assertIn(gms.PASS, row)
 
 
-# ── nvidia_tally: the stale-result branch ──────────────────────────────────
+# ── filtered LUKS history branches ─────────────────────────────────────────
 
-class NvidiaTallyStaleResults(unittest.TestCase):
+class ExcludedTally(unittest.TestCase):
+    def test_counts_configured_cells_filtered_from_luks(self):
+        configured = {"yellowfin": {"gnome", "base"}}
+        scheduled = {"yellowfin": {"gnome"}}
+        results = {"yellowfin:base": ("success", "2026-08-06", "1")}
+        excluded = gms.excluded_tally(
+            configured, scheduled, results, lambda v, d: f"{v}:{d}"
+        )
+        self.assertEqual(excluded, ["yellowfin:base"])
 
-    def test_counts_stale_nvidia_results(self):
-        matrix = {"yellowfin": {"gnome-nvidia", "gnome"}}
-        results = {"yellowfin:gnome-nvidia": ("success", "2026-08-06", "1")}
-        stale = gms.nvidia_tally(matrix, results, lambda v, d: f"{v}:{d}")
-        self.assertEqual(stale, 1)
+    def test_removed_cells_are_not_misclassified_as_filtered(self):
+        configured = {"yellowfin": {"gnome"}}
+        scheduled = {"yellowfin": {"gnome"}}
+        results = {"yellowfin:base": ("success", "2026-08-06", "1")}
+        self.assertEqual(
+            gms.excluded_tally(
+                configured, scheduled, results, lambda v, d: f"{v}:{d}"
+            ),
+            [],
+        )
 
-    def test_non_nvidia_flavors_are_not_counted(self):
-        matrix = {"yellowfin": {"gnome"}}
-        results = {"yellowfin:gnome": ("success", "2026-08-06", "1")}
-        stale = gms.nvidia_tally(matrix, results, lambda v, d: f"{v}:{d}")
-        self.assertEqual(stale, 0)
-
-    def test_nvidia_flavor_with_no_result_is_not_counted(self):
-        matrix = {"yellowfin": {"gnome-nvidia"}}
-        stale = gms.nvidia_tally(matrix, {}, lambda v, d: f"{v}:{d}")
-        self.assertEqual(stale, 0)
+    def test_empty_results_are_not_disclosed(self):
+        configured = {"yellowfin": {"base"}}
+        scheduled = {"yellowfin": set()}
+        self.assertEqual(
+            gms.excluded_tally(
+                configured, scheduled, {}, lambda v, d: f"{v}:{d}"
+            ),
+            [],
+        )
 
 
 # ── public summary payload ─────────────────────────────────────────────────
@@ -481,7 +493,7 @@ class MainCliDispatch(unittest.TestCase):
 
     build()'s own orchestration (475-738) composes iso_matrix, luks_matrix,
     latest_results, contract_results, overlay_tags, cell, desktop_table,
-    tally, undeclared_tally and nvidia_tally — every one of which has its
+    tally, undeclared_tally and excluded_tally — every one of which has its
     own unit tests above and in test_matrix_status_fetch.py — so mocking it
     here isolates what main() itself is responsible for: reading the
     existing doc, diffing, and choosing an exit code.

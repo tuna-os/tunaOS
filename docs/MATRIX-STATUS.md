@@ -145,7 +145,7 @@ The denominator is the amd64 graphical image set that `luks-e2e.yml` schedules: 
 | **albacore** | ❌ | ❌ | ❌ | ❌ | ❌ |
 | **bonito** | ❌ | ✅ | ✅ | ❌ | ✅ |
 | **bonito-rawhide** | ❌ | ✅ | ✅ | ❌ | ❌ |
-| **flounder** | ❌ | ❌ | ❌ | — | ❌ |
+| **flounder** | — | ❌ | — | — | ❌ |
 | **flounder-sid** | ❌ | ❌ | — | — | ❌ |
 | **grouper** | ❌ | ✅ | ❌ | — | ❌ |
 | **guppy** | ❌ | ❌ | — | — | ❌ |
@@ -157,9 +157,9 @@ The denominator is the amd64 graphical image set that `luks-e2e.yml` schedules: 
 | **wahoo** | ❌ | ❌ | ❌ | — | — |
 | **yellowfin** | ❌ | ✅ | ✅ | ❌ | ✅ |
 
-NVIDIA cells are **out of scope** for this workflow — `luks-e2e.yml` excludes them deliberately, because `-nvidia` takes the identical LUKS path in headless QEMU. 39 stale pre-exclusion result(s) remain from before that change; they are not a gap and will age out.
+Historical results remain for `albacore:base-hwe`, `albacore:base-nvidia`, `bonito-rawhide:base-hwe`, `bonito-rawhide:base-nvidia`, `bonito:base-hwe`, `bonito:base-nvidia`, `skipjack:base-hwe`, `skipjack:base-nvidia`, `yellowfin:base-hwe`, `yellowfin:base-nvidia`. These cells are still declared in `.github/build-config.yml` but excluded by current `luks-e2e.yml` filters; they are outside the scheduled matrix, not current coverage.
 
-The table above still shows a result for `albacore:base-hwe`, `albacore:base-nvidia`, `albacore:gnome-nvidia-hwe`, `bonito-rawhide:base-hwe`, `bonito-rawhide:base-nvidia`, `bonito:base-hwe`, `bonito:base-nvidia`, `flounder:cosmic`, `flounder:gnome`, `flounder:gnome-nvidia`, `skipjack:base-hwe`, `skipjack:base-nvidia`, `skipjack:gnome-nvidia-hwe`, `yellowfin:base-hwe`, `yellowfin:base-nvidia`, `yellowfin:gnome-nvidia-hwe`. `.github/build-config.yml` no longer declares those flavours, so `luks-e2e.yml` cannot schedule them and no run will ever turn them green. They are excluded from the count above — a last-measured verdict kept visible, not a gap. Same reasoning as the NVIDIA note.
+Historical results remain for `albacore:gnome-nvidia-hwe`, `flounder:cosmic`, `flounder:gnome`, `flounder:gnome-nvidia`, `skipjack:gnome-nvidia-hwe`, `yellowfin:gnome-nvidia-hwe`. `.github/build-config.yml` no longer declares those flavours, so `luks-e2e.yml` cannot schedule them and no run will ever turn them green. They are outside the current scheduled matrix; a last-measured verdict is kept visible, not current coverage.
 
 Newest result 2026-10-01, oldest still-authoritative result 2026-08-06. Results older than the most recent round of fixes are the best available data, not current data.
 
@@ -214,7 +214,7 @@ Newest result 2026-10-15.
 
 ## Installer smoke
 
-**57 of 62** non-NVIDIA ISO cells have *ever* been tested — 92% coverage. 0 of those pass.
+**57 of 62** ISO cells have *ever* been tested — 92% coverage. 0 of those pass.
 
 This is the only axis that checks whether a human could install the image. For 5 combinations, nobody has confirmed the installer appears on screen.
 
@@ -262,22 +262,24 @@ The run that last asserted each verdict above. A re-run of a cell moves a row he
 
 ## 3. Known systemic gaps
 
-**NVIDIA is out of scope, not failing.** `luks-e2e.yml` excludes `-nvidia` on
-purpose (commit `5c730e9`). Those flavors take the identical LUKS path in
-headless QEMU, so a test there proves nothing about NVIDIA. The stale results
-above predate that change, and they will age out.
+**NVIDIA overlays are in the LUKS denominator, but that is not GPU
+qualification.** The generated LUKS matrix includes image-only overlays such
+as `gnome-nvidia`; the headless LUKS path exercises storage and install
+behavior, not NVIDIA rendering hardware. Historical results outside the current
+scheduled matrix remain visible above as last-measured data, not current
+coverage.
 
-The honest position: **NVIDIA is untested, not broken**. No workflow today can
-test it, because a real test needs a host with an NVIDIA GPU. That is a
-different problem from the render-node gap above, and `iso-e2e-gpu.sh` does not
+The honest position: **NVIDIA rendering coverage is incomplete, not a declared
+failure.** GPU-specific validation still needs a runner with an NVIDIA GPU.
+That is different from the render-node gap above, and `iso-e2e-gpu.sh` does not
 solve it.
 
-**We plan this work; we did not abandon it.** NVIDIA coverage waits on GPU
-capacity from the AWS grant, through runs-on. Two steps follow that capacity:
-add `-nvidia` back to the matrix filter in `luks-e2e.yml`, then point it at
-those runners. tuna-os/tunaOS#848 comes first, because no stage-3 flavor can
-build a dev ISO at all today. Until then, read the ⬜ and stale cells above as
-*not yet covered*, not as a backlog of broken cells.
+**We plan this work; we did not abandon it.** NVIDIA GPU coverage waits on GPU
+capacity from the AWS grant, through `runs-on`. Once that capacity exists, add
+a hardware-qualified lane for the NVIDIA flavors. tuna-os/tunaOS#848 comes
+first, because no stage-3 flavor can build a dev ISO at all today. Until then,
+read the ⬜ and stale cells above as *not yet covered*, not as a backlog of
+broken cells.
 
 **The boot gate for cosmic/niri/xfwl4 is out of scope, because it cannot
 start.** This failure differs from everything else in this section. The problem
