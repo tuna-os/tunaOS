@@ -112,3 +112,22 @@ yq_bin() { command -v yq; }
 	[ "$status" -eq 0 ]
 	[ "$output" -eq 1 ]
 }
+
+@test "admitted Hummingbird Tuna packages fail closed when strict install fails" {
+	local fn
+	fn="$(awk '/^install_dnf_packages\(\)/,/^}/' "$INSTALL")"
+	[ -n "$fn" ]
+	run bash -c "
+		set -u
+		${fn}
+		_TD_DESKTOP=tuna
+		IS_HUMMINGBIRD=true
+		_TD_EXCL_ARGS=()
+		dnf_retry() { echo strict; return 1; }
+		install_available() { echo fallback; return 0; }
+		install_dnf_packages tuna-desktop
+	"
+	[ "$status" -ne 0 ]
+	[[ "$output" == *strict* ]]
+	[[ "$output" != *fallback* ]]
+}
