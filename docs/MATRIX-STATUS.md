@@ -114,25 +114,25 @@ Green criterion 8 (`no_silent_omissions`): the sweep runs `checks/verify-package
 
 ## Package parity
 
-**43 of 52** cells at parity (49 measured, 3 never measured).
+**0 of 52** cells at parity (0 measured, 52 never measured).
 
 Green criterion 7 (`parity`), first cadence: `package-parity.yml` runs `scripts/package-parity.sh --audit` daily, and audits every desktop package set against its own base. That shape exposes a build that applies no desktop at all (#858). ❌ covers BROKEN (no more packages than the base) and suspect (fewer than 25 added). A diff against each variant upstream reference comes next, and nothing asserts it yet.
 
 | Variant | gnome | kde | cosmic | niri | xfce |
 |---|:--:|:--:|:--:|:--:|:--:|
-| **albacore** | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **bonito** | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **bonito-rawhide** | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **flounder** | ❌ | ❌ | — | — | ❌ |
+| **albacore** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| **bonito** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| **bonito-rawhide** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| **flounder** | — | ⬜ | — | — | ⬜ |
 | **flounder-sid** | ⬜ | ⬜ | — | — | ⬜ |
-| **grouper** | ❌ | ❌ | ❌ | — | ❌ |
-| **guppy** | ✅ | ✅ | — | — | ✅ |
-| **hummingbird** | ✅ | ❌ | ✅ | ❌ | — |
-| **marlin** | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **sailfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **skipjack** | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **wahoo** | ✅ | ✅ | ✅ | — | — |
-| **yellowfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **grouper** | ⬜ | ⬜ | ⬜ | — | ⬜ |
+| **guppy** | ⬜ | ⬜ | — | — | ⬜ |
+| **hummingbird** | ⬜ | — | ⬜ | — | — |
+| **marlin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| **sailfin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| **skipjack** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| **wahoo** | ⬜ | ⬜ | ⬜ | — | — |
+| **yellowfin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 
 ## LUKS E2E
 
