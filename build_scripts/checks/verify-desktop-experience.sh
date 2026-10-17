@@ -730,6 +730,24 @@ esac
 # ended up with lightdm it needs an X server.
 x11_display_manager_has_a_server
 
+# A graphical login is not operable without the system message bus. Some
+# display managers (SDDM and greetd) remain active when dbus-broker has failed,
+# so the display-manager check below cannot stand in for this one. That exact
+# shape emitted DESKTOP_CONTRACT_OK on yellowfin:niri in tunaOS#2664.
+#
+# Resolve dbus.service instead of assuming dbus-broker: supported bases may use
+# dbus-daemon, and the contract is about the bus rather than its implementation.
+verify_system_bus() {
+	local bus_unit state
+	bus_unit=$(systemctl show -P Id dbus.service 2>/dev/null || true)
+	bus_unit="${bus_unit:-dbus.service}"
+	if systemctl is-active --quiet "$bus_unit" 2>/dev/null; then
+		return 0
+	fi
+	state=$(systemctl is-active "$bus_unit" 2>/dev/null || true)
+	report_fail "system_bus_inactive unit=${bus_unit} state=${state:-unknown}"
+}
+
 if [[ "$mode" == --runtime ]]; then
 	# Each check is individually gated so a single failure doesn't
 	# kill the script silently via `set -e`. The final marker is
@@ -740,6 +758,7 @@ if [[ "$mode" == --runtime ]]; then
 		echo "TUNAOS_DESKTOP_CONTRACT_FAIL reason=${reason}" | tee /dev/ttyS0 2>/dev/null || true
 		ok=0
 	}
+	verify_system_bus
 	if ! command -v remora >/dev/null 2>&1; then
 		report_fail remora_not_found
 	fi
