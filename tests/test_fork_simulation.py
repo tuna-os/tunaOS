@@ -99,14 +99,23 @@ def test_workflow_runs_real_steps_with_empty_secrets_and_reports_failures() -> N
     assert "gh issue create" in body and "gh issue edit" in body
     assert "Fail when a simulation failed" in body
     assert "SIMULATION_UNEXPECTED_LOG" in runner
-    assert "expected synthetic API call was not exercised" in runner
-    assert "external simulation attempted a synthetic API mutation" in runner
+    assert "/run/fork-simulation-audit/api.log" in runner
+    assert "/run/fork-simulation-audit/unexpected.log" in runner
+    assert "audit_root" in runner
+    assert ".fork-simulation-api.log" not in runner
+    assert '--workflow "$workflow"' in runner
 
 
-def run_fixture(tmp_path, persona, *arguments, token="fixture-token", stdin=""):
+def run_fixture(
+    tmp_path, persona, *arguments, token="fixture-token", stdin="", workflow="synthetic-workflow.yml"
+):
     event_path = tmp_path / "event.json"
     event_path.write_text(
-        json.dumps(fork_simulation.event(persona, "tuna-os/tunaos", "head", "base"))
+        json.dumps(
+            fork_simulation.event(
+                persona, "tuna-os/tunaos", "head", "base", workflow
+            )
+        )
     )
     api_log = tmp_path / "api.log"
     unexpected_log = tmp_path / "unexpected.log"
@@ -146,6 +155,19 @@ def test_same_repository_comment_delivery_is_exercised(tmp_path) -> None:
 
     assert result.returncode == 0, result.stderr
     assert calls == ["POST\trepos/tuna-os/tunaos/issues/1/comments"]
+    assert unexpected == ""
+
+def test_fixture_reads_the_file_list_from_the_matching_synthetic_event(tmp_path) -> None:
+    result, calls, unexpected = run_fixture(
+        tmp_path,
+        "same-repo-contributor",
+        "repos/tuna-os/tunaos/pulls/1/files",
+        workflow="pr-nudges.yml",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == [".github/workflows/pr-nudges.yml"]
+    assert calls == ["GET\trepos/tuna-os/tunaos/pulls/1/files"]
     assert unexpected == ""
 
 
