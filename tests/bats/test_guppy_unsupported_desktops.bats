@@ -43,7 +43,7 @@ assert not found, f'guppy declares unsupported Gentoo flavors: {found}'
 
 # The desktops Gentoo can actually satisfy today. Losing one of these IS the
 # silent regression this file was written to catch.
-assert {'kde', 'xfce'} <= flavors, 'known Gentoo desktop coverage disappeared'
+assert {'kde', 'xfce', 'tuna'} <= flavors, 'known Gentoo desktop coverage disappeared'
 print(','.join(sorted(flavors)))
 EOF
   [ "$status" -eq 0 ]
