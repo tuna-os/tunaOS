@@ -426,6 +426,9 @@ class FactoryHealthSummary(unittest.TestCase):
         self.assertEqual(got["factory_health"], {"green": 1, "total": 2})
         self.assertEqual(got["install"], {"passed": 1, "tested": 1, "total": 2})
         self.assertEqual(got["lifecycle"], {"passed": 1, "tested": 2, "total": 2})
+        self.assertEqual(got["builds"], {"passed": 1, "tested": 2, "total": 2})
+        self.assertEqual(got["boots"], {"passed": 0, "tested": 0, "total": 0})
+        self.assertEqual(got["desktop"], {"passed": 0, "tested": 0, "total": 0})
         # The base flavor's empty boot slot is out of scope, so only marlin's
         # applicable missing install evidence enters this count.
         self.assertEqual(got["never_tested"], 1)
