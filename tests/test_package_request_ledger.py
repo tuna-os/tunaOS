@@ -67,13 +67,22 @@ def test_native_requests_preserve_constraints(manager, args, expression):
      '--setopt=install_weak_deps=False'),
     ('dnf', ['--config', '/etc/dnf/dnf.conf', 'install', 'cosmic-session'],
      '--config=/etc/dnf/dnf.conf'),
-    ('apt', ['-o', 'Dir::Etc::sourcelist=/tmp/list', 'install', 'cosmic-session'],
-     '-o=Dir::Etc::sourcelist=/tmp/list'),
 ])
 def test_global_option_operands_are_consumed_before_the_subcommand(manager, args, option):
     normalized = recorder.normalize(manager, args)
     assert normalized['requests'] == ['cosmic-session']
     assert option in normalized['options']
+
+
+def test_apt_option_operand_is_not_persisted():
+    normalized = recorder.normalize(
+        'apt', ['-o', 'Acquire::https::Proxy=https://user:secret@proxy.invalid/', 'install', 'curl']
+    )
+    assert normalized['requests'] == ['curl']
+    assert normalized['options'] == []
+    assert 'unsupported-manager-option' in normalized['coverageGaps']
+    assert 'user' not in json.dumps(normalized)
+    assert 'secret' not in json.dumps(normalized)
 
 
 def test_global_option_without_its_operand_is_a_coverage_gap():

@@ -67,6 +67,10 @@ def _locate_operation(manager: str, args: list[str]):
                 gaps.add("unsupported-option-arity")
                 return None, [], options, gaps, False
             operand = args[index + 1]
+            if arg in {"-o", "--option"}:
+                gaps.add("unsupported-manager-option")
+                index += 1 + count
+                continue
             if not SAFE_EXPRESSION.fullmatch(operand):
                 gaps.add("unsupported-option-operand")
                 return None, [], options, gaps, False
@@ -98,13 +102,13 @@ def normalize(manager: str, arguments: list[str]) -> dict | None:
         flag = next((a for a in args if a.startswith("-") and not a.startswith("--")), "")
         if flag.startswith(("-Q", "-F")):
             return None
-        operation = PACMAN_COMPACT.get(flag, "unknown")
-        if flag in args:
-            args.remove(flag)
-        if operation == "unknown":
+        operation = PACMAN_COMPACT.get(flag)
+        if operation is None:
             gaps.add("unsupported-manager-option")
+            operation = "unknown"
             args = []
         else:
+            args.remove(flag)
             options.append(flag)
     elif canonical == "rpm":
         if any(a in {"--eval", "--showrc", "--version", "--help"} for a in args):
