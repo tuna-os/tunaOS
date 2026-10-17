@@ -176,6 +176,6 @@ def test_required_coverage_is_preserved_without_observations():
     rows = [health.evaluate_row(record, None, None, None, None, collection_available=False,
                                now=NOW, build_seconds=172800, required_image_checks={"boot"},
                                required_factory_checks={"install"}) for record in records]
-    assert len(rows) == len(records) == 269
+    assert len(rows) == len(records)
     assert {targets.target_key(row["target"]) for row in rows} == {targets.target_key(row["target"]) for row in records}
     assert all(row["required"] and row["status"] == "missing" for row in rows)

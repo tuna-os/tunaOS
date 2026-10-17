@@ -1599,7 +1599,7 @@ jobs:
       - name: Build qcow2 from testing image (virgl)
         if: ${{ startsWith(inputs.flavor, 'cosmic') || startsWith(inputs.flavor, 'niri') || startsWith(inputs.flavor, 'xfwl4') }}
         env:
-          TEST_IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}-testing
+          TEST_IMAGE: ${{ needs.manifest.outputs.image }}@${{ needs.manifest.outputs.digest }}
         run: |
           just qcow2 "${TEST_IMAGE}"
 

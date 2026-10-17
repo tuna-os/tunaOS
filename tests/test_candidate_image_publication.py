@@ -40,8 +40,13 @@ def test_candidates_keep_signature_and_boot_gates_but_never_promote():
 
 def test_boot_desktop_and_asahi_verify_immutable_manifest():
     jobs = workflow('reusable-build-image.yml')['jobs']
-    gate = next(step for step in jobs['verify_boot']['steps'] if step.get('name') == 'Build qcow2 from testing image')
-    assert gate['env']['TEST_IMAGE'] == PIN
+    boot_images = [
+        step['env']['TEST_IMAGE']
+        for step in jobs['verify_boot']['steps']
+        if 'TEST_IMAGE' in step.get('env', {})
+    ]
+    assert boot_images
+    assert set(boot_images) == {PIN}
     for step in jobs['verify_desktop']['steps']:
         if 'TEST_IMAGE' in step.get('env', {}):
             assert step['env']['TEST_IMAGE'] == PIN

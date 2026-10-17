@@ -13,7 +13,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from scripts.contracts import base, consumer, evidence
+from scripts.contracts import base, consumer, evidence, targets
 
 REVISION = "1" * 40
 POLICY_REVISION = "9" * 40
@@ -282,10 +282,10 @@ def test_arch_override_combines_with_cachyos_additions(tmp_path):
     assert doc["resolution"]["status"] != "complete"
 
 
-def test_required_empty_base_records_keep_all_269_real_targets_blocked():
+def test_required_empty_base_records_keep_every_real_target_blocked():
     config = yaml.safe_load((ROOT / ".github/build-config.yml").read_text())
     result = consumer.resolve_all(config, {}, REVISION, ROOT)
-    assert len(result["targets"]) == 269
+    assert len(result["targets"]) == len(targets.resolve_required_targets(config))
     assert all(row["required"] and row["status"] == "blocked" and row["contract"] is None for row in result["targets"])
     assert all(row["reasons"][0]["code"] == "missing-base-record" for row in result["targets"])
     assert any(row["target"]["variant"] == "grouper" and row["target"]["platform"] == "linux/arm64" for row in result["targets"])
