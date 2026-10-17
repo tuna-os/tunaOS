@@ -173,12 +173,16 @@ def test_the_generated_readme_block_exposes_public_factory_health():
     assert "docs/matrix-provenance.json" in generator
     assert ".summary.factory_health" in generator
     assert ".summary.install" in generator
+    assert ".summary.install.tested" in generator
     assert ".summary.lifecycle" in generator
+    assert ".summary.lifecycle.tested" in generator
     assert ".summary.known_regressions" in generator
 
 
 def test_every_new_release_appends_the_same_generated_verification_data():
     workflow = yaml.safe_load(RELEASE_WORKFLOW.read_text())
+    assert workflow["concurrency"]["cancel-in-progress"] is False
+    assert "github.ref" in workflow["concurrency"]["group"]
     run_blocks = [
         step["run"]
         for job in workflow["jobs"].values()

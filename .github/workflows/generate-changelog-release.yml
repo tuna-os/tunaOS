@@ -44,6 +44,10 @@ env:
   # not for a fortnight. If nothing shipped AND the newest published release
   # is older than this, the Releases page is rotting and the run goes red.
   MAX_RELEASE_AGE_DAYS: "8"
+concurrency:
+  group: generate-release-${{ github.repository }}-${{ github.ref }}
+  cancel-in-progress: false
+
 
 jobs:
   generate-release:

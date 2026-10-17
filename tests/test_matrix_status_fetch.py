@@ -218,14 +218,14 @@ class RunWalkPicksTheNewestAuthoritativeResult(unittest.TestCase):
         self.assertEqual(full_sweep, "")
         self.assertEqual(gms.lifecycle_results(results)["yellowfin:gnome"][0], "failure")
 
-    def test_prefix_neutral_identity_recognizes_beta_and_unprefixed_jobs(self):
+    def test_beta_existence_probes_are_excluded_from_full_sweep(self):
         runs = [
             {"databaseId": 1, "createdAt": "2026-08-06T00:00:00Z", "status": "completed"},
         ]
         jobs = {
             "1": [
-                {"name": "bonito-rawhide:gnome (amd64)", "conclusion": "success"},
                 {"name": "BETA guppy:gnome (amd64)", "conclusion": "success"},
+                {"name": "bonito-rawhide:gnome (amd64)", "conclusion": "success"},
             ]
         }
 
@@ -236,18 +236,20 @@ class RunWalkPicksTheNewestAuthoritativeResult(unittest.TestCase):
                 return {"jobs": jobs[args[2]]}
             return None
 
-        expected = {
-            "bonito-rawhide:gnome (amd64)",
-            "guppy:gnome (amd64)",
-        }
+        expected = {"guppy:gnome (amd64)", "bonito-rawhide:gnome (amd64)"}
         with mock.patch.object(gms, "gh_json", side_effect=fake):
             _, full_sweep = gms._collect_latest_results(
                 "bootc-lifecycle.yml",
                 r":",
                 expected,
-                gms.lifecycle_job_key,
+                gms.lifecycle_sweep_job_key,
             )
-        self.assertEqual(full_sweep, "2026-08-06")
+        self.assertEqual(full_sweep, "")
+        self.assertIsNone(gms.lifecycle_sweep_job_key("BETA guppy:gnome (amd64)"))
+        self.assertEqual(
+            gms.lifecycle_sweep_job_key("bonito-rawhide:gnome (amd64)"),
+            "bonito-rawhide:gnome (amd64)",
+        )
 
 
 class ApiOutageCurrentlyDegradesSilently(unittest.TestCase):
