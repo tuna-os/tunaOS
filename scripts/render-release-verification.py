@@ -12,17 +12,13 @@ BEGIN = "<!-- release-verification:start -->"
 END = "<!-- release-verification:end -->"
 
 
-def axis_tally(cells: dict, axis: str) -> tuple[int, int, int]:
-    verdicts = [axes[axis]["verdict"] for axes in cells.values() if axis in axes]
-    return (
-        sum(verdict == "pass" for verdict in verdicts),
-        sum(verdict != "untested" for verdict in verdicts),
-        len(verdicts),
-    )
+def axis_tally(summary: dict, axis: str) -> tuple[int, int, int]:
+    tally = summary[axis]
+    return tally["passed"], tally["tested"], tally["total"]
 
 
-def fraction(cells: dict, axis: str) -> str:
-    passed, tested, total = axis_tally(cells, axis)
+def fraction(summary: dict, axis: str) -> str:
+    passed, tested, total = axis_tally(summary, axis)
     return f"{passed}/{total} pass ({tested}/{total} tested)"
 
 
@@ -39,12 +35,13 @@ def stored_image_identity(body: str) -> tuple[str, str]:
         raise ValueError("release body does not contain one immutable image identity")
     return matches.pop()
 
+
+
 def render(payload: dict, image: str, digest: str, sbom_packages: int) -> str:
     summary = payload["summary"]
-    cells = payload["cells"]
     health = summary["factory_health"]
     regressions = summary["known_regressions"]
-    built, _, built_total = axis_tally(cells, "builds")
+    built, _, built_total = axis_tally(summary, "builds")
 
     digest_text = f"`{digest}`" if digest else "not reported"
     sbom_text = (
@@ -65,12 +62,12 @@ def render(payload: dict, image: str, digest: str, sbom_packages: int) -> str:
             f"- SBOM: {sbom_text}",
             "",
             "### Runtime",
-            f"- Booted: **{fraction(cells, 'boots')}**",
-            f"- Desktop contract: **{fraction(cells, 'desktop')}**",
-            f"- Installer and encrypted-disk path: **{fraction(cells, 'install')}**",
+            f"- Booted: **{fraction(summary, 'boots')}**",
+            f"- Desktop contract: **{fraction(summary, 'desktop')}**",
+            f"- Installer and encrypted-disk path: **{fraction(summary, 'install')}**",
             "",
             "### Lifecycle",
-            f"- Update, rebase, and rollback: **{fraction(cells, 'lifecycle')}**",
+            f"- Update, rebase, and rollback: **{fraction(summary, 'lifecycle')}**",
             "",
             "### Supply chain",
             f"- Image: `{image}`",
@@ -87,11 +84,13 @@ def render(payload: dict, image: str, digest: str, sbom_packages: int) -> str:
     )
 
 
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--provenance", type=Path, default=Path("docs/matrix-provenance.json"))
     parser.add_argument("--image")
     parser.add_argument("--stored-identity", type=Path)
+    parser.add_argument("--digest", default="")
     parser.add_argument("--sbom-packages", type=int, default=0)
     parser.add_argument("--body", type=Path, help="existing release body to update")
     parser.add_argument("--output", type=Path)
