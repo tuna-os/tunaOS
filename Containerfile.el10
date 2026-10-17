@@ -15,13 +15,13 @@ ARG IMAGE_NAME_VARIANT
 # without --build-arg overrides will fail with a clear error.
 ARG COMMON_IMAGE_REF="ghcr.io/projectbluefin/common:unpinned-must-override"
 ARG BREW_IMAGE_REF="ghcr.io/ublue-os/brew:unpinned-must-override"
-# projectbluefin/utah-packages: Bluefin's GNOME 51 for Hummingbird as a dnf
-# repository inside an OCI image (/repository, createrepo_c output; the image
-# is cosign-signed and pinned by digest in image-versions.yaml). Only the
-# gnome stage of a hummingbird build reads it -- bind-mounted, never copied,
-# so no image carries 500 MB of RPMs -- through the file:// repo declared in
-# manifests/desktops/gnome.yaml's hummingbird section
-# (tuna-os/tunaos-packages#629).
+# projectbluefin/utah-packages: Bluefin's GNOME 51 and supporting Hummingbird
+# desktop closure as a dnf repository inside an OCI image (/repository,
+# createrepo_c output; the image is cosign-signed and pinned by digest in
+# image-versions.yaml). Hummingbird's gnome and cosmic stages read it through
+# the file:// repos declared in manifests/desktops/{gnome,cosmic}.yaml. It is
+# bind-mounted, never copied, so no image carries the repository's RPM payload
+# (tuna-os/tunaos-packages#629, tuna-os/tunaOS#2513).
 ARG UTAH_PACKAGES_IMAGE_REF="ghcr.io/projectbluefin/utah-packages:unpinned-must-override"
 # tuna-os/tunaos-packages: this project's own GNOME 50 for EL10, from the
 # gnome50-el10-x86_64 build chain, in the same shape -- a createrepo_c
@@ -201,10 +201,10 @@ RUN rm -rf /opt && ln -s /var/opt /opt
 FROM base-no-de AS gnome
 # Bluefin LTS experience payload is scoped to GNOME images.
 COPY --from=common /system_files/bluefin /
-# /run/utah-packages and /run/gnome50-el10-packages are read only when the
-# manifest's OS section declares a repo there -- hummingbird declares the
-# first, el10 the second; on every other variant each is an unused read-only
-# directory for the duration of this one RUN.
+# The mounted package repositories are read only when the manifest's OS
+# section declares them. Hummingbird GNOME and COSMIC read utah-packages;
+# EL10 GNOME reads gnome50-el10-packages. On every other variant they are
+# unused, read-only directories for the duration of one RUN.
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
@@ -225,6 +225,7 @@ FROM base-no-de AS cosmic
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
+  --mount=type=bind,from=utah-packages,source=/repository,target=/run/utah-packages \
   /run/context/build_scripts/desktop/install-desktop.sh cosmic
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \

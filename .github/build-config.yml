@@ -1172,13 +1172,12 @@ variants:
     # architecture whose base cannot resolve its mandatory packages scores an
     # unsatisfiable cell red every night and tells a user the image exists.
     #
-    # The direction of travel points the same way. As hummingbird takes more of
-    # its package set from projectbluefin/utah-packages, arm64 gets further out
-    # of reach, not closer: that repository is a SINGLE-manifest OCI image
-    # (measured 2026-09-11 — mediaType application/vnd.oci.image.manifest.v1+json,
-    # no manifest list, x86_64 only), which is already why hummingbird:gnome
-    # carries its own amd64 pin. A source that cannot be pulled for aarch64
-    # cannot supply an aarch64 image.
+    # The direction of travel points the same way. Hummingbird's GNOME and
+    # COSMIC package sets now both consume projectbluefin/utah-packages, whose
+    # OCI image is a SINGLE manifest (measured 2026-09-11 — mediaType
+    # application/vnd.oci.image.manifest.v1+json, no manifest list, x86_64
+    # only). Each desktop therefore carries its own amd64 pin. A source that
+    # cannot be pulled for aarch64 cannot supply an aarch64 image.
     #
     # Restore "linux/arm64" only alongside BOTH: the aarch64 snapshot carrying
     # xfsprogs (the one-line curl above is the check) and an aarch64 build of
@@ -1190,13 +1189,11 @@ variants:
         stage: 1
         build_image: true
         build_iso: true
-      # GNOME remains amd64-only until its aarch64 source (utah-packages)
-      # publishes there. COSMIC's own 25 manifest packages did converge on
-      # aarch64 (2026-09-06) and this flavor inherits the variant platforms
-      # below — which are amd64-only today for a reason one layer down: the
-      # BASE cannot build on arm64 at all (see the platforms note above), so a
-      # desktop whose package set resolves still had nothing to layer onto.
-      # Both notes revert together.
+      # GNOME and COSMIC remain amd64-only until their shared package source
+      # (utah-packages) publishes an aarch64 image. The variant is separately
+      # amd64-only because its base cannot resolve mandatory xfsprogs there.
+      # If that base gap closes first, these flavor pins must remain until
+      # Utah also publishes arm64.
       - id: gnome
         stage: 2
         platforms: ["linux/amd64"]
@@ -1234,6 +1231,7 @@ variants:
       # do not exist yet and should not be advertised as though they do.
       - id: cosmic
         stage: 2
+        platforms: ["linux/amd64"]
         build_image: true
         build_iso: true
 

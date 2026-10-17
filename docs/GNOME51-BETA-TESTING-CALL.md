@@ -10,8 +10,9 @@ GNOME 51 does not roll out to every TunaOS base at once.
 
 1. **Use `hummingbird:gnome` as the GNOME 51 canary.** Hummingbird gets the
    coherent GNOME stack from Bluefin's `projectbluefin/utah-packages`
-   repository image. TunaOS pins that image by digest, mounts its repository
-   only while building the GNOME layer, and tests the resulting TunaOS image.
+   repository image. TunaOS pins that image by digest and mounts its repository
+   while building Hummingbird's GNOME and COSMIC layers; this plan tests the
+   GNOME image.
 2. **Keep EL10 on the factory-built GNOME 50 tier.** Yellowfin, Albacore, and
    Skipjack must not be advertised as GNOME 51. Their configured source is the
    digest-pinned `gnome50-el10-x86_64` image from `tuna-os/tunaos-packages`.
@@ -42,11 +43,12 @@ The supply path is reviewable in this repository:
 
 - `image-versions.yaml` pins `utah-packages` by digest;
 - `registry-map.yaml` names `ghcr.io/projectbluefin/utah-packages`;
-- `Containerfile.el10` bind-mounts `/repository` only into the GNOME build;
-- `manifests/desktops/gnome.yaml` gives that local repository priority over
-  TunaOS's supplemental Hummingbird repository; and
-- `tests/test_hummingbird_gnome_consumes_utah_packages.py` holds the pin,
-  mount, priority, and local-only signature exception together.
+- `Containerfile.el10` bind-mounts `/repository` into the Hummingbird GNOME
+  and COSMIC builds;
+- both desktop manifests give that local repository priority over TunaOS's
+  supplemental Hummingbird repository; and
+- `tests/test_hummingbird_desktops_consume_utah_packages.py` holds the pin,
+  mounts, priorities, and local-only signature exception together.
 
 See [HUMMINGBIRD.md](HUMMINGBIRD.md) for the base's package and architecture
 constraints.
