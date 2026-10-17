@@ -2,10 +2,10 @@
 
 A booted marlin:gnome host with BUILD_ID=4ace379 reported that
 `pacman -Q gvfs-goa` could not find the package, and its
-`/usr/share/thumbnailers/` directory had no video or document thumbnailer.
+`/usr/share/thumbnailers/` directory had no video thumbnailer.
 The Arch GNOME manifest must name the Arch packages that provide those desktop
 integration paths: `gvfs-goa` for GNOME Online Accounts mounts and
-`gst-thumbnailers` for Nautilus media/document thumbnailing.
+`gst-thumbnailers` for Nautilus audio/video thumbnailing.
 
 Falsification: structural -- remove either package from
 `packages.pacman` in manifests/desktops/gnome-arch.yaml and this test fails.
