@@ -395,6 +395,9 @@ packages:
   # import, verify this fingerprint, locally sign it, update the trustdb and
   # require a package signature. The package atom pins beta.1 and the tunaos
   # repository, so a source overlay or a later beta cannot silently replace it.
+  # Sourcing exception: PACKAGE-SOURCING.md admits the GURU Cage ebuild for
+  # `guppy:tuna` only; review it by 2026-12-31 while Tideforge packaging is
+  # tracked under tunaOS#3202.
   emerge:
     display_manager: greetd
     source_repositories:
