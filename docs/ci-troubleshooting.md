@@ -1583,20 +1583,24 @@ The image had both backends; the default preferred GNOME for Access.
 
 **Fix:** Select GTK for Access, and GNOME for Screenshot and ScreenCast. The contract for the installed desktop rejects missing, wrong, duplicate, or out-of-section preferences. The admission test runs the shell validator against the shipped configuration and broken variants. Verify the final image in its separate boot gate.
 
-## Tuna package ownership fails outside Arch
+### Tuna desktop contract reports false package absence outside Arch (#3194)
 
 **Symptom:** A Tuna desktop image on an RPM, Debian, or Gentoo base stops in
-`verify-desktop-experience.sh` because `pacman` is unavailable.
+`verify-desktop-experience.sh` before it can check binary ownership because the
+contract invokes `pacman -Qq` even though that package database is not present.
 
 **Measured cause:** At source commit
-`9cd82cd74568c11600f7c9587b5e08eaaf4186e5`, the Tuna contract queried only
-`pacman -Qq`. This is source evidence; final non-Arch images still require
-separate boot and authentication qualification.
+`9cd82cd74568c11600f7c9587b5e08eaaf4186e5`, the non-Arch reproduction reaches
+the unconditional `pacman -Qq` query and exits before the native package
+manager can report the installed `tuna-desktop` package. The regression fixture
+in `tests/test_tuna_target_neutral_package_contract.py` reproduces the RPM,
+Debian, and Gentoo query paths and records the owner and calendar-server
+failure cases.
 
-**Fix:** Select the native package database from `os-release`, require exact
-`tuna-desktop` package and binary ownership, and accept each packaged GNOME
-calendar-server path. `tests/test_tuna_target_neutral_package_contract.py`
-executes package-query, owner-failure, and calendar-path cases.
+**Fix:** Select the native package database from `os-release`, require the
+exact `tuna-desktop` package and binary ownership, and accept each packaged
+GNOME calendar-server path. Run the target-neutral package-contract test before
+qualifying the final image in its separate boot and authentication gate.
 
 ### guppy:gnome installs GNOME 49 and fails the version floor (#2450)
 
