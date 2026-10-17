@@ -1,12 +1,12 @@
 """Shared `gh` CLI subprocess wrapper for scripts/*.py.
 
 Replaces the independently-hardened wrappers in import-frontend-parity.py,
-rerun-startup-failures.py and detect-dead-gates.py, which each rediscovered
-part of the same lesson: a `gh` call that fails silently or drops stderr
-turns into an incident that looks like "no data" instead of "the query
-failed." See tuna-os/tunaOS#2716.
+rerun-startup-failures.py, detect-dead-gates.py and gen-matrix-status.py,
+which each rediscovered part of the same lesson: a `gh` call that fails
+silently or drops stderr turns into an incident that looks like "no data"
+instead of "the query failed." See tuna-os/tunaOS#2716.
 
-Two layers, matching the two ways those call sites use `gh`:
+Three layers, matching the three ways those call sites use `gh`:
 
   * `run(args)` -- never raises, never retries. Returns a CompletedProcess
     (or a `_Failed` stand-in shaped like one if `gh` itself is missing from
@@ -19,15 +19,25 @@ Two layers, matching the two ways those call sites use `gh`:
     stdout+stderr) after retries are exhausted. For callers where a failed
     query must not be silently read as "empty" or "no runs".
 
+  * `gh_json(args, retries=3, backoff=2.0)` -- parses stdout as JSON,
+    returning None (with a stderr warning naming the call and gh's reason)
+    when the query fails after retries, or when stdout is empty. For
+    callers that degrade a failed query to "unknown" by design; callers
+    that must not read failure as "no data" raise on None themselves
+    (see gen-matrix-status.py's `gh_json_required`).
+
 Usage:
-    from lib.gh import run, gh, GhError
+    from lib.gh import run, gh, gh_json, GhError
 
     r = run(["run", "list", "--limit", "10"])           # never raises
     out = gh(["run", "list", "--limit", "10"])          # raises GhError
+    data = gh_json(["run", "view", "123", "--json", "jobs"])  # None on failure
 """
 from __future__ import annotations
 
+import json
 import subprocess
+import sys
 import time
 
 
@@ -77,3 +87,44 @@ def gh(args: list[str], retries: int = 1, backoff: float = 2.0) -> str:
         f"  stdout: {last.stdout.strip() or '(empty)'}\n"
         f"  stderr: {last.stderr.strip() or '(empty)'}"
     )
+
+
+def gh_json(args: list[str], retries: int = 3, backoff: float = 2.0):
+    """Run `gh`, parse stdout as JSON. Returns None on missing/failed query.
+
+    On success returns the parsed value (or None for empty stdout, exactly
+    like a query with nothing to report). After `retries` failed attempts
+    (nonzero exit or unparseable stdout) prints a warning naming the call
+    and gh's own reason -- the job log of the 2026-09-24 refresh (run
+    35990117734) that blanked every bonito cell carried no line at all
+    about which call failed -- and returns None.
+    """
+    for attempt in range(retries):
+        detail: str | None = None
+        try:
+            proc = run(args)
+        except subprocess.CalledProcessError as err:
+            # check=False never raises in production, but a failed `gh`
+            # reads the same whatever shape it arrives in: name it and retry.
+            detail = getattr(err, "stderr", "") or str(err)
+            proc = None
+        else:
+            if proc.returncode == 0:
+                try:
+                    return json.loads(proc.stdout) if proc.stdout.strip() else None
+                except json.JSONDecodeError as exc:
+                    detail = str(exc)
+            else:
+                # A `gh` that cannot even start (missing binary) arrives here as
+                # the `_Failed` stand-in instead of raising FileNotFoundError.
+                # Fall back to the exit status when stderr is empty, the way
+                # str(CalledProcessError) did for the old wrapper.
+                detail = proc.stderr or f"exit status {proc.returncode}"
+        if attempt == retries - 1:
+            print(
+                f"warning: gh {' '.join(args)}: {(detail or '').strip()}",
+                file=sys.stderr,
+            )
+            return None
+        time.sleep(backoff)
+    return None
