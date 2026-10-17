@@ -12,6 +12,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github/workflows/rerun-infra-failures.yml"
+LIFECYCLE_WORKFLOW = ROOT / ".github/workflows/bootc-lifecycle.yml"
 
 
 def test_dispatch_only_stingray_is_an_automatic_retry_source() -> None:
@@ -22,3 +23,14 @@ def test_dispatch_only_stingray_is_an_automatic_retry_source() -> None:
     assert "github.event.workflow_run.name == 'Build Stingray [experimental]'" in condition
     assert "github.event.workflow_run.conclusion == 'failure'" in condition
     assert "github.event.workflow_run.run_attempt == 1" in condition
+
+
+def test_experimental_variants_use_beta_lifecycle_lane() -> None:
+    document = yaml.safe_load(LIFECYCLE_WORKFLOW.read_text(encoding="utf-8"))
+    generate = next(
+        step["run"]
+        for step in document["jobs"]["generate-matrix"]["steps"]
+        if step.get("id") == "gen"
+    )
+
+    assert generate.count("($variant.experimental == true)") == 2
