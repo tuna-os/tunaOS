@@ -1665,11 +1665,11 @@ capture first, then sends the graceful powerdown itself before the kill.
 
 ### Marlin base userland gaps (tunaOS#3351, #3353, #3354, #3355)
 
-**Symptom:** A booted marlin:gnome (BUILD_ID=4ace379) has no `hostname`, `diff`, `less`, `lsusb`, `bluetoothctl`, `distrobox`, or `buildah`; Bluetooth stays `disabled; preset: disabled`; modern laptop audio lacks SOF firmware and the ALSA-to-PipeWire route.
+**Symptom:** A booted marlin:gnome (BUILD_ID=4ace379) has no `hostname`, `diff`, `less`, `lsusb`, `bluetoothctl`, `distrobox`, or `buildah`. Bluetooth stays `disabled; preset: disabled`. Audio on modern laptops has no SOF firmware and no ALSA-to-PipeWire route.
 
 **Measured cause:** The stock Arch `base` metapackage no longer ships `diffutils` or `less`, and Arch's default preset is `disable *`. `Containerfile.arch` skips `build_scripts/10-base-packages.sh`, so everything that phase provides elsewhere (`buildah`, `distrobox`, `fzf`) never reached marlin, and nothing enabled `bluetooth.service`. `bluez` was present only transitively via `fwupd`. All sixteen missing names resolve in Arch `core`/`extra` (verified with `pacman -Si` against the 20261011 base).
 
-**Fix:** `Containerfile.arch` installs all sixteen explicitly (`inetutils`, `diffutils`, `less`, `usbutils`, `man-db`, `fzf`, `buildah`, `distrobox`, `bluez`, `bluez-utils`, `sof-firmware`, `pipewire-alsa`, plus the updater path in the next row). `40-services.sh` enables `bluetooth.service` and `uupd.timer` on the pacman branch only, and a marlin-scoped preset (`system_files_overrides/marlin/.../50-tunaos-marlin.preset`, delivered by `92-variant-customizations.sh`) preserves those symlinks through first-boot preset policy without changing any other variant.
+**Fix:** `Containerfile.arch` installs all sixteen explicitly (`inetutils`, `diffutils`, `less`, `usbutils`, `man-db`, `fzf`, `buildah`, `distrobox`, `bluez`, `bluez-utils`, `sof-firmware`, `pipewire-alsa`, plus the updater path in the next row). `40-services.sh` enables `bluetooth.service` and `uupd.timer` on the pacman branch only. A marlin-scoped preset (`system_files_overrides/marlin/.../50-tunaos-marlin.preset`, delivered by `92-variant-customizations.sh`) preserves those symlinks through first-boot preset policy, with no change to any other variant.
 
 ### Marlin shipped uupd triggers without uupd (tunaOS#3356)
 
@@ -1677,4 +1677,4 @@ capture first, then sends the graceful powerdown itself before the kill.
 
 **Measured cause:** `Containerfile.arch` copies the common payload that provides the uupd timer and AC trigger but never ran the package phase that installs the pinned binary and core units. Observed on a reference marlin:gnome host (booted 2026-09-22 image): trigger starts, `systemctl start uupd.service` exits `NOTINSTALLED`, unit enters `start-limit-hit`.
 
-**Fix:** The pinned download moved into shared `build_scripts/install-uupd.sh` (same `image-versions.yaml` pin; stages binary plus `uupd.service`, `uupd.timer`, `uupd-manual.service` before installing; smoke with `UUPD_CONTEXT="$PWD" UUPD_ROOT="$scratch"` into a disposable root). The apt and dnf branches of `10-base-packages.sh` delegate to it unchanged in behavior, and `Containerfile.arch` carries the pin file and runs the installer before `40-services.sh`. The context exact-set test now treats `install-uupd.sh` as needing the pin file.
+**Fix:** The pinned download moved into shared `build_scripts/install-uupd.sh` (same `image-versions.yaml` pin; stages the binary plus `uupd.service`, `uupd.timer`, `uupd-manual.service` before install; smoke with `UUPD_CONTEXT="$PWD" UUPD_ROOT="$scratch"` into a disposable root). The apt and dnf branches of `10-base-packages.sh` delegate to it unchanged in behavior, and `Containerfile.arch` carries the pin file and runs the installer before `40-services.sh`. The context exact-set test now treats `install-uupd.sh` as a consumer of the pin file.
