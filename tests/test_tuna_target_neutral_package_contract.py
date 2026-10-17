@@ -228,12 +228,121 @@ def test_unknown_backend_cannot_default_to_rpm(tmp_path):
     assert result.returncode != 0
 
 
-def test_installed_contract_reaches_native_package_queries_after_overlay():
+def test_installed_contract_reaches_native_package_queries_and_privacy_routing():
     case = SCRIPT.read_text().split("\ntuna)\n", 1)[1].split("\n\t;;", 1)[0]
     assert 'tuna_installed_package_names "$tuna_backend"' in case
     assert 'tuna_installed_file_owner "$tuna_backend" "/usr/bin/$binary"' in case
-    assert "/usr/share/xdg-desktop-portal/portals/tuna.portal" not in case
-    assert "org.freedesktop.impl.portal.Lockdown tuna" not in case
+    assert "/usr/share/xdg-desktop-portal/portals/tuna.portal" in case
+    assert "DBusName=org.freedesktop.impl.portal.desktop.tuna" in case
+    assert "Interfaces=org.freedesktop.impl.portal.Lockdown;" in case
+    assert "require_portal_preference /usr/share/xdg-desktop-portal/tuna-portals.conf org.freedesktop.impl.portal.Lockdown tuna" in case
+
+
+def test_tuna_branch_rejects_missing_or_wrong_lockdown_routing(tmp_path):
+    source = SCRIPT.read_text()
+    case = source.split("\ntuna)\n", 1)[1].split("\n\t;;", 1)[0]
+    root = tmp_path / "root"
+    tools = tmp_path / "tools"
+    descriptor = root / "usr/share/xdg-desktop-portal/portals/tuna.portal"
+    portals = root / "usr/share/xdg-desktop-portal/tuna-portals.conf"
+    sessions = root / "usr/share/wayland-sessions"
+    (root / "etc/greetd").mkdir(parents=True)
+    (root / "etc/systemd/system").mkdir(parents=True)
+    sessions.mkdir(parents=True)
+    descriptor.parent.mkdir(parents=True)
+    tools.mkdir()
+    (sessions / "tuna.desktop").write_text(
+        "[Desktop Entry]\nExec=tuna-session\nDesktopNames=Tuna;GNOME;\nName=Tuna Desktop\n"
+    )
+    (sessions / "roost.desktop").write_text(
+        "[Desktop Entry]\nExec=tuna-session\nNoDisplay=true\n"
+    )
+    (root / "etc/greetd/environments").write_text("Tuna Desktop\n")
+    descriptor.write_text(
+        "[portal]\n"
+        "DBusName=org.freedesktop.impl.portal.desktop.tuna\n"
+        "Interfaces=org.freedesktop.impl.portal.Lockdown;\n"
+    )
+    (root / "etc/systemd/system/display-manager.service").symlink_to(
+        "greetd.service"
+    )
+    for binary in (
+        "tuna-compositor",
+        "tuna-session",
+        "tuna-shell-host",
+        "tuna-shell-gtk",
+        "tuna-ibus-bridge",
+        "tuna-greeter",
+        "ibus-daemon",
+        "orca",
+        "gnome-keyring-daemon",
+        "dbus-update-activation-environment",
+        "wpctl",
+        "gtkgreet",
+        "cage",
+    ):
+        command = tools / binary
+        command.write_text("#!/bin/sh\nexit 0\n")
+        command.chmod(0o755)
+    launcher = tools / "Tuna"
+    launcher.write_text("#!/bin/sh\nexec tuna-session\n")
+    launcher.chmod(0o755)
+
+    case = case.replace("/usr", str(root / "usr")).replace(
+        "/etc", str(root / "etc")
+    )
+    case = case.replace(
+        str(root / "usr/share/xdg-desktop-portal/tuna-portals.conf"),
+        str(portals),
+    )
+    case = case.replace(
+        str(root / "usr/share/xdg-desktop-portal/portals/tuna.portal"),
+        str(descriptor),
+    )
+    portal_parser = (
+        "require_portal_preference() {"
+        + source.split("require_portal_preference() {", 1)[1].split(
+            "\nrequire_unit()", 1
+        )[0]
+    )
+    body = (
+        "desktop=tuna\nmode=build\n"
+        + FUNCTIONS
+        + "\n"
+        + portal_parser
+        + "\n"
+        + """
+tuna_package_backend() { echo dpkg; }
+tuna_installed_package_names() { printf 'tuna-desktop\\npower-profiles-daemon\\n'; }
+tuna_installed_file_owner() { echo tuna-desktop; }
+require_command() { return 0; }
+require_glob() { return 0; }
+require_any_glob() { return 0; }
+require_unit() { return 0; }
+"""
+        + case
+    )
+    valid = (
+        "[preferred]\n"
+        "org.freedesktop.impl.portal.Lockdown=tuna;\n"
+        "org.freedesktop.impl.portal.ScreenCast=gnome;\n"
+        "org.freedesktop.impl.portal.Screenshot=gnome;\n"
+        "org.freedesktop.impl.portal.Access=gtk;\n"
+    )
+    for content, accepted in (
+        (valid, True),
+        (valid.replace("org.freedesktop.impl.portal.Lockdown=tuna;\n", ""), False),
+        (valid.replace("Lockdown=tuna;", "Lockdown=gnome;"), False),
+    ):
+        portals.write_text(content)
+        result = subprocess.run(
+            ["bash", "-euo", "pipefail", "-c", body],
+            env={**os.environ, "PATH": f"{tools}{os.pathsep}{os.environ['PATH']}"},
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        assert (result.returncode == 0) is accepted, result.stderr
 
 
 @pytest.mark.parametrize(
