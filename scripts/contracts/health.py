@@ -163,13 +163,16 @@ def evaluate_row(required: dict[str, Any], attempt: dict | None,
         reasons.append("package-or-image-contract-" + row["status"])
         return row
     expected_publication = required.get("publication")
+    expected_factory_publication = required.get("factoryPublication")
     if (publication is None or not isinstance(expected_publication, dict)
         or publication.get("repository") != expected_publication.get("repository")
         or publication.get("tag") != expected_publication.get("tag")
         or image["publication"].get("repository") != expected_publication.get("repository")
         or image["publication"].get("tag") != expected_publication.get("tag")
-        or package["publication"].get("repository") != expected_publication.get("repository")
-        or package["publication"].get("tag") != expected_publication.get("tag")
+        or (expected_factory_publication is not None and
+            (not isinstance(expected_factory_publication, dict)
+             or package["publication"].get("repository") != expected_factory_publication.get("repository")
+             or package["publication"].get("tag") != expected_factory_publication.get("tag")))
         or not attempt.get("imageDigest")
         or publication["digest"] != attempt["imageDigest"]
         or image["imageDigest"] != attempt["imageDigest"]

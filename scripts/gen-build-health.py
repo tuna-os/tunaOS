@@ -26,7 +26,8 @@ REPOSITORY = "tuna-os/tunaOS"
 RUN_DEPTH = 200
 FETCH_DEPTH = RUN_DEPTH * 4
 MAX_BYTES = 8 * 1024 * 1024
-MAX_JOB_PAGES = 20
+MAX_JOB_PAGES = 40
+JOBS_PAGE = 50
 SHA = re.compile(r"[0-9a-f]{40}\Z")
 WRAPPERS = {
     "albacore": "🐟-albacore", "yellowfin": "🐠-yellowfin",
@@ -153,17 +154,17 @@ def fetch_jobs(fetch: Callable, run: dict):
     total = None
     for page in range(1, MAX_JOB_PAGES + 1):
         endpoint = (f"repos/{REPOSITORY}/actions/runs/{run['id']}/attempts/"
-                    f"{run['run_attempt']}/jobs?per_page=100&page={page}")
+                    f"{run['run_attempt']}/jobs?per_page={JOBS_PAGE}&page={page}")
         body = fetch(endpoint)
         if not isinstance(body, dict) or not isinstance(body.get("jobs"), list):
             raise CollectionError("malformed job list")
         count = body.get("total_count")
-        if type(count) is not int or count < 0 or count > MAX_JOB_PAGES * 100:
+        if type(count) is not int or count < 0 or count > MAX_JOB_PAGES * JOBS_PAGE:
             raise CollectionError("job count exceeds bound")
         if total is not None and count != total:
             raise CollectionError("job pagination changed during collection")
         total = count
-        if len(body["jobs"]) > 100:
+        if len(body["jobs"]) > JOBS_PAGE:
             raise CollectionError("oversized jobs page")
         for job in body["jobs"]:
             if not isinstance(job, dict):
@@ -183,7 +184,7 @@ def fetch_jobs(fetch: Callable, run: dict):
             jobs.append(job)
         if len(jobs) == total:
             return jobs
-        if len(body["jobs"]) < 100:
+        if len(body["jobs"]) < JOBS_PAGE:
             raise CollectionError("incomplete job pagination")
     raise CollectionError("job pagination exhausted")
 

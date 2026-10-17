@@ -111,6 +111,13 @@ def test_reordering_legacy_sources_does_not_turn_them_into_new_sources():
     assert len(result['inherited']) == 2
     assert result['forbiddenNew'] == []
 
+def test_removing_one_provider_does_not_reclassify_the_rest():
+    baseline = {"el10": {"copr": [{"repo": "legacy/a"}, {"repo": "legacy/b"}]}}
+    current = {"el10": {"copr": [{"repo": "legacy/a"}]}}
+    result = classify_policy(current, baseline)
+    assert result["inherited"] == ["el10.copr: copr is not an approved package source"]
+    assert result["forbiddenNew"] == []
+
 
 def test_changing_disallowed_repository_endpoint_does_not_inherit_permission():
     baseline = {'repo': {'uri': 'https://foreign.invalid/old'}}

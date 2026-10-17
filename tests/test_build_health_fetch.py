@@ -202,13 +202,13 @@ def test_job_attempt_and_source_must_match(field, value):
 
 
 def test_job_pagination_is_complete_and_attempt_specific():
-    first = jobs()[:1] * 100
+    first = jobs()[:1] * 50
     first = [dict(job, id=i + 1) for i, job in enumerate(first)]
-    second = [dict(jobs()[0], id=101)]
+    second = [dict(jobs()[0], id=51)]
     def fetch(endpoint):
         assert '/attempts/2/jobs?' in endpoint
-        return {'total_count': 101, 'jobs': second if 'page=2' in endpoint else first}
-    assert len(collector.fetch_jobs(fetch, run())) == 101
+        return {'total_count': 51, 'jobs': second if 'page=2' in endpoint else first}
+    assert len(collector.fetch_jobs(fetch, run())) == 51
 
 
 def test_missing_job_page_blocks_collection():

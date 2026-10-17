@@ -208,7 +208,7 @@ def test_wrapper_default_recorder_is_relative_to_its_source(tmp_path):
         [
             "/bin/bash",
             "-c",
-            'source "$1"; dnf install -y cosmic-session',
+            'source "$1"; bash -c "dnf install -y cosmic-session"',
             "test",
             str(helper_dir / "package-recording.sh"),
         ],
