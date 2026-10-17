@@ -1608,7 +1608,7 @@ variants:
   - id: grouper
     emoji: "🪸"
     description: "Based on Ubuntu 26.04 Resolute Raccoon"
-    base_image: "docker.io/library/ubuntu:resolute@sha256:2e27ff302056b2b96df4a524ce48e72c595abfe3fd7a3d923adf8e782e16896f"
+    base_image: "docker.io/library/ubuntu:resolute@sha256:c098726dd9b9733f3e885f8de0ef375206a311b0a317eadc40d347b1115fb944"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [ubuntu]
     # Built directly from stock Ubuntu and bootcified in Containerfile.ubuntu
