@@ -107,6 +107,7 @@ def test_workflow_runs_real_steps_with_empty_secrets_and_reports_failures() -> N
     assert '--workflow "$workflow"' in runner
 
 def test_act_homebrew_path_is_persisted_for_following_steps() -> None:
+    runner = (ROOT / "scripts" / "run-fork-simulation.sh").read_text(encoding="utf-8")
     action = (ROOT / ".github/actions/setup-tunaos/action.yml").read_text(encoding="utf-8")
     assert 'brew_bin="$(command -v brew || true)"' in action
     assert '/home/linuxbrew/.linuxbrew/bin/brew' in action
@@ -119,6 +120,22 @@ def test_act_homebrew_path_is_persisted_for_following_steps() -> None:
     assert 'brew_prefix="$("$brew_bin" --prefix)"' in just_fix
     assert '"$GITHUB_PATH"' in just_fix
     assert '"$GITHUB_ENV"' in just_fix
+    assert "brew install just shfmt" in just_fix
+    assert "GITHUB_STEP_SUMMARY" in runner
+    assert "fork fallback was not reached" in runner
+
+def test_fixture_models_effective_job_permissions() -> None:
+    assert fork_simulation.workflow_permissions("pr-nudges.yml")["remind"] == {
+        "contents": "read",
+        "pull-requests": "write",
+    }
+    assert fork_simulation.workflow_permissions("just-fix.yml")["fix"] == {
+        "contents": "write",
+        "pull-requests": "write",
+    }
+    assert fork_simulation.workflow_permissions("matrix-status.yml")["regenerate"][
+        "actions"
+    ] == "read"
 
 
 
@@ -143,7 +160,7 @@ def run_fixture(
         "SIMULATION_API_LOG": str(api_log),
         "SIMULATION_UNEXPECTED_LOG": str(unexpected_log),
     }
-    env.pop("GITHUB_TOKEN", None)
+    env["GITHUB_JOB"] = fork_simulation.SIMULATION_JOBS.get(workflow, "synthetic")
     env["GH_TOKEN"] = token
     result = subprocess.run(
         [str(FIXTURE), "api", *arguments],
@@ -167,6 +184,22 @@ def test_same_repository_comment_delivery_is_exercised(tmp_path) -> None:
         "repos/tuna-os/tunaos/issues/1/comments",
         "-F",
         f"body=@{body}",
+        workflow="pr-nudges.yml",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert calls == ["POST\trepos/tuna-os/tunaos/issues/1/comments"]
+    assert unexpected == ""
+
+def test_fixture_defaults_input_requests_to_post(tmp_path) -> None:
+    result, calls, unexpected = run_fixture(
+        tmp_path,
+        "same-repo-contributor",
+        "repos/tuna-os/tunaos/issues/1/comments",
+        "--input",
+        "-",
+        stdin='{"body":"synthetic reminder"}',
+        workflow="pr-nudges.yml",
     )
 
     assert result.returncode == 0, result.stderr
@@ -223,6 +256,7 @@ def test_fixture_rejects_unauthorized_reviewer_mutation(
         "-",
         token=token,
         stdin="{}",
+        workflow="drop-bot-review-requests.yml",
     )
 
     assert result.returncode != 0
