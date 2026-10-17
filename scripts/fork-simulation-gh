@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# Minimal gh fixture for synthetic pull-request workflows. Never contacts GitHub.
+set -euo pipefail
+
+[[ "${1:-}" == api ]] || {
+	echo "fork simulation fixture only supports gh api" >&2
+	exit 64
+}
+shift
+
+method=GET
+endpoint=
+while (($#)); do
+	case "$1" in
+	-X | --method)
+		method="${2:?missing method}"
+		shift 2
+		;;
+	--paginate)
+		shift
+		;;
+	--jq)
+		shift 2
+		;;
+	--input)
+		[[ "${2:-}" == - ]] && cat >/dev/null
+		shift 2
+		;;
+	repos/*)
+		endpoint="$1"
+		shift
+		;;
+	*)
+		echo "unsupported gh api argument: $1" >&2
+		exit 64
+		;;
+	esac
+done
+
+repo="${GITHUB_REPOSITORY:?}"
+pr="${SIMULATION_PR:?}"
+case "$method:$endpoint" in
+"GET:repos/$repo/pulls/$pr/files")
+	# pr-nudges asks gh to apply `.[].filename`; emit that selected value.
+	printf '%s\n' '.github/workflows/pr-nudges.yml'
+	;;
+"GET:repos/$repo/pulls/$pr")
+	# Renovate's synthetic PR has one auto-requested user reviewer.
+	printf '%s\n' '{"reviewers":["fork-simulation-reviewer"],"team_reviewers":[]}'
+	;;
+"DELETE:repos/$repo/pulls/$pr/requested_reviewers")
+	printf '%s\n' '{}'
+	;;
+*)
+	echo "unexpected synthetic GitHub request: $method $endpoint" >&2
+	exit 64
+	;;
+esac
