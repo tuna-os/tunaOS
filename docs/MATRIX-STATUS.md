@@ -58,7 +58,7 @@ no boot.
 
 ---
 
-The configured image matrix now has 152 cells. Eleven of them are Tuna Desktop (formerly Roost) cells for amd64: Marlin, Yellowfin, Albacore, Skipjack, Wahoo, Bonito, Bonito Rawhide, Grouper, Flounder, Flounder Sid and Sailfin. The `guppy:gnome` cell returned on 2026-10-07 (#2450). Issue #3252 adds five cells for dispatch-only Stingray evaluation. This status snapshot is from before these additions and does not mark them green; each needs its own image, desktop and boot evidence.
+The configured image matrix now has 151 cells. Eleven of them are Tuna Desktop (formerly Roost) cells for amd64: Marlin, Yellowfin, Albacore, Skipjack, Wahoo, Bonito, Bonito Rawhide, Grouper, Flounder, Flounder Sid and Sailfin. The `guppy:gnome` cell returned on 2026-10-07 (#2450). Issue #3252 adds four cells for dispatch-only Stingray evaluation. This status snapshot is from before these additions and does not mark them green; each needs its own image, desktop and boot evidence.
 
 <!-- BEGIN GENERATED — scripts/gen-matrix-status.py -->
 

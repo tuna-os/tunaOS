@@ -1737,10 +1737,6 @@ variants:
         stage: 2
         build_image: true
         build_iso: true
-      - id: cosmic
-        stage: 2
-        platforms: ["linux/amd64"]
-        build_image: true
       - id: xfce
         stage: 2
         build_image: true
