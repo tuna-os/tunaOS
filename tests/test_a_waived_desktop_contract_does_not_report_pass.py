@@ -92,7 +92,7 @@ def test_a_waived_contract_emits_a_greppable_marker(tmp_path):
 def test_every_hummingbird_exemption_counts_what_it_waives():
     """An exemption that doesn't count is invisible again."""
     src = CHECK.read_text()
-    # Count STRUCTURALLY, not by matching one layout. This used to count the
+    # Count structurally, not by matching one layout. This used to count the
     # single-line form `... ]]; then waive; return 0; fi`, which meant a
     # formatter expanding those one-liners into ordinary if-blocks dropped the
     # count to 0 and failed a test whose subject had not changed at all.
@@ -109,3 +109,6 @@ def test_every_hummingbird_exemption_counts_what_it_waives():
         f"{exemptions} require_* exemptions but only {counted} call waive() — "
         "an uncounted exemption can still report a pass over a broken image"
     )
+    assert src.count(
+        '&& "${desktop:-}" != cosmic && "${desktop:-}" != tuna'
+    ) == exemptions
