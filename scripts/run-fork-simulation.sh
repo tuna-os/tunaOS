@@ -37,12 +37,28 @@ for persona in "$@"; do
 			--repository "$REPOSITORY" --head-sha "$head_sha" --base-sha "$base_sha" \
 			>"$worktree/event.json"
 
+		# These workflows query or mutate PR state. Mount a strict gh fixture
+		# over the runner binary so their synthetic PR #1 cannot read or modify
+		# an unrelated real PR. Other workflows retain gh for read-only CI data.
+		api_fixture=()
+		case "$workflow" in
+		drop-bot-review-requests.yml | pr-nudges.yml)
+			api_fixture=(
+				--container-options
+				"--volume=${GITHUB_WORKSPACE}/scripts/fork-simulation-gh:/usr/local/bin/gh:ro"
+			)
+			;;
+		esac
+
 		echo "::group::${workflow} — ${persona}"
 		set +e
 		timeout 35m act pull_request \
 			--workflows ".github/workflows/${workflow}" \
 			--eventpath "$worktree/event.json" \
 			--actor "$(python3 scripts/fork-simulation.py actor "$persona")" \
+			--env "GITHUB_REPOSITORY=${REPOSITORY}" \
+			--env "SIMULATION_PR=1" \
+			"${api_fixture[@]}" \
 			--secret-file /dev/null \
 			--secret "GITHUB_TOKEN=${SIMULATION_GITHUB_TOKEN}" \
 			--env-file /dev/null \
