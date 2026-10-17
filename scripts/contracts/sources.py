@@ -27,12 +27,14 @@ def _records(value: object, path: str = "") -> list[tuple[str, tuple[str, str, s
             name = str(key)
             key_path = f"{path}.{name}" if path else name
             if name.lower() in FORBIDDEN_KEYS:
-                fingerprint = (
-                    _consumer_scope(key_path),
-                    name.lower(),
-                    json.dumps(child, sort_keys=True, separators=(",", ":")),
-                )
-                found.append((f"{key_path}: {name} is not an approved package source", fingerprint))
+                entries = child if isinstance(child, list) else [child]
+                for entry in entries:
+                    fingerprint = (
+                        _consumer_scope(key_path),
+                        name.lower(),
+                        json.dumps(entry, sort_keys=True, separators=(",", ":")),
+                    )
+                    found.append((f"{key_path}: {name} is not an approved package source", fingerprint))
             found.extend(_records(child, key_path))
     elif isinstance(value, list):
         for index, child in enumerate(value):

@@ -95,6 +95,23 @@ def test_matching_authenticated_receipts_and_observation_times_are_healthy(obser
     assert evidence.validate(feed, "build-health", now=NOW) == feed
 
 
+def test_factory_publication_uses_its_separate_policy(observations):
+    factory = observations["package"]["receipt"]
+    factory["publication"] = {
+        **PUBLICATION,
+        "repository": "repo.tunaos.org/factory/alma10",
+        "tag": "cosmic",
+    }
+    observations["required"]["factoryPublication"] = {
+        "repository": factory["publication"]["repository"],
+        "tag": factory["publication"]["tag"],
+    }
+    observations["image"]["receipt"]["factoryReceiptDigests"] = [
+        "sha256:" + hashlib.sha256(evidence.canonical_json(factory)).hexdigest()
+    ]
+    assert evaluate(observations)["status"] == "healthy"
+
+
 @pytest.mark.parametrize("status", ["failed", "blocked", "running", "missing", "stale", "unknown"])
 def test_last_good_publication_cannot_hide_latest_result(observations, status):
     observations["attempt"]["status"] = status
