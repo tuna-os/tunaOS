@@ -176,6 +176,8 @@ GEN
 # Extract the codec-baseline block and run it against a fake ffmpeg on PATH.
 run_codec_block() {
   local bin="${BATS_TEST_TMPDIR}/bin"
+  local hummingbird="${1:-false}"
+  local desktop_name="${2:-gnome}"
   mkdir -p "$bin"
   cp "${BATS_TEST_TMPDIR}/fake-ffmpeg" "${bin}/ffmpeg"
   chmod +x "${bin}/ffmpeg"
@@ -185,7 +187,8 @@ run_codec_block() {
     set -euo pipefail
     require_any_glob() { :; }
     require_command() { :; }
-    IS_HUMMINGBIRD=false
+    IS_HUMMINGBIRD=${hummingbird}
+    desktop=${desktop_name}
     ${block}
   "
 }
@@ -219,6 +222,32 @@ FAKE
   [ "$status" -eq 1 ]
   [[ "$output" == *"would not run"* ]]
   [[ "$output" == *"codec_diag: decoders_stderr: error while loading shared libraries"* ]]
+}
+
+@test "Hummingbird Tuna rejects a decoder-less ffmpeg" {
+  cat > "${BATS_TEST_TMPDIR}/fake-ffmpeg" <<'FAKE'
+#!/usr/bin/env bash
+case "$*" in
+*-decoders*) echo " V....D vp9    Google VP9" ;;
+*-version*)  echo "ffmpeg version 9.9-test" ;;
+esac
+FAKE
+  run run_codec_block true tuna
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"cannot decode h264"* ]]
+}
+
+@test "Hummingbird Tuna rejects an ffmpeg that will not run" {
+  cat > "${BATS_TEST_TMPDIR}/fake-ffmpeg" <<'FAKE'
+#!/usr/bin/env bash
+case "$*" in
+*-decoders*) echo "error while loading shared libraries: libavcodec.so.62" >&2; exit 127 ;;
+*-version*)  echo "ffmpeg version 9.9-test" ;;
+esac
+FAKE
+  run run_codec_block true tuna
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"would not run"* ]]
 }
 
 @test "a healthy ffmpeg passes silently — no codec_diag noise on green" {

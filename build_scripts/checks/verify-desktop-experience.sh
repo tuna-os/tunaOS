@@ -896,7 +896,7 @@ else
 		if ((_ffmpeg_rc != 0)); then
 			echo "ffmpeg is installed but would not run (broken dependencies?) — cannot verify codecs" >&2
 			_ffmpeg_diag
-			if [[ "${IS_HUMMINGBIRD:-false}" != "true" ]]; then
+			if [[ "${IS_HUMMINGBIRD:-false}" != "true" || "${desktop:-}" == tuna ]]; then
 				exit 1
 			fi
 			waive
@@ -929,7 +929,7 @@ else
 			# means the stub, so the name cannot carry the distinction.
 			if [[ "${IS_ELN:-false}" == "true" ]]; then
 				echo "TUNAOS_CODEC_GAP: ELN publishes no functional H.264/H.265 decoder (ffmpeg-free + noopenh264 stub, no RPM Fusion ELN branch); wahoo images cannot play mainstream video (tunaOS: ELN preview lane)" >&2
-			elif [[ "${IS_HUMMINGBIRD:-false}" != "true" ]]; then
+			elif [[ "${IS_HUMMINGBIRD:-false}" != "true" || "${desktop:-}" == tuna ]]; then
 				exit 1
 			fi
 			waive
