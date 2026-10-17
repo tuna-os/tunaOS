@@ -346,8 +346,19 @@ def luks_matrix() -> dict[str, set[str]]:
     return _matrix("build_image", desktops_only=True)
 
 
+def _is_beta_lifecycle_cell(cell: str) -> bool:
+    variant_id, flavor_id = cell.split(":", 1)
+    return (
+        "rawhide" in variant_id
+        or "sid" in variant_id
+        or variant_id == "guppy"
+        or "asahi" in flavor_id
+        or "zfs" in flavor_id
+    )
+
+
 def lifecycle_sweep_jobs(config: dict | None = None) -> set[str]:
-    """Exact job names in an unfiltered bootc-lifecycle matrix."""
+    """Stable lifecycle jobs; beta existence probes are advisory only."""
     config = config or load_build_config(CONFIG)
     jobs = set()
     for variant in config.get("variants", []):
@@ -357,17 +368,15 @@ def lifecycle_sweep_jobs(config: dict | None = None) -> set[str]:
             if (not flavor.get("build_image") or flavor_id == "base"
                     or flavor_id.startswith("base-")):
                 continue
+            cell = f"{variant_id}:{flavor_id}"
+            if _is_beta_lifecycle_cell(cell):
+                continue
             platforms = flavor.get("platforms")
             if platforms is None:
                 platforms = variant.get("platforms") or []
-            beta = (
-                "rawhide" in variant_id or "sid" in variant_id
-                or variant_id == "guppy" or "asahi" in flavor_id or "zfs" in flavor_id
-            )
-            prefix = "BETA " if beta else ""
             for architecture in ("amd64", "arm64"):
                 if f"linux/{architecture}" in platforms:
-                    jobs.add(f"{prefix}{variant_id}:{flavor_id} ({architecture})")
+                    jobs.add(f"{cell} ({architecture})")
     return jobs
 
 
@@ -762,7 +771,8 @@ def _axis_from_results(results: dict, key: str) -> str:
 
 # bootc-lifecycle job names carry an arch suffix, and the beta lane adds a
 # display-only "BETA " prefix. The collector uses a prefix-neutral identity for
-# full-sweep coverage while lifecycle_results() keys the evidence by cell.
+# full-sweep coverage, while lifecycle_results excludes the beta lane because
+# its jobs only probe tag existence and do not assert update/rollback behavior.
 _LIFECYCLE_NAME = re.compile(
     r"^(?:BETA\s+)?(?P<cell>[a-z0-9-]+:[a-z0-9-]+)\s+\((?P<arch>[a-z0-9]+)\)$"
 )
@@ -776,44 +786,33 @@ def lifecycle_job_key(name: str) -> str | None:
     return f"{match.group('cell')} ({match.group('arch')})"
 
 
-def lifecycle_sweep_jobs(config: dict | None = None) -> set[str]:
-    """Exact prefix-neutral job identities in the lifecycle matrix."""
-    config = config or load_build_config(CONFIG)
-    jobs = set()
-    for variant in config.get("variants", []):
-        variant_id = variant["id"]
-        for flavor in variant.get("flavors", []):
-            flavor_id = flavor["id"]
-            if (not flavor.get("build_image") or flavor_id == "base"
-                    or flavor_id.startswith("base-")):
-                continue
-            platforms = flavor.get("platforms")
-            if platforms is None:
-                platforms = variant.get("platforms") or []
-            for architecture in ("amd64", "arm64"):
-                if f"linux/{architecture}" in platforms:
-                    jobs.add(f"{variant_id}:{flavor_id} ({architecture})")
-    return jobs
 
 
 def lifecycle_results(
     raw_results: dict[str, tuple[str, str, str]] | None = None,
 ) -> dict[str, tuple[str, str, str]]:
-    """Cell-keyed lifecycle verdicts, worst-of-arches.
+    """Newest stable lifecycle result per cell, worst-of-architectures.
 
-    The wiring below was written before Bootc Lifecycle had ever run, and the
-    first real sweep (run 32040213366, 168 jobs) proved the raw job names never
-    matched a cell lookup. Normalize the names here, and merge a cell's arch
-    legs pessimistically — one green leg must not mask a red one.
+    The raw collector is intentionally prefix-preserving for LUKS and therefore
+    can contain both a current ``BETA cell (arch)`` name and an older unprefixed
+    spelling. Deduplicate lifecycle identities before merging architectures so
+    an older failure cannot override a newer result.
     """
     if raw_results is None:
         raw_results = latest_results("bootc-lifecycle.yml", r":")
-    merged: dict[str, tuple[str, str, str]] = {}
+    newest_by_job: dict[str, tuple[str, str, str]] = {}
     for name, hit in raw_results.items():
-        match = _LIFECYCLE_NAME.match(name)
-        if not match:
+        job_key = lifecycle_job_key(name)
+        if job_key is None:
             continue
-        cell = match.group("cell")
+        cell = job_key.rsplit(" (", 1)[0]
+        if _is_beta_lifecycle_cell(cell):
+            continue
+        newest_by_job.setdefault(job_key, hit)
+
+    merged: dict[str, tuple[str, str, str]] = {}
+    for job_key, hit in newest_by_job.items():
+        cell = job_key.rsplit(" (", 1)[0]
         prev = merged.get(cell)
         if prev is None or (prev[0] == "success" and hit[0] == "failure"):
             merged[cell] = hit

@@ -201,5 +201,5 @@ def test_every_new_release_appends_the_same_generated_verification_data():
     assert "--stored-identity release-body.md" in report_block
     assert "CURRENT_DIGEST" not in report_block.split('if [[ \"$EXISTING\" == \"true\" ]]', 1)[1]
     renderer = RELEASE_REPORT.read_text()
-    assert 'payload["summary"]' in renderer
-    assert 'payload["cells"]' in renderer
+    assert 'payload.get("summary")' in renderer
+    assert 'payload.get("cells")' in renderer

@@ -555,14 +555,15 @@ class LifecycleResultsNormalisation(unittest.TestCase):
         with mock.patch.object(gms, "latest_results", return_value=raw):
             return gms.lifecycle_results()
 
-    def test_real_job_names_normalise_to_cells(self):
+    def test_newest_prefix_variant_wins_before_arch_merge(self):
         got = self._with_raw({
-            "yellowfin:gnome (amd64)": ("success", "2026-08-17", "1"),
-            "BETA guppy:gnome (amd64)": ("success", "2026-08-17", "1"),
+            "BETA yellowfin:gnome (amd64)": ("success", "2026-08-17", "2"),
+            "yellowfin:gnome (amd64)": ("failure", "2026-08-16", "1"),
+            "BETA guppy:gnome (amd64)": ("success", "2026-08-17", "2"),
             "flounder:kde-nvidia (amd64)": ("failure", "2026-08-17", "1"),
         })
         self.assertEqual(got["yellowfin:gnome"][0], "success")
-        self.assertEqual(got["guppy:gnome"][0], "success")
+        self.assertNotIn("guppy:gnome", got)
         self.assertEqual(got["flounder:kde-nvidia"][0], "failure")
 
     def test_arch_legs_merge_worst_of(self):
@@ -570,29 +571,28 @@ class LifecycleResultsNormalisation(unittest.TestCase):
         # never-tested-is-not-green. Order-independent on purpose.
         for first, second in (("success", "failure"), ("failure", "success")):
             got = self._with_raw({
-                "bonito-rawhide:gnome (amd64)": (first, "2026-08-17", "1"),
-                "bonito-rawhide:gnome (arm64)": (second, "2026-08-17", "1"),
+                "yellowfin:gnome (amd64)": (first, "2026-08-17", "1"),
+                "yellowfin:gnome (arm64)": (second, "2026-08-17", "1"),
             })
-            self.assertEqual(got["bonito-rawhide:gnome"][0], "failure")
+            self.assertEqual(got["yellowfin:gnome"][0], "failure")
 
-    def test_expected_lifecycle_names_match_unprefixed_rawhide_and_sid_jobs(self):
+    def test_lifecycle_sweep_excludes_beta_existence_probes(self):
         config = {
             "variants": [
+                {
+                    "id": "yellowfin",
+                    "platforms": ["linux/amd64"],
+                    "flavors": [{"id": "gnome", "build_image": True}],
+                },
                 {
                     "id": "bonito-rawhide",
                     "platforms": ["linux/amd64"],
                     "flavors": [{"id": "gnome", "build_image": True}],
                 },
-                {
-                    "id": "flounder-sid",
-                    "platforms": ["linux/amd64"],
-                    "flavors": [{"id": "kde", "build_image": True}],
-                },
             ]
         }
         assert gms.lifecycle_sweep_jobs(config) == {
-            "bonito-rawhide:gnome (amd64)",
-            "flounder-sid:kde (amd64)",
+            "yellowfin:gnome (amd64)",
         }
         assert gms.lifecycle_job_key("BETA guppy:gnome (amd64)") == (
             "guppy:gnome (amd64)"
