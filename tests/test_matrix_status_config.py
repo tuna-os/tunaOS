@@ -411,6 +411,19 @@ class DesktopTableRendering(unittest.TestCase):
         self.assertIn(gms.PASS, row)
 
 
+    def test_historical_failures_render_for_removed_flavors(self):
+        matrix = {"flounder": {"kde", "xfce"}}
+        results = {
+            "LUKS flounder:gnome": ("failure", "2026-08-06", "1"),
+            "LUKS flounder:cosmic": ("failure", "2026-08-01", "2"),
+        }
+        row = next(
+            row
+            for row in gms.desktop_table(matrix, results, lambda v, d: f"LUKS {v}:{d}")
+            if "flounder" in row
+        )
+        self.assertEqual(row, "| **flounder** | ❌ | ⬜ | ❌ | — | ⬜ |")
+
 # ── filtered LUKS history branches ─────────────────────────────────────────
 
 class ExcludedTally(unittest.TestCase):

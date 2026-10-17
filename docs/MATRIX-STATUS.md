@@ -145,7 +145,7 @@ The denominator is the amd64 graphical image set that `luks-e2e.yml` schedules: 
 | **albacore** | ❌ | ❌ | ❌ | ❌ | ❌ |
 | **bonito** | ❌ | ✅ | ✅ | ❌ | ✅ |
 | **bonito-rawhide** | ❌ | ✅ | ✅ | ❌ | ❌ |
-| **flounder** | — | ❌ | — | — | ❌ |
+| **flounder** | ❌ | ❌ | ❌ | — | ❌ |
 | **flounder-sid** | ❌ | ❌ | — | — | ❌ |
 | **grouper** | ❌ | ✅ | ❌ | — | ❌ |
 | **guppy** | ❌ | ❌ | — | — | ❌ |
