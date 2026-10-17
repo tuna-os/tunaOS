@@ -826,11 +826,6 @@
   },
   {
     "variant": "stingray",
-    "flavor": "cosmic",
-    "arch": "x86_64"
-  },
-  {
-    "variant": "stingray",
     "flavor": "gnome",
     "arch": "aarch64"
   },
