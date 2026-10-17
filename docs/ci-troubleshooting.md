@@ -1639,6 +1639,24 @@ repository defaults for token scope.
 **Fix:** Set a narrow scope for each workflow. Give write access only to a job
 that changes GitHub state. The regression test for #2767 checks each workflow.
 
+### Fork simulation times out while rebuilding images
+
+**Symptom:** The fork rehearsal times out in an ISO, image, or KVM lane. It
+does not report token or secret failures.
+
+**Measured cause (#2257):** PR #2604 ran every pull-request workflow under
+`act` for three personas. The run included the heavyweight ISO and live-image
+lanes. Thus, the weekly job would rebuild or boot large artifacts for each
+persona. It would report resource timeouts as fork-safety failures.
+
+**Fix:** Keep an explicit, fail-closed classification in
+`scripts/fork-simulation.py`. Run only fork-sensitive, act-compatible lanes.
+Pass the intended `GITHUB_REPOSITORY` explicitly. For workflows that read or
+change pull-request state, mount `scripts/fork-simulation-gh`: its synthetic PR
+fixture matches event PR 1 and rejects unlisted requests without contacting
+GitHub. Record why heavyweight/read-only lanes remain under static checks. The
+classification test rejects each unreviewed pull-request workflow.
+
 ### Admitted variant with missing rebuild repository fails CI
 
 **Symptom:** A new variant fails nightly builds for declared desktops (e.g. 10+ red nights for Hummingbird).
