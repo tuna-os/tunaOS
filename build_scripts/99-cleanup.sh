@@ -216,23 +216,21 @@ chmod 644 /usr/share/ublue-os/image-info.json
 [ -d /var/spool/plymouth ] && rm -rf /var/spool/plymouth/*
 [ -d /var/roothome/buildinfo ] && rm -rf /var/roothome/buildinfo
 
-# No SSH host keys in the image (tunaOS#3287). Debian's and Ubuntu's
-# openssh-server postinst runs `ssh-keygen -A` when 40-services.sh installs
-# it, so every install from flounder, flounder-sid and grouper shared one set
-# of host private keys. The other families generate them on the machine and
-# never reach this with keys present.
+# No SSH host keys in the image (tunaOS#3287, tunaOS#3298).
+# openssh-server's postinst creates host keys while apt builds Debian and
+# Ubuntu images, so leaving them here gives every installed machine the same
+# identity.
 #
-# The Debian/Ubuntu generator is openssh-server's own sshd-keygen.service,
-# which runs `ssh-keygen -A` before ssh.service but only under
-# ConditionFirstBoot=yes. On a bootc machine that condition is not a
-# guarantee: an upgrade from a digest that still baked keys drops them in
-# the /etc merge (they are unmodified image defaults) on a boot that is not
-# the first. The drop-in resets the conditions (an empty assignment clears
-# them all), restores the two path checks, and runs whenever a key is
-# missing. `ssh-keygen -A` only creates the missing types.
+# Debian trixie/sid and Ubuntu resolute ship sshd-keygen.service. Its
+# ConditionFirstBoot=yes is not sufficient for bootc upgrades: an upgrade
+# from an old digest can drop unmodified baked keys from /etc on a later boot.
+# Reset that condition and run whenever any private key is missing.
 #
-# Images whose openssh has no sshd-keygen.service keep their keys: removing
-# them there would leave sshd with none and nothing to make them.
+# Ubuntu noble ships ssh.service but no generator. Give it the same behavior
+# with a TunaOS oneshot pulled in by ssh.service. The generator has no
+# RemainAfterExit so a later ssh.service start can replace a newly missing key.
+# If neither verified path exists, fail the build rather than ship a shared
+# private key.
 if compgen -G '/etc/ssh/ssh_host_*' >/dev/null; then
 	if [[ -f /usr/lib/systemd/system/sshd-keygen.service ]] &&
 		grep -q '^ExecStart=.*ssh-keygen -A' /usr/lib/systemd/system/sshd-keygen.service; then
@@ -246,10 +244,33 @@ ConditionPathExists=|!/etc/ssh/ssh_host_ed25519_key
 ConditionPathExists=|!/etc/ssh/ssh_host_ecdsa_key
 ConditionPathExists=|!/etc/ssh/ssh_host_rsa_key
 EOF
-		rm -f /etc/ssh/ssh_host_*
+	elif [[ -x /usr/bin/ssh-keygen ]] &&
+		[[ -f /usr/lib/systemd/system/ssh.service ]]; then
+		cat >/usr/lib/systemd/system/tunaos-ssh-host-keygen.service <<'EOF'
+[Unit]
+Description=Generate SSH host keys
+ConditionPathIsReadWrite=/etc/ssh
+ConditionPathIsSymbolicLink=!/etc/ssh
+ConditionPathExists=|!/etc/ssh/ssh_host_ed25519_key
+ConditionPathExists=|!/etc/ssh/ssh_host_ecdsa_key
+ConditionPathExists=|!/etc/ssh/ssh_host_rsa_key
+Before=ssh.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/ssh-keygen -A
+EOF
+		install -d -m 0755 /usr/lib/systemd/system/ssh.service.d
+		cat >/usr/lib/systemd/system/ssh.service.d/10-tunaos-host-keygen.conf <<'EOF'
+[Unit]
+Requires=tunaos-ssh-host-keygen.service
+After=tunaos-ssh-host-keygen.service
+EOF
 	else
-		echo "WARNING: /etc/ssh carries host keys and no sshd-keygen.service regenerates them; leaving them" >&2
+		echo "ERROR: /etc/ssh carries host keys and no verified per-machine generator is available" >&2
+		exit 1
 	fi
+	rm -f /etc/ssh/ssh_host_*
 fi
 
 # The --fix option (containers/bootc#1152) was closed without merging.
