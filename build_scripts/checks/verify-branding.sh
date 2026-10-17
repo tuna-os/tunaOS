@@ -115,6 +115,7 @@ declare -A FISH=(
 	["skipjack"]="Katsuwonus pelamis" ["bonito"]="Sarda sarda"
 	["bonito-rawhide"]="Sarda sarda" ["sailfin"]="Istiophorus platypterus"
 	["guppy"]="Poecilia reticulata" ["grouper"]="Epinephelus marginatus"
+	["stingray"]="Dasyatis pastinaca"
 	["marlin"]="Makaira nigricans" ["flounder"]="Platichthys flesus"
 	["flounder-sid"]="Platichthys flesus" ["gurnard"]="Chelidonichthys lucerna"
 	# Not a fish, and the only one: hummingbird is named for the bird, so the

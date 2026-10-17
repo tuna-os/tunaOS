@@ -22,6 +22,7 @@ NON_RELEASE_TRACKS = {
     "hummingbird": "experimental",
     "marlin": "rolling",
     "sailfin": "rolling",
+    "stingray": "experimental",
     "wahoo": "experimental",
 }
 

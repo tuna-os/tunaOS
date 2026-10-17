@@ -23,6 +23,7 @@ Bring a modern, cloud-native experience to the Enterprise Linux Desktop. tunaOS 
 | Sailfin | openSUSE Tumbleweed (rolling) | GNOME, KDE, Niri, XFCE | Beta |
 | Guppy | Gentoo Linux (source-based) | GNOME, KDE, Niri, XFCE | Beta |
 | Grouper | Ubuntu 26.04 | GNOME, KDE, Niri, XFCE | Beta (RFC 010) |
+| Stingray | Ubuntu 26.10 | Base, GNOME, KDE, XFCE | Proposal; experimental and dispatch-only (see #3252) |
 | Marlin | Arch Linux (rolling), CachyOS overlay | GNOME, KDE, COSMIC, Niri, XFCE | Beta |
 | Flounder / Flounder Sid | Debian 13 Trixie / Sid | GNOME, KDE, COSMIC, Niri, XFCE | Beta |
 | Hummingbird | Fedora Hummingbird (container-native bootc) | Base, GNOME, COSMIC | Experimental (see #1341) |
@@ -40,6 +41,14 @@ by [VARIANT-LIFECYCLE.md](VARIANT-LIFECYCLE.md). A passing GNOME/default cell
 does not promote the other cells. Promotion or a deliberate narrower support
 claim must link the per-cell boot-gate, LUKS-E2E, desktop-contract, and
 user-install evidence in its PR.
+
+**Stingray admission record (#3252)** — Owner: hanthor. Dispatch-only capacity:
+8 image cells and 6 ISO-capable cells across amd64/arm64 add no nightly load
+while the proposal is qualified. Beta acceptance requires every declared image
+to build, each desktop boot gate and desktop contract to pass, the published
+ISOs to complete LUKS E2E, and the results to be recorded before enabling a
+schedule or download entry. Tuna Desktop, Asahi, and ZFS are excluded until
+their package or profile-specific admission gates are satisfied.
 
 > **Experimental** (per maintainer #1315): Hummingbird and Gurnard/Pantheon are
 > configured in `.github/build-config.yml` and building, but predate the
@@ -75,6 +84,7 @@ user-install evidence in its PR.
 | **bonito-rawhide** | **S:** GNOME, KDE, COSMIC, Niri, XFCE, Tuna; <br>**U:** Pantheon | **S:** GNOME, KDE, COSMIC, Niri, XFCE; <br>**U:** Pantheon, Tuna | **U:** GNOME, KDE, COSMIC, Niri, XFCE, Pantheon, Tuna |
 | **gurnard** | **S:** Pantheon; <br>**U:** GNOME, KDE, COSMIC, Niri, XFCE, Tuna | **S:** Pantheon; <br>**U:** GNOME, KDE, COSMIC, Niri, XFCE, Tuna | **U:** GNOME, KDE, COSMIC, Niri, XFCE, Pantheon, Tuna |
 | **grouper** | **S:** GNOME, KDE, COSMIC, XFCE, Tuna; <br>**U:** Niri, Pantheon | **S:** GNOME, KDE, XFCE; <br>**U:** COSMIC, Niri, Pantheon, Tuna | **E:** GNOME; <br>**U:** KDE, COSMIC, Niri, XFCE, Pantheon, Tuna |
+| **stingray** | **S:** GNOME, KDE, XFCE; <br>**U:** COSMIC, Niri, Pantheon, Tuna | **S:** GNOME, KDE, XFCE; <br>**U:** COSMIC, Niri, Pantheon, Tuna | **U:** GNOME, KDE, COSMIC, Niri, XFCE, Pantheon, Tuna |
 | **marlin** | **S:** GNOME, KDE, COSMIC, Niri, XFCE, Tuna; <br>**U:** Pantheon | **S:** GNOME; <br>**U:** KDE, COSMIC, Niri, XFCE, Pantheon, Tuna | **U:** GNOME, KDE, COSMIC, Niri, XFCE, Pantheon, Tuna |
 | **flounder** | **S:** KDE, XFCE, Tuna; <br>**U:** GNOME, COSMIC, Niri, Pantheon | **U:** GNOME, KDE, COSMIC, Niri, XFCE, Pantheon, Tuna | **U:** GNOME, KDE, COSMIC, Niri, XFCE, Pantheon, Tuna |
 | **flounder-sid** | **S:** GNOME, KDE, XFCE, Tuna; <br>**U:** COSMIC, Niri, Pantheon | **U:** GNOME, KDE, COSMIC, Niri, XFCE, Pantheon, Tuna | **U:** GNOME, KDE, COSMIC, Niri, XFCE, Pantheon, Tuna |

@@ -332,15 +332,15 @@ class UndeclaredCellsAreNotCountedAgainstUs(unittest.TestCase):
             gms.VOLATILE_LINE,
         )
 
-    def test_the_real_build_config_declares_52_luks_cells(self):
+    def test_the_real_build_config_declares_56_luks_cells(self):
         """Ties the unit tests above to the actual denominator on disk.
 
         If this number moves, the LUKS total moves with it, and that should be
         a deliberate build-config edit rather than a surprise.
 
-        51 -> 52 on 2026-10-07: guppy:gnome is on again. ::gentoo now has
-        GNOME 50.5 under ~amd64, and manifests/desktops/gnome.yaml
-        emerge_accept_keywords accepts it (tunaOS#2450).
+        52 -> 56 on 2026-10-17: the dispatch-only Stingray proposal adds its
+        four declared desktops. Like Wahoo below, these cost monthly LUKS
+        sweep cells but no nightly build capacity (tunaOS#3252).
 
         52 -> 51 on 2026-09-11: guppy:gnome is off. ::gentoo's main tree tops
         out at GNOME 49.9, below the 50 floor
@@ -362,12 +362,10 @@ class UndeclaredCellsAreNotCountedAgainstUs(unittest.TestCase):
         flounder-sid instead. gnome-nvidia is a stage-3 overlay on it and
         goes with it, but only gnome carries LUKS, hence one cell not two.
 
-        52 -> 53 on 2026-08-25: wahoo (Fedora ELN) declares one desktop
-        flavor, gnome, with build_image: true. luks-e2e.yml builds its matrix
-        from build_image with no experimental filter, so the cell is real and
-        counted rather than quietly excluded — it costs one boot in the
-        monthly sweep (`0 7 1 * *`), and nothing nightly, because the variant
-        is dispatch-only.
+        53 -> 55 on 2026-10-17: dispatch-only Stingray keeps GNOME, KDE
+        and XFCE; COSMIC is deferred until its PPA publishes for Stonking.
+        The removed COSMIC cell was the single amd64-only Stingray desktop
+        entry; its PPA publishes only for Ubuntu Resolute, not Stonking.
 
         53 -> 51 on 2026-08-25: hummingbird stopped declaring kde and niri.
         Neither had a `packages.hummingbird` section in
@@ -388,13 +386,14 @@ class UndeclaredCellsAreNotCountedAgainstUs(unittest.TestCase):
         the Niri stack and zero `xfce*`), so they add nothing here.
         """
         matrix = gms.luks_matrix()
-        self.assertEqual(sum(len(v) for v in matrix.values()), 52)
+        self.assertEqual(sum(len(v) for v in matrix.values()), 55)
         # The control that makes the drop specific rather than merely smaller:
         # hummingbird keeps exactly the desktops it has package sets for.
         self.assertEqual(matrix.get("hummingbird"), {"gnome", "cosmic"})
         # wahoo carries exactly the desktops ELN composes -- and notably NOT
         # niri or xfce, which is what keeps this an honest denominator.
         self.assertEqual(matrix.get("wahoo"), {"gnome", "cosmic", "kde"})
+        self.assertEqual(matrix.get("stingray"), {"gnome", "kde", "xfce"})
         self.assertNotIn("cosmic", matrix.get("flounder", set()))
         self.assertNotIn("cosmic", matrix.get("flounder-sid", set()))
         # A control: the flavours flounder DOES declare are still there, so
