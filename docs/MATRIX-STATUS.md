@@ -92,25 +92,25 @@ Per-cell provenance — which run asserted which criterion, when — is machine-
 
 ## Silent omissions
 
-**0 of 52** cells clean (0 read, 52 never read).
+**52 of 52** cells clean (52 read, 0 never read).
 
 Green criterion 8 (`no_silent_omissions`): the sweep runs `checks/verify-package-wishlist.sh` against every published image it pulls. That is the same gate new builds pass at build time. So an image that drops a package in silence, outside `package-miss-allowlist.txt`, reads ❌ here even when it predates the gate. A cell whose image the sweep never read — no image, a pull error, a lost job — is ⬜, not clean.
 
 | Variant | gnome | kde | cosmic | niri | xfce |
 |---|:--:|:--:|:--:|:--:|:--:|
-| **albacore** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **bonito** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **bonito-rawhide** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **flounder** | — | ⬜ | — | — | ⬜ |
-| **flounder-sid** | ⬜ | ⬜ | — | — | ⬜ |
-| **grouper** | ⬜ | ⬜ | ⬜ | — | ⬜ |
-| **guppy** | ⬜ | ⬜ | — | — | ⬜ |
-| **hummingbird** | ⬜ | — | ⬜ | — | — |
-| **marlin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **sailfin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **skipjack** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **wahoo** | ⬜ | ⬜ | ⬜ | — | — |
-| **yellowfin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| **albacore** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **bonito** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **bonito-rawhide** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **flounder** | — | ✅ | — | — | ✅ |
+| **flounder-sid** | ✅ | ✅ | — | — | ✅ |
+| **grouper** | ✅ | ✅ | ✅ | — | ✅ |
+| **guppy** | ✅ | ✅ | — | — | ✅ |
+| **hummingbird** | ✅ | — | ✅ | — | — |
+| **marlin** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **sailfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **skipjack** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **wahoo** | ✅ | ✅ | ✅ | — | — |
+| **yellowfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 ## Package parity
 
