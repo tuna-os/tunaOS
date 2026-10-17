@@ -93,7 +93,7 @@ if [[ "${1:-}" == "--audit" ]]; then
 	# dropped five declared variants (wahoo, hummingbird, bonito-rawhide,
 	# gurnard, flounder-sid) and the audit reported on nine of fourteen
 	# while looking complete.
-	variants=(yellowfin albacore skipjack wahoo bonito hummingbird sailfin guppy bonito-rawhide gurnard grouper marlin flounder flounder-sid)
+	variants=(yellowfin albacore skipjack wahoo bonito hummingbird sailfin guppy bonito-rawhide gurnard grouper stingray marlin flounder flounder-sid)
 	if command -v yq >/dev/null && [[ -f "$BUILD_CONFIG" ]]; then
 		mapfile -t variants < <(yq -r '.variants[].id' "$BUILD_CONFIG")
 	fi

@@ -20,6 +20,7 @@ canonical_variant() {
 	gentoo) echo guppy ;;
 	elementary) echo gurnard ;;
 	ubuntu) echo grouper ;;
+	ubuntu-26.10) echo stingray ;;
 	arch | archlinux) echo marlin ;;
 	debian) echo flounder ;;
 	*) echo "$1" ;;
@@ -82,6 +83,7 @@ bonito | bonito-rawhide) CODE_NAME="Sarda sarda" ;;
 sailfin) CODE_NAME="Istiophorus platypterus" ;;
 guppy) CODE_NAME="Poecilia reticulata" ;;
 grouper) CODE_NAME="Epinephelus marginatus" ;;
+stingray) CODE_NAME="Dasyatis pastinaca" ;;
 marlin) CODE_NAME="Makaira nigricans" ;;
 hummingbird) CODE_NAME="Trochilidae" ;;
 wahoo) CODE_NAME="Acanthocybium solandri" ;;

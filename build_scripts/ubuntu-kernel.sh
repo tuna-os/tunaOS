@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Kernel + firmware install for grouper (Ubuntu). Two paths:
+# Kernel + firmware install for TunaOS Ubuntu variants. Two paths:
 #
 #   default          — generic kernel + linux-firmware (all arches). linux-generic
 #                      unless its kernel cannot mount a composefs image from a
@@ -97,12 +97,13 @@ kernel_can_mount_composefs() {
 # fully partitioned, LUKS-formatted disk.) The releases this file serves differ
 # on exactly this symbol:
 #
-#   resolute (26.04, grouper)  GA 7.0.0   CONFIG_EROFS_FS_BACKED_BY_FILE=y
-#   noble    (24.04, gurnard)  GA 6.8.0   absent — HWE 7.0.0 has it
+#   resolute (26.04, grouper)   GA 7.0.0   CONFIG_EROFS_FS_BACKED_BY_FILE=y
+#   stonking (26.10, stingray)  GA 7.3.0   CONFIG_EROFS_FS_BACKED_BY_FILE=y
+#   noble    (24.04, gurnard)   GA 6.8.0   absent — HWE 7.0.0 has it
 #
-# so the choice is made by reading the config of the kernel we are about to
-# install, not by branching on a release name and not by a version table that
-# goes stale the next time either release moves.
+# The choice is made by reading the config of the kernel we are about to
+# install, not by branching on a release name or a version table that goes
+# stale the next time either release moves.
 select_kernel_pkg() {
 	local ga_pkg="linux-generic" ga_kver hwe_pkg hwe_kver
 	ga_kver="$(kernel_pkg_kver "$ga_pkg")"
