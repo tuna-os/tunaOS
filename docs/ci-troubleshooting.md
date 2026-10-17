@@ -1573,6 +1573,25 @@ On 2026-10-04 the Corral builder on AWS failed with `bootupd is required for ost
 The Marlin override `50-marlin.toml` selects systemd-boot and ext4. Containerfile.arch now applies the variant overrides and checks bootc's merged configuration before release. External installers must also select `--composefs-backend` when the image has systemd-boot without a GRUB update payload; the bootupctl executable alone does not identify an OSTree installation. Corral's corrected image probe reports composefs/ext4. The AWS boot result remains a separate qualification gate.
 
 
+### Marlin AC-power updater failure (#3356)
+
+**Symptom:** `systemctl --failed` reports `uupd-on-ac.service` after every AC
+power event, and the journal says `uupd.service: Unit not found`. The image
+also has no `/usr/bin/uupd`.
+
+**Measured cause:** `Containerfile.arch` copied the common system files that
+provide the uupd timer and AC trigger, but it skipped
+`build_scripts/10-base-packages.sh`, the only existing caller that installed
+the pinned uupd binary and core units. `build_scripts/40-services.sh` correctly
+left uupd out of its pacman path, so the copied trigger remained without its
+target.
+
+**Fix:** `Containerfile.arch` carries `image-versions.yaml` into its build
+context and runs `build_scripts/install-uupd.sh`. The shared installer downloads
+the binary and `uupd.service`, `uupd.timer`, and `uupd-manual.service` from the
+same pinned release; the apt and dnf paths use it too. The regression test
+exercises extraction and installation into a temporary image root.
+
 ### Roost Screenshot consent cannot open its Access dialog
 
 **Symptom:** A Screenshot request reaches GNOME but cannot complete its consent dialog.

@@ -41,6 +41,7 @@ COPY system_files /files
 COPY system_files_overrides /overrides
 COPY build_scripts /build_scripts
 COPY manifests /manifests
+COPY image-versions.yaml /image-versions.yaml
 COPY experiences /experiences
 
 FROM ${COMMON_IMAGE_REF} AS common
@@ -287,6 +288,12 @@ RUN systemctl mask systemd-firstboot.service
 LABEL containers.bootc 1
 COPY --from=context /files /
 COPY --from=common /system_files/shared /
+
+# common's shared tree includes uupd's timers and AC trigger. This base does
+# not run 10-base-packages.sh, so install the matching binary and core units
+# before 40-services.sh sees the image.
+RUN --mount=type=bind,from=context,source=/,target=/run/context \
+    /run/context/build_scripts/install-uupd.sh
 
 # remora — the desktop experience contract requires it, and this base does
 # not run 26-packages-post.sh, which is what installs remora on the dnf

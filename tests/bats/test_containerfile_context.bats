@@ -94,11 +94,12 @@ strip_comments() { grep -v '^[[:space:]]*#' || true; }
 
 @test "image-versions.yaml is carried exactly where a build script reads it" {
   # This one is deliberately NOT uniform. 10-base-packages.sh reads
-  # /run/context/image-versions.yaml unguarded, and runs on el10, debian and
-  # ubuntu only. kcm-ublue.sh reads it too but returns early without dnf, so
-  # the pacman/zypper/emerge files never reach it. Asserted as an exact set so
-  # that adding the read to another script, or the file to another context,
-  # has to be a deliberate change to this list.
+  # /run/context/image-versions.yaml unguarded on el10, debian and ubuntu;
+  # Containerfile.arch invokes install-uupd.sh directly and needs the same
+  # pinned file. kcm-ublue.sh reads it too but returns early without dnf, so
+  # the other package-manager files never reach it. Asserted as an exact set
+  # so adding the read to another script, or the file to another context, has
+  # to be a deliberate change to this list.
   local f body has needs
   for f in "${CONTAINERFILES[@]}"; do
     body="$(context_stage "${REPO_ROOT}/$f" | strip_comments)"
@@ -109,9 +110,9 @@ strip_comments() { grep -v '^[[:space:]]*#' || true; }
     # build_scripts/10-base-packages.sh") and the unstripped grep read that
     # as the script being run, failing every PR after #1038 merged.
     needs=0
-    strip_comments <"${REPO_ROOT}/$f" | grep -q '10-base-packages.sh' && needs=1
+    strip_comments <"${REPO_ROOT}/$f" | grep -qE '10-base-packages.sh|install-uupd.sh' && needs=1
     if [ "$has" -ne "$needs" ]; then
-      echo "FAIL: ${f} carries image-versions.yaml=${has} but runs 10-base-packages.sh=${needs}" >&2
+      echo "FAIL: ${f} carries image-versions.yaml=${has} but needs it=${needs}" >&2
       return 1
     fi
   done
