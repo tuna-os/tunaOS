@@ -422,7 +422,7 @@ No known variant-specific blocker.
 ### stingray (Ubuntu 26.10, experimental) — proposal; dispatch-only
 | area | state | action |
 |---|---|---|
-| base + GNOME/KDE/COSMIC/XFCE | Configured by #3252 from the digest-pinned Ubuntu 26.10 Stonking base; no build or boot evidence yet | dispatch all declared cells; require image, desktop, boot, and LUKS evidence before Beta or scheduling |
+| base + GNOME/KDE/XFCE | Configured by #3252 from the digest-pinned Ubuntu 26.10 Stonking base; no build or boot evidence yet | dispatch all declared cells; require image, desktop, boot, and LUKS evidence before Beta or scheduling |
 | Tuna/Asahi/ZFS | not declared; each lacks its package or profile-specific admission evidence | keep out until its own gate is satisfied |
 
 ### marlin (Arch) — 16/16 build, gates regressed
