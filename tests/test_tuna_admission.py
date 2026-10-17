@@ -98,8 +98,11 @@ def test_hummingbird_cell_uses_the_pinned_native_signed_target():
         "gnome-settings-daemon", "gnome-control-center", "gnome-keyring",
         "evolution-data-server", "xdg-desktop-portal-gnome",
         "xdg-desktop-portal-gtk", "gvfs", "nautilus", "NetworkManager",
+        "NetworkManager-wifi", "linux-firmware", "amd-gpu-firmware",
+        "intel-gpu-firmware", "iwlwifi-mvm-firmware", "wireless-regdb", "iw",
         "pipewire", "wireplumber", "pipewire-gstreamer",
-        "gstreamer1-plugins-good", "tuned-ppd", "flatpak",
+        "gstreamer1-plugins-good", "gstreamer1-plugin-libav", "ffmpeg",
+        "tuned-ppd", "flatpak",
     ):
         assert package in section["packages"], package
 

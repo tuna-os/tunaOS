@@ -304,11 +304,22 @@ packages:
       - nautilus
       - ptyxis
       - NetworkManager
+      # The desktop-less Hummingbird base omits this physical-hardware
+      # baseline; weak dependencies are disabled by the fallback installer.
+      - NetworkManager-wifi
+      - linux-firmware
+      - amd-gpu-firmware
+      - intel-gpu-firmware
+      - iwlwifi-mvm-firmware
+      - wireless-regdb
+      - iw
       - libsecret
       - pipewire
       - wireplumber
       - pipewire-gstreamer
       - gstreamer1-plugins-good
+      - gstreamer1-plugin-libav
+      - ffmpeg
       - tuned-ppd
       - upower
       - flatpak
