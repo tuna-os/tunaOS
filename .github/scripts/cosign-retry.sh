@@ -44,15 +44,36 @@ _cosign_transient() {
 }
 
 # cosign_retry <command...> — run until it succeeds, the error turns out to
-# be non-transient, or the deadline passes.
+# be non-transient, or the deadline passes. Each invocation is bounded by the
+# remaining deadline so a hung child cannot outlive the retry budget.
 cosign_retry() {
 	local attempt=1 backoff=15 rc=0 now remaining out deadline
+	local invocation_seconds timed_out
 	out="$(mktemp)"
 	deadline=$(($(date +%s) + SIGN_DEADLINE_MINUTES * 60))
 
 	while :; do
 		rc=0
-		"$@" >"$out" 2>&1 || rc=$?
+		timed_out=0
+		now="$(date +%s)"
+		remaining=$((deadline - now))
+		invocation_seconds="$remaining"
+		if [ "$invocation_seconds" -lt 1 ]; then
+			# GNU timeout treats 0 as "no timeout"; retain a one-second
+			# floor when the retry deadline has already elapsed.
+			invocation_seconds=1
+		fi
+		if declare -F "$1" >/dev/null 2>&1; then
+			# Unit probes use shell functions; execute those in-process.
+			"$@" >"$out" 2>&1 || rc=$?
+		else
+			timeout --foreground --kill-after=1s \
+				"${invocation_seconds}s" "$@" >"$out" 2>&1 || rc=$?
+		fi
+		if [ "$rc" -eq 124 ] || [ "$rc" -eq 137 ]; then
+			timed_out=1
+			echo "::warning::${2:-$1} timed out after ${invocation_seconds}s; checking captured output for a transient Sigstore failure." >&2
+		fi
 		if [ "$rc" -eq 0 ]; then
 			cat "$out"
 			rm -f "$out"
@@ -62,6 +83,9 @@ cosign_retry() {
 		cat "$out" >&2
 
 		if ! _cosign_transient "$out"; then
+			if [ "$timed_out" -eq 1 ]; then
+				echo "::error::${2:-$1} timed out before reporting a transient Sigstore failure." >&2
+			fi
 			echo "::error::${2:-$1} failed with a non-transient error (exit ${rc}); not retrying." >&2
 			rm -f "$out"
 			return "$rc"
@@ -70,6 +94,9 @@ cosign_retry() {
 		now="$(date +%s)"
 		remaining=$((deadline - now))
 		if [ "$remaining" -le "$backoff" ]; then
+			if [ "$timed_out" -eq 1 ]; then
+				echo "::error::${2:-$1} timed out and the retry deadline is exhausted." >&2
+			fi
 			# Marker, not prose: rerun-infra-failures.yml greps job logs for
 			# SIGSTORE_OUTAGE to tell "Sigstore was down" apart from "this
 			# build is broken", and only re-runs the former.

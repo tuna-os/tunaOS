@@ -190,3 +190,16 @@ EOF
   [[ "$output" == *"SIGSTORE_OUTAGE"* ]]
   [ ! -s "${STUB_DIR}/sleep.log" ]
 }
+
+@test "cosign_retry: bounds a hung child at the invocation deadline" {
+  SIGN_DEADLINE_MINUTES=0
+  local hung="${STUB_DIR}/hung_cmd"
+  cat > "$hung" <<'EOF'
+#!/usr/bin/env bash
+while :; do :; done
+EOF
+  chmod +x "$hung"
+  run cosign_retry "$hung"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"timed out"* ]]
+}
