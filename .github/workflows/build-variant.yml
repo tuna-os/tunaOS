@@ -254,7 +254,8 @@ jobs:
                 flavor:        .flavor,
                 platforms:     .platforms,
                 platforms_json: .platforms_json,
-                base_image:    .base_image
+                base_image:    .base_image,
+                promotion_hold: .promotion_hold
               })
             }'
           }
@@ -345,6 +346,7 @@ jobs:
       platforms-json: ${{ matrix.platforms_json }}
       default-tag: ${{ matrix.published_tag }}
       publish: ${{ github.event_name != 'pull_request' }}
+      promote: ${{ !matrix.promotion_hold }}
       sbom: ${{ github.event_name != 'pull_request' }}
       pr-boot-verify: ${{ inputs.pr-boot-verify }}
     secrets:
@@ -403,6 +405,7 @@ jobs:
       platforms-json: ${{ matrix.platforms_json }}
       default-tag: ${{ matrix.published_tag }}
       publish: true
+      promote: ${{ !matrix.promotion_hold }}
       sbom: true
     secrets:
       TUNAOS_PUBLISH_USERNAME: ${{ secrets.TUNAOS_PUBLISH_USERNAME }}
@@ -447,6 +450,7 @@ jobs:
       platforms-json: ${{ matrix.platforms_json }}
       default-tag: ${{ matrix.published_tag }}
       publish: true
+      promote: ${{ !matrix.promotion_hold }}
       sbom: true
     secrets:
       TUNAOS_PUBLISH_USERNAME: ${{ secrets.TUNAOS_PUBLISH_USERNAME }}
@@ -485,6 +489,7 @@ jobs:
       platforms-json: ${{ matrix.platforms_json }}
       default-tag: ${{ matrix.published_tag }}
       publish: true
+      promote: ${{ !matrix.promotion_hold }}
       sbom: true
     secrets:
       TUNAOS_PUBLISH_USERNAME: ${{ secrets.TUNAOS_PUBLISH_USERNAME }}
