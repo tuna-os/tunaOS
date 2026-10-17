@@ -105,7 +105,7 @@ while IFS=$'\t' read -r variant emoji; do
 	unscored=$count
 	while IFS= read -r scan_id; do
 		((unscored > 0)) || break
-		stage_jobs=$(gh api --paginate "repos/${repo}/actions/runs/${scan_id}/jobs?per_page=100" \
+		stage_jobs=$(gh api --paginate "repos/${repo}/actions/runs/${scan_id}/jobs?per_page=50" \
 			--jq '.jobs[] | select((.name | endswith(" / Promote")) or (.name | endswith(" / Gate"))) | [.name, .conclusion] | @tsv')
 		for flavor in "${configured[@]}"; do
 			[[ -n "${promo_of[$flavor]:-}" ]] && continue
