@@ -283,6 +283,13 @@ packages:
       - name: tunaos-hummingbird
         baseurl: https://repo.tunaos.org/hummingbird/20251124-$basearch/
         priority: 5
+      # The same digest-pinned Utah repository supplies the GNOME closure used
+      # by the Tuna package target; its local priority must beat the network
+      # Hummingbird tier without weakening that tier's signature check.
+      - name: utah-packages
+        baseurl: file:///run/utah-packages
+        priority: 4
+        unsigned: true
     packages:
       - tuna-desktop-1.0.0~beta.1-1.bfin1
       - dbus-tools

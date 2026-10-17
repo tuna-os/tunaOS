@@ -285,6 +285,7 @@ FROM base-no-de AS tuna
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
+  --mount=type=bind,from=utah-packages,source=/repository,target=/run/utah-packages \
   /run/context/build_scripts/desktop/install-desktop.sh tuna
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \

@@ -86,11 +86,19 @@ def test_hummingbird_cell_uses_the_pinned_native_signed_target():
     manifest = yaml.safe_load((ROOT / "manifests/desktops/tuna.yaml").read_text())
     section = manifest["packages"]["hummingbird"]
     assert section["display_manager"] == "greetd"
-    assert section["repos"] == [{
-        "name": "tunaos-hummingbird",
-        "baseurl": "https://repo.tunaos.org/hummingbird/20251124-$basearch/",
-        "priority": 5,
-    }]
+    assert section["repos"] == [
+        {
+            "name": "tunaos-hummingbird",
+            "baseurl": "https://repo.tunaos.org/hummingbird/20251124-$basearch/",
+            "priority": 5,
+        },
+        {
+            "name": "utah-packages",
+            "baseurl": "file:///run/utah-packages",
+            "priority": 4,
+            "unsigned": True,
+        },
+    ]
     assert section["packages"][0] == "tuna-desktop-1.0.0~beta.1-1.bfin1"
     for package in (
         "dbus-tools", "orca", "greetd", "gtkgreet", "cage",
@@ -123,9 +131,9 @@ def test_hummingbird_cell_uses_the_pinned_native_signed_target():
         "sha256:91c0b8e23392ee8d95096820d07b133fcda27cb4e635e66f16ee56e25ceaf922"
     )
 
-    containerfile = (ROOT / "Containerfile.el10").read_text()
-    stage = containerfile.split("FROM base-no-de AS tuna\n", 1)[1]
+    stage = (ROOT / "Containerfile.el10").read_text().split("FROM base-no-de AS tuna\n", 1)[1]
     assert "install-desktop.sh tuna" in stage
+    assert "--mount=type=bind,from=utah-packages,source=/repository,target=/run/utah-packages" in stage
     base_packages = (ROOT / "build_scripts/10-base-packages.sh").read_text()
     hummingbird = base_packages.split(
         "if [[ $IS_HUMMINGBIRD == true ]]; then", 1
