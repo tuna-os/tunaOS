@@ -1662,3 +1662,20 @@ stopped more slowly passed.
 **Fix:** `iso-e2e.sh` always sets `TUNAOS_LUKS_NO_POWEROFF=1`. It takes the
 capture first, then sends the graceful powerdown itself before the kill.
 `tests/bats/test_luks_capture_before_powerdown.bats` holds that order.
+
+### Marlin Bluetooth is unavailable after boot (#3351)
+
+**Symptom:** On a booted `marlin:gnome` image, `rfkill` shows an unblocked
+Bluetooth adapter, but `bluetooth.service` is inactive with `preset: disabled`
+and `bluetoothctl` is not installed.
+
+**Measured cause:** `Containerfile.arch` installed `bluez` only indirectly
+through `fwupd` and did not install `bluez-utils`. Arch's
+`99-default.preset` is `disable *`, and neither the pacman service path nor
+the TunaOS preset enabled `bluetooth.service`.
+
+**Fix:** Declare `bluez` and `bluez-utils` in the Arch base package list,
+explicitly enable `bluetooth.service` in the pacman service path, and name it
+in `50-tunaos.preset` so first-boot preset application preserves the enable.
+`tests/regressions/test_issue_3351_marlin_bluetooth.py` guards all three
+contracts.

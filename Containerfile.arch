@@ -120,6 +120,8 @@ RUN KERNEL_PKG="linux"; \
         pipewire \
         wireplumber \
         flatpak \
+        bluez \
+        bluez-utils \
         fwupd \
         plymouth \
         power-profiles-daemon \

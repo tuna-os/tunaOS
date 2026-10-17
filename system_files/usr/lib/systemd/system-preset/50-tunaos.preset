@@ -46,6 +46,7 @@ enable tunaos-desktop-contract.service
 enable tunaos-live-ready.service
 
 # Boot-time hardware detection and first-boot setup.
+enable bluetooth.service
 enable tunaos-software-gl-detect.service
 enable tunaos-var-home-restorecon.service
 enable ublue-system-setup.service

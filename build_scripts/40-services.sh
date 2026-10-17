@@ -576,6 +576,9 @@ if [[ "${PKG_MGR:-}" == "pacman" ]] || command -v zypper &>/dev/null || command 
 	# which is built before this script runs.
 	tunaos_enable_network_manager
 
+	# Arch's default preset disables every service, so explicitly enable
+	# Bluetooth after installing bluez in Containerfile.arch.
+	safe_enable bluetooth.service
 	safe_enable tailscaled.service
 	safe_enable fwupd.service
 	systemctl --global enable podman-auto-update.timer 2>/dev/null || true
