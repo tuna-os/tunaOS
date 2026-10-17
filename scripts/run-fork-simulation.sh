@@ -59,6 +59,7 @@ for persona in "$@"; do
 		)
 
 		echo "::group::${workflow} — ${persona}"
+		act_log="$audit_dir/act.log"
 		set +e
 		timeout 35m act pull_request \
 			--workflows ".github/workflows/${workflow}" \
@@ -76,8 +77,9 @@ for persona in "$@"; do
 			--concurrent-jobs 1 \
 			--container-architecture linux/amd64 \
 			--platform "ubuntu-latest=${ACT_IMAGE}" \
-			--platform "ubuntu-24.04=${ACT_IMAGE}"
-		rc=$?
+			--platform "ubuntu-24.04=${ACT_IMAGE}" \
+			"${api_fixture[@]}" 2>&1 | tee "$act_log"
+		rc="${PIPESTATUS[0]}"
 		set -e
 		if [[ -s "$unexpected_log" ]]; then
 			echo "fixture rejected unexpected synthetic API calls:" >&2
@@ -107,7 +109,7 @@ for persona in "$@"; do
 			fi
 		done
 		if [[ "$workflow:$persona" == "just-fix.yml:first-time-external" ]] &&
-			! grep -Fq "This pull request comes from a fork" "$summary"; then
+			! grep -Fq "This pull request comes from a fork" "$act_log"; then
 			echo "fork fallback was not reached for the external just-fix simulation" >&2
 			[[ $rc -ne 0 ]] || rc=65
 		fi

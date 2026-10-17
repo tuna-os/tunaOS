@@ -102,6 +102,9 @@ def test_workflow_runs_real_steps_with_empty_secrets_and_reports_failures() -> N
     assert "SIMULATION_UNEXPECTED_LOG" in runner
     assert "/run/fork-simulation-audit/api.log" in runner
     assert "/run/fork-simulation-audit/unexpected.log" in runner
+    assert '"${api_fixture[@]}"' in runner
+    assert 'tee "$act_log"' in runner
+    assert 'PIPESTATUS[0]' in runner
     assert "audit_root" in runner
     assert ".fork-simulation-api.log" not in runner
     assert '--workflow "$workflow"' in runner
