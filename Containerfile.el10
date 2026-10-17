@@ -278,13 +278,14 @@ RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
 RUN rm -rf /opt && ln -s /var/opt /opt
 
 # Tuna Desktop on the RPM bases (tuna-os/tuna-desktop ADR 0008, epic #577):
-# EL10 (yellowfin, albacore, skipjack), Fedora 44 (bonito) and ELN (wahoo).
-# The package and the pieces their bases lack come from the TunaOS factory's
-# signed repositories, declared per target in manifests/desktops/tuna.yaml.
+# EL10, Fedora 44, Fedora Rawhide, ELN and Hummingbird. The package and the
+# pieces their bases lack come from each target's signed TunaOS repository,
+# declared per target in manifests/desktops/tuna.yaml.
 FROM base-no-de AS tuna
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
+  --mount=type=bind,from=utah-packages,source=/repository,target=/run/utah-packages \
   /run/context/build_scripts/desktop/install-desktop.sh tuna
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \

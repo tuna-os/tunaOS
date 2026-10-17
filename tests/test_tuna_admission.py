@@ -1,5 +1,6 @@
 """Tuna Desktop (formerly Roost) admission must preserve signed sourcing and an installed-session gate."""
 import hashlib
+import subprocess
 from pathlib import Path
 import yaml
 
@@ -31,7 +32,7 @@ def test_every_variant_has_an_explicit_tuna_rollout_record():
 def test_tuna_cells_are_amd64_images_without_iso_expansion():
     config = rollout()
     admitted = [v for v in config["variants"] if config["tuna_rollout"][v["id"]]["status"] == "admitted"]
-    assert {v["id"] for v in admitted} == {"marlin", "yellowfin", "albacore", "skipjack", "wahoo", "bonito", "bonito-rawhide", "grouper", "flounder", "flounder-sid", "sailfin"}
+    assert {v["id"] for v in admitted} == {"marlin", "yellowfin", "albacore", "skipjack", "wahoo", "bonito", "bonito-rawhide", "hummingbird", "grouper", "flounder", "flounder-sid", "sailfin"}
     for variant in admitted:
         flavor = next(f for f in variant["flavors"] if f["id"] == "tuna")
         assert flavor["stage"] == 2
@@ -81,6 +82,162 @@ def test_rpm_cells_install_the_pinned_beta_from_signed_factory_repositories():
     stage = containerfile.split("FROM base-no-de AS tuna\n", 1)[1]
     assert "install-desktop.sh tuna" in stage
 
+
+def test_hummingbird_cell_uses_the_pinned_native_signed_target():
+    manifest = yaml.safe_load((ROOT / "manifests/desktops/tuna.yaml").read_text())
+    section = manifest["packages"]["hummingbird"]
+    assert section["display_manager"] == "greetd"
+    assert section["repos"] == [
+        {
+            "name": "tunaos-hummingbird",
+            "baseurl": "https://repo.tunaos.org/hummingbird/20251124-$basearch/",
+            "priority": 5,
+        },
+        {
+            "name": "utah-packages",
+            "baseurl": "file:///run/utah-packages",
+            "priority": 4,
+            "unsigned": True,
+        },
+    ]
+    assert section["packages"][0] == "tuna-desktop-1.0.0~beta.1-1.bfin1"
+    for package in (
+        "dbus-tools", "orca", "greetd", "gtkgreet", "cage",
+        "xorg-x11-server-Xwayland", "ibus", "gnome-shell",
+        "evolution-data-server", "xdg-desktop-portal-gnome",
+        "xdg-desktop-portal-gtk", "gvfs", "nautilus", "NetworkManager",
+        "NetworkManager-wifi", "linux-firmware", "amd-gpu-firmware",
+        "intel-gpu-firmware", "iwlwifi-mvm-firmware", "wireless-regdb", "iw",
+        "pipewire", "wireplumber", "pipewire-gstreamer",
+        "gstreamer1-plugins-good", "gstreamer1-plugin-libav", "ffmpeg",
+        "tuned-ppd", "flatpak",
+    ):
+        assert package in section["packages"], package
+
+    config = rollout()
+    variant = next(v for v in config["variants"] if v["id"] == "hummingbird")
+    flavor = next(f for f in variant["flavors"] if f["id"] == "tuna")
+    assert flavor == {
+        "id": "tuna",
+        "stage": 2,
+        "platforms": ["linux/amd64"],
+        "build_image": True,
+        "build_iso": False,
+        "build_qcow2": False,
+        "luks_e2e": False,
+    }
+    assert variant["base_image"] == (
+        "quay.io/hummingbird-community/bootc-os:latest@"
+        "sha256:a3a06793169af39bf14f49f497ad243984343617ef22725507ddc66b4c8e9413"
+    )
+
+    stage = (ROOT / "Containerfile.el10").read_text().split("FROM base-no-de AS tuna\n", 1)[1]
+    assert "install-desktop.sh tuna" in stage
+    assert "--mount=type=bind,from=utah-packages,source=/repository,target=/run/utah-packages" in stage
+    base_packages = (ROOT / "build_scripts/10-base-packages.sh").read_text()
+    hummingbird = base_packages.split(
+        "if [[ $IS_HUMMINGBIRD == true ]]; then", 1
+    )[1].split("\nelif", 1)[0]
+    assert "gpgcheck=1" in hummingbird
+    assert "gpgkey=https://repo.tunaos.org/public.gpg" in hummingbird
+
+
+def test_hummingbird_bootstrap_waiver_excludes_admitted_tuna():
+    import re
+    import subprocess
+
+    script = (ROOT / "build_scripts/checks/verify-desktop-experience.sh").read_text()
+    guard = re.search(
+        r'if \[\[ "\$\{IS_HUMMINGBIRD:-false\}" == "true" && "\$\{desktop:-\}" != cosmic && "\$\{desktop:-\}" != tuna \]\]; then',
+        script,
+    )
+    assert guard, "the Hummingbird waiver must exclude admitted Tuna"
+    command = (
+        'IS_HUMMINGBIRD=true; desktop="$1"; '
+        f"{guard.group(0)} exit 0; else exit 1; fi"
+    )
+    for desktop, accepted in (("gnome", True), ("cosmic", False), ("tuna", False)):
+        result = subprocess.run(
+            ["bash", "-c", command, "waiver-test", desktop],
+            capture_output=True,
+            text=True,
+        )
+        assert (result.returncode == 0) is accepted, (desktop, result.stderr)
+
+
+def test_hummingbird_tuna_fails_direct_contract_checks():
+    import re
+    import subprocess
+
+    script = (ROOT / "build_scripts/checks/verify-desktop-experience.sh").read_text()
+    guards = re.findall(
+        r'(?m)^\s*((?:if|elif) \[\[ "\$\{IS_HUMMINGBIRD:-false\}" != "true" \|\| "\$\{desktop:-\}" == tuna \]\]; then)$',
+        script,
+    )
+    assert len(guards) >= 5, "the direct Hummingbird failure guards changed"
+    for guard in guards:
+        condition = guard.replace("elif ", "if ", 1)
+        command = (
+            'IS_HUMMINGBIRD=true; desktop="$1"; '
+            f"{condition} exit 0; else exit 1; fi"
+        )
+        for desktop, accepted in (("tuna", True), ("gnome", False)):
+            result = subprocess.run(
+                ["bash", "-c", command, "guard-test", desktop],
+                capture_output=True,
+                text=True,
+            )
+            assert (result.returncode == 0) is accepted, (guard, desktop)
+
+def _hummingbird_codec_block() -> str:
+    source = (ROOT / "build_scripts/checks/verify-desktop-experience.sh").read_text()
+    return source.split("\t# ── Codec baseline ──\n", 1)[1].split(
+        "\n\t# ── KDE version-skew guard", 1
+    )[0]
+
+
+def _run_hummingbird_tuna_codec_case(tmp_path: Path, *, decoders_rc: int):
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir(parents=True)
+    ffmpeg = bin_dir / "ffmpeg"
+    ffmpeg.write_text(
+        "#!/usr/bin/env bash\n"
+        'if [[ "$*" == *"-decoders"* ]]; then exit "$DECODERS_RC"; fi\n'
+        "exit 0\n"
+    )
+    ffmpeg.chmod(0o755)
+    script = "\n".join(
+        [
+            "set -euo pipefail",
+            "desktop=tuna",
+            "IS_HUMMINGBIRD=true",
+            "IS_ELN=false",
+            "TUNAOS_CONTRACT_WAIVED=0",
+            "waive() { TUNAOS_CONTRACT_WAIVED=$((TUNAOS_CONTRACT_WAIVED + 1)); }",
+            "require_any_glob() { :; }",
+            "require_command() { :; }",
+            _hummingbird_codec_block(),
+        ]
+    )
+    return subprocess.run(
+        ["bash", "-c", script],
+        capture_output=True,
+        text=True,
+        env={
+            "PATH": f"{bin_dir}:/usr/bin:/bin",
+            "DECODERS_RC": str(decoders_rc),
+        },
+    )
+
+
+def test_hummingbird_tuna_codec_failures_are_not_waived(tmp_path):
+    cannot_run = _run_hummingbird_tuna_codec_case(tmp_path / "cannot-run", decoders_rc=7)
+    assert cannot_run.returncode == 1, cannot_run.stdout + cannot_run.stderr
+    assert "would not run" in cannot_run.stderr
+
+    no_h264 = _run_hummingbird_tuna_codec_case(tmp_path / "no-h264", decoders_rc=0)
+    assert no_h264.returncode == 1, no_h264.stdout + no_h264.stderr
+    assert "cannot decode h264" in no_h264.stderr
 
 def test_apt_cells_install_the_pinned_beta_from_the_signed_tideforge_index_for_their_base():
     manifest = yaml.safe_load((ROOT / "manifests/desktops/tuna.yaml").read_text())

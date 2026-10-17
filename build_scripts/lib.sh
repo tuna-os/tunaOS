@@ -686,9 +686,15 @@ install_available() {
 		fi
 	done
 
-	local available=() missing=()
+	local available=() missing=() pkg
 	for pkg in "${pkgs[@]}"; do
-		if dnf repoquery --available --qf '%{name}\n' "$pkg" 2>/dev/null | grep -qx "$pkg"; then
+		# A version-qualified RPM spec is reported by repoquery as its bare
+		# name, so also compare the exact name-version-release tuple. Keep the
+		# original spec in available[] so dnf installs the requested version.
+		if dnf repoquery --available --qf '%{name}\n' "$pkg" 2>/dev/null |
+			grep -Fqx -- "$pkg" ||
+			dnf repoquery --available --qf '%{name}-%{version}-%{release}\n' "$pkg" 2>/dev/null |
+			grep -Fqx -- "$pkg"; then
 			available+=("$pkg")
 		else
 			missing+=("$pkg")

@@ -90,10 +90,9 @@ tuna_rollout:
   bonito: {status: admitted, package_target: fedora}
   wahoo: {status: admitted, package_target: eln}
   bonito-rawhide: {status: admitted, package_target: rawhide}
-  hummingbird:
-    status: unsupported
-    package_target: hummingbird
-    reason: "unsupported until package target hummingbird publishes tuna-desktop (tunaos-packages#832)"
+  # tunaos-packages#832 now publishes the exact beta.1 RPM in the Hummingbird
+  # build-chain repository; admit only the pinned base's amd64 cell below.
+  hummingbird: {status: admitted, package_target: hummingbird}
   sailfin: {status: admitted, package_target: opensuse}
   gurnard:
     status: unsupported
@@ -1236,6 +1235,18 @@ variants:
         stage: 2
         build_image: true
         build_iso: true
+      # Tuna Desktop (tunaOS#3200): tuna-desktop is built and signed by the
+      # Hummingbird build-chain target in the same Fedora 44 + public-hummingbird
+      # + utah-packages root as its native dependencies. The pinned bootc base
+      # remains amd64-only, and image/desktop/boot qualification is independent
+      # of the package target's aarch64 RPM.
+      - id: tuna
+        stage: 2
+        platforms: ["linux/amd64"]
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+        luks_e2e: false
 
   # ── Sailfin ──────────────────────────────────────────────────────────────
   # Sailfin Tumbleweed: rolling-release, zypper-based.

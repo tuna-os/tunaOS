@@ -262,6 +262,81 @@ packages:
       - dejavu-sans-fonts
       - liberation-fonts
 
+  # Fedora Hummingbird (hummingbird, tunaOS#3200). The Hummingbird build-chain
+  # target builds Tuna Desktop in Fedora 44 + public-hummingbird + utah-packages,
+  # then publishes the signed RPM into the same Hummingbird repository as its
+  # native dependencies (tunaos-packages#832). Do not route this through
+  # Tideforge: that would qualify a third-party root rather than the pinned
+  # bootc base.
+  #
+  # Served-package evidence from the published target (2026-10-16):
+  #   x86_64  run 38877631220  fea2c26e8494ac942bddbf4927792e5434a437a2981e99f683357481af46ac54
+  #   aarch64 run 38901123271  a1f98b089357369cc29083bf412d4c467b4a8ec77c0749b0a419d1baf758fe68
+  # The repository signing key is the TunaOS public key (fingerprint
+  # 4E5CC9F8B3B521793D95266E629BE6EA45188366); leaving `unsigned` absent keeps
+  # install-desktop.sh on gpgcheck=1. The pinned Hummingbird base is amd64-only,
+  # so only the independently qualified x86_64 cell is admitted below.
+
+  hummingbird:
+    display_manager: greetd
+    repos:
+      - name: tunaos-hummingbird
+        baseurl: https://repo.tunaos.org/hummingbird/20251124-$basearch/
+        priority: 5
+      # The same digest-pinned Utah repository supplies the GNOME closure used
+      # by the Tuna package target; its local priority must beat the network
+      # Hummingbird tier without weakening that tier's signature check.
+      - name: utah-packages
+        baseurl: file:///run/utah-packages
+        priority: 4
+        unsigned: true
+    packages:
+      - tuna-desktop-1.0.0~beta.1-1.bfin1
+      - dbus-tools
+      - orca
+      - greetd
+      - gtkgreet
+      - cage
+      - xorg-x11-server-Xwayland
+      - ibus
+      - gnome-shell
+      - gnome-settings-daemon
+      - gnome-control-center
+      - gnome-keyring
+      - evolution-data-server
+      - xdg-desktop-portal-gnome
+      - xdg-desktop-portal-gtk
+      - xdg-user-dirs
+      - gvfs
+      - nautilus
+      - ptyxis
+      - NetworkManager
+      # The desktop-less Hummingbird base omits this physical-hardware
+      # baseline; weak dependencies are disabled by the fallback installer.
+      - NetworkManager-wifi
+      - linux-firmware
+      - amd-gpu-firmware
+      - intel-gpu-firmware
+      - iwlwifi-mvm-firmware
+      - wireless-regdb
+      - iw
+      - libsecret
+      - pipewire
+      - wireplumber
+      - pipewire-gstreamer
+      - gstreamer1-plugins-good
+      - gstreamer1-plugin-libav
+      - ffmpeg
+      - tuned-ppd
+      - upower
+      - flatpak
+      - plymouth
+      - adwaita-icon-theme
+      - google-noto-sans-fonts
+      - google-noto-color-emoji-fonts
+      - dejavu-sans-fonts
+      - liberation-fonts
+
   # Ubuntu 26.04 (grouper), Debian sid (flounder-sid) and Debian 13 trixie
   # (flounder). Only tuna-desktop is a factory build, served from the signed
   # Tideforge apt index for each base (tunaos-packages#835, #836, #837);
