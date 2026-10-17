@@ -68,7 +68,7 @@ The configured image matrix now has 147 cells. Eleven of them are Tuna Desktop (
 
 `.github/green-criteria.yml` sets the bar. A cell is green only when every criterion that blocks it, and applies to it, has a current affirmative result. A criterion that nobody ran, nobody asserted, or that CI skipped renders ⬜, and it does not count as satisfied. These criteria block today: `builds`, `desktop`, `boots`, `parity`, `no_silent_omissions`. These are advisory — the sections below measure them, and they do not block yet: `install`, `lifecycle`, `rebuildable`, `arch_honesty`. Unimplemented: `iso`. To graduate a criterion, edit `enforcement:` in that file. This table and the README count then tighten with no code change.
 
-**87 of 147** published cells are composite-green.
+**89 of 147** published cells are composite-green.
 
 | Variant | gnome | kde | cosmic | niri | xfce |
 |---|:--:|:--:|:--:|:--:|:--:|
@@ -187,7 +187,7 @@ The sweep pulls the **published** image and runs the contract script against it 
 
 ## Bootc Lifecycle
 
-**39 of 52** cells green (52 tested, 0 never tested).
+**36 of 52** cells green (41 tested, 11 never tested).
 
 Validates bootc image update, rebase, rollback, alias resolution, and post-switch system contracts across published stream deployments.
 
@@ -195,11 +195,11 @@ Validates bootc image update, rebase, rollback, alias resolution, and post-switc
 |---|:--:|:--:|:--:|:--:|:--:|
 | **albacore** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **bonito** | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **bonito-rawhide** | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **bonito-rawhide** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | **flounder** | ✅ | ✅ | — | — | ✅ |
-| **flounder-sid** | ❌ | ❌ | — | — | ❌ |
+| **flounder-sid** | ⬜ | ⬜ | — | — | ⬜ |
 | **grouper** | ✅ | ✅ | ✅ | — | ✅ |
-| **guppy** | ✅ | ✅ | — | — | ✅ |
+| **guppy** | ⬜ | ⬜ | — | — | ⬜ |
 | **gurnard** | — | — | — | — | — |
 | **hummingbird** | ❌ | ❌ | ❌ | ❌ | — |
 | **marlin** | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -243,14 +243,14 @@ The run that last asserted each verdict above. A re-run of a cell moves a row he
 
 | Date | Run | Cells |
 |---|---|---|
-| 2026-10-15 | [38713238238](https://github.com/tuna-os/tunaOS/actions/runs/38713238238) | 112 |
+| 2026-10-15 | [38713238238](https://github.com/tuna-os/tunaOS/actions/runs/38713238238) | 90 |
 | 2026-10-08 | [37771441491](https://github.com/tuna-os/tunaOS/actions/runs/37771441491) | 1 |
 | 2026-10-01 | [36875090451](https://github.com/tuna-os/tunaOS/actions/runs/36875090451) | 11 |
 | 2026-10-01 | [36873532817](https://github.com/tuna-os/tunaOS/actions/runs/36873532817) | 98 |
 | 2026-09-10 | [34487443208](https://github.com/tuna-os/tunaOS/actions/runs/34487443208) | 5 |
 | 2026-09-10 | [34479027185](https://github.com/tuna-os/tunaOS/actions/runs/34479027185) | 1 |
-| 2026-09-10 | [34459513536](https://github.com/tuna-os/tunaOS/actions/runs/34459513536) | 5 |
-| 2026-09-03 | [33737812664](https://github.com/tuna-os/tunaOS/actions/runs/33737812664) | 5 |
+| 2026-09-10 | [34459513536](https://github.com/tuna-os/tunaOS/actions/runs/34459513536) | 3 |
+| 2026-09-03 | [33737812664](https://github.com/tuna-os/tunaOS/actions/runs/33737812664) | 2 |
 | 2026-09-01 | [33506738063](https://github.com/tuna-os/tunaOS/actions/runs/33506738063) | 15 |
 | 2026-08-20 | [32335146969](https://github.com/tuna-os/tunaOS/actions/runs/32335146969) | 2 |
 | 2026-08-19 | [32238167029](https://github.com/tuna-os/tunaOS/actions/runs/32238167029) | 38 |
