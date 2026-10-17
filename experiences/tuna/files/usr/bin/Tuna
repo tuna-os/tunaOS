@@ -1,0 +1,16 @@
+#!/bin/sh
+# Session entry behind the greeter's "Tuna Desktop" choice (tunaOS#3110).
+#
+# gtkgreet has no display-name field: it lists /etc/greetd/environments
+# verbatim, and greetd runs the chosen line as `exec <line>` after sourcing
+# the login profile. Listing the session by its name, "Tuna Desktop", so
+# runs this command with the single argument "Desktop"; it starts the same
+# supervisor as /usr/share/wayland-sessions/tuna.desktop (Exec=tuna-session).
+if [ "$#" -ne 1 ] || [ "$1" != Desktop ]; then
+	echo "usage: Tuna Desktop  (the greetd session entry for Tuna Desktop)" >&2
+	exit 64
+fi
+# greetd opens a tty-type logind session and, unlike GDM, does not set the
+# session type from the session entry; the session is Wayland.
+export XDG_SESSION_TYPE=wayland
+exec tuna-session

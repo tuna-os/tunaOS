@@ -27,6 +27,44 @@ trap emit_fail_on_early_exit EXIT
 source /run/context/build_scripts/lib.sh 2>/dev/null || true
 detected_os 2>/dev/null || true
 
+# Tuna Desktop ships on Arch (pacman), the RPM bases and the apt bases (dpkg).
+# Query the native database for installed names and file owners, never
+# virtual provides or a repository's availability (adapted from tunaOS#3194).
+tuna_package_backend() {
+	if command -v pacman >/dev/null 2>&1; then
+		echo pacman
+	# An rpm binary alone (installable on Debian) is not an RPM base.
+	elif command -v rpm >/dev/null 2>&1 && rpm -q rpm >/dev/null 2>&1; then
+		echo rpm
+	elif command -v dpkg-query >/dev/null 2>&1; then
+		echo dpkg
+	else
+		echo "no supported Tuna package backend (pacman, rpm or dpkg) in this image" >&2
+		return 1
+	fi
+}
+
+tuna_installed_package_names() {
+	case "$1" in
+	pacman) pacman -Qq ;;
+	rpm) rpm -qa --qf '%{NAME}\n' ;;
+	# Installed only, read from the second (state) character: the first is the
+	# selection, so a held install is `hi`, and removed-but-not-purged is `rc`.
+	dpkg) dpkg-query -W -f '${db:Status-Abbrev} ${Package}\n' | awk 'substr($1, 2, 1) == "i" { print $2 }' ;;
+	*) return 1 ;;
+	esac
+}
+
+tuna_installed_file_owner() {
+	case "$1" in
+	pacman) pacman -Qqo "$2" ;;
+	rpm) rpm -qf --qf '%{NAME}\n' "$2" ;;
+	# `dpkg -S` prints "<package>[:<arch>]: <path>".
+	dpkg) dpkg -S "$2" | sed -n '1s/[:,].*//p' ;;
+	*) return 1 ;;
+	esac
+}
+
 # How many requirements the hummingbird exemption let through.
 #
 # Every require_* below returns 0 instead of exiting when IS_HUMMINGBIRD is
@@ -479,8 +517,9 @@ tuna)
 	experience="tunaos/tuna"
 	# The package is tuna-desktop (formerly roost, tuna-desktop#536). It must
 	# be what is installed, and nothing may still need the old package name.
-	# Compare exact names: `pacman -Q` on the old name would match
-	# tuna-desktop through its provides=roost and pass for the wrong reason.
+	# Compare exact names from the native database: `pacman -Q`/`rpm -q` on
+	# the old name would match tuna-desktop through its provides=roost and
+	# pass for the wrong reason.
 	tuna_backend="$(tuna_package_backend)"
 	installed_packages="$(tuna_installed_package_names "$tuna_backend")"
 	grep -qx 'tuna-desktop' <<<"$installed_packages" || {
@@ -495,7 +534,7 @@ tuna)
 		require_command "$binary"
 		"$binary" --version
 		[[ "$(tuna_installed_file_owner "$tuna_backend" "/usr/bin/$binary")" == tuna-desktop ]] || {
-			echo "Tuna binary is not owned by the installed tuna-desktop package: $binary" >&2
+			echo "/usr/bin/$binary is not owned by the installed tuna-desktop package" >&2
 			exit 1
 		}
 	done
@@ -527,8 +566,14 @@ tuna)
 	grep -qx 'Exec=tuna-session' /usr/share/wayland-sessions/roost.desktop
 	grep -qx 'NoDisplay=true' /usr/share/wayland-sessions/roost.desktop
 	require_glob '/etc/pam.d/roost-lock'
+	# gtkgreet lists environments lines verbatim, so the picker must show
+	# the session's name, and greetd's `exec <line>` must reach the same
+	# supervisor as tuna.desktop (tunaOS#3110).
 	require_glob '/etc/greetd/environments'
-	grep -qx 'tuna-session' /etc/greetd/environments
+	grep -qx 'Tuna Desktop' /etc/greetd/environments
+	grep -qx 'Name=Tuna Desktop' /usr/share/wayland-sessions/tuna.desktop
+	require_command Tuna
+	grep -qx 'exec tuna-session' "$(command -v Tuna)"
 	require_glob '/usr/share/xdg-desktop-portal/tuna-portals.conf'
 	require_glob '/usr/share/xdg-desktop-portal/portals/tuna.portal'
 	grep -qx 'DBusName=org.freedesktop.impl.portal.desktop.tuna' /usr/share/xdg-desktop-portal/portals/tuna.portal
@@ -538,14 +583,58 @@ tuna)
 		require_portal_preference /usr/share/xdg-desktop-portal/tuna-portals.conf "org.freedesktop.impl.portal.$portal" gnome
 	done
 	require_portal_preference /usr/share/xdg-desktop-portal/tuna-portals.conf org.freedesktop.impl.portal.Access gtk
-	require_any_glob '/usr/lib/gnome-shell-calendar-server' '/usr/libexec/gnome-shell-calendar-server'
+	# Arch ships it under /usr/lib, Fedora, EL and Debian under /usr/libexec,
+	# openSUSE under /usr/libexec/gnome-shell (gnome-shell-calendar). The
+	# shell reaches it by D-Bus activation, so the path is the package's.
+	require_any_glob '/usr/lib/gnome-shell-calendar-server' '/usr/libexec/gnome-shell-calendar-server' '/usr/libexec/gnome-shell/gnome-shell-calendar-server'
 	require_command ibus-daemon
+	require_command orca
 	require_command gnome-keyring-daemon
+	# beta.1 starts graphical-session.target only after this import succeeds;
+	# without it every portal fails (tuna-os/tuna-desktop#691).
+	require_command dbus-update-activation-environment
 	require_command wpctl
 	require_command gtkgreet
 	require_command cage
 	require_any_glob '/usr/libexec/xdg-desktop-portal-gnome' '/usr/lib/xdg-desktop-portal-gnome'
 	require_any_glob '/usr/libexec/xdg-desktop-portal-gtk' '/usr/lib/xdg-desktop-portal-gtk'
+	# Power profiles on the Fedora and EL bases come from tuned-ppd, the
+	# provider their GNOME flavors ship; Arch, openSUSE and the apt bases use
+	# power-profiles-daemon, as their GNOME flavors do. Either one answers the
+	# Quick Settings power-mode API.
+	if [[ "$tuna_backend" == rpm ]] && ! command -v zypper >/dev/null 2>&1; then
+		grep -qx 'tuned-ppd' <<<"$installed_packages" || {
+			echo "tuned-ppd is not installed; the Tuna power-mode menu has no provider" >&2
+			exit 1
+		}
+	else
+		grep -qx 'power-profiles-daemon' <<<"$installed_packages" || {
+			echo "power-profiles-daemon is not installed; the Tuna power-mode menu has no provider" >&2
+			exit 1
+		}
+	fi
+	# No SSH host keys baked into the image (tunaOS#3287): every install would
+	# share them. 99-cleanup.sh drops them where the machine regenerates its
+	# own. Build time only; a booted machine has its generated keys.
+	if [[ "$mode" != --runtime ]] && compgen -G '/etc/ssh/ssh_host_*' >/dev/null; then
+		echo "the image ships SSH host keys:" /etc/ssh/ssh_host_* >&2
+		exit 1
+	fi
+	# Another display manager's preset (gdm, installed because gnome-shell
+	# requires its gdm-libs) takes display-manager.service and VT1, and greetd
+	# then dies with EPERM on the terminal. Catch it at build time, not at the
+	# boot gate.
+	tuna_dm="$(readlink -f /etc/systemd/system/display-manager.service 2>/dev/null || true)"
+	[[ "${tuna_dm##*/}" == greetd.service ]] || {
+		echo "display-manager.service is '${tuna_dm:-unset}', not greetd.service" >&2
+		exit 1
+	}
+	if [[ -f /usr/lib/systemd/system/gdm.service ]]; then
+		[[ "$(readlink /etc/systemd/system/gdm.service 2>/dev/null || true)" == /dev/null ]] || {
+			echo "gdm.service is installed beside greetd but not masked; a first-boot preset would start it on VT1" >&2
+			exit 1
+		}
+	fi
 	require_unit greetd
 	dm_pattern='^greetd\.service$'
 	;;
@@ -580,24 +669,17 @@ cosmic)
 	# GNOME/KDE/XFCE were held to: measure the manifest first, then require.
 	#
 	# cosmic-files and xdg-desktop-portal-cosmic are explicit, non-optional
-	# entries in manifests/desktops/cosmic.yaml's apt, fedora and zypper
+	# entries in manifests/desktops/cosmic.yaml's apt, fedora, el10 and zypper
 	# sections, and in cosmic-arch.yaml's pacman section — the same bar
 	# dolphin/konsole (kde) and thunar (xfce) were required on ("explicit in
 	# every manifest section that builds"). Without a file manager COSMIC is
 	# not merely sparse, it is unusable the same way sailfin:gnome was
 	# (tunaos-packages#132, the issue that started this whole contract).
 	#
-	# el10 (yellowfin/albacore/skipjack/redfin) is deliberately excluded:
-	# there both packages come from the yselkowitz/cosmic-epel COPR
-	# (cosmic.yaml's el10.copr section), and install-desktop.sh installs
-	# every copr block with `|| true` (the exact "COPR packages" step,
-	# distinct from the regular `dnf_retry -y install` used for fedora/apt/
-	# zypper/pacman, which has no such fallback) — a flaky COPR there can
-	# legitimately produce a build that has always shipped correctly. The
-	# condition below reproduces install-desktop.sh's own _TD_OS="el10"
-	# fallback exactly (dnf-based, not Fedora, not Hummingbird) rather than
-	# re-deriving it from a distro-name enumeration that could drift out of
-	# sync with the real branching logic.
+	# el10 used to be excluded because both packages came from the
+	# best-effort yselkowitz/cosmic-epel COPR block; since #3132 they come
+	# from the Tideforge tier repo as plain required packages, so el10 is
+	# held to the same bar.
 	#
 	# Binary path for cosmic-files confirmed live (mdapi.fedoraproject.org
 	# rawhide file list, 2026-08-08): /usr/bin/cosmic-files, so a plain PATH
@@ -613,14 +695,10 @@ cosmic)
 	# so the next person knows which half of this is live-verified and which
 	# is carried over from an already-established pattern, same as this
 	# file's own stated rule asks for.
-	if [[ "${PKG_MGR:-}" == "dnf" && "${IS_FEDORA:-false}" != true && "${IS_HUMMINGBIRD:-false}" != true ]]; then
-		echo "info: skipping cosmic-files/xdg-desktop-portal-cosmic on the el10 family — cosmic.yaml sources them from a best-effort COPR here (tunaOS#916)"
-	else
-		require_command cosmic-files
-		require_any_glob \
-			'/usr/libexec/xdg-desktop-portal-cosmic' \
-			'/usr/lib/xdg-desktop-portal-cosmic'
-	fi
+	require_command cosmic-files
+	require_any_glob \
+		'/usr/libexec/xdg-desktop-portal-cosmic' \
+		'/usr/lib/xdg-desktop-portal-cosmic'
 	# cosmic-greeter.service is accepted alongside greetd.service because it is
 	# greetd: `ExecStart=greetd --config /etc/greetd/cosmic-greeter.toml`, with
 	# `Provides: x-display-manager` and `Pre-Depends: greetd` on the deb. On

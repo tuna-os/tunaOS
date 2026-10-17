@@ -21,6 +21,10 @@ COPY manifests /manifests
 COPY build_scripts /build_scripts
 COPY system_files /files
 COPY system_files_overrides /overrides
+# Only Tuna's curated files: install-desktop.sh applies experiences/<desktop>
+# whenever it is present, and the other desktops' trees are not part of this
+# image today.
+COPY experiences/tuna /experiences/tuna
 
 FROM ${COMMON_IMAGE_REF} AS common
 
@@ -385,3 +389,8 @@ FROM desktop AS xfce
 # `The target "cosmic" was not found in the provided Dockerfile` (#1012)
 # before it could reach the packages that were already staged for it.
 FROM desktop AS cosmic
+
+# Tuna Desktop (tuna-os/tuna-desktop ADR 0008, epic #577; tunaOS#3201).
+# tuna-desktop comes from the factory's signed opensuse-tumbleweed index,
+# declared in manifests/desktops/tuna.yaml; everything else is Tumbleweed's.
+FROM desktop AS tuna
