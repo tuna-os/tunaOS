@@ -128,7 +128,22 @@ Skipped cells and cells with no test do not count as green. The full per-axis bo
 For local media builds, signature and SBOM checks, registry authentication,
 and pull help, read [docs/INSTALL.md](docs/INSTALL.md).
 
+<!-- hive-contribute-plea: donated-compute appeal, keep in sync across repos -->
+## Contribute compute — no code needed
+
+**[Donate time with your AI CLI](https://hub.tunaos.org/#contribute).**
+
+Your machine runs one task at a time using your signed-in AI coding CLI.
+The relay alternates between eligible **School** (OS) and **Reef** (apps)
+hives after each task. If one hive has no work, the other can continue.
+
+The guide covers prerequisites, verified `just` setup, credentials, provider
+costs, and how to stop with Ctrl+C. Your subscription quota or API charges apply.
+Never post account credentials or API keys in issues or pull requests.
+
 ## Contributing
+
+**[Contribute through Hive](https://hub.tunaos.org/#contribute)** to donate time with your AI CLI.
 
 Contributions welcome! See [`CONTRIBUTING.md`](CONTRIBUTING.md) for development
 environment setup, the build workflow and pre-commit checklist, pull request
@@ -136,6 +151,7 @@ guidelines, and an architecture overview.
 
 ## Community and support
 
+- **Contribute through Hive:** [Donate time with your AI CLI](https://hub.tunaos.org/#contribute)
 - 🐛 **Report Issues:** [GitHub Issues](https://github.com/tuna-os/tunaOS/issues)
 - [m] **Chat**: [#tunaos:reilly.asia](https://matrix.to/#/%23tunaos:reilly.asia)
 - 🎮 **Discord:** [TunaOS](https://discord.gg/MXSTqB8Nv)
@@ -173,24 +189,8 @@ The full index of every guide, policy, and project plan is at
 <img width="100" height="130" alt="Bootc_Logo" src="https://raw.githubusercontent.com/containers/common/main/logos/bootc-logo-full-vert.png" />
 </a>
 
----
-
-This repository and many [tuna-os](https://github.com/tuna-os) repositories
-use **[Hive](https://hive.tunaos.org)** for development and maintenance. Hive
-is a development platform for AI agents. It uses
-[KubeStellar](https://kubestellar.io/) for orchestration.
-
----
-
 *Inspired by [Bluefin](https://projectbluefin.io) and the [Universal Blue](https://universal-blue.org/) Community*
 
 *Licensed under [Apache 2.0](https://github.com/tuna-os/tunaOS/blob/main/LICENSE)*
 
 </div>
-
-<!-- hive-contribute-plea: donated-compute appeal, keep in sync across repos -->
-## Contribute compute — no code needed
-
-No time to write code? You can still push this project's backlog forward. A TunaOS AI-agent hive works on this repository. Lend the hive your AI subscription or API tokens, and your machine runs tasks from this project's backlog.
-
-- 🏫 [Contribute compute to the school hive](https://school.tunaos.org/contribute)
