@@ -1603,6 +1603,20 @@ GNOME 49 is below the floor: nothing below GNOME 50 ships
 
 **Fix:** Workflows and composite actions use the `.github/actions/setup-yq` action. That action downloads yq `v4.53.3` and checks its SHA-256 value before it installs the file. It installs the file to `/usr/local/bin`, which comes before the runner image's `/usr/bin/yq` on `PATH`, and then fails the step if the yq on `PATH` does not report exactly `v4.53.3`. The test `tests/regressions/test_issue_2071_yq_downloads_are_pinned.py` checks each yq download in the workflows and actions.
 
+### Desktop image builds download an unverified yq release asset (#3329)
+
+**Symptom:** A manifest-driven desktop build downloads `yq` into
+`/usr/bin/yq` before parsing the desktop manifest.
+
+**Measured cause:** `build_scripts/desktop/install-desktop.sh` used a pinned
+release URL but did not verify the release asset. A changed or compromised
+asset could therefore execute as root inside the image build.
+
+**Fix:** The installer now accepts only `x86_64` and `aarch64`, checks the
+architecture-specific SHA-256 for yq `v4.53.3`, and renames the verified file
+atomically into `/usr/bin/yq`. `tests/regressions/test_issue_3329_yq_downloads_are_verified.py`
+holds the download, checksum, and install ordering.
+
 ### AI porting agent executes untrusted upstream diffs with write token
 
 **Symptom:** Scheduled watch workflows send third-party commit diffs to LLM agents with write permissions. The agent commits and pushes branches without review.
