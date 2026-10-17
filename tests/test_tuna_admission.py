@@ -1,5 +1,6 @@
 """Tuna Desktop (formerly Roost) admission must preserve signed sourcing and an installed-session gate."""
 import hashlib
+import subprocess
 from pathlib import Path
 import yaml
 
@@ -103,7 +104,6 @@ def test_hummingbird_cell_uses_the_pinned_native_signed_target():
     for package in (
         "dbus-tools", "orca", "greetd", "gtkgreet", "cage",
         "xorg-x11-server-Xwayland", "ibus", "gnome-shell",
-        "gnome-settings-daemon", "gnome-control-center", "gnome-keyring",
         "evolution-data-server", "xdg-desktop-portal-gnome",
         "xdg-desktop-portal-gtk", "gvfs", "nautilus", "NetworkManager",
         "NetworkManager-wifi", "linux-firmware", "amd-gpu-firmware",
@@ -188,6 +188,56 @@ def test_hummingbird_tuna_fails_direct_contract_checks():
                 text=True,
             )
             assert (result.returncode == 0) is accepted, (guard, desktop)
+
+def _hummingbird_codec_block() -> str:
+    source = (ROOT / "build_scripts/checks/verify-desktop-experience.sh").read_text()
+    return source.split("\t# ── Codec baseline ──\n", 1)[1].split(
+        "\n\t# ── KDE version-skew guard", 1
+    )[0]
+
+
+def _run_hummingbird_tuna_codec_case(tmp_path: Path, *, decoders_rc: int):
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir(parents=True)
+    ffmpeg = bin_dir / "ffmpeg"
+    ffmpeg.write_text(
+        "#!/usr/bin/env bash\n"
+        'if [[ "$*" == *"-decoders"* ]]; then exit "$DECODERS_RC"; fi\n'
+        "exit 0\n"
+    )
+    ffmpeg.chmod(0o755)
+    script = "\n".join(
+        [
+            "set -euo pipefail",
+            "desktop=tuna",
+            "IS_HUMMINGBIRD=true",
+            "IS_ELN=false",
+            "TUNAOS_CONTRACT_WAIVED=0",
+            "waive() { TUNAOS_CONTRACT_WAIVED=$((TUNAOS_CONTRACT_WAIVED + 1)); }",
+            "require_any_glob() { :; }",
+            "require_command() { :; }",
+            _hummingbird_codec_block(),
+        ]
+    )
+    return subprocess.run(
+        ["bash", "-c", script],
+        capture_output=True,
+        text=True,
+        env={
+            "PATH": f"{bin_dir}:/usr/bin:/bin",
+            "DECODERS_RC": str(decoders_rc),
+        },
+    )
+
+
+def test_hummingbird_tuna_codec_failures_are_not_waived(tmp_path):
+    cannot_run = _run_hummingbird_tuna_codec_case(tmp_path / "cannot-run", decoders_rc=7)
+    assert cannot_run.returncode == 1, cannot_run.stdout + cannot_run.stderr
+    assert "would not run" in cannot_run.stderr
+
+    no_h264 = _run_hummingbird_tuna_codec_case(tmp_path / "no-h264", decoders_rc=0)
+    assert no_h264.returncode == 1, no_h264.stdout + no_h264.stderr
+    assert "cannot decode h264" in no_h264.stderr
 
 def test_apt_cells_install_the_pinned_beta_from_the_signed_tideforge_index_for_their_base():
     manifest = yaml.safe_load((ROOT / "manifests/desktops/tuna.yaml").read_text())

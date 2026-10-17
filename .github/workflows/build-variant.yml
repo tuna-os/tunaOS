@@ -314,6 +314,9 @@ jobs:
       platforms-json: ${{ matrix.platforms_json }}
       default-tag: ${{ matrix.published_tag }}
       publish: true
+      # Hummingbird Tuna remains a testing image until the #3200 release
+      # qualification and owner gate are recorded.
+      promote: ${{ matrix.variant != 'hummingbird' || matrix.flavor != 'tuna' }}
       sbom: true
 
   # ── Stage 3: Desktop HWE and nvidia flavors ───────────────────────────────────
