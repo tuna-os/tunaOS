@@ -44,6 +44,10 @@ env:
   # not for a fortnight. If nothing shipped AND the newest published release
   # is older than this, the Releases page is rotting and the run goes red.
   MAX_RELEASE_AGE_DAYS: "8"
+concurrency:
+  group: generate-release-${{ github.repository }}-${{ github.ref }}
+  cancel-in-progress: false
+
 
 jobs:
   generate-release:
@@ -328,6 +332,65 @@ jobs:
               {"sbom_name": "pipewire",      "label": "PipeWire"}
             ]
           github-token: ${{ github.token }}
+
+      # create-release owns the changelog/release card. A retry may repair a
+      # release whose first report append failed, but it must derive identity
+      # from that release's body and attached SPDX inventory, never today's tag.
+      - name: Append release verification report
+        if: >-
+          steps.check.outputs.skip == 'false' &&
+          inputs.dry_run != true &&
+          (steps.release.outcome == 'success' || steps.existing.outputs.exists == 'true')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO:      ${{ github.repository }}
+          TAG:       ${{ steps.vars.outputs.tag }}
+          STREAM:    ${{ steps.vars.outputs.stream }}
+        run: |
+          set -euo pipefail
+          gh release view "$TAG" --repo "$REPO" --json body -q .body > release-body.md
+          if grep -Fq '<!-- release-verification:start -->' release-body.md; then
+            echo "Release ${TAG} already carries its verification snapshot"
+            exit 0
+          fi
+
+          # Always read the evidence from the published release. A concurrent
+          # create-release invocation can win after the earlier existence check,
+          # so current-build outputs are not authoritative even on the
+          # `steps.existing == false` path.
+          rm -rf _release-evidence
+          mkdir _release-evidence
+          gh release download "$TAG" --repo "$REPO" --dir _release-evidence \
+            --pattern '*.spdx.json'
+          mapfile -t SBOMS < <(find _release-evidence -type f -name '*.spdx.json')
+          if [[ "${#SBOMS[@]}" -ne 1 ]]; then
+            echo "::error::release ${TAG} must have exactly one attached SPDX inventory"
+            exit 1
+          fi
+          SBOM_PACKAGES=$(jq '(.packages // []) | length' "${SBOMS[0]}")
+          if [[ "$SBOM_PACKAGES" -lt "$SBOM_MIN_PACKAGES" ]]; then
+            echo "::error::release ${TAG} attached SPDX inventory is an unusable stub"
+            exit 1
+          fi
+          mapfile -t STORED < <(
+            python3 scripts/render-release-verification.py \
+              --stored-identity release-body.md
+          )
+          if [[ "${#STORED[@]}" -ne 2 ]]; then
+            echo "::error::could not recover original image identity from ${TAG}"
+            exit 1
+          fi
+          IMAGE="${STORED[0]}:${STREAM}"
+          DIGEST="${STORED[1]}"
+
+          python3 scripts/render-release-verification.py \
+            --image "$IMAGE" \
+            --digest "$DIGEST" \
+            --sbom-packages "$SBOM_PACKAGES" \
+            --body release-body.md \
+            --output release-body-with-verification.md
+          gh release edit "$TAG" --repo "$REPO" \
+            --notes-file release-body-with-verification.md
 
       # projectbluefin/actions/bootc-build/create-release has no note-injection
       # input (tunaos#1398 — a `handwritten:` input here was silently ignored,

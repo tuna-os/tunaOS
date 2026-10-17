@@ -159,6 +159,129 @@ class RunWalkPicksTheNewestAuthoritativeResult(unittest.TestCase):
         ]}
         self.assertEqual(self._fetch(runs, jobs), {})
 
+    def test_targeted_rerun_does_not_advance_full_sweep_date(self):
+        runs = [
+            {"databaseId": 2, "createdAt": "2026-08-06T00:00:00Z", "status": "completed"},
+            {"databaseId": 1, "createdAt": "2026-08-05T00:00:00Z", "status": "completed"},
+        ]
+        jobs = {
+            "2": [{"name": "cell a", "conclusion": "success"}],
+            "1": [
+                {"name": "cell a", "conclusion": "failure"},
+                {"name": "cell b", "conclusion": "success"},
+            ],
+        }
+
+        def fake(*args):
+            if args[0:2] == ("run", "list"):
+                return runs
+            if args[0:2] == ("run", "view"):
+                return {"jobs": jobs[args[2]]}
+            return None
+
+        with mock.patch.object(gms, "gh_json", side_effect=fake):
+            results, full_sweep = gms._collect_latest_results(
+                "wf.yml",
+                r"^cell ",
+                {"cell a", "cell b"},
+                lambda name: name,
+            )
+        self.assertEqual(results["cell a"], ("success", "2026-08-06", "2"))
+        self.assertEqual(full_sweep, "2026-08-05")
+
+    def test_history_walk_continues_after_full_sweep_coverage(self):
+        runs = [
+            {"databaseId": 3, "createdAt": "2026-08-07T00:00:00Z", "status": "completed"},
+            {"databaseId": 2, "createdAt": "2026-08-06T00:00:00Z", "status": "completed"},
+            {"databaseId": 1, "createdAt": "2026-08-05T00:00:00Z", "status": "completed"},
+        ]
+        jobs = {
+            "3": [{"name": "cell a", "conclusion": "success"}],
+            "2": [
+                {"name": "cell a", "conclusion": "failure"},
+                {"name": "cell b", "conclusion": "success"},
+            ],
+            "1": [{"name": "cell c", "conclusion": "success"}],
+        }
+
+        def fake(*args):
+            if args[0:2] == ("run", "list"):
+                return runs
+            if args[0:2] == ("run", "view"):
+                return {"jobs": jobs[args[2]]}
+            return None
+
+        with mock.patch.object(gms, "gh_json", side_effect=fake):
+            results, full_sweep = gms._collect_latest_results(
+                "wf.yml", r"^cell ", {"cell a", "cell b"},
+                lambda name: name,
+            )
+        self.assertEqual(full_sweep, "2026-08-06")
+        self.assertIn("cell c", results)
+
+
+
+    def test_lifecycle_full_sweep_requires_every_architecture_leg(self):
+        runs = [
+            {"databaseId": 2, "createdAt": "2026-08-06T00:00:00Z", "status": "completed"},
+            {"databaseId": 1, "createdAt": "2026-08-05T00:00:00Z", "status": "completed"},
+        ]
+        jobs = {
+            "2": [{"name": "yellowfin:gnome (amd64)", "conclusion": "success"}],
+            "1": [{"name": "yellowfin:gnome (arm64)", "conclusion": "failure"}],
+        }
+
+        def fake(*args):
+            if args[0:2] == ("run", "list"):
+                return runs
+            if args[0:2] == ("run", "view"):
+                return {"jobs": jobs[args[2]]}
+            return None
+
+        expected = {"yellowfin:gnome (amd64)", "yellowfin:gnome (arm64)"}
+        with mock.patch.object(gms, "gh_json", side_effect=fake):
+            results, full_sweep = gms._collect_latest_results(
+                "bootc-lifecycle.yml",
+                r":",
+                expected,
+                lambda name: name if gms._LIFECYCLE_NAME.match(name) else None,
+            )
+        self.assertEqual(full_sweep, "")
+        self.assertEqual(gms.lifecycle_results(results)["yellowfin:gnome"][0], "failure")
+
+    def test_beta_existence_probes_are_excluded_from_full_sweep(self):
+        runs = [
+            {"databaseId": 1, "createdAt": "2026-08-06T00:00:00Z", "status": "completed"},
+        ]
+        jobs = {
+            "1": [
+                {"name": "BETA guppy:gnome (amd64)", "conclusion": "success"},
+                {"name": "bonito-rawhide:gnome (amd64)", "conclusion": "success"},
+            ]
+        }
+
+        def fake(*args):
+            if args[0:2] == ("run", "list"):
+                return runs
+            if args[0:2] == ("run", "view"):
+                return {"jobs": jobs[args[2]]}
+            return None
+
+        expected = {"guppy:gnome (amd64)", "bonito-rawhide:gnome (amd64)"}
+        with mock.patch.object(gms, "gh_json", side_effect=fake):
+            _, full_sweep = gms._collect_latest_results(
+                "bootc-lifecycle.yml",
+                r":",
+                expected,
+                gms.lifecycle_sweep_job_key,
+            )
+        self.assertEqual(full_sweep, "")
+        self.assertIsNone(gms.lifecycle_sweep_job_key("BETA guppy:gnome (amd64)"))
+        self.assertEqual(
+            gms.lifecycle_sweep_job_key("bonito-rawhide:gnome (amd64)"),
+            "bonito-rawhide:gnome (amd64)",
+        )
+
 
 class ApiOutageCurrentlyDegradesSilently(unittest.TestCase):
     """Characterises a gap between the module docstring and the behaviour.

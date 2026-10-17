@@ -15,7 +15,7 @@ Covers, per tunaOS#1721:
   * contract_results — subprocess-based artifact download, including the
     "no successful run yet" and "artifact expired" fallbacks.
   * desktop_table — the per-desktop row renderer shared by every section.
-  * nvidia_tally's stale-result branch.
+  * excluded_tally and undeclared_tally's filtered-history branches.
   * main()'s --check / --check-structure / default-write dispatch, with
     build() mocked so this exercises argument handling and file I/O only.
 
@@ -27,9 +27,10 @@ call site, same as tests/test_matrix_status_fetch.py does for gh_json.
 import importlib.util
 import io
 import json
-import subprocess
+import re
 import sys
 import tempfile
+import subprocess
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -149,6 +150,27 @@ class LoadBuildConfigFallbackParser(unittest.TestCase):
             matrix = gms.iso_matrix()
         # Only `gnome` sets build_iso: true in CONFIG_TEXT.
         self.assertEqual(matrix, {"yellowfin": {"gnome"}})
+
+    def test_luks_matrix_matches_amd64_workflow_filters(self):
+        config = {
+            "variants": [{
+                "id": "yellowfin",
+                "platforms": ["linux/amd64", "linux/arm64"],
+                "flavors": [
+                    {"id": "base", "build_image": True},
+                    {"id": "gnome", "build_image": True},
+                    {"id": "gnome-nvidia", "build_image": True},
+                    {"id": "arm-only", "build_image": True,
+                     "platforms": ["linux/arm64"]},
+                    {"id": "disabled", "build_image": True, "luks_e2e": False},
+                ],
+            }]
+        }
+        with mock.patch.object(gms, "load_build_config", return_value=config):
+            self.assertEqual(
+                gms.luks_matrix(),
+                {"yellowfin": {"gnome", "gnome-nvidia"}},
+            )
 
     def test_matches_pyyaml_on_the_same_input(self):
         """The whole point of the fallback: it must agree with PyYAML.
@@ -352,6 +374,18 @@ class ContractResultsArtifactDownload(unittest.TestCase):
 
         self.assertEqual(got, {"a:b": ("pass", "2026-08-01", "1")})
 
+    def test_completed_runs_without_an_artifact_refuse_empty_snapshot(self):
+        run = self._run()
+        with mock.patch.object(gms, "gh_json", return_value=[run]), \
+                mock.patch.object(
+                    gms.subprocess,
+                    "run",
+                    side_effect=subprocess.CalledProcessError(1, "gh"),
+                ):
+            with self.assertRaisesRegex(RuntimeError, "refusing an empty snapshot"):
+                gms.contract_results()
+
+
 
 # ── desktop_table ───────────────────────────────────────────────────────────
 
@@ -377,26 +411,92 @@ class DesktopTableRendering(unittest.TestCase):
         self.assertIn(gms.PASS, row)
 
 
-# ── nvidia_tally: the stale-result branch ──────────────────────────────────
+    def test_historical_failures_render_for_removed_flavors(self):
+        matrix = {"flounder": {"kde", "xfce"}}
+        results = {
+            "LUKS flounder:gnome": ("failure", "2026-08-06", "1"),
+            "LUKS flounder:cosmic": ("failure", "2026-08-01", "2"),
+        }
+        row = next(
+            row
+            for row in gms.desktop_table(matrix, results, lambda v, d: f"LUKS {v}:{d}")
+            if "flounder" in row
+        )
+        self.assertEqual(row, "| **flounder** | ❌ | ⬜ | ❌ | — | ⬜ |")
 
-class NvidiaTallyStaleResults(unittest.TestCase):
+# ── filtered LUKS history branches ─────────────────────────────────────────
 
-    def test_counts_stale_nvidia_results(self):
-        matrix = {"yellowfin": {"gnome-nvidia", "gnome"}}
-        results = {"yellowfin:gnome-nvidia": ("success", "2026-08-06", "1")}
-        stale = gms.nvidia_tally(matrix, results, lambda v, d: f"{v}:{d}")
-        self.assertEqual(stale, 1)
+class ExcludedTally(unittest.TestCase):
+    def test_counts_configured_cells_filtered_from_luks(self):
+        configured = {"yellowfin": {"gnome", "base"}}
+        scheduled = {"yellowfin": {"gnome"}}
+        results = {"yellowfin:base": ("success", "2026-08-06", "1")}
+        excluded = gms.excluded_tally(
+            configured, scheduled, results, lambda v, d: f"{v}:{d}"
+        )
+        self.assertEqual(excluded, ["yellowfin:base"])
 
-    def test_non_nvidia_flavors_are_not_counted(self):
-        matrix = {"yellowfin": {"gnome"}}
-        results = {"yellowfin:gnome": ("success", "2026-08-06", "1")}
-        stale = gms.nvidia_tally(matrix, results, lambda v, d: f"{v}:{d}")
-        self.assertEqual(stale, 0)
+    def test_removed_cells_are_not_misclassified_as_filtered(self):
+        configured = {"yellowfin": {"gnome"}}
+        scheduled = {"yellowfin": {"gnome"}}
+        results = {"yellowfin:base": ("success", "2026-08-06", "1")}
+        self.assertEqual(
+            gms.excluded_tally(
+                configured, scheduled, results, lambda v, d: f"{v}:{d}"
+            ),
+            [],
+        )
 
-    def test_nvidia_flavor_with_no_result_is_not_counted(self):
-        matrix = {"yellowfin": {"gnome-nvidia"}}
-        stale = gms.nvidia_tally(matrix, {}, lambda v, d: f"{v}:{d}")
-        self.assertEqual(stale, 0)
+    def test_empty_results_are_not_disclosed(self):
+        configured = {"yellowfin": {"base"}}
+        scheduled = {"yellowfin": set()}
+        self.assertEqual(
+            gms.excluded_tally(
+                configured, scheduled, {}, lambda v, d: f"{v}:{d}"
+            ),
+            [],
+        )
+
+
+# ── public summary payload ─────────────────────────────────────────────────
+
+class FactoryHealthSummary(unittest.TestCase):
+    def test_summary_is_derived_from_the_same_cell_evidence(self):
+        provenance = {
+            "yellowfin:gnome": {
+                "builds": {"verdict": "pass", "date": "2026-08-14"},
+                "install": {"verdict": "pass", "date": "2026-08-13"},
+                "lifecycle": {"verdict": "fail", "date": "2026-08-14"},
+            },
+            "marlin:kde": {
+                "builds": {"verdict": "fail", "date": "2026-08-12"},
+                "install": {"verdict": "untested", "date": ""},
+                "lifecycle": {"verdict": "pass", "date": "2026-08-12"},
+            },
+            "albacore:base": {
+                "boots": {"verdict": "untested", "date": ""},
+            },
+        }
+        generated = "**1 of 2** published cells are composite-green."
+        got = gms.factory_health_summary(
+            provenance, generated, ["2026-08-14"]
+        )
+
+        self.assertEqual(got["factory_health"], {"green": 1, "total": 2})
+        self.assertEqual(got["builds"], {"passed": 1, "tested": 2, "total": 2})
+        self.assertEqual(got["boots"], {"passed": 0, "tested": 0, "total": 0})
+        self.assertEqual(got["desktop"], {"passed": 0, "tested": 0, "total": 0})
+        self.assertEqual(got["install"], {"passed": 1, "tested": 1, "total": 2})
+        self.assertEqual(got["lifecycle"], {"passed": 1, "tested": 2, "total": 2})
+        self.assertEqual(got["builds"], {"passed": 1, "tested": 2, "total": 2})
+        self.assertEqual(got["boots"], {"passed": 0, "tested": 0, "total": 0})
+        self.assertEqual(got["desktop"], {"passed": 0, "tested": 0, "total": 0})
+        # The base flavor's empty boot slot is out of scope, so only marlin's
+        # applicable missing install evidence enters this count.
+        self.assertEqual(got["never_tested"], 1)
+        self.assertEqual(got["known_regressions"]["blocking"], 1)
+        self.assertEqual(got["known_regressions"]["advisory"], 1)
+        self.assertEqual(got["last_full_sweep"], "2026-08-14")
 
 
 # ── main(): --check / --check-structure / default write ────────────────────
@@ -406,7 +506,7 @@ class MainCliDispatch(unittest.TestCase):
 
     build()'s own orchestration (475-738) composes iso_matrix, luks_matrix,
     latest_results, contract_results, overlay_tags, cell, desktop_table,
-    tally, undeclared_tally and nvidia_tally — every one of which has its
+    tally, undeclared_tally and excluded_tally — every one of which has its
     own unit tests above and in test_matrix_status_fetch.py — so mocking it
     here isolates what main() itself is responsible for: reading the
     existing doc, diffing, and choosing an exit code.
@@ -499,6 +599,47 @@ class MainCliDispatch(unittest.TestCase):
                 gms.main()
 
 
+def test_committed_snapshot_counts_match_provenance_and_board():
+    root = SCRIPT.parents[1]
+    payload = json.loads((root / "docs/matrix-provenance.json").read_text())
+    document = (root / "docs/MATRIX-STATUS.md").read_text()
+
+    def axis_counts(axis):
+        verdicts = [
+            axes[axis]["verdict"]
+            for axes in payload["cells"].values()
+            if axis in axes
+        ]
+        return {
+            "passed": verdicts.count("pass"),
+            "tested": sum(verdict != "untested" for verdict in verdicts),
+            "total": len(verdicts),
+        }
+
+    def section(title):
+        body = document.split(f"## {title}\n", 1)[1]
+        return body.split("\n## ", 1)[0]
+
+    patterns = {
+        "LUKS E2E": ("install", r"\*\*(\d+) of (\d+)\*\* cells green \((\d+) tested"),
+        "Desktop Contract Sweep": (
+            "desktop",
+            r"\*\*(\d+) of (\d+)\*\* cells satisfy .+?\((\d+) tested",
+        ),
+        "Bootc Lifecycle": ("lifecycle", r"\*\*(\d+) of (\d+)\*\* cells green \((\d+) tested"),
+        "Package parity": ("parity", r"\*\*(\d+) of (\d+)\*\* cells at parity \((\d+) measured"),
+    }
+    for title, (axis, pattern) in patterns.items():
+        match = re.search(pattern, section(title), re.DOTALL)
+        assert match, f"missing generated headline for {title}"
+        board = {
+            "passed": int(match.group(1)),
+            "total": int(match.group(2)),
+            "tested": int(match.group(3)),
+        }
+        assert board == axis_counts(axis), title
+        if axis in payload["summary"]:
+            assert payload["summary"][axis] == board, axis
 if __name__ == "__main__":
     unittest.main()
 
@@ -514,14 +655,17 @@ class LifecycleResultsNormalisation(unittest.TestCase):
         with mock.patch.object(gms, "latest_results", return_value=raw):
             return gms.lifecycle_results()
 
-    def test_real_job_names_normalise_to_cells(self):
+    def test_beta_probe_cannot_replace_unprefixed_validation(self):
         got = self._with_raw({
-            "yellowfin:gnome (amd64)": ("success", "2026-08-17", "1"),
-            "BETA guppy:gnome (amd64)": ("success", "2026-08-17", "1"),
+            "BETA yellowfin:gnome (amd64)": ("success", "2026-08-17", "2"),
+            "yellowfin:gnome (amd64)": ("failure", "2026-08-16", "1"),
+            "BETA guppy:gnome (amd64)": ("success", "2026-08-17", "2"),
+            "bonito-rawhide:gnome (amd64)": ("failure", "2026-08-17", "1"),
             "flounder:kde-nvidia (amd64)": ("failure", "2026-08-17", "1"),
         })
-        self.assertEqual(got["yellowfin:gnome"][0], "success")
-        self.assertEqual(got["guppy:gnome"][0], "success")
+        self.assertEqual(got["yellowfin:gnome"][0], "failure")
+        self.assertNotIn("guppy:gnome", got)
+        self.assertEqual(got["bonito-rawhide:gnome"][0], "failure")
         self.assertEqual(got["flounder:kde-nvidia"][0], "failure")
 
     def test_arch_legs_merge_worst_of(self):
@@ -529,10 +673,32 @@ class LifecycleResultsNormalisation(unittest.TestCase):
         # never-tested-is-not-green. Order-independent on purpose.
         for first, second in (("success", "failure"), ("failure", "success")):
             got = self._with_raw({
-                "bonito-rawhide:gnome (amd64)": (first, "2026-08-17", "1"),
-                "bonito-rawhide:gnome (arm64)": (second, "2026-08-17", "1"),
+                "yellowfin:gnome (amd64)": (first, "2026-08-17", "1"),
+                "yellowfin:gnome (arm64)": (second, "2026-08-17", "1"),
             })
-            self.assertEqual(got["bonito-rawhide:gnome"][0], "failure")
+            self.assertEqual(got["yellowfin:gnome"][0], "failure")
+
+    def test_lifecycle_sweep_excludes_beta_existence_probes(self):
+        config = {
+            "variants": [
+                {
+                    "id": "yellowfin",
+                    "platforms": ["linux/amd64"],
+                    "flavors": [{"id": "gnome", "build_image": True}],
+                },
+                {
+                    "id": "bonito-rawhide",
+                    "platforms": ["linux/amd64"],
+                    "flavors": [{"id": "gnome", "build_image": True}],
+                },
+            ]
+        }
+        assert gms.lifecycle_sweep_jobs(config) == {
+            "yellowfin:gnome (amd64)",
+        }
+        assert gms.lifecycle_job_key("BETA guppy:gnome (amd64)") == (
+            "guppy:gnome (amd64)"
+        )
 
     def test_non_cell_jobs_are_ignored(self):
         got = self._with_raw({

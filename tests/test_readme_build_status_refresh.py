@@ -30,6 +30,8 @@ yaml = pytest.importorskip("yaml")
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/update-build-status.yml"
 GENERATOR = ROOT / ".github/scripts/update-build-status.sh"
+RELEASE_WORKFLOW = ROOT / ".github/workflows/generate-changelog-release.yml"
+RELEASE_REPORT = ROOT / "scripts/render-release-verification.py"
 DEFAULT_BRANCH = "main"
 
 
@@ -152,3 +154,58 @@ def test_the_readme_still_has_the_markers_the_generator_writes_between():
             f"{marker} is missing from README.md; the generator has nothing to "
             "replace and the refresh PR would be empty forever"
         )
+
+
+def test_the_generated_readme_block_exposes_public_factory_health():
+    readme = (ROOT / "README.md").read_text()
+    expected = (
+        "Factory health:",
+        "Install-tested:",
+        "Lifecycle-tested:",
+        "Never tested:",
+        "Known regressions:",
+        "Last full sweep:",
+    )
+    for label in expected:
+        assert label in readme, f"README generated block is missing {label!r}"
+
+    generator = GENERATOR.read_text()
+    assert "docs/matrix-provenance.json" in generator
+    assert ".summary.factory_health" in generator
+    assert ".summary.install" in generator
+    assert ".summary.install.tested" in generator
+    assert ".summary.lifecycle" in generator
+    assert ".summary.lifecycle.tested" in generator
+    assert ".summary.known_regressions" in generator
+
+
+def test_every_new_release_appends_the_same_generated_verification_data():
+    workflow = yaml.safe_load(RELEASE_WORKFLOW.read_text())
+    assert workflow["concurrency"]["cancel-in-progress"] is False
+    assert "github.ref" in workflow["concurrency"]["group"]
+    run_blocks = [
+        step["run"]
+        for job in workflow["jobs"].values()
+        for step in job["steps"]
+        if "run" in step
+    ]
+    report_block = next(
+        block for block in run_blocks if "render-release-verification.py" in block
+    )
+    assert "gh release edit" in report_block
+    assert "--notes-file" in report_block
+    assert RELEASE_REPORT.exists()
+    report_step = next(
+        step for job in workflow["jobs"].values() for step in job["steps"]
+        if step.get("name") == "Append release verification report"
+    )
+    assert "inputs.dry_run != true" in report_step["if"]
+    assert "steps.existing.outputs.exists == 'true'" in report_step["if"]
+    assert "gh release download" in report_block
+    assert "--stored-identity release-body.md" in report_block
+    assert "CURRENT_DIGEST" not in report_block
+    assert "CURRENT_SBOM_PACKAGES" not in report_block
+    assert "EXISTING" not in report_block
+    renderer = RELEASE_REPORT.read_text()
+    assert 'payload.get("summary")' in renderer
+    assert 'payload.get("cells")' in renderer
