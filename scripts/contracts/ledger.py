@@ -169,6 +169,8 @@ def reconcile(contract: dict, ledger: dict, base_inventory: list[dict], final_in
             raise EvidenceError("invalid native requirement measurement payload")
         if not evidence or any(not isinstance(item, dict) or not DIGEST.fullmatch(str(item.get("digest", ""))) for item in evidence):
             gaps.add("missing-native-requirement-evidence")
+        if requirement.get("requestedSource") and measurement.get("provider") != requirement["requestedSource"]:
+            gaps.add("native-provider-mismatch")
         if measurement.get("status") == "optional-missing" and not requirement["required"]:
             continue
         if measurement.get("status") == "transient-removed" and requirement["scope"] == "transient":
@@ -177,8 +179,6 @@ def reconcile(contract: dict, ledger: dict, base_inventory: list[dict], final_in
             continue
         if measurement.get("status") != "satisfied" or not packages or any(canonical_json(item) not in final_records for item in packages):
             gaps.add("unsatisfied-final-package-requirement")
-        if requirement.get("requestedSource") and measurement.get("provider") != requirement["requestedSource"]:
-            gaps.add("native-provider-mismatch")
     dispositions = native_proof.get("requestDispositions", {})
     if not isinstance(dispositions, dict):
         raise EvidenceError("native request dispositions must be a record")

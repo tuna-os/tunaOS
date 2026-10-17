@@ -17,7 +17,7 @@ on:
     paths:
       - .github/workflows/build-archlinuxarm-base.yml
       - scripts/verify-archlinuxarm-rootfs.py
-      - tests/test_archlinuxarm_rootfs.py
+      - tests/regressions/test_issue_1710_archlinuxarm_rootfs_authenticity.py
 
 concurrency:
   group: build-archlinuxarm-base-${{ github.ref }}

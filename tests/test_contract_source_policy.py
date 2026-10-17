@@ -63,6 +63,29 @@ def test_inherited_and_new_sources_are_distinguished():
                                         'ubuntu.ppa: ppa is not an approved package source']}
 
 
+def test_forbidden_provider_exception_is_scoped_to_consumer():
+    baseline = {'packages': {'el10': {'copr': [{'repo': 'legacy/project'}]}}}
+    current = {'packages': {'eln': {'copr': [{'repo': 'legacy/project'}]}}}
+    result = classify_policy(current, baseline)
+    assert result['forbiddenNew'] == [
+        'packages.eln.copr: copr is not an approved package source'
+    ]
+
+
+def test_endpoint_exception_is_scoped_to_consumer():
+    baseline = {'packages': {'el10': {'repos': [
+        {'url': 'https://foreign.invalid/repo'}
+    ]}}}
+    current = {'packages': {'eln': {'repos': [
+        {'url': 'https://foreign.invalid/repo'}
+    ]}}}
+    result = classify_policy(current, baseline)
+    assert result['forbiddenNew'] == [
+        'packages.eln.repos[0].url: external repository host '
+        "'foreign.invalid' is not approved"
+    ]
+
+
 def test_removed_legacy_source_is_not_retained_as_current_debt():
     assert classify_policy({}, {'el10': {'copr': []}}) == {'inherited': [], 'forbiddenNew': []}
 
