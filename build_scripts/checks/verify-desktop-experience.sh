@@ -65,14 +65,15 @@ tuna_installed_file_owner() {
 	esac
 }
 
-# How many requirements the hummingbird exemption let through.
+# How many requirements the hummingbird bootstrap exemption let through.
 #
-# Every require_* below returns 0 instead of exiting when IS_HUMMINGBIRD is
-# set, so hummingbird can bootstrap against incomplete repos. COSMIC is the
-# exception: its boot Gate cannot currently prove that the session starts, so
-# waiving this contract too would let an image with no session or greeter reach
-# the published tag (tunaOS#2513). Other hummingbird desktops retain the
-# bootstrap waiver and are stopped by their boot Gate when unusable.
+# Every require_* below returns 0 instead of exiting for an unsupported
+# Hummingbird desktop, so those incomplete ports can bootstrap against a
+# moving package set. COSMIC is excluded because its boot Gate cannot prove
+# that the session starts; Tuna is excluded because it is now an admitted
+# desktop and must fail closed on every missing session or greeter requirement.
+# Other unsupported Hummingbird desktops retain the bootstrap waiver and are
+# stopped by their boot Gate when unusable.
 #
 # The waiver counter also prevents an exempt image from being reported as
 # passed. The script once printed "desktop experience contract passed" after
@@ -91,9 +92,10 @@ tuna_installed_file_owner() {
 TUNAOS_CONTRACT_WAIVED=0
 waive() { TUNAOS_CONTRACT_WAIVED=$((TUNAOS_CONTRACT_WAIVED + 1)); }
 
+
 require_command() { command -v "$1" >/dev/null || {
 	echo "missing required command: $1" >&2
-	if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${desktop:-}" != cosmic ]]; then
+	if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${desktop:-}" != cosmic && "${desktop:-}" != tuna ]]; then
 		waive
 		return 0
 	fi
@@ -101,7 +103,7 @@ require_command() { command -v "$1" >/dev/null || {
 }; }
 require_glob() { compgen -G "$1" >/dev/null || {
 	echo "missing required path: $1" >&2
-	if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${desktop:-}" != cosmic ]]; then
+	if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${desktop:-}" != cosmic && "${desktop:-}" != tuna ]]; then
 		waive
 		return 0
 	fi
@@ -132,7 +134,7 @@ require_portal_preference() {
 }
 require_unit() { systemctl list-unit-files "$1.service" --no-legend 2>/dev/null | grep -q "^$1.service" || {
 	echo "missing unit: $1.service" >&2
-	if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${desktop:-}" != cosmic ]]; then
+	if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${desktop:-}" != cosmic && "${desktop:-}" != tuna ]]; then
 		waive
 		return 0
 	fi
@@ -149,7 +151,7 @@ require_any_unit() {
 		fi
 	done
 	echo "missing unit: none of [$*] exist" >&2
-	if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${desktop:-}" != cosmic ]]; then
+	if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${desktop:-}" != cosmic && "${desktop:-}" != tuna ]]; then
 		waive
 		return 0
 	fi
@@ -162,7 +164,7 @@ require_any_glob() {
 		compgen -G "$g" >/dev/null && return 0
 	done
 	echo "missing required path: none of [$*] exist" >&2
-	if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${desktop:-}" != cosmic ]]; then
+	if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${desktop:-}" != cosmic && "${desktop:-}" != tuna ]]; then
 		waive
 		return 0
 	fi
@@ -180,7 +182,7 @@ require_user_unit() {
 		return 0
 	fi
 	echo "missing user unit: ${u}.service" >&2
-	if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${desktop:-}" != cosmic ]]; then
+	if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${desktop:-}" != cosmic && "${desktop:-}" != tuna ]]; then
 		waive
 		return 0
 	fi
@@ -198,7 +200,7 @@ require_any_user_unit() {
 		fi
 	done
 	echo "missing user unit: none of [$*] exist" >&2
-	if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${desktop:-}" != cosmic ]]; then
+	if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${desktop:-}" != cosmic && "${desktop:-}" != tuna ]]; then
 		waive
 		return 0
 	fi
@@ -252,7 +254,7 @@ x11_display_manager_has_a_server() {
 	compgen -G "${root}/usr/lib/xorg/Xorg" >/dev/null && return 0
 	compgen -G "${root}/usr/libexec/Xorg" >/dev/null && return 0
 	echo "lightdm is installed but no X server is (Xorg, /usr/lib/xorg/Xorg, /usr/libexec/Xorg) — lightdm cannot create a display server for its greeter, exits 1, and display-manager.service crash-loops; the reason is logged only to /var/log/lightdm/lightdm.log" >&2
-	if [[ "${IS_HUMMINGBIRD:-false}" == "true" ]]; then
+	if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${desktop:-}" != cosmic && "${desktop:-}" != tuna ]]; then
 		waive
 		return 0
 	fi
@@ -267,7 +269,7 @@ xfce_greetd_greeter_contract() {
 	local greetd_conf="${TUNAOS_VERIFY_ROOT:-}/etc/greetd/config.toml"
 	if ! grep -qs 'gtkgreet' "$greetd_conf"; then
 		echo "greetd is the display manager but ${greetd_conf} does not launch gtkgreet — stock agreety boots users to a text prompt, not a login screen" >&2
-		if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${desktop:-}" != cosmic ]]; then
+		if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${desktop:-}" != cosmic && "${desktop:-}" != tuna ]]; then
 			waive
 			return 0
 		fi
@@ -330,7 +332,7 @@ require_gnome_at_least() {
 	major="$(gnome_shell_major)"
 	if [[ -z "$major" ]]; then
 		echo "cannot determine the installed GNOME version: gnome-shell --version failed and no package manager knows gnome-shell" >&2
-		if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${desktop:-}" != cosmic ]]; then
+		if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${desktop:-}" != cosmic && "${desktop:-}" != tuna ]]; then
 			waive
 			return 0
 		fi
@@ -338,7 +340,7 @@ require_gnome_at_least() {
 	fi
 	if ((major < floor)); then
 		echo "GNOME ${major} is below the floor: nothing below GNOME ${floor} ships (maintainer directive 2026-09-03; the target is 51). This image's gnome-shell reports major version ${major}." >&2
-		if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${desktop:-}" != cosmic ]]; then
+		if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${desktop:-}" != cosmic && "${desktop:-}" != tuna ]]; then
 			waive
 			return 0
 		fi
@@ -356,7 +358,7 @@ require_gnome_shell_schema() {
 		return 0
 	fi
 	echo "missing or unreadable compiled GSettings schema: org.gnome.shell; GNOME cannot start its greeter or desktop" >&2
-	if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${desktop:-}" != cosmic ]]; then
+	if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${desktop:-}" != cosmic && "${desktop:-}" != tuna ]]; then
 		waive
 		return 0
 	fi

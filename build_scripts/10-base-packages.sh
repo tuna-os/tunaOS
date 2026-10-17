@@ -244,7 +244,8 @@ if [[ $IS_HUMMINGBIRD == true ]]; then
 name=TunaOS Hummingbird published packages
 baseurl=https://repo.tunaos.org/hummingbird/20251124-$basearch/
 enabled=1
-gpgcheck=0
+gpgcheck=1
+gpgkey=https://repo.tunaos.org/public.gpg
 priority=5
 REPO
 	# --skip-broken as well as --skip-unavailable: the two are different

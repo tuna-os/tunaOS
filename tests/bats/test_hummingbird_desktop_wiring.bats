@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
-# Hummingbird gets its own manifest section, and that section reuses Fedora's
-# package names rather than restating them.
+# Hummingbird gets its own manifest section, and sections reuse Fedora
+# package names where the native target's package contract allows it.
 #
 # Why its own section: Hummingbird IS a Fedora Rawhide rebuild (30 of 38 core
 # packages match Rawhide's version AND release, differing only in the .hum1
@@ -12,7 +12,7 @@
 # tuna-os/tunaos-packages#250.
 #
 # Why an alias and not a copy: the names ARE Fedora's. A second literal list
-# across five desktop manifests is how these files drift apart — this repo has
+# across six desktop manifests is how these files drift apart — this repo has
 # been bitten repeatedly by a fact true of a CLASS being retyped per file.
 
 REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
@@ -77,11 +77,11 @@ yq_bin() { command -v yq; }
 	[ "$output" -ge 1 ]
 }
 
-# Only gnome and cosmic are wired on purpose. kde uses `groups:` and niri
-# uses `copr:`, and their Hummingbird package sets (~47-50% repo coverage,
-# #1755 §4) do not exist yet — inventing sections for packages the repo
-# cannot supply would be guesswork. This test records that as a deliberate
-# boundary so their absence is not read as an oversight.
+# GNOME, COSMIC and Tuna are wired because their Hummingbird package targets
+# exist. KDE and Niri use `groups:`/`copr:` and their Hummingbird package sets
+# do not exist yet — inventing sections for packages the repo cannot supply
+# would be guesswork. This test records that boundary so their absence is not
+# read as an oversight.
 @test "only the desktops whose hummingbird packages exist are wired" {
 	[ -n "$(yq_bin)" ] || skip "yq not available"
 	local d

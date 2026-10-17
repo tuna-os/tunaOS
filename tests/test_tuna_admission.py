@@ -31,7 +31,7 @@ def test_every_variant_has_an_explicit_tuna_rollout_record():
 def test_tuna_cells_are_amd64_images_without_iso_expansion():
     config = rollout()
     admitted = [v for v in config["variants"] if config["tuna_rollout"][v["id"]]["status"] == "admitted"]
-    assert {v["id"] for v in admitted} == {"marlin", "yellowfin", "albacore", "skipjack", "wahoo", "bonito", "bonito-rawhide", "grouper", "flounder", "flounder-sid", "sailfin"}
+    assert {v["id"] for v in admitted} == {"marlin", "yellowfin", "albacore", "skipjack", "wahoo", "bonito", "bonito-rawhide", "hummingbird", "grouper", "flounder", "flounder-sid", "sailfin"}
     for variant in admitted:
         flavor = next(f for f in variant["flavors"] if f["id"] == "tuna")
         assert flavor["stage"] == 2
@@ -80,6 +80,78 @@ def test_rpm_cells_install_the_pinned_beta_from_signed_factory_repositories():
     assert "COPY experiences/tuna /experiences/tuna" in context
     stage = containerfile.split("FROM base-no-de AS tuna\n", 1)[1]
     assert "install-desktop.sh tuna" in stage
+
+
+def test_hummingbird_cell_uses_the_pinned_native_signed_target():
+    manifest = yaml.safe_load((ROOT / "manifests/desktops/tuna.yaml").read_text())
+    section = manifest["packages"]["hummingbird"]
+    assert section["display_manager"] == "greetd"
+    assert section["repos"] == [{
+        "name": "tunaos-hummingbird",
+        "baseurl": "https://repo.tunaos.org/hummingbird/20251124-$basearch/",
+        "priority": 5,
+    }]
+    assert section["packages"][0] == "tuna-desktop-1.0.0~beta.1-1.bfin1"
+    for package in (
+        "dbus-tools", "orca", "greetd", "gtkgreet", "cage",
+        "xorg-x11-server-Xwayland", "ibus", "gnome-shell",
+        "gnome-settings-daemon", "gnome-control-center", "gnome-keyring",
+        "evolution-data-server", "xdg-desktop-portal-gnome",
+        "xdg-desktop-portal-gtk", "gvfs", "nautilus", "NetworkManager",
+        "pipewire", "wireplumber", "pipewire-gstreamer",
+        "gstreamer1-plugins-good", "tuned-ppd", "flatpak",
+    ):
+        assert package in section["packages"], package
+
+    config = rollout()
+    variant = next(v for v in config["variants"] if v["id"] == "hummingbird")
+    flavor = next(f for f in variant["flavors"] if f["id"] == "tuna")
+    assert flavor == {
+        "id": "tuna",
+        "stage": 2,
+        "platforms": ["linux/amd64"],
+        "build_image": True,
+        "build_iso": False,
+        "build_qcow2": False,
+        "luks_e2e": False,
+    }
+    assert variant["base_image"] == (
+        "quay.io/hummingbird-community/bootc-os:latest@"
+        "sha256:91c0b8e23392ee8d95096820d07b133fcda27cb4e635e66f16ee56e25ceaf922"
+    )
+
+    containerfile = (ROOT / "Containerfile.el10").read_text()
+    stage = containerfile.split("FROM base-no-de AS tuna\n", 1)[1]
+    assert "install-desktop.sh tuna" in stage
+    base_packages = (ROOT / "build_scripts/10-base-packages.sh").read_text()
+    hummingbird = base_packages.split(
+        "if [[ $IS_HUMMINGBIRD == true ]]; then", 1
+    )[1].split("\nelif", 1)[0]
+    assert "gpgcheck=1" in hummingbird
+    assert "gpgkey=https://repo.tunaos.org/public.gpg" in hummingbird
+
+
+def test_hummingbird_bootstrap_waiver_excludes_admitted_tuna():
+    import re
+    import subprocess
+
+    script = (ROOT / "build_scripts/checks/verify-desktop-experience.sh").read_text()
+    guard = re.search(
+        r'if \[\[ "\$\{IS_HUMMINGBIRD:-false\}" == "true" && "\$\{desktop:-\}" != cosmic && "\$\{desktop:-\}" != tuna \]\]; then',
+        script,
+    )
+    assert guard, "the Hummingbird waiver must exclude admitted Tuna"
+    command = (
+        'IS_HUMMINGBIRD=true; desktop="$1"; '
+        f"{guard.group(0)} exit 0; else exit 1; fi"
+    )
+    for desktop, accepted in (("gnome", True), ("cosmic", False), ("tuna", False)):
+        result = subprocess.run(
+            ["bash", "-c", command, "waiver-test", desktop],
+            capture_output=True,
+            text=True,
+        )
+        assert (result.returncode == 0) is accepted, (desktop, result.stderr)
 
 
 def test_apt_cells_install_the_pinned_beta_from_the_signed_tideforge_index_for_their_base():
