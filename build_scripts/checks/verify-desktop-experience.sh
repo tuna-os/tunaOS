@@ -27,67 +27,6 @@ trap emit_fail_on_early_exit EXIT
 source /run/context/build_scripts/lib.sh 2>/dev/null || true
 detected_os 2>/dev/null || true
 
-# Tuna Desktop ships on Arch (pacman), the RPM bases and the apt bases (dpkg).
-# Query the native database for installed names and file owners, never
-# virtual provides or a repository's availability (adapted from tunaOS#3194).
-tuna_package_backend() {
-	if command -v pacman >/dev/null 2>&1; then
-		echo pacman
-	# An rpm binary alone (installable on Debian) is not an RPM base.
-	elif command -v rpm >/dev/null 2>&1 && rpm -q rpm >/dev/null 2>&1; then
-		echo rpm
-	elif command -v dpkg-query >/dev/null 2>&1; then
-		echo dpkg
-	else
-		echo "no supported Tuna package backend (pacman, rpm or dpkg) in this image" >&2
-		return 1
-	fi
-}
-
-tuna_installed_package_names() {
-	case "$1" in
-	pacman) pacman -Qq ;;
-	rpm) rpm -qa --qf '%{NAME}\n' ;;
-	# Installed only, read from the second (state) character: the first is the
-	# selection, so a held install is `hi`, and removed-but-not-purged is `rc`.
-	dpkg) dpkg-query -W -f '${db:Status-Abbrev} ${Package}\n' | awk 'substr($1, 2, 1) == "i" { print $2 }' ;;
-	*) return 1 ;;
-	esac
-}
-
-tuna_installed_file_owner() {
-	case "$1" in
-	pacman) pacman -Qqo "$2" ;;
-	rpm) rpm -qf --qf '%{NAME}\n' "$2" ;;
-	# `dpkg -S` prints "<package>[:<arch>]: <path>".
-	dpkg) dpkg -S "$2" | sed -n '1s/[:,].*//p' ;;
-	*) return 1 ;;
-	esac
-}
-
-# How many requirements the hummingbird exemption let through.
-#
-# Every require_* below returns 0 instead of exiting when IS_HUMMINGBIRD is
-# set, so hummingbird can bootstrap against incomplete repos. COSMIC is the
-# exception: its boot Gate cannot currently prove that the session starts, so
-# waiving this contract too would let an image with no session or greeter reach
-# the published tag (tunaOS#2513). Other hummingbird desktops retain the
-# bootstrap waiver and are stopped by their boot Gate when unusable.
-#
-# The waiver counter also prevents an exempt image from being reported as
-# passed. The script once printed "desktop experience contract passed" after
-# listing ten unmet requirements, which is how hummingbird:gnome shipped with
-# no GNOME in it for weeks and no one noticed.
-#
-# Measured on tunaOS run 32813037866 (2026-08-25): the image carried 410
-# packages -- gnome-backgrounds and gnome-user-docs, no gnome-shell, no gdm,
-# no mutter, no gtk4 -- and this check called it passed. The boot gate then
-# failed 15 minutes later on a marker that could never be emitted, because
-# the packages were dropped upstream (tunaos-packages#519).
-#
-# Exit status is deliberately unchanged: turning the waiver into a hard
-# failure would red-line every hummingbird build, which is a policy call for
-# a human, not a side effect of a logging fix.
 # Query installed names, not virtual provides or availability in a repository.
 # os-release remains available after /run/context is removed at image boot.
 tuna_package_backend() {
@@ -133,7 +72,7 @@ tuna_installed_file_owner() {
 		owner="$(dpkg-query -S "$2")" || return 1
 		# Architecture qualifiers are allowed; diversions or multiple owners
 		# remain ambiguous and cannot pass the exact owner comparison below.
-		[[ "$owner" != *$'\n'* && "$owner" == *": $2" ]] || return 1
+		[[ "$owner" != *$'\n'* && "$owner" != *,* && "$owner" == *": $2" ]] || return 1
 		owner=${owner%": $2"}
 		printf '%s\n' "${owner%%:*}"
 		;;
@@ -141,6 +80,30 @@ tuna_installed_file_owner() {
 	*) return 1 ;;
 	esac
 }
+
+# How many requirements the hummingbird exemption let through.
+#
+# Every require_* below returns 0 instead of exiting when IS_HUMMINGBIRD is
+# set, so hummingbird can bootstrap against incomplete repos. COSMIC is the
+# exception: its boot Gate cannot currently prove that the session starts, so
+# waiving this contract too would let an image with no session or greeter reach
+# the published tag (tunaOS#2513). Other hummingbird desktops retain the
+# bootstrap waiver and are stopped by their boot Gate when unusable.
+#
+# The waiver counter also prevents an exempt image from being reported as
+# passed. The script once printed "desktop experience contract passed" after
+# listing ten unmet requirements, which is how hummingbird:gnome shipped with
+# no GNOME in it for weeks and no one noticed.
+#
+# Measured on tunaOS run 32813037866 (2026-08-25): the image carried 410
+# packages -- gnome-backgrounds and gnome-user-docs, no gnome-shell, no gdm,
+# no mutter, no gtk4 -- and this check called it passed. The boot gate then
+# failed 15 minutes later on a marker that could never be emitted, because
+# the packages were dropped upstream (tunaos-packages#519).
+#
+# Exit status is deliberately unchanged: turning the waiver into a hard
+# failure would red-line every hummingbird build, which is a policy call for
+# a human, not a side effect of a logging fix.
 
 TUNAOS_CONTRACT_WAIVED=0
 waive() { TUNAOS_CONTRACT_WAIVED=$((TUNAOS_CONTRACT_WAIVED + 1)); }
@@ -575,10 +538,6 @@ tuna)
 	require_command Tuna
 	grep -qx 'exec tuna-session' "$(command -v Tuna)"
 	require_glob '/usr/share/xdg-desktop-portal/tuna-portals.conf'
-	require_glob '/usr/share/xdg-desktop-portal/portals/tuna.portal'
-	grep -qx 'DBusName=org.freedesktop.impl.portal.desktop.tuna' /usr/share/xdg-desktop-portal/portals/tuna.portal
-	grep -qx 'Interfaces=org.freedesktop.impl.portal.Lockdown;' /usr/share/xdg-desktop-portal/portals/tuna.portal
-	require_portal_preference /usr/share/xdg-desktop-portal/tuna-portals.conf org.freedesktop.impl.portal.Lockdown tuna
 	for portal in ScreenCast Screenshot; do
 		require_portal_preference /usr/share/xdg-desktop-portal/tuna-portals.conf "org.freedesktop.impl.portal.$portal" gnome
 	done

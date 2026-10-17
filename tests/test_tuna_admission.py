@@ -209,7 +209,8 @@ def test_dpkg_installed_names_keep_held_packages_and_drop_removed_ones(tmp_path)
     fake = tmp_path / "dpkg-query"
     fake.write_text(
         "#!/bin/sh\n"
-        "printf 'ii  tuna-desktop\\nhi  power-profiles-daemon\\nrc  roost\\nun  absent\\n'\n"
+        "printf 'tuna-desktop:amd64\\tinstalled\\npower-profiles-daemon\\tinstalled\\n"
+        "roost\\tconfig-files\\nabsent\\tnot-installed\\n'\n"
     )
     fake.chmod(0o755)
     command = "tuna_installed_package_names() {" + function + "\ntuna_installed_package_names dpkg"

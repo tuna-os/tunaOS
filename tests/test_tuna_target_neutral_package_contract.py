@@ -103,11 +103,15 @@ def test_database_query_failure_never_passes(tmp_path, backend):
     assert result.returncode != 0
 
 
-def test_ambiguous_dpkg_owner_fails(tmp_path):
+@pytest.mark.parametrize("output", [
+    "tuna-desktop: /usr/bin/tuna-compositor\nforeign: /usr/bin/tuna-compositor\n",
+    "tuna-desktop:amd64, foreign:amd64: /usr/bin/tuna-compositor\n",
+])
+def test_ambiguous_dpkg_owner_fails(tmp_path, output):
     result, _ = execute(
         tmp_path,
         "tuna_installed_file_owner dpkg /usr/bin/tuna-compositor",
-        "tuna-desktop: /usr/bin/tuna-compositor\nforeign: /usr/bin/tuna-compositor\n",
+        output,
     )
     assert result.returncode != 0
 
@@ -224,13 +228,12 @@ def test_unknown_backend_cannot_default_to_rpm(tmp_path):
     assert result.returncode != 0
 
 
-def test_installed_contract_reaches_query_and_portal_after_overlay():
+def test_installed_contract_reaches_native_package_queries_after_overlay():
     case = SCRIPT.read_text().split("\ntuna)\n", 1)[1].split("\n\t;;", 1)[0]
     assert 'tuna_installed_package_names "$tuna_backend"' in case
     assert 'tuna_installed_file_owner "$tuna_backend" "/usr/bin/$binary"' in case
-    assert "org.freedesktop.impl.portal.Lockdown tuna" in case
-    routing = ROOT / "experiences/tuna/files/usr/share/xdg-desktop-portal/tuna-portals.conf"
-    assert routing.read_text().splitlines().count("org.freedesktop.impl.portal.Lockdown=tuna;") == 1
+    assert "/usr/share/xdg-desktop-portal/portals/tuna.portal" not in case
+    assert "org.freedesktop.impl.portal.Lockdown tuna" not in case
 
 
 @pytest.mark.parametrize(

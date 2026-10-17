@@ -1583,24 +1583,20 @@ The image had both backends; the default preferred GNOME for Access.
 
 **Fix:** Select GTK for Access, and GNOME for Screenshot and ScreenCast. The contract for the installed desktop rejects missing, wrong, duplicate, or out-of-section preferences. The admission test runs the shell validator against the shipped configuration and broken variants. Verify the final image in its separate boot gate.
 
-## Tuna package ownership or Lockdown routing fails outside Arch
+## Tuna package ownership fails outside Arch
 
-**Symptom:** A Tuna desktop image on an RPM, Debian, or Gentoo base either
-stops in `verify-desktop-experience.sh` because `pacman` is unavailable, or
-starts with no Tuna handler for `org.freedesktop.impl.portal.Lockdown`.
+**Symptom:** A Tuna desktop image on an RPM, Debian, or Gentoo base stops in
+`verify-desktop-experience.sh` because `pacman` is unavailable.
 
 **Measured cause:** At source commit
 `9cd82cd74568c11600f7c9587b5e08eaaf4186e5`, the Tuna contract queried only
-`pacman -Qq`. The experience overlay copied after package installation had no
-`org.freedesktop.impl.portal.Lockdown` preference, so it replaced the package's
-route. This is source evidence; final non-Arch images still require separate
-boot, authentication, and portal runtime qualification.
+`pacman -Qq`. This is source evidence; final non-Arch images still require
+separate boot and authentication qualification.
 
-**Fix:** Select the native package database from `os-release`; require exact
-`tuna-desktop` package and binary ownership; accept each packaged GNOME
-calendar-server path; and route Lockdown to Tuna in the installed overlay.
-`tests/test_tuna_target_neutral_package_contract.py` executes package-query,
-owner-failure, calendar-path, and portal-routing cases.
+**Fix:** Select the native package database from `os-release`, require exact
+`tuna-desktop` package and binary ownership, and accept each packaged GNOME
+calendar-server path. `tests/test_tuna_target_neutral_package_contract.py`
+executes package-query, owner-failure, and calendar-path cases.
 
 ### guppy:gnome installs GNOME 49 and fails the version floor (#2450)
 
