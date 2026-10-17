@@ -1,35 +1,50 @@
 #!/usr/bin/env bats
-# tests/bats/test_verify_image_packages.bats
-# Unit tests for scripts/verify-image-packages.sh
+# The package verifier must read both historical list-shaped Gentoo manifests
+# and the metadata mapping used by pinned repository-qualified atoms.
+
+REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
 
 setup() {
-  TEST_ROOT="${BATS_TEST_DIRNAME}/test_root_tmp"
-  mkdir -p "${TEST_ROOT}"
-  export PATH="${TEST_ROOT}/bin:${PATH}"
+  repo="${BATS_TEST_TMPDIR}/repo"
+  mkdir -p "${repo}/bin" "${repo}/manifests/desktops" "${repo}/scripts"
+  cp "${REPO_ROOT}/scripts/verify-image-packages.sh" "${repo}/scripts/"
 
-  # Set up directories
-  mkdir -p "${TEST_ROOT}/bin"
-  mkdir -p "${TEST_ROOT}/manifests/desktops"
+  cat >"${repo}/bin/podman" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%q ' "$@" >>"${PODMAN_LOG}"
+printf '\n' >>"${PODMAN_LOG}"
+joined="$*"
+if [[ "${joined}" == *"/etc/os-release"* ]]; then
+  printf 'gentoo\n'
+fi
+if [[ "${joined}" == *"portageq match"* ]]; then
+  [[ "${joined}" == *"grep -q ."* ]]
+fi
+EOF
+  chmod +x "${repo}/bin/podman"
+  export PATH="${repo}/bin:${PATH}"
+  export PODMAN_LOG="${repo}/podman.log"
+}
 
-  # Create a mock manifest
-  cat >"${TEST_ROOT}/manifests/desktops/testflavor.yaml" <<'YAML'
+run_verifier() {
+  run env PODMAN_LOG="${PODMAN_LOG}" bash "${repo}/scripts/verify-image-packages.sh" fake-image "$1"
+}
+
+@test "mapping-shaped Gentoo manifest passes repository-qualified exact atom" {
+  cat >"${repo}/manifests/desktops/tuna.yaml" <<'EOF'
 packages:
-  apt:
-    - debian-pkg1
-    - debian-pkg2
-  fedora:
-    packages:
-      - fedora-pkg1
-  el10:
-    packages:
-      - el-pkg1
   emerge:
-    - category/gentoo-pkg1
-YAML
+    display_manager: greetd
+    source_repositories:
+      - name: guru
+    packages:
+      - =gui-wm/tuna-desktop-1.0.0_beta1::tunaos
+EOF
 
-  # Stub yq to use the mock manifest path if requested
-  # In the real script, it looks at REPO_ROOT/manifests/desktops/flavor.yaml.
-  # So we override REPO_ROOT or stub yq to point to our test directory.
+  run_verifier tuna
+  [ "$status" -eq 0 ]
+  grep -Fq -- '=gui-wm/tuna-desktop-1.0.0_beta1::tunaos' "$PODMAN_LOG"
 }
 
 teardown() {
