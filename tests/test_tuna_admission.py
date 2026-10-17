@@ -153,6 +153,8 @@ def test_tuna_contract_is_a_known_desktop_with_session_and_pam_requirements():
     case = script.split("\ntuna)\n", 1)[1].split("\n\t;;", 1)[0]
     for requirement in ("Exec=tuna-session", "/etc/pam.d/tuna-lock", "tuna-shell-gtk", "tuna-session.target", "require_unit greetd", "tuna-portals.conf", "require_command orca"):
         assert requirement in case
+    portal_config = ROOT / "experiences/tuna/files/usr/share/xdg-desktop-portal/tuna-portals.conf"
+    assert "Lockdown=tuna;" in portal_config.read_text()
 
 
 def test_tuna_is_a_selectable_greetd_session_listed_by_name(tmp_path):
@@ -180,25 +182,44 @@ def test_tuna_is_a_selectable_greetd_session_listed_by_name(tmp_path):
         assert "tuna-session" not in refused.stdout
 
 
-def test_installed_portal_contract_rejects_missing_or_ambiguous_consent_routing(tmp_path):
+def test_installed_portal_contract_rejects_missing_or_ambiguous_routing(tmp_path):
     import subprocess
 
     script = (ROOT / "build_scripts/checks/verify-desktop-experience.sh").read_text()
     function = script.split("require_portal_preference() {", 1)[1].split("\nrequire_unit()", 1)[0]
-    command = "require_portal_preference() {" + function + "\nrequire_portal_preference \"$1\" org.freedesktop.impl.portal.Access gtk"
+    command = "require_portal_preference() {" + function + '\nrequire_portal_preference "$1" "$2" "$3"'
     shipped = (ROOT / "experiences/tuna/files/usr/share/xdg-desktop-portal/tuna-portals.conf").read_text()
-    for content, accepted in (
-        (shipped, True),
-        (shipped.replace("org.freedesktop.impl.portal.Access=gtk;\n", ""), False),
-        (shipped.replace("Access=gtk;", "Access=gnome;"), False),
-        (shipped.replace("Access=gtk;", "Access=gtk;gnome;"), False),
-        (shipped + "org.freedesktop.impl.portal.Access=gnome;\n", False),
-        (shipped.replace("[preferred]", "[unrelated]"), False),
-    ):
-        config = tmp_path / "tuna-portals.conf"
-        config.write_text(content)
-        result = subprocess.run(["bash", "-c", command, "portal-contract", str(config)], capture_output=True)
-        assert (result.returncode == 0) is accepted, result.stderr.decode()
+    routes = (
+        ("org.freedesktop.impl.portal.ScreenCast", "gnome"),
+        ("org.freedesktop.impl.portal.Screenshot", "gnome"),
+        ("org.freedesktop.impl.portal.Access", "gtk"),
+    )
+    for interface, backend in routes:
+        line = f"{interface}={backend};\n"
+        for content, accepted in (
+            (shipped, True),
+            (shipped.replace(line, "", 1), False),
+            (shipped.replace(line, f"{interface}=wrong;\n", 1), False),
+            (shipped.replace(line, f"{line}{interface}=other;\n", 1), False),
+        ):
+            config = tmp_path / "tuna-portals.conf"
+            config.write_text(content)
+            result = subprocess.run(
+                ["bash", "-c", command, "portal-contract", str(config), interface, backend],
+                capture_output=True,
+                text=True,
+            )
+            assert (result.returncode == 0) is accepted, result.stderr
+
+    config = tmp_path / "unpreferred-portals.conf"
+    config.write_text(shipped.replace("[preferred]", "[unrelated]"))
+    for interface, backend in routes:
+        result = subprocess.run(
+            ["bash", "-c", command, "portal-contract", str(config), interface, backend],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode != 0, (interface, result.stderr)
 
 
 def test_dpkg_installed_names_keep_held_packages_and_drop_removed_ones(tmp_path):
@@ -209,7 +230,8 @@ def test_dpkg_installed_names_keep_held_packages_and_drop_removed_ones(tmp_path)
     fake = tmp_path / "dpkg-query"
     fake.write_text(
         "#!/bin/sh\n"
-        "printf 'ii  tuna-desktop\\nhi  power-profiles-daemon\\nrc  roost\\nun  absent\\n'\n"
+        "printf 'tuna-desktop:amd64\\tinstalled\\npower-profiles-daemon\\tinstalled\\n"
+        "roost\\tconfig-files\\nabsent\\tnot-installed\\n'\n"
     )
     fake.chmod(0o755)
     command = "tuna_installed_package_names() {" + function + "\ntuna_installed_package_names dpkg"
