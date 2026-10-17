@@ -106,13 +106,13 @@ _Each cell reports the newest conclusive main-branch run that asserted it, so a 
 | 🏔️ `ghcr.io/tuna-os/tromso` | [tromso](https://github.com/tuna-os/tromso) | KDE | [✅ 2026-10-15](https://github.com/tuna-os/tromso/actions/runs/38684318450) |
 | 🐭 `ghcr.io/tuna-os/xfce-linux` | [xfce-linux](https://github.com/tuna-os/xfce-linux) | XFCE | [✅ 2026-10-16](https://github.com/tuna-os/xfce-linux/actions/runs/38835702023) |
 
-**Built 138/147 · composite green 89/147 (93% built)** — The remainder has **3 failures** and **6 never reached** (stale: 0); no job asserted the latter. We show the two values separately. A cell with no job has no test, but it can still work.
+**Built 138/147 · composite green 125/147 (93% built)** — The remainder has **3 failures** and **6 never reached** (stale: 0); no job asserted the latter. We show the two values separately. A cell with no job has no test, but it can still work.
 
-**Factory health: 89/147 cells green**
+**Factory health: 125/147 cells green**
 
-**Install-tested: 52/52 · Lifecycle-tested: 49/52 · Never tested: 178**
+**Install-tested: 110/110 · Lifecycle-tested: 49/52 · Never tested: 25**
 
-**Known regressions: 3 `blocking`, 52 advisory**
+**Known regressions: 11 `blocking`, 94 advisory**
 
 **Last full sweep: 46 days ago (2026-09-01)**
 
