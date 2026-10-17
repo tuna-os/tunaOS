@@ -1606,7 +1606,7 @@ GNOME 49 is below the floor: nothing below GNOME 50 ships
 ### Desktop image builds download an unverified yq release asset (#3329)
 
 **Symptom:** A manifest-driven desktop build downloads `yq` into
-`/usr/bin/yq` before parsing the desktop manifest.
+`/usr/bin/yq` before it reads the desktop manifest.
 
 **Measured cause:** `build_scripts/desktop/install-desktop.sh` used a pinned
 release URL but did not verify the release asset. A changed or compromised
@@ -1615,7 +1615,7 @@ asset could therefore execute as root inside the image build.
 **Fix:** The installer now accepts only `x86_64` and `aarch64`, checks the
 architecture-specific SHA-256 for yq `v4.53.3`, and renames the verified file
 atomically into `/usr/bin/yq`. `tests/regressions/test_issue_3329_yq_downloads_are_verified.py`
-holds the download, checksum, and install ordering.
+checks the download, checksum, and install sequence.
 
 ### AI porting agent executes untrusted upstream diffs with write token
 
