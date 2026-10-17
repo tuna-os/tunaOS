@@ -1583,18 +1583,25 @@ The image had both backends; the default preferred GNOME for Access.
 
 **Fix:** Select GTK for Access, and GNOME for Screenshot and ScreenCast. The contract for the installed desktop rejects missing, wrong, duplicate, or out-of-section preferences. The admission test runs the shell validator against the shipped configuration and broken variants. Verify the final image in its separate boot gate.
 
-## Tuna packages and privacy portals
+## Tuna package ownership or Lockdown routing fails outside Arch
 
-Before this fix, the Tuna contract queried only pacman. Other distributions need their native package database.
+**Symptom:** A Tuna desktop image on an RPM, Debian, or Gentoo base either
+stops in `verify-desktop-experience.sh` because `pacman` is unavailable, or
+starts with no Tuna handler for `org.freedesktop.impl.portal.Lockdown`.
 
-The installer copies the experience overlay after package installation. The overlay replaces the portal config from the package.
-Its older copy omitted `org.freedesktop.impl.portal.Lockdown=tuna;`.
+**Measured cause:** At source commit
+`9cd82cd74568c11600f7c9587b5e08eaaf4186e5`, the Tuna contract queried only
+`pacman -Qq`. The experience overlay copied after package installation had no
+`org.freedesktop.impl.portal.Lockdown` preference, so it replaced the package's
+route. This is source evidence; final non-Arch images still require separate
+boot, authentication, and portal runtime qualification.
 
-The contract selects the package manager from `os-release`. It checks package names and owners of binaries.
-The overlay now selects Tuna for Lockdown. The contract rejects absent or ambiguous entries.
+**Fix:** Select the native package database from `os-release`; require exact
+`tuna-desktop` package and binary ownership; accept each packaged GNOME
+calendar-server path; and route Lockdown to Tuna in the installed overlay.
+`tests/test_tuna_target_neutral_package_contract.py` executes package-query,
+owner-failure, calendar-path, and portal-routing cases.
 
-The tests exercise pacman, RPM, dpkg and Portage queries. They reject query errors, wrong owners and legacy names.
-Real images still need authentication and portal runtime checks.
 ### guppy:gnome installs GNOME 49 and fails the version floor (#2450)
 
 **Symptom:** The `gnome` build of `guppy` (Gentoo) stops in `verify-desktop-experience.sh` with this error:

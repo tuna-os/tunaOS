@@ -6,6 +6,7 @@ qualify any built image or convert a metadata check into a login proof.
 
 import json
 import os
+import shlex
 import subprocess
 from pathlib import Path
 
@@ -109,6 +110,83 @@ def test_ambiguous_dpkg_owner_fails(tmp_path):
         "tuna-desktop: /usr/bin/tuna-compositor\nforeign: /usr/bin/tuna-compositor\n",
     )
     assert result.returncode != 0
+
+
+@pytest.mark.parametrize(
+    "owner,returncode",
+    [
+        ("foreign-package\n", 0),
+        ("", 9),
+    ],
+)
+def test_actual_tuna_branch_rejects_foreign_or_failed_owner_query(
+    tmp_path, owner, returncode
+):
+    tools = tmp_path / "tools"
+    tools.mkdir()
+    for binary in (
+        "tuna-compositor",
+        "tuna-session",
+        "tuna-shell-host",
+        "tuna-shell-gtk",
+        "tuna-ibus-bridge",
+        "tuna-greeter",
+    ):
+        command = tools / binary
+        command.write_text("#!/bin/sh\nexit 0\n")
+        command.chmod(0o755)
+
+    case = SCRIPT.read_text().split("\ntuna)\n", 1)[1].split("\n\t;;", 1)[0]
+    owner_loop = "for binary " + case.split("\tfor binary ", 1)[1].split(
+        "\n\tdone", 1
+    )[0] + "\n\tdone"
+    body = (
+        FUNCTIONS
+        + "\nrequire_command() { command -v \"$1\" >/dev/null; }\n"
+        + "tuna_installed_file_owner() { printf '%s' \"$QUERY_OUTPUT\"; return \"$QUERY_EXIT\"; }\n"
+        + "tuna_backend=dpkg\n"
+        + owner_loop
+    )
+    result, _ = execute(tmp_path, ":", owner, returncode, body)
+    assert result.returncode != 0
+    assert "is not owned by the installed tuna-desktop package" in result.stderr
+
+
+@pytest.mark.parametrize(
+    "present",
+    [
+        "usr/lib/gnome-shell-calendar-server",
+        "usr/libexec/gnome-shell-calendar-server",
+        "usr/libexec/gnome-shell/gnome-shell-calendar-server",
+        None,
+    ],
+)
+def test_actual_calendar_server_paths_are_cross_distribution(tmp_path, present):
+    if present is not None:
+        path = tmp_path / present
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.touch()
+
+    source = SCRIPT.read_text()
+    helper = "require_any_glob() {" + source.split(
+        "require_any_glob() {", 1
+    )[1].split("\n}", 1)[0] + "\n}"
+    tuna_case = source.split("\ntuna)\n", 1)[1].split("\n\t;;", 1)[0]
+    calendar_call = next(
+        line.strip()
+        for line in tuna_case.splitlines()
+        if "gnome-shell-calendar-server" in line
+    )
+    paths = [tmp_path / path.lstrip("/") for path in shlex.split(calendar_call)[1:]]
+    result = subprocess.run(
+        ["bash", "-euo", "pipefail", "-c", helper + "\nrequire_any_glob " + " ".join(
+            shlex.quote(str(path)) for path in paths
+        )],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert (result.returncode == 0) == (present is not None)
 
 
 @pytest.mark.parametrize(
