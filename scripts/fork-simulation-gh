@@ -1,19 +1,35 @@
 #!/usr/bin/env bash
-# Minimal gh fixture for synthetic pull-request workflows. Never contacts GitHub.
+# Strict gh fixture for synthetic pull-request workflows. Never contacts GitHub.
 set -euo pipefail
 
-[[ "${1:-}" == api ]] || {
-	echo "fork simulation fixture only supports gh api" >&2
+: "${SIMULATION_API_LOG:?}"
+: "${SIMULATION_UNEXPECTED_LOG:?}"
+
+unexpected() {
+	printf '%s\n' "$*" >>"$SIMULATION_UNEXPECTED_LOG"
+	echo "unexpected synthetic GitHub request: $*" >&2
 	exit 64
 }
+
+[[ "${1:-}" == api ]] || unexpected "unsupported command: ${1:-missing}"
 shift
 
 method=GET
+method_explicit=false
 endpoint=
+field=
 while (($#)); do
 	case "$1" in
 	-X | --method)
 		method="${2:?missing method}"
+		method_explicit=true
+		shift 2
+		;;
+	-F | --field | -f | --raw-field)
+		field="${2:?missing field}"
+		if [[ "$method_explicit" == false ]]; then
+			method=POST
+		fi
 		shift 2
 		;;
 	--paginate)
@@ -23,7 +39,8 @@ while (($#)); do
 		shift 2
 		;;
 	--input)
-		[[ "${2:-}" == - ]] && cat >/dev/null
+		[[ "${2:-}" == - ]] || unexpected "unsupported input: ${2:-missing}"
+		cat >/dev/null
 		shift 2
 		;;
 	repos/*)
@@ -31,14 +48,27 @@ while (($#)); do
 		shift
 		;;
 	*)
-		echo "unsupported gh api argument: $1" >&2
-		exit 64
+		unexpected "unsupported gh api argument: $1"
 		;;
 	esac
 done
 
 repo="${GITHUB_REPOSITORY:?}"
 pr="${SIMULATION_PR:?}"
+printf '%s\t%s\n' "$method" "$endpoint" >>"$SIMULATION_API_LOG"
+
+allow_mutation() {
+	local token="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
+	[[ -n "$token" ]] || unexpected "unauthenticated mutation: $method $endpoint"
+	[[ -r "${GITHUB_EVENT_PATH:-}" ]] ||
+		unexpected "mutation without synthetic event: $method $endpoint"
+	jq -e --arg repo "$repo" \
+		'.pull_request.head.repo.fork == false and
+		 .pull_request.head.repo.full_name == $repo' \
+		"$GITHUB_EVENT_PATH" >/dev/null ||
+		unexpected "fork mutation: $method $endpoint"
+}
+
 case "$method:$endpoint" in
 "GET:repos/$repo/pulls/$pr/files")
 	# pr-nudges asks gh to apply `.[].filename`; emit that selected value.
@@ -48,11 +78,20 @@ case "$method:$endpoint" in
 	# Renovate's synthetic PR has one auto-requested user reviewer.
 	printf '%s\n' '{"reviewers":["fork-simulation-reviewer"],"team_reviewers":[]}'
 	;;
+"GET:repos/$repo/issues/$pr/comments")
+	# No prior synthetic reminder exists.
+	;;
+"POST:repos/$repo/issues/$pr/comments")
+	allow_mutation
+	[[ "$field" == body=@* && -r "${field#body=@}" ]] ||
+		unexpected "invalid PR comment body field"
+	printf '%s\n' '{}'
+	;;
 "DELETE:repos/$repo/pulls/$pr/requested_reviewers")
+	allow_mutation
 	printf '%s\n' '{}'
 	;;
 *)
-	echo "unexpected synthetic GitHub request: $method $endpoint" >&2
-	exit 64
+	unexpected "$method $endpoint"
 	;;
 esac

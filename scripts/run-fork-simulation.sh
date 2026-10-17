@@ -18,6 +18,10 @@ for persona in "$@"; do
 		worktree="$(mktemp -d "${RUNNER_TEMP}/fork-simulation.XXXXXX")"
 		git clone --quiet --local --no-hardlinks "$GITHUB_WORKSPACE" "$worktree/repo"
 		cd "$worktree/repo"
+		api_log="$worktree/repo/.fork-simulation-api.log"
+		unexpected_log="$worktree/repo/.fork-simulation-unexpected.log"
+		: >"$api_log"
+		: >"$unexpected_log"
 		git config user.name "Fork Simulation"
 		git config user.email "fork-simulation@users.noreply.github.com"
 		git switch --quiet --create "fork-simulation/${persona}"
@@ -58,6 +62,8 @@ for persona in "$@"; do
 			--actor "$(python3 scripts/fork-simulation.py actor "$persona")" \
 			--env "GITHUB_REPOSITORY=${REPOSITORY}" \
 			--env "SIMULATION_PR=1" \
+			--env "SIMULATION_API_LOG=.fork-simulation-api.log" \
+			--env "SIMULATION_UNEXPECTED_LOG=.fork-simulation-unexpected.log" \
 			"${api_fixture[@]}" \
 			--secret-file /dev/null \
 			--secret "GITHUB_TOKEN=${SIMULATION_GITHUB_TOKEN}" \
@@ -68,6 +74,38 @@ for persona in "$@"; do
 			--platform "ubuntu-24.04=${ACT_IMAGE}"
 		rc=$?
 		set -e
+		if [[ -s "$unexpected_log" ]]; then
+			echo "fixture rejected unexpected synthetic API calls:" >&2
+			cat "$unexpected_log" >&2
+			[[ $rc -ne 0 ]] || rc=65
+		fi
+		expected_requests=()
+		case "$workflow:$persona" in
+		pr-nudges.yml:same-repo-contributor)
+			expected_requests=(
+				$'GET\trepos/'"${REPOSITORY}"'/pulls/1/files'
+				$'GET\trepos/'"${REPOSITORY}"'/issues/1/comments'
+				$'POST\trepos/'"${REPOSITORY}"'/issues/1/comments'
+			)
+			;;
+		drop-bot-review-requests.yml:renovate)
+			expected_requests=(
+				$'GET\trepos/'"${REPOSITORY}"'/pulls/1'
+				$'DELETE\trepos/'"${REPOSITORY}"'/pulls/1/requested_reviewers'
+			)
+			;;
+		esac
+		for request in "${expected_requests[@]}"; do
+			if ! grep -Fqx "$request" "$api_log"; then
+				echo "expected synthetic API call was not exercised: $request" >&2
+				[[ $rc -ne 0 ]] || rc=65
+			fi
+		done
+		if [[ "$persona" == first-time-external ]] &&
+			grep -Eq $'^(POST|PUT|PATCH|DELETE)\t' "$api_log"; then
+			echo "external simulation attempted a synthetic API mutation" >&2
+			[[ $rc -ne 0 ]] || rc=65
+		fi
 		echo "::endgroup::"
 		if [[ $rc -eq 0 ]]; then
 			status=pass
