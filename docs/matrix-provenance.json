@@ -5,6 +5,21 @@
    "green": 112,
    "total": 147
   },
+  "builds": {
+   "passed": 125,
+   "tested": 125,
+   "total": 147
+  },
+  "boots": {
+   "passed": 72,
+   "tested": 73,
+   "total": 84
+  },
+  "desktop": {
+   "passed": 50,
+   "tested": 51,
+   "total": 52
+  },
   "install": {
    "passed": 13,
    "tested": 52,

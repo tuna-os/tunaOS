@@ -1,6 +1,9 @@
 """Release notes carry the public factory evidence from matrix provenance."""
 
 import importlib.util
+import json
+import subprocess
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -21,6 +24,9 @@ def payload():
     return {
         "summary": {
             "factory_health": {"green": 1, "total": 2},
+            "builds": {"passed": 1, "tested": 2, "total": 2},
+            "boots": {"passed": 1, "tested": 1, "total": 2},
+            "desktop": {"passed": 1, "tested": 2, "total": 2},
             "install": {"passed": 1, "tested": 2, "total": 2},
             "lifecycle": {"passed": 1, "tested": 2, "total": 2},
             "never_tested": 1,
@@ -57,6 +63,32 @@ def test_report_covers_release_and_runtime_verification_axes():
     assert "Booted: **1/2 pass (1/2 tested)**" in report
     assert "**1 blocking**, **1 advisory**" in report
     assert report.count(MODULE.BEGIN) == report.count(MODULE.END) == 1
+
+
+def test_workflow_cli_arguments_render_the_digest(tmp_path):
+    provenance = tmp_path / "provenance.json"
+    output = tmp_path / "report.md"
+    provenance.write_text(json.dumps(payload()))
+
+    subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT),
+            "--provenance",
+            str(provenance),
+            "--image",
+            "ghcr.io/tuna-os/yellowfin:gnome",
+            "--digest",
+            "sha256:abc",
+            "--sbom-packages",
+            "123",
+            "--output",
+            str(output),
+        ],
+        check=True,
+    )
+
+    assert "- Digest: `sha256:abc`" in output.read_text()
 
 
 def test_stored_release_identity_uses_original_immutable_reference():
