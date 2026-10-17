@@ -3522,21 +3522,13 @@
     "run": "https://github.com/tuna-os/tunaOS/actions/runs/38906627617",
     "verdict": "fail"
    },
-   "parity": {
+   "builds": {
     "date": "",
     "evidence": "",
     "run": "",
     "verdict": "untested"
-   }
-  },
-  "wahoo:tuna": {
-   "boots": {
-    "date": "2026-10-16",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/38906627617#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/38906627617",
-    "verdict": "fail"
    },
-   "builds": {
+   "parity": {
     "date": "",
     "evidence": "",
     "run": "",
