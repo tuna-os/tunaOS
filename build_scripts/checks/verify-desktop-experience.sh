@@ -538,14 +538,10 @@ tuna)
 	require_command Tuna
 	grep -qx 'exec tuna-session' "$(command -v Tuna)"
 	require_glob '/usr/share/xdg-desktop-portal/tuna-portals.conf'
-	require_glob '/usr/share/xdg-desktop-portal/portals/tuna.portal'
-	grep -qx 'DBusName=org.freedesktop.impl.portal.desktop.tuna' /usr/share/xdg-desktop-portal/portals/tuna.portal
-	grep -qx 'Interfaces=org.freedesktop.impl.portal.Lockdown;' /usr/share/xdg-desktop-portal/portals/tuna.portal
 	for portal in ScreenCast Screenshot; do
 		require_portal_preference /usr/share/xdg-desktop-portal/tuna-portals.conf "org.freedesktop.impl.portal.$portal" gnome
 	done
 	require_portal_preference /usr/share/xdg-desktop-portal/tuna-portals.conf org.freedesktop.impl.portal.Access gtk
-	require_portal_preference /usr/share/xdg-desktop-portal/tuna-portals.conf org.freedesktop.impl.portal.Lockdown tuna
 	# openSUSE under /usr/libexec/gnome-shell (gnome-shell-calendar). The
 	# shell reaches it by D-Bus activation, so the path is the package's.
 	require_any_glob '/usr/lib/gnome-shell-calendar-server' '/usr/libexec/gnome-shell-calendar-server' '/usr/libexec/gnome-shell/gnome-shell-calendar-server'

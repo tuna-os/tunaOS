@@ -154,11 +154,7 @@ def test_tuna_contract_is_a_known_desktop_with_session_and_pam_requirements():
     for requirement in ("Exec=tuna-session", "/etc/pam.d/tuna-lock", "tuna-shell-gtk", "tuna-session.target", "require_unit greetd", "tuna-portals.conf", "require_command orca"):
         assert requirement in case
     portal_config = ROOT / "experiences/tuna/files/usr/share/xdg-desktop-portal/tuna-portals.conf"
-    assert "Lockdown=tuna;" in portal_config.read_text()
-    descriptor = ROOT / "experiences/tuna/files/usr/share/xdg-desktop-portal/portals/tuna.portal"
-    descriptor_text = descriptor.read_text()
-    for requirement in ("DBusName=org.freedesktop.impl.portal.desktop.tuna", "Interfaces=org.freedesktop.impl.portal.Lockdown;"):
-        assert requirement in descriptor_text
+    assert "Lockdown=tuna;" not in portal_config.read_text()
 
 
 def test_tuna_is_a_selectable_greetd_session_listed_by_name(tmp_path):
@@ -197,7 +193,6 @@ def test_installed_portal_contract_rejects_missing_or_ambiguous_routing(tmp_path
         ("org.freedesktop.impl.portal.ScreenCast", "gnome"),
         ("org.freedesktop.impl.portal.Screenshot", "gnome"),
         ("org.freedesktop.impl.portal.Access", "gtk"),
-        ("org.freedesktop.impl.portal.Lockdown", "tuna"),
     )
     for interface, backend in routes:
         line = f"{interface}={backend};\n"

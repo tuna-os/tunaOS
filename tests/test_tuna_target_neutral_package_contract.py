@@ -232,24 +232,22 @@ def test_installed_contract_reaches_native_package_queries_and_privacy_routing()
     case = SCRIPT.read_text().split("\ntuna)\n", 1)[1].split("\n\t;;", 1)[0]
     assert 'tuna_installed_package_names "$tuna_backend"' in case
     assert 'tuna_installed_file_owner "$tuna_backend" "/usr/bin/$binary"' in case
-    assert "/usr/share/xdg-desktop-portal/portals/tuna.portal" in case
-    assert "DBusName=org.freedesktop.impl.portal.desktop.tuna" in case
-    assert "Interfaces=org.freedesktop.impl.portal.Lockdown;" in case
-    assert "require_portal_preference /usr/share/xdg-desktop-portal/tuna-portals.conf org.freedesktop.impl.portal.Lockdown tuna" in case
+    assert "/usr/share/xdg-desktop-portal/tuna-portals.conf" in case
+    assert "require_portal_preference /usr/share/xdg-desktop-portal/tuna-portals.conf org.freedesktop.impl.portal.Access gtk" in case
+    assert "org.freedesktop.impl.portal.Lockdown" not in case
 
 
-def test_tuna_branch_rejects_missing_or_wrong_lockdown_routing(tmp_path):
+def test_tuna_branch_rejects_missing_or_wrong_privacy_routing(tmp_path):
     source = SCRIPT.read_text()
     case = source.split("\ntuna)\n", 1)[1].split("\n\t;;", 1)[0]
     root = tmp_path / "root"
     tools = tmp_path / "tools"
-    descriptor = root / "usr/share/xdg-desktop-portal/portals/tuna.portal"
     portals = root / "usr/share/xdg-desktop-portal/tuna-portals.conf"
     sessions = root / "usr/share/wayland-sessions"
     (root / "etc/greetd").mkdir(parents=True)
     (root / "etc/systemd/system").mkdir(parents=True)
+    portals.parent.mkdir(parents=True)
     sessions.mkdir(parents=True)
-    descriptor.parent.mkdir(parents=True)
     tools.mkdir()
     (sessions / "tuna.desktop").write_text(
         "[Desktop Entry]\nExec=tuna-session\nDesktopNames=Tuna;GNOME;\nName=Tuna Desktop\n"
@@ -258,11 +256,6 @@ def test_tuna_branch_rejects_missing_or_wrong_lockdown_routing(tmp_path):
         "[Desktop Entry]\nExec=tuna-session\nNoDisplay=true\n"
     )
     (root / "etc/greetd/environments").write_text("Tuna Desktop\n")
-    descriptor.write_text(
-        "[portal]\n"
-        "DBusName=org.freedesktop.impl.portal.desktop.tuna\n"
-        "Interfaces=org.freedesktop.impl.portal.Lockdown;\n"
-    )
     (root / "etc/systemd/system/display-manager.service").symlink_to(
         "greetd.service"
     )
@@ -295,10 +288,6 @@ def test_tuna_branch_rejects_missing_or_wrong_lockdown_routing(tmp_path):
         str(root / "usr/share/xdg-desktop-portal/tuna-portals.conf"),
         str(portals),
     )
-    case = case.replace(
-        str(root / "usr/share/xdg-desktop-portal/portals/tuna.portal"),
-        str(descriptor),
-    )
     portal_parser = (
         "require_portal_preference() {"
         + source.split("require_portal_preference() {", 1)[1].split(
@@ -324,15 +313,14 @@ require_unit() { return 0; }
     )
     valid = (
         "[preferred]\n"
-        "org.freedesktop.impl.portal.Lockdown=tuna;\n"
         "org.freedesktop.impl.portal.ScreenCast=gnome;\n"
         "org.freedesktop.impl.portal.Screenshot=gnome;\n"
         "org.freedesktop.impl.portal.Access=gtk;\n"
     )
     for content, accepted in (
         (valid, True),
-        (valid.replace("org.freedesktop.impl.portal.Lockdown=tuna;\n", ""), False),
-        (valid.replace("Lockdown=tuna;", "Lockdown=gnome;"), False),
+        (valid.replace("org.freedesktop.impl.portal.Access=gtk;\n", ""), False),
+        (valid.replace("Access=gtk;", "Access=wrong;"), False),
     ):
         portals.write_text(content)
         result = subprocess.run(
@@ -343,7 +331,6 @@ require_unit() { return 0; }
             check=False,
         )
         assert (result.returncode == 0) is accepted, result.stderr
-
 
 @pytest.mark.parametrize(
     "answer",
@@ -369,9 +356,9 @@ def test_actual_tuna_branch_rejects_old_or_nonmatching_installed_name(tmp_path, 
     "replacement",
     [
         "",
-        "org.freedesktop.impl.portal.Lockdown=gnome;\n",
-        "org.freedesktop.impl.portal.Lockdown=tuna;gnome;\n",
-        "org.freedesktop.impl.portal.Lockdown=tuna;\n" * 2,
+        "org.freedesktop.impl.portal.Access=gnome;\n",
+        "org.freedesktop.impl.portal.Access=gtk;gnome;\n",
+        "org.freedesktop.impl.portal.Access=gtk;\n" * 2,
     ],
 )
 def test_actual_portal_parser_rejects_missing_wrong_or_ambiguous_privacy_route(
@@ -391,7 +378,7 @@ def test_actual_portal_parser_rejects_missing_wrong_or_ambiguous_privacy_route(
             "pipefail",
             "-c",
             parser
-            + f'\nrequire_portal_preference "{config}" org.freedesktop.impl.portal.Lockdown tuna',
+            + f'\nrequire_portal_preference "{config}" org.freedesktop.impl.portal.Access gtk',
         ],
         text=True,
         capture_output=True,
