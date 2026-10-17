@@ -334,6 +334,22 @@ def test_unexplained_observed_demand_is_blocked(tmp_path):
     assert result['status'] == 'blocked'
     assert 'unexplained-observed-package-request' in result['reasons']
 
+def test_observed_requiredness_mismatch_blocks_reconciliation(tmp_path):
+    args = reconciliation_fixture(tmp_path, scope='final', required=False, status='optional-missing')
+    args[1]['requests'][0]['required'] = True
+    result = ledger.reconcile(*args)
+    assert result['status'] == 'blocked'
+    assert 'package-requiredness-mismatch' in result['reasons']
+
+
+def test_unfinished_request_with_null_result_blocks_reconciliation(tmp_path):
+    args = reconciliation_fixture(tmp_path)
+    args[1]['requests'][0]['result'] = None
+    args[1]['coverageGaps'].append('unfinished-package-request')
+    result = ledger.reconcile(*args)
+    assert result['status'] == 'blocked'
+    assert 'unfinished-package-request' in result['reasons']
+
 
 def test_recording_io_failure_cannot_prevent_native_command_with_errexit(tmp_path):
     binary = tmp_path / 'bin'
