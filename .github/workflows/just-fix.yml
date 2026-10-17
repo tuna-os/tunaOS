@@ -61,6 +61,32 @@ jobs:
         if: steps.check-bot.outputs.last_commit_is_bot != 'true'
         uses: Homebrew/actions/setup-homebrew@2ebcf16054461267868620b1414507f3ccc765c1 # main as of 2026-06-09
 
+
+      - name: Persist Homebrew path
+        if: steps.check-bot.outputs.last_commit_is_bot != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          brew_bin="$(command -v brew || true)"
+          if [[ -z "$brew_bin" ]]; then
+            for candidate in \
+              /home/linuxbrew/.linuxbrew/bin/brew \
+              /root/.linuxbrew/bin/brew \
+              /opt/homebrew/bin/brew \
+              /usr/local/bin/brew; do
+              if [[ -x "$candidate" ]]; then
+                brew_bin="$candidate"
+                break
+              fi
+            done
+          fi
+          [[ -n "$brew_bin" ]] || {
+            echo "Homebrew was installed but no brew executable was found" >&2
+            exit 1
+          }
+          brew_prefix="$("$brew_bin" --prefix)"
+          printf '%s\n' "${brew_prefix}/bin" "${brew_prefix}/sbin" >> "$GITHUB_PATH"
+          printf 'PATH=%s/bin:%s/sbin:%s\n' "$brew_prefix" "$brew_prefix" "$PATH" >> "$GITHUB_ENV"
       - name: Install just
         if: steps.check-bot.outputs.last_commit_is_bot != 'true'
         run: brew install just
