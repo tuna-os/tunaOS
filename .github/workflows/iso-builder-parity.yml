@@ -127,15 +127,22 @@ jobs:
           set -euo pipefail
           for source in ci browser; do
             manifest="parity/${source}/experience-manifest.json"
+            iso="parity/${source}/${source}.iso"
             test -f "$manifest" || { echo "missing $manifest" >&2; exit 1; }
+            test -f "$iso" || { echo "missing $iso" >&2; exit 1; }
             python3 scripts/verify-experience-manifest.py "$manifest"
             jq -e --arg v "$VARIANT" --arg f "$FLAVOR" \
               '.variant == $v and .flavor == $f' "$manifest" >/dev/null
+            expected="$(jq -er '.iso_sha256' "$manifest")"
+            actual="sha256:$(sha256sum "$iso" | awk '{print $1}')"
+            if [[ "$actual" != "$expected" ]]; then
+              echo "::error::${source} ISO does not match its producer manifest"
+              exit 1
+            fi
           done
           python3 scripts/verify-experience-manifest.py \
             parity/ci/experience-manifest.json \
             --compare parity/browser/experience-manifest.json
-
       - name: Run strict offline GUI qualification against CI ISO
         env:
           VARIANT: ${{ inputs.variant }}
