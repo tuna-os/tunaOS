@@ -380,10 +380,66 @@ def test_guarded_uploader_never_writes_retained_destinations(tmp_path: Path):
                for destination in second_destinations)
 
 
-def test_resolver_remains_valid_when_a_later_publication_replaces_latest(tmp_path: Path):
+def test_routine_publication_keeps_two_iso_copies_and_no_resolver(tmp_path: Path):
+    iso = tmp_path / "fish-gnome-10.2-x86_64.iso"
+    iso.write_bytes(b"iso")
+    digest = hashlib.sha256(b"iso").hexdigest()
+    (tmp_path / f"{iso.name}.sha256").write_text(f"{digest}  {iso.name}\n")
+    (tmp_path / f"{iso.name}.sigstore.json").write_text("{}")
     config_path = tmp_path / "config.json"
     config_path.write_text(json.dumps({
         "iso_delivery": {"cutover_targets": [], "retained_r2_isos": []},
+        "iso_groups": [],
+        "variants": [],
+    }))
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    rclone_log = tmp_path / "rclone.log"
+    rclone = fake_bin / "rclone"
+    rclone.write_text(
+        "#!/bin/sh\n"
+        "printf '%s\\n' \"$*\" >> \"$RCLONE_LOG\"\n"
+    )
+    rclone.chmod(0o755)
+
+    result = subprocess.run(
+        [
+            str(PUBLISH_R2),
+            str(iso),
+            "fish-gnome-latest.iso",
+            str(config_path),
+            "R2:bucket/live-isos",
+        ],
+        cwd=tmp_path,
+        env=os.environ | {
+            "PATH": f"{fake_bin}:{os.environ['PATH']}",
+            "RCLONE_LOG": str(rclone_log),
+            "TUNAOS_PUBLICATION_ID": "routine-run",
+        },
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    destinations = [
+        call.rsplit(" ", 1)[-1] for call in rclone_log.read_text().splitlines()
+    ]
+    assert len(destinations) == 6
+    assert sum(name.endswith(".iso") for name in destinations) == 2
+    assert any(name.endswith(f"/{iso.name}") for name in destinations)
+    assert any(name.endswith("/fish-gnome-latest.iso") for name in destinations)
+    assert not any("-snapshot-" in name for name in destinations)
+    assert not any(name.endswith("/fish-gnome-latest.json")
+                   for name in destinations)
+
+
+def test_frozen_resolver_remains_valid_after_later_publication(tmp_path: Path):
+    config_path = tmp_path / "config.json"
+    config_path.write_text(json.dumps({
+        "iso_delivery": {
+            "cutover_targets": [],
+            "retained_r2_isos": ["fish-gnome-latest.iso"],
+        },
         "iso_groups": [],
         "variants": [],
     }))
