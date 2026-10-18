@@ -983,6 +983,8 @@ with open(path) as f:
 recipe["bootloader"] = bootloader
 recipe["composeFsBackend"] = composefs == "true"
 recipe["filesystem"] = filesystem
+if recipe.get("local_imgref") == "containers-storage:ghcr.io/tuna-os/tunaos:latest":
+    del recipe["local_imgref"]
 with open(path, "w") as f:
     json.dump(recipe, f, indent=2)
     f.write("\n")

@@ -255,6 +255,10 @@ if 'completed' in tour:
 
 recipe['tour'] = new_tour
 
+recipe['imgref'] = '${IMAGE_REGISTRY:-ghcr.io}/${IMAGE_VENDOR:-tuna-os}/${IMAGE_NAME}:${IMAGE_FLAVOR}'
+if recipe.get('local_imgref') == 'containers-storage:ghcr.io/tuna-os/tunaos:latest':
+    del recipe['local_imgref']
+
 # The variant is the name people see; the installer's stock slides say
 # TunaOS (e.g. your new TunaOS workstation). Swap it in every text value,
 # leaving image references alone.
