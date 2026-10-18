@@ -34,8 +34,11 @@ other way to get this wrong.
 from __future__ import annotations
 
 import fnmatch
+import json
 import re
 from pathlib import Path
+import subprocess
+import tempfile
 
 import pytest
 import yaml
@@ -43,6 +46,8 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOWS = ROOT / ".github" / "workflows"
 PRUNE = WORKFLOWS / "prune-r2.yml"
+POLICY = ROOT / "scripts" / "iso-delivery-policy.py"
+CONFIG = ROOT / ".github" / "build-config.yml"
 
 # Every expansion collapses to one placeholder. The test is about the SHAPE of
 # the name around "-latest", not about resolving variant/flavor/arch: any
@@ -97,6 +102,12 @@ def pointer_names() -> set[str]:
         for token in LATEST_TOKEN.findall(text):
             found.update(_expand(token, latest_values))
         found.update(latest_values)
+    # The shared uploader derives verification sidecars from every ISO
+    # destination after the workflows choose the pointer name.
+    for name in tuple(found):
+        if name.endswith(".iso"):
+            found.add(f"{name}.sha256")
+            found.add(f"{name}.sigstore.json")
     return found
 
 
@@ -130,6 +141,27 @@ def prune_steps() -> list[tuple[str, str, list[tuple[str, str]]]]:
                 kind = "include" if sign == "+" else "exclude"
                 pattern = filter_pattern
             rules.append((kind, pattern))
+        if "--filter-from" in code:
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".json") as config_json:
+                json.dump(yaml.safe_load(CONFIG.read_text(encoding="utf-8")), config_json)
+                config_json.flush()
+                generated = subprocess.run(
+                    [
+                        str(POLICY),
+                        "--config-json",
+                        config_json.name,
+                        "retention-filters",
+                    ],
+                    text=True,
+                    capture_output=True,
+                    check=True,
+                ).stdout
+            rules.extend(
+                ("include" if sign == "+" else "exclude", pattern)
+                for sign, pattern in (
+                    line.split(" ", 1) for line in generated.splitlines() if line
+                )
+            )
         steps.append((step.get("name", "?"), prefix.group(1) if prefix else "?", rules))
     return steps
 
@@ -149,7 +181,8 @@ def verdict(name: str, rules: list[tuple[str, str]]) -> str:
     single-segment patterns this workflow uses.
     """
     for kind, pattern in rules:
-        if fnmatch.fnmatch(name, pattern):
+        candidate = f"/{name}" if pattern.startswith("/") else name
+        if fnmatch.fnmatch(candidate, pattern):
             return "keep" if kind == "exclude" else "delete"
     return "keep" if any(kind == "include" for kind, _ in rules) else "delete"
 
@@ -196,7 +229,7 @@ def test_prune_rules_have_deterministic_order():
         )
         assert "--include " not in code
         assert "--exclude " not in code
-        assert "--filter " in code
+        assert ("--filter " in code) != ("--filter-from " in code)
 
 
 @pytest.mark.parametrize("name", sorted(pointer_names()))

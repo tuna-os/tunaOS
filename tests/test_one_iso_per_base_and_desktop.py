@@ -20,17 +20,25 @@ Guarded by tests because the config is what the whole publish pipeline reads,
 and a typo here is a silently missing ISO rather than an error.
 """
 from __future__ import annotations
+import importlib.util
 
 import json
+import os
 import subprocess
 from pathlib import Path
 
 import yaml
+import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG = ROOT / ".github" / "build-config.yml"
 DESKTOPS = ["gnome", "kde", "cosmic", "niri", "xfce"]
 POLICY = ROOT / "scripts" / "iso-delivery-policy.py"
+PUBLISH_R2 = ROOT / "scripts" / "publish-iso-r2.sh"
+SPEC = importlib.util.spec_from_file_location("iso_delivery_policy", POLICY)
+POLICY_MODULE = importlib.util.module_from_spec(SPEC)
+assert SPEC.loader
+SPEC.loader.exec_module(POLICY_MODULE)
 
 
 def config() -> dict:
@@ -188,34 +196,144 @@ def _annotate_group(tmp_path: Path, config: dict) -> subprocess.CompletedProcess
     )
 
 
-def test_partially_covered_group_keeps_r2_publication(tmp_path: Path):
-    result = _annotate_group(
-        tmp_path,
-        _group_policy_config([_qualification("kde")], []),
-    )
-    assert result.returncode == 0, result.stderr
-    assert json.loads(result.stdout)["include"][0]["r2_cutover"] is False
-
-
-def test_fully_covered_group_closes_r2_publication(tmp_path: Path):
+def test_nonempty_cutover_is_rejected_until_receipts_are_integrated(tmp_path: Path):
     result = _annotate_group(
         tmp_path,
         _group_policy_config(
             [_qualification("kde"), _qualification("kde-hwe")],
-            ["fish-kde-latest.iso", "fish-kde-20261018-x86_64.iso"],
-        ),
-    )
-    assert result.returncode == 0, result.stderr
-    assert json.loads(result.stdout)["include"][0]["r2_cutover"] is True
-
-
-def test_fully_covered_group_requires_retained_r2_inventory(tmp_path: Path):
-    result = _annotate_group(
-        tmp_path,
-        _group_policy_config(
-            [_qualification("kde"), _qualification("kde-hwe")],
-            [],
+            ["fish-kde-latest.iso", "fish-kde-10.2-x86_64.iso"],
         ),
     )
     assert result.returncode != 0
-    assert "fully cut-over group" in result.stderr
+    assert "#3381" in result.stderr
+    assert "current qualification catalog" in result.stderr
+
+
+def test_versioned_target_inventory_does_not_accept_a_sibling_flavor():
+    retained = (
+        "fish-gnome-latest.iso",
+        "fish-gnome-nvidia-10.2-x86_64.iso",
+    )
+    assert not POLICY_MODULE.has_dated_iso(
+        retained, "fish", "gnome", "linux/amd64"
+    )
+    assert POLICY_MODULE.has_dated_iso(
+        retained + ("fish-gnome-10.2-x86_64.iso",),
+        "fish",
+        "gnome",
+        "linux/amd64",
+    )
+
+
+def test_versioned_group_inventory_does_not_accept_a_sibling_group():
+    cfg = _group_policy_config([], [])
+    active = {
+        ("fish", "kde", "linux/amd64"),
+        ("fish", "kde-hwe", "linux/amd64"),
+    }
+    with pytest.raises(POLICY_MODULE.PolicyError, match="versioned ISO"):
+        POLICY_MODULE.validate_group_retention(
+            cfg,
+            active,
+            ("fish-kde-latest.iso", "fish-kde-nvidia-10.2-x86_64.iso"),
+        )
+    POLICY_MODULE.validate_group_retention(
+        cfg,
+        active,
+        ("fish-kde-latest.iso", "fish-kde-10.2-x86_64.iso"),
+    )
+
+
+def test_group_without_a_buildable_live_flavor_requires_no_inventory():
+    cfg = {
+        "iso_groups": [{
+            "suffix": "",
+            "flavors": ["gnome-nvidia"],
+            "offline_flavors": ["gnome"],
+        }],
+        "variants": [{
+            "id": "grouper",
+            "platforms": ["linux/amd64"],
+            "flavors": [{"id": "gnome", "build_image": True}],
+        }],
+    }
+    POLICY_MODULE.validate_group_retention(
+        cfg, {("grouper", "gnome", "linux/amd64")}, ()
+    )
+
+
+def test_guarded_uploader_never_writes_retained_destinations(tmp_path: Path):
+    iso = tmp_path / "fish-gnome-10.2-x86_64.iso"
+    iso.write_bytes(b"iso")
+    (tmp_path / f"{iso.name}.sha256").write_text("digest  iso\n")
+    (tmp_path / f"{iso.name}.sigstore.json").write_text("{}")
+    config_path = tmp_path / "config.json"
+    config_path.write_text(json.dumps({
+        "iso_delivery": {
+            "cutover_targets": [],
+            "retained_r2_isos": [
+                iso.name,
+                "fish-gnome-latest.iso",
+            ],
+        },
+        "iso_groups": [],
+        "variants": [],
+    }))
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    rclone_log = tmp_path / "rclone.log"
+    rclone = fake_bin / "rclone"
+    rclone.write_text("#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$RCLONE_LOG\"\n")
+    rclone.chmod(0o755)
+
+    result = subprocess.run(
+        [
+            str(PUBLISH_R2),
+            str(iso),
+            "fish-gnome-latest.iso",
+            str(config_path),
+            "R2:bucket/live-isos",
+        ],
+        cwd=tmp_path,
+        env=os.environ | {
+            "PATH": f"{fake_bin}:{os.environ['PATH']}",
+            "RCLONE_LOG": str(rclone_log),
+        },
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert not rclone_log.exists()
+    assert result.stdout.count("retained R2 object is immutable") == 6
+
+    config_path.write_text(json.dumps({
+        "iso_delivery": {
+            "cutover_targets": [],
+            "retained_r2_isos": ["fish-gnome-latest.iso"],
+        },
+        "iso_groups": [],
+        "variants": [],
+    }))
+    result = subprocess.run(
+        [
+            str(PUBLISH_R2),
+            str(iso),
+            "fish-gnome-latest.iso",
+            str(config_path),
+            "R2:bucket/live-isos",
+        ],
+        cwd=tmp_path,
+        env=os.environ | {
+            "PATH": f"{fake_bin}:{os.environ['PATH']}",
+            "RCLONE_LOG": str(rclone_log),
+        },
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    uploads = rclone_log.read_text().splitlines()
+    assert len(uploads) == 3
+    assert all(f"/{iso.name}" in upload for upload in uploads)
+    assert all("-latest" not in upload for upload in uploads)
