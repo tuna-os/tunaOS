@@ -358,9 +358,26 @@ jobs:
             candidate="$requested"
             expected_digest=""
             resolver="${requested%.iso}.json"
-            payload="$(rclone cat --s3-no-check-bucket \
-              "R2:${{ secrets.R2_BUCKET }}/live-isos/${resolver}" 2>/dev/null || true)"
-            if [[ -n "$payload" ]]; then
+            if ! resolver_listing="$(rclone lsf --s3-no-check-bucket \
+              --files-only --include "/${resolver}" \
+              "R2:${{ secrets.R2_BUCKET }}/live-isos/")"; then
+              echo "::error::Cannot list resolver ${resolver}; refusing frozen stable fallback" >&2
+              exit 1
+            fi
+            if [[ -n "$resolver_listing" ]]; then
+              if [[ "$resolver_listing" != "$resolver" ]]; then
+                echo "::error::Unexpected resolver listing for ${resolver}; refusing frozen stable fallback" >&2
+                exit 1
+              fi
+              if ! payload="$(rclone cat --s3-no-check-bucket \
+                "R2:${{ secrets.R2_BUCKET }}/live-isos/${resolver}")"; then
+                echo "::error::Cannot read resolver ${resolver}; refusing frozen stable fallback" >&2
+                exit 1
+              fi
+              if [[ -z "$payload" ]]; then
+                echo "::error::Empty resolver ${resolver}; refusing frozen stable fallback" >&2
+                exit 1
+              fi
               if ! resolved="$(jq -er '
                 select(.schema == "TunaOSIsoResolution/v1") |
                 select(.iso | type == "string" and endswith(".iso") and

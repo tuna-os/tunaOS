@@ -360,7 +360,7 @@ def test_the_rclone_failure_does_not_abort_before_the_fallback():
 
 @pytest.mark.parametrize(
     ("resolver_mode", "expected_status"),
-    [("absent", 0), ("invalid", 1)],
+    [("absent", 0), ("read-error", 1), ("empty", 1), ("invalid", 1)],
 )
 def test_resolver_download_falls_back_only_when_resolver_is_absent(
     tmp_path, resolver_mode, expected_status
@@ -377,7 +377,10 @@ def test_resolver_download_falls_back_only_when_resolver_is_absent(
     rclone.write_text(
         "#!/bin/sh\n"
         "case \"$1:$RESOLVER_MODE\" in\n"
-        "  cat:absent) exit 1 ;;\n"
+        "  lsf:absent) exit 0 ;;\n"
+        "  lsf:*) printf 'fish-gnome-latest.json\\n' ;;\n"
+        "  cat:read-error) exit 1 ;;\n"
+        "  cat:empty) exit 0 ;;\n"
         "  cat:invalid) printf '{}\\n' ;;\n"
         "  copyto:*) for last; do :; done; printf 'stable' > \"$last\" ;;\n"
         "esac\n",
@@ -398,8 +401,8 @@ def test_resolver_download_falls_back_only_when_resolver_is_absent(
         check=False,
     )
     assert proc.returncode == expected_status, proc.stderr
-    if resolver_mode == "invalid":
+    if resolver_mode == "absent":
+        assert "fish-gnome-latest.iso" in github_env.read_text()
+    else:
         assert "refusing frozen stable fallback" in proc.stderr
         assert not github_env.exists()
-    else:
-        assert "fish-gnome-latest.iso" in github_env.read_text()
