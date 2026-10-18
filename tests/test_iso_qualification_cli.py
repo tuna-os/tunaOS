@@ -66,17 +66,21 @@ def test_qualification_requires_manifest_before_starting_qemu(tmp_path):
 
 
 @pytest.mark.parametrize(
-    ("profile", "partition_type", "expects_luks_open"),
+    ("profile", "partition_type", "root_device", "vg_pvs", "succeeds"),
     [
-        ("plain", "ext4", False),
-        ("encrypted", "crypto_LUKS", True),
+        ("plain", "ext4", "/dev/sda2", "", True),
+        ("encrypted", "crypto_LUKS", "/dev/mapper/tunaos-qualification-root", "", True),
+        ("encrypted", "crypto_LUKS", "/dev/sda3", "", False),
+        ("encrypted", "crypto_LUKS", "/dev/vg/root", "encrypted-pv", True),
+        ("encrypted", "crypto_LUKS", "/dev/vg/root", "plain-pv", False),
+        ("encrypted", "crypto_LUKS", "/dev/vg/root", "encrypted-pv\nplain-pv", False),
     ],
 )
 def test_account_provisioning_uses_deployment_aware_guestfish(
-    tmp_path, profile, partition_type, expects_luks_open
+    tmp_path, profile, partition_type, root_device, vg_pvs, succeeds
 ):
     function = shell_section(
-        "prepare_qualification_disk() {",
+        "qualification_root_is_encrypted() {",
         "qualification_frame_text() {",
     )
     fakebin = tmp_path / "bin"
@@ -96,13 +100,13 @@ case "$*" in
   *list-partitions*) printf '/dev/sda1\\n/dev/sda2\\n' ;;
   *"vfs-type /dev/sda1"*) printf 'vfat\\n' ;;
   *"vfs-type /dev/sda2"*) printf '%s\\n' "$PARTITION_TYPE" ;;
-  *list-filesystems*)
-    if [[ "$PARTITION_TYPE" == crypto_LUKS ]]; then
-      printf '/dev/mapper/tunaos-qualification-root: ext4\\n'
-    else
-      printf '/dev/sda2: ext4\\n'
-    fi
+  *list-filesystems*) printf '%s: ext4\\n' "$ROOT_DEVICE" ;;
+  *"lvm-canonical-lv-name "*)
+    [[ "$ROOT_DEVICE" == /dev/vg/root ]] || exit 1
+    printf '%s\\n' "$ROOT_DEVICE"
     ;;
+  *"pvuuid /dev/mapper/tunaos-qualification-root"*) printf 'encrypted-pv\\n' ;;
+  *"vgpvuuids vg"*) printf '%s\\n' "$VG_PVS" ;;
   *"is-dir /state/deploy"*) printf 'true\\n' ;;
   *"is-dir /ostree/deploy"*) printf 'false\\n' ;;
   *"glob-expand /state/deploy/"*) printf '/state/deploy/abc/etc\\n' ;;
@@ -124,6 +128,8 @@ esac
     env = os.environ | {
         "PATH": f"{fakebin}:{os.environ['PATH']}",
         "PARTITION_TYPE": partition_type,
+        "ROOT_DEVICE": root_device,
+        "VG_PVS": vg_pvs,
         "CALLS": str(calls),
         "CAPTURED": str(captured),
     }
@@ -148,12 +154,18 @@ esac
         text=True,
         check=False,
     )
-    assert proc.returncode == 0, proc.stderr
     arguments = calls.read_text(encoding="utf-8")
+    if not succeeds:
+        assert proc.returncode != 0
+        assert "deployment root is not backed entirely" in proc.stderr
+        assert " upload " not in arguments
+        assert not captured.exists()
+        return
+    assert proc.returncode == 0, proc.stderr
     assert "vfs-type /dev/sda2" in arguments
     assert (
         "cryptsetup-open /dev/sda2 tunaos-qualification-root" in arguments
-    ) is expects_luks_open
+    ) is (profile == "encrypted")
     assert "glob-expand /state/deploy/*/etc" in arguments
     assert "virt-customize" not in arguments
     script = captured.read_text(encoding="utf-8")

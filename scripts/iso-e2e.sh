@@ -3583,6 +3583,22 @@ boot_disk_image() {
 	return 1
 }
 
+# Accept a direct unlocked filesystem, or an LV whose whole VG resides on
+# that unlocked PV. An unrelated LUKS partition does not encrypt the root.
+qualification_root_is_encrypted() {
+	local device="$1" mapping=/dev/mapper/tunaos-qualification-root
+	[[ "$device" == "$mapping" ]] && return 0
+	local lv vg encrypted_pv vg_pvs
+	lv="$(guestfish --remote lvm-canonical-lv-name "$device" 2>/dev/null)" || return 1
+	[[ "$lv" == /dev/*/* ]] || return 1
+	vg="${lv#/dev/}"
+	vg="${vg%%/*}"
+	encrypted_pv="$(guestfish --remote pvuuid "$mapping" 2>/dev/null)" || return 1
+	[[ -n "$encrypted_pv" ]] || return 1
+	vg_pvs="$(guestfish --remote vgpvuuids "$vg" 2>/dev/null)" || return 1
+	[[ "$vg_pvs" == "$encrypted_pv" ]]
+}
+
 # Inspect the disk the GUI wrote and provision the harness-owned account used
 # for an offline, monitor-driven greeter login. All disk access stays inside a
 # libguestfs appliance. Root discovery is deployment-aware and does not depend
@@ -3660,7 +3676,7 @@ EOF
 		if [[ "$encrypted" -eq 1 ]]; then
 			printf '%s\n' "$passphrase" |
 				guestfish --keys-from-stdin --remote \
-					cryptsetup-open "$luks_partition" tunaos-qualification-root
+					cryptsetup-open "$luks_partition" tunaos-qualification-root || exit 1
 			guestfish --remote lvm-scan true
 			guestfish --remote vg-activate-all true
 		fi
@@ -3673,9 +3689,14 @@ EOF
 			"" | swap | crypto_LUKS | LVM2_member) continue ;;
 			esac
 			guestfish --remote -- -umount-all >/dev/null 2>&1 || true
-			guestfish --remote -- -mount "$device" / >/dev/null 2>&1
+			guestfish --remote mount "$device" / >/dev/null 2>&1 || continue
 			if [[ "$(guestfish --remote is-dir /state/deploy)" == true ||
-				"$(guestfish --remote is-dir /ostree/deploy)" == true ]]; then
+			"$(guestfish --remote is-dir /ostree/deploy)" == true ]]; then
+				if [[ "$QUALIFICATION_PROFILE" == encrypted ]] &&
+					! qualification_root_is_encrypted "$device"; then
+					echo "ERROR: deployment root is not backed entirely by the unlocked LUKS partition: ${device}" >&2
+					exit 1
+				fi
 				root_found=1
 				break
 			fi
@@ -3819,7 +3840,6 @@ drive_qualification_login() {
 	monitor_cmd "sendkey ret"
 	echo "==> Submitted the harness account through the graphical console"
 }
-
 
 boot_qualification_disk() {
 	local installed_serial="${OUTPUT_DIR}/installed-serial.log"
