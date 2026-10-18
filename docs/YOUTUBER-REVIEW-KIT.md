@@ -18,16 +18,14 @@ criteria the issue proposed):
 
 ## What's ready to send today
 
-Verified live (`curl -I`, 2026-08-14) instead of assumed from the original
-issue draft, which named two artifacts that don't exist yet — see
-**Known gap** below before sending anything.
+The x86 download checks date to 2026-08-14. Re-check each link before use.
+The 2026-10-17 [X13s assessment](X13S-SUPPORT.md) corrects the earlier ARM ISO claims.
 
 | Story | Variant | Download | Notes |
 |---|---|---|---|
 | Enterprise Linux desktop, stable | Yellowfin GNOME | [yellowfin-gnome-latest.iso](https://download.tunaos.org/live-isos/yellowfin-gnome-latest.iso) | The flagship, most-tested variant |
 | Fedora desktop | Bonito GNOME | [bonito-gnome-latest.iso](https://download.tunaos.org/live-isos/bonito-gnome-latest.iso) | Bonito is still Beta (GA tracked in #272) — say so if it comes up |
-| Snapdragon X Elite / ARM laptop | bonito-x13s | [bonito-x13s-latest.iso](https://download.tunaos.org/bonito-x13s/bonito-x13s-latest.iso) | Rebuilt automatically on every push — always current |
-| Snapdragon X Elite / ARM laptop (Bluefin-based) | dakota-x13s | [x13s-live-latest.iso](https://download.tunaos.org/dakota-x13s/x13s-live-latest.iso) | Alpha; tracks upstream Project Bluefin Dakota |
+| ThinkPad X13s / Snapdragon 8cx Gen3 (SC8280XP), not X Elite | Proposed `bonito:gnome-x13s`; no implementation | [Assessment](X13S-SUPPORT.md), not an ISO | Read-only observations of postmarketOS. No TunaOS boot or install test. |
 
 **Before sending any link**, re-check `https://tunaos.org/download` (or
 re-`curl -I` the URL) — these are `-latest.iso` convenience pointers, not
@@ -56,8 +54,8 @@ live; niri isn't in Bonito's published-ISO set today.
 reviewer a 404 (or asking them to build their own ISO from source) on a
 project's *first* pitch to a channel with 100k+ subscribers is worse than
 not pitching the Gurnard story yet. Lead with Yellowfin/Bonito (stable,
-verified downloads) and the ARM story (bonito-x13s/dakota-x13s, both
-verified live and continuously rebuilt) instead. Revisit Gurnard once
+verified x86 downloads). Hold the X13s pitch until boot and install qualification ends.
+ARM64 OCI publication does not validate hardware. Revisit Gurnard once
 `build_iso: true` lands for it and a real download exists — worth its own
 follow-up issue if a maintainer wants to prioritize that ahead of the
 09-01 Hacktoberfest registration window, since it also feeds the
@@ -77,25 +75,25 @@ Use as the email body / video-description seed:
 > attestations for every published artifact — a genuinely current
 > supply-chain story, not a claim.
 >
-> Two things make it a fresh angle for a review: **hardware breadth**
-> (it runs on Snapdragon X Elite ARM laptops like the ThinkPad X13s, not
-> just x86) and **desktop breadth** (GNOME, KDE Plasma, COSMIC, Niri,
-> XFCE — same image-based update model on every one).
+> The project offers **architecture breadth**: ARM64 OCI inputs alongside x86.
+> X13s qualification remains a plan, not a claim of support.
+> It also offers **desktop breadth**: GNOME, KDE Plasma, COSMIC, Niri,
+> and XFCE share the same image-based update model.
 
 ## Hardware notes: what to test on ARM vs x86
 
 - **x86_64 (Yellowfin/Bonito)**: standard install, any UEFI machine.
   `sudo bootc switch`/`sudo bootc upgrade` for the atomic-update story.
-- **ARM (bonito-x13s/dakota-x13s, Lenovo ThinkPad X13s / Qualcomm
-  SC8280XP)**: needs the X13s-specific kernel args and device tree
-  already baked into the image (`arm64.nopauth`, `clk_ignore_unused`,
-  `pd_ignore_unused`, `modprobe.blacklist=qcom_q6v5_pas`,
-  `sc8280xp-lenovo-thinkpad-x13s.dtb`) — nothing the reviewer needs to
-  configure manually, but worth mentioning on camera since "just works
-  on Windows-on-ARM silicon" is the actual news. Known-rough edges
-  (camera, cellular modem, fingerprint reader) are inherited from the
-  upstream `jlinton/x13s` kernel enablement, not TunaOS-specific — don't
-  claim more hardware support than the X13s kernel work itself provides.
+- **ARM (Lenovo ThinkPad X13s / Qualcomm SC8280XP, Snapdragon 8cx Gen3,
+  not X Elite)**: read the [X13s assessment](X13S-SUPPORT.md) before a review.
+  The 2026-10-17 investigation observed postmarketOS, not TunaOS.
+  It did not test a TunaOS boot or install.
+  Generic Bonito GNOME and Fedora 44 bootc images provide ARM64 OCI inputs.
+  The build matrix, router, and overlay have no X13s profile.
+  The proposed `bonito:gnome-x13s` would use the stock Fedora kernel.
+  No implementation exists. Do not promise an ISO, built-in boot configuration,
+  or functional peripherals. The assessment records the boot chain and gaps
+  in hardware tests.
 
 ## Download / checksum verification steps
 

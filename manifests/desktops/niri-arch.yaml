@@ -58,6 +58,7 @@ packages:
     # Integration
     - xdg-desktop-portal-gnome
     - xdg-desktop-portal-gtk
+    - xdg-terminal-exec
     - xdg-user-dirs
     - xdg-user-dirs-gtk
     - polkit-gnome

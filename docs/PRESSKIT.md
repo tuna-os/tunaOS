@@ -36,9 +36,11 @@ manifest-driven, multi-distro build pipeline.
    nautilus, gdm, orca) for AlmaLinux/CentOS Stream. TunaOS builds them with
    its own RPM build chain. Enterprise desktops therefore get GNOME on the
    upstream schedule, and do not wait for the next EL point release.
-2. **ARM is next**: Snapdragon X Elite (X13s-class) laptop builds are
-   bootc desktops. This is one of the hardware classes for ARM Linux with
-   the fastest growth. An **experimental** Apple Silicon (M1/M2) installer
+2. **ARM is next**: generic Bonito GNOME and Fedora 44 bootc images provide
+   ARM64 OCI inputs. X13s qualification remains a plan, not shipped support.
+   The ThinkPad X13s uses Snapdragon 8cx Gen3 (SC8280XP), not X Elite.
+   The [X13s assessment](X13S-SUPPORT.md) records read-only observations of postmarketOS.
+   No TunaOS boot or install test took place. An **experimental** Apple Silicon (M1/M2) installer
    (bootc-installer-asahi) ships kernel + glue today. The boot payloads are
    still not ready ([#777](https://github.com/tuna-os/tunaos/issues/777)), so
    Apple Silicon is an engineering preview, not a shipped product.
@@ -140,8 +142,9 @@ image, BuildStream-built).
 - Show a `bootc upgrade` + rollback in 2 minutes (any variant)
 - Show that GNOME 51 runs on AlmaLinux 10 (the EL10 backport story)
 - Show how to verify a keyless signature (cosign verify against Rekor)
-- Show the ARM story: Snapdragon X Elite build, plus the preview of the
-  experimental installer for Apple Silicon
+- Explain the ARM64 OCI inputs and planned [X13s qualification](X13S-SUPPORT.md).
+  Include the preview of the experimental installer for Apple Silicon.
+  Do not present an X13s demo as validated TunaOS support.
 
 ## For YouTubers
 

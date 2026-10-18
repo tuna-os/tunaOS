@@ -47,7 +47,7 @@ Why your listeners will find this compelling:
 1. Enterprise Base + Modern Desktop: Albacore & Yellowfin ship modern GNOME, KDE, COSMIC, and Niri directly on top of AlmaLinux 10 / RHEL 10.
 2. Unbreakable Updates & Rollback: System upgrades are single atomic image pulls. If an update causes an issue, `bootc rollback` instantly restores the previous working state.
 3. Modern Supply Chain: Every image is signed keylessly using Sigstore/cosign with verifiable SBOMs.
-4. Multi-Distro & Architecture: Beyond EL10, TunaOS builds images across Fedora (Bonito), Arch/CachyOS (Marlin), and Ubuntu LTS (Gurnard), alongside experimental ARM Snapdragon X Elite builds.
+4. Multi-Distro & Architecture: Beyond EL10, TunaOS builds images across Fedora (Bonito), Arch/CachyOS (Marlin), and Ubuntu LTS (Gurnard). Generic Bonito GNOME ARM64 OCI inputs exist. They do not prove Snapdragon laptop support. We propose X13s qualification, not a release.
 
 I've attached our one-page Press Kit ([docs/PRESSKIT.md]) with full technical specs and variant lifecycle tables.
 
@@ -67,7 +67,7 @@ https://github.com/tuna-os/tunaOS
 - **The Problem:** The traditional package manager dilemma (`dnf`/`apt`/`pacman` roulette vs. stale software).
 - **The Solution:** OCI container-native system architecture via `bootc` (CNCF sandbox project).
 - **Supply Chain Security:** Eliminating static GPG keys in favor of Sigstore/cosign keyless verification.
-- **Hardware Diversity:** Supporting modern x86-64 hardware, vintage legacy laptops (e-waste revival), and experimental ARM platforms (Snapdragon X Elite).
+- **Hardware Diversity:** We support modern x86-64 hardware and vintage legacy laptops (e-waste revival). ARM laptops need qualification. The X13s uses Snapdragon 8cx Gen 3, not X Elite. The [X13s assessment](../X13S-SUPPORT.md) does not prove TunaOS support for either platform.
 - **Honest Status:** Highlighting stable GA lines (Albacore/Yellowfin) while being candid about beta/experimental variants (Marlin, Gurnard, Apple Silicon).
 
 ---

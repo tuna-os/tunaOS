@@ -17,7 +17,7 @@ your hardware (HWE kernels, NVIDIA, ARM), see the
 
 | Hardware | Status | Docs |
 |----------|--------|------|
-| Snapdragon X Elite (e.g. Lenovo ThinkPad X13s) | Supported via [Bonito](https://tunaos.org/docs/bonito) (ARM64) | [Snapdragon X Elite FAQ](https://tunaos.org/docs/faq); the dedicated [bonito-x13s](https://tunaos.org/docs/bonito-x13s) / [dakota-x13s](https://tunaos.org/docs/dakota-x13s) pages are archived |
+| Lenovo ThinkPad X13s (Snapdragon 8cx Gen 3 / SC8280XP, not X Elite) | Assessed on postmarketOS; TunaOS boot, installation, upgrade and rollback are not yet verified | [X13s assessment and bring-up requirements](X13S-SUPPORT.md) |
 | Apple Silicon (M1, M2) | In progress via [Asahi Linux](https://asahilinux.org/) — see note below | [bootc-installer-asahi](https://github.com/tuna-os/bootc-installer-asahi) |
 | Apple Silicon (M3 and newer) | Not supported (no Asahi support for M3+ yet) | — |
 
