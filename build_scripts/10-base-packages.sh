@@ -593,6 +593,6 @@ fi
 
 dnf -y remove console-login-helper-messages setroubleshoot || true
 
-	# Install uupd and its upstream units from the pinned GitHub release.
-	/run/context/build_scripts/install-uupd.sh
+# Install uupd and its upstream units from the pinned GitHub release.
+/run/context/build_scripts/install-uupd.sh
 printf "::endgroup::\n"
