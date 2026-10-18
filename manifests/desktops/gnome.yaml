@@ -37,6 +37,7 @@ packages:
     - plymouth-theme-spinner
     - xdg-desktop-portal-gnome
     - xdg-desktop-portal-gtk
+    - xdg-terminal-exec
     - xdg-user-dirs-gtk
     # gnome-keyring is NOT pulled by ubuntu-desktop-minimal. Measured on the
     # published grouper:gnome: zero gnome-keyring packages installed and no
@@ -104,6 +105,7 @@ packages:
       - ptyxis
       - xdg-desktop-portal-gnome
       - xdg-desktop-portal-gtk
+      - xdg-terminal-exec
       - xdg-user-dirs-gtk
       - yelp
       - desktop-backgrounds-gnome
@@ -245,6 +247,7 @@ packages:
       - ptyxis
       - xdg-desktop-portal-gnome
       - xdg-desktop-portal-gtk
+      - xdg-terminal-exec
       - xdg-user-dirs-gtk
       - yelp
       - desktop-backgrounds-gnome
@@ -377,6 +380,7 @@ packages:
       - ptyxis
       - sane-backends-drivers-scanners
       - xdg-desktop-portal-gnome
+      - xdg-terminal-exec
       - xdg-user-dirs-gtk
       - yelp-tools
       - gnome-disk-utility
@@ -538,6 +542,6 @@ versionlock:
 
 post_install:
   - tuna-flatpak-remote.sh
-  # Curated Flatpak set (store + browser + Extension Manager) — see the
-  # script header; asserts live in verify-desktop-experience.sh.
+  # Curated Flatpak set (store + browser + terminal + Extension Manager) —
+  # see the script header; asserts live in verify-desktop-experience.sh.
   - flatpak-preinstall.sh

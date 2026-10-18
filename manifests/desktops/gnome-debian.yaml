@@ -18,6 +18,7 @@ packages:
     - nautilus
     - xdg-desktop-portal-gnome
     - xdg-desktop-portal-gtk
+    - xdg-terminal-exec
     - xdg-user-dirs-gtk
     # glib-compile-schemas — live-iso customize (desktop-gnome.sh) compiles
     # gschema overrides for autologin/no-sleep; Debian ships the tool in the
@@ -30,6 +31,6 @@ packages:
 # tuna-flatpak-remote.sh like every other desktop manifest.
 post_install:
   - tuna-flatpak-remote.sh
-  # Curated Flatpak set (store + browser) + preinstall service — see the
-  # script header; asserts live in verify-desktop-experience.sh.
+  # Curated Flatpak set (store + browser + terminal) + preinstall service —
+  # see the script header; asserts live in verify-desktop-experience.sh.
   - flatpak-preinstall.sh

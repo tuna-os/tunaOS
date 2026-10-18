@@ -48,11 +48,15 @@ background, verified, and swapped at reboot; if it misbehaves, `bootc
 rollback` puts you back on the last good system in seconds.
 
 This talk demos the full loop live: pull an image, upgrade, break the new
-image on purpose, and roll back. We'll also show what this unlocks — the
-same image runs on enterprise Linux bases (AlmaLinux 10, CentOS Stream 10),
-ARM laptops (Snapdragon X Elite, Apple Silicon work in progress), and a
+image on purpose, and roll back. We'll also show what this unlocks across
+enterprise Linux bases (AlmaLinux 10, CentOS Stream 10) and a
 Kubernetes-native VM manager (Corral) that treats desktops as declarative
-resources. No vendor pitch: the whole stack is open source, and every
+resources. Generic Bonito GNOME ARM64 OCI inputs exist.
+Laptop support still needs qualification: [X13s assessment](X13S-SUPPORT.md).
+The X13s uses Snapdragon 8cx Gen 3, not X Elite.
+We did not boot or install TunaOS on it.
+Apple Silicon remains work in progress. No vendor pitch: the whole stack
+is open source, and every
 artifact is signed and reproducible.
 
 Attendees leave with a concrete recipe they can run at home and a clear
