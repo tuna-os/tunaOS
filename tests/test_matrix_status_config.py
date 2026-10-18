@@ -645,38 +645,35 @@ if __name__ == "__main__":
 
 
 class LifecycleResultsNormalisation(unittest.TestCase):
-    """W2: the lifecycle scaffold was written before the workflow ever ran,
-    and the first real sweep (run 32040213366) proved its keys never matched
-    — latest_results returns raw job names ("yellowfin:gnome (amd64)",
-    "BETA guppy:gnome (amd64)") while the composite looks up
-    "variant:flavor". 168 verdicts rendered as 168 ⬜."""
+    """Lifecycle scoring accepts only current validating matrix jobs."""
 
     def _with_raw(self, raw):
         with mock.patch.object(gms, "latest_results", return_value=raw):
             return gms.lifecycle_results()
 
-    def test_beta_probe_cannot_replace_unprefixed_validation(self):
+    def test_current_validations_normalise_and_beta_history_is_excluded(self):
         got = self._with_raw({
-            "BETA yellowfin:gnome (amd64)": ("success", "2026-08-17", "2"),
-            "yellowfin:gnome (amd64)": ("failure", "2026-08-16", "1"),
-            "BETA guppy:gnome (amd64)": ("success", "2026-08-17", "2"),
+            "yellowfin:gnome (amd64)": ("success", "2026-08-17", "1"),
+            "yellowfin:kde (amd64)": ("failure", "2026-08-17", "1"),
+            "BETA yellowfin:gnome (amd64)": ("failure", "2026-08-18", "2"),
+            "BETA guppy:gnome (amd64)": ("success", "2026-08-18", "2"),
+            "guppy:gnome (amd64)": ("failure", "2026-08-17", "1"),
             "bonito-rawhide:gnome (amd64)": ("failure", "2026-08-17", "1"),
-            "flounder:kde-nvidia (amd64)": ("failure", "2026-08-17", "1"),
         })
-        self.assertEqual(got["yellowfin:gnome"][0], "failure")
+        self.assertEqual(got["yellowfin:gnome"][0], "success")
+        self.assertEqual(got["yellowfin:kde"][0], "failure")
         self.assertNotIn("guppy:gnome", got)
-        self.assertEqual(got["bonito-rawhide:gnome"][0], "failure")
-        self.assertEqual(got["flounder:kde-nvidia"][0], "failure")
+        self.assertNotIn("bonito-rawhide:gnome", got)
 
     def test_arch_legs_merge_worst_of(self):
         # One green leg must not mask a red one — same spirit as
         # never-tested-is-not-green. Order-independent on purpose.
         for first, second in (("success", "failure"), ("failure", "success")):
             got = self._with_raw({
-                "yellowfin:gnome (amd64)": (first, "2026-08-17", "1"),
-                "yellowfin:gnome (arm64)": (second, "2026-08-17", "1"),
+                "bonito:gnome (amd64)": (first, "2026-08-17", "1"),
+                "bonito:gnome (arm64)": (second, "2026-08-17", "1"),
             })
-            self.assertEqual(got["yellowfin:gnome"][0], "failure")
+            self.assertEqual(got["bonito:gnome"][0], "failure")
 
     def test_lifecycle_sweep_excludes_beta_existence_probes(self):
         config = {
@@ -688,6 +685,12 @@ class LifecycleResultsNormalisation(unittest.TestCase):
                 },
                 {
                     "id": "bonito-rawhide",
+                    "platforms": ["linux/amd64"],
+                    "flavors": [{"id": "gnome", "build_image": True}],
+                },
+                {
+                    "id": "future",
+                    "experimental": True,
                     "platforms": ["linux/amd64"],
                     "flavors": [{"id": "gnome", "build_image": True}],
                 },

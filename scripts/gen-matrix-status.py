@@ -354,7 +354,12 @@ def _is_beta_lifecycle_cell(cell: str) -> bool:
 
 
 def lifecycle_sweep_jobs(config: dict | None = None) -> set[str]:
-    """Stable lifecycle jobs; beta existence probes are advisory only."""
+    """Exact validating job names in an unfiltered lifecycle matrix.
+
+    The BETA lane only probes tag existence. It is intentionally absent from
+    both lifecycle scoring and full-sweep coverage until that lane executes
+    the actual lifecycle assertions.
+    """
     config = config or load_build_config(CONFIG)
     jobs = set()
     for variant in config.get("variants", []):
@@ -365,7 +370,7 @@ def lifecycle_sweep_jobs(config: dict | None = None) -> set[str]:
                     or flavor_id.startswith("base-")):
                 continue
             cell = f"{variant_id}:{flavor_id}"
-            if _is_beta_lifecycle_cell(cell):
+            if _is_beta_lifecycle_cell(cell) or variant.get("experimental") is True:
                 continue
             platforms = flavor.get("platforms")
             if platforms is None:
@@ -408,14 +413,14 @@ def _collect_latest_results(
             name, conclusion = job.get("name", ""), job.get("conclusion")
             if not pattern.search(name) or conclusion not in ("success", "failure"):
                 continue
+            normalized = cell_name(name) if cell_name is not None else name
+            if not normalized:
+                continue
             if name not in found:
                 deepest_was_new = True
             found.setdefault(name, (conclusion, date, run_id))
-            if cell_name is not None:
-                normalized = cell_name(name)
-                if normalized:
-                    run_cells.add(normalized)
-                    found_cells.add(normalized)
+            run_cells.add(normalized)
+            found_cells.add(normalized)
         if (
             not full_sweep_date
             and full_sweep_cells
@@ -817,17 +822,18 @@ def _result_order(hit: tuple[str, str, str]) -> tuple[str, int | str]:
 def lifecycle_results(
     raw_results: dict[str, tuple[str, str, str]] | None = None,
 ) -> dict[str, tuple[str, str, str]]:
-    """Newest real lifecycle result per cell, worst-of-architectures."""
+    """Newest current validation per cell, worst-of-architectures."""
+    allowed = lifecycle_sweep_jobs()
     if raw_results is None:
         raw_results = latest_results("bootc-lifecycle.yml", r":")
     newest_by_job: dict[str, tuple[str, str, str]] = {}
     for name, hit in raw_results.items():
-        # The BETA lane only probes tag existence. It must not replace a real
-        # validation result, even if a stable cell was mistakenly routed there.
+        # A successful BETA job only proves that a tag exists. It must not
+        # replace a lifecycle validation, even if the cell changed lanes.
         if name.startswith("BETA "):
             continue
         job_key = lifecycle_job_key(name)
-        if job_key is None:
+        if job_key is None or job_key not in allowed:
             continue
         previous = newest_by_job.get(job_key)
         if previous is None or _result_order(hit) > _result_order(previous):

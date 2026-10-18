@@ -227,8 +227,8 @@ class RunWalkPicksTheNewestAuthoritativeResult(unittest.TestCase):
             {"databaseId": 1, "createdAt": "2026-08-05T00:00:00Z", "status": "completed"},
         ]
         jobs = {
-            "2": [{"name": "yellowfin:gnome (amd64)", "conclusion": "success"}],
-            "1": [{"name": "yellowfin:gnome (arm64)", "conclusion": "failure"}],
+            "2": [{"name": "bonito:gnome (amd64)", "conclusion": "success"}],
+            "1": [{"name": "bonito:gnome (arm64)", "conclusion": "failure"}],
         }
 
         def fake(*args):
@@ -238,7 +238,7 @@ class RunWalkPicksTheNewestAuthoritativeResult(unittest.TestCase):
                 return {"jobs": jobs[args[2]]}
             return None
 
-        expected = {"yellowfin:gnome (amd64)", "yellowfin:gnome (arm64)"}
+        expected = {"bonito:gnome (amd64)", "bonito:gnome (arm64)"}
         with mock.patch.object(gms, "gh_json", side_effect=fake):
             results, full_sweep = gms._collect_latest_results(
                 "bootc-lifecycle.yml",
@@ -247,7 +247,7 @@ class RunWalkPicksTheNewestAuthoritativeResult(unittest.TestCase):
                 lambda name: name if gms._LIFECYCLE_NAME.match(name) else None,
             )
         self.assertEqual(full_sweep, "")
-        self.assertEqual(gms.lifecycle_results(results)["yellowfin:gnome"][0], "failure")
+        self.assertEqual(gms.lifecycle_results(results)["bonito:gnome"][0], "failure")
 
     def test_beta_existence_probes_are_excluded_from_full_sweep(self):
         runs = [

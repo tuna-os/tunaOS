@@ -387,6 +387,7 @@ jobs:
             --image "$IMAGE" \
             --digest "$DIGEST" \
             --sbom-packages "$SBOM_PACKAGES" \
+            --provenance-commit "$(git rev-parse HEAD)" \
             --body release-body.md \
             --output release-body-with-verification.md
           gh release edit "$TAG" --repo "$REPO" \

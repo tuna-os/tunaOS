@@ -24,7 +24,9 @@ def stored_image_identity(body: str) -> tuple[str, str]:
     """Recover the immutable image identity generated into a release card."""
     matches = set(
         re.findall(
-            r"(ghcr\.io/[a-z0-9_.-]+/[a-z0-9_.-]+)@(sha256:[0-9a-f]{64})",
+            r"(?<![A-Za-z0-9._/-])"
+            r"([a-z0-9](?:[a-z0-9.-]*[a-z0-9])?(?::[0-9]+)?"
+            r"(?:/[a-z0-9._-]+)+)@(sha256:[0-9a-f]{64})(?![0-9a-f])",
             body,
         )
     )
@@ -32,15 +34,18 @@ def stored_image_identity(body: str) -> tuple[str, str]:
         raise ValueError("release body does not contain one immutable image identity")
     return matches.pop()
 
-
-
-def render(payload: dict, image: str, digest: str, sbom_packages: int) -> str:
+def render(
+    payload: dict,
+    image: str,
+    digest: str,
+    sbom_packages: int,
+    provenance_commit: str,
+) -> str:
     summary = payload["summary"]
     health = summary["factory_health"]
     regressions = summary["known_regressions"]
     built = summary["builds"]["passed"]
     built_total = summary["builds"]["total"]
-
     digest_text = f"`{digest}`" if digest else "not reported"
     sbom_text = (
         f"✅ SPDX inventory contains {sbom_packages} packages"
@@ -52,11 +57,11 @@ def render(payload: dict, image: str, digest: str, sbom_packages: int) -> str:
             BEGIN,
             "## TunaOS Release Verification",
             "",
-            "Generated from the same [matrix provenance](https://github.com/tuna-os/tunaOS/blob/main/docs/matrix-provenance.json) as the public factory-health summary.",
+            f"Generated from the same [matrix provenance](https://github.com/tuna-os/tunaOS/blob/{provenance_commit}/docs/matrix-provenance.json) as the public factory-health summary.",
             "",
             "### Images",
             f"- Built and promoted: **{built}/{built_total}** cells",
-            f"- Signed: **{built}/{built_total}** promoted cells (promotion requires the keyless signing job)",
+            f"- Signed: **{built}/{built}** promoted cells (promotion requires the keyless signing job)",
             f"- SBOM: {sbom_text}",
             "",
             "### Runtime",
@@ -89,6 +94,7 @@ def main() -> int:
     parser.add_argument("--image")
     parser.add_argument("--digest", default="")
     parser.add_argument("--stored-identity", type=Path)
+    parser.add_argument("--provenance-commit")
     parser.add_argument("--sbom-packages", type=int, default=0)
     parser.add_argument("--body", type=Path, help="existing release body to update")
     parser.add_argument("--output", type=Path)
@@ -101,13 +107,21 @@ def main() -> int:
         print(repository)
         print(digest)
         return 0
+    if not args.provenance_commit:
+        parser.error("--provenance-commit is required unless --stored-identity is used")
     if not args.image:
         parser.error("--image is required unless --stored-identity is used")
 
     payload = json.loads(args.provenance.read_text())
     if not payload.get("summary") or not payload.get("cells"):
         parser.error(f"{args.provenance} has no generated summary/cells payload")
-    report = render(payload, args.image, args.digest, args.sbom_packages) + "\n"
+    report = render(
+        payload,
+        args.image,
+        args.digest,
+        args.sbom_packages,
+        args.provenance_commit,
+    ) + "\n"
     if args.body:
         body = args.body.read_text().rstrip()
         old_block = re.compile(
