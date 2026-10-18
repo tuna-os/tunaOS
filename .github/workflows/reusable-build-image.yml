@@ -474,12 +474,15 @@ jobs:
               | .digest' <<<"$RAW"
           )
           if [[ "${#SMALL_ZSTD[@]}" -gt 0 ]]; then
+            IMAGE_REF="${IMAGE_REGISTRY}/${IMAGE_NAME}"
+            REGISTRY_HOST="${IMAGE_REF%%/*}"
+            REPOSITORY="${IMAGE_REF#*/}"
             TOKEN="$(curl -fsSL \
-              "https://${IMAGE_REGISTRY}/token?service=${IMAGE_REGISTRY}&scope=repository:${IMAGE_NAME}:pull" \
+              "https://${REGISTRY_HOST}/token?service=${REGISTRY_HOST}&scope=repository:${REPOSITORY}:pull" \
               | jq -er .token)"
             for layer_digest in "${SMALL_ZSTD[@]}"; do
               curl -fsSL -H "Authorization: Bearer ${TOKEN}" \
-                "https://${IMAGE_REGISTRY}/v2/${IMAGE_NAME}/blobs/${layer_digest}" \
+                "https://${REGISTRY_HOST}/v2/${REPOSITORY}/blobs/${layer_digest}" \
                 -o "${BLOBS}/${layer_digest/:/_}"
             done
           fi

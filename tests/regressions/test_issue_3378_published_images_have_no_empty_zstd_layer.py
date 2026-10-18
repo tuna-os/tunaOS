@@ -163,8 +163,10 @@ def _run_push_gate(
         "  esac\n"
         "done\n"
         "if [[ -z \"$destination\" ]]; then\n"
+        "  [[ \"$url\" == \"$EXPECTED_TOKEN_URL\" ]] || exit 42\n"
         "  printf '{\"token\":\"fixture-token\"}\\n'\n"
         "else\n"
+        "  [[ \"$url\" == \"$EXPECTED_BLOB_PREFIX\"* ]] || exit 43\n"
         "  digest=${url##*/}\n"
         "  cp \"$BLOB_SOURCE/${digest/:/_}\" \"$destination\"\n"
         "fi\n",
@@ -175,14 +177,19 @@ def _run_push_gate(
     digest = "sha256:" + "a" * 64
     env = os.environ | {
         "PATH": f"{tools}:{os.environ['PATH']}",
-        "IMAGE_REGISTRY": "ghcr.io",
-        "IMAGE_NAME": "tuna-os/marlin",
+        "IMAGE_REGISTRY": "ghcr.io/tuna-os",
+        "IMAGE_NAME": "marlin",
         "DEFAULT_TAG": "tuna",
         "SAFE_PLATFORM": "linux-amd64",
         "DIGEST": digest,
         "INSPECTED_REF": str(record),
         "MANIFEST": str(manifest),
         "BLOB_SOURCE": str(blob_source),
+        "EXPECTED_TOKEN_URL": (
+            "https://ghcr.io/token?service=ghcr.io"
+            "&scope=repository:tuna-os/marlin:pull"
+        ),
+        "EXPECTED_BLOB_PREFIX": "https://ghcr.io/v2/tuna-os/marlin/blobs/",
     }
     result = subprocess.run(
         ["bash", "-euo", "pipefail", "-c", gate["run"]],
