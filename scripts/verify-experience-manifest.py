@@ -3,6 +3,7 @@
 
 import argparse
 import datetime as dt
+import hashlib
 import json
 import re
 import sys
@@ -24,9 +25,10 @@ INSTALLER_REVISION_RE = re.compile(r"^(?:[0-9a-f]{40}|[0-9a-f]{64})$")
 ARCHITECTURES = {"x86_64", "aarch64"}
 PLATFORMS = {"linux/amd64": "x86_64", "linux/arm64": "aarch64"}
 BUILD_PATHS = {"browser", "ci"}
+HARDWARE_SCOPES = {"qemu-kvm", "qemu-tcg"}
 MANIFEST_KIND = "tunaos-experience-manifest/v2"
-RESULT_KIND = "tunaos-offline-gui-result/v1"
-RECEIPT_KIND = "tunaos-offline-gui-receipt/v1"
+RESULT_KIND = "tunaos-offline-gui-result/v2"
+RECEIPT_KIND = "tunaos-offline-gui-receipt/v2"
 
 MANIFEST_FIELDS = {
     "kind", "variant", "flavor", "architecture", "platform", "hardware_scope",
@@ -38,11 +40,14 @@ MANIFEST_FIELDS = {
 RESULT_FIELDS = {
     "kind", "profile", "network_disabled", "installer_source",
     "install_method", "generic_cli", "wizard_screens", "installed_boot",
-    "desktop_contract", "source_image_digest", "iso_detached", "owned_disk",
-    "encrypted", "duration_seconds",
+    "desktop_contract", "source_image_digest", "iso_sha256",
+    "manifest_sha256", "iso_detached", "owned_disk", "encrypted",
+    "duration_seconds",
 }
 QUALIFICATION_FIELDS = RESULT_FIELDS - {"kind", "profile", "duration_seconds"}
-RECEIPT_FIELDS = MANIFEST_FIELDS | {"generated_at", "qualification", "timings"}
+RECEIPT_FIELDS = MANIFEST_FIELDS | {
+    "generated_at", "qualified_manifest_sha256", "qualification", "timings"
+}
 PARITY_FIELDS = (
     "variant", "flavor", "architecture", "platform", "hardware_scope",
     "source_image_ref", "source_image_digest", "base_image_digest",
@@ -92,8 +97,12 @@ def validate_manifest(manifest: dict, label: str) -> None:
     _exact_fields(manifest, MANIFEST_FIELDS, label)
     if manifest["kind"] != MANIFEST_KIND:
         raise ValueError(f"{label}: kind must be {MANIFEST_KIND}")
-    for field in ("variant", "flavor", "hardware_scope"):
+    for field in ("variant", "flavor"):
         _string(manifest, field, label)
+    if manifest["hardware_scope"] not in HARDWARE_SCOPES:
+        raise ValueError(
+            f"{label}: unsupported hardware_scope: {manifest['hardware_scope']}"
+        )
     if manifest["architecture"] not in ARCHITECTURES:
         raise ValueError(f"{label}: unsupported architecture: {manifest['architecture']}")
     if manifest["platform"] not in PLATFORMS:
@@ -171,14 +180,19 @@ def validate_result(result: dict, label: str) -> None:
             and (not isinstance(actual, bool) or actual is not expected)
         ) or (not isinstance(expected, bool) and actual != expected):
             raise ValueError(f"{label}: {field} must be {expected!r}")
-    _digest(result, "source_image_digest", label)
+    for field in ("source_image_digest", "iso_sha256", "manifest_sha256"):
+        _digest(result, field, label)
     duration = result["duration_seconds"]
     if not isinstance(duration, int) or isinstance(duration, bool) or duration <= 0:
         raise ValueError(f"{label}: duration_seconds must be a positive integer")
 
 
-def build_receipt(manifest: dict, results: list[dict]) -> dict:
+def build_receipt(
+    manifest: dict, results: list[dict], manifest_sha256: str
+) -> dict:
     validate_manifest(manifest, "manifest")
+    if not DIGEST_RE.fullmatch(manifest_sha256):
+        raise ValueError("manifest identity must be a lowercase sha256 digest")
     by_profile = {}
     for index, result in enumerate(results):
         validate_result(result, f"result[{index}]")
@@ -189,6 +203,10 @@ def build_receipt(manifest: dict, results: list[dict]) -> dict:
             raise ValueError(
                 f"{profile}: installed source digest does not match the manifest"
             )
+        if result["iso_sha256"] != manifest["iso_sha256"]:
+            raise ValueError(f"{profile}: ISO digest does not match the manifest")
+        if result["manifest_sha256"] != manifest_sha256:
+            raise ValueError(f"{profile}: result is bound to a different manifest")
         by_profile[profile] = result
     if set(by_profile) != {"plain", "encrypted"}:
         missing = sorted({"plain", "encrypted"} - set(by_profile))
@@ -213,6 +231,7 @@ def build_receipt(manifest: dict, results: list[dict]) -> dict:
         "generated_at": dt.datetime.now(dt.timezone.utc).isoformat().replace(
             "+00:00", "Z"
         ),
+        "qualified_manifest_sha256": manifest_sha256,
         "qualification": qualification,
         "timings": {
             "plain_seconds": durations["plain"],
@@ -229,6 +248,7 @@ def validate_receipt(receipt: dict, label: str) -> None:
     manifest = {field: receipt[field] for field in MANIFEST_FIELDS}
     manifest["kind"] = MANIFEST_KIND
     validate_manifest(manifest, label)
+    _digest(receipt, "qualified_manifest_sha256", label)
     try:
         dt.datetime.fromisoformat(receipt["generated_at"].replace("Z", "+00:00"))
     except (AttributeError, ValueError) as exc:
@@ -265,6 +285,14 @@ def validate_receipt(receipt: dict, label: str) -> None:
             raise ValueError(
                 f"{label}: {profile} installed source digest does not match receipt"
             )
+        if result["iso_sha256"] != receipt["iso_sha256"]:
+            raise ValueError(
+                f"{label}: {profile} ISO digest does not match receipt"
+            )
+        if result["manifest_sha256"] != receipt["qualified_manifest_sha256"]:
+            raise ValueError(
+                f"{label}: {profile} manifest digest does not match receipt"
+            )
     if durations["total_seconds"] != (
         durations["plain_seconds"] + durations["encrypted_seconds"]
     ):
@@ -281,6 +309,10 @@ def validate(value: dict, label: str) -> None:
         validate_result(value, label)
     else:
         raise ValueError(f"{label}: unsupported or missing kind: {kind!r}")
+
+
+def file_sha256(path: Path) -> str:
+    return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def compare(left: dict, right: dict) -> list[str]:
@@ -305,7 +337,11 @@ def main() -> int:
                 raise ValueError("receipts can only be built from an experience manifest")
             if not args.write_receipt:
                 raise ValueError("--result requires --write-receipt")
-            receipt = build_receipt(first, [load(path) for path in args.result])
+            receipt = build_receipt(
+                first,
+                [load(path) for path in args.result],
+                file_sha256(args.document),
+            )
             validate_receipt(receipt, str(args.write_receipt))
             args.write_receipt.write_text(
                 json.dumps(receipt, indent=2, sort_keys=True) + "\n",
