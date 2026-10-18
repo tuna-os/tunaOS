@@ -3569,14 +3569,19 @@ boot_disk_image() {
 	return 1
 }
 
-# Inspect the disk the GUI wrote. Boot success alone cannot distinguish a plain
-# layout from an encrypted layout that auto-unlocked, so qualification checks
-# the partition types while the VM is stopped.
-verify_qualification_encryption() {
+# Inspect the disk the GUI wrote and provision the harness-owned account used
+# for an offline, monitor-driven greeter login. The account lives only in the
+# installed disk's mutable /etc; the immutable deployment and source digest
+# remain untouched.
+prepare_qualification_disk() {
 	command -v qemu-nbd >/dev/null 2>&1 || {
 		echo "ERROR: qualification requires qemu-nbd" >&2
 		return 77
 	}
+	if [[ "$QUALIFICATION_PROFILE" == "encrypted" ]] && ! command -v cryptsetup >/dev/null 2>&1; then
+		echo "ERROR: encrypted qualification requires cryptsetup" >&2
+		return 77
+	fi
 	modprobe nbd max_part=16 2>/dev/null || true
 	local nbd=""
 	for candidate in /dev/nbd{0..15}; do
@@ -3590,37 +3595,191 @@ verify_qualification_encryption() {
 		echo "ERROR: no free NBD device for qualification disk inspection" >&2
 		return 77
 	fi
-	qemu-nbd --read-only --connect="$nbd" "$INSTALL_DISK"
+
+	local passphrase="${TUNAOS_QUALIFICATION_PASSPHRASE:-tunaose2e}"
+	local mapper_name="tunaos-qualification-root"
+	local mapper="/dev/mapper/${mapper_name}"
+	local mountpoint=""
+	local root_device=""
+	local root_fstype=""
+	local -a mount_args=()
+	local encrypted=0
+	local result=0
+	qemu-nbd --connect="$nbd" "$INSTALL_DISK"
 	partprobe "$nbd" 2>/dev/null || true
 	udevadm settle 2>/dev/null || true
-	local encrypted=0
-	lsblk -rno FSTYPE "$nbd" 2>/dev/null | grep -qx crypto_LUKS && encrypted=1
-	qemu-nbd --disconnect "$nbd" >/dev/null
+
+	local luks_device
+	luks_device="$(lsblk -prno NAME,FSTYPE "$nbd" 2>/dev/null |
+		awk '$2 == "crypto_LUKS" {print $1; exit}')"
+	[[ -n "$luks_device" ]] && encrypted=1
 	if [[ "$QUALIFICATION_PROFILE" == "encrypted" && "$encrypted" -ne 1 ]]; then
 		echo "ERROR: encrypted GUI profile produced no crypto_LUKS partition" >&2
-		return 1
-	fi
-	if [[ "$QUALIFICATION_PROFILE" == "plain" && "$encrypted" -ne 0 ]]; then
+		result=1
+	elif [[ "$QUALIFICATION_PROFILE" == "plain" && "$encrypted" -ne 0 ]]; then
 		echo "ERROR: plain GUI profile unexpectedly produced a crypto_LUKS partition" >&2
-		return 1
+		result=1
 	fi
+
+	if [[ "$result" -eq 0 && "$encrypted" -eq 1 ]]; then
+		if ! printf '%s' "$passphrase" |
+			cryptsetup open --key-file=- "$luks_device" "$mapper_name"; then
+			echo "ERROR: qualification could not unlock installed root" >&2
+			result=1
+		fi
+	fi
+
+	local search_device="$nbd"
+	[[ "$encrypted" -eq 1 ]] && search_device="$mapper"
+	if [[ "$result" -eq 0 ]] && [[ "$(lsblk -no FSTYPE "$search_device" 2>/dev/null)" == "LVM2_member" ]]; then
+		command -v vgchange >/dev/null 2>&1 || {
+			echo "ERROR: qualification LVM root requires lvm2" >&2
+			result=77
+		}
+		if [[ "$result" -eq 0 ]] && ! vgchange -ay >/dev/null; then
+			echo "ERROR: qualification could not activate installed LVM root" >&2
+			result=1
+		fi
+	fi
+	if [[ "$result" -eq 0 ]]; then
+		root_device="$(lsblk -bprno NAME,FSTYPE,SIZE "$search_device" 2>/dev/null |
+			awk '$2 ~ /^(btrfs|ext4|xfs)$/ && $3 > max {max=$3; device=$1} END {print device}')"
+		if [[ -z "$root_device" ]]; then
+			echo "ERROR: qualification could not locate installed root filesystem" >&2
+			result=1
+		fi
+	fi
+
+	if [[ "$result" -eq 0 ]]; then
+		mountpoint="$(mktemp -d)"
+		root_fstype="$(lsblk -no FSTYPE "$root_device" 2>/dev/null)"
+		mount_args=()
+		[[ "$root_fstype" == xfs ]] && mount_args=(-o nouuid)
+		if ! mount "${mount_args[@]}" "$root_device" "$mountpoint"; then
+			echo "ERROR: qualification could not mount installed root" >&2
+			result=1
+		elif [[ ! -x "$mountpoint/usr/sbin/useradd" || ! -x "$mountpoint/usr/sbin/chpasswd" ]]; then
+			echo "ERROR: installed root lacks account provisioning tools" >&2
+			result=1
+		elif ! chroot "$mountpoint" getent passwd "$E2E_INSTALL_USER" >/dev/null 2>&1; then
+			chroot "$mountpoint" /usr/sbin/useradd --create-home \
+				--comment "TunaOS Qualification" "$E2E_INSTALL_USER" || result=1
+		fi
+		if [[ "$result" -eq 0 ]] && ! printf '%s:%s\n' "$E2E_INSTALL_USER" "$E2E_INSTALL_PASSWORD" |
+			chroot "$mountpoint" /usr/sbin/chpasswd; then
+			echo "ERROR: qualification could not set the installed login password" >&2
+			result=1
+		fi
+		if [[ "$result" -eq 0 && -x "$mountpoint/usr/sbin/restorecon" ]]; then
+			chroot "$mountpoint" /usr/sbin/restorecon -RF \
+				"/home/${E2E_INSTALL_USER}" /etc/passwd /etc/shadow \
+				/etc/group /etc/gshadow || result=1
+		fi
+		sync
+		if mountpoint -q "$mountpoint" && ! umount "$mountpoint"; then
+			echo "ERROR: qualification could not unmount installed root" >&2
+			result=1
+		fi
+		rmdir "$mountpoint" 2>/dev/null || true
+	fi
+
+	if command -v vgchange >/dev/null 2>&1; then
+		vgchange -an >/dev/null 2>&1 || true
+	fi
+	[[ -e "$mapper" ]] && cryptsetup close "$mapper_name" >/dev/null 2>&1 || true
+	qemu-nbd --disconnect "$nbd" >/dev/null 2>&1 || true
+	return "$result"
 }
+
+qualification_frame_text() {
+	local label="$1"
+	screenshot "$label" >&2 || true
+	local image="${OUTPUT_DIR}/${label}.png"
+	[[ -s "$image" ]] || image="${OUTPUT_DIR}/${label}.ppm"
+	[[ -s "$image" ]] || return 1
+	local normalized="${OUTPUT_DIR}/.${label}-ocr.png"
+	magick "$image" -colorspace Gray -resize 200% "$normalized" 2>/dev/null || return 1
+	tesseract "$normalized" stdout --psm 6 2>/dev/null || true
+	rm -f "$normalized"
+}
+
+wait_for_qualification_text() {
+	local pattern="$1" label="$2" timeout="$3"
+	local deadline=$((SECONDS + timeout))
+	local attempt=0 text
+	while ((SECONDS < deadline)); do
+		attempt=$((attempt + 1))
+		text="$(qualification_frame_text "${label}-${attempt}" || true)"
+		if grep -Eqi "$pattern" <<<"$text"; then
+			printf '%s\n' "$text"
+			return 0
+		fi
+		sleep 5
+	done
+	return 1
+}
+
+drive_qualification_unlock() {
+	local passphrase="${TUNAOS_QUALIFICATION_PASSPHRASE:-tunaose2e}"
+	echo "==> Waiting for the graphical disk-unlock prompt..."
+	if ! wait_for_qualification_text \
+		'passphrase|password.*(disk|volume)|unlock|decrypt' \
+		"installed-unlock" 180 >/dev/null; then
+		echo "ERROR: encrypted qualification never displayed a recognizable unlock prompt" >&2
+		return 4
+	fi
+	send_text "$passphrase"
+	monitor_cmd "sendkey ret"
+	echo "==> Submitted the qualification passphrase through the graphical console"
+}
+
+drive_qualification_login() {
+	local prompt
+	echo "==> Waiting for the installed graphical login..."
+	if ! prompt="$(wait_for_qualification_text \
+		'TunaOS Qualification|tunaose2e|not listed|log[ -]?in' \
+		"installed-login" 180)"; then
+		echo "ERROR: qualification never displayed a recognizable graphical login" >&2
+		return 4
+	fi
+	if grep -Eqi 'TunaOS Qualification|tunaose2e' <<<"$prompt"; then
+		# The harness account is selected in the greeter's user list.
+		monitor_cmd "sendkey ret"
+		sleep 2
+	else
+		# Username-entry greeters (including GDM's "Not listed?" path).
+		monitor_cmd "sendkey ret"
+		sleep 2
+		send_text "$E2E_INSTALL_USER"
+		monitor_cmd "sendkey ret"
+		sleep 2
+	fi
+	send_text "$E2E_INSTALL_PASSWORD"
+	monitor_cmd "sendkey ret"
+	echo "==> Submitted the harness account through the graphical console"
+}
+
 
 boot_qualification_disk() {
 	local installed_serial="${OUTPUT_DIR}/installed-serial.log"
-	local serial_socket="${OUTPUT_DIR}/installed-serial.sock"
-	local passphrase="${TUNAOS_QUALIFICATION_PASSPHRASE:-tunaose2e}"
 	local expected_desktop="$FLAVOR"
 	expected_desktop="${expected_desktop%-hwe}"
 	expected_desktop="${expected_desktop%-nvidia}"
 	expected_desktop="${expected_desktop%-cachyos}"
 	expected_desktop="${expected_desktop%-zfs}"
-	local -a installed_serial_args=("${E2E_SERIAL_ARGS[@]}")
+	local expected_process_pattern
+	case "$expected_desktop" in
+	gnome) expected_process_pattern="gnome-shell" ;;
+	kde) expected_process_pattern="kwin_wayland|plasmashell" ;;
+	cosmic) expected_process_pattern="cosmic-comp" ;;
+	niri) expected_process_pattern="niri" ;;
+	xfce) expected_process_pattern="xfwm4|xfwl4|labwc|wayfire" ;;
+	pantheon) expected_process_pattern="gala" ;;
+	tuna) expected_process_pattern="tuna-compositor|tuna-shell-host" ;;
+	*) expected_process_pattern="[^ ]+" ;;
+	esac
 	: >"$SERIAL_LOG"
-	rm -f "$installed_serial" "$serial_socket"
-	if [[ "$QUALIFICATION_PROFILE" == "encrypted" ]]; then
-		installed_serial_args=(-serial "unix:${serial_socket},server,nowait")
-	fi
+	rm -f "$installed_serial"
 
 	e2e_phase "Booting qualified ${QUALIFICATION_PROFILE} disk with ISO detached and guest networking disabled..."
 	reset_qemu_sockets
@@ -3638,35 +3797,35 @@ boot_qualification_disk() {
 		-device virtio-blk-pci,drive=disk,bootindex=0 \
 		-nic none \
 		-monitor "unix:${MONITOR_SOCK},server,nowait" \
-		"${installed_serial_args[@]}" \
+		"${E2E_SERIAL_ARGS[@]}" \
 		"${QEMU_GPU_ARGS[@]}" \
 		-pidfile "$QEMU_PIDFILE" \
 		-daemonize
 
 	if [[ "$QUALIFICATION_PROFILE" == "encrypted" ]]; then
-		TUNAOS_LUKS_NO_POWEROFF=1 \
-			python3 "${SCRIPT_DIR}/luks-first-boot.py" \
-			"$serial_socket" "$MONITOR_SOCK" "$passphrase" "$TIMEOUT" 120 |
-			tee "$installed_serial"
-	else
-		local deadline=$((SECONDS + TIMEOUT))
-		while ((SECONDS < deadline)); do
-			if grep -q "TUNAOS_DESKTOP_CONTRACT_\\(OK\\|FAIL\\)" "$SERIAL_LOG" 2>/dev/null; then
-				break
-			fi
-			if grep -qai "passphrase for disk" "$SERIAL_LOG" 2>/dev/null; then
-				echo "ERROR: plain qualification boot requested a disk passphrase" >&2
-				return 4
-			fi
-			sleep 5
-		done
-		cp "$SERIAL_LOG" "$installed_serial"
+		drive_qualification_unlock
 	fi
+	drive_qualification_login
+
+	local deadline=$((SECONDS + TIMEOUT))
+	while ((SECONDS < deadline)); do
+		if grep -q "TUNAOS_DESKTOP_CONTRACT_\\(OK\\|FAIL\\)" "$SERIAL_LOG" 2>/dev/null; then
+			break
+		fi
+		if [[ "$QUALIFICATION_PROFILE" == "plain" ]] &&
+			grep -qai "passphrase for disk" "$SERIAL_LOG" 2>/dev/null; then
+			echo "ERROR: plain qualification boot requested a disk passphrase" >&2
+			return 4
+		fi
+		sleep 5
+	done
+	cp "$SERIAL_LOG" "$installed_serial"
 
 	if ! grep -F "TUNAOS_DESKTOP_CONTRACT_OK desktop=${expected_desktop} " "$installed_serial" |
 		grep -F "source_image_digest=${EXPECTED_SOURCE_DIGEST}" |
 		grep -F "session_class=user" |
-		grep -Eq "session_type=(wayland|x11)"; then
+		grep -E "session_type=(wayland|x11)" |
+		grep -Eq "session_process=(${expected_process_pattern})( |$)"; then
 		echo "ERROR: installed desktop, user session, or immutable source identity did not match" >&2
 		grep -a "TUNAOS_DESKTOP_CONTRACT_" "$installed_serial" >&2 || true
 		return 4
@@ -3736,7 +3895,7 @@ run_qualification() {
 	# inspecting or booting its owned target disk.
 	poweroff_and_wait_vm
 	mv -f "$SERIAL_LOG" "${OUTPUT_DIR}/qualification-live-serial.log"
-	verify_qualification_encryption
+	prepare_qualification_disk
 	boot_qualification_disk
 	write_qualification_result
 	echo "==> Strict offline GUI qualification PASSED (${QUALIFICATION_PROFILE})"

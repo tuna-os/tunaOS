@@ -104,8 +104,12 @@ Test outputs are uploaded as GitHub Actions artifacts:
 `.github/workflows/iso-builder-parity.yml` runs two installations for each CI
 and browser-built ISO. Both runs use the ISO's bundled graphical installer.
 The `plain` and `encrypted` profiles use separate fresh 32 GiB disks, no guest
-NIC or vsock, and no host-provided image or Fisherman binary. Each installed
-disk then boots with the ISO detached.
+NIC or vsock, and no host-provided image or Fisherman binary. The harness
+provisions a disposable account in the installed disk's mutable `/etc`, drives
+the shipped graphical disk-unlock and greeter surfaces through the QEMU
+monitor, and requires the requested desktop's compositor to run as that user.
+The immutable deployment remains unchanged, and each disk boots with the ISO
+detached.
 
 `experience-manifest.json` is an input declaration, not a test result.
 `scripts/verify-experience-manifest.py` validates these fields:
@@ -125,8 +129,8 @@ After both runs, the validator combines the two result files into
 - The source digest from the booted system matches the manifest.
 
 The receipt also has the time for each leg. The workflow uploads only JSON,
-logs, screenshots, and text diagnostics. It does not upload input ISOs, VM
-disks, or UEFI variable files.
+logs, PNG/PPM screenshots, and text diagnostics. It does not upload input ISOs,
+VM disks, or UEFI variable files.
 
 ## Test Files
 

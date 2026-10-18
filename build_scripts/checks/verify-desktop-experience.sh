@@ -779,7 +779,18 @@ if [[ "$mode" == --runtime ]]; then
 	session_user="unknown"
 	session_class="unknown"
 	session_type="unknown"
+	session_process="unknown"
 	if [[ "$(cat /sys/class/dmi/id/product_version 2>/dev/null || true)" == "tunaos-offline-gui-qualification" ]]; then
+		case "$desktop" in
+		gnome) session_processes="gnome-shell" ;;
+		kde) session_processes="kwin_wayland plasmashell" ;;
+		cosmic) session_processes="cosmic-comp" ;;
+		niri) session_processes="niri" ;;
+		xfce) session_processes="xfwm4 xfwl4 labwc wayfire" ;;
+		pantheon) session_processes="gala" ;;
+		tuna) session_processes="tuna-compositor tuna-shell-host" ;;
+		*) session_processes="" ;;
+		esac
 		session_deadline=$((SECONDS + 120))
 		while ((SECONDS < session_deadline)); do
 			while read -r session_id _; do
@@ -790,17 +801,23 @@ if [[ "$mode" == --runtime ]]; then
 				class="$(sed -n 's/^Class=//p' <<<"$session_details")"
 				type="$(sed -n 's/^Type=//p' <<<"$session_details")"
 				user="$(sed -n 's/^Name=//p' <<<"$session_details")"
-				if [[ "$active" == yes && "$class" == user && "$type" =~ ^(wayland|x11)$ && -n "$user" ]]; then
-					session_user="$user"
-					session_class="$class"
-					session_type="$type"
-					break 2
+				if [[ "$active" != yes || "$class" != user || ! "$type" =~ ^(wayland|x11)$ || -z "$user" ]]; then
+					continue
 				fi
+				for process in $session_processes; do
+					if pgrep -u "$user" -x "$process" >/dev/null 2>&1; then
+						session_user="$user"
+						session_class="$class"
+						session_type="$type"
+						session_process="$process"
+						break 3
+					fi
+				done
 			done < <(loginctl list-sessions --no-legend 2>/dev/null || true)
 			sleep 2
 		done
 		if [[ "$session_class" != user ]]; then
-			report_fail installed_user_session_missing
+			report_fail "installed_desktop_session_missing expected=${session_processes// /,}"
 		fi
 	fi
 	if [[ "$ok" -eq 1 ]]; then
@@ -832,7 +849,7 @@ if len(found) == 1:
 ' <<<"$bootc_status" 2>/dev/null || true)"
 			[[ -n "$parsed_digest" ]] && source_image_digest="$parsed_digest"
 		fi
-		echo "TUNAOS_DESKTOP_CONTRACT_OK desktop=$desktop experience=$experience source_image_digest=$source_image_digest session_user=$session_user session_class=$session_class session_type=$session_type" |
+		echo "TUNAOS_DESKTOP_CONTRACT_OK desktop=$desktop experience=$experience source_image_digest=$source_image_digest session_user=$session_user session_class=$session_class session_type=$session_type session_process=$session_process" |
 			tee /dev/ttyS0 2>/dev/null || true
 	fi
 	# Always emit a final summary marker (OK or FAIL) so the gate has a

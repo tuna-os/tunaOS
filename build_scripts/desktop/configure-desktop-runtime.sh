@@ -296,7 +296,7 @@ ${BRANDING_EXTRA}
 ExecStart=-/usr/libexec/tunaos/e2e-runtime-checks ${desktop}
 StandardOutput=journal+console
 StandardError=journal+console
-TimeoutStartSec=90
+TimeoutStartSec=240
 
 [Install]
 WantedBy=graphical.target

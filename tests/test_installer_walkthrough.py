@@ -41,7 +41,9 @@ MAGICK_STUB = r"""#!/bin/bash
 #   magick in.png ... %[fx:standard_deviation] ... -> MAGICK_STDDEV to stdout
 #   magick in out                                 -> copy/convert (any bytes ok)
 if [ "$1" = "compare" ]; then
-  echo "${MAGICK_AE:-0}" >&2
+  nn=$(printf '%s\n' "$@" | sed -n 's/.*-\([0-9][0-9]\)\.png$/\1/p' | tail -1)
+  var="MAGICK_AE_${nn}"
+  echo "${!var:-${MAGICK_AE:-0}}" >&2
   exit 0
 fi
 for a in "$@"; do
@@ -157,7 +159,12 @@ def run_walkthrough(tess, magick_ae=5000, magick_stddev=0.5, steps="2",
 
         env = dict(os.environ)
         env["PATH"] = str(fakebin) + os.pathsep + env.get("PATH", "")
-        env["MAGICK_AE"] = str(magick_ae)
+        if isinstance(magick_ae, dict):
+            env["MAGICK_AE"] = "5000"
+            for k, v in magick_ae.items():
+                env[f"MAGICK_AE_{k}"] = str(v)
+        else:
+            env["MAGICK_AE"] = str(magick_ae)
         env["MAGICK_STDDEV"] = str(magick_stddev)
         for k, v in tess.items():
             env[f"TESS_{k}"] = v
@@ -248,6 +255,32 @@ class TestRendersAdvancesScreens:
         )
         assert proc.returncode == 0, proc.stdout + proc.stderr
         assert summary["screens"]["install"] is True
+
+    def test_qualification_never_escalates_input_during_static_install_progress(self):
+        frames = {
+            "00": "Welcome to TunaOS installer. Get Started",
+            "01": "Select Target Disk",
+            "02": "Disk Encryption. Enter passphrase",
+            "03": "Confirm Installation. Ready to install",
+            "04": "Installation Progress. Writing image",
+            "15": "Installation complete. Remove the installation media",
+        }
+        frames.update({
+            f"{index:02d}": "Installation Progress. Writing image"
+            for index in range(5, 15)
+        })
+        proc, summary = run_walkthrough(
+            frames,
+            magick_ae={f"{index:02d}": 0 for index in range(5, 15)},
+            steps="16",
+            qualification="plain",
+        )
+        assert proc.returncode == 0, proc.stdout + proc.stderr
+        assert summary["qualification_complete"] is True
+        # One Escape is the intentional pre-walkthrough shell-overview probe.
+        # Static backend frames must not add another one.
+        assert run_walkthrough.last_commands.count("sendkey esc") == 1
+        assert "continuing observation without input" in proc.stdout
 
     def test_qualification_rejects_summary_to_done_without_install_state(self):
         proc, summary = run_walkthrough(
