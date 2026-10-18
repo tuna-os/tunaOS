@@ -24,12 +24,16 @@ fi
 REF="${1:?usage: check-bootc-installable-layers [--arch ARCH] <registry/repo:tag|registry/repo@digest>}"
 
 FIRST="${REF%%/*}"
-if [[ "$FIRST" == *.* || "$FIRST" == *:* || "$FIRST" == localhost ]]; then
+if [[ "$REF" == */* ]] &&
+  [[ "$FIRST" == *.* || "$FIRST" == *:* || "$FIRST" == localhost ]]; then
   REGISTRY="$FIRST"
   REST="${REF#*/}"
 else
   REGISTRY="docker.io"
-  REST="library/${REF}"
+  REST="$REF"
+fi
+if [[ "$REGISTRY" == docker.io && "$REST" != */* ]]; then
+  REST="library/${REST}"
 fi
 REPO="${REST%%[:@]*}"
 

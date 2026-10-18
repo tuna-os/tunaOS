@@ -28,6 +28,8 @@ import tempfile
 import threading
 from pathlib import Path
 
+import pytest
+
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -177,6 +179,57 @@ def test_many_entry_small_zstd_layer_is_fully_drained():
     result = run_validator(blob)
     assert result.returncode == 0, result.stderr
 
+
+
+@pytest.mark.parametrize(
+    ("reference", "repository", "tag"),
+    [
+        ("ubuntu:latest", "library/ubuntu", "latest"),
+        ("tuna-os/marlin:tuna", "tuna-os/marlin", "tuna"),
+        ("docker.io/ubuntu:latest", "library/ubuntu", "latest"),
+    ],
+)
+def test_docker_hub_reference_resolves_registry_and_namespace(
+    tmp_path, reference, repository, tag
+):
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    urls = tmp_path / "urls"
+    curl = fake_bin / "curl"
+    curl.write_text(
+        "#!/bin/sh\n"
+        "url=\n"
+        "for arg in \"$@\"; do case \"$arg\" in http://*|https://*) url=$arg;; esac; done\n"
+        "printf '%s\\n' \"$url\" >> \"$URL_LOG\"\n"
+        "case \"$url\" in\n"
+        "  *auth.docker.io*) printf '{\"token\":\"test-token\"}\\n' ;;\n"
+        "  */manifests/*) printf '%s\\n' "
+        "'{\"schemaVersion\":2,\"mediaType\":\"application/vnd.oci.image.manifest.v1+json\","
+        "\"layers\":[{\"digest\":\"sha256:test\",\"size\":4096,"
+        "\"mediaType\":\"application/vnd.oci.image.layer.v1.tar+gzip\"}]}' ;;\n"
+        "  *) exit 1 ;;\n"
+        "esac\n",
+        encoding="utf-8",
+    )
+    curl.chmod(0o755)
+    proc = subprocess.run(
+        [str(VALIDATOR), reference],
+        cwd=ROOT,
+        env=os.environ | {
+            "PATH": f"{fake_bin}:{os.environ['PATH']}",
+            "URL_LOG": str(urls),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stderr
+    requests = urls.read_text()
+    assert f"scope=repository:{repository}:pull" in requests
+    assert (
+        f"https://registry-1.docker.io/v2/{repository}/manifests/{tag}"
+        in requests
+    )
 
 def test_final_stage_writes_original_published_flavor(tmp_path):
     source = FINAL_CONTAINERFILE.read_text(encoding="utf-8")
