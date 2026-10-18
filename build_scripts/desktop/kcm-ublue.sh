@@ -25,7 +25,8 @@ printf "::group:: === KCM Ublue + Bazaar + Oversteer Udev ===\n"
 
 # ---- Version pins --------------------------------------------------------
 KCM_UBLUE_VERSION=$(grep '^\s*kcm_ublue:' /run/context/image-versions.yaml | sed 's/.*"\(.*\)".*/\1/')
-KRUNNER_BAZAAR_REF=$(grep '^\s*krunner_bazaar_src:' /run/context/image-versions.yaml | sed 's/.*"\(.*\)".*/\1/')
+# renovate: datasource=git-refs depName=bazaar-org/krunner-bazaar
+KRUNNER_BAZAAR_REF="dbed96fa4c2e709c38432eb63e58289636f01b33"
 if [[ ! "$KRUNNER_BAZAAR_REF" =~ ^[0-9a-f]{40}$ ]]; then
 	echo "ERROR: krunner_bazaar_src must be a 40-character commit SHA" >&2
 	exit 1
