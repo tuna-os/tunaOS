@@ -721,10 +721,15 @@ class LifecycleResultsNormalisation(unittest.TestCase):
             "run": "",
             "verdict": "untested",
         } for result in beta_lifecycle)
+        verdicts = [
+            axes["lifecycle"]["verdict"]
+            for axes in provenance["cells"].values()
+            if "lifecycle" in axes
+        ]
         assert provenance["summary"]["lifecycle"] == {
-            "passed": 36,
-            "tested": 41,
-            "total": 52,
+            "passed": verdicts.count("pass"),
+            "tested": sum(verdict != "untested" for verdict in verdicts),
+            "total": len(verdicts),
         }
 
     def test_non_cell_jobs_are_ignored(self):

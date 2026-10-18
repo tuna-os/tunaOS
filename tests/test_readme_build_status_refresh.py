@@ -206,6 +206,14 @@ def test_every_new_release_appends_the_same_generated_verification_data():
     assert "CURRENT_DIGEST" not in report_block
     assert "CURRENT_SBOM_PACKAGES" not in report_block
     assert "EXISTING" not in report_block
+    digest_step = next(
+        step for job in workflow["jobs"].values() for step in job["steps"]
+        if step.get("name") == "Fetch image digest"
+    )
+    assert "steps.existing.outputs.exists == 'false'" in digest_step["if"]
+    assert "inputs.dry_run != true" in digest_step["if"]
+    assert "^sha256:[0-9a-f]{64}$" in digest_step["run"]
+    assert "::error::Could not fetch digest" in digest_step["run"]
     renderer = RELEASE_REPORT.read_text()
     assert 'payload.get("summary")' in renderer
     assert 'payload.get("cells")' in renderer

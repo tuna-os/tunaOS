@@ -262,25 +262,6 @@ jobs:
             echo "::error::${CANDIDATES} build run(s) in the lookback window, none carrying a usable '${ARTIFACT}'"
           fi
 
-      # ── Fetch image digest ────────────────────────────────────────────────
-      - name: Fetch image digest
-        id: digest
-        if: steps.check.outputs.skip == 'false'
-        env:
-          VARIANT: ${{ steps.vars.outputs.variant }}
-          STREAM:  ${{ steps.vars.outputs.stream }}
-        run: |
-          set -euo pipefail
-          sudo apt-get install -y skopeo -q
-          IMAGE_REF="${IMAGE_REGISTRY}/${VARIANT}:${STREAM}"
-          DIGEST=$(skopeo inspect --no-tags "docker://${IMAGE_REF}" \
-            | python3 -c "import json,sys; print(json.load(sys.stdin)['Digest'])" \
-            2>/dev/null || echo "")
-          if [[ -z "${DIGEST}" ]]; then
-            echo "::warning::Could not fetch digest for ${IMAGE_REF}"
-          fi
-          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
-
       # ── Check if release already exists ──────────────────────────────────
       - name: Check for existing release
         id: existing
@@ -297,6 +278,34 @@ jobs:
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
+
+      # Resolve mutable registry tags only for a release that is about to be
+      # created. Existing releases recover their immutable identity from their
+      # own notes below; today's tag must never be used to repair them.
+      - name: Fetch image digest
+        id: digest
+        if: >-
+          steps.check.outputs.skip == 'false' &&
+          steps.existing.outputs.exists == 'false' &&
+          inputs.dry_run != true &&
+          (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+        env:
+          VARIANT: ${{ steps.vars.outputs.variant }}
+          STREAM:  ${{ steps.vars.outputs.stream }}
+        run: |
+          set -euo pipefail
+          sudo apt-get install -y skopeo -q
+          IMAGE_REF="${IMAGE_REGISTRY}/${VARIANT}:${STREAM}"
+          if ! DIGEST=$(skopeo inspect --no-tags "docker://${IMAGE_REF}" \
+            | jq -er '.Digest'); then
+            echo "::error::Could not fetch digest for ${IMAGE_REF}"
+            exit 1
+          fi
+          if [[ ! "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "::error::Registry returned an invalid digest for ${IMAGE_REF}: ${DIGEST}"
+            exit 1
+          fi
+          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
 
       # ── Create GitHub Release with SBOM diff + release card ──────────────
       - name: Create Release
