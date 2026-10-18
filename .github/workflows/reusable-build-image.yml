@@ -451,6 +451,7 @@ jobs:
           IMAGE_NAME: ${{ env.IMAGE_NAME }}
           DEFAULT_TAG: ${{ inputs.default-tag }}
           SAFE_PLATFORM: ${{ matrix.safeplatform }}
+          DIGEST: ${{ steps.push.outputs.remote_image_digest }}
         run: |
           # chunkah packs layers with ostree component annotations; if a
           # podman/skopeo regression strips them during push, client delta
@@ -460,7 +461,7 @@ jobs:
           # produced a 25-byte empty zstd tar that bootc 1.16.10 rejects as
           # truncated (tunaOS#3378). Check the pushed artifact, after podman's
           # forced recompression, so the gate covers what users install.
-          REF="docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}"
+          REF="docker://${IMAGE_REGISTRY}/${IMAGE_NAME}@${DIGEST}"
           RAW=$(sudo skopeo inspect --raw "$REF")
           LAYERS=$(echo "$RAW" | jq '.layers | length')
           ANNOTATED=$(echo "$RAW" | jq '[.layers[].annotations // {} | keys[]] | map(select(test("ostree|chunkah"))) | length')

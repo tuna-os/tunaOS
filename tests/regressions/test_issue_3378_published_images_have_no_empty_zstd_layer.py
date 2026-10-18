@@ -14,8 +14,11 @@ makes the broken-manifest test stop failing closed.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from pathlib import Path
+
+import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 CHECK = ROOT / "scripts" / "check-oci-layers.py"
@@ -66,3 +69,54 @@ def test_a_zstd_layer_large_enough_to_contain_a_tar_entry_passes():
 
     assert result.returncode == 0
     assert "none empty" in result.stdout
+
+
+def test_the_push_gate_inspects_the_digest_forwarded_to_promotion(tmp_path: Path):
+    workflow = yaml.safe_load(
+        (ROOT / ".github/workflows/reusable-build-image.yml").read_text(
+            encoding="utf-8"
+        )
+    )
+    steps = workflow["jobs"]["build_push"]["steps"]
+    gate = next(step for step in steps if step.get("name") == "Verify pushed layer metadata")
+
+    tools = tmp_path / "tools"
+    tools.mkdir()
+    record = tmp_path / "inspected-ref"
+    sudo = tools / "sudo"
+    sudo.write_text("#!/usr/bin/env bash\nexec \"$@\"\n", encoding="utf-8")
+    sudo.chmod(0o755)
+    skopeo = tools / "skopeo"
+    skopeo.write_text(
+        "#!/usr/bin/env bash\n"
+        "printf '%s' \"$3\" > \"$INSPECTED_REF\"\n"
+        "cat <<'EOF'\n"
+        '{"schemaVersion":2,"layers":[{"mediaType":"application/vnd.oci.image.layer.v1.tar+zstd","digest":"sha256:healthy","size":80}]}\n'
+        "EOF\n",
+        encoding="utf-8",
+    )
+    skopeo.chmod(0o755)
+
+    digest = "sha256:" + "a" * 64
+    env = os.environ | {
+        "PATH": f"{tools}:{os.environ['PATH']}",
+        "IMAGE_REGISTRY": "ghcr.io",
+        "IMAGE_NAME": "tuna-os/marlin",
+        "DEFAULT_TAG": "tuna",
+        "SAFE_PLATFORM": "linux-amd64",
+        "DIGEST": digest,
+        "INSPECTED_REF": str(record),
+    }
+    result = subprocess.run(
+        ["bash", "-euo", "pipefail", "-c", gate["run"]],
+        cwd=ROOT,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert record.read_text(encoding="utf-8") == (
+        f"docker://ghcr.io/tuna-os/marlin@{digest}"
+    )
