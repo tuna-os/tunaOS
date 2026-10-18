@@ -47,6 +47,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import urllib.error
 import urllib.parse
@@ -126,6 +127,10 @@ def audit(sources: dict, floor: str = FLOOR_COMMIT) -> list[str]:
     """Pure: {desktop: source_dict} -> list of problems. No network."""
     problems = []
     for desktop, source in sorted(sources.items()):
+        source_error = source.get("source_error")
+        if source_error:
+            problems.append(f"{desktop}: {source_error}")
+            continue
         url = source.get("url")
         if not url:
             problems.append(
@@ -186,8 +191,11 @@ def api_json(url: str) -> dict:
 
 
 def resolve_sha(repo: str, ref: str) -> str:
-    """A branch (or short SHA) in repo -> its full 40-char HEAD SHA."""
-    return api_json(f"https://api.github.com/repos/{repo}/commits/{ref}")["sha"]
+    """A branch (or short SHA) in repo -> its full 40-character HEAD SHA."""
+    sha = api_json(f"https://api.github.com/repos/{repo}/commits/{ref}").get("sha")
+    if not isinstance(sha, str) or re.fullmatch(r"[0-9a-f]{40}", sha) is None:
+        raise KeyError(f"{repo}@{ref} did not resolve to a full commit SHA")
+    return sha
 
 
 def submodule_sha(repo: str, path: str, ref: str = INSTALLER_REF) -> str:
@@ -197,8 +205,8 @@ def submodule_sha(repo: str, path: str, ref: str = INSTALLER_REF) -> str:
         f"https://api.github.com/repos/{repo}/contents/{path}?{query}"
     )
     sha = value.get("sha")
-    if not isinstance(sha, str) or len(sha) != 40:
-        raise KeyError(f"{repo}:{path}@{ref} has no committed submodule SHA")
+    if not isinstance(sha, str) or re.fullmatch(r"[0-9a-f]{40}", sha) is None:
+        raise KeyError(f"{repo}:{path}@{ref} has no valid committed submodule SHA")
     return sha
 
 
@@ -237,12 +245,17 @@ def collect() -> dict:
                 source["commit"] = submodule_sha(
                     where["repo"], where["submodule"], INSTALLER_REF
                 )
-            except (
-                urllib.error.URLError,
-                urllib.error.HTTPError,
-                TimeoutError,
-                KeyError,
-            ):
+            except urllib.error.HTTPError as exc:
+                if exc.code == 404:
+                    source["source_error"] = (
+                        f"production gitlink {where['submodule']} is missing at "
+                        f"{where['repo']}@{INSTALLER_REF}"
+                    )
+                else:
+                    source["at_or_after_floor"] = None
+            except KeyError as exc:
+                source["source_error"] = str(exc)
+            except (urllib.error.URLError, TimeoutError):
                 source["at_or_after_floor"] = None
             sources[desktop] = source
     # Resolve every canonical-repo pin to a full SHA (branches to their head)
@@ -257,8 +270,19 @@ def collect() -> dict:
         if not ref:
             continue
         try:
-            sha = ref if len(ref) == 40 else resolve_sha(CANONICAL, ref)
-        except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, KeyError):
+            sha = ref if re.fullmatch(r"[0-9a-f]{40}", ref) else resolve_sha(CANONICAL, ref)
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                source["source_error"] = (
+                    f"fisherman revision {ref!r} does not exist in {CANONICAL}"
+                )
+            else:
+                source["at_or_after_floor"] = None
+            continue
+        except KeyError as exc:
+            source["source_error"] = str(exc)
+            continue
+        except (urllib.error.URLError, TimeoutError):
             source["at_or_after_floor"] = None
             continue
         source["resolved"] = sha
