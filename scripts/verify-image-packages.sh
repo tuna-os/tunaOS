@@ -119,7 +119,7 @@ for pkg in "${PACKAGES[@]}"; do
 			echo "✓ ${pkg}"
 		fi
 		;;
-gentoo)
+	gentoo)
 		# Ask Portage to match the atom, rather than treating an atom as a
 		# filesystem path. This handles repository-qualified and exact-version
 		# atoms such as =gui-wm/tuna-desktop-1.0.0_beta1::tunaos.
