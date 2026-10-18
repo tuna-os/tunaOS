@@ -390,7 +390,7 @@ def _collect_latest_results(
     """Newest per-job results and newest run that covered the full cell set."""
     runs = gh_json(
         "run", "list", "--repo", REPO, "--workflow", workflow,
-        "--limit", str(FETCH_DEPTH),
+        "--branch", "main", "--limit", str(FETCH_DEPTH),
         "--json", "databaseId,createdAt,status",
     ) or []
     pattern = re.compile(name_re)
@@ -1449,12 +1449,12 @@ def build() -> str:
     ]
     if missing:
         out += [
-            f"Missing for {len(missing)} ISO cell(s): "
+            f"Missing for {len(missing)} non-NVIDIA, non-HWE ISO cell(s): "
             + ", ".join(f"`{m}`" for m in missing),
             "",
         ]
     else:
-        out += ["Every ISO cell has an overlay.", ""]
+        out += ["Every non-NVIDIA, non-HWE ISO cell has an overlay.", ""]
 
     # ── Provenance ──────────────────────────────────────────────────────────
     # Re-running a cell to the same verdict rewrites this table and nothing
@@ -1495,7 +1495,7 @@ VOLATILE_LINE = re.compile(
     r"|Historical results remain for "    # filtered historical LUKS results
     r"|The table above still shows a result for "  # removed cells
     r"|Missing for "                      # depends on published overlay tags
-    r"|Every ISO cell has an overlay"
+    r"|Every non-NVIDIA, non-HWE ISO cell has an overlay"
     # Present only while the newest sweep has a cell that neither passed nor
     # failed. One sweep finishing mid-review makes this whole paragraph appear
     # or vanish, which broke the gate on tunaOS#2512 for a line no pull request

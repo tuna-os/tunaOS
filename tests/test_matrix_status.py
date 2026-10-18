@@ -44,7 +44,7 @@ Newest result 2026-08-06, oldest still-authoritative result 2026-08-05.
 
 **41** tags published.
 
-Missing for 6 ISO cell(s): `gurnard-pantheon`, `hummingbird-base`
+Missing for 6 non-NVIDIA, non-HWE ISO cell(s): `gurnard-pantheon`, `hummingbird-base`
 
 ## Provenance
 
@@ -101,8 +101,9 @@ class LiveChurnIsIgnored(unittest.TestCase):
     def test_overlay_inventory_changing(self):
         published = BLOCK.replace("**41** tags published.", "**43** tags published.")
         published = published.replace(
-            "Missing for 6 ISO cell(s): `gurnard-pantheon`, `hummingbird-base`",
-            "Every ISO cell has an overlay.",
+            "Missing for 6 non-NVIDIA, non-HWE ISO cell(s): "
+            "`gurnard-pantheon`, `hummingbird-base`",
+            "Every non-NVIDIA, non-HWE ISO cell has an overlay.",
         )
         self.assertSameStructure(published)
 
