@@ -604,7 +604,10 @@ if qualification:
         prev = frames[-1] if frames else None
         frames.append(p)
         moved = bool(prev) and changed_pixels(prev, p) > DIFF_PIXELS
-        update_navigation(moved)
+        if previous_screen != "install":
+            update_navigation(moved)
+        elif not moved:
+            note("installation frame unchanged — continuing observation without input")
         detected = identify_screen(p)
         # GNOME's progress page has only a generic "Installing" heading, so it
         # is recognized contextually after summary. A changed but unrelated
