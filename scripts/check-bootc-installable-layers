@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+# check-bootc-installable-layers — every small layer of a published image
+# must be a tar stream bootc can import.
+#
+# A LABEL-only (or otherwise content-free) build stage emits an empty tar
+# layer, and bootc's layer splitter rejects it with "Truncated tar archive"
+# (tuna-os/tunaOS#3378) — while `podman pull` and `podman run` stay green,
+# so nothing else catches it. This gate fetches the pushed manifest, pulls
+# every layer under 4 KiB, and requires each to list at least one tar entry.
+#
+# Usage:
+#   scripts/check-bootc-installable-layers [--arch amd64] <ref>
+#
+# <ref> is registry/repo:tag or registry/repo@digest (anonymous read).
+# Needs: curl, jq, tar, and zstd for zstd layers. Exits nonzero naming the
+# first offending layer.
+set -euo pipefail
+
+ARCH="amd64"
+if [[ "${1:-}" == "--arch" ]]; then
+  ARCH="${2:?--arch needs a value (e.g. amd64, arm64)}"
+  shift 2
+fi
+REF="${1:?usage: check-bootc-installable-layers [--arch ARCH] <registry/repo:tag|registry/repo@digest>}"
+
+FIRST="${REF%%/*}"
+if [[ "$FIRST" == *.* || "$FIRST" == *:* || "$FIRST" == localhost ]]; then
+  REGISTRY="$FIRST"
+  REST="${REF#*/}"
+else
+  REGISTRY="docker.io"
+  REST="library/${REF}"
+fi
+REPO="${REST%%[:@]*}"
+
+token() {
+  curl -fsSL "https://${REGISTRY}/token?service=${REGISTRY}&scope=repository:${REPO}:pull" 2>/dev/null \
+    | jq -r '.token // .access_token'
+}
+
+manifest() {
+  local ref="$1" accept="$2"
+  curl -fsSL "${AUTH[@]}" -H "Accept: ${accept}" \
+    "${SCHEME}://${REGISTRY}/v2/${REPO}/manifests/${ref}"
+}
+
+SCHEME="https"
+AUTH=()
+if [[ "$REGISTRY" == localhost* || "$REGISTRY" == "127."* || "$REGISTRY" == "[::1]"* ]]; then
+  # Local test registries serve plain HTTP with no auth.
+  SCHEME="http"
+else
+  TOKEN="$(token)"
+  [[ -n "$TOKEN" && "$TOKEN" != "null" ]] || { echo "check-bootc-installable-layers: cannot get anonymous pull token for ${REGISTRY}/${REPO}" >&2; exit 1; }
+  AUTH=(-H "Authorization: Bearer ${TOKEN}")
+fi
+
+if [[ "$REST" == *[@:]* ]]; then
+  TAG="${REST#*[@:]}"
+else
+  TAG="latest"
+fi
+MANIFEST="$(manifest "$TAG" 'application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.oci.image.manifest.v1+json')"
+MTYPE="$(echo "$MANIFEST" | jq -r '.mediaType')"
+if [[ "$MTYPE" == *"manifest.list"* || "$MTYPE" == *"image.index"* ]]; then
+  DIGEST="$(echo "$MANIFEST" | jq -r ".manifests[] | select(.platform.architecture==\"${ARCH}\") | .digest" | head -n 1)"
+  [[ -n "$DIGEST" && "$DIGEST" != "null" ]] || { echo "check-bootc-installable-layers: no ${ARCH} manifest in ${REF}" >&2; exit 1; }
+  MANIFEST="$(manifest "$DIGEST" 'application/vnd.oci.image.manifest.v1+json')"
+fi
+mapfile -t LAYERS < <(echo "$MANIFEST" | jq -r '.layers[] | "\(.digest) \(.size) \(.mediaType)"')
+[[ "${#LAYERS[@]}" -gt 0 ]] || { echo "check-bootc-installable-layers: no layers in ${REF}" >&2; exit 1; }
+
+fail=0
+idx=0
+for entry in "${LAYERS[@]}"; do
+  digest="${entry%% *}"; rest="${entry#* }"
+  size="${rest%% *}"; media="${rest#* }"
+  idx=$((idx + 1))
+  if [[ "$size" -ge 4096 ]]; then
+    continue
+  fi
+  blob="$(mktemp)"
+  if ! curl -fsSL "${AUTH[@]}" \
+      "${SCHEME}://${REGISTRY}/v2/${REPO}/blobs/${digest}" -o "$blob"; then
+    echo "check-bootc-installable-layers: cannot fetch layer ${idx} ${digest}" >&2
+    rm -f "$blob"; fail=1; continue
+  fi
+  entries=""
+  case "$media" in
+    *gzip*) entries="$(gzip -dc "$blob" 2>/dev/null | tar -t 2>/dev/null | head -n 2)" ;;
+    *zstd*) entries="$(zstd -dc "$blob" 2>/dev/null | tar -t 2>/dev/null | head -n 2)" ;;
+    *tar)   entries="$(tar -t -f "$blob" 2>/dev/null | head -n 2)" ;;
+    *) echo "check-bootc-installable-layers: layer ${idx} ${digest} has unknown media type ${media}" >&2; rm -f "$blob"; fail=1; continue ;;
+  esac
+  rm -f "$blob"
+  if [[ -z "$entries" ]]; then
+    echo "check-bootc-installable-layers: layer ${idx} ${digest} (${size} bytes, ${media}) holds no tar entries — bootc install rejects it (tuna-os/tunaOS#3378)" >&2
+    fail=1
+  fi
+done
+
+if [[ "$fail" == "1" ]]; then
+  exit 1
+fi
+echo "check-bootc-installable-layers: ${#LAYERS[@]} layers, all small layers importable — ${REF}"
