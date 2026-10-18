@@ -29,7 +29,7 @@ KCM_UBLUE_VERSION=$(grep '^\s*kcm_ublue:' /run/context/image-versions.yaml | sed
 KRUNNER_BAZAAR_REF="dbed96fa4c2e709c38432eb63e58289636f01b33"
 if [[ ! "$KRUNNER_BAZAAR_REF" =~ ^[0-9a-f]{40}$ ]]; then
 	echo "ERROR: krunner_bazaar_src must be a 40-character commit SHA" >&2
-	exit 1
+	return 1 2>/dev/null || exit 1
 fi
 
 ARCH=$(uname -m)
