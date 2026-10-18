@@ -83,6 +83,23 @@ def test_rejects_non_strict_qualification_evidence(field, value, message):
         MODULE.validate_result(result("plain", **{field: value}), "test")
 
 
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("network_disabled", 1),
+        ("generic_cli", 0),
+        ("installed_boot", 1.0),
+        ("desktop_contract", 1),
+        ("iso_detached", 1),
+        ("owned_disk", 1),
+        ("encrypted", 0.0),
+    ],
+)
+def test_rejects_numeric_values_for_strict_boolean_evidence(field, value):
+    with pytest.raises(ValueError, match=field):
+        MODULE.validate_result(result("plain", **{field: value}), "test")
+
+
 def test_rejects_plain_result_claiming_encryption():
     with pytest.raises(ValueError, match="encrypted"):
         MODULE.validate_result(result("plain", encrypted=True), "test")

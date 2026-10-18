@@ -3569,6 +3569,64 @@ boot_disk_image() {
 	return 1
 }
 
+install_qualification_account_service() {
+	local deployment_root="$1"
+	local account_dir="${deployment_root}/etc/tunaos-qualification"
+	local unit_dir="${deployment_root}/etc/systemd/system"
+	install -d -m 0700 "$account_dir"
+	printf '%s' "$E2E_INSTALL_PASSWORD" >"${account_dir}/password"
+	chmod 0600 "${account_dir}/password"
+	cat >"${account_dir}/create-account" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+account=${E2E_INSTALL_USER@Q}
+etc_root="\${TUNAOS_QUALIFICATION_ETC_ROOT:-}"
+password_file="\${etc_root}/etc/tunaos-qualification/password"
+if ! getent passwd "\$account" >/dev/null; then
+	useradd --create-home --comment "TunaOS Qualification" "\$account"
+fi
+password="\$(cat "\$password_file")"
+printf '%s:%s\n' "\$account" "\$password" | chpasswd
+if command -v restorecon >/dev/null 2>&1; then
+	restorecon -RF "/home/\${account}" /etc/passwd /etc/shadow /etc/group /etc/gshadow
+fi
+rm -f "\$password_file"
+EOF
+	chmod 0700 "${account_dir}/create-account"
+	install -d -m 0755 "${unit_dir}/graphical.target.wants"
+	cat >"${unit_dir}/tunaos-qualification-account.service" <<'EOF'
+[Unit]
+Description=Provision the TunaOS offline GUI qualification account
+ConditionPathExists=/etc/tunaos-qualification/password
+Before=display-manager.service
+
+[Service]
+Type=oneshot
+ExecStart=/etc/tunaos-qualification/create-account
+RemainAfterExit=yes
+
+[Install]
+WantedBy=graphical.target
+EOF
+	ln -sfn ../tunaos-qualification-account.service \
+		"${unit_dir}/graphical.target.wants/tunaos-qualification-account.service"
+}
+
+activate_qualification_volume_group() {
+	local device="$1"
+	local volume_group=""
+	volume_group="$(pvs --devices "$device" --noheadings \
+		-o vg_name "$device" 2>/dev/null | xargs)"
+	[[ -n "$volume_group" && "$volume_group" != *" "* ]] || return 1
+	vgchange --devices "$device" -ay "$volume_group" >/dev/null || return 1
+	printf '%s\n' "$volume_group"
+}
+
+deactivate_qualification_volume_group() {
+	local device="$1" volume_group="$2"
+	vgchange --devices "$device" -an "$volume_group" >/dev/null
+}
+
 # Inspect the disk the GUI wrote and provision the harness-owned account used
 # for an offline, monitor-driven greeter login. The account lives only in the
 # installed disk's mutable /etc; the immutable deployment and source digest
@@ -3602,6 +3660,8 @@ prepare_qualification_disk() {
 	local mountpoint=""
 	local root_device=""
 	local root_fstype=""
+	local lvm_device=""
+	local activated_vg=""
 	local -a mount_args=()
 	local encrypted=0
 	local result=0
@@ -3631,13 +3691,18 @@ prepare_qualification_disk() {
 
 	local search_device="$nbd"
 	[[ "$encrypted" -eq 1 ]] && search_device="$mapper"
-	if [[ "$result" -eq 0 ]] && [[ "$(lsblk -no FSTYPE "$search_device" 2>/dev/null)" == "LVM2_member" ]]; then
-		command -v vgchange >/dev/null 2>&1 || {
+	if [[ "$result" -eq 0 ]]; then
+		lvm_device="$(lsblk -prno NAME,FSTYPE "$search_device" 2>/dev/null |
+			awk '$2 == "LVM2_member" {print $1; exit}')"
+	fi
+	if [[ "$result" -eq 0 && -n "$lvm_device" ]]; then
+		command -v pvs >/dev/null 2>&1 && command -v vgchange >/dev/null 2>&1 || {
 			echo "ERROR: qualification LVM root requires lvm2" >&2
 			result=77
 		}
-		if [[ "$result" -eq 0 ]] && ! vgchange -ay >/dev/null; then
-			echo "ERROR: qualification could not activate installed LVM root" >&2
+		if [[ "$result" -eq 0 ]] &&
+			! activated_vg="$(activate_qualification_volume_group "$lvm_device")"; then
+			echo "ERROR: qualification could not activate its installed LVM root" >&2
 			result=1
 		fi
 	fi
@@ -3658,22 +3723,19 @@ prepare_qualification_disk() {
 		if ! mount "${mount_args[@]}" "$root_device" "$mountpoint"; then
 			echo "ERROR: qualification could not mount installed root" >&2
 			result=1
-		elif [[ ! -x "$mountpoint/usr/sbin/useradd" || ! -x "$mountpoint/usr/sbin/chpasswd" ]]; then
-			echo "ERROR: installed root lacks account provisioning tools" >&2
-			result=1
-		elif ! chroot "$mountpoint" getent passwd "$E2E_INSTALL_USER" >/dev/null 2>&1; then
-			chroot "$mountpoint" /usr/sbin/useradd --create-home \
-				--comment "TunaOS Qualification" "$E2E_INSTALL_USER" || result=1
-		fi
-		if [[ "$result" -eq 0 ]] && ! printf '%s:%s\n' "$E2E_INSTALL_USER" "$E2E_INSTALL_PASSWORD" |
-			chroot "$mountpoint" /usr/sbin/chpasswd; then
-			echo "ERROR: qualification could not set the installed login password" >&2
-			result=1
-		fi
-		if [[ "$result" -eq 0 && -x "$mountpoint/usr/sbin/restorecon" ]]; then
-			chroot "$mountpoint" /usr/sbin/restorecon -RF \
-				"/home/${E2E_INSTALL_USER}" /etc/passwd /etc/shadow \
-				/etc/group /etc/gshadow || result=1
+		else
+			local -a deployments=()
+			mapfile -t deployments < <(
+				find "$mountpoint/ostree/deploy" -regextype posix-extended \
+					-type d -regex '.*/deploy/[^/]+\.[0-9]+' -print 2>/dev/null
+			)
+			if [[ "${#deployments[@]}" -ne 1 ]]; then
+				echo "ERROR: qualification expected one installed OSTree deployment, found ${#deployments[@]}" >&2
+				result=1
+			elif ! install_qualification_account_service "${deployments[0]}"; then
+				echo "ERROR: qualification could not stage first-boot account provisioning" >&2
+				result=1
+			fi
 		fi
 		sync
 		if mountpoint -q "$mountpoint" && ! umount "$mountpoint"; then
@@ -3683,8 +3745,9 @@ prepare_qualification_disk() {
 		rmdir "$mountpoint" 2>/dev/null || true
 	fi
 
-	if command -v vgchange >/dev/null 2>&1; then
-		vgchange -an >/dev/null 2>&1 || true
+	if [[ -n "$activated_vg" ]]; then
+		deactivate_qualification_volume_group "$lvm_device" "$activated_vg" \
+			>/dev/null 2>&1 || true
 	fi
 	[[ -e "$mapper" ]] && cryptsetup close "$mapper_name" >/dev/null 2>&1 || true
 	qemu-nbd --disconnect "$nbd" >/dev/null 2>&1 || true
@@ -3698,7 +3761,15 @@ qualification_frame_text() {
 	[[ -s "$image" ]] || image="${OUTPUT_DIR}/${label}.ppm"
 	[[ -s "$image" ]] || return 1
 	local normalized="${OUTPUT_DIR}/.${label}-ocr.png"
-	magick "$image" -colorspace Gray -resize 200% "$normalized" 2>/dev/null || return 1
+	local image_magick=""
+	if command -v magick >/dev/null 2>&1; then
+		image_magick="magick"
+	elif command -v convert >/dev/null 2>&1; then
+		image_magick="convert"
+	else
+		return 1
+	fi
+	"$image_magick" "$image" -colorspace Gray -resize 200% "$normalized" 2>/dev/null || return 1
 	tesseract "$normalized" stdout --psm 6 2>/dev/null || true
 	rm -f "$normalized"
 }
