@@ -63,11 +63,19 @@ in that module; `tests/bats/test_e2e_visual.bats` exercises it without QEMU.
 ### Running Locally
 
 ```bash
-# Download a pre-built ISO
-wget https://download.tunaos.org/live-isos/yellowfin-gnome-latest.iso
+# Resolve the current pre-built ISO. During a rollback, the stable object stays
+# frozen and this resolver points at a checksum-addressed snapshot.
+base=https://download.tunaos.org/live-isos
+stable=yellowfin-gnome-latest.iso
+resolution="$(curl -fsSL "$base/${stable%.iso}.json" || true)"
+iso="$(jq -r '.iso // empty' <<<"$resolution")"
+[[ -n "$iso" ]] || iso="$stable"  # legacy target without a resolver
+curl -fLO "$base/$iso"
+expected="$(jq -r '.digest // empty' <<<"$resolution")"
+[[ -z "$expected" || "sha256:$(sha256sum "$iso" | awk '{print $1}')" == "$expected" ]]
 
 # Run the e2e test
-./scripts/iso-e2e.sh yellowfin gnome ./yellowfin-gnome-latest.iso
+./scripts/iso-e2e.sh yellowfin gnome "./$iso"
 ```
 
 Requirements:

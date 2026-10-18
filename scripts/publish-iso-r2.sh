@@ -68,7 +68,9 @@ publication_name() {
 	is_retained "$requested" || retained_status=$?
 	case "$retained_status" in
 	0)
-		printf '%s-sha256-%s.iso\n' "${requested%.iso}" "$digest_suffix"
+		local snapshot="${requested%.iso}"
+		snapshot="${snapshot/-latest/-snapshot}"
+		printf '%s-sha256-%s.iso\n' "$snapshot" "$digest_suffix"
 		;;
 	1) printf '%s\n' "$requested" ;;
 	*) return "$retained_status" ;;
@@ -80,10 +82,11 @@ trap 'rm -rf "$tmpdir"' EXIT
 
 publish_iso_as() {
 	local object=$1
-	local checksum_file="${tmpdir}/${object##*/}.sha256"
-	printf '%s  %s\n' "$digest" "$object" >"$checksum_file"
 	copy_unless_retained "$iso" "$object"
-	copy_unless_retained "$checksum_file" "${object}.sha256"
+	# Keep the exact checksum bytes that cosign signed. The checksum subject is
+	# the build artifact's original basename; resolver-aware consumers verify
+	# its digest field against the downloaded publication name.
+	copy_unless_retained "$checksum" "${object}.sha256"
 	copy_unless_retained "$bundle" "${object}.sigstore.json"
 }
 
@@ -95,12 +98,13 @@ publish_iso_as "$latest_publication"
 
 # A stable, small resolver keeps rollback publication discoverable when the
 # historical -latest object itself is immutable. It points only at the signed,
-# checksum-addressed artifact set above.
+# checksum-addressed artifact set above and records the filename inside the
+# signed checksum payload.
 resolver="${latest%.iso}.json"
 resolver_file="${tmpdir}/${resolver##*/}"
-printf '{"schema":"TunaOSIsoResolution/v1","iso":"%s","sha256":"%s.sha256","sigstore":"%s.sigstore.json","digest":"sha256:%s"}\n' \
-	"$latest_publication" "$latest_publication" "$latest_publication" "$digest" \
-	>"$resolver_file"
+printf '{"schema":"TunaOSIsoResolution/v1","iso":"%s","sha256":"%s.sha256","sigstore":"%s.sigstore.json","checksum_subject":"%s","digest":"sha256:%s"}\n' \
+	"$latest_publication" "$latest_publication" "$latest_publication" \
+	"$(basename "$iso")" "$digest" >"$resolver_file"
 copy_unless_retained "$resolver_file" "$resolver"
 
 echo "==> Published ${versioned_publication}; ${resolver} resolves current download to ${latest_publication}"

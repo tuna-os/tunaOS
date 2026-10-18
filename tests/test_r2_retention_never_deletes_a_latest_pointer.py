@@ -242,12 +242,29 @@ def test_no_prune_step_deletes_a_latest_pointer(name):
 
 
 @pytest.mark.parametrize(
+    "name",
+    [
+        "yellowfin-gnome-latest.json",
+        "yellowfin-gnome-latest-arm64.json",
+    ],
+)
+def test_prune_keeps_stable_resolvers(name):
+    steps = [s for s in prune_steps() if s[1] == "live-isos/"]
+    assert steps
+    assert all(verdict(name, rules) == "keep" for _, _, rules in steps)
+
+
+@pytest.mark.parametrize(
     "name,prefix",
     [
         # Dated ISO and its sidecars: the whole point of the 14-day window.
         ("bonito-gnome-20260914.iso", "live-isos/"),
         ("bonito-gnome-20260914.iso.sha256", "live-isos/"),
         ("bonito-gnome-20260914.iso.sigstore.json", "live-isos/"),
+        # Superseded rollback snapshots are not stable pointers.
+        ("bonito-gnome-snapshot-sha256-deadbeef.iso", "live-isos/"),
+        ("bonito-gnome-snapshot-sha256-deadbeef.iso.sha256", "live-isos/"),
+        ("bonito-gnome-snapshot-sha256-deadbeef.iso.sigstore.json", "live-isos/"),
         # Arch-suffixed DATED ISOs are ordinary builds, not pointers.
         ("bonito-gnome-20260914-arm64.iso", "live-isos/"),
         ("yellowfin-gnome-20260914.png", "screenshots/"),

@@ -266,8 +266,9 @@ def test_group_without_a_buildable_live_flavor_requires_no_inventory():
 def test_guarded_uploader_never_writes_retained_destinations(tmp_path: Path):
     iso = tmp_path / "fish-gnome-10.2-x86_64.iso"
     iso.write_bytes(b"iso")
-    (tmp_path / f"{iso.name}.sha256").write_text("digest  iso\n")
-    (tmp_path / f"{iso.name}.sigstore.json").write_text("{}")
+    signed_checksum = f"{hashlib.sha256(b'iso').hexdigest()}  {iso.name}\n"
+    (tmp_path / f"{iso.name}.sha256").write_text(signed_checksum)
+    (tmp_path / f"{iso.name}.sigstore.json").write_text('{"signed":"checksum"}')
     config_path = tmp_path / "config.json"
     config_path.write_text(json.dumps({
         "iso_delivery": {
@@ -283,8 +284,15 @@ def test_guarded_uploader_never_writes_retained_destinations(tmp_path: Path):
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
     rclone_log = tmp_path / "rclone.log"
+    capture_dir = tmp_path / "uploaded"
+    capture_dir.mkdir()
     rclone = fake_bin / "rclone"
-    rclone.write_text("#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$RCLONE_LOG\"\n")
+    rclone.write_text(
+        "#!/bin/sh\n"
+        "printf '%s\\n' \"$*\" >> \"$RCLONE_LOG\"\n"
+        "before=; last=; for arg in \"$@\"; do before=$last; last=$arg; done\n"
+        "cp \"$before\" \"$CAPTURE_DIR/$(basename \"$last\")\"\n"
+    )
     rclone.chmod(0o755)
 
     result = subprocess.run(
@@ -299,6 +307,7 @@ def test_guarded_uploader_never_writes_retained_destinations(tmp_path: Path):
         env=os.environ | {
             "PATH": f"{fake_bin}:{os.environ['PATH']}",
             "RCLONE_LOG": str(rclone_log),
+            "CAPTURE_DIR": str(capture_dir),
         },
         text=True,
         capture_output=True,
@@ -310,10 +319,19 @@ def test_guarded_uploader_never_writes_retained_destinations(tmp_path: Path):
     destinations = [upload.rsplit(" ", 1)[-1] for upload in uploads]
     assert not any(destination.endswith(f"/{iso.name}") for destination in destinations)
     assert not any(destination.endswith("/fish-gnome-latest.iso") for destination in destinations)
-    assert any(f"-sha256-{hashlib.sha256(b'iso').hexdigest()[:16]}.iso" in destination
-               for destination in destinations)
+    snapshot = f"fish-gnome-10.2-x86_64-sha256-{hashlib.sha256(b'iso').hexdigest()[:16]}.iso"
+    latest_snapshot = f"fish-gnome-snapshot-sha256-{hashlib.sha256(b'iso').hexdigest()[:16]}.iso"
+    assert any(destination.endswith(f"/{snapshot}") for destination in destinations)
+    assert any(destination.endswith(f"/{latest_snapshot}") for destination in destinations)
     assert any(destination.endswith("/fish-gnome-latest.json")
                for destination in destinations)
+    assert (capture_dir / f"{latest_snapshot}.sha256").read_text() == signed_checksum
+    assert (capture_dir / f"{latest_snapshot}.sigstore.json").read_text() == (
+        tmp_path / f"{iso.name}.sigstore.json"
+    ).read_text()
+    resolver = json.loads((capture_dir / "fish-gnome-latest.json").read_text())
+    assert resolver["iso"] == latest_snapshot
+    assert resolver["checksum_subject"] == iso.name
 
     config_path.write_text(json.dumps({
         "iso_delivery": {
@@ -335,6 +353,7 @@ def test_guarded_uploader_never_writes_retained_destinations(tmp_path: Path):
         env=os.environ | {
             "PATH": f"{fake_bin}:{os.environ['PATH']}",
             "RCLONE_LOG": str(rclone_log),
+            "CAPTURE_DIR": str(capture_dir),
         },
         text=True,
         capture_output=True,

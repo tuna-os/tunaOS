@@ -298,7 +298,16 @@ def print_retention_filters(config: dict[str, Any]) -> None:
         print(f"- /{iso}")
         print(f"- /{iso}.sha256")
         print(f"- /{iso}.sigstore.json")
-    print("- *-latest*")
+    # Stable pointers and their resolver stay immutable. Checksum snapshots use
+    # "-snapshot-", so they remain eligible for age pruning.
+    print("- *-latest.iso")
+    print("- *-latest-*.iso")
+    print("- *-latest.iso.sha256")
+    print("- *-latest-*.iso.sha256")
+    print("- *-latest.iso.sigstore.json")
+    print("- *-latest-*.iso.sigstore.json")
+    print("- *-latest.json")
+    print("- *-latest-*.json")
     print("+ *.iso")
     print("+ *.iso.sha256")
     print("+ *.iso.sigstore.json")
