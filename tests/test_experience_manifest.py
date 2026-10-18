@@ -36,6 +36,7 @@ def manifest(**overrides):
         "platform": "x86_64",
         "cpu_baseline": "x86-64-v2",
         "hardware_scope": "qemu",
+        "iso_sha256": _digest("e"),
         "resolved_inputs": {
             "source": _digest("a"),
             "overlay": _digest("b"),
@@ -134,6 +135,15 @@ def test_rejects_booted_digest_mismatch(mode):
         MODULE.validate(data, "test")
 
 
+@pytest.mark.parametrize("mode", ["plain", "encrypted"])
+def test_rejects_observed_source_mismatch_with_resolved_input(mode):
+    data = manifest()
+    data["observed"][mode]["source_digest"] = _digest("f")
+    data["observed"][mode]["booted_digest"] = _digest("f")
+    with pytest.raises(ValueError, match="does not match resolved_inputs.source"):
+        MODULE.validate(data, "test")
+
+
 @pytest.mark.parametrize("field", ["platform", "cpu_baseline", "hardware_scope"])
 @pytest.mark.parametrize("bad", ["", "   ", 123, None])
 def test_rejects_missing_identity_fields(field, bad):
@@ -146,6 +156,13 @@ def test_rejects_missing_top_level_blocks(field):
     data = manifest()
     del data[field]
     with pytest.raises(ValueError, match=field):
+        MODULE.validate(data, "test")
+
+
+def test_rejects_missing_iso_checksum():
+    data = manifest()
+    del data["iso_sha256"]
+    with pytest.raises(ValueError, match="iso_sha256 is missing"):
         MODULE.validate(data, "test")
 
 
@@ -208,8 +225,24 @@ def test_compare_ignores_timing_only_drift():
     left = manifest()
     right = copy.deepcopy(left)
     right["observed"]["plain"]["duration_s"] += 42.0
+    right["observed"]["plain"]["install_duration_s"] = 500.0
+    right["observed"]["plain"]["cold_boot_s"] = 200.0
+    right["observed"]["plain"]["warm_boot_s"] = 100.0
     right["measurements"]["cold"]["duration_s"] += 10.0
     assert MODULE.compare(left, right) == []
+
+
+def test_compare_ignores_free_disk_measurement_only():
+    other = manifest()
+    other["browser"]["free_disk_gib"] = 7
+    assert MODULE.compare(manifest(), other) == []
+
+
+def test_compare_retains_browser_identity_and_memory():
+    for field, value in (("name", "firefox"), ("version", "131.0"), ("memory_gib", 16)):
+        other = manifest()
+        other["browser"][field] = value
+        assert MODULE.compare(manifest(), other) == ["browser"]
 
 
 def test_compare_flags_missing_observed_mode():

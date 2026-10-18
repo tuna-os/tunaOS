@@ -47,7 +47,10 @@ QUALIFICATION_COMPARE_FIELDS = (
     "resolved_inputs", "browser", "offline_network_disabled",
     "observed", "measurements",
 )
-VOLATILE_SUBKEYS = frozenset({"duration_s", "timestamp", "started_at", "finished_at"})
+VOLATILE_SUBKEYS = frozenset({
+    "duration_s", "install_duration_s", "cold_boot_s", "warm_boot_s",
+    "timestamp", "started_at", "finished_at",
+})
 
 MIGRATION_HINT = (
     "not a QualificationEvidence v1 manifest: old bare-boolean manifests "
@@ -112,6 +115,9 @@ def validate(manifest: dict, label: str) -> None:
     for field in ("variant", "flavor", "platform", "cpu_baseline",
                   "hardware_scope"):
         _require_text(manifest, field, label)
+    if "iso_sha256" not in manifest:
+        raise ValueError(f"{label}: iso_sha256 is missing")
+    _require_digest(manifest["iso_sha256"], "iso_sha256", label)
     inputs = manifest.get("resolved_inputs")
     if not isinstance(inputs, dict):
         raise ValueError(f"{label}: resolved_inputs must be an object")
@@ -155,6 +161,11 @@ def validate(manifest: dict, label: str) -> None:
                 "must prove BOTH a plain and an encrypted GUI install"
             )
         _validate_observed_record(observed[mode], mode, label)
+        if observed[mode]["source_digest"].lower() != inputs["source"].lower():
+            raise ValueError(
+                f"{label}: observed.{mode}.source_digest does not match "
+                "resolved_inputs.source"
+            )
     measurements = manifest.get("measurements")
     if not isinstance(measurements, dict):
         raise ValueError(f"{label}: measurements must be an object")
@@ -179,9 +190,18 @@ def _stable(value):
     return value
 
 
+def _comparable(field: str, value):
+    stable = _stable(value)
+    if field == "browser" and isinstance(stable, dict):
+        stable = {key: item for key, item in stable.items()
+                  if key != "free_disk_gib"}
+    return stable
+
+
 def compare(left: dict, right: dict) -> list[str]:
     return [field for field in QUALIFICATION_COMPARE_FIELDS
-            if _stable(left.get(field)) != _stable(right.get(field))]
+            if _comparable(field, left.get(field))
+            != _comparable(field, right.get(field))]
 
 
 def main() -> int:

@@ -178,6 +178,15 @@ def resolve_sha(repo: str, ref: str) -> str:
     return api_json(f"https://api.github.com/repos/{repo}/commits/{ref}")["sha"]
 
 
+
+def submodule_sha(repo: str, path: str) -> str:
+    """Return the exact gitlink committed by the installer repository."""
+    value = api_json(f"https://api.github.com/repos/{repo}/contents/{path}")
+    sha = value.get("sha")
+    if not isinstance(sha, str) or len(sha) != 40:
+        raise KeyError(f"{repo}:{path} has no committed submodule SHA")
+    return sha
+
 def floor_is_ancestor(repo: str, sha: str, floor: str = FLOOR_COMMIT) -> bool | None:
     """Is `floor` an ancestor of (or identical to) `sha`? None if unknowable."""
     try:
@@ -199,9 +208,20 @@ def collect() -> dict:
                 fetch(where["repo"], where["manifest"])
             )
         else:
-            sources[desktop] = source_from_gitmodules(
+            source = source_from_gitmodules(
                 fetch(where["repo"], ".gitmodules"), where["submodule"]
             )
+            # A tracking branch is not the source used by the build. Git checks
+            # out the repository's committed gitlink, so audit that exact SHA.
+            source.pop("branch", None)
+            try:
+                source["commit"] = submodule_sha(
+                    where["repo"], where["submodule"]
+                )
+            except (urllib.error.URLError, urllib.error.HTTPError,
+                    TimeoutError, KeyError):
+                source["at_or_after_floor"] = None
+            sources[desktop] = source
     # Resolve every canonical-repo pin to a full SHA (branches to their head)
     # so the floor check compares exact revisions, then record whether the
     # MediaInput v1 floor is an ancestor of each pin. A resolution the API
