@@ -92,7 +92,6 @@ tuna_installed_file_owner() {
 TUNAOS_CONTRACT_WAIVED=0
 waive() { TUNAOS_CONTRACT_WAIVED=$((TUNAOS_CONTRACT_WAIVED + 1)); }
 
-
 require_command() { command -v "$1" >/dev/null || {
 	echo "missing required command: $1" >&2
 	if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${desktop:-}" != cosmic && "${desktop:-}" != tuna ]]; then
