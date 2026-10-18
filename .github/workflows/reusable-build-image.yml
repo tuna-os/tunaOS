@@ -444,7 +444,7 @@ jobs:
           echo "remote_image_digest=${REMOTE_IMAGE_DIGEST}" >> $GITHUB_OUTPUT
           echo "digest=${IMAGE_DIGEST}" >> $GITHUB_OUTPUT
 
-      - name: Verify rechunk metadata preserved
+      - name: Verify pushed layer metadata
         if: ${{ inputs.publish }}
         env:
           IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
@@ -454,12 +454,18 @@ jobs:
         run: |
           # chunkah packs layers with ostree component annotations; if a
           # podman/skopeo regression strips them during push, client delta
-          # updates silently degrade. Advisory check (warn, don't block).
+          # updates silently degrade. The annotation check remains advisory.
+          #
+          # The layer check is blocking. A label-only Containerfile.final
+          # produced a 25-byte empty zstd tar that bootc 1.16.10 rejects as
+          # truncated (tunaOS#3378). Check the pushed artifact, after podman's
+          # forced recompression, so the gate covers what users install.
           REF="docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}"
           RAW=$(sudo skopeo inspect --raw "$REF")
           LAYERS=$(echo "$RAW" | jq '.layers | length')
           ANNOTATED=$(echo "$RAW" | jq '[.layers[].annotations // {} | keys[]] | map(select(test("ostree|chunkah"))) | length')
           echo "layers=${LAYERS} ostree-annotated-keys=${ANNOTATED}"
+          python3 scripts/check-oci-layers.py <<<"$RAW"
           if [ "${ANNOTATED}" = "0" ]; then
             echo "::warning::pushed manifest ${REF} has no ostree/chunkah layer annotations — rechunk metadata may have been stripped"
           fi

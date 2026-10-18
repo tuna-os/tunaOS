@@ -18,3 +18,10 @@ LABEL org.opencontainers.image.version="${SHA_HEAD_SHORT}"
 LABEL io.bootc=1
 LABEL containers.bootc=1
 LABEL ostree.bootable=1
+
+# A label-only final stage made Buildah append a 25-byte zstd layer that
+# expands to an empty tar. bootc 1.16.10 rejects that layer as truncated
+# (tunaOS#3378). Record the rechunked source revision as a real filesystem
+# change so every published manifest ends in a non-empty tar layer.
+RUN install -d -m 0755 /usr/share/tunaos && \
+    printf 'source=%s\n' "${SHA_HEAD_SHORT}" > /usr/share/tunaos/rechunked-build
