@@ -3569,241 +3569,63 @@ boot_disk_image() {
 	return 1
 }
 
-qualification_deployment_root() {
-	local installed_root="$1"
-	local -a deployments=()
+# Inspect the disk the GUI wrote and provision the harness-owned account used
+# for an offline, monitor-driven greeter login. libguestfs performs both disk
+# inspection and first-boot script injection inside its appliance VM: no guest
+# binary executes as host root, and guest-controlled symlinks are never
+# resolved by host filesystem operations.
+prepare_qualification_disk() {
+	command -v virt-filesystems >/dev/null 2>&1 &&
+		command -v virt-customize >/dev/null 2>&1 || {
+		echo "ERROR: qualification requires libguestfs-tools" >&2
+		return 77
+	}
 
-	# composefs-native deliberately leaves /ostree present, so its state
-	# deployment must win over the legacy OSTree probe.
-	if [[ -d "${installed_root}/state/deploy" ]]; then
-		mapfile -t deployments < <(
-			find "${installed_root}/state/deploy" -mindepth 1 -maxdepth 1 \
-				-type d -print 2>/dev/null
-		)
-	else
-		mapfile -t deployments < <(
-			find "${installed_root}/ostree/deploy" -regextype posix-extended \
-				-type d -regex '.*/deploy/[^/]+\.[0-9]+' -print 2>/dev/null
-		)
-	fi
-	[[ "${#deployments[@]}" -eq 1 ]] || return 1
-	printf '%s\n' "${deployments[0]}"
-}
-
-label_qualification_account_files() {
-	local deployment_root="$1"
-	[[ -d "${deployment_root}/etc/selinux" ]] || return 0
-	local restorecon=""
-	for candidate in /usr/sbin/restorecon /sbin/restorecon; do
-		if [[ -x "${deployment_root}${candidate}" ]]; then
-			restorecon="$candidate"
-			break
-		fi
-	done
-	if [[ -z "$restorecon" ]]; then
-		echo "ERROR: installed SELinux policy has no restorecon binary" >&2
+	local passphrase="${TUNAOS_QUALIFICATION_PASSPHRASE:-tunaose2e}"
+	local inventory=""
+	if ! inventory="$(virt-filesystems --long --parts --filesystems \
+		--format qcow2 -a "$INSTALL_DISK")"; then
+		echo "ERROR: libguestfs could not inspect the qualification disk" >&2
 		return 1
 	fi
-	chroot "$deployment_root" "$restorecon" -RF \
-		/etc/tunaos-qualification \
-		/etc/systemd/system/tunaos-qualification-account.service \
-		/etc/systemd/system/graphical.target.wants/tunaos-qualification-account.service \
-		/etc/systemd/system-preset/10-tunaos-qualification.preset
-}
+	local encrypted=0
+	grep -q 'crypto_LUKS' <<<"$inventory" && encrypted=1
+	if [[ "$QUALIFICATION_PROFILE" == "encrypted" && "$encrypted" -ne 1 ]]; then
+		echo "ERROR: encrypted GUI profile produced no crypto_LUKS partition" >&2
+		return 1
+	elif [[ "$QUALIFICATION_PROFILE" == "plain" && "$encrypted" -ne 0 ]]; then
+		echo "ERROR: plain GUI profile unexpectedly produced a crypto_LUKS partition" >&2
+		return 1
+	fi
 
-install_qualification_account_service() {
-	local deployment_root="$1"
-	local account_dir="${deployment_root}/etc/tunaos-qualification"
-	local unit_dir="${deployment_root}/etc/systemd/system"
-	local preset_dir="${deployment_root}/etc/systemd/system-preset"
-	install -d -m 0700 "$account_dir"
-	printf '%s' "$E2E_INSTALL_PASSWORD" >"${account_dir}/password"
-	chmod 0600 "${account_dir}/password"
-	cat >"${account_dir}/create-account" <<EOF
+	local firstboot
+	firstboot="$(mktemp)"
+	cat >"$firstboot" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
 account=${E2E_INSTALL_USER@Q}
-etc_root="\${TUNAOS_QUALIFICATION_ETC_ROOT:-}"
-password_file="\${etc_root}/etc/tunaos-qualification/password"
+password=${E2E_INSTALL_PASSWORD@Q}
 if ! getent passwd "\$account" >/dev/null; then
 	useradd --create-home --comment "TunaOS Qualification" "\$account"
 fi
-password="\$(cat "\$password_file")"
 printf '%s:%s\n' "\$account" "\$password" | chpasswd
 if command -v restorecon >/dev/null 2>&1; then
 	restorecon -RF "/home/\${account}" /etc/passwd /etc/shadow /etc/group /etc/gshadow
 fi
-rm -f "\$password_file"
 EOF
-	chmod 0600 "${account_dir}/create-account"
-	install -d -m 0755 "${unit_dir}/graphical.target.wants" "$preset_dir"
-	cat >"${unit_dir}/tunaos-qualification-account.service" <<'EOF'
-[Unit]
-Description=Provision the TunaOS offline GUI qualification account
-ConditionPathExists=/etc/tunaos-qualification/password
-Before=display-manager.service
+	chmod 0700 "$firstboot"
 
-[Service]
-Type=oneshot
-ExecStart=/usr/bin/bash /etc/tunaos-qualification/create-account
-RemainAfterExit=yes
-
-[Install]
-WantedBy=graphical.target
-EOF
-	ln -sfn ../tunaos-qualification-account.service \
-		"${unit_dir}/graphical.target.wants/tunaos-qualification-account.service"
-	printf '%s\n' "enable tunaos-qualification-account.service" \
-		>"${preset_dir}/10-tunaos-qualification.preset"
-	label_qualification_account_files "$deployment_root"
-}
-
-activate_qualification_volume_group() {
-	local device="$1"
-	local volume_group=""
-	volume_group="$(pvs --devices "$device" --noheadings \
-		-o vg_name "$device" 2>/dev/null | xargs)"
-	[[ -n "$volume_group" && "$volume_group" != *" "* ]] || return 1
-	vgchange --devices "$device" -ay "$volume_group" >/dev/null || return 1
-	printf '%s\n' "$volume_group"
-}
-
-deactivate_qualification_volume_group() {
-	local device="$1" volume_group="$2"
-	vgchange --devices "$device" -an "$volume_group" >/dev/null
-}
-
-close_qualification_mapper() {
-	local mapper_name="$1" mapper_opened="$2"
-	[[ "$mapper_opened" -eq 1 ]] || return 0
-	cryptsetup close "$mapper_name"
-}
-
-# Inspect the disk the GUI wrote and provision the harness-owned account used
-# for an offline, monitor-driven greeter login. The account lives only in the
-# installed disk's mutable /etc; the immutable deployment and source digest
-# remain untouched.
-prepare_qualification_disk() {
-	command -v qemu-nbd >/dev/null 2>&1 || {
-		echo "ERROR: qualification requires qemu-nbd" >&2
-		return 77
-	}
-	if [[ "$QUALIFICATION_PROFILE" == "encrypted" ]] && ! command -v cryptsetup >/dev/null 2>&1; then
-		echo "ERROR: encrypted qualification requires cryptsetup" >&2
-		return 77
+	local -a key_args=()
+	if [[ "$encrypted" -eq 1 ]]; then
+		key_args=(--key "all:key:${passphrase}")
 	fi
-	modprobe nbd max_part=16 2>/dev/null || true
-	local nbd=""
-	for candidate in /dev/nbd{0..15}; do
-		[[ -b "$candidate" ]] || continue
-		if [[ "$(cat "/sys/class/block/${candidate##*/}/size" 2>/dev/null || echo 1)" == 0 ]]; then
-			nbd="$candidate"
-			break
-		fi
-	done
-	if [[ -z "$nbd" ]]; then
-		echo "ERROR: no free NBD device for qualification disk inspection" >&2
-		return 77
+	if ! virt-customize --format qcow2 -a "$INSTALL_DISK" \
+		"${key_args[@]}" --firstboot "$firstboot"; then
+		rm -f "$firstboot"
+		echo "ERROR: libguestfs could not stage first-boot account provisioning" >&2
+		return 1
 	fi
-
-	local passphrase="${TUNAOS_QUALIFICATION_PASSPHRASE:-tunaose2e}"
-	local mapper_name="tunaos-qualification-root-${BASHPID}"
-	local mapper="/dev/mapper/${mapper_name}"
-	local mountpoint=""
-	local root_device=""
-	local root_fstype=""
-	local lvm_device=""
-	local activated_vg=""
-	local -a mount_args=()
-	local encrypted=0
-	local result=0
-	local mapper_opened=0
-	qemu-nbd --connect="$nbd" "$INSTALL_DISK"
-	partprobe "$nbd" 2>/dev/null || true
-	udevadm settle 2>/dev/null || true
-
-	local luks_device
-	luks_device="$(lsblk -prno NAME,FSTYPE "$nbd" 2>/dev/null |
-		awk '$2 == "crypto_LUKS" {print $1; exit}')"
-	[[ -n "$luks_device" ]] && encrypted=1
-	if [[ "$QUALIFICATION_PROFILE" == "encrypted" && "$encrypted" -ne 1 ]]; then
-		echo "ERROR: encrypted GUI profile produced no crypto_LUKS partition" >&2
-		result=1
-	elif [[ "$QUALIFICATION_PROFILE" == "plain" && "$encrypted" -ne 0 ]]; then
-		echo "ERROR: plain GUI profile unexpectedly produced a crypto_LUKS partition" >&2
-		result=1
-	fi
-
-	if [[ "$result" -eq 0 && "$encrypted" -eq 1 ]]; then
-		if ! printf '%s' "$passphrase" |
-			cryptsetup open --key-file=- "$luks_device" "$mapper_name"; then
-			echo "ERROR: qualification could not unlock installed root" >&2
-			result=1
-		else
-			mapper_opened=1
-		fi
-	fi
-
-	local search_device="$nbd"
-	[[ "$encrypted" -eq 1 ]] && search_device="$mapper"
-	if [[ "$result" -eq 0 ]]; then
-		lvm_device="$(lsblk -prno NAME,FSTYPE "$search_device" 2>/dev/null |
-			awk '$2 == "LVM2_member" {print $1; exit}')"
-	fi
-	if [[ "$result" -eq 0 && -n "$lvm_device" ]]; then
-		command -v pvs >/dev/null 2>&1 && command -v vgchange >/dev/null 2>&1 || {
-			echo "ERROR: qualification LVM root requires lvm2" >&2
-			result=77
-		}
-		if [[ "$result" -eq 0 ]] &&
-			! activated_vg="$(activate_qualification_volume_group "$lvm_device")"; then
-			echo "ERROR: qualification could not activate its installed LVM root" >&2
-			result=1
-		fi
-	fi
-	if [[ "$result" -eq 0 ]]; then
-		root_device="$(lsblk -bprno NAME,FSTYPE,SIZE "$search_device" 2>/dev/null |
-			awk '$2 ~ /^(btrfs|ext4|xfs)$/ && $3 > max {max=$3; device=$1} END {print device}')"
-		if [[ -z "$root_device" ]]; then
-			echo "ERROR: qualification could not locate installed root filesystem" >&2
-			result=1
-		fi
-	fi
-
-	if [[ "$result" -eq 0 ]]; then
-		mountpoint="$(mktemp -d)"
-		root_fstype="$(lsblk -no FSTYPE "$root_device" 2>/dev/null)"
-		mount_args=()
-		[[ "$root_fstype" == xfs ]] && mount_args=(-o nouuid)
-		if ! mount "${mount_args[@]}" "$root_device" "$mountpoint"; then
-			echo "ERROR: qualification could not mount installed root" >&2
-			result=1
-		else
-			local deployment_root=""
-			if ! deployment_root="$(qualification_deployment_root "$mountpoint")"; then
-				echo "ERROR: qualification expected exactly one installed deployment" >&2
-				result=1
-			elif ! install_qualification_account_service "$deployment_root"; then
-				echo "ERROR: qualification could not stage first-boot account provisioning" >&2
-				result=1
-			fi
-		fi
-		sync
-		if mountpoint -q "$mountpoint" && ! umount "$mountpoint"; then
-			echo "ERROR: qualification could not unmount installed root" >&2
-			result=1
-		fi
-		rmdir "$mountpoint" 2>/dev/null || true
-	fi
-
-	if [[ -n "$activated_vg" ]]; then
-		deactivate_qualification_volume_group "$lvm_device" "$activated_vg" \
-			>/dev/null 2>&1 || true
-	fi
-	close_qualification_mapper "$mapper_name" "$mapper_opened" \
-		>/dev/null 2>&1 || true
-	qemu-nbd --disconnect "$nbd" >/dev/null 2>&1 || true
-	return "$result"
+	rm -f "$firstboot"
 }
 
 qualification_frame_text() {
