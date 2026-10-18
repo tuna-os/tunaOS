@@ -66,6 +66,16 @@ on:
         required: false
         type: boolean
         default: true
+      cutover-check:
+        description: >-
+          Delivery-cutover gate for this {variant, flavor, platform} cell
+          (computed by the caller from delivery-cutover.json via
+          scripts/delivery-cutover.py). When true the R2 upload below is
+          skipped for a cut-over target; build, boot gate and signing still
+          run. Defaults to false, which is current behavior.
+        required: false
+        type: boolean
+        default: false
       capture-installer:
         description: "Also capture the installer walkthrough flow (screenshots ride the e2e artifact)"
         required: false
@@ -405,7 +415,15 @@ jobs:
           VARIANT: ${{ inputs.variant }}
           FLAVOR: ${{ inputs.flavor }}
           PLATFORM: ${{ inputs.platform }}
+          CUTOVER_SUPPRESS: ${{ inputs.cutover-check }}
         run: |
+          # Delivery cutover (delivery-cutover.json): suppression is
+          # upload-only. Build, boot gate and signing above already ran; a
+          # cut-over target just stops publishing to R2.
+          if [[ "${CUTOVER_SUPPRESS}" == "true" ]]; then
+            echo "Cut over per delivery-cutover.json — skipping R2 upload for ${VARIANT}:${FLAVOR} (${PLATFORM})"
+            exit 0
+          fi
           if [[ -z "${R2_BUCKET}" ]]; then
             echo "R2 secrets not configured — skipping publish"
             exit 0

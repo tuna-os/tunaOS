@@ -47,6 +47,13 @@ jobs:
     name: Prune R2
     runs-on: ubuntu-latest
     steps:
+      # Delivery cutover (delivery-cutover.json) is versioned policy: the
+      # retained[] inventory below is read from the checkout, so this job
+      # needs the repo (it previously ran without one).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
       - name: Install rclone
         run: sudo apt-get install -y rclone
 
@@ -83,8 +90,25 @@ jobs:
           # must not depend on whichever order a particular rclone release
           # chooses. The final rule also keeps unrelated live-isos objects out
           # of this extension-scoped deletion.
+          # Delivery cutover: retained[] names from delivery-cutover.json
+          # (dated ISOs + sidecars of cut-over targets) survive the 14d
+          # sweep. Each rule lands AFTER the latest-pointer exclusion and
+          # BEFORE the delete rules, so first-match order keeps pointers,
+          # then retained objects, then prunes the rest. With the empty
+          # initial policy this list is empty and the FLAGS below are
+          # identical to today. Dry runs list the retained names.
+          KEPT=()
+          while IFS= read -r rule; do
+            [[ -n "$rule" ]] || continue
+            KEPT+=(--filter "$rule")
+          done < <(python3 scripts/delivery-cutover.py --retained || true)
+          if ((${#KEPT[@]} > 0)); then
+            echo "==> Retained by delivery-cutover.json (excluded from prune):"
+            printf '    %s\n' "${KEPT[@]}"
+          fi
           FLAGS=(--log-level INFO --s3-no-check-bucket --min-age 14d \
             --filter "- *-latest*" \
+            "${KEPT[@]}" \
             --filter "+ *.iso" \
             --filter "+ *.iso.sha256" \
             --filter "+ *.iso.sigstore.json" \

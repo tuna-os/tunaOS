@@ -7,6 +7,7 @@ Those restrictions cannot remove targets from the required coverage denominator.
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import json
 import re
@@ -513,6 +514,36 @@ def _index_descriptors(
     return by_target_key, extra_records
 
 
+def _resolve_descriptor_digests(desc: dict[str, Any] | None) -> tuple[str | None, str | None, str | None]:
+    """Return (indexDigest, platformManifestDigest, configDigest) for a descriptor."""
+    if desc is None:
+        return None, None, None
+    res_in = desc.get("resolvedInputs") if isinstance(desc.get("resolvedInputs"), dict) else {}
+    idx_digest = _optional_digest(
+        desc.get("indexDigest") or res_in.get("indexDigest"),
+        "indexDigest",
+    )
+    raw_pm = (
+        desc.get("platformManifestDigest")
+        or res_in.get("platformManifestDigest")
+        or desc.get("childDigest")
+        or desc.get("manifestDigest")
+    )
+    if raw_pm is None and desc.get("digest") is not None:
+        if desc.get("mediaType") in INDEX_MEDIA_TYPES:
+            idx_digest = idx_digest or _optional_digest(desc["digest"], "indexDigest")
+        else:
+            raw_pm = desc["digest"]
+    pm_digest = _optional_digest(raw_pm, "platformManifestDigest")
+    if pm_digest is not None and idx_digest is not None and pm_digest == idx_digest:
+        raise ValueError("platformManifestDigest cannot be conflated with indexDigest")
+    cfg_digest = _optional_digest(
+        desc.get("configDigest") or res_in.get("configDigest"),
+        "configDigest",
+    )
+    return idx_digest, pm_digest, cfg_digest
+
+
 def _lookup_overlay(overlays: Any, target: dict[str, Any], publication: dict[str, str], desc: dict[str, Any] | None) -> tuple[bool, str | None, str | None, bool]:
     """Return (overlay_found, liveOverlayDigest, liveOverlayBaseDigest, conflicting_labels)."""
     tkey = target_key(target)
@@ -697,6 +728,103 @@ def _match_receipt(
     return None, saw_stale
 
 
+def _receipt_lookup(receipt: dict[str, Any], *names: str) -> Any:
+    """First present value across top-level and nested input spellings."""
+    sources = [receipt]
+    for key in ("resolvedInputs", "resolved_inputs"):
+        nested = receipt.get(key)
+        if isinstance(nested, dict):
+            sources.append(nested)
+    for source in sources:
+        for name in names:
+            if source.get(name) not in (None, ""):
+                return source[name]
+    return None
+
+
+def receipt_to_catalog_projection(receipt: dict[str, Any]) -> dict[str, Any]:
+    """Project a QualificationEvidence/v1 receipt onto catalog_snapshot's receipts shape.
+
+    Only normalizes field spellings (snake_case v1 evidence onto the camelCase
+    shape _match_receipt and the qualification ladder read). Digest binding is
+    unchanged: every digest still passes _optional_digest and matching still
+    requires equality, never similarity.
+    """
+    if not isinstance(receipt, dict):
+        raise ValueError("qualification receipt must be a mapping")
+
+    projected: dict[str, Any] = {}
+    for key in (
+        "target", "variant", "flavor", "platform", "publication",
+        "browser", "resources", "measurements", "evidence",
+        "reason", "checks", "status", "localOnly",
+        "imageDigest", "manifestDigest", "digest", "overlayDigest",
+        "contractDigest",
+    ):
+        if key in receipt:
+            projected[key] = receipt[key]
+    if "localOnly" not in projected and "local_only" in receipt:
+        projected["localOnly"] = receipt["local_only"]
+
+    publication = receipt.get("publication") if isinstance(receipt.get("publication"), dict) else {}
+    pm_raw = _receipt_lookup(
+        receipt,
+        "platformManifestDigest", "source", "imageDigest", "manifestDigest",
+        "source_image_digest",
+    )
+    if pm_raw is None and publication.get("digest") not in (None, ""):
+        pm_raw = publication["digest"]
+    if pm_raw is None and receipt.get("digest") not in (None, ""):
+        pm_raw = receipt["digest"]
+    platform_manifest_digest = _optional_digest(pm_raw, "receipt platformManifestDigest") if pm_raw not in (None, "") else None
+    live_overlay_digest = _optional_digest(
+        _receipt_lookup(receipt, "liveOverlayDigest", "overlay", "overlayDigest"),
+        "receipt liveOverlayDigest",
+    )
+    index_digest = _optional_digest(_receipt_lookup(receipt, "indexDigest"), "indexDigest")
+    config_digest = _optional_digest(_receipt_lookup(receipt, "configDigest"), "configDigest")
+
+    installer_revision = _receipt_lookup(receipt, "installerRevision", "installer_revision", "installer")
+    installer_revision = str(installer_revision) if installer_revision not in (None, "") else ""
+    engine_revision = _receipt_lookup(receipt, "engineRevision", "engine_revision", "engine")
+    engine_revision = str(engine_revision) if engine_revision not in (None, "") else ""
+
+    qualified_at = _receipt_lookup(
+        receipt, "qualifiedAt", "qualified_at", "measuredAt", "measured_at", "generatedAt", "generated_at",
+    )
+    qualified_at = qualified_at if isinstance(qualified_at, str) and qualified_at else None
+    receipt_digest_raw = _receipt_lookup(receipt, "receiptDigest", "receipt_digest", "contractDigest", "contract_digest")
+    receipt_digest = _optional_digest(receipt_digest_raw, "receiptDigest") if receipt_digest_raw not in (None, "") else None
+
+    status = projected.get("status")
+    checks = projected.get("checks")
+    checks_failed = isinstance(checks, list) and any(
+        isinstance(c, dict) and c.get("status") not in (None, "pass", "passed", "success")
+        for c in checks
+    )
+    if status is None and checks_failed:
+        status = "fail"
+    projected["status"] = status
+
+    projected["platformManifestDigest"] = platform_manifest_digest
+    projected["liveOverlayDigest"] = live_overlay_digest
+    projected["indexDigest"] = index_digest
+    projected["configDigest"] = config_digest
+    projected["installerRevision"] = installer_revision
+    projected["engineRevision"] = engine_revision
+    projected["resolvedInputs"] = {
+        "platformManifestDigest": platform_manifest_digest,
+        "liveOverlayDigest": live_overlay_digest,
+        "indexDigest": index_digest,
+        "configDigest": config_digest,
+        "installerRevision": installer_revision,
+        "engineRevision": engine_revision,
+    }
+    projected["qualifiedAt"] = qualified_at
+    projected["receiptDigest"] = receipt_digest
+    return projected
+
+
 def validate_catalog_entry(entry: dict[str, Any]) -> None:
     """Validate a single CatalogSnapshot target entry against schema and OCI invariants."""
     if not isinstance(entry, dict):
@@ -850,33 +978,7 @@ def catalog_snapshot(
         ref = f"{repo}:{tag}"
         desc = desc_by_key.get(tkey)
 
-        idx_digest: str | None = None
-        pm_digest: str | None = None
-        cfg_digest: str | None = None
-        if desc is not None:
-            res_in = desc.get("resolvedInputs") if isinstance(desc.get("resolvedInputs"), dict) else {}
-            idx_digest = _optional_digest(
-                desc.get("indexDigest") or res_in.get("indexDigest"),
-                "indexDigest",
-            )
-            raw_pm = (
-                desc.get("platformManifestDigest")
-                or res_in.get("platformManifestDigest")
-                or desc.get("childDigest")
-                or desc.get("manifestDigest")
-            )
-            if raw_pm is None and desc.get("digest") is not None:
-                if desc.get("mediaType") in INDEX_MEDIA_TYPES:
-                    idx_digest = idx_digest or _optional_digest(desc["digest"], "indexDigest")
-                else:
-                    raw_pm = desc["digest"]
-            pm_digest = _optional_digest(raw_pm, "platformManifestDigest")
-            if pm_digest is not None and idx_digest is not None and pm_digest == idx_digest:
-                raise ValueError("platformManifestDigest cannot be conflated with indexDigest")
-            cfg_digest = _optional_digest(
-                desc.get("configDigest") or res_in.get("configDigest"),
-                "configDigest",
-            )
+        idx_digest, pm_digest, cfg_digest = _resolve_descriptor_digests(desc)
 
         available = pm_digest is not None
         overlay_found, ovl_digest, ovl_base_digest, ovl_conflict = _lookup_overlay(
@@ -1036,6 +1138,79 @@ def catalog_snapshot(
     }
     validate_catalog_snapshot(snapshot)
     return snapshot
+
+
+def downgrade_stale_targets(
+    snapshot: dict[str, Any],
+    current_descriptors: Any = None,
+    current_overlays: Any = None,
+    current_pins: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Rewrite qualified/local-only entries whose inputs moved since their receipt matched.
+
+    A qualified entry is digest-bound to its receipt at build time, so the
+    entry's recorded platform digest, overlay digest and installer/engine
+    revisions stand in for the receipt's. Any current input that differs from
+    the recorded one rewrites the entry to unqualified/stale-qualification-receipt
+    while keeping its qualifiedAt, receiptDigest, browser and resources as dated
+    provenance. Inputs left as None are not evaluated and cannot stale an entry.
+    """
+    if not isinstance(snapshot, dict) or not isinstance(snapshot.get("targets"), list):
+        raise ValueError("downgrade requires a catalog snapshot mapping")
+    if current_pins is not None and not isinstance(current_pins, dict):
+        raise ValueError("current_pins must be a mapping")
+    pins = current_pins or {}
+    pin_installer = pins.get("installerRevision", pins.get("installer_revision", ""))
+    pin_engine = pins.get("engineRevision", pins.get("engine_revision", ""))
+
+    entries = copy.deepcopy(snapshot["targets"])
+    current_by_key: dict[str, dict[str, Any]] = {}
+    if current_descriptors is not None:
+        required_by_key = {target_key(entry["target"]): {"target": entry["target"]} for entry in entries}
+        current_by_key, _ = _index_descriptors(current_descriptors, {"variants": []}, required_by_key)
+
+    for entry in entries:
+        qual = entry["qualification"]
+        if qual["status"] not in {"qualified", "local-only"}:
+            continue
+        stale = False
+        current_desc = current_by_key.get(entry["targetKey"]) if current_descriptors is not None else None
+        if current_descriptors is not None:
+            _, current_pm, _ = _resolve_descriptor_digests(current_desc)
+            if current_pm != entry["facts"]["digest"]:
+                stale = True
+        if not stale and current_overlays is not None:
+            _, current_ovl, _, _ = _lookup_overlay(
+                current_overlays, entry["target"], entry["publication"], current_desc
+            )
+            if current_ovl != entry["resolvedInputs"].get("liveOverlayDigest"):
+                stale = True
+        if not stale and pins:
+            for field, current_pin in (
+                ("installerRevision", pin_installer),
+                ("engineRevision", pin_engine),
+            ):
+                recorded = entry["resolvedInputs"].get(field)
+                if current_pin not in (None, "") and recorded not in (None, "") and current_pin != recorded:
+                    stale = True
+                    break
+        if stale:
+            entry["qualification"] = {
+                "status": "unqualified",
+                "reason": "stale-qualification-receipt",
+                "qualifiedAt": qual.get("qualifiedAt"),
+                "receiptDigest": qual.get("receiptDigest"),
+                "browser": qual.get("browser"),
+                "resources": qual.get("resources"),
+            }
+            validate_catalog_entry(entry)
+
+    downgraded = dict(snapshot)
+    downgraded["targets"] = entries
+    downgraded["snapshotDigest"] = "sha256:" + hashlib.sha256(_canonical_json(entries)).hexdigest()
+    validate_catalog_snapshot(downgraded)
+    return downgraded
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)

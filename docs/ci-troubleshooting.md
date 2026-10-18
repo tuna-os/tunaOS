@@ -1681,3 +1681,11 @@ capture first, then sends the graceful powerdown itself before the kill.
 **Measured cause:** `Containerfile.arch` copies the common payload that provides the uupd timer and AC trigger. It never ran the package phase that installs the pinned binary and core units. Observed on a reference marlin:gnome host (booted 2026-09-22 image): trigger starts, `systemctl start uupd.service` exits `NOTINSTALLED`, unit enters `start-limit-hit`.
 
 **Fix:** The pinned download moved into shared `build_scripts/install-uupd.sh` (same `image-versions.yaml` pin; stages the binary plus `uupd.service`, `uupd.timer`, `uupd-manual.service` before install; smoke with `UUPD_CONTEXT="$PWD" UUPD_ROOT="$scratch"` into a disposable root). The apt and dnf branches of `10-base-packages.sh` delegate to it unchanged in behavior, and `Containerfile.arch` carries the pin file and runs the installer before `40-services.sh`. The context exact-set test now treats `install-uupd.sh` as a consumer of the pin file.
+
+### On-demand ISO-builder qualification — browser/IO bug chain
+
+| # | Symptom | Root cause | Fix |
+|---|---|---|---|
+| 1 | `layer_fetch` stalls at byte 12582912 with zero progress and no error | The layer reader issued one range request for the whole remainder past the 12 MiB chunk cap and never resumed it | Fetch in capped chunks, resume from the last committed byte, account progress per chunk |
+| 2 | Browser-built ISO is truncated against its manifest size while every phase reported success | Async JS sink backpressure: the writer closed with chunks still queued, so acknowledgments outran the flush | Await the sink ready/close handshake (drain before close) and verify output size against the manifest |
+| 3 | `scripts/iso-e2e.sh --strict-offline-gui` cannot bind its offline source on a flattened live root | The embedded payload store was never mounted nor listed in `additionalimagestores`, so the offline installer path had no source (same shape as §4 row 21) | Loop-mount the embedded store (`LiveOS/store.squashfs.img`) and point `/etc/containers/storage.conf` `additionalimagestores` at the mount point |

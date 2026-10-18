@@ -20,7 +20,7 @@ import yaml
 
 from contracts.health import attempt_status, evaluate_row
 from contracts.evidence import validate
-from contracts.targets import coverage_document, platform_slug
+from contracts.targets import coverage_document, platform_slug, receipt_to_catalog_projection
 
 REPOSITORY = "tuna-os/tunaOS"
 RUN_DEPTH = 200
@@ -234,8 +234,91 @@ def normalized_jobs(jobs: list[dict], target: dict):
     return normalized
 
 
+def _matching_receipts(receipts, target):
+    """Project QualificationEvidence/v1 receipts onto a target, oldest first.
+
+    Reporting only: digest binding stays in catalog_snapshot. Malformed
+    receipts are skipped, never scored.
+    """
+    if not receipts:
+        return []
+    items = receipts.values() if isinstance(receipts, dict) else receipts
+    if not isinstance(items, list):
+        try:
+            items = list(items)
+        except TypeError:
+            return []
+    matched = []
+    for item in items:
+        candidates = [x for x in item if isinstance(x, dict)] if isinstance(item, list) else [item]
+        for candidate in candidates:
+            if not isinstance(candidate, dict):
+                continue
+            try:
+                projected = receipt_to_catalog_projection(candidate)
+            except ValueError:
+                continue
+            ident = projected.get("target") if isinstance(projected.get("target"), dict) else projected
+            if (ident.get("variant"), ident.get("flavor"), ident.get("platform")) != (
+                    target["variant"], target["flavor"], target["platform"]):
+                continue
+            matched.append(projected)
+    matched.sort(key=lambda projected: str(projected.get("qualifiedAt") or ""))
+    return matched
+
+
+def _measurement_seconds(measurements, block):
+    entry = measurements.get(block) if isinstance(measurements, dict) else None
+    duration = entry.get("duration_s") if isinstance(entry, dict) else None
+    if isinstance(duration, bool) or not isinstance(duration, (int, float)) or duration < 0:
+        return None
+    return duration
+
+
+def _qualification_summary(projected):
+    """Additive dated-qualification and cold/warm performance summary."""
+    status = projected.get("status")
+    checks = projected.get("checks")
+    failing = status in {"fail", "failed", "unqualified", "blocked"} or (
+        isinstance(checks, list) and any(
+            isinstance(check, dict) and check.get("status") not in (None, "pass", "passed", "success")
+            for check in checks))
+    if failing:
+        state = "unqualified"
+    elif status == "local-only" or projected.get("localOnly") is True:
+        state = "local-only"
+    else:
+        state = "qualified"
+    browser = projected.get("browser")
+    browser_label = None
+    if isinstance(browser, dict):
+        browser_label = " ".join(
+            part for part in (browser.get("name"), browser.get("version"))
+            if isinstance(part, str) and part).strip() or None
+    evidence = projected.get("evidence")
+    urls = []
+    if isinstance(evidence, list):
+        for item in evidence:
+            if isinstance(item, dict) and isinstance(item.get("url"), str) and item["url"]:
+                urls.append({"url": item["url"]})
+            elif isinstance(item, str) and item:
+                urls.append({"url": item})
+    measurements = projected.get("measurements")
+    qualified_at = projected.get("qualifiedAt")
+    receipt_digest = projected.get("receiptDigest")
+    return {
+        "status": state,
+        "qualifiedAt": qualified_at if isinstance(qualified_at, str) and qualified_at else None,
+        "receiptDigest": receipt_digest if isinstance(receipt_digest, str) and receipt_digest else None,
+        "browser": browser_label,
+        "coldSeconds": _measurement_seconds(measurements, "cold"),
+        "warmSeconds": _measurement_seconds(measurements, "warm"),
+        "evidence": urls,
+    }
+
+
 def collect(config: dict, source_revision: str, fetch: Callable, *, now=None,
-            build_seconds=172800, feed_seconds=90000):
+            build_seconds=172800, feed_seconds=90000, receipts=None):
     if not isinstance(source_revision, str) or not SHA.fullmatch(source_revision):
         raise CollectionError("collector source revision must be immutable")
     now = now or datetime.now(timezone.utc)
@@ -312,6 +395,9 @@ def collect(config: dict, source_revision: str, fetch: Callable, *, now=None,
                                      required_factory_checks={"package-supply"})
             if not available:
                 evaluated["reasons"].append("github-collection-unavailable")
+            matched = _matching_receipts(receipts, target)
+            if matched:
+                evaluated["qualification"] = _qualification_summary(matched[-1])
             row["health"] = evaluated
     return {"schemaVersion": 1, "kind": "build-health", "sourceRevision": source_revision,
             "generatedAt": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -324,10 +410,25 @@ def collect(config: dict, source_revision: str, fetch: Callable, *, now=None,
 def markdown(document):
     lines = ["# Build health", "", f"Observed {document['generatedAt']}; collection {document['collection']['status']}.",
              "", "Successful jobs require authenticated package/image receipts before publication is verified.",
-             "", "| Variant | Flavor | Platform | Status | Reasons |", "|---|---|---|---|---|"]
+             "", "| Variant | Flavor | Platform | Status | Reasons | QualifiedAt | Receipt | Browser | Cold | Warm |",
+             "|---|---|---|---|---|---|---|---|---|---|"]
     for row in document["targets"]:
         target = row["target"]
-        lines.append(f"| {target['variant']} | {target['flavor']} | {target['platform']} | {row['status']} | {', '.join(row['reasons'])} |")
+        qual = row.get("qualification") or {}
+        qualified_at = qual.get("qualifiedAt") or "—"
+        digest = qual.get("receiptDigest") or ""
+        if not digest:
+            receipt_cell = "—"
+        else:
+            short = digest if len(digest) <= 19 else digest[:19] + "…"
+            first = (qual.get("evidence") or [None])[0]
+            first_url = first.get("url") if isinstance(first, dict) else None
+            receipt_cell = f"[{short}]({first_url})" if first_url else short
+        browser = qual.get("browser") or "—"
+        cold = qual.get("coldSeconds")
+        warm = qual.get("warmSeconds")
+        lines.append(f"| {target['variant']} | {target['flavor']} | {target['platform']} | {row['status']} | {', '.join(row['reasons'])} | "
+                     f"{qualified_at} | {receipt_cell} | {browser} | {cold if cold is not None else '—'} | {warm if warm is not None else '—'} |")
     return "\n".join(lines) + "\n"
 
 
