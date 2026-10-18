@@ -1,6 +1,22 @@
 config:
   global_platforms: ["linux/amd64", "linux/arm64"]
 
+# ── Browser-builder delivery cutover (tunaOS#3382) ──────────────────────────
+# This is the reviewed switch from routine prebuilt R2 publication to the
+# browser builder. A target may enter cutover_targets only with current
+# browser-qualified evidence from the qualification catalog (#3381).
+# local-fallback, unqualified, and unsupported targets stay out and therefore
+# keep the existing scheduled R2 publication path.
+#
+# Retention is deliberately independent and append-only. Before adding a
+# cutover target, inventory every existing versioned and -latest ISO for that
+# target in live-isos/ here. List ISO basenames only; the policy evaluator
+# protects each checksum and Sigstore sidecar as well. Removing a cutover row
+# restores routine publication but MUST NOT remove its retained inventory.
+iso_delivery:
+  cutover_targets: []
+  retained_r2_isos: []
+
 # ── Grouped dedup ISOs (issue #455) ───────────────────────────────────────────
 # Per-desktop-per-flavor ISOs are wasteful: all desktops on a variant share the
 # same Enterprise-Linux base, so tacklebox `shared_store.dedup` packs several
@@ -13,6 +29,7 @@ config:
 # variant's actual `build_image: true` flavors, so a variant that lacks a
 # Variants that lack certain desktops simply get a smaller ISO — no group
 # needs per-variant tailoring here.
+
 iso_groups:
   # Desktop ISO group: boots GNOME NVIDIA by default, and embeds
   # both NVIDIA and non-NVIDIA flavors in the offline store for installer auto-detection.
