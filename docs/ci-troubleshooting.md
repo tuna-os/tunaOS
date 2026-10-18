@@ -1682,7 +1682,7 @@ capture first, then sends the graceful powerdown itself before the kill.
 ### Countme clean install rejects a missing overridden dependency
 
 **Symptom:** The `Test countme collector with D1` step fails with
-`Missing: undici@8.12.2 from lock file` before running tests. Observed in
+`Missing: undici@8.12.2 from lock file` before tests start. Observed in
 [Unit Tests run 39146505460](https://github.com/tuna-os/tunaOS/actions/runs/39146505460).
 
 **Measured cause:** At `fe228c4`, `services/countme/package.json` overrides
@@ -1691,8 +1691,7 @@ Node 24.19.0 / npm 11.9.0 reproduces the failure with
 `npm ci --ignore-scripts --prefix services/countme`.
 
 **Fix:** Regenerate with `npm install --package-lock-only --ignore-scripts
---prefix services/countme` using Node 24 / npm 11, retain unrelated platform
-metadata, and commit the missing resolved package and integrity. Verify with a
+--prefix services/countme` using Node 24 / npm 11. Preserve metadata for other platforms and commit the missing resolved package and integrity. Verify with a
 clean `npm ci --ignore-scripts`, `npm test`, and `npm run build` in that directory.
-An override edit must be checked with `npm ci`; matching npm majors alone does
-not prove that the manifest and lockfile agree.
+Check each override edit with `npm ci`. The same npm major alone does not
+prove that the manifest and lockfile agree.
