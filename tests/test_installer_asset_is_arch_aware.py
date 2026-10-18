@@ -35,17 +35,17 @@ def script() -> str:
     return SCRIPT.read_text(encoding="utf-8")
 
 
-def test_the_asset_name_is_chosen_from_the_host_arch():
+def test_the_asset_name_uses_an_explicit_target_arch_with_host_fallback():
     text = script()
-    assert '_installer_asset="org.bootcinstaller.Installer.flatpak"' in text
-    assert '_installer_asset="org.bootcinstaller.Installer-$(uname -m).flatpak"' in text
+    assert '_installer_arch="${TUNA_INSTALLER_ARCH:-$(uname -m)}"' in text
+    assert '_installer_asset="org.bootcinstaller.Installer-${_installer_arch}.flatpak"' in text
 
 
 def test_x86_64_keeps_the_bare_asset_name():
     """Downstreams fetch that exact URL; the arch suffix is for everyone else."""
     text = script()
-    guard = re.search(r'if \[\[ "\$\(uname -m\)" != "x86_64" \]\]; then', text)
-    assert guard, "the suffix is not gated on being a non-x86_64 host"
+    guard = re.search(r'if \[\[ "\$\{_installer_arch\}" != "x86_64" \]\]; then', text)
+    assert guard, "the suffix is not gated on a non-x86_64 target"
     bare = text.index('_installer_asset="org.bootcinstaller.Installer.flatpak"')
     assert bare < guard.start(), "x86_64 must be the default, not the exception"
 
@@ -59,12 +59,12 @@ def test_both_download_urls_use_the_resolved_asset():
     assert all(u == "${_installer_asset}" for u in urls), urls
 
 
-def test_a_missing_arch_asset_fails_by_name():
+def test_a_missing_arch_asset_fails_by_resolved_target_name():
     """Otherwise the next failure reads as 'Nothing matches ... in remote
     installer-local' three commands later, which looks like a corrupt
     download rather than an asset that was never published."""
     text = script()
-    assert 'echo "ERROR: no ${_installer_asset} published for $(uname -m)"' in text
+    assert 'echo "ERROR: no ${_installer_asset} published for ${_installer_arch}"' in text
 
 
 def test_the_deploy_path_is_not_hardcoded_to_x86_64():
