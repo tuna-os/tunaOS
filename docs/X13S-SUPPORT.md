@@ -1,7 +1,8 @@
 # ThinkPad X13s support
 
-**Status:** image-profile inspection only. TunaOS has not booted, installed, or
-qualified this profile on a ThinkPad X13s.
+**Status:** image profile defined; the first ARM64 child build and its generated
+inspection report are pending. TunaOS has not booted, installed, or qualified
+this profile on a ThinkPad X13s.
 
 This page is for the X13s Gen 1 from Lenovo (`lenovo,thinkpad-x13s`).
 They use the Qualcomm SC8280XP / Snapdragon 8cx Gen 3 SoC. This page excludes
@@ -33,7 +34,9 @@ W2 will add the complete early-boot payload to the initramfs.
 
 ## Stock Fedora payload measured before admission
 
-The source profile resolved on 2026-10-17 to:
+The following is a pre-admission inspection of the pinned ARM64 parent payload,
+not evidence from a completed `bonito:gnome-x13s` build. The source profile
+resolved on 2026-10-17 to:
 
 ```text
 ghcr.io/tuna-os/bonito:gnome (linux/arm64)
@@ -43,8 +46,8 @@ quay.io/fedora/fedora-bootc:44 (linux/arm64)
 sha256:5d8c73520a3fa7753b5ad8958ad4d553283ba7e5902d054cc4e88078e0522d08
 ```
 
-We exported this child for ARM64. It used Fedora kernel
-`7.2.11-200.fc44.aarch64`. The payload contains both X13s DTBs:
+The inspected parent payload used Fedora kernel `7.2.11-200.fc44.aarch64` and
+contained both X13s DTBs:
 
 ```text
 /usr/lib/modules/7.2.11-200.fc44.aarch64/dtb/qcom/sc8280xp-lenovo-thinkpad-x13s.dtb
@@ -59,15 +62,15 @@ I2C-HID, WCN6855 Wi-Fi, PMIC GLINK, battery management, Qualcomm remoteproc and
 SC8280XP audio are present. The result gives no reason to replace the Fedora
 kernel.
 
-Fedora supplies the WCN6855 Wi-Fi payload. It also supplies the QCA files for
-board Bluetooth in compressed form. The exported image did not contain the X13s
+Fedora's parent payload supplies the WCN6855 Wi-Fi files and the compressed QCA
+files for board Bluetooth. It did not contain the X13s
 `qcom/sc8280xp/LENOVO/21BX/` DSP/topology directory or `qcom/a660_*` GPU
 firmware. W2 must resolve and verify those gaps before a live artifact can be
 called complete.
 
-Issue #3377 records the immutable digest and full report for the admitted
-child. The normal ARM64 image build creates that report. This dated
-pre-admission measurement does not replace it.
+The first normal ARM64 child build will create the immutable digest and full
+generated report recorded by issue #3377. Until that succeeds, only the dated
+parent-payload measurement above is available.
 
 ## DTB boot-path decision for W4
 
