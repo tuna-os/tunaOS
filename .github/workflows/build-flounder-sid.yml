@@ -1,6 +1,7 @@
 name: Build Flounder-sid
 permissions:
   contents: read
+  actions: read
   packages: write
   id-token: write
 on:
