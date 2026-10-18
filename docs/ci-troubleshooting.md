@@ -1665,3 +1665,26 @@ stopped more slowly passed.
 **Fix:** `iso-e2e.sh` always sets `TUNAOS_LUKS_NO_POWEROFF=1`. It takes the
 capture first, then sends the graceful powerdown itself before the kill.
 `tests/bats/test_luks_capture_before_powerdown.bats` holds that order.
+### Marlin base userland gaps (tunaOS#3351, #3353, #3354, #3355)
+
+**Symptom:** A booted marlin:gnome (BUILD_ID=4ace379) has no `hostname`, `diff`, `less`, `lsusb`, `bluetoothctl`, `distrobox`, or `buildah`; Bluetooth stays `disabled; preset: disabled`; modern laptop audio lacks SOF firmware and the ALSA-to-PipeWire route.
+
+**Measured cause:** The stock Arch `base` metapackage no longer ships `diffutils` or `less`, and Arch's default preset is `disable *`. `Containerfile.arch` skips `build_scripts/10-base-packages.sh`, so everything that phase provides elsewhere (`buildah`, `distrobox`, `fzf`) never reached marlin, and nothing enabled `bluetooth.service`. `bluez` was present only transitively via `fwupd`. All sixteen missing names resolve in Arch `core`/`extra` (verified with `pacman -Si` against the 20261011 base).
+
+**Fix:** `Containerfile.arch` installs all sixteen explicitly (`inetutils`, `diffutils`, `less`, `usbutils`, `man-db`, `fzf`, `buildah`, `distrobox`, `bluez`, `bluez-utils`, `sof-firmware`, `pipewire-alsa`, plus the updater path in the next row). `40-services.sh` enables `bluetooth.service` and `uupd.timer` on the pacman branch only, and a marlin-scoped preset (`system_files_overrides/marlin/.../50-tunaos-marlin.preset`, delivered by `92-variant-customizations.sh`) preserves those symlinks through first-boot preset policy without changing any other variant.
+
+### Marlin shipped uupd triggers without uupd (tunaOS#3356)
+
+**Symptom:** `systemctl --failed` reports `uupd-on-ac.service` after every AC event; the journal says `uupd.service: Unit not found`, and the image has no `/usr/bin/uupd`.
+
+**Measured cause:** `Containerfile.arch` copies the common payload that provides the uupd timer and AC trigger but never ran the package phase that installs the pinned binary and core units. Observed on `james@dilli` (marlin:gnome, booted 2026-09-22 image): trigger starts, `systemctl start uupd.service` exits `NOTINSTALLED`, unit enters `start-limit-hit`.
+
+**Fix:** The pinned download moved into shared `build_scripts/install-uupd.sh` (same `image-versions.yaml` pin, currently v1.4.0; stages binary plus `uupd.service`, `uupd.timer`, `uupd-manual.service` before installing; smoke with `UUPD_CONTEXT="$PWD" UUPD_ROOT="$scratch"` into a disposable root). The apt and dnf branches of `10-base-packages.sh` delegate to it unchanged in behavior, and `Containerfile.arch` carries the pin file and runs the installer before `40-services.sh`. The context exact-set test now treats `install-uupd.sh` as needing the pin file.
+
+### On-demand ISO-builder qualification — browser/IO bug chain
+
+| # | Symptom | Root cause | Fix |
+|---|---|---|---|
+| 1 | `layer_fetch` stalls at byte 12582912 with zero progress and no error | The layer reader issued one range request for the whole remainder past the 12 MiB chunk cap and never resumed it | Fetch in capped chunks, resume from the last committed byte, account progress per chunk |
+| 2 | Browser-built ISO is truncated against its manifest size while every phase reported success | Async JS sink backpressure: the writer closed with chunks still queued, so acknowledgments outran the flush | Await the sink ready/close handshake (drain before close) and verify output size against the manifest |
+| 3 | `scripts/iso-e2e.sh --strict-offline-gui` cannot bind its offline source on a flattened live root | The embedded payload store was never mounted nor listed in `additionalimagestores`, so the offline installer path had no source (same shape as §4 row 21) | Loop-mount the embedded store (`LiveOS/store.squashfs.img`) and point `/etc/containers/storage.conf` `additionalimagestores` at the mount point |
