@@ -41,6 +41,7 @@ RESULT_FIELDS = {
     "desktop_contract", "source_image_digest", "iso_detached", "owned_disk",
     "encrypted", "duration_seconds",
 }
+QUALIFICATION_FIELDS = RESULT_FIELDS - {"kind", "profile", "duration_seconds"}
 RECEIPT_FIELDS = MANIFEST_FIELDS | {"generated_at", "qualification", "timings"}
 PARITY_FIELDS = (
     "variant", "flavor", "architecture", "platform", "hardware_scope",
@@ -241,11 +242,19 @@ def validate_receipt(receipt: dict, label: str) -> None:
     }:
         raise ValueError(f"{label}: timings must contain both legs and total")
     for profile in ("plain", "encrypted"):
+        nested = qualification[profile]
+        if not isinstance(nested, dict):
+            raise ValueError(f"{label}.qualification.{profile}: must be an object")
+        _exact_fields(
+            nested,
+            QUALIFICATION_FIELDS,
+            f"{label}.qualification.{profile}",
+        )
         result = {
+            **nested,
             "kind": RESULT_KIND,
             "profile": profile,
             "duration_seconds": durations[f"{profile}_seconds"],
-            **qualification[profile],
         }
         validate_result(result, f"{label}.qualification.{profile}")
         if result["source_image_digest"] != receipt["source_image_digest"]:

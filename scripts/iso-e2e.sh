@@ -2074,10 +2074,18 @@ wait_pid_gone() {
 POWEROFF_WAIT_SECS="${TUNAOS_E2E_POWEROFF_WAIT:-180}"
 
 poweroff_and_wait_vm() {
-	if ! "${GUEST_SSH[@]}" "sudo systemctl poweroff" 2>/dev/null; then
+	if [[ "$MODE" == "qualification" ]]; then
+		# Qualification deliberately has no SSH forwarding. Address this VM
+		# through its private monitor so a concurrent guest on SSH_PORT can
+		# never receive our shutdown command.
+		if [[ ! -S "$MONITOR_SOCK" ]] || ! command -v socat &>/dev/null; then
+			echo "ERROR: qualification VM monitor is unavailable for poweroff" >&2
+			return 6
+		fi
+		echo "system_powerdown" | socat - "UNIX-CONNECT:${MONITOR_SOCK}" 2>/dev/null || true
+	elif ! "${GUEST_SSH[@]}" "sudo systemctl poweroff" 2>/dev/null; then
 		# Not fatal: the guest may be going down already (sshd dies mid-command
-		# often enough), and ACPI below is a second way in. But it changes what
-		# a long wait MEANS, so it must not be silent.
+		# often enough), and ACPI below is a second way in.
 		echo "==> note: 'systemctl poweroff' over ssh did not return cleanly" >&2
 	fi
 	sleep 10
@@ -3617,7 +3625,7 @@ boot_qualification_disk() {
 	e2e_phase "Booting qualified ${QUALIFICATION_PROFILE} disk with ISO detached and guest networking disabled..."
 	reset_qemu_sockets
 	"$QEMU" \
-		-smbios type=1,product=tunaos-countme-disabled \
+		-smbios type=1,product=tunaos-countme-disabled,version=tunaos-offline-gui-qualification \
 		-name "tunaos-offline-gui-${QUALIFICATION_PROFILE}" \
 		-machine "$QEMU_MACHINE" \
 		-cpu "$CPU_ARG" \
@@ -3656,8 +3664,10 @@ boot_qualification_disk() {
 	fi
 
 	if ! grep -F "TUNAOS_DESKTOP_CONTRACT_OK desktop=${expected_desktop} " "$installed_serial" |
-		grep -Fq "source_image_digest=${EXPECTED_SOURCE_DIGEST}"; then
-		echo "ERROR: installed desktop or immutable source identity did not match" >&2
+		grep -F "source_image_digest=${EXPECTED_SOURCE_DIGEST}" |
+		grep -F "session_class=user" |
+		grep -Eq "session_type=(wayland|x11)"; then
+		echo "ERROR: installed desktop, user session, or immutable source identity did not match" >&2
 		grep -a "TUNAOS_DESKTOP_CONTRACT_" "$installed_serial" >&2 || true
 		return 4
 	fi
@@ -3720,6 +3730,7 @@ run_qualification() {
 	local walkthrough="${SCRIPT_DIR}/installer-walkthrough.py"
 	python3 "$walkthrough" "$MONITOR_SOCK" "${OUTPUT_DIR}/walkthrough" \
 		"${TUNAOS_QUALIFICATION_STEPS:-240}" "${FLAVOR:-de}" \
+		"--vnc=${OUTPUT_DIR}/vnc.sock" \
 		"--qualification=${QUALIFICATION_PROFILE}"
 	# The wizard's done screen is the completion signal. Stop the live VM before
 	# inspecting or booting its owned target disk.

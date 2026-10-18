@@ -776,22 +776,63 @@ if [[ "$mode" == --runtime ]]; then
 	elif [[ ! "$dm_id" =~ $dm_pattern ]]; then
 		report_fail "dm_mismatch dm=${dm_id:-unknown} expected=${dm_pattern}"
 	fi
+	session_user="unknown"
+	session_class="unknown"
+	session_type="unknown"
+	if [[ "$(cat /sys/class/dmi/id/product_version 2>/dev/null || true)" == "tunaos-offline-gui-qualification" ]]; then
+		session_deadline=$((SECONDS + 120))
+		while ((SECONDS < session_deadline)); do
+			while read -r session_id _; do
+				[[ -n "$session_id" ]] || continue
+				session_details="$(loginctl show-session "$session_id" \
+					-p Active -p Class -p Type -p Name 2>/dev/null || true)"
+				active="$(sed -n 's/^Active=//p' <<<"$session_details")"
+				class="$(sed -n 's/^Class=//p' <<<"$session_details")"
+				type="$(sed -n 's/^Type=//p' <<<"$session_details")"
+				user="$(sed -n 's/^Name=//p' <<<"$session_details")"
+				if [[ "$active" == yes && "$class" == user && "$type" =~ ^(wayland|x11)$ && -n "$user" ]]; then
+					session_user="$user"
+					session_class="$class"
+					session_type="$type"
+					break 2
+				fi
+			done < <(loginctl list-sessions --no-legend 2>/dev/null || true)
+			sleep 2
+		done
+		if [[ "$session_class" != user ]]; then
+			report_fail installed_user_session_missing
+		fi
+	fi
 	if [[ "$ok" -eq 1 ]]; then
-		# Qualification boots have no guest network or agent. Emit the booted
-		# immutable image identity beside the desktop verdict so the host can
-		# prove that the GUI installed the manifest's exact source digest.
-		# `bootc status` has used both JSON spellings across supported bases.
-		# Keep "unknown" explicit rather than letting a parser failure turn
-		# into a false identity match.
+		# Select imageDigest only below the booted deployment. Staged and
+		# rollback deployments carry the same key and are not this system.
 		source_image_digest="unknown"
-		if command -v bootc >/dev/null 2>&1; then
+		if command -v bootc >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
 			bootc_status="$(bootc status --json 2>/dev/null ||
 				bootc status --format json 2>/dev/null || true)"
-			parsed_digest="$(grep -oEm1 '"imageDigest"[[:space:]]*:[[:space:]]*"sha256:[0-9a-f]{64}"' <<<"$bootc_status" |
-				grep -oE 'sha256:[0-9a-f]{64}' || true)"
+			parsed_digest="$(python3 -c '
+import json, re, sys
+try:
+    booted = json.load(sys.stdin).get("status", {}).get("booted", {})
+except (AttributeError, json.JSONDecodeError):
+    raise SystemExit(0)
+stack = [booted]
+found = set()
+while stack:
+    value = stack.pop()
+    if isinstance(value, dict):
+        digest = value.get("imageDigest")
+        if isinstance(digest, str) and re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
+            found.add(digest)
+        stack.extend(value.values())
+    elif isinstance(value, list):
+        stack.extend(value)
+if len(found) == 1:
+    print(found.pop())
+' <<<"$bootc_status" 2>/dev/null || true)"
 			[[ -n "$parsed_digest" ]] && source_image_digest="$parsed_digest"
 		fi
-		echo "TUNAOS_DESKTOP_CONTRACT_OK desktop=$desktop experience=$experience source_image_digest=$source_image_digest" |
+		echo "TUNAOS_DESKTOP_CONTRACT_OK desktop=$desktop experience=$experience source_image_digest=$source_image_digest session_user=$session_user session_class=$session_class session_type=$session_type" |
 			tee /dev/ttyS0 2>/dev/null || true
 	fi
 	# Always emit a final summary marker (OK or FAIL) so the gate has a
