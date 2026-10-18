@@ -697,11 +697,12 @@ def _axis_from_results(results: dict, key: str) -> str:
     return _stage_verdict(hit[0] if hit else None)
 
 
-# bootc-lifecycle job names carry an arch suffix, and the smoke-tier jobs a
-# BETA prefix: "yellowfin:gnome (amd64)", "BETA guppy:gnome (amd64)". The
-# composite and the Lifecycle section key cells as plain "variant:flavor".
+# bootc-lifecycle job names carry an arch suffix, and the probe-only jobs a
+# BETA prefix: "yellowfin:gnome (amd64)", "BETA guppy:gnome (amd64)". Only
+# the stable lane executes lifecycle validation; a successful BETA job only
+# proves that its image tag exists and therefore must not become evidence.
 _LIFECYCLE_NAME = re.compile(
-    r"^(?:BETA\s+)?(?P<cell>[a-z0-9-]+:[a-z0-9-]+)\s+\([a-z0-9]+\)$"
+    r"^(?P<beta>BETA\s+)?(?P<cell>[a-z0-9-]+:[a-z0-9-]+)\s+\([a-z0-9]+\)$"
 )
 
 
@@ -718,7 +719,7 @@ def lifecycle_results() -> dict[str, tuple[str, str, str]]:
     merged: dict[str, tuple[str, str, str]] = {}
     for name, hit in latest_results("bootc-lifecycle.yml", r":").items():
         m = _LIFECYCLE_NAME.match(name)
-        if not m:
+        if not m or m.group("beta"):
             continue
         cell = m.group("cell")
         prev = merged.get(cell)
