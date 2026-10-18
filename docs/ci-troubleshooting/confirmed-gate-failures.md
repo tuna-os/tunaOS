@@ -1074,3 +1074,12 @@ capture first, then sends the graceful powerdown itself before the kill.
 **Cause:** A long sentence or a cluster of nouns in `docs/MATRIX-STATUS.md` crosses the budget.
 
 **Fix:** Split the sentence. For text inside the generated block, edit `scripts/gen-matrix-status.py` and render it again. Keep the budget at 1609. Preserve the dates when you replay saved evidence.
+### Offline qualification rejects a valid test fixture (#3399)
+
+**Symptom:** Bats reports `MODE: unbound variable` in the helper for VM shutdown.
+
+**Cause:** The test extracted that helper but did not set the mode. The new offline branch reads this value to select the monitor.
+
+**Fix:** Set the mode in the driver and test both paths. Assert that offline shutdown never calls SSH. Check each QEMU launch for its serial log and disk boot order.
+
+**Disk check:** A LUKS partition alone does not prove root encryption. Test a plaintext deployment beside an unrelated LUKS partition; the encrypted profile must reject it before account writes.
