@@ -251,7 +251,9 @@ EOF
 @test "the matrix callers stamp per-row cutover state" {
   run grep -F "scripts/delivery-cutover.py --annotate-matrix" "${REPO_ROOT}/.github/workflows/build-variant.yml"
   [ "$status" -eq 0 ]
-  run grep -F "scripts/delivery-cutover.py --annotate-matrix" "${REPO_ROOT}/.github/workflows/publish-isos.yml"
+  run grep -F "scripts/delivery-cutover.py" "${REPO_ROOT}/.github/workflows/publish-isos.yml"
+  [ "$status" -eq 0 ]
+  run grep -F -- "--annotate-matrix" "${REPO_ROOT}/.github/workflows/publish-isos.yml"
   [ "$status" -eq 0 ]
   run grep -F "cutover-check:" "${REPO_ROOT}/.github/workflows/build-variant.yml"
   [ "$status" -eq 0 ]
