@@ -36,6 +36,14 @@
 #
 #   scripts/iso-e2e.sh <iso_path> --luks
 #   scripts/iso-e2e.sh <iso_path> --published
+#   scripts/iso-e2e.sh <iso_path> --qualification <plain|encrypted> \
+#       --manifest experience-manifest.json
+#       Strict production qualification: boots with no guest NIC or vsock,
+#       drives the bundled graphical installer through every wizard screen,
+#       then boots the owned target disk with the ISO detached and verifies
+#       the desktop contract plus immutable source digest. Run both profiles
+#       into separate output directories; the receipt validator requires both.
+#
 #
 # --published is the one mode that works on media a USER can download.
 # Production ISOs ship sshd disabled, so every other mode here is
@@ -56,6 +64,8 @@
 #       the TPM unlocks it unattended — see Environment below.
 #
 # Options:
+#   --qualification MODE  Strict offline GUI install profile: plain or encrypted.
+#   --manifest FILE       Immutable build manifest required by qualification.
 #   --timeout SEC         Per-phase timeout (default: 300)
 #   --live-marker RE      Readiness regex for the serial log (env: LIVE_MARKER).
 #                         Default TUNAOS_LIVE_READY|TBOX_LIVE_READY — ours and
@@ -212,7 +222,9 @@ fi
 ISO_PATH=""
 KICKSTART=""
 APP_CMD=""
-MODE="ready" # ready | install | kickstart | ssh | app-launch | published
+MODE="ready" # ready | install | kickstart | ssh | app-launch | published | qualification
+QUALIFICATION_PROFILE=""
+EXPERIENCE_MANIFEST=""
 TIMEOUT=300
 LIVE_MARKER="${LIVE_MARKER:-TUNAOS_LIVE_READY|TBOX_LIVE_READY}"
 OUTPUT_DIR="./iso-e2e-out"
@@ -250,6 +262,15 @@ while [[ $# -gt 0 ]]; do
 		MODE="install"
 		LUKS=1
 		shift
+		;;
+	--qualification)
+		MODE="qualification"
+		QUALIFICATION_PROFILE="${2:-}"
+		shift 2
+		;;
+	--manifest)
+		EXPERIENCE_MANIFEST="${2:-}"
+		shift 2
 		;;
 	--app-launch)
 		MODE="app-launch"
@@ -333,7 +354,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$ISO_PATH" ]]; then
-	echo "Usage: $0 <iso_path> [--kickstart KS | --luks | --ssh-only | --published] [options]" >&2
+	echo "Usage: $0 <iso_path> [--kickstart KS | --luks | --ssh-only | --published | --qualification MODE --manifest FILE] [options]" >&2
 	exit 1
 fi
 
@@ -348,6 +369,25 @@ if [[ "$MODE" == "kickstart" ]] && [[ ! -f "$KICKSTART" ]]; then
 	exit 1
 fi
 [[ "$MODE" == "kickstart" ]] && KICKSTART="$(realpath "$KICKSTART")"
+
+if [[ "$MODE" == "qualification" ]]; then
+	case "$QUALIFICATION_PROFILE" in
+	plain | encrypted) ;;
+	*)
+		echo "ERROR: --qualification must be plain or encrypted" >&2
+		exit 1
+		;;
+	esac
+	if [[ -z "$EXPERIENCE_MANIFEST" || ! -f "$EXPERIENCE_MANIFEST" ]]; then
+		echo "ERROR: --qualification requires --manifest FILE" >&2
+		exit 1
+	fi
+	EXPERIENCE_MANIFEST="$(realpath "$EXPERIENCE_MANIFEST")"
+	if [[ -n "${FISHERMAN_OVERRIDE:-}" || -n "${TBOX_E2E_IMAGE:-}" ]]; then
+		echo "ERROR: qualification forbids FISHERMAN_OVERRIDE and TBOX_E2E_IMAGE; use the bundled GUI and source" >&2
+		exit 1
+	fi
+fi
 
 mkdir -p "$OUTPUT_DIR"
 OUTPUT_DIR="$(realpath "$OUTPUT_DIR")"
@@ -425,6 +465,45 @@ x86_64 | amd64)
 	exit 77
 	;;
 esac
+
+EXPECTED_SOURCE_DIGEST=""
+QUALIFICATION_STARTED=0
+if [[ "$MODE" == "qualification" ]]; then
+	command -v jq >/dev/null 2>&1 || {
+		echo "ERROR: qualification requires jq" >&2
+		exit 77
+	}
+	python3 "${SCRIPT_DIR}/verify-experience-manifest.py" "$EXPERIENCE_MANIFEST"
+	manifest_variant="$(jq -er '.variant' "$EXPERIENCE_MANIFEST")"
+	manifest_flavor="$(jq -er '.flavor' "$EXPERIENCE_MANIFEST")"
+	manifest_arch="$(jq -er '.architecture' "$EXPERIENCE_MANIFEST")"
+	EXPECTED_SOURCE_DIGEST="$(jq -er '.source_image_digest' "$EXPERIENCE_MANIFEST")"
+	expected_iso_sha="$(jq -er '.iso_sha256' "$EXPERIENCE_MANIFEST")"
+	expected_cpus="$(jq -er '.resource_profile.cpus' "$EXPERIENCE_MANIFEST")"
+	expected_memory="$(jq -er '.resource_profile.memory_mib' "$EXPERIENCE_MANIFEST")"
+	expected_disk="$(jq -er '.resource_profile.disk_gib' "$EXPERIENCE_MANIFEST")"
+	host_arch="$HOST_ARCH"
+	[[ "$host_arch" == arm64 ]] && host_arch="aarch64"
+	[[ "$host_arch" == amd64 ]] && host_arch="x86_64"
+	if [[ "$manifest_variant" != "$VARIANT" || "$manifest_flavor" != "$FLAVOR" ]]; then
+		echo "ERROR: manifest target ${manifest_variant}:${manifest_flavor} does not match ${VARIANT}:${FLAVOR}" >&2
+		exit 1
+	fi
+	if [[ "$manifest_arch" != "$host_arch" ]]; then
+		echo "ERROR: manifest architecture ${manifest_arch} does not match host ${host_arch}" >&2
+		exit 1
+	fi
+	if [[ "$expected_cpus" -ne "$CPUS" || "$expected_memory" -ne "$MEMORY" || "$expected_disk" -ne 32 ]]; then
+		echo "ERROR: QEMU resources (${CPUS} CPUs, ${MEMORY} MiB, 32 GiB disk) do not match manifest" >&2
+		exit 1
+	fi
+	actual_iso_sha="sha256:$(sha256sum "$ISO_PATH" | cut -d' ' -f1)"
+	if [[ "$actual_iso_sha" != "$expected_iso_sha" ]]; then
+		echo "ERROR: ISO digest ${actual_iso_sha} does not match manifest ${expected_iso_sha}" >&2
+		exit 1
+	fi
+	QUALIFICATION_STARTED=$SECONDS
+fi
 if [[ -z "${QEMU:-}" ]]; then
 	for candidate in "${QEMU_CANDIDATES[@]}"; do
 		if [[ -x "$candidate" ]]; then
@@ -635,7 +714,8 @@ fi
 # "Could not set up host forwarding rule 'tcp::2222-:22'" — arrives after the
 # disk image is created and reads like a QEMU fault rather than "something
 # else is already listening".
-if command -v ss &>/dev/null && ss -tln 2>/dev/null | grep -q ":${SSH_PORT} "; then
+if [[ "$MODE" != "qualification" ]] &&
+	command -v ss &>/dev/null && ss -tln 2>/dev/null | grep -q ":${SSH_PORT} "; then
 	echo "ERROR: port ${SSH_PORT} is already in use; the guest SSH forward cannot bind." >&2
 	echo "       Set TBOX_E2E_SSH_PORT to a free port, e.g.:" >&2
 	echo "         TBOX_E2E_SSH_PORT=2322 $0 $*" >&2
@@ -651,6 +731,19 @@ LIVE_SERIAL_LOG="${OUTPUT_DIR}/live-serial.log"
 LUKS_EVIDENCE_LOG="${OUTPUT_DIR}/luks-evidence.log"
 INSTALL_DISK="${OUTPUT_DIR}/install-disk.qcow2"
 QEMU_PIDFILE="${OUTPUT_DIR}/qemu.pid"
+
+if [[ "$MODE" == "qualification" && -e "$INSTALL_DISK" ]]; then
+	echo "ERROR: qualification target disk already exists: ${INSTALL_DISK}" >&2
+	echo "       Use a fresh output directory; strict evidence never reuses a disk." >&2
+	exit 1
+fi
+
+# shellcheck disable=SC2054 # QEMU option values use comma-separated suboptions.
+LIVE_NET_ARGS=(
+	-netdev "user,id=net0,hostfwd=tcp::${SSH_PORT}-:22"
+	-device virtio-net-pci,netdev=net0
+)
+[[ "$MODE" == "qualification" ]] && LIVE_NET_ARGS=(-nic none)
 
 # What the run is currently waiting on, as a file rather than a variable: the
 # wall-clock watchdog below runs in a background subshell forked before any of
@@ -712,6 +805,13 @@ SWAP_DISK_BYID="/dev/disk/by-id/virtio-${SWAP_DISK_SERIAL}"
 SCRATCH_DISK="${OUTPUT_DIR}/scratch-disk.qcow2"
 SCRATCH_DISK_SERIAL="e2escratch"
 SCRATCH_DISK_BYID="/dev/disk/by-id/virtio-${SCRATCH_DISK_SERIAL}"
+LIVE_AUX_DISK_ARGS=(
+	-drive "if=none,id=swapdisk,file=${SWAP_DISK},format=qcow2"
+	-device "virtio-blk-pci,drive=swapdisk,serial=${SWAP_DISK_SERIAL}"
+	-drive "if=none,id=scratchdisk,file=${SCRATCH_DISK},format=qcow2"
+	-device "virtio-blk-pci,drive=scratchdisk,serial=${SCRATCH_DISK_SERIAL}"
+)
+[[ "$MODE" == "qualification" ]] && LIVE_AUX_DISK_ARGS=()
 
 # QEMU writes the guest console into SERIAL_LOG, and several code paths below
 # tee ssh output into that same file. `-serial file:PATH` opens the file
@@ -854,7 +954,7 @@ setup_vsock() {
 	)
 	echo "==> vsock SSH fallback armed (guest-cid=${VSOCK_CID})"
 }
-setup_vsock
+[[ "$MODE" == "qualification" ]] || setup_vsock
 
 record_luks_evidence() {
 	[[ "$LUKS" -eq 1 ]] || return 0
@@ -1189,22 +1289,22 @@ boot_live_iso() {
 		fi
 	fi
 
-	# See SWAP_DISK above. Attached to the live/install boot only; the
-	# installed system is booted without it and never records it in fstab.
-	if [[ ! -f "$SWAP_DISK" ]]; then
-		echo "==> Creating 8G swap disk: ${SWAP_DISK}"
-		if ! qemu-img create -f qcow2 "$SWAP_DISK" 8G; then
-			echo "ERROR: qemu-img create failed for the swap disk" >&2
-			return 1
+	# Qualification exposes exactly one owned target disk to the GUI. Existing
+	# SSH install modes retain their scratch and swap devices.
+	if [[ "$MODE" != "qualification" ]]; then
+		if [[ ! -f "$SWAP_DISK" ]]; then
+			echo "==> Creating 8G swap disk: ${SWAP_DISK}"
+			if ! qemu-img create -f qcow2 "$SWAP_DISK" 8G; then
+				echo "ERROR: qemu-img create failed for the swap disk" >&2
+				return 1
+			fi
 		fi
-	fi
-
-	# See SCRATCH_DISK above. Live boot only, like the swap disk.
-	if [[ ! -f "$SCRATCH_DISK" ]]; then
-		echo "==> Creating 32G scratch disk: ${SCRATCH_DISK}"
-		if ! qemu-img create -f qcow2 "$SCRATCH_DISK" 32G; then
-			echo "ERROR: qemu-img create failed for the scratch disk" >&2
-			return 1
+		if [[ ! -f "$SCRATCH_DISK" ]]; then
+			echo "==> Creating 32G scratch disk: ${SCRATCH_DISK}"
+			if ! qemu-img create -f qcow2 "$SCRATCH_DISK" 32G; then
+				echo "ERROR: qemu-img create failed for the scratch disk" >&2
+				return 1
+			fi
 		fi
 	fi
 
@@ -1236,13 +1336,9 @@ boot_live_iso() {
 		-device scsi-cd,drive=iso \
 		-drive "if=none,id=disk,file=${INSTALL_DISK},format=qcow2" \
 		-device virtio-blk-pci,drive=disk \
-		-drive "if=none,id=swapdisk,file=${SWAP_DISK},format=qcow2" \
-		-device "virtio-blk-pci,drive=swapdisk,serial=${SWAP_DISK_SERIAL}" \
-		-drive "if=none,id=scratchdisk,file=${SCRATCH_DISK},format=qcow2" \
-		-device "virtio-blk-pci,drive=scratchdisk,serial=${SCRATCH_DISK_SERIAL}" \
-		-netdev "user,id=net0,hostfwd=tcp::${SSH_PORT}-:22" \
-		-device virtio-net-pci,netdev=net0 \
-		${VSOCK_ARGS[@]+"${VSOCK_ARGS[@]}"} \
+		"${LIVE_AUX_DISK_ARGS[@]}" \
+		"${LIVE_NET_ARGS[@]}" \
+		"${VSOCK_ARGS[@]}" \
 		-monitor "unix:${MONITOR_SOCK},server,nowait" \
 		"${E2E_SERIAL_ARGS[@]}" \
 		"${QEMU_GPU_ARGS[@]}" \
@@ -3465,9 +3561,183 @@ boot_disk_image() {
 	return 1
 }
 
+# Inspect the disk the GUI wrote. Boot success alone cannot distinguish a plain
+# layout from an encrypted layout that auto-unlocked, so qualification checks
+# the partition types while the VM is stopped.
+verify_qualification_encryption() {
+	command -v qemu-nbd >/dev/null 2>&1 || {
+		echo "ERROR: qualification requires qemu-nbd" >&2
+		return 77
+	}
+	modprobe nbd max_part=16 2>/dev/null || true
+	local nbd=""
+	for candidate in /dev/nbd{0..15}; do
+		[[ -b "$candidate" ]] || continue
+		if [[ "$(cat "/sys/class/block/${candidate##*/}/size" 2>/dev/null || echo 1)" == 0 ]]; then
+			nbd="$candidate"
+			break
+		fi
+	done
+	if [[ -z "$nbd" ]]; then
+		echo "ERROR: no free NBD device for qualification disk inspection" >&2
+		return 77
+	fi
+	qemu-nbd --read-only --connect="$nbd" "$INSTALL_DISK"
+	partprobe "$nbd" 2>/dev/null || true
+	udevadm settle 2>/dev/null || true
+	local encrypted=0
+	lsblk -rno FSTYPE "$nbd" 2>/dev/null | grep -qx crypto_LUKS && encrypted=1
+	qemu-nbd --disconnect "$nbd" >/dev/null
+	if [[ "$QUALIFICATION_PROFILE" == "encrypted" && "$encrypted" -ne 1 ]]; then
+		echo "ERROR: encrypted GUI profile produced no crypto_LUKS partition" >&2
+		return 1
+	fi
+	if [[ "$QUALIFICATION_PROFILE" == "plain" && "$encrypted" -ne 0 ]]; then
+		echo "ERROR: plain GUI profile unexpectedly produced a crypto_LUKS partition" >&2
+		return 1
+	fi
+}
+
+boot_qualification_disk() {
+	local installed_serial="${OUTPUT_DIR}/installed-serial.log"
+	local serial_socket="${OUTPUT_DIR}/installed-serial.sock"
+	local passphrase="${TUNAOS_QUALIFICATION_PASSPHRASE:-tunaose2e}"
+	local expected_desktop="$FLAVOR"
+	expected_desktop="${expected_desktop%-hwe}"
+	expected_desktop="${expected_desktop%-nvidia}"
+	expected_desktop="${expected_desktop%-cachyos}"
+	expected_desktop="${expected_desktop%-zfs}"
+	local -a installed_serial_args=("${E2E_SERIAL_ARGS[@]}")
+	: >"$SERIAL_LOG"
+	rm -f "$installed_serial" "$serial_socket"
+	if [[ "$QUALIFICATION_PROFILE" == "encrypted" ]]; then
+		installed_serial_args=(-serial "unix:${serial_socket},server,nowait")
+	fi
+
+	e2e_phase "Booting qualified ${QUALIFICATION_PROFILE} disk with ISO detached and guest networking disabled..."
+	reset_qemu_sockets
+	"$QEMU" \
+		-smbios type=1,product=tunaos-countme-disabled \
+		-name "tunaos-offline-gui-${QUALIFICATION_PROFILE}" \
+		-machine "$QEMU_MACHINE" \
+		-cpu "$CPU_ARG" \
+		-accel "$ACCEL" \
+		-m "$MEMORY" \
+		-smp "$CPUS" \
+		-drive "if=pflash,format=raw,readonly=on,file=${UEFI_CODE}" \
+		-drive "if=pflash,format=raw,file=${OVMF_VARS}" \
+		-drive "if=none,id=disk,file=${INSTALL_DISK},format=qcow2" \
+		-device virtio-blk-pci,drive=disk,bootindex=0 \
+		-nic none \
+		-monitor "unix:${MONITOR_SOCK},server,nowait" \
+		"${installed_serial_args[@]}" \
+		"${QEMU_GPU_ARGS[@]}" \
+		-pidfile "$QEMU_PIDFILE" \
+		-daemonize
+
+	if [[ "$QUALIFICATION_PROFILE" == "encrypted" ]]; then
+		TUNAOS_LUKS_NO_POWEROFF=1 \
+			python3 "${SCRIPT_DIR}/luks-first-boot.py" \
+			"$serial_socket" "$MONITOR_SOCK" "$passphrase" "$TIMEOUT" 120 |
+			tee "$installed_serial"
+	else
+		local deadline=$((SECONDS + TIMEOUT))
+		while ((SECONDS < deadline)); do
+			if grep -q "TUNAOS_DESKTOP_CONTRACT_\\(OK\\|FAIL\\)" "$SERIAL_LOG" 2>/dev/null; then
+				break
+			fi
+			if grep -qai "passphrase for disk" "$SERIAL_LOG" 2>/dev/null; then
+				echo "ERROR: plain qualification boot requested a disk passphrase" >&2
+				return 4
+			fi
+			sleep 5
+		done
+		cp "$SERIAL_LOG" "$installed_serial"
+	fi
+
+	if ! grep -F "TUNAOS_DESKTOP_CONTRACT_OK desktop=${expected_desktop} " "$installed_serial" |
+		grep -Fq "source_image_digest=${EXPECTED_SOURCE_DIGEST}"; then
+		echo "ERROR: installed desktop or immutable source identity did not match" >&2
+		grep -a "TUNAOS_DESKTOP_CONTRACT_" "$installed_serial" >&2 || true
+		return 4
+	fi
+	if grep -q "TUNAOS_DESKTOP_CONTRACT_FAIL" "$installed_serial"; then
+		echo "ERROR: installed desktop contract reported failure" >&2
+		return 4
+	fi
+	if ! wait_for_paint "installed-desktop"; then
+		echo "ERROR: installed desktop never painted" >&2
+		return 6
+	fi
+	screenshot_sane "installed-desktop" || {
+		echo "ERROR: installed desktop capture is blank or absent" >&2
+		return 6
+	}
+	poweroff_and_wait_vm
+}
+
+write_qualification_result() {
+	local walkthrough="${OUTPUT_DIR}/walkthrough/walkthrough-${FLAVOR:-de}.json"
+	local duration=$((SECONDS - QUALIFICATION_STARTED))
+	((duration > 0)) || duration=1
+	jq -e --argjson required '["welcome","disk","encryption","summary","install","done"]' \
+		'.failures == 0 and .qualification_complete == true and
+		 [.screens | to_entries[] | select(.value == true) | .key] as $seen |
+		 ($required - $seen | length) == 0' "$walkthrough" >/dev/null
+	jq -n \
+		--arg kind "tunaos-offline-gui-result/v1" \
+		--arg profile "$QUALIFICATION_PROFILE" \
+		--arg digest "$EXPECTED_SOURCE_DIGEST" \
+		--argjson encrypted "$([[ "$QUALIFICATION_PROFILE" == encrypted ]] && echo true || echo false)" \
+		--argjson duration "$duration" \
+		'{
+			kind: $kind,
+			profile: $profile,
+			network_disabled: true,
+			installer_source: "bundled",
+			install_method: "graphical",
+			generic_cli: false,
+			wizard_screens: ["welcome", "disk", "encryption", "summary", "install", "done"],
+			installed_boot: true,
+			desktop_contract: true,
+			source_image_digest: $digest,
+			iso_detached: true,
+			owned_disk: true,
+			encrypted: $encrypted,
+			duration_seconds: $duration
+		}' >"${OUTPUT_DIR}/qualification-result.json"
+	python3 "${SCRIPT_DIR}/verify-experience-manifest.py" \
+		"${OUTPUT_DIR}/qualification-result.json"
+}
+
+run_qualification() {
+	boot_live_iso
+	sleep 5
+	if ! wait_for_paint "10-ready"; then
+		echo "ERROR: offline live session never painted" >&2
+		return 2
+	fi
+	local walkthrough="${SCRIPT_DIR}/installer-walkthrough.py"
+	python3 "$walkthrough" "$MONITOR_SOCK" "${OUTPUT_DIR}/walkthrough" \
+		"${TUNAOS_QUALIFICATION_STEPS:-240}" "${FLAVOR:-de}" \
+		"--qualification=${QUALIFICATION_PROFILE}"
+	# The wizard's done screen is the completion signal. Stop the live VM before
+	# inspecting or booting its owned target disk.
+	poweroff_and_wait_vm
+	mv -f "$SERIAL_LOG" "${OUTPUT_DIR}/qualification-live-serial.log"
+	verify_qualification_encryption
+	boot_qualification_disk
+	write_qualification_result
+	echo "==> Strict offline GUI qualification PASSED (${QUALIFICATION_PROFILE})"
+}
+
 # ── Main ────────────────────────────────────────────────────────────────────
 
 case "$MODE" in
+qualification)
+	run_qualification
+	exit $?
+	;;
 disk)
 	boot_disk_image || exit 1
 	# Which contract proves the boot. Base images reach multi-user, not

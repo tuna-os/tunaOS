@@ -98,6 +98,36 @@ Test outputs are uploaded as GitHub Actions artifacts:
 - `screenshot.png` — Desktop screenshot via QEMU monitor
 - `serial.log` — Full boot serial console output
 
+
+### Strict offline GUI qualification
+
+`.github/workflows/iso-builder-parity.yml` runs two installations for each CI
+and browser-built ISO. Both runs use the ISO's bundled graphical installer.
+The `plain` and `encrypted` profiles use separate fresh 32 GiB disks, no guest
+NIC or vsock, and no host-provided image or Fisherman binary. Each installed
+disk then boots with the ISO detached.
+
+`experience-manifest.json` is an input declaration, not a test result.
+`scripts/verify-experience-manifest.py` validates these fields:
+
+- target identity: variant, flavor, platform, architecture, and hardware scope;
+- immutable source, base, overlay, and ISO SHA-256 digests;
+- full installer, builder, and engine Git revisions;
+- browser identity for browser builds and an explicit CI build path;
+- the CPU, memory, and disk resource profile.
+
+After both runs, the validator combines the two result files into
+`qualification-receipt.json`. A valid receipt proves these facts:
+
+- The GUI showed every wizard screen in order and completed the install.
+- The disk has the encryption state for its profile.
+- The installed system passed its desktop contract.
+- The source digest from the booted system matches the manifest.
+
+The receipt also has the time for each leg. The workflow uploads only JSON,
+logs, screenshots, and text diagnostics. It does not upload input ISOs, VM
+disks, or UEFI variable files.
+
 ## Test Files
 
 | File | Purpose |

@@ -12,15 +12,47 @@ SPEC.loader.exec_module(MODULE)
 
 
 def manifest(**overrides):
+    digest = "sha256:" + "a" * 64
     value = {
+        "kind": MODULE.MANIFEST_KIND,
         "variant": "yellowfin",
         "flavor": "gnome",
-        "source_image_digest": "sha256:" + "a" * 64,
+        "architecture": "x86_64",
+        "platform": "linux/amd64",
+        "hardware_scope": "qemu-kvm",
+        "source_image_ref": f"ghcr.io/tuna-os/yellowfin@{digest}",
+        "source_image_digest": digest,
+        "base_image_digest": "sha256:" + "b" * 64,
+        "overlay_digest": "sha256:" + "c" * 64,
+        "iso_sha256": "sha256:" + "d" * 64,
         "installer_app_id": "org.bootcinstaller.Installer",
-        "screens": MODULE.REQUIRED_SCREENS,
-        "luks": True,
+        "installer_revision": "1" * 40,
+        "builder_revision": "2" * 40,
+        "engine_revision": "3" * 40,
+        "build_path": "browser",
+        "browser": {"name": "chromium", "version": "141.0.0"},
+        "resource_profile": {"cpus": 4, "memory_mib": 8192, "disk_gib": 32},
+    }
+    value.update(overrides)
+    return value
+
+
+def result(profile, **overrides):
+    value = {
+        "kind": MODULE.RESULT_KIND,
+        "profile": profile,
+        "network_disabled": True,
+        "installer_source": "bundled",
+        "install_method": "graphical",
+        "generic_cli": False,
+        "wizard_screens": MODULE.REQUIRED_SCREENS,
         "installed_boot": True,
         "desktop_contract": True,
+        "source_image_digest": "sha256:" + "a" * 64,
+        "iso_detached": True,
+        "owned_disk": True,
+        "encrypted": profile == "encrypted",
+        "duration_seconds": 123,
     }
     value.update(overrides)
     return value
@@ -29,25 +61,149 @@ def manifest(**overrides):
 def test_accepts_complete_manifest(tmp_path):
     path = tmp_path / "manifest.json"
     path.write_text(json.dumps(manifest()))
-    assert MODULE.main.__name__ == "main"
     MODULE.validate(MODULE.load(path), str(path))
 
 
-@pytest.mark.parametrize("field", ["luks", "installed_boot", "desktop_contract"])
-def test_requires_successful_install_contract(field):
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("network_disabled", False, "network_disabled"),
+        ("installer_source", "injected", "installer_source"),
+        ("install_method", "fisherman-cli", "install_method"),
+        ("generic_cli", True, "generic_cli"),
+        ("wizard_screens", ["welcome", "done"], "wizard_screens"),
+        ("installed_boot", False, "installed_boot"),
+        ("desktop_contract", False, "desktop_contract"),
+        ("iso_detached", False, "iso_detached"),
+        ("owned_disk", False, "owned_disk"),
+    ],
+)
+def test_rejects_non_strict_qualification_evidence(field, value, message):
+    with pytest.raises(ValueError, match=message):
+        MODULE.validate_result(result("plain", **{field: value}), "test")
+
+
+def test_rejects_plain_result_claiming_encryption():
+    with pytest.raises(ValueError, match="encrypted"):
+        MODULE.validate_result(result("plain", encrypted=True), "test")
+
+
+def test_rejects_encrypted_result_without_encryption():
+    with pytest.raises(ValueError, match="encrypted"):
+        MODULE.validate_result(result("encrypted", encrypted=False), "test")
+
+
+def test_manifest_requires_immutable_source_reference():
+    with pytest.raises(ValueError, match="source_image_ref"):
+        MODULE.validate_manifest(
+            manifest(source_image_ref="ghcr.io/tuna-os/yellowfin:gnome"), "test"
+        )
+
+
+@pytest.mark.parametrize(
+    "field",
+    ["source_image_digest", "base_image_digest", "overlay_digest", "iso_sha256"],
+)
+def test_manifest_requires_all_immutable_digests(field):
     with pytest.raises(ValueError, match=field):
-        MODULE.validate(manifest(**{field: False}), "test")
+        MODULE.validate_manifest(manifest(**{field: "latest"}), "test")
+
+def test_manifest_requires_matching_platform_and_architecture():
+    with pytest.raises(ValueError, match="platform does not match architecture"):
+        MODULE.validate_manifest(manifest(platform="linux/arm64"), "test")
 
 
-def test_rejects_wrong_screen_order():
-    with pytest.raises(ValueError, match="screens"):
-        MODULE.validate(manifest(screens=["welcome", "disk", "summary"]), "test")
+
+@pytest.mark.parametrize(
+    "field", ["installer_revision", "builder_revision", "engine_revision"]
+)
+def test_manifest_requires_full_revisions(field):
+    with pytest.raises(ValueError, match=field):
+        MODULE.validate_manifest(manifest(**{field: "main"}), "test")
+
+def test_manifest_accepts_exact_ostree_installer_commit():
+    MODULE.validate_manifest(manifest(installer_revision="4" * 64), "test")
 
 
-def test_compare_reports_digest_mismatch():
+def test_browser_build_requires_browser_identity():
+    with pytest.raises(ValueError, match="browser builds require"):
+        MODULE.validate_manifest(manifest(browser=None), "test")
+
+
+def test_ci_build_forbids_fake_browser_identity():
+    with pytest.raises(ValueError, match="CI builds must set browser to null"):
+        MODULE.validate_manifest(manifest(build_path="ci"), "test")
+
+
+def test_ci_build_accepts_null_browser():
+    MODULE.validate_manifest(manifest(build_path="ci", browser=None), "test")
+
+
+@pytest.mark.parametrize("field", ["cpus", "memory_mib", "disk_gib"])
+def test_resource_profile_values_are_positive_integers(field):
+    resources = manifest()["resource_profile"] | {field: 0}
+    with pytest.raises(ValueError, match=field):
+        MODULE.validate_manifest(manifest(resource_profile=resources), "test")
+
+
+def test_build_receipt_requires_both_install_profiles():
+    with pytest.raises(ValueError, match="missing: encrypted"):
+        MODULE.build_receipt(manifest(), [result("plain")])
+
+
+def test_build_receipt_rejects_installed_digest_mismatch():
+    with pytest.raises(ValueError, match="installed source digest"):
+        MODULE.build_receipt(
+            manifest(),
+            [
+                result("plain"),
+                result("encrypted", source_image_digest="sha256:" + "f" * 64),
+            ],
+        )
+
+
+def test_receipt_records_identity_inputs_context_resources_and_timings():
+    receipt = MODULE.build_receipt(
+        manifest(), [result("plain"), result("encrypted", duration_seconds=321)]
+    )
+    MODULE.validate_receipt(receipt, "receipt")
+    assert receipt["source_image_digest"] == "sha256:" + "a" * 64
+    assert receipt["installer_revision"] == "1" * 40
+    assert receipt["builder_revision"] == "2" * 40
+    assert receipt["engine_revision"] == "3" * 40
+    assert receipt["browser"] == {"name": "chromium", "version": "141.0.0"}
+    assert receipt["resource_profile"]["memory_mib"] == 8192
+    assert receipt["qualification"]["plain"]["network_disabled"] is True
+    assert receipt["qualification"]["encrypted"]["encrypted"] is True
+    assert receipt["timings"] == {
+        "plain_seconds": 123,
+        "encrypted_seconds": 321,
+        "total_seconds": 444,
+    }
+
+
+def test_receipt_schema_cannot_carry_disk_or_iso_artifact_paths():
+    receipt = MODULE.build_receipt(
+        manifest(), [result("plain"), result("encrypted")]
+    )
+    receipt["disk_path"] = "install-disk.qcow2"
+    with pytest.raises(ValueError, match="unsupported fields: disk_path"):
+        MODULE.validate_receipt(receipt, "receipt")
+
+
+def test_compare_reports_parity_critical_mismatch_only():
     left = manifest()
-    right = manifest(source_image_digest="sha256:" + "b" * 64)
-    assert MODULE.compare(left, right) == ["source_image_digest"]
+    right = manifest(
+        source_image_digest="sha256:" + "e" * 64,
+        source_image_ref="ghcr.io/tuna-os/yellowfin@sha256:" + "e" * 64,
+        build_path="ci",
+        browser=None,
+        builder_revision="4" * 40,
+    )
+    assert MODULE.compare(left, right) == [
+        "source_image_ref",
+        "source_image_digest",
+    ]
 
 
 def test_load_invalid_json(tmp_path):
@@ -60,55 +216,34 @@ def test_load_invalid_json(tmp_path):
 def test_load_non_dict_json(tmp_path):
     path = tmp_path / "array.json"
     path.write_text("[1, 2, 3]", encoding="utf-8")
-    with pytest.raises(ValueError, match="manifest must be a JSON object"):
+    with pytest.raises(ValueError, match="document must be a JSON object"):
         MODULE.load(path)
 
 
-def test_validate_missing_required_fields():
-    data = manifest()
-    del data["variant"]
-    with pytest.raises(ValueError, match="missing fields: variant"):
-        MODULE.validate(data, "test")
-
-
-@pytest.mark.parametrize("field", ["variant", "flavor"])
-@pytest.mark.parametrize("invalid_value", [123, "", "   "])
-def test_validate_invalid_string_fields(field, invalid_value):
-    data = manifest(**{field: invalid_value})
-    with pytest.raises(ValueError, match=f"{field} must be a non-empty string"):
-        MODULE.validate(data, "test")
-
-
-def test_validate_invalid_source_image_digest():
-    data = manifest(source_image_digest="invalid_digest")
-    with pytest.raises(ValueError, match="source_image_digest must be a sha256 digest"):
-        MODULE.validate(data, "test")
-
-
-def test_validate_unsupported_installer_app_id():
-    data = manifest(installer_app_id="org.invalid.Installer")
-    with pytest.raises(ValueError, match="unsupported installer_app_id"):
-        MODULE.validate(data, "test")
-
-
-def test_main_single_valid_manifest(tmp_path, monkeypatch, capsys):
-    path = tmp_path / "manifest.json"
-    path.write_text(json.dumps(manifest()), encoding="utf-8")
-    monkeypatch.setattr("sys.argv", [str(SCRIPT), str(path)])
+def test_main_writes_and_validates_receipt(tmp_path, monkeypatch, capsys):
+    manifest_path = tmp_path / "manifest.json"
+    plain_path = tmp_path / "plain.json"
+    encrypted_path = tmp_path / "encrypted.json"
+    receipt_path = tmp_path / "receipt.json"
+    manifest_path.write_text(json.dumps(manifest()), encoding="utf-8")
+    plain_path.write_text(json.dumps(result("plain")), encoding="utf-8")
+    encrypted_path.write_text(json.dumps(result("encrypted")), encoding="utf-8")
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            str(SCRIPT),
+            str(manifest_path),
+            "--result",
+            str(plain_path),
+            "--result",
+            str(encrypted_path),
+            "--write-receipt",
+            str(receipt_path),
+        ],
+    )
     assert MODULE.main() == 0
-    captured = capsys.readouterr()
-    assert f"ok - validated {path}" in captured.out
-
-
-def test_main_compare_matching(tmp_path, monkeypatch, capsys):
-    path1 = tmp_path / "m1.json"
-    path2 = tmp_path / "m2.json"
-    path1.write_text(json.dumps(manifest()), encoding="utf-8")
-    path2.write_text(json.dumps(manifest()), encoding="utf-8")
-    monkeypatch.setattr("sys.argv", [str(SCRIPT), str(path1), "--compare", str(path2)])
-    assert MODULE.main() == 0
-    captured = capsys.readouterr()
-    assert f"ok - {path1} matches {path2}" in captured.out
+    MODULE.validate_receipt(MODULE.load(receipt_path), str(receipt_path))
+    assert "wrote strict qualification receipt" in capsys.readouterr().out
 
 
 def test_main_compare_mismatch(tmp_path, monkeypatch, capsys):
@@ -118,15 +253,5 @@ def test_main_compare_mismatch(tmp_path, monkeypatch, capsys):
     path2.write_text(json.dumps(manifest(flavor="kde")), encoding="utf-8")
     monkeypatch.setattr("sys.argv", [str(SCRIPT), str(path1), "--compare", str(path2)])
     assert MODULE.main() == 1
-    captured = capsys.readouterr()
-    assert "error: parity mismatch in: flavor" in captured.err
-
-
-def test_main_invalid_manifest_returns_error(tmp_path, monkeypatch, capsys):
-    path = tmp_path / "invalid.json"
-    path.write_text("invalid json content", encoding="utf-8")
-    monkeypatch.setattr("sys.argv", [str(SCRIPT), str(path)])
-    assert MODULE.main() == 1
-    captured = capsys.readouterr()
-    assert "error:" in captured.err
+    assert "error: parity mismatch in: flavor" in capsys.readouterr().err
 

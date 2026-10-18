@@ -777,7 +777,22 @@ if [[ "$mode" == --runtime ]]; then
 		report_fail "dm_mismatch dm=${dm_id:-unknown} expected=${dm_pattern}"
 	fi
 	if [[ "$ok" -eq 1 ]]; then
-		echo "TUNAOS_DESKTOP_CONTRACT_OK desktop=$desktop experience=$experience" | tee /dev/ttyS0 2>/dev/null || true
+		# Qualification boots have no guest network or agent. Emit the booted
+		# immutable image identity beside the desktop verdict so the host can
+		# prove that the GUI installed the manifest's exact source digest.
+		# `bootc status` has used both JSON spellings across supported bases.
+		# Keep "unknown" explicit rather than letting a parser failure turn
+		# into a false identity match.
+		source_image_digest="unknown"
+		if command -v bootc >/dev/null 2>&1; then
+			bootc_status="$(bootc status --json 2>/dev/null ||
+				bootc status --format json 2>/dev/null || true)"
+			parsed_digest="$(grep -oEm1 '"imageDigest"[[:space:]]*:[[:space:]]*"sha256:[0-9a-f]{64}"' <<<"$bootc_status" |
+				grep -oE 'sha256:[0-9a-f]{64}' || true)"
+			[[ -n "$parsed_digest" ]] && source_image_digest="$parsed_digest"
+		fi
+		echo "TUNAOS_DESKTOP_CONTRACT_OK desktop=$desktop experience=$experience source_image_digest=$source_image_digest" |
+			tee /dev/ttyS0 2>/dev/null || true
 	fi
 	# Always emit a final summary marker (OK or FAIL) so the gate has a
 	# deterministic signal regardless of which individual reason fired.
