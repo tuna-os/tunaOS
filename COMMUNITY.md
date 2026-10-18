@@ -6,6 +6,12 @@
 
 tunaOS is an open-source project building OCI-based Enterprise Linux desktops. We welcome contributors at all levels.
 
+**[Contribute through Hive](https://hub.tunaos.org/#contribute) — no code needed.**
+Your machine runs one task at a time with your signed-in AI CLI.
+The relay alternates eligible School (OS) and Reef (apps) hives after each task.
+Your subscription quota or API charges apply. The guide explains prerequisites,
+verified `just` setup, credentials, and how to stop the relay with Ctrl+C.
+
 ### Quick Start
 
 1. **Try it**: `bootc switch --enforce-container-sigpolicy ghcr.io/tuna-os/yellowfin:gnome`
@@ -17,6 +23,7 @@ tunaOS is an open-source project building OCI-based Enterprise Linux desktops. W
 
 | Level | What you do | How to start |
 |-------|-------------|--------------|
+| **Compute donor** | Run your signed-in AI CLI for TunaOS tasks | Follow the [Hive donation guide](https://hub.tunaos.org/#contribute) |
 | **Tester** | Run images, report bugs | Install any variant, open issues |
 | **Contributor** | Fix bugs, improve docs | Good first issues, PRs welcome |
 | **Desktop maintainer** | Own a desktop flavor | Build and test regularly, review PRs |
@@ -73,16 +80,17 @@ keep going (#1136).
 - **Monthly office hours** (~30 min, announced 1 week ahead in the room):
   open Q&A / walkthrough slot. No fixed agenda beyond "bring questions."
 
-- **`#new-to-tunaos` pinned message** — the three best entry points for
-  someone new to the room:
+- **`#new-to-tunaos` pinned message** — entry points for someone new to the room:
 
   ```
   👋 New here? Start with one of these:
 
-  1. Try it: bootc switch --enforce-container-sigpolicy ghcr.io/tuna-os/yellowfin:gnome
-  2. Pick a starter task: issues labeled "good first issue"
+  1. Donate AI CLI time — no code needed:
+     → https://hub.tunaos.org/#contribute
+  2. Try it: bootc switch --enforce-container-sigpolicy ghcr.io/tuna-os/yellowfin:gnome
+  3. Pick a starter task: issues labeled "good first issue"
      → https://github.com/tuna-os/tunaOS/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22
-  3. Read CONTRIBUTING.md and COMMUNITY.md (this file) before your first PR
+  4. Read CONTRIBUTING.md and COMMUNITY.md (this file) before your first PR
 
   Questions are welcome any time — you don't need to wait for office hours.
   ```
