@@ -1,0 +1,10 @@
+# Marlin-scoped presets (delivered via 92-variant-customizations.sh).
+#
+# Arch ships a disable-all default preset, and first-boot preset policy
+# deletes enablement symlinks for units no preset names (see the shared
+# 50-tunaos.preset header for the measured mechanism). These two units are
+# enabled by 40-services.sh's pacman branch, so they are named here to
+# preserve exactly what the build intends — scoped to marlin so no other
+# variant's first-boot policy changes.
+enable bluetooth.service
+enable uupd.timer

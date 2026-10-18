@@ -1396,9 +1396,8 @@ def build() -> str:
         f"({tested} tested, {total - tested} never tested).",
         "",
         (
-            "Validates bootc image update, rebase, rollback, alias resolution, "
-            "and post-switch system contracts across published desktop stream "
-            "deployments."
+            "Checks update, rebase, rollback and aliases with bootc. "
+            "Also checks system contracts after a switch between published desktops."
         ),
         "",
     ]
