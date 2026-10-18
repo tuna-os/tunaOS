@@ -1604,7 +1604,7 @@ jobs:
         run: |
           # Strip overlay suffixes from flavor (e.g. gnome-nvidia -> gnome)
           DESKTOP="${FLAVOR}"
-          for _suffix in -nvidia-hwe -nvidia -hwe -cachyos -asahi -zfs; do
+          for _suffix in -nvidia-hwe -nvidia -hwe -cachyos -asahi -x13s -zfs; do
             if [[ "$DESKTOP" == *"$_suffix" ]]; then
               DESKTOP="${DESKTOP%"$_suffix"}"
               break
@@ -1750,7 +1750,7 @@ jobs:
           set -euo pipefail
           # Strip overlay suffixes from flavor (e.g. gnome-nvidia -> gnome)
           DESKTOP="${FLAVOR}"
-          for _suffix in -nvidia-hwe -nvidia -hwe -cachyos -asahi -zfs; do
+          for _suffix in -nvidia-hwe -nvidia -hwe -cachyos -asahi -x13s -zfs; do
             if [[ "$DESKTOP" == *"$_suffix" ]]; then
               DESKTOP="${DESKTOP%"$_suffix"}"
               break

@@ -1066,6 +1066,17 @@ variants:
         build_image: true
         build_iso: false
         build_qcow2: false
+      # Lenovo ThinkPad X13s Gen 1 (SC8280XP), stock Fedora kernel inspection
+      # profile. This is a hardware-specific child of GNOME, not a generic
+      # Snapdragon/X Elite support claim. ARM64 only; W1 (#3377) deliberately
+      # produces no install media or hardware qualification.
+      - id: gnome-x13s
+        stage: 3
+        platforms: ["linux/arm64"]
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+        luks_e2e: false
       # Intel Macs with Apple's T2 security chip. Fedora's t2linux stack is
       # x86_64-only; no generic ISO may stand in for this profile because it
       # lacks the T2 kernel. Bootsahi Legacy supplies its dedicated USB flow.

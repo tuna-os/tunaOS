@@ -110,7 +110,7 @@ def test_timelapse_outputs_cover_plain_desktops_only(tmp_path):
     desktops = set(json.loads(values["base_desktops"]))
     assert {"gnome", "kde", "cosmic", "niri", "xfce", "pantheon"} <= desktops
     assert not any(
-        desktop.endswith(("-hwe", "-nvidia", "-asahi", "-t2", "-zfs", "-cachyos"))
+        desktop.endswith(("-hwe", "-nvidia", "-asahi", "-t2", "-x13s", "-zfs", "-cachyos"))
         for desktop in desktops
     )
 
@@ -118,7 +118,7 @@ def test_timelapse_outputs_cover_plain_desktops_only(tmp_path):
     assert cells
     assert all(
         not cell.endswith(
-            ("-hwe", "-nvidia", "-asahi", "-t2", "-zfs", "-cachyos")
+            ("-hwe", "-nvidia", "-asahi", "-t2", "-x13s", "-zfs", "-cachyos")
         )
         for cell in cells
     )
