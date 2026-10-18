@@ -648,11 +648,7 @@ def test_committed_snapshot_counts_match_provenance_and_board():
         assert board == axis_counts(axis), title
         if axis in payload["summary"]:
             assert payload["summary"][axis] == board, axis
-    assert payload["summary"]["iso"] == {
-        "passed": 0,
-        "tested": 57,
-        "total": 62,
-    }
+    assert payload["summary"]["iso"] == axis_counts("iso")
 if __name__ == "__main__":
     unittest.main()
 
