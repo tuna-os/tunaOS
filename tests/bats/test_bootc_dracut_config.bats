@@ -45,6 +45,20 @@ _conf() { cat "${1}/usr/lib/dracut/dracut.conf.d/30-bootc-container-build.conf";
   [[ "$conf" == *overlay* ]]
 }
 
+@test "early KMS display drivers are added when present as modules" {
+  # Without early KMS drivers in the initramfs, fbcon defers console takeover,
+  # Plymouth cannot render its graphical boot splash, and disk encryption
+  # (LUKS) boots to a blank screen until late userspace starts the desktop.
+  local root; root="$(_fixture no i915 amdgpu virtio_gpu)"
+  run env TUNAOS_SYSROOT="$root" bash "$SCRIPT"
+  [ "$status" -eq 0 ]
+  local conf; conf="$(_conf "$root")"
+  [[ "$conf" == *"add_drivers"* ]]
+  [[ "$conf" == *i915* ]]
+  [[ "$conf" == *amdgpu* ]]
+  [[ "$conf" == *virtio_gpu* ]]
+}
+
 @test "non-composefs image gets no composefs drivers" {
   # el10 is deliberately traditional ostree. Adding erofs there would be cargo
   # cult, and the point of detecting rather than hardcoding is that it doesn't.

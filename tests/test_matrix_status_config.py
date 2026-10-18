@@ -612,6 +612,15 @@ def test_committed_snapshot_counts_match_provenance_and_board():
     payload = json.loads((root / "docs/matrix-provenance.json").read_text())
     document = (root / "docs/MATRIX-STATUS.md").read_text()
 
+    composite = re.search(
+        r"\*\*(\d+) of (\d+)\*\* published cells are composite-green", document
+    )
+    assert composite
+    assert payload["summary"]["factory_health"] == {
+        "green": int(composite.group(1)),
+        "total": int(composite.group(2)),
+    }
+
     def axis_counts(axis):
         verdicts = [
             axes[axis]["verdict"]
@@ -673,6 +682,15 @@ class LifecycleResultsNormalisation(unittest.TestCase):
         self.assertEqual(got["yellowfin:kde"][0], "failure")
         self.assertNotIn("guppy:gnome", got)
         self.assertNotIn("bonito-rawhide:gnome", got)
+
+    def test_renamed_job_uses_newest_result_before_merging_architectures(self):
+        # Display-name whitespace can change without changing a cell or arch.
+        # Run IDs must sort numerically when both runs share a calendar date.
+        old = ("yellowfin:gnome  (amd64)", ("failure", "2026-08-17", "9"))
+        new = ("yellowfin:gnome (amd64)", ("success", "2026-08-17", "10"))
+        for entries in ((old, new), (new, old)):
+            got = self._with_raw(dict(entries))
+            self.assertEqual(got["yellowfin:gnome"], new[1])
 
     def test_arch_legs_merge_worst_of(self):
         # One green leg must not mask a red one — same spirit as

@@ -578,6 +578,12 @@ if [[ "${PKG_MGR:-}" == "pacman" ]] || command -v zypper &>/dev/null || command 
 
 	safe_enable tailscaled.service
 	safe_enable fwupd.service
+	if [[ "${PKG_MGR:-}" == "pacman" ]]; then
+		# Arch's disable-all preset leaves these off unless named; the
+		# marlin-scoped preset preserves the symlinks on first boot.
+		safe_enable bluetooth.service
+		safe_enable uupd.timer
+	fi
 	systemctl --global enable podman-auto-update.timer 2>/dev/null || true
 	systemctl --global enable speech-dispatcher.socket 2>/dev/null || true
 
