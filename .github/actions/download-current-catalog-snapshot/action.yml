@@ -28,8 +28,12 @@ runs:
         destination="${RUNNER_TEMP}/current-catalog-snapshot"
         rm -rf "$destination"
         mkdir -p "$destination"
-        gh run download "$run_id" --repo "$GITHUB_REPOSITORY" \
-          --name catalog-facts --dir "$destination"
+        if ! gh run download "$run_id" --repo "$GITHUB_REPOSITORY" \
+          --name catalog-facts --dir "$destination"; then
+          echo "::notice::Catalog snapshot artifact for run ${run_id} is unavailable; delivery publication remains enabled"
+          echo "snapshot=" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
         (
           cd "$destination"
           sha256sum --check --strict catalog-snapshot.json.sha256
