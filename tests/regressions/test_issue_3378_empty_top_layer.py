@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import ctypes
 import ctypes.util
+import gzip
 import hashlib
 import http.server
 import io
@@ -77,14 +78,18 @@ sys.stdout.buffer.write(destination.raw[:written])
 """
 
 
-def zstd_tar(entries: list[str]) -> bytes:
+def tar_archive(entries: list[str], *, padding: int = 0) -> bytes:
     archive = io.BytesIO()
     with tarfile.open(fileobj=archive, mode="w") as stream:
         for name in entries:
             info = tarfile.TarInfo(name)
             info.size = 0
             stream.addfile(info)
-    source = archive.getvalue()
+    return archive.getvalue() + b"\0" * padding
+
+
+def zstd_tar(entries: list[str], *, padding: int = 0) -> bytes:
+    source = tar_archive(entries, padding=padding)
     destination = ctypes.create_string_buffer(ZSTD.ZSTD_compressBound(len(source)))
     size = ZSTD.ZSTD_compress(
         destination, len(destination), source, len(source), 3
@@ -93,8 +98,15 @@ def zstd_tar(entries: list[str]) -> bytes:
     return destination.raw[:size]
 
 
+def gzip_tar(entries: list[str], *, padding: int = 0) -> bytes:
+    return gzip.compress(tar_archive(entries, padding=padding))
+
+
 def run_validator(
-    blob: bytes, *, immutable_reference: bool = False
+    blob: bytes,
+    *,
+    immutable_reference: bool = False,
+    media_type: str = "application/vnd.oci.image.layer.v1.tar+zstd",
 ) -> subprocess.CompletedProcess[str]:
     digest = "sha256:" + hashlib.sha256(blob).hexdigest()
     manifest = json.dumps({
@@ -103,7 +115,7 @@ def run_validator(
         "layers": [{
             "digest": digest,
             "size": len(blob),
-            "mediaType": "application/vnd.oci.image.layer.v1.tar+zstd",
+            "mediaType": media_type,
         }],
     }).encode()
     reference = (
@@ -177,6 +189,20 @@ def test_many_entry_small_zstd_layer_is_fully_drained():
     blob = zstd_tar([f"usr/share/test/{number:03d}" for number in range(300)])
     assert len(blob) < 4096, "fixture must exercise the small-layer validation path"
     result = run_validator(blob)
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize(
+    ("compress", "media_type"),
+    [
+        (zstd_tar, "application/vnd.oci.image.layer.v1.tar+zstd"),
+        (gzip_tar, "application/vnd.oci.image.layer.v1.tar+gzip"),
+    ],
+)
+def test_padded_small_compressed_layer_is_fully_drained(compress, media_type):
+    blob = compress(["usr/share/test/entry"], padding=1024 * 1024)
+    assert len(blob) < 4096, "fixture must exercise the small-layer validation path"
+    result = run_validator(blob, media_type=media_type)
     assert result.returncode == 0, result.stderr
 
 
