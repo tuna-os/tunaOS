@@ -23,12 +23,27 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import importlib.util
+
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG = ROOT / ".github" / "build-config.yml"
 DESKTOPS = ["gnome", "kde", "cosmic", "niri", "xfce"]
 
+
+def _delivery_cutover():
+    spec = importlib.util.spec_from_file_location(
+        "delivery_cutover", ROOT / "scripts" / "delivery-cutover.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+DC = _delivery_cutover()
+
+DIGEST = "sha256:" + "ab" * 32
 
 def config() -> dict:
     return yaml.safe_load(CONFIG.read_text(encoding="utf-8"))
@@ -119,3 +134,58 @@ def test_the_intersection_that_makes_partial_variants_safe_still_exists():
         encoding="utf-8")
     assert "iso_groups ∩ variant flavors" in wf
     assert "select(($sel | length) > 0)" in wf
+
+def _full_group_entries(cfg: dict, variant: str, suffix: str) -> list[dict]:
+    """A cutover entry for every member x platform target of a group."""
+    live, offline = DC.group_members(cfg, variant, suffix)
+    entries = []
+    for flavor in dict.fromkeys(live + offline):
+        for platform in DC.required_platforms_for(cfg, variant, flavor):
+            entries.append({
+                "target": {"variant": variant, "flavor": flavor, "platform": platform},
+                "evidence": {"receiptDigest": DIGEST, "qualifiedAt": "2026-10-01T00:00:00Z"},
+                "preset": "test-preset",
+            })
+    return entries
+
+
+def test_empty_policy_covers_no_group_so_every_group_still_publishes():
+    """The default path: with the empty initial policy no group's upload is
+    suppressed, so the universal-publication shape above is what ships."""
+    cfg = config()
+    policy = {"cutover": [], "retained": []}
+    probed = 0
+    for group in groups():
+        suffix = group.get("suffix") or ""
+        for variant in cfg["variants"]:
+            live, offline = DC.group_members(cfg, variant["id"], suffix)
+            if not live and not offline:
+                continue
+            probed += 1
+            assert DC.group_covered(
+                policy, variant["id"], suffix, live, offline, config=cfg
+            ) is False, (variant["id"], suffix)
+    assert probed > 0, "no variant x group probed; the loop above is vacuous"
+
+
+def test_cut_over_group_suppresses_only_that_group():
+    """Per-target cutover: a fully qualified group stops publishing while
+    every other group and variant keeps publishing as today."""
+    cfg = config()
+    live, offline = DC.group_members(cfg, "yellowfin", "kde")
+    assert live and offline
+    policy = {"cutover": _full_group_entries(cfg, "yellowfin", "kde"), "retained": []}
+    assert DC.group_covered(
+        policy, "yellowfin", "kde", live, offline, config=cfg
+    ) is True
+    for suffix in ("", "cosmic", "niri", "xfce"):
+        other_live, other_offline = DC.group_members(cfg, "yellowfin", suffix)
+        if not other_live and not other_offline:
+            continue
+        assert DC.group_covered(
+            policy, "yellowfin", suffix, other_live, other_offline, config=cfg
+        ) is False, suffix
+    bonito_live, bonito_offline = DC.group_members(cfg, "bonito", "kde")
+    assert DC.group_covered(
+        policy, "bonito", "kde", bonito_live, bonito_offline, config=cfg
+    ) is False
