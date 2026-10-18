@@ -192,11 +192,11 @@ criteria:
     name: The ISO boots and offers an installer
     proves: The live ISO boots and the installer frontend appears on screen.
     asserted_by: >-
-      .github/workflows/iso-e2e.yml + scripts/iso-e2e.sh --strict-offline-gui
-      (strict offline GUI qualification: plain and encrypted installs with
-      guest egress blocked; parity definition in
-      .github/workflows/iso-builder-parity.yml, evidence validated by
-      scripts/verify-experience-manifest.py)
+      .github/workflows/iso-e2e.yml + scripts/iso-e2e.sh (registered coverage
+      is readiness-only: live boot, painted framebuffer, and installer
+      availability). scripts/iso-e2e.sh --strict-offline-gui and
+      .github/workflows/iso-builder-parity.yml define the unregistered plain +
+      encrypted qualification contract.
     enforcement: advisory
     freshness_sla_days: 8
     graduation:
@@ -207,22 +207,23 @@ criteria:
           e2e: Run readiness e2e
         scripts:
           - scripts/iso-e2e.sh
-          - scripts/verify-experience-manifest.py
     scope:
       excludes_flavor_suffixes: ["-asahi"]
       excludes_flavors: ["base", "base-hwe", "base-nvidia"]
     status_2026_08_17: "31 of 36 ISO cells ever tested; 0 pass"
     status_2026_10_18: >-
-      advisory. Strict offline GUI gate registered (plain + encrypted
-      installs, egress blocked, QualificationEvidence/v1); graduates to
-      blocking after 2 consecutive passes like `install`.
+      advisory and incomplete. The registered iso-e2e job runs readiness-only;
+      it does not invoke --strict-offline-gui or validate
+      QualificationEvidence/v1. The standalone parity workflow defines that
+      stricter plain + encrypted contract, but its results do not count toward
+      this criterion's two-pass graduation until the registered job supplies
+      immutable input manifests and runs both profiles.
     blocked_by: ["#1772", "#1556"]
     notes: >-
-      The only axis that checks a human could actually install. Zero cells pass
-      today, so "working ISOs" is currently unproven everywhere. The strict
-      gate asserts both install modes with no skipped assertions: the parity
-      steps run unconditionally and a skipped, missing, or stale verdict never
-      counts as qualified.
+      The registered job proves the live ISO reaches a painted installer
+      surface. It does not yet prove installation completes. Zero registered
+      cells have plain + encrypted qualification evidence, so "working ISOs"
+      remains unproven and the criterion cannot graduate.
 
   - id: install
     name: Installation completes and the installed system boots

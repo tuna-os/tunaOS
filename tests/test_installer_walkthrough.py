@@ -133,7 +133,7 @@ class FakeQEMUMonitor:
 
 def run_walkthrough(tess, magick_ae=5000, magick_stddev=0.5, steps="2",
                     flavor="de", strict=False, timeout=120, tess_neg=None,
-                    spec=None):
+                    spec=None, mode=None):
     """Run the script against the fake monitor + stubs.
 
     *tess* maps frame number (str) -> OCR text. *tess_neg* is the same for the
@@ -163,12 +163,16 @@ def run_walkthrough(tess, magick_ae=5000, magick_stddev=0.5, steps="2",
             env[f"TESS_{k}"] = v
         for k, v in (tess_neg or {}).items():
             env[f"TESSNEG_{k}"] = v
+        if mode is not None:
+            env["TUNAOS_WALKTHROUGH_INSTALL_POLL"] = "0"
 
         cmd = [sys.executable, str(SCRIPT), sock, str(outdir), steps, flavor]
         if strict:
             cmd.append("--strict")
         if spec is not None:
             cmd.append(f"--spec={spec}")
+        if mode is not None:
+            cmd.append(f"--mode={mode}")
         proc = subprocess.run(cmd, capture_output=True, text=True, env=env,
                               timeout=timeout)
 
@@ -200,6 +204,31 @@ class TestRendersAdvancesScreens:
         assert summary["screens"]["disk"] is True
         assert "ok - de: reached 'welcome' screen" in proc.stdout
         assert "ok - de: reached 'disk' screen" in proc.stdout
+
+    def test_explicit_install_polls_past_navigation_budget_without_more_input(self):
+        frames = {
+            "00": "Welcome to TunaOS installer. Get Started",
+            "01": "Choose the disk where the system will be installed",
+            "02": "Disk Encryption Passphrase",
+            "03": "Installation Summary Ready to install",
+            "04": "Installation Progress Writing image",
+            "16": "Installation complete Remove the installation media",
+        }
+        frames.update({
+            f"{index:02d}": "Installation Progress Writing image"
+            for index in range(5, 16)
+        })
+        proc, summary = run_walkthrough(
+            frames,
+            steps="6",
+            mode="plain",
+        )
+        assert proc.returncode == 0, proc.stdout + proc.stderr
+        assert summary["screens"]["done"] is True
+        assert summary["frames"] == 17
+        assert run_walkthrough.last_commands.count("sendkey ret") == 4
+        assert "polling without input" in proc.stdout
+        assert "done screen reached" in proc.stdout
 
     def test_prose_on_welcome_does_not_credit_later_screens(self):
         # The positional fix: welcome prose that mentions disk keywords must
