@@ -63,6 +63,16 @@ if [[ "${TUNA_ASSET_NAME_ONLY:-0}" == "1" ]]; then
 	exit 0
 fi
 
+# Test hook: exercise metadata output without mutating a host image or
+# requiring flatpak/podman. TUNA_SESSION_ROOT must point at a disposable root.
+if [[ "${TUNA_METADATA_ONLY:-0}" == "1" ]]; then
+	: "${TUNA_SESSION_ROOT:?TUNA_SESSION_ROOT is required in metadata-only mode}"
+	INSTALLER_APP="${TUNA_INSTALLER_APP:?TUNA_INSTALLER_APP is required in metadata-only mode}"
+	INSTALLER_REVISION="${TUNA_INSTALLER_REVISION:-unknown}"
+	INSTALLER_BUNDLE_SHA256="${TUNA_INSTALLER_BUNDLE_SHA256:-unknown}"
+	write_live_source_metadata
+	exit 0
+fi
 # This persistent live-only marker survives /run becoming a tmpfs at boot.
 mkdir -p "${TUNA_SESSION_ROOT:-}/etc/tunaos"
 touch "${TUNA_SESSION_ROOT:-}/etc/tunaos/live-session"
@@ -75,16 +85,6 @@ touch "${TUNA_SESSION_ROOT:-}/etc/bootc-installer/live-iso-mode"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Test hook: exercise metadata output without mutating a host image or
-# requiring flatpak/podman. TUNA_SESSION_ROOT must point at a disposable root.
-if [[ "${TUNA_METADATA_ONLY:-0}" == "1" ]]; then
-	: "${TUNA_SESSION_ROOT:?TUNA_SESSION_ROOT is required in metadata-only mode}"
-	INSTALLER_APP="${TUNA_INSTALLER_APP:?TUNA_INSTALLER_APP is required in metadata-only mode}"
-	INSTALLER_REVISION="${TUNA_INSTALLER_REVISION:-unknown}"
-	INSTALLER_BUNDLE_SHA256="${TUNA_INSTALLER_BUNDLE_SHA256:-unknown}"
-	write_live_source_metadata
-	exit 0
-fi
 
 # ── 1. Desktop detection ──────────────────────────────────────────────────────
 # TUNA_SESSION_ROOT lets the bats tests point detection at a fake root.

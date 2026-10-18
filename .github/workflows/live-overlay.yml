@@ -183,15 +183,10 @@ jobs:
             xfce) INSTALLER_APP="org.tunaos.InstallerXfce" ;;
             *) INSTALLER_APP="org.bootcinstaller.Installer" ;;
           esac
-          # The revision the overlay's installer payload came from: every
-          # frontend now ships from tuna-os/bootc-installer (see
-          # scripts/check-installer-fisherman-pins.py), so one release query
-          # covers all five app IDs. Best-effort -- a lookup miss records
-          # "unknown" rather than failing the overlay, and customize-live.sh
-          # additionally writes the exact installed commit + bundle digest
-          # into /etc/tunaos/live-installer-info inside the overlay itself.
-          INSTALLER_REV="$(gh api repos/tuna-os/bootc-installer/releases/latest --jq .tag_name 2>/dev/null || echo unknown)"
-          echo "installer: ${INSTALLER_APP}@${INSTALLER_REV} (arch ${INSTALLER_ARCH})"
+          # The installed Flatpak commit is the payload identity. The
+          # customization script records it after installation; read that
+          # receipt below rather than guessing from a moving release tag.
+          echo "installer app: ${INSTALLER_APP} (arch ${INSTALLER_ARCH})"
 
           # Use tacklebox's own customize pipeline rather than reimplementing
           # it here (tacklebox#149).
@@ -228,12 +223,18 @@ jobs:
           # with explicit exports so target identity both reaches the
           # container and participates in tacklebox's cache key.
           CUSTOMIZE_SCRIPT="$PWD/live-iso/common/src/.customize-live-${SAFEPLATFORM}.sh"
-          trap 'rm -f "$CUSTOMIZE_SCRIPT"' EXIT
+          PROVENANCE_CTR=""
+          PROVENANCE_FILE=""
+          cleanup() {
+            rm -f "$CUSTOMIZE_SCRIPT"
+            [[ -z "$PROVENANCE_FILE" ]] || sudo rm -f "$PROVENANCE_FILE"
+            [[ -z "$PROVENANCE_CTR" ]] || sudo podman rm -f "$PROVENANCE_CTR" >/dev/null
+          }
+          trap cleanup EXIT
           {
             echo '#!/usr/bin/env bash'
             printf 'export TUNA_INSTALLER_ARCH=%q\n' "$INSTALLER_ARCH"
             printf 'export TUNA_INSTALLER_APP=%q\n' "$INSTALLER_APP"
-            printf 'export TUNA_INSTALLER_REVISION=%q\n' "$INSTALLER_REV"
             printf 'export TUNA_LIVE_BASE_IMAGE=%q\n' "$IMG"
             printf 'export TUNA_LIVE_BASE_DIGEST=%q\n' "$BASE_DIGEST"
             printf 'export TUNA_LIVE_PLATFORM=%q\n' "$PLATFORM"
@@ -249,8 +250,20 @@ jobs:
             --label "org.tunaos.live-overlay.base=${IMG}" \
             --label "org.tunaos.live-overlay.base-digest=${BASE_DIGEST}" \
             --label "org.tunaos.live-overlay.platform=${PLATFORM}" \
-            --label "org.tunaos.live-overlay.baseline=true" \
-            --label "org.tunaos.live-overlay.installer=${INSTALLER_APP}@${INSTALLER_REV}"
+            --label "org.tunaos.live-overlay.baseline=true"
+
+          PROVENANCE_FILE="$(mktemp)"
+          PROVENANCE_CTR="$(sudo podman create "$OUT" true)"
+          sudo podman cp \
+            "${PROVENANCE_CTR}:/etc/tunaos/live-source.json" "$PROVENANCE_FILE"
+          sudo chown "$(id -u):$(id -g)" "$PROVENANCE_FILE"
+          ACTUAL_INSTALLER_APP="$(jq -er '.installer_app_id | strings | select(length > 0)' "$PROVENANCE_FILE")"
+          ACTUAL_INSTALLER_REV="$(jq -er '.installer_revision | select(test("^[0-9a-f]{64}$"))' "$PROVENANCE_FILE")"
+          sudo podman commit --quiet \
+            --change "LABEL org.tunaos.live-overlay.installer=${ACTUAL_INSTALLER_APP}@${ACTUAL_INSTALLER_REV}" \
+            "$PROVENANCE_CTR" "$OUT" >/dev/null
+          sudo podman rm -f "$PROVENANCE_CTR" >/dev/null
+          PROVENANCE_CTR=""
 
           # Tacklebox's --label writes the base digest into the image config.
           # Its consumer also requires the digest on the platform manifest
@@ -287,14 +300,41 @@ jobs:
               jq -e --arg value "$BASE_DIGEST" \
                 '.annotations["org.tunaos.live-overlay.base-digest"] == $value' >/dev/null
           )
+          PLATFORM_DIGEST="$(skopeo inspect --format '{{.Digest}}' "docker://${OUT}")"
+          jq -n \
+            --arg variant "$VARIANT" \
+            --arg flavor "$FLAVOR" \
+            --arg platform "$PLATFORM" \
+            --arg repository "${OUT%:*}" \
+            --arg digest "$PLATFORM_DIGEST" \
+            --arg base_digest "$BASE_DIGEST" \
+            --arg installer "${ACTUAL_INSTALLER_APP}@${ACTUAL_INSTALLER_REV}" \
+            '{
+              variant: $variant,
+              flavor: $flavor,
+              platform: $platform,
+              repository: $repository,
+              digest: $digest,
+              base_digest: $base_digest,
+              installer: $installer
+            }' >"${RUNNER_TEMP}/live-overlay-receipt-${VARIANT}-${FLAVOR}-${SAFEPLATFORM}.json"
           echo "published $OUT"
+
+      - name: Upload current-run platform receipt
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: live-overlay-receipt-${{ matrix.variant }}-${{ matrix.flavor }}-${{ matrix.safeplatform }}
+          path: ${{ runner.temp }}/live-overlay-receipt-${{ matrix.variant }}-${{ matrix.flavor }}-${{ matrix.safeplatform }}.json
+          if-no-files-found: error
+          retention-days: 1
 
   publish-compatible-index:
     name: Publish compatible multi-platform tags
     needs: [generate-matrix, overlay]
-    if: ${{ needs.generate-matrix.outputs.count != '0' }}
+    if: ${{ always() && needs.generate-matrix.outputs.count != '0' }}
     runs-on: ubuntu-latest
     permissions:
+      actions: read
       packages: write
     env:
       MATRIX: ${{ needs.generate-matrix.outputs.matrix }}
@@ -304,27 +344,48 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: echo "$GITHUB_TOKEN" | podman login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
 
-      - name: Publish existing unsuffixed tags as platform indexes
+      - name: Download current-run platform receipts
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        continue-on-error: true
+        with:
+          pattern: live-overlay-receipt-*
+          path: receipts
+          merge-multiple: true
+
+      - name: Publish complete current-run platform groups
         run: |
           set -euo pipefail
+          shopt -s nullglob
+          receipt_files=(receipts/*.json)
+          receipts='[]'
+          if ((${#receipt_files[@]})); then
+            receipts="$(jq -s '.' "${receipt_files[@]}")"
+          fi
           jq -r '.include | unique_by([.variant, .flavor])[] | [.variant, .flavor] | @tsv' \
             <<<"$MATRIX" |
           while IFS=$'\t' read -r variant flavor; do
+            expected="$(jq -c --arg variant "$variant" --arg flavor "$flavor" \
+              '[.include[] | select(.variant == $variant and .flavor == $flavor) |
+                {platform}] | unique_by(.platform) | sort_by(.platform)' <<<"$MATRIX")"
+            current="$(jq -c --arg variant "$variant" --arg flavor "$flavor" \
+              '[.[] | select(.variant == $variant and .flavor == $flavor)] |
+                unique_by(.platform) | sort_by(.platform)' <<<"$receipts")"
+            if ! jq -e --argjson expected "$expected" \
+              'map({platform}) == $expected and length == ($expected | length)' \
+              <<<"$current" >/dev/null; then
+              echo "skipping ${variant}:${flavor}: current-run platform set is incomplete"
+              continue
+            fi
+
             index="ghcr.io/tuna-os/live-overlay:${variant}-${flavor}"
             podman manifest rm "$index" >/dev/null 2>&1 || true
             podman manifest create "$index"
-            while read -r safeplatform; do
-              platform_ref="ghcr.io/tuna-os/live-overlay:${variant}-${flavor}-${safeplatform}"
-              base_digest="$(skopeo inspect --config "docker://${platform_ref}" \
-                | jq -er '.config.Labels["org.tunaos.live-overlay.base-digest"]')"
+            while IFS=$'\t' read -r repository digest base_digest; do
+              platform_ref="${repository}@${digest}"
               podman manifest add "$index" "docker://${platform_ref}"
               podman manifest annotate "$index" "$platform_ref" \
                 --annotation "org.tunaos.live-overlay.base-digest=${base_digest}"
-            done < <(
-              jq -r --arg variant "$variant" --arg flavor "$flavor" \
-                '.include[] | select(.variant == $variant and .flavor == $flavor) | .safeplatform' \
-                <<<"$MATRIX"
-            )
+            done < <(jq -r '.[] | [.repository, .digest, .base_digest] | @tsv' <<<"$current")
             podman manifest push --all "$index" "docker://$index"
-            echo "published $index"
+            echo "published $index from current-run receipts"
           done
