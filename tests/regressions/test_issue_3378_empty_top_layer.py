@@ -91,7 +91,9 @@ def zstd_tar(entries: list[str]) -> bytes:
     return destination.raw[:size]
 
 
-def run_validator(blob: bytes) -> subprocess.CompletedProcess[str]:
+def run_validator(
+    blob: bytes, *, immutable_reference: bool = False
+) -> subprocess.CompletedProcess[str]:
     digest = "sha256:" + hashlib.sha256(blob).hexdigest()
     manifest = json.dumps({
         "schemaVersion": 2,
@@ -102,10 +104,15 @@ def run_validator(blob: bytes) -> subprocess.CompletedProcess[str]:
             "mediaType": "application/vnd.oci.image.layer.v1.tar+zstd",
         }],
     }).encode()
+    reference = (
+        "sha256:" + hashlib.sha256(manifest).hexdigest()
+        if immutable_reference
+        else "image"
+    )
 
     class Registry(http.server.BaseHTTPRequestHandler):
         def do_GET(self):  # noqa: N802 - BaseHTTPRequestHandler API
-            if self.path == "/v2/test/manifests/image":
+            if self.path == f"/v2/test/manifests/{reference}":
                 payload, content_type = manifest, "application/json"
             elif self.path == f"/v2/test/blobs/{digest}":
                 payload, content_type = blob, "application/octet-stream"
@@ -132,7 +139,7 @@ def run_validator(blob: bytes) -> subprocess.CompletedProcess[str]:
                 env = os.environ.copy()
                 env["PATH"] = f"{directory}:{env['PATH']}"
                 return subprocess.run(
-                    [str(VALIDATOR), f"127.0.0.1:{server.server_address[1]}/test:image"],
+                    [str(VALIDATOR), f"127.0.0.1:{server.server_address[1]}/test@{reference}"],
                     cwd=ROOT,
                     env=env,
                     capture_output=True,
@@ -154,6 +161,14 @@ def test_nonempty_small_zstd_layer_is_accepted():
     result = run_validator(zstd_tar(["usr/share/tunaos/build-info.json"]))
     assert result.returncode == 0, result.stderr
     assert "all small layers importable" in result.stdout
+
+
+def test_nonempty_layer_is_checked_through_an_immutable_manifest_reference():
+    result = run_validator(
+        zstd_tar(["usr/share/tunaos/build-info.json"]),
+        immutable_reference=True,
+    )
+    assert result.returncode == 0, result.stderr
 
 
 def test_many_entry_small_zstd_layer_is_fully_drained():

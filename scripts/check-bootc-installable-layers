@@ -12,8 +12,8 @@
 #   scripts/check-bootc-installable-layers [--arch amd64] <ref>
 #
 # <ref> is registry/repo:tag or registry/repo@digest (anonymous read).
-# Needs: curl, jq, tar, and zstd for zstd layers. Exits nonzero naming the
-# first offending layer.
+# Needs: curl, jq, tar, and zstd for zstd layers. Docker Hub, GHCR, Quay,
+# unauthenticated registries, and local HTTP test registries are supported.
 set -euo pipefail
 
 ARCH="amd64"
@@ -33,15 +33,33 @@ else
 fi
 REPO="${REST%%[:@]*}"
 
-token() {
-  curl -fsSL "https://${REGISTRY}/token?service=${REGISTRY}&scope=repository:${REPO}:pull" 2>/dev/null \
-    | jq -r '.token // .access_token'
+api_host() {
+  case "$1" in
+    docker.io) printf 'registry-1.docker.io' ;;
+    *) printf '%s' "$1" ;;
+  esac
 }
+
+auth_header() {
+  local registry="$1" repo="$2" url="" token_value=""
+  case "$registry" in
+    docker.io) url="https://auth.docker.io/token?service=registry.docker.io&scope=repository:${repo}:pull" ;;
+    quay.io) url="https://quay.io/v2/auth?service=quay.io&scope=repository:${repo}:pull" ;;
+    ghcr.io) url="https://ghcr.io/token?scope=repository:${repo}:pull" ;;
+    *) return 0 ;;
+  esac
+  token_value="$(curl -fsS --max-time 20 "$url" 2>/dev/null |
+    jq -r '.token // .access_token // empty')"
+  [[ -n "$token_value" ]] || return 1
+  printf 'Authorization: Bearer %s' "$token_value"
+}
+
+API_REGISTRY="$(api_host "$REGISTRY")"
 
 manifest() {
   local ref="$1" accept="$2"
   curl -fsSL "${AUTH[@]}" -H "Accept: ${accept}" \
-    "${SCHEME}://${REGISTRY}/v2/${REPO}/manifests/${ref}"
+    "${SCHEME}://${API_REGISTRY}/v2/${REPO}/manifests/${ref}"
 }
 
 SCHEME="https"
@@ -49,10 +67,13 @@ AUTH=()
 if [[ "$REGISTRY" == localhost* || "$REGISTRY" == "127."* || "$REGISTRY" == "[::1]"* ]]; then
   # Local test registries serve plain HTTP with no auth.
   SCHEME="http"
+  API_REGISTRY="$REGISTRY"
 else
-  TOKEN="$(token)"
-  [[ -n "$TOKEN" && "$TOKEN" != "null" ]] || { echo "check-bootc-installable-layers: cannot get anonymous pull token for ${REGISTRY}/${REPO}" >&2; exit 1; }
-  AUTH=(-H "Authorization: Bearer ${TOKEN}")
+  HEADER="$(auth_header "$REGISTRY" "$REPO")" || {
+    echo "check-bootc-installable-layers: cannot get anonymous pull token for ${REGISTRY}/${REPO}" >&2
+    exit 1
+  }
+  [[ -z "$HEADER" ]] || AUTH=(-H "$HEADER")
 fi
 
 if [[ "$REST" == *[@:]* ]]; then
@@ -81,7 +102,7 @@ for entry in "${LAYERS[@]}"; do
   fi
   blob="$(mktemp)"
   if ! curl -fsSL "${AUTH[@]}" \
-      "${SCHEME}://${REGISTRY}/v2/${REPO}/blobs/${digest}" -o "$blob"; then
+      "${SCHEME}://${API_REGISTRY}/v2/${REPO}/blobs/${digest}" -o "$blob"; then
     echo "check-bootc-installable-layers: cannot fetch layer ${idx} ${digest}" >&2
     rm -f "$blob"; fail=1; continue
   fi
