@@ -209,3 +209,23 @@ def test_repository_conflicts_and_operation_order():
     other = {"packages": {"repositories": [{**repo, "url": "https://different.org/repo"}]}}
     with pytest.raises(MODULE.ConfigError, match="conflicting inherited"):
         MODULE.merge_layers([layer, other])
+
+
+def test_stock_example_edits_trigger_the_contract_suite():
+    workflow = yaml.safe_load((ROOT / ".github/workflows/test.yml").read_text())
+    assert "examples/**" in workflow[True]["pull_request"]["paths"]
+
+
+def test_receipt_ignores_generated_untracked_files_but_detects_source_changes(tmp_path):
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    source = tmp_path / "system_files/usr/libexec/probe.py"
+    source.parent.mkdir(parents=True)
+    source.write_text("print('stock')\n")
+    subprocess.run(["git", "-C", str(tmp_path), "add", "."], check=True)
+    before = MODULE.source_receipt(tmp_path)
+    cache = source.parent / "__pycache__/probe.pyc"
+    cache.parent.mkdir()
+    cache.write_bytes(b"generated runtime bytes")
+    assert MODULE.source_receipt(tmp_path) == before
+    source.write_text("print('changed')\n")
+    assert MODULE.source_receipt(tmp_path)["sha256"] != before["sha256"]

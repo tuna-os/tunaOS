@@ -1678,3 +1678,11 @@ capture first, then sends the graceful powerdown itself before the kill.
 **Measured cause:** `Containerfile.arch` copies the common payload that provides the uupd timer and AC trigger. It never ran the package phase that installs the pinned binary and core units. Observed on a reference marlin:gnome host (booted 2026-09-22 image): trigger starts, `systemctl start uupd.service` exits `NOTINSTALLED`, unit enters `start-limit-hit`.
 
 **Fix:** The pinned download moved into shared `build_scripts/install-uupd.sh` (same `image-versions.yaml` pin; stages the binary plus `uupd.service`, `uupd.timer`, `uupd-manual.service` before install; smoke with `UUPD_CONTEXT="$PWD" UUPD_ROOT="$scratch"` into a disposable root). The apt and dnf branches of `10-base-packages.sh` delegate to it unchanged in behavior, and `Containerfile.arch` carries the pin file and runs the installer before `40-services.sh`. The context exact-set test now treats `install-uupd.sh` as a consumer of the pin file.
+
+## Fork source pin changes after tests
+
+Symptom: the fork review tool reports a catalog pin mismatch after Python tests.
+Cause: imports create untracked bytecode under `system_files/usr/libexec`.
+The receipt must select only Git-tracked source files. The test for the fork contract
+checks that temporary bytecode leaves the pin intact and a source edit changes it.
+Do not refresh a source pin to accept temporary files.

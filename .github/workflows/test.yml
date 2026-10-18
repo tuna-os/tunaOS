@@ -24,6 +24,8 @@ on:
       #   registry-map.yaml 4  files 2
       - 'scripts/**'
       - 'tests/**'
+      # The fork-config contract suite reads the pinned stock example.
+      - 'examples/**'
       - 'build_scripts/**'
       # One entry rather than six. .github/scripts/**, changelogs.py,
       # workflows/**, green-criteria.yml, runs-on.yml and actions/** were all

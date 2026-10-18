@@ -73,8 +73,10 @@ def source_paths(root):
                 "build_scripts/lib/variant-identity.tsv", "scripts/resolve-flavor.sh",
                 "scripts/resolve-image.sh", "scripts/lib/build-config.sh",
                 "system_files/**/*")
+    tracked = set(subprocess.check_output(["git", "-C", str(root), "ls-files", "-z"], text=True).split("\0"))
     return sorted({p.relative_to(root).as_posix() for pattern in patterns
-                   for p in root.glob(pattern) if p.is_file() or p.is_symlink()})
+                   for p in root.glob(pattern)
+                   if (p.is_file() or p.is_symlink()) and p.relative_to(root).as_posix() in tracked})
 
 
 def source_receipt(root):

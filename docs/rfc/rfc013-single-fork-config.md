@@ -25,12 +25,13 @@ never invents cells or changes a hold. The legacy catalog retains all flags,
 rollout records, ISO groups, aliases, stages and base digest pins.
 
 The receipt hashes existing package manifests, build scripts, identity data,
-Containerfiles, image pins and committed assets. It is a **source snapshot**,
+Containerfiles, image pins and committed assets. Only Git-tracked files enter
+the receipt; Python bytecode and other temporary output do not. It is a **source snapshot**,
 not a resolved package transaction or evidence from a built image. Shell-driven
 package lists remain shell-driven. Nothing in this phase installs packages,
 configures repositories or changes the image brand.
 
-Use Python 3.10+ and PyYAML (the existing Python test dependency):
+Use a Git checkout, Python 3.10+ and PyYAML (the existing Python test dependency):
 
 ```sh
 python3 scripts/resolve-fork-config.py examples/fork/stock.yaml > /tmp/plan.json
