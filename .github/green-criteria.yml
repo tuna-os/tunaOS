@@ -191,20 +191,38 @@ criteria:
   - id: iso
     name: The ISO boots and offers an installer
     proves: The live ISO boots and the installer frontend appears on screen.
-    asserted_by: .github/workflows/iso-e2e.yml + scripts/iso-e2e.sh (Installer smoke)
-    enforcement: unimplemented
+    asserted_by: >-
+      .github/workflows/iso-e2e.yml + scripts/iso-e2e.sh --strict-offline-gui
+      (strict offline GUI qualification: plain and encrypted installs with
+      guest egress blocked; parity definition in
+      .github/workflows/iso-builder-parity.yml, evidence validated by
+      scripts/verify-experience-manifest.py)
+    enforcement: advisory
     freshness_sla_days: 8
+    graduation:
+      required_consecutive_passes: 2
     gates:
       - workflow: .github/workflows/iso-e2e.yml
         jobs:
           e2e: Run readiness e2e
         scripts:
           - scripts/iso-e2e.sh
+          - scripts/verify-experience-manifest.py
+    scope:
+      excludes_flavor_suffixes: ["-asahi"]
+      excludes_flavors: ["base", "base-hwe", "base-nvidia"]
     status_2026_08_17: "31 of 36 ISO cells ever tested; 0 pass"
+    status_2026_10_18: >-
+      advisory. Strict offline GUI gate registered (plain + encrypted
+      installs, egress blocked, QualificationEvidence/v1); graduates to
+      blocking after 2 consecutive passes like `install`.
     blocked_by: ["#1772", "#1556"]
     notes: >-
       The only axis that checks a human could actually install. Zero cells pass
-      today, so "working ISOs" is currently unproven everywhere.
+      today, so "working ISOs" is currently unproven everywhere. The strict
+      gate asserts both install modes with no skipped assertions: the parity
+      steps run unconditionally and a skipped, missing, or stale verdict never
+      counts as qualified.
 
   - id: install
     name: Installation completes and the installed system boots
