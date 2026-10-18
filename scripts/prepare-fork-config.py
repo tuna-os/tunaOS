@@ -73,7 +73,7 @@ def wallpaper(path):
     return {"path": f"fork-assets/{digest}.{extension}", "sha256": digest}, data
 
 
-def compile_cells(config_path, root=ROOT):
+def compile_cells(config_path, root=ROOT, identity_staging=False):
     config = yaml.load(config_path.read_text(), Loader=COMPILER.UniqueLoader)
     plan = COMPILER.resolve(config, config_path.parent, root)
     if not config.get("targets"):
@@ -93,8 +93,24 @@ def compile_cells(config_path, root=ROOT):
         manager = MANAGERS[containerfile]
         validate_packages(cell["intent"]["packages"], manager)
         branding = cell["intent"]["branding"]
+        if identity_staging and not {"name", "logo"}.issubset(branding):
+            raise ConfigError("identity staging needs both name and logo in every selected enabled cell")
+        identity = None
         if set(branding) & {"name", "logo"}:
-            raise ConfigError("name/logo customization is deferred until embedded installer and Plymouth assets are integrated")
+            if not identity_staging:
+                raise ConfigError("name/logo customization is deferred until embedded installer and Plymouth assets are integrated; use --identity-staging for non-buildable root staging")
+            spec = importlib.util.spec_from_file_location("prepare_identity", root / "scripts/prepare-fork-identity.py")
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            try:
+                identity, blobs = module.prepare(branding, cell, config_path.parent, plan["sources"]["sha256"])
+            except (ValueError, ImportError, OSError) as exc:
+                raise ConfigError(f"identity staging: {exc}") from exc
+            assets.update(blobs)
+            # Internal URL/package adapter retains its closed contract. The
+            # separate identity payload records all name/logo intent and hashes.
+            cell = {**cell, "intent": {**cell["intent"], "branding": {
+                key: value for key, value in branding.items() if key not in ("name", "logo")}}}
         cell_assets = {}
         if "wallpaper" in branding:
             if flavor == "tuna":
@@ -119,15 +135,17 @@ def compile_cells(config_path, root=ROOT):
                "ENABLE_HWE": "0", "ENABLE_NVIDIA": "0", "ENABLE_ASAHI": "0", "ENABLE_SSHD": "0",
                "IMAGE_REGISTRY": image["registry"], "REPO_ORGANIZATION": image["namespace"],
                "USE_CACHE": "0", "IS_CI": "0", "SKIP_RECHUNK": "1", "SKIP_SUBMODULES": "1"}
-        cells.append({"manifest": manifest, "environment": env, "base_digest_pinned": base_pinned})
+        cells.append({"manifest": manifest, "environment": env, "base_digest_pinned": base_pinned,
+                      **({"identity": identity} if identity else {})})
     return plan, cells, assets
 
 
-def prepare(config_path, output, root=ROOT):
-    reserved = (root / "manifests/fork-config.json", root / "manifests/fork-assets")
+def prepare(config_path, output, root=ROOT, identity_staging=False):
+    reserved = tuple(root / "manifests" / name for name in (
+        "fork-config.json", "fork-assets", "fork-identity.json", "fork-identity-assets"))
     if any(path.exists() or path.is_symlink() for path in reserved):
         raise ConfigError("source checkout contains reserved generated fork payload paths; use a clean source checkout")
-    plan, cells, assets = compile_cells(config_path, root)
+    plan, cells, assets = compile_cells(config_path, root, identity_staging)
     if output.exists() or output.is_symlink():
         raise ConfigError("output must not already exist; prepared contexts are never overwritten")
     if output.resolve().is_relative_to(root.resolve()):
@@ -157,12 +175,17 @@ def prepare(config_path, output, root=ROOT):
         if COMPILER.source_receipt(context) != plan["sources"]:
             raise ConfigError("sources changed during preparation; discard output and retry after review")
         (context / "manifests/fork-config.json").write_text(json.dumps(manifest, indent=2) + "\n")
-        for asset in manifest["assets"].values():
+        cell_assets = list(manifest["assets"].values())
+        if "identity" in cell:
+            (context / "manifests/fork-identity.json").write_text(json.dumps(cell["identity"], indent=2) + "\n")
+            cell_assets += list(cell["identity"]["assets"].values())
+        for asset in cell_assets:
             destination = context / "manifests" / asset["path"]
             destination.parent.mkdir(parents=True, exist_ok=True)
             destination.write_bytes(assets[asset["path"]])
         builds.append({"context": name, "environment": cell["environment"],
-                       "base_digest_pinned": cell["base_digest_pinned"]})
+                       "base_digest_pinned": cell["base_digest_pinned"],
+                       **({"build_blocked": cell["identity"]["blocked_consumers"]} if "identity" in cell else {})})
     (output / "builds.json").write_text(json.dumps(builds, indent=2) + "\n")
     return builds
 
@@ -172,11 +195,17 @@ def main():
     parser.add_argument("config", type=Path)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--build", action="store_true", help="build every prepared cell locally; no push/release")
+    parser.add_argument("--identity-staging", action="store_true", help="prepare name/logo staging inputs; never buildable images")
     args = parser.parse_args()
     try:
-        builds = prepare(args.config.resolve(), args.output.resolve())
+        if args.identity_staging and args.build:
+            raise ConfigError("identity staging cannot build: installer, Plymouth and image qualification are incomplete")
+        options = {"identity_staging": True} if args.identity_staging else {}
+        builds = prepare(args.config.resolve(), args.output.resolve(), **options)
         print(f"Prepared {len(builds)} local preview contexts in {args.output}")
         for build in builds:
+            if build.get("build_blocked"):
+                print(f"BLOCKED: {build['context']} is identity staging only: " + ", ".join(build["build_blocked"]), file=sys.stderr)
             if not build["base_digest_pinned"]:
                 print(f"WARNING: {build['context']} retains a mutable upstream base: {build['environment']['BASE_IMAGE']}", file=sys.stderr)
         if args.build:
