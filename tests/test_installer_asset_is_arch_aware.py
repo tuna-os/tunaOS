@@ -41,8 +41,23 @@ def test_aarch64_uses_the_target_specific_asset_name() -> None:
     )
 
 
-def test_metadata_only_requires_disposable_root_before_writes() -> None:
+def test_metadata_only_requires_disposable_root_before_writes(
+    tmp_path: Path,
+) -> None:
+    fakebin = tmp_path / "bin"
+    fakebin.mkdir()
+    marker_calls = tmp_path / "marker-calls"
+    for command in ("mkdir", "touch"):
+        stub = fakebin / command
+        stub.write_text(
+            "#!/usr/bin/env bash\n"
+            f"printf '%s\\n' \"$*\" >>{str(marker_calls)!r}\n"
+            "exit 99\n",
+            encoding="utf-8",
+        )
+        stub.chmod(0o755)
     env = os.environ | {
+        "PATH": f"{fakebin}:{os.environ['PATH']}",
         "TUNA_METADATA_ONLY": "1",
         "TUNA_INSTALLER_APP": "org.bootcinstaller.Installer",
     }
@@ -55,3 +70,4 @@ def test_metadata_only_requires_disposable_root_before_writes() -> None:
     )
     assert result.returncode != 0
     assert "TUNA_SESSION_ROOT is required" in result.stderr
+    assert not marker_calls.exists()
