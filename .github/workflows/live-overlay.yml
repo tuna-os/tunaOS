@@ -44,6 +44,7 @@ jobs:
         uses: ./.github/actions/setup-yq
       - id: gen
         env:
+          EVENT_NAME: ${{ github.event_name }}
           WANT_VARIANT: ${{ inputs.variant || 'all' }}
           WANT_FLAVOR: ${{ inputs.flavors || 'all' }}
         run: |
@@ -57,9 +58,11 @@ jobs:
           # (gnome/kde/cosmic/niri/xfce, no -nvidia/-hwe); new variants are
           # picked up automatically instead of the old yellowfin-only default.
           MATRIX=$(yq -o json .github/build-config.yml | jq -c \
-            --arg v "$WANT_VARIANT" --arg f "$WANT_FLAVOR" '{
+            --arg event "$EVENT_NAME" --arg v "$WANT_VARIANT" --arg f "$WANT_FLAVOR" '{
               include: [
-                .variants[] as $var | $var.flavors[]
+                .variants[] as $var
+                | select($event == "workflow_dispatch" or $var.experimental != true)
+                | $var.flavors[]
                 | select(.build_image == true)
                 | select(.id | test("^(gnome|kde|cosmic|niri|xfce)$"))
                 | select($v == "all" or $var.id == $v)

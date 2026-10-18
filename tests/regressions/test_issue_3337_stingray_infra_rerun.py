@@ -15,6 +15,7 @@ WORKFLOW = ROOT / ".github/workflows/rerun-infra-failures.yml"
 LIFECYCLE_WORKFLOW = ROOT / ".github/workflows/bootc-lifecycle.yml"
 DAILY_WORKFLOW = ROOT / ".github/workflows/daily-verify.yml"
 SWEEP_WORKFLOW = ROOT / ".github/workflows/desktop-contract-sweep.yml"
+OVERLAY_WORKFLOW = ROOT / ".github/workflows/live-overlay.yml"
 
 
 def test_dispatch_only_stingray_is_an_automatic_retry_source() -> None:
@@ -65,3 +66,15 @@ def test_scheduled_desktop_sweep_excludes_dispatch_only_experimental_variants() 
 
     assert generate["env"]["EVENT_NAME"] == "${{ github.event_name }}"
     assert '$event == "workflow_dispatch" or .experimental != true' in generate["run"]
+
+
+def test_scheduled_live_overlays_exclude_dispatch_only_experimental_variants() -> None:
+    document = yaml.safe_load(OVERLAY_WORKFLOW.read_text(encoding="utf-8"))
+    generate = next(
+        step
+        for step in document["jobs"]["generate-matrix"]["steps"]
+        if step.get("id") == "gen"
+    )
+
+    assert generate["env"]["EVENT_NAME"] == "${{ github.event_name }}"
+    assert '$event == "workflow_dispatch" or $var.experimental != true' in generate["run"]
