@@ -93,18 +93,25 @@ publish_iso_as() {
 versioned=$(basename "$iso")
 versioned_publication=$(publication_name "$versioned")
 latest_publication=$(publication_name "$latest")
+# Resolver targets are always content-addressed, even while the legacy
+# -latest alias remains mutable. A reader that fetched the previous resolver
+# therefore keeps a stable ISO/digest pair across overlapping publications.
+resolver_base="${latest%.iso}"
+resolver_base="${resolver_base/-latest/-snapshot}"
+resolver_publication="${resolver_base}-sha256-${digest_suffix}.iso"
 publish_iso_as "$versioned_publication"
-publish_iso_as "$latest_publication"
+publish_iso_as "$resolver_publication"
+if [[ "$latest_publication" != "$resolver_publication" ]]; then
+	publish_iso_as "$latest_publication"
+fi
 
-# A stable, small resolver keeps rollback publication discoverable when the
-# historical -latest object itself is immutable. It points only at the signed,
-# checksum-addressed artifact set above and records the filename inside the
-# signed checksum payload.
+# Publish the stable resolver only after its immutable ISO, checksum, and
+# signature bundle. The legacy alias above remains for non-resolver clients.
 resolver="${latest%.iso}.json"
 resolver_file="${tmpdir}/${resolver##*/}"
 printf '{"schema":"TunaOSIsoResolution/v1","iso":"%s","sha256":"%s.sha256","sigstore":"%s.sigstore.json","checksum_subject":"%s","digest":"sha256:%s"}\n' \
-	"$latest_publication" "$latest_publication" "$latest_publication" \
+	"$resolver_publication" "$resolver_publication" "$resolver_publication" \
 	"$(basename "$iso")" "$digest" >"$resolver_file"
 copy_unless_retained "$resolver_file" "$resolver"
 
-echo "==> Published ${versioned_publication}; ${resolver} resolves current download to ${latest_publication}"
+echo "==> Published ${versioned_publication}; ${resolver} resolves current download to ${resolver_publication}"

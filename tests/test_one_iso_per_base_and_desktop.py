@@ -372,6 +372,70 @@ def test_guarded_uploader_never_writes_retained_destinations(tmp_path: Path):
                for destination in second_destinations)
 
 
+def test_resolver_remains_valid_when_a_later_publication_replaces_latest(tmp_path: Path):
+    config_path = tmp_path / "config.json"
+    config_path.write_text(json.dumps({
+        "iso_delivery": {"cutover_targets": [], "retained_r2_isos": []},
+        "iso_groups": [],
+        "variants": [],
+    }))
+    remote = tmp_path / "remote"
+    remote.mkdir()
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    rclone = fake_bin / "rclone"
+    rclone.write_text(
+        "#!/bin/sh\n"
+        "before=; last=; for arg in \"$@\"; do before=$last; last=$arg; done\n"
+        "cp \"$before\" \"$REMOTE/$(basename \"$last\")\"\n"
+    )
+    rclone.chmod(0o755)
+
+    def publish(directory: Path, content: bytes) -> dict:
+        directory.mkdir()
+        iso = directory / "fish-gnome-10.2-x86_64.iso"
+        iso.write_bytes(content)
+        digest = hashlib.sha256(content).hexdigest()
+        (directory / f"{iso.name}.sha256").write_text(
+            f"{digest}  {iso.name}\n"
+        )
+        (directory / f"{iso.name}.sigstore.json").write_text(
+            json.dumps({"signed": digest})
+        )
+        result = subprocess.run(
+            [
+                str(PUBLISH_R2),
+                str(iso),
+                "fish-gnome-latest.iso",
+                str(config_path),
+                "R2:bucket/live-isos",
+            ],
+            cwd=directory,
+            env=os.environ | {
+                "PATH": f"{fake_bin}:{os.environ['PATH']}",
+                "REMOTE": str(remote),
+            },
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        assert result.returncode == 0, result.stderr
+        return json.loads((remote / "fish-gnome-latest.json").read_text())
+
+    # Model a reader fetching A's resolver immediately before publisher B
+    # replaces the legacy alias and resolver.
+    resolver_a = publish(tmp_path / "build-a", b"first publication")
+    resolver_b = publish(tmp_path / "build-b", b"second publication")
+
+    assert resolver_a["iso"] != resolver_b["iso"]
+    for resolver in (resolver_a, resolver_b):
+        target = remote / resolver["iso"]
+        assert target.exists()
+        assert "sha256:" + hashlib.sha256(target.read_bytes()).hexdigest() == (
+            resolver["digest"]
+        )
+
+
 def test_guarded_uploader_aborts_before_r2_write_on_invalid_policy(tmp_path: Path):
     iso = tmp_path / "fish-gnome-10.2-x86_64.iso"
     iso.write_bytes(b"iso")
