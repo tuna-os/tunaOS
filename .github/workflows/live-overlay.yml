@@ -252,7 +252,41 @@ jobs:
             --label "org.tunaos.live-overlay.baseline=true" \
             --label "org.tunaos.live-overlay.installer=${INSTALLER_APP}@${INSTALLER_REV}"
 
-          sudo podman push "$OUT"
+          # Tacklebox's --label writes the base digest into the image config.
+          # Its consumer also requires the digest on the platform manifest
+          # itself; an annotation on the later multi-platform index descriptor
+          # is not the same object. Push OCI explicitly, then replace this tag
+          # with the same manifest plus the provenance annotation.
+          sudo podman push --format oci "$OUT"
+          (
+            manifest_dir="$(mktemp -d)"
+            trap 'rm -rf "$manifest_dir"' EXIT
+            raw="${manifest_dir}/manifest.json"
+            annotated="${manifest_dir}/annotated.json"
+            skopeo inspect --raw "docker://${OUT}" >"$raw"
+            jq --arg key "org.tunaos.live-overlay.base-digest" \
+              --arg value "$BASE_DIGEST" '
+                if .mediaType != "application/vnd.oci.image.manifest.v1+json"
+                then error("live overlay platform manifest is not OCI")
+                else .annotations = ((.annotations // {}) + {($key): $value})
+                end
+              ' "$raw" >"$annotated"
+            registry_token="$(
+              printf 'user = "%s:%s"\n' "$GITHUB_ACTOR" "$GH_TOKEN" |
+                curl --config - --fail --silent --show-error \
+                  "https://ghcr.io/token?service=ghcr.io&scope=repository:tuna-os/live-overlay:pull,push" |
+                jq -er .token
+            )"
+            printf 'header = "Authorization: Bearer %s"\n' "$registry_token" |
+              curl --config - --fail --silent --show-error \
+                --request PUT \
+                --header "Content-Type: application/vnd.oci.image.manifest.v1+json" \
+                --data-binary "@${annotated}" \
+                "https://ghcr.io/v2/tuna-os/live-overlay/manifests/${OUT##*:}"
+            skopeo inspect --raw "docker://${OUT}" |
+              jq -e --arg value "$BASE_DIGEST" \
+                '.annotations["org.tunaos.live-overlay.base-digest"] == $value' >/dev/null
+          )
           echo "published $OUT"
 
   publish-compatible-index:
