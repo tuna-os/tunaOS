@@ -717,7 +717,7 @@ if [[ -n "${INSTALLER_APP}" ]]; then
 				# "Nothing matches ... in remote installer-local" three
 				# commands later, which looks like a corrupt download rather
 				# than an asset that was never published.
-				echo "ERROR: no ${_installer_asset} published for $(uname -m)" >&2
+				echo "ERROR: no ${_installer_asset} published for ${_installer_arch}" >&2
 				exit 1
 			fi
 		fi

@@ -36,6 +36,16 @@ def test_failed_required_job_dominates_skipped_downstream_jobs(phase, result):
     assert health.attempt_status(observation) == ("failed", [phase + "-failed"])
 
 
+def test_failed_required_job_dominates_unknown_job_phase():
+    observation = jobs(build="failure")
+    observation.append({
+        "phase": "new-unrecognized-phase",
+        "status": "completed",
+        "conclusion": "success",
+    })
+    assert health.attempt_status(observation) == ("failed", ["build-failed"])
+
+
 @pytest.mark.parametrize("result,status", [("cancelled", "blocked"), ("skipped", "blocked"),
                                          ("neutral", "unknown"), (None, "unknown")])
 def test_required_gate_cannot_be_replaced_by_promote_success(result, status):
