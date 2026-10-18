@@ -1,10 +1,9 @@
-# Browser/CI ISO parity gate (tunaOS#673).
+# Strict browser/CI ISO qualification and parity gate (tunaOS#3380).
 #
-# ISO-builder publishes an ISO and experience manifest as an artifact. This
-# reusable workflow downloads that artifact and a CI-built reference artifact,
-# validates that their inputs and GUI/install contracts match, then runs the
-# exact same LUKS harness against both ISO paths. There is intentionally no
-# browser-specific E2E implementation here.
+# Each artifact is qualified independently. The bundled graphical installer
+# must complete plain and encrypted installs with no guest network, host image,
+# or injected Fisherman. Only bounded logs, screenshots, JSON, and receipts are
+# uploaded; ISO and VM disk images never become evidence artifacts.
 name: ISO Builder Parity
 permissions: {}
 
@@ -48,10 +47,14 @@ on:
         required: false
 
 jobs:
-  parity:
-    name: ${{ inputs.variant }}:${{ inputs.flavor }} browser/CI LUKS parity
+  qualify:
+    name: ${{ inputs.variant }}:${{ inputs.flavor }} ${{ matrix.source }} offline GUI
+    strategy:
+      fail-fast: false
+      matrix:
+        source: [ci, browser]
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    timeout-minutes: 360
     permissions:
       contents: read
       actions: read
@@ -61,70 +64,113 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Download CI ISO and manifest
+      - name: Download ISO and immutable experience manifest
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: ${{ inputs.ci_artifact }}
-          path: parity/ci
-          repository: ${{ inputs.ci_repository }}
-          run-id: ${{ inputs.ci_run_id }}
+          name: ${{ matrix.source == 'ci' && inputs.ci_artifact || inputs.browser_artifact }}
+          path: parity/${{ matrix.source }}
+          repository: ${{ matrix.source == 'ci' && inputs.ci_repository || inputs.browser_repository }}
+          run-id: ${{ matrix.source == 'ci' && inputs.ci_run_id || inputs.browser_run_id }}
           github-token: ${{ secrets.artifact_token || github.token }}
 
-      - name: Download browser ISO and manifest
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: ${{ inputs.browser_artifact }}
-          path: parity/browser
-          repository: ${{ inputs.browser_repository }}
-          run-id: ${{ inputs.browser_run_id }}
-          github-token: ${{ secrets.artifact_token || github.token }}
-
-      - name: Install E2E dependencies
+      - name: Install offline GUI qualification dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends qemu-system-x86 qemu-utils ovmf socat sshpass imagemagick swtpm
+          sudo apt-get install -y --no-install-recommends \
+            imagemagick jq ovmf parted qemu-system-x86 qemu-utils \
+            socat sshpass swtpm tesseract-ocr
 
-      - name: Validate and compare experience manifests
+      - name: Validate target and immutable build evidence
         env:
+          SOURCE: ${{ matrix.source }}
           VARIANT: ${{ inputs.variant }}
           FLAVOR: ${{ inputs.flavor }}
         run: |
           set -euo pipefail
-          for source in ci browser; do
-            manifest="parity/${source}/experience-manifest.json"
-            test -f "$manifest" || { echo "missing $manifest" >&2; exit 1; }
-            python3 scripts/verify-experience-manifest.py "$manifest"
-            jq -e --arg v "$VARIANT" --arg f "$FLAVOR" \
-              '.variant == $v and .flavor == $f' "$manifest" >/dev/null
+          manifest="parity/${SOURCE}/experience-manifest.json"
+          iso="parity/${SOURCE}/${SOURCE}.iso"
+          test -f "$manifest" || { echo "missing $manifest" >&2; exit 1; }
+          test -f "$iso" || { echo "missing $iso" >&2; exit 1; }
+          python3 scripts/verify-experience-manifest.py "$manifest"
+          jq -e --arg variant "$VARIANT" --arg flavor "$FLAVOR" --arg source "$SOURCE" \
+            '.variant == $variant and .flavor == $flavor and
+             .build_path == (if $source == "browser" then "browser" else "ci" end)' \
+            "$manifest" >/dev/null
+
+      - name: Run plain and encrypted offline GUI qualifications
+        env:
+          SOURCE: ${{ matrix.source }}
+          VARIANT: ${{ inputs.variant }}
+          FLAVOR: ${{ inputs.flavor }}
+          TUNAOS_PIXEL_GATE: "1"
+          TUNAOS_DESKTOP_CONTRACT: "1"
+        run: |
+          set -euo pipefail
+          manifest="parity/${SOURCE}/experience-manifest.json"
+          iso="parity/${SOURCE}/${SOURCE}.iso"
+          cpus="$(jq -r '.resource_profile.cpus' "$manifest")"
+          memory="$(jq -r '.resource_profile.memory_mib' "$manifest")"
+          for profile in plain encrypted; do
+            sudo -E ./scripts/iso-e2e.sh "$iso" \
+              --qualification "$profile" \
+              --manifest "$manifest" \
+              --output "parity/${SOURCE}-e2e/${profile}" \
+              --cpus "$cpus" \
+              --memory "$memory" \
+              --timeout 900
           done
+
+      - name: Build and validate qualification receipt
+        env:
+          SOURCE: ${{ matrix.source }}
+        run: |
+          set -euo pipefail
+          out="parity/${SOURCE}-e2e"
+          sudo chown -R "$(id -u):$(id -g)" "$out"
           python3 scripts/verify-experience-manifest.py \
-            parity/ci/experience-manifest.json \
-            --compare parity/browser/experience-manifest.json
+            "parity/${SOURCE}/experience-manifest.json" \
+            --result "${out}/plain/qualification-result.json" \
+            --result "${out}/encrypted/qualification-result.json" \
+            --write-receipt "${out}/qualification-receipt.json"
+          python3 scripts/verify-experience-manifest.py \
+            "${out}/qualification-receipt.json"
 
-      - name: Run the identical LUKS E2E against CI ISO
-        env:
-          VARIANT: ${{ inputs.variant }}
-          FLAVOR: ${{ inputs.flavor }}
-        run: |
-          set -euo pipefail
-          iso="parity/ci/ci.iso"
-          test -f "$iso" || { echo "missing $iso" >&2; exit 1; }
-          ./scripts/iso-e2e.sh "$iso" --luks --output parity/ci-e2e
-
-      - name: Run the identical LUKS E2E against browser ISO
-        env:
-          VARIANT: ${{ inputs.variant }}
-          FLAVOR: ${{ inputs.flavor }}
-        run: |
-          set -euo pipefail
-          iso="parity/browser/browser.iso"
-          test -f "$iso" || { echo "missing $iso" >&2; exit 1; }
-          ./scripts/iso-e2e.sh "$iso" --luks --output parity/browser-e2e
-
-      - name: Upload parity evidence
+      - name: Upload bounded qualification evidence
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: iso-builder-parity-${{ inputs.variant }}-${{ inputs.flavor }}
-          path: parity/*-e2e
-          if-no-files-found: warn
+          name: iso-builder-qualification-${{ matrix.source }}-${{ inputs.variant }}-${{ inputs.flavor }}
+          path: |
+            parity/${{ matrix.source }}-e2e/**/*.json
+            parity/${{ matrix.source }}-e2e/**/*.log
+            parity/${{ matrix.source }}-e2e/**/*.png
+            parity/${{ matrix.source }}-e2e/**/*.txt
+          if-no-files-found: error
+          retention-days: 14
+
+  parity:
+    name: ${{ inputs.variant }}:${{ inputs.flavor }} receipt parity
+    needs: qualify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Download qualification receipts
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: iso-builder-qualification-*-${{ inputs.variant }}-${{ inputs.flavor }}
+          path: receipts
+
+      - name: Validate browser and local parity receipts
+        run: |
+          set -euo pipefail
+          ci="$(find receipts -path '*qualification-ci-*' -name qualification-receipt.json -print -quit)"
+          browser="$(find receipts -path '*qualification-browser-*' -name qualification-receipt.json -print -quit)"
+          test -n "$ci" && test -n "$browser"
+          python3 scripts/verify-experience-manifest.py "$ci" --compare "$browser"
