@@ -1512,8 +1512,8 @@ VOLATILE_LINE = re.compile(
     r")"
 )
 
-# A result glyph is live state; NA is structure, because it means build-config
-# does not schedule that cell at all.
+# Results are live state. NA is structural for scheduled cells; historical
+# results can replace NA outside a table's current matrix (see cell()).
 LIVE_GLYPH = re.compile(f"[{PASS}{FAIL}{UNTESTED}]")
 EVIDENCE_LINK = re.compile(
     rf"\[([{PASS}{FAIL}{UNTESTED}])\]\(https://github\.com/[^)]+#artifacts\)"
@@ -1552,13 +1552,24 @@ def structural(block: str, keep_rows: set[tuple[str, str]] | None = None) -> str
     So compare with live-derived content masked: cell results, every count, the
     data-freshness dates, the provenance rows, the overlay inventory. What
     survives is the shape of the document — its prose, its sections, and which
-    cells build-config schedules at all (NA versus scheduled) — which is exactly
-    the surface a PR can break. Byte-exact drift is still enforced on the
+    cells build-config schedules at all (NA versus scheduled). Historical
+    pass/fail results outside that set can appear and expire with the run
+    window, so they compare as NA. UNTESTED still means scheduled and is not
+    masked to NA. Byte-exact drift is still enforced on the
     scheduled run, which is what actually keeps the file fresh.
 
     keep_rows limits table rows to those both sides agree exist; pass the
     intersection of table_rows() from each side.
     """
+    desktop_matrix = _matrix("build_image", desktops_only=True)
+    historical_matrices = {
+        "## Silent omissions": desktop_matrix,
+        "## Package parity": desktop_matrix,
+        "## LUKS E2E": luks_matrix(),
+        "## Desktop Contract Sweep": desktop_matrix,
+        "## Bootc Lifecycle": desktop_matrix,
+        "## Installer smoke": iso_matrix(),
+    }
     section, lines = "", []
     for line in block.splitlines():
         if line.startswith("## "):
@@ -1576,6 +1587,14 @@ def structural(block: str, keep_rows: set[tuple[str, str]] | None = None) -> str
         # its run URL are live data, so neither belongs in the PR structural
         # drift comparison.
         line = EVIDENCE_LINK.sub(r"\1", line)
+        if match and section in historical_matrices:
+            scheduled = historical_matrices[section].get(match["variant"], set())
+            columns = line.split("|")
+            if len(columns) == len(DESKTOPS) + 3:
+                for index, desktop in enumerate(DESKTOPS, start=2):
+                    if desktop not in scheduled and columns[index].strip() in (PASS, FAIL):
+                        columns[index] = f" {NA} "
+                line = "|".join(columns)
         line = LIVE_GLYPH.sub("?", line)
         line = re.sub(r"\d+", "N", line)
         if not line.strip() and lines and not lines[-1].strip():
