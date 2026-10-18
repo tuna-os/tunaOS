@@ -2327,3 +2327,13 @@ Installation has no helper timeout and no downloads.
 The helper defers SIGINT/SIGTERM until dpkg and needrestart cleanup finish.
 It cannot defer SIGKILL or the outer job timeout. Logs show separate durations
 for acquisition and installation, on success or failure.
+||||||| parent of 3555aefd (fix(qualification): bind encrypted roots and repair regression checks)
+### Offline qualification rejects a valid test fixture (#3399)
+
+**Symptom:** Bats reports `MODE: unbound variable` in the helper for VM shutdown.
+
+**Cause:** The test extracted that helper but did not set the mode. The new offline branch reads this value to select the monitor.
+
+**Fix:** Set the mode in the driver and test both paths. Assert that offline shutdown never calls SSH. Check each QEMU launch for its serial log and disk boot order.
+
+**Disk check:** A LUKS partition alone does not prove root encryption. Test a plaintext deployment beside an unrelated LUKS partition; the encrypted profile must reject it before account writes.
