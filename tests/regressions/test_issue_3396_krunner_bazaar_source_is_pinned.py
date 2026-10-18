@@ -39,3 +39,26 @@ def test_krunner_bazaar_ref_is_validated_before_download():
     download = script.index('archive/${KRUNNER_BAZAAR_REF}.tar.gz')
 
     assert validation < download
+
+
+def test_renovate_extracts_named_ref_and_content_digest():
+    import json
+    import subprocess
+
+    config = ROOT / "renovate.json"
+    # Run the actual configured JavaScript expression, including named groups.
+    result = subprocess.run([
+        "node", "-e", """
+const fs = require('fs');
+const config = JSON.parse(fs.readFileSync(process.argv[1], 'utf8'));
+const manager = config.customManagers.find(m => m.description === 'Update pinned GitHub source commits in build scripts');
+const source = fs.readFileSync(process.argv[2], 'utf8');
+const matches = [...source.matchAll(new RegExp(manager.matchStrings[0], 'g'))];
+console.log(JSON.stringify(matches.map(m => ({...m.groups, packageName: manager.packageNameTemplate.replace('{{{depName}}}', m.groups.depName)}))));
+""", str(config), str(SCRIPT)], capture_output=True, text=True, check=True)
+    dependencies = json.loads(result.stdout)
+    assert dependencies == [{
+        "datasource": "git-refs", "depName": "bazaar-org/krunner-bazaar",
+        "currentValue": "v1.3.0", "currentDigest": re.search(r'KRUNNER_BAZAAR_REF="([0-9a-f]{40})"', SCRIPT.read_text()).group(1),
+        "packageName": "https://github.com/bazaar-org/krunner-bazaar",
+    }]

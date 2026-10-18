@@ -73,8 +73,9 @@
         "/^build_scripts\\/desktop\\/kcm-ublue\\.sh$/"
       ],
       "matchStrings": [
-        "#\\s*renovate:\\s*datasource=(?<datasource>[^\\s]+)\\s+depName=(?<depName>[^\\s]+)\\n\\s*KRUNNER_BAZAAR_REF=\"(?<currentValue>[0-9a-f]{40})\""
-      ]
+        "#\\s*renovate:\\s*datasource=(?<datasource>[^\\s]+)\\s+depName=(?<depName>[^\\s]+)\\s+ref=(?<currentValue>[^\\s]+)\\n\\s*KRUNNER_BAZAAR_REF=\"(?<currentDigest>[0-9a-f]{40})\""
+      ],
+      "packageNameTemplate": "https://github.com/{{{depName}}}"
     },
     {
       "customType": "regex",
