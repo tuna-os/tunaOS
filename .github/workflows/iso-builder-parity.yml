@@ -77,8 +77,8 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
-            imagemagick jq ovmf parted qemu-system-x86 qemu-utils \
-            socat sshpass swtpm tesseract-ocr
+            cryptsetup-bin imagemagick jq lvm2 ovmf parted python3-vncdotool \
+            qemu-system-x86 qemu-utils socat sshpass swtpm tesseract-ocr
 
       - name: Validate target and immutable build evidence
         env:
@@ -144,6 +144,7 @@ jobs:
             parity/${{ matrix.source }}-e2e/**/*.json
             parity/${{ matrix.source }}-e2e/**/*.log
             parity/${{ matrix.source }}-e2e/**/*.png
+            parity/${{ matrix.source }}-e2e/**/*.ppm
             parity/${{ matrix.source }}-e2e/**/*.txt
           if-no-files-found: error
           retention-days: 14
