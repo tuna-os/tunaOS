@@ -1703,3 +1703,14 @@ Node 24.19.0 / npm 11.9.0 reproduces the failure with
 clean `npm ci --ignore-scripts`, `npm test`, and `npm run build` in that directory.
 Check each override edit with `npm ci`. The same npm major alone does not
 prove that the manifest and lockfile agree.
+
+### Matrix drift check fails when old results enter or leave the window
+
+**Symptom:** The check reports a change between `—` and a pass or fail glyph.
+Run [39161613161](https://github.com/tuna-os/tunaOS/actions/runs/39161613161) shows this for removed desktop cells.
+
+**Cause:** These tables show results for cells outside the current schedule.
+The check treated each `—` as a config change, even for those cells.
+
+**Fix:** Use each table's source matrix to mask only old pass and fail results outside its schedule.
+Keep scheduled cells and `⬜` distinct from `—`. Preserve the results and their dates in the output.

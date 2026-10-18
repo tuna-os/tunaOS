@@ -17,6 +17,7 @@ import io
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "gen-matrix-status.py"
 
@@ -142,6 +143,88 @@ class RealDriftIsCaught(unittest.TestCase):
             BLOCK.replace("| Variant | gnome | kde | cosmic | niri | xfce |",
                           "| Variant | gnome | kde | cosmic | niri |")
         )
+
+
+class HistoricalCellsAreLiveChurn(unittest.TestCase):
+    SECTIONS = (
+        "## Silent omissions", "## Package parity", "## LUKS E2E",
+        "## Desktop Contract Sweep", "## Bootc Lifecycle", "## Installer smoke",
+    )
+
+    def normalize(self, section, row, matrix):
+        with (
+            patch.object(gms, "_matrix", return_value=matrix),
+            patch.object(gms, "luks_matrix", return_value=matrix),
+            patch.object(gms, "iso_matrix", return_value=matrix),
+        ):
+            return gms.structural(section + "\n" + row)
+
+    def test_unscheduled_history_can_appear_and_expire(self):
+        # The Oct 18 PR #3317 gate failed when old niri jobs entered the LUKS
+        # window and removed desktop results left the lifecycle window.
+        empty = "| **flounder** | — | ⬜ | — | — | ⬜ |"
+        matrix = {"flounder": {"kde", "xfce"}}
+        for section in self.SECTIONS:
+            for verdict in (gms.PASS, gms.FAIL):
+                with self.subTest(section=section, verdict=verdict):
+                    history = empty.replace("| — | ⬜ |", f"| {verdict} | ⬜ |", 1)
+                    self.assertEqual(self.normalize(section, empty, matrix),
+                                     self.normalize(section, history, matrix))
+
+    def test_unknown_variant_history_is_not_current_coverage(self):
+        empty = "| **retired** | — | — | — | — | — |"
+        history = "| **retired** | ❌ | ✅ | — | — | — |"
+        self.assertEqual(self.normalize("## LUKS E2E", empty, {}),
+                         self.normalize("## LUKS E2E", history, {}))
+        results = {"LUKS retired:gnome": ("failure", "2026-08-01", "123")}
+        before = dict(results)
+        self.assertIn("❌", "\n".join(gms.desktop_table({}, results, lambda v, d: f"LUKS {v}:{d}")))
+        self.assertEqual(gms.tally({}, results, lambda v, d: f"LUKS {v}:{d}"), (0, 0, 0))
+        self.assertEqual(results, before)
+
+    def test_newly_scheduled_cell_still_requires_doc_update(self):
+        absent = "| **flounder** | — | ⬜ | — | — | ⬜ |"
+        matrix = {"flounder": {"gnome", "kde", "xfce"}}
+        for section in self.SECTIONS:
+            for glyph in (gms.PASS, gms.FAIL, gms.UNTESTED):
+                with self.subTest(section=section, glyph=glyph):
+                    scheduled = absent.replace("| — | ⬜ |", f"| {glyph} | ⬜ |", 1)
+                    self.assertNotEqual(self.normalize(section, absent, matrix),
+                                        self.normalize(section, scheduled, matrix))
+
+    def test_unscheduled_untested_cell_is_still_drift(self):
+        absent = "| **flounder** | — | ⬜ | — | — | ⬜ |"
+        old_schedule = absent.replace("| — | ⬜ |", "| ⬜ | ⬜ |", 1)
+        matrix = {"flounder": {"kde", "xfce"}}
+        self.assertNotEqual(self.normalize("## LUKS E2E", absent, matrix),
+                            self.normalize("## LUKS E2E", old_schedule, matrix))
+
+    def test_composite_is_not_a_historical_table(self):
+        absent = "| **retired** | — | — | — | — | — |"
+        result = absent.replace("| — |", "| ✅ |", 1)
+        self.assertNotEqual(self.normalize("## Composite green — the bar", absent, {}),
+                            self.normalize("## Composite green — the bar", result, {}))
+
+    def test_each_table_uses_its_own_schedule(self):
+        row = "| **sample** | ✅ | ✅ | ✅ | ✅ | ✅ |"
+        with (
+            patch.object(gms, "_matrix", return_value={"sample": {"gnome"}}),
+            patch.object(gms, "luks_matrix", return_value={"sample": {"xfce"}}),
+            patch.object(gms, "iso_matrix", return_value={"sample": {"kde"}}),
+        ):
+            for section in self.SECTIONS:
+                expected = {"## LUKS E2E": "xfce", "## Installer smoke": "kde"}.get(section, "gnome")
+                cells = gms.structural(section + "\n" + row).splitlines()[1].split("|")[2:-1]
+                self.assertEqual([c.strip() for c in cells],
+                                 ["?" if d == expected else gms.NA for d in gms.DESKTOPS])
+
+    def test_linked_historical_evidence_is_preserved(self):
+        empty = "| **retired** | — | — | — | — | — |"
+        linked = empty.replace("| — |", "| [✅](https://github.com/tuna-os/tunaOS/actions/runs/123#artifacts) |", 1)
+        original = linked
+        self.assertEqual(self.normalize("## LUKS E2E", empty, {}),
+                         self.normalize("## LUKS E2E", linked, {}))
+        self.assertEqual(linked, original)
 
 
 class RunWindowCountsCompletedRuns(unittest.TestCase):
