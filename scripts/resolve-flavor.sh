@@ -14,7 +14,7 @@
 #   DESKTOP_FLAVOR   — the --target stage name
 #   ENABLE_HWE       — 0 or 1
 #   ENABLE_NVIDIA    — 0 or 1
-#   OVERLAY_TYPE     — hwe, nvidia, cachyos, asahi, or empty
+#   OVERLAY_TYPE     — hwe, nvidia, cachyos, asahi, t2, x13s, or empty
 #   ENABLE_ASAHI     — 0 or 1 (grouper full-build asahi path)
 #   PARENT_FLAVOR    — parent image tag (for chained builds)
 
@@ -78,6 +78,13 @@ if [[ "${VARIANT}" == "grouper" && "${FLAVOR}" == *"-asahi" ]]; then
 	CONTAINERFILE="Containerfile.ubuntu"
 	ENABLE_ASAHI="1"
 	DESKTOP_FLAVOR="${FLAVOR%-asahi}"
+elif [[ "${VARIANT}" == "bonito" && "${FLAVOR}" == *"-x13s" ]]; then
+	# ThinkPad X13s / SC8280XP inspection profile. The overlay hard-fails off
+	# aarch64 and on non-Fedora parents; W1 intentionally keeps Fedora's kernel.
+	CONTAINERFILE="Containerfile.overlay"
+	OVERLAY_TYPE="x13s"
+	DESKTOP_FLAVOR="desktop"
+	PARENT_FLAVOR="${FLAVOR%-x13s}"
 elif [[ "${VARIANT}" != "grouper" && "${FLAVOR}" == *"-asahi" ]]; then
 	# Apple Silicon overlay on a DE image (build_scripts/overlay/asahi.sh);
 	# aarch64 only — the overlay hard-fails on other arches.

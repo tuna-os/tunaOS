@@ -137,7 +137,7 @@ check 'bootc status --format json' | jq -r '.status.booted.image.image.image' 2>
 # to the bare desktop name it expects. base* flavors have no desktop to
 # check and are skipped, same as the boot gate in reusable-build-image.yml.
 FUNC_DESKTOP="$FLAVOR"
-for _suffix in -nvidia-hwe -nvidia -hwe -cachyos -asahi -zfs; do
+for _suffix in -nvidia-hwe -nvidia -hwe -cachyos -asahi -x13s -zfs; do
 	if [[ "$FUNC_DESKTOP" == *"$_suffix" ]]; then
 		FUNC_DESKTOP="${FUNC_DESKTOP%"$_suffix"}"
 		break

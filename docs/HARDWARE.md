@@ -13,11 +13,12 @@ your hardware (HWE kernels, NVIDIA, ARM), see the
 | **RAM** | 4 GB | 8 GB+ |
 | **Storage** | 20 GB | 50 GB+ |
 
-## Supported hardware (ARM laptops)
+## ARM laptop status
 
 | Hardware | Status | Docs |
 |----------|--------|------|
-| Snapdragon X Elite (e.g. Lenovo ThinkPad X13s) | Supported via [Bonito](https://tunaos.org/docs/bonito) (ARM64) | [Snapdragon X Elite FAQ](https://tunaos.org/docs/faq); the dedicated [bonito-x13s](https://tunaos.org/docs/bonito-x13s) / [dakota-x13s](https://tunaos.org/docs/dakota-x13s) pages are archived |
+| ThinkPad X13s Gen 1 (Snapdragon 8cx Gen 3 / SC8280XP) | `bonito:gnome-x13s` builds for payload inspection; no hardware boot or install proof | [X13s support](X13S-SUPPORT.md) |
+| Snapdragon X Elite laptops | Not supported; X13s results do not apply to these systems | — |
 | Apple Silicon (M1, M2) | In progress via [Asahi Linux](https://asahilinux.org/) — see note below | [bootc-installer-asahi](https://github.com/tuna-os/bootc-installer-asahi) |
 | Apple Silicon (M3 and newer) | Not supported (no Asahi support for M3+ yet) | — |
 

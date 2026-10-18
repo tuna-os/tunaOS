@@ -12,7 +12,7 @@ permissions:
 # verify-asahi 05:40, matrix-status & catalog-facts 06:00,
 # desktop-contract-sweep 08:00).
 #   00:20 yellowfin(21fl)  02:20 albacore(21)       04:20 gurnard(2)
-#   06:20 guppy(4)         09:20 skipjack(19)       11:20 bonito(17)
+#   06:20 guppy(4)         09:20 skipjack(19)       11:20 bonito(18)
 #   13:20 marlin(17)       15:20 bonito-rawhide(15) 17:20 grouper(8)
 #   19:20 sailfin(7)       21:20 flounder(8)        22:20 hummingbird(3)
 #   23:20 flounder-sid(8)
