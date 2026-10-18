@@ -397,7 +397,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$ISO_PATH" ]]; then
-	echo "Usage: $0 <iso_path> [--kickstart KS | --luks | --ssh-only | --published | --strict-offline-gui[=plain|luks]] [options]" >&2
+	echo "Usage: $0 <iso_path> [--kickstart KS | --luks | --ssh-only | --published] [--strict-offline-gui[=plain|luks]] [options]" >&2
 	exit 1
 fi
 
