@@ -85,12 +85,12 @@ if [[ "$REST" == *[@:]* ]]; then
 else
   TAG="latest"
 fi
-MANIFEST="$(manifest "$TAG" 'application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.oci.image.manifest.v1+json')"
+MANIFEST="$(manifest "$TAG" 'application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.oci.image.manifest.v1+json,application/vnd.docker.distribution.manifest.v2+json')"
 MTYPE="$(echo "$MANIFEST" | jq -r '.mediaType')"
 if [[ "$MTYPE" == *"manifest.list"* || "$MTYPE" == *"image.index"* ]]; then
   DIGEST="$(echo "$MANIFEST" | jq -r ".manifests[] | select(.platform.architecture==\"${ARCH}\") | .digest" | head -n 1)"
   [[ -n "$DIGEST" && "$DIGEST" != "null" ]] || { echo "check-bootc-installable-layers: no ${ARCH} manifest in ${REF}" >&2; exit 1; }
-  MANIFEST="$(manifest "$DIGEST" 'application/vnd.oci.image.manifest.v1+json')"
+  MANIFEST="$(manifest "$DIGEST" 'application/vnd.oci.image.manifest.v1+json,application/vnd.docker.distribution.manifest.v2+json')"
 fi
 mapfile -t LAYERS < <(echo "$MANIFEST" | jq -r '.layers[] | "\(.digest) \(.size) \(.mediaType)"')
 [[ "${#LAYERS[@]}" -gt 0 ]] || { echo "check-bootc-installable-layers: no layers in ${REF}" >&2; exit 1; }
