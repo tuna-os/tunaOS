@@ -189,7 +189,7 @@ Newest result 2026-10-17.
 
 ## Bootc Lifecycle
 
-**36 of 52** cells green (49 tested, 3 never tested).
+**36 of 52** cells green (41 tested, 11 never tested).
 
 Validates bootc image update, rebase, rollback, alias resolution, and post-switch system contracts across published desktop stream deployments.
 
@@ -197,9 +197,9 @@ Validates bootc image update, rebase, rollback, alias resolution, and post-switc
 |---|:--:|:--:|:--:|:--:|:--:|
 | **albacore** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **bonito** | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **bonito-rawhide** | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **bonito-rawhide** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | **flounder** | ✅ | ✅ | — | — | ✅ |
-| **flounder-sid** | ❌ | ❌ | — | — | ❌ |
+| **flounder-sid** | ⬜ | ⬜ | — | — | ⬜ |
 | **grouper** | ✅ | ✅ | ✅ | — | ✅ |
 | **guppy** | ⬜ | ⬜ | — | — | ⬜ |
 | **gurnard** | — | — | — | — | — |

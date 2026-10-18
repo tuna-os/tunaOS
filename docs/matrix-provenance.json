@@ -611,10 +611,10 @@
     "verdict": "fail"
    },
    "lifecycle": {
-    "date": "2026-10-15",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/38713238238#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/38713238238",
-    "verdict": "fail"
+    "date": "",
+    "evidence": "",
+    "run": "",
+    "verdict": "untested"
    },
    "no_silent_omissions": {
     "date": "2026-10-17",
@@ -687,10 +687,10 @@
     "verdict": "fail"
    },
    "lifecycle": {
-    "date": "2026-10-15",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/38713238238#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/38713238238",
-    "verdict": "fail"
+    "date": "",
+    "evidence": "",
+    "run": "",
+    "verdict": "untested"
    },
    "no_silent_omissions": {
     "date": "2026-10-17",
@@ -783,10 +783,10 @@
     "verdict": "fail"
    },
    "lifecycle": {
-    "date": "2026-10-15",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/38713238238#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/38713238238",
-    "verdict": "fail"
+    "date": "",
+    "evidence": "",
+    "run": "",
+    "verdict": "untested"
    },
    "no_silent_omissions": {
     "date": "2026-10-17",
@@ -859,10 +859,10 @@
     "verdict": "fail"
    },
    "lifecycle": {
-    "date": "2026-10-15",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/38713238238#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/38713238238",
-    "verdict": "fail"
+    "date": "",
+    "evidence": "",
+    "run": "",
+    "verdict": "untested"
    },
    "no_silent_omissions": {
     "date": "2026-10-17",
@@ -949,10 +949,10 @@
     "verdict": "fail"
    },
    "lifecycle": {
-    "date": "2026-10-15",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/38713238238#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/38713238238",
-    "verdict": "fail"
+    "date": "",
+    "evidence": "",
+    "run": "",
+    "verdict": "untested"
    },
    "no_silent_omissions": {
     "date": "2026-10-17",
@@ -1523,10 +1523,10 @@
     "verdict": "fail"
    },
    "lifecycle": {
-    "date": "2026-10-15",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/38713238238#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/38713238238",
-    "verdict": "fail"
+    "date": "",
+    "evidence": "",
+    "run": "",
+    "verdict": "untested"
    },
    "no_silent_omissions": {
     "date": "2026-10-17",
@@ -1587,10 +1587,10 @@
     "verdict": "fail"
    },
    "lifecycle": {
-    "date": "2026-10-15",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/38713238238#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/38713238238",
-    "verdict": "fail"
+    "date": "",
+    "evidence": "",
+    "run": "",
+    "verdict": "untested"
    },
    "no_silent_omissions": {
     "date": "2026-10-17",
@@ -1665,10 +1665,10 @@
     "verdict": "fail"
    },
    "lifecycle": {
-    "date": "2026-10-15",
-    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/38713238238#artifacts",
-    "run": "https://github.com/tuna-os/tunaOS/actions/runs/38713238238",
-    "verdict": "fail"
+    "date": "",
+    "evidence": "",
+    "run": "",
+    "verdict": "untested"
    },
    "no_silent_omissions": {
     "date": "2026-10-17",
@@ -4366,15 +4366,15 @@
    "total": 110
   },
   "known_regressions": {
-   "advisory": 94,
+   "advisory": 86,
    "blocking": 11
   },
   "last_full_sweep": "2026-09-01",
   "lifecycle": {
    "passed": 36,
-   "tested": 49,
+   "tested": 41,
    "total": 52
   },
-  "never_tested": 25
+  "never_tested": 33
  }
 }

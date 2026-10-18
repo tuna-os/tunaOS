@@ -370,7 +370,7 @@ def lifecycle_sweep_jobs(config: dict | None = None) -> set[str]:
                     or flavor_id.startswith("base-")):
                 continue
             cell = f"{variant_id}:{flavor_id}"
-            if _is_beta_lifecycle_cell(cell) or variant.get("experimental") is True:
+            if _is_beta_lifecycle_cell(cell):
                 continue
             platforms = flavor.get("platforms")
             if platforms is None:

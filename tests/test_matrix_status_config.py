@@ -675,7 +675,7 @@ class LifecycleResultsNormalisation(unittest.TestCase):
             })
             self.assertEqual(got["bonito:gnome"][0], "failure")
 
-    def test_lifecycle_sweep_excludes_beta_existence_probes(self):
+    def test_lifecycle_sweep_excludes_beta_probes_but_keeps_validating_experimental_jobs(self):
         config = {
             "variants": [
                 {
@@ -697,11 +697,35 @@ class LifecycleResultsNormalisation(unittest.TestCase):
             ]
         }
         assert gms.lifecycle_sweep_jobs(config) == {
+            "future:gnome (amd64)",
             "yellowfin:gnome (amd64)",
         }
         assert gms.lifecycle_job_key("BETA guppy:gnome (amd64)") == (
             "guppy:gnome (amd64)"
         )
+
+    def test_committed_snapshot_excludes_probe_only_beta_lifecycle_results(self):
+        provenance = json.loads(
+            (SCRIPT.parent.parent / "docs" / "matrix-provenance.json").read_text()
+        )
+        beta_prefixes = ("bonito-rawhide:", "flounder-sid:")
+        beta_lifecycle = [
+            axes["lifecycle"]
+            for cell, axes in provenance["cells"].items()
+            if cell.startswith(beta_prefixes) and "lifecycle" in axes
+        ]
+        assert len(beta_lifecycle) == 8
+        assert all(result == {
+            "date": "",
+            "evidence": "",
+            "run": "",
+            "verdict": "untested",
+        } for result in beta_lifecycle)
+        assert provenance["summary"]["lifecycle"] == {
+            "passed": 36,
+            "tested": 41,
+            "total": 52,
+        }
 
     def test_non_cell_jobs_are_ignored(self):
         got = self._with_raw({
