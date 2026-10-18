@@ -259,6 +259,51 @@
             },
             "minItems": 0
           },
+          "qualification": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "enum": ["qualified", "local-only", "unqualified"]
+              },
+              "qualifiedAt": {
+                "anyOf": [
+                  {"$ref": "identity.schema.json#/$defs/utcTimestamp"},
+                  {"type": "null"}
+                ]
+              },
+              "receiptDigest": {
+                "anyOf": [
+                  {"$ref": "identity.schema.json#/$defs/digest"},
+                  {"type": "null"}
+                ]
+              },
+              "browser": {
+                "anyOf": [
+                  {"type": "string", "minLength": 1},
+                  {"type": "null"}
+                ]
+              },
+              "coldSeconds": {
+                "anyOf": [
+                  {"type": "number", "minimum": 0},
+                  {"type": "null"}
+                ]
+              },
+              "warmSeconds": {
+                "anyOf": [
+                  {"type": "number", "minimum": 0},
+                  {"type": "null"}
+                ]
+              },
+              "evidence": {
+                "type": "array",
+                "items": {"$ref": "identity.schema.json#/$defs/evidence"},
+                "minItems": 0
+              }
+            },
+            "required": ["status", "evidence"],
+            "additionalProperties": false
+          },
           "measuredAt": {
             "anyOf": [
               {
