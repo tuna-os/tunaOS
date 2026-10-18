@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github/workflows/rerun-infra-failures.yml"
 LIFECYCLE_WORKFLOW = ROOT / ".github/workflows/bootc-lifecycle.yml"
 DAILY_WORKFLOW = ROOT / ".github/workflows/daily-verify.yml"
+SWEEP_WORKFLOW = ROOT / ".github/workflows/desktop-contract-sweep.yml"
 
 
 def test_dispatch_only_stingray_is_an_automatic_retry_source() -> None:
@@ -52,3 +53,15 @@ def test_daily_rotation_excludes_dispatch_only_experimental_variants() -> None:
         if step.get("id") == "set-matrix"
     )
     assert "$variant.experimental != true" in generate
+
+
+def test_scheduled_desktop_sweep_excludes_dispatch_only_experimental_variants() -> None:
+    document = yaml.safe_load(SWEEP_WORKFLOW.read_text(encoding="utf-8"))
+    generate = next(
+        step
+        for step in document["jobs"]["generate_matrix"]["steps"]
+        if step.get("id") == "cells"
+    )
+
+    assert generate["env"]["EVENT_NAME"] == "${{ github.event_name }}"
+    assert '$event == "workflow_dispatch" or .experimental != true' in generate["run"]
