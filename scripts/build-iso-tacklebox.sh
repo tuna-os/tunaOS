@@ -118,9 +118,18 @@ IMAGE_REF=$(tunaos_image_ref "$VARIANT" "$FLAVOR" "$REPO" "$TAG")
 # Tacklebox copies IMAGE_REF into the store under this canonical ref; it does
 # not pull a second image or require a local podman tag.
 PAYLOAD_REF=$(tunaos_image_ref "$VARIANT" "$FLAVOR" ghcr "$TAG")
+case "$(uname -m)" in
+x86_64 | amd64) SOURCE_PLATFORM="linux/amd64" ;;
+aarch64 | arm64) SOURCE_PLATFORM="linux/arm64" ;;
+*)
+	echo "ERROR: unsupported ISO build architecture: $(uname -m)" >&2
+	exit 1
+	;;
+esac
 if [[ "$REPO" == "local" ]]; then
 	tunaos_import_to_root_storage "$IMAGE_REF"
 else
+	podman pull --platform "$SOURCE_PLATFORM" "$IMAGE_REF"
 	# Registry image: tacklebox's Pull() lands it in root's store, but the live
 	# squash mounts it via `sudo -u $SUDO_USER podman unshare`, which reads the
 	# *invoking user's* rootless store (see tacklebox internal/install/{bootc,
@@ -133,6 +142,11 @@ else
 		echo "==> Pre-pulling ${IMAGE_REF} into ${REAL_USER}'s rootless store (for live squash)..."
 		sudo -u "$REAL_USER" -H podman pull "$IMAGE_REF"
 	fi
+fi
+BASE_DIGEST="$(podman image inspect --format '{{.Digest}}' "$IMAGE_REF")"
+if [[ ! "$BASE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+	echo "ERROR: cannot resolve platform manifest digest for ${IMAGE_REF}" >&2
+	exit 1
 fi
 
 # ponytail: tacklebox runner delegated to common.sh tunaos_run_tacklebox
@@ -170,6 +184,15 @@ CUSTOMIZE_DIR="${OUT_DIR}/live-customize"
 rm -rf "$CUSTOMIZE_DIR"
 mkdir -p "$CUSTOMIZE_DIR"
 cp -a "${REPO_ROOT}/live-iso/common/src/." "$CUSTOMIZE_DIR/"
+mv "${CUSTOMIZE_DIR}/customize-live.sh" "${CUSTOMIZE_DIR}/customize-live-real.sh"
+{
+	echo '#!/usr/bin/env bash'
+	printf 'export TUNA_LIVE_BASE_IMAGE=%q\n' "$IMAGE_REF"
+	printf 'export TUNA_LIVE_BASE_DIGEST=%q\n' "$BASE_DIGEST"
+	printf 'export TUNA_LIVE_PLATFORM=%q\n' "$SOURCE_PLATFORM"
+	echo 'exec "$(dirname "${BASH_SOURCE[0]}")/customize-live-real.sh" "$@"'
+} >"${CUSTOMIZE_DIR}/customize-live.sh"
+chmod 0755 "${CUSTOMIZE_DIR}/customize-live.sh"
 if [[ "$DEV" == "1" ]]; then
 	touch "${CUSTOMIZE_DIR}/.enable-sshd"
 fi

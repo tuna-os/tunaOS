@@ -39,3 +39,19 @@ def test_aarch64_uses_the_target_specific_asset_name() -> None:
         installer_asset("aarch64")
         == "org.bootcinstaller.Installer-aarch64.flatpak"
     )
+
+
+def test_metadata_only_requires_disposable_root_before_writes() -> None:
+    env = os.environ | {
+        "TUNA_METADATA_ONLY": "1",
+        "TUNA_INSTALLER_APP": "org.bootcinstaller.Installer",
+    }
+    result = subprocess.run(
+        ["bash", str(SCRIPT)],
+        check=False,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert result.returncode != 0
+    assert "TUNA_SESSION_ROOT is required" in result.stderr
