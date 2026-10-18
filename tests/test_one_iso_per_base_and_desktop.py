@@ -20,6 +20,7 @@ Guarded by tests because the config is what the whole publish pipeline reads,
 and a typo here is a silently missing ISO rather than an error.
 """
 from __future__ import annotations
+import hashlib
 import importlib.util
 
 import json
@@ -304,8 +305,15 @@ def test_guarded_uploader_never_writes_retained_destinations(tmp_path: Path):
         check=False,
     )
     assert result.returncode == 0, result.stderr
-    assert not rclone_log.exists()
-    assert result.stdout.count("retained R2 object is immutable") == 6
+    uploads = rclone_log.read_text().splitlines()
+    assert len(uploads) == 7
+    destinations = [upload.rsplit(" ", 1)[-1] for upload in uploads]
+    assert not any(destination.endswith(f"/{iso.name}") for destination in destinations)
+    assert not any(destination.endswith("/fish-gnome-latest.iso") for destination in destinations)
+    assert any(f"-sha256-{hashlib.sha256(b'iso').hexdigest()[:16]}.iso" in destination
+               for destination in destinations)
+    assert any(destination.endswith("/fish-gnome-latest.json")
+               for destination in destinations)
 
     config_path.write_text(json.dumps({
         "iso_delivery": {
@@ -334,6 +342,55 @@ def test_guarded_uploader_never_writes_retained_destinations(tmp_path: Path):
     )
     assert result.returncode == 0, result.stderr
     uploads = rclone_log.read_text().splitlines()
-    assert len(uploads) == 3
-    assert all(f"/{iso.name}" in upload for upload in uploads)
-    assert all("-latest" not in upload for upload in uploads)
+    assert len(uploads) == 14
+    second_destinations = [
+        upload.rsplit(" ", 1)[-1] for upload in uploads[7:]
+    ]
+    assert any(destination.endswith(f"/{iso.name}") for destination in second_destinations)
+    assert not any(destination.endswith("/fish-gnome-latest.iso")
+                   for destination in second_destinations)
+    assert any(destination.endswith("/fish-gnome-latest.json")
+               for destination in second_destinations)
+
+
+def test_guarded_uploader_aborts_before_r2_write_on_invalid_policy(tmp_path: Path):
+    iso = tmp_path / "fish-gnome-10.2-x86_64.iso"
+    iso.write_bytes(b"iso")
+    (tmp_path / f"{iso.name}.sha256").write_text("digest  iso\n")
+    (tmp_path / f"{iso.name}.sigstore.json").write_text("{}")
+    config_path = tmp_path / "config.json"
+    config_path.write_text(json.dumps({
+        "iso_delivery": {
+            "cutover_targets": [],
+            "retained_r2_isos": "not-a-list",
+        },
+        "iso_groups": [],
+        "variants": [],
+    }))
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    rclone_log = tmp_path / "rclone.log"
+    rclone = fake_bin / "rclone"
+    rclone.write_text("#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$RCLONE_LOG\"\n")
+    rclone.chmod(0o755)
+
+    result = subprocess.run(
+        [
+            str(PUBLISH_R2),
+            str(iso),
+            "fish-gnome-latest.iso",
+            str(config_path),
+            "R2:bucket/live-isos",
+        ],
+        cwd=tmp_path,
+        env=os.environ | {
+            "PATH": f"{fake_bin}:{os.environ['PATH']}",
+            "RCLONE_LOG": str(rclone_log),
+        },
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode != 0
+    assert not rclone_log.exists()
+    assert "policy is invalid" in result.stderr

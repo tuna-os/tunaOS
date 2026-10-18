@@ -5,6 +5,7 @@
 REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
 WORKFLOW="${REPO_ROOT}/.github/workflows/reusable-build-artifacts.yml"
 PUBLISH_WORKFLOW="${REPO_ROOT}/.github/workflows/publish-isos.yml"
+UPLOADER="${REPO_ROOT}/scripts/publish-iso-r2.sh"
 
 @test "ISO signing uses GitHub OIDC without a private key" {
   grep -q 'cosign sign-blob --bundle' "$WORKFLOW"
@@ -26,8 +27,10 @@ PUBLISH_WORKFLOW="${REPO_ROOT}/.github/workflows/publish-isos.yml"
 }
 
 @test "both publication backends include checksum and bundle sidecars" {
-  grep -q 'live-isos/${LATEST}.sha256' "$WORKFLOW"
-  grep -q 'live-isos/${LATEST}.sigstore.json' "$WORKFLOW"
+  grep -q 'scripts/publish-iso-r2.sh' "$WORKFLOW"
+  grep -q 'publish_iso_as' "$UPLOADER"
+  grep -q '"${object}.sha256"' "$UPLOADER"
+  grep -q '"${object}.sigstore.json"' "$UPLOADER"
   grep -q '"${ISO}.sha256" "${ISO}.sigstore.json"' "$PUBLISH_WORKFLOW"
 }
 
