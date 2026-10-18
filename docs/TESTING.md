@@ -63,16 +63,38 @@ in that module; `tests/bats/test_e2e_visual.bats` exercises it without QEMU.
 ### Running Locally
 
 ```bash
+set -euo pipefail
+
 # Resolve the current pre-built ISO. During a rollback, the stable object stays
-# frozen and this resolver points at a checksum-addressed snapshot.
+# frozen and this resolver points at a checksum-addressed snapshot. Only a
+# confirmed missing resolver selects the legacy stable object.
 base=https://download.tunaos.org/live-isos
 stable=yellowfin-gnome-latest.iso
-resolution="$(curl -fsSL "$base/${stable%.iso}.json" || true)"
-iso="$(jq -r '.iso // empty' <<<"$resolution")"
-[[ -n "$iso" ]] || iso="$stable"  # legacy target without a resolver
-curl -fLO "$base/$iso"
-expected="$(jq -r '.digest // empty' <<<"$resolution")"
-[[ -z "$expected" || "sha256:$(sha256sum "$iso" | awk '{print $1}')" == "$expected" ]]
+resolution_file="$(mktemp)"
+trap 'rm -f "$resolution_file"' EXIT
+status="$(curl --silent --show-error --location --output "$resolution_file" \
+  --write-out '%{http_code}' "$base/${stable%.iso}.json")"
+case "$status" in
+  200)
+    resolved="$(jq -er '
+      select(.schema == "TunaOSIsoResolution/v1")
+      | select(.iso | test("^[A-Za-z0-9][A-Za-z0-9._-]*[.]iso$"))
+      | select(.digest | test("^sha256:[0-9a-f]{64}$"))
+      | [.iso, .digest] | @tsv
+    ' "$resolution_file")"
+    IFS=$'\t' read -r iso expected <<<"$resolved"
+    ;;
+  404) iso="$stable"; expected="" ;;
+  *) echo "resolver request failed with HTTP $status" >&2; exit 1 ;;
+esac
+curl --fail --location --remote-name "$base/$iso"
+if [[ -n "$expected" ]]; then
+  actual="sha256:$(sha256sum "$iso" | awk '{print $1}')"
+  [[ "$actual" == "$expected" ]] || {
+    echo "ISO digest mismatch: expected $expected, got $actual" >&2
+    exit 1
+  }
+fi
 
 # Run the e2e test
 ./scripts/iso-e2e.sh yellowfin gnome "./$iso"

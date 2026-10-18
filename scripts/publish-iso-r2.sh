@@ -104,26 +104,27 @@ publish_iso_as() {
 versioned=$(basename "$iso")
 versioned_publication=$(publication_name "$versioned")
 latest_publication=$(publication_name "$latest")
-# Every publication gets a new immutable resolver target, even when it
-# republishes identical bytes. A prune that captured an older resolver set
-# can therefore never delete a concurrently reactivated old snapshot: the
-# new target has a new key and a fresh mtime before the resolver switches.
-resolver_base="${latest%.iso}"
-resolver_base="${resolver_base/-latest/-snapshot}"
-resolver_publication="${resolver_base}-run-${publication_id}-sha256-${digest_suffix}.iso"
+# A resolver is needed only when policy freezes the stable alias. Its
+# publication_name is already unique to this run, so it is both the resolver
+# target and the second full ISO copy. Routine publication keeps the legacy
+# two-copy layout (versioned + latest) and creates no resolver.
 publish_iso_as "$versioned_publication"
-publish_iso_as "$resolver_publication"
-if [[ "$latest_publication" != "$resolver_publication" ]]; then
+if [[ "$latest_publication" == "$latest" ]]; then
 	publish_iso_as "$latest_publication"
+	echo "==> Published ${versioned_publication} and mutable ${latest_publication}; no frozen alias resolver required"
+	exit 0
 fi
 
+publish_iso_as "$latest_publication"
+
 # Publish the stable resolver only after its immutable ISO, checksum, and
-# signature bundle. The legacy alias above remains for non-resolver clients.
+# signature bundle. The retained legacy alias remains frozen for clients that
+# do not yet understand resolvers.
 resolver="${latest%.iso}.json"
 resolver_file="${tmpdir}/${resolver##*/}"
 printf '{"schema":"TunaOSIsoResolution/v1","iso":"%s","sha256":"%s.sha256","sigstore":"%s.sigstore.json","checksum_subject":"%s","digest":"sha256:%s"}\n' \
-	"$resolver_publication" "$resolver_publication" "$resolver_publication" \
+	"$latest_publication" "$latest_publication" "$latest_publication" \
 	"$(basename "$iso")" "$digest" >"$resolver_file"
 copy_unless_retained "$resolver_file" "$resolver"
 
-echo "==> Published ${versioned_publication}; ${resolver} resolves current download to ${resolver_publication}"
+echo "==> Published ${versioned_publication}; ${resolver} resolves current download to ${latest_publication}"
