@@ -25,7 +25,8 @@ never invents cells or changes a hold. The legacy catalog retains all flags,
 rollout records, ISO groups, aliases, stages and base digest pins.
 
 The receipt hashes existing package manifests, build scripts, identity data,
-Containerfiles, image pins and committed assets. Only Git-tracked files enter
+Containerfiles, image pins, committed assets, variant overrides and curated
+experience files. Only Git-tracked files enter
 the receipt; Python bytecode and other temporary output do not. It is a **source snapshot**,
 not a resolved package transaction or evidence from a built image. Shell-driven
 package lists remain shell-driven. Nothing in this phase installs packages,
@@ -120,7 +121,7 @@ resolver/admission tests remain in place. These source-level tests do not claim 
    fork deltas. Test conflicts, missing packages and repeat application.
 4. Apply brand values in `90-image-info.sh`, image metadata and desktop settings.
    Cover both `install-desktop.sh` and Debian/Ubuntu's
-   `configure-desktop-runtime.sh`; [the brand guide](../../BRANDING.md) records why
+   `configure-desktop-runtime.sh`; [the brand guide](../BRANDING.md) records why
    a change to one path is insufficient. Handle fish names, URLs, CPE, logo and
    installer identity explicitly.
 5. Generate fork assets before the build, commit or hash those assets,

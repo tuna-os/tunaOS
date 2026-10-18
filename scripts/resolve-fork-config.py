@@ -72,7 +72,7 @@ def source_paths(root):
                 "Containerfile*", "manifests/desktops/*.yaml", "build_scripts/**/*.sh",
                 "build_scripts/lib/variant-identity.tsv", "scripts/resolve-flavor.sh",
                 "scripts/resolve-image.sh", "scripts/lib/build-config.sh",
-                "system_files/**/*")
+                "system_files/**/*", "system_files_overrides/**/*", "experiences/**/*")
     tracked = set(subprocess.check_output(["git", "-C", str(root), "ls-files", "-z"], text=True).split("\0"))
     return sorted({p.relative_to(root).as_posix() for pattern in patterns
                    for p in root.glob(pattern)

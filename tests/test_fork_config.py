@@ -229,3 +229,22 @@ def test_receipt_ignores_generated_untracked_files_but_detects_source_changes(tm
     assert MODULE.source_receipt(tmp_path) == before
     source.write_text("print('changed')\n")
     assert MODULE.source_receipt(tmp_path)["sha256"] != before["sha256"]
+
+
+@pytest.mark.parametrize("name", [
+    "system_files_overrides/marlin/usr/lib/bootc/install/50-marlin.toml",
+    "experiences/tuna/files/etc/greetd/environments",
+])
+def test_consumed_payload_mutation_invalidates_the_old_pin(tmp_path, name):
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    source = tmp_path / name
+    source.parent.mkdir(parents=True)
+    source.write_text("stock payload\n")
+    subprocess.run(["git", "-C", str(tmp_path), "add", "."], check=True)
+    before = MODULE.source_receipt(tmp_path)
+    assert name in before["files"]
+    config = {"schema_version": 1, "catalog": {"sha256": before["sha256"]}}
+    source.write_text("changed payload\n")
+    assert MODULE.source_receipt(tmp_path)["sha256"] != before["sha256"]
+    with pytest.raises(MODULE.ConfigError, match="pin mismatch"):
+        MODULE.resolve(config, tmp_path, root=tmp_path)
