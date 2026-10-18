@@ -165,7 +165,11 @@ def validate_result(result: dict, label: str) -> None:
         "encrypted": profile == "encrypted",
     }
     for field, expected in strict_values.items():
-        if result[field] != expected:
+        actual = result[field]
+        if (
+            isinstance(expected, bool)
+            and (not isinstance(actual, bool) or actual is not expected)
+        ) or (not isinstance(expected, bool) and actual != expected):
             raise ValueError(f"{label}: {field} must be {expected!r}")
     _digest(result, "source_image_digest", label)
     duration = result["duration_seconds"]
