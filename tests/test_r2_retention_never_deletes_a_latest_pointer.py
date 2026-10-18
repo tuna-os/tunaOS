@@ -35,9 +35,10 @@ from __future__ import annotations
 
 import fnmatch
 import json
+import os
 import re
-from pathlib import Path
 import subprocess
+from pathlib import Path
 import tempfile
 
 import pytest
@@ -283,3 +284,72 @@ def test_dated_objects_are_still_deleted(name, prefix):
         assert verdict(name, rules) == "delete", (
             f"{step!r} would keep dated object {name!r} forever; rules {rules}"
         )
+
+
+def run_iso_prune_with_stubbed_rclone(tmp_path, mode):
+    document = yaml.safe_load(PRUNE.read_text(encoding="utf-8"))
+    step = next(
+        item
+        for item in document["jobs"]["prune"]["steps"]
+        if item.get("name", "").startswith("Prune dated ISOs")
+    )
+    script = GH_EXPR.sub("test-bucket", step["run"])
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    (bin_dir / "yq").write_text("#!/bin/sh\necho '{}'\n", encoding="utf-8")
+    (bin_dir / "python3").write_text(
+        "#!/bin/sh\necho '- /policy-retained.iso'\n", encoding="utf-8"
+    )
+    marker = tmp_path / "delete-called"
+    (bin_dir / "rclone").write_text(
+        """#!/bin/sh
+case "$1:$RCLONE_MODE" in
+  lsf:list-fails) exit 23 ;;
+  lsf:*) printf '%s\n' "${RCLONE_LISTING:-}" ;;
+  cat:read-fails) exit 24 ;;
+  cat:malformed) echo '{}' ;;
+  cat:*) echo '{"schema":"TunaOSIsoResolution/v1","iso":"snapshot.iso"}' ;;
+  delete:*) touch "$RCLONE_DELETE_MARKER" ;;
+esac
+""",
+        encoding="utf-8",
+    )
+    for command in ("yq", "python3", "rclone"):
+        (bin_dir / command).chmod(0o755)
+    env = os.environ.copy()
+    env.update({
+        "PATH": f"{bin_dir}:{env['PATH']}",
+        "RCLONE_CONFIG_R2_ACCESS_KEY_ID": "configured",
+        "RUNNER_TEMP": str(tmp_path),
+        "DRY_RUN": "false",
+        "RCLONE_MODE": mode,
+        "RCLONE_DELETE_MARKER": str(marker),
+        "RCLONE_LISTING": (
+            "fish-latest.iso.sigstore.json"
+            if mode == "sidecar-only"
+            else "fish-latest.json"
+        ),
+    })
+    result = subprocess.run(
+        ["bash", "-c", script],
+        cwd=ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return result, marker
+
+
+@pytest.mark.parametrize("mode", ["list-fails", "read-fails", "malformed"])
+def test_iso_prune_fails_closed_before_delete(tmp_path, mode):
+    result, marker = run_iso_prune_with_stubbed_rclone(tmp_path, mode)
+    assert result.returncode != 0
+    assert "refusing to prune" in result.stdout
+    assert not marker.exists()
+
+
+def test_iso_prune_does_not_parse_sigstore_sidecars_as_resolvers(tmp_path):
+    result, marker = run_iso_prune_with_stubbed_rclone(tmp_path, "sidecar-only")
+    assert result.returncode == 0, result.stderr
+    assert marker.exists()

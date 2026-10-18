@@ -346,6 +346,12 @@ jobs:
           # intentionally frozen, while its small JSON resolver points at the
           # current checksum snapshot. Targets without a resolver retain the
           # legacy direct-download behavior.
+          DESKTOP="${FLAVOR%%-*}"
+          if [[ "$DESKTOP" == "gnome" ]]; then
+            GROUP_OBJECT="${VARIANT}-latest.iso"
+          else
+            GROUP_OBJECT="${VARIANT}-${DESKTOP}-latest.iso"
+          fi
           OBJECT="${VARIANT}-${FLAVOR}-latest.iso"
           FOUND=""
           for requested in "${OBJECT}" "${GROUP_OBJECT}"; do

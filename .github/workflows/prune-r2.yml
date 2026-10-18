@@ -67,6 +67,7 @@ jobs:
           RCLONE_CONFIG_R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
           DRY_RUN: ${{ inputs.dry_run || 'false' }}
         run: |
+          set -euo pipefail
           if [[ -z "${RCLONE_CONFIG_R2_ACCESS_KEY_ID:-}" ]]; then
             echo "::notice::R2 credentials not configured; skipping prune."
             exit 0
@@ -77,28 +78,39 @@ jobs:
           CONFIG_JSON="${RUNNER_TEMP}/build-config.json"
           FILTERS="${RUNNER_TEMP}/live-isos-retention.filter"
           STATIC_FILTERS="${RUNNER_TEMP}/live-isos-static-retention.filter"
+          REMOTE_OBJECTS="${RUNNER_TEMP}/live-isos-objects.txt"
           REMOTE="R2:${{ secrets.R2_BUCKET }}/live-isos/"
           yq -o=json '.' .github/build-config.yml > "$CONFIG_JSON"
           python3 scripts/iso-delivery-policy.py \
             --config-json "$CONFIG_JSON" retention-filters > "$STATIC_FILTERS"
+          if ! rclone lsf --s3-no-check-bucket --files-only "$REMOTE" > "$REMOTE_OBJECTS"; then
+            echo "::error::Could not list live-isos resolvers; refusing to prune"
+            exit 1
+          fi
           : > "$FILTERS"
           while IFS= read -r resolver; do
             case "$resolver" in
-              *-latest*.json) ;;
+              *.iso.sigstore.json) continue ;;
+              *-latest.json|*-latest-*.json) ;;
               *) continue ;;
             esac
-            payload="$(rclone cat --s3-no-check-bucket "${REMOTE}${resolver}" 2>/dev/null || true)"
-            current="$(jq -er '
+            if ! payload="$(rclone cat --s3-no-check-bucket "${REMOTE}${resolver}")"; then
+              echo "::error::Could not read resolver ${resolver}; refusing to prune"
+              exit 1
+            fi
+            if ! current="$(jq -er '
               select(.schema == "TunaOSIsoResolution/v1") | .iso |
               select(type == "string" and endswith(".iso") and
                      (contains("/") | not))
-            ' <<<"$payload" 2>/dev/null || true)"
-            [[ -n "$current" ]] || continue
+            ' <<<"$payload")"; then
+              echo "::error::Invalid resolver ${resolver}; refusing to prune"
+              exit 1
+            fi
             printf '%s\n' \
               "- /${current}" \
               "- /${current}.sha256" \
               "- /${current}.sigstore.json" >> "$FILTERS"
-          done < <(rclone lsf --s3-no-check-bucket --files-only "$REMOTE")
+          done < "$REMOTE_OBJECTS"
           cat "$STATIC_FILTERS" >> "$FILTERS"
           FLAGS=(--log-level INFO --s3-no-check-bucket --min-age 14d \
             --filter-from "$FILTERS")
