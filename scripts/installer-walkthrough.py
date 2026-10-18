@@ -583,11 +583,12 @@ if qualification:
             # from a wizard that jumps straight from summary to done.
             time.sleep(int(os.environ.get("TUNAOS_QUALIFICATION_POLL", "15")))
         elif current == "encryption" and qualification == "encrypted" and not encryption_configured:
-            # Qualification frontends expose the enable control followed by the
-            # passphrase and confirmation fields in keyboard order. A frontend
-            # that does not expose that accessible order fails this gate instead
-            # of silently receiving a host-authored Fisherman recipe.
-            send_keys("spc", "tab")
+            # GNOME's encryption switch is enabled by default; toggling it
+            # would turn encryption off. Other qualification frontends expose
+            # a disabled switch before the passphrase fields.
+            if flavor != "gnome":
+                send_keys("spc")
+            send_keys("tab")
             type_text(passphrase)
             send_keys("tab")
             type_text(passphrase)

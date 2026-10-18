@@ -192,13 +192,15 @@ python3 scripts/verify-experience-manifest.py experience-manifest.json \
 
 The mode refuses `FISHERMAN_OVERRIDE` and `TBOX_E2E_IMAGE`.
 It gives the live guest one new target disk and no NIC or vsock.
-It checks all six screens in order.
+It checks all six screens in order and requires the manifest's
+`hardware_scope` to match the selected QEMU accelerator.
 It also checks the encryption state on the stopped disk.
 
 The installed boot has no ISO attached. Its serial contract marker must report
-the manifest's exact `source_image_digest`. Receipt artifacts contain JSON,
-logs, and screenshots only. Never upload the input ISO, `*.qcow2`, or UEFI
-variable files.
+the manifest's exact `source_image_digest`. Each result is bound to the
+validated ISO digest and the SHA-256 of the exact manifest file supplied to
+the run. Receipt artifacts contain JSON, logs, and screenshots only. Never
+upload the input ISO, `*.qcow2`, or UEFI variable files.
 
 ---
 

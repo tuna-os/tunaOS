@@ -238,6 +238,24 @@ class TestRendersAdvancesScreens:
             assert summary["encryption_configured"] is True
             assert any(command == "sendkey t" for command in run_walkthrough.last_commands)
 
+    def test_gnome_encrypted_profile_preserves_default_enabled_switch(self):
+        proc, summary = run_walkthrough(
+            {
+                "00": "Welcome to TunaOS installer. Get Started",
+                "01": "Select Target Disk",
+                "02": "Disk Encryption. Enter passphrase",
+                "03": "Confirm Installation. Ready to install",
+                "04": "Installation Progress. Writing image",
+                "05": "Installation complete. Remove the installation media",
+            },
+            steps="8",
+            flavor="gnome",
+            qualification="encrypted",
+        )
+        assert proc.returncode == 0, proc.stdout + proc.stderr
+        assert summary["encryption_configured"] is True
+        assert "sendkey spc" not in run_walkthrough.last_commands
+
 
     def test_qualification_contextually_recognizes_gnome_progress(self):
         proc, summary = run_walkthrough(

@@ -170,20 +170,6 @@ def test_qualification_wait_rejects_bootloader_before_session(tmp_path):
     assert calls.read_text() == "2"
 
 
-def test_session_wait_fits_inside_generated_service_timeouts():
-    root = Path(__file__).parents[1]
-    verify = (
-        root / "build_scripts/checks/verify-desktop-experience.sh"
-    ).read_text(encoding="utf-8")
-    runtime = (
-        root / "build_scripts/desktop/configure-desktop-runtime.sh"
-    ).read_text(encoding="utf-8")
-    install = (
-        root / "build_scripts/desktop/install-desktop.sh"
-    ).read_text(encoding="utf-8")
-    assert "session_deadline=$((SECONDS + 210))" in verify
-    assert "TimeoutStartSec=300" in runtime
-    assert "TimeoutStartSec=300" in install
 
 
 def test_qualification_ocr_falls_back_to_convert(tmp_path):

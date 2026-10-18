@@ -102,14 +102,15 @@ Test outputs are uploaded as GitHub Actions artifacts:
 ### Strict offline GUI qualification
 
 `.github/workflows/iso-builder-parity.yml` runs two installations for each CI
-and browser-built ISO. Both runs use the ISO's bundled graphical installer.
-The `plain` and `encrypted` profiles use separate fresh 32 GiB disks, no guest
-NIC or vsock, and no host-provided image or Fisherman binary. The harness
-provisions a disposable account in the installed disk's mutable `/etc`, drives
-the shipped graphical disk-unlock and greeter surfaces through the QEMU
-monitor, and requires the requested desktop's compositor to run as that user.
-The immutable deployment remains unchanged, and each disk boots with the ISO
-detached.
+and browser-built ISO on the GPU runner pool. Both runs use the ISO's bundled
+graphical installer. The `plain` and `encrypted` profiles use separate fresh
+32 GiB disks, no guest NIC or vsock, and no host-provided image or Fisherman
+binary. The harness requires the manifest's `hardware_scope` to match the QEMU
+accelerator actually selected, provisions a disposable account in the
+installed disk's mutable `/etc`, drives the shipped graphical disk-unlock and
+greeter surfaces through the QEMU monitor, and requires the requested
+desktop's compositor to run as that user. The immutable deployment remains
+unchanged, and each disk boots with the ISO detached.
 
 `experience-manifest.json` is an input declaration, not a test result.
 `scripts/verify-experience-manifest.py` validates these fields:
@@ -121,7 +122,10 @@ detached.
 - the CPU, memory, and disk resource profile.
 
 After both runs, the validator combines the two result files into
-`qualification-receipt.json`. A valid receipt proves these facts:
+`qualification-receipt.json`. Each result carries the validated ISO digest and
+the SHA-256 digest of the exact manifest file used by that run; receipt
+construction rejects either identity changing between declaration and
+qualification. A valid receipt also proves these facts:
 
 - The GUI showed every wizard screen in order and completed the install.
 - The disk has the encryption state for its profile.

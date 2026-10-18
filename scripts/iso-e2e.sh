@@ -467,6 +467,8 @@ x86_64 | amd64)
 esac
 
 EXPECTED_SOURCE_DIGEST=""
+EXPECTED_ISO_DIGEST=""
+EXPERIENCE_MANIFEST_DIGEST=""
 QUALIFICATION_STARTED=0
 if [[ "$MODE" == "qualification" ]]; then
 	command -v jq >/dev/null 2>&1 || {
@@ -478,7 +480,9 @@ if [[ "$MODE" == "qualification" ]]; then
 	manifest_flavor="$(jq -er '.flavor' "$EXPERIENCE_MANIFEST")"
 	manifest_arch="$(jq -er '.architecture' "$EXPERIENCE_MANIFEST")"
 	EXPECTED_SOURCE_DIGEST="$(jq -er '.source_image_digest' "$EXPERIENCE_MANIFEST")"
-	expected_iso_sha="$(jq -er '.iso_sha256' "$EXPERIENCE_MANIFEST")"
+	EXPECTED_ISO_DIGEST="$(jq -er '.iso_sha256' "$EXPERIENCE_MANIFEST")"
+	manifest_hardware_scope="$(jq -er '.hardware_scope' "$EXPERIENCE_MANIFEST")"
+	EXPERIENCE_MANIFEST_DIGEST="sha256:$(sha256sum "$EXPERIENCE_MANIFEST" | cut -d' ' -f1)"
 	expected_cpus="$(jq -er '.resource_profile.cpus' "$EXPERIENCE_MANIFEST")"
 	expected_memory="$(jq -er '.resource_profile.memory_mib' "$EXPERIENCE_MANIFEST")"
 	expected_disk="$(jq -er '.resource_profile.disk_gib' "$EXPERIENCE_MANIFEST")"
@@ -498,8 +502,8 @@ if [[ "$MODE" == "qualification" ]]; then
 		exit 1
 	fi
 	actual_iso_sha="sha256:$(sha256sum "$ISO_PATH" | cut -d' ' -f1)"
-	if [[ "$actual_iso_sha" != "$expected_iso_sha" ]]; then
-		echo "ERROR: ISO digest ${actual_iso_sha} does not match manifest ${expected_iso_sha}" >&2
+	if [[ "$actual_iso_sha" != "$EXPECTED_ISO_DIGEST" ]]; then
+		echo "ERROR: ISO digest ${actual_iso_sha} does not match manifest ${EXPECTED_ISO_DIGEST}" >&2
 		exit 1
 	fi
 	QUALIFICATION_STARTED=$SECONDS
@@ -708,6 +712,11 @@ elif [[ "$QEMU_MACHINE" == "pc" ]]; then
 	# XSAVE, and AVX, causing #UD crashes when loading EFI bootloaders
 	# from newer distros (e.g. AlmaLinux Kitten 10 / yellowfin).
 	CPU_ARG="qemu64,+sse4.1,+sse4.2,+aes,+xsave,+xsaveopt,+xsavec,+xsaves,+popcnt,+avx,+avx2"
+fi
+if [[ "$MODE" == "qualification" ]] &&
+	[[ "$manifest_hardware_scope" != "qemu-${ACCEL}" ]]; then
+	echo "ERROR: manifest hardware_scope ${manifest_hardware_scope} does not match qemu-${ACCEL}" >&2
+	exit 1
 fi
 
 # Fail early and legibly if the forward port is taken. QEMU's own error —
@@ -3817,9 +3826,11 @@ write_qualification_result() {
 		 [.screens | to_entries[] | select(.value == true) | .key] as $seen |
 		 ($required - $seen | length) == 0' "$walkthrough" >/dev/null
 	jq -n \
-		--arg kind "tunaos-offline-gui-result/v1" \
+		--arg kind "tunaos-offline-gui-result/v2" \
 		--arg profile "$QUALIFICATION_PROFILE" \
 		--arg digest "$EXPECTED_SOURCE_DIGEST" \
+		--arg iso_digest "$EXPECTED_ISO_DIGEST" \
+		--arg manifest_digest "$EXPERIENCE_MANIFEST_DIGEST" \
 		--argjson encrypted "$([[ "$QUALIFICATION_PROFILE" == encrypted ]] && echo true || echo false)" \
 		--argjson duration "$duration" \
 		'{
@@ -3833,6 +3844,8 @@ write_qualification_result() {
 			installed_boot: true,
 			desktop_contract: true,
 			source_image_digest: $digest,
+			iso_sha256: $iso_digest,
+			manifest_sha256: $manifest_digest,
 			iso_detached: true,
 			owned_disk: true,
 			encrypted: $encrypted,
