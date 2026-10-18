@@ -39,8 +39,9 @@ configures repositories or changes the image brand.
 Use a Git checkout, Python 3.10+ and PyYAML (the existing Python test dependency):
 
 ```sh
-python3 scripts/resolve-fork-config.py examples/fork/stock.yaml > /tmp/plan.json
-python3 scripts/resolve-fork-config.py examples/fork/stock.yaml --format legacy > /tmp/build.json
+python3 scripts/resolve-fork-config.py --init-template examples/fork/stock.template.yaml > /tmp/stock.yaml
+python3 scripts/resolve-fork-config.py /tmp/stock.yaml > /tmp/plan.json
+python3 scripts/resolve-fork-config.py /tmp/stock.yaml --format legacy > /tmp/build.json
 TUNAOS_BUILD_CONFIG=/tmp/build.json ./scripts/resolve-image.sh yellowfin base
 ```
 
@@ -147,3 +148,11 @@ with a desktop or installer that works.
 Only retire legacy overrides after those consumers and acceptance checks pass.
 For rollback, use the unchanged legacy path and revert the adapters. Keep
 pinned catalog/base inputs and provenance with each plan. Maintainers must sign off and write an ADR under [RFC-PROCESS.md](../../RFC-PROCESS.md).
+
+## Local consumer preview
+
+See [FORK-CONFIG-PREVIEW.md](../FORK-CONFIG-PREVIEW.md) for the first opt-in consumer slice.
+The review command and stock export keep their prior behavior. An explicit
+command creates new configs from templates. Unsupported intent fails.
+Full brand support, safe removals, parent closure and image qualification remain
+later acceptance gates.

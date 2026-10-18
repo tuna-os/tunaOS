@@ -231,10 +231,21 @@ def resolve(config, config_dir, root=ROOT):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("config", type=Path, nargs="?")
+    parser.add_argument("--init-template", type=Path, help="create a NEW pinned config from a template without catalog; never refresh existing pins")
     parser.add_argument("--catalog-pin", action="store_true", help="print the current source receipt digest")
     parser.add_argument("--format", choices=("plan", "legacy"), default="plan")
     args = parser.parse_args()
     try:
+        if args.init_template:
+            if args.config or args.catalog_pin or args.format != "plan":
+                parser.error("--init-template cannot be combined with config, --catalog-pin or --format")
+            template = yaml.load(args.init_template.read_text(), Loader=UniqueLoader)
+            if not isinstance(template, dict) or "catalog" in template:
+                raise ConfigError("initialization requires a template without catalog; existing config pins must be reviewed manually")
+            template = {**template, "catalog": {"sha256": source_receipt(ROOT)["sha256"]}}
+            resolve(template, args.init_template.parent)
+            print(yaml.safe_dump(template, sort_keys=False), end="")
+            return
         if args.catalog_pin:
             if args.config or args.format != "plan":
                 parser.error("--catalog-pin cannot be combined with config or --format")

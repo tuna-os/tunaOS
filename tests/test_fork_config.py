@@ -19,7 +19,8 @@ SPEC.loader.exec_module(MODULE)
 
 @pytest.fixture(scope="module")
 def stock():
-    return yaml.safe_load((ROOT / "examples/fork/stock.yaml").read_text())
+    template = yaml.safe_load((ROOT / "examples/fork/stock.template.yaml").read_text())
+    return {**template, "catalog": {"sha256": MODULE.source_receipt(ROOT)["sha256"]}}
 
 
 @pytest.fixture(scope="module")
@@ -64,9 +65,11 @@ def test_source_receipt_preserves_package_and_identity_inputs(plan):
     assert "not an effective package transaction" in plan["package_resolution"]
 
 
-def test_stock_adapter_and_build_config_seam(tmp_path):
+def test_stock_adapter_and_build_config_seam(tmp_path, stock):
+    config = tmp_path / "stock.yaml"
+    config.write_text(yaml.safe_dump(stock))
     output = subprocess.check_output(["python3", str(ROOT / "scripts/resolve-fork-config.py"),
-                                      str(ROOT / "examples/fork/stock.yaml"), "--format", "legacy"], text=True)
+                                      str(config), "--format", "legacy"], text=True)
     adapted = tmp_path / "build.json"
     adapted.write_text(output)
     original = yaml.safe_load((ROOT / ".github/build-config.yml").read_text())
