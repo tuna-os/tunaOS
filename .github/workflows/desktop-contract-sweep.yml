@@ -51,6 +51,7 @@ jobs:
       - id: cells
         shell: bash
         env:
+          EVENT_NAME: ${{ github.event_name }}
           FILTER: ${{ inputs.filter }}
         run: |
           set -euo pipefail
@@ -59,6 +60,10 @@ jobs:
           # -nvidia, -asahi, -cachyos and -zfs variants are the same desktop
           # on different hardware and would triple the matrix without testing
           # a different contract.
+          #
+          # Scheduled completeness covers only images the factory publishes.
+          # Dispatch-only experimental variants stay available for manual
+          # admission sweeps, where a missing image is correctly a failure.
           #
           # Filtering happens in jq, not yq: yq's `EXPR1 as $v | EXPR2`
           # still emits one row for a $v binding whose EXPR2 matches
@@ -69,8 +74,11 @@ jobs:
           # "gurnard:" cell (variant, empty desktop) that failed
           # evidence-bundle.sh's `invalid cell` check and then failed
           # collate's baseline reconciliation too.
-          cells=$(yq -o=json '.' .github/build-config.yml | jq -c '
-              [.variants[] | .id as $v | .flavors[]
+          cells=$(yq -o=json '.' .github/build-config.yml | jq -c \
+            --arg event "$EVENT_NAME" '
+              [.variants[]
+                | select($event == "workflow_dispatch" or .experimental != true)
+                | .id as $v | .flavors[]
                 | select(.build_image == true)
                 | select(.id | test("^(gnome|kde|niri|xfce|cosmic)$"))
                 | {variant: $v, desktop: .id}]')
