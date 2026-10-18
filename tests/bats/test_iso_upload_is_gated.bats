@@ -20,10 +20,11 @@ DIGEST="sha256:abababababababababababababababababababababababababababababababab"
 
 setup() {
   POLICY="$(mktemp)"
+  SNAPSHOT="$(mktemp)"
 }
 
 teardown() {
-  rm -f "$POLICY"
+  rm -f "$POLICY" "$SNAPSHOT"
 }
 
 # emit_policy <outfile> [variant flavor platform]...
@@ -31,10 +32,9 @@ teardown() {
 emit_policy() {
   local out="$1"
   shift
-  python3 - "$out" "$@" <<'EOF'
-import json, sys
-out, triples = sys.argv[1], sys.argv[2:]
-assert len(triples) % 3 == 0, triples
+  python3 - "$out" "$SNAPSHOT" "$REPO_ROOT" "$CONFIG" "$@" <<'EOF'
+import hashlib, importlib.util, json, pathlib, sys
+out, snapshot_out, repo_root, config_path, *triples = sys.argv[1:]
 digest = "sha256:" + "ab" * 32
 entries = [
     {"target": {"variant": v, "flavor": f, "platform": p},
@@ -44,6 +44,76 @@ entries = [
 ]
 json.dump({"schemaVersion": 1, "kind": "delivery-cutover",
            "cutover": entries, "retained": []}, open(out, "w"))
+
+spec = importlib.util.spec_from_file_location(
+    "delivery_cutover", pathlib.Path(repo_root) / "scripts" / "delivery-cutover.py")
+delivery = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(delivery)
+from contracts.targets import _canonical_json, _oci_platform, catalog_snapshot
+
+if not entries:
+    snapshot = catalog_snapshot(delivery.load_config(config_path))
+else:
+    targets = []
+    for entry in entries:
+        target = delivery.canonical_target(**entry["target"])
+        key = delivery.target_key(target)
+        manifest_digest = "sha256:" + "01" * 32
+        targets.append({
+            "target": target,
+            "targetKey": key,
+            "required": True,
+            "scheduled": True,
+            "publication": {
+                "repository": f"ghcr.io/tuna-os/{target['variant']}",
+                "tag": target["flavor"],
+                "ref": f"ghcr.io/tuna-os/{target['variant']}:{target['flavor']}",
+            },
+            "availability": {
+                "available": True,
+                "ociPlatform": _oci_platform(target["platform"]),
+            },
+            "resolvedInputs": {
+                "platformManifestDigest": manifest_digest,
+                "indexDigest": "sha256:" + "02" * 32,
+                "configDigest": None,
+                "liveOverlayDigest": None,
+                "liveOverlayBaseDigest": None,
+                "installerRevision": "test-installer",
+                "engineRevision": "test-engine",
+            },
+            "facts": {
+                "digest": manifest_digest,
+                "desktop": target["flavor"].split("-")[0],
+                "kernelVer": "",
+                "hasSdBoot": False,
+                "pkgManager": "",
+                "repoFamily": "",
+                "layerCount": 0,
+                "compressedSize": 0,
+                "bootc": True,
+            },
+            "qualification": {
+                "status": "qualified",
+                "reason": None,
+                "qualifiedAt": entry["evidence"]["qualifiedAt"],
+                "receiptDigest": entry["evidence"]["receiptDigest"],
+                "browser": None,
+                "resources": None,
+            },
+        })
+    targets.sort(key=lambda candidate: candidate["targetKey"])
+    snapshot = {
+        "schemaVersion": 1,
+        "kind": "catalog-snapshot",
+        "producerRevision": "test",
+        "generatedAt": "2026-10-01T00:00:00Z",
+        "coverageDigest": "sha256:" + "03" * 32,
+        "snapshotDigest": "sha256:" + hashlib.sha256(
+            _canonical_json(targets)).hexdigest(),
+        "targets": targets,
+    }
+pathlib.Path(snapshot_out).write_text(json.dumps(snapshot))
 EOF
 }
 
@@ -51,7 +121,7 @@ EOF
   emit_policy "$POLICY" bonito gnome linux/amd64
   run python3 "$CUTOVER" --check \
     --variant bonito --flavor gnome --platform linux/amd64 \
-    --policy "$POLICY" --config "$CONFIG"
+    --policy "$POLICY" --config "$CONFIG" --snapshot "$SNAPSHOT"
   [ "$status" -eq 0 ]
   [ "$output" = "true" ]
 }
@@ -60,13 +130,13 @@ EOF
   emit_policy "$POLICY" bonito gnome linux/amd64
   run python3 "$CUTOVER" --check \
     --variant bonito --flavor gnome --platform linux/arm64 \
-    --policy "$POLICY" --config "$CONFIG"
+    --policy "$POLICY" --config "$CONFIG" --snapshot "$SNAPSHOT"
   [ "$status" -eq 1 ]
   [ "$output" = "false" ]
 
   run python3 "$CUTOVER" --check \
     --variant bonito --flavor kde --platform linux/amd64 \
-    --policy "$POLICY" --config "$CONFIG"
+    --policy "$POLICY" --config "$CONFIG" --snapshot "$SNAPSHOT"
   [ "$status" -eq 1 ]
   [ "$output" = "false" ]
 }
@@ -75,13 +145,13 @@ EOF
   emit_policy "$POLICY"
   run python3 "$CUTOVER" --check \
     --variant bonito --flavor gnome --platform linux/amd64 \
-    --policy "$POLICY" --config "$CONFIG"
+    --policy "$POLICY" --config "$CONFIG" --snapshot "$SNAPSHOT"
   [ "$status" -eq 1 ]
   [ "$output" = "false" ]
 
   run python3 "$CUTOVER" --check \
     --variant yellowfin --group kde \
-    --policy "$POLICY" --config "$CONFIG"
+    --policy "$POLICY" --config "$CONFIG" --snapshot "$SNAPSHOT"
   [ "$status" -eq 1 ]
   [ "$output" = "false" ]
 }
@@ -96,7 +166,7 @@ EOF
     yellowfin kde-nvidia linux/amd64
   run python3 "$CUTOVER" --check \
     --variant yellowfin --group kde \
-    --policy "$POLICY" --config "$CONFIG"
+    --policy "$POLICY" --config "$CONFIG" --snapshot "$SNAPSHOT"
   [ "$status" -eq 1 ]
   [ "$output" = "false" ]
 }
@@ -110,7 +180,7 @@ EOF
     yellowfin kde-nvidia linux/amd64
   run python3 "$CUTOVER" --check \
     --variant yellowfin --group kde \
-    --policy "$POLICY" --config "$CONFIG"
+    --policy "$POLICY" --config "$CONFIG" --snapshot "$SNAPSHOT"
   [ "$status" -eq 0 ]
   [ "$output" = "true" ]
 }
@@ -124,13 +194,13 @@ EOF
     bonito gnome-nvidia linux/amd64
   run python3 "$CUTOVER" --check \
     --variant bonito --group default \
-    --policy "$POLICY" --config "$CONFIG"
+    --policy "$POLICY" --config "$CONFIG" --snapshot "$SNAPSHOT"
   [ "$status" -eq 0 ]
   [ "$output" = "true" ]
 
   run python3 "$CUTOVER" --check \
     --variant bonito --group flagship \
-    --policy "$POLICY" --config "$CONFIG"
+    --policy "$POLICY" --config "$CONFIG" --snapshot "$SNAPSHOT"
   [ "$status" -eq 0 ]
   [ "$output" = "true" ]
 }
@@ -139,7 +209,7 @@ EOF
   emit_policy "$POLICY" bonito gnome linux/amd64
   run python3 "$CUTOVER" --check \
     --variant bonito --flavor gnome --platform linux/amd64 \
-    --policy "$POLICY" --config "$CONFIG"
+    --policy "$POLICY" --config "$CONFIG" --snapshot "$SNAPSHOT"
   [ "$status" -eq 0 ]
   [ "$output" = "true" ]
 
@@ -147,7 +217,7 @@ EOF
   emit_policy "$POLICY"
   run python3 "$CUTOVER" --check \
     --variant bonito --flavor gnome --platform linux/amd64 \
-    --policy "$POLICY" --config "$CONFIG"
+    --policy "$POLICY" --config "$CONFIG" --snapshot "$SNAPSHOT"
   [ "$status" -eq 1 ]
   [ "$output" = "false" ]
 }
