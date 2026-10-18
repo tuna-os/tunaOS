@@ -504,24 +504,26 @@ if __name__ == "__main__":
 
 
 class LifecycleResultsNormalisation(unittest.TestCase):
-    """W2: the lifecycle scaffold was written before the workflow ever ran,
-    and the first real sweep (run 32040213366) proved its keys never matched
-    — latest_results returns raw job names ("yellowfin:gnome (amd64)",
-    "BETA guppy:gnome (amd64)") while the composite looks up
-    "variant:flavor". 168 verdicts rendered as 168 ⬜."""
+    """Lifecycle scoring normalises stable job names and ignores beta probes.
+
+    The first real sweep (run 32040213366) proved the raw stable job names did
+    not match cell keys. Beta jobs use the same suffix but only probe whether a
+    tag exists, so accepting their successful conclusion as lifecycle evidence
+    would falsely mark an unvalidated experimental cell green.
+    """
 
     def _with_raw(self, raw):
         with mock.patch.object(gms, "latest_results", return_value=raw):
             return gms.lifecycle_results()
 
-    def test_real_job_names_normalise_to_cells(self):
+    def test_real_stable_job_names_normalise_to_cells(self):
         got = self._with_raw({
             "yellowfin:gnome (amd64)": ("success", "2026-08-17", "1"),
             "BETA guppy:gnome (amd64)": ("success", "2026-08-17", "1"),
             "flounder:kde-nvidia (amd64)": ("failure", "2026-08-17", "1"),
         })
         self.assertEqual(got["yellowfin:gnome"][0], "success")
-        self.assertEqual(got["guppy:gnome"][0], "success")
+        self.assertNotIn("guppy:gnome", got)
         self.assertEqual(got["flounder:kde-nvidia"][0], "failure")
 
     def test_arch_legs_merge_worst_of(self):
