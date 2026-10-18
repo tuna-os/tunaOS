@@ -45,7 +45,7 @@ WORKFLOW = ROOT / ".github" / "workflows" / "build-variant.yml"
 def _flatten_step() -> str:
     """The jq pipeline that turns build-config into the build matrix."""
     text = WORKFLOW.read_text(encoding="utf-8")
-    start = text.index("FULL_MATRIX=$(yq")
+    start = text.index("FULL_MATRIX=$(")
     end = text.index("make_image_matrix()", start)
     return text[start:end]
 
