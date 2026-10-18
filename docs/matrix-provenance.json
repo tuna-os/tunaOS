@@ -4365,6 +4365,11 @@
    "tested": 110,
    "total": 110
   },
+  "iso": {
+   "passed": 0,
+   "tested": 57,
+   "total": 62
+  },
   "known_regressions": {
    "advisory": 86,
    "blocking": 11
