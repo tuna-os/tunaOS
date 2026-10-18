@@ -79,6 +79,8 @@ jobs:
           # linux/amd64 default, so annotate on that platform.
           MATRIX=$(echo "$MATRIX" | python3 scripts/delivery-cutover.py --annotate-matrix --default-platform linux/amd64)
           COUNT=$(echo "$MATRIX" | jq '.include | length')
+          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
 
   build-and-publish:
     name: ${{ matrix.variant }}:${{ matrix.flavor }}
