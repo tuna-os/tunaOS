@@ -189,6 +189,46 @@ class RunWalkPicksTheNewestAuthoritativeResult(unittest.TestCase):
         self.assertEqual(results["cell a"], ("success", "2026-08-06", "2"))
         self.assertEqual(full_sweep, "2026-08-05")
 
+    def test_newer_off_main_sweep_cannot_advance_public_date(self):
+        main_run = {
+            "databaseId": 1,
+            "createdAt": "2026-08-05T00:00:00Z",
+            "status": "completed",
+        }
+        off_main_run = {
+            "databaseId": 2,
+            "createdAt": "2026-08-06T00:00:00Z",
+            "status": "completed",
+        }
+        jobs = {
+            "1": [
+                {"name": "cell a", "conclusion": "success"},
+                {"name": "cell b", "conclusion": "success"},
+            ],
+            "2": [
+                {"name": "cell a", "conclusion": "success"},
+                {"name": "cell b", "conclusion": "success"},
+            ],
+        }
+
+        def fake(*args):
+            if args[0:2] == ("run", "list"):
+                if "--branch" in args and args[args.index("--branch") + 1] == "main":
+                    return [main_run]
+                return [off_main_run, main_run]
+            if args[0:2] == ("run", "view"):
+                return {"jobs": jobs[args[2]]}
+            return None
+
+        with mock.patch.object(gms, "gh_json", side_effect=fake):
+            _, full_sweep = gms._collect_latest_results(
+                "wf.yml",
+                r"^cell ",
+                {"cell a", "cell b"},
+                lambda name: name,
+            )
+        self.assertEqual(full_sweep, "2026-08-05")
+
     def test_history_walk_continues_after_full_sweep_coverage(self):
         runs = [
             {"databaseId": 3, "createdAt": "2026-08-07T00:00:00Z", "status": "completed"},
