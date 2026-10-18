@@ -973,18 +973,39 @@ if [[ -f "$RECIPE_FILE" ]]; then
 	_composefs_backend="$(sed -n 's/^composeFsBackend=//p' <<<"$_backend_kv")"
 	_filesystem="$(sed -n 's/^filesystem=//p' <<<"$_backend_kv")"
 
-	python3 - "$RECIPE_FILE" "$_bootloader" "$_composefs_backend" "$_filesystem" <<'PYEOF'
+	python3 - "$RECIPE_FILE" "$_bootloader" "$_composefs_backend" "$_filesystem" "${DESKTOP}" <<'PYEOF'
 import json
+import os
 import sys
 
-path, bootloader, composefs, filesystem = sys.argv[1:5]
+path, bootloader, composefs, filesystem, desktop = sys.argv[1:6]
 with open(path) as f:
     recipe = json.load(f)
 recipe["bootloader"] = bootloader
 recipe["composeFsBackend"] = composefs == "true"
 recipe["filesystem"] = filesystem
-if recipe.get("local_imgref") == "containers-storage:ghcr.io/tuna-os/tunaos:latest":
-    del recipe["local_imgref"]
+
+# If imgref or local_imgref carries the generic placeholder, interpolate from image identity
+imgref = recipe.get("imgref", "")
+if not imgref or "tuna-os/tunaos:latest" in imgref:
+    variant = None
+    if os.path.exists("/usr/share/tunaos/identity.env"):
+        with open("/usr/share/tunaos/identity.env") as env_f:
+            for line in env_f:
+                if line.startswith("TUNAOS_VARIANT="):
+                    variant = line.split("=", 1)[1].strip().strip("'\"")
+    if not variant and os.path.exists("/etc/os-release"):
+        with open("/etc/os-release") as os_f:
+            for line in os_f:
+                if line.startswith("IMAGE_ID="):
+                    variant = line.split("=", 1)[1].strip().strip("'\"")
+    if variant and desktop:
+        imgref = f"ghcr.io/tuna-os/{variant}:{desktop}"
+        recipe["imgref"] = imgref
+
+if recipe.get("imgref"):
+    recipe["local_imgref"] = f"containers-storage:{recipe['imgref']}"
+
 with open(path, "w") as f:
     json.dump(recipe, f, indent=2)
     f.write("\n")

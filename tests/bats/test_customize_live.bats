@@ -179,8 +179,8 @@ detect() {
 
 # ── Recipe wiring ─────────────────────────────────────────────────────────────
 
-@test "customize-live.sh: cleans up placeholder local_imgref from installer recipe" {
-  grep -q 'del recipe\["local_imgref"\]' "${SCRIPT}"
+@test "customize-live.sh: populates local_imgref from imgref for offline install" {
+  grep -q 'recipe\["local_imgref"\] = f"containers-storage:' "${SCRIPT}"
 }
 
 @test "build-iso-tacklebox.sh: recipe passes live_customize with customize-live.sh" {
