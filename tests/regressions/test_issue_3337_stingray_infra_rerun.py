@@ -13,6 +13,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github/workflows/rerun-infra-failures.yml"
 LIFECYCLE_WORKFLOW = ROOT / ".github/workflows/bootc-lifecycle.yml"
+DAILY_WORKFLOW = ROOT / ".github/workflows/daily-verify.yml"
 
 
 def test_dispatch_only_stingray_is_an_automatic_retry_source() -> None:
@@ -34,3 +35,20 @@ def test_experimental_variants_use_beta_lifecycle_lane() -> None:
     )
 
     assert generate.count("($variant.experimental == true)") == 2
+
+
+def test_experimental_only_lifecycle_dispatch_skips_empty_stable_lane() -> None:
+    document = yaml.safe_load(LIFECYCLE_WORKFLOW.read_text(encoding="utf-8"))
+    condition = document["jobs"]["lifecycle"]["if"]
+    assert "needs.generate-matrix.outputs.matrix" in condition
+    assert "include[0]" in condition
+
+
+def test_daily_rotation_excludes_dispatch_only_experimental_variants() -> None:
+    document = yaml.safe_load(DAILY_WORKFLOW.read_text(encoding="utf-8"))
+    generate = next(
+        step["run"]
+        for step in document["jobs"]["generate_matrix"]["steps"]
+        if step.get("id") == "set-matrix"
+    )
+    assert "$variant.experimental != true" in generate
