@@ -71,7 +71,9 @@ def test_a_zstd_layer_large_enough_to_contain_a_tar_entry_passes():
     assert "none empty" in result.stdout
 
 
-def test_the_push_gate_inspects_the_digest_forwarded_to_promotion(tmp_path: Path):
+def _run_push_gate(
+    tmp_path: Path, layers: list[dict]
+) -> tuple[subprocess.CompletedProcess[str], Path, str]:
     workflow = yaml.safe_load(
         (ROOT / ".github/workflows/reusable-build-image.yml").read_text(
             encoding="utf-8"
@@ -83,6 +85,10 @@ def test_the_push_gate_inspects_the_digest_forwarded_to_promotion(tmp_path: Path
     tools = tmp_path / "tools"
     tools.mkdir()
     record = tmp_path / "inspected-ref"
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(
+        json.dumps({"schemaVersion": 2, "layers": layers}), encoding="utf-8"
+    )
     sudo = tools / "sudo"
     sudo.write_text("#!/usr/bin/env bash\nexec \"$@\"\n", encoding="utf-8")
     sudo.chmod(0o755)
@@ -90,9 +96,7 @@ def test_the_push_gate_inspects_the_digest_forwarded_to_promotion(tmp_path: Path
     skopeo.write_text(
         "#!/usr/bin/env bash\n"
         "printf '%s' \"$3\" > \"$INSPECTED_REF\"\n"
-        "cat <<'EOF'\n"
-        '{"schemaVersion":2,"layers":[{"mediaType":"application/vnd.oci.image.layer.v1.tar+zstd","digest":"sha256:healthy","size":80}]}\n'
-        "EOF\n",
+        "cat \"$MANIFEST\"\n",
         encoding="utf-8",
     )
     skopeo.chmod(0o755)
@@ -106,6 +110,7 @@ def test_the_push_gate_inspects_the_digest_forwarded_to_promotion(tmp_path: Path
         "SAFE_PLATFORM": "linux-amd64",
         "DIGEST": digest,
         "INSPECTED_REF": str(record),
+        "MANIFEST": str(manifest),
     }
     result = subprocess.run(
         ["bash", "-euo", "pipefail", "-c", gate["run"]],
@@ -115,8 +120,26 @@ def test_the_push_gate_inspects_the_digest_forwarded_to_promotion(tmp_path: Path
         capture_output=True,
         check=False,
     )
+    return result, record, digest
+
+
+def test_the_push_gate_inspects_the_digest_forwarded_to_promotion(tmp_path: Path):
+    healthy = {
+        "mediaType": "application/vnd.oci.image.layer.v1.tar+zstd",
+        "digest": "sha256:healthy",
+        "size": 80,
+    }
+    result, record, digest = _run_push_gate(tmp_path, [healthy])
 
     assert result.returncode == 0, result.stderr
     assert record.read_text(encoding="utf-8") == (
         f"docker://ghcr.io/tuna-os/marlin@{digest}"
     )
+
+
+def test_the_push_gate_blocks_the_incident_manifest(tmp_path: Path):
+    result, _, _ = _run_push_gate(tmp_path, [EMPTY_LAYER])
+
+    assert result.returncode == 1
+    assert EMPTY_LAYER["digest"] in result.stderr
+    assert "25-byte zstd tar layer" in result.stderr
