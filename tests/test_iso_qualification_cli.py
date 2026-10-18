@@ -66,14 +66,14 @@ def test_qualification_requires_manifest_before_starting_qemu(tmp_path):
 
 
 @pytest.mark.parametrize(
-    ("profile", "inventory", "expected_key"),
+    ("profile", "partition_type", "expects_luks_open"),
     [
-        ("plain", "/dev/sda2 ext4\n", None),
-        ("encrypted", "/dev/sda2 crypto_LUKS\n", "all:key:tunaose2e"),
+        ("plain", "ext4", False),
+        ("encrypted", "crypto_LUKS", True),
     ],
 )
-def test_account_provisioning_runs_inside_libguestfs(
-    tmp_path, profile, inventory, expected_key
+def test_account_provisioning_uses_deployment_aware_guestfish(
+    tmp_path, profile, partition_type, expects_luks_open
 ):
     function = shell_section(
         "prepare_qualification_disk() {",
@@ -81,30 +81,49 @@ def test_account_provisioning_runs_inside_libguestfs(
     )
     fakebin = tmp_path / "bin"
     fakebin.mkdir()
-    calls = tmp_path / "virt-customize.args"
-    captured = tmp_path / "firstboot"
-    virt_filesystems = fakebin / "virt-filesystems"
-    virt_filesystems.write_text(
-        "#!/bin/sh\nprintf '%s' \"$INVENTORY\"\n", encoding="utf-8"
-    )
-    virt_customize = fakebin / "virt-customize"
-    virt_customize.write_text(
-        "#!/bin/sh\n"
-        "printf '%s\\n' \"$@\" > \"$CALLS\"\n"
-        "while [ \"$#\" -gt 0 ]; do\n"
-        "  if [ \"$1\" = --firstboot ]; then cp \"$2\" \"$CAPTURED\"; exit 0; fi\n"
-        "  shift\n"
-        "done\n"
-        "exit 2\n",
+    calls = tmp_path / "guestfish.calls"
+    captured = tmp_path / "account-script"
+    guestfish = fakebin / "guestfish"
+    guestfish.write_text(
+        """#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\\n' "$*" >>"$CALLS"
+if [[ "${1:-}" == "--listen" ]]; then
+  echo 'GUESTFISH_PID=4242; export GUESTFISH_PID'
+  exit 0
+fi
+case "$*" in
+  *list-partitions*) printf '/dev/sda1\\n/dev/sda2\\n' ;;
+  *"vfs-type /dev/sda1"*) printf 'vfat\\n' ;;
+  *"vfs-type /dev/sda2"*) printf '%s\\n' "$PARTITION_TYPE" ;;
+  *list-filesystems*)
+    if [[ "$PARTITION_TYPE" == crypto_LUKS ]]; then
+      printf '/dev/mapper/tunaos-qualification-root: ext4\\n'
+    else
+      printf '/dev/sda2: ext4\\n'
+    fi
+    ;;
+  *"is-dir /state/deploy"*) printf 'true\\n' ;;
+  *"is-dir /ostree/deploy"*) printf 'false\\n' ;;
+  *"glob-expand /state/deploy/"*) printf '/state/deploy/abc/etc\\n' ;;
+  *" upload "*)
+    args=("$@")
+    source_path="${args[${#args[@]}-2]}"
+    destination="${args[${#args[@]}-1]}"
+    if [[ "$destination" == */tunaos/qualification-account.sh ]]; then
+      cp "$source_path" "$CAPTURED"
+    fi
+    ;;
+esac
+""",
         encoding="utf-8",
     )
-    for command in (virt_filesystems, virt_customize):
-        command.chmod(0o755)
+    guestfish.chmod(0o755)
     disk = tmp_path / "install-disk.qcow2"
     disk.touch()
     env = os.environ | {
         "PATH": f"{fakebin}:{os.environ['PATH']}",
-        "INVENTORY": inventory,
+        "PARTITION_TYPE": partition_type,
         "CALLS": str(calls),
         "CAPTURED": str(captured),
     }
@@ -130,12 +149,13 @@ def test_account_provisioning_runs_inside_libguestfs(
         check=False,
     )
     assert proc.returncode == 0, proc.stderr
-    arguments = calls.read_text(encoding="utf-8").splitlines()
-    assert arguments[:4] == ["--format", "qcow2", "-a", str(disk)]
-    if expected_key is None:
-        assert "--key" not in arguments
-    else:
-        assert arguments[4:6] == ["--key", expected_key]
+    arguments = calls.read_text(encoding="utf-8")
+    assert "vfs-type /dev/sda2" in arguments
+    assert (
+        "cryptsetup-open /dev/sda2 tunaos-qualification-root" in arguments
+    ) is expects_luks_open
+    assert "glob-expand /state/deploy/*/etc" in arguments
+    assert "virt-customize" not in arguments
     script = captured.read_text(encoding="utf-8")
     assert "useradd --create-home" in script
     assert "qualification:offline-password" not in script
