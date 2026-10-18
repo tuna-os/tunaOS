@@ -17,7 +17,7 @@ images:
   - name: zirconium
     image: ghcr.io/zirconium-dev/zirconium
     tag: latest
-    digest: sha256:cf148db4bc2ebdf42c1d7666c1c398f501eacac2353327bdf2f565908117844f
+    digest: sha256:9df8e25d93ebc5ff0115d00742aee5890345a7fb84b74f2edef9288ea4d3596b
 
   # Bluefin's GNOME 51 for Hummingbird (projectbluefin/utah-packages): a
   # createrepo_c repository shipped as an OCI image (`/repository`), signed
@@ -31,7 +31,7 @@ images:
   - name: utah-packages
     image: ghcr.io/projectbluefin/utah-packages
     tag: latest
-    digest: sha256:1dccaf261ee53ec4dad802510bdcb85ce4a57d1ed6ad7a46b32e93ebd0d32cbd
+    digest: sha256:883f65e360e457292e7e25ede84cda439f83647facffb5c70b6a1eb91f2de299
 
   # tunaOS' own GNOME 50 for EL10, from the gnome50-el10-x86_64 build chain in
   # tuna-os/tunaos-packages: a createrepo_c repository shipped as an OCI image
