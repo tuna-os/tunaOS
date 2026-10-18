@@ -325,7 +325,7 @@ ExecStart=/usr/libexec/tunaos/verify-desktop-experience ${desktop} --runtime
 ExecStart=-/usr/libexec/tunaos/e2e-runtime-checks ${desktop}
 StandardOutput=journal+console
 StandardError=journal+console
-TimeoutStartSec=240
+TimeoutStartSec=300
 
 [Install]
 WantedBy=graphical.target
