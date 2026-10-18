@@ -97,8 +97,8 @@ downloads:
   # renovate: datasource=github-releases depName=twpayne/chezmoi
   chezmoi: "v2.73.2"
   chezmoi_sha256:
-    amd64: "74c239da8b55ae9955a833304b87adc4cf82336647f31d317ccbb7952ad58d46"
-    arm64: "4b5df8d925b79abbe265af25e4c585a4da91aadbae573a0dcc8e2bfcf63e6f1a"
+    amd64: "99d95c77c5d0ebe88108eb6abb6c6bf056bdd6ea23df4cc5e3b169c246b2834b"
+    arm64: "3097548a99325026120a8475649fb7217226c70f70ffa627c83c81528997c86a"
   # The boot gate's harness (scripts/corral-boot-gate.sh, installed by
   # scripts/install-corral.sh). The commit of the v0.7.0 tag, the first release
   # with `vmtest --fail-marker`/`--karg` and local composefs builds. corral

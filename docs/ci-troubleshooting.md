@@ -1662,3 +1662,16 @@ stopped more slowly passed.
 **Fix:** `iso-e2e.sh` always sets `TUNAOS_LUKS_NO_POWEROFF=1`. It takes the
 capture first, then sends the graceful powerdown itself before the kill.
 `tests/bats/test_luks_capture_before_powerdown.bats` holds that order.
+
+### A download version changes but its hashes stay stale
+
+**Symptom:** The checksum gate rejects the pinned `chezmoi` release on both
+architectures.
+
+**Measured cause:** PR #3358 changed the version to `v2.73.2` but kept the
+`v2.73.1` hashes. [Job 117433595064](https://github.com/tuna-os/tunaOS/actions/runs/39045607248/job/117433595064)
+reports both mismatches.
+
+**Fix:** Run `python3 scripts/check-download-checksums.py --only chezmoi --fix`.
+Check both release assets with `python3 -m pytest tests/test_pinned_download_checksums.py -k chezmoi`.
+Commit the version and both hashes together.
