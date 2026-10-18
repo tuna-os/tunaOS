@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import urllib.error
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -214,3 +215,69 @@ def test_unresolvable_pins_warn_dont_fail() -> None:
     assert mod.audit({"kde": {"url": LIVE, "commit": "abc123"}}) == []
     unknown = {"url": LIVE, "resolved": "a" * 40, "at_or_after_floor": None}
     assert mod.audit({"kde": unknown}) == []
+
+
+def test_invalid_production_gitlink_fails_closed(monkeypatch) -> None:
+    monkeypatch.setattr(
+        mod,
+        "INSTALLERS",
+        {
+            "gnome": {
+                "repo": "tuna-os/bootc-installer",
+                "submodule": "fisherman",
+            }
+        },
+    )
+    monkeypatch.setattr(
+        mod,
+        "fetch",
+        lambda *_args: (
+            '[submodule "fisherman"]\n'
+            "\tpath = fisherman\n"
+            f"\turl = {LIVE}\n"
+        ),
+    )
+    monkeypatch.setattr(
+        mod,
+        "submodule_sha",
+        lambda *_args: (_ for _ in ()).throw(KeyError("invalid gitlink")),
+    )
+
+    sources = mod.collect()
+
+    assert "source_error" in sources["gnome"]
+    assert "invalid gitlink" in mod.audit(sources)[0]
+
+
+def test_missing_fisherman_revision_fails_closed(monkeypatch) -> None:
+    monkeypatch.setattr(
+        mod,
+        "INSTALLERS",
+        {
+            "kde": {
+                "repo": "tuna-os/bootc-installer",
+                "manifest": "frontend.json",
+            }
+        },
+    )
+    manifest = json.dumps(
+        {
+            "modules": [
+                {
+                    "name": "fisherman",
+                    "sources": [{"type": "git", "url": LIVE, "branch": "missing"}],
+                }
+            ]
+        }
+    )
+    monkeypatch.setattr(mod, "fetch", lambda *_args: manifest)
+    missing = urllib.error.HTTPError("", 404, "Not Found", {}, None)
+    monkeypatch.setattr(
+        mod,
+        "resolve_sha",
+        lambda *_args: (_ for _ in ()).throw(missing),
+    )
+
+    sources = mod.collect()
+
+    assert "does not exist" in mod.audit(sources)[0]

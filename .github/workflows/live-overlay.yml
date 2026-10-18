@@ -58,9 +58,11 @@ jobs:
           #
           # EXACT FILTER (jq, below): build_image == true AND the flavor id
           # matches a desktop family with an optional hardware/kernel layer
-          # suffix — ^(gnome|kde|cosmic|niri|xfce|pantheon|tuna)(-(hwe|nvidia|
-          # nvidia-hwe|cachyos|zfs))?$. That includes the -hwe/-nvidia/
-          # -nvidia-hwe/-cachyos/-zfs layers CI qualifies, and excludes:
+          # suffix — ^(gnome|kde|cosmic|niri|xfce|pantheon)(-(hwe|nvidia|
+          # nvidia-hwe|cachyos|zfs))?$. `tuna` is excluded until its greetd
+          # session is supported by the production live baseline. The filter
+          # includes -hwe/-nvidia/-nvidia-hwe/-cachyos/-zfs layers CI qualifies,
+          # and excludes:
           #   * base and base-* (no desktop, no live session to customize),
           #   * *-asahi / *-t2 (device-specific install paths -- the
           #     asahi-installer / T2 flows, not the live ISO -- even where
@@ -76,7 +78,7 @@ jobs:
               include: [
                 . as $root | .variants[] as $var | $var.flavors[]
                 | select(.build_image == true)
-                | select(.id | test("^(gnome|kde|cosmic|niri|xfce|pantheon|tuna)(-(hwe|nvidia|nvidia-hwe|cachyos|zfs))?$"))
+                | select(.id | test("^(gnome|kde|cosmic|niri|xfce|pantheon)(-(hwe|nvidia|nvidia-hwe|cachyos|zfs))?$"))
                 | select($v == "all" or $var.id == $v)
                 | select($f == "all" or .id == $f)
                 | {variant: $var.id, flavor: .id,
@@ -141,6 +143,7 @@ jobs:
           PLATFORM: ${{ matrix.platform }}
           SAFEPLATFORM: ${{ matrix.safeplatform }}
           TACKLEBOX_BIN: ${{ steps.tbx.outputs.bin }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           IMG="ghcr.io/tuna-os/${VARIANT}:${FLAVOR}"
@@ -277,8 +280,12 @@ jobs:
             podman manifest rm "$index" >/dev/null 2>&1 || true
             podman manifest create "$index"
             while read -r safeplatform; do
-              podman manifest add "$index" \
-                "docker://ghcr.io/tuna-os/live-overlay:${variant}-${flavor}-${safeplatform}"
+              platform_ref="ghcr.io/tuna-os/live-overlay:${variant}-${flavor}-${safeplatform}"
+              base_digest="$(skopeo inspect --config "docker://${platform_ref}" \
+                | jq -er '.config.Labels["org.tunaos.live-overlay.base-digest"]')"
+              podman manifest add "$index" "docker://${platform_ref}"
+              podman manifest annotate "$index" "$platform_ref" \
+                --annotation "org.tunaos.live-overlay.base-digest=${base_digest}"
             done < <(
               jq -r --arg variant "$variant" --arg flavor "$flavor" \
                 '.include[] | select(.variant == $variant and .flavor == $flavor) | .safeplatform' \
