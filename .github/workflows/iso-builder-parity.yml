@@ -43,13 +43,48 @@ on:
       flavor:
         required: true
         type: string
+      browser_name:
+        description: "Browser identifier recorded in the qualification evidence"
+        required: false
+        default: "unknown"
+        type: string
+      browser_version:
+        description: "Browser version recorded in the qualification evidence"
+        required: false
+        default: "unknown"
+        type: string
+      browser_memory_gib:
+        description: "Browser host memory GiB (empty: the harness measures the runner)"
+        required: false
+        default: ""
+        type: string
+      browser_free_disk_gib:
+        description: "Browser host free disk GiB (empty: the harness measures the runner)"
+        required: false
+        default: ""
+        type: string
+      qual_platform:
+        description: "Target platform recorded in the qualification evidence"
+        required: false
+        default: ""
+        type: string
+      qual_cpu_baseline:
+        description: "Target CPU baseline recorded in the qualification evidence"
+        required: false
+        default: ""
+        type: string
+      qual_hardware_scope:
+        description: "Target hardware scope recorded in the qualification evidence"
+        required: false
+        default: ""
+        type: string
     secrets:
       artifact_token:
         required: false
 
 jobs:
   parity:
-    name: ${{ inputs.variant }}:${{ inputs.flavor }} browser/CI LUKS parity
+    name: ${{ inputs.variant }}:${{ inputs.flavor }} browser/CI strict offline GUI parity
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     permissions:
@@ -101,30 +136,101 @@ jobs:
             parity/ci/experience-manifest.json \
             --compare parity/browser/experience-manifest.json
 
-      - name: Run the identical LUKS E2E against CI ISO
+      - name: Run strict offline GUI qualification against CI ISO
         env:
           VARIANT: ${{ inputs.variant }}
           FLAVOR: ${{ inputs.flavor }}
+          TUNAOS_QUAL_PLATFORM: ${{ inputs.qual_platform }}
+          TUNAOS_QUAL_CPU_BASELINE: ${{ inputs.qual_cpu_baseline }}
+          TUNAOS_QUAL_HARDWARE_SCOPE: ${{ inputs.qual_hardware_scope }}
+          TUNAOS_QUAL_BROWSER_NAME: ${{ inputs.browser_name }}
+          TUNAOS_QUAL_BROWSER_VERSION: ${{ inputs.browser_version }}
+          TUNAOS_QUAL_BROWSER_MEMORY_GIB: ${{ inputs.browser_memory_gib }}
+          TUNAOS_QUAL_BROWSER_FREE_DISK_GIB: ${{ inputs.browser_free_disk_gib }}
         run: |
           set -euo pipefail
           iso="parity/ci/ci.iso"
           test -f "$iso" || { echo "missing $iso" >&2; exit 1; }
-          ./scripts/iso-e2e.sh "$iso" --luks --output parity/ci-e2e
+          # The source digest the qualification must match after reboot.
+          # v1 manifests carry it under resolved_inputs; accept the legacy
+          # field while iso-builder callers migrate. Empty is fine — the
+          # harness then reads it from the live guest over SSH, or fails
+          # closed if neither channel yields it.
+          manifest="parity/ci/experience-manifest.json"
+          if [ -f "$manifest" ]; then
+            export TUNAOS_QUAL_SOURCE_DIGEST
+            TUNAOS_QUAL_SOURCE_DIGEST="$(jq -r '.resolved_inputs.source // .source_image_digest // empty' "$manifest")"
+          fi
+          ./scripts/iso-e2e.sh "$iso" --strict-offline-gui --output parity/ci-e2e
 
-      - name: Run the identical LUKS E2E against browser ISO
+      - name: Run strict offline GUI qualification against browser ISO
         env:
           VARIANT: ${{ inputs.variant }}
           FLAVOR: ${{ inputs.flavor }}
+          TUNAOS_QUAL_PLATFORM: ${{ inputs.qual_platform }}
+          TUNAOS_QUAL_CPU_BASELINE: ${{ inputs.qual_cpu_baseline }}
+          TUNAOS_QUAL_HARDWARE_SCOPE: ${{ inputs.qual_hardware_scope }}
+          TUNAOS_QUAL_BROWSER_NAME: ${{ inputs.browser_name }}
+          TUNAOS_QUAL_BROWSER_VERSION: ${{ inputs.browser_version }}
+          TUNAOS_QUAL_BROWSER_MEMORY_GIB: ${{ inputs.browser_memory_gib }}
+          TUNAOS_QUAL_BROWSER_FREE_DISK_GIB: ${{ inputs.browser_free_disk_gib }}
         run: |
           set -euo pipefail
           iso="parity/browser/browser.iso"
           test -f "$iso" || { echo "missing $iso" >&2; exit 1; }
-          ./scripts/iso-e2e.sh "$iso" --luks --output parity/browser-e2e
+          manifest="parity/browser/experience-manifest.json"
+          if [ -f "$manifest" ]; then
+            export TUNAOS_QUAL_SOURCE_DIGEST
+            TUNAOS_QUAL_SOURCE_DIGEST="$(jq -r '.resolved_inputs.source // .source_image_digest // empty' "$manifest")"
+          fi
+          ./scripts/iso-e2e.sh "$iso" --strict-offline-gui --output parity/browser-e2e
+
+      - name: Validate and compare qualification evidence
+        run: |
+          set -euo pipefail
+          for source in ci browser; do
+            ev="parity/${source}-e2e/qualification-evidence.json"
+            test -f "$ev" || { echo "missing $ev" >&2; exit 1; }
+            python3 scripts/verify-experience-manifest.py "$ev"
+          done
+          python3 scripts/verify-experience-manifest.py \
+            parity/ci-e2e/qualification-evidence.json \
+            --compare parity/browser-e2e/qualification-evidence.json
+
+      - name: Prune heavy temporaries before upload
+        if: always()
+        run: |
+          set -euo pipefail
+          # Multi-GB temporaries must never reach artifact storage: installed
+          # qcow2 disks, raw PPM captures, and any ISO copies staged under
+          # the per-source output dirs. Evidence is the converted PNGs,
+          # logs, walkthrough JSON, and qualification-evidence.json.
+          for dir in parity/ci-e2e parity/browser-e2e; do
+            [ -d "$dir" ] || continue
+            find "$dir" -type f \( -name '*.qcow2' -o -name '*.ppm' -o -name '*.iso' \) -delete
+          done
 
       - name: Upload parity evidence
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: iso-builder-parity-${{ inputs.variant }}-${{ inputs.flavor }}
-          path: parity/*-e2e
+          # Curated evidence only: serial/evidence logs, the v1
+          # qualification JSON, per-mode fragments, walkthrough TAP JSON,
+          # and converted PNG frames. The prune step above already deleted
+          # qcow2/PPM/ISO temporaries; no disk-image path is listed here, so
+          # multi-GB media can never reach artifact storage.
+          path: |
+            parity/ci-e2e/*.log
+            parity/ci-e2e/*.json
+            parity/ci-e2e/*.png
+            parity/ci-e2e/walkthrough-*/*.json
+            parity/ci-e2e/walkthrough-*/*.png
+            parity/browser-e2e/*.log
+            parity/browser-e2e/*.json
+            parity/browser-e2e/*.png
+            parity/browser-e2e/walkthrough-*/*.json
+            parity/browser-e2e/walkthrough-*/*.png
           if-no-files-found: warn
+          retention-days: 1
+          compression-level: 0
