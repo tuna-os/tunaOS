@@ -100,10 +100,10 @@ priority 4, above the `tunaos-hummingbird` prefix (5). The repo is marked
 content, because the image digest is the signature there and nothing fetched
 over the network may skip `gpgcheck` (#1655).
 
-What utah does not ship (the fedora list's extras, and the other five
-desktops) still comes from `repo.tunaos.org/hummingbird/<snapshot>`, which
-tunaos-packages now builds in the same Fedora 44 + public-hummingbird root
-(tuna-os/tunaos-packages#630) and gates on a static installability walk.
+The Fedora extras and other desktops still use
+`repo.tunaos.org/hummingbird/<snapshot>`. tunaos-packages builds these packages
+in the same Fedora 44 + public-hummingbird root (tuna-os/tunaos-packages#630).
+A static check verifies that these packages can install.
 The decision and the numbers behind it are in tunaos-packages'
 `docs/HUMMINGBIRD-TARGET.md` and tuna-os/tunaos-packages#629.
 
@@ -112,7 +112,7 @@ The decision and the numbers behind it are in tunaos-packages'
 `tunaos-packages#832` now publishes `tuna-desktop`
 `1.0.0~beta.1-1.bfin1` in the same Fedora 44 + public-hummingbird +
 utah-packages build root as its Hummingbird dependencies. The served RPMs
-were verified by SHA-256 as `fea2c26e8494ac942bddbf4927792e5434a437a2981e99f683357481af46ac54`
+have SHA-256 hashes of `fea2c26e8494ac942bddbf4927792e5434a437a2981e99f683357481af46ac54`
 on x86_64 (run 38877631220) and
 `a1f98b089357369cc29083bf412d4c467b4a8ec77c0749b0a419d1baf758fe68` on
 aarch64 (run 38901123271). The tunaOS manifest uses the signed
@@ -120,11 +120,11 @@ aarch64 (run 38901123271). The tunaOS manifest uses the signed
 NEVR; the repository key is
 `4E5CC9F8B3B521793D95266E629BE6EA45188366`.
 
-The tunaOS cell is admitted only on `linux/amd64`, because the pinned bootc
-base still cannot build on aarch64. It remains image-only until native
-desktop boot, authentication, portal, install and recovery evidence graduates
-the v1 release gates; the package's aarch64 publication does not qualify an
-image architecture by itself.
+tunaOS admits this cell only on `linux/amd64`. The pinned bootc base still
+cannot build on aarch64. The image uses only `*-testing` tags until native desktop
+boot, authentication, portal, install and recovery evidence passes the v1
+release gates. The package's aarch64 publication does not qualify an image
+architecture by itself.
 
 ### utah does not close the GNOME closure yet (measured 2026-09-24)
 
