@@ -94,7 +94,10 @@ check: _ensure_check_deps ste
     echo "Checking workflow drift..."
     python3 {{ justfile_directory() }}/scripts/generate-workflows.py
     python3 {{ justfile_directory() }}/scripts/gen-ci-lanes.py --check
-    if ! git diff --exit-code .github/workflows/build-*.yml; then
+    # build-variant.yml is hand-maintained despite matching build-*.yml.
+    # Compare only the per-variant entry points that generate-workflows.py owns.
+    mapfile -t generated_build_workflows < <(yq -r '.variants[].id | ".github/workflows/build-\(.).yml"' .github/build-config.yml)
+    if ! git diff --exit-code -- "${generated_build_workflows[@]}"; then
         echo "::error::Generated workflow files are stale. Run 'just generate-workflows' and commit the changes."
         exit 1
     fi

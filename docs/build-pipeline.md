@@ -72,6 +72,28 @@ points and the manual `build-flavor.yml` dispatcher.
   - **Cosign signing + SBOM** with transient error retry and deadline backoff for all published images (#1377)
   - Pull-request builds do not promote user-facing tags
 
+#### ISO delivery cutover
+
+`iso_delivery` in `.github/build-config.yml` is the reviewed switch between
+browser-first delivery and routine publication of prebuilt ISOs to R2. Each
+`cutover_targets` entry uses an exact `variant` / `flavor` / `platform`
+identity. Each entry also needs `browser-qualified` status, a date, and an
+evidence reference. If no entry matches, scheduled and explicit publication
+continue through the prebuilt path.
+
+The workflow closes R2 publication for a group only if every buildable flavor
+in its offline store has an exact cutover entry. Partial qualification keeps
+the group open. `scripts/iso-delivery-policy.py` evaluates both matrix forms.
+This keeps the two workflows in sync.
+
+Before you add a cutover target, record every existing versioned and `-latest`
+ISO basename in `retained_r2_isos`. Keep this list after a rollback. If you
+remove a target, publication resumes and the retained inventory stays in
+place. The retention workflow adds the `.sha256` and `.sigstore.json` sidecars
+for each ISO. It excludes all three exact objects and then starts the 14-day
+deletion rule. Policy validation rejects a published target or fully covered
+group without a retained latest pointer and a retained versioned ISO.
+
 ### 2. Pull Request Checks
 
 Pull requests run the repository's validation workflows and any selected image

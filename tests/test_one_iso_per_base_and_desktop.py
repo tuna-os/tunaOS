@@ -21,6 +21,8 @@ and a typo here is a silently missing ISO rather than an error.
 """
 from __future__ import annotations
 
+import json
+import subprocess
 from pathlib import Path
 
 import yaml
@@ -28,6 +30,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG = ROOT / ".github" / "build-config.yml"
 DESKTOPS = ["gnome", "kde", "cosmic", "niri", "xfce"]
+POLICY = ROOT / "scripts" / "iso-delivery-policy.py"
 
 
 def config() -> dict:
@@ -119,3 +122,100 @@ def test_the_intersection_that_makes_partial_variants_safe_still_exists():
         encoding="utf-8")
     assert "iso_groups ∩ variant flavors" in wf
     assert "select(($sel | length) > 0)" in wf
+
+
+def _qualification(flavor: str) -> dict:
+    return {
+        "variant": "fish",
+        "flavor": flavor,
+        "platform": "linux/amd64",
+        "qualification": "browser-qualified",
+        "qualified_at": "2026-10-18",
+        "evidence": f"qualification/fish-{flavor}.json",
+    }
+
+
+def _group_policy_config(targets: list[dict], retained: list[str]) -> dict:
+    return {
+        "iso_delivery": {
+            "cutover_targets": targets,
+            "retained_r2_isos": retained,
+        },
+        "iso_groups": [
+            {
+                "suffix": "kde",
+                "flavors": ["kde"],
+                "offline_flavors": ["kde", "kde-hwe"],
+            }
+        ],
+        "variants": [
+            {
+                "id": "fish",
+                "platforms": ["linux/amd64"],
+                "flavors": [
+                    {"id": "kde", "build_image": True, "build_iso": False},
+                    {"id": "kde-hwe", "build_image": True, "build_iso": False},
+                ],
+            }
+        ],
+    }
+
+
+def _annotate_group(tmp_path: Path, config: dict) -> subprocess.CompletedProcess[str]:
+    config_path = tmp_path / "config.json"
+    config_path.write_text(json.dumps(config), encoding="utf-8")
+    matrix = {
+        "include": [
+            {
+                "variant": "fish",
+                "group": "kde",
+                "platform": "linux/amd64",
+                "required_flavors": ["kde", "kde-hwe"],
+            }
+        ]
+    }
+    return subprocess.run(
+        [
+            str(POLICY),
+            "--config-json",
+            str(config_path),
+            "annotate-group-matrix",
+        ],
+        input=json.dumps(matrix),
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+
+def test_partially_covered_group_keeps_r2_publication(tmp_path: Path):
+    result = _annotate_group(
+        tmp_path,
+        _group_policy_config([_qualification("kde")], []),
+    )
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["include"][0]["r2_cutover"] is False
+
+
+def test_fully_covered_group_closes_r2_publication(tmp_path: Path):
+    result = _annotate_group(
+        tmp_path,
+        _group_policy_config(
+            [_qualification("kde"), _qualification("kde-hwe")],
+            ["fish-kde-latest.iso", "fish-kde-20261018-x86_64.iso"],
+        ),
+    )
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["include"][0]["r2_cutover"] is True
+
+
+def test_fully_covered_group_requires_retained_r2_inventory(tmp_path: Path):
+    result = _annotate_group(
+        tmp_path,
+        _group_policy_config(
+            [_qualification("kde"), _qualification("kde-hwe")],
+            [],
+        ),
+    )
+    assert result.returncode != 0
+    assert "fully cut-over group" in result.stderr

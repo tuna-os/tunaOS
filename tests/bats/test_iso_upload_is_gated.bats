@@ -13,6 +13,16 @@
 REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
 VARIANT_WF="${REPO_ROOT}/.github/workflows/build-variant.yml"
 ARTIFACTS_WF="${REPO_ROOT}/.github/workflows/reusable-build-artifacts.yml"
+POLICY="${REPO_ROOT}/scripts/iso-delivery-policy.py"
+CONFIG="${REPO_ROOT}/.github/build-config.yml"
+
+setup() {
+  TEST_TMPDIR="$(mktemp -d)"
+}
+
+teardown() {
+  rm -rf "$TEST_TMPDIR"
+}
 
 @test "every ISO call site decides upload-r2 rather than inheriting the default" {
   local calls uploads
@@ -30,8 +40,8 @@ ARTIFACTS_WF="${REPO_ROOT}/.github/workflows/reusable-build-artifacts.yml"
   [ "$status" -ne 0 ]
 }
 
-@test "scheduled runs still publish, so documented download URLs stay current" {
-  run grep -c "upload-r2: \${{ github.event_name == 'schedule' || inputs.publish-isos }}" "$VARIANT_WF"
+@test "scheduled runs publish only outside reviewed cutover targets" {
+  run grep -c "upload-r2: \${{ (github.event_name == 'schedule' || inputs.publish-isos) && !matrix.r2_cutover }}" "$VARIANT_WF"
   [ "$status" -eq 0 ]
   [ "$output" -ge 1 ]
 }
@@ -59,4 +69,80 @@ ARTIFACTS_WF="${REPO_ROOT}/.github/workflows/reusable-build-artifacts.yml"
   run grep -A2 'name: Upload ISO to Cloudflare R2' "$ARTIFACTS_WF"
   [ "$status" -eq 0 ]
   [[ "$output" == *"if: inputs.upload-r2"* ]]
+}
+
+@test "the checked-in empty policy validates and keeps normal publication" {
+  yq -o=json '.' "$CONFIG" > "$TEST_TMPDIR/config.json"
+  run "$POLICY" --config-json "$TEST_TMPDIR/config.json" validate
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"0 cutover target(s)"* ]]
+}
+
+@test "an exact qualified target stops publishing and removal restores it" {
+  cat > "$TEST_TMPDIR/config.json" <<'JSON'
+{
+  "iso_delivery": {
+    "cutover_targets": [{
+      "variant": "fish",
+      "flavor": "gnome",
+      "platform": "linux/amd64",
+      "qualification": "browser-qualified",
+      "qualified_at": "2026-10-18",
+      "evidence": "qualification/fish-gnome.json"
+    }],
+    "retained_r2_isos": [
+      "fish-gnome-latest.iso",
+      "fish-gnome-20261018-x86_64.iso"
+    ]
+  },
+  "iso_groups": [],
+  "variants": [{
+    "id": "fish",
+    "platforms": ["linux/amd64"],
+    "flavors": [
+      {"id": "gnome", "build_image": true, "build_iso": true},
+      {"id": "kde", "build_image": true, "build_iso": true}
+    ]
+  }]
+}
+JSON
+  cat > "$TEST_TMPDIR/matrix.json" <<'JSON'
+{"include":[
+  {"variant":"fish","flavor":"gnome","platform":"linux/amd64"},
+  {"variant":"fish","flavor":"kde","platform":"linux/amd64"}
+]}
+JSON
+
+  run bash -c '"$1" --config-json "$2" annotate-target-matrix < "$3"' \
+    _ "$POLICY" "$TEST_TMPDIR/config.json" "$TEST_TMPDIR/matrix.json"
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.include[0].r2_cutover' <<<"$output")" = "true" ]
+  [ "$(jq -r '.include[1].r2_cutover' <<<"$output")" = "false" ]
+
+  jq '.iso_delivery.cutover_targets = []' "$TEST_TMPDIR/config.json" \
+    > "$TEST_TMPDIR/restored.json"
+  run bash -c '"$1" --config-json "$2" annotate-target-matrix < "$3"' \
+    _ "$POLICY" "$TEST_TMPDIR/restored.json" "$TEST_TMPDIR/matrix.json"
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '[.include[].r2_cutover] | all(. == false)' <<<"$output")" = "true" ]
+}
+
+@test "retention protects each exact ISO and both verification sidecars" {
+  cat > "$TEST_TMPDIR/config.json" <<'JSON'
+{
+  "iso_delivery": {
+    "cutover_targets": [],
+    "retained_r2_isos": ["fish-gnome-20261018-x86_64.iso"]
+  },
+  "iso_groups": [],
+  "variants": []
+}
+JSON
+
+  run "$POLICY" --config-json "$TEST_TMPDIR/config.json" retention-filters
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"- /fish-gnome-20261018-x86_64.iso"* ]]
+  [[ "$output" == *"- /fish-gnome-20261018-x86_64.iso.sha256"* ]]
+  [[ "$output" == *"- /fish-gnome-20261018-x86_64.iso.sigstore.json"* ]]
 }

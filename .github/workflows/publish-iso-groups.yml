@@ -80,13 +80,16 @@ jobs:
           # Emit one matrix entry per (variant, group) whose intersection of
           # group flavors with the variant's build_image flavors is non-empty.
           # "default"/'' is the flagship group; its ISO has no suffix.
-          MATRIX=$(yq -o=json .github/build-config.yml | jq -c \
-            --arg wv "$WANT_VARIANT" --arg wg "$WANT_GROUP" '
+          CONFIG_JSON="${RUNNER_TEMP}/build-config.json"
+          yq -o=json '.' .github/build-config.yml > "$CONFIG_JSON"
+          MATRIX=$(jq -c --arg wv "$WANT_VARIANT" --arg wg "$WANT_GROUP" '
             [ .variants[] as $var
               | ($var.flavors | map(select(.build_image == true) | .id)) as $vf
               | .iso_groups[] as $g
               | ($g.suffix // "") as $suffix
               | ($g.flavors | map(select(. as $f | $vf | index($f)))) as $sel
+              | ($g.offline_flavors // $g.flavors
+                 | map(select(. as $f | $vf | index($f)))) as $offline
               | select(($sel | length) > 0)
               | select($wv == "all" or $var.id == $wv)
               | select($wg == "all"
@@ -96,13 +99,17 @@ jobs:
               # UNLESS the dispatch names that exact suffix.
               | select(($g.publish != false) or ($wg == $suffix))
               | {
-                  variant:  $var.id,
-                  group:    (if $suffix == "" then "default" else $suffix end),
-                  suffix:   $suffix,
-                  basename: (if $suffix == "" then $var.id else "\($var.id)-\($suffix)" end),
-                  flavors:  $sel
+                  variant:         $var.id,
+                  group:           (if $suffix == "" then "default" else $suffix end),
+                  suffix:          $suffix,
+                  basename:        (if $suffix == "" then $var.id else "\($var.id)-\($suffix)" end),
+                  flavors:         $sel,
+                  required_flavors: $offline,
+                  platform:        "linux/amd64"
                 }
-            ] | { include: . }')
+            ] | { include: . }' "$CONFIG_JSON" \
+            | python3 scripts/iso-delivery-policy.py \
+              --config-json "$CONFIG_JSON" annotate-group-matrix)
           # Probe every image the selected group will consume. A variant whose
           # flagship image was never published is skipped, as is a group with
           # a missing flavor (for example, a failed gnome-nvidia build). Do
@@ -327,9 +334,11 @@ jobs:
           ls -l "$CHECKSUM" "$BUNDLE"
           cat "$CHECKSUM"
 
-      # Only reached if the boot gate passed.
+      # Only reached if the boot gate passed. A group closes R2 publication
+      # only when every buildable offline flavor is in the reviewed cutover;
+      # partial coverage keeps the established prebuilt path.
       - name: Upload ISO to Cloudflare R2
-        if: ${{ inputs.skip_upload != true }}
+        if: ${{ inputs.skip_upload != true && !matrix.r2_cutover }}
         env:
           RCLONE_CONFIG_R2_TYPE: s3
           RCLONE_CONFIG_R2_PROVIDER: Cloudflare
@@ -365,15 +374,10 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ matrix.basename }}-iso
-          # The ISO itself is deliberately NOT uploaded. This job's whole
-          # purpose is to put it in R2, so an Actions artifact of the same
-          # bytes is a second copy of the deliverable — at 90 days by
-          # default, across every grouped cell, against 0.5 GB of included
-          # storage. The checksum and signature stay: they are kilobytes,
-          # and they are what a reviewer actually wants to see from a run.
-          #
-          # Recovering the ISO means downloading it from R2, which is the
-          # thing being published and therefore the copy worth testing.
+          # The ISO itself is deliberately NOT uploaded. For non-cutover
+          # groups, R2 is the durable copy. For cutover groups, the browser
+          # builder is the delivery path and this run retains only the signed
+          # checksum evidence needed for review.
           path: |
             ${{ matrix.basename }}-*.iso.sha256
             ${{ matrix.basename }}-*.iso.sigstore.json
