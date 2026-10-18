@@ -88,17 +88,18 @@ This keeps the two workflows in sync.
 
 Before you add a cutover target, record every existing versioned and `-latest`
 ISO basename in `retained_r2_isos`. Keep this list after a rollback. If you
-remove a target, publication resumes without modifying those retained objects.
-When a requested versioned or latest name is retained, the shared uploader
-writes the fresh ISO and its unchanged signed sidecars under a
-`-snapshot-sha256-<prefix>` name and updates
-`<variant>-<flavor>-latest[...].json` (`TunaOSIsoResolution/v1`) to resolve the
-current signed download. Download surfaces use that resolver after rollback
-instead of assuming the immutable historical `-latest.iso` object moved. The
-retention workflow protects each resolver's current target plus every explicit
-retained ISO and sidecar; superseded snapshots age out after 14 days. Policy
-validation rejects a published target or fully covered group without a retained
-latest pointer and a retained versioned ISO.
+remove a target, publication resumes and retains those objects.
+
+When a requested versioned or latest name is in `retained_r2_isos`, the shared
+uploader writes a fresh ISO and unchanged signed sidecars under a
+`-snapshot-sha256-<prefix>` name. It also updates
+`<variant>-<flavor>-latest[...].json` (`TunaOSIsoResolution/v1`) with the
+current signed download. After rollback, download surfaces use this resolver,
+not historical `-latest.iso` objects. The retention workflow protects each
+resolver target, every explicit retained ISO, and each sidecar. Superseded
+snapshots age out after 14 days. Policy validation rejects a published target
+or fully covered group without a retained latest pointer and a retained
+versioned ISO.
 
 ### 2. Pull Request Checks
 
