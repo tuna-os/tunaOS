@@ -16,11 +16,75 @@
 
 set -exo pipefail
 
+write_live_source_metadata() {
+	local root="${TUNA_SESSION_ROOT:-}"
+	local metadata_dir="${root}/etc/tunaos"
+	mkdir -p "${metadata_dir}"
+	cat >"${metadata_dir}/live-installer-info" <<INFOEOF
+# Written by tunaOS customize-live.sh: the installer payload in this squash.
+INSTALLER_APP=${INSTALLER_APP}
+INSTALLER_REVISION=${INSTALLER_REVISION}
+INSTALLER_BUNDLE_SHA256=${INSTALLER_BUNDLE_SHA256}
+INFOEOF
+
+	python3 - "${metadata_dir}/live-source.json" "${INSTALLER_APP}" "${INSTALLER_REVISION}" <<'PYEOF'
+import json
+import os
+import sys
+
+path, installer_app, installer_revision = sys.argv[1:4]
+metadata = {
+    "base_image": os.environ.get("TUNA_LIVE_BASE_IMAGE", "unknown"),
+    "base_digest": os.environ.get("TUNA_LIVE_BASE_DIGEST", "unknown"),
+    "platform": os.environ.get("TUNA_LIVE_PLATFORM", "unknown"),
+    "installer_app_id": installer_app,
+    "installer_revision": installer_revision,
+}
+with open(path, "w") as metadata_file:
+    json.dump(metadata, metadata_file, indent=2)
+    metadata_file.write("\n")
+PYEOF
+	echo "customize-live: installer ${INSTALLER_APP}@${INSTALLER_REVISION} (bundle ${INSTALLER_BUNDLE_SHA256})"
+	echo "customize-live: source metadata written to ${metadata_dir}/live-source.json"
+}
+
+installer_asset_for_arch() {
+	if [[ "$1" == "x86_64" ]]; then
+		printf '%s\n' "org.bootcinstaller.Installer.flatpak"
+	else
+		printf '%s\n' "org.bootcinstaller.Installer-$1.flatpak"
+	fi
+}
+
+# Behavior probe for the architecture-specific release asset. Unlike the
+# metadata-only mode below, this performs no filesystem mutation.
+if [[ "${TUNA_ASSET_NAME_ONLY:-0}" == "1" ]]; then
+	installer_asset_for_arch "${TUNA_INSTALLER_ARCH:-$(uname -m)}"
+	exit 0
+fi
+
 # This persistent live-only marker survives /run becoming a tmpfs at boot.
 mkdir -p "${TUNA_SESSION_ROOT:-}/etc/tunaos"
 touch "${TUNA_SESSION_ROOT:-}/etc/tunaos/live-session"
+# The installer backend's live-ISO flag: an empty sentinel alongside the
+# live-session marker above, so fisherman's bootc path can tell live media
+# (install the running squash's payload) from a containerized invocation
+# without probing for session files.
+mkdir -p "${TUNA_SESSION_ROOT:-}/etc/bootc-installer"
+touch "${TUNA_SESSION_ROOT:-}/etc/bootc-installer/live-iso-mode"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Test hook: exercise metadata output without mutating a host image or
+# requiring flatpak/podman. TUNA_SESSION_ROOT must point at a disposable root.
+if [[ "${TUNA_METADATA_ONLY:-0}" == "1" ]]; then
+	: "${TUNA_SESSION_ROOT:?TUNA_SESSION_ROOT is required in metadata-only mode}"
+	INSTALLER_APP="${TUNA_INSTALLER_APP:?TUNA_INSTALLER_APP is required in metadata-only mode}"
+	INSTALLER_REVISION="${TUNA_INSTALLER_REVISION:-unknown}"
+	INSTALLER_BUNDLE_SHA256="${TUNA_INSTALLER_BUNDLE_SHA256:-unknown}"
+	write_live_source_metadata
+	exit 0
+fi
 
 # ── 1. Desktop detection ──────────────────────────────────────────────────────
 # TUNA_SESSION_ROOT lets the bats tests point detection at a fake root.
@@ -62,6 +126,14 @@ pantheon) INSTALLER_APP="org.bootcinstaller.Installer" ;;
 # install-flatpaks.sh there) rather than from the tuna-os Flatpak remote.
 *) INSTALLER_APP="org.bootcinstaller.Installer" ;;
 esac
+
+# Provenance captured during the pre-install below and recorded in
+# /etc/tunaos/live-installer-info + /etc/tunaos/live-source.json, so the
+# overlay carries its own installer receipt (the workflow mirrors the app
+# id and revision into OCI labels from the same values).
+INSTALLER_ARCH="${TUNA_INSTALLER_ARCH:-$(uname -m)}"
+INSTALLER_REVISION="${TUNA_INSTALLER_REVISION:-unknown}"
+INSTALLER_BUNDLE_SHA256="remote"
 
 # Test hook: report detection and stop before any system mutation.
 if [[ "${TUNA_DETECT_ONLY:-0}" == "1" ]]; then
@@ -684,10 +756,11 @@ if [[ -n "${INSTALLER_APP}" ]]; then
 		# the bare name — every existing consumer fetches that exact URL, and
 		# renaming it would break them for no gain. See
 		# tuna-os/bootc-installer#25.
-		_installer_asset="org.bootcinstaller.Installer.flatpak"
-		if [[ "$(uname -m)" != "x86_64" ]]; then
-			_installer_asset="org.bootcinstaller.Installer-$(uname -m).flatpak"
-		fi
+		# TUNA_INSTALLER_ARCH is the matrix platform's arch, threaded through
+		# by live-overlay.yml so the bundle matches the TARGET, not whatever
+		# the build host happens to report. INSTALLER_ARCH defaults to the host
+		# arch for the ISO build path, which never sets it.
+		_installer_asset="$(installer_asset_for_arch "${INSTALLER_ARCH}")"
 		if ! curl --retry 3 --fail --location --max-time 300 \
 			"https://github.com/tuna-os/bootc-installer/releases/latest/download/${_installer_asset}" \
 			-o "${INSTALLER_FLATPAK_FILE}" 2>/dev/null; then
@@ -699,13 +772,18 @@ if [[ -n "${INSTALLER_APP}" ]]; then
 				# "Nothing matches ... in remote installer-local" three
 				# commands later, which looks like a corrupt download rather
 				# than an asset that was never published.
-				echo "ERROR: no ${_installer_asset} published for $(uname -m)" >&2
+				echo "ERROR: no ${_installer_asset} published for ${INSTALLER_ARCH}" >&2
 				exit 1
 			fi
 		fi
 		INSTALLER_LOCAL_REPO="/tmp/installer-local-repo"
 		ostree init --repo="${INSTALLER_LOCAL_REPO}" --mode=archive-z2
 		flatpak build-import-bundle "${INSTALLER_LOCAL_REPO}" "${INSTALLER_FLATPAK_FILE}"
+		# Receipt for the overlay: the exact bytes imported, hashed before the
+		# file is removed. A missing sha256sum must not fail an otherwise good
+		# install; "unknown" says so honestly downstream.
+		INSTALLER_BUNDLE_SHA256="$(sha256sum "${INSTALLER_FLATPAK_FILE}" 2>/dev/null | cut -d' ' -f1 || true)"
+		INSTALLER_BUNDLE_SHA256="${INSTALLER_BUNDLE_SHA256:-unknown}"
 		rm -f "${INSTALLER_FLATPAK_FILE}"
 		flatpak remote-add --system --no-gpg-verify installer-local "file://${INSTALLER_LOCAL_REPO}"
 		# On failure, say WHAT THE REMOTES ACTUALLY OFFER. The error flatpak
@@ -783,10 +861,10 @@ if [[ -n "${INSTALLER_APP}" ]]; then
 		# the deployment directory but omits the 'active' symlink inside the
 		# branch directory, leaving the app unreachable to flatpak run/list.
 		# Reproduce the symlink a normal installation would create.
-		# $(uname -m), not a hardcoded x86_64: flatpak deploys under the
-		# host arch, so on aarch64 this globbed a directory that does not
-		# exist and the repair below silently did nothing.
-		_app_arch_dir="/var/lib/flatpak/app/${INSTALLER_APP}/$(uname -m)"
+		# INSTALLER_ARCH follows the explicit target platform when the overlay
+		# workflow sets one, and the host architecture for direct ISO builds.
+		# Using x86_64 here made the aarch64 active-symlink repair a no-op.
+		_app_arch_dir="/var/lib/flatpak/app/${INSTALLER_APP}/${INSTALLER_ARCH}"
 		for _branch_dir in "${_app_arch_dir}"/*/; do
 			_branch_dir="${_branch_dir%/}"
 			[[ -d "${_branch_dir}" ]] || continue
@@ -857,6 +935,20 @@ if [[ -n "${INSTALLER_APP}" ]]; then
 	else
 		echo "WARNING: fisherman not found inside ${INSTALLER_APP}" >&2
 	fi
+fi
+
+# ── 4a2. Installer and source receipt ─────────────────────────────────────
+# What section 3 actually installed, as facts rather than labels: the app id,
+# deployed Flatpak commit, bundle digest, base image manifest digest, and
+# target platform. The overlay workflow supplies the base fields; the ISO
+# path records "unknown" because it does not consume a separately published
+# overlay. File writes only: a customize container has no host graphroot.
+if [[ -n "${INSTALLER_APP:-}" ]]; then
+	_installed_commit="$(flatpak info --system --show-commit "${INSTALLER_APP}" 2>/dev/null || true)"
+	if [[ -n "${_installed_commit}" ]]; then
+		INSTALLER_REVISION="${_installed_commit}"
+	fi
+	write_live_source_metadata
 fi
 
 # ── 4b. Polkit: passwordless install for the live session ────────────────────

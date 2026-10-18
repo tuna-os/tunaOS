@@ -67,6 +67,39 @@ detect() {
   [ "$status" -eq 0 ]
 }
 
+@test "metadata-only mode writes an exact live source receipt" {
+  local digest="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  run env \
+    TUNA_SESSION_ROOT="${FAKE_ROOT}" \
+    TUNA_METADATA_ONLY=1 \
+    TUNA_INSTALLER_APP="org.tunaos.InstallerKde" \
+    TUNA_INSTALLER_REVISION="flatpak-commit-123" \
+    TUNA_INSTALLER_BUNDLE_SHA256="bundle-sha-456" \
+    TUNA_LIVE_BASE_IMAGE="ghcr.io/tuna-os/yellowfin:kde" \
+    TUNA_LIVE_BASE_DIGEST="${digest}" \
+    TUNA_LIVE_PLATFORM="linux/amd64" \
+    bash "${SCRIPT}"
+  [ "$status" -eq 0 ]
+
+  [ -f "${FAKE_ROOT}/etc/bootc-installer/live-iso-mode" ]
+  grep -Fxq "INSTALLER_APP=org.tunaos.InstallerKde" \
+    "${FAKE_ROOT}/etc/tunaos/live-installer-info"
+  grep -Fxq "INSTALLER_REVISION=flatpak-commit-123" \
+    "${FAKE_ROOT}/etc/tunaos/live-installer-info"
+  grep -Fxq "INSTALLER_BUNDLE_SHA256=bundle-sha-456" \
+    "${FAKE_ROOT}/etc/tunaos/live-installer-info"
+
+  run jq -e \
+    --arg digest "${digest}" \
+    '.base_image == "ghcr.io/tuna-os/yellowfin:kde"
+      and .base_digest == $digest
+      and .platform == "linux/amd64"
+      and .installer_app_id == "org.tunaos.InstallerKde"
+      and .installer_revision == "flatpak-commit-123"' \
+    "${FAKE_ROOT}/etc/tunaos/live-source.json"
+  [ "$status" -eq 0 ]
+}
+
 # ── Static content assertions ────────────────────────────────────────────────
 
 @test "customize-live.sh: passes shellcheck" {
