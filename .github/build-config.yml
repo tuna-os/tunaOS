@@ -2,11 +2,12 @@ config:
   global_platforms: ["linux/amd64", "linux/arm64"]
 
 # ── Browser-builder delivery cutover (tunaOS#3382) ──────────────────────────
-# This is the reviewed switch from routine prebuilt R2 publication to the
-# browser builder. A target may enter cutover_targets only with current
-# browser-qualified evidence from the qualification catalog (#3381).
-# local-fallback, unqualified, and unsupported targets stay out and therefore
-# keep the existing scheduled R2 publication path.
+# This is the reviewed switch from routine R2 publication to the browser builder.
+# Until #3381 supplies a checked qualification catalog and current receipt
+# validation, the policy rejects every non-empty target list.
+# Once integrated, a target may enter only with matching browser-qualified
+# evidence. local-fallback, unqualified, and unsupported targets stay out and
+# therefore keep the existing scheduled R2 publication path.
 #
 # Retention is deliberately independent and append-only. Before adding a
 # cutover target, inventory every existing versioned and -latest ISO for that

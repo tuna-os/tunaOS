@@ -21,6 +21,7 @@ PLATFORM_ARCH = {
     "linux/amd64": "x86_64",
     "linux/arm64": "aarch64",
 }
+VERSION_COMPONENT = r"[0-9]+(?:[._+~-][A-Za-z0-9]+)*"
 
 
 class PolicyError(ValueError):
@@ -110,8 +111,8 @@ def has_dated_iso(
 ) -> bool:
     arch = PLATFORM_ARCH[platform]
     pattern = re.compile(
-        rf"^{re.escape(variant)}-{re.escape(flavor)}-(?!latest(?:-|\.))"
-        rf".+-{re.escape(arch)}\.iso$"
+        rf"^{re.escape(variant)}-{re.escape(flavor)}-"
+        rf"{VERSION_COMPONENT}-{re.escape(arch)}\.iso$"
     )
     return any(pattern.fullmatch(name) for name in retained)
 
@@ -184,6 +185,11 @@ def active_targets(config: dict[str, Any]) -> frozenset[tuple[str, str, str]]:
                 )
 
     validate_group_retention(config, active, retained)
+    if active:
+        raise PolicyError(
+            "non-empty cutover_targets are disabled until #3381 supplies a "
+            "current qualification catalog and matching receipt validation"
+        )
     return frozenset(active)
 
 
@@ -206,6 +212,13 @@ def validate_group_retention(
         for group in groups:
             if not isinstance(group, dict):
                 raise PolicyError("every ISO group must be an object")
+            live = [
+                flavor
+                for flavor in group.get("flavors", [])
+                if flavor in built
+            ]
+            if not live:
+                continue
             required = [
                 flavor
                 for flavor in group.get("offline_flavors", group.get("flavors", []))
@@ -223,7 +236,7 @@ def validate_group_retention(
                     f"fully cut-over group {basename!r} does not retain {latest!r}"
                 )
             pattern = re.compile(
-                rf"^{re.escape(basename)}-(?!latest\.)[A-Za-z0-9._+-]+-x86_64\.iso$"
+                rf"^{re.escape(basename)}-{VERSION_COMPONENT}-x86_64\.iso$"
             )
             if not any(pattern.fullmatch(name) for name in retained):
                 raise PolicyError(
@@ -270,6 +283,15 @@ def annotate_groups(
     sys.stdout.write("\n")
 
 
+def object_is_retained(config: dict[str, Any], object_name: str) -> bool:
+    """Whether an exact R2 destination or either sidecar is immutable."""
+    if object_name.endswith(".sha256"):
+        object_name = object_name.removesuffix(".sha256")
+    elif object_name.endswith(".sigstore.json"):
+        object_name = object_name.removesuffix(".sigstore.json")
+    return object_name in retained_isos(policy_for(config))
+
+
 def print_retention_filters(config: dict[str, Any]) -> None:
     policy = policy_for(config)
     for iso in retained_isos(policy):
@@ -288,8 +310,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--config-json", type=Path, required=True)
     parser.add_argument(
         "command",
-        choices=("validate", "annotate-target-matrix", "annotate-group-matrix", "retention-filters"),
+        choices=(
+            "validate", "annotate-target-matrix", "annotate-group-matrix",
+            "retention-filters", "object-protected",
+        ),
     )
+    parser.add_argument("--object")
     return parser.parse_args()
 
 
@@ -304,8 +330,12 @@ def main() -> int:
             annotate_targets(config, active)
         elif args.command == "annotate-group-matrix":
             annotate_groups(config, active)
-        else:
+        elif args.command == "retention-filters":
             print_retention_filters(config)
+        else:
+            if not args.object:
+                raise PolicyError("object-protected requires --object")
+            print("true" if object_is_retained(config, args.object) else "false")
     except PolicyError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1

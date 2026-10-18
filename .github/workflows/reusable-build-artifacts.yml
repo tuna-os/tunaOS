@@ -124,6 +124,9 @@ jobs:
       # This does not narrow the pre-existing window in which a concurrent
       # run moves the tag between push and pull; it closes the failure that
       # #2059 measured, which is a cell whose image never published at all.
+
+      - name: Setup yq
+        uses: ./.github/actions/setup-yq
       - name: Fetch the digest this run published for this cell
         id: cell_digest
         if: inputs.image-digest-artifact != ''
@@ -411,29 +414,15 @@ jobs:
             exit 0
           fi
           ISO=$(find . -maxdepth 1 -name "*.iso" | head -1)
-          CHECKSUM="${ISO}.sha256"
-          BUNDLE="${ISO}.sigstore.json"
-          echo "==> Uploading $ISO to R2..."
-          for artifact in "$ISO" "$CHECKSUM" "$BUNDLE"; do
-            rclone copy --log-level INFO --checksum --s3-no-check-bucket \
-              "$artifact" "R2:${R2_BUCKET}/live-isos/"
-          done
-          # amd64 keeps the bare <variant>-<flavor>-latest.iso name — that's a
-          # documented download URL (docs/TESTING.md) users already `wget`,
-          # so it must not move out from under them. Other platforms
-          # (#1378) get an arch-suffixed pointer instead of clobbering it.
+          # amd64 keeps the documented bare pointer. Other platforms use an
+          # arch suffix so they cannot overwrite the amd64 download.
           if [[ "${PLATFORM}" == "linux/amd64" ]]; then
             LATEST="${VARIANT}-${FLAVOR}-latest.iso"
           else
             ARCH_SUFFIX="${PLATFORM##*/}"
             LATEST="${VARIANT}-${FLAVOR}-latest-${ARCH_SUFFIX}.iso"
           fi
-          rclone copyto --log-level INFO --s3-no-check-bucket \
-            "$ISO" "R2:${R2_BUCKET}/live-isos/${LATEST}"
-          DIGEST=$(sha256sum "$ISO" | awk '{print $1}')
-          printf '%s  %s\n' "$DIGEST" "$LATEST" > "${LATEST}.sha256"
-          rclone copyto --log-level INFO --s3-no-check-bucket \
-            "${LATEST}.sha256" "R2:${R2_BUCKET}/live-isos/${LATEST}.sha256"
-          rclone copyto --log-level INFO --s3-no-check-bucket \
-            "$BUNDLE" "R2:${R2_BUCKET}/live-isos/${LATEST}.sigstore.json"
-          echo "==> Published $(basename "$ISO") and ${LATEST}, with checksum + Sigstore bundle sidecars"
+          CONFIG_JSON="${RUNNER_TEMP}/build-config.json"
+          yq -o=json '.' .github/build-config.yml > "$CONFIG_JSON"
+          scripts/publish-iso-r2.sh \
+            "$ISO" "$LATEST" "$CONFIG_JSON" "R2:${R2_BUCKET}/live-isos"

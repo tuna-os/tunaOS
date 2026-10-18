@@ -79,7 +79,7 @@ teardown() {
   [[ "$output" == *"0 cutover target(s)"* ]]
 }
 
-@test "an exact qualified target stops publishing and removal restores it" {
+@test "nonempty cutover remains disabled until qualification receipts are integrated" {
   cat > "$TEST_TMPDIR/config.json" <<'JSON'
 {
   "iso_delivery": {
@@ -116,9 +116,8 @@ JSON
 
   run bash -c '"$1" --config-json "$2" annotate-target-matrix < "$3"' \
     _ "$POLICY" "$TEST_TMPDIR/config.json" "$TEST_TMPDIR/matrix.json"
-  [ "$status" -eq 0 ]
-  [ "$(jq -r '.include[0].r2_cutover' <<<"$output")" = "true" ]
-  [ "$(jq -r '.include[1].r2_cutover' <<<"$output")" = "false" ]
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"#3381"* ]]
 
   jq '.iso_delivery.cutover_targets = []' "$TEST_TMPDIR/config.json" \
     > "$TEST_TMPDIR/restored.json"

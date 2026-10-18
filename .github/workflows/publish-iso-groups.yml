@@ -352,23 +352,11 @@ jobs:
             echo "ERROR: No ISO found for ${{ matrix.basename }}"
             exit 1
           fi
-          CHECKSUM="${ISO}.sha256"
-          BUNDLE="${ISO}.sigstore.json"
-          echo "==> Uploading $ISO to R2..."
-          for artifact in "$ISO" "$CHECKSUM" "$BUNDLE"; do
-            rclone copy --log-level INFO --checksum --s3-no-check-bucket \
-              "$artifact" R2:${{ secrets.R2_BUCKET }}/live-isos/
-          done
-          LATEST="${{ matrix.basename }}-latest.iso"
-          rclone copyto --log-level INFO --s3-no-check-bucket \
-            "$ISO" "R2:${{ secrets.R2_BUCKET }}/live-isos/${LATEST}"
-          DIGEST=$(sha256sum "$ISO" | awk '{print $1}')
-          printf '%s  %s\n' "$DIGEST" "$LATEST" > "${LATEST}.sha256"
-          rclone copyto --log-level INFO --s3-no-check-bucket \
-            "${LATEST}.sha256" "R2:${{ secrets.R2_BUCKET }}/live-isos/${LATEST}.sha256"
-          rclone copyto --log-level INFO --s3-no-check-bucket \
-            "$BUNDLE" "R2:${{ secrets.R2_BUCKET }}/live-isos/${LATEST}.sigstore.json"
-          echo "==> Upload complete: $(basename "$ISO") (latest → ${LATEST}) with signed sidecars"
+          CONFIG_JSON="${RUNNER_TEMP}/build-config.json"
+          yq -o=json '.' .github/build-config.yml > "$CONFIG_JSON"
+          scripts/publish-iso-r2.sh \
+            "$ISO" "${{ matrix.basename }}-latest.iso" "$CONFIG_JSON" \
+            "R2:${{ secrets.R2_BUCKET }}/live-isos"
 
       - name: Upload ISO as artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
