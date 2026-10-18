@@ -7,7 +7,7 @@
 #   buildah build --target=base-no-de --file Containerfile.arch .
 #   buildah build --target=kde --file Containerfile.arch .
 
-ARG BASE_IMAGE="docker.io/archlinux/archlinux:latest@sha256:830140f42fa7fe08b953c2bca212b68b80f64d9a97d7a52bcd0caa37735c01fa"
+ARG BASE_IMAGE="docker.io/archlinux/archlinux:latest@sha256:f9e436f35af0ca4fcd33839ae6138030342625473db4b4d1da4c6b158b37a0f9"
 ARG COMMON_IMAGE_REF="ghcr.io/projectbluefin/common:unpinned-must-override"
 
 ARG DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
@@ -41,6 +41,7 @@ COPY system_files /files
 COPY system_files_overrides /overrides
 COPY build_scripts /build_scripts
 COPY manifests /manifests
+COPY image-versions.yaml /image-versions.yaml
 COPY experiences /experiences
 
 FROM ${COMMON_IMAGE_REF} AS common
@@ -101,6 +102,7 @@ RUN KERNEL_PKG="linux"; \
         ${KERNEL_PKG} \
         ${KERNEL_PKG}-headers \
         linux-firmware \
+        sof-firmware \
         ostree \
         btrfs-progs \
         e2fsprogs \
@@ -110,6 +112,8 @@ RUN KERNEL_PKG="linux"; \
         device-mapper \
         skopeo \
         podman \
+        buildah \
+        distrobox \
         dbus \
         glib2 \
         shadow \
@@ -117,7 +121,16 @@ RUN KERNEL_PKG="linux"; \
         fuse-overlayfs \
         systemd \
         networkmanager \
+        inetutils \
+        diffutils \
+        less \
+        usbutils \
+        man-db \
+        fzf \
+        bluez \
+        bluez-utils \
         pipewire \
+        pipewire-alsa \
         wireplumber \
         flatpak \
         fwupd \
@@ -140,6 +153,15 @@ RUN KERNEL_PKG="linux"; \
         gst-plugins-ugly \
         gst-libav && \
     pacman -Scc --noconfirm
+
+# Rootless podman needs setuid newuidmap/newgidmap, and /usr is read-only at
+# runtime, so the bit has to be set here. Stock archlinux/archlinux ships both
+# mode 755 (measured: shadow 4.20.0.arch1-1 in-container `stat`, and the same
+# 755 on a booted marlin:gnome whose /usr is the published image) — which is
+# why rootless `podman unshare` fails there with "should have setuid or have
+# filecaps". No `|| true`: an image whose container workflow needs a helper
+# bit it does not have is broken, and the failure only shows at runtime.
+RUN chmod 4755 /usr/bin/newuidmap /usr/bin/newgidmap
 # gst-libav above is not optional garnish: the ugly set only carries the
 # x264 ENcoder — H.264/H.265 DEcode in GStreamer apps goes through
 # libgstlibav.so (measured: Arch's gst-libav ships
@@ -287,6 +309,11 @@ RUN systemctl mask systemd-firstboot.service
 LABEL containers.bootc 1
 COPY --from=context /files /
 COPY --from=common /system_files/shared /
+
+# The common payload ships uupd's AC trigger but not its binary/core units.
+# This base skips 10-base-packages.sh; install the same pinned release here.
+RUN --mount=type=bind,from=context,source=/,target=/run/context \
+    /run/context/build_scripts/install-uupd.sh
 
 # remora — the desktop experience contract requires it, and this base does
 # not run 26-packages-post.sh, which is what installs remora on the dnf
