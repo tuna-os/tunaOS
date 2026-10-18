@@ -93,12 +93,15 @@ strip_comments() { grep -v '^[[:space:]]*#' || true; }
 }
 
 @test "image-versions.yaml is carried exactly where a build script reads it" {
-  # This one is deliberately NOT uniform. 10-base-packages.sh reads
-  # /run/context/image-versions.yaml unguarded, and runs on el10, debian and
-  # ubuntu only. kcm-ublue.sh reads it too but returns early without dnf, so
-  # the pacman/zypper/emerge files never reach it. Asserted as an exact set so
-  # that adding the read to another script, or the file to another context,
-  # has to be a deliberate change to this list.
+  # This one is deliberately NOT uniform. 10-base-packages.sh delegates the
+  # uupd install to install-uupd.sh, which reads
+  # /run/context/image-versions.yaml unguarded; 10-base-packages.sh runs on
+  # el10, debian and ubuntu, and Containerfile.arch invokes install-uupd.sh
+  # directly (marlin:gnome shipped uupd triggers without the uupd binary,
+  # tunaOS#3356). kcm-ublue.sh reads it too but returns early without dnf, so
+  # the other package-manager files never reach it. Asserted as an exact set
+  # so that adding the read to another script, or the file to another
+  # context, has to be a deliberate change to this list.
   local f body has needs
   for f in "${CONTAINERFILES[@]}"; do
     body="$(context_stage "${REPO_ROOT}/$f" | strip_comments)"
@@ -109,19 +112,22 @@ strip_comments() { grep -v '^[[:space:]]*#' || true; }
     # build_scripts/10-base-packages.sh") and the unstripped grep read that
     # as the script being run, failing every PR after #1038 merged.
     needs=0
-    strip_comments <"${REPO_ROOT}/$f" | grep -q '10-base-packages.sh' && needs=1
+    strip_comments <"${REPO_ROOT}/$f" | grep -qE '10-base-packages.sh|install-uupd.sh' && needs=1
     if [ "$has" -ne "$needs" ]; then
-      echo "FAIL: ${f} carries image-versions.yaml=${has} but runs 10-base-packages.sh=${needs}" >&2
+      echo "FAIL: ${f} carries image-versions.yaml=${has} but needs it=${needs}" >&2
       return 1
     fi
   done
 }
 
-@test "10-base-packages.sh really does read it unguarded" {
-  # The premise of the test above. If someone guards the read, the asymmetry
-  # stops being justified and this should be revisited rather than silently
-  # keeping a rule whose reason has gone.
-  grep -q 'image-versions.yaml' "${REPO_ROOT}/build_scripts/10-base-packages.sh"
+@test "install-uupd.sh really does read the pin unguarded" {
+  # The premise of the test above. The uupd pin read lives in the shared
+  # install-uupd.sh (10-base-packages.sh delegates to it on apt/dnf;
+  # Containerfile.arch invokes it directly). If someone guards the read, the
+  # asymmetry stops being justified and this should be revisited rather than
+  # silently keeping a rule whose reason has gone.
+  grep -q 'image-versions.yaml' "${REPO_ROOT}/build_scripts/install-uupd.sh"
+  grep -q 'install-uupd.sh' "${REPO_ROOT}/build_scripts/10-base-packages.sh"
   # And kcm-ublue.sh must still bail before its read on an RPM-less distro.
   local head
   head="$(sed -n '1,25p' "${REPO_ROOT}/build_scripts/desktop/kcm-ublue.sh")"
