@@ -128,3 +128,49 @@ def test_url_forms_normalize_to_the_same_repo() -> None:
         "git@github.com:tuna-os/fisherman.git",
     ):
         assert mod.normalize_repo(url) == "tuna-os/fisherman"
+
+def test_all_five_frontends_share_the_consolidated_monorepo() -> None:
+    """Every desktop builds its installer from tuna-os/bootc-installer."""
+    assert set(mod.INSTALLERS) == {"kde", "cosmic", "niri", "xfce", "gnome"}
+    for desktop, where in mod.INSTALLERS.items():
+        assert where["repo"] == "tuna-os/bootc-installer", desktop
+
+
+def test_manifest_entries_live_under_frontends() -> None:
+    for desktop in ("kde", "cosmic", "niri", "xfce"):
+        manifest = mod.INSTALLERS[desktop]["manifest"]
+        assert manifest.startswith(f"frontends/{desktop}/flatpak/"), desktop
+        assert manifest.endswith(".json"), desktop
+
+
+def test_gnome_has_a_submodule_entry_and_no_manifest() -> None:
+    assert mod.INSTALLERS["gnome"]["submodule"] == "fisherman"
+    assert "manifest" not in mod.INSTALLERS["gnome"]
+
+
+def test_audit_fails_a_non_canonical_repo() -> None:
+    problems = mod.audit({"kde": {"url": DEAD, "commit": "d349c31e"}})
+    assert len(problems) == 1
+    assert mod.CANONICAL in problems[0]
+
+
+def test_audit_fails_a_below_floor_sha() -> None:
+    problems = mod.audit(
+        {"kde": {"url": LIVE, "commit": "00000001", "at_or_after_floor": False}}
+    )
+    assert len(problems) == 1
+    assert "floor" in problems[0]
+
+
+def test_audit_passes_the_floor_sha_and_newer() -> None:
+    floor = {"url": LIVE, "resolved": mod.FLOOR_COMMIT, "at_or_after_floor": True}
+    newer = {"url": LIVE, "resolved": "f" * 40, "at_or_after_floor": True}
+    assert mod.audit({"kde": floor}) == []
+    assert mod.audit({"kde": newer}) == []
+
+
+def test_unresolvable_pins_warn_dont_fail() -> None:
+    """Matching main()'s blip policy: at_or_after_floor=None only warns."""
+    assert mod.audit({"kde": {"url": LIVE, "commit": "abc123"}}) == []
+    unknown = {"url": LIVE, "resolved": "a" * 40, "at_or_after_floor": None}
+    assert mod.audit({"kde": unknown}) == []
