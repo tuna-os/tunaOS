@@ -1,6 +1,7 @@
 ARG IMAGE_NAME
 ARG IMAGE_VENDOR
 ARG DESKTOP_FLAVOR
+ARG TUNAOS_IMAGE_FLAVOR
 ARG SHA_HEAD_SHORT
 ARG RECHUNKED_BASE
 
@@ -10,6 +11,7 @@ FROM ${RECHUNKED_BASE}
 ARG IMAGE_NAME
 ARG IMAGE_VENDOR
 ARG DESKTOP_FLAVOR
+ARG TUNAOS_IMAGE_FLAVOR
 ARG SHA_HEAD_SHORT
 
 LABEL org.opencontainers.image.title="TunaOS ${IMAGE_NAME} (${DESKTOP_FLAVOR})"
@@ -24,5 +26,5 @@ LABEL ostree.bootable=1
 # stage non-empty with a build provenance file.
 RUN mkdir -p /usr/share/tunaos && \
     printf '{"image":"%s","flavor":"%s","vendor":"%s","revision":"%s"}\n' \
-        "${IMAGE_NAME}" "${DESKTOP_FLAVOR}" "${IMAGE_VENDOR}" "${SHA_HEAD_SHORT}" \
+        "${IMAGE_NAME}" "${TUNAOS_IMAGE_FLAVOR}" "${IMAGE_VENDOR}" "${SHA_HEAD_SHORT}" \
         > /usr/share/tunaos/build-info.json

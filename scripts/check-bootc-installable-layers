@@ -87,9 +87,9 @@ for entry in "${LAYERS[@]}"; do
   fi
   entries=""
   case "$media" in
-    *gzip*) entries="$(gzip -dc "$blob" 2>/dev/null | tar -t 2>/dev/null | head -n 2)" ;;
-    *zstd*) entries="$(zstd -dc "$blob" 2>/dev/null | tar -t 2>/dev/null | head -n 2)" ;;
-    *tar)   entries="$(tar -t -f "$blob" 2>/dev/null | head -n 2)" ;;
+    *gzip*) entries="$(gzip -dc "$blob" 2>/dev/null | tar -t 2>/dev/null | awk 'NR <= 2')" ;;
+    *zstd*) entries="$(zstd -dc "$blob" 2>/dev/null | tar -t 2>/dev/null | awk 'NR <= 2')" ;;
+    *tar)   entries="$(tar -t -f "$blob" 2>/dev/null | awk 'NR <= 2')" ;;
     *) echo "check-bootc-installable-layers: layer ${idx} ${digest} has unknown media type ${media}" >&2; rm -f "$blob"; fail=1; continue ;;
   esac
   rm -f "$blob"
