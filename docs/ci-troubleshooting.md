@@ -1586,8 +1586,8 @@ The image had both backends; the default preferred GNOME for Access.
 ### Tuna desktop contract reports false package absence outside Arch (#3194)
 
 **Symptom:** A Tuna desktop image on an RPM, Debian, or Gentoo base stops in
-`verify-desktop-experience.sh` before it can check binary ownership because the
-contract invokes `pacman -Qq` even though that package database is not present.
+`verify-desktop-experience.sh`. The contract invokes `pacman -Qq`, but that
+package database is not present. It exits before it can check binary ownership.
 
 **Measured cause:** At source commit
 `9cd82cd74568c11600f7c9587b5e08eaaf4186e5`, the non-Arch reproduction reaches
@@ -1597,14 +1597,14 @@ in `tests/test_tuna_target_neutral_package_contract.py` reproduces the RPM,
 Debian, and Gentoo query paths and records the owner and calendar-server
 failure cases.
 
-**Fix:** Select the native package database from `os-release`, require the
-exact `tuna-desktop` package and binary ownership, and accept each packaged
-GNOME calendar-server path. Run the target-neutral package-contract test before
-qualifying the final image in its separate boot and authentication gate.
+**Fix:** Select the native package database from `os-release`. Check for the
+exact `tuna-desktop` package and confirm binary ownership. Accept each packaged
+path for the GNOME calendar server. Run the target-neutral package-contract
+test before you qualify the final image in its separate boot and authentication gate.
 
 **Verification:** `python3 -m pytest tests/test_tuna_admission.py
 tests/test_tuna_target_neutral_package_contract.py -q` passes 54 focused
-tests; a real image still requires the separate boot and authentication gate.
+tests; a real image still needs the separate boot and authentication gate.
 
 ### guppy:gnome installs GNOME 49 and fails the version floor (#2450)
 
