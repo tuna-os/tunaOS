@@ -71,21 +71,39 @@ jobs:
             echo "::notice::R2 credentials not configured; skipping prune."
             exit 0
           fi
-          # One ordered filter file protects two immutable classes before the
-          # age-based includes: every stable *-latest* pointer, and every exact
-          # ISO basename in iso_delivery.retained_r2_isos. The policy evaluator
-          # expands retained ISOs to their checksum and Sigstore sidecars, so a
-          # cutover cannot leave verification data deletable. Exact basenames
-          # also avoid exempting future unrelated objects from retention.
+          # One ordered filter file protects immutable stable pointers, exact
+          # reviewed inventory, and each resolver's current checksum snapshot.
+          # Superseded snapshots remain included and age out after 14 days.
           CONFIG_JSON="${RUNNER_TEMP}/build-config.json"
           FILTERS="${RUNNER_TEMP}/live-isos-retention.filter"
+          STATIC_FILTERS="${RUNNER_TEMP}/live-isos-static-retention.filter"
+          REMOTE="R2:${{ secrets.R2_BUCKET }}/live-isos/"
           yq -o=json '.' .github/build-config.yml > "$CONFIG_JSON"
           python3 scripts/iso-delivery-policy.py \
-            --config-json "$CONFIG_JSON" retention-filters > "$FILTERS"
+            --config-json "$CONFIG_JSON" retention-filters > "$STATIC_FILTERS"
+          : > "$FILTERS"
+          while IFS= read -r resolver; do
+            case "$resolver" in
+              *-latest*.json) ;;
+              *) continue ;;
+            esac
+            payload="$(rclone cat --s3-no-check-bucket "${REMOTE}${resolver}" 2>/dev/null || true)"
+            current="$(jq -er '
+              select(.schema == "TunaOSIsoResolution/v1") | .iso |
+              select(type == "string" and endswith(".iso") and
+                     (contains("/") | not))
+            ' <<<"$payload" 2>/dev/null || true)"
+            [[ -n "$current" ]] || continue
+            printf '%s\n' \
+              "- /${current}" \
+              "- /${current}.sha256" \
+              "- /${current}.sigstore.json" >> "$FILTERS"
+          done < <(rclone lsf --s3-no-check-bucket --files-only "$REMOTE")
+          cat "$STATIC_FILTERS" >> "$FILTERS"
           FLAGS=(--log-level INFO --s3-no-check-bucket --min-age 14d \
             --filter-from "$FILTERS")
           [[ "$DRY_RUN" == "true" ]] && FLAGS+=(--dry-run)
-          echo "==> Pruning live-isos/ (>14d, excluding latest and retained inventory)..."
+          echo "==> Pruning live-isos/ (>14d, preserving stable, retained, and resolved objects)..."
           rclone delete "${FLAGS[@]}" "R2:${{ secrets.R2_BUCKET }}/live-isos/"
 
       - name: Prune dated screenshots older than 60 days

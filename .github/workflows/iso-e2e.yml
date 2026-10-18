@@ -342,29 +342,46 @@ jobs:
           # turned E2E yellowfin:gnome green: the object would have landed
           # under a key nothing looks up.
           #
-          # Try the per-flavor name first, since that is what is in the
-          # bucket today, then the group name. A flavor maps to its group by
-          # its desktop prefix -- gnome-hwe and gnome-nvidia all ride inside
-          # the gnome group's offline store, so they resolve to the same ISO.
-          DESKTOP="${FLAVOR%%-*}"
-          if [[ "$DESKTOP" == "gnome" ]]; then
-            GROUP_OBJECT="${VARIANT}-latest.iso"
-          else
-            GROUP_OBJECT="${VARIANT}-${DESKTOP}-latest.iso"
-          fi
+          # Resolve each stable name first. During rollback the stable ISO is
+          # intentionally frozen, while its small JSON resolver points at the
+          # current checksum snapshot. Targets without a resolver retain the
+          # legacy direct-download behavior.
           OBJECT="${VARIANT}-${FLAVOR}-latest.iso"
           FOUND=""
-          for candidate in "${OBJECT}" "${GROUP_OBJECT}"; do
-            echo "==> Trying ${candidate} from R2..."
-            rclone copy --log-level INFO --s3-no-check-bucket \
-              "R2:${{ secrets.R2_BUCKET }}/live-isos/${candidate}" . || true
-            if [[ -f "${candidate}" ]]; then
-              FOUND="${candidate}"
-              break
+          for requested in "${OBJECT}" "${GROUP_OBJECT}"; do
+            candidate="$requested"
+            expected_digest=""
+            resolver="${requested%.iso}.json"
+            payload="$(rclone cat --s3-no-check-bucket \
+              "R2:${{ secrets.R2_BUCKET }}/live-isos/${resolver}" 2>/dev/null || true)"
+            resolved="$(jq -er '
+              select(.schema == "TunaOSIsoResolution/v1") | .iso |
+              select(type == "string" and endswith(".iso") and
+                     (contains("/") | not))
+            ' <<<"$payload" 2>/dev/null || true)"
+            if [[ -n "$resolved" ]]; then
+              candidate="$resolved"
+              expected_digest="$(jq -r '.digest // empty' <<<"$payload")"
+              echo "==> ${requested} resolves to ${candidate}"
+            else
+              echo "==> No resolver for ${requested}; trying the stable object"
             fi
+            rm -f "$candidate"
+            rclone copyto --log-level INFO --s3-no-check-bucket \
+              "R2:${{ secrets.R2_BUCKET }}/live-isos/${candidate}" "$candidate" || true
+            [[ -f "$candidate" ]] || continue
+            if [[ -n "$expected_digest" ]]; then
+              actual="sha256:$(sha256sum "$candidate" | awk '{print $1}')"
+              if [[ "$actual" != "$expected_digest" ]]; then
+                echo "::error::Resolver digest mismatch for ${candidate}" >&2
+                exit 1
+              fi
+            fi
+            FOUND="${candidate}"
+            break
           done
           if [[ -z "${FOUND}" ]]; then
-            echo "::error::No ISO in R2 under either name: live-isos/${OBJECT} (per-flavor) or live-isos/${GROUP_OBJECT} (grouped)"
+            echo "::error::No resolvable ISO in R2 for ${OBJECT} or ${GROUP_OBJECT}"
             exit 1
           fi
           OBJECT="${FOUND}"
