@@ -65,182 +65,82 @@ def test_qualification_requires_manifest_before_starting_qemu(tmp_path):
     assert "--qualification requires --manifest FILE" in proc.stderr
 
 
-def test_first_boot_account_service_targets_the_ostree_deployment(tmp_path):
+@pytest.mark.parametrize(
+    ("profile", "inventory", "expected_key"),
+    [
+        ("plain", "/dev/sda2 ext4\n", None),
+        ("encrypted", "/dev/sda2 crypto_LUKS\n", "all:key:tunaose2e"),
+    ],
+)
+def test_account_provisioning_runs_inside_libguestfs(
+    tmp_path, profile, inventory, expected_key
+):
     function = shell_section(
-        "qualification_deployment_root() {",
-        "activate_qualification_volume_group() {",
+        "prepare_qualification_disk() {",
+        "qualification_frame_text() {",
     )
-    deployment = tmp_path / "ostree/deploy/tunaos/deploy/deadbeef.0"
-    deployment.mkdir(parents=True)
-    proc = subprocess.run(
-        ["bash", "-eu", "-c", (
-            f"{function}\n"
-            f'E2E_INSTALL_USER=qualification E2E_INSTALL_PASSWORD=offline-password\n'
-            f'deployment="$(qualification_deployment_root {tmp_path})"\n'
-            'install_qualification_account_service "$deployment"\n'
-        )],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert proc.returncode == 0, proc.stderr
-
-    account_dir = deployment / "etc/tunaos-qualification"
-    unit_dir = deployment / "etc/systemd/system"
-    assert (account_dir / "password").read_text() == "offline-password"
-    assert (unit_dir / "graphical.target.wants/tunaos-qualification-account.service").is_symlink()
-    assert (
-        deployment / "etc/systemd/system-preset/10-tunaos-qualification.preset"
-    ).read_text() == "enable tunaos-qualification-account.service\n"
-
     fakebin = tmp_path / "bin"
     fakebin.mkdir()
-    useradd_log = tmp_path / "useradd.log"
-    password_log = tmp_path / "password.log"
-    commands = {
-        "getent": "#!/bin/sh\nexit 2\n",
-        "useradd": f"#!/bin/sh\nprintf '%s\\n' \"$*\" > {useradd_log}\n",
-        "chpasswd": f"#!/bin/sh\ncat > {password_log}\n",
-        "restorecon": "#!/bin/sh\nexit 0\n",
-    }
-    for name, body in commands.items():
-        command = fakebin / name
-        command.write_text(body, encoding="utf-8")
+    calls = tmp_path / "virt-customize.args"
+    captured = tmp_path / "firstboot"
+    virt_filesystems = fakebin / "virt-filesystems"
+    virt_filesystems.write_text(
+        "#!/bin/sh\nprintf '%s' \"$INVENTORY\"\n", encoding="utf-8"
+    )
+    virt_customize = fakebin / "virt-customize"
+    virt_customize.write_text(
+        "#!/bin/sh\n"
+        "printf '%s\\n' \"$@\" > \"$CALLS\"\n"
+        "while [ \"$#\" -gt 0 ]; do\n"
+        "  if [ \"$1\" = --firstboot ]; then cp \"$2\" \"$CAPTURED\"; exit 0; fi\n"
+        "  shift\n"
+        "done\n"
+        "exit 2\n",
+        encoding="utf-8",
+    )
+    for command in (virt_filesystems, virt_customize):
         command.chmod(0o755)
+    disk = tmp_path / "install-disk.qcow2"
+    disk.touch()
     env = os.environ | {
         "PATH": f"{fakebin}:{os.environ['PATH']}",
-        "TUNAOS_QUALIFICATION_ETC_ROOT": str(deployment),
+        "INVENTORY": inventory,
+        "CALLS": str(calls),
+        "CAPTURED": str(captured),
     }
-    helper = subprocess.run(
-        ["/bin/bash", str(account_dir / "create-account")],
-        env=env,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert helper.returncode == 0, helper.stderr
-    assert "--create-home" in useradd_log.read_text()
-    assert password_log.read_text() == "qualification:offline-password\n"
-    assert not (account_dir / "password").exists()
-
-def test_account_service_prefers_composefs_native_deployment(tmp_path):
-    function = shell_section(
-        "qualification_deployment_root() {",
-        "label_qualification_account_files() {",
-    )
-    ostree = tmp_path / "ostree/deploy/tunaos/deploy/deadbeef.0"
-    composefs = tmp_path / "state/deploy/abcdef"
-    ostree.mkdir(parents=True)
-    composefs.mkdir(parents=True)
     proc = subprocess.run(
-        ["bash", "-eu", "-c", f'{function}\nqualification_deployment_root "{tmp_path}"'],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert proc.returncode == 0, proc.stderr
-    assert proc.stdout.strip() == str(composefs)
-
-
-def test_staged_account_files_are_labeled_with_guest_policy(tmp_path):
-    functions = shell_section(
-        "label_qualification_account_files() {",
-        "activate_qualification_volume_group() {",
-    )
-    deployment = tmp_path / "deployment"
-    (deployment / "etc/selinux").mkdir(parents=True)
-    restorecon = deployment / "usr/sbin/restorecon"
-    restorecon.parent.mkdir(parents=True)
-    restorecon.write_text("#!/bin/sh\n", encoding="utf-8")
-    restorecon.chmod(0o755)
-    calls = tmp_path / "chroot.log"
-    fakebin = tmp_path / "bin"
-    fakebin.mkdir()
-    chroot = fakebin / "chroot"
-    chroot.write_text(
-        f"#!/bin/sh\nprintf '%s\\n' \"$*\" > {calls}\n", encoding="utf-8"
-    )
-    chroot.chmod(0o755)
-    proc = subprocess.run(
-        ["bash", "-eu", "-c", (
-            f"{functions}\n"
-            f"E2E_INSTALL_USER=qualification E2E_INSTALL_PASSWORD=offline-password "
-            f"install_qualification_account_service {deployment}"
-        )],
-        env=os.environ | {"PATH": f"{fakebin}:{os.environ['PATH']}"},
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert proc.returncode == 0, proc.stderr
-    assert "/usr/sbin/restorecon -RF" in calls.read_text()
-    assert "/etc/tunaos-qualification" in calls.read_text()
-
-
-def test_mapper_cleanup_only_closes_mapping_opened_by_this_run(tmp_path):
-    function = shell_section(
-        "close_qualification_mapper() {",
-        "# Inspect the disk the GUI wrote",
-    )
-    fakebin = tmp_path / "bin"
-    fakebin.mkdir()
-    calls = tmp_path / "cryptsetup.log"
-    cryptsetup = fakebin / "cryptsetup"
-    cryptsetup.write_text(
-        f"#!/bin/sh\nprintf '%s\\n' \"$*\" >> {calls}\n", encoding="utf-8"
-    )
-    cryptsetup.chmod(0o755)
-    proc = subprocess.run(
-        ["/bin/bash", "-eu", "-c", (
-            f"{function}\n"
-            "close_qualification_mapper tunaos-qualification-root-111 0\n"
-            "close_qualification_mapper tunaos-qualification-root-222 1\n"
-        )],
-        env=os.environ | {"PATH": str(fakebin)},
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert proc.returncode == 0, proc.stderr
-    assert calls.read_text().splitlines() == [
-        "close tunaos-qualification-root-222"
-    ]
-
-def test_lvm_activation_and_cleanup_are_scoped_to_owned_device(tmp_path):
-    functions = shell_section(
-        "activate_qualification_volume_group() {",
-        "# Inspect the disk the GUI wrote",
-    )
-    fakebin = tmp_path / "bin"
-    fakebin.mkdir()
-    calls = tmp_path / "vgchange.log"
-    (fakebin / "pvs").write_text(
-        "#!/bin/sh\nprintf ' qualification-vg\\n'\n", encoding="utf-8"
-    )
-    (fakebin / "vgchange").write_text(
-        f"#!/bin/sh\nprintf '%s\\n' \"$*\" >> {calls}\n", encoding="utf-8"
-    )
-    for command in ("pvs", "vgchange"):
-        (fakebin / command).chmod(0o755)
-    env = os.environ | {"PATH": f"{fakebin}:{os.environ['PATH']}"}
-    proc = subprocess.run(
-        ["bash", "-eu", "-o", "pipefail", "-c", (
-            f"{functions}\n"
-            'vg="$(activate_qualification_volume_group /dev/nbd7p2)"\n'
-            '[[ "$vg" == qualification-vg ]]\n'
-            'deactivate_qualification_volume_group /dev/nbd7p2 "$vg"\n'
-        )],
+        [
+            "bash",
+            "-eu",
+            "-o",
+            "pipefail",
+            "-c",
+            (
+                f"{function}\n"
+                f"INSTALL_DISK={str(disk)!r}\n"
+                f"QUALIFICATION_PROFILE={profile!r}\n"
+                "E2E_INSTALL_USER=qualification\n"
+                "E2E_INSTALL_PASSWORD=offline-password\n"
+                "prepare_qualification_disk\n"
+            ),
+        ],
         env=env,
         capture_output=True,
         text=True,
         check=False,
     )
     assert proc.returncode == 0, proc.stderr
-    assert calls.read_text().splitlines() == [
-        "--devices /dev/nbd7p2 -ay qualification-vg",
-        "--devices /dev/nbd7p2 -an qualification-vg",
-    ]
-
+    arguments = calls.read_text(encoding="utf-8").splitlines()
+    assert arguments[:4] == ["--format", "qcow2", "-a", str(disk)]
+    if expected_key is None:
+        assert "--key" not in arguments
+    else:
+        assert arguments[4:6] == ["--key", expected_key]
+    script = captured.read_text(encoding="utf-8")
+    assert "useradd --create-home" in script
+    assert "qualification:offline-password" not in script
+    assert "password='offline-password'" in script
+    assert 'restorecon -RF "/home/${account}"' in script
 
 def test_qualification_wait_rejects_bootloader_before_session(tmp_path):
     function = shell_section(
