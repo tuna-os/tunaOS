@@ -77,3 +77,34 @@ def test_x13s_overlay_rejects_a_wrong_architecture(tmp_path: Path):
 
     assert proc.returncode != 0
     assert "only applies to aarch64 builds" in proc.stderr
+
+
+def test_x13s_firmware_inventory_follows_usable_symlinks(tmp_path: Path):
+    source = OVERLAY.read_text(encoding="utf-8")
+    function = (
+        "inventory_file() {"
+        + source.split("inventory_file() {", 1)[1].split("\n}\n\nreport_dir=", 1)[0]
+        + "\n}"
+    )
+    payload = tmp_path / "payload"
+    payload.mkdir()
+    compressed = payload / "amss.bin.xz"
+    compressed.write_text("firmware", encoding="utf-8")
+
+    firmware = tmp_path / "firmware"
+    firmware.mkdir()
+    (firmware / compressed.name).symlink_to(compressed)
+
+    for directory in (firmware, tmp_path / "firmware-link"):
+        if directory != firmware:
+            directory.symlink_to(firmware, target_is_directory=True)
+        expected = directory / "amss.bin"
+        proc = subprocess.run(
+            ["bash", "-euo", "pipefail", "-c", f"{function}\ninventory_file \"$1\"", "bash", str(expected)],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        assert proc.returncode == 0, proc.stderr
+        assert proc.stdout.startswith(f"PRESENT {expected} -> ")
+        assert str(directory / compressed.name) in proc.stdout

@@ -133,7 +133,7 @@ inventory_file() {
 	base="${expected##*/}"
 	if [[ -d "${dir}" ]]; then
 		mapfile -t matches < <(
-			find "${dir}" -maxdepth 1 -type f \
+			find -L "${dir}" -maxdepth 1 -type f \
 				\( -name "${base}" -o -name "${base}.*" \) -print | sort
 		)
 	fi
