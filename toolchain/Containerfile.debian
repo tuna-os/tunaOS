@@ -25,6 +25,7 @@ ARG BOOTC_VERSION
 ARG BOOTUPD_VERSION
 ARG OSTREE_VERSION
 ARG COMPOSEFS_VERSION
+ARG RUSTUP_VERSION=1.28.2
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV CARGO_HOME=/tmp/rust
@@ -59,9 +60,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libseccomp-dev libcap-dev libglib2.0-dev bison flex \
     && rm -rf /var/lib/apt/lists/*
 
-# Rust toolchain (minimal) for the bootc and bootupd cargo builds.
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
-        sh -s -- --profile minimal -y
+# Rust toolchain (minimal) for the bootc and bootupd cargo builds. The
+# installer is fetched at a fixed release and checked before execution so a
+# mutable bootstrap endpoint cannot inject code into the root build.
+RUN set -eux; \
+      case "$(dpkg --print-architecture)" in \
+        amd64) RUSTUP_ARCH=x86_64-unknown-linux-gnu; RUSTUP_SHA256=20a06e644b0d9bd2fbdbfd52d42540bdde820ea7df86e92e533c073da0cdd43c ;; \
+        arm64) RUSTUP_ARCH=aarch64-unknown-linux-gnu; RUSTUP_SHA256=e3853c5a252fca15252d07cb23a1bdd9377a8c6f3efa01531109281ae47f841c ;; \
+        *) echo "Unsupported Debian architecture: $(dpkg --print-architecture)" >&2; exit 1 ;; \
+      esac; \
+      curl --fail --silent --show-error --location \
+        "https://static.rust-lang.org/rustup/archive/${RUSTUP_VERSION}/${RUSTUP_ARCH}/rustup-init" \
+        -o /tmp/rustup-init; \
+      echo "${RUSTUP_SHA256}  /tmp/rustup-init" | sha256sum --check --strict; \
+      chmod +x /tmp/rustup-init; \
+      /tmp/rustup-init -y --profile minimal; \
+      rm -f /tmp/rustup-init
 
 # ── composefs + libostree from source (trixie only) ──────────────────────────
 # ostree's configure finds composefs via pkg-config (not the git submodule), so

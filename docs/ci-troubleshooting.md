@@ -1514,6 +1514,21 @@ Do not wait for the transaction from inside it. This check reports manager
 state; the separate display-manager and user-session checks prove more.
 
 
+### Debian toolchain bootstrap changes without a source diff (#3414)
+
+**Symptom:** Two builds from the same TunaOS revision can compile different Rust
+toolchains, and a compromised bootstrap response can alter the `bootc` and
+`bootupd` binaries published in the toolchain artifact.
+
+**Measured cause:** `toolchain/Containerfile.debian` previously piped the live
+`https://sh.rustup.rs` response directly to `sh` as the root build user. The
+endpoint had no repository-controlled release identity or checksum.
+
+**Fix:** Fetch `rustup-init` from the `1.28.2` archive on
+`static.rust-lang.org`, select the target architecture from the Debian base,
+and verify the pinned amd64 or arm64 SHA-256 before execution. The installer
+still uses the existing minimal profile and `CARGO_HOME`/`RUSTUP_HOME` paths.
+
 ## 32. Weekly boot report hides successful non-GNOME QCOW2 captures (#2801)
 
 **Symptom:** The 2026-09-28 report listed KDE, Niri, and COSMIC QCOW2
