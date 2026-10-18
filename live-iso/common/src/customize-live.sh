@@ -85,7 +85,6 @@ touch "${TUNA_SESSION_ROOT:-}/etc/bootc-installer/live-iso-mode"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-
 # ── 1. Desktop detection ──────────────────────────────────────────────────────
 # TUNA_SESSION_ROOT lets the bats tests point detection at a fake root.
 _SR="${TUNA_SESSION_ROOT:-}"

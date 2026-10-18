@@ -147,7 +147,8 @@ jobs:
         run: |
           set -euo pipefail
           IMG="ghcr.io/tuna-os/${VARIANT}:${FLAVOR}"
-          OUT="ghcr.io/tuna-os/live-overlay:${VARIANT}-${FLAVOR}-${SAFEPLATFORM}"
+          # Each attempt owns its staging tag through annotation and digest capture.
+          OUT="ghcr.io/tuna-os/live-overlay:${VARIANT}-${FLAVOR}-${SAFEPLATFORM}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
 
           for i in 1 2 3; do sudo podman pull --platform "$PLATFORM" "$IMG" && break; sleep $((i*15)); done
 

@@ -62,9 +62,11 @@ detect() {
   [ "$output" = "DETECTED kde org.tunaos.InstallerKde" ]
 }
 
-@test "detect-only mode exits 0 and mutates nothing" {
+@test "detect-only mode exits 0 and writes live-media sentinels" {
   TUNA_SESSION_ROOT="${FAKE_ROOT}" TUNA_DETECT_ONLY=1 run bash "${SCRIPT}"
   [ "$status" -eq 0 ]
+  [ -f "${FAKE_ROOT}/etc/bootc-installer/live-iso-mode" ]
+  [ -f "${FAKE_ROOT}/etc/tunaos/live-session" ]
 }
 
 @test "metadata-only mode writes an exact live source receipt" {
@@ -81,7 +83,7 @@ detect() {
     bash "${SCRIPT}"
   [ "$status" -eq 0 ]
 
-  [ -f "${FAKE_ROOT}/etc/bootc-installer/live-iso-mode" ]
+  [ ! -e "${FAKE_ROOT}/etc/bootc-installer/live-iso-mode" ]
   grep -Fxq "INSTALLER_APP=org.tunaos.InstallerKde" \
     "${FAKE_ROOT}/etc/tunaos/live-installer-info"
   grep -Fxq "INSTALLER_REVISION=flatpak-commit-123" \
