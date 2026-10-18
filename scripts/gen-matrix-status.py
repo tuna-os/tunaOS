@@ -1096,11 +1096,18 @@ def factory_health_summary(
         raise RuntimeError("generated matrix has no composite-green headline")
 
     criteria = {c["id"]: c for c in load_green_criteria()}
+    iso_cells = {
+        f"{variant}:{flavor}"
+        for variant, flavors in iso_matrix().items()
+        for flavor in flavors
+    }
 
     def applicable_results(axis: str):
         criterion = criteria.get(axis)
         for cell_key, axes in provenance.items():
             if axis not in axes:
+                continue
+            if axis == "iso" and cell_key not in iso_cells:
                 continue
             flavor = cell_key.split(":", 1)[-1]
             if criterion and not criterion_scope_allows(criterion, flavor):
@@ -1141,6 +1148,7 @@ def factory_health_summary(
         "boots": axis_tally("boots"),
         "desktop": axis_tally("desktop"),
         "install": axis_tally("install"),
+        "iso": axis_tally("iso"),
         "lifecycle": axis_tally("lifecycle"),
         "never_tested": never_tested,
         "known_regressions": regressions,

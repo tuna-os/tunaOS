@@ -27,6 +27,7 @@ def payload():
             "boots": {"passed": 1, "tested": 1, "total": 2},
             "desktop": {"passed": 1, "tested": 2, "total": 2},
             "install": {"passed": 1, "tested": 2, "total": 2},
+            "iso": {"passed": 0, "tested": 1, "total": 2},
             "lifecycle": {"passed": 1, "tested": 2, "total": 2},
             "never_tested": 1,
             "known_regressions": {"blocking": 1, "advisory": 1},
@@ -38,6 +39,7 @@ def payload():
                 "boots": result("pass"),
                 "desktop": result("pass"),
                 "install": result("pass"),
+                "iso": result("fail"),
                 "lifecycle": result("fail"),
             },
             "marlin:kde": {
@@ -46,6 +48,7 @@ def payload():
                 "desktop": result("fail"),
                 "install": result("fail"),
                 "lifecycle": result("pass"),
+                "iso": result("untested", ""),
             },
         },
     }
@@ -62,6 +65,8 @@ def test_report_covers_release_and_runtime_verification_axes():
     assert "Signed: **1/1** promoted cells" in report
     assert "SBOM: ✅ SPDX inventory contains 123 packages" in report
     assert "Booted: **1/2 pass (1/2 tested)**" in report
+    assert "Unattended encrypted installation: **1/2 pass (2/2 tested)**" in report
+    assert "Installer frontend smoke: **0/2 pass (1/2 tested)**" in report
     assert "**1 blocking**, **1 advisory**" in report
     assert "- Lifecycle validation (install configuration and desktop contract): **1/2 pass (2/2 tested)**" in report
     assert f"/blob/{commit}/docs/matrix-provenance.json" in report

@@ -466,11 +466,13 @@ class FactoryHealthSummary(unittest.TestCase):
             "yellowfin:gnome": {
                 "builds": {"verdict": "pass", "date": "2026-08-14"},
                 "install": {"verdict": "pass", "date": "2026-08-13"},
+                "iso": {"verdict": "fail", "date": "2026-08-13"},
                 "lifecycle": {"verdict": "fail", "date": "2026-08-14"},
             },
             "marlin:kde": {
                 "builds": {"verdict": "fail", "date": "2026-08-12"},
                 "install": {"verdict": "untested", "date": ""},
+                "iso": {"verdict": "fail", "date": "2026-08-12"},
                 "lifecycle": {"verdict": "pass", "date": "2026-08-12"},
             },
             "albacore:base": {
@@ -478,9 +480,14 @@ class FactoryHealthSummary(unittest.TestCase):
             },
         }
         generated = "**1 of 2** published cells are composite-green."
-        got = gms.factory_health_summary(
-            provenance, generated, ["2026-08-14"]
-        )
+        with mock.patch.object(
+            gms,
+            "iso_matrix",
+            return_value={"yellowfin": {"gnome"}, "marlin": {"kde"}},
+        ):
+            got = gms.factory_health_summary(
+                provenance, generated, ["2026-08-14"]
+            )
 
         self.assertEqual(got["factory_health"], {"green": 1, "total": 2})
         self.assertEqual(got["builds"], {"passed": 1, "tested": 2, "total": 2})
@@ -488,6 +495,7 @@ class FactoryHealthSummary(unittest.TestCase):
         self.assertEqual(got["desktop"], {"passed": 0, "tested": 0, "total": 0})
         self.assertEqual(got["install"], {"passed": 1, "tested": 1, "total": 2})
         self.assertEqual(got["lifecycle"], {"passed": 1, "tested": 2, "total": 2})
+        self.assertEqual(got["iso"], {"passed": 0, "tested": 2, "total": 2})
         self.assertEqual(got["builds"], {"passed": 1, "tested": 2, "total": 2})
         self.assertEqual(got["boots"], {"passed": 0, "tested": 0, "total": 0})
         self.assertEqual(got["desktop"], {"passed": 0, "tested": 0, "total": 0})
@@ -640,6 +648,11 @@ def test_committed_snapshot_counts_match_provenance_and_board():
         assert board == axis_counts(axis), title
         if axis in payload["summary"]:
             assert payload["summary"][axis] == board, axis
+    assert payload["summary"]["iso"] == {
+        "passed": 0,
+        "tested": 57,
+        "total": 62,
+    }
 if __name__ == "__main__":
     unittest.main()
 
