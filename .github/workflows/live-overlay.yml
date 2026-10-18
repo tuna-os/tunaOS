@@ -18,7 +18,7 @@ on:
         default: "all"
         type: string
       flavors:
-        description: "Single desktop flavor id (gnome/kde/cosmic/niri/xfce), or 'all'"
+        description: "Single flavor id (e.g. gnome, kde-nvidia, cosmic-hwe), or 'all'"
         required: false
         default: "all"
         type: string
@@ -49,35 +49,58 @@ jobs:
         run: |
           # Overlays carry the per-desktop live payload (installer flatpak,
           # autologin, polkit) the browser ISO builder grafts in as
-          # live-overlay:<variant>-<flavor>. Filter on build_image (NOT
-          # build_iso): the browser builds ISOs from any published *image*,
-          # including image-only variants CI never cuts an ISO for — sailfin
-          # is exactly that case, so it had no overlay and booted with no
-          # installer. Restrict to the plain desktop tags the browser offers
-          # (gnome/kde/cosmic/niri/xfce, no -nvidia/-hwe); new variants are
-          # picked up automatically instead of the old yellowfin-only default.
+          # live-overlay:<variant>-<flavor>[-<safeplatform>]. Filter on
+          # build_image (NOT build_iso): the browser builds ISOs from any
+          # published *image*, including image-only variants CI never cuts an
+          # ISO for — sailfin is exactly that case, so it had no overlay and
+          # booted with no installer. New variants are picked up automatically
+          # instead of the old yellowfin-only default.
+          #
+          # EXACT FILTER (jq, below): build_image == true AND the flavor id
+          # matches a desktop family with an optional hardware/kernel layer
+          # suffix — ^(gnome|kde|cosmic|niri|xfce|pantheon|tuna)(-(hwe|nvidia|
+          # nvidia-hwe|cachyos|zfs))?$. That includes the -hwe/-nvidia/
+          # -nvidia-hwe/-cachyos/-zfs layers CI qualifies, and excludes:
+          #   * base and base-* (no desktop, no live session to customize),
+          #   * *-asahi / *-t2 (device-specific install paths -- the
+          #     asahi-installer / T2 flows, not the live ISO -- even where
+          #     build-config marks them buildable),
+          #   * anything build_image: false (e.g. yellowfin gnome-nvidia-hwe,
+          #     tunaOS#2518: builds but cannot mount its own root).
+          # Each surviving flavor fans out to one row per declared platform
+          # (flavor platforms, else variant platforms; linux/amd64/v2 is a
+          # CPU-feature variant, not a target arch, so only linux/amd64 and
+          # linux/arm64 qualify -- same exclusion build-variant.yml applies).
           MATRIX=$(yq -o json .github/build-config.yml | jq -c \
             --arg v "$WANT_VARIANT" --arg f "$WANT_FLAVOR" '{
               include: [
-                .variants[] as $var | $var.flavors[]
+                . as $root | .variants[] as $var | $var.flavors[]
                 | select(.build_image == true)
-                | select(.id | test("^(gnome|kde|cosmic|niri|xfce)$"))
+                | select(.id | test("^(gnome|kde|cosmic|niri|xfce|pantheon|tuna)(-(hwe|nvidia|nvidia-hwe|cachyos|zfs))?$"))
                 | select($v == "all" or $var.id == $v)
                 | select($f == "all" or .id == $f)
-                | {variant: $var.id, flavor: .id}
+                | {variant: $var.id, flavor: .id,
+                   platforms: (.platforms // $var.platforms // $root.config.global_platforms // ["linux/amd64"])}
+                | .platforms as $plats
+                | {variant: .variant, flavor: .flavor,
+                   platform: $plats[]}
+                | select(.platform == "linux/amd64" or .platform == "linux/arm64")
+                | {variant, flavor, platform,
+                   safeplatform: (.platform | gsub("/"; "-")),
+                   runner: (if .platform == "linux/arm64" then "ubuntu-24.04-arm" else "ubuntu-latest" end)}
               ]
             }')
           COUNT=$(echo "$MATRIX" | jq '.include | length')
           echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
           echo "count=$COUNT" >> "$GITHUB_OUTPUT"
           echo "Building $COUNT overlay(s):"
-          echo "$MATRIX" | jq -r '.include[] | "  \(.variant):\(.flavor)"'
+          echo "$MATRIX" | jq -r '.include[] | "  \(.variant):\(.flavor) [\(.platform)]"'
 
   overlay:
-    name: ${{ matrix.variant }}:${{ matrix.flavor }}
+    name: ${{ matrix.variant }}:${{ matrix.flavor }} [${{ matrix.platform }}]
     needs: generate-matrix
     if: ${{ needs.generate-matrix.outputs.count != '0' }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
     strategy:
       fail-fast: false
@@ -106,7 +129,7 @@ jobs:
           git -C "$src" checkout --quiet "$SHA"
           ( cd "$src" && go build -o "$RUNNER_TEMP/tacklebox-bin" ./cmd/tacklebox )
           "$RUNNER_TEMP/tacklebox-bin" customize-live --help >/dev/null || {
-            echo "::error::tacklebox @ ${SHA} has no customize-live command — bump the pin in image-versions.yaml to a commit that includes tuna-os/tacklebox#149"
+            echo "::error::tacklebox @ ${SHA} lacks customize-live; pin a commit containing tuna-os/tacklebox#149"
             exit 1
           }
           echo "bin=$RUNNER_TEMP/tacklebox-bin" >> "$GITHUB_OUTPUT"
@@ -115,13 +138,15 @@ jobs:
         env:
           VARIANT: ${{ matrix.variant }}
           FLAVOR: ${{ matrix.flavor }}
+          PLATFORM: ${{ matrix.platform }}
+          SAFEPLATFORM: ${{ matrix.safeplatform }}
           TACKLEBOX_BIN: ${{ steps.tbx.outputs.bin }}
         run: |
           set -euo pipefail
           IMG="ghcr.io/tuna-os/${VARIANT}:${FLAVOR}"
-          OUT="ghcr.io/tuna-os/live-overlay:${VARIANT}-${FLAVOR}"
+          OUT="ghcr.io/tuna-os/live-overlay:${VARIANT}-${FLAVOR}-${SAFEPLATFORM}"
 
-          for i in 1 2 3; do sudo podman pull "$IMG" && break; sleep $((i*15)); done
+          for i in 1 2 3; do sudo podman pull --platform "$PLATFORM" "$IMG" && break; sleep $((i*15)); done
 
           # The digest of the base we ACTUALLY built from. The base label
           # below records only a tag, and tags move — so on its own it cannot
@@ -132,6 +157,38 @@ jobs:
           # overlay silently ships an old rootfs.
           BASE_DIGEST="$(sudo podman image inspect --format '{{.Digest}}' "$IMG")"
           echo "base digest: ${BASE_DIGEST}"
+
+          # Installer bundle selection is arch-specific: the release carries
+          # one flatpak bundle per arch (org.bootcinstaller.Installer.flatpak
+          # on x86_64, org.bootcinstaller.Installer-<arch>.flatpak elsewhere;
+          # see customize-live.sh). Thread the matrix platform through as the
+          # arch customize-live.sh must download for, rather than letting it
+          # guess from the runner (an arm64 overlay built under emulation
+          # still reports the emulated uname, but being explicit beats being
+          # lucky). Same desktop -> app-id mapping as customize-live.sh's
+          # DESKTOP case: strip the hardware/kernel layer suffix first.
+          case "$PLATFORM" in
+            linux/arm64) INSTALLER_ARCH="aarch64" ;;
+            *) INSTALLER_ARCH="x86_64" ;;
+          esac
+          DESKTOP="${FLAVOR%%-hwe}"; DESKTOP="${DESKTOP%%-nvidia}"
+          DESKTOP="${DESKTOP%%-cachyos}"; DESKTOP="${DESKTOP%%-zfs}"
+          case "$DESKTOP" in
+            kde) INSTALLER_APP="org.tunaos.InstallerKde" ;;
+            niri) INSTALLER_APP="org.tunaos.InstallerNiri" ;;
+            cosmic) INSTALLER_APP="org.tunaos.InstallerCosmic" ;;
+            xfce) INSTALLER_APP="org.tunaos.InstallerXfce" ;;
+            *) INSTALLER_APP="org.bootcinstaller.Installer" ;;
+          esac
+          # The revision the overlay's installer payload came from: every
+          # frontend now ships from tuna-os/bootc-installer (see
+          # scripts/check-installer-fisherman-pins.py), so one release query
+          # covers all five app IDs. Best-effort -- a lookup miss records
+          # "unknown" rather than failing the overlay, and customize-live.sh
+          # additionally writes the exact installed commit + bundle digest
+          # into /etc/tunaos/live-installer-info inside the overlay itself.
+          INSTALLER_REV="$(gh api repos/tuna-os/bootc-installer/releases/latest --jq .tag_name 2>/dev/null || echo unknown)"
+          echo "installer: ${INSTALLER_APP}@${INSTALLER_REV} (arch ${INSTALLER_ARCH})"
 
           # Use tacklebox's own customize pipeline rather than reimplementing
           # it here (tacklebox#149).
@@ -163,14 +220,70 @@ jobs:
           # first NAME=VALUE, so `env HOME=/root -u XDG_DATA_HOME` treats
           # `-u` as the command to run and dies with
           # `env: '-u': No such file or directory`. Options first.
+          # The pinned tacklebox forwards only its own allowlisted variables
+          # into the customization container. Generate the script it hashes
+          # with explicit exports so target identity both reaches the
+          # container and participates in tacklebox's cache key.
+          CUSTOMIZE_SCRIPT="$PWD/live-iso/common/src/.customize-live-${SAFEPLATFORM}.sh"
+          trap 'rm -f "$CUSTOMIZE_SCRIPT"' EXIT
+          {
+            echo '#!/usr/bin/env bash'
+            printf 'export TUNA_INSTALLER_ARCH=%q\n' "$INSTALLER_ARCH"
+            printf 'export TUNA_INSTALLER_APP=%q\n' "$INSTALLER_APP"
+            printf 'export TUNA_INSTALLER_REVISION=%q\n' "$INSTALLER_REV"
+            printf 'export TUNA_LIVE_BASE_IMAGE=%q\n' "$IMG"
+            printf 'export TUNA_LIVE_BASE_DIGEST=%q\n' "$BASE_DIGEST"
+            printf 'export TUNA_LIVE_PLATFORM=%q\n' "$PLATFORM"
+            tail -n +2 "$PWD/live-iso/common/src/customize-live.sh"
+          } > "$CUSTOMIZE_SCRIPT"
+          chmod 0755 "$CUSTOMIZE_SCRIPT"
+
           sudo -E env -u XDG_DATA_HOME -u XDG_CONFIG_HOME HOME=/root \
             "${TACKLEBOX_BIN}" customize-live \
             --image "$IMG" \
-            --script "$PWD/live-iso/common/src/customize-live.sh" \
+            --script "$CUSTOMIZE_SCRIPT" \
             --tag "$OUT" \
             --label "org.tunaos.live-overlay.base=${IMG}" \
             --label "org.tunaos.live-overlay.base-digest=${BASE_DIGEST}" \
-            --label "org.tunaos.live-overlay.baseline=true"
+            --label "org.tunaos.live-overlay.platform=${PLATFORM}" \
+            --label "org.tunaos.live-overlay.baseline=true" \
+            --label "org.tunaos.live-overlay.installer=${INSTALLER_APP}@${INSTALLER_REV}"
 
           sudo podman push "$OUT"
           echo "published $OUT"
+
+  publish-compatible-index:
+    name: Publish compatible multi-platform tags
+    needs: [generate-matrix, overlay]
+    if: ${{ needs.generate-matrix.outputs.count != '0' }}
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    env:
+      MATRIX: ${{ needs.generate-matrix.outputs.matrix }}
+    steps:
+      - name: Log in to GHCR
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$GITHUB_TOKEN" | podman login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+
+      - name: Publish existing unsuffixed tags as platform indexes
+        run: |
+          set -euo pipefail
+          jq -r '.include | unique_by([.variant, .flavor])[] | [.variant, .flavor] | @tsv' \
+            <<<"$MATRIX" |
+          while IFS=$'\t' read -r variant flavor; do
+            index="ghcr.io/tuna-os/live-overlay:${variant}-${flavor}"
+            podman manifest rm "$index" >/dev/null 2>&1 || true
+            podman manifest create "$index"
+            while read -r safeplatform; do
+              podman manifest add "$index" \
+                "docker://ghcr.io/tuna-os/live-overlay:${variant}-${flavor}-${safeplatform}"
+            done < <(
+              jq -r --arg variant "$variant" --arg flavor "$flavor" \
+                '.include[] | select(.variant == $variant and .flavor == $flavor) | .safeplatform' \
+                <<<"$MATRIX"
+            )
+            podman manifest push --all "$index" "docker://$index"
+            echo "published $index"
+          done
