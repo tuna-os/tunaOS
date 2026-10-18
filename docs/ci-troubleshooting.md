@@ -1663,6 +1663,19 @@ stopped more slowly passed.
 capture first, then sends the graceful powerdown itself before the kill.
 `tests/bats/test_luks_capture_before_powerdown.bats` holds that order.
 
+### A download version changes but its hashes stay stale
+
+**Symptom:** The checksum gate rejects the pinned `chezmoi` release on both
+architectures.
+
+**Measured cause:** PR #3358 changed the version to `v2.73.2` but kept the
+`v2.73.1` hashes. [Job 117433595064](https://github.com/tuna-os/tunaOS/actions/runs/39045607248/job/117433595064)
+reports both mismatches.
+
+**Fix:** Run `python3 scripts/check-download-checksums.py --only chezmoi --fix`.
+Check both release assets with `python3 -m pytest tests/test_pinned_download_checksums.py -k chezmoi`.
+Commit the version and both hashes together.
+
 ### Marlin base userland gaps (tunaOS#3351, #3353, #3354, #3355)
 
 **Symptom:** A booted marlin:gnome (BUILD_ID=4ace379) has no `hostname`, `diff`, `less`, `lsusb`, `bluetoothctl`, `distrobox`, or `buildah`. Bluetooth stays `disabled; preset: disabled`. Audio on modern laptops has no SOF firmware and no ALSA-to-PipeWire route.
@@ -1678,3 +1691,20 @@ capture first, then sends the graceful powerdown itself before the kill.
 **Measured cause:** `Containerfile.arch` copies the common payload that provides the uupd timer and AC trigger. It never ran the package phase that installs the pinned binary and core units. Observed on a reference marlin:gnome host (booted 2026-09-22 image): trigger starts, `systemctl start uupd.service` exits `NOTINSTALLED`, unit enters `start-limit-hit`.
 
 **Fix:** The pinned download moved into shared `build_scripts/install-uupd.sh` (same `image-versions.yaml` pin; stages the binary plus `uupd.service`, `uupd.timer`, `uupd-manual.service` before install; smoke with `UUPD_CONTEXT="$PWD" UUPD_ROOT="$scratch"` into a disposable root). The apt and dnf branches of `10-base-packages.sh` delegate to it unchanged in behavior, and `Containerfile.arch` carries the pin file and runs the installer before `40-services.sh`. The context exact-set test now treats `install-uupd.sh` as a consumer of the pin file.
+
+### Countme clean install rejects a missing overridden dependency
+
+**Symptom:** The `Test countme collector with D1` step fails with
+`Missing: undici@8.12.2 from lock file` before tests start. Observed in
+[Unit Tests run 39146505460](https://github.com/tuna-os/tunaOS/actions/runs/39146505460).
+
+**Measured cause:** At `fe228c4`, `services/countme/package.json` overrides
+Miniflare's `undici` to `8.12.2`, but the lockfile has no matching package entry.
+Node 24.19.0 / npm 11.9.0 reproduces the failure with
+`npm ci --ignore-scripts --prefix services/countme`.
+
+**Fix:** Regenerate with `npm install --package-lock-only --ignore-scripts
+--prefix services/countme` using Node 24 / npm 11. Preserve metadata for other platforms and commit the missing resolved package and integrity. Verify with a
+clean `npm ci --ignore-scripts`, `npm test`, and `npm run build` in that directory.
+Check each override edit with `npm ci`. The same npm major alone does not
+prove that the manifest and lockfile agree.
