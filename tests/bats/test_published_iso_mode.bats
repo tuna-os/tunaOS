@@ -14,7 +14,10 @@ SCRIPT="${REPO_ROOT}/scripts/iso-e2e.sh"
 @test "the published mode exists and is documented in usage" {
   grep -q '\-\-published)' "$SCRIPT"
   grep -q 'MODE="published"' "$SCRIPT"
-  grep -q '\-\-published\]' "$SCRIPT"
+  run bash "$SCRIPT"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Usage:"* ]]
+  [[ "$output" == *"--published"* ]]
 }
 
 @test "the published mode never calls SSH" {
