@@ -753,6 +753,10 @@ LIVE_NET_ARGS=(
 	-device virtio-net-pci,netdev=net0
 )
 [[ "$MODE" == "qualification" ]] && LIVE_NET_ARGS=(-nic none)
+QUALIFICATION_INPUT_ARGS=()
+if [[ "$MODE" == "qualification" && "$QEMU_MACHINE" == "virt" ]]; then
+	QUALIFICATION_INPUT_ARGS=(-device virtio-keyboard-pci)
+fi
 
 # What the run is currently waiting on, as a file rather than a variable: the
 # wall-clock watchdog below runs in a background subshell forked before any of
@@ -1347,6 +1351,7 @@ boot_live_iso() {
 		-device virtio-blk-pci,drive=disk \
 		"${LIVE_AUX_DISK_ARGS[@]}" \
 		"${LIVE_NET_ARGS[@]}" \
+		"${QUALIFICATION_INPUT_ARGS[@]}" \
 		"${VSOCK_ARGS[@]}" \
 		-monitor "unix:${MONITOR_SOCK},server,nowait" \
 		"${E2E_SERIAL_ARGS[@]}" \
@@ -3579,37 +3584,21 @@ boot_disk_image() {
 }
 
 # Inspect the disk the GUI wrote and provision the harness-owned account used
-# for an offline, monitor-driven greeter login. libguestfs performs both disk
-# inspection and first-boot script injection inside its appliance VM: no guest
-# binary executes as host root, and guest-controlled symlinks are never
-# resolved by host filesystem operations.
+# for an offline, monitor-driven greeter login. All disk access stays inside a
+# libguestfs appliance. Root discovery is deployment-aware and does not depend
+# on libguestfs OS inspection, which cannot identify OSTree/composefs roots.
 prepare_qualification_disk() {
-	command -v virt-filesystems >/dev/null 2>&1 &&
-		command -v virt-customize >/dev/null 2>&1 || {
-		echo "ERROR: qualification requires libguestfs-tools" >&2
+	command -v guestfish >/dev/null 2>&1 || {
+		echo "ERROR: qualification requires guestfish" >&2
 		return 77
 	}
 
 	local passphrase="${TUNAOS_QUALIFICATION_PASSPHRASE:-tunaose2e}"
-	local inventory=""
-	if ! inventory="$(virt-filesystems --long --parts --filesystems \
-		--format qcow2 -a "$INSTALL_DISK")"; then
-		echo "ERROR: libguestfs could not inspect the qualification disk" >&2
-		return 1
-	fi
-	local encrypted=0
-	grep -q 'crypto_LUKS' <<<"$inventory" && encrypted=1
-	if [[ "$QUALIFICATION_PROFILE" == "encrypted" && "$encrypted" -ne 1 ]]; then
-		echo "ERROR: encrypted GUI profile produced no crypto_LUKS partition" >&2
-		return 1
-	elif [[ "$QUALIFICATION_PROFILE" == "plain" && "$encrypted" -ne 0 ]]; then
-		echo "ERROR: plain GUI profile unexpectedly produced a crypto_LUKS partition" >&2
-		return 1
-	fi
-
-	local firstboot
-	firstboot="$(mktemp)"
-	cat >"$firstboot" <<EOF
+	local account_script unit_file preset_file
+	account_script="$(mktemp)"
+	unit_file="$(mktemp)"
+	preset_file="$(mktemp)"
+	cat >"$account_script" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
 account=${E2E_INSTALL_USER@Q}
@@ -3621,20 +3610,120 @@ printf '%s:%s\n' "\$account" "\$password" | chpasswd
 if command -v restorecon >/dev/null 2>&1; then
 	restorecon -RF "/home/\${account}" /etc/passwd /etc/shadow /etc/group /etc/gshadow
 fi
+touch /var/lib/tunaos-qualification-account.done
 EOF
-	chmod 0700 "$firstboot"
+	chmod 0700 "$account_script"
+	cat >"$unit_file" <<'EOF'
+[Unit]
+Description=Provision the offline qualification account
+Before=display-manager.service
+ConditionPathExists=!/var/lib/tunaos-qualification-account.done
 
-	local -a key_args=()
-	if [[ "$encrypted" -eq 1 ]]; then
-		key_args=(--key "all:key:${passphrase}")
-	fi
-	if ! virt-customize --format qcow2 -a "$INSTALL_DISK" \
-		"${key_args[@]}" --firstboot "$firstboot"; then
-		rm -f "$firstboot"
-		echo "ERROR: libguestfs could not stage first-boot account provisioning" >&2
+[Service]
+Type=oneshot
+ExecStart=/etc/tunaos/qualification-account.sh
+
+[Install]
+WantedBy=multi-user.target
+EOF
+	printf '%s\n' 'enable tunaos-qualification-account.service' >"$preset_file"
+
+	if ! (
+		set -euo pipefail
+		eval "$(guestfish --listen)"
+		trap 'guestfish --remote exit >/dev/null 2>&1 || true' EXIT
+		guestfish --remote add-drive-opts "$INSTALL_DISK" format:qcow2
+		guestfish --remote run
+
+		mapfile -t partitions < <(guestfish --remote list-partitions)
+		((${#partitions[@]})) || {
+			echo "ERROR: qualification disk has no partitions" >&2
+			exit 1
+		}
+		encrypted=0
+		luks_partition=""
+		for partition in "${partitions[@]}"; do
+			partition_type="$(guestfish --remote -- -vfs-type "$partition" 2>/dev/null || true)"
+			if [[ "$partition_type" == "crypto_LUKS" ]]; then
+				encrypted=1
+				luks_partition="$partition"
+				break
+			fi
+		done
+		if [[ "$QUALIFICATION_PROFILE" == "encrypted" && "$encrypted" -ne 1 ]]; then
+			echo "ERROR: encrypted GUI profile produced no crypto_LUKS partition" >&2
+			exit 1
+		elif [[ "$QUALIFICATION_PROFILE" == "plain" && "$encrypted" -ne 0 ]]; then
+			echo "ERROR: plain GUI profile unexpectedly produced a crypto_LUKS partition" >&2
+			exit 1
+		fi
+		if [[ "$encrypted" -eq 1 ]]; then
+			printf '%s\n' "$passphrase" |
+				guestfish --keys-from-stdin --remote \
+					cryptsetup-open "$luks_partition" tunaos-qualification-root
+			guestfish --remote lvm-scan true
+			guestfish --remote vg-activate-all true
+		fi
+
+		root_found=0
+		while IFS=: read -r device fs_type; do
+			device="${device#"${device%%[![:space:]]*}"}"
+			fs_type="${fs_type#"${fs_type%%[![:space:]]*}"}"
+			case "$fs_type" in
+			"" | swap | crypto_LUKS | LVM2_member) continue ;;
+			esac
+			guestfish --remote -- -umount-all >/dev/null 2>&1 || true
+			guestfish --remote -- -mount "$device" / >/dev/null 2>&1
+			if [[ "$(guestfish --remote is-dir /state/deploy)" == true ||
+				"$(guestfish --remote is-dir /ostree/deploy)" == true ]]; then
+				root_found=1
+				break
+			fi
+		done < <(guestfish --remote list-filesystems)
+		[[ "$root_found" -eq 1 ]] || {
+			echo "ERROR: no OSTree or composefs deployment root found" >&2
+			exit 1
+		}
+
+		mapfile -t mutable_etc < <(
+			guestfish --remote glob-expand '/state/deploy/*/etc' 2>/dev/null || true
+		)
+		if ((${#mutable_etc[@]} == 0)); then
+			mapfile -t mutable_etc < <(
+				guestfish --remote glob-expand '/ostree/deploy/*/deploy/*/etc' 2>/dev/null || true
+			)
+		fi
+		((${#mutable_etc[@]} == 1)) || {
+			echo "ERROR: expected one mutable deployment /etc, found ${#mutable_etc[@]}" >&2
+			exit 1
+		}
+		guest_etc="${mutable_etc[0]}"
+		guestfish --remote mkdir-p "${guest_etc}/tunaos"
+		guestfish --remote mkdir-p "${guest_etc}/systemd/system/multi-user.target.wants"
+		guestfish --remote mkdir-p "${guest_etc}/systemd/system-preset"
+		guestfish --remote upload "$account_script" "${guest_etc}/tunaos/qualification-account.sh"
+		guestfish --remote chmod 0755 "${guest_etc}/tunaos/qualification-account.sh"
+		guestfish --remote upload "$unit_file" \
+			"${guest_etc}/systemd/system/tunaos-qualification-account.service"
+		guestfish --remote upload "$preset_file" \
+			"${guest_etc}/systemd/system-preset/40-tunaos-qualification.preset"
+		guestfish --remote rm-f \
+			"${guest_etc}/systemd/system/multi-user.target.wants/tunaos-qualification-account.service"
+		guestfish --remote ln-s \
+			/etc/systemd/system/tunaos-qualification-account.service \
+			"${guest_etc}/systemd/system/multi-user.target.wants/tunaos-qualification-account.service"
+		# Relabel both the physical sysroot and the selected deployed root on
+		# boot so systemd can read the appliance-staged unit and execute its
+		# account script under enforcing SELinux.
+		guestfish --remote touch /.autorelabel
+		guestfish --remote touch "${guest_etc%/etc}/.autorelabel"
+		guestfish --remote umount-all
+	); then
+		rm -f "$account_script" "$unit_file" "$preset_file"
+		echo "ERROR: libguestfs could not stage deployment-aware account provisioning" >&2
 		return 1
 	fi
-	rm -f "$firstboot"
+	rm -f "$account_script" "$unit_file" "$preset_file"
 }
 
 qualification_frame_text() {
@@ -3769,6 +3858,7 @@ boot_qualification_disk() {
 		-device virtio-blk-pci,drive=disk,bootindex=0 \
 		-nic none \
 		-monitor "unix:${MONITOR_SOCK},server,nowait" \
+		"${QUALIFICATION_INPUT_ARGS[@]}" \
 		"${E2E_SERIAL_ARGS[@]}" \
 		"${QEMU_GPU_ARGS[@]}" \
 		-pidfile "$QEMU_PIDFILE" \
@@ -3791,6 +3881,11 @@ boot_qualification_disk() {
 		fi
 		sleep 5
 	done
+	if base_contract_failed_on_serial "$SERIAL_LOG" "${BASE_CONTRACT_GRACE:-120}"; then
+		cp "$SERIAL_LOG" "$installed_serial"
+		echo "ERROR: installed desktop contract passed, but the base contract failed" >&2
+		return 4
+	fi
 	cp "$SERIAL_LOG" "$installed_serial"
 
 	if ! grep -F "TUNAOS_DESKTOP_CONTRACT_OK desktop=${expected_desktop} " "$installed_serial" |
