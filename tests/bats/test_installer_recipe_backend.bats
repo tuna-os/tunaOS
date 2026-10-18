@@ -213,3 +213,110 @@ probe() {
   [[ "$output" == *"bootloader=systemd"* ]]
   [[ "$output" == *"composeFsBackend=true"* ]]
 }
+
+# ── x86_64/aarch64 precedence: bootupd wins, sealing picks the filesystem ────
+#
+# Backend and filesystem are SEPARATE questions (installer-recipe-backend.sh).
+# A sealed image that still ships bootupd stays on the ostree path (bootupd is
+# checked first) but must still get ext4 (sealed => fs-verity => no XFS).
+# These pin both arch spellings explicitly via the helper params because the
+# probe used to spell the x64 EFI names literally and went blind on arm64.
+
+@test "x86_64 sealed image with legacy bootupd stays ostree/grub2 on ext4" {
+  add_bootupd_legacy x64
+  set_composefs yes
+  probe
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"bootloader=grub2"* ]]
+  [[ "$output" == *"composeFsBackend=false"* ]]
+  [[ "$output" == *"filesystem=ext4"* ]]
+}
+
+@test "aarch64 sealed image with legacy bootupd stays ostree/grub2 on ext4" {
+  add_bootupd_legacy aa64
+  set_composefs yes
+  probe
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"bootloader=grub2"* ]]
+  [[ "$output" == *"composeFsBackend=false"* ]]
+  [[ "$output" == *"filesystem=ext4"* ]]
+}
+
+@test "aarch64 modern bootupd payload with sealed pin stays ostree on ext4" {
+  add_bootupd_modern aa64
+  set_composefs signed
+  probe
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"bootloader=grub2"* ]]
+  [[ "$output" == *"composeFsBackend=false"* ]]
+  [[ "$output" == *"filesystem=ext4"* ]]
+}
+
+@test "aarch64 composefs pin with no bootupd is systemd-boot on ext4" {
+  set_composefs yes
+  probe
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"bootloader=systemd"* ]]
+  [[ "$output" == *"composeFsBackend=true"* ]]
+  [[ "$output" == *"filesystem=ext4"* ]]
+}
+
+@test "x86_64 systemd-boot with no pin is composefs-native on xfs" {
+  add_systemd_boot x64
+  probe
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"bootloader=systemd"* ]]
+  [[ "$output" == *"composeFsBackend=true"* ]]
+  [[ "$output" == *"filesystem=xfs"* ]]
+}
+
+# ── Overlay artifacts: live-iso-mode + coherent source metadata ──────────────
+#
+# customize-live.sh records what the squash IS alongside the recipe keys above:
+# a live-iso-mode sentinel, an installer receipt (app + deployed revision),
+# and live-source.json (base digest + platform + installer app + revision).
+# These are static assertions on the script, not a boot: file writes only, so
+# they must not require a host containers-storage graphroot to hold. The heavy
+# proof that rebuilt media boots the matching desktop stays in CI.
+
+CUSTOMIZE="${REPO_ROOT}/live-iso/common/src/customize-live.sh"
+
+@test "overlay: live media carries the live-iso-mode sentinel" {
+  grep -q 'etc/bootc-installer/live-iso-mode' "$CUSTOMIZE"
+}
+
+@test "overlay: receipt records the installer app and deployed revision" {
+  grep -q '/etc/tunaos/live-installer-info' "$CUSTOMIZE"
+  grep -q 'INSTALLER_APP=${INSTALLER_APP}' "$CUSTOMIZE"
+  grep -q 'INSTALLER_REVISION=${INSTALLER_REVISION}' "$CUSTOMIZE"
+}
+
+@test "overlay: live-source.json carries base digest, platform, installer app+revision" {
+  grep -q '/etc/tunaos/live-source.json' "$CUSTOMIZE"
+  grep -q 'TUNA_LIVE_BASE_DIGEST' "$CUSTOMIZE"
+  grep -q 'TUNA_LIVE_PLATFORM' "$CUSTOMIZE"
+  grep -q '"base_digest"' "$CUSTOMIZE"
+  grep -q '"platform"' "$CUSTOMIZE"
+  grep -q '"installer_app_id"' "$CUSTOMIZE"
+  grep -q '"installer_revision"' "$CUSTOMIZE"
+}
+
+@test "overlay: receipt and source metadata need no host containers-storage graphroot" {
+  # The 4a2/5c blocks must be file writes + env reads only. A podman/skopeo
+  # store lookup there would answer about the BUILD host (or fail outright on
+  # the pure/tacklebox live boot, which has no graphroot) instead of the base
+  # image the squash was customized from.
+  local section code
+  section="$(awk '/4a2\. Installer receipt/,/4b\. Polkit/' "$CUSTOMIZE")"
+  section+="$(awk '/5c\. Live source metadata/,/var\/tmp headroom/' "$CUSTOMIZE")"
+  # Comments name the forbidden tools to explain why they are absent; only
+  # code lines count.
+  code="$(grep -v '^[[:space:]]*#' <<<"$section")"
+  ! grep -q 'podman' <<<"$code"
+  ! grep -q 'skopeo' <<<"$code"
+  ! grep -q 'containers-storage' <<<"$code"
+}
+
+@test "overlay: customize-live probes the image for recipe keys instead of guessing" {
+  grep -Fq 'installer-recipe-backend.sh' "$CUSTOMIZE"
+}

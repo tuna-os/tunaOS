@@ -123,7 +123,11 @@ downloads:
   # runs, and the boot dies in emergency on `overlayfs: failed to resolve
   # '/run/rootfsbase'`. Proven both ways by named runs: broken at
   # tacklebox 30629145076, booting to login at 30630284339.
-  tacklebox: "ae93e9b5bacef49746cb1b08dc805c3149d7c9c8"
+  tacklebox: "d3070b525bf1b812b81c22d32c8d51199eaa2e53"
+  # At d3070b5 (pushed on origin feat/browser-parity-engine): carries
+  # BuildRequest, the exact platform, the stall repair, and offline layout
+  # embedding -- everything the browser-parity engine path needs. tacklebox
+  # PR #381 will advance this pin on merge.
   # ae93e9b (tuna-os/tacklebox#300) makes the post-customize commit deadline
   # settable with TBOX_CUSTOMIZE_COMMIT_TIMEOUT; before it, a literal 600s
   # killed multi-GB desktop commits on CI (tunaOS#1893), and
