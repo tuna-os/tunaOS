@@ -360,14 +360,24 @@ jobs:
             resolver="${requested%.iso}.json"
             payload="$(rclone cat --s3-no-check-bucket \
               "R2:${{ secrets.R2_BUCKET }}/live-isos/${resolver}" 2>/dev/null || true)"
-            resolved="$(jq -er '
-              select(.schema == "TunaOSIsoResolution/v1") | .iso |
-              select(type == "string" and endswith(".iso") and
-                     (contains("/") | not))
-            ' <<<"$payload" 2>/dev/null || true)"
-            if [[ -n "$resolved" ]]; then
+            if [[ -n "$payload" ]]; then
+              if ! resolved="$(jq -er '
+                select(.schema == "TunaOSIsoResolution/v1") |
+                select(.iso | type == "string" and endswith(".iso") and
+                       (contains("/") | not)) |
+                select(.sha256 == (.iso + ".sha256")) |
+                select(.sigstore == (.iso + ".sigstore.json")) |
+                select(.checksum_subject | type == "string" and
+                       length > 0 and (contains("/") | not)) |
+                select(.digest | type == "string" and
+                       test("^sha256:[0-9a-f]{64}$")) |
+                .iso
+              ' <<<"$payload")"; then
+                echo "::error::Invalid resolver ${resolver}; refusing frozen stable fallback" >&2
+                exit 1
+              fi
               candidate="$resolved"
-              expected_digest="$(jq -r '.digest // empty' <<<"$payload")"
+              expected_digest="$(jq -r '.digest' <<<"$payload")"
               echo "==> ${requested} resolves to ${candidate}"
             else
               echo "==> No resolver for ${requested}; trying the stable object"

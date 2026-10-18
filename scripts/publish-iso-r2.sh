@@ -62,6 +62,17 @@ copy_unless_retained() {
 
 digest=$(sha256sum "$iso" | awk '{print $1}')
 digest_suffix=${digest:0:16}
+publication_id="${TUNAOS_PUBLICATION_ID:-}"
+if [[ -z "$publication_id" && -n "${GITHUB_RUN_ID:-}" ]]; then
+	publication_id="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT:-1}"
+fi
+if [[ -z "$publication_id" ]]; then
+	publication_id="$(date -u +%Y%m%dT%H%M%S%N)-${BASHPID}"
+fi
+if [[ ! "$publication_id" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+	echo "ERROR: publication id contains unsafe object-name characters: ${publication_id}" >&2
+	exit 1
+fi
 
 publication_name() {
 	local requested=$1 retained_status=0
@@ -70,7 +81,7 @@ publication_name() {
 	0)
 		local snapshot="${requested%.iso}"
 		snapshot="${snapshot/-latest/-snapshot}"
-		printf '%s-sha256-%s.iso\n' "$snapshot" "$digest_suffix"
+		printf '%s-run-%s-sha256-%s.iso\n' "$snapshot" "$publication_id" "$digest_suffix"
 		;;
 	1) printf '%s\n' "$requested" ;;
 	*) return "$retained_status" ;;
@@ -93,12 +104,13 @@ publish_iso_as() {
 versioned=$(basename "$iso")
 versioned_publication=$(publication_name "$versioned")
 latest_publication=$(publication_name "$latest")
-# Resolver targets are always content-addressed, even while the legacy
-# -latest alias remains mutable. A reader that fetched the previous resolver
-# therefore keeps a stable ISO/digest pair across overlapping publications.
+# Every publication gets a new immutable resolver target, even when it
+# republishes identical bytes. A prune that captured an older resolver set
+# can therefore never delete a concurrently reactivated old snapshot: the
+# new target has a new key and a fresh mtime before the resolver switches.
 resolver_base="${latest%.iso}"
 resolver_base="${resolver_base/-latest/-snapshot}"
-resolver_publication="${resolver_base}-sha256-${digest_suffix}.iso"
+resolver_publication="${resolver_base}-run-${publication_id}-sha256-${digest_suffix}.iso"
 publish_iso_as "$versioned_publication"
 publish_iso_as "$resolver_publication"
 if [[ "$latest_publication" != "$resolver_publication" ]]; then
