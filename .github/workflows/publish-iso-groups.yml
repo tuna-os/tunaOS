@@ -148,6 +148,7 @@ jobs:
     timeout-minutes: 120
     permissions:
       contents: write
+      actions: read
       packages: read
       id-token: write
     strategy:
@@ -158,6 +159,11 @@ jobs:
         with:
           persist-credentials: false
           submodules: recursive
+      - id: catalog-snapshot
+        uses: ./.github/actions/download-current-catalog-snapshot
+        with:
+          token: ${{ github.token }}
+
 
       - name: Maximize build disk
         uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be # main as of 2026-06-09
@@ -337,13 +343,27 @@ jobs:
       # (current behavior).
       - name: Check delivery cutover for this group
         id: cutover
+        env:
+          CATALOG_SNAPSHOT: ${{ steps.catalog-snapshot.outputs.snapshot }}
         run: |
-          if python3 scripts/delivery-cutover.py --check \
-              --variant "${{ matrix.variant }}" --group "${{ matrix.group }}"; then
-            echo "cutover=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "cutover=false" >> "$GITHUB_OUTPUT"
+          snapshot_args=()
+          if [[ -n "$CATALOG_SNAPSHOT" ]]; then
+            snapshot_args=(--snapshot "$CATALOG_SNAPSHOT")
           fi
+          set +e
+          verdict="$(python3 scripts/delivery-cutover.py --check \
+            --variant "${{ matrix.variant }}" --group "${{ matrix.group }}" \
+            "${snapshot_args[@]}")"
+          status=$?
+          set -e
+          case "${status}:${verdict}" in
+            0:true) echo "cutover=true" >> "$GITHUB_OUTPUT" ;;
+            1:false) echo "cutover=false" >> "$GITHUB_OUTPUT" ;;
+            *)
+              echo "::error::delivery cutover evaluation failed (status=${status}, verdict=${verdict})"
+              exit 1
+              ;;
+          esac
 
       # Only reached if the boot gate passed.
       - name: Upload ISO to Cloudflare R2

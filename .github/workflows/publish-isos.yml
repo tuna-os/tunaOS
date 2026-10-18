@@ -41,6 +41,10 @@ on:
         default: false
         type: boolean
 
+permissions:
+  contents: read
+  actions: read
+
 jobs:
   generate-matrix:
     name: Generate ISO matrix
@@ -52,6 +56,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - id: catalog-snapshot
+        uses: ./.github/actions/download-current-catalog-snapshot
+        with:
+          token: ${{ github.token }}
+
 
       - name: Setup yq
         uses: ./.github/actions/setup-yq
@@ -59,6 +68,7 @@ jobs:
       - name: Build matrix from build-config.yml
         id: build
         env:
+          CATALOG_SNAPSHOT: ${{ steps.catalog-snapshot.outputs.snapshot }}
           WANT_VARIANT: ${{ inputs.variant || 'all' }}
           WANT_FLAVOR: ${{ inputs.flavor || 'all' }}
         run: |
@@ -73,11 +83,15 @@ jobs:
                 {variant: $var.id, flavor: .id}
               ]
             }')
-          # Delivery cutover: stamp each row with its per-target gate. This
-          # caller builds from the promoted :<flavor> image without a
-          # platform axis, matching reusable-build-artifacts.yml's
-          # linux/amd64 default, so annotate on that platform.
-          MATRIX=$(echo "$MATRIX" | python3 scripts/delivery-cutover.py --annotate-matrix --default-platform linux/amd64)
+          # Suppress only when this exact commit's catalog snapshot still
+          # validates the target's qualification receipt.
+          CUTOVER_SNAPSHOT=()
+          if [[ -n "$CATALOG_SNAPSHOT" ]]; then
+            CUTOVER_SNAPSHOT=(--snapshot "$CATALOG_SNAPSHOT")
+          fi
+          MATRIX=$(echo "$MATRIX" | python3 scripts/delivery-cutover.py \
+            --annotate-matrix --default-platform linux/amd64 \
+            "${CUTOVER_SNAPSHOT[@]}")
           COUNT=$(echo "$MATRIX" | jq '.include | length')
           echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
           echo "count=$COUNT" >> "$GITHUB_OUTPUT"

@@ -20,9 +20,21 @@ def _consumer_scope(path: str) -> str:
     return parts[0] if parts else ""
 
 
-def _records(value: object, path: str = "") -> list[tuple[str, tuple[str, str, str]]]:
-    found: list[tuple[str, tuple[str, str, str]]] = []
+def _records(
+    value: object, path: str = "", repository_context: str = ""
+) -> list[tuple[str, tuple[str, ...]]]:
+    found: list[tuple[str, tuple[str, ...]]] = []
     if isinstance(value, dict):
+        endpoint_context = repository_context
+        if any(str(key).lower() in ENDPOINT_KEYS for key in value):
+            endpoint_context = json.dumps(
+                {
+                    "condition": value.get("condition"),
+                    "suite": value.get("suite"),
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            )
         for key, child in value.items():
             name = str(key)
             key_path = f"{path}.{name}" if path else name
@@ -35,13 +47,13 @@ def _records(value: object, path: str = "") -> list[tuple[str, tuple[str, str, s
                         json.dumps(entry, sort_keys=True, separators=(",", ":")),
                     )
                     found.append((f"{key_path}: {name} is not an approved package source", fingerprint))
-            found.extend(_records(child, key_path))
+            found.extend(_records(child, key_path, endpoint_context))
     elif isinstance(value, list):
         for index, child in enumerate(value):
-            found.extend(_records(child, f"{path}[{index}]"))
+            found.extend(_records(child, f"{path}[{index}]", repository_context))
     elif isinstance(value, str) and path.rsplit(".", 1)[-1] in ENDPOINT_KEYS:
         name = path.rsplit(".", 1)[-1]
-        fingerprint = (_consumer_scope(path), name, value)
+        fingerprint = (_consumer_scope(path), repository_context, name, value)
         if re.search(r"\s", value):
             found.append((f"{path}: repository endpoint contains whitespace", fingerprint))
             return found

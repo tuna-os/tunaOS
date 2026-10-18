@@ -16,11 +16,11 @@ groups, retained_inventory() is empty. Uploads proceed and prune deletes
 exactly as today. Nothing here performs R2 operations, builds, or workflow
 runs; it only reads the policy and build-config data files.
 
-Identity and receipt binding reuse scripts/contracts/targets.py: target_key()
-for canonical identity, resolve_required_targets()/coverage_document() for
-current-catalog membership, receipt_to_catalog_projection() for evidence
-normalization, and downgrade_stale_targets() when a catalog snapshot is
-supplied for full staleness verification.
+Identity and receipt binding reuse scripts/contracts/targets.py. Publication
+is suppressed only when the caller supplies a current CatalogSnapshot whose
+qualified/local-only target still carries the policy entry's receipt digest.
+No snapshot means cutover false, preserving publication rather than trusting
+stale or unknown input identity.
 """
 
 from __future__ import annotations
@@ -174,13 +174,14 @@ def is_cut_over(
     config: dict | None = None,
     snapshot: dict | None = None,
 ) -> bool:
-    """True only when the target entry is present and its evidence still holds.
+    """True only when current catalog evidence still validates the entry.
 
-    Requires: a cutover entry for the target, digest-bound evidence, current
-    catalog membership, and — when a catalog snapshot is supplied — that
-    downgrade_stale_targets leaves the target qualified/local-only with the
-    same receiptDigest (i.e. its inputs have not moved since qualification).
+    A cutover entry and catalog membership are necessary but not sufficient:
+    callers must supply the current CatalogSnapshot. Without it, publication
+    remains enabled rather than trusting qualification against unknown inputs.
     """
+    if snapshot is None:
+        return False
     entry = find_entry(policy, variant, flavor, platform)
     if entry is None:
         return False
@@ -198,23 +199,21 @@ def is_cut_over(
         return False
     if key not in known:
         return False
-    if snapshot is not None:
-        try:
-            downgraded = downgrade_stale_targets(snapshot)
-        except ValueError:
-            return False
-        for catalog_entry in downgraded.get("targets", []):
-            if catalog_entry.get("targetKey") != key:
-                continue
-            qualification = catalog_entry.get("qualification", {})
-            if qualification.get("status") not in {"qualified", "local-only"}:
-                return False
-            return (
-                qualification.get("receiptDigest")
-                == entry.get("evidence", {}).get("receiptDigest")
-            )
+    try:
+        downgraded = downgrade_stale_targets(snapshot)
+    except ValueError:
         return False
-    return True
+    for catalog_entry in downgraded.get("targets", []):
+        if catalog_entry.get("targetKey") != key:
+            continue
+        qualification = catalog_entry.get("qualification", {})
+        if qualification.get("status") not in {"qualified", "local-only"}:
+            return False
+        return (
+            qualification.get("receiptDigest")
+            == entry.get("evidence", {}).get("receiptDigest")
+        )
+    return False
 
 
 def group_members(
@@ -275,6 +274,7 @@ def group_covered(
     live_members: list[str],
     offline_members: list[str],
     config: dict | None = None,
+    snapshot: dict | None = None,
 ) -> bool:
     """True only when every LIVE + OFFLINE member target is cut over."""
     if config is None:
@@ -290,7 +290,10 @@ def group_covered(
         if not platforms:
             return False
         for platform in platforms:
-            if not is_cut_over(policy, variant, flavor, platform, config=config):
+            if not is_cut_over(
+                policy, variant, flavor, platform,
+                config=config, snapshot=snapshot,
+            ):
                 return False
     return True
 
@@ -309,6 +312,7 @@ def annotate_matrix(
     policy: dict,
     config: dict,
     default_platform: str = "linux/amd64",
+    snapshot: dict | None = None,
 ) -> dict:
     """Add a per-row `cutover` boolean to a {include: [...]} matrix document."""
     rows = matrix.get("include", [])
@@ -321,9 +325,13 @@ def annotate_matrix(
         variant = row.get("variant", "")
         flavor = row.get("flavor", "")
         platform = row.get("platform", "") or default_platform
-        annotated.append(
-            {**row, "cutover": bool(is_cut_over(policy, variant, flavor, platform, config=config))}
-        )
+        annotated.append({
+            **row,
+            "cutover": bool(is_cut_over(
+                policy, variant, flavor, platform,
+                config=config, snapshot=snapshot,
+            )),
+        })
     return {"include": annotated}
 
 
@@ -345,9 +353,16 @@ def main(argv: list[str] | None = None) -> int:
     if args.annotate_matrix:
         policy = load_policy(args.policy)
         config = load_config(args.config)
+        snapshot = None
+        if args.snapshot:
+            with open(args.snapshot, "r", encoding="utf-8") as handle:
+                snapshot = json.load(handle)
         matrix = json.load(sys.stdin)
         json.dump(
-            annotate_matrix(matrix, policy, config, args.default_platform), sys.stdout
+            annotate_matrix(
+                matrix, policy, config, args.default_platform, snapshot
+            ),
+            sys.stdout,
         )
         sys.stdout.write("\n")
         return 0
@@ -368,7 +383,8 @@ def main(argv: list[str] | None = None) -> int:
         if args.group:
             live, offline = group_members(config, args.variant, args.group)
             covered = group_covered(
-                policy, args.variant, args.group, live, offline, config=config
+                policy, args.variant, args.group, live, offline,
+                config=config, snapshot=snapshot,
             )
             sys.stdout.write(("true" if covered else "false") + "\n")
             return 0 if covered else 1

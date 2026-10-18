@@ -111,6 +111,53 @@ def test_reordering_legacy_sources_does_not_turn_them_into_new_sources():
     assert len(result['inherited']) == 2
     assert result['forbiddenNew'] == []
 
+
+def test_reordering_repository_contexts_keeps_endpoint_exceptions_inherited():
+    baseline = {"repos": [
+        {
+            "condition": "ubuntu",
+            "suite": "noble",
+            "url": "https://foreign-a.invalid/repo",
+        },
+        {
+            "condition": "debian-sid",
+            "suite": "sid",
+            "url": "https://foreign-b.invalid/repo",
+        },
+    ]}
+    result = classify_policy(
+        {"repos": list(reversed(baseline["repos"]))},
+        baseline,
+    )
+    assert len(result["inherited"]) == 2
+    assert result["forbiddenNew"] == []
+
+
+@pytest.mark.parametrize(
+    ("field", "before", "after"),
+    [
+        ("condition", "ubuntu", "debian-sid"),
+        ("suite", "noble", "sid"),
+    ],
+)
+def test_endpoint_exception_is_scoped_to_repository_context(field, before, after):
+    baseline = {"repos": [{
+        "condition": "ubuntu",
+        "suite": "noble",
+        "uri": "https://foreign.invalid/repo",
+    }]}
+    current = {"repos": [{
+        "condition": "ubuntu",
+        "suite": "noble",
+        "uri": "https://foreign.invalid/repo",
+    }]}
+    current["repos"][0][field] = after
+    baseline["repos"][0][field] = before
+
+    result = classify_policy(current, baseline)
+    assert result["forbiddenNew"]
+    assert not result["inherited"]
+
 def test_removing_one_provider_does_not_reclassify_the_rest():
     baseline = {"el10": {"copr": [{"repo": "legacy/a"}, {"repo": "legacy/b"}]}}
     current = {"el10": {"copr": [{"repo": "legacy/a"}]}}

@@ -6,7 +6,7 @@ pruning afterwards. These tests pin the gate's behavior, not its wiring:
 
 - empty policy == today's behavior (uploads proceed, prune deletes as today);
 - a target is cut over only with a digest-bound evidence entry that is still
-  a member of the current catalog (plus snapshot staleness when supplied);
+  a member of the current catalog and a current matching snapshot;
 - group closure needs every LIVE + OFFLINE member target cut over;
 - retained_inventory() ordering/dedup, annotate-matrix defaults;
 - retained dated ISOs + sidecars survive the ordered prune-filter replay
@@ -34,6 +34,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "delivery-cutover.py"
 POLICY_FILE = ROOT / ".github" / "delivery-cutover.json"
 PRUNE_WF = ROOT / ".github" / "workflows" / "prune-r2.yml"
+GROUP_WF = ROOT / ".github" / "workflows" / "publish-iso-groups.yml"
 
 
 def _load_delivery_cutover():
@@ -121,9 +122,11 @@ def test_empty_policy_cuts_over_nothing(config):
         ("yellowfin", "kde", "linux/arm64"),
     ],
 )
-def test_is_cut_over_true_matrix(config, variant, flavor, platform):
+def test_cutover_entries_without_current_snapshot_never_suppress_publication(
+    config, variant, flavor, platform
+):
     policy = make_policy([make_entry(variant, flavor, platform)])
-    assert DC.is_cut_over(policy, variant, flavor, platform, config=config) is True
+    assert DC.is_cut_over(policy, variant, flavor, platform, config=config) is False
 
 
 def test_is_cut_over_needs_a_matching_entry(config):
@@ -333,10 +336,12 @@ def test_group_members_rejects_unknown_group(config):
         DC.group_members(config, "bonito", "no-such-desktop")
 
 
-def test_group_covered_needs_every_member_target(config):
+def test_group_covered_requires_current_catalog_snapshot(config):
     policy = make_policy(full_group_entries(config, "yellowfin", "kde"))
     live, offline = DC.group_members(config, "yellowfin", "kde")
-    assert DC.group_covered(policy, "yellowfin", "kde", live, offline, config=config) is True
+    assert DC.group_covered(
+        policy, "yellowfin", "kde", live, offline, config=config
+    ) is False
 
 
 def test_group_covered_false_on_empty_members(config):
@@ -413,6 +418,47 @@ def test_retained_cli_empty_policy_emits_nothing():
     assert proc.stdout == ""
 
 
+@pytest.mark.parametrize(
+    ("helper_status", "helper_output", "expected_status", "expected_output"),
+    [
+        (1, "false", 0, "cutover=false"),
+        (2, "error", 1, ""),
+        (0, "unexpected", 1, ""),
+    ],
+)
+def test_group_cutover_gate_only_accepts_exact_helper_verdicts(
+    tmp_path, helper_status, helper_output, expected_status, expected_output
+):
+    workflow = yaml.safe_load(GROUP_WF.read_text(encoding="utf-8"))
+    step = next(
+        item
+        for item in workflow["jobs"]["build-and-publish"]["steps"]
+        if item.get("name") == "Check delivery cutover for this group"
+    )
+    script = re.sub(r"\$\{\{[^}]+\}\}", "sample", step["run"])
+    fakebin = tmp_path / "bin"
+    fakebin.mkdir()
+    (fakebin / "python3").write_text(
+        f"#!/bin/sh\nprintf '%s\\n' {helper_output!r}\nexit {helper_status}\n",
+        encoding="utf-8",
+    )
+    (fakebin / "python3").chmod(0o755)
+    output = tmp_path / "github-output"
+    result = subprocess.run(
+        ["bash", "-c", script],
+        cwd=ROOT,
+        env={
+            "PATH": f"{fakebin}:/usr/bin:/bin",
+            "GITHUB_OUTPUT": str(output),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert (result.returncode == 0) == (expected_status == 0)
+    assert (output.read_text().strip() if output.exists() else "") == expected_output
+
+
 def test_prune_aborts_before_rclone_when_retention_inventory_fails(tmp_path):
     workflow = yaml.safe_load(PRUNE_WF.read_text(encoding="utf-8"))
     prune_step = next(
@@ -460,7 +506,8 @@ def test_annotate_matrix_marks_only_cut_over_rows(config):
         {"variant": "bonito", "flavor": "gnome", "platform": "linux/arm64"},
         {"variant": "yellowfin", "flavor": "kde-nvidia", "platform": "linux/amd64"},
     ]}
-    annotated = DC.annotate_matrix(matrix, policy, config)
+    snapshot = _qualified_snapshot(receipt_digest=DIGEST)
+    annotated = DC.annotate_matrix(matrix, policy, config, snapshot=snapshot)
     assert [row["cutover"] for row in annotated["include"]] == [True, False, False]
     # The original rows survive untouched apart from the stamp.
     assert annotated["include"][0]["variant"] == "bonito"
@@ -471,8 +518,14 @@ def test_annotate_matrix_defaults_missing_platform(config):
     default platform, matching the amd64 default downstream."""
     policy = make_policy([make_entry("bonito", "gnome", "linux/amd64")])
     matrix = {"include": [{"variant": "bonito", "flavor": "gnome"}]}
-    assert DC.annotate_matrix(matrix, policy, config)["include"][0]["cutover"] is True
-    flipped = DC.annotate_matrix(matrix, policy, config, default_platform="linux/arm64")
+    snapshot = _qualified_snapshot(receipt_digest=DIGEST)
+    assert DC.annotate_matrix(
+        matrix, policy, config, snapshot=snapshot
+    )["include"][0]["cutover"] is True
+    flipped = DC.annotate_matrix(
+        matrix, policy, config, default_platform="linux/arm64",
+        snapshot=snapshot,
+    )
     assert flipped["include"][0]["cutover"] is False
 
 
