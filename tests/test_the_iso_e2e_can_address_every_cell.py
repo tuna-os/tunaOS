@@ -285,14 +285,9 @@ def test_the_build_step_fails_when_it_produces_no_iso():
 
 
 def test_the_r2_step_still_guards_the_published_path():
-    """Adding a second source must not weaken the first.
-
-    The message moved when the lookup learned the grouped naming scheme;
-    what must not move is that a missing published ISO is still a hard
-    failure rather than a silently skipped cell.
-    """
+    """Adding resolvers must not weaken the published-path hard failure."""
     body = WORKFLOW.read_text(encoding="utf-8")
-    assert "::error::No ISO in R2 under either name" in body
+    assert "::error::No resolvable ISO in R2" in body
 
 
 # ── Two naming schemes in one bucket ─────────────────────────────────────
@@ -344,21 +339,20 @@ def test_a_flavor_variant_resolves_to_its_group():
 
 
 def test_it_still_fails_loudly_when_neither_name_exists():
-    """Two chances to find it is not a licence to boot nothing."""
+    """Resolvers plus two stable fallbacks are not a licence to boot nothing."""
     run = download_step()["run"]
-    assert "::error::No ISO in R2 under either name" in run, run[-800:]
+    assert "::error::No resolvable ISO in R2" in run, run[-800:]
     assert "exit 1" in run
-    # And it must name BOTH keys it tried, or the next reader cannot tell
-    # which pipeline was supposed to have produced the ISO.
-    err = run[run.index("::error::No ISO in R2"):]
+    # It must name both stable keys, or the next reader cannot tell which
+    # publication path was supposed to have produced the ISO.
+    err = run[run.index("::error::No resolvable ISO in R2"):]
     assert "${OBJECT}" in err and "${GROUP_OBJECT}" in err, err[:300]
 
 
 def test_the_rclone_failure_does_not_abort_before_the_fallback():
-    """`set -euo pipefail` plus a failing rclone would kill the step before
-    the second candidate was ever tried — the fallback would be dead code."""
+    """A missing resolved or stable object must advance to the next name."""
     run = download_step()["run"]
-    copy_lines = [l for l in run.splitlines() if "rclone copy" in l]
+    copy_lines = [line for line in run.splitlines() if "rclone copy" in line]
     assert copy_lines, run[-800:]
-    idx = run.index("for candidate in")
-    assert "|| true" in run[idx:], run[idx:idx + 600]
+    idx = run.index('for requested in')
+    assert "|| true" in run[idx:], run[idx:idx + 900]
