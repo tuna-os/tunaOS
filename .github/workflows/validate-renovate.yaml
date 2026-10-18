@@ -43,7 +43,7 @@ jobs:
         shell: bash
         env:
           # renovate: datasource=npm depName=renovate
-          RENOVATE_VERSION: "44.155.8"
+          RENOVATE_VERSION: "44.164.5"
         run: npm install -g renovate@${RENOVATE_VERSION}
 
       - name: Validate Renovate config
