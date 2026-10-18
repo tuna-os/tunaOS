@@ -1,5 +1,6 @@
 """Phase 1 compiles review intent; stock adapter keeps the build contract intact."""
 import copy
+import fnmatch
 import hashlib
 import importlib.util
 import json
@@ -219,7 +220,7 @@ def test_stock_example_edits_trigger_the_contract_suite():
 def test_receipt_ignores_generated_untracked_files_but_detects_source_changes(tmp_path):
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
     source = tmp_path / "system_files/usr/libexec/probe.py"
-    source.parent.mkdir(parents=True)
+    source.parent.mkdir(parents=True, exist_ok=True)
     source.write_text("print('stock')\n")
     subprocess.run(["git", "-C", str(tmp_path), "add", "."], check=True)
     before = MODULE.source_receipt(tmp_path)
@@ -234,11 +235,20 @@ def test_receipt_ignores_generated_untracked_files_but_detects_source_changes(tm
 @pytest.mark.parametrize("name", [
     "system_files_overrides/marlin/usr/lib/bootc/install/50-marlin.toml",
     "experiences/tuna/files/etc/greetd/environments",
+    "build_scripts/bootc/sandbox/usr/lib/ostree/prepare-root.conf",
+    "build_scripts/checks/package-miss-allowlist.txt",
+    "scripts/_registry.sh",
+    "scripts/build-image-inner.sh",
+    "Justfile",
+    "just/build.just",
+    "custom/etc/example.conf",
+    ".containerignore",
+    ".dockerignore",
 ])
 def test_consumed_payload_mutation_invalidates_the_old_pin(tmp_path, name):
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
     source = tmp_path / name
-    source.parent.mkdir(parents=True)
+    source.parent.mkdir(parents=True, exist_ok=True)
     source.write_text("stock payload\n")
     subprocess.run(["git", "-C", str(tmp_path), "add", "."], check=True)
     before = MODULE.source_receipt(tmp_path)
@@ -248,3 +258,46 @@ def test_consumed_payload_mutation_invalidates_the_old_pin(tmp_path, name):
     assert MODULE.source_receipt(tmp_path)["sha256"] != before["sha256"]
     with pytest.raises(MODULE.ConfigError, match="pin mismatch"):
         MODULE.resolve(config, tmp_path, root=tmp_path)
+
+
+def test_every_receipt_input_triggers_the_contract_suite(plan):
+    workflow = yaml.safe_load((ROOT / ".github/workflows/test.yml").read_text())
+    patterns = workflow[True]["pull_request"]["paths"]
+    missing = [name for name in plan["sources"]["files"]
+               if not any(fnmatch.fnmatchcase(name, pattern) for pattern in patterns)]
+    assert not missing
+
+
+def test_receipt_detects_executable_mode_changes(tmp_path):
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    source = tmp_path / "build_scripts/probe.sh"
+    source.parent.mkdir()
+    source.write_text("#!/bin/sh\n")
+    source.chmod(0o644)
+    subprocess.run(["git", "-C", str(tmp_path), "add", "."], check=True)
+    before = MODULE.source_receipt(tmp_path)
+    source.chmod(0o755)
+    after = MODULE.source_receipt(tmp_path)
+    assert before["files"] == after["files"]
+    assert before["modes"]["build_scripts/probe.sh"] == "100644"
+    assert after["modes"]["build_scripts/probe.sh"] == "100755"
+    assert before["sha256"] != after["sha256"]
+    config = {"schema_version": 1, "catalog": {"sha256": before["sha256"]}}
+    with pytest.raises(MODULE.ConfigError, match="pin mismatch"):
+        MODULE.resolve(config, tmp_path, root=tmp_path)
+
+
+def test_receipt_detects_symlink_target_changes_and_source_deletion(tmp_path):
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    source = tmp_path / "system_files/probe"
+    source.parent.mkdir()
+    source.symlink_to("/missing-first")
+    subprocess.run(["git", "-C", str(tmp_path), "add", "."], check=True)
+    before = MODULE.source_receipt(tmp_path)
+    source.unlink()
+    source.symlink_to("/missing-second")
+    after = MODULE.source_receipt(tmp_path)
+    assert after["modes"]["system_files/probe"] == "120000"
+    assert before["sha256"] != after["sha256"]
+    source.unlink()
+    assert MODULE.source_receipt(tmp_path)["sha256"] != after["sha256"]

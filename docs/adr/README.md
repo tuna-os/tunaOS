@@ -28,4 +28,4 @@ When the project adopts an architectural change, significant refactor, or policy
 | [0009](0009-suite-common-namespace-ownership.md) | Clarify suite-common namespace ownership | Accepted | 2026-08-19 | [#1585](https://github.com/tuna-os/tunaOS/pull/1585) |
 | [0010](0010-spec-driven-work-with-spektacular.md) | Spec-driven work with Spektacular | Accepted | 2026-09-24 | [RFC 011](../rfc/rfc011-spektacular.md), [#2673](https://github.com/tuna-os/tunaOS/issues/2673) |
 | [0011](0011-private-adoption-metrics.md) | Private adoption metrics | Accepted | 2026-09-27 | [RFC 012](../rfc/rfc012-private-adoption-metrics.md), [#2775](https://github.com/tuna-os/tunaOS/issues/2775) |
-| [0012](0012-fork-config-compatibility-foundation.md) | Fork config compatibility foundation | Proposed | 2026-10-18 | [RFC 013](../rfc/rfc013-single-fork-config.md), [#3433](https://github.com/tuna-os/tunaOS/issues/3433) |
+| [0012](0012-fork-config-compatibility-foundation.md) | Fork config compatibility foundation | Accepted | 2026-10-18 | [RFC 013](../rfc/rfc013-single-fork-config.md), [#3433](https://github.com/tuna-os/tunaOS/issues/3433) |

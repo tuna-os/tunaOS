@@ -26,6 +26,7 @@ on:
       - 'tests/**'
       # The fork-config contract suite reads the pinned stock example.
       - 'examples/**'
+      - 'experiences/**'
       - 'build_scripts/**'
       # One entry rather than six. .github/scripts/**, changelogs.py,
       # workflows/**, green-criteria.yml, runs-on.yml and actions/** were all
@@ -44,6 +45,8 @@ on:
       - 'custom/**'
       - 'files/**'
       - 'Containerfile*'
+      - '.containerignore'
+      - '.dockerignore'
       - 'image-versions.yaml'
       - 'registry-map.yaml'
       - 'renovate.json'

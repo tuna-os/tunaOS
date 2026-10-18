@@ -69,9 +69,8 @@ def strings(value, where):
 def source_paths(root):
     """Source receipt, not a second package or variant catalog."""
     patterns = (".github/build-config.yml", "image-versions.yaml", "registry-map.yaml",
-                "Containerfile*", "manifests/desktops/*.yaml", "build_scripts/**/*.sh",
-                "build_scripts/lib/variant-identity.tsv", "scripts/resolve-flavor.sh",
-                "scripts/resolve-image.sh", "scripts/lib/build-config.sh",
+                "Containerfile*", "manifests/**/*", "build_scripts/**/*", "scripts/**/*",
+                "Justfile", "just/**/*", ".containerignore", ".dockerignore", "custom/**/*",
                 "system_files/**/*", "system_files_overrides/**/*", "experiences/**/*")
     tracked = set(subprocess.check_output(["git", "-C", str(root), "ls-files", "-z"], text=True).split("\0"))
     return sorted({p.relative_to(root).as_posix() for pattern in patterns
@@ -81,12 +80,15 @@ def source_paths(root):
 
 def source_receipt(root):
     files = {}
+    modes = {}
     for name in source_paths(root):
         path = root / name
         content = b"symlink:" + os.readlink(path).encode() if path.is_symlink() else path.read_bytes()
         files[name] = hashlib.sha256(content).hexdigest()
-    digest = hashlib.sha256(json.dumps(files, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
-    return {"sha256": digest, "files": files}
+        modes[name] = "120000" if path.is_symlink() else ("100755" if path.stat().st_mode & 0o111 else "100644")
+    payload = {"files": files, "modes": modes}
+    digest = hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    return {"sha256": digest, **payload}
 
 
 def validate_layer(value, where, config_dir):

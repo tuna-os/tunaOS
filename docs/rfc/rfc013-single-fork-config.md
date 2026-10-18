@@ -24,10 +24,14 @@ fork intent, whole legacy catalog and a hash receipt for the sources. Selection 
 never invents cells or changes a hold. The legacy catalog retains all flags,
 rollout records, ISO groups, aliases, stages and base digest pins.
 
-The receipt hashes existing package manifests, build scripts, identity data,
+The receipt covers the catalog, local build drivers and in-container sources.
+It hashes package manifests, build scripts, identity data,
 Containerfiles, image pins, committed assets, variant overrides and curated
-experience files. Only Git-tracked files enter
-the receipt; Python bytecode and other temporary output do not. It is a **source snapshot**,
+experience files. It also records executable modes and symlink targets.
+
+Only Git-tracked files enter the receipt; Python bytecode and other temporary
+output do not. Commit new inputs before use. Workflow orchestration, host tools
+and downloaded inputs are outside this receipt. It is a **source snapshot**,
 not a resolved package transaction or evidence from a built image. Shell-driven
 package lists remain shell-driven. Nothing in this phase installs packages,
 configures repositories or changes the image brand.
