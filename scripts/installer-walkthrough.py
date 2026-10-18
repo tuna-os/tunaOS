@@ -486,6 +486,24 @@ def maybe_configure_encryption(png):
         note("plain mode: leaving the encryption default (none) selected")
     return True
 
+
+def explicit_install_stage(png):
+    """Return install/done while an explicit run is in its backend phase."""
+    if not mode_explicit or not shutil.which("tesseract"):
+        return None
+    text = " ".join((ocr(png) or "").lower().split())
+    if any(term in text for term in (
+        "installation complete", "install complete", "completed successfully",
+        "remove the installation media",
+    )):
+        return "done"
+    if any(term in text for term in (
+        "installation progress", "installing", "writing image",
+        "copying files", "deploying",
+    )):
+        return "install"
+    return None
+
 # ── Capture ──────────────────────────────────────────────────────────────
 time.sleep(5)  # let the installer settle on its first screen
 frames = []
@@ -574,10 +592,26 @@ escaped = False
 # failed (an installer that exits before done stops producing frames).
 encryption_configured = False
 missed = 0
-for i in range(1, steps + 1):
-    send_keys(*(["tab"] * tabs), activation)
-    time.sleep(3)
-    p = shot(i, f"after advance {i}")
+installing = False
+install_deadline = None
+install_timeout = int(os.environ.get("TUNAOS_WALKTHROUGH_INSTALL_TIMEOUT", "5400"))
+install_poll = int(os.environ.get("TUNAOS_WALKTHROUGH_INSTALL_POLL", "15"))
+i = 1
+while i <= steps or (mode_explicit and installing):
+    if installing:
+        if time.monotonic() >= install_deadline:
+            tap(False,
+                f"{flavor}: strict {walk_mode}: installation completed in time",
+                f"done screen did not appear within {install_timeout}s",
+                enforced=True)
+            break
+        # Backend progress is observation-only. Escape, Tab, Return, Space,
+        # and VNC clicks can all activate cancellation or reboot controls.
+        time.sleep(install_poll)
+    else:
+        send_keys(*(["tab"] * tabs), activation)
+        time.sleep(3)
+    p = shot(i, f"after {'install poll' if installing else 'advance'} {i}")
     if p and mode_explicit and not encryption_configured:
         try:
             if maybe_configure_encryption(p):
@@ -603,6 +637,17 @@ for i in range(1, steps + 1):
         prev = frames[-1] if frames else None
         frames.append(p)
         moved = bool(prev) and changed_pixels(prev, p) > DIFF_PIXELS
+        stage = explicit_install_stage(p)
+        if stage == "done":
+            note("done screen reached — stopping explicit installer input")
+            break
+        if stage == "install" and mode_explicit:
+            if not installing:
+                installing = True
+                install_deadline = time.monotonic() + install_timeout
+                note("installation progress reached — polling without input")
+            i += 1
+            continue
         if moved:
             tabs = 0          # new page: try its default action first, again
             escaped = False   # re-arm the modal escape for the next stall
@@ -618,24 +663,6 @@ for i in range(1, steps + 1):
                 print(f"  # no change — widening focus search to {tabs} tabs",
                       flush=True)
             elif not escaped:
-                # A modal swallows the whole sweep. Starting the tab count at
-                # 0 (above) stops the harness WALKING into GNOME's Credits
-                # dialog, but nothing stops a dialog that opens for any other
-                # reason — and once inside, every escalation is spent on the
-                # modal's own widgets while the wizard behind it never moves.
-                #
-                # Run 31216208138's gnome leg is the shape: frame 02 is the
-                # Credits modal, frame 03 is byte-identical to it, and the
-                # remaining five steps produced no new screen. The harness
-                # reported "6/8 transitions changed >500px" — opening and
-                # scrolling a dialog counts as movement — so the stall was
-                # invisible in every metric except the pictures.
-                #
-                # Escape is the one key that means "close this" in both GTK
-                # and Qt, and it does nothing to a wizard page that has no
-                # dialog open, so it is safe to spend a step on. Once only
-                # per stall: re-armed by the next real advance, so a run
-                # cannot sit in an Escape loop.
                 escaped = True
                 tabs = 0
                 print("  # focus sweep exhausted — sending 'esc' in case a "
@@ -644,15 +671,12 @@ for i in range(1, steps + 1):
                 send_keys("esc")
                 time.sleep(2)
             elif os.path.exists(vnc_sock) and shutil.which("vncdo") and shutil.which("socat"):
-                # Fallback to mouse click on primary button location via VNC if keyboard navigation stalls
-                # Primary action buttons ("Get Started", "Next", "Continue") sit near bottom right / center bottom
                 print("  # keyboard navigation exhausted — attempting VNC mouse click on primary action button", flush=True)
                 bridge = subprocess.Popen(
                     ["socat", f"TCP-LISTEN:{vnc_port},reuseaddr,fork", f"UNIX-CONNECT:{vnc_sock}"],
                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 try:
                     time.sleep(1)
-                    # Click center-right / bottom-right region (x=700, y=550 for 1024x768 framebuffer)
                     subprocess.run(["vncdo", "-s", f"127.0.0.1::{vnc_port}", "move", "700", "550", "click", "1"],
                                    check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 finally:
@@ -661,7 +685,7 @@ for i in range(1, steps + 1):
                         bridge.wait(timeout=5)
                     except Exception:
                         bridge.kill()
-
+    i += 1
 print(f"\n# walkthrough verification ({flavor}) — {len(frames)} frames, "
       f"strict={strict}\n", flush=True)
 
