@@ -9,6 +9,7 @@ SCRIPT = Path(__file__).parents[1] / "scripts" / "verify-experience-manifest.py"
 SPEC = importlib.util.spec_from_file_location("experience_manifest", SCRIPT)
 MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
+MANIFEST_SHA256 = "sha256:" + "e" * 64
 
 
 def manifest(**overrides):
@@ -49,6 +50,8 @@ def result(profile, **overrides):
         "installed_boot": True,
         "desktop_contract": True,
         "source_image_digest": "sha256:" + "a" * 64,
+        "iso_sha256": "sha256:" + "d" * 64,
+        "manifest_sha256": MANIFEST_SHA256,
         "iso_detached": True,
         "owned_disk": True,
         "encrypted": profile == "encrypted",
@@ -125,6 +128,10 @@ def test_manifest_requires_all_immutable_digests(field):
     with pytest.raises(ValueError, match=field):
         MODULE.validate_manifest(manifest(**{field: "latest"}), "test")
 
+def test_manifest_rejects_unsupported_hardware_scope():
+    with pytest.raises(ValueError, match="hardware_scope"):
+        MODULE.validate_manifest(manifest(hardware_scope="whatever-ran"), "test")
+
 def test_manifest_requires_matching_platform_and_architecture():
     with pytest.raises(ValueError, match="platform does not match architecture"):
         MODULE.validate_manifest(manifest(platform="linux/arm64"), "test")
@@ -165,7 +172,7 @@ def test_resource_profile_values_are_positive_integers(field):
 
 def test_build_receipt_requires_both_install_profiles():
     with pytest.raises(ValueError, match="missing: encrypted"):
-        MODULE.build_receipt(manifest(), [result("plain")])
+        MODULE.build_receipt(manifest(), [result("plain")], MANIFEST_SHA256)
 
 
 def test_build_receipt_rejects_installed_digest_mismatch():
@@ -176,14 +183,33 @@ def test_build_receipt_rejects_installed_digest_mismatch():
                 result("plain"),
                 result("encrypted", source_image_digest="sha256:" + "f" * 64),
             ],
+            MANIFEST_SHA256,
+        )
+
+
+def test_build_receipt_rejects_iso_or_manifest_identity_mismatch():
+    with pytest.raises(ValueError, match="ISO digest"):
+        MODULE.build_receipt(
+            manifest(),
+            [result("plain", iso_sha256="sha256:" + "f" * 64), result("encrypted")],
+            MANIFEST_SHA256,
+        )
+    with pytest.raises(ValueError, match="different manifest"):
+        MODULE.build_receipt(
+            manifest(),
+            [result("plain", manifest_sha256="sha256:" + "f" * 64), result("encrypted")],
+            MANIFEST_SHA256,
         )
 
 
 def test_receipt_records_identity_inputs_context_resources_and_timings():
     receipt = MODULE.build_receipt(
-        manifest(), [result("plain"), result("encrypted", duration_seconds=321)]
+        manifest(),
+        [result("plain"), result("encrypted", duration_seconds=321)],
+        MANIFEST_SHA256,
     )
     MODULE.validate_receipt(receipt, "receipt")
+    assert receipt["qualified_manifest_sha256"] == MANIFEST_SHA256
     assert receipt["source_image_digest"] == "sha256:" + "a" * 64
     assert receipt["installer_revision"] == "1" * 40
     assert receipt["builder_revision"] == "2" * 40
@@ -201,7 +227,7 @@ def test_receipt_records_identity_inputs_context_resources_and_timings():
 
 def test_receipt_schema_cannot_carry_disk_or_iso_artifact_paths():
     receipt = MODULE.build_receipt(
-        manifest(), [result("plain"), result("encrypted")]
+        manifest(), [result("plain"), result("encrypted")], MANIFEST_SHA256
     )
     receipt["disk_path"] = "install-disk.qcow2"
     with pytest.raises(ValueError, match="unsupported fields: disk_path"):
@@ -215,7 +241,7 @@ def test_receipt_schema_cannot_carry_disk_or_iso_artifact_paths():
 ])
 def test_receipt_nested_evidence_cannot_override_derived_fields(field, value):
     receipt = MODULE.build_receipt(
-        manifest(), [result("plain"), result("encrypted")]
+        manifest(), [result("plain"), result("encrypted")], MANIFEST_SHA256
     )
     receipt["qualification"]["plain"][field] = value
     with pytest.raises(ValueError, match=f"unsupported fields: {field}"):
@@ -257,8 +283,13 @@ def test_main_writes_and_validates_receipt(tmp_path, monkeypatch, capsys):
     encrypted_path = tmp_path / "encrypted.json"
     receipt_path = tmp_path / "receipt.json"
     manifest_path.write_text(json.dumps(manifest()), encoding="utf-8")
-    plain_path.write_text(json.dumps(result("plain")), encoding="utf-8")
-    encrypted_path.write_text(json.dumps(result("encrypted")), encoding="utf-8")
+    identity = MODULE.file_sha256(manifest_path)
+    plain_path.write_text(
+        json.dumps(result("plain", manifest_sha256=identity)), encoding="utf-8"
+    )
+    encrypted_path.write_text(
+        json.dumps(result("encrypted", manifest_sha256=identity)), encoding="utf-8"
+    )
     monkeypatch.setattr(
         "sys.argv",
         [
