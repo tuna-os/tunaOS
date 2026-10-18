@@ -1651,11 +1651,13 @@ persona. It would report resource timeouts as fork-safety failures.
 
 **Fix:** Keep an explicit, fail-closed classification in
 `scripts/fork-simulation.py`. Run only fork-sensitive, act-compatible lanes.
-Pass the intended `GITHUB_REPOSITORY` explicitly. For workflows that read or
-change pull-request state, mount `scripts/fork-simulation-gh`: its synthetic PR
-fixture matches event PR 1 and rejects unlisted requests without contacting
-GitHub. Record why heavyweight/read-only lanes remain under static checks. The
-classification test rejects each unreviewed pull-request workflow.
+Pass the intended `GITHUB_REPOSITORY` explicitly.
+
+For workflows that read or change pull-request state, mount
+`scripts/fork-simulation-gh`. Its fixture uses PR 1 from the event. It rejects
+unlisted requests without a call to GitHub. Record why heavyweight/read-only
+lanes remain under static checks. The classification test rejects each
+unreviewed pull-request workflow.
 
 ### Admitted variant with missing rebuild repository fails CI
 
