@@ -174,3 +174,51 @@ def test_unresolvable_pins_warn_dont_fail() -> None:
     assert mod.audit({"kde": {"url": LIVE, "commit": "abc123"}}) == []
     unknown = {"url": LIVE, "resolved": "a" * 40, "at_or_after_floor": None}
     assert mod.audit({"kde": unknown}) == []
+
+
+def test_floor_ancestry_fast_path_needs_no_dates(monkeypatch) -> None:
+    """An ancestor pin passes on the compare call alone (one API call)."""
+    calls = []
+
+    def fake_api(url: str) -> dict:
+        calls.append(url)
+        return {"status": "ahead"}
+
+    monkeypatch.setattr(mod, "api_json", fake_api)
+    assert mod.floor_is_ancestor("tuna-os/fisherman", "f" * 40) is True
+    assert len(calls) == 1
+
+
+def test_floor_date_fallback_passes_a_newer_squash_merge(monkeypatch) -> None:
+    """A squash merge reads as diverged but carries the floor's content."""
+    def fake_api(url: str) -> dict:
+        if "/compare/" in url:
+            return {"status": "diverged"}
+        if url.endswith(mod.FLOOR_COMMIT):
+            return {"commit": {"committer": {"date": "2026-10-17T00:00:00Z"}}}
+        return {"commit": {"committer": {"date": "2026-10-18T00:00:00Z"}}}
+
+    monkeypatch.setattr(mod, "api_json", fake_api)
+    assert mod.floor_is_ancestor("tuna-os/fisherman", "a" * 40) is True
+
+
+def test_floor_date_fallback_fails_an_older_pin(monkeypatch) -> None:
+    def fake_api(url: str) -> dict:
+        if "/compare/" in url:
+            return {"status": "behind"}
+        if url.endswith(mod.FLOOR_COMMIT):
+            return {"commit": {"committer": {"date": "2026-10-17T00:00:00Z"}}}
+        return {"commit": {"committer": {"date": "2026-08-29T00:00:00Z"}}}
+
+    monkeypatch.setattr(mod, "api_json", fake_api)
+    assert mod.floor_is_ancestor("tuna-os/fisherman", "0" * 40) is False
+
+
+def test_floor_date_unknown_warns_instead_of_failing(monkeypatch) -> None:
+    def fake_api(url: str) -> dict:
+        if "/compare/" in url:
+            return {"status": "diverged"}
+        raise TimeoutError("offline")
+
+    monkeypatch.setattr(mod, "api_json", fake_api)
+    assert mod.floor_is_ancestor("tuna-os/fisherman", "a" * 40) is None
