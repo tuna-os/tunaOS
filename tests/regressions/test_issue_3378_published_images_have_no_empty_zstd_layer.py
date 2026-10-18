@@ -13,9 +13,12 @@ makes the broken-manifest test stop failing closed.
 
 from __future__ import annotations
 
+import ctypes
+import ctypes.util
 import json
 import os
 import subprocess
+import tempfile
 from pathlib import Path
 
 import yaml
@@ -28,6 +31,41 @@ EMPTY_LAYER = {
     "size": 25,
 }
 
+ZSTD = ctypes.CDLL(ctypes.util.find_library("zstd"))
+ZSTD.ZSTD_compressBound.argtypes = [ctypes.c_size_t]
+ZSTD.ZSTD_compressBound.restype = ctypes.c_size_t
+ZSTD.ZSTD_compress.argtypes = [
+    ctypes.c_void_p,
+    ctypes.c_size_t,
+    ctypes.c_void_p,
+    ctypes.c_size_t,
+    ctypes.c_int,
+]
+ZSTD.ZSTD_compress.restype = ctypes.c_size_t
+ZSTD.ZSTD_isError.argtypes = [ctypes.c_size_t]
+ZSTD.ZSTD_isError.restype = ctypes.c_uint
+
+
+def _compress_zstd(payload: bytes) -> bytes:
+    output = ctypes.create_string_buffer(ZSTD.ZSTD_compressBound(len(payload)))
+    size = ZSTD.ZSTD_compress(output, len(output), payload, len(payload), 3)
+    assert not ZSTD.ZSTD_isError(size)
+    return output.raw[:size]
+
+
+def _empty_tar_blob() -> bytes:
+    return _compress_zstd(bytes(1024))
+
+
+def _tiny_nonempty_tar_blob() -> bytes:
+    header = bytearray(512)
+    header[0] = ord("a")
+    header[156] = ord("0")
+    header[148:156] = b"        "
+    checksum = sum(header)
+    header[148:156] = f"{checksum:06o}\0 ".encode()
+    return _compress_zstd(bytes(header) + bytes(1024))
+
 
 def _check(*layers: dict) -> subprocess.CompletedProcess[str]:
     manifest = {
@@ -35,13 +73,19 @@ def _check(*layers: dict) -> subprocess.CompletedProcess[str]:
         "mediaType": "application/vnd.oci.image.manifest.v1+json",
         "layers": list(layers),
     }
-    return subprocess.run(
-        [str(CHECK)],
-        input=json.dumps(manifest),
-        text=True,
-        capture_output=True,
-        check=False,
-    )
+    with tempfile.TemporaryDirectory() as directory:
+        blob_dir = Path(directory)
+        for layer in layers:
+            if layer.get("size", 50) < 50:
+                name = layer["digest"].replace(":", "_")
+                (blob_dir / name).write_bytes(_empty_tar_blob())
+        return subprocess.run(
+            [str(CHECK), "--blob-dir", str(blob_dir)],
+            input=json.dumps(manifest),
+            text=True,
+            capture_output=True,
+            check=False,
+        )
 
 
 def test_the_published_empty_layer_fails_closed():
@@ -72,7 +116,7 @@ def test_a_zstd_layer_large_enough_to_contain_a_tar_entry_passes():
 
 
 def _run_push_gate(
-    tmp_path: Path, layers: list[dict]
+    tmp_path: Path, layers: list[dict], blobs: dict[str, bytes] | None = None
 ) -> tuple[subprocess.CompletedProcess[str], Path, str]:
     workflow = yaml.safe_load(
         (ROOT / ".github/workflows/reusable-build-image.yml").read_text(
@@ -89,6 +133,10 @@ def _run_push_gate(
     manifest.write_text(
         json.dumps({"schemaVersion": 2, "layers": layers}), encoding="utf-8"
     )
+    blob_source = tmp_path / "blobs"
+    blob_source.mkdir()
+    for digest, payload in (blobs or {}).items():
+        (blob_source / digest.replace(":", "_")).write_bytes(payload)
     sudo = tools / "sudo"
     sudo.write_text("#!/usr/bin/env bash\nexec \"$@\"\n", encoding="utf-8")
     sudo.chmod(0o755)
@@ -100,6 +148,29 @@ def _run_push_gate(
         encoding="utf-8",
     )
     skopeo.chmod(0o755)
+    curl = tools / "curl"
+    curl.write_text(
+        "#!/usr/bin/env bash\n"
+        "set -euo pipefail\n"
+        "destination=''\n"
+        "url=''\n"
+        "while [[ $# -gt 0 ]]; do\n"
+        "  case \"$1\" in\n"
+        "    -o) destination=$2; shift 2 ;;\n"
+        "    -H|-A) shift 2 ;;\n"
+        "    -*) shift ;;\n"
+        "    *) url=$1; shift ;;\n"
+        "  esac\n"
+        "done\n"
+        "if [[ -z \"$destination\" ]]; then\n"
+        "  printf '{\"token\":\"fixture-token\"}\\n'\n"
+        "else\n"
+        "  digest=${url##*/}\n"
+        "  cp \"$BLOB_SOURCE/${digest/:/_}\" \"$destination\"\n"
+        "fi\n",
+        encoding="utf-8",
+    )
+    curl.chmod(0o755)
 
     digest = "sha256:" + "a" * 64
     env = os.environ | {
@@ -111,6 +182,7 @@ def _run_push_gate(
         "DIGEST": digest,
         "INSPECTED_REF": str(record),
         "MANIFEST": str(manifest),
+        "BLOB_SOURCE": str(blob_source),
     }
     result = subprocess.run(
         ["bash", "-euo", "pipefail", "-c", gate["run"]],
@@ -138,8 +210,27 @@ def test_the_push_gate_inspects_the_digest_forwarded_to_promotion(tmp_path: Path
 
 
 def test_the_push_gate_blocks_the_incident_manifest(tmp_path: Path):
-    result, _, _ = _run_push_gate(tmp_path, [EMPTY_LAYER])
+    result, _, _ = _run_push_gate(
+        tmp_path,
+        [EMPTY_LAYER],
+        {EMPTY_LAYER["digest"]: _empty_tar_blob()},
+    )
 
     assert result.returncode == 1
     assert EMPTY_LAYER["digest"] in result.stderr
     assert "25-byte zstd tar layer" in result.stderr
+
+
+def test_a_valid_tiny_zstd_tar_is_inspected_and_accepted(tmp_path: Path):
+    blob = _tiny_nonempty_tar_blob()
+    assert len(blob) < 50
+    digest = "sha256:tiny-valid"
+    layer = {
+        "mediaType": "application/vnd.oci.image.layer.v1.tar+zstd",
+        "digest": digest,
+        "size": len(blob),
+    }
+
+    result, _, _ = _run_push_gate(tmp_path, [layer], {digest: blob})
+
+    assert result.returncode == 0, result.stderr

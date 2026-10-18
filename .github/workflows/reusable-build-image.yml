@@ -466,7 +466,24 @@ jobs:
           LAYERS=$(echo "$RAW" | jq '.layers | length')
           ANNOTATED=$(echo "$RAW" | jq '[.layers[].annotations // {} | keys[]] | map(select(test("ostree|chunkah"))) | length')
           echo "layers=${LAYERS} ostree-annotated-keys=${ANNOTATED}"
-          python3 scripts/check-oci-layers.py <<<"$RAW"
+          BLOBS="$(mktemp -d)"
+          trap 'rm -rf "$BLOBS"' EXIT
+          mapfile -t SMALL_ZSTD < <(
+            jq -r '.layers[]
+              | select((.mediaType | contains("tar+zstd")) and .size < 50)
+              | .digest' <<<"$RAW"
+          )
+          if [[ "${#SMALL_ZSTD[@]}" -gt 0 ]]; then
+            TOKEN="$(curl -fsSL \
+              "https://${IMAGE_REGISTRY}/token?service=${IMAGE_REGISTRY}&scope=repository:${IMAGE_NAME}:pull" \
+              | jq -er .token)"
+            for layer_digest in "${SMALL_ZSTD[@]}"; do
+              curl -fsSL -H "Authorization: Bearer ${TOKEN}" \
+                "https://${IMAGE_REGISTRY}/v2/${IMAGE_NAME}/blobs/${layer_digest}" \
+                -o "${BLOBS}/${layer_digest/:/_}"
+            done
+          fi
+          python3 scripts/check-oci-layers.py --blob-dir "$BLOBS" <<<"$RAW"
           if [ "${ANNOTATED}" = "0" ]; then
             echo "::warning::pushed manifest ${REF} has no ostree/chunkah layer annotations — rechunk metadata may have been stripped"
           fi
