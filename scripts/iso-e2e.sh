@@ -3569,10 +3569,53 @@ boot_disk_image() {
 	return 1
 }
 
+qualification_deployment_root() {
+	local installed_root="$1"
+	local -a deployments=()
+
+	# composefs-native deliberately leaves /ostree present, so its state
+	# deployment must win over the legacy OSTree probe.
+	if [[ -d "${installed_root}/state/deploy" ]]; then
+		mapfile -t deployments < <(
+			find "${installed_root}/state/deploy" -mindepth 1 -maxdepth 1 \
+				-type d -print 2>/dev/null
+		)
+	else
+		mapfile -t deployments < <(
+			find "${installed_root}/ostree/deploy" -regextype posix-extended \
+				-type d -regex '.*/deploy/[^/]+\.[0-9]+' -print 2>/dev/null
+		)
+	fi
+	[[ "${#deployments[@]}" -eq 1 ]] || return 1
+	printf '%s\n' "${deployments[0]}"
+}
+
+label_qualification_account_files() {
+	local deployment_root="$1"
+	[[ -d "${deployment_root}/etc/selinux" ]] || return 0
+	local restorecon=""
+	for candidate in /usr/sbin/restorecon /sbin/restorecon; do
+		if [[ -x "${deployment_root}${candidate}" ]]; then
+			restorecon="$candidate"
+			break
+		fi
+	done
+	if [[ -z "$restorecon" ]]; then
+		echo "ERROR: installed SELinux policy has no restorecon binary" >&2
+		return 1
+	fi
+	chroot "$deployment_root" "$restorecon" -RF \
+		/etc/tunaos-qualification \
+		/etc/systemd/system/tunaos-qualification-account.service \
+		/etc/systemd/system/graphical.target.wants/tunaos-qualification-account.service \
+		/etc/systemd/system-preset/10-tunaos-qualification.preset
+}
+
 install_qualification_account_service() {
 	local deployment_root="$1"
 	local account_dir="${deployment_root}/etc/tunaos-qualification"
 	local unit_dir="${deployment_root}/etc/systemd/system"
+	local preset_dir="${deployment_root}/etc/systemd/system-preset"
 	install -d -m 0700 "$account_dir"
 	printf '%s' "$E2E_INSTALL_PASSWORD" >"${account_dir}/password"
 	chmod 0600 "${account_dir}/password"
@@ -3592,8 +3635,8 @@ if command -v restorecon >/dev/null 2>&1; then
 fi
 rm -f "\$password_file"
 EOF
-	chmod 0700 "${account_dir}/create-account"
-	install -d -m 0755 "${unit_dir}/graphical.target.wants"
+	chmod 0600 "${account_dir}/create-account"
+	install -d -m 0755 "${unit_dir}/graphical.target.wants" "$preset_dir"
 	cat >"${unit_dir}/tunaos-qualification-account.service" <<'EOF'
 [Unit]
 Description=Provision the TunaOS offline GUI qualification account
@@ -3602,7 +3645,7 @@ Before=display-manager.service
 
 [Service]
 Type=oneshot
-ExecStart=/etc/tunaos-qualification/create-account
+ExecStart=/usr/bin/bash /etc/tunaos-qualification/create-account
 RemainAfterExit=yes
 
 [Install]
@@ -3610,6 +3653,9 @@ WantedBy=graphical.target
 EOF
 	ln -sfn ../tunaos-qualification-account.service \
 		"${unit_dir}/graphical.target.wants/tunaos-qualification-account.service"
+	printf '%s\n' "enable tunaos-qualification-account.service" \
+		>"${preset_dir}/10-tunaos-qualification.preset"
+	label_qualification_account_files "$deployment_root"
 }
 
 activate_qualification_volume_group() {
@@ -3625,6 +3671,12 @@ activate_qualification_volume_group() {
 deactivate_qualification_volume_group() {
 	local device="$1" volume_group="$2"
 	vgchange --devices "$device" -an "$volume_group" >/dev/null
+}
+
+close_qualification_mapper() {
+	local mapper_name="$1" mapper_opened="$2"
+	[[ "$mapper_opened" -eq 1 ]] || return 0
+	cryptsetup close "$mapper_name"
 }
 
 # Inspect the disk the GUI wrote and provision the harness-owned account used
@@ -3655,7 +3707,7 @@ prepare_qualification_disk() {
 	fi
 
 	local passphrase="${TUNAOS_QUALIFICATION_PASSPHRASE:-tunaose2e}"
-	local mapper_name="tunaos-qualification-root"
+	local mapper_name="tunaos-qualification-root-${BASHPID}"
 	local mapper="/dev/mapper/${mapper_name}"
 	local mountpoint=""
 	local root_device=""
@@ -3665,6 +3717,7 @@ prepare_qualification_disk() {
 	local -a mount_args=()
 	local encrypted=0
 	local result=0
+	local mapper_opened=0
 	qemu-nbd --connect="$nbd" "$INSTALL_DISK"
 	partprobe "$nbd" 2>/dev/null || true
 	udevadm settle 2>/dev/null || true
@@ -3686,6 +3739,8 @@ prepare_qualification_disk() {
 			cryptsetup open --key-file=- "$luks_device" "$mapper_name"; then
 			echo "ERROR: qualification could not unlock installed root" >&2
 			result=1
+		else
+			mapper_opened=1
 		fi
 	fi
 
@@ -3724,15 +3779,11 @@ prepare_qualification_disk() {
 			echo "ERROR: qualification could not mount installed root" >&2
 			result=1
 		else
-			local -a deployments=()
-			mapfile -t deployments < <(
-				find "$mountpoint/ostree/deploy" -regextype posix-extended \
-					-type d -regex '.*/deploy/[^/]+\.[0-9]+' -print 2>/dev/null
-			)
-			if [[ "${#deployments[@]}" -ne 1 ]]; then
-				echo "ERROR: qualification expected one installed OSTree deployment, found ${#deployments[@]}" >&2
+			local deployment_root=""
+			if ! deployment_root="$(qualification_deployment_root "$mountpoint")"; then
+				echo "ERROR: qualification expected exactly one installed deployment" >&2
 				result=1
-			elif ! install_qualification_account_service "${deployments[0]}"; then
+			elif ! install_qualification_account_service "$deployment_root"; then
 				echo "ERROR: qualification could not stage first-boot account provisioning" >&2
 				result=1
 			fi
@@ -3749,7 +3800,8 @@ prepare_qualification_disk() {
 		deactivate_qualification_volume_group "$lvm_device" "$activated_vg" \
 			>/dev/null 2>&1 || true
 	fi
-	[[ -e "$mapper" ]] && cryptsetup close "$mapper_name" >/dev/null 2>&1 || true
+	close_qualification_mapper "$mapper_name" "$mapper_opened" \
+		>/dev/null 2>&1 || true
 	qemu-nbd --disconnect "$nbd" >/dev/null 2>&1 || true
 	return "$result"
 }
@@ -3772,6 +3824,24 @@ qualification_frame_text() {
 	"$image_magick" "$image" -colorspace Gray -resize 200% "$normalized" 2>/dev/null || return 1
 	tesseract "$normalized" stdout --psm 6 2>/dev/null || true
 	rm -f "$normalized"
+}
+
+wait_for_qualification_session_paint() {
+	local label="$1"
+	local boot_menu_re='Boot in|Reboot Into Firmware|GNU GRUB|Press .* to edit'
+	local deadline=$((SECONDS + ${TUNAOS_QUALIFICATION_BOOT_SETTLE:-240}))
+	while ((SECONDS < deadline)); do
+		if wait_for_paint "$label"; then
+			local frame_text=""
+			if frame_text="$(qualification_frame_text "$label")" &&
+				! grep -qiE "$boot_menu_re" <<<"$frame_text"; then
+				return 0
+			fi
+		fi
+		echo "==> qualification guest is not past the bootloader; waiting" >&2
+		sleep 15
+	done
+	return 1
 }
 
 wait_for_qualification_text() {
@@ -3905,8 +3975,8 @@ boot_qualification_disk() {
 		echo "ERROR: installed desktop contract reported failure" >&2
 		return 4
 	fi
-	if ! wait_for_paint "installed-desktop"; then
-		echo "ERROR: installed desktop never painted" >&2
+	if ! wait_for_qualification_session_paint "installed-desktop"; then
+		echo "ERROR: installed desktop never painted past the bootloader" >&2
 		return 6
 	fi
 	screenshot_sane "installed-desktop" || {
@@ -3953,8 +4023,8 @@ write_qualification_result() {
 run_qualification() {
 	boot_live_iso
 	sleep 5
-	if ! wait_for_paint "10-ready"; then
-		echo "ERROR: offline live session never painted" >&2
+	if ! wait_for_qualification_session_paint "10-ready"; then
+		echo "ERROR: offline live session never painted past the bootloader" >&2
 		return 2
 	fi
 	local walkthrough="${SCRIPT_DIR}/installer-walkthrough.py"

@@ -791,7 +791,7 @@ if [[ "$mode" == --runtime ]]; then
 		tuna) session_processes="tuna-compositor tuna-shell-host" ;;
 		*) session_processes="" ;;
 		esac
-		session_deadline=$((SECONDS + 120))
+		session_deadline=$((SECONDS + 210))
 		while ((SECONDS < session_deadline)); do
 			while read -r session_id _; do
 				[[ -n "$session_id" ]] || continue

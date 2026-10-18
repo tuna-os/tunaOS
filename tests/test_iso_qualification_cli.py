@@ -67,16 +67,17 @@ def test_qualification_requires_manifest_before_starting_qemu(tmp_path):
 
 def test_first_boot_account_service_targets_the_ostree_deployment(tmp_path):
     function = shell_section(
-        "install_qualification_account_service() {",
+        "qualification_deployment_root() {",
         "activate_qualification_volume_group() {",
     )
     deployment = tmp_path / "ostree/deploy/tunaos/deploy/deadbeef.0"
+    deployment.mkdir(parents=True)
     proc = subprocess.run(
         ["bash", "-eu", "-c", (
             f"{function}\n"
-            f"E2E_INSTALL_USER=qualification "
-            f"E2E_INSTALL_PASSWORD=offline-password "
-            f"install_qualification_account_service {deployment}"
+            f'E2E_INSTALL_USER=qualification E2E_INSTALL_PASSWORD=offline-password\n'
+            f'deployment="$(qualification_deployment_root {tmp_path})"\n'
+            'install_qualification_account_service "$deployment"\n'
         )],
         capture_output=True,
         text=True,
@@ -88,6 +89,9 @@ def test_first_boot_account_service_targets_the_ostree_deployment(tmp_path):
     unit_dir = deployment / "etc/systemd/system"
     assert (account_dir / "password").read_text() == "offline-password"
     assert (unit_dir / "graphical.target.wants/tunaos-qualification-account.service").is_symlink()
+    assert (
+        deployment / "etc/systemd/system-preset/10-tunaos-qualification.preset"
+    ).read_text() == "enable tunaos-qualification-account.service\n"
 
     fakebin = tmp_path / "bin"
     fakebin.mkdir()
@@ -108,7 +112,7 @@ def test_first_boot_account_service_targets_the_ostree_deployment(tmp_path):
         "TUNAOS_QUALIFICATION_ETC_ROOT": str(deployment),
     }
     helper = subprocess.run(
-        [str(account_dir / "create-account")],
+        ["/bin/bash", str(account_dir / "create-account")],
         env=env,
         capture_output=True,
         text=True,
@@ -119,6 +123,88 @@ def test_first_boot_account_service_targets_the_ostree_deployment(tmp_path):
     assert password_log.read_text() == "qualification:offline-password\n"
     assert not (account_dir / "password").exists()
 
+def test_account_service_prefers_composefs_native_deployment(tmp_path):
+    function = shell_section(
+        "qualification_deployment_root() {",
+        "label_qualification_account_files() {",
+    )
+    ostree = tmp_path / "ostree/deploy/tunaos/deploy/deadbeef.0"
+    composefs = tmp_path / "state/deploy/abcdef"
+    ostree.mkdir(parents=True)
+    composefs.mkdir(parents=True)
+    proc = subprocess.run(
+        ["bash", "-eu", "-c", f'{function}\nqualification_deployment_root "{tmp_path}"'],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stdout.strip() == str(composefs)
+
+
+def test_staged_account_files_are_labeled_with_guest_policy(tmp_path):
+    functions = shell_section(
+        "label_qualification_account_files() {",
+        "activate_qualification_volume_group() {",
+    )
+    deployment = tmp_path / "deployment"
+    (deployment / "etc/selinux").mkdir(parents=True)
+    restorecon = deployment / "usr/sbin/restorecon"
+    restorecon.parent.mkdir(parents=True)
+    restorecon.write_text("#!/bin/sh\n", encoding="utf-8")
+    restorecon.chmod(0o755)
+    calls = tmp_path / "chroot.log"
+    fakebin = tmp_path / "bin"
+    fakebin.mkdir()
+    chroot = fakebin / "chroot"
+    chroot.write_text(
+        f"#!/bin/sh\nprintf '%s\\n' \"$*\" > {calls}\n", encoding="utf-8"
+    )
+    chroot.chmod(0o755)
+    proc = subprocess.run(
+        ["bash", "-eu", "-c", (
+            f"{functions}\n"
+            f"E2E_INSTALL_USER=qualification E2E_INSTALL_PASSWORD=offline-password "
+            f"install_qualification_account_service {deployment}"
+        )],
+        env=os.environ | {"PATH": f"{fakebin}:{os.environ['PATH']}"},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert "/usr/sbin/restorecon -RF" in calls.read_text()
+    assert "/etc/tunaos-qualification" in calls.read_text()
+
+
+def test_mapper_cleanup_only_closes_mapping_opened_by_this_run(tmp_path):
+    function = shell_section(
+        "close_qualification_mapper() {",
+        "# Inspect the disk the GUI wrote",
+    )
+    fakebin = tmp_path / "bin"
+    fakebin.mkdir()
+    calls = tmp_path / "cryptsetup.log"
+    cryptsetup = fakebin / "cryptsetup"
+    cryptsetup.write_text(
+        f"#!/bin/sh\nprintf '%s\\n' \"$*\" >> {calls}\n", encoding="utf-8"
+    )
+    cryptsetup.chmod(0o755)
+    proc = subprocess.run(
+        ["/bin/bash", "-eu", "-c", (
+            f"{function}\n"
+            "close_qualification_mapper tunaos-qualification-root-111 0\n"
+            "close_qualification_mapper tunaos-qualification-root-222 1\n"
+        )],
+        env=os.environ | {"PATH": str(fakebin)},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert calls.read_text().splitlines() == [
+        "close tunaos-qualification-root-222"
+    ]
 
 def test_lvm_activation_and_cleanup_are_scoped_to_owned_device(tmp_path):
     functions = shell_section(
@@ -156,6 +242,50 @@ def test_lvm_activation_and_cleanup_are_scoped_to_owned_device(tmp_path):
     ]
 
 
+def test_qualification_wait_rejects_bootloader_before_session(tmp_path):
+    function = shell_section(
+        "wait_for_qualification_session_paint() {",
+        "wait_for_qualification_text() {",
+    )
+    calls = tmp_path / "ocr-calls"
+    proc = subprocess.run(
+        ["/bin/bash", "-eu", "-c", (
+            f"{function}\n"
+            f"calls={calls}\n"
+            'wait_for_paint() { return 0; }\n'
+            'qualification_frame_text() {\n'
+            '  count=0; [[ -f "$calls" ]] && count="$(cat "$calls")"\n'
+            '  count=$((count + 1)); printf "%s" "$count" >"$calls"\n'
+            '  [[ "$count" -eq 1 ]] && printf "GNU GRUB\\n" || printf "Welcome\\n"\n'
+            '}\n'
+            'sleep() { :; }\n'
+            'TUNAOS_QUALIFICATION_BOOT_SETTLE=30\n'
+            'wait_for_qualification_session_paint ready\n'
+        )],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert calls.read_text() == "2"
+
+
+def test_session_wait_fits_inside_generated_service_timeouts():
+    root = Path(__file__).parents[1]
+    verify = (
+        root / "build_scripts/checks/verify-desktop-experience.sh"
+    ).read_text(encoding="utf-8")
+    runtime = (
+        root / "build_scripts/desktop/configure-desktop-runtime.sh"
+    ).read_text(encoding="utf-8")
+    install = (
+        root / "build_scripts/desktop/install-desktop.sh"
+    ).read_text(encoding="utf-8")
+    assert "session_deadline=$((SECONDS + 210))" in verify
+    assert "TimeoutStartSec=300" in runtime
+    assert "TimeoutStartSec=300" in install
+
+
 def test_qualification_ocr_falls_back_to_convert(tmp_path):
     function = shell_section(
         "qualification_frame_text() {",
@@ -164,20 +294,24 @@ def test_qualification_ocr_falls_back_to_convert(tmp_path):
     fakebin = tmp_path / "bin"
     fakebin.mkdir()
     (fakebin / "convert").write_text(
-        "#!/bin/sh\nfor output; do :; done\ncp \"$1\" \"$output\"\n",
+        "#!/bin/sh\nfor output; do :; done\n/bin/cp \"$1\" \"$output\"\n",
         encoding="utf-8",
     )
     (fakebin / "tesseract").write_text(
         "#!/bin/sh\nprintf 'graphical login\\n'\n", encoding="utf-8"
     )
+    (fakebin / "rm").write_text(
+        "#!/bin/sh\n/bin/rm \"$@\"\n", encoding="utf-8"
+    )
+    (fakebin / "rm").chmod(0o755)
     for command in ("convert", "tesseract"):
         (fakebin / command).chmod(0o755)
     env = os.environ | {
-        "PATH": f"{fakebin}:/usr/bin:/bin",
+        "PATH": str(fakebin),
         "OUTPUT_DIR": str(tmp_path),
     }
     proc = subprocess.run(
-        ["bash", "-eu", "-c", (
+        ["/bin/bash", "-eu", "-c", (
             'screenshot() { printf frame >"$OUTPUT_DIR/$1.ppm"; }\n'
             f"{function}\n"
             "qualification_frame_text installed-login"
