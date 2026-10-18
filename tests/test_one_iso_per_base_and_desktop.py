@@ -308,6 +308,7 @@ def test_guarded_uploader_never_writes_retained_destinations(tmp_path: Path):
             "PATH": f"{fake_bin}:{os.environ['PATH']}",
             "RCLONE_LOG": str(rclone_log),
             "CAPTURE_DIR": str(capture_dir),
+            "TUNAOS_PUBLICATION_ID": "test-run-1",
         },
         text=True,
         capture_output=True,
@@ -319,8 +320,14 @@ def test_guarded_uploader_never_writes_retained_destinations(tmp_path: Path):
     destinations = [upload.rsplit(" ", 1)[-1] for upload in uploads]
     assert not any(destination.endswith(f"/{iso.name}") for destination in destinations)
     assert not any(destination.endswith("/fish-gnome-latest.iso") for destination in destinations)
-    snapshot = f"fish-gnome-10.2-x86_64-sha256-{hashlib.sha256(b'iso').hexdigest()[:16]}.iso"
-    latest_snapshot = f"fish-gnome-snapshot-sha256-{hashlib.sha256(b'iso').hexdigest()[:16]}.iso"
+    snapshot = (
+        f"fish-gnome-10.2-x86_64-run-test-run-1-sha256-"
+        f"{hashlib.sha256(b'iso').hexdigest()[:16]}.iso"
+    )
+    latest_snapshot = (
+        f"fish-gnome-snapshot-run-test-run-1-sha256-"
+        f"{hashlib.sha256(b'iso').hexdigest()[:16]}.iso"
+    )
     assert any(destination.endswith(f"/{snapshot}") for destination in destinations)
     assert any(destination.endswith(f"/{latest_snapshot}") for destination in destinations)
     assert any(destination.endswith("/fish-gnome-latest.json")
@@ -354,6 +361,7 @@ def test_guarded_uploader_never_writes_retained_destinations(tmp_path: Path):
             "PATH": f"{fake_bin}:{os.environ['PATH']}",
             "RCLONE_LOG": str(rclone_log),
             "CAPTURE_DIR": str(capture_dir),
+            "TUNAOS_PUBLICATION_ID": "test-run-2",
         },
         text=True,
         capture_output=True,
@@ -391,7 +399,7 @@ def test_resolver_remains_valid_when_a_later_publication_replaces_latest(tmp_pat
     )
     rclone.chmod(0o755)
 
-    def publish(directory: Path, content: bytes) -> dict:
+    def publish(directory: Path, content: bytes, publication_id: str) -> dict:
         directory.mkdir()
         iso = directory / "fish-gnome-10.2-x86_64.iso"
         iso.write_bytes(content)
@@ -414,6 +422,7 @@ def test_resolver_remains_valid_when_a_later_publication_replaces_latest(tmp_pat
             env=os.environ | {
                 "PATH": f"{fake_bin}:{os.environ['PATH']}",
                 "REMOTE": str(remote),
+                "TUNAOS_PUBLICATION_ID": publication_id,
             },
             text=True,
             capture_output=True,
@@ -422,12 +431,15 @@ def test_resolver_remains_valid_when_a_later_publication_replaces_latest(tmp_pat
         assert result.returncode == 0, result.stderr
         return json.loads((remote / "fish-gnome-latest.json").read_text())
 
-    # Model a reader fetching A's resolver immediately before publisher B
-    # replaces the legacy alias and resolver.
-    resolver_a = publish(tmp_path / "build-a", b"first publication")
-    resolver_b = publish(tmp_path / "build-b", b"second publication")
+    # Model prune capturing A's resolver targets, then an identical
+    # publication reactivating those bytes while prune still holds its stale
+    # candidate set. B must get a new key that stale deletion cannot name.
+    resolver_a = publish(tmp_path / "build-a", b"same publication", "run-a")
+    stale_prune_candidates = {path.name for path in remote.iterdir()}
+    resolver_b = publish(tmp_path / "build-b", b"same publication", "run-b")
 
     assert resolver_a["iso"] != resolver_b["iso"]
+    assert resolver_b["iso"] not in stale_prune_candidates
     for resolver in (resolver_a, resolver_b):
         target = remote / resolver["iso"]
         assert target.exists()

@@ -356,3 +356,50 @@ def test_the_rclone_failure_does_not_abort_before_the_fallback():
     assert copy_lines, run[-800:]
     idx = run.index('for requested in')
     assert "|| true" in run[idx:], run[idx:idx + 900]
+
+
+@pytest.mark.parametrize(
+    ("resolver_mode", "expected_status"),
+    [("absent", 0), ("invalid", 1)],
+)
+def test_resolver_download_falls_back_only_when_resolver_is_absent(
+    tmp_path, resolver_mode, expected_status
+):
+    script = (
+        download_step()["run"]
+        .replace("${{ matrix.variant }}", "fish")
+        .replace("${{ matrix.flavor }}", "gnome")
+        .replace("${{ secrets.R2_BUCKET }}", "bucket")
+    )
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    rclone = fake_bin / "rclone"
+    rclone.write_text(
+        "#!/bin/sh\n"
+        "case \"$1:$RESOLVER_MODE\" in\n"
+        "  cat:absent) exit 1 ;;\n"
+        "  cat:invalid) printf '{}\\n' ;;\n"
+        "  copyto:*) for last; do :; done; printf 'stable' > \"$last\" ;;\n"
+        "esac\n",
+        encoding="utf-8",
+    )
+    rclone.chmod(0o755)
+    github_env = tmp_path / "github-env"
+    proc = subprocess.run(
+        ["/bin/bash", "-eu", "-o", "pipefail", "-c", script],
+        cwd=tmp_path,
+        env=os.environ | {
+            "PATH": f"{fake_bin}:{os.environ['PATH']}",
+            "GITHUB_ENV": str(github_env),
+            "RESOLVER_MODE": resolver_mode,
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == expected_status, proc.stderr
+    if resolver_mode == "invalid":
+        assert "refusing frozen stable fallback" in proc.stderr
+        assert not github_env.exists()
+    else:
+        assert "fish-gnome-latest.iso" in github_env.read_text()
