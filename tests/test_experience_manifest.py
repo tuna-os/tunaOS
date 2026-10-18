@@ -191,6 +191,20 @@ def test_receipt_schema_cannot_carry_disk_or_iso_artifact_paths():
         MODULE.validate_receipt(receipt, "receipt")
 
 
+@pytest.mark.parametrize("field,value", [
+    ("profile", "encrypted"),
+    ("kind", "forged-kind"),
+    ("duration_seconds", 1),
+])
+def test_receipt_nested_evidence_cannot_override_derived_fields(field, value):
+    receipt = MODULE.build_receipt(
+        manifest(), [result("plain"), result("encrypted")]
+    )
+    receipt["qualification"]["plain"][field] = value
+    with pytest.raises(ValueError, match=f"unsupported fields: {field}"):
+        MODULE.validate_receipt(receipt, "receipt")
+
+
 def test_compare_reports_parity_critical_mismatch_only():
     left = manifest()
     right = manifest(

@@ -243,12 +243,19 @@ def send_keys(*keys):
 
 
 def type_text(text):
-    """Type the qualification passphrase through QEMU's key names."""
+    """Type ASCII qualification input through QEMU's key names."""
     aliases = {"-": "minus", ".": "dot", "_": "shift-minus"}
     for char in text:
-        key = aliases.get(char, char.lower())
-        if not (char.isalnum() or char in aliases):
-            raise ValueError(f"unsupported qualification input character: {char!r}")
+        if "A" <= char <= "Z":
+            key = f"shift-{char.lower()}"
+        elif ("a" <= char <= "z") or ("0" <= char <= "9"):
+            key = char
+        elif char in aliases:
+            key = aliases[char]
+        else:
+            raise ValueError(
+                f"unsupported qualification input character: {char!r}"
+            )
         send_keys(key)
 
 
@@ -421,15 +428,27 @@ def load_spec(path):
 
 
 spec = load_spec(spec_path)
+_screen_text = {}
+
 
 
 def identify_screen(png):
     """Return the installer screen id visible in one frame, if any."""
-    text = ocr(png) if png else ""
+    text = (ocr(png) if png else "") or ""
+    _screen_text[png] = text
     for screen in spec:
         if any(keyword.lower() in text for keyword in screen.get("keywords", [])):
             return screen["id"]
     return None
+
+
+def is_contextual_install_screen(png):
+    """Recognize GNOME progress only from positive progress-page evidence."""
+    text = _screen_text.get(png, "")
+    return "installing" in text and any(
+        marker in text
+        for marker in ("elapsed", "writing image", "do not power off", "progress", "%")
+    )
 
 
 # ── Capture ──────────────────────────────────────────────────────────────
@@ -587,13 +606,15 @@ if qualification:
         moved = bool(prev) and changed_pixels(prev, p) > DIFF_PIXELS
         update_navigation(moved)
         detected = identify_screen(p)
-        # GNOME's progress page has only the generic heading "Installing".
-        # The shared screen spec deliberately rejects that keyword because it
-        # also occurs in welcome prose. A changed state directly after the
-        # recognized summary is safe context for the progress page, provided
-        # it is not already the recognized done page. Preserve that state
-        # across later progress frames so the driver never activates Cancel.
-        if detected is None and previous_screen in {"summary", "install"} and moved:
+        # GNOME's progress page has only a generic "Installing" heading, so it
+        # is recognized contextually after summary. A changed but unrelated
+        # dialog is not progress evidence and must not satisfy qualification.
+        if (
+            detected is None
+            and previous_screen in {"summary", "install"}
+            and moved
+            and is_contextual_install_screen(p)
+        ):
             current = "install"
         elif detected is None and previous_screen == "install":
             current = "install"

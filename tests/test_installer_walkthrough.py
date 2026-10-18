@@ -133,7 +133,7 @@ class FakeQEMUMonitor:
 
 def run_walkthrough(tess, magick_ae=5000, magick_stddev=0.5, steps="2",
                     flavor="de", strict=False, timeout=120, tess_neg=None,
-                    spec=None, qualification=None):
+                    spec=None, qualification=None, passphrase=None):
     """Run the script against the fake monitor + stubs.
 
     *tess* maps frame number (str) -> OCR text. *tess_neg* is the same for the
@@ -165,6 +165,8 @@ def run_walkthrough(tess, magick_ae=5000, magick_stddev=0.5, steps="2",
             env[f"TESSNEG_{k}"] = v
         if qualification is not None:
             env["TUNAOS_QUALIFICATION_POLL"] = "0"
+        if passphrase is not None:
+            env["TUNAOS_QUALIFICATION_PASSPHRASE"] = passphrase
 
         cmd = [sys.executable, str(SCRIPT), sock, str(outdir), steps, flavor]
         if strict:
@@ -229,6 +231,7 @@ class TestRendersAdvancesScreens:
             assert summary["encryption_configured"] is True
             assert any(command == "sendkey t" for command in run_walkthrough.last_commands)
 
+
     def test_qualification_contextually_recognizes_gnome_progress(self):
         proc, summary = run_walkthrough(
             {
@@ -261,6 +264,55 @@ class TestRendersAdvancesScreens:
         assert proc.returncode == 1
         assert summary["screens"]["install"] is False
         assert "not ok - de: reached 'install' screen" in proc.stdout
+    def test_qualification_rejects_unrecognized_changed_frame_as_progress(self):
+        proc, summary = run_walkthrough(
+            {
+                "00": "Welcome to TunaOS installer. Get Started",
+                "01": "Select Target Disk",
+                "02": "Disk Encryption. Enter passphrase",
+                "03": "Confirm Installation. Ready to install",
+                "04": "Reviewing unrelated release notes",
+                "05": "Installation complete. Remove the installation media",
+            },
+            steps="8",
+            qualification="plain",
+        )
+        assert proc.returncode == 1
+        assert summary["screens"]["install"] is False
+
+    def test_encrypted_qualification_preserves_uppercase_passphrase(self):
+        proc, summary = run_walkthrough(
+            {
+                "00": "Welcome to TunaOS installer. Get Started",
+                "01": "Select Target Disk",
+                "02": "Disk Encryption. Enter passphrase",
+                "03": "Confirm Installation. Ready to install",
+                "04": "Installation Progress. Writing image",
+                "05": "Installation complete. Remove the installation media",
+            },
+            steps="8",
+            qualification="encrypted",
+            passphrase="Test123",
+        )
+        assert proc.returncode == 0, proc.stdout + proc.stderr
+        assert summary["qualification_complete"] is True
+        assert "sendkey shift-t" in run_walkthrough.last_commands
+
+
+    def test_encrypted_qualification_rejects_unsupported_passphrase_characters(self):
+        proc, summary = run_walkthrough(
+            {
+                "00": "Welcome to TunaOS installer. Get Started",
+                "01": "Select Target Disk",
+                "02": "Disk Encryption. Enter passphrase",
+            },
+            steps="4",
+            qualification="encrypted",
+            passphrase="Bad!",
+        )
+        assert proc.returncode != 0
+        assert summary is None
+        assert "unsupported qualification input character: '!'" in proc.stderr
 
     def test_qualification_fails_when_optional_walkthrough_screen_is_skipped(self):
         proc, summary = run_walkthrough(
