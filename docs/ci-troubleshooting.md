@@ -1688,6 +1688,13 @@ capture first, then sends the graceful powerdown itself before the kill.
 **Fix:** Set the mode in the driver and test both paths. Assert that offline shutdown never calls SSH. Check each QEMU launch for its serial log and disk boot order.
 
 **Disk check:** A LUKS partition alone does not prove root encryption. Test a plaintext deployment beside an unrelated LUKS partition; the encrypted profile must reject it before account writes.
+## Fork source pin changes after tests
+
+Symptom: the fork review tool reports a catalog pin mismatch after Python tests.
+Cause: imports create untracked bytecode under `system_files/usr/libexec`.
+The receipt must select only Git-tracked source files. The test for the fork contract
+checks that temporary bytecode leaves the pin intact and a source edit changes it.
+Do not refresh a source pin to accept temporary files.
 
 ### Countme clean install rejects a missing overridden dependency
 
