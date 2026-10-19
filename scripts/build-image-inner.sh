@@ -30,8 +30,10 @@ set -euxo pipefail
 # Identity staging is deliberately non-buildable until all visible consumers
 # and boot qualification exist. Do not bypass the preparation command's gate.
 if [[ -e manifests/fork-identity.json || -L manifests/fork-identity.json ]]; then
-	echo "ERROR: fork identity staging cannot build: installer/Plymouth/boot qualification incomplete" >&2
-	exit 2
+	python3 scripts/qualify-fork-image.py --validate-build-entry || {
+		echo "ERROR: fork identity staging cannot build: installer/Plymouth/boot qualification incomplete" >&2
+		exit 2
+	}
 fi
 
 # ── Defaults ──────────────────────────────────────────────────────────────────
@@ -149,6 +151,9 @@ if [[ -f manifests/fork-config.json ]]; then
 	BUILD_ARGS+=("--no-cache")
 	fork_payload_paths=(manifests/fork-config.json)
 	if [[ -d manifests/fork-assets ]]; then fork_payload_paths+=(manifests/fork-assets); fi
+	for identity_path in manifests/fork-identity.json manifests/fork-identity-assets manifests/fork-qualification.json; do
+		if [[ -e "$identity_path" ]]; then fork_payload_paths+=("$identity_path"); fi
+	done
 	fork_payload_hash=$(find "${fork_payload_paths[@]}" -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -c1-16)
 	build_scripts_hash="${build_scripts_hash}-${fork_payload_hash}"
 fi

@@ -1739,3 +1739,13 @@ cannot change the theme already copied by dracut. The test runs
 `plymouth-set-theme.sh` before it applies identity. It checks the generated
 PNG, selection and password callbacks. Keep image builds blocked until an
 actual initramfs and encrypted-root boot verify the same files.
+
+### Fork staging refuses an image build
+
+`prepare-fork-config.py --identity-staging --build` and the ordinary build
+entry reject the identity payload until real-image qualification is complete.
+This is an intentional admission boundary, not a missing environment flag.
+Use the [qualification harness](FORK-IMAGE-QUALIFICATION.md)
+for the two local canaries. Its result records build, boot and installed
+identity separately from graphical login and installer tests. Never interpret
+an unexecuted stage as a pass or remove the production gate to run the canary.

@@ -16,6 +16,31 @@ BLOCKERS = ["installer-recipe-resource", "plymouth-initramfs", "built-image-boot
 SHA = re.compile(r"[0-9a-f]{64}\Z")
 
 
+def qualification(manifest, container=False):
+    """Narrow, nonpublishing canary authority; absent for normal staging/builds."""
+    if manifest is None:
+        return False
+    receipt = manifest.parent / "fork-qualification.json"
+    if not receipt.exists():
+        return False
+    if receipt.is_symlink() or not receipt.is_file():
+        raise ValueError("qualification receipt must be a regular file")
+    q = read_json(receipt)
+    base_path = manifest.parent / "fork-config.json"
+    m, base = load(manifest), read_json(base_path)
+    expected = {"schema_version": 1, "purpose": "nonpublishing-canary",
+                "identity_sha256": hashlib.sha256(manifest.read_bytes()).hexdigest(),
+                "config_sha256": hashlib.sha256(base_path.read_bytes()).hexdigest()}
+    if q != expected or base.get("image") != {"registry": "localhost", "namespace": "fork-qualification"}:
+        raise ValueError("qualification receipt or local image namespace mismatch")
+    if (m["variant"] not in ("yellowfin", "grouper") or m["flavor"] != "gnome"
+            or m["platform"] != "linux/amd64"):
+        raise ValueError("qualification admits only yellowfin/grouper GNOME amd64")
+    if container and not Path("/run/.containerenv").is_file():
+        raise ValueError("qualification writes require a Podman build container")
+    return True
+
+
 def valid_name(name):
     return isinstance(name, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9 ._-]{0,63}", name) and name == name.strip()
 
@@ -203,7 +228,7 @@ def installer_updates(manifest, root, m):
 def apply_boot(manifest, root):
     m = load(manifest)
     root = root.resolve(strict=True)
-    if root == Path("/") or not root.is_dir():
+    if not root.is_dir() or (root == Path("/") and not qualification(manifest, container=True)):
         raise ValueError("identity boot staging requires a non-live directory; builds remain blocked")
     updates = boot_updates(manifest, root, m)
     for path, data in updates.items():
@@ -216,7 +241,7 @@ def apply(manifest, root, check=False):
     root = root.resolve(strict=True)
     if not root.is_dir():
         raise ValueError("identity staging root must be a directory")
-    if root == Path("/"):
+    if root == Path("/") and not qualification(manifest, container=True):
         raise ValueError("identity staging requires an explicit non-live root; builds remain blocked")
     osr = target(root, "usr/lib/os-release")
     image_info = target(root, "usr/share/ublue-os/image-info.json")
@@ -345,7 +370,7 @@ def main():
     parser.add_argument("--check", action="store_true", help="validate all inputs and targets without writes")
     args = parser.parse_args()
     try:
-        if not args.root.is_absolute() or ((args.manifest or args.boot_only) and args.root.resolve() == Path("/")):
+        if not args.root.is_absolute() or ((args.manifest or args.boot_only) and args.root.resolve() == Path("/") and not qualification(args.manifest, container=True)):
             raise ValueError("identity staging requires an absolute non-live root")
         if args.boot_only:
             if not args.manifest or args.check:

@@ -1,0 +1,83 @@
+name: Fork Image Qualification
+
+# A bounded opt-in canary. No registry writes, releases, deployment or secrets.
+# This is deliberately separate from production build/admission workflows.
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/fork-image-qualification.yml"
+      - "scripts/qualify-fork-image.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: fork-image-qualification-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  canary:
+    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'feat/fork-image-qualification'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Prepare container storage
+        uses: projectbluefin/actions/bootc-build/setup-runner@59f783ed76fd9d449ef6887a6649446801bd5434 # v1 as of 2026-07-02
+        with:
+          storage-backend: btrfs
+          update-podman: "true"
+          install-tools: '[]'
+      - name: Install test tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq python3-pil python3-yaml qemu-system-x86 qemu-utils ovmf ffmpeg
+          curl -fsSL https://github.com/mikefarah/yq/releases/download/v4.53.3/yq_linux_amd64 -o "$RUNNER_TEMP/yq"
+          echo "fa52a4e758c63d38299163fbdd1edfb4c4963247918bf9c1c5d31d84789eded4  $RUNNER_TEMP/yq" | sha256sum -c -
+          sudo install -m 0755 "$RUNNER_TEMP/yq" /usr/local/bin/yq
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm || true
+          test -c /dev/kvm
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version: "1.27"
+          cache: false
+      - name: Install pinned corral
+        run: |
+          scripts/install-corral.sh "$RUNNER_TEMP/corral-bin"
+          sudo install -m 0755 "$RUNNER_TEMP/corral-bin/corral" /usr/local/bin/corral
+      - name: Qualify RPM canary, then apt canary
+        run: |
+          set -euo pipefail
+          sudo git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          for variant in yellowfin grouper; do
+            sudo python3 scripts/qualify-fork-image.py --variant "$variant" --output "$RUNNER_TEMP/fork-evidence/$variant"
+          done
+      - name: Collect bounded evidence
+        if: always()
+        run: |
+          mkdir -p fork-evidence
+          for variant in yellowfin grouper; do
+            src="$RUNNER_TEMP/fork-evidence/$variant"
+            test -d "$src" || continue
+            mkdir -p "fork-evidence/$variant"
+            sudo cp "$src/qualification.json" "fork-evidence/$variant/" || true
+            sudo cp "$src/image-inspect.json" "fork-evidence/$variant/" || true
+            sudo cp "$src/fork.yaml" "fork-evidence/$variant/" || true
+            sudo cp "$src/prepared/source-receipt.json" "fork-evidence/$variant/" || true
+            if test -d "$src/boot"; then sudo cp -r "$src/boot" "fork-evidence/$variant/"; fi
+          done
+          sudo chown -R "$USER:$(id -gn)" fork-evidence
+      - name: Upload qualification evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: fork-image-qualification-${{ github.run_id }}
+          path: fork-evidence/
+          retention-days: 7
+          if-no-files-found: warn
