@@ -885,7 +885,7 @@ variants:
     upstream_track: experimental
     description: "Based on Fedora ELN (EL11 preview, rolling)"
     experimental: true
-    base_image: "registry.fedoraproject.org/eln-bootc:latest@sha256:c60293d11865400103507d6fa6a420ad37d82e8f38b885378fff65455edfbdc7"
+    base_image: "registry.fedoraproject.org/eln-bootc:latest@sha256:3599a585c5937437895eb71d99f330070f07d21eb888f8faaad780c8bd2a71fd"
     # No alias: `eln` is Fedora's identifier for a moving development target,
     # and an alias tag is a stability promise this lane deliberately does not
     # make. Revisit if/when ELN gains a versioned publish.
@@ -1148,7 +1148,7 @@ variants:
     # not a rebuild of an existing one. Read docs/HUMMINGBIRD.md before
     # reasoning about what its package set should contain.
     description: "Fedora Hummingbird (hardened rolling Rawhide fork, bootc)"
-    base_image: "quay.io/hummingbird-community/bootc-os:latest@sha256:a3a06793169af39bf14f49f497ad243984343617ef22725507ddc66b4c8e9413"
+    base_image: "quay.io/hummingbird-community/bootc-os:latest@sha256:cfbd877853849ed8307fa38f492dffdc24e0e0f4340293ef536ceee1fa8afaa5"
     # amd64 only, because aarch64 has nothing to build FROM yet: the base
     # stage's mandatory xfsprogs guard (build_scripts/10-base-packages.sh) has
     # no repository that can satisfy it on arm64, so every hummingbird arm64

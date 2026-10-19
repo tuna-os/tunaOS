@@ -35,3 +35,9 @@ Run `bats tests/bats/test_variant_identity.bats tests/bats/test_wallpaper_contra
 to check selector priority, desktop suffixes, assets, fallbacks, and the Plasma
 path. These tests examine the source tree. Inspect the built OS image to verify
 that it contains the selected artwork before you claim runtime verification.
+
+The identity writer runs the same selector after final identity updates and overlay
+file copies. It uses the original image flavor to retain desktop overrides for
+overlay targets. Explicit fork customization runs afterward and keeps priority over
+stock artwork and URLs. `pytest tests/test_anime_finalization.py` executes these
+writer sequences in isolated filesystems, including the real JPEG assets.
