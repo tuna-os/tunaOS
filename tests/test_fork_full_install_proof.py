@@ -8,6 +8,7 @@ execute installer/recipe mutation programs.
 import copy
 import importlib.util
 import json
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -683,7 +684,9 @@ def serial_vm(tmp_path, monkeypatch):
     monkeypatch.setattr(PROOF.time, "sleep", lambda delay: now.__setitem__(0, now[0] + delay))
     module = serial_module()
     vm = SimpleNamespace(
-        process=SimpleNamespace(poll=lambda: None), serial_path=tmp_path / "serial.log"
+        process=SimpleNamespace(poll=lambda: None),
+        observer_path=tmp_path / "observer.log",
+        serial_path=tmp_path / "serial.log",
     )
     return SimpleNamespace(vm=vm, module=module, now=now, read=PROOF.serial_observer(vm, module))
 
@@ -692,9 +695,9 @@ def test_serial_reader_requires_new_sequence_and_drops_only_unfinished_tail(seri
     state = serial_vm
     first = state.module.encode_snapshot(full_serial_snapshot()).decode()
     second = state.module.encode_snapshot(full_serial_snapshot(1)).decode()
-    state.vm.serial_path.write_text("kernel noise\n" + first + second[:35])
+    state.vm.observer_path.write_text("kernel noise\n" + first + second[:35])
     assert state.read()["seq"] == 0
-    state.vm.serial_path.write_text(first + second)
+    state.vm.observer_path.write_text(first + second)
     assert state.read()["seq"] == 1
     with pytest.raises(TimeoutError):
         state.read()
@@ -704,12 +707,12 @@ def test_serial_reader_requires_new_sequence_and_drops_only_unfinished_tail(seri
 def test_serial_reader_never_ignores_malformed_complete_rows_or_boot_changes(serial_vm):
     state = serial_vm
     first = state.module.encode_snapshot(full_serial_snapshot()).decode()
-    state.vm.serial_path.write_text(first)
+    state.vm.observer_path.write_text(first)
     assert state.read()["boot_id"] == TARGET_BOOT
-    state.vm.serial_path.write_text(first + state.module.PREFIX + "{broken}\n")
+    state.vm.observer_path.write_text(first + state.module.PREFIX + "{broken}\n")
     with pytest.raises(ValueError, match="malformed"):
         state.read()
-    state.vm.serial_path.write_text(
+    state.vm.observer_path.write_text(
         first + state.module.encode_snapshot(full_serial_snapshot(1, SOURCE_BOOT)).decode()
     )
     with pytest.raises(ValueError, match="another boot"):
@@ -718,7 +721,7 @@ def test_serial_reader_never_ignores_malformed_complete_rows_or_boot_changes(ser
 
 def test_serial_reader_checks_guest_exit_even_when_cached_evidence_exists(serial_vm):
     state = serial_vm
-    state.vm.serial_path.write_bytes(state.module.encode_snapshot(full_serial_snapshot()))
+    state.vm.observer_path.write_bytes(state.module.encode_snapshot(full_serial_snapshot()))
     state.vm.process.poll = lambda: 0
     with pytest.raises(ValueError, match="guest exited"):
         state.read()
@@ -737,7 +740,7 @@ def test_serial_reader_bounds_console_file_before_reading(serial_vm, monkeypatch
         def read_text(self, **kwargs):
             raise AssertionError("oversized console must not be read")
 
-    state.vm.serial_path = Oversized()
+    state.vm.observer_path = Oversized()
     with pytest.raises(ValueError, match="exceeds bound"):
         state.read()
 
@@ -893,7 +896,7 @@ def test_serial_first_frame_has_boot_grace_but_later_frames_still_expire(serial_
     def advance(delay):
         state.now[0] += delay
         if state.now[0] == 100:
-            state.vm.serial_path.write_bytes(state.module.encode_snapshot(full_serial_snapshot()))
+            state.vm.observer_path.write_bytes(state.module.encode_snapshot(full_serial_snapshot()))
 
     monkeypatch.setattr(PROOF.time, "sleep", advance)
     assert state.read()["seq"] == 0
@@ -1578,3 +1581,60 @@ def test_login_diagnostic_rejects_malformed_or_unbounded_data(change):
     value.update(change)
     with pytest.raises(ValueError):
         PROOF.login_diagnostic(value)
+
+
+def test_dedicated_reader_never_uses_console_only_evidence(serial_vm):
+    state = serial_vm
+    state.vm.serial_path.write_bytes(state.module.encode_snapshot(full_serial_snapshot()))
+    with pytest.raises(TimeoutError, match="private-port"):
+        state.read()
+    assert state.now[0] == 480
+
+
+def test_damaged_console_does_not_poison_private_observer(serial_vm):
+    state = serial_vm
+    state.vm.serial_path.write_text(state.module.PREFIX + '{"damaged":TUNAOS_BASE_CONTRACT_OK\n')
+    state.vm.observer_path.write_bytes(state.module.encode_snapshot(full_serial_snapshot()))
+    assert state.read()["seq"] == 0
+    # The damaged private stream remains fatal even when console data is valid.
+    state.vm.serial_path.write_bytes(state.module.encode_snapshot(full_serial_snapshot(1)))
+    state.vm.observer_path.write_text(state.module.PREFIX + "{damaged}\n")
+    with pytest.raises(ValueError, match="malformed"):
+        state.read()
+
+
+def test_final_evidence_uses_only_dedicated_private_channel():
+    source = (ROOT / "scripts/qualify-fork-install.py").read_text()
+    assert "vm.serial_path" not in source
+    assert "parse_lines(bounded_serial_text(vm.observer_path))" in "".join(source.split())
+
+
+def test_concurrent_console_writes_cannot_corrupt_private_observer(serial_vm):
+    state = serial_vm
+    started, stop = threading.Event(), threading.Event()
+    writes = []
+
+    def console_writer():
+        with state.vm.serial_path.open("w") as stream:
+            while not stop.is_set() and len(writes) < 2000:
+                stream.write(
+                    state.module.PREFIX + '{"interrupted":/dev/vTUNAOS_BASE_CONTRACT_OK\nda3\n'
+                )
+                stream.flush()
+                writes.append(1)
+                started.set()
+
+    writer = threading.Thread(target=console_writer, daemon=True)
+    writer.start()
+    try:
+        assert started.wait(3)
+        with state.vm.observer_path.open("w") as stream:
+            for seq in range(10):
+                stream.write(state.module.encode_snapshot(full_serial_snapshot(seq)).decode())
+                stream.flush()
+                assert state.read()["seq"] == seq
+        assert writes
+    finally:
+        stop.set()
+        writer.join(timeout=3)
+    assert not writer.is_alive()

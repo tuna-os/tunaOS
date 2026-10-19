@@ -542,7 +542,7 @@ def test_nonroot_refused_before_touching_serial(monkeypatch):
 
 def test_main_only_writes_serial_and_stops_by_deadline(monkeypatch):
     clock = [0.0]
-    writes, opens, closes, sleeps = [], [], [], []
+    writes, closes, sleeps = [], [], []
     monkeypatch.setattr(OBSERVER.time, "monotonic", lambda: clock[0])
 
     def sleep(seconds):
@@ -551,8 +551,7 @@ def test_main_only_writes_serial_and_stops_by_deadline(monkeypatch):
 
     monkeypatch.setattr(OBSERVER.time, "sleep", sleep)
     monkeypatch.setattr(OBSERVER.os, "geteuid", lambda: 0)
-    monkeypatch.setattr(OBSERVER.os, "open", lambda path, flags: opens.append((path, flags)) or 9)
-    monkeypatch.setattr(OBSERVER.os, "fstat", lambda fd: SimpleNamespace(st_mode=0o020600))
+    monkeypatch.setattr(OBSERVER, "open_observer_port", lambda: 9)
     monkeypatch.setattr(OBSERVER.os, "close", closes.append)
 
     class FakeObserver:
@@ -569,8 +568,7 @@ def test_main_only_writes_serial_and_stops_by_deadline(monkeypatch):
     assert OBSERVER.main(["--duration", "5"]) == 0
     assert [OBSERVER.latest(row.decode())["seq"] for row in writes] == [0, 1, 2]
     assert sleeps == [2, 2, 1] and clock[0] == 5
-    assert len(opens) == 1 and opens[0][0] == "/dev/ttyS0"
-    assert opens[0][1] & os.O_NONBLOCK and opens[0][1] & os.O_NOFOLLOW
+    assert OBSERVER.PORT_NAME == "org.tunaos.fork-observer"
     assert closes == [9]
 
 
@@ -969,3 +967,185 @@ def test_real_loginctl_property_filter_against_private_bus():
         process.wait(timeout=5)
         process.stdout.close()
         process.stderr.close()
+
+
+@pytest.fixture
+def private_port(monkeypatch):
+    state = SimpleNamespace(
+        target="../vport0p1",
+        name=OBSERVER.PORT_NAME,
+        device_number="0:3",
+        opens=[],
+        closes=[],
+        expected=SimpleNamespace(st_mode=0o020600, st_dev=1, st_ino=2, st_rdev=3),
+    )
+    state.actual = copy.copy(state.expected)
+    fake_os = SimpleNamespace(**vars(os))
+
+    def readlink(path):
+        assert path == OBSERVER.PORT_PATH
+        if state.target is None:
+            raise FileNotFoundError
+        return state.target
+
+    def read_name(path, limit):
+        if path == Path("/sys/class/virtio-ports/vport0p1/dev"):
+            assert limit == 64
+            return state.device_number
+        assert path == Path("/sys/class/virtio-ports/vport0p1/name") and limit == 128
+        return state.name
+
+    def stat_node(path, *, follow_symlinks):
+        assert path == Path("/dev/vport0p1") and follow_symlinks is False
+        return state.expected
+
+    fake_os.readlink = readlink
+    fake_os.stat = stat_node
+    fake_os.open = lambda path, flags: state.opens.append((path, flags)) or 9
+    fake_os.fstat = lambda fd: state.actual
+    fake_os.close = state.closes.append
+    monkeypatch.setattr(OBSERVER, "os", fake_os)
+    monkeypatch.setattr(OBSERVER, "read_text", read_name)
+    return state
+
+
+def test_private_observer_port_requires_exact_named_character_device(private_port):
+    state = private_port
+    assert OBSERVER.open_observer_port() == 9
+    assert len(state.opens) == 1 and state.opens[0][0] == Path("/dev/vport0p1")
+    flags = state.opens[0][1]
+    for flag in (os.O_WRONLY, os.O_NONBLOCK, os.O_NOCTTY, os.O_NOFOLLOW):
+        assert flags & flag
+    assert state.closes == []
+
+
+def test_missing_private_port_never_opens_console(private_port):
+    private_port.target = None
+    assert OBSERVER.open_observer_port() is None
+    assert private_port.opens == [] and private_port.closes == []
+
+
+@pytest.mark.parametrize(
+    "target",
+    [
+        "/dev/vport0p1",
+        "../../dev/vport0p1",
+        "../nested/vport0p1",
+        "../ttyS0",
+        "../vport0p1/../ttyS0",
+        "../vport0p1\n",
+        "vport0p1",
+        "../vportxp1",
+        "",
+    ],
+)
+def test_other_symlink_routes_are_refused_without_open(private_port, target):
+    private_port.target = target
+    with pytest.raises(ValueError, match="unexpected observer port target"):
+        OBSERVER.open_observer_port()
+    assert private_port.opens == []
+
+
+@pytest.mark.parametrize("mode", [0o100600, 0o120777, 0o060600, 0o010600])
+def test_private_port_target_must_be_character_device(private_port, mode):
+    private_port.expected.st_mode = mode
+    with pytest.raises(ValueError, match="not a character device"):
+        OBSERVER.open_observer_port()
+    assert private_port.opens == []
+
+
+def test_private_port_rejects_other_sysfs_name(private_port):
+    private_port.name = "org.other.port"
+    with pytest.raises(ValueError, match="name mismatch"):
+        OBSERVER.open_observer_port()
+    assert private_port.opens == []
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("st_mode", 0o100600),
+        ("st_dev", 4),
+        ("st_ino", 5),
+        ("st_rdev", 6),
+    ],
+)
+def test_private_port_fd_is_bound_to_checked_character_device(private_port, field, value):
+    setattr(private_port.actual, field, value)
+    with pytest.raises(ValueError, match="changed while opening"):
+        OBSERVER.open_observer_port()
+    assert len(private_port.opens) == 1 and private_port.closes == [9]
+
+
+@pytest.mark.parametrize("changed", ["target", "name"])
+def test_private_port_rechecks_alias_and_name_after_open(private_port, changed):
+    state = private_port
+
+    def replace(path, flags):
+        state.opens.append((path, flags))
+        setattr(state, changed, "../vport0p2" if changed == "target" else "other-port")
+        return 9
+
+    OBSERVER.os.open = replace
+    with pytest.raises(ValueError, match="changed while opening"):
+        OBSERVER.open_observer_port()
+    assert state.closes == [9]
+
+
+@pytest.mark.parametrize("duration,expected_wait", [(60, 30), (5, 5)])
+def test_absent_port_discovery_is_bounded_and_runs_no_collectors(
+    monkeypatch, duration, expected_wait
+):
+    clock, attempts = [0.0], []
+    monkeypatch.setattr(OBSERVER.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(
+        OBSERVER.time, "sleep", lambda delay: clock.__setitem__(0, clock[0] + delay)
+    )
+    monkeypatch.setattr(OBSERVER.os, "geteuid", lambda: 0)
+    monkeypatch.setattr(OBSERVER, "open_observer_port", lambda: attempts.append(clock[0]))
+    monkeypatch.setattr(OBSERVER, "Observer", lambda _: pytest.fail("no collectors without port"))
+    assert OBSERVER.main(["--duration", str(duration)]) == 0
+    assert clock[0] == expected_wait and len(attempts) == expected_wait
+
+
+def test_private_port_udev_delay_consumes_original_duration_budget(monkeypatch):
+    clock, attempts, writes = [0.0], [], []
+    monkeypatch.setattr(OBSERVER.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(
+        OBSERVER.time, "sleep", lambda delay: clock.__setitem__(0, clock[0] + delay)
+    )
+    monkeypatch.setattr(OBSERVER.os, "geteuid", lambda: 0)
+    monkeypatch.setattr(OBSERVER.os, "close", lambda _: None)
+
+    def port():
+        attempts.append(clock[0])
+        return 9 if clock[0] >= 3 else None
+
+    monkeypatch.setattr(OBSERVER, "open_observer_port", port)
+    monkeypatch.setattr(OBSERVER, "Observer", lambda end: SimpleNamespace(snapshot=snapshot))
+    monkeypatch.setattr(OBSERVER, "write_serial", lambda *args: writes.append(args) or True)
+    assert OBSERVER.main(["--duration", "5"]) == 0
+    assert attempts == [0, 1, 2, 3] and clock[0] == 5
+    assert len(writes) == 1 and writes[0][2] == 5
+
+
+@pytest.mark.parametrize("device_number", ["0:4", "1:3", "bad", "0:3\n", "0:03:4"])
+def test_private_port_character_number_must_match_sysfs(private_port, device_number):
+    private_port.device_number = device_number
+    with pytest.raises(ValueError, match="sysfs"):
+        OBSERVER.open_observer_port()
+    assert private_port.opens == []
+
+
+def test_private_port_sysfs_device_number_rechecked_after_open(private_port):
+    state = private_port
+
+    def replace(path, flags):
+        state.opens.append((path, flags))
+        state.device_number = "0:4"
+        return 9
+
+    OBSERVER.os.open = replace
+    with pytest.raises(ValueError, match="changed while opening"):
+        OBSERVER.open_observer_port()
+    assert state.closes == [9]

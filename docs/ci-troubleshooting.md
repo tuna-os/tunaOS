@@ -1858,3 +1858,20 @@ A failed login now saves `*-login-failed.png` and a failed `*-login.json`
 with bounded, validated before/last login facts. The report excludes post-input OCR, keyboard
 input, exception text and arbitrary observer fields. A screenshot
 failure cannot change the login verdict.
+
+### Fork observer corrupts a boot-contract console marker
+
+[Run 39246281273](https://github.com/tuna-os/tunaOS/actions/runs/39246281273)
+failed the original BASE check on Yellowfin before installation.
+The BASE marker interrupted a JSON record on `/dev/ttyS0`.
+The shared console could not keep these two writes separate.
+
+The observer now uses only the `org.tunaos.fork-observer` virtio port.
+It checks the device alias, sysfs name, device number and open descriptor.
+It waits up to 30 seconds for the port, within its total time limit.
+If the port is absent, it exits without output. Original Corral boots have no port.
+The reader uses only the private file for this channel, with no console fallback.
+
+Tests write to both channels at the same time. Noise on the console does not change the
+observer file. Corrupt JSON in that file still fails. The BASE parser stays strict.
+A new native run must pass both the BASE check and observation through the private port.

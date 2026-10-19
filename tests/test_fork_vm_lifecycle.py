@@ -202,3 +202,34 @@ def test_qemu_stderr_diagnostics_are_bounded_and_separate_from_serial(disks):
     assert len(vm.receipt['qemu_stderr_tail']) == 8192
     assert vm.receipt['qemu_stderr_tail'].endswith('QEMU failure')
     assert 'private guest' not in vm.receipt['qemu_stderr_tail']
+
+
+@pytest.mark.parametrize("phase", ["source", "target"])
+def test_observer_channel_is_separate_from_console(disks, phase):
+    private, source, target = disks
+    vm = make(private, phase, source if phase == "source" else None, target,
+              23456 if phase == "source" else None)
+    args = vm.command()
+    channels = [args[i + 1] for i, arg in enumerate(args) if arg == "-chardev"]
+    assert channels == ["file,id=serial0,path=" + str(vm.serial_path),
+                        "file,id=fork-observer,path=" + str(vm.observer_path)]
+    assert vm.observer_path != vm.serial_path
+    assert vm.observer_path.parent == vm.directory
+    assert args[args.index("-serial") + 1] == "chardev:serial0"
+    assert "virtio-serial-pci,id=fork-observer-controller" in args
+    assert "virtserialport,bus=fork-observer-controller.0,chardev=fork-observer,name=org.tunaos.fork-observer" in args
+    assert vm.receipt["observer_channel"]["shared_with_console"] is False
+
+
+def test_preexisting_observer_sink_is_rejected_before_qemu(disks, monkeypatch):
+    private, source, target = disks
+    vm = make(private, 'target', None, target)
+    victim = private / 'unrelated'
+    victim.write_bytes(b'keep')
+    vm.observer_path.symlink_to(victim)
+    def forbidden(*args, **kwargs):
+        raise AssertionError('QEMU must not start with a replaced evidence sink')
+    monkeypatch.setattr(VM.subprocess, 'Popen', forbidden)
+    with pytest.raises(FileExistsError):
+        vm.start()
+    assert victim.read_bytes() == b'keep'

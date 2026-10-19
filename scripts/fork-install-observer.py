@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Read-only serial evidence for disposable fork-install qualification canaries.
+"""Read-only private-port evidence for disposable fork-install qualification canaries.
 
 Install only in the finalized qualification image, never a production image.
 The service must run as root after multi-user.target. It creates no accounts,
 passwords, sessions, mounts, or disk state. The only write is bounded evidence
-on /dev/ttyS0. A snapshot is evidence, never installation authorization.
+on the dedicated org.tunaos.fork-observer virtio port. No console fallback.
+A snapshot is evidence, never installation authorization.
 
 Root mounts are not rewritten: composefs:/ remains composefs:/. Independently
 matched block mounts at /sysroot or /var are candidates, not an assertion that
@@ -34,6 +35,9 @@ VERSION = 2
 USER = "canary"
 INTERVAL = 2.0
 MAX_DURATION = 3600
+PORT_NAME = "org.tunaos.fork-observer"
+PORT_PATH = Path("/dev/virtio-ports") / PORT_NAME
+PORT_DISCOVERY_SECONDS = 30
 MAX_ROW = 65535
 MAX_OUTPUT = 16384
 MAX_SESSIONS = 32
@@ -868,6 +872,49 @@ def write_serial(fd, data, deadline):
     return True
 
 
+def open_observer_port():
+    """Open only the named virtio port, binding its symlink, sysfs name and fd."""
+    try:
+        target = os.readlink(PORT_PATH)
+        if not re.fullmatch(r"\.\./vport[0-9]+p[0-9]+", target):
+            raise ValueError("unexpected observer port target")
+        node = Path("/dev") / target[3:]
+        name_path = Path("/sys/class/virtio-ports") / node.name / "name"
+        if read_text(name_path, 128) != PORT_NAME:
+            raise ValueError("observer port name mismatch")
+        device_number = read_text(name_path.parent / "dev", 64)
+        if not re.fullmatch(r"[0-9]{1,10}:[0-9]{1,10}", device_number):
+            raise ValueError("invalid observer sysfs device number")
+        expected = os.stat(node, follow_symlinks=False)
+        if not stat.S_ISCHR(expected.st_mode):
+            raise ValueError("observer port is not a character device")
+        if (os.major(expected.st_rdev), os.minor(expected.st_rdev)) != tuple(
+            int(part) for part in device_number.split(":")
+        ):
+            raise ValueError("observer character device differs from sysfs")
+        fd = os.open(node, os.O_WRONLY | os.O_NONBLOCK | os.O_NOCTTY | os.O_NOFOLLOW)
+    except FileNotFoundError:
+        return None  # Normal in original/Corral boots which have no private port.
+    bound = False
+    try:
+        actual = os.fstat(fd)
+        if (
+            not stat.S_ISCHR(actual.st_mode)
+            or any(
+                getattr(actual, k) != getattr(expected, k) for k in ("st_dev", "st_ino", "st_rdev")
+            )
+            or os.readlink(PORT_PATH) != target
+            or read_text(name_path, 128) != PORT_NAME
+            or read_text(name_path.parent / "dev", 64) != device_number
+        ):
+            raise ValueError("observer port changed while opening")
+        bound = True
+        return fd
+    finally:
+        if not bound:
+            os.close(fd)
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--duration", type=int, default=MAX_DURATION)
@@ -876,10 +923,16 @@ def main(argv=None):
         parser.error("requires root and a duration between 1 and 3600 seconds")
     deadline = time.monotonic() + args.duration
     try:
-        fd = os.open("/dev/ttyS0", os.O_WRONLY | os.O_NONBLOCK | os.O_NOCTTY | os.O_NOFOLLOW)
+        fd = None
+        discover_until = min(deadline, time.monotonic() + PORT_DISCOVERY_SECONDS)
+        while time.monotonic() < discover_until:
+            fd = open_observer_port()
+            if fd is not None:
+                break
+            time.sleep(min(1, max(0, discover_until - time.monotonic())))
+        if fd is None:
+            return 0  # Do not emit records to the shared boot console.
         try:
-            if not stat.S_ISCHR(os.fstat(fd).st_mode):
-                return 2
             observer = Observer(deadline)
             seq, next_sample = 0, time.monotonic()
             while time.monotonic() < deadline:

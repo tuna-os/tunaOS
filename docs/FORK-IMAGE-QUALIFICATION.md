@@ -128,7 +128,8 @@ runner. This step does not launch the installer or write a target disk.
 ## Full test-disk install
 
 The canary can build with `--installed-proof-observer`. This adds a read-only
-serial probe for one hour. It is absent from the default build path.
+probe for one hour on a named virtio port. It does not use the boot console.
+It is absent from the default build path.
 The full install helper uses the exact OCI image from local storage and one new 64 GiB disk.
 It checks the disk's file identity, serial, size and blank state before Install.
 

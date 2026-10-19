@@ -997,9 +997,9 @@ def serial_observer(vm, module):
         deadline = time.monotonic() + (480 if boot_id is None else 30)
         while time.monotonic() < deadline:
             if vm.process.poll() is not None:
-                raise ValueError("guest exited before fresh serial evidence")
-            if vm.serial_path.exists():
-                text = bounded_serial_text(vm.serial_path)
+                raise ValueError("guest exited before fresh private-port evidence")
+            if vm.observer_path.exists():
+                text = bounded_serial_text(vm.observer_path)
                 # Ignore only an unfinished final write. Malformed complete rows
                 # are fatal, and latest() never falls back to an earlier boot.
                 text = text[: text.rfind("\n") + 1]
@@ -1013,7 +1013,7 @@ def serial_observer(vm, module):
                         boot_id, last_seq = value["boot_id"], value["seq"]
                         return value
             time.sleep(1)
-        raise TimeoutError("no fresh bounded target observer evidence")
+        raise TimeoutError("no fresh bounded private-port observer evidence")
 
     return read
 
@@ -1660,8 +1660,10 @@ def main():
                     try:
                         vm.close()
                         report[vm.phase + "_lifecycle"] = vm.receipt
-                        if vm.serial_path.exists():
-                            rows = observer_module.parse_lines(bounded_serial_text(vm.serial_path))
+                        if vm.observer_path.exists():
+                            rows = observer_module.parse_lines(
+                                bounded_serial_text(vm.observer_path)
+                            )
                             # Only schema-validated nonsecret observer records leave
                             # private storage; raw console logs are never uploaded.
                             (out / (vm.phase + "-observations.json")).write_text(

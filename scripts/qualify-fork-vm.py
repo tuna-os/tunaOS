@@ -83,6 +83,7 @@ class VM:
         self.directory.mkdir(mode=0o700)
         self.qmp_path = self.directory / 'qmp.sock'
         self.serial_path = self.directory / 'serial.log'
+        self.observer_path = self.directory / 'observer.jsonl'
         self.process = None
         self.log = None
         self.ssh_port = ssh_port
@@ -130,6 +131,9 @@ class VM:
                 '-nodefaults', '-no-reboot', '-display', 'none', '-vga', 'virtio',
                 '-qmp', 'unix:' + str(self.qmp_path) + ',server=on,wait=off',
                 '-chardev', 'file,id=serial0,path=' + str(self.serial_path), '-serial', 'chardev:serial0',
+                '-chardev', 'file,id=fork-observer,path=' + str(self.observer_path),
+                '-device', 'virtio-serial-pci,id=fork-observer-controller',
+                '-device', 'virtserialport,bus=fork-observer-controller.0,chardev=fork-observer,name=org.tunaos.fork-observer',
                 '-device', 'qemu-xhci,id=xhci', '-device', 'usb-tablet,bus=xhci.0', '-device', 'virtio-rng-pci']
         for name, path in self.firmware.items():
             args += ['-drive', 'if=pflash,format=raw,id=' + name + ',readonly=' + ('on' if name == 'firmware-code' else 'off') + ',file=' + path]
@@ -145,6 +149,7 @@ class VM:
                      '-device', 'virtio-net-pci,netdev=net0']
         else:
             args += ['-nic', 'none']
+        self.receipt['observer_channel'] = {'transport': 'virtio-serial', 'port': 'org.tunaos.fork-observer', 'shared_with_console': False}
         self.receipt['accelerator'] = accelerator
         return args
 
@@ -157,6 +162,11 @@ class VM:
             DISK.validate_image_info(info, spec['path'], expected_size=DISK.TARGET_BYTES if spec is self.target_spec else None)
         self.receipt['disk_sha256_before'] = {path: digest(path) for path in self.identities}
         args = self.command()
+        # Both character backends stay inside the exclusive private VM directory.
+        # Their separate files prevent kernel/getty readiness output from corrupting JSON.
+        for path in (self.serial_path, self.observer_path):
+            fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+            os.close(fd)
         self.log = (self.directory / 'qemu.log').open('xb')
         self.process = subprocess.Popen(args, stdin=subprocess.DEVNULL, stdout=self.log, stderr=self.log, start_new_session=True)
         self.receipt['pid'] = self.process.pid
