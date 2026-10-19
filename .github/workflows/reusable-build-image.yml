@@ -444,6 +444,24 @@ jobs:
           echo "remote_image_digest=${REMOTE_IMAGE_DIGEST}" >> $GITHUB_OUTPUT
           echo "digest=${IMAGE_DIGEST}" >> $GITHUB_OUTPUT
 
+      - name: Verify bootc-installable layers
+        if: ${{ inputs.publish }}
+        env:
+          REMOTE_IMAGE_DIGEST: ${{ steps.push.outputs.remote_image_digest }}
+          IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
+          IMAGE_NAME: ${{ env.IMAGE_NAME }}
+        run: |
+          # A LABEL-only (or otherwise empty) stage emits an empty tar layer
+          # that bootc install rejects ("Truncated tar archive",
+          # tuna-os/tunaOS#3378) while podman stays green. Blocking: an
+          # uninstallable published image is not shippable.
+          command -v zstd >/dev/null || sudo apt-get install -y -qq zstd
+          [[ "$REMOTE_IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+            echo "::error::push returned invalid digest: ${REMOTE_IMAGE_DIGEST}"
+            exit 1
+          }
+          scripts/check-bootc-installable-layers \
+            "${IMAGE_REGISTRY}/${IMAGE_NAME}@${REMOTE_IMAGE_DIGEST}"
       - name: Verify pushed layer metadata
         if: ${{ inputs.publish }}
         env:
