@@ -288,3 +288,13 @@ def test_preview_build_scrubs_input_overrides_secrets_and_shell_hooks(fork, tmp_
     assert handed_off["YQ"] == "/tmp/explicit-host-yq"
     for key, value in cell["environment"].items():
         assert handed_off[key] == value
+
+
+def test_apt_typed_repository_only_routes_to_apt():
+    repo = {"type": "apt", "id": "tools", "url": "https://example.org/apt", "key_url": "https://example.org/key.asc",
+            "key_sha256": "a" * 64, "suites": ["noble"], "components": ["main"]}
+    packages = {"repositories": [repo], "remove": [], "add": [], "optional": []}
+    MODULE.validate_packages(packages, "apt")
+    for manager in ("dnf", "zypper", "pacman", "emerge"):
+        with pytest.raises(MODULE.ConfigError):
+            MODULE.validate_packages(packages, manager)

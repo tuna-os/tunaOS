@@ -84,7 +84,8 @@ A layer accepts only `branding` and `packages`:
   paths, not image formats. Phase 2 must validate format, size and asset receipts.
 - `packages`: optional `add`, `remove`, `optional` lists of unique nonempty
   strings and `repositories`, a list of objects with exactly `id`, `url`,
-  `key_url`. URLs need HTTPS. No unsigned repository switch. These are native
+  `key_url`. The later [APT adapter](../FORK-APT-REPOSITORIES.md) adds an explicit
+  `type: apt` with mandatory `suites`, `components` and `key_sha256`. URLs need HTTPS. No unsigned repository switch. These are native
   package names, not portable cross-family aliases. Scope them to the relevant
   variant. The tool runs no package shell and makes no claim about package availability.
 

@@ -34,6 +34,7 @@ _tunaos_fork_branding_schema() {
 		def text: type == "string" and length > 0 and (test("[[:cntrl:]]") | not);
 		def https: text and test("^https://[^/[:space:]]+(/[^[:space:]]*)?$");
 		def strings: type == "array" and all(.[]; text) and (length == (unique | length));
+		.[0].package_manager as $manager |
 		length == 1 and (.[0] | exact(["schema_version", "variant", "flavor", "platform", "package_manager", "intent", "sources", "assets", "image"])
 		and .schema_version == 1
 		and (.image | exact(["registry", "namespace"])
@@ -50,7 +51,13 @@ _tunaos_fork_branding_schema() {
 		and (.intent.packages | exact(["add", "remove", "optional", "repositories"]))
 		and (.intent.packages | (.add | strings) and (.remove | strings) and (.optional | strings))
 		and (.intent.packages.repositories | type == "array" and all(.[];
-			exact(["id", "url", "key_url"]) and (.id | text) and (.url | https) and (.key_url | https)))
+			(.id | text) and (.url | https) and (.key_url | https) and
+			(if .type == "apt" then
+				$manager == "apt" and exact(["id", "url", "key_url", "type", "suites", "components", "key_sha256"]) and
+				(.key_sha256 | type == "string" and test("^[a-f0-9]{64}$\\z")) and
+				([.suites, .components] | all(.[]; strings and length > 0 and
+					all(.[]; test("^[a-z0-9][a-z0-9+._-]*$\\z"))))
+			else exact(["id", "url", "key_url"]) end)))
 		and (.assets | subset(["wallpaper"]))
 		and ((.assets | has("wallpaper")) == (.intent.branding | has("wallpaper")))
 		and (if .assets | has("wallpaper") then .assets.wallpaper |

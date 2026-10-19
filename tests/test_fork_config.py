@@ -304,3 +304,18 @@ def test_receipt_detects_symlink_target_changes_and_source_deletion(tmp_path):
     assert before["sha256"] != after["sha256"]
     source.unlink()
     assert MODULE.source_receipt(tmp_path)["sha256"] != after["sha256"]
+
+
+def test_apt_repository_schema_and_inherited_identity(tmp_path):
+    repo = {"type": "apt", "id": "tools", "url": "https://example.org/apt", "key_url": "https://example.org/key.asc",
+            "key_sha256": "a" * 64, "suites": ["noble", "noble-updates"], "components": ["main"]}
+    layer = {"packages": {"repositories": [repo]}}
+    MODULE.validate_layer(layer, "global", tmp_path)
+    assert MODULE.merge_layers([layer, layer])["packages"]["repositories"] == [repo]
+    for field, value in (("suites", []), ("components", ["main", "main"]), ("suites", ["noble\ntrusted=yes"]),
+                         ("key_sha256", "invalid"), ("type", "portage"), ("key_url", "http://example.org/key")):
+        altered = {"packages": {"repositories": [dict(repo, **{field: value})]}}
+        with pytest.raises(MODULE.ConfigError):
+            MODULE.validate_layer(altered, "global", tmp_path)
+    with pytest.raises(MODULE.ConfigError, match="conflicting inherited"):
+        MODULE.merge_layers([layer, {"packages": {"repositories": [dict(repo, suites=["trixie"])]}}])

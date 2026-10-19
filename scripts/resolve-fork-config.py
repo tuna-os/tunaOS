@@ -116,11 +116,22 @@ def validate_layer(value, where, config_dir):
                 continue
             ids = set()
             for repo in vals:
-                mapping(repo, ("id", "url", "key_url"), where + ".repositories", ("id", "url", "key_url"))
-                for field, val in repo.items():
+                fields = ("id", "url", "key_url")
+                if isinstance(repo, dict) and repo.get("type") == "apt":
+                    fields += ("type", "suites", "components", "key_sha256")
+                mapping(repo, fields, where + ".repositories", fields)
+                for field in ("id", "url", "key_url"):
+                    val = repo[field]
                     string(val, where + ".repositories." + field)
                     if field != "id" and not re.fullmatch(r"https://[^\s/]+(?:/[^\s]*)?", val):
                         raise ConfigError(f"{where}.repositories.{field}: expected an HTTPS URL")
+                if repo.get("type") == "apt":
+                    for field in ("suites", "components"):
+                        strings(repo[field], where + ".repositories." + field)
+                        if any(not re.fullmatch(r"[a-z0-9][a-z0-9+._-]*", v) for v in repo[field]):
+                            raise ConfigError(f"{where}.repositories.{field}: expected literal apt tokens")
+                    if not isinstance(repo["key_sha256"], str) or not re.fullmatch(r"[0-9a-f]{64}", repo["key_sha256"]):
+                        raise ConfigError(f"{where}.repositories.key_sha256: expected lowercase SHA256")
                 if repo["id"] in ids:
                     raise ConfigError(f"{where}: duplicate repository id {repo['id']}")
                 ids.add(repo["id"])

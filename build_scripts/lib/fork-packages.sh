@@ -10,24 +10,49 @@ _tunaos_fork_packages_error() {
 	return 1
 }
 
-_tunaos_fork_package_install() (
-	# apt can resolve an addition by removing installed packages, even with
-	# no explicit removal intent. Protect both install attempts in lib.sh.
-	# A subshell keeps this override out of all later stock package calls.
+_tunaos_fork_package_refresh() (
 	if [[ "$PKG_MGR" == apt ]]; then
-		# pkg_install in lib.sh calls this override indirectly.
 		# shellcheck disable=SC2329
 		apt-get() {
-			if [[ "${1:-}" == install ]]; then
-				command apt-get --no-remove "$@"
-			else
-				command apt-get "$@"
-			fi
+			command apt-get -o APT::Update::Error-Mode=any -o Acquire::AllowInsecureRepositories=false \
+				-o Acquire::AllowDowngradeToInsecureRepositories=false "$@"
 		}
 	fi
-	# Other families retain their existing solver flags. Command dispatch
-	# tests do not qualify conflict/replacement behavior in a built image.
-	pkg_install "$@"
+	pkg_refresh
+)
+
+_tunaos_fork_package_install() (
+	if [[ "$PKG_MGR" == apt ]]; then
+		local refresh_failed=0 install_failed=0
+		# Legacy pkg_install does not propagate its initial update failure.
+		# A scoped guard prevents every install/retry after a failed refresh.
+		# shellcheck disable=SC2329
+		apt-get() {
+			if [[ "${1:-}" == update ]]; then
+				command apt-get -o APT::Update::Error-Mode=any -o Acquire::AllowInsecureRepositories=false \
+					-o Acquire::AllowDowngradeToInsecureRepositories=false "$@" || {
+					refresh_failed=1
+					return 1
+				}
+			elif [[ "${1:-}" == install ]]; then
+				((refresh_failed == 0 && install_failed == 0)) || return 1
+				command apt-get --no-remove -o APT::Get::AllowUnauthenticated=false "$@" || {
+					install_failed=1
+					return 1
+				}
+			else
+				return 1
+			fi
+		}
+		# Never inherit lib.sh forced dependency recovery for fork intent.
+		# shellcheck disable=SC2329
+		dpkg() { return 1; }
+	fi
+	local status=0
+	pkg_install "$@" || status=$?
+	# Repository verification failures are fatal even for optional packages.
+	if [[ "$PKG_MGR" == apt ]] && ((refresh_failed != 0)); then return 78; fi
+	return "$status"
 )
 
 _tunaos_validate_fork_packages() {
@@ -73,11 +98,21 @@ _tunaos_validate_fork_packages() {
 			(.add | names) and (.optional | names) and (.remove | names) and
 			([.add[], .optional[], .remove[]] | length == (unique | length)) and
 			(.repositories | type == "array" and all(.[];
-				type == "object" and keys == ["id", "key_url", "url"] and
-				(.id | token) and (.url | https) and (.key_url | https)) and
+				type == "object" and (.id | token) and (.url | https) and (.key_url | https) and
+				(if .type == "apt" then
+					$manager == "apt" and keys == ["components", "id", "key_sha256", "key_url", "suites", "type", "url"] and
+					(.key_sha256 | digest) and
+					([.suites, .components] | all(.[]; type == "array" and length > 0 and
+						length == (unique | length) and all(.[]; type == "string" and test("^[a-z0-9][a-z0-9+._-]*$\\z"))))
+				else keys == ["id", "key_url", "url"] end)) and
 				(map(.id) | length == (unique | length))))
 	' "$manifest" >/dev/null; then
 		_tunaos_fork_packages_error "invalid generated manifest or package syntax: $manifest"
+		return 1
+	fi
+
+	if [[ "$manager" == apt ]] && ! jq -e '.intent.packages.repositories | all(.[]; .type == "apt")' "$manifest" >/dev/null; then
+		_tunaos_fork_packages_error 'repositories are unsupported for apt without type, suites, components and key_sha256'
 		return 1
 	fi
 
@@ -88,7 +123,7 @@ _tunaos_validate_fork_packages() {
 		_tunaos_fork_packages_error 'removals are unsupported without protected transaction validation'
 		return 1
 	fi
-	if [[ $(jq '.intent.packages.repositories | length' "$manifest") != 0 && "$manager" != dnf && "$manager" != zypper ]]; then
+	if [[ $(jq '.intent.packages.repositories | length' "$manifest") != 0 && "$manager" != dnf && "$manager" != zypper && "$manager" != apt ]]; then
 		_tunaos_fork_packages_error "repositories are unsupported for '$manager'; v1 has no family-specific trust/source contract"
 		return 1
 	fi
@@ -158,7 +193,7 @@ tunaos_apply_fork_packages() {
 	local -a required=() optional=() optional_installed=() optional_missing=()
 	mapfile -t required < <(jq -r '.intent.packages.add[]' "$manifest")
 	mapfile -t optional < <(jq -r '.intent.packages.optional[]' "$manifest")
-	local count index repo_id repo_url key_url repo_dir repo_path content existing package
+	local count index repo_id repo_url key_url repo_dir repo_path content existing package status
 	count=$(jq '.intent.packages.repositories | length' "$manifest")
 	if ((${#required[@]} + ${#optional[@]} + count > 0)); then
 		if ! declare -F pkg_refresh >/dev/null || ! declare -F pkg_install >/dev/null; then
@@ -174,7 +209,11 @@ tunaos_apply_fork_packages() {
 	# Namespace every repository; never overwrite a legacy source. Both RPM
 	# adapters require package AND metadata signatures for this narrow opt-in.
 	# A source that lacks signed metadata must fail, not disable verification.
-	if ((count > 0)); then
+	if ((count > 0)) && [[ "$PKG_MGR" == apt ]]; then
+		# The family adapter stages all keys/files before committing any source.
+		source "$(dirname "${BASH_SOURCE[0]}")/fork-apt-repositories.sh" || return 1
+		tunaos_fork_apt_repositories "$manifest" "$root" || return 1
+	elif ((count > 0)); then
 		case "$PKG_MGR" in
 		dnf) repo_dir="${root%/}/etc/yum.repos.d" ;;
 		zypper) repo_dir="${root%/}/etc/zypp/repos.d" ;;
@@ -221,7 +260,7 @@ tunaos_apply_fork_packages() {
 				_tunaos_fork_packages_error 'signed repository metadata refresh failed'
 				return 1
 			}
-		elif ! pkg_refresh; then
+		elif ! _tunaos_fork_package_refresh; then
 			_tunaos_fork_packages_error 'repository metadata refresh failed'
 			return 1
 		fi
@@ -236,6 +275,11 @@ tunaos_apply_fork_packages() {
 		if _tunaos_fork_package_install "$package"; then
 			optional_installed+=("$package")
 		else
+			status=$?
+			if ((status == 78)); then
+				_tunaos_fork_packages_error 'repository refresh failed during optional installation'
+				return 1
+			fi
 			optional_missing+=("$package")
 			printf 'fork packages: optional package unavailable: %s\n' "$package" >&2
 		fi
