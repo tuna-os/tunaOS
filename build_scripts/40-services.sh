@@ -593,6 +593,11 @@ if [[ "${PKG_MGR:-}" == "pacman" ]] || command -v zypper &>/dev/null || command 
 		dconf update || true
 	fi
 
+	# TunaOS-owned files that collide with the common payload (ujust shell
+	# completions, uupd notification drop-in) must be re-installed after the
+	# last common COPY; install-desktop.sh repeats this for desktop stages.
+	/run/context/build_scripts/install-tunaos-overrides.sh
+
 	# systemd-resolved
 	tunaos_enable_systemd_resolved
 
@@ -600,6 +605,11 @@ if [[ "${PKG_MGR:-}" == "pacman" ]] || command -v zypper &>/dev/null || command 
 	exit 0
 fi
 # ── dnf (RPM / Universal-Blue) path continues below ───────────────────
+
+# TunaOS-owned files that collide with the common payload (ujust shell
+# completions, uupd notification drop-in); install-desktop.sh repeats this
+# after the bluefin copy for desktop stages.
+/run/context/build_scripts/install-tunaos-overrides.sh
 
 sed -i 's|uupd|& --disable-module-distrobox|' /usr/lib/systemd/system/uupd.service 2>/dev/null || true
 
