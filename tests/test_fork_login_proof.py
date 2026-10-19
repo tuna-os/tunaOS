@@ -179,7 +179,8 @@ def test_guest_observer_and_host_harness_compile():
 
 @pytest.mark.parametrize("boot_ok", [True, False])
 @pytest.mark.parametrize("cleanup_ok", [True, False])
-def test_lifecycle_cleans_credentials_and_separates_image_identity(tmp_path, monkeypatch, boot_ok, cleanup_ok):
+@pytest.mark.parametrize("installer_mode", ["skip", "pass", "fail"])
+def test_lifecycle_cleans_credentials_and_separates_image_identity(tmp_path, monkeypatch, boot_ok, cleanup_ok, installer_mode):
     """A mocked lifecycle checks report/cleanup contracts; it is not a VM pass."""
     import sys
     import yaml
@@ -196,6 +197,17 @@ def test_lifecycle_cleans_credentials_and_separates_image_identity(tmp_path, mon
     removed = False
     monkeypatch.setattr(sys, "argv", ["proof", "--image", "localhost/fork-qualification/yellowfin:gnome-linux-amd64",
                                       "--output", str(output), "--wallpaper", str(fixture)])
+    if installer_mode != "skip":
+        # Exercise opt-in lifecycle/report/cleanup with a fixture helper only.
+        # This does not run an installer or qualify a native window.
+        root = tmp_path / "fixture-root"
+        (root / "scripts").mkdir(parents=True)
+        body = 'def qualify(*args):\n    args[-1]["status"] = "passed"\n'
+        if installer_mode == "fail":
+            body += '    raise ValueError("fixture installer failure")\n'
+        (root / "scripts/qualify-fork-installer.py").write_text(body)
+        monkeypatch.setattr(PROOF, "ROOT", root)
+        sys.argv += ["--installer-artifact", str(tmp_path / "fixture.zip")]
     monkeypatch.setattr(PROOF.os, "geteuid", lambda: 0)
     monkeypatch.setattr(PROOF.shutil, "which", lambda name: None if name == "tailscale" else "/test/" + name)
     monkeypatch.setattr(PROOF.tempfile, "mkdtemp", lambda **kwargs: str(private))
@@ -258,7 +270,7 @@ def test_lifecycle_cleans_credentials_and_separates_image_identity(tmp_path, mon
 
     monkeypatch.setattr(PROOF, "run", run)
     monkeypatch.setattr(PROOF.subprocess, "run", execute)
-    assert PROOF.main() == (0 if boot_ok and cleanup_ok else 1)
+    assert PROOF.main() == (0 if boot_ok and cleanup_ok and installer_mode != "fail" else 1)
     report = json.loads((output / "login-proof.json").read_text())
     assert report["cleanup"] == ("passed" if cleanup_ok else "failed")
     assert not private.exists()
@@ -268,6 +280,10 @@ def test_lifecycle_cleans_credentials_and_separates_image_identity(tmp_path, mon
     assert not any(path.name in ("spec.yaml", "id_ed25519", "Containerfile") for path in output.rglob("*"))
     text = (output / "login-proof.json").read_text()
     assert "$6$" not in text and "private-key-fixture" not in text
+    if boot_ok and installer_mode != "skip":
+        assert report["installer_ui"] == ("passed" if installer_mode == "pass" else "failed")
+    else:
+        assert report["installer_ui"] == "not-run"
     if boot_ok:
         assert report["derived_image"]["id"] == "derived-id"
         assert report["typed_login"] == report["wallpaper_render"] == "passed"

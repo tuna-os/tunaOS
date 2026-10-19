@@ -176,6 +176,9 @@ def boot_updates(manifest, root, m):
     if not settings.has_section("Daemon"):
         settings.add_section("Daemon")
     settings.set("Daemon", "Theme", THEME)
+    # Ubuntu's plymouth-populate-initrd reads Theme only with a valid ThemeDir;
+    # otherwise it copies the update-alternatives default (usually bgrt).
+    settings.set("Daemon", "ThemeDir", "/usr/share/plymouth/themes")
     import io
     output = io.StringIO()
     settings.write(output, space_around_delimiters=False)

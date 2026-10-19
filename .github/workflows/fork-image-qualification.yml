@@ -9,9 +9,11 @@ on:
       - "scripts/qualify-fork-image.py"
       - "scripts/qualify-fork-initramfs.py"
       - "scripts/qualify-fork-login.py"
+      - "scripts/qualify-fork-installer.py"
   workflow_dispatch:
 
 permissions:
+  actions: read
   contents: read
   packages: read
 
@@ -62,7 +64,11 @@ jobs:
             sudo python3 scripts/qualify-fork-image.py --variant "$variant" --output "$RUNNER_TEMP/fork-evidence/$variant" || status=1
           done
           exit "$status"
-      - name: Verify typed GNOME login in disposable derived guests
+      - name: Download frozen installer artifact
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 scripts/qualify-fork-installer.py --download-output "$RUNNER_TEMP/installer-artifact"
+      - name: Verify typed GNOME login and installer in disposable derived guests
         run: |
           set -euo pipefail
           status=0
@@ -70,20 +76,24 @@ jobs:
             out="$RUNNER_TEMP/fork-evidence/$variant"
             sudo python3 scripts/qualify-fork-login.py \
               --image "localhost/fork-qualification/$variant:gnome-linux-amd64" \
-              --wallpaper "$out/wallpaper.jpg" --output "$out/login" || status=1
+              --wallpaper "$out/wallpaper.jpg" --output "$out/login" \
+              --installer-artifact "$RUNNER_TEMP/installer-artifact/installer-artifact.zip" || status=1
           done
           exit "$status"
       - name: Collect bounded evidence
         if: always()
         run: |
           mkdir -p fork-evidence
+          if test -f "$RUNNER_TEMP/installer-artifact/artifact-provenance.json"; then
+            cp "$RUNNER_TEMP/installer-artifact/artifact-provenance.json" fork-evidence/
+          fi
           for variant in yellowfin grouper; do
             src="$RUNNER_TEMP/fork-evidence/$variant"
             test -d "$src" || continue
             mkdir -p "fork-evidence/$variant"
             sudo cp "$src/qualification.json" "fork-evidence/$variant/" || true
             sudo cp "$src/image-inspect.json" "fork-evidence/$variant/" || true
-            sudo cp "$src/initramfs.json" "$src/greeter-config.txt" "fork-evidence/$variant/" || true
+            sudo cp "$src/initramfs.json" "$src/initramfs-diagnostics.txt" "$src/greeter-config.txt" "fork-evidence/$variant/" || true
             sudo cp "$src/fork.yaml" "fork-evidence/$variant/" || true
             sudo cp "$src/prepared/source-receipt.json" "fork-evidence/$variant/" || true
             if test -d "$src/login"; then

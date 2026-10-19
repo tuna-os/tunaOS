@@ -5,6 +5,7 @@ import hashlib
 import json
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 
 
@@ -40,8 +41,17 @@ def inspect():
             root = Path(directory)
             subprocess.run(["lsinitrd", "--unpack", str(archive)], cwd=root, check=True,
                            stdout=subprocess.DEVNULL)
+            try:
+                files = validate_payload(root)
+            except ValueError:
+                listing = subprocess.run(["lsinitrd", str(archive)], text=True, capture_output=True, check=False)
+                print("Failed initramfs payload archive: " + str(archive), file=sys.stderr)
+                for line in listing.stdout.splitlines():
+                    if "plymouth" in line or "fork-identity" in line:
+                        print(line, file=sys.stderr)
+                raise
             results.append({"archive": str(archive), "sha256": hashlib.sha256(archive.read_bytes()).hexdigest(),
-                            "files": validate_payload(root)})
+                            "files": files})
     print(json.dumps(results, indent=2))
 
 

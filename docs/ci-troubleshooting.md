@@ -1759,3 +1759,26 @@ Send its verdict to the serial device as well as the journal.
 Keep the SSH key generator in the service dependency graph.
 Do not add the same dependency to `ssh.socket`: it can cause a cycle.
 The next native test must check the keygen journal and an SSH login.
+
+
+### Installer process exists but the fork welcome screen is unproven
+
+The frozen bootc-installer source at `c037f9b7` can map `BootcRamWindow`,
+`BootcCpuWindow` or `BootcUnsupportedWindow` through the normal app entrypoint.
+A live process or a nonblank screenshot does not distinguish these windows from
+`BootcWindow`. GNOME also exports its display to the user systemd manager after
+startup; the compositor's initial process environment need not contain that socket.
+
+Use the [welcome proof](FORK-IMAGE-QUALIFICATION.md#optional-native-installer-welcome-proof) for a native test.
+It reads the existing user's session environment. It needs a new wizard map and
+the exact app commit. It also checks visible welcome/install copy and pixels from the source logo.
+If GitHub denies the frozen artifact download, report that exact HTTP status.
+Do not replace it with a source build or change token permissions to make the test run.
+
+### Ubuntu initramfs copies the wrong fork theme
+
+Ubuntu's `plymouth-populate-initrd` reads `Theme` from the config only when
+`ThemeDir` also names a valid theme directory. Without it, the tool uses
+`update-alternatives`, which can still select `bgrt`. Set both keys before
+dracut runs. Run `39193902719` exposed this with the actual archive check.
+Keep that check: files in the root image do not prove an initramfs payload.

@@ -171,10 +171,10 @@ echo TUNAOS_FORK_GREETER_DIAGNOSTICS_END
                         "/usr/libexec/tunaos/fork-identity.py", "/"], check=True)
         report["image_identity"] = "passed"
         report["initramfs_theme"] = "running"
-        initramfs = subprocess.check_output(["podman", "run", "--rm", "--pull=never", "--entrypoint", "python3",
-                                             "--volume", str(ROOT / "scripts/qualify-fork-initramfs.py") + ":/probe.py:ro",
-                                             image, "/probe.py"], text=True)
-        (out / "initramfs.json").write_text(initramfs)
+        with (out / "initramfs.json").open("w") as payload, (out / "initramfs-diagnostics.txt").open("w") as diagnostics:
+            subprocess.run(["podman", "run", "--rm", "--pull=never", "--entrypoint", "python3",
+                            "--volume", str(ROOT / "scripts/qualify-fork-initramfs.py") + ":/probe.py:ro",
+                            image, "/probe.py"], text=True, stdout=payload, stderr=diagnostics, check=True)
         report["initramfs_theme"] = "passed"
         report["greeter_profile"] = "running"
         greeter = subprocess.check_output(["podman", "run", "--rm", "--pull=never", "--entrypoint", "bash", image,

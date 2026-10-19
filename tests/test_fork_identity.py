@@ -269,6 +269,7 @@ def test_boot_assets_and_selection_before_desktop_identity(staged, tmp_path):
     assert (root / "usr/lib/os-release").read_bytes() == original
     conf = (root / "etc/plymouth/plymouthd.conf").read_text()
     assert "Theme=fork-identity" in conf
+    assert "ThemeDir=/usr/share/plymouth/themes" in conf
     theme = root / IDENTITY.THEME_DIR
     from PIL import Image
     with Image.open(theme / "splash.png") as image:
@@ -333,7 +334,7 @@ def test_early_selector_reaches_staged_payload(staged, tmp_path):
     run = subprocess.run(["bash", str(context / "build_scripts/plymouth-set-theme.sh"), "yellowfin"],
                          env={**os.environ, "TUNAOS_SYSROOT": str(root)}, capture_output=True, text=True)
     assert run.returncode == 0, run.stderr
-    assert (root / "etc/plymouth/plymouthd.conf").read_text().strip() == "[Daemon]\nTheme=fork-identity"
+    assert (root / "etc/plymouth/plymouthd.conf").read_text().strip() == "[Daemon]\nTheme=fork-identity\nThemeDir=/usr/share/plymouth/themes"
     # Same entry point remains closed to live image writes until qualification.
     run = subprocess.run(["bash", str(context / "build_scripts/plymouth-set-theme.sh"), "yellowfin"],
                          env={k: v for k, v in os.environ.items() if k != "TUNAOS_SYSROOT"}, capture_output=True, text=True)
@@ -416,3 +417,36 @@ def test_gdm_profile_rejected_before_identity_mutation(staged, tmp_path, bad):
     with pytest.raises(ValueError):
         IDENTITY.apply(manifest, root)
     assert (root / "usr/lib/os-release").read_bytes() == before
+
+
+@pytest.mark.parametrize("omit_theme_dir", [False, True])
+def test_ubuntu_populate_initrd_selects_the_generated_theme(staged, tmp_path, omit_theme_dir):
+    import configparser
+    import os
+    manifest, root, _, _ = materialize(staged, tmp_path)
+    IDENTITY.apply_boot(manifest, root)
+    path = root / "etc/plymouth/plymouthd.conf"
+    conf = configparser.ConfigParser(interpolation=None)
+    conf.optionxform = str
+    conf.read(path)
+    assert conf["Daemon"]["ThemeDir"] == "/usr/share/plymouth/themes"
+    # Remap only the fixture's root. The actual vendor selection functions
+    # below must choose fork-identity even while alternatives names bgrt.
+    if omit_theme_dir:
+        conf.remove_option("Daemon", "ThemeDir")
+    else:
+        conf["Daemon"]["ThemeDir"] = str(root / "usr/share/plymouth/themes")
+    with path.open("w") as stream:
+        conf.write(stream, space_around_delimiters=False)
+    policy = root / "usr/share/plymouth"
+    (policy / "plymouthd.defaults").write_text("[Daemon]\nTheme=bgrt\n")
+    fixture = ROOT / "tests/fixtures/plymouth/ubuntu-theme-selection.sh"
+    run = subprocess.run(
+        ["bash", "-c", 'source "$1"; set_theme_dir; printf "%s\n" "$PLYMOUTH_THEME_NAME" "$PLYMOUTH_THEME_DIR"', "test", str(fixture)],
+        env={**os.environ, "PLYMOUTH_CONFDIR": str(path.parent),
+             "PLYMOUTH_POLICYDIR": str(policy), "PLYMOUTH_DATADIR": str(root / "usr/share"),
+             "PLYMOUTH_THEME_NAME": "bgrt"}, capture_output=True, text=True,
+    )
+    assert run.returncode == 0, run.stderr
+    expected = "bgrt" if omit_theme_dir else "fork-identity"
+    assert run.stdout.splitlines() == [expected, str(root / "usr/share/plymouth/themes" / expected)]

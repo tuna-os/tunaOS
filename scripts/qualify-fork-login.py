@@ -8,6 +8,7 @@ import argparse
 import csv
 import hashlib
 import io
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -221,6 +222,7 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--wallpaper", type=Path, required=True)
     parser.add_argument("--corral", default="corral")
+    parser.add_argument("--installer-artifact", type=Path, help="opt-in frozen installer artifact ZIP; downloaded separately on host")
     args = parser.parse_args()
     admit_image(args.image)
     import yaml
@@ -242,7 +244,8 @@ def main():
     out = args.output.resolve()
     report = {"schema_version": 1, "scope": "disposable derived local canary only",
               "publishing": False, "production_image_login_qualified": False,
-              "typed_login": "not-run", "wallpaper_render": "not-run", "cleanup": "not-run"}
+              "typed_login": "not-run", "wallpaper_render": "not-run", "cleanup": "not-run",
+              "installer_ui": "not-run"}
     name = "fork-login-" + secrets.token_hex(6)
     derived = "localhost/corral-vmtest/" + name + ":latest"
     pinned = "localhost/fork-login-source/" + name + ":latest"
@@ -366,6 +369,18 @@ def main():
         report["wallpaper_render"] = "passed" if report["wallpaper_pixels"]["passed"] else "failed"
         if report["wallpaper_render"] != "passed":
             raise ValueError("the actual desktop framebuffer does not show enough canary wallpaper")
+        if args.installer_artifact:
+            report["installer_ui"] = "running"
+            spec = importlib.util.spec_from_file_location("fork_installer", ROOT / "scripts/qualify-fork-installer.py")
+            installer = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(installer)
+            # Reuse this exact authenticated desktop and cleanup boundary.
+            from types import SimpleNamespace
+            harness = SimpleNamespace(run=run, ssh_command=ssh_command, validate_login=validate_login, words=words)
+            installer.qualify(harness, raw["ssh"], private, args.installer_artifact,
+                              out, screenshot, observe, before, report["authenticated_session"]["Id"],
+                              report["source_image"]["id"], report.setdefault("installer", {}))
+            report["installer_ui"] = "passed"
     except Exception as error:
         # Exception text can include tool argv, so never put password-bearing
         # commands in argv. All input of the synthetic password stays in memory.
@@ -375,6 +390,9 @@ def main():
     finally:
         if report["typed_login"] == "running":
             report["typed_login"] = "failed"
+        if report["installer_ui"] == "running":
+            report["installer_ui"] = "failed"
+            report.setdefault("installer", {})["status"] = "failed"
         errors = []
         if qmp:
             try:
@@ -424,8 +442,11 @@ def main():
         for frame in out.glob("*.png"):
             report.setdefault("screenshots", {})[frame.name] = hashlib.sha256(frame.read_bytes()).hexdigest()
         (out / "login-proof.json").write_text(json.dumps(report, indent=2) + "\n")
-    print(json.dumps({key: report[key] for key in ("typed_login", "wallpaper_render", "cleanup")}))
-    return 0 if all(report[key] == "passed" for key in ("typed_login", "wallpaper_render", "cleanup")) else 1
+    required = ["typed_login", "wallpaper_render", "cleanup"]
+    if args.installer_artifact:
+        required.append("installer_ui")
+    print(json.dumps({key: report[key] for key in required}))
+    return 0 if all(report[key] == "passed" for key in required) else 1
 
 
 if __name__ == "__main__":
