@@ -78,20 +78,16 @@ def retained_isos(policy: dict[str, Any]) -> tuple[str, ...]:
     retained = policy.get("retained_r2_isos", [])
     if not isinstance(retained, list):
         raise PolicyError("iso_delivery.retained_r2_isos must be a list")
-
     checked: list[str] = []
     seen: set[str] = set()
+
+
     for name in retained:
         if not isinstance(name, str) or not name:
             raise PolicyError("every retained R2 ISO must be a non-empty string")
-        if (
-            name.startswith("-")
-            or "/" in name
-            or any(character in name for character in "*?[]{}")
-            or not name.endswith(".iso")
-        ):
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._+~-]*\.iso", name):
             raise PolicyError(
-                f"retained R2 ISO {name!r} must be an exact live-isos/*.iso basename"
+                f"retained R2 ISO {name!r} must be a safe single-line basename"
             )
         if name in seen:
             raise PolicyError(f"duplicate retained R2 ISO {name!r}")

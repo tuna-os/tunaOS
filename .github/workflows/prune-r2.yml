@@ -100,8 +100,8 @@ jobs:
             fi
             if ! current="$(jq -er '
               select(.schema == "TunaOSIsoResolution/v1") | .iso |
-              select(type == "string" and endswith(".iso") and
-                     (contains("/") | not))
+              select(type == "string" and
+                     test("^[A-Za-z0-9][A-Za-z0-9._+~-]*\\.iso$"))
             ' <<<"$payload")"; then
               echo "::error::Invalid resolver ${resolver}; refusing to prune"
               exit 1
