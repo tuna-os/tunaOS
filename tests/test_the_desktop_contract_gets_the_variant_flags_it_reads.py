@@ -3,15 +3,19 @@
 verify-desktop-experience.sh runs in two places with different plumbing:
 
   build time   install-desktop.sh sources build_scripts/lib.sh, which derives
-               IS_ELN / IS_HUMMINGBIRD from BASE_IMAGE. Both are set.
+               IS_ELN / IS_HUMMINGBIRD and the distro flags. All are set.
   Desktop      reusable-build-image.yml runs the same script standalone in a
-  contract     container, so nothing sources lib.sh and every flag has to be
-               passed with an explicit `-e`.
+  contract     container, so variant flags have to be passed explicitly and
+               distro flags are derived from the image's /etc/os-release.
 
 The script uses those flags to tell a packaging mistake apart from a measured
 property of an upstream compose. A flag that does not arrive silently reads as
 false, so an exemption the script is written to apply cannot fire, and a
 correctly-built image fails a check that was never meant to fail it.
+
+The invariant is the join, not either side: whatever variant flags the script
+reads, the job that runs it must pass. Distro identity is the exception because
+the standalone image itself is the authoritative source.
 
 Measured, 2026-09-11: the job passed IS_HUMMINGBIRD and not IS_ELN, so wahoo's
 ELN codec gap -- documented in the README ("no codecs"), implemented in the
@@ -41,10 +45,11 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 CONTRACT = ROOT / "build_scripts" / "checks" / "verify-desktop-experience.sh"
 WORKFLOW = ROOT / ".github" / "workflows" / "reusable-build-image.yml"
 
-# Flags the script reads that the job is NOT expected to pass, each with the
-# reason. Anything else the script starts branching on has to be plumbed, which
-# is the point of this file.
-#
+# Flags the script reads that the standalone job must receive explicitly, each
+# with the reason. Distro identity is derived from the image's os-release
+# because the standalone container does not mount build_scripts/lib.sh.
+# Anything else the script starts branching on has to be plumbed.
+
 # IS_FEDORA is deliberately here rather than fixed alongside IS_ELN, because
 # passing it would change nothing today. Its one use is
 #
@@ -64,6 +69,9 @@ WORKFLOW = ROOT / ".github" / "workflows" / "reusable-build-image.yml"
 # silently.
 INERT_IN_THIS_JOB = {"IS_FEDORA"}
 
+# The image itself is authoritative for these flags in standalone callers.
+DERIVED_IN_CONTAINER = {"IS_DEBIAN", "IS_UBUNTU"}
+
 # Not per-variant switches at all: a test-harness path override and an
 # allowlist path used by a different script.
 NOT_VARIANT_FLAGS = {"TUNAOS_VERIFY_ROOT", "TUNAOS_WISHLIST_ALLOWLIST"}
@@ -76,7 +84,9 @@ def _flags_the_script_reads() -> set[str]:
     return {
         name
         for name in re.findall(r"\$\{(IS_[A-Z0-9_]+)(?::-[^}]*)?\}", text)
-        if name not in NOT_VARIANT_FLAGS and name not in INERT_IN_THIS_JOB
+        if name not in NOT_VARIANT_FLAGS
+        and name not in INERT_IN_THIS_JOB
+        and name not in DERIVED_IN_CONTAINER
     }
 
 
@@ -102,6 +112,13 @@ def test_the_script_actually_branches_on_variant_flags():
     assert "IS_ELN" in flags and "IS_HUMMINGBIRD" in flags, (
         f"expected the two known variant flags among {sorted(flags)}"
     )
+
+def test_standalone_contract_derives_distro_flags_from_os_release():
+    text = CONTRACT.read_text(encoding="utf-8")
+    assert "detect_standalone_distro_flags" in text
+    assert "[[ -r /etc/os-release ]]" in text
+    assert 'ID" == ubuntu' in text
+    assert 'ID" == debian' in text
 
 
 @pytest.mark.parametrize("flag", sorted(_flags_the_script_reads()))
