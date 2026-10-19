@@ -30,6 +30,9 @@ import threading
 from pathlib import Path
 
 import pytest
+import yaml
+
+
 
 
 
@@ -279,3 +282,49 @@ def test_final_stage_writes_original_published_flavor(tmp_path):
         "vendor": "tuna-os",
         "revision": "deadbeef",
     }
+
+def test_workflow_layer_gate_propagates_an_empty_layer_failure(tmp_path):
+    """The publish job must fail on the immutable pushed manifest digest."""
+    workflow = yaml.safe_load(
+        (ROOT / ".github/workflows/reusable-build-image.yml").read_text()
+    )
+    step = next(
+        step
+        for job in workflow["jobs"].values()
+        for step in job.get("steps", [])
+        if step.get("name") == "Verify bootc-installable layers"
+    )
+    scripts = tmp_path / "scripts"
+    scripts.mkdir()
+    gate = scripts / "check-bootc-installable-layers"
+    gate.write_text(
+        "#!/bin/sh\n"
+        'printf "%s\\n" "$*" > "$GATE_ARGS"\n'
+        'printf "%s\\n" "holds no tar entries" >&2\n'
+        "exit 1\n",
+        encoding="utf-8",
+    )
+    gate.chmod(0o755)
+    zstd = tmp_path / "zstd"
+    zstd.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    zstd.chmod(0o755)
+    digest = "sha256:" + "b" * 64
+    result = subprocess.run(
+        ["bash", "-euo", "pipefail", "-c", step["run"]],
+        cwd=tmp_path,
+        env=os.environ
+        | {
+            "PATH": f"{tmp_path}:{os.environ['PATH']}",
+            "REMOTE_IMAGE_DIGEST": digest,
+            "IMAGE_REGISTRY": "ghcr.io/tuna-os",
+            "IMAGE_NAME": "marlin",
+            "GATE_ARGS": str(tmp_path / "gate-args"),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode != 0
+    assert (tmp_path / "gate-args").read_text().strip() == (
+        f"ghcr.io/tuna-os/marlin@{digest}"
+    )
