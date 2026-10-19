@@ -325,9 +325,9 @@ must describe independently measured archives; this function does not fetch them
                       (expected_context, "context"), (observed_transport, "transport")):
         _same(validate_document(doc), role, "document role")
     context = expected_context
-    identity = _media_identity(media, context["media"]["sizeBytes"])
-    for doc in (browser, native, context):
-        _same(doc["media"], identity, "media")
+    # Reject cheap metadata mismatches before reading potentially multi-GB media.
+    for doc in (browser, native):
+        _same(doc["media"], context["media"], "media")
     for key, receipt, raw in (("browserProducer", browser, browser_bytes),
                               ("nativeProducer", native, native_bytes)):
         _same(observed_transport[key], context[key], key + ".transport")
@@ -339,4 +339,6 @@ must describe independently measured archives; this function does not fetch them
     _same(native["harness"], context["harness"], "native.harness")
     for mode in ("plain", "encrypted"):
         _same(native["observed"][mode]["sourceDigest"], context["input_descriptors"]["source"]["digest"], mode + ".sourceDigest")
+    identity = _media_identity(media, context["media"]["sizeBytes"])
+    _same(identity, context["media"], "media")
     return {"consistency_valid": True, "authentication": "not_authenticated"}

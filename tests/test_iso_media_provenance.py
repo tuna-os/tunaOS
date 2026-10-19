@@ -57,6 +57,26 @@ def check(bundle):
                                     bundle["media"], bundle["context"], bundle["transport"])
 
 
+class CountingMedia(io.BytesIO):
+    def __init__(self, data):
+        super().__init__(data)
+        self.read_calls = 0
+        self.bytes_read = 0
+
+    def read(self, size=-1):
+        self.read_calls += 1
+        chunk = super().read(size)
+        self.bytes_read += len(chunk)
+        return chunk
+
+
+@pytest.fixture
+def counting_media(bundle):
+    stream = CountingMedia(bundle["media"])
+    bundle["media"] = stream
+    return stream
+
+
 def test_portable_positive_is_bound_to_real_fixture_bytes(bundle):
     identity = {"sha256": digest(bundle["media"]), "sizeBytes": len(bundle["media"])}
     assert len(bundle["media"]) == 32
@@ -323,6 +343,109 @@ def test_legacy_reader_does_not_guess_unrecognized_versions(legacy):
 def test_legacy_reader_still_rejects_nonfinite_json():
     with pytest.raises(MODULE.ContractError):
         MODULE.inspect_legacy(b'{"schema":"QualificationEvidence/v1","value":1e999}')
+
+
+@pytest.mark.parametrize("producer", ["browserProducer", "nativeProducer"])
+@pytest.mark.parametrize("section,field,value", [
+    ("run", "runId", 999),
+    ("run", "runAttempt", 99),
+    ("artifact", "id", 999),
+    ("artifact", "archiveSha256", "sha256:" + "9" * 64),
+])
+def test_transport_mismatch_rejected_without_reading_media(
+        bundle, counting_media, producer, section, field, value):
+    bundle["transport"][producer][section][field] = value
+    assert MODULE.validate_document(bundle["transport"]) == "transport"
+    with pytest.raises(MODULE.ContractError, match=producer + r"\.transport"):
+        check(bundle)
+    assert (counting_media.read_calls, counting_media.bytes_read) == (0, 0)
+
+
+@pytest.mark.parametrize("role", ["browser", "native"])
+def test_receipt_hash_mismatch_rejected_without_reading_media(bundle, counting_media, role):
+    bundle[role + "_bytes"] += b"\n"
+    with pytest.raises(MODULE.ContractError, match=role + r"Producer\.receiptSha256"):
+        check(bundle)
+    assert (counting_media.read_calls, counting_media.bytes_read) == (0, 0)
+
+
+@pytest.mark.parametrize("role", ["browser", "native"])
+def test_declared_run_mismatch_rejected_without_reading_media(bundle, counting_media, role):
+    bundle[role]["run"]["runId"] = 999
+    refresh_receipts(bundle)
+    with pytest.raises(MODULE.ContractError, match=role + r"Producer\.run"):
+        check(bundle)
+    assert (counting_media.read_calls, counting_media.bytes_read) == (0, 0)
+
+
+def test_browser_receipt_link_mismatch_rejected_without_reading_media(bundle, counting_media):
+    bundle["native"]["browserReceiptSha256"] = "sha256:" + "9" * 64
+    refresh_receipts(bundle, bind_browser=False)
+    with pytest.raises(MODULE.ContractError, match=r"native\.browserReceiptSha256"):
+        check(bundle)
+    assert (counting_media.read_calls, counting_media.bytes_read) == (0, 0)
+
+
+@pytest.mark.parametrize("path,diagnostic", [
+    (("input_descriptors", "engine", "sha256"), "input_descriptors"),
+    (("input_descriptors", "installer", "deployedCommit"), "input_descriptors"),
+    (("input_descriptors", "overlay", "digest"), "input_descriptors"),
+    (("build_request_sha256",), "build_request_sha256"),
+    (("recipe_sha256",), "recipe_sha256"),
+    (("config_sha256",), "config_sha256"),
+    (("harness", "qemuSha256"), "harness"),
+])
+def test_expected_input_mismatch_rejected_without_reading_media(
+        bundle, counting_media, path, diagnostic):
+    target = bundle["context"]
+    for key in path[:-1]:
+        target = target[key]
+    target[path[-1]] = "sha256:" + "9" * 64
+    assert MODULE.validate_document(bundle["context"]) == "context"
+    with pytest.raises(MODULE.ContractError, match=diagnostic):
+        check(bundle)
+    assert (counting_media.read_calls, counting_media.bytes_read) == (0, 0)
+
+
+@pytest.mark.parametrize("role", ["browser", "native", "context"])
+@pytest.mark.parametrize("field,value", [("sha256", "sha256:" + "9" * 64), ("sizeBytes", 33)])
+def test_declared_media_mismatch_rejected_without_reading_media(
+        bundle, counting_media, role, field, value):
+    bundle[role]["media"][field] = value
+    refresh_receipts(bundle)
+    with pytest.raises(MODULE.ContractError, match="media"):
+        check(bundle)
+    assert (counting_media.read_calls, counting_media.bytes_read) == (0, 0)
+
+
+@pytest.mark.parametrize("mode", ["plain", "encrypted"])
+def test_installed_source_mismatch_rejected_without_reading_media(bundle, counting_media, mode):
+    record = bundle["native"]["observed"][mode]
+    record["sourceDigest"] = record["bootedDigest"] = "sha256:" + "9" * 64
+    refresh_receipts(bundle)
+    assert MODULE.validate_document(bundle["native"]) == "native"
+    with pytest.raises(MODULE.ContractError, match=mode + r"\.sourceDigest"):
+        check(bundle)
+    assert (counting_media.read_calls, counting_media.bytes_read) == (0, 0)
+
+
+def test_matching_metadata_still_reads_actual_media(bundle, counting_media):
+    assert check(bundle) == {"consistency_valid": True, "authentication": "not_authenticated"}
+    assert counting_media.read_calls > 0
+    assert counting_media.bytes_read == bundle["context"]["media"]["sizeBytes"]
+
+
+@pytest.mark.parametrize("mutation", ["corrupt", "truncated", "oversized"])
+def test_matching_metadata_still_rejects_changed_stream_bytes(bundle, mutation):
+    original = bundle["media"]
+    changed = {"corrupt": b"X" + original[1:],
+               "truncated": original[:-1], "oversized": original + b"X"}[mutation]
+    stream = CountingMedia(changed)
+    bundle["media"] = stream
+    with pytest.raises(MODULE.ContractError, match="media"):
+        check(bundle)
+    assert stream.read_calls > 0
+    assert stream.bytes_read == len(changed)
 
 
 def test_streamed_media_uses_bounded_binary_reads(bundle):
