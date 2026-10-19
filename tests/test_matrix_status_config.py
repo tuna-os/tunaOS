@@ -61,7 +61,9 @@ iso_groups:
 variants:
   - id: yellowfin
     emoji: "🐠"
-    platforms: ["linux/amd64", "linux/arm64"]
+    platforms:
+      - linux/amd64
+      - linux/arm64
     flavors:
       - id: base
         stage: 1
@@ -69,12 +71,16 @@ variants:
         build_iso: false
         build_qcow2: false
       - id: base-nvidia
-        platforms: ["linux/amd64"]
+        platforms:
+          - linux/amd64
         stage: 2
         build_image: true
         build_iso: false
         build_qcow2: false
       - id: gnome
+        platforms:
+          - linux/amd64
+          - linux/amd64/v2
         stage: 2
         build_image: true
         build_iso: true
@@ -139,6 +145,14 @@ class LoadBuildConfigFallbackParser(unittest.TestCase):
         cfg = self._load()
         flavors = {f["id"]: f for f in cfg["variants"][0]["flavors"]}
         self.assertEqual(flavors["base-nvidia"]["platforms"], ["linux/amd64"])
+    def test_block_style_flavor_platform_override(self):
+        cfg = self._load()
+        flavors = {f["id"]: f for f in cfg["variants"][0]["flavors"]}
+        self.assertEqual(
+            flavors["gnome"]["platforms"],
+            ["linux/amd64", "linux/amd64/v2"],
+        )
+
 
     def test_flavor_without_override_inherits_variant_platforms(self):
         cfg = self._load()
