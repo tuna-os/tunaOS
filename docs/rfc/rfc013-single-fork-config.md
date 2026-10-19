@@ -156,3 +156,32 @@ The review command and stock export keep their prior behavior. An explicit
 command creates new configs from templates. Unsupported intent fails.
 Full brand support, safe removals, parent closure and image qualification remain
 later acceptance gates.
+
+## Explain config intent
+
+Add `--explain` to the plan command to see the origin of each fork delta:
+
+```sh
+python3 scripts/resolve-fork-config.py /tmp/stock.yaml --explain > /tmp/plan.json
+```
+
+The default plan and legacy export keep their existing output shape. Explanation
+version 1 adds `explanation` at the top level and `intent_provenance` per cell.
+Brand fields record each source key in precedence order. The last key is the
+`effective_source`. The list includes overwritten declarations but not their values.
+
+For each package operation, `index` refers to the resolved intent list.
+The `sources` array records each config list position that contributed that value.
+Exact duplicates retain all origins but one effective entry. Empty lists remain
+no-ops. Cross-operation conflicts still fail.
+
+Image and target origins refer to keys in the config. An omitted target axis
+uses `catalog:all-declared`. An omitted image field stays omitted and makes no
+claim about a runtime default. The explanation adds no absolute config path,
+shadowed value or environment data. The existing plan contains user-provided
+values; review it before you share it.
+
+This explains only the delta intent in the config. It does not expand shell
+transactions for upstream packages, prove that a consumer used an asset, or
+qualify a built image. Use `--explain` with the plan format only. Do not use it
+with `--catalog-pin` or the legacy export.
