@@ -1,0 +1,47 @@
+#compdef ujust
+# ujust completion for zsh: delegate to just's dynamic (clap) completer,
+# pointed at ujust's justfile.
+#
+# The common payload ships `source <(JUST_COMPLETE=zsh ujust)`, whose
+# generated function registers for `just` instead of `ujust` and completes
+# against the current directory's justfile rather than ujust's. This file
+# replaces it; install-tunaos-overrides.sh re-installs it after the common
+# payload (every Containerfile copies the common layers last).
+_ujust() {
+    local justfile=/usr/share/ublue-os/just/00-entry.just
+    local -a jwords
+    local idx
+    if [[ -r $justfile ]]; then
+        jwords=(just --justfile "$justfile" "${(@)words[2,-1]}")
+        idx=$(( CURRENT + 1 ))
+    else
+        jwords=(just "${(@)words[2,-1]}")
+        idx=$(( CURRENT - 1 ))
+    fi
+    local -a completions=("${(@f)$( \
+        _CLAP_IFS=$'\n' \
+        _CLAP_COMPLETE_INDEX="$idx" \
+        JUST_COMPLETE=zsh \
+        just -- "${jwords[@]}" 2>/dev/null \
+    )}")
+
+    [[ -n $completions ]] || return 1
+    local -a dirs=() other=()
+    local completion value
+    for completion in $completions; do
+        value="${completion%%:*}"
+        if [[ "$value" == */ ]]; then
+            if [[ "$completion" == *:* ]]; then
+                dirs+=("${value%/}:${completion#*:}")
+            else
+                dirs+=("${value%/}")
+            fi
+        else
+            other+=("$completion")
+        fi
+    done
+    [[ -n $dirs ]] && _describe -V 'values' dirs -S '/' -r '/'
+    [[ -n $other ]] && _describe -V 'values' other
+}
+
+_ujust "$@"
