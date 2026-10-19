@@ -173,8 +173,10 @@ def test_adapter_refuses_unimplemented_fork_application(stock, tmp_path, extra):
 def test_plan_enabled_cells_match_the_real_workflow_query(plan):
     """Execute the workflow's matrix expression, not a copied approximation."""
     workflow = (ROOT / ".github/workflows/build-variant.yml").read_text()
-    query = workflow.split("--arg event \"${EVENT_NAME}\" '", 1)[1].split("' | jq -c -s '.'", 1)[0]
-    result = subprocess.run(["jq", "-c", "--arg", "event", "workflow_dispatch", query],
+    chunk = workflow.split("--arg event \"${EVENT_NAME}\"", 1)[1].split("' | jq -c -s '.'", 1)[0]
+    query = chunk.split("'", 2)[1]
+    result = subprocess.run(["jq", "-c", "--arg", "event", "workflow_dispatch",
+                             "--argjson", "selection", "null", query],
                             input=json.dumps(plan["legacy_catalog"]), text=True, capture_output=True,
                             env=dict(os.environ, FILTER_VARIANT="all", FILTER_FLAVOR="all"), check=True)
     actual = {(row["variant"], row["flavor"], platform) for row in map(json.loads, result.stdout.splitlines())
