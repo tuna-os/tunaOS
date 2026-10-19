@@ -21,10 +21,11 @@ DIGEST="sha256:abababababababababababababababababababababababababababababababab"
 setup() {
   POLICY="$(mktemp)"
   SNAPSHOT="$(mktemp)"
+  CURRENT_INPUTS="$(mktemp)"
 }
 
 teardown() {
-  rm -f "$POLICY" "$SNAPSHOT"
+  rm -f "$POLICY" "$SNAPSHOT" "$CURRENT_INPUTS"
 }
 
 # emit_policy <outfile> [variant flavor platform]...
@@ -55,13 +56,13 @@ EOF
 emit_snapshot() {
   local out="$1"
   shift
-  python3 - "$out" "$@" <<'EOF'
+  python3 - "$out" "$CURRENT_INPUTS" "$@" <<'EOF'
 import hashlib, json, sys
 from pathlib import Path
 sys.path.insert(0, str(Path.cwd() / "scripts"))
 from contracts.targets import _canonical_json, _oci_platform, cpu_baseline, hardware_scope
 
-out, triples = sys.argv[1], sys.argv[2:]
+out, current_out, triples = sys.argv[1], sys.argv[2], sys.argv[3:]
 assert len(triples) % 3 == 0, triples
 digest = "sha256:" + "ab" * 32
 entries = []
@@ -129,6 +130,7 @@ snapshot = {
     "currentInputs": {"descriptors": descriptors, "overlays": {}, "pins": {}},
 }
 json.dump(snapshot, open(out, "w"), indent=2, sort_keys=True)
+json.dump(snapshot["currentInputs"], open(current_out, "w"), indent=2, sort_keys=True)
 EOF
 }
 
@@ -138,7 +140,8 @@ EOF
   emit_snapshot "$SNAPSHOT" bonito gnome linux/amd64
   run python3 "$CUTOVER" --check \
     --variant bonito --flavor gnome --platform linux/amd64 \
-    --policy "$POLICY" --config "$CONFIG" --snapshot "$SNAPSHOT"
+    --policy "$POLICY" --config "$CONFIG" --snapshot "$SNAPSHOT" \
+    --current-inputs "$CURRENT_INPUTS"
   [ "$status" -eq 0 ]
   [ "$output" = "true" ]
 }
@@ -158,13 +161,15 @@ EOF
   emit_snapshot "$SNAPSHOT" bonito gnome linux/amd64
   run python3 "$CUTOVER" --check \
     --variant bonito --flavor gnome --platform linux/arm64 \
-    --policy "$POLICY" --config "$CONFIG" --snapshot "$SNAPSHOT"
+    --policy "$POLICY" --config "$CONFIG" --snapshot "$SNAPSHOT" \
+    --current-inputs "$CURRENT_INPUTS"
   [ "$status" -eq 1 ]
   [ "$output" = "false" ]
 
   run python3 "$CUTOVER" --check \
     --variant bonito --flavor kde --platform linux/amd64 \
-    --policy "$POLICY" --config "$CONFIG" --snapshot "$SNAPSHOT"
+    --policy "$POLICY" --config "$CONFIG" --snapshot "$SNAPSHOT" \
+    --current-inputs "$CURRENT_INPUTS"
   [ "$status" -eq 1 ]
   [ "$output" = "false" ]
 }
@@ -181,13 +186,15 @@ EOF
     yellowfin kde-nvidia linux/amd64
   run python3 "$CUTOVER" --check \
     --variant bonito --flavor gnome --platform linux/amd64 \
-    --policy "$POLICY" --config "$CONFIG" --snapshot "$SNAPSHOT"
+    --policy "$POLICY" --config "$CONFIG" --snapshot "$SNAPSHOT" \
+    --current-inputs "$CURRENT_INPUTS"
   [ "$status" -eq 1 ]
   [ "$output" = "false" ]
 
   run python3 "$CUTOVER" --check \
     --variant yellowfin --group kde \
-    --policy "$POLICY" --config "$CONFIG" --snapshot "$SNAPSHOT"
+    --policy "$POLICY" --config "$CONFIG" --snapshot "$SNAPSHOT" \
+    --current-inputs "$CURRENT_INPUTS"
   [ "$status" -eq 1 ]
   [ "$output" = "false" ]
 }
@@ -207,7 +214,8 @@ EOF
     yellowfin kde-nvidia linux/amd64
   run python3 "$CUTOVER" --check \
     --variant yellowfin --group kde \
-    --policy "$POLICY" --config "$CONFIG" --snapshot "$SNAPSHOT"
+    --policy "$POLICY" --config "$CONFIG" --snapshot "$SNAPSHOT" \
+    --current-inputs "$CURRENT_INPUTS"
   [ "$status" -eq 1 ]
   [ "$output" = "false" ]
 }
@@ -228,7 +236,8 @@ EOF
     yellowfin kde-nvidia linux/amd64
   run python3 "$CUTOVER" --check \
     --variant yellowfin --group kde \
-    --policy "$POLICY" --config "$CONFIG" --snapshot "$SNAPSHOT"
+    --policy "$POLICY" --config "$CONFIG" --snapshot "$SNAPSHOT" \
+    --current-inputs "$CURRENT_INPUTS"
   [ "$status" -eq 0 ]
   [ "$output" = "true" ]
 }
@@ -249,13 +258,15 @@ EOF
     bonito gnome-nvidia linux/amd64
   run python3 "$CUTOVER" --check \
     --variant bonito --group default \
-    --policy "$POLICY" --config "$CONFIG" --snapshot "$SNAPSHOT"
+    --policy "$POLICY" --config "$CONFIG" --snapshot "$SNAPSHOT" \
+    --current-inputs "$CURRENT_INPUTS"
   [ "$status" -eq 0 ]
   [ "$output" = "true" ]
 
   run python3 "$CUTOVER" --check \
     --variant bonito --group flagship \
-    --policy "$POLICY" --config "$CONFIG" --snapshot "$SNAPSHOT"
+    --policy "$POLICY" --config "$CONFIG" --snapshot "$SNAPSHOT" \
+    --current-inputs "$CURRENT_INPUTS"
   [ "$status" -eq 0 ]
   [ "$output" = "true" ]
 }
@@ -266,7 +277,8 @@ EOF
   emit_snapshot "$SNAPSHOT" bonito gnome linux/amd64
   run python3 "$CUTOVER" --check \
     --variant bonito --flavor gnome --platform linux/amd64 \
-    --policy "$POLICY" --config "$CONFIG" --snapshot "$SNAPSHOT"
+    --policy "$POLICY" --config "$CONFIG" --snapshot "$SNAPSHOT" \
+    --current-inputs "$CURRENT_INPUTS"
   [ "$status" -eq 0 ]
   [ "$output" = "true" ]
 
@@ -274,7 +286,8 @@ EOF
   emit_policy "$POLICY"
   run python3 "$CUTOVER" --check \
     --variant bonito --flavor gnome --platform linux/amd64 \
-    --policy "$POLICY" --config "$CONFIG" --snapshot "$SNAPSHOT"
+    --policy "$POLICY" --config "$CONFIG" --snapshot "$SNAPSHOT" \
+    --current-inputs "$CURRENT_INPUTS"
   [ "$status" -eq 1 ]
   [ "$output" = "false" ]
 }

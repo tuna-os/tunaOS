@@ -207,6 +207,9 @@ def test_cut_over_group_suppresses_only_that_group():
     assert DC.group_covered(
         policy, "yellowfin", "kde", live, offline,
         config=cfg, snapshot=snapshot,
+        current_descriptors=descriptors,
+        current_overlays={},
+        current_pins={},
     ) is True
     for suffix in ("", "cosmic", "niri", "xfce"):
         other_live, other_offline = DC.group_members(cfg, "yellowfin", suffix)
