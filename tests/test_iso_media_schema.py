@@ -261,3 +261,25 @@ def test_receipt_cannot_embed_expected_context_to_authorize_itself(validator, do
 def test_context_rejects_expired_artifact(validator, documents, producer):
     documents["context"][producer]["artifact"]["expired"] = True
     assert not validator.is_valid(documents["context"])
+
+
+@pytest.mark.parametrize("role", ["browser", "context"])
+@pytest.mark.parametrize("baseline", ["x86-64", "x86-64-v2", "x86-64-v3"])
+def test_schema_accepts_supported_bare_amd64_baselines(validator, documents, role, baseline):
+    documents[role]["input_descriptors"]["source"].update(platform="linux/amd64", cpuBaseline=baseline)
+    validator.validate(documents[role])
+
+
+@pytest.mark.parametrize("baseline", ["x86-64-v4", "unknown", "", None, False])
+def test_schema_rejects_unsupported_baseline(validator, documents, baseline):
+    documents["browser"]["input_descriptors"]["source"]["cpuBaseline"] = baseline
+    assert not validator.is_valid(documents["browser"])
+
+
+def test_schema_baseline_set_matches_reviewed_catalog_inventory():
+    inventory = json.loads((FIXTURES / "catalog-baselines.json").read_text())
+    pairs = inventory["advertisedPairs"]
+    assert sum(pair["count"] for pair in pairs) == inventory["targetCount"] == 269
+    assert {pair["cpuBaseline"] for pair in pairs} == set(
+        SCHEMA["$defs"]["source"]["properties"]["cpuBaseline"]["enum"])
+    assert inventory["source"]["sha256"] == "sha256:d15587ae9c941bc7ac16178279be6a3d8fa665e3d04391b139b0fd345b7618d2"

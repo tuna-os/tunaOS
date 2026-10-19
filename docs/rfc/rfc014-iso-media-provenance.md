@@ -40,6 +40,13 @@ Those gates must check authenticated evidence and proof from tests in a real sys
 6. Native tests verify the selected archive and ISO bytes before boot. Their
    receipt names the exact browser receipt and keeps the identity of the harness separate.
 
+Bare `linux/amd64` does not determine a CPU baseline. Keep the supplied baseline
+and match it against independent context. The initial supported set is x86-64,
+x86-64-v2, x86-64-v3 and armv8-a. A platform with an explicit variant limits the set.
+
+The fixture has values from the catalog. It does not prove runtime support.
+Refresh it manually from a reviewed snapshot; it does not monitor another repository.
+
 Both plain and encrypted native observations must identify the source and
 installed system. They must record completion through the GUI offline and reboot from the target alone.
 These facts cannot come from a skipped step, an absent field or a claim of success.

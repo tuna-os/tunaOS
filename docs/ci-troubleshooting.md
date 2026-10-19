@@ -1723,3 +1723,22 @@ directory from a stable checkout.
 Fork previews also disable layer reuse with `--no-cache`. Some legacy stages
 declare the cache argument after their base hooks. Gentoo has a separate branch
 for desktop builds. Tests must prove each stage before fork builds can reuse layers.
+
+### Anime wallpaper disappears after desktop setup
+
+**Symptom:** The selector chooses anime or a desktop override, but the final
+wallpaper is the vector fallback (PR #3465).
+
+**Cause:** RPM and Gentoo run `90-image-info.sh` after desktop setup. Overlays
+copy `system_files` again and then run it. It copied the vector over the
+selected art. Selector-only tests did not cover this final writer.
+
+**Fix:** Use the shared selector from the identity writer too, with
+`TUNAOS_IMAGE_FLAVOR` to identify the desktop in overlay builds.
+Apply artwork from the fork afterward. Run `pytest tests/test_anime_finalization.py`.
+
+The fixtures execute the complete identity writer in those orders.
+They check all 14 real JPEGs across six desktops.
+They preserve desktop overrides, fallback files, custom fork art and URLs.
+Fork overlay input remains unsupported and fails closed.
+These are source-level tests, not built-image or boot acceptance.

@@ -406,3 +406,47 @@ print(json.dumps(result))
 """
     output = subprocess.check_output([sys.executable, "-S", "-c", script, str(ROOT)], text=True)
     assert json.loads(output) == {"consistency_valid": True, "authentication": "not_authenticated"}
+
+
+@pytest.mark.parametrize("baseline", ["x86-64", "x86-64-v2", "x86-64-v3"])
+def test_bare_amd64_preserves_independently_supplied_baseline(bundle, baseline):
+    for role in ("browser", "context"):
+        bundle[role]["input_descriptors"]["source"].update(
+            platform="linux/amd64", cpuBaseline=baseline)
+    refresh_receipts(bundle)
+    assert check(bundle) == {"consistency_valid": True, "authentication": "not_authenticated"}
+
+
+def test_bare_amd64_baseline_must_match_independent_context(bundle):
+    for role in ("browser", "context"):
+        bundle[role]["input_descriptors"]["source"]["platform"] = "linux/amd64"
+    bundle["browser"]["input_descriptors"]["source"]["cpuBaseline"] = "x86-64-v3"
+    refresh_receipts(bundle)
+    with pytest.raises(MODULE.ContractError, match="input_descriptors"):
+        check(bundle)
+
+
+@pytest.mark.parametrize("platform,baseline", [
+    ("linux/amd64/v2", "x86-64-v3"), ("linux/amd64/v2", "x86-64"),
+    ("linux/amd64", "armv8-a"), ("linux/arm64", "x86-64-v2"),
+    ("linux/amd64", "x86-64-v4"), ("linux/amd64", "unknown"),
+])
+@pytest.mark.parametrize("role", ["browser", "context"])
+def test_source_baseline_must_be_supported_and_match_explicit_platform(bundle, platform, baseline, role):
+    bundle[role]["input_descriptors"]["source"].update(platform=platform, cpuBaseline=baseline)
+    with pytest.raises(MODULE.ContractError, match="cpuBaseline"):
+        MODULE.validate_document(bundle[role])
+
+
+def test_catalog_advertised_baseline_inventory_is_supported_without_inference(bundle):
+    inventory = json.loads((FIXTURES / "catalog-baselines.json").read_text())
+    for pair in inventory["advertisedPairs"]:
+        candidate = copy.deepcopy(bundle)
+        for role in ("browser", "context"):
+            inputs = candidate[role]["input_descriptors"]
+            inputs["source"].update(platform=pair["platform"], cpuBaseline=pair["cpuBaseline"])
+            if pair["platform"] == "linux/arm64":
+                inputs["installer"]["arch"] = "aarch64"
+                inputs["installer"]["ref"] = inputs["installer"]["ref"].replace("/x86_64/", "/aarch64/")
+        refresh_receipts(candidate)
+        assert check(candidate) == {"consistency_valid": True, "authentication": "not_authenticated"}

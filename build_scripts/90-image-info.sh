@@ -343,12 +343,11 @@ TUNAOS_BASE='${BASE_LABEL}'
 TUNAOS_HOMAGE='${HOMAGE}'
 EOF
 
-	# The variant's scene becomes the default wallpaper every desktop points
-	# at. All fourteen stay installed, so a user can pick a sibling's.
-	VARIANT_WALLPAPER="/usr/share/backgrounds/tunaos/${VARIANT_KEY}.jpg"
-	if [[ -f "${VARIANT_WALLPAPER}" ]]; then
-		install -m0644 "${VARIANT_WALLPAPER}" /usr/share/backgrounds/tunaos/tunaos-default.jpg
-	fi
+	# RPM, Gentoo and overlay stages run this after desktop setup or re-copy
+	# system_files. Reapply the same selector; never reset anime/overrides to
+	# the vector fallback. The original flavor retains the desktop for overlay
+	# targets whose DESKTOP_FLAVOR is only "desktop" (PR #3465).
+	/run/context/build_scripts/desktop/select-wallpaper.sh "${TUNAOS_IMAGE_FLAVOR:-${DESKTOP_FLAVOR:-base}}"
 
 	# The lettermark (scripts/branding/make-lettermarks.py): the variant's
 	# emoji and name. The variant is the brand, so this is what the login

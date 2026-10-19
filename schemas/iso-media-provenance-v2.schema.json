@@ -57,7 +57,12 @@
         },
         "cpuBaseline": {
           "type": "string",
-          "minLength": 1
+          "enum": [
+            "x86-64",
+            "x86-64-v2",
+            "x86-64-v3",
+            "armv8-a"
+          ]
         }
       },
       "required": [
