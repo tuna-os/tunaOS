@@ -16,8 +16,18 @@ ASSETS="$(cd "$(dirname "${BASH_SOURCE[0]}")/assets/tunaos-overrides" && pwd)"
 
 install -Dm0644 "$ASSETS/ujust-bash" \
 	"$ROOT/usr/share/bash-completion/completions/ujust"
+# Eager copy: fzf's `eval "$(fzf --bash)"` replaces the -D handler that
+# lazy-loads completions/, so without this `ujust <tab>` falls through to
+# file completion in fzf-enabled shells. bash-completion sources this dir at
+# init, before user rc hijacks anything.
+install -Dm0644 "$ASSETS/ujust-bash" \
+	"$ROOT/etc/bash_completion.d/ujust"
 install -Dm0644 "$ASSETS/ujust-zsh" \
 	"$ROOT/usr/share/zsh/site-functions/_ujust"
+# Brew zsh (and carapace's zsh bridge, which serves fish completions) reads
+# /usr/local, never /usr/share — without this, `ujust <tab>` is empty there.
+install -Dm0644 "$ASSETS/ujust-zsh" \
+	"$ROOT/usr/local/share/zsh/site-functions/_ujust"
 install -Dm0644 "$ASSETS/ujust-fish" \
 	"$ROOT/usr/share/fish/vendor_completions.d/ujust.fish"
 

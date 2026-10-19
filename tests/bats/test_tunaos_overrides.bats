@@ -16,11 +16,13 @@ ASSETS="${REPO_ROOT}/build_scripts/assets/tunaos-overrides"
 	grep -q 'set -euo pipefail' "$INSTALLER"
 }
 
-@test "installer: installs all six files under override root" {
+@test "installer: installs all eight files under override root" {
 	root="$(mktemp -d)"
 	TUNAOS_OVERRIDE_ROOT="$root" bash "$INSTALLER" >/dev/null
 	[ -f "$root/usr/share/bash-completion/completions/ujust" ]
+	[ -f "$root/etc/bash_completion.d/ujust" ]
 	[ -f "$root/usr/share/zsh/site-functions/_ujust" ]
+	[ -f "$root/usr/local/share/zsh/site-functions/_ujust" ]
 	[ -f "$root/usr/share/fish/vendor_completions.d/ujust.fish" ]
 	[ -f "$root/usr/lib/systemd/system/uupd.service.d/20-tunaos.conf" ]
 	[ -f "$root/usr/lib/systemd/system/tunaos-uupd-notify@.service" ]
@@ -32,7 +34,9 @@ ASSETS="${REPO_ROOT}/build_scripts/assets/tunaos-overrides"
 	root="$(mktemp -d)"
 	TUNAOS_OVERRIDE_ROOT="$root" bash "$INSTALLER" >/dev/null
 	cmp "$ASSETS/ujust-bash" "$root/usr/share/bash-completion/completions/ujust"
+	cmp "$ASSETS/ujust-bash" "$root/etc/bash_completion.d/ujust"
 	cmp "$ASSETS/ujust-zsh" "$root/usr/share/zsh/site-functions/_ujust"
+	cmp "$ASSETS/ujust-zsh" "$root/usr/local/share/zsh/site-functions/_ujust"
 	cmp "$ASSETS/ujust-fish" "$root/usr/share/fish/vendor_completions.d/ujust.fish"
 	cmp "$ASSETS/uupd-20-tunaos.conf" "$root/usr/lib/systemd/system/uupd.service.d/20-tunaos.conf"
 	cmp "$ASSETS/tunaos-uupd-notify.service" "$root/usr/lib/systemd/system/tunaos-uupd-notify@.service"
@@ -46,6 +50,11 @@ ASSETS="${REPO_ROOT}/build_scripts/assets/tunaos-overrides"
 	run env TUNAOS_OVERRIDE_ROOT="$root" bash "$INSTALLER"
 	[ "$status" -eq 0 ]
 	rm -rf "$root"
+}
+
+@test "arch base: installs bash-completion (loader for eager ujust file)" {
+	run grep -E '^\s+bash-completion \\$' "${REPO_ROOT}/Containerfile.arch"
+	[ "$status" -eq 0 ]
 }
 
 @test "bash completion: registers for ujust, injects justfile" {
