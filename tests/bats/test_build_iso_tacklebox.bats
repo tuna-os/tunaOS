@@ -649,12 +649,15 @@ FAKE
 	# here covers.
 	local repo="${BATS_TEST_DIRNAME}/../.."
 	local wf="${repo}/.github/workflows/live-overlay.yml"
+	grep -q 'echo .export TUNA_SESSION_ROOT=/.' "${repo}/scripts/build-iso-tacklebox.sh"
+	grep -q 'echo .export TUNA_SESSION_ROOT=/.' "$wf"
 	# Options BEFORE assignments: GNU env stops parsing options at the first
 	# NAME=VALUE, so `env HOME=/root -u XDG_DATA_HOME` runs `-u` as the command
-	# and the step dies. Verified by running it, not just by grepping.
-	grep -q 'sudo -E env -u XDG_DATA_HOME -u XDG_CONFIG_HOME HOME=/root' "$wf"
+	# and the step dies with
+	# `env: '-u': No such file or directory`. Options first.
 	# A substring pin cannot tell you the invocation is well-formed, so
 	# actually execute the flag order this asserts.
+	grep -q 'sudo -E env -u XDG_DATA_HOME -u XDG_CONFIG_HOME HOME=/root' "$wf"
 	run env -u XDG_DATA_HOME -u XDG_CONFIG_HOME HOME=/root true
 	[ "$status" -eq 0 ]
 
