@@ -44,6 +44,13 @@ def assert_dependency_refusal(result):
     assert "dependenc" in diagnostic.lower() and "fixture-app" in diagnostic
 
 
+def seed_pacman_sync(source, destination):
+    # The disposable container has already synchronized verified repository
+    # metadata. Retain it in the private root to avoid missing-database warnings.
+    assert source.is_dir() and list(source.glob("*.db")), "synchronized pacman metadata is required"
+    shutil.copytree(source, destination)
+
+
 def pacman_archive(path, name, dependency):
     """Build a local fixture archive; pacman itself must accept its metadata."""
     payload = f"{name}\n".encode()
@@ -87,6 +94,11 @@ class NativeRoot:
         else:
             database = self.root / "var/lib/pacman"
             database.mkdir(parents=True)
+            seed_pacman_sync(Path("/var/lib/pacman/sync"), database / "sync")
+            self.evidence["sync_metadata_sha256"] = {
+                path.name: hashlib.sha256(path.read_bytes()).hexdigest()
+                for path in sorted((database / "sync").iterdir()) if path.is_file()
+            }
             cache = self.root / "var/cache/pacman/pkg"
             cache.mkdir(parents=True)
             self.native = [
@@ -373,3 +385,22 @@ def test_dependency_diagnostic_may_span_streams(stdout, stderr):
 def test_dependency_diagnostic_requires_real_failure_and_dependent(status, stdout, stderr):
     with pytest.raises(AssertionError):
         assert_dependency_refusal(subprocess.CompletedProcess([], status, stdout, stderr))
+
+
+def test_private_pacman_sync_preserves_metadata_bytes(tmp_path):
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "core.db").write_bytes(b"fixture metadata")
+    (source / "core.db.sig").write_bytes(b"fixture signature")
+    target = tmp_path / "target"
+    seed_pacman_sync(source, target)
+    assert {p.name: p.read_bytes() for p in target.iterdir()} == {
+        p.name: p.read_bytes() for p in source.iterdir()
+    }
+
+
+def test_private_pacman_sync_requires_existing_metadata(tmp_path):
+    target = tmp_path / "target"
+    with pytest.raises(AssertionError, match="synchronized pacman metadata"):
+        seed_pacman_sync(tmp_path / "missing", target)
+    assert not target.exists()
