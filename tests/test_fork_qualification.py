@@ -114,3 +114,79 @@ def test_real_canary_prepares_before_native_build(tmp_path, monkeypatch):
     assert report["build"] == "failed"
     assert report["boot"] == "not-run"
     assert report["login"] == "not-run"
+    diagnostic = next((output / "prepared").glob("*/system_files/usr/libexec/tunaos/fork-greeter-diagnostics"))
+    original(["bash", "-n", str(diagnostic)], check=True)
+
+
+def test_readiness_cannot_substitute_for_guest_verdicts():
+    assert set(QUALIFY.assess_serial("TUNAOS_DESKTOP_CONTRACT_OK").values()) == {"failed"}
+    serial = "TUNAOS_FORK_IDENTITY_OK\nTUNAOS_BASE_CONTRACT_OK\nTUNAOS_INSTALL_CHECKS_RESULT pass=16 fail=0 desktop=gnome"
+    assert set(QUALIFY.assess_serial(serial).values()) == {"passed"}
+    assert QUALIFY.assess_serial("[   11.363798] sh[979]: TUNAOS_FORK_IDENTITY_OK\r\n")["installed_identity"] == "passed"
+    broken = serial + "\nTUNAOS_FORK_IDENTITY_FAIL\nTUNAOS_BASE_CONTRACT_FAIL\nTUNAOS_INSTALL_CHECKS_RESULT pass=16 fail=1 desktop=gnome"
+    assert set(QUALIFY.assess_serial(broken).values()) == {"failed"}
+
+
+def test_serial_probe_and_tcg_fallback_are_explicit():
+    script = (ROOT / "scripts/qualify-fork-image.py").read_text()
+    workflow = (ROOT / ".github/workflows/fork-image-qualification.yml").read_text()
+    assert "exec >/dev/ttyS0 2>&1" in script
+    assert 'test -c /dev/kvm' not in workflow
+    assert '"accelerator": "kvm" if Path("/dev/kvm").exists() else "tcg"' in script
+    assert 'sudo rm -rf "fork-evidence/$variant/boot/corral/ssh"' in workflow
+
+
+def test_initramfs_payload_checks_real_bytes_and_paths(tmp_path):
+    spec = importlib.util.spec_from_file_location("initramfs", ROOT / "scripts/qualify-fork-initramfs.py")
+    initramfs = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(initramfs)
+    image, unpacked = tmp_path / "image", tmp_path / "unpacked"
+    for root in (image, unpacked):
+        for relative in initramfs.FILES + ["etc/plymouth/plymouthd.conf"]:
+            path = root / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("[Daemon]\nTheme=fork-identity\n" if relative.endswith(".conf") else relative)
+    assert len(initramfs.validate_payload(unpacked, image)) == 4
+    path = unpacked / initramfs.FILES[1]
+    path.write_bytes(b"different")
+    with pytest.raises(ValueError, match="differs"):
+        initramfs.validate_payload(unpacked, image)
+    path.unlink()
+    path.symlink_to(image / initramfs.FILES[1])
+    with pytest.raises(ValueError, match="safe payload"):
+        initramfs.validate_payload(unpacked, image)
+
+
+def test_guest_ssh_intent_is_explicit_and_local_only():
+    gate = (ROOT / "scripts/corral-boot-gate.sh").read_text()
+    harness = (ROOT / "scripts/qualify-fork-image.py").read_text()
+    assert '${TUNAOS_FORK_CANARY_SSH:-0}' in gate
+    assert '[[ "$IMAGE" == localhost/fork-qualification/* ]]' in gate
+    assert '--karg systemd.wants=ssh.service --karg systemd.wants=sshd.service' in gate
+    assert '"TUNAOS_FORK_CANARY_SSH": "1"' in harness
+
+
+def test_serial_getty_prompt_can_share_marker_line():
+    serial = "localhost login: TUNAOS_BASE_CONTRACT_OK state=starting bus=dbus-broker.service\r\n"
+    assert QUALIFY.assess_serial(serial)["base_contract"] == "passed"
+    assert QUALIFY.assess_serial("echo TUNAOS_BASE_CONTRACT_OK")["base_contract"] == "failed"
+    assert QUALIFY.assess_serial(serial + "TUNAOS_BASE_CONTRACT_FAIL")["base_contract"] == "failed"
+
+
+def test_native_canary_tracks_production_fork_source_inputs():
+    workflow = (ROOT / ".github/workflows/fork-image-qualification.yml").read_text()
+    for path in ("scripts/prepare-fork-config.py", "scripts/resolve-fork-config.py",
+                 "scripts/export-fork-source.py", "build_scripts/lib/fork-*",
+                 "live-iso/common/src/installer-recipe-backend.sh"):
+        assert f'      - "{path}"' in workflow
+
+
+def test_native_export_binds_original_and_uploads_only_provenance():
+    script = (ROOT / "scripts/qualify-fork-image.py").read_text()
+    workflow = (ROOT / ".github/workflows/fork-image-qualification.yml").read_text()
+    assert 'exporter.export(context / "manifests/fork-config.json", out / "oci-export")' in script
+    assert 'report["exported_source"]["source_image_id"].removeprefix("sha256:") != report["image_id"].removeprefix("sha256:")' in script
+    assert 'report["source_export"] = "passed"' in script
+    assert '"$src/oci-export/source-receipt.json"' in workflow
+    assert '"$src/oci-export/source-manifest.json"' in workflow
+    assert 'cp -r "$src/oci-export"' not in workflow

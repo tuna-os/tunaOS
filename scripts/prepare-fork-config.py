@@ -23,6 +23,9 @@ SPEC = importlib.util.spec_from_file_location("fork_config", ROOT / "scripts/res
 COMPILER = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(COMPILER)
 ConfigError = COMPILER.ConfigError
+SPEC = importlib.util.spec_from_file_location("fork_installer_source", ROOT / "build_scripts/lib/fork-installer-source.py")
+INSTALLER = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(INSTALLER)
 # Routes, not a second variant catalog. Unknown future routes fail closed.
 MANAGERS = {"Containerfile.el10": "dnf", "Containerfile.ubuntu": "apt",
             "Containerfile.debian": "apt", "Containerfile.arch": "pacman",
@@ -128,21 +131,29 @@ def compile_cells(config_path, root=ROOT, identity_staging=False):
                     "package_manager": manager, "intent": cell["intent"],
                     "sources": {"sha256": plan["sources"]["sha256"]}, "assets": cell_assets}
         # One local tag per architecture avoids overwriting earlier fanout results.
-        tag = f"{image['registry']}/{image['namespace']}/{cell['variant']}:{flavor}-{cell['platform'].replace('/', '-')}"
+        tag = INSTALLER.target_ref(manifest)
         env = {"IMAGE_TAG": tag, "VARIANT": cell["variant"], "PUBLIC_IMAGE_NAME": cell["variant"],
                "CONTAINERFILE": containerfile, "BASE_IMAGE": base, "PLATFORM": cell["platform"],
                "DESKTOP_FLAVOR": routing["DESKTOP_FLAVOR"], "TUNAOS_IMAGE_FLAVOR": flavor,
                "ENABLE_HWE": "0", "ENABLE_NVIDIA": "0", "ENABLE_ASAHI": "0", "ENABLE_SSHD": "0",
                "IMAGE_REGISTRY": image["registry"], "REPO_ORGANIZATION": image["namespace"],
                "USE_CACHE": "0", "IS_CI": "0", "SKIP_RECHUNK": "1", "SKIP_SUBMODULES": "1"}
+        try:
+            recipe = INSTALLER.read_json(INSTALLER.safe_target(root / "system_files", INSTALLER.RECIPE))
+            catalog_path = INSTALLER.safe_target(root / "system_files", INSTALLER.CATALOG)
+            catalog = INSTALLER.read_json(catalog_path) if catalog_path.exists() else None
+            recipe, catalog = INSTALLER.project(manifest, recipe, catalog, branding.get("name"))
+        except ValueError as exc:
+            raise ConfigError(str(exc)) from exc
         cells.append({"manifest": manifest, "environment": env, "base_digest_pinned": base_pinned,
+                      "installer_recipe": recipe, "installer_catalog": catalog,
                       **({"identity": identity} if identity else {})})
     return plan, cells, assets
 
 
 def prepare(config_path, output, root=ROOT, identity_staging=False):
     reserved = tuple(root / "manifests" / name for name in (
-        "fork-config.json", "fork-assets", "fork-identity.json", "fork-identity-assets"))
+        "fork-config.json", "fork-assets", "fork-identity.json", "fork-identity-assets")) + (root / INSTALLER.PROBE,)
     if any(path.exists() or path.is_symlink() for path in reserved):
         raise ConfigError("source checkout contains reserved generated fork payload paths; use a clean source checkout")
     plan, cells, assets = compile_cells(config_path, root, identity_staging)
@@ -174,6 +185,15 @@ def prepare(config_path, output, root=ROOT, identity_staging=False):
         subprocess.run(["git", "-C", str(context), "add", "--all"], check=True)
         if COMPILER.source_receipt(context) != plan["sources"]:
             raise ConfigError("sources changed during preparation; discard output and retry after review")
+        for relative, value in ((INSTALLER.RECIPE, cell["installer_recipe"]),
+                                (INSTALLER.CATALOG, cell["installer_catalog"])):
+            # Recipe object order is executable UI order; receipts/catalogs
+            # retain their existing canonical serialization.
+            (context / "system_files" / relative).write_bytes(
+                INSTALLER.json_bytes(value, sort_keys=relative != INSTALLER.RECIPE))
+        # Containerfiles copy build_scripts, not live-iso. Keep one canonical
+        # backend implementation and carry its exact reviewed bytes into builds.
+        shutil.copyfile(context / "live-iso/common/src/installer-recipe-backend.sh", context / INSTALLER.PROBE)
         (context / "manifests/fork-config.json").write_text(json.dumps(manifest, indent=2) + "\n")
         cell_assets = list(manifest["assets"].values())
         if "identity" in cell:

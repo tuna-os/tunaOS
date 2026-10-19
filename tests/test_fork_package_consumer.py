@@ -476,6 +476,8 @@ def test_compiled_sample_runs_both_real_helpers_and_repeats_without_transactions
         "image-ref": f"ostree-image-signed:docker://{image['registry']}/{image['namespace']}/{variant}",
     }))
     (root / "usr/share/tunaos/identity.env").write_text(f"TUNAOS_VARIANT='{variant}'\n")
+    from tests.test_fork_installer_source import prepare_root
+    prepare_root(context, root, generated)
     log = tmp_path / "transactions"
     script = r'''
 set -euo pipefail

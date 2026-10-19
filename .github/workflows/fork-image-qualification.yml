@@ -7,9 +7,18 @@ on:
     paths:
       - ".github/workflows/fork-image-qualification.yml"
       - "scripts/qualify-fork-image.py"
+      - "scripts/qualify-fork-initramfs.py"
+      - "scripts/qualify-fork-login.py"
+      - "scripts/qualify-fork-installer.py"
+      - "scripts/prepare-fork-config.py"
+      - "scripts/resolve-fork-config.py"
+      - "scripts/export-fork-source.py"
+      - "build_scripts/lib/fork-*"
+      - "live-iso/common/src/installer-recipe-backend.sh"
   workflow_dispatch:
 
 permissions:
+  actions: read
   contents: read
   packages: read
 
@@ -35,14 +44,14 @@ jobs:
       - name: Install test tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y jq python3-pil python3-yaml qemu-system-x86 qemu-utils ovmf ffmpeg
+          sudo apt-get install -y jq python3-pil python3-yaml skopeo qemu-system-x86 qemu-utils ovmf ffmpeg tesseract-ocr
           curl -fsSL https://github.com/mikefarah/yq/releases/download/v4.53.3/yq_linux_amd64 -o "$RUNNER_TEMP/yq"
           echo "fa52a4e758c63d38299163fbdd1edfb4c4963247918bf9c1c5d31d84789eded4  $RUNNER_TEMP/yq" | sha256sum -c -
           sudo install -m 0755 "$RUNNER_TEMP/yq" /usr/local/bin/yq
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm || true
-          test -c /dev/kvm
+          # Corral uses TCG automatically when KVM is absent.
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version: "1.27"
@@ -55,22 +64,55 @@ jobs:
         run: |
           set -euo pipefail
           sudo git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          status=0
           for variant in yellowfin grouper; do
-            sudo python3 scripts/qualify-fork-image.py --variant "$variant" --output "$RUNNER_TEMP/fork-evidence/$variant"
+            sudo python3 scripts/qualify-fork-image.py --variant "$variant" --output "$RUNNER_TEMP/fork-evidence/$variant" || status=1
           done
+          exit "$status"
+      - name: Download frozen installer artifact
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 scripts/qualify-fork-installer.py --download-output "$RUNNER_TEMP/installer-artifact"
+      - name: Verify typed GNOME login and installer in disposable derived guests
+        run: |
+          set -euo pipefail
+          status=0
+          for variant in yellowfin grouper; do
+            out="$RUNNER_TEMP/fork-evidence/$variant"
+            sudo python3 scripts/qualify-fork-login.py \
+              --image "localhost/fork-qualification/$variant:gnome-linux-amd64" \
+              --wallpaper "$out/wallpaper.jpg" --output "$out/login" \
+              --installer-artifact "$RUNNER_TEMP/installer-artifact/installer-artifact.zip" || status=1
+          done
+          exit "$status"
       - name: Collect bounded evidence
         if: always()
         run: |
           mkdir -p fork-evidence
+          if test -f "$RUNNER_TEMP/installer-artifact/artifact-provenance.json"; then
+            cp "$RUNNER_TEMP/installer-artifact/artifact-provenance.json" fork-evidence/
+          fi
           for variant in yellowfin grouper; do
             src="$RUNNER_TEMP/fork-evidence/$variant"
             test -d "$src" || continue
             mkdir -p "fork-evidence/$variant"
             sudo cp "$src/qualification.json" "fork-evidence/$variant/" || true
             sudo cp "$src/image-inspect.json" "fork-evidence/$variant/" || true
+            sudo cp "$src/initramfs.json" "$src/initramfs-diagnostics.txt" "$src/greeter-config.txt" "fork-evidence/$variant/" || true
             sudo cp "$src/fork.yaml" "fork-evidence/$variant/" || true
             sudo cp "$src/prepared/source-receipt.json" "fork-evidence/$variant/" || true
-            if test -d "$src/boot"; then sudo cp -r "$src/boot" "fork-evidence/$variant/"; fi
+            if test -f "$src/oci-export/source-receipt.json"; then
+              sudo cp "$src/oci-export/source-receipt.json" "fork-evidence/$variant/oci-source-receipt.json"
+              sudo cp "$src/oci-export/source-manifest.json" "fork-evidence/$variant/oci-source-manifest.json"
+            fi
+            if test -d "$src/login"; then
+              sudo cp -r "$src/login" "fork-evidence/$variant/"
+            fi
+            if test -d "$src/boot"; then
+              sudo cp -r "$src/boot" "fork-evidence/$variant/"
+              # The VM no longer exists; do not upload its ephemeral SSH keys.
+              sudo rm -rf "fork-evidence/$variant/boot/corral/ssh"
+            fi
           done
           sudo chown -R "$USER:$(id -gn)" fork-evidence
       - name: Upload qualification evidence

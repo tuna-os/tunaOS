@@ -134,10 +134,35 @@ THEME_DIR = "usr/share/plymouth/themes/" + THEME
 BOOT_FILES = {THEME_DIR + "/" + THEME + ".plymouth", THEME_DIR + "/splash.png",
               THEME_DIR + "/splash.script", "etc/plymouth/plymouthd.conf"}
 INSTALLER_FILES = {"etc/bootc-installer/branding.json"}
+GDM_PROFILE = "etc/dconf/profile/gdm"
 
 
-def json_bytes(value):
-    return (json.dumps(value, sort_keys=True, indent=2) + "\n").encode()
+def gdm_updates(root):
+    """Make the opt-in greeter read gdm.d before the vendor defaults.
+
+    GNOME's login-logo contract requires this profile, not just a compiled
+    database. Preserve vendor/admin fallbacks and the writable user database;
+    never change authentication, session selection or dconf locks.
+    """
+    profile = target(root, GDM_PROFILE)
+    vendor = target(root, "usr/share/dconf/profile/gdm")
+    source = profile if profile.exists() else vendor
+    lines = source.read_text().splitlines() if source.exists() else [
+        "user-db:user", "file-db:/usr/share/gdm/greeter-dconf-defaults"]
+    active = [line.strip() for line in lines if line.strip() and not line.lstrip().startswith("#")]
+    if not active or not active[0].startswith("user-db:") or sum(
+            line.startswith("user-db:") for line in active) != 1:
+        raise ValueError("unsupported GDM dconf profile: expected one leading user database")
+    # First database wins for unlocked defaults. Appending gdm after Ubuntu's
+    # file-db leaves its Ubuntu logo effective even though gdm.d is compiled.
+    lines = [line for line in lines if line.strip() != "system-db:gdm"]
+    index = next(i for i, line in enumerate(lines) if line.strip().startswith("user-db:"))
+    lines.insert(index + 1, "system-db:gdm")
+    return {profile: ("\n".join(lines) + "\n").encode()}
+
+
+def json_bytes(value, *, sort_keys=True):
+    return (json.dumps(value, sort_keys=sort_keys, indent=2) + "\n").encode()
 
 
 def boot_updates(manifest, root, m):
@@ -151,6 +176,9 @@ def boot_updates(manifest, root, m):
     if not settings.has_section("Daemon"):
         settings.add_section("Daemon")
     settings.set("Daemon", "Theme", THEME)
+    # Ubuntu's plymouth-populate-initrd reads Theme only with a valid ThemeDir;
+    # otherwise it copies the update-alternatives default (usually bgrt).
+    settings.set("Daemon", "ThemeDir", "/usr/share/plymouth/themes")
     import io
     output = io.StringIO()
     settings.write(output, space_around_delimiters=False)
@@ -196,7 +224,9 @@ def installer_updates(manifest, root, m):
                 # branding logo remains unprefixed for the shared resolver.
                 slide["image"] = "/run/host" + branding["logo"]
         recipe.update(distro_name=m["name"], distro_logo=branding["logo"], welcome_title="Welcome to " + m["name"])
-        updates[path] = json_bytes(recipe)
+        # Recipe steps and tour slides follow insertion order, including custom
+        # entries. Sorting this display-only update changes installer navigation.
+        updates[path] = json_bytes(recipe, sort_keys=False)
     # Existing catalog entries may include other distributions. Update only
     # the leaf whose exact image ref matches the recipe; preserve every option.
     path = target(root, "etc/bootc-installer/images.json")
@@ -287,6 +317,7 @@ def apply(manifest, root, check=False):
         for dest in destinations:
             updates[target(root, dest)] = data
     updates[target(root, "usr/libexec/tunaos/fork-identity.py")] = Path(__file__).read_bytes()
+    updates.update(gdm_updates(root))
     updates.update(boot_updates(manifest, root, m))
     updates.update(installer_updates(manifest, root, m))
     updates[target(root, "etc/issue")] = b"\\S{PRETTY_NAME}\n\\r (\\l)\n"
@@ -336,7 +367,7 @@ def verify(root):
             info["fork-config"].get(k) != m[k] for k in ("sources", "variant", "flavor", "platform"))):
         raise ValueError("installed identity does not match image-info source/platform receipt")
     required = {"usr/lib/os-release", "usr/share/pixmaps/tunaos.svg", "usr/share/icons/hicolor/scalable/apps/tunaos.svg",
-                "usr/share/pixmaps/tunaos-lettermark.svg", "etc/issue", "etc/xdg/fastfetch/config.jsonc", "usr/libexec/tunaos/fork-identity.py"} | BOOT_FILES | INSTALLER_FILES
+                "usr/share/pixmaps/tunaos-lettermark.svg", "etc/issue", "etc/xdg/fastfetch/config.jsonc", "usr/libexec/tunaos/fork-identity.py"} | BOOT_FILES | INSTALLER_FILES | {GDM_PROFILE}
     for relative in ("etc/bootc-installer/recipe.json", "etc/bootc-installer/images.json"):
         if target(root, relative).exists():
             required.add(relative)
@@ -347,9 +378,9 @@ def verify(root):
         if not isinstance(digest, str) or not SHA.fullmatch(digest) or hashlib.sha256(path.read_bytes()).hexdigest() != digest:
             raise ValueError(f"applied identity hash mismatch: {relative}")
     installed_manifest = target(root, "usr/share/tunaos/fork-identity/manifest.json")
-    for path, data in {**boot_updates(installed_manifest, root, m), **installer_updates(installed_manifest, root, m)}.items():
+    for path, data in {**gdm_updates(root), **boot_updates(installed_manifest, root, m), **installer_updates(installed_manifest, root, m)}.items():
         if path.read_bytes() != data:
-            raise ValueError("boot or installer values do not match identity intent")
+            raise ValueError("greeter, boot or installer values do not match identity intent")
     for relative in ("usr/lib/os-release", "etc/os-release"):
         if relative not in applied:
             continue

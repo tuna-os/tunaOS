@@ -1,7 +1,9 @@
 """Execute staged identity consumers; no container/GTK/boot acceptance claim."""
+import hashlib
 import importlib.util
 import json
 from pathlib import Path
+import shutil
 import subprocess
 
 import pytest
@@ -149,7 +151,8 @@ def test_existing_brand_adapter_reaches_identity_on_both_families(staged, tmp_pa
             "image-ref": f"ostree-image-signed:docker://localhost/fork-preview/{variant}"}
     (root / "usr/share/ublue-os/image-info.json").write_text(json.dumps(info))
     context = manifest.parent.parent
-    (context / "build_scripts/lib").mkdir(parents=True)
+    from tests.test_fork_installer_source import prepare_root
+    prepare_root(context, root, cell["manifest"])
     for name in ("fork-branding.sh", "fork-identity.py"):
         shutil.copyfile(ROOT / "build_scripts/lib" / name, context / "build_scripts/lib" / name)
     run = subprocess.run(["bash", "-c", 'set -euo pipefail; source "$1"; tunaos_apply_fork_branding "$2" "$3"',
@@ -162,15 +165,91 @@ def test_existing_brand_adapter_reaches_identity_on_both_families(staged, tmp_pa
         assert "tunaos_apply_fork_branding" in (ROOT / "build_scripts/desktop" / entry).read_text()
 
 
-def test_full_preparation_marks_builds_blocked(staged, tmp_path):
+def test_full_preparation_preserves_recipe_order_through_identity(staged, tmp_path):
+    """Run 39209599456 opened disk first after recursive recipe key sorting.
+
+    Falsification: behavioural; each production writer must keep the template's
+    ordered steps and tour, while receipts bind the exact resulting bytes.
+    """
+    source = PREPARE.INSTALLER
+    stock = json.loads((ROOT / "system_files" / source.RECIPE).read_text())
+    assert list(stock["steps"]) == ["welcome", "image", "disk", "encryption"]
+    assert list(stock["tour"]) == ["welcome", "features", "community", "completed"]
+
+    def assert_order(actual, expected):
+        if isinstance(expected, dict):
+            assert list(actual) == list(expected)
+            for key, value in expected.items():
+                assert_order(actual[key], value)
+        elif isinstance(expected, list):
+            for item, original in zip(actual, expected, strict=True):
+                assert_order(item, original)
+
+    before = PREPARE.COMPILER.source_receipt(ROOT)
     output = tmp_path / "prepared"
     builds = PREPARE.prepare(staged, output, identity_staging=True)
     assert len(builds) == 2
     for build in builds:
         assert build["build_blocked"] == IDENTITY.BLOCKERS
-        manifest = output / build["context"] / "manifests/fork-identity.json"
+        context = output / build["context"]
+        manifest = context / "manifests/fork-identity.json"
         assert IDENTITY.load(manifest)["name"] == "Harbor"
+        base = context / "manifests/fork-config.json"
+        config = source.read_json(base)
+        assert config["sources"] == {"sha256": before["sha256"]}
+        prepared_recipe = source.read_json(context / "system_files" / source.RECIPE)
+        assert_order(prepared_recipe, stock)
+        root = tmp_path / ("root-" + config["variant"])
+        for relative in (source.RECIPE, source.CATALOG):
+            path = root / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(context / "system_files" / relative, path)
+        # Exercise the canonical probe on both measured backend layouts.
+        efi = ("usr/lib/bootupd/updates/EFI/test/grubx64.efi" if config["variant"] == "yellowfin"
+               else "usr/lib/systemd/boot/efi/systemd-bootx64.efi")
+        for relative, content in {
+            "usr/lib/os-release": 'ID=fixture\nNAME="Stock"\n',
+            "usr/share/ublue-os/image-info.json": json.dumps({"image-name": config["variant"], "image-flavor": "gnome"}),
+            efi: "fixture EFI payload",
+            "usr/lib/ostree/prepare-root.conf": "[composefs]\nenabled = " + ("no" if config["variant"] == "yellowfin" else "yes") + "\n",
+        }.items():
+            path = root / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content)
+        source.finalize(base, root, context / source.PROBE)
+        recipe_path = root / source.RECIPE
+        assert_order(source.read_json(recipe_path), stock)
+        finalized = recipe_path.read_bytes()
+        source.finalize(base, root, context / source.PROBE)
+        source.finalize(base, root, context / source.PROBE, verify_only=True)
+        assert recipe_path.read_bytes() == finalized
+        IDENTITY.apply(manifest, root)
+        assert_order(source.read_json(recipe_path), stock)
+        applied_path = root / "usr/share/tunaos/fork-identity/applied.json"
+        applied = source.read_json(applied_path)
+        assert list(applied) == sorted(applied)
+        assert applied[source.RECIPE] == hashlib.sha256(recipe_path.read_bytes()).hexdigest()
+        installed = root / "usr/share/tunaos/fork-identity/fork-config.json"
+        assert installed.read_bytes() == base.read_bytes()
+        snapshot = {p.relative_to(root): p.read_bytes() for p in root.rglob("*") if p.is_file()}
+        for _ in range(2):
+            IDENTITY.apply(manifest, root)
+            IDENTITY.verify(root)
+            source.finalize(base, root, context / source.PROBE, verify_only=True)
+            assert snapshot == {p.relative_to(root): p.read_bytes() for p in root.rglob("*") if p.is_file()}
+        reordered = source.read_json(recipe_path)
+        reordered["steps"] = dict(sorted(reordered["steps"].items()))
+        recipe_path.write_text(json.dumps(reordered, indent=2) + "\n")
+        with pytest.raises(ValueError, match="hash mismatch"):
+            IDENTITY.verify(root)
     assert not (ROOT / "manifests/fork-identity.json").exists()
+    assert PREPARE.COMPILER.source_receipt(ROOT) == before
+
+
+@pytest.mark.parametrize("helper", [IDENTITY, PREPARE.INSTALLER])
+def test_nonrecipe_json_serialization_stays_canonical(helper):
+    value = {"z": {"second": 2, "first": 1}, "a": 3}
+    assert helper.json_bytes(value) == (json.dumps(value, sort_keys=True, indent=2) + "\n").encode()
 
 
 def test_non_png_and_unsupported_desktop_fail(staged):
@@ -269,6 +348,7 @@ def test_boot_assets_and_selection_before_desktop_identity(staged, tmp_path):
     assert (root / "usr/lib/os-release").read_bytes() == original
     conf = (root / "etc/plymouth/plymouthd.conf").read_text()
     assert "Theme=fork-identity" in conf
+    assert "ThemeDir=/usr/share/plymouth/themes" in conf
     theme = root / IDENTITY.THEME_DIR
     from PIL import Image
     with Image.open(theme / "splash.png") as image:
@@ -333,7 +413,7 @@ def test_early_selector_reaches_staged_payload(staged, tmp_path):
     run = subprocess.run(["bash", str(context / "build_scripts/plymouth-set-theme.sh"), "yellowfin"],
                          env={**os.environ, "TUNAOS_SYSROOT": str(root)}, capture_output=True, text=True)
     assert run.returncode == 0, run.stderr
-    assert (root / "etc/plymouth/plymouthd.conf").read_text().strip() == "[Daemon]\nTheme=fork-identity"
+    assert (root / "etc/plymouth/plymouthd.conf").read_text().strip() == "[Daemon]\nTheme=fork-identity\nThemeDir=/usr/share/plymouth/themes"
     # Same entry point remains closed to live image writes until qualification.
     run = subprocess.run(["bash", str(context / "build_scripts/plymouth-set-theme.sh"), "yellowfin"],
                          env={k: v for k, v in os.environ.items() if k != "TUNAOS_SYSROOT"}, capture_output=True, text=True)
@@ -352,6 +432,9 @@ def test_recipe_tour_projects_stock_copy_and_art_only(staged, tmp_path):
     assert "TunaOS" not in actual["tour"]["completed"]["description"]
     assert actual["tour"]["welcome"]["image"] == "/run/host/usr/share/pixmaps/tunaos.svg"
     assert actual["tour"]["custom"] == recipe["tour"]["custom"]
+    assert list(actual["tour"]) == list(recipe["tour"])
+    assert list(actual["tour"]["welcome"]) == list(recipe["tour"]["welcome"])
+    assert list(actual["steps"]) == list(recipe["steps"])
     assert actual["imgref"] == recipe["imgref"]
     IDENTITY.verify(root)
 
@@ -368,3 +451,84 @@ def test_identity_pair_must_match_canonical_intent(staged, tmp_path):
     paired.write_text(json.dumps(value))
     with pytest.raises(ValueError, match="canonical"):
         IDENTITY.verify(root)
+
+
+@pytest.mark.parametrize("source,content", [
+    (None, None),
+    ("etc/dconf/profile/gdm", "user-db:user\nfile-db:/var/lib/gdm3/greeter-dconf-defaults\n"),
+    ("usr/share/dconf/profile/gdm", "user-db:user\nfile-db:/usr/share/gdm/greeter-dconf-defaults\n"),
+    ("etc/dconf/profile/gdm", "# Keep defaults\nuser-db:user\nsystem-db:site\nsystem-db:gdm\n"),
+])
+def test_gdm_profile_precedes_vendor_defaults(staged, tmp_path, source, content):
+    manifest, root, _, _ = materialize(staged, tmp_path)
+    if source:
+        path = root / source
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content)
+    IDENTITY.apply(manifest, root)
+    profile = root / "etc/dconf/profile/gdm"
+    active = [line for line in profile.read_text().splitlines() if not line.startswith("#")]
+    assert active[:2] == ["user-db:user", "system-db:gdm"]
+    if content:
+        assert all(line in profile.read_text().splitlines() for line in content.splitlines())
+    IDENTITY.apply(manifest, root)
+    IDENTITY.verify(root)
+    profile.write_text("user-db:user\nfile-db:/usr/share/gdm/greeter-dconf-defaults\n")
+    with pytest.raises(ValueError, match="hash mismatch"):
+        IDENTITY.verify(root)
+    # Even an updated hash cannot make a disconnected greeter profile valid.
+    import hashlib
+    receipt = root / "usr/share/tunaos/fork-identity/applied.json"
+    applied = json.loads(receipt.read_text())
+    applied["etc/dconf/profile/gdm"] = hashlib.sha256(profile.read_bytes()).hexdigest()
+    receipt.write_text(json.dumps(applied))
+    with pytest.raises(ValueError, match="greeter, boot or installer"):
+        IDENTITY.verify(root)
+
+
+@pytest.mark.parametrize("bad", ["symlink", "wrong-profile"])
+def test_gdm_profile_rejected_before_identity_mutation(staged, tmp_path, bad):
+    manifest, root, _, _ = materialize(staged, tmp_path)
+    profile = root / "etc/dconf/profile/gdm"
+    profile.parent.mkdir(parents=True)
+    if bad == "symlink":
+        profile.symlink_to(tmp_path / "outside")
+    else:
+        profile.write_text("file-db:/vendor\nuser-db:user\n")
+    before = (root / "usr/lib/os-release").read_bytes()
+    with pytest.raises(ValueError):
+        IDENTITY.apply(manifest, root)
+    assert (root / "usr/lib/os-release").read_bytes() == before
+
+
+@pytest.mark.parametrize("omit_theme_dir", [False, True])
+def test_ubuntu_populate_initrd_selects_the_generated_theme(staged, tmp_path, omit_theme_dir):
+    import configparser
+    import os
+    manifest, root, _, _ = materialize(staged, tmp_path)
+    IDENTITY.apply_boot(manifest, root)
+    path = root / "etc/plymouth/plymouthd.conf"
+    conf = configparser.ConfigParser(interpolation=None)
+    conf.optionxform = str
+    conf.read(path)
+    assert conf["Daemon"]["ThemeDir"] == "/usr/share/plymouth/themes"
+    # Remap only the fixture's root. The actual vendor selection functions
+    # below must choose fork-identity even while alternatives names bgrt.
+    if omit_theme_dir:
+        conf.remove_option("Daemon", "ThemeDir")
+    else:
+        conf["Daemon"]["ThemeDir"] = str(root / "usr/share/plymouth/themes")
+    with path.open("w") as stream:
+        conf.write(stream, space_around_delimiters=False)
+    policy = root / "usr/share/plymouth"
+    (policy / "plymouthd.defaults").write_text("[Daemon]\nTheme=bgrt\n")
+    fixture = ROOT / "tests/fixtures/plymouth/ubuntu-theme-selection.sh"
+    run = subprocess.run(
+        ["bash", "-c", 'source "$1"; set_theme_dir; printf "%s\n" "$PLYMOUTH_THEME_NAME" "$PLYMOUTH_THEME_DIR"', "test", str(fixture)],
+        env={**os.environ, "PLYMOUTH_CONFDIR": str(path.parent),
+             "PLYMOUTH_POLICYDIR": str(policy), "PLYMOUTH_DATADIR": str(root / "usr/share"),
+             "PLYMOUTH_THEME_NAME": "bgrt"}, capture_output=True, text=True,
+    )
+    assert run.returncode == 0, run.stderr
+    expected = "bgrt" if omit_theme_dir else "fork-identity"
+    assert run.stdout.splitlines() == [expected, str(root / "usr/share/plymouth/themes" / expected)]
