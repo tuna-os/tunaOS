@@ -88,8 +88,8 @@ done < <(apt-cache pkgnames linux-image- |
 
 if [[ -z "$HELD" ]]; then
 	SNAPSHOT_SCRIPT="${TUNAOS_DEBIAN_NVIDIA_SNAPSHOT_SCRIPT:-/run/context/build_scripts/overlay/debian-nvidia-snapshot.sh}"
-	if [[ -x "$SNAPSHOT_SCRIPT" ]]; then
-		if ! HELD="$("$SNAPSHOT_SCRIPT" "$DRIVER" "$KVER")"; then
+	if [[ -f "$SNAPSHOT_SCRIPT" ]]; then
+		if ! HELD="$(bash "$SNAPSHOT_SCRIPT" "$DRIVER" "$KVER")"; then
 			echo "ERROR: Debian snapshot fallback could not recover a kernel for ${DRIVER} on ${KVER}" >&2
 			exit 1
 		fi
