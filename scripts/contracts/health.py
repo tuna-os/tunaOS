@@ -168,6 +168,13 @@ def evaluate_row(required: dict[str, Any], attempt: dict | None,
                          readiness["status"] if readiness["status"] in {"running", "stale", "unknown"} else "blocked")
         reasons.append("package-or-image-contract-" + row["status"])
         return row
+    # These linkage fields are optional in the receipt schemas, but health
+    # requires them. Two absent base digests must not compare as a match.
+    if (not image.get("baseDigest") or not package.get("baseDigest")
+        or not image.get("factoryReceiptDigests")):
+        row["status"] = "blocked"
+        reasons.append("attempt-publication-receipt-mismatch")
+        return row
     expected_publication = required.get("publication")
     expected_factory_publication = required.get("factoryPublication")
     if (publication is None or not isinstance(expected_publication, dict)

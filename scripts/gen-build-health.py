@@ -294,58 +294,15 @@ def _measurement_seconds(measurements, block):
             not math.isfinite(duration) or duration < 0):
         return None
     return duration
-def _complete_qualification(projected):
-    """Return whether a receipt carries enough proof to be qualified."""
-    if not all(
-        isinstance(projected.get(field), str) and projected[field]
-        for field in ("qualifiedAt", "receiptDigest", "platformManifestDigest")
-    ):
-        return False
-    if not isinstance(projected.get("browser"), dict):
-        return False
-    status = projected.get("status")
-    if status not in {None, "qualified", "passed", "success", "local-only", "legacy-absent"}:
-        return False
-    observed = projected.get("observed")
-    if not isinstance(observed, dict):
-        return False
-    for mode in ("plain", "encrypted"):
-        record = observed.get(mode)
-        if not isinstance(record, dict):
-            return False
-        if record.get("installed_boot") is not True:
-            return False
-        if record.get("desktop_contract") is not True:
-            return False
-    measurements = projected.get("measurements")
-    if not isinstance(measurements, dict):
-        return False
-    return all(_measurement_seconds(measurements, block) is not None
-               for block in ("cold", "warm"))
-
-
-
 def _qualification_summary(projected):
-    """Additive dated-qualification and cold/warm performance summary."""
-    status = projected.get("status")
-    checks = projected.get("checks")
-    failing = (
-        not _complete_qualification(projected)
-        or status in {"fail", "failed", "unqualified", "blocked"}
-        or (
-            isinstance(checks, list) and any(
-                isinstance(check, dict)
-                and check.get("status") not in (None, "pass", "passed", "success")
-                for check in checks
-            )
-        )
-    )
-    if failing:
-        state = "unqualified"
-    elif status == "local-only" or projected.get("localOnly") is True:
-        state = "local-only"
-    else:
-        state = "qualified"
+    """Preserve receipt diagnostics without implying authenticated admission.
+
+    This collector has no independent current-input/browser-build context. The
+    catalog admission gate owns qualification; receipt shape or self-reported
+    success cannot replace it. Keep this report closed until that integration
+    has its reviewed provenance contract.
+    """
+    state = "unqualified"
     browser = projected.get("browser")
     browser_label = None
     if isinstance(browser, dict):

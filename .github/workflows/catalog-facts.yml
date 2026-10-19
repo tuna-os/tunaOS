@@ -324,7 +324,7 @@ jobs:
               # immutable child manifest that was actually probed; the moving
               # index/tag placeholder above is not a runtime-facts source.
               if pm_digest and probe:
-                  image_key = f"tuna-os/{cell}"
+                  image_key = f"tuna-os/{var}:{flavor}"
                   measured = {
                       "platform": plat,
                       "platformManifestDigest": pm_digest,

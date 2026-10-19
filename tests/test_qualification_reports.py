@@ -363,7 +363,7 @@ def single_variant_config():
          "platforms": ["linux/amd64/v2", "linux/arm64"]}]}]}
 
 
-def test_collect_with_receipts_reports_qualification_and_validates():
+def test_collect_with_receipts_preserves_diagnostics_without_qualification():
     receipts = {"albacore:cosmic:linux/amd64/v2": dict(
         _strict_v1_receipt(), evidence=[{"url": "https://example.invalid/run/1"}])}
     document = collector.collect(
@@ -373,7 +373,7 @@ def test_collect_with_receipts_reports_qualification_and_validates():
     intel = next(r for r in document["targets"]
                  if r["target"]["platform"] == "linux/amd64/v2")
     qual = intel["qualification"]
-    assert qual["status"] == "qualified"
+    assert qual["status"] == "unqualified"
     assert qual["qualifiedAt"] == "2026-10-17T01:02:03Z"
     assert qual["receiptDigest"] == DIGEST_C
     assert qual["browser"] == "chromium 140.0"
@@ -590,3 +590,14 @@ def test_placeholder_profile_cannot_be_browser_proof(field, value):
     with pytest.raises(ValueError, match="browser"):
         targets._qualification_validator()(receipt, "test")
     assert _candidate_status(_catalog_with_receipt(receipt)) == "unqualified"
+
+
+@pytest.mark.parametrize("receipt", [catalog_receipt(), _strict_v1_receipt(), v1_receipt(
+    status="qualified", observed={mode: {"installed_boot": True, "desktop_contract": True}
+                                  for mode in ("plain", "encrypted")})])
+def test_reporting_cannot_admit_self_asserted_or_structural_receipts(receipt):
+    projected = targets.receipt_to_catalog_projection(receipt)
+    summary = collector._qualification_summary(projected)
+    assert summary["status"] == "unqualified"
+    assert summary["receiptDigest"] == projected["receiptDigest"]
+    assert summary["coldSeconds"] is not None

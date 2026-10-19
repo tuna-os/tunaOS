@@ -1787,3 +1787,10 @@ directory from a stable checkout.
 Fork previews also disable layer reuse with `--no-cache`. Some legacy stages
 declare the cache argument after their base hooks. Gentoo has a separate branch
 for desktop builds. Tests must prove each stage before fork builds can reuse layers.
+
+## Health reports require separate admission
+
+Receipt shape and reported success do not establish browser qualification.
+The collector keeps dates, hashes and durations from receipts as diagnostics.
+It reports these receipts as unqualified until the collector can verify trusted inputs.
+The catalog has its own gate; report generation must not bypass that gate.
