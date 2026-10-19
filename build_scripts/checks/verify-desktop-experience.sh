@@ -27,6 +27,22 @@ trap emit_fail_on_early_exit EXIT
 source /run/context/build_scripts/lib.sh 2>/dev/null || true
 detected_os 2>/dev/null || true
 
+# Standalone callers mount only this script, so build-time lib.sh detection is
+# unavailable in those containers. Derive the distro flags from the installed
+# image as a fallback while preserving values exported by lib.sh or the caller.
+detect_standalone_distro_flags() {
+	local ID="" ID_LIKE=""
+	[[ -r /etc/os-release ]] && . /etc/os-release
+	if [[ "${IS_UBUNTU:-false}" != true && "$ID" == ubuntu ]]; then
+		IS_UBUNTU=true
+	elif [[ "${IS_DEBIAN:-false}" != true &&
+		( "$ID" == debian || " $ID_LIKE " == *" debian "* ) ]]; then
+		IS_DEBIAN=true
+	fi
+}
+detect_standalone_distro_flags
+
+
 # Tuna Desktop ships on Arch (pacman), the RPM bases and the apt bases (dpkg).
 # Query the native database for installed names and file owners, never
 # virtual provides or a repository's availability (adapted from tunaOS#3194).
