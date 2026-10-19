@@ -1959,3 +1959,17 @@ The deadline still applies. Success needs a stable snapshot with a new graphical
 session from `gdm-password` and a GNOME Shell process.
 A failed read of an existing session remains an error.
 The report records each confirmed disappearance and its timestamp.
+
+### GTK loses widget focus after Next opens an empty form
+
+[Run 39310516324](https://github.com/tuna-os/tunaOS/actions/runs/39310516324)
+activated Welcome and turned encryption off in both variants. Both then displayed
+Create User with the same active window but no focused widget.
+The empty form disables Next, which held focus on the prior page.
+
+After its own page-advance action, the harness checks the new page and active
+window again. It can send one Tab to establish widget focus.
+It then observes focus for at most four snapshots.
+If no unique focus appears, the test stops without Enter or text input.
+The exception does not apply to the same page, another window or ambiguous focus.
+A regression test covers the full sequence through guarded Install activation.

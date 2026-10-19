@@ -798,7 +798,7 @@ PAGE_HEADINGS = (
 )
 
 
-def keyboard_window(snapshot, pid):
+def keyboard_window(snapshot, pid, *, allow_unfocused=False):
     """GTK4 SENSITIVE represents !DISABLED; ENABLED is not emitted.
 
     GTK 4.22 gtkatspicontext.c and gtkatspiutils.c also deliberately return
@@ -813,6 +813,8 @@ def keyboard_window(snapshot, pid):
         raise ValueError("keyboard navigation requires one active installer window")
     focused = [n for n in nodes.values() if n["pid"] == pid and showing(n)
                and n["states"].get("focused") is True and frames[0] in ancestors(n, nodes)]
+    if not focused and allow_unfocused:
+        return frames[0], None
     if len(focused) != 1:
         raise ValueError("keyboard navigation requires one focused installer descendant")
     return frames[0], focused[0]
@@ -836,9 +838,9 @@ def page_branch(snapshot, heading, pid):
     return exclusive[-1]
 
 
-def keyboard_target(snapshot, heading, name, roles, pid, *, header=False):
+def keyboard_target(snapshot, heading, name, roles, pid, *, header=False, allow_unfocused=False):
     nodes = tree(snapshot)
-    window, focused = keyboard_window(snapshot, pid)
+    window, focused = keyboard_window(snapshot, pid, allow_unfocused=allow_unfocused)
     branch = page_branch(snapshot, heading, pid)
     page_roots = [page_branch(snapshot, h, pid) for h in PAGE_HEADINGS
                   if any(n["name"] == h and n["role"] == "label" for n in nodes.values())]
@@ -865,6 +867,12 @@ def keyboard_target(snapshot, heading, name, roles, pid, *, header=False):
 class KeyboardUI(UI):
     """Real bounded Tab traversal; never calls an accessibility action/setter."""
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.focus_transition = None
+        self.current_page = None
+        self.navigation_events = []
+
     def page(self, expected=None):
         frame, size, words, snapshot = self.capture("keyboard-page")
         if phrase_rows(words, "Type to search"):
@@ -872,7 +880,7 @@ class KeyboardUI(UI):
         found = [heading for heading in PAGE_HEADINGS if phrase_rows(words, heading)]
         if len(found) != 1 or (expected is not None and found[0] != expected):
             raise ValueError("visible wizard page is absent, ambiguous, or changed")
-        keyboard_window(snapshot, self.app_pid)
+        keyboard_window(snapshot, self.app_pid, allow_unfocused=True)
         page_branch(snapshot, found[0], self.app_pid)
         return found[0], snapshot
 
@@ -880,8 +888,42 @@ class KeyboardUI(UI):
         heading, snapshot = self.page(heading)
         seen = set()
         deadline = time.monotonic() + 90
+        pending = self.focus_transition
+        bootstrap = (pending is not None and pending.get("action") in {"Welcome", "Next"}
+                     and pending.get("from") in PAGE_HEADINGS and pending["from"] != heading)
         for _ in range(32):
-            target, focused = keyboard_target(snapshot, heading, name, roles, self.app_pid, header=header)
+            if time.monotonic() >= deadline:
+                raise ValueError("native keyboard focus deadline expired")
+            target, focused = keyboard_target(snapshot, heading, name, roles, self.app_pid,
+                                             header=header, allow_unfocused=bootstrap)
+            if focused is None:
+                # A page advance can disable the focused header Next button.
+                # This is the only case that admits one non-activating Tab
+                # without widget focus. The exact app/window/page and target
+                # remain bound; Enter and all text still need unique focus.
+                _, snapshot = self.page(heading)
+                target, focused = keyboard_target(snapshot, heading, name, roles, self.app_pid,
+                                                 header=header, allow_unfocused=True)
+                if focused is not None:
+                    continue
+                if time.monotonic() >= deadline:
+                    raise ValueError("native keyboard focus deadline expired")
+                self.qmp.key("tab")
+                self.navigation_events.append({"action": "establish-focus-with-tab",
+                                               "from": pending["from"], "page": heading})
+                bootstrap = False
+                self.focus_transition = None
+                for _ in range(4):
+                    if time.monotonic() >= deadline:
+                        break
+                    time.sleep(.25)
+                    snapshot = self.snapshot()
+                    _, focused = keyboard_window(snapshot, self.app_pid, allow_unfocused=True)
+                    if focused is not None:
+                        break
+                if focused is None:
+                    raise ValueError("native focus did not appear after the single transition Tab")
+                continue
             # A hidden matching control never qualifies: actual focus must land
             # on the unique control inside the screenshot-verified page branch.
             if focused == target:
@@ -889,6 +931,8 @@ class KeyboardUI(UI):
                 target, focused = keyboard_target(fresh, final_heading, name, roles, self.app_pid, header=header)
                 if focused != target:
                     raise ValueError("keyboard focus changed before native input")
+                self.current_page = heading
+                self.focus_transition = None
                 return target
             identity = (focused["id"], focused["parent"], focused["role"], focused["name"])
             if identity in seen or time.monotonic() >= deadline:
@@ -907,6 +951,7 @@ class KeyboardUI(UI):
             time.sleep(1)
         target = self.focus(name, ("list item",), heading="Welcome to Harbor Canary")
         self.qmp.key("ret")
+        self.focus_transition = {"from": self.current_page, "action": "Welcome"}
         return {"name": name, "pid": target["pid"], "role": target["role"],
                 "transport": "QMP keyboard", "focused": True, "overview_escape": escaped}
 
@@ -921,6 +966,8 @@ class KeyboardUI(UI):
         else:
             target = self.focus(name, roles, header=name == "Next")
         self.qmp.key("ret")
+        if name == "Next":
+            self.focus_transition = {"from": self.current_page, "action": "Next"}
         return {"name": name, "pid": target["pid"], "role": target["role"],
                 "transport": "QMP keyboard", "focused": True}
 

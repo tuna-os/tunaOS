@@ -877,3 +877,118 @@ def test_header_next_excludes_hidden_per_page_buttons():
         value["nodes"].append(button)
     selected, _ = UI.keyboard_target(value, "Create User", "Next", ("push button",), pid, header=True)
     assert selected["id"] == 300
+
+
+def test_entire_keyboard_sequence_handles_disabled_header_focus(monkeypatch):
+    """Run21 reaches Create User with active frame but zero focused widgets.
+
+    Extend the approved native tree with the source-defined header Next button.
+    This exercises every remaining input phase without a guest or disk writes.
+    """
+    value = run20_tree()
+    pid = value["nodes"][0]["pid"]
+    next_button = node(300, 241, "button", "Next", [0, 0, 80, 40], enabled=False)
+    next_button.update(pid=pid, role_id=43)
+    value["nodes"].append(next_button)
+    phase = ["Welcome to Harbor Canary"]
+    typed = set()
+    events = []
+    disk_guard = [False]
+
+    def focused():
+        return next((n["id"] for n in value["nodes"] if n["states"].get("focused")), None)
+
+    def focus(ident):
+        for n in value["nodes"]:
+            n["states"]["focused"] = n["id"] == ident
+
+    def key(*keys):
+        events.append(keys)
+        current = focused()
+        if keys == ("tab",):
+            order = {
+                "Welcome to Harbor Canary": [29],
+                "Disk Encryption": [75, 300],
+                "Create User": [122, 128, 134, 147] + ([300] if len(typed) == 4 else []),
+                "Confirm installation": [172],
+            }[phase[0]]
+            focus(order[(order.index(current) + 1) % len(order)] if current in order else order[0])
+        elif keys == ("spc",):
+            assert current == 75
+            value["nodes"][75]["states"]["checked"] = False
+        elif keys == ("ret",):
+            if current == 29:
+                phase[0] = "Disk Encryption"
+            elif current == 300:
+                phase[0] = "Create User" if phase[0] == "Disk Encryption" else "Confirm installation"
+            else:
+                assert current == 172 and disk_guard[0]
+                return
+            next_button["states"]["sensitive"] = phase[0] != "Create User"
+            focus(None)  # The new empty form disables the formerly focused Next.
+        else:
+            assert keys == ("ctrl", "a") and current in (122, 128, 134, 147)
+
+    def type_text(text):
+        assert focused() in (122, 128, 134, 147)
+        typed.add(focused())
+        next_button["states"]["sensitive"] = len(typed) == 4
+        events.append(("typed",))  # Never save supplied field text.
+
+    driver = UI.KeyboardUI(SimpleNamespace(key=key, type=type_text), None,
+                           lambda: copy.deepcopy(value), None, app_pid=pid)
+    monkeypatch.setattr(driver, "capture", lambda label: (Path("fixture.png"), SIZE,
+                                                         words(phase[0]), copy.deepcopy(value)))
+    monkeypatch.setattr(UI.time, "sleep", lambda _: None)
+    driver.start_welcome()
+    driver.toggle_off("Encrypt this disk")
+    driver.click("Next")
+    for name, secret in (("Name", False), ("Username", False), ("Password", True), ("Confirm Password", True)):
+        driver.field(name, "synthetic-test-value", secret=secret)
+    driver.click("Next")
+    driver.focus("Install", ("push button",), heading="Confirm installation")
+    disk_guard[0] = True
+    driver.click("Install")
+    assert typed == {122, 128, 134, 147}
+    assert [event["page"] for event in driver.navigation_events] == ["Disk Encryption", "Create User", "Confirm installation"]
+    assert events.count(("ret",)) == 4
+
+
+@pytest.mark.parametrize("case", ["no_transition", "same_page", "inactive", "ambiguous_focus", "no_focus_after_tab", "changed_page", "changed_app_after_tab", "ambiguous_after_tab", "deadline", "unapproved_transition"])
+def test_focus_bootstrap_is_narrow_nonactivating_and_bounded(monkeypatch, case):
+    value = run20_tree()
+    pid = value["nodes"][0]["pid"]
+    for n in value["nodes"]:
+        n["states"]["focused"] = False
+    events = []
+    def key(*keys):
+        events.append(keys)
+        if case == "changed_app_after_tab":
+            value["nodes"][1]["states"]["active"] = False
+        if case == "ambiguous_after_tab":
+            for ident in (122, 128):
+                value["nodes"][ident]["states"]["focused"] = True
+    driver = UI.KeyboardUI(SimpleNamespace(key=key, type=lambda *a: events.append(("typed",))),
+                           None, lambda: copy.deepcopy(value), None, app_pid=pid)
+    if case != "no_transition":
+        driver.focus_transition = {"from": "Create User" if case == "same_page" else "Disk Encryption",
+                                   "action": "unrelated" if case == "unapproved_transition" else "Next"}
+    if case == "inactive":
+        value["nodes"][1]["states"]["active"] = False
+    if case == "ambiguous_focus":
+        for ident in (122, 128):
+            value["nodes"][ident]["states"]["focused"] = True
+    count = [0]
+    clock = [0]
+    monkeypatch.setattr(UI.time, "monotonic", lambda: clock[0])
+    def capture(label):
+        count[0] += 1
+        if case == "deadline" and count[0] > 1:
+            clock[0] = 100
+        heading = "Confirm installation" if case == "changed_page" and count[0] > 1 else "Create User"
+        return Path("fixture.png"), SIZE, words(heading), copy.deepcopy(value)
+    monkeypatch.setattr(driver, "capture", capture)
+    monkeypatch.setattr(UI.time, "sleep", lambda _: None)
+    with pytest.raises(ValueError):
+        driver.field("Password", "synthetic-test-value", secret=True)
+    assert events == ([("tab",)] if case in {"no_focus_after_tab", "changed_app_after_tab", "ambiguous_after_tab"} else [])

@@ -1184,6 +1184,7 @@ print(json.dumps(values))
         private=private,
         evidence=lambda value: report.__setitem__("native_ui_observation", value),
     )
+    report["native_navigation_events"] = ui.navigation_events
     # Probe accessibility before any navigation, so a missing platform bridge
     # fails without touching the install confirmation.
     require(ui.snapshot()["nodes"], "native accessibility bridge is unavailable")
