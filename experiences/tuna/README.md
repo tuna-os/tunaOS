@@ -8,6 +8,12 @@ The key is byte-identical to tuna-os/tunaos-packages `public.gpg` at commit `f56
 
 The existing gtkgreet/cage launcher supplies a graphical greetd session picker and software rendering fallback. The shipped `tuna.desktop` session launches its supervisor (`tuna-session`), and its `tuna-lock` PAM service handles unlock. `XDG_CURRENT_DESKTOP` is `Tuna:GNOME`, so xdg-desktop-portal reads `tuna-portals.conf`.
 
+The beta.1 package does not publish a Tuna xdg-desktop-portal backend, so the
+image deliberately does not route `org.freedesktop.impl.portal.Lockdown` to
+`tuna`. That route and its contract check remain deferred until a package
+release ships the backend; the shipped configuration names only the GNOME and
+GTK implementations that beta.1 provides.
+
 gtkgreet has no display-name field: it lists `/etc/greetd/environments` verbatim, and greetd runs the chosen line as `exec <line>`. The picker therefore lists the session by its name, `Tuna Desktop`, and that line runs the `Tuna` launcher in this overlay (`/usr/bin/Tuna`), which accepts only the argument `Desktop`, sets `XDG_SESSION_TYPE=wayland` (greetd, unlike GDM, leaves the tty session type), and starts `tuna-session` (tunaOS#3110).
 
 Upgrades from the `roost` flavor: the `tuna-desktop` package `provides` `roost` and ships, for one release, `roost-*` links to the `tuna-*` binaries, a hidden `roost.desktop` (`NoDisplay=true`, `Exec=tuna-session`) so a display manager that remembers the "roost" session still starts Tuna Desktop, and a `roost-lock` PAM service for a session started before the upgrade. Nothing in the image installs or requires a package named `roost`.

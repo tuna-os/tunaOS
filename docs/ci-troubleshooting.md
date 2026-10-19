@@ -1568,9 +1568,25 @@ uses the previous defect: the report must query a matrix cell with
 
 ### Marlin selects OSTree/XFS during disk installation
 
-On 2026-10-04 the Corral builder on AWS failed with `bootupd is required for ostree-based installs`. The Marlin image had bootupctl and systemd-boot but no GRUB update payload. Its shared installer configuration also reported an XFS root although prepare-root.conf enabled composefs.
+**Symptom:** The Corral builder on AWS fails with
+`bootupd is required for ostree-based installs`, or the installer log reports
+an XFS root while the image's `prepare-root.conf` enables composefs.
 
-The Marlin override `50-marlin.toml` selects systemd-boot and ext4. Containerfile.arch now applies the variant overrides and checks bootc's merged configuration before release. External installers must also select `--composefs-backend` when the image has systemd-boot without a GRUB update payload; the bootupctl executable alone does not identify an OSTree installation. Corral's corrected image probe reports composefs/ext4. The AWS boot result remains a separate qualification gate.
+**Measured cause:** On 2026-10-04, Marlin had `bootupctl` and systemd-boot but
+no GRUB update payload. The shared installer configuration still reported XFS,
+even though `prepare-root.conf` selected composefs. The bootupctl executable
+alone is not evidence of an OSTree backend.
+
+**Fix:** `50-marlin.toml` selects systemd-boot and ext4. `Containerfile.arch`
+applies the variant override and checks bootc's merged configuration before
+release. External installers must select `--composefs-backend` for an image
+with systemd-boot and no GRUB update payload. The corrected image probe reports
+composefs/ext4.
+
+**Verification:** Run `pytest -q tests/test_marlin_installer_defaults.py`.
+For a builder failure, inspect `gh run view <run-id> --log` and search for
+`bootupd|composefs|filesystem|backend`; the AWS boot result remains a separate
+qualification gate.
 
 
 ### Roost Screenshot consent cannot open its Access dialog
