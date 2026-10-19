@@ -75,6 +75,7 @@ esac
         "#!/bin/sh\nexit " + ("1" if settings.get("sync_fail") else "0") + "\n",
         encoding="utf-8",
     )
+    (fakebin / "emaint").chmod(0o755)
     (fakebin / "gpg").write_text(
         """#!/bin/sh
 case "$*" in
@@ -89,6 +90,7 @@ exit 0
     )
     (fakebin / "gpg").chmod(0o755)
     (fakebin / "gpgconf").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    (fakebin / "gpgconf").chmod(0o755)
     (fakebin / "emerge").write_text(
         "#!/bin/sh\nprintf '%s\\n' reached > \"$TUNAOS_EMERGE_MARKER\"\n",
         encoding="utf-8",
@@ -141,6 +143,6 @@ def test_trust_failures_reject_before_emerge(tmp_path: Path, emerge_branch: str,
 
 
 def test_valid_signed_binrepo_reaches_emerge(tmp_path: Path, emerge_branch: str):
-    result = run_emerge_branch(tmp_path, emerge_branch)
+    result = run_emerge_branch(tmp_path, emerge_branch, TUNAOS_SOURCE_COUNT="1")
     assert result.returncode == 0, result.stdout + result.stderr
     assert (tmp_path / "emerge-called").read_text(encoding="utf-8").strip() == "reached"
