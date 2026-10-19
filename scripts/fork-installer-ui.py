@@ -11,6 +11,44 @@ import tempfile
 import time
 from pathlib import Path
 
+# Runs in the admitted guest, before dropping to its desktop user. The socket
+# is resolved through the exact pinned process's mount namespace. SO_PEERCRED
+# identifies the per-instance proxy; a host PID and a bus PID are not synonyms.
+PROXY_BINDING = r"""
+import socket
+import struct
+
+def bind_accessibility(expected):
+    if expected not in instances():
+        raise ValueError("pinned installer process changed before accessibility observation")
+    proc = PROC_ROOT / str(expected["pid"])
+    def stamp(path):
+        return path.joinpath("stat").read_text().rsplit(")", 1)[1].split()[19]
+    start = stamp(proc)
+    endpoint = proc / "root/run/flatpak/at-spi-bus"
+    before = endpoint.stat()
+    if not stat.S_ISSOCK(before.st_mode) or before.st_uid != uid:
+        raise ValueError("installer accessibility endpoint is not its user socket")
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as peer:
+        peer.settimeout(3)
+        peer.connect(str(endpoint))
+        proxy_pid, proxy_uid, _ = struct.unpack("3i", peer.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12))
+    proxy = PROC_ROOT / str(proxy_pid)
+    if (proxy_pid <= 0 or proxy_pid == expected["pid"] or proxy_uid != uid
+            or proxy.stat().st_uid != uid
+            or proxy.joinpath("exe").resolve().name != "xdg-dbus-proxy"):
+        raise ValueError("installer accessibility peer is not its user proxy")
+    proxy_start = stamp(proxy)
+    after = endpoint.stat()
+    if ((before.st_dev, before.st_ino) != (after.st_dev, after.st_ino)
+            or start != stamp(proc) or expected not in instances()):
+        raise ValueError("installer accessibility binding changed during observation")
+    return {"host_pid": expected["pid"], "bus_pid": proxy_pid, "uid": uid,
+            "application": expected["application"], "app_commit": expected["app_commit"],
+            "process_start": start, "proxy_start": proxy_start,
+            "socket_device": before.st_dev, "socket_inode": before.st_ino}
+"""
+
 # Executed as the already authenticated desktop user. Atspi is the platform's
 # normal accessibility observer, not a process injection or application test API.
 SNAPSHOT = r"""
@@ -20,15 +58,24 @@ gi.require_version("Atspi", "2.0")
 from gi.repository import Atspi
 Atspi.set_timeout(1500, 3000)
 allowed = __PIDS__
+# Dict form is the verified host-process -> bus-peer mapping. Lists are used
+# only by source-shaped collector fixtures, without a Flatpak proxy.
+peers = allowed if isinstance(allowed, dict) else {pid: pid for pid in allowed}
+if len(set(peers.values())) != len(peers):
+    raise ValueError("accessibility process bindings collide")
+by_peer = {peer: host for host, peer in peers.items()}
+roots = {host: 0 for host in peers}
+observed_bus_pids = []
 rows = []
 objects = []
 root = Atspi.get_desktop(0)
 def visit(node, parent, depth):
     if depth > 24 or len(rows) >= 1800:
         raise ValueError("accessibility tree exceeds bound")
-    pid = node.get_process_id()
-    if pid not in allowed:
-        return
+    bus_pid = node.get_process_id()
+    if bus_pid not in by_peer:
+        raise ValueError("accessibility descendant changed process binding")
+    pid = by_peer[bus_pid]
     key = len(rows)
     role = node.get_role_name().casefold()
     state = node.get_state_set()
@@ -48,7 +95,7 @@ def visit(node, parent, depth):
         bounds = [box.x, box.y, box.width, box.height]
     except Exception:
         pass
-    rows.append({"id": key, "parent": parent, "pid": pid, "role": role,
+    rows.append({"id": key, "parent": parent, "pid": pid, "bus_pid": bus_pid, "role": role,
                  "name": name, "states": states, "bounds": bounds, "role_id": int(node.get_role())})
     objects.append(node)
     count = node.get_child_count()
@@ -58,10 +105,17 @@ def visit(node, parent, depth):
         child = node.get_child_at_index(index)
         if child is not None:
             visit(child, key, depth + 1)
+if root.get_child_count() > 64:
+    raise ValueError("accessibility application count exceeds bound")
 for index in range(root.get_child_count()):
     app = root.get_child_at_index(index)
-    if app is not None and app.get_process_id() in allowed:
+    if app is not None:
+        observed_bus_pids.append(app.get_process_id())
+    if app is not None and app.get_process_id() in by_peer:
+        roots[by_peer[app.get_process_id()]] += 1
         visit(app, None, 0)
+if isinstance(allowed, dict) and any(count != 1 for count in roots.values()):
+    raise ValueError("accessibility process must have exactly one application root")
 relation_targets = 0
 for index, node in enumerate(objects):
     relations = {}
@@ -102,7 +156,7 @@ print(json.dumps({"schema_version": 1, "nodes": rows}))
 
 
 PROBE_FAILURE_MESSAGES = frozenset(
-    re.findall(r'raise ValueError\("([^"\n]+)"\)', SNAPSHOT)
+    re.findall(r'raise ValueError\("([^"\n]+)"\)', SNAPSHOT + PROXY_BINDING)
 )
 
 
@@ -114,9 +168,12 @@ def diagnostic_program(program, filename):
         + "except Exception as error:\n"
         + "    frames = traceback.extract_tb(error.__traceback__)[-12:]\n"
         + "    message = str(error)\n"
+        + "    peers = globals().get('observed_bus_pids', [])\n"
+        + "    peers = peers if isinstance(peers, list) and len(peers) <= 64 and all(type(p) is int and p > 0 for p in peers) else []\n"
         + "    allowed = " + repr(sorted(PROBE_FAILURE_MESSAGES)) + "\n"
         + "    print(json.dumps({'schema_version': 1, 'probe_error': {\n"
         + "        'exception_type': type(error).__name__[:80],\n"
+        + "        'observed_bus_pids': peers,\n"
         + "        'message': message if message in allowed else '<omitted>',\n"
         + "        'message_sha256': hashlib.sha256(message.encode()).hexdigest(),\n"
         + "        'traceback': [{'file': f.filename if f.filename in "

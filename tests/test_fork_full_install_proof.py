@@ -1645,5 +1645,31 @@ def test_accessibility_failure_is_retained_before_navigation(monkeypatch, tmp_pa
     monkeypatch.setattr(PROOF, 'guest_call', lambda *args: {'schema_version': 1, 'probe_error': error})
     report = {}
     with pytest.raises(ValueError, match='native accessibility probe failed: ValueError'):
-        PROOF.accessibility({}, tmp_path, [42], report)
+        PROOF.accessibility({}, tmp_path, [42, 43], report, app={"pid": 42})
     assert report['native_ui_probe_error'] == error
+
+
+def test_accessibility_proxy_program_and_nested_probe_compile(monkeypatch, tmp_path):
+    import ast
+    app = {'pid': 42, 'uid': 1000, 'application': 'org.bootcinstaller.Installer', 'app_commit': 'a' * 64}
+    def guest(*args):
+        outer = args[2]
+        compile(outer, '<outer>', 'exec')
+        # The diagnostic wrapper compiles its embedded guest program. Compile
+        # both generated levels so quoting cannot hide a runtime-only failure.
+        programs = [node.value for node in ast.walk(ast.parse(outer))
+                    if isinstance(node, ast.Constant) and isinstance(node.value, str)
+                    and 'def bind_accessibility' in node.value]
+        assert len(programs) == 1
+        program = programs[0]
+        compile(program, '<binding>', 'exec')
+        probes = [node.value for node in ast.walk(ast.parse(program))
+                  if isinstance(node, ast.Constant) and isinstance(node.value, str)
+                  and 'import gi' in node.value]
+        assert len(probes) == 1
+        compile(probes[0].replace('__PIDS__', repr({42: 700, 43: 43})), '<probe>', 'exec')
+        return {'process_binding': {'host_pid': 42, 'bus_pid': 700}}
+    monkeypatch.setattr(PROOF, 'guest_call', guest)
+    report = {}
+    PROOF.accessibility({}, tmp_path, [42, 43], report, app=app)
+    assert report['native_ui_process_binding'] == {'host_pid': 42, 'bus_pid': 700}

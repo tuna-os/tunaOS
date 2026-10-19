@@ -885,23 +885,27 @@ print(json.dumps(value))
     return value
 
 
-def accessibility(access, private, pids, report=None):
+def accessibility(access, private, pids, report=None, *, app):
     require(
-        pids and all(type(pid) is int and pid > 0 for pid in pids),
+        len(pids) == 2 and all(type(pid) is int and pid > 0 for pid in pids)
+        and pids[0] == app["pid"] and pids[0] != pids[1],
         "missing accessibility process binding",
     )
-    code = UI_MODULE.diagnostic_program(
-        UI_MODULE.SNAPSHOT.replace("__PIDS__", repr(pids)), "<fork-accessibility>"
-    )
     program = (
-        INSTALLER.GUEST_COMMON
-        + "\nprint(run(user_env()+"
-        + repr(["python3", "-c", code])
-        + ",timeout=90))\n"
+        INSTALLER.GUEST_COMMON + UI_MODULE.PROXY_BINDING
+        + "\nexpected = " + repr(app)
+        + "\nbinding = bind_accessibility(expected)"
+        + "\npeers = {expected['pid']: binding['bus_pid'], " + repr(pids[1]) + ": " + repr(pids[1]) + "}"
+        + "\ncode = " + repr(UI_MODULE.diagnostic_program(UI_MODULE.SNAPSHOT, "<fork-accessibility>")) + ".replace('__PIDS__', repr(peers))"
+        + "\nvalue = json.loads(run(user_env()+['python3', '-c', code], timeout=90))"
+        + "\nif binding != bind_accessibility(expected): raise ValueError('installer accessibility binding changed during observation')"
+        + "\nvalue['process_binding'] = binding\nprint(json.dumps(value))\n"
     )
     value = guest_call(
         access, private, UI_MODULE.diagnostic_program(program, "<fork-accessibility-launch>"), 120
     )
+    if report is not None and "process_binding" in value:
+        report["native_ui_process_binding"] = value["process_binding"]
     if "probe_error" in value:
         if report is not None:
             report["native_ui_probe_error"] = value["probe_error"]
@@ -1154,7 +1158,7 @@ print(json.dumps(values))
     ui = UI_MODULE.UI(
         vm.qmp,
         screenshot,
-        lambda: accessibility(access, private, [app["pid"], shell], report),
+        lambda: accessibility(access, private, [app["pid"], shell], report, app=app),
         LOGIN.words,
         app_pid=app["pid"],
         private=private,

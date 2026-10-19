@@ -436,7 +436,8 @@ def test_safe_diagnostic_accepts_native_gtk_role_names(role):
 
 
 @pytest.mark.parametrize("relation_case", ["valid", "unresolved", "duplicate"])
-def test_snapshot_label_relations_accept_unhashable_gi_wrappers(monkeypatch, capsys, relation_case):
+@pytest.mark.parametrize("mapping", ["direct", "proxy", "wrong", "collision", "missing", "ambiguous"])
+def test_snapshot_label_relations_accept_unhashable_gi_wrappers(monkeypatch, capsys, relation_case, mapping):
     import sys
     import types
 
@@ -450,7 +451,7 @@ def test_snapshot_label_relations_accept_unhashable_gi_wrappers(monkeypatch, cap
             return isinstance(other, Accessible) and self.key == other.key
 
         def get_process_id(self):
-            return PID
+            return 700 if mapping != "direct" else PID
 
         def get_role_name(self):
             return self.role
@@ -489,6 +490,10 @@ def test_snapshot_label_relations_accept_unhashable_gi_wrappers(monkeypatch, cap
     label = Accessible(2, "label", "Encrypt this disk")
     row = Accessible(1, "list item", "", [label])
     root = Accessible(9, "desktop", "", [Accessible(0, "application", "Installer", [row])])
+    if mapping == "ambiguous":
+        root.children.append(Accessible(10, "application", "Installer", []))
+    if mapping == "missing":
+        root.children.clear()
     atspi = SimpleNamespace(
         set_timeout=lambda *a: None,
         get_desktop=lambda _: root,
@@ -518,8 +523,18 @@ def test_snapshot_label_relations_accept_unhashable_gi_wrappers(monkeypatch, cap
     monkeypatch.setitem(sys.modules, "gi.repository", repository)
 
     def observe():
-        exec(UI.SNAPSHOT.replace("__PIDS__", repr([PID])), {})  # noqa: S102 - execute the owned read-only observer against fixture GI
+        bindings = [PID] if mapping == "direct" else {PID: 700}
+        if mapping == "wrong":
+            bindings = {PID: 701}
+        if mapping == "collision":
+            bindings = {PID: 700, PID + 1: 700}
+        exec(UI.SNAPSHOT.replace("__PIDS__", repr(bindings)), {})  # noqa: S102 - execute the owned read-only observer against fixture GI
 
+    if mapping in {"wrong", "collision", "missing", "ambiguous"}:
+        with pytest.raises(ValueError, match="process bindings collide|exactly one application root"):
+            observe()
+        assert capsys.readouterr().out == ""
+        return
     if relation_case == "duplicate":
         with pytest.raises(ValueError, match="unresolved target|duplicate accessibility"):
             observe()
@@ -528,6 +543,8 @@ def test_snapshot_label_relations_accept_unhashable_gi_wrappers(monkeypatch, cap
     observe()
     value = json.loads(capsys.readouterr().out)
     assert value["nodes"][1]["relations"] == {"labelled_by": [2]}
+    assert value["nodes"][1]["pid"] == PID
+    assert value["nodes"][1]["bus_pid"] == (PID if mapping == "direct" else 700)
     assert UI.safe_snapshot(value)["nodes"][1]["relations"] == {"labelled_by": [2]}
     if relation_case == "unresolved":
         assert value["nodes"][1]["unresolved_relations"] == {"labelled_by": 1}
@@ -650,3 +667,56 @@ def test_selected_install_button_with_off_tree_label_is_rejected():
     value['nodes'][9]['unresolved_relations'] = {'described_by': 1}
     with pytest.raises(ValueError, match='selected control has an unresolved'):
         UI.select(value, 'Install', ('push button',), pid=PID)
+
+
+@pytest.mark.parametrize('mismatch', [None, 'uid', 'exe', 'socket', 'app', 'restart'])
+def test_proxy_binding_uses_exact_pinned_process_socket(monkeypatch, tmp_path, mismatch):
+    import socket
+    import stat
+    import struct
+
+    app = {'pid': 200, 'uid': 1000, 'application': 'org.bootcinstaller.Installer', 'app_commit': 'a' * 64}
+    for pid, start in [(200, 123), (700, 456)]:
+        proc = tmp_path / str(pid)
+        proc.mkdir()
+        (proc / 'stat').write_text(str(pid) + ' (name with spaces) S ' + '0 ' * 18 + str(start))
+    (tmp_path / '700/exe').symlink_to('/usr/bin/' + ('other' if mismatch == 'exe' else 'xdg-dbus-proxy'))
+    endpoint = tmp_path / '200/root/run/flatpak/at-spi-bus'
+    actual_stat = Path.stat
+    def fake_stat(path, *args, **kwargs):
+        if path == endpoint:
+            return SimpleNamespace(st_mode=stat.S_IFSOCK if mismatch != 'socket' else stat.S_IFREG, st_uid=1000, st_dev=1, st_ino=27)
+        if path == tmp_path / '700':
+            return SimpleNamespace(st_uid=1000)
+        return actual_stat(path, *args, **kwargs)
+    monkeypatch.setattr(Path, 'stat', fake_stat)
+    class Peer:
+        def __enter__(self): return self
+        def __exit__(self, *args): pass
+        def settimeout(self, seconds): assert seconds == 3
+        def connect(self, path): assert path == str(endpoint)
+        def getsockopt(self, level, option, size):
+            assert (level, option, size) == (socket.SOL_SOCKET, socket.SO_PEERCRED, 12)
+            if mismatch == 'restart':
+                (tmp_path / '200/stat').write_text('200 (changed) S ' + '0 ' * 18 + '124')
+            return struct.pack('3i', 700, 1001 if mismatch == 'uid' else 1000, 1000)
+    monkeypatch.setattr(socket, 'socket', lambda *args: Peer())
+    scope = {'PROC_ROOT': tmp_path, 'uid': 1000, 'stat': stat, 'instances': lambda: [] if mismatch == 'app' else [app]}
+    exec(UI.PROXY_BINDING, scope)
+    if mismatch:
+        with pytest.raises(ValueError, match='installer process changed|not its user|binding changed'):
+            scope['bind_accessibility'](app)
+    else:
+        proof = scope['bind_accessibility'](app)
+        assert proof['host_pid'] == 200 and proof['bus_pid'] == 700
+        assert proof['app_commit'] == app['app_commit']
+        assert proof['process_start'] == '123' and proof['proxy_start'] == '456'
+
+
+@pytest.mark.parametrize('peers,expected', [([700, 43], [700, 43]), (['private'], []), (list(range(1, 70)), [])])
+def test_failed_probe_exposes_only_bounded_numeric_bus_peers(capsys, peers, expected):
+    program = 'observed_bus_pids = ' + repr(peers) + '\nraise ValueError("accessibility process must have exactly one application root")'
+    exec(UI.diagnostic_program(program, '<fork-accessibility>'), {})
+    value = json.loads(capsys.readouterr().out)
+    assert value['probe_error']['observed_bus_pids'] == expected
+    assert 'private' not in json.dumps(value)
