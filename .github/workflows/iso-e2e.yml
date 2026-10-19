@@ -602,12 +602,18 @@ jobs:
         if: always() && steps.filter.outputs.skip != 'true'
         env:
           EVIDENCE_ARCH: amd64
-          EVIDENCE_STATUS: ${{ steps.e2e.outputs.rc == '0' && 'success' || 'failure' }}
+          E2E_OUTCOME: ${{ steps.e2e.outcome }}
+          E2E_RC: ${{ steps.e2e.outputs.rc }}
         run: |
+          # Missing outputs must not compare equal to zero in Actions expressions.
+          export EVIDENCE_STATUS=failure
+          if [[ "$E2E_OUTCOME" == success && "$E2E_RC" == 0 ]]; then
+            export EVIDENCE_STATUS=success
+          fi
           scripts/evidence-bundle.sh \
             "${{ matrix.variant }}:${{ matrix.flavor }}" iso iso-e2e-out
       - name: Validate strict qualification evidence
-        if: steps.filter.outputs.skip != 'true' && steps.e2e.outputs.rc == '0'
+        if: steps.filter.outputs.skip != 'true' && steps.e2e.outcome == 'success' && steps.e2e.outputs.rc == '0'
         run: |
           python3 scripts/verify-experience-manifest.py \
             iso-e2e-out/qualification-evidence.json
