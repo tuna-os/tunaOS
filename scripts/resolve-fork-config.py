@@ -145,6 +145,24 @@ def merge_layers(layers):
     return result
 
 
+def explain_layers(named_layers, intent):
+    """Explain validated delta intent with config keys, never host paths or values."""
+    branding = {}
+    packages = {key: [] for key in intent["packages"]}
+    for key in sorted(intent["branding"]):
+        sources = [f"{name}.branding.{key}" for name, layer in named_layers
+                   if key in layer.get("branding", {})]
+        branding[key] = {"effective_source": sources[-1], "sources": sources}
+    for operation, values in intent["packages"].items():
+        for index, value in enumerate(values):
+            sources = [f"{name}.packages.{operation}[{source_index}]"
+                       for name, layer in named_layers
+                       for source_index, candidate in enumerate(layer.get("packages", {}).get(operation, []))
+                       if candidate == value]
+            packages[operation].append({"index": index, "sources": sources})
+    return {"branding": branding, "packages": packages}
+
+
 def load_catalog(root):
     # Use the same provider-neutral seam as existing image consumers. Do not
     # interpret a user-selected path independently from the shell library.
@@ -157,7 +175,7 @@ def load_catalog(root):
     return catalog, Path(path)
 
 
-def resolve(config, config_dir, root=ROOT):
+def resolve(config, config_dir, root=ROOT, *, explain=False):
     mapping(config, ("schema_version", "catalog", "image", "targets", "global", "overrides"),
             "config", ("schema_version", "catalog"))
     if type(config["schema_version"]) is not int or config["schema_version"] != 1:
@@ -211,30 +229,46 @@ def resolve(config, config_dir, root=ROOT):
             desktop = next((name for name in sorted(desktops, key=len, reverse=True)
                             if flavor["id"] == name or flavor["id"].startswith(name + "-")), None)
             key = variant["id"] + ":" + flavor["id"]
-            intent = merge_layers([global_layer, overrides.get("variants", {}).get(variant["id"], {}),
-                                   overrides.get("desktops", {}).get(desktop, {}),
-                                   overrides.get("cells", {}).get(key, {})])
+            named_layers = [("global", global_layer),
+                            (f"overrides.variants.{variant['id']}", overrides.get("variants", {}).get(variant["id"], {})),
+                            (f"overrides.desktops.{desktop}", overrides.get("desktops", {}).get(desktop, {})),
+                            (f"overrides.cells.{key}", overrides.get("cells", {}).get(key, {}))]
+            intent = merge_layers([layer for _, layer in named_layers])
             for platform in flavor.get("platforms", variant.get("platforms", catalog["config"]["global_platforms"])):
                 selected = all(key not in targets or value in targets[key] for key, value in
                                (("variants", variant["id"]), ("flavors", flavor["id"]), ("platforms", platform)))
                 expanded.append({"variant": variant["id"], "flavor": flavor["id"], "platform": platform,
                                  "selected": selected, "build_image": flavor.get("build_image", False),
                                  "routing": routing, "intent": intent})
+                if explain:
+                    expanded[-1]["intent_provenance"] = explain_layers(named_layers, intent)
     if not any(cell["selected"] and cell["build_image"] for cell in expanded):
         raise ConfigError("targets select no enabled catalog cells")
-    return {"plan_version": 1, "mode": "review-only", "consumers_integrated": False,
+    plan = {"plan_version": 1, "mode": "review-only", "consumers_integrated": False,
             "sources": receipt, "legacy_catalog": copy.deepcopy(catalog), "cells": expanded,
             "image_intent": config.get("image", {}),
             "package_resolution": "deferred: source receipt is not an effective package transaction"}
+    if explain:
+        plan["explanation"] = {
+            "version": 1, "scope": "config-delta-intent-only",
+            "precedence": ["global", "variant", "desktop", "cell"],
+            "image_sources": {key: f"image.{key}" for key in sorted(config.get("image", {}))},
+            "target_sources": {key: f"targets.{key}" if key in targets else "catalog:all-declared"
+                               for key in ("variants", "flavors", "platforms")},
+        }
+    return plan
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("config", type=Path, nargs="?")
+    parser.add_argument("--explain", action="store_true", help="add config-key origins for resolved delta intent; not runtime evidence")
     parser.add_argument("--catalog-pin", action="store_true", help="print the current source receipt digest")
     parser.add_argument("--format", choices=("plan", "legacy"), default="plan")
     args = parser.parse_args()
     try:
+        if args.explain and (args.catalog_pin or args.format != "plan"):
+            parser.error("--explain requires config and --format plan")
         if args.catalog_pin:
             if args.config or args.format != "plan":
                 parser.error("--catalog-pin cannot be combined with config or --format")
@@ -243,7 +277,7 @@ def main():
         if not args.config:
             parser.error("config is required")
         config = yaml.load(args.config.read_text(), Loader=UniqueLoader)
-        plan = resolve(config, args.config.parent)
+        plan = resolve(config, args.config.parent, explain=args.explain)
         if args.format == "legacy":
             if any(config.get(k) for k in ("image", "targets", "global", "overrides")):
                 raise ConfigError("legacy adapter accepts stock intent only; fork consumers are not integrated")
