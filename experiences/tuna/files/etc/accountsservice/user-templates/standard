@@ -2,5 +2,5 @@
 # TunaOS selects the Tuna Wayland session for users who have not chosen one.
 
 [User]
-Session=tuna.desktop
+Session=tuna
 Icon=${HOME}/.face
