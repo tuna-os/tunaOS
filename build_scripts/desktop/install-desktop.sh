@@ -1111,6 +1111,11 @@ EOF
 	safe_enable tunaos-desktop-contract.service
 fi
 
+# Re-assert TunaOS-owned files over the bluefin payload copied above
+# (ujust shell completions, uupd notification drop-in); also done in
+# 40-services.sh for base images.
+"${_TD_CTX}/build_scripts/install-tunaos-overrides.sh"
+
 "${_TD_CTX}/build_scripts/install-countme.sh"
 
 emit_packages_manifest
