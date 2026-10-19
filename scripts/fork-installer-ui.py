@@ -11,6 +11,10 @@ import tempfile
 import time
 from pathlib import Path
 
+MAX_NODES = 4096
+MAX_DEPTH = 64
+MAX_EVIDENCE_BYTES = 2 * 1024 * 1024
+
 # Runs in the admitted guest, before dropping to its desktop user. The socket
 # is resolved through the exact pinned process's mount namespace. SO_PEERCRED
 # identifies the per-instance proxy; a host PID and a bus PID are not synonyms.
@@ -69,9 +73,16 @@ observed_bus_pids = []
 rows = []
 objects = []
 root = Atspi.get_desktop(0)
-def visit(node, parent, depth):
-    if depth > 24 or len(rows) >= 1800:
-        raise ValueError("accessibility tree exceeds bound")
+traversal_metrics = {"visited_nodes": 0, "max_depth": 0}
+def visit(node, parent, depth, trail=()):
+    traversal_metrics["visited_nodes"] = len(rows)
+    traversal_metrics["max_depth"] = max(depth, traversal_metrics["max_depth"])
+    if any(node == ancestor for ancestor in trail):
+        raise ValueError("accessibility child cycle detected")
+    if depth > __MAX_DEPTH__:
+        raise ValueError("accessibility depth exceeds bound")
+    if len(rows) >= __MAX_NODES__:
+        raise ValueError("accessibility node count exceeds bound")
     bus_pid = node.get_process_id()
     if bus_pid not in by_peer:
         raise ValueError("accessibility descendant changed process binding")
@@ -99,12 +110,12 @@ def visit(node, parent, depth):
                  "name": name, "states": states, "bounds": bounds, "role_id": int(node.get_role())})
     objects.append(node)
     count = node.get_child_count()
-    if count > 1800:
+    if count < 0 or count > __MAX_NODES__:
         raise ValueError("accessibility child count exceeds bound")
     for index in range(count):
         child = node.get_child_at_index(index)
         if child is not None:
-            visit(child, key, depth + 1)
+            visit(child, key, depth + 1, trail + (node,))
 if root.get_child_count() > 64:
     raise ValueError("accessibility application count exceeds bound")
 for index in range(root.get_child_count()):
@@ -151,8 +162,9 @@ for index, node in enumerate(objects):
         relations[label] = targets
     rows[index]["relations"] = relations
     rows[index]["unresolved_relations"] = unresolved
-print(json.dumps({"schema_version": 1, "nodes": rows}))
-"""
+traversal_metrics["visited_nodes"] = len(rows)
+print(json.dumps({"schema_version": 1, "nodes": rows, "traversal": traversal_metrics}))
+""".replace("__MAX_NODES__", str(MAX_NODES)).replace("__MAX_DEPTH__", str(MAX_DEPTH))
 
 
 PROBE_FAILURE_MESSAGES = frozenset(
@@ -170,10 +182,13 @@ def diagnostic_program(program, filename):
         + "    message = str(error)\n"
         + "    peers = globals().get('observed_bus_pids', [])\n"
         + "    peers = peers if isinstance(peers, list) and len(peers) <= 64 and all(type(p) is int and p > 0 for p in peers) else []\n"
+        + "    metrics = globals().get('traversal_metrics', {})\n"
+        + "    metrics = {k: metrics[k] for k in ('visited_nodes', 'max_depth') if isinstance(metrics, dict) and type(metrics.get(k)) is int and 0 <= metrics[k] <= 100000}\n"
         + "    allowed = " + repr(sorted(PROBE_FAILURE_MESSAGES)) + "\n"
         + "    print(json.dumps({'schema_version': 1, 'probe_error': {\n"
         + "        'exception_type': type(error).__name__[:80],\n"
         + "        'observed_bus_pids': peers,\n"
+        + "        'traversal': metrics,\n"
         + "        'message': message if message in allowed else '<omitted>',\n"
         + "        'message_sha256': hashlib.sha256(message.encode()).hexdigest(),\n"
         + "        'traceback': [{'file': f.filename if f.filename in "
@@ -274,7 +289,7 @@ def tree(snapshot):
     if not isinstance(snapshot, dict) or snapshot.get("schema_version") != 1:
         raise ValueError("invalid accessibility observation")
     rows = snapshot.get("nodes")
-    if not isinstance(rows, list) or len(rows) > 1800:
+    if not isinstance(rows, list) or len(rows) > MAX_NODES:
         raise ValueError("accessibility tree exceeds bound")
     nodes = {}
     for row in rows:
@@ -301,7 +316,7 @@ def ancestors(node, nodes):
     while node.get("parent") is not None:
         node = nodes[node["parent"]]
         result.append(node)
-        if len(result) > 24:
+        if len(result) > MAX_DEPTH:
             raise ValueError("accessibility ancestry exceeds bound")
     return result
 
@@ -527,7 +542,14 @@ def safe_snapshot(snapshot):
                     raise ValueError("invalid accessibility relation targets")
                 item["relations"][key] = targets
     result = {"schema_version": 1, "nodes": safe}
-    if len(json.dumps(result, ensure_ascii=True)) > 512 * 1024:
+    metrics = snapshot.get("traversal", {})
+    if (not isinstance(metrics, dict)
+        or any(k not in {"visited_nodes", "max_depth"} or type(v) is not int
+               or not 0 <= v <= (MAX_NODES if k == "visited_nodes" else MAX_DEPTH)
+               for k, v in metrics.items())):
+        raise ValueError("invalid accessibility traversal metrics")
+    result["traversal"] = metrics
+    if len(json.dumps(result, ensure_ascii=True)) > MAX_EVIDENCE_BYTES:
         raise ValueError("safe accessibility evidence exceeds bound")
     return result
 

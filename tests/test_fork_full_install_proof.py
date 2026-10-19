@@ -1649,7 +1649,8 @@ def test_accessibility_failure_is_retained_before_navigation(monkeypatch, tmp_pa
     assert report['native_ui_probe_error'] == error
 
 
-def test_accessibility_proxy_program_and_nested_probe_compile(monkeypatch, tmp_path):
+@pytest.mark.parametrize("include_shell", [False, True])
+def test_accessibility_proxy_program_and_nested_probe_compile(monkeypatch, tmp_path, include_shell):
     import ast
     app = {'pid': 42, 'uid': 1000, 'application': 'org.bootcinstaller.Installer', 'app_commit': 'a' * 64}
     def guest(*args):
@@ -1671,5 +1672,5 @@ def test_accessibility_proxy_program_and_nested_probe_compile(monkeypatch, tmp_p
         return {'process_binding': {'host_pid': 42, 'bus_pid': 700}}
     monkeypatch.setattr(PROOF, 'guest_call', guest)
     report = {}
-    PROOF.accessibility({}, tmp_path, [42, 43], report, app=app)
+    PROOF.accessibility({}, tmp_path, [42, 43] if include_shell else [42], report, app=app)
     assert report['native_ui_process_binding'] == {'host_pid': 42, 'bus_pid': 700}

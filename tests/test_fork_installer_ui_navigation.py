@@ -310,7 +310,7 @@ def test_failure_diagnostics_omit_arbitrary_names_and_credential_values():
 def test_diagnostic_tree_limits_and_ancestry_fail_closed(change):
     value = encryption_tree()
     if change == "limit":
-        value["nodes"] *= 181
+        value["nodes"] *= (UI.MAX_NODES // len(value["nodes"]) + 1)
     elif change == "cycle":
         value["nodes"][1]["parent"] = 1
     elif change == "duplicate":
@@ -720,3 +720,68 @@ def test_failed_probe_exposes_only_bounded_numeric_bus_peers(capsys, peers, expe
     value = json.loads(capsys.readouterr().out)
     assert value['probe_error']['observed_bus_pids'] == expected
     assert 'private' not in json.dumps(value)
+
+
+@pytest.mark.parametrize('case', ['deep', 'cycle', 'depth_limit', 'node_limit'])
+def test_collector_bounds_deep_gtk_tree_and_rejects_cycles(monkeypatch, capsys, case):
+    import sys
+    import types
+
+    class Accessible:
+        __hash__ = None
+        serial = 0
+        def __init__(self, children=(), *, key=None):
+            type(self).serial += 1
+            self.key = key if key is not None else type(self).serial
+            self.children = list(children)
+        def __eq__(self, other):
+            return isinstance(other, Accessible) and self.key == other.key
+        def get_process_id(self): return PID
+        def get_role_name(self): return 'panel'
+        def get_role(self): return 1
+        def get_name(self): return ''
+        def get_child_count(self): return len(self.children)
+        def get_child_at_index(self, index): return self.children[index]
+        def get_relation_set(self): return []
+        def get_state_set(self): return SimpleNamespace(contains=lambda _: True)
+        def get_component_iface(self): raise ValueError('no component')
+
+    app = Accessible()
+    if case in {'deep', 'depth_limit'}:
+        cursor = app
+        for _ in range(35 if case == 'deep' else UI.MAX_DEPTH + 1):
+            child = Accessible()
+            cursor.children.append(child)
+            cursor = child
+    elif case == 'cycle':
+        # Same native accessible, a different unhashable GI wrapper.
+        app.children.append(Accessible([Accessible(key=app.key)]))
+    else:
+        app.children.extend(Accessible() for _ in range(UI.MAX_NODES))
+    root = Accessible([app])
+    states = ('showing', 'visible', 'enabled', 'sensitive', 'focused', 'checked', 'active', 'defunct')
+    atspi = SimpleNamespace(set_timeout=lambda *a: None, get_desktop=lambda _: root,
+        StateType=SimpleNamespace(**{k.upper(): k for k in states}),
+        RelationType=SimpleNamespace(LABELLED_BY=1, DESCRIBED_BY=2))
+    gi = types.ModuleType('gi')
+    gi.require_version = lambda *a: None
+    repository = types.ModuleType('gi.repository')
+    repository.Atspi = atspi
+    monkeypatch.setitem(sys.modules, 'gi', gi)
+    monkeypatch.setitem(sys.modules, 'gi.repository', repository)
+    program = UI.SNAPSHOT.replace('__PIDS__', repr({PID: PID}))
+    exec(UI.diagnostic_program(program, '<fork-accessibility>'), {})
+    value = json.loads(capsys.readouterr().out)
+    if case == 'deep':
+        assert value['traversal'] == {'visited_nodes': 36, 'max_depth': 35}
+        nodes = UI.tree(value)
+        assert len(UI.ancestors(nodes[35], nodes)) == 35
+        assert UI.safe_snapshot(value)['traversal'] == value['traversal']
+    else:
+        expected = {'cycle': 'accessibility child cycle detected',
+                    'depth_limit': 'accessibility depth exceeds bound',
+                    'node_limit': 'accessibility node count exceeds bound'}
+        error = value['probe_error']
+        assert error['message'] == expected[case]
+        assert error['traversal']['visited_nodes'] <= UI.MAX_NODES
+        assert error['traversal']['max_depth'] <= UI.MAX_DEPTH + 1

@@ -887,15 +887,16 @@ print(json.dumps(value))
 
 def accessibility(access, private, pids, report=None, *, app):
     require(
-        len(pids) == 2 and all(type(pid) is int and pid > 0 for pid in pids)
-        and pids[0] == app["pid"] and pids[0] != pids[1],
+        len(pids) in (1, 2) and all(type(pid) is int and pid > 0 for pid in pids)
+        and pids[0] == app["pid"] and len(set(pids)) == len(pids),
         "missing accessibility process binding",
     )
     program = (
         INSTALLER.GUEST_COMMON + UI_MODULE.PROXY_BINDING
         + "\nexpected = " + repr(app)
         + "\nbinding = bind_accessibility(expected)"
-        + "\npeers = {expected['pid']: binding['bus_pid'], " + repr(pids[1]) + ": " + repr(pids[1]) + "}"
+        + "\npeers = " + repr({pid: pid for pid in pids[1:]})
+        + "\npeers[expected['pid']] = binding['bus_pid']"
         + "\ncode = " + repr(UI_MODULE.diagnostic_program(UI_MODULE.SNAPSHOT, "<fork-accessibility>")) + ".replace('__PIDS__', repr(peers))"
         + "\nvalue = json.loads(run(user_env()+['python3', '-c', code], timeout=90))"
         + "\nif binding != bind_accessibility(expected): raise ValueError('installer accessibility binding changed during observation')"
@@ -1155,10 +1156,13 @@ print(json.dumps(values))
         vm.screenshot(path)
         return path
 
+    # Overview is checked in the screenshot. Shell accessibility is needed
+    # only for its native password dialog, not for installer widget navigation.
+    observe_shell = False
     ui = UI_MODULE.UI(
         vm.qmp,
         screenshot,
-        lambda: accessibility(access, private, [app["pid"], shell], report, app=app),
+        lambda: accessibility(access, private, [app["pid"]] + ([shell] if observe_shell else []), report, app=app),
         LOGIN.words,
         app_pid=app["pid"],
         private=private,
@@ -1239,6 +1243,7 @@ print(json.dumps(values))
         time.sleep(2)
     else:
         raise TimeoutError("native wizard did not reach guarded install confirmation")
+    observe_shell = True
     deadline = time.monotonic() + 90
     while time.monotonic() < deadline:
         processes = process_evidence(access, private, helper)
