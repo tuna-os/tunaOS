@@ -11,6 +11,7 @@ import hashlib
 import importlib.util
 import inspect
 import json
+import math
 import os
 import re
 import shutil
@@ -43,6 +44,7 @@ INSTALLER = module("fork_installer", "qualify-fork-installer.py")
 EXPORT = module("fork_export", "export-fork-source.py")
 DISK = module("fork_disk", "qualify-fork-disk.py")
 UI_MODULE = module("fork_ui", "fork-installer-ui.py")
+OBSERVER = module("fork_observer", "fork-install-observer.py")
 
 
 def require(value, message):
@@ -490,46 +492,141 @@ def source_observer(access, private):
     return LOGIN.observer(access, private)
 
 
-def typed_login(qmp, screenshot, observe, private, out, password, label):
-    deadline = time.monotonic() + 240
-    selected = False
-    while time.monotonic() < deadline:
-        frame = screenshot(label + "-greeter.png")
-        rows = LOGIN.words(frame)
-        if LOGIN.password_prompt(frame, rows, private)["verified"]:
-            break
-        if not selected and LOGIN.find_word(rows, "username"):
-            qmp.type(USER)
-            qmp.key("ret")
-            selected = True
-        elif not selected and LOGIN.find_word(rows, USER):
-            qmp.key("ret")
-            selected = True
-        time.sleep(3)
-    else:
-        raise ValueError("visible synthetic-user GDM Password prompt unavailable")
-    before = observe()
-    LOGIN.assert_no_login(before)
-    frame = screenshot(label + "-password-prompt.png")
-    prompt = LOGIN.password_prompt(frame, LOGIN.words(frame), private)
-    require(prompt["verified"], "GDM prompt changed before secret input")
-    qmp.type(password)
-    qmp.key("ret")
-    deadline = time.monotonic() + 240
-    while time.monotonic() < deadline:
-        after = observe()
-        if LOGIN.session(after):
-            actual = LOGIN.validate_login(before, after)
-            (out / (label + "-login.json")).write_text(
-                json.dumps(
-                    {"before": before, "after": after, "session": actual, "prompt": prompt},
-                    indent=2,
-                )
-                + "\n"
+def login_diagnostic(value):
+    """Copy only bounded login facts, not arbitrary observer fields or errors."""
+    require(isinstance(value, dict), "invalid login observation")
+    boot_id, uptime, uid = value.get("boot_id"), value.get("uptime"), value.get("uid")
+    require(
+        isinstance(boot_id, str)
+        and OBSERVER.BOOT_ID.fullmatch(boot_id)
+        and type(uptime) in (int, float)
+        and math.isfinite(uptime)
+        and uptime >= 0
+        and (uid is None or (type(uid) is int and uid > 0)),
+        "invalid login clock or account",
+    )
+    rows, shells = value.get("sessions"), value.get("gnome_shell")
+    require(isinstance(rows, list) and len(rows) <= OBSERVER.MAX_SESSIONS, "invalid login sessions")
+    for row in rows:
+        require(
+            isinstance(row, dict)
+            and set(row) == set(OBSERVER.SESSION_KEYS)
+            and all(isinstance(v, str) and len(v) <= 256 for v in row.values())
+            and OBSERVER.SESSION_ID.fullmatch(row["Id"]),
+            "invalid login session properties",
+        )
+    require(len({row["Id"] for row in rows}) == len(rows), "duplicate login sessions")
+    require(
+        isinstance(shells, list) and len(shells) <= OBSERVER.MAX_SHELLS,
+        "invalid login shell evidence",
+    )
+    for shell in shells:
+        require(
+            isinstance(shell, dict)
+            and set(shell) == {"pid", "start_ticks"}
+            and type(shell["pid"]) is int
+            and shell["pid"] > 0
+            and isinstance(shell["start_ticks"], str)
+            and re.fullmatch(r"[0-9]{1,32}", shell["start_ticks"]),
+            "invalid login shell identity",
+        )
+    require(
+        len({shell["pid"] for shell in shells}) == len(shells) and (not shells or uid is not None),
+        "inconsistent login shell evidence",
+    )
+    safe = {
+        "boot_id": boot_id,
+        "uptime": uptime,
+        "uid": uid,
+        "sessions": rows,
+        "gnome_shell": shells,
+    }
+    for key, allowed, evidence in (
+        ("sessions_status", OBSERVER.STATUSES, rows),
+        ("gnome_shell_status", OBSERVER.STATUSES | {"absent"}, shells),
+    ):
+        if key in value:
+            require(
+                isinstance(value[key], str)
+                and value[key] in allowed
+                and (not evidence or value[key] == "ok"),
+                "invalid login collector status",
             )
-            return before, after, actual
-        time.sleep(3)
-    raise ValueError("typed password did not produce a native gdm-password session")
+            safe[key] = value[key]
+    encoded = json.dumps(safe, allow_nan=False, ensure_ascii=True)
+    require(len(encoded) <= 32768, "login diagnostic exceeds limit")
+    return json.loads(encoded)
+
+
+def typed_login(qmp, screenshot, observe, private, out, password, label):
+    before_safe, last_safe = None, None
+    stage = "greeter"
+    try:
+        deadline = time.monotonic() + 240
+        selected = False
+        while time.monotonic() < deadline:
+            frame = screenshot(label + "-greeter.png")
+            rows = LOGIN.words(frame)
+            if LOGIN.password_prompt(frame, rows, private)["verified"]:
+                break
+            if not selected and LOGIN.find_word(rows, "username"):
+                qmp.type(USER)
+                qmp.key("ret")
+                selected = True
+            elif not selected and LOGIN.find_word(rows, USER):
+                qmp.key("ret")
+                selected = True
+            time.sleep(3)
+        else:
+            raise ValueError("visible synthetic-user GDM Password prompt unavailable")
+        stage = "before_password"
+        before = observe()
+        before_safe = login_diagnostic(before)
+        LOGIN.assert_no_login(before)
+        frame = screenshot(label + "-password-prompt.png")
+        prompt = LOGIN.password_prompt(frame, LOGIN.words(frame), private)
+        require(prompt["verified"], "GDM prompt changed before secret input")
+        stage = "password_input"
+        qmp.type(password)
+        qmp.key("ret")
+        stage = "authenticated_session"
+        deadline = time.monotonic() + 240
+        while time.monotonic() < deadline:
+            after = observe()
+            last_safe = login_diagnostic(after)
+            if LOGIN.session(after):
+                actual = LOGIN.validate_login(before, after)
+                (out / (label + "-login.json")).write_text(
+                    json.dumps(
+                        {
+                            "status": "passed",
+                            "before": before,
+                            "after": after,
+                            "session": actual,
+                            "prompt": prompt,
+                        },
+                        indent=2,
+                    )
+                    + "\n"
+                )
+                return before, after, actual
+            time.sleep(3)
+        raise ValueError("typed password did not produce a native gdm-password session")
+    except BaseException:
+        # Keep the exact failed stage and last validated facts even if the VM
+        # exits or the next observation is malformed. Never include exception
+        # text, keyboard input, raw console logs, or post-input OCR text.
+        failure = {"status": "failed", "stage": stage, "before": before_safe, "last": last_safe}
+        try:
+            screenshot(label + "-login-failed.png")
+            failure["screenshot"] = label + "-login-failed.png"
+        except (OSError, ValueError, RuntimeError, subprocess.SubprocessError):
+            failure["screenshot_status"] = "unavailable"
+        try:
+            (out / (label + "-login.json")).write_text(json.dumps(failure, indent=2) + "\n")
+        except OSError:
+            pass  # Evidence I/O must not turn a failed login into a pass.
+        raise
 
 
 def transfer_source(access, private, exported, receipt):

@@ -4,6 +4,9 @@ import copy
 import importlib.util
 import json
 import os
+import shutil
+import signal
+import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -468,7 +471,9 @@ def test_login_collection_allows_empty_but_not_partial_or_failed_properties(monk
     def fake_command(args, **kwargs):
         if "list-sessions" in args:
             return OBSERVER.result("ok", "3 1000 canary seat0", 0)
-        assert args[-1] == "--property=" + ",".join(OBSERVER.SESSION_KEYS)
+        assert args == ["loginctl", "show-session", "3", "--no-pager"] + [
+            "--property=" + key for key in OBSERVER.SESSION_KEYS
+        ]
         return OBSERVER.result("ok", "\n".join(f"{k}={v}" for k, v in row.items()), 0)
 
     monkeypatch.setattr(OBSERVER, "command", fake_command)
@@ -912,3 +917,55 @@ def test_unavailable_nss_memberships_never_publish_guessed_groups(monkeypatch):
 
     monkeypatch.setattr(OBSERVER.os, "getgrouplist", unavailable)
     assert OBSERVER.account_groups(SimpleNamespace(pw_gid=1000), "ok") == ([], None, "unavailable")
+
+
+def test_real_loginctl_property_filter_against_private_bus():
+    """Use the installed CLI parser, never a fake command blessing our argv."""
+    system_python = Path("/usr/bin/python3")
+    required = ("loginctl", "dbus-daemon")
+
+    def unavailable(reason):
+        if os.environ.get("GITHUB_ACTIONS") == "true":
+            pytest.fail(reason)  # The standard Ubuntu CI lane must run this gate.
+        pytest.skip(reason)
+
+    if not system_python.is_file() or any(shutil.which(name) is None for name in required):
+        unavailable("real loginctl test needs system Python, loginctl and dbus-daemon")
+    env = {"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8"}
+    available = subprocess.run(
+        [str(system_python), "-c", "from gi.repository import Gio, GLib"],
+        check=False,
+        env=env,
+        capture_output=True,
+        timeout=5,
+    )
+    if available.returncode:
+        unavailable("real loginctl test needs the system Python gi/Gio installation")
+    fixture = ROOT / "tests/fixtures/fork-login/loginctl_private_bus.py"
+    process = subprocess.Popen(
+        [str(system_python), str(fixture), str(ROOT / "scripts/fork-install-observer.py")],
+        env=env,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=True,
+    )
+    try:
+        stdout, stderr = process.communicate(timeout=30)
+        if process.returncode == 77:
+            unavailable("local sandbox denies private D-Bus Unix socket creation (EPERM)")
+        assert process.returncode == 0, (stdout + stderr)[-8192:]
+        assert "PASS: real loginctl comma negative control" in stdout
+        rows = [json.loads(line) for line in stdout.splitlines() if line.startswith("{")]
+        assert len(rows) == 2 and {row["legacy_list"] for row in rows} == {False, True}
+        assert all(row["observer_status"] == "ok" for row in rows)
+    finally:
+        # Also reap the private daemon if the fixture exits early or times out.
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        process.wait(timeout=5)
+        process.stdout.close()
+        process.stderr.close()

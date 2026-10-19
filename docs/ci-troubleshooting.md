@@ -1826,3 +1826,35 @@ It uses grayscale, autocontrast, 4× scale and PSM7. Each word in the exact
 
 The exact source-logo check stays in place. Local tests pass for both frames;
 a new native run must pass before this gate is complete.
+
+### Fork cold-login proof sees GNOME Shell but no logind session
+
+**Symptom:** [Run 39235973978](https://github.com/tuna-os/tunaOS/actions/runs/39235973978)
+passed the preparation guest's typed login and Welcome screen, then timed out on
+cold-source login. Both cells reported UID 1000 and a live canary `gnome-shell`,
+but serial evidence contained `sessions=[]` and `sessions_status=empty`. The helper did not
+start installation.
+
+**Cause:** The serial observer requested
+`loginctl show-session --property=Id,User,...`. Unlike `systemctl`, loginctl
+appends each entire argument as one property filter; the joined string matches
+nothing. The artifact identifies systemd 257 on Yellowfin and 259 on Grouper;
+both upstream parsers use this behavior
+([v257](https://github.com/systemd/systemd/blob/70bae7648f2c18010187c9cf20093155eaa26029/src/login/loginctl.c#L1579-L1588),
+[v259](https://github.com/systemd/systemd/blob/9ca433482f2281d71718718705ca8cd3bf562ad6/src/login/loginctl.c#L1572-L1581)).
+The preparation guest's older collector reads all properties. Its login check passed.
+
+**Fix:** Pass one `--property=KEY` argument for each allowed property. These
+options also preserve empty values such as `Desktop=`. Keep the original checks
+for a new, local, active, unlocked `gdm-password` session and a live shell.
+`test_real_loginctl_property_filter_against_private_bus` exercises the installed
+CLI against an isolated fixture bus, with the incorrect comma form, empty
+values and both session-list APIs. It needs system Python's installed GIO,
+`dbus-daemon` and `loginctl`; missing prerequisites or socket denial fail in
+GitHub CI and skip locally. A source regression does not replace the next native
+cold-login and installation run.
+
+A failed login now saves `*-login-failed.png` and a failed `*-login.json`
+with bounded, validated before/last login facts. The report excludes post-input OCR, keyboard
+input, exception text and arbitrary observer fields. A screenshot
+failure cannot change the login verdict.

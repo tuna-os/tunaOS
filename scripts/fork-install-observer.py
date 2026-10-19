@@ -251,7 +251,10 @@ def sessions(deadline):
     found = []
     for sid in ids:
         got = command(
-            ["loginctl", "show-session", sid, "--no-pager", "--property=" + ",".join(SESSION_KEYS)],
+            # loginctl treats each -p argument as one literal property name;
+            # comma joining returned no rows on both cells in run 39235973978.
+            ["loginctl", "show-session", sid, "--no-pager"]
+            + ["--property=" + key for key in SESSION_KEYS],
             deadline=deadline,
         )
         if got["status"] != "ok":

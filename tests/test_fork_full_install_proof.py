@@ -1366,3 +1366,215 @@ def test_failed_source_binding_retains_both_provenance_observations(tmp_path, mo
     assert value["status"] == "failed" and value["cleanup"] == "passed"
     assert "corral_boot" not in value and "test_password" not in value
     assert not private.exists()
+
+
+def login_observation(*, active=False, missing_sessions=False):
+    value = {
+        "boot_id": SOURCE_BOOT,
+        "uptime": 110.0 if active else 100.0,
+        "uid": 1000,
+        "sessions": [],
+        "sessions_status": "empty" if missing_sessions else "ok",
+        "gnome_shell": [{"pid": 200, "start_ticks": "10500"}] if active else [],
+        "gnome_shell_status": "ok",
+    }
+    if active and not missing_sessions:
+        value["sessions"] = [
+            dict(
+                zip(
+                    PROOF.OBSERVER.SESSION_KEYS,
+                    (
+                        "3",
+                        "1000",
+                        "canary",
+                        "no",
+                        "wayland",
+                        "user",
+                        "yes",
+                        "active",
+                        "gdm-password",
+                        "GNOME",
+                        "seat0",
+                        "200",
+                        "no",
+                        "105000000",
+                    ),
+                    strict=True,
+                )
+            )
+        ]
+    return value
+
+
+@pytest.fixture
+def typed_login_case(tmp_path, monkeypatch):
+    clock = [0.0]
+    monkeypatch.setattr(PROOF.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(PROOF.time, "sleep", lambda _: clock.__setitem__(0, clock[0] + 240))
+    monkeypatch.setattr(PROOF.LOGIN, "words", lambda _: [])
+    monkeypatch.setattr(PROOF.LOGIN, "password_prompt", lambda *a: {"verified": True})
+    screens, events = [], []
+
+    def screenshot(name):
+        screens.append(name)
+        (tmp_path / name).write_bytes(b"fixture pixels")
+        return tmp_path / name
+
+    qmp = SimpleNamespace(
+        type=lambda text: events.append(("type", text)), key=lambda key: events.append(("key", key))
+    )
+    return SimpleNamespace(
+        clock=clock,
+        screens=screens,
+        events=events,
+        screenshot=screenshot,
+        qmp=qmp,
+        out=tmp_path,
+        password="ephemeral-fixture-secret",
+    )
+
+
+def invoke_typed_login(case, observe):
+    return PROOF.typed_login(
+        case.qmp, case.screenshot, observe, case.out, case.out, case.password, "cold-source"
+    )
+
+
+def test_typed_login_timeout_keeps_bounded_facts_and_final_frame(typed_login_case):
+    case = typed_login_case
+    before = login_observation()
+    last = login_observation(active=True, missing_sessions=True)
+    # Extra command/credential material must never enter failure diagnostics.
+    before["untrusted"] = last["untrusted"] = case.password
+    values = iter([before, last])
+    with pytest.raises(ValueError, match="native gdm-password session"):
+        invoke_typed_login(case, lambda: next(values))
+    text = (case.out / "cold-source-login.json").read_text()
+    report = json.loads(text)
+    assert report["status"] == "failed"
+    assert report["stage"] == "authenticated_session"
+    assert report["before"] == PROOF.login_diagnostic(before)
+    assert report["last"] == PROOF.login_diagnostic(last)
+    assert report["last"]["sessions_status"] == "empty"
+    assert report["last"]["gnome_shell"]
+    assert case.screens[-1] == report["screenshot"] == "cold-source-login-failed.png"
+    assert case.password not in text and "untrusted" not in text
+    assert len(text) < 65536
+    assert case.events == [("type", case.password), ("key", "ret")]
+
+
+def test_typed_login_still_requires_native_password_session(typed_login_case):
+    case = typed_login_case
+    before, after = login_observation(), login_observation(active=True)
+    values = iter([before, after])
+    assert invoke_typed_login(case, lambda: next(values)) == (before, after, after["sessions"][0])
+    report = json.loads((case.out / "cold-source-login.json").read_text())
+    assert report["status"] == "passed" and report["session"]["Service"] == "gdm-password"
+    assert "cold-source-login-failed.png" not in case.screens
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"Service": "gdm-autologin"},
+        {"Remote": "yes"},
+        {"LockedHint": "yes"},
+        {"Class": "greeter"},
+        {"Type": "tty"},
+        {"Name": "root"},
+        {"Active": "no"},
+        {"TimestampMonotonic": "99000000"},
+    ],
+)
+def test_failed_login_diagnostics_never_relax_authentication(typed_login_case, change):
+    case = typed_login_case
+    after = login_observation(active=True)
+    after["sessions"][0].update(change)
+    values = iter([login_observation(), after])
+    with pytest.raises(ValueError):
+        invoke_typed_login(case, lambda: next(values))
+    report = json.loads((case.out / "cold-source-login.json").read_text())
+    assert report["status"] == "failed" and report["last"] == after
+
+
+def test_typed_login_preexisting_session_fails_without_password_input(typed_login_case):
+    case = typed_login_case
+    with pytest.raises(ValueError, match="existed before password"):
+        invoke_typed_login(case, lambda: login_observation(active=True))
+    report = json.loads((case.out / "cold-source-login.json").read_text())
+    assert report["status"] == "failed" and report["stage"] == "before_password"
+    assert report["before"]["gnome_shell"] and report["last"] is None
+    assert case.events == []
+
+
+def test_observer_failure_preserves_last_validated_frame_without_exception_text(
+    typed_login_case, monkeypatch
+):
+    case = typed_login_case
+    monkeypatch.setattr(PROOF.time, "sleep", lambda _: case.clock.__setitem__(0, case.clock[0] + 1))
+    values = iter([login_observation(), login_observation(active=True, missing_sessions=True)])
+
+    def observe():
+        try:
+            return next(values)
+        except StopIteration:
+            raise TimeoutError(case.password)
+
+    with pytest.raises(TimeoutError):
+        invoke_typed_login(case, observe)
+    text = (case.out / "cold-source-login.json").read_text()
+    assert json.loads(text)["last"]["gnome_shell"]
+    assert case.password not in text and "TimeoutError" not in text
+
+
+def test_invalid_observer_data_is_not_published(typed_login_case):
+    case = typed_login_case
+    malformed = login_observation(active=True)
+    malformed["sessions"][0]["credential"] = case.password
+    values = iter([login_observation(), malformed])
+    with pytest.raises(ValueError, match="invalid login session properties"):
+        invoke_typed_login(case, lambda: next(values))
+    text = (case.out / "cold-source-login.json").read_text()
+    assert json.loads(text)["last"] is None and case.password not in text
+
+
+def test_final_screenshot_failure_cannot_hide_login_failure(typed_login_case):
+    case = typed_login_case
+    screen = case.screenshot
+
+    def screenshot(name):
+        if name.endswith("-failed.png"):
+            raise OSError(case.password)
+        return screen(name)
+
+    case.screenshot = screenshot
+    values = iter([login_observation(), login_observation(active=True, missing_sessions=True)])
+    with pytest.raises(ValueError, match="native gdm-password session"):
+        invoke_typed_login(case, lambda: next(values))
+    text = (case.out / "cold-source-login.json").read_text()
+    assert json.loads(text)["screenshot_status"] == "unavailable" and case.password not in text
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"boot_id": "bad"},
+        {"uptime": float("nan")},
+        {"uptime": True},
+        {"uptime": -1},
+        {"uid": 0},
+        {"uid": True},
+        {"sessions": [{}]},
+        {"sessions": "3"},
+        {"sessions": [dict.fromkeys(PROOF.OBSERVER.SESSION_KEYS, "x" * 257)]},
+        {"gnome_shell": [{"pid": 1, "start_ticks": "1" * 33}]},
+        {"gnome_shell": [{"pid": True, "start_ticks": "1"}]},
+        {"gnome_shell_status": "invalid"},
+        {"sessions_status": ["ok"]},
+    ],
+)
+def test_login_diagnostic_rejects_malformed_or_unbounded_data(change):
+    value = login_observation()
+    value.update(change)
+    with pytest.raises(ValueError):
+        PROOF.login_diagnostic(value)
