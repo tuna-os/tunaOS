@@ -885,7 +885,7 @@ variants:
     upstream_track: experimental
     description: "Based on Fedora ELN (EL11 preview, rolling)"
     experimental: true
-    base_image: "registry.fedoraproject.org/eln-bootc:latest@sha256:54fa37bfd9d5e00b93da10c2e08dc1ed1ed8c4e23b3d043dfc987e853ff3fdbe"
+    base_image: "registry.fedoraproject.org/eln-bootc:latest@sha256:c60293d11865400103507d6fa6a420ad37d82e8f38b885378fff65455edfbdc7"
     # No alias: `eln` is Fedora's identifier for a moving development target,
     # and an alias tag is a stability promise this lane deliberately does not
     # make. Revisit if/when ELN gains a versioned publish.
@@ -1360,7 +1360,7 @@ variants:
     # while the Containerfile built from the pinned digest, so the pre-pull
     # fetched an image the build never used and the workaround silently did
     # nothing for guppy. Keep the two in lockstep when bumping.
-    base_image: "docker.io/gentoo/stage3:latest@sha256:faa32cce7310f28af521566a7b52ce0015d11efaac78d4fe4b09f1ac602297b6"
+    base_image: "docker.io/gentoo/stage3:latest@sha256:916dc4d8cf38d316da9a838c2e20f32f16b7d4f21ef137b4682b66d68874c2c5"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [gentoo]
     platforms: ["linux/amd64"]
