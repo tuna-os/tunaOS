@@ -1,0 +1,46 @@
+name: Native fork removal qualification
+on:
+  pull_request:
+    paths:
+      - 'build_scripts/lib/fork-removals.sh'
+      - 'build_scripts/lib/fork-removal-inventory.py'
+      - 'tests/test_fork_removal_inventory.py'
+      - 'tests/test_fork_removals_native_families.py'
+      - 'tests/test_fork_removal_native_workflow.py'
+      - 'scripts/test-native-fork-removals.sh'
+      - '.github/workflows/fork-removal-native.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-removal:
+    name: Native removal (${{ matrix.family }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        family: [rpm, pacman]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Qualify exact removal in disposable container
+        env:
+          FAMILY: ${{ matrix.family }}
+        run: scripts/test-native-fork-removals.sh "$FAMILY" "$RUNNER_TEMP/native-removal-$FAMILY"
+      - name: Save native evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: native-removal-${{ matrix.family }}
+          path: ${{ runner.temp }}/native-removal-${{ matrix.family }}
+          if-no-files-found: error
+          retention-days: 14

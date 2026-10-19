@@ -214,6 +214,10 @@ Six more, each measured while fixing the live-ISO and install path
   wrong answer. When a default exists, test the unrecognised case
   explicitly.
 
+- **An RPM selector is not always a package name.** Compare the query result
+  with the requested name before removal. Version and architecture selectors
+  pass a token regex. See [native removal checks](docs/FORK-NATIVE-REMOVALS.md).
+
 ## Agent Skills
 
 ### Issue tracker

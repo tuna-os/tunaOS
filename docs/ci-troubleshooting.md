@@ -1739,3 +1739,15 @@ cannot change the theme already copied by dracut. The test runs
 `plymouth-set-theme.sh` before it applies identity. It checks the generated
 PNG, selection and password callbacks. Keep image builds blocked until an
 actual initramfs and encrypted-root boot verify the same files.
+
+
+## Fork RPM selector passes name validation
+
+| Symptom | Cause | Fix |
+| --- | --- | --- |
+| A version or architecture suffix passes the candidate name regex | RPM accepts selectors as well as exact package names | Compare `rpm -q --qf` names with each requested name before the dry run. Reject empty, different or multiple results. |
+
+The [RPM manual](https://rpm.org/docs/4.20.x/man/rpm.8.html#package-selection-options)
+describes these selectors. Tests check rejection before erase.
+[Native removal checks](FORK-NATIVE-REMOVALS.md) add cases in private roots.
+Inventory and file hashes must stay unchanged. A local native skip does not prove this gate.
