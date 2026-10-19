@@ -73,6 +73,13 @@ if [[ "${TUNA_METADATA_ONLY:-0}" == "1" ]]; then
 	write_live_source_metadata
 	exit 0
 fi
+# Every live customization must target the image root supplied by tacklebox.
+# An unset root would otherwise create host-side /etc markers when a caller
+# invokes this script outside the container contract.
+if [[ -z "${TUNA_SESSION_ROOT:-}" ]]; then
+	echo "customize-live: TUNA_SESSION_ROOT is required" >&2
+	exit 1
+fi
 # This persistent live-only marker survives /run becoming a tmpfs at boot.
 mkdir -p "${TUNA_SESSION_ROOT:-}/etc/tunaos"
 touch "${TUNA_SESSION_ROOT:-}/etc/tunaos/live-session"

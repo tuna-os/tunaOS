@@ -185,6 +185,7 @@ rm -rf "$CUSTOMIZE_DIR"
 mkdir -p "$CUSTOMIZE_DIR"
 cp -a "${REPO_ROOT}/live-iso/common/src/." "$CUSTOMIZE_DIR/"
 mv "${CUSTOMIZE_DIR}/customize-live.sh" "${CUSTOMIZE_DIR}/customize-live-real.sh"
+chmod 0755 "${CUSTOMIZE_DIR}/customize-live-real.sh"
 {
 	echo '#!/usr/bin/env bash'
 	printf 'export TUNA_LIVE_BASE_IMAGE=%q\n' "$IMAGE_REF"

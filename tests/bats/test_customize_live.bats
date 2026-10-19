@@ -69,6 +69,12 @@ detect() {
   [ -f "${FAKE_ROOT}/etc/tunaos/live-session" ]
 }
 
+@test "missing session root fails before writing live markers" {
+  run env TUNA_SESSION_ROOT= TUNA_DETECT_ONLY=1 bash "${SCRIPT}"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"TUNA_SESSION_ROOT is required"* ]]
+}
+
 @test "metadata-only mode writes an exact live source receipt" {
   local digest="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
   run env \
