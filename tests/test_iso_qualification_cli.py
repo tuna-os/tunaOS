@@ -87,12 +87,16 @@ def test_account_provisioning_uses_deployment_aware_guestfish(
     fakebin.mkdir()
     calls = tmp_path / "guestfish.calls"
     captured = tmp_path / "account-script"
+    listener_key = tmp_path / "listener-key"
     guestfish = fakebin / "guestfish"
     guestfish.write_text(
         """#!/usr/bin/env bash
 set -euo pipefail
-printf '%s\\n' "$*" >>"$CALLS"
+printf '%s\n' "$*" >>"$CALLS"
 if [[ "${1:-}" == "--listen" ]]; then
+  [[ "$*" == *"--keys-from-stdin"* ]] || exit 91
+  IFS= read -r listener_key
+  printf '%s\n' "$listener_key" >"$LISTENER_KEY"
   echo 'GUESTFISH_PID=4242; export GUESTFISH_PID'
   exit 0
 fi
@@ -132,6 +136,7 @@ esac
         "VG_PVS": vg_pvs,
         "CALLS": str(calls),
         "CAPTURED": str(captured),
+        "LISTENER_KEY": str(listener_key),
     }
     proc = subprocess.run(
         [
@@ -155,6 +160,7 @@ esac
         check=False,
     )
     arguments = calls.read_text(encoding="utf-8")
+    assert listener_key.read_text(encoding="utf-8") == "tunaose2e\n"
     if not succeeds:
         assert proc.returncode != 0
         assert "deployment root is not backed entirely" in proc.stderr
