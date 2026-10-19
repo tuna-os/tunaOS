@@ -992,3 +992,88 @@ def test_focus_bootstrap_is_narrow_nonactivating_and_bounded(monkeypatch, case):
     with pytest.raises(ValueError):
         driver.field("Password", "synthetic-test-value", secret=True)
     assert events == ([("tab",)] if case in {"no_focus_after_tab", "changed_app_after_tab", "ambiguous_after_tab"} else [])
+
+
+def confirmation_tree(path="/dev/vdb"):
+    return {"schema_version": 1, "nodes": [
+        node(0, None, "application", "Installer", None),
+        node(1, 0, "frame", "Installer", [0, 0, 900, 768], active=True),
+        node(2, 1, "panel", "", [0, 0, 900, 700]),
+        node(3, 2, "panel", "", [0, 0, 900, 700]),
+        node(4, 3, "label", "Create User", [0, 0, 200, 30]),
+        node(5, 2, "panel", "", [0, 0, 900, 700]),
+        node(6, 5, "label", "Confirm installation", [0, 0, 200, 30]),
+        node(7, 5, "list item", "", [0, 0, 576, 56]),
+        node(8, 7, "label", "Disk", [0, 0, 100, 20]),
+        node(9, 7, "label", f"{path} (64 GiB)", [0, 0, 150, 20]),
+        node(10, 5, "list item", "", [0, 0, 576, 56]),
+        node(11, 10, "label", f"Everything on {path} will be erased. This cannot be undone.",
+             [0, 0, 576, 20]),
+    ]}
+
+
+@pytest.mark.parametrize("change", ["wrong_device", "similar_path", "duplicate_warning", "inactive",
+                                   "wrong_process", "wrong_page", "unbound_disk", "wrong_size"])
+def test_confirmation_disk_requires_exact_bound_selected_target(change):
+    value = confirmation_tree()
+    if change == "wrong_device":
+        value = confirmation_tree("/dev/vda")
+    elif change == "similar_path":
+        value = confirmation_tree("/dev/vdb1")
+    elif change == "duplicate_warning":
+        value["nodes"].append(dict(value["nodes"][11], id=12))
+    elif change == "inactive":
+        value["nodes"][1]["states"]["active"] = False
+    elif change == "wrong_process":
+        value["nodes"][9]["pid"] += 1
+    elif change == "wrong_page":
+        value["nodes"][7]["parent"] = 3
+    elif change == "unbound_disk":
+        value["nodes"][8]["parent"] = 5
+    elif change == "wrong_size":
+        value["nodes"][9]["name"] = "/dev/vdb (32 GiB)"
+    with pytest.raises(ValueError):
+        UI.confirmation_disk(value, PID, "/dev/vdb")
+
+
+@pytest.mark.parametrize("change", ["valid", "wrong_ocr", "suffix", "confusable", "duplicate",
+                                   "low_confidence", "stale_app", "wrong_heading"])
+def test_confirmation_warning_ocr_never_sends_input(tmp_path, change):
+    from PIL import Image
+
+    frame = tmp_path / "frame.png"
+    Image.new("RGB", SIZE, "white").save(frame)
+    value = confirmation_tree()
+    warning = UI.confirmation_disk(value, PID, "/dev/vdb")
+    rows = words(warning)
+    if change == "wrong_ocr":
+        rows[2]["text"] = "/dev/vda"
+    elif change == "suffix":
+        rows[2]["text"] = "/dev/vdb1"
+    elif change == "confusable":
+        rows[2]["text"] = "/dev/vdß"
+    elif change == "duplicate":
+        rows += words(warning, y=500, line=2)
+    elif change == "low_confidence":
+        rows[2]["conf"] = "79"
+    after = copy.deepcopy(value)
+    if change == "stale_app":
+        after["nodes"][1]["states"]["active"] = False
+    events = []
+
+    def read_words(path, **kwargs):
+        assert kwargs == {"psm": 11, "confidence": 80}
+        assert Image.open(path).size == (SIZE[0] * 2, SIZE[1] * 2)
+        return [r for r in rows if float(r["conf"]) >= kwargs["confidence"]]
+
+    instance = UI.KeyboardUI(SimpleNamespace(key=events.append), None, lambda: after,
+                             read_words, app_pid=PID, private=tmp_path)
+    heading = "Create User" if change == "wrong_heading" else "Confirm installation"
+    instance.capture = lambda label: (frame, SIZE, words(heading), value)
+    if change == "valid":
+        result = instance.confirmation_target("/dev/vdb")
+        assert result["warning_visible"] and result["disk_row_bound"]
+    else:
+        with pytest.raises(ValueError):
+            instance.confirmation_target("/dev/vdb")
+    assert events == []

@@ -1973,3 +1973,17 @@ It then observes focus for at most four snapshots.
 If no unique focus appears, the test stops without Enter or text input.
 The exception does not apply to the same page, another window or ambiguous focus.
 A regression test covers the full sequence through guarded Install activation.
+
+### Confirmation text is visible but OCR misses the target disk
+
+[Run 39319018523](https://github.com/tuna-os/tunaOS/actions/runs/39319018523)
+completed the four fields on Create User in both variants. It stopped before Install.
+The confirmation frame showed `/dev/vdb (64 GiB)` and the erase warning.
+Full-size OCR missed the red warning line.
+
+The check reads one grayscale copy of the full frame at twice its size.
+It needs the exact warning, at high confidence, with an exact device token.
+The live confirmation page must also contain that disk subtitle and warning.
+The subtitle must belong to the Disk row in the verified application.
+The test repeats the disk guards before Install. Wrong paths, duplicate warnings
+and a changed active window remain errors.

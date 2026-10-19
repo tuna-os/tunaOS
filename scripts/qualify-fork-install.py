@@ -1229,10 +1229,7 @@ print(json.dumps(values))
             ui.click("Next")
         elif UI_MODULE.phrase_rows(words, "Confirm installation"):
             require(user_entered, "native account creation page was not completed")
-            require(
-                UI_MODULE.phrase_rows(words, first["target_path"]),
-                "confirmation does not visibly identify guarded target path",
-            )
+            report["confirmation_target"] = ui.confirmation_target(first["target_path"])
             # Complete non-activating focus traversal before the final guards.
             # The later Enter refuses to traverse or act if this focus changes.
             ui.focus("Install", ("push button",), heading="Confirm installation")

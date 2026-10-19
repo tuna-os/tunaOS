@@ -864,6 +864,30 @@ def keyboard_target(snapshot, heading, name, roles, pid, *, header=False, allow_
     return candidates[0], focused
 
 
+def confirmation_disk(snapshot, pid, target_path):
+    """Bind the displayed disk and erasure warning to the exact confirm page."""
+    if not re.fullmatch(r"/dev/[a-zA-Z0-9]+", target_path):
+        raise ValueError("invalid guarded target path")
+    nodes = tree(snapshot)
+    window, _ = keyboard_window(snapshot, pid, allow_unfocused=True)
+    branch = page_branch(snapshot, "Confirm installation", pid)
+    labels = [n for n in nodes.values() if n["pid"] == pid and n["role"] == "label"
+              and showing(n) and window in ancestors(n, nodes)
+              and branch in ancestors(n, nodes)]
+    warning = f"Everything on {target_path} will be erased. This cannot be undone."
+    selected = [n for n in labels if n["name"] == f"{target_path} (64 GiB)"]
+    warnings = [n for n in labels if n["name"] == warning]
+    if len(selected) != 1 or len(warnings) != 1:
+        raise ValueError("confirmation disk subtitle or warning is absent or ambiguous")
+    row = next((n for n in ancestors(selected[0], nodes) if n["role"] == "list item"), None)
+    disk_titles = [n for n in labels if n["name"] == "Disk" and row in ancestors(n, nodes)]
+    if row is None or len(disk_titles) != 1:
+        raise ValueError("confirmation target subtitle is not bound to the Disk row")
+    for node in selected + warnings + disk_titles:
+        complete_labels(node)
+    return warning
+
+
 class KeyboardUI(UI):
     """Real bounded Tab traversal; never calls an accessibility action/setter."""
 
@@ -872,6 +896,37 @@ class KeyboardUI(UI):
         self.focus_transition = None
         self.current_page = None
         self.navigation_events = []
+
+    def confirmation_target(self, target_path):
+        """Read-only, exact path proof; no fuzzy OCR or guessed crop geometry."""
+        from PIL import Image, ImageOps
+
+        frame, size, rows, snapshot = self.capture("confirmation-target")
+        if ([h for h in PAGE_HEADINGS if phrase_rows(rows, h)] != ["Confirm installation"]
+                or phrase_rows(rows, "Type to search")):
+            raise ValueError("confirmation page is not uniquely visible")
+        warning = confirmation_disk(snapshot, self.app_pid, target_path)
+        # GTK's red warning is lost by full-size sparse OCR. Scaling the whole
+        # frame preserves placement and exact tokens, without inventing bounds.
+        with Image.open(frame) as source:
+            if source.size != size or size[0] * size[1] > 4096 * 2160:
+                raise ValueError("confirmation framebuffer exceeds bounded size")
+            scaled = ImageOps.grayscale(source).resize((size[0] * 2, size[1] * 2))
+            with tempfile.TemporaryDirectory(prefix="confirmation-ocr-", dir=self.private) as temporary:
+                path = Path(temporary) / "frame.png"
+                scaled.save(path)
+                rows = self.words(path, psm=11, confidence=80)
+        matches = phrase_rows(rows, warning)
+        if len(matches) != 1:
+            raise ValueError("confirmation does not visibly identify the exact target warning")
+        # phrase_rows normalizes punctuation for prose; the device token must
+        # additionally match byte-for-byte, preserving slashes and suffixes.
+        if [r["text"] for r in matches[0]][2] != target_path:
+            raise ValueError("confirmation target OCR token differs from guarded path")
+        confirmation_disk(self.snapshot(), self.app_pid, target_path)
+        return {"target_path": target_path, "size_gib": 64, "frame": Path(frame).name,
+                "warning_visible": True, "disk_row_bound": True,
+                "ocr": "full-frame grayscale 2x; exact warning; confidence >=80"}
 
     def page(self, expected=None):
         frame, size, words, snapshot = self.capture("keyboard-page")
