@@ -78,6 +78,15 @@ def load_config(path: str | Path = DEFAULT_CONFIG) -> dict:
     if not isinstance(config, dict):
         raise ValueError(f"build config must be a mapping: {path}")
     return config
+def load_current_inputs(path: str | Path | None):
+    """Load observations collected independently of the qualification snapshot."""
+    if not path:
+        return None, None, None
+    with open(path, "r", encoding="utf-8") as handle:
+        current = json.load(handle)
+    if not isinstance(current, dict):
+        raise ValueError(f"current inputs must be a mapping: {path}")
+    return current.get("descriptors"), current.get("overlays"), current.get("pins")
 
 
 def canonical_target(variant: str, flavor: str, platform: str) -> dict[str, str]:
@@ -201,13 +210,6 @@ def is_cut_over(
     if key not in known:
         return False
 
-    current = snapshot.get("currentInputs")
-    if current_descriptors is None or current_overlays is None or current_pins is None:
-        if not isinstance(current, dict):
-            return False
-        current_descriptors = current.get("descriptors")
-        current_overlays = current.get("overlays")
-        current_pins = current.get("pins")
     if current_descriptors is None or current_overlays is None or current_pins is None:
         return False
     try:
@@ -383,7 +385,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--flavor", default="")
     parser.add_argument("--platform", default="")
     parser.add_argument("--group", default="")
-    parser.add_argument("--snapshot", default="")
+    parser.add_argument("--current-inputs", default="")
     parser.add_argument("--check", action="store_true")
     parser.add_argument("--retained", action="store_true")
     parser.add_argument("--annotate-matrix", action="store_true")
@@ -397,10 +399,20 @@ def main(argv: list[str] | None = None) -> int:
         if args.snapshot:
             with open(args.snapshot, "r", encoding="utf-8") as handle:
                 snapshot = json.load(handle)
+        current_descriptors, current_overlays, current_pins = load_current_inputs(
+            args.current_inputs
+        )
         matrix = json.load(sys.stdin)
         json.dump(
             annotate_matrix(
-                matrix, policy, config, args.default_platform, snapshot=snapshot
+                matrix,
+                policy,
+                config,
+                args.default_platform,
+                snapshot=snapshot,
+                current_descriptors=current_descriptors,
+                current_overlays=current_overlays,
+                current_pins=current_pins,
             ),
             sys.stdout,
         )
@@ -420,6 +432,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.snapshot:
             with open(args.snapshot, "r", encoding="utf-8") as handle:
                 snapshot = json.load(handle)
+        current_descriptors, current_overlays, current_pins = load_current_inputs(
+            args.current_inputs
+        )
         if args.group:
             live, offline = group_members(config, args.variant, args.group)
             covered = group_covered(
@@ -430,6 +445,9 @@ def main(argv: list[str] | None = None) -> int:
                 offline,
                 config=config,
                 snapshot=snapshot,
+                current_descriptors=current_descriptors,
+                current_overlays=current_overlays,
+                current_pins=current_pins,
             )
             sys.stdout.write(("true" if covered else "false") + "\n")
             return 0 if covered else 1
@@ -441,6 +459,9 @@ def main(argv: list[str] | None = None) -> int:
                 args.platform,
                 config=config,
                 snapshot=snapshot,
+                current_descriptors=current_descriptors,
+                current_overlays=current_overlays,
+                current_pins=current_pins,
             )
             sys.stdout.write(("true" if cut else "false") + "\n")
             return 0 if cut else 1

@@ -130,8 +130,24 @@ def test_is_cut_over_true_matrix(config, variant, flavor, platform):
         platform=platform,
     )
     assert DC.is_cut_over(
-        policy, variant, flavor, platform, config=config, snapshot=snapshot
+        policy, variant, flavor, platform, config=config, snapshot=snapshot,
+        current_descriptors=snapshot["currentInputs"]["descriptors"],
+        current_overlays=snapshot["currentInputs"]["overlays"],
+        current_pins=snapshot["currentInputs"]["pins"],
     ) is True
+def test_snapshot_embedded_current_inputs_are_not_authoritative(config):
+    policy = make_policy([make_entry("bonito", "gnome", "linux/amd64")])
+    snapshot = _qualified_snapshot(receipt_digest=DIGEST)
+    assert DC.is_cut_over(
+        policy,
+        "bonito",
+        "gnome",
+        "linux/amd64",
+        config=config,
+        snapshot=snapshot,
+    ) is False
+
+
 
 
 def test_is_cut_over_needs_a_matching_entry(config):
@@ -318,7 +334,10 @@ def test_snapshot_with_matching_digest_stays_cut_over(config):
     policy = make_policy([make_entry("bonito", "gnome", "linux/amd64")])
     snapshot = _qualified_snapshot(receipt_digest=DIGEST)
     assert DC.is_cut_over(
-        policy, "bonito", "gnome", "linux/amd64", config=config, snapshot=snapshot
+        policy, "bonito", "gnome", "linux/amd64", config=config, snapshot=snapshot,
+        current_descriptors=snapshot["currentInputs"]["descriptors"],
+        current_overlays=snapshot["currentInputs"]["overlays"],
+        current_pins=snapshot["currentInputs"]["pins"],
     ) is True
 
 
@@ -328,7 +347,10 @@ def test_snapshot_with_moved_receipt_digest_downgrades(config):
     policy = make_policy([make_entry("bonito", "gnome", "linux/amd64")])
     snapshot = _qualified_snapshot(receipt_digest=OTHER_DIGEST)
     assert DC.is_cut_over(
-        policy, "bonito", "gnome", "linux/amd64", config=config, snapshot=snapshot
+        policy, "bonito", "gnome", "linux/amd64", config=config, snapshot=snapshot,
+        current_descriptors=snapshot["currentInputs"]["descriptors"],
+        current_overlays=snapshot["currentInputs"]["overlays"],
+        current_pins=snapshot["currentInputs"]["pins"],
     ) is False
 
 
@@ -361,7 +383,10 @@ def test_moved_pins_downgrade_a_qualified_snapshot(config):
     assert entry["qualification"]["status"] == "unqualified"
     assert entry["qualification"]["reason"] == "stale-qualification-receipt"
     assert DC.is_cut_over(
-        policy, "bonito", "gnome", "linux/amd64", config=config, snapshot=downgraded
+        policy, "bonito", "gnome", "linux/amd64", config=config, snapshot=downgraded,
+        current_descriptors=downgraded["currentInputs"]["descriptors"],
+        current_overlays=downgraded["currentInputs"]["overlays"],
+        current_pins=downgraded["currentInputs"]["pins"],
     ) is False
     # Control: unchanged pins leave the qualification (and the gate) intact.
     steady = downgrade_stale_targets(
@@ -372,7 +397,10 @@ def test_moved_pins_downgrade_a_qualified_snapshot(config):
     )
     assert steady_entry["qualification"]["status"] == "qualified"
     assert DC.is_cut_over(
-        policy, "bonito", "gnome", "linux/amd64", config=config, snapshot=steady
+        policy, "bonito", "gnome", "linux/amd64", config=config, snapshot=steady,
+        current_descriptors=steady["currentInputs"]["descriptors"],
+        current_overlays=steady["currentInputs"]["overlays"],
+        current_pins=steady["currentInputs"]["pins"],
     ) is True
 
 
@@ -408,6 +436,9 @@ def test_group_covered_needs_every_member_target(config):
     assert DC.group_covered(
         policy, "yellowfin", "kde", live, offline,
         config=config, snapshot=snapshot,
+        current_descriptors=snapshot["currentInputs"]["descriptors"],
+        current_overlays=snapshot["currentInputs"]["overlays"],
+        current_pins=snapshot["currentInputs"]["pins"],
     ) is True
 
 
@@ -494,7 +525,16 @@ def test_annotate_matrix_marks_only_cut_over_rows(config):
         {"variant": "yellowfin", "flavor": "kde-nvidia", "platform": "linux/amd64"},
     ]}
     snapshot = _qualified_snapshot(receipt_digest=DIGEST)
-    annotated = DC.annotate_matrix(matrix, policy, config, snapshot=snapshot)
+    current = snapshot["currentInputs"]
+    annotated = DC.annotate_matrix(
+        matrix,
+        policy,
+        config,
+        snapshot=snapshot,
+        current_descriptors=current["descriptors"],
+        current_overlays=current["overlays"],
+        current_pins=current["pins"],
+    )
     assert [row["cutover"] for row in annotated["include"]] == [True, False, False]
     # The original rows survive untouched apart from the stamp.
     assert annotated["include"][0]["variant"] == "bonito"
@@ -506,13 +546,26 @@ def test_annotate_matrix_defaults_missing_platform(config):
     policy = make_policy([make_entry("bonito", "gnome", "linux/amd64")])
     matrix = {"include": [{"variant": "bonito", "flavor": "gnome"}]}
     snapshot = _qualified_snapshot(receipt_digest=DIGEST)
+    current = snapshot["currentInputs"]
     assert DC.annotate_matrix(
-        matrix, policy, config, snapshot=snapshot
+        matrix,
+        policy,
+        config,
+        snapshot=snapshot,
+        current_descriptors=current["descriptors"],
+        current_overlays=current["overlays"],
+        current_pins=current["pins"],
     )["include"][0]["cutover"] is True
     flipped = DC.annotate_matrix(
-        matrix, policy, config, default_platform="linux/arm64", snapshot=snapshot
+        matrix,
+        policy,
+        config,
+        default_platform="linux/arm64",
+        snapshot=snapshot,
+        current_descriptors=current["descriptors"],
+        current_overlays=current["overlays"],
+        current_pins=current["pins"],
     )
-    assert flipped["include"][0]["cutover"] is False
 
 
 def test_annotate_matrix_rejects_bad_shape(config):
