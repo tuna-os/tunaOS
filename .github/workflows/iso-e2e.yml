@@ -295,7 +295,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             qemu-system-x86 qemu-utils ovmf socat swtpm \
             rclone sshpass skopeo python3-yaml \
-            imagemagick tesseract-ocr
+            imagemagick tesseract-ocr xorriso squashfs-tools
 
       # The R2 source is the default — it tests the artifact users actually
       # download. Skipped when source=artifact (workflow_dispatch only).
@@ -388,19 +388,21 @@ jobs:
           FLAVOR: ${{ matrix.flavor }}
         run: |
           set -euo pipefail
-          mapfile -t IMAGE_IDENTITY < <(python3 - "$VARIANT" <<'PY'
+          mapfile -t IMAGE_IDENTITY < <(python3 - "$VARIANT" "$FLAVOR" <<'PY'
           import sys
           import yaml
 
-          variant_id = sys.argv[1]
+          variant_id, flavor_id = sys.argv[1:3]
           document = yaml.safe_load(open(".github/build-config.yml"))
           variant = next(item for item in document["variants"]
                          if item["id"] == variant_id)
           image_name = variant.get("publish_name", variant_id)
           suffix = variant.get("tag_suffix", "")
-          published_tag = variant_id + (f"-{suffix}" if suffix else "")
+          image_tag = flavor_id
+          if suffix and not image_tag.endswith(f"-{suffix}"):
+              image_tag = f"{image_tag}-{suffix}"
           print(image_name)
-          print(published_tag)
+          print(image_tag)
           PY
           )
           IMAGE_NAME="${IMAGE_IDENTITY[0]}"
@@ -411,11 +413,33 @@ jobs:
             echo "::error::skopeo returned no immutable digest for ${SOURCE_REF}"
             exit 1
           }
-          # The checked-in customization program is the immutable installer
-          # integration input used to place fisherman in the live squash. The
-          # actual bundled binary is intentionally not inferred from a moving
-          # live SSH session.
-          INSTALLER_DIGEST="sha256:$(sha256sum live-iso/common/src/customize-live.sh | awk '{print $1}')"
+          # Read the installer receipt from the ISO's squashfs. Hashing the
+          # checkout's customize-live.sh only proves the build input, not the
+          # installer payload that was actually bundled into this ISO.
+          receipt_dir="$(mktemp -d)"
+          trap 'rm -rf "$receipt_dir"' EXIT
+          mapfile -t media_payloads < <(
+            xorriso -indev "$ISO_PATH" -find / -type f \
+              \( -name '*.squashfs' -o -name '*.sfs' -o -name '*.img' \) -print \
+              2>/dev/null
+          )
+          INSTALLER_DIGEST=""
+          for media_path in "${media_payloads[@]}"; do
+            xorriso -osirrox on -indev "$ISO_PATH" \
+              -extract "$media_path" "$receipt_dir" >/dev/null 2>&1 || continue
+            while IFS= read -r payload; do
+              receipt="$(unsquashfs -cat "$payload" etc/tunaos/live-installer-info 2>/dev/null || true)"
+              candidate="$(awk -F= '$1 == "INSTALLER_BUNDLE_SHA256" { print $2; exit }' <<<"$receipt")"
+              if [[ "$candidate" =~ ^[0-9a-fA-F]{64}$ ]]; then
+                INSTALLER_DIGEST="sha256:${candidate}"
+                break 2
+              fi
+            done < <(find "$receipt_dir" -type f)
+          done
+          [[ "$INSTALLER_DIGEST" =~ ^sha256:[0-9a-fA-F]{64}$ ]] || {
+            echo "::error::ISO does not contain a valid live-installer-info receipt"
+            exit 1
+          }
           OVERLAY_DIGEST="sha256:$(sha256sum "$ISO_PATH" | awk '{print $1}')"
           {
             echo "TUNAOS_QUAL_SOURCE_DIGEST=${SOURCE_DIGEST}"

@@ -119,6 +119,8 @@ def _validate_observed_record(
 def validate(manifest: dict, label: str) -> None:
     if manifest.get("schema") != SCHEMA_V1:
         raise ValueError(f"{label}: {MIGRATION_HINT}")
+    _require_text(manifest, "qualifiedAt", label)
+    _require_digest(manifest.get("receiptDigest"), "receiptDigest", label)
     for field in ("variant", "flavor", "platform", "cpu_baseline",
                   "hardware_scope"):
         _require_text(manifest, field, label)

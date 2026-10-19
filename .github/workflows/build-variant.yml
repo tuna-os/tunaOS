@@ -212,15 +212,11 @@ jobs:
           # Per-stage artifact matrices — each stage's ISOs/QCOW2s depend
           # only on that stage's image builds, avoiding the stage-4 artifact
           # jail where a gnome-nvidia-hwe failure blocked ALL ISOs (F10).
-          # One row per architecture platform (#1378): this used to hardcode
-          # platform: "linux/amd64" unconditionally, so flavors that publish
-          # arm64 images (per build-config.yml's platforms/global_platforms)
-          # never got arm64 ISO/QCOW2 artifacts — the same gap #230 closed
-          # without the fix landing. platforms_json (built above, per entry)
-          # already carries every {platform, safeplatform} pair the image
-          # matrix published; expand each artifact-eligible entry into one
-          # row per amd64/arm64 platform instead of one fixed amd64 row.
-          # /v2 (a CPU-feature variant, not a real target arch) is excluded.
+          # One row per canonical catalog platform (#1378): this used to
+          # hardcode generic linux/amd64, so flavors whose catalog target is
+          # linux/amd64/v2 could never be marked cut over. Keep /v2 distinct
+          # from the generic AMD64 target; the builder's safeplatform carries
+          # the same identity into the artifact name and image tag.
           make_artifact_matrix() {
             local STAGE=$1
             echo "$FULL_MATRIX" | jq -c --argjson stage "$STAGE" '{
@@ -228,7 +224,9 @@ jobs:
                 select(.stage == $stage and (.build_iso == true or .build_qcow2 == true))
                 | . as $e
                 | ($e.platforms_json | fromjson)[]
-                | select(.platform == "linux/amd64" or .platform == "linux/arm64")
+                | select(.platform == "linux/amd64" or
+                         .platform == "linux/amd64/v2" or
+                         .platform == "linux/arm64")
                 | {
                     variant:       $e.variant,
                     image_name:    $e.image_name,
