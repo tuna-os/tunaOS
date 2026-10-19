@@ -71,7 +71,8 @@ def source_paths(root):
     patterns = (".github/build-config.yml", "image-versions.yaml", "registry-map.yaml",
                 "Containerfile*", "manifests/**/*", "build_scripts/**/*", "scripts/**/*",
                 "Justfile", "just/**/*", ".containerignore", ".dockerignore", "custom/**/*",
-                "system_files/**/*", "system_files_overrides/**/*", "experiences/**/*")
+                "system_files/**/*", "system_files_overrides/**/*", "experiences/**/*",
+                "live-iso/common/src/installer-recipe-backend.sh")
     tracked = set(subprocess.check_output(["git", "-C", str(root), "ls-files", "-z"], text=True).split("\0"))
     return sorted({p.relative_to(root).as_posix() for pattern in patterns
                    for p in root.glob(pattern)

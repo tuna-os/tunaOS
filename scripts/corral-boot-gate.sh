@@ -94,6 +94,16 @@ trap '"$CORRAL" delete "$NAME" -f >/dev/null 2>&1 || true' EXIT
 # Kernel arguments as in just/qcow2-build.just. Corral puts
 # console=ttyS0,115200n8 first; naming ttyS0 again after tty0 keeps it the
 # primary console, where systemd and the base contract write.
+# Only the nonpublishing fork canary requests SSH explicitly. Production images
+# keep their service enablement policy; these arguments affect this guest boot.
+qualification_args=()
+if [[ "${TUNAOS_FORK_CANARY_SSH:-0}" == 1 ]]; then
+	[[ "$IMAGE" == localhost/fork-qualification/* ]] || {
+		echo "Invalid canary SSH image" >&2
+		exit 1
+	}
+	qualification_args+=(--karg systemd.wants=ssh.service --karg systemd.wants=sshd.service)
+fi
 rc=0
 "$CORRAL" vmtest "$NAME" \
 	--bootc "$IMAGE" \
@@ -102,7 +112,7 @@ rc=0
 	--karg console=tty0 --karg console=ttyS0,115200n8 \
 	--karg systemd.journald.forward_to_console=1 \
 	--karg systemd.unit=graphical.target \
-	--karg tunaos.countme=0 \
+	--karg tunaos.countme=0 "${qualification_args[@]}" \
 	--ready-marker "$READY" \
 	--fail-marker "$FAIL" \
 	--timeout "${TIMEOUT}s" \

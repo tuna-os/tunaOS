@@ -137,3 +137,19 @@ exists. Failure to verify cleanup makes the proof fail.
 The proof includes the native inventory and contract results for the disposable child.
 It does not qualify the original image's identity, boot or installer.
 A complete build with removal intent needs its own image qualification.
+
+## Actual build proof
+
+`scripts/qualify-fork-removal-build.py` runs the real build entrypoint twice for
+one admitted variant. The first context has no package changes. The second
+requests `remove: [fastfetch]` through the normal config compiler.
+Between these builds, the launcher runs the disposable child proof above.
+The final image must pass completed-receipt verification with a fresh native
+inventory and desktop contract. The workflow retains build logs and receipts.
+
+The separate `fork-removal-build-qualification.yml` matrix uses read-only
+repository permissions and local image tags. It keeps the current no-cache
+boundary. It does not run login, installer or disk helpers, and does not cancel
+the separate image canary. The temporary source stack includes that canary's
+base fixes and compiler as an explicit dependency; it preserves their commits.
+Package build results do not certify boot, identity or installation.

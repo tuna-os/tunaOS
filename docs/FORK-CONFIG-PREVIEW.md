@@ -153,9 +153,55 @@ fastfetch consumers in a disposable root. See [the identity contract](FORK-IDENT
 for the contract, measured installer blockers and required canaries. Normal
 preparation still rejects name/logo; this is not a completed rebrand.
 
+### Installer source and destination
+
+Each prepared context routes the installer to the same exact tag as `IMAGE_TAG`:
+`<registry>/<namespace>/<variant>:<flavor>-<platform-with-dashes>`.
+`imgref` names the update destination; `local_imgref` initially names that same
+image through `containers-storage:`. The recipe contains no digest of itself.
+An absent or ambiguous source causes an error before the build.
+The error cannot select the stock TunaOS image.
+
+The generated system `images.json` makes the same target the image screen's
+default. If a catalog already exists, the compiler changes only its unique matched leaf.
+It preserves unrelated entries and options. The compiler also updates catalogs within recipes.
+The frontend must reject a selection that disagrees with an explicit local source.
+Changes to the display name cannot select another image.
+
+Before identity hashes the recipe and catalog, the fork adapter probes the actual
+build root with the existing `installer-recipe-backend.sh`. It writes the measured
+`bootloader`, boolean `composeFsBackend`, and `filesystem` to the recipe, and the
+frontend's established `composefs`, `bootloader`, and `filesystem` leaf fields.
+Bootupd takes precedence over native composefs. Sealed images need ext4.
+
+If the probe cannot classify the root, it stops with an error.
+The source receipt pins the probe bytes; preparation copies them into each private context.
+Stock contexts do not run this adapter. Identity build/production gates stay closed.
+
+After the local build, export an offline source with its digest:
+
+```sh
+python3 scripts/export-fork-source.py \
+  --manifest /tmp/harbor-build/yellowfin--gnome--linux-amd64/manifests/fork-config.json \
+  --output /tmp/harbor-export
+```
+
+The exporter resolves the configured local tag once, then uses its immutable config
+ID. It verifies the embedded fork manifest, recipe, catalog and measured backend;
+`--preserve-digests` export must keep the original platform manifest. The verifier checks each
+OCI blob by SHA-256 and size. The config/index architecture must match the
+resolved platform. `source-receipt.json` records these final digests outside the
+image. It is export evidence, not proof of a native installation or boot.
+
+The `source/` directory is a single-image OCI layout. A disposable
+installer qualification can mount a verified copy read-only and use
+`oci:/absolute/guest/path/source` as its local source, without a `:tag` suffix.
+Keep the destination from the recipe. Record the exact path for the test source
+and reverify bytes after transfer. This export does not publish,
+create credentials, launch an installer, erase disks or enable production builds.
 ### APT source declarations
 
 [Typed APT sources](FORK-APT-REPOSITORIES.md) add suites, components and a pinned
 key hash. Existing RPM declarations keep their format. Portage and Arch custom
 sources still fail closed. [Removal qualification](FORK-PACKAGE-SAFETY.md) is
-separate; normal fork builds still reject all removals.
+separate. The [optional-stock policy](FORK-OPTIONAL-REMOVALS.md) admits only its exact reviewed case.

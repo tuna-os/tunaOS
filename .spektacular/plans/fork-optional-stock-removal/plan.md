@@ -30,3 +30,17 @@ Focused shell/compiler/helper regression tests, full fork suite, mandatory
 `just fix && just check`, independent safety review, native family CI and actual
 image canary evidence. Publish a separate draft stacked on the protected-inventory
 PR and track checks to terminal. Do not change the held description of PR #3449.
+
+## Native build proof dependency integration
+
+The separate native build matrix needs the existing canary base/desktop fixes
+and current source-routing compiler. Integrate the reviewed canary snapshot
+`f05875a1` (local `7b29cedc`) as an explicit dependency of PR #3453. Preserve
+its attribution and leave PR #3445 unchanged. The temporary review diff includes
+that dependency until the upstream bases converge.
+
+For each admitted variant, build a package-only stock context, run the guarded
+disposable child proof, then build an actual `remove: [fastfetch]` context.
+Verify final native inventory and completed contract receipts. Keep existing
+no-cache settings, read-only repository permissions and no registry publication.
+Do not infer boot, installer or identity qualification from these package tests.

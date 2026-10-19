@@ -1,0 +1,88 @@
+name: Fork Removal Build Qualification
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/fork-removal-build-qualification.yml"
+      - "scripts/qualify-fork-removal-build.py"
+      - "scripts/qualify-fork-optional-removal.py"
+      - "build_scripts/lib/fork-optional-removals.*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: fork-removal-build-qualification-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  native-build:
+    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'feat/fork-optional-stock-removal'
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [yellowfin, grouper]
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Prepare container storage
+        uses: projectbluefin/actions/bootc-build/setup-runner@59f783ed76fd9d449ef6887a6649446801bd5434 # v1 as of 2026-07-02
+        with:
+          storage-backend: btrfs
+          update-podman: "true"
+          install-tools: '[]'
+      - name: Install bounded proof tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq python3-yaml
+          curl -fsSL https://github.com/mikefarah/yq/releases/download/v4.53.3/yq_linux_amd64 -o "$RUNNER_TEMP/yq"
+          echo "fa52a4e758c63d38299163fbdd1edfb4c4963247918bf9c1c5d31d84789eded4  $RUNNER_TEMP/yq" | sha256sum -c -
+          sudo install -m 0755 "$RUNNER_TEMP/yq" /usr/local/bin/yq
+      - name: Build stock, prove disposable child, build actual removal intent
+        env:
+          VARIANT: ${{ matrix.variant }}
+        run: |
+          sudo git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          sudo python3 scripts/qualify-fork-removal-build.py \
+            --variant "$VARIANT" --output "$RUNNER_TEMP/removal-build"
+      - name: Collect bounded proof artifacts
+        if: always()
+        run: |
+          mkdir -p removal-build-evidence
+          sudo python3 - "$RUNNER_TEMP/removal-build" removal-build-evidence <<'PY'
+          import pathlib, sys
+          source, target = map(pathlib.Path, sys.argv[1:])
+          paths = ['qualification.json', 'native-evidence.json', 'verify.stdout.log', 'verify.stderr.log',
+                   'stock/fork.yaml', 'stock/build.log', 'stock/prepared/builds.json', 'stock/prepared/source-receipt.json',
+                   'removal/fork.yaml', 'removal/build.log', 'removal/prepared/builds.json', 'removal/prepared/source-receipt.json',
+                   'child/proof.json', 'child/package-only.yaml', 'child/ancestor-manifest.json', 'child/stdout.log', 'child/stderr.log',
+                   'child/evidence/ancestor-package-receipt.json', 'child/evidence/package-receipt.json',
+                   'child/evidence/stock-baseline.json', 'child/evidence/native-removal-receipt.json']
+          for name in paths:
+              path = source / name
+              if not path.is_file() or path.is_symlink():
+                  continue
+              destination = target / name
+              destination.parent.mkdir(parents=True, exist_ok=True)
+              with path.open('rb') as stream:
+                  if name.endswith('.log'):
+                      stream.seek(max(0, path.stat().st_size - 20 * 1024 * 1024))
+                  data = stream.read(20 * 1024 * 1024 + 1)
+              if len(data) > 20 * 1024 * 1024:
+                  raise SystemExit('proof artifact exceeded size limit: ' + name)
+              destination.write_bytes(data)
+          PY
+          sudo chown -R "$USER:$(id -gn)" removal-build-evidence
+      - name: Upload package-only qualification evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: fork-removal-build-${{ matrix.variant }}-${{ github.run_id }}
+          path: removal-build-evidence/
+          retention-days: 7
+          if-no-files-found: warn

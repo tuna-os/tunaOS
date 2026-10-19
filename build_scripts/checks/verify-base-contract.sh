@@ -28,8 +28,21 @@
 
 set -uo pipefail
 
+# journal+console follows the last console= argument, often tty0 on
+# composefs boots. Keep the serial boot gate observable without creating a
+# fake device on machines with no serial console.
+runtime=false
+[[ "${1:-}" == "--runtime" ]] && runtime=true
+
+emit_marker() {
+	printf '%s\n' "$1"
+	if [[ "$runtime" == true && -c /dev/ttyS0 && -w /dev/ttyS0 ]]; then
+		printf '%s\n' "$1" >/dev/ttyS0 2>/dev/null || true
+	fi
+}
+
 fail() {
-	echo "TUNAOS_BASE_CONTRACT_FAIL reason=$1" >&2
+	emit_marker "TUNAOS_BASE_CONTRACT_FAIL reason=$1" >&2
 	exit 1
 }
 
@@ -193,4 +206,4 @@ if ! systemctl is-active --quiet "$bus_unit"; then
 	fail "system-bus-inactive unit=${bus_unit} state=$(systemctl is-active "$bus_unit" 2>/dev/null || echo unknown)"
 fi
 
-echo "TUNAOS_BASE_CONTRACT_OK state=${state} bus=${bus_unit}"
+emit_marker "TUNAOS_BASE_CONTRACT_OK state=${state} bus=${bus_unit}"
