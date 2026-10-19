@@ -22,11 +22,11 @@ import urllib.request
 import zipfile
 
 REPOSITORY = "tuna-os/bootc-installer"
-RUN_ID = 39200715506
-ARTIFACT_ID = 12163907071
-SOURCE_HEAD = "4d0e653f9283debb57b460fe495f65184f9d2c6c"
-TESTED_MERGE = "7b6cbf9c152147c031f9ba362ddf4e909f36f643"
-ZIP_SHA256 = "ca1e72cdc7aa13d74e4d0adfa48c6839f79c8829d9cd86ea7f9b8cad2b1fc148"
+RUN_ID = 39208307700
+ARTIFACT_ID = 12167011212
+SOURCE_HEAD = "4822697262cc73bc0b2a35cd8e13f76c4de8e196"
+TESTED_MERGE = "a4960c059d901141db40639af4401e52b223f887"
+ZIP_SHA256 = "7a4250f3c8684ad74707ffc95b5cada50a0c480c08abd469c5047a2168ff2081"
 APP = "org.bootcinstaller.Installer"
 BUNDLE_NAME = APP + ".flatpak"
 API = "https://api.github.com/repos/" + REPOSITORY
@@ -256,6 +256,79 @@ print(json.dumps({"instances": instances(), "stamps": stamps}))
 '''
 
 
+FISHERMAN_PATH_PROBE = r'''
+import hashlib, json, os, subprocess
+from pathlib import Path
+path = Path.home() / ".cache/bootc-installer/fisherman"
+def command(args):
+    try:
+        p = subprocess.run(args, capture_output=True, text=True, timeout=15)
+        return {"returncode": p.returncode, "stdout": p.stdout[-4000:], "stderr": p.stderr[-2000:]}
+    except (OSError, subprocess.TimeoutExpired) as error:
+        return {"error": type(error).__name__}
+report = {"scope": "read-only staged executable diagnostics", "staged_path": str(path),
+          "sandbox_home": os.environ.get("HOME", ""), "sandbox_cache": os.environ.get("XDG_CACHE_HOME", "")}
+for label, prefix in (("sandbox", []), ("desktop_user_host_portal", ["flatpak-spawn", "--host"])):
+    checks = {}
+    for name, args in (("stat", ["stat", "--printf=%F %a %u %g %s\\n", "--", str(path)]),
+                       ("sha256", ["sha256sum", "--", str(path)]),
+                       ("realpath", ["realpath", "--", str(path)]),
+                       ("file", ["file", "--", str(path)]),
+                       ("elf_headers", ["readelf", "-l", "--", str(path)])):
+        checks[name] = command(prefix + args)
+    report[label] = checks
+report["host_environment"] = command(["flatpak-spawn", "--host", "sh", "-c",
+    'printf "HOME=%s\\nXDG_CACHE_HOME=%s\\n" "$HOME" "$XDG_CACHE_HOME"; flatpak --version'])
+# ELF PT_INTERP comes from a binary header, never from executing the binary.
+try:
+    import struct
+    with path.open("rb") as stream:
+        header = stream.read(64)
+        if header[:4] == b"\x7fELF" and header[4] == 2 and header[5] in (1, 2):
+            endian = "<" if header[5] == 1 else ">"
+            offset = struct.unpack_from(endian + "Q", header, 32)[0]
+            size, count = struct.unpack_from(endian + "HH", header, 54)
+            if size < 56 or count > 128:
+                raise ValueError("unbounded ELF program headers")
+            for index in range(count):
+                stream.seek(offset + index * size)
+                entry = stream.read(56)
+                if struct.unpack_from(endian + "I", entry)[0] == 3:
+                    position = struct.unpack_from(endian + "Q", entry, 8)[0]
+                    length = struct.unpack_from(endian + "Q", entry, 32)[0]
+                    if not 1 <= length <= 4096:
+                        raise ValueError("unbounded ELF interpreter")
+                    stream.seek(position)
+                    interpreter = stream.read(length).rstrip(b"\0").decode("utf-8")
+                    if not interpreter.startswith("/") or "\0" in interpreter:
+                        raise ValueError("invalid ELF interpreter")
+                    report["interpreter"] = {"path": interpreter,
+                        "sandbox": command(["stat", "--", interpreter]),
+                        "desktop_user_host_portal": command(["flatpak-spawn", "--host", "stat", "--", interpreter])}
+except (OSError, ValueError, struct.error) as error:
+    report["elf_read_error"] = type(error).__name__
+print(json.dumps(report))
+'''
+
+GUEST_FISHERMAN_DIAGNOSTICS = GUEST_COMMON + "\ndiagnostics = json.loads(run(user_env() + " + repr([
+    "flatpak", "run", "--system", "--command=python3", APP, "-c", FISHERMAN_PATH_PROBE
+]) + ", timeout=120))\n" + r'''
+path = str(Path(user.pw_dir) / ".cache/bootc-installer/fisherman")
+prefix = user_env()
+checks = {}
+for name, args in (("stat", ["stat", "--", path]), ("sha256", ["sha256sum", "--", path]),
+                   ("realpath", ["realpath", "--", path]), ("file", ["file", "--", path]),
+                   ("elf_headers", ["readelf", "-l", "--", path])):
+    try:
+        result = subprocess.run(prefix + args, capture_output=True, text=True, timeout=15)
+        checks[name] = {"returncode": result.returncode, "stdout": result.stdout[-4000:], "stderr": result.stderr[-2000:]}
+    except (OSError, subprocess.TimeoutExpired) as error:
+        checks[name] = {"error": type(error).__name__}
+diagnostics["ordinary_desktop_user_host"] = checks
+print(json.dumps(diagnostics))
+'''
+
+
 def validate_window(observation, launched, installed):
     processes = [p for p in observation["instances"] if p["uid"] == launched["uid"]
                  and p["application"] == APP and p["app_commit"] == installed["app_commit"]]
@@ -401,9 +474,17 @@ def qualify(harness, access, private, archive, out, screenshot, observe, before,
         report["observed_window"] = observed
         report["visible_branding"] = pixels
         if validate_window(observed, report["launch"], report["installed_bundle"]) and pixels["passed"]:
+            try:
+                report["fisherman_path_diagnostics"] = guest(GUEST_FISHERMAN_DIAGNOSTICS, 240)
+            except (ValueError, OSError, subprocess.SubprocessError) as error:
+                report["fisherman_path_diagnostics"] = {"error": type(error).__name__}
             report["status"] = "passed"
             return
         time.sleep(3)
+    try:
+        report["fisherman_path_diagnostics"] = guest(GUEST_FISHERMAN_DIAGNOSTICS, 240)
+    except (ValueError, OSError, subprocess.SubprocessError) as error:
+        report["fisherman_path_diagnostics"] = {"error": type(error).__name__}
     report["guest_application_log"] = harness.run(ssh + ["tail -c 12000 /var/tmp/fork-installer.log"], timeout=30)
     raise ValueError("normal installer did not show a mapped GNOME wizard with the built fork name and reference logo")
 

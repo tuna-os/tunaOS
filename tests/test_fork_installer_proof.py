@@ -3,6 +3,7 @@ import base64
 import hashlib
 import importlib.util
 import io
+import json
 from pathlib import Path
 import stat
 import urllib.error
@@ -28,10 +29,10 @@ def metadata():
 
 def test_exact_artifact_source_and_zip_provenance():
     receipt = PROOF.validate_metadata(*metadata())
-    assert receipt["artifact_id"] == 12163907071
-    assert receipt["run_id"] == 39200715506
-    assert receipt["source_head"] == "4d0e653f9283debb57b460fe495f65184f9d2c6c"
-    assert receipt["recorded_tested_merge"] == "7b6cbf9c152147c031f9ba362ddf4e909f36f643"
+    assert receipt["artifact_id"] == 12167011212
+    assert receipt["run_id"] == 39208307700
+    assert receipt["source_head"] == "4822697262cc73bc0b2a35cd8e13f76c4de8e196"
+    assert receipt["recorded_tested_merge"] == "a4960c059d901141db40639af4401e52b223f887"
 
 
 @pytest.mark.parametrize("key,value", [("id", 123), ("name", "different.flatpak"),
@@ -78,7 +79,7 @@ def test_api_denial_is_bounded_and_never_falls_back_or_logs_token(monkeypatch, s
             raise urllib.error.HTTPError(request.full_url, status, "denied sensitive-test-token", {}, None)
     monkeypatch.setattr(PROOF.urllib.request, "build_opener", lambda *args: Opener())
     with pytest.raises(RuntimeError, match=f"HTTP {status}") as error:
-        PROOF.api_request("/actions/artifacts/12163907071", "sensitive-test-token")
+        PROOF.api_request("/actions/artifacts/12167011212", "sensitive-test-token")
     assert "sensitive-test-token" not in str(error.value)
     assert len(calls) == 1
 
@@ -298,3 +299,48 @@ def test_actual_ocr_parser_can_find_the_two_required_lines(tmp_path):
     draw.text((640, 450), "Install Harbor Canary", anchor="mm", font=font, fill="white")
     image.save(frame)
     assert PROOF.visible_branding(frame, reference, login.words(frame))["passed"]
+
+
+def test_fisherman_diagnostics_use_same_desktop_portal_without_execution():
+    compile(PROOF.FISHERMAN_PATH_PROBE, "fisherman-path-probe", "exec")
+    compile(PROOF.GUEST_FISHERMAN_DIAGNOSTICS, "guest-path-probe", "exec")
+    assert 'user_env()' in PROOF.GUEST_FISHERMAN_DIAGNOSTICS
+    assert '["flatpak-spawn", "--host"]' in PROOF.FISHERMAN_PATH_PROBE
+    assert '"readelf", "-l"' in PROOF.FISHERMAN_PATH_PROBE
+    assert '"sha256sum"' in PROOF.FISHERMAN_PATH_PROBE
+    assert '"interpreter"' in PROOF.FISHERMAN_PATH_PROBE
+    assert '"pkexec"' not in PROOF.FISHERMAN_PATH_PROBE
+    assert '"chmod"' not in PROOF.FISHERMAN_PATH_PROBE
+    assert '"sudo"' not in PROOF.FISHERMAN_PATH_PROBE
+    assert '"fisherman", "probe"' not in PROOF.FISHERMAN_PATH_PROBE
+
+
+def test_fisherman_diagnostics_reads_elf_interpreter_without_running_binary(tmp_path, monkeypatch, capsys):
+    import struct
+    from types import SimpleNamespace
+    home = tmp_path / "home"
+    binary = home / ".cache/bootc-installer/fisherman"
+    binary.parent.mkdir(parents=True)
+    interpreter = b"/lib64/ld-linux-x86-64.so.2\0"
+    header = bytearray(64)
+    header[:6] = b"\x7fELF\x02\x01"
+    struct.pack_into("<Q", header, 32, 64)
+    struct.pack_into("<HH", header, 54, 56, 1)
+    program = bytearray(56)
+    struct.pack_into("<I", program, 0, 3)
+    struct.pack_into("<Q", program, 8, 120)
+    struct.pack_into("<Q", program, 32, len(interpreter))
+    binary.write_bytes(header + program + interpreter)
+    monkeypatch.setattr(Path, "home", lambda: home)
+    commands = []
+    def fake_run(args, **kwargs):
+        commands.append(args)
+        assert kwargs["timeout"] == 15
+        assert args[0] != str(binary)
+        return SimpleNamespace(returncode=0, stdout="observed", stderr="")
+    monkeypatch.setattr(PROOF.subprocess, "run", fake_run)
+    exec(PROOF.FISHERMAN_PATH_PROBE, {})
+    result = json.loads(capsys.readouterr().out)
+    assert result["interpreter"]["path"] == interpreter.rstrip(b"\0").decode()
+    assert ["flatpak-spawn", "--host", "stat", "--", result["interpreter"]["path"]] in commands
+    assert ["flatpak-spawn", "--host", "sha256sum", "--", str(binary)] in commands
