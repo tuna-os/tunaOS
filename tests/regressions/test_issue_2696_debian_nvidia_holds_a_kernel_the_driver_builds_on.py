@@ -25,6 +25,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 HOLD = ROOT / "build_scripts/overlay/debian-nvidia-kernel-hold.sh"
 INSTALL = ROOT / "build_scripts/overlay/overrides/nvidia-debian/20-nvidia.sh"
+SNAPSHOT = ROOT / "build_scripts/overlay/debian-nvidia-snapshot.sh"
 
 SID_KERNELS = ["7.1.12+deb14-amd64", "7.1.13+deb14-amd64", "7.2.7+deb14-amd64"]
 
@@ -78,7 +79,7 @@ esac
         "#!/bin/bash\n"
         + (f"echo '{snapshot_kernel}'\n" if snapshot_kernel else "exit 1\n")
     )
-    snapshot.chmod(0o755)
+    snapshot.chmod(0o644)
     env = dict(
         os.environ,
         PATH=f"{bindir}:{os.environ['PATH']}",
@@ -141,6 +142,10 @@ def test_no_kernel_under_the_ceiling_fails_loudly(tmp_path):
     assert proc.returncode != 0
     assert "snapshot fallback" in proc.stderr
     assert trees == ["7.2.7+deb14-amd64"] and calls == []
+
+
+def test_shipped_snapshot_helper_is_invocable_without_execute_bits():
+    assert SNAPSHOT.stat().st_mode & 0o111 == 0
 
 
 def test_an_empty_kernel_name_is_refused_before_any_rm(tmp_path):
