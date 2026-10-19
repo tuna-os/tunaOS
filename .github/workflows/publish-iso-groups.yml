@@ -9,8 +9,8 @@ name: Publish Grouped Dedup ISOs to R2
 # can be compared before the old one is retired.
 
 permissions:
+  actions: read
   contents: read
-
 on:
   workflow_dispatch:
     inputs:
@@ -335,11 +335,31 @@ jobs:
       # Build, boot gate and signing above always run; only the R2 upload is
       # gated. With the empty initial policy every group evaluates to false
       # (current behavior).
+      - name: Download current catalog snapshot
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          snapshot_dir="$RUNNER_TEMP/catalog-facts"
+          mkdir -p "$snapshot_dir"
+          run_id="$(gh run list --repo "$GITHUB_REPOSITORY" \
+            --workflow catalog-facts.yml --branch main --status success --limit 1 \
+            --json databaseId --jq '.[0].databaseId // empty' 2>/dev/null || true)"
+          if [[ -n "$run_id" ]] && gh run download "$run_id" \
+              --repo "$GITHUB_REPOSITORY" --name catalog-facts --dir "$snapshot_dir"; then
+            echo "CATALOG_SNAPSHOT=$snapshot_dir/catalog-snapshot.json" >> "$GITHUB_ENV"
+          fi
+
       - name: Check delivery cutover for this group
         id: cutover
         run: |
+          SNAPSHOT_ARGS=()
+          if [[ -s "${CATALOG_SNAPSHOT:-}" ]]; then
+            SNAPSHOT_ARGS=(--snapshot "$CATALOG_SNAPSHOT")
+          fi
           if python3 scripts/delivery-cutover.py --check \
-              --variant "${{ matrix.variant }}" --group "${{ matrix.group }}"; then
+              --variant "${{ matrix.variant }}" --group "${{ matrix.group }}" \
+              "${SNAPSHOT_ARGS[@]}"; then
             echo "cutover=true" >> "$GITHUB_OUTPUT"
           else
             echo "cutover=false" >> "$GITHUB_OUTPUT"

@@ -372,6 +372,21 @@ def test_collect_with_receipts_reports_qualification_and_validates():
     assert qual["evidence"] == [{"url": "https://example.invalid/run/1"}]
 
 
+def test_collect_incomplete_receipt_cannot_score_qualified():
+    receipt = v1_receipt()
+    receipt.pop("source_image_digest")
+    receipts = {"albacore:cosmic:linux/amd64/v2": receipt}
+    document = collector.collect(
+        single_variant_config(), SOURCE, lambda _: {"workflow_runs": []},
+        now=NOW, receipts=receipts,
+    )
+    intel = next(
+        row for row in document["targets"]
+        if row["target"]["platform"] == "linux/amd64/v2"
+    )
+    assert intel["qualification"]["status"] == "unqualified"
+
+
 def test_collect_default_path_shape_unchanged_without_receipts():
     document = collector.collect(
         single_variant_config(), SOURCE, lambda _: {"workflow_runs": []}, now=NOW)

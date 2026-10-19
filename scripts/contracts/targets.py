@@ -550,11 +550,14 @@ def _lookup_overlay(overlays: Any, target: dict[str, Any], publication: dict[str
     variant = target["variant"]
     flavor = target["flavor"]
     platform = target["platform"]
+    safe_platform = platform.replace("/", "-")
     repo = publication["repository"]
     tag = publication["tag"]
     short_repo = repo.removeprefix("ghcr.io/")
-    overlay_ref = f"ghcr.io/tuna-os/live-overlay:{variant}-{flavor}"
-    short_overlay_ref = f"tuna-os/live-overlay:{variant}-{flavor}"
+    overlay_ref = f"ghcr.io/tuna-os/live-overlay:{variant}-{flavor}-{safe_platform}"
+    short_overlay_ref = f"tuna-os/live-overlay:{variant}-{flavor}-{safe_platform}"
+    legacy_overlay_ref = f"ghcr.io/tuna-os/live-overlay:{variant}-{flavor}"
+    legacy_short_overlay_ref = f"tuna-os/live-overlay:{variant}-{flavor}"
 
     candidate: dict[str, Any] | None = None
     if isinstance(overlays, dict):
@@ -567,11 +570,15 @@ def _lookup_overlay(overlays: Any, target: dict[str, Any], publication: dict[str
             f"{short_repo}:{tag}@{platform}",
             f"{overlay_ref}@{platform}",
             f"{short_overlay_ref}@{platform}",
+            overlay_ref,
+            short_overlay_ref,
+            f"{legacy_overlay_ref}@{platform}",
+            f"{legacy_short_overlay_ref}@{platform}",
+            legacy_overlay_ref,
+            legacy_short_overlay_ref,
             (variant, flavor),
             f"{variant}:{flavor}",
             f"{variant}-{flavor}",
-            overlay_ref,
-            short_overlay_ref,
             f"{repo}:{tag}",
             f"{short_repo}:{tag}",
         ):
@@ -757,6 +764,7 @@ def receipt_to_catalog_projection(receipt: dict[str, Any]) -> dict[str, Any]:
     for key in (
         "target", "variant", "flavor", "platform", "publication",
         "browser", "resources", "measurements", "evidence",
+        "observed", "resolved_inputs", "resolvedInputs",
         "reason", "checks", "status", "localOnly",
         "imageDigest", "manifestDigest", "digest", "overlayDigest",
         "contractDigest",

@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.tunaos.org/consumer-contract.schema.json",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "kind",
+    "schemaVersion",
+    "target",
+    "baseReference",
+    "baseDigest",
+    "baseResolution",
+    "contractDigest"
+  ],
+  "properties": {
+    "kind": { "const": "consumer-contract" },
+    "schemaVersion": { "const": 1 },
+    "target": { "$ref": "identity.schema.json#/$defs/target" },
+    "baseReference": { "type": "string", "minLength": 1 },
+    "baseDigest": { "$ref": "identity.schema.json#/$defs/digest" },
+    "contractDigest": { "$ref": "identity.schema.json#/$defs/digest" },
+    "baseResolution": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "reference",
+        "childDigest",
+        "platform",
+        "cpuBaseline",
+        "observedPlatform"
+      ],
+      "properties": {
+        "reference": { "type": "string", "minLength": 1 },
+        "childDigest": { "$ref": "identity.schema.json#/$defs/digest" },
+        "platform": {
+          "enum": ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
+        },
+        "cpuBaseline": { "type": "string", "minLength": 1 },
+        "observedPlatform": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["os", "architecture", "variant"],
+          "properties": {
+            "os": { "const": "linux" },
+            "architecture": { "enum": ["amd64", "arm64"] },
+            "variant": { "type": ["string", "null"] }
+          }
+        }
+      }
+    }
+  }
+}

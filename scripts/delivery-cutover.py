@@ -176,12 +176,14 @@ def is_cut_over(
 ) -> bool:
     """True only when the target entry is present and its evidence still holds.
 
-    Requires: a cutover entry for the target, digest-bound evidence, current
-    catalog membership, and — when a catalog snapshot is supplied — that
-    downgrade_stale_targets leaves the target qualified/local-only with the
-    same receiptDigest (i.e. its inputs have not moved since qualification).
+    Requires a cutover entry for the target, digest-bound evidence, current
+    catalog membership, and a current catalog snapshot proving the target is
+    still qualified/local-only with the same receiptDigest. Without that
+    snapshot suppression is unsafe and this returns False.
     """
     entry = find_entry(policy, variant, flavor, platform)
+    if snapshot is None:
+        return False
     if entry is None:
         return False
     if not _evidence_binds(entry, variant, flavor, platform):
@@ -275,6 +277,7 @@ def group_covered(
     live_members: list[str],
     offline_members: list[str],
     config: dict | None = None,
+    snapshot: dict | None = None,
 ) -> bool:
     """True only when every LIVE + OFFLINE member target is cut over."""
     if config is None:
@@ -290,7 +293,7 @@ def group_covered(
         if not platforms:
             return False
         for platform in platforms:
-            if not is_cut_over(policy, variant, flavor, platform, config=config):
+            if not is_cut_over(policy, variant, flavor, platform, config=config, snapshot=snapshot):
                 return False
     return True
 
@@ -309,6 +312,7 @@ def annotate_matrix(
     policy: dict,
     config: dict,
     default_platform: str = "linux/amd64",
+    snapshot: dict | None = None,
 ) -> dict:
     """Add a per-row `cutover` boolean to a {include: [...]} matrix document."""
     rows = matrix.get("include", [])
@@ -322,7 +326,7 @@ def annotate_matrix(
         flavor = row.get("flavor", "")
         platform = row.get("platform", "") or default_platform
         annotated.append(
-            {**row, "cutover": bool(is_cut_over(policy, variant, flavor, platform, config=config))}
+            {**row, "cutover": bool(is_cut_over(policy, variant, flavor, platform, config=config, snapshot=snapshot))}
         )
     return {"include": annotated}
 
@@ -345,9 +349,16 @@ def main(argv: list[str] | None = None) -> int:
     if args.annotate_matrix:
         policy = load_policy(args.policy)
         config = load_config(args.config)
+        snapshot = None
+        if args.snapshot:
+            with open(args.snapshot, "r", encoding="utf-8") as handle:
+                snapshot = json.load(handle)
         matrix = json.load(sys.stdin)
         json.dump(
-            annotate_matrix(matrix, policy, config, args.default_platform), sys.stdout
+            annotate_matrix(
+                matrix, policy, config, args.default_platform, snapshot=snapshot
+            ),
+            sys.stdout,
         )
         sys.stdout.write("\n")
         return 0
@@ -368,7 +379,13 @@ def main(argv: list[str] | None = None) -> int:
         if args.group:
             live, offline = group_members(config, args.variant, args.group)
             covered = group_covered(
-                policy, args.variant, args.group, live, offline, config=config
+                policy,
+                args.variant,
+                args.group,
+                live,
+                offline,
+                config=config,
+                snapshot=snapshot,
             )
             sys.stdout.write(("true" if covered else "false") + "\n")
             return 0 if covered else 1

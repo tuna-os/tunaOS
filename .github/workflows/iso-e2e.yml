@@ -295,7 +295,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             qemu-system-x86 qemu-utils ovmf socat \
             rclone sshpass \
-            imagemagick
+            imagemagick tesseract-ocr
 
       # The R2 source is the default — it tests the artifact users actually
       # download. Skipped when source=artifact (workflow_dispatch only).
@@ -483,10 +483,10 @@ jobs:
             echo "FLAVOR=${FLAVOR}"
           } >> "$GITHUB_ENV"
 
-      - name: Run readiness e2e
+      - name: Run strict offline GUI qualification
         id: e2e
         if: steps.filter.outputs.skip != 'true'
-        timeout-minutes: 20
+        timeout-minutes: 60
         run: |
           mkdir -p iso-e2e-out
           # Free runners get KVM via /dev/kvm permissions; if it's not
@@ -497,6 +497,7 @@ jobs:
           sudo --preserve-env=KVM_FLAG \
             ./scripts/iso-e2e.sh "${ISO_PATH}" \
               --output iso-e2e-out \
+              --strict-offline-gui \
               --timeout 600 \
               ${KVM_FLAG}
           rc=$?
@@ -522,6 +523,12 @@ jobs:
         run: |
           scripts/evidence-bundle.sh \
             "${{ matrix.variant }}:${{ matrix.flavor }}" iso iso-e2e-out
+      - name: Validate strict qualification evidence
+        if: steps.filter.outputs.skip != 'true' && steps.e2e.outputs.rc == '0'
+        run: |
+          python3 scripts/verify-experience-manifest.py \
+            iso-e2e-out/qualification-evidence.json
+
 
       - name: Job summary
         if: always() && steps.filter.outputs.skip != 'true'

@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.tunaos.org/image-receipt.schema.json",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "kind",
+    "schemaVersion",
+    "target",
+    "imageDigest",
+    "sourceRevision",
+    "attemptIdentity",
+    "publication",
+    "checks",
+    "provenance",
+    "installedPackages",
+    "contractDigest"
+  ],
+  "properties": {
+    "kind": { "const": "image-receipt" },
+    "schemaVersion": { "const": 1 },
+    "target": { "$ref": "identity.schema.json#/$defs/target" },
+    "imageDigest": { "$ref": "identity.schema.json#/$defs/digest" },
+    "baseDigest": { "$ref": "identity.schema.json#/$defs/digest" },
+    "sourceRevision": { "$ref": "identity.schema.json#/$defs/revision" },
+    "attemptIdentity": { "$ref": "identity.schema.json#/$defs/attemptIdentity" },
+    "publication": { "$ref": "identity.schema.json#/$defs/publication" },
+    "checks": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "identity.schema.json#/$defs/check" }
+    },
+    "provenance": { "$ref": "identity.schema.json#/$defs/provenance" },
+    "installedPackages": {
+      "type": "array",
+      "items": { "$ref": "identity.schema.json#/$defs/package" },
+      "minItems": 0
+    },
+    "factoryReceiptDigests": {
+      "type": "array",
+      "items": { "$ref": "identity.schema.json#/$defs/digest" },
+      "minItems": 0
+    },
+    "contractDigest": { "$ref": "identity.schema.json#/$defs/digest" }
+  }
+}

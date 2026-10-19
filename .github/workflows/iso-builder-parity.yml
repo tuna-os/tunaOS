@@ -117,7 +117,7 @@ jobs:
       - name: Install E2E dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends qemu-system-x86 qemu-utils ovmf socat sshpass imagemagick swtpm
+          sudo apt-get install -y --no-install-recommends qemu-system-x86 qemu-utils ovmf socat sshpass imagemagick swtpm tesseract-ocr
 
       - name: Validate and compare experience manifests
         env:

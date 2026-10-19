@@ -174,9 +174,39 @@ def test_cut_over_group_suppresses_only_that_group():
     cfg = config()
     live, offline = DC.group_members(cfg, "yellowfin", "kde")
     assert live and offline
-    policy = {"cutover": _full_group_entries(cfg, "yellowfin", "kde"), "retained": []}
+    entries = _full_group_entries(cfg, "yellowfin", "kde")
+    policy = {"cutover": entries, "retained": []}
+    from contracts.targets import _oci_platform, catalog_snapshot
+
+    descriptors = {}
+    receipts = {}
+    for entry in entries:
+        target = entry["target"]
+        key = f"{target['variant']}:{target['flavor']}:{target['platform']}"
+        platform_digest = "sha256:" + "01" * 32
+        descriptors[key] = {
+            "platformManifestDigest": platform_digest,
+            "ociPlatform": _oci_platform(target["platform"]),
+        }
+        receipts[key] = {
+            "variant": target["variant"],
+            "flavor": target["flavor"],
+            "platform": target["platform"],
+            "platformManifestDigest": platform_digest,
+            "receiptDigest": DIGEST,
+            "receipt_digest": DIGEST,
+            "qualifiedAt": "2026-10-01T00:00:00Z",
+            "measured_at": "2026-10-01T00:00:00Z",
+            "browser": {"name": "Chromium", "version": "1"},
+            "measurements": {
+                "cold": {"duration_s": 1},
+                "warm": {"duration_s": 1},
+            },
+        }
+    snapshot = catalog_snapshot(cfg, descriptors=descriptors, receipts=receipts)
     assert DC.group_covered(
-        policy, "yellowfin", "kde", live, offline, config=cfg
+        policy, "yellowfin", "kde", live, offline,
+        config=cfg, snapshot=snapshot,
     ) is True
     for suffix in ("", "cosmic", "niri", "xfce"):
         other_live, other_offline = DC.group_members(cfg, "yellowfin", suffix)
