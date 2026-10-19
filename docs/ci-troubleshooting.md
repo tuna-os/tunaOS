@@ -1686,6 +1686,13 @@ capture first, then sends the graceful powerdown itself before the kill.
 **Cause:** The workflow converts YAML in `CONFIG_JSON` before it builds the matrix with jq. The test still searched for an inline yq call.
 
 **Fix:** Locate the `FULL_MATRIX` assignment. Keep the assertions for `.variants[]`, `.flavors[]`, and the `build_image` filter.
+## Fork source pin changes after tests
+
+Symptom: the fork review tool reports a catalog pin mismatch after Python tests.
+Cause: imports create untracked bytecode under `system_files/usr/libexec`.
+The receipt must select only Git-tracked source files. The test for the fork contract
+checks that temporary bytecode leaves the pin intact and a source edit changes it.
+Do not refresh a source pin to accept temporary files.
 
 ### Countme clean install rejects a missing overridden dependency
 
