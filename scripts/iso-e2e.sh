@@ -428,6 +428,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # orchestration so they can be tested without booting QEMU.
 # shellcheck source=lib/e2e-visual.sh
 . "${SCRIPT_DIR}/lib/e2e-visual.sh"
+# shellcheck source=lib/qualification-evidence.sh
+. "${SCRIPT_DIR}/lib/qualification-evidence.sh"
 # Extract VARIANT and FLAVOR from ISO filename for screenshot comparison and
 # for the fisherman recipe's image ref (used only as a fallback — callers
 # should set VARIANT/FLAVOR explicitly, e.g. luks-e2e.yml's env: block).
@@ -3912,13 +3914,9 @@ boot_qualification_disk() {
 	fi
 	cp "$SERIAL_LOG" "$installed_serial"
 
-	if ! grep -F "TUNAOS_DESKTOP_CONTRACT_OK desktop=${expected_desktop} " "$installed_serial" |
-		grep -F "source_image_digest=${EXPECTED_SOURCE_DIGEST}" |
-		grep -F "session_class=user" |
-		grep -E "session_type=(wayland|x11)" |
-			grep -Eq "session_process=(${expected_process_pattern})([[:space:]]|$)"; then
-		echo "ERROR: installed desktop, user session, or immutable source identity did not match" >&2
-		grep -a "TUNAOS_DESKTOP_CONTRACT_" "$installed_serial" >&2 || true
+	if ! validate_installed_boot_evidence \
+		"$installed_serial" "$expected_desktop" "$EXPECTED_SOURCE_DIGEST" \
+		"$expected_process_pattern"; then
 		return 4
 	fi
 	if grep -q "TUNAOS_DESKTOP_CONTRACT_FAIL" "$installed_serial"; then
