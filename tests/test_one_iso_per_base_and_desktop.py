@@ -210,6 +210,18 @@ def test_nonempty_cutover_is_rejected_until_receipts_are_integrated(tmp_path: Pa
     assert "current qualification catalog" in result.stderr
 
 
+@pytest.mark.parametrize(
+    "unsafe_name",
+    [
+        "bait.iso\n+ *\n- retained.iso",
+        "bait.iso\r\n+ /retained.iso",
+    ],
+)
+def test_retained_inventory_rejects_filter_injection(unsafe_name):
+    with pytest.raises(POLICY_MODULE.PolicyError, match="safe single-line"):
+        POLICY_MODULE.retained_isos({"retained_r2_isos": [unsafe_name]})
+
+
 def test_versioned_target_inventory_does_not_accept_a_sibling_flavor():
     retained = (
         "fish-gnome-latest.iso",

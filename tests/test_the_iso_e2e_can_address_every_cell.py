@@ -349,18 +349,23 @@ def test_it_still_fails_loudly_when_neither_name_exists():
     assert "${OBJECT}" in err and "${GROUP_OBJECT}" in err, err[:300]
 
 
-def test_the_rclone_failure_does_not_abort_before_the_fallback():
-    """A missing resolved or stable object must advance to the next name."""
+def test_stable_download_failure_can_fallback_but_resolved_cannot():
+    """Only a missing resolver permits the legacy stable fallback."""
     run = download_step()["run"]
     copy_lines = [line for line in run.splitlines() if "rclone copy" in line]
     assert copy_lines, run[-800:]
-    idx = run.index('for requested in')
-    assert "|| true" in run[idx:], run[idx:idx + 900]
+    idx = run.index("for requested in")
+    body = run[idx:]
+    assert 'if [[ -n "$expected_digest" ]]' in body
+    assert "refusing stable fallback" in body
+
+
 
 
 @pytest.mark.parametrize(
     ("resolver_mode", "expected_status"),
-    [("absent", 0), ("read-error", 1), ("empty", 1), ("invalid", 1)],
+    [("absent", 0), ("read-error", 1), ("empty", 1), ("invalid", 1),
+     ("download-error", 1)],
 )
 def test_resolver_download_falls_back_only_when_resolver_is_absent(
     tmp_path, resolver_mode, expected_status
@@ -382,6 +387,8 @@ def test_resolver_download_falls_back_only_when_resolver_is_absent(
         "  cat:read-error) exit 1 ;;\n"
         "  cat:empty) exit 0 ;;\n"
         "  cat:invalid) printf '{}\\n' ;;\n"
+        "  cat:download-error) printf '{\"schema\":\"TunaOSIsoResolution/v1\",\"iso\":\"snapshot.iso\",\"sha256\":\"snapshot.iso.sha256\",\"sigstore\":\"snapshot.iso.sigstore.json\",\"checksum_subject\":\"snapshot.iso\",\"digest\":\"sha256:0000000000000000000000000000000000000000000000000000000000000000\"}\\n' ;;\n"
+        "  copyto:download-error) exit 1 ;;\n"
         "  copyto:*) for last; do :; done; printf 'stable' > \"$last\" ;;\n"
         "esac\n",
         encoding="utf-8",
@@ -404,5 +411,5 @@ def test_resolver_download_falls_back_only_when_resolver_is_absent(
     if resolver_mode == "absent":
         assert "fish-gnome-latest.iso" in github_env.read_text()
     else:
-        assert "refusing frozen stable fallback" in proc.stderr
+        assert "refusing" in proc.stderr
         assert not github_env.exists()

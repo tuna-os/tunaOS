@@ -298,9 +298,12 @@ def run_iso_prune_with_stubbed_rclone(tmp_path, mode):
     bin_dir.mkdir()
     (bin_dir / "yq").write_text("#!/bin/sh\necho '{}'\n", encoding="utf-8")
     (bin_dir / "python3").write_text(
-        "#!/bin/sh\necho '- /policy-retained.iso'\n", encoding="utf-8"
+        "#!/bin/sh\n"
+        "printf '%s\\n' '- /policy-retained.iso' '+ *.iso' '- *'\n",
+        encoding="utf-8",
     )
     marker = tmp_path / "delete-called"
+    filter_capture = tmp_path / "delete-filter"
     (bin_dir / "rclone").write_text(
         """#!/bin/sh
 case "$1:$RCLONE_MODE" in
@@ -308,8 +311,20 @@ case "$1:$RCLONE_MODE" in
   lsf:*) printf '%s\n' "${RCLONE_LISTING:-}" ;;
   cat:read-fails) exit 24 ;;
   cat:malformed) echo '{}' ;;
+  cat:unsafe) printf '%s\n' '{"schema":"TunaOSIsoResolution/v1","iso":"bait.iso\n+ *"}' ;;
   cat:*) echo '{"schema":"TunaOSIsoResolution/v1","iso":"snapshot.iso"}' ;;
-  delete:*) touch "$RCLONE_DELETE_MARKER" ;;
+  delete:*)
+    touch "$RCLONE_DELETE_MARKER"
+    if [ -n "${RCLONE_DELETE_FILTER:-}" ]; then
+      previous=""
+      for argument in "$@"; do
+        if [ "$previous" = "--filter-from" ]; then
+          cat "$argument" > "$RCLONE_DELETE_FILTER"
+        fi
+        previous="$argument"
+      done
+    fi
+    ;;
 esac
 """,
         encoding="utf-8",
@@ -324,6 +339,7 @@ esac
         "DRY_RUN": "false",
         "RCLONE_MODE": mode,
         "RCLONE_DELETE_MARKER": str(marker),
+        "RCLONE_DELETE_FILTER": str(filter_capture),
         "RCLONE_LISTING": (
             "fish-latest.iso.sigstore.json"
             if mode == "sidecar-only"
@@ -341,7 +357,7 @@ esac
     return result, marker
 
 
-@pytest.mark.parametrize("mode", ["list-fails", "read-fails", "malformed"])
+@pytest.mark.parametrize("mode", ["list-fails", "read-fails", "malformed", "unsafe"])
 def test_iso_prune_fails_closed_before_delete(tmp_path, mode):
     result, marker = run_iso_prune_with_stubbed_rclone(tmp_path, mode)
     assert result.returncode != 0
@@ -353,3 +369,18 @@ def test_iso_prune_does_not_parse_sigstore_sidecars_as_resolvers(tmp_path):
     result, marker = run_iso_prune_with_stubbed_rclone(tmp_path, "sidecar-only")
     assert result.returncode == 0, result.stderr
     assert marker.exists()
+
+def test_iso_prune_protects_resolved_snapshot_and_sidecars(tmp_path):
+    result, marker = run_iso_prune_with_stubbed_rclone(tmp_path, "valid")
+    assert result.returncode == 0, result.stderr
+    assert marker.exists()
+    filter_lines = (tmp_path / "delete-filter").read_text(encoding="utf-8").splitlines()
+    protected = [
+        "- /snapshot.iso",
+        "- /snapshot.iso.sha256",
+        "- /snapshot.iso.sigstore.json",
+    ]
+    positions = [filter_lines.index(rule) for rule in protected]
+    first_include = filter_lines.index("+ *.iso")
+    assert max(positions) < first_include
+    assert "- *" in filter_lines

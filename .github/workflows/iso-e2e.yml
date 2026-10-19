@@ -399,10 +399,21 @@ jobs:
             else
               echo "==> No resolver for ${requested}; trying the stable object"
             fi
-            rm -f "$candidate"
-            rclone copyto --log-level INFO --s3-no-check-bucket \
-              "R2:${{ secrets.R2_BUCKET }}/live-isos/${candidate}" "$candidate" || true
-            [[ -f "$candidate" ]] || continue
+            if ! rclone copyto --log-level INFO --s3-no-check-bucket \
+              "R2:${{ secrets.R2_BUCKET }}/live-isos/${candidate}" "$candidate"; then
+              if [[ -n "$expected_digest" ]]; then
+                echo "::error::Resolver target ${candidate} is unavailable; refusing stable fallback" >&2
+                exit 1
+              fi
+              continue
+            fi
+            if [[ ! -f "$candidate" ]]; then
+              if [[ -n "$expected_digest" ]]; then
+                echo "::error::Resolver target ${candidate} was not downloaded; refusing stable fallback" >&2
+                exit 1
+              fi
+              continue
+            fi
             if [[ -n "$expected_digest" ]]; then
               actual="sha256:$(sha256sum "$candidate" | awk '{print $1}')"
               if [[ "$actual" != "$expected_digest" ]]; then
