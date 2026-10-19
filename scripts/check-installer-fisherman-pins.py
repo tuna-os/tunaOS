@@ -230,14 +230,33 @@ def collect() -> dict:
     sources = {}
     for desktop, where in INSTALLERS.items():
         if "manifest" in where:
-            sources[desktop] = source_from_manifest(
-                fetch(where["repo"], where["manifest"], INSTALLER_REF)
-            )
+            try:
+                manifest = fetch(where["repo"], where["manifest"], INSTALLER_REF)
+            except urllib.error.HTTPError as exc:
+                if exc.code != 404:
+                    raise
+                sources[desktop] = {
+                    "source_error": (
+                        f"production manifest {where['manifest']} is missing at "
+                        f"{where['repo']}@{INSTALLER_REF}"
+                    )
+                }
+                continue
+            sources[desktop] = source_from_manifest(manifest)
         else:
-            source = source_from_gitmodules(
-                fetch(where["repo"], ".gitmodules", INSTALLER_REF),
-                where["submodule"],
-            )
+            try:
+                gitmodules = fetch(where["repo"], ".gitmodules", INSTALLER_REF)
+            except urllib.error.HTTPError as exc:
+                if exc.code != 404:
+                    raise
+                sources[desktop] = {
+                    "source_error": (
+                        f"production .gitmodules is missing at "
+                        f"{where['repo']}@{INSTALLER_REF}"
+                    )
+                }
+                continue
+            source = source_from_gitmodules(gitmodules, where["submodule"])
             # A tracking branch is not the source used by the build. Git checks
             # out the production ref's committed gitlink, so audit that SHA.
             source.pop("branch", None)

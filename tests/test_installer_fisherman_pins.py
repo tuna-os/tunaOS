@@ -16,6 +16,7 @@ import importlib.util
 import json
 import urllib.error
 from pathlib import Path
+import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "check-installer-fisherman-pins.py"
@@ -281,3 +282,22 @@ def test_missing_fisherman_revision_fails_closed(monkeypatch) -> None:
     sources = mod.collect()
 
     assert "does not exist" in mod.audit(sources)[0]
+
+
+def test_missing_production_manifest_fails_through_main(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(
+        mod,
+        "INSTALLERS",
+        {
+            "kde": {
+                "repo": "tuna-os/bootc-installer",
+                "manifest": "frontends/kde/flatpak/org.tunaos.InstallerKde.json",
+            }
+        },
+    )
+    missing = urllib.error.HTTPError("", 404, "Not Found", {}, None)
+    monkeypatch.setattr(mod, "fetch", lambda *_args: (_ for _ in ()).throw(missing))
+    monkeypatch.setattr(sys, "argv", ["check-installer-fisherman-pins.py"])
+
+    assert mod.main() == 1
+    assert "production manifest" in capsys.readouterr().out
