@@ -32,4 +32,4 @@ cp -r "${SRCDIR}/cache/valve-audio/sof-nau8821-max" /usr/share/alsa/ucm2/conf.d/
 cp -r "${SRCDIR}/cache/valve-audio/sof_fw/." /usr/lib/firmware/amd/
 
 # proper steam controller support
-sed -i '12a LD_PRELOAD=/usr/lib/extest/libextest.so' /usr/bin/steam
+sed -i '12a export LD_PRELOAD="/usr/lib/extest/libextest.so:/usr/lib64/extest/libextest.so"' /usr/bin/steam
