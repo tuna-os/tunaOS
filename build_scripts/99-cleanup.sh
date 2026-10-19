@@ -246,6 +246,19 @@ ConditionPathExists=|!/etc/ssh/ssh_host_ed25519_key
 ConditionPathExists=|!/etc/ssh/ssh_host_ecdsa_key
 ConditionPathExists=|!/etc/ssh/ssh_host_rsa_key
 EOF
+		# Package postinst only enables the generator through /etc wants links.
+		# Keep the dependency in the image's vendor units so first-boot presets
+		# and /etc merge cannot detach key generation from an enabled daemon.
+		# This does not enable any listener; it runs only when SSH is started.
+		for ssh_unit in ssh.service sshd.service sshd@.service; do
+			[[ -e "/usr/lib/systemd/system/${ssh_unit}" ]] || continue
+			install -d -m 0755 "/usr/lib/systemd/system/${ssh_unit}.d"
+			cat >"/usr/lib/systemd/system/${ssh_unit}.d/10-tunaos-host-keys.conf" <<'EOF'
+[Unit]
+Requires=sshd-keygen.service
+After=sshd-keygen.service
+EOF
+		done
 		rm -f /etc/ssh/ssh_host_*
 	else
 		echo "WARNING: /etc/ssh carries host keys and no sshd-keygen.service regenerates them; leaving them" >&2

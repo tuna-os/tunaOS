@@ -392,6 +392,31 @@ tunaos_enable_systemd_resolved() {
 		>"${tmpfiles_dir}/tunaos-resolv-conf.conf"
 }
 
+# Base boot contract (green criterion 3, GREEN-MASTER-PLAN W3). Every image
+# gets the unit — on desktop images it is the multi-user complement to
+# tunaos-desktop-contract.service, on base images it is the only boot proof
+# there is. The Gate's --contract base mode keys off its serial marker, the
+# same way the desktop gate keys off TUNAOS_DESKTOP_CONTRACT_*.
+/run/context/build_scripts/checks/verify-base-contract.sh
+install -Dm0755 /run/context/build_scripts/checks/verify-base-contract.sh \
+	/usr/libexec/tunaos/verify-base-contract
+cat >/usr/lib/systemd/system/tunaos-base-contract.service <<'UNIT'
+[Unit]
+Description=Verify TunaOS base boot contract
+After=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/tunaos/verify-base-contract --runtime
+StandardOutput=journal+console
+StandardError=journal+console
+TimeoutStartSec=300
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+systemctl enable tunaos-base-contract.service
+
 if [[ "${PKG_MGR:-}" == "apt" ]]; then
 	# Sleep-then-hibernate defaults via a logind drop-in (Ubuntu ships no
 	# stock /usr/lib/systemd/logind.conf; a drop-in is honoured everywhere).
@@ -682,30 +707,6 @@ safe_enable uupd.timer
 # systemd reapplies distro policy on first boot.
 systemctl enable tunaos-software-gl-detect.service
 
-# Base boot contract (green criterion 3, GREEN-MASTER-PLAN W3). Every image
-# gets the unit — on desktop images it is the multi-user complement to
-# tunaos-desktop-contract.service, on base images it is the only boot proof
-# there is. The Gate's --contract base mode keys off its serial marker, the
-# same way the desktop gate keys off TUNAOS_DESKTOP_CONTRACT_*.
-/run/context/build_scripts/checks/verify-base-contract.sh
-install -Dm0755 /run/context/build_scripts/checks/verify-base-contract.sh \
-	/usr/libexec/tunaos/verify-base-contract
-cat >/usr/lib/systemd/system/tunaos-base-contract.service <<'UNIT'
-[Unit]
-Description=Verify TunaOS base boot contract
-After=multi-user.target
-
-[Service]
-Type=oneshot
-ExecStart=/usr/libexec/tunaos/verify-base-contract --runtime
-StandardOutput=journal+console
-StandardError=journal+console
-TimeoutStartSec=300
-
-[Install]
-WantedBy=multi-user.target
-UNIT
-systemctl enable tunaos-base-contract.service
 safe_enable ublue-system-setup.service
 systemctl --global enable ublue-user-setup.service
 systemctl mask bootc-fetch-apply-updates.timer bootc-fetch-apply-updates.service auditd.service audit-rules.service
