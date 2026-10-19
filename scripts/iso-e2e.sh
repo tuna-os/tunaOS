@@ -3644,7 +3644,8 @@ WantedBy=multi-user.target
 EOF
 	printf '%s\n' 'enable tunaos-qualification-account.service' >"$preset_file"
 
-	if ! (
+	set +e
+	(
 		set -euo pipefail
 		eval "$(guestfish --listen)"
 		trap 'guestfish --remote exit >/dev/null 2>&1 || true' EXIT
@@ -3739,7 +3740,10 @@ EOF
 		guestfish --remote touch /.autorelabel
 		guestfish --remote touch "${guest_etc%/etc}/.autorelabel"
 		guestfish --remote umount-all
-	); then
+	)
+	provision_status=$?
+	set -e
+	if ((provision_status != 0)); then
 		rm -f "$account_script" "$unit_file" "$preset_file"
 		echo "ERROR: libguestfs could not stage deployment-aware account provisioning" >&2
 		return 1
@@ -3912,7 +3916,7 @@ boot_qualification_disk() {
 		grep -F "source_image_digest=${EXPECTED_SOURCE_DIGEST}" |
 		grep -F "session_class=user" |
 		grep -E "session_type=(wayland|x11)" |
-		grep -Eq "session_process=(${expected_process_pattern})( |$)"; then
+			grep -Eq "session_process=(${expected_process_pattern})([[:space:]]|$)"; then
 		echo "ERROR: installed desktop, user session, or immutable source identity did not match" >&2
 		grep -a "TUNAOS_DESKTOP_CONTRACT_" "$installed_serial" >&2 || true
 		return 4

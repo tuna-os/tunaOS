@@ -238,7 +238,10 @@ class TestRendersAdvancesScreens:
             assert summary["encryption_configured"] is True
             assert any(command == "sendkey t" for command in run_walkthrough.last_commands)
 
-    def test_gnome_encrypted_profile_preserves_default_enabled_switch(self):
+    @pytest.mark.parametrize("flavor", ["gnome", "gnome-hwe", "pantheon"])
+    def test_gnome_frontend_encrypted_profiles_preserve_default_enabled_switch(
+        self, flavor
+    ):
         proc, summary = run_walkthrough(
             {
                 "00": "Welcome to TunaOS installer. Get Started",
@@ -249,13 +252,58 @@ class TestRendersAdvancesScreens:
                 "05": "Installation complete. Remove the installation media",
             },
             steps="8",
-            flavor="gnome",
+            flavor=flavor,
             qualification="encrypted",
         )
         assert proc.returncode == 0, proc.stdout + proc.stderr
         assert summary["encryption_configured"] is True
         assert "sendkey spc" not in run_walkthrough.last_commands
 
+    def test_gnome_plain_profile_disables_default_enabled_switch_once(self):
+        proc, summary = run_walkthrough(
+            {
+                "00": "Welcome to TunaOS installer. Get Started",
+                "01": "Select Target Disk",
+                "02": "Disk Encryption. Enter passphrase",
+                "03": "Confirm Installation. Ready to install",
+                "04": "Installation Progress. Writing image",
+                "05": "Installation complete. Remove the installation media",
+            },
+            steps="8",
+            flavor="gnome-hwe",
+            qualification="plain",
+        )
+        assert proc.returncode == 0, proc.stdout + proc.stderr
+        commands = run_walkthrough.last_commands
+        assert commands.count("sendkey spc") == 1
+        assert commands[commands.index("sendkey spc") + 1 :].count("sendkey ret") >= 1
+        assert summary["qualification_complete"] is True
+
+    def test_forked_frontend_selects_luks_passphrase_before_typing(self):
+        proc, summary = run_walkthrough(
+            {
+                "00": "Welcome to TunaOS installer. Get Started",
+                "01": "Select Target Disk",
+                "02": "Disk Encryption. Enter passphrase",
+                "03": "Confirm Installation. Ready to install",
+                "04": "Installation Progress. Writing image",
+                "05": "Installation complete. Remove the installation media",
+            },
+            steps="8",
+            flavor="xfce-hwe",
+            qualification="encrypted",
+        )
+        assert proc.returncode == 0, proc.stdout + proc.stderr
+        commands = run_walkthrough.last_commands
+        start = commands.index("sendkey home")
+        assert commands[start : start + 5] == [
+            "sendkey home",
+            "sendkey down",
+            "sendkey spc",
+            "sendkey tab",
+            "sendkey t",
+        ]
+        assert summary["qualification_complete"] is True
 
     def test_qualification_contextually_recognizes_gnome_progress(self):
         proc, summary = run_walkthrough(
