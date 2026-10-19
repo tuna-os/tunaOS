@@ -301,9 +301,17 @@ def test_guarded_uploader_never_writes_retained_destinations(tmp_path: Path):
     rclone = fake_bin / "rclone"
     rclone.write_text(
         "#!/bin/sh\n"
-        "printf '%s\\n' \"$*\" >> \"$RCLONE_LOG\"\n"
-        "before=; last=; for arg in \"$@\"; do before=$last; last=$arg; done\n"
-        "cp \"$before\" \"$CAPTURE_DIR/$(basename \"$last\")\"\n"
+        "case \"$1\" in\n"
+        "  lsf)\n"
+        "    candidate=; for arg in \"$@\"; do case \"$arg\" in /*) candidate=${arg#/};; esac; done\n"
+        "    [ \"$candidate\" = \"${RCLONE_EXISTING:-}\" ] && printf '%s\\n' \"$candidate\"; exit 0\n"
+        "    ;;\n"
+        "  *)\n"
+        "    printf '%s\\n' \"$*\" >> \"$RCLONE_LOG\"\n"
+        "    before=; last=; for arg in \"$@\"; do before=$last; last=$arg; done\n"
+        "    cp \"$before\" \"$CAPTURE_DIR/$(basename \"$last\")\"\n"
+        "    ;;\n"
+        "esac\n"
     )
     rclone.chmod(0o755)
 
@@ -392,6 +400,72 @@ def test_guarded_uploader_never_writes_retained_destinations(tmp_path: Path):
                for destination in second_destinations)
 
 
+def test_snapshot_reactivation_fails_closed(tmp_path: Path):
+    iso = tmp_path / "fish-gnome-10.2-x86_64.iso"
+    iso.write_bytes(b"iso")
+    checksum = hashlib.sha256(b"iso").hexdigest()
+    (tmp_path / f"{iso.name}.sha256").write_text(f"{checksum}  {iso.name}\n")
+    (tmp_path / f"{iso.name}.sigstore.json").write_text("{}")
+    config_path = tmp_path / "config.json"
+    config_path.write_text(json.dumps({
+        "iso_delivery": {
+            "cutover_targets": [],
+            "retained_r2_isos": [iso.name, "fish-gnome-latest.iso"],
+        },
+        "iso_groups": [],
+        "variants": [],
+    }))
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    capture_dir = tmp_path / "uploaded"
+    capture_dir.mkdir()
+    rclone_log = tmp_path / "rclone.log"
+    rclone = fake_bin / "rclone"
+    rclone.write_text(
+        "#!/bin/sh\n"
+        "case \"$1\" in\n"
+        "  lsf)\n"
+        "    candidate=; for arg in \"$@\"; do case \"$arg\" in /*) candidate=${arg#/};; esac; done\n"
+        "    [ \"$candidate\" = \"${RCLONE_EXISTING:-}\" ] && printf '%s\\n' \"$candidate\"\n"
+        "    ;;\n"
+        "  *)\n"
+        "    printf '%s\\n' \"$*\" >> \"$RCLONE_LOG\"\n"
+        "    before=; last=; for arg in \"$@\"; do before=$last; last=$arg; done\n"
+        "    cp \"$before\" \"$CAPTURE_DIR/$(basename \"$last\")\"\n"
+        "    ;;\n"
+        "esac\n"
+    )
+    rclone.chmod(0o755)
+    digest_suffix = checksum[:16]
+    existing = (
+        f"fish-gnome-snapshot-run-reused-sha256-{digest_suffix}.iso"
+    )
+    result = subprocess.run(
+        [
+            str(PUBLISH_R2),
+            str(iso),
+            "fish-gnome-latest.iso",
+            str(config_path),
+            "R2:bucket/live-isos",
+        ],
+        cwd=tmp_path,
+        env=os.environ | {
+            "PATH": f"{fake_bin}:{os.environ['PATH']}",
+            "RCLONE_LOG": str(rclone_log),
+            "CAPTURE_DIR": str(capture_dir),
+            "RCLONE_EXISTING": existing,
+            "TUNAOS_PUBLICATION_ID": "reused",
+        },
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode != 0
+    assert "refusing to reactivate existing snapshot object" in result.stderr
+    assert not (capture_dir / "fish-gnome-latest.json").exists()
+    assert not any(existing in line for line in rclone_log.read_text().splitlines())
+
+
 def test_routine_publication_keeps_two_iso_copies_and_no_resolver(tmp_path: Path):
     iso = tmp_path / "fish-gnome-10.2-x86_64.iso"
     iso.write_bytes(b"iso")
@@ -462,8 +536,13 @@ def test_frozen_resolver_remains_valid_after_later_publication(tmp_path: Path):
     rclone = fake_bin / "rclone"
     rclone.write_text(
         "#!/bin/sh\n"
-        "before=; last=; for arg in \"$@\"; do before=$last; last=$arg; done\n"
-        "cp \"$before\" \"$REMOTE/$(basename \"$last\")\"\n"
+        "case \"$1\" in\n"
+        "  lsf) exit 0 ;;\n"
+        "  *)\n"
+        "    before=; last=; for arg in \"$@\"; do before=$last; last=$arg; done\n"
+        "    cp \"$before\" \"$REMOTE/$(basename \"$last\")\"\n"
+        "    ;;\n"
+        "esac\n"
     )
     rclone.chmod(0o755)
 

@@ -13,6 +13,7 @@
 REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
 VARIANT_WF="${REPO_ROOT}/.github/workflows/build-variant.yml"
 ARTIFACTS_WF="${REPO_ROOT}/.github/workflows/reusable-build-artifacts.yml"
+PUBLISH_WF="${REPO_ROOT}/.github/workflows/publish-isos.yml"
 POLICY="${REPO_ROOT}/scripts/iso-delivery-policy.py"
 CONFIG="${REPO_ROOT}/.github/build-config.yml"
 
@@ -44,6 +45,11 @@ teardown() {
   run grep -c "upload-r2: \${{ (github.event_name == 'schedule' || inputs.publish-isos) && !matrix.r2_cutover }}" "$VARIANT_WF"
   [ "$status" -eq 0 ]
   [ "$output" -ge 1 ]
+}
+
+@test "manual per-flavor publication also honors cutover targets" {
+  run grep -F "upload-r2: \${{ inputs.skip_upload != true && !matrix.r2_cutover }}" "$PUBLISH_WF"
+  [ "$status" -eq 0 ]
 }
 
 @test "publish-isos exists as an opt-in and is off by default" {
