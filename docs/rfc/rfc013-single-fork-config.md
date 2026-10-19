@@ -1,7 +1,10 @@
 # RFC 013: One fork-owned config
 
-Status: Draft. Issue: [#3433](https://github.com/tuna-os/tunaOS/issues/3433).
-This draft does not approve a rollout or merge.
+Status: Partially accepted. Issue: [#3433](https://github.com/tuna-os/tunaOS/issues/3433).
+[ADR 0012](../adr/0012-fork-config-compatibility-foundation.md) covers the foundation.
+[ADR 0013](../adr/0013-fork-config-consumer-preview.md) covers the bounded preview
+for opt-in consumers. The broader rollout remains a draft; image acceptance gates
+and normal merge checks still apply.
 
 ## Problem and choice
 
