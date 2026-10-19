@@ -8,7 +8,7 @@ import pytest
 HELPER = Path(__file__).resolve().parents[1] / "build_scripts/lib/fork-removals.sh"
 
 
-def run(tmp_path, manager, packages, *, fail="", enabled=True, query_name=None):
+def run(tmp_path, manager, packages, *, fail="", enabled=True, query_name=None, query_exit=0):
     log = tmp_path / "log"
     bindir = tmp_path / "bin"
     bindir.mkdir(exist_ok=True)
@@ -25,6 +25,7 @@ if [[ "${0##*/}" == rpm && "$1" == -q ]]; then
         printf '%s\\n' "${!#}"
     fi
 fi
+exit "$QUERY_EXIT"
 ''')
         path.chmod(0o755)
     result = subprocess.run(["/bin/bash", "-c",
@@ -33,7 +34,7 @@ fi
                             env=dict(os.environ, PATH=f"{bindir}:/usr/bin:/bin", LOG=str(log), FAIL=fail,
                                      TUNAOS_FORK_REMOVAL_QUALIFICATION="1" if enabled else "0",
                                      RPM_QUERY_OVERRIDE="1" if query_name is not None else "0",
-                                     RPM_QUERY_NAME=query_name or ""),
+                                     RPM_QUERY_NAME=query_name or "", QUERY_EXIT=str(query_exit)),
                             text=True, capture_output=True)
     return result, log.read_text().splitlines() if log.exists() else []
 
@@ -98,3 +99,11 @@ def test_rpm_empty_mismatched_or_ambiguous_names_fail_before_dry_run(tmp_path, q
     assert result.returncode != 0
     assert "exact installed package name" in result.stderr
     assert len(log) == 1 and log[0].startswith("rpm:-q ")
+
+
+@pytest.mark.parametrize("manager", ["apt", "dnf", "zypper", "pacman"])
+def test_failed_query_with_valid_stdout_never_starts_removal(tmp_path, manager):
+    result, log = run(tmp_path, manager, ["example"], query_exit=41)
+    assert result.returncode != 0
+    assert len(log) == 1
+    assert not any("--remove" in call or ":-e " in call or ":-R " in call for call in log)

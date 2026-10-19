@@ -54,7 +54,8 @@ tunaos_qualify_fork_removals() (
 		;;
 	apt)
 		for package in "$@"; do
-			[[ "$(dpkg-query -W -f='${db:Status-Status}' -- "$package")" == installed ]] || return 1
+			installed_name="$(dpkg-query -W -f='${db:Status-Status}' -- "$package")" || return 1
+			[[ "$installed_name" == installed ]] || return 1
 		done
 		dpkg --dry-run --remove -- "$@" || return 1
 		dpkg --remove -- "$@" || return 1
