@@ -144,7 +144,11 @@ setup_runtime_check_stubs() {
   systemctl() {
     case "$1" in
       is-system-running) echo running ;;
-      is-active) echo active ;;
+      is-enabled) return 1 ;; # production fixture has no enabled SSH daemon
+      is-active)
+        case "$2" in sshd.service|ssh.service|sshd.socket|ssh.socket) return 3 ;; esac
+        echo active
+        ;;
       # Real is-failed exits NON-zero for a healthy unit; a catch-all `return
       # 0` stub would report every unit as failed.
       is-failed) return 1 ;;
@@ -191,7 +195,11 @@ setup_runtime_check_stubs() {
   systemctl() {
     case "$1" in
       is-system-running) echo running ;;
-      is-active) echo active ;;
+      is-enabled) return 1 ;; # production fixture has no enabled SSH daemon
+      is-active)
+        case "$2" in sshd.service|ssh.service|sshd.socket|ssh.socket) return 3 ;; esac
+        echo active
+        ;;
       # Real is-failed exits NON-zero for a healthy unit; a catch-all `return
       # 0` stub would report every unit as failed.
       is-failed) return 1 ;;

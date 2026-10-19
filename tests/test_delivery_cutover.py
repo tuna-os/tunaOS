@@ -686,3 +686,25 @@ def test_prune_still_deletes_non_retained_dated_objects(tmp_path, name):
     """The other way to get this wrong: keep everything and prune nothing."""
     rules = _prune_rules_with_retained(tmp_path)
     assert _verdict(name, rules) == "delete", f"prune would keep {name!r} forever"
+
+
+@pytest.mark.parametrize("with_snapshot", [False, True])
+def test_annotation_cli_accepts_snapshot_and_keeps_empty_policy_publication(tmp_path, with_snapshot):
+    args = [sys.executable, str(SCRIPT), "--annotate-matrix"]
+    if with_snapshot:
+        path = tmp_path / "snapshot.json"
+        path.write_text(json.dumps({"targets": []}))
+        args.extend(["--snapshot", str(path)])
+    proc = subprocess.run(args, input=json.dumps({"include": [{
+        "variant": "yellowfin", "flavor": "gnome", "platform": "linux/amd64/v2"}]}),
+        text=True, capture_output=True)
+    assert proc.returncode == 0, proc.stderr
+    assert json.loads(proc.stdout)["include"][0]["cutover"] is False
+
+
+def test_check_cli_without_snapshot_retains_target():
+    proc = subprocess.run([sys.executable, str(SCRIPT), "--check", "--variant",
+                           "yellowfin", "--flavor", "gnome", "--platform", "linux/amd64/v2"],
+                          text=True, capture_output=True)
+    assert proc.returncode == 1, proc.stderr
+    assert proc.stdout.strip() == "false"

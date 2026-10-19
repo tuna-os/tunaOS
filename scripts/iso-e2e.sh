@@ -3542,11 +3542,8 @@ strict_capture_live_inputs() {
 			[[ -n "$STRICT_SOURCE_DIGEST" ]] &&
 				strict_offline_evidence "source_digest=${STRICT_SOURCE_DIGEST} source=live-bootc-status"
 		fi
-		if [[ -z "${STRICT_INSTALLER_DIGEST:-}" ]]; then
-			STRICT_INSTALLER_DIGEST="$("${GUEST_SSH[@]}" 'sha256sum /usr/local/bin/fisherman 2>/dev/null' 2>/dev/null | awk '{print "sha256:"$1}' || true)"
-			[[ "$STRICT_INSTALLER_DIGEST" =~ ^sha256:[0-9a-fA-F]{64}$ ]] &&
-				strict_offline_evidence "installer_digest=${STRICT_INSTALLER_DIGEST} source=live-bundled-fisherman"
-		fi
+		# A backend executable hash cannot identify the installed GUI frontend.
+		# Installer identity must be supplied from the media's build receipt.
 	fi
 }
 
@@ -4004,7 +4001,7 @@ emit_qualification_evidence() {
 		STRICT_EV_SCOPE="${TUNAOS_QUAL_HARDWARE_SCOPE:-qemu}" \
 		STRICT_EV_SOURCE="$STRICT_SOURCE_DIGEST" STRICT_EV_OVERLAY="$STRICT_OVERLAY_DIGEST" \
 		STRICT_EV_INSTALLER="$STRICT_INSTALLER_DIGEST" STRICT_EV_ENGINE="$STRICT_ENGINE_DIGEST" \
-		STRICT_EV_BNAME="${TUNAOS_QUAL_BROWSER_NAME:-unknown}" \
+		STRICT_EV_BNAME="${TUNAOS_QUAL_BROWSER_NAME:-native-qemu}" \
 		STRICT_EV_BVER="${TUNAOS_QUAL_BROWSER_VERSION:-unknown}" \
 		STRICT_EV_MEM="$qual_mem" STRICT_EV_DISK="$qual_disk" \
 		STRICT_EV_PLAIN="$plain_frag" STRICT_EV_LUKS="$luks_frag" \
@@ -4089,17 +4086,13 @@ run_strict_offline_gui() {
 	# to a host transfer.
 	export TUNAOS_WALKTHROUGH_LUKS_PASS="${TUNAOS_WALKTHROUGH_LUKS_PASS:-tunaos-e2e-luks}"
 	E2E_LUKS_PASS="$TUNAOS_WALKTHROUGH_LUKS_PASS"
-	# Immutable inputs measurable without a guest: the live media itself
-	# (overlay) and the virtualization engine binary (engine). Source and
-	# installer come from env or the live guest (strict_capture_live_inputs).
+	# Builder identities must come from build provenance. The ISO checksum
+	# is not an OCI overlay digest, and QEMU is not the tacklebox builder.
 	STRICT_OVERLAY_DIGEST="${TUNAOS_QUAL_OVERLAY_DIGEST:-}"
-	if [[ -z "$STRICT_OVERLAY_DIGEST" ]]; then
-		STRICT_OVERLAY_DIGEST="sha256:$(sha256sum "$ISO_PATH" | awk '{print $1}')"
-	fi
 	STRICT_ENGINE_DIGEST="${TUNAOS_QUAL_ENGINE_DIGEST:-}"
-	if [[ -z "$STRICT_ENGINE_DIGEST" ]]; then
-		STRICT_ENGINE_DIGEST="sha256:$(sha256sum "$QEMU" | awk '{print $1}')"
-	fi
+	strict_require_digest "$STRICT_OVERLAY_DIGEST" "OCI live overlay" || return 1
+	strict_require_digest "$STRICT_ENGINE_DIGEST" "ISO builder engine" || return 1
+	strict_offline_evidence "iso_sha256=$(sha256sum "$ISO_PATH" | awk '{print $1}') qemu_sha256=$(sha256sum "$QEMU" | awk '{print $1}')"
 	STRICT_SOURCE_DIGEST="${TUNAOS_QUAL_SOURCE_DIGEST:-}"
 	STRICT_INSTALLER_DIGEST="${TUNAOS_QUAL_INSTALLER_DIGEST:-}"
 	strict_offline_evidence "iso=${ISO_PATH} overlay_digest=${STRICT_OVERLAY_DIGEST} engine_digest=${STRICT_ENGINE_DIGEST}"

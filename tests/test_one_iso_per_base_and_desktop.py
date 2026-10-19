@@ -198,7 +198,8 @@ def test_cut_over_group_suppresses_only_that_group():
         entry["evidence"]["receiptDigest"] = receipts[key]["receiptDigest"]
     snapshot = catalog_snapshot(
         cfg, descriptors=descriptors, overlays=overlays, receipts=receipts,
-        installer_revision=DIGEST, engine_revision=DIGEST)
+        installer_revision=DIGEST, engine_revision=DIGEST,
+        browser_builds={key: receipt["build_provenance"] for key, receipt in receipts.items()})
     assert DC.group_covered(
         policy, "yellowfin", "kde", live, offline,
         config=cfg, snapshot=snapshot,
@@ -234,13 +235,15 @@ def strict_receipt(target, *, source, overlay, installer, engine, cpu_baseline):
         "cpu_baseline": cpu_baseline, "hardware_scope": "qemu",
         "resolved_inputs": {"source": source, "overlay": overlay,
                             "installer": installer, "engine": engine},
-        "browser": {"name": "chromium", "version": "test-only",
+        "browser": {"name": "chromium", "version": "140.0",
                     "memory_gib": 8, "free_disk_gib": 20},
         "offline_network_disabled": True,
         "observed": {"plain": dict(observed), "encrypted": dict(observed)},
         "measurements": {"cold": {"duration_s": 1}, "warm": {"duration_s": 1}},
         "qualifiedAt": "2026-10-01T00:00:00Z",
     }
+    receipt["build_provenance"] = {"origin": "browser", "receipt_digest": overlay,
+                                   "iso_digest": source, "browser": dict(receipt["browser"])}
     receipt["receiptDigest"] = "sha256:" + hashlib.sha256(
         json.dumps(receipt, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     return receipt

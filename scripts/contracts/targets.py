@@ -657,7 +657,7 @@ def _qualification_validator():
     return module.validate
 
 
-def _admit_qualification(receipt, target, expected_inputs):
+def _admit_qualification(receipt, target, expected_inputs, browser_build=None):
     """Check evidence structure and independently supplied input identities.
 
     A content checksum detects modification; it does not authenticate a runner.
@@ -668,6 +668,18 @@ def _admit_qualification(receipt, target, expected_inputs):
         return False
     try:
         _qualification_validator()(raw, "catalog qualification")
+        # This observation must come from the trusted browser-build artifact
+        # collector, independently of the qualification receipt being admitted.
+        provenance = raw.get("build_provenance")
+        if not isinstance(browser_build, dict) or not isinstance(provenance, dict):
+            return False
+        if provenance != browser_build or provenance.get("origin") != "browser":
+            return False
+        if any(not isinstance(provenance.get(key), str) or not DIGEST.fullmatch(provenance[key])
+               for key in ("receipt_digest", "iso_digest")):
+            return False
+        if provenance.get("browser") != raw["browser"]:
+            return False
         if raw.get("status") not in (None, "qualified", "passed", "success"):
             return False
         if "checks" in raw and (not isinstance(raw["checks"], list) or any(
@@ -1012,6 +1024,7 @@ def catalog_snapshot(
     descriptors: Any = None,
     overlays: Any = None,
     receipts: Any = None,
+    browser_builds: dict[str, Any] | None = None,
     producer_revision: str = "",
     generated_at: str = "",
     installer_revision: str = "",
@@ -1146,6 +1159,7 @@ def catalog_snapshot(
                     matched_receipt, target,
                     {"source": pm_digest, "overlay": ovl_digest,
                      "installer": inst_rev, "engine": eng_rev},
+                    (browser_builds or {}).get(tkey),
                 ):
                     qual_status = "unqualified"
                     qual_reason = "invalid-qualification-evidence"
@@ -1196,6 +1210,13 @@ def catalog_snapshot(
             },
         }
         validate_catalog_entry(entry)
+        if qual_status == "qualified":
+            provenance = matched_receipt["_qualificationEvidence"]["build_provenance"]
+            entry["qualification"].update(
+                buildOrigin=provenance["origin"],
+                browserBuildReceiptDigest=provenance["receipt_digest"],
+                isoDigest=provenance["iso_digest"],
+            )
         entries.append(entry)
 
     snapshot = {
