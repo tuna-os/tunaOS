@@ -69,12 +69,13 @@ The builder keeps output from failed builds for diagnosis.
 - Required and optional additions of native packages on dnf, apt, pacman, zypper and Portage.
   Use plain package names, or `category/name` on Portage.
   The compiler refuses options, groups, file/URL installs, archives, globs and version expressions.
-- Additional repositories only on dnf/zypper: literal HTTPS repository/key URLs
+- Additional RPM repositories on dnf/zypper: literal HTTPS repository/key URLs
   and filename-safe IDs.
   The adapter uses `fork-<id>` as the namespace and needs both metadata and package signatures.
   The fork author explicitly chooses the key URL; there is no unsigned-repository fallback.
   Native trust/repository canary builds are still needed.
-  Apt suites/components, pacman trust, and Portage overlay identities need an expanded family-specific schema.
+  APT uses the [typed source contract](FORK-APT-REPOSITORIES.md).
+  Pacman trust and Portage overlay identities still need separate contracts.
 - Homepage, documentation and support URLs, plus a JPEG wallpaper that you generate before the build.
   The JPEG must contain one frame, with 1..8192 pixels per axis and a maximum size of 16 MiB.
   The host decodes the JPEG and records its SHA-256; runtime helpers verify those exact bytes.
@@ -89,7 +90,7 @@ The adapter runs after the stock desktop packages/hooks and before experience ch
 It sets up repositories first, then adds required packages, then tries each optional package.
 Required failures fail the build.
 
-Fork apt installs use `--no-remove`, including retries.
+Fork apt installs use `--no-remove`. Failed refresh or install blocks forced recovery and retries.
 Other managers keep their existing solver flags.
 Tests of command calls do not prove replacement or dependency behavior in native transactions.
 The adapter records failures of optional packages in a per-cell receipt under `/usr/share/tunaos/fork-config/packages`.
@@ -151,3 +152,10 @@ fork builds can reuse layers.
 fastfetch consumers in a disposable root. See [the identity contract](FORK-IDENTITY-STAGING.md)
 for the contract, measured installer blockers and required canaries. Normal
 preparation still rejects name/logo; this is not a completed rebrand.
+
+### APT source declarations
+
+[Typed APT sources](FORK-APT-REPOSITORIES.md) add suites, components and a pinned
+key hash. Existing RPM declarations keep their format. Portage and Arch custom
+sources still fail closed. [Removal qualification](FORK-PACKAGE-SAFETY.md) is
+separate; normal fork builds still reject all removals.

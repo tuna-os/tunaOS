@@ -327,6 +327,8 @@ def actual_package_wrappers():
     )
 
 
+APT_UPDATE_FLAGS = "-o APT::Update::Error-Mode=any -o Acquire::AllowInsecureRepositories=false -o Acquire::AllowDowngradeToInsecureRepositories=false"
+
 ADAPTER_CASES = [
     ("dnf", "htop", ["dnf:makecache", "dnf:install -y --setopt=install_weak_deps=False htop"]),
     ("zypper", "htop", ["zypper:--non-interactive --gpg-auto-import-keys refresh",
@@ -334,8 +336,8 @@ ADAPTER_CASES = [
     ("pacman", "htop", ["pacman:-Sy --noconfirm", "pacman:-S --noconfirm --needed htop"]),
     ("emerge", "sys-process/htop", ["emerge:--sync --quiet",
                                    "emerge:--verbose --getbinpkg sys-process/htop"]),
-    ("apt", "htop", ["apt-get:update", "apt-get:update -qq",
-                      "apt-get:--no-remove install -y --no-install-recommends "
+    ("apt", "htop", [f"apt-get:{APT_UPDATE_FLAGS} update", f"apt-get:{APT_UPDATE_FLAGS} update -qq",
+                      "apt-get:--no-remove -o APT::Get::AllowUnauthenticated=false install -y --no-install-recommends "
                       "-o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold htop"]),
 ]
 
@@ -398,13 +400,7 @@ exit "$status"
     if with_repo and manager == "dnf":
         expected[0] = "dnf:-y makecache"
     assert commands[:len(expected)] == expected
-    if fails and manager == "apt":
-        assert commands[len(expected):] == [
-            "dpkg:--configure -a --force-depends",
-            "apt-get:--no-remove install -y -f --no-install-recommends htop",
-        ]
-    else:
-        assert commands == expected
+    assert commands == expected
     receipts = list(root.glob("usr/share/tunaos/fork-config/packages/*.json"))
     if fails and operation == "add":
         assert result.returncode != 0
@@ -522,3 +518,141 @@ tunaos_verify_fork_branding "$ROOT"
     assert log.read_text().splitlines() == calls
     assert {str(path.relative_to(root)): path.read_bytes()
             for path in root.rglob("*") if path.is_file()} == before
+
+
+@pytest.fixture
+def apt_repository_tools(tmp_path):
+    """Fake transport/key conversion only; never claim native apt signature proof."""
+    import hashlib
+    bindir = tmp_path / "apt-tools"
+    bindir.mkdir()
+    key = b"-----BEGIN PGP PUBLIC KEY BLOCK-----\nfixture-key\n-----END PGP PUBLIC KEY BLOCK-----\n"
+    keyfile = tmp_path / "fixture.asc"
+    keyfile.write_bytes(key)
+    (bindir / "curl").write_text('''#!/bin/bash
+[[ "${FAIL_KEY_DOWNLOAD:-0}" == 0 ]] || exit 22
+while (($#)); do
+    if [[ "$1" == --output ]]; then cp "$KEY_FIXTURE" "$2"; exit; fi
+    shift
+done
+exit 9
+''')
+    (bindir / "gpg").write_text('''#!/bin/bash
+[[ "${FAIL_KEY_PARSE:-0}" == 0 ]] || exit 2
+while (($#)); do
+    if [[ "$1" == --output ]]; then cp "$3" "$2"; exit; fi
+    shift
+done
+exit 9
+''')
+    for path in bindir.iterdir():
+        path.chmod(0o755)
+    repo = dict(REPOSITORY, type="apt", suites=["noble", "noble-updates"], components=["main", "universe"],
+                key_sha256=hashlib.sha256(key).hexdigest())
+    return repo, {"PATH": f"{bindir}:{os.environ['PATH']}", "KEY_FIXTURE": str(keyfile)}
+
+
+def test_apt_repository_generates_scoped_deb822_and_receipt(harness, apt_repository_tools):
+    repo, env = apt_repository_tools
+    result = harness(manifest("apt", repositories=[repo], add=["htop"]), PKG_MGR="apt", **env)
+    assert result.returncode == 0, result.stderr
+    content = (harness.root / "etc/apt/sources.list.d/fork-tools.sources").read_text()
+    assert content == (f"Types: deb\nURIs: {repo['url']}\nSuites: noble noble-updates\n"
+                       "Components: main universe\nSigned-By: /usr/share/keyrings/fork-tools.gpg\nEnabled: yes\n")
+    assert (harness.root / "usr/share/keyrings/fork-tools.gpg").exists()
+    assert harness.transactions() == ["refresh", "install:htop"]
+    assert harness.receipt()["repositories"] == [repo]
+    assert not (harness.root / "etc/apt/trusted.gpg").exists()
+
+
+@pytest.mark.parametrize("failure", ["digest", "download", "parse", "collision", "symlink"])
+def test_apt_repo_failure_does_not_write_any_source_or_start_transaction(harness, apt_repository_tools, failure):
+    repo, env = apt_repository_tools
+    if failure == "digest":
+        repo["key_sha256"] = "0" * 64
+    elif failure == "download":
+        env["FAIL_KEY_DOWNLOAD"] = "1"
+    elif failure == "parse":
+        env["FAIL_KEY_PARSE"] = "1"
+    elif failure == "collision":
+        path = harness.root / "usr/share/keyrings/fork-tools.gpg"
+        path.parent.mkdir(parents=True)
+        path.write_text("existing key")
+    else:
+        (harness.root / "etc").symlink_to(harness.context)
+    before = {str(p.relative_to(harness.root)): p.read_bytes() for p in harness.root.rglob("*") if p.is_file()}
+    result = harness(manifest("apt", repositories=[repo]), PKG_MGR="apt", **env)
+    assert result.returncode != 0
+    assert harness.transactions() == []
+    assert harness.receipt() is None
+    assert not (harness.root / "etc/apt/sources.list.d/fork-tools.sources").exists()
+    after = {str(p.relative_to(harness.root)): p.read_bytes() for p in harness.root.rglob("*") if p.is_file()}
+    assert before == after
+
+
+@pytest.mark.parametrize("field,value", [("suites", []), ("components", []), ("suites", ["noble\nTrusted: yes"]),
+                                         ("components", ["main", "main"]), ("key_sha256", "bad"),
+                                         ("type", "portage"), ("trusted", True)])
+def test_bad_apt_contract_rejected_before_mutation(harness, apt_repository_tools, field, value):
+    repo, env = apt_repository_tools
+    repo[field] = value
+    result = harness(manifest("apt", repositories=[repo]), PKG_MGR="apt", **env)
+    assert result.returncode != 0
+    assert harness.transactions() == []
+    assert list(harness.root.iterdir()) == []
+
+
+def test_fork_apt_failed_refresh_blocks_install_and_forced_recovery(tmp_path):
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    log = tmp_path / "commands"
+    for name in ("apt-get", "dpkg"):
+        path = bindir / name
+        path.write_text('''#!/bin/bash
+printf '%s:%s\\n' "${0##*/}" "$*" >> "$LOG"
+[[ "$*" != *update* ]]
+''')
+        path.chmod(0o755)
+    script = actual_package_wrappers() + r'''
+source "$HELPER"
+mkdir() { return 0; }
+_tunaos_fork_package_install htop
+'''
+    result = subprocess.run(["bash", "-c", script],
+                            env=dict(os.environ, PATH=f"{bindir}:/usr/bin:/bin", LOG=str(log), HELPER=str(HELPER), PKG_MGR="apt"),
+                            text=True, capture_output=True)
+    assert result.returncode != 0
+    assert log.read_text().splitlines() == [f"apt-get:{APT_UPDATE_FLAGS} update -qq"]
+
+
+def test_apt_repository_manifest_is_accepted_by_branding_schema(harness, apt_repository_tools):
+    repo, _ = apt_repository_tools
+    path = harness.context / "manifests/fork-config.json"
+    path.write_text(json.dumps(manifest("apt", repositories=[repo])))
+    result = subprocess.run(["bash", "-c", 'source "$1"; _tunaos_fork_branding_schema "$2"',
+                             "test", str(ROOT / "build_scripts/lib/fork-branding.sh"), str(path)],
+                            text=True, capture_output=True)
+    assert result.returncode == 0, result.stderr
+
+
+def test_optional_apt_refresh_failure_is_fatal_not_a_missing_package(harness):
+    # Exit 78 is the adapter's explicit repository failure, not a missing package.
+    # Exercise the loop without any native package operation.
+    config = manifest("apt", optional=["htop"])
+    (harness.context / "manifests/fork-config.json").write_text(json.dumps(config))
+    script = r'''
+source "$HELPER"
+PKG_MGR=apt
+IMAGE_NAME_VARIANT=yellowfin
+TUNAOS_IMAGE_FLAVOR=gnome
+uname() { echo x86_64; }
+pkg_refresh() { return 0; }
+pkg_install() { return 0; }
+_tunaos_fork_package_install() { return 78; }
+tunaos_apply_fork_packages "$CONTEXT" "$ROOT"
+'''
+    result = subprocess.run(["bash", "-c", script], env=dict(os.environ, HELPER=str(HELPER),
+                             CONTEXT=str(harness.context), ROOT=str(harness.root)), text=True, capture_output=True)
+    assert result.returncode != 0
+    assert "repository refresh failed during optional" in result.stderr
+    assert harness.receipt() is None

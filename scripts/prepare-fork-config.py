@@ -33,6 +33,7 @@ ARCHIVE = r"\.(rpm|deb|udeb|ebuild|tbz2|gpkg\.tar|pkg\.tar(\.[a-z0-9]+)?)$"
 
 
 def validate_packages(packages, manager):
+    COMPILER.validate_layer({"packages": packages}, "packages", Path("."))
     if packages["remove"]:
         raise ConfigError("package removals are not supported by this preview: solver/base protections required")
     pattern = PACKAGE + "/" + PACKAGE if manager == "emerge" else (
@@ -41,9 +42,11 @@ def validate_packages(packages, manager):
         for value in packages[key]:
             if not re.fullmatch(pattern, value) or re.search(ARCHIVE, value, re.I):
                 raise ConfigError(f"{manager}: {value!r} is not a supported plain native package name")
-    if packages["repositories"] and manager not in ("dnf", "zypper"):
+    if packages["repositories"] and manager not in ("dnf", "zypper", "apt"):
         raise ConfigError(f"{manager}: custom repository semantics are not supported by this preview")
     for repo in packages["repositories"]:
+        if (repo.get("type") == "apt") != (manager == "apt"):
+            raise ConfigError(f"{manager}: repository semantics: type must match the selected package family")
         if not re.fullmatch(r"[a-z0-9][a-z0-9_-]*", repo["id"]):
             raise ConfigError("repository id must be a lowercase filename-safe token")
         if any(not re.fullmatch(REPO_URL, repo[k]) for k in ("url", "key_url")):
