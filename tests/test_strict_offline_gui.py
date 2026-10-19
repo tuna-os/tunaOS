@@ -92,7 +92,11 @@ def test_r2_strict_path_resolves_source_and_installer_inputs_before_boot():
     assert "skopeo inspect" in provenance
     assert "TUNAOS_QUAL_SOURCE_DIGEST" in provenance
     assert "TUNAOS_QUAL_INSTALLER_DIGEST" in provenance
-    assert 'sha256sum live-iso/common/src/customize-live.sh' in provenance
+    assert 'unsquashfs -cat' in provenance
+    assert 'etc/tunaos/live-installer-info' in provenance
+    assert 'INSTALLER_BUNDLE_SHA256' in provenance
+    assert 'sha256sum "$ISO_PATH"' in provenance
+    assert 'sha256sum live-iso/common/src/customize-live.sh' not in provenance
 
 def test_parity_workflow_upload_has_no_disk_suffixed_paths():
     text = _text(WORKFLOW)
@@ -109,3 +113,9 @@ def test_parity_workflow_sets_retention_and_compression():
     text = _text(WORKFLOW)
     assert "retention-days: 1" in text
     assert "compression-level: 0" in text
+
+
+def test_strict_job_budget_covers_both_input_paths():
+    text = _text(ISO_WORKFLOW)
+    assert "&& 130 || 70 }}" in text
+    assert text.count("timeout-minutes: 60") == 2

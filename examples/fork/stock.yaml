@@ -1,4 +1,4 @@
 # Phase 1 stock intent: review upstream source changes before refreshing this pin.
 schema_version: 1
 catalog:
-  sha256: f2dcc4a35ac2a05afc0f2a8390fd93017b930d1f30e2eeabe30a8dd01209211f
+  sha256: 386033088eda6bbd4d003ea154da8f8e7e673403ba6d607b5c5ab674e0df3174

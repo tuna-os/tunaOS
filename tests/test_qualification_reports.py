@@ -10,6 +10,8 @@ cannot pass.
 from __future__ import annotations
 
 import copy
+import hashlib
+import json
 import importlib.util
 import sys
 from datetime import datetime, timezone
@@ -76,6 +78,19 @@ def v1_receipt(**over):
     return receipt
 
 
+def catalog_receipt():
+    """Synthetic strict evidence for unit tests; never distributed as proof."""
+    receipt = _strict_v1_receipt()
+    receipt["resolved_inputs"].update(source=DIGEST_B, overlay=DIGEST_1)
+    for record in receipt["observed"].values():
+        record.update(source_digest=DIGEST_B, booted_digest=DIGEST_B)
+    receipt["resources"] = {"cpu": "4"}
+    receipt.pop("receiptDigest")
+    receipt["receiptDigest"] = "sha256:" + hashlib.sha256(
+        json.dumps(receipt, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    return receipt
+
+
 def qualified_snapshot():
     data = config()
     descriptors = {
@@ -101,17 +116,7 @@ def qualified_snapshot():
         },
     }
     receipts = [
-        {
-            "variant": "albacore",
-            "flavor": "cosmic",
-            "platform": "linux/amd64/v2",
-            "platformManifestDigest": DIGEST_B,
-            "liveOverlayDigest": DIGEST_1,
-            "qualifiedAt": "2026-10-17T01:02:03Z",
-            "receiptDigest": DIGEST_C,
-            "browser": {"name": "Chromium", "version": "140.0"},
-            "resources": {"cpu": "4"},
-        },
+        catalog_receipt(),
         {
             "variant": "skipjack",
             "flavor": "cosmic-hwe",
@@ -126,14 +131,14 @@ def qualified_snapshot():
     snapshot = targets.catalog_snapshot(
         data, descriptors=descriptors, overlays=overlays, receipts=receipts,
         producer_revision="rev-1", generated_at="2026-10-17T03:00:00Z",
-        installer_revision="inst-1", engine_revision="eng-1",
+        installer_revision=DIGEST_C, engine_revision=DIGEST_D,
     )
     return snapshot, descriptors, overlays
 
 
 # ── 1. receipt_to_catalog_projection ──────────────────────────────────────────
 
-def test_v1_receipt_projects_to_qualified_with_date_digest_browser_passthrough():
+def test_legacy_projection_preserves_metadata_but_cannot_qualify():
     projected = targets.receipt_to_catalog_projection(v1_receipt())
     assert projected["platformManifestDigest"] == DIGEST_B
     assert projected["liveOverlayDigest"] == DIGEST_1
@@ -153,9 +158,9 @@ def test_v1_receipt_projects_to_qualified_with_date_digest_browser_passthrough()
     )
     entry = next(e for e in snapshot["targets"]
                  if e["targetKey"] == "albacore:cosmic:linux/amd64/v2")
-    assert entry["qualification"]["status"] == "qualified"
-    assert entry["qualification"]["qualifiedAt"] == "2026-10-17T01:02:03Z"
-    assert entry["qualification"]["receiptDigest"] == DIGEST_C
+    assert entry["qualification"]["status"] == "unqualified"
+    assert entry["qualification"]["reason"] == "invalid-qualification-evidence"
+
 
 
 @pytest.mark.parametrize("receipt", [
@@ -210,8 +215,8 @@ def test_overlay_move_downgrades_with_provenance_intact():
     assert entry["qualification"]["status"] == "unqualified"
     assert entry["qualification"]["reason"] == "stale-qualification-receipt"
     assert entry["qualification"]["qualifiedAt"] == "2026-10-17T01:02:03Z"
-    assert entry["qualification"]["receiptDigest"] == DIGEST_C
-    assert entry["qualification"]["browser"] == {"name": "Chromium", "version": "140.0"}
+    assert entry["qualification"]["receiptDigest"] == catalog_receipt()["receiptDigest"]
+    assert entry["qualification"]["browser"] == catalog_receipt()["browser"]
     assert entry["qualification"]["resources"] == {"cpu": "4"}
 
 
@@ -245,7 +250,7 @@ def test_unchanged_inputs_keep_entries_identical_and_digest_stable():
     snapshot, descriptors, overlays = qualified_snapshot()
     downgraded = targets.downgrade_stale_targets(
         snapshot, current_descriptors=descriptors, current_overlays=overlays,
-        current_pins={"installerRevision": "inst-1", "engineRevision": "eng-1"})
+        current_pins={"installerRevision": DIGEST_C, "engineRevision": DIGEST_D})
     assert downgraded["targets"] == snapshot["targets"]
     assert downgraded["snapshotDigest"] == snapshot["snapshotDigest"]
 
@@ -284,7 +289,7 @@ def test_projected_receipts_cover_every_candidate_with_four_distinct_states():
             "liveOverlayDigest": DIGEST_2, "liveOverlayBaseDigest": DIGEST_E},
     }
     raw_receipts = [
-        v1_receipt(),
+        catalog_receipt(),
         {"variant": "skipjack", "flavor": "cosmic-hwe", "platform": "linux/amd64",
          "source_image_digest": DIGEST_D, "overlay": DIGEST_2,
          "local_only": True, "reason": "qemu-only-verification",
@@ -293,7 +298,8 @@ def test_projected_receipts_cover_every_candidate_with_four_distinct_states():
     receipts = [targets.receipt_to_catalog_projection(r) for r in raw_receipts]
     snapshot = targets.catalog_snapshot(
         data, descriptors=descriptors, overlays=overlays, receipts=receipts,
-        generated_at="2026-10-17T03:00:00Z")
+        generated_at="2026-10-17T03:00:00Z",
+        installer_revision=DIGEST_C, engine_revision=DIGEST_D)
     targets.validate_catalog_snapshot(snapshot)
 
     required_keys = {targets.target_key(r["target"])
@@ -355,7 +361,7 @@ def single_variant_config():
 
 def test_collect_with_receipts_reports_qualification_and_validates():
     receipts = {"albacore:cosmic:linux/amd64/v2": dict(
-        v1_receipt(), platform="linux/amd64/v2")}
+        _strict_v1_receipt(), evidence=[{"url": "https://example.invalid/run/1"}])}
     document = collector.collect(
         single_variant_config(), SOURCE, lambda _: {"workflow_runs": []},
         now=NOW, receipts=receipts)
@@ -366,8 +372,8 @@ def test_collect_with_receipts_reports_qualification_and_validates():
     assert qual["status"] == "qualified"
     assert qual["qualifiedAt"] == "2026-10-17T01:02:03Z"
     assert qual["receiptDigest"] == DIGEST_C
-    assert qual["browser"] == "Chromium 140.0"
-    assert qual["coldSeconds"] == 61.5
+    assert qual["browser"] == "chromium 140.0"
+    assert qual["coldSeconds"] == 60.0
     assert qual["warmSeconds"] == 12.0
     assert qual["evidence"] == [{"url": "https://example.invalid/run/1"}]
 
@@ -445,3 +451,105 @@ def test_collect_default_path_shape_unchanged_without_receipts():
         single_variant_config(), SOURCE, lambda _: {"workflow_runs": []}, now=NOW)
     collector.validate(document, expected_kind="build-health", now=NOW)
     assert all("qualification" not in row for row in document["targets"])
+
+
+def test_legacy_receipt_without_observations_remains_unqualified():
+    document = collector.collect(
+        single_variant_config(), SOURCE, lambda _: {"workflow_runs": []},
+        now=NOW, receipts={"albacore:cosmic:linux/amd64/v2": v1_receipt()})
+    intel = next(row for row in document["targets"]
+                 if row["target"]["platform"] == "linux/amd64/v2")
+    assert intel["qualification"]["status"] == "unqualified"
+
+
+def _catalog_with_receipt(receipt, **pins):
+    return targets.catalog_snapshot(
+        config(),
+        descriptors={"albacore:cosmic:linux/amd64/v2": {
+            "platformManifestDigest": DIGEST_B,
+            "ociPlatform": {"os": "linux", "architecture": "amd64", "variant": "v2"}}},
+        overlays={"albacore:cosmic:linux/amd64/v2": {
+            "liveOverlayDigest": DIGEST_1, "liveOverlayBaseDigest": DIGEST_B}},
+        receipts=[receipt], installer_revision=pins.get("installer", DIGEST_C),
+        engine_revision=pins.get("engine", DIGEST_D))
+
+
+def _candidate_status(snapshot):
+    return next(e["qualification"]["status"] for e in snapshot["targets"]
+                if e["targetKey"] == "albacore:cosmic:linux/amd64/v2")
+
+
+def test_strict_raw_and_projected_receipts_have_same_admission():
+    receipt = catalog_receipt()
+    assert _candidate_status(_catalog_with_receipt(receipt)) == "qualified"
+    assert _candidate_status(_catalog_with_receipt(
+        targets.receipt_to_catalog_projection(receipt))) == "qualified"
+
+
+@pytest.mark.parametrize("status", [None, "running", "queued", "skipped", "passed"])
+def test_untyped_receipt_status_never_substitutes_for_install_evidence(status):
+    assert _candidate_status(_catalog_with_receipt(v1_receipt(status=status))) == "unqualified"
+
+
+@pytest.mark.parametrize("mutation", [
+    lambda r: r.pop("observed"),
+    lambda r: r["observed"].pop("encrypted"),
+    lambda r: r["observed"]["plain"].update(installed_boot=False),
+    lambda r: r["observed"]["encrypted"].update(booted_digest=DIGEST_F),
+    lambda r: r.update(status="running"),
+    lambda r: r["browser"].update(name="native-qemu"),
+    lambda r: r.update(receiptDigest=DIGEST_A),
+    lambda r: r["resolved_inputs"].update(engine=DIGEST_E),
+    lambda r: r.update(cpu_baseline="wrong"),
+])
+def test_incomplete_tampered_or_wrong_identity_evidence_is_unqualified(mutation):
+    receipt = catalog_receipt()
+    mutation(receipt)
+    assert _candidate_status(_catalog_with_receipt(receipt)) == "unqualified"
+
+
+@pytest.mark.parametrize("pins", [
+    {"installer": ""}, {"engine": "tacklebox-1.0"},
+    {"installer": DIGEST_E}, {"engine": DIGEST_F},
+])
+def test_independent_expected_revisions_are_required(pins):
+    assert _candidate_status(_catalog_with_receipt(catalog_receipt(), **pins)) == "unqualified"
+
+
+def test_projection_cannot_replace_original_receipt_identity():
+    projected = targets.receipt_to_catalog_projection(catalog_receipt())
+    projected["_qualificationEvidence"]["resolved_inputs"]["engine"] = DIGEST_E
+    assert _candidate_status(_catalog_with_receipt(projected)) == "unqualified"
+
+
+def test_projection_metadata_is_derived_only_from_original_evidence():
+    raw = catalog_receipt()
+    projected = targets.receipt_to_catalog_projection(raw)
+    projected.update(browser={"name": "forged"}, qualifiedAt="tomorrow",
+                     receiptDigest=DIGEST_F, status="passed")
+    snapshot = _catalog_with_receipt(projected)
+    candidate = next(e for e in snapshot["targets"]
+                     if e["targetKey"] == "albacore:cosmic:linux/amd64/v2")
+    assert candidate["qualification"]["status"] == "qualified"
+    for field in ("browser", "qualifiedAt", "receiptDigest"):
+        assert candidate["qualification"][field] == raw[field]
+
+
+@pytest.mark.parametrize("raw", [None, False, 1, "bad", []])
+def test_malformed_original_evidence_is_unqualified(raw):
+    projected = targets.receipt_to_catalog_projection(catalog_receipt())
+    projected["_qualificationEvidence"] = raw
+    assert _candidate_status(_catalog_with_receipt(projected)) == "unqualified"
+
+
+@pytest.mark.parametrize("number", [float("nan"), float("inf"), -float("inf")])
+@pytest.mark.parametrize("field", ["memory_gib", "cold"])
+def test_nonfinite_resources_and_measurements_are_rejected(number, field):
+    receipt = catalog_receipt()
+    if field == "cold":
+        receipt["measurements"]["cold"]["duration_s"] = number
+    else:
+        receipt["browser"][field] = number
+    with pytest.raises(ValueError, match="finite"):
+        targets._qualification_validator()(receipt, "test")
+    assert _candidate_status(_catalog_with_receipt(receipt)) == "unqualified"

@@ -15,6 +15,7 @@ installed_boot/desktop_contract) is rejected with a migration error.
 
 import argparse
 import json
+import math
 import re
 import sys
 from pathlib import Path
@@ -83,6 +84,8 @@ def _require_digest(value, where: str, label: str) -> None:
 def _require_number(value, where: str, label: str) -> None:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ValueError(f"{label}: {where} must be a number")
+    if not math.isfinite(value):
+        raise ValueError(f"{label}: {where} must be finite")
     if value < 0:
         raise ValueError(f"{label}: {where} must not be negative")
 

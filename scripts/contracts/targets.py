@@ -9,6 +9,8 @@ from __future__ import annotations
 import argparse
 import copy
 import hashlib
+import importlib.util
+from functools import lru_cache
 import json
 import re
 from pathlib import Path
@@ -646,6 +648,50 @@ def _lookup_overlay(overlays: Any, target: dict[str, Any], publication: dict[str
     return True, ovl_digest, base_digest, conflicting
 
 
+@lru_cache(maxsize=1)
+def _qualification_validator():
+    path = Path(__file__).resolve().parents[1] / "verify-experience-manifest.py"
+    spec = importlib.util.spec_from_file_location("catalog_qualification_validator", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.validate
+
+
+def _admit_qualification(receipt, target, expected_inputs):
+    """Check evidence structure and independently supplied input identities.
+
+    A content checksum detects modification; it does not authenticate a runner.
+    Caller-supplied descriptors and revisions must come from the trusted producer.
+    """
+    raw = receipt.get("_qualificationEvidence", receipt)
+    if not isinstance(raw, dict):
+        return False
+    try:
+        _qualification_validator()(raw, "catalog qualification")
+        if raw.get("status") not in (None, "qualified", "passed", "success"):
+            return False
+        if "checks" in raw and (not isinstance(raw["checks"], list) or any(
+            not isinstance(check, dict) or check.get("status") not in ("pass", "passed", "success")
+            for check in raw["checks"]
+        )):
+            return False
+        if any(raw.get(key) != target[key] for key in ("variant", "flavor", "platform")):
+            return False
+        if raw.get("cpu_baseline") != target["cpuBaseline"]:
+            return False
+        if any(not isinstance(value, str) or not DIGEST.fullmatch(value)
+               for value in expected_inputs.values()):
+            return False
+        if any(raw["resolved_inputs"].get(key) != value
+               for key, value in expected_inputs.items()):
+            return False
+        unsigned = {key: value for key, value in raw.items() if key != "receiptDigest"}
+        checksum = "sha256:" + hashlib.sha256(_canonical_json(unsigned)).hexdigest()
+        return raw["receiptDigest"] == checksum
+    except (ValueError, TypeError, KeyError):
+        return False
+
+
 def _match_receipt(
     receipts: Any,
     target: dict[str, Any],
@@ -690,6 +736,14 @@ def _match_receipt(
 
     saw_stale = False
     for receipt in candidates:
+        if "_qualificationEvidence" in receipt:
+            # A projection is only a transport wrapper, never a second authority.
+            receipt = receipt["_qualificationEvidence"]
+            if not isinstance(receipt, dict):
+                saw_stale = True
+                continue
+        if receipt.get("schema") == "QualificationEvidence/v1":
+            receipt = receipt_to_catalog_projection(receipt)
         if isinstance(receipt.get("target"), dict):
             try:
                 if target_key(receipt["target"]) != tkey:
@@ -761,6 +815,8 @@ def receipt_to_catalog_projection(receipt: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("qualification receipt must be a mapping")
 
     projected: dict[str, Any] = {}
+    if receipt.get("schema") == "QualificationEvidence/v1":
+        projected["_qualificationEvidence"] = copy.deepcopy(receipt)
     for key in (
         "target", "variant", "flavor", "platform", "publication",
         "browser", "resources", "measurements", "evidence",
@@ -1086,6 +1142,13 @@ def catalog_snapshot(
                     )
                     browser_info = matched_receipt.get("browser")
                     resources_info = matched_receipt.get("resources")
+                elif ovl_base_digest != pm_digest or not _admit_qualification(
+                    matched_receipt, target,
+                    {"source": pm_digest, "overlay": ovl_digest,
+                     "installer": inst_rev, "engine": eng_rev},
+                ):
+                    qual_status = "unqualified"
+                    qual_reason = "invalid-qualification-evidence"
                 else:
                     qual_status = "qualified"
                     qual_reason = None

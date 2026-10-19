@@ -877,9 +877,9 @@ if [[ -n "${INSTALLER_APP}" ]]; then
 		# the plain one. The ln below then resolves through the symlink either way.
 		mkdir -p "$(readlink -m /usr/local/bin)"
 		ln -sf "${FISHERMAN_BIN}" /usr/local/bin/fisherman
-else
+	else
 		echo "WARNING: fisherman not found inside ${INSTALLER_APP}" >&2
-fi
+	fi
 fi
 
 # ── 4a2. Installer receipt ────────────────────────────────────────────────
