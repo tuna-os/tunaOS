@@ -123,6 +123,10 @@ def compile_cells(config_path, root=ROOT):
     return plan, cells, assets
 
 
+def is_directory_source(path):
+    return path.is_dir() and not path.is_symlink()
+
+
 def prepare(config_path, output, root=ROOT):
     reserved = (root / "manifests/fork-config.json", root / "manifests/fork-assets")
     if any(path.exists() or path.is_symlink() for path in reserved):
@@ -145,7 +149,7 @@ def prepare(config_path, output, root=ROOT):
         context.mkdir()
         for relative in filter(None, tracked):
             src, dst = root / relative, context / relative
-            if src.is_dir():
+            if is_directory_source(src):
                 raise ConfigError(f"submodule/directory source needs an explicit receipt: {relative}")
             dst.parent.mkdir(parents=True, exist_ok=True)
             if src.is_symlink():
