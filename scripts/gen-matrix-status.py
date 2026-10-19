@@ -231,6 +231,29 @@ def load_build_config(config_path: Path = CONFIG) -> dict:
     except ImportError:
         pass
     content = config_path.read_text()
+    def parse_platforms(text: str, default: list[str]) -> list[str]:
+        inline = re.search(r"(?m)^[ \t]*platforms:\s*\[(.*?)\]", text)
+        if inline:
+            return [
+                value.strip().strip("\"'")
+                for value in inline.group(1).split(",")
+                if value.strip()
+            ]
+        block = re.search(
+            r"(?m)^[ \t]*platforms:\s*\n"
+            r"(?P<items>(?:[ \t]*-\s*[^#\n]+\n?)+)",
+            text,
+        )
+        if block:
+            values = []
+            for item in block.group("items").splitlines():
+                value = item.strip()[1:].split("#", 1)[0].strip().strip("\"'")
+                if value:
+                    values.append(value)
+            if values:
+                return values
+        return list(default)
+
     iso_groups = []
     if "iso_groups:" in content:
         ig_section = content.split("iso_groups:\n", 1)[1].split("\n\n", 1)[0]
@@ -261,11 +284,10 @@ def load_build_config(config_path: Path = CONFIG) -> dict:
             continue
         lines = rv.strip().splitlines()
         vid = lines[0].split("#")[0].strip().strip("\"'")
-        v_platforms = ["linux/amd64", "linux/arm64"]
-        header_part = rv.split("flavors:\n", 1)[0]
-        vp_match = re.search(r"platforms:\s*\[(.*?)\]", header_part)
-        if vp_match:
-            v_platforms = [p.strip().strip("\"'") for p in vp_match.group(1).split(",")]
+        v_platforms = parse_platforms(
+            rv.split("flavors:\n", 1)[0],
+            ["linux/amd64", "linux/arm64"],
+        )
         flavors = []
         if "flavors:" in rv:
             fl_text = rv.split("flavors:\n", 1)[1]
@@ -278,11 +300,7 @@ def load_build_config(config_path: Path = CONFIG) -> dict:
                 b_img = "build_image: true" in rf
                 b_iso = "build_iso: true" in rf
                 b_qcow2 = "build_qcow2: true" in rf
-                fp_match = re.search(r"platforms:\s*\[(.*?)\]", rf)
-                if fp_match:
-                    f_platforms = [p.strip().strip("\"'") for p in fp_match.group(1).split(",")]
-                else:
-                    f_platforms = list(v_platforms)
+                f_platforms = parse_platforms(rf, v_platforms)
                 flavors.append({
                     "id": fid,
                     "build_image": b_img,
