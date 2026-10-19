@@ -13,6 +13,7 @@ ROOT = Path(__file__).parents[1]
 E2E = ROOT / "scripts" / "iso-e2e.sh"
 WALKTHROUGH = ROOT / "scripts" / "installer-walkthrough.py"
 WORKFLOW = ROOT / ".github" / "workflows" / "iso-builder-parity.yml"
+ISO_WORKFLOW = ROOT / ".github" / "workflows" / "iso-e2e.yml"
 
 HEAVY_SUFFIXES = (".qcow2", ".iso", ".ppm")
 
@@ -75,6 +76,23 @@ def test_parity_workflow_runs_strict_mode_for_both_sources():
     assert "qualification-evidence.json" in text
     assert "verify-experience-manifest.py" in text
 
+def test_iso_e2e_strict_failure_cannot_become_green():
+    text = _text(ISO_WORKFLOW)
+    strict_step = text.split("name: Run strict offline GUI qualification", 1)[1]
+    assert "--strict-offline-gui" in strict_step
+    assert "qualification-evidence.json" in strict_step
+    assert 'if [[ "$rc" -ne 0 ]]' in strict_step
+    assert 'exit "$rc"' in strict_step
+    assert "name: Fail on e2e error" in strict_step
+
+
+def test_r2_strict_path_resolves_source_and_installer_inputs_before_boot():
+    text = _text(ISO_WORKFLOW)
+    provenance = text.split("name: Resolve immutable R2 qualification inputs", 1)[1]
+    assert "skopeo inspect" in provenance
+    assert "TUNAOS_QUAL_SOURCE_DIGEST" in provenance
+    assert "TUNAOS_QUAL_INSTALLER_DIGEST" in provenance
+    assert 'sha256sum live-iso/common/src/customize-live.sh' in provenance
 
 def test_parity_workflow_upload_has_no_disk_suffixed_paths():
     text = _text(WORKFLOW)

@@ -25,6 +25,7 @@ on:
     - cron: "0 6 * * *"
 
 permissions:
+  actions: read
   contents: read
   packages: read
 
@@ -318,6 +319,26 @@ jobs:
                       probe = probe_child(repo, pm_digest, plat)
 
               record_overlay(shard, var, flavor, plat)
+              # Keep the legacy images map useful to browser consumers as well
+              # as the platform descriptor map. These values must come from the
+              # immutable child manifest that was actually probed; the moving
+              # index/tag placeholder above is not a runtime-facts source.
+              if pm_digest and probe:
+                  image_key = f"tuna-os/{cell}"
+                  measured = {
+                      "platform": plat,
+                      "platformManifestDigest": pm_digest,
+                      "kernelVer": probe.get("kernelVer", ""),
+                      "hasSdBoot": probe.get("hasSdBoot") == "true",
+                      "pkgManager": probe.get("pkgManager", ""),
+                      "repoFamily": probe.get("repoFamily", ""),
+                      "bootc": probe.get("bootc", bootc_flag) == "true",
+                  }
+                  image = shard["images"].setdefault(image_key, {})
+                  image.update(measured)
+                  image.setdefault("platforms", {})[plat] = measured
+
+
               if pm_digest:
                   tkey = f"{var}:{flavor}:{plat}"
                   shard["descriptors"][tkey] = {
@@ -374,6 +395,52 @@ jobs:
         with:
           pattern: facts-*
           path: shards
+      - name: Collect validated strict qualification receipts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          rm -rf strict-receipts
+          mkdir -p strict-receipts
+          run_id="$(gh run list --repo "$GITHUB_REPOSITORY" \
+            --workflow iso-e2e.yml --branch main --status success --limit 1 \
+            --json databaseId --jq '.[0].databaseId // empty' 2>/dev/null || true)"
+          if [[ -n "$run_id" ]]; then
+            gh run download "$run_id" --repo "$GITHUB_REPOSITORY" \
+              --pattern 'iso-e2e-*' --dir strict-receipts || \
+              echo "::warning::strict ISO artifacts were unavailable; no qualification receipts will be published"
+          else
+            echo "::warning::no successful strict ISO run; no qualification receipts will be published"
+          fi
+          python3 - <<'PY'
+          import json
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          sys.path.insert(0, "scripts")
+          from contracts.targets import receipt_to_catalog_projection
+
+          receipts = []
+          for path in sorted(Path("strict-receipts").rglob("qualification-evidence.json")):
+              subprocess.run(
+                  ["python3", "scripts/verify-experience-manifest.py", str(path)],
+                  check=True,
+              )
+              document = json.loads(path.read_text(encoding="utf-8"))
+              if not all(
+                  isinstance(document.get(field), str) and document[field]
+                  for field in ("variant", "flavor", "platform")
+              ):
+                  raise SystemExit(f"{path}: qualification identity is incomplete")
+              receipts.append(receipt_to_catalog_projection(document))
+          Path("qualification-receipts.json").write_text(
+              json.dumps(receipts, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          print(f"validated qualification receipts: {len(receipts)}")
+          PY
+
       - name: Merge shards and validate browser catalog completeness
         run: |
           set -euo pipefail
@@ -407,14 +474,25 @@ jobs:
           facts = merged["images"]
           descriptors = merged.get("descriptors", {})
           overlays = merged.get("overlays", {})
+          receipts = json.load(open("qualification-receipts.json"))
+
 
           snapshot = catalog_snapshot(
               config,
               descriptors=descriptors,
               overlays=overlays,
+              receipts=receipts,
               producer_revision=producer_rev,
               generated_at=generated_at,
           )
+          # Preserve the observations used for this snapshot so publication
+          # gates can compare them again instead of trusting a dated
+          # qualification after an image or overlay moved.
+          snapshot["currentInputs"] = {
+              "descriptors": descriptors,
+              "overlays": overlays,
+              "pins": {},
+          }
           validate_catalog_snapshot(snapshot)
           snapshot_body = json.dumps(snapshot, indent=2, sort_keys=True) + "\n"
           with open("catalog-snapshot.json", "w") as f:
@@ -460,3 +538,4 @@ jobs:
             catalog-facts.json
             catalog-snapshot.json
             catalog-snapshot.json.sha256
+            qualification-receipts.json

@@ -51,6 +51,7 @@ def main() -> int:
         if target is None:
             continue
         found_flavor = True
+        candidates: dict[str, list[str]] = {}
         target_stage = target.get("stage")
         if type(target_stage) is not int or target_stage < 1:
             raise SystemExit(
@@ -61,12 +62,13 @@ def main() -> int:
             raise SystemExit(
                 f"candidate selection: {variant_id} has no variant platforms"
             )
-        candidates: dict[str, list[str]] = {}
         for flavor in flavors:
             if not isinstance(flavor, dict) or flavor.get("build_image") is not True:
                 continue
             stage = flavor.get("stage")
             if type(stage) is not int or stage > target_stage:
+                continue
+            if stage == target_stage and flavor.get("id") != want_flavor:
                 continue
             platforms = flavor.get("platforms", variant_platforms)
             if not isinstance(platforms, list) or not platforms:

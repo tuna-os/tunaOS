@@ -64,8 +64,10 @@ def main():
 """
 
     # Least-privilege token for the called build-variant.yml: it reads the
-    # repo, pushes images to GHCR, and signs with GitHub OIDC (keyless cosign).
+    # repo and current Actions artifacts, pushes images to GHCR, and signs
+    # with GitHub OIDC (keyless cosign).
     permissions_block = """permissions:
+  actions: read
   contents: read
   packages: write
   id-token: write

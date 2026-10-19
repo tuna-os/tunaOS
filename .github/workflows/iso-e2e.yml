@@ -293,8 +293,8 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
-            qemu-system-x86 qemu-utils ovmf socat \
-            rclone sshpass \
+            qemu-system-x86 qemu-utils ovmf socat swtpm \
+            rclone sshpass skopeo python3-yaml \
             imagemagick tesseract-ocr
 
       # The R2 source is the default — it tests the artifact users actually
@@ -374,6 +374,58 @@ jobs:
             echo "VARIANT=${VARIANT}"
             echo "FLAVOR=${FLAVOR}"
           } >> "$GITHUB_ENV"
+
+      # Published media deliberately has no guaranteed live SSH transport.
+      # Resolve the immutable inputs before booting it instead of allowing
+      # strict_capture_live_inputs() to leave source/installer blank and let
+      # the evidence emitter discover that omission after two installs.
+      - name: Resolve immutable R2 qualification inputs
+        if: >-
+          steps.filter.outputs.skip != 'true' &&
+          (github.event_name != 'workflow_dispatch' || inputs.source == 'r2-latest')
+        env:
+          VARIANT: ${{ matrix.variant }}
+          FLAVOR: ${{ matrix.flavor }}
+        run: |
+          set -euo pipefail
+          mapfile -t IMAGE_IDENTITY < <(python3 - "$VARIANT" <<'PY'
+          import sys
+          import yaml
+
+          variant_id = sys.argv[1]
+          document = yaml.safe_load(open(".github/build-config.yml"))
+          variant = next(item for item in document["variants"]
+                         if item["id"] == variant_id)
+          image_name = variant.get("publish_name", variant_id)
+          suffix = variant.get("tag_suffix", "")
+          published_tag = variant_id + (f"-{suffix}" if suffix else "")
+          print(image_name)
+          print(published_tag)
+          PY
+          )
+          IMAGE_NAME="${IMAGE_IDENTITY[0]}"
+          PUBLISHED_TAG="${IMAGE_IDENTITY[1]}"
+          SOURCE_REF="ghcr.io/tuna-os/${IMAGE_NAME}:${PUBLISHED_TAG}-linux-amd64"
+          SOURCE_DIGEST="$(skopeo inspect --format '{{.Digest}}' "docker://${SOURCE_REF}")"
+          [[ "$SOURCE_DIGEST" =~ ^sha256:[0-9a-fA-F]{64}$ ]] || {
+            echo "::error::skopeo returned no immutable digest for ${SOURCE_REF}"
+            exit 1
+          }
+          # The checked-in customization program is the immutable installer
+          # integration input used to place fisherman in the live squash. The
+          # actual bundled binary is intentionally not inferred from a moving
+          # live SSH session.
+          INSTALLER_DIGEST="sha256:$(sha256sum live-iso/common/src/customize-live.sh | awk '{print $1}')"
+          OVERLAY_DIGEST="sha256:$(sha256sum "$ISO_PATH" | awk '{print $1}')"
+          {
+            echo "TUNAOS_QUAL_SOURCE_DIGEST=${SOURCE_DIGEST}"
+            echo "TUNAOS_QUAL_INSTALLER_DIGEST=${INSTALLER_DIGEST}"
+            echo "TUNAOS_QUAL_OVERLAY_DIGEST=${OVERLAY_DIGEST}"
+            echo "TUNAOS_QUAL_PLATFORM=linux/amd64"
+            echo "TUNAOS_QUAL_SOURCE_REF=${SOURCE_REF}"
+          } >> "$GITHUB_ENV"
+          echo "strict qualification source: ${SOURCE_REF}@${SOURCE_DIGEST}"
+          echo "strict qualification installer input: ${INSTALLER_DIGEST}"
 
       # Build in place. No R2 read, no artifact upload, nothing to clean up:
       # the ISO lives and dies on this runner. Mirrors live-iso-bootc.yml's
@@ -494,17 +546,26 @@ jobs:
           KVM_FLAG=""
           [[ -r /dev/kvm && -w /dev/kvm ]] || KVM_FLAG="--no-kvm"
           set +e
-          sudo --preserve-env=KVM_FLAG \
+          sudo --preserve-env=KVM_FLAG,VARIANT,FLAVOR,TUNAOS_QUAL_SOURCE_DIGEST,TUNAOS_QUAL_OVERLAY_DIGEST,TUNAOS_QUAL_INSTALLER_DIGEST,TUNAOS_QUAL_ENGINE_DIGEST,TUNAOS_QUAL_PLATFORM,TUNAOS_QUAL_CPU_BASELINE,TUNAOS_QUAL_HARDWARE_SCOPE \
             ./scripts/iso-e2e.sh "${ISO_PATH}" \
               --output iso-e2e-out \
               --strict-offline-gui \
               --timeout 600 \
               ${KVM_FLAG}
+
           rc=$?
           set -e
           echo "rc=${rc}" >> "$GITHUB_OUTPUT"
-          # Make the artifact dir readable so upload-artifact can stage it.
+          # Make the artifact dir readable so the always-run evidence steps
+          # can stage the failure diagnostics as well as successful evidence.
           sudo chown -R "$USER:$(id -gn)" iso-e2e-out || true
+          # Keep the output directory for the always-run evidence steps, but
+          # do not let a captured nonzero strict verdict become a green job.
+          if [[ "$rc" -ne 0 ]]; then
+            echo "::error::strict offline GUI qualification failed with exit ${rc}"
+            exit "$rc"
+          fi
+
 
       - name: Convert screenshots to PNG
         if: always() && steps.filter.outputs.skip != 'true'
@@ -562,6 +623,7 @@ jobs:
           path: |
             iso-e2e-out/serial.log
             iso-e2e-out/*.png
+            iso-e2e-out/qualification-evidence.json
             evidence/${{ matrix.variant }}/${{ matrix.flavor }}/amd64/
           if-no-files-found: warn
           retention-days: 7

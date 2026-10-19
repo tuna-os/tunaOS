@@ -173,18 +173,18 @@ def is_cut_over(
     platform: str,
     config: dict | None = None,
     snapshot: dict | None = None,
+    current_descriptors=None,
+    current_overlays=None,
+    current_pins: dict | None = None,
 ) -> bool:
     """True only when the target entry is present and its evidence still holds.
 
-    Requires a cutover entry for the target, digest-bound evidence, current
-    catalog membership, and a current catalog snapshot proving the target is
-    still qualified/local-only with the same receiptDigest. Without that
-    snapshot suppression is unsafe and this returns False.
+    A snapshot is useful only with the observations that are current at the
+    time of this check. If the caller cannot provide those observations, this
+    returns False rather than treating an old qualified snapshot as fresh.
     """
     entry = find_entry(policy, variant, flavor, platform)
-    if snapshot is None:
-        return False
-    if entry is None:
+    if snapshot is None or entry is None:
         return False
     if not _evidence_binds(entry, variant, flavor, platform):
         return False
@@ -200,23 +200,36 @@ def is_cut_over(
         return False
     if key not in known:
         return False
-    if snapshot is not None:
-        try:
-            downgraded = downgrade_stale_targets(snapshot)
-        except ValueError:
+
+    current = snapshot.get("currentInputs")
+    if current_descriptors is None or current_overlays is None or current_pins is None:
+        if not isinstance(current, dict):
             return False
-        for catalog_entry in downgraded.get("targets", []):
-            if catalog_entry.get("targetKey") != key:
-                continue
-            qualification = catalog_entry.get("qualification", {})
-            if qualification.get("status") not in {"qualified", "local-only"}:
-                return False
-            return (
-                qualification.get("receiptDigest")
-                == entry.get("evidence", {}).get("receiptDigest")
-            )
+        current_descriptors = current.get("descriptors")
+        current_overlays = current.get("overlays")
+        current_pins = current.get("pins")
+    if current_descriptors is None or current_overlays is None or current_pins is None:
         return False
-    return True
+    try:
+        downgraded = downgrade_stale_targets(
+            snapshot,
+            current_descriptors=current_descriptors,
+            current_overlays=current_overlays,
+            current_pins=current_pins,
+        )
+    except ValueError:
+        return False
+    for catalog_entry in downgraded.get("targets", []):
+        if catalog_entry.get("targetKey") != key:
+            continue
+        qualification = catalog_entry.get("qualification", {})
+        if qualification.get("status") not in {"qualified", "local-only"}:
+            return False
+        return (
+            qualification.get("receiptDigest")
+            == entry.get("evidence", {}).get("receiptDigest")
+        )
+    return False
 
 
 def group_members(
@@ -278,6 +291,9 @@ def group_covered(
     offline_members: list[str],
     config: dict | None = None,
     snapshot: dict | None = None,
+    current_descriptors=None,
+    current_overlays=None,
+    current_pins: dict | None = None,
 ) -> bool:
     """True only when every LIVE + OFFLINE member target is cut over."""
     if config is None:
@@ -293,7 +309,17 @@ def group_covered(
         if not platforms:
             return False
         for platform in platforms:
-            if not is_cut_over(policy, variant, flavor, platform, config=config, snapshot=snapshot):
+            if not is_cut_over(
+                policy,
+                variant,
+                flavor,
+                platform,
+                config=config,
+                snapshot=snapshot,
+                current_descriptors=current_descriptors,
+                current_overlays=current_overlays,
+                current_pins=current_pins,
+            ):
                 return False
     return True
 
@@ -313,8 +339,11 @@ def annotate_matrix(
     config: dict,
     default_platform: str = "linux/amd64",
     snapshot: dict | None = None,
+    current_descriptors=None,
+    current_overlays=None,
+    current_pins: dict | None = None,
 ) -> dict:
-    """Add a per-row `cutover` boolean to a {include: [...]} matrix document."""
+    """Add a per-row `cutover` boolean to a {variant, flavor, platform} matrix."""
     rows = matrix.get("include", [])
     if not isinstance(rows, list):
         raise ValueError("matrix must carry an 'include' list")
@@ -326,7 +355,22 @@ def annotate_matrix(
         flavor = row.get("flavor", "")
         platform = row.get("platform", "") or default_platform
         annotated.append(
-            {**row, "cutover": bool(is_cut_over(policy, variant, flavor, platform, config=config, snapshot=snapshot))}
+            {
+                **row,
+                "cutover": bool(
+                    is_cut_over(
+                        policy,
+                        variant,
+                        flavor,
+                        platform,
+                        config=config,
+                        snapshot=snapshot,
+                        current_descriptors=current_descriptors,
+                        current_overlays=current_overlays,
+                        current_pins=current_pins,
+                    )
+                ),
+            }
         )
     return {"include": annotated}
 
