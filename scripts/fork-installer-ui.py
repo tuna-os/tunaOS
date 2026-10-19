@@ -65,6 +65,7 @@ for index in range(root.get_child_count()):
 relation_targets = 0
 for index, node in enumerate(objects):
     relations = {}
+    unresolved = {}
     relation_set = node.get_relation_set() or []
     if len(relation_set) > 32:
         raise ValueError("accessibility relation set exceeds bound")
@@ -88,10 +89,14 @@ for index, node in enumerate(objects):
             # GI wrappers need not be hashable or the same Python instance.
             match = next((i for i, candidate in enumerate(objects) if candidate == target), None)
             if match is None:
-                raise ValueError("accessibility label relation has an unresolved target")
-            targets.append(match)
+                # Relations are non-hierarchical. An unrelated off-tree label
+                # must not destroy the snapshot; selected controls reject it.
+                unresolved[label] = unresolved.get(label, 0) + 1
+            else:
+                targets.append(match)
         relations[label] = targets
     rows[index]["relations"] = relations
+    rows[index]["unresolved_relations"] = unresolved
 print(json.dumps({"schema_version": 1, "nodes": rows}))
 """
 
@@ -138,7 +143,19 @@ def select(snapshot, name, roles, *, focused=False, pid=None):
     ]
     if len(candidates) != 1:
         raise ValueError("expected one visible enabled " + name + " control")
+    complete_labels(candidates[0])
     return candidates[0]
+
+
+def complete_labels(node):
+    unresolved = node.get("unresolved_relations", {})
+    if (not isinstance(unresolved, dict)
+        or any(key not in {"labelled_by", "described_by"}
+               or type(count) is not int or not 1 <= count <= 32
+               for key, count in unresolved.items())):
+        raise ValueError("invalid unresolved accessibility relations")
+    if unresolved:
+        raise ValueError("selected control has an unresolved label relation")
 
 
 def rect(node, size):
@@ -315,6 +332,8 @@ def titled_row(snapshot, name, pid, size):
     if len(labels) > 1:
         raise ValueError("action row title label is ambiguous")
     title = labels[0] if labels else row
+    complete_labels(row)
+    complete_labels(title)
     if row.get("name", "").casefold() not in ("", name.casefold()):
         raise ValueError("action row has a contradictory accessible name")
     labelled_by = row.get("relations", {}).get("labelled_by")
@@ -342,6 +361,7 @@ def row_switch(snapshot, name, pid, size):
     if len(switches) != 1:
         raise ValueError("expected exactly one switch in the titled encryption row")
     switch = switches[0]
+    complete_labels(switch)
     # An unnamed suffix is valid; a different explicit label is not.
     if switch.get("name", "").casefold() not in ("", name.casefold()):
         raise ValueError("encryption suffix has another accessible label")
@@ -431,6 +451,13 @@ def safe_snapshot(snapshot):
         relations = original.get("relations", {})
         if not isinstance(relations, dict) or len(relations) > 32:
             raise ValueError("invalid accessibility relations")
+        unresolved = original.get("unresolved_relations", {})
+        if (not isinstance(unresolved, dict)
+            or any(key not in {"labelled_by", "described_by"}
+                   or type(count) is not int or not 1 <= count <= 32
+                   for key, count in unresolved.items())):
+            raise ValueError("invalid unresolved accessibility relations")
+        item["unresolved_relations"] = unresolved
         item["relations"] = {}
         for key in ("labelled_by", "described_by"):
             if key in relations:

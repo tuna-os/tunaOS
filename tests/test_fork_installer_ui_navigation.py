@@ -520,7 +520,7 @@ def test_snapshot_label_relations_accept_unhashable_gi_wrappers(monkeypatch, cap
     def observe():
         exec(UI.SNAPSHOT.replace("__PIDS__", repr([PID])), {})  # noqa: S102 - execute the owned read-only observer against fixture GI
 
-    if relation_case != "valid":
+    if relation_case == "duplicate":
         with pytest.raises(ValueError, match="unresolved target|duplicate accessibility"):
             observe()
         assert capsys.readouterr().out == ""
@@ -529,6 +529,10 @@ def test_snapshot_label_relations_accept_unhashable_gi_wrappers(monkeypatch, cap
     value = json.loads(capsys.readouterr().out)
     assert value["nodes"][1]["relations"] == {"labelled_by": [2]}
     assert UI.safe_snapshot(value)["nodes"][1]["relations"] == {"labelled_by": [2]}
+    if relation_case == "unresolved":
+        assert value["nodes"][1]["unresolved_relations"] == {"labelled_by": 1}
+        with pytest.raises(ValueError, match="selected control has an unresolved"):
+            UI.complete_labels(value["nodes"][1])
 
 
 @pytest.mark.parametrize("change", ["row_name", "row_relation", "switch_relation", "unbound_title"])
@@ -605,7 +609,7 @@ def test_unit_workflow_installs_native_ocr_dependency():
 
 
 @pytest.mark.parametrize('program,expected', [
-    ('raise ValueError("accessibility label relation has an unresolved target")', 'accessibility label relation has an unresolved target'),
+    ('raise ValueError("accessibility relation target total exceeds bound")', 'accessibility relation target total exceeds bound'),
     ('raise RuntimeError("private-field-value")', '<omitted>'),
     ('raise AttributeError("private-field-value")', '<omitted>'),
 ])
@@ -623,3 +627,26 @@ def test_probe_failure_keeps_structural_trace_without_field_values(capsys, progr
 def test_probe_wrapper_preserves_success_json(capsys):
     exec(UI.diagnostic_program('print(json.dumps({"schema_version": 1, "nodes": []}))', '<fork-accessibility>'), {})
     assert json.loads(capsys.readouterr().out) == {'schema_version': 1, 'nodes': []}
+
+
+def test_unrelated_off_tree_relation_does_not_authorize_selected_control():
+    value = encryption_tree()
+    value['nodes'][8]['unresolved_relations'] = {'labelled_by': 1}
+    assert UI.safe_snapshot(value)['nodes'][8]['unresolved_relations'] == {'labelled_by': 1}
+    assert UI.row_switch(value, 'Encrypt this disk', PID, SIZE)[2]['id'] == 6
+
+
+@pytest.mark.parametrize('index', [2, 4, 6])
+def test_selected_row_title_or_switch_with_off_tree_label_stays_rejected(index):
+    value = encryption_tree()
+    value['nodes'][index]['unresolved_relations'] = {'labelled_by': 1}
+    with pytest.raises(ValueError, match='selected control has an unresolved'):
+        UI.row_switch(value, 'Encrypt this disk', PID, SIZE)
+
+
+def test_selected_install_button_with_off_tree_label_is_rejected():
+    value = encryption_tree()
+    value['nodes'][9]['name'] = 'Install'
+    value['nodes'][9]['unresolved_relations'] = {'described_by': 1}
+    with pytest.raises(ValueError, match='selected control has an unresolved'):
+        UI.select(value, 'Install', ('push button',), pid=PID)
