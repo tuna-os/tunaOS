@@ -1686,6 +1686,13 @@ capture first, then sends the graceful powerdown itself before the kill.
 **Cause:** A long sentence or a cluster of nouns in `docs/MATRIX-STATUS.md` crosses the budget.
 
 **Fix:** Split the sentence. For text inside the generated block, edit `scripts/gen-matrix-status.py` and render it again. Keep the budget at 1609. Preserve the dates when you replay saved evidence.
+## Fork source pin changes after tests
+
+Symptom: the fork review tool reports a catalog pin mismatch after Python tests.
+Cause: imports create untracked bytecode under `system_files/usr/libexec`.
+The receipt must select only Git-tracked source files. The test for the fork contract
+checks that temporary bytecode leaves the pin intact and a source edit changes it.
+Do not refresh a source pin to accept temporary files.
 
 ### Countme clean install rejects a missing overridden dependency
 
