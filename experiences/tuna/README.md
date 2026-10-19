@@ -8,11 +8,11 @@ The key is byte-identical to tuna-os/tunaos-packages `public.gpg` at commit `f56
 
 GDM supplies the login experience and session picker. The shipped `tuna.desktop` session launches its supervisor (`tuna-session`), and its `tuna-lock` PAM service handles unlock. GDM starts the session directly as a regular user and sets the Wayland session type; `XDG_CURRENT_DESKTOP` is `Tuna:GNOME`, so xdg-desktop-portal reads `tuna-portals.conf`.
 
-The Tuna overlay supplies GDM configuration in the native path for each base (`/etc/gdm/custom.conf` or `/etc/gdm3/daemon.conf`): Wayland is enabled, `tuna.desktop` is the default session, and automatic login is disabled. `tuna-gdm.sh` masks stale greetd state, points `display-manager.service` at GDM, and appends the Tuna theme overrides to GNOME Shell's theme resource.
+The Tuna overlay supplies GDM configuration in the native path for each base (`/etc/gdm/custom.conf` or `/etc/gdm3/custom.conf`) and an AccountsService user template at `/etc/accountsservice/user-templates/standard`: Wayland is enabled, new users default to `tuna.desktop`, and automatic login is disabled. `tuna-gdm.sh` masks stale greetd state, points `display-manager.service` at GDM, and appends the Tuna theme overrides to GNOME Shell's theme resource.
 
 Upgrades from the `roost` flavor: the `tuna-desktop` package `provides` `roost` and ships, for one release, `roost-*` links to the `tuna-*` binaries, a hidden `roost.desktop` (`NoDisplay=true`, `Exec=tuna-session`) so a display manager that remembers the "roost" session still starts Tuna Desktop, and a `roost-lock` PAM service for a session started before the upgrade. Nothing in the image installs or requires a package named `roost`.
 
-The desktop contract checks six executable versions, their `roost-*` compatibility links, both session entries, both PAM services, the user session target, GDM's session/default/no-autologin configuration and compiled theme, calendar server, IBus, portal backends, keyring and WirePlumber. Image and runtime contract results are still required before publication; source checks do not establish boot readiness.
+The desktop contract checks six executable versions, their `roost-*` compatibility links, both session entries, both PAM services, the user session target, the AccountsService session template, GDM's native configuration/no-autologin settings and compiled theme, calendar server, IBus, portal backends, keyring and WirePlumber. Image and runtime contract results are still required before publication; source checks do not establish boot readiness.
 
 ## Other variants
 
@@ -29,7 +29,7 @@ The dnf factory repositories keep `gpgcheck=1` against `https://repo.tunaos.org/
 
 On the Fedora and EL bases, gdm is installed explicitly and `tuna-gdm.sh` unifies the service alias with GDM instead of masking it. Power profiles come from `tuned-ppd`, as on the GNOME flavors of those bases. `dbus-tools` supplies `dbus-update-activation-environment`, which beta.1 needs to start `graphical-session.target` and the portals (tuna-os/tuna-desktop#691 removes that need).
 
-On the apt bases, the overlay supplies `/etc/gdm3/daemon.conf`; on Arch, Fedora, ELN, Rawhide and openSUSE it supplies `/etc/gdm/custom.conf`. In every case the hook masks greetd, selects the Tuna Wayland session and leaves keyring, IBus, calendar and portal routing on their existing packages.
+On the apt bases, the overlay supplies `/etc/gdm3/custom.conf`; on Arch, Fedora, ELN, Rawhide and openSUSE it supplies `/etc/gdm/custom.conf`. The AccountsService template selects `tuna.desktop` for users without a saved choice. In every case the hook masks greetd, selects the Tuna Wayland session and leaves keyring, IBus, calendar and portal routing on their existing packages.
 
 ## Switch an existing Roost install
 

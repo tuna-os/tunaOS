@@ -1,0 +1,6 @@
+[Template]
+# TunaOS selects the Tuna Wayland session for users who have not chosen one.
+
+[User]
+Session=tuna.desktop
+Icon=${HOME}/.face
