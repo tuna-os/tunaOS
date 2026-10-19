@@ -258,6 +258,42 @@ def type_text(text):
             )
         send_keys(key)
 
+def installer_frontend(flavor_name):
+    """Map an ISO flavor/overlay to the installer frontend it launches."""
+    frontend = flavor_name.rsplit(":", 1)[-1].lower().split("-", 1)[0]
+    # Pantheon deliberately launches the upstream GNOME installer; see
+    # live-iso/common/src/customize-live.sh.
+    return "gnome" if frontend == "pantheon" else frontend
+
+
+def configure_encryption(frontend, profile, passphrase):
+    """Select the requested encryption mode and complete its controls."""
+    if frontend == "gnome":
+        # GNOME's switch starts enabled. Plain mode must turn it off; encrypted
+        # mode must leave it alone. In either case the next Tab reaches the
+        # primary action or the passphrase controls.
+        if profile == "plain":
+            send_keys("spc")
+        send_keys("tab")
+    else:
+        # The forked frontends expose an explicit choice list whose first
+        # entries are `none` and `luks-passphrase`. Home makes the selection
+        # deterministic even when focus was left on a later option.
+        send_keys("home")
+        if profile == "encrypted":
+            send_keys("down")
+        send_keys("spc", "tab")
+
+    if profile == "encrypted":
+        # These fields are reached only after the passphrase mode is selected;
+        # typing both values and tabbing to Continue exercises that focus path
+        # instead of letting the generic navigation sweep toggle controls.
+        type_text(passphrase)
+        send_keys("tab")
+        type_text(passphrase)
+        send_keys("tab")
+    send_keys("ret")
+
 
 def stddev(png):
     """Grayscale standard deviation — 0 means a flat (blank) image."""
@@ -582,17 +618,10 @@ if qualification:
             # Observe only; this is also what makes a real install distinguishable
             # from a wizard that jumps straight from summary to done.
             time.sleep(int(os.environ.get("TUNAOS_QUALIFICATION_POLL", "15")))
-        elif current == "encryption" and qualification == "encrypted" and not encryption_configured:
-            # GNOME's encryption switch is enabled by default; toggling it
-            # would turn encryption off. Other qualification frontends expose
-            # a disabled switch before the passphrase fields.
-            if flavor != "gnome":
-                send_keys("spc")
-            send_keys("tab")
-            type_text(passphrase)
-            send_keys("tab")
-            type_text(passphrase)
-            send_keys("tab", "ret")
+        elif current == "encryption" and qualification and not encryption_configured:
+            configure_encryption(
+                installer_frontend(flavor), qualification, passphrase
+            )
             encryption_configured = True
             time.sleep(3)
         else:
