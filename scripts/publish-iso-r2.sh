@@ -93,6 +93,23 @@ trap 'rm -rf "$tmpdir"' EXIT
 
 publish_iso_as() {
 	local object=$1
+	if [[ "$object" == *-snapshot-*.iso ]]; then
+		# A resolver may only point at a newly published snapshot. Reusing an
+		# existing object lets a concurrent prune delete that old snapshot
+		# between resolver collection and deletion, including its sidecars.
+		for candidate in "$object" "${object}.sha256" "${object}.sigstore.json"; do
+			local existing
+			if ! existing="$(rclone lsf --s3-no-check-bucket --files-only \
+				--include "/${candidate}" "${destination}/")"; then
+				echo "ERROR: could not check whether snapshot object exists: ${candidate}" >&2
+				return 1
+			fi
+			if [[ -n "$existing" ]]; then
+				echo "ERROR: refusing to reactivate existing snapshot object: ${candidate}" >&2
+				return 1
+			fi
+		done
+	fi
 	copy_unless_retained "$iso" "$object"
 	# Keep the exact checksum bytes that cosign signed. The checksum subject is
 	# the build artifact's original basename; resolver-aware consumers verify
