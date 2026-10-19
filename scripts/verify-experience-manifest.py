@@ -151,6 +151,10 @@ def validate(manifest: dict, label: str) -> None:
             "(non-browser) provenance — a natively-qualified run must not "
             "masquerade as browser qualification"
         )
+    if browser["name"].strip().lower() in {"unknown", "none", "null", "n/a", "placeholder", "unspecified"}:
+        raise ValueError(f"{label}: browser.name must identify a measured browser")
+    if not re.fullmatch(r"[1-9][0-9]*(?:\.[0-9]+)*", browser["version"].strip()):
+        raise ValueError(f"{label}: browser.version must be a measured numeric version")
     for field in ("memory_gib", "free_disk_gib"):
         if field not in browser:
             raise ValueError(f"{label}: browser.{field} is missing")

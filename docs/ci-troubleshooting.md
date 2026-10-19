@@ -1751,3 +1751,20 @@ trusted workflow run, its source commit, and its harness revision. The current
 collector's latest successful run lookup does not establish those bindings.
 Browser cold and warm runs plus offline plain and encrypted installs still need
 real evidence. Unit fixtures are synthetic and must never ship as that evidence.
+
+The gate also needs a separate observation of the browser build. It must bind
+the final ISO digest, build receipt and measured browser profile to the original
+qualification receipt. The producer must get this observation from a trusted
+workflow and artifact. No current caller supplies it, so admission stays closed.
+A native test does not prove the origin of a browser build. The gate rejects names and versions such as `unknown`.
+
+The R2 receipt extractor also used `-print`, which xorriso rejects. The test
+returned code 5 before any receipt read. Use `-exec echo`, decode the quoted
+paths as data, and extract each file to a distinct file path. Keep errors visible
+and check the command status before `mapfile`. A failed inventory command does
+not prove that a receipt is absent. Save the ISO checksum before this step.
+
+The strict harness no longer substitutes QEMU for the ISO builder or the ISO
+checksum for an OCI overlay digest. It records those runtime hashes separately.
+A backend executable also cannot identify the GUI installer. These identities
+need the trusted build receipt before browser qualification can proceed.

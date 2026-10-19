@@ -386,6 +386,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--platform", default="")
     parser.add_argument("--group", default="")
     parser.add_argument("--current-inputs", default="")
+    parser.add_argument("--snapshot", default="")
     parser.add_argument("--check", action="store_true")
     parser.add_argument("--retained", action="store_true")
     parser.add_argument("--annotate-matrix", action="store_true")

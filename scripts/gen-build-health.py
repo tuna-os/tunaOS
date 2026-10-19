@@ -12,6 +12,7 @@ import importlib.util
 import json
 import math
 import re
+import resource
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
@@ -110,7 +111,7 @@ def gh_fetch(endpoint: str, api_version: str):
                 raise CollectionError("GitHub API unavailable")
             output.seek(0)
             return strict_json(output.read(MAX_BYTES + 1))
-    except (OSError, subprocess.TimeoutExpired) as exc:
+    except (OSError, subprocess.SubprocessError) as exc:
         raise CollectionError("GitHub API unavailable") from exc
 
 

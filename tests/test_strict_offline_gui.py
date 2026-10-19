@@ -119,3 +119,12 @@ def test_strict_job_budget_covers_both_input_paths():
     text = _text(ISO_WORKFLOW)
     assert "&& 130 || 70 }}" in text
     assert text.count("timeout-minutes: 60") == 2
+
+
+def test_runtime_hashes_do_not_substitute_for_builder_or_frontend_identity():
+    script = (ROOT / "scripts/iso-e2e.sh").read_text()
+    assert 'STRICT_ENGINE_DIGEST="sha256:$(sha256sum "$QEMU"' not in script
+    assert 'STRICT_OVERLAY_DIGEST="sha256:$(sha256sum "$ISO_PATH"' not in script
+    strict_capture = script.split('strict_capture_live_inputs() {', 1)[1].split('\n}', 1)[0]
+    assert 'sha256sum /usr/local/bin/fisherman' not in strict_capture
+    assert 'STRICT_EV_BNAME="${TUNAOS_QUAL_BROWSER_NAME:-native-qemu}"' in script

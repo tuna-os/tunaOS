@@ -85,6 +85,8 @@ def catalog_receipt():
     for record in receipt["observed"].values():
         record.update(source_digest=DIGEST_B, booted_digest=DIGEST_B)
     receipt["resources"] = {"cpu": "4"}
+    receipt["build_provenance"] = {"origin": "browser", "receipt_digest": DIGEST_E,
+                                   "iso_digest": DIGEST_F, "browser": dict(receipt["browser"])}
     receipt.pop("receiptDigest")
     receipt["receiptDigest"] = "sha256:" + hashlib.sha256(
         json.dumps(receipt, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
@@ -132,6 +134,7 @@ def qualified_snapshot():
         data, descriptors=descriptors, overlays=overlays, receipts=receipts,
         producer_revision="rev-1", generated_at="2026-10-17T03:00:00Z",
         installer_revision=DIGEST_C, engine_revision=DIGEST_D,
+        browser_builds={"albacore:cosmic:linux/amd64/v2": catalog_receipt()["build_provenance"]},
     )
     return snapshot, descriptors, overlays
 
@@ -299,7 +302,8 @@ def test_projected_receipts_cover_every_candidate_with_four_distinct_states():
     snapshot = targets.catalog_snapshot(
         data, descriptors=descriptors, overlays=overlays, receipts=receipts,
         generated_at="2026-10-17T03:00:00Z",
-        installer_revision=DIGEST_C, engine_revision=DIGEST_D)
+        installer_revision=DIGEST_C, engine_revision=DIGEST_D,
+        browser_builds={"albacore:cosmic:linux/amd64/v2": catalog_receipt()["build_provenance"]})
     targets.validate_catalog_snapshot(snapshot)
 
     required_keys = {targets.target_key(r["target"])
@@ -471,7 +475,9 @@ def _catalog_with_receipt(receipt, **pins):
         overlays={"albacore:cosmic:linux/amd64/v2": {
             "liveOverlayDigest": DIGEST_1, "liveOverlayBaseDigest": DIGEST_B}},
         receipts=[receipt], installer_revision=pins.get("installer", DIGEST_C),
-        engine_revision=pins.get("engine", DIGEST_D))
+        engine_revision=pins.get("engine", DIGEST_D),
+        browser_builds=pins.get("browser_builds", {
+            "albacore:cosmic:linux/amd64/v2": catalog_receipt()["build_provenance"]}))
 
 
 def _candidate_status(snapshot):
@@ -551,5 +557,36 @@ def test_nonfinite_resources_and_measurements_are_rejected(number, field):
     else:
         receipt["browser"][field] = number
     with pytest.raises(ValueError, match="finite"):
+        targets._qualification_validator()(receipt, "test")
+    assert _candidate_status(_catalog_with_receipt(receipt)) == "unqualified"
+
+
+def test_real_collector_subprocess_installs_output_limit(tmp_path, monkeypatch):
+    import os
+    gh = tmp_path / "gh"
+    gh.write_text('#!/bin/sh\nprintf \'{"workflow_runs": []}\\n\'\n')
+    gh.chmod(0o755)
+    monkeypatch.setenv("PATH", str(tmp_path) + os.pathsep + os.environ["PATH"])
+    assert collector.gh_fetch("repos/tuna-os/tunaOS/actions/runs", "2022-11-28") == {"workflow_runs": []}
+
+
+@pytest.mark.parametrize("builds", [None, {}, {"albacore:cosmic:linux/amd64/v2": {"origin": "browser"}}])
+def test_no_independent_browser_build_provenance_cannot_qualify(builds):
+    assert _candidate_status(_catalog_with_receipt(catalog_receipt(), browser_builds=builds)) == "unqualified"
+
+
+def test_self_asserted_browser_origin_cannot_replace_trusted_artifact_binding():
+    expected = copy.deepcopy(catalog_receipt()["build_provenance"])
+    expected["iso_digest"] = DIGEST_2
+    assert _candidate_status(_catalog_with_receipt(catalog_receipt(), browser_builds={
+        "albacore:cosmic:linux/amd64/v2": expected})) == "unqualified"
+
+
+@pytest.mark.parametrize("field,value", [("name", "unknown"), ("name", " n/a "),
+                                         ("version", "unknown"), ("version", "placeholder")])
+def test_placeholder_profile_cannot_be_browser_proof(field, value):
+    receipt = catalog_receipt()
+    receipt["browser"][field] = value
+    with pytest.raises(ValueError, match="browser"):
         targets._qualification_validator()(receipt, "test")
     assert _candidate_status(_catalog_with_receipt(receipt)) == "unqualified"
