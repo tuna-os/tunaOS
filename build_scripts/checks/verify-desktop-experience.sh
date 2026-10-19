@@ -553,18 +553,20 @@ tuna)
 		echo "the image ships SSH host keys:" /etc/ssh/ssh_host_* >&2
 		exit 1
 	fi
-	# GDM owns the login session on every Tuna base. The configuration is
-	# installed in both native locations because the experience overlay is
-	# shared; Debian-family bases read gdm3/custom.conf, while the other bases
-	# read gdm/custom.conf.
+	# GDM owns the login session on every Tuna base. The shared experience
+	# overlay carries both native dpkg paths because Ubuntu and Debian use
+	# different GDM configuration filenames. Select the path for the actual
+	# base rather than by the package manager alone.
 	require_any_unit gdm gdm3
 	tuna_dm="$(readlink -f /etc/systemd/system/display-manager.service 2>/dev/null || true)"
 	[[ "${tuna_dm##*/}" =~ ^(gdm|gdm3)\.service$ ]] || {
 		echo "display-manager.service is '${tuna_dm:-unset}', not a GDM unit" >&2
 		exit 1
 	}
-	if [[ "$tuna_backend" == dpkg ]]; then
+	if [[ "${IS_UBUNTU:-false}" == true ]]; then
 		tuna_gdm_config=/etc/gdm3/custom.conf
+	elif [[ "${IS_DEBIAN:-false}" == true ]]; then
+		tuna_gdm_config=/etc/gdm3/daemon.conf
 	else
 		tuna_gdm_config=/etc/gdm/custom.conf
 	fi
@@ -588,10 +590,10 @@ tuna)
 	awk '
 		$0 == "[User]" { in_user = 1; next }
 		in_user && /^\[/ { in_user = 0 }
-		in_user && /^[[:space:]]*Session[[:space:]]*=[[:space:]]*tuna\.desktop[[:space:]]*$/ { found++ }
+		in_user && /^[[:space:]]*Session[[:space:]]*=[[:space:]]*tuna[[:space:]]*$/ { found++ }
 		END { exit !(found == 1) }
 	' "$tuna_gdm_session_template" || {
-		echo "AccountsService does not select tuna.desktop: $tuna_gdm_session_template" >&2
+		echo "AccountsService does not select the tuna session: $tuna_gdm_session_template" >&2
 		exit 1
 	}
 	if grep -Eiq '^[[:space:]]*AutomaticLoginEnable[[:space:]]*=[[:space:]]*true[[:space:]]*$' "$tuna_gdm_config"; then

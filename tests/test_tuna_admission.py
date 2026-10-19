@@ -155,7 +155,7 @@ def test_tuna_package_signatures_cannot_be_silently_disabled():
 def test_tuna_contract_is_a_known_desktop_with_session_and_pam_requirements():
     script = (ROOT / "build_scripts/checks/verify-desktop-experience.sh").read_text()
     case = script.split("\ntuna)\n", 1)[1].split("\n\t;;", 1)[0]
-    for requirement in ("Exec=tuna-session", "/etc/pam.d/tuna-lock", "tuna-shell-gtk", "tuna-session.target", "require_any_unit gdm gdm3", "tuna-portals.conf", "require_command orca", "Session", "tuna\\.desktop", "/etc/accountsservice/user-templates/standard", "AutomaticLoginEnable"):
+    for requirement in ("Exec=tuna-session", "/etc/pam.d/tuna-lock", "tuna-shell-gtk", "tuna-session.target", "require_any_unit gdm gdm3", "tuna-portals.conf", "require_command orca", "Session", "tuna.desktop", "/etc/accountsservice/user-templates/standard", "AutomaticLoginEnable"):
         assert requirement in case
 
 
@@ -171,7 +171,7 @@ def test_tuna_gdm_configuration_selects_wayland_session_without_autologin():
         assert expected in package_list
         assert not {"greetd", "gtkgreet", "greetd-gtkgreet", "cage"} & set(package_list)
 
-    for name in ("etc/gdm/custom.conf", "etc/gdm3/custom.conf"):
+    for name in ("etc/gdm/custom.conf", "etc/gdm3/custom.conf", "etc/gdm3/daemon.conf"):
         config = (ROOT / "experiences/tuna/files" / name).read_text()
         assert "WaylandEnable=true" in config
         assert "DefaultSession" not in config
@@ -179,7 +179,14 @@ def test_tuna_gdm_configuration_selects_wayland_session_without_autologin():
 
     template = (ROOT / "experiences/tuna/files/etc/accountsservice/user-templates/standard").read_text()
     assert "[User]" in template
-    assert "Session=tuna.desktop" in template
+    assert "Session=tuna\n" in template
+    assert "Session=tuna.desktop" not in template
+
+    contract = (ROOT / "build_scripts/checks/verify-desktop-experience.sh").read_text()
+    assert "IS_UBUNTU" in contract
+    assert "IS_DEBIAN" in contract
+    assert "tuna_gdm_config=/etc/gdm3/custom.conf" in contract
+    assert "tuna_gdm_config=/etc/gdm3/daemon.conf" in contract
 
     css = (ROOT / "experiences/tuna/files/usr/share/gnome-shell/theme/tuna-gdm.css").read_text()
     assert "TunaOS GDM theme overrides" in css
