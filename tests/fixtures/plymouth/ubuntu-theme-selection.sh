@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Selection functions from Ubuntu plymouth 24.004.60+git20250831.4a3c171d-0ubuntu8.
 # Source: archive.ubuntu.com/ubuntu/pool/main/p/plymouth/
 # These functions run against fixture directories, never the host /etc.

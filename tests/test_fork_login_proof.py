@@ -126,23 +126,37 @@ def test_pixels_require_actual_solid_canary_color(tmp_path):
         PROOF.wallpaper_match(screen, reference)
 
 
-def test_qmp_emits_real_keyboard_events_without_command_line(tmp_path, monkeypatch):
+@pytest.mark.parametrize("failure", [None, "greeting", "command"])
+def test_qmp_releases_single_client_monitor_between_calls(tmp_path, monkeypatch, failure):
     calls = []
+    handles = {"sockets": 0, "streams": 0}
 
     class Stream:
-        pending = [b'{"QMP": {"version": {}}}\n']
+        def __init__(self):
+            self.pending = [b'{"QMP": {"version": {}}}\n']
+            handles["streams"] += 1
 
         def write(self, line):
-            calls.append(json.loads(line))
-            self.pending.extend([b'{"event": "irrelevant"}\n', b'{"return": {}}\n'])
+            command = json.loads(line)
+            calls.append(command)
+            if failure == "command" and command["execute"] == "send-key":
+                self.pending.append(b'{"error": {"desc": "do not echo this"}}\n')
+            else:
+                self.pending.extend([b'{"event": "irrelevant"}\n', b'{"return": {}}\n'])
 
         def readline(self):
+            if failure == "greeting":
+                raise TimeoutError("greeting timeout")
             return self.pending.pop(0)
 
         def close(self):
-            pass
+            handles["streams"] -= 1
 
     class Socket:
+        def __init__(self):
+            assert handles["sockets"] == 0, "another client owns the monitor"
+            handles["sockets"] += 1
+
         def settimeout(self, timeout):
             assert timeout == 10
 
@@ -153,19 +167,50 @@ def test_qmp_emits_real_keyboard_events_without_command_line(tmp_path, monkeypat
             return Stream()
 
         def close(self):
-            pass
+            handles["sockets"] -= 1
 
     monkeypatch.setattr(PROOF.socket, "socket", lambda family: Socket())
     monkeypatch.setattr(PROOF.time, "sleep", lambda seconds: None)
     qmp = PROOF.QMP(tmp_path / "qmp.sock")
+    assert handles == {"sockets": 0, "streams": 0}, "screenshot needs the monitor before input"
+    if failure:
+        with pytest.raises((TimeoutError, RuntimeError)):
+            qmp.key("a")
+        assert handles == {"sockets": 0, "streams": 0}
+        return
     qmp.type("a7z")
+    assert handles == {"sockets": 0, "streams": 0}, "screenshot needs the monitor after input"
     qmp.key("ret")
     with pytest.raises(ValueError, match="ASCII"):
         qmp.type("bad!input")
     qmp.close()
-    assert calls[0]["execute"] == "qmp_capabilities"
-    assert all(c["execute"] == "send-key" for c in calls[1:])
-    assert [c["arguments"]["keys"][0]["data"] for c in calls[1:]] == ["a", "7", "z", "ret"]
+    assert handles == {"sockets": 0, "streams": 0}
+    assert [c["execute"] for c in calls] == ["qmp_capabilities", "send-key"] * 4
+    assert [c["arguments"]["keys"][0]["data"] for c in calls[1::2]] == ["a", "7", "z", "ret"]
+
+
+@pytest.mark.parametrize("outcome", ["success", "nonzero", "remaining", "timeout", "already-absent"])
+def test_vm_cleanup_requires_exit_success_and_resource_absence(tmp_path, monkeypatch, outcome):
+    monkeypatch.setattr(PROOF.Path, "home", lambda: tmp_path)
+    directory = tmp_path / ".local/share/corral/vms/proof"
+    if outcome != "already-absent":
+        directory.mkdir(parents=True)
+
+    def execute(command, **kwargs):
+        assert command == ["corral", "delete", "proof", "-f"]
+        assert kwargs["timeout"] == 150
+        if outcome == "timeout":
+            raise subprocess.TimeoutExpired(command, 150)
+        if directory.exists() and outcome != "remaining":
+            directory.rmdir()
+        return subprocess.CompletedProcess(command, 2 if outcome in ("nonzero", "already-absent") else 0,
+                                           stderr="bounded diagnostic" * 200)
+
+    monkeypatch.setattr(PROOF.subprocess, "run", execute)
+    result = PROOF.delete_vm("corral", "proof")
+    assert result["passed"] is (outcome in ("success", "already-absent"))
+    assert result["already_absent"] is (outcome == "already-absent")
+    assert len(result.get("stderr", "")) <= 1500
 
 
 def test_guest_observer_and_host_harness_compile():
@@ -195,6 +240,8 @@ def test_lifecycle_cleans_credentials_and_separates_image_identity(tmp_path, mon
     calls = []
     typed = []
     removed = False
+    source_tags = {"localhost/fork-qualification/yellowfin:gnome-linux-amd64", "localhost/source-alias:keep"}
+    original_tags = set(source_tags)
     monkeypatch.setattr(sys, "argv", ["proof", "--image", "localhost/fork-qualification/yellowfin:gnome-linux-amd64",
                                       "--output", str(output), "--wallpaper", str(fixture)])
     if installer_mode != "skip":
@@ -215,7 +262,8 @@ def test_lifecycle_cleans_credentials_and_separates_image_identity(tmp_path, mon
     monkeypatch.setattr(PROOF.Path, "home", lambda: tmp_path / "home")
     monkeypatch.setattr(PROOF.time, "sleep", lambda seconds: None)
     monkeypatch.setattr(PROOF, "identity", lambda image: {"reference": image, "id":
-                        "derived-id" if image.startswith("localhost/corral-vmtest/") else "source-id", "digest": ""})
+                        "derived-id" if image.startswith("localhost/corral-vmtest/") else "source-id",
+                        "digest": "", "repo_tags": sorted(source_tags)})
     monkeypatch.setattr(PROOF, "observer", lambda access, private: lambda: next(samples))
     monkeypatch.setattr(PROOF, "install_password", lambda access, private, hashed: calls.append(("install-password",)))
     monkeypatch.setattr(PROOF, "words", lambda frame: [{"text": "canary"}, {"text": "Password:"}])
@@ -237,6 +285,8 @@ def test_lifecycle_cleans_credentials_and_separates_image_identity(tmp_path, mon
 
     def run(command, **kwargs):
         calls.append(command)
+        if command[:2] == ["podman", "tag"]:
+            source_tags.add(command[3])
         if command[:3] == ["openssl", "passwd", "-6"]:
             assert kwargs["input"].endswith("\n")
             return "$6$random$hash"
@@ -266,6 +316,10 @@ def test_lifecycle_cleans_credentials_and_separates_image_identity(tmp_path, mon
             return subprocess.CompletedProcess(command, 1 if removed else 0)
         if command[:2] == ["podman", "rmi"]:
             removed = cleanup_ok
+        if command[:2] == ["podman", "untag"]:
+            assert len(command) == 4 and command[2] == "source-id"
+            assert command[3].startswith("localhost/fork-login-source/")
+            source_tags.remove(command[3])
         return subprocess.CompletedProcess(command, 0)
 
     monkeypatch.setattr(PROOF, "run", run)
@@ -277,6 +331,8 @@ def test_lifecycle_cleans_credentials_and_separates_image_identity(tmp_path, mon
     assert report["source_image"]["id"] == "source-id"
     assert report["production_image_login_qualified"] is False
     assert removed is cleanup_ok
+    assert source_tags == original_tags
+    assert set(report["source_image_after_cleanup"]["repo_tags"]) == original_tags
     assert not any(path.name in ("spec.yaml", "id_ed25519", "Containerfile") for path in output.rglob("*"))
     text = (output / "login-proof.json").read_text()
     assert "$6$" not in text and "private-key-fixture" not in text

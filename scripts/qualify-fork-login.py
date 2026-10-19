@@ -13,7 +13,7 @@ import json
 import os
 from pathlib import Path
 import re
-import secrets
+from secrets import choice, token_hex
 import shutil
 import signal
 import socket
@@ -71,7 +71,7 @@ def run(command, **kwargs):
 def identity(image):
     info = json.loads(run(["podman", "image", "inspect", image]))[0]
     return {"reference": image, "id": info["Id"], "digest": info.get("Digest", ""),
-            "repo_digests": info.get("RepoDigests", [])}
+            "repo_digests": info.get("RepoDigests", []), "repo_tags": info.get("RepoTags", []) or []}
 
 
 def admit_image(image):
@@ -110,20 +110,19 @@ def validate_login(before, after):
 
 
 class QMP:
-    """Keep secret keystrokes out of argv, command logs, and filesystem artifacts."""
-    def __init__(self, path):
-        self.sock = socket.socket(socket.AF_UNIX)
-        self.sock.settimeout(10)
-        self.sock.connect(str(path))
-        self.stream = self.sock.makefile("rwb", buffering=0)
-        if "QMP" not in json.loads(self.stream.readline()):
-            raise ValueError("QMP greeting missing")
-        self.execute("qmp_capabilities")
+    """Secret keyboard input with no idle monitor connection between calls.
 
-    def execute(self, command, arguments=None):
-        self.stream.write((json.dumps({"execute": command, "arguments": arguments or {}}) + "\n").encode())
+    Corral 388342b opens the same QMP socket for each screenshot. Keeping our
+    connection open blocks that client's greeting (native run 39196450923).
+    """
+    def __init__(self, path):
+        self.path = path
+
+    @staticmethod
+    def exchange(stream, command, arguments=None):
+        stream.write((json.dumps({"execute": command, "arguments": arguments or {}}) + "\n").encode())
         while True:
-            response = json.loads(self.stream.readline())
+            response = json.loads(stream.readline())
             if "event" in response:
                 continue
             if "error" in response:
@@ -131,6 +130,26 @@ class QMP:
                 raise RuntimeError("QMP command failed: " + command)
             if "return" in response:
                 return response["return"]
+
+    def execute(self, command, arguments=None):
+        sock = socket.socket(socket.AF_UNIX)
+        stream = None
+        try:
+            sock.settimeout(10)
+            sock.connect(str(self.path))
+            stream = sock.makefile("rwb", buffering=0)
+            if "QMP" not in json.loads(stream.readline()):
+                raise ValueError("QMP greeting missing")
+            self.exchange(stream, "qmp_capabilities")
+            return self.exchange(stream, command, arguments)
+        finally:
+            # Release both handles even when the greeting/command fails, before
+            # Corral's next screenshot, diagnostics, or cleanup operation.
+            try:
+                if stream is not None:
+                    stream.close()
+            finally:
+                sock.close()
 
     def key(self, *codes):
         self.execute("send-key", {"keys": [{"type": "qcode", "data": c} for c in codes], "hold-time": 60})
@@ -143,8 +162,8 @@ class QMP:
             self.key(character)
 
     def close(self):
-        self.stream.close()
-        self.sock.close()
+        # Each operation already closes its own connection on every path.
+        pass
 
 
 def words(path):
@@ -216,6 +235,24 @@ def observer(access, private):
     return lambda: json.loads(run(command, input=OBSERVE, timeout=90))
 
 
+def delete_vm(corral, name):
+    directory = Path.home() / ".local/share/corral/vms" / name
+    was_present = directory.exists()
+    try:
+        # Corral allows 20s for direct QEMU termination, then performs systemctl
+        # stop/disable/reload with no shorter internal limit. Cover that sequence
+        # and systemd's usual 90s stop timeout with a bounded outer deadline.
+        result = subprocess.run([corral, "delete", name, "-f"], capture_output=True, text=True, timeout=150)
+        remaining = directory.exists()
+        return {"passed": not remaining and (result.returncode == 0 or not was_present),
+                "returncode": result.returncode, "timeout_seconds": 150,
+                "stderr": (result.stderr or "")[-1500:], "directory_remaining": remaining,
+                "already_absent": not was_present}
+    except (OSError, subprocess.TimeoutExpired) as error:
+        return {"passed": False, "error": type(error).__name__, "timeout_seconds": 150,
+                "directory_remaining": directory.exists(), "already_absent": not was_present}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--image", required=True)
@@ -246,7 +283,7 @@ def main():
               "publishing": False, "production_image_login_qualified": False,
               "typed_login": "not-run", "wallpaper_render": "not-run", "cleanup": "not-run",
               "installer_ui": "not-run"}
-    name = "fork-login-" + secrets.token_hex(6)
+    name = "fork-login-" + token_hex(6)
     derived = "localhost/corral-vmtest/" + name + ":latest"
     pinned = "localhost/fork-login-source/" + name + ":latest"
     private = Path(tempfile.mkdtemp(prefix="fork-login-private-"))
@@ -270,7 +307,7 @@ def main():
         probe = run(["bash", "-c", 'source "$1/scripts/lib/backend.sh"; probe_image_backend "$2" podman',
                      "bash", str(ROOT), pinned], timeout=60)
         filesystem = "ext4" if "SEALED=1" in probe.splitlines() else "xfs"
-        password = "".join(secrets.choice(string.ascii_lowercase + string.digits) for _ in range(24))
+        password = "".join(choice(string.ascii_lowercase + string.digits) for _ in range(24))
         hashed = run(["openssl", "passwd", "-6", "-stdin"], input=password + "\n", timeout=10).strip()
         ssh_unit = "ssh.service" if "/grouper:" in args.image else "sshd.service"
         spec_path = private / "spec.yaml"
@@ -408,11 +445,8 @@ def main():
             except OSError:
                 errors.append("serial evidence copy failed")
         if started:
-            try:
-                subprocess.run([args.corral, "delete", name, "-f"], capture_output=True, text=True, timeout=60)
-                if (Path.home() / ".local/share/corral/vms" / name).exists():
-                    errors.append("disposable VM deletion failed")
-            except (OSError, subprocess.TimeoutExpired):
+            report["vm_cleanup"] = delete_vm(args.corral, name)
+            if not report["vm_cleanup"]["passed"]:
                 errors.append("disposable VM deletion failed")
             try:
                 exists = subprocess.run(["podman", "image", "exists", derived], capture_output=True, timeout=30)
@@ -424,11 +458,16 @@ def main():
                 errors.append("derived image deletion failed")
         if pinned_created:
             try:
-                # Remove only this run's extra name, leaving the source image.
-                if subprocess.run(["podman", "untag", pinned], capture_output=True, timeout=30).returncode != 0:
+                # `untag IMAGE` removes ALL its names. Supply the exact extra
+                # NAME separately so the original image and every alias survive.
+                if subprocess.run(["podman", "untag", report["source_image"]["id"], pinned], capture_output=True, timeout=30).returncode != 0:
                     errors.append("private source tag cleanup failed")
-                if identity(args.image)["id"] != report["source_image"]["id"]:
+                retained = identity(args.image)
+                report["source_image_after_cleanup"] = retained
+                if retained["id"] != report["source_image"]["id"]:
                     errors.append("source image tag changed during the proof")
+                if not set(report["source_image"].get("repo_tags", [])).issubset(retained.get("repo_tags", [])):
+                    errors.append("source image aliases changed during cleanup")
             except (OSError, subprocess.SubprocessError):
                 errors.append("source image identity verification failed")
         # Only this run's mkdtemp directory, never a supplied or resolved path.
