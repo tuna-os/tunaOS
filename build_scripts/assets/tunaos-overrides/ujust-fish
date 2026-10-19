@@ -1,0 +1,13 @@
+# ujust completion for fish: delegate to just's dynamic (clap) completer,
+# pointed at ujust's justfile.
+#
+# The common payload ships `JUST_COMPLETE=fish ujust | source`, which emits
+# a completion registered for `just` instead of `ujust` and completes
+# against the current directory's justfile rather than ujust's. This file
+# replaces it; install-tunaos-overrides.sh re-installs it after the common
+# payload (every Containerfile copies the common layers last).
+if test -r /usr/share/ublue-os/just/00-entry.just
+    complete --keep-order --exclusive --command ujust --arguments "(JUST_COMPLETE=fish just -- just --justfile /usr/share/ublue-os/just/00-entry.just (commandline --current-process --tokenize --cut-at-cursor)[2..] (commandline --current-token))"
+else
+    complete --keep-order --exclusive --command ujust --arguments "(JUST_COMPLETE=fish just -- just (commandline --current-process --tokenize --cut-at-cursor)[2..] (commandline --current-token))"
+end
