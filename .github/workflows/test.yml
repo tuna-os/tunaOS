@@ -108,6 +108,11 @@ jobs:
           # pytest for Python tests
           pip3 install pytest pytest-cov --break-system-packages 2>/dev/null || pip3 install pytest pytest-cov --user
 
+          # Independent schema oracle, pinned with the other external tools.
+          schema_version=$(yq -r '.downloads.jsonschema // ""' image-versions.yaml)
+          [[ "$schema_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Invalid jsonschema test pin" >&2; exit 1; }
+          python3 -m pip install "jsonschema==$schema_version" --break-system-packages || python3 -m pip install "jsonschema==$schema_version" --user
+
           # Pillow + requests for desktop-verify.py tests
           pip3 install pillow requests --break-system-packages 2>/dev/null || pip3 install pillow requests --user
 
