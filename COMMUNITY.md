@@ -56,6 +56,20 @@ curated `good first issue` tasks, and weekly maintainer triage documented in
 - **PR Reviews**: All contributions reviewed within 48 hours
 - **Matrix**: [#tunaos:reilly.asia](https://matrix.to/#/%23tunaos:reilly.asia) — real-time chat, weekly release notes, monthly office hours (see below)
 
+### Discussion response queue
+
+Q&A threads need a human first response within **7 days**. The
+[`discussion-triage.yml`](.github/workflows/discussion-triage.yml) workflow
+creates one visible tracker for the oldest unanswered Q&A on each daily sweep,
+on a new Discussion, or when a maintainer runs its manual backfill. The tracker
+links back to the public thread and is a queue signal, not an answer.
+
+Maintainers should reply in the Discussion and mark the answer there. The
+workflow never posts an answer or closes the tracker; close it manually after
+the thread has a chosen answer. To make the queue visible before the daily
+sweep, maintainers should set repository notifications to **Watch → Custom →
+Discussions**.
+
 ### Matrix room cadence
 
 The Matrix room is the project's real-time channel; this section documents
