@@ -78,7 +78,14 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
             imagemagick jq libguestfs-tools ovmf python3-yaml python3-vncdotool \
-            qemu-system-x86 qemu-utils socat sshpass swtpm tesseract-ocr
+            qemu-system-modules-opengl qemu-system-x86 qemu-utils socat sshpass swtpm tesseract-ocr
+
+      # This GPU-routed gate must not silently fall back to plain virtio: the
+      # Smithay desktops under qualification need a DRM render node, QEMU's GL
+      # device, and egl-headless. Fail before starting either ISO install.
+      - name: Record GPU/DRM runner capability
+        run: |
+          scripts/gpu-drm-preflight.sh --require-virgl --output parity/gpu-capability.txt
 
       - name: Validate target and immutable build evidence
         env:
@@ -141,6 +148,7 @@ jobs:
         with:
           name: iso-builder-qualification-${{ matrix.source }}-${{ inputs.variant }}-${{ inputs.flavor }}
           path: |
+            parity/gpu-capability.txt
             parity/${{ matrix.source }}-e2e/**/*.json
             parity/${{ matrix.source }}-e2e/**/*.log
             parity/${{ matrix.source }}-e2e/**/*.png
