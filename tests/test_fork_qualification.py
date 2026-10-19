@@ -164,3 +164,10 @@ def test_guest_ssh_intent_is_explicit_and_local_only():
     assert '[[ "$IMAGE" == localhost/fork-qualification/* ]]' in gate
     assert '--karg systemd.wants=ssh.service --karg systemd.wants=sshd.service' in gate
     assert '"TUNAOS_FORK_CANARY_SSH": "1"' in harness
+
+
+def test_serial_getty_prompt_can_share_marker_line():
+    serial = "localhost login: TUNAOS_BASE_CONTRACT_OK state=starting bus=dbus-broker.service\r\n"
+    assert QUALIFY.assess_serial(serial)["base_contract"] == "passed"
+    assert QUALIFY.assess_serial("echo TUNAOS_BASE_CONTRACT_OK")["base_contract"] == "failed"
+    assert QUALIFY.assess_serial(serial + "TUNAOS_BASE_CONTRACT_FAIL")["base_contract"] == "failed"

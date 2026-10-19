@@ -56,9 +56,9 @@ def assess_serial(serial):
     """Read independent guest verdicts; readiness alone qualifies none of them."""
     checks = re.findall(r"TUNAOS_INSTALL_CHECKS_RESULT pass=(\d+) fail=(\d+) desktop=gnome", serial)
     return {
-        "installed_identity": "passed" if re.search(r"(?m)^(?:\[[^\]\r\n]+\] [^\r\n:]+: )?TUNAOS_FORK_IDENTITY_OK(?:\s|$)", serial)
+        "installed_identity": "passed" if re.search(r"(?m)^(?:(?:[A-Za-z0-9_.-]+ login: )|(?:\[[^\]\r\n]+\] [^\r\n:]+: ))?TUNAOS_FORK_IDENTITY_OK(?:\s|$)", serial)
         and "TUNAOS_FORK_IDENTITY_FAIL" not in serial else "failed",
-        "base_contract": "passed" if re.search(r"(?m)^(?:\[[^\]\r\n]+\] [^\r\n:]+: )?TUNAOS_BASE_CONTRACT_OK(?:\s|$)", serial)
+        "base_contract": "passed" if re.search(r"(?m)^(?:(?:[A-Za-z0-9_.-]+ login: )|(?:\[[^\]\r\n]+\] [^\r\n:]+: ))?TUNAOS_BASE_CONTRACT_OK(?:\s|$)", serial)
         and "TUNAOS_BASE_CONTRACT_FAIL" not in serial else "failed",
         "installed_checks": "passed" if checks and all(int(fail) == 0 and int(passed) > 0
                                                        for passed, fail in checks) else "failed",
