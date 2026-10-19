@@ -4009,7 +4009,10 @@ emit_qualification_evidence() {
 		STRICT_EV_MEM="$qual_mem" STRICT_EV_DISK="$qual_disk" \
 		STRICT_EV_PLAIN="$plain_frag" STRICT_EV_LUKS="$luks_frag" \
 		python3 - <<'PYEOF'
-import json, os
+import hashlib
+import json
+import os
+from datetime import datetime, timezone
 plain = json.load(open(os.environ["STRICT_EV_PLAIN"]))
 luks = json.load(open(os.environ["STRICT_EV_LUKS"]))
 def observed(frag):
@@ -4053,6 +4056,10 @@ evidence = {
         "warm": {"duration_s": plain.get("warm_boot_s", 0), "mode": "plain"},
     },
 }
+evidence["qualifiedAt"] = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+evidence["receiptDigest"] = "sha256:" + hashlib.sha256(
+    json.dumps(evidence, sort_keys=True, separators=(",", ":")).encode("utf-8")
+).hexdigest()
 with open(os.environ["STRICT_EV_OUT"], "w") as f:
     json.dump(evidence, f, indent=2)
 PYEOF

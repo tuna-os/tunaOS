@@ -10,8 +10,8 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import math
 import re
-import resource
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
@@ -288,7 +288,9 @@ def _matching_receipts(receipts, target):
 def _measurement_seconds(measurements, block):
     entry = measurements.get(block) if isinstance(measurements, dict) else None
     duration = entry.get("duration_s") if isinstance(entry, dict) else None
-    if isinstance(duration, bool) or not isinstance(duration, (int, float)) or duration < 0:
+    if (isinstance(duration, bool) or
+            not isinstance(duration, (int, float)) or
+            not math.isfinite(duration) or duration < 0):
         return None
     return duration
 def _complete_qualification(projected):
@@ -300,18 +302,20 @@ def _complete_qualification(projected):
         return False
     if not isinstance(projected.get("browser"), dict):
         return False
+    status = projected.get("status")
+    if status not in {None, "qualified", "passed", "success", "local-only", "legacy-absent"}:
+        return False
     observed = projected.get("observed")
-    if observed is not None:
-        if not isinstance(observed, dict):
+    if not isinstance(observed, dict):
+        return False
+    for mode in ("plain", "encrypted"):
+        record = observed.get(mode)
+        if not isinstance(record, dict):
             return False
-        for mode in ("plain", "encrypted"):
-            record = observed.get(mode)
-            if not isinstance(record, dict):
-                return False
-            if record.get("installed_boot") is not True:
-                return False
-            if record.get("desktop_contract") is not True:
-                return False
+        if record.get("installed_boot") is not True:
+            return False
+        if record.get("desktop_contract") is not True:
+            return False
     measurements = projected.get("measurements")
     if not isinstance(measurements, dict):
         return False

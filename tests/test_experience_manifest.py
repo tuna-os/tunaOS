@@ -36,6 +36,8 @@ def manifest(**overrides):
         "platform": "x86_64",
         "cpu_baseline": "x86-64-v2",
         "hardware_scope": "qemu",
+        "qualifiedAt": "2026-10-19T00:00:00Z",
+        "receiptDigest": _digest("e"),
         "resolved_inputs": {
             "source": _digest("a"),
             "overlay": _digest("b"),
