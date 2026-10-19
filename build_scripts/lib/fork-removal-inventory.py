@@ -44,8 +44,13 @@ def validate_records(records, manager):
         if manager == "pacman":
             if arch is not None:
                 raise ProtectionError("pacman query does not report package architecture")
+        elif manager in {"dnf", "zypper"} and record["name"] == "gpg-pubkey" and arch == "(none)":
+            # RPM stores imported public keys as architecture-less pseudo-packages.
+            # Preserve the literal native value and every key version in all
+            # before/after comparisons; do not filter security metadata away.
+            pass
         elif not isinstance(arch, str) or not re.fullmatch(r"[A-Za-z0-9_.+-]+", arch):
-            raise ProtectionError("invalid native package architecture")
+            raise ProtectionError(f"invalid native package architecture: {record['name']} {arch!r}")
     keys = [tuple(record[k] or "" for k in ("name", "version", "architecture")) for record in records]
     if len(set(keys)) != len(keys):
         raise ProtectionError("duplicate native package record")

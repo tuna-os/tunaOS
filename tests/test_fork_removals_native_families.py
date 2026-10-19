@@ -37,6 +37,19 @@ def require_native(family):
         pytest.skip(reason)
 
 
+def require_rpm_distro_key(directory=Path("/etc/pki/rpm-gpg")):
+    # The native lane uses AlmaLinux; Fedora developer containers ship the same
+    # RPM key-file layout. Read a shipped public key, never fetch or generate one.
+    for pattern in ("RPM-GPG-KEY-AlmaLinux*", "RPM-GPG-KEY-fedora*"):
+        for path in sorted(directory.glob(pattern)):
+            if path.is_file() and b"-----BEGIN PGP PUBLIC KEY BLOCK-----" in path.read_bytes():
+                return path
+    reason = "native rpm needs a shipped AlmaLinux/Fedora public key"
+    if os.environ.get("TUNAOS_NATIVE_REMOVAL_REQUIRED") == "rpm":
+        pytest.fail(reason)
+    pytest.skip(reason)
+
+
 def assert_dependency_refusal(result):
     # Native tools can split the summary and dependency detail across streams.
     diagnostic = result.stdout + result.stderr
@@ -298,6 +311,7 @@ def test_local_fixture_archive_declares_dependency_and_exact_payload(tmp_path):
                          ids=["rpm-dnf", "rpm-zypper", "pacman"])
 def test_native_protected_inventory(tmp_path, family, manager):
     require_native(family)
+    public_key = require_rpm_distro_key() if family == "rpm" else None
     image_digest = os.environ.get("TUNAOS_NATIVE_REMOVAL_IMAGE_ID")
     if not image_digest:
         if os.environ.get("TUNAOS_NATIVE_REMOVAL_REQUIRED") == family:
@@ -319,6 +333,25 @@ def test_native_protected_inventory(tmp_path, family, manager):
                             "source_sha256": source_sha256, "image_digest": image_digest})
     try:
         native.setup(packages=[])
+        key_records = []
+        if public_key is not None:
+            # --root and --dbpath scope both import and erasure to this fixture;
+            # the host keyring and signature policy are never modified.
+            native.run([*native.native, "--import", str(public_key)])
+            key_output = native.run([
+                *native.native, "-q", "--qf",
+                "%{NAME}\\t%{EPOCHNUM}:%{VERSION}-%{RELEASE}\\t%{ARCH}\\n", "gpg-pubkey",
+            ]).stdout
+            key_records = [dict(zip(("name", "version", "architecture"), line.split("\t")))
+                           for line in key_output.splitlines()]
+            key_records.sort(key=lambda row: (row["name"], row["version"], row["architecture"]))
+            assert key_records
+            assert all(row["name"] == "gpg-pubkey" and row["architecture"] == "(none)"
+                       for row in key_records)
+            native.evidence["rpm_public_key"] = {
+                "path": str(public_key), "sha256": hashlib.sha256(public_key.read_bytes()).hexdigest(),
+                "records": key_records,
+            }
         native.install("fixture-library")
         native.run([sys.executable, str(inventory_helper), "capture", *identity,
                     "--stage", "base", "--output", str(base)], env=environment)
@@ -327,12 +360,35 @@ def test_native_protected_inventory(tmp_path, family, manager):
                     "--stage", "desktop", "--output", str(desktop)], env=environment)
         native.evidence["baselines"] = {"base": json.loads(base.read_text()),
                                          "desktop": json.loads(desktop.read_text())}
-        assert [row["name"] for row in native.evidence["baselines"]["base"]["packages"]] == ["fixture-library"]
-        assert [row["name"] for row in native.evidence["baselines"]["desktop"]["packages"]] == ["fixture-app", "fixture-library"]
+        for stage, names in (("base", ["fixture-library"]),
+                             ("desktop", ["fixture-app", "fixture-library"])):
+            captured = native.evidence["baselines"][stage]["packages"]
+            assert [row["name"] for row in captured if row["name"] != "gpg-pubkey"] == names
+            assert [row for row in captured if row["name"] == "gpg-pubkey"] == key_records
         native.install("fixture-spare")
         original = native.snapshot()
         qualify = [sys.executable, str(inventory_helper), "qualify", *identity,
                    "--base", str(base), "--desktop", str(desktop), "--receipt", str(receipt)]
+        if public_key is not None:
+            result = native.run([*qualify, "--remove", "gpg-pubkey"], env=environment, check=False)
+            assert result.returncode != 0 and "protected base/desktop" in result.stderr
+            assert native.snapshot() == original and not receipt.exists()
+            # A missing key must fail closed before removing any fixture package.
+            # Erase only the key records just imported into the temporary DB.
+            selectors = native.run([*native.native, "-q", "--qf",
+                                    "%{NAME}-%{VERSION}-%{RELEASE}\\n", "gpg-pubkey"]).stdout.splitlines()
+            native.run([*native.native, "--erase", "--", *selectors])
+            missing_key = native.snapshot()
+            assert missing_key == {
+                section: {name: value for name, value in entries.items() if name != "gpg-pubkey"}
+                for section, entries in original.items()
+            }
+            result = native.run([*qualify, "--remove", "fixture-spare"], env=environment, check=False)
+            assert result.returncode != 0 and "protected baseline inventory drift: gpg-pubkey" in result.stderr
+            assert native.snapshot() == missing_key and not receipt.exists()
+            native.evidence["rpm_public_key"]["missing_key_refusal"] = result.stderr
+            native.run([*native.native, "--import", str(public_key)])
+            assert native.snapshot() == original
         for name in ("fixture-library", "fixture-app", "fixture-spare"):
             before = native.snapshot()
             result = native.run([*qualify, "--remove", name], env=environment, check=False)
@@ -360,12 +416,32 @@ def test_native_protected_inventory(tmp_path, family, manager):
             {"name": name, "version": "0:1.0-1" if family == "rpm" else "1.0-1",
              "architecture": "noarch" if family == "rpm" else None}
             for name in sorted(FIXTURES)
-        ]
+        ] + key_records
         assert outcome["after"] == [row for row in outcome["before"] if row["name"] != "fixture-spare"]
         native.evidence["removal_receipt"] = outcome
         native.evidence["passed"] = True
     finally:
         native.save(suffix="-protected")
+
+
+def test_rpm_public_key_missing_fails_required_family(tmp_path, monkeypatch):
+    monkeypatch.setenv("TUNAOS_NATIVE_REMOVAL_REQUIRED", "rpm")
+    with pytest.raises(pytest.fail.Exception, match="shipped AlmaLinux/Fedora public key"):
+        require_rpm_distro_key(tmp_path)
+
+
+def test_rpm_public_key_missing_skips_developer_run(tmp_path, monkeypatch):
+    monkeypatch.delenv("TUNAOS_NATIVE_REMOVAL_REQUIRED", raising=False)
+    with pytest.raises(pytest.skip.Exception, match="shipped AlmaLinux/Fedora public key"):
+        require_rpm_distro_key(tmp_path)
+
+
+def test_rpm_public_key_uses_shipped_distro_armored_file(tmp_path):
+    (tmp_path / "RPM-GPG-KEY-AlmaLinux-invalid").write_text("not a public key\n")
+    (tmp_path / "RPM-GPG-KEY-third-party").write_text("-----BEGIN PGP PUBLIC KEY BLOCK-----\n")
+    public_key = tmp_path / "RPM-GPG-KEY-fedora-fixture"
+    public_key.write_text("-----BEGIN PGP PUBLIC KEY BLOCK-----\n")
+    assert require_rpm_distro_key(tmp_path) == public_key
 
 
 @pytest.mark.parametrize("stdout,stderr", [
