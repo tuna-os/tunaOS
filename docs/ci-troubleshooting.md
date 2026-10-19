@@ -1703,3 +1703,23 @@ Node 24.19.0 / npm 11.9.0 reproduces the failure with
 clean `npm ci --ignore-scripts`, `npm test`, and `npm run build` in that directory.
 Check each override edit with `npm ci`. The same npm major alone does not
 prove that the manifest and lockfile agree.
+
+## Fork preview reuses stock packages/art or rejects a changed checkout
+
+**Cause:** The key for the cache had only a hash of shell scripts.
+Thus, two forks could use the same key. Pins include hashes of source files.
+An edit to those inputs makes a config stale. A frozen stock example also failed
+after each dependency update, even when the build contract did not change.
+
+**Fix:** The preview adds a hash of the manifest and assets to the cache key.
+`test_real_build_engine_receives_fork_cell_and_cache_identity` runs the build driver
+with a stub builder. Different bytes make the keys different.
+This test does not prove container-cache behavior or image acceptance.
+
+Create new configs from templates; do not refresh a real fork's pin automatically.
+If sources change during a copy, review the receipt. Then prepare a new output
+directory from a stable checkout.
+
+Fork previews also disable layer reuse with `--no-cache`. Some legacy stages
+declare the cache argument after their base hooks. Gentoo has a separate branch
+for desktop builds. Tests must prove each stage before fork builds can reuse layers.

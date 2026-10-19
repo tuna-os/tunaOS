@@ -79,10 +79,11 @@ Do not merge the stack as a unit on the strength of a source-test pass.
 Reconcile the shared catalog with [#3431](https://github.com/tuna-os/tunaOS/pull/3431)
 and its parent [#3143](https://github.com/tuna-os/tunaOS/pull/3143), and do not add another catalog. Keep one active change per shared contract surface.
 
-The foundation recipe uses `examples/fork/stock.yaml`. The consumer preview
-introduces `stock.template.yaml` and explicit initialization. Use the commands
-from the checked-out revision. Do not copy a preview command into the shipped
-recipe before its prerequisite lands. Both recipes keep the existing strict pin until the user reviews a change.
+The opt-in preview uses `examples/fork/stock.template.yaml`. Initialize a new
+strictly pinned config with `--init-template` before you resolve or build it.
+Existing configs retain their reviewed pins and fail when source inputs change.
+Initialization never refreshes an existing config. See
+[FORK-CONFIG-PREVIEW.md](FORK-CONFIG-PREVIEW.md) for commands and supported intent.
 
 ## What completes the milestone
 
