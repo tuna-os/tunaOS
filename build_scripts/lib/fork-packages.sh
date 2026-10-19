@@ -116,12 +116,12 @@ _tunaos_validate_fork_packages() {
 		return 1
 	fi
 
-	# A removal denylist cannot protect transitive desktop/base dependencies.
-	# lib.sh also masks pacman removal errors and emerge only deselects atoms.
-	# Until solver-backed protection exists, fail closed for every removal.
+	# Eligibility is source-controlled and shared with config preview.
 	if [[ $(jq '.intent.packages.remove | length' "$manifest") != 0 ]]; then
-		_tunaos_fork_packages_error 'removals are unsupported without protected transaction validation'
-		return 1
+		python3 "$(dirname "${BASH_SOURCE[0]}")/fork-optional-removals.py" validate --manifest "$manifest" || {
+			_tunaos_fork_packages_error 'removals are unsupported for this intent'
+			return 1
+		}
 	fi
 	if [[ $(jq '.intent.packages.repositories | length' "$manifest") != 0 && "$manager" != dnf && "$manager" != zypper && "$manager" != apt ]]; then
 		_tunaos_fork_packages_error "repositories are unsupported for '$manager'; v1 has no family-specific trust/source contract"
@@ -188,6 +188,20 @@ tunaos_apply_fork_packages() {
 		fi
 		_tunaos_fork_packages_error "existing receipt differs or is incomplete: $receipt"
 		return 1
+	fi
+
+	local removal_count receipt_status=complete
+	removal_count=$(jq '.intent.packages.remove | length' "$manifest") || return 1
+	if ((removal_count > 0)); then
+		# Keep the baseline hash in this shell, outside files later package scripts
+		# can rewrite. Interrupted pending work cannot be resumed in a new shell.
+		mkdir -p "$receipt_dir" || return 1
+		TUNAOS_FORK_REMOVAL_BASELINE="${receipt}.baseline.json"
+		TUNAOS_FORK_REMOVAL_BASELINE_SHA256=$(python3 "$(dirname "${BASH_SOURCE[0]}")/fork-optional-removals.py" capture \
+			--manifest "$manifest" --baseline "$TUNAOS_FORK_REMOVAL_BASELINE" --root "$root") || return 1
+		TUNAOS_FORK_REMOVAL_MANIFEST_SHA256="$digest"
+		TUNAOS_FORK_REMOVAL_PACKAGE_RECEIPT="$receipt"
+		receipt_status=pending-removal
 	fi
 
 	local -a required=() optional=() optional_installed=() optional_missing=()
@@ -292,8 +306,8 @@ tunaos_apply_fork_packages() {
 	missing_json=$(printf '%s\n' "${optional_missing[@]}" | jq -Rsc 'split("\n") | map(select(length > 0))') || return 1
 	mkdir -p "$receipt_dir" || return 1
 	receipt_tmp=$(mktemp "${receipt}.XXXXXX") || return 1
-	if ! jq --arg digest "$digest" --argjson installed "$installed_json" --argjson missing "$missing_json" '
-		{schema_version: 1, status: "complete", variant, flavor, platform,
+	if ! jq --arg digest "$digest" --argjson installed "$installed_json" --argjson missing "$missing_json" --arg status "$receipt_status" '
+		{schema_version: 1, status: $status, variant, flavor, platform,
 		 package_manager, image, manifest_sha256: $digest, sources,
 		 repositories: .intent.packages.repositories, remove: [],
 		 required_installed: .intent.packages.add,
@@ -304,4 +318,48 @@ tunaos_apply_fork_packages() {
 	fi
 	chmod 0644 "$receipt_tmp" && mv "$receipt_tmp" "$receipt" || return 1
 	printf 'fork packages: recorded %s\n' "$receipt"
+}
+
+# Called only after desktop setup, branding and the normal contract have run.
+tunaos_finalize_fork_packages() {
+	local context="${1:-/run/context}" desktop="${2:-}" root="${3:-/}"
+	local manifest="${context}/manifests/fork-config.json" canonical digest receipt receipt_tmp
+	[[ -e "$manifest" || -L "$manifest" ]] || return 0
+	_tunaos_validate_fork_packages "$manifest" "${PKG_MGR:-}" || return 1
+	[[ $(jq '.intent.packages.remove | length' "$manifest") != 0 ]] || return 0
+	canonical=$(jq -cS . "$manifest") || return 1
+	digest=$(printf '%s' "$canonical" | sha256sum) || return 1
+	digest="${digest%% *}"
+	local variant flavor platform
+	variant=$(jq -r '.variant' "$manifest") || return 1
+	flavor=$(jq -r '.flavor' "$manifest") || return 1
+	platform=$(jq -r '.platform' "$manifest") || return 1
+	receipt="${root%/}/usr/share/tunaos/fork-config/packages/${variant}--${flavor}--${platform//\//-}.json"
+	[[ -f "$receipt" && ! -L "$receipt" ]] || return 1
+	if jq -e --arg digest "$digest" '.status == "complete" and .manifest_sha256 == $digest' "$receipt" >/dev/null; then
+		# Ubuntu invokes both desktop paths in separate shells. A completed
+		# transaction may be checked again, but never resumed or re-executed.
+		python3 "$(dirname "${BASH_SOURCE[0]}")/fork-optional-removals.py" verify-complete \
+			--manifest "$manifest" --baseline "${receipt}.baseline.json" \
+			--receipt "${receipt}.removal.json" --context "$context" --root "$root" --desktop "$desktop"
+		return $?
+	fi
+	[[ "$digest" == "${TUNAOS_FORK_REMOVAL_MANIFEST_SHA256:-}" && -n "${TUNAOS_FORK_REMOVAL_BASELINE_SHA256:-}" ]] || {
+		_tunaos_fork_packages_error 'removal baseline must be captured in this build shell before additions'
+		return 1
+	}
+	receipt="$TUNAOS_FORK_REMOVAL_PACKAGE_RECEIPT"
+	[[ -f "$receipt" && ! -L "$receipt" ]] || return 1
+	jq -e --arg digest "$digest" '.status == "pending-removal" and .manifest_sha256 == $digest' "$receipt" >/dev/null || return 1
+	python3 "$(dirname "${BASH_SOURCE[0]}")/fork-optional-removals.py" apply \
+		--manifest "$manifest" --baseline "$TUNAOS_FORK_REMOVAL_BASELINE" \
+		--baseline-sha256 "$TUNAOS_FORK_REMOVAL_BASELINE_SHA256" \
+		--receipt "${receipt}.removal.json" --context "$context" --root "$root" --desktop "$desktop" || return 1
+	receipt_tmp=$(mktemp "${receipt}.XXXXXX") || return 1
+	if ! jq --slurpfile manifest "$manifest" '.status = "complete" | .remove = $manifest[0].intent.packages.remove' "$receipt" >"$receipt_tmp"; then
+		rm -f "$receipt_tmp"
+		return 1
+	fi
+	chmod 0644 "$receipt_tmp" && mv "$receipt_tmp" "$receipt" || return 1
+	unset TUNAOS_FORK_REMOVAL_BASELINE_SHA256 TUNAOS_FORK_REMOVAL_MANIFEST_SHA256
 }

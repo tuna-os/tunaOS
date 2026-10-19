@@ -32,13 +32,21 @@ REPO_URL = r"https://[A-Za-z0-9][A-Za-z0-9.-]*(?::[0-9]{1,5})?(?:/[A-Za-z0-9._~%
 ARCHIVE = r"\.(rpm|deb|udeb|ebuild|tbz2|gpkg\.tar|pkg\.tar(\.[a-z0-9]+)?)$"
 
 
-def validate_packages(packages, manager):
+def validate_packages(packages, manager, variant=None, flavor=None, root=ROOT):
+    removal_policy = None
     COMPILER.validate_layer({"packages": packages}, "packages", Path("."))
     if packages["remove"]:
-        raise ConfigError("package removals are not supported by this preview: solver/base protections required")
+        spec = importlib.util.spec_from_file_location(
+            "fork_optional_removals", root / "build_scripts/lib/fork-optional-removals.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        try:
+            removal_policy = module.validate_intent(packages, manager, variant, flavor)
+        except ValueError as exc:
+            raise ConfigError(f"package removals are unsupported: {exc}") from exc
     pattern = PACKAGE + "/" + PACKAGE if manager == "emerge" else (
         r"[a-z0-9][a-z0-9+.-]*" if manager == "apt" else PACKAGE)
-    for key in ("add", "optional"):
+    for key in ("add", "optional", "remove"):
         for value in packages[key]:
             if not re.fullmatch(pattern, value) or re.search(ARCHIVE, value, re.I):
                 raise ConfigError(f"{manager}: {value!r} is not a supported plain native package name")
@@ -51,6 +59,8 @@ def validate_packages(packages, manager):
             raise ConfigError("repository id must be a lowercase filename-safe token")
         if any(not re.fullmatch(REPO_URL, repo[k]) for k in ("url", "key_url")):
             raise ConfigError("repository URLs must be literal HTTPS URLs without query/fragment/auth/interpolation")
+
+    return removal_policy
 
 
 def wallpaper(path):
@@ -94,7 +104,7 @@ def compile_cells(config_path, root=ROOT, identity_staging=False):
                 flavor != routing["DESKTOP_FLAVOR"]):
             raise ConfigError(f"{cell['variant']}:{flavor}: only direct manifest-backed desktop routes are supported; base/overlay closure is deferred")
         manager = MANAGERS[containerfile]
-        validate_packages(cell["intent"]["packages"], manager)
+        removal_policy = validate_packages(cell["intent"]["packages"], manager, cell["variant"], flavor, root)
         branding = cell["intent"]["branding"]
         if identity_staging and not {"name", "logo"}.issubset(branding):
             raise ConfigError("identity staging needs both name and logo in every selected enabled cell")
@@ -139,6 +149,7 @@ def compile_cells(config_path, root=ROOT, identity_staging=False):
                "IMAGE_REGISTRY": image["registry"], "REPO_ORGANIZATION": image["namespace"],
                "USE_CACHE": "0", "IS_CI": "0", "SKIP_RECHUNK": "1", "SKIP_SUBMODULES": "1"}
         cells.append({"manifest": manifest, "environment": env, "base_digest_pinned": base_pinned,
+                      "package_removal_policy": removal_policy,
                       **({"identity": identity} if identity else {})})
     return plan, cells, assets
 
@@ -188,6 +199,7 @@ def prepare(config_path, output, root=ROOT, identity_staging=False):
             destination.write_bytes(assets[asset["path"]])
         builds.append({"context": name, "environment": cell["environment"],
                        "base_digest_pinned": cell["base_digest_pinned"],
+                       "package_removal_policy": cell["package_removal_policy"],
                        **({"build_blocked": cell["identity"]["blocked_consumers"]} if "identity" in cell else {})})
     (output / "builds.json").write_text(json.dumps(builds, indent=2) + "\n")
     return builds

@@ -1,8 +1,10 @@
 # Native removal checks
 
-The candidate in `build_scripts/lib/fork-removals.sh` needs
-`TUNAOS_FORK_REMOVAL_QUALIFICATION=1`. Normal fork builds still reject removals.
-A test pass does not open that gate or prove a desktop image works.
+The standalone entrypoint in `build_scripts/lib/fork-removals.sh` needs
+`TUNAOS_FORK_REMOVAL_QUALIFICATION=1`. It shares a private native primitive with
+the [reviewed optional adapter](FORK-OPTIONAL-REMOVALS.md). That adapter accepts
+only fastfetch for GNOME on Grouper and Yellowfin, with stricter checks.
+A test pass does not authorize arbitrary removals or prove a desktop image works.
 
 ## Small container lane
 

@@ -3,6 +3,7 @@ set -euo pipefail
 
 desktop="${1:?usage: verify-desktop-experience.sh <gnome|kde|niri|cosmic|xfce|pantheon|tuna> [--runtime]}"
 mode="${2:-build}"
+_TUNAOS_OWNER_ENABLED=0
 
 # At runtime the E2E gate greps ttyS0 for a contract marker; a silent early
 # exit (e.g. a require_* failing under set -e) would leave the gate waiting
@@ -11,6 +12,9 @@ mode="${2:-build}"
 marker_emitted=0
 emit_fail_on_early_exit() {
 	local rc=$?
+	if [[ "$_TUNAOS_OWNER_ENABLED" == 1 ]]; then
+		contract_owner_evidence_finish "$rc" || rc=1
+	fi
 	if [[ "$mode" == --runtime && "$rc" -ne 0 && "$marker_emitted" -eq 0 ]]; then
 		# The static assertions run before the runtime summary block below.  Keep
 		# their failure actionable in a serial-only Gate: without this, the
@@ -21,11 +25,20 @@ emit_fail_on_early_exit() {
 		printf 'TUNAOS_DESKTOP_CONTRACT_FAIL desktop=%s reason=early_exit rc=%s line=%s command=%q\n' \
 			"${desktop}" "${rc}" "${line}" "${command}" | tee /dev/ttyS0 2>/dev/null || true
 	fi
+	exit "$rc"
 }
 trap emit_fail_on_early_exit EXIT
 
 source /run/context/build_scripts/lib.sh 2>/dev/null || true
 detected_os 2>/dev/null || true
+
+# Evidence is opt-in and partial; it cannot admit a package removal. Stock and
+# runtime checks do not load Python or query owners. Each run needs a new path.
+if [[ -n "${TUNAOS_CONTRACT_OWNER_EVIDENCE:-}" ]]; then
+	source "${BASH_SOURCE[0]%/*}/../lib/contract-package-owners.sh"
+	contract_owner_evidence_init "${BASH_SOURCE[0]}"
+	_TUNAOS_OWNER_ENABLED=1
+fi
 
 # Tuna Desktop ships on Arch (pacman), the RPM bases and the apt bases (dpkg).
 # Query the native database for installed names and file owners, never
@@ -89,24 +102,39 @@ tuna_installed_file_owner() {
 # failure would red-line every hummingbird build, which is a policy call for
 # a human, not a side effect of a logging fix.
 TUNAOS_CONTRACT_WAIVED=0
-waive() { TUNAOS_CONTRACT_WAIVED=$((TUNAOS_CONTRACT_WAIVED + 1)); }
+waive() {
+	TUNAOS_CONTRACT_WAIVED=$((TUNAOS_CONTRACT_WAIVED + 1))
+	if [[ "${_TUNAOS_OWNER_ENABLED:-0}" == 1 ]]; then
+		contract_owner_record waiver "${FUNCNAME[1]:-unknown}"
+	fi
+}
 
-require_command() { command -v "$1" >/dev/null || {
-	echo "missing required command: $1" >&2
-	if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${desktop:-}" != cosmic ]]; then
-		waive
-		return 0
+require_command() {
+	command -v "$1" >/dev/null || {
+		echo "missing required command: $1" >&2
+		if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${desktop:-}" != cosmic ]]; then
+			waive
+			return 0
+		fi
+		exit 1
+	}
+	if [[ "${_TUNAOS_OWNER_ENABLED:-0}" == 1 ]]; then
+		contract_owner_record command "$1"
 	fi
-	exit 1
-}; }
-require_glob() { compgen -G "$1" >/dev/null || {
-	echo "missing required path: $1" >&2
-	if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${desktop:-}" != cosmic ]]; then
-		waive
-		return 0
+}
+require_glob() {
+	compgen -G "$1" >/dev/null || {
+		echo "missing required path: $1" >&2
+		if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${desktop:-}" != cosmic ]]; then
+			waive
+			return 0
+		fi
+		exit 1
+	}
+	if [[ "${_TUNAOS_OWNER_ENABLED:-0}" == 1 ]]; then
+		contract_owner_record glob "$1"
 	fi
-	exit 1
-}; }
+}
 # Tuna Desktop (formerly Roost) Screenshot consent in GNOME 51 needs GTK
 # Access routing (Roost portal job 111453682195). Check the installed
 # configuration, not only whether a configuration file was copied into the
@@ -130,14 +158,19 @@ require_portal_preference() {
 		return 1
 	}
 }
-require_unit() { systemctl list-unit-files "$1.service" --no-legend 2>/dev/null | grep -q "^$1.service" || {
-	echo "missing unit: $1.service" >&2
-	if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${desktop:-}" != cosmic ]]; then
-		waive
-		return 0
+require_unit() {
+	systemctl list-unit-files "$1.service" --no-legend 2>/dev/null | grep -q "^$1.service" || {
+		echo "missing unit: $1.service" >&2
+		if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${desktop:-}" != cosmic ]]; then
+			waive
+			return 0
+		fi
+		exit 1
+	}
+	if [[ "${_TUNAOS_OWNER_ENABLED:-0}" == 1 ]]; then
+		contract_owner_record unit "$1"
 	fi
-	exit 1
-}; }
+}
 # Distro drift: the same DE ships different DM units per variant (gdm vs
 # Debian's gdm3; xfce is gdm on Fedora/EL but lightdm/greetd on Ubuntu).
 # Build-time: require at least one candidate unit to exist.
@@ -145,6 +178,9 @@ require_any_unit() {
 	local u
 	for u in "$@"; do
 		if systemctl list-unit-files "$u.service" --no-legend 2>/dev/null | grep -q "^$u.service"; then
+			if [[ "${_TUNAOS_OWNER_ENABLED:-0}" == 1 ]]; then
+				contract_owner_record unit "$u"
+			fi
 			return 0
 		fi
 	done
@@ -159,7 +195,12 @@ require_any_unit() {
 require_any_glob() {
 	local g
 	for g in "$@"; do
-		compgen -G "$g" >/dev/null && return 0
+		if compgen -G "$g" >/dev/null; then
+			if [[ "${_TUNAOS_OWNER_ENABLED:-0}" == 1 ]]; then
+				contract_owner_record glob "$g"
+			fi
+			return 0
+		fi
 	done
 	echo "missing required path: none of [$*] exist" >&2
 	if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${desktop:-}" != cosmic ]]; then
@@ -177,6 +218,9 @@ require_user_unit() {
 		compgen -G "/usr/lib/systemd/user/${u}.service" >/dev/null ||
 		compgen -G "/etc/systemd/user/${u}.service" >/dev/null ||
 		compgen -G "/usr/lib/*/systemd/user/${u}.service" >/dev/null; then
+		if [[ "${_TUNAOS_OWNER_ENABLED:-0}" == 1 ]]; then
+			contract_owner_record user_unit "$u"
+		fi
 		return 0
 	fi
 	echo "missing user unit: ${u}.service" >&2
@@ -194,6 +238,9 @@ require_any_user_unit() {
 			compgen -G "/usr/lib/systemd/user/${u}.service" >/dev/null ||
 			compgen -G "/etc/systemd/user/${u}.service" >/dev/null ||
 			compgen -G "/usr/lib/*/systemd/user/${u}.service" >/dev/null; then
+			if [[ "${_TUNAOS_OWNER_ENABLED:-0}" == 1 ]]; then
+				contract_owner_record user_unit "$u"
+			fi
 			return 0
 		fi
 	done
@@ -1057,4 +1104,9 @@ else
 			>"/usr/share/tunaos/experience-contracts/${desktop}"
 		echo "desktop experience contract passed: $desktop ($experience)"
 	fi
+fi
+
+if [[ "$_TUNAOS_OWNER_ENABLED" == 1 ]]; then
+	# shellcheck disable=SC2034 # Read by the opt-in helper at EXIT.
+	TUNAOS_OWNER_COMPLETED=1
 fi

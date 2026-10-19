@@ -1751,3 +1751,10 @@ The [RPM manual](https://rpm.org/docs/4.20.x/man/rpm.8.html#package-selection-op
 describes these selectors. Tests check rejection before erase.
 [Native removal checks](FORK-NATIVE-REMOVALS.md) add cases in private roots.
 Inventory and file hashes must stay unchanged. A local native skip does not prove this gate.
+
+## Optional stock removal refuses a zero-exit desktop check
+
+| Symptom | Cause to check | Fix |
+| --- | --- | --- |
+| The optional-removal helper refuses a checker that exited zero | The previous success marker was stale, the fresh result was waived, or the checker did not emit the matching strict pass marker and log | Fix the stock desktop contract. Do not synthesize a marker, allow a waiver or retry the failed root. `tests/test_fork_optional_removals.py` executes stale/no-op/waived-result rejection; see [the optional-removal boundary](FORK-OPTIONAL-REMOVALS.md). |
+| A fork addition succeeds but later removal reports a disappeared stock name/architecture | The additions solver deleted or replaced a protected stock identity | Reject that transaction and rebuild from untouched stock. Package version upgrades are allowed; silently deleting a stock name/architecture is not. |

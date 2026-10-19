@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Qualification candidate only. Normal fork builds reject removals before here.
+# Exact native primitive shared by the reviewed optional adapter and qualification.
+# The standalone public entrypoint remains qualification-only.
 # Never use the legacy pkg_remove: pacman masks errors; Portage only deselects.
 
 _tunaos_fork_removal_error() {
@@ -7,11 +8,7 @@ _tunaos_fork_removal_error() {
 	return 1
 }
 
-tunaos_qualify_fork_removals() (
-	[[ "${TUNAOS_FORK_REMOVAL_QUALIFICATION:-}" == 1 ]] || {
-		_tunaos_fork_removal_error 'requires an explicit disposable qualification environment'
-		return 1
-	}
+_tunaos_remove_exact_native() (
 	local manager="$1" package installed_name
 	shift
 	(($# > 0)) || return 0
@@ -65,4 +62,14 @@ tunaos_qualify_fork_removals() (
 		pacman -R --noconfirm -- "$@" || return 1
 		;;
 	esac
+)
+
+# Do not call the private primitive directly from build consumers. The production
+# optional-removal adapter adds reviewed policy, inventories and desktop gates.
+tunaos_qualify_fork_removals() (
+	[[ "${TUNAOS_FORK_REMOVAL_QUALIFICATION:-}" == 1 ]] || {
+		_tunaos_fork_removal_error 'requires an explicit disposable qualification environment'
+		return 1
+	}
+	_tunaos_remove_exact_native "$@"
 )
