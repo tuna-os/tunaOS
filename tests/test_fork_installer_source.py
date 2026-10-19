@@ -29,7 +29,7 @@ def prepare_root(context, root, value):
     for relative, data in ((SOURCE.RECIPE, recipe), (SOURCE.CATALOG, catalog)):
         path = root / relative
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(SOURCE.json_bytes(data))
+        path.write_text(json.dumps(data, indent=2) + "\n")
     efi = root / "usr/lib/bootupd/updates/EFI/test/grubx64.efi"
     efi.parent.mkdir(parents=True, exist_ok=True)
     efi.write_bytes(b"fixture payload")
@@ -96,8 +96,12 @@ def test_final_recipe_and_frontend_leaf_use_real_root_probe(tmp_path, sealed, bo
     config.write_text("[composefs]\nenabled = " + ("yes" if sealed else "no") + "\n")
     m = context / "fork-config.json"
     m.write_text(json.dumps(manifest()))
+    original = SOURCE.read_json(root / SOURCE.RECIPE)
     SOURCE.finalize(m, root, context / SOURCE.PROBE)
     recipe = SOURCE.read_json(root / SOURCE.RECIPE)
+    assert list(recipe["steps"]) == list(original["steps"])
+    assert list(recipe["tour"]) == list(original["tour"])
+    assert list(recipe["tour"]["welcome"]) == list(original["tour"]["welcome"])
     selected = SOURCE.selected_leaf(SOURCE.read_json(root / SOURCE.CATALOG), SOURCE.target_ref(manifest()))
     assert recipe["bootloader"] == selected["bootloader"] == ("grub2" if bootupd else "systemd")
     assert recipe["composeFsBackend"] is selected["composefs"] is (not bootupd)

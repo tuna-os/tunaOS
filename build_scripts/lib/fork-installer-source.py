@@ -34,8 +34,8 @@ def read_json(path):
     return json.loads(path.read_text(), object_pairs_hook=unique)
 
 
-def json_bytes(value):
-    return (json.dumps(value, sort_keys=True, indent=2) + "\n").encode()
+def json_bytes(value, *, sort_keys=True):
+    return (json.dumps(value, sort_keys=sort_keys, indent=2) + "\n").encode()
 
 
 def target_ref(manifest):
@@ -227,8 +227,10 @@ def finalize(manifest_path, root, probe, check=False, verify_only=False):
         raise ValueError("installer recipe/catalog metadata differs from measured boot payload")
     if check or verify_only:
         return
+    # Run 39209599456 opened disk first: recipe object order controls steps
+    # and tour slides. Preserve nested order; catalog serialization stays canonical.
     for path, value in ((recipe_path, recipe), (catalog_path, catalog)):
-        path.write_bytes(json_bytes(value))
+        path.write_bytes(json_bytes(value, sort_keys=path != recipe_path))
 
 
 def validate_entry(context, env):

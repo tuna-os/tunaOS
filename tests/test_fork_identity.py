@@ -1,7 +1,9 @@
 """Execute staged identity consumers; no container/GTK/boot acceptance claim."""
+import hashlib
 import importlib.util
 import json
 from pathlib import Path
+import shutil
 import subprocess
 
 import pytest
@@ -163,15 +165,91 @@ def test_existing_brand_adapter_reaches_identity_on_both_families(staged, tmp_pa
         assert "tunaos_apply_fork_branding" in (ROOT / "build_scripts/desktop" / entry).read_text()
 
 
-def test_full_preparation_marks_builds_blocked(staged, tmp_path):
+def test_full_preparation_preserves_recipe_order_through_identity(staged, tmp_path):
+    """Run 39209599456 opened disk first after recursive recipe key sorting.
+
+    Falsification: behavioural; each production writer must keep the template's
+    ordered steps and tour, while receipts bind the exact resulting bytes.
+    """
+    source = PREPARE.INSTALLER
+    stock = json.loads((ROOT / "system_files" / source.RECIPE).read_text())
+    assert list(stock["steps"]) == ["welcome", "image", "disk", "encryption"]
+    assert list(stock["tour"]) == ["welcome", "features", "community", "completed"]
+
+    def assert_order(actual, expected):
+        if isinstance(expected, dict):
+            assert list(actual) == list(expected)
+            for key, value in expected.items():
+                assert_order(actual[key], value)
+        elif isinstance(expected, list):
+            for item, original in zip(actual, expected, strict=True):
+                assert_order(item, original)
+
+    before = PREPARE.COMPILER.source_receipt(ROOT)
     output = tmp_path / "prepared"
     builds = PREPARE.prepare(staged, output, identity_staging=True)
     assert len(builds) == 2
     for build in builds:
         assert build["build_blocked"] == IDENTITY.BLOCKERS
-        manifest = output / build["context"] / "manifests/fork-identity.json"
+        context = output / build["context"]
+        manifest = context / "manifests/fork-identity.json"
         assert IDENTITY.load(manifest)["name"] == "Harbor"
+        base = context / "manifests/fork-config.json"
+        config = source.read_json(base)
+        assert config["sources"] == {"sha256": before["sha256"]}
+        prepared_recipe = source.read_json(context / "system_files" / source.RECIPE)
+        assert_order(prepared_recipe, stock)
+        root = tmp_path / ("root-" + config["variant"])
+        for relative in (source.RECIPE, source.CATALOG):
+            path = root / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(context / "system_files" / relative, path)
+        # Exercise the canonical probe on both measured backend layouts.
+        efi = ("usr/lib/bootupd/updates/EFI/test/grubx64.efi" if config["variant"] == "yellowfin"
+               else "usr/lib/systemd/boot/efi/systemd-bootx64.efi")
+        for relative, content in {
+            "usr/lib/os-release": 'ID=fixture\nNAME="Stock"\n',
+            "usr/share/ublue-os/image-info.json": json.dumps({"image-name": config["variant"], "image-flavor": "gnome"}),
+            efi: "fixture EFI payload",
+            "usr/lib/ostree/prepare-root.conf": "[composefs]\nenabled = " + ("no" if config["variant"] == "yellowfin" else "yes") + "\n",
+        }.items():
+            path = root / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content)
+        source.finalize(base, root, context / source.PROBE)
+        recipe_path = root / source.RECIPE
+        assert_order(source.read_json(recipe_path), stock)
+        finalized = recipe_path.read_bytes()
+        source.finalize(base, root, context / source.PROBE)
+        source.finalize(base, root, context / source.PROBE, verify_only=True)
+        assert recipe_path.read_bytes() == finalized
+        IDENTITY.apply(manifest, root)
+        assert_order(source.read_json(recipe_path), stock)
+        applied_path = root / "usr/share/tunaos/fork-identity/applied.json"
+        applied = source.read_json(applied_path)
+        assert list(applied) == sorted(applied)
+        assert applied[source.RECIPE] == hashlib.sha256(recipe_path.read_bytes()).hexdigest()
+        installed = root / "usr/share/tunaos/fork-identity/fork-config.json"
+        assert installed.read_bytes() == base.read_bytes()
+        snapshot = {p.relative_to(root): p.read_bytes() for p in root.rglob("*") if p.is_file()}
+        for _ in range(2):
+            IDENTITY.apply(manifest, root)
+            IDENTITY.verify(root)
+            source.finalize(base, root, context / source.PROBE, verify_only=True)
+            assert snapshot == {p.relative_to(root): p.read_bytes() for p in root.rglob("*") if p.is_file()}
+        reordered = source.read_json(recipe_path)
+        reordered["steps"] = dict(sorted(reordered["steps"].items()))
+        recipe_path.write_text(json.dumps(reordered, indent=2) + "\n")
+        with pytest.raises(ValueError, match="hash mismatch"):
+            IDENTITY.verify(root)
     assert not (ROOT / "manifests/fork-identity.json").exists()
+    assert PREPARE.COMPILER.source_receipt(ROOT) == before
+
+
+@pytest.mark.parametrize("helper", [IDENTITY, PREPARE.INSTALLER])
+def test_nonrecipe_json_serialization_stays_canonical(helper):
+    value = {"z": {"second": 2, "first": 1}, "a": 3}
+    assert helper.json_bytes(value) == (json.dumps(value, sort_keys=True, indent=2) + "\n").encode()
 
 
 def test_non_png_and_unsupported_desktop_fail(staged):
@@ -354,6 +432,9 @@ def test_recipe_tour_projects_stock_copy_and_art_only(staged, tmp_path):
     assert "TunaOS" not in actual["tour"]["completed"]["description"]
     assert actual["tour"]["welcome"]["image"] == "/run/host/usr/share/pixmaps/tunaos.svg"
     assert actual["tour"]["custom"] == recipe["tour"]["custom"]
+    assert list(actual["tour"]) == list(recipe["tour"])
+    assert list(actual["tour"]["welcome"]) == list(recipe["tour"]["welcome"])
+    assert list(actual["steps"]) == list(recipe["steps"])
     assert actual["imgref"] == recipe["imgref"]
     IDENTITY.verify(root)
 

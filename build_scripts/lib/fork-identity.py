@@ -161,8 +161,8 @@ def gdm_updates(root):
     return {profile: ("\n".join(lines) + "\n").encode()}
 
 
-def json_bytes(value):
-    return (json.dumps(value, sort_keys=True, indent=2) + "\n").encode()
+def json_bytes(value, *, sort_keys=True):
+    return (json.dumps(value, sort_keys=sort_keys, indent=2) + "\n").encode()
 
 
 def boot_updates(manifest, root, m):
@@ -224,7 +224,9 @@ def installer_updates(manifest, root, m):
                 # branding logo remains unprefixed for the shared resolver.
                 slide["image"] = "/run/host" + branding["logo"]
         recipe.update(distro_name=m["name"], distro_logo=branding["logo"], welcome_title="Welcome to " + m["name"])
-        updates[path] = json_bytes(recipe)
+        # Recipe steps and tour slides follow insertion order, including custom
+        # entries. Sorting this display-only update changes installer navigation.
+        updates[path] = json_bytes(recipe, sort_keys=False)
     # Existing catalog entries may include other distributions. Update only
     # the leaf whose exact image ref matches the recipe; preserve every option.
     path = target(root, "etc/bootc-installer/images.json")

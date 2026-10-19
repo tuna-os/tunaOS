@@ -29,10 +29,10 @@ def metadata():
 
 def test_exact_artifact_source_and_zip_provenance():
     receipt = PROOF.validate_metadata(*metadata())
-    assert receipt["artifact_id"] == 12167011212
-    assert receipt["run_id"] == 39208307700
-    assert receipt["source_head"] == "4822697262cc73bc0b2a35cd8e13f76c4de8e196"
-    assert receipt["recorded_tested_merge"] == "a4960c059d901141db40639af4401e52b223f887"
+    assert receipt["artifact_id"] == 12169166635
+    assert receipt["run_id"] == 39214448822
+    assert receipt["source_head"] == "7bf74f727a3a8696f6d7f7b509d51150939d8d1e"
+    assert receipt["recorded_tested_merge"] == "01d54aa3bfd9e2a6e350d956a95eab449c7a13b4"
 
 
 @pytest.mark.parametrize("key,value", [("id", 123), ("name", "different.flatpak"),
@@ -79,7 +79,7 @@ def test_api_denial_is_bounded_and_never_falls_back_or_logs_token(monkeypatch, s
             raise urllib.error.HTTPError(request.full_url, status, "denied sensitive-test-token", {}, None)
     monkeypatch.setattr(PROOF.urllib.request, "build_opener", lambda *args: Opener())
     with pytest.raises(RuntimeError, match=f"HTTP {status}") as error:
-        PROOF.api_request("/actions/artifacts/12167011212", "sensitive-test-token")
+        PROOF.api_request("/actions/artifacts/12169166635", "sensitive-test-token")
     assert "sensitive-test-token" not in str(error.value)
     assert len(calls) == 1
 
@@ -137,8 +137,8 @@ def test_reject_symlink_zip_member(tmp_path, monkeypatch):
 def window():
     launched = {"uid": 1000, "started_at": 123.45}
     installed = {"app_commit": "app-commit"}
-    observed = {"instances": [{"uid": 1000, "application": PROOF.APP, "app_commit": "app-commit"}],
-                "stamps": [{"uid": 1000, "fields": {"app_id": PROOF.APP, "window": "BootcWindow",
+    observed = {"instances": [{"pid": 42, "uid": 1000, "application": PROOF.APP, "app_commit": "app-commit"}],
+                "stamps": [{"pid": 42, "namespace": "app-process-root", "uid": 1000, "fields": {"app_id": PROOF.APP, "window": "BootcWindow",
                                                    "signal": "gtk-map", "mapped_at": "123.46"}}]}
     return observed, launched, installed
 
@@ -331,7 +331,8 @@ def test_fisherman_diagnostics_reads_elf_interpreter_without_running_binary(tmp_
     struct.pack_into("<Q", program, 8, 120)
     struct.pack_into("<Q", program, 32, len(interpreter))
     binary.write_bytes(header + program + interpreter)
-    monkeypatch.setattr(Path, "home", lambda: home)
+    import sys
+    monkeypatch.setitem(sys.modules, "bootc_installer.utils.fisherman_runner", SimpleNamespace(HOST_PATH=str(binary)))
     commands = []
     def fake_run(args, **kwargs):
         commands.append(args)
@@ -344,3 +345,29 @@ def test_fisherman_diagnostics_reads_elf_interpreter_without_running_binary(tmp_
     assert result["interpreter"]["path"] == interpreter.rstrip(b"\0").decode()
     assert ["flatpak-spawn", "--host", "stat", "--", result["interpreter"]["path"]] in commands
     assert ["flatpak-spawn", "--host", "sha256sum", "--", str(binary)] in commands
+
+
+@pytest.mark.parametrize("field,value", [("pid", 43), ("namespace", "host-runtime"), ("uid", 0)])
+def test_readiness_stamp_must_belong_to_exact_live_app_namespace(field, value):
+    observed, launched, installed = window()
+    observed["stamps"][0][field] = value
+    assert not PROOF.validate_window(observed, launched, installed)
+
+
+@pytest.mark.parametrize("exits", [False, True])
+def test_observer_reads_actual_app_process_runtime_not_host_paths(tmp_path, capsys, exits):
+    namespace = tmp_path / "42/root/run/user/1000"
+    namespace.mkdir(parents=True)
+    (namespace / "tuna-installer-ready").write_text("window=BootcWindow\nsignal=gtk-map\n")
+    instance = {"pid": 42, "uid": 1000, "application": PROOF.APP, "app_commit": "app-commit"}
+    calls = iter([[instance], [] if exits else [instance]])
+    scope = {"instances": lambda: next(calls), "PROC_ROOT": tmp_path,
+             "runtime": Path("/run/user/1000"), "json": json}
+    exec(PROOF.GUEST_OBSERVE.removeprefix(PROOF.GUEST_COMMON), scope)
+    result = json.loads(capsys.readouterr().out)
+    if exits:
+        assert result == {"instances": [], "stamps": []}
+    else:
+        assert result["stamps"][0]["pid"] == 42
+        assert result["stamps"][0]["namespace"] == "app-process-root"
+        assert result["stamps"][0]["fields"]["signal"] == "gtk-map"

@@ -1797,3 +1797,20 @@ recipe and selected leaf using the canonical root probe before identity hashes.
 `tests/test_fork_installer_source.py` exercises the real probe for bootupd/sealed
 combinations, stock-source rejection, inherited catalog refs, and repeated writes;
 it does not replace native installer or installed-boot qualification.
+
+### Fork installer opens the disk page before welcome
+
+**Cause:** Native run `39209599456` showed the disk page first on Yellowfin and
+Grouper. The builder logged `disk,encryption,image,welcome`, but the source
+recipe has `welcome,image,disk,encryption`. Each writer sorted all keys, even in
+nested objects. The installer uses object order for steps
+and tour slides, so those writes changed the UI sequence.
+
+**Fix:** Keep the recipe's nested object order in all three writers. Keep sorted
+JSON for catalogs and receipts. Hash the exact recipe bytes after the final write.
+`test_full_preparation_preserves_recipe_order_through_identity` runs preparation,
+the actual backend probe and repeated identity writes in fixture roots. It checks
+step and tour order, stable bytes and detection of a changed recipe hash.
+
+These source tests do not prove that the welcome screen appears first. Rebuild
+and check the actual installer before you claim that result.

@@ -187,7 +187,10 @@ def prepare(config_path, output, root=ROOT, identity_staging=False):
             raise ConfigError("sources changed during preparation; discard output and retry after review")
         for relative, value in ((INSTALLER.RECIPE, cell["installer_recipe"]),
                                 (INSTALLER.CATALOG, cell["installer_catalog"])):
-            (context / "system_files" / relative).write_bytes(INSTALLER.json_bytes(value))
+            # Recipe object order is executable UI order; receipts/catalogs
+            # retain their existing canonical serialization.
+            (context / "system_files" / relative).write_bytes(
+                INSTALLER.json_bytes(value, sort_keys=relative != INSTALLER.RECIPE))
         # Containerfiles copy build_scripts, not live-iso. Keep one canonical
         # backend implementation and carry its exact reviewed bytes into builds.
         shutil.copyfile(context / "live-iso/common/src/installer-recipe-backend.sh", context / INSTALLER.PROBE)
