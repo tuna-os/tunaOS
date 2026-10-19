@@ -5,8 +5,11 @@ No widget setters, accessibility actions, demo variables, or autoinstall API.
 Password fields are identified by role/focus; their text is never read.
 """
 
+import json
 import re
+import tempfile
 import time
+from pathlib import Path
 
 # Executed as the already authenticated desktop user. Atspi is the platform's
 # normal accessibility observer, not a process injection or application test API.
@@ -18,7 +21,7 @@ from gi.repository import Atspi
 Atspi.set_timeout(1500, 3000)
 allowed = __PIDS__
 rows = []
-seen = set()
+objects = []
 root = Atspi.get_desktop(0)
 def visit(node, parent, depth):
     if depth > 24 or len(rows) >= 1800:
@@ -32,7 +35,8 @@ def visit(node, parent, depth):
     states = {label: state.contains(value) for label, value in (
         ("showing", Atspi.StateType.SHOWING), ("visible", Atspi.StateType.VISIBLE),
         ("enabled", Atspi.StateType.ENABLED), ("sensitive", Atspi.StateType.SENSITIVE),
-        ("focused", Atspi.StateType.FOCUSED), ("checked", Atspi.StateType.CHECKED))}
+        ("focused", Atspi.StateType.FOCUSED), ("checked", Atspi.StateType.CHECKED),
+        ("active", Atspi.StateType.ACTIVE), ("defunct", Atspi.StateType.DEFUNCT))}
     name = node.get_name() or ""
     # Names label controls. Never call Atspi.Text or EditableText: those expose
     # values and would make secret entry part of the observation surface.
@@ -45,7 +49,8 @@ def visit(node, parent, depth):
     except Exception:
         pass
     rows.append({"id": key, "parent": parent, "pid": pid, "role": role,
-                 "name": name, "states": states, "bounds": bounds})
+                 "name": name, "states": states, "bounds": bounds, "role_id": int(node.get_role())})
+    objects.append(node)
     count = node.get_child_count()
     if count > 1800:
         raise ValueError("accessibility child count exceeds bound")
@@ -57,22 +62,54 @@ for index in range(root.get_child_count()):
     app = root.get_child_at_index(index)
     if app is not None and app.get_process_id() in allowed:
         visit(app, None, 0)
+relation_targets = 0
+for index, node in enumerate(objects):
+    relations = {}
+    relation_set = node.get_relation_set() or []
+    if len(relation_set) > 32:
+        raise ValueError("accessibility relation set exceeds bound")
+    for relation in relation_set:
+        kind = relation.get_relation_type()
+        label = {Atspi.RelationType.LABELLED_BY: "labelled_by",
+                 Atspi.RelationType.DESCRIBED_BY: "described_by"}.get(kind)
+        if label is None:
+            continue
+        if label in relations:
+            raise ValueError("duplicate accessibility label relation")
+        count = relation.get_n_targets()
+        if count < 0 or count > 32:
+            raise ValueError("accessibility relation exceeds bound")
+        relation_targets += count
+        if relation_targets > 4096:
+            raise ValueError("accessibility relation target total exceeds bound")
+        targets = []
+        for offset in range(count):
+            target = relation.get_target(offset)
+            # GI wrappers need not be hashable or the same Python instance.
+            match = next((i for i, candidate in enumerate(objects) if candidate == target), None)
+            if match is None:
+                raise ValueError("accessibility label relation has an unresolved target")
+            targets.append(match)
+        relations[label] = targets
+    rows[index]["relations"] = relations
 print(json.dumps({"schema_version": 1, "nodes": rows}))
 """
 
 
-def select(snapshot, name, roles, *, focused=False):
+def select(snapshot, name, roles, *, focused=False, pid=None):
     if not isinstance(snapshot, dict) or snapshot.get("schema_version") != 1:
         raise ValueError("invalid accessibility observation")
     candidates = [
         node
         for node in snapshot.get("nodes", [])
-        if node.get("name", "").casefold() == name.casefold()
+        if (pid is None or node.get("pid") == pid)
+        and node.get("name", "").casefold() == name.casefold()
         and node.get("role") in roles
         and all(
             node.get("states", {}).get(k) is True
             for k in ("visible", "showing", "enabled", "sensitive")
         )
+        and node.get("states", {}).get("defunct") is not True
         and (not focused or node["states"].get("focused") is True)
     ]
     if len(candidates) != 1:
@@ -128,15 +165,272 @@ def visible_label(node, rows, phrase, size):
         ) / 2
         if x <= cx <= x + w and y <= cy <= y + h:
             found.append((cx, cy))
-    if len(found) != 1:
+    if len(found) > 1:
+        raise ValueError("ambiguous visible text within accessibility control")
+    if not found:
         raise ValueError("accessibility control is not paired with its visible text")
     return found[0]
 
 
+def tree(snapshot):
+    if not isinstance(snapshot, dict) or snapshot.get("schema_version") != 1:
+        raise ValueError("invalid accessibility observation")
+    rows = snapshot.get("nodes")
+    if not isinstance(rows, list) or len(rows) > 1800:
+        raise ValueError("accessibility tree exceeds bound")
+    nodes = {}
+    for row in rows:
+        if (
+            not isinstance(row, dict)
+            or type(row.get("id")) is not int
+            or row["id"] < 0
+            or row["id"] in nodes
+            or type(row.get("pid")) is not int
+            or row["pid"] <= 0
+        ):
+            raise ValueError("invalid accessibility node identity")
+        parent = row.get("parent")
+        if parent is not None and (
+            type(parent) is not int or parent not in nodes or nodes[parent]["pid"] != row["pid"]
+        ):
+            raise ValueError("invalid accessibility ancestry")
+        nodes[row["id"]] = row
+    return nodes
+
+
+def ancestors(node, nodes):
+    result = []
+    while node.get("parent") is not None:
+        node = nodes[node["parent"]]
+        result.append(node)
+        if len(result) > 24:
+            raise ValueError("accessibility ancestry exceeds bound")
+    return result
+
+
+def showing(node, *, enabled=False):
+    keys = ("visible", "showing", "enabled", "sensitive") if enabled else ("visible", "showing")
+    return node.get("states", {}).get("defunct") is not True and all(
+        node.get("states", {}).get(key) is True for key in keys
+    )
+
+
+def inside(child, parent, size):
+    x, y, w, h = rect(child, size)
+    px, py, pw, ph = rect(parent, size)
+    if not (px <= x and py <= y and x + w <= px + pw and y + h <= py + ph):
+        raise ValueError("control is outside its bound accessible row/window")
+
+
+def in_window(node, window, snapshot, size):
+    if node["id"] != window["id"] and window not in ancestors(node, tree(snapshot)):
+        raise ValueError("control does not descend from the active installer window")
+    inside(node, window, size)
+
+
+class InactiveInstallerError(ValueError):
+    """An ordinary unfocused window may be activated with a bound heading click."""
+
+
+def active_app(snapshot, pid, size):
+    nodes = tree(snapshot)
+    frames = [
+        n
+        for n in nodes.values()
+        if n["pid"] == pid
+        and n.get("role") in ("frame", "window")
+        and showing(n)
+        and n.get("states", {}).get("active") is True
+    ]
+    if not frames:
+        raise InactiveInstallerError("installer does not have one active visible window")
+    if len(frames) != 1:
+        raise ValueError("installer has ambiguous active windows")
+    frame = frames[0]
+    rect(frame, size)
+    focused = [
+        n
+        for n in nodes.values()
+        if n["pid"] == pid
+        and showing(n)
+        and n.get("states", {}).get("focused") is True
+        and frame in ancestors(n, nodes)
+    ]
+    if not focused:
+        if frame.get("states", {}).get("focused") is True:
+            raise ValueError("installer frame focus does not prove focused input descendant")
+        raise InactiveInstallerError("installer window has no observed input focus")
+    return frame
+
+
+def titled_row(snapshot, name, pid, size):
+    """Adw.ActionRow's exact title binds its nearest GtkListBoxRow ancestor."""
+    nodes = tree(snapshot)
+    titles = [
+        n
+        for n in nodes.values()
+        if n["pid"] == pid
+        and showing(n)
+        and n.get("name", "").casefold() == name.casefold()
+        and n.get("role") in ("label", "list item")
+    ]
+    matches = {}
+    for title in titles:
+        lineage = [title] + ancestors(title, nodes)
+        rows = [n for n in lineage if n.get("role") == "list item"]
+        if not rows:
+            continue
+        row = rows[0]
+        if showing(row, enabled=True):
+            inside(title, row, size)
+            matches.setdefault(row["id"], (row, []))[1].append(title)
+    if len(matches) != 1:
+        raise ValueError("expected one visible titled action row: " + name)
+    row, titles = next(iter(matches.values()))
+    labels = [title for title in titles if title["role"] == "label"]
+    if len(labels) > 1:
+        raise ValueError("action row title label is ambiguous")
+    title = labels[0] if labels else row
+    if row.get("name", "").casefold() not in ("", name.casefold()):
+        raise ValueError("action row has a contradictory accessible name")
+    labelled_by = row.get("relations", {}).get("labelled_by")
+    # Adw.ActionRow explicitly labels itself with its title GtkLabel. Require
+    # that relation when its own computed name is empty, and reject conflicts.
+    if labelled_by is not None:
+        if labelled_by != [title["id"]] or title["role"] != "label":
+            raise ValueError("action row title relation is absent or contradictory")
+    elif row.get("name", "").casefold() != name.casefold():
+        raise ValueError("action row title has no exact accessibility binding")
+    return row, title
+
+
+def row_switch(snapshot, name, pid, size):
+    nodes = tree(snapshot)
+    row, title = titled_row(snapshot, name, pid, size)
+    switches = [
+        n
+        for n in nodes.values()
+        if n["pid"] == pid
+        and n.get("role") in ("check box", "toggle button", "switch")
+        and showing(n, enabled=True)
+        and next((a for a in ancestors(n, nodes) if a.get("role") == "list item"), None) == row
+    ]
+    if len(switches) != 1:
+        raise ValueError("expected exactly one switch in the titled encryption row")
+    switch = switches[0]
+    # An unnamed suffix is valid; a different explicit label is not.
+    if switch.get("name", "").casefold() not in ("", name.casefold()):
+        raise ValueError("encryption suffix has another accessible label")
+    labelled_by = switch.get("relations", {}).get("labelled_by")
+    if labelled_by is not None and labelled_by != [title["id"]]:
+        raise ValueError("encryption suffix has a contradictory title relation")
+    inside(switch, row, size)
+    return row, title, switch
+
+
+DIAGNOSTIC_NAMES = {
+    "",
+    "Welcome to Harbor Canary",
+    "Install Harbor Canary",
+    "Power Off",
+    "Credits",
+    "Type to search",
+    "Disk Encryption",
+    "Encrypt this disk",
+    "Use hardware-backed encryption",
+    "Create User",
+    "Name",
+    "Username",
+    "Password",
+    "Confirm Password",
+    "Next",
+    "Back",
+    "Install",
+    "Choose an Image",
+    "Harbor Canary",
+    "Confirm installation",
+    "Install Location",
+    "Authentication Required",
+    "canary",
+    "Harbor Canary is installed",
+}
+
+
+def safe_snapshot(snapshot):
+    """Keep only structural facts and known static labels, never field values."""
+    nodes = tree(snapshot)
+    safe = []
+    for node in nodes.values():
+        role = node.get("role")
+        if not isinstance(role, str) or not re.fullmatch(r"[a-z -]{1,80}", role):
+            raise ValueError("invalid accessibility role")
+        bounds = node.get("bounds")
+        if bounds is not None and (
+            not isinstance(bounds, list)
+            or len(bounds) != 4
+            or any(type(v) is not int or abs(v) > 2**31 for v in bounds)
+        ):
+            raise ValueError("invalid accessibility bounds")
+        states = node.get("states", {})
+        if not isinstance(states, dict) or len(states) > 32:
+            raise ValueError("invalid accessibility states")
+        name = node.get("name", "")
+        if not isinstance(name, str) or len(name) > 512:
+            raise ValueError("invalid accessibility name")
+        safe.append(
+            {
+                "id": node["id"],
+                "parent": node.get("parent"),
+                "pid": node["pid"],
+                "role": role,
+                "name": name if name in DIAGNOSTIC_NAMES else "<omitted>",
+                "bounds": bounds,
+                "states": {
+                    k: states[k]
+                    for k in (
+                        "visible",
+                        "showing",
+                        "enabled",
+                        "sensitive",
+                        "focused",
+                        "checked",
+                        "active",
+                        "defunct",
+                    )
+                    if type(states.get(k)) is bool
+                },
+            }
+        )
+    for original, item in zip(nodes.values(), safe, strict=True):
+        if type(original.get("role_id")) is int and 0 <= original["role_id"] <= 1024:
+            item["role_id"] = original["role_id"]
+        relations = original.get("relations", {})
+        if not isinstance(relations, dict) or len(relations) > 32:
+            raise ValueError("invalid accessibility relations")
+        item["relations"] = {}
+        for key in ("labelled_by", "described_by"):
+            if key in relations:
+                targets = relations[key]
+                if (
+                    not isinstance(targets, list)
+                    or len(targets) > 32
+                    or any(type(t) is not int or t not in nodes for t in targets)
+                ):
+                    raise ValueError("invalid accessibility relation targets")
+                item["relations"][key] = targets
+    result = {"schema_version": 1, "nodes": safe}
+    if len(json.dumps(result, ensure_ascii=True)) > 512 * 1024:
+        raise ValueError("safe accessibility evidence exceeds bound")
+    return result
+
+
 class UI:
-    def __init__(self, qmp, screenshot, snapshot, words):
+    def __init__(
+        self, qmp, screenshot, snapshot, words, *, app_pid=None, private=None, evidence=None
+    ):
         self.qmp, self.screenshot, self.snapshot, self.words = qmp, screenshot, snapshot, words
         self.counter = 0
+        self.app_pid, self.private, self.evidence = app_pid, private, evidence
 
     def capture(self, label):
         from PIL import Image
@@ -145,12 +439,95 @@ class UI:
         frame = self.screenshot(f"ui-{self.counter:03d}-{label}.png")
         with Image.open(frame) as image:
             size = image.size
-        return frame, size, self.words(frame), self.snapshot()
+        snapshot = self.snapshot()
+        if self.evidence is not None:
+            self.evidence(
+                {"frame": Path(frame).name, "size": list(size), "snapshot": safe_snapshot(snapshot)}
+            )
+        return frame, size, self.words(frame), snapshot
+
+    def label_point(self, frame, node, rows, phrase, size):
+        try:
+            return visible_label(node, rows, phrase, size)
+        except ValueError as error:
+            if self.private is None or "ambiguous" in str(error):
+                raise
+        # Low-contrast GTK button text is missed by full-frame OCR in run15.
+        # Crop only the accessibility-bound label/control and require all exact
+        # tokens at high confidence; never expand to a guessed screen region.
+        from PIL import Image, ImageOps
+
+        x, y, w, h = rect(node, size)
+        with Image.open(frame) as source:
+            crop = ImageOps.autocontrast(ImageOps.grayscale(source.crop((x, y, x + w, y + h))))
+            crop = crop.resize((w * 4, h * 4), Image.Resampling.LANCZOS)
+            with tempfile.TemporaryDirectory(prefix="control-ocr-", dir=self.private) as temporary:
+                path = Path(temporary) / "control.png"
+                crop.save(path)
+                text = self.words(path, psm=7, confidence=0)
+        if [r["text"].strip().casefold() for r in text] != phrase.casefold().split() or any(
+            float(r["conf"]) < 80 for r in text
+        ):
+            raise ValueError("bound control crop does not contain the exact visible label")
+        return x + w / 2, y + h / 2
+
+    def start_welcome(self, name="Install Harbor Canary"):
+        if self.app_pid is None:
+            raise ValueError("Welcome navigation requires a bound installer process")
+        frame, size, words, snapshot = self.capture("welcome-focus")
+        escaped = False
+        if phrase_rows(words, "Type to search"):
+            self.qmp.key("esc")
+            escaped = True
+            time.sleep(1)
+            frame, size, words, snapshot = self.capture("welcome-after-overview")
+        if phrase_rows(words, "Type to search"):
+            raise ValueError("GNOME overview is still visible")
+        try:
+            active_app(snapshot, self.app_pid, size)
+        except InactiveInstallerError:
+            visible_windows = [
+                n
+                for n in tree(snapshot).values()
+                if n["pid"] == self.app_pid and n.get("role") in ("frame", "window") and showing(n)
+            ]
+            if len(visible_windows) != 1:
+                raise ValueError("Welcome activation requires one unambiguous visible window")
+            title = select(snapshot, "Welcome to Harbor Canary", ("label",), pid=self.app_pid)
+            windows = [
+                n
+                for n in ancestors(title, tree(snapshot))
+                if n.get("role") in ("frame", "window") and showing(n)
+            ]
+            if len(windows) != 1:
+                raise ValueError("Welcome heading is not bound to one installer window")
+            inside(title, windows[0], size)
+            self.point(
+                self.label_point(frame, title, words, "Welcome to Harbor Canary", size), size
+            )
+            frame, size, words, snapshot = self.capture("welcome-focused")
+        window = active_app(snapshot, self.app_pid, size)
+        if phrase_rows(words, "Type to search"):
+            raise ValueError("GNOME overview obscures the active installer")
+        row, title = titled_row(snapshot, name, self.app_pid, size)
+        in_window(row, window, snapshot, size)
+        point = self.label_point(frame, title, words, name, size)
+        self.point(point, size)
+        return {
+            "pid": self.app_pid,
+            "role": row["role"],
+            "name": name,
+            "bounds": row["bounds"],
+            "overview_escape": escaped,
+            "active_window_and_focus_verified": True,
+        }
 
     def click(self, name, roles=("push button",), *, label=None):
-        _, size, words, snapshot = self.capture("control")
-        node = select(snapshot, name, roles)
-        point = visible_label(node, words, label or name, size)
+        frame, size, words, snapshot = self.capture("control")
+        node = select(snapshot, name, roles, pid=self.app_pid)
+        if self.app_pid is not None:
+            in_window(node, active_app(snapshot, self.app_pid, size), snapshot, size)
+        point = self.label_point(frame, node, words, label or name, size)
         self.point(point, size)
         return {"name": name, "role": node["role"], "pid": node["pid"], "bounds": node["bounds"]}
 
@@ -185,34 +562,57 @@ class UI:
         # Entry coordinates need not contain their label on all GTK versions;
         # click its checked center, then independently prove actual input focus.
         _, size, _, snapshot = self.capture("field")
-        node = select(snapshot, name, roles)
+        node = select(snapshot, name, roles, pid=self.app_pid)
+        if self.app_pid is not None:
+            in_window(node, active_app(snapshot, self.app_pid, size), snapshot, size)
         x, y, w, h = rect(node, size)
         self.point((x + w / 2, y + h / 2), size)
-        focused = select(self.snapshot(), name, roles, focused=True)
+        fresh = self.snapshot()
+        focused = select(fresh, name, roles, focused=True, pid=self.app_pid)
+        if self.app_pid is not None:
+            in_window(focused, active_app(fresh, self.app_pid, size), fresh, size)
         if focused["pid"] != node["pid"]:
             raise ValueError("input focus moved to another application")
+        if any(focused.get(key) != node.get(key) for key in ("role", "bounds")):
+            raise ValueError("input focus moved away from the exact bound control")
         self.qmp.key("ctrl", "a")
         self.qmp.type(value)
         # Never read field text, and never return the supplied value.
         return {"name": name, "role": node["role"], "typed": True, "secret": secret}
 
     def toggle_off(self, name):
-        _, size, words, snapshot = self.capture("encryption")
-        # Adw.ActionRow associates its title with the suffix Gtk.Switch. Both
-        # must be visible in the same row before touching the switch.
-        node = select(snapshot, name, ("check box", "toggle button", "switch"))
-        x, y, w, h = rect(node, size)
-        matches = phrase_rows(words, name)
-        aligned = [
-            rows for rows in matches if all(y - h <= int(row["top"]) <= y + 2 * h for row in rows)
-        ]
-        if len(aligned) != 1 or node["states"].get("checked") is not True:
+        frame, size, words, snapshot = self.capture("encryption")
+        if self.app_pid is None:
+            raise ValueError("encryption control requires a bound installer process")
+        window = active_app(snapshot, self.app_pid, size)
+        row, title, node = row_switch(snapshot, name, self.app_pid, size)
+        in_window(row, window, snapshot, size)
+        self.label_point(frame, title, words, name, size)
+        if node["states"].get("checked") is not True:
             raise ValueError("expected checked encryption switch with visible row label")
+        x, y, w, h = rect(node, size)
         self.point((x + w / 2, y + h / 2), size)
-        changed = select(self.snapshot(), name, ("check box", "toggle button", "switch"))
-        if changed["pid"] != node["pid"] or changed["states"].get("checked") is not False:
+        changed_snapshot = self.snapshot()
+        active_app(changed_snapshot, self.app_pid, size)
+        changed_row, _, changed = row_switch(changed_snapshot, name, self.app_pid, size)
+        in_window(
+            changed_row, active_app(changed_snapshot, self.app_pid, size), changed_snapshot, size
+        )
+        if (
+            changed["pid"] != node["pid"]
+            or changed["role"] != node["role"]
+            or changed["bounds"] != node["bounds"]
+            or changed["states"].get("checked") is not False
+        ):
             raise ValueError("native encryption switch did not turn off")
-        return {"name": name, "checked_before": True, "checked_after": False}
+        return {
+            "name": name,
+            "pid": node["pid"],
+            "row_bounds": row["bounds"],
+            "switch_bounds": node["bounds"],
+            "checked_before": True,
+            "checked_after": False,
+        }
 
     def authenticate(self, password, shell_pid):
         frame, size, words, snapshot = self.capture("polkit-password")

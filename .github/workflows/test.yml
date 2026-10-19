@@ -104,7 +104,7 @@ jobs:
         run: |
           # Real loginctl regression uses an isolated read-only D-Bus fixture.
           sudo apt-get update
-          sudo apt-get install -y python3-gi dbus-daemon dbus-bin
+          sudo apt-get install -y python3-gi dbus-daemon dbus-bin tesseract-ocr
 
           # BATS (bash automated testing system)
           brew install bats-core

@@ -1143,7 +1143,13 @@ print(json.dumps(values))
         return path
 
     ui = UI_MODULE.UI(
-        vm.qmp, screenshot, lambda: accessibility(access, private, [app["pid"], shell]), LOGIN.words
+        vm.qmp,
+        screenshot,
+        lambda: accessibility(access, private, [app["pid"], shell]),
+        LOGIN.words,
+        app_pid=app["pid"],
+        private=private,
+        evidence=lambda value: report.__setitem__("native_ui_observation", value),
     )
     # Probe accessibility before any navigation, so a missing platform bridge
     # fails without touching the install confirmation.
@@ -1158,9 +1164,8 @@ print(json.dumps(values))
     require(
         not process_evidence(access, private, helper), "privileged installer was already running"
     )
-    # Welcome's selected primary row is the real app default. A fresh verified
-    # welcome frame above precedes this ordinary Enter key.
-    vm.qmp.key("ret")
+    # The app may still be previewed in GNOME overview; never send an unbound Enter.
+    report["welcome_control"] = ui.start_welcome()
     user_entered = False
     encryption_off = False
     deadline = time.monotonic() + 300

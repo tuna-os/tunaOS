@@ -1875,3 +1875,56 @@ The reader uses only the private file for this channel, with no console fallback
 Tests write to both channels at the same time. Noise on the console does not change the
 observer file. Corrupt JSON in that file still fails. The BASE parser stays strict.
 A new native run must pass both the BASE check and observation through the private port.
+
+### Fork installer stays at Welcome or cannot select the encryption switch
+
+**Symptom:** [Run 39253040831](https://github.com/tuna-os/tunaOS/actions/runs/39253040831)
+passed both cold-source logins and blank-target checks, then stopped before Install.
+Yellowfin's `ui-067-wizard-page.png` still shows GNOME overview; Grouper's
+`ui-003-encryption.png` shows Disk Encryption with its switch enabled.
+
+**Cause:** Enter did not prove that the installer had input focus.
+The switch selector checked its name but not its parent ActionRow.
+The run saved no AT-SPI trees, so its precise switch name is unknown.
+In the pinned [installer template](https://github.com/tuna-os/bootc-installer/blob/64217e6f53f40c2d0343d44c2b7fcd6f59c274dd/bootc_installer/gtk/default-encryption.blp#L43-L89),
+the switch sits inside the titled row. [Adw.ActionRow](https://github.com/GNOME/libadwaita/blob/5808d27bd19fd16af6bafdb35c64c4a492daeaf5/src/adw-action-row.ui#L4-L9)
+labels the row through its title widget. An incidental subtitle does not prove the row's identity.
+
+**Fix:** Exit observed overview with Escape. Check that one installer window is
+active and has a focused descendant. Click its visible Welcome row by exact title.
+Bind the encryption switch to the nearest titled row and exact process.
+Check its ancestry under the active window and its bounds.
+Reject duplicate matches, hidden/defunct controls and labels that conflict.
+
+After a field click, recheck focus and control identity before text input.
+All input still uses ordinary QMP pointer/keyboard events. No widget setters are used.
+
+Full-frame OCR misses the orange Next label in the same Grouper screenshot.
+A fallback crops only the control from its checked bounds.
+It accepts only the complete exact label at high confidence.
+Ambiguous matches in the full frame still fail.
+
+Native screenshots and their run/artifact hashes are fixtures. Test accessibility
+trees are explicitly source-shaped, not native captures. The report in
+`install-proof.json` now has a bounded `native_ui_observation`. This contains
+structural facts, static allowlisted names, focus states and label relations.
+It excludes field text and arbitrary names. A native rerun must verify runtime
+focus and accessibility behavior.
+
+### Fork harness-only fixes repeatedly rebuild the original OCI pair
+
+The compiler source receipt includes `scripts/**/*`.
+In [run 39235973978](https://github.com/tuna-os/tunaOS/actions/runs/39235973978),
+the original layers for Yellowfin and Grouper totalled about 8.5 GiB.
+A host harness fix starts another full build in the combined workflow.
+The old image must retain the hashes of its actual source.
+
+The [artifact transport](fork-image-artifacts.md) retains only the original OCI files
+and explicit receipts after both original images pass their build, boot and export checks.
+Uploads precede login and installation tests. Artifacts expire after three days.
+A later run can select an exact pair through the PR's pin file.
+Original receipts keep their bytes; a separate record identifies the new harness and its changed inputs.
+
+Changes to the image source or embedded observer need a new build.
+Expired or corrupt artifacts and ambiguous pins stop the run.
+There is no fallback. Fixture tests do not prove a native upload, download or installation.

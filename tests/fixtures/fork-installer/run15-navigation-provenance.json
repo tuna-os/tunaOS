@@ -1,0 +1,21 @@
+{
+  "run_id": 39253040831,
+  "source_head": "d68e390e83e5536b0c384f758c159c47d9edb983",
+  "artifact_id": 12189877355,
+  "artifact_zip_sha256": "16e622ea848344d92cef68acc52753b0f4713d80c87c7d65a225d631d373d32a",
+  "files": [
+    {
+      "file": "run15-yellowfin-overview.png",
+      "artifact_path": "yellowfin/installed-proof/ui-067-wizard-page.png",
+      "bytes": 53746,
+      "sha256": "b4b5067c0813b4844eb49c79aba2564a0f92dfe147288695bb0fb9e0b727c7d3"
+    },
+    {
+      "file": "run15-grouper-encryption.png",
+      "artifact_path": "grouper/installed-proof/ui-003-encryption.png",
+      "bytes": 50271,
+      "sha256": "3fb0aafbf604eac3af54e347f9cda44c458343b520f1c5fa531be133c7841c6f"
+    }
+  ],
+  "accessibility_tree": "Not recorded in run15; regression trees are source-shaped fixtures, not native captures."
+}

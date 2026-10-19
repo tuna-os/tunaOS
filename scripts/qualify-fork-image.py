@@ -229,7 +229,7 @@ echo TUNAOS_FORK_GREETER_DIAGNOSTICS_END
         if failed:
             raise ValueError("guest qualification failed: " + ", ".join(failed))
         # Bind the finalized original image to local-only installer media.
-        # Keep the OCI layers on the runner; upload only the external receipt.
+        # A separate producer allowlists and bounds any public Actions artifact.
         report["source_export"] = "running"
         exporter = module("fork_source_export", ROOT / "scripts/export-fork-source.py")
         report["exported_source"] = exporter.export(context / "manifests/fork-config.json", out / "oci-export")
