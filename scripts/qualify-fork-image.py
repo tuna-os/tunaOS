@@ -52,6 +52,29 @@ def authorize(context):
     return receipt
 
 
+def install_target_observer(context):
+    """Add read-only serial proof only to an admitted local canary context."""
+    if not IDENTITY.qualification(context / "manifests/fork-identity.json"):
+        raise ValueError("target observer requires exact qualification authority")
+    source = ROOT / "scripts/fork-install-observer.py"
+    destination = context / "system_files/usr/libexec/tunaos/fork-install-observer.py"
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_bytes(source.read_bytes())
+    destination.chmod(0o755)
+    units = context / "system_files/usr/lib/systemd/system"
+    units.mkdir(parents=True, exist_ok=True)
+    unit = units / "fork-install-observer.service"
+    unit.write_text("[Unit]\nDescription=Read-only disposable installation proof\nAfter=multi-user.target\n"
+                    "[Service]\nType=simple\nExecStart=/usr/bin/python3 /usr/libexec/tunaos/fork-install-observer.py --duration 3600\n"
+                    "RuntimeMaxSec=3610\nTimeoutStopSec=10\nStandardOutput=null\nStandardError=null\n")
+    wants = units / "multi-user.target.wants"
+    wants.mkdir(exist_ok=True)
+    (wants / unit.name).symlink_to("../" + unit.name)
+    return {"scope": "qualification-only-read-only-serial", "maximum_seconds": 3600,
+            "observer_sha256": hashlib.sha256(destination.read_bytes()).hexdigest(),
+            "unit_sha256": hashlib.sha256(unit.read_bytes()).hexdigest()}
+
+
 def assess_serial(serial):
     """Read independent guest verdicts; readiness alone qualifies none of them."""
     checks = re.findall(r"TUNAOS_INSTALL_CHECKS_RESULT pass=(\d+) fail=(\d+) desktop=gnome", serial)
@@ -68,6 +91,7 @@ def assess_serial(serial):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--validate-build-entry", action="store_true")
+    parser.add_argument("--installed-proof-observer", action="store_true")
     parser.add_argument("--variant", choices=("yellowfin", "grouper"))
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
@@ -108,6 +132,8 @@ def main():
         report["authority"] = authorize(context)
         env = {"PATH": os.environ["PATH"], "HOME": os.environ["HOME"], "LANG": "C.UTF-8", **build["environment"]}
         validate_entry(context, env)
+        if args.installed_proof_observer:
+            report["target_observer"] = install_target_observer(context)
         report["source"] = source
         report["base_image"] = env["BASE_IMAGE"]
         report["base_digest_pinned"] = build["base_digest_pinned"]

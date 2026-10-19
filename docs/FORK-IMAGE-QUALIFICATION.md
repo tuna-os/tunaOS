@@ -124,3 +124,21 @@ the config ID and platform. The source image ID must match the earlier image che
 The `source_export` result is separate from boot and installation. The workflow
 uploads only the external source receipt and raw manifest. OCI layers stay on the
 runner. This step does not launch the installer or write a target disk.
+
+## Full test-disk install
+
+The canary can build with `--installed-proof-observer`. This adds a read-only
+serial probe for one hour. It is absent from the default build path.
+The full install helper uses the exact OCI image from local storage and one new 64 GiB disk.
+It checks the disk's file identity, serial, size and blank state before Install.
+
+The temporary source account uses the normal password prompt for an administrator.
+The helper does not add a passwordless rule. After the native installer finishes,
+it shuts down the source VM and boots only the target disk with fresh firmware
+state. The target must prove its image digest, fork identity, user groups,
+typed login and wallpaper. The test fails if shutdown needs force.
+
+Only the named JSON receipts and PNG screenshots enter the uploaded evidence.
+Disks, OCI layers, raw output from the target console and temporary account material stay
+private. The helper removes them after it verifies VM cleanup. These tests must pass
+in the native run before the full install can count as qualified.

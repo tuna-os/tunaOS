@@ -10,6 +10,11 @@ on:
       - "scripts/qualify-fork-initramfs.py"
       - "scripts/qualify-fork-login.py"
       - "scripts/qualify-fork-installer.py"
+      - "scripts/qualify-fork-install.py"
+      - "scripts/fork-installer-ui.py"
+      - "scripts/qualify-fork-vm.py"
+      - "scripts/qualify-fork-disk.py"
+      - "scripts/fork-install-observer.py"
       - "scripts/prepare-fork-config.py"
       - "scripts/resolve-fork-config.py"
       - "scripts/export-fork-source.py"
@@ -66,7 +71,7 @@ jobs:
           sudo git config --global --add safe.directory "$GITHUB_WORKSPACE"
           status=0
           for variant in yellowfin grouper; do
-            sudo python3 scripts/qualify-fork-image.py --variant "$variant" --output "$RUNNER_TEMP/fork-evidence/$variant" || status=1
+            sudo python3 scripts/qualify-fork-image.py --installed-proof-observer --variant "$variant" --output "$RUNNER_TEMP/fork-evidence/$variant" || status=1
           done
           exit "$status"
       - name: Download frozen installer artifact
@@ -82,6 +87,19 @@ jobs:
             sudo python3 scripts/qualify-fork-login.py \
               --image "localhost/fork-qualification/$variant:gnome-linux-amd64" \
               --wallpaper "$out/wallpaper.jpg" --output "$out/login" \
+              --installer-artifact "$RUNNER_TEMP/installer-artifact/installer-artifact.zip" || status=1
+          done
+          exit "$status"
+      - name: Install exact fork to a guarded second disk and verify target-only boot
+        run: |
+          set -euo pipefail
+          status=0
+          for variant in yellowfin grouper; do
+            out="$RUNNER_TEMP/fork-evidence/$variant"
+            sudo python3 scripts/qualify-fork-install.py \
+              --image "localhost/fork-qualification/$variant:gnome-linux-amd64" \
+              --manifest "$out/prepared/${variant}--gnome--linux-amd64/manifests/fork-config.json" \
+              --wallpaper "$out/wallpaper.jpg" --output "$out/installed-proof" \
               --installer-artifact "$RUNNER_TEMP/installer-artifact/installer-artifact.zip" || status=1
           done
           exit "$status"
@@ -107,6 +125,25 @@ jobs:
             fi
             if test -d "$src/login"; then
               sudo cp -r "$src/login" "fork-evidence/$variant/"
+            fi
+            if test -d "$src/installed-proof"; then
+              # Only the helper's public-safe JSON and PNG evidence may leave the runner.
+              # Private disks, OCI layers, console streams and account material are excluded.
+              sudo python3 - "$src/installed-proof" "fork-evidence/$variant/installed-proof" <<'PYSAFE'
+          import pathlib, sys
+          source, target = map(pathlib.Path, sys.argv[1:])
+          target.mkdir(parents=True, exist_ok=True)
+          allowed_json = {'install-proof.json', 'prepare-login.json', 'cold-source-login.json',
+                          'installed-target-login.json', 'source-observations.json', 'target-observations.json'}
+          for path in source.iterdir():
+              if path.is_symlink() or not path.is_file() or path.suffix not in {'.json', '.png'}:
+                  continue
+              if path.suffix == '.json' and path.name not in allowed_json:
+                  continue
+              if path.stat().st_size > 32 * 1024 * 1024:
+                  raise SystemExit('installed proof evidence exceeds bounded size')
+              (target / path.name).write_bytes(path.read_bytes())
+          PYSAFE
             fi
             if test -d "$src/boot"; then
               sudo cp -r "$src/boot" "fork-evidence/$variant/"

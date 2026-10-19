@@ -85,7 +85,12 @@ def test_duplicate_authority_keys_rejected(staged, tmp_path):
 
 def test_workflow_nonpublishing_and_bounded():
     text = "\n".join(line for line in (ROOT / ".github/workflows/fork-image-qualification.yml").read_text().splitlines() if not line.lstrip().startswith("#"))
-    for forbidden in ("secrets.", "write", "podman push", "rclone", "pull_request_target"):
+    import yaml
+    workflow = yaml.safe_load(text)
+    assert workflow["permissions"] == {"actions": "read", "contents": "read", "packages": "read"}
+    for job in workflow["jobs"].values():
+        assert "permissions" not in job
+    for forbidden in ("secrets.", "podman push", "rclone", "pull_request_target"):
         assert forbidden not in text.replace("registry writes", "registry mutations")
     assert "timeout-minutes: 180" in text
     assert "for variant in yellowfin grouper" in text
@@ -190,3 +195,25 @@ def test_native_export_binds_original_and_uploads_only_provenance():
     assert '"$src/oci-export/source-receipt.json"' in workflow
     assert '"$src/oci-export/source-manifest.json"' in workflow
     assert 'cp -r "$src/oci-export"' not in workflow
+
+
+def test_install_observer_requires_exact_local_authority(staged, tmp_path):
+    manifest, _ = canary(staged, tmp_path)
+    with pytest.raises(ValueError, match="authority"):
+        QUALIFY.install_target_observer(tmp_path)
+    QUALIFY.authorize(tmp_path)
+    receipt = QUALIFY.install_target_observer(tmp_path)
+    units = tmp_path / "system_files/usr/lib/systemd/system"
+    text = (units / "fork-install-observer.service").read_text()
+    assert "After=multi-user.target" in text
+    assert "Before=display-manager" not in text
+    assert "RuntimeMaxSec=3610" in text and "--duration 3600" in text
+    assert (units / "multi-user.target.wants/fork-install-observer.service").is_symlink()
+    import hashlib
+    assert receipt["observer_sha256"] == hashlib.sha256((ROOT / "scripts/fork-install-observer.py").read_bytes()).hexdigest()
+
+
+def test_install_observer_cli_is_opt_in():
+    text = (ROOT / "scripts/qualify-fork-image.py").read_text()
+    assert 'if args.installed_proof_observer:' in text
+    assert '"--installed-proof-observer", action="store_true"' in text
