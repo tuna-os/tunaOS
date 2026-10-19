@@ -487,6 +487,7 @@ tuna)
 	require_glob '/usr/share/wayland-sessions/tuna.desktop'
 	grep -qx 'Exec=tuna-session' /usr/share/wayland-sessions/tuna.desktop
 	grep -qx 'DesktopNames=Tuna;GNOME;' /usr/share/wayland-sessions/tuna.desktop
+	grep -qx 'Name=Tuna Desktop' /usr/share/wayland-sessions/tuna.desktop
 	require_glob '/etc/pam.d/tuna-lock'
 	require_glob '/usr/lib/systemd/user/tuna-session.target'
 	# Upgrades from the roost flavor: the old binary names, the hidden session
@@ -512,19 +513,13 @@ tuna)
 	grep -qx 'Exec=tuna-session' /usr/share/wayland-sessions/roost.desktop
 	grep -qx 'NoDisplay=true' /usr/share/wayland-sessions/roost.desktop
 	require_glob '/etc/pam.d/roost-lock'
-	# gtkgreet lists environments lines verbatim, so the picker must show
-	# the session's name, and greetd's `exec <line>` must reach the same
-	# supervisor as tuna.desktop (tunaOS#3110).
-	require_glob '/etc/greetd/environments'
-	grep -qx 'Tuna Desktop' /etc/greetd/environments
-	grep -qx 'Name=Tuna Desktop' /usr/share/wayland-sessions/tuna.desktop
-	require_command Tuna
-	grep -qx 'exec tuna-session' "$(command -v Tuna)"
 	require_glob '/usr/share/xdg-desktop-portal/tuna-portals.conf'
 	for portal in ScreenCast Screenshot; do
 		require_portal_preference /usr/share/xdg-desktop-portal/tuna-portals.conf "org.freedesktop.impl.portal.$portal" gnome
 	done
 	require_portal_preference /usr/share/xdg-desktop-portal/tuna-portals.conf org.freedesktop.impl.portal.Access gtk
+	require_any_glob '/usr/libexec/xdg-desktop-portal-gnome' '/usr/lib/xdg-desktop-portal-gnome'
+	require_any_glob '/usr/libexec/xdg-desktop-portal-gtk' '/usr/lib/xdg-desktop-portal-gtk'
 	# Arch ships it under /usr/lib, Fedora, EL and Debian under /usr/libexec,
 	# openSUSE under /usr/libexec/gnome-shell (gnome-shell-calendar). The
 	# shell reaches it by D-Bus activation, so the path is the package's.
@@ -536,10 +531,6 @@ tuna)
 	# without it every portal fails (tuna-os/tuna-desktop#691).
 	require_command dbus-update-activation-environment
 	require_command wpctl
-	require_command gtkgreet
-	require_command cage
-	require_any_glob '/usr/libexec/xdg-desktop-portal-gnome' '/usr/lib/xdg-desktop-portal-gnome'
-	require_any_glob '/usr/libexec/xdg-desktop-portal-gtk' '/usr/lib/xdg-desktop-portal-gtk'
 	# Power profiles on the Fedora and EL bases come from tuned-ppd, the
 	# provider their GNOME flavors ship; Arch, openSUSE and the apt bases use
 	# power-profiles-daemon, as their GNOME flavors do. Either one answers the
@@ -562,23 +553,69 @@ tuna)
 		echo "the image ships SSH host keys:" /etc/ssh/ssh_host_* >&2
 		exit 1
 	fi
-	# Another display manager's preset (gdm, installed because gnome-shell
-	# requires its gdm-libs) takes display-manager.service and VT1, and greetd
-	# then dies with EPERM on the terminal. Catch it at build time, not at the
-	# boot gate.
+	# GDM owns the login session on every Tuna base. The configuration is
+	# installed in both native locations because the experience overlay is
+	# shared; each distro reads only the path it owns.
+	require_any_unit gdm gdm3
 	tuna_dm="$(readlink -f /etc/systemd/system/display-manager.service 2>/dev/null || true)"
-	[[ "${tuna_dm##*/}" == greetd.service ]] || {
-		echo "display-manager.service is '${tuna_dm:-unset}', not greetd.service" >&2
+	[[ "${tuna_dm##*/}" =~ ^(gdm|gdm3)\.service$ ]] || {
+		echo "display-manager.service is '${tuna_dm:-unset}', not a GDM unit" >&2
 		exit 1
 	}
-	if [[ -f /usr/lib/systemd/system/gdm.service ]]; then
-		[[ "$(readlink /etc/systemd/system/gdm.service 2>/dev/null || true)" == /dev/null ]] || {
-			echo "gdm.service is installed beside greetd but not masked; a first-boot preset would start it on VT1" >&2
-			exit 1
-		}
+	case "${tuna_dm##*/}" in
+	gdm3.service) tuna_gdm_config=/etc/gdm3/daemon.conf ;;
+	gdm.service) tuna_gdm_config=/etc/gdm/custom.conf ;;
+	esac
+	[[ -f "$tuna_gdm_config" ]] || {
+		echo "missing GDM configuration: ${tuna_gdm_config:-unset}" >&2
+		exit 1
+	}
+	grep -Eq '^[[:space:]]*WaylandEnable[[:space:]]*=[[:space:]]*true[[:space:]]*$' "$tuna_gdm_config" || {
+		echo "GDM does not enable Wayland: $tuna_gdm_config" >&2
+		exit 1
+	}
+	grep -Eq '^[[:space:]]*DefaultSession[[:space:]]*=[[:space:]]*tuna\.desktop[[:space:]]*$' "$tuna_gdm_config" || {
+		echo "GDM does not select tuna.desktop: $tuna_gdm_config" >&2
+		exit 1
+	}
+	if grep -Eiq '^[[:space:]]*AutomaticLoginEnable[[:space:]]*=[[:space:]]*true[[:space:]]*$' "$tuna_gdm_config"; then
+		echo "GDM automatic login is enabled: $tuna_gdm_config" >&2
+		exit 1
 	fi
-	require_unit greetd
-	dm_pattern='^greetd\.service$'
+	require_glob '/usr/share/gnome-shell/theme/tuna-gdm.css'
+	require_command gresource
+	tuna_gdm_resource=""
+	for resource in \
+		/usr/share/gnome-shell/gnome-shell-theme.gresource \
+		/usr/lib/gnome-shell/gnome-shell-theme.gresource; do
+		if [[ -s "$resource" ]]; then
+			tuna_gdm_resource="$resource"
+			break
+		fi
+	done
+	[[ -n "$tuna_gdm_resource" ]] || {
+		echo "missing GNOME Shell theme resource" >&2
+		exit 1
+	}
+	tuna_gdm_css_dump="$(mktemp)"
+	tuna_gdm_css_applied=0
+	while IFS= read -r resource_name; do
+		case "$resource_name" in
+		/org/gnome/shell/theme/gnome-shell*.css)
+			if gresource extract "$tuna_gdm_resource" "$resource_name" >"$tuna_gdm_css_dump" &&
+				grep -qF 'TunaOS GDM theme overrides' "$tuna_gdm_css_dump"; then
+				tuna_gdm_css_applied=1
+				break
+			fi
+			;;
+		esac
+	done < <(gresource list "$tuna_gdm_resource")
+	rm -f "$tuna_gdm_css_dump"
+	(( tuna_gdm_css_applied == 1 )) || {
+		echo "GNOME Shell theme resource lacks Tuna GDM overrides" >&2
+		exit 1
+	}
+	dm_pattern='^(gdm|gdm3)\.service$'
 	;;
 niri)
 	experience="zirconium-dev/zirconium"

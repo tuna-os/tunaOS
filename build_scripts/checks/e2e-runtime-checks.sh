@@ -6,8 +6,8 @@
 # (LGPL-2.1-or-later): test/tests/01-installation.sh, 02-services.sh,
 # 04-smoke.sh and 05-firstboot-presets.sh, extended to cover every TunaOS
 # variant (rpm / dpkg / pacman / portage) and desktop (gnome, kde, niri,
-# cosmic, xfce — validated via the display-manager.service alias so distro
-# unit-name drift like gdm vs gdm3 vs lightdm doesn't matter).
+# cosmic, xfce, tuna — validated via the display-manager.service alias so
+# distro unit-name drift like gdm vs gdm3 vs lightdm doesn't matter).
 #
 # Unlike snosi (which SSHes into the test VM), the installed TunaOS system
 # has no login user CI can reach — the only channel out is the serial
@@ -210,6 +210,7 @@ dm_id=$(systemctl show -P Id display-manager.service 2>/dev/null || true)
 emit "# display manager: ${dm_id:-unknown}"
 case "$DESKTOP" in
 gnome) dm_pattern='^(gdm|gdm3)\.service$' ;;
+tuna) dm_pattern='^(gdm|gdm3)\.service$' ;;
 kde) dm_pattern='^(sddm|plasmalogin)\.service$' ;; # KDE 6.5+ renamed sddm
 niri) dm_pattern='^greetd\.service$' ;;
 # cosmic-greeter IS greetd (ExecStart=greetd --config

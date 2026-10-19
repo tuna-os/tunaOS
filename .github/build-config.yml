@@ -160,9 +160,9 @@ variants:
         build_image: true
         build_iso: false
         build_qcow2: false
-      # Tuna Desktop (tuna_rollout above, tunaOS#3195): el10 package target.
-      # amd64 only: gtkgreet is published for EL10 x86_64 only, and the
-      # boot gate and session qualification run on amd64.
+      # Tuna Desktop (tuna_rollout above, tunaOS#3195): EL10 package target.
+      # amd64 only: the Tuna Desktop package and GDM qualification run on
+      # x86_64, like the rest of the tuna cell.
       - id: tuna
         stage: 2
         platforms: ["linux/amd64"]
@@ -404,9 +404,9 @@ variants:
         build_image: true
         build_iso: false
         build_qcow2: false
-      # Tuna Desktop (tuna_rollout above, tunaOS#3196): el10 package target.
-      # amd64 only: gtkgreet is published for EL10 x86_64 only, and the
-      # boot gate and session qualification run on amd64.
+      # Tuna Desktop (tuna_rollout above, tunaOS#3196): EL10 package target.
+      # amd64 only: the Tuna Desktop package and GDM qualification run on
+      # x86_64, like the rest of the tuna cell.
       - id: tuna
         stage: 2
         platforms: ["linux/amd64"]
@@ -649,9 +649,9 @@ variants:
         build_image: true
         build_iso: false
         build_qcow2: false
-      # Tuna Desktop (tuna_rollout above, tunaOS#3197): el10 package target.
-      # amd64 only: gtkgreet is published for EL10 x86_64 only, and the
-      # boot gate and session qualification run on amd64.
+      # Tuna Desktop (tuna_rollout above, tunaOS#3197): ELN package target.
+      # amd64 only: the Tuna Desktop package and GDM qualification run on
+      # x86_64, like the rest of the tuna cell.
       - id: tuna
         stage: 2
         platforms: ["linux/amd64"]
@@ -937,9 +937,8 @@ variants:
         build_image: true
         build_iso: false
         build_qcow2: false
-      # Tuna Desktop (tuna_rollout above, tunaOS#3198): eln package target,
-      # which publishes tuna-desktop and gtkgreet; amd64 only, like every
-      # tuna cell.
+      # Tuna Desktop (tuna_rollout above, tunaOS#3198): ELN package target,
+      # which publishes tuna-desktop; amd64 only, like every tuna cell.
       - id: tuna
         stage: 2
         platforms: ["linux/amd64"]
