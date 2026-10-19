@@ -758,7 +758,7 @@ def test_progress_collection_exports_only_safe_event_flags(monkeypatch):
         {}, Path("/unused"), "/var/home/canary/.cache/bootc-installer/fisherman-output.log"
     )
     code = captured[0]
-    assert 'result={"complete":False,"error":False,"events":0,"bytes":0}' in code
+    assert '"steps":[],"errors":[]' in code
     assert 'value.get("type")=="complete"' in code and 'value.get("overall_pct")==100' in code
     assert 'if value.get("type")=="error"' in code
     assert "16*1024*1024" in code
@@ -781,35 +781,8 @@ def test_progress_collection_exports_only_safe_event_flags(monkeypatch):
     ],
 )
 def test_polkit_authentication_rejects_unbound_or_ambiguous_secret_destination(monkeypatch, change):
-    rows = [
-        {
-            "text": text,
-            "page_num": 1,
-            "block_num": 1,
-            "par_num": 1,
-            "line_num": line,
-            "left": 60,
-            "top": 30,
-            "width": 50,
-            "height": 15,
-        }
-        for line, text in [(1, "Authentication"), (1, "Required"), (2, "canary")]
-    ]
-    node = {
-        "pid": 200,
-        "role": "password text",
-        "name": "Password",
-        "bounds": [50, 50, 200, 35],
-        "states": {key: True for key in ("visible", "showing", "enabled", "sensitive", "focused")},
-    }
-    account = {
-        "pid": 200,
-        "role": "label",
-        "name": "canary",
-        "bounds": [50, 25, 200, 20],
-        "states": {"visible": True, "showing": True},
-    }
-    nodes = [node, account]
+    value, rows = polkit_case()
+    node, account = value["nodes"][4], value["nodes"][3]
     if change == "wrong_shell":
         node["pid"] = 201
     elif change == "not_focused":
@@ -821,70 +794,49 @@ def test_polkit_authentication_rejects_unbound_or_ambiguous_secret_destination(m
     elif change == "missing_dialog":
         rows = rows[2:]
     elif change == "duplicate":
-        nodes.append(copy.deepcopy(node))
+        value["nodes"].append(dict(node, id=5))
     elif change == "wrong_account_pid":
         account["pid"] = 201
     elif change == "background_account":
-        account["bounds"] = [500, 400, 200, 30]
-        rows[-1].update(left=510, top=405)
+        account["bounds"] = [900, 700, 200, 30]
     elif change == "hidden_account":
         account["states"]["showing"] = False
     elif change == "duplicate_account":
-        nodes.append(copy.deepcopy(account))
+        value["nodes"].append(dict(account, id=5))
     typed = []
-    qmp = SimpleNamespace(type=typed.append, key=lambda *args: None)
-    ui = PROOF.UI_MODULE.UI(qmp, None, None, None)
-    monkeypatch.setattr(
-        ui, "capture", lambda label: (Path("polkit.png"), (800, 600), rows, {"nodes": nodes})
-    )
+    ui = PROOF.UI_MODULE.UI(SimpleNamespace(type=typed.append, key=lambda *args: None),
+                           None, lambda: value, None)
+    monkeypatch.setattr(ui, "capture", lambda label: (Path("polkit.png"), (1280, 800), rows, value))
     with pytest.raises(ValueError):
         ui.authenticate("shortlivedtest123", 200)
     assert typed == []
 
 
+def polkit_case():
+    nodes = []
+    for i, parent, role, name, bounds in [
+        (0, None, "application", "Shell", None),
+        (1, 0, "dialog", "", [410, 163, 459, 473]),
+        (2, 1, "label", "Authentication Required", [434, 199, 411, 28]),
+        (3, 1, "label", "canary", [434, 398, 411, 25]),
+        (4, 1, "password text", "", [493, 459, 263, 21]),
+    ]:
+        nodes.append({"id": i, "parent": parent, "pid": 200, "role": role, "name": name,
+                      "bounds": bounds, "states": {"visible": True, "showing": True,
+                      "enabled": True, "sensitive": True, "focused": i == 4}})
+    rows = [{"text": text, "page_num": 1, "block_num": 1, "par_num": 1,
+             "line_num": line, "left": x, "top": y, "width": 100, "height": 20}
+            for text, line, x, y in [("Authentication", 1, 500, 200),
+                                    ("Required", 1, 610, 200), ("canary", 2, 600, 400)]]
+    return {"schema_version": 1, "nodes": nodes}, rows
+
+
 def test_polkit_authentication_returns_no_plaintext(monkeypatch):
-    rows = [
-        {
-            "text": text,
-            "page_num": 1,
-            "block_num": 1,
-            "par_num": 1,
-            "line_num": line,
-            "left": 60,
-            "top": 30,
-            "width": 50,
-            "height": 15,
-        }
-        for line, text in [(1, "Authentication"), (1, "Required"), (2, "canary")]
-    ]
-    node = {
-        "pid": 200,
-        "role": "password text",
-        "name": "Password",
-        "bounds": [50, 50, 200, 35],
-        "states": {key: True for key in ("visible", "showing", "enabled", "sensitive", "focused")},
-    }
-    account = {
-        "pid": 200,
-        "role": "label",
-        "name": "canary",
-        "bounds": [50, 25, 200, 20],
-        "states": {"visible": True, "showing": True},
-    }
+    value, rows = polkit_case()
     calls = []
-    ui = PROOF.UI_MODULE.UI(
-        SimpleNamespace(
-            type=lambda s: calls.append(("type", s)), key=lambda *k: calls.append(("key", k))
-        ),
-        None,
-        None,
-        None,
-    )
-    monkeypatch.setattr(
-        ui,
-        "capture",
-        lambda label: (Path("polkit.png"), (800, 600), rows, {"nodes": [node, account]}),
-    )
+    ui = PROOF.UI_MODULE.UI(SimpleNamespace(type=lambda s: calls.append(("type", s)),
+        key=lambda *k: calls.append(("key", k))), None, lambda: value, None)
+    monkeypatch.setattr(ui, "capture", lambda label: (Path("polkit.png"), (1280, 800), rows, value))
     evidence = ui.authenticate("shortlivedtest123", 200)
     assert calls == [("type", "shortlivedtest123"), ("key", ("ret",))]
     assert "shortlivedtest123" not in json.dumps(evidence)
@@ -1689,3 +1641,31 @@ def test_disappearing_session_is_observed_then_stable_login_required(typed_login
     report = json.loads((case.out / "cold-source-login.json").read_text())
     assert report["transient_scans"] == [{"uptime": changed["uptime"], "scan": changed["session_scan"]}]
     assert report["after"]["session_scan"]["status"] == "stable"
+
+
+def test_progress_preserves_bounded_error_and_stage_without_credentials(tmp_path, monkeypatch, capsys):
+    import hashlib
+
+    log = tmp_path / "fisherman.log"
+    events = [
+        {"type": "step", "step": 8, "total_steps": 9, "overall_pct": 98, "step_id": "post-config"},
+        {"type": "info", "message": "private recipe password payload"},
+        {"type": "recovery_key", "key": "never-export-this"},
+        {"type": "error", "message": "useradd (chroot /mnt/target): exit status 6 --password=secret $6$salt$hash"},
+    ]
+    log.write_text("\n".join(json.dumps(e) for e in events) + "\nraw stderr not exported\n")
+
+    def execute(access, private, code):
+        exec(code, {})  # noqa: S102 - owned read-only collector against a private synthetic log
+        return json.loads(capsys.readouterr().out)
+
+    monkeypatch.setattr(PROOF, "guest_call", execute)
+    result = PROOF.progress_evidence({}, tmp_path, str(log))
+    assert result["error"] and not result["complete"]
+    assert result["steps"] == [{"step": 8, "total_steps": 9, "overall_pct": 98, "step_id": "post-config"}]
+    assert result["errors"][0]["exit_status"] == 6
+    assert "/mnt/target" in result["errors"][0]["message"]
+    assert result["log_sha256"] == hashlib.sha256(log.read_bytes()).hexdigest()
+    text = json.dumps(result)
+    assert all(secret not in text for secret in ("secret", "$6$", "never-export-this", "private recipe", "raw stderr"))
+    assert PROOF.redact({"errors": [{"message": "failed syntheticpw"}]}, ("syntheticpw",))["errors"][0]["message"] == "failed <redacted>"

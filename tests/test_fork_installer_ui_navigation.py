@@ -1172,3 +1172,31 @@ def test_polkit_unexpected_password_identity_relation_is_rejected():
     value["nodes"][4]["relations"] = {"labelled_by": [3]}
     with pytest.raises(ValueError, match="unresolved identity"):
         UI.polkit_prompt(value, PID, SIZE)
+
+
+@pytest.mark.parametrize("message,retry", [
+    ("bound control crop does not contain the exact visible label", True),
+    ("accessibility control is not paired with its visible text", True),
+    ("ambiguous visible text within accessibility control", False),
+    ("control is outside the visible framebuffer", False),
+])
+def test_authentication_capture_race_never_types_or_accepts_ambiguous_pixels(tmp_path, message, retry):
+    value = polkit_tree()
+    events = []
+    ui = UI.KeyboardUI(SimpleNamespace(type=events.append, key=events.append), None,
+                       lambda: value, None, private=tmp_path)
+    ui.capture = lambda label: (tmp_path / "transition.png", SIZE, [], value)
+
+    def failed(*args):
+        raise ValueError(message)
+
+    ui.label_point = failed
+    if retry:
+        assert ui.authentication_ready(PID) is False
+        assert ui.navigation_events == [{"action": "authentication-frame-not-ready", "frame": "transition.png"}]
+        ui.label_point = lambda *args: (600, 400)
+        assert ui.authentication_ready(PID) is True
+    else:
+        with pytest.raises(ValueError):
+            ui.authentication_ready(PID)
+    assert events == []

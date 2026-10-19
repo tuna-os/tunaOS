@@ -2003,3 +2003,20 @@ GNOME's [StEntry](https://github.com/GNOME/gnome-shell/blob/main/src/st/st-entry
 uses `DESCRIBED_BY` for its hint actor, outside the entry's child tree.
 One unresolved hint can remain diagnostic. It does not identify the account or field.
 An unresolved `LABELLED_BY` or an unexpected identity relation remains an error.
+
+### Authentication appears between the screenshot and the tree read
+
+[Run 39333923120](https://github.com/tuna-os/tunaOS/actions/runs/39333923120)
+reached the native password prompt on both variants. Grouper's screenshot still
+showed confirmation while the later tree read contained the password dialog.
+The check now repeats that read-only observation within the same deadline.
+It still needs exact visible labels and a fresh focused field before any input.
+Ambiguous text or invalid coordinates remain errors.
+
+Yellowfin passed authentication and reached the backend's configuration phase.
+It then reported an error. The old report retained only the error flag.
+The collector now keeps bounded error events, stage IDs and a hash of the log.
+It removes credential arguments and hashes, and excludes recipes, recovery keys
+and other free-form log events. The final report also removes the test password.
+
+The harness saves a screenshot and the last backend summary before it raises the error.

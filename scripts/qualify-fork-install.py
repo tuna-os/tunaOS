@@ -1124,22 +1124,43 @@ def process_evidence(access, private, helper):
 
 def progress_evidence(access, private, log_path):
     program = r"""
-import json
+import hashlib,json,re
 from pathlib import Path
 path=Path(__PATH__)
-result={"complete":False,"error":False,"events":0,"bytes":0}
+result={"complete":False,"error":False,"events":0,"bytes":0,"steps":[],"errors":[]}
+def message(value):
+    value=re.sub(r"\$[a-zA-Z0-9]+\$[^\s:]+", "<redacted-hash>", value)
+    value=re.sub(r"(?i)(?:--?(?:password|passphrase|token|secret)(?:=|\s+)|(?:password|passphrase|token|secret)\s*[:=]).*", "<redacted-credential-arguments>", value)
+    return value[:2048]
 if path.exists():
     size=path.stat().st_size
     if size>16*1024*1024:raise ValueError("backend log exceeds bound")
-    result["bytes"]=size
-    for line in path.read_text(errors="replace").splitlines():
+    data=path.read_bytes()
+    if len(data)>16*1024*1024:raise ValueError("backend log grew beyond bound")
+    result["bytes"]=len(data)
+    result["log_sha256"]=hashlib.sha256(data).hexdigest()
+    for line in data.decode(errors="replace").splitlines():
         try:value=json.loads(line)
         except ValueError:continue
         if not isinstance(value,dict):continue
         result["events"]+=1
         if value.get("type")=="complete" and value.get("overall_pct")==100:result["complete"]=True
-        if value.get("type")=="error":result["error"]=True
-# Do not export log messages, argv, recipes or password hashes.
+        if value.get("type")=="step":
+            step={k:value[k] for k in ("step","total_steps","overall_pct","elapsed_ms")
+                  if type(value.get(k)) in (int,float)}
+            identifier=value.get("step_id","")
+            if isinstance(identifier,str) and re.fullmatch(r"[a-z0-9_-]{1,64}",identifier):step["step_id"]=identifier
+            result["steps"]=(result["steps"]+[step])[-32:]
+        if value.get("type")=="error":
+            result["error"]=True
+            raw=value.get("message","")
+            if isinstance(raw,str):
+                error={"type":"error","message":message(raw),"message_sha256":hashlib.sha256(raw.encode()).hexdigest()}
+                status=re.search(r"exit status ([0-9]{1,3})(?:\D|$)",raw)
+                if status:error["exit_status"]=int(status.group(1))
+                result["errors"]=(result["errors"]+[error])[-8:]
+# No free-form stdout/stderr, recipes, argv, recovery keys or info events leave
+# the guest. The report writer also removes the exact ephemeral password/hash.
 print(json.dumps(result))
 """.replace("__PATH__", repr(log_path))
     return guest_call(access, private, program)
@@ -1277,6 +1298,7 @@ print(json.dumps(values))
     else:
         raise TimeoutError("normal pkexec did not request a native administrator password")
     invoked = []
+    report["observed_bootc_invocations"] = invoked
     deadline = time.monotonic() + 1800
     while time.monotonic() < deadline:
         for process in process_evidence(access, private, helper):
@@ -1290,8 +1312,9 @@ print(json.dumps(values))
                 if process not in invoked:
                     invoked.append(process)
         progress = progress_evidence(access, private, preflight["log_path"])
-        require(not progress["error"], "native backend reported installation error")
+        report["backend_progress"] = progress
         frame = screenshot("installation-progress.png")
+        require(not progress["error"], "native backend reported installation error")
         words = LOGIN.words(frame)
         if UI_MODULE.phrase_rows(words, preflight["done_title"]):
             require(

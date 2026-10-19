@@ -750,8 +750,22 @@ class UI:
         if controls is None:
             return False
         _, title, account, _ = controls
-        self.label_point(frame, title, words, "Authentication Required", size)
-        self.label_point(frame, account, words, "canary", size)
+        try:
+            self.label_point(frame, title, words, "Authentication Required", size)
+            self.label_point(frame, account, words, "canary", size)
+        except ValueError as error:
+            # capture() takes pixels before the accessibility snapshot. The
+            # dialog can appear between them. Missing exact pixels are a
+            # bounded read-only startup observation, never permission to type.
+            if str(error) not in {
+                "bound control crop does not contain the exact visible label",
+                "accessibility control is not paired with its visible text",
+            }:
+                raise
+            if hasattr(self, "navigation_events"):
+                self.navigation_events.append({"action": "authentication-frame-not-ready",
+                                               "frame": Path(frame).name})
+            return False
         return True
 
     def authenticate(self, password, shell_pid):
