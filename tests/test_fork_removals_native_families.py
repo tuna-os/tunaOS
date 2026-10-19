@@ -37,6 +37,13 @@ def require_native(family):
         pytest.skip(reason)
 
 
+def assert_dependency_refusal(result):
+    # Native tools can split the summary and dependency detail across streams.
+    diagnostic = result.stdout + result.stderr
+    assert result.returncode != 0
+    assert "dependenc" in diagnostic.lower() and "fixture-app" in diagnostic
+
+
 def pacman_archive(path, name, dependency):
     """Build a local fixture archive; pacman itself must accept its metadata."""
     payload = f"{name}\n".encode()
@@ -213,8 +220,7 @@ def test_native_exact_removal(tmp_path, family, manager):
         assert before == after == original
         for targets in (["fixture-library"], ["fixture-spare", "fixture-library"]):
             result, before, after = native.remove(targets)
-            assert result.returncode != 0
-            assert "dependenc" in result.stderr.lower() and "fixture-app" in result.stderr
+            assert_dependency_refusal(result)
             assert before == after == original
         for targets in (["fixture-missing"], ["fixture-spare", "fixture-missing"]):
             result, before, after = native.remove(targets)
@@ -348,3 +354,22 @@ def test_native_protected_inventory(tmp_path, family, manager):
         native.evidence["passed"] = True
     finally:
         native.save(suffix="-protected")
+
+
+@pytest.mark.parametrize("stdout,stderr", [
+    ("", "dependency failure: fixture-app"),
+    ("fixture-app needs fixture-library", "could not satisfy dependencies"),
+    ("dependency failure: fixture-app", ""),
+])
+def test_dependency_diagnostic_may_span_streams(stdout, stderr):
+    assert_dependency_refusal(subprocess.CompletedProcess([], 1, stdout, stderr))
+
+
+@pytest.mark.parametrize("status,stdout,stderr", [
+    (0, "fixture-app", "dependency failure"),
+    (1, "", "dependency failure"),
+    (1, "fixture-app", "unrelated failure"),
+])
+def test_dependency_diagnostic_requires_real_failure_and_dependent(status, stdout, stderr):
+    with pytest.raises(AssertionError):
+        assert_dependency_refusal(subprocess.CompletedProcess([], status, stdout, stderr))
