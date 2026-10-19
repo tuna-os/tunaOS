@@ -12,7 +12,7 @@ tunaos_qualify_fork_removals() (
 		_tunaos_fork_removal_error 'requires an explicit disposable qualification environment'
 		return 1
 	}
-	local manager="$1" package
+	local manager="$1" package installed_name
 	shift
 	(($# > 0)) || return 0
 	case "$manager" in
@@ -40,7 +40,15 @@ tunaos_qualify_fork_removals() (
 	# No recursive dependency cleanup, force, wildcard or solver erase flags.
 	case "$manager" in
 	dnf | zypper)
-		rpm -q -- "$@" >/dev/null || return 1
+		# RPM also accepts version/architecture selectors. Refuse any query
+		# that does not resolve to exactly the requested installed name.
+		for package in "$@"; do
+			installed_name="$(rpm -q --qf '%{NAME}\n' -- "$package")" || return 1
+			[[ "$installed_name" == "$package" ]] || {
+				_tunaos_fork_removal_error "RPM selector is not one exact installed package name: $package"
+				return 1
+			}
+		done
 		rpm -e --test -- "$@" || return 1
 		rpm -e -- "$@" || return 1
 		;;
