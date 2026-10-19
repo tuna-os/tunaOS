@@ -127,6 +127,9 @@ RUN KERNEL_PKG="linux"; \
         usbutils \
         man-db \
         fzf \
+        # Load-bearing for ujust tab-completion: without it nothing sources
+        # /usr/share/bash-completion or /etc/bash_completion.d (tunaOS#3472).
+        bash-completion \
         bluez \
         bluez-utils \
         pipewire \
