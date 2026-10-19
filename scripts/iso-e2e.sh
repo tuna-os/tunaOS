@@ -3649,7 +3649,7 @@ EOF
 	set +e
 	(
 		set -euo pipefail
-		eval "$(guestfish --listen)"
+		eval "$(guestfish --listen --keys-from-stdin <<<"$passphrase")"
 		trap 'guestfish --remote exit >/dev/null 2>&1 || true' EXIT
 		guestfish --remote add-drive-opts "$INSTALL_DISK" format:qcow2
 		guestfish --remote run
