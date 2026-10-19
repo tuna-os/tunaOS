@@ -77,7 +77,7 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
-            imagemagick jq libguestfs-tools ovmf python3-vncdotool \
+            imagemagick jq libguestfs-tools ovmf python3-yaml python3-vncdotool \
             qemu-system-x86 qemu-utils socat sshpass swtpm tesseract-ocr
 
       - name: Validate target and immutable build evidence
