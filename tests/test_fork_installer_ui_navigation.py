@@ -1077,3 +1077,98 @@ def test_confirmation_warning_ocr_never_sends_input(tmp_path, change):
         with pytest.raises(ValueError):
             instance.confirmation_target("/dev/vdb")
     assert events == []
+
+
+def polkit_tree():
+    return {"schema_version": 1, "nodes": [
+        node(0, None, "application", "Shell", None),
+        node(1, 0, "dialog", "", [410, 163, 459, 473]),
+        node(2, 1, "label", "Authentication Required", [434, 199, 411, 28]),
+        node(3, 1, "label", "canary", [434, 398, 411, 25]),
+        node(4, 1, "password text", "", [493, 459, 263, 21], focused=True),
+    ]}
+
+
+@pytest.mark.parametrize("change", ["wrong_user", "wrong_agent", "extra_password", "lost_focus",
+                                   "wrong_dialog", "zero_bounds", "outside_frame", "duplicate_title"])
+def test_polkit_rejects_unbound_or_unfocused_password(change):
+    value = polkit_tree()
+    if change == "wrong_user":
+        value["nodes"][3]["name"] = "root"
+    elif change == "wrong_agent":
+        value["nodes"][4]["pid"] += 1
+    elif change == "extra_password":
+        value["nodes"].append(dict(value["nodes"][4], id=5))
+    elif change == "lost_focus":
+        value["nodes"][4]["states"]["focused"] = False
+    elif change == "wrong_dialog":
+        value["nodes"][2]["parent"] = 0
+    elif change == "zero_bounds":
+        value["nodes"][3]["bounds"] = [0, 0, 0, 0]
+    elif change == "outside_frame":
+        value["nodes"][3]["bounds"][0] = SIZE[0]
+    elif change == "duplicate_title":
+        value["nodes"].append(dict(value["nodes"][2], id=5))
+    with pytest.raises(ValueError):
+        UI.polkit_prompt(value, PID, SIZE)
+
+
+@pytest.mark.parametrize("change", ["valid", "lost_focus", "moved", "changed_dialog", "wrong_user"])
+def test_polkit_rechecks_exact_prompt_after_bound_ocr_before_typing(tmp_path, change):
+    from PIL import Image
+
+    frame = tmp_path / "prompt.png"
+    Image.new("RGB", SIZE, "white").save(frame)
+    value, after = polkit_tree(), polkit_tree()
+    if change == "lost_focus":
+        after["nodes"][4]["states"]["focused"] = False
+    elif change == "moved":
+        after["nodes"][4]["bounds"][0] += 1
+    elif change == "changed_dialog":
+        after["nodes"][1]["id"] = 10
+        for n in after["nodes"][2:]:
+            n["parent"] = 10
+    elif change == "wrong_user":
+        after["nodes"][3]["name"] = "root"
+    events, reads = [], []
+    instance = UI.KeyboardUI(SimpleNamespace(type=lambda s: events.append("typed"), key=events.append),
+                             None, lambda: after, None, private=tmp_path)
+    instance.capture = lambda label: (frame, SIZE, [], value)
+    instance.label_point = lambda frame, node, rows, phrase, size: reads.append((node["id"], phrase))
+    if change == "valid":
+        assert instance.authentication_ready(PID)
+        assert instance.authenticate("synthetictest", PID)["password_typed"]
+        assert events == ["typed", "ret"]
+        assert reads == [(2, "Authentication Required"), (3, "canary")] * 2
+    else:
+        with pytest.raises(ValueError):
+            instance.authenticate("synthetictest", PID)
+        assert events == []
+
+
+def test_polkit_waits_only_for_missing_or_unfocused_prompt():
+    empty = {"schema_version": 1, "nodes": [node(0, None, "application", "Shell", None)]}
+    assert UI.polkit_prompt(empty, PID, SIZE, waiting=True) is None
+    value = polkit_tree()
+    value["nodes"][4]["states"]["focused"] = False
+    assert UI.polkit_prompt(value, PID, SIZE, waiting=True) is None
+    value["nodes"].append(dict(value["nodes"][4], id=5))
+    with pytest.raises(ValueError):
+        UI.polkit_prompt(value, PID, SIZE, waiting=True)
+
+
+def test_polkit_supplemental_hint_is_not_an_identity_label():
+    value = polkit_tree()
+    value["nodes"][4]["unresolved_relations"] = {"described_by": 1}
+    assert UI.polkit_prompt(value, PID, SIZE)[3]["id"] == 4
+    for unresolved in ({"labelled_by": 1}, {"described_by": 2}, {"described_by": 1, "labelled_by": 1}):
+        value["nodes"][4]["unresolved_relations"] = unresolved
+        with pytest.raises(ValueError, match="unresolved identity"):
+            UI.polkit_prompt(value, PID, SIZE)
+
+
+def test_polkit_unexpected_password_identity_relation_is_rejected():
+    value = polkit_tree()
+    value["nodes"][4]["relations"] = {"labelled_by": [3]}
+    with pytest.raises(ValueError, match="unresolved identity"):
+        UI.polkit_prompt(value, PID, SIZE)

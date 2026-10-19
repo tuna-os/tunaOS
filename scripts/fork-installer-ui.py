@@ -744,43 +744,27 @@ class UI:
             "checked_after": False,
         }
 
+    def authentication_ready(self, shell_pid):
+        frame, size, words, snapshot = self.capture("authentication-wait")
+        controls = polkit_prompt(snapshot, shell_pid, size, waiting=True)
+        if controls is None:
+            return False
+        _, title, account, _ = controls
+        self.label_point(frame, title, words, "Authentication Required", size)
+        self.label_point(frame, account, words, "canary", size)
+        return True
+
     def authenticate(self, password, shell_pid):
         frame, size, words, snapshot = self.capture("polkit-password")
-        if not phrase_rows(words, "Authentication Required") or not phrase_rows(words, "canary"):
-            raise ValueError(
-                "native polkit dialog does not visibly identify the synthetic administrator"
-            )
-        entries = [
-            node
-            for node in snapshot["nodes"]
-            if node.get("pid") == shell_pid
-            and node.get("role") == "password text"
-            and all(
-                node.get("states", {}).get(key) is True
-                for key in ("visible", "showing", "enabled", "sensitive", "focused")
-            )
-        ]
-        if len(entries) != 1:
-            raise ValueError("native polkit password field is not uniquely focused in GNOME Shell")
-        x, y, w, h = rect(entries[0], size)
-        accounts = [
-            node
-            for node in snapshot["nodes"]
-            if node.get("pid") == shell_pid
-            and node.get("role") == "label"
-            and node.get("name", "").casefold() == "canary"
-            and all(node.get("states", {}).get(key) is True for key in ("visible", "showing"))
-        ]
-        if len(accounts) != 1:
-            raise ValueError(
-                "native polkit administrator account label is not unique in GNOME Shell"
-            )
-        ax, ay, aw, ah = rect(accounts[0], size)
-        visible_label(accounts[0], words, "canary", size)
-        if not (ay + ah <= y + h and y - ay <= 400 and ax < x + w and ax + aw > x):
-            raise ValueError(
-                "native polkit account label is not paired with the focused password field"
-            )
+        controls = polkit_prompt(snapshot, shell_pid, size)
+        _, title, account, entry = controls
+        self.label_point(frame, title, words, "Authentication Required", size)
+        self.label_point(frame, account, words, "canary", size)
+        fresh = polkit_prompt(self.snapshot(), shell_pid, size)
+        # The process binding is rechecked by the snapshot provider. Require
+        # this same dialog and focused field after the bounded OCR reads.
+        if [(n["id"], n["bounds"]) for n in fresh] != [(n["id"], n["bounds"]) for n in controls]:
+            raise ValueError("native polkit prompt changed before password input")
         self.qmp.type(password)
         self.qmp.key("ret")
         return {
@@ -790,6 +774,51 @@ class UI:
             "password_typed": True,
             "frame": frame.name,
         }
+
+
+def polkit_prompt(snapshot, shell_pid, size, *, waiting=False):
+    """Select only the exact Shell dialog, never a generic password field."""
+    nodes = tree(snapshot)
+    shell_nodes = [n for n in nodes.values() if n["pid"] == shell_pid and showing(n)]
+    titles = [n for n in shell_nodes if n["role"] == "label" and n["name"] == "Authentication Required"]
+    entries = [n for n in shell_nodes if n["role"] == "password text"]
+    if waiting and len(titles) <= 1 and len(entries) <= 1 and (not titles or not entries):
+        return None
+    if len(titles) != 1 or len(entries) != 1:
+        raise ValueError("native polkit title or password field is absent or ambiguous")
+    entry, title = entries[0], titles[0]
+    if not all(entry["states"].get(k) is True for k in ("enabled", "sensitive", "focused")):
+        if waiting and entry["states"].get("focused") is False:
+            return None
+        raise ValueError("native polkit password field is not uniquely focused")
+    focused = [n for n in shell_nodes if n["states"].get("focused") is True]
+    if len(focused) != 1 or focused[0] != entry:
+        raise ValueError("native polkit focus is ambiguous")
+    dialogs = [n for n in ancestors(entry, nodes) if n["role"] == "dialog" and n["pid"] == shell_pid]
+    if len(dialogs) != 1 or dialogs[0] not in ancestors(title, nodes):
+        raise ValueError("native polkit title is not bound to the focused dialog")
+    accounts = [n for n in shell_nodes if n["role"] == "label" and n["name"] == "canary"
+                and dialogs[0] in ancestors(n, nodes)]
+    if len(accounts) != 1:
+        raise ValueError("native polkit administrator is not uniquely bound to the dialog")
+    account = accounts[0]
+    for n in (title, account):
+        complete_labels(n)
+    # StEntry describes its inner text with an off-tree hint actor. This
+    # supplemental hint is not used to identify the administrator or field.
+    # Keep unresolved identity labels closed; admit only the known single hint.
+    unresolved = entry.get("unresolved_relations", {})
+    if unresolved not in ({}, {"described_by": 1}) or "labelled_by" in entry.get("relations", {}):
+        raise ValueError("native polkit password has unresolved identity labels")
+    for n in (title, account, entry):
+        rect(n, size)
+    x, y, w, h = entry["bounds"]
+    ax, ay, aw, ah = account["bounds"]
+    tx, ty, tw, th = title["bounds"]
+    if not (ty + th <= ay and ay + ah <= y + h and y - ay <= 400
+            and ax < x + w and ax + aw > x and tx < x + w and tx + tw > x):
+        raise ValueError("native polkit labels are not paired with the password field")
+    return dialogs[0], title, account, entry
 
 
 PAGE_HEADINGS = (

@@ -1987,3 +1987,19 @@ The live confirmation page must also contain that disk subtitle and warning.
 The subtitle must belong to the Disk row in the verified application.
 The test repeats the disk guards before Install. Wrong paths, duplicate warnings
 and a changed active window remain errors.
+
+### A native password dialog is visible but full-frame OCR misses it
+
+[Run 39325936708](https://github.com/tuna-os/tunaOS/actions/runs/39325936708)
+completed installation and target login for Grouper. Yellowfin activated Install
+but stopped at its visible password dialog. Full-frame OCR missed its title.
+
+The check binds the title, account label and focused password field to one dialog
+in the verified process for GNOME Shell. Its coordinates refer to the screen.
+The existing label check can read an exact crop at those coordinates.
+The test checks the same dialog and focused field again before password input.
+
+GNOME's [StEntry](https://github.com/GNOME/gnome-shell/blob/main/src/st/st-entry.c)
+uses `DESCRIBED_BY` for its hint actor, outside the entry's child tree.
+One unresolved hint can remain diagnostic. It does not identify the account or field.
+An unresolved `LABELLED_BY` or an unexpected identity relation remains an error.

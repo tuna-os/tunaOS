@@ -1269,8 +1269,7 @@ print(json.dumps(values))
             "privileged execution bypassed required password prompt",
         )
         if len([p for p in processes if p["kind"] == "pkexec"]) == 1:
-            _, _, words, _ = ui.capture("authentication-wait")
-            if UI_MODULE.phrase_rows(words, "Authentication Required"):
+            if ui.authentication_ready(shell):
                 report["pkexec_before_authentication"] = processes
                 report["authentication"] = ui.authenticate(password, shell)
                 break
