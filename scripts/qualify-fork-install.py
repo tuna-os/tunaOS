@@ -885,19 +885,28 @@ print(json.dumps(value))
     return value
 
 
-def accessibility(access, private, pids):
+def accessibility(access, private, pids, report=None):
     require(
         pids and all(type(pid) is int and pid > 0 for pid in pids),
         "missing accessibility process binding",
     )
-    code = UI_MODULE.SNAPSHOT.replace("__PIDS__", repr(pids))
+    code = UI_MODULE.diagnostic_program(
+        UI_MODULE.SNAPSHOT.replace("__PIDS__", repr(pids)), "<fork-accessibility>"
+    )
     program = (
         INSTALLER.GUEST_COMMON
         + "\nprint(run(user_env()+"
         + repr(["python3", "-c", code])
         + ",timeout=90))\n"
     )
-    return guest_call(access, private, program, 120)
+    value = guest_call(
+        access, private, UI_MODULE.diagnostic_program(program, "<fork-accessibility-launch>"), 120
+    )
+    if "probe_error" in value:
+        if report is not None:
+            report["native_ui_probe_error"] = value["probe_error"]
+        raise ValueError("native accessibility probe failed: " + value["probe_error"]["exception_type"])
+    return value
 
 
 def current_app(access, private, installed):
@@ -1145,7 +1154,7 @@ print(json.dumps(values))
     ui = UI_MODULE.UI(
         vm.qmp,
         screenshot,
-        lambda: accessibility(access, private, [app["pid"], shell]),
+        lambda: accessibility(access, private, [app["pid"], shell], report),
         LOGIN.words,
         app_pid=app["pid"],
         private=private,

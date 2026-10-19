@@ -1638,3 +1638,12 @@ def test_concurrent_console_writes_cannot_corrupt_private_observer(serial_vm):
         stop.set()
         writer.join(timeout=3)
     assert not writer.is_alive()
+
+
+def test_accessibility_failure_is_retained_before_navigation(monkeypatch, tmp_path):
+    error = {'exception_type': 'ValueError', 'message': 'accessibility label relation has an unresolved target', 'traceback': [{'file': '<fork-accessibility>', 'line': 84}]}
+    monkeypatch.setattr(PROOF, 'guest_call', lambda *args: {'schema_version': 1, 'probe_error': error})
+    report = {}
+    with pytest.raises(ValueError, match='native accessibility probe failed: ValueError'):
+        PROOF.accessibility({}, tmp_path, [42], report)
+    assert report['native_ui_probe_error'] == error

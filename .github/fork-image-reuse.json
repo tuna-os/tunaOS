@@ -1,1 +1,18 @@
-null
+{
+  "run_id": 39269250891,
+  "head_sha": "ba8b9494949449a42e3526a3992b7fb3b2777220",
+  "images": {
+    "yellowfin": {
+      "artifact_id": 12195993365,
+      "archive_sha256": "sha256:31ec9dc65f00c0a2f0dd229a42a24a3b77b55a36251e274d5031095f44a356bc",
+      "manifest_digest": "sha256:3d23dc4517a8b0d9202fe737d25796893c256a03d9ed07e3cd25fbd196881136",
+      "config_digest": "sha256:35fdac412f8696d782f2b7fd8a233d067a1caacd04a180e36c2a64c51c31e80e"
+    },
+    "grouper": {
+      "artifact_id": 12195908508,
+      "archive_sha256": "sha256:cb39249353bbd5b3cb934ee6ec7560bd8ab633a540485408d020d7f64cd14ae1",
+      "manifest_digest": "sha256:2f24960ab7b816fb0350f15a4d097623a745b3696cd8411c3b81ddb59d3b2ec3",
+      "config_digest": "sha256:ce120bba76e0020af67024460f58a12e330ce94d8e56871c16a3ecd2212d0805"
+    }
+  }
+}

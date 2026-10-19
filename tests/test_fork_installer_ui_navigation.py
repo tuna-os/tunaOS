@@ -602,3 +602,24 @@ def test_field_rechecks_active_window_and_exact_control_before_typing(monkeypatc
 def test_unit_workflow_installs_native_ocr_dependency():
     workflow = (ROOT / '.github/workflows/test.yml').read_text()
     assert 'sudo apt-get install -y python3-gi dbus-daemon dbus-bin tesseract-ocr' in workflow
+
+
+@pytest.mark.parametrize('program,expected', [
+    ('raise ValueError("accessibility label relation has an unresolved target")', 'accessibility label relation has an unresolved target'),
+    ('raise RuntimeError("private-field-value")', '<omitted>'),
+    ('raise AttributeError("private-field-value")', '<omitted>'),
+])
+def test_probe_failure_keeps_structural_trace_without_field_values(capsys, program, expected):
+    exec(UI.diagnostic_program(program, '<fork-accessibility>'), {})
+    output = capsys.readouterr().out
+    assert 'private-field-value' not in output
+    error = json.loads(output)['probe_error']
+    assert error['message'] == expected
+    assert error['traceback'][-1] == {'file': '<fork-accessibility>', 'line': 1}
+    assert len(error['message_sha256']) == 64
+    assert error['exception_type'] in {'ValueError', 'RuntimeError', 'AttributeError'}
+
+
+def test_probe_wrapper_preserves_success_json(capsys):
+    exec(UI.diagnostic_program('print(json.dumps({"schema_version": 1, "nodes": []}))', '<fork-accessibility>'), {})
+    assert json.loads(capsys.readouterr().out) == {'schema_version': 1, 'nodes': []}

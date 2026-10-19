@@ -96,6 +96,30 @@ print(json.dumps({"schema_version": 1, "nodes": rows}))
 """
 
 
+PROBE_FAILURE_MESSAGES = frozenset(
+    re.findall(r'raise ValueError\("([^"\n]+)"\)', SNAPSHOT)
+)
+
+
+def diagnostic_program(program, filename):
+    """Return bounded structural trace facts without exception values or locals."""
+    return (
+        "import json, traceback, hashlib\n"
+        + "try:\n    exec(compile(" + repr(program) + ", " + repr(filename) + ", 'exec'))\n"
+        + "except Exception as error:\n"
+        + "    frames = traceback.extract_tb(error.__traceback__)[-12:]\n"
+        + "    message = str(error)\n"
+        + "    allowed = " + repr(sorted(PROBE_FAILURE_MESSAGES)) + "\n"
+        + "    print(json.dumps({'schema_version': 1, 'probe_error': {\n"
+        + "        'exception_type': type(error).__name__[:80],\n"
+        + "        'message': message if message in allowed else '<omitted>',\n"
+        + "        'message_sha256': hashlib.sha256(message.encode()).hexdigest(),\n"
+        + "        'traceback': [{'file': f.filename if f.filename in "
+        + repr(['<fork-accessibility>', '<fork-accessibility-launch>', '<string>'])
+        + " else '<external>', 'line': f.lineno} for f in frames]}}))\n"
+    )
+
+
 def select(snapshot, name, roles, *, focused=False, pid=None):
     if not isinstance(snapshot, dict) or snapshot.get("schema_version") != 1:
         raise ValueError("invalid accessibility observation")
