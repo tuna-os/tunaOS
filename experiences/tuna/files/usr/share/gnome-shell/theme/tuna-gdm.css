@@ -1,0 +1,13 @@
+/* TunaOS GDM theme overrides; compiled into GNOME Shell's theme resource. */
+#lockDialogGroup {
+    background-color: #1b2733;
+    background-image: url("file:///usr/share/backgrounds/tunaos/tunaos-default.jpg");
+    background-position: center;
+    background-size: cover;
+}
+
+#loginDialog {
+    background-color: rgba(27, 39, 51, 0.92);
+    border-radius: 18px;
+    padding: 24px;
+}

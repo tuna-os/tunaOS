@@ -414,6 +414,10 @@ if [[ "${PKG_MGR:-}" == "apt" ]]; then
 		safe_disable gdm.service
 		safe_enable greetd.service
 		;;
+	tuna)
+		safe_disable greetd.service
+		safe_enable gdm3.service
+		;;
 	gnome) safe_enable gdm.service ;;
 	*) echo "No display manager for DESKTOP_FLAVOR='${DESKTOP_FLAVOR}'" ;;
 	esac
@@ -507,6 +511,10 @@ if [[ "${PKG_MGR:-}" == "pacman" ]] || command -v zypper &>/dev/null || command 
 	niri | cosmic)
 		safe_disable gdm.service
 		safe_enable greetd.service
+		;;
+	tuna)
+		safe_disable greetd.service
+		safe_enable gdm.service
 		;;
 	gnome) safe_enable gdm.service ;;
 	*) echo "Skipping DE-specific display-manager service setup (DESKTOP_FLAVOR='${DESKTOP_FLAVOR}')" ;;
@@ -618,6 +626,9 @@ if [[ "${DESKTOP_FLAVOR}" == "kde" ]]; then
 elif [[ "${DESKTOP_FLAVOR}" == "niri" || "${DESKTOP_FLAVOR}" == "cosmic" ]]; then
 	safe_disable gdm.service
 	safe_enable greetd.service
+elif [[ "${DESKTOP_FLAVOR}" == "tuna" ]]; then
+	safe_disable greetd.service
+	safe_enable gdm.service
 elif [[ "${DESKTOP_FLAVOR}" == "gnome" ]]; then
 	safe_enable gdm.service
 else
