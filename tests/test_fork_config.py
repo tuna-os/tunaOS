@@ -303,3 +303,72 @@ def test_receipt_detects_symlink_target_changes_and_source_deletion(tmp_path):
     assert before["sha256"] != after["sha256"]
     source.unlink()
     assert MODULE.source_receipt(tmp_path)["sha256"] != after["sha256"]
+
+
+def test_explain_keeps_default_plan_unchanged(stock):
+    plain = MODULE.resolve(stock, ROOT)
+    explained = MODULE.resolve(stock, ROOT, explain=True)
+    assert 'explanation' not in plain
+    assert explained.pop('explanation')['scope'] == 'config-delta-intent-only'
+    for cell in explained['cells']:
+        assert cell.pop('intent_provenance') == {
+            'branding': {}, 'packages': {'repositories': [], 'remove': [], 'add': [], 'optional': []}}
+    assert explained == plain
+
+
+def test_explain_effective_brand_and_all_list_origins(stock):
+    config = copy.deepcopy(stock)
+    config.update({
+        'image': {'registry': 'ghcr.io', 'namespace': 'example'},
+        'targets': {'variants': ['yellowfin'], 'flavors': ['gnome']},
+        'global': {'branding': {'name': 'Global'}, 'packages': {'add': ['vim'], 'remove': ['old']}},
+        'overrides': {
+            'variants': {'yellowfin': {'branding': {'name': 'Variant'}, 'packages': {'add': ['vim', 'git']}}},
+            'desktops': {'gnome': {'branding': {'name': 'Desktop'}, 'packages': {'optional': ['htop']}}},
+            'cells': {'yellowfin:gnome': {'branding': {'name': 'Cell'}, 'packages': {'add': []}}},
+        },
+    })
+    plan = MODULE.resolve(config, ROOT, explain=True)
+    cell = next(c for c in plan['cells'] if c['selected'])
+    assert cell['intent']['branding']['name'] == 'Cell'
+    assert cell['intent_provenance']['branding']['name'] == {
+        'effective_source': 'overrides.cells.yellowfin:gnome.branding.name',
+        'sources': ['global.branding.name', 'overrides.variants.yellowfin.branding.name',
+                    'overrides.desktops.gnome.branding.name', 'overrides.cells.yellowfin:gnome.branding.name']}
+    assert cell['intent_provenance']['packages']['add'] == [
+        {'index': 0, 'sources': ['global.packages.add[0]', 'overrides.variants.yellowfin.packages.add[0]']},
+        {'index': 1, 'sources': ['overrides.variants.yellowfin.packages.add[1]']}]
+    assert cell['intent_provenance']['packages']['remove'] == [{'index': 0, 'sources': ['global.packages.remove[0]']}]
+    assert cell['intent_provenance']['packages']['optional'] == [{'index': 0, 'sources': ['overrides.desktops.gnome.packages.optional[0]']}]
+    assert plan['explanation']['image_sources'] == {'namespace': 'image.namespace', 'registry': 'image.registry'}
+    assert plan['explanation']['target_sources']['platforms'] == 'catalog:all-declared'
+    # Origins contain keys and indices only, not shadowed values or private host paths.
+    origins = json.dumps(cell['intent_provenance'])
+    assert 'Global' not in origins and str(ROOT) not in origins
+    assert MODULE.resolve(config, ROOT, explain=True) == plan
+
+
+def test_explain_repositories_deduplicate_without_repeating_values():
+    repo = {'id': 'example', 'url': 'https://example.org/repo', 'key_url': 'https://example.org/key'}
+    layers = [('global', {'packages': {'repositories': [repo]}}),
+              ('overrides.variants.yellowfin', {'packages': {'repositories': [repo]}})]
+    intent = MODULE.merge_layers([layer for _, layer in layers])
+    result = MODULE.explain_layers(layers, intent)
+    assert result['packages']['repositories'] == [{'index': 0, 'sources': [
+        'global.packages.repositories[0]', 'overrides.variants.yellowfin.packages.repositories[0]']}]
+    assert 'https://' not in json.dumps(result)
+
+
+def test_explain_still_rejects_cross_scope_conflicts(stock):
+    config = {**stock, 'global': {'packages': {'add': ['vim']}},
+              'overrides': {'desktops': {'gnome': {'packages': {'remove': ['vim']}}}}}
+    with pytest.raises(MODULE.ConfigError, match='conflicting package operations'):
+        MODULE.resolve(config, ROOT, explain=True)
+
+
+@pytest.mark.parametrize('extra', [['--catalog-pin'], ['--format', 'legacy']])
+def test_explain_rejects_incompatible_cli_modes(extra):
+    result = subprocess.run(['python3', str(ROOT / 'scripts/resolve-fork-config.py'), '--explain', *extra],
+                            capture_output=True, text=True)
+    assert result.returncode == 2
+    assert '--explain requires config and --format plan' in result.stderr
