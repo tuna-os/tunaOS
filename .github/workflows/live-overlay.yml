@@ -234,6 +234,7 @@ jobs:
           trap cleanup EXIT
           {
             echo '#!/usr/bin/env bash'
+            echo 'export TUNA_SESSION_ROOT=/'
             printf 'export TUNA_INSTALLER_ARCH=%q\n' "$INSTALLER_ARCH"
             printf 'export TUNA_INSTALLER_APP=%q\n' "$INSTALLER_APP"
             printf 'export TUNA_LIVE_BASE_IMAGE=%q\n' "$IMG"

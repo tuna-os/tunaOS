@@ -188,6 +188,7 @@ mv "${CUSTOMIZE_DIR}/customize-live.sh" "${CUSTOMIZE_DIR}/customize-live-real.sh
 chmod 0755 "${CUSTOMIZE_DIR}/customize-live-real.sh"
 {
 	echo '#!/usr/bin/env bash'
+	echo 'export TUNA_SESSION_ROOT=/'
 	printf 'export TUNA_LIVE_BASE_IMAGE=%q\n' "$IMAGE_REF"
 	printf 'export TUNA_LIVE_BASE_DIGEST=%q\n' "$BASE_DIGEST"
 	printf 'export TUNA_LIVE_PLATFORM=%q\n' "$SOURCE_PLATFORM"
