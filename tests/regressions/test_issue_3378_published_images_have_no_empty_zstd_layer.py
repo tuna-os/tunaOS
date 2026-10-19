@@ -17,6 +17,7 @@ import ctypes
 import ctypes.util
 import json
 import os
+import struct
 import subprocess
 import tempfile
 from pathlib import Path
@@ -65,6 +66,10 @@ def _tiny_nonempty_tar_blob() -> bytes:
     checksum = sum(header)
     header[148:156] = f"{checksum:06o}\0 ".encode()
     return _compress_zstd(bytes(header) + bytes(1024))
+
+
+def _skippable_frame(payload: bytes = b"x") -> bytes:
+    return struct.pack("<II", 0x184D2A50, len(payload)) + payload
 
 
 def _check(*layers: dict) -> subprocess.CompletedProcess[str]:
@@ -232,6 +237,21 @@ def test_a_valid_tiny_zstd_tar_is_inspected_and_accepted(tmp_path: Path):
     blob = _tiny_nonempty_tar_blob()
     assert len(blob) < 50
     digest = "sha256:tiny-valid"
+    layer = {
+        "mediaType": "application/vnd.oci.image.layer.v1.tar+zstd",
+        "digest": digest,
+        "size": len(blob),
+    }
+
+    result, _, _ = _run_push_gate(tmp_path, [layer], {digest: blob})
+
+    assert result.returncode == 0, result.stderr
+
+
+def test_a_skippable_frame_before_a_tiny_zstd_tar_is_accepted(tmp_path: Path):
+    blob = _skippable_frame() + _tiny_nonempty_tar_blob()
+    assert len(blob) < 50
+    digest = "sha256:skippable-prefix"
     layer = {
         "mediaType": "application/vnd.oci.image.layer.v1.tar+zstd",
         "digest": digest,

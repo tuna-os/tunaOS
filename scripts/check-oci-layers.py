@@ -103,6 +103,11 @@ def _zstd_prefix(blob: bytes, length: int) -> bytes:
                 raise ValueError(library.ZSTD_getErrorName(status).decode())
             output.extend(destination.raw[: output_buffer.pos])
             if status == 0:
+                # A skippable or completed frame can end before the input
+                # buffer. Continue so concatenated frames still contribute to
+                # the bounded tar prefix.
+                if input_buffer.pos < input_buffer.size:
+                    continue
                 break
             if input_buffer.pos == previous and output_buffer.pos == 0:
                 raise ValueError("truncated zstd stream")
