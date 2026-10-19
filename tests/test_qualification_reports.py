@@ -387,6 +387,59 @@ def test_collect_incomplete_receipt_cannot_score_qualified():
     assert intel["qualification"]["status"] == "unqualified"
 
 
+def _strict_v1_receipt(*, installed_boot=True):
+    digest = "sha256:" + "a" * 64
+    record = {
+        "installed_boot": installed_boot,
+        "desktop_contract": True,
+        "source_digest": digest,
+        "booted_digest": digest,
+        "target_imgref": "ghcr.io/tuna-os/albacore:cosmic",
+        "duration_s": 123.0,
+    }
+    return {
+        "schema": "QualificationEvidence/v1",
+        "variant": "albacore",
+        "flavor": "cosmic",
+        "platform": "linux/amd64/v2",
+        "cpu_baseline": "x86-64-v2",
+        "hardware_scope": "qemu",
+        "resolved_inputs": {
+            "source": digest,
+            "overlay": "sha256:" + "b" * 64,
+            "installer": "sha256:" + "c" * 64,
+            "engine": "sha256:" + "d" * 64,
+        },
+        "browser": {
+            "name": "chromium",
+            "version": "140.0",
+            "memory_gib": 8,
+            "free_disk_gib": 20,
+        },
+        "offline_network_disabled": True,
+        "observed": {"plain": record, "encrypted": dict(record)},
+        "measurements": {
+            "cold": {"duration_s": 60.0},
+            "warm": {"duration_s": 12.0},
+        },
+        "qualifiedAt": "2026-10-17T01:02:03Z",
+        "receiptDigest": DIGEST_C,
+    }
+
+
+def test_schema_receipt_without_installed_boot_proof_cannot_score_qualified():
+    receipt = _strict_v1_receipt(installed_boot=False)
+    document = collector.collect(
+        single_variant_config(), SOURCE, lambda _: {"workflow_runs": []},
+        now=NOW, receipts={"albacore:cosmic:linux/amd64/v2": receipt},
+    )
+    intel = next(
+        row for row in document["targets"]
+        if row["target"]["platform"] == "linux/amd64/v2"
+    )
+    assert "qualification" not in intel
+
+
 def test_collect_default_path_shape_unchanged_without_receipts():
     document = collector.collect(
         single_variant_config(), SOURCE, lambda _: {"workflow_runs": []}, now=NOW)

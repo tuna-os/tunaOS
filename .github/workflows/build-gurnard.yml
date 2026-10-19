@@ -1,5 +1,6 @@
 name: Build Gurnard
 permissions:
+  actions: read
   contents: read
   packages: write
   id-token: write

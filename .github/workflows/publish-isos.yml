@@ -86,13 +86,23 @@ jobs:
                 select(.build_iso == true) |
                 select($v == "all" or $var.id == $v) |
                 select($f == "all" or .id == $f) |
-                {variant: $var.id, flavor: .id}
+                {
+                  variant: $var.id,
+                  flavor: .id,
+                  platform: (
+                    if ($var.id == "yellowfin" or $var.id == "albacore")
+                       and ((.platforms // $var.platforms // []) | index("linux/amd64/v2"))
+                    then "linux/amd64/v2"
+                    else "linux/amd64"
+                    end
+                  )
+                }
+                | . + {safeplatform: (.platform | gsub("/"; "-"))}
               ]
             }')
-          # Delivery cutover: stamp each row with its per-target gate. This
-          # caller builds from the promoted :<flavor> image without a
-          # platform axis, matching reusable-build-artifacts.yml's
-          # linux/amd64 default, so annotate on that platform.
+          # Delivery cutover must use the same canonical platform identity as
+          # the catalog. In particular, ordinary Alma targets are AMD64/v2,
+          # not the generic AMD64 alias.
           SNAPSHOT_ARGS=()
           if [[ -s "${CATALOG_SNAPSHOT:-}" ]]; then
             SNAPSHOT_ARGS=(--snapshot "$CATALOG_SNAPSHOT")
@@ -113,18 +123,21 @@ jobs:
       contents: read
       packages: read
       id-token: write
-    # Builds the ISO from the promoted :<flavor> image, boot-gates it in
-    # QEMU, and only publishes to R2 if the gate passes.
+    # Builds the ISO from the platform-qualified promoted image, boot-gates it
+    # in QEMU, and only publishes to R2 if the gate passes.
     uses: ./.github/workflows/reusable-build-artifacts.yml
     with:
       variant: ${{ matrix.variant }}
       flavor: ${{ matrix.flavor }}
-      image-tag: ${{ matrix.flavor }}
+      platform: ${{ matrix.platform }}
+      safeplatform: ${{ matrix.safeplatform }}
+      image-tag: ${{ matrix.flavor }}-${{ matrix.safeplatform }}
       upload-r2: ${{ inputs.skip_upload != true }}
       # Delivery cutover: same per-target gate as the nightly path above.
       # matrix.cutover is stamped in generate-matrix; a row without it
       # evaluates to false (current behavior).
       cutover-check: ${{ matrix.cutover == true }}
+
     secrets:
       R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
       R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -145,7 +158,7 @@ jobs:
       - name: Download signed ISO
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: iso-${{ matrix.variant }}-${{ matrix.flavor }}-linux-amd64
+          name: iso-${{ matrix.variant }}-${{ matrix.flavor }}-${{ matrix.safeplatform }}
           path: release-assets
 
       - name: Attach ISO to GitHub Release

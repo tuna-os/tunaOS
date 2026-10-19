@@ -147,6 +147,7 @@ jobs:
     # measured shape with room: ~14m build, 25m boot gate, 30m signing.
     timeout-minutes: 120
     permissions:
+      actions: read
       contents: write
       packages: read
       id-token: write

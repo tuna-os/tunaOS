@@ -257,6 +257,19 @@ def _qualified_snapshot(*, receipt_digest, status="qualified",
         "snapshotDigest": "sha256:" + __import__("hashlib").sha256(
             _canonical_json(entries)).hexdigest(),
         "targets": entries,
+        "currentInputs": {
+            "descriptors": {
+                f"{variant}:{flavor}:{platform}": {
+                    "platform": platform,
+                    "platformManifestDigest": pm_digest,
+                }
+            },
+            "overlays": {},
+            "pins": {
+                "installerRevision": installer,
+                "engineRevision": engine,
+            },
+        },
     }
 
 def _qualified_snapshot_for_entries(entries):
@@ -287,6 +300,17 @@ def _qualified_snapshot_for_entries(entries):
     snapshot["snapshotDigest"] = "sha256:" + __import__("hashlib").sha256(
         _canonical_json(targets)
     ).hexdigest()
+    snapshot["currentInputs"] = {
+        "descriptors": {
+            target["targetKey"]: {
+                "platform": target["target"]["platform"],
+                "platformManifestDigest": target["facts"]["digest"],
+            }
+            for target in targets
+        },
+        "overlays": {},
+        "pins": {},
+    }
     return snapshot
 
 

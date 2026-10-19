@@ -8,6 +8,7 @@ until a separately authenticated receipt collector is connected.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import re
 import resource
@@ -21,6 +22,15 @@ import yaml
 from contracts.health import attempt_status, evaluate_row
 from contracts.evidence import validate
 from contracts.targets import coverage_document, platform_slug, receipt_to_catalog_projection
+
+_qualification_spec = importlib.util.spec_from_file_location(
+    "qualification_evidence",
+    Path(__file__).with_name("verify-experience-manifest.py"),
+)
+_qualification_module = importlib.util.module_from_spec(_qualification_spec)
+assert _qualification_spec.loader is not None
+_qualification_spec.loader.exec_module(_qualification_module)
+
 
 REPOSITORY = "tuna-os/tunaOS"
 RUN_DEPTH = 200
@@ -234,6 +244,13 @@ def normalized_jobs(jobs: list[dict], target: dict):
     return normalized
 
 
+def _validate_qualification_receipt(candidate):
+    """Validate schema-tagged receipts before they can influence health."""
+    if candidate.get("schema") != "QualificationEvidence/v1":
+        return
+    _qualification_module.validate(candidate, "qualification receipt")
+
+
 def _matching_receipts(receipts, target):
     """Project QualificationEvidence/v1 receipts onto a target, oldest first.
 
@@ -255,8 +272,9 @@ def _matching_receipts(receipts, target):
             if not isinstance(candidate, dict):
                 continue
             try:
+                _validate_qualification_receipt(candidate)
                 projected = receipt_to_catalog_projection(candidate)
-            except ValueError:
+            except (TypeError, ValueError):
                 continue
             ident = projected.get("target") if isinstance(projected.get("target"), dict) else projected
             if (ident.get("variant"), ident.get("flavor"), ident.get("platform")) != (
@@ -282,6 +300,18 @@ def _complete_qualification(projected):
         return False
     if not isinstance(projected.get("browser"), dict):
         return False
+    observed = projected.get("observed")
+    if observed is not None:
+        if not isinstance(observed, dict):
+            return False
+        for mode in ("plain", "encrypted"):
+            record = observed.get(mode)
+            if not isinstance(record, dict):
+                return False
+            if record.get("installed_boot") is not True:
+                return False
+            if record.get("desktop_contract") is not True:
+                return False
     measurements = projected.get("measurements")
     if not isinstance(measurements, dict):
         return False

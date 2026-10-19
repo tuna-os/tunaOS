@@ -59,6 +59,17 @@ def test_filtered_flavor_includes_prior_build_stages_and_platforms():
     }
 
 
+def test_filtered_stage_excludes_unrelated_peer_flavors():
+    result = run_selector(FILTER_VARIANT="yellowfin", FILTER_FLAVOR="gnome")
+    assert result.returncode == 0
+    assert json.loads(result.stdout) == {
+        "yellowfin": {
+            "base": ["linux/amd64", "linux/arm64"],
+            "gnome": ["linux/amd64"],
+        }
+    }
+
+
 def test_unknown_flavor_fails_closed():
     result = run_selector(FILTER_VARIANT="yellowfin", FILTER_FLAVOR="missing")
     assert result.returncode != 0

@@ -219,7 +219,11 @@ jobs:
           # arbitrary host environment variables into its customization
           # container. Embed the measured provenance as exports in the script
           # it mounts instead of trusting the host process environment.
-          CUSTOMIZE_SCRIPT="$RUNNER_TEMP/customize-live-with-provenance.sh"
+          CUSTOMIZE_DIR="$RUNNER_TEMP/customize-live"
+          rm -rf "$CUSTOMIZE_DIR"
+          mkdir -p "$CUSTOMIZE_DIR"
+          cp -a "$PWD/live-iso/common/src/." "$CUSTOMIZE_DIR/"
+          CUSTOMIZE_SCRIPT="$CUSTOMIZE_DIR/customize-live-with-provenance.sh"
           {
             printf '#!/usr/bin/env bash\n'
             printf 'export TUNA_INSTALLER_ARCH=%q\n' "$INSTALLER_ARCH"
@@ -228,7 +232,7 @@ jobs:
             printf 'export TUNA_LIVE_BASE_IMAGE=%q\n' "$IMG"
             printf 'export TUNA_LIVE_BASE_DIGEST=%q\n' "$BASE_DIGEST"
             printf 'export TUNA_LIVE_PLATFORM=%q\n' "$PLATFORM"
-            cat "$PWD/live-iso/common/src/customize-live.sh"
+            cat "$CUSTOMIZE_DIR/customize-live.sh"
           } > "$CUSTOMIZE_SCRIPT"
           chmod +x "$CUSTOMIZE_SCRIPT"
           sudo -E env -u XDG_DATA_HOME -u XDG_CONFIG_HOME HOME=/root \
