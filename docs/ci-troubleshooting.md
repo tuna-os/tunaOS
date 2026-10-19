@@ -1740,6 +1740,80 @@ cannot change the theme already copied by dracut. The test runs
 PNG, selection and password callbacks. Keep image builds blocked until an
 actual initramfs and encrypted-root boot verify the same files.
 
+### Fork staging refuses an image build
+
+`prepare-fork-config.py --identity-staging --build` and the ordinary build
+entry reject the identity payload until real-image qualification is complete.
+This is an intentional admission boundary, not a missing environment flag.
+Use the [qualification harness](FORK-IMAGE-QUALIFICATION.md)
+for the two local canaries. Its result records build, boot and installed
+identity separately from graphical login and installer tests. Never interpret
+an unexecuted stage as a pass or remove the production gate to run the canary.
+
+
+### Grouper has no base boot marker
+
+Run `39187536308` reached GDM but had no base marker or SSH host keys.
+Keep the base contract before the apt branch exit in `40-services.sh`.
+Send its verdict to the serial device as well as the journal.
+Keep the SSH key generator in the service dependency graph.
+Do not add the same dependency to `ssh.socket`: it can cause a cycle.
+The next native test must check the keygen journal and an SSH login.
+
+
+### Installer process exists but the fork welcome screen is unproven
+
+The frozen bootc-installer source at `c037f9b7` can map `BootcRamWindow`,
+`BootcCpuWindow` or `BootcUnsupportedWindow` through the normal app entrypoint.
+A live process or a nonblank screenshot does not distinguish these windows from
+`BootcWindow`. GNOME also exports its display to the user systemd manager after
+startup; the compositor's initial process environment need not contain that socket.
+
+Use the [welcome proof](FORK-IMAGE-QUALIFICATION.md#optional-native-installer-welcome-proof) for a native test.
+It reads the existing user's session environment. It needs a new wizard map and
+the exact app commit. It also checks visible welcome/install copy and pixels from the source logo.
+If GitHub denies the frozen artifact download, report that exact HTTP status.
+Do not replace it with a source build or change token permissions to make the test run.
+
+### Ubuntu initramfs copies the wrong fork theme
+
+Ubuntu's `plymouth-populate-initrd` reads `Theme` from the config only when
+`ThemeDir` also names a valid theme directory. Without it, the tool uses
+`update-alternatives`, which can still select `bgrt`. Set both keys before
+dracut runs. Run `39193902719` exposed this with the actual archive check.
+Keep that check: files in the root image do not prove an initramfs payload.
+
+### Fork installer shows the right logo but selects a stock image or wrong storage
+
+The identity adapter deliberately changes display fields only. The stock recipe
+still named `ghcr.io/tuna-os/tunaos:latest`, while the image screen's embedded
+catalog could override recipe `imgref` through its selected-image result. Also,
+raw images retained the template's composefs/systemd/xfs values: only customization of the live ISO ran
+the probe for the final backend.
+
+Use the exact build tag from the resolved cell for the recipe and host catalog.
+Reject duplicate or absent target leaves before the build. Finalize the
+recipe and selected leaf using the canonical root probe before identity hashes.
+`tests/test_fork_installer_source.py` exercises the real probe for bootupd/sealed
+combinations, stock-source rejection, inherited catalog refs, and repeated writes;
+it does not replace native installer or installed-boot qualification.
+
+### Fork installer opens the disk page before welcome
+
+**Cause:** Native run `39209599456` showed the disk page first on Yellowfin and
+Grouper. The builder logged `disk,encryption,image,welcome`, but the source
+recipe has `welcome,image,disk,encryption`. Each writer sorted all keys, even in
+nested objects. The installer uses object order for steps
+and tour slides, so those writes changed the UI sequence.
+
+**Fix:** Keep the recipe's nested object order in all three writers. Keep sorted
+JSON for catalogs and receipts. Hash the exact recipe bytes after the final write.
+`test_full_preparation_preserves_recipe_order_through_identity` runs preparation,
+the actual backend probe and repeated identity writes in fixture roots. It checks
+step and tour order, stable bytes and detection of a changed recipe hash.
+
+These source tests do not prove that the welcome screen appears first. Rebuild
+and check the actual installer before you claim that result.
 
 ## Fork RPM selector passes name validation
 
@@ -1751,3 +1825,10 @@ The [RPM manual](https://rpm.org/docs/4.20.x/man/rpm.8.html#package-selection-op
 describes these selectors. Tests check rejection before erase.
 [Native removal checks](FORK-NATIVE-REMOVALS.md) add cases in private roots.
 Inventory and file hashes must stay unchanged. A local native skip does not prove this gate.
+
+## Optional stock removal refuses a zero-exit desktop check
+
+| Symptom | Cause to check | Fix |
+| --- | --- | --- |
+| The optional-removal helper refuses a checker that exited zero | The previous success marker was stale, the fresh result was waived, or the checker did not emit the matching strict pass marker and log | Fix the stock desktop contract. Do not synthesize a marker, allow a waiver or retry the failed root. `tests/test_fork_optional_removals.py` executes stale/no-op/waived-result rejection; see [the optional-removal boundary](FORK-OPTIONAL-REMOVALS.md). |
+| A fork addition succeeds but later removal reports a disappeared stock name/architecture | The additions solver deleted or replaced a protected stock identity | Reject that transaction and rebuild from untouched stock. Package version upgrades are allowed; silently deleting a stock name/architecture is not. |

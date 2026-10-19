@@ -1,8 +1,11 @@
 # Fork package removal qualification
 
-Normal fork preparation still rejects every removal. The standalone
-`build_scripts/lib/fork-removals.sh` candidate is for disposable qualification
-roots only. It needs `TUNAOS_FORK_REMOVAL_QUALIFICATION=1`; normal builds do not source it. This switch is not a declaration of production support.
+Fork preparation accepts only the optional-stock policy below.
+All other removals remain unsupported. The standalone qualification entrypoint in
+`build_scripts/lib/fork-removals.sh` still needs a disposable root and
+`TUNAOS_FORK_REMOVAL_QUALIFICATION=1`. This switch does not declare production
+support. The optional adapter uses the exact native primitive. It
+adds its own source policy, inventory and desktop-contract checks.
 
 Use exact names for packages. The adapter rejects missing targets.
 A fixed policy protects boot, network, security and system packages.
@@ -100,3 +103,38 @@ native dependency evidence are necessary but do not replace image qualification.
 protected names, failure propagation and exact deltas. Its native dpkg test uses
 an isolated package database to capture both stages, reject protected removal,
 and remove an additional fixture with a verified receipt.
+
+## Optional stock package removal integration
+
+The connected opt-in path uses the existing `packages.remove` list. Its initial
+source-controlled eligibility is deliberately narrow: exactly `fastfetch` on
+direct `grouper:gnome` (APT) and `yellowfin:gnome` (DNF). Other packages, desktops,
+families and inherited routes fail during preparation. `builds.json` records the
+selected removal policy so preview does not imply general removal support.
+No config means no package-removal work or new stock-build dependency.
+
+The build records the stock packages before fork repository and addition steps.
+The shell retains the digest of this inventory. After additions, the shell writes
+a receipt with status `pending-removal`. This does not certify a completed build.
+
+The adapter removes packages after desktop setup, brand changes and normal contract checks.
+The adapter checks the baseline, native package health and a fresh desktop contract.
+It also checks native dependencies before removal. It accepts only the requested
+change to the inventory. It then runs the strict desktop contract again.
+The shell marks the package receipt complete only after these checks pass.
+
+Discard a failed or interrupted build. An incomplete receipt does not authorize
+removal in a new shell. There is no automatic dependency cleanup or recovery
+transaction. Ubuntu invokes both desktop scripts in separate processes.
+The second process verifies the completed receipt, current native inventory and
+a fresh desktop contract. It does not repeat removal or resume incomplete work.
+
+This first rule does not establish that every other stock package is essential.
+More support needs evidence from required boot, desktop and security contracts.
+It also needs native dependency checks and tests on representative images.
+Partial owner metadata is evidence, not an authorization policy.
+
+Native fixture results do not replace tests of the real signed packages and
+contracts in disposable containers from the target images. See the draft PR's
+verification record for current evidence. This section describes the implementation
+boundary; it does not assert that full-image qualification has completed.

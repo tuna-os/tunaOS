@@ -1137,6 +1137,10 @@ fi
 
 "${_TD_CTX}/build_scripts/install-countme.sh"
 
+if declare -F tunaos_finalize_fork_packages >/dev/null; then
+	tunaos_finalize_fork_packages "${_TD_CTX}" "${_TD_DESKTOP}"
+fi
+
 emit_packages_manifest
 
 printf "::endgroup::\n"

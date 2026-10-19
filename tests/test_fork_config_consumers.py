@@ -298,3 +298,36 @@ def test_apt_typed_repository_only_routes_to_apt():
     for manager in ("dnf", "zypper", "pacman", "emerge"):
         with pytest.raises(MODULE.ConfigError):
             MODULE.validate_packages(packages, manager)
+
+
+@pytest.mark.parametrize("variant,manager", [("yellowfin", "dnf"), ("grouper", "apt")])
+def test_optional_stock_removal_policy_is_explicit(variant, manager):
+    packages = {"repositories": [], "remove": ["fastfetch"], "add": [], "optional": []}
+    policy = MODULE.validate_packages(packages, manager, variant, "gnome")
+    assert isinstance(policy, dict) and policy
+
+
+@pytest.mark.parametrize("variant,manager,flavor,package", [
+    ("yellowfin", "dnf", "gnome", "bash"),
+    ("yellowfin", "dnf", "gnome", "glow"),
+    ("yellowfin", "dnf", "kde", "fastfetch"),
+    ("grouper", "apt", "xfce", "fastfetch"),
+    ("bonito", "dnf", "gnome", "fastfetch"),
+    ("marlin", "pacman", "gnome", "fastfetch"),
+    ("guppy", "emerge", "gnome", "app-misc/fastfetch"),
+])
+def test_unqualified_stock_removal_has_actionable_preview_error(variant, manager, flavor, package):
+    packages = {"repositories": [], "remove": [package], "add": [], "optional": []}
+    with pytest.raises(MODULE.ConfigError, match="removals are unsupported"):
+        MODULE.validate_packages(packages, manager, variant, flavor)
+
+
+def test_selected_removal_policy_survives_prepared_build_plan(fork, tmp_path):
+    def change(config):
+        config["global"]["packages"]["remove"] = ["fastfetch"]
+        # The sample adds fastfetch optionally on Yellowfin; overlapping intent
+        # must still be removed explicitly rather than silently overwritten.
+        config["overrides"]["variants"]["yellowfin"]["packages"]["optional"] = []
+    edit(fork, change)
+    builds = MODULE.prepare(fork, tmp_path / "with-removal")
+    assert all(isinstance(build["package_removal_policy"], dict) for build in builds)

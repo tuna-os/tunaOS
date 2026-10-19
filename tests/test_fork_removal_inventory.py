@@ -117,6 +117,52 @@ def test_native_inventory_parsers(monkeypatch, manager, output):
     assert result == [{"name": "pkg", "version": "1", "architecture": None if manager == "pacman" else "all"}]
 
 
+@pytest.mark.parametrize("manager", ["dnf", "zypper"])
+def test_rpm_public_key_records_keep_native_missing_architecture(monkeypatch, manager):
+    output = "gpg-pubkey\t0:93e8909b-66d42b2c\t(none)\ngpg-pubkey\t0:957f5868-5e5499b8\t(none)\n"
+    monkeypatch.setattr(MOD, "invoke", lambda command: output)
+    assert MOD.snapshot(manager) == [
+        {"name": "gpg-pubkey", "version": version, "architecture": "(none)"}
+        for version in ("0:93e8909b-66d42b2c", "0:957f5868-5e5499b8")
+    ]
+
+
+@pytest.mark.parametrize("manager,name,arch", [
+    ("apt", "gpg-pubkey", "(none)"), ("dnf", "ordinary", "(none)"),
+    ("dnf", "gpg-pubkey", "(unknown)"), ("dnf", "gpg-pubkey", None),
+    ("zypper", "gpg-pubkey", ""), ("pacman", "gpg-pubkey", "(none)"),
+])
+def test_missing_architecture_exception_is_rpm_public_key_only(manager, name, arch):
+    with pytest.raises(MOD.ProtectionError, match="architecture"):
+        MOD.validate_records([{"name": name, "version": "1", "architecture": arch}], manager)
+
+
+@pytest.mark.parametrize("drop_key", [False, True])
+def test_rpm_key_record_is_protected_in_exact_delta(tmp_path, monkeypatch, drop_key):
+    monkeypatch.setenv("TUNAOS_FORK_REMOVAL_QUALIFICATION", "1")
+    key = {"name": "gpg-pubkey", "version": "0:93e8909b-66d42b2c", "architecture": "(none)"}
+    current = [key]
+    monkeypatch.setattr(MOD, "snapshot", lambda manager: current.copy())
+    base, desktop, receipt = [tmp_path / name for name in ("base.json", "desktop.json", "receipt.json")]
+    MOD.capture("dnf", "base", SOURCE, IMAGE, base)
+    MOD.capture("dnf", "desktop", SOURCE, IMAGE, desktop)
+    current.append(record("spare"))
+
+    def remove(*args, **kwargs):
+        current.remove(record("spare"))
+        if drop_key:
+            current.remove(key)
+
+    monkeypatch.setattr(MOD.subprocess, "run", remove)
+    if drop_key:
+        with pytest.raises(MOD.ProtectionError, match="unexpected package delta"):
+            MOD.qualify("dnf", SOURCE, IMAGE, base, desktop, ["spare"], receipt)
+        assert not receipt.exists()
+    else:
+        result = MOD.qualify("dnf", SOURCE, IMAGE, base, desktop, ["spare"], receipt)
+        assert result["after"] == [key]
+
+
 @pytest.mark.parametrize("output", ["pkg\t1\tall\tunpacked\n", "pkg\t1\n", "pkg\t1\tall\tinstalled\npkg\t1\tall\tinstalled\n"])
 def test_incomplete_or_invalid_native_inventory(monkeypatch, output):
     monkeypatch.setattr(MOD, "invoke", lambda command: output)

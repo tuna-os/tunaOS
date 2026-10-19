@@ -328,3 +328,7 @@ EOF
 	systemctl enable tunaos-desktop-contract.service
 	;;
 esac
+
+if declare -F tunaos_finalize_fork_packages >/dev/null; then
+	tunaos_finalize_fork_packages /run/context "$desktop"
+fi

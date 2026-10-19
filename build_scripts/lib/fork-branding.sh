@@ -199,6 +199,9 @@ tunaos_apply_fork_branding() {
 		}
 	done
 	_tunaos_fork_branding_image_info "$manifest" "$root/usr/share/ublue-os/image-info.json" || return 1
+	python3 "$context/build_scripts/lib/fork-installer-source.py" \
+		--manifest "$manifest" --root "${root:-/}" \
+		--backend-probe "$context/build_scripts/lib/installer-recipe-backend.sh" --check || return 1
 	for field in HOME_URL DOCUMENTATION_URL SUPPORT_URL BUG_REPORT_URL; do
 		value="$(tunaos_fork_branding_url "$manifest" "$field")"
 		[[ -n "$value" ]] || continue
@@ -248,6 +251,13 @@ tunaos_apply_fork_branding() {
 		'.["fork-config"] = ($manifest[0] | {schema_version, image, variant, flavor, platform, sources})' "$file" >"$tmp" || return 1
 	chmod --reference="$file" "$tmp"
 	mv "$tmp" "$file"
+	# Probe the current boot payload after package/stock writers. This is
+	# repeated at the final desktop hook before identity hashes the recipe.
+	python3 "$context/build_scripts/lib/fork-installer-source.py" \
+		--manifest "$manifest" --root "${root:-/}" \
+		--backend-probe "$context/build_scripts/lib/installer-recipe-backend.sh" || return 1
+	install -Dm0755 "$context/build_scripts/lib/fork-installer-source.py" "$root/usr/libexec/tunaos/fork-installer-source.py"
+	install -Dm0755 "$context/build_scripts/lib/installer-recipe-backend.sh" "$root/usr/libexec/tunaos/installer-recipe-backend.sh"
 	# Name/logo staging consumes the same resolved cell, after stock writers on
 	# both desktop paths. Its helper refuses the live root; image builds remain
 	# blocked until installer/Plymouth consumers and canaries are implemented.
@@ -271,6 +281,9 @@ tunaos_verify_fork_branding() {
 	_tunaos_fork_branding_schema "$manifest" || return 1
 	_tunaos_fork_branding_platform "$manifest" || return 1
 	_tunaos_fork_branding_asset "$manifest" || return 1
+	python3 "$root/usr/libexec/tunaos/fork-installer-source.py" \
+		--manifest "$manifest" --root "${root:-/}" \
+		--backend-probe "$root/usr/libexec/tunaos/installer-recipe-backend.sh" --verify || return 1
 	file="$root/usr/share/ublue-os/image-info.json"
 	_tunaos_fork_branding_image_info "$manifest" "$file" || return 1
 	jq -e --slurpfile manifest "$manifest" \

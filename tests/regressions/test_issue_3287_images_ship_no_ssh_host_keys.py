@@ -88,6 +88,8 @@ def _image(tmp_path: Path, unit: str | None) -> Path:
     (scratch / UNIT_DIR.lstrip("/")).mkdir(parents=True)
     if unit is not None:
         (scratch / UNIT_DIR.lstrip("/") / "sshd-keygen.service").write_text(unit)
+    for name in ("ssh.service", "sshd@.service", "ssh.socket"):
+        (scratch / UNIT_DIR.lstrip("/") / name).write_text("[Unit]\nDescription=Test SSH entrypoint\n")
     return scratch
 
 
@@ -192,3 +194,26 @@ def test_an_image_without_the_generator_keeps_its_keys(tmp_path):
     assert result.returncode == 0, result.stderr
     assert len(list((scratch / "etc/ssh").glob("ssh_host_*"))) == 2 * len(KEY_TYPES)
     assert "no sshd-keygen.service" in result.stderr
+
+
+@pytest.mark.parametrize("name", ["ssh.service", "sshd@.service"])
+def test_keygen_dependency_survives_missing_package_enablement_links(tmp_path, name):
+    scratch = _image(tmp_path, DEBIAN_UNIT)
+    # No /etc/systemd/system links exist in this fixture. The vendor drop-in
+    # must pull AND order keygen whenever an administrator starts SSH.
+    assert _run_cleanup(scratch).returncode == 0
+    dependency = scratch / UNIT_DIR.lstrip("/") / f"{name}.d/10-tunaos-host-keys.conf"
+    assert dependency.read_text() == "[Unit]\nRequires=sshd-keygen.service\nAfter=sshd-keygen.service\n"
+    assert not (scratch / "etc/systemd/system").exists(), "cleanup must not enable SSH"
+
+
+def test_non_debian_generator_gets_no_new_dependencies(tmp_path):
+    scratch = _image(tmp_path, None)
+    assert _run_cleanup(scratch).returncode == 0
+    assert not list((scratch / UNIT_DIR.lstrip("/")).glob("*.d/10-tunaos-host-keys.conf"))
+
+
+def test_socket_does_not_wait_for_normal_service_default_dependencies(tmp_path):
+    scratch = _image(tmp_path, DEBIAN_UNIT)
+    assert _run_cleanup(scratch).returncode == 0
+    assert not (scratch / UNIT_DIR.lstrip("/") / "ssh.socket.d/10-tunaos-host-keys.conf").exists()

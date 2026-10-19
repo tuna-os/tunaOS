@@ -131,3 +131,26 @@ Then test stock and fork canaries through build, boot, GDM/login and install. Re
 The identity helper verifies the receipt before it checks display values for the fork. Expand other desktops only
 with their own consumers and evidence. No hold, source pin, release gate or
 production workflow changes here.
+
+## GDM profile wiring found by the Grouper canary
+
+Run `39187536308` reached the GNOME greeter on Grouper, but its screenshot
+still displayed the Ubuntu wordmark. The existing GNOME adapter wrote and
+compiled `gdm.d`, while neither it nor its checker required a profile that
+reads that database. Asset hashes alone did not detect this gap.
+
+The opt-in identity adapter now owns `/etc/dconf/profile/gdm` in its applied
+receipt. It places `system-db:gdm` immediately after the user database and
+preserves the remaining vendor/admin fallback databases. A vendor file database before it would give priority to the vendor logo. If no local
+profile exists it preserves `/usr/share/dconf/profile/gdm`, or uses GNOME's
+standard greeter profile. Unsupported layouts and symlinks fail preflight before
+identity writes.
+
+Stock images never enter this adapter. It preserves authentication,
+session selection and lock policy. It does not migrate the display manager.
+
+This follows the [GNOME greeter-logo contract](https://help.gnome.org/system-admin-guide/login-logo.html).
+Tests cover missing profiles, Ubuntu-style vendor databases, fallback profiles,
+idempotence, invalid layouts and altered files. They do not establish that the
+rebuilt greeter renders the supplied wordmark: that still needs the next
+canary's effective GSettings value and screenshot.

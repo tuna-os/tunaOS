@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "policy_id": "reviewed-optional-stock-v1",
+  "routes": [
+    {
+      "variant": "grouper",
+      "package_manager": "apt",
+      "packages": [
+        "fastfetch"
+      ]
+    },
+    {
+      "variant": "yellowfin",
+      "package_manager": "dnf",
+      "packages": [
+        "fastfetch"
+      ]
+    }
+  ],
+  "desktop_contract": "strict-before-and-after",
+  "target_removal_scripts": "reject",
+  "flavors": [
+    "gnome"
+  ]
+}
