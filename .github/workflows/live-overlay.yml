@@ -67,10 +67,10 @@ jobs:
           #     build-config marks them buildable),
           #   * anything build_image: false (e.g. yellowfin gnome-nvidia-hwe,
           #     tunaOS#2518: builds but cannot mount its own root).
-          # Each surviving flavor fans out to one row per declared platform
-          # (flavor platforms, else variant platforms; linux/amd64/v2 is a
-          # CPU-feature variant, not a target arch, so only linux/amd64 and
-          # linux/arm64 qualify -- same exclusion build-variant.yml applies).
+          # Each surviving flavor fans out to one row per declared platform.
+          # linux/amd64/v2 is a distinct OCI target and must remain distinct
+          # from the generic linux/amd64 row; the catalog requires it for
+          # ordinary Alma targets.
           MATRIX=$(yq -o json .github/build-config.yml | jq -c \
             --arg v "$WANT_VARIANT" --arg f "$WANT_FLAVOR" '{
               include: [
@@ -84,7 +84,7 @@ jobs:
                 | .platforms as $plats
                 | {variant: .variant, flavor: .flavor,
                    platform: $plats[]}
-                | select(.platform == "linux/amd64" or .platform == "linux/arm64")
+                | select(.platform == "linux/amd64" or .platform == "linux/amd64/v2" or .platform == "linux/arm64")
                 | {variant, flavor, platform,
                    safeplatform: (.platform | gsub("/"; "-"))}
               ]
@@ -99,7 +99,7 @@ jobs:
     name: ${{ matrix.variant }}:${{ matrix.flavor }} [${{ matrix.platform }}]
     needs: generate-matrix
     if: ${{ needs.generate-matrix.outputs.count != '0' }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ contains(matrix.platform, 'arm64') && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
     timeout-minutes: 45
     strategy:
       fail-fast: false
@@ -215,23 +215,26 @@ jobs:
           # path gets root's own store, as scripts/build-iso-tacklebox.sh does
           # for the ISO build. This workflow does NOT go through that script,
           # so it needs its own copy of the fix.
-          # NOTE the argument order: GNU env stops parsing options at the
-          # first NAME=VALUE, so `env HOME=/root -u XDG_DATA_HOME` treats
-          # `-u` as the command to run and dies with
-          # `env: '-u': No such file or directory`. Options first.
-          # TUNA_INSTALLER_ARCH / TUNA_INSTALLER_APP / TUNA_INSTALLER_REVISION
-          # travel the same env into the customize container so the script and
-          # the OCI labels below agree on what was installed.
+          # Tacklebox's pinned customize-live command does not forward
+          # arbitrary host environment variables into its customization
+          # container. Embed the measured provenance as exports in the script
+          # it mounts instead of trusting the host process environment.
+          CUSTOMIZE_SCRIPT="$RUNNER_TEMP/customize-live-with-provenance.sh"
+          {
+            printf '#!/usr/bin/env bash\n'
+            printf 'export TUNA_INSTALLER_ARCH=%q\n' "$INSTALLER_ARCH"
+            printf 'export TUNA_INSTALLER_APP=%q\n' "$INSTALLER_APP"
+            printf 'export TUNA_INSTALLER_REVISION=%q\n' "$INSTALLER_REV"
+            printf 'export TUNA_LIVE_BASE_IMAGE=%q\n' "$IMG"
+            printf 'export TUNA_LIVE_BASE_DIGEST=%q\n' "$BASE_DIGEST"
+            printf 'export TUNA_LIVE_PLATFORM=%q\n' "$PLATFORM"
+            cat "$PWD/live-iso/common/src/customize-live.sh"
+          } > "$CUSTOMIZE_SCRIPT"
+          chmod +x "$CUSTOMIZE_SCRIPT"
           sudo -E env -u XDG_DATA_HOME -u XDG_CONFIG_HOME HOME=/root \
-            "TUNA_INSTALLER_ARCH=${INSTALLER_ARCH}" \
-            "TUNA_INSTALLER_APP=${INSTALLER_APP}" \
-            "TUNA_INSTALLER_REVISION=${INSTALLER_REV}" \
-            "TUNA_LIVE_BASE_IMAGE=${IMG}" \
-            "TUNA_LIVE_BASE_DIGEST=${BASE_DIGEST}" \
-            "TUNA_LIVE_PLATFORM=${PLATFORM}" \
             "${TACKLEBOX_BIN}" customize-live \
             --image "$IMG" \
-            --script "$PWD/live-iso/common/src/customize-live.sh" \
+            --script "$CUSTOMIZE_SCRIPT" \
             --tag "$OUT" \
             --label "org.tunaos.live-overlay.base=${IMG}" \
             --label "org.tunaos.live-overlay.base-digest=${BASE_DIGEST}" \
@@ -241,3 +244,42 @@ jobs:
 
           sudo podman push "$OUT"
           echo "published $OUT"
+
+  # Keep the historical unsuffixed reference usable by tacklebox and older
+  # browser builders. The per-platform jobs above are the immutable sources;
+  # this job publishes a manifest index that points at every platform tag
+  # instead of allowing the last platform to overwrite the tag.
+  publish-index:
+    name: Publish compatible overlay indexes
+    needs: [generate-matrix, overlay]
+    if: ${{ needs.overlay.result == 'success' && needs.generate-matrix.outputs.count != '0' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Log in to GHCR
+        run: echo "${{ env.GITHUB_TOKEN }}" | podman login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish unsuffixed multi-platform overlay indexes
+        env:
+          MATRIX: ${{ needs.generate-matrix.outputs.matrix }}
+        run: |
+          set -euo pipefail
+          declare -A indexes=()
+          while IFS=$'\t' read -r variant flavor safeplatform; do
+            key="${variant}:${flavor}"
+            if [[ -z "${indexes[$key]+set}" ]]; then
+              indexes["$key"]="ghcr.io/tuna-os/live-overlay:${variant}-${flavor}"
+              podman manifest create "${indexes[$key]}"
+            fi
+            podman manifest add "${indexes[$key]}" \
+              "docker://ghcr.io/tuna-os/live-overlay:${variant}-${flavor}-${safeplatform}"
+          done < <(
+            jq -r '.include[] | [.variant, .flavor, .safeplatform] | @tsv' <<<"$MATRIX"
+          )
+
+          for index in "${indexes[@]}"; do
+            podman manifest push --all "$index" "docker://$index"
+          done

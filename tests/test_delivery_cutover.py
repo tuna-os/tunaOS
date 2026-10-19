@@ -123,7 +123,15 @@ def test_empty_policy_cuts_over_nothing(config):
 )
 def test_is_cut_over_true_matrix(config, variant, flavor, platform):
     policy = make_policy([make_entry(variant, flavor, platform)])
-    assert DC.is_cut_over(policy, variant, flavor, platform, config=config) is True
+    snapshot = _qualified_snapshot(
+        receipt_digest=DIGEST,
+        variant=variant,
+        flavor=flavor,
+        platform=platform,
+    )
+    assert DC.is_cut_over(
+        policy, variant, flavor, platform, config=config, snapshot=snapshot
+    ) is True
 
 
 def test_is_cut_over_needs_a_matching_entry(config):
@@ -167,22 +175,27 @@ def test_is_cut_over_requires_current_catalog_membership(config):
 
 # Snapshot staleness.
 def _qualified_snapshot(*, receipt_digest, status="qualified",
-                        installer="rev-pin-1", engine="rev-pin-1"):
+                        installer="rev-pin-1", engine="rev-pin-1",
+                        variant="bonito", flavor="gnome", platform="linux/amd64"):
     """A minimal valid CatalogSnapshot v1 covering one target.
 
     Hand-built (rather than via catalog_snapshot) so the qualification can be
     qualified: the real builder needs live OCI descriptors to qualify
     anything, which is exactly what unit scope must not require.
     """
-    from contracts.targets import _canonical_json, _oci_platform
+    from contracts.targets import _canonical_json, _oci_platform, hardware_scope
 
     pm_digest = "sha256:" + "01" * 32
     target = {
-        "variant": "bonito",
-        "flavor": "gnome",
-        "platform": "linux/amd64",
-        "cpuBaseline": "x86-64",
-        "hardwareScope": "generic",
+        "variant": variant,
+        "flavor": flavor,
+        "platform": platform,
+        "cpuBaseline": (
+            "x86-64-v2" if platform == "linux/amd64/v2"
+            else "x86-64" if platform == "linux/amd64"
+            else "armv8-a"
+        ),
+        "hardwareScope": hardware_scope(flavor),
     }
     if status == "qualified":
         qualification = {
@@ -204,15 +217,15 @@ def _qualified_snapshot(*, receipt_digest, status="qualified",
         }
     entries = [{
         "target": target,
-        "targetKey": "bonito:gnome:linux/amd64",
+        "targetKey": f"{variant}:{flavor}:{platform}",
         "required": True,
         "scheduled": True,
         "publication": {
-            "repository": "ghcr.io/tuna-os/bonito",
-            "tag": "gnome",
-            "ref": "ghcr.io/tuna-os/bonito:gnome",
+            "repository": f"ghcr.io/tuna-os/{variant}",
+            "tag": flavor,
+            "ref": f"ghcr.io/tuna-os/{variant}:{flavor}",
         },
-        "availability": {"available": True, "ociPlatform": _oci_platform("linux/amd64")},
+        "availability": {"available": True, "ociPlatform": _oci_platform(platform)},
         "resolvedInputs": {
             "platformManifestDigest": pm_digest,
             "indexDigest": "sha256:" + "02" * 32,
@@ -245,6 +258,36 @@ def _qualified_snapshot(*, receipt_digest, status="qualified",
             _canonical_json(entries)).hexdigest(),
         "targets": entries,
     }
+
+def _qualified_snapshot_for_entries(entries):
+    from contracts.targets import _canonical_json
+
+    if not entries:
+        raise ValueError("snapshot needs at least one target")
+    targets = []
+    for entry in entries:
+        target = entry["target"]
+        evidence = entry.get("evidence", {})
+        targets.append(
+            _qualified_snapshot(
+                receipt_digest=evidence.get("receiptDigest", DIGEST),
+                variant=target["variant"],
+                flavor=target["flavor"],
+                platform=target["platform"],
+            )["targets"][0]
+        )
+    targets.sort(key=lambda item: item["targetKey"])
+    snapshot = _qualified_snapshot(
+        receipt_digest=DIGEST,
+        variant=targets[0]["target"]["variant"],
+        flavor=targets[0]["target"]["flavor"],
+        platform=targets[0]["target"]["platform"],
+    )
+    snapshot["targets"] = targets
+    snapshot["snapshotDigest"] = "sha256:" + __import__("hashlib").sha256(
+        _canonical_json(targets)
+    ).hexdigest()
+    return snapshot
 
 
 def test_snapshot_with_matching_digest_stays_cut_over(config):
@@ -334,9 +377,14 @@ def test_group_members_rejects_unknown_group(config):
 
 
 def test_group_covered_needs_every_member_target(config):
-    policy = make_policy(full_group_entries(config, "yellowfin", "kde"))
+    entries = full_group_entries(config, "yellowfin", "kde")
+    policy = make_policy(entries)
     live, offline = DC.group_members(config, "yellowfin", "kde")
-    assert DC.group_covered(policy, "yellowfin", "kde", live, offline, config=config) is True
+    snapshot = _qualified_snapshot_for_entries(entries)
+    assert DC.group_covered(
+        policy, "yellowfin", "kde", live, offline,
+        config=config, snapshot=snapshot,
+    ) is True
 
 
 def test_group_covered_false_on_empty_members(config):
@@ -421,7 +469,8 @@ def test_annotate_matrix_marks_only_cut_over_rows(config):
         {"variant": "bonito", "flavor": "gnome", "platform": "linux/arm64"},
         {"variant": "yellowfin", "flavor": "kde-nvidia", "platform": "linux/amd64"},
     ]}
-    annotated = DC.annotate_matrix(matrix, policy, config)
+    snapshot = _qualified_snapshot(receipt_digest=DIGEST)
+    annotated = DC.annotate_matrix(matrix, policy, config, snapshot=snapshot)
     assert [row["cutover"] for row in annotated["include"]] == [True, False, False]
     # The original rows survive untouched apart from the stamp.
     assert annotated["include"][0]["variant"] == "bonito"
@@ -432,8 +481,13 @@ def test_annotate_matrix_defaults_missing_platform(config):
     default platform, matching the amd64 default downstream."""
     policy = make_policy([make_entry("bonito", "gnome", "linux/amd64")])
     matrix = {"include": [{"variant": "bonito", "flavor": "gnome"}]}
-    assert DC.annotate_matrix(matrix, policy, config)["include"][0]["cutover"] is True
-    flipped = DC.annotate_matrix(matrix, policy, config, default_platform="linux/arm64")
+    snapshot = _qualified_snapshot(receipt_digest=DIGEST)
+    assert DC.annotate_matrix(
+        matrix, policy, config, snapshot=snapshot
+    )["include"][0]["cutover"] is True
+    flipped = DC.annotate_matrix(
+        matrix, policy, config, default_platform="linux/arm64", snapshot=snapshot
+    )
     assert flipped["include"][0]["cutover"] is False
 
 

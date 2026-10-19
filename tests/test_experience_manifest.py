@@ -134,6 +134,27 @@ def test_rejects_booted_digest_mismatch(mode):
         MODULE.validate(data, "test")
 
 
+@pytest.mark.parametrize(
+    "field", ["install_duration_s", "cold_boot_s", "warm_boot_s"]
+)
+def test_compare_ignores_install_and_boot_timing_fields(field):
+    left = manifest()
+    right = copy.deepcopy(left)
+    left["observed"]["plain"][field] = 1.0
+    right["observed"]["plain"][field] = 2.0
+    left["measurements"]["cold"][field] = 3.0
+    right["measurements"]["cold"][field] = 4.0
+    assert MODULE.compare(left, right) == []
+
+
+@pytest.mark.parametrize("mode", ["plain", "encrypted"])
+def test_rejects_observed_source_digest_mismatch(mode):
+    data = manifest()
+    data["observed"][mode]["source_digest"] = _digest("e")
+    with pytest.raises(ValueError, match="source_digest.*does not match"):
+        MODULE.validate(data, "test")
+
+
 @pytest.mark.parametrize("field", ["platform", "cpu_baseline", "hardware_scope"])
 @pytest.mark.parametrize("bad", ["", "   ", 123, None])
 def test_rejects_missing_identity_fields(field, bad):

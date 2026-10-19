@@ -273,16 +273,38 @@ def _measurement_seconds(measurements, block):
     if isinstance(duration, bool) or not isinstance(duration, (int, float)) or duration < 0:
         return None
     return duration
+def _complete_qualification(projected):
+    """Return whether a receipt carries enough proof to be qualified."""
+    if not all(
+        isinstance(projected.get(field), str) and projected[field]
+        for field in ("qualifiedAt", "receiptDigest", "platformManifestDigest")
+    ):
+        return False
+    if not isinstance(projected.get("browser"), dict):
+        return False
+    measurements = projected.get("measurements")
+    if not isinstance(measurements, dict):
+        return False
+    return all(_measurement_seconds(measurements, block) is not None
+               for block in ("cold", "warm"))
+
 
 
 def _qualification_summary(projected):
     """Additive dated-qualification and cold/warm performance summary."""
     status = projected.get("status")
     checks = projected.get("checks")
-    failing = status in {"fail", "failed", "unqualified", "blocked"} or (
-        isinstance(checks, list) and any(
-            isinstance(check, dict) and check.get("status") not in (None, "pass", "passed", "success")
-            for check in checks))
+    failing = (
+        not _complete_qualification(projected)
+        or status in {"fail", "failed", "unqualified", "blocked"}
+        or (
+            isinstance(checks, list) and any(
+                isinstance(check, dict)
+                and check.get("status") not in (None, "pass", "passed", "success")
+                for check in checks
+            )
+        )
+    )
     if failing:
         state = "unqualified"
     elif status == "local-only" or projected.get("localOnly") is True:

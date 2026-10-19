@@ -111,44 +111,15 @@ jobs:
             fi
             TOP_DIGEST="sha256:$(printf '%s' "$RAW_MANIFEST" | sha256sum | awk '{print $1}')"
 
-            PROBE=""
-            if podman pull -q "$IMG" >/dev/null 2>&1; then
-              PROBE=$(podman run --rm --entrypoint="" "$IMG" sh -c '
-                echo "kernelVer=$(ls /usr/lib/modules 2>/dev/null | head -1)"
-                if   [ -f /usr/share/wayland-sessions/plasma.desktop ] \
-                  || [ -f /usr/share/wayland-sessions/plasmawayland.desktop ]; then echo "desktop=kde"
-                elif [ -f /usr/share/wayland-sessions/niri.desktop ];   then echo "desktop=niri"
-                elif [ -f /usr/share/wayland-sessions/cosmic.desktop ]; then echo "desktop=cosmic"
-                elif ls /usr/share/xsessions/xfce*.desktop >/dev/null 2>&1 \
-                  || ls /usr/share/wayland-sessions/xfce*.desktop >/dev/null 2>&1; then echo "desktop=xfce"
-                else echo "desktop=gnome"; fi
-                if [ -f /usr/lib/systemd/boot/efi/systemd-bootx64.efi ] \
-                  || [ -f /usr/lib/systemd/boot/efi/systemd-bootaa64.efi ]; then
-                  echo "hasSdBoot=true"
-                else
-                  echo "hasSdBoot=false"
-                fi
-                command -v bootc >/dev/null 2>&1 && echo "bootc=true" || echo "bootc=false"
-                if   command -v dnf >/dev/null 2>&1 || command -v dnf5 >/dev/null 2>&1; then echo "pkgManager=dnf"; echo "repoFamily=fedora"
-                elif command -v zypper >/dev/null 2>&1; then echo "pkgManager=zypper"; echo "repoFamily=opensuse"
-                elif command -v pacman >/dev/null 2>&1; then echo "pkgManager=pacman"; echo "repoFamily=arch"
-                elif command -v apt >/dev/null 2>&1 || command -v apt-get >/dev/null 2>&1; then echo "pkgManager=apt"; echo "repoFamily=debian"
-                elif command -v emerge >/dev/null 2>&1; then echo "pkgManager=portage"; echo "repoFamily=gentoo"
-                elif command -v apk >/dev/null 2>&1; then echo "pkgManager=apk"; echo "repoFamily=alpine"
-                else echo "pkgManager="; echo "repoFamily="; fi
-              ' 2>/dev/null || true)
-              podman rmi "$IMG" >/dev/null 2>&1 || true
-            fi
-
-            get() { echo "$PROBE" | grep "^$1=" | head -1 | cut -d= -f2-; }
-            DESKTOP="$(get desktop)"
-            [[ -z "$DESKTOP" ]] && DESKTOP="${FLAVOR%%-*}"
-            KERNEL_VER="$(get kernelVer)"
-            HAS_SDBOOT="$(get hasSdBoot)"
-            BOOTC_FLAG="$(get bootc)"
-            [[ -z "$BOOTC_FLAG" ]] && BOOTC_FLAG="true"
-            PKG_MGR="$(get pkgManager)"
-            REPO_FAM="$(get repoFamily)"
+            # Runtime facts are collected only from the immutable child
+            # manifest below. Do not probe the moving tag once and copy its
+            # host-platform result into every descriptor.
+            DESKTOP="${FLAVOR%%-*}"
+            KERNEL_VER=""
+            HAS_SDBOOT=""
+            BOOTC_FLAG="true"
+            PKG_MGR=""
+            REPO_FAM=""
 
             jq --arg k "tuna-os/${CELL}" --arg d "$TOP_DIGEST" \
                --arg de "$DESKTOP" --arg kv "$KERNEL_VER" \
@@ -158,33 +129,119 @@ jobs:
                                hasSdBoot:($sb=="true"), pkgManager:$pm, repoFamily:$rf}' \
                shard.json > shard.tmp && mv shard.tmp shard.json
 
-            OVL_REF="ghcr.io/tuna-os/live-overlay:${VAR}-${FLAVOR}"
-            OVL_INSPECT=$(skopeo inspect "docker://${OVL_REF}" 2>/dev/null || true)
-            if [[ -n "$OVL_INSPECT" ]]; then
-              OVL_DIGEST=$(printf '%s' "$OVL_INSPECT" | jq -r '.Digest // empty')
-              OVL_BASE=$(printf '%s' "$OVL_INSPECT" | jq -r '.Labels["org.tunaos.live-overlay.base-digest"] // empty')
-              OVL_ACTUAL_BASE=$(printf '%s' "$OVL_INSPECT" | jq -r '.Labels["org.tunaos.live-overlay.actual-base-digest"] // empty')
-              if [[ -n "$OVL_DIGEST" ]]; then
-                jq --arg k "${VAR}:${FLAVOR}" \
-                   --arg d "$OVL_DIGEST" \
-                   --arg bd "$OVL_BASE" \
-                   --arg abd "$OVL_ACTUAL_BASE" \
-                   '.overlays[$k] = {
-                      liveOverlayDigest: $d,
-                      labels: (
-                        {}
-                        + (if $bd != "" then {"org.tunaos.live-overlay.base-digest": $bd} else {} end)
-                        + (if $abd != "" then {"org.tunaos.live-overlay.actual-base-digest": $abd} else {} end)
-                      )
-                    }' shard.json > shard.tmp && mv shard.tmp shard.json
-              fi
-            fi
 
             python3 - "$VAR" "$FLAVOR" "$REPO" "$TAG" "$PLATS_CSV" "$TOP_DIGEST" \
               "$DESKTOP" "$KERNEL_VER" "$HAS_SDBOOT" "$BOOTC_FLAG" "$PKG_MGR" "$REPO_FAM" <<'PY'
           import json
           import subprocess
           import sys
+          import platform as host_platform
+
+          PROBE_SCRIPT = r'''
+          echo "kernelVer=$(ls /usr/lib/modules 2>/dev/null | head -1)"
+          if [ -f /usr/share/wayland-sessions/plasma.desktop ] ||
+             [ -f /usr/share/wayland-sessions/plasmawayland.desktop ]; then echo "desktop=kde"
+          elif [ -f /usr/share/wayland-sessions/niri.desktop ]; then echo "desktop=niri"
+          elif [ -f /usr/share/wayland-sessions/cosmic.desktop ]; then echo "desktop=cosmic"
+          elif ls /usr/share/xsessions/xfce*.desktop >/dev/null 2>&1 ||
+               ls /usr/share/wayland-sessions/xfce*.desktop >/dev/null 2>&1; then echo "desktop=xfce"
+          else echo "desktop=gnome"; fi
+          if [ -f /usr/lib/systemd/boot/efi/systemd-bootx64.efi ] ||
+             [ -f /usr/lib/systemd/boot/efi/systemd-bootaa64.efi ]; then echo "hasSdBoot=true"
+          else echo "hasSdBoot=false"; fi
+          command -v bootc >/dev/null 2>&1 && echo "bootc=true" || echo "bootc=false"
+          if command -v dnf >/dev/null 2>&1 || command -v dnf5 >/dev/null 2>&1; then echo "pkgManager=dnf"; echo "repoFamily=fedora"
+          elif command -v zypper >/dev/null 2>&1; then echo "pkgManager=zypper"; echo "repoFamily=opensuse"
+          elif command -v pacman >/dev/null 2>&1; then echo "pkgManager=pacman"; echo "repoFamily=arch"
+          elif command -v apt >/dev/null 2>&1 || command -v apt-get >/dev/null 2>&1; then echo "pkgManager=apt"; echo "repoFamily=debian"
+          elif command -v emerge >/dev/null 2>&1; then echo "pkgManager=portage"; echo "repoFamily=gentoo"
+          elif command -v apk >/dev/null 2>&1; then echo "pkgManager=apk"; echo "repoFamily=alpine"
+          else echo "pkgManager="; echo "repoFamily="; fi
+          '''
+
+          def probe_child(repo: str, digest: str, target_platform: str) -> dict[str, str]:
+              architecture = target_platform.split("/", 2)[1]
+              host = host_platform.machine()
+              compatible = (
+                  architecture == "amd64" and host in {"x86_64", "amd64"}
+              ) or (
+                  architecture == "arm64" and host in {"aarch64", "arm64"}
+              )
+              if not compatible:
+                  return {}
+              try:
+                  result = subprocess.run(
+                      [
+                          "podman", "run", "--rm", "--platform", target_platform,
+                          "--entrypoint=", f"{repo}@{digest}", "sh", "-c",
+                          PROBE_SCRIPT,
+                      ],
+                      capture_output=True, text=True, timeout=90, check=False,
+                  )
+              except (OSError, subprocess.TimeoutExpired):
+                  return {}
+              if result.returncode != 0:
+                  return {}
+              values = {}
+              for line in result.stdout.splitlines():
+                  key, separator, value = line.partition("=")
+                  if separator:
+                      values[key] = value
+              return values
+
+          def inspect_config(repo: str, digest: str) -> dict:
+              try:
+                  output = subprocess.check_output(
+                      ["skopeo", "inspect", "--config", f"docker://{repo}@{digest}"],
+                      text=True, timeout=30,
+                  )
+                  value = json.loads(output)
+                  return value if isinstance(value, dict) else {}
+              except (OSError, subprocess.SubprocessError, json.JSONDecodeError):
+                  return {}
+
+          def config_matches(value: dict, target_platform: str) -> bool:
+              parts = target_platform.split("/")
+              actual = (value.get("os"), value.get("architecture"), value.get("variant"))
+              wanted = (parts[0], parts[1], parts[2] if len(parts) > 2 else None)
+              if actual[:2] != wanted[:2]:
+                  return False
+              if wanted[1] == "arm64" and wanted[2] is None:
+                  return actual[2] in (None, "", "v8")
+              return (actual[2] or None) == wanted[2]
+
+          def record_overlay(shard: dict, var: str, flavor: str, target_platform: str) -> None:
+              safe = target_platform.replace("/", "-")
+              reference = (
+                  f"ghcr.io/tuna-os/live-overlay:"
+                  f"{var}-{flavor}-{safe}"
+              )
+              try:
+                  output = subprocess.check_output(
+                      ["skopeo", "inspect", f"docker://{reference}"],
+                      text=True, timeout=30,
+                  )
+                  inspect = json.loads(output)
+              except (OSError, subprocess.SubprocessError, json.JSONDecodeError):
+                  return
+              digest = inspect.get("Digest")
+              if not isinstance(digest, str) or not digest:
+                  return
+              labels = inspect.get("Labels") or {}
+              if not isinstance(labels, dict):
+                  labels = {}
+              shard["overlays"][f"{var}:{flavor}:{target_platform}"] = {
+                  "platform": target_platform,
+                  "liveOverlayDigest": digest,
+                  "labels": {
+                      key: labels[key]
+                      for key in (
+                          "org.tunaos.live-overlay.base-digest",
+                          "org.tunaos.live-overlay.actual-base-digest",
+                      )
+                      if labels.get(key)
+                  },
+              }
 
           (
               var,
@@ -218,6 +275,7 @@ jobs:
               cfg_digest = None
               layer_count = 0
               comp_size = 0
+              probe = {}
 
               if isinstance(manifests, list):
                   idx_digest = top_digest
@@ -238,23 +296,28 @@ jobs:
                   if pm_digest:
                       try:
                           child_raw = subprocess.check_output(
-                              ["skopeo", "inspect", "--raw", f"docker://{repo}@{pm_digest}"]
+                              ["skopeo", "inspect", "--raw", f"docker://{repo}@{pm_digest}"],
+                              text=True,
                           )
                           child_doc = json.loads(child_raw)
                           cfg_digest = (child_doc.get("config") or {}).get("digest")
                           layers = child_doc.get("layers") or []
                           layer_count = len(layers)
                           comp_size = sum(int(l.get("size") or 0) for l in layers)
+                          probe = probe_child(repo, pm_digest, plat)
                       except Exception:
                           pass
               else:
-                  if want_arch == "amd64" and want_var is None:
+                  config = inspect_config(repo, top_digest)
+                  if config_matches(config, plat):
                       pm_digest = top_digest
                       cfg_digest = (doc.get("config") or {}).get("digest")
                       layers = doc.get("layers") or []
                       layer_count = len(layers)
                       comp_size = sum(int(l.get("size") or 0) for l in layers)
+                      probe = probe_child(repo, pm_digest, plat)
 
+              record_overlay(shard, var, flavor, plat)
               if pm_digest:
                   tkey = f"{var}:{flavor}:{plat}"
                   shard["descriptors"][tkey] = {
@@ -273,14 +336,14 @@ jobs:
                       },
                       "facts": {
                           "digest": pm_digest,
-                          "desktop": desktop,
-                          "kernelVer": kernel_ver,
-                          "hasSdBoot": has_sdboot == "true",
-                          "pkgManager": pkg_mgr,
-                          "repoFamily": repo_fam,
+                          "desktop": probe.get("desktop") or desktop,
+                          "kernelVer": probe.get("kernelVer", ""),
+                          "hasSdBoot": probe.get("hasSdBoot") == "true",
+                          "pkgManager": probe.get("pkgManager", ""),
+                          "repoFamily": probe.get("repoFamily", ""),
                           "layerCount": layer_count,
                           "compressedSize": comp_size,
-                          "bootc": bootc_flag == "true",
+                          "bootc": probe.get("bootc", bootc_flag) == "true",
                       },
                   }
 

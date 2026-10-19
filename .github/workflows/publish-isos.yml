@@ -1,6 +1,7 @@
 name: Publish Live ISOs to R2
 
 permissions:
+  actions: read
   contents: read
 
 on:
@@ -52,6 +53,21 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Download current catalog snapshot
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          snapshot_dir="$RUNNER_TEMP/catalog-facts"
+          mkdir -p "$snapshot_dir"
+          run_id="$(gh run list --repo "$GITHUB_REPOSITORY" \
+            --workflow catalog-facts.yml --branch main --status success --limit 1 \
+            --json databaseId --jq '.[0].databaseId // empty' 2>/dev/null || true)"
+          if [[ -n "$run_id" ]] && gh run download "$run_id" \
+              --repo "$GITHUB_REPOSITORY" --name catalog-facts --dir "$snapshot_dir"; then
+            echo "CATALOG_SNAPSHOT=$snapshot_dir/catalog-snapshot.json" >> "$GITHUB_ENV"
+          fi
+
 
       - name: Setup yq
         uses: ./.github/actions/setup-yq
@@ -77,8 +93,14 @@ jobs:
           # caller builds from the promoted :<flavor> image without a
           # platform axis, matching reusable-build-artifacts.yml's
           # linux/amd64 default, so annotate on that platform.
-          MATRIX=$(echo "$MATRIX" | python3 scripts/delivery-cutover.py --annotate-matrix --default-platform linux/amd64)
+          SNAPSHOT_ARGS=()
+          if [[ -s "${CATALOG_SNAPSHOT:-}" ]]; then
+            SNAPSHOT_ARGS=(--snapshot "$CATALOG_SNAPSHOT")
+          fi
+          MATRIX=$(echo "$MATRIX" | python3 scripts/delivery-cutover.py --annotate-matrix --default-platform linux/amd64 "${SNAPSHOT_ARGS[@]}")
           COUNT=$(echo "$MATRIX" | jq '.include | length')
+          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
 
   build-and-publish:
     name: ${{ matrix.variant }}:${{ matrix.flavor }}

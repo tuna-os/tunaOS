@@ -47,7 +47,10 @@ QUALIFICATION_COMPARE_FIELDS = (
     "resolved_inputs", "browser", "offline_network_disabled",
     "observed", "measurements",
 )
-VOLATILE_SUBKEYS = frozenset({"duration_s", "timestamp", "started_at", "finished_at"})
+VOLATILE_SUBKEYS = frozenset({
+    "duration_s", "install_duration_s", "cold_boot_s", "warm_boot_s",
+    "timestamp", "started_at", "finished_at",
+})
 
 MIGRATION_HINT = (
     "not a QualificationEvidence v1 manifest: old bare-boolean manifests "
@@ -84,7 +87,9 @@ def _require_number(value, where: str, label: str) -> None:
         raise ValueError(f"{label}: {where} must not be negative")
 
 
-def _validate_observed_record(record, mode: str, label: str) -> None:
+def _validate_observed_record(
+    record, mode: str, label: str, resolved_source: str
+) -> None:
     if not isinstance(record, dict):
         raise ValueError(f"{label}: observed.{mode} must be an object")
     for field in ("installed_boot", "desktop_contract"):
@@ -94,6 +99,11 @@ def _validate_observed_record(record, mode: str, label: str) -> None:
     booted = record.get("booted_digest")
     _require_digest(source, f"observed.{mode}.source_digest", label)
     _require_digest(booted, f"observed.{mode}.booted_digest", label)
+    if source.lower() != resolved_source.lower():
+        raise ValueError(
+            f"{label}: observed.{mode}.source_digest {source} does not match "
+            f"resolved_inputs.source {resolved_source}"
+        )
     if source.lower() != booted.lower():
         raise ValueError(
             f"{label}: observed.{mode}: booted digest {booted} does not match "
@@ -154,7 +164,9 @@ def validate(manifest: dict, label: str) -> None:
                 f"{label}: observed.{mode} is missing — the qualification "
                 "must prove BOTH a plain and an encrypted GUI install"
             )
-        _validate_observed_record(observed[mode], mode, label)
+        _validate_observed_record(
+            observed[mode], mode, label, inputs["source"]
+        )
     measurements = manifest.get("measurements")
     if not isinstance(measurements, dict):
         raise ValueError(f"{label}: measurements must be an object")

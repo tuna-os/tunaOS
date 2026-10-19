@@ -47,6 +47,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import urllib.error
 import urllib.request
@@ -178,25 +179,13 @@ def resolve_sha(repo: str, ref: str) -> str:
     return api_json(f"https://api.github.com/repos/{repo}/commits/{ref}")["sha"]
 
 
-def commit_date(repo: str, sha: str) -> str | None:
-    """A commit's committer date (ISO 8601) via the commits API. None if unknowable."""
-    try:
-        commit = api_json(f"https://api.github.com/repos/{repo}/commits/{sha}")
-        date = commit.get("commit", {}).get("committer", {}).get("date")
-        return date if isinstance(date, str) and date else None
-    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, KeyError):
-        return None
-
 
 def floor_is_ancestor(repo: str, sha: str, floor: str = FLOOR_COMMIT) -> bool | None:
-    """Is `floor` an ancestor of (or identical to) `sha`? None if unknowable.
+    """Return whether the floor is proven to be an ancestor of ``sha``.
 
-    Ancestry is the fast path. Squash merges break ancestry while carrying
-    the floor's content (fisherman#340 merged this way), so a non-ancestor
-    pin falls back to committer-date order: a pin committed at or after the
-    floor passes, an older one fails. Dates are reviewed-SHA metadata, not
-    proof of content -- the divergence warning in main() stays the signal
-    that frontends should converge on one revision.
+    A newer timestamp or a divergent commit is not content proof. A
+    non-ancestor pin therefore fails closed; callers only receive ``None``
+    when the compare API cannot answer.
     """
     try:
         status = api_json(
@@ -204,17 +193,19 @@ def floor_is_ancestor(repo: str, sha: str, floor: str = FLOOR_COMMIT) -> bool | 
         )["status"]
     except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, KeyError):
         return None
-    # "ahead": sha descends from the floor; "identical": pinned exactly on it.
     if status in ("ahead", "identical"):
         return True
-    # "behind"/"diverged": ancestry cannot prove the floor is included (a
-    # squash merge of the floor's branch reads as "diverged"). Fall back to
-    # committer dates; unknowable dates warn instead of failing.
-    floor_date = commit_date(repo, floor)
-    sha_date = commit_date(repo, sha)
-    if floor_date is None or sha_date is None:
-        return None
-    return sha_date >= floor_date
+    if status in ("behind", "diverged"):
+        return False
+    return None
+
+def submodule_sha(repo: str, path: str) -> str:
+    """Read the exact gitlink SHA recorded for a submodule path."""
+    payload = api_json(f"https://api.github.com/repos/{repo}/contents/{path}")
+    sha = payload.get("sha") if isinstance(payload, dict) else None
+    if not isinstance(sha, str) or not re.fullmatch(r"[0-9a-f]{40}", sha):
+        raise ValueError(f"{repo}:{path} did not return a 40-character gitlink SHA")
+    return sha
 
 
 def collect() -> dict:
@@ -225,9 +216,11 @@ def collect() -> dict:
                 fetch(where["repo"], where["manifest"])
             )
         else:
-            sources[desktop] = source_from_gitmodules(
+            source = source_from_gitmodules(
                 fetch(where["repo"], ".gitmodules"), where["submodule"]
             )
+            source["commit"] = submodule_sha(where["repo"], where["submodule"])
+            sources[desktop] = source
     # Resolve every canonical-repo pin to a full SHA (branches to their head)
     # so the floor check compares exact revisions, then record whether the
     # MediaInput v1 floor is an ancestor of each pin. A resolution the API
@@ -263,7 +256,9 @@ def main() -> int:
         # drift over months, not against a flaky minute.
         print(f"::warning::could not read installer manifests: {exc}")
         return 0
-
+    except ValueError as exc:
+        print(f"::error::{exc}")
+        return 1
     if args.json:
         print(json.dumps(sources, indent=2, sort_keys=True))
 

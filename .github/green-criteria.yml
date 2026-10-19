@@ -204,7 +204,7 @@ criteria:
     gates:
       - workflow: .github/workflows/iso-e2e.yml
         jobs:
-          e2e: Run readiness e2e
+          e2e: Run strict offline GUI qualification
         scripts:
           - scripts/iso-e2e.sh
           - scripts/verify-experience-manifest.py

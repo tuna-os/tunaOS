@@ -189,8 +189,8 @@ def test_floor_ancestry_fast_path_needs_no_dates(monkeypatch) -> None:
     assert len(calls) == 1
 
 
-def test_floor_date_fallback_passes_a_newer_squash_merge(monkeypatch) -> None:
-    """A squash merge reads as diverged but carries the floor's content."""
+def test_floor_divergence_fails_closed_even_with_newer_timestamp(monkeypatch) -> None:
+    """A newer commit date cannot prove a divergent pin contains the floor."""
     def fake_api(url: str) -> dict:
         if "/compare/" in url:
             return {"status": "diverged"}
@@ -199,25 +199,36 @@ def test_floor_date_fallback_passes_a_newer_squash_merge(monkeypatch) -> None:
         return {"commit": {"committer": {"date": "2026-10-18T00:00:00Z"}}}
 
     monkeypatch.setattr(mod, "api_json", fake_api)
-    assert mod.floor_is_ancestor("tuna-os/fisherman", "a" * 40) is True
+    assert mod.floor_is_ancestor("tuna-os/fisherman", "a" * 40) is False
 
 
-def test_floor_date_fallback_fails_an_older_pin(monkeypatch) -> None:
+def test_floor_behind_fails_closed(monkeypatch) -> None:
     def fake_api(url: str) -> dict:
-        if "/compare/" in url:
-            return {"status": "behind"}
-        if url.endswith(mod.FLOOR_COMMIT):
-            return {"commit": {"committer": {"date": "2026-10-17T00:00:00Z"}}}
-        return {"commit": {"committer": {"date": "2026-08-29T00:00:00Z"}}}
+        assert "/compare/" in url
+        return {"status": "behind"}
 
     monkeypatch.setattr(mod, "api_json", fake_api)
     assert mod.floor_is_ancestor("tuna-os/fisherman", "0" * 40) is False
 
 
-def test_floor_date_unknown_warns_instead_of_failing(monkeypatch) -> None:
+def test_submodule_sha_uses_exact_gitlink_revision(monkeypatch) -> None:
+    calls = []
+
+    def fake_api(url: str) -> dict:
+        calls.append(url)
+        return {"sha": "b" * 40}
+
+    monkeypatch.setattr(mod, "api_json", fake_api)
+    assert mod.submodule_sha("tuna-os/bootc-installer", "fisherman") == "b" * 40
+    assert calls == [
+        "https://api.github.com/repos/tuna-os/bootc-installer/contents/fisherman"
+    ]
+
+
+def test_floor_unknown_warns_instead_of_failing(monkeypatch) -> None:
     def fake_api(url: str) -> dict:
         if "/compare/" in url:
-            return {"status": "diverged"}
+            return {"status": "unknown"}
         raise TimeoutError("offline")
 
     monkeypatch.setattr(mod, "api_json", fake_api)
