@@ -368,3 +368,51 @@ def test_identity_pair_must_match_canonical_intent(staged, tmp_path):
     paired.write_text(json.dumps(value))
     with pytest.raises(ValueError, match="canonical"):
         IDENTITY.verify(root)
+
+
+@pytest.mark.parametrize("source,content", [
+    (None, None),
+    ("etc/dconf/profile/gdm", "user-db:user\nfile-db:/var/lib/gdm3/greeter-dconf-defaults\n"),
+    ("usr/share/dconf/profile/gdm", "user-db:user\nfile-db:/usr/share/gdm/greeter-dconf-defaults\n"),
+    ("etc/dconf/profile/gdm", "# Keep defaults\nuser-db:user\nsystem-db:site\nsystem-db:gdm\n"),
+])
+def test_gdm_profile_precedes_vendor_defaults(staged, tmp_path, source, content):
+    manifest, root, _, _ = materialize(staged, tmp_path)
+    if source:
+        path = root / source
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content)
+    IDENTITY.apply(manifest, root)
+    profile = root / "etc/dconf/profile/gdm"
+    active = [line for line in profile.read_text().splitlines() if not line.startswith("#")]
+    assert active[:2] == ["user-db:user", "system-db:gdm"]
+    if content:
+        assert all(line in profile.read_text().splitlines() for line in content.splitlines())
+    IDENTITY.apply(manifest, root)
+    IDENTITY.verify(root)
+    profile.write_text("user-db:user\nfile-db:/usr/share/gdm/greeter-dconf-defaults\n")
+    with pytest.raises(ValueError, match="hash mismatch"):
+        IDENTITY.verify(root)
+    # Even an updated hash cannot make a disconnected greeter profile valid.
+    import hashlib
+    receipt = root / "usr/share/tunaos/fork-identity/applied.json"
+    applied = json.loads(receipt.read_text())
+    applied["etc/dconf/profile/gdm"] = hashlib.sha256(profile.read_bytes()).hexdigest()
+    receipt.write_text(json.dumps(applied))
+    with pytest.raises(ValueError, match="greeter, boot or installer"):
+        IDENTITY.verify(root)
+
+
+@pytest.mark.parametrize("bad", ["symlink", "wrong-profile"])
+def test_gdm_profile_rejected_before_identity_mutation(staged, tmp_path, bad):
+    manifest, root, _, _ = materialize(staged, tmp_path)
+    profile = root / "etc/dconf/profile/gdm"
+    profile.parent.mkdir(parents=True)
+    if bad == "symlink":
+        profile.symlink_to(tmp_path / "outside")
+    else:
+        profile.write_text("file-db:/vendor\nuser-db:user\n")
+    before = (root / "usr/lib/os-release").read_bytes()
+    with pytest.raises(ValueError):
+        IDENTITY.apply(manifest, root)
+    assert (root / "usr/lib/os-release").read_bytes() == before

@@ -38,3 +38,25 @@ sudo python3 scripts/qualify-fork-image.py --variant grouper --output /tmp/harbo
 
 Use a new output directory each time. No upload, registry login, push, R2
 publication or production admission occurs in these commands.
+
+## Evidence transport
+
+The probe writes to `/dev/ttyS0` directly. In
+[run 39187536308](https://github.com/tuna-os/tunaOS/actions/runs/39187536308),
+the command line for composefs kept `console=tty0` last. Thus `journal+console`
+did not put the identity result on the serial port. The desktop test used an
+explicit serial path and did report its result.
+
+Corral at the source pin in `image-versions.yaml` selects TCG when KVM is absent.
+The workflow must not stop before that fallback can run. The receipt records
+the selected accelerator. TCG uses the same assertions and timeout.
+
+The harness also unpacks each actual initramfs. It compares the bytes of each theme
+asset and checks the selected theme in its configuration.
+This proves embedded assets, not the visible splash. The greeter diagnostic
+records its profile and logo setting. A screenshot review must still confirm
+that the greeter displays the intended logo and name.
+
+The canary fails if an identity marker, base marker or installed-system TAP result is absent or fails.
+The readiness marker from the desktop cannot replace these results.
+The upload excludes Corral's ephemeral SSH keys.

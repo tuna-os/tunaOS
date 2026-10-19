@@ -7,6 +7,7 @@ on:
     paths:
       - ".github/workflows/fork-image-qualification.yml"
       - "scripts/qualify-fork-image.py"
+      - "scripts/qualify-fork-initramfs.py"
   workflow_dispatch:
 
 permissions:
@@ -42,7 +43,7 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm || true
-          test -c /dev/kvm
+          # Corral uses TCG automatically when KVM is absent.
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version: "1.27"
@@ -68,9 +69,14 @@ jobs:
             mkdir -p "fork-evidence/$variant"
             sudo cp "$src/qualification.json" "fork-evidence/$variant/" || true
             sudo cp "$src/image-inspect.json" "fork-evidence/$variant/" || true
+            sudo cp "$src/initramfs.json" "$src/greeter-config.txt" "fork-evidence/$variant/" || true
             sudo cp "$src/fork.yaml" "fork-evidence/$variant/" || true
             sudo cp "$src/prepared/source-receipt.json" "fork-evidence/$variant/" || true
-            if test -d "$src/boot"; then sudo cp -r "$src/boot" "fork-evidence/$variant/"; fi
+            if test -d "$src/boot"; then
+              sudo cp -r "$src/boot" "fork-evidence/$variant/"
+              # The VM no longer exists; do not upload its ephemeral SSH keys.
+              sudo rm -rf "fork-evidence/$variant/boot/corral/ssh"
+            fi
           done
           sudo chown -R "$USER:$(id -gn)" fork-evidence
       - name: Upload qualification evidence

@@ -5,6 +5,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -51,6 +52,19 @@ def authorize(context):
     return receipt
 
 
+def assess_serial(serial):
+    """Read independent guest verdicts; readiness alone qualifies none of them."""
+    checks = re.findall(r"TUNAOS_INSTALL_CHECKS_RESULT pass=(\d+) fail=(\d+) desktop=gnome", serial)
+    return {
+        "installed_identity": "passed" if re.search(r"(?m)^(?:\[[^\]\r\n]+\] [^\r\n:]+: )?TUNAOS_FORK_IDENTITY_OK(?:\s|$)", serial)
+        and "TUNAOS_FORK_IDENTITY_FAIL" not in serial else "failed",
+        "base_contract": "passed" if re.search(r"(?m)^(?:\[[^\]\r\n]+\] [^\r\n:]+: )?TUNAOS_BASE_CONTRACT_OK(?:\s|$)", serial)
+        and "TUNAOS_BASE_CONTRACT_FAIL" not in serial else "failed",
+        "installed_checks": "passed" if checks and all(int(fail) == 0 and int(passed) > 0
+                                                       for passed, fail in checks) else "failed",
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--validate-build-entry", action="store_true")
@@ -67,9 +81,11 @@ def main():
     args.output.mkdir(parents=True)
     out = args.output.resolve()
     report = {"variant": args.variant, "platform": "linux/amd64", "publishing": False,
+              "accelerator": "kvm" if Path("/dev/kvm").exists() else "tcg",
               "build": "not-run", "image_identity": "not-run", "boot": "not-run",
+              "base_contract": "not-run", "installed_checks": "not-run",
               "installed_identity": "not-run", "wallpaper_defaults": "not-run",
-              "initramfs_theme": "not-run", "wallpaper_render": "not-run", "login": "not-run", "installer_ui": "not-run"}
+              "initramfs_theme": "not-run", "wallpaper_render": "not-run", "greeter_profile": "not-run", "greeter_render": "not-run", "login": "not-run", "installer_ui": "not-run"}
     try:
         import yaml
         from PIL import Image
@@ -103,13 +119,47 @@ def main():
         units.mkdir(parents=True, exist_ok=True)
         unit = units / "fork-qualification.service"
         unit.write_text('[Unit]\nDescription=Verify installed fork qualification receipt\nBefore=display-manager.service\n'
-                        '[Service]\nType=oneshot\nExecStart=/bin/sh -c "python3 /usr/libexec/tunaos/fork-identity.py / '
+                        '[Service]\nType=oneshot\nExecStart=/bin/sh -c "exec >/dev/ttyS0 2>&1; python3 /usr/libexec/tunaos/fork-identity.py / '
                         '&& echo TUNAOS_FORK_IDENTITY_OK || { echo TUNAOS_FORK_IDENTITY_FAIL; exit 1; }"\n'
                         'StandardOutput=journal+console\nStandardError=journal+console\n')
         wants = units / "multi-user.target.wants"
         wants.mkdir(exist_ok=True)
         (wants / unit.name).symlink_to("../" + unit.name)
         report["guest_probe_sha256"] = hashlib.sha256(unit.read_bytes()).hexdigest()
+        diagnostic = context / "system_files/usr/libexec/tunaos/fork-greeter-diagnostics"
+        diagnostic.parent.mkdir(parents=True, exist_ok=True)
+        diagnostic.write_text("""#!/bin/bash
+exec >/dev/ttyS0 2>&1
+echo TUNAOS_FORK_GREETER_DIAGNOSTICS_BEGIN
+for f in /etc/dconf/profile/gdm /usr/share/dconf/profile/gdm /etc/dconf/db/gdm.d/*; do
+    echo "=== $f"
+    test ! -f "$f" || cat "$f"
+done
+DCONF_PROFILE=gdm gsettings get org.gnome.login-screen logo
+for attempt in {1..30}; do
+    found=0
+    for user in gdm Debian-gdm; do
+        uid=$(id -u "$user" 2>/dev/null) || continue
+        for pid in $(pgrep -u "$uid" gnome-shell); do
+            echo "greeter user=$user pid=$pid"
+            tr '\\0' '\\n' <"/proc/$pid/environ" | grep '^DCONF_PROFILE=' || true
+            found=1
+        done
+    done
+    test "$found" = 0 || break
+    sleep 1
+done
+systemctl show ssh.service ssh.socket sshd-keygen.service --property=LoadState,ActiveState,SubState,Result,After,Wants,Requires || true
+journalctl -b -u sshd-keygen.service -u ssh.service --no-pager -n 60 || true
+echo TUNAOS_FORK_GREETER_DIAGNOSTICS_END
+""")
+        diagnostic.chmod(0o755)
+        diagnostic_unit = units / "fork-greeter-diagnostics.service"
+        diagnostic_unit.write_text('[Unit]\nDescription=Record greeter qualification diagnostics\nAfter=display-manager.service\n'
+                                   '[Service]\nType=oneshot\nExecStart=/usr/libexec/tunaos/fork-greeter-diagnostics\nTimeoutStartSec=45\n')
+        (wants / diagnostic_unit.name).symlink_to("../" + diagnostic_unit.name)
+        report["greeter_probe_sha256"] = hashlib.sha256(diagnostic.read_bytes()).hexdigest()
+        report["greeter_unit_sha256"] = hashlib.sha256(diagnostic_unit.read_bytes()).hexdigest()
         report["build"] = "running"
         subprocess.run(["bash", "scripts/build-image-inner.sh"], cwd=context, env=env, check=True)
         report["build"] = "passed"
@@ -120,6 +170,21 @@ def main():
         subprocess.run(["podman", "run", "--rm", "--pull=never", "--entrypoint", "python3", image,
                         "/usr/libexec/tunaos/fork-identity.py", "/"], check=True)
         report["image_identity"] = "passed"
+        report["initramfs_theme"] = "running"
+        initramfs = subprocess.check_output(["podman", "run", "--rm", "--pull=never", "--entrypoint", "python3",
+                                             "--volume", str(ROOT / "scripts/qualify-fork-initramfs.py") + ":/probe.py:ro",
+                                             image, "/probe.py"], text=True)
+        (out / "initramfs.json").write_text(initramfs)
+        report["initramfs_theme"] = "passed"
+        report["greeter_profile"] = "running"
+        greeter = subprocess.check_output(["podman", "run", "--rm", "--pull=never", "--entrypoint", "bash", image,
+                                          "-c", 'for f in /etc/dconf/profile/gdm /usr/share/dconf/profile/gdm /etc/dconf/db/gdm.d/*; '
+                                          'do echo "=== $f"; test ! -f "$f" || cat "$f"; done; '
+                                          'DCONF_PROFILE=gdm gsettings get org.gnome.login-screen logo'], text=True)
+        (out / "greeter-config.txt").write_text(greeter)
+        if not greeter.splitlines() or greeter.splitlines()[-1] != "\'/usr/share/pixmaps/tunaos-lettermark.svg\'":
+            raise ValueError("effective GDM profile does not select the supplied lettermark")
+        report["greeter_profile"] = "passed"
         probe = ('source /usr/libexec/tunaos/fork-branding.sh; tunaos_verify_fork_branding /; '
                  'for key in picture-uri picture-uri-dark; do '
                  'test "$(GSETTINGS_BACKEND=memory gsettings get org.gnome.desktop.background "$key")" '
@@ -128,12 +193,15 @@ def main():
                         "-ec", probe], check=True)
         report["wallpaper_defaults"] = "passed"
         report["boot"] = "running"
-        subprocess.run(["bash", str(ROOT / "scripts/corral-boot-gate.sh"), image, str(out / "boot"), "900"], check=True)
+        subprocess.run(["bash", str(ROOT / "scripts/corral-boot-gate.sh"), image, str(out / "boot"), "900"],
+                       env={**os.environ, "TUNAOS_FORK_CANARY_SSH": "1"}, check=True)
         report["boot"] = "passed"
         serial = (out / "boot/serial.log").read_text()
-        if "TUNAOS_FORK_IDENTITY_OK" not in serial or "TUNAOS_FORK_IDENTITY_FAIL" in serial:
-            raise ValueError("installed identity probe did not pass on guest serial")
-        report["installed_identity"] = "passed"
+        guest = assess_serial(serial)
+        report.update(guest)
+        failed = [stage for stage, status in guest.items() if status != "passed"]
+        if failed:
+            raise ValueError("guest qualification failed: " + ", ".join(failed))
     finally:
         for stage, status in list(report.items()):
             if status == "running":

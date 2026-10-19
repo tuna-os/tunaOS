@@ -1749,3 +1749,13 @@ Use the [qualification harness](FORK-IMAGE-QUALIFICATION.md)
 for the two local canaries. Its result records build, boot and installed
 identity separately from graphical login and installer tests. Never interpret
 an unexecuted stage as a pass or remove the production gate to run the canary.
+
+
+### Grouper has no base boot marker
+
+Run `39187536308` reached GDM but had no base marker or SSH host keys.
+Keep the base contract before the apt branch exit in `40-services.sh`.
+Send its verdict to the serial device as well as the journal.
+Keep the SSH key generator in the service dependency graph.
+Do not add the same dependency to `ssh.socket`: it can cause a cycle.
+The next native test must check the keygen journal and an SSH login.
