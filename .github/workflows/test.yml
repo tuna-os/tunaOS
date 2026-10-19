@@ -24,6 +24,8 @@ on:
       #   registry-map.yaml 4  files 2
       - 'scripts/**'
       - 'tests/**'
+      # Versioned contract schemas are executable test inputs.
+      - 'schemas/**'
       # The fork-config contract suite initializes the stock/fork templates.
       - 'examples/**'
       - 'experiences/**'
