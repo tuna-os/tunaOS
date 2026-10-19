@@ -166,6 +166,18 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
   [ "$status" -eq 0 ]
 }
 
+
+@test "install-desktop.sh writes the display-manager preset after hooks" {
+  local script="${REPO_ROOT}/build_scripts/desktop/install-desktop.sh"
+  local post_line preset_line experience_line
+  post_line="$(grep -nF 'for script in "${_TD_POST_SCRIPTS[@]}"; do' "$script" | cut -d: -f1)"
+  preset_line="$(grep -nF 'write_display_manager_preset "${_TD_PRESET_DM}"' "$script" | cut -d: -f1)"
+  experience_line="$(grep -nF '# Desktop communities own their curated defaults' "$script" | cut -d: -f1)"
+  [ -n "$post_line" ] && [ -n "$preset_line" ] && [ -n "$experience_line" ]
+  [ "$preset_line" -gt "$post_line" ]
+  [ "$preset_line" -lt "$experience_line" ]
+}
+
 # ── Contract checks must accept either unit ───────────────────────────────
 
 @test "verify-desktop-experience.sh: kde contract accepts sddm or plasmalogin" {

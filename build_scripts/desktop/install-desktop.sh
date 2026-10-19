@@ -1004,10 +1004,6 @@ if [[ -n "${_TD_DM}" && "${_TD_DM}" != "null" ]]; then
 		else
 			echo "display-manager.service already points at $(basename "${_TD_ALIAS_TARGET}"); leaving it"
 		fi
-		# Follow the resolved alias rather than enabling a competing manifest
-		# greeter when native packaging selected a different real manager.
-		_TD_PRESET_DM="$(basename "$(readlink -f "${_TD_ALIAS}")")"
-		write_display_manager_preset "${_TD_PRESET_DM}"
 	fi
 	# Server-oriented bootc bases such as AlmaLinux default to
 	# multi-user.target. Enabling a display manager alone does not change the
@@ -1042,6 +1038,14 @@ for cmd in "${_TD_POST_INLINE[@]}"; do
 		eval "$cmd"
 	fi
 done
+
+if [[ -n "${_TD_DM}" && "${_TD_DM}" != "null" && -n "${_TD_ALIAS:-}" ]]; then
+	# Post-install hooks may resolve a different real manager (for example,
+	# EL10's greetd integration can replace the manifest's GDM alias). Generate
+	# the first-boot preset from the final alias, not the pre-hook selection.
+	_TD_PRESET_DM="$(basename "$(readlink -f "${_TD_ALIAS}")")"
+	write_display_manager_preset "${_TD_PRESET_DM}"
+fi
 
 # Desktop communities own their curated defaults as plain files. This keeps
 # opinions reviewable and portable without creating a package for a few config

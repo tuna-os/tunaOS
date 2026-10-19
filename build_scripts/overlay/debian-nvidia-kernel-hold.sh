@@ -87,10 +87,22 @@ done < <(apt-cache pkgnames linux-image- |
 	sort -V)
 
 if [[ -z "$HELD" ]]; then
-	echo "ERROR: nvidia-kernel-dkms ${DRIVER} does not build on kernel ${SERIES} (ceiling ${CEILING})," >&2
-	echo "       and the archive no longer carries a linux-image-*-${FLAVOUR} at or below ${CEILING}" >&2
-	echo "       with matching headers. Needs a newer Debian nvidia driver; see this script's header." >&2
-	exit 1
+	SNAPSHOT_SCRIPT="${TUNAOS_DEBIAN_NVIDIA_SNAPSHOT_SCRIPT:-/run/context/build_scripts/overlay/debian-nvidia-snapshot.sh}"
+	if [[ -x "$SNAPSHOT_SCRIPT" ]]; then
+		if ! HELD="$("$SNAPSHOT_SCRIPT" "$DRIVER" "$KVER")"; then
+			echo "ERROR: Debian snapshot fallback could not recover a kernel for ${DRIVER} on ${KVER}" >&2
+			exit 1
+		fi
+		if [[ ! "$HELD" =~ ^[0-9]+\.[0-9]+\.[0-9]+\+deb[0-9]+-${FLAVOUR}$ ]]; then
+			echo "ERROR: Debian snapshot fallback returned an invalid kernel: ${HELD}" >&2
+			exit 1
+		fi
+		echo "==> snapshot fallback selected kernel ${HELD}"
+	else
+		echo "ERROR: nvidia-kernel-dkms ${DRIVER} does not build on kernel ${SERIES} (ceiling ${CEILING})," >&2
+		echo "       and no Debian snapshot fallback is available for this overlay" >&2
+		exit 1
+	fi
 fi
 
 echo "==> holding kernel at ${HELD}: ${KVER} is above the ${CEILING} ceiling for ${DRIVER_UPSTREAM}"

@@ -35,7 +35,7 @@ def _stub(bindir: Path, name: str, body: str) -> None:
     path.chmod(0o755)
 
 
-def _run(tmp_path: Path, kver: str, driver: str, archive: list[str]):
+def _run(tmp_path: Path, kver: str, driver: str, archive: list[str], snapshot_kernel: str | None = None):
     modules = tmp_path / "modules"
     boot = tmp_path / "boot"
     bindir = tmp_path / "bin"
@@ -73,11 +73,18 @@ purge) rm -rf {modules}/"$k"/kernel ;;
 esac
 """,
     )
+    snapshot = bindir / "snapshot"
+    snapshot.write_text(
+        "#!/bin/bash\n"
+        + (f"echo '{snapshot_kernel}'\n" if snapshot_kernel else "exit 1\n")
+    )
+    snapshot.chmod(0o755)
     env = dict(
         os.environ,
         PATH=f"{bindir}:{os.environ['PATH']}",
         TUNAOS_MODULES_ROOT=str(modules),
         TUNAOS_BOOT_DIR=str(boot),
+        TUNAOS_DEBIAN_NVIDIA_SNAPSHOT_SCRIPT=str(snapshot),
     )
     proc = subprocess.run(
         ["bash", str(HOLD), kver], capture_output=True, text=True, env=env
@@ -113,12 +120,26 @@ def test_an_unmeasured_driver_builds_against_the_shipped_kernel(tmp_path):
     assert trees == ["7.2.7+deb14-amd64"] and calls == []
 
 
+def test_snapshot_fallback_supplies_a_kernel_when_archive_has_none(tmp_path):
+    proc, trees, calls, modules = _run(
+        tmp_path,
+        "7.2.7+deb14-amd64",
+        "550.163.01-5.1",
+        ["7.2.6+deb14-amd64", "7.2.7+deb14-amd64"],
+        snapshot_kernel="7.1.13+deb14-amd64",
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert trees == ["7.1.13+deb14-amd64"]
+    assert any("install" in c and "linux-image-7.1.13+deb14-amd64" in c for c in calls)
+    assert (modules / "7.1.13+deb14-amd64" / "vmlinuz").read_text() == "vmlinuz\n"
+
+
 def test_no_kernel_under_the_ceiling_fails_loudly(tmp_path):
     proc, trees, calls, _ = _run(
         tmp_path, "7.2.7+deb14-amd64", "550.163.01-5.1", ["7.2.6+deb14-amd64", "7.2.7+deb14-amd64"]
     )
     assert proc.returncode != 0
-    assert "does not build on kernel 7.2" in proc.stderr
+    assert "snapshot fallback" in proc.stderr
     assert trees == ["7.2.7+deb14-amd64"] and calls == []
 
 
