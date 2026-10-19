@@ -144,12 +144,32 @@ def test_real_build_entry_uses_compiled_intent_and_sanitized_environment(tmp_pat
             'USE_CACHE': '0', 'IS_CI': '0', 'SKIP_RECHUNK': '1', 'BASE_IMAGE': 'base@sha256:' + 'b' * 64}}]
     monkeypatch.setattr(MOD.PREPARE, 'prepare', prepare)
     monkeypatch.setattr(MOD, 'inspect', lambda image: 'sha256:' + 'c' * 64)
-    monkeypatch.setattr(MOD.subprocess, 'run', lambda args, **kwargs: calls.append((args, kwargs)))
+    monkeypatch.setattr(MOD, 'run_build', lambda context, env, log: calls.append((context, env, log)))
     monkeypatch.setenv('TUNAOS_BUILD_CONFIG', 'untrusted-inherited-override')
     context, image, base = MOD.build('grouper', remove, tmp_path / 'build', 'a' * 64, ROOT)
     assert image == 'sha256:' + 'c' * 64 and '@sha256:' in base
     assert len(calls) == 1
-    assert calls[0][0] == ['bash', 'scripts/build-image-inner.sh']
-    assert calls[0][1]['cwd'] == context and calls[0][1]['check'] is True
-    assert 'TUNAOS_BUILD_CONFIG' not in calls[0][1]['env']
-    assert calls[0][1]['env']['USE_CACHE'] == '0'
+    assert calls[0][0] == context
+    assert 'TUNAOS_BUILD_CONFIG' not in calls[0][1]
+    assert calls[0][1]['USE_CACHE'] == '0'
+
+
+def test_build_timeout_stops_its_own_process_group(tmp_path, monkeypatch):
+    waits, signals = [], []
+    class Process:
+        pid = 12345
+        def wait(self, timeout):
+            waits.append(timeout)
+            if len(waits) < 3:
+                raise subprocess.TimeoutExpired('build', timeout)
+            return -9
+    def popen(command, **kwargs):
+        assert command == ['bash', 'scripts/build-image-inner.sh']
+        assert kwargs['start_new_session'] is True
+        return Process()
+    monkeypatch.setattr(MOD.subprocess, 'Popen', popen)
+    monkeypatch.setattr(MOD.os, 'killpg', lambda pid, sig: signals.append((pid, sig)))
+    with (tmp_path / 'log').open('w') as log, pytest.raises(subprocess.TimeoutExpired):
+        MOD.run_build(tmp_path, {}, log)
+    assert waits == [3000, 15, 15]
+    assert signals == [(12345, MOD.signal.SIGTERM), (12345, MOD.signal.SIGKILL)]

@@ -7,6 +7,13 @@ on:
       - "scripts/qualify-fork-removal-build.py"
       - "scripts/qualify-fork-optional-removal.py"
       - "build_scripts/lib/fork-optional-removals.*"
+      - "build_scripts/lib/fork-packages.sh"
+      - "build_scripts/lib/fork-removals.sh"
+      - "build_scripts/lib/fork-removal-inventory.py"
+      - "build_scripts/desktop/install-desktop.sh"
+      - "build_scripts/desktop/configure-desktop-runtime.sh"
+      - "scripts/prepare-fork-config.py"
+      - "scripts/resolve-fork-config.py"
   workflow_dispatch:
 
 permissions:

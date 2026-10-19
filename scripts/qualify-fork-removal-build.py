@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import re
+import signal
 import subprocess
 import uuid
 
@@ -58,6 +59,25 @@ def inspect(image):
     return image_id
 
 
+def run_build(context, env, log):
+    """Bound each build and stop its process group before reporting a timeout."""
+    command = ['bash', 'scripts/build-image-inner.sh']
+    process = subprocess.Popen(command, cwd=context, env=env, stdout=log,
+                               stderr=subprocess.STDOUT, start_new_session=True)
+    try:
+        status = process.wait(timeout=3000)
+    except subprocess.TimeoutExpired:
+        os.killpg(process.pid, signal.SIGTERM)
+        try:
+            process.wait(timeout=15)
+        except subprocess.TimeoutExpired:
+            os.killpg(process.pid, signal.SIGKILL)
+            process.wait(timeout=15)
+        raise
+    if status:
+        raise subprocess.CalledProcessError(status, command)
+
+
 def build(variant, remove, output, source, root):
     output.mkdir()
     namespace = 'fork-removal-build-target' if remove else 'fork-removal-build-stock'
@@ -83,8 +103,7 @@ def build(variant, remove, output, source, root):
         raise ValueError('build environment differs from the nonpublishing proof')
     # Keep the existing no-cache boundary. Cache relaxation needs its own proof.
     with (output / 'build.log').open('w') as log:
-        subprocess.run(['bash', 'scripts/build-image-inner.sh'], cwd=context, env=env,
-                       stdout=log, stderr=subprocess.STDOUT, check=True)
+        run_build(context, env, log)
     return context, inspect(env['IMAGE_TAG']), env['BASE_IMAGE']
 
 
