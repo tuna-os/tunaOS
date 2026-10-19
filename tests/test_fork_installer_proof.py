@@ -6,6 +6,7 @@ import io
 import json
 from pathlib import Path
 import stat
+import shutil
 import urllib.error
 import zipfile
 
@@ -16,6 +17,11 @@ ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location("installer_proof", ROOT / "scripts/qualify-fork-installer.py")
 PROOF = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(PROOF)
+LOGIN_SPEC = importlib.util.spec_from_file_location("installer_login_ocr", ROOT / "scripts/qualify-fork-login.py")
+LOGIN = importlib.util.module_from_spec(LOGIN_SPEC)
+LOGIN_SPEC.loader.exec_module(LOGIN)
+FIXTURES = ROOT / "tests/fixtures/fork-installer"
+REAL_OCR = pytest.mark.skipif(not shutil.which("tesseract"), reason="tesseract is not installed")
 
 
 def metadata():
@@ -202,12 +208,19 @@ def screen(tmp_path, box=(474, 190, 602, 318), color="#eb922d"):
     image = Image.new("RGB", (1280, 800), "#333333")
     if box:
         image.paste(color, box)
+    image.paste("white", (308, 420, 768, 474))
     image.save(frame)
     return frame, reference
 
 
+def exact_label(path, **kwargs):
+    assert kwargs == {"psm": 7, "confidence": 0}
+    assert Path(path).is_file()
+    return [{"text": word, "conf": "95"} for word in ("Install", "Harbor", "Canary")]
+
+
 def test_framebuffer_reference_match_must_be_above_the_real_heading(tmp_path):
-    assert PROOF.visible_branding(*screen(tmp_path), words())["passed"] is True
+    assert PROOF.visible_branding(*screen(tmp_path), words(), ocr=exact_label, private=tmp_path)["passed"] is True
 
 
 @pytest.mark.parametrize("box,color", [(None, "#eb922d"), ((474, 190, 602, 318), "red"),
@@ -215,15 +228,15 @@ def test_framebuffer_reference_match_must_be_above_the_real_heading(tmp_path):
                                       ((474, 190, 602, 230), "#eb922d"),
                                       ((0, 0, 1280, 800), "#eb922d")])
 def test_missing_wrong_unrelated_or_nonsquare_logo_fails(tmp_path, box, color):
-    assert not PROOF.visible_branding(*screen(tmp_path, box, color), words())["passed"]
+    assert not PROOF.visible_branding(*screen(tmp_path, box, color), words(), ocr=exact_label, private=tmp_path)["passed"]
 
 
 def test_both_heading_and_install_row_are_required(tmp_path):
     frame, reference = screen(tmp_path)
     rows = words()
-    assert not PROOF.visible_branding(frame, reference, rows[:4])["passed"]
+    assert not PROOF.visible_branding(frame, reference, rows, ocr=lambda *a, **kw: [], private=tmp_path)["passed"]
     rows[2]["text"] = "TunaOS"
-    assert not PROOF.visible_branding(frame, reference, rows)["passed"]
+    assert not PROOF.visible_branding(frame, reference, rows, ocr=exact_label, private=tmp_path)["passed"]
 
 
 def test_guest_sources_compile_and_use_normal_existing_session():
@@ -279,26 +292,159 @@ def test_host_download_never_forwards_token_to_storage(tmp_path, monkeypatch):
         assert b"signature=fixture" not in path.read_bytes()
 
 
-def test_actual_ocr_parser_can_find_the_two_required_lines(tmp_path):
-    """Synthetic image checks OCR integration only, not a native app window."""
-    import shutil
-    from PIL import ImageDraw, ImageFont
-    if not shutil.which("tesseract"):
-        pytest.skip("tesseract is not installed on this test host")
-    spec = importlib.util.spec_from_file_location("login_ocr", ROOT / "scripts/qualify-fork-login.py")
-    login = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(login)
+@pytest.fixture(params=["yellowfin", "grouper"])
+def captured_welcome(request):
+    provenance = json.loads((FIXTURES / "provenance.json").read_text())
+    sample = provenance["screenshots"][request.param]
+    frame = FIXTURES / sample["file"]
+    assert PROOF.sha256(frame) == sample["sha256"]
+    return frame, sample
+
+
+def reference_logo(tmp_path):
     reference = tmp_path / "reference.png"
-    frame = tmp_path / "ocr.png"
     PROOF.logo_reference(wrapped_logo(), reference)
-    image = Image.new("RGB", (1280, 800), "#333333")
-    image.paste("#eb922d", (576, 190, 704, 318))
-    draw = ImageDraw.Draw(image)
-    font = ImageFont.load_default(size=28)
-    draw.text((640, 360), "Welcome to Harbor Canary", anchor="mm", font=font, fill="white")
-    draw.text((640, 450), "Install Harbor Canary", anchor="mm", font=font, fill="white")
+    return reference
+
+
+@REAL_OCR
+def test_actual_native_welcome_uses_action_row_geometry_and_exact_crop(captured_welcome, tmp_path):
+    """Run 39215796177 frames are OCR regressions, not a new native acceptance."""
+    frame, sample = captured_welcome
+    # Retain the measured old failure even if a newer Tesseract fixes PSM11.
+    old_lines = PROOF.exact_lines(sample["full_frame_words"], "install harbor canary", isolated=False)
+    assert bool(old_lines) == (sample["variant"] == "grouper")
+    receipt = PROOF.visible_branding(frame, reference_logo(tmp_path), LOGIN.words(frame),
+                                     ocr=LOGIN.words, private=tmp_path)
+    assert receipt["passed"] is True
+    assert receipt["frame_sha256"] == sample["sha256"]
+    assert receipt["action_rows"][0]["bounds"] == sample["row_bbox"]
+    assert receipt["install_row_ocr"]["crop_bbox"] == sample["crop_bbox"]
+    assert receipt["install_row_ocr"]["psm"] == 7
+    assert receipt["install_row_ocr"]["scale"] == 4
+    assert [r["text"] for r in receipt["install_row_ocr"]["words"]] == ["Install", "Harbor", "Canary"]
+    assert all(float(r["conf"]) >= 80 for r in receipt["install_row_ocr"]["words"])
+    assert receipt["logo_matches"][0]["reference_matching_fraction"] >= .98
+    assert not list(tmp_path.glob("installer-ocr-*")), "temporary crops must be removed"
+
+
+@REAL_OCR
+def test_native_welcome_detection_moves_with_the_window(captured_welcome, tmp_path):
+    frame, _ = captured_welcome
+    shifted = tmp_path / "shifted.png"
+    with Image.open(frame) as source:
+        image = Image.new("RGB", source.size, "#12394b")
+        image.paste(source, (45, 23))
+        image.save(shifted)
+    assert PROOF.visible_branding(shifted, reference_logo(tmp_path), LOGIN.words(shifted),
+                                  ocr=LOGIN.words, private=tmp_path)["passed"]
+
+
+@pytest.mark.parametrize("collision", ["wrong-brand", "substring", "prefix", "suffix", "duplicate"])
+def test_welcome_heading_requires_unique_complete_copy(captured_welcome, tmp_path, collision):
+    frame, sample = captured_welcome
+    rows = [dict(r) for r in sample["full_frame_words"]]
+    heading = PROOF.exact_lines(rows, "welcome to harbor canary")[0]
+    if collision == "wrong-brand":
+        heading[2]["text"] = "TunaOS"
+    elif collision == "substring":
+        heading[-1]["text"] = "Canary2"
+    elif collision == "duplicate":
+        rows += [{**r, "block_num": "100", "top": "650"} for r in heading]
+    else:
+        # A separate TSV block on the same baseline must not hide extra copy.
+        left, top, right, bottom = PROOF.text_bounds(heading)
+        rows.append({**heading[0], "text": "Not" if collision == "prefix" else "Now",
+                     "block_num": "100", "left": str(left - 42 if collision == "prefix" else right + 6),
+                     "top": str(top), "width": "36", "height": str(bottom - top)})
+    receipt = PROOF.visible_branding(frame, reference_logo(tmp_path), rows,
+                                     ocr=lambda *a, **kw: pytest.fail("ambiguous heading reached crop OCR"), private=tmp_path)
+    assert not receipt["passed"]
+    assert receipt["reason"] == "no unique exact welcome heading"
+
+
+@pytest.mark.parametrize("label", [[], ["Harbor", "Canary"], ["Reinstall", "Harbor", "Canary"],
+                                  ["Install", "Harbor", "Canary2"], ["Install", "TunaOS"],
+                                  ["Do", "not", "Install", "Harbor", "Canary"],
+                                  ["Install", "Harbor", "Canary", "now"], ["Install", "Harbor", "Canary!"],
+                                  ["Canary", "Harbor", "Install"]])
+def test_crop_requires_exact_complete_label(captured_welcome, tmp_path, label):
+    frame, sample = captured_welcome
+    receipt = PROOF.visible_branding(frame, reference_logo(tmp_path), sample["full_frame_words"],
+                                     ocr=lambda *a, **kw: [{"text": word, "conf": 99} for word in label], private=tmp_path)
+    assert not receipt["passed"]
+    assert receipt["reason"] == "action row label is not exactly Install Harbor Canary"
+
+
+@pytest.mark.parametrize("confidence", [0, 20.99, 79.99])
+def test_crop_cannot_reuse_icon_merged_low_confidence_text(captured_welcome, tmp_path, confidence):
+    frame, sample = captured_welcome
+    label = [{"text": word, "conf": 99} for word in ("Install", "Harbor", "Canary")]
+    label[0]["conf"] = confidence
+    receipt = PROOF.visible_branding(frame, reference_logo(tmp_path), sample["full_frame_words"],
+                                     ocr=lambda *a, **kw: label, private=tmp_path)
+    assert not receipt["passed"]
+    assert not list(tmp_path.glob("installer-ocr-*"))
+
+
+def test_unrelated_or_duplicate_install_copy_does_not_substitute_for_row(captured_welcome, tmp_path):
+    frame, sample = captured_welcome
+    rows = sample["full_frame_words"] + [{**r, "block_num": "100", "top": "650"} for r in words()[4:]]
+    receipt = PROOF.visible_branding(frame, reference_logo(tmp_path), rows, ocr=exact_label, private=tmp_path)
+    assert not receipt["passed"]
+    assert receipt["reason"] == "conflicting install label outside the welcome action row"
+
+
+@pytest.mark.parametrize("geometry", ["missing", "off-center", "page", "ambiguous", "unknown-theme"])
+def test_absent_or_ambiguous_action_row_fails_before_ocr(tmp_path, geometry):
+    frame, reference = screen(tmp_path)
+    with Image.open(frame) as source:
+        image = source.copy()
+    image.paste("#333333", (308, 420, 768, 474))
+    if geometry == "off-center":
+        image.paste("white", (50, 420, 510, 474))
+    elif geometry == "page":
+        image.paste("white", (0, 380, 1280, 800))
+    elif geometry == "ambiguous":
+        image.paste("white", (308, 390, 768, 426))
+        image.paste("white", (308, 432, 768, 468))
+    elif geometry == "unknown-theme":
+        image.paste("#444444", (308, 420, 768, 474))
     image.save(frame)
-    assert PROOF.visible_branding(frame, reference, login.words(frame))["passed"]
+    receipt = PROOF.visible_branding(frame, reference, words(),
+                                     ocr=lambda *a, **kw: pytest.fail("invalid row reached OCR"), private=tmp_path)
+    assert not receipt["passed"]
+    assert receipt["reason"] == "no unique first action row below the welcome heading"
+
+
+@REAL_OCR
+@pytest.mark.parametrize("text", ["", "Install TunaOS", "Reinstall Harbor Canary", "Do not Install Harbor Canary",
+                                 "Install Harbor Canary now", "Install Harbor Canary2"])
+def test_real_crop_ocr_rejects_changed_visible_copy(captured_welcome, tmp_path, text):
+    from PIL import ImageDraw, ImageFont
+    frame, sample = captured_welcome
+    changed = tmp_path / "changed.png"
+    with Image.open(frame) as source:
+        image = source.copy()
+    left, top, right, bottom = sample["crop_bbox"]
+    image.paste("white", (left, top, right, bottom))
+    ImageDraw.Draw(image).text((left + 3, top + 4), text, font=ImageFont.load_default(size=14), fill="#333333")
+    image.save(changed)
+    receipt = PROOF.visible_branding(changed, reference_logo(tmp_path), LOGIN.words(changed),
+                                     ocr=LOGIN.words, private=tmp_path)
+    assert not receipt["passed"]
+
+
+def test_private_crop_is_removed_if_ocr_fails(captured_welcome, tmp_path):
+    frame, sample = captured_welcome
+
+    def fail(path, **kwargs):
+        assert Path(path).is_file()
+        raise RuntimeError("OCR failed")
+
+    with pytest.raises(RuntimeError, match="OCR failed"):
+        PROOF.visible_branding(frame, reference_logo(tmp_path), sample["full_frame_words"], ocr=fail, private=tmp_path)
+    assert not list(tmp_path.glob("installer-ocr-*"))
 
 
 def test_fisherman_diagnostics_use_same_desktop_portal_without_execution():

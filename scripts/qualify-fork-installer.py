@@ -15,6 +15,7 @@ import re
 import shutil
 import stat
 import subprocess
+import tempfile
 import time
 import urllib.error
 import urllib.parse
@@ -375,33 +376,120 @@ def logo_reference(svg, png):
     return hashlib.sha256(svg.encode()).hexdigest()
 
 
-def visible_branding(frame, reference, rows):
-    """Pair the welcome heading with a reference-matched square above it.
+def text_bounds(line):
+    return (min(int(r["left"]) for r in line), min(int(r["top"]) for r in line),
+            max(int(r["left"]) + int(r["width"]) for r in line),
+            max(int(r["top"]) + int(r["height"]) for r in line))
 
-    This is deliberately specific to the solid 128px qualification logo. Color
-    alone, unrelated orange rectangles, and an app title without welcome copy
-    cannot earn a pass. Different logos need a different pixel matcher.
-    """
-    from PIL import Image, ImageChops
+
+def exact_lines(rows, expected, *, isolated=True):
+    """Require a whole exact line, including nearby words split into TSV blocks."""
     lines = {}
     for row in rows:
         key = tuple(row.get(k, "") for k in ("page_num", "block_num", "par_num", "line_num"))
         lines.setdefault(key, []).append(row)
-    heading = []
-    install = []
+    matches = []
     for line in lines.values():
-        normalized = " ".join(re.sub(r"[^a-z0-9]", "", r["text"].lower()) for r in line)
-        if normalized == "welcome to harbor canary":
-            heading.append(line)
-        if normalized == "install harbor canary":
-            install.append(line)
-    if len(heading) != 1 or len(install) != 1:
-        return {"passed": False, "reason": "unique welcome heading and install row are not both visible"}
-    line = heading[0]
-    left = min(int(r["left"]) for r in line)
-    right = max(int(r["left"]) + int(r["width"]) for r in line)
-    top = min(int(r["top"]) for r in line)
+        line = sorted(line, key=lambda row: int(row["left"]))
+        if [row["text"].strip().casefold() for row in line] != expected.split():
+            continue
+        left, top, right, bottom = text_bounds(line)
+        height = bottom - top
+        neighbors = []
+        for row in rows:
+            if any(row is member for member in line):
+                continue
+            x, y, r, b = text_bounds([row])
+            overlap = min(bottom, b) - max(top, y)
+            gap = max(0, left - r, x - right)
+            if overlap >= min(height, b - y) * .5 and gap <= height * 2:
+                neighbors.append(row)
+        if not isolated or not neighbors:
+            matches.append(line)
+    return matches
+
+
+def welcome_action_rows(image, heading):
+    """Find the first light action row below the heading, not arbitrary text.
+
+    Run 39215796177 has 575x54 light rows on both guests. The icon merges with
+    Install under full-frame PSM11 on Yellowfin. Bound connected components by
+    the observed heading's scale/column; unknown themes and ambiguity fail closed.
+    """
+    left, top, right, bottom = text_bounds(heading)
+    width, height = right - left, bottom - top
     center = (left + right) / 2
+    x0, x1 = max(0, int(center - width)), min(image.width, int(center + width))
+    y0, y1 = max(0, bottom + round(height * .4)), min(image.height, bottom + height * 5)
+    pixels = image.convert("RGB").load()
+    remaining = {(x, y) for y in range(y0, y1) for x in range(x0, x1)
+                 if min(pixels[x, y]) >= 253 and max(pixels[x, y]) - min(pixels[x, y]) <= 4}
+    candidates = []
+    while remaining:
+        seed = remaining.pop()
+        component, todo = [seed], [seed]
+        while todo:
+            x, y = todo.pop()
+            for neighbor in ((x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)):
+                if neighbor in remaining:
+                    remaining.remove(neighbor)
+                    component.append(neighbor)
+                    todo.append(neighbor)
+        if len(component) < width * height:
+            continue
+        xs, ys = zip(*component)
+        box = min(xs), min(ys), max(xs) + 1, max(ys) + 1
+        w, h = box[2] - box[0], box[3] - box[1]
+        # Reject clipped components: a white page cannot masquerade as a row.
+        if (box[0] <= x0 or box[1] <= y0 or box[2] >= x1 or box[3] >= y1
+                or not (1.4 * width <= w <= 2.1 * width and 1.5 * height <= h <= 3 * height
+                        and abs((box[0] + box[2]) / 2 - center) <= max(12, height * .5)
+                        and .5 * height <= box[1] - bottom <= 3 * height)
+                or len(component) / (w * h) < .85):
+            continue
+        candidates.append({"bounds": list(box), "light_fraction": len(component) / (w * h)})
+    return candidates
+
+
+def visible_branding(frame, reference, rows, *, ocr, private):
+    """Require exact welcome/row copy plus the reference logo in one layout."""
+    from PIL import Image, ImageChops, ImageOps
+    receipt = {"passed": False, "frame_sha256": sha256(frame),
+               "method": "welcome-relative-action-row-v1", "full_frame_words": rows}
+    headings = exact_lines(rows, "welcome to harbor canary")
+    if len(headings) != 1:
+        return {**receipt, "reason": "no unique exact welcome heading"}
+    line = headings[0]
+    left, top, right, _ = text_bounds(line)
+    center = (left + right) / 2
+    with Image.open(frame) as screenshot:
+        action_rows = welcome_action_rows(screenshot, line)
+        receipt["action_rows"] = action_rows
+        if len(action_rows) != 1:
+            return {**receipt, "reason": "no unique first action row below the welcome heading"}
+        row_left, row_top, row_right, row_bottom = action_rows[0]["bounds"]
+        row_height = row_bottom - row_top
+        # Read the entire label column, not an expected-word-sized fragment.
+        # Row-relative insets exclude the icon/chevron and the separate subtitle.
+        crop_box = [row_left + round(row_height * .74), row_top + round(row_height * .12),
+                    row_right - round(row_height * .74), row_top + round(row_height * .56)]
+        crop = ImageOps.autocontrast(ImageOps.grayscale(screenshot.crop(crop_box)))
+        crop = crop.resize((crop.width * 4, crop.height * 4), Image.Resampling.LANCZOS)
+        with tempfile.TemporaryDirectory(prefix="installer-ocr-", dir=private) as temporary:
+            crop_path = Path(temporary) / "install-row.png"
+            crop.save(crop_path)
+            label = ocr(crop_path, psm=7, confidence=0)
+        receipt["install_row_ocr"] = {"crop_bbox": crop_box, "scale": 4, "psm": 7,
+                                      "preprocessing": "grayscale-autocontrast", "words": label,
+                                      "minimum_word_confidence": 80}
+        if ([r["text"].strip().casefold() for r in label] != ["install", "harbor", "canary"]
+                or any(float(r.get("conf", -1)) < 80 for r in label)):
+            return {**receipt, "reason": "action row label is not exactly Install Harbor Canary"}
+        # A second exact label anywhere in the full frame remains ambiguous.
+        for other in exact_lines(rows, "install harbor canary", isolated=False):
+            x, y, r, b = text_bounds(other)
+            if not (row_left <= x < r <= row_right and row_top <= y < b <= row_bottom):
+                return {**receipt, "reason": "conflicting install label outside the welcome action row"}
     with Image.open(reference) as source, Image.open(frame) as screenshot:
         reference_image = source.convert("RGB")
         image = screenshot.convert("RGB")
@@ -437,7 +525,7 @@ def visible_branding(frame, reference, rows):
             matching = sum(max(p) <= 8 for p in diff.getdata()) / (128 * 128)
             if matching >= .98:
                 candidates.append({"bounds": box, "reference_matching_fraction": matching})
-    return {"passed": len(candidates) == 1, "welcome_heading": "Welcome to Harbor Canary",
+    return {**receipt, "passed": len(candidates) == 1, "welcome_heading": "Welcome to Harbor Canary",
             "install_row": "Install Harbor Canary", "logo_matches": candidates,
             "reference_sha256": sha256(reference), "minimum_reference_matching_fraction": .98}
 
@@ -489,7 +577,7 @@ def qualify(harness, access, private, archive, out, screenshot, observe, before,
             raise ValueError("installer proof lost the authenticated desktop session")
         observed = guest(GUEST_OBSERVE)
         frame = screenshot("40-installer-welcome.png")
-        pixels = visible_branding(frame, reference, harness.words(frame))
+        pixels = visible_branding(frame, reference, harness.words(frame), ocr=harness.words, private=private)
         report["observed_window"] = observed
         report["visible_branding"] = pixels
         if validate_window(observed, report["launch"], report["installed_bundle"]) and pixels["passed"]:

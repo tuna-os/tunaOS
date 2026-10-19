@@ -1814,3 +1814,15 @@ step and tour order, stable bytes and detection of a changed recipe hash.
 
 These source tests do not prove that the welcome screen appears first. Rebuild
 and check the actual installer before you claim that result.
+
+### Fork Welcome screen text check fails
+
+[Run 39215796177](https://github.com/tuna-os/tunaOS/actions/runs/39215796177)
+showed the correct Yellowfin screen, but PSM11 read its download icon as part of
+`Install`. The word scored 20.994308, below the cutoff of 30.
+The test now reads the full label in the first light row below the Welcome text.
+It uses grayscale, autocontrast, 4× scale and PSM7. Each word in the exact
+`Install Harbor Canary` label must score at least 80. Extra words fail the test.
+
+The exact source-logo check stays in place. Local tests pass for both frames;
+a new native run must pass before this gate is complete.
