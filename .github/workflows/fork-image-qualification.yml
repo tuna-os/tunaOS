@@ -10,6 +10,11 @@ on:
       - "scripts/qualify-fork-initramfs.py"
       - "scripts/qualify-fork-login.py"
       - "scripts/qualify-fork-installer.py"
+      - "scripts/prepare-fork-config.py"
+      - "scripts/resolve-fork-config.py"
+      - "scripts/export-fork-source.py"
+      - "build_scripts/lib/fork-*"
+      - "live-iso/common/src/installer-recipe-backend.sh"
   workflow_dispatch:
 
 permissions:
@@ -39,7 +44,7 @@ jobs:
       - name: Install test tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y jq python3-pil python3-yaml qemu-system-x86 qemu-utils ovmf ffmpeg tesseract-ocr
+          sudo apt-get install -y jq python3-pil python3-yaml skopeo qemu-system-x86 qemu-utils ovmf ffmpeg tesseract-ocr
           curl -fsSL https://github.com/mikefarah/yq/releases/download/v4.53.3/yq_linux_amd64 -o "$RUNNER_TEMP/yq"
           echo "fa52a4e758c63d38299163fbdd1edfb4c4963247918bf9c1c5d31d84789eded4  $RUNNER_TEMP/yq" | sha256sum -c -
           sudo install -m 0755 "$RUNNER_TEMP/yq" /usr/local/bin/yq
@@ -96,6 +101,10 @@ jobs:
             sudo cp "$src/initramfs.json" "$src/initramfs-diagnostics.txt" "$src/greeter-config.txt" "fork-evidence/$variant/" || true
             sudo cp "$src/fork.yaml" "fork-evidence/$variant/" || true
             sudo cp "$src/prepared/source-receipt.json" "fork-evidence/$variant/" || true
+            if test -f "$src/oci-export/source-receipt.json"; then
+              sudo cp "$src/oci-export/source-receipt.json" "fork-evidence/$variant/oci-source-receipt.json"
+              sudo cp "$src/oci-export/source-manifest.json" "fork-evidence/$variant/oci-source-manifest.json"
+            fi
             if test -d "$src/login"; then
               sudo cp -r "$src/login" "fork-evidence/$variant/"
             fi

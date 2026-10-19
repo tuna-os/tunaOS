@@ -1,7 +1,9 @@
 """Typed login proof must not turn SSH/readiness/autologin into a GUI pass."""
 import importlib.util
+import hashlib
 import json
 from pathlib import Path
+import shutil
 import subprocess
 
 import pytest
@@ -11,6 +13,8 @@ ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location("login_proof", ROOT / "scripts/qualify-fork-login.py")
 PROOF = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(PROOF)
+FIXTURES = ROOT / "tests/fixtures/fork-login"
+REAL_OCR = pytest.mark.skipif(not shutil.which("tesseract"), reason="real screenshot regression requires Tesseract")
 
 
 def observations():
@@ -109,6 +113,115 @@ def test_ocr_matching_requires_exact_unambiguous_visible_words():
     assert PROOF.find_word([{"text": "canary"}], "canary")
     assert not PROOF.find_word([{"text": "canary"}, {"text": "canary"}], "canary")
     assert not PROOF.find_word([{"text": "canary2"}], "canary")
+
+
+@pytest.fixture(params=["yellowfin", "grouper"])
+def captured_prompt(request):
+    manifest = json.loads((FIXTURES / "provenance.json").read_text())
+    sample = manifest["screenshots"][request.param]
+    frame = FIXTURES / sample["file"]
+    assert hashlib.sha256(frame.read_bytes()).hexdigest() == sample["sha256"]
+    return frame, sample
+
+
+@REAL_OCR
+def test_actual_native_prompt_uses_field_geometry_and_cropped_ocr(captured_prompt, tmp_path):
+    """Run-5 screenshots failed full-frame OCR despite a visible Password field."""
+    frame, sample = captured_prompt
+    rows = PROOF.words(frame)
+    assert PROOF.find_word(rows, "canary")
+    assert not PROOF.find_word(rows, "password")
+    receipt = PROOF.password_prompt(frame, rows, tmp_path)
+    assert receipt["verified"] is True
+    assert receipt["frame_sha256"] == sample["sha256"]
+    assert receipt["frame_size"] == [1280, 800]
+    assert len(receipt["account_candidates"]) == len(receipt["field_candidates"]) == 1
+    assert receipt["field_candidates"][0]["bbox"] == sample["field_bbox"]
+    assert receipt["field_ocr"]["crop_bbox"] == sample["crop_bbox"]
+    assert receipt["field_ocr"]["psm"] == 7
+    assert receipt["field_ocr"]["scale"] == 4
+    assert [word["text"] for word in receipt["field_ocr"]["words"]] == ["Password"]
+    assert float(receipt["field_ocr"]["words"][0]["conf"]) >= 60
+    assert not list(tmp_path.iterdir()), "private crop must be removed after OCR"
+
+
+@pytest.mark.parametrize("collision", ["substring", "brand-neighbor", "brand-footer", "duplicate", "low-confidence"])
+def test_account_anchor_rejects_brand_name_and_ambiguous_labels(captured_prompt, tmp_path, collision):
+    frame, sample = captured_prompt
+    account = dict(sample["account_word"])
+    rows = [account]
+    if collision == "substring":
+        account["text"] = "canary2"
+    elif collision == "brand-neighbor":
+        rows.append({**account, "text": "Harbor", "left": int(account["left"]) - 88, "width": 80})
+    elif collision == "brand-footer":
+        account["top"] = 680
+    elif collision == "duplicate":
+        rows.append({**account, "top": 350})
+    else:
+        account["conf"] = 79
+    receipt = PROOF.password_prompt(frame, rows, tmp_path)
+    assert receipt["verified"] is False
+    assert receipt["reason"] == "no unique isolated account label"
+    assert "field_ocr" not in receipt
+
+
+@pytest.mark.parametrize("field_text", [[], [{"text": "canary", "conf": 99}],
+                                      [{"text": "NotPassword", "conf": 99}],
+                                      [{"text": "Password:", "conf": 99}],
+                                      [{"text": "Password", "conf": 59}],
+                                      [{"text": "Password", "conf": 99}, {"text": "reset", "conf": 99}]])
+def test_field_ocr_has_no_name_substring_or_fuzzy_fallback(captured_prompt, tmp_path, monkeypatch, field_text):
+    frame, sample = captured_prompt
+
+    def ocr(path, **kwargs):
+        assert kwargs == {"psm": 7, "confidence": 0}
+        return field_text
+
+    monkeypatch.setattr(PROOF, "words", ocr)
+    receipt = PROOF.password_prompt(frame, [sample["account_word"]], tmp_path)
+    assert receipt["verified"] is False
+    assert receipt["reason"] == "field interior did not contain exactly Password"
+
+
+@REAL_OCR
+@pytest.mark.parametrize("missing", ["text", "outline"])
+def test_visible_account_alone_never_qualifies(captured_prompt, tmp_path, missing):
+    frame, sample = captured_prompt
+    changed = tmp_path / "negative.png"
+    with Image.open(frame) as original:
+        image = original.convert("RGB")
+        left, top, right, bottom = sample["field_bbox"]
+        if missing == "text":
+            image.paste(image.getpixel((left + 10, top + 6)), (left + 5, top + 5, right - 5, bottom - 5))
+        else:
+            interior = image.crop((left + 5, top + 5, right - 5, bottom - 5))
+            image.paste(image.getpixel((left - 10, top)), (left - 3, top - 3, right + 3, bottom + 3))
+            image.paste(interior, (left + 5, top + 5))
+        image.save(changed)
+    receipt = PROOF.password_prompt(changed, [sample["account_word"]], tmp_path)
+    assert receipt["verified"] is False
+    if missing == "outline":
+        assert receipt["reason"] == "no unique outlined password field"
+        assert "field_ocr" not in receipt
+    else:
+        assert receipt["reason"] == "field interior did not contain exactly Password"
+
+
+@REAL_OCR
+def test_field_detection_moves_with_the_account(captured_prompt, tmp_path):
+    frame, sample = captured_prompt
+    shifted = tmp_path / "translated.png"
+    with Image.open(frame) as original:
+        image = Image.new("RGB", original.size, original.getpixel((0, 0)))
+        image.paste(original, (48, -35))
+        image.save(shifted)
+    account = {**sample["account_word"], "left": int(sample["account_word"]["left"]) + 48,
+               "top": int(sample["account_word"]["top"]) - 35}
+    receipt = PROOF.password_prompt(shifted, [account], tmp_path)
+    assert receipt["verified"] is True
+    assert receipt["field_candidates"][0]["bbox"] == [value + delta for value, delta in
+                                                       zip(sample["field_bbox"], [48, -35, 48, -35])]
 
 
 def test_pixels_require_actual_solid_canary_color(tmp_path):
@@ -224,8 +337,9 @@ def test_guest_observer_and_host_harness_compile():
 
 @pytest.mark.parametrize("boot_ok", [True, False])
 @pytest.mark.parametrize("cleanup_ok", [True, False])
+@pytest.mark.parametrize("prompt_ok", [True, False])
 @pytest.mark.parametrize("installer_mode", ["skip", "pass", "fail"])
-def test_lifecycle_cleans_credentials_and_separates_image_identity(tmp_path, monkeypatch, boot_ok, cleanup_ok, installer_mode):
+def test_lifecycle_cleans_credentials_and_separates_image_identity(tmp_path, monkeypatch, boot_ok, cleanup_ok, prompt_ok, installer_mode):
     """A mocked lifecycle checks report/cleanup contracts; it is not a VM pass."""
     import sys
     import yaml
@@ -267,6 +381,8 @@ def test_lifecycle_cleans_credentials_and_separates_image_identity(tmp_path, mon
     monkeypatch.setattr(PROOF, "observer", lambda access, private: lambda: next(samples))
     monkeypatch.setattr(PROOF, "install_password", lambda access, private, hashed: calls.append(("install-password",)))
     monkeypatch.setattr(PROOF, "words", lambda frame: [{"text": "canary"}, {"text": "Password:"}])
+    monkeypatch.setattr(PROOF, "password_prompt", lambda frame, rows, private:
+                        {"verified": frame.name == "10-greeter.png" or prompt_ok, "frame_sha256": "fixture-hash"})
 
     class QMP:
         def __init__(self, path):
@@ -324,7 +440,7 @@ def test_lifecycle_cleans_credentials_and_separates_image_identity(tmp_path, mon
 
     monkeypatch.setattr(PROOF, "run", run)
     monkeypatch.setattr(PROOF.subprocess, "run", execute)
-    assert PROOF.main() == (0 if boot_ok and cleanup_ok and installer_mode != "fail" else 1)
+    assert PROOF.main() == (0 if boot_ok and cleanup_ok and prompt_ok and installer_mode != "fail" else 1)
     report = json.loads((output / "login-proof.json").read_text())
     assert report["cleanup"] == ("passed" if cleanup_ok else "failed")
     assert not private.exists()
@@ -336,14 +452,18 @@ def test_lifecycle_cleans_credentials_and_separates_image_identity(tmp_path, mon
     assert not any(path.name in ("spec.yaml", "id_ed25519", "Containerfile") for path in output.rglob("*"))
     text = (output / "login-proof.json").read_text()
     assert "$6$" not in text and "private-key-fixture" not in text
-    if boot_ok and installer_mode != "skip":
+    if boot_ok and prompt_ok and installer_mode != "skip":
         assert report["installer_ui"] == ("passed" if installer_mode == "pass" else "failed")
     else:
         assert report["installer_ui"] == "not-run"
     if boot_ok:
         assert report["derived_image"]["id"] == "derived-id"
+        prompt = json.loads((output / "20-password-prompt.json").read_text())
+        assert prompt["verified"] is prompt_ok
+    if boot_ok and prompt_ok:
         assert report["typed_login"] == report["wallpaper_render"] == "passed"
         assert len(typed) == 1 and typed[0] not in text
+        assert report["password_prompt"]["receipt"] == "20-password-prompt.json"
     else:
         assert report["typed_login"] == "failed" and report["wallpaper_render"] == "not-run"
         assert not typed

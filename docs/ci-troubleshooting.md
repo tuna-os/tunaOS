@@ -1782,3 +1782,18 @@ Ubuntu's `plymouth-populate-initrd` reads `Theme` from the config only when
 `update-alternatives`, which can still select `bgrt`. Set both keys before
 dracut runs. Run `39193902719` exposed this with the actual archive check.
 Keep that check: files in the root image do not prove an initramfs payload.
+
+### Fork installer shows the right logo but selects a stock image or wrong storage
+
+The identity adapter deliberately changes display fields only. The stock recipe
+still named `ghcr.io/tuna-os/tunaos:latest`, while the image screen's embedded
+catalog could override recipe `imgref` through its selected-image result. Also,
+raw images retained the template's composefs/systemd/xfs values: only customization of the live ISO ran
+the probe for the final backend.
+
+Use the exact build tag from the resolved cell for the recipe and host catalog.
+Reject duplicate or absent target leaves before the build. Finalize the
+recipe and selected leaf using the canonical root probe before identity hashes.
+`tests/test_fork_installer_source.py` exercises the real probe for bootupd/sealed
+combinations, stock-source rejection, inherited catalog refs, and repeated writes;
+it does not replace native installer or installed-boot qualification.

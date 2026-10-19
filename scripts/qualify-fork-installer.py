@@ -22,11 +22,11 @@ import urllib.request
 import zipfile
 
 REPOSITORY = "tuna-os/bootc-installer"
-RUN_ID = 39191155314
-ARTIFACT_ID = 12160008700
-SOURCE_HEAD = "c037f9b71a651bc42027db0cab21fe5cca72261f"
-TESTED_MERGE = "eebc9fa608875f5f5ad33a187e64245711908d34"
-ZIP_SHA256 = "49f0185d567dc94604d583785fc00aeb7ed2275b4a0e7dda2b6f728eb93075d6"
+RUN_ID = 39200715506
+ARTIFACT_ID = 12163907071
+SOURCE_HEAD = "4d0e653f9283debb57b460fe495f65184f9d2c6c"
+TESTED_MERGE = "7b6cbf9c152147c031f9ba362ddf4e909f36f643"
+ZIP_SHA256 = "ca1e72cdc7aa13d74e4d0adfa48c6839f79c8829d9cd86ea7f9b8cad2b1fc148"
 APP = "org.bootcinstaller.Installer"
 BUNDLE_NAME = APP + ".flatpak"
 API = "https://api.github.com/repos/" + REPOSITORY

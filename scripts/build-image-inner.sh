@@ -36,6 +36,12 @@ if [[ -e manifests/fork-identity.json || -L manifests/fork-identity.json ]]; the
 	}
 fi
 
+# A generated fork recipe and its default image catalog must describe the same
+# resolved target as the actual build tag. Validate before any builder runs.
+if [[ -e manifests/fork-config.json || -L manifests/fork-config.json ]]; then
+	python3 build_scripts/lib/fork-installer-source.py --validate-build-entry
+fi
+
 # ── Defaults ──────────────────────────────────────────────────────────────────
 IMAGE_REGISTRY="${IMAGE_REGISTRY:-ghcr.io}"
 REPO_ORGANIZATION="${REPO_ORGANIZATION:-tuna-os}"

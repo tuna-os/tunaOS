@@ -83,7 +83,7 @@ def main():
     report = {"variant": args.variant, "platform": "linux/amd64", "publishing": False,
               "accelerator": "kvm" if Path("/dev/kvm").exists() else "tcg",
               "build": "not-run", "image_identity": "not-run", "boot": "not-run",
-              "base_contract": "not-run", "installed_checks": "not-run",
+              "base_contract": "not-run", "installed_checks": "not-run", "source_export": "not-run",
               "installed_identity": "not-run", "wallpaper_defaults": "not-run",
               "initramfs_theme": "not-run", "wallpaper_render": "not-run", "greeter_profile": "not-run", "greeter_render": "not-run", "login": "not-run", "installer_ui": "not-run"}
     try:
@@ -202,6 +202,14 @@ echo TUNAOS_FORK_GREETER_DIAGNOSTICS_END
         failed = [stage for stage, status in guest.items() if status != "passed"]
         if failed:
             raise ValueError("guest qualification failed: " + ", ".join(failed))
+        # Bind the finalized original image to local-only installer media.
+        # Keep the OCI layers on the runner; upload only the external receipt.
+        report["source_export"] = "running"
+        exporter = module("fork_source_export", ROOT / "scripts/export-fork-source.py")
+        report["exported_source"] = exporter.export(context / "manifests/fork-config.json", out / "oci-export")
+        if report["exported_source"]["source_image_id"].removeprefix("sha256:") != report["image_id"].removeprefix("sha256:"):
+            raise ValueError("exported installer source differs from the qualified original image")
+        report["source_export"] = "passed"
     finally:
         for stage, status in list(report.items()):
             if status == "running":

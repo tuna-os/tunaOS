@@ -74,6 +74,8 @@ def fixture(tmp_path):
     }
     path = context / "manifests/fork-config.json"
     path.write_text(json.dumps(manifest))
+    from tests.test_fork_installer_source import prepare_root
+    prepare_root(context, root, manifest)
     return context, root, path, manifest
 
 

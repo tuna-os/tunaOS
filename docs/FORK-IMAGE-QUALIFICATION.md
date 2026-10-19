@@ -76,13 +76,13 @@ sudo python3 scripts/qualify-fork-login.py \
   --installer-artifact /tmp/harbor-installer/installer-artifact.zip
 ```
 
-The download helper accepts only bootc-installer artifact `12160008700` from
-[run 39191155314](https://github.com/tuna-os/bootc-installer/actions/runs/39191155314).
+The download helper accepts only bootc-installer artifact `12163907071` from
+[run 39200715506](https://github.com/tuna-os/bootc-installer/actions/runs/39200715506).
 It checks the successful completed run, source head and ZIP SHA-256. It records a second checksum for
 the single Flatpak bundle. The login helper checks the ZIP again before extraction.
 
-The API-verified source head is `c037f9b71a651bc42027db0cab21fe5cca72261f`.
-The recorded tested merge is `eebc9fa608875f5f5ad33a187e64245711908d34`.
+The API-verified source head is `4d0e653f9283debb57b460fe495f65184f9d2c6c`.
+The recorded tested merge is `7b6cbf9c152147c031f9ba362ddf4e909f36f643`.
 That merge comes from prior provenance; this helper does not recheck the checkout SHA. The helper does not substitute a source build or release.
 
 `GITHUB_TOKEN`, when needed, is read only by the host download helper. The helper does not put its value
@@ -112,3 +112,15 @@ reference PNG, artifact and bundle hashes, app/runtime commits, and window
 observations. `installer_committed_install` and `installed_target_identity` remain
 `not-run`. The helper does not activate Install or erase a disk. Unit tests for the helper
 check these contracts; they are not evidence that the native wizard has passed.
+
+## Local installer source export
+
+After original-image checks pass, the canary exports that exact image to a local
+OCI directory. It resolves the configured tag once, pins the image ID, and checks
+the embedded fork manifest and measured installer recipe. Skopeo must preserve
+the platform-manifest digest. A second check hashes every exported blob and checks
+the config ID and platform. The source image ID must match the earlier image check.
+
+The `source_export` result is separate from boot and installation. The workflow
+uploads only the external source receipt and raw manifest. OCI layers stay on the
+runner. This step does not launch the installer or write a target disk.

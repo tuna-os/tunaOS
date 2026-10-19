@@ -171,3 +171,22 @@ def test_serial_getty_prompt_can_share_marker_line():
     assert QUALIFY.assess_serial(serial)["base_contract"] == "passed"
     assert QUALIFY.assess_serial("echo TUNAOS_BASE_CONTRACT_OK")["base_contract"] == "failed"
     assert QUALIFY.assess_serial(serial + "TUNAOS_BASE_CONTRACT_FAIL")["base_contract"] == "failed"
+
+
+def test_native_canary_tracks_production_fork_source_inputs():
+    workflow = (ROOT / ".github/workflows/fork-image-qualification.yml").read_text()
+    for path in ("scripts/prepare-fork-config.py", "scripts/resolve-fork-config.py",
+                 "scripts/export-fork-source.py", "build_scripts/lib/fork-*",
+                 "live-iso/common/src/installer-recipe-backend.sh"):
+        assert f'      - "{path}"' in workflow
+
+
+def test_native_export_binds_original_and_uploads_only_provenance():
+    script = (ROOT / "scripts/qualify-fork-image.py").read_text()
+    workflow = (ROOT / ".github/workflows/fork-image-qualification.yml").read_text()
+    assert 'exporter.export(context / "manifests/fork-config.json", out / "oci-export")' in script
+    assert 'report["exported_source"]["source_image_id"].removeprefix("sha256:") != report["image_id"].removeprefix("sha256:")' in script
+    assert 'report["source_export"] = "passed"' in script
+    assert '"$src/oci-export/source-receipt.json"' in workflow
+    assert '"$src/oci-export/source-manifest.json"' in workflow
+    assert 'cp -r "$src/oci-export"' not in workflow

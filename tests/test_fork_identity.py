@@ -149,7 +149,8 @@ def test_existing_brand_adapter_reaches_identity_on_both_families(staged, tmp_pa
             "image-ref": f"ostree-image-signed:docker://localhost/fork-preview/{variant}"}
     (root / "usr/share/ublue-os/image-info.json").write_text(json.dumps(info))
     context = manifest.parent.parent
-    (context / "build_scripts/lib").mkdir(parents=True)
+    from tests.test_fork_installer_source import prepare_root
+    prepare_root(context, root, cell["manifest"])
     for name in ("fork-branding.sh", "fork-identity.py"):
         shutil.copyfile(ROOT / "build_scripts/lib" / name, context / "build_scripts/lib" / name)
     run = subprocess.run(["bash", "-c", 'set -euo pipefail; source "$1"; tunaos_apply_fork_branding "$2" "$3"',

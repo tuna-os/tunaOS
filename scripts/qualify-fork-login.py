@@ -18,6 +18,7 @@ import shutil
 import signal
 import socket
 import string
+from statistics import median
 import subprocess
 import tempfile
 import time
@@ -166,15 +167,147 @@ class QMP:
         pass
 
 
-def words(path):
-    output = run(["tesseract", str(path), "stdout", "--psm", "11", "tsv"], timeout=30)
+def words(path, *, psm=11, confidence=30):
+    output = run(["tesseract", str(path), "stdout", "--psm", str(psm), "tsv"], timeout=30)
     return [row for row in csv.DictReader(io.StringIO(output), delimiter="\t")
-            if row.get("text", "").strip() and float(row.get("conf", -1)) >= 30]
+            if row.get("text", "").strip() and float(row.get("conf", -1)) >= confidence]
 
 
 def find_word(rows, text):
     matches = [row for row in rows if re.sub(r"[^a-z0-9]", "", row["text"].lower()) == text]
     return matches[0] if len(matches) == 1 else None
+
+
+def word_box(row):
+    return tuple(int(row[key]) for key in ("left", "top", "width", "height"))
+
+
+def account_labels(rows, size):
+    """Only an isolated exact account label near the center can anchor a field."""
+    width, height = size
+    candidates = []
+    for row in rows:
+        if row["text"].strip().casefold() != USER or float(row["conf"]) < 80:
+            continue
+        x, y, w, h = word_box(row)
+        if not (w > 0 and h > 0 and abs(x + w / 2 - width / 2) <= width * .12
+                and height * .25 <= y + h / 2 <= height * .72 and w <= width * .25):
+            continue
+        # PSM11 can split one line across blocks. Check spatial neighbors too,
+        # so "Harbor Canary" cannot stand in for the account named "canary".
+        neighbors = []
+        for other in rows:
+            if other is row or float(other["conf"]) < 50:
+                continue
+            ox, oy, ow, oh = word_box(other)
+            overlap = min(y + h, oy + oh) - max(y, oy)
+            gap = max(0, x - ox - ow, ox - x - w)
+            if overlap >= min(h, oh) * .5 and gap < w * .7:
+                neighbors.append(other)
+        if not neighbors:
+            candidates.append(row)
+    return candidates
+
+
+def focused_fields(image, account):
+    """Find paired bright borders below the account, then verify both sides.
+
+    Real run 39199753352 has a dark GDM canvas in both variants. Its focused
+    field border is at least 45 levels brighter, while its fill is not. All
+    search distances scale from the observed account glyphs, not screen coords.
+    Unknown themes or ambiguous rectangles fail closed.
+    """
+    x, y, aw, ah = word_box(account)
+    center = x + aw / 2
+    width, height = image.size
+    pixels = image.convert("RGB").load()
+    background_x = max(0, min(width - 1, int(center - aw * 2.3)))
+    background = int(median(min(pixels[background_x, yy])
+                            for yy in range(y + ah, min(height, y + ah * 5))))
+    threshold = background + 45
+    if threshold > 225:
+        return []
+    xmin, xmax = max(0, int(center - aw * 2.4)), min(width, int(center + aw * 2.4))
+    ymin, ymax = y + ah + max(3, int(ah * .65)), min(height, y + ah * 6)
+    runs = []
+    for yy in range(ymin, ymax):
+        start = None
+        for xx in range(xmin, xmax + 1):
+            bright = xx < xmax and min(pixels[xx, yy]) >= threshold
+            if bright and start is None:
+                start = xx
+            if not bright and start is not None:
+                if 2.4 * aw <= xx - start <= 4.5 * aw and abs((start + xx) / 2 - center) <= aw * .35:
+                    runs.append((start, yy, xx))
+                start = None
+    groups = []
+    for run in runs:
+        if not groups or run[1] > groups[-1][-1][1] + 1:
+            groups.append([])
+        groups[-1].append(run)
+    fields = []
+    for upper, lower in zip(groups, groups[1:]):
+        top, bottom = upper[0][1], lower[-1][1] + 1
+        left, right = min(run[0] for run in upper + lower), max(run[2] for run in upper + lower)
+        if not (1.1 * ah <= bottom - top <= 2.7 * ah and .65 * ah <= top - y - ah <= 3 * ah):
+            continue
+        margin = max(3, int(ah * .45))
+        inner_rows = range(top + 4, bottom - 4)
+        left_edges, right_edges = [], []
+        for yy in inner_rows:
+            left_pixels = [xx for xx in range(max(0, left - margin), left + 2) if min(pixels[xx, yy]) >= threshold]
+            right_pixels = [xx for xx in range(right - 2, min(width, right + margin)) if min(pixels[xx, yy]) >= threshold]
+            if left_pixels:
+                left_edges.append(min(left_pixels))
+            if right_pixels:
+                right_edges.append(max(right_pixels) + 1)
+        if len(left_edges) < len(inner_rows) * .8 or len(right_edges) < len(inner_rows) * .8:
+            continue
+        fields.append({"bbox": [int(median(left_edges)), top, int(median(right_edges)), bottom],
+                       "background_level": background, "outline_threshold": threshold})
+    return fields
+
+
+def password_prompt(frame, rows, private):
+    """Verify exact Password text inside one outlined field below one account.
+
+    Native screenshots prove full-frame PSM11 misses this low-contrast label.
+    Crop only the observed field interior, excluding its border/reveal icon;
+    upscale 4x, apply grayscale autocontrast, and read one text line with PSM7.
+    """
+    from PIL import Image, ImageOps
+    receipt = {"verified": False, "frame": Path(frame).name,
+               "frame_sha256": hashlib.sha256(Path(frame).read_bytes()).hexdigest(),
+               "full_frame_words": rows, "method": "account-relative-focused-field-v1"}
+    with Image.open(frame) as image:
+        receipt["frame_size"] = list(image.size)
+        accounts = account_labels(rows, image.size)
+        receipt["account_candidates"] = accounts
+        if len(accounts) != 1:
+            receipt["reason"] = "no unique isolated account label"
+            return receipt
+        fields = focused_fields(image, accounts[0])
+        receipt["field_candidates"] = fields
+        if len(fields) != 1:
+            receipt["reason"] = "no unique outlined password field"
+            return receipt
+        left, top, right, bottom = fields[0]["bbox"]
+        field_height = bottom - top
+        inset_x, inset_y = max(3, round(field_height * 8 / 38)), max(2, round(field_height * 5 / 38))
+        crop_box = [left + inset_x, top + inset_y, right - round(field_height * 1.5), bottom - inset_y]
+        crop = ImageOps.autocontrast(ImageOps.grayscale(image.crop(crop_box)))
+        crop = crop.resize((crop.width * 4, crop.height * 4), Image.Resampling.LANCZOS)
+        with tempfile.TemporaryDirectory(prefix="password-ocr-", dir=private) as temporary:
+            crop_path = Path(temporary) / "field.png"
+            crop.save(crop_path)
+            text = words(crop_path, psm=7, confidence=0)
+        receipt["field_ocr"] = {"crop_bbox": crop_box, "scale": 4, "psm": 7,
+                                "preprocessing": "grayscale-autocontrast", "words": text}
+        # No substring, whitelist, fuzzy match or account-only fallback.
+        receipt["verified"] = len(text) == 1 and text[0]["text"].strip().casefold() == "password" and float(text[0]["conf"]) >= 60
+        if not receipt["verified"]:
+            receipt["reason"] = "field interior did not contain exactly Password"
+    return receipt
 
 
 def wallpaper_match(frame, reference):
@@ -356,7 +489,9 @@ def main():
                 time.sleep(3)
                 continue
             rows = words(frame)
-            if find_word(rows, "password") and find_word(rows, USER):
+            prompt = password_prompt(frame, rows, private)
+            (out / "10-greeter-ocr.json").write_text(json.dumps(prompt, indent=2) + "\n")
+            if prompt["verified"]:
                 break
             if not selected and find_word(rows, "username"):
                 qmp.type(USER)
@@ -373,7 +508,12 @@ def main():
         before = observe()
         assert_no_login(before)
         (out / "before-login.json").write_text(json.dumps(before, indent=2) + "\n")
-        screenshot("20-password-prompt.png")
+        frame = screenshot("20-password-prompt.png")
+        prompt = password_prompt(frame, words(frame), private)
+        (out / "20-password-prompt.json").write_text(json.dumps(prompt, indent=2) + "\n")
+        if not prompt["verified"]:
+            raise ValueError("password prompt changed before secret input; refusing to type")
+        report["password_prompt"] = {"receipt": "20-password-prompt.json", "frame_sha256": prompt["frame_sha256"]}
         qmp.type(password)
         qmp.key("ret")
         password = ""

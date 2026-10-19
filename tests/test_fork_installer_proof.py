@@ -28,10 +28,10 @@ def metadata():
 
 def test_exact_artifact_source_and_zip_provenance():
     receipt = PROOF.validate_metadata(*metadata())
-    assert receipt["artifact_id"] == 12160008700
-    assert receipt["run_id"] == 39191155314
-    assert receipt["source_head"] == "c037f9b71a651bc42027db0cab21fe5cca72261f"
-    assert receipt["recorded_tested_merge"] == "eebc9fa608875f5f5ad33a187e64245711908d34"
+    assert receipt["artifact_id"] == 12163907071
+    assert receipt["run_id"] == 39200715506
+    assert receipt["source_head"] == "4d0e653f9283debb57b460fe495f65184f9d2c6c"
+    assert receipt["recorded_tested_merge"] == "7b6cbf9c152147c031f9ba362ddf4e909f36f643"
 
 
 @pytest.mark.parametrize("key,value", [("id", 123), ("name", "different.flatpak"),
@@ -78,7 +78,7 @@ def test_api_denial_is_bounded_and_never_falls_back_or_logs_token(monkeypatch, s
             raise urllib.error.HTTPError(request.full_url, status, "denied sensitive-test-token", {}, None)
     monkeypatch.setattr(PROOF.urllib.request, "build_opener", lambda *args: Opener())
     with pytest.raises(RuntimeError, match=f"HTTP {status}") as error:
-        PROOF.api_request("/actions/artifacts/12160008700", "sensitive-test-token")
+        PROOF.api_request("/actions/artifacts/12163907071", "sensitive-test-token")
     assert "sensitive-test-token" not in str(error.value)
     assert len(calls) == 1
 
