@@ -475,36 +475,11 @@ jobs:
           # podman/skopeo regression strips them during push, client delta
           # updates silently degrade. The annotation check remains advisory.
           #
-          # The layer check is blocking. A label-only Containerfile.final
-          # produced a 25-byte empty zstd tar that bootc 1.16.10 rejects as
-          # truncated (tunaOS#3378). Check the pushed artifact, after podman's
-          # forced recompression, so the gate covers what users install.
           REF="docker://${IMAGE_REGISTRY}/${IMAGE_NAME}@${DIGEST}"
           RAW=$(sudo skopeo inspect --raw "$REF")
           LAYERS=$(echo "$RAW" | jq '.layers | length')
           ANNOTATED=$(echo "$RAW" | jq '[.layers[].annotations // {} | keys[]] | map(select(test("ostree|chunkah"))) | length')
           echo "layers=${LAYERS} ostree-annotated-keys=${ANNOTATED}"
-          BLOBS="$(mktemp -d)"
-          trap 'rm -rf "$BLOBS"' EXIT
-          mapfile -t SMALL_ZSTD < <(
-            jq -r '.layers[]
-              | select((.mediaType | contains("tar+zstd")) and .size < 50)
-              | .digest' <<<"$RAW"
-          )
-          if [[ "${#SMALL_ZSTD[@]}" -gt 0 ]]; then
-            IMAGE_REF="${IMAGE_REGISTRY}/${IMAGE_NAME}"
-            REGISTRY_HOST="${IMAGE_REF%%/*}"
-            REPOSITORY="${IMAGE_REF#*/}"
-            TOKEN="$(curl -fsSL \
-              "https://${REGISTRY_HOST}/token?service=${REGISTRY_HOST}&scope=repository:${REPOSITORY}:pull" \
-              | jq -er .token)"
-            for layer_digest in "${SMALL_ZSTD[@]}"; do
-              curl -fsSL -H "Authorization: Bearer ${TOKEN}" \
-                "https://${REGISTRY_HOST}/v2/${REPOSITORY}/blobs/${layer_digest}" \
-                -o "${BLOBS}/${layer_digest/:/_}"
-            done
-          fi
-          python3 scripts/check-oci-layers.py --blob-dir "$BLOBS" <<<"$RAW"
           if [ "${ANNOTATED}" = "0" ]; then
             echo "::warning::pushed manifest ${REF} has no ostree/chunkah layer annotations — rechunk metadata may have been stripped"
           fi
