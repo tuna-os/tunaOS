@@ -5,6 +5,11 @@ workflow plus argument-parsing behavior only. Never boots QEMU.
 """
 
 import re
+import json
+import os
+
+import pytest
+import yaml
 import subprocess
 import sys
 from pathlib import Path
@@ -128,3 +133,37 @@ def test_runtime_hashes_do_not_substitute_for_builder_or_frontend_identity():
     strict_capture = script.split('strict_capture_live_inputs() {', 1)[1].split('\n}', 1)[0]
     assert 'sha256sum /usr/local/bin/fisherman' not in strict_capture
     assert 'STRICT_EV_BNAME="${TUNAOS_QUAL_BROWSER_NAME:-native-qemu}"' in script
+
+
+@pytest.mark.parametrize("outcome,rc,expected", [
+    ("success", "0", "success"),
+    ("success", "1", "failure"),
+    ("failure", "0", "failure"),
+    ("cancelled", "0", "failure"),
+    ("skipped", "", "failure"),
+    ("pending", "0", "failure"),
+    ("", "", "failure"),
+    ("success", "", "failure"),
+    ("success", "00", "failure"),
+    ("success", "false", "failure"),
+    ("success", " 0", "failure"),
+])
+def test_iso_evidence_status_requires_completed_success(tmp_path, outcome, rc, expected):
+    document = yaml.safe_load(ISO_WORKFLOW.read_text())
+    step = next(step for job in document["jobs"].values()
+                for step in job.get("steps", []) if step.get("name") == "Collect evidence")
+    assert step["env"]["E2E_OUTCOME"] == "${{ steps.e2e.outcome }}"
+    assert step["env"]["E2E_RC"] == "${{ steps.e2e.outputs.rc }}"
+    script = step["run"].replace("${{ matrix.variant }}", "albacore").replace(
+        "${{ matrix.flavor }}", "gnome")
+    (tmp_path / "scripts").mkdir()
+    (tmp_path / "scripts/evidence-bundle.sh").symlink_to(ROOT / "scripts/evidence-bundle.sh")
+    (tmp_path / "iso-e2e-out").mkdir()
+    result = subprocess.run(["bash", "-e", "-c", script], cwd=tmp_path,
+                            env={**os.environ, "E2E_OUTCOME": outcome, "E2E_RC": rc,
+                                 "EVIDENCE_ARCH": "amd64",
+                                 "EVIDENCE_ROOT": str(tmp_path / "evidence")},
+                            capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    metadata = json.loads((tmp_path / "evidence/albacore/gnome/amd64/metadata.json").read_text())
+    assert metadata["status"] == expected
