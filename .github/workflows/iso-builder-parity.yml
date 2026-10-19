@@ -117,12 +117,13 @@ jobs:
       - name: Install E2E dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends qemu-system-x86 qemu-utils ovmf socat sshpass imagemagick swtpm
+          sudo apt-get install -y --no-install-recommends qemu-system-x86 qemu-utils ovmf socat sshpass imagemagick swtpm tesseract-ocr
 
       - name: Validate and compare experience manifests
         env:
           VARIANT: ${{ inputs.variant }}
           FLAVOR: ${{ inputs.flavor }}
+          QUAL_PLATFORM: ${{ inputs.qual_platform }}
         run: |
           set -euo pipefail
           for source in ci browser; do
@@ -133,6 +134,12 @@ jobs:
             python3 scripts/verify-experience-manifest.py "$manifest"
             jq -e --arg v "$VARIANT" --arg f "$FLAVOR" \
               '.variant == $v and .flavor == $f' "$manifest" >/dev/null
+            if [[ -n "${QUAL_PLATFORM:-}" ]]; then
+              jq -e --arg p "$QUAL_PLATFORM" '.platform == $p' "$manifest" >/dev/null || {
+                echo "::error::${source} manifest platform does not match canonical target ${QUAL_PLATFORM}"
+                exit 1
+              }
+            fi
             expected="$(jq -er '.iso_sha256' "$manifest")"
             actual="sha256:$(sha256sum "$iso" | awk '{print $1}')"
             if [[ "$actual" != "$expected" ]]; then
@@ -165,9 +172,10 @@ jobs:
           # closed if neither channel yields it.
           manifest="parity/ci/experience-manifest.json"
           if [ -f "$manifest" ]; then
-            export TUNAOS_QUAL_SOURCE_DIGEST TUNAOS_QUAL_OVERLAY_DIGEST
+            export TUNAOS_QUAL_SOURCE_DIGEST TUNAOS_QUAL_OVERLAY_DIGEST TUNAOS_QUAL_INSTALLER_DIGEST
             TUNAOS_QUAL_SOURCE_DIGEST="$(jq -r '.resolved_inputs["source"] // .source_image_digest // empty' "$manifest")"
             TUNAOS_QUAL_OVERLAY_DIGEST="$(jq -r '.resolved_inputs["overlay"] // empty' "$manifest")"
+            TUNAOS_QUAL_INSTALLER_DIGEST="$(jq -r '.resolved_inputs["installer"] // .installer_digest // empty' "$manifest")"
           fi
           ./scripts/iso-e2e.sh "$iso" --strict-offline-gui --output parity/ci-e2e
 
@@ -188,9 +196,10 @@ jobs:
           test -f "$iso" || { echo "missing $iso" >&2; exit 1; }
           manifest="parity/browser/experience-manifest.json"
           if [ -f "$manifest" ]; then
-            export TUNAOS_QUAL_SOURCE_DIGEST TUNAOS_QUAL_OVERLAY_DIGEST
+            export TUNAOS_QUAL_SOURCE_DIGEST TUNAOS_QUAL_OVERLAY_DIGEST TUNAOS_QUAL_INSTALLER_DIGEST
             TUNAOS_QUAL_SOURCE_DIGEST="$(jq -r '.resolved_inputs["source"] // .source_image_digest // empty' "$manifest")"
             TUNAOS_QUAL_OVERLAY_DIGEST="$(jq -r '.resolved_inputs["overlay"] // empty' "$manifest")"
+            TUNAOS_QUAL_INSTALLER_DIGEST="$(jq -r '.resolved_inputs["installer"] // .installer_digest // empty' "$manifest")"
           fi
           ./scripts/iso-e2e.sh "$iso" --strict-offline-gui --output parity/browser-e2e
 

@@ -294,8 +294,7 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
             qemu-system-x86 qemu-utils ovmf socat \
-            rclone sshpass \
-            imagemagick
+            rclone sshpass imagemagick tesseract-ocr
 
       # The R2 source is the default — it tests the artifact users actually
       # download. Skipped when source=artifact (workflow_dispatch only).

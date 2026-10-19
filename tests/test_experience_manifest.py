@@ -163,6 +163,14 @@ def test_rejects_missing_top_level_blocks(field):
     del data[field]
     with pytest.raises(ValueError, match=field):
         MODULE.validate(data, "test")
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
+def test_rejects_nonfinite_measurements(value):
+    data = manifest()
+    data["observed"]["plain"]["duration_s"] = value
+    with pytest.raises(ValueError, match="finite number"):
+        MODULE.validate(data, "test")
+
+
 
 
 def test_rejects_missing_iso_checksum():
