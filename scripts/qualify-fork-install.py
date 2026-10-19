@@ -9,6 +9,7 @@ production account/policy changes, public registry, or target SSH injection.
 import argparse
 import hashlib
 import importlib.util
+import inspect
 import json
 import os
 import re
@@ -54,17 +55,139 @@ def digest(path):
         return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
+def canonical_image_id(value):
+    """Podman inspect may omit sha256:, but no other ID spelling is admitted."""
+    match = re.fullmatch(r"(?:sha256:)?([0-9a-f]{64})", value) if isinstance(value, str) else None
+    require(match is not None, "source image has an invalid SHA-256 config ID")
+    return "sha256:" + match[1]
+
+
 def identity(image):
     data = json.loads(LOGIN.run(["podman", "image", "inspect", image], timeout=60))
     require(isinstance(data, list) and len(data) == 1, "source image inspection is ambiguous")
     info = data[0]
+    require(isinstance(info, dict), "source image inspection is not an object")
     return {
         "reference": image,
-        "id": info["Id"],
+        "id": canonical_image_id(info.get("Id")),
         "digest": info.get("Digest", ""),
         "repo_digests": info.get("RepoDigests", []),
         "repo_tags": info.get("RepoTags", []) or [],
     }
+
+
+def validate_source_binding(source, inspected, reference):
+    """Keep config identity, platform manifest digest and tracking ref distinct."""
+    require(
+        isinstance(source, dict) and isinstance(inspected, dict), "source provenance is malformed"
+    )
+    image_id = canonical_image_id(inspected.get("id"))
+    manifest = inspected.get("digest")
+    require(
+        isinstance(manifest, str) and re.fullmatch(r"sha256:[0-9a-f]{64}", manifest),
+        "source image has no exact inspected platform manifest digest",
+    )
+    require(
+        source.get("source_image_id") == image_id
+        and source.get("target_imgref") == reference
+        and inspected.get("reference") == reference,
+        "export is not the same finalized original image",
+    )
+    verified = source.get("verified_oci")
+    require(
+        isinstance(verified, dict) and verified.get("config_digest") == image_id,
+        "verified OCI config differs from inspected original image",
+    )
+    require(
+        source.get("source_manifest_digest") == manifest
+        and verified.get("manifest_digest") == manifest,
+        "verified OCI platform manifest differs from inspected original image",
+    )
+    require(
+        source.get("preserved_digest") is True,
+        "export did not preserve the original platform manifest",
+    )
+
+
+def selected_catalog_name(catalog, target_ref):
+    """Name of the exact default catalog leaf in installer243's image screen.
+
+    Direct references use the leaf name. Tag references use the nearest
+    registry-owning node's name, never the channel or an unrelated group.
+    Unlike the UI's neutral fallback, this qualification requires a real
+    catalog name. It never derives the expected Done text from an OCI slug.
+    """
+    import copy
+
+    if not isinstance(catalog, dict):
+        raise ValueError("installer catalog is not an object")  # noqa: TRY004 - invalid serialized evidence
+    catalog = copy.deepcopy(catalog)
+    aliases = catalog.get("aliases", {})
+    if not isinstance(aliases, dict):
+        raise ValueError("installer catalog aliases are malformed")  # noqa: TRY004 - invalid serialized evidence
+
+    # Match the native catalog loader's one-pass alias replacement. Do not
+    # follow unresolved or recursive aliases into a guessed name/ref.
+    def resolve(obj, depth=0):
+        if depth > 32:
+            raise ValueError("installer catalog aliases exceed depth bound")
+        if isinstance(obj, dict):
+            items = obj.items()
+        elif isinstance(obj, list):
+            items = enumerate(obj)
+        else:
+            return
+        for key, value in items:
+            if isinstance(value, str) and value.startswith("@"):
+                if value[1:] not in aliases:
+                    raise ValueError("installer catalog has an unresolved alias")
+                obj[key] = copy.deepcopy(aliases[value[1:]])
+            else:
+                resolve(value, depth + 1)
+
+    resolve(catalog)
+    if (
+        catalog.get("default_image") != target_ref
+        or not isinstance(target_ref, str)
+        or not target_ref
+    ):
+        raise ValueError("installer catalog default differs from the exact selected image")
+    names = []
+    count = 0
+
+    def walk(nodes, registry="", registry_name="", depth=0):
+        nonlocal count
+        if not isinstance(nodes, list) or depth > 32:
+            raise ValueError("installer catalog tree is malformed or too deep")
+        for node in nodes:
+            count += 1
+            if not isinstance(node, dict) or count > 4096:
+                raise ValueError("installer catalog node is malformed or exceeds bound")
+            current_registry = node.get("registry", registry)
+            current_name = node.get("name", "") if "registry" in node else registry_name
+            ref = node.get("imgref")
+            tagged = ref is None and "tag" in node
+            if tagged and current_registry:
+                if not isinstance(current_registry, str) or not isinstance(node["tag"], str):
+                    raise ValueError("installer catalog tag reference is malformed")
+                ref = current_registry + ":" + node["tag"]
+            if ref is not None:
+                if ref == target_ref:
+                    name = current_name if tagged else node.get("name")
+                    if (
+                        not isinstance(name, str)
+                        or not name.strip()
+                        or name.strip().startswith("@")
+                    ):
+                        raise ValueError("selected catalog image has no explicit display name")
+                    names.append(name.strip())
+            else:
+                walk(node.get("children", []), current_registry, current_name, depth + 1)
+
+    walk(catalog.get("images"))
+    if len(names) != 1:
+        raise ValueError("exact selected catalog image is missing or ambiguous")
+    return names[0]
 
 
 def export_source(manifest, private):
@@ -580,23 +703,40 @@ print(json.dumps(rows))
 def bundled_preflight(access, private, source, target_path, group):
     # This executes the pinned app's pure mapper and non-destructive backend
     # validator; it does not touch the live UI's object state or install.
-    code = r"""
-import hashlib,json,sys
+    code = (
+        inspect.getsource(selected_catalog_name)
+        + r"""
+import hashlib,json,os,sys
 from pathlib import Path
 sys.path.insert(0,"/app/share/org.bootcinstaller.Installer")
 from bootc_installer.utils.processor import Processor
 from bootc_installer.utils.fisherman_runner import HOST_PATH, LOG_PATH
 from bootc_installer.utils.recipe import RecipeLoader
-from bootc_installer.utils import branding
+from types import SimpleNamespace
+from bootc_installer.utils import copy as copy_text
 recipe=RecipeLoader().raw
+user_catalog=Path(os.environ.get("XDG_CONFIG_HOME",str(Path.home()/".config")))/"bootc-installer/images.json"
+if user_catalog.exists():raise ValueError("unexpected per-user catalog overrides the source image catalog")
+catalog_path=Path("/run/host/etc/bootc-installer/images.json")
+def unique_pairs(pairs):
+    value={}
+    for key,item in pairs:
+        if key in value:raise ValueError("duplicate installer catalog key")
+        value[key]=item
+    return value
+catalog=json.loads(catalog_path.read_text(),object_pairs_hook=unique_pairs)
+selected_name=selected_catalog_name(catalog,__IMAGE__)
 final={"disk":{"auto":{"disk":__TARGET__,"pretty_size":"64 GiB"},"filesystem":__FS__},
        "selected_image":__IMAGE__,"composefs_backend":__COMPOSEFS__,"bootloader":__BOOTLOADER__,"image_filesystem":__FS__,
        "hostname":"canary","encryption":{"type":"none"},"user":{"username":"canary","fullname":"canary","password":"","groups":[__GROUP__]}}
 result=Processor.gen_install_recipe("/tmp/fork-preflight.log",[final],recipe)
 print(json.dumps({"recipe":result,"helper":HOST_PATH,"log_path":LOG_PATH,
  "bundled_helper_sha256":hashlib.sha256(Path("/app/bin/fisherman").read_bytes()).hexdigest(),
- "done_title":branding.resolve().text("done_title",name=__PRETTY__)}))
+ "selected_catalog_name":selected_name,"selected_catalog_ref":__IMAGE__,
+ "selected_catalog_sha256":hashlib.sha256(catalog_path.read_bytes()).hexdigest(),
+ "done_title":copy_text.text(SimpleNamespace(recipe=recipe),"done_title",name=selected_name)}))
 """
+    )
     replace = {
         "__TARGET__": target_path,
         "__FS__": source["storage"]["filesystem"],
@@ -604,7 +744,6 @@ print(json.dumps({"recipe":result,"helper":HOST_PATH,"log_path":LOG_PATH,
         "__COMPOSEFS__": source["storage"]["composeFsBackend"],
         "__BOOTLOADER__": source["storage"]["bootloader"],
         "__GROUP__": group,
-        "__PRETTY__": source["target_imgref"].rsplit("/", 1)[1].split(":", 1)[0].capitalize(),
     }
     for key, value in replace.items():
         code = code.replace(key, repr(value))
@@ -1179,11 +1318,9 @@ def main():
         )
         report["observer_sha256"] = observer_sha
         source = export_source(args.manifest, private)
-        require(
-            source["source_image_id"] == source_id and source["target_imgref"] == args.image,
-            "export is not the same finalized original image",
-        )
+        # Retain both independent observations even if an exact binding fails.
         report["source_receipt"] = source
+        validate_source_binding(source, report["source_image"], args.image)
         LOGIN.run(["podman", "tag", source_id, pinned], timeout=30)
         pinned_created = True
         require(

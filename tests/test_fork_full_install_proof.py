@@ -36,6 +36,10 @@ def receipt():
         "catalog_sha256": "sha256:" + "f" * 64,
         "storage": {"composeFsBackend": False, "bootloader": "grub2", "filesystem": "xfs"},
         "preserved_digest": True,
+        "verified_oci": {
+            "config_digest": "sha256:" + "b" * 64,
+            "manifest_digest": "sha256:" + "c" * 64,
+        },
     }
 
 
@@ -952,7 +956,12 @@ def test_main_cleanup_continues_after_corral_delete_raises(tmp_path, monkeypatch
     monkeypatch.setattr(
         PROOF,
         "identity",
-        lambda ref: {"id": source["source_image_id"], "repo_tags": [source["target_imgref"]]},
+        lambda ref: {
+            "reference": ref,
+            "id": source["source_image_id"],
+            "digest": source["source_manifest_digest"],
+            "repo_tags": [source["target_imgref"]],
+        },
     )
     monkeypatch.setattr(PROOF.LOGIN, "make_spec", lambda *args: {})
 
@@ -1083,3 +1092,277 @@ def test_functional_proof_does_not_claim_complete_installer_branding():
     assert '"production_installer_qualified": False' in text
     assert 'report["installer_done_branding"]' in text
     assert '"Harbor Canary is installed"' in text
+
+
+@pytest.mark.parametrize("prefix", ["", "sha256:"])
+def test_inspected_image_id_is_canonical_and_matches_export(prefix, monkeypatch):
+    source = receipt()
+    raw_id = prefix + "b" * 64
+    command = []
+
+    def run(args, **kwargs):
+        command.append((args, kwargs))
+        return json.dumps(
+            [
+                {
+                    "Id": raw_id,
+                    "Digest": source["source_manifest_digest"],
+                    "RepoTags": [source["target_imgref"]],
+                }
+            ]
+        )
+
+    monkeypatch.setattr(PROOF.LOGIN, "run", run)
+    observed = PROOF.identity(source["target_imgref"])
+    assert observed["id"] == source["source_image_id"]
+    assert observed["digest"] != observed["id"], "manifest digest is not the config ID"
+    PROOF.validate_source_binding(source, observed, source["target_imgref"])
+    assert command == [(["podman", "image", "inspect", source["target_imgref"]], {"timeout": 60})]
+
+
+@pytest.mark.parametrize(
+    "bad_id",
+    [
+        None,
+        True,
+        123,
+        {},
+        [],
+        "",
+        "sha256:",
+        "b" * 63,
+        "b" * 65,
+        "sha256:" + "g" * 64,
+        "sha256:" + "B" * 64,
+        "B" * 64,
+        "sha512:" + "b" * 64,
+        "sha256:sha256:" + "b" * 64,
+        " " + "b" * 64,
+        "b" * 64 + "\n",
+        "localhost/repo@sha256:" + "b" * 64,
+    ],
+)
+def test_identity_rejects_malformed_or_ambiguous_config_ids(bad_id, monkeypatch):
+    monkeypatch.setattr(PROOF.LOGIN, "run", lambda *a, **kw: json.dumps([{"Id": bad_id}]))
+    with pytest.raises(ValueError, match="invalid SHA-256 config ID"):
+        PROOF.identity(receipt()["target_imgref"])
+
+
+@pytest.mark.parametrize(
+    "data", [[], [{}, {}], [None], ["not-an-object"], {}, [{"Digest": "sha256:" + "c" * 64}]]
+)
+def test_identity_rejects_missing_or_nonunique_inspection(data, monkeypatch):
+    monkeypatch.setattr(PROOF.LOGIN, "run", lambda *a, **kw: json.dumps(data))
+    with pytest.raises(ValueError):
+        PROOF.identity(receipt()["target_imgref"])
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "id",
+        "digest",
+        "config_digest",
+        "manifest_digest",
+        "source_image_id",
+        "source_manifest_digest",
+        "target_imgref",
+        "reference",
+        "preserved_digest",
+    ],
+)
+def test_normalization_never_hides_different_source_or_manifest(field):
+    source = receipt()
+    inspected = {
+        "reference": source["target_imgref"],
+        "id": source["source_image_id"],
+        "digest": source["source_manifest_digest"],
+    }
+    other = "sha256:" + "9" * 64
+    if field in ("id", "digest", "reference"):
+        inspected[field] = other
+    elif field in ("config_digest", "manifest_digest"):
+        source["verified_oci"][field] = other
+    else:
+        source[field] = False if field == "preserved_digest" else other
+    with pytest.raises(ValueError):
+        PROOF.validate_source_binding(source, inspected, receipt()["target_imgref"])
+
+
+@pytest.mark.parametrize("digest", [None, "", "c" * 64, "sha512:" + "c" * 64, "sha256:" + "C" * 64])
+def test_binding_requires_exact_inspected_platform_manifest_digest(digest):
+    source = receipt()
+    inspected = {
+        "reference": source["target_imgref"],
+        "id": source["source_image_id"],
+        "digest": digest,
+    }
+    with pytest.raises(ValueError, match="platform manifest digest"):
+        PROOF.validate_source_binding(source, inspected, source["target_imgref"])
+
+
+def catalog(nodes=None):
+    return {
+        "default_image": receipt()["target_imgref"],
+        "images": nodes
+        if nodes is not None
+        else [{"name": " Harbor Canary ", "imgref": receipt()["target_imgref"]}],
+    }
+
+
+def test_done_name_uses_exact_catalog_name_not_slug():
+    original = catalog()
+    assert PROOF.selected_catalog_name(original, receipt()["target_imgref"]) == "Harbor Canary"
+    assert original["images"][0]["name"] == " Harbor Canary "
+
+
+def test_done_name_inherits_only_nearest_registry_owner_for_tag_leaf():
+    ref = receipt()["target_imgref"]
+    registry, tag = ref.rsplit(":", 1)
+    tree = catalog(
+        [
+            {
+                "name": "Outer Name",
+                "registry": "localhost/other",
+                "children": [
+                    {
+                        "name": "Harbor Canary",
+                        "registry": registry,
+                        "children": [
+                            {
+                                "name": "Desktop Group",
+                                "children": [{"name": "Stable channel", "tag": tag}],
+                            }
+                        ],
+                    }
+                ],
+            }
+        ]
+    )
+    assert PROOF.selected_catalog_name(tree, ref) == "Harbor Canary"
+
+
+def test_direct_reference_name_does_not_inherit_registry_or_group_name():
+    ref = receipt()["target_imgref"]
+    tree = catalog(
+        [
+            {
+                "name": "Wrong Group",
+                "registry": "localhost/unrelated",
+                "children": [{"name": "Harbor Canary", "imgref": ref, "tag": "ignored"}],
+            }
+        ]
+    )
+    assert PROOF.selected_catalog_name(tree, ref) == "Harbor Canary"
+
+
+def test_done_name_resolves_native_one_pass_catalog_aliases():
+    ref = receipt()["target_imgref"]
+    tree = catalog([{"name": "@product", "imgref": "@reference"}])
+    tree.update(default_image="@reference", aliases={"product": "Harbor Canary", "reference": ref})
+    assert PROOF.selected_catalog_name(tree, ref) == "Harbor Canary"
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        "missing",
+        "duplicate",
+        "wrong_default",
+        "blank_name",
+        "nonstr_name",
+        "wrong_ref",
+        "wrong_tree",
+        "wrong_node",
+        "unknown_alias",
+        "chained_alias",
+    ],
+)
+def test_done_name_rejects_guessed_or_ambiguous_catalog_identity(change):
+    ref = receipt()["target_imgref"]
+    tree = catalog()
+    if change == "missing":
+        tree["images"] = []
+    elif change == "duplicate":
+        tree["images"] *= 2
+    elif change == "wrong_default":
+        tree["default_image"] = "localhost/other:latest"
+    elif change == "blank_name":
+        tree["images"][0]["name"] = " "
+    elif change == "nonstr_name":
+        tree["images"][0]["name"] = 123
+    elif change == "wrong_ref":
+        tree["images"][0]["imgref"] = "localhost/other:latest"
+    elif change == "wrong_tree":
+        tree["images"] = {}
+    elif change == "wrong_node":
+        tree["images"] = [False]
+    elif change == "unknown_alias":
+        tree["images"][0]["name"] = "@missing"
+    elif change == "chained_alias":
+        tree["images"][0]["name"] = "@product"
+        tree["aliases"] = {"product": "@next", "next": "Harbor Canary"}
+    with pytest.raises(ValueError):
+        PROOF.selected_catalog_name(tree, ref)
+
+
+def test_failed_source_binding_retains_both_provenance_observations(tmp_path, monkeypatch):
+    import sys
+
+    from PIL import Image
+
+    original = receipt()
+    exported = copy.deepcopy(original)
+    exported["source_image_id"] = "sha256:" + "9" * 64
+    inspected = {
+        "reference": original["target_imgref"],
+        "id": original["source_image_id"],
+        "digest": original["source_manifest_digest"],
+        "repo_tags": [original["target_imgref"]],
+    }
+    private = tmp_path / "private"
+    private.mkdir()
+    wallpaper = tmp_path / "wallpaper.png"
+    Image.new("RGB", (4, 4), "black").save(wallpaper)
+    output = tmp_path / "output"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "qualify-fork-install.py",
+            "--image",
+            original["target_imgref"],
+            "--manifest",
+            str(tmp_path / "manifest.json"),
+            "--installer-artifact",
+            str(tmp_path / "installer.zip"),
+            "--wallpaper",
+            str(wallpaper),
+            "--output",
+            str(output),
+        ],
+    )
+    monkeypatch.setattr(PROOF.os, "geteuid", lambda: 0)
+    monkeypatch.setattr(
+        PROOF.shutil, "which", lambda name: None if name == "tailscale" else "/mock/" + name
+    )
+    monkeypatch.setattr(PROOF.tempfile, "mkdtemp", lambda **kwargs: str(private))
+    monkeypatch.setattr(PROOF, "module", lambda *args: SimpleNamespace())
+    monkeypatch.setattr(PROOF, "identity", lambda image: inspected)
+    monkeypatch.setattr(PROOF, "export_source", lambda *args: exported)
+    monkeypatch.setattr(PROOF, "digest", lambda path: OBSERVER_SHA)
+
+    def run(args, **kwargs):
+        assert args[:2] == ["podman", "run"], "binding failure must precede tag/VM setup"
+        assert original["source_image_id"] in args, "runtime uses canonical config ID"
+        return OBSERVER_SHA + "  observer.py" if "sha256sum" in args else ""
+
+    monkeypatch.setattr(PROOF.LOGIN, "run", run)
+    assert PROOF.main() == 1
+    value = json.loads((output / "install-proof.json").read_text())
+    assert value["source_image"] == inspected
+    assert value["source_receipt"] == exported
+    assert value["error"] == "export is not the same finalized original image"
+    assert value["status"] == "failed" and value["cleanup"] == "passed"
+    assert "corral_boot" not in value and "test_password" not in value
+    assert not private.exists()

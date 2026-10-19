@@ -76,13 +76,13 @@ sudo python3 scripts/qualify-fork-login.py \
   --installer-artifact /tmp/harbor-installer/installer-artifact.zip
 ```
 
-The download helper accepts only bootc-installer artifact `12169166635` from
-[run 39214448822](https://github.com/tuna-os/bootc-installer/actions/runs/39214448822).
+The download helper accepts only bootc-installer artifact `12176463967` from
+[run 39228336232](https://github.com/tuna-os/bootc-installer/actions/runs/39228336232).
 It checks the successful completed run, source head and ZIP SHA-256. It records a second checksum for
 the single Flatpak bundle. The login helper checks the ZIP again before extraction.
 
-The API-verified source head is `7bf74f727a3a8696f6d7f7b509d51150939d8d1e`.
-The recorded tested merge is `01d54aa3bfd9e2a6e350d956a95eab449c7a13b4`.
+The API-verified source head is `64217e6f53f40c2d0343d44c2b7fcd6f59c274dd`.
+The recorded tested merge is `3979160692f774bc6ddfa590697266eb1c29c7cf`.
 That merge comes from prior provenance; this helper does not recheck the checkout SHA. The helper does not substitute a source build or release.
 
 `GITHUB_TOKEN`, when needed, is read only by the host download helper. The helper does not put its value
