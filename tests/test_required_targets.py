@@ -342,10 +342,10 @@ def test_catalog_snapshot_accounts_for_required_and_extra_published_candidates()
         'available': True,
         'ociPlatform': {'os': 'linux', 'architecture': 'amd64', 'variant': 'v2'},
     }
-    assert alma_v2['qualification']['status'] == 'qualified'
-    assert alma_v2['qualification']['reason'] is None
-    assert alma_v2['qualification']['qualifiedAt'] == '2026-10-17T01:02:03Z'
-    assert alma_v2['qualification']['receiptDigest'] == DIGEST_C
+    assert alma_v2['qualification']['status'] == 'unqualified'
+    assert alma_v2['qualification']['reason'] == 'invalid-qualification-evidence'
+    assert alma_v2['qualification']['qualifiedAt'] is None
+    assert alma_v2['qualification']['receiptDigest'] is None
 
     alma_arm = by_key['albacore:cosmic:linux/arm64']
     assert alma_arm['required'] is True
@@ -610,10 +610,11 @@ def test_moving_tag_without_matching_digest_receipt_is_unqualified():
     receipts['ghcr.io/tuna-os/albacore:cosmic']['platformManifestDigest'] = DIGEST_B
     qualified_snapshot = targets.catalog_snapshot(data, descriptors=descriptors, receipts=receipts)
     qualified_by_key = {entry['targetKey']: entry for entry in qualified_snapshot['targets']}
-    assert qualified_by_key['albacore:cosmic:linux/amd64/v2']['qualification']['status'] == 'qualified'
-    assert qualified_by_key['albacore:cosmic:linux/amd64/v2']['qualification']['reason'] is None
-    assert qualified_by_key['albacore:cosmic:linux/amd64/v2']['qualification']['qualifiedAt'] == '2026-10-16T00:00:00Z'
-    assert qualified_by_key['albacore:cosmic:linux/amd64/v2']['qualification']['receiptDigest'] == DIGEST_C
+    # Matching a source digest alone does not prove either offline install.
+    assert qualified_by_key['albacore:cosmic:linux/amd64/v2']['qualification']['status'] == 'unqualified'
+    assert qualified_by_key['albacore:cosmic:linux/amd64/v2']['qualification']['reason'] == 'invalid-qualification-evidence'
+    assert qualified_by_key['albacore:cosmic:linux/amd64/v2']['qualification']['qualifiedAt'] is None
+    assert qualified_by_key['albacore:cosmic:linux/amd64/v2']['qualification']['receiptDigest'] is None
 
 
 def test_validate_catalog_snapshot_rejects_schema_and_policy_violations():

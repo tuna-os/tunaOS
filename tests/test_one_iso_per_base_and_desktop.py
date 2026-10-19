@@ -176,10 +176,11 @@ def test_cut_over_group_suppresses_only_that_group():
     assert live and offline
     entries = _full_group_entries(cfg, "yellowfin", "kde")
     policy = {"cutover": entries, "retained": []}
-    from contracts.targets import _oci_platform, catalog_snapshot
+    from contracts.targets import _oci_platform, catalog_snapshot, cpu_baseline
 
     descriptors = {}
     receipts = {}
+    overlays = {}
     for entry in entries:
         target = entry["target"]
         key = f"{target['variant']}:{target['flavor']}:{target['platform']}"
@@ -188,28 +189,22 @@ def test_cut_over_group_suppresses_only_that_group():
             "platformManifestDigest": platform_digest,
             "ociPlatform": _oci_platform(target["platform"]),
         }
-        receipts[key] = {
-            "variant": target["variant"],
-            "flavor": target["flavor"],
-            "platform": target["platform"],
-            "platformManifestDigest": platform_digest,
-            "receiptDigest": DIGEST,
-            "receipt_digest": DIGEST,
-            "qualifiedAt": "2026-10-01T00:00:00Z",
-            "measured_at": "2026-10-01T00:00:00Z",
-            "browser": {"name": "Chromium", "version": "1"},
-            "measurements": {
-                "cold": {"duration_s": 1},
-                "warm": {"duration_s": 1},
-            },
-        }
-    snapshot = catalog_snapshot(cfg, descriptors=descriptors, receipts=receipts)
+        overlays[key] = {"liveOverlayDigest": DIGEST,
+                         "liveOverlayBaseDigest": platform_digest}
+        receipts[key] = strict_receipt(
+            target, source=platform_digest, overlay=DIGEST,
+            installer=DIGEST, engine=DIGEST,
+            cpu_baseline=cpu_baseline(target["variant"], target["platform"]))
+        entry["evidence"]["receiptDigest"] = receipts[key]["receiptDigest"]
+    snapshot = catalog_snapshot(
+        cfg, descriptors=descriptors, overlays=overlays, receipts=receipts,
+        installer_revision=DIGEST, engine_revision=DIGEST)
     assert DC.group_covered(
         policy, "yellowfin", "kde", live, offline,
         config=cfg, snapshot=snapshot,
         current_descriptors=descriptors,
-        current_overlays={},
-        current_pins={},
+        current_overlays=overlays,
+        current_pins={"installerRevision": DIGEST, "engineRevision": DIGEST},
     ) is True
     for suffix in ("", "cosmic", "niri", "xfce"):
         other_live, other_offline = DC.group_members(cfg, "yellowfin", suffix)
@@ -222,3 +217,30 @@ def test_cut_over_group_suppresses_only_that_group():
     assert DC.group_covered(
         policy, "bonito", "kde", bonito_live, bonito_offline, config=cfg
     ) is False
+
+
+import hashlib
+import json
+
+
+def strict_receipt(target, *, source, overlay, installer, engine, cpu_baseline):
+    observed = {
+        "installed_boot": True, "desktop_contract": True,
+        "source_digest": source, "booted_digest": source,
+        "target_imgref": "ghcr.io/tuna-os/test@" + source, "duration_s": 1,
+    }
+    receipt = {
+        "schema": "QualificationEvidence/v1", **target,
+        "cpu_baseline": cpu_baseline, "hardware_scope": "qemu",
+        "resolved_inputs": {"source": source, "overlay": overlay,
+                            "installer": installer, "engine": engine},
+        "browser": {"name": "chromium", "version": "test-only",
+                    "memory_gib": 8, "free_disk_gib": 20},
+        "offline_network_disabled": True,
+        "observed": {"plain": dict(observed), "encrypted": dict(observed)},
+        "measurements": {"cold": {"duration_s": 1}, "warm": {"duration_s": 1}},
+        "qualifiedAt": "2026-10-01T00:00:00Z",
+    }
+    receipt["receiptDigest"] = "sha256:" + hashlib.sha256(
+        json.dumps(receipt, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    return receipt

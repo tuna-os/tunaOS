@@ -170,9 +170,10 @@ jobs:
     # 00:18:40. `cancelled` reads like infrastructure flake, so a sweep of
     # six cells reported nothing usable about any of them.
     #
-    # Only the build path needs the larger budget; sourcing from R2 is a
-    # download plus a 20-minute boot and 30 is right for it.
-    timeout-minutes: ${{ (github.event_name == 'workflow_dispatch' && inputs.source == 'build') && 90 || 30 }}
+    # Strict plain+encrypted GUI qualification declares 60 minutes. The
+    # build path adds another 60; allow ten minutes for setup/artifact upload
+    # on each path so the job cannot preempt its own strict phase.
+    timeout-minutes: ${{ (github.event_name == 'workflow_dispatch' && inputs.source == 'build') && 130 || 70 }}
     strategy:
       # Don't cancel the other leg if one fails — we want to see both signals.
       fail-fast: false

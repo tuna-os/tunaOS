@@ -1710,3 +1710,44 @@ Node 24.19.0 / npm 11.9.0 reproduces the failure with
 clean `npm ci --ignore-scripts`, `npm test`, and `npm run build` in that directory.
 Check each override edit with `npm ci`. The same npm major alone does not
 prove that the manifest and lockfile agree.
+
+
+### ISO parity CI reports stale receipts and fixture failures
+
+**Symptom:** PR #3431 Unit Tests run 39248193947 reports catalog pin mismatches.
+It also reports `unqualified != qualified`, a stale assertion about the overlay,
+and a 90-minute job with two 60-minute steps.
+
+**Cause:** source changes invalidated the stock receipt. The positive fixture
+lacked the observed plain and encrypted boot records that the gate now needs.
+The test expected a hash of a checkout script. Runtime provenance now comes
+from the ISO payload. Strict qualification grew to a 60-minute step.
+
+**Fix:** refresh the stock receipt against the final tree in the same push.
+Use a schema-valid strict fixture for the positive case. Keep a negative test
+for a legacy receipt without observations. Check extraction of the installer
+receipt and the ISO hash. Reject the old checkout hash.
+
+Give build and R2 paths
+130 and 70 minutes each. Keep the 60-minute limits on individual steps.
+These CI repairs do not prove that a browser ISO installed.
+
+### Catalog qualification rejects raw status-only receipts
+
+A source digest and `status: passed` do not prove an offline installation.
+The catalog now validates the original `QualificationEvidence/v1` receipt.
+It checks both installed-boot records and the finite measured values.
+It checks the content checksum and the expected digest of each input.
+Those digests must come from the producer's descriptors and revision inputs.
+A projection cannot replace the original receipt's metadata.
+
+This is structural validation and input binding. A checksum does not identify
+who ran the test. The current catalog workflow does not supply trusted installer
+and engine digests, so its targets stay unqualified. Keep publication and download
+inventory intact while these inputs are absent.
+
+Before you admit production receipts, bind the artifact ID and digest to a
+trusted workflow run, its source commit, and its harness revision. The current
+collector's latest successful run lookup does not establish those bindings.
+Browser cold and warm runs plus offline plain and encrypted installs still need
+real evidence. Unit fixtures are synthetic and must never ship as that evidence.

@@ -173,12 +173,16 @@ def test_adapter_refuses_unimplemented_fork_application(stock, tmp_path, extra):
 def test_plan_enabled_cells_match_the_real_workflow_query(plan):
     """Execute the workflow's matrix expression, not a copied approximation."""
     workflow = (ROOT / ".github/workflows/build-variant.yml").read_text()
-    chunk = workflow.split("--arg event \"${EVENT_NAME}\"", 1)[1].split("' | jq -c -s '.'", 1)[0]
-    query = chunk.split("'", 2)[1]
+    query = workflow.split('--argjson selection "$CANDIDATE_SELECTION" \'', 1)[1].split("' | jq -c -s '.'", 1)[0]
+    env = dict(os.environ, FILTER_VARIANT="all", FILTER_FLAVOR="all")
+    config_json = json.dumps(plan["legacy_catalog"])
+    selection = subprocess.run(
+        ["python3", str(ROOT / "scripts/candidate-flavor-selection.py")],
+        input=config_json, text=True, capture_output=True, env=env, check=True)
     result = subprocess.run(["jq", "-c", "--arg", "event", "workflow_dispatch",
-                             "--argjson", "selection", "null", query],
-                            input=json.dumps(plan["legacy_catalog"]), text=True, capture_output=True,
-                            env=dict(os.environ, FILTER_VARIANT="all", FILTER_FLAVOR="all"), check=True)
+                             "--argjson", "selection", selection.stdout.strip(), query],
+                            input=config_json, text=True, capture_output=True,
+                            env=env, check=True)
     actual = {(row["variant"], row["flavor"], platform) for row in map(json.loads, result.stdout.splitlines())
               for platform in row["platforms"].split(",")}
     expected = {(c["variant"], c["flavor"], c["platform"]) for c in plan["cells"] if c["build_image"]}
