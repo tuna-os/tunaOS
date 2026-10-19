@@ -32,14 +32,18 @@ manifests/desktops/
 The generic installer `build_scripts/desktop/install-desktop.sh` reads a manifest and installs the desktop. One script, all desktops, all OS families.
 
 ### Key Scripts
-
 | Script | Purpose |
 |--------|---------|
 | `scripts/resolve-flavor.sh` | Routes flavor → Containerfile, target, parent, flags |
 | `scripts/resolve-image.sh` | Resolves image refs (base, common, brew, akmods) |
 | `scripts/build-image-inner.sh` | The build engine (env-var driven, replaces old Justfile monolith) |
+| `build_scripts/lib.sh` | Compatibility facade; sources the domain modules below |
+| `build_scripts/lib/platform.sh` | Explicit OS/image detection and identity flags |
+| `build_scripts/lib/packages.sh` | Package adapters, retries, and omission accounting |
+| `build_scripts/lib/service-policy.sh` | Unit, display-manager, and login policy |
+| `build_scripts/lib/reporting.sh` | CI warnings, bootc lint findings, and package manifest |
+| `build_scripts/lib/orchestration.sh` | Override dispatch and system-file copying |
 | `build_scripts/desktop/install-desktop.sh` | Generic manifest-driven DE installer |
-| `build_scripts/lib.sh` | Shared library (OS detection, pkg abstraction, retry logic) |
 
 ### Containerfiles
 

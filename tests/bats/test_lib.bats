@@ -141,14 +141,13 @@ JQ
   unset SCRIPTS_PATH MAJOR_VERSION_NUMBER CONTEXT_PATH BUILD_SCRIPTS_PATH
 
   # -- Source lib.sh under test (point dirname to our test root) --
-  # We copy lib.sh to a temp location and tweak paths so it can be sourced.
+  # Copy the facade and every domain module so source-contract tests exercise
+  # the same module graph as a build stage.
   cp "${REPO_ROOT}/build_scripts/lib.sh" "${TEST_ROOT}/lib_test.sh"
   mkdir -p "${TEST_ROOT}/lib"
-  cp "${REPO_ROOT}/build_scripts/lib/service-policy.sh" "${TEST_ROOT}/lib/service-policy.sh"
-  # Remove the set -euo pipefail to make testing easier
+  cp "${REPO_ROOT}/build_scripts/lib/"*.sh "${TEST_ROOT}/lib/"
+  # Remove the set -euo pipefail to make testing easier.
   sed -i 's/^set -euo pipefail/set -uo pipefail\n# set -e removed for test/' "${TEST_ROOT}/lib_test.sh"
-  # Make _IMAGE_INFO overridable so image-info.json tests can point to test stubs
-  sed -i 's|^\([[:space:]]*\)_IMAGE_INFO="/usr/share/ublue-os/image-info.json"|\1_IMAGE_INFO="${_IMAGE_INFO:-/usr/share/ublue-os/image-info.json}"|' "${TEST_ROOT}/lib_test.sh"
 
   # ...and default it to a path that does NOT exist, so the HOST's copy cannot
   # leak in. Without this the suite is not hermetic: on a ublue-derived
@@ -219,6 +218,51 @@ teardown() {
   [[ "$IMAGE_PRETTY_NAME" == "Redfin" ]]
 }
 
+@test "OS detection: Ubuntu selects apt and grouper identity" {
+  BASE_IMAGE="docker.io/library/ubuntu:26.04"
+  export BASE_IMAGE
+  source "${TEST_ROOT}/lib_test.sh"
+  [[ "$IS_UBUNTU" == "true" ]]
+  [[ "$PKG_MGR" == "apt" ]]
+  [[ "$IMAGE_NAME" == "grouper" ]]
+}
+
+@test "OS detection: Debian selects apt and flounder identity" {
+  BASE_IMAGE="docker.io/library/debian:13"
+  export BASE_IMAGE
+  source "${TEST_ROOT}/lib_test.sh"
+  [[ "$IS_DEBIAN" == "true" ]]
+  [[ "$PKG_MGR" == "apt" ]]
+  [[ "$IMAGE_NAME" == "flounder" ]]
+}
+
+@test "OS detection: Arch selects pacman and marlin identity" {
+  BASE_IMAGE="docker.io/archlinux/archlinux:latest"
+  export BASE_IMAGE
+  source "${TEST_ROOT}/lib_test.sh"
+  [[ "$IS_ARCH" == "true" ]]
+  [[ "$PKG_MGR" == "pacman" ]]
+  [[ "$IMAGE_NAME" == "marlin" ]]
+}
+
+@test "OS detection: openSUSE selects zypper and sailfin identity" {
+  BASE_IMAGE="registry.opensuse.org/opensuse/tumbleweed:latest"
+  export BASE_IMAGE
+  source "${TEST_ROOT}/lib_test.sh"
+  [[ "$IS_OPENSUSE" == "true" ]]
+  [[ "$PKG_MGR" == "zypper" ]]
+  [[ "$IMAGE_NAME" == "sailfin" ]]
+}
+
+@test "OS detection: Gentoo selects emerge and guppy identity" {
+  BASE_IMAGE="docker.io/gentoo/stage3:latest"
+  export BASE_IMAGE
+  source "${TEST_ROOT}/lib_test.sh"
+  [[ "$IS_GENTOO" == "true" ]]
+  [[ "$PKG_MGR" == "emerge" ]]
+  [[ "$IMAGE_NAME" == "guppy" ]]
+}
+
 @test "OS detection: only one flag is true at a time" {
   BASE_IMAGE="quay.io/almalinuxorg/almalinux-bootc:10-kitten"
   export BASE_IMAGE
@@ -281,6 +325,23 @@ JSON
   source "${TEST_ROOT}/lib_test.sh"
   [[ "$IS_FEDORA" == "true" ]]
   [[ "$IMAGE_NAME" == "bonito" ]]
+}
+
+@test "initialize_platform can be rerun explicitly after fixture changes" {
+  TUNAOS_ENV_CACHE="${TEST_ROOT}/platform-cache"
+  export TUNAOS_ENV_CACHE
+  BASE_IMAGE="quay.io/fedora/fedora-bootc:44"
+  export BASE_IMAGE
+  source "${TEST_ROOT}/lib_test.sh"
+  [[ "$PKG_MGR" == "dnf" ]]
+
+  rm -f "$TUNAOS_ENV_CACHE"
+  BASE_IMAGE="docker.io/archlinux/archlinux:latest"
+  export BASE_IMAGE
+  unset IMAGE_NAME IMAGE_PRETTY_NAME
+  initialize_platform >/dev/null
+  [[ "$IS_ARCH" == "true" ]]
+  [[ "$PKG_MGR" == "pacman" ]]
 }
 
 @test "OS detection: default DESKTOP_FLAVOR is gnome" {
@@ -778,7 +839,7 @@ BOOTC
   # The shape is always an `else dnf ...` that reads as "the default" and is
   # really "every manager I did not think about". lib.sh knows five managers
   # (see the PKG_MGR assignment); each dispatcher must name all five.
-  local lib="${REPO_ROOT}/build_scripts/lib.sh"
+  local lib="${REPO_ROOT}/build_scripts/lib/packages.sh"
   local fn mgr body missing=""
 
   for fn in pkg_install pkg_remove pkg_refresh pkg_clean; do
@@ -800,7 +861,7 @@ BOOTC
   # Naming dnf explicitly is only half the fix. The tail must be an error, so a
   # sixth base added later fails loudly here rather than silently shelling out
   # to a package manager it does not have.
-  local lib="${REPO_ROOT}/build_scripts/lib.sh"
+  local lib="${REPO_ROOT}/build_scripts/lib/packages.sh"
   local fn body
   for fn in pkg_install pkg_remove pkg_refresh pkg_clean; do
     body="$(sed -n "/^${fn}() {/,/^}/p" "$lib")"

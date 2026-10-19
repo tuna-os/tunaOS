@@ -10,11 +10,15 @@ The naming scheme is self-documenting along two axes:
 
 ```
 build_scripts/
-├── lib.sh                     # shared library — sourced by everything as
-│                              #   /run/context/build_scripts/lib.sh
-├── lib/                       # side-effect-free modules exposed by lib.sh
-│   └── service-policy.sh      # unit, display-manager, and login policy
-│
+├── lib.sh                     # compatibility facade — sourced by everything
+│                              # as /run/context/build_scripts/lib.sh
+├── lib/                       # side-effect-free domain modules exposed by lib.sh
+│   ├── platform.sh            # explicit OS/image detection and identity flags
+│   ├── packages.sh            # package adapters, retries, and wishlist records
+│   ├── service-policy.sh      # unit, display-manager, and login policy
+│   ├── reporting.sh           # CI warnings, bootc lint, and package manifest
+│   └── orchestration.sh       # override dispatch and system-file copying
+
 │   # ── base-image phases (run in numeric order) ─────────────────────
 ├── 00-copy-files.sh           # overlay system_files into the image
 ├── 01-workarounds.sh          # temporary hacks (goal: empty)
@@ -78,3 +82,8 @@ Conventions:
   subdirectories without breaking.
 - Manifest `post_install` entries are bare filenames resolved against
   `build_scripts/desktop/`.
+
+The facade is the compatibility seam: it sources every module and calls
+`initialize_platform` so existing consumers still receive flags and functions
+from one path. Domain modules define functions only; they do not detect a host,
+write a cache, or run a package/service/reporting command when sourced directly.

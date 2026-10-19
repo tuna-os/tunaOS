@@ -143,7 +143,7 @@ Key scripts:
 - `scripts/resolve-image.sh` — resolves image refs from 3 config sources
 - `scripts/build-image-inner.sh` — the build engine (env-var driven)
 - `build_scripts/desktop/install-desktop.sh` — generic DE installer (reads YAML)
-- `build_scripts/lib.sh` — shared helpers (OS detection, pkg abstraction)
+- `build_scripts/lib.sh` — compatibility facade; domain modules under `build_scripts/lib/` own platform, package, service, reporting, and orchestration boundaries
 
 Full architecture: [`docs/AGENT_GUIDE.md`](docs/AGENT_GUIDE.md)
 

@@ -415,7 +415,7 @@ elif [[ ${IS_ELN:-false} == true ]]; then
 		exit 1
 	fi
 elif [[ $IS_FEDORA == true ]]; then
-	# detect_fedora_ver (lib.sh) yields "rawhide" on Rawhide images — from
+	# detect_fedora_ver (build_scripts/lib/packages.sh) yields "rawhide" on Rawhide images — from
 	# os-release, because `rpm -E %fedora` expands to the numeric NEXT
 	# release there and would leave the tolerance gate below permanently
 	# cold (run 32002010101). Also picks the -rawhide rpmfusion release
@@ -443,7 +443,7 @@ elif [[ $IS_FEDORA == true ]]; then
 	if [[ "${FEDORA_VER}" == "rawhide" ]]; then
 		dnf_opts+=(--exclude='openh264*')
 	fi
-	# install_rawhide_tolerant (build_scripts/lib.sh) behaves exactly like a
+	# install_rawhide_tolerant (build_scripts/lib/packages.sh) behaves exactly like a
 	# plain `dnf -y install` on every pinned Fedora release — including this
 	# one, bonito — and only degrades to a --skip-broken retry + loud
 	# wishlist record when FEDORA_VER=rawhide AND the strict transaction
@@ -593,6 +593,6 @@ fi
 
 dnf -y remove console-login-helper-messages setroubleshoot || true
 
-	# Install uupd and its upstream units from the pinned GitHub release.
-	/run/context/build_scripts/install-uupd.sh
+# Install uupd and its upstream units from the pinned GitHub release.
+/run/context/build_scripts/install-uupd.sh
 printf "::endgroup::\n"

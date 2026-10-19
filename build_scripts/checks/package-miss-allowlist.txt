@@ -107,7 +107,7 @@ gum
 
 # ── build_scripts/10-base-packages.sh install_rawhide_tolerant path
 #    (tunaOS#1810) — the RPM Fusion Rawhide multimedia transaction, tolerant
-#    ONLY when FEDORA_VER=rawhide (see build_scripts/lib.sh). ffmpeg is the
+#    ONLY when FEDORA_VER=rawhide (see build_scripts/lib/packages.sh). ffmpeg is the
 #    one that actually drops: rpmfusion-free-rawhide's ffmpeg-libs-8.1.2-5
 #    Requires: liboapv.so.2()(64bit), which nothing in the enabled repos
 #    provides — Fedora rawhide's openapv-libs moved to liboapv.so.3.

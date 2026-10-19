@@ -15,7 +15,7 @@
 # the pcsc omit line on Debian.
 
 REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
-LIB="${REPO_ROOT}/build_scripts/lib.sh"
+LIB="${REPO_ROOT}/build_scripts/lib/packages.sh"
 
 @test "the zypper install path retries" {
   run grep -qE '^\s*zypper_retry --non-interactive in ' "$LIB"

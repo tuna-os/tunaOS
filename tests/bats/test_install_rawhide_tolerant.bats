@@ -11,13 +11,13 @@
 # depsolve, not the package list.
 #
 # These tests run the REAL install_rawhide_tolerant + record_package_wishlist
-# functions extracted verbatim from build_scripts/lib.sh (not a
+# functions extracted verbatim from build_scripts/lib/packages.sh (not a
 # reimplementation) against mocked dnf/rpm binaries — the same
 # extract-and-run technique test_package_wishlist_gate.bats uses for
 # record_package_wishlist itself.
 
 REPO_ROOT="${REPO_ROOT:-$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)}"
-LIB="${REPO_ROOT}/build_scripts/lib.sh"
+LIB="${REPO_ROOT}/build_scripts/lib/packages.sh"
 
 setup() {
   BIN="${BATS_TEST_TMPDIR}/bin"

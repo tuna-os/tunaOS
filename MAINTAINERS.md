@@ -27,7 +27,7 @@
 1. Add entry to `.github/build-config.yml` `variants` array
 2. Add base image to `image-versions.yaml`
 3. Run `just generate-workflows` and commit generated files
-4. OS detection in `build_scripts/lib.sh` may need a new `IS_*` flag
+4. Platform detection in `build_scripts/lib/platform.sh` may need a new `IS_*` flag
 
 ### Adding a new desktop
 

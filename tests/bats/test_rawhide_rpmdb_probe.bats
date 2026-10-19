@@ -7,12 +7,12 @@
 # probe rebuilds the rpmdb inherited from the base BEFORE stage-2's first rpm
 # write, and its marker discriminates the three hypotheses in the issue.
 #
-# Runs the REAL functions extracted verbatim from build_scripts/lib.sh (the
+# Runs the REAL functions extracted verbatim from build_scripts/lib/packages.sh (the
 # extract-and-run technique of test_install_rawhide_tolerant.bats) against
 # mocked rpm.
 
 REPO_ROOT="${REPO_ROOT:-$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)}"
-LIB="${REPO_ROOT}/build_scripts/lib.sh"
+LIB="${REPO_ROOT}/build_scripts/lib/packages.sh"
 
 setup() {
   BIN="${BATS_TEST_TMPDIR}/bin"

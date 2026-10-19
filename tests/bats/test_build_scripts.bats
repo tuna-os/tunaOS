@@ -24,18 +24,23 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
   [ "$status" -eq 0 ]
 }
 
-@test "build_scripts/lib.sh: defines pkg_install function" {
-  run grep 'pkg_install()' "${REPO_ROOT}/build_scripts/lib.sh"
+@test "build_scripts/lib/packages.sh: defines pkg_install function" {
+  run grep 'pkg_install()' "${REPO_ROOT}/build_scripts/lib/packages.sh"
   [ "$status" -eq 0 ]
 }
 
-@test "build_scripts/lib.sh: defines pkg_remove function" {
-  run grep 'pkg_remove()' "${REPO_ROOT}/build_scripts/lib.sh"
+@test "build_scripts/lib/packages.sh: defines pkg_remove function" {
+  run grep 'pkg_remove()' "${REPO_ROOT}/build_scripts/lib/packages.sh"
   [ "$status" -eq 0 ]
 }
 
-@test "build_scripts/lib.sh: defines emit_packages_manifest function" {
-  run grep 'emit_packages_manifest()' "${REPO_ROOT}/build_scripts/lib.sh"
+@test "build_scripts/lib/reporting.sh: defines emit_packages_manifest function" {
+  run grep 'emit_packages_manifest()' "${REPO_ROOT}/build_scripts/lib/reporting.sh"
+  [ "$status" -eq 0 ]
+}
+
+@test "build_scripts/lib.sh: sources the platform initializer" {
+  run grep 'initialize_platform' "${REPO_ROOT}/build_scripts/lib.sh"
   [ "$status" -eq 0 ]
 }
 

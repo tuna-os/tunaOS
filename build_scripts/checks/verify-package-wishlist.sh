@@ -3,7 +3,7 @@
 # skipped a package nobody declared acceptable to skip.
 #
 # install_available / apt_install_available record every miss into
-# /usr/share/tunaos/missing-on-<image>.txt (lib.sh:record_package_wishlist)
+# /usr/share/tunaos/missing-on-<image>.txt (packages.sh:record_package_wishlist)
 # as a ::warning — loud, but warnings do not fail builds. The result was
 # that adding one package name to any install_available list silently made
 # it optional everywhere, forever: a typo, a dropped EL10 build, or a repo
