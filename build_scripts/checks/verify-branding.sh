@@ -72,6 +72,18 @@ if [[ -e "$fork_manifest" || -L "$fork_manifest" ]]; then
 	fi
 fi
 
+# A valid identity receipt changes only the display checks. A broken receipt
+# fails closed; it never becomes a stock or qualified-image pass.
+fork_identity_valid=false
+fork_identity=/usr/share/tunaos/fork-identity/manifest.json
+if [[ -e "$fork_identity" || -L "$fork_identity" ]]; then
+	if [[ "$fork_branding_valid" == true ]] && python3 /usr/libexec/tunaos/fork-identity.py /; then
+		fork_identity_valid=true
+	else
+		fail "fork identity receipt or applied consumers do not match"
+	fi
+fi
+
 # /etc/os-release is conventionally a symlink to /usr/lib/os-release, but the
 # latter is the canonical file: an image can ship it without the /etc link.
 # Reading only /etc/os-release there would report *every* field as unset and
@@ -154,6 +166,9 @@ else
 	pass "os-release=${os_release_file}"
 fi
 want_codename="${FISH[$variant]:-}"
+if [[ "$fork_identity_valid" == true ]]; then
+	want_codename="$(jq -r .name "$fork_identity")"
+fi
 got_codename="$(osr VERSION_CODENAME)"
 if [[ -z "$want_codename" ]]; then
 	fail "no fish codename defined for variant '${variant}' — add it here and in 90-image-info.sh"
@@ -166,7 +181,7 @@ fi
 got_pretty="$(osr PRETTY_NAME)"
 if [[ -z "$got_pretty" ]]; then
 	fail "PRETTY_NAME is unset"
-elif names_upstream "$got_pretty"; then
+elif [[ "$fork_identity_valid" != true ]] && names_upstream "$got_pretty"; then
 	fail "PRETTY_NAME is '${got_pretty}' — still names the upstream distro"
 else
 	pass "PRETTY_NAME=${got_pretty}"
@@ -281,7 +296,9 @@ for _dcf_dir in /etc/dconf/db/*.d; do
 done
 
 # Plymouth: the boot splash is the first branded thing a user sees.
-if [[ -d /usr/share/plymouth/themes/tunaos ]] ||
+if [[ "$fork_identity_valid" == true ]]; then
+	pass "fork Plymouth selection and assets match receipt"
+elif [[ -d /usr/share/plymouth/themes/tunaos ]] ||
 	[[ "$(readlink -f /usr/share/plymouth/themes/default.plymouth 2>/dev/null)" == *tunaos* ]]; then
 	pass "TunaOS plymouth theme active"
 else

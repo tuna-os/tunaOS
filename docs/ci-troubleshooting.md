@@ -1731,3 +1731,11 @@ At bootc-installer dev `981141d348b9207f9ef93bbdcec80d6b5f5611e0`, `_make_icon` 
 Flatpak host `/usr` is also under `/run/host/usr`. Do not substitute a filename
 for a resource URI and mark the installer branded. Keep builds with custom identity blocked until tests verify the shared renderer/path contract and the artifact.
 See [the source audit and identity contract](FORK-IDENTITY-STAGING.md).
+
+## Fork splash appears only after boot
+
+The desktop identity pass runs after the first initramfs. A logo written there
+cannot change the theme already copied by dracut. The test runs
+`plymouth-set-theme.sh` before it applies identity. It checks the generated
+PNG, selection and password callbacks. Keep image builds blocked until an
+actual initramfs and encrypted-root boot verify the same files.

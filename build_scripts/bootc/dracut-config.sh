@@ -170,6 +170,9 @@ cat "${CONF_DIR}/30-bootc-container-build.conf"
 # Never fatal: a missing splash is not worth a failed image.
 if [[ -z "$R" ]]; then
 	"$(dirname "$(readlink -f "$0")")/../plymouth-set-theme.sh" ||
-		echo "WARNING: plymouth-set-theme.sh failed; the distro boot splash stays" >&2
+		{
+			[[ ! -e "$(dirname "$(readlink -f "$0")")/../../manifests/fork-identity.json" && ! -L "$(dirname "$(readlink -f "$0")")/../../manifests/fork-identity.json" ]] || exit 1
+			echo "WARNING: plymouth-set-theme.sh failed; the distro boot splash stays" >&2
+		}
 fi
 printf "::endgroup::\n"
