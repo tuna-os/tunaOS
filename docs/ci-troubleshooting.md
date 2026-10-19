@@ -1689,6 +1689,13 @@ voice and a long paragraph.
 **Fix:** Split the text and use active verbs. Run `scripts/run-ste-lint.sh`
 with the workflow's pinned linter. Keep `.ste-budget` unchanged. The package
 and promotion tests still apply; a prose pass does not qualify the image.
+## Fork source pin changes after tests
+
+Symptom: the fork review tool reports a catalog pin mismatch after Python tests.
+Cause: imports create untracked bytecode under `system_files/usr/libexec`.
+The receipt must select only Git-tracked source files. The test for the fork contract
+checks that temporary bytecode leaves the pin intact and a source edit changes it.
+Do not refresh a source pin to accept temporary files.
 
 ### Countme clean install rejects a missing overridden dependency
 
