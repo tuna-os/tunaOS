@@ -555,17 +555,19 @@ tuna)
 	fi
 	# GDM owns the login session on every Tuna base. The configuration is
 	# installed in both native locations because the experience overlay is
-	# shared; each distro reads only the path it owns.
+	# shared; Debian-family bases read gdm3/custom.conf, while the other bases
+	# read gdm/custom.conf.
 	require_any_unit gdm gdm3
 	tuna_dm="$(readlink -f /etc/systemd/system/display-manager.service 2>/dev/null || true)"
 	[[ "${tuna_dm##*/}" =~ ^(gdm|gdm3)\.service$ ]] || {
 		echo "display-manager.service is '${tuna_dm:-unset}', not a GDM unit" >&2
 		exit 1
 	}
-	case "${tuna_dm##*/}" in
-	gdm3.service) tuna_gdm_config=/etc/gdm3/daemon.conf ;;
-	gdm.service) tuna_gdm_config=/etc/gdm/custom.conf ;;
-	esac
+	if [[ "$tuna_backend" == dpkg ]]; then
+		tuna_gdm_config=/etc/gdm3/custom.conf
+	else
+		tuna_gdm_config=/etc/gdm/custom.conf
+	fi
 	[[ -f "$tuna_gdm_config" ]] || {
 		echo "missing GDM configuration: ${tuna_gdm_config:-unset}" >&2
 		exit 1
@@ -574,8 +576,22 @@ tuna)
 		echo "GDM does not enable Wayland: $tuna_gdm_config" >&2
 		exit 1
 	}
-	grep -Eq '^[[:space:]]*DefaultSession[[:space:]]*=[[:space:]]*tuna\.desktop[[:space:]]*$' "$tuna_gdm_config" || {
-		echo "GDM does not select tuna.desktop: $tuna_gdm_config" >&2
+	if grep -Eq '^[[:space:]]*DefaultSession[[:space:]]*=' "$tuna_gdm_config"; then
+		echo "GDM uses unsupported DefaultSession setting: $tuna_gdm_config" >&2
+		exit 1
+	fi
+	tuna_gdm_session_template=/etc/accountsservice/user-templates/standard
+	[[ -f "$tuna_gdm_session_template" ]] || {
+		echo "missing AccountsService session template: $tuna_gdm_session_template" >&2
+		exit 1
+	}
+	awk '
+		$0 == "[User]" { in_user = 1; next }
+		in_user && /^\[/ { in_user = 0 }
+		in_user && /^[[:space:]]*Session[[:space:]]*=[[:space:]]*tuna\.desktop[[:space:]]*$/ { found++ }
+		END { exit !(found == 1) }
+	' "$tuna_gdm_session_template" || {
+		echo "AccountsService does not select tuna.desktop: $tuna_gdm_session_template" >&2
 		exit 1
 	}
 	if grep -Eiq '^[[:space:]]*AutomaticLoginEnable[[:space:]]*=[[:space:]]*true[[:space:]]*$' "$tuna_gdm_config"; then

@@ -41,6 +41,8 @@ def test_tuna_cells_are_amd64_images_without_iso_expansion():
         assert flavor["luks_e2e"] is False
     manifest = yaml.safe_load((ROOT / "manifests/desktops/tuna.yaml").read_text())
     assert "tunaos/tuna-desktop=1.0.0beta.1-1" in manifest["packages"]["pacman"]
+    assert "accountsservice" in manifest["packages"]["pacman"]
+    assert "glib2-devel" in manifest["packages"]["pacman"]
     assert "orca" in manifest["packages"]["pacman"], "the Screen Reader key needs distribution Orca"
     assert manifest["display_manager"] == "gdm"
     assert "tuna-gdm.sh" in manifest["post_install"]
@@ -52,7 +54,7 @@ def test_rpm_cells_install_the_pinned_beta_from_signed_factory_repositories():
         section = manifest["packages"][target]
         assert section["display_manager"] == "gdm"
         assert nevr in section["packages"]
-        for package in ("gdm", "xdg-desktop-portal-gnome", "xdg-desktop-portal-gtk", "gnome-keyring"):
+        for package in ("gdm", "accountsservice", "glib2-devel", "xdg-desktop-portal-gnome", "xdg-desktop-portal-gtk", "gnome-keyring"):
             assert package in section["packages"], (target, package)
         # tuned-ppd, as each base's GNOME flavor ships, conflicts with
         # power-profiles-daemon (the yellowfin/skipjack package-set dry-run).
@@ -88,7 +90,7 @@ def test_apt_cells_install_the_pinned_beta_from_the_signed_tideforge_index_for_t
     section = manifest["packages"]["apt"]
     assert "tuna-desktop=1.0.0~beta.1-1" in section["packages"]
     assert section["display_manager"] == "gdm3"
-    for package in ("gdm3", "libglib2.0-bin", "libglib2.0-dev-bin", "xdg-desktop-portal-gnome", "xdg-desktop-portal-gtk", "gnome-keyring", "orca", "power-profiles-daemon"):
+    for package in ("gdm3", "accountsservice", "libglib2.0-bin", "libglib2.0-dev-bin", "xdg-desktop-portal-gnome", "xdg-desktop-portal-gtk", "gnome-keyring", "orca", "power-profiles-daemon"):
         assert package in section["packages"], package
     repos = {repo["condition"]: repo for repo in section["repos"]}
     assert set(repos) == {"ubuntu", "debian-sid", "debian-trixie"}
@@ -122,7 +124,7 @@ def test_zypper_cell_installs_the_pinned_beta_from_the_signed_factory_index():
     assert "tuna-desktop-1.0.0~beta.1-1" in section["packages"]
     # dbus-update-activation-environment (tuna-os/tuna-desktop#691) and
     # Tumbleweed's emoji font name.
-    for package in ("dbus-1-tools", "google-noto-coloremoji-fonts", "gdm", "glib2-tools", "xdg-desktop-portal-gnome", "xdg-desktop-portal-gtk", "gnome-keyring", "orca", "power-profiles-daemon"):
+    for package in ("dbus-1-tools", "google-noto-coloremoji-fonts", "gdm", "accountsservice", "glib2-tools", "xdg-desktop-portal-gnome", "xdg-desktop-portal-gtk", "gnome-keyring", "orca", "power-profiles-daemon"):
         assert package in section["packages"], package
     (repo,) = section["repos"]
     assert repo["baseurl"] == "https://repo.tunaos.org/rpm/opensuse-tumbleweed/x86_64/"
@@ -153,7 +155,7 @@ def test_tuna_package_signatures_cannot_be_silently_disabled():
 def test_tuna_contract_is_a_known_desktop_with_session_and_pam_requirements():
     script = (ROOT / "build_scripts/checks/verify-desktop-experience.sh").read_text()
     case = script.split("\ntuna)\n", 1)[1].split("\n\t;;", 1)[0]
-    for requirement in ("Exec=tuna-session", "/etc/pam.d/tuna-lock", "tuna-shell-gtk", "tuna-session.target", "require_any_unit gdm gdm3", "tuna-portals.conf", "require_command orca", "DefaultSession", "AutomaticLoginEnable"):
+    for requirement in ("Exec=tuna-session", "/etc/pam.d/tuna-lock", "tuna-shell-gtk", "tuna-session.target", "require_any_unit gdm gdm3", "tuna-portals.conf", "require_command orca", "Session", "tuna\\.desktop", "/etc/accountsservice/user-templates/standard", "AutomaticLoginEnable"):
         assert requirement in case
 
 
@@ -169,11 +171,15 @@ def test_tuna_gdm_configuration_selects_wayland_session_without_autologin():
         assert expected in package_list
         assert not {"greetd", "gtkgreet", "greetd-gtkgreet", "cage"} & set(package_list)
 
-    for name in ("etc/gdm/custom.conf", "etc/gdm3/daemon.conf"):
+    for name in ("etc/gdm/custom.conf", "etc/gdm3/custom.conf"):
         config = (ROOT / "experiences/tuna/files" / name).read_text()
         assert "WaylandEnable=true" in config
-        assert "DefaultSession=tuna.desktop" in config
+        assert "DefaultSession" not in config
         assert "AutomaticLoginEnable=false" in config
+
+    template = (ROOT / "experiences/tuna/files/etc/accountsservice/user-templates/standard").read_text()
+    assert "[User]" in template
+    assert "Session=tuna.desktop" in template
 
     css = (ROOT / "experiences/tuna/files/usr/share/gnome-shell/theme/tuna-gdm.css").read_text()
     assert "TunaOS GDM theme overrides" in css
