@@ -785,3 +785,95 @@ def test_collector_bounds_deep_gtk_tree_and_rejects_cycles(monkeypatch, capsys, 
         assert error['message'] == expected[case]
         assert error['traversal']['visited_nodes'] <= UI.MAX_NODES
         assert error['traversal']['max_depth'] <= UI.MAX_DEPTH + 1
+
+
+def run20_tree():
+    # Actual read-only run39301862725, artifact12214686184. Known static
+    # labels/structure only; unrelated names were filtered by safe_snapshot.
+    return json.loads((FIXTURES / "run20-accessibility.json").read_text())
+
+
+def test_real_gtk4_tree_has_page_scoped_keyboard_targets():
+    value = run20_tree()
+    pid = value["nodes"][0]["pid"]
+    window, focused = UI.keyboard_window(value, pid)
+    assert window["id"] == 1 and focused["id"] == 29
+    target, focused = UI.keyboard_target(value, "Welcome to Harbor Canary", "Install Harbor Canary", ("list item",), pid)
+    assert target == focused
+    password, _ = UI.keyboard_target(value, "Create User", "Password", ("password text",), pid)
+    assert password["id"] == 134  # Encryption Password81 must never match.
+    install, _ = UI.keyboard_target(value, "Confirm installation", "Install", ("push button",), pid)
+    assert install["id"] == 172 and install["states"]["enabled"] is False
+
+
+@pytest.mark.parametrize("change", ["disabled", "wrong_process", "duplicate", "inactive"])
+def test_keyboard_target_keeps_identity_uniqueness_and_sensitivity(change):
+    value = run20_tree()
+    pid = value["nodes"][0]["pid"]
+    if change == "disabled":
+        value["nodes"][29]["states"]["sensitive"] = False
+    elif change == "wrong_process":
+        value["nodes"][29]["pid"] += 1
+    elif change == "duplicate":
+        extra = copy.deepcopy(value["nodes"][29]); extra["id"] = 300; value["nodes"].append(extra)
+    else:
+        value["nodes"][1]["states"]["active"] = False
+    with pytest.raises(ValueError):
+        UI.keyboard_target(value, "Welcome to Harbor Canary", "Install Harbor Canary", ("list item",), pid)
+
+
+def test_keyboard_hidden_matching_field_never_receives_secret(monkeypatch):
+    value = run20_tree()
+    pid = value["nodes"][0]["pid"]
+    for node in value["nodes"]:
+        node["states"]["focused"] = node["id"] == 81
+    calls = []
+    driver = UI.KeyboardUI(SimpleNamespace(key=lambda *a: calls.append(a), type=lambda *a: calls.append(a)),
+                           None, lambda: copy.deepcopy(value), None, app_pid=pid)
+    monkeypatch.setattr(driver, "page", lambda expected=None: ("Create User", copy.deepcopy(value)))
+    monkeypatch.setattr(UI.time, "sleep", lambda _: None)
+    with pytest.raises(ValueError, match="cycled"):
+        driver.field("Password", "synthetic-secret", secret=True)
+    assert calls == [("tab",)]
+
+
+def test_keyboard_real_focus_before_input_and_no_pointer(monkeypatch):
+    initial = run20_tree()
+    pid = initial["nodes"][0]["pid"]
+    fresh = copy.deepcopy(initial)
+    for node in fresh["nodes"]:
+        node["states"]["focused"] = node["id"] == 134
+    calls = []
+    driver = UI.KeyboardUI(SimpleNamespace(key=lambda *a: calls.append(a), type=lambda *a: calls.append(a)),
+                           None, lambda: copy.deepcopy(fresh), None, app_pid=pid)
+    pages = iter([("Create User", initial), ("Create User", fresh)])
+    monkeypatch.setattr(driver, "page", lambda expected=None: next(pages))
+    monkeypatch.setattr(UI.time, "sleep", lambda _: None)
+    assert driver.field("Password", "synthetic-secret", secret=True)["focused"]
+    assert calls == [("tab",), ("ctrl", "a"), ("synthetic-secret",)]
+
+
+def test_install_never_traverses_after_final_disk_guard(monkeypatch):
+    value = run20_tree()
+    pid = value["nodes"][0]["pid"]
+    calls = []
+    driver = UI.KeyboardUI(SimpleNamespace(key=lambda *a: calls.append(a)), None, None, None, app_pid=pid)
+    monkeypatch.setattr(driver, "page", lambda expected=None: ("Confirm installation", copy.deepcopy(value)))
+    with pytest.raises(ValueError, match="final disk guard"):
+        driver.click("Install")
+    assert calls == []
+    for node in value["nodes"]:
+        node["states"]["focused"] = node["id"] == 172
+    assert driver.click("Install")["focused"]
+    assert calls == [("ret",)]
+
+
+def test_header_next_excludes_hidden_per_page_buttons():
+    value = run20_tree()
+    pid = value["nodes"][0]["pid"]
+    for ident, parent in ((300, 241), (301, 92)):
+        button = node(ident, parent, "button", "Next", [0, 0, 80, 40], enabled=False)
+        button.update(pid=pid, role_id=43)
+        value["nodes"].append(button)
+    selected, _ = UI.keyboard_target(value, "Create User", "Next", ("push button",), pid, header=True)
+    assert selected["id"] == 300

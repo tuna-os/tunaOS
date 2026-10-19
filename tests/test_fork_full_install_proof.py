@@ -1674,3 +1674,18 @@ def test_accessibility_proxy_program_and_nested_probe_compile(monkeypatch, tmp_p
     report = {}
     PROOF.accessibility({}, tmp_path, [42, 43] if include_shell else [42], report, app=app)
     assert report['native_ui_process_binding'] == {'host_pid': 42, 'bus_pid': 700}
+
+
+def test_disappearing_session_is_observed_then_stable_login_required(typed_login_case, monkeypatch):
+    case = typed_login_case
+    monkeypatch.setattr(PROOF.time, "sleep", lambda _: case.clock.__setitem__(0, case.clock[0] + 1))
+    before = login_observation()
+    changed = login_observation()
+    changed["session_scan"] = {"status": "changed", "disappeared": ["c1"]}
+    after = login_observation(active=True)
+    after["session_scan"] = {"status": "stable", "disappeared": []}
+    values = iter([before, changed, after])
+    assert invoke_typed_login(case, lambda: next(values))[2] == after["sessions"][0]
+    report = json.loads((case.out / "cold-source-login.json").read_text())
+    assert report["transient_scans"] == [{"uptime": changed["uptime"], "scan": changed["session_scan"]}]
+    assert report["after"]["session_scan"]["status"] == "stable"

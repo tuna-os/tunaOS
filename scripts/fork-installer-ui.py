@@ -790,3 +790,157 @@ class UI:
             "password_typed": True,
             "frame": frame.name,
         }
+
+
+PAGE_HEADINGS = (
+    "Welcome to Harbor Canary", "Disk Encryption", "Create User",
+    "Choose an Image", "Confirm installation", "Install Location",
+)
+
+
+def keyboard_window(snapshot, pid):
+    """GTK4 SENSITIVE represents !DISABLED; ENABLED is not emitted.
+
+    GTK 4.22 gtkatspicontext.c and gtkatspiutils.c also deliberately return
+    zero SCREEN coordinates. Keyboard input needs native focus, not invented
+    geometry. Only the exact process-bound active window is admitted.
+    """
+    nodes = tree(snapshot)
+    frames = [n for n in nodes.values() if n["pid"] == pid
+              and n["role"] in ("frame", "window") and showing(n)
+              and n["states"].get("active") is True]
+    if len(frames) != 1:
+        raise ValueError("keyboard navigation requires one active installer window")
+    focused = [n for n in nodes.values() if n["pid"] == pid and showing(n)
+               and n["states"].get("focused") is True and frames[0] in ancestors(n, nodes)]
+    if len(focused) != 1:
+        raise ValueError("keyboard navigation requires one focused installer descendant")
+    return frames[0], focused[0]
+
+
+def page_branch(snapshot, heading, pid):
+    nodes = tree(snapshot)
+    headings = [n for n in nodes.values() if n["pid"] == pid and n["role"] == "label"
+                and n["name"] in PAGE_HEADINGS]
+    matches = [n for n in headings if n["name"] == heading]
+    if len(matches) != 1 or len(headings) < 2:
+        raise ValueError("wizard page heading is absent or ambiguous")
+    target = matches[0]
+    complete_labels(target)
+    other_paths = [{n["id"] for n in [h] + ancestors(h, nodes)}
+                   for h in headings if h != target]
+    exclusive = [n for n in [target] + ancestors(target, nodes)
+                 if not any(n["id"] in path for path in other_paths)]
+    if not exclusive:
+        raise ValueError("wizard pages do not have distinct ancestry")
+    return exclusive[-1]
+
+
+def keyboard_target(snapshot, heading, name, roles, pid, *, header=False):
+    nodes = tree(snapshot)
+    window, focused = keyboard_window(snapshot, pid)
+    branch = page_branch(snapshot, heading, pid)
+    page_roots = [page_branch(snapshot, h, pid) for h in PAGE_HEADINGS
+                  if any(n["name"] == h and n["role"] == "label" for n in nodes.values())]
+    candidates = []
+    for node in nodes.values():
+        lineage = ancestors(node, nodes)
+        role = "push button" if node["role"] == "button" and node.get("role_id") == 43 else node["role"]
+        if (node["pid"] != pid or node["name"] != name or role not in roles
+                or not showing(node) or node["states"].get("sensitive") is not True
+                or window not in lineage):
+            continue
+        if header:
+            if any(root == node or root in lineage for root in page_roots):
+                continue
+        elif branch != node and branch not in lineage:
+            continue
+        complete_labels(node)
+        candidates.append(node)
+    if len(candidates) != 1:
+        raise ValueError("keyboard target is absent, disabled, or ambiguous on the verified page")
+    return candidates[0], focused
+
+
+class KeyboardUI(UI):
+    """Real bounded Tab traversal; never calls an accessibility action/setter."""
+
+    def page(self, expected=None):
+        frame, size, words, snapshot = self.capture("keyboard-page")
+        if phrase_rows(words, "Type to search"):
+            raise ValueError("GNOME overview obscures keyboard navigation")
+        found = [heading for heading in PAGE_HEADINGS if phrase_rows(words, heading)]
+        if len(found) != 1 or (expected is not None and found[0] != expected):
+            raise ValueError("visible wizard page is absent, ambiguous, or changed")
+        keyboard_window(snapshot, self.app_pid)
+        page_branch(snapshot, found[0], self.app_pid)
+        return found[0], snapshot
+
+    def focus(self, name, roles, *, heading=None, header=False):
+        heading, snapshot = self.page(heading)
+        seen = set()
+        deadline = time.monotonic() + 90
+        for _ in range(32):
+            target, focused = keyboard_target(snapshot, heading, name, roles, self.app_pid, header=header)
+            # A hidden matching control never qualifies: actual focus must land
+            # on the unique control inside the screenshot-verified page branch.
+            if focused == target:
+                final_heading, fresh = self.page(heading)
+                target, focused = keyboard_target(fresh, final_heading, name, roles, self.app_pid, header=header)
+                if focused != target:
+                    raise ValueError("keyboard focus changed before native input")
+                return target
+            identity = (focused["id"], focused["parent"], focused["role"], focused["name"])
+            if identity in seen or time.monotonic() >= deadline:
+                raise ValueError("native keyboard focus cycled or did not advance to target")
+            seen.add(identity)
+            self.qmp.key("tab")
+            time.sleep(.2)
+            snapshot = self.snapshot()
+        raise ValueError("native keyboard focus traversal exceeds bound")
+
+    def start_welcome(self, name="Install Harbor Canary"):
+        _, _, words, _ = self.capture("keyboard-welcome")
+        escaped = bool(phrase_rows(words, "Type to search"))
+        if escaped:
+            self.qmp.key("esc")
+            time.sleep(1)
+        target = self.focus(name, ("list item",), heading="Welcome to Harbor Canary")
+        self.qmp.key("ret")
+        return {"name": name, "pid": target["pid"], "role": target["role"],
+                "transport": "QMP keyboard", "focused": True, "overview_escape": escaped}
+
+    def click(self, name, roles=("push button",), *, label=None):
+        if label is not None:
+            raise ValueError("keyboard action does not admit alternate labels")
+        if name == "Install":
+            _, snapshot = self.page("Confirm installation")
+            target, focused = keyboard_target(snapshot, "Confirm installation", name, roles, self.app_pid)
+            if target != focused:
+                raise ValueError("Install focus changed after the final disk guard")
+        else:
+            target = self.focus(name, roles, header=name == "Next")
+        self.qmp.key("ret")
+        return {"name": name, "pid": target["pid"], "role": target["role"],
+                "transport": "QMP keyboard", "focused": True}
+
+    def field(self, name, value, *, secret=False):
+        target = self.focus(name, ("password text",) if secret else ("text", "entry"), heading="Create User")
+        self.qmp.key("ctrl", "a")
+        self.qmp.type(value)
+        return {"name": name, "role": target["role"], "typed": True, "secret": secret,
+                "transport": "QMP keyboard", "focused": True}
+
+    def toggle_off(self, name):
+        target = self.focus(name, ("switch", "check box", "toggle button"), heading="Disk Encryption")
+        if target["states"].get("checked") is not True:
+            raise ValueError("encryption switch was not checked before native input")
+        self.qmp.key("spc")
+        time.sleep(.3)
+        _, fresh = self.page("Disk Encryption")
+        changed, focused = keyboard_target(fresh, "Disk Encryption", name,
+                                          ("switch", "check box", "toggle button"), self.app_pid)
+        if changed != focused or changed["states"].get("checked") is not False:
+            raise ValueError("native keyboard encryption switch did not turn off")
+        return {"name": name, "pid": target["pid"], "checked_before": True,
+                "checked_after": False, "transport": "QMP keyboard", "focused": True}

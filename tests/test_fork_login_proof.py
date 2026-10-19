@@ -467,3 +467,36 @@ def test_lifecycle_cleans_credentials_and_separates_image_identity(tmp_path, mon
     else:
         assert report["typed_login"] == "failed" and report["wallpaper_render"] == "not-run"
         assert not typed
+
+
+def test_source_session_scan_retries_only_confirmed_disappearance():
+    import ast
+    import re
+    from types import SimpleNamespace
+    definition = next(n for n in ast.parse(PROOF.OBSERVE).body if isinstance(n, ast.FunctionDef) and n.name == "scan_sessions")
+    def scan(results):
+        calls = []
+        def run(args, **kwargs):
+            calls.append(args)
+            return next(results)
+        namespace = {"subprocess": SimpleNamespace(run=run), "re": re}
+        exec(compile(ast.Module(body=[definition], type_ignores=[]), "<session-scan>", "exec"), namespace)
+        return namespace["scan_sessions"](), calls
+    result = lambda code, text: SimpleNamespace(returncode=code, stdout=text)
+    value, calls = scan(iter([result(0, "c1 greeter\n17 canary"), result(1, ""), result(0, "17 canary")]))
+    assert value == ([], {"status": "changed", "disappeared": ["c1"]})
+    assert calls[-1][1] == "list-sessions"
+    with pytest.raises(ValueError, match="could not be read"):
+        scan(iter([result(0, "17 canary"), result(1, ""), result(0, "17 canary")]))
+    with pytest.raises(ValueError, match="malformed"):
+        scan(iter([result(0, "17 canary"), result(0, "Name=canary")]))
+    with pytest.raises(ValueError, match="listing failed"):
+        scan(iter([result(1, "")]))
+
+
+def test_changed_scan_cannot_prove_login_or_no_preexisting_session():
+    before, after = observations()
+    after["session_scan"] = {"status": "changed", "disappeared": ["c1"]}
+    assert PROOF.session(after) is None
+    with pytest.raises(ValueError, match="scan changed"):
+        PROOF.assert_no_login(after)

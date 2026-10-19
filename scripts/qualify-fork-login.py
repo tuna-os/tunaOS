@@ -30,20 +30,38 @@ WALLPAPER = "file:///usr/share/backgrounds/tunaos/tunaos-default.jpg"
 # This runs as root over the disposable VM's loopback-only, ephemeral-key SSH.
 # It observes logind and the real user's session bus; it does not create a session.
 OBSERVE = r"""
-import glob, hashlib, json, os, pwd, subprocess
+import glob, hashlib, json, os, pwd, re, subprocess
 from pathlib import Path
 user = "canary"
 def run(args):
     p = subprocess.run(args, text=True, capture_output=True, timeout=15)
     return p.stdout.strip() if p.returncode == 0 else ""
 uid = pwd.getpwnam(user).pw_uid
-sessions = []
-for row in run(["loginctl", "list-sessions", "--no-legend", "--no-pager"]).splitlines():
-    sid = row.split()[0]
-    properties = run(["loginctl", "show-session", sid, "--no-pager"])
-    item = dict(line.split("=", 1) for line in properties.splitlines() if "=" in line)
-    sessions.append({key: item.get(key, "") for key in
-        ("Id", "User", "Name", "Remote", "Type", "Class", "Active", "State", "Service", "Desktop", "Seat", "Leader", "LockedHint", "TimestampMonotonic")})
+def scan_sessions():
+    def listed():
+        result = subprocess.run(["loginctl", "list-sessions", "--no-legend", "--no-pager"],
+                                text=True, capture_output=True, timeout=15)
+        if result.returncode:
+            raise ValueError("login session listing failed")
+        ids = [line.split()[0] for line in result.stdout.splitlines() if line.strip()]
+        if len(ids) > 64 or len(set(ids)) != len(ids) or any(not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", sid) for sid in ids):
+            raise ValueError("invalid login session listing")
+        return ids
+    sessions = []
+    for sid in listed():
+        result = subprocess.run(["loginctl", "show-session", sid, "--no-pager"],
+                                text=True, capture_output=True, timeout=15)
+        if result.returncode:
+            if sid not in listed():
+                return [], {"status": "changed", "disappeared": [sid]}
+            raise ValueError("existing login session could not be read")
+        item = dict(line.split("=", 1) for line in result.stdout.splitlines() if "=" in line)
+        if item.get("Id") != sid:
+            raise ValueError("login session identity changed or is malformed")
+        sessions.append({key: item.get(key, "") for key in
+            ("Id", "User", "Name", "Remote", "Type", "Class", "Active", "State", "Service", "Desktop", "Seat", "Leader", "LockedHint", "TimestampMonotonic")})
+    return sessions, {"status": "stable", "disappeared": []}
+sessions, session_scan = scan_sessions()
 shells = []
 for proc in Path("/proc").glob("[0-9]*"):
     try:
@@ -61,7 +79,7 @@ if shells:
             "gsettings", "get", "org.gnome.desktop.background", key])
 print(json.dumps({"boot_id": Path("/proc/sys/kernel/random/boot_id").read_text().strip(),
     "uptime": float(Path("/proc/uptime").read_text().split()[0]),
-    "uid": uid, "sessions": sessions, "gnome_shell": shells, "wallpaper": settings}))
+    "uid": uid, "sessions": sessions, "session_scan": session_scan, "gnome_shell": shells, "wallpaper": settings}))
 """
 
 
@@ -81,6 +99,8 @@ def admit_image(image):
 
 
 def session(observation):
+    if observation.get("session_scan", {}).get("status", "stable") != "stable":
+        return None
     found = [s for s in observation["sessions"] if
              s["Name"] == USER and s["User"] == str(observation["uid"]) and
              s["Class"] == "user" and s["Type"] in ("wayland", "x11") and
@@ -93,6 +113,8 @@ def session(observation):
 
 
 def assert_no_login(observation):
+    if observation.get("session_scan", {}).get("status", "stable") != "stable":
+        raise ValueError("login session scan changed before password input")
     if observation["gnome_shell"] or any(s["Name"] == USER and s["Class"] == "user" and
                                          s["Type"] in ("wayland", "x11") for s in observation["sessions"]):
         raise ValueError("graphical test-user session existed before password input")

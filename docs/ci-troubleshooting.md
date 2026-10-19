@@ -1928,3 +1928,34 @@ Original receipts keep their bytes; a separate record identifies the new harness
 Changes to the image source or embedded observer need a new build.
 Expired or corrupt artifacts and ambiguous pins stop the run.
 There is no fallback. Fixture tests do not prove a native upload, download or installation.
+
+### GTK4 controls exist but the harness cannot select them
+
+[Run 39301862725](https://github.com/tuna-os/tunaOS/actions/runs/39301862725)
+captured 248 nodes from the installer. GTK4 uses `SENSITIVE` but does not emit
+`ENABLED`. It returns zero for `SCREEN` coordinates. Carousel pages can report
+`SHOWING` even when the screen displays another page.
+The fixture `tests/fixtures/fork-installer/run20-accessibility.json` retains these facts.
+
+The harness now sends Tab through QMP within the active window of the verified process.
+A screenshot identifies the page. The ancestry of that page limits which fields can match.
+Focus must reach the exact control before the harness sends Enter, Space or text.
+A cycle, a changed page or a disabled control stops the test.
+
+GTK role 43 can have the name `button` or `push button`.
+The harness does not guess coordinates for GTK controls.
+See GTK 4.22's [coordinate helper](https://github.com/GNOME/gtk/blob/4.22.0/gtk/a11y/gtkatspiutils.c)
+and [state code](https://github.com/GNOME/gtk/blob/4.22.0/gtk/a11y/gtkatspicontext.c).
+Local tests of fixtures do not prove an installation.
+
+### Login diagnostics reject an empty session during greeter teardown
+
+The same run stopped Grouper soon after its `gdm-password` session appeared.
+The observer converted a failed `loginctl show-session` into an empty row.
+A session can disappear after the first list request.
+The observer retries only if a second list confirms that the session disappeared.
+
+The deadline still applies. Success needs a stable snapshot with a new graphical
+session from `gdm-password` and a GNOME Shell process.
+A failed read of an existing session remains an error.
+The report records each confirmed disappearance and its timestamp.

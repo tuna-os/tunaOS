@@ -553,6 +553,16 @@ def login_diagnostic(value):
                 "invalid login collector status",
             )
             safe[key] = value[key]
+    if "session_scan" in value:
+        scan = value["session_scan"]
+        require(isinstance(scan, dict) and set(scan) == {"status", "disappeared"}
+                and scan["status"] in {"stable", "changed"}
+                and isinstance(scan["disappeared"], list)
+                and len(scan["disappeared"]) == (1 if scan["status"] == "changed" else 0)
+                and all(isinstance(sid, str) and OBSERVER.SESSION_ID.fullmatch(sid)
+                        for sid in scan["disappeared"])
+                and (scan["status"] == "stable" or not rows), "invalid login scan evidence")
+        safe["session_scan"] = scan
     encoded = json.dumps(safe, allow_nan=False, ensure_ascii=True)
     require(len(encoded) <= 32768, "login diagnostic exceeds limit")
     return json.loads(encoded)
@@ -560,6 +570,7 @@ def login_diagnostic(value):
 
 def typed_login(qmp, screenshot, observe, private, out, password, label):
     before_safe, last_safe = None, None
+    transient_scans = []
     stage = "greeter"
     try:
         deadline = time.monotonic() + 240
@@ -594,6 +605,9 @@ def typed_login(qmp, screenshot, observe, private, out, password, label):
         while time.monotonic() < deadline:
             after = observe()
             last_safe = login_diagnostic(after)
+            if last_safe.get("session_scan", {}).get("status") == "changed":
+                require(len(transient_scans) < 80, "login session changes exceed bound")
+                transient_scans.append({"uptime": last_safe["uptime"], "scan": last_safe["session_scan"]})
             if LOGIN.session(after):
                 actual = LOGIN.validate_login(before, after)
                 (out / (label + "-login.json")).write_text(
@@ -604,6 +618,7 @@ def typed_login(qmp, screenshot, observe, private, out, password, label):
                             "after": after,
                             "session": actual,
                             "prompt": prompt,
+                            "transient_scans": transient_scans,
                         },
                         indent=2,
                     )
@@ -616,7 +631,8 @@ def typed_login(qmp, screenshot, observe, private, out, password, label):
         # Keep the exact failed stage and last validated facts even if the VM
         # exits or the next observation is malformed. Never include exception
         # text, keyboard input, raw console logs, or post-input OCR text.
-        failure = {"status": "failed", "stage": stage, "before": before_safe, "last": last_safe}
+        failure = {"status": "failed", "stage": stage, "before": before_safe, "last": last_safe,
+                   "transient_scans": transient_scans}
         try:
             screenshot(label + "-login-failed.png")
             failure["screenshot"] = label + "-login-failed.png"
@@ -1159,7 +1175,7 @@ print(json.dumps(values))
     # Overview is checked in the screenshot. Shell accessibility is needed
     # only for its native password dialog, not for installer widget navigation.
     observe_shell = False
-    ui = UI_MODULE.UI(
+    ui = UI_MODULE.KeyboardUI(
         vm.qmp,
         screenshot,
         lambda: accessibility(access, private, [app["pid"]] + ([shell] if observe_shell else []), report, app=app),
@@ -1216,6 +1232,9 @@ print(json.dumps(values))
                 UI_MODULE.phrase_rows(words, first["target_path"]),
                 "confirmation does not visibly identify guarded target path",
             )
+            # Complete non-activating focus traversal before the final guards.
+            # The later Enter refuses to traverse or act if this focus changes.
+            ui.focus("Install", ("push button",), heading="Confirm installation")
             # This repeats every host/QMP/serial/signature check immediately
             # before the single destructive native Install click.
             final = guarded_disks(vm, creation, access, private, observe)
