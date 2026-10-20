@@ -1764,3 +1764,16 @@ Buffer the output of each try. If a page fails, discard all output from that
 try. After three failures, retain the command's exit status and diagnostic.
 Keep README unchanged; do not publish a partial table.
 See `tests/test_readme_status_api_retries.py` for regression tests.
+
+### Fork preparation reports changed sources with a desktop override
+
+Symptom: the test for source receipts rejects a tracked desktop adapter, or preparation
+reports `sources changed during preparation` before a build starts.
+Cause: commit `aa9810e9` added `manifests/desktops/tuna-arch.yaml` after
+TOML became the primary owner of desktop policy. The source index includes this ignored
+path, but `git add --all` in the prepared context omits it.
+
+Fix: `[desktops.tuna-arch]` owns the override for GDM on Marlin in `tunaos.toml`.
+The compiler emits its ignored adapter. The regression test compares every
+package, its order, hooks and display manager with the historical source.
+Other cells still use greetd. No package pin changes in this repair.
