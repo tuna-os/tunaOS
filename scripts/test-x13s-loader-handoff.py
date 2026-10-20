@@ -153,6 +153,8 @@ def grub_config(case):
 
 
 def assert_result(case, log, returncode):
+    if returncode != 0:
+        raise ValueError("fixture emulator exited nonzero")
     passed = "X13S_FIXTURE_PASS" in log
     if case == "positive":
         if not passed or returncode != 0 or "X13S_FIXTURE_UNAME=7.2.11-200.fc44.aarch64" not in log:

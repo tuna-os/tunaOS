@@ -59,10 +59,13 @@ def test_positive_requires_sentinel_release_and_clean_exit():
 def test_negative_controls_must_reach_expected_payload():
     handoff.assert_result("missing-initrd", "Kernel panic - VFS: Unable to mount root fs", 0)
     handoff.assert_result("wrong-argument", "X13S_FIXTURE_FAIL", 0)
-    for case in ("missing-initrd", "wrong-argument"):
-        for log in ("", "X13S_FIXTURE_PASS", "firmware error"):
-            with pytest.raises(ValueError):
-                handoff.assert_result(case, log, 124)
+    for case, log in (
+        ("missing-initrd", "Kernel panic - VFS: Unable to mount root fs"),
+        ("wrong-argument", "X13S_FIXTURE_FAIL"),
+    ):
+        for code in (124, -9):
+            with pytest.raises(ValueError, match="exited nonzero"):
+                handoff.assert_result(case, log, code)
 
 
 def test_configs_use_actual_linux_initrd_path():
