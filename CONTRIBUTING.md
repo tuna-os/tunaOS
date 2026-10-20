@@ -126,7 +126,7 @@ versionlock: [glib2]
 EOF
 
 # 2. Add stage to Containerfile (copy from existing DE pattern)
-# 3. Add flavor to .github/build-config.yml
+# 3. Add flavor to tunaos.toml
 # 4. That's it — install-desktop.sh handles the rest
 ```
 
@@ -179,3 +179,15 @@ just verify-disk image.qcow2  # QEMU boot verification
 ## License
 
 [Apache 2.0](LICENSE)
+
+### Primary config
+
+Edit `tunaos.toml` for matrix changes. Run `python3 scripts/config.py validate`
+to check it, or `python3 scripts/config.py show` to view the build input.
+`python3 scripts/config.py generate` writes the ignored compatibility file.
+Build setup runs this step too. Do not edit that generated file.
+
+Python 3.10 needs `python3 -m pip install -r requirements-config.txt`; later
+Python versions use the standard library. This parser runs on the build host;
+it is not an image package choice. Packages and brand settings still
+follow the staged [migration plan](docs/PRIMARY-CONFIG-MIGRATION.md).
