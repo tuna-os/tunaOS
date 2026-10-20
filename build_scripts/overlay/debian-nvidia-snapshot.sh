@@ -21,10 +21,36 @@ test -s "$KEYRING" || {
 	echo 'ERROR: Debian archive keyring missing' >&2
 	exit 1
 }
+
 APT_ROOT="${TUNAOS_APT_ROOT:-/etc/apt}"
-SOURCE="$APT_ROOT/sources.list.d/tunaos-nvidia-kernel-snapshot.sources"
-PREF="$APT_ROOT/preferences.d/tunaos-nvidia-kernel-snapshot"
-mkdir -p "$APT_ROOT/sources.list.d" "$APT_ROOT/preferences.d"
+SOURCE_DIR="$APT_ROOT/sources.list.d"
+PREF_DIR="$APT_ROOT/preferences.d"
+mkdir -p "$SOURCE_DIR" "$PREF_DIR"
+SOURCE="$(mktemp "$SOURCE_DIR/tunaos-nvidia-kernel-snapshot.XXXXXX.sources")"
+PREF="$(mktemp "$PREF_DIR/tunaos-nvidia-kernel-snapshot.XXXXXX")"
+snapshot_config_valid=0
+cleanup_snapshot_config() {
+	if (( ! snapshot_config_valid )); then
+		rm -f "$SOURCE" "$PREF"
+	fi
+}
+trap cleanup_snapshot_config EXIT
+
+# A non-default root is a test/build hook, not a reason to write files in one
+# directory and query another. Keep every APT read on the same isolated root.
+APT_OPTIONS=()
+if [[ "$APT_ROOT" != /etc/apt ]]; then
+	mkdir -p "$APT_ROOT/lists/partial" "$APT_ROOT/cache/archives/partial"
+	APT_OPTIONS=(
+		-o "Dir::Etc::sourcelist=/dev/null"
+		-o "Dir::Etc::sourceparts=$SOURCE_DIR"
+		-o "Dir::Etc::preferences=/dev/null"
+		-o "Dir::Etc::preferencesparts=$PREF_DIR"
+		-o "Dir::State::lists=$APT_ROOT/lists"
+		-o "Dir::Cache::archives=$APT_ROOT/cache/archives"
+	)
+fi
+
 cat >"$SOURCE" <<EOF
 Types: deb
 URIs: https://snapshot.debian.org/archive/debian/20260909T000000Z/
@@ -46,10 +72,10 @@ Package: linux-image-7.1.13+deb14-amd64 linux-binary-7.1.13+deb14-amd64 linux-mo
 Pin: version 7.1.13-1
 Pin-Priority: 1001
 EOF
-apt-get -o Acquire::AllowInsecureRepositories=false \
+apt-get "${APT_OPTIONS[@]}" -o Acquire::AllowInsecureRepositories=false \
 	-o Acquire::AllowDowngradeToInsecureRepositories=false update >&2
 while read -r package digest; do
-	metadata="$(apt-cache show "$package=7.1.13-1")"
+	metadata="$(apt-cache "${APT_OPTIONS[@]}" show "$package=7.1.13-1")"
 	if [[ "$(sed -n 's/^Version: //p' <<<"$metadata" | sort -u)" != 7.1.13-1 ||
 	"$(sed -n 's/^SHA256: //p' <<<"$metadata" | sort -u)" != "$digest" ]]; then
 		echo "ERROR: snapshot package identity/digest mismatch: $package" >&2
@@ -64,4 +90,5 @@ linux-headers-7.1.13+deb14-amd64 a7c629573f3cd9a7b39d3e510ea371d9379255f60eb57b6
 linux-headers-7.1.13+deb14-common 02074fc2ab421537b1f3bffee185bf949b463eae98c39d2f00c72ab45a8b400f
 linux-kbuild-7.1.13+deb14 8ea4872d0c2d3014dc499bc5ef72751e5327c2a17d686873443a63ae5e7f3165
 EOF
+snapshot_config_valid=1
 echo 7.1.13+deb14-amd64

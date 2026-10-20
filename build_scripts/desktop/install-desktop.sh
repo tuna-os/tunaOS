@@ -1078,7 +1078,6 @@ if [[ -e "${_TD_CTX}/manifests/fork-config.json" || -L "${_TD_CTX}/manifests/for
 	source "${_TD_CTX}/build_scripts/lib/fork-packages.sh"
 	tunaos_apply_fork_packages "${_TD_CTX}"
 fi
-fi
 
 # Desktop communities own their curated defaults as plain files. This keeps
 # opinions reviewable and portable without creating a package for a few config

@@ -19,6 +19,7 @@ the first test fails. The last test is structural: remove the hold call from
 """
 
 import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -32,15 +33,16 @@ SNAPSHOT = ROOT / "build_scripts/overlay/debian-nvidia-snapshot.sh"
 SID_KERNELS = ["7.1.12+deb14-amd64", "7.1.13+deb14-amd64", "7.2.7+deb14-amd64"]
 
 
-SNAPSHOT_METADATA = {
-    "linux-image-7.1.13+deb14-amd64": "0b95e4a84487c63a6a76653c918567861021ae0c3c37032a7cc08f50708b12e5",
-    "linux-binary-7.1.13+deb14-amd64": "61d025ab9d2fa82a193be55a0d2a478d36ed453b539c8d4ceafa6ec5490ed1bb",
-    "linux-modules-7.1.13+deb14-amd64": "a196a904568e6d59b2c173fca3ca56bcda7109a84430eca534b0de0a993fb593",
-    "linux-base-7.1.13+deb14-amd64": "89a08daf6620c0b4cb8dacb7e8ff5199102dba2ae009281406b3b307ba3cb9c0",
-    "linux-headers-7.1.13+deb14-amd64": "a7c629573f3cd9a7b39d3e510ea371d9379255f60eb57b6c54a3ccd8ca3dc5a1",
-    "linux-headers-7.1.13+deb14-common": "02074fc2ab421537b1f3bffee185bf949b463eae98c39d2f00c72ab45a8b400f",
-    "linux-kbuild-7.1.13+deb14": "8ea4872d0c2d3014dc499bc5ef72751e5327c2a17d686873443a63ae5e7f3165",
-}
+def _snapshot_metadata():
+    metadata = dict(
+        re.findall(
+            r"^(linux-\S+)\s+([0-9a-f]{64})$",
+            SNAPSHOT.read_text(encoding="utf-8"),
+            re.MULTILINE,
+        )
+    )
+    assert len(metadata) == 7
+    return metadata
 
 
 def _stub(bindir: Path, name: str, body: str) -> None:
@@ -51,6 +53,7 @@ def _stub(bindir: Path, name: str, body: str) -> None:
 
 def _run(tmp_path: Path, kver: str, driver: str, archive: list[str], snapshot_kernel: str | None = None):
     modules = tmp_path / "modules"
+    apt_root = tmp_path / "apt"
     boot = tmp_path / "boot"
     bindir = tmp_path / "bin"
     for d in (modules / kver, boot, bindir):
@@ -66,7 +69,8 @@ def _run(tmp_path: Path, kver: str, driver: str, archive: list[str], snapshot_ke
     _stub(
         bindir,
         "apt-cache",
-        f"""case "$1" in
+        f"""while [[ "${{1:-}}" == -o ]]; do shift 2; done
+case "$1" in
 pkgnames) printf '%s\\n' '{pkgnames}' ;;
 show)
   if [[ "$2" == --no-all-versions ]]; then echo 'Version: {driver}'; exit 0; fi
@@ -79,7 +83,8 @@ esac
     _stub(
         bindir,
         "apt-get",
-        f"""echo "$*" >> {log}
+        f"""while [[ "${{1:-}}" == -o ]]; do shift 2; done
+echo "$*" >> {log}
 pkg="${{@: -1}}"; k="${{pkg#linux-image-}}"
 case "$1" in
 install) mkdir -p {modules}/"$k"/kernel; echo vmlinuz > {boot}/vmlinuz-"$k" ;;
@@ -90,7 +95,14 @@ esac
     snapshot = bindir / "snapshot"
     snapshot.write_text(
         "#!/bin/bash\n"
-        + (f"echo '{snapshot_kernel}'\n" if snapshot_kernel else "exit 1\n")
+        + (
+            'mkdir -p "$TUNAOS_APT_ROOT/sources.list.d" "$TUNAOS_APT_ROOT/preferences.d"\n'
+            'touch "$TUNAOS_APT_ROOT/sources.list.d/tunaos-nvidia-kernel-snapshot.fake.sources"\n'
+            'touch "$TUNAOS_APT_ROOT/preferences.d/tunaos-nvidia-kernel-snapshot.fake"\n'
+            f"echo '{snapshot_kernel}'\n"
+            if snapshot_kernel
+            else "exit 1\n"
+        )
     )
     snapshot.chmod(0o644)
     env = dict(
@@ -98,6 +110,7 @@ esac
         PATH=f"{bindir}:{os.environ['PATH']}",
         TUNAOS_MODULES_ROOT=str(modules),
         TUNAOS_BOOT_DIR=str(boot),
+        TUNAOS_APT_ROOT=str(apt_root),
         TUNAOS_DEBIAN_NVIDIA_SNAPSHOT_SCRIPT=str(snapshot),
     )
     proc = subprocess.run(
@@ -126,7 +139,7 @@ def _run_snapshot(
     keyring.write_bytes(b"fixture keyring")
     log = tmp_path / "snapshot-apt.log"
     metadata_cases = []
-    for package, digest in SNAPSHOT_METADATA.items():
+    for package, digest in _snapshot_metadata().items():
         if metadata_mode == "missing" and package == "linux-kbuild-7.1.13+deb14":
             continue
         if metadata_mode == "mismatch" and package == "linux-image-7.1.13+deb14-amd64":
@@ -137,6 +150,7 @@ def _run_snapshot(
     _stub(
         bindir,
         "apt-cache",
+        'while [[ "${1:-}" == -o ]]; do shift 2; done\n'
         'if [[ "$1" == show ]]; then\n'
         '  package="${2%%=*}"\n'
         '  case "$package" in\n'
@@ -168,30 +182,36 @@ def _run_snapshot(
         text=True,
         env=env,
     )
-    return proc, log.read_text().splitlines() if log.exists() else []
+    return proc, log.read_text().splitlines() if log.exists() else [], apt_root
 
 
 def test_snapshot_helper_selects_the_pinned_kernel_from_verified_metadata(tmp_path):
-    proc, calls = _run_snapshot(tmp_path)
+    proc, calls, apt_root = _run_snapshot(tmp_path)
 
     assert proc.returncode == 0, proc.stderr
     assert proc.stdout.strip() == "7.1.13+deb14-amd64"
-    assert any("update" in call for call in calls)
+    assert any(f"Dir::State::lists={apt_root}/lists" in call for call in calls)
+    assert list((apt_root / "sources.list.d").glob("tunaos-nvidia-kernel-snapshot.*.sources"))
+    assert list((apt_root / "preferences.d").glob("tunaos-nvidia-kernel-snapshot.*"))
 
 
 def test_snapshot_update_failure_stops_before_any_package_change(tmp_path):
-    proc, calls = _run_snapshot(tmp_path, update_status=23)
+    proc, calls, apt_root = _run_snapshot(tmp_path, update_status=23)
 
     assert proc.returncode != 0
     assert calls and all("install" not in call and "purge" not in call for call in calls)
+    assert not list((apt_root / "sources.list.d").glob("tunaos-nvidia-kernel-snapshot.*.sources"))
+    assert not list((apt_root / "preferences.d").glob("tunaos-nvidia-kernel-snapshot.*"))
 
 
 @pytest.mark.parametrize("metadata_mode", ["missing", "mismatch"])
 def test_snapshot_bad_metadata_stops_before_any_package_change(tmp_path, metadata_mode):
-    proc, calls = _run_snapshot(tmp_path, metadata_mode=metadata_mode)
+    proc, calls, apt_root = _run_snapshot(tmp_path, metadata_mode=metadata_mode)
 
     assert proc.returncode != 0
     assert calls and all("install" not in call and "purge" not in call for call in calls)
+    assert not list((apt_root / "sources.list.d").glob("tunaos-nvidia-kernel-snapshot.*.sources"))
+    assert not list((apt_root / "preferences.d").glob("tunaos-nvidia-kernel-snapshot.*"))
 
 
 @pytest.mark.parametrize(
@@ -204,7 +224,7 @@ def test_snapshot_bad_metadata_stops_before_any_package_change(tmp_path, metadat
     ],
 )
 def test_snapshot_rejects_unsupported_inputs_before_apt(tmp_path, os_release_id, architecture, driver, kernel):
-    proc, calls = _run_snapshot(
+    proc, calls, apt_root = _run_snapshot(
         tmp_path,
         os_release_id=os_release_id,
         architecture=architecture,
@@ -213,6 +233,8 @@ def test_snapshot_rejects_unsupported_inputs_before_apt(tmp_path, os_release_id,
     )
 
     assert proc.returncode != 0
+    assert not list((apt_root / "sources.list.d").glob("tunaos-nvidia-kernel-snapshot.*.sources"))
+    assert not list((apt_root / "preferences.d").glob("tunaos-nvidia-kernel-snapshot.*"))
     assert calls == []
 
 
