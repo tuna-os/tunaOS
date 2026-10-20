@@ -187,7 +187,10 @@ def api_json(url: str) -> dict:
     if token:
         request.add_header("Authorization", f"Bearer {token}")
     with urllib.request.urlopen(request, timeout=30) as response:
-        value = json.loads(response.read().decode())
+        try:
+            value = json.loads(response.read().decode())
+        except json.JSONDecodeError as exc:
+            raise KeyError(f"{url} returned invalid JSON") from exc
     if not isinstance(value, dict):
         raise KeyError(f"{url} returned non-object JSON")
     return value

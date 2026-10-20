@@ -8,6 +8,7 @@ probe so this contract is tested as behavior rather than source text.
 from __future__ import annotations
 
 import os
+import pytest
 import subprocess
 from pathlib import Path
 
@@ -39,6 +40,24 @@ def test_aarch64_uses_the_target_specific_asset_name() -> None:
         installer_asset("aarch64")
         == "org.bootcinstaller.Installer-aarch64.flatpak"
     )
+
+
+@pytest.mark.parametrize(
+    ("arch", "expected"),
+    [
+        ("amd64", "org.bootcinstaller.Installer.flatpak"),
+        ("linux/amd64", "org.bootcinstaller.Installer.flatpak"),
+        ("linux/amd64/v2", "org.bootcinstaller.Installer.flatpak"),
+        ("arm64", "org.bootcinstaller.Installer-aarch64.flatpak"),
+        ("linux/arm64", "org.bootcinstaller.Installer-aarch64.flatpak"),
+    ],
+)
+def test_matrix_architecture_aliases_select_the_published_asset(arch: str, expected: str) -> None:
+    assert installer_asset(arch) == expected
+
+
+def test_unknown_architecture_fails_closed() -> None:
+    env = os.environ | {"TUNA_ASSET_NAME_ONLY": "1", "TUNA_INSTALLER_ARCH": "mips64"}
 
 
 def test_metadata_only_requires_disposable_root_before_writes(

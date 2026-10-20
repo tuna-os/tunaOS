@@ -307,3 +307,18 @@ def test_missing_production_manifest_fails_through_main(monkeypatch, capsys) -> 
 
     assert mod.main() == 1
     assert "production manifest" in capsys.readouterr().out
+
+def test_invalid_json_response_fails_closed(monkeypatch) -> None:
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return b"not-json"
+
+    monkeypatch.setattr(mod.urllib.request, "urlopen", lambda *_args, **_kwargs: Response())
+    with pytest.raises(KeyError, match="invalid JSON"):
+        mod.api_json("https://api.example.test/resource")
