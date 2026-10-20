@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -12,6 +13,8 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from contracts.sources import ALLOWED_REPO_HOSTS, FORBIDDEN_KEYS, classify_policy, violations
+from lib import tunaos_config, tunaos_packages
+from urllib.parse import urlparse
 
 
 def changed_files(base: str) -> list[Path]:
@@ -42,6 +45,56 @@ def at_revision(base: str, path: Path) -> object | None:
         return None
 
 
+def primary_profiles(text):
+    document = tunaos_config.tomllib.loads(text)
+    return tunaos_packages.legacy_profiles({key: document[key] for key in ('package_groups', 'desktops')})
+
+
+def baseline_profiles(base):
+    try:
+        source = subprocess.check_output(['git', 'show', f'{base}:tunaos.toml'], text=True,
+                                         stderr=subprocess.DEVNULL)
+        parsed = tunaos_config.tomllib.loads(source)
+        if 'desktops' in parsed:
+            return primary_profiles(source)
+    except subprocess.CalledProcessError:
+        pass
+    names = subprocess.check_output(['git', 'ls-tree', '-r', '--name-only', base,
+                                     '--', 'manifests/desktops'], text=True).splitlines()
+    return {Path(name).stem: at_revision(base, Path(name)) for name in names if name.endswith('.yaml')}
+
+
+def source_inventory(profiles):
+    """Source identity and native scope survive formatting and group expansion."""
+    records = {}
+    for profile, document in profiles.items():
+        if not isinstance(document, dict):
+            continue
+        for family, policy in document.get('packages', {}).items():
+            if not isinstance(policy, dict):
+                continue
+            for kind in ('copr', 'ppa', 'obs', 'aur', 'repos'):
+                for record in policy.get(kind, []):
+                    if not isinstance(record, dict):
+                        record = {'repo': record}
+                    external = any(isinstance(value, str) and value.startswith(('http://', 'https://'))
+                                   and (urlparse(value).hostname or '') not in ALLOWED_REPO_HOSTS
+                                   for key, value in record.items()
+                                   if key in {'baseurl', 'url', 'uri', 'keyring_url'})
+                    if kind not in FORBIDDEN_KEYS and not external:
+                        continue
+                    # Package selections are not new sources. Native scope and
+                    # source/trust/options are, even if a record is renamed.
+                    identity = {key: value for key, value in record.items() if key not in {'name', 'packages'}}
+                    fingerprint = json.dumps([profile, family, kind, identity], sort_keys=True)
+                    records[fingerprint] = f'{profile}.{family}.{kind}: unapproved source {identity}'
+    return records
+
+
+def primary_source_errors(path, base=None):
+    current = source_inventory(primary_profiles(path.read_text()))
+    previous = source_inventory(baseline_profiles(base)) if base else {}
+    return [message for key, message in current.items() if key not in previous]
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--base", help="base revision used to select changed manifests")
@@ -50,7 +103,14 @@ def main() -> int:
     files = changed_files(args.base) if args.base and not args.files else args.files
     manifests = [path for path in files if path.parts[:1] == ("manifests",) and path.suffix in {".yaml", ".yml"}]
     errors: list[str] = []
+    if Path('tunaos.toml') in files:
+        try:
+            errors.extend('tunaos.toml: ' + error for error in primary_source_errors(Path('tunaos.toml'), args.base))
+        except (OSError, ValueError, KeyError, subprocess.CalledProcessError) as error:
+            errors.append(f'tunaos.toml: cannot resolve package source policy: {error}')
     for path in manifests:
+        if not path.exists() and Path('tunaos.toml') in files:
+            continue
         try:
             document = yaml.safe_load(path.read_text()) or {}
         except (OSError, yaml.YAMLError) as error:
@@ -89,7 +149,8 @@ def main() -> int:
         print("\n".join(f"- {error}" for error in errors), file=sys.stderr)
         print("Build missing packages in Tideforge or use the base system repository; see PACKAGE-SOURCING.md.", file=sys.stderr)
         return 1
-    print(f"Package source policy OK ({len(manifests)} changed manifest(s) checked).")
+    print(f"Package source policy OK ({len(manifests)} changed manifest(s), "
+          f"{int(Path('tunaos.toml') in files)} primary configuration checked).")
     return 0
 
 

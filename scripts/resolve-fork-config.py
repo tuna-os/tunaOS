@@ -72,7 +72,7 @@ def strings(value, where):
 def source_paths(root):
     """Source receipt, not a second package or variant catalog."""
     patterns = ("tunaos.toml", "requirements-config.txt", "image-versions.yaml", "registry-map.yaml",
-                "Containerfile*", "manifests/**/*", "build_scripts/**/*", "scripts/**/*",
+                "Containerfile*", "build_scripts/**/*", "scripts/**/*",
                 "Justfile", "just/**/*", ".containerignore", ".dockerignore", "custom/**/*",
                 "system_files/**/*", "system_files_overrides/**/*", "experiences/**/*")
     tracked = set(subprocess.check_output(["git", "-C", str(root), "ls-files", "-z"], text=True).split("\0"))
