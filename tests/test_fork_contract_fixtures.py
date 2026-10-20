@@ -296,6 +296,17 @@ def test_capability_registry_is_closed_and_fails_without_a_fallback():
                 CAPABILITIES.require_capability(registry, frontend["id"], operation)
 
 
+def test_capability_registry_rejects_invalid_app_id(tmp_path):
+    path = FIXTURES / _case("frontends-name-backend-and-unsupported-operations")["input"]
+    registry = json.loads(path.read_text())
+    registry["frontends"][0]["app_id"] = None
+    invalid = tmp_path / "capabilities.json"
+    invalid.write_text(json.dumps(registry))
+
+    with pytest.raises(CAPABILITIES.CapabilityError, match=r"app_id: expected nonempty string"):
+        CAPABILITIES.load(invalid)
+
+
 def test_capability_cli_rejects_unsupported_operation():
     path = FIXTURES / _case("frontends-name-backend-and-unsupported-operations")["input"]
     result = subprocess.run(
@@ -306,7 +317,7 @@ def test_capability_cli_rejects_unsupported_operation():
             "--frontend",
             "gnome",
             "--require",
-            "bootc-installer-recipe",
+            "fisherman-encryption-modes",
         ],
         text=True,
         capture_output=True,

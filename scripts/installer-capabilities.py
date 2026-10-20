@@ -90,7 +90,7 @@ def load(path: Path | str) -> dict:
         if frontend_id in seen:
             raise CapabilityError(f"registry.frontends[{index}].id: duplicate frontend")
         seen.add(frontend_id)
-        _text(frontend["repository"], f"registry.frontends[{index}].repository")
+        _text(frontend["app_id"], f"registry.frontends[{index}].app_id")
         _text(frontend["path"], f"registry.frontends[{index}].path")
         backend = _text(frontend["backend"], f"registry.frontends[{index}].backend")
         if backend not in required_by_backend:

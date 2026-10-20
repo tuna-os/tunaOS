@@ -25,14 +25,14 @@
       "backend": "fisherman",
       "capabilities": [
         "install",
+        "bootc-installer-recipe",
         "fisherman-recipe",
         "readiness-stamp",
         "product-name"
       ],
       "unsupported": [
         "offline-image-discovery",
-        "fisherman-encryption-modes",
-        "bootc-installer-recipe"
+        "fisherman-encryption-modes"
       ]
     },
     {
