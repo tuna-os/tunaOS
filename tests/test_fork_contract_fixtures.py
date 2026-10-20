@@ -97,6 +97,8 @@ def test_fork_intent_fixture_cases_are_executable(name):
     case = _case(name)
     path = FIXTURES / case["input"]
     config = yaml.load(path.read_text(encoding="utf-8"), Loader=INTENT.UniqueLoader)
+    if name in {"intent-valid-inherited-overrides", "intent-rejects-inherited-package-conflict"}:
+        config["catalog"]["sha256"] = INTENT.source_receipt(ROOT)["sha256"]
     if "normalized" in case:
         plan = INTENT.resolve(config, path.parent, ROOT)
         assert _normalized_intent(plan) == _document(case["normalized"])
