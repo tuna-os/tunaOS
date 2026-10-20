@@ -140,6 +140,13 @@
         "bootc-dev/bootc"
       ],
       "allowedVersions": "<=1.16.10"
+    },
+    {
+      "description": "Keep Python 3.10 config parsing on TOML 1.0. tomli 2.3+ accepts TOML 1.1 syntax that Python 3.11's stdlib rejects.",
+      "matchPackageNames": [
+        "tomli"
+      ],
+      "allowedVersions": "<2.3.0"
     }
   ]
 }
