@@ -272,6 +272,16 @@ def test_report_schema_uses_the_same_skip_reason_allowlist():
     skipped["reasonCode"] = "secret"
     assert not validator.is_valid(report)
 
+def test_report_schema_uses_the_same_failure_reason_allowlist():
+    schema = json.loads((ROOT / "schemas/qualification-report-v1.schema.json").read_text())
+    validator = Draft202012Validator(schema)
+    report = MODULE.build_report(evidence_context(), [event("boot", "failed", 1)])
+    report["assertions"][0]["reasonCode"] = "secret"
+    assert not validator.is_valid(report)
+    report = MODULE.build_report(evidence_context(), [event("boot", "failed", 1)])
+    report["firstFailure"]["reasonCode"] = "secret"
+    assert not validator.is_valid(report)
+
 def test_welcome_screenshot_never_counts_as_install_success():
     report = MODULE.build_report(evidence_context(), [
         event("build", "passed", 1), event("boot", "passed", 2),
