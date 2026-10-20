@@ -108,8 +108,10 @@ def validate(document):
             raise ConfigError('default selection must reference configured variant and desktop')
     else:
         table(selection, ('kind', 'image', 'platform'))
-        # Syntax only. Inspection, relay admission and qualification remain engine policy.
-        pattern(selection['image'], r'[a-z0-9.-]+(?::[0-9]+)?/[a-z0-9._-]+(?:/[a-z0-9._-]+)*(?::[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}(?:@sha256:[0-9a-f]{64})?|@sha256:[0-9a-f]{64})')
+        # Path and DNS labels follow distribution/reference v0.6.0 regexp.go.
+        # Preserve lowercase DNS/IPv4 scope, required tag/digest and SHA-256.
+        # Syntax does not grant inspection, relay admission or qualification.
+        pattern(selection['image'], r'[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*(?::[0-9]+)?/[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*(?:/[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*)*(?::[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}(?:@sha256:[0-9a-f]{64})?|@sha256:[0-9a-f]{64})')
     if selection['platform'] not in ('linux/amd64', 'linux/amd64/v2', 'linux/amd64/v3', 'linux/arm64'):
         raise ConfigError('unsupported platform')
     entries(document['curated_app_sets'], ('id', 'label', 'desktops', 'url', 'format'), 'curated_app_sets')
