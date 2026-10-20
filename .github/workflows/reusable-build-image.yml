@@ -384,6 +384,7 @@ jobs:
           # config selects ext4, and the unsealed probe would otherwise pick
           # xfs, which its GRUB cannot read.
           TUNAOS_QCOW2_FILESYSTEM: ${{ inputs.image-variant == 'hummingbird' && 'ext4' || '' }}
+          TUNAOS_GDM_LOGIN_CHECK: ${{ inputs.flavor == 'tuna' && '1' || '0' }}
         run: |
           mkdir -p verify-out
           IMAGE="localhost/${IMAGE_VARIANT}:${DEFAULT_TAG}"
@@ -395,7 +396,7 @@ jobs:
           # evidence-upload step below already runs under `if: always()`, so
           # dropping the swallow doesn't lose any diagnostics — it just makes
           # the check red when the boot actually failed.
-          sudo --preserve-env=TUNAOS_QCOW2_FILESYSTEM \
+          sudo --preserve-env=TUNAOS_QCOW2_FILESYSTEM,TUNAOS_GDM_LOGIN_CHECK \
             ./scripts/corral-boot-gate.sh "$IMAGE" verify-out 300
 
       - name: Upload PR verification evidence
@@ -1557,9 +1558,10 @@ jobs:
           # untouched -- the variable is unset for them and the probe decides
           # exactly as before.
           TUNAOS_QCOW2_FILESYSTEM: ${{ inputs.image-variant == 'hummingbird' && 'ext4' || '' }}
+          TUNAOS_GDM_LOGIN_CHECK: ${{ inputs.flavor == 'tuna' && '1' || '0' }}
         run: |
           mkdir -p verify-out
-          sudo --preserve-env=TUNAOS_QCOW2_FILESYSTEM \
+          sudo --preserve-env=TUNAOS_QCOW2_FILESYSTEM,TUNAOS_GDM_LOGIN_CHECK \
             ./scripts/corral-boot-gate.sh "$TEST_IMAGE" verify-out 900
 
       - name: Build qcow2 from testing image (virgl)

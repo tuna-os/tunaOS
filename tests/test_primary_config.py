@@ -225,8 +225,8 @@ runpy.run_path(sys.argv[1])
 
 
 def test_tomli_fallback_is_selected_when_stdlib_parser_is_missing():
-    # Use the standard parser behind a test-only tomli shim to exercise the
-    # import fallback without adding a dependency to >=3.11 test environments.
+    # Use a test-only tomli shim to exercise the no-stdlib-parser path.
+    # It avoids requiring a second parser install in the child process.
     code = '''import builtins, runpy, sys
 try:
     import tomllib
@@ -328,7 +328,7 @@ def test_install_does_not_guess_an_image_when_resolution_fails(tmp_path, resolve
 
 @pytest.mark.parametrize("toml11", ['value = {\n key = 1,\n}\n', 'value = "\\x41"\n'])
 def test_parser_keeps_the_shared_toml10_grammar(toml11):
-    # 3.10 and 3.11 must reject edits only newer TOML parsers understand.
+    # All supported Python versions must reject syntax newer than TOML 1.0.
     with pytest.raises(config.tomllib.TOMLDecodeError):
         config.tomllib.loads(toml11)
 

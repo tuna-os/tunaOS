@@ -1,6 +1,6 @@
 """Primary TOML matrix and desktop policy with generated compatibility adapters.
 
-Python 3.10 uses the pinned tomli parser; 3.11+ uses the standard library.
+Python 3.10+ prefers pinned tomli when installed; newer stdlib grammar must not change validation.
 Base/shared package and branding ownership remain later migration milestones.
 """
 from __future__ import annotations
@@ -16,10 +16,10 @@ import re
 import tempfile
 
 try:
-    import tomllib
+    import tomli as tomllib
 except ModuleNotFoundError:
     try:
-        import tomli as tomllib
+        import tomllib
     except ModuleNotFoundError as exc:
         raise SystemExit(
             "Python 3.10 requires tomli. Install the reviewed dependencies: "
