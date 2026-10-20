@@ -43,6 +43,7 @@ notify_user() { # uid
 		"$NOTIFY_SEND" --app-name="$APP" --icon="$ICON" \
 		--urgency=critical --expire-time=60000 --wait \
 		--action=retry="Try again" "$SUMMARY" "$BODY" 2>/dev/null)" || return 0
+	action="${action//$'\r'/}"
 	if [[ "$action" == "retry" ]]; then
 		systemctl start "$UNIT" || true
 	fi
