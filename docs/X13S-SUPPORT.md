@@ -204,7 +204,7 @@ assessment. The inspected source had no X13s flavor or overlay.
 
 | Work package | Integration points and requirement |
 |---|---|
-| ARM64 image profile | `.github/build-config.yml`, `scripts/resolve-flavor.sh`, `Containerfile.overlay`, new `build_scripts/overlay/x13s.sh`; reuse the parent-image/overlay convention and reject unsupported architectures |
+| ARM64 image profile | `tunaos.toml`, then regenerate `.github/build-config.yml`; `scripts/resolve-flavor.sh`, `Containerfile.overlay`, new `build_scripts/overlay/x13s.sh`; reuse the parent-image/overlay convention and reject unsupported architectures |
 | Kernel and firmware | Inspect the actual Bonito kernel package/configuration/DTB, firmware and dracut output; use stock Fedora unless a measured gap requires a change |
 | Persistent boot arguments | Image-side `/usr/lib/bootc/kargs.d/*.toml`, following `build_scripts/overlay/overrides/nvidia/20-nvidia.sh`; verify first install, upgrade and rollback |
 | DTB deployment | Package the kernel-matched X13s DTB and select it in the chosen boot path; both active and rollback kernels must have their own usable boot artifacts |

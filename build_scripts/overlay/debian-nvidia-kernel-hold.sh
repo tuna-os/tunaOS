@@ -152,7 +152,7 @@ fi
 
 echo "==> holding kernel at ${HELD}: ${KVER} is above the ${CEILING} ceiling for ${DRIVER_UPSTREAM}"
 export DEBIAN_FRONTEND=noninteractive
-apt-get "${APT_OPTIONS[@]}" install -y --no-install-recommends "linux-image-${HELD}"
+apt-get "${APT_OPTIONS[@]}" install -y --no-install-recommends "linux-headers-${HELD}" "linux-image-${HELD}"
 # Also removes linux-image-amd64/-generic, which depend on the exact ABI.
 apt-get "${APT_OPTIONS[@]}" purge -y "linux-image-${KVER}"
 # dracut's initramfs.img (and Containerfile.debian's vmlinuz copy) are not

@@ -27,7 +27,7 @@ SOURCE_DIR="$APT_ROOT/sources.list.d"
 PREF_DIR="$APT_ROOT/preferences.d"
 mkdir -p "$SOURCE_DIR" "$PREF_DIR"
 SOURCE="$(mktemp "$SOURCE_DIR/tunaos-nvidia-kernel-snapshot.XXXXXX.sources")"
-PREF="$(mktemp "$PREF_DIR/tunaos-nvidia-kernel-snapshot.XXXXXX")"
+PREF="$(mktemp "$PREF_DIR/tunaos-nvidia-kernel-snapshot.XXXXXX.pref")"
 snapshot_config_valid=0
 cleanup_snapshot_config() {
 	if (( ! snapshot_config_valid )); then
