@@ -104,6 +104,7 @@ inspect_modules=(
 
 # The firmware list is the board inventory, not a redistribution request. Both
 # Fedora's compressed payloads and uncompressed files satisfy the inventory.
+# Linux firmware loading supports .xz and .zst, not arbitrary backup suffixes.
 inspect_firmware=(
 	/usr/lib/firmware/qca/hpbtfw21.tlv
 	/usr/lib/firmware/qca/hpnv21.b8c
@@ -134,7 +135,7 @@ inventory_file() {
 	if [[ -d "${dir}" ]]; then
 		mapfile -t matches < <(
 			find -L "${dir}" -maxdepth 1 -type f \
-				\( -name "${base}" -o -name "${base}.*" \) -print | sort
+				\( -name "${base}" -o -name "${base}.xz" -o -name "${base}.zst" \) -print | sort
 		)
 	fi
 	if ((${#matches[@]})); then
