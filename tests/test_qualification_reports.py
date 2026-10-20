@@ -81,7 +81,7 @@ def v1_receipt(**over):
 def catalog_receipt():
     """Synthetic strict evidence for unit tests; never distributed as proof."""
     receipt = _strict_v1_receipt()
-    receipt["resolved_inputs"].update(source=DIGEST_B, overlay=DIGEST_1)
+    receipt["resolved_inputs"].update(source=DIGEST_B, overlay=DIGEST_1, media=DIGEST_F)
     for record in receipt["observed"].values():
         record.update(source_digest=DIGEST_B, booted_digest=DIGEST_B)
     receipt["resources"] = {"cpu": "4"}
@@ -591,6 +591,25 @@ def test_self_asserted_browser_origin_cannot_replace_trusted_artifact_binding():
     expected["iso_digest"] = DIGEST_2
     assert _candidate_status(_catalog_with_receipt(catalog_receipt(), browser_builds={
         "albacore:cosmic:linux/amd64/v2": expected})) == "unqualified"
+
+
+@pytest.mark.parametrize("projected", [False, True])
+@pytest.mark.parametrize("changed_media", ["native", "browser"])
+def test_native_install_and_browser_build_must_identify_the_same_iso(projected, changed_media):
+    receipt = catalog_receipt()
+    if changed_media == "native":
+        receipt["resolved_inputs"]["media"] = DIGEST_2
+    else:
+        receipt["build_provenance"]["iso_digest"] = DIGEST_2
+    browser_build = copy.deepcopy(receipt["build_provenance"])
+    receipt.pop("receiptDigest")
+    receipt["receiptDigest"] = "sha256:" + hashlib.sha256(
+        json.dumps(receipt, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    targets._qualification_validator()(receipt, "synthetic mismatched-media receipt")
+    if projected:
+        receipt = targets.receipt_to_catalog_projection(receipt)
+    assert _candidate_status(_catalog_with_receipt(receipt, browser_builds={
+        "albacore:cosmic:linux/amd64/v2": browser_build})) == "unqualified"
 
 
 @pytest.mark.parametrize("field,value", [("name", "unknown"), ("name", " n/a "),
