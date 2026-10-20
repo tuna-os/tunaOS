@@ -148,16 +148,19 @@ def test_gate_runs_the_preflight_before_building_or_booting_the_image():
     assert "verify-out/runner-capability.txt" in upload["with"]["path"]
 
 
-def test_offline_gui_parity_installs_gl_modules_and_preflights_before_qualification():
+def test_offline_gui_parity_uses_available_hosted_qemu_without_gpu_pool():
     document = yaml.safe_load(PARITY_WORKFLOW.read_text())
-    steps = document["jobs"]["qualify"]["steps"]
+    job = document["jobs"]["qualify"]
+    steps = job["steps"]
     names = [step.get("name") for step in steps]
 
+    assert job["runs-on"] == "ubuntu-24.04"
     install = steps[names.index("Install offline GUI qualification dependencies")]
     assert "qemu-system-modules-opengl" in install["run"]
 
-    preflight = names.index("Record GPU/DRM runner capability")
+    preflight = names.index("Record QEMU capability")
     qualification = names.index("Run plain and encrypted offline GUI qualifications")
     assert preflight < qualification
-    assert "--require-virgl" in steps[preflight]["run"]
-    assert "parity/gpu-capability.txt" in steps[preflight]["run"]
+    assert "--require-virgl" not in steps[preflight]["run"]
+    assert "parity/qemu-capability.txt" in steps[preflight]["run"]
+    assert steps[qualification]["env"]["TUNAOS_E2E_GPU"] == "plain"
