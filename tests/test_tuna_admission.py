@@ -1,5 +1,6 @@
 """Tuna Desktop (formerly Roost) admission must preserve signed sourcing and an installed-session gate."""
 import hashlib
+import subprocess
 from pathlib import Path
 import yaml
 
@@ -76,41 +77,53 @@ def test_pull_requests_build_every_admitted_tuna_image_in_ci():
         for variant in config["variants"]
         if config["tuna_rollout"][variant["id"]]["status"] == "admitted"
     }
-    workflow = yaml.safe_load((ROOT / ".github/workflows/build-flavor.yml").read_text())
+    workflow = yaml.safe_load((ROOT / ".github/workflows/test.yml").read_text())
     event = workflow.get("on", workflow.get(True))
     assert "pull_request" in event
-    paths = set(event["pull_request"]["paths"])
-    assert {
-        ".github/build-config.yml",
-        ".github/workflows/build-flavor.yml",
-        ".github/workflows/build-variant.yml",
-        ".github/workflows/reusable-build-image.yml",
-        ".github/actions/**",
-        ".github/scripts/**",
-        "Containerfile*",
-        "build_scripts/**",
-        "experiences/**",
-        "image-versions.yaml",
-        "manifests/desktops/tuna*.yaml",
-        "system_files/**",
-        "system_files_overrides/**",
-        "scripts/**",
-        "manifests/desktop-contracts/**",
-        "Justfile",
-        "just/**",
-        "tests/functional/**",
+    assert {".github/**", "build_scripts/**", "system_files_overrides/**", "tunaos.toml"} <= set(
+        event["pull_request"]["paths"]
+    )
+    assert workflow["permissions"]["contents"] == "read"
+    detector = workflow["jobs"]["tuna_build_inputs"]
+    assert detector["if"] == "github.event_name == 'pull_request'"
+    assert detector["permissions"] == {"contents": "read", "pull-requests": "read"}
+    assert detector["outputs"]["relevant"] == "${{ steps.filter.outputs.relevant }}"
+
+    job = workflow["jobs"]["tuna_pr_images"]
+    assert job["needs"] == "tuna_build_inputs"
+    assert job["if"] == (
+        "github.event_name == 'pull_request' && "
+        "needs.tuna_build_inputs.outputs.relevant == 'true'"
+    )
+    assert job["permissions"] == {"contents": "read"}
+    assert "secrets" not in job
+    assert job["uses"] == "./.github/workflows/build-variant.yml"
+    assert job["with"]["flavor"] == "tuna"
+    assert job["with"]["variant"] == "${{ matrix.variant }}"
+    assert set(job["strategy"]["matrix"]["variant"]) == admitted
+    assert len(job["strategy"]["matrix"]["variant"]) == len(admitted)
+
+
+def test_tuna_build_input_filter_catches_sources_and_ignores_docs():
+    script = ROOT / ".github/scripts/tuna-pr-build-inputs.sh"
+
+    def matches(path):
+        result = subprocess.run(
+            ["bash", str(script)],
+            input=path + "\n",
+            text=True,
+            capture_output=True,
+        )
+        return result.returncode == 0
+
+    for path in (
         "tunaos.toml",
-    } <= paths
-    assert workflow["permissions"] == {"contents": "read"}
-    pr_job = workflow["jobs"]["build_tuna_pr"]
-    assert pr_job["if"] == "github.event_name == 'pull_request'"
-    assert pr_job["uses"] == "./.github/workflows/build-variant.yml"
-    assert pr_job["with"]["flavor"] == "tuna"
-    assert pr_job["with"]["variant"] == "${{ matrix.variant }}"
-    assert set(pr_job["strategy"]["matrix"]["variant"]) == admitted
-    assert len(pr_job["strategy"]["matrix"]["variant"]) == len(admitted)
-    for name in ("validate", "build"):
-        assert workflow["jobs"][name]["if"] == "github.event_name == 'workflow_dispatch'"
+        "build_scripts/desktop/tuna-gdm-theme.sh",
+        ".github/scripts/tuna-pr-build-inputs.sh",
+        "system_files_overrides/tuna/example.conf",
+    ):
+        assert matches(path), path
+    assert not matches("docs/CI_SPEC.md")
 
 
 def test_rpm_cells_install_the_pinned_beta_from_signed_factory_repositories():
