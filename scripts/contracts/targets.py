@@ -678,6 +678,8 @@ def _admit_qualification(receipt, target, expected_inputs, browser_build=None):
         if any(not isinstance(provenance.get(key), str) or not DIGEST.fullmatch(provenance[key])
                for key in ("receipt_digest", "iso_digest")):
             return False
+        if provenance["iso_digest"] != raw["resolved_inputs"]["media"]:
+            return False
         if provenance.get("browser") != raw["browser"]:
             return False
         if raw.get("status") not in (None, "qualified", "passed", "success"):

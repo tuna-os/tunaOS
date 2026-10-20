@@ -1769,6 +1769,24 @@ The strict harness no longer substitutes QEMU for the ISO builder or the ISO
 checksum for an OCI overlay digest. It records those runtime hashes separately.
 A backend executable also cannot identify the GUI installer. These identities
 need the trusted build receipt before browser qualification can proceed.
+
+### Catalog admission accepts installation evidence for a different ISO
+
+**Symptom:** A synthetic browser build observation and native qualification
+receipt identify different ISO digests, but the catalog reports `qualified`.
+
+**Measured cause:** At PR #3431 commit `ce442239`, admission matched the browser
+observation to `build_provenance` but did not compare its `iso_digest` with the
+native receipt's `resolved_inputs.media`. All four raw/projected receipt cases
+in `test_native_install_and_browser_build_must_identify_the_same_iso` failed
+before the fix, even with valid receipt checksums.
+
+**Fix:** Require those media digests to match. Keep the positive fixture bound
+to one ISO. The regression changes either media digest, recalculates the receipt
+checksum, and expects admission to fail. The production collector still supplies
+no trusted browser observation, so this fix does not open admission or qualify
+any media.
+
 ## Fork preview reuses stock packages/art or rejects a changed checkout
 
 **Cause:** The key for the cache had only a hash of shell scripts.
