@@ -81,6 +81,10 @@ teardown() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"if: inputs.upload-r2"* ]]
 }
+@test "the R2 upload reuses the policy JSON rendered by the cutover gate" {
+  [ "$(grep -c 'yq -o=json' "$ARTIFACTS_WF")" -eq 1 ]
+}
+
 @test "the shared uploader rechecks the exact cutover policy" {
   local gate
   gate="$(grep -n 'name: Enforce R2 cutover policy' "$ARTIFACTS_WF" | cut -d: -f1)"

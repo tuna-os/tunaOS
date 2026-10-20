@@ -104,6 +104,17 @@ def validate(config):
             table(target, target_fields, target_fields, where)
             for key in target_fields:
                 text(target[key], f'{where}.{key}')
+            if target['platform'] not in PLATFORMS:
+                raise ConfigError(f'{where}.platform: unsupported platform')
+            if target['qualification'] != 'browser-qualified':
+                raise ConfigError(f'{where}.qualification: expected browser-qualified')
+            qualified_at = target['qualified_at']
+            if not re.fullmatch(r'\d{4}-\d{2}-\d{2}', qualified_at):
+                raise ConfigError(f'{where}.qualified_at: expected ISO date YYYY-MM-DD')
+            try:
+                datetime.strptime(qualified_at, '%Y-%m-%d')
+            except ValueError as exc:
+                raise ConfigError(f'{where}.qualified_at: invalid ISO date') from exc
     variants = config['variants']
     if not isinstance(variants, dict) or not variants:
         raise ConfigError('variants: expected nonempty table')

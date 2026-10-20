@@ -15,6 +15,15 @@ destination=${4%/}
 policy="$(dirname "$0")/iso-delivery-policy.py"
 checksum="${iso}.sha256"
 bundle="${iso}.sigstore.json"
+versioned="${iso##*/}"
+
+safe_iso_basename() {
+	[[ "$1" =~ ^[A-Za-z0-9][A-Za-z0-9._+~-]*\.iso$ ]]
+}
+if ! safe_iso_basename "$versioned" || ! safe_iso_basename "$latest"; then
+	echo "ERROR: ISO and latest names must be safe single-line basenames ending in .iso" >&2
+	exit 2
+fi
 
 for source in "$iso" "$checksum" "$bundle"; do
 	[[ -f "$source" ]] || {
@@ -118,7 +127,6 @@ publish_iso_as() {
 	copy_unless_retained "$bundle" "${object}.sigstore.json"
 }
 
-versioned=$(basename "$iso")
 versioned_publication=$(publication_name "$versioned")
 latest_publication=$(publication_name "$latest")
 # A resolver is needed only when policy freezes the stable alias. Its
