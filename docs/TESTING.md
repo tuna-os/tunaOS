@@ -102,10 +102,10 @@ Test outputs are uploaded as GitHub Actions artifacts:
 ### Strict offline GUI qualification
 
 `.github/workflows/iso-builder-parity.yml` runs two installations for each CI
-and browser-built ISO on the GPU runner pool. Both runs use the ISO's bundled
-graphical installer. The `plain` and `encrypted` profiles use separate fresh
-32 GiB disks, no guest NIC or vsock, and no host-provided image or Fisherman
-binary.
+and browser-built ISO on the available hosted QEMU pool. Both runs use the
+ISO's bundled graphical installer and the software virtio display path. The
+`plain` and `encrypted` profiles use separate fresh 32 GiB disks, no guest NIC
+or vsock, and no host-provided image or Fisherman binary.
 
 The harness checks that the manifest's `hardware_scope` matches the
 selected QEMU accelerator. It provisions a disposable account in the installed

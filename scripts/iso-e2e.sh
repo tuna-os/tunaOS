@@ -3677,9 +3677,10 @@ EOF
 			exit 1
 		fi
 		if [[ "$encrypted" -eq 1 ]]; then
-			printf '%s\n' "$passphrase" |
-				guestfish --keys-from-stdin --remote \
-					cryptsetup-open "$luks_partition" tunaos-qualification-root || exit 1
+			# The listener owns guestfish's key input. Passing
+			# --keys-from-stdin to a --remote client feeds the client
+			# process, not the listener that executes cryptsetup-open.
+			guestfish --remote cryptsetup-open "$luks_partition" tunaos-qualification-root || exit 1
 			guestfish --remote lvm-scan true
 			guestfish --remote vg-activate-all true
 		fi
