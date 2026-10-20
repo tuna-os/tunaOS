@@ -32,7 +32,7 @@
   "$defs": {
     "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
     "token": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,79}$" },
-    "timestamp": { "type": "string", "format": "date-time", "pattern": "Z$", "maxLength": 32 },
+    "timestamp": { "type": "string", "format": "date-time", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$", "maxLength": 20 },
     "image": {
       "type": "object", "additionalProperties": false,
       "properties": {
