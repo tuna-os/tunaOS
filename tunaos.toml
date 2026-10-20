@@ -238,7 +238,7 @@ id = "gnome"
 # GNOME 50 on EL10 comes from the tunaos-packages tier at
 # repo.tunaos.org/gnome50/10-stream-x86_64 (manifests/desktops/
 # gnome.yaml), which publishes x86_64 only (the aarch64 path 404s,
-# 2026-09-03). The floor is GNOME 50 (gnome.yaml minimum_version), so
+# 2026-09-03). The floor is GNOME 51 (desktops.gnome.minimum_version), so
 # an arm64 leg would be the base's 49 -- not allowed to ship -- and is
 # not declared. Re-add linux/arm64 here the day the tier grows an
 # aarch64 index, and delete the variant from
@@ -510,7 +510,7 @@ id = "gnome"
 # GNOME 50 on EL10 comes from the tunaos-packages tier at
 # repo.tunaos.org/gnome50/10-stream-x86_64 (manifests/desktops/
 # gnome.yaml), which publishes x86_64 only (the aarch64 path 404s,
-# 2026-09-03). The floor is GNOME 50 (gnome.yaml minimum_version), so
+# 2026-09-03). The floor is GNOME 51 (desktops.gnome.minimum_version), so
 # an arm64 leg would be the base's 49 -- not allowed to ship -- and is
 # not declared. Re-add linux/arm64 here the day the tier grows an
 # aarch64 index, and delete the variant from
@@ -783,7 +783,7 @@ id = "gnome"
 # GNOME 50 on EL10 comes from the tunaos-packages tier at
 # repo.tunaos.org/gnome50/10-stream-x86_64 (manifests/desktops/
 # gnome.yaml), which publishes x86_64 only (the aarch64 path 404s,
-# 2026-09-03). The floor is GNOME 50 (gnome.yaml minimum_version), so
+# 2026-09-03). The floor is GNOME 51 (desktops.gnome.minimum_version), so
 # an arm64 leg would be the base's 49 -- not allowed to ship -- and is
 # not declared. Re-add linux/arm64 here the day the tier grows an
 # aarch64 index, and delete the variant from
@@ -2142,7 +2142,7 @@ build_image = true
 id = "gnome"
 stage = 2
 platforms = ["linux/amd64", "linux/arm64"]
-# Off: Debian 13 trixie ships GNOME 48.7 and the floor is 50
+# Off: Debian 13 trixie ships GNOME 48.7 and the floor is 51
 # (manifests/desktops/gnome.yaml minimum_version), so this flavor
 # cannot ship a conforming desktop from its own base.
 #
@@ -2255,7 +2255,7 @@ id = "gnome-nvidia"
 platforms = ["linux/amd64"]
 stage = 3
 # Off with its parent: a stage-3 overlay on gnome, which cannot
-# meet the GNOME 50 floor from trixie (see above).
+# meet the GNOME 51 floor from trixie (see above).
 build_image = false
 build_iso = false
 build_qcow2 = false
@@ -2833,7 +2833,7 @@ required = [
 # GNOME Desktop Manifest
 [desktops.gnome]
 display_manager = "gdm"
-minimum_version = 50
+minimum_version = 51
 emerge_accept_keywords = [
   "gnome-base/gdm",
   "gnome-base/gnome-control-center",
