@@ -17,6 +17,7 @@ spec.loader.exec_module(handoff)
 def archive(name="payload", mode=stat.S_IFREG | 0o644, data=b"bytes"):
     return handoff.newc([(name, mode, data)])
 
+
 def test_download_handles_short_reads(monkeypatch, tmp_path):
     payload = b"payload"
 
@@ -38,6 +39,8 @@ def test_download_handles_short_reads(monkeypatch, tmp_path):
     target = tmp_path / "payload"
     handoff.download("https://fixture.invalid/payload", target, handoff.digest(payload), size=len(payload))
     assert target.read_bytes() == payload
+
+
 def test_download_default_bound_is_hard(monkeypatch, tmp_path):
     class Response:
         def __init__(self):
@@ -59,6 +62,7 @@ def test_download_default_bound_is_hard(monkeypatch, tmp_path):
     with pytest.raises(ValueError, match="bound"):
         handoff.download("https://fixture.invalid/key", target, "unused")
     assert not target.exists()
+
 
 def test_serial_evidence_keeps_raw_bytes(tmp_path):
     path = tmp_path / "serial.log"
@@ -85,7 +89,7 @@ def test_rejects_links_empty_hardlink_members_and_directories(mode, data):
         handoff.member_from_newc(archive(mode=mode, data=data), "payload")
 
 
-@pytest.mark.parametrize("name", ["../payload", "/payload", "a/../../payload"])
+@pytest.mark.parametrize("name", ["", ".", "./", "../payload", "/payload", "a/../../payload"])
 def test_rejects_unsafe_paths(name):
     with pytest.raises(ValueError, match="unsafe"):
         handoff.member_from_newc(archive(name=name), name)
@@ -96,10 +100,12 @@ def test_rejects_duplicate_member():
     with pytest.raises(ValueError, match="duplicate"):
         handoff.member_from_newc(data, "payload")
 
+
 def test_rejects_normalized_duplicate_member():
     data = handoff.newc([("a/b", stat.S_IFREG, b"a"), ("a//b", stat.S_IFREG, b"b")])
     with pytest.raises(ValueError, match="duplicate"):
         handoff.member_from_newc(data, "a/b")
+
 
 def test_rejects_invalid_archive_name_encoding():
     data = handoff.newc([("payload", stat.S_IFREG | 0o644, b"bytes")])
@@ -124,7 +130,10 @@ def test_missing_member_fails():
 def test_positive_requires_sentinel_release_and_clean_exit():
     log = "X13S_FIXTURE_PASS\nX13S_FIXTURE_UNAME=7.2.11-200.fc44.aarch64\n"
     handoff.assert_result("positive", log, 0)
-    for badlog, code in [(log, 124), ("", 0), ("X13S_FIXTURE_PASS", 0)]:
+    for badlog, code in [
+        (log, 124), ("", 0), ("X13S_FIXTURE_PASS", 0),
+        (log + "Kernel panic - not syncing\n", 0), (log + "X13S_FIXTURE_FAIL\n", 0),
+    ]:
         with pytest.raises(ValueError):
             handoff.assert_result("positive", badlog, code)
 
@@ -210,6 +219,7 @@ def test_check_loader_rejects_missing_inventory_loader(monkeypatch):
 def test_check_loader_rejects_unsafe_or_mismatched_payload(monkeypatch, sections, message):
     with pytest.raises(ValueError, match=message):
         _check_loader_with_sections(monkeypatch, sections)
+
 
 @pytest.mark.parametrize("machine", [0x8664, 0xA641, 0])
 def test_rejects_non_arm64_payload(machine):

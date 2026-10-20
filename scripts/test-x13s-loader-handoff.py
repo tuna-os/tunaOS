@@ -30,6 +30,14 @@ def digest(data):
     return hashlib.sha256(data).hexdigest()
 
 
+def file_digest(path):
+    hasher = hashlib.sha256()
+    with Path(path).open("rb") as stream:
+        while chunk := stream.read(1024 * 1024):
+            hasher.update(chunk)
+    return hasher.hexdigest()
+
+
 def download(url, target, expected, size=None):
     # All URLs and identities come from the reviewed fixture pins, not dispatch input.
     if size is not None and not 0 <= size <= MAX_DOWNLOAD:
@@ -116,7 +124,7 @@ def member_from_newc(source, wanted):
             canonical = name[2:] if name.startswith("./") else name
             path = PurePosixPath(canonical)
             canonical = path.as_posix()
-            if path.is_absolute() or ".." in path.parts or canonical in seen:
+            if canonical in {"", "."} or path.is_absolute() or ".." in path.parts or canonical in seen:
                 raise ValueError("unsafe or duplicate archive name")
             seen.add(canonical)
             if canonical == wanted:
@@ -196,7 +204,9 @@ def assert_result(case, log, returncode):
         raise ValueError("fixture emulator exited nonzero")
     passed = "X13S_FIXTURE_PASS" in log
     if case == "positive":
-        if not passed or "X13S_FIXTURE_UNAME=7.2.11-200.fc44.aarch64" not in log:
+        forbidden = ("Kernel panic", "X13S_FIXTURE_FAIL")
+        if (not passed or "X13S_FIXTURE_UNAME=7.2.11-200.fc44.aarch64" not in log
+                or any(marker in log for marker in forbidden)):
             raise ValueError("selected loader did not complete external-initrd handoff")
     elif case == "missing-initrd" and ("Kernel panic" not in log or not any(x in log for x in ("No working init found", "Unable to mount root fs"))):
         raise ValueError("missing-initrd control did not reach the selected kernel")
@@ -332,9 +342,14 @@ def main():
             except subprocess.TimeoutExpired:
                 code = 124
         output, log = read_serial(serial)
-        assert_result(case, log, code)
-        report["cases"].append({"case": case, "exit_code": code, "serial_sha256": digest(output), "esp_sha256": digest(esp.read_bytes())})
+        report["cases"].append({
+            "case": case,
+            "exit_code": code,
+            "serial_sha256": digest(output),
+            "esp_sha256": file_digest(esp),
+        })
         (out / "report.json").write_text(json.dumps(report, indent=2) + "\n")
+        assert_result(case, log, code)
         esp.unlink()
         variables.unlink()
     print(json.dumps(report, indent=2))

@@ -91,7 +91,7 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 | `weekly-boot-report.yml` | post-merge + scheduled | Weekly Boot Screenshot Report | `0 10 * * 1`, manual | — |
 | `weekly-desktop-screenshots.yml` | post-merge + scheduled | Weekly Desktop Screenshots | `0 2 * * 1`, manual | — |
 | `weekly-qcow2-screenshots.yml` | post-merge + scheduled | Weekly QCOW2 Boot Screenshots | `0 20 * * 0`, manual | — |
-| `x13s-loader-handoff.yml` | PR-deterministic + manual | X13s loader handoff fixture | each PR, manual | — |
+| `x13s-loader-handoff.yml` | PR-deterministic + post-merge | X13s loader handoff fixture | each PR, manual | — |
 
 <!-- END GENERATED CI LANES -->
 

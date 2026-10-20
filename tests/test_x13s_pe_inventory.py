@@ -46,6 +46,12 @@ def pe(parts=None, machine=0xAA64):
     return bytes(data)
 
 
+def section_table(data):
+    pe_offset = struct.unpack_from("<I", data, 0x3C)[0]
+    optional_header_size = struct.unpack_from("<H", data, pe_offset + 20)[0]
+    return pe_offset + 24 + optional_header_size
+
+
 def test_observes_exact_root_without_claiming_boot_or_trust():
     result = inventory.inspect_pe(pe())
     assert result["sections"][1]["root_compatible"] == ["lenovo,thinkpad-x13s", "qcom,sc8280xp"]
@@ -84,7 +90,7 @@ def test_rejects_truncated_payload():
 
 def test_rejects_overlapping_sections():
     data = bytearray(pe())
-    table = 200
+    table = section_table(data)
     first = struct.unpack_from("<I", data, table + 20)[0]
     struct.pack_into("<I", data, table + 40 + 20, first)
     with pytest.raises(inventory.InventoryError, match="overlapping"):
@@ -147,7 +153,7 @@ def test_rejects_non_immutable_input(wrapper):
 
 def test_distinguishes_padding_from_initialized_kernel_bytes():
     data = bytearray(pe([(b".linux", b"kernel" + bytes(10))]))
-    struct.pack_into("<I", data, 208, 6)
+    struct.pack_into("<I", data, section_table(data) + 8, 6)
     section = inventory.inspect_pe(bytes(data))["sections"][0]
     assert section["size"] == 16
     assert section["virtual_size"] == section["initialized_size"] == 6
@@ -157,7 +163,7 @@ def test_distinguishes_padding_from_initialized_kernel_bytes():
 
 def test_uninitialized_memory_is_not_fabricated_as_file_bytes():
     data = bytearray(pe([(b".bss", b"abc")]))
-    struct.pack_into("<I", data, 208, 100)
+    struct.pack_into("<I", data, section_table(data) + 8, 100)
     section = inventory.inspect_pe(bytes(data))["sections"][0]
     assert section["virtual_size"] == 100
     assert section["initialized_size"] == 3
