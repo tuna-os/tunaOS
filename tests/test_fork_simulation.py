@@ -89,6 +89,10 @@ def test_workflow_runs_real_steps_with_empty_secrets_and_reports_failures() -> N
         "contents": "write",
         "pull-requests": "write",
     }
+    assert document["jobs"]["report"]["concurrency"] == {
+        "group": "fork-simulation-report",
+        "cancel-in-progress": False,
+    }
     assert "act pull_request" in runner
     assert "--secret-file /dev/null" in runner
     assert '--secret "GITHUB_TOKEN=${SIMULATION_GITHUB_TOKEN}"' in runner
@@ -123,9 +127,12 @@ def test_act_homebrew_path_is_persisted_for_following_steps() -> None:
     assert 'brew_prefix="$("$brew_bin" --prefix)"' in just_fix
     assert '"$GITHUB_PATH"' in just_fix
     assert '"$GITHUB_ENV"' in just_fix
-    assert "brew install just shfmt" in just_fix
+    assert "brew install just" in just_fix
+    assert "mvdan.cc/sh/v3/cmd/shfmt@v" in just_fix
+    assert 'GOBIN="$RUNNER_TEMP/bin"' in just_fix
     assert "GITHUB_STEP_SUMMARY" in runner
     assert "fork fallback was not reached" in runner
+
 
 def test_fixture_models_effective_job_permissions() -> None:
     assert fork_simulation.workflow_permissions("pr-nudges.yml")["remind"] == {
@@ -143,16 +150,21 @@ def test_fixture_models_effective_job_permissions() -> None:
 
 
 def run_fixture(
-    tmp_path, persona, *arguments, token="fixture-token", stdin="", workflow="synthetic-workflow.yml"
+    tmp_path,
+    persona,
+    *arguments,
+    token="fixture-token",
+    stdin="",
+    workflow="synthetic-workflow.yml",
+    permissions=None,
 ):
-    event_path = tmp_path / "event.json"
-    event_path.write_text(
-        json.dumps(
-            fork_simulation.event(
-                persona, "tuna-os/tunaos", "head", "base", workflow
-            )
-        )
+    event = fork_simulation.event(
+        persona, "tuna-os/tunaos", "head", "base", workflow
     )
+    if permissions is not None:
+        event["simulation_fixture"]["permissions"] = permissions
+    event_path = tmp_path / "event.json"
+    event_path.write_text(json.dumps(event))
     api_log = tmp_path / "api.log"
     unexpected_log = tmp_path / "unexpected.log"
     env = {
@@ -163,6 +175,8 @@ def run_fixture(
         "SIMULATION_API_LOG": str(api_log),
         "SIMULATION_UNEXPECTED_LOG": str(unexpected_log),
     }
+    env.pop("GITHUB_TOKEN", None)
+    env.pop("GH_TOKEN", None)
     env["GITHUB_JOB"] = fork_simulation.SIMULATION_JOBS.get(workflow, "synthetic")
     env["GH_TOKEN"] = token
     result = subprocess.run(
@@ -265,6 +279,24 @@ def test_fixture_rejects_unauthorized_reviewer_mutation(
     assert result.returncode != 0
     assert calls == ["DELETE\trepos/tuna-os/tunaos/pulls/1/requested_reviewers"]
     assert diagnostic in unexpected
+
+def test_fixture_rejects_mutation_without_declared_scope(tmp_path) -> None:
+    permissions = fork_simulation.workflow_permissions("pr-nudges.yml")
+    permissions["remind"]["pull-requests"] = "read"
+    result, calls, unexpected = run_fixture(
+        tmp_path,
+        "same-repo-contributor",
+        "repos/tuna-os/tunaos/issues/1/comments",
+        "--input",
+        "-",
+        stdin='{"body":"synthetic reminder"}',
+        workflow="pr-nudges.yml",
+        permissions=permissions,
+    )
+
+    assert result.returncode != 0
+    assert calls == ["POST\trepos/tuna-os/tunaos/issues/1/comments"]
+    assert "without pull-requests:write" in unexpected
 
 
 def test_fixture_records_tolerated_unknown_calls_separately(tmp_path) -> None:

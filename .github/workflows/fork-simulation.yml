@@ -106,6 +106,9 @@ jobs:
     name: Fork-safety report
     if: always()
     needs: [simulate-fork, simulate-internal]
+    concurrency:
+      group: fork-simulation-report
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     permissions:
       actions: read

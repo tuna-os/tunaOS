@@ -109,7 +109,8 @@ for persona in "$@"; do
 			fi
 		done
 		if [[ "$workflow:$persona" == "just-fix.yml:first-time-external" ]] &&
-			! grep -Fq "This pull request comes from a fork" "$act_log"; then
+			! grep -Fq "This pull request comes from a fork" "$act_log" &&
+			! grep -Fq "This pull request comes from a fork" "$summary"; then
 			echo "fork fallback was not reached for the external just-fix simulation" >&2
 			[[ $rc -ne 0 ]] || rc=65
 		fi

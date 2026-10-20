@@ -87,9 +87,22 @@ jobs:
           brew_prefix="$("$brew_bin" --prefix)"
           printf '%s\n' "${brew_prefix}/bin" "${brew_prefix}/sbin" >> "$GITHUB_PATH"
           printf 'PATH=%s/bin:%s/sbin:%s\n' "$brew_prefix" "$brew_prefix" "$PATH" >> "$GITHUB_ENV"
-      - name: Install just and shfmt
+      - name: Install just and pinned shfmt
         if: steps.check-bot.outputs.last_commit_is_bot != 'true'
-        run: brew install just shfmt
+        run: |
+          set -euo pipefail
+          brew install just
+          want="$(sed -n 's/^  shfmt: "v\{0,1\}\([^"]*\)"$/\1/p' image-versions.yaml | head -1)"
+          [[ -n "$want" ]] || {
+            echo "image-versions.yaml has no shfmt pin" >&2
+            exit 1
+          }
+          mkdir -p "$RUNNER_TEMP/bin"
+          GOBIN="$RUNNER_TEMP/bin" go install "mvdan.cc/sh/v3/cmd/shfmt@v${want}"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+          export PATH="$RUNNER_TEMP/bin:$PATH"
+          just --version
+          shfmt --version
 
       - name: Run just fix
         if: steps.check-bot.outputs.last_commit_is_bot != 'true'
