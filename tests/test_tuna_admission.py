@@ -46,6 +46,36 @@ def test_tuna_cells_are_amd64_images_without_iso_expansion():
     assert "greetd-gtkgreet.sh" in manifest["post_install"]
 
 
+def test_marlin_runs_tuna_on_gdm_while_other_flavors_stay_on_greetd():
+    """tunaOS#3438, Marlin first: the -arch override moves Marlin to stock
+    GDM while every other tuna flavor keeps greetd. A second display
+    manager beside GDM would race it for seat0/VT1, so the Arch list must
+    not name any greetd frontend, and no greetd post-install may run."""
+    arch = yaml.safe_load((ROOT / "manifests/desktops/tuna-arch.yaml").read_text())
+    assert arch["display_manager"] == "gdm"
+    packages = arch["packages"]["pacman"]
+    assert "tunaos/tuna-desktop=1.0.0beta.1-1" in packages, "the beta pin moves with the manifest"
+    assert "orca" in packages, "the Screen Reader key needs distribution Orca"
+    assert "gdm" in packages
+    for absent in ("greetd", "greetd-gtkgreet", "gtkgreet", "cage"):
+        assert absent not in packages, f"{absent} would race GDM for the login screen"
+    for script in arch["post_install"]:
+        assert "greetd" not in script, f"{script} wires the display manager Marlin just left"
+    # The shared manifest is untouched: other flavors keep their DM.
+    shared = yaml.safe_load((ROOT / "manifests/desktops/tuna.yaml").read_text())
+    assert shared["display_manager"] == "greetd"
+    assert "greetd-gtkgreet.sh" in shared["post_install"]
+
+
+def test_tuna_contract_expects_gdm_on_marlin_and_greetd_elsewhere():
+    """The desktop contract must match the manifest per base: GDM on
+    Marlin (pacman) and greetd everywhere else."""
+    script = (ROOT / "build_scripts/checks/verify-desktop-experience.sh").read_text()
+    case = script.split("\ntuna)\n", 1)[1].split("\n\t;;", 1)[0]
+    assert "dm_pattern='^gdm\\.service$'" in case
+    assert "dm_pattern='^greetd\\.service$'" in case
+    assert "require_unit gdm" in case
+
 def test_rpm_cells_install_the_pinned_beta_from_signed_factory_repositories():
     manifest = yaml.safe_load((ROOT / "manifests/desktops/tuna.yaml").read_text())
     for target, nevr in (("el10", "tuna-desktop-1.0.0~beta.1-1.el10"), ("fedora", "tuna-desktop-1.0.0~beta.1-1.fc44"), ("rawhide", "tuna-desktop-1.0.0~beta.1-1.fc46"), ("eln", "tuna-desktop-1.0.0~beta.1-1.eln159")):
