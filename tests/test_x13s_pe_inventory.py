@@ -8,6 +8,8 @@ import struct
 import pytest
 
 spec = importlib.util.spec_from_file_location("x13s_pe_inventory", Path(__file__).parents[1] / "scripts/x13s_pe_inventory.py")
+if spec is None or spec.loader is None:
+    raise RuntimeError("unable to load x13s_pe_inventory.py")
 inventory = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(inventory)
 

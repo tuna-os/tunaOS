@@ -10,7 +10,7 @@ from pathlib import Path, PurePosixPath
 import platform
 import stat
 import struct
-import subprocess
+import resource
 import urllib.request
 import importlib.util
 
@@ -124,6 +124,8 @@ def check_arm64(data):
 
 def check_loader(data):
     spec = importlib.util.spec_from_file_location("x13s_pe", ROOT / "scripts/x13s_pe_inventory.py")
+    if spec is None or spec.loader is None:
+        raise ValueError("unable to load PE inventory module")
     observer = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(observer)
     result = observer.inspect_pe(data)
@@ -158,9 +160,10 @@ def newc(entries):
 def grub_config(case):
     nonce = "external-initrd-v1" if case != "wrong-argument" else "wrong"
     initrd = "initrd /fixture/initrd\n" if case != "missing-initrd" else ""
+    panic = "1" if case == "missing-initrd" else "-1"
     return ("set timeout=0\nserial --unit=0 --speed=115200\n"
             "terminal_output console serial\n"
-            f"linux /fixture/loader.efi console=ttyAMA0 rdinit=/init panic=-1 x13s.fixture={nonce}\n"
+            f"linux /fixture/loader.efi console=ttyAMA0 rdinit=/init panic={panic} x13s.fixture={nonce}\n"
             + initrd + "boot\n")
 
 
@@ -221,7 +224,7 @@ def main():
         if pin["name"] == "kernel-uki-dtbloader":
             unsigned = out / "unsigned-control.rpm"
             unsigned.write_bytes(rpm.read_bytes())
-            run(["rpmsign", "--delsign", unsigned], capture_output=True)
+            run(["rpm", "--delsign", unsigned], capture_output=True)
             control = subprocess.run(["rpmkeys", "--dbpath", str(db), "--checksig", "--verbose", str(unsigned)],
                                      capture_output=True, text=True, env={**os.environ, "LC_ALL": "C"})
             (out / "unsigned-control.rpmkeys.txt").write_text(control.stdout + control.stderr)
@@ -234,7 +237,6 @@ def main():
             unsigned.unlink()
 
         # A file keeps decompression off the Python heap; enforce a process file bound.
-        import resource
         def limit():
             resource.setrlimit(resource.RLIMIT_FSIZE, (MAX_CPIO, MAX_CPIO))
         archive = out / "payload.cpio"

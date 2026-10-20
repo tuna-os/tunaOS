@@ -64,12 +64,13 @@ jobs:
           source = Path(os.environ['RUNNER_TEMP']) / 'x13s-handoff'
           target = Path('fixture-receipts')
           target.mkdir(exist_ok=True)
-          for pattern in ('report.json', 'loader-observation.json', '*.rpmkeys.txt', '*/serial.log', '*/argv.json'):
-              for path in source.glob(pattern):
-                  if path.is_file() and path.stat().st_size <= 4 * 1024 * 1024:
-                      destination = target / path.relative_to(source)
-                      destination.parent.mkdir(parents=True, exist_ok=True)
-                      shutil.copyfile(path, destination)
+          if source.exists():
+              for pattern in ('report.json', 'loader-observation.json', '*.rpmkeys.txt', '*/serial.log', '*/argv.json'):
+                  for path in source.glob(pattern):
+                      if path.is_file() and path.stat().st_size <= 4 * 1024 * 1024:
+                          destination = target / path.relative_to(source)
+                          destination.parent.mkdir(parents=True, exist_ok=True)
+                          shutil.copyfile(path, destination)
           PY
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()

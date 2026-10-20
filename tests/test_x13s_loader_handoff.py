@@ -3,6 +3,7 @@ import importlib.util
 from pathlib import Path
 import stat
 import struct
+from types import SimpleNamespace
 
 import pytest
 
@@ -48,9 +49,6 @@ def test_serial_evidence_keeps_raw_bytes(tmp_path):
     assert log == "boot\ufffd\n"
 
 
-
-
-
 def test_selects_only_inline_regular_payload():
     assert handoff.member_from_newc(archive(), "payload") == b"bytes"
 
@@ -68,10 +66,10 @@ def test_rejects_unsafe_paths(name):
 
 
 def test_rejects_duplicate_member():
-
     data = handoff.newc([("payload", stat.S_IFREG, b"a"), ("./payload", stat.S_IFREG, b"b")])
     with pytest.raises(ValueError, match="duplicate"):
         handoff.member_from_newc(data, "payload")
+
 def test_rejects_invalid_archive_name_encoding():
     data = handoff.newc([("payload", stat.S_IFREG | 0o644, b"bytes")])
     assert b"payload\0" in data
@@ -118,8 +116,69 @@ def test_configs_use_actual_linux_initrd_path():
     assert "initrd /fixture/initrd" in positive
     assert "chainloader" not in positive
     assert "initrd /fixture/initrd" not in handoff.grub_config("missing-initrd")
+    assert "panic=1" in handoff.grub_config("missing-initrd")
     assert "x13s.fixture=wrong" in handoff.grub_config("wrong-argument")
+    assert "panic=-1" in positive
 
+
+def _check_loader_with_sections(monkeypatch, sections):
+    class Loader:
+        def exec_module(self, module):
+            module.inspect_pe = lambda _data: {"sections": sections}
+
+    monkeypatch.setattr(
+        handoff.importlib.util,
+        "spec_from_file_location",
+        lambda *_args: SimpleNamespace(loader=Loader()),
+    )
+    monkeypatch.setattr(
+        handoff.importlib.util,
+        "module_from_spec",
+        lambda _spec: SimpleNamespace(),
+    )
+    return handoff.check_loader(b"synthetic")
+
+
+def test_check_loader_rejects_missing_inventory_loader(monkeypatch):
+    monkeypatch.setattr(
+        handoff.importlib.util,
+        "spec_from_file_location",
+        lambda *_args: SimpleNamespace(loader=None),
+    )
+    with pytest.raises(ValueError, match="unable to load"):
+        handoff.check_loader(b"synthetic")
+
+
+@pytest.mark.parametrize(
+    "sections,message",
+    [
+        (
+            [
+                {"name": ".linux", "initialized_sha256": "f838299696f91f0400de9e6b796d3d862f8e9eb2899101a913314150ce9550d6"},
+                {"name": ".uname", "kernel_release": "7.2.11-200.fc44.aarch64"},
+                {"name": ".initrd"},
+            ],
+            "compete",
+        ),
+        (
+            [
+                {"name": ".linux", "initialized_sha256": "wrong"},
+                {"name": ".uname", "kernel_release": "7.2.11-200.fc44.aarch64"},
+            ],
+            "kernel",
+        ),
+        (
+            [
+                {"name": ".linux", "initialized_sha256": "f838299696f91f0400de9e6b796d3d862f8e9eb2899101a913314150ce9550d6"},
+                {"name": ".uname", "kernel_release": "wrong"},
+            ],
+            "release",
+        ),
+    ],
+)
+def test_check_loader_rejects_unsafe_or_mismatched_payload(monkeypatch, sections, message):
+    with pytest.raises(ValueError, match=message):
+        _check_loader_with_sections(monkeypatch, sections)
 
 @pytest.mark.parametrize("machine", [0x8664, 0xA641, 0])
 def test_rejects_non_arm64_payload(machine):
