@@ -48,64 +48,30 @@ cd tunaos
 
 ### 2. Prune: turn off what you don't want
 
-Open `.github/build-config.yml`. This file defines every variant and every
-flavor. Remove or comment out everything you don't need.
+Open `tunaos.toml`. TunaOS itself uses this file for the matrix. Edit the
+existing variant and flavor tables; do not edit `.github/build-config.yml`.
+Build setup creates that ignored compatibility file from TOML.
 
-**Before** — full matrix, ~60 flavors:
+For example, find this flavor under Yellowfin and change its build flags:
 
-```yaml
-variants:
-  - id: yellowfin
-    ...
-    flavors:
-      - id: base
-      - id: gnome
-      - id: cosmic
-      - id: kde
-      - id: niri
-      - id: gnome-hwe
-      - id: gnome-nvidia
-      - id: gnome-nvidia-hwe
-      - id: cosmic-hwe
-      - id: cosmic-nvidia
-      - id: kde-hwe
-      - id: kde-nvidia
-      - id: niri-hwe
-      - id: niri-nvidia
-  - id: albacore
-    ... (same shape)
-  - id: skipjack
-    ...
-  - id: bonito
-    ...
-  # ... grouper, marlin, flounder, flounder-sid, sailfin, guppy, bonito-rawhide
+```toml
+[[variants.yellowfin.flavors]]
+id = "cosmic"
+stage = 2
+build_image = false
+build_iso = false
+build_qcow2 = false
 ```
 
-**After** — one variant, one desktop, optional NVIDIA:
+This is an excerpt, not a whole config file. Keep the shared `base` stage and
+all parent stages that the desktops you keep need. Keep existing safety holds
+until tests support a change. If you remove a whole variant, also remove its
+`tuna_rollout` entry. Run `python3 scripts/config.py validate` after edits.
+Use `python3 scripts/config.py show` to inspect the effective matrix.
 
-```yaml
-variants:
-  - id: yellowfin
-    emoji: "🐠"
-    description: "Based on AlmaLinux Kitten 10"
-    base_image: "quay.io/almalinuxorg/almalinux-bootc:10-kitten"
-    platforms: ["linux/amd64"]
-    flavors:
-      - id: base
-        stage: 1
-        build_image: true
-      - id: gnome
-        stage: 2
-        build_image: true
-        build_iso: true
-      - id: gnome-nvidia
-        stage: 3
-        build_image: true
-        build_iso: true
-```
-
-> **Tip:** Keep `base` — it's a shared stage that every desktop needs.
-> Delete the rest. You can always add them back from git history.
+Packages and brand settings still use the paths below in this first migration
+step. The [single-config plan](PRIMARY-CONFIG-MIGRATION.md) tracks their move
+into the same file.
 
 What to turn off and why:
 
@@ -461,13 +427,14 @@ RUN rm -rf /opt && ln -s /var/opt /opt
 
 ### 3. Register in the build matrix
 
-In `.github/build-config.yml`, under your variant:
+In `tunaos.toml`, append a flavor table under your variant:
 
-```yaml
-- id: myde
-  stage: 2
-  build_image: true
-  build_iso: true
+```toml
+[[variants.yellowfin.flavors]]
+id = "myde"
+stage = 2
+build_image = true
+build_iso = true
 ```
 
 That's it — one YAML file, one Containerfile stage, one matrix entry. No
@@ -502,21 +469,29 @@ fi
 
 ### 3. Add the variant to the build matrix
 
-```yaml
-# .github/build-config.yml
-- id: myvariant
-  emoji: "🐟"
-  description: "Based on MyOS"
-  base_image: "ghcr.io/myorg/myos-bootc:latest"
-  platforms: ["linux/amd64"]
-  flavors:
-    - id: base
-      stage: 1
-      build_image: true
-    - id: gnome
-      stage: 2
-      build_image: true
-      build_iso: true
+```toml
+# tunaos.toml: add these tables to the existing file.
+[variants.myvariant]
+emoji = "🐟"
+description = "Based on MyOS"
+base_image = "ghcr.io/myorg/myos-bootc:latest"
+platforms = ["linux/amd64"]
+
+[[variants.myvariant.flavors]]
+id = "base"
+stage = 1
+build_image = true
+
+[[variants.myvariant.flavors]]
+id = "gnome"
+stage = 2
+build_image = true
+build_iso = true
+
+[tuna_rollout.myvariant]
+status = "unsupported"
+package_target = "myos"
+reason = "Tuna Desktop packages for this base need tests."
 ```
 
 ### 4. Add package sections to desktop manifests
@@ -628,7 +603,7 @@ tunaos/
 │   ├── files/                       #   config file overlay
 │   └── systemd/                     #   systemd units
 │
-├── .github/build-config.yml         ← EDIT THIS — BUILD MATRIX
+├── tunaos.toml                     ← EDIT THIS — BUILD MATRIX
 ├── .github/workflows/               ← CI PIPELINE
 │   ├── build-variant.yml            #   orchestrator (works as-is on forks)
 │   ├── reusable-build-image.yml     #   per-image build+push+sign

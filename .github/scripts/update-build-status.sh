@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# shellcheck source=.github/scripts/gh-read-retry.sh
+source "$(dirname "${BASH_SOURCE[0]}")/gh-read-retry.sh"
+
 # Regenerate the README build-matrix snapshot from build-config.yml and the
 # latest completed main-branch run of each variant workflow.
 # Requires: gh, jq, yq. GITHUB_TOKEN must be able to read Actions metadata.
@@ -9,7 +12,12 @@ script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd -- "${script_dir}/../.." && pwd)"
 criteria_file="${repo_root}/.github/green-criteria.yml"
 repo="${GITHUB_REPOSITORY:-tuna-os/tunaOS}"
-config="${1:-.github/build-config.yml}"
+if [[ -n "${1:-}" ]]; then
+	config="$1"
+else
+	source "$(dirname "${BASH_SOURCE[0]}")/../../scripts/lib/build-config.sh"
+	config="$(tunaos_build_config)" || exit 1
+fi
 readme="${2:-README.md}"
 start='<!-- build-status:start -->'
 end='<!-- build-status:end -->'
@@ -58,7 +66,7 @@ while IFS=$'\t' read -r variant emoji; do
 	# build". Fetch a short window and prefer the newest run that actually
 	# concluded success or failure, so one cancellation does not blank a
 	# variant's whole row (tunaOS#1730).
-	runs=$(gh run list \
+	runs=$(gh_read_retry run list \
 		--repo "$repo" \
 		--workflow "build-${variant}.yml" \
 		--branch main \
@@ -105,7 +113,7 @@ while IFS=$'\t' read -r variant emoji; do
 	unscored=$count
 	while IFS= read -r scan_id; do
 		((unscored > 0)) || break
-		stage_jobs=$(gh api --paginate "repos/${repo}/actions/runs/${scan_id}/jobs?per_page=50" \
+		stage_jobs=$(gh_read_retry api --paginate "repos/${repo}/actions/runs/${scan_id}/jobs?per_page=100" \
 			--jq '.jobs[] | select((.name | endswith(" / Promote")) or (.name | endswith(" / Gate"))) | [.name, .conclusion] | @tsv')
 		for flavor in "${configured[@]}"; do
 			[[ -n "${promo_of[$flavor]:-}" ]] && continue
