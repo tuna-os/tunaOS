@@ -7,6 +7,15 @@ for free, and which parts each desktop owns.
 It exists because `marlin:gnome` looked unbranded, and every check we had still
 passed.
 
+## Opt-in fork preview
+
+A prepared fork context can change the support, documentation and home URLs.
+It can also replace the shared JPEG wallpaper. See the [contract for fork
+consumers](FORK-BRANDING.md) for the inputs, desktop hooks and runtime checks.
+The preview rejects a custom name or logo. Those changes need coordinated
+support for the installer, boot splash and desktop assets.
+Tests of source files do not prove what an image displays.
+
 ## The three layers
 
 The brand lands partly, and the part that lands fools a spot check. We wrote

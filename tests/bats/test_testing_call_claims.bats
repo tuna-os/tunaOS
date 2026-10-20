@@ -44,7 +44,7 @@ setup() { [ -f "$DOC" ] || skip "testing call not present on this branch"; }
   # If someone bumps bonito's base and not this doc, the doc starts lying. Read
   # the version from the config rather than hardcoding it here.
   local ver
-  ver="$(awk '/^  - id: bonito$/{f=1} f && /base_image:/{print; exit}' "$CONFIG" | grep -oE 'fedora-bootc:[0-9]+' | cut -d: -f2)"
+  ver="$(yq -r '.variants[] | select(.id == "bonito") | .base_image' "$CONFIG" | grep -oE 'fedora-bootc:[0-9]+' | cut -d: -f2)"
   [ -n "$ver" ]
   run grep -F "Fedora ${ver}" "$DOC"
   [ "$status" -eq 0 ]
