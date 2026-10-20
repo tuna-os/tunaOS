@@ -546,7 +546,23 @@ EOF
 	"!!map") readarray -t _TD_PKGS < <($YQ -r '.packages.apt.packages // [] | .[]' "${_TD_MANIFEST}") ;;
 	"!!seq") readarray -t _TD_PKGS < <($YQ -r '.packages.apt[]' "${_TD_MANIFEST}") ;;
 	esac
-	if ((${#_TD_PKGS[@]} > 0)); then
+	if [[ "${IS_DEBIAN:-false}" == true && "${TUNAOS_IMAGE_FLAVOR:-}" == gnome && "$_TD_DESKTOP" == gnome ]]; then
+		# The host binds this contract to the original flavor and native target.
+		# HWE/NVIDIA stages retain the existing adapter path until separately tested.
+		# shellcheck source=build_scripts/lib/desktop-contract.sh
+		source "${_TD_CTX}/build_scripts/lib/desktop-contract.sh"
+		_TD_NATIVE_ARCH=$(dpkg --print-architecture)
+		case "$_TD_NATIVE_ARCH" in
+		amd64 | arm64) ;;
+		*)
+			echo "ERROR: unsupported Debian contract architecture: $_TD_NATIVE_ARCH" >&2
+			exit 1
+			;;
+		esac
+		tunaos_desktop_contract_install \
+			"${_TD_CTX}/manifests/desktop-contracts/${IMAGE_NAME_VARIANT:?}/gnome/linux-${_TD_NATIVE_ARCH}.json" \
+			"${_TD_CTX}/tunaos.toml" "$IMAGE_NAME_VARIANT" gnome "linux/${_TD_NATIVE_ARCH}"
+	elif ((${#_TD_PKGS[@]} > 0)); then
 		pkg_install "${_TD_PKGS[@]}"
 	elif [[ "${_TD_APT_TYPE}" != "!!null" ]]; then
 		# Fail loudly: an apt section exists but nothing parsed out of it.
@@ -1183,5 +1199,11 @@ fi
 "${_TD_CTX}/build_scripts/install-countme.sh"
 
 emit_packages_manifest
+
+# A failed hook, branding check, or package-manifest emission never leaves a
+# successful package receipt. Native package presence is checked by verification.
+if [[ "${_TUNA_DESKTOP_INSTALLED:-0}" == 1 ]]; then
+	tunaos_desktop_contract_commit /usr/share/tunaos/desktop-package-contract.json
+fi
 
 printf "::endgroup::\n"
