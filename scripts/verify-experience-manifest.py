@@ -12,13 +12,18 @@ bundled installer GUI on egress-blocked QEMU, each followed by an installed
 disk boot. The old bare-boolean manifest (variant/flavor/screens/luks/
 installed_boot/desktop_contract) is rejected with a migration error.
 """
-
 import argparse
 import json
 import math
 import re
 import sys
 from pathlib import Path
+
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+from contracts.targets import validate_target
 
 
 SCHEMA_V1 = "QualificationEvidence/v1"
@@ -112,12 +117,28 @@ def _validate_observed_record(record, mode: str, label: str) -> None:
     _require_number(record["duration_s"], f"observed.{mode}.duration_s", label)
 
 
+def _validate_target_identity(manifest: dict, label: str) -> None:
+    target = {
+        "variant": manifest["variant"],
+        "flavor": manifest["flavor"],
+        "platform": manifest["platform"],
+        "cpuBaseline": manifest["cpu_baseline"],
+        "hardwareScope": manifest["hardware_scope"],
+    }
+    try:
+        validate_target(target)
+    except ValueError as exc:
+        raise ValueError(f"{label}: invalid canonical target identity: {exc}") from exc
+
+
+
 def validate(manifest: dict, label: str) -> None:
     if manifest.get("schema") != SCHEMA_V1:
         raise ValueError(f"{label}: {MIGRATION_HINT}")
     for field in ("variant", "flavor", "platform", "cpu_baseline",
                   "hardware_scope"):
         _require_text(manifest, field, label)
+    _validate_target_identity(manifest, label)
     if "iso_sha256" not in manifest:
         raise ValueError(f"{label}: iso_sha256 is missing")
     _require_digest(manifest["iso_sha256"], "iso_sha256", label)

@@ -200,7 +200,26 @@ def test_self_declared_passing_subset_cannot_remove_required_checks(observations
 @pytest.mark.parametrize("kind", ["image", "package"])
 def test_generating_a_fresh_feed_does_not_refresh_old_evidence(observations, kind):
     observations[kind]["measuredAt"] = "2026-10-07T10:00:00Z"
-    assert evaluate(observations)["status"] == "stale"
+    row = evaluate(observations)
+    assert row["status"] == "stale"
+    if kind == "package":
+        assert row["packageReadiness"]["status"] == "stale"
+
+
+def test_old_latest_factory_observation_stales_package_readiness(observations):
+    observations["package"]["latestAttempt"]["measuredAt"] = "2026-10-07T10:00:00Z"
+    row = evaluate(observations)
+    assert row["packageReadiness"]["status"] == "stale"
+    assert row["status"] == "stale"
+
+
+def test_package_readiness_stales_before_missing_image_or_failed_attempt_returns(observations):
+    observations["package"]["measuredAt"] = "2026-10-07T10:00:00Z"
+    observations["image"] = None
+    observations["attempt"]["status"] = "failed"
+    row = evaluate(observations)
+    assert row["packageReadiness"]["status"] == "stale"
+    assert row["status"] == "failed"
 
 
 @pytest.mark.parametrize("measured", [None, "2026-10-11T10:00:00Z", "2026-10-10T10:00:00+00:00"])

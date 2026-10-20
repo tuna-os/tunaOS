@@ -39,9 +39,9 @@ def manifest(**overrides):
         "schema": "QualificationEvidence/v1",
         "variant": "yellowfin",
         "flavor": "gnome",
-        "platform": "x86_64",
+        "platform": "linux/amd64/v2",
         "cpu_baseline": "x86-64-v2",
-        "hardware_scope": "qemu",
+        "hardware_scope": "generic",
         "iso_sha256": _digest("e"),
         "resolved_inputs": {
             "source": _digest("a"),
@@ -155,6 +155,18 @@ def test_rejects_observed_source_mismatch_with_resolved_input(mode):
 def test_rejects_missing_identity_fields(field, bad):
     with pytest.raises(ValueError, match=field):
         MODULE.validate(manifest(**{field: bad}), "test")
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [("platform", "linux/amd64"), ("cpu_baseline", "x86-64"),
+     ("hardware_scope", "qemu")],
+)
+def test_rejects_noncanonical_target_identity(field, value):
+    candidate = manifest()
+    candidate[field] = value
+    with pytest.raises(ValueError, match="canonical target identity"):
+        MODULE.validate(candidate, "fixture")
 
 
 @pytest.mark.parametrize("field", ["resolved_inputs", "browser", "observed", "measurements"])
@@ -339,7 +351,13 @@ def test_parity_workflow_binds_each_iso_to_its_own_manifest(tmp_path):
             json.dumps(evidence), encoding="utf-8"
         )
 
-    env = os.environ | {"VARIANT": "yellowfin", "FLAVOR": "gnome"}
+    env = os.environ | {
+        "VARIANT": "yellowfin",
+        "FLAVOR": "gnome",
+        "QUAL_PLATFORM": "linux/amd64/v2",
+        "QUAL_CPU_BASELINE": "x86-64-v2",
+        "QUAL_HARDWARE_SCOPE": "generic",
+    }
     valid = subprocess.run(
         ["bash", "-c", script],
         cwd=ROOT,
