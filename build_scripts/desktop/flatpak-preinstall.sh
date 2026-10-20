@@ -58,12 +58,12 @@ _fp_add_app() {
 _FP_POLICY="$(dirname -- "${BASH_SOURCE[0]}")/flatpak-preinstall.tsv"
 [[ -f "$_FP_POLICY" ]] || {
 	echo "missing generated Flatpak policy" >&2
-	exit 1
+	return 1 2>/dev/null || exit 1
 }
 _FP_INSTALLED_POLICY="${_FP_DIR}/../tunaos-preinstall-policy.tsv"
 [[ ! -L "$_FP_INSTALLED_POLICY" ]] || {
 	echo "refusing linked Flatpak policy" >&2
-	exit 1
+	return 1 2>/dev/null || exit 1
 }
 : >"$_FP_INSTALLED_POLICY"
 chmod 0644 "$_FP_INSTALLED_POLICY"

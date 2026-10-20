@@ -174,3 +174,23 @@ def test_kcm_cannot_bypass_the_primary_declaration_list():
         if 'kcm-ublue' in operations:
             assert operations.index('kcm-ublue') < operations.index('flatpak-preinstall')
     assert '[Flatpak Preinstall ' not in (ROOT / 'build_scripts/desktop/kcm-ublue.sh').read_text()
+
+
+@pytest.mark.parametrize('sourced', [False, True])
+@pytest.mark.parametrize('failure', ['missing-policy', 'linked-policy'])
+def test_recipe_failure_is_nonzero_in_both_hook_contexts(tmp_path, sourced, failure):
+    script = tmp_path / 'flatpak-preinstall.sh'
+    script.write_bytes((ROOT / 'build_scripts/desktop/flatpak-preinstall.sh').read_bytes())
+    protected = tmp_path / 'protected'
+    protected.write_text('preserve\n')
+    if failure == 'linked-policy':
+        (tmp_path / 'flatpak-preinstall.tsv').write_bytes(
+            (ROOT / 'build_scripts/desktop/flatpak-preinstall.tsv').read_bytes())
+        (tmp_path / 'tunaos-preinstall-policy.tsv').symlink_to(protected)
+    command = ['bash', '-c', 'source "$1"', 'hook-test', str(script)] if sourced else ['bash', str(script)]
+    result = subprocess.run(command, env={
+        'PATH': '/usr/bin:/bin', 'TUNAOS_PREINSTALL_DIR': str(tmp_path / 'preinstall.d'),
+        'TUNAOS_SYSTEMD_SYSTEM_DIR': str(tmp_path / 'no-unit')}, capture_output=True)
+    assert result.returncode == 1
+    assert protected.read_text() == 'preserve\n'
+    assert not list((tmp_path / 'preinstall.d').glob('*.preinstall'))
