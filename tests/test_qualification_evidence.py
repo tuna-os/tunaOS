@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import importlib.util
 import json
+import re
 from pathlib import Path
 
 from jsonschema import Draft202012Validator
@@ -381,6 +382,21 @@ def test_disjoint_tool_inventories_are_bounded_before_serialization():
         MODULE.evaluate_reuse(producer, current)
 
 
+def test_disjoint_harness_inventories_are_bounded_before_serialization():
+    producer = producer_receipt()
+    producer["inputs"]["harness"] = {
+        f"producer-harness-{index}": {"digest": D["6"], "assertions": ["build"]}
+        for index in range(512)
+    }
+    current = current_inputs()
+    current["inputs"]["harness"] = {
+        f"current-harness-{index}": {"digest": D["7"], "assertions": ["build"]}
+        for index in range(512)
+    }
+    with pytest.raises(MODULE.ContractError, match="changed harness inputs exceed bound"):
+        MODULE.evaluate_reuse(producer, current)
+
+
 @pytest.mark.parametrize("field,value", [("classification", []), ("reasonCode", {})])
 def test_malformed_failure_enum_is_reported_after_a_valid_failure(tmp_path, field, value):
     context = evidence_context()
@@ -402,3 +418,28 @@ def test_malformed_tail_preserves_prior_failure(tmp_path, tail):
     report = MODULE.build_report(context, MODULE.load_events(path, context, MODULE.validate_context(context)[1]))
     assert report["firstFailure"]["stage"] == "install"
     assert any(row["name"] == "diagnostics" for row in report["assertions"])
+
+
+@pytest.mark.parametrize(
+    ("mutation", "path"),
+    [
+        ("build", "inputs.build.bad.digest"),
+        ("harness", "inputs.harness.bad.digest"),
+    ],
+)
+def test_validation_errors_identify_the_offending_input(mutation, path):
+    receipt = producer_receipt()
+    if mutation == "build":
+        receipt["inputs"]["build"]["bad"] = "not-a-digest"
+    else:
+        receipt["inputs"]["harness"]["bad"] = {"digest": "not-a-digest", "assertions": ["build"]}
+    with pytest.raises(MODULE.ContractError, match=re.escape(path)):
+        MODULE.evaluate_reuse(receipt, current_inputs())
+
+
+def test_build_report_revalidates_context_when_evidence_is_supplied():
+    context = evidence_context()
+    evidence = MODULE.validate_context(context)[1]
+    del context["image"]
+    with pytest.raises(MODULE.ContractError, match="invalid fields"):
+        MODULE.build_report(context, [], evidence=evidence)
