@@ -36,6 +36,11 @@ tuna_gdm_rebuild_resource() {
 				rm -rf "$tmp"
 				return 1
 			fi
+			if [[ -z "$relative" || "$relative" == /* || "/$relative/" == */../* ]]; then
+				echo "tuna-gdm: unsafe GResource path: $name" >&2
+				rm -rf "$tmp"
+				return 1
+			fi
 			path="$tmp/$relative"
 			mkdir -p "$(dirname "$path")"
 			if ! gresource extract "$resource" "$name" >"$path"; then
