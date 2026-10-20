@@ -251,10 +251,22 @@ jobs:
             echo "invalid live overlay digest: ${OVERLAY_DIGEST}" >&2
             exit 1
           }
+          TACKLEBOX_PIN="$(awk -F'"' '/^[[:space:]]*tacklebox:/ { print $2; exit }' image-versions.yaml)"
+          [[ "$TACKLEBOX_PIN" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "invalid tacklebox pin: ${TACKLEBOX_PIN}" >&2
+            exit 1
+          }
+          TUNA_LIVE_ENGINE_DIGEST="sha256:$(printf 'tacklebox:%s' "$TACKLEBOX_PIN" | sha256sum | awk '{print $1}')"
           export TUNAOS_IMAGE_REF="${IMAGE_REF}@${IMAGE_DIGEST}"
+          export TUNA_LIVE_PAYLOAD_REF="$TUNAOS_IMAGE_REF"
+          export TUNA_LIVE_BASE_IMAGE="$IMAGE_REF"
+          export TUNA_LIVE_BASE_DIGEST="$IMAGE_DIGEST"
+          export TUNA_LIVE_OVERLAY_REF="${OVERLAY_REF}@${OVERLAY_DIGEST}"
           export TUNA_LIVE_OVERLAY_DIGEST="$OVERLAY_DIGEST"
+          export TUNA_LIVE_ENGINE_DIGEST
           echo "Building ISO from ${TUNAOS_IMAGE_REF} (${PLATFORM})"
-          echo "Embedding live overlay ${OVERLAY_REF}@${TUNA_LIVE_OVERLAY_DIGEST}"
+          echo "Embedding live overlay ${TUNA_LIVE_OVERLAY_REF}"
+          echo "ISO builder provenance ${TUNA_LIVE_ENGINE_DIGEST}"
           sudo -E bash ./scripts/build-iso-tacklebox.sh \
             "${VARIANT}" "${FLAVOR}" ghcr "${TAG}" 0 "${PLATFORM}"
       # #1378 follow-through. This step installs the native QEMU + firmware
@@ -462,18 +474,16 @@ jobs:
             rclone copy --log-level INFO --checksum --s3-no-check-bucket \
               "$artifact" "R2:${R2_BUCKET}/live-isos/"
           done
-          # amd64 keeps the bare <variant>-<flavor>-latest.iso name — that's a
-          # documented download URL (docs/TESTING.md) users already `wget`,
-          # so it must not move out from under them. Other platforms
-          # (#1378) get an arch-suffixed pointer instead of clobbering it.
-          if [[ "${PLATFORM}" == "linux/amd64" || "${PLATFORM}" == "linux/amd64/v2" ]]; then
-            # The canonical x86 target owns the public bare pointer. Alma's
-            # ordinary x86 target is AMD64/v2; NVIDIA remains generic AMD64.
-            LATEST="${VARIANT}-${FLAVOR}-latest.iso"
-          else
-            ARCH_SUFFIX="${PLATFORM##*/}"
-            LATEST="${VARIANT}-${FLAVOR}-latest-${ARCH_SUFFIX}.iso"
-          fi
+          # AMD64/v2 is the canonical ordinary Alma target and owns the
+          # historical bare pointer. Generic AMD64 gets a distinct pointer so
+          # two x86 matrix legs cannot overwrite one another's ISO, checksum,
+          # or signature bundle.
+          case "${PLATFORM}" in
+            linux/amd64/v2) LATEST="${VARIANT}-${FLAVOR}-latest.iso" ;;
+            linux/amd64) LATEST="${VARIANT}-${FLAVOR}-latest-amd64.iso" ;;
+            linux/arm64) LATEST="${VARIANT}-${FLAVOR}-latest-arm64.iso" ;;
+            *) echo "::error::unsupported canonical platform: ${PLATFORM}"; exit 1 ;;
+          esac
           rclone copyto --log-level INFO --s3-no-check-bucket \
             "$ISO" "R2:${R2_BUCKET}/live-isos/${LATEST}"
           DIGEST=$(sha256sum "$ISO" | awk '{print $1}')

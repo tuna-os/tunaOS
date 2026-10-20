@@ -1066,6 +1066,7 @@ meta = {
     "base_image": os.environ.get("TUNA_LIVE_BASE_IMAGE", "unknown"),
     "base_digest": os.environ.get("TUNA_LIVE_BASE_DIGEST", "unknown"),
     "overlay_digest": os.environ.get("TUNA_LIVE_OVERLAY_DIGEST", "unknown"),
+    "engine_digest": os.environ.get("TUNA_LIVE_ENGINE_DIGEST", "unknown"),
     "platform": os.environ.get("TUNA_LIVE_PLATFORM", "unknown"),
     "installer_app_id": sys.argv[1],
     "installer_revision": sys.argv[2],

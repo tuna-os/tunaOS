@@ -317,28 +317,45 @@ check "locale is configured" \
 # The installed image may deliberately ship no SSH daemon. Emit the same
 # bootc identity that the strict harness would otherwise collect over SSH so
 # serial-only published-media runs can still prove the installed deployment.
-bootc_identity_json=$(
-	bootc status --json 2>/dev/null ||
-	bootc status --format json 2>/dev/null ||
-	bootc status 2>/dev/null ||
-	true
-)
-bootc_identity_digest=$(printf '%s' "$bootc_identity_json" |
-	sed -nE 's/.*"imageDigest"[[:space:]]*:[[:space:]]*"(sha256:[0-9a-fA-F]{64})".*/\1/p' |
-	head -1 || true)
-if [[ ! "$bootc_identity_digest" =~ ^sha256:[0-9a-fA-F]{64}$ ]]; then
-	bootc_identity_digest=$(printf '%s' "$bootc_identity_json" |
-		grep -oE 'sha256:[0-9a-fA-F]{64}' | head -1 || true)
-fi
-bootc_identity_ref=$(printf '%s' "$bootc_identity_json" |
-	sed -nE 's/.*"image"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' | head -1 || true)
-if [[ "$bootc_identity_digest" =~ ^sha256:[0-9a-fA-F]{64}$ &&
-	-n "$bootc_identity_ref" ]]; then
-	emit "TUNAOS_IMAGE_IDENTITY digest=${bootc_identity_digest} targetImgref=${bootc_identity_ref}"
+bootc_identity_json="$(bootc status --json 2>/dev/null || true)"
+bootc_identity_pair="$(
+	printf '%s' "$bootc_identity_json" | python3 -c '
+import json
+import sys
+
+try:
+    document = json.load(sys.stdin)
+except (json.JSONDecodeError, TypeError):
+    raise SystemExit(0)
+
+status = document.get("status")
+if not isinstance(status, dict):
+    status = document
+booted = status.get("booted")
+if not isinstance(booted, dict):
+    raise SystemExit(0)
+image = booted.get("image")
+if not isinstance(image, dict):
+    raise SystemExit(0)
+digest = image.get("imageDigest") or image.get("digest")
+inner = image.get("image")
+if isinstance(inner, dict):
+    ref = inner.get("image") or inner.get("ref") or ""
+else:
+    ref = inner or image.get("ref") or image.get("imageRef") or ""
+if not isinstance(digest, str) or not isinstance(ref, str):
+    raise SystemExit(0)
+if not __import__("re").fullmatch(r"sha256:[0-9a-fA-F]{64}", digest) or not ref:
+    raise SystemExit(0)
+print(f"{digest}|{ref}")
+' 2>/dev/null || true
+)"
+if [[ "$bootc_identity_pair" =~ ^(sha256:[0-9a-fA-F]{64})\|([^[:space:]]+)$ ]]; then
+	emit "TUNAOS_IMAGE_IDENTITY digest=${BASH_REMATCH[1]} targetImgref=${BASH_REMATCH[2]}"
 else
 	emit "# bootc identity unavailable on serial-only installed boot"
 fi
-unset bootc_identity_json bootc_identity_digest bootc_identity_ref
+unset bootc_identity_json bootc_identity_pair
 
 # Tell an automated reader where to go next. These checks run on the guest's
 # serial console, which is the ONLY channel out of an installed system that

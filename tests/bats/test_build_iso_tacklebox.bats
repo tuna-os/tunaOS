@@ -168,17 +168,18 @@ teardown() {
   [ "$result" = "ghcr.io/tuna-os/bonito:v1.2.3" ]
 }
 
-@test "offline payload keeps a canonical installed-system ref" {
+@test "offline payload stays pinned to the promoted source image" {
 	SCRIPT_PATH="${REPO_ROOT:-$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)}/scripts/build-iso-tacklebox.sh"
-  grep -q 'PAYLOAD_REF=$(tunaos_image_ref "$VARIANT" "$FLAVOR" ghcr "$TAG" 0)' "$SCRIPT_PATH"
-  grep -q '"source": "${IMAGE_REF}"' "$SCRIPT_PATH"
+  grep -q 'SOURCE_IMAGE_REF=$(tunaos_image_ref "$VARIANT" "$FLAVOR" "$REPO" "$TAG")' "$SCRIPT_PATH"
+  grep -q 'PAYLOAD_REF="${TUNA_LIVE_PAYLOAD_REF:-$SOURCE_IMAGE_REF}"' "$SCRIPT_PATH"
+  grep -q '"source": "${SOURCE_IMAGE_REF}"' "$SCRIPT_PATH"
   grep -q '"ref": "${PAYLOAD_REF}"' "$SCRIPT_PATH"
-  source_ref="localhost/yellowfin:kde"
-  canonical_ref="ghcr.io/tuna-os/yellowfin:kde"
-  recipe=$(printf '{"offline_payloads":[{"source":"%s","ref":"%s"}]}' "$source_ref" "$canonical_ref")
+  grep -q 'cp -a "${REPO_ROOT}/live-iso/common/src/." "$CUSTOMIZE_DIR/"' "$SCRIPT_PATH"
+  source_ref="ghcr.io/tuna-os/yellowfin:kde@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  recipe=$(printf '{"offline_payloads":[{"source":"%s","ref":"%s"}]}' "$source_ref" "$source_ref")
   run jq -r '.offline_payloads[0].source + " -> " + .offline_payloads[0].ref' <<<"$recipe"
   [ "$status" -eq 0 ]
-  [ "$output" = "localhost/yellowfin:kde -> ghcr.io/tuna-os/yellowfin:kde" ]
+  [ "$output" = "${source_ref} -> ${source_ref}" ]
 }
 
 @test "image source override does not replace canonical offline payload ref" {

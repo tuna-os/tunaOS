@@ -183,7 +183,7 @@ jobs:
   e2e:
     name: E2E ${{ matrix.variant }}:${{ matrix.flavor }}
     needs: generate-matrix
-    runs-on: ubuntu-24.04
+    runs-on: ${{ contains(matrix.platform, 'arm64') && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     # The job budget has to cover the steps inside it. This was a flat 30
     # while the build step declares 60 and the readiness step 20, so every
     # `source: build` cell was killed by the JOB at 30 minutes with its own
@@ -313,15 +313,26 @@ jobs:
 
       - name: Install QEMU and helpers
         if: steps.filter.outputs.skip != 'true'
+        env:
+          PLATFORM: ${{ matrix.platform }}
         run: |
+          set -euo pipefail
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends \
-            qemu-system-x86 qemu-utils ovmf socat swtpm \
-            rclone sshpass skopeo python3-yaml \
-            chromium imagemagick tesseract-ocr xorriso squashfs-tools
-          QEMU_BIN="$(command -v qemu-system-x86_64)"
+          if [[ "$PLATFORM" == "linux/arm64" ]]; then
+            sudo apt-get install -y --no-install-recommends \
+              qemu-system-arm qemu-efi-aarch64 qemu-utils socat swtpm \
+              rclone sshpass skopeo python3-yaml chromium imagemagick \
+              tesseract-ocr xorriso squashfs-tools
+            QEMU_BIN="$(command -v qemu-system-aarch64)"
+          else
+            sudo apt-get install -y --no-install-recommends \
+              qemu-system-x86 qemu-utils ovmf socat swtpm \
+              rclone sshpass skopeo python3-yaml chromium imagemagick \
+              tesseract-ocr xorriso squashfs-tools
+            QEMU_BIN="$(command -v qemu-system-x86_64)"
+          fi
           {
-            echo "TUNAOS_QUAL_ENGINE_DIGEST=sha256:$(sha256sum "$QEMU_BIN" | awk '{print $1}')"
+            echo "TUNAOS_QEMU_DIGEST=sha256:$(sha256sum "$QEMU_BIN" | awk '{print $1}')"
             echo "TUNAOS_QUAL_BROWSER_NAME=chromium"
             echo "TUNAOS_QUAL_BROWSER_VERSION=$(chromium --version | awk '{print $2}')"
           } >> "$GITHUB_ENV"
@@ -377,10 +388,12 @@ jobs:
           # its desktop prefix -- gnome-hwe and gnome-nvidia all ride inside
           # the gnome group's offline store, so they resolve to the same ISO.
           DESKTOP="${FLAVOR%%-*}"
-          PLATFORM_SUFFIX=""
-          if [[ "$PLATFORM" == "linux/arm64" ]]; then
-            PLATFORM_SUFFIX="-arm64"
-          fi
+          case "$PLATFORM" in
+            linux/amd64/v2) PLATFORM_SUFFIX="" ;;
+            linux/amd64) PLATFORM_SUFFIX="-amd64" ;;
+            linux/arm64) PLATFORM_SUFFIX="-arm64" ;;
+            *) echo "::error::unsupported canonical platform: ${PLATFORM}" >&2; exit 1 ;;
+          esac
           if [[ "$DESKTOP" == "gnome" ]]; then
             GROUP_OBJECT="${VARIANT}-latest${PLATFORM_SUFFIX}.iso"
           else
@@ -390,12 +403,18 @@ jobs:
           FOUND=""
           for candidate in "${OBJECT}" "${GROUP_OBJECT}"; do
             echo "==> Trying ${candidate} from R2..."
+            rm -f "${candidate}" "${candidate}.sha256"
             rclone copy --log-level INFO --s3-no-check-bucket \
               "R2:${{ secrets.R2_BUCKET }}/live-isos/${candidate}" . || true
-            if [[ -f "${candidate}" ]]; then
+            rclone copy --log-level INFO --s3-no-check-bucket \
+              "R2:${{ secrets.R2_BUCKET }}/live-isos/${candidate}.sha256" . || true
+            if [[ -f "${candidate}" && -f "${candidate}.sha256" ]] &&
+                sha256sum --check --strict "${candidate}.sha256"; then
               FOUND="${candidate}"
               break
             fi
+            echo "::warning::${candidate} was missing or failed its published checksum"
+            rm -f "${candidate}" "${candidate}.sha256"
           done
           if [[ -z "${FOUND}" ]]; then
             echo "::error::No ISO in R2 under either name: live-isos/${OBJECT} (per-flavor) or live-isos/${GROUP_OBJECT} (grouped)"
@@ -524,17 +543,25 @@ jobs:
             echo "::error::invalid live overlay digest: ${TUNA_LIVE_OVERLAY_DIGEST}"
             exit 1
           }
-          export TUNA_LIVE_OVERLAY_DIGEST
+          TACKLEBOX_PIN="$(awk -F'"' '/^[[:space:]]*tacklebox:/ { print $2; exit }' image-versions.yaml)"
+          [[ "$TACKLEBOX_PIN" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "::error::invalid tacklebox pin: ${TACKLEBOX_PIN}"
+            exit 1
+          }
+          TUNA_LIVE_ENGINE_DIGEST="sha256:$(printf 'tacklebox:%s' "$TACKLEBOX_PIN" | sha256sum | awk '{print $1}')"
+          export TUNA_LIVE_OVERLAY_REF="${OVERLAY_REF}@${TUNA_LIVE_OVERLAY_DIGEST}"
+          export TUNA_LIVE_ENGINE_DIGEST
 
           sudo just build "$VARIANT" "$FLAVOR" "$PLATFORM" 1 "$FLAVOR"
           TUNA_LIVE_BASE_IMAGE="localhost/${VARIANT}:${FLAVOR}"
           TUNA_LIVE_BASE_DIGEST="$(sudo podman image inspect \
-            --format '{{.Id}}' "${VARIANT}:${FLAVOR}")"
-          [[ "$TUNA_LIVE_BASE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || {
-            echo "::error::invalid locally built source image digest: ${TUNA_LIVE_BASE_DIGEST}"
+            --format '{{.Digest}}' "${VARIANT}:${FLAVOR}")"
+          [[ "$TUNA_LIVE_BASE_DIGEST" =~ ^sha256:[0-9a-fA-F]{64}$ ]] || {
+            echo "::error::invalid locally built source manifest digest: ${TUNA_LIVE_BASE_DIGEST}"
             exit 1
           }
           export TUNA_LIVE_BASE_IMAGE TUNA_LIVE_BASE_DIGEST
+          export TUNA_LIVE_PAYLOAD_REF="${TUNA_LIVE_BASE_IMAGE}@${TUNA_LIVE_BASE_DIGEST}"
 
           sudo -E env "PATH=$PATH" just iso "$VARIANT" "$FLAVOR" local "$FLAVOR" 0 "$PLATFORM"
           ISO="$(find . -maxdepth 3 -name '*.iso' -newermt '-2 hours' -print -quit)"
@@ -571,6 +598,7 @@ jobs:
           SOURCE_REF=""
           SOURCE_DIGEST=""
           OVERLAY_DIGEST=""
+          ENGINE_DIGEST=""
           QUAL_PLATFORM=""
           INSTALLER_DIGEST=""
           for payload in "${media_payloads[@]}"; do
@@ -584,16 +612,19 @@ jobs:
           except (json.JSONDecodeError, TypeError):
               raise SystemExit(0)
           print("\t".join(str(value.get(key, "")) for key in
-                          ("base_image", "base_digest", "overlay_digest", "platform")))
+                          ("base_image", "base_digest", "overlay_digest",
+                           "engine_digest", "platform")))
           ' <<<"$source_meta"
               )"
-              IFS=$'\t' read -r candidate_ref candidate_source candidate_overlay candidate_platform <<<"$identity"
+              IFS=$'\t' read -r candidate_ref candidate_source candidate_overlay candidate_engine candidate_platform <<<"$identity"
               if [[ -n "$candidate_ref" && -n "$candidate_source" &&
-                    -n "$candidate_overlay" && -n "$candidate_platform" ]]; then
+                    -n "$candidate_overlay" && -n "$candidate_engine" &&
+                    -n "$candidate_platform" ]]; then
                 if [[ -n "$SOURCE_REF" ]]; then
                   [[ "$SOURCE_REF" == "$candidate_ref" &&
                      "$SOURCE_DIGEST" == "$candidate_source" &&
                      "$OVERLAY_DIGEST" == "$candidate_overlay" &&
+                     "$ENGINE_DIGEST" == "$candidate_engine" &&
                      "$QUAL_PLATFORM" == "$candidate_platform" ]] || {
                     echo "::error::ISO payloads disagree on embedded provenance" >&2
                     exit 1
@@ -602,14 +633,20 @@ jobs:
                   SOURCE_REF="$candidate_ref"
                   SOURCE_DIGEST="$candidate_source"
                   OVERLAY_DIGEST="$candidate_overlay"
+                  ENGINE_DIGEST="$candidate_engine"
                   QUAL_PLATFORM="$candidate_platform"
                 fi
               fi
             fi
             receipt="$(unsquashfs -cat "$payload" etc/tunaos/live-installer-info 2>/dev/null || true)"
             candidate="$(awk -F= '$1 == "INSTALLER_BUNDLE_SHA256" { print $2; exit }' <<<"$receipt")"
+            revision="$(awk -F= '$1 == "INSTALLER_REVISION" { print $2; exit }' <<<"$receipt")"
             if [[ "$candidate" =~ ^[0-9a-fA-F]{64}$ ]]; then
               INSTALLER_DIGEST="sha256:${candidate}"
+            elif [[ "$revision" =~ ^[0-9a-fA-F]{64}$ ]]; then
+              # Remote Flatpak installs have no bundle to hash; the deployed
+              # commit is the immutable installer identity.
+              INSTALLER_DIGEST="sha256:${revision,,}"
             fi
           done
           [[ "$SOURCE_DIGEST" =~ ^sha256:[0-9a-fA-F]{64}$ ]] || {
@@ -618,6 +655,10 @@ jobs:
           }
           [[ "$OVERLAY_DIGEST" =~ ^sha256:[0-9a-fA-F]{64}$ ]] || {
             echo "::error::ISO does not contain a valid embedded live overlay digest"
+            exit 1
+          }
+          [[ "$ENGINE_DIGEST" =~ ^sha256:[0-9a-fA-F]{64}$ ]] || {
+            echo "::error::ISO does not contain a valid embedded builder digest"
             exit 1
           }
           [[ "$QUAL_PLATFORM" =~ ^linux/(amd64|arm64)(/v2)?$ ]] || {
@@ -636,6 +677,7 @@ jobs:
             echo "TUNAOS_QUAL_SOURCE_DIGEST=${SOURCE_DIGEST}"
             echo "TUNAOS_QUAL_INSTALLER_DIGEST=${INSTALLER_DIGEST}"
             echo "TUNAOS_QUAL_OVERLAY_DIGEST=${OVERLAY_DIGEST}"
+            echo "TUNAOS_QUAL_ENGINE_DIGEST=${ENGINE_DIGEST}"
             echo "TUNAOS_QUAL_MEDIA_DIGEST=${MEDIA_DIGEST}"
             echo "TUNAOS_QUAL_PLATFORM=${QUAL_PLATFORM}"
             echo "TUNAOS_QUAL_SOURCE_REF=${SOURCE_REF}"
@@ -648,6 +690,7 @@ jobs:
           echo "strict qualification source: ${SOURCE_REF}@${SOURCE_DIGEST}"
           echo "strict qualification overlay: ${OVERLAY_DIGEST}"
           echo "strict qualification installer input: ${INSTALLER_DIGEST}"
+          echo "strict qualification builder: ${ENGINE_DIGEST}"
           echo "strict qualification media: ${MEDIA_DIGEST}"
 
       - name: Run strict offline GUI qualification
@@ -660,8 +703,6 @@ jobs:
           # readable we fall back to TCG (slower but functional).
           KVM_FLAG=""
           [[ -r /dev/kvm && -w /dev/kvm ]] || KVM_FLAG="--no-kvm"
-          QEMU_BIN="$(command -v qemu-system-x86_64 || command -v qemu-system-aarch64)"
-          export TUNAOS_QUAL_ENGINE_DIGEST="sha256:$(sha256sum "$QEMU_BIN" | awk '{print $1}')"
           set +e
           sudo --preserve-env=KVM_FLAG,VARIANT,FLAVOR,TUNAOS_QUAL_SOURCE_DIGEST,TUNAOS_QUAL_OVERLAY_DIGEST,TUNAOS_QUAL_INSTALLER_DIGEST,TUNAOS_QUAL_ENGINE_DIGEST,TUNAOS_QUAL_MEDIA_DIGEST,STRICT_PUBLISHED_MEDIA,TUNAOS_QUAL_PLATFORM,TUNAOS_QUAL_CPU_BASELINE,TUNAOS_QUAL_HARDWARE_SCOPE,TUNAOS_QUAL_BROWSER_NAME,TUNAOS_QUAL_BROWSER_VERSION,TUNAOS_QUAL_BROWSER_MEMORY_GIB,TUNAOS_QUAL_BROWSER_FREE_DISK_GIB \
             ./scripts/iso-e2e.sh "${ISO_PATH}" \
