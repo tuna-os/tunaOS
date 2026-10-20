@@ -2,6 +2,7 @@
 import copy
 import importlib.util
 import json
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -10,9 +11,11 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location('builder_config', ROOT / 'scripts/lib/iso_builder_config.py')
+assert SPEC is not None and SPEC.loader is not None, 'cannot load ISO Builder config module'
 builder = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(builder)
 SPEC2 = importlib.util.spec_from_file_location('primary_config', ROOT / 'scripts/lib/tunaos_config.py')
+assert SPEC2 is not None and SPEC2.loader is not None, 'cannot load primary config module'
 primary = importlib.util.module_from_spec(SPEC2)
 SPEC2.loader.exec_module(primary)
 
@@ -72,10 +75,23 @@ def test_invalid_values_fail_closed(section, key, value):
 
 
 @pytest.mark.parametrize('field', ['desktops', 'variants', 'curated_app_sets', 'ddi_channels'])
-def test_duplicate_ids_rejected(field):
+def test_duplicate_ids_rejected_with_collection_and_id(field):
     doc = config()
-    doc[field].append(copy.deepcopy(doc[field][0]))
-    with pytest.raises(builder.ConfigError):
+    duplicate = copy.deepcopy(doc[field][0])
+    doc[field].append(duplicate)
+    with pytest.raises(builder.ConfigError, match=rf"{field}: duplicate id '{duplicate['id']}'"):
+        builder.validate(doc)
+
+
+def test_duplicate_flatpak_names_desktop_and_app():
+    doc = config()
+    desktop = doc['desktops'][0]
+    app = desktop['default_flatpaks'][0]
+    desktop['default_flatpaks'].append(app)
+    with pytest.raises(
+        builder.ConfigError,
+        match=rf"desktops.{desktop['id']}.default_flatpaks: duplicate Flatpak '{re.escape(app)}'",
+    ):
         builder.validate(doc)
 
 
@@ -99,6 +115,13 @@ def test_primary_default_must_be_build_enabled_cell():
     doc.pop('iso_builder')
     with pytest.raises(builder.ConfigError, match='no stock fallback'):
         builder.project(doc)
+
+
+def test_render_is_canonical_across_mapping_insertion_order():
+    document = primary.load()
+    expected = builder.render(document)
+    document['iso_builder'] = dict(reversed(tuple(document['iso_builder'].items())))
+    assert builder.render(document) == expected
 
 
 def test_portable_image_config_has_no_primary_dependency():

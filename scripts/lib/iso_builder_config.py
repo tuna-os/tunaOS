@@ -46,15 +46,15 @@ def url(value, asset=False):
         raise ConfigError('expected HTTPS URL without credentials or custom port')
 
 
-def entries(value, fields):
+def entries(value, fields, collection):
     if not isinstance(value, list):
-        raise ConfigError('expected list')
+        raise ConfigError(f'{collection}: expected list')
     seen = set()
     for entry in value:
         table(entry, fields)
         pattern(entry['id'], r'[a-z0-9][a-z0-9-]*')
         if entry['id'] in seen:
-            raise ConfigError('duplicate id')
+            raise ConfigError(f'{collection}: duplicate id {entry["id"]!r}')
         seen.add(entry['id'])
     return seen
 
@@ -81,18 +81,22 @@ def validate(document):
     table(document['output'], ('volume_label', 'filename_prefix'))
     pattern(document['output']['volume_label'], r'[A-Z0-9_]{1,32}')
     pattern(document['output']['filename_prefix'], r'[a-z0-9][a-z0-9_-]{0,63}')
-    desktops = entries(document['desktops'], ('id', 'name', 'description', 'default_flatpaks'))
+    desktops = entries(document['desktops'], ('id', 'name', 'description', 'default_flatpaks'), 'desktops')
     for desktop in document['desktops']:
         text(desktop['name'])
         text(desktop['description'])
         apps = desktop['default_flatpaks']
         if not isinstance(apps, list):
-            raise ConfigError('default_flatpaks must be a list')
+            raise ConfigError(f'desktops.{desktop["id"]}.default_flatpaks: expected list')
+        seen_apps = set()
         for app in apps:
             pattern(app, r'[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+){2,}')
-        if len(apps) != len(set(apps)):
-            raise ConfigError('duplicate Flatpak')
-    variants = entries(document['variants'], ('id', 'name'))
+            if app in seen_apps:
+                raise ConfigError(
+                    f'desktops.{desktop["id"]}.default_flatpaks: duplicate Flatpak {app!r}'
+                )
+            seen_apps.add(app)
+    variants = entries(document['variants'], ('id', 'name'), 'variants')
     for variant in document['variants']:
         text(variant['name'])
     selection = document['default_selection']
@@ -108,7 +112,7 @@ def validate(document):
         pattern(selection['image'], r'[a-z0-9.-]+(?::[0-9]+)?/[a-z0-9._/-]+(?::[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}|@sha256:[0-9a-f]{64})')
     if selection['platform'] not in ('linux/amd64', 'linux/amd64/v2', 'linux/amd64/v3', 'linux/arm64'):
         raise ConfigError('unsupported platform')
-    entries(document['curated_app_sets'], ('id', 'label', 'desktops', 'url', 'format'))
+    entries(document['curated_app_sets'], ('id', 'label', 'desktops', 'url', 'format'), 'curated_app_sets')
     for collection in document['curated_app_sets']:
         text(collection['label'])
         url(collection['url'])
@@ -117,7 +121,7 @@ def validate(document):
             raise ConfigError('collection desktops must be unique configured ids')
         if collection['format'] not in ('brewfile', 'preinstall'):
             raise ConfigError('unsupported collection format')
-    entries(document.get('ddi_channels', []), ('id', 'stem', 'name', 'desktop'))
+    entries(document.get('ddi_channels', []), ('id', 'stem', 'name', 'desktop'), 'ddi_channels')
     for channel in document.get('ddi_channels', []):
         pattern(channel['stem'], r'[a-z0-9][a-z0-9-]*')
         text(channel['name'])
@@ -144,4 +148,4 @@ def project(primary):
 
 
 def render(primary):
-    return json.dumps(project(primary), ensure_ascii=False, indent=2) + '\n'
+    return json.dumps(project(primary), ensure_ascii=False, indent=2, sort_keys=True) + '\n'
