@@ -28,7 +28,7 @@ def test_desktop_flavors_without_aarch64_package_sources_are_amd64_only():
     hb = _hummingbird()
     for flavor in hb["flavors"]:
         if flavor["id"] in PINNED_AMD64_ONLY:
-            platforms = flavor.get("platforms") or hb["platforms"]
+            platforms = flavor.get("platforms")
             assert platforms == ["linux/amd64"], (
                 f"hummingbird:{flavor['id']} declares "
                 f"{platforms} — re-adding arm64 requires measuring the "
