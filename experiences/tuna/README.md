@@ -16,7 +16,7 @@ The desktop contract checks six executable versions, their `roost-*` compatibili
 
 ## Other variants
 
-tuna-os/tuna-desktop ADR 0008 ships Tuna Desktop on every TunaOS variant, or records it as unsupported with a reason. `tuna_rollout` in `.github/build-config.yml` is that record; `tests/test_tuna_admission.py` keeps it complete and in step with the flavor cells.
+tuna-os/tuna-desktop ADR 0008 ships Tuna Desktop on every TunaOS variant, or records it as unsupported with a reason. `tuna_rollout` in `tunaos.toml` is that record; `tests/test_tuna_admission.py` keeps it complete and in step with the flavor cells.
 
 - EL10 (`yellowfin:tuna`, `albacore:tuna`, `skipjack:tuna`) installs `tuna-desktop-1.0.0~beta.1-1.el10`, `gdm`, `gtk4-layer-shell` and `libseat` from the configured repositories.
 - Fedora 44 (`bonito:tuna`) installs `tuna-desktop-1.0.0~beta.1-1.fc44` and `gdm`; the rest is Fedora's.
