@@ -24,7 +24,7 @@
 
 ### Adding a new variant
 
-1. Add entry to `.github/build-config.yml` `variants` array
+1. Add entry to `tunaos.toml` `variants` table
 2. Add base image to `image-versions.yaml`
 3. Run `just generate-workflows` and commit generated files
 4. OS detection in `build_scripts/lib.sh` may need a new `IS_*` flag
@@ -33,7 +33,7 @@
 
 1. Write a manifest at `manifests/desktops/<desktop>.yaml` (packages per base OS, display manager, versionlock)
 2. Add a stage to the Containerfile (copy from an existing desktop's pattern)
-3. Add the flavor to `.github/build-config.yml` — `install-desktop.sh` handles the rest (see CONTRIBUTING.md)
+3. Add the flavor to `tunaos.toml` — `install-desktop.sh` handles the rest (see CONTRIBUTING.md)
 
 ### Contributor Onboarding & Issue Triage
 

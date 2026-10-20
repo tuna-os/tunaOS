@@ -16,7 +16,12 @@ set -euo pipefail
 #
 # Requires: gh, yq. Usage: sibling-images-status.sh [build-config.yml]
 
-config="${1:-.github/build-config.yml}"
+if [[ -n "${1:-}" ]]; then
+	config="$1"
+else
+	source "$(dirname "${BASH_SOURCE[0]}")/../../scripts/lib/build-config.sh"
+	config="$(tunaos_build_config)" || exit 1
+fi
 
 count=$(yq -r '.sibling_images | length // 0' "$config")
 if ((count == 0)); then
