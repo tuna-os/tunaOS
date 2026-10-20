@@ -127,23 +127,7 @@ inspect_firmware=(
 	/usr/lib/firmware/ath11k/WCN6855/hw2.1/regdb.bin
 )
 
-inventory_file() {
-	local expected="$1" dir base
-	local -a matches=()
-	dir="${expected%/*}"
-	base="${expected##*/}"
-	if [[ -d "${dir}" ]]; then
-		mapfile -t matches < <(
-			find -L "${dir}" -maxdepth 1 -type f \
-				\( -name "${base}" -o -name "${base}.xz" -o -name "${base}.zst" \) -print | sort
-		)
-	fi
-	if ((${#matches[@]})); then
-		printf 'PRESENT %s -> %s\n' "${expected}" "${matches[*]}"
-	else
-		printf 'MISSING %s\n' "${expected}"
-	fi
-}
+. "$(dirname "${BASH_SOURCE[0]}")/lib/x13s_inventory.sh"
 
 report_dir=/usr/share/tunaos
 report="${report_dir}/x13s-inspection.txt"

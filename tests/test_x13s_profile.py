@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CONFIG = ROOT / ".github" / "build-config.yml"
 RESOLVER = ROOT / "scripts" / "resolve-flavor.sh"
 OVERLAY = ROOT / "build_scripts" / "overlay" / "x13s.sh"
-
+INVENTORY = ROOT / "build_scripts" / "overlay" / "lib" / "x13s_inventory.sh"
 
 def resolve(variant: str, flavor: str) -> dict[str, str]:
     proc = subprocess.run(
@@ -81,12 +81,6 @@ def test_x13s_overlay_rejects_a_wrong_architecture(tmp_path: Path):
 
 
 def test_x13s_firmware_inventory_follows_usable_symlinks(tmp_path: Path):
-    source = OVERLAY.read_text(encoding="utf-8")
-    function = (
-        "inventory_file() {"
-        + source.split("inventory_file() {", 1)[1].split("\n}\n\nreport_dir=", 1)[0]
-        + "\n}"
-    )
     payload = tmp_path / "payload"
     payload.mkdir()
     compressed = payload / "amss.bin.xz"
@@ -101,7 +95,7 @@ def test_x13s_firmware_inventory_follows_usable_symlinks(tmp_path: Path):
             directory.symlink_to(firmware, target_is_directory=True)
         expected = directory / "amss.bin"
         proc = subprocess.run(
-            ["bash", "-euo", "pipefail", "-c", f"{function}\ninventory_file \"$1\"", "bash", str(expected)],
+            ["bash", "-euo", "pipefail", "-c", 'source "$1"; inventory_file "$2"', "bash", str(INVENTORY), str(expected)],
             text=True,
             capture_output=True,
             check=False,
@@ -132,14 +126,8 @@ def test_x13s_firmware_inventory_rejects_dangling_links(tmp_path: Path):
 
 
 def firmware_inventory(expected: Path) -> str:
-    source = OVERLAY.read_text(encoding="utf-8")
-    function = (
-        "inventory_file() {"
-        + source.split("inventory_file() {", 1)[1].split("\n}\n\nreport_dir=", 1)[0]
-        + "\n}"
-    )
     return subprocess.run(
-        ["bash", "-euo", "pipefail", "-c", f'{function}\ninventory_file "$1"', "bash", str(expected)],
+        ["bash", "-euo", "pipefail", "-c", 'source "$1"; inventory_file "$2"', "bash", str(INVENTORY), str(expected)],
         text=True,
         capture_output=True,
         check=True,
