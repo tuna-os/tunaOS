@@ -780,19 +780,24 @@ def composite_section(criteria, stage, contract, luks, smoke, lifecycle,
         "## Composite green — the bar",
         "",
         (
-            "`.github/green-criteria.yml` sets the bar. A cell is green only "
-            "when every criterion that blocks it, and applies to it, has a "
-            "current affirmative result. A criterion that nobody ran, nobody "
-            "asserted, or that CI skipped renders \u2b1c, and it does not "
-            "count as satisfied. These criteria block today: "
+            "`.github/green-criteria.yml` sets the bar. The sheet marks a cell "
+            "green only when every criterion that blocks that cell and applies "
+            "to it carries a current affirmative result. A criterion that "
+            "nobody ran, nobody asserted, or that CI skipped renders \u2b1c, "
+            "and the sheet does not count it as satisfied. These criteria "
+            "block today: "
             + ", ".join(f"`{c}`" for c in blocking)
-            + ". These are advisory — the sections below measure them, and "
-            "they do not block yet: "
+            + "."
+        ),
+        "",
+        (
+            "These criteria stay advisory — the sections below measure them, "
+            "and they do not block yet: "
             + ", ".join(f"`{c}`" for c in advisory)
             + ". Unimplemented: "
             + ", ".join(f"`{c}`" for c in unimplemented)
             + ". To graduate a criterion, edit `enforcement:` in that file. "
-            "This table and the README count then tighten with no code change."
+            "The table and the README count then tighten with no code change."
         ),
         "",
         f"**{green} of {total}** published cells are composite-green.",
