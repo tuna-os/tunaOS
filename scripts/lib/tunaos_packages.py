@@ -53,6 +53,11 @@ def validate_source_records(records, kind, family, where):
                 required = {'name', 'baseurl'}
             else:
                 raise PolicyError(item + ': repositories unsupported for this family')
+        elif kind == 'source_repositories' and family == 'emerge':
+            allowed = required = {'name', 'sync_uri'}
+        elif kind == 'binrepos' and family == 'emerge':
+            allowed = {'name', 'priority', 'sync_uri', 'verify_signature', 'key', 'fingerprint'}
+            required = set(allowed)
         elif kind == 'ppa' and family == 'apt':
             allowed, required = {'repo', 'condition'}, {'repo', 'condition'}
         elif kind == 'copr' and family in {'el10', 'fedora', 'rawhide', 'eln', 'hummingbird'}:
@@ -66,9 +71,9 @@ def validate_source_records(records, kind, family, where):
             if key == 'priority':
                 if type(value) is not int or value < 1:
                     raise PolicyError(item + '.priority: expected positive integer')
-            elif key == 'unsigned':
+            elif key in {'unsigned', 'verify_signature'}:
                 if type(value) is not bool:
-                    raise PolicyError(item + '.unsigned: expected boolean')
+                    raise PolicyError(item + f'.{key}: expected boolean')
             elif key == 'packages':
                 string_list(value, item + '.packages')
             else:
@@ -83,7 +88,7 @@ def validate_source_records(records, kind, family, where):
             raise PolicyError(item + '.repo: expected explicit PPA owner/archive')
         if kind == 'copr' and not re.fullmatch(r'[A-Za-z0-9_-]+/[A-Za-z0-9_-]+', record['repo']):
             raise PolicyError(item + '.repo: expected explicit COPR owner/project')
-        for key in ('uri', 'url', 'baseurl', 'keyring_url'):
+        for key in ('uri', 'url', 'baseurl', 'keyring_url', 'sync_uri'):
             if key not in record:
                 continue
             value = record[key]
@@ -151,6 +156,8 @@ def validate(document):
                 allowed = {'required', 'include'}
                 if family in {'apt', 'cachyos', 'zypper'}:
                     allowed |= {'repos'}
+                if family == 'emerge':
+                    allowed |= {'source_repositories', 'binrepos', 'display_manager'}
                 if family == 'apt':
                     allowed |= {'ppa'}
                 if family == 'zypper':
@@ -163,7 +170,7 @@ def validate(document):
                     operation_ids(value, 'before', where + '.' + key)
                 elif key in {'display_manager', 'group_options'}:
                     string_list([value], where + '.' + key)
-                elif key in {'repos', 'copr', 'ppa'}:
+                elif key in {'repos', 'copr', 'ppa', 'source_repositories', 'binrepos'}:
                     validate_source_records(value, key, family, where + '.' + key)
             expanded = expand(groups, policy)
             known(expanded, allowed - {'include'}, where + ' (expanded)')

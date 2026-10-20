@@ -10,6 +10,7 @@
     "cosmic-dock": "cosmic-dock.sh",
     "greetd-system-integration": "greetd-system-integration.sh",
     "greetd-gtkgreet": "greetd-gtkgreet.sh",
+    "gentoo-pipewire-user-services": "gentoo-pipewire-user-services.sh",
     "kcm-ublue": "kcm-ublue.sh",
     "dms-qml-payload": "dms-qml-payload.sh",
     "xfce-greeter": "xfce-greeter.sh",
