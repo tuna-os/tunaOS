@@ -95,13 +95,21 @@ def test_pull_requests_build_every_admitted_tuna_image_in_ci():
         "github.event_name == 'pull_request' && "
         "needs.tuna_build_inputs.outputs.relevant == 'true'"
     )
-    assert job["permissions"] == {"contents": "read"}
+    assert job["permissions"] == {
+        "contents": "read",
+        "packages": "write",
+        "id-token": "write",
+    }
     assert "secrets" not in job
     assert job["uses"] == "./.github/workflows/build-variant.yml"
     assert job["with"]["flavor"] == "tuna"
     assert job["with"]["variant"] == "${{ matrix.variant }}"
     assert set(job["strategy"]["matrix"]["variant"]) == admitted
     assert len(job["strategy"]["matrix"]["variant"]) == len(admitted)
+    variant_workflow = yaml.safe_load((ROOT / ".github/workflows/build-variant.yml").read_text())
+    build_base = variant_workflow["jobs"]["build_base"]["with"]
+    assert build_base["publish"] == "${{ github.event_name != 'pull_request' }}"
+    assert build_base["sbom"] == "${{ github.event_name != 'pull_request' }}"
 
 
 def test_tuna_build_input_filter_catches_sources_and_ignores_docs():

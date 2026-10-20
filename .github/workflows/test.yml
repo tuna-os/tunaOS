@@ -239,8 +239,12 @@ jobs:
     name: "${{ matrix.variant }}:tuna"
     needs: tuna_build_inputs
     if: github.event_name == 'pull_request' && needs.tuna_build_inputs.outputs.relevant == 'true'
+    # The reusable image jobs declare publishing scopes. Their PR path disables
+    # publish/SBOM and does not receive the R2 secrets passed by manual builds.
     permissions:
       contents: read
+      packages: write
+      id-token: write
     strategy:
       fail-fast: false
       matrix:
