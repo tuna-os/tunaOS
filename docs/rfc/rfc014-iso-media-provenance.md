@@ -1,6 +1,6 @@
 # RFC 014: ISO media provenance
 
-- Status: approved approach for the contract stage; implementation under review
+- Status: contract stage merged; read-only adapter under review
 - Owner: hanthor
 - Branch: rfc014-iso-media-provenance
 - Tracks: [#3381](https://github.com/tuna-os/tunaOS/issues/3381), [#3470](https://github.com/tuna-os/tunaOS/issues/3470), [iso-builder#270](https://github.com/tuna-os/iso-builder/issues/270)
@@ -90,3 +90,40 @@ reboot on the same media before per-target qualification or cutover.
 This stage deletes no retained objects. No new publication stream, credentials or
 workflow permissions are part of this stage. Spektacular procedural review uses
 the self-approval rule in AGENTS.md; it does not expand maintainer approval.
+
+## Read-only artifact snapshot phase
+
+Select one artifact for the adapter to check.
+Its policy names the reviewed repository ID, workflow ID and path, source
+commit, branch, expected archive digest and byte limit. A receipt cannot supply
+that policy. The first producer scope is `tuna-os/iso-builder`,
+`.github/workflows/ci.yml`, `refs/heads/main`, with a successful manual run.
+
+Supply fresh responses from the API and archive bytes through a read-only
+interface. It constructs exact endpoints for the run and artifact.
+It never selects by latest success, artifact name or candidate URL.
+It checks metadata before archive access and hashes bytes within the limit.
+Then it checks the artifact and current run again.
+
+Both run observations must have `run_attempt: 1`.
+The adapter rejects reruns because the artifact API omits the upload sequence.
+Timestamps cannot prove that sequence. Assertions in receipts cannot prove it.
+A later rerun does not change the identity of bytes already checked.
+REST does not promise an atomic view across these requests.
+
+Successful output reports metadata and archive checks with
+`authentication: not_authenticated` and `attempt_policy: first_attempt_only`.
+The measured byte length must match the API artifact size and the independent limit.
+The [uploader](https://github.com/actions/toolkit/blob/main/packages/artifact/src/internal/upload/upload-artifact.ts)
+records the size and digest of uploaded bytes.
+It checks artifact identity, size and expiration again after the hash.
+
+The result is not a v2 pair of transport records.
+It does not fabricate a native producer, interpret a receipt or qualify media.
+The caller must provide fresh, authenticated transport and reviewed configuration.
+That future caller must also enforce safe redirects and timeouts.
+This phase has no network client or production caller.
+
+Fixtures record the reviewed source and use synthetic run and artifact IDs.
+They cannot prove a browser build. The existing producer emits records in v1,
+which remain outside v2 admission.
