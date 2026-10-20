@@ -189,6 +189,28 @@ def test_plan_enabled_cells_match_the_real_workflow_query(plan):
     assert actual == expected
 
 
+def test_pull_request_matrix_includes_tuna_in_stage_one():
+    workflow_path = ROOT / ".github/workflows/build-variant.yml"
+    workflow = yaml.safe_load(workflow_path.read_text())
+    matrix_step = next(step for step in workflow["jobs"]["generate_matrix"]["steps"]
+                       if step.get("id") == "set-matrix")
+    event = "pull_request" if matrix_step.get("env", {}).get("EVENT_NAME") == \
+        "${{ github.event_name }}" else ""
+    text = workflow_path.read_text()
+    query = text.split('--arg event "${EVENT_NAME}" \'', 1)[1].split("' | jq -c -s '.'", 1)[0]
+    result = subprocess.run(
+        ["jq", "-c", "--arg", "event", event, query],
+        input=json.dumps(yaml.safe_load((ROOT / ".github/build-config.yml").read_text())),
+        text=True, capture_output=True,
+        env=dict(os.environ, FILTER_VARIANT="marlin", FILTER_FLAVOR="tuna"),
+        check=True)
+    row = next(json.loads(line) for line in result.stdout.splitlines()
+               if json.loads(line)["variant"] == "marlin")
+    assert row["flavor"] == "tuna"
+    assert row["stage"] == 1
+    assert row["platforms"] == "linux/amd64"
+
+
 def test_read_only_plan_is_deterministic(stock):
     assert MODULE.resolve(stock, ROOT) == MODULE.resolve(stock, ROOT)
 
