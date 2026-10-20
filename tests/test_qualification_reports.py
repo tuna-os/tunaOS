@@ -478,6 +478,7 @@ def test_legacy_receipt_without_observations_remains_unqualified():
 
 
 def _catalog_with_receipt(receipt, **pins):
+    from datetime import datetime, timezone
     return targets.catalog_snapshot(
         config(),
         descriptors={"albacore:cosmic:linux/amd64/v2": {
@@ -485,6 +486,7 @@ def _catalog_with_receipt(receipt, **pins):
             "ociPlatform": {"os": "linux", "architecture": "amd64", "variant": "v2"}}},
         overlays={"albacore:cosmic:linux/amd64/v2": {
             "liveOverlayDigest": DIGEST_1, "liveOverlayBaseDigest": DIGEST_B}},
+        qualification_now=pins.get("now", datetime(2026, 10, 20, tzinfo=timezone.utc)),
         receipts=[receipt], installer_revision=pins.get("installer", DIGEST_C),
         engine_revision=pins.get("engine", DIGEST_D),
         browser_builds=pins.get("browser_builds", {
@@ -631,3 +633,43 @@ def test_reporting_cannot_admit_self_asserted_or_structural_receipts(receipt):
     assert summary["status"] == "unqualified"
     assert summary["receiptDigest"] == projected["receiptDigest"]
     assert summary["coldSeconds"] is not None
+
+
+@pytest.mark.parametrize("value", [None, "not-a-date", "2099-01-01T00:00:00Z",
+    "2026-10-20T00:00:00", "2026-10-20T01:00:00+01:00", "2026-02-30T00:00:00Z",
+    "2026-10-20T00:00:00.0000001Z", "2026-10-20T00:00:00." + "0" * 129 + "Z"])
+@pytest.mark.parametrize("projected", [False, True])
+def test_strict_admission_rejects_invalid_qualification_time(value, projected):
+    # Falsification: a checksum-correct diagnostic receipt used to qualify even
+    # with missing, malformed or future time. Keep diagnostic reading supported.
+    receipt = catalog_receipt()
+    if value is None:
+        receipt.pop("qualifiedAt")
+    else:
+        receipt["qualifiedAt"] = value
+    receipt.pop("receiptDigest")
+    receipt["receiptDigest"] = "sha256:" + hashlib.sha256(
+        json.dumps(receipt, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    targets._qualification_validator()(receipt, "diagnostic timestamp fixture")
+    if projected:
+        receipt = targets.receipt_to_catalog_projection(receipt)
+    assert _candidate_status(_catalog_with_receipt(receipt)) == "unqualified"
+
+
+@pytest.mark.parametrize("value,expected", [
+    ("2026-10-20T00:00:00.123456Z", True),
+    ("2026-10-20T00:00:00.1234560000000Z", True),
+    ("2026-10-20T00:00:00.1234560000001Z", False),
+    ("2026-10-20T00:00:00.1234559999999Z", True),
+    ("2026-10-20T00:00:00Z", True),
+    ("2000-01-01T00:00:00Z", True),
+])
+def test_qualification_time_exact_instant_without_rounding_or_age_policy(value, expected):
+    from datetime import datetime, timezone
+    now = datetime(2026, 10, 20, microsecond=123456, tzinfo=timezone.utc)
+    assert targets._qualification_time_valid(value, now=now) is expected
+
+
+def test_qualification_clock_must_be_timezone_aware():
+    from datetime import datetime
+    assert not targets._qualification_time_valid("2026-10-20T00:00:00Z", now=datetime(2026, 10, 20))
