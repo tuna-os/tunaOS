@@ -10,6 +10,7 @@
 #   - Output path construction
 
 setup() {
+  REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
   TEST_ROOT="$(mktemp -d)"
   mkdir -p "${TEST_ROOT}/live-iso"
   cd "${TEST_ROOT}" || exit 1
@@ -183,6 +184,10 @@ teardown() {
 }
 
 @test "image source override does not replace canonical offline payload ref" {
+	cd "$REPO_ROOT" || exit 1
+	export TUNAOS_BUILD_CONFIG="$TEST_ROOT/build-config.yml"
+	export GITHUB_REPOSITORY_OWNER=tuna-os
+	printf '%s\n' '{"variants":[{"id":"yellowfin","publish_name":"yellowfin"}]}' > "$TUNAOS_BUILD_CONFIG"
 	source "${REPO_ROOT}/scripts/lib/image.sh"
 	TUNAOS_IMAGE_REF="ghcr.io/tuna-os/yellowfin:kde@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	[ "$(tunaos_image_ref yellowfin kde ghcr kde 1)" = "$TUNAOS_IMAGE_REF" ]
