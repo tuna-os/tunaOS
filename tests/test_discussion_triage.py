@@ -96,7 +96,12 @@ def test_existing_trackers_are_skipped_across_successive_sweeps(tmp_path: Path) 
                 {
                     "number": 501,
                     "state": "closed",
-                    "body": "<!-- tunaos-discussion-response:12 -->",
+                    "user": {"login": "github-actions[bot]"},
+                    "body": (
+                        "<!-- tunaos-discussion-response:12 -->\n"
+                        "## Discussion response needed\n"
+                        "[Discussion #12](https://github.com/orgs/tuna-os/discussions/12)"
+                    ),
                 }
             ]
         ),
@@ -115,6 +120,20 @@ def test_existing_trackers_are_skipped_across_successive_sweeps(tmp_path: Path) 
     ) == 0
     assert json.loads(output_path.read_text(encoding="utf-8"))["number"] == 93
 
+
+
+def test_tracker_markers_require_workflow_author_and_tracker_shape() -> None:
+    candidate = triage.unanswered_q_and_a(
+        [_discussion(93, "2026-04-19T20:10:39Z", title="Real question")]
+    )[0]
+    genuine = triage._tracker(candidate)
+    issues = [
+        {"user": {"login": "ordinary-user"}, "body": genuine["issue_body"]},
+        {"user": {"login": "github-actions[bot]"}, "body": f"quoted {genuine['marker']}"},
+        {"user": {"login": "github-actions[bot]"}, "body": genuine["issue_body"]},
+    ]
+
+    assert triage.tracked_discussion_numbers(issues) == {93}
 
 def test_issue_title_is_capped_but_body_keeps_full_discussion_title() -> None:
     title = "x" * 300

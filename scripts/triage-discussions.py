@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 RESPONSE_TARGET_DAYS = 7
+TRACKER_AUTHORS = frozenset({"github-actions[bot]", "github-actions"})
 TRACKER_MARKER = re.compile(r"<!--\s*tunaos-discussion-response:(\d+)\s*-->")
 
 
@@ -82,15 +83,28 @@ def _candidate(discussion: Any) -> dict[str, Any] | None:
 
 
 def tracked_discussion_numbers(issues: list[Any]) -> set[int]:
-    """Return discussion numbers already represented by any issue state."""
+    """Return discussion numbers from genuine workflow-created trackers."""
     tracked: set[int] = set()
     for issue in issues:
         if not isinstance(issue, dict) or issue.get("pull_request") is not None:
             continue
+        user = issue.get("user")
+        if not isinstance(user, dict) or user.get("login") not in TRACKER_AUTHORS:
+            continue
         body = issue.get("body")
         if not isinstance(body, str):
             continue
-        tracked.update(int(match) for match in TRACKER_MARKER.findall(body))
+        for match in TRACKER_MARKER.finditer(body):
+            number = int(match.group(1))
+            marker = match.group(0)
+            if body.count(marker) != 1 or "## Discussion response needed" not in body:
+                continue
+            if not re.search(
+                rf"\[Discussion #{number}\]\(https://github\.com/[^)\s]+/{number}\)",
+                body,
+            ):
+                continue
+            tracked.add(number)
     return tracked
 
 
