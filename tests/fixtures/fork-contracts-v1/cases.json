@@ -46,7 +46,7 @@
       "format": "json",
       "consumer": "scripts/installer-capabilities.py and frontend parity integration tests",
       "compatibility": "each frontend names one backend and explicit unsupported operations; unsupported operations must fail, not select another backend",
-      "gaps": ["synchronized declarations in each external frontend repository", "frontend PR links for the fixture version"]
+      "gaps": ["synchronized declarations and fixture-version/check links in the bootc-installer monorepo", "frontend PR links for the fixture version"]
     }
   ],
   "cases": [

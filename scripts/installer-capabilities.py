@@ -19,7 +19,7 @@ class CapabilityError(ValueError):
 _TOP_LEVEL = {"schema_version", "contract", "fixture_version", "backends", "frontends"}
 _BACKEND_FIELDS = {"contract_version", "required_operations"}
 _FRONTEND_FIELDS = {
-    "id", "repository", "app_id", "backend", "capabilities", "unsupported"
+    "id", "repository", "path", "app_id", "backend", "capabilities", "unsupported"
 }
 
 
@@ -91,7 +91,7 @@ def load(path: Path | str) -> dict:
             raise CapabilityError(f"registry.frontends[{index}].id: duplicate frontend")
         seen.add(frontend_id)
         _text(frontend["repository"], f"registry.frontends[{index}].repository")
-        _text(frontend["app_id"], f"registry.frontends[{index}].app_id")
+        _text(frontend["path"], f"registry.frontends[{index}].path")
         backend = _text(frontend["backend"], f"registry.frontends[{index}].backend")
         if backend not in required_by_backend:
             raise CapabilityError(f"registry.frontends[{index}].backend: unknown backend")
