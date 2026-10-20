@@ -1,0 +1,32 @@
+{
+  "description": "Advertised baseline inventory only; this does not certify runtime support or qualification. Refresh manually from a reviewed catalog when its supported set changes. Cross-repository automatic collection is not implemented.",
+  "source": {
+    "repository": "tuna-os/iso-builder",
+    "revision": "3d331af07b6f201a8af6c2b2d3f6a3174d5fe38e",
+    "path": "app/public/catalog-snapshot.json",
+    "sha256": "sha256:d15587ae9c941bc7ac16178279be6a3d8fa665e3d04391b139b0fd345b7618d2"
+  },
+  "targetCount": 269,
+  "advertisedPairs": [
+    {
+      "platform": "linux/amd64",
+      "cpuBaseline": "x86-64",
+      "count": 78
+    },
+    {
+      "platform": "linux/amd64",
+      "cpuBaseline": "x86-64-v3",
+      "count": 20
+    },
+    {
+      "platform": "linux/amd64/v2",
+      "cpuBaseline": "x86-64-v2",
+      "count": 36
+    },
+    {
+      "platform": "linux/arm64",
+      "cpuBaseline": "armv8-a",
+      "count": 135
+    }
+  ]
+}
