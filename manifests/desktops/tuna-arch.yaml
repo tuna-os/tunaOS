@@ -1,0 +1,67 @@
+# Tuna Desktop on Marlin (Arch): GDM reference cell (tunaOS#3438).
+#
+# Marlin leads the login-manager migration: stock GDM supplies the user
+# list, fingerprint/smartcard, accessibility, i18n and tested PAM flows
+# that gtkgreet theming could never reach. The other tuna flavors stay on
+# greetd/gtkgreet (manifests/desktops/tuna.yaml) until their own cells
+# move in the order tunaOS#3438 records.
+#
+# This -arch override beats tuna.yaml on pacman bases (install-desktop.sh
+# prefers manifests/desktops/<desktop>-arch.yaml), so Marlin reads the
+# package set, display manager and post-install list below and nothing
+# from tuna.yaml's pacman section.
+display_manager: gdm
+
+packages:
+  pacman:
+    # Pinned to the published v1.0.0-beta.1 release (ADR 0008 in
+    # tuna-os/tuna-desktop: image flavors follow beta tags). pacman resolves
+    # the repo-qualified `name=version` target exactly and fails the build if
+    # the served repository no longer carries it, so a new beta is an
+    # explicit bump here, never a silent drift.
+    - tunaos/tuna-desktop=1.0.0beta.1-1
+    # GDM (tunaOS#3438): pulls gnome-shell as a dependency, which this list
+    # names anyway. greetd, greetd-gtkgreet and cage are gone with it: GDM
+    # ships its own greeter, and nothing on Marlin may enable a second
+    # display manager to race it for seat0/VT1.
+    - gdm
+    - xorg-xwayland
+    - ibus
+    # Screen Reader: Tuna Desktop starts and stops Orca from GNOME's
+    # screen-reader-enabled key, as GNOME does; without the package the
+    # key does nothing (published-image qualification, tuna-desktop#273).
+    - orca
+    - gnome-shell
+    - gnome-settings-daemon
+    - gnome-control-center
+    - gnome-keyring
+    - evolution-data-server
+    - xdg-desktop-portal-gnome
+    - xdg-desktop-portal-gtk
+    - xdg-user-dirs
+    - gvfs
+    - nautilus
+    - ptyxis
+    - networkmanager
+    - libsecret
+    - pipewire
+    - wireplumber
+    - gst-plugin-pipewire
+    - gst-plugins-good
+    - power-profiles-daemon
+    - upower
+    - flatpak
+    - plymouth
+    - adwaita-icon-theme
+    - noto-fonts
+    - noto-fonts-emoji
+    - ttf-dejavu
+    - ttf-liberation
+
+versionlock: []
+post_install:
+  - tuna-flatpak-remote.sh
+  # No greetd-system-integration.sh (it points display-manager.service at
+  # greetd) and no greetd-gtkgreet.sh (nothing installs gtkgreet on Marlin,
+  # and the script no-ops without it): GDM owns the login screen here.
+  - flatpak-preinstall.sh
