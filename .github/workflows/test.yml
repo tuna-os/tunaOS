@@ -24,6 +24,11 @@ on:
       #   registry-map.yaml 4  files 2
       - 'scripts/**'
       - 'tests/**'
+      # Versioned contract schemas are executable test inputs.
+      - 'schemas/**'
+      # The fork-config contract suite initializes the stock/fork templates.
+      - 'examples/**'
+      - 'experiences/**'
       - 'build_scripts/**'
       # One entry rather than six. .github/scripts/**, changelogs.py,
       # workflows/**, green-criteria.yml, runs-on.yml and actions/** were all
@@ -42,6 +47,8 @@ on:
       - 'custom/**'
       - 'files/**'
       - 'Containerfile*'
+      - '.containerignore'
+      - '.dockerignore'
       - 'image-versions.yaml'
       - 'registry-map.yaml'
       - 'renovate.json'
@@ -102,6 +109,11 @@ jobs:
 
           # pytest for Python tests
           pip3 install pytest pytest-cov --break-system-packages 2>/dev/null || pip3 install pytest pytest-cov --user
+
+          # Independent schema oracle, pinned with the other external tools.
+          schema_version=$(yq -r '.downloads.jsonschema // ""' image-versions.yaml)
+          [[ "$schema_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Invalid jsonschema test pin" >&2; exit 1; }
+          python3 -m pip install "jsonschema==$schema_version" --break-system-packages || python3 -m pip install "jsonschema==$schema_version" --user
 
           # Pillow + requests for desktop-verify.py tests
           pip3 install pillow requests --break-system-packages 2>/dev/null || pip3 install pillow requests --user

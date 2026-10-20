@@ -7,6 +7,7 @@ import shlex
 import subprocess
 from pathlib import Path
 
+import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -108,3 +109,38 @@ def test_x13s_firmware_inventory_follows_usable_symlinks(tmp_path: Path):
         assert proc.returncode == 0, proc.stderr
         assert proc.stdout.startswith(f"PRESENT {expected} -> ")
         assert str(directory / compressed.name) in proc.stdout
+
+
+@pytest.mark.parametrize("suffix", ["", ".xz", ".zst"])
+def test_x13s_firmware_inventory_accepts_supported_payloads(tmp_path: Path, suffix: str):
+    expected = tmp_path / "amss.bin"
+    expected.with_name(expected.name + suffix).write_bytes(b"firmware")
+    assert firmware_inventory(expected).startswith(f"PRESENT {expected} -> ")
+
+
+@pytest.mark.parametrize("suffix", [".bak", ".sig", ".xz.bak", ".zst.sig", ".gz"])
+def test_x13s_firmware_inventory_rejects_non_payload_suffixes(tmp_path: Path, suffix: str):
+    expected = tmp_path / "amss.bin"
+    expected.with_name(expected.name + suffix).write_bytes(b"not usable firmware")
+    assert firmware_inventory(expected) == f"MISSING {expected}\n"
+
+
+def test_x13s_firmware_inventory_rejects_dangling_links(tmp_path: Path):
+    expected = tmp_path / "amss.bin"
+    expected.with_name("amss.bin.xz").symlink_to(tmp_path / "absent")
+    assert firmware_inventory(expected) == f"MISSING {expected}\n"
+
+
+def firmware_inventory(expected: Path) -> str:
+    source = OVERLAY.read_text(encoding="utf-8")
+    function = (
+        "inventory_file() {"
+        + source.split("inventory_file() {", 1)[1].split("\n}\n\nreport_dir=", 1)[0]
+        + "\n}"
+    )
+    return subprocess.run(
+        ["bash", "-euo", "pipefail", "-c", f'{function}\ninventory_file "$1"', "bash", str(expected)],
+        text=True,
+        capture_output=True,
+        check=True,
+    ).stdout

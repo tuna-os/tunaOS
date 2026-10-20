@@ -30,3 +30,10 @@ Invoked by:
 See `docs/AGENT_GUIDE.md`'s Key Files table for the fuller list and how
 these fit into the overall build pipeline (`docs/PIPELINE.md`,
 `docs/build-pipeline.md`).
+
+## Fork config review
+
+`resolve-fork-config.py` validates opt-in fork intent and emits a review plan.
+Its stock-only legacy export uses the existing `TUNAOS_BUILD_CONFIG` seam.
+It does not apply package or brand changes. See [RFC 013](../docs/rfc/rfc013-single-fork-config.md)
+for the schema, compatibility checks and consumer migration plan.
