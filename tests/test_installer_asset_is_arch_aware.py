@@ -59,6 +59,17 @@ def test_matrix_architecture_aliases_select_the_published_asset(arch: str, expec
 def test_unknown_architecture_fails_closed() -> None:
     env = os.environ | {"TUNA_ASSET_NAME_ONLY": "1", "TUNA_INSTALLER_ARCH": "mips64"}
 
+    result = subprocess.run(
+        ["bash", str(SCRIPT)],
+        check=False,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert result.returncode != 0
+    assert "unsupported installer architecture: mips64" in result.stderr
+    assert result.stdout == ""
+
 
 def test_metadata_only_requires_disposable_root_before_writes(
     tmp_path: Path,
