@@ -311,7 +311,7 @@ case "$1:$RCLONE_MODE" in
   lsf:*) printf '%s\n' "${RCLONE_LISTING:-}" ;;
   cat:read-fails) exit 24 ;;
   cat:malformed) echo '{}' ;;
-  cat:unsafe) printf '%s\n' '{"schema":"TunaOSIsoResolution/v1","iso":"bait.iso\n+ *"}' ;;
+  cat:unsafe) printf '%s\\n' '{"schema":"TunaOSIsoResolution/v1","iso":"bait.iso\\n+ *"}' ;;
   cat:*) echo '{"schema":"TunaOSIsoResolution/v1","iso":"snapshot.iso"}' ;;
   delete:*)
     touch "$RCLONE_DELETE_MARKER"

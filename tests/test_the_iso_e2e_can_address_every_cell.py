@@ -356,7 +356,7 @@ def test_stable_download_failure_can_fallback_but_resolved_cannot():
     assert copy_lines, run[-800:]
     idx = run.index("for requested in")
     body = run[idx:]
-    assert 'if [[ -n "$expected_digest" ]]' in body
+    assert 'actual="sha256:' in body
     assert "refusing stable fallback" in body
 
 
