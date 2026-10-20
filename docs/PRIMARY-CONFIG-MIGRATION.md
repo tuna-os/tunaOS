@@ -218,3 +218,8 @@ flavors that exist in the matrix.
 See [ISO Builder configuration](ISO-BUILDER-CONFIG.md) for export, validation,
 drift checks and catalog authority boundaries. This does not move installed
 image identity, artwork or installer branding into primary configuration.
+
+The Marlin GDM override also belongs to `[desktops.tuna-arch]`. Its generated
+adapter has the same precedence as the former tracked YAML. The regression
+fixture at commit `aa9810e9` preserves the complete package and hook contract;
+other Tuna Desktop cells retain their existing display manager.
