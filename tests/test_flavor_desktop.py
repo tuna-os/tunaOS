@@ -18,6 +18,7 @@ HELPER = ROOT / "scripts/lib/flavor-desktop.sh"
         ("gnome-nvidia", "gnome"),
         ("kde-nvidia-hwe", "kde"),
         ("gnome-x13s", "gnome"),
+        ("gnome-t2", "gnome"),
         ("base-hwe", "base"),
     ],
 )
