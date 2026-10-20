@@ -32,7 +32,7 @@ how predictable its inputs are. These are separate dimensions. A Beta can
 consume either a fixed release or a rolling repository, but they cannot carry
 the same availability promise.
 
-`.github/build-config.yml` is the machine-readable source for non-release
+`tunaos.toml` is the machine-readable source for non-release
 tracks. A variant without `upstream_track` consumes a fixed release or stream.
 The current exceptions are:
 
@@ -87,7 +87,7 @@ A new base variant or flavor needs, **before any build work starts**:
      repodata), and publish packages for all declared platforms (`linux/amd64`,
      `linux/arm64`). If an architecture lacks package sources, it must be
      explicitly excluded from the variant's `platforms` — and from any enabled
-     flavor's own `platforms` override — in `.github/build-config.yml` (e.g.
+     flavor's own `platforms` override — in `tunaos.toml` (e.g.
      hummingbird amd64-only until aarch64 repodata converges).
    - **Essential packages for the desktop**: the repository or base must carry
      essential desktop packages (compositor/session, display manager, core shell
@@ -98,7 +98,7 @@ A new base variant or flavor needs, **before any build work starts**:
      `manifests/desktops/<flavor>.yaml` — must contain a concrete
      `packages.<os>` section (e.g. `packages.hummingbird`, `packages.eln`) with
      a non-empty package list for every desktop flavor enabled with
-     `build_image: true` in `.github/build-config.yml`. Declaring flavors
+     `build_image: true` in `tunaos.toml`. Declaring flavors
      without manifest sections is prohibited.
 
 New **output architectures** (e.g. a mkosi DDI sidecar per variant, #999/#1227)

@@ -54,11 +54,11 @@ EOF
 import os, re, sys
 
 root = sys.argv[1]
-text = open(os.path.join(root, '.github/build-config.yml')).read()
+text = open(os.path.join(root, 'tunaos.toml')).read()
 
 # The guppy variant's own comment block, not any other variant's.
-start = text.index('  - id: guppy')
-end = text.index('\n  - id: ', start + 10)
+start = text.index('[variants.guppy]')
+end = text.index('\n[variants.', start + 10)
 block = text[start:end]
 marker = 'NOT declared, and not an oversight:'
 assert marker in block, 'guppy lost its omission block'
