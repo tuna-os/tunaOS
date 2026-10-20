@@ -57,7 +57,27 @@
         "producerRunId": { "type": ["integer", "null"], "minimum": 1 },
         "artifactId": { "type": ["integer", "null"], "minimum": 1 }
       },
-      "required": ["mode", "producerRunId", "artifactId"]
+      "required": ["mode", "producerRunId", "artifactId"],
+      "allOf": [
+        {
+          "if": { "properties": { "mode": { "const": "built" } }, "required": ["mode"] },
+          "then": {
+            "properties": {
+              "producerRunId": { "type": "null" },
+              "artifactId": { "type": "null" }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "mode": { "const": "reused" } }, "required": ["mode"] },
+          "then": {
+            "properties": {
+              "producerRunId": { "type": "integer", "minimum": 1 },
+              "artifactId": { "type": "integer", "minimum": 1 }
+            }
+          }
+        }
+      ]
     },
     "evidence": {
       "type": "object", "additionalProperties": false,
