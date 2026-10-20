@@ -1,7 +1,45 @@
 # RFC 013: One fork-owned config
 
-Status: Draft. Issue: [#3433](https://github.com/tuna-os/tunaOS/issues/3433).
-This draft does not approve a rollout or merge.
+Status: Partially accepted. Issue: [#3433](https://github.com/tuna-os/tunaOS/issues/3433).
+[ADR 0012](../adr/0012-fork-config-compatibility-foundation.md) covers the foundation.
+[ADR 0013](../adr/0013-fork-config-consumer-preview.md) covers the bounded preview
+for opt-in consumers. The broader rollout remains a draft; image acceptance gates
+and normal merge checks still apply.
+
+## Draft revision: TunaOS uses its own config
+
+The maintainer asks for one editable `tunaos.toml` that TunaOS itself uses.
+TOML was the requested format. The package lists and comments in
+[Utah](https://github.com/projectbluefin/utah/blob/main/packages/utah.toml)
+are the style reference. Utah uses a separate Bluefin contract; TunaOS must
+not keep a separate stock-only source for the same settings.
+
+This draft changes the long-term source ownership in the sections below.
+It does not change the past decisions in ADR 0012 and ADR 0013.
+The new ownership takes effect as each tested part lands. Issue
+[#3433](https://github.com/tuna-os/tunaOS/issues/3433) tracks the work.
+
+The first part moves the whole matrix into `tunaos.toml`. Builds and local
+tools derive `.github/build-config.yml` from that source. Git ignores the derived file. Renovate edits TOML; build setup refreshes
+the derived file without a bot commit. The old matrix remains only as a test fixture.
+
+The goal also covers packages, repositories, image names, brand settings,
+logos, wallpapers, emoji and shared installer settings. These are later
+steps, not a claim that the matrix change completes the goal. Assets can
+stay in files named by the config. See the
+[migration plan](../PRIMARY-CONFIG-MIGRATION.md) for the ownership map.
+
+The config tools must use the same parser and rules as builds. The requested
+example is `tunaos config add htop`: check the selected bases and their real
+repositories, show the change, then write once. If a name is missing or has
+more than one match, explain the problem before any write. Preserve comments
+and allow hand edits. The example does not add `htop` to stock images.
+
+Python 3.10 remains supported with the pinned parser in
+`requirements-config.txt`. Python 3.11 and later use `tomllib`.
+Unknown fields fail with a field path. Tests compare all old values and
+orders and show that an edit reaches the build input. Source tests do not
+prove that an image boots or that hardware works.
 
 ## Problem and choice
 
@@ -39,8 +77,9 @@ configures repositories or changes the image brand.
 Use a Git checkout, Python 3.10+ and PyYAML (the existing Python test dependency):
 
 ```sh
-python3 scripts/resolve-fork-config.py examples/fork/stock.yaml > /tmp/plan.json
-python3 scripts/resolve-fork-config.py examples/fork/stock.yaml --format legacy > /tmp/build.json
+python3 scripts/resolve-fork-config.py --init-template examples/fork/stock.template.yaml > /tmp/stock.yaml
+python3 scripts/resolve-fork-config.py /tmp/stock.yaml > /tmp/plan.json
+python3 scripts/resolve-fork-config.py /tmp/stock.yaml --format legacy > /tmp/build.json
 TUNAOS_BUILD_CONFIG=/tmp/build.json ./scripts/resolve-image.sh yellowfin base
 ```
 
@@ -147,3 +186,40 @@ with a desktop or installer that works.
 Only retire legacy overrides after those consumers and acceptance checks pass.
 For rollback, use the unchanged legacy path and revert the adapters. Keep
 pinned catalog/base inputs and provenance with each plan. Maintainers must sign off and write an ADR under [RFC-PROCESS.md](../../RFC-PROCESS.md).
+
+## Local consumer preview
+
+See [FORK-CONFIG-PREVIEW.md](../FORK-CONFIG-PREVIEW.md) for the first opt-in consumer slice.
+The review command and stock export keep their prior behavior. An explicit
+command creates new configs from templates. Unsupported intent fails.
+Full brand support, safe removals, parent closure and image qualification remain
+later acceptance gates.
+
+## Explain config intent
+
+Add `--explain` to the plan command to see the origin of each fork delta:
+
+```sh
+python3 scripts/resolve-fork-config.py /tmp/stock.yaml --explain > /tmp/plan.json
+```
+
+The default plan and legacy export keep their existing output shape. Explanation
+version 1 adds `explanation` at the top level and `intent_provenance` per cell.
+Brand fields record each source key in precedence order. The last key is the
+`effective_source`. The list includes overwritten declarations but not their values.
+
+For each package operation, `index` refers to the resolved intent list.
+The `sources` array records each config list position that contributed that value.
+Exact duplicates retain all origins but one effective entry. Empty lists remain
+no-ops. Cross-operation conflicts still fail.
+
+Image and target origins refer to keys in the config. An omitted target axis
+uses `catalog:all-declared`. An omitted image field stays omitted and makes no
+claim about a runtime default. The explanation adds no absolute config path,
+shadowed value or environment data. The existing plan contains user-provided
+values; review it before you share it.
+
+This explains only the delta intent in the config. It does not expand shell
+transactions for upstream packages, prove that a consumer used an asset, or
+qualify a built image. Use `--explain` with the plan format only. Do not use it
+with `--catalog-pin` or the legacy export.

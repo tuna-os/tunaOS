@@ -17,7 +17,7 @@ WRANGLER_SEND_METRICS=false npx wrangler deploy --dry-run
 Tests use Miniflare's real D1 implementation. They cover concurrent writes,
 transaction rollback, body limits, category validation, suppression, snapshots,
 clock boundaries, health gaps and retention. The generated allowlist comes from
-`.github/build-config.yml`; run `scripts/generate-countme-allowlist.py` from the
+`tunaos.toml`; run `scripts/generate-countme-allowlist.py` from the
 repository root after matrix changes.
 
 The deployment review also tests the collector with the website source. With a

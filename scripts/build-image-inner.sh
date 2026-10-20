@@ -133,6 +133,18 @@ fi
 
 # Build scripts hash for cache invalidation
 build_scripts_hash=$(find build_scripts -type f -name '*.sh' -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -c1-16)
+# Generated fork payloads are bind-mounted context too. Their content must enter
+# the cache key, or a prior stock/other fork layer can be reused unchanged.
+if [[ -f manifests/fork-config.json ]]; then
+	# Some legacy stages declare the cache ARG after their base hooks, and
+	# Gentoo desktop-build branches before that declaration. Preview builds
+	# disable layer reuse until every stage has real cache-invalidation evidence.
+	BUILD_ARGS+=("--no-cache")
+	fork_payload_paths=(manifests/fork-config.json)
+	if [[ -d manifests/fork-assets ]]; then fork_payload_paths+=(manifests/fork-assets); fi
+	fork_payload_hash=$(find "${fork_payload_paths[@]}" -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -c1-16)
+	build_scripts_hash="${build_scripts_hash}-${fork_payload_hash}"
+fi
 BUILD_ARGS+=("--build-arg" "BUILD_SCRIPTS_HASH=${build_scripts_hash}")
 
 # Git SHA

@@ -1,0 +1,212 @@
+{
+  "native_resolution": [
+    1672,
+    941
+  ],
+  "assets": [
+    {
+      "variant": "yellowfin",
+      "original": "originals/yellowfin.png",
+      "wallpaper": "wallpapers/yellowfin-anime.jpg",
+      "width": 1672,
+      "height": 941,
+      "original_sha256": "1630174c18e9aad80d25b14d0a12fa29368cffbb710a279a4f915f06aa9c4430",
+      "jpeg_sha256": "d317da23b15c06443c2359b6e1c8218c4c2d881d9b93fbbf4304f307d4eed5f7"
+    },
+    {
+      "variant": "albacore",
+      "original": "originals/albacore.png",
+      "wallpaper": "wallpapers/albacore-anime.jpg",
+      "width": 1672,
+      "height": 941,
+      "original_sha256": "f42cbdba890d5c6d297b6c59cad829b9aef08675108350a25337ff671d17511a",
+      "jpeg_sha256": "01f96d5dfba7c2570937eadc71de12388ca11ddf927031786fdbfb0d7b48ea2c"
+    },
+    {
+      "variant": "skipjack",
+      "original": "originals/skipjack.png",
+      "wallpaper": "wallpapers/skipjack-anime.jpg",
+      "width": 1672,
+      "height": 941,
+      "original_sha256": "555d1a7be1ca4bb3b38bf0c7579d918a7e111a24348e6af1852753233f593a14",
+      "jpeg_sha256": "53191ab3e8712257cd65bbfbf9405936e5f3d59b895d5f63b69f2be6dade7902"
+    },
+    {
+      "variant": "wahoo",
+      "original": "originals/wahoo.png",
+      "wallpaper": "wallpapers/wahoo-anime.jpg",
+      "width": 1672,
+      "height": 941,
+      "original_sha256": "e9fbb6f8aef6776879bbddea44d6e65197bef6480b4c78857ee15051d6cb8459",
+      "jpeg_sha256": "60523d778318dcf6da2bed436c4eaf4af446e398864e99894001931e6c9089bd"
+    },
+    {
+      "variant": "bonito",
+      "original": "originals/bonito.png",
+      "wallpaper": "wallpapers/bonito-anime.jpg",
+      "width": 1672,
+      "height": 941,
+      "original_sha256": "9847061acf40423bccb37b8fcac84694f53cbda6d4557a96ecebf6a602de40fb",
+      "jpeg_sha256": "431a4aec3cc31d240d7768dd9730955ef9050d7149f11a4ff475b1ba63a7f94a"
+    },
+    {
+      "variant": "hummingbird",
+      "original": "originals/hummingbird.png",
+      "wallpaper": "wallpapers/hummingbird-anime.jpg",
+      "width": 1672,
+      "height": 941,
+      "original_sha256": "49756ced7d4bf46b6805d4ca0175b6415431bf4907c02f42e5a938ff26f7dd73",
+      "jpeg_sha256": "84c3242f79f20f0344c8ff3a36fe873e170a5f82e0d8e4625697ff9b561d31b4"
+    },
+    {
+      "variant": "sailfin",
+      "original": "originals/sailfin.png",
+      "wallpaper": "wallpapers/sailfin-anime.jpg",
+      "width": 1672,
+      "height": 941,
+      "original_sha256": "af6aa10dc3330f1ba8edc1a132138798c187b0ae00667ac69388b3d4e64c0f2d",
+      "jpeg_sha256": "e87e985776524d17687491e6da5fd25726ef894a2d3b97925c48049f47f5f547"
+    },
+    {
+      "variant": "guppy",
+      "original": "originals/guppy.png",
+      "wallpaper": "wallpapers/guppy-anime.jpg",
+      "width": 1672,
+      "height": 941,
+      "original_sha256": "9fbc1562fdbee63a29649ceda61c2d01569bff9b5a446f043f14c9fb360bcad7",
+      "jpeg_sha256": "4a74ab2ad7eba9dbaba201e0df4a3ca8c5c913195c294df399ed3b31e1dd97f6"
+    },
+    {
+      "variant": "bonito-rawhide",
+      "original": "originals/bonito-rawhide.png",
+      "wallpaper": "wallpapers/bonito-rawhide-anime.jpg",
+      "width": 1672,
+      "height": 941,
+      "original_sha256": "112caf5dcfb7dd15c6bea042717af1960bd35fae7fd1fab3721eb879389396c4",
+      "jpeg_sha256": "f29b2b3084a2831d57bde2cee7f2921144ea976fb731c72fb6ac9ee88e359a20"
+    },
+    {
+      "variant": "gurnard",
+      "original": "originals/gurnard.png",
+      "wallpaper": "wallpapers/gurnard-anime.jpg",
+      "width": 1672,
+      "height": 941,
+      "original_sha256": "7f12330eb3cafbecc461cf1cda87cd2f86397ea4d8678cff993ef23b196e7611",
+      "jpeg_sha256": "49ee4e41943536f73589763a0ddb225ed9aa39f211c36b003aaa6c8abe15d304"
+    },
+    {
+      "variant": "grouper",
+      "original": "originals/grouper.png",
+      "wallpaper": "wallpapers/grouper-anime.jpg",
+      "width": 1672,
+      "height": 941,
+      "original_sha256": "d8db7f5a4e412c02f2505b8b8a3ad172b5ea0f11e9a9bce34371fe503e0610da",
+      "jpeg_sha256": "bdd7be41c3164875bc6c239815bb05cb4259779cc342a428bfc502207b85290b"
+    },
+    {
+      "variant": "marlin",
+      "original": "originals/marlin.png",
+      "wallpaper": "wallpapers/marlin-anime.jpg",
+      "width": 1672,
+      "height": 941,
+      "original_sha256": "858dc9047af24ad4b34118e80d5c0559a0b7edc1d5818e53cda7a5031df9f4ea",
+      "jpeg_sha256": "c33369bb5a0ce093e0bdaaed7086d63e4d374089ccc3595546868bbaba59a604"
+    },
+    {
+      "variant": "flounder",
+      "original": "originals/flounder.png",
+      "wallpaper": "wallpapers/flounder-anime.jpg",
+      "width": 1672,
+      "height": 941,
+      "original_sha256": "fdc01deb2f12308a3d72b5461038ababf654e81dbca6030216d0361d3d387658",
+      "jpeg_sha256": "8ed05fcb4b8778222059ad38b41184403745366474d8a0a2e52e34891d2f6a3b"
+    },
+    {
+      "variant": "flounder-sid",
+      "original": "originals/flounder-sid.png",
+      "wallpaper": "wallpapers/flounder-sid-anime.jpg",
+      "width": 1672,
+      "height": 941,
+      "original_sha256": "08fb0271720f69378f7f75aa028b9cb68b7bde5c7e2c79131b016a7a20b62a24",
+      "jpeg_sha256": "95c4ac971377bf946fc058b210f9a1edec4ada898167eaef26bae17ba50d6b8b"
+    }
+  ],
+  "generation_prompts": {
+    "description": "Generation briefs derived from canonical TunaOS scenes, not verbatim image-tool prompts.",
+    "generator": "OpenAI image-generation tool",
+    "shared_brief": "Anime background painting in gouache and watercolor with soft pencil lines, paper grain, and loose brushwork, like a hand-drawn Japanese animated film background of the 1990s. Wide near-16:9 landscape composition. The variant emoji subject is embodied in the scene, not a sticker. No text, letters, logos, signatures, watermarks, glossy rendering, HDR, or over-sharpening. Keep useful calm space for desktop icons.",
+    "refinements": "Individual prompts included scene-specific refinements, including a rod holder without people for bonito, natural fish splashes, and a radiation trefoil symbol for flounder-sid.",
+    "variants": {
+      "yellowfin": {
+        "emoji": "🐠",
+        "palette": "warm golden yellows and soft coral pinks",
+        "scene": "a sunlit tropical lagoon seen from a wooden jetty; a large yellowfin tropical fish leaps in a bright arc at the centre, golden light on the water, reef shapes visible through clear shallows"
+      },
+      "albacore": {
+        "emoji": "🐟",
+        "palette": "clear cobalt and cerulean blues",
+        "scene": "an old harbour town at the edge of the open ocean; at the centre a great silver-blue albacore tuna breaks the surface, a school of tuna shimmering beneath it, fishing boats moored along the quay"
+      },
+      "skipjack": {
+        "emoji": "🍣",
+        "palette": "dusky plum and violet twilight, warm lantern light",
+        "scene": "a tiny seaside sushi counter at twilight, lanterns glowing, sliding doors open onto the harbour; at the centre a beautiful plate of nigiri sushi on the counter, the sea and boats beyond"
+      },
+      "wahoo": {
+        "emoji": "🎏",
+        "palette": "deep indigo and soft sky blue",
+        "scene": "a nostalgic Japanese seaside village on a hillside above a bay; at the centre koinobori carp streamers fly from a tall bamboo pole in the sea breeze, tiled roofs, power lines, a harbour and islands on the horizon"
+      },
+      "bonito": {
+        "emoji": "🎣",
+        "palette": "pale morning blues and silver",
+        "scene": "the end of a weathered wooden pier on a calm morning; at the centre a fishing rod bends as a bonito takes the line, a bucket and tackle box beside it, gulls, mist on the far shore"
+      },
+      "hummingbird": {
+        "emoji": "🐦",
+        "palette": "jade and teal greens with hibiscus red",
+        "scene": "a cliffside garden above the sea, hibiscus and trumpet flowers in bloom; at the centre a hummingbird hovers with blurred wings over a flower, the ocean glittering far below"
+      },
+      "sailfin": {
+        "emoji": "⛵",
+        "palette": "fresh leaf greens and a honey-gold sunset",
+        "scene": "a sailboat gliding past green headlands at golden hour; the sail at the centre catches the low sun, a lighthouse on the point, long reflections on the water"
+      },
+      "guppy": {
+        "emoji": "🌈",
+        "palette": "lavender and muted violet after rain",
+        "scene": "a rocky bay just after a summer rain; at the centre a vivid rainbow arcs over the sea, and in a clear tide pool in the foreground tiny colourful guppies swim among pebbles"
+      },
+      "bonito-rawhide": {
+        "emoji": "🐉",
+        "palette": "slate and steel blues with sea-foam white",
+        "scene": "a wild coast under a dramatic sky; at the centre a serpentine eastern dragon rises from the waves, coiling through spray and cloud, a small shrine gate on the rocks below"
+      },
+      "gurnard": {
+        "emoji": "🤖",
+        "palette": "blueberry blues and the warm glow of streetlights",
+        "scene": "a quiet beach at blue hour; at the centre a small friendly retro robot beachcombs at the waterline, holding up a seashell, a sea robin fish in the shallows beside it, lights of a seaside town behind"
+      },
+      "grouper": {
+        "emoji": "🪸",
+        "palette": "warm terracotta and sunset orange",
+        "scene": "an underwater coral reef lit by warm sunset light filtering down from the surface; at the centre a great branching coral, a big friendly grouper resting beside it, small fish, sea fans, shafts of light"
+      },
+      "marlin": {
+        "emoji": "🚀",
+        "palette": "midnight navy and electric sky blue",
+        "scene": "a sea launch platform at night far out on the ocean; at the centre a rocket lifts off, its flame reflected across the dark water, a blue marlin leaping in the foreground, a sky full of stars"
+      },
+      "flounder": {
+        "emoji": "🐡",
+        "palette": "rose and deep magenta-red",
+        "scene": "a rocky coast at low tide; at the centre a round, puffed-up pufferfish in a clear tide pool, starfish and shells around it, a small fishing village on the headland"
+      },
+      "flounder-sid": {
+        "emoji": "☢️",
+        "palette": "dark crimson night with a sickly green glow",
+        "scene": "an abandoned seaside research station at night, rusted and overgrown; at the centre a glowing green radiation-symbol sign on the station wall, strange bioluminescent fish glowing in the water below, eerie but beautiful"
+      }
+    }
+  }
+}

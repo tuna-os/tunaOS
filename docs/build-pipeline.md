@@ -15,14 +15,14 @@ not represent all desktops; each flavor has its own tag.
 
 ### Variants
 
-`.github/build-config.yml` is the source of truth for the build matrix. Do not
+`tunaos.toml` is the source of truth for the build matrix. Do not
 copy a static subset from this page into automation: variants and their flavor,
 platform, ISO, and QCOW2 availability are declared there. The generated
 [Matrix Status](MATRIX-STATUS.md) provides the current per-cell verification
 view, and the root [README](../README.md#choose-your-image) summarizes the
 published and local-build-only images for readers choosing a base.
 
-### Flavors (4-stage DAG; source of truth: `.github/build-config.yml`)
+### Flavors (4-stage DAG; source of truth: `tunaos.toml`)
 
 | Stage | Flavors | Description |
 |---|---|---|
