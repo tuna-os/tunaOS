@@ -228,10 +228,10 @@ The recommended next action is a maintainer-reviewed choice between these
 models, followed by one disposable **plain** target. The first prototype MUST
 not change the production matrix, replace current artifacts, or include
 LUKS/TPM qualification. This draft is not implementation approval.
-Under [`RFC-PROCESS.md`](../../RFC-PROCESS.md), a companion ADR MUST be
-recorded when this contract/investigation scope is approved and merged; that
-ADR records the scope and the non-implementation boundary. A later ADR records
-the chosen architecture after the maintainer approves it.
+Under [`RFC-PROCESS.md`](../../RFC-PROCESS.md), maintainers MUST record a
+companion ADR when they approve and merge this contract/investigation scope.
+That ADR records the scope and the non-implementation boundary. A later ADR
+records the chosen architecture after the maintainer approves it.
 
 ## Sequencing
 
