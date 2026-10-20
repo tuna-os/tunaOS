@@ -22,10 +22,10 @@ The adapter emits one JSON object with these fields:
 The environment object contains:
 
 - `id`: `<variant>-<flavor>`.
-- `image`: the pinned live-overlay image when `TUNA_LIVE_OVERLAY_REF` is
-  exported; otherwise the resolved source image returned by
-  `tunaos_image_ref`. The overlay is consumed as the live root, not merely
-  recorded as metadata.
+- `image`: the pinned live-overlay image when the caller exports
+  `TUNA_LIVE_OVERLAY_REF`; otherwise the source image that
+  `tunaos_image_ref` resolves. The live root consumes the overlay; the
+  build does not merely record it as metadata.
 - `desktop`: the session-manager name (`gnome`, `kde`, `niri`, `cosmic`, or
   `xfce`) inferred from the flavor.
 - `live_customize`: a one-item array containing the generated
@@ -36,16 +36,17 @@ The environment object contains:
 
 The payload mapping's `source` and `ref` identify the promoted installed
 payload. CI passes the source manifest digest in both values; local builds may
-use the local manifest digest. This keeps the installed system identity
-separate from the live-overlay identity while still pinning both inputs.
+use the local manifest digest. This keeps the identity of the installed
+system separate from the identity of the live overlay, with a pin on each
+input.
 
 ## Invariants
 
 Changes to the adapter must preserve these invariants:
 
-1. The live environment and offline payload may use different refs, but the
-   live overlay's recorded base digest must identify the same source manifest
-   used by the offline payload.
+1. The live environment and offline payload may use different refs. The
+   live overlay's recorded base digest must still identify the source
+   manifest that the offline payload uses.
 2. The environment is live-only and has one customization entry.
 3. The customization directory is private to the build output directory; a
    developer-only `.enable-sshd` marker must never modify the source tree.
