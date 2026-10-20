@@ -4363,3 +4363,46 @@ required = [
   "gnome-base/gvfs",
   "gnome-base/gnome-keyring",
 ]
+
+# Marlin GDM override from aa9810e9 (tunaOS#3438). The generated -arch
+# adapter takes precedence over tuna.yaml on pacman bases. Other tuna
+# profiles retain greetd. Package order and beta pin are unchanged.
+[desktops.tuna-arch]
+display_manager = "gdm"
+versionlock = []
+after_install = ["tuna-flatpak-remote", "flatpak-preinstall"]
+
+[desktops.tuna-arch.packages.pacman]
+required = [
+  "tunaos/tuna-desktop=1.0.0beta.1-1",
+  "gdm",
+  "xorg-xwayland",
+  "ibus",
+  "orca",
+  "gnome-shell",
+  "gnome-settings-daemon",
+  "gnome-control-center",
+  "gnome-keyring",
+  "evolution-data-server",
+  "xdg-desktop-portal-gnome",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs",
+  "gvfs",
+  "nautilus",
+  "ptyxis",
+  "networkmanager",
+  "libsecret",
+  "pipewire",
+  "wireplumber",
+  "gst-plugin-pipewire",
+  "gst-plugins-good",
+  "power-profiles-daemon",
+  "upower",
+  "flatpak",
+  "plymouth",
+  "adwaita-icon-theme",
+  "noto-fonts",
+  "noto-fonts-emoji",
+  "ttf-dejavu",
+  "ttf-liberation",
+]
