@@ -13,7 +13,8 @@
     "publication",
     "checks",
     "provenance",
-    "contractDigest"
+    "contractDigest",
+    "baseDigest"
   ],
   "properties": {
     "kind": { "const": "factory-receipt" },

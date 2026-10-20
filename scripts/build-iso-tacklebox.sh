@@ -8,13 +8,15 @@
 # approach for simpler, more reliable ISO generation.
 #
 # Usage:
-#   sudo ./scripts/build-iso-tacklebox.sh <variant> <flavor> [<repo>] [<tag>]
+#   sudo ./scripts/build-iso-tacklebox.sh <variant> <flavor> [<repo>] [<tag>] [<dev>] [<platform>]
 #     variant   yellowfin | albacore | skipjack | bonito
 #     flavor    base | gnome | gnome-hwe | kde | …
-#     repo      local | ghcr   (default: local)
+#     repo      local | ghcr (default: local)
 #     tag       defaults to <flavor>
+#     dev       1 enables disposable live SSH (default: 0)
+#     platform  canonical target platform; /v2 is retained in the output name
 #
-# Outputs to project root as <variant>-<flavor>-<version>-<arch>.iso
+# Outputs to project root as <variant>-<flavor>-<version>-<arch-or-platform>.iso
 
 set -euo pipefail
 
@@ -51,6 +53,7 @@ FLAVOR="${2:?usage: $0 <variant> <flavor> [repo] [tag]}"
 REPO="${3:-local}"
 TAG="${4:-$FLAVOR}"
 DEV="${5:-0}"
+PLATFORM="${6:-}"
 
 if [[ "$EUID" -ne 0 ]]; then
 	echo "ERROR: tacklebox needs root for sgdisk / mkfs / mount" >&2
@@ -169,7 +172,23 @@ RECIPE_FILE="${OUT_DIR}/recipe.json"
 CUSTOMIZE_DIR="${OUT_DIR}/live-customize"
 rm -rf "$CUSTOMIZE_DIR"
 mkdir -p "$CUSTOMIZE_DIR"
-cp -a "${REPO_ROOT}/live-iso/common/src/." "$CUSTOMIZE_DIR/"
+if [[ "$IMAGE_REF" == *@sha256:* ]]; then
+	BASE_IMAGE="${IMAGE_REF%@*}"
+	BASE_DIGEST="${IMAGE_REF##*@}"
+else
+	BASE_IMAGE="$IMAGE_REF"
+	BASE_DIGEST="unknown"
+fi
+BASE_IMAGE="${TUNA_LIVE_BASE_IMAGE:-$BASE_IMAGE}"
+BASE_DIGEST="${TUNA_LIVE_BASE_DIGEST:-$BASE_DIGEST}"
+{
+	printf 'export TUNA_LIVE_BASE_IMAGE=%q\n' "$BASE_IMAGE"
+	printf 'export TUNA_LIVE_BASE_DIGEST=%q\n' "$BASE_DIGEST"
+	printf 'export TUNA_LIVE_OVERLAY_DIGEST=%q\n' "${TUNA_LIVE_OVERLAY_DIGEST:-unknown}"
+	printf 'export TUNA_LIVE_PLATFORM=%q\n' "${PLATFORM:-unknown}"
+	cat "${REPO_ROOT}/live-iso/common/src/customize-live.sh"
+} > "${CUSTOMIZE_DIR}/customize-live.sh"
+chmod +x "${CUSTOMIZE_DIR}/customize-live.sh"
 if [[ "$DEV" == "1" ]]; then
 	touch "${CUSTOMIZE_DIR}/.enable-sshd"
 fi
@@ -261,8 +280,17 @@ VERSION_ID=$(podman run --rm --log-driver=k8s-file --security-opt label=disable 
 	sh -c '. /usr/lib/os-release && echo "${VERSION_ID}"')
 ARCH=$(podman run --rm --log-driver=k8s-file --security-opt label=disable \
 	"$IMAGE_REF" uname -m)
+if [[ -n "$PLATFORM" ]]; then
+	case "$PLATFORM" in
+	linux/amd64|linux/amd64/v2|linux/arm64) ;;
+	*) echo "ERROR: unsupported canonical platform: ${PLATFORM}" >&2; exit 1 ;;
+	esac
+	FILENAME_PLATFORM="${PLATFORM//\//-}"
+else
+	FILENAME_PLATFORM="$ARCH"
+fi
 
-FINAL_ISO="${REPO_ROOT}/${VARIANT}-${FLAVOR}-${VERSION_ID}-${ARCH}.iso"
+FINAL_ISO="${REPO_ROOT}/${VARIANT}-${FLAVOR}-${VERSION_ID}-${FILENAME_PLATFORM}.iso"
 cp "$ISO_OUT" "$FINAL_ISO"
 
 if [[ -n "${SUDO_USER:-}" ]]; then

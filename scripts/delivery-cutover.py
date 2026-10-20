@@ -86,6 +86,9 @@ def load_current_inputs(path: str | Path | None):
         current = json.load(handle)
     if not isinstance(current, dict):
         raise ValueError(f"current inputs must be a mapping: {path}")
+    current = current.get("currentInputs", current)
+    if not isinstance(current, dict):
+        raise ValueError(f"current inputs must be a mapping: {path}")
     return current.get("descriptors"), current.get("overlays"), current.get("pins")
 
 

@@ -14,7 +14,9 @@
     "checks",
     "provenance",
     "installedPackages",
-    "contractDigest"
+    "contractDigest",
+    "baseDigest",
+    "factoryReceiptDigests"
   ],
   "properties": {
     "kind": { "const": "image-receipt" },

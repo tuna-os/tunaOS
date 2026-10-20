@@ -291,11 +291,13 @@ CUSTOMIZE="${REPO_ROOT}/live-iso/common/src/customize-live.sh"
   grep -q 'INSTALLER_REVISION=${INSTALLER_REVISION}' "$CUSTOMIZE"
 }
 
-@test "overlay: live-source.json carries base digest, platform, installer app+revision" {
+@test "overlay: live-source.json carries base, overlay, platform, installer identity" {
   grep -q '/etc/tunaos/live-source.json' "$CUSTOMIZE"
   grep -q 'TUNA_LIVE_BASE_DIGEST' "$CUSTOMIZE"
+  grep -q 'TUNA_LIVE_OVERLAY_DIGEST' "$CUSTOMIZE"
   grep -q 'TUNA_LIVE_PLATFORM' "$CUSTOMIZE"
   grep -q '"base_digest"' "$CUSTOMIZE"
+  grep -q '"overlay_digest"' "$CUSTOMIZE"
   grep -q '"platform"' "$CUSTOMIZE"
   grep -q '"installer_app_id"' "$CUSTOMIZE"
   grep -q '"installer_revision"' "$CUSTOMIZE"

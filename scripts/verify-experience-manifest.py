@@ -14,6 +14,7 @@ installed_boot/desktop_contract) is rejected with a migration error.
 """
 
 import argparse
+import hashlib
 import json
 import math
 import re
@@ -36,7 +37,7 @@ INSTALLER_IDS = {
 }
 DIGEST_RE = re.compile(r"^sha256:[0-9a-fA-F]{64}$")
 
-RESOLVED_INPUT_DIGESTS = ("source", "overlay", "installer", "engine")
+RESOLVED_INPUT_DIGESTS = ("source", "overlay", "installer", "engine", "media")
 OBSERVED_MODES = ("plain", "encrypted")
 MEASUREMENT_BLOCKS = ("cold", "warm")
 
@@ -50,7 +51,7 @@ QUALIFICATION_COMPARE_FIELDS = (
 )
 VOLATILE_SUBKEYS = frozenset({
     "duration_s", "install_duration_s", "cold_boot_s", "warm_boot_s",
-    "timestamp", "started_at", "finished_at",
+    "free_disk_gib",
 })
 
 MIGRATION_HINT = (
@@ -80,6 +81,12 @@ def _require_digest(value, where: str, label: str) -> None:
     if not isinstance(value, str) or not DIGEST_RE.fullmatch(value):
         raise ValueError(f"{label}: {where} must be a sha256 digest")
 
+def _receipt_digest(manifest: dict) -> str:
+    payload = {key: value for key, value in manifest.items() if key != "receiptDigest"}
+    canonical = json.dumps(
+        payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+    ).encode("utf-8")
+    return "sha256:" + hashlib.sha256(canonical).hexdigest()
 
 def _require_number(value, where: str, label: str) -> None:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
@@ -122,8 +129,6 @@ def _validate_observed_record(
 def validate(manifest: dict, label: str) -> None:
     if manifest.get("schema") != SCHEMA_V1:
         raise ValueError(f"{label}: {MIGRATION_HINT}")
-    _require_text(manifest, "qualifiedAt", label)
-    _require_digest(manifest.get("receiptDigest"), "receiptDigest", label)
     for field in ("variant", "flavor", "platform", "cpu_baseline",
                   "hardware_scope"):
         _require_text(manifest, field, label)
@@ -189,6 +194,9 @@ def validate(manifest: dict, label: str) -> None:
             raise ValueError(f"{label}: measurements.{block}.duration_s is missing")
         _require_number(entry["duration_s"],
                         f"measurements.{block}.duration_s", label)
+    _require_digest(manifest.get("receiptDigest"), "receiptDigest", label)
+    if manifest["receiptDigest"].lower() != _receipt_digest(manifest):
+        raise ValueError(f"{label}: receiptDigest does not match canonical evidence")
 
 
 def _stable(value):

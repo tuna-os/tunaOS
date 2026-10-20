@@ -91,17 +91,32 @@ def test_iso_e2e_strict_failure_cannot_become_green():
     assert "name: Fail on e2e error" in strict_step
 
 
-def test_r2_strict_path_resolves_source_and_installer_inputs_before_boot():
+def test_iso_strict_path_uses_embedded_source_and_separate_media_identity():
     text = _text(ISO_WORKFLOW)
-    provenance = text.split("name: Resolve immutable R2 qualification inputs", 1)[1]
-    assert "skopeo inspect" in provenance
+    provenance = text.split("name: Resolve immutable ISO qualification inputs", 1)[1]
+    assert "live-source.json" in provenance
     assert "TUNAOS_QUAL_SOURCE_DIGEST" in provenance
+    assert "TUNAOS_QUAL_OVERLAY_DIGEST" in provenance
+    assert "TUNAOS_QUAL_MEDIA_DIGEST" in provenance
     assert "TUNAOS_QUAL_INSTALLER_DIGEST" in provenance
     assert 'unsquashfs -cat' in provenance
     assert 'etc/tunaos/live-installer-info' in provenance
     assert 'INSTALLER_BUNDLE_SHA256' in provenance
     assert 'sha256sum "$ISO_PATH"' in provenance
     assert 'sha256sum live-iso/common/src/customize-live.sh' not in provenance
+
+
+def test_published_media_has_bounded_display_and_serial_identity_fallback():
+    workflow = _text(ISO_WORKFLOW)
+    harness = _text(E2E)
+    assert "wait_for_strict_live_ready" in harness
+    assert "screenshot_sane" in harness
+    assert "TUNAOS_IMAGE_IDENTITY digest=" in _text(
+        ROOT / "build_scripts" / "checks" / "e2e-runtime-checks.sh"
+    )
+    assert "STRICT_PUBLISHED_MEDIA=1" in workflow
+    assert "STRICT_PUBLISHED_MEDIA=0" in workflow
+    assert "native-qemu" not in workflow
 
 def test_parity_workflow_upload_has_no_disk_suffixed_paths():
     text = _text(WORKFLOW)
@@ -132,7 +147,8 @@ def test_runtime_hashes_do_not_substitute_for_builder_or_frontend_identity():
     assert 'STRICT_OVERLAY_DIGEST="sha256:$(sha256sum "$ISO_PATH"' not in script
     strict_capture = script.split('strict_capture_live_inputs() {', 1)[1].split('\n}', 1)[0]
     assert 'sha256sum /usr/local/bin/fisherman' not in strict_capture
-    assert 'STRICT_EV_BNAME="${TUNAOS_QUAL_BROWSER_NAME:-native-qemu}"' in script
+    assert "TUNAOS_QUAL_BROWSER_NAME must identify the measured browser" in script
+    assert "TUNAOS_QUAL_BROWSER_VERSION must identify the measured browser version" in script
 
 
 @pytest.mark.parametrize("outcome,rc,expected", [

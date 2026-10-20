@@ -43,6 +43,7 @@ def manifest(**overrides):
             "overlay": _digest("b"),
             "installer": _digest("c"),
             "engine": _digest("d"),
+            "media": _digest("f"),
         },
         "browser": {
             "name": "chromium",
@@ -61,6 +62,7 @@ def manifest(**overrides):
         },
     }
     value.update(overrides)
+    value["receiptDigest"] = MODULE._receipt_digest(value)
     return value
 
 
@@ -148,6 +150,20 @@ def test_compare_ignores_install_and_boot_timing_fields(field):
     right["measurements"]["cold"][field] = 4.0
     assert MODULE.compare(left, right) == []
 
+def test_compare_ignores_transient_free_disk_measurement():
+    left = manifest()
+    right = copy.deepcopy(left)
+    left["browser"]["free_disk_gib"] = 20
+    right["browser"]["free_disk_gib"] = 11
+    assert MODULE.compare(left, right) == []
+
+
+def test_rejects_receipt_digest_for_changed_content():
+    data = manifest()
+    data["browser"]["memory_gib"] = 9
+    with pytest.raises(ValueError, match="receiptDigest"):
+        MODULE.validate(data, "test")
+
 
 @pytest.mark.parametrize("mode", ["plain", "encrypted"])
 def test_rejects_observed_source_digest_mismatch(mode):
@@ -172,7 +188,7 @@ def test_rejects_missing_top_level_blocks(field):
         MODULE.validate(data, "test")
 
 
-@pytest.mark.parametrize("digest_name", ["source", "overlay", "installer", "engine"])
+@pytest.mark.parametrize("digest_name", ["source", "overlay", "installer", "engine", "media"])
 def test_rejects_missing_resolved_input_digest(digest_name):
     data = manifest()
     del data["resolved_inputs"][digest_name]

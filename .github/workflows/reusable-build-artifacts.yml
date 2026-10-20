@@ -200,7 +200,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          pkgs=(just jq rclone golang-go git systemd-boot-efi mtools squashfs-tools xorriso dosfstools gdisk e2fsprogs btrfs-progs)
+          pkgs=(just jq rclone golang-go git skopeo systemd-boot-efi mtools squashfs-tools xorriso dosfstools gdisk e2fsprogs btrfs-progs)
           if sudo sh -c 'command -v podman' >/dev/null 2>&1; then
             echo "podman already present: $(sudo sh -c 'command -v podman') ($(sudo podman --version))"
           else
@@ -225,12 +225,38 @@ jobs:
           VARIANT: ${{ inputs.variant }}
           FLAVOR: ${{ inputs.flavor }}
           IMAGE_TAG: ${{ inputs.image-tag }}
+          PLATFORM: ${{ inputs.platform }}
         run: |
+          set -euo pipefail
           export TACKLEBOX_FROM_SOURCE=1
           TAG="${IMAGE_TAG:-${FLAVOR}-linux-amd64}"
+          IMAGE_REF="$(bash ./scripts/published-image-ref.sh "$VARIANT" "$TAG" ghcr)"
+          case "$PLATFORM" in
+            linux/amd64)  SKOPEO_PLATFORM=(--override-arch amd64) ;;
+            linux/amd64/v2) SKOPEO_PLATFORM=(--override-arch amd64 --override-variant v2) ;;
+            linux/arm64)   SKOPEO_PLATFORM=(--override-arch arm64) ;;
+            *) echo "unsupported canonical platform: ${PLATFORM}" >&2; exit 1 ;;
+          esac
+          IMAGE_DIGEST="$(skopeo inspect "${SKOPEO_PLATFORM[@]}" \
+            --format '{{.Digest}}' "docker://${IMAGE_REF}")"
+          [[ "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+            echo "invalid promoted image digest: ${IMAGE_DIGEST}" >&2
+            exit 1
+          }
+          SAFE_PLATFORM="${PLATFORM//\//-}"
+          OVERLAY_REF="ghcr.io/tuna-os/live-overlay:${VARIANT}-${FLAVOR}-${SAFE_PLATFORM}"
+          OVERLAY_DIGEST="$(skopeo inspect "${SKOPEO_PLATFORM[@]}" \
+            --format '{{.Digest}}' "docker://${OVERLAY_REF}")"
+          [[ "$OVERLAY_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+            echo "invalid live overlay digest: ${OVERLAY_DIGEST}" >&2
+            exit 1
+          }
+          export TUNAOS_IMAGE_REF="${IMAGE_REF}@${IMAGE_DIGEST}"
+          export TUNA_LIVE_OVERLAY_DIGEST="$OVERLAY_DIGEST"
+          echo "Building ISO from ${TUNAOS_IMAGE_REF} (${PLATFORM})"
+          echo "Embedding live overlay ${OVERLAY_REF}@${TUNA_LIVE_OVERLAY_DIGEST}"
           sudo -E bash ./scripts/build-iso-tacklebox.sh \
-            "${VARIANT}" "${FLAVOR}" ghcr "${TAG}"
-
+            "${VARIANT}" "${FLAVOR}" ghcr "${TAG}" 0 "${PLATFORM}"
       # #1378 follow-through. This step installs the native QEMU + firmware
       # for the runner arch, and scripts/iso-e2e.sh picks qemu-system-aarch64,
       # the `virt` machine and AAVMF on an aarch64 host. The last x86 literal
@@ -440,7 +466,9 @@ jobs:
           # documented download URL (docs/TESTING.md) users already `wget`,
           # so it must not move out from under them. Other platforms
           # (#1378) get an arch-suffixed pointer instead of clobbering it.
-          if [[ "${PLATFORM}" == "linux/amd64" ]]; then
+          if [[ "${PLATFORM}" == "linux/amd64" || "${PLATFORM}" == "linux/amd64/v2" ]]; then
+            # The canonical x86 target owns the public bare pointer. Alma's
+            # ordinary x86 target is AMD64/v2; NVIDIA remains generic AMD64.
             LATEST="${VARIANT}-${FLAVOR}-latest.iso"
           else
             ARCH_SUFFIX="${PLATFORM##*/}"

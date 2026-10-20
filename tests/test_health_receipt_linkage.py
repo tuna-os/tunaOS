@@ -1,4 +1,4 @@
-"""Optional schema fields must still establish linkage before health is green."""
+"""Receipt schemas require linkage fields before health can be evaluated."""
 import copy
 import datetime as dt
 import hashlib
@@ -8,7 +8,7 @@ import sys
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from contracts.evidence import canonical_json, validate
+from contracts.evidence import EvidenceError, canonical_json, validate
 from contracts.health import evaluate_row
 
 NOW = dt.datetime(2026, 10, 19, 21, tzinfo=dt.timezone.utc)
@@ -68,14 +68,15 @@ def test_complete_schema_valid_receipts_are_healthy():
     (("image", "baseDigest"), ("package", "baseDigest")),
     (("image", "factoryReceiptDigests"),),
 ])
-def test_schema_valid_missing_linkage_is_blocked(missing):
+def test_schema_missing_linkage_is_rejected_before_health(missing):
     data = inputs()
     for receipt, field in missing:
         del data[receipt]["receipt"][field]
-    validate_receipts(data)
+    with pytest.raises(EvidenceError, match="required property"):
+        validate_receipts(data)
     result = evaluate_row(**data)
     assert result["status"] == "blocked"
-    assert result["reasons"] == ["attempt-publication-receipt-mismatch"]
+    assert result["reasons"] == ["invalid-or-mismatched-receipt"]
 
 
 def test_schema_valid_empty_factory_linkage_is_blocked():
