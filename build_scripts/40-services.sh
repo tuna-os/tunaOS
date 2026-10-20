@@ -598,7 +598,6 @@ if [[ "${PKG_MGR:-}" == "pacman" ]] || command -v zypper &>/dev/null || command 
 		dconf update || true
 	fi
 
-
 	# systemd-resolved
 	tunaos_enable_systemd_resolved
 
@@ -606,7 +605,6 @@ if [[ "${PKG_MGR:-}" == "pacman" ]] || command -v zypper &>/dev/null || command 
 	exit 0
 fi
 # ── dnf (RPM / Universal-Blue) path continues below ───────────────────
-
 
 sed -i 's|uupd|& --disable-module-distrobox|' /usr/lib/systemd/system/uupd.service 2>/dev/null || true
 

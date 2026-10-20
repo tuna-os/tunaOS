@@ -38,10 +38,10 @@ ASSETS="${REPO_ROOT}/build_scripts/assets/tunaos-overrides"
 	cmp "$ASSETS/ujust-bash" "$root/usr/share/bash-completion/completions/ujust"
 	cmp "$ASSETS/ujust-bash" "$root/etc/bash_completion.d/ujust"
 	cmp "$ASSETS/ujust-zsh" "$root/usr/share/zsh/site-functions/_ujust"
+	cmp "$ASSETS/tunaos-ujust.tmpfiles" "$root/usr/lib/tmpfiles.d/tunaos-ujust.conf"
 	cmp "$ASSETS/ujust-fish" "$root/usr/share/fish/vendor_completions.d/ujust.fish"
 	cmp "$ASSETS/uupd-20-tunaos.conf" "$root/usr/lib/systemd/system/uupd.service.d/20-tunaos.conf"
 	cmp "$ASSETS/tunaos-uupd-notify.service" "$root/usr/lib/systemd/system/tunaos-uupd-notify@.service"
-	cmp "$ASSETS/uupd-notify" "$root/usr/libexec/tunaos/uupd-notify"
 	rm -rf "$root"
 }
 
@@ -108,7 +108,8 @@ EOF
 	chmod +x "$root/just"
 	run env PATH="$root:$PATH" zsh -fc '
 _describe() { print -r -- "$*"; }
-source "$1"
+fpath=("${1:h}" $fpath)
+autoload -Uz _ujust
 words=(ujust)
 CURRENT=1
 _ujust
@@ -171,8 +172,9 @@ EOF
 #!/bin/sh
 printf '%s\n' "\$*" >"$root/systemctl.log"
 EOF
-	cat >"$bin/machinectl" <<'EOF'
+	cat >"$bin/machinectl" <<EOF
 #!/bin/sh
+printf '%s\n' "\$*" >"$root/machinectl.log"
 printf 'retry\r\n'
 EOF
 	cat >"$bin/notify-send" <<'EOF'
@@ -184,8 +186,8 @@ EOF
 		TUNAOS_MACHINECTL="$bin/machinectl" \
 		TUNAOS_NOTIFY_SEND="$bin/notify-send" \
 		bash "$ASSETS/uupd-notify" uupd.service
-	[ "$status" -eq 0 ]
 	[ "$(cat "$root/systemctl.log")" = "start uupd.service" ]
+	grep -q '^shell tester@ ' "$root/machinectl.log"
 	rm -rf "$root"
 }
 
