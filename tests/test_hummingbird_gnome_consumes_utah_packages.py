@@ -103,7 +103,7 @@ def test_the_build_engine_passes_the_ref_as_a_build_arg():
     assert '"UTAH_PACKAGES_IMAGE_REF=${utah_packages_ref}"' in text
 
 
-def test_the_containerfile_declares_the_stage_and_mounts_it_on_gnome_and_tuna():
+def test_the_containerfile_mounts_utah_packages_on_gnome_and_tuna():
     text = CONTAINERFILE.read_text()
     assert 'ARG UTAH_PACKAGES_IMAGE_REF="ghcr.io/projectbluefin/utah-packages:unpinned-must-override"' in text, (
         "the default must be a tag that cannot resolve, like COMMON/BREW, so a "
