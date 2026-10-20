@@ -11,15 +11,23 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
 from typing import Any
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from lib import tunaos_config
+
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-CONFIG = ROOT / ".github" / "build-config.yml"
+OVERLAY_FLAVOR = re.compile(
+    r"^(gnome|kde|cosmic|niri|xfce|pantheon|tuna)"
+    r"(-(hwe|nvidia|nvidia-hwe|cachyos|zfs))?$"
+)
 VERSIONS = ROOT / "image-versions.yaml"
 
 
@@ -111,26 +119,34 @@ def _overlay_identity(variant: str, flavor: str, platform: str, base_digest: str
     digest = _digest(str(output.get("Digest", "")), reference)
     labels = output.get("Labels") if isinstance(output.get("Labels"), dict) else {}
     label_base = labels.get("org.tunaos.live-overlay.base-digest")
-    if label_base and label_base != base_digest:
+    if not label_base:
+        raise RuntimeError(f"{reference}: missing base digest label")
+    if label_base != base_digest:
         raise RuntimeError(f"{reference}: base digest moved from {base_digest} to {label_base}")
     return {
         "variant": variant,
         "flavor": flavor,
         "platform": platform,
         "liveOverlayDigest": digest,
-        "liveOverlayBaseDigest": label_base or base_digest,
+        "liveOverlayBaseDigest": label_base,
     }
 
 
 def _engine_pin() -> str:
     versions = yaml.safe_load(VERSIONS.read_text(encoding="utf-8"))
-    pin = versions.get("tacklebox") if isinstance(versions, dict) else None
+    downloads = versions.get("downloads") if isinstance(versions, dict) else None
+    pin = downloads.get("tacklebox") if isinstance(downloads, dict) else None
     if not isinstance(pin, str) or not pin:
-        raise RuntimeError("image-versions.yaml has no tacklebox pin")
+        raise RuntimeError("image-versions.yaml has no downloads.tacklebox pin")
     return "sha256:" + hashlib.sha256(f"tacklebox:{pin}".encode()).hexdigest()
 
 
-def collect(config: dict[str, Any], wanted_variant: str = "") -> dict[str, Any]:
+def collect(
+    config: dict[str, Any],
+    wanted_variant: str = "",
+    wanted_flavor: str = "",
+    wanted_platform: str = "",
+) -> dict[str, Any]:
     descriptors: dict[str, Any] = {}
     overlays: dict[str, Any] = {}
     for variant_cfg in config.get("variants", []):
@@ -140,19 +156,32 @@ def collect(config: dict[str, Any], wanted_variant: str = "") -> dict[str, Any]:
         if not isinstance(variant, str) or (wanted_variant and variant != wanted_variant):
             continue
         for flavor_cfg in variant_cfg.get("flavors", []):
-            if not isinstance(flavor_cfg, dict) or flavor_cfg.get("build_image") is not True:
+            if (not isinstance(flavor_cfg, dict)
+                    or flavor_cfg.get("build_image") is not True):
                 continue
             flavor = flavor_cfg.get("id")
-            if not isinstance(flavor, str):
+            if (not isinstance(flavor, str)
+                    or (wanted_flavor and flavor != wanted_flavor)):
                 continue
             platforms = flavor_cfg.get("platforms") or variant_cfg.get("platforms") or ["linux/amd64"]
             for platform in platforms:
-                identity = _image_identity(config, variant, flavor, platform)
+                if wanted_platform and platform != wanted_platform:
+                    continue
                 key = f"{variant}:{flavor}:{platform}"
+                try:
+                    identity = _image_identity(config, variant, flavor, platform)
+                except RuntimeError as exc:
+                    print(f"::warning::{key}: {exc}", file=sys.stderr)
+                    continue
                 descriptors[key] = identity
-                overlays[key] = _overlay_identity(
-                    variant, flavor, platform, identity["platformManifestDigest"]
-                )
+                if not OVERLAY_FLAVOR.fullmatch(flavor):
+                    continue
+                try:
+                    overlays[key] = _overlay_identity(
+                        variant, flavor, platform, identity["platformManifestDigest"]
+                    )
+                except RuntimeError as exc:
+                    print(f"::warning::{key}: {exc}", file=sys.stderr)
     return {
         "currentInputs": {
             "descriptors": descriptors,
@@ -165,11 +194,13 @@ def collect(config: dict[str, Any], wanted_variant: str = "") -> dict[str, Any]:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--variant", default="")
+    parser.add_argument("--flavor", default="")
+    parser.add_argument("--platform", default="")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     try:
-        config = yaml.safe_load(CONFIG.read_text(encoding="utf-8"))
-        document = collect(config, args.variant)
+        config = tunaos_config.matrix(tunaos_config.load())
+        document = collect(config, args.variant, args.flavor, args.platform)
         args.output.write_text(
             json.dumps(document, indent=2, sort_keys=True) + "\n", encoding="utf-8"
         )
