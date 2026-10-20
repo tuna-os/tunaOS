@@ -2,6 +2,7 @@
 """Summarize explicit test reports without changing the test result."""
 import argparse
 import ast
+import errno
 import io
 import json
 import os
@@ -17,6 +18,15 @@ MAX_REPORTS = 256
 MAX_FAILURES = 100
 SOURCE_ROOT = Path(__file__).resolve().parents[1]
 MAX_OUTPUT = 1024 * 1024
+
+
+class ReportError(ValueError):
+    """A fixed diagnostic code with optional numeric metadata, never content."""
+
+    def __init__(self, code, size=None):
+        super().__init__(code)
+        self.code = code
+        self.size = size
 
 
 def bounded(value, limit):
@@ -37,14 +47,16 @@ def read_report(root, relative, budget):
         descriptor = os.open(parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory)
         with os.fdopen(descriptor, 'rb') as stream:
             info = os.fstat(stream.fileno())
-            if not stat.S_ISREG(info.st_mode) or info.st_size > MAX_FILE:
-                raise ValueError('nonregular or oversized report')
+            if not stat.S_ISREG(info.st_mode):
+                raise ReportError('nonregular-report')
+            if info.st_size > MAX_FILE:
+                raise ReportError('oversized-report', info.st_size)
             if budget[0] + info.st_size > MAX_TOTAL:
-                raise ValueError('cumulative report size limit')
+                raise ReportError('cumulative-report-size-limit', info.st_size)
             data = stream.read(MAX_FILE + 1)
             after = os.fstat(stream.fileno())
             if len(data) != info.st_size or (info.st_size, info.st_mtime_ns, info.st_ctime_ns) != (after.st_size, after.st_mtime_ns, after.st_ctime_ns):
-                raise ValueError('report changed during read')
+                raise ReportError('report-changed-during-read', info.st_size)
             budget[0] += len(data)
             return data.decode('utf-8')
     finally:
@@ -109,7 +121,7 @@ def failure(result, identifier, kind):
 
 def parse_junit(text, result, source_budget):
     if re.search(r'<!\s*(?:DOCTYPE|ENTITY)', text, re.I) or '\x00' in text:
-        raise ValueError('DTD, entity declaration or non-UTF-8 XML refused')
+        raise ReportError('forbidden-xml-declaration-or-nul')
     depth = nodes = 0
     parser = ET.iterparse(io.StringIO(text), events=('start', 'end'))
     for event, node in parser:
@@ -117,9 +129,9 @@ def parse_junit(text, result, source_budget):
             depth += 1
             nodes += 1
             if depth > 64 or nodes > 100000:
-                raise ValueError('XML structure limit')
+                raise ReportError('xml-structure-limit')
             if nodes == 1 and node.tag not in ('testsuites', 'testsuite'):
-                raise ValueError('unexpected JUnit root')
+                raise ReportError('unexpected-junit-root')
             continue
         depth -= 1
         if node.tag != 'testcase':
@@ -174,8 +186,19 @@ def summarize(root):
     source_budget = [0]
     try:
         parse_junit(read_report(root, 'pytest.xml', budget), result['pytest'], source_budget)
-    except (OSError, ValueError, ET.ParseError):
-        issue(result['pytest'], 'invalid-or-missing-junit')
+    except ReportError as error:
+        issue(result['pytest'], error.code)
+        if error.size is not None:
+            result['pytest']['report_size_bytes'] = error.size
+    except UnicodeDecodeError:
+        issue(result['pytest'], 'invalid-utf8-junit')
+    except ET.ParseError:
+        issue(result['pytest'], 'invalid-xml-junit')
+    except OSError as error:
+        issue(result['pytest'], 'missing-junit' if error.errno == errno.ENOENT else
+              'unsafe-junit-path' if error.errno in (errno.ELOOP, errno.ENOTDIR) else 'unreadable-junit')
+    except ValueError:
+        issue(result['pytest'], 'invalid-junit')
     try:
         result['pytest']['exit_code'] = exit_code(read_report(root, 'pytest.exit', budget))
     except (OSError, ValueError):

@@ -307,3 +307,46 @@ def test_workflow_publishes_only_a_regular_complete_summary(tmp_path):
     assert json.loads(output.read_text())['pytest']['exit_code'] == 1
     assert '[[ -f ' in STEPS['Summarize test failures']['run']
     assert '&& ! -L ' in STEPS['Summarize test failures']['run']
+
+
+@pytest.mark.parametrize('content,code', [
+    (b'\xff', 'invalid-utf8-junit'),
+    (b'<broken', 'invalid-xml-junit'),
+    (b'<arbitrary/>', 'unexpected-junit-root'),
+    (b'<!DOCTYPE x><testsuite/>', 'forbidden-xml-declaration-or-nul'),
+    (b'<testsuite>' + b'<a>' * 65 + b'</a>' * 65 + b'</testsuite>', 'xml-structure-limit'),
+])
+def test_junit_rejection_reason_is_fixed_and_content_free(tmp_path, content, code):
+    root = reports(tmp_path)
+    (root / 'pytest.xml').write_bytes(content)
+    result = module.summarize(root)['pytest']
+    assert result['issues'] == [code]
+    assert result['exit_code'] == 1
+
+
+def test_missing_and_oversized_junit_are_distinct_without_raising_limits(tmp_path, monkeypatch):
+    root = reports(tmp_path)
+    report = root / 'pytest.xml'
+    report.unlink()
+    assert module.summarize(root)['pytest']['issues'] == ['missing-junit']
+    monkeypatch.setattr(module, 'MAX_FILE', 16)
+    report.write_bytes(b'credential-never-publish' * 2)
+    result = module.summarize(root)['pytest']
+    assert result['issues'] == ['oversized-report']
+    assert result['report_size_bytes'] == report.stat().st_size
+    assert 'credential' not in json.dumps(result)
+    assert module.MAX_FILE == 16
+
+
+def test_changed_junit_has_fixed_reason_and_original_exit(tmp_path, monkeypatch):
+    root = reports(tmp_path)
+    original = module.read_report
+    def changed(root, relative, budget):
+        if relative == 'pytest.xml':
+            raise module.ReportError('report-changed-during-read', 123)
+        return original(root, relative, budget)
+    monkeypatch.setattr(module, 'read_report', changed)
+    result = module.summarize(root)['pytest']
+    assert result['issues'] == ['report-changed-during-read']
+    assert result['report_size_bytes'] == 123
+    assert result['exit_code'] == 1
