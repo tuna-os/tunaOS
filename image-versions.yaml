@@ -163,7 +163,7 @@ downloads:
   # serves every architecture. Re-derive from the .sha256 asset, never from a
   # local sha256sum of whatever arrived, whenever this version moves.
   # renovate: datasource=github-releases depName=AvengeMedia/DankMaterialShell
-  dms_qml: "v1.6.3"
+  dms_qml: "v2.0.0"
   dms_qml_sha256: "f8f3884aff9d29b008a50fd0d164b512a680a6cce209a8b62a690534fdfd4c80"
 
   # Zirconium's mkosi.extra payload, fetched as a source tarball by
