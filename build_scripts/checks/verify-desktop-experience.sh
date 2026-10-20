@@ -379,6 +379,22 @@ require_gnome_shell_schema() {
 	exit 1
 }
 
+# GDM's keyfile parser accepts surrounding whitespace and case-insensitive
+# booleans; ignore comments so only an active setting can bypass the greeter.
+gdm_autologin_enabled() {
+	local config="${1:-/etc/gdm/custom.conf}"
+	awk '
+		/^[[:space:]]*#/ { next }
+		{
+			line = $0
+			sub(/[[:space:]]*#.*/, "", line)
+			if (tolower(line) ~ /^[[:space:]]*automaticloginenable[[:space:]]*=[[:space:]]*true[[:space:]]*$/) {
+				found = 1
+			}
+		}
+		END { exit !found }
+	' "$config"
+}
 case "$desktop" in
 gnome)
 	experience="projectbluefin/bluefin-lts"
@@ -475,6 +491,7 @@ kde)
 	require_command konsole
 	dm_pattern='^(sddm|plasmalogin)\.service$'
 	;;
+
 tuna)
 	experience="tunaos/tuna"
 	# The package is tuna-desktop (formerly roost, tuna-desktop#536). It must
@@ -529,6 +546,7 @@ tuna)
 	grep -qx 'Exec=tuna-session' /usr/share/wayland-sessions/roost.desktop
 	grep -qx 'NoDisplay=true' /usr/share/wayland-sessions/roost.desktop
 	require_glob '/etc/pam.d/roost-lock'
+
 	require_glob '/usr/share/xdg-desktop-portal/tuna-portals.conf'
 	for portal in ScreenCast Screenshot; do
 		require_portal_preference /usr/share/xdg-desktop-portal/tuna-portals.conf "org.freedesktop.impl.portal.$portal" gnome
@@ -547,6 +565,7 @@ tuna)
 	# without it every portal fails (tuna-os/tuna-desktop#691).
 	require_command dbus-update-activation-environment
 	require_command wpctl
+
 	# Power profiles on the Fedora and EL bases come from tuned-ppd, the
 	# provider their GNOME flavors ship; Arch, openSUSE and the apt bases use
 	# power-profiles-daemon, as their GNOME flavors do. Either one answers the
