@@ -23,6 +23,8 @@ NOTIFY_SEND="${TUNAOS_NOTIFY_SEND:-/usr/bin/notify-send}"
 [[ -x "$NOTIFY_SEND" ]] || exit 0
 command -v loginctl >/dev/null 2>&1 || exit 0
 command -v systemctl >/dev/null 2>&1 || exit 0
+command -v getent >/dev/null 2>&1 || exit 0
+command -v timeout >/dev/null 2>&1 || exit 0
 
 is_interactive() { # uid -> 0 if interactive
 	local uid="$1" record shell home
@@ -37,9 +39,9 @@ is_interactive() { # uid -> 0 if interactive
 	return 0
 }
 
-notify_user() { # uid
-	local uid="$1" action
-	action="$(timeout 75 "$MACHINECTL" shell "${uid}@" \
+notify_user() { # uid user
+	local uid="$1" user="$2" action
+	action="$(timeout 75 "$MACHINECTL" shell "${user}@" \
 		"$NOTIFY_SEND" --app-name="$APP" --icon="$ICON" \
 		--urgency=critical --expire-time=60000 --wait \
 		--action=retry="Try again" "$SUMMARY" "$BODY" 2>/dev/null)" || return 0
@@ -49,10 +51,10 @@ notify_user() { # uid
 	fi
 }
 
-while read -r uid _rest; do
-	[[ "$uid" =~ ^[0-9]+$ ]] || continue
+while read -r uid user _rest; do
+	[[ "$uid" =~ ^[0-9]+$ && -n "$user" ]] || continue
 	if is_interactive "$uid"; then
-		notify_user "$uid"
+		notify_user "$uid" "$user"
 	fi
 done < <(loginctl list-users --no-legend 2>/dev/null || true)
 
