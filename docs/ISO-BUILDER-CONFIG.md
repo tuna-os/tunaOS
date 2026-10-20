@@ -128,3 +128,14 @@ choice becomes a visible unavailable selection; it never selects another row.
 Review selection needs availability and must meet the existing policy for offered images.
 Execution must pass the existing gate for qualification. Recommendations grant
 no qualification, and preview leaves never enter image inspection or build APIs.
+
+## Image reference syntax
+
+Image defaults use the path and DNS label rules from [distribution/reference v0.6.0](https://github.com/distribution/reference/blob/v0.6.0/regexp.go).
+The existing portable scope stays lowercase DNS or IPv4 hosts, with optional numeric ports. IPv6 and uppercase hosts remain outside this scope.
+
+A tag, a SHA-256 digest, or both are required. Path atoms can contain letters and digits.
+One or two underscores and repeated hyphens can separate these atoms.
+
+The shared fixture at `tests/fixtures/builder-config-image-references.json` checks Python, JSON Schema and browser validation.
+Syntax checks do not grant registry access or qualify an image.
