@@ -129,9 +129,9 @@ status = "admitted"
 package_target = "rawhide"
 
 [tuna_rollout.hummingbird]
-status = "unsupported"
+status = "admitted"
 package_target = "hummingbird"
-reason = "unsupported until package target hummingbird publishes tuna-desktop (tunaos-packages#832)"
+portals = "blocked on tuna-desktop session-start fix"
 
 [tuna_rollout.sailfin]
 status = "admitted"
@@ -1419,6 +1419,14 @@ id = "cosmic"
 stage = 2
 build_image = true
 build_iso = true
+[[variants.hummingbird.flavors]]
+id = "tuna"
+platforms = ["linux/amd64"]
+stage = 2
+build_image = true
+build_iso = false
+build_qcow2 = false
+luks_e2e = false
 
 # ── Sailfin ──────────────────────────────────────────────────────────────
 # Sailfin Tumbleweed: rolling-release, zypper-based.
