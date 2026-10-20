@@ -356,7 +356,11 @@ jobs:
         run: |
           SNAPSHOT_ARGS=()
           if [[ -s "${CATALOG_SNAPSHOT:-}" ]]; then
-            SNAPSHOT_ARGS=(--snapshot "$CATALOG_SNAPSHOT" --current-inputs "$CATALOG_SNAPSHOT")
+            # The catalog artifact is historical qualification evidence, not
+            # an observation of this publication. Without independently
+            # collected member descriptors, overlays, and pins, delivery-
+            # cutover.py deliberately fails open and uploads the new ISO.
+            SNAPSHOT_ARGS=(--snapshot "$CATALOG_SNAPSHOT")
           fi
           if python3 scripts/delivery-cutover.py --check \
               --variant "${{ matrix.variant }}" --group "${{ matrix.group }}" \

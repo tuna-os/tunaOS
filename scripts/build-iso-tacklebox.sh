@@ -120,7 +120,7 @@ IMAGE_REF=$(tunaos_image_ref "$VARIANT" "$FLAVOR" "$REPO" "$TAG")
 # bootc's direct live-ISO path must resolve the published image reference.
 # Tacklebox copies IMAGE_REF into the store under this canonical ref; it does
 # not pull a second image or require a local podman tag.
-PAYLOAD_REF=$(tunaos_image_ref "$VARIANT" "$FLAVOR" ghcr "$TAG")
+PAYLOAD_REF=$(tunaos_image_ref "$VARIANT" "$FLAVOR" ghcr "$TAG" 0)
 if [[ "$REPO" == "local" ]]; then
 	tunaos_import_to_root_storage "$IMAGE_REF"
 else

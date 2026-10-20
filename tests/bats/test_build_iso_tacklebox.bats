@@ -170,7 +170,7 @@ teardown() {
 
 @test "offline payload keeps a canonical installed-system ref" {
 	SCRIPT_PATH="${REPO_ROOT:-$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)}/scripts/build-iso-tacklebox.sh"
-  grep -q 'PAYLOAD_REF=$(tunaos_image_ref "$VARIANT" "$FLAVOR" ghcr "$TAG")' "$SCRIPT_PATH"
+  grep -q 'PAYLOAD_REF=$(tunaos_image_ref "$VARIANT" "$FLAVOR" ghcr "$TAG" 0)' "$SCRIPT_PATH"
   grep -q '"source": "${IMAGE_REF}"' "$SCRIPT_PATH"
   grep -q '"ref": "${PAYLOAD_REF}"' "$SCRIPT_PATH"
   source_ref="localhost/yellowfin:kde"
@@ -179,6 +179,13 @@ teardown() {
   run jq -r '.offline_payloads[0].source + " -> " + .offline_payloads[0].ref' <<<"$recipe"
   [ "$status" -eq 0 ]
   [ "$output" = "localhost/yellowfin:kde -> ghcr.io/tuna-os/yellowfin:kde" ]
+}
+
+@test "image source override does not replace canonical offline payload ref" {
+	source "${REPO_ROOT}/scripts/lib/image.sh"
+	TUNAOS_IMAGE_REF="ghcr.io/tuna-os/yellowfin:kde@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	[ "$(tunaos_image_ref yellowfin kde ghcr kde 1)" = "$TUNAOS_IMAGE_REF" ]
+	[ "$(tunaos_image_ref yellowfin kde ghcr kde 0)" = "ghcr.io/tuna-os/yellowfin:kde" ]
 }
 
 # ── Desktop detection ──────────────────────────────────────────────────────
