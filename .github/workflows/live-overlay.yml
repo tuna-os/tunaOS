@@ -102,6 +102,9 @@ jobs:
     name: ${{ matrix.variant }}:${{ matrix.flavor }} [${{ matrix.platform }}]
     needs: generate-matrix
     if: ${{ needs.generate-matrix.outputs.count != '0' }}
+    permissions:
+      contents: read
+      packages: write
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
     strategy:

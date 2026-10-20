@@ -27,18 +27,19 @@ INSTALLER_REVISION=${INSTALLER_REVISION}
 INSTALLER_BUNDLE_SHA256=${INSTALLER_BUNDLE_SHA256}
 INFOEOF
 
-	python3 - "${metadata_dir}/live-source.json" "${INSTALLER_APP}" "${INSTALLER_REVISION}" <<'PYEOF'
+	python3 - "${metadata_dir}/live-source.json" "${INSTALLER_APP}" "${INSTALLER_REVISION}" "${INSTALLER_BUNDLE_SHA256}" <<'PYEOF'
 import json
 import os
 import sys
 
-path, installer_app, installer_revision = sys.argv[1:4]
+path, installer_app, installer_revision, installer_bundle_sha256 = sys.argv[1:5]
 metadata = {
     "base_image": os.environ.get("TUNA_LIVE_BASE_IMAGE", "unknown"),
     "base_digest": os.environ.get("TUNA_LIVE_BASE_DIGEST", "unknown"),
     "platform": os.environ.get("TUNA_LIVE_PLATFORM", "unknown"),
     "installer_app_id": installer_app,
     "installer_revision": installer_revision,
+    "installer_bundle_sha256": installer_bundle_sha256,
 }
 with open(path, "w") as metadata_file:
     json.dump(metadata, metadata_file, indent=2)
@@ -141,7 +142,9 @@ INSTALLER_ARCH="${TUNA_INSTALLER_ARCH:-$(uname -m)}"
 INSTALLER_REVISION="${TUNA_INSTALLER_REVISION:-unknown}"
 INSTALLER_BUNDLE_SHA256="remote"
 
-# Test hook: report detection and stop before any system mutation.
+# Test hook: report detection and stop before the desktop adapter and remaining
+# live-system setup. The live-media markers above are already part of the
+# detection contract and are intentionally retained for this mode.
 if [[ "${TUNA_DETECT_ONLY:-0}" == "1" ]]; then
 	echo "DETECTED ${DESKTOP} ${INSTALLER_APP:-none}"
 	exit 0

@@ -3,8 +3,9 @@
 # entrypoint) and its wiring in scripts/build-iso-tacklebox.sh.
 #
 # Detection tests run the real script against a fake session root
-# (TUNA_SESSION_ROOT) with TUNA_DETECT_ONLY=1, which exits before any
-# system mutation.
+# (TUNA_SESSION_ROOT) with TUNA_DETECT_ONLY=1. The mode exits before the
+# desktop adapter and remaining live-system setup, after writing the live
+# media markers that are part of its detection contract.
 
 REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
 SCRIPT="${REPO_ROOT}/live-iso/common/src/customize-live.sh"
@@ -103,7 +104,8 @@ detect() {
       and .base_digest == $digest
       and .platform == "linux/amd64"
       and .installer_app_id == "org.tunaos.InstallerKde"
-      and .installer_revision == "flatpak-commit-123"' \
+      and .installer_revision == "flatpak-commit-123"
+      and .installer_bundle_sha256 == "bundle-sha-456"' \
     "${FAKE_ROOT}/etc/tunaos/live-source.json"
   [ "$status" -eq 0 ]
 }

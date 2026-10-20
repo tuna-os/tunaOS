@@ -142,7 +142,7 @@ else
 	REAL_USER="${SUDO_USER:-}"
 	if [[ -n "$REAL_USER" && "$REAL_USER" != "root" ]]; then
 		echo "==> Pre-pulling ${IMAGE_REF} into ${REAL_USER}'s rootless store (for live squash)..."
-		sudo -u "$REAL_USER" -H podman pull "$IMAGE_REF"
+		sudo -u "$REAL_USER" -H podman pull --platform "$SOURCE_PLATFORM" "$IMAGE_REF"
 	fi
 fi
 BASE_DIGEST="$(platform_manifest_digest "$IMAGE_REF" "$SOURCE_PLATFORM")"
