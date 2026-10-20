@@ -885,7 +885,7 @@ jobs:
     needs:
       - build_push
     container:
-      image: cgr.dev/chainguard/wolfi-base@sha256:ce0f1ccb7b104c5c3c90fa649b0c3f88a6f8604dd89dc45d6cecce91864f00e2  # :latest linux/amd64 as of 2026-06-13
+      image: cgr.dev/chainguard/wolfi-base@sha256:76811b6958657eb28da6f2ce79bbb97516e5818df442a086e94ab4c67303608b  # :latest linux/amd64 as of 2026-06-13
       # This job only performs registry/API operations (podman login and
       # manifest create/add/annotate/push). It does not run or build a
       # container or mount a host filesystem -- but podman itself needs
