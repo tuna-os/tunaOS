@@ -73,7 +73,7 @@ ASSETS="${REPO_ROOT}/build_scripts/assets/tunaos-overrides"
 }
 
 @test "arch base: installs bash-completion (loader for eager ujust file)" {
-	run grep -E '^[[:space:]]+bash-completion \$' "${REPO_ROOT}/Containerfile.arch"
+	run grep -E '^[[:space:]]+bash-completion[[:space:]]+\\$' "${REPO_ROOT}/Containerfile.arch"
 	[ "$status" -eq 0 ]
 }
 
