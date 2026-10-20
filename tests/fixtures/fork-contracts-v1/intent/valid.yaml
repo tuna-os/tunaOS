@@ -2,7 +2,7 @@
 # reviewed TunaOS source receipt changes.
 schema_version: 1
 catalog:
-  sha256: 128be6b0dd756d2117f2bb1689e9a90417644da66659f38685478034063d070b
+  sha256: e9198ffbc01d6da139fb0e7e42118f720d0ab2d080a7f41a380871f5e0cb3aa7
 image:
   registry: registry.example
   namespace: harbor
