@@ -63,7 +63,7 @@
       "type": "object", "additionalProperties": false,
       "properties": {
         "id": { "$ref": "#/$defs/token" },
-        "url": { "type": "string", "format": "uri", "pattern": "^https://", "maxLength": 512 },
+        "url": { "type": "string", "format": "uri", "pattern": "^https://[^@?#%]+(?:/[^?#%]*)?$", "maxLength": 512 },
         "sha256": { "$ref": "#/$defs/digest" }
       },
       "required": ["id", "url", "sha256"]
