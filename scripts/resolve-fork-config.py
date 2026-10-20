@@ -4,15 +4,18 @@
 Only --format legacy supports build consumption, and only for stock intent.
 Requires PyYAML, already used by the repository's Python tooling.
 """
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from lib import tunaos_config
+
 import argparse
 import copy
 import hashlib
 import json
 import os
-from pathlib import Path
 import re
 import subprocess
-import sys
 
 import yaml
 
@@ -68,7 +71,7 @@ def strings(value, where):
 
 def source_paths(root):
     """Source receipt, not a second package or variant catalog."""
-    patterns = (".github/build-config.yml", "image-versions.yaml", "registry-map.yaml",
+    patterns = ("tunaos.toml", "requirements-config.txt", "image-versions.yaml", "registry-map.yaml",
                 "Containerfile*", "manifests/**/*", "build_scripts/**/*", "scripts/**/*",
                 "Justfile", "just/**/*", ".containerignore", ".dockerignore", "custom/**/*",
                 "system_files/**/*", "system_files_overrides/**/*", "experiences/**/*")
@@ -189,7 +192,7 @@ def resolve(config, config_dir, root=ROOT, *, explain=False):
     catalog, catalog_path = load_catalog(root)
     # An environment override is supported only when byte-identical to the
     # pinned catalog. Otherwise the source receipt would falsely attest it.
-    if catalog_path.read_bytes() != (root / ".github/build-config.yml").read_bytes():
+    if catalog_path.read_bytes() != tunaos_config.render(tunaos_config.load(root / "tunaos.toml")).encode():
         raise ConfigError("TUNAOS_BUILD_CONFIG differs from the pinned catalog")
     if "image" in config:
         image = mapping(config["image"], ("registry", "namespace"), "image", ("registry", "namespace"))
@@ -262,11 +265,22 @@ def resolve(config, config_dir, root=ROOT, *, explain=False):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("config", type=Path, nargs="?")
+    parser.add_argument("--init-template", type=Path, help="create a NEW pinned config from a template without catalog; never refresh existing pins")
     parser.add_argument("--explain", action="store_true", help="add config-key origins for resolved delta intent; not runtime evidence")
     parser.add_argument("--catalog-pin", action="store_true", help="print the current source receipt digest")
     parser.add_argument("--format", choices=("plan", "legacy"), default="plan")
     args = parser.parse_args()
     try:
+        if args.init_template:
+            if args.config or args.catalog_pin or args.explain or args.format != "plan":
+                parser.error("--init-template cannot be combined with config, --catalog-pin, --explain or --format")
+            template = yaml.load(args.init_template.read_text(), Loader=UniqueLoader)
+            if not isinstance(template, dict) or "catalog" in template:
+                raise ConfigError("initialization requires a template without catalog; existing config pins must be reviewed manually")
+            template = {**template, "catalog": {"sha256": source_receipt(ROOT)["sha256"]}}
+            resolve(template, args.init_template.parent)
+            print(yaml.safe_dump(template, sort_keys=False), end="")
+            return
         if args.explain and (args.catalog_pin or args.format != "plan"):
             parser.error("--explain requires config and --format plan")
         if args.catalog_pin:

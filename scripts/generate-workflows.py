@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
-import yaml
-import os
 import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from lib import tunaos_config
+
+import os
 import json
 import argparse
 
@@ -22,13 +25,7 @@ def main():
                 output.write(body)
             print(f"Generated {path}")
 
-    config_file = '.github/build-config.yml'
-    if not os.path.exists(config_file):
-        print(f"Error: {config_file} not found", file=sys.stderr)
-        sys.exit(1)
-
-    with open(config_file, 'r') as f:
-        config = yaml.safe_load(f)
+    config = tunaos_config.matrix(tunaos_config.load())
 
     # Generate commitments independently of actual workflow execution coverage.
     # PR narrowing and package-supply restrictions must remain visible gaps.

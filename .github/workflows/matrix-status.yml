@@ -22,7 +22,9 @@ on:
       - "scripts/gen-platform-coverage.py"
       - "scripts/matrix_evaluator.py"
       - "image-versions.yaml"
-      - ".github/build-config.yml"
+      - "tunaos.toml"
+      - "scripts/config.py"
+      - "scripts/lib/tunaos_config.py"
       - "docs/MATRIX-STATUS.md"
       - "docs/BUILD-HEALTH.md"
       - "docs/build-health.json"
@@ -96,6 +98,9 @@ jobs:
             docs/build-health.json
             docs/BUILD-HEALTH.md
           if-no-files-found: error
+
+      - name: Prepare build configuration
+        uses: ./.github/actions/prepare-config
 
       - name: Regenerate
         if: github.event_name != 'pull_request'

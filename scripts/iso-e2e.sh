@@ -2576,15 +2576,10 @@ run_install() {
 	# publish-iso-groups.yml use, so there is one definition of the mapping.
 	local published_ref=""
 	if ! published_ref=$(
-		TUNAOS_BUILD_CONFIG="${SCRIPT_DIR}/../.github/build-config.yml" \
-			"${SCRIPT_DIR}/published-image-ref.sh" "${VARIANT:-}" "${FLAVOR:-}" ghcr 2>/dev/null
+		"${SCRIPT_DIR}/published-image-ref.sh" "${VARIANT:-}" "${FLAVOR:-}" ghcr
 	) || [[ -z "$published_ref" ]]; then
-		published_ref="ghcr.io/tuna-os/${VARIANT:-}:${FLAVOR:-}"
-		# Loud, because this fallback is silently wrong for exactly the variants
-		# the resolver exists to handle, and a quiet wrong ref costs 40 minutes.
-		echo "WARNING: published-image-ref.sh failed (is yq installed?);" >&2
-		echo "WARNING: guessing ${published_ref}. This is WRONG for any variant" >&2
-		echo "WARNING: with publish_name/tag_suffix set in build-config.yml." >&2
+		echo "ERROR: cannot resolve the published image; fix the config before installation." >&2
+		return 1
 	fi
 
 	local target_imgref="$published_ref"
