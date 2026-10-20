@@ -42,6 +42,7 @@ GENERATED_BUILDS = sorted(
     for variant in (
         yaml.safe_load((WORKFLOWS.parent / "build-config.yml").read_text()) or {}
     ).get("variants", [])
+    if variant["id"] != "stingray"
 )
 assert GENERATED_BUILDS, "no generated build-<variant>.yml workflows found"
 

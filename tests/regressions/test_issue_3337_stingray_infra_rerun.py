@@ -12,6 +12,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github/workflows/rerun-infra-failures.yml"
+STINGRAY_BUILD_WORKFLOW = ROOT / ".github/workflows/build-stingray.yml"
 LIFECYCLE_WORKFLOW = ROOT / ".github/workflows/bootc-lifecycle.yml"
 DAILY_WORKFLOW = ROOT / ".github/workflows/daily-verify.yml"
 SWEEP_WORKFLOW = ROOT / ".github/workflows/desktop-contract-sweep.yml"
@@ -26,6 +27,15 @@ def test_dispatch_only_stingray_is_an_automatic_retry_source() -> None:
     assert "github.event.workflow_run.name == 'Build Stingray [experimental]'" in condition
     assert "github.event.workflow_run.conclusion == 'failure'" in condition
     assert "github.event.workflow_run.run_attempt == 1" in condition
+
+
+def test_stingray_same_flavor_dispatches_share_a_concurrency_group() -> None:
+    document = yaml.safe_load(STINGRAY_BUILD_WORKFLOW.read_text(encoding="utf-8"))
+    group = document["concurrency"]["group"]
+
+    assert "github.run_id" not in group
+    assert "inputs.flavor" in group
+
 
 
 def test_experimental_variants_use_beta_lifecycle_lane() -> None:
