@@ -5,7 +5,8 @@
 # through Debian's signed InRelease using the installed archive keyring.
 set -euo pipefail
 
-. /etc/os-release
+OS_RELEASE_FILE="${TUNAOS_OS_RELEASE_FILE:-/etc/os-release}"
+. "$OS_RELEASE_FILE"
 if [[ "${ID:-}" != debian ]]; then
 	echo 'ERROR: Debian snapshot fallback requires a native Debian image' >&2
 	exit 1
@@ -15,7 +16,7 @@ if [[ "${1:-}" != 550.163.01-5.1 || ! "${2:-}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\+deb14
 	echo 'ERROR: no measured Debian snapshot fallback for this driver/kernel/architecture' >&2
 	exit 1
 fi
-KEYRING=/usr/share/keyrings/debian-archive-keyring.gpg
+KEYRING="${TUNAOS_DEBIAN_KEYRING:-/usr/share/keyrings/debian-archive-keyring.gpg}"
 test -s "$KEYRING" || {
 	echo 'ERROR: Debian archive keyring missing' >&2
 	exit 1
