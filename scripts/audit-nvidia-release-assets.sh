@@ -54,6 +54,9 @@ command -v rclone >/dev/null || {
 	exit 1
 }
 
+source "${repo_root}/scripts/lib/build-config.sh"
+config="$(tunaos_build_config)"
+
 # Every (variant, flavor) the matrix says ships an NVIDIA ISO.
 mapfile -t cells < <(
 	yq -o=json '.' "$config" |

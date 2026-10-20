@@ -85,21 +85,8 @@ if [[ "$PKG_MGR" == "apt" ]]; then
 	# shellcheck disable=SC2015 # intentional: A&&B||true is a guard pattern
 	[[ "$IS_UBUNTU" == true ]] && pkg_remove ubuntu-advantage-tools || true
 
-	# Install uupd from GitHub release (same source as RPM path)
-	UUPD_VERSION=$(grep '^\s*uupd:' /run/context/image-versions.yaml | sed 's/.*"\(.*\)".*/\1/')
-	UUPD_ARCH="$(uname -m | sed 's/x86_64/x86_64/;s/aarch64/arm64/')"
-	UUPD_SRC_BASE="https://raw.githubusercontent.com/ublue-os/uupd/${UUPD_VERSION}"
-
-	# Download binary tarball (separate, so partial download doesn't corrupt)
-	# and systemd units (parallel — small, safe to Z).
-	curl --retry 3 --fail -sSL -o /tmp/uupd.tar.gz \
-		"https://github.com/ublue-os/uupd/releases/download/${UUPD_VERSION}/uupd_Linux_${UUPD_ARCH}.tar.gz"
-	tar -xzf /tmp/uupd.tar.gz -C /usr/bin uupd
-	rm -f /tmp/uupd.tar.gz
-	curl --retry 3 --fail -Z -s \
-		-o /usr/lib/systemd/system/uupd.service "${UUPD_SRC_BASE}/uupd.service" \
-		-o /usr/lib/systemd/system/uupd.timer "${UUPD_SRC_BASE}/uupd.timer" \
-		-o /usr/lib/systemd/system/uupd-manual.service "${UUPD_SRC_BASE}/uupd-manual.service"
+	# Install uupd and its upstream units from the pinned GitHub release.
+	/run/context/build_scripts/install-uupd.sh
 
 	printf "::endgroup::\n"
 	return 0
@@ -606,22 +593,6 @@ fi
 
 dnf -y remove console-login-helper-messages setroubleshoot || true
 
-# Install uupd from GitHub release tarball.
-# The ublue-os/packages COPR dropped epel-10 chroots (~2026-06-08);
-# Bluefin LTS adopted this same approach.
-# Version is pinned in image-versions.yaml and tracked by Renovate.
-UUPD_VERSION=$(grep '^\s*uupd:' /run/context/image-versions.yaml | sed 's/.*"\(.*\)".*/\1/')
-UUPD_ARCH="$(uname -m | sed 's/x86_64/x86_64/;s/aarch64/arm64/')"
-UUPD_SRC_BASE="https://raw.githubusercontent.com/ublue-os/uupd/${UUPD_VERSION}"
-
-# Download binary tarball (separate, so partial download doesn't corrupt)
-# and systemd units (parallel — small, safe to Z).
-curl --retry 3 --fail -sSL -o /tmp/uupd.tar.gz \
-	"https://github.com/ublue-os/uupd/releases/download/${UUPD_VERSION}/uupd_Linux_${UUPD_ARCH}.tar.gz"
-tar -xzf /tmp/uupd.tar.gz -C /usr/bin uupd
-rm -f /tmp/uupd.tar.gz
-curl --retry 3 --fail -Z -s \
-	-o /usr/lib/systemd/system/uupd.service "${UUPD_SRC_BASE}/uupd.service" \
-	-o /usr/lib/systemd/system/uupd.timer "${UUPD_SRC_BASE}/uupd.timer" \
-	-o /usr/lib/systemd/system/uupd-manual.service "${UUPD_SRC_BASE}/uupd-manual.service"
+# Install uupd and its upstream units from the pinned GitHub release.
+/run/context/build_scripts/install-uupd.sh
 printf "::endgroup::\n"

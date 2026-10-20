@@ -127,6 +127,14 @@ def test_the_selectors_find_something():
             f"expected the suite to read {known}; parsed {sorted(reads)}")
 
 
+def test_schema_only_changes_trigger_the_contract_suite():
+    """Schema inputs need coverage even below the MIN_REFS heuristic."""
+    assert _is_covered("schemas", _filter_paths()), (
+        "the ISO media contract tests read schemas/, but a schema-only pull "
+        "request runs no Unit Tests. Add schemas/** to test.yml's paths filter."
+    )
+
+
 @pytest.mark.parametrize(
     "name", sorted(n for n in _paths_the_suite_reads()
                    if n not in GATED_ELSEWHERE))
