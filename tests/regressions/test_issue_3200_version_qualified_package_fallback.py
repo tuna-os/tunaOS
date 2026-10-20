@@ -6,10 +6,9 @@ the bare name for a version-qualified request, so comparing that output with
 the full request used to demote an available pinned Tuna package to the
 wishlist and omit it from the retry.
 
-Falsification: behavioural -- the harness returns the bare name for the first
-repoquery format and the exact name-version-release tuple for the second.  If
-the fallback only accepts bare names, the install stub is never called with
-the pinned request.
+Falsification: behavioural -- the harness returns the exact tuple requested
+from one repoquery call. Both ordinary name-version-release and
+name-epoch:version-release requests must reach the install command unchanged.
 """
 
 from __future__ import annotations
@@ -17,9 +16,14 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[2]
 LIB = ROOT / "build_scripts" / "lib.sh"
-PACKAGE = "tuna-desktop-1.0.0~beta.1-1.bfin1"
+PACKAGES = (
+    "tuna-desktop-1.0.0~beta.1-1.bfin1",
+    "tuna-desktop-1:1.0.0~beta.1-1.bfin1",
+)
 
 
 def _extract_install_available() -> str:
@@ -42,19 +46,19 @@ def _extract_install_available() -> str:
     return result.stdout
 
 
-def test_version_qualified_package_is_installed_by_the_retry(tmp_path: Path):
+@pytest.mark.parametrize("package", PACKAGES)
+def test_version_qualified_package_is_installed_by_the_retry(
+    tmp_path: Path, package: str
+):
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     record = tmp_path / "install-args"
     dnf = bin_dir / "dnf"
     dnf.write_text(
-        """#!/usr/bin/env bash
+        f"""#!/usr/bin/env bash
 if [[ "$1" == repoquery ]]; then
-  if [[ "$*" == *"%{name}-%{version}-%{release}"* ]]; then
-    printf '%s\\n' 'tuna-desktop-1.0.0~beta.1-1.bfin1'
-  else
-    printf '%s\\n' 'tuna-desktop'
-  fi
+  [[ "$*" == *"%{{epoch}}:%{{version}}-%{{release}}"* ]] || exit 2
+  printf '%s\\n' '{package}'
   exit 0
 fi
 printf '%s\\n' "$@" > "$TUNAOS_INSTALL_ARGS"
@@ -70,7 +74,7 @@ printf '%s\\n' "$@" > "$TUNAOS_INSTALL_ARGS"
             "export IMAGE_NAME=hummingbird",
             "record_package_wishlist() { :; }",
             _extract_install_available(),
-            f"install_available '{PACKAGE}'",
+            f"install_available '{package}'",
         ]
     )
     result = subprocess.run(
@@ -82,4 +86,4 @@ printf '%s\\n' "$@" > "$TUNAOS_INSTALL_ARGS"
     )
 
     assert result.returncode == 0, result.stdout + result.stderr
-    assert record.read_text(encoding="utf-8").splitlines()[-1] == PACKAGE
+    assert record.read_text(encoding="utf-8").splitlines()[-1] == package

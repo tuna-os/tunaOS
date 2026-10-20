@@ -658,10 +658,11 @@ record_package_wishlist() {
 #       quickshell-git dms dms-cli dms-greeter
 #
 # Notes:
-# - `dnf repoquery --available --qf '%{name}\n%{name}-%{version}-%{release}\n'`
-#   emits both the bare name and exact name-version-release tuple in one query.
-#   Matching the requested spec strictly avoids partial-name false positives
-#   (probing `pam-u2f` must not match `pam-u2f-doc`).
+# - `dnf repoquery --available --qf
+#   '%{name}\n%{name}-%{version}-%{release}\n%{name}-%{epoch}:%{version}-%{release}\n'`
+#   emits the bare name plus exact epoch-less and epoch-qualified tuples in one
+#   query. Matching the requested spec strictly avoids partial-name false
+#   positives (probing `pam-u2f` must not match `pam-u2f-doc`).
 # - Logs go through `::group::` markers so the build output stays foldable in CI.
 install_available() {
 	local coprs=()
@@ -687,12 +688,12 @@ install_available() {
 
 	local available=() missing=() pkg
 	for pkg in "${pkgs[@]}"; do
-		# A version-qualified RPM spec is reported by repoquery as its bare
-		# name, so compare both forms from one query. Keep the original spec in
-		# available[] so dnf installs the requested version.
+		# Compare the bare, exact NEVR, and epoch-qualified NEVR forms from one
+		# query. Keep the original spec in available[] so dnf installs exactly
+		# the requested version.
 		if dnf repoquery --available \
-			--qf '%{name}\n%{name}-%{version}-%{release}\n' "$pkg" 2>/dev/null |
-			grep -Fqx -- "$pkg"; then
+			--qf '%{name}\n%{name}-%{version}-%{release}\n%{name}-%{epoch}:%{version}-%{release}\n' \
+			"$pkg" 2>/dev/null | grep -Fqx -- "$pkg"; then
 			available+=("$pkg")
 		else
 			missing+=("$pkg")
