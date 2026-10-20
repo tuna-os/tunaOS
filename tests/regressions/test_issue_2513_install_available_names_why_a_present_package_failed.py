@@ -33,7 +33,7 @@ import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-LIB = ROOT / "build_scripts" / "lib.sh"
+LIB = ROOT / "build_scripts" / "lib" / "packages.sh"
 
 CONFLICT = (
     "  - file /usr/lib64/libxml2.so.16 from install of libxml2-2.15.4-1.hum1.x86_64 "

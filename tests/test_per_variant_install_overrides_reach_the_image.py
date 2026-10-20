@@ -145,7 +145,7 @@ def test_the_context_stage_publishes_overrides_where_the_hook_looks():
 
 def test_the_hook_guards_the_same_directory_the_copier_reads():
     """The `-d` test and copy_systemfiles_for must not drift apart."""
-    lib = (ROOT / "build_scripts" / "lib.sh").read_text()
+    lib = (ROOT / "build_scripts" / "lib" / "orchestration.sh").read_text()
     assert '"${CONTEXT_PATH}/overrides/$WHAT"' in lib, (
         "copy_systemfiles_for no longer reads ${CONTEXT_PATH}/overrides/ -- "
         "the hook's guard below must be updated to match it"
