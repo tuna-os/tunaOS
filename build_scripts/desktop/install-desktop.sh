@@ -1051,6 +1051,19 @@ if [[ -n "${_TD_DM}" && "${_TD_DM}" != "null" && -n "${_TD_ALIAS:-}" ]]; then
 	write_display_manager_preset "${_TD_PRESET_DM}"
 fi
 
+# Fork deltas follow legacy package hooks, before experience/runtime checks.
+# Validate branding before changing packages so a malformed generated input
+# cannot partially apply. An absent file leaves the legacy path untouched.
+if [[ -e "${_TD_CTX}/manifests/fork-config.json" || -L "${_TD_CTX}/manifests/fork-config.json" ]]; then
+	# shellcheck source=/dev/null
+	source "${_TD_CTX}/build_scripts/lib/fork-branding.sh"
+	tunaos_validate_fork_branding "${_TD_CTX}"
+	# shellcheck source=/dev/null
+	source "${_TD_CTX}/build_scripts/lib/fork-packages.sh"
+	tunaos_apply_fork_packages "${_TD_CTX}"
+fi
+fi
+
 # Desktop communities own their curated defaults as plain files. This keeps
 # opinions reviewable and portable without creating a package for a few config
 # files; any contributor can maintain experiences/<desktop>/files/.
@@ -1081,6 +1094,10 @@ if [[ "${_TD_DESKTOP}" == gnome || "${_TD_DESKTOP}" == kde || "${_TD_DESKTOP}" =
 	install -Dm0755 "${_TD_CTX}/build_scripts/checks/e2e-runtime-checks.sh" \
 		/usr/libexec/tunaos/e2e-runtime-checks
 
+	if [[ -e "${_TD_CTX}/manifests/fork-config.json" ]]; then
+		tunaos_apply_fork_branding "${_TD_CTX}"
+	fi
+
 	# Branding contract — common to every desktop, plus per-desktop surfaces.
 	# Same pattern as the desktop-experience check: run at build time, install
 	# as a runtime unit for the VM promotion gate. The branding scripts take
@@ -1090,6 +1107,9 @@ if [[ "${_TD_DESKTOP}" == gnome || "${_TD_DESKTOP}" == kde || "${_TD_DESKTOP}" =
 		/usr/libexec/tunaos/verify-branding
 	# Per-desktop artwork, when a variant has some (docs/BRANDING.md).
 	"${_TD_CTX}/build_scripts/desktop/select-wallpaper.sh" "${_TD_DESKTOP}"
+	if [[ -e "${_TD_CTX}/manifests/fork-config.json" ]]; then
+		tunaos_apply_fork_branding "${_TD_CTX}"
+	fi
 	BRANDING_EXTRA=""
 	case "${_TD_DESKTOP}" in
 	gnome)
@@ -1126,6 +1146,11 @@ if [[ "${_TD_DESKTOP}" == gnome || "${_TD_DESKTOP}" == kde || "${_TD_DESKTOP}" =
 		BRANDING_EXTRA="ExecStart=-/usr/libexec/tunaos/verify-branding-niri ${IMAGE_NAME:-${_TD_DESKTOP}} --runtime"
 		;;
 	esac
+	# KDE rewrites its About website; reassert the supplied homepage afterward.
+	if [[ -e "${_TD_CTX}/manifests/fork-config.json" ]]; then
+		tunaos_apply_fork_branding "${_TD_CTX}"
+		tunaos_verify_fork_branding
+	fi
 	cat >/usr/lib/systemd/system/tunaos-desktop-contract.service <<EOF
 [Unit]
 Description=Verify TunaOS ${_TD_DESKTOP} desktop experience
