@@ -14,7 +14,6 @@ import re
 from pathlib import Path
 from typing import Any
 
-import yaml
 
 PLATFORMS = {
     "linux/amd64": ("linux", "amd64", None, "x86-64"),
@@ -1217,6 +1216,7 @@ def main() -> None:
     parser.add_argument("--config", type=Path, default=Path(".github/build-config.yml"))
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
+    import yaml
     document = coverage_document(yaml.safe_load(args.config.read_text()))
     body = json.dumps(document, indent=2, sort_keys=True) + "\n"
     if args.output:
