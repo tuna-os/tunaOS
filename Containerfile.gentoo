@@ -26,6 +26,7 @@ ARG BOOTC_COMMIT="3e76c16556c55e6d15d31bd47602b231e2131cb2"
 # to /run/context/... here would double-nest to /run/context/run/context/...)
 FROM scratch AS context
 COPY manifests /manifests
+COPY tunaos.toml /tunaos.toml
 COPY build_scripts /build_scripts
 COPY experiences /experiences
 COPY system_files /files
