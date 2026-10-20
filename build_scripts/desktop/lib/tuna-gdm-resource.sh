@@ -31,7 +31,11 @@ tuna_gdm_rebuild_resource() {
 		for name in "${resources[@]}"; do
 			[[ -n "$name" ]] || continue
 			relative="${name#/org/gnome/shell/theme/}"
-			[[ "$relative" != "$name" ]] || continue
+			if [[ "$relative" == "$name" ]]; then
+				echo "tuna-gdm: unsupported GResource prefix: $name" >&2
+				rm -rf "$tmp"
+				return 1
+			fi
 			path="$tmp/$relative"
 			mkdir -p "$(dirname "$path")"
 			if ! gresource extract "$resource" "$name" >"$path"; then

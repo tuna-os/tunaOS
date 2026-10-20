@@ -31,16 +31,22 @@ detected_os 2>/dev/null || true
 # unavailable in those containers. Derive the distro flags from the installed
 # image as a fallback while preserving values exported by lib.sh or the caller.
 detect_standalone_distro_flags() {
-	local ID="" ID_LIKE=""
-	[[ -r /etc/os-release ]] && . /etc/os-release
-	if [[ "${IS_UBUNTU:-false}" != true && "$ID" == ubuntu ]]; then
+	local os_id="" os_id_like="" key value
+	if [[ -r /etc/os-release ]]; then
+		while IFS='=' read -r key value; do
+			case "$key" in
+			ID) os_id="${value#\"}"; os_id="${os_id%\"}" ;;
+			ID_LIKE) os_id_like="${value#\"}"; os_id_like="${os_id_like%\"}" ;;
+			esac
+		done </etc/os-release
+	fi
+	if [[ ! -v IS_UBUNTU && "$os_id" == ubuntu ]]; then
 		IS_UBUNTU=true
-	elif [[ "${IS_DEBIAN:-false}" != true &&
-		( "$ID" == debian || " $ID_LIKE " == *" debian "* ) ]]; then
+	elif [[ ! -v IS_DEBIAN &&
+		( "$os_id" == debian || " $os_id_like " == *" debian "* ) ]]; then
 		IS_DEBIAN=true
 	fi
 }
-detect_standalone_distro_flags
 
 
 # Tuna Desktop ships on Arch (pacman), the RPM bases and the apt bases (dpkg).
@@ -598,6 +604,20 @@ tuna)
 		echo "display-manager.service is '${tuna_dm:-unset}', not a GDM unit" >&2
 		exit 1
 	}
+	if [[ -e /etc/systemd/system/graphical.target.wants/greetd.service ]]; then
+		echo "greetd is still enabled in graphical.target.wants" >&2
+		exit 1
+	fi
+	if [[ -e /usr/lib/systemd/system/greetd.service ||
+		-e /lib/systemd/system/greetd.service ||
+		-e /etc/systemd/system/greetd.service ||
+		-L /etc/systemd/system/greetd.service ]]; then
+		if [[ ! -L /etc/systemd/system/greetd.service ||
+			"$(readlink /etc/systemd/system/greetd.service 2>/dev/null || true)" != /dev/null ]]; then
+			echo "greetd is installed but not masked for the Tuna GDM image" >&2
+			exit 1
+		fi
+	fi
 	if [[ "${IS_UBUNTU:-false}" == true ]]; then
 		tuna_gdm_config=/etc/gdm3/custom.conf
 	elif [[ "${IS_DEBIAN:-false}" == true ]]; then
