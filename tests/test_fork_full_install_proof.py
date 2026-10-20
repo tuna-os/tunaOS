@@ -1692,7 +1692,7 @@ def test_progress_account_diagnostics_are_anchored_bounded_and_redacted(tmp_path
     assert diagnostics[-1] == {"tool": "chpasswd", "class": "password-crypt-failed"}
     assert all(value not in json.dumps(diagnostics) for value in ("$6$", "secret", "private-user", "private payload", "control", "+ chpasswd"))
 
-@pytest.mark.parametrize("change", ["valid", "mount-alias", "wrong-serial", "wrong-mount", "root-disk", "symlink", "absent"])
+@pytest.mark.parametrize("change", ["valid", "mount-alias", "wrong-serial", "wrong-mount", "root-disk", "symlink", "absent", "flat-query", "stat-error"])
 def test_account_diagnostic_target_is_bound_and_metadata_only(tmp_path, monkeypatch, capsys, change):
     import os
     import subprocess
@@ -1728,15 +1728,42 @@ def test_account_diagnostic_target_is_bound_and_metadata_only(tmp_path, monkeypa
 
     def execute(access, private, code):
         code = code.replace("/mnt/fisherman-target", str(requested_mount))
-        monkeypatch.setattr(subprocess, "check_output", lambda args, **kwargs: json.dumps(blocks if args[0] == "lsblk" else {"filesystems": mounts}))
+        if change == "flat-query":
+            code = code.replace('"--tree",', "")
+        if change == "stat-error":
+            original_lstat = Path.lstat
+
+            def fail_stat(path, *args, **kwargs):
+                if path.name == "passwd":
+                    raise PermissionError(13, "PRIVATE-STAT-DETAIL")
+                return original_lstat(path, *args, **kwargs)
+
+            monkeypatch.setattr(Path, "lstat", fail_stat)
+
+        def output(args, **kwargs):
+            if args[0] != "lsblk":
+                return json.dumps({"filesystems": mounts})
+            # Real lsblk omits children unless NAME or --tree was requested.
+            inventory = blocks if "--tree" in args else {"blockdevices": [{k: v for k, v in d.items() if k != "children"} for d in blocks["blockdevices"]]}
+            return json.dumps(inventory)
+
+        monkeypatch.setattr(subprocess, "check_output", output)
         monkeypatch.setattr(subprocess, "run", lambda args, **kwargs: SimpleNamespace(returncode=0, stdout="shadow-utils 0:4.15.0-13.el10.x86_64\n"))
         exec(code, {})  # noqa: S102 - production collector with synthetic mount metadata
         return json.loads(capsys.readouterr().out)
 
     monkeypatch.setattr(PROOF, "guest_call", execute)
     if change not in ("valid", "mount-alias", "absent"):
-        with pytest.raises(ValueError, match="diagnostic"):
-            PROOF.account_target_diagnostics({}, tmp_path, "target", "source")
+        result = PROOF.account_target_diagnostics({}, tmp_path, "target", "source")
+        assert result["target_status"] == "diagnostic-failed"
+        assert result["failure"]["operation"] in ("disk-binding", "mount-binding", "deployment-binding", "account-stat")
+        if change == "stat-error":
+            assert result["failure"]["errno"] == 13
+            assert "PRIVATE-STAT-DETAIL" not in json.dumps(result)
+        else:
+            assert result["failure"]["reason"]
+        if change == "flat-query":
+            assert result["failure"]["reason"] == "mount-device-binding"
         return
     result = PROOF.account_target_diagnostics({}, tmp_path, "target", "source")
     assert result["source_rpms"] == ["shadow-utils 0:4.15.0-13.el10.x86_64"]
@@ -1775,8 +1802,8 @@ def test_account_audit_exports_bound_identifiers_not_raw_payload(tmp_path, monke
 
     monkeypatch.setattr(PROOF, "guest_call", execute)
     if repetitions == 3000:
-        with pytest.raises(ValueError, match="audit evidence exceeds bound"):
-            PROOF.account_target_diagnostics({}, tmp_path, "target", "source", collect_audit=True)
+        result = PROOF.account_target_diagnostics({}, tmp_path, "target", "source", collect_audit=True)
+        assert result["failure"] == {"operation": "audit-query", "exception": "ValueError", "reason": "audit-output-bound"}
         return
     result = PROOF.account_target_diagnostics({}, tmp_path, "target", "source", collect_audit=True)
     records = result["account_audit"]["records"]
@@ -1785,5 +1812,73 @@ def test_account_audit_exports_bound_identifiers_not_raw_payload(tmp_path, monke
     assert records[-3]["permissive"] == "0"
     assert records[-2]["type"] == "USER_AVC" and records[-2]["pid"] == "44"
     assert records[-2]["res"] == "failed"
-    assert records[-1] == {"tool": "chpasswd", "class": "unknown-selinux-class"}
+    assert records[-1] == {"tool": "chpasswd", "source": "journal", "class": "unknown-selinux-class"}
     assert all(secret not in json.dumps(result) for secret in ("SECRET", "PRIVATE", "HIDDEN", "PASSWORD", "proctitle"))
+
+
+@pytest.mark.parametrize("operation", ["audit-query", "package-query", "block-inventory", "mount-inventory", "guest-collector-transport"])
+def test_account_diagnostic_subprocess_failures_keep_operation_and_code(tmp_path, monkeypatch, capsys, operation):
+    import subprocess
+
+    identifiers = {"journalctl": "audit-query", "rpm": "package-query", "lsblk": "block-inventory", "findmnt": "mount-inventory"}
+    blocks = {"blockdevices": [{"path": "/dev/vda", "serial": "source"},
+              {"path": "/dev/vdb", "serial": "target", "type": "disk", "size": 64 * 1024**3}]}
+
+    def command(args, **kwargs):
+        if identifiers[args[0]] == operation:
+            raise subprocess.CalledProcessError(23, ["PRIVATE-ARGV"], output="PRIVATE-OUTPUT", stderr="PRIVATE-STDERR")
+        output = json.dumps(blocks if args[0] == "lsblk" else {"filesystems": []})
+        return output if args[0] in ("lsblk", "findmnt") else SimpleNamespace(returncode=0, stdout="")
+
+    def execute(access, private, code):
+        if operation == "guest-collector-transport":
+            raise subprocess.CalledProcessError(23, ["PRIVATE-ARGV"], stderr="PRIVATE-STDERR")
+        monkeypatch.setattr(subprocess, "run", command)
+        monkeypatch.setattr(subprocess, "check_output", command)
+        exec(code, {})  # noqa: S102 - forced failures in owned diagnostic program
+        return json.loads(capsys.readouterr().out)
+
+    monkeypatch.setattr(PROOF, "guest_call", execute)
+    result = PROOF.account_target_diagnostics({}, tmp_path, "target", "source", collect_audit=True)
+    assert result["target_status"] == "diagnostic-failed"
+    assert result["failure"] == {"operation": operation, "exception": "CalledProcessError", "returncode": 23}
+    assert "PRIVATE" not in json.dumps(result)
+
+
+@pytest.mark.parametrize("symlink", [False, True])
+def test_account_audit_file_tail_never_exports_raw_records(tmp_path, monkeypatch, capsys, symlink):
+    import subprocess
+
+    audit = tmp_path / "audit.log"
+    import time
+
+    audit.write_text(f'type=USER_AVC msg=audit({int(time.time())}.4:5): pid=72 comm="chpasswd" avc: denied {{ passwd }} for scontext=system_u:system_r:passwd_t:s0 tcontext=system_u:system_r:passwd_t:s0 tclass=passwd proctitle=PRIVATE\n')
+    with audit.open("a") as stream:
+        stream.write('type=USER_AVC msg=audit(1.0:1): pid=999 comm="chpasswd" avc: denied { read } for tclass=file\n')
+    selected = audit
+    if symlink:
+        selected = tmp_path / "audit-link.log"
+        selected.symlink_to(audit)
+    blocks = {"blockdevices": [{"path": "/dev/vda", "serial": "source"},
+              {"path": "/dev/vdb", "serial": "target", "type": "disk", "size": 64 * 1024**3}]}
+
+    def execute(access, private, code):
+        code = code.replace("/var/log/audit/audit.log", str(selected))
+        journal = json.dumps({"_COMM": "chpasswd", "MESSAGE": "type=1400 pid=88 avc: denied { passwd } for tclass=passwd"})
+        monkeypatch.setattr(subprocess, "run", lambda args, **kwargs: SimpleNamespace(returncode=0, stdout=journal if args[0] == "journalctl" else ""))
+        monkeypatch.setattr(subprocess, "check_output", lambda args, **kwargs: json.dumps(blocks if args[0] == "lsblk" else {"filesystems": []}))
+        exec(code, {})  # noqa: S102 - bounded file collector on a synthetic private audit log
+        return json.loads(capsys.readouterr().out)
+
+    monkeypatch.setattr(PROOF, "guest_call", execute)
+    result = PROOF.account_target_diagnostics({}, tmp_path, "target", "source", collect_audit=True)
+    assert "PRIVATE" not in json.dumps(result)
+    journal_records = [record for record in result["account_audit"]["records"] if record["source"] == "journal"]
+    assert len(journal_records) == 1 and journal_records[0]["pid"] == "88"
+    if symlink:
+        assert result["account_audit"]["file_failure"]["operation"] == "audit-file-tail"
+        assert result["account_audit"]["file_failure"]["errno"] > 0
+    else:
+        records = [record for record in result["account_audit"]["records"] if record["source"] == "audit-file"]
+        assert len(records) == 1
+        assert records[0]["pid"] == "72" and records[0]["source"] == "audit-file"

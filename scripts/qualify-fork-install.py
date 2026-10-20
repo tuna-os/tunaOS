@@ -1128,25 +1128,63 @@ def account_target_diagnostics(access, private, target_serial, source_serial, co
 import json,os,re,stat,subprocess
 from pathlib import Path
 result={"scope":"account-failure-diagnostics-only","target_status":"unavailable"}
-def run(args):
+def run(identifier,args):
+    global operation
+    operation=identifier
     value=subprocess.check_output(args,text=True,timeout=10)
     if len(value)>65536:raise ValueError("diagnostic command output exceeds bound")
     return value
 if __AUDIT__:
+    operation="audit-query"
     audit=subprocess.run(["journalctl","-b","--no-pager","-n","512","-o","json",
         "_COMM=chpasswd","+","_TRANSPORT=audit","+","_TRANSPORT=kernel"],capture_output=True,text=True,timeout=10)
     if len(audit.stdout.encode())>2*1024*1024:raise ValueError("account audit evidence exceeds bound")
-    result["account_audit"]={"query_returncode":audit.returncode,"records":[]}
+    result["account_audit"]={"query_operation":"audit-query","query_returncode":audit.returncode,"records":[]}
+    events=[]
     for line in audit.stdout.splitlines():
         try:event=json.loads(line)
         except ValueError:continue
+        if isinstance(event,dict):events.append(("journal",event))
+    operation="audit-file-tail"
+    result["account_audit"]["file_status"]="unavailable"
+    try:
+        fd=os.open("/var/log/audit/audit.log",os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
+        try:
+            info=os.fstat(fd)
+            if not stat.S_ISREG(info.st_mode):raise ValueError("diagnostic audit path is not regular")
+            offset=max(0,info.st_size-2*1024*1024)
+            os.lseek(fd,offset,os.SEEK_SET)
+            data=os.read(fd,2*1024*1024)
+            lines=data.decode(errors="replace").splitlines()
+            if offset and lines:lines=lines[1:]
+            boot=re.search(r"^btime ([0-9]+)$",Path("/proc/stat").read_text(),re.MULTILINE)
+            if not boot:raise ValueError("diagnostic boot time unavailable")
+            boot_time=int(boot.group(1))
+            for line in lines[-512:]:
+                stamp=re.search(r"\baudit\(([0-9]+)(?:\.[0-9]+)?:[0-9]+\)",line)
+                if stamp and int(stamp.group(1))>=boot_time:
+                    events.append(("audit-file",{"MESSAGE":line}))
+            result["account_audit"]["file_status"]="read-current-boot"
+            result["account_audit"]["file_boot_time"]=boot_time
+            result["account_audit"]["file_bytes_read"]=len(data)
+        finally:os.close(fd)
+    except FileNotFoundError:result["account_audit"]["file_status"]="absent"
+    except (OSError,ValueError) as error:
+        failure={"operation":operation,"exception":type(error).__name__}
+        if type(getattr(error,"errno",None)) is int:failure["errno"]=error.errno
+        if str(error)=="diagnostic audit path is not regular":failure["reason"]="audit-file-type"
+        if str(error)=="diagnostic boot time unavailable":failure["reason"]="audit-boot-time"
+        result["account_audit"]["file_status"]="failed"
+        result["account_audit"]["file_failure"]=failure
+    operation="audit-record-filter"
+    for origin,event in events:
         if not isinstance(event,dict):continue
         raw=event.get("MESSAGE","")
         if not isinstance(raw,str) or len(raw)>16384:continue
         bound=event.get("_COMM")=="chpasswd" or re.search(r'(?:^|\s)comm=(?:"chpasswd"|chpasswd)(?:\s|$)',raw)
         bound=bound or re.search(r'(?:^|\s)exe="/[^"\s]*/chpasswd"(?:\s|$)',raw)
         if not bound:continue
-        record={"tool":"chpasswd"}
+        record={"tool":"chpasswd","source":origin}
         fields={"type":r"(?:[0-9]{4}|AVC|USER_AVC|USER_SELINUX_ERR)","pid":r"[0-9]{1,10}",
             "errno":r"-?[0-9]{1,4}","exit":r"-?[0-9]{1,4}","res":r"(?:success|failed|denied)",
             "success":r"(?:yes|no)","permissive":r"[01]",
@@ -1166,18 +1204,22 @@ if __AUDIT__:
         if denied:record["denied_permissions"]=sorted(set(denied.group(1).split()))
         context=event.get("_SELINUX_CONTEXT","")
         if isinstance(context,str) and re.fullmatch(r"[a-zA-Z0-9_:.,-]{1,256}",context):record["journal_context"]=context
-        if len(record)>1:result["account_audit"]["records"]=(result["account_audit"]["records"]+[record])[-32:]
+        if len(record)>2:result["account_audit"]["records"]=(result["account_audit"]["records"]+[record])[-32:]
+operation="package-query"
 packages=["shadow-utils","glibc","libselinux","libxcrypt","pam-libs","libeconf"]
 query=subprocess.run(["rpm","-q","--qf","%{NAME} %{EPOCHNUM}:%{VERSION}-%{RELEASE}.%{ARCH}\\n",*packages],text=True,capture_output=True,timeout=10)
+result["source_rpm_query_operation"]="package-query"
 result["source_rpm_query_returncode"]=query.returncode
 result["source_rpms"]=[line for line in query.stdout.splitlines()
     if re.fullmatch(r"(?:shadow-utils|glibc|libselinux|libxcrypt|pam-libs|libeconf) [a-zA-Z0-9_.:+~-]{1,160}",line)][:20]
+operation="selinux-state"
 for name,path in [("selinux_enforce","/sys/fs/selinux/enforce"),("collector_security_context","/proc/self/attr/current")]:
     try:
         value=Path(path).read_text()[:256].strip("\x00\n")
         if re.fullmatch(r"[a-zA-Z0-9_:.,-]{1,256}",value):result[name]=value
     except (OSError,UnicodeError):pass
-blocks=json.loads(run(["lsblk","--json","--bytes","--paths","--output","PATH,TYPE,SIZE,SERIAL,MAJ:MIN"]))["blockdevices"]
+blocks=json.loads(run("block-inventory",["lsblk","--json","--tree","--bytes","--paths","--output","PATH,TYPE,SIZE,SERIAL,MAJ:MIN"]))["blockdevices"]
+operation="disk-binding"
 target=[d for d in blocks if d.get("serial")==__TARGET__]
 source=[d for d in blocks if d.get("serial")==__SOURCE__]
 if len(target)!=1 or len(source)!=1 or target[0]["path"]==source[0]["path"]:
@@ -1187,7 +1229,8 @@ if target.get("type")!="disk" or target.get("size")!=64*1024**3:
     raise ValueError("diagnostic target disk differs from guarded disk")
 parts=target.get("children",[])
 allowed={p["maj:min"] for p in parts if p.get("type")=="part"}
-mounts=json.loads(run(["findmnt","--json","--list","--output","TARGET,SOURCE,FSTYPE,OPTIONS,MAJ:MIN"]))["filesystems"]
+mounts=json.loads(run("mount-inventory",["findmnt","--json","--list","--output","TARGET,SOURCE,FSTYPE,OPTIONS,MAJ:MIN"]))["filesystems"]
+operation="mount-binding"
 requested_mount=Path("/mnt/fisherman-target")
 canonical_mount=requested_mount.resolve()
 result["mountpoint"]={"requested":str(requested_mount),"resolved":str(canonical_mount)}
@@ -1199,12 +1242,14 @@ if mount:
     if any(m.get("target")=="/" and m.get("maj:min") in allowed for m in mounts):
         raise ValueError("diagnostic target unexpectedly backs running root")
     result["mount"]={k:mount.get(k) for k in ("target","source","fstype","options","maj:min")}
+    operation="deployment-discovery"
     base=canonical_mount/"ostree/deploy/default/deploy"
     if base.exists() and base.resolve()!=base:raise ValueError("diagnostic deployment base has symlink components")
     roots=list(base.glob("*.0")) if base.is_dir() else []
     roots=[p for p in roots if re.fullmatch(r"[0-9a-f]{64}\.0",p.name)]
     if len(roots)==1:
         root=roots[0]
+        operation="deployment-binding"
         if root.resolve()!=root or root.is_symlink() or (root/"etc").resolve()!=root/"etc":
             raise ValueError("diagnostic deployment path has symlink components")
         device=root.stat().st_dev
@@ -1219,6 +1264,7 @@ if mount:
         result["account_files"]={}
         for name in (".","passwd","group","shadow","gshadow","passwd.lock","group.lock","shadow.lock","gshadow.lock",".pwd.lock"):
             path=root/"etc"/name
+            operation="account-stat"
             try:
                 value=path.lstat()
                 result["account_files"][name]={"mode":oct(stat.S_IMODE(value.st_mode)),"uid":value.st_uid,"gid":value.st_gid,
@@ -1230,6 +1276,7 @@ if mount:
                         if re.fullmatch(r"[a-zA-Z0-9_:.,-]{1,256}",label):result["account_files"][name]["selinux_context"]=label
                     except (OSError,UnicodeError):pass
             except FileNotFoundError:result["account_files"][name]={"absent":True}
+        operation="binary-label"
         binary=root/"usr/sbin/chpasswd"
         result["chpasswd_context"]={"status":"unavailable"}
         if binary.resolve()==binary and binary.is_file():
@@ -1240,7 +1287,42 @@ if mount:
     else:result["target_status"]="deployment-unavailable-or-ambiguous"
 print(json.dumps(result))
 '''.replace("__TARGET__", repr(target_serial)).replace("__SOURCE__", repr(source_serial)).replace("__AUDIT__", repr(collect_audit))
-    return guest_call(access, private, program)
+    # Preserve only fixed operation/reason identifiers, never captured argv or stderr.
+    reasons = {
+        "diagnostic command output exceeds bound": "command-output-bound",
+        "account audit evidence exceeds bound": "audit-output-bound",
+        "diagnostic audit path is not regular": "audit-file-type",
+        "diagnostic disk serial binding is ambiguous": "disk-serial-binding",
+        "diagnostic target disk differs from guarded disk": "disk-size-binding",
+        "diagnostic mount is not on guarded target": "mount-device-binding",
+        "diagnostic target unexpectedly backs running root": "running-root-binding",
+        "diagnostic deployment base has symlink components": "deployment-base-alias",
+        "diagnostic deployment path has symlink components": "deployment-path-alias",
+        "diagnostic deployment device differs from guarded mount": "deployment-device-binding",
+        "diagnostic mountpoint alias changed": "mountpoint-alias-change",
+    }
+    program = program.replace("print(json.dumps(result))", "")
+    program = (
+        "import json,subprocess\nresult={}\noperation='collector-start'\ntry:\n"
+        + "\n".join("    " + line for line in program.splitlines())
+        + "\nexcept Exception as error:\n"
+        + "    failure={'operation':operation,'exception':type(error).__name__}\n"
+        + "    reasons=" + repr(reasons) + "\n"
+        + "    if str(error) in reasons:failure['reason']=reasons[str(error)]\n"
+        + "    for key in ('returncode','errno'):\n"
+        + "        value=getattr(error,key,None)\n"
+        + "        if type(value) is int:failure[key]=value\n"
+        + "    result['failure']=failure\n"
+        + "    result['target_status']='diagnostic-failed'\n"
+        + "print(json.dumps(result))\n"
+    )
+    try:
+        return guest_call(access, private, program)
+    except (ValueError, RuntimeError, subprocess.SubprocessError) as error:
+        failure = {"operation": "guest-collector-transport", "exception": type(error).__name__}
+        if type(getattr(error, "returncode", None)) is int:
+            failure["returncode"] = error.returncode
+        return {"target_status": "diagnostic-failed", "failure": failure}
 
 
 def progress_evidence(access, private, log_path):
@@ -1470,10 +1552,12 @@ print(json.dumps(values))
                 )
                 diagnostic["observed_stage"] = progress["steps"][-1].get("step_id", "unknown")
                 report["account_diagnostics_latest"] = diagnostic
+                if "failure" in diagnostic:
+                    report["account_diagnostics_failure"] = diagnostic["failure"]
                 if diagnostic["target_status"] == "bound":
                     report["account_diagnostics_bound"] = diagnostic
             except (ValueError, RuntimeError, subprocess.SubprocessError) as error:
-                report["account_diagnostics_failure"] = type(error).__name__
+                report["account_diagnostics_failure"] = {"operation": "diagnostic-report", "exception": type(error).__name__}
         frame = screenshot("installation-progress.png")
         require(not progress["error"], "native backend reported installation error")
         words = LOGIN.words(frame)
