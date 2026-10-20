@@ -7,7 +7,8 @@ tunaos_image_ref() {
 	local flavor="${2:-gnome}"
 	local repo="${3:-local}"
 	local tag="${4:-${flavor}}"
-	if [[ "$repo" == "ghcr" && -n "${TUNAOS_IMAGE_REF:-}" ]]; then
+	local allow_override="${5:-1}"
+	if [[ "$allow_override" == "1" && "$repo" == "ghcr" && -n "${TUNAOS_IMAGE_REF:-}" ]]; then
 		echo "$TUNAOS_IMAGE_REF"
 		return
 	fi
