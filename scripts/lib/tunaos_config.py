@@ -595,7 +595,7 @@ def validate(config):
             seen.add(flavor['id'])
             if type(flavor['stage']) is not int or not 1 <= flavor['stage'] <= 4:
                 raise ConfigError(f'{fp}.stage: expected integer 1..4')
-            for key in ('build_image', 'build_iso', 'build_qcow2', 'luks_e2e'):
+            for key in ('build_image', 'build_iso', 'build_qcow2', 'luks_e2e', 'promotion_hold'):
                 if key in flavor and type(flavor[key]) is not bool:
                     raise ConfigError(f'{fp}.{key}: expected boolean')
             if 'platforms' in flavor:
