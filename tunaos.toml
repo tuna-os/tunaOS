@@ -1223,6 +1223,17 @@ build_iso = false
 build_qcow2 = false
 
 [[variants.bonito.flavors]]
+# ThinkPad X13s / SC8280XP inspection profile. This is an ARM64-only
+# stage-3 child of the Fedora GNOME image; it creates no install artifacts.
+id = "gnome-x13s"
+stage = 3
+platforms = ["linux/arm64"]
+build_image = true
+build_iso = false
+build_qcow2 = false
+luks_e2e = false
+
+[[variants.bonito.flavors]]
 # Apple Silicon (M1/M2, Asahi Linux) — overlay/asahi.sh; aarch64 only.
 # No ISO: Apple Silicon cannot external-boot; installs go through the
 # asahi-installer path from macOS.
