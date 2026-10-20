@@ -191,7 +191,7 @@ Newest result 2026-10-17.
 
 **36 of 52** cells green (41 tested, 11 never tested).
 
-Checks update, rebase, rollback and aliases with bootc. Also checks system contracts after a switch between published desktops.
+Checks image metadata, `bootc install print-configuration`, and the configured desktop contract. It does not exercise update, rebase, or rollback transitions.
 
 | Variant | gnome | kde | cosmic | niri | xfce |
 |---|:--:|:--:|:--:|:--:|:--:|
