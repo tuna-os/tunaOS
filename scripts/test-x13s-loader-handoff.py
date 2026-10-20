@@ -29,8 +29,17 @@ def digest(data):
 
 def download(url, target, expected, size=None):
     # All URLs and identities come from the reviewed fixture pins, not dispatch input.
+    limit = size + 1 if size is not None else 1024 * 1024 + 1
+    chunks = []
     with urllib.request.urlopen(url, timeout=60) as response:
-        data = response.read((size or 1024 * 1024) + 1)
+        remaining = limit
+        while remaining:
+            chunk = response.read(min(1024 * 1024, remaining))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            remaining -= len(chunk)
+    data = b"".join(chunks)
     if (size is not None and len(data) != size) or digest(data) != expected:
         raise ValueError("download identity mismatch")
     target.write_bytes(data)
@@ -78,7 +87,10 @@ def member_from_newc(data, wanted):
         rawname = stream.read(namesize)
         if len(rawname) != namesize or rawname[-1:] != b"\0":
             raise ValueError("invalid archive name")
-        name = rawname[:-1].decode("utf-8")
+        try:
+            name = rawname[:-1].decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise ValueError("invalid archive name encoding") from exc
         stream.read((-110 - namesize) % 4)
         if name == "TRAILER!!!":
             break
@@ -197,7 +209,7 @@ def main():
         download(pin["url"], rpm, pin["rpm_sha256"], pin["rpm_size"])
         verification = subprocess.run(["rpmkeys", "--dbpath", str(db), "--checksig", "--verbose", str(rpm)], capture_output=True, text=True, env={**os.environ, "LC_ALL": "C"})
         (out / (pin["name"] + ".rpmkeys.txt")).write_text(verification.stdout + verification.stderr)
-        signature_receipt(verification.stdout, verification.returncode, pins["fingerprint"])
+        signature_receipt(verification.stdout + verification.stderr, verification.returncode, pins["fingerprint"])
         if pin["name"] == "kernel-uki-dtbloader":
             unsigned = out / "unsigned-control.rpm"
             unsigned.write_bytes(rpm.read_bytes())
@@ -206,7 +218,7 @@ def main():
                                      capture_output=True, text=True, env={**os.environ, "LC_ALL": "C"})
             (out / "unsigned-control.rpmkeys.txt").write_text(control.stdout + control.stderr)
             try:
-                signature_receipt(control.stdout, control.returncode, pins["fingerprint"])
+                signature_receipt(control.stdout + control.stderr, control.returncode, pins["fingerprint"])
             except ValueError:
                 pass
             else:

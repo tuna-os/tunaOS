@@ -14,6 +14,29 @@ spec.loader.exec_module(handoff)
 def archive(name="payload", mode=stat.S_IFREG | 0o644, data=b"bytes"):
     return handoff.newc([(name, mode, data)])
 
+def test_download_handles_short_reads(monkeypatch, tmp_path):
+    payload = b"payload"
+
+    class Response:
+        def __init__(self):
+            self.remaining = payload
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self, count):
+            chunk, self.remaining = self.remaining[: min(2, count)], self.remaining[min(2, count):]
+            return chunk
+
+    monkeypatch.setattr(handoff.urllib.request, "urlopen", lambda *args, **kwargs: Response())
+    target = tmp_path / "payload"
+    handoff.download("https://fixture.invalid/payload", target, handoff.digest(payload), size=len(payload))
+    assert target.read_bytes() == payload
+
+
 
 def test_selects_only_inline_regular_payload():
     assert handoff.member_from_newc(archive(), "payload") == b"bytes"
@@ -32,9 +55,17 @@ def test_rejects_unsafe_paths(name):
 
 
 def test_rejects_duplicate_member():
+
     data = handoff.newc([("payload", stat.S_IFREG, b"a"), ("./payload", stat.S_IFREG, b"b")])
     with pytest.raises(ValueError, match="duplicate"):
         handoff.member_from_newc(data, "payload")
+def test_rejects_invalid_archive_name_encoding():
+    data = handoff.newc([("payload", stat.S_IFREG | 0o644, b"bytes")])
+    assert b"payload\0" in data
+    data = data.replace(b"payload\0", b"\xffayload\0", 1)
+    with pytest.raises(ValueError, match="encoding"):
+        handoff.member_from_newc(data, "payload")
+
 
 
 @pytest.mark.parametrize("cut", [0, 6, 109, 115, 120])

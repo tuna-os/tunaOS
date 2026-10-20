@@ -11,7 +11,7 @@ document_status: draft
 - Treat browser shim/GRUB support as native support: distinct code paths. Browser provenance work cannot establish native boot-chain behavior.
 
 ## Chosen approach — evidence
-Retain Fedora stock kernel plus packaged board firmware. Implement and verify the W1-selected shim/GRUB/Fedora kernel-uki-dtbloader payload payload with image-architecture matching, kernel-matched DTB selection and final artifact inspection before experimental live delivery. Installed update/rollback remains a separate physical gate. Fedora F44 automatic-DTB proposal describes embedded DTBs and CHID selection, but actual installed package behavior still requires artifact inspection.
+Retain Fedora stock kernel plus packaged board firmware. Implement and verify the W1-selected shim/GRUB/Fedora kernel-uki-dtbloader payload with image-architecture matching, kernel-matched DTB selection and final artifact inspection before experimental live delivery. Installed update/rollback remains a separate physical gate. Fedora F44 automatic-DTB proposal describes embedded DTBs and CHID selection, but actual installed package behavior still requires artifact inspection.
 
 ## Files examined
 - tunaos:build_scripts/overlay/x13s.sh — W1 inventory only, no firmware installation or hardware success.
@@ -33,7 +33,7 @@ Retain Fedora stock kernel plus packaged board firmware. Implement and verify th
 - https://github.com/tuna-os/tunaOS/issues/3368 — scope and physical evidence gates.
 - https://github.com/tuna-os/tunaOS/issues/3377 — W1 parent observations and loader decision.
 - https://packages.fedoraproject.org/pkgs/linux-firmware/qcom-firmware/fedora-44.html — 21BX DSP/topology and a660 files, dependencies and licenses; package catalog, not built-image evidence.
-- https://fedoraproject.org/wiki/Changes/Automatic_DTB_selection_for_aarch64_EFI_systems — Fedora Fedora kernel-uki-dtbloader payload design.
+- https://fedoraproject.org/wiki/Changes/Automatic_DTB_selection_for_aarch64_EFI_systems — Fedora kernel-uki-dtbloader payload design.
 - https://raw.githubusercontent.com/torvalds/linux/master/drivers/base/firmware_loader/main.c — exact firmware names and supported .xz/.zst suffixes.
 
 ## Prior plans / specs consulted
