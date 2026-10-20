@@ -20,7 +20,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests/fixtures/fork-contracts-v1"
-CASES = json.loads((FIXTURES / "cases.json").read_text())
+CASES = json.loads((FIXTURES / "cases.json").read_text(encoding="utf-8"))
 
 
 def _load_module(path: Path, name: str):
@@ -46,7 +46,7 @@ def _case(name):
 
 
 def _document(relative):
-    return json.loads((FIXTURES / relative).read_text())
+    return json.loads((FIXTURES / relative).read_text(encoding="utf-8"))
 
 
 def _stub_x86_64_uname(tools: Path) -> None:
@@ -96,7 +96,7 @@ def _normalized_intent(plan):
 def test_fork_intent_fixture_cases_are_executable(name):
     case = _case(name)
     path = FIXTURES / case["input"]
-    config = yaml.load(path.read_text(), Loader=INTENT.UniqueLoader)
+    config = yaml.load(path.read_text(encoding="utf-8"), Loader=INTENT.UniqueLoader)
     if "normalized" in case:
         plan = INTENT.resolve(config, path.parent, ROOT)
         assert _normalized_intent(plan) == _document(case["normalized"])
@@ -121,7 +121,7 @@ def _run_branding(relative, tmp_path):
     env = os.environ.copy()
     env.update(
         {
-            "PATH": f"{tools}{os.pathsep}{env['PATH']}",
+            "PATH": os.pathsep.join(filter(None, (str(tools), env.get("PATH", "")))),
             "IMAGE_NAME_VARIANT": "yellowfin",
             "TUNAOS_IMAGE_FLAVOR": "gnome",
             "PKG_MGR": "dnf",
@@ -156,7 +156,7 @@ def test_branding_fixture_cases_run_the_shell_adapter(name, tmp_path):
     result = _run_branding(case["input"], tmp_path)
     if "normalized" in case:
         assert result.returncode == 0, result.stderr
-        assert json.loads((tmp_path / "context/manifests/fork-config.json").read_text()) == _document(case["normalized"])
+        assert json.loads((tmp_path / "context/manifests/fork-config.json").read_text(encoding="utf-8")) == _document(case["normalized"])
     else:
         assert result.returncode != 0
         assert case["expected_rejection"] in result.stderr
@@ -190,7 +190,7 @@ tunaos_apply_fork_packages "$2" "$3"
             "PKG_MGR": "dnf",
             "IMAGE_NAME_VARIANT": "yellowfin",
             "TUNAOS_IMAGE_FLAVOR": "gnome",
-            "PATH": f"{tools}{os.pathsep}{env['PATH']}",
+            "PATH": os.pathsep.join(filter(None, (str(tools), env.get("PATH", "")))),
         }
     )
     return subprocess.run(
@@ -220,7 +220,7 @@ def test_package_fixture_cases_run_transaction_adapter(name, tmp_path):
     receipt = root / "usr/share/tunaos/fork-config/packages/yellowfin--gnome--linux-amd64.json"
     if "normalized" in case:
         assert result.returncode == 0, result.stderr
-        assert json.loads(receipt.read_text()) == _document(case["normalized"])
+        assert json.loads(receipt.read_text(encoding="utf-8")) == _document(case["normalized"])
     else:
         assert result.returncode != 0
         assert case["expected_rejection"] in result.stderr
@@ -236,7 +236,7 @@ def _set_path(document, path, value):
 
 def _provenance_bundle():
     source = ROOT / "tests/fixtures/iso-media-provenance-v2"
-    cases = json.loads((source / "cases.json").read_text())
+    cases = json.loads((source / "cases.json").read_text(encoding="utf-8"))
     return {
         "browser_bytes": cases["browserReceiptUtf8"].encode(),
         "native_bytes": cases["nativeReceiptUtf8"].encode(),
@@ -312,7 +312,7 @@ def test_capability_registry_is_closed_and_fails_without_a_fallback():
 
 def test_capability_registry_rejects_invalid_app_id(tmp_path):
     path = FIXTURES / _case("frontends-name-backend-and-unsupported-operations")["input"]
-    registry = json.loads(path.read_text())
+    registry = json.loads(path.read_text(encoding="utf-8"))
     registry["frontends"][0]["app_id"] = None
     invalid = tmp_path / "capabilities.json"
     invalid.write_text(json.dumps(registry))
@@ -333,7 +333,7 @@ def test_capability_registry_rejects_invalid_app_id(tmp_path):
 )
 def test_capability_registry_rejects_invalid_contract_fields(tmp_path, field, value, message):
     path = FIXTURES / _case("frontends-name-backend-and-unsupported-operations")["input"]
-    registry = json.loads(path.read_text())
+    registry = json.loads(path.read_text(encoding="utf-8"))
     registry["frontends"][0][field] = value
     invalid = tmp_path / f"capabilities-{field}.json"
     invalid.write_text(json.dumps(registry))
@@ -344,7 +344,7 @@ def test_capability_registry_rejects_invalid_contract_fields(tmp_path, field, va
 
 def test_capability_registry_rejects_missing_backend_operation(tmp_path):
     path = FIXTURES / _case("frontends-name-backend-and-unsupported-operations")["input"]
-    registry = json.loads(path.read_text())
+    registry = json.loads(path.read_text(encoding="utf-8"))
     registry["frontends"][0]["capabilities"].remove("fisherman-recipe")
     invalid = tmp_path / "capabilities-missing-operation.json"
     invalid.write_text(json.dumps(registry))
