@@ -147,7 +147,8 @@ def test_bats_and_tee_failures_keep_gate(tmp_path, bats_code, tee_code):
 
 def test_workflow_upload_is_narrow_and_pinned():
     upload = STEPS['Archive test failure summary']
-    assert upload['if'] == 'failure()'
+    assert upload['if'] == "failure() && steps.test_failure_summary.outcome == 'success'"
+    assert STEPS['Summarize test failures']['id'] == 'test_failure_summary'
     assert upload['uses'] == STEPS['Archive Python coverage']['uses']
     assert upload['with']['path'] == '${{ runner.temp }}/tunaos-test-failures.json'
     assert upload['with']['retention-days'] == 7
@@ -268,3 +269,41 @@ def test_unresolvable_source_identifiers_are_not_guessed(tmp_path):
     details = module.summarize(root)['pytest']['failure_details']
     assert details == [{'test': 'unresolved-test', 'kind': 'failure'},
                        {'test': 'tests/sample.py::unresolved-test', 'kind': 'failure'}]
+
+
+@pytest.mark.parametrize('kind', ['directory', 'symlink', 'fifo', 'file'])
+def test_workflow_preserves_existing_output_and_cannot_enable_upload(tmp_path, kind):
+    output = tmp_path / 'tunaos-test-failures.json'
+    protected = tmp_path / 'protected'
+    protected.write_text('credential-do-not-upload')
+    if kind == 'directory':
+        output.mkdir()
+        (output / 'secret').write_text(protected.read_text())
+    elif kind == 'symlink':
+        output.symlink_to(protected)
+    elif kind == 'fifo':
+        os.mkfifo(output)
+    else:
+        output.write_text(protected.read_text())
+    before = output.lstat()
+    result = subprocess.run(['bash', '-eo', 'pipefail', '-c', STEPS['Summarize test failures']['run']],
+                            cwd=ROOT, env={**os.environ, 'RUNNER_TEMP': str(tmp_path)},
+                            capture_output=True, timeout=5)
+    assert result.returncode != 0
+    assert (output.lstat().st_mode, output.lstat().st_ino) == (before.st_mode, before.st_ino)
+    assert protected.read_text() == 'credential-do-not-upload'
+    assert "steps.test_failure_summary.outcome == 'success'" in STEPS['Archive test failure summary']['if']
+    assert not list(tmp_path.glob('.test-summary-*'))
+
+
+def test_workflow_publishes_only_a_regular_complete_summary(tmp_path):
+    reports(tmp_path / 'tunaos-test-results')
+    result = subprocess.run(['bash', '-eo', 'pipefail', '-c', STEPS['Summarize test failures']['run']],
+                            cwd=ROOT, env={**os.environ, 'RUNNER_TEMP': str(tmp_path)},
+                            capture_output=True, timeout=5)
+    assert result.returncode == 0, result.stderr
+    output = tmp_path / 'tunaos-test-failures.json'
+    assert output.is_file() and not output.is_symlink()
+    assert json.loads(output.read_text())['pytest']['exit_code'] == 1
+    assert '[[ -f ' in STEPS['Summarize test failures']['run']
+    assert '&& ! -L ' in STEPS['Summarize test failures']['run']
