@@ -399,6 +399,13 @@ jobs:
           sudo --preserve-env=TUNAOS_QCOW2_FILESYSTEM,TUNAOS_GDM_LOGIN_CHECK \
             ./scripts/corral-boot-gate.sh "$IMAGE" verify-out 300
 
+      - name: Normalize PR verification evidence ownership
+        if: always() && github.event_name == 'pull_request' && contains(matrix.platform, 'amd64')
+        run: |
+          if [[ -d verify-out ]]; then
+            sudo chown -R "$USER:$(id -gn)" verify-out
+          fi
+
       - name: Upload PR verification evidence
         if: always() && github.event_name == 'pull_request' && contains(matrix.platform, 'amd64')
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
