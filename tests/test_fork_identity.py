@@ -160,6 +160,26 @@ def test_existing_brand_adapter_reaches_identity_on_both_families(staged, tmp_pa
                          capture_output=True, text=True)
     assert run.returncode == 0, run.stderr
     IDENTITY.verify(root)
+    (root / "etc/os-release").unlink()
+    (root / "etc/os-release").symlink_to("/usr/lib/os-release")
+    (root / "usr/share/tunaos").mkdir(parents=True, exist_ok=True)
+    (root / "usr/share/tunaos/identity.env").write_text(
+        f"TUNAOS_VARIANT='{variant}'\n"
+    )
+    verify = subprocess.run(
+        [
+            "bash",
+            "-c",
+            'set -euo pipefail; uname() { printf "x86_64\\n"; }; '
+            'source "$1"; tunaos_verify_fork_branding "$2"',
+            "test",
+            str(context / "build_scripts/lib/fork-branding.sh"),
+            str(root),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert verify.returncode == 0, verify.stderr
     for entry in ("install-desktop.sh", "configure-desktop-runtime.sh"):
         assert "tunaos_apply_fork_branding" in (ROOT / "build_scripts/desktop" / entry).read_text()
 
