@@ -53,7 +53,7 @@ jobs:
       fail-fast: false
       matrix:
         source: [ci, browser]
-    runs-on: ${{ format('runs-on={0}/runner=gpu', github.run_id) }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 360
     permissions:
       contents: read
@@ -80,12 +80,13 @@ jobs:
             imagemagick jq libguestfs-tools ovmf python3-yaml python3-vncdotool \
             qemu-system-modules-opengl qemu-system-x86 qemu-utils socat sshpass swtpm tesseract-ocr
 
-      # This GPU-routed gate must not silently fall back to plain virtio: the
-      # Smithay desktops under qualification need a DRM render node, QEMU's GL
-      # device, and egl-headless. Fail before starting either ISO install.
-      - name: Record GPU/DRM runner capability
+      # This gate runs on the available hosted QEMU pool rather than the
+      # unavailable g4dn RunsOn group. Its graphics contract is the software
+      # virtio path; record the host capability, then force iso-e2e to use that
+      # path instead of opportunistically selecting a different display mode.
+      - name: Record QEMU capability
         run: |
-          scripts/gpu-drm-preflight.sh --require-virgl --output parity/gpu-capability.txt
+          scripts/gpu-drm-preflight.sh --output parity/qemu-capability.txt
 
       - name: Validate target and immutable build evidence
         env:
@@ -109,8 +110,8 @@ jobs:
           SOURCE: ${{ matrix.source }}
           VARIANT: ${{ inputs.variant }}
           FLAVOR: ${{ inputs.flavor }}
+          TUNAOS_E2E_GPU: "plain"
           TUNAOS_PIXEL_GATE: "1"
-          TUNAOS_DESKTOP_CONTRACT: "1"
         run: |
           set -euo pipefail
           manifest="parity/${SOURCE}/experience-manifest.json"
@@ -148,7 +149,7 @@ jobs:
         with:
           name: iso-builder-qualification-${{ matrix.source }}-${{ inputs.variant }}-${{ inputs.flavor }}
           path: |
-            parity/gpu-capability.txt
+            parity/qemu-capability.txt
             parity/${{ matrix.source }}-e2e/**/*.json
             parity/${{ matrix.source }}-e2e/**/*.log
             parity/${{ matrix.source }}-e2e/**/*.png

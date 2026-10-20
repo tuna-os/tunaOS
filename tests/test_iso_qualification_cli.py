@@ -100,6 +100,9 @@ if [[ "${1:-}" == "--listen" ]]; then
   echo 'GUESTFISH_PID=4242; export GUESTFISH_PID'
   exit 0
 fi
+if [[ "$*" == *"--keys-from-stdin --remote"* ]]; then
+  exit 92
+fi
 case "$*" in
   *list-partitions*) printf '/dev/sda1\\n/dev/sda2\\n' ;;
   *"vfs-type /dev/sda1"*) printf 'vfat\\n' ;;
