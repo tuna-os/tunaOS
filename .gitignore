@@ -61,3 +61,8 @@ tests/bats/test_root_tmp/
 
 # Runtime compatibility adapter generated from the primary tunaos.toml.
 /.github/build-config.yml
+
+# Runtime desktop policy projections from the same primary TOML.
+/manifests/desktops/*.yaml
+/manifests/desktop-plans/
+/manifests/desktop-contracts/
