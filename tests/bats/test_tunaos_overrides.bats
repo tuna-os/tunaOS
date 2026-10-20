@@ -96,6 +96,27 @@ ASSETS="${REPO_ROOT}/build_scripts/assets/tunaos-overrides"
 	run grep -F -- '--justfile' "$ASSETS/ujust-zsh"
 	[ "$status" -eq 0 ]
 }
+@test "zsh completion: loads the function and runs a completion query" {
+	if ! command -v zsh >/dev/null 2>&1; then
+		skip "zsh not installed"
+	fi
+	root="$(mktemp -d)"
+	cat >"$root/just" <<'EOF'
+#!/usr/bin/env sh
+printf 'build\n'
+EOF
+	chmod +x "$root/just"
+	run env PATH="$root:$PATH" zsh -fc '
+_describe() { print -r -- "$*"; }
+source "$1"
+words=(ujust)
+CURRENT=1
+_ujust
+' zsh "$ASSETS/ujust-zsh"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"build"* ]]
+	rm -rf "$root"
+}
 
 @test "fish completion: targets ujust command, injects justfile" {
 	run grep -E -- '--command ujust' "$ASSETS/ujust-fish"

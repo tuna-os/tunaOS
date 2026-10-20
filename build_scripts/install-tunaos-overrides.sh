@@ -28,13 +28,16 @@ install -Dm0644 "$ASSETS/ujust-zsh" \
 # /var and is wiped/recreated across deployments. The tmpfiles rule restores
 # the compatibility path at boot after that alias's target is available.
 install -d -m 0755 "$ROOT/usr/lib/tmpfiles.d"
+tmpfiles="$(mktemp)"
+trap 'rm -f "$tmpfiles"' EXIT
 printf '%s\n' \
 	'd /var/usrlocal 0755 root root -' \
 	'd /var/usrlocal/share 0755 root root -' \
 	'd /var/usrlocal/share/zsh 0755 root root -' \
 	'd /var/usrlocal/share/zsh/site-functions 0755 root root -' \
 	'L+ /var/usrlocal/share/zsh/site-functions/_ujust - - - - /usr/share/zsh/site-functions/_ujust' \
-	>"$ROOT/usr/lib/tmpfiles.d/tunaos-ujust.conf"
+	>"$tmpfiles"
+install -Dm0644 "$tmpfiles" "$ROOT/usr/lib/tmpfiles.d/tunaos-ujust.conf"
 install -d -m 0755 "$ROOT/var/usrlocal/share/zsh/site-functions"
 ln -sfn /usr/share/zsh/site-functions/_ujust \
 	"$ROOT/var/usrlocal/share/zsh/site-functions/_ujust"

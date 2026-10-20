@@ -44,4 +44,3 @@ _ujust() {
     [[ -n $other ]] && _describe -V 'values' other
 }
 
-_ujust "$@"
