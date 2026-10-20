@@ -1,0 +1,80 @@
+name: X13s loader handoff fixture
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/x13s-loader-handoff.yml
+      - scripts/test-x13s-loader-handoff.py
+      - scripts/x13s_pe_inventory.py
+      - tests/test_x13s_loader_handoff.py
+      - tests/test_x13s_pe_inventory.py
+      - tests/fixtures/x13s-handoff/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: x13s-loader-handoff-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  handoff:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install official runner dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            qemu-system-arm qemu-efi-aarch64 mtools dosfstools \
+            rpm rpm2cpio gnupg gcc libc6-dev python3-pytest
+      - name: Record runner and tool identities
+        run: |
+          mkdir -p fixture-receipts
+          {
+            uname -a
+            printf 'runner-image=%s\n' "${ImageVersion:-unknown}"
+            qemu-system-aarch64 --version
+            rpm --version
+            cc --version
+            dpkg-query -W qemu-system-arm qemu-efi-aarch64 mtools rpm gcc libc6-dev
+          } > fixture-receipts/tools.txt
+      - name: Test fixture rejection and observation behavior
+        run: |
+          python3 -m pytest -q tests/test_x13s_loader_handoff.py tests/test_x13s_pe_inventory.py
+      - name: Exercise selected Fedora chain and negative controls
+        run: |
+          test -f /usr/share/AAVMF/AAVMF_CODE.fd
+          test -f /usr/share/AAVMF/AAVMF_VARS.fd
+          python3 scripts/test-x13s-loader-handoff.py \
+            --output "$RUNNER_TEMP/x13s-handoff" \
+            --firmware-code /usr/share/AAVMF/AAVMF_CODE.fd \
+            --firmware-vars /usr/share/AAVMF/AAVMF_VARS.fd
+      - name: Collect bounded evidence
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          import shutil
+          source = Path(os.environ['RUNNER_TEMP']) / 'x13s-handoff'
+          target = Path('fixture-receipts')
+          target.mkdir(exist_ok=True)
+          for pattern in ('report.json', 'loader-observation.json', '*.rpmkeys.txt', '*/serial.log', '*/argv.json'):
+              for path in source.glob(pattern):
+                  if path.is_file() and path.stat().st_size <= 4 * 1024 * 1024:
+                      destination = target / path.relative_to(source)
+                      destination.parent.mkdir(parents=True, exist_ok=True)
+                      shutil.copyfile(path, destination)
+          PY
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: x13s-emulator-handoff-${{ github.sha }}
+          path: fixture-receipts
+          retention-days: 7
+          if-no-files-found: error
