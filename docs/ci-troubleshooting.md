@@ -214,6 +214,7 @@ each one from scratch.
 | 55 | Bonito (or other digest-pinned variants) fails on both base architectures with `manifest unknown` / 404 (run 32965043165) | Quay/Docker garbage-collects untagged base image manifests upstream after newer builds land. The repository-wide scheduled check at 22:20 UTC was too far from the 11:20 UTC build to catch midday upstream deletions, and `.github/build-config.yml` lacked Renovate digest automation | (1) Added Renovate `customManager` in `renovate.json` for `.github/build-config.yml` `base_image:` pins; (2) added scoped variant preflight to `scripts/check-base-image-pins.sh`; (3) `build-variant.yml` runs `check-base-image-pins.sh` for the target variant in `generate_matrix` before matrix execution. Regression test: `tests/regressions/test_issue_2113_bonito_checks_its_pin_before_the_matrix.py` (tunaOS#2113) |
 | 56 | The `regenerate` check (`gen-matrix-status.py --check-structure`) fails on every pull request after about 14 minutes with `RuntimeError: gh run view 38592759334 ... returned nothing after 3 attempts`. The log shows `HTTP 502: Server Error (.../runs/38592759334/jobs?per_page=100)` | `gh run view --json jobs` always asks for 100 jobs per page. For some large runs (31224494825, 38713238238, 38592759334, with 113 to 153 jobs) the API returns HTTP 502 for that page size on every attempt. With `per_page=50` the same runs return in seconds. The build walk raised on the failed query | `run_jobs()` tries `gh run view` first, then `gh api --paginate` with `per_page=50`. If both fail, the build walk skips that run with a warning, and an older run scores its cells. If a cell has no verdict from a readable run after a skip, the refresh still raises. Test: `tests/test_an_unreadable_run_is_skipped_not_fatal.py` |
 | 57 | `bootc install to-disk` on published `ghcr.io/tuna-os/marlin:tuna` fails while importing layer `sha256:9cb6e55d…`: `Truncated tar archive detected while reading next header` | The 65th and final layer is a 25-byte zstd frame that expands to exactly 1024 zero bytes: a valid empty tar. `Containerfile.final` changed only image labels after chunkah, but Buildah still emitted an empty filesystem layer. GNU tar accepts it; the bootc 1.16.10 layer splitter does not. The same empty descriptor was measured on current marlin:gnome, albacore:gnome, and bonito:gnome, so this is a generic relabel-stage defect rather than Tuna Desktop content | `Containerfile.final` now writes `/usr/share/tunaos/build-info.json`, making its final filesystem layer non-empty. After each platform push, the workflow runs `scripts/check-bootc-installable-layers` and rejects any small layer whose decompressed tar stream has no entries. Regression tests: `tests/regressions/test_issue_3378_*` (tunaOS#3378) |
+| 58 | An artifact matches a workflow run but its upload attempt cannot be established | GitHub artifact metadata exposes run and head identity, but no upload-attempt field; receipt names and timestamps do not prove that linkage | The RFC014 read-only adapter accepts only a run observed at successful attempt one before and after archive verification. Reject reruns and missing linkage; preserve `authentication: not_authenticated` until a trusted caller and separate proof exist. Tests mutate the attempt before and after collection. |
 
 **Pattern to notice (bugs #1-14):** almost every bug here was a live-squash-specific
 environment gap (missing package, missing locale, missing remote, wrong
@@ -1704,3 +1705,63 @@ Node 24.19.0 / npm 11.9.0 reproduces the failure with
 clean `npm ci --ignore-scripts`, `npm test`, and `npm run build` in that directory.
 Check each override edit with `npm ci`. The same npm major alone does not
 prove that the manifest and lockfile agree.
+
+## Fork preview reuses stock packages/art or rejects a changed checkout
+
+**Cause:** The key for the cache had only a hash of shell scripts.
+Thus, two forks could use the same key. Pins include hashes of source files.
+An edit to those inputs makes a config stale. A frozen stock example also failed
+after each dependency update, even when the build contract did not change.
+
+**Fix:** The preview adds a hash of the manifest and assets to the cache key.
+`test_real_build_engine_receives_fork_cell_and_cache_identity` runs the build driver
+with a stub builder. Different bytes make the keys different.
+This test does not prove container-cache behavior or image acceptance.
+
+Create new configs from templates; do not refresh a real fork's pin automatically.
+If sources change during a copy, review the receipt. Then prepare a new output
+directory from a stable checkout.
+
+Fork previews also disable layer reuse with `--no-cache`. Some legacy stages
+declare the cache argument after their base hooks. Gentoo has a separate branch
+for desktop builds. Tests must prove each stage before fork builds can reuse layers.
+
+### Anime wallpaper disappears after desktop setup
+
+**Symptom:** The selector chooses anime or a desktop override, but the final
+wallpaper is the vector fallback (PR #3465).
+
+**Cause:** RPM and Gentoo run `90-image-info.sh` after desktop setup. Overlays
+copy `system_files` again and then run it. It copied the vector over the
+selected art. Selector-only tests did not cover this final writer.
+
+**Fix:** Use the shared selector from the identity writer too, with
+`TUNAOS_IMAGE_FLAVOR` to identify the desktop in overlay builds.
+Apply artwork from the fork afterward. Run `pytest tests/test_anime_finalization.py`.
+
+The fixtures execute the complete identity writer in those orders.
+They check all 14 real JPEGs across six desktops.
+They preserve desktop overrides, fallback files, custom fork art and URLs.
+Fork overlay input remains unsupported and fails closed.
+These are source-level tests, not built-image or boot acceptance.
+
+### README build-status refresh stops on a GitHub API 502
+
+**Symptom:** `Update README build status` fails in `Refresh build status table`
+with `gh: Server Error (HTTP 502)` before it opens a refresh PR.
+
+**Measured cause:** [run 39310599051](https://github.com/tuna-os/tunaOS/actions/runs/39310599051)
+(job 118258852799, 2026-10-19) installed yq successfully, then an unretried
+read in `update-build-status.sh` aborted the generator. This was not a rejected
+push to protected `main`; the workflow already publishes through a PR.
+
+**Fix:** Use `gh_read_retry` for the run-list and paginated job reads.
+Try at most three times. Wait 5/10 seconds for transient network or HTTP 5xx
+errors. Rate limits retain their original diagnostic: `gh run list` does not
+expose reset headers, so do not guess when GitHub allows another request.
+Authentication, authorization and other errors fail immediately.
+
+Buffer the output of each try. If a page fails, discard all output from that
+try. After three failures, retain the command's exit status and diagnostic.
+Keep README unchanged; do not publish a partial table.
+See `tests/test_readme_status_api_retries.py` for regression tests.

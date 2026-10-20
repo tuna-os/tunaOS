@@ -12,10 +12,10 @@
 ---
 
 [![License](https://img.shields.io/github/license/tuna-os/tunaOS?style=for-the-badge)](https://github.com/tuna-os/tunaOS/blob/main/LICENSE)
-[![GitHub Stars](https://img.shields.io/github/stars/tuna-os/tunaOS?style=for-the-badge)](https://github.com/tuna-os/tunaOS/stargazers)
+[![GitHub Stars](https://img.shields.io/github/stars/tuna-os/tunaOS?style=for-the-badge)](https://github.com/tuna-os/tunaOS)
 [![Issues](https://img.shields.io/github/issues/tuna-os/tunaOS?style=for-the-badge)](https://github.com/tuna-os/tunaOS/issues)
 [![Adoption evidence](https://img.shields.io/badge/adoption-0_production%2C_2_evaluation-2ea44f?style=for-the-badge)](ADOPTERS.md)
-[![Discord](https://img.shields.io/badge/Discord-join-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/MXSTqB8Nv)
+[![Discussions](https://img.shields.io/badge/Discussions-ask_a_question-2ea44f?style=for-the-badge&logo=github&logoColor=white)](https://github.com/tuna-os/tunaOS/discussions)
 
 </div>
 
@@ -25,7 +25,7 @@
 
 TunaOS builds **bootc-based desktop operating systems** with atomic updates and straightforward rollbacks. Choose an Enterprise Linux base for long-term stability or an alternative distribution for a faster release cadence. Both choices use the same image-based management model.
 
-[Visit tunaos.org](https://tunaos.org/) or read the [launch announcement](https://tunaos.org/blog/modern-enterprise-linux-desktops-with-tunaos).
+[Visit tunaos.org](https://tunaos.org/) or read the [User Guide](docs/USER-GUIDE.md).
 
 - **Modern Desktops**: GNOME, KDE Plasma, COSMIC, Niri, and XFCE — equal first-class options across distribution bases
 - **Up-to-Date Desktop Stack**: Fresh desktop features and updates backported to Enterprise and community bases
@@ -154,7 +154,7 @@ guidelines, and an architecture overview.
 - **Contribute through Hive:** [Donate time with your AI CLI](https://hub.tunaos.org/#contribute)
 - 🐛 **Report Issues:** [GitHub Issues](https://github.com/tuna-os/tunaOS/issues)
 - [m] **Chat**: [#tunaos:reilly.asia](https://matrix.to/#/%23tunaos:reilly.asia)
-- 🎮 **Discord:** [TunaOS](https://discord.gg/MXSTqB8Nv)
+- 💬 **Questions and ideas:** [GitHub Discussions](https://github.com/tuna-os/tunaOS/discussions)
 
 Related communities: [Universal Blue Discord](https://discord.gg/WEu6BdFEtp) ·
 [AlmaLinux Atomic SIG](https://chat.almalinux.org/almalinux/channels/sigatomic)
