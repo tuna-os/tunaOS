@@ -1,8 +1,9 @@
 # Anime wallpapers
 
-Each of the 14 variants has anime artwork based on its emoji and the coastal
-scene in `scripts/branding/art-prompts.mjs`. All six desktop families use the
-same asset for a variant. This avoids copies for each desktop.
+Fourteen variants have anime artwork based on their emoji and the coastal scene
+in `scripts/branding/art-prompts.mjs`. All six desktop families use the same
+asset for a variant. Stingray has no independently sourced anime asset and uses
+its generated vector fallback.
 
 `build_scripts/desktop/select-wallpaper.sh` selects in this order:
 

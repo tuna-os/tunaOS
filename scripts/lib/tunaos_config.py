@@ -26,6 +26,7 @@ except ModuleNotFoundError:
 
 ROOT = Path(__file__).resolve().parents[2]
 ID = re.compile(r"[a-z0-9][a-z0-9-]*\Z")
+REPOSITORY_NAME = re.compile(r"[a-z0-9]+(?:(?:[._]|__|[-]+)[a-z0-9]+)*\Z")
 PLATFORMS = {"linux/amd64", "linux/amd64/v2", "linux/amd64/v3", "linux/arm64"}
 
 
@@ -62,6 +63,10 @@ def identifier(value, path):
         raise ConfigError(f"{path}: expected lowercase identifier")
 
 
+def repository_name(value, path):
+    if not isinstance(value, str) or not REPOSITORY_NAME.fullmatch(value):
+        raise ConfigError(f"{path}: expected lowercase repository name")
+
 def validate(config):
     """Validate the complete phase-1 surface; reject inert future sections."""
     table(config, ('schema_version', 'build', 'iso_groups', 'sibling_images', 'tuna_rollout', 'variants'),
@@ -88,7 +93,7 @@ def validate(config):
         if 'aliases' in variant:
             strings(variant['aliases'], where + '.aliases')
             for alias in variant['aliases']:
-                identifier(alias, where + '.aliases')
+                repository_name(alias, where + '.aliases')
         flavors = variant['flavors']
         if not isinstance(flavors, list) or not flavors:
             raise ConfigError(f'{where}.flavors: expected nonempty list')

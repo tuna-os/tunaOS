@@ -54,8 +54,10 @@ class Image:
             target_path = self.context / path
             target_path.write_text(source)
             target_path.chmod(0o755)
-        for suffix in (".jpg", "-anime.jpg"):
-            shutil.copyfile(WALLS / f"{variant}{suffix}", self.walls / f"{variant}{suffix}")
+        shutil.copyfile(WALLS / f"{variant}.jpg", self.walls / f"{variant}.jpg")
+        anime = WALLS / f"{variant}-anime.jpg"
+        if anime.exists():
+            shutil.copyfile(anime, self.walls / anime.name)
         self.reset_copy()
 
     def reset_copy(self):
@@ -89,7 +91,10 @@ def test_real_art_survives_final_identity_writer(tmp_path, variant, flavor):
     image.info()
     image.desktop()
     image.info()
-    assert image.output() == (WALLS / f"{variant}-anime.jpg").read_bytes()
+    expected = WALLS / f"{variant}-anime.jpg"
+    if not expected.exists():
+        expected = WALLS / f"{variant}.jpg"
+    assert image.output() == expected.read_bytes()
     assert (image.walls / f"{variant}.jpg").read_bytes() == (WALLS / f"{variant}.jpg").read_bytes()
 
 
