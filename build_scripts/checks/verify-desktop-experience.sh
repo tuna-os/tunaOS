@@ -92,9 +92,14 @@ tuna_installed_file_owner() {
 TUNAOS_CONTRACT_WAIVED=0
 waive() { TUNAOS_CONTRACT_WAIVED=$((TUNAOS_CONTRACT_WAIVED + 1)); }
 
+hummingbird_bootstrap_waived() {
+	[[ "${IS_HUMMINGBIRD:-false}" == "true" &&
+		"${desktop:-}" != cosmic && "${desktop:-}" != tuna ]]
+}
+
 require_command() { command -v "$1" >/dev/null || {
 	echo "missing required command: $1" >&2
-	if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${desktop:-}" != cosmic && "${desktop:-}" != tuna ]]; then
+	if hummingbird_bootstrap_waived; then
 		waive
 		return 0
 	fi
@@ -102,7 +107,7 @@ require_command() { command -v "$1" >/dev/null || {
 }; }
 require_glob() { compgen -G "$1" >/dev/null || {
 	echo "missing required path: $1" >&2
-	if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${desktop:-}" != cosmic && "${desktop:-}" != tuna ]]; then
+	if hummingbird_bootstrap_waived; then
 		waive
 		return 0
 	fi
@@ -133,7 +138,7 @@ require_portal_preference() {
 }
 require_unit() { systemctl list-unit-files "$1.service" --no-legend 2>/dev/null | grep -q "^$1.service" || {
 	echo "missing unit: $1.service" >&2
-	if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${desktop:-}" != cosmic && "${desktop:-}" != tuna ]]; then
+	if hummingbird_bootstrap_waived; then
 		waive
 		return 0
 	fi
@@ -150,7 +155,7 @@ require_any_unit() {
 		fi
 	done
 	echo "missing unit: none of [$*] exist" >&2
-	if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${desktop:-}" != cosmic && "${desktop:-}" != tuna ]]; then
+	if hummingbird_bootstrap_waived; then
 		waive
 		return 0
 	fi
@@ -163,7 +168,7 @@ require_any_glob() {
 		compgen -G "$g" >/dev/null && return 0
 	done
 	echo "missing required path: none of [$*] exist" >&2
-	if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${desktop:-}" != cosmic && "${desktop:-}" != tuna ]]; then
+	if hummingbird_bootstrap_waived; then
 		waive
 		return 0
 	fi
@@ -181,7 +186,7 @@ require_user_unit() {
 		return 0
 	fi
 	echo "missing user unit: ${u}.service" >&2
-	if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${desktop:-}" != cosmic && "${desktop:-}" != tuna ]]; then
+	if hummingbird_bootstrap_waived; then
 		waive
 		return 0
 	fi
@@ -199,7 +204,7 @@ require_any_user_unit() {
 		fi
 	done
 	echo "missing user unit: none of [$*] exist" >&2
-	if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${desktop:-}" != cosmic && "${desktop:-}" != tuna ]]; then
+	if hummingbird_bootstrap_waived; then
 		waive
 		return 0
 	fi
@@ -253,7 +258,7 @@ x11_display_manager_has_a_server() {
 	compgen -G "${root}/usr/lib/xorg/Xorg" >/dev/null && return 0
 	compgen -G "${root}/usr/libexec/Xorg" >/dev/null && return 0
 	echo "lightdm is installed but no X server is (Xorg, /usr/lib/xorg/Xorg, /usr/libexec/Xorg) — lightdm cannot create a display server for its greeter, exits 1, and display-manager.service crash-loops; the reason is logged only to /var/log/lightdm/lightdm.log" >&2
-	if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${desktop:-}" != cosmic && "${desktop:-}" != tuna ]]; then
+	if hummingbird_bootstrap_waived; then
 		waive
 		return 0
 	fi
@@ -268,7 +273,7 @@ xfce_greetd_greeter_contract() {
 	local greetd_conf="${TUNAOS_VERIFY_ROOT:-}/etc/greetd/config.toml"
 	if ! grep -qs 'gtkgreet' "$greetd_conf"; then
 		echo "greetd is the display manager but ${greetd_conf} does not launch gtkgreet — stock agreety boots users to a text prompt, not a login screen" >&2
-		if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${desktop:-}" != cosmic && "${desktop:-}" != tuna ]]; then
+		if hummingbird_bootstrap_waived; then
 			waive
 			return 0
 		fi
@@ -331,7 +336,7 @@ require_gnome_at_least() {
 	major="$(gnome_shell_major)"
 	if [[ -z "$major" ]]; then
 		echo "cannot determine the installed GNOME version: gnome-shell --version failed and no package manager knows gnome-shell" >&2
-		if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${desktop:-}" != cosmic && "${desktop:-}" != tuna ]]; then
+		if hummingbird_bootstrap_waived; then
 			waive
 			return 0
 		fi
@@ -339,7 +344,7 @@ require_gnome_at_least() {
 	fi
 	if ((major < floor)); then
 		echo "GNOME ${major} is below the floor: nothing below GNOME ${floor} ships (maintainer directive 2026-09-03; the target is 51). This image's gnome-shell reports major version ${major}." >&2
-		if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${desktop:-}" != cosmic && "${desktop:-}" != tuna ]]; then
+		if hummingbird_bootstrap_waived; then
 			waive
 			return 0
 		fi
@@ -357,7 +362,7 @@ require_gnome_shell_schema() {
 		return 0
 	fi
 	echo "missing or unreadable compiled GSettings schema: org.gnome.shell; GNOME cannot start its greeter or desktop" >&2
-	if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${desktop:-}" != cosmic && "${desktop:-}" != tuna ]]; then
+	if hummingbird_bootstrap_waived; then
 		waive
 		return 0
 	fi
@@ -948,7 +953,7 @@ else
 		if ((_ffmpeg_rc != 0)); then
 			echo "ffmpeg is installed but would not run (broken dependencies?) — cannot verify codecs" >&2
 			_ffmpeg_diag
-			if [[ "${IS_HUMMINGBIRD:-false}" != "true" || "${desktop:-}" == tuna ]]; then
+			if ! hummingbird_bootstrap_waived; then
 				exit 1
 			fi
 			waive
@@ -981,7 +986,7 @@ else
 			# means the stub, so the name cannot carry the distinction.
 			if [[ "${IS_ELN:-false}" == "true" ]]; then
 				echo "TUNAOS_CODEC_GAP: ELN publishes no functional H.264/H.265 decoder (ffmpeg-free + noopenh264 stub, no RPM Fusion ELN branch); wahoo images cannot play mainstream video (tunaOS: ELN preview lane)" >&2
-			elif [[ "${IS_HUMMINGBIRD:-false}" != "true" || "${desktop:-}" == tuna ]]; then
+			elif ! hummingbird_bootstrap_waived; then
 				exit 1
 			fi
 			waive
@@ -1036,7 +1041,7 @@ else
 		for _fp_app in "${_fp_apps[@]}"; do
 			if ! grep -rqs "^\[Flatpak Preinstall ${_fp_app}\]" /usr/share/flatpak/preinstall.d; then
 				echo "missing flatpak preinstall declaration: ${_fp_app}" >&2
-				if [[ "${IS_HUMMINGBIRD:-false}" != "true" || "${desktop:-}" == tuna ]]; then
+				if ! hummingbird_bootstrap_waived; then
 					exit 1
 				fi
 			fi
@@ -1046,7 +1051,7 @@ else
 		if [[ -f /usr/lib/systemd/system/flatpak-preinstall.service ]]; then
 			if ! systemctl is-enabled flatpak-preinstall.service >/dev/null 2>&1; then
 				echo "flatpak-preinstall.service is shipped but not enabled — the declared flatpaks would never install" >&2
-				if [[ "${IS_HUMMINGBIRD:-false}" != "true" || "${desktop:-}" == tuna ]]; then
+				if ! hummingbird_bootstrap_waived; then
 					exit 1
 				fi
 			fi
@@ -1077,7 +1082,7 @@ else
 			_dcf_name="${_dcf_name##*/}"
 			if [[ ! -s "/etc/dconf/db/${_dcf_name}" ]]; then
 				echo "missing compiled dconf database: keyfiles in ${_dcf_dir} but /etc/dconf/db/${_dcf_name} is missing or empty (run dconf update)" >&2
-				if [[ "${IS_HUMMINGBIRD:-false}" != "true" || "${desktop:-}" == tuna ]]; then
+				if ! hummingbird_bootstrap_waived; then
 					exit 1
 				fi
 			fi

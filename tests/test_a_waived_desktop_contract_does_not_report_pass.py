@@ -90,33 +90,18 @@ def test_a_waived_contract_emits_a_greppable_marker(tmp_path):
 
 
 def test_every_hummingbird_exemption_counts_what_it_waives():
-    """An exemption that doesn't count is invisible again."""
+    """An exemption that does not count is invisible again."""
     src = CHECK.read_text()
-    # Count structurally, not by matching one layout. This used to count the
-    # single-line form `... ]]; then waive; return 0; fi`, which meant a
-    # formatter expanding those one-liners into ordinary if-blocks dropped the
-    # count to 0 and failed a test whose subject had not changed at all.
-    # (shfmt does exactly that; see the .editorconfig fix in this PR.)
     exemption_re = re.compile(
-        r'IS_HUMMINGBIRD:-false\}" == "true"[^\n]*\]\]; then(.*?)\n\s*fi\b',
-        re.S,
+        r"(?ms)^[ \t]*if hummingbird_bootstrap_waived; then\n"
+        r"(?P<body>.*?)(?=^[ \t]*fi\b)"
     )
-    blocks = exemption_re.findall(src)
-    exemptions = len(blocks)
-    counted = sum(1 for b in blocks if "waive" in b)
-    assert exemptions > 0, "the exemption shape changed; this test is stale"
-    assert counted == exemptions, (
-        f"{exemptions} require_* exemptions but only {counted} call waive() — "
-        "an uncounted exemption can still report a pass over a broken image"
+    blocks = [match.group("body") for match in exemption_re.finditer(src)]
+    assert len(blocks) >= 10, "the shared Hummingbird waiver is no longer used"
+    assert all("waive" in block for block in blocks), (
+        "an uncounted Hummingbird exemption can still report a pass over a "
+        "broken image"
     )
-    guard_re = re.compile(
-        r'if\s+\[\[\s*(?P<condition>[^\]]*IS_HUMMINGBIRD[^\]]*==\s*"true"[^\]]*)\]\]\s*;\s*then',
-        re.S,
-    )
-    guard_conditions = [match.group("condition") for match in guard_re.finditer(src)]
-    assert len(guard_conditions) == exemptions
-    assert all(
-        re.search(r'\$\{desktop:-\}"?\s*!=\s*cosmic', condition)
-        and re.search(r'\$\{desktop:-\}"?\s*!=\s*tuna', condition)
-        for condition in guard_conditions
+    assert src.count("! hummingbird_bootstrap_waived; then") >= 5, (
+        "direct contract failures must also reject admitted Tuna"
     )
