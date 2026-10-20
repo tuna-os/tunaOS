@@ -25,6 +25,8 @@ CASES = json.loads((FIXTURES / "cases.json").read_text())
 
 def _load_module(path: Path, name: str):
     spec = importlib.util.spec_from_file_location(name, path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"cannot load adapter module: {path}")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -138,7 +140,7 @@ def test_branding_fixture_cases_run_the_shell_adapter(name, tmp_path):
     result = _run_branding(case["input"], tmp_path)
     if "normalized" in case:
         assert result.returncode == 0, result.stderr
-        assert _document(case["input"]) == _document(case["normalized"])
+        assert json.loads((tmp_path / "context/manifests/fork-config.json").read_text()) == _document(case["input"])
     else:
         assert result.returncode != 0
         assert case["expected_rejection"] in result.stderr
@@ -311,7 +313,7 @@ def test_capability_cli_rejects_unsupported_operation():
         check=False,
     )
     assert result.returncode == 2
-    assert "unsupported operation" in result.stdout
+    assert "unsupported operation" in result.stderr
 
 
 def test_fixture_index_is_versioned_and_paths_are_synchronized():

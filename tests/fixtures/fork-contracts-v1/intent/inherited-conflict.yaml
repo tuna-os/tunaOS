@@ -1,6 +1,6 @@
 schema_version: 1
 catalog:
-  sha256: 6ec8b6ef6e403030537d79736378de5bb42767dac768f88da29c7f727197785f
+  sha256: 128be6b0dd756d2117f2bb1689e9a90417644da66659f38685478034063d070b
 targets:
   variants: [yellowfin]
   flavors: [gnome]
