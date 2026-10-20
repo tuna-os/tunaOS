@@ -155,6 +155,7 @@ def test_branding_fixture_cases_run_the_shell_adapter(name, tmp_path):
     case = _case(name)
     result = _run_branding(case["input"], tmp_path)
     if "normalized" in case:
+        assert result.returncode == 0, result.stderr
         assert json.loads((tmp_path / "context/manifests/fork-config.json").read_text()) == _document(case["normalized"])
     else:
         assert result.returncode != 0
