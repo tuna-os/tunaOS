@@ -4013,11 +4013,12 @@ baseurl = "https://repo.tunaos.org/rpm/rawhide/x86_64/"
 priority = 100
 
 [desktops.tuna.packages.apt]
-display_manager = "gdm3"
+display_manager = "gdm"
 required = [
   "tuna-desktop=1.0.0~beta.1-1",
   "orca",
   "gdm3",
+  "gjs",
   "xwayland",
   "ibus",
   "gnome-shell",

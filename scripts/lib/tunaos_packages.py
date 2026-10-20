@@ -155,6 +155,7 @@ def validate(document):
                     allowed |= {'repos'}
                 elif family == 'zypper':
                     allowed |= {'repos', 'display_manager'}
+            known(policy, allowed, where)
             for key, value in policy.items():
                 if key in LIST_FIELDS | {'include'}:
                     string_list(value, where + '.' + key)
