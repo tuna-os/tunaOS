@@ -6,9 +6,9 @@ backend. A caller must name the frontend and operation it wants; unsupported
 operations fail instead of falling through to another backend.
 """
 from __future__ import annotations
-
 import argparse
 import json
+import sys
 from pathlib import Path
 
 
@@ -29,9 +29,9 @@ def _text(value, where):
     return value
 
 
-def _unique_strings(value, where):
-    if not isinstance(value, list) or not value or not all(isinstance(item, str) and item for item in value):
-        raise CapabilityError(f"{where}: expected nonempty string list")
+def _unique_strings(value, where, *, allow_empty=False):
+    if not isinstance(value, list) or (not allow_empty and not value) or not all(isinstance(item, str) and item for item in value):
+        raise CapabilityError(f"{where}: expected {'string list' if allow_empty else 'nonempty string list'}")
     if len(value) != len(set(value)):
         raise CapabilityError(f"{where}: duplicate operation")
     return set(value)
@@ -99,7 +99,7 @@ def load(path: Path | str) -> dict:
             frontend["capabilities"], f"registry.frontends[{index}].capabilities"
         )
         unsupported = _unique_strings(
-            frontend["unsupported"], f"registry.frontends[{index}].unsupported"
+            frontend["unsupported"], f"registry.frontends[{index}].unsupported", allow_empty=True
         )
         overlap = capabilities & unsupported
         if overlap:
@@ -140,7 +140,7 @@ def main() -> int:
         print(json.dumps({"valid": True}, sort_keys=True))
         return 0
     except CapabilityError as exc:
-        print(f"ERROR: {exc}")
+        print(f"ERROR: {exc}", file=sys.stderr)
         return 2
 
 
