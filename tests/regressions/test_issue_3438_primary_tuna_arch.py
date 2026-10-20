@@ -1,4 +1,10 @@
-"""The Marlin GDM override has one editable owner, primary TOML (issue #3438)."""
+"""The Marlin GDM override has one editable owner, primary TOML (issue #3438).
+
+Falsification: the unfixed primary source has no tuna-arch profile, so the
+compiler cannot match the historical GDM fixture. Restoring the tracked YAML
+also makes the adapter-ownership assertion fail. These checks drive the real
+compiler and inspect tracked paths instead of accepting a receipt exception.
+"""
 import importlib.util
 import json
 from pathlib import Path
