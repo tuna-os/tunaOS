@@ -76,23 +76,41 @@ def test_pull_requests_build_every_admitted_tuna_image_in_ci():
         for variant in config["variants"]
         if config["tuna_rollout"][variant["id"]]["status"] == "admitted"
     }
-    workflow = yaml.safe_load((ROOT / ".github/workflows/build-tuna-pr.yml").read_text())
+    workflow = yaml.safe_load((ROOT / ".github/workflows/build-flavor.yml").read_text())
     event = workflow.get("on", workflow.get(True))
     assert "pull_request" in event
-    event_config = event["pull_request"]
-    paths = event_config["paths"]
+    paths = set(event["pull_request"]["paths"])
     assert {
-        ".github/actions/**", ".github/scripts/**", "Containerfile*",
-        "experiences/**", "image-versions.yaml", "manifests/desktops/tuna*.yaml",
-        "system_files_overrides/**", "tunaos.toml",
-    } <= set(paths)
+        ".github/build-config.yml",
+        ".github/workflows/build-flavor.yml",
+        ".github/workflows/build-variant.yml",
+        ".github/workflows/reusable-build-image.yml",
+        ".github/actions/**",
+        ".github/scripts/**",
+        "Containerfile*",
+        "build_scripts/**",
+        "experiences/**",
+        "image-versions.yaml",
+        "manifests/desktops/tuna*.yaml",
+        "system_files/**",
+        "system_files_overrides/**",
+        "scripts/**",
+        "manifests/desktop-contracts/**",
+        "Justfile",
+        "just/**",
+        "tests/functional/**",
+        "tunaos.toml",
+    } <= paths
     assert workflow["permissions"] == {"contents": "read"}
-    job = workflow["jobs"]["build_tuna"]
-    assert job["uses"] == "./.github/workflows/build-variant.yml"
-    assert job["with"]["flavor"] == "tuna"
-    assert job["with"]["variant"] == "${{ matrix.variant }}"
-    assert set(job["strategy"]["matrix"]["variant"]) == admitted
-    assert len(job["strategy"]["matrix"]["variant"]) == len(admitted)
+    pr_job = workflow["jobs"]["build_tuna_pr"]
+    assert pr_job["if"] == "github.event_name == 'pull_request'"
+    assert pr_job["uses"] == "./.github/workflows/build-variant.yml"
+    assert pr_job["with"]["flavor"] == "tuna"
+    assert pr_job["with"]["variant"] == "${{ matrix.variant }}"
+    assert set(pr_job["strategy"]["matrix"]["variant"]) == admitted
+    assert len(pr_job["strategy"]["matrix"]["variant"]) == len(admitted)
+    for name in ("validate", "build"):
+        assert workflow["jobs"][name]["if"] == "github.event_name == 'workflow_dispatch'"
 
 
 def test_rpm_cells_install_the_pinned_beta_from_signed_factory_repositories():
