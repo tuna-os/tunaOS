@@ -30,7 +30,14 @@ def _text(value, where):
 
 
 def _unique_strings(value, where, *, allow_empty=False):
-    if not isinstance(value, list) or (not allow_empty and not value) or not all(isinstance(item, str) and item for item in value):
+    if (
+        not isinstance(value, list)
+        or (not allow_empty and not value)
+        or not all(
+            isinstance(item, str) and item and item == item.strip()
+            for item in value
+        )
+    ):
         raise CapabilityError(f"{where}: expected {'string list' if allow_empty else 'nonempty string list'}")
     if len(value) != len(set(value)):
         raise CapabilityError(f"{where}: duplicate operation")
@@ -92,6 +99,7 @@ def load(path: Path | str) -> dict:
         seen.add(frontend_id)
         _text(frontend["app_id"], f"registry.frontends[{index}].app_id")
         _text(frontend["path"], f"registry.frontends[{index}].path")
+        _text(frontend["repository"], f"registry.frontends[{index}].repository")
         backend = _text(frontend["backend"], f"registry.frontends[{index}].backend")
         if backend not in required_by_backend:
             raise CapabilityError(f"registry.frontends[{index}].backend: unknown backend")
