@@ -56,8 +56,11 @@ def test_every_routing_result_matches_existing_resolver(plan):
 
 def test_source_receipt_preserves_package_and_identity_inputs(plan):
     files = plan["sources"]["files"]
-    for path in ROOT.glob("manifests/desktops/*.yaml"):
-        assert files[path.relative_to(ROOT).as_posix()] == hashlib.sha256(path.read_bytes()).hexdigest()
+    # The editable primary source and its trusted compiler own desktop policy.
+    # Generated adapters must not become a second pinned source of truth.
+    assert not any(name.startswith("manifests/desktops/") for name in files)
+    for name in ("tunaos.toml", "scripts/lib/tunaos_packages.py", "scripts/lib/desktop_operations.json"):
+        assert files[name] == hashlib.sha256((ROOT / name).read_bytes()).hexdigest()
     for name in ("build_scripts/10-base-packages.sh", "build_scripts/20-packages.sh",
                  "build_scripts/90-image-info.sh", "build_scripts/lib/variant-identity.tsv",
                  "build_scripts/desktop/install-desktop.sh", "build_scripts/desktop/configure-desktop-runtime.sh"):

@@ -91,6 +91,7 @@ COPY system_files /files
 COPY system_files_overrides /overrides
 COPY build_scripts /build_scripts
 COPY manifests /manifests
+COPY tunaos.toml /tunaos.toml
 # Only Tuna's curated files: install-desktop.sh applies experiences/<desktop>
 # whenever it is present, and the other desktops' trees are not part of the
 # apt images today.
