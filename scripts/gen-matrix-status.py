@@ -795,7 +795,7 @@ def composite_section(criteria, stage, contract, luks, smoke, lifecycle,
             "and they do not block yet: "
             + ", ".join(f"`{c}`" for c in advisory)
             + ". Unimplemented: "
-            + ", ".join(f"`{c}`" for c in unimplemented)
+            + (", ".join(f"`{c}`" for c in unimplemented) or "none")
             + ". To graduate a criterion, edit `enforcement:` in that file. "
             "The table and the README count then tighten with no code change."
         ),
