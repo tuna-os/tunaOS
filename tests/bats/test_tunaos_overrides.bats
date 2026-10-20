@@ -16,14 +16,16 @@ ASSETS="${REPO_ROOT}/build_scripts/assets/tunaos-overrides"
 	grep -q 'set -euo pipefail' "$INSTALLER"
 }
 
-@test "installer: installs all eight files under override root" {
+@test "installer: installs immutable completion and boot compatibility link" {
 	root="$(mktemp -d)"
 	TUNAOS_OVERRIDE_ROOT="$root" bash "$INSTALLER" >/dev/null
 	[ -f "$root/usr/share/bash-completion/completions/ujust" ]
 	[ -f "$root/etc/bash_completion.d/ujust" ]
 	[ -f "$root/usr/share/zsh/site-functions/_ujust" ]
-	[ -f "$root/usr/local/share/zsh/site-functions/_ujust" ]
 	[ -f "$root/usr/share/fish/vendor_completions.d/ujust.fish" ]
+	[ -f "$root/usr/lib/tmpfiles.d/tunaos-ujust.conf" ]
+	[ -L "$root/var/usrlocal/share/zsh/site-functions/_ujust" ]
+	[ "$(readlink "$root/var/usrlocal/share/zsh/site-functions/_ujust")" = "/usr/share/zsh/site-functions/_ujust" ]
 	[ -f "$root/usr/lib/systemd/system/uupd.service.d/20-tunaos.conf" ]
 	[ -f "$root/usr/lib/systemd/system/tunaos-uupd-notify@.service" ]
 	[ -x "$root/usr/libexec/tunaos/uupd-notify" ]
@@ -36,7 +38,6 @@ ASSETS="${REPO_ROOT}/build_scripts/assets/tunaos-overrides"
 	cmp "$ASSETS/ujust-bash" "$root/usr/share/bash-completion/completions/ujust"
 	cmp "$ASSETS/ujust-bash" "$root/etc/bash_completion.d/ujust"
 	cmp "$ASSETS/ujust-zsh" "$root/usr/share/zsh/site-functions/_ujust"
-	cmp "$ASSETS/ujust-zsh" "$root/usr/local/share/zsh/site-functions/_ujust"
 	cmp "$ASSETS/ujust-fish" "$root/usr/share/fish/vendor_completions.d/ujust.fish"
 	cmp "$ASSETS/uupd-20-tunaos.conf" "$root/usr/lib/systemd/system/uupd.service.d/20-tunaos.conf"
 	cmp "$ASSETS/tunaos-uupd-notify.service" "$root/usr/lib/systemd/system/tunaos-uupd-notify@.service"
@@ -50,6 +51,25 @@ ASSETS="${REPO_ROOT}/build_scripts/assets/tunaos-overrides"
 	run env TUNAOS_OVERRIDE_ROOT="$root" bash "$INSTALLER"
 	[ "$status" -eq 0 ]
 	rm -rf "$root"
+}
+@test "tmpfiles recreates the compatibility link after an empty or existing /var" {
+	if ! command -v systemd-tmpfiles >/dev/null 2>&1; then
+		skip "systemd-tmpfiles not installed"
+	fi
+	for state in empty preexisting; do
+		root="$(mktemp -d)"
+		TUNAOS_OVERRIDE_ROOT="$root" bash "$INSTALLER" >/dev/null
+		if [[ "$state" == empty ]]; then
+			rm -rf "$root/var"
+		else
+			rm -f "$root/var/usrlocal/share/zsh/site-functions/_ujust"
+			printf stale >"$root/var/usrlocal/share/zsh/site-functions/_ujust"
+		fi
+		systemd-tmpfiles --root="$root" --create "$root/usr/lib/tmpfiles.d/tunaos-ujust.conf"
+		[ -L "$root/var/usrlocal/share/zsh/site-functions/_ujust" ]
+		[ "$(readlink "$root/var/usrlocal/share/zsh/site-functions/_ujust")" = "/usr/share/zsh/site-functions/_ujust" ]
+		rm -rf "$root"
+	done
 }
 
 @test "arch base: installs bash-completion (loader for eager ujust file)" {
@@ -86,11 +106,16 @@ ASSETS="${REPO_ROOT}/build_scripts/assets/tunaos-overrides"
 	[ "$status" -eq 0 ]
 }
 
-@test "uupd drop-in: disables restart spam, wires notifier" {
+@test "uupd drop-in: disables restart spam and duplicate upstream notices" {
 	run grep -E '^Restart=no' "$ASSETS/uupd-20-tunaos.conf"
 	[ "$status" -eq 0 ]
 	run grep -E '^OnFailure=tunaos-uupd-notify@%n\.service' "$ASSETS/uupd-20-tunaos.conf"
 	[ "$status" -eq 0 ]
+	run grep -E '^PrivateMounts=yes$' "$ASSETS/uupd-20-tunaos.conf"
+	[ "$status" -eq 0 ]
+	run grep -E '^InaccessiblePaths=/usr/bin/machinectl$' "$ASSETS/uupd-20-tunaos.conf"
+	[ "$status" -eq 0 ]
+
 }
 
 @test "notifier unit: runs the notify script with the failed unit" {
@@ -109,11 +134,49 @@ ASSETS="${REPO_ROOT}/build_scripts/assets/tunaos-overrides"
 	[ "$output" = 'exit 0' ]
 }
 
-@test "wiring: 40-services and install-desktop call the installer" {
-	run grep -c 'install-tunaos-overrides.sh' "${REPO_ROOT}/build_scripts/40-services.sh"
-	[ "$output" -ge 2 ]
-	run grep -c 'install-tunaos-overrides.sh' "${REPO_ROOT}/build_scripts/desktop/install-desktop.sh"
-	[ "$output" -ge 1 ]
+@test "notifier: retries when machinectl returns a CRLF action" {
+	root="$(mktemp -d)"
+	bin="$root/bin"
+	mkdir -p "$bin" "$root/home"
+	cat >"$bin/loginctl" <<'EOF'
+#!/bin/sh
+printf '1000 tester\n'
+EOF
+	cat >"$bin/getent" <<EOF
+#!/bin/sh
+printf 'tester:x:1000:1000::%s:/bin/bash\n' "$root/home"
+EOF
+	cat >"$bin/systemctl" <<EOF
+#!/bin/sh
+printf '%s\n' "\$*" >"$root/systemctl.log"
+EOF
+	cat >"$bin/machinectl" <<'EOF'
+#!/bin/sh
+printf 'retry\r\n'
+EOF
+	cat >"$bin/notify-send" <<'EOF'
+#!/bin/sh
+exit 0
+EOF
+	chmod +x "$bin"/*
+	run env PATH="$bin:$PATH" \
+		TUNAOS_MACHINECTL="$bin/machinectl" \
+		TUNAOS_NOTIFY_SEND="$bin/notify-send" \
+		bash "$ASSETS/uupd-notify" uupd.service
+	[ "$status" -eq 0 ]
+	[ "$(cat "$root/systemctl.log")" = "start uupd.service" ]
+	rm -rf "$root"
+}
+
+@test "wiring: shared and overlay stages re-assert the installer" {
+	services="${REPO_ROOT}/build_scripts/40-services.sh"
+	shared_line="$(grep -n '^/run/context/build_scripts/install-tunaos-overrides.sh$' "$services" | cut -d: -f1)"
+	apt_line="$(grep -n '^if \[\[ "\${PKG_MGR:-}" == "apt" \]\]' "$services" | cut -d: -f1)"
+	[ -n "$shared_line" ]
+	[ "$shared_line" -lt "$apt_line" ]
+	[ "$(grep -c '^/run/context/build_scripts/install-tunaos-overrides.sh$' "$services")" -eq 1 ]
+	grep -qF 'install-tunaos-overrides.sh' "${REPO_ROOT}/build_scripts/desktop/install-desktop.sh"
+	grep -qF '/run/context/build_scripts/install-tunaos-overrides.sh' "${REPO_ROOT}/Containerfile.overlay"
 }
 
 @test "shellcheck: installer and notifier are clean" {
