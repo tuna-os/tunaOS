@@ -444,6 +444,24 @@ jobs:
           echo "remote_image_digest=${REMOTE_IMAGE_DIGEST}" >> $GITHUB_OUTPUT
           echo "digest=${IMAGE_DIGEST}" >> $GITHUB_OUTPUT
 
+      - name: Verify bootc-installable layers
+        if: ${{ inputs.publish }}
+        env:
+          REMOTE_IMAGE_DIGEST: ${{ steps.push.outputs.remote_image_digest }}
+          IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
+          IMAGE_NAME: ${{ env.IMAGE_NAME }}
+        run: |
+          # A LABEL-only (or otherwise empty) stage emits an empty tar layer
+          # that bootc install rejects ("Truncated tar archive",
+          # tuna-os/tunaOS#3378) while podman stays green. Blocking: an
+          # uninstallable published image is not shippable.
+          command -v zstd >/dev/null || sudo apt-get install -y -qq zstd
+          [[ "$REMOTE_IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+            echo "::error::push returned invalid digest: ${REMOTE_IMAGE_DIGEST}"
+            exit 1
+          }
+          scripts/check-bootc-installable-layers \
+            "${IMAGE_REGISTRY}/${IMAGE_NAME}@${REMOTE_IMAGE_DIGEST}"
       - name: Verify rechunk metadata preserved
         if: ${{ inputs.publish }}
         env:
@@ -863,7 +881,7 @@ jobs:
     needs:
       - build_push
     container:
-      image: cgr.dev/chainguard/wolfi-base@sha256:030e45cb37187dff322bbefe9658bcaec31b824a5d523380771a64864c9f45d4  # :latest linux/amd64 as of 2026-06-13
+      image: cgr.dev/chainguard/wolfi-base@sha256:ce0f1ccb7b104c5c3c90fa649b0c3f88a6f8604dd89dc45d6cecce91864f00e2  # :latest linux/amd64 as of 2026-06-13
       # This job only performs registry/API operations (podman login and
       # manifest create/add/annotate/push). It does not run or build a
       # container or mount a host filesystem -- but podman itself needs
