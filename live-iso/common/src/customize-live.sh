@@ -895,6 +895,13 @@ if [[ -n "${INSTALLER_APP:-}" ]]; then
 	_installed_commit="$(flatpak info --system --show-commit "${INSTALLER_APP}" 2>/dev/null || true)"
 	if [[ -n "${_installed_commit}" ]]; then
 		INSTALLER_REVISION="${_installed_commit}"
+		# Remote installs have no downloaded bundle to hash. Their deployed
+		# Flatpak commit is the immutable installer identity instead of the
+		# old literal "remote" placeholder.
+		if [[ "${INSTALLER_BUNDLE_SHA256}" == "remote" &&
+			"${_installed_commit}" =~ ^[0-9a-fA-F]{64}$ ]]; then
+			INSTALLER_BUNDLE_SHA256="${_installed_commit}"
+		fi
 	fi
 	mkdir -p /etc/tunaos
 	cat >/etc/tunaos/live-installer-info <<INFOEOF
@@ -1042,9 +1049,8 @@ fi
 # ── 5c. Live source metadata: what this squash IS ─────────────────────────
 # Coherent source metadata for the overlay/ISO consumer: the base image ref
 # and digest this squash was customized FROM, the platform it was built for,
-# and the installer payload from section 4a2 above. The workflow feeds the
-# base fields in (TUNA_LIVE_* env, mirrored into OCI labels); the ISO build
-# path never sets them, so "unknown" there is expected, not an error.
+# and the installer payload from section 4a2 above. The workflow and local ISO
+# build feed the TUNA_LIVE_* fields, mirrored into OCI labels where applicable.
 #
 # File writes only -- no podman/skopeo/containers-storage queries. The
 # pure/tacklebox live boot has no host containers-storage graphroot, and a
@@ -1059,6 +1065,7 @@ import sys
 meta = {
     "base_image": os.environ.get("TUNA_LIVE_BASE_IMAGE", "unknown"),
     "base_digest": os.environ.get("TUNA_LIVE_BASE_DIGEST", "unknown"),
+    "overlay_digest": os.environ.get("TUNA_LIVE_OVERLAY_DIGEST", "unknown"),
     "platform": os.environ.get("TUNA_LIVE_PLATFORM", "unknown"),
     "installer_app_id": sys.argv[1],
     "installer_revision": sys.argv[2],

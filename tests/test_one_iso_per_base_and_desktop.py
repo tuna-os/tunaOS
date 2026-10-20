@@ -232,9 +232,11 @@ def strict_receipt(target, *, source, overlay, installer, engine, cpu_baseline):
     }
     receipt = {
         "schema": "QualificationEvidence/v1", **target,
-        "cpu_baseline": cpu_baseline, "hardware_scope": "qemu",
+        "cpu_baseline": cpu_baseline,
+        "hardware_scope": "qemu",
         "resolved_inputs": {"source": source, "overlay": overlay,
-                            "installer": installer, "engine": engine},
+                            "installer": installer, "engine": engine,
+                            "media": source},
         "browser": {"name": "chromium", "version": "140.0",
                     "memory_gib": 8, "free_disk_gib": 20},
         "offline_network_disabled": True,

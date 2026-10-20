@@ -75,6 +75,21 @@ def config():
     return DC.load_config()
 
 
+def test_load_current_inputs_accepts_catalog_snapshot_wrapper(tmp_path):
+    path = tmp_path / "catalog-snapshot.json"
+    path.write_text(json.dumps({
+        "currentInputs": {
+            "descriptors": {"cell": {"digest": DIGEST}},
+            "overlays": {"cell": {"digest": OTHER_DIGEST}},
+            "pins": {"engineRevision": DIGEST},
+        }
+    }), encoding="utf-8")
+    assert DC.load_current_inputs(path) == (
+        {"cell": {"digest": DIGEST}},
+        {"cell": {"digest": OTHER_DIGEST}},
+        {"engineRevision": DIGEST},
+    )
+
 def full_group_entries(config, variant, suffix):
     """Every member x platform target of a group, in gate order."""
     live, offline = DC.group_members(config, variant, suffix)

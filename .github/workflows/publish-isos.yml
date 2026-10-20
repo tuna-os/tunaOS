@@ -105,7 +105,7 @@ jobs:
           # not the generic AMD64 alias.
           SNAPSHOT_ARGS=()
           if [[ -s "${CATALOG_SNAPSHOT:-}" ]]; then
-            SNAPSHOT_ARGS=(--snapshot "$CATALOG_SNAPSHOT")
+            SNAPSHOT_ARGS=(--snapshot "$CATALOG_SNAPSHOT" --current-inputs "$CATALOG_SNAPSHOT")
           fi
           MATRIX=$(echo "$MATRIX" | python3 scripts/delivery-cutover.py --annotate-matrix --default-platform linux/amd64 "${SNAPSHOT_ARGS[@]}")
           COUNT=$(echo "$MATRIX" | jq '.include | length')
@@ -124,14 +124,15 @@ jobs:
       packages: read
       id-token: write
     # Builds the ISO from the platform-qualified promoted image, boot-gates it
-    # in QEMU, and only publishes to R2 if the gate passes.
+    # in QEMU, and only publishes to R2 if the gate passes. The reusable
+    # workflow resolves this promoted tag to its immutable platform digest.
     uses: ./.github/workflows/reusable-build-artifacts.yml
     with:
       variant: ${{ matrix.variant }}
       flavor: ${{ matrix.flavor }}
       platform: ${{ matrix.platform }}
       safeplatform: ${{ matrix.safeplatform }}
-      image-tag: ${{ matrix.flavor }}-${{ matrix.safeplatform }}
+      image-tag: ${{ matrix.flavor }}
       upload-r2: ${{ inputs.skip_upload != true }}
       # Delivery cutover: same per-target gate as the nightly path above.
       # matrix.cutover is stamped in generate-matrix; a row without it

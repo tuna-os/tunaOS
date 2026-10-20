@@ -46,7 +46,10 @@ Changes to the adapter must preserve these invariants:
    invocation.
 5. The final ISO is copied to the repository root using the filename contract
    consumed by publish and end-to-end workflows:
-   `<variant>-<flavor>-<VERSION_ID>-<arch>.iso`.
+   `<variant>-<flavor>-<VERSION_ID>-<arch-or-platform>.iso`. Local calls that
+   omit the optional platform retain the container-reported architecture;
+   canonical CI calls include `/v2` as `linux-amd64-v2` so distinct OCI
+   targets cannot overwrite one another.
 
 Tacklebox changes that alter the accepted recipe fields or the meaning of
 these invariants need updating this document and the adapter's tests in

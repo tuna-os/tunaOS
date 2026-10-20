@@ -364,8 +364,15 @@ def single_variant_config():
 
 
 def test_collect_with_receipts_preserves_diagnostics_without_qualification():
-    receipts = {"albacore:cosmic:linux/amd64/v2": dict(
-        _strict_v1_receipt(), evidence=[{"url": "https://example.invalid/run/1"}])}
+    receipt = _strict_v1_receipt()
+    receipt["evidence"] = [{"url": "https://example.invalid/run/1"}]
+    receipt["receiptDigest"] = "sha256:" + hashlib.sha256(
+        json.dumps(
+            {key: value for key, value in receipt.items() if key != "receiptDigest"},
+            sort_keys=True, separators=(",", ":"),
+        ).encode()
+    ).hexdigest()
+    receipts = {"albacore:cosmic:linux/amd64/v2": receipt}
     document = collector.collect(
         single_variant_config(), SOURCE, lambda _: {"workflow_runs": []},
         now=NOW, receipts=receipts)
@@ -375,7 +382,7 @@ def test_collect_with_receipts_preserves_diagnostics_without_qualification():
     qual = intel["qualification"]
     assert qual["status"] == "unqualified"
     assert qual["qualifiedAt"] == "2026-10-17T01:02:03Z"
-    assert qual["receiptDigest"] == DIGEST_C
+    assert qual["receiptDigest"] == receipts["albacore:cosmic:linux/amd64/v2"]["receiptDigest"]
     assert qual["browser"] == "chromium 140.0"
     assert qual["coldSeconds"] == 60.0
     assert qual["warmSeconds"] == 12.0
@@ -407,7 +414,7 @@ def _strict_v1_receipt(*, installed_boot=True):
         "target_imgref": "ghcr.io/tuna-os/albacore:cosmic",
         "duration_s": 123.0,
     }
-    return {
+    value = {
         "schema": "QualificationEvidence/v1",
         "variant": "albacore",
         "flavor": "cosmic",
@@ -419,6 +426,7 @@ def _strict_v1_receipt(*, installed_boot=True):
             "overlay": "sha256:" + "b" * 64,
             "installer": "sha256:" + "c" * 64,
             "engine": "sha256:" + "d" * 64,
+            "media": "sha256:" + "e" * 64,
         },
         "browser": {
             "name": "chromium",
@@ -433,8 +441,11 @@ def _strict_v1_receipt(*, installed_boot=True):
             "warm": {"duration_s": 12.0},
         },
         "qualifiedAt": "2026-10-17T01:02:03Z",
-        "receiptDigest": DIGEST_C,
     }
+    value["receiptDigest"] = "sha256:" + hashlib.sha256(
+        json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    return value
 
 
 def test_schema_receipt_without_installed_boot_proof_cannot_score_qualified():

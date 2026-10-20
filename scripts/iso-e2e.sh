@@ -162,12 +162,15 @@
 #   TUNAOS_QUAL_SOURCE_DIGEST
 #                         sha256 digest of the source image under test. Used
 #                         when the live guest has no SSH (published media);
-#                         otherwise read from the live guest's bootc status.
+#                         strict installed-boot identity comes from the
+#                         serial marker when SSH is unavailable, otherwise
+#                         read from the live guest's bootc status.
 #   TUNAOS_QUAL_OVERLAY_DIGEST / TUNAOS_QUAL_INSTALLER_DIGEST /
-#   TUNAOS_QUAL_ENGINE_DIGEST
-#                         Immutable-input digests (live media, bundled
-#                         installer backend, virtualization engine). Measured
-#                         by the harness when it can; explicit env wins.
+#   TUNAOS_QUAL_ENGINE_DIGEST / TUNAOS_QUAL_MEDIA_DIGEST
+#                         Immutable-input digests (live overlay, bundled
+#                         installer backend, virtualization engine, and ISO
+#                         media). Measured by the harness when it can; explicit
+#                         env wins.
 #   TUNAOS_QUAL_PLATFORM / TUNAOS_QUAL_CPU_BASELINE /
 #   TUNAOS_QUAL_HARDWARE_SCOPE
 #                         Target identity for the evidence (defaults: uname
@@ -3530,6 +3533,31 @@ strict_offline_assert_iso_detached() {
 	return 0
 }
 
+# Published R2 media may omit both tunaos-live-ready.service and live SSH.
+# The strict GUI walkthrough remains the real gate; this bounded probe only
+# waits until a usable display exists before invoking it.
+wait_for_strict_live_ready() {
+	local deadline=$(($(date +%s) + TIMEOUT))
+	e2e_phase "Waiting up to ${TIMEOUT}s for published-media GUI readiness..."
+	while (($(date +%s) < deadline)); do
+		if [[ -f "$SERIAL_LOG" ]] && grep -qE -- "$LIVE_MARKER" "$SERIAL_LOG" 2>/dev/null; then
+			echo "==> Published media readiness marker found"
+			return 0
+		fi
+		if boot_failed_on_serial; then
+			return 2
+		fi
+		screenshot "strict-live-ready" >/dev/null 2>&1 || true
+		if screenshot_sane "strict-live-ready"; then
+			echo "==> Published media display is rendered; continuing to strict walkthrough"
+			return 0
+		fi
+		sleep 5
+	done
+	echo "ERROR: published-media display did not become ready within ${TIMEOUT}s" >&2
+	return 2
+}
+
 strict_capture_live_inputs() {
 	# Resolve the immutable inputs the harness can measure. Explicit env
 	# wins; the live guest (over SSH — dev media only) fills the rest.
@@ -3579,7 +3607,11 @@ run_strict_gui_install() {
 		strict_offline_verify_netdev "live-${mode}" || rc=$?
 	fi
 	if [[ "$rc" -eq 0 ]]; then
-		wait_for_ready || rc=$?
+		if [[ "${STRICT_PUBLISHED_MEDIA:-0}" == "1" ]]; then
+			wait_for_strict_live_ready || rc=$?
+		else
+			wait_for_ready || rc=$?
+		fi
 	fi
 	if [[ "$rc" -eq 0 ]]; then
 		strict_capture_live_inputs
@@ -3830,11 +3862,10 @@ verify_strict_installed_boot() {
 	fi
 	strict_offline_evidence "installed_${mode}_contract=ok passphrase_prompt=$([[ "$saw_prompt" -eq 1 ]] && echo yes || echo no)"
 	screenshot "strict-${mode}-installed" || true
-	# ── Installed-system identity over SSH (fail closed) ─────────────
-	# The installed boot above keeps the SSH hostfwd (under restrict=on) plus
-	# vsock. Dev media whose installed system accepts the harness transport
-	# yields bootc status; anything else leaves the digest/targetImgref
-	# checks unprovable, and unprovable checks fail here.
+	# ── Installed-system identity (SSH or serial, fail closed) ─────
+	# Published media deliberately may not ship SSH. The installed runtime
+	# check emits TUNAOS_IMAGE_IDENTITY on serial for that case; dev media
+	# still uses bootc status over the harness transport.
 	local ssh_ok=0
 	for _ in $(seq 1 15); do
 		if check_ssh 2>/dev/null; then
@@ -3843,20 +3874,26 @@ verify_strict_installed_boot() {
 		fi
 		sleep 2
 	done
-	if [[ "$ssh_ok" -ne 1 ]]; then
-		echo "ERROR: --strict-offline-gui (${mode}): installed-system SSH unavailable; bootc digest + targetImgref are unverifiable" >&2
-		echo "       (the installed system must accept the harness SSH transport — dev media where the GUI install provisions SSH access)" >&2
-		strict_poweroff_installed
-		return 1
-	fi
-	local bc_file="${OUTPUT_DIR}/strict-${mode}-bootc-status.json"
-	"${GUEST_SSH[@]}" 'bootc status --json 2>/dev/null || sudo bootc status --json 2>/dev/null' >"$bc_file" 2>/dev/null || {
-		echo "ERROR: --strict-offline-gui (${mode}): 'bootc status --json' failed on the installed system" >&2
-		strict_poweroff_installed
-		return 1
-	}
 	local parsed booted_digest booted_ref
-	parsed="$(strict_parse_bootc_json "$bc_file")"
+	if [[ "$ssh_ok" -eq 1 ]]; then
+		local bc_file="${OUTPUT_DIR}/strict-${mode}-bootc-status.json"
+		"${GUEST_SSH[@]}" 'bootc status --json 2>/dev/null || sudo bootc status --json 2>/dev/null' >"$bc_file" 2>/dev/null || {
+			echo "ERROR: --strict-offline-gui (${mode}): 'bootc status --json' failed on the installed system" >&2
+			strict_poweroff_installed
+			return 1
+		}
+		parsed="$(strict_parse_bootc_json "$bc_file")"
+	else
+		local identity_line
+		identity_line="$(grep -aE 'TUNAOS_IMAGE_IDENTITY digest=sha256:[0-9a-fA-F]{64} targetImgref=[^[:space:]]+' "$installed_log" | tail -1 || true)"
+		if [[ -z "$identity_line" ]]; then
+			echo "ERROR: --strict-offline-gui (${mode}): installed identity unavailable over SSH and serial" >&2
+			echo "       published media must emit TUNAOS_IMAGE_IDENTITY from its installed runtime checks" >&2
+			strict_poweroff_installed
+			return 1
+		fi
+		parsed="$(sed -nE 's/.*TUNAOS_IMAGE_IDENTITY digest=(sha256:[0-9a-fA-F]{64}) targetImgref=([^[:space:]]+).*/\1|\2/p' <<<"$identity_line")"
+	fi
 	booted_digest="${parsed%%|*}"
 	booted_ref="${parsed#*|}"
 	if [[ ! "$booted_digest" =~ ^sha256:[0-9a-fA-F]{64}$ ]]; then
@@ -3980,6 +4017,7 @@ emit_qualification_evidence() {
 	strict_require_digest "${STRICT_OVERLAY_DIGEST:-}" "overlay" || return 1
 	strict_require_digest "${STRICT_INSTALLER_DIGEST:-}" "installer" || return 1
 	strict_require_digest "${STRICT_ENGINE_DIGEST:-}" "engine" || return 1
+	strict_require_digest "${STRICT_MEDIA_DIGEST:-}" "media" || return 1
 	[[ -n "${VARIANT:-}" && -n "${FLAVOR:-}" ]] || {
 		echo "ERROR: --strict-offline-gui: VARIANT/FLAVOR are unset (set them explicitly, e.g. VARIANT=yellowfin FLAVOR=gnome)" >&2
 		return 1
@@ -4001,8 +4039,9 @@ emit_qualification_evidence() {
 		STRICT_EV_SCOPE="${TUNAOS_QUAL_HARDWARE_SCOPE:-qemu}" \
 		STRICT_EV_SOURCE="$STRICT_SOURCE_DIGEST" STRICT_EV_OVERLAY="$STRICT_OVERLAY_DIGEST" \
 		STRICT_EV_INSTALLER="$STRICT_INSTALLER_DIGEST" STRICT_EV_ENGINE="$STRICT_ENGINE_DIGEST" \
-		STRICT_EV_BNAME="${TUNAOS_QUAL_BROWSER_NAME:-native-qemu}" \
-		STRICT_EV_BVER="${TUNAOS_QUAL_BROWSER_VERSION:-unknown}" \
+		STRICT_EV_MEDIA="$STRICT_MEDIA_DIGEST" \
+		STRICT_EV_BNAME="${TUNAOS_QUAL_BROWSER_NAME:?TUNAOS_QUAL_BROWSER_NAME must identify the measured browser}" \
+		STRICT_EV_BVER="${TUNAOS_QUAL_BROWSER_VERSION:?TUNAOS_QUAL_BROWSER_VERSION must identify the measured browser version}" \
 		STRICT_EV_MEM="$qual_mem" STRICT_EV_DISK="$qual_disk" \
 		STRICT_EV_PLAIN="$plain_frag" STRICT_EV_LUKS="$luks_frag" \
 		python3 - <<'PYEOF'
@@ -4036,6 +4075,7 @@ evidence = {
         "overlay": os.environ["STRICT_EV_OVERLAY"],
         "installer": os.environ["STRICT_EV_INSTALLER"],
         "engine": os.environ["STRICT_EV_ENGINE"],
+        "media": os.environ["STRICT_EV_MEDIA"],
     },
     "browser": {
         "name": os.environ["STRICT_EV_BNAME"],
@@ -4055,7 +4095,9 @@ evidence = {
 }
 evidence["qualifiedAt"] = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 evidence["receiptDigest"] = "sha256:" + hashlib.sha256(
-    json.dumps(evidence, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    json.dumps(
+        evidence, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+    ).encode("utf-8")
 ).hexdigest()
 with open(os.environ["STRICT_EV_OUT"], "w") as f:
     json.dump(evidence, f, indent=2)
@@ -4090,12 +4132,14 @@ run_strict_offline_gui() {
 	# is not an OCI overlay digest, and QEMU is not the tacklebox builder.
 	STRICT_OVERLAY_DIGEST="${TUNAOS_QUAL_OVERLAY_DIGEST:-}"
 	STRICT_ENGINE_DIGEST="${TUNAOS_QUAL_ENGINE_DIGEST:-}"
+	STRICT_MEDIA_DIGEST="${TUNAOS_QUAL_MEDIA_DIGEST:-sha256:$(sha256sum "$ISO_PATH" | awk '{print $1}')}"
 	strict_require_digest "$STRICT_OVERLAY_DIGEST" "OCI live overlay" || return 1
 	strict_require_digest "$STRICT_ENGINE_DIGEST" "ISO builder engine" || return 1
+	strict_require_digest "$STRICT_MEDIA_DIGEST" "ISO media" || return 1
 	strict_offline_evidence "iso_sha256=$(sha256sum "$ISO_PATH" | awk '{print $1}') qemu_sha256=$(sha256sum "$QEMU" | awk '{print $1}')"
 	STRICT_SOURCE_DIGEST="${TUNAOS_QUAL_SOURCE_DIGEST:-}"
 	STRICT_INSTALLER_DIGEST="${TUNAOS_QUAL_INSTALLER_DIGEST:-}"
-	strict_offline_evidence "iso=${ISO_PATH} overlay_digest=${STRICT_OVERLAY_DIGEST} engine_digest=${STRICT_ENGINE_DIGEST}"
+	strict_offline_evidence "iso=${ISO_PATH} overlay_digest=${STRICT_OVERLAY_DIGEST} media_digest=${STRICT_MEDIA_DIGEST} engine_digest=${STRICT_ENGINE_DIGEST}"
 	# TPM for the luks leg: fresh here, restarted with preserved state
 	# before each installed boot (same lifecycle as --luks).
 	if [[ ",${STRICT_OFFLINE_GUI_MODES}," == *",luks,"* ]]; then

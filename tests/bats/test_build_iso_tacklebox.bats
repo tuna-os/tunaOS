@@ -338,6 +338,16 @@ JSON
   [ "$ISO_OUT" = ".build/iso-tacklebox/bonito-cosmic/tunaos-bonito-cosmic.iso" ]
 }
 
+@test "recipe: canonical v2 platform remains distinct in copied ISO name" {
+  VARIANT="albacore"
+  FLAVOR="gnome"
+  VERSION_ID="10.0"
+  PLATFORM="linux/amd64/v2"
+  FILENAME_PLATFORM="${PLATFORM//\//-}"
+  FINAL_ISO="${VARIANT}-${FLAVOR}-${VERSION_ID}-${FILENAME_PLATFORM}.iso"
+  [ "$FINAL_ISO" = "albacore-gnome-10.0-linux-amd64-v2.iso" ]
+}
+
 # ── Tacklebox mode selection ───────────────────────────────────────────────
 
 @test "tacklebox: TACKLEBOX_FROM_SOURCE=0 uses container image" {

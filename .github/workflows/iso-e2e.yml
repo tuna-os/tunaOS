@@ -109,6 +109,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - uses: ./.github/actions/setup-yq
 
       # A dispatch tests exactly the cells asked for. Anything else -- the
       # pull_request harness trigger and the Monday schedule -- runs a fixed
@@ -140,13 +141,32 @@ jobs:
           DISPATCH_FLAVORS: ${{ inputs.flavors }}
         run: |
           set -euo pipefail
+          BUILD_CONFIG_JSON="$(yq -o=json '.' .github/build-config.yml)"
+          canonical_platform() {
+            jq -r --arg variant "$1" --arg flavor "$2" '
+              .variants[] | select(.id == $variant) as $variant |
+              ($variant.flavors[] | select(.id == $flavor)) as $flavor |
+              ($flavor.platforms // $variant.platforms // ["linux/amd64"]) |
+              if index("linux/amd64/v2") != null then "linux/amd64/v2"
+              elif index("linux/amd64") != null then "linux/amd64"
+              else .[0] end
+            ' <<<"$BUILD_CONFIG_JSON"
+          }
+          M='{"include":[]}'
           if [[ -n "${DISPATCH_VARIANT:-}" && -n "${DISPATCH_FLAVORS:-}" ]]; then
-            M=$(jq -cn --arg v "$DISPATCH_VARIANT" --arg f "$DISPATCH_FLAVORS" \
-              '{include: ($f | split(",") | map(ltrimstr(" ") | rtrimstr(" "))
-                              | map(select(length > 0))
-                              | map({variant: $v, flavor: .}))}')
+            while IFS= read -r flavor; do
+              [[ -n "$flavor" ]] || continue
+              platform="$(canonical_platform "$DISPATCH_VARIANT" "$flavor")"
+              [[ -n "$platform" ]] || {
+                echo "::error::unknown variant/flavor: ${DISPATCH_VARIANT}:${flavor}"
+                exit 1
+              }
+              M="$(jq --arg v "$DISPATCH_VARIANT" --arg f "$flavor" --arg p "$platform" \
+                '.include += [{variant:$v, flavor:$f, platform:$p}]' <<<"$M")"
+            done < <(tr ',' '\n' <<<"$DISPATCH_FLAVORS" | awk '{$1=$1};1')
           else
-            M='{"include":[{"variant":"albacore","flavor":"gnome"}]}'
+            M="$(jq -cn --arg p "$(canonical_platform albacore gnome)" \
+              '{include:[{variant:"albacore", flavor:"gnome", platform:$p}]}')"
           fi
           # An empty include list is a GREEN CHECK THAT RAN NOTHING, which is
           # worse than a red one: a sweep would report complete having
@@ -296,7 +316,13 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             qemu-system-x86 qemu-utils ovmf socat swtpm \
             rclone sshpass skopeo python3-yaml \
-            imagemagick tesseract-ocr xorriso squashfs-tools
+            chromium imagemagick tesseract-ocr xorriso squashfs-tools
+          QEMU_BIN="$(command -v qemu-system-x86_64)"
+          {
+            echo "TUNAOS_QUAL_ENGINE_DIGEST=sha256:$(sha256sum "$QEMU_BIN" | awk '{print $1}')"
+            echo "TUNAOS_QUAL_BROWSER_NAME=chromium"
+            echo "TUNAOS_QUAL_BROWSER_VERSION=$(chromium --version | awk '{print $2}')"
+          } >> "$GITHUB_ENV"
 
       # The R2 source is the default — it tests the artifact users actually
       # download. Skipped when source=artifact (workflow_dispatch only).
@@ -317,6 +343,7 @@ jobs:
           # Use matrix.* directly — that's what the job name displays.
           VARIANT="${{ matrix.variant }}"
           FLAVOR="${{ matrix.flavor }}"
+          PLATFORM="${{ matrix.platform }}"
           # `publish-isos.yml` writes the canonical name as
           # `<variant>-<flavor>-latest.iso` (search for `LATEST=` in that
           # workflow). Match that exact name so we don't accidentally pick
@@ -348,12 +375,16 @@ jobs:
           # its desktop prefix -- gnome-hwe and gnome-nvidia all ride inside
           # the gnome group's offline store, so they resolve to the same ISO.
           DESKTOP="${FLAVOR%%-*}"
-          if [[ "$DESKTOP" == "gnome" ]]; then
-            GROUP_OBJECT="${VARIANT}-latest.iso"
-          else
-            GROUP_OBJECT="${VARIANT}-${DESKTOP}-latest.iso"
+          PLATFORM_SUFFIX=""
+          if [[ "$PLATFORM" == "linux/arm64" ]]; then
+            PLATFORM_SUFFIX="-arm64"
           fi
-          OBJECT="${VARIANT}-${FLAVOR}-latest.iso"
+          if [[ "$DESKTOP" == "gnome" ]]; then
+            GROUP_OBJECT="${VARIANT}-latest${PLATFORM_SUFFIX}.iso"
+          else
+            GROUP_OBJECT="${VARIANT}-${DESKTOP}-latest${PLATFORM_SUFFIX}.iso"
+          fi
+          OBJECT="${VARIANT}-${FLAVOR}-latest${PLATFORM_SUFFIX}.iso"
           FOUND=""
           for candidate in "${OBJECT}" "${GROUP_OBJECT}"; do
             echo "==> Trying ${candidate} from R2..."
@@ -374,80 +405,12 @@ jobs:
             echo "ISO_PATH=$(realpath "${OBJECT}")"
             echo "VARIANT=${VARIANT}"
             echo "FLAVOR=${FLAVOR}"
+            echo "PLATFORM=${PLATFORM}"
           } >> "$GITHUB_ENV"
 
-      # Published media deliberately has no guaranteed live SSH transport.
-      # Resolve the immutable inputs before booting it instead of allowing
-      # strict_capture_live_inputs() to leave source/installer blank and let
-      # the evidence emitter discover that omission after two installs.
-      - name: Resolve immutable R2 qualification inputs
-        if: >-
-          steps.filter.outputs.skip != 'true' &&
-          (github.event_name != 'workflow_dispatch' || inputs.source == 'r2-latest')
-        env:
-          VARIANT: ${{ matrix.variant }}
-          FLAVOR: ${{ matrix.flavor }}
-        run: |
-          set -euo pipefail
-          mapfile -t IMAGE_IDENTITY < <(python3 - "$VARIANT" "$FLAVOR" <<'PY'
-          import sys
-          import yaml
-
-          variant_id, flavor_id = sys.argv[1:3]
-          document = yaml.safe_load(open(".github/build-config.yml"))
-          variant = next(item for item in document["variants"]
-                         if item["id"] == variant_id)
-          image_name = variant.get("publish_name", variant_id)
-          suffix = variant.get("tag_suffix", "")
-          image_tag = flavor_id
-          if suffix and not image_tag.endswith(f"-{suffix}"):
-              image_tag = f"{image_tag}-{suffix}"
-          print(image_name)
-          print(image_tag)
-          PY
-          )
-          IMAGE_NAME="${IMAGE_IDENTITY[0]}"
-          PUBLISHED_TAG="${IMAGE_IDENTITY[1]}"
-          SOURCE_REF="ghcr.io/tuna-os/${IMAGE_NAME}:${PUBLISHED_TAG}-linux-amd64"
-          SOURCE_DIGEST="$(skopeo inspect --format '{{.Digest}}' "docker://${SOURCE_REF}")"
-          [[ "$SOURCE_DIGEST" =~ ^sha256:[0-9a-fA-F]{64}$ ]] || {
-            echo "::error::skopeo returned no immutable digest for ${SOURCE_REF}"
-            exit 1
-          }
-          # Read the installer receipt from the ISO's squashfs. Hashing the
-          # checkout's customize-live.sh only proves the build input, not the
-          # installer payload that was actually bundled into this ISO.
-          receipt_dir="$(mktemp -d)"
-          trap 'rm -rf "$receipt_dir"' EXIT
-          mkdir -p iso-e2e-out
-          sha256sum "$ISO_PATH" > iso-e2e-out/media.sha256
-          # Capture the command status before mapfile; process substitution hides it.
-          python3 scripts/extract-iso-payloads.py "$ISO_PATH" "$receipt_dir" \
-            > iso-e2e-out/media-payloads.txt
-          mapfile -t media_payloads < iso-e2e-out/media-payloads.txt
-          INSTALLER_DIGEST=""
-          for payload in "${media_payloads[@]}"; do
-            receipt="$(unsquashfs -cat "$payload" etc/tunaos/live-installer-info 2>/dev/null || true)"
-            candidate="$(awk -F= '$1 == "INSTALLER_BUNDLE_SHA256" { print $2; exit }' <<<"$receipt")"
-            if [[ "$candidate" =~ ^[0-9a-fA-F]{64}$ ]]; then
-              INSTALLER_DIGEST="sha256:${candidate}"
-              break
-            fi
-          done
-          [[ "$INSTALLER_DIGEST" =~ ^sha256:[0-9a-fA-F]{64}$ ]] || {
-            echo "::error::ISO does not contain a valid live-installer-info receipt"
-            exit 1
-          }
-          OVERLAY_DIGEST="sha256:$(sha256sum "$ISO_PATH" | awk '{print $1}')"
-          {
-            echo "TUNAOS_QUAL_SOURCE_DIGEST=${SOURCE_DIGEST}"
-            echo "TUNAOS_QUAL_INSTALLER_DIGEST=${INSTALLER_DIGEST}"
-            echo "TUNAOS_QUAL_OVERLAY_DIGEST=${OVERLAY_DIGEST}"
-            echo "TUNAOS_QUAL_PLATFORM=linux/amd64"
-            echo "TUNAOS_QUAL_SOURCE_REF=${SOURCE_REF}"
-          } >> "$GITHUB_ENV"
-          echo "strict qualification source: ${SOURCE_REF}@${SOURCE_DIGEST}"
-          echo "strict qualification installer input: ${INSTALLER_DIGEST}"
+      # Both published and in-place media must carry immutable source,
+      # overlay, installer, platform, and media identities before the strict
+      # harness starts; never infer them from the current registry tag.
 
       # Build in place. No R2 read, no artifact upload, nothing to clean up:
       # the ISO lives and dies on this runner. Mirrors live-iso-bootc.yml's
@@ -462,11 +425,12 @@ jobs:
         env:
           VARIANT: ${{ matrix.variant }}
           FLAVOR: ${{ matrix.flavor }}
+          PLATFORM: ${{ matrix.platform }}
           TACKLEBOX_FROM_SOURCE: "1"
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y just podman jq golang-go git systemd-boot-efi \
+          sudo apt-get install -y just podman jq skopeo golang-go git systemd-boot-efi \
             xorriso mtools squashfs-tools dosfstools gdisk e2fsprogs btrfs-progs
           # Both runner images ship a podman that cannot run/commit these
           # containers (tunaOS#1893); same Kubic install as every other
@@ -544,8 +508,33 @@ jobs:
           # is what one bare-invocation failure looked like. Root storage also
           # makes the save|load hop unnecessary: the image is already where
           # tacklebox will look for it.
-          sudo just build "$VARIANT" "$FLAVOR" linux/amd64 1 "$FLAVOR"
-          sudo -E env "PATH=$PATH" just iso "$VARIANT" "$FLAVOR" local "$FLAVOR"
+          case "$PLATFORM" in
+            linux/amd64)  SKOPEO_PLATFORM=(--override-arch amd64) ;;
+            linux/amd64/v2) SKOPEO_PLATFORM=(--override-arch amd64 --override-variant v2) ;;
+            linux/arm64)   SKOPEO_PLATFORM=(--override-arch arm64) ;;
+            *) echo "unsupported canonical platform: ${PLATFORM}" >&2; exit 1 ;;
+          esac
+          SAFE_PLATFORM="${PLATFORM//\//-}"
+          OVERLAY_REF="ghcr.io/tuna-os/live-overlay:${VARIANT}-${FLAVOR}-${SAFE_PLATFORM}"
+          TUNA_LIVE_OVERLAY_DIGEST="$(skopeo inspect "${SKOPEO_PLATFORM[@]}" \
+            --format '{{.Digest}}' "docker://${OVERLAY_REF}")"
+          [[ "$TUNA_LIVE_OVERLAY_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+            echo "::error::invalid live overlay digest: ${TUNA_LIVE_OVERLAY_DIGEST}"
+            exit 1
+          }
+          export TUNA_LIVE_OVERLAY_DIGEST
+
+          sudo just build "$VARIANT" "$FLAVOR" "$PLATFORM" 1 "$FLAVOR"
+          TUNA_LIVE_BASE_IMAGE="localhost/${VARIANT}:${FLAVOR}"
+          TUNA_LIVE_BASE_DIGEST="$(sudo podman image inspect \
+            --format '{{.Id}}' "${VARIANT}:${FLAVOR}")"
+          [[ "$TUNA_LIVE_BASE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+            echo "::error::invalid locally built source image digest: ${TUNA_LIVE_BASE_DIGEST}"
+            exit 1
+          }
+          export TUNA_LIVE_BASE_IMAGE TUNA_LIVE_BASE_DIGEST
+
+          sudo -E env "PATH=$PATH" just iso "$VARIANT" "$FLAVOR" local "$FLAVOR" 0 "$PLATFORM"
           ISO="$(find . -maxdepth 3 -name '*.iso' -newermt '-2 hours' -print -quit)"
           if [[ -z "$ISO" ]]; then
             echo "::error::build produced no ISO for ${VARIANT}:${FLAVOR}"
@@ -556,6 +545,108 @@ jobs:
             echo "VARIANT=${VARIANT}"
             echo "FLAVOR=${FLAVOR}"
           } >> "$GITHUB_ENV"
+      - name: Resolve immutable ISO qualification inputs
+        if: steps.filter.outputs.skip != 'true'
+        env:
+          VARIANT: ${{ matrix.variant }}
+          FLAVOR: ${{ matrix.flavor }}
+          PLATFORM: ${{ matrix.platform }}
+          PUBLISHED_MEDIA: ${{ github.event_name != 'workflow_dispatch' || inputs.source == 'r2-latest' }}
+        run: |
+          set -euo pipefail
+          # Source and overlay identities are read from the media's own
+          # provenance file. Resolving a current GHCR tag here would identify
+          # a newer image than the ISO embeds.
+          receipt_dir="$(mktemp -d)"
+          trap 'rm -rf "$receipt_dir"' EXIT
+          mkdir -p iso-e2e-out
+          MEDIA_DIGEST="sha256:$(sha256sum "$ISO_PATH" | awk '{print $1}')"
+          printf '%s  %s\n' "${MEDIA_DIGEST#sha256:}" "$ISO_PATH" > iso-e2e-out/media.sha256
+          # Capture the command status before mapfile; process substitution hides it.
+          python3 scripts/extract-iso-payloads.py "$ISO_PATH" "$receipt_dir" \
+            > iso-e2e-out/media-payloads.txt
+          mapfile -t media_payloads < iso-e2e-out/media-payloads.txt
+          SOURCE_REF=""
+          SOURCE_DIGEST=""
+          OVERLAY_DIGEST=""
+          QUAL_PLATFORM=""
+          INSTALLER_DIGEST=""
+          for payload in "${media_payloads[@]}"; do
+            source_meta="$(unsquashfs -cat "$payload" etc/tunaos/live-source.json 2>/dev/null || true)"
+            if [[ -n "$source_meta" ]]; then
+              identity="$(
+                python3 -c '
+          import json, sys
+          try:
+              value = json.load(sys.stdin)
+          except (json.JSONDecodeError, TypeError):
+              raise SystemExit(0)
+          print("\t".join(str(value.get(key, "")) for key in
+                          ("base_image", "base_digest", "overlay_digest", "platform")))
+          ' <<<"$source_meta"
+              )"
+              IFS=$'\t' read -r candidate_ref candidate_source candidate_overlay candidate_platform <<<"$identity"
+              if [[ -n "$candidate_ref" && -n "$candidate_source" &&
+                    -n "$candidate_overlay" && -n "$candidate_platform" ]]; then
+                if [[ -n "$SOURCE_REF" ]]; then
+                  [[ "$SOURCE_REF" == "$candidate_ref" &&
+                     "$SOURCE_DIGEST" == "$candidate_source" &&
+                     "$OVERLAY_DIGEST" == "$candidate_overlay" &&
+                     "$QUAL_PLATFORM" == "$candidate_platform" ]] || {
+                    echo "::error::ISO payloads disagree on embedded provenance" >&2
+                    exit 1
+                  }
+                else
+                  SOURCE_REF="$candidate_ref"
+                  SOURCE_DIGEST="$candidate_source"
+                  OVERLAY_DIGEST="$candidate_overlay"
+                  QUAL_PLATFORM="$candidate_platform"
+                fi
+              fi
+            fi
+            receipt="$(unsquashfs -cat "$payload" etc/tunaos/live-installer-info 2>/dev/null || true)"
+            candidate="$(awk -F= '$1 == "INSTALLER_BUNDLE_SHA256" { print $2; exit }' <<<"$receipt")"
+            if [[ "$candidate" =~ ^[0-9a-fA-F]{64}$ ]]; then
+              INSTALLER_DIGEST="sha256:${candidate}"
+            fi
+          done
+          [[ "$SOURCE_DIGEST" =~ ^sha256:[0-9a-fA-F]{64}$ ]] || {
+            echo "::error::ISO does not contain a valid embedded source digest"
+            exit 1
+          }
+          [[ "$OVERLAY_DIGEST" =~ ^sha256:[0-9a-fA-F]{64}$ ]] || {
+            echo "::error::ISO does not contain a valid embedded live overlay digest"
+            exit 1
+          }
+          [[ "$QUAL_PLATFORM" =~ ^linux/(amd64|arm64)(/v2)?$ ]] || {
+            echo "::error::ISO does not contain a valid embedded platform"
+            exit 1
+          }
+          [[ "$QUAL_PLATFORM" == "$PLATFORM" ]] || {
+            echo "::error::embedded platform ${QUAL_PLATFORM} does not match matrix target ${PLATFORM}"
+            exit 1
+          }
+          [[ "$INSTALLER_DIGEST" =~ ^sha256:[0-9a-fA-F]{64}$ ]] || {
+            echo "::error::ISO does not contain a valid live-installer-info receipt"
+            exit 1
+          }
+          {
+            echo "TUNAOS_QUAL_SOURCE_DIGEST=${SOURCE_DIGEST}"
+            echo "TUNAOS_QUAL_INSTALLER_DIGEST=${INSTALLER_DIGEST}"
+            echo "TUNAOS_QUAL_OVERLAY_DIGEST=${OVERLAY_DIGEST}"
+            echo "TUNAOS_QUAL_MEDIA_DIGEST=${MEDIA_DIGEST}"
+            echo "TUNAOS_QUAL_PLATFORM=${QUAL_PLATFORM}"
+            echo "TUNAOS_QUAL_SOURCE_REF=${SOURCE_REF}"
+            if [[ "$PUBLISHED_MEDIA" == "true" ]]; then
+              echo "STRICT_PUBLISHED_MEDIA=1"
+            else
+              echo "STRICT_PUBLISHED_MEDIA=0"
+            fi
+          } >> "$GITHUB_ENV"
+          echo "strict qualification source: ${SOURCE_REF}@${SOURCE_DIGEST}"
+          echo "strict qualification overlay: ${OVERLAY_DIGEST}"
+          echo "strict qualification installer input: ${INSTALLER_DIGEST}"
+          echo "strict qualification media: ${MEDIA_DIGEST}"
 
       - name: Run strict offline GUI qualification
         id: e2e
@@ -567,8 +658,10 @@ jobs:
           # readable we fall back to TCG (slower but functional).
           KVM_FLAG=""
           [[ -r /dev/kvm && -w /dev/kvm ]] || KVM_FLAG="--no-kvm"
+          QEMU_BIN="$(command -v qemu-system-x86_64 || command -v qemu-system-aarch64)"
+          export TUNAOS_QUAL_ENGINE_DIGEST="sha256:$(sha256sum "$QEMU_BIN" | awk '{print $1}')"
           set +e
-          sudo --preserve-env=KVM_FLAG,VARIANT,FLAVOR,TUNAOS_QUAL_SOURCE_DIGEST,TUNAOS_QUAL_OVERLAY_DIGEST,TUNAOS_QUAL_INSTALLER_DIGEST,TUNAOS_QUAL_ENGINE_DIGEST,TUNAOS_QUAL_PLATFORM,TUNAOS_QUAL_CPU_BASELINE,TUNAOS_QUAL_HARDWARE_SCOPE \
+          sudo --preserve-env=KVM_FLAG,VARIANT,FLAVOR,TUNAOS_QUAL_SOURCE_DIGEST,TUNAOS_QUAL_OVERLAY_DIGEST,TUNAOS_QUAL_INSTALLER_DIGEST,TUNAOS_QUAL_ENGINE_DIGEST,TUNAOS_QUAL_MEDIA_DIGEST,STRICT_PUBLISHED_MEDIA,TUNAOS_QUAL_PLATFORM,TUNAOS_QUAL_CPU_BASELINE,TUNAOS_QUAL_HARDWARE_SCOPE,TUNAOS_QUAL_BROWSER_NAME,TUNAOS_QUAL_BROWSER_VERSION,TUNAOS_QUAL_BROWSER_MEMORY_GIB,TUNAOS_QUAL_BROWSER_FREE_DISK_GIB \
             ./scripts/iso-e2e.sh "${ISO_PATH}" \
               --output iso-e2e-out \
               --strict-offline-gui \
