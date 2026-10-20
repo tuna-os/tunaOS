@@ -42,7 +42,7 @@ it leads directly to expecting Fedora 43's package set to be present. It is not.
 ## What this means for tunaOS
 
 tunaOS builds `hummingbird:{base,gnome,cosmic}` (see
-`.github/build-config.yml`), **amd64 only — every flavor, base included**.
+`tunaos.toml`), **amd64 only — every flavor, base included**.
 
 That is narrower than this page said before for two reasons. The base cannot
 build on arm64 because the snapshot does not have the mandatory packages.
@@ -188,7 +188,7 @@ datestamped, immutable snapshot"; that reading produced a false STALE
 verdict and bad advice ("the snapshot needs refreshing"), both since
 corrected. Judge this repo by its *content* age, never its name.
 
-The genuine mismatch is between the two halves: `.github/build-config.yml`
+The genuine mismatch is between the two halves: `tunaos.toml`
 pins the upstream base image by digest while the package prefix grows on the
 factory's own cadence. They drift apart with every upstream roll, and the
 drift surfaces as dependency breakage inside the layered desktop instead of

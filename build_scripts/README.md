@@ -27,6 +27,7 @@ build_scripts/
 ├── 99-cleanup.sh              # final cleanup (always last)
 │
 │   # ── called directly by Containerfiles, not part of the numeric run ──
+├── install-uupd.sh             # install the pinned uupd binary and units
 ├── free-uid-1000.sh           # remove the stock account at UID 1000 so a
 │                              #   live ISO can place its own user there.
 │                              #   Takes no distro flags, so any Containerfile
