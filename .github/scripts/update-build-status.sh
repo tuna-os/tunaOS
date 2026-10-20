@@ -9,7 +9,12 @@ source "$(dirname "${BASH_SOURCE[0]}")/gh-read-retry.sh"
 # Requires: gh, jq, yq. GITHUB_TOKEN must be able to read Actions metadata.
 
 repo="${GITHUB_REPOSITORY:-tuna-os/tunaOS}"
-config="${1:-.github/build-config.yml}"
+if [[ -n "${1:-}" ]]; then
+	config="$1"
+else
+	source "$(dirname "${BASH_SOURCE[0]}")/../../scripts/lib/build-config.sh"
+	config="$(tunaos_build_config)" || exit 1
+fi
 readme="${2:-README.md}"
 start='<!-- build-status:start -->'
 end='<!-- build-status:end -->'
