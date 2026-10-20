@@ -349,3 +349,56 @@ def test_duplicate_json_fields_are_rejected_without_last_value_wins(tmp_path):
     path.write_text('{"schemaVersion":1,"schemaVersion":1}')
     with pytest.raises(MODULE.ContractError, match="duplicate"):
         MODULE.load_json(path)
+
+
+def test_schema_rejects_credentialed_or_encoded_public_urls():
+    schema = json.loads((ROOT / "schemas/qualification-report-v1.schema.json").read_text())
+    validator = Draft202012Validator(schema)
+    report = MODULE.build_report(evidence_context(), [event("build", "passed", 1)])
+    for url in (
+        "https://user:secret@example.org/log",
+        "https://example.org/log?token=secret",
+        "https://example.org/log#private",
+        "https://example.org/log%2Fprivate",
+    ):
+        candidate = copy.deepcopy(report)
+        candidate["evidence"][0]["url"] = url
+        assert not validator.is_valid(candidate)
+
+
+def test_disjoint_tool_inventories_are_bounded_before_serialization():
+    producer = producer_receipt()
+    producer["tools"] = {
+        f"tool-{index}": {"version": "1.0.0", "assertions": ["build"]}
+        for index in range(32)
+    }
+    current = current_inputs()
+    current["tools"] = {
+        f"current-{index}": {"version": "1.0.0", "assertions": ["build"]}
+        for index in range(32)
+    }
+    with pytest.raises(MODULE.ContractError, match="changed tools exceed bound"):
+        MODULE.evaluate_reuse(producer, current)
+
+
+@pytest.mark.parametrize("field,value", [("classification", []), ("reasonCode", {})])
+def test_malformed_failure_enum_is_reported_after_a_valid_failure(tmp_path, field, value):
+    context = evidence_context()
+    rows = [event("install", "failed", 1), event("cleanup", "failed", 2)]
+    rows[1]["failure"][field] = value
+    path = tmp_path / "events.jsonl"
+    path.write_text("\n".join(map(json.dumps, rows)) + "\n")
+    report = MODULE.build_report(context, MODULE.load_events(path, context, MODULE.validate_context(context)[1]))
+    assert report["firstFailure"]["stage"] == "install"
+    assert any(row["name"] == "diagnostics" for row in report["assertions"])
+
+
+@pytest.mark.parametrize("tail", [b"x" * (MODULE.MAX_DOCUMENT_BYTES + 1), b"\xff"])
+def test_malformed_tail_preserves_prior_failure(tmp_path, tail):
+    context = evidence_context()
+    prefix = (json.dumps(event("install", "failed", 1)) + "\n").encode()
+    path = tmp_path / "events.jsonl"
+    path.write_bytes(prefix + tail)
+    report = MODULE.build_report(context, MODULE.load_events(path, context, MODULE.validate_context(context)[1]))
+    assert report["firstFailure"]["stage"] == "install"
+    assert any(row["name"] == "diagnostics" for row in report["assertions"])

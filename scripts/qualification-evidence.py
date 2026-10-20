@@ -208,6 +208,9 @@ def evaluate_reuse(producer: object, current: object) -> dict:
                                                        expected["inputs"]["harness"])
     tool_changes, tool_assertions = changed_assertions(previous["tools"], expected["tools"])
     invalidated = sorted(set(invalidated) | set(tool_assertions))
+    require(len(tool_changes) <= 32, "reuse decision: changed tools exceed bound")
+    require(len(invalidated) <= MAX_ASSERTIONS,
+            "reuse decision: invalidated assertions exceed bound")
     verdicts = dict(previous["assertions"])
     for name in invalidated:
         verdicts[name] = "not-run"
@@ -298,8 +301,12 @@ def validate_event(value: object, assertions: set[str], evidence: dict[str, dict
         event = exact(value, common | {"failure"}, "event")
         failure = exact(event["failure"], {"classification", "reasonCode", "commandId",
                                              "exitCode", "evidenceIds"}, "event.failure")
-        require(failure["classification"] in CLASSIFICATIONS, "event.failure.classification: invalid value")
-        require(failure["reasonCode"] in REASON_CODES, "event.failure.reasonCode: invalid value")
+        require(isinstance(failure["classification"], str)
+                and failure["classification"] in CLASSIFICATIONS,
+                "event.failure.classification: invalid value")
+        require(isinstance(failure["reasonCode"], str)
+                and failure["reasonCode"] in REASON_CODES,
+                "event.failure.reasonCode: invalid value")
         require(failure["commandId"] is None or (isinstance(failure["commandId"], str)
                 and TOKEN.fullmatch(failure["commandId"])), "event.failure.commandId: invalid value")
         require(failure["exitCode"] is None or (type(failure["exitCode"]) is int
@@ -330,22 +337,34 @@ def malformed_event(context: dict, at: str | None = None) -> dict:
 
 def load_events(path: Path, context: dict, evidence: dict[str, dict]) -> list[dict]:
     try:
-        with path.open("rb") as stream:
-            data = stream.read(MAX_DOCUMENT_BYTES + 1)
-        require(len(data) <= MAX_DOCUMENT_BYTES, "event stream exceeds bound")
-        text = data.decode("utf-8")
-    except (OSError, UnicodeError, ContractError):
+        data = path.read_bytes()
+    except OSError:
         return [malformed_event(context)]
+
+    truncated = len(data) > MAX_DOCUMENT_BYTES
+    data = data[:MAX_DOCUMENT_BYTES]
     events = []
     seen = set()
     previous_timestamp = None
     declared = set(context["assertions"])
-    for line in text.splitlines():
+    malformed = False
+    for raw_line in data.splitlines():
+        malformed_at = previous_timestamp or context["generatedAt"]
+        if len(raw_line) > MAX_EVENT_BYTES:
+            events.append(malformed_event(context, malformed_at))
+            malformed = True
+            break
+        try:
+            line = raw_line.decode("utf-8")
+        except UnicodeError:
+            events.append(malformed_event(context, malformed_at))
+            malformed = True
+            break
         if not line.strip():
             continue
-        malformed_at = previous_timestamp or context["generatedAt"]
-        if len(line.encode()) > MAX_EVENT_BYTES or len(events) >= MAX_ASSERTIONS:
+        if len(events) >= MAX_ASSERTIONS:
             events.append(malformed_event(context, malformed_at))
+            malformed = True
             break
         try:
             event = json.loads(line, object_pairs_hook=unique_object)
@@ -355,10 +374,13 @@ def load_events(path: Path, context: dict, evidence: dict[str, dict]) -> list[di
                     "event stream timestamps are out of order")
         except (ContractError, json.JSONDecodeError):
             events.append(malformed_event(context, malformed_at))
+            malformed = True
             break
         events.append(event)
         seen.add(event["assertion"])
         previous_timestamp = event["timestamp"]
+    if truncated and not malformed:
+        events.append(malformed_event(context, previous_timestamp or context["generatedAt"]))
     return events
 
 
