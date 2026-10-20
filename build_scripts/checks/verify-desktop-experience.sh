@@ -386,12 +386,119 @@ gdm_autologin_enabled() {
 	' "$config"
 }
 
-# Tests may source the function library without running the desktop checks.
-if [[ "${TUNAOS_CONTRACT_LIBRARY_ONLY:-false}" == true ]]; then
-	if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then
-		return 0
+verify_codec_baseline() {
+	# ── Codec baseline ──
+	# "Codecs installed" was promised on every family and verified on none —
+	# the EL10 x86_64_v2 leg shipped ffmpeg-free only (no H.264/H.265 at
+	# all) and marlin shipped gst-plugins-ugly without gst-libav (x264
+	# ENcoder present, no mainstream DEcoder), and both were green. Two
+	# file-level proofs, both cheap and network-free:
+	#
+	# 1. The GStreamer libav plugin exists — the piece that lets totem,
+	#    thumbnailers and WebKit decode through libavcodec. One measured
+	#    path per packaging family (repo rule: no unmeasured globs):
+	#      rpm/openSUSE/Gentoo  /usr/lib64/gstreamer-1.0/libgstlibav.so
+	#      Arch                 /usr/lib/gstreamer-1.0/libgstlibav.so
+	#      Debian/Ubuntu        /usr/lib/<triplet>/gstreamer-1.0/libgstlibav.so
+	#      (the apt path MEASURED on ubuntu:noble — gstreamer1.0-libav ships
+	#      /usr/lib/x86_64-linux-gnu/gstreamer-1.0/libgstlibav.so)
+	# 2. `ffmpeg -decoders` actually lists h264 — the plugin above routes
+	#    into libavcodec, so a free-codec libavcodec (the exact v2 failure)
+	#    is caught here even though the plugin file exists.
+	require_any_glob \
+		'/usr/lib64/gstreamer-1.0/libgstlibav.so' \
+		'/usr/lib/gstreamer-1.0/libgstlibav.so' \
+		'/usr/lib/*/gstreamer-1.0/libgstlibav.so'
+	require_command ffmpeg
+	if command -v ffmpeg >/dev/null 2>&1; then
+		# NEVER pipe ffmpeg straight into `grep -q` here. grep -q exits at the
+		# first match, ffmpeg is still writing its ~30 KB decoder list, gets
+		# SIGPIPE, exits 141 — and under this script's `set -o pipefail` the
+		# pipeline reports failure WITH the decoder present. That is not a
+		# race in practice: measured on ubuntu:noble (ffmpeg 6.1.1, h264
+		# decoder confirmed in the output), the piped form returned 141 on
+		# five out of five runs and failed gurnard:pantheon's proof build
+		# (run 31196812732) with a message blaming a "crippled libavcodec"
+		# the image did not have. Capture first, then grep the variable —
+		# and keep "ffmpeg would not run" distinct from "ffmpeg runs but
+		# cannot decode", because their fixes live in different places
+		# (packaging deps vs codec sourcing).
+		# Both failure branches dump the evidence that names the cause,
+		# because this check fired on guppy:xfce (run 31201546516) with a
+		# freshly source-built ffmpeg 8.1.2 whose USE line showed x264 —
+		# a build where the native h264 decoder should be unconditional —
+		# while the same check passes inside the July guppy:gnome image
+		# and against Alpine's 8.1.2. Three container reproductions of the
+		# tooling stage could not replicate it (portage tree drift), so
+		# the next failing run must answer for itself: WHICH ffmpeg ran,
+		# what its configure line disabled, what it printed to stderr
+		# (previously discarded), and what the decoder list actually held.
+		_ffmpeg_diag() {
+			{
+				echo "codec_diag: ffmpeg=$(command -v ffmpeg)"
+				ffmpeg -version 2>&1 | head -2 | sed 's/^/codec_diag: /'
+				ffmpeg -version 2>&1 | tr ' ' '\n' | grep -- '--disable-\(everything\|decoders\|decoder=[a-z0-9_]*\)' | sed 's/^/codec_diag: configure /'
+				echo "codec_diag: decoders_stdout_bytes=${#_ffmpeg_decoders}"
+				echo "codec_diag: decoders_stderr: ${_ffmpeg_stderr:-<empty>}"
+				grep -i 'h26' <<<"$_ffmpeg_decoders" | head -5 | sed 's/^/codec_diag: h26x /'
+			} >&2 || true
+		}
+		_ffmpeg_decoders=""
+		_ffmpeg_stderr=""
+		_ffmpeg_rc=0
+		_ffmpeg_stderr_file="$(mktemp)"
+		_ffmpeg_decoders="$(ffmpeg -hide_banner -decoders 2>"$_ffmpeg_stderr_file")" || _ffmpeg_rc=$?
+		_ffmpeg_stderr="$(head -c 2048 "$_ffmpeg_stderr_file")"
+		rm -f "$_ffmpeg_stderr_file"
+		if ((_ffmpeg_rc != 0)); then
+			echo "ffmpeg is installed but would not run (broken dependencies?) — cannot verify codecs" >&2
+			_ffmpeg_diag
+			if ! hummingbird_bootstrap_waived; then
+				exit 1
+			fi
+			waive
+		elif ! grep -q ' h264 ' <<<"$_ffmpeg_decoders"; then
+			echo "ffmpeg cannot decode h264 — a free/crippled libavcodec is installed" >&2
+			_ffmpeg_diag
+			# ELN (wahoo) is the one base where this is a measured property of
+			# the upstream compose rather than a packaging mistake this repo
+			# can fix, so it is named, marked and let through — never silently.
+			#
+			# Measured on the pinned eln-bootc digest, 2026-08-25:
+			#   - eln-{baseos,appstream,crb,extras} carry no ffmpeg and no
+			#     gstreamer1-plugins-ugly; RPM Fusion publishes no ELN branch.
+			#   - ffmpeg-free 8.1.2 lists exactly one h264 entry,
+			#     `libopenh264 ... (codec h264)` — which does not match the
+			#     ' h264 ' decoder-column test above, and would not deserve to:
+			#   - the only openh264 in ELN is `noopenh264-2.6.0-5.eln158`,
+			#     Fedora's API-compatible STUB. Encoding a 1s testsrc through
+			#     it produced a 0-byte file ("Nothing was written into output
+			#     file"), so the decoder is present in the list and does
+			#     nothing. That is the crippled case, correctly detected.
+			#   - no hevc/H.265 decoder is listed at all.
+			#
+			# So wahoo has NO working H.264 or H.265 path, and the marker says
+			# so in the build log rather than a green cell implying otherwise.
+			# Remove this branch — do not extend it — the day ELN gains a
+			# functional codec source. It must never be widened to accept
+			# `libopenh264` generally: on a base where the real openh264 is
+			# installed that name means working decode, and on this one it
+			# means the stub, so the name cannot carry the distinction.
+			if [[ "${IS_ELN:-false}" == "true" ]]; then
+				echo "TUNAOS_CODEC_GAP: ELN publishes no functional H.264/H.265 decoder (ffmpeg-free + noopenh264 stub, no RPM Fusion ELN branch); wahoo images cannot play mainstream video (tunaOS: ELN preview lane)" >&2
+			elif ! hummingbird_bootstrap_waived; then
+				exit 1
+			fi
+			waive
+		fi
 	fi
-	exit 0
+}
+
+# Tests may source the function library without running the desktop checks.
+# An exported variable must never disable checks when this file is executed.
+if [[ "${TUNAOS_CONTRACT_LIBRARY_ONLY:-false}" == true &&
+	"${BASH_SOURCE[0]}" != "$0" ]]; then
+	return 0
 fi
 
 case "$desktop" in
@@ -896,112 +1003,7 @@ else
 		fi
 	fi
 
-	# ── Codec baseline ──
-	# "Codecs installed" was promised on every family and verified on none —
-	# the EL10 x86_64_v2 leg shipped ffmpeg-free only (no H.264/H.265 at
-	# all) and marlin shipped gst-plugins-ugly without gst-libav (x264
-	# ENcoder present, no mainstream DEcoder), and both were green. Two
-	# file-level proofs, both cheap and network-free:
-	#
-	# 1. The GStreamer libav plugin exists — the piece that lets totem,
-	#    thumbnailers and WebKit decode through libavcodec. One measured
-	#    path per packaging family (repo rule: no unmeasured globs):
-	#      rpm/openSUSE/Gentoo  /usr/lib64/gstreamer-1.0/libgstlibav.so
-	#      Arch                 /usr/lib/gstreamer-1.0/libgstlibav.so
-	#      Debian/Ubuntu        /usr/lib/<triplet>/gstreamer-1.0/libgstlibav.so
-	#      (the apt path MEASURED on ubuntu:noble — gstreamer1.0-libav ships
-	#      /usr/lib/x86_64-linux-gnu/gstreamer-1.0/libgstlibav.so)
-	# 2. `ffmpeg -decoders` actually lists h264 — the plugin above routes
-	#    into libavcodec, so a free-codec libavcodec (the exact v2 failure)
-	#    is caught here even though the plugin file exists.
-	require_any_glob \
-		'/usr/lib64/gstreamer-1.0/libgstlibav.so' \
-		'/usr/lib/gstreamer-1.0/libgstlibav.so' \
-		'/usr/lib/*/gstreamer-1.0/libgstlibav.so'
-	require_command ffmpeg
-	if command -v ffmpeg >/dev/null 2>&1; then
-		# NEVER pipe ffmpeg straight into `grep -q` here. grep -q exits at the
-		# first match, ffmpeg is still writing its ~30 KB decoder list, gets
-		# SIGPIPE, exits 141 — and under this script's `set -o pipefail` the
-		# pipeline reports failure WITH the decoder present. That is not a
-		# race in practice: measured on ubuntu:noble (ffmpeg 6.1.1, h264
-		# decoder confirmed in the output), the piped form returned 141 on
-		# five out of five runs and failed gurnard:pantheon's proof build
-		# (run 31196812732) with a message blaming a "crippled libavcodec"
-		# the image did not have. Capture first, then grep the variable —
-		# and keep "ffmpeg would not run" distinct from "ffmpeg runs but
-		# cannot decode", because their fixes live in different places
-		# (packaging deps vs codec sourcing).
-		# Both failure branches dump the evidence that names the cause,
-		# because this check fired on guppy:xfce (run 31201546516) with a
-		# freshly source-built ffmpeg 8.1.2 whose USE line showed x264 —
-		# a build where the native h264 decoder should be unconditional —
-		# while the same check passes inside the July guppy:gnome image
-		# and against Alpine's 8.1.2. Three container reproductions of the
-		# tooling stage could not replicate it (portage tree drift), so
-		# the next failing run must answer for itself: WHICH ffmpeg ran,
-		# what its configure line disabled, what it printed to stderr
-		# (previously discarded), and what the decoder list actually held.
-		_ffmpeg_diag() {
-			{
-				echo "codec_diag: ffmpeg=$(command -v ffmpeg)"
-				ffmpeg -version 2>&1 | head -2 | sed 's/^/codec_diag: /'
-				ffmpeg -version 2>&1 | tr ' ' '\n' | grep -- '--disable-\(everything\|decoders\|decoder=[a-z0-9_]*\)' | sed 's/^/codec_diag: configure /'
-				echo "codec_diag: decoders_stdout_bytes=${#_ffmpeg_decoders}"
-				echo "codec_diag: decoders_stderr: ${_ffmpeg_stderr:-<empty>}"
-				grep -i 'h26' <<<"$_ffmpeg_decoders" | head -5 | sed 's/^/codec_diag: h26x /'
-			} >&2 || true
-		}
-		_ffmpeg_decoders=""
-		_ffmpeg_stderr=""
-		_ffmpeg_rc=0
-		_ffmpeg_stderr_file="$(mktemp)"
-		_ffmpeg_decoders="$(ffmpeg -hide_banner -decoders 2>"$_ffmpeg_stderr_file")" || _ffmpeg_rc=$?
-		_ffmpeg_stderr="$(head -c 2048 "$_ffmpeg_stderr_file")"
-		rm -f "$_ffmpeg_stderr_file"
-		if ((_ffmpeg_rc != 0)); then
-			echo "ffmpeg is installed but would not run (broken dependencies?) — cannot verify codecs" >&2
-			_ffmpeg_diag
-			if ! hummingbird_bootstrap_waived; then
-				exit 1
-			fi
-			waive
-		elif ! grep -q ' h264 ' <<<"$_ffmpeg_decoders"; then
-			echo "ffmpeg cannot decode h264 — a free/crippled libavcodec is installed" >&2
-			_ffmpeg_diag
-			# ELN (wahoo) is the one base where this is a measured property of
-			# the upstream compose rather than a packaging mistake this repo
-			# can fix, so it is named, marked and let through — never silently.
-			#
-			# Measured on the pinned eln-bootc digest, 2026-08-25:
-			#   - eln-{baseos,appstream,crb,extras} carry no ffmpeg and no
-			#     gstreamer1-plugins-ugly; RPM Fusion publishes no ELN branch.
-			#   - ffmpeg-free 8.1.2 lists exactly one h264 entry,
-			#     `libopenh264 ... (codec h264)` — which does not match the
-			#     ' h264 ' decoder-column test above, and would not deserve to:
-			#   - the only openh264 in ELN is `noopenh264-2.6.0-5.eln158`,
-			#     Fedora's API-compatible STUB. Encoding a 1s testsrc through
-			#     it produced a 0-byte file ("Nothing was written into output
-			#     file"), so the decoder is present in the list and does
-			#     nothing. That is the crippled case, correctly detected.
-			#   - no hevc/H.265 decoder is listed at all.
-			#
-			# So wahoo has NO working H.264 or H.265 path, and the marker says
-			# so in the build log rather than a green cell implying otherwise.
-			# Remove this branch — do not extend it — the day ELN gains a
-			# functional codec source. It must never be widened to accept
-			# `libopenh264` generally: on a base where the real openh264 is
-			# installed that name means working decode, and on this one it
-			# means the stub, so the name cannot carry the distinction.
-			if [[ "${IS_ELN:-false}" == "true" ]]; then
-				echo "TUNAOS_CODEC_GAP: ELN publishes no functional H.264/H.265 decoder (ffmpeg-free + noopenh264 stub, no RPM Fusion ELN branch); wahoo images cannot play mainstream video (tunaOS: ELN preview lane)" >&2
-			elif ! hummingbird_bootstrap_waived; then
-				exit 1
-			fi
-			waive
-		fi
-	fi
-
+	verify_codec_baseline
 	# ── KDE version-skew guard (pattern from ublue-os/aurora's 20-tests.sh) ──
 	# Mid-compose repo skew can ship kwin/kscreen from a newer Plasma than
 	# plasma-desktop; the session then crashes at login while every package

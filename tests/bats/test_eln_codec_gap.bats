@@ -39,14 +39,22 @@ BASE_PKGS="${REPO_ROOT}/build_scripts/10-base-packages.sh"
   [ "$status" -ne 0 ]
 }
 
-@test "the exemption is ELN-only — other families still exit 1" {
-  # The elif chain must keep a bare `exit 1` for everything that is neither
-  # ELN nor hummingbird; an unconditional pass here would green a codec-less
-  # image on every base.
-  run awk '/ffmpeg cannot decode h264/,/^\t\tfi$/' "$CONTRACT"
-  [[ "$output" == *'IS_ELN:-false}" == "true"'* ]]
-  [[ "$output" == *'IS_HUMMINGBIRD:-false}" != "true"'* ]]
-  [[ "$output" == *"exit 1"* ]]
+@test "the Hummingbird codec waiver excludes admitted Tuna" {
+  run env TUNAOS_CONTRACT_LIBRARY_ONLY=true bash -c '
+    source "$1" "$2"
+    IS_HUMMINGBIRD=true
+    desktop="$2"
+    hummingbird_bootstrap_waived
+  ' waiver-harness "$CONTRACT" gnome
+  [ "$status" -eq 0 ]
+
+  run env TUNAOS_CONTRACT_LIBRARY_ONLY=true bash -c '
+    source "$1" "$2"
+    IS_HUMMINGBIRD=true
+    desktop="$2"
+    hummingbird_bootstrap_waived
+  ' waiver-harness "$CONTRACT" tuna
+  [ "$status" -ne 0 ]
 }
 
 @test "the ELN base install does not pull the noopenh264 stub on purpose" {

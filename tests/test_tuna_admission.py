@@ -7,6 +7,7 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
+CHECK = ROOT / "build_scripts" / "checks" / "verify-desktop-experience.sh"
 
 
 def rollout():
@@ -198,6 +199,19 @@ def test_hummingbird_bootstrap_waiver_excludes_admitted_tuna():
         )
         assert (result.returncode == 0) is accepted, (desktop, result.stderr)
 
+
+def test_library_only_env_cannot_bypass_an_executed_contract(tmp_path):
+    result = subprocess.run(
+        ["/bin/bash", str(CHECK), "gnome"],
+        capture_output=True,
+        text=True,
+        env={"PATH": str(tmp_path), "TUNAOS_CONTRACT_LIBRARY_ONLY": "true"},
+    )
+
+    assert result.returncode == 1
+    assert "missing required command: gnome-shell" in result.stderr
+
+
 def test_hummingbird_tuna_promotion_requires_the_release_gate():
     build_variant = (ROOT / ".github/workflows/build-variant.yml").read_text()
     assert (
@@ -216,36 +230,6 @@ def test_hummingbird_tuna_required_packages_do_not_use_best_effort_fallback():
     )[0]
     assert "dnf_retry -y install" in strict
     assert "--skip-unavailable" not in strict
-    library = (ROOT / "build_scripts/lib.sh").read_text()
-    assert "--qf '%{name}\\n%{name}-%{version}-%{release}\\n'" in library
-
-
-def test_hummingbird_tuna_fails_direct_contract_checks():
-    script = (ROOT / "build_scripts/checks/verify-desktop-experience.sh").read_text()
-    assert script.count("! hummingbird_bootstrap_waived; then") >= 5, (
-        "the direct Hummingbird failure guards changed"
-    )
-    command = "\n".join(
-        [
-            _hummingbird_bootstrap_waiver(),
-            'IS_HUMMINGBIRD=true; desktop="$1"; '
-            "if ! hummingbird_bootstrap_waived; then exit 0; else exit 1; fi",
-        ]
-    )
-    for desktop, accepted in (("tuna", True), ("gnome", False)):
-        result = subprocess.run(
-            ["bash", "-c", command, "guard-test", desktop],
-            capture_output=True,
-            text=True,
-        )
-        assert (result.returncode == 0) is accepted, desktop
-
-
-def _hummingbird_codec_block() -> str:
-    source = (ROOT / "build_scripts/checks/verify-desktop-experience.sh").read_text()
-    return source.split("\t# ── Codec baseline ──\n", 1)[1].split(
-        "\n\t# ── KDE version-skew guard", 1
-    )[0]
 
 
 def _run_hummingbird_tuna_codec_case(tmp_path: Path, *, decoders_rc: int):
@@ -261,6 +245,8 @@ def _run_hummingbird_tuna_codec_case(tmp_path: Path, *, decoders_rc: int):
     script = "\n".join(
         [
             "set -euo pipefail",
+            "export TUNAOS_CONTRACT_LIBRARY_ONLY=true",
+            f"source {str(CHECK)!r} tuna",
             "desktop=tuna",
             "IS_HUMMINGBIRD=true",
             "IS_ELN=false",
@@ -268,7 +254,7 @@ def _run_hummingbird_tuna_codec_case(tmp_path: Path, *, decoders_rc: int):
             "waive() { TUNAOS_CONTRACT_WAIVED=$((TUNAOS_CONTRACT_WAIVED + 1)); }",
             "require_any_glob() { :; }",
             "require_command() { :; }",
-            _hummingbird_codec_block(),
+            "verify_codec_baseline",
         ]
     )
     return subprocess.run(

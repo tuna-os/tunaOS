@@ -88,6 +88,7 @@ def _run_floor(tmp_path: Path, floor: int, *, fakes: dict[str, str], env: dict |
         [
             "set -uo pipefail",
             "waive() { echo WAIVED; }",
+            _function_source("hummingbird_bootstrap_waived"),
             _function_source("gnome_shell_major"),
             _function_source("require_gnome_at_least"),
             f"require_gnome_at_least {floor}",
