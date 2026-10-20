@@ -1,5 +1,6 @@
 """Tuna Desktop (formerly Roost) admission must preserve signed sourcing and an installed-session gate."""
 import hashlib
+import os
 import re
 import subprocess
 from pathlib import Path
@@ -474,3 +475,44 @@ def test_retired_flavor_has_an_explicit_switch_and_recovery_procedure():
     assert "sudo bootc rollback" in guide
     assert "/var/home" in guide
     assert "must still prove" in guide
+
+
+def test_hummingbird_tuna_build_uses_dedicated_container_target(tmp_path):
+    """The real build driver must route only this cell to its mounted stage."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    log = tmp_path / "builder.log"
+    podman = bin_dir / "podman"
+    podman.write_text(
+        "#!/usr/bin/env bash\nprintf '%s\\n' \"$@\" >>\"$BUILDER_LOG\"\n",
+        encoding="utf-8",
+    )
+    podman.chmod(0o755)
+    env = {
+        **os.environ,
+        "PATH": f"{bin_dir}:{os.environ['PATH']}",
+        "BUILDER_LOG": str(log),
+        "IMAGE_TAG": "local:hummingbird-tuna",
+        "VARIANT": "hummingbird",
+        "CONTAINERFILE": "Containerfile.el10",
+        "BASE_IMAGE": "example/hummingbird",
+        "PLATFORM": "linux/amd64",
+        "DESKTOP_FLAVOR": "tuna",
+        "TUNAOS_IMAGE_FLAVOR": "tuna",
+        "ENABLE_HWE": "0",
+        "ENABLE_NVIDIA": "0",
+        "ENABLE_SSHD": "0",
+        "SKIP_RECHUNK": "1",
+        "IS_CI": "0",
+    }
+    result = subprocess.run(
+        ["bash", "scripts/build-image-inner.sh"],
+        cwd=ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    args = log.read_text(encoding="utf-8").splitlines()
+    assert "--target=tuna-hummingbird" in args
+    assert "--target=tuna" not in args

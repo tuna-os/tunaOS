@@ -385,6 +385,15 @@ gdm_autologin_enabled() {
 		END { exit !found }
 	' "$config"
 }
+
+# Tests may source the function library without running the desktop checks.
+if [[ "${TUNAOS_CONTRACT_LIBRARY_ONLY:-false}" == true ]]; then
+	if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then
+		return 0
+	fi
+	exit 0
+fi
+
 case "$desktop" in
 gnome)
 	experience="projectbluefin/bluefin-lts"
