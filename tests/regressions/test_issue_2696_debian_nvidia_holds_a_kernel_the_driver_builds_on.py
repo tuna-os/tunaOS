@@ -277,6 +277,8 @@ def test_snapshot_fallback_supplies_a_kernel_when_archive_has_none(tmp_path):
     assert trees == ["7.1.13+deb14-amd64"]
     assert any("install" in c and "linux-image-7.1.13+deb14-amd64" in c for c in calls)
     assert (modules / "7.1.13+deb14-amd64" / "vmlinuz").read_text() == "vmlinuz\n"
+    assert not list((tmp_path / "apt/sources.list.d").glob("tunaos-nvidia-kernel-snapshot.*"))
+    assert not list((tmp_path / "apt/preferences.d").glob("tunaos-nvidia-kernel-snapshot.*"))
 
 
 def test_no_kernel_under_the_ceiling_fails_loudly(tmp_path):
