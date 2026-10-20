@@ -51,8 +51,11 @@ def test_serial_evidence_keeps_raw_bytes(tmp_path):
     assert log == "boot\ufffd\n"
 
 
-def test_selects_only_inline_regular_payload():
+def test_selects_only_inline_regular_payload(tmp_path):
     assert handoff.member_from_newc(archive(), "payload") == b"bytes"
+    path = tmp_path / "payload.cpio"
+    path.write_bytes(archive())
+    assert handoff.member_from_newc(path, "payload") == b"bytes"
 
 
 @pytest.mark.parametrize("mode,data", [(stat.S_IFLNK | 0o777, b"target"), (stat.S_IFREG, b""), (stat.S_IFDIR, b"x")])

@@ -139,11 +139,10 @@ def test_rejects_unbounded_section_count(count):
         inventory.inspect_pe(bytes(data))
 
 
-def test_preserves_input_bytes():
-    data = pe()
-    before = bytes(data)
-    inventory.inspect_pe(data)
-    assert data == before
+@pytest.mark.parametrize("wrapper", [bytearray, memoryview])
+def test_rejects_non_immutable_input(wrapper):
+    with pytest.raises(inventory.InventoryError, match="immutable bytes"):
+        inventory.inspect_pe(wrapper(pe()))
 
 
 def test_distinguishes_padding_from_initialized_kernel_bytes():

@@ -30,20 +30,25 @@ def digest(data):
 
 def download(url, target, expected, size=None):
     # All URLs and identities come from the reviewed fixture pins, not dispatch input.
-    limit = size + 1 if size is not None else 1024 * 1024 + 1
-    chunks = []
-    with urllib.request.urlopen(url, timeout=60) as response:
-        remaining = limit
-        while remaining:
-            chunk = response.read(min(1024 * 1024, remaining))
-            if not chunk:
-                break
-            chunks.append(chunk)
-            remaining -= len(chunk)
-    data = b"".join(chunks)
-    if (size is not None and len(data) != size) or digest(data) != expected:
-        raise ValueError("download identity mismatch")
-    target.write_bytes(data)
+    limit = size if size is not None else 1024 * 1024
+    total = 0
+    hasher = hashlib.sha256()
+    try:
+        with urllib.request.urlopen(url, timeout=60) as response, target.open("wb") as stream:
+            while True:
+                chunk = response.read(min(1024 * 1024, limit - total + 1))
+                if not chunk:
+                    break
+                total += len(chunk)
+                if total > limit:
+                    raise ValueError("download exceeds bound")
+                stream.write(chunk)
+                hasher.update(chunk)
+        if (size is not None and total != size) or hasher.hexdigest() != expected:
+            raise ValueError("download identity mismatch")
+    except Exception:
+        target.unlink(missing_ok=True)
+        raise
 
 
 def export_approved_key(home, fingerprint):
@@ -70,48 +75,61 @@ def signature_receipt(output, returncode, fingerprint):
     return {"signer_fingerprint": fingerprint, "verified_header_signature": True}
 
 
-def member_from_newc(data, wanted):
+def member_from_newc(source, wanted):
     """Select one inline regular member; do not resolve links or extract paths."""
-    if len(data) > MAX_CPIO:
-        raise ValueError("archive exceeds bound")
-    stream = io.BytesIO(data)
-    selected = None
-    seen = set()
-    while True:
-        header = stream.read(110)
-        if len(header) != 110 or header[:6] != b"070701":
-            raise ValueError("invalid newc header")
-        fields = [int(header[6 + i * 8:14 + i * 8], 16) for i in range(13)]
-        mode, size, namesize = fields[1], fields[6], fields[11]
-        if not 1 <= namesize <= 4096 or size > MAX_CPIO:
-            raise ValueError("invalid archive span")
-        rawname = stream.read(namesize)
-        if len(rawname) != namesize or rawname[-1:] != b"\0":
-            raise ValueError("invalid archive name")
-        try:
-            name = rawname[:-1].decode("utf-8")
-        except UnicodeDecodeError as exc:
-            raise ValueError("invalid archive name encoding") from exc
-        stream.read((-110 - namesize) % 4)
-        if name == "TRAILER!!!":
-            break
-        canonical = name[2:] if name.startswith("./") else name
-        path = PurePosixPath(canonical)
-        canonical = path.as_posix()
-        if path.is_absolute() or ".." in path.parts or canonical in seen:
-            raise ValueError("unsafe or duplicate archive name")
-        seen.add(canonical)
-        content = stream.read(size)
-        if len(content) != size:
-            raise ValueError("truncated archive member")
-        stream.read((-size) % 4)
-        if canonical == wanted:
-            if not stat.S_ISREG(mode) or not size:
-                raise ValueError("selected member is not an inline regular payload")
-            selected = content
-    if selected is None:
-        raise ValueError("required payload is missing")
-    return selected
+    close_stream = False
+    if isinstance(source, (bytes, bytearray, memoryview)):
+        if len(source) > MAX_CPIO:
+            raise ValueError("archive exceeds bound")
+        stream = io.BytesIO(source)
+    else:
+        archive = Path(source)
+        if archive.stat().st_size > MAX_CPIO:
+            raise ValueError("archive exceeds bound")
+        stream = archive.open("rb")
+        close_stream = True
+    try:
+        selected = None
+        seen = set()
+        while True:
+            header = stream.read(110)
+            if len(header) != 110 or header[:6] != b"070701":
+                raise ValueError("invalid newc header")
+            fields = [int(header[6 + i * 8:14 + i * 8], 16) for i in range(13)]
+            mode, size, namesize = fields[1], fields[6], fields[11]
+            if not 1 <= namesize <= 4096 or size > MAX_CPIO:
+                raise ValueError("invalid archive span")
+            rawname = stream.read(namesize)
+            if len(rawname) != namesize or rawname[-1:] != b"\0":
+                raise ValueError("invalid archive name")
+            try:
+                name = rawname[:-1].decode("utf-8")
+            except UnicodeDecodeError as exc:
+                raise ValueError("invalid archive name encoding") from exc
+            stream.read((-110 - namesize) % 4)
+            if name == "TRAILER!!!":
+                break
+            canonical = name[2:] if name.startswith("./") else name
+            path = PurePosixPath(canonical)
+            canonical = path.as_posix()
+            if path.is_absolute() or ".." in path.parts or canonical in seen:
+                raise ValueError("unsafe or duplicate archive name")
+            seen.add(canonical)
+            if canonical == wanted:
+                if not stat.S_ISREG(mode) or not size:
+                    raise ValueError("selected member is not an inline regular payload")
+                selected = stream.read(size)
+                if len(selected) != size:
+                    raise ValueError("truncated archive member")
+            else:
+                stream.seek(size, io.SEEK_CUR)
+            stream.read((-size) % 4)
+        if selected is None:
+            raise ValueError("required payload is missing")
+        return selected
+    finally:
+        if close_stream:
+            stream.close()
 
 
 def check_arm64(data):
@@ -174,7 +192,7 @@ def assert_result(case, log, returncode):
         raise ValueError("fixture emulator exited nonzero")
     passed = "X13S_FIXTURE_PASS" in log
     if case == "positive":
-        if not passed or returncode != 0 or "X13S_FIXTURE_UNAME=7.2.11-200.fc44.aarch64" not in log:
+        if not passed or "X13S_FIXTURE_UNAME=7.2.11-200.fc44.aarch64" not in log:
             raise ValueError("selected loader did not complete external-initrd handoff")
     elif case == "missing-initrd" and ("Kernel panic" not in log or not any(x in log for x in ("No working init found", "Unable to mount root fs"))):
         raise ValueError("missing-initrd control did not reach the selected kernel")
@@ -244,8 +262,10 @@ def main():
         archive = out / "payload.cpio"
         with archive.open("wb") as stream:
             run(["rpm2cpio", rpm], stdout=stream, preexec_fn=limit)
-        data = member_from_newc(archive.read_bytes(), pin["member"])
-        archive.unlink()
+        try:
+            data = member_from_newc(archive, pin["member"])
+        finally:
+            archive.unlink(missing_ok=True)
         if len(data) != pin["efi_size"] or digest(data) != pin["efi_sha256"]:
             raise ValueError("EFI payload identity mismatch")
         check_arm64(data)
