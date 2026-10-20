@@ -1,547 +1,408 @@
-# GNOME Desktop Manifest
-
-display_manager: gdm
-
-# Version floor for every GNOME image, whatever the base. Maintainer directive
-# 2026-09-03: tunaOS is moving off GNOME 49 -- nothing below 50 ships, and 51
-# is the target as it releases (51.0 is due 2026-09-12). This is the documented
-# policy; build_scripts/checks/verify-desktop-experience.sh enforces it with
-# its own constant (it runs inside the image, where this file is not
-# available) and tests/test_the_gnome_floor_is_enforced.py holds the two
-# equal. Bases that cannot reach the floor from their own repositories on
-# 2026-09-03: Debian trixie (48.7; sid has 50.4) and Gentoo (::gentoo tops out
-# at 49.9). Their gnome cells fail the desktop contract until a source that
-# meets the floor is wired, which is the honest state, not a bug in the check.
-# Gentoo is wired again since 2026-10-07: ::gentoo carries GNOME 50.5 under
-# ~amd64, and emerge_accept_keywords below accepts it (tunaOS#2450).
-minimum_version: 50
-
-packages:
-  # This section serves Ubuntu (grouper). Debian uses gnome-debian.yaml.
-  apt:
-    - ubuntu-desktop-minimal
-    # gnome-session and ubuntu-session are explicit because pkg_install runs
-    # --no-install-recommends: since resolute's GNOME 50.1 update they are no
-    # longer pulled in without recommends, and without them
-    # /usr/share/wayland-sessions has no *gnome*.desktop at all, which
-    # configure-desktop-runtime.sh hard-fails on (grouper:gnome red from
-    # 2026-07-21). Same rule as gnome-keyring below.
-    - gnome-session
-    - ubuntu-session
-    - gnome-browser-connector
-    - gnome-disk-utility
-    - gnome-system-monitor
-    - gnome-user-docs
-    - nautilus
-    - yelp
-    - plymouth-theme-spinner
-    - xdg-desktop-portal-gnome
-    - xdg-desktop-portal-gtk
-    - xdg-terminal-exec
-    - xdg-user-dirs-gtk
-    # gnome-keyring is NOT pulled by ubuntu-desktop-minimal. Measured on the
-    # published grouper:gnome: zero gnome-keyring packages installed and no
-    # gnome-keyring-daemon binary, so saved credentials, SSH/GPG agents and
-    # every app that stores a secret silently fail. Present in Ubuntu 26.04
-    # main (50.0-1), so this is an omission in the list, not an upstream gap.
-    - gnome-keyring
-    # ...and the PAM module, so the keyring is unlocked by the login password
-    # instead of prompting again on first use (matches niri and cosmic).
-    - libpam-gnome-keyring
-
-  fedora:
-    packages: &fedora_gnome_packages
-      - ModemManager
-      - NetworkManager-adsl
-      # Laptop hardware baseline. Hummingbird inherits this list and does not
-      # ship these in its desktop-less base (#2064). Keep the firmware binary
-      # names explicit: linux-firmware's device packages are weak dependencies,
-      # and install_available disables weak dependencies on its fallback path.
-      - NetworkManager-wifi
-      - linux-firmware
-      - amd-gpu-firmware
-      - intel-gpu-firmware
-      - iwlwifi-mvm-firmware
-      - wireless-regdb
-      - iw
-      - NetworkManager-openconnect-gnome
-      - NetworkManager-openvpn-gnome
-      - NetworkManager-ppp
-      - NetworkManager-ssh-gnome
-      - NetworkManager-vpnc-gnome
-      - NetworkManager-wwan
-      - avahi
-      - dconf
-      - fprintd-pam
-      - gdm
-      - glib-networking
-      - gnome-backgrounds
-      - gnome-bluetooth
-      - gnome-browser-connector
-      - gnome-color-manager
-      - gnome-control-center
-      - gnome-disk-utility
-      - gnome-initial-setup
-      - gnome-remote-desktop
-      - gnome-session-wayland-session
-      - gnome-settings-daemon
-      - gnome-shell
-      - gnome-system-monitor
-      - gnome-user-docs
-      - gnome-user-share
-      - gvfs-afc
-      - gvfs-fuse
-      - gvfs-goa
-      - gvfs-gphoto2
-      - gvfs-mtp
-      - gvfs-smb
-      - librsvg2
-      - libsane-hpaio
-      - mesa-dri-drivers
-      - mesa-libEGL
-      - mesa-vulkan-drivers
-      - nautilus
-      - polkit
-      - ptyxis
-      - xdg-desktop-portal-gnome
-      - xdg-desktop-portal-gtk
-      - xdg-terminal-exec
-      - xdg-user-dirs-gtk
-      - yelp
-      - desktop-backgrounds-gnome
-      - pinentry-gnome3
-      - qadwaitadecorations-qt5
-      - evince-thumbnailer
-      - evince-previewer
-      - totem-video-thumbnailer
-    # Split/retired GVfs backends are absent from Fedora 45 Rawhide. Keep
-    # them on releases that still publish them without failing Rawhide.
-    optional:
-      - gvfs-afp
-      - gvfs-archive
-    exclude:
-      - PackageKit
-      - PackageKit-command-not-found
-      - gnome-software
-      - gnome-software-fedora-langpacks
-
-  # ── Hummingbird ────────────────────────────────────────────────────────
-  # Hummingbird is a Fedora Rawhide rebuild: 30 of 38 core packages carry
-  # Rawhide's exact version AND release, differing only in the .hum1 dist tag.
-  # So the package NAMES are Fedora's, and this section aliases the fedora
-  # list above rather than restating it — a second copy across five desktop
-  # manifests is how these files drift apart.
-  #
-  # What differs is only where the names resolve from. Hummingbird publishes a
-  # base OS and no desktop: of the 58 packages the fedora list installs, its
-  # 3384-package repository ships page-one dependencies, with desktop packages
-  # published via the tuna-os/tunaos-packages desktop closure pipeline.
-  #
-  # The package pipeline publishes to a stable channel URL:
-  #   https://repo.tunaos.org/hummingbird/current/$basearch/
-  # (retaining immutable snapshot identifiers at .../hummingbird/<snapshot>-$basearch/
-  # for reproduction/rollback).
-  #
-  # NOTE (08-12): the `current` alias does NOT exist on repo.tunaos.org yet —
-  # the pipeline publishes only the immutable snapshot path. Pinning to the
-  # snapshot so the desktop builds can resolve the repo; switch back to
-  # current/$basearch/ when tunaos-packages publishes the stable alias
-  # (tuna-os/tunaos-packages#365).
-  hummingbird:
-    repos:
-      - name: tunaos-hummingbird
-        baseurl: https://repo.tunaos.org/hummingbird/20251124-$basearch/
-        priority: 5
-      # GNOME 51 itself comes from projectbluefin/utah-packages: Bluefin's
-      # build for Hummingbird, in Hummingbird's own root, published as an OCI
-      # image carrying a createrepo_c repository. Containerfile.el10 bind-
-      # mounts /repository of the digest pinned in image-versions.yaml at
-      # /run/utah-packages for the gnome stage; the digest is the signature
-      # (see the `unsigned` rule in install-desktop.sh). Priority 4 beats the
-      # tunaos-hummingbird prefix (5) so the GNOME stack resolves from one
-      # coherent build; what utah does not ship (the fedora list's extras)
-      # still comes from the prefix. Decided in tuna-os/tunaos-packages#629;
-      # the numbers are in tunaos-packages' docs/HUMMINGBIRD-TARGET.md.
-      - name: utah-packages
-        baseurl: file:///run/utah-packages
-        priority: 4
-        unsigned: true
-    packages: *fedora_gnome_packages
-
-  # ── Wahoo (Fedora ELN) ─────────────────────────────────────────────────
-  # ELN is Fedora Rawhide sources built with Enterprise Linux macros, so the
-  # package NAMES are Fedora's — but the ELN compose is a subset, and a
-  # strict `dnf install` of the fedora list above fails on the ten names it
-  # does not carry. Measured with `dnf repoquery` against the pinned
-  # eln-bootc digest on 2026-08-25: 42 of 52 present.
-  #
-  # The 42 are listed strictly, so an ELN regression in any of them fails
-  # this lane's build — which is what an early-warning lane is for. The ten
-  # misses go under optional: (install_available, best-effort) rather than
-  # being deleted, so they start installing by themselves the week ELN
-  # grows them, with no edit here.
-  #
-  # GNOME version on this base: 51~beta (gnome-shell 51~beta-3.eln158,
-  # gdm 51~beta-1.eln158, mutter 51~beta-1.eln158), on BOTH x86_64 and
-  # aarch64 — so no per-arch flavor pin is needed, unlike hummingbird.
-  # gnome-keyring is named here rather than left to whatever gdm or
-  # gnome-shell happen to Require. ELN used to pull it in transitively and
-  # stopped: wahoo:gnome built clean on 2026-09-11 23:24 (run 34657968072) and
-  # failed on 2026-09-12 09:5x (run 34686896701) with
-  #
-  #     GNOME 51 meets the floor of 50
-  #     missing required path: none of [/usr/bin/gnome-keyring-daemon] exist
-  #
-  # from verify-desktop-experience.sh, in the same compose churn that retired
-  # fastfetch the same morning. Both names resolve on ELN, measured against the
-  # live repos (dl.fedoraproject.org/pub/eln/1, AppStream+BaseOS+CRB+Extras).
-  #
-  # -pam alongside it for the reason the apt and zypper sections give: without
-  # the PAM module the keyring is not unlocked by the login password, so saved
-  # credentials and the SSH/GPG agents prompt separately on first use. apt lists
-  # gnome-keyring + libpam-gnome-keyring and zypper lists gnome-keyring +
-  # gnome-keyring-pam; this makes ELN say the same thing.
-  #
-  # The other dnf sections (fedora, el10, hummingbird) still get it
-  # transitively and are deliberately untouched -- their contract checks pass,
-  # and changing a list on a measurement taken against a different base is how
-  # a guess ships.
-  eln:
-    packages:
-      - ModemManager
-      - NetworkManager-adsl
-      - NetworkManager-openvpn-gnome
-      - NetworkManager-ppp
-      - NetworkManager-wwan
-      - avahi
-      - dconf
-      - fprintd-pam
-      - gdm
-      - glib-networking
-      - gnome-bluetooth
-      - gnome-browser-connector
-      - gnome-color-manager
-      - gnome-control-center
-      - gnome-disk-utility
-      - gnome-initial-setup
-      - gnome-keyring
-      - gnome-keyring-pam
-      - gnome-remote-desktop
-      - gnome-session-wayland-session
-      - gnome-settings-daemon
-      - gnome-shell
-      - gnome-system-monitor
-      - gnome-user-docs
-      - gvfs-fuse
-      - gvfs-goa
-      - gvfs-gphoto2
-      - gvfs-mtp
-      - gvfs-smb
-      - librsvg2
-      - libsane-hpaio
-      - mesa-dri-drivers
-      - mesa-libEGL
-      - mesa-vulkan-drivers
-      - nautilus
-      - polkit
-      - ptyxis
-      - xdg-desktop-portal-gnome
-      - xdg-desktop-portal-gtk
-      - xdg-terminal-exec
-      - xdg-user-dirs-gtk
-      - yelp
-      - desktop-backgrounds-gnome
-      - pinentry-gnome3
-    # Absent from ELN on 2026-08-25 — best-effort so they land
-    # automatically when the compose grows them.
-    optional:
-      - NetworkManager-openconnect-gnome
-      - NetworkManager-ssh-gnome
-      - NetworkManager-vpnc-gnome
-      - evince-previewer
-      - evince-thumbnailer
-      - gnome-backgrounds
-      - gnome-user-share
-      - gvfs-afc
-      - qadwaitadecorations-qt5
-      - totem-video-thumbnailer
-      - gvfs-afp
-      - gvfs-archive
-    exclude:
-      - PackageKit
-      - PackageKit-command-not-found
-      - gnome-software
-      - gnome-software-fedora-langpacks
-  el10:
-    # GNOME 50 on EL10 comes from tunaOS's own package factory
-    # (tuna-os/tunaos-packages, build-order-gnome50 / gnome51): RPMs built in
-    # GitHub Actions in a CentOS Stream 10 mock root, signed with the tunaOS
-    # key, published as createrepo_c output inside an OCI image. No COPR:
-    # maintainer directive
-    # 2026-09-03 -- "no more COPR, build in GitHub like utah-packages". The
-    # previous jreilly1821/c10s-gnome-50 COPR entries are gone; the factory
-    # tier carries the same 50.0 builds plus gnome50-el10-compat, the glib2
-    # 2.88 / fontconfig 2.17 / gjs / gobject-introspection the stack needs,
-    # and the selinux-policy 43 that gdm 50 requires (466 binary names
-    # measured 2026-09-03).
-    #
-    # EL 10.2 ships GNOME 49 itself (AlmaLinux 10.2 AppStream: gnome-shell
-    # 49.4, gtk4 4.16, gdm 47) and the floor is 50 (minimum_version above),
-    # so this repo sits at priority 1: for every name it carries, its build
-    # wins over AppStream's regardless of version, and the version locks at
-    # the end of install-desktop.sh pin what it installed.
-    #
-    # x86_64 only today: the chain has a single leg, gnome50-el10-x86_64, and
-    # there is no aarch64 image to pin, so the EL10 gnome flavors are pinned to
-    # amd64 in .github/build-config.yml (arch_honesty criterion; same shape as
-    # xfce's tier). An aarch64 cell in tunaos-packages is the unblock.
-    #
-    # It is consumed as an OCI image of the createrepo_c output, by digest
-    # (image-versions.yaml pins `gnome50-el10-packages`), bind-mounted by
-    # Containerfile.el10 at /run/gnome50-el10-packages -- exactly how
-    # hummingbird consumes projectbluefin/utah-packages below. `unsigned: true`
-    # because the digest is the signature: the bytes cannot differ from what
-    # was reviewed, and install-desktop.sh allows that only for a file:// repo
-    # (tuna-os/tunaOS#1655).
-    #
-    # This replaces the https tier at repo.tunaos.org/gnome50/10-stream-x86_64
-    # this block used to name. That prefix was never factory output: the
-    # since-deleted refresh-gnome50-r2.yml rclone-synced the
-    # jreilly1821/c10s-gnome-50 COPR into it, so its packages carried the COPR
-    # project key and a gpgcheck=1 consumer could not install one of them --
-    # yellowfin run 33750514082 failed at "GPG check FAILED ...
-    # glib2-2.88.0-4.el10". tunaos-packages#676 gave the family its own prefix
-    # and evicts foreign content from it; #682 fixed the buildroot so the chain
-    # could rebuild what the eviction removed. Taking the OCI image by digest
-    # removes the network from the path altogether.
-    repos:
-      - name: gnome50-el10-packages
-        baseurl: file:///run/gnome50-el10-packages
-        priority: 1
-        unsigned: true
-
-    # Run before any group or package of this section, with the tier live.
-    # The first two are what Bluefin LTS does on the same stack: the base's
-    # glib2 2.80 and fontconfig 2.15 must be upgraded before gnome-shell 50
-    # is resolved (pango 1.57 links a fontconfig 2.17 symbol; glib2 2.84+
-    # ships both libgirepository-1.0 and -2.0, and gjs/gobject-introspection
-    # must move together or gnome-shell double-registers GIRepository at
-    # startup). gnome50-el10-compat is the tier's shim for the EL10 bits
-    # GNOME 50 assumes. The last removes the base's gnome-shell-common, which
-    # conflicts with the tier's; it is a no-op on a base that never had it.
-    pre_install:
-      - "dnf -y upgrade glib2 fontconfig gobject-introspection gjs"
-      - "dnf_retry -y install --allowerasing gnome50-el10-compat"
-      - "warn_on_fail dnf_retry -y remove --noautoremove gnome-shell-common"
-
-    groups:
-      - "Common NetworkManager submodules"
-      - "Core"
-      - "Fonts"
-      - "Guest Desktop Agents"
-      - "Hardware Support"
-      - "Printing Client"
-      - "Standard"
-      - "Workstation product core"
-    group_options: "--nobest --allowerasing"
-    group_exclude:
-      - PackageKit
-      - PackageKit-command-not-found
-
-    packages:
-      - gdm
-      - glib2
-      - gnome-bluetooth
-      - gnome-color-manager
-      - gnome-control-center
-      - gnome-initial-setup
-      - gnome-remote-desktop
-      - gnome-session-wayland-session
-      - gnome-settings-daemon
-      - gnome-shell
-      # Named explicitly because gnome-shell-50.0-3 in the pinned tier
-      # declares `Provides: gnome-shell-common = 50.0-3`. That satisfies its
-      # own dependency, so DNF never pulls the real noarch RPM that owns
-      # org.gnome.shell.gschema.xml. GDM then dies before login (#2750), and
-      # the schema gate fails every EL10 GNOME cell, for example albacore run
-      # 36840489732. A name match beats a provide, so this line installs the
-      # real RPM. Keep it after tunaos-packages#748 lands; it is then a no-op.
-      - gnome-shell-common
-      - gnome-user-docs
-      - gvfs-fuse
-      - gvfs-goa
-      - gvfs-gphoto2
-      - gvfs-mtp
-      - gvfs-smb
-      - libsane-hpaio
-      - nautilus
-      - dbus-daemon
-      - orca
-      - ptyxis
-      - sane-backends-drivers-scanners
-      - xdg-desktop-portal-gnome
-      - xdg-terminal-exec
-      - xdg-user-dirs-gtk
-      - yelp-tools
-      - gnome-disk-utility
-      - NetworkManager-adsl
-    exclude:
-      - gnome-software
-      - gnome-extensions-app
-      - PackageKit
-      - PackageKit-command-not-found
-      - gnome-software-fedora-langpacks
-
-  # ── Zypper (openSUSE Tumbleweed) ───────────────────────────────────
-  # The patterns alone are a session skeleton, NOT a desktop. Measured on
-  # Tumbleweed, patterns-gnome-gnome resolves to gdm, gnome-shell and
-  # mutter plus dependencies — it contains no nautilus, no gvfs, no
-  # gnome-keyring and no xdg-desktop-portal-gnome. That is why
-  # sailfin:gnome shipped +192 packages against yellowfin:gnome's +576,
-  # with no file manager and no portals (tunaos-packages#132).
-  #
-  # Note this is NOT a --no-recommends artifact: the pattern resolves to
-  # the same 475 packages with and without recommends. The list was simply
-  # incomplete, so the packages below are explicit.
-  #
-  # Every name here was verified to resolve with `zypper se -x -t package`
-  # against Tumbleweed. Do not add unverified names — an unresolvable name
-  # is what silently shipped a desktop-less image in the first place, and
-  # several obvious guesses are wrong on openSUSE:
-  #   NetworkManager-openvpn-gnome → NetworkManager-openvpn (no -gnome)
-  #   tracker / tracker-miners     → tinysparql / localsearch
-  #   librsvg                      → librsvg-2-2
-  zypper:
-    - patterns-gnome-gnome
-    - patterns-gnome-gnome_basis
-    - gdm
-    # Session and control surface
-    - gnome-session
-    - gnome-settings-daemon
-    - gnome-control-center
-    - gnome-browser-connector
-    - gnome-menus
-    - gnome-backgrounds
-    # Files, mounting and secrets — the actual gap
-    - nautilus
-    - gvfs
-    - gvfs-backends
-    - gvfs-fuse
-    - gnome-keyring
-    - gnome-keyring-pam
-    - xdg-desktop-portal-gnome
-    - xdg-desktop-portal-gtk
-    - xdg-user-dirs-gtk
-    # Hardware, network and power integration
-    - ModemManager
-    - NetworkManager-openvpn
-    - NetworkManager-openconnect
-    - NetworkManager-vpnc
-    - gnome-bluetooth
-    - power-profiles-daemon
-    - switcheroo-control
-    - fwupd
-    - fprintd-pam
-    - gnome-color-manager
-    - gnome-disk-utility
-    - simple-scan
-    # Core apps and first-run
-    - gnome-initial-setup
-    - gnome-software
-    - gnome-system-monitor
-    - gnome-console
-    - gnome-text-editor
-    - gnome-calculator
-    - gnome-font-viewer
-    - gnome-characters
-    - gnome-logs
-    - loupe
-    - evince
-    - file-roller
-    - baobab
-    - seahorse
-    - gnome-online-accounts
-    - gnome-remote-desktop
-    - gnome-user-share
-    # Search indexing (tracker's successors)
-    - localsearch
-    - tinysparql
-    # Accessibility and help
-    - orca
-    - yelp
-    - gnome-user-docs
-    # Graphics and rendering
-    - Mesa-dri
-    - Mesa-libEGL1
-    - Mesa-vulkan-device-select
-    - librsvg-2-2
-    - glib-networking
-    - avahi
-    - dconf
-    - polkit
-    - pinentry-gnome3
-
-  # ── Emerge (Gentoo) ────────────────────────────────────────────────
-  # gnome-light, NOT gnome-base/gnome: the full meta pulls
-  # gnome-extra-apps -> gnome-connections -> spice-gtk -> 32-bit glib
-  # (abi_x86_32) on top of everything else it drags in.
-  emerge:
-    - gnome-base/gnome-light
-    - gnome-base/gdm
-    # dconf is explicit, not assumed: Gentoo's gdm ships keyfiles in
-    # /etc/dconf/db/distro.d, and the build-time `dconf update` in
-    # install-desktop.sh / 40-services.sh is guarded on `command -v dconf`.
-    # Neither atom above pulls the gnome-base/dconf CLI, so the guard skipped
-    # and the desktop contract failed on the uncompiled distro database
-    # (run 38894192116). Same shape as the fedora cosmic section above, which
-    # lists dconf for hummingbird's minimal rebuild.
-    - gnome-base/dconf
-
-# Gentoo only: the ~amd64 keywords that lift guppy:gnome over the floor.
-# ::gentoo has GNOME 50 under ~amd64 only. Stable amd64 stops at gnome-shell
-# 49.7, and the official binhost builds only stable versions, so these
-# packages build from source. install-desktop.sh writes this list to
-# /etc/portage/package.accept_keywords before the emerge. It is the whole GNOME
-# 50 core set, not only gnome-shell. With gnome-shell, mutter, gdm,
-# gnome-session and gsettings-desktop-schemas alone, portage resolves (measured
-# 2026-10-07) and keeps gnome-control-center, gnome-settings-daemon and
-# xdg-desktop-portal-gnome at 49. That is a mixed 49/50 desktop. GNOME 50
-# targets gtk 4.22 and libadwaita 1.9, so those two are here too.
-# gnome-base/nautilus is not here: ::gentoo package.masks >=nautilus-50
-# (gexiv2-0.16 fallout, bug 982084), so nautilus stays at 49.
-# Each package name has no version. Portage takes the newest ~amd64 ebuild, so
-# a 50.x bump in ::gentoo does not need an edit here.
-emerge_accept_keywords:
-  - gnome-base/gdm
-  - gnome-base/gnome-control-center
-  - gnome-base/gnome-keyring
-  - gnome-base/gnome-session
-  - gnome-base/gnome-settings-daemon
-  - gnome-base/gnome-shell
-  - gnome-base/gsettings-desktop-schemas
-  - gui-libs/gtk
-  - gui-libs/libadwaita
-  - sys-apps/xdg-desktop-portal-gnome
-  - x11-wm/mutter
-
-versionlock:
-  - glib2
-  - fontconfig
-  - gdm
-  - gnome-shell
-  - mutter
-  - gnome-session-wayland-session
-  - gnome-settings-daemon
-  - gnome-control-center
-  - gsettings-desktop-schemas
-  - gtk4
-  - libadwaita
-  - pango
-  - xdg-desktop-portal
-  - xdg-desktop-portal-gnome
-
-post_install:
-  - tuna-flatpak-remote.sh
-  # Curated Flatpak set (store + browser + terminal + Extension Manager) —
-  # see the script header; asserts live in verify-desktop-experience.sh.
-  - flatpak-preinstall.sh
+{
+  "display_manager": "gdm",
+  "minimum_version": 50,
+  "emerge_accept_keywords": [
+    "gnome-base/gdm",
+    "gnome-base/gnome-control-center",
+    "gnome-base/gnome-keyring",
+    "gnome-base/gnome-session",
+    "gnome-base/gnome-settings-daemon",
+    "gnome-base/gnome-shell",
+    "gnome-base/gsettings-desktop-schemas",
+    "gui-libs/gtk",
+    "gui-libs/libadwaita",
+    "sys-apps/xdg-desktop-portal-gnome",
+    "x11-wm/mutter"
+  ],
+  "versionlock": [
+    "glib2",
+    "fontconfig",
+    "gdm",
+    "gnome-shell",
+    "mutter",
+    "gnome-session-wayland-session",
+    "gnome-settings-daemon",
+    "gnome-control-center",
+    "gsettings-desktop-schemas",
+    "gtk4",
+    "libadwaita",
+    "pango",
+    "xdg-desktop-portal",
+    "xdg-desktop-portal-gnome"
+  ],
+  "post_install": [
+    "tuna-flatpak-remote.sh",
+    "flatpak-preinstall.sh"
+  ],
+  "packages": {
+    "apt": [
+      "ubuntu-desktop-minimal",
+      "gnome-session",
+      "ubuntu-session",
+      "gnome-browser-connector",
+      "gnome-disk-utility",
+      "gnome-system-monitor",
+      "gnome-user-docs",
+      "nautilus",
+      "yelp",
+      "plymouth-theme-spinner",
+      "xdg-desktop-portal-gnome",
+      "xdg-desktop-portal-gtk",
+      "xdg-terminal-exec",
+      "xdg-user-dirs-gtk",
+      "gnome-keyring",
+      "libpam-gnome-keyring"
+    ],
+    "fedora": {
+      "packages": [
+        "ModemManager",
+        "NetworkManager-adsl",
+        "NetworkManager-wifi",
+        "linux-firmware",
+        "amd-gpu-firmware",
+        "intel-gpu-firmware",
+        "iwlwifi-mvm-firmware",
+        "wireless-regdb",
+        "iw",
+        "NetworkManager-openconnect-gnome",
+        "NetworkManager-openvpn-gnome",
+        "NetworkManager-ppp",
+        "NetworkManager-ssh-gnome",
+        "NetworkManager-vpnc-gnome",
+        "NetworkManager-wwan",
+        "avahi",
+        "dconf",
+        "fprintd-pam",
+        "gdm",
+        "glib-networking",
+        "gnome-backgrounds",
+        "gnome-bluetooth",
+        "gnome-browser-connector",
+        "gnome-color-manager",
+        "gnome-control-center",
+        "gnome-disk-utility",
+        "gnome-initial-setup",
+        "gnome-remote-desktop",
+        "gnome-session-wayland-session",
+        "gnome-settings-daemon",
+        "gnome-shell",
+        "gnome-system-monitor",
+        "gnome-user-docs",
+        "gnome-user-share",
+        "gvfs-afc",
+        "gvfs-fuse",
+        "gvfs-goa",
+        "gvfs-gphoto2",
+        "gvfs-mtp",
+        "gvfs-smb",
+        "librsvg2",
+        "libsane-hpaio",
+        "mesa-dri-drivers",
+        "mesa-libEGL",
+        "mesa-vulkan-drivers",
+        "nautilus",
+        "polkit",
+        "ptyxis",
+        "xdg-terminal-exec",
+        "xdg-desktop-portal-gnome",
+        "xdg-desktop-portal-gtk",
+        "xdg-user-dirs-gtk",
+        "yelp",
+        "desktop-backgrounds-gnome",
+        "pinentry-gnome3",
+        "qadwaitadecorations-qt5",
+        "evince-thumbnailer",
+        "evince-previewer",
+        "totem-video-thumbnailer"
+      ],
+      "optional": [
+        "gvfs-afp",
+        "gvfs-archive"
+      ],
+      "exclude": [
+        "PackageKit",
+        "PackageKit-command-not-found",
+        "gnome-software",
+        "gnome-software-fedora-langpacks"
+      ]
+    },
+    "hummingbird": {
+      "packages": [
+        "ModemManager",
+        "NetworkManager-adsl",
+        "NetworkManager-wifi",
+        "linux-firmware",
+        "amd-gpu-firmware",
+        "intel-gpu-firmware",
+        "iwlwifi-mvm-firmware",
+        "wireless-regdb",
+        "iw",
+        "NetworkManager-openconnect-gnome",
+        "NetworkManager-openvpn-gnome",
+        "NetworkManager-ppp",
+        "NetworkManager-ssh-gnome",
+        "NetworkManager-vpnc-gnome",
+        "NetworkManager-wwan",
+        "avahi",
+        "dconf",
+        "fprintd-pam",
+        "gdm",
+        "glib-networking",
+        "gnome-backgrounds",
+        "gnome-bluetooth",
+        "gnome-browser-connector",
+        "gnome-color-manager",
+        "gnome-control-center",
+        "gnome-disk-utility",
+        "gnome-initial-setup",
+        "gnome-remote-desktop",
+        "gnome-session-wayland-session",
+        "gnome-settings-daemon",
+        "gnome-shell",
+        "gnome-system-monitor",
+        "gnome-user-docs",
+        "gnome-user-share",
+        "gvfs-afc",
+        "gvfs-fuse",
+        "gvfs-goa",
+        "gvfs-gphoto2",
+        "gvfs-mtp",
+        "gvfs-smb",
+        "librsvg2",
+        "libsane-hpaio",
+        "mesa-dri-drivers",
+        "mesa-libEGL",
+        "mesa-vulkan-drivers",
+        "nautilus",
+        "polkit",
+        "ptyxis",
+        "xdg-terminal-exec",
+        "xdg-desktop-portal-gnome",
+        "xdg-desktop-portal-gtk",
+        "xdg-user-dirs-gtk",
+        "yelp",
+        "desktop-backgrounds-gnome",
+        "pinentry-gnome3",
+        "qadwaitadecorations-qt5",
+        "evince-thumbnailer",
+        "evince-previewer",
+        "totem-video-thumbnailer"
+      ],
+      "repos": [
+        {
+          "name": "tunaos-hummingbird",
+          "baseurl": "https://repo.tunaos.org/hummingbird/20251124-$basearch/",
+          "priority": 5
+        },
+        {
+          "name": "utah-packages",
+          "baseurl": "file:///run/utah-packages",
+          "priority": 4,
+          "unsigned": true
+        }
+      ]
+    },
+    "eln": {
+      "packages": [
+        "ModemManager",
+        "NetworkManager-adsl",
+        "NetworkManager-openvpn-gnome",
+        "NetworkManager-ppp",
+        "NetworkManager-wwan",
+        "avahi",
+        "dconf",
+        "fprintd-pam",
+        "gdm",
+        "glib-networking",
+        "gnome-bluetooth",
+        "gnome-browser-connector",
+        "gnome-color-manager",
+        "gnome-control-center",
+        "gnome-disk-utility",
+        "gnome-initial-setup",
+        "gnome-keyring",
+        "gnome-keyring-pam",
+        "gnome-remote-desktop",
+        "gnome-session-wayland-session",
+        "gnome-settings-daemon",
+        "gnome-shell",
+        "gnome-system-monitor",
+        "gnome-user-docs",
+        "gvfs-fuse",
+        "gvfs-goa",
+        "gvfs-gphoto2",
+        "gvfs-mtp",
+        "gvfs-smb",
+        "librsvg2",
+        "libsane-hpaio",
+        "mesa-dri-drivers",
+        "mesa-libEGL",
+        "mesa-vulkan-drivers",
+        "nautilus",
+        "polkit",
+        "ptyxis",
+        "xdg-desktop-portal-gnome",
+        "xdg-desktop-portal-gtk",
+        "xdg-user-dirs-gtk",
+        "yelp",
+        "desktop-backgrounds-gnome",
+        "pinentry-gnome3"
+      ],
+      "optional": [
+        "NetworkManager-openconnect-gnome",
+        "NetworkManager-ssh-gnome",
+        "NetworkManager-vpnc-gnome",
+        "evince-previewer",
+        "evince-thumbnailer",
+        "gnome-backgrounds",
+        "gnome-user-share",
+        "gvfs-afc",
+        "qadwaitadecorations-qt5",
+        "totem-video-thumbnailer",
+        "gvfs-afp",
+        "gvfs-archive"
+      ],
+      "exclude": [
+        "PackageKit",
+        "PackageKit-command-not-found",
+        "gnome-software",
+        "gnome-software-fedora-langpacks"
+      ]
+    },
+    "el10": {
+      "pre_install": [
+        "dnf -y upgrade glib2 fontconfig gobject-introspection gjs",
+        "dnf_retry -y install --allowerasing gnome50-el10-compat",
+        "warn_on_fail dnf_retry -y remove --noautoremove gnome-shell-common"
+      ],
+      "groups": [
+        "Common NetworkManager submodules",
+        "Core",
+        "Fonts",
+        "Guest Desktop Agents",
+        "Hardware Support",
+        "Printing Client",
+        "Standard",
+        "Workstation product core"
+      ],
+      "group_options": "--nobest --allowerasing",
+      "group_exclude": [
+        "PackageKit",
+        "PackageKit-command-not-found"
+      ],
+      "packages": [
+        "gdm",
+        "glib2",
+        "gnome-bluetooth",
+        "gnome-color-manager",
+        "gnome-control-center",
+        "gnome-initial-setup",
+        "gnome-remote-desktop",
+        "gnome-session-wayland-session",
+        "gnome-settings-daemon",
+        "gnome-shell",
+        "gnome-shell-common",
+        "gnome-user-docs",
+        "gvfs-fuse",
+        "gvfs-goa",
+        "gvfs-gphoto2",
+        "gvfs-mtp",
+        "gvfs-smb",
+        "libsane-hpaio",
+        "nautilus",
+        "dbus-daemon",
+        "orca",
+        "ptyxis",
+        "sane-backends-drivers-scanners",
+        "xdg-desktop-portal-gnome",
+        "xdg-user-dirs-gtk",
+        "yelp-tools",
+        "gnome-disk-utility",
+        "NetworkManager-adsl"
+      ],
+      "exclude": [
+        "gnome-software",
+        "gnome-extensions-app",
+        "PackageKit",
+        "PackageKit-command-not-found",
+        "gnome-software-fedora-langpacks"
+      ],
+      "repos": [
+        {
+          "name": "gnome50-el10-packages",
+          "baseurl": "file:///run/gnome50-el10-packages",
+          "priority": 1,
+          "unsigned": true
+        }
+      ]
+    },
+    "zypper": [
+      "patterns-gnome-gnome",
+      "patterns-gnome-gnome_basis",
+      "gdm",
+      "gnome-session",
+      "gnome-settings-daemon",
+      "gnome-control-center",
+      "gnome-browser-connector",
+      "gnome-menus",
+      "gnome-backgrounds",
+      "nautilus",
+      "gvfs",
+      "gvfs-backends",
+      "gvfs-fuse",
+      "gnome-keyring",
+      "gnome-keyring-pam",
+      "xdg-desktop-portal-gnome",
+      "xdg-desktop-portal-gtk",
+      "xdg-user-dirs-gtk",
+      "ModemManager",
+      "NetworkManager-openvpn",
+      "NetworkManager-openconnect",
+      "NetworkManager-vpnc",
+      "gnome-bluetooth",
+      "power-profiles-daemon",
+      "switcheroo-control",
+      "fwupd",
+      "fprintd-pam",
+      "gnome-color-manager",
+      "gnome-disk-utility",
+      "simple-scan",
+      "gnome-initial-setup",
+      "gnome-software",
+      "gnome-system-monitor",
+      "gnome-console",
+      "gnome-text-editor",
+      "gnome-calculator",
+      "gnome-font-viewer",
+      "gnome-characters",
+      "gnome-logs",
+      "loupe",
+      "evince",
+      "file-roller",
+      "baobab",
+      "seahorse",
+      "gnome-online-accounts",
+      "gnome-remote-desktop",
+      "gnome-user-share",
+      "localsearch",
+      "tinysparql",
+      "orca",
+      "yelp",
+      "gnome-user-docs",
+      "Mesa-dri",
+      "Mesa-libEGL1",
+      "Mesa-vulkan-device-select",
+      "librsvg-2-2",
+      "glib-networking",
+      "avahi",
+      "dconf",
+      "polkit",
+      "pinentry-gnome3"
+    ],
+    "emerge": [
+      "gnome-base/gnome-light",
+      "gnome-base/gdm",
+      "gnome-base/dconf"
+    ]
+  }
+}

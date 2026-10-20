@@ -1,110 +1,66 @@
-# niri Desktop Manifest — Arch Linux / CachyOS
-#
-# niri.yaml builds the Fedora set out of three COPRs (yalter/niri-git,
-# avengemedia/danklinux, avengemedia/dms-git). Arch ships niri itself in
-# [extra], so no third-party repo is needed here — but the DankMaterialShell
-# pieces (quickshell, dms, dms-greeter) have no Arch equivalent in the official
-# repos, so this is a plain niri session rather than a DMS one.
-#
-# Two name differences from the Fedora list: SwayNotificationCenter is `swaync`
-# and adw-gtk3-theme is `adw-gtk-theme`.
-#
-# Every package below was verified present in core/extra for x86_64.
-
-# GREETER: there is no DMS greeter here, but there IS an official graphical one.
-#
-# This file used to claim "Arch has no official equivalent" and left greetd on
-# its packaged config. That config runs `agreety --cmd /bin/sh`, and agreety is
-# NOT part of Arch's greetd package: it ships in greetd-agreety, which nothing
-# installed. So greetd came up pointed at a binary that was not on the image:
-#
-#   $ pacman -Ql greetd | grep bin/
-#   greetd /usr/bin/greetd          <- and nothing else
-#   $ pacman -F usr/bin/agreety
-#   usr/bin/agreety is owned by extra/greetd-agreety
-#
-# With Restart=always in the packaged unit that is a restart loop, not the text
-# prompt the old comment assumed. Arch does carry the same fallback stack
-# openSUSE uses, greetd-gtkgreet (/usr/bin/gtkgreet) and cage, both in
-# [extra], so wire that up instead, via the shared greetd-gtkgreet.sh below.
-#
-# Still absent, and still a real gap: the DankMaterialShell session (quickshell,
-# dms, dms-greeter) has no official Arch packaging, so this is a plain niri
-# session with a gtkgreet login rather than a DMS one.
-display_manager: greetd
-
-packages:
-  pacman:
-    # Compositor and session
-    - niri
-    - greetd
-    # The greeter. Arch splits every greetd frontend into its own package and
-    # installs none of them with greetd itself, so naming one is mandatory:
-    # without it greetd's stock config points at an absent agreety. gtkgreet is
-    # a plain Wayland client and cannot own a VT, so cage hosts it; the pair
-    # greetd-gtkgreet.sh expects, matching the zypper section of niri.yaml.
-    - greetd-gtkgreet
-    - cage
-    - xwayland-satellite
-    # Shell surfaces
-    - waybar
-    - fuzzel
-    - swaync
-    - swaylock
-    - swayidle
-    # Wallpaper: niri draws none itself; swaybg renders the branded one.
-    - swaybg
-    - cliphist
-    # Integration
-    - xdg-desktop-portal-gnome
-    - xdg-desktop-portal-gtk
-    - xdg-terminal-exec
-    - xdg-user-dirs
-    - xdg-user-dirs-gtk
-    - polkit-gnome
-    - gnome-keyring
-    - wl-clipboard
-    # Hardware and media controls
-    - networkmanager
-    - pipewire
-    - wireplumber
-    - pavucontrol
-    - brightnessctl
-    - playerctl
-    - blueman
-    - power-profiles-daemon
-    - fwupd
-    - plymouth
-    # Applications and theming
-    - nautilus
-    - flatpak
-    - adw-gtk-theme
-    - papirus-icon-theme
-    # Software Vulkan (lavapipe) + ICD loader; Arch splits both out of `mesa`.
-    # See niri.yaml for why this is the test rather than the fix.
-    - vulkan-icd-loader
-    - vulkan-swrast
-
-  cachyos:
-    repos:
-      - name: cachyos
-        url: "https://mirror.cachyos.org/repo/$arch/cachyos"
-      - name: cachyos-extra
-        url: "https://mirror.cachyos.org/repo/$arch/cachyos-extra"
-    packages:
-      - linux-cachyos
-      - linux-cachyos-headers
-      - cachyos-settings
-
-versionlock: []
-
-# Post-install scripts to source (relative to build_scripts/)
-post_install:
-  - tuna-flatpak-remote.sh
-  # Replaces greetd's stock agreety config with gtkgreet under cage. Self-gating
-  # on `command -v gtkgreet && command -v cage`, so it is a no-op if that
-  # packaging ever regresses rather than writing a config for a missing greeter.
-  - greetd-gtkgreet.sh
-  # Curated Flatpak set (store + browser) + preinstall service — see the
-  # script header; asserts live in verify-desktop-experience.sh.
-  - flatpak-preinstall.sh
+{
+  "display_manager": "greetd",
+  "versionlock": [],
+  "post_install": [
+    "tuna-flatpak-remote.sh",
+    "greetd-gtkgreet.sh",
+    "flatpak-preinstall.sh"
+  ],
+  "packages": {
+    "pacman": [
+      "niri",
+      "greetd",
+      "greetd-gtkgreet",
+      "cage",
+      "xwayland-satellite",
+      "waybar",
+      "fuzzel",
+      "swaync",
+      "swaylock",
+      "swayidle",
+      "swaybg",
+      "cliphist",
+      "xdg-desktop-portal-gnome",
+      "xdg-desktop-portal-gtk",
+      "xdg-user-dirs",
+      "xdg-user-dirs-gtk",
+      "polkit-gnome",
+      "gnome-keyring",
+      "wl-clipboard",
+      "networkmanager",
+      "pipewire",
+      "wireplumber",
+      "pavucontrol",
+      "brightnessctl",
+      "playerctl",
+      "blueman",
+      "power-profiles-daemon",
+      "fwupd",
+      "plymouth",
+      "nautilus",
+      "xdg-terminal-exec",
+      "flatpak",
+      "adw-gtk-theme",
+      "papirus-icon-theme",
+      "vulkan-icd-loader",
+      "vulkan-swrast"
+    ],
+    "cachyos": {
+      "packages": [
+        "linux-cachyos",
+        "linux-cachyos-headers",
+        "cachyos-settings"
+      ],
+      "repos": [
+        {
+          "name": "cachyos",
+          "url": "https://mirror.cachyos.org/repo/$arch/cachyos"
+        },
+        {
+          "name": "cachyos-extra",
+          "url": "https://mirror.cachyos.org/repo/$arch/cachyos-extra"
+        }
+      ]
+    }
+  }
+}

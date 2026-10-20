@@ -199,7 +199,8 @@ def test_snapshot_helper_selects_the_pinned_kernel_from_verified_metadata(tmp_pa
     assert proc.stdout.strip() == "7.1.13+deb14-amd64"
     assert any(f"Dir::State::lists={apt_root}/lists" in call for call in calls)
     assert list((apt_root / "sources.list.d").glob("tunaos-nvidia-kernel-snapshot.*.sources"))
-    assert list((apt_root / "preferences.d").glob("tunaos-nvidia-kernel-snapshot.*"))
+    preferences = list((apt_root / "preferences.d").glob("tunaos-nvidia-kernel-snapshot.*"))
+    assert preferences and all(path.suffix == ".pref" for path in preferences)
 
 
 def test_snapshot_update_failure_stops_before_any_package_change(tmp_path):
@@ -283,6 +284,7 @@ def test_snapshot_fallback_supplies_a_kernel_when_archive_has_none(tmp_path):
     assert proc.returncode == 0, proc.stderr
     assert trees == ["7.1.13+deb14-amd64"]
     assert any("install" in c and "linux-image-7.1.13+deb14-amd64" in c for c in calls)
+    assert any("install" in c and "linux-headers-7.1.13+deb14-amd64" in c for c in calls)
     assert (modules / "7.1.13+deb14-amd64" / "vmlinuz").read_text() == "vmlinuz\n"
     assert not list((tmp_path / "apt/sources.list.d").glob("tunaos-nvidia-kernel-snapshot.*"))
     assert not list((tmp_path / "apt/preferences.d").glob("tunaos-nvidia-kernel-snapshot.*"))
@@ -308,6 +310,8 @@ def test_preexisting_snapshot_config_survives_cleanup(tmp_path):
     )
     assert proc.returncode == 0, proc.stderr
     assert (tmp_path / "apt/sources.list.d/tunaos-nvidia-kernel-snapshot.preexisting.sources").read_text() == "keep\n"
+
+
 def test_shipped_snapshot_helper_is_invocable_without_execute_bits():
     assert SNAPSHOT.stat().st_mode & 0o111 == 0
     assert 'HELD="$(bash "$SNAPSHOT_SCRIPT"' in HOLD.read_text(encoding="utf-8")
