@@ -170,8 +170,9 @@
 #                         by the harness when it can; explicit env wins.
 #   TUNAOS_QUAL_PLATFORM / TUNAOS_QUAL_CPU_BASELINE /
 #   TUNAOS_QUAL_HARDWARE_SCOPE
-#                         Target identity for the evidence (defaults: uname
-#                         -m, unknown, qemu). Set by the calling workflow.
+#                         Canonical target identity for the evidence. All three
+#                         values are REQUIRED in strict mode and must be
+#                         supplied by the calling workflow.
 #   TUNAOS_QUAL_BROWSER_NAME / TUNAOS_QUAL_BROWSER_VERSION /
 #   TUNAOS_QUAL_BROWSER_MEMORY_GIB / TUNAOS_QUAL_BROWSER_FREE_DISK_GIB
 #                         Browser/resource profile for the evidence, filled
@@ -3982,6 +3983,12 @@ emit_qualification_evidence() {
 		echo "ERROR: --strict-offline-gui: VARIANT/FLAVOR are unset (set them explicitly, e.g. VARIANT=yellowfin FLAVOR=gnome)" >&2
 		return 1
 	}
+	[[ -n "${TUNAOS_QUAL_PLATFORM:-}" &&
+		-n "${TUNAOS_QUAL_CPU_BASELINE:-}" &&
+		-n "${TUNAOS_QUAL_HARDWARE_SCOPE:-}" ]] || {
+		echo "ERROR: --strict-offline-gui: canonical target identity is incomplete; set TUNAOS_QUAL_PLATFORM, TUNAOS_QUAL_CPU_BASELINE, and TUNAOS_QUAL_HARDWARE_SCOPE" >&2
+		return 1
+	}
 	local qual_mem="${TUNAOS_QUAL_BROWSER_MEMORY_GIB:-}"
 	if [[ -z "$qual_mem" ]]; then
 		qual_mem="$(free -g 2>/dev/null | awk '/^Mem:/ {print $2}')"
@@ -3994,9 +4001,9 @@ emit_qualification_evidence() {
 	fi
 	STRICT_EV_OUT="$QUAL_EVIDENCE_JSON" \
 		STRICT_EV_VARIANT="$VARIANT" STRICT_EV_FLAVOR="$FLAVOR" \
-		STRICT_EV_PLATFORM="${TUNAOS_QUAL_PLATFORM:-$(uname -m)}" \
-		STRICT_EV_CPU="${TUNAOS_QUAL_CPU_BASELINE:-unknown}" \
-		STRICT_EV_SCOPE="${TUNAOS_QUAL_HARDWARE_SCOPE:-qemu}" \
+		STRICT_EV_PLATFORM="$TUNAOS_QUAL_PLATFORM" \
+		STRICT_EV_CPU="$TUNAOS_QUAL_CPU_BASELINE" \
+		STRICT_EV_SCOPE="$TUNAOS_QUAL_HARDWARE_SCOPE" \
 		STRICT_EV_ISO="$STRICT_ISO_DIGEST" \
 		STRICT_EV_SOURCE="$STRICT_SOURCE_DIGEST" STRICT_EV_OVERLAY="$STRICT_OVERLAY_DIGEST" \
 		STRICT_EV_INSTALLER="$STRICT_INSTALLER_DIGEST" STRICT_EV_ENGINE="$STRICT_ENGINE_DIGEST" \

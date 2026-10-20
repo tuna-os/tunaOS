@@ -9,6 +9,7 @@ from __future__ import annotations
 import datetime as dt
 import hashlib
 import json
+import math
 import pathlib
 import re
 from typing import Any
@@ -33,13 +34,26 @@ def _pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
 def loads(text: str) -> dict[str, Any]:
     def constant(value: str) -> None:
         raise EvidenceError(f"non-finite JSON number: {value}")
+
+    def finite_float(value: str) -> float:
+        parsed = float(value)
+        if not math.isfinite(parsed):
+            raise EvidenceError(f"non-finite JSON number: {value}")
+        return parsed
+
     try:
-        value = json.loads(text, object_pairs_hook=_pairs, parse_constant=constant)
+        value = json.loads(
+            text,
+            object_pairs_hook=_pairs,
+            parse_constant=constant,
+            parse_float=finite_float,
+        )
     except json.JSONDecodeError as exc:
         raise EvidenceError(str(exc)) from exc
     if not isinstance(value, dict):
         raise EvidenceError("evidence must be a JSON object")
     return value
+
 
 
 def canonical_json(value: Any) -> bytes:
