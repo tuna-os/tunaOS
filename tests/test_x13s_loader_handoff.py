@@ -38,6 +38,27 @@ def test_download_handles_short_reads(monkeypatch, tmp_path):
     target = tmp_path / "payload"
     handoff.download("https://fixture.invalid/payload", target, handoff.digest(payload), size=len(payload))
     assert target.read_bytes() == payload
+def test_download_default_bound_is_hard(monkeypatch, tmp_path):
+    class Response:
+        def __init__(self):
+            self.remaining = handoff.DEFAULT_DOWNLOAD_LIMIT + 1
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self, count):
+            amount = min(self.remaining, count)
+            self.remaining -= amount
+            return b"x" * amount
+
+    monkeypatch.setattr(handoff.urllib.request, "urlopen", lambda *args, **kwargs: Response())
+    target = tmp_path / "oversized-key"
+    with pytest.raises(ValueError, match="bound"):
+        handoff.download("https://fixture.invalid/key", target, "unused")
+    assert not target.exists()
 
 def test_serial_evidence_keeps_raw_bytes(tmp_path):
     path = tmp_path / "serial.log"

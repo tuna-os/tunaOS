@@ -18,6 +18,8 @@ import importlib.util
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE = ROOT / "tests/fixtures/x13s-handoff"
 MAX_CPIO = 160 * 1024 * 1024
+MAX_DOWNLOAD = MAX_CPIO
+DEFAULT_DOWNLOAD_LIMIT = 4 * 1024 * 1024
 
 
 def run(args, **kwargs):
@@ -30,7 +32,9 @@ def digest(data):
 
 def download(url, target, expected, size=None):
     # All URLs and identities come from the reviewed fixture pins, not dispatch input.
-    limit = size if size is not None else 1024 * 1024
+    if size is not None and not 0 <= size <= MAX_DOWNLOAD:
+        raise ValueError("download size exceeds bound")
+    limit = size if size is not None else DEFAULT_DOWNLOAD_LIMIT
     total = 0
     hasher = hashlib.sha256()
     try:
