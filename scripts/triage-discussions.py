@@ -6,12 +6,14 @@ from __future__ import annotations
 import argparse
 import html
 import json
+import re
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
 RESPONSE_TARGET_DAYS = 7
+TRACKER_MARKER = re.compile(r"<!--\s*tunaos-discussion-response:(\d+)\s*-->")
 
 
 def _created_at(value: Any) -> datetime | None:
@@ -79,6 +81,19 @@ def _candidate(discussion: Any) -> dict[str, Any] | None:
     }
 
 
+def tracked_discussion_numbers(issues: list[Any]) -> set[int]:
+    """Return discussion numbers already represented by any issue state."""
+    tracked: set[int] = set()
+    for issue in issues:
+        if not isinstance(issue, dict) or issue.get("pull_request") is not None:
+            continue
+        body = issue.get("body")
+        if not isinstance(body, str):
+            continue
+        tracked.update(int(match) for match in TRACKER_MARKER.findall(body))
+    return tracked
+
+
 def unanswered_q_and_a(discussions: list[Any]) -> list[dict[str, Any]]:
     """Return valid unanswered Q&A discussions, oldest first."""
     candidates = [candidate for row in discussions if (candidate := _candidate(row))]
@@ -114,7 +129,7 @@ answer.
     return {
         **candidate,
         "marker": marker,
-        "issue_title": f"Discussion #{number} needs a response: {title}",
+        "issue_title": f"Discussion #{number} needs a response: {title}"[:256],
         "issue_body": body,
     }
 
@@ -131,11 +146,15 @@ def _load(path: Path) -> list[Any]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--input", type=Path, required=True)
+    parser.add_argument("--existing-issues", type=Path)
     parser.add_argument("--output", type=Path)
     args = parser.parse_args(argv)
 
     try:
-        candidates = unanswered_q_and_a(_load(args.input))
+        discussions = unanswered_q_and_a(_load(args.input))
+        issues = _load(args.existing_issues) if args.existing_issues else []
+        tracked = tracked_discussion_numbers(issues)
+        candidates = [row for row in discussions if row["number"] not in tracked]
     except (OSError, ValueError, json.JSONDecodeError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 2

@@ -77,6 +77,58 @@ def test_tracker_body_is_a_public_reply_instruction_not_an_automated_answer() ->
     assert "closes issues" in tracker["issue_body"]
 
 
+def test_existing_trackers_are_skipped_across_successive_sweeps(tmp_path: Path) -> None:
+    discussions_path = tmp_path / "discussions.json"
+    issues_path = tmp_path / "issues.json"
+    output_path = tmp_path / "candidate.json"
+    discussions_path.write_text(
+        json.dumps(
+            [
+                _discussion(12, "2026-04-18T20:10:39Z", title="Already queued"),
+                _discussion(93, "2026-04-19T20:10:39Z", title="Next question"),
+            ]
+        ),
+        encoding="utf-8",
+    )
+    issues_path.write_text(
+        json.dumps(
+            [
+                {
+                    "number": 501,
+                    "state": "closed",
+                    "body": "<!-- tunaos-discussion-response:12 -->",
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    assert triage.main(
+        [
+            "--input",
+            str(discussions_path),
+            "--existing-issues",
+            str(issues_path),
+            "--output",
+            str(output_path),
+        ]
+    ) == 0
+    assert json.loads(output_path.read_text(encoding="utf-8"))["number"] == 93
+
+
+def test_issue_title_is_capped_but_body_keeps_full_discussion_title() -> None:
+    title = "x" * 300
+    candidate = triage.unanswered_q_and_a(
+        [_discussion(93, "2026-04-20T20:10:39Z", title=title)]
+    )[0]
+
+    tracker = triage._tracker(candidate)
+
+    assert len(tracker["issue_title"]) == 256
+    assert tracker["issue_title"].startswith("Discussion #93 needs a response: ")
+    assert title in tracker["issue_body"]
+
+
 def test_malformed_rows_are_ignored_without_hiding_valid_questions() -> None:
     rows = [
         None,
@@ -119,6 +171,9 @@ def test_workflow_sweeps_and_supports_a_manual_backfill() -> None:
     ]
     run_text = "\n".join(run_blocks)
     assert "gh issue create" in run_text
+    assert "gh issue list" not in run_text
+    assert "issues?state=all&per_page=100" in run_text
+    assert "--existing-issues issues.json" in run_text
     assert "gh issue close" not in run_text
     assert "github.event.discussion.title" not in run_text
     assert "github.event.discussion.body" not in run_text
