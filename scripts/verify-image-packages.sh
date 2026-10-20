@@ -14,6 +14,8 @@ fi
 IMAGE="$1"
 FLAVOR="$2"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Generated desktop adapters are prepared before every direct reader.
+python3 "${REPO_ROOT}/scripts/config.py" generate >/dev/null
 MANIFEST="${REPO_ROOT}/manifests/desktops/${FLAVOR}.yaml"
 
 if [[ ! -f "$MANIFEST" ]]; then
@@ -35,6 +37,15 @@ OS_ID=$(podman run --rm --entrypoint sh "$IMAGE" -c '
 
 OS_ID=$(echo "$OS_ID" | tr -d '\r\n')
 echo "Detected OS inside image: ${OS_ID}"
+
+if [[ "$OS_ID" == debian && "$FLAVOR" == gnome ]]; then
+	# The caller supplies its selected build cell. Never infer provenance from
+	# a mutable image tag or from the installed receipt being verified.
+	: "${VARIANT:?Debian GNOME verification requires selected VARIANT}"
+	: "${PLATFORM:?Debian GNOME verification requires selected PLATFORM}"
+	exec python3 "${REPO_ROOT}/scripts/config.py" verify-debian-image \
+		--image "$IMAGE" --variant "$VARIANT" --desktop "$FLAVOR" --platform "$PLATFORM"
+fi
 
 # 2) Extract package list based on OS type
 PACKAGES=()
