@@ -1,0 +1,342 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ISO Builder presentation configuration v1",
+  "description": "Presentation only. Portable validators must also enforce unique ids and referential integrity; this schema cannot grant target admission or transport permissions.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "preview_only",
+    "brand",
+    "presentation",
+    "output",
+    "desktops",
+    "variants",
+    "default_selection",
+    "curated_app_sets"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "preview_only": {
+      "type": "boolean"
+    },
+    "brand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "homepage_url",
+        "documentation_url"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^\\u0000-\\u001f\\u007f]*\\S[^\\u0000-\\u001f\\u007f]*$"
+        },
+        "homepage_url": {
+          "type": "string",
+          "pattern": "^https://[^\\s/@\\\\:]+(?::443)?(?:[/?#][^\\s\\\\]*)?$"
+        },
+        "documentation_url": {
+          "type": "string",
+          "pattern": "^https://[^\\s/@\\\\:]+(?::443)?(?:[/?#][^\\s\\\\]*)?$"
+        },
+        "logo_url": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^https://[^\\s/@\\\\:]+(?::443)?(?:[/?#][^\\s\\\\]*)?$"
+            },
+            {
+              "type": "string",
+              "pattern": "^/(?:[A-Za-z0-9_-]+/)*[A-Za-z0-9_-]+(?:\\.[A-Za-z0-9_-]+)*$"
+            }
+          ]
+        },
+        "favicon_url": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^https://[^\\s/@\\\\:]+(?::443)?(?:[/?#][^\\s\\\\]*)?$"
+            },
+            {
+              "type": "string",
+              "pattern": "^/(?:[A-Za-z0-9_-]+/)*[A-Za-z0-9_-]+(?:\\.[A-Za-z0-9_-]+)*$"
+            }
+          ]
+        },
+        "support_url": {
+          "type": "string",
+          "pattern": "^https://[^\\s/@\\\\:]+(?::443)?(?:[/?#][^\\s\\\\]*)?$"
+        },
+        "disclaimer": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^\\u0000-\\u001f\\u007f]*\\S[^\\u0000-\\u001f\\u007f]*$"
+        }
+      }
+    },
+    "presentation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "headline",
+        "intro",
+        "accent_color"
+      ],
+      "properties": {
+        "headline": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^\\u0000-\\u001f\\u007f]*\\S[^\\u0000-\\u001f\\u007f]*$"
+        },
+        "intro": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^\\u0000-\\u001f\\u007f]*\\S[^\\u0000-\\u001f\\u007f]*$"
+        },
+        "accent_color": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$"
+        }
+      }
+    },
+    "output": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "volume_label",
+        "filename_prefix"
+      ],
+      "properties": {
+        "volume_label": {
+          "type": "string",
+          "pattern": "^[A-Z0-9_]{1,32}$"
+        },
+        "filename_prefix": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"
+        }
+      }
+    },
+    "desktops": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "description",
+          "default_flatpaks"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[^\\u0000-\\u001f\\u007f]*\\S[^\\u0000-\\u001f\\u007f]*$"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[^\\u0000-\\u001f\\u007f]*\\S[^\\u0000-\\u001f\\u007f]*$"
+          },
+          "default_flatpaks": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]+(?:\\.[A-Za-z0-9_-]+){2,}$"
+            }
+          }
+        }
+      }
+    },
+    "variants": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "name"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[^\\u0000-\\u001f\\u007f]*\\S[^\\u0000-\\u001f\\u007f]*$"
+          }
+        }
+      }
+    },
+    "default_selection": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "variant",
+            "flavor",
+            "platform"
+          ],
+          "properties": {
+            "kind": {
+              "const": "catalog"
+            },
+            "variant": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9-]*$"
+            },
+            "flavor": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9-]*$"
+            },
+            "platform": {
+              "enum": [
+                "linux/amd64",
+                "linux/amd64/v2",
+                "linux/amd64/v3",
+                "linux/arm64"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "image",
+            "platform"
+          ],
+          "properties": {
+            "kind": {
+              "const": "image"
+            },
+            "image": {
+              "type": "string",
+              "pattern": "^[a-z0-9.-]+(?::[0-9]+)?/[a-z0-9._/-]+(?::[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}|@sha256:[0-9a-f]{64})$"
+            },
+            "platform": {
+              "enum": [
+                "linux/amd64",
+                "linux/amd64/v2",
+                "linux/amd64/v3",
+                "linux/arm64"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "curated_app_sets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "label",
+          "desktops",
+          "url",
+          "format"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[^\\u0000-\\u001f\\u007f]*\\S[^\\u0000-\\u001f\\u007f]*$"
+          },
+          "desktops": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9-]*$"
+            }
+          },
+          "url": {
+            "type": "string",
+            "pattern": "^https://[^\\s/@\\\\:]+(?::443)?(?:[/?#][^\\s\\\\]*)?$"
+          },
+          "format": {
+            "enum": [
+              "brewfile",
+              "preinstall"
+            ]
+          }
+        }
+      }
+    },
+    "ddi_channels": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "stem",
+          "name",
+          "desktop"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "stem": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[^\\u0000-\\u001f\\u007f]*\\S[^\\u0000-\\u001f\\u007f]*$"
+          },
+          "desktop": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "preview_only": {
+            "const": true
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "brand": {
+            "required": [
+              "disclaimer"
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

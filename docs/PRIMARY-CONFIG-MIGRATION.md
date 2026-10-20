@@ -211,3 +211,10 @@ replace a canonical variant name or a declared publish name.
 ISO live flavors and offline payloads are separate lists. A GNOME NVIDIA live
 image can carry non-NVIDIA GNOME in its offline store. Both lists must name
 flavors that exist in the matrix.
+
+## ISO Builder presentation slice
+
+`[iso_builder]` now owns the bounded browser presentation and default choices.
+See [ISO Builder configuration](ISO-BUILDER-CONFIG.md) for export, validation,
+drift checks and catalog authority boundaries. This does not move installed
+image identity, artwork or installer branding into primary configuration.
