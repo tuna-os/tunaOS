@@ -187,7 +187,10 @@ def api_json(url: str) -> dict:
     if token:
         request.add_header("Authorization", f"Bearer {token}")
     with urllib.request.urlopen(request, timeout=30) as response:
-        return json.loads(response.read().decode())
+        value = json.loads(response.read().decode())
+    if not isinstance(value, dict):
+        raise KeyError(f"{url} returned non-object JSON")
+    return value
 
 
 def resolve_sha(repo: str, ref: str) -> str:
@@ -204,6 +207,8 @@ def submodule_sha(repo: str, path: str, ref: str = INSTALLER_REF) -> str:
     value = api_json(
         f"https://api.github.com/repos/{repo}/contents/{path}?{query}"
     )
+    if not isinstance(value, dict):
+        raise KeyError(f"{repo}:{path}@{ref} returned non-object JSON")
     sha = value.get("sha")
     if not isinstance(sha, str) or re.fullmatch(r"[0-9a-f]{40}", sha) is None:
         raise KeyError(f"{repo}:{path}@{ref} has no valid committed submodule SHA")

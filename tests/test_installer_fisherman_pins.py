@@ -16,6 +16,7 @@ import importlib.util
 import json
 import urllib.error
 from pathlib import Path
+import pytest
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -248,6 +249,11 @@ def test_invalid_production_gitlink_fails_closed(monkeypatch) -> None:
 
     assert "source_error" in sources["gnome"]
     assert "invalid gitlink" in mod.audit(sources)[0]
+
+def test_non_object_gitlink_response_fails_closed(monkeypatch) -> None:
+    monkeypatch.setattr(mod, "api_json", lambda _url: [])
+    with pytest.raises(KeyError, match="non-object"):
+        mod.submodule_sha("tuna-os/bootc-installer", "fisherman")
 
 
 def test_missing_fisherman_revision_fails_closed(monkeypatch) -> None:
