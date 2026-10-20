@@ -143,6 +143,7 @@ def test_hummingbird_cell_uses_the_pinned_native_signed_target():
 
 
 def test_hummingbird_bootstrap_waiver_excludes_admitted_tuna():
+
     import re
     import subprocess
 
@@ -163,6 +164,27 @@ def test_hummingbird_bootstrap_waiver_excludes_admitted_tuna():
             text=True,
         )
         assert (result.returncode == 0) is accepted, (desktop, result.stderr)
+
+def test_hummingbird_tuna_promotion_requires_the_release_gate():
+    build_variant = (ROOT / ".github/workflows/build-variant.yml").read_text()
+    assert (
+        "promote: ${{ matrix.variant != 'hummingbird' || matrix.flavor != 'tuna' }}"
+        in build_variant
+    )
+    reusable = (ROOT / ".github/workflows/reusable-build-image.yml").read_text()
+    promote = reusable.split("  tag-image:", 1)[1].split("  promote:", 1)[0]
+    assert "inputs.promote" in promote
+
+
+def test_hummingbird_tuna_required_packages_do_not_use_best_effort_fallback():
+    installer = (ROOT / "build_scripts/desktop/install-desktop.sh").read_text()
+    strict = installer.split('if [[ "${_TD_DESKTOP}" == "tuna" ]]; then', 1)[1].split(
+        "elif ", 1
+    )[0]
+    assert "dnf_retry -y install" in strict
+    assert "--skip-unavailable" not in strict
+    library = (ROOT / "build_scripts/lib.sh").read_text()
+    assert "--qf '%{name}-%{version}-%{release}\\n'" in library
 
 
 def test_hummingbird_tuna_fails_direct_contract_checks():
