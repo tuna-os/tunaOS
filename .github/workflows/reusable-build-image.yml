@@ -1817,11 +1817,14 @@ jobs:
           # neither can drift from the other.
           is_eln=false
           [[ "${IMAGE_VARIANT}" == wahoo* ]] && is_eln=true
+          is_ubuntu=false
+          [[ "${IMAGE_VARIANT}" == grouper* || "${IMAGE_VARIANT}" == gurnard* ]] && is_ubuntu=true
 
           sudo podman run --rm \
             -v "$PWD/build_scripts/checks/verify-desktop-experience.sh:/vde.sh:z" \
             -e IS_HUMMINGBIRD="$is_hb" \
             -e IS_ELN="$is_eln" \
+            -e IS_UBUNTU="$is_ubuntu" \
             --entrypoint /bin/bash "${TEST_IMAGE}" /vde.sh "${DESKTOP}"
 
       - name: Verify package wishlist
