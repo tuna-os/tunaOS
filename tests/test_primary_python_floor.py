@@ -1,7 +1,6 @@
-"""The oldest supported Python job must keep testing the compatibility floor.
-
-Falsification: advancing the compatibility job beyond Python 3.10, or dropping
-the narrow update rule, makes these tests fail while patch updates remain valid.
+"""The primary-config matrix must keep the compatibility floor and current Python.
+Falsification: removing Python 3.10 loses floor coverage; removing 3.15 loses
+coverage against the standard library's newer TOML parser.
 """
 import json
 from pathlib import Path
@@ -10,10 +9,13 @@ import re
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_primary_job_runs_python310_not_latest_runtime():
+def test_primary_matrix_runs_python310_floor_and_python315():
     workflow = (ROOT / '.github/workflows/test.yml').read_text()
-    job = workflow.split('  primary-config-python310:', 1)[1].split('\n  unit-tests:', 1)[0]
-    assert re.search(r"python-version:\s*['\"]3\.10(?:\.\d+)?['\"](?:\s|$)", job)
+    job = workflow.split('  primary-config:', 1)[1].split('\n  unit-tests:', 1)[0]
+    matrix = re.search(r'(?m)^\s*python-version:\s*\[([^\]]+)\]', job)
+    assert matrix is not None
+    versions = re.findall(r'["\'](\d+\.\d+(?:\.\d+)?)["\']', matrix.group(1))
+    assert versions == ['3.10', '3.15']
     assert 'python -m pytest -q tests/test_primary_config.py' in job
 
 
