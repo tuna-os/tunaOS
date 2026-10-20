@@ -342,10 +342,9 @@ jobs:
           # turned E2E yellowfin:gnome green: the object would have landed
           # under a key nothing looks up.
           #
-          # Resolve each stable name first. During rollback the stable ISO is
-          # intentionally frozen, while its small JSON resolver points at the
-          # current checksum snapshot. Targets without a resolver retain the
-          # legacy direct-download behavior.
+          # Resolve every resolver name before attempting any stable object.
+          # Grouped GNOME is preferred when both generations are present; an
+          # existing malformed resolver is always a hard failure.
           DESKTOP="${FLAVOR%%-*}"
           if [[ "$DESKTOP" == "gnome" ]]; then
             GROUP_OBJECT="${VARIANT}-latest.iso"
@@ -353,77 +352,95 @@ jobs:
             GROUP_OBJECT="${VARIANT}-${DESKTOP}-latest.iso"
           fi
           OBJECT="${VARIANT}-${FLAVOR}-latest.iso"
-          FOUND=""
-          for requested in "${OBJECT}" "${GROUP_OBJECT}"; do
-            candidate="$requested"
-            expected_digest=""
+          RESOLVER_ORDER=("${GROUP_OBJECT}" "${OBJECT}")
+          declare -A SEEN_RESOLVERS HAS_RESOLVER RESOLVED DIGEST
+          for requested in "${RESOLVER_ORDER[@]}"; do
+            [[ -z "${SEEN_RESOLVERS[$requested]:-}" ]] || continue
+            SEEN_RESOLVERS["$requested"]=1
             resolver="${requested%.iso}.json"
+            HAS_RESOLVER["$requested"]=false
             if ! resolver_listing="$(rclone lsf --s3-no-check-bucket \
               --files-only --include "/${resolver}" \
               "R2:${{ secrets.R2_BUCKET }}/live-isos/")"; then
               echo "::error::Cannot list resolver ${resolver}; refusing frozen stable fallback" >&2
               exit 1
             fi
-            if [[ -n "$resolver_listing" ]]; then
-              if [[ "$resolver_listing" != "$resolver" ]]; then
-                echo "::error::Unexpected resolver listing for ${resolver}; refusing frozen stable fallback" >&2
-                exit 1
-              fi
-              if ! payload="$(rclone cat --s3-no-check-bucket \
-                "R2:${{ secrets.R2_BUCKET }}/live-isos/${resolver}")"; then
-                echo "::error::Cannot read resolver ${resolver}; refusing frozen stable fallback" >&2
-                exit 1
-              fi
-              if [[ -z "$payload" ]]; then
-                echo "::error::Empty resolver ${resolver}; refusing frozen stable fallback" >&2
-                exit 1
-              fi
-              if ! resolved="$(jq -er '
-                select(.schema == "TunaOSIsoResolution/v1") |
-                select(.iso | type == "string" and endswith(".iso") and
-                       (contains("/") | not)) |
-                select(.sha256 == (.iso + ".sha256")) |
-                select(.sigstore == (.iso + ".sigstore.json")) |
-                select(.checksum_subject | type == "string" and
-                       length > 0 and (contains("/") | not)) |
-                select(.digest | type == "string" and
-                       test("^sha256:[0-9a-f]{64}$")) |
-                .iso
-              ' <<<"$payload")"; then
-                echo "::error::Invalid resolver ${resolver}; refusing frozen stable fallback" >&2
-                exit 1
-              fi
-              candidate="$resolved"
-              expected_digest="$(jq -r '.digest' <<<"$payload")"
-              echo "==> ${requested} resolves to ${candidate}"
-            else
-              echo "==> No resolver for ${requested}; trying the stable object"
+            [[ -n "$resolver_listing" ]] || continue
+            if [[ "$resolver_listing" != "$resolver" ]]; then
+              echo "::error::Unexpected resolver listing for ${resolver}; refusing frozen stable fallback" >&2
+              exit 1
             fi
+            if ! payload="$(rclone cat --s3-no-check-bucket \
+              "R2:${{ secrets.R2_BUCKET }}/live-isos/${resolver}")"; then
+              echo "::error::Cannot read resolver ${resolver}; refusing frozen stable fallback" >&2
+              exit 1
+            fi
+            if [[ -z "$payload" ]]; then
+              echo "::error::Empty resolver ${resolver}; refusing frozen stable fallback" >&2
+              exit 1
+            fi
+            if ! resolved_fields="$(jq -er -s '
+              if length != 1 then error("resolver must be one JSON document") else .[0] end |
+              select(.schema == "TunaOSIsoResolution/v1") |
+              select(.iso | type == "string" and endswith(".iso") and
+                     (contains("/") | not)) |
+              select(.sha256 == (.iso + ".sha256")) |
+              select(.sigstore == (.iso + ".sigstore.json")) |
+              select(.checksum_subject | type == "string" and
+                     length > 0 and (contains("/") | not)) |
+              select(.digest | type == "string" and
+                     test("^sha256:[0-9a-f]{64}$")) |
+              [.iso, .digest] | @tsv
+            ' <<<"$payload")"; then
+              echo "::error::Invalid resolver ${resolver}; refusing frozen stable fallback" >&2
+              exit 1
+            fi
+            IFS=$'\t' read -r resolved expected_digest <<<"$resolved_fields"
+            HAS_RESOLVER["$requested"]=true
+            RESOLVED["$requested"]="$resolved"
+            DIGEST["$requested"]="$expected_digest"
+          done
+
+          FOUND=""
+          for requested in "${RESOLVER_ORDER[@]}"; do
+            [[ "${HAS_RESOLVER[$requested]:-false}" == true ]] || continue
+            candidate="${RESOLVED[$requested]}"
+            expected_digest="${DIGEST[$requested]}"
+            echo "==> ${requested} resolves to ${candidate}"
             if ! rclone copyto --log-level INFO --s3-no-check-bucket \
               "R2:${{ secrets.R2_BUCKET }}/live-isos/${candidate}" "$candidate"; then
-              if [[ -n "$expected_digest" ]]; then
-                echo "::error::Resolver target ${candidate} is unavailable; refusing stable fallback" >&2
-                exit 1
-              fi
-              continue
+              echo "::error::Resolver target ${candidate} is unavailable; refusing stable fallback" >&2
+              exit 1
             fi
             if [[ ! -f "$candidate" ]]; then
-              if [[ -n "$expected_digest" ]]; then
-                echo "::error::Resolver target ${candidate} was not downloaded; refusing stable fallback" >&2
-                exit 1
-              fi
-              continue
+              echo "::error::Resolver target ${candidate} was not downloaded; refusing stable fallback" >&2
+              exit 1
             fi
-            if [[ -n "$expected_digest" ]]; then
-              actual="sha256:$(sha256sum "$candidate" | awk '{print $1}')"
-              if [[ "$actual" != "$expected_digest" ]]; then
-                echo "::error::Resolver digest mismatch for ${candidate}" >&2
-                exit 1
-              fi
+            actual="sha256:$(sha256sum "$candidate" | awk '{print $1}')"
+            if [[ "$actual" != "$expected_digest" ]]; then
+              echo "::error::Resolver digest mismatch for ${candidate}" >&2
+              exit 1
             fi
             FOUND="${candidate}"
             break
           done
+
+          # No resolver exists for either name: retain the legacy direct
+          # lookup, but only after both resolver listings were checked.
+          if [[ -z "${FOUND}" ]]; then
+            declare -A SEEN_FALLBACK
+            for candidate in "$OBJECT" "$GROUP_OBJECT"; do
+              [[ -z "${SEEN_FALLBACK[$candidate]:-}" ]] || continue
+              SEEN_FALLBACK["$candidate"]=1
+              echo "==> No resolver; trying stable object ${candidate}"
+              if rclone copyto --log-level INFO --s3-no-check-bucket \
+                "R2:${{ secrets.R2_BUCKET }}/live-isos/${candidate}" "$candidate" &&
+                [[ -f "$candidate" ]]; then
+                FOUND="${candidate}"
+                break
+              fi
+            done
+          fi
           if [[ -z "${FOUND}" ]]; then
             echo "::error::No resolvable ISO in R2 for ${OBJECT} or ${GROUP_OBJECT}"
             exit 1

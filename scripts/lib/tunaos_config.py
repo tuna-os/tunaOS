@@ -64,12 +64,30 @@ def identifier(value, path):
 
 def validate(config):
     """Validate the complete phase-1 surface; reject inert future sections."""
-    table(config, ('schema_version', 'build', 'iso_groups', 'sibling_images', 'tuna_rollout', 'variants'),
+    table(config, ('schema_version', 'build', 'iso_groups', 'iso_delivery', 'sibling_images', 'tuna_rollout', 'variants'),
           ('schema_version', 'build', 'iso_groups', 'sibling_images', 'tuna_rollout', 'variants'), 'config')
     if type(config['schema_version']) is not int or config['schema_version'] != 1:
         raise ConfigError('schema_version: expected integer 1')
     table(config['build'], ('global_platforms',), ('global_platforms',), 'build')
     strings(config['build']['global_platforms'], 'build.global_platforms', platform=True)
+    if 'iso_delivery' in config:
+        policy = config['iso_delivery']
+        table(policy, ('cutover_targets', 'retained_r2_isos'),
+              ('cutover_targets', 'retained_r2_isos'), 'iso_delivery')
+        if not isinstance(policy['cutover_targets'], list):
+            raise ConfigError('iso_delivery.cutover_targets: expected list')
+        if not isinstance(policy['retained_r2_isos'], list):
+            raise ConfigError('iso_delivery.retained_r2_isos: expected list')
+        for i, name in enumerate(policy['retained_r2_isos']):
+            text(name, f'iso_delivery.retained_r2_isos[{i}]')
+            if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._+~-]*\.iso', name):
+                raise ConfigError(f'iso_delivery.retained_r2_isos[{i}]: unsafe ISO basename')
+        target_fields = ('variant', 'flavor', 'platform', 'qualification', 'qualified_at', 'evidence')
+        for i, target in enumerate(policy['cutover_targets']):
+            where = f'iso_delivery.cutover_targets[{i}]'
+            table(target, target_fields, target_fields, where)
+            for key in target_fields:
+                text(target[key], f'{where}.{key}')
     variants = config['variants']
     if not isinstance(variants, dict) or not variants:
         raise ConfigError('variants: expected nonempty table')
@@ -222,9 +240,15 @@ def load(path=None):
 def matrix(config):
     """Project the old consumer shape without inventing defaults or losing flags."""
     validate(config)
-    return copy.deepcopy({'config': config['build'], 'iso_groups': config['iso_groups'],
-                          'sibling_images': config['sibling_images'], 'tuna_rollout': config['tuna_rollout'],
-                          'variants': [{'id': name, **value} for name, value in config['variants'].items()]})
+    projected = {'config': copy.deepcopy(config['build']),
+                 'iso_groups': copy.deepcopy(config['iso_groups']),
+                 'sibling_images': copy.deepcopy(config['sibling_images']),
+                 'tuna_rollout': copy.deepcopy(config['tuna_rollout']),
+                 'variants': [{'id': name, **copy.deepcopy(value)}
+                              for name, value in config['variants'].items()]}
+    if 'iso_delivery' in config:
+        projected['iso_delivery'] = copy.deepcopy(config['iso_delivery'])
+    return projected
 
 
 def render(config):

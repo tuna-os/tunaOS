@@ -74,7 +74,8 @@ points and the manual `build-flavor.yml` dispatcher.
 
 #### ISO delivery cutover
 
-`iso_delivery` in `.github/build-config.yml` is the reviewed switch between
+`iso_delivery` in the authoritative `tunaos.toml` (and its generated
+`.github/build-config.yml` adapter) is the reviewed switch between
 browser-first delivery and routine publication of prebuilt ISOs to R2. Each
 `cutover_targets` entry uses an exact `variant` / `flavor` / `platform`
 identity. Each entry also needs `browser-qualified` status, a date, and an
