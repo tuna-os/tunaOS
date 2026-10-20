@@ -206,3 +206,57 @@ jobs:
           path: coverage-python.xml
           retention-days: 30
           if-no-files-found: ignore
+
+  tuna_build_inputs:
+    name: Detect Tuna image inputs
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      relevant: ${{ steps.filter.outputs.relevant }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Detect Tuna image input changes
+        id: filter
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          files="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" --jq '.[].filename')"
+          if printf '%s\n' "$files" | bash .github/scripts/tuna-pr-build-inputs.sh; then
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "relevant=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  tuna_pr_images:
+    name: "${{ matrix.variant }}:tuna"
+    needs: tuna_build_inputs
+    if: github.event_name == 'pull_request' && needs.tuna_build_inputs.outputs.relevant == 'true'
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        variant:
+          - marlin
+          - yellowfin
+          - albacore
+          - skipjack
+          - bonito
+          - wahoo
+          - bonito-rawhide
+          - grouper
+          - flounder
+          - flounder-sid
+          - sailfin
+    uses: ./.github/workflows/build-variant.yml
+    with:
+      variant: ${{ matrix.variant }}
+      flavor: tuna
