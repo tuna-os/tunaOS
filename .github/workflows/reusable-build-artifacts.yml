@@ -444,7 +444,5 @@ jobs:
             ARCH_SUFFIX="${PLATFORM##*/}"
             LATEST="${VARIANT}-${FLAVOR}-latest-${ARCH_SUFFIX}.iso"
           fi
-          CONFIG_JSON="${RUNNER_TEMP}/build-config.json"
-          yq -o=json '.' .github/build-config.yml > "$CONFIG_JSON"
           scripts/publish-iso-r2.sh \
             "$ISO" "$LATEST" "$CONFIG_JSON" "R2:${R2_BUCKET}/live-isos"
