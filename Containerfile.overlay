@@ -149,6 +149,11 @@ RUN --mount=type=tmpfs,dst=/tmp \
     --mount=type=bind,from=context,source=/,target=/run/context \
     /run/context/build_scripts/00-copy-files.sh
 
+# The overlay re-copies common's shared payload after the parent image was
+# built; restore TunaOS-owned completions and update policy over that copy.
+RUN --mount=type=bind,from=context,source=/,target=/run/context \
+    /run/context/build_scripts/install-tunaos-overrides.sh
+
 RUN --mount=type=bind,from=context,source=/,target=/run/context \
     /run/context/build_scripts/90-image-info.sh
 
