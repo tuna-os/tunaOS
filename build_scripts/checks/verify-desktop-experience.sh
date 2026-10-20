@@ -94,7 +94,7 @@ waive() { TUNAOS_CONTRACT_WAIVED=$((TUNAOS_CONTRACT_WAIVED + 1)); }
 
 hummingbird_bootstrap_waived() {
 	[[ "${IS_HUMMINGBIRD:-false}" == "true" &&
-		"${desktop:-}" != cosmic && "${desktop:-}" != tuna ]]
+		"${desktop:-}" != "cosmic" && "${desktop:-}" != "tuna" ]]
 }
 
 require_command() { command -v "$1" >/dev/null || {

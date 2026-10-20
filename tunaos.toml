@@ -131,7 +131,7 @@ package_target = "rawhide"
 [tuna_rollout.hummingbird]
 status = "admitted"
 package_target = "hummingbird"
-portals = "blocked on tuna-desktop session-start fix"
+reason = "blocked on tuna-desktop session-start fix"
 
 [tuna_rollout.sailfin]
 status = "admitted"
