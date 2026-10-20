@@ -23,7 +23,7 @@ This is the bounded audit of documentation parity that
 | 2 | [tunaos-packages#132](https://github.com/tuna-os/tunaos-packages/issues/132) | GNOME-only precursor (`:base` vs `:gnome` deltas) |
 | 3 | [tuna-os/docs `src/data/variants.ts`](https://github.com/tuna-os/docs/blob/main/src/data/variants.ts) | The tunaos.org variant catalog — which desktops each variant page lists |
 | 4 | [tuna-os/docs `src/pages/`](https://github.com/tuna-os/docs/tree/main/src/pages) | The per-variant landing pages (`/yellowfin`, `/bonito`, …) |
-| 5 | [`.github/build-config.yml`](../.github/build-config.yml) | Current build matrix (`build_image` / `build_iso` per flavor) |
+| 5 | [`tunaos.toml`](../tunaos.toml) | Current build matrix (`build_image` / `build_iso` per flavor) |
 | 6 | [tuna-os/docs `static/iso-index.json`](https://github.com/tuna-os/docs/blob/main/static/iso-index.json) | The download page's live ISO links (`download.tunaos.org`) |
 
 ## The audit's edition count (37 vs 40)
@@ -165,7 +165,7 @@ Editions with no ISO surfaced in `iso-index.json` (the download page's source):
   `skipjack` kde/cosmic/niri/xfce, `marlin` cosmic/niri/xfce,
   `flounder` kde — 11 editions.
 
-Several of these have `build_iso: true` in `.github/build-config.yml`, but the
+Several of these have `build_iso: true` in `tunaos.toml`, but the
 community desktop ISO group is declared `publish: false` (only the default
 GNOME group is published as `<variant>.iso`), and no per-desktop ISO reaches the
 R2 index for them. The browser ISO builder (`iso.tunaos.org`) can still produce
@@ -179,6 +179,6 @@ hand-maintained numbers:
 * Variant-page listings: `tuna-os/docs` → `src/data/variants.ts`.
 * Download links: `tuna-os/docs` → `static/iso-index.json` (refreshed by the
   docs repo's `update-iso-index` workflow).
-* Build reality: `.github/build-config.yml` (`build_image` / `build_iso`).
+* Build reality: `tunaos.toml` (`build_image` / `build_iso`).
 
 Re-check those three when a cell here looks stale.

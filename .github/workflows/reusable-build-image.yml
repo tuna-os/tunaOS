@@ -165,6 +165,9 @@ jobs:
           persist-credentials: false
         if: ${{ startsWith(inputs.flavor, 'base') }}
 
+      - name: Prepare build configuration
+        uses: ./.github/actions/prepare-config
+
       - name: Setup runner
         uses: projectbluefin/actions/bootc-build/setup-runner@59f783ed76fd9d449ef6887a6649446801bd5434 # v1 as of 2026-07-02
         with:
@@ -959,7 +962,7 @@ jobs:
             done
           }
           # Install necessary packages for building and pushing the image
-          apk_install jq git podman uutils bash conmon crun netavark fuse-overlayfs libstdc++ yq
+          apk_install jq git podman uutils bash conmon crun netavark fuse-overlayfs libstdc++ yq python3
           # Point /bin/sh at bash WITHOUT `ln -sf`.
           #
           # This step installs uutils, which replaces coreutils in PATH, so the
@@ -989,6 +992,9 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      - name: Prepare build configuration
+        uses: ./.github/actions/prepare-config
 
       - name: Report upstream job status
         env:

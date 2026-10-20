@@ -7,7 +7,11 @@ tunaos_build_config() {
 	local library_dir repo_root config
 	library_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 	repo_root="$(cd "${library_dir}/../.." && pwd)"
-	config="${TUNAOS_BUILD_CONFIG:-${repo_root}/.github/build-config.yml}"
+	if [[ -n "${TUNAOS_BUILD_CONFIG:-}" ]]; then
+		config="$TUNAOS_BUILD_CONFIG"
+	else
+		config="$(python3 "${repo_root}/scripts/config.py" generate --root "$repo_root")" || return 1
+	fi
 
 	if [[ ! -f "$config" ]]; then
 		echo "ERROR: build config not found: ${config}" >&2

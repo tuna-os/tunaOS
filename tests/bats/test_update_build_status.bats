@@ -201,7 +201,7 @@ STUB
   [ ! -e "${BATS_TEST_TMPDIR}/README.md.bak" ]
 }
 
-@test "args: config and readme default to .github/build-config.yml and README.md in the cwd" {
+@test "args: config defaults to repository source while README stays in cwd" {
   local work="${BATS_TEST_TMPDIR}/work"
   mkdir -p "${work}/.github"
   echo 'variants: []' > "${work}/.github/build-config.yml"
@@ -210,6 +210,8 @@ STUB
   run bash -c 'cd "$1" && shift && exec bash "$0"' "$SCRIPT" "$work"
   [ "$status" -eq 0 ]
   grep -q '\*\*1/4\*\*' "${work}/README.md"
+  # An unrelated CWD adapter is not the authoritative source.
+  grep -qx 'variants: \[\]' "${work}/.github/build-config.yml"
 }
 
 @test "args: GITHUB_REPOSITORY defaults to tuna-os/tunaOS when unset" {
