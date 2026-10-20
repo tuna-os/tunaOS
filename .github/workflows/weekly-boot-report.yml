@@ -38,6 +38,9 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Prepare build configuration
+        uses: ./.github/actions/prepare-config
+
       - name: Install podman (for image inspect)
         run: |
           # The boot-report script uses `podman create + cp` to extract the

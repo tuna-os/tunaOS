@@ -184,6 +184,9 @@ Six more, each measured while fixing the live-ISO and install path
 - **Load the data the desktop uses.** The GNOME binary passed the contract
   without its schema RPM (Yellowfin, #2750). Query the compiled schema with
   GLib. The XML can exist without a compiled schema.
+- **Test the last writer.** Desktop selection can pass and still be overwritten
+  by `90-image-info.sh` or an overlay file copy (PR #3465). Run the final writer
+  sequence too; preserve explicit fork branding after stock selection.
 - **Verify a fix in the built artifact, not in the source tree.** The guard
   above was present in the script, committed, reviewed and merged, and
   absent from every image. `just build` then `podman run --rm <image>` to

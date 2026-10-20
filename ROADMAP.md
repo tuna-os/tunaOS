@@ -10,6 +10,17 @@ Bring a modern, cloud-native experience to the Enterprise Linux Desktop. tunaOS 
 
 ---
 
+## Delivery priority: one-config reference journey
+
+The near-term outcome is a repeatable branded Yellowfin/RPM and Grouper/APT
+installation from one fork-owned config. See the [delivery plan](docs/FORK-DELIVERY.md)
+and [tracking epic #3474](https://github.com/tuna-os/tunaOS/issues/3474) for the
+six priorities, dependencies and acceptance gates. Finish the two reference
+journeys before expanding scope. Generated exact-image evidence owns test
+status; a planned outcome or a green draft PR is not a shipped result.
+
+---
+
 ## Current Status (August 2026)
 
 ### Active Variants
@@ -56,7 +67,7 @@ user-install evidence in its PR.
 
 ### Platform Coverage Matrix
 
-`scripts/gen-platform-coverage.py` makes this matrix from [`.github/build-config.yml`](./.github/build-config.yml). It records the desktop/platform combinations the image factory commits to build; it does not infer support from registry tags.
+`scripts/gen-platform-coverage.py` makes this matrix from [`tunaos.toml`](./tunaos.toml). It records the desktop/platform combinations the image factory commits to build; it does not infer support from registry tags.
 
 - **S — Supported:** an active cell for a standard OCI image (`build_image: true`). Runtime evidence and current failures remain visible in [MATRIX-STATUS.md](docs/MATRIX-STATUS.md).
 - **E — Experimental:** an active Apple Silicon/Asahi cell. The boot chain has static verification, but the installer and real-hardware gates have not graduated it.
