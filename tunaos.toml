@@ -1670,7 +1670,7 @@ build_qcow2 = false
 [[variants.bonito-rawhide.flavors]]
 # Tuna Desktop (tuna_rollout above, tunaOS#3203): rawhide package
 # target, repo.tunaos.org/rpm/rawhide (tunaos-packages#870). Published
-# as bonito:tuna-rawhide.
+# as bonito-rawhide:tuna.
 id = "tuna"
 stage = 2
 platforms = ["linux/amd64"]
@@ -2304,7 +2304,7 @@ build_image = true
 [[variants.flounder-sid.flavors]]
 # Tuna Desktop (tuna_rollout above, tunaOS#3207): debian package
 # target, signed apt index repo.tunaos.org/tideforge/debian-sid.
-# Published as flounder:tuna-sid.
+# Published as flounder-sid:tuna.
 id = "tuna"
 stage = 2
 platforms = ["linux/amd64"]

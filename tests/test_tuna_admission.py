@@ -1,5 +1,6 @@
 """Tuna Desktop (formerly Roost) admission must preserve signed sourcing and an installed-session gate."""
 import hashlib
+import re
 import subprocess
 from pathlib import Path
 import yaml
@@ -174,19 +175,19 @@ def test_hummingbird_cell_uses_the_pinned_native_signed_target():
     assert "gpgkey=https://repo.tunaos.org/public.gpg" in hummingbird
 
 
-def test_hummingbird_bootstrap_waiver_excludes_admitted_tuna():
-
-    import re
-
+def _hummingbird_bootstrap_waiver() -> str:
     script = (ROOT / "build_scripts/checks/verify-desktop-experience.sh").read_text()
-    guard = re.search(
-        r'if \[\[ "\$\{IS_HUMMINGBIRD:-false\}" == "true" && "\$\{desktop:-\}" != cosmic && "\$\{desktop:-\}" != tuna \]\]; then',
-        script,
-    )
-    assert guard, "the Hummingbird waiver must exclude admitted Tuna"
-    command = (
-        'IS_HUMMINGBIRD=true; desktop="$1"; '
-        f"{guard.group(0)} exit 0; else exit 1; fi"
+    start = script.index("hummingbird_bootstrap_waived() {")
+    end = script.index("\n}\n", start) + 2
+    return script[start:end]
+
+
+def test_hummingbird_bootstrap_waiver_excludes_admitted_tuna():
+    command = "\n".join(
+        [
+            _hummingbird_bootstrap_waiver(),
+            'IS_HUMMINGBIRD=true; desktop="$1"; hummingbird_bootstrap_waived',
+        ]
     )
     for desktop, accepted in (("gnome", True), ("cosmic", False), ("tuna", False)):
         result = subprocess.run(
@@ -219,27 +220,25 @@ def test_hummingbird_tuna_required_packages_do_not_use_best_effort_fallback():
 
 
 def test_hummingbird_tuna_fails_direct_contract_checks():
-    import re
-
     script = (ROOT / "build_scripts/checks/verify-desktop-experience.sh").read_text()
-    guards = re.findall(
-        r'(?m)^\s*((?:if|elif) \[\[ "\$\{IS_HUMMINGBIRD:-false\}" != "true" \|\| "\$\{desktop:-\}" == tuna \]\]; then)$',
-        script,
+    assert script.count("! hummingbird_bootstrap_waived; then") >= 5, (
+        "the direct Hummingbird failure guards changed"
     )
-    assert len(guards) >= 5, "the direct Hummingbird failure guards changed"
-    for guard in guards:
-        condition = guard.replace("elif ", "if ", 1)
-        command = (
+    command = "\n".join(
+        [
+            _hummingbird_bootstrap_waiver(),
             'IS_HUMMINGBIRD=true; desktop="$1"; '
-            f"{condition} exit 0; else exit 1; fi"
+            "if ! hummingbird_bootstrap_waived; then exit 0; else exit 1; fi",
+        ]
+    )
+    for desktop, accepted in (("tuna", True), ("gnome", False)):
+        result = subprocess.run(
+            ["bash", "-c", command, "guard-test", desktop],
+            capture_output=True,
+            text=True,
         )
-        for desktop, accepted in (("tuna", True), ("gnome", False)):
-            result = subprocess.run(
-                ["bash", "-c", command, "guard-test", desktop],
-                capture_output=True,
-                text=True,
-            )
-            assert (result.returncode == 0) is accepted, (guard, desktop)
+        assert (result.returncode == 0) is accepted, desktop
+
 
 def _hummingbird_codec_block() -> str:
     source = (ROOT / "build_scripts/checks/verify-desktop-experience.sh").read_text()
