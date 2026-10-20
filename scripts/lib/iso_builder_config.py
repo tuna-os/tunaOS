@@ -14,8 +14,10 @@ class ConfigError(ValueError):
 def table(value, required, optional=()):
     if not isinstance(value, dict):
         raise ConfigError('expected object')
-    if set(value) - set(required) - set(optional) or set(required) - set(value):
-        raise ConfigError(f'unknown or missing fields: {sorted(value)}; required {required}')
+    unknown = set(value) - set(required) - set(optional)
+    missing = set(required) - set(value)
+    if unknown or missing:
+        raise ConfigError(f'unknown keys {sorted(unknown)}; missing keys {sorted(missing)}')
 
 
 def text(value):

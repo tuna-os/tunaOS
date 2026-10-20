@@ -22,12 +22,14 @@ def main():
             content = iso_builder_config.render(tunaos_config.load(args.root / 'tunaos.toml'))
             target = args.output or args.root / 'docs/iso-builder.config.json'
             if args.command == 'check-builder-config':
-                if not target.is_file() or target.read_text() != content:
+                if target.is_symlink():
+                    raise tunaos_config.ConfigError(f'{target}: refusing symlink')
+                if not target.is_file() or target.read_text(encoding='utf-8') != content:
                     raise tunaos_config.ConfigError(f'{target}: generated builder config drift; run generate-builder-config')
             else:
                 if target.is_symlink():
                     raise tunaos_config.ConfigError(f'{target}: refusing symlink')
-                target.write_text(content)
+                target.write_text(content, encoding='utf-8')
             print(target)
         elif args.command == 'verify-debian-image':
             if not all((args.image, args.variant, args.desktop, args.platform)):

@@ -36,6 +36,16 @@ def test_unknown_fields_fail_closed(path):
         builder.validate(doc)
 
 
+def test_table_error_reports_unknown_and_missing_fields():
+    doc = config()
+    doc['brand']['unexpected'] = True
+    del doc['brand']['name']
+    with pytest.raises(builder.ConfigError) as error:
+        builder.validate(doc)
+    assert "unknown keys ['unexpected']" in str(error.value)
+    assert "missing keys ['name']" in str(error.value)
+
+
 @pytest.mark.parametrize('section,key,value', [
     (None, 'schema_version', True), (None, 'preview_only', 1),
     ('brand', 'homepage_url', 'javascript:alert(1)'),
@@ -111,6 +121,20 @@ def test_drift_cli_is_read_only_and_detects_changes(tmp_path):
     assert result.returncode == 1 and 'drift' in result.stderr
     assert output.read_text() == '{}\n'
 
+
+def test_drift_cli_refuses_symlink_target(tmp_path):
+    output = tmp_path / 'config.json'
+    victim = tmp_path / 'victim.json'
+    victim.write_text(builder.render(primary.load()), encoding='utf-8')
+    output.symlink_to(victim)
+    cli = [sys.executable, str(ROOT / 'scripts/config.py')]
+    result = subprocess.run(
+        cli + ['check-builder-config', '--output', str(output)],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 1
+    assert 'refusing symlink' in result.stderr
 
 def test_schema_shape_matches_export():
     # jsonschema is optional locally; executable stdlib validation remains mandatory.
