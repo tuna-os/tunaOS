@@ -38,7 +38,11 @@ CAPABILITIES = _load_module(ROOT / "scripts/installer-capabilities.py", "install
 
 
 def _case(name):
-    return next(case for case in CASES["cases"] if case["name"] == name)
+    try:
+        return next(case for case in CASES["cases"] if case["name"] == name)
+    except StopIteration:
+        available = sorted(case["name"] for case in CASES["cases"])
+        raise KeyError(f"unknown fixture case {name!r}; available={available}") from None
 
 
 def _document(relative):
@@ -100,7 +104,15 @@ def _run_branding(relative, tmp_path):
     tools = tmp_path / "tools"
     tools.mkdir()
     uname = tools / "uname"
-    uname.write_text("#!/bin/sh\n[ \"$1\" = \"-m\" ] && echo x86_64 || /usr/bin/uname \"$@\"\n")
+    uname.write_text(
+        "#!/bin/sh\n"
+        'if [ "$1" = "-m" ]; then echo x86_64; else\n'
+        "  for candidate in /usr/bin/uname /bin/uname; do\n"
+        '    [ -x "$candidate" ] && exec "$candidate" "$@"\n'
+        "  done\n"
+        "  exit 127\n"
+        "fi\n"
+    )
     uname.chmod(0o755)
     env = os.environ.copy()
     env.update(
@@ -139,8 +151,7 @@ def test_branding_fixture_cases_run_the_shell_adapter(name, tmp_path):
     case = _case(name)
     result = _run_branding(case["input"], tmp_path)
     if "normalized" in case:
-        assert result.returncode == 0, result.stderr
-        assert json.loads((tmp_path / "context/manifests/fork-config.json").read_text()) == _document(case["input"])
+        assert json.loads((tmp_path / "context/manifests/fork-config.json").read_text()) == _document(case["normalized"])
     else:
         assert result.returncode != 0
         assert case["expected_rejection"] in result.stderr
@@ -156,7 +167,15 @@ def _run_packages(relative, tmp_path, *, refresh=True):
     tools = tmp_path / "tools"
     tools.mkdir()
     uname = tools / "uname"
-    uname.write_text("#!/bin/sh\n[ \"$1\" = \"-m\" ] && echo x86_64 || /usr/bin/uname \"$@\"\n")
+    uname.write_text(
+        "#!/bin/sh\n"
+        'if [ "$1" = "-m" ]; then echo x86_64; else\n'
+        "  for candidate in /usr/bin/uname /bin/uname; do\n"
+        '    [ -x "$candidate" ] && exec "$candidate" "$@"\n'
+        "  done\n"
+        "  exit 127\n"
+        "fi\n"
+    )
     uname.chmod(0o755)
     refresh_body = "return 0" if refresh else "return 1"
     command = f"""
@@ -304,6 +323,38 @@ def test_capability_registry_rejects_invalid_app_id(tmp_path):
     invalid.write_text(json.dumps(registry))
 
     with pytest.raises(CAPABILITIES.CapabilityError, match=r"app_id: expected nonempty string"):
+        CAPABILITIES.load(invalid)
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("repository", None, r"repository: expected nonempty string"),
+        ("capabilities", [" install"], r"capabilities: expected"),
+        ("unsupported", ["install"], r"operation both supported and unsupported"),
+        ("id", "kde", r"duplicate frontend"),
+        ("backend", "missing", r"unknown backend"),
+    ],
+)
+def test_capability_registry_rejects_invalid_contract_fields(tmp_path, field, value, message):
+    path = FIXTURES / _case("frontends-name-backend-and-unsupported-operations")["input"]
+    registry = json.loads(path.read_text())
+    registry["frontends"][0][field] = value
+    invalid = tmp_path / f"capabilities-{field}.json"
+    invalid.write_text(json.dumps(registry))
+
+    with pytest.raises(CAPABILITIES.CapabilityError, match=message):
+        CAPABILITIES.load(invalid)
+
+
+def test_capability_registry_rejects_missing_backend_operation(tmp_path):
+    path = FIXTURES / _case("frontends-name-backend-and-unsupported-operations")["input"]
+    registry = json.loads(path.read_text())
+    registry["frontends"][0]["capabilities"].remove("fisherman-recipe")
+    invalid = tmp_path / "capabilities-missing-operation.json"
+    invalid.write_text(json.dumps(registry))
+
+    with pytest.raises(CAPABILITIES.CapabilityError, match="backend operations not declared"):
         CAPABILITIES.load(invalid)
 
 
