@@ -117,8 +117,8 @@ def test_standalone_contract_derives_distro_flags_from_os_release():
     text = CONTRACT.read_text(encoding="utf-8")
     assert "detect_standalone_distro_flags" in text
     assert "[[ -r /etc/os-release ]]" in text
-    assert 'ID" == ubuntu' in text
-    assert 'ID" == debian' in text
+    assert '"$os_id" == ubuntu' in text
+    assert '"$os_id" == debian' in text
 
 
 @pytest.mark.parametrize("flag", sorted(_flags_the_script_reads()))

@@ -158,3 +158,16 @@ def test_rebuild_resource_rejects_unexpected_prefix(tmp_path: Path):
     assert result.returncode != 0
     assert "unsupported GResource prefix" in result.stderr
     assert resource.read_bytes() == b"ORIGINAL RESOURCE"
+
+def test_rebuild_resource_rejects_path_traversal(tmp_path: Path):
+    result, resource = _run_rebuild(
+        tmp_path,
+        resource_names=[
+            "/org/gnome/shell/theme/gnome-shell.css",
+            "/org/gnome/shell/theme/../escape.css",
+        ],
+    )
+
+    assert result.returncode != 0
+    assert "unsafe GResource path" in result.stderr
+    assert resource.read_bytes() == b"ORIGINAL RESOURCE"

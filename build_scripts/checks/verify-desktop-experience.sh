@@ -48,6 +48,7 @@ detect_standalone_distro_flags() {
 	fi
 }
 
+detect_standalone_distro_flags
 
 # Tuna Desktop ships on Arch (pacman), the RPM bases and the apt bases (dpkg).
 # Query the native database for installed names and file owners, never
