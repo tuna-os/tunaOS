@@ -416,6 +416,8 @@ if [[ "${PKG_MGR:-}" == "apt" ]]; then
 		;;
 	tuna)
 		safe_disable greetd.service
+		safe_disable gdm.service
+		safe_disable gdm3.service
 		safe_enable gdm3.service
 		;;
 	gnome) safe_enable gdm.service ;;
@@ -514,6 +516,8 @@ if [[ "${PKG_MGR:-}" == "pacman" ]] || command -v zypper &>/dev/null || command 
 		;;
 	tuna)
 		safe_disable greetd.service
+		safe_disable gdm.service
+		safe_disable gdm3.service
 		safe_enable gdm.service
 		;;
 	gnome) safe_enable gdm.service ;;
@@ -628,6 +632,8 @@ elif [[ "${DESKTOP_FLAVOR}" == "niri" || "${DESKTOP_FLAVOR}" == "cosmic" ]]; the
 	safe_enable greetd.service
 elif [[ "${DESKTOP_FLAVOR}" == "tuna" ]]; then
 	safe_disable greetd.service
+	safe_disable gdm.service
+	safe_disable gdm3.service
 	safe_enable gdm.service
 elif [[ "${DESKTOP_FLAVOR}" == "gnome" ]]; then
 	safe_enable gdm.service

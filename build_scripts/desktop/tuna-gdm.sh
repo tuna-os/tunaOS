@@ -62,7 +62,8 @@ rm -f "/etc/systemd/system/graphical.target.wants/${_tuna_gdm_name}.service"
 ln -sfn "$_tuna_gdm_unit" "/etc/systemd/system/graphical.target.wants/${_tuna_gdm_name}.service"
 rm -f /etc/systemd/system/display-manager.service
 ln -sfn "$_tuna_gdm_unit" /etc/systemd/system/display-manager.service
-systemctl set-default graphical.target
+rm -f /etc/systemd/system/default.target
+ln -s graphical.target /etc/systemd/system/default.target
 
 # GNOME Shell owns the GDM login UI in a compiled GResource. Extract the
 # distro resource, append the Tuna overrides to every shell stylesheet, and
@@ -82,3 +83,4 @@ done
 _tuna_gdm_css_count="$(
 	tuna_gdm_rebuild_resource "$_tuna_gdm_resource" "$_tuna_gdm_theme"
 )"
+printf 'tuna-gdm: updated %s GResource stylesheet(s)\n' "$_tuna_gdm_css_count"

@@ -45,18 +45,21 @@ esac
         assert (result.returncode == 0) is accepted, (resource, result.stderr)
 
 
-def _run_rebuild(tmp_path: Path, *, compile_failure: bool = False) -> tuple[subprocess.CompletedProcess[str], Path]:
+def _run_rebuild(
+    tmp_path: Path,
+    *,
+    compile_failure: bool = False,
+    resource_names: list[str] | None = None,
+) -> tuple[subprocess.CompletedProcess[str], Path]:
     resource = tmp_path / "gnome-shell-theme.gresource"
     resource.write_bytes(b"ORIGINAL RESOURCE")
+    resource_names = resource_names or [
+        "/org/gnome/shell/theme/gnome-shell.css",
+        "/org/gnome/shell/theme/HighContrast/gnome-shell-high-contrast.css",
+        "/org/gnome/shell/theme/assets/logo.svg",
+    ]
     (tmp_path / "gnome-shell-theme.gresource.list").write_text(
-        "\n".join(
-            [
-                "/org/gnome/shell/theme/gnome-shell.css",
-                "/org/gnome/shell/theme/HighContrast/gnome-shell-high-contrast.css",
-                "/org/gnome/shell/theme/assets/logo.svg",
-            ]
-        )
-        + "\n"
+        "\n".join(resource_names) + "\n"
     )
     theme = tmp_path / "tuna-gdm.css"
     theme.write_text("/* TunaOS GDM theme overrides */\n")
@@ -141,4 +144,17 @@ def test_rebuild_resource_compile_failure_keeps_original(tmp_path: Path):
     result, resource = _run_rebuild(tmp_path, compile_failure=True)
 
     assert result.returncode != 0
+    assert resource.read_bytes() == b"ORIGINAL RESOURCE"
+
+def test_rebuild_resource_rejects_unexpected_prefix(tmp_path: Path):
+    result, resource = _run_rebuild(
+        tmp_path,
+        resource_names=[
+            "/org/gnome/shell/theme/gnome-shell.css",
+            "/org/other/theme/unexpected.css",
+        ],
+    )
+
+    assert result.returncode != 0
+    assert "unsupported GResource prefix" in result.stderr
     assert resource.read_bytes() == b"ORIGINAL RESOURCE"
