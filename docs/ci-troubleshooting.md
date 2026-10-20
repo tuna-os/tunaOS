@@ -1743,3 +1743,24 @@ They check all 14 real JPEGs across six desktops.
 They preserve desktop overrides, fallback files, custom fork art and URLs.
 Fork overlay input remains unsupported and fails closed.
 These are source-level tests, not built-image or boot acceptance.
+
+### README build-status refresh stops on a GitHub API 502
+
+**Symptom:** `Update README build status` fails in `Refresh build status table`
+with `gh: Server Error (HTTP 502)` before it opens a refresh PR.
+
+**Measured cause:** [run 39310599051](https://github.com/tuna-os/tunaOS/actions/runs/39310599051)
+(job 118258852799, 2026-10-19) installed yq successfully, then an unretried
+read in `update-build-status.sh` aborted the generator. This was not a rejected
+push to protected `main`; the workflow already publishes through a PR.
+
+**Fix:** Use `gh_read_retry` for the run-list and paginated job reads.
+Try at most three times. Wait 5/10 seconds for transient network or HTTP 5xx
+errors. Rate limits retain their original diagnostic: `gh run list` does not
+expose reset headers, so do not guess when GitHub allows another request.
+Authentication, authorization and other errors fail immediately.
+
+Buffer the output of each try. If a page fails, discard all output from that
+try. After three failures, retain the command's exit status and diagnostic.
+Keep README unchanged; do not publish a partial table.
+See `tests/test_readme_status_api_retries.py` for regression tests.
