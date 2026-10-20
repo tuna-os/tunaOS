@@ -115,16 +115,22 @@ yq_bin() { command -v yq; }
 	local fn
 	fn="$(awk '/^install_dnf_packages\(\)/,/^}/' "$INSTALL")"
 	[ -n "$fn" ]
-	run bash -c "
-		set -u
-		${fn}
-		_TD_DESKTOP=tuna
-		IS_HUMMINGBIRD=true
-		_TD_EXCL_ARGS=()
-		dnf_retry() { echo strict; return 1; }
-		install_available() { echo fallback; return 0; }
-		install_dnf_packages tuna-desktop
-	"
+	local harness="${BATS_TEST_TMPDIR}/install-dnf-packages.sh"
+	{
+		cat <<'EOF'
+set -u
+EOF
+		printf '%s\n' "$fn"
+		cat <<'EOF'
+	_TD_DESKTOP=tuna
+	IS_HUMMINGBIRD=true
+	_TD_EXCL_ARGS=()
+	dnf_retry() { echo strict; return 1; }
+	install_available() { echo fallback; return 0; }
+	install_dnf_packages tuna-desktop
+EOF
+	} >"$harness"
+	run bash "$harness"
 	[ "$status" -ne 0 ]
 	[[ "$output" == *strict* ]]
 	[[ "$output" != *fallback* ]]
