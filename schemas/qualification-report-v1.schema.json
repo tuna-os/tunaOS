@@ -83,6 +83,9 @@
     "skipReason": {
       "enum": ["blocked-by-prior-failure", "not-applicable"]
     },
+    "reasonCode": {
+      "enum": ["assertion-failed", "cleanup-failed", "contract-mismatch", "malformed-evidence", "runner-unavailable", "timeout", "unknown"]
+    },
     "command": {
       "type": ["string", "null"],
       "pattern": "^[a-z0-9][a-z0-9._-]{0,79}$"
@@ -106,9 +109,8 @@
           "if": { "properties": { "status": { "const": "failed" } }, "required": ["status"] },
           "then": {
             "properties": {
-              "timestamp": { "$ref": "#/$defs/timestamp" },
               "classification": { "enum": ["product", "harness", "runner", "unknown"] },
-              "reasonCode": { "$ref": "#/$defs/token" },
+              "reasonCode": { "$ref": "#/$defs/reasonCode" },
               "evidenceIds": { "allOf": [{ "$ref": "#/$defs/evidenceIds" }, { "minItems": 1 }] }
             }
           }
@@ -154,7 +156,7 @@
         "stage": { "$ref": "#/$defs/token" },
         "timestamp": { "$ref": "#/$defs/timestamp" },
         "classification": { "enum": ["product", "harness", "runner", "unknown"] },
-        "reasonCode": { "$ref": "#/$defs/token" },
+        "reasonCode": { "$ref": "#/$defs/reasonCode" },
         "commandId": { "$ref": "#/$defs/command" },
         "exitCode": { "$ref": "#/$defs/exitCode" },
         "evidenceIds": { "allOf": [{ "$ref": "#/$defs/evidenceIds" }, { "minItems": 1 }] }

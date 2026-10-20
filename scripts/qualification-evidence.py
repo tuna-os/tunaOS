@@ -16,6 +16,7 @@ MAX_EVENT_BYTES = 16 * 1024
 MAX_ASSERTIONS = 128
 MAX_EVIDENCE = 32
 MAX_INPUTS = 512
+MAX_TOOLS = 32
 DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
 COMMIT = re.compile(r"[0-9a-f]{40}\Z")
 TOKEN = re.compile(r"[a-z0-9](?:[a-z0-9._-]{0,79})\Z")
@@ -121,7 +122,7 @@ def validate_inputs(value: object) -> dict:
 
 
 def validate_tools(value: object) -> dict:
-    require(isinstance(value, dict) and 0 < len(value) <= 32, "tools: invalid inventory")
+    require(isinstance(value, dict) and 0 < len(value) <= MAX_TOOLS, "tools: invalid inventory")
     for name, record in value.items():
         where = f"tools.{name}"
         token(name, where)
@@ -214,7 +215,7 @@ def evaluate_reuse(producer: object, current: object) -> dict:
     invalidated = sorted(set(invalidated) | set(tool_assertions))
     require(len(harness_changes) <= MAX_INPUTS,
             "reuse decision: changed harness inputs exceed bound")
-    require(len(tool_changes) <= 32, "reuse decision: changed tools exceed bound")
+    require(len(tool_changes) <= MAX_TOOLS, "reuse decision: changed tools exceed bound")
     require(len(invalidated) <= MAX_ASSERTIONS,
             "reuse decision: invalidated assertions exceed bound")
     verdicts = dict(previous["assertions"])
