@@ -15,6 +15,7 @@ on:
       - "image-versions.yaml"
       - "manifests/desktops/tuna*.yaml"
       - "system_files/**"
+      - "system_files_overrides/**"
       - "scripts/**"
       - "manifests/desktop-contracts/**"
       - "Justfile"
@@ -24,8 +25,6 @@ on:
 
 permissions:
   contents: read
-  packages: write
-  id-token: write
 
 jobs:
   build_tuna:

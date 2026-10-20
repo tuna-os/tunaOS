@@ -101,7 +101,7 @@ MOCK
   [[ "$output" == *"source/cell receipt matches"* ]]
 }
 
-@test "verify-packages: Tuna apt maps verify packages and gdm3 without treating repositories as packages" {
+@test "verify-packages: Tuna apt maps normalize version pins and require canonical gdm.service" {
   cat >"${TEST_ROOT}/bin/podman" <<'MOCK'
 #!/usr/bin/env bash
 if [[ "$*" == *"os-release"* ]]; then
@@ -111,7 +111,7 @@ fi
 if [[ "$*" == *"dpkg-query"* ]]; then
   pkg="${@: -1}"
   case "$pkg" in
-    *"["*|*"{"*|*"https"*|*" "*) exit 1 ;;
+    *"["*|*"{"*|*"https"*|*" "*|*"="*) exit 1 ;;
   esac
   echo "install ok installed"
   exit 0
@@ -123,7 +123,7 @@ if [[ "$*" == *"systemd/system"* ]]; then
   case "$*" in
     *"tailscaled.service"*) exit 0 ;;
     *"systemd-resolved.service"*) exit 0 ;;
-    *"gdm3.service"*) exit 0 ;;
+    *"gdm.service"*) exit 0 ;;
   esac
   exit 1
 fi
@@ -134,7 +134,7 @@ MOCK
   run bash "${BATS_TEST_DIRNAME}/../../scripts/verify-image-packages.sh" "localhost/flounder-sid-tuna:base" tuna
   [ "$status" -eq 0 ]
   [[ "$output" == *"✓ gdm3"* ]]
-  [[ "$output" == *"✓ systemd service file: gdm.service|gdm3.service"* ]]
+  [[ "$output" == *"✓ systemd service file: gdm.service"* ]]
 }
 
 @test "verify-packages: routes to /var/db/pkg check for Gentoo" {

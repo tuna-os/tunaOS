@@ -125,7 +125,8 @@ for pkg in "${PACKAGES[@]}"; do
 		fi
 		;;
 	ubuntu | debian)
-		if ! podman run --rm --entrypoint dpkg-query "$IMAGE" -W -f='${Status}' "$pkg" 2>/dev/null | grep -q "ok installed"; then
+		query_pkg="${pkg%%=*}"
+		if ! podman run --rm --entrypoint dpkg-query "$IMAGE" -W -f='${Status}' "$query_pkg" 2>/dev/null | grep -q "ok installed"; then
 			echo "❌ Missing package: ${pkg}"
 			FAILED=1
 		else
@@ -181,7 +182,8 @@ SYSTEMD_SERVICES=(tailscaled.service systemd-resolved.service)
 # unit names — the same DE ships different DM units per base (KDE 6.5+ renamed
 # sddm to plasmalogin), and any one of them satisfies the check.
 case "${FLAVOR}" in
-gnome | tuna) SYSTEMD_SERVICES+=("gdm.service|gdm3.service") ;;
+gnome) SYSTEMD_SERVICES+=("gdm.service|gdm3.service") ;;
+tuna) SYSTEMD_SERVICES+=(gdm.service) ;;
 kde) SYSTEMD_SERVICES+=("sddm.service|plasmalogin.service") ;;
 niri | cosmic) SYSTEMD_SERVICES+=(greetd.service) ;;
 esac

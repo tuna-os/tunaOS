@@ -51,7 +51,7 @@ gnome)
 	SESSION_GLOBS='/usr/share/wayland-sessions/*gnome*.desktop /usr/share/wayland-sessions/ubuntu*.desktop'
 	;;
 tuna)
-	DM_PATTERN='^(gdm|gdm3)\.service$'
+DM_PATTERN='^gdm\.service$'
 	SESSION_BIN=tuna-session
 	SESSION_GLOBS='/usr/share/wayland-sessions/tuna.desktop'
 	;;

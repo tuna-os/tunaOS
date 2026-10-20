@@ -550,18 +550,23 @@ tuna)
 	# without it every portal fails (tuna-os/tuna-desktop#691).
 	require_command dbus-update-activation-environment
 	require_command wpctl
-	# Every Tuna base uses GDM. Debian names the package, binary and unit gdm3;
-	# Arch, RPM and openSUSE use gdm.
+	# Every Tuna base uses the canonical gdm.service unit. Debian and Ubuntu
+	# retain gdm3 as the package and executable name.
+	tuna_gdm_unit=gdm
 	if [[ "$tuna_backend" == dpkg ]]; then
-		tuna_gdm_unit=gdm3
+		tuna_gdm_command=gdm3
 		tuna_gdm_package=gdm3
-		tuna_gdm_config=/etc/gdm3/daemon.conf
+		if [[ "${IS_UBUNTU:-false}" == true ]]; then
+			tuna_gdm_config=/etc/gdm3/custom.conf
+		else
+			tuna_gdm_config=/etc/gdm3/daemon.conf
+		fi
 	else
-		tuna_gdm_unit=gdm
+		tuna_gdm_command=gdm
 		tuna_gdm_package=gdm
 		tuna_gdm_config=/etc/gdm/custom.conf
 	fi
-	require_command "$tuna_gdm_unit"
+	require_command "$tuna_gdm_command"
 	grep -qx "$tuna_gdm_package" <<<"$installed_packages" || {
 		echo "the ${tuna_gdm_package} package is not installed; Tuna has no login screen" >&2
 		exit 1
@@ -606,6 +611,10 @@ tuna)
 		echo "greetd.service is enabled beside GDM; two display managers would race for seat0/VT1" >&2
 		exit 1
 	fi
+	[[ -r "$tuna_gdm_config" ]] || {
+		echo "GDM configuration is missing or unreadable: $tuna_gdm_config" >&2
+		exit 1
+	}
 	if gdm_autologin_enabled "$tuna_gdm_config"; then
 		echo "GDM automatic login is enabled; the login screen is bypassed" >&2
 		exit 1
@@ -628,10 +637,10 @@ tuna)
 			exit 1
 		}
 	done
-	tuna_gdm_theme_unit="/etc/systemd/system/${tuna_gdm_unit}.service.d/10-tuna-gdm-theme.conf"
-	require_glob "$tuna_gdm_theme_unit"
-	grep -Fqx 'Environment=G_RESOURCE_OVERLAYS=/org/gnome/shell/theme=/usr/share/tunaos/gdm-theme' "$tuna_gdm_theme_unit" || {
-		echo "GDM is not configured to load the Tuna theme overlay" >&2
+	tuna_gdm_shell_desktop=/usr/share/gdm/greeter/applications/org.gnome.Shell.desktop
+	require_glob "$tuna_gdm_shell_desktop"
+	grep -Fq 'Exec=env G_RESOURCE_OVERLAYS=/org/gnome/shell/theme=/usr/share/tunaos/gdm-theme ' "$tuna_gdm_shell_desktop" || {
+		echo "the GDM greeter is not configured to load the Tuna theme overlay" >&2
 		exit 1
 	}
 	dm_pattern="^${tuna_gdm_unit}\\.service$"

@@ -63,8 +63,8 @@ def test_all_tuna_bases_use_gdm_and_remove_greetd_components():
         assert "gdm" in section["packages"], target
         assert removed.isdisjoint(section["packages"]), target
     apt = shared["packages"]["apt"]
-    assert apt["display_manager"] == "gdm3"
-    assert "gdm3" in apt["packages"]
+    assert apt["display_manager"] == "gdm"
+    assert {"gdm3", "gjs"} <= set(apt["packages"])
     assert removed.isdisjoint(apt["packages"])
     assert not any("greetd" in script for script in shared["post_install"])
 
@@ -84,8 +84,9 @@ def test_pull_requests_build_every_admitted_tuna_image_in_ci():
     assert {
         ".github/actions/**", ".github/scripts/**", "Containerfile*",
         "experiences/**", "image-versions.yaml", "manifests/desktops/tuna*.yaml",
-        "tunaos.toml",
+        "system_files_overrides/**", "tunaos.toml",
     } <= set(paths)
+    assert workflow["permissions"] == {"contents": "read"}
     job = workflow["jobs"]["build_tuna"]
     assert job["uses"] == "./.github/workflows/build-variant.yml"
     assert job["with"]["flavor"] == "tuna"
@@ -134,9 +135,9 @@ def test_rpm_cells_install_the_pinned_beta_from_signed_factory_repositories():
 def test_apt_cells_install_the_pinned_beta_from_the_signed_tideforge_index_for_their_base():
     manifest = yaml.safe_load((ROOT / "manifests/desktops/tuna.yaml").read_text())
     section = manifest["packages"]["apt"]
-    assert section["display_manager"] == "gdm3"
+    assert section["display_manager"] == "gdm"
     assert "tuna-desktop=1.0.0~beta.1-1" in section["packages"]
-    for package in ("gdm3", "xdg-desktop-portal-gnome", "xdg-desktop-portal-gtk", "gnome-keyring", "orca", "power-profiles-daemon"):
+    for package in ("gdm3", "gjs", "xdg-desktop-portal-gnome", "xdg-desktop-portal-gtk", "gnome-keyring", "orca", "power-profiles-daemon"):
         assert package in section["packages"], package
     assert {"greetd", "greetd-gtkgreet", "gtkgreet", "cage"}.isdisjoint(section["packages"])
     repos = {repo["condition"]: repo for repo in section["repos"]}

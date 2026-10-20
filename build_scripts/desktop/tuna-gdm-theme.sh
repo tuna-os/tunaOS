@@ -23,22 +23,16 @@ _tuna_gdm_theme_install() {
 	local resource_file="${test_root}/usr/share/gnome-shell/gnome-shell-theme.gresource"
 	local theme_dir="${test_root}/usr/share/tunaos/gdm-theme"
 	local identity_file="${test_root}/usr/share/tunaos/identity.env"
-	local gdm_unit="gdm"
-	local accent stylesheet resource_path unit_dir
+	local shell_desktop="${test_root}/usr/share/applications/org.gnome.Shell.desktop"
+	local greeter_apps_dir="${test_root}/usr/share/gdm/greeter/applications"
+	local accent stylesheet resource_path staged_theme greeter_desktop_tmp
 
-	if [[ -n "$test_root" ]]; then
-		if [[ -f "$test_root/usr/lib/systemd/system/gdm3.service" || -f "$test_root/lib/systemd/system/gdm3.service" ]]; then
-			gdm_unit="gdm3"
-		fi
-		unit_dir="${test_root}/etc/systemd/system/${gdm_unit}.service.d"
-	else
+	if [[ -z "$test_root" ]]; then
 		resource_file="/usr/share/gnome-shell/gnome-shell-theme.gresource"
 		theme_dir="/usr/share/tunaos/gdm-theme"
 		identity_file="/usr/share/tunaos/identity.env"
-		if [[ -f /usr/lib/systemd/system/gdm3.service || -f /lib/systemd/system/gdm3.service ]]; then
-			gdm_unit="gdm3"
-		fi
-		unit_dir="/etc/systemd/system/${gdm_unit}.service.d"
+		shell_desktop="/usr/share/applications/org.gnome.Shell.desktop"
+		greeter_apps_dir="/usr/share/gdm/greeter/applications"
 	fi
 
 	[[ -r "$identity_file" ]] || {
@@ -54,21 +48,25 @@ _tuna_gdm_theme_install() {
 		echo "GNOME Shell theme resource is missing: $resource_file" >&2
 		return 1
 	}
-
+	[[ -r "$shell_desktop" ]] || {
+		echo "GNOME Shell session component is missing: $shell_desktop" >&2
+		return 1
+	}
 	command -v gjs >/dev/null 2>&1 || {
 		echo "gjs is required to theme the GDM greeter" >&2
 		return 1
 	}
-	mkdir -p "$theme_dir" "$unit_dir"
 
+	mkdir -p "${theme_dir%/*}" "$greeter_apps_dir"
+	staged_theme="$(mktemp -d "${theme_dir}.tmp.XXXXXX")"
 	for stylesheet in gnome-shell-dark.css gnome-shell-light.css gnome-shell-high-contrast.css; do
 		resource_path="/org/gnome/shell/theme/$stylesheet"
-		if ! _tuna_gdm_theme_extract "$resource_file" "$resource_path" >"$theme_dir/$stylesheet"; then
-			rm -f "$theme_dir/$stylesheet"
+		if ! _tuna_gdm_theme_extract "$resource_file" "$resource_path" >"$staged_theme/$stylesheet"; then
+			rm -rf "$staged_theme"
 			echo "GNOME Shell theme resource does not contain $resource_path" >&2
 			return 1
 		fi
-		cat >>"$theme_dir/$stylesheet" <<CSS
+		cat >>"$staged_theme/$stylesheet" <<CSS
 
 /* Tuna's per-variant identity accent. */
 #lockDialogGroup {
@@ -76,11 +74,27 @@ _tuna_gdm_theme_install() {
 }
 CSS
 	done
+	rm -rf "$theme_dir"
+	mv "$staged_theme" "$theme_dir"
 
-	cat >"$unit_dir/10-tuna-gdm-theme.conf" <<'UNIT'
-[Service]
-Environment=G_RESOURCE_OVERLAYS=/org/gnome/shell/theme=/usr/share/tunaos/gdm-theme
-UNIT
+	# GDM puts /usr/share/gdm/greeter first in the greeter's XDG_DATA_DIRS.
+	# Shadow only its GNOME Shell session component so regular user sessions do
+	# not inherit the resource overlay.
+	greeter_desktop_tmp="$(mktemp "${greeter_apps_dir}/.org.gnome.Shell.desktop.XXXXXX")"
+	if ! awk '
+		BEGIN { replaced = 0 }
+		/^Exec=/ && !replaced {
+			sub(/^Exec=/, "Exec=env G_RESOURCE_OVERLAYS=/org/gnome/shell/theme=/usr/share/tunaos/gdm-theme ")
+			replaced = 1
+		}
+		{ print }
+		END { if (!replaced) exit 1 }
+	' "$shell_desktop" >"$greeter_desktop_tmp"; then
+		rm -f "$greeter_desktop_tmp"
+		echo "GNOME Shell session component has no Exec entry: $shell_desktop" >&2
+		return 1
+	fi
+	mv "$greeter_desktop_tmp" "$greeter_apps_dir/org.gnome.Shell.desktop"
 }
 
 _tuna_gdm_theme_install

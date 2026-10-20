@@ -4,10 +4,16 @@ setup() {
   REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
   SCRIPT="${REPO_ROOT}/build_scripts/desktop/tuna-gdm-theme.sh"
   ROOT="${BATS_TEST_TMPDIR}/root"
-  mkdir -p "${ROOT}/usr/share/gnome-shell" "${ROOT}/usr/bin" "${ROOT}/usr/share/tunaos" "${ROOT}/usr/lib/systemd/system"
+  mkdir -p "${ROOT}/usr/share/gnome-shell" "${ROOT}/usr/bin" \
+    "${ROOT}/usr/share/tunaos" "${ROOT}/usr/share/applications"
   printf 'unchanged package resource\n' >"${ROOT}/usr/share/gnome-shell/gnome-shell-theme.gresource"
   printf "TUNAOS_ACCENT='#1793D1'\n" >"${ROOT}/usr/share/tunaos/identity.env"
-  touch "${ROOT}/usr/lib/systemd/system/gdm.service"
+  cat >"${ROOT}/usr/share/applications/org.gnome.Shell.desktop" <<'DESKTOP'
+[Desktop Entry]
+Name=GNOME Shell
+Exec=/usr/bin/gnome-shell --mode=gdm
+Type=Application
+DESKTOP
   export TUNAOS_GDM_THEME_ROOT="${ROOT}"
   export PATH="${ROOT}/usr/bin:${PATH}"
   cat >"${ROOT}/usr/bin/gjs" <<'MOCK'
@@ -38,29 +44,38 @@ MOCK
   done
 
   [ "$(cat "${ROOT}/usr/share/gnome-shell/gnome-shell-theme.gresource")" = "unchanged package resource" ]
-  [ "$(cat "${ROOT}/etc/systemd/system/gdm.service.d/10-tuna-gdm-theme.conf")" = $'[Service]\nEnvironment=G_RESOURCE_OVERLAYS=/org/gnome/shell/theme=/usr/share/tunaos/gdm-theme' ]
+  grep -Fqx 'Exec=/usr/bin/gnome-shell --mode=gdm' \
+    "${ROOT}/usr/share/applications/org.gnome.Shell.desktop"
+  grep -Fqx 'Exec=env G_RESOURCE_OVERLAYS=/org/gnome/shell/theme=/usr/share/tunaos/gdm-theme /usr/bin/gnome-shell --mode=gdm' \
+    "${ROOT}/usr/share/gdm/greeter/applications/org.gnome.Shell.desktop"
 
   run bash "$SCRIPT"
   [ "$status" -eq 0 ]
   [ "$(grep -Fc 'background-color: #1793D1;' "${ROOT}/usr/share/tunaos/gdm-theme/gnome-shell-dark.css")" -eq 1 ]
 }
 
-@test "GDM theme targets gdm3 on Debian-based images" {
-  rm "${ROOT}/usr/lib/systemd/system/gdm.service"
-  touch "${ROOT}/usr/lib/systemd/system/gdm3.service"
-  printf "TUNAOS_ACCENT='#E95420'\n" >"${ROOT}/usr/share/tunaos/identity.env"
-
+@test "GDM theme does not set the overlay on the daemon or regular user sessions" {
   run bash "$SCRIPT"
   [ "$status" -eq 0 ]
-  [ -f "${ROOT}/etc/systemd/system/gdm3.service.d/10-tuna-gdm-theme.conf" ]
-  [ ! -e "${ROOT}/etc/systemd/system/gdm.service.d/10-tuna-gdm-theme.conf" ]
-  grep -Fqx '  background-color: #E95420;' "${ROOT}/usr/share/tunaos/gdm-theme/gnome-shell-dark.css"
+  [ ! -d "${ROOT}/etc/systemd/system/gdm.service.d" ]
+  [ ! -d "${ROOT}/etc/systemd/system/gdm3.service.d" ]
+  run grep -Fq G_RESOURCE_OVERLAYS "${ROOT}/usr/share/applications/org.gnome.Shell.desktop"
+  [ "$status" -ne 0 ]
+  grep -Fq G_RESOURCE_OVERLAYS \
+    "${ROOT}/usr/share/gdm/greeter/applications/org.gnome.Shell.desktop"
 }
 
+@test "GDM theme keeps the last complete theme if resource extraction fails" {
+  run bash "$SCRIPT"
+  [ "$status" -eq 0 ]
 
-@test "GDM theme fails closed if an installed stylesheet resource is missing" {
+  printf "TUNAOS_ACCENT='#E95420'\n" >"${ROOT}/usr/share/tunaos/identity.env"
   export GDM_THEME_MISSING_RESOURCE=/org/gnome/shell/theme/gnome-shell-high-contrast.css
   run bash "$SCRIPT"
   [ "$status" -ne 0 ]
-  [ ! -e "${ROOT}/etc/systemd/system/gdm.service.d/10-tuna-gdm-theme.conf" ]
+  for stylesheet in gnome-shell-dark.css gnome-shell-light.css gnome-shell-high-contrast.css; do
+    grep -Fqx '  background-color: #1793D1;' "${ROOT}/usr/share/tunaos/gdm-theme/${stylesheet}"
+    run grep -Fq '#E95420' "${ROOT}/usr/share/tunaos/gdm-theme/${stylesheet}"
+    [ "$status" -ne 0 ]
+  done
 }
