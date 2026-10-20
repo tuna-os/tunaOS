@@ -78,41 +78,7 @@ for _tuna_gdm_candidate in \
 done
 [[ -n "$_tuna_gdm_resource" ]] || tuna_gdm_fail "GNOME Shell theme resource is missing"
 
-_tuna_gdm_tmp="$(mktemp -d)"
-_tuna_gdm_xml="$_tuna_gdm_tmp/theme.gresource.xml"
-_tuna_gdm_output="$_tuna_gdm_tmp/gnome-shell-theme.gresource"
-_tuna_gdm_css_count=0
-mapfile -t _tuna_gdm_resources < <(gresource list "$_tuna_gdm_resource")
-((${#_tuna_gdm_resources[@]} > 0)) || tuna_gdm_fail "GDM theme resource is empty"
-
-{
-	printf '%s\n' '<?xml version="1.0" encoding="UTF-8"?>'
-	printf '%s\n' '<gresources>'
-	printf '%s\n' '  <gresource prefix="/org/gnome/shell/theme">'
-	for _tuna_gdm_resource_name in "${_tuna_gdm_resources[@]}"; do
-		_tuna_gdm_relative="${_tuna_gdm_resource_name#/org/gnome/shell/theme/}"
-		[[ "$_tuna_gdm_relative" != "$_tuna_gdm_resource_name" ]] || continue
-		_tuna_gdm_path="$_tuna_gdm_tmp/$_tuna_gdm_relative"
-		mkdir -p "$(dirname "$_tuna_gdm_path")"
-		gresource extract "$_tuna_gdm_resource" "$_tuna_gdm_resource_name" >"$_tuna_gdm_path"
-		case "$_tuna_gdm_relative" in
-		gnome-shell*.css|*/gnome-shell*.css)
-			printf '\n' >>"$_tuna_gdm_path"
-			cat "$_tuna_gdm_theme" >>"$_tuna_gdm_path"
-			_tuna_gdm_css_count=$((_tuna_gdm_css_count + 1))
-			;;
-		esac
-		printf '    <file>%s</file>\n' "$_tuna_gdm_relative"
-	done
-	printf '%s\n' '  </gresource>'
-	printf '%s\n' '</gresources>'
-} >"$_tuna_gdm_xml"
-
-(( _tuna_gdm_css_count > 0 )) || tuna_gdm_fail "GNOME Shell theme resource has no stylesheet"
-glib-compile-resources "$_tuna_gdm_xml" \
-	--sourcedir="$_tuna_gdm_tmp" \
-	--target="$_tuna_gdm_output"
-install -m0644 "$_tuna_gdm_output" "$_tuna_gdm_resource"
-rm -rf "$_tuna_gdm_tmp"
-
-echo "tuna-gdm: selected ${_tuna_gdm_name}, updated ${_tuna_gdm_css_count} GNOME Shell stylesheet(s)"
+. "$(dirname "${BASH_SOURCE[0]}")/lib/tuna-gdm-resource.sh"
+_tuna_gdm_css_count="$(
+	tuna_gdm_rebuild_resource "$_tuna_gdm_resource" "$_tuna_gdm_theme"
+)"
