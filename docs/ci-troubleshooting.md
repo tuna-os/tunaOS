@@ -213,6 +213,7 @@ each one from scratch.
 | 54 | A Matrix Status refresh turns **every cell of one unchanged variant** from ✅ to ⬜, and the composite drops by 16. The provenance names a run about ten runs back (skipjack from 35351369196, 2026-09-18, in the 08:10 refresh of 2026-09-25; albacore from 35429236550, 2026-09-19, in the next one). The next refresh reads the variant correctly again, and the job log has no warning | **`build_stage_results` scored the variant from a page of runs that did not start at the newest.** None of the nine newer runs contributed, and the old run fell outside the 2-day freshness SLA. The fallback was the 11th run on main, so it cannot be in a correct first page of 10 | `main_runs()` checks each `gh run list` page against the workflow's newest run on main, read with its own API call. It fetches again when that run is missing, and after three stale answers the refresh fails instead of publishing. A completed run whose `run view` has no jobs also fails the refresh instead of being skipped. If a refresh fails with `never contained the newest run`, re-run it. Regression test: `tests/regressions/test_issue_2709_*` (tunaOS#2709) |
 | 55 | Bonito (or other digest-pinned variants) fails on both base architectures with `manifest unknown` / 404 (run 32965043165) | Quay/Docker garbage-collects untagged base image manifests upstream after newer builds land. The repository-wide scheduled check at 22:20 UTC was too far from the 11:20 UTC build to catch midday upstream deletions, and `.github/build-config.yml` lacked Renovate digest automation | (1) Added Renovate `customManager` in `renovate.json` for `.github/build-config.yml` `base_image:` pins; (2) added scoped variant preflight to `scripts/check-base-image-pins.sh`; (3) `build-variant.yml` runs `check-base-image-pins.sh` for the target variant in `generate_matrix` before matrix execution. Regression test: `tests/regressions/test_issue_2113_bonito_checks_its_pin_before_the_matrix.py` (tunaOS#2113) |
 | 56 | The `regenerate` check (`gen-matrix-status.py --check-structure`) fails on every pull request after about 14 minutes with `RuntimeError: gh run view 38592759334 ... returned nothing after 3 attempts`. The log shows `HTTP 502: Server Error (.../runs/38592759334/jobs?per_page=100)` | `gh run view --json jobs` always asks for 100 jobs per page. For some large runs (31224494825, 38713238238, 38592759334, with 113 to 153 jobs) the API returns HTTP 502 for that page size on every attempt. With `per_page=50` the same runs return in seconds. The build walk raised on the failed query | `run_jobs()` tries `gh run view` first, then `gh api --paginate` with `per_page=50`. If both fail, the build walk skips that run with a warning, and an older run scores its cells. If a cell has no verdict from a readable run after a skip, the refresh still raises. Test: `tests/test_an_unreadable_run_is_skipped_not_fatal.py` |
+| 57 | An artifact matches a workflow run but its upload attempt cannot be established | GitHub artifact metadata exposes run and head identity, but no upload-attempt field; receipt names and timestamps do not prove that linkage | The RFC014 read-only adapter accepts only a run observed at successful attempt one before and after archive verification. Reject reruns and missing linkage; preserve `authentication: not_authenticated` until a trusted caller and separate proof exist. Tests mutate the attempt before and after collection. |
 
 **Pattern to notice (bugs #1-14):** almost every bug here was a live-squash-specific
 environment gap (missing package, missing locale, missing remote, wrong
@@ -1794,3 +1795,43 @@ Receipt shape and reported success do not establish browser qualification.
 The collector keeps dates, hashes and durations from receipts as diagnostics.
 It reports these receipts as unqualified until the collector can verify trusted inputs.
 The catalog has its own gate; report generation must not bypass that gate.
+
+### Anime wallpaper disappears after desktop setup
+
+**Symptom:** The selector chooses anime or a desktop override, but the final
+wallpaper is the vector fallback (PR #3465).
+
+**Cause:** RPM and Gentoo run `90-image-info.sh` after desktop setup. Overlays
+copy `system_files` again and then run it. It copied the vector over the
+selected art. Selector-only tests did not cover this final writer.
+
+**Fix:** Use the shared selector from the identity writer too, with
+`TUNAOS_IMAGE_FLAVOR` to identify the desktop in overlay builds.
+Apply artwork from the fork afterward. Run `pytest tests/test_anime_finalization.py`.
+
+The fixtures execute the complete identity writer in those orders.
+They check all 14 real JPEGs across six desktops.
+They preserve desktop overrides, fallback files, custom fork art and URLs.
+Fork overlay input remains unsupported and fails closed.
+These are source-level tests, not built-image or boot acceptance.
+
+### README build-status refresh stops on a GitHub API 502
+
+**Symptom:** `Update README build status` fails in `Refresh build status table`
+with `gh: Server Error (HTTP 502)` before it opens a refresh PR.
+
+**Measured cause:** [run 39310599051](https://github.com/tuna-os/tunaOS/actions/runs/39310599051)
+(job 118258852799, 2026-10-19) installed yq successfully, then an unretried
+read in `update-build-status.sh` aborted the generator. This was not a rejected
+push to protected `main`; the workflow already publishes through a PR.
+
+**Fix:** Use `gh_read_retry` for the run-list and paginated job reads.
+Try at most three times. Wait 5/10 seconds for transient network or HTTP 5xx
+errors. Rate limits retain their original diagnostic: `gh run list` does not
+expose reset headers, so do not guess when GitHub allows another request.
+Authentication, authorization and other errors fail immediately.
+
+Buffer the output of each try. If a page fails, discard all output from that
+try. After three failures, retain the command's exit status and diagnostic.
+Keep README unchanged; do not publish a partial table.
+See `tests/test_readme_status_api_retries.py` for regression tests.
