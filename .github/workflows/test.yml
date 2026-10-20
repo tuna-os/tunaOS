@@ -79,8 +79,12 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  primary-config-python310:
-    name: Primary config (Python 3.10)
+  primary-config:
+    name: Primary config (Python ${{ matrix.python-version }})
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.15"]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -90,10 +94,10 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
-          python-version: '3.10'
+          python-version: ${{ matrix.python-version }}
       - name: Install config test dependencies
         run: python -m pip install pytest -r requirements-config.txt
-      - name: Verify primary config on the oldest supported Python
+      - name: Verify primary config on Python ${{ matrix.python-version }}
         run: python -m pytest -q tests/test_primary_config.py
 
   unit-tests:
@@ -127,7 +131,7 @@ jobs:
           brew install bats-core
 
           # pytest for Python tests
-          pip3 install pytest pytest-cov --break-system-packages 2>/dev/null || pip3 install pytest pytest-cov --user
+          pip3 install pytest pytest-cov -r requirements-config.txt --break-system-packages 2>/dev/null || pip3 install pytest pytest-cov -r requirements-config.txt --user
 
           # Independent schema oracle, pinned with the other external tools.
           schema_version=$(yq -r '.downloads.jsonschema // ""' image-versions.yaml)
