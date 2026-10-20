@@ -17,10 +17,10 @@ ARG COMMON_IMAGE_REF="ghcr.io/projectbluefin/common:unpinned-must-override"
 ARG BREW_IMAGE_REF="ghcr.io/ublue-os/brew:unpinned-must-override"
 # projectbluefin/utah-packages: Bluefin's GNOME 51 for Hummingbird as a dnf
 # repository inside an OCI image (/repository, createrepo_c output; the image
-# is cosign-signed and pinned by digest in image-versions.yaml). Only the
-# gnome stage of a hummingbird build reads it -- bind-mounted, never copied,
-# so no image carries 500 MB of RPMs -- through the file:// repo declared in
-# manifests/desktops/gnome.yaml's hummingbird section
+# is cosign-signed and pinned by digest in image-versions.yaml). The GNOME
+# stage and Hummingbird Tuna stage read it through a temporary bind mount,
+# never copying the roughly 500 MB of RPMs into an image, using the file://
+# repos declared in manifests/desktops/gnome.yaml and tuna.yaml.
 # (tuna-os/tunaos-packages#629).
 ARG UTAH_PACKAGES_IMAGE_REF="ghcr.io/projectbluefin/utah-packages:unpinned-must-override"
 # tuna-os/tunaos-packages: this project's own GNOME 50 for EL10, from the
@@ -281,8 +281,20 @@ RUN rm -rf /opt && ln -s /var/opt /opt
 # Tuna Desktop on the RPM bases (tuna-os/tuna-desktop ADR 0008, epic #577):
 # EL10, Fedora 44, Fedora Rawhide, ELN and Hummingbird. The package and the
 # pieces their bases lack come from each target's signed TunaOS repository,
-# declared per target in manifests/desktops/tuna.yaml.
+# declared per target in manifests/desktops/tuna.yaml. Hummingbird gets a
+# separate target because its native Utah repository is an additional input.
 FROM base-no-de AS tuna
+RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/desktop/install-desktop.sh tuna
+RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/90-image-info.sh
+RUN rm -rf /opt && ln -s /var/opt /opt
+
+FROM base-no-de AS tuna-hummingbird
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \

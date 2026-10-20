@@ -10,7 +10,7 @@
 #   CONTAINERFILE      — which Containerfile to use
 #   BASE_IMAGE         — the FROM image for the build
 #   PLATFORM           — target platform(s) (e.g. "linux/amd64")
-#   DESKTOP_FLAVOR     — the --target stage name
+#   DESKTOP_FLAVOR     — requested desktop flavor (usually the --target stage)
 #   ENABLE_HWE         — 0 or 1
 #   ENABLE_NVIDIA      — 0 or 1
 #   ENABLE_SSHD        — 0 or 1
@@ -50,11 +50,11 @@ common_image_sha=$($YQ -r '.images[] | select(.name == "common") | .digest' imag
 common_image_ref="${common_image}@${common_image_sha}"
 brew_image_sha=$($YQ -r '.images[] | select(.name == "brew") | .digest' image-versions.yaml)
 brew_image_ref="${brew_image}@${brew_image_sha}"
-# Hummingbird's GNOME comes from projectbluefin/utah-packages, an OCI image
-# carrying a dnf repository; Containerfile.el10 bind-mounts it into the gnome
-# stage and manifests/desktops/gnome.yaml's hummingbird section points dnf at
-# it. Resolved for every build so the Containerfile has one contract; only
-# hummingbird's gnome stage reads it.
+# Hummingbird's GNOME and Tuna come from projectbluefin/utah-packages, an OCI
+# image carrying a dnf repository; Containerfile.el10 bind-mounts it into the
+# gnome and tuna-hummingbird stages, and their manifests point dnf at it.
+# Resolved for every build so the Containerfile has one contract; only those
+# Hummingbird stages read it.
 utah_packages_image="${UTAH_PACKAGES_IMAGE:-ghcr.io/projectbluefin/utah-packages}"
 utah_packages_sha=$($YQ -r '.images[] | select(.name == "utah-packages") | .digest' image-versions.yaml)
 utah_packages_ref="${utah_packages_image}@${utah_packages_sha}"
@@ -175,6 +175,11 @@ if [[ "${USE_CACHE}" == "1" ]]; then
 	BUILD_ARGS+=("${CACHE_MOUNTS[@]}")
 fi
 
+BUILD_TARGET="${DESKTOP_FLAVOR}"
+if [[ "${VARIANT}" == "hummingbird" && "${DESKTOP_FLAVOR}" == "tuna" ]]; then
+	BUILD_TARGET="tuna-hummingbird"
+fi
+
 # ── Pass 1: Build image ──────────────────────────────────────────────────────
 PRE_CHUNK_TAG="${IMAGE_TAG}-pre-chunk"
 
@@ -185,14 +190,14 @@ if [[ "${IS_CI}" == "1" ]] && command -v buildah &>/dev/null; then
 	PULL_FLAG="--pull-always"
 fi
 
-echo "==> Building ${DESKTOP_FLAVOR} stage..."
+echo "==> Building ${BUILD_TARGET} stage..."
 
 build_primary_image() {
 	${BUILDER} build \
 		--security-opt label=disable \
 		--dns=8.8.8.8 \
 		--platform "${PLATFORM}" \
-		--target="${DESKTOP_FLAVOR}" \
+		--target="${BUILD_TARGET}" \
 		"${BUILD_ARGS[@]}" \
 		--tag "${PRE_CHUNK_TAG}" \
 		${PULL_FLAG} \

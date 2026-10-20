@@ -109,9 +109,9 @@ def test_rpm_cells_install_the_pinned_beta_from_signed_factory_repositories():
     containerfile = (ROOT / "Containerfile.el10").read_text()
     context = containerfile.split("FROM scratch as context\n", 1)[1].split("FROM ", 1)[0]
     assert "COPY experiences/tuna /experiences/tuna" in context
-    stage = containerfile.split("FROM base-no-de AS tuna\n", 1)[1]
+    stage = containerfile.split("FROM base-no-de AS tuna\n", 1)[1].split("\nFROM ", 1)[0]
     assert "install-desktop.sh tuna" in stage
-
+    assert "--mount=type=bind,from=utah-packages" not in stage
 
 def test_hummingbird_cell_uses_the_pinned_native_signed_target():
     manifest = yaml.safe_load((ROOT / "manifests/desktops/tuna.yaml").read_text())
@@ -158,10 +158,12 @@ def test_hummingbird_cell_uses_the_pinned_native_signed_target():
     }
     assert variant["base_image"] == (
         "quay.io/hummingbird-community/bootc-os:latest@"
-        "sha256:a3a06793169af39bf14f49f497ad243984343617ef22725507ddc66b4c8e9413"
+        "sha256:cfbd877853849ed8307fa38f492dffdc24e0e0f4340293ef536ceee1fa8afaa5"
     )
 
-    stage = (ROOT / "Containerfile.el10").read_text().split("FROM base-no-de AS tuna\n", 1)[1]
+    stage = (ROOT / "Containerfile.el10").read_text().split(
+        "FROM base-no-de AS tuna-hummingbird\n", 1
+    )[1]
     assert "install-desktop.sh tuna" in stage
     assert "--mount=type=bind,from=utah-packages,source=/repository,target=/run/utah-packages" in stage
     base_packages = (ROOT / "build_scripts/10-base-packages.sh").read_text()
@@ -175,7 +177,6 @@ def test_hummingbird_cell_uses_the_pinned_native_signed_target():
 def test_hummingbird_bootstrap_waiver_excludes_admitted_tuna():
 
     import re
-    import subprocess
 
     script = (ROOT / "build_scripts/checks/verify-desktop-experience.sh").read_text()
     guard = re.search(
@@ -214,12 +215,11 @@ def test_hummingbird_tuna_required_packages_do_not_use_best_effort_fallback():
     assert "dnf_retry -y install" in strict
     assert "--skip-unavailable" not in strict
     library = (ROOT / "build_scripts/lib.sh").read_text()
-    assert "--qf '%{name}-%{version}-%{release}\\n'" in library
+    assert "--qf '%{name}\\n%{name}-%{version}-%{release}\\n'" in library
 
 
 def test_hummingbird_tuna_fails_direct_contract_checks():
     import re
-    import subprocess
 
     script = (ROOT / "build_scripts/checks/verify-desktop-experience.sh").read_text()
     guards = re.findall(
@@ -369,7 +369,6 @@ def test_tuna_is_a_selectable_greetd_session_listed_by_name(tmp_path):
     line as `exec <line>` (tunaOS#3110): the picker shows "Tuna Desktop", and
     that line runs the shipped launcher, which starts tuna-session."""
     import os
-    import subprocess
 
     environments = ROOT / "experiences/tuna/files/etc/greetd/environments"
     assert environments.read_text().splitlines() == ["Tuna Desktop"]
@@ -390,7 +389,6 @@ def test_tuna_is_a_selectable_greetd_session_listed_by_name(tmp_path):
 
 
 def test_installed_portal_contract_rejects_missing_or_ambiguous_consent_routing(tmp_path):
-    import subprocess
 
     script = (ROOT / "build_scripts/checks/verify-desktop-experience.sh").read_text()
     function = script.split("require_portal_preference() {", 1)[1].split("\nrequire_unit()", 1)[0]
@@ -411,7 +409,6 @@ def test_installed_portal_contract_rejects_missing_or_ambiguous_consent_routing(
 
 
 def test_dpkg_installed_names_keep_held_packages_and_drop_removed_ones(tmp_path):
-    import subprocess
 
     script = (ROOT / "build_scripts/checks/verify-desktop-experience.sh").read_text()
     function = script.split("tuna_installed_package_names() {", 1)[1].split("\ntuna_installed_file_owner()", 1)[0]
