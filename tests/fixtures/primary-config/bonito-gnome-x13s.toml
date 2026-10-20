@@ -1,6 +1,6 @@
 # Acceptance-only extension: append to a temporary copy of tunaos.toml.
 [[variants.bonito.flavors]]
-id = "gnome-x13s"
+id = "gnome-acceptance-arm64"
 stage = 3
 platforms = ["linux/arm64"]
 build_image = true
