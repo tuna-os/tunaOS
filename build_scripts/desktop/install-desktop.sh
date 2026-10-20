@@ -737,7 +737,8 @@ if [[ "${_TD_OS}" == "el10" || "${_TD_OS}" == "fedora" || "${_TD_OS}" == "rawhid
 	# native IPsec plugin strictly, including its GNOME editor. Scope this to
 	# Fedora Rawhide: Hummingbird shares the manifest list but has its own repo.
 	# https://discourse.gnome.org/t/networkmanager-vpn-plugins-maintenance-status-update/38676
-	if [[ "${_TD_OS}" == fedora && "$(detect_fedora_ver)" == rawhide ]]; then
+	if [[ ( "${_TD_OS}" == fedora || "${_TD_OS}" == rawhide ) &&
+		"$(detect_fedora_ver)" == rawhide ]]; then
 		for _TD_PKG_INDEX in "${!_TD_PKGS[@]}"; do
 			if [[ "${_TD_PKGS[$_TD_PKG_INDEX]}" == NetworkManager-vpnc-gnome ]]; then
 				_TD_PKGS[$_TD_PKG_INDEX]=NetworkManager-libreswan-gnome
@@ -1020,10 +1021,6 @@ if [[ -n "${_TD_DM}" && "${_TD_DM}" != "null" ]]; then
 		else
 			echo "display-manager.service already points at $(basename "${_TD_ALIAS_TARGET}"); leaving it"
 		fi
-		# Follow the resolved alias rather than enabling a competing manifest
-		# greeter when native packaging selected a different real manager.
-		_TD_PRESET_DM="$(basename "$(readlink -f "${_TD_ALIAS}")")"
-		write_display_manager_preset "${_TD_PRESET_DM}"
 	fi
 	# Server-oriented bootc bases such as AlmaLinux default to
 	# multi-user.target. Enabling a display manager alone does not change the

@@ -40,6 +40,9 @@ SNAPSHOT_PREF_DIR="$APT_ROOT/preferences.d"
 APT_OPTIONS=()
 if [[ "$APT_ROOT" != /etc/apt ]]; then
 	mkdir -p "$APT_ROOT/lists/partial" "$APT_ROOT/cache/archives/partial"
+	# Keep the source/preferences directories present for isolated APT roots;
+	# apt-get otherwise emits a missing-directory warning or ignores the parts.
+	mkdir -p "$SNAPSHOT_SOURCE_DIR" "$SNAPSHOT_PREF_DIR"
 	APT_OPTIONS=(
 		-o "Dir::Etc::sourcelist=/dev/null"
 		-o "Dir::Etc::sourceparts=$SNAPSHOT_SOURCE_DIR"
