@@ -207,6 +207,14 @@ def test_projection_does_not_mutate_source():
     projected["variants"][0]["flavors"].clear()
     assert document["variants"][next(iter(document["variants"]))]["flavors"]
 
+def test_iso_delivery_retained_inventory_survives_projection():
+    document = config.load()
+    document["iso_delivery"]["retained_r2_isos"] = ["yellowfin-gnome-10-x86_64.iso"]
+    generated = json.loads(config.render(document))
+    assert generated["iso_delivery"]["retained_r2_isos"] == [
+        "yellowfin-gnome-10-x86_64.iso"
+    ]
+
 
 def test_missing_both_toml_parsers_explains_dependency():
     code = '''import builtins, runpy, sys

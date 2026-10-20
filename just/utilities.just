@@ -98,6 +98,10 @@ check: _ensure_check_deps ste
     # build-variant.yml is hand-maintained despite matching build-*.yml.
     # Compare only the per-variant entry points that generate-workflows.py owns.
     mapfile -t generated_build_workflows < <(yq -r '.variants[].id | ".github/workflows/build-\(.).yml"' .github/build-config.yml)
+    if ((${#generated_build_workflows[@]} == 0)); then
+        echo "::error::No generated build workflows were found; refusing an empty drift comparison."
+        exit 1
+    fi
     if ! git diff --exit-code -- "${generated_build_workflows[@]}"; then
         echo "::error::Generated workflow files are stale. Run 'just generate-workflows' and commit the changes."
         exit 1

@@ -26,6 +26,7 @@ import importlib.util
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 import yaml
@@ -185,6 +186,7 @@ def _annotate_group(tmp_path: Path, config: dict) -> subprocess.CompletedProcess
     }
     return subprocess.run(
         [
+            sys.executable,
             str(POLICY),
             "--config-json",
             str(config_path),

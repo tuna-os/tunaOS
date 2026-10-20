@@ -37,6 +37,7 @@ import fnmatch
 import json
 import os
 import re
+import sys
 import subprocess
 from pathlib import Path
 import tempfile
@@ -148,6 +149,7 @@ def prune_steps() -> list[tuple[str, str, list[tuple[str, str]]]]:
                 config_json.flush()
                 generated = subprocess.run(
                     [
+                        sys.executable,
                         str(POLICY),
                         "--config-json",
                         config_json.name,
