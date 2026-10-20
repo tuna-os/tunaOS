@@ -36,7 +36,7 @@ def test_tuna_cells_are_amd64_images_without_iso_expansion():
         flavor = next(f for f in variant["flavors"] if f["id"] == "tuna")
         assert flavor["stage"] == 2
         assert flavor["platforms"] == ["linux/amd64"]
-        assert flavor.get("promotion_hold", False) is (variant["id"] == "guppy")
+        assert flavor.get("promotion_hold", False) == (variant["id"] == "guppy")
         assert not flavor["build_iso"]
         assert not flavor["build_qcow2"]
         assert flavor["luks_e2e"] is False

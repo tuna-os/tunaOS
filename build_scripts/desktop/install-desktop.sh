@@ -481,7 +481,13 @@ EOF
 	# in the anchor package's dependency chain (packages.emerge[0] — the
 	# meta/-light/-4-meta package for kde/gnome/xfce) gets served as binary.
 	# Best-effort and fails open; see the script header for the full story.
-	_TD_EMERGE_ANCHOR="${_TD_EMERGE_PKGS[0]#[<>=~]}"
+	_TD_EMERGE_ANCHOR="${_TD_EMERGE_PKGS[0]}"
+	while [[ -n "${_TD_EMERGE_ANCHOR}" ]]; do
+		case "${_TD_EMERGE_ANCHOR:0:1}" in
+			'!'|'<'|'>'|'='|'~') _TD_EMERGE_ANCHOR="${_TD_EMERGE_ANCHOR:1}" ;;
+			*) break ;;
+		esac
+	done
 	"${_TD_CTX}/build_scripts/desktop/gentoo-binhost-version-lock.sh" \
 		"${_TD_EMERGE_ANCHOR%%/*}" "${_TD_EMERGE_PKGS[@]}" || true
 

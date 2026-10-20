@@ -178,6 +178,20 @@ def test_remote_unsigned_source_is_rejected():
     d=live();d['desktops']['gnome']['packages']['hummingbird']['repos'][0]['unsigned']=True
     with pytest.raises(r.PolicyError,match='unsigned remote'):r.validate(d)
 
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("verify_signature", False, "must require package signatures"),
+        ("sync_uri", "https://example.invalid/binpkgs", "TunaOS HTTPS source"),
+    ],
+)
+def test_emerge_binrepo_trust_matches_installer_contract(field, value, message):
+    d = live()
+    binrepo = d["desktops"]["tuna"]["packages"]["emerge"]["binrepos"][0]
+    binrepo[field] = value
+    with pytest.raises(r.PolicyError, match=message):
+        r.validate(d)
+
 
 def test_projection_is_deterministic_and_matches_frozen_profiles():
     document=historical()
