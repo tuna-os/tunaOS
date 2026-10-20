@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import argparse
 import copy
+from datetime import datetime, timezone
+from decimal import Decimal
 import hashlib
 import importlib.util
 from functools import lru_cache
@@ -657,7 +659,30 @@ def _qualification_validator():
     return module.validate
 
 
-def _admit_qualification(receipt, target, expected_inputs, browser_build=None):
+def _qualification_time_valid(value, *, now: datetime) -> bool:
+    """Check the existing UTC timestamp contract at an explicit evaluation time.
+
+    No age-expiry or clock-skew policy is inferred. Decimal fractions avoid
+    truncating a sub-microsecond future instant into an admissible timestamp.
+    """
+    if (not isinstance(value, str) or len(value) > 128
+            or not isinstance(now, datetime) or now.utcoffset() is None):
+        return False
+    match = re.fullmatch(r"([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2})(?:\.([0-9]+))?Z", value)
+    if not match:
+        return False
+    try:
+        instant = datetime.strptime(match[1], "%Y-%m-%dT%H:%M:%S").replace(tzinfo=timezone.utc)
+    except ValueError:
+        return False
+    elapsed = now.astimezone(timezone.utc) - instant
+    available = (Decimal(elapsed.days * 86400 + elapsed.seconds)
+                 + Decimal(elapsed.microseconds) / Decimal(1000000))
+    fraction = Decimal("0." + (match[2] or "0"))
+    return fraction <= available
+
+
+def _admit_qualification(receipt, target, expected_inputs, browser_build=None, *, qualification_now=None):
     """Check evidence structure and independently supplied input identities.
 
     A content checksum detects modification; it does not authenticate a runner.
@@ -668,6 +693,10 @@ def _admit_qualification(receipt, target, expected_inputs, browser_build=None):
         return False
     try:
         _qualification_validator()(raw, "catalog qualification")
+        if not _qualification_time_valid(raw.get("qualifiedAt"), now=(
+            qualification_now if qualification_now is not None else datetime.now(timezone.utc)
+        )):
+            return False
         # This observation must come from the trusted browser-build artifact
         # collector, independently of the qualification receipt being admitted.
         provenance = raw.get("build_provenance")
@@ -1031,8 +1060,11 @@ def catalog_snapshot(
     generated_at: str = "",
     installer_revision: str = "",
     engine_revision: str = "",
+    qualification_now: datetime | None = None,
 ) -> dict[str, Any]:
     """Build and validate a canonical CatalogSnapshot v1 document."""
+    if qualification_now is None:
+        qualification_now = datetime.now(timezone.utc)
     coverage = coverage_document(config)
     required_records = coverage["targets"]
     required_by_key = {target_key(rec["target"]): rec for rec in required_records}
@@ -1162,6 +1194,7 @@ def catalog_snapshot(
                     {"source": pm_digest, "overlay": ovl_digest,
                      "installer": inst_rev, "engine": eng_rev},
                     (browser_builds or {}).get(tkey),
+                    qualification_now=qualification_now,
                 ):
                     qual_status = "unqualified"
                     qual_reason = "invalid-qualification-evidence"
