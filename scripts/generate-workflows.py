@@ -77,12 +77,12 @@ jobs:
   workflow_dispatch:
     inputs:
       flavor:
-        description: 'Flavor (all, base, gnome, kde, niri, etc.)'
+        description: 'Flavor (all, {flavors})'
         default: 'all'
         type: string
 
 concurrency:
-  group: build-{name}-${{{{ github.ref }}}}-${{{{ github.event_name == 'workflow_dispatch' && github.run_id || github.event_name }}}}
+  group: build-{name}-${{{{ github.ref }}}}-${{{{ inputs.flavor || 'all' }}}}
   cancel-in-progress: true
 
 jobs:
@@ -108,10 +108,12 @@ jobs:
         experimental = variant.get('experimental', False)
 
         if experimental:
+            flavors = ", ".join(f["id"] for f in variant.get("flavors", []) if f.get("build_image"))
             workflow_content = template_experimental.format(
                 name=name,
                 name_cap=name_cap,
                 emoji=emoji,
+                flavors=flavors,
                 permissions=permissions_block
             )
         else:
