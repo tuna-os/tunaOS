@@ -147,6 +147,20 @@
         "bootc-dev/bootc"
       ],
       "allowedVersions": "<=1.16.10"
+    },
+    {
+      "description": "Keep the primary-config compatibility job on Python 3.10; other runtime jobs may advance.",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchPackageNames": [
+        "python"
+      ],
+      "matchFileNames": [
+        ".github/workflows/test.yml"
+      ],
+      "matchCurrentValue": "/^3\\.10(?:\\.|$)/",
+      "allowedVersions": "<3.11"
     }
   ]
 }
