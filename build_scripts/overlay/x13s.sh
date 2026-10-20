@@ -23,12 +23,16 @@ fi
 mapfile -t kernels < <(
 	find /usr/lib/modules -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort -V
 )
-if ((${#kernels[@]} != 1)); then
-	printf 'ERROR: X13s inspection requires exactly one kernel, found %d: %s\n' \
-		"${#kernels[@]}" "${kernels[*]:-(none)}" >&2
+if ((${#kernels[@]} == 0)); then
+	echo "ERROR: X13s inspection requires a kernel" >&2
 	exit 1
 fi
-kver="${kernels[0]}"
+last_kernel_index=$((${#kernels[@]} - 1))
+kver="${kernels[$last_kernel_index]}"
+if ((${#kernels[@]} > 1)); then
+	printf 'WARNING: X13s inspection found %d kernels (%s); using newest %s\n' \
+		"${#kernels[@]}" "${kernels[*]}" "${kver}" >&2
+fi
 module_dir="/usr/lib/modules/${kver}"
 
 config="${module_dir}/config"
