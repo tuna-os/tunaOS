@@ -17,7 +17,7 @@ SHA = re.compile(r"[0-9a-f]{64}\Z")
 
 
 def valid_name(name):
-    return isinstance(name, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9 ._-]{0,63}", name) and name == name.strip()
+    return bool(isinstance(name, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9 ._-]{0,63}", name) and name == name.strip())
 
 
 def unique(pairs):

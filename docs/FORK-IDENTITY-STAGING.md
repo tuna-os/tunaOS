@@ -1,8 +1,8 @@
 # Fork name/logo staging
 
 This is an opt-in, **non-buildable** continuation of RFC 013, stacked on the
-URL/package/wallpaper consumer preview. It tests identity formats and GNOME paths in a disposable root. It does not enable a
-partially branded image. Stock builds keep their previous behavior.
+URL/package/wallpaper consumer preview. It tests identity formats and GNOME paths in a disposable root.
+It does not enable a partially branded image. Stock builds keep their previous behavior.
 
 ## Prepare from the same fork file
 

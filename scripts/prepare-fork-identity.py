@@ -19,7 +19,20 @@ def prepare(branding, cell, directory, source):
     if cell["flavor"] != "gnome" or cell["routing"]["CONTAINERFILE"] not in (
             "Containerfile.el10", "Containerfile.debian", "Containerfile.ubuntu"):
         raise ValueError("identity staging currently supports only direct RPM/Debian/Ubuntu GNOME")
-    path = directory / branding["logo"]
+    logo = Path(branding["logo"])
+    if logo.is_absolute() or ".." in logo.parts:
+        raise ValueError("identity logo must be a safe config-relative file")
+    candidate = directory
+    for part in logo.parts:
+        candidate /= part
+        if candidate.is_symlink():
+            raise ValueError("identity logo must not use symlinked path components")
+    try:
+        path = candidate.resolve(strict=True)
+    except OSError as exc:
+        raise ValueError("identity logo must be an existing regular file") from exc
+    if not path.is_relative_to(directory.resolve()) or not path.is_file():
+        raise ValueError("identity logo must be an existing regular file within its config directory")
     with path.open("rb") as stream:
         data = stream.read(4 * 1024 * 1024 + 1)
     if not 0 < len(data) <= 4 * 1024 * 1024:

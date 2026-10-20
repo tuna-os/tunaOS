@@ -98,6 +98,18 @@ def test_name_contract(staged, name):
         PREPARE.compile_cells(staged, identity_staging=True)
 
 
+def test_identity_logo_rejects_symlinked_path(staged, tmp_path):
+    config = yaml.safe_load(staged.read_text())
+    config["global"]["branding"]["logo"] = "linked-logo.png"
+    (staged.parent / "linked-logo.png").symlink_to(staged.parent / "logo.png")
+    staged.write_text(yaml.safe_dump(config))
+    with pytest.raises(PREPARE.ConfigError, match="symlinked"):
+        PREPARE.compile_cells(staged, identity_staging=True)
+
+
+def test_identity_valid_name_returns_bool():
+    assert IDENTITY.valid_name("Harbor") is True
+    assert IDENTITY.valid_name(" bad") is False
 def test_asset_tamper_and_cell_mismatch_fail_before_writes(staged, tmp_path):
     manifest, root, _, _ = materialize(staged, tmp_path)
     original = (root / "usr/lib/os-release").read_bytes()
