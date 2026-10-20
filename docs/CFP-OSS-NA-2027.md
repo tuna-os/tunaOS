@@ -53,7 +53,7 @@ Attendees get a model for image-based desktops and a delivery checklist. They se
 
 ### Outline
 
-Use the 40-minute version if the CFP allows it. Cut items 5 and 6 for 30 minutes.
+Use the 40-minute version if the CFP allows it. For a 30-minute slot, use the timed cut below and do not submit both outlines as if they were interchangeable.
 
 1. **The OS artifact — 4 minutes**
    - Why an OCI image fits a workstation
@@ -79,7 +79,7 @@ Use the 40-minute version if the CFP allows it. Cut items 5 and 6 for 30 minutes
    - Docs that another operator can use
 7. **Questions — 3 minutes**
 
-For a 30-minute slot, combine items 5 and 6 into a three-minute video and reserve the rest for questions.
+For a 30-minute slot: item 1 is 3 minutes, item 2 is 5 minutes, item 3 is 6 minutes, item 4 is 7 minutes, the combined items 5 and 6 are 4 minutes (three minutes of recorded/live demo plus one minute of operations lessons), and questions are 5 minutes. The segments total 30 minutes.
 
 ### Demonstration plan
 
