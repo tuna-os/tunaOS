@@ -232,6 +232,16 @@ def test_dangling_reserved_payload_symlink_fails_before_compilation(tmp_path, mo
     assert not outside.exists()
 
 
+
+@pytest.mark.parametrize("target_exists", [True, False])
+def test_directory_symlink_is_not_rejected_as_directory_source(tmp_path, target_exists):
+    target = tmp_path / "target"
+    if target_exists:
+        target.mkdir()
+    link = tmp_path / "link"
+    link.symlink_to(target, target_is_directory=True)
+    assert MODULE.is_directory_source(link) is False
+
 def test_preview_build_scrubs_input_overrides_secrets_and_shell_hooks(fork, tmp_path, monkeypatch):
     import os
     import sys
