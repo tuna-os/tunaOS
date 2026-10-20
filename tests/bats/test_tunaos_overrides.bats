@@ -73,7 +73,7 @@ ASSETS="${REPO_ROOT}/build_scripts/assets/tunaos-overrides"
 }
 
 @test "arch base: installs bash-completion (loader for eager ujust file)" {
-	run grep -E '^\s+bash-completion \\$' "${REPO_ROOT}/Containerfile.arch"
+	run grep -E '^[[:space:]]+bash-completion \$' "${REPO_ROOT}/Containerfile.arch"
 	[ "$status" -eq 0 ]
 }
 
@@ -128,8 +128,8 @@ _ujust
 	[ "$status" -eq 0 ]
 }
 
-@test "uupd drop-in: disables restart spam and duplicate upstream notices" {
-	run grep -E '^Restart=no' "$ASSETS/uupd-20-tunaos.conf"
+@test "uupd drop-in: keeps restart recovery and suppresses duplicate upstream notices" {
+	run grep -E '^Restart=on-failure' "$ASSETS/uupd-20-tunaos.conf"
 	[ "$status" -eq 0 ]
 	run grep -E '^OnFailure=tunaos-uupd-notify@%n\.service' "$ASSETS/uupd-20-tunaos.conf"
 	[ "$status" -eq 0 ]
@@ -166,6 +166,7 @@ printf '1000 tester\n'
 EOF
 	cat >"$bin/getent" <<EOF
 #!/bin/sh
+if [ "\$2" != tester ]; then exit 1; fi
 printf 'tester:x:1000:1000::%s:/bin/bash\n' "$root/home"
 EOF
 	cat >"$bin/systemctl" <<EOF
