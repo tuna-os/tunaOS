@@ -161,7 +161,9 @@ jobs:
                 echo "::error::unknown variant/flavor: ${DISPATCH_VARIANT}:${flavor}"
                 exit 1
               }
-              M="$(jq --arg v "$DISPATCH_VARIANT" --arg f "$flavor" --arg p "$platform" \
+              # -c: GITHUB_OUTPUT takes the value up to the first newline, so
+              # pretty-printed JSON would hand fromJson() a bare "{".
+              M="$(jq -c --arg v "$DISPATCH_VARIANT" --arg f "$flavor" --arg p "$platform" \
                 '.include += [{variant:$v, flavor:$f, platform:$p}]' <<<"$M")"
             done < <(tr ',' '\n' <<<"$DISPATCH_FLAVORS" | awk '{$1=$1};1')
           else
