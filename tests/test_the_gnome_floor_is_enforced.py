@@ -77,10 +77,8 @@ def _run_floor(tmp_path: Path, floor: int, *, fakes: dict[str, str], env: dict |
 # ── The policy and the enforcement agree ─────────────────────────────────────
 
 
-def test_the_floor_is_fifty_one():
-    import sys
-
-    sys.path.insert(0, str(ROOT / "scripts"))
+def test_the_floor_is_fifty_one(monkeypatch):
+    monkeypatch.syspath_prepend(str(ROOT / "scripts"))
     from lib import tunaos_config
 
     assert tunaos_config.load(ROOT / "tunaos.toml")["desktops"]["gnome"]["minimum_version"] == 51
@@ -148,12 +146,13 @@ def test_no_answer_at_all_is_a_failure_not_a_pass(tmp_path):
     assert "cannot determine the installed GNOME version" in r.stderr
 
 
-@pytest.mark.parametrize("version", ["49.5", "50.4", ""])
+@pytest.mark.parametrize("version", ["49.5", "50.4", None])
 def test_hummingbird_cannot_waive_the_gnome_floor(tmp_path, version):
+    fake = f'echo "GNOME Shell {version}"' if version else "exit 1"
     r = _run_floor(
         tmp_path,
         51,
-        fakes={"gnome-shell": f'echo "{version}"'},
+        fakes={"gnome-shell": fake},
         env={"IS_HUMMINGBIRD": "true"},
     )
     assert r.returncode != 0

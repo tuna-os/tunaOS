@@ -1772,7 +1772,7 @@ unknown version passes on Hummingbird.
 
 **Cause:** The former policy and runtime constant were both 50. The version
 helper also waived failures on Hummingbird. The tests in
-`tests/test_the_gnome_floor_is_enforced.py` reproduces both paths with fake
+`tests/test_the_gnome_floor_is_enforced.py` reproduce both paths with fake
 installed binaries.
 
 **Fix:** Keep `desktops.gnome.minimum_version` in `tunaos.toml` and the runtime
