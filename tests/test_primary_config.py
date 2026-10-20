@@ -344,9 +344,8 @@ def test_tomli_dependency_ceiling_preserves_shared_toml_grammar():
     assert rule["matchManagers"] == ["pip_requirements"]
     assert rule["matchFileNames"] == ["requirements-config.txt"]
     assert rule["allowedVersions"] == "==2.2.1"
-    # pip_requirements strips environment markers and extracts the PEP 440
-    # specifier as currentValue; packageName is normalized to "tomli".
-    # https://github.com/renovatebot/renovate/blob/44.166.0/lib/modules/manager/pip_requirements/extract.ts
+    # Install the pinned TOML 1.0 parser on every Python version; a marker would
+    # let newer stdlib parsers accept syntax rejected by the compatibility floor.
     from packaging.requirements import Requirement
     from packaging.specifiers import SpecifierSet
     requirements = [Requirement(line) for line in
@@ -355,8 +354,7 @@ def test_tomli_dependency_ceiling_preserves_shared_toml_grammar():
     dependency, = requirements
     assert dependency.name == "tomli"
     assert str(dependency.specifier) == rule["allowedVersions"]
-    assert dependency.marker.evaluate({"python_version": "3.10"})
-    assert not dependency.marker.evaluate({"python_version": "3.11"})
+    assert dependency.marker is None
     allowed = SpecifierSet(rule["allowedVersions"])
     assert "2.2.1" in allowed
     for version in ("2.2.0", "2.2.2", "2.3.2", "2.4.0", "2.4.1", "2.5.0", "3.0.0"):
