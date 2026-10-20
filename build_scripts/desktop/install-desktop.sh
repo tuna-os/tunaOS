@@ -954,7 +954,7 @@ write_display_manager_preset() {
 		;;
 	esac
 	mkdir -p /etc/systemd/system-preset
-	printf 'enable %s\n' "$unit" >/etc/systemd/system-preset/99-tunaos-desktop.preset
+	printf 'enable %s\n' "$unit" >/etc/systemd/system-preset/50-tunaos-desktop.preset
 }
 
 if [[ -n "${_TD_DM}" && "${_TD_DM}" != "null" ]]; then
