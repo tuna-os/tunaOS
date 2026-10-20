@@ -66,12 +66,10 @@ A change to an input used by that test does the same.
 qualification adapters. `schemas/qualification-reuse-v1.schema.json` defines
 producer receipts, current inputs and reuse decisions. A producer names the
 exact manifest and config digests, source and config receipts, consumed build
-inputs, platform, tool versions, workflow run and artifact. Run and artifact
-
-URLs must agree with their numeric GitHub IDs. Tags and partial receipts cause
-a rebuild. Changed build inputs, identities or platforms also cause a rebuild.
-After review, refresh the source receipt in the same push as a change to build
-source. Never edit the digest alone.
+inputs, platform, tool versions, workflow run and artifact. Run and artifact URLs must agree with their numeric GitHub IDs.
+Tags and partial receipts cause a rebuild. Changed build inputs, identities or platforms also cause a rebuild.
+After review, refresh the source receipt in the same push as a change to build source.
+Never edit the digest alone.
 
 Harness inputs and tools name the assertions they affect. Their changes may
 reuse the exact image bytes. The decision sets the affected assertions to

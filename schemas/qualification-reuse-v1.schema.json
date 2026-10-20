@@ -79,10 +79,10 @@
         "workflowPath": { "type": "string", "pattern": "^\\.github/workflows/[A-Za-z0-9_.-]+\\.ya?ml$" },
         "runId": { "type": "integer", "minimum": 1 },
         "runAttempt": { "type": "integer", "minimum": 1 },
-        "runUrl": { "type": "string", "format": "uri", "maxLength": 512 },
+        "runUrl": { "type": "string", "format": "uri", "pattern": "^https://[^@?#%]+(?:/[^?#%]*)?$", "maxLength": 512 },
         "artifactId": { "type": "integer", "minimum": 1 },
         "artifactName": { "$ref": "#/$defs/token" },
-        "artifactUrl": { "type": "string", "format": "uri", "maxLength": 512 },
+        "artifactUrl": { "type": "string", "format": "uri", "pattern": "^https://[^@?#%]+(?:/[^?#%]*)?$", "maxLength": 512 },
         "artifactSha256": { "$ref": "#/$defs/digest" },
         "headSha": { "$ref": "#/$defs/commit" }
       },

@@ -409,9 +409,13 @@ def assertion_record(name: str, status: str = "not-run", at: str | None = None,
     }
 
 
-def build_report(context_value: object, events: list[dict]) -> dict:
-    context, evidence = validate_context(context_value)
+def build_report(context_value: object, events: list[dict], *, evidence: dict[str, dict] | None = None) -> dict:
+    if evidence is None:
+        context, evidence = validate_context(context_value)
+    else:
+        context = context_value
     records = {name: assertion_record(name) for name in context["assertions"]}
+
     first_failure = None
     previous_timestamp = None
     for event in events:
@@ -498,7 +502,7 @@ def main() -> None:
         else:
             context = load_json(args.context)
             validated, evidence = validate_context(context)
-            result = build_report(validated, load_events(args.events, validated, evidence))
+            result = build_report(validated, load_events(args.events, validated, evidence), evidence=evidence)
         write_json(args.output, result)
     except (ContractError, OSError, json.JSONDecodeError) as exc:
         print(f"ERROR: qualification evidence: {exc}", file=sys.stderr)
