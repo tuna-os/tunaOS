@@ -1,0 +1,115 @@
+{
+  "run_id": 39199753352,
+  "scope": "Unmodified pre-input screenshots of disposable synthetic canary guests; these are OCR regressions, not successful login evidence.",
+  "regression": "Full-frame PSM11 misses the visible low-contrast Password label in both native screenshots. Account-relative outlined-field crops with grayscale autocontrast, 4x scaling and PSM7 recover the exact label.",
+  "screenshots": {
+    "yellowfin": {
+      "file": "yellowfin-password-prompt.png",
+      "source_artifact": "yellowfin/login/10-greeter.png",
+      "sha256": "b73add5b256b6fe644c1937150e971fadef58ea092fa17e2f3a8cb37d8cc53b1",
+      "source_image": {
+        "reference": "localhost/fork-qualification/yellowfin:gnome-linux-amd64",
+        "id": "cfa9ed69f9ad5b3eda827c08c1e0da735090a6ed030cf86af053e5ed74de956f",
+        "digest": "sha256:255c8308913be6a5ae407cc1cedf947c941a985300eef42464206cfb0d76188b",
+        "repo_digests": [
+          "localhost/fork-qualification/yellowfin@sha256:255c8308913be6a5ae407cc1cedf947c941a985300eef42464206cfb0d76188b"
+        ],
+        "repo_tags": [
+          "localhost/fork-qualification/yellowfin:gnome-linux-amd64",
+          "localhost/fork-qualification/yellowfin:gnome-linux-amd64-pre-chunk"
+        ]
+      },
+      "derived_image": {
+        "reference": "localhost/corral-vmtest/fork-login-b24ef16beb0b:latest",
+        "id": "9955230b824ac3b3fb52b3ccf3e266b4376ea98cb5eaaa1db22c34ff8fee4f61",
+        "digest": "sha256:379f14535f8cffe04747153eace0dd09d66b33110b49a1c47c011fc6ef97ca84",
+        "repo_digests": [
+          "localhost/corral-vmtest/fork-login-b24ef16beb0b@sha256:379f14535f8cffe04747153eace0dd09d66b33110b49a1c47c011fc6ef97ca84"
+        ],
+        "repo_tags": [
+          "localhost/corral-vmtest/fork-login-b24ef16beb0b:latest"
+        ]
+      },
+      "account_word": {
+        "level": "5",
+        "page_num": "1",
+        "block_num": "5",
+        "par_num": "1",
+        "line_num": "1",
+        "word_num": "1",
+        "left": "598",
+        "top": "420",
+        "width": "83",
+        "height": "22",
+        "conf": "96.323891",
+        "text": "canary"
+      },
+      "field_bbox": [
+        502,
+        472,
+        777,
+        511
+      ],
+      "crop_bbox": [
+        510,
+        477,
+        719,
+        506
+      ]
+    },
+    "grouper": {
+      "file": "grouper-password-prompt.png",
+      "source_artifact": "grouper/login/10-greeter.png",
+      "sha256": "6dfe93babecf38203ed050fa53580cc1e32e3c57cdd79fdf25ce67f674c6716b",
+      "source_image": {
+        "reference": "localhost/fork-qualification/grouper:gnome-linux-amd64",
+        "id": "a8eca887b0c12c84672b481037361f2f132f1c1fa6ca180ba7f8ea70f89f5df8",
+        "digest": "sha256:ac1ab95b1f303a72bfb8c6eb39a0d20ecd4135cd7a3bc722f95b39bd915ad88c",
+        "repo_digests": [
+          "localhost/fork-qualification/grouper@sha256:ac1ab95b1f303a72bfb8c6eb39a0d20ecd4135cd7a3bc722f95b39bd915ad88c"
+        ],
+        "repo_tags": [
+          "localhost/fork-qualification/grouper:gnome-linux-amd64",
+          "localhost/fork-qualification/grouper:gnome-linux-amd64-pre-chunk"
+        ]
+      },
+      "derived_image": {
+        "reference": "localhost/corral-vmtest/fork-login-17b0e8a4b16c:latest",
+        "id": "7f680c42b29b39c80aaca70c14bba7b334ce53ea0d10292bb997df3edb3e2536",
+        "digest": "sha256:58c76761304a83860d2fcc1a023555decae17dad0d0a65f31dadaa0e324e5d6b",
+        "repo_digests": [
+          "localhost/corral-vmtest/fork-login-17b0e8a4b16c@sha256:58c76761304a83860d2fcc1a023555decae17dad0d0a65f31dadaa0e324e5d6b"
+        ],
+        "repo_tags": [
+          "localhost/corral-vmtest/fork-login-17b0e8a4b16c:latest"
+        ]
+      },
+      "account_word": {
+        "level": "5",
+        "page_num": "1",
+        "block_num": "5",
+        "par_num": "1",
+        "line_num": "1",
+        "word_num": "1",
+        "left": "601",
+        "top": "421",
+        "width": "78",
+        "height": "19",
+        "conf": "96.011116",
+        "text": "canary"
+      },
+      "field_bbox": [
+        502,
+        471,
+        777,
+        507
+      ],
+      "crop_bbox": [
+        510,
+        476,
+        723,
+        502
+      ]
+    }
+  }
+}

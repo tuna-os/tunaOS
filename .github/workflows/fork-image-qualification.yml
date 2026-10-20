@@ -1,0 +1,246 @@
+name: Fork Image Qualification
+
+# A bounded opt-in canary. Public original-image artifacts expire after 3 days.
+# No registry writes, releases, deployment or secrets.
+# This is deliberately separate from production build/admission workflows.
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/fork-image-qualification.yml"
+      - ".github/fork-image-reuse.json"
+      - "scripts/fork-image-artifact.py"
+      - "scripts/qualify-fork-image.py"
+      - "scripts/qualify-fork-initramfs.py"
+      - "scripts/qualify-fork-login.py"
+      - "scripts/qualify-fork-installer.py"
+      - "scripts/qualify-fork-install.py"
+      - "scripts/fork-installer-ui.py"
+      - "scripts/qualify-fork-vm.py"
+      - "scripts/qualify-fork-disk.py"
+      - "scripts/fork-install-observer.py"
+      - "scripts/prepare-fork-config.py"
+      - "scripts/resolve-fork-config.py"
+      - "scripts/export-fork-source.py"
+      - "build_scripts/lib/fork-*"
+      - "live-iso/common/src/installer-recipe-backend.sh"
+  workflow_dispatch:
+    inputs:
+      reuse_sources:
+        description: "Optional immutable pair JSON; empty uses .github/fork-image-reuse.json"
+        required: false
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+  packages: read
+
+concurrency:
+  group: fork-image-qualification-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  canary:
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/feat/fork-image-qualification') ||
+      (github.event_name == 'pull_request' && github.head_ref == 'feat/fork-image-qualification' &&
+      github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      FORK_SOURCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Prepare container storage
+        uses: projectbluefin/actions/bootc-build/setup-runner@59f783ed76fd9d449ef6887a6649446801bd5434 # v1 as of 2026-07-02
+        with:
+          storage-backend: btrfs
+          update-podman: "true"
+          install-tools: '[]'
+      - name: Install test tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq python3-pil python3-yaml skopeo qemu-system-x86 qemu-utils ovmf ffmpeg tesseract-ocr
+          curl -fsSL https://github.com/mikefarah/yq/releases/download/v4.53.3/yq_linux_amd64 -o "$RUNNER_TEMP/yq"
+          echo "fa52a4e758c63d38299163fbdd1edfb4c4963247918bf9c1c5d31d84789eded4  $RUNNER_TEMP/yq" | sha256sum -c -
+          sudo install -m 0755 "$RUNNER_TEMP/yq" /usr/local/bin/yq
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm || true
+          # Corral uses TCG automatically when KVM is absent.
+      - name: Select explicit original-image pins
+        id: reuse
+        env:
+          FORK_REUSE_JSON: ${{ inputs.reuse_sources }}
+        run: python3 scripts/fork-image-artifact.py select --output "$RUNNER_TEMP/fork-image-selection.json"
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version: "1.27"
+          cache: false
+      - name: Install pinned corral
+        run: |
+          scripts/install-corral.sh "$RUNNER_TEMP/corral-bin"
+          sudo install -m 0755 "$RUNNER_TEMP/corral-bin/corral" /usr/local/bin/corral
+      - name: Restore verified original images for a newer harness
+        if: steps.reuse.outputs.reuse == 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          sudo git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          sudo --preserve-env=GITHUB_TOKEN python3 scripts/fork-image-artifact.py restore \
+            --pins "$RUNNER_TEMP/fork-image-selection.json" --output "$RUNNER_TEMP/fork-evidence"
+      - name: Qualify RPM canary, then apt canary
+        if: steps.reuse.outputs.reuse == 'false'
+        run: |
+          set -euo pipefail
+          sudo git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          status=0
+          for variant in yellowfin grouper; do
+            sudo python3 scripts/qualify-fork-image.py --installed-proof-observer --variant "$variant" --output "$RUNNER_TEMP/fork-evidence/$variant" || status=1
+          done
+          exit "$status"
+      - name: Stage only the bounded original OCI image pair
+        if: steps.reuse.outputs.reuse == 'false'
+        run: |
+          sudo --preserve-env=GITHUB_REPOSITORY,GITHUB_RUN_ID,FORK_SOURCE_HEAD \
+            python3 scripts/fork-image-artifact.py package \
+            --evidence "$RUNNER_TEMP/fork-evidence" --output "$RUNNER_TEMP/fork-original-images"
+      - name: Upload original Yellowfin image
+        if: steps.reuse.outputs.reuse == 'false'
+        id: yellowfin_image
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: fork-original-oci-${{ github.run_id }}-yellowfin
+          path: ${{ runner.temp }}/fork-original-images/yellowfin/
+          compression-level: 0
+          retention-days: 3
+          if-no-files-found: error
+      - name: Upload original Grouper image
+        if: steps.reuse.outputs.reuse == 'false'
+        id: grouper_image
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: fork-original-oci-${{ github.run_id }}-grouper
+          path: ${{ runner.temp }}/fork-original-images/grouper/
+          compression-level: 0
+          retention-days: 3
+          if-no-files-found: error
+      - name: Record immutable image artifact pins
+        if: steps.reuse.outputs.reuse == 'false'
+        env:
+          YELLOWFIN_ARTIFACT_ID: ${{ steps.yellowfin_image.outputs.artifact-id }}
+          YELLOWFIN_ARCHIVE_SHA256: ${{ steps.yellowfin_image.outputs.artifact-digest }}
+          GROUPER_ARTIFACT_ID: ${{ steps.grouper_image.outputs.artifact-id }}
+          GROUPER_ARCHIVE_SHA256: ${{ steps.grouper_image.outputs.artifact-digest }}
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib
+          result = {"run_id": int(os.environ["GITHUB_RUN_ID"]),
+                    "head_sha": os.environ["FORK_SOURCE_HEAD"], "images": {}}
+          for variant in ("yellowfin", "grouper"):
+              bundle = json.loads((pathlib.Path(os.environ["RUNNER_TEMP"]) / "fork-original-images" / variant / "bundle.json").read_text())
+              prefix = variant.upper()
+              digest = os.environ[prefix + "_ARCHIVE_SHA256"].removeprefix("sha256:")
+              result["images"][variant] = {"artifact_id": int(os.environ[prefix + "_ARTIFACT_ID"]),
+                  "archive_sha256": "sha256:" + digest,
+                  "manifest_digest": bundle["source_manifest_digest"], "config_digest": bundle["source_image_id"]}
+          destination = pathlib.Path(os.environ["RUNNER_TEMP"]) / "fork-image-pins.json"
+          destination.write_text(json.dumps(result, indent=2) + "\n")
+          print(destination.read_text())
+          PY
+      - name: Download frozen installer artifact
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 scripts/qualify-fork-installer.py --download-output "$RUNNER_TEMP/installer-artifact"
+      - name: Verify typed GNOME login and installer in disposable derived guests
+        run: |
+          set -euo pipefail
+          status=0
+          for variant in yellowfin grouper; do
+            out="$RUNNER_TEMP/fork-evidence/$variant"
+            sudo python3 scripts/qualify-fork-login.py \
+              --image "localhost/fork-qualification/$variant:gnome-linux-amd64" \
+              --wallpaper "$out/wallpaper.jpg" --output "$out/login" \
+              --installer-artifact "$RUNNER_TEMP/installer-artifact/installer-artifact.zip" || status=1
+          done
+          exit "$status"
+      - name: Install exact fork to a guarded second disk and verify target-only boot
+        run: |
+          set -euo pipefail
+          status=0
+          for variant in yellowfin grouper; do
+            out="$RUNNER_TEMP/fork-evidence/$variant"
+            sudo python3 scripts/qualify-fork-install.py \
+              --image "localhost/fork-qualification/$variant:gnome-linux-amd64" \
+              --manifest "$out/prepared/${variant}--gnome--linux-amd64/manifests/fork-config.json" \
+              --wallpaper "$out/wallpaper.jpg" --output "$out/installed-proof" \
+              --installer-artifact "$RUNNER_TEMP/installer-artifact/installer-artifact.zip" || status=1
+          done
+          exit "$status"
+      - name: Collect bounded evidence
+        if: always()
+        run: |
+          mkdir -p fork-evidence
+          if test -f "$RUNNER_TEMP/fork-image-pins.json"; then
+            cp "$RUNNER_TEMP/fork-image-pins.json" fork-evidence/
+          fi
+          if test -f "$RUNNER_TEMP/installer-artifact/artifact-provenance.json"; then
+            cp "$RUNNER_TEMP/installer-artifact/artifact-provenance.json" fork-evidence/
+          fi
+          for variant in yellowfin grouper; do
+            src="$RUNNER_TEMP/fork-evidence/$variant"
+            test -d "$src" || continue
+            mkdir -p "fork-evidence/$variant"
+            sudo cp "$src/qualification.json" "fork-evidence/$variant/" || true
+            for receipt in bundle.json image-reuse.json; do
+              if test -f "$src/$receipt"; then
+                sudo cp "$src/$receipt" "fork-evidence/$variant/"
+              fi
+            done
+            sudo cp "$src/image-inspect.json" "fork-evidence/$variant/" || true
+            sudo cp "$src/initramfs.json" "$src/initramfs-diagnostics.txt" "$src/greeter-config.txt" "fork-evidence/$variant/" || true
+            sudo cp "$src/fork.yaml" "fork-evidence/$variant/" || true
+            sudo cp "$src/prepared/source-receipt.json" "fork-evidence/$variant/" || true
+            if test -f "$src/oci-export/source-receipt.json"; then
+              sudo cp "$src/oci-export/source-receipt.json" "fork-evidence/$variant/oci-source-receipt.json"
+              sudo cp "$src/oci-export/source-manifest.json" "fork-evidence/$variant/oci-source-manifest.json"
+            fi
+            if test -d "$src/login"; then
+              sudo cp -r "$src/login" "fork-evidence/$variant/"
+            fi
+            if test -d "$src/installed-proof"; then
+              # Only the helper's public-safe JSON and PNG evidence may leave the runner.
+              # Private disks, OCI layers, console streams and account material are excluded.
+              sudo python3 - "$src/installed-proof" "fork-evidence/$variant/installed-proof" <<'PYSAFE'
+          import pathlib, sys
+          source, target = map(pathlib.Path, sys.argv[1:])
+          target.mkdir(parents=True, exist_ok=True)
+          allowed_json = {'install-proof.json', 'prepare-login.json', 'cold-source-login.json',
+                          'installed-target-login.json', 'source-observations.json', 'target-observations.json'}
+          for path in source.iterdir():
+              if path.is_symlink() or not path.is_file() or path.suffix not in {'.json', '.png'}:
+                  continue
+              if path.suffix == '.json' and path.name not in allowed_json:
+                  continue
+              if path.stat().st_size > 32 * 1024 * 1024:
+                  raise SystemExit('installed proof evidence exceeds bounded size')
+              (target / path.name).write_bytes(path.read_bytes())
+          PYSAFE
+            fi
+            if test -d "$src/boot"; then
+              sudo cp -r "$src/boot" "fork-evidence/$variant/"
+              # The VM no longer exists; do not upload its ephemeral SSH keys.
+              sudo rm -rf "fork-evidence/$variant/boot/corral/ssh"
+            fi
+          done
+          sudo chown -R "$USER:$(id -gn)" fork-evidence
+      - name: Upload qualification evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: fork-image-qualification-${{ github.run_id }}
+          path: fork-evidence/
+          retention-days: 7
+          if-no-files-found: warn

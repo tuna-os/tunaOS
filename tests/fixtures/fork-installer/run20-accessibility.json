@@ -1,0 +1,6658 @@
+{
+  "schema_version": 1,
+  "nodes": [
+    {
+      "id": 0,
+      "parent": null,
+      "pid": 3362,
+      "role": "application",
+      "name": "<omitted>",
+      "bounds": null,
+      "states": {
+        "visible": false,
+        "showing": false,
+        "enabled": false,
+        "sensitive": false,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 75,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 1,
+      "parent": 0,
+      "pid": 3362,
+      "role": "frame",
+      "name": "<omitted>",
+      "bounds": [
+        0,
+        0,
+        900,
+        800
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": true,
+        "defunct": false
+      },
+      "role_id": 23,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 2,
+      "parent": 1,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        900,
+        800
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 3,
+      "parent": 2,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        900,
+        800
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 4,
+      "parent": 3,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        900,
+        800
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 5,
+      "parent": 4,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        900,
+        800
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 6,
+      "parent": 5,
+      "pid": 3362,
+      "role": "grouping",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        900,
+        800
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 99,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 7,
+      "parent": 6,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        900,
+        754
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 8,
+      "parent": 7,
+      "pid": 3362,
+      "role": "grouping",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        900,
+        754
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 99,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 9,
+      "parent": 8,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        900,
+        754
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 10,
+      "parent": 9,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        900,
+        754
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 11,
+      "parent": 10,
+      "pid": 3362,
+      "role": "scroll pane",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        900,
+        754
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 49,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 12,
+      "parent": 11,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        900,
+        754
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 13,
+      "parent": 12,
+      "pid": 3362,
+      "role": "grouping",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        900,
+        754
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 99,
+      "unresolved_relations": {
+        "described_by": 1
+      },
+      "relations": {
+        "described_by": []
+      }
+    },
+    {
+      "id": 14,
+      "parent": 13,
+      "pid": 3362,
+      "role": "scroll pane",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        900,
+        471
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 49,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 15,
+      "parent": 14,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        900,
+        471
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 16,
+      "parent": 15,
+      "pid": 3362,
+      "role": "grouping",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        900,
+        471
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 99,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 17,
+      "parent": 16,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        575,
+        423
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 18,
+      "parent": 17,
+      "pid": 3362,
+      "role": "grouping",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        575,
+        203
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 99,
+      "unresolved_relations": {
+        "labelled_by": 1,
+        "described_by": 1
+      },
+      "relations": {
+        "labelled_by": [],
+        "described_by": []
+      }
+    },
+    {
+      "id": 19,
+      "parent": 18,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        575,
+        203
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 20,
+      "parent": 19,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        575,
+        203
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 21,
+      "parent": 20,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        350,
+        179
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 22,
+      "parent": 21,
+      "pid": 3362,
+      "role": "image",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        350,
+        128
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 27,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 23,
+      "parent": 21,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        350,
+        33
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 24,
+      "parent": 23,
+      "pid": 3362,
+      "role": "label",
+      "name": "Welcome to Harbor Canary",
+      "bounds": [
+        0,
+        0,
+        350,
+        33
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 29,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 25,
+      "parent": 17,
+      "pid": 3362,
+      "role": "grouping",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        575,
+        109
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 99,
+      "unresolved_relations": {
+        "labelled_by": 1,
+        "described_by": 1
+      },
+      "relations": {
+        "labelled_by": [],
+        "described_by": []
+      }
+    },
+    {
+      "id": 26,
+      "parent": 25,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        575,
+        109
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 27,
+      "parent": 26,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        575,
+        109
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 28,
+      "parent": 27,
+      "pid": 3362,
+      "role": "list",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        575,
+        109
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 31,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 29,
+      "parent": 28,
+      "pid": 3362,
+      "role": "list item",
+      "name": "Install Harbor Canary",
+      "bounds": [
+        0,
+        0,
+        575,
+        55
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": true,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 32,
+      "unresolved_relations": {},
+      "relations": {
+        "labelled_by": [
+          32
+        ],
+        "described_by": [
+          33
+        ]
+      }
+    },
+    {
+      "id": 30,
+      "parent": 29,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        547,
+        50
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 31,
+      "parent": 30,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        497,
+        36
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 32,
+      "parent": 31,
+      "pid": 3362,
+      "role": "label",
+      "name": "Install Harbor Canary",
+      "bounds": [
+        0,
+        0,
+        497,
+        18
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 29,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 33,
+      "parent": 31,
+      "pid": 3362,
+      "role": "label",
+      "name": "<omitted>",
+      "bounds": [
+        0,
+        0,
+        497,
+        15
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 29,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 34,
+      "parent": 30,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        16,
+        50
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 35,
+      "parent": 34,
+      "pid": 3362,
+      "role": "image",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        16,
+        16
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 27,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 36,
+      "parent": 28,
+      "pid": 3362,
+      "role": "list item",
+      "name": "Power Off",
+      "bounds": [
+        0,
+        0,
+        575,
+        54
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 32,
+      "unresolved_relations": {
+        "described_by": 1
+      },
+      "relations": {
+        "labelled_by": [
+          39
+        ],
+        "described_by": []
+      }
+    },
+    {
+      "id": 37,
+      "parent": 36,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        547,
+        50
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 38,
+      "parent": 37,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        497,
+        18
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 39,
+      "parent": 38,
+      "pid": 3362,
+      "role": "label",
+      "name": "Power Off",
+      "bounds": [
+        0,
+        0,
+        497,
+        18
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 29,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 40,
+      "parent": 37,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        16,
+        50
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 41,
+      "parent": 40,
+      "pid": 3362,
+      "role": "image",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        16,
+        16
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 27,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 42,
+      "parent": 17,
+      "pid": 3362,
+      "role": "grouping",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        575,
+        63
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 99,
+      "unresolved_relations": {
+        "labelled_by": 1,
+        "described_by": 1
+      },
+      "relations": {
+        "labelled_by": [],
+        "described_by": []
+      }
+    },
+    {
+      "id": 43,
+      "parent": 42,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        575,
+        63
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 44,
+      "parent": 43,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        575,
+        63
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 45,
+      "parent": 44,
+      "pid": 3362,
+      "role": "label",
+      "name": "<omitted>",
+      "bounds": [
+        0,
+        0,
+        267,
+        17
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 29,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 46,
+      "parent": 44,
+      "pid": 3362,
+      "role": "button",
+      "name": "Credits",
+      "bounds": [
+        0,
+        0,
+        75,
+        34
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 43,
+      "unresolved_relations": {},
+      "relations": {
+        "labelled_by": [
+          47
+        ]
+      }
+    },
+    {
+      "id": 47,
+      "parent": 46,
+      "pid": 3362,
+      "role": "label",
+      "name": "Credits",
+      "bounds": [
+        0,
+        0,
+        41,
+        24
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 29,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 48,
+      "parent": 9,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        900,
+        754
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 49,
+      "parent": 48,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        900,
+        754
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 50,
+      "parent": 49,
+      "pid": 3362,
+      "role": "scroll pane",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        900,
+        754
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 49,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 51,
+      "parent": 50,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        900,
+        754
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 52,
+      "parent": 51,
+      "pid": 3362,
+      "role": "grouping",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        900,
+        754
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 99,
+      "unresolved_relations": {
+        "described_by": 1
+      },
+      "relations": {
+        "described_by": []
+      }
+    },
+    {
+      "id": 53,
+      "parent": 52,
+      "pid": 3362,
+      "role": "scroll pane",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        900,
+        463
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 49,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 54,
+      "parent": 53,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        900,
+        463
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 55,
+      "parent": 54,
+      "pid": 3362,
+      "role": "grouping",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        900,
+        463
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 99,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 56,
+      "parent": 55,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        575,
+        415
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 57,
+      "parent": 56,
+      "pid": 3362,
+      "role": "grouping",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        575,
+        227
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 99,
+      "unresolved_relations": {
+        "labelled_by": 1,
+        "described_by": 1
+      },
+      "relations": {
+        "labelled_by": [],
+        "described_by": []
+      }
+    },
+    {
+      "id": 58,
+      "parent": 57,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        575,
+        227
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 59,
+      "parent": 58,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        575,
+        227
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 60,
+      "parent": 59,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        312,
+        203
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 61,
+      "parent": 60,
+      "pid": 3362,
+      "role": "image",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        312,
+        128
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 27,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 62,
+      "parent": 60,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        312,
+        57
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 63,
+      "parent": 62,
+      "pid": 3362,
+      "role": "label",
+      "name": "Disk Encryption",
+      "bounds": [
+        0,
+        0,
+        312,
+        33
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 29,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 64,
+      "parent": 62,
+      "pid": 3362,
+      "role": "label",
+      "name": "<omitted>",
+      "bounds": [
+        0,
+        0,
+        312,
+        18
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 29,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 65,
+      "parent": 56,
+      "pid": 3362,
+      "role": "grouping",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        575,
+        164
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 99,
+      "unresolved_relations": {
+        "labelled_by": 1,
+        "described_by": 1
+      },
+      "relations": {
+        "labelled_by": [],
+        "described_by": []
+      }
+    },
+    {
+      "id": 66,
+      "parent": 65,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        575,
+        164
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 67,
+      "parent": 66,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        575,
+        164
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 68,
+      "parent": 67,
+      "pid": 3362,
+      "role": "list",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        575,
+        164
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 31,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 69,
+      "parent": 68,
+      "pid": 3362,
+      "role": "list item",
+      "name": "Encrypt this disk",
+      "bounds": [
+        0,
+        0,
+        575,
+        55
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 32,
+      "unresolved_relations": {},
+      "relations": {
+        "labelled_by": [
+          72
+        ],
+        "described_by": [
+          73
+        ]
+      }
+    },
+    {
+      "id": 70,
+      "parent": 69,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        547,
+        50
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 71,
+      "parent": 70,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        495,
+        36
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 72,
+      "parent": 71,
+      "pid": 3362,
+      "role": "label",
+      "name": "Encrypt this disk",
+      "bounds": [
+        0,
+        0,
+        495,
+        18
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 29,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 73,
+      "parent": 71,
+      "pid": 3362,
+      "role": "label",
+      "name": "<omitted>",
+      "bounds": [
+        0,
+        0,
+        495,
+        15
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 29,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 74,
+      "parent": 70,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        46,
+        50
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 75,
+      "parent": 74,
+      "pid": 3362,
+      "role": "switch",
+      "name": "Encrypt this disk",
+      "bounds": [
+        0,
+        0,
+        46,
+        26
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": true,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 130,
+      "unresolved_relations": {},
+      "relations": {
+        "labelled_by": [
+          72
+        ],
+        "described_by": [
+          73
+        ]
+      }
+    },
+    {
+      "id": 76,
+      "parent": 68,
+      "pid": 3362,
+      "role": "list item",
+      "name": "<omitted>",
+      "bounds": [
+        0,
+        0,
+        575,
+        55
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 32,
+      "unresolved_relations": {},
+      "relations": {
+        "labelled_by": [
+          79,
+          80
+        ]
+      }
+    },
+    {
+      "id": 77,
+      "parent": 76,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        559,
+        50
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 78,
+      "parent": 77,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        519,
+        50
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 79,
+      "parent": 78,
+      "pid": 3362,
+      "role": "label",
+      "name": "Password",
+      "bounds": [
+        0,
+        0,
+        68,
+        18
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 29,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 80,
+      "parent": 78,
+      "pid": 3362,
+      "role": "label",
+      "name": "Password",
+      "bounds": [
+        0,
+        0,
+        69,
+        18
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 29,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 81,
+      "parent": 78,
+      "pid": 3362,
+      "role": "password text",
+      "name": "Password",
+      "bounds": [
+        0,
+        0,
+        467,
+        50
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 40,
+      "unresolved_relations": {},
+      "relations": {
+        "labelled_by": [
+          80
+        ]
+      }
+    },
+    {
+      "id": 82,
+      "parent": 77,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        34,
+        50
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 83,
+      "parent": 82,
+      "pid": 3362,
+      "role": "button",
+      "name": "<omitted>",
+      "bounds": [
+        0,
+        0,
+        34,
+        34
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 43,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 84,
+      "parent": 68,
+      "pid": 3362,
+      "role": "list item",
+      "name": "<omitted>",
+      "bounds": [
+        0,
+        0,
+        575,
+        54
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 32,
+      "unresolved_relations": {},
+      "relations": {
+        "labelled_by": [
+          87,
+          88
+        ]
+      }
+    },
+    {
+      "id": 85,
+      "parent": 84,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        559,
+        50
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 86,
+      "parent": 85,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        519,
+        50
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 87,
+      "parent": 86,
+      "pid": 3362,
+      "role": "label",
+      "name": "Confirm Password",
+      "bounds": [
+        0,
+        0,
+        128,
+        18
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 29,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 88,
+      "parent": 86,
+      "pid": 3362,
+      "role": "label",
+      "name": "Confirm Password",
+      "bounds": [
+        0,
+        0,
+        129,
+        18
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 29,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 89,
+      "parent": 86,
+      "pid": 3362,
+      "role": "password text",
+      "name": "Confirm Password",
+      "bounds": [
+        0,
+        0,
+        467,
+        50
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 40,
+      "unresolved_relations": {},
+      "relations": {
+        "labelled_by": [
+          88
+        ]
+      }
+    },
+    {
+      "id": 90,
+      "parent": 85,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        34,
+        50
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 91,
+      "parent": 90,
+      "pid": 3362,
+      "role": "button",
+      "name": "<omitted>",
+      "bounds": [
+        0,
+        0,
+        34,
+        34
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 43,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 92,
+      "parent": 9,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        900,
+        754
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 93,
+      "parent": 92,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        900,
+        754
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 94,
+      "parent": 93,
+      "pid": 3362,
+      "role": "scroll pane",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        900,
+        754
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 49,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 95,
+      "parent": 94,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        900,
+        754
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 96,
+      "parent": 95,
+      "pid": 3362,
+      "role": "grouping",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        900,
+        754
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 99,
+      "unresolved_relations": {
+        "described_by": 1
+      },
+      "relations": {
+        "described_by": []
+      }
+    },
+    {
+      "id": 97,
+      "parent": 96,
+      "pid": 3362,
+      "role": "scroll pane",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        900,
+        725
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 49,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 98,
+      "parent": 97,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        900,
+        725
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 99,
+      "parent": 98,
+      "pid": 3362,
+      "role": "grouping",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        900,
+        725
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 99,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 100,
+      "parent": 99,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        575,
+        677
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 101,
+      "parent": 100,
+      "pid": 3362,
+      "role": "grouping",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        575,
+        227
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 99,
+      "unresolved_relations": {
+        "labelled_by": 1,
+        "described_by": 1
+      },
+      "relations": {
+        "labelled_by": [],
+        "described_by": []
+      }
+    },
+    {
+      "id": 102,
+      "parent": 101,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        575,
+        227
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 103,
+      "parent": 102,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        575,
+        227
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 104,
+      "parent": 103,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        256,
+        203
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 105,
+      "parent": 104,
+      "pid": 3362,
+      "role": "image",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        256,
+        128
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 27,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 106,
+      "parent": 104,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        256,
+        57
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 107,
+      "parent": 106,
+      "pid": 3362,
+      "role": "label",
+      "name": "Create User",
+      "bounds": [
+        0,
+        0,
+        256,
+        33
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 29,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 108,
+      "parent": 106,
+      "pid": 3362,
+      "role": "label",
+      "name": "<omitted>",
+      "bounds": [
+        0,
+        0,
+        256,
+        18
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 29,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 109,
+      "parent": 100,
+      "pid": 3362,
+      "role": "grouping",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        575,
+        128
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 99,
+      "unresolved_relations": {
+        "labelled_by": 1,
+        "described_by": 1
+      },
+      "relations": {
+        "labelled_by": [],
+        "described_by": []
+      }
+    },
+    {
+      "id": 110,
+      "parent": 109,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        575,
+        128
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 111,
+      "parent": 110,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        575,
+        128
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 112,
+      "parent": 111,
+      "pid": 3362,
+      "role": "image",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        575,
+        128
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 27,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 113,
+      "parent": 100,
+      "pid": 3362,
+      "role": "grouping",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        575,
+        274
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 99,
+      "unresolved_relations": {
+        "labelled_by": 1,
+        "described_by": 1
+      },
+      "relations": {
+        "labelled_by": [],
+        "described_by": []
+      }
+    },
+    {
+      "id": 114,
+      "parent": 113,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        575,
+        274
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 115,
+      "parent": 114,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        575,
+        274
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 116,
+      "parent": 115,
+      "pid": 3362,
+      "role": "list",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        575,
+        274
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 31,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 117,
+      "parent": 116,
+      "pid": 3362,
+      "role": "list item",
+      "name": "<omitted>",
+      "bounds": [
+        0,
+        0,
+        575,
+        55
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 32,
+      "unresolved_relations": {},
+      "relations": {
+        "labelled_by": [
+          120,
+          121
+        ]
+      }
+    },
+    {
+      "id": 118,
+      "parent": 117,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        559,
+        50
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 119,
+      "parent": 118,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        559,
+        50
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 120,
+      "parent": 119,
+      "pid": 3362,
+      "role": "label",
+      "name": "Name",
+      "bounds": [
+        0,
+        0,
+        41,
+        18
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 29,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 121,
+      "parent": 119,
+      "pid": 3362,
+      "role": "label",
+      "name": "Name",
+      "bounds": [
+        0,
+        0,
+        41,
+        18
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 29,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 122,
+      "parent": 119,
+      "pid": 3362,
+      "role": "text",
+      "name": "Name",
+      "bounds": [
+        0,
+        0,
+        507,
+        50
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 61,
+      "unresolved_relations": {},
+      "relations": {
+        "labelled_by": [
+          121
+        ]
+      }
+    },
+    {
+      "id": 123,
+      "parent": 116,
+      "pid": 3362,
+      "role": "list item",
+      "name": "<omitted>",
+      "bounds": [
+        0,
+        0,
+        575,
+        55
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 32,
+      "unresolved_relations": {},
+      "relations": {
+        "labelled_by": [
+          126,
+          127
+        ]
+      }
+    },
+    {
+      "id": 124,
+      "parent": 123,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        559,
+        50
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 125,
+      "parent": 124,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        559,
+        50
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 126,
+      "parent": 125,
+      "pid": 3362,
+      "role": "label",
+      "name": "Username",
+      "bounds": [
+        0,
+        0,
+        72,
+        18
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 29,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 127,
+      "parent": 125,
+      "pid": 3362,
+      "role": "label",
+      "name": "Username",
+      "bounds": [
+        0,
+        0,
+        72,
+        18
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 29,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 128,
+      "parent": 125,
+      "pid": 3362,
+      "role": "text",
+      "name": "Username",
+      "bounds": [
+        0,
+        0,
+        507,
+        50
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 61,
+      "unresolved_relations": {},
+      "relations": {
+        "labelled_by": [
+          127
+        ]
+      }
+    },
+    {
+      "id": 129,
+      "parent": 116,
+      "pid": 3362,
+      "role": "list item",
+      "name": "<omitted>",
+      "bounds": [
+        0,
+        0,
+        575,
+        55
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 32,
+      "unresolved_relations": {},
+      "relations": {
+        "labelled_by": [
+          132,
+          133
+        ]
+      }
+    },
+    {
+      "id": 130,
+      "parent": 129,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        559,
+        50
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 131,
+      "parent": 130,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        519,
+        50
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 132,
+      "parent": 131,
+      "pid": 3362,
+      "role": "label",
+      "name": "Password",
+      "bounds": [
+        0,
+        0,
+        68,
+        18
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 29,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 133,
+      "parent": 131,
+      "pid": 3362,
+      "role": "label",
+      "name": "Password",
+      "bounds": [
+        0,
+        0,
+        69,
+        18
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 29,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 134,
+      "parent": 131,
+      "pid": 3362,
+      "role": "password text",
+      "name": "Password",
+      "bounds": [
+        0,
+        0,
+        467,
+        50
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 40,
+      "unresolved_relations": {},
+      "relations": {
+        "labelled_by": [
+          133
+        ]
+      }
+    },
+    {
+      "id": 135,
+      "parent": 130,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        34,
+        50
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 136,
+      "parent": 135,
+      "pid": 3362,
+      "role": "button",
+      "name": "<omitted>",
+      "bounds": [
+        0,
+        0,
+        34,
+        34
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 43,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 137,
+      "parent": 116,
+      "pid": 3362,
+      "role": "list item",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        575,
+        55
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": false,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 32,
+      "unresolved_relations": {
+        "labelled_by": 1,
+        "described_by": 1
+      },
+      "relations": {
+        "labelled_by": [],
+        "described_by": []
+      }
+    },
+    {
+      "id": 138,
+      "parent": 137,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        547,
+        50
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 139,
+      "parent": 138,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        541,
+        0
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 140,
+      "parent": 138,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        0,
+        50
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 141,
+      "parent": 140,
+      "pid": 3362,
+      "role": "label",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        0,
+        17
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 29,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 142,
+      "parent": 116,
+      "pid": 3362,
+      "role": "list item",
+      "name": "<omitted>",
+      "bounds": [
+        0,
+        0,
+        575,
+        54
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 32,
+      "unresolved_relations": {},
+      "relations": {
+        "labelled_by": [
+          145,
+          146
+        ]
+      }
+    },
+    {
+      "id": 143,
+      "parent": 142,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        559,
+        50
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 144,
+      "parent": 143,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        519,
+        50
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 145,
+      "parent": 144,
+      "pid": 3362,
+      "role": "label",
+      "name": "Confirm Password",
+      "bounds": [
+        0,
+        0,
+        128,
+        18
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 29,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 146,
+      "parent": 144,
+      "pid": 3362,
+      "role": "label",
+      "name": "Confirm Password",
+      "bounds": [
+        0,
+        0,
+        129,
+        18
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 29,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 147,
+      "parent": 144,
+      "pid": 3362,
+      "role": "password text",
+      "name": "Confirm Password",
+      "bounds": [
+        0,
+        0,
+        467,
+        50
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 40,
+      "unresolved_relations": {},
+      "relations": {
+        "labelled_by": [
+          146
+        ]
+      }
+    },
+    {
+      "id": 148,
+      "parent": 143,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        34,
+        50
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 149,
+      "parent": 148,
+      "pid": 3362,
+      "role": "button",
+      "name": "<omitted>",
+      "bounds": [
+        0,
+        0,
+        34,
+        34
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 43,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 150,
+      "parent": 9,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        900,
+        754
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 151,
+      "parent": 150,
+      "pid": 3362,
+      "role": "scroll pane",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        900,
+        754
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 49,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 152,
+      "parent": 151,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        900,
+        754
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 153,
+      "parent": 152,
+      "pid": 3362,
+      "role": "grouping",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        900,
+        754
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 99,
+      "unresolved_relations": {
+        "described_by": 1
+      },
+      "relations": {
+        "described_by": []
+      }
+    },
+    {
+      "id": 154,
+      "parent": 153,
+      "pid": 3362,
+      "role": "scroll pane",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        900,
+        343
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 49,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 155,
+      "parent": 154,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        900,
+        343
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 156,
+      "parent": 155,
+      "pid": 3362,
+      "role": "grouping",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        900,
+        343
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 99,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 157,
+      "parent": 156,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        575,
+        295
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 158,
+      "parent": 157,
+      "pid": 3362,
+      "role": "grouping",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        575,
+        203
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 99,
+      "unresolved_relations": {
+        "labelled_by": 1,
+        "described_by": 1
+      },
+      "relations": {
+        "labelled_by": [],
+        "described_by": []
+      }
+    },
+    {
+      "id": 159,
+      "parent": 158,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        575,
+        203
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 160,
+      "parent": 159,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        575,
+        203
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 161,
+      "parent": 160,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        259,
+        179
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 162,
+      "parent": 161,
+      "pid": 3362,
+      "role": "image",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        259,
+        128
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 27,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 163,
+      "parent": 161,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        259,
+        33
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 164,
+      "parent": 163,
+      "pid": 3362,
+      "role": "label",
+      "name": "Confirm installation",
+      "bounds": [
+        0,
+        0,
+        259,
+        33
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 29,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 165,
+      "parent": 157,
+      "pid": 3362,
+      "role": "grouping",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        575,
+        0
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 99,
+      "unresolved_relations": {
+        "labelled_by": 1,
+        "described_by": 1
+      },
+      "relations": {
+        "labelled_by": [],
+        "described_by": []
+      }
+    },
+    {
+      "id": 166,
+      "parent": 165,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        575,
+        0
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 167,
+      "parent": 166,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        575,
+        0
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 168,
+      "parent": 157,
+      "pid": 3362,
+      "role": "grouping",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        575,
+        44
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 99,
+      "unresolved_relations": {
+        "labelled_by": 1,
+        "described_by": 1
+      },
+      "relations": {
+        "labelled_by": [],
+        "described_by": []
+      }
+    },
+    {
+      "id": 169,
+      "parent": 168,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        575,
+        44
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 170,
+      "parent": 169,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        575,
+        44
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 171,
+      "parent": 170,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        109,
+        44
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 172,
+      "parent": 171,
+      "pid": 3362,
+      "role": "button",
+      "name": "Install",
+      "bounds": [
+        0,
+        0,
+        109,
+        44
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 43,
+      "unresolved_relations": {},
+      "relations": {
+        "labelled_by": [
+          173
+        ]
+      }
+    },
+    {
+      "id": 173,
+      "parent": 172,
+      "pid": 3362,
+      "role": "label",
+      "name": "Install",
+      "bounds": [
+        0,
+        0,
+        45,
+        24
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 29,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 174,
+      "parent": 9,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        900,
+        754
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 175,
+      "parent": 174,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        820,
+        550
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 176,
+      "parent": 175,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        820,
+        550
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 177,
+      "parent": 174,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        820,
+        161
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 178,
+      "parent": 177,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        820,
+        63
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 179,
+      "parent": 178,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        178,
+        63
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 180,
+      "parent": 179,
+      "pid": 3362,
+      "role": "label",
+      "name": "<omitted>",
+      "bounds": [
+        0,
+        0,
+        79,
+        21
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 29,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 181,
+      "parent": 179,
+      "pid": 3362,
+      "role": "label",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        0,
+        17
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 29,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 182,
+      "parent": 179,
+      "pid": 3362,
+      "role": "label",
+      "name": "<omitted>",
+      "bounds": [
+        0,
+        0,
+        178,
+        17
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 29,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 183,
+      "parent": 178,
+      "pid": 3362,
+      "role": "label",
+      "name": "<omitted>",
+      "bounds": [
+        0,
+        0,
+        34,
+        25
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 29,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 184,
+      "parent": 177,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        820,
+        34
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 185,
+      "parent": 184,
+      "pid": 3362,
+      "role": "label",
+      "name": "<omitted>",
+      "bounds": [
+        0,
+        0,
+        75,
+        34
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 29,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 186,
+      "parent": 184,
+      "pid": 3362,
+      "role": "label",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        0,
+        34
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 29,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 187,
+      "parent": 184,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        629,
+        34
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 188,
+      "parent": 184,
+      "pid": 3362,
+      "role": "button",
+      "name": "<omitted>",
+      "bounds": [
+        0,
+        0,
+        34,
+        34
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 43,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 189,
+      "parent": 184,
+      "pid": 3362,
+      "role": "button",
+      "name": "<omitted>",
+      "bounds": [
+        0,
+        0,
+        34,
+        34
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 43,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 190,
+      "parent": 177,
+      "pid": 3362,
+      "role": "progress bar",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        820,
+        8
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 42,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 191,
+      "parent": 9,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        900,
+        754
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 192,
+      "parent": 191,
+      "pid": 3362,
+      "role": "scroll pane",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        900,
+        754
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 49,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 193,
+      "parent": 192,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        900,
+        754
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 194,
+      "parent": 193,
+      "pid": 3362,
+      "role": "grouping",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        900,
+        546
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 99,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 195,
+      "parent": 194,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        551,
+        450
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 196,
+      "parent": 195,
+      "pid": 3362,
+      "role": "image",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        64,
+        64
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 27,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 197,
+      "parent": 195,
+      "pid": 3362,
+      "role": "label",
+      "name": "<omitted>",
+      "bounds": [
+        0,
+        0,
+        302,
+        33
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 29,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 198,
+      "parent": 195,
+      "pid": 3362,
+      "role": "label",
+      "name": "<omitted>",
+      "bounds": [
+        0,
+        0,
+        399,
+        62
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 29,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 199,
+      "parent": 195,
+      "pid": 3362,
+      "role": "grouping",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        551,
+        63
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 99,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 200,
+      "parent": 199,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        513,
+        37
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 201,
+      "parent": 200,
+      "pid": 3362,
+      "role": "label",
+      "name": "<omitted>",
+      "bounds": [
+        0,
+        0,
+        467,
+        37
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 29,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 202,
+      "parent": 200,
+      "pid": 3362,
+      "role": "button",
+      "name": "<omitted>",
+      "bounds": [
+        0,
+        0,
+        34,
+        34
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": false,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 43,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 203,
+      "parent": 195,
+      "pid": 3362,
+      "role": "check box",
+      "name": "<omitted>",
+      "bounds": [
+        0,
+        0,
+        238,
+        28
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 7,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 204,
+      "parent": 203,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        20,
+        20
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 205,
+      "parent": 203,
+      "pid": 3362,
+      "role": "label",
+      "name": "<omitted>",
+      "bounds": [
+        0,
+        0,
+        206,
+        20
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 29,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 206,
+      "parent": 195,
+      "pid": 3362,
+      "role": "button",
+      "name": "<omitted>",
+      "bounds": [
+        0,
+        0,
+        130,
+        44
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": false,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 43,
+      "unresolved_relations": {},
+      "relations": {
+        "labelled_by": [
+          207
+        ]
+      }
+    },
+    {
+      "id": 207,
+      "parent": 206,
+      "pid": 3362,
+      "role": "label",
+      "name": "<omitted>",
+      "bounds": [
+        0,
+        0,
+        66,
+        24
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 29,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 208,
+      "parent": 9,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        900,
+        754
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 209,
+      "parent": 208,
+      "pid": 3362,
+      "role": "scroll pane",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        900,
+        754
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 49,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 210,
+      "parent": 209,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        900,
+        754
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 211,
+      "parent": 210,
+      "pid": 3362,
+      "role": "grouping",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        900,
+        754
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 99,
+      "unresolved_relations": {
+        "described_by": 1
+      },
+      "relations": {
+        "described_by": []
+      }
+    },
+    {
+      "id": 212,
+      "parent": 211,
+      "pid": 3362,
+      "role": "scroll pane",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        900,
+        343
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 49,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 213,
+      "parent": 212,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        900,
+        343
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 214,
+      "parent": 213,
+      "pid": 3362,
+      "role": "grouping",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        900,
+        343
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 99,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 215,
+      "parent": 214,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        575,
+        295
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 216,
+      "parent": 215,
+      "pid": 3362,
+      "role": "grouping",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        575,
+        227
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 99,
+      "unresolved_relations": {
+        "labelled_by": 1,
+        "described_by": 1
+      },
+      "relations": {
+        "labelled_by": [],
+        "described_by": []
+      }
+    },
+    {
+      "id": 217,
+      "parent": 216,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        575,
+        227
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 218,
+      "parent": 217,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        575,
+        227
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 219,
+      "parent": 218,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        343,
+        203
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 220,
+      "parent": 219,
+      "pid": 3362,
+      "role": "image",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        343,
+        128
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 27,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 221,
+      "parent": 219,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        343,
+        57
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 222,
+      "parent": 221,
+      "pid": 3362,
+      "role": "label",
+      "name": "<omitted>",
+      "bounds": [
+        0,
+        0,
+        343,
+        33
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 29,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 223,
+      "parent": 221,
+      "pid": 3362,
+      "role": "label",
+      "name": "<omitted>",
+      "bounds": [
+        0,
+        0,
+        343,
+        18
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 29,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 224,
+      "parent": 215,
+      "pid": 3362,
+      "role": "grouping",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        575,
+        44
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 99,
+      "unresolved_relations": {
+        "labelled_by": 1,
+        "described_by": 1
+      },
+      "relations": {
+        "labelled_by": [],
+        "described_by": []
+      }
+    },
+    {
+      "id": 225,
+      "parent": 224,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        575,
+        44
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 226,
+      "parent": 225,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        575,
+        44
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 227,
+      "parent": 226,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        296,
+        44
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 228,
+      "parent": 227,
+      "pid": 3362,
+      "role": "button",
+      "name": "<omitted>",
+      "bounds": [
+        0,
+        0,
+        135,
+        44
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 43,
+      "unresolved_relations": {},
+      "relations": {
+        "labelled_by": [
+          229
+        ]
+      }
+    },
+    {
+      "id": 229,
+      "parent": 228,
+      "pid": 3362,
+      "role": "label",
+      "name": "<omitted>",
+      "bounds": [
+        0,
+        0,
+        71,
+        24
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 29,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 230,
+      "parent": 227,
+      "pid": 3362,
+      "role": "button",
+      "name": "<omitted>",
+      "bounds": [
+        0,
+        0,
+        151,
+        44
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 43,
+      "unresolved_relations": {},
+      "relations": {
+        "labelled_by": [
+          231
+        ]
+      }
+    },
+    {
+      "id": 231,
+      "parent": 230,
+      "pid": 3362,
+      "role": "label",
+      "name": "<omitted>",
+      "bounds": [
+        0,
+        0,
+        87,
+        24
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 29,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 232,
+      "parent": 6,
+      "pid": 3362,
+      "role": "grouping",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        900,
+        46
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 99,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 233,
+      "parent": 232,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        900,
+        46
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 234,
+      "parent": 233,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        900,
+        46
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 235,
+      "parent": 234,
+      "pid": 3362,
+      "role": "grouping",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        902,
+        46
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 99,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 236,
+      "parent": 235,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        902,
+        46
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 237,
+      "parent": 236,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        902,
+        46
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 238,
+      "parent": 237,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        0,
+        34
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 239,
+      "parent": 237,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        0,
+        34
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 240,
+      "parent": 237,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        120,
+        34
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 241,
+      "parent": 240,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        114,
+        34
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 242,
+      "parent": 241,
+      "pid": 3362,
+      "role": "button",
+      "name": "Credits",
+      "bounds": [
+        0,
+        0,
+        34,
+        34
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 43,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 243,
+      "parent": 241,
+      "pid": 3362,
+      "role": "button",
+      "name": "<omitted>",
+      "bounds": [
+        0,
+        0,
+        34,
+        34
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 43,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 244,
+      "parent": 241,
+      "pid": 3362,
+      "role": "button",
+      "name": "<omitted>",
+      "bounds": [
+        0,
+        0,
+        34,
+        34
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 43,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 245,
+      "parent": 6,
+      "pid": 3362,
+      "role": "grouping",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        900,
+        0
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 99,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 246,
+      "parent": 245,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        900,
+        0
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    },
+    {
+      "id": 247,
+      "parent": 246,
+      "pid": 3362,
+      "role": "panel",
+      "name": "",
+      "bounds": [
+        0,
+        0,
+        900,
+        0
+      ],
+      "states": {
+        "visible": true,
+        "showing": true,
+        "enabled": false,
+        "sensitive": true,
+        "focused": false,
+        "checked": false,
+        "active": false,
+        "defunct": false
+      },
+      "role_id": 39,
+      "unresolved_relations": {},
+      "relations": {}
+    }
+  ],
+  "traversal": {
+    "visited_nodes": 248,
+    "max_depth": 26
+  }
+}

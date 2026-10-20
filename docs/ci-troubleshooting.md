@@ -1741,6 +1741,286 @@ cannot change the theme already copied by dracut. The test runs
 PNG, selection and password callbacks. Keep image builds blocked until an
 actual initramfs and encrypted-root boot verify the same files.
 
+### Fork staging refuses an image build
+
+`prepare-fork-config.py --identity-staging --build` and the ordinary build
+entry reject the identity payload until real-image qualification is complete.
+This is an intentional admission boundary, not a missing environment flag.
+Use the [qualification harness](FORK-IMAGE-QUALIFICATION.md)
+for the two local canaries. Its result records build, boot and installed
+identity separately from graphical login and installer tests. Never interpret
+an unexecuted stage as a pass or remove the production gate to run the canary.
+
+
+### Grouper has no base boot marker
+
+Run `39187536308` reached GDM but had no base marker or SSH host keys.
+Keep the base contract before the apt branch exit in `40-services.sh`.
+Send its verdict to the serial device as well as the journal.
+Keep the SSH key generator in the service dependency graph.
+Do not add the same dependency to `ssh.socket`: it can cause a cycle.
+The next native test must check the keygen journal and an SSH login.
+
+
+### Installer process exists but the fork welcome screen is unproven
+
+The frozen bootc-installer source at `c037f9b7` can map `BootcRamWindow`,
+`BootcCpuWindow` or `BootcUnsupportedWindow` through the normal app entrypoint.
+A live process or a nonblank screenshot does not distinguish these windows from
+`BootcWindow`. GNOME also exports its display to the user systemd manager after
+startup; the compositor's initial process environment need not contain that socket.
+
+Use the [welcome proof](FORK-IMAGE-QUALIFICATION.md#optional-native-installer-welcome-proof) for a native test.
+It reads the existing user's session environment. It needs a new wizard map and
+the exact app commit. It also checks visible welcome/install copy and pixels from the source logo.
+If GitHub denies the frozen artifact download, report that exact HTTP status.
+Do not replace it with a source build or change token permissions to make the test run.
+
+### Ubuntu initramfs copies the wrong fork theme
+
+Ubuntu's `plymouth-populate-initrd` reads `Theme` from the config only when
+`ThemeDir` also names a valid theme directory. Without it, the tool uses
+`update-alternatives`, which can still select `bgrt`. Set both keys before
+dracut runs. Run `39193902719` exposed this with the actual archive check.
+Keep that check: files in the root image do not prove an initramfs payload.
+
+### Fork installer shows the right logo but selects a stock image or wrong storage
+
+The identity adapter deliberately changes display fields only. The stock recipe
+still named `ghcr.io/tuna-os/tunaos:latest`, while the image screen's embedded
+catalog could override recipe `imgref` through its selected-image result. Also,
+raw images retained the template's composefs/systemd/xfs values: only customization of the live ISO ran
+the probe for the final backend.
+
+Use the exact build tag from the resolved cell for the recipe and host catalog.
+Reject duplicate or absent target leaves before the build. Finalize the
+recipe and selected leaf using the canonical root probe before identity hashes.
+`tests/test_fork_installer_source.py` exercises the real probe for bootupd/sealed
+combinations, stock-source rejection, inherited catalog refs, and repeated writes;
+it does not replace native installer or installed-boot qualification.
+
+### Fork installer opens the disk page before welcome
+
+**Cause:** Native run `39209599456` showed the disk page first on Yellowfin and
+Grouper. The builder logged `disk,encryption,image,welcome`, but the source
+recipe has `welcome,image,disk,encryption`. Each writer sorted all keys, even in
+nested objects. The installer uses object order for steps
+and tour slides, so those writes changed the UI sequence.
+
+**Fix:** Keep the recipe's nested object order in all three writers. Keep sorted
+JSON for catalogs and receipts. Hash the exact recipe bytes after the final write.
+`test_full_preparation_preserves_recipe_order_through_identity` runs preparation,
+the actual backend probe and repeated identity writes in fixture roots. It checks
+step and tour order, stable bytes and detection of a changed recipe hash.
+
+These source tests do not prove that the welcome screen appears first. Rebuild
+and check the actual installer before you claim that result.
+
+### Fork Welcome screen text check fails
+
+[Run 39215796177](https://github.com/tuna-os/tunaOS/actions/runs/39215796177)
+showed the correct Yellowfin screen, but PSM11 read its download icon as part of
+`Install`. The word scored 20.994308, below the cutoff of 30.
+The test now reads the full label in the first light row below the Welcome text.
+It uses grayscale, autocontrast, 4× scale and PSM7. Each word in the exact
+`Install Harbor Canary` label must score at least 80. Extra words fail the test.
+
+The exact source-logo check stays in place. Local tests pass for both frames;
+a new native run must pass before this gate is complete.
+
+### Fork cold-login proof sees GNOME Shell but no logind session
+
+**Symptom:** [Run 39235973978](https://github.com/tuna-os/tunaOS/actions/runs/39235973978)
+passed the preparation guest's typed login and Welcome screen, then timed out on
+cold-source login. Both cells reported UID 1000 and a live canary `gnome-shell`,
+but serial evidence contained `sessions=[]` and `sessions_status=empty`. The helper did not
+start installation.
+
+**Cause:** The serial observer requested
+`loginctl show-session --property=Id,User,...`. Unlike `systemctl`, loginctl
+appends each entire argument as one property filter; the joined string matches
+nothing. The artifact identifies systemd 257 on Yellowfin and 259 on Grouper;
+both upstream parsers use this behavior
+([v257](https://github.com/systemd/systemd/blob/70bae7648f2c18010187c9cf20093155eaa26029/src/login/loginctl.c#L1579-L1588),
+[v259](https://github.com/systemd/systemd/blob/9ca433482f2281d71718718705ca8cd3bf562ad6/src/login/loginctl.c#L1572-L1581)).
+The preparation guest's older collector reads all properties. Its login check passed.
+
+**Fix:** Pass one `--property=KEY` argument for each allowed property. These
+options also preserve empty values such as `Desktop=`. Keep the original checks
+for a new, local, active, unlocked `gdm-password` session and a live shell.
+`test_real_loginctl_property_filter_against_private_bus` exercises the installed
+CLI against an isolated fixture bus, with the incorrect comma form, empty
+values and both session-list APIs. It needs system Python's installed GIO,
+`dbus-daemon` and `loginctl`; missing prerequisites or socket denial fail in
+GitHub CI and skip locally. A source regression does not replace the next native
+cold-login and installation run.
+
+A failed login now saves `*-login-failed.png` and a failed `*-login.json`
+with bounded, validated before/last login facts. The report excludes post-input OCR, keyboard
+input, exception text and arbitrary observer fields. A screenshot
+failure cannot change the login verdict.
+
+### Fork observer corrupts a boot-contract console marker
+
+[Run 39246281273](https://github.com/tuna-os/tunaOS/actions/runs/39246281273)
+failed the original BASE check on Yellowfin before installation.
+The BASE marker interrupted a JSON record on `/dev/ttyS0`.
+The shared console could not keep these two writes separate.
+
+The observer now uses only the `org.tunaos.fork-observer` virtio port.
+It checks the device alias, sysfs name, device number and open descriptor.
+It waits up to 30 seconds for the port, within its total time limit.
+If the port is absent, it exits without output. Original Corral boots have no port.
+The reader uses only the private file for this channel, with no console fallback.
+
+Tests write to both channels at the same time. Noise on the console does not change the
+observer file. Corrupt JSON in that file still fails. The BASE parser stays strict.
+A new native run must pass both the BASE check and observation through the private port.
+
+### Fork installer stays at Welcome or cannot select the encryption switch
+
+**Symptom:** [Run 39253040831](https://github.com/tuna-os/tunaOS/actions/runs/39253040831)
+passed both cold-source logins and blank-target checks, then stopped before Install.
+Yellowfin's `ui-067-wizard-page.png` still shows GNOME overview; Grouper's
+`ui-003-encryption.png` shows Disk Encryption with its switch enabled.
+
+**Cause:** Enter did not prove that the installer had input focus.
+The switch selector checked its name but not its parent ActionRow.
+The run saved no AT-SPI trees, so its precise switch name is unknown.
+In the pinned [installer template](https://github.com/tuna-os/bootc-installer/blob/64217e6f53f40c2d0343d44c2b7fcd6f59c274dd/bootc_installer/gtk/default-encryption.blp#L43-L89),
+the switch sits inside the titled row. [Adw.ActionRow](https://github.com/GNOME/libadwaita/blob/5808d27bd19fd16af6bafdb35c64c4a492daeaf5/src/adw-action-row.ui#L4-L9)
+labels the row through its title widget. An incidental subtitle does not prove the row's identity.
+
+**Fix:** Exit observed overview with Escape. Check that one installer window is
+active and has a focused descendant. Click its visible Welcome row by exact title.
+Bind the encryption switch to the nearest titled row and exact process.
+Check its ancestry under the active window and its bounds.
+Reject duplicate matches, hidden/defunct controls and labels that conflict.
+
+After a field click, recheck focus and control identity before text input.
+All input still uses ordinary QMP pointer/keyboard events. No widget setters are used.
+
+Full-frame OCR misses the orange Next label in the same Grouper screenshot.
+A fallback crops only the control from its checked bounds.
+It accepts only the complete exact label at high confidence.
+Ambiguous matches in the full frame still fail.
+
+Native screenshots and their run/artifact hashes are fixtures. Test accessibility
+trees are explicitly source-shaped, not native captures. The report in
+`install-proof.json` now has a bounded `native_ui_observation`. This contains
+structural facts, static allowlisted names, focus states and label relations.
+It excludes field text and arbitrary names. A native rerun must verify runtime
+focus and accessibility behavior.
+
+### Fork harness-only fixes repeatedly rebuild the original OCI pair
+
+The compiler source receipt includes `scripts/**/*`.
+In [run 39235973978](https://github.com/tuna-os/tunaOS/actions/runs/39235973978),
+the original layers for Yellowfin and Grouper totalled about 8.5 GiB.
+A host harness fix starts another full build in the combined workflow.
+The old image must retain the hashes of its actual source.
+
+The [artifact transport](fork-image-artifacts.md) retains only the original OCI files
+and explicit receipts after both original images pass their build, boot and export checks.
+Uploads precede login and installation tests. Artifacts expire after three days.
+A later run can select an exact pair through the PR's pin file.
+Original receipts keep their bytes; a separate record identifies the new harness and its changed inputs.
+
+Changes to the image source or embedded observer need a new build.
+Expired or corrupt artifacts and ambiguous pins stop the run.
+There is no fallback. Fixture tests do not prove a native upload, download or installation.
+
+### GTK4 controls exist but the harness cannot select them
+
+[Run 39301862725](https://github.com/tuna-os/tunaOS/actions/runs/39301862725)
+captured 248 nodes from the installer. GTK4 uses `SENSITIVE` but does not emit
+`ENABLED`. It returns zero for `SCREEN` coordinates. Carousel pages can report
+`SHOWING` even when the screen displays another page.
+The fixture `tests/fixtures/fork-installer/run20-accessibility.json` retains these facts.
+
+The harness now sends Tab through QMP within the active window of the verified process.
+A screenshot identifies the page. The ancestry of that page limits which fields can match.
+Focus must reach the exact control before the harness sends Enter, Space or text.
+A cycle, a changed page or a disabled control stops the test.
+
+GTK role 43 can have the name `button` or `push button`.
+The harness does not guess coordinates for GTK controls.
+See GTK 4.22's [coordinate helper](https://github.com/GNOME/gtk/blob/4.22.0/gtk/a11y/gtkatspiutils.c)
+and [state code](https://github.com/GNOME/gtk/blob/4.22.0/gtk/a11y/gtkatspicontext.c).
+Local tests of fixtures do not prove an installation.
+
+### Login diagnostics reject an empty session during greeter teardown
+
+The same run stopped Grouper soon after its `gdm-password` session appeared.
+The observer converted a failed `loginctl show-session` into an empty row.
+A session can disappear after the first list request.
+The observer retries only if a second list confirms that the session disappeared.
+
+The deadline still applies. Success needs a stable snapshot with a new graphical
+session from `gdm-password` and a GNOME Shell process.
+A failed read of an existing session remains an error.
+The report records each confirmed disappearance and its timestamp.
+
+### GTK loses widget focus after Next opens an empty form
+
+[Run 39310516324](https://github.com/tuna-os/tunaOS/actions/runs/39310516324)
+activated Welcome and turned encryption off in both variants. Both then displayed
+Create User with the same active window but no focused widget.
+The empty form disables Next, which held focus on the prior page.
+
+After its own page-advance action, the harness checks the new page and active
+window again. It can send one Tab to establish widget focus.
+It then observes focus for at most four snapshots.
+If no unique focus appears, the test stops without Enter or text input.
+The exception does not apply to the same page, another window or ambiguous focus.
+A regression test covers the full sequence through guarded Install activation.
+
+### Confirmation text is visible but OCR misses the target disk
+
+[Run 39319018523](https://github.com/tuna-os/tunaOS/actions/runs/39319018523)
+completed the four fields on Create User in both variants. It stopped before Install.
+The confirmation frame showed `/dev/vdb (64 GiB)` and the erase warning.
+Full-size OCR missed the red warning line.
+
+The check reads one grayscale copy of the full frame at twice its size.
+It needs the exact warning, at high confidence, with an exact device token.
+The live confirmation page must also contain that disk subtitle and warning.
+The subtitle must belong to the Disk row in the verified application.
+The test repeats the disk guards before Install. Wrong paths, duplicate warnings
+and a changed active window remain errors.
+
+### A native password dialog is visible but full-frame OCR misses it
+
+[Run 39325936708](https://github.com/tuna-os/tunaOS/actions/runs/39325936708)
+completed installation and target login for Grouper. Yellowfin activated Install
+but stopped at its visible password dialog. Full-frame OCR missed its title.
+
+The check binds the title, account label and focused password field to one dialog
+in the verified process for GNOME Shell. Its coordinates refer to the screen.
+The existing label check can read an exact crop at those coordinates.
+The test checks the same dialog and focused field again before password input.
+
+GNOME's [StEntry](https://github.com/GNOME/gnome-shell/blob/main/src/st/st-entry.c)
+uses `DESCRIBED_BY` for its hint actor, outside the entry's child tree.
+One unresolved hint can remain diagnostic. It does not identify the account or field.
+An unresolved `LABELLED_BY` or an unexpected identity relation remains an error.
+
+### Authentication appears between the screenshot and the tree read
+
+[Run 39333923120](https://github.com/tuna-os/tunaOS/actions/runs/39333923120)
+reached the native password prompt on both variants. Grouper's screenshot still
+showed confirmation while the later tree read contained the password dialog.
+The check now repeats that read-only observation within the same deadline.
+It still needs exact visible labels and a fresh focused field before any input.
+Ambiguous text or invalid coordinates remain errors.
+
+Yellowfin passed authentication and reached the backend's configuration phase.
+It then reported an error. The old report retained only the error flag.
+The collector now keeps bounded error events, stage IDs and a hash of the log.
+It removes credential arguments and hashes, and excludes recipes, recovery keys
+and other free-form log events. The final report also removes the test password.
+
+The harness saves a screenshot and the last backend summary before it raises the error.
 ### Anime wallpaper disappears after desktop setup
 
 **Symptom:** The selector chooses anime or a desktop override, but the final
