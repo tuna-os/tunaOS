@@ -49,6 +49,20 @@ def _document(relative):
     return json.loads((FIXTURES / relative).read_text())
 
 
+def _stub_x86_64_uname(tools: Path) -> None:
+    uname = tools / "uname"
+    uname.write_text(
+        "#!/bin/sh\n"
+        'if [ "$1" = "-m" ]; then echo x86_64; else\n'
+        "  for candidate in /usr/bin/uname /bin/uname; do\n"
+        '    [ -x "$candidate" ] && exec "$candidate" "$@"\n'
+        "  done\n"
+        "  exit 127\n"
+        "fi\n"
+    )
+    uname.chmod(0o755)
+
+
 def _normalized_intent(plan):
     return {
         "consumers_integrated": plan["consumers_integrated"],
@@ -103,21 +117,11 @@ def _run_branding(relative, tmp_path):
     # is controlled for a deterministic cross-platform vector.
     tools = tmp_path / "tools"
     tools.mkdir()
-    uname = tools / "uname"
-    uname.write_text(
-        "#!/bin/sh\n"
-        'if [ "$1" = "-m" ]; then echo x86_64; else\n'
-        "  for candidate in /usr/bin/uname /bin/uname; do\n"
-        '    [ -x "$candidate" ] && exec "$candidate" "$@"\n'
-        "  done\n"
-        "  exit 127\n"
-        "fi\n"
-    )
-    uname.chmod(0o755)
+    _stub_x86_64_uname(tools)
     env = os.environ.copy()
     env.update(
         {
-            "PATH": f"{tools}:{env['PATH']}",
+            "PATH": f"{tools}{os.pathsep}{env['PATH']}",
             "IMAGE_NAME_VARIANT": "yellowfin",
             "TUNAOS_IMAGE_FLAVOR": "gnome",
             "PKG_MGR": "dnf",
@@ -166,17 +170,7 @@ def _run_packages(relative, tmp_path, *, refresh=True):
     root.mkdir()
     tools = tmp_path / "tools"
     tools.mkdir()
-    uname = tools / "uname"
-    uname.write_text(
-        "#!/bin/sh\n"
-        'if [ "$1" = "-m" ]; then echo x86_64; else\n'
-        "  for candidate in /usr/bin/uname /bin/uname; do\n"
-        '    [ -x "$candidate" ] && exec "$candidate" "$@"\n'
-        "  done\n"
-        "  exit 127\n"
-        "fi\n"
-    )
-    uname.chmod(0o755)
+    _stub_x86_64_uname(tools)
     refresh_body = "return 0" if refresh else "return 1"
     command = f"""
 set -euo pipefail
@@ -195,7 +189,7 @@ tunaos_apply_fork_packages "$2" "$3"
             "PKG_MGR": "dnf",
             "IMAGE_NAME_VARIANT": "yellowfin",
             "TUNAOS_IMAGE_FLAVOR": "gnome",
-            "PATH": f"{tools}:{env['PATH']}",
+            "PATH": f"{tools}{os.pathsep}{env['PATH']}",
         }
     )
     return subprocess.run(
