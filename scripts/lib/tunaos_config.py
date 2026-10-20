@@ -6,6 +6,7 @@ This first ownership migration does not yet consume package/branding sections.
 from __future__ import annotations
 
 import copy
+from datetime import datetime
 import json
 import os
 from pathlib import Path
@@ -156,14 +157,32 @@ def validate(config):
         for alias in aliases:
             if alias in reserved:
                 raise ConfigError(f'variants.{name}.aliases: {alias!r} shadows a canonical image name')
-        destinations = [variant.get('publish_name', name), *aliases]
-        for destination in destinations:
-            for flavor in variant['flavors']:
-                tag = flavor['id'] + (f'-{suffix}' if suffix else '')
-                key = (destination, tag)
-                if key in published and published[key] != name:
-                    raise ConfigError(f'variants.{name}: {destination}:{tag} also belongs to {published[key]}')
-                published[key] = name
+        canonical = variant.get('publish_name', name)
+        for flavor in variant['flavors']:
+            tag = flavor['id'] + (f'-{suffix}' if suffix else '')
+            platforms = flavor.get('platforms', variant['platforms'])
+            # reusable-build-image.yml: Push Manifest and Promote Image emit
+            # canonical, testing, architecture, and YYYYMMDD history tags.
+            stems = [tag, *(tag + '-' + p.removeprefix('linux/').replace('/', '-')
+                            for p in platforms)]
+            entries = [(canonical, stem, dated) for stem in stems for dated in (False, True)]
+            entries.append((canonical, tag + '-testing', False))
+            # Build pushes also use safeplatform names, before promotion.
+            for platform in platforms:
+                build_tag = tag + '-' + platform.replace('/', '-')
+                entries.extend([(canonical, build_tag, False),
+                                (canonical, build_tag + '.packages', False)])
+            entries.extend((alias, tag, dated) for alias in aliases for dated in (False, True))
+            owner = (name, flavor['id'])
+            for destination, stem, dated in entries:
+                for previous_stem, previous_dated, previous_owner in published.get(destination, []):
+                    if previous_owner == owner:
+                        continue
+                    if publication_tags_overlap(stem, dated, previous_stem, previous_dated):
+                        display = stem + ('-YYYYMMDD' if dated else '')
+                        raise ConfigError(f'variants.{name}: {destination}:{display} '
+                                          f'also belongs to {previous_owner[0]}')
+                published.setdefault(destination, []).append((stem, dated, owner))
     for i, group in enumerate(config['iso_groups']):
         # Offline payloads intentionally include flavors absent from the live menu.
         for key in ('flavors', 'offline_flavors'):
@@ -171,6 +190,23 @@ def validate(config):
             if unknown:
                 raise ConfigError(f'iso_groups[{i}].{key}: unknown flavors {sorted(unknown)}')
     return config
+
+
+def publication_tags_overlap(left, left_dated, right, right_dated):
+    """Compare literal tags and the workflow's calendar-date suffix families."""
+    if left_dated == right_dated:
+        return left == right
+    stem, literal = (left, right) if left_dated else (right, left)
+    if not literal.startswith(stem + '-'):
+        return False
+    suffix = literal[len(stem) + 1:]
+    if not re.fullmatch(r'[0-9]{8}', suffix):
+        return False
+    try:
+        datetime.strptime(suffix, '%Y%m%d')
+    except ValueError:
+        return False
+    return True
 
 
 def load(path=None):

@@ -420,7 +420,8 @@ def test_renovate_only_pin_update_keeps_live_suite_green(tmp_path):
     for name in ("tunaos.toml", "renovate.json", "requirements-config.txt",
                  "scripts/config.py", "scripts/lib/tunaos_config.py",
                  "scripts/lib/build-config.sh", "scripts/iso-e2e.sh",
-                 "just/utilities.just", "tests/test_primary_config.py"):
+                 "just/utilities.just", ".github/workflows/reusable-build-image.yml",
+                 "tests/test_primary_config.py"):
         target = checkout / name
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(ROOT / name, target)
@@ -443,3 +444,60 @@ def test_renovate_only_pin_update_keeps_live_suite_green(tmp_path):
     assert {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in fixtures.iterdir()} == before
     emitted = config.matrix(config.load(primary))
     assert next(v for v in emitted["variants"] if v["id"] == variant_id)["base_image"] == replacement
+
+
+@pytest.mark.parametrize("suffix", ["amd64", "arm64", "linux-amd64", "testing", "20261020", "amd64-20261020"])
+def test_generated_publication_tag_collisions_are_rejected(suffix):
+    document = config.load()
+    document["variants"]["bonito-rawhide"]["tag_suffix"] = suffix
+    with pytest.raises(config.ConfigError, match="also belongs to bonito"):
+        config.validate(document)
+
+
+def test_architecture_override_publication_collision_is_rejected():
+    document = config.load()
+    document["variants"]["yellowfin"]["publish_name"] = "skipjack"
+    document["variants"]["yellowfin"]["tag_suffix"] = "amd64-v2"
+    with pytest.raises(config.ConfigError, match="also belongs to"):
+        config.validate(document)
+
+
+@pytest.mark.parametrize("left,dated,right,other_dated,expected", [
+    ("gnome", True, "gnome-20261020", False, True),
+    ("gnome-20261020", False, "gnome", True, True),
+    ("gnome", True, "gnome", True, True),
+    ("gnome", True, "gnome-20261340", False, False),
+    ("gnome", True, "gnome-2026102", False, False),
+    ("gnome", True, "gnome-testing", False, False),
+    ("gnome", True, "gnome-amd64", True, False),
+])
+def test_publication_date_families(left, dated, right, other_dated, expected):
+    assert config.publication_tags_overlap(left, dated, right, other_dated) is expected
+
+
+def test_generated_tag_collision_between_flavors_is_rejected():
+    document = config.load()
+    variant = document["variants"]["bonito"]
+    extra = copy.deepcopy(next(f for f in variant["flavors"] if f["id"] == "gnome"))
+    extra["id"] = "gnome-testing"
+    variant["flavors"].append(extra)
+    with pytest.raises(config.ConfigError, match="also belongs to bonito"):
+        config.validate(document)
+
+
+def test_publication_validator_tracks_workflow_tag_producers():
+    import re
+    workflow = (ROOT / ".github/workflows/reusable-build-image.yml").read_text()
+    # A producer change must update the namespace model and collision fixtures.
+    copies = set(re.findall(r'^\s+copy_retry "([^"\n]+)"', workflow, re.MULTILINE))
+    canonical = "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}"
+    alias = "${IMAGE_REGISTRY}/${alias_name}:${DEFAULT_TAG}"
+    assert copies == {canonical, canonical + "-${DATE_TAG}", canonical + "-${arch}",
+                      canonical + "-${arch}-${DATE_TAG}", alias, alias + "-${DATE_TAG}"}
+    assert 'DATE_TAG="$(date +%Y%m%d)"' in workflow
+    assert 'arch="${platform#linux/}"' in workflow
+    assert 'arch="${arch//\\//-}"' in workflow
+    assert 'type=raw,value=${{ env.DEFAULT_TAG}}' in workflow
+    assert '$IMAGE_REGISTRY/$IMAGE_NAME:${tag}-testing' in workflow
+    assert canonical + '-${SAFE_PLATFORM}"' in workflow
+    assert canonical + '-${SAFE_PLATFORM}.packages"' in workflow
