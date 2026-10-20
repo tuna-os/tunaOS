@@ -85,9 +85,26 @@ jobs:
             echo "CATALOG_SNAPSHOT=$snapshot_dir/catalog-snapshot.json" >> "$GITHUB_ENV"
           fi
 
+      - name: Install delivery input probe
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends python3-yaml skopeo
+
+      - name: Collect current delivery inputs
+        env:
+          CURRENT_INPUTS: ${{ runner.temp }}/current-delivery-inputs.json
+        run: |
+          set -euo pipefail
+          if python3 scripts/collect-current-inputs.py --output "$CURRENT_INPUTS"; then
+            echo "CURRENT_INPUTS=$CURRENT_INPUTS" >> "$GITHUB_ENV"
+          else
+            echo "::warning::current delivery inputs were unavailable; cutover annotations will remain false"
+          fi
 
       - name: Setup yq
         uses: ./.github/actions/setup-yq
+
+
 
       - name: Validate Inputs
         env:
@@ -252,7 +269,9 @@ jobs:
           # With the empty initial policy every row gets cutover=false, so the
           # cutover-check inputs below evaluate to current behavior.
           SNAPSHOT_ARGS=()
-          if [[ -s "${CATALOG_SNAPSHOT:-}" ]]; then
+          if [[ -s "${CATALOG_SNAPSHOT:-}" && -s "${CURRENT_INPUTS:-}" ]]; then
+            SNAPSHOT_ARGS=(--snapshot "$CATALOG_SNAPSHOT" --current-inputs "$CURRENT_INPUTS")
+          elif [[ -s "${CATALOG_SNAPSHOT:-}" ]]; then
             SNAPSHOT_ARGS=(--snapshot "$CATALOG_SNAPSHOT")
           fi
           ARTIFACT_S2_MATRIX=$(echo "$ARTIFACT_S2_MATRIX" | python3 scripts/delivery-cutover.py --annotate-matrix "${SNAPSHOT_ARGS[@]}")

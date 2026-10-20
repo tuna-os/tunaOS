@@ -97,13 +97,17 @@ def test_iso_strict_path_uses_embedded_source_and_separate_media_identity():
     assert "live-source.json" in provenance
     assert "TUNAOS_QUAL_SOURCE_DIGEST" in provenance
     assert "TUNAOS_QUAL_OVERLAY_DIGEST" in provenance
+    assert "TUNAOS_QUAL_ENGINE_DIGEST" in provenance
     assert "TUNAOS_QUAL_MEDIA_DIGEST" in provenance
     assert "TUNAOS_QUAL_INSTALLER_DIGEST" in provenance
+    assert "engine_digest" in provenance
     assert 'unsquashfs -cat' in provenance
     assert 'etc/tunaos/live-installer-info' in provenance
     assert 'INSTALLER_BUNDLE_SHA256' in provenance
+    assert 'INSTALLER_REVISION' in provenance
     assert 'sha256sum "$ISO_PATH"' in provenance
     assert 'sha256sum live-iso/common/src/customize-live.sh' not in provenance
+    assert "sha256sum --check --strict" in text
 
 
 def test_published_media_has_bounded_display_and_serial_identity_fallback():

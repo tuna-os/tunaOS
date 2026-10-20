@@ -157,6 +157,13 @@ def test_compare_ignores_transient_free_disk_measurement():
     right["browser"]["free_disk_gib"] = 11
     assert MODULE.compare(left, right) == []
 
+def test_compare_ignores_builder_specific_media_output():
+    left = manifest()
+    right = copy.deepcopy(left)
+    left["resolved_inputs"]["media"] = _digest("a")
+    right["resolved_inputs"]["media"] = _digest("f")
+    assert MODULE.compare(left, right) == []
+
 
 def test_rejects_receipt_digest_for_changed_content():
     data = manifest()

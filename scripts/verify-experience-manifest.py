@@ -208,9 +208,20 @@ def _stable(value):
     return value
 
 
+def _comparison_value(field: str, value):
+    value = _stable(value)
+    if field == "resolved_inputs" and isinstance(value, dict):
+        # Media is an output of each builder, not a qualification input.
+        # Validate it against its own ISO before comparing the two runs; ISO
+        # filesystem timestamps can legitimately make the bytes differ.
+        value = {key: item for key, item in value.items() if key != "media"}
+    return value
+
+
 def compare(left: dict, right: dict) -> list[str]:
     return [field for field in QUALIFICATION_COMPARE_FIELDS
-            if _stable(left.get(field)) != _stable(right.get(field))]
+            if _comparison_value(field, left.get(field)) !=
+               _comparison_value(field, right.get(field))]
 
 
 def main() -> int:

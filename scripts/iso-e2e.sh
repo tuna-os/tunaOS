@@ -3715,10 +3715,9 @@ strict_poweroff_installed() {
 }
 
 strict_parse_bootc_json() {
-	# $1 = bootc status --json file. Prints "digest|ref" (empty side when
-	# unresolvable). Probes the known bootc shapes, then falls back to the
-	# first sha256: digest in the output — still bootc's own words, just
-	# schema-drift-tolerant.
+	# $1 = bootc status --json file. Prints "digest|ref". Only the
+	# booted deployment is authoritative; staged/rollback deployments must
+	# never satisfy installed-image identity.
 	STRICT_BC_FILE="$1" python3 - <<'PYEOF' 2>/dev/null || echo "|"
 import json, os, re
 try:
@@ -3726,15 +3725,28 @@ try:
 except Exception:
     print("|")
     raise SystemExit
-st = (doc.get("status") or {}).get("booted") or {}
-img = st.get("image") or {}
-inner = img.get("image") or {}
-spec = doc.get("spec") or {}
-digest = (img.get("imageDigest") or st.get("imageDigest") or st.get("digest") or "")
-ref = (inner.get("image") or (spec.get("image") or {}).get("image") or "")
-if not digest:
-    m = re.search(r"sha256:[0-9a-fA-F]{64}", json.dumps(doc))
-    digest = m.group(0) if m else ""
+status = doc.get("status")
+if not isinstance(status, dict):
+    status = doc
+booted = status.get("booted")
+if not isinstance(booted, dict):
+    print("|")
+    raise SystemExit
+img = booted.get("image")
+if not isinstance(img, dict):
+    print("|")
+    raise SystemExit
+inner = img.get("image")
+if isinstance(inner, dict):
+    ref = inner.get("image") or inner.get("ref") or ""
+else:
+    ref = inner or img.get("ref") or img.get("imageRef") or ""
+digest = img.get("imageDigest") or img.get("digest")
+if (not isinstance(digest, str) or
+        not re.fullmatch(r"sha256:[0-9a-fA-F]{64}", digest) or
+        not isinstance(ref, str) or not ref):
+    print("|")
+    raise SystemExit
 print(f"{digest}|{ref}")
 PYEOF
 }
