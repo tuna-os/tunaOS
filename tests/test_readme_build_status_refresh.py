@@ -182,7 +182,8 @@ def test_the_generated_readme_block_exposes_public_factory_health():
 def test_every_new_release_appends_the_same_generated_verification_data():
     workflow = yaml.safe_load(RELEASE_WORKFLOW.read_text())
     assert workflow["concurrency"]["cancel-in-progress"] is False
-    assert "github.ref" in workflow["concurrency"]["group"]
+    assert "github.ref" not in workflow["concurrency"]["group"]
+    assert "github.repository" in workflow["concurrency"]["group"]
     run_blocks = [
         step["run"]
         for job in workflow["jobs"].values()
@@ -210,6 +211,23 @@ def test_every_new_release_appends_the_same_generated_verification_data():
     assert "CURRENT_DIGEST" not in report_block
     assert "CURRENT_SBOM_PACKAGES" not in report_block
     assert "EXISTING" not in report_block
+
+    attach_step = next(
+        step for job in workflow["jobs"].values() for step in job["steps"]
+        if step.get("name") == "Attach matrix provenance snapshot"
+    )
+    assert "github.run_attempt > 1" in attach_step["if"]
+    assert "--clobber" not in attach_step["run"]
+    create_step = next(
+        step for job in workflow["jobs"].values() for step in job["steps"]
+        if step.get("name") == "Create Release"
+    )
+    assert create_step["with"]["draft"] is True
+    assert any(
+        step.get("name") == "Publish release after evidence verification"
+        for job in workflow["jobs"].values()
+        for step in job["steps"]
+    )
     digest_step = next(
         step for job in workflow["jobs"].values() for step in job["steps"]
         if step.get("name") == "Fetch image digest"

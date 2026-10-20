@@ -45,7 +45,7 @@ env:
   # is older than this, the Releases page is rotting and the run goes red.
   MAX_RELEASE_AGE_DAYS: "8"
 concurrency:
-  group: generate-release-${{ github.repository }}-${{ github.ref }}
+  group: generate-release-${{ github.repository }}
   cancel-in-progress: false
 
 
@@ -340,22 +340,42 @@ jobs:
               {"sbom_name": "flatpak",       "label": "Flatpak"},
               {"sbom_name": "pipewire",      "label": "PipeWire"}
             ]
-          github-token: ${{ github.token }}
+          draft:              true
+          github-token:       ${{ github.token }}
 
-      # Pin the exact provenance input consumed by the release report. The
-      # commit sidecar is needed because a retry may run after main advances.
+      # Pin the exact provenance input consumed by the release report. A
+      # failed upload can be retried only from the same workflow run, so a
+      # later dispatch cannot overwrite a draft with a newer checkout.
       - name: Attach matrix provenance snapshot
-        if: steps.release.outcome == 'success'
+        if: >-
+          steps.check.outputs.skip == 'false' &&
+          inputs.dry_run != true &&
+          (steps.existing.outputs.exists == 'false' || github.run_attempt > 1) &&
+          (steps.release.outcome == 'success' || github.run_attempt > 1)
         env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-          TAG: ${{ steps.vars.outputs.tag }}
+          GH_TOKEN:      ${{ github.token }}
+          REPO:          ${{ github.repository }}
+          TAG:           ${{ steps.vars.outputs.tag }}
+          RUN_ATTEMPT:   ${{ github.run_attempt }}
+          EXISTING:      ${{ steps.existing.outputs.exists }}
         run: |
           set -euo pipefail
           cp docs/matrix-provenance.json matrix-provenance.json
           git rev-parse HEAD > matrix-provenance-commit.txt
-          gh release upload "$TAG" --repo "$REPO" \
-            matrix-provenance.json matrix-provenance-commit.txt --clobber
+          assets="$(gh release view "$TAG" --repo "$REPO" --json assets --jq '.assets[].name')"
+          missing=()
+          for asset in matrix-provenance.json matrix-provenance-commit.txt; do
+            grep -Fxq "$asset" <<<"$assets" || missing+=("$asset")
+          done
+          if (( ${#missing[@]} == 0 )); then
+            echo "Release ${TAG} already has its provenance snapshot"
+            exit 0
+          fi
+          if [[ "$EXISTING" == true && "$RUN_ATTEMPT" -le 1 ]]; then
+            echo "::error::draft ${TAG} is missing provenance; rerun the original workflow instead of using a newer checkout"
+            exit 1
+          fi
+          gh release upload "$TAG" --repo "$REPO" "${missing[@]}"
 
       # create-release owns the changelog/release card. A retry may repair a
       # release whose first report append failed, but it must derive identity
@@ -487,6 +507,21 @@ jobs:
           fi
 
           echo "Verified ${ASSET_COUNT} uploaded asset(s), including an SPDX SBOM, for ${TAG}"
+
+      - name: Publish release after evidence verification
+        if: >-
+          !cancelled() &&
+          steps.check.outputs.skip == 'false' &&
+          inputs.dry_run != true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO:     ${{ github.repository }}
+          TAG:      ${{ steps.vars.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if [[ "$(gh release view "$TAG" --repo "$REPO" --json isDraft --jq .isDraft)" == "true" ]]; then
+            gh release edit "$TAG" --repo "$REPO" --draft=false
+          fi
 
       # ── Release cadence health gate (#1147) ───────────────────────────────
       # Before this existed, "we shipped nothing" and "we shipped" were the
