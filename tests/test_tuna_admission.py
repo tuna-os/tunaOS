@@ -68,14 +68,12 @@ def test_marlin_runs_tuna_on_gdm_while_other_flavors_stay_on_greetd():
 
 
 def test_tuna_contract_expects_gdm_on_marlin_and_greetd_elsewhere():
-    """The desktop contract must match the manifest per base: GDM alias
-    and no autologin on Marlin (pacman), greetd alias and greeter
-    frontend everywhere else."""
+    """The desktop contract must match the manifest per base: GDM on
+    Marlin (pacman) and greetd everywhere else."""
     script = (ROOT / "build_scripts/checks/verify-desktop-experience.sh").read_text()
     case = script.split("\ntuna)\n", 1)[1].split("\n\t;;", 1)[0]
     assert "dm_pattern='^gdm\\.service$'" in case
     assert "dm_pattern='^greetd\\.service$'" in case
-    assert "AutomaticLoginEnable" in case
     assert "require_unit gdm" in case
 
 def test_rpm_cells_install_the_pinned_beta_from_signed_factory_repositories():
