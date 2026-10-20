@@ -363,6 +363,22 @@ require_gnome_shell_schema() {
 	exit 1
 }
 
+# GDM's keyfile parser accepts surrounding whitespace and case-insensitive
+# booleans; ignore comments so only an active setting can bypass the greeter.
+gdm_autologin_enabled() {
+	local config="${1:-/etc/gdm/custom.conf}"
+	awk '
+		/^[[:space:]]*#/ { next }
+		{
+			line = $0
+			sub(/[[:space:]]*#.*/, "", line)
+			if (tolower(line) ~ /^[[:space:]]*automaticloginenable[[:space:]]*=[[:space:]]*true[[:space:]]*$/) {
+				found = 1
+			}
+		}
+		END { exit !found }
+	' "$config"
+}
 case "$desktop" in
 gnome)
 	experience="projectbluefin/bluefin-lts"
@@ -459,6 +475,7 @@ kde)
 	require_command konsole
 	dm_pattern='^(sddm|plasmalogin)\.service$'
 	;;
+
 tuna)
 	experience="tunaos/tuna"
 	# The package is tuna-desktop (formerly roost, tuna-desktop#536). It must
@@ -592,9 +609,7 @@ tuna)
 			echo "greetd.service is enabled beside GDM; two display managers would race for seat0/VT1" >&2
 			exit 1
 		fi
-		# Stock GDM ships no autologin; a stray AutomaticLoginEnable=True
-		# would bypass the login screen this migration exists to qualify.
-		if grep -qs '^AutomaticLoginEnable *= *True' /etc/gdm/custom.conf 2>/dev/null; then
+		if gdm_autologin_enabled /etc/gdm/custom.conf; then
 			echo "GDM automatic login is enabled; the login screen is bypassed" >&2
 			exit 1
 		fi
