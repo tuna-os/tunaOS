@@ -28,6 +28,7 @@ user-facing site:
 | [../runbooks/rollback-a-bad-image-promotion.md](../runbooks/rollback-a-bad-image-promotion.md) | Containing a bad container image promotion: repointing the bare tag to a last-known-good dated tag |
 | [mkosi-investigation.md](mkosi-investigation.md) | Notes from the mkosi-based image build investigation |
 | [PIPELINE.md](PIPELINE.md) | Build pipeline reference: stages, workflows, artifact flow |
+| [RELEASE-AUTOMATION.md](RELEASE-AUTOMATION.md) | Q4 release cadence, asset completeness, fail-on-drop, stream parity, and release traceability requirements (#1186) |
 | [EDUCATION-PITCH.md](EDUCATION-PITCH.md) | Education & teaching lab adoption brief for CS departments (#1600) |
 | [CONTENT-CLAIM-CHECKLIST.md](CONTENT-CLAIM-CHECKLIST.md) | What a guide or campaign post must verify before it claims it — image refs, shipped tooling, hardware, readiness (#2289) |
 | [BRANCH-PROTECTION.md](BRANCH-PROTECTION.md) | Current-state audit + proposal for main-branch protection & required CI (#1167) |
