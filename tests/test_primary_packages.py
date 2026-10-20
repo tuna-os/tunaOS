@@ -35,6 +35,11 @@ def test_live_primary_source_owns_all_profiles():
     assert r.resolve(d,'gnome',manager='apt',os_id='debian')['sections'][-1][1]['required'][-1]=='fixture-native-tool'
 
 
+def test_apt_profile_can_override_display_manager():
+    result=r.resolve(live(),'tuna',manager='apt',os_id='debian')
+    assert result['display_manager']=='gdm3'
+
+
 def fixture_requested_packages(requested, targets, evidence):
     """Fixture-only intent preflight, not a repository lookup or production add."""
     r.string_list(requested, 'requested')

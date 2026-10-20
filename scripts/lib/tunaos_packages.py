@@ -149,13 +149,12 @@ def validate(document):
             allowed = NATIVE_FIELDS
             if family in {'apt', 'pacman', 'cachyos', 'zypper', 'emerge'}:
                 allowed = {'required', 'include'}
-                if family in {'apt', 'cachyos', 'zypper'}:
-                    allowed |= {'repos'}
                 if family == 'apt':
-                    allowed |= {'ppa'}
-                if family == 'zypper':
-                    allowed |= {'display_manager'}
-            known(policy, allowed, where)
+                    allowed |= {'repos', 'ppa', 'display_manager'}
+                elif family == 'cachyos':
+                    allowed |= {'repos'}
+                elif family == 'zypper':
+                    allowed |= {'repos', 'display_manager'}
             for key, value in policy.items():
                 if key in LIST_FIELDS | {'include'}:
                     string_list(value, where + '.' + key)

@@ -1,10 +1,7 @@
-# Tuna Desktop on Marlin (Arch): GDM reference cell (tunaOS#3438).
+# Tuna Desktop on Marlin (Arch): the pacman-specific GDM configuration.
 #
-# Marlin leads the login-manager migration: stock GDM supplies the user
-# list, fingerprint/smartcard, accessibility, i18n and tested PAM flows
-# that gtkgreet theming could never reach. The other tuna flavors stay on
-# greetd/gtkgreet (manifests/desktops/tuna.yaml) until their own cells
-# move in the order tunaOS#3438 records.
+# Every admitted Tuna flavor uses GDM (tunaOS#3438). Marlin's native unit is
+# gdm.service; GDM lists the Tuna session directly and owns the greeter.
 #
 # This -arch override beats tuna.yaml on pacman bases (install-desktop.sh
 # prefers manifests/desktops/<desktop>-arch.yaml), so Marlin reads the
@@ -61,7 +58,8 @@ packages:
 versionlock: []
 post_install:
   - tuna-flatpak-remote.sh
-  # No greetd-system-integration.sh (it points display-manager.service at
-  # greetd) and no greetd-gtkgreet.sh (nothing installs gtkgreet on Marlin,
-  # and the script no-ops without it): GDM owns the login screen here.
+  # No greetd integration or Tuna launcher: GDM lists tuna.desktop directly.
+  # Generate the variant-accent overlay from GNOME's installed stylesheet;
+  # the gdm.service drop-in scopes it to Marlin's GDM process.
+  - tuna-gdm-theme.sh
   - flatpak-preinstall.sh

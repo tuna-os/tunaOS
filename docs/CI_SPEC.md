@@ -38,7 +38,8 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 | `build-sailfin.yml` | post-merge + scheduled | Build Sailfin | `20 19 * * *`, manual | — |
 | `build-skipjack.yml` | post-merge + scheduled | Build Skipjack | `20 9 * * *`, manual | — |
 | `build-toolchain.yml` | post-merge | build-toolchain | push, manual | — |
-| `build-variant.yml` | post-merge + scheduled | Unified Build | caller cadence | — |
+| `build-tuna-pr.yml` | PR-deterministic | Tuna PR images | each PR | — |
+| `build-variant.yml` | PR-deterministic + post-merge + scheduled | Unified Build | caller cadence | — |
 | `build-wahoo.yml` | post-merge | Build Wahoo [experimental] | manual | — |
 | `build-yellowfin.yml` | post-merge + scheduled | Build Yellowfin | `20 0 * * *`, manual | — |
 | `catalog-facts.yml` | post-merge + scheduled | Catalog Facts | `0 6 * * *`, manual | — |
@@ -78,15 +79,15 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 | `randomized-tests.yml` | post-merge + scheduled | Randomized Tests | `30 3 * * *`, manual | — |
 | `rerun-infra-failures.yml` | post-merge | Re-run infra failures | workflow completion, manual | — |
 | `rerun-startup-failures.yml` | post-merge + scheduled | Re-run startup failures | `0 */3 * * *`, manual | — |
-| `reusable-build-artifacts.yml` | post-merge + scheduled | Artifacts | caller cadence | — |
-| `reusable-build-image.yml` | post-merge + scheduled | `builds`, `desktop`, `boots`, `no_silent_omissions` | caller cadence | `builds`: 2d, `desktop`: 2d, `boots`: 2d, `no_silent_omissions`: 2d |
+| `reusable-build-artifacts.yml` | PR-deterministic + post-merge + scheduled | Artifacts | caller cadence | — |
+| `reusable-build-image.yml` | PR-deterministic + post-merge + scheduled | `builds`, `desktop`, `boots`, `no_silent_omissions` | caller cadence | `builds`: 2d, `desktop`: 2d, `boots`: 2d, `no_silent_omissions`: 2d |
 | `scorecard.yml` | post-merge + scheduled | Scorecard supply-chain security | push, `38 0 * * 4`, branch_protection_rule | — |
 | `snapshot-upstreams.yml` | post-merge + scheduled | Snapshot upstreams | `0 9 * * 1`, manual | — |
 | `ste.yml` | PR-deterministic + post-merge | Prose | each PR, push, manual | — |
 | `test.yml` | PR-deterministic + post-merge | Test | each PR, push, manual | — |
 | `update-build-status.yml` | post-merge + scheduled | Update README build status | `30 13 * * *`, manual | — |
 | `validate-renovate.yaml` | PR-deterministic + post-merge | Validate Renovate Config | each PR, push | — |
-| `verify-asahi-one.yml` | post-merge + scheduled | Verify Asahi image (one) | caller cadence | — |
+| `verify-asahi-one.yml` | PR-deterministic + post-merge + scheduled | Verify Asahi image (one) | caller cadence | — |
 | `verify-asahi.yml` | post-merge + scheduled | Verify Asahi image | `40 5 * * *`, manual | — |
 | `weekly-boot-report.yml` | post-merge + scheduled | Weekly Boot Screenshot Report | `0 10 * * 1`, manual | — |
 | `weekly-desktop-screenshots.yml` | post-merge + scheduled | Weekly Desktop Screenshots | `0 2 * * 1`, manual | — |

@@ -1,0 +1,51 @@
+name: Tuna PR images
+
+on:
+  pull_request:
+    paths:
+      - ".github/build-config.yml"
+      - ".github/workflows/build-tuna-pr.yml"
+      - ".github/workflows/build-variant.yml"
+      - ".github/workflows/reusable-build-image.yml"
+      - ".github/actions/**"
+      - ".github/scripts/**"
+      - "Containerfile*"
+      - "build_scripts/**"
+      - "experiences/**"
+      - "image-versions.yaml"
+      - "manifests/desktops/tuna*.yaml"
+      - "system_files/**"
+      - "scripts/**"
+      - "manifests/desktop-contracts/**"
+      - "Justfile"
+      - "just/**"
+      - "tests/functional/**"
+      - "tunaos.toml"
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+jobs:
+  build_tuna:
+    name: "${{ matrix.variant }}:tuna"
+    strategy:
+      fail-fast: false
+      matrix:
+        variant:
+          - marlin
+          - yellowfin
+          - albacore
+          - skipjack
+          - bonito
+          - wahoo
+          - bonito-rawhide
+          - grouper
+          - flounder
+          - flounder-sid
+          - sailfin
+    uses: ./.github/workflows/build-variant.yml
+    with:
+      variant: ${{ matrix.variant }}
+      flavor: tuna
