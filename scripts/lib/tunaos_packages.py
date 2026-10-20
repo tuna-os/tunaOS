@@ -153,7 +153,7 @@ def validate(document):
                     allowed |= {'repos'}
                 if family == 'apt':
                     allowed |= {'ppa'}
-                if family == 'zypper':
+                if family in {'apt', 'zypper'}:
                     allowed |= {'display_manager'}
             known(policy, allowed, where)
             for key, value in policy.items():

@@ -617,20 +617,23 @@ tuna)
 		echo "GDM uses unsupported DefaultSession setting: $tuna_gdm_config" >&2
 		exit 1
 	fi
-	tuna_gdm_session_template=/etc/accountsservice/user-templates/standard
-	[[ -f "$tuna_gdm_session_template" ]] || {
-		echo "missing AccountsService session template: $tuna_gdm_session_template" >&2
-		exit 1
-	}
-	awk '
-		$0 == "[User]" { in_user = 1; next }
-		in_user && /^\[/ { in_user = 0 }
-		in_user && /^[[:space:]]*Session[[:space:]]*=[[:space:]]*tuna[[:space:]]*$/ { found++ }
-		END { exit !(found == 1) }
-	' "$tuna_gdm_session_template" || {
-		echo "AccountsService does not select the tuna session: $tuna_gdm_session_template" >&2
-		exit 1
-	}
+	for tuna_gdm_session_template in \
+		/etc/accountsservice/user-templates/standard \
+		/etc/accountsservice/user-templates/administrator; do
+		[[ -f "$tuna_gdm_session_template" ]] || {
+			echo "missing AccountsService session template: $tuna_gdm_session_template" >&2
+			exit 1
+		}
+		awk '
+			$0 == "[User]" { in_user = 1; next }
+			in_user && /^\[/ { in_user = 0 }
+			in_user && /^[[:space:]]*Session[[:space:]]*=[[:space:]]*tuna[[:space:]]*$/ { found++ }
+			END { exit !(found == 1) }
+		' "$tuna_gdm_session_template" || {
+			echo "AccountsService does not select the tuna session: $tuna_gdm_session_template" >&2
+			exit 1
+		}
+	done
 	if grep -Eiq '^[[:space:]]*AutomaticLoginEnable[[:space:]]*=[[:space:]]*true[[:space:]]*$' "$tuna_gdm_config"; then
 		echo "GDM automatic login is enabled: $tuna_gdm_config" >&2
 		exit 1

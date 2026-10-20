@@ -48,11 +48,8 @@ def test_tuna_cells_are_amd64_images_without_iso_expansion():
     assert "tuna-gdm.sh" in manifest["post_install"]
 
 
-def test_marlin_runs_tuna_on_gdm_while_other_flavors_stay_on_greetd():
-    """tunaOS#3438, Marlin first: the -arch override moves Marlin to stock
-    GDM while every other tuna flavor keeps greetd. A second display
-    manager beside GDM would race it for seat0/VT1, so the Arch list must
-    not name any greetd frontend, and no greetd post-install may run."""
+def test_tuna_runs_gdm_across_shared_and_arch_manifests():
+    """tunaOS#3438: every Tuna flavor uses the stock GDM login path."""
     arch = yaml.safe_load((ROOT / "manifests/desktops/tuna-arch.yaml").read_text())
     assert arch["display_manager"] == "gdm"
     packages = arch["packages"]["pacman"]
@@ -63,20 +60,18 @@ def test_marlin_runs_tuna_on_gdm_while_other_flavors_stay_on_greetd():
         assert absent not in packages, f"{absent} would race GDM for the login screen"
     for script in arch["post_install"]:
         assert "greetd" not in script, f"{script} wires the display manager Marlin just left"
-    # The shared manifest is untouched: other flavors keep their DM.
     shared = yaml.safe_load((ROOT / "manifests/desktops/tuna.yaml").read_text())
-    assert shared["display_manager"] == "greetd"
-    assert "greetd-gtkgreet.sh" in shared["post_install"]
+    assert shared["display_manager"] == "gdm"
+    assert "tuna-gdm.sh" in shared["post_install"]
+    assert not {"greetd", "greetd-gtkgreet", "gtkgreet", "cage"} & set(shared["packages"]["pacman"])
 
 
-def test_tuna_contract_expects_gdm_on_marlin_and_greetd_elsewhere():
-    """The desktop contract must match the manifest per base: GDM on
-    Marlin (pacman) and greetd everywhere else."""
+def test_tuna_contract_expects_gdm_on_every_tuna_cell():
+    """The desktop contract must match the GDM migration on every Tuna cell."""
     script = (ROOT / "build_scripts/checks/verify-desktop-experience.sh").read_text()
     case = script.split("\ntuna)\n", 1)[1].split("\n\t;;", 1)[0]
-    assert "dm_pattern='^gdm\\.service$'" in case
-    assert "dm_pattern='^greetd\\.service$'" in case
-    assert "require_unit gdm" in case
+    assert "dm_pattern='^(gdm|gdm3)\\.service$'" in case
+    assert "require_any_unit gdm gdm3" in case
 
 def test_rpm_cells_install_the_pinned_beta_from_signed_factory_repositories():
     manifest = yaml.safe_load((ROOT / "manifests/desktops/tuna.yaml").read_text())
@@ -185,7 +180,7 @@ def test_tuna_package_signatures_cannot_be_silently_disabled():
 def test_tuna_contract_is_a_known_desktop_with_session_and_pam_requirements():
     script = (ROOT / "build_scripts/checks/verify-desktop-experience.sh").read_text()
     case = script.split("\ntuna)\n", 1)[1].split("\n\t;;", 1)[0]
-    for requirement in ("Exec=tuna-session", "/etc/pam.d/tuna-lock", "tuna-shell-gtk", "tuna-session.target", "require_any_unit gdm gdm3", "tuna-portals.conf", "require_command orca", "Session", "tuna.desktop", "/etc/accountsservice/user-templates/standard", "AutomaticLoginEnable"):
+    for requirement in ("Exec=tuna-session", "/etc/pam.d/tuna-lock", "tuna-shell-gtk", "tuna-session.target", "require_any_unit gdm gdm3", "tuna-portals.conf", "require_command orca", "Session", "tuna.desktop", "/etc/accountsservice/user-templates/standard", "/etc/accountsservice/user-templates/administrator", "AutomaticLoginEnable"):
         assert requirement in case
 
 
@@ -207,11 +202,11 @@ def test_tuna_gdm_configuration_selects_wayland_session_without_autologin():
         assert "DefaultSession" not in config
         assert "AutomaticLoginEnable=false" in config
 
-    template = (ROOT / "experiences/tuna/files/etc/accountsservice/user-templates/standard").read_text()
-    assert "[User]" in template
-    assert "Session=tuna\n" in template
-    assert "Session=tuna.desktop" not in template
-
+    for template_name in ("standard", "administrator"):
+        template = (ROOT / "experiences/tuna/files/etc/accountsservice/user-templates" / template_name).read_text()
+        assert "[User]" in template
+        assert "Session=tuna\n" in template
+        assert "Session=tuna.desktop" not in template
     contract = (ROOT / "build_scripts/checks/verify-desktop-experience.sh").read_text()
     assert "IS_UBUNTU" in contract
     assert "IS_DEBIAN" in contract

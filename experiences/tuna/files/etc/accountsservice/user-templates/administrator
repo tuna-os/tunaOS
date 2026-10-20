@@ -1,0 +1,6 @@
+[Template]
+# TunaOS selects the Tuna Wayland session for administrator accounts without a saved choice.
+
+[User]
+Session=tuna
+Icon=${HOME}/.face
