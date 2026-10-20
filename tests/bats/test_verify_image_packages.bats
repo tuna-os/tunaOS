@@ -17,10 +17,13 @@ printf '\n' >>"${PODMAN_LOG}"
 joined="$*"
 if [[ "${joined}" == *"/etc/os-release"* ]]; then
   printf 'gentoo\n'
+  exit 0
 fi
 if [[ "${joined}" == *"portageq match"* ]]; then
   [[ "${joined}" == *"grep -q ."* ]]
+  exit 0
 fi
+exit 0
 EOF
   chmod +x "${repo}/bin/podman"
   export PATH="${repo}/bin:${PATH}"
