@@ -78,7 +78,7 @@ Stage 3: gnome-hwe, kde-hwe, gnome-nvidia, kde-nvidia, etc.     (parallel)
 Stage 4: gnome-nvidia-hwe                                        (depends on stage 3)
 ```
 
-Defined in `.github/build-config.yml`. The workflow is `build-variant.yml` → `reusable-build-image.yml`.
+Defined in `tunaos.toml`. The workflow is `build-variant.yml` → `reusable-build-image.yml`.
 
 ---
 
@@ -180,7 +180,7 @@ do with the ISO.
 
 1. Create `manifests/desktops/<name>.yaml` with package lists per OS family
 2. Add a stage in `Containerfile` (copy the pattern from existing DE stages)
-3. Add the flavor to `.github/build-config.yml` for each variant
+3. Add the flavor to `tunaos.toml` for each variant
 
 No new shell script needed. `install-desktop.sh` handles it.
 
@@ -188,7 +188,7 @@ No new shell script needed. `install-desktop.sh` handles it.
 
 1. Find/build a bootc-compatible base image
 2. Add detection to `build_scripts/lib.sh` (IS_* flag, PKG_MGR)
-3. Add the variant to `.github/build-config.yml`
+3. Add the variant to `tunaos.toml`
 4. Add pacman/apt/dnf sections to each desktop manifest
 5. (Optional) Create a `Containerfile.<variant>` if the variant needs bootc conversion
 
@@ -198,7 +198,7 @@ No new shell script needed. `install-desktop.sh` handles it.
 
 | File | What it controls |
 |------|-----------------|
-| `.github/build-config.yml` | The build matrix (variants × flavors × platforms × stages) |
+| `tunaos.toml` | The build matrix (variants × flavors × platforms × stages) |
 | `PACKAGE-SOURCING.md` | Package sourcing policy (tiering, Tideforge-first, allowlist, #1319) |
 | `image-versions.yaml` | Pinned image digests + download versions |
 | `registry-map.yaml` | Registry mirror overrides |

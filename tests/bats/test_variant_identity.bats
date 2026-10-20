@@ -201,3 +201,62 @@ rows() { grep -v '^#' "$TSV" | grep -v '^$'; }
   HOME="${BATS_TEST_TMPDIR}" PATH=/usr/bin:/bin run "${REPO_ROOT}/system_files/usr/libexec/tunaos/dms-wallpaper"
   [ "$status" -eq 0 ]
 }
+
+@test "shared anime serves every desktop and overlay, preserving vector fallback" {
+  local root="${BATS_TEST_TMPDIR}/anime-root" desktop
+  mkdir -p "${root}/usr/share/backgrounds/tunaos" "${root}/usr/share/tunaos"
+  echo "TUNAOS_VARIANT='wahoo'" >"${root}/usr/share/tunaos/identity.env"
+  echo scene >"${root}/usr/share/backgrounds/tunaos/wahoo.jpg"
+  echo anime >"${root}/usr/share/backgrounds/tunaos/wahoo-anime.jpg"
+  for desktop in gnome kde cosmic xfce niri pantheon gnome-nvidia kde-cachyos; do
+    "${REPO_ROOT}/build_scripts/desktop/select-wallpaper.sh" "$desktop" "$root"
+    [ "$(cat "${root}/usr/share/backgrounds/tunaos/tunaos-default.jpg")" = anime ]
+    [ "$(cat "${root}/usr/share/backgrounds/tunaos/wahoo.jpg")" = scene ]
+  done
+}
+
+@test "unknown variant preserves the generic wallpaper" {
+  local root="${BATS_TEST_TMPDIR}/unknown-root"
+  mkdir -p "${root}/usr/share/backgrounds/tunaos"
+  echo generic >"${root}/usr/share/backgrounds/tunaos/tunaos-default.jpg"
+  "${REPO_ROOT}/build_scripts/desktop/select-wallpaper.sh" gnome "$root"
+  [ "$(cat "${root}/usr/share/backgrounds/tunaos/tunaos-default.jpg")" = generic ]
+}
+
+@test "explicit desktop artwork overrides shared anime" {
+  local root="${BATS_TEST_TMPDIR}/override-root"
+  mkdir -p "${root}/usr/share/backgrounds/tunaos" "${root}/usr/share/tunaos"
+  echo "TUNAOS_VARIANT='wahoo'" >"${root}/usr/share/tunaos/identity.env"
+  echo painted >"${root}/usr/share/backgrounds/tunaos/wahoo-gnome.jpg"
+  echo anime >"${root}/usr/share/backgrounds/tunaos/wahoo-anime.jpg"
+  "${REPO_ROOT}/build_scripts/desktop/select-wallpaper.sh" gnome-nvidia "$root"
+  [ "$(cat "${root}/usr/share/backgrounds/tunaos/tunaos-default.jpg")" = painted ]
+}
+
+@test "every variant ships shared anime alongside its rendered fallback" {
+  local id
+  while IFS=$'\t' read -r id _; do
+    [ -s "${WALLS}/${id}-anime.jpg" ] || { echo "FAIL: no ${id}-anime.jpg" >&2; return 1; }
+    [ -s "${WALLS}/${id}.jpg" ] || return 1
+  done < <(rows)
+}
+
+@test "shared anime checksums match the reviewed asset manifest" {
+  command -v node >/dev/null || skip "node not installed"
+  run node --input-type=module -e '
+    const { readFileSync } = await import("node:fs");
+    const { createHash } = await import("node:crypto");
+    const root = process.argv[1];
+    const manifest = JSON.parse(readFileSync(root + "/docs/branding/anime-wallpapers.json", "utf8"));
+    const ids = readFileSync(root + "/build_scripts/lib/variant-identity.tsv", "utf8")
+      .split("\n").filter(l => l && !l.startsWith("#")).map(l => l.split("\t")[0]);
+    if (new Set(manifest.assets.map(a => a.variant)).size !== ids.length) throw new Error("asset count mismatch");
+    for (const id of ids) {
+      const asset = manifest.assets.find(a => a.variant === id);
+      if (!asset) throw new Error("missing manifest asset: " + id);
+      const bytes = readFileSync(root + "/system_files/usr/share/backgrounds/tunaos/" + id + "-anime.jpg");
+      if (createHash("sha256").update(bytes).digest("hex") !== asset.jpeg_sha256) throw new Error("checksum mismatch: " + id);
+    }
+  ' "$REPO_ROOT"
+  [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
+}
