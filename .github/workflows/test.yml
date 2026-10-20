@@ -138,13 +138,23 @@ jobs:
           pip3 install pillow requests --break-system-packages 2>/dev/null || pip3 install pillow requests --user
 
       - name: Run BATS tests
+        shell: bash
         run: |
           echo "=== BATS Tests ==="
           FAILED=0
+          report_root="$RUNNER_TEMP/tunaos-test-results/bats"
           for f in tests/bats/*.bats; do
             [[ -f "$f" ]] || continue
             echo "  Running: $f"
-            bats --formatter tap "$f" || FAILED=1
+            report="$report_root/$f.tap"
+            mkdir -p "$(dirname "$report")"
+            if bats --formatter tap "$f" | tee "$report"; then
+              status=0
+            else
+              status=$?
+              FAILED=1
+            fi
+            printf '%s\n' "$status" > "$report.exit"
           done
           exit $FAILED
 
@@ -152,7 +162,32 @@ jobs:
         if: always()
         run: |
           echo "=== pytest Tests ==="
-          python3 -m pytest tests/ tests/pytest/ -v --tb=short --cov=. --cov-report=term --cov-report=xml:coverage-python.xml
+          report_root="$RUNNER_TEMP/tunaos-test-results"
+          mkdir -p "$report_root"
+          if python3 -m pytest tests/ tests/pytest/ -v --tb=short --cov=. --cov-report=term --cov-report=xml:coverage-python.xml --junitxml="$report_root/pytest.xml" -o junit_logging=no -o junit_log_passing_tests=false; then
+            status=0
+          else
+            status=$?
+          fi
+          printf '%s\n' "$status" > "$report_root/pytest.exit"
+          exit "$status"
+
+      - name: Summarize test failures
+        id: test_failure_summary
+        if: always()
+        run: |
+          python3 scripts/summarize-test-failures.py --reports "$RUNNER_TEMP/tunaos-test-results" --output "$RUNNER_TEMP/tunaos-test-failures.json"
+
+          [[ -f "$RUNNER_TEMP/tunaos-test-failures.json" && ! -L "$RUNNER_TEMP/tunaos-test-failures.json" ]]
+
+      - name: Archive test failure summary
+        if: failure() && steps.test_failure_summary.outcome == 'success'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: test-failures-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/tunaos-test-failures.json
+          retention-days: 7
+          if-no-files-found: warn
 
       # npm 10 (the runner image default) and npm 11 (what Renovate uses to
       # write services/countme/package-lock.json) disagree on the lockfile once
