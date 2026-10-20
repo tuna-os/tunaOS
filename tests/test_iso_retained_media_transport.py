@@ -278,7 +278,8 @@ def test_individually_matching_chunks_still_require_whole_iso_hash(candidate):
         candidate.verify()
 
 
-@pytest.mark.parametrize("mutation", ["duplicate", "missing", "symlink", "traversal", "oversize", "encrypted"])
+@pytest.mark.parametrize("mutation", ["duplicate", "missing", "symlink", "traversal", "oversize", "encrypted",
+                                      "nul-receipt", "nul-other"])
 def test_unsafe_archive_never_reaches_r2(candidate, mutation):
     name, raw = candidate.retained.receipt_path, encode(candidate.browser)
     entries = [(name, raw)]
@@ -295,8 +296,20 @@ def test_unsafe_archive_never_reaches_r2(candidate, mutation):
         entries.append(("../outside.json", raw))
     elif mutation == "oversize":
         entries = [(name, b" " * (TRANSPORT.MAX_MANIFEST_BYTES + 1))]
+    elif mutation in ("nul-receipt", "nul-other"):
+        prefix = name if mutation == "nul-receipt" else "other.json"
+        raw_name = prefix + "X/../outside"
+        entries = [(raw_name, raw)] if mutation == "nul-receipt" else entries + [(raw_name, b"tiny")]
     with pytest.warns(UserWarning) if mutation == "duplicate" else __import__("contextlib").nullcontext():
         candidate.repack_archive(entries)
+    if mutation in ("nul-receipt", "nul-other"):
+        # Patch both raw ZIP headers: writestr itself truncates NUL names.
+        assert candidate.archive.count(raw_name.encode()) == 2
+        candidate.archive = candidate.archive.replace(raw_name.encode(), (prefix + "\x00/../outside").encode())
+        candidate.rehash_archive()
+        with zipfile.ZipFile(io.BytesIO(candidate.archive)) as zipped:
+            member = zipped.infolist()[0 if mutation == "nul-receipt" else 1]
+            assert "\x00" in member.orig_filename and member.filename == prefix
     if mutation == "encrypted":
         raw_archive = bytearray(candidate.archive)
         offset = raw_archive.index(b"PK\x01\x02")

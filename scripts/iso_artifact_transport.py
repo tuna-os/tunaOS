@@ -283,10 +283,13 @@ def _receipt_member(archive, retained):
                 _reject("archive_member_limit", "archive")
             names, total = set(), 0
             for member in members:
-                _safe_member(member.filename, "archive.member")
-                if member.filename in names:
+                # ZipInfo.filename truncates at NUL; validate the original name.
+                name = member.orig_filename
+                _safe_member(name, "archive.member")
+                _match(member.filename, name, "archive.member")
+                if name in names:
                     _reject("duplicate_member", "archive.member")
-                names.add(member.filename)
+                names.add(name)
                 mode = member.external_attr >> 16
                 if stat.S_IFMT(mode) not in (0, stat.S_IFREG, stat.S_IFDIR) or member.flag_bits & 1:
                     _reject("unsafe_member", "archive.member")
