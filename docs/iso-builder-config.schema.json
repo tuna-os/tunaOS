@@ -35,25 +35,25 @@
         "name": {
           "type": "string",
           "minLength": 1,
-          "pattern": "^[^\\u0000-\\u001f\\u007f]*\\S[^\\u0000-\\u001f\\u007f]*$"
+          "pattern": "^(?![\\s\\S]*[\\u0000-\\u001f\\u007f])[^\\u0000-\\u001f\\u007f]*\\S[^\\u0000-\\u001f\\u007f]*(?![\\s\\S])"
         },
         "homepage_url": {
           "type": "string",
-          "pattern": "^https://[^\\s/@\\\\:]+(?::443)?(?:[/?#][^\\s\\\\]*)?$"
+          "pattern": "^(?![\\s\\S]*[\\u0000-\\u001f\\u007f])https://[^\\s/@\\\\:]+(?::443)?(?:[/?#][^\\s\\\\]*)?(?![\\s\\S])"
         },
         "documentation_url": {
           "type": "string",
-          "pattern": "^https://[^\\s/@\\\\:]+(?::443)?(?:[/?#][^\\s\\\\]*)?$"
+          "pattern": "^(?![\\s\\S]*[\\u0000-\\u001f\\u007f])https://[^\\s/@\\\\:]+(?::443)?(?:[/?#][^\\s\\\\]*)?(?![\\s\\S])"
         },
         "logo_url": {
           "anyOf": [
             {
               "type": "string",
-              "pattern": "^https://[^\\s/@\\\\:]+(?::443)?(?:[/?#][^\\s\\\\]*)?$"
+              "pattern": "^(?![\\s\\S]*[\\u0000-\\u001f\\u007f])https://[^\\s/@\\\\:]+(?::443)?(?:[/?#][^\\s\\\\]*)?(?![\\s\\S])"
             },
             {
               "type": "string",
-              "pattern": "^/(?:[A-Za-z0-9_-]+/)*[A-Za-z0-9_-]+(?:\\.[A-Za-z0-9_-]+)*$"
+              "pattern": "^(?![\\s\\S]*[\\u0000-\\u001f\\u007f])/(?:[A-Za-z0-9_-]+/)*[A-Za-z0-9_-]+(?:\\.[A-Za-z0-9_-]+)*(?![\\s\\S])"
             }
           ]
         },
@@ -61,22 +61,22 @@
           "anyOf": [
             {
               "type": "string",
-              "pattern": "^https://[^\\s/@\\\\:]+(?::443)?(?:[/?#][^\\s\\\\]*)?$"
+              "pattern": "^(?![\\s\\S]*[\\u0000-\\u001f\\u007f])https://[^\\s/@\\\\:]+(?::443)?(?:[/?#][^\\s\\\\]*)?(?![\\s\\S])"
             },
             {
               "type": "string",
-              "pattern": "^/(?:[A-Za-z0-9_-]+/)*[A-Za-z0-9_-]+(?:\\.[A-Za-z0-9_-]+)*$"
+              "pattern": "^(?![\\s\\S]*[\\u0000-\\u001f\\u007f])/(?:[A-Za-z0-9_-]+/)*[A-Za-z0-9_-]+(?:\\.[A-Za-z0-9_-]+)*(?![\\s\\S])"
             }
           ]
         },
         "support_url": {
           "type": "string",
-          "pattern": "^https://[^\\s/@\\\\:]+(?::443)?(?:[/?#][^\\s\\\\]*)?$"
+          "pattern": "^(?![\\s\\S]*[\\u0000-\\u001f\\u007f])https://[^\\s/@\\\\:]+(?::443)?(?:[/?#][^\\s\\\\]*)?(?![\\s\\S])"
         },
         "disclaimer": {
           "type": "string",
           "minLength": 1,
-          "pattern": "^[^\\u0000-\\u001f\\u007f]*\\S[^\\u0000-\\u001f\\u007f]*$"
+          "pattern": "^(?![\\s\\S]*[\\u0000-\\u001f\\u007f])[^\\u0000-\\u001f\\u007f]*\\S[^\\u0000-\\u001f\\u007f]*(?![\\s\\S])"
         }
       }
     },
@@ -92,16 +92,16 @@
         "headline": {
           "type": "string",
           "minLength": 1,
-          "pattern": "^[^\\u0000-\\u001f\\u007f]*\\S[^\\u0000-\\u001f\\u007f]*$"
+          "pattern": "^(?![\\s\\S]*[\\u0000-\\u001f\\u007f])[^\\u0000-\\u001f\\u007f]*\\S[^\\u0000-\\u001f\\u007f]*(?![\\s\\S])"
         },
         "intro": {
           "type": "string",
           "minLength": 1,
-          "pattern": "^[^\\u0000-\\u001f\\u007f]*\\S[^\\u0000-\\u001f\\u007f]*$"
+          "pattern": "^(?![\\s\\S]*[\\u0000-\\u001f\\u007f])[^\\u0000-\\u001f\\u007f]*\\S[^\\u0000-\\u001f\\u007f]*(?![\\s\\S])"
         },
         "accent_color": {
           "type": "string",
-          "pattern": "^#[0-9a-fA-F]{6}$"
+          "pattern": "^(?![\\s\\S]*[\\u0000-\\u001f\\u007f])#[0-9a-fA-F]{6}(?![\\s\\S])"
         }
       }
     },
@@ -115,11 +115,11 @@
       "properties": {
         "volume_label": {
           "type": "string",
-          "pattern": "^[A-Z0-9_]{1,32}$"
+          "pattern": "^(?![\\s\\S]*[\\u0000-\\u001f\\u007f])[A-Z0-9_]{1,32}(?![\\s\\S])"
         },
         "filename_prefix": {
           "type": "string",
-          "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"
+          "pattern": "^(?![\\s\\S]*[\\u0000-\\u001f\\u007f])[a-z0-9][a-z0-9_-]{0,63}(?![\\s\\S])"
         }
       }
     },
@@ -137,24 +137,24 @@
         "properties": {
           "id": {
             "type": "string",
-            "pattern": "^[a-z0-9][a-z0-9-]*$"
+            "pattern": "^(?![\\s\\S]*[\\u0000-\\u001f\\u007f])[a-z0-9][a-z0-9-]*(?![\\s\\S])"
           },
           "name": {
             "type": "string",
             "minLength": 1,
-            "pattern": "^[^\\u0000-\\u001f\\u007f]*\\S[^\\u0000-\\u001f\\u007f]*$"
+            "pattern": "^(?![\\s\\S]*[\\u0000-\\u001f\\u007f])[^\\u0000-\\u001f\\u007f]*\\S[^\\u0000-\\u001f\\u007f]*(?![\\s\\S])"
           },
           "description": {
             "type": "string",
             "minLength": 1,
-            "pattern": "^[^\\u0000-\\u001f\\u007f]*\\S[^\\u0000-\\u001f\\u007f]*$"
+            "pattern": "^(?![\\s\\S]*[\\u0000-\\u001f\\u007f])[^\\u0000-\\u001f\\u007f]*\\S[^\\u0000-\\u001f\\u007f]*(?![\\s\\S])"
           },
           "default_flatpaks": {
             "type": "array",
             "uniqueItems": true,
             "items": {
               "type": "string",
-              "pattern": "^[A-Za-z0-9_-]+(?:\\.[A-Za-z0-9_-]+){2,}$"
+              "pattern": "^(?![\\s\\S]*[\\u0000-\\u001f\\u007f])[A-Za-z0-9_-]+(?:\\.[A-Za-z0-9_-]+){2,}(?![\\s\\S])"
             }
           }
         }
@@ -172,12 +172,12 @@
         "properties": {
           "id": {
             "type": "string",
-            "pattern": "^[a-z0-9][a-z0-9-]*$"
+            "pattern": "^(?![\\s\\S]*[\\u0000-\\u001f\\u007f])[a-z0-9][a-z0-9-]*(?![\\s\\S])"
           },
           "name": {
             "type": "string",
             "minLength": 1,
-            "pattern": "^[^\\u0000-\\u001f\\u007f]*\\S[^\\u0000-\\u001f\\u007f]*$"
+            "pattern": "^(?![\\s\\S]*[\\u0000-\\u001f\\u007f])[^\\u0000-\\u001f\\u007f]*\\S[^\\u0000-\\u001f\\u007f]*(?![\\s\\S])"
           }
         }
       }
@@ -199,11 +199,11 @@
             },
             "variant": {
               "type": "string",
-              "pattern": "^[a-z0-9][a-z0-9-]*$"
+              "pattern": "^(?![\\s\\S]*[\\u0000-\\u001f\\u007f])[a-z0-9][a-z0-9-]*(?![\\s\\S])"
             },
             "flavor": {
               "type": "string",
-              "pattern": "^[a-z0-9][a-z0-9-]*$"
+              "pattern": "^(?![\\s\\S]*[\\u0000-\\u001f\\u007f])[a-z0-9][a-z0-9-]*(?![\\s\\S])"
             },
             "platform": {
               "enum": [
@@ -229,7 +229,7 @@
             },
             "image": {
               "type": "string",
-              "pattern": "^[a-z0-9.-]+(?::[0-9]+)?/[a-z0-9._/-]+(?::[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}|@sha256:[0-9a-f]{64})$"
+              "pattern": "^(?![\\s\\S]*[\\u0000-\\u001f\\u007f])[a-z0-9.-]+(?::[0-9]+)?/[a-z0-9._-]+(?:/[a-z0-9._-]+)*(?::[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}(?:@sha256:[0-9a-f]{64})?|@sha256:[0-9a-f]{64})(?![\\s\\S])"
             },
             "platform": {
               "enum": [
@@ -258,24 +258,24 @@
         "properties": {
           "id": {
             "type": "string",
-            "pattern": "^[a-z0-9][a-z0-9-]*$"
+            "pattern": "^(?![\\s\\S]*[\\u0000-\\u001f\\u007f])[a-z0-9][a-z0-9-]*(?![\\s\\S])"
           },
           "label": {
             "type": "string",
             "minLength": 1,
-            "pattern": "^[^\\u0000-\\u001f\\u007f]*\\S[^\\u0000-\\u001f\\u007f]*$"
+            "pattern": "^(?![\\s\\S]*[\\u0000-\\u001f\\u007f])[^\\u0000-\\u001f\\u007f]*\\S[^\\u0000-\\u001f\\u007f]*(?![\\s\\S])"
           },
           "desktops": {
             "type": "array",
             "uniqueItems": true,
             "items": {
               "type": "string",
-              "pattern": "^[a-z0-9][a-z0-9-]*$"
+              "pattern": "^(?![\\s\\S]*[\\u0000-\\u001f\\u007f])[a-z0-9][a-z0-9-]*(?![\\s\\S])"
             }
           },
           "url": {
             "type": "string",
-            "pattern": "^https://[^\\s/@\\\\:]+(?::443)?(?:[/?#][^\\s\\\\]*)?$"
+            "pattern": "^(?![\\s\\S]*[\\u0000-\\u001f\\u007f])https://[^\\s/@\\\\:]+(?::443)?(?:[/?#][^\\s\\\\]*)?(?![\\s\\S])"
           },
           "format": {
             "enum": [
@@ -300,20 +300,20 @@
         "properties": {
           "id": {
             "type": "string",
-            "pattern": "^[a-z0-9][a-z0-9-]*$"
+            "pattern": "^(?![\\s\\S]*[\\u0000-\\u001f\\u007f])[a-z0-9][a-z0-9-]*(?![\\s\\S])"
           },
           "stem": {
             "type": "string",
-            "pattern": "^[a-z0-9][a-z0-9-]*$"
+            "pattern": "^(?![\\s\\S]*[\\u0000-\\u001f\\u007f])[a-z0-9][a-z0-9-]*(?![\\s\\S])"
           },
           "name": {
             "type": "string",
             "minLength": 1,
-            "pattern": "^[^\\u0000-\\u001f\\u007f]*\\S[^\\u0000-\\u001f\\u007f]*$"
+            "pattern": "^(?![\\s\\S]*[\\u0000-\\u001f\\u007f])[^\\u0000-\\u001f\\u007f]*\\S[^\\u0000-\\u001f\\u007f]*(?![\\s\\S])"
           },
           "desktop": {
             "type": "string",
-            "pattern": "^[a-z0-9][a-z0-9-]*$"
+            "pattern": "^(?![\\s\\S]*[\\u0000-\\u001f\\u007f])[a-z0-9][a-z0-9-]*(?![\\s\\S])"
           }
         }
       }

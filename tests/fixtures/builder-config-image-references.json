@@ -1,0 +1,58 @@
+[
+  {
+    "reference": "ghcr.io/example/image:stable",
+    "valid": true
+  },
+  {
+    "reference": "ghcr.io/example/image@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "valid": true
+  },
+  {
+    "reference": "ghcr.io/example/image:stable@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "valid": true
+  },
+  {
+    "reference": "ghcr.io/example//image:stable",
+    "valid": false
+  },
+  {
+    "reference": "ghcr.io//image:stable",
+    "valid": false
+  },
+  {
+    "reference": "ghcr.io/example/:stable",
+    "valid": false
+  },
+  {
+    "reference": "ghcr.io/example/image:stable\n",
+    "valid": false
+  },
+  {
+    "reference": "ghcr.io/example/image:stable\u0000",
+    "valid": false
+  },
+  {
+    "reference": "ghcr.io/example/image:stable\u001f",
+    "valid": false
+  },
+  {
+    "reference": "ghcr.io/example/image:stable\u007f",
+    "valid": false
+  },
+  {
+    "reference": "ghcr.io:443/example/image:stable",
+    "valid": true
+  },
+  {
+    "reference": "ghcr.io/example/image:stable@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "valid": false
+  },
+  {
+    "reference": "ghcr.io/example/image:@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "valid": false
+  },
+  {
+    "reference": "ghcr.io/example/image:stable@sha512:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "valid": false
+  }
+]

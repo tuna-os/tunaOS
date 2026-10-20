@@ -196,3 +196,46 @@ def test_preview_requires_disclaimer():
     doc['preview_only'] = True
     with pytest.raises(builder.ConfigError, match='disclaimer'):
         builder.validate(doc)
+
+
+def _string_paths(value, path=()):
+    if isinstance(value, str):
+        yield path
+    elif isinstance(value, dict):
+        for key, child in value.items():
+            yield from _string_paths(child, path + (key,))
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            yield from _string_paths(child, path + (index,))
+
+
+@pytest.mark.parametrize('suffix', ['\n', '\x00', '\x1f', '\x7f'])
+def test_schema_and_reference_reject_controls_in_every_stock_string(suffix):
+    jsonschema = pytest.importorskip('jsonschema')
+    validator = jsonschema.Draft202012Validator(json.loads((ROOT / 'docs/iso-builder-config.schema.json').read_text()))
+    for path in _string_paths(config()):
+        doc = config()
+        target = doc
+        for key in path[:-1]:
+            target = target[key]
+        target[path[-1]] += suffix
+        assert not validator.is_valid(doc), path
+        with pytest.raises(builder.ConfigError):
+            builder.validate(doc)
+
+
+@pytest.mark.parametrize('reference,valid', [
+    (case['reference'], case['valid'])
+    for case in json.loads((ROOT / 'tests/fixtures/builder-config-image-references.json').read_text())
+])
+def test_schema_and_reference_image_identity_parity(reference, valid):
+    jsonschema = pytest.importorskip('jsonschema')
+    schema = json.loads((ROOT / 'docs/iso-builder-config.schema.json').read_text())
+    doc = config()
+    doc['default_selection'] = {'kind': 'image', 'image': reference, 'platform': 'linux/amd64'}
+    assert jsonschema.Draft202012Validator(schema).is_valid(doc) is valid
+    if valid:
+        builder.validate(doc)
+    else:
+        with pytest.raises(builder.ConfigError):
+            builder.validate(doc)
