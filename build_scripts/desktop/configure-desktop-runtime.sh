@@ -179,6 +179,19 @@ EOF
 	echo "configure-desktop-runtime: wrote tmpfiles.d for lightdm /var state (bootc fresh-/var)"
 fi
 
+# Legacy desktop scripts do not necessarily source lib.sh. Load it only for
+# an explicit generated config, preserving the stock runtime setup path.
+if [[ -e /run/context/manifests/fork-config.json || -L /run/context/manifests/fork-config.json ]]; then
+	# shellcheck source=/dev/null
+	source /run/context/build_scripts/lib.sh
+	# shellcheck source=/dev/null
+	source /run/context/build_scripts/lib/fork-branding.sh
+	tunaos_validate_fork_branding /run/context
+	# shellcheck source=/dev/null
+	source /run/context/build_scripts/lib/fork-packages.sh
+	tunaos_apply_fork_packages /run/context
+fi
+
 # Every desktop family ships an explicit runtime contract plus the
 # snosi-derived installed-system TAP checks (harvested from the serial
 # console by scripts/iso-e2e.sh; the checks ExecStart is non-fatal).
@@ -222,6 +235,10 @@ gnome | kde | niri | cosmic | xfce | pantheon)
 	install -Dm0755 /run/context/build_scripts/checks/e2e-runtime-checks.sh \
 		/usr/libexec/tunaos/e2e-runtime-checks
 
+	if [[ -e /run/context/manifests/fork-config.json ]]; then
+		tunaos_apply_fork_branding /run/context
+	fi
+
 	# Branding contract — common to every desktop, plus per-desktop surfaces.
 	# The branding scripts take the VARIANT (fish codename), not the desktop.
 	/run/context/build_scripts/checks/verify-branding.sh "${IMAGE_NAME:-$desktop}"
@@ -229,6 +246,9 @@ gnome | kde | niri | cosmic | xfce | pantheon)
 		/usr/libexec/tunaos/verify-branding
 	# Per-desktop artwork, when a variant has some (docs/BRANDING.md).
 	/run/context/build_scripts/desktop/select-wallpaper.sh "$desktop"
+	if [[ -e /run/context/manifests/fork-config.json ]]; then
+		tunaos_apply_fork_branding /run/context
+	fi
 	BRANDING_EXTRA=""
 	case "$desktop" in
 	gnome)
@@ -264,6 +284,10 @@ gnome | kde | niri | cosmic | xfce | pantheon)
 		BRANDING_EXTRA="ExecStart=-/usr/libexec/tunaos/verify-branding-niri ${IMAGE_NAME:-$desktop} --runtime"
 		;;
 	esac
+	if [[ -e /run/context/manifests/fork-config.json ]]; then
+		tunaos_apply_fork_branding /run/context
+		tunaos_verify_fork_branding
+	fi
 	# Wants=, NOT Requires=. With Requires=, a failed display manager takes
 	# the contract down as DEPEND — which silences the one service built to
 	# diagnose that exact failure: verify-desktop-experience --runtime has a

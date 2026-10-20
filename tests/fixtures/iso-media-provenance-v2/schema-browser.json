@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 2,
+  "kind": "qualification-evidence",
+  "half": "browser",
+  "media": {
+    "sha256": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+    "sizeBytes": 32
+  },
+  "input_descriptors": {
+    "source": {
+      "kind": "oci-platform-manifest",
+      "ref": "ghcr.io/example/fixture@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "platform": "linux/amd64/v2",
+      "cpuBaseline": "x86-64-v2"
+    },
+    "overlay": {
+      "kind": "oci-platform-manifest",
+      "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "baseDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "installer": {
+      "kind": "flatpak-commit",
+      "appId": "org.example.Installer",
+      "ref": "app/org.example.Installer/x86_64/stable",
+      "arch": "x86_64",
+      "deployedCommit": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    },
+    "engine": {
+      "kind": "wasm-module",
+      "sha256": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "sourceRevision": "dddddddddddddddddddddddddddddddddddddddd",
+      "runtimeShimSha256": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    }
+  },
+  "build_request_sha256": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+  "recipe_sha256": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+  "config_sha256": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+  "browser": {
+    "product": "chromium",
+    "version": "140.0.1"
+  },
+  "resources": [
+    {
+      "subject": "browser",
+      "quantity": "memoryCapacity",
+      "unit": "bytes",
+      "method": "reported",
+      "value": 8589934592,
+      "source": "navigator.deviceMemory"
+    },
+    {
+      "subject": "browser",
+      "quantity": "availableStorage",
+      "unit": "bytes",
+      "method": "estimated",
+      "value": 42949672960,
+      "source": "navigator.storage.estimate"
+    },
+    {
+      "subject": "wasm",
+      "quantity": "elapsedDuration",
+      "unit": "seconds",
+      "method": "measured",
+      "value": 12.5,
+      "source": "performance.now"
+    }
+  ],
+  "run": {
+    "repository": "example/browser-fixture",
+    "workflowPath": ".github/workflows/browser-fixture.yml",
+    "workflowRevision": "1111111111111111111111111111111111111111",
+    "sourceRevision": "2222222222222222222222222222222222222222",
+    "harnessRevision": "3333333333333333333333333333333333333333",
+    "runId": 101,
+    "runAttempt": 2
+  }
+}
