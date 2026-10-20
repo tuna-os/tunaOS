@@ -1669,3 +1669,74 @@ def test_progress_preserves_bounded_error_and_stage_without_credentials(tmp_path
     text = json.dumps(result)
     assert all(secret not in text for secret in ("secret", "$6$", "never-export-this", "private recipe", "raw stderr"))
     assert PROOF.redact({"errors": [{"message": "failed syntheticpw"}]}, ("syntheticpw",))["errors"][0]["message"] == "failed <redacted>"
+
+
+def test_progress_account_diagnostics_are_anchored_bounded_and_redacted(tmp_path, monkeypatch, capsys):
+    log = tmp_path / "fisherman.log"
+    lines = ["chpasswd: failure while writing changes to /etc/shadow"] * 18
+    lines += ["chpasswd: line 1: user 'private-user' does not exist", "chpasswd: failed to crypt secret $6$salt$hash",
+              "+ chpasswd -e", "unrelated chpasswd: private payload", "chpasswd: control\x1b[31m",
+              "chpasswd: " + "x" * 3000]
+    log.write_text("\n".join(lines))
+
+    def execute(access, private, code):
+        exec(code, {})  # noqa: S102 - owned collector with a synthetic private log
+        return json.loads(capsys.readouterr().out)
+
+    monkeypatch.setattr(PROOF, "guest_call", execute)
+    result = PROOF.progress_evidence({}, tmp_path, str(log))
+    diagnostics = result["account_diagnostics"]
+    assert len(diagnostics) == 16
+    assert diagnostics[0] == {"tool": "chpasswd", "class": "account-file-operation", "message": "failure while writing changes to /etc/shadow"}
+    assert diagnostics[-2] == {"tool": "chpasswd", "class": "user-missing"}
+    assert diagnostics[-1] == {"tool": "chpasswd", "class": "password-crypt-failed"}
+    assert all(value not in json.dumps(diagnostics) for value in ("$6$", "secret", "private-user", "private payload", "control", "+ chpasswd"))
+
+@pytest.mark.parametrize("change", ["valid", "wrong-serial", "wrong-mount", "root-disk", "symlink", "absent"])
+def test_account_diagnostic_target_is_bound_and_metadata_only(tmp_path, monkeypatch, capsys, change):
+    import os
+    import subprocess
+
+    mountpoint = tmp_path / "target"
+    deployment = mountpoint / "ostree/deploy/default/deploy" / ("a" * 64 + ".0")
+    (deployment / "etc").mkdir(parents=True)
+    (deployment / "etc/passwd").write_text("synthetic-private-account-contents")
+    device = deployment.stat().st_dev
+    major_minor = f"{os.major(device)}:{os.minor(device)}"
+    blocks = {"blockdevices": [
+        {"path": "/dev/vda", "type": "disk", "serial": "source"},
+        {"path": "/dev/vdb", "type": "disk", "serial": "target", "size": 64 * 1024**3,
+         "children": [{"type": "part", "maj:min": major_minor}]},
+    ]}
+    mounts = [{"target": str(mountpoint), "source": "/dev/vdb2", "fstype": "xfs", "options": "rw", "maj:min": major_minor}]
+    if change == "wrong-serial":
+        blocks["blockdevices"][1]["serial"] = "other"
+    if change == "wrong-mount":
+        mounts[0]["maj:min"] = "999:999"
+    if change == "root-disk":
+        mounts.append({"target": "/", "maj:min": major_minor})
+    if change == "symlink":
+        (deployment / "etc").rename(deployment / "other")
+        (deployment / "etc").symlink_to("other")
+    if change == "absent":
+        mounts = []
+
+    def execute(access, private, code):
+        code = code.replace("/mnt/fisherman-target", str(mountpoint))
+        monkeypatch.setattr(subprocess, "check_output", lambda args, **kwargs: json.dumps(blocks if args[0] == "lsblk" else {"filesystems": mounts}))
+        monkeypatch.setattr(subprocess, "run", lambda args, **kwargs: SimpleNamespace(returncode=0, stdout="shadow-utils 0:4.15.0-13.el10.x86_64\n"))
+        exec(code, {})  # noqa: S102 - production collector with synthetic mount metadata
+        return json.loads(capsys.readouterr().out)
+
+    monkeypatch.setattr(PROOF, "guest_call", execute)
+    if change not in ("valid", "absent"):
+        with pytest.raises(ValueError, match="diagnostic"):
+            PROOF.account_target_diagnostics({}, tmp_path, "target", "source")
+        return
+    result = PROOF.account_target_diagnostics({}, tmp_path, "target", "source")
+    assert result["source_rpms"] == ["shadow-utils 0:4.15.0-13.el10.x86_64"]
+    assert result["target_status"] == ("bound" if change == "valid" else "unavailable")
+    assert "synthetic-private-account-contents" not in json.dumps(result)
+    if change == "valid":
+        assert result["account_files"]["passwd"]["type"] == "regular"
+        assert result["account_files"]["shadow"] == {"absent": True}

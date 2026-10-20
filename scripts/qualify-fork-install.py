@@ -1122,12 +1122,81 @@ def process_evidence(access, private, helper):
     return guest_call(access, private, GUEST_PROCESSES.replace("__HELPER__", repr(helper)))
 
 
+def account_target_diagnostics(access, private, target_serial, source_serial):
+    """Read metadata only, bound to the previously guarded disposable target."""
+    program = r'''
+import json,os,re,stat,subprocess
+from pathlib import Path
+result={"scope":"account-failure-diagnostics-only","target_status":"unavailable"}
+def run(args):
+    value=subprocess.check_output(args,text=True,timeout=10)
+    if len(value)>65536:raise ValueError("diagnostic command output exceeds bound")
+    return value
+packages=["shadow-utils","glibc","libselinux","libxcrypt","pam-libs","libeconf"]
+query=subprocess.run(["rpm","-q","--qf","%{NAME} %{EPOCHNUM}:%{VERSION}-%{RELEASE}.%{ARCH}\\n",*packages],text=True,capture_output=True,timeout=10)
+result["source_rpm_query_returncode"]=query.returncode
+result["source_rpms"]=[line for line in query.stdout.splitlines()
+    if re.fullmatch(r"(?:shadow-utils|glibc|libselinux|libxcrypt|pam-libs|libeconf) [a-zA-Z0-9_.:+~-]{1,160}",line)][:20]
+for name,path in [("selinux_enforce","/sys/fs/selinux/enforce"),("collector_security_context","/proc/self/attr/current")]:
+    try:
+        value=Path(path).read_text()[:256].strip("\x00\n")
+        if re.fullmatch(r"[a-zA-Z0-9_:.,-]{1,256}",value):result[name]=value
+    except (OSError,UnicodeError):pass
+blocks=json.loads(run(["lsblk","--json","--bytes","--paths","--output","PATH,TYPE,SIZE,SERIAL,MAJ:MIN"]))["blockdevices"]
+target=[d for d in blocks if d.get("serial")==__TARGET__]
+source=[d for d in blocks if d.get("serial")==__SOURCE__]
+if len(target)!=1 or len(source)!=1 or target[0]["path"]==source[0]["path"]:
+    raise ValueError("diagnostic disk serial binding is ambiguous")
+target=target[0]
+if target.get("type")!="disk" or target.get("size")!=64*1024**3:
+    raise ValueError("diagnostic target disk differs from guarded disk")
+parts=target.get("children",[])
+allowed={p["maj:min"] for p in parts if p.get("type")=="part"}
+mounts=json.loads(run(["findmnt","--json","--list","--output","TARGET,SOURCE,FSTYPE,OPTIONS,MAJ:MIN"]))["filesystems"]
+mount=[m for m in mounts if m.get("target")=="/mnt/fisherman-target"]
+if mount:
+    if len(mount)!=1 or mount[0].get("maj:min") not in allowed:
+        raise ValueError("diagnostic mount is not on guarded target")
+    mount=mount[0]
+    if any(m.get("target")=="/" and m.get("maj:min") in allowed for m in mounts):
+        raise ValueError("diagnostic target unexpectedly backs running root")
+    result["mount"]={k:mount.get(k) for k in ("target","source","fstype","options","maj:min")}
+    base=Path("/mnt/fisherman-target/ostree/deploy/default/deploy")
+    if base.exists() and base.resolve()!=base:raise ValueError("diagnostic deployment base has symlink components")
+    roots=list(base.glob("*.0")) if base.is_dir() else []
+    roots=[p for p in roots if re.fullmatch(r"[0-9a-f]{64}\.0",p.name)]
+    if len(roots)==1:
+        root=roots[0]
+        if root.resolve()!=root or root.is_symlink() or (root/"etc").resolve()!=root/"etc":
+            raise ValueError("diagnostic deployment path has symlink components")
+        device=root.stat().st_dev
+        if f"{os.major(device)}:{os.minor(device)}"!=mount["maj:min"]:
+            raise ValueError("diagnostic deployment device differs from guarded mount")
+        result["deployment"]=str(root)
+        result["target_status"]="bound"
+        result["pseudo_mounts"]={name:[{k:m.get(k) for k in ("target","fstype","options","maj:min")}
+            for m in mounts if m.get("target")==str(root/name)] for name in ("proc","sys","dev")}
+        result["account_files"]={}
+        for name in (".","passwd","group","shadow","gshadow","passwd.lock","group.lock","shadow.lock","gshadow.lock",".pwd.lock"):
+            path=root/"etc"/name
+            try:
+                value=path.lstat()
+                result["account_files"][name]={"mode":oct(stat.S_IMODE(value.st_mode)),"uid":value.st_uid,"gid":value.st_gid,
+                    "type":"regular" if stat.S_ISREG(value.st_mode) else "symlink" if stat.S_ISLNK(value.st_mode) else "directory" if stat.S_ISDIR(value.st_mode) else "other",
+                    "size":value.st_size,"device":value.st_dev,"inode":value.st_ino}
+            except FileNotFoundError:result["account_files"][name]={"absent":True}
+    else:result["target_status"]="deployment-unavailable-or-ambiguous"
+print(json.dumps(result))
+'''.replace("__TARGET__", repr(target_serial)).replace("__SOURCE__", repr(source_serial))
+    return guest_call(access, private, program)
+
+
 def progress_evidence(access, private, log_path):
     program = r"""
 import hashlib,json,re
 from pathlib import Path
 path=Path(__PATH__)
-result={"complete":False,"error":False,"events":0,"bytes":0,"steps":[],"errors":[]}
+result={"complete":False,"error":False,"events":0,"bytes":0,"steps":[],"errors":[],"account_diagnostics":[]}
 def message(value):
     value=re.sub(r"\$[a-zA-Z0-9]+\$[^\s:]+", "<redacted-hash>", value)
     value=re.sub(r"(?i)(?:--?(?:password|passphrase|token|secret)(?:=|\s+)|(?:password|passphrase|token|secret)\s*[:=]).*", "<redacted-credential-arguments>", value)
@@ -1141,7 +1210,33 @@ if path.exists():
     result["log_sha256"]=hashlib.sha256(data).hexdigest()
     for line in data.decode(errors="replace").splitlines():
         try:value=json.loads(line)
-        except ValueError:continue
+        except ValueError:
+            if line in ("Cannot open audit interface", "Cannot open audit interface."):
+                result["account_diagnostics"]=(result["account_diagnostics"]+[
+                    {"tool":"shadow-utils","class":"audit-interface-failed"}])[-16:]
+                continue
+            # Retain only account-tool diagnostics, never arbitrary output or argv.
+            match=re.fullmatch(r"(chpasswd|useradd): ([^\x00-\x08\x0b-\x1f\x7f]*)",line)
+            if match:
+                tool,detail=match.groups()
+                patterns={
+                    "account-file-operation":r"(?:cannot lock|cannot open|failure while writing changes to|failed to unlock) /etc/(?:passwd|shadow)(?:; try again later\.)?",
+                    "invalid-password-input":r"line [0-9]+: (?:line too long|missing new password)",
+                    "user-missing":r"line [0-9]+: user '[^']*' does not exist",
+                    "entry-prepare-failed":r"line [0-9]+: failed to prepare the new /etc/(?:passwd|shadow) entry '[^']*'",
+                    "changes-ignored":r"error detected, changes ignored\.?",
+                    "selinux-context-failed":r"can not get previous SELinux process context: [a-zA-Z ]{1,120}",
+                    "audit-interface-failed":r"Cannot open audit interface\.?",
+                    "password-crypt-failed":r".*(?:failed to crypt|crypt failed).*",
+                }
+                for classifier,pattern in patterns.items():
+                    if re.fullmatch(pattern,detail):
+                        item={"tool":tool,"class":classifier}
+                        if classifier in ("account-file-operation","invalid-password-input","selinux-context-failed"):
+                            item["message"]=message(detail)
+                        result["account_diagnostics"]=(result["account_diagnostics"]+[item])[-16:]
+                        break
+            continue
         if not isinstance(value,dict):continue
         result["events"]+=1
         if value.get("type")=="complete" and value.get("overall_pct")==100:result["complete"]=True
@@ -1159,8 +1254,9 @@ if path.exists():
                 status=re.search(r"exit status ([0-9]{1,3})(?:\D|$)",raw)
                 if status:error["exit_status"]=int(status.group(1))
                 result["errors"]=(result["errors"]+[error])[-8:]
-# No free-form stdout/stderr, recipes, argv, recovery keys or info events leave
-# the guest. The report writer also removes the exact ephemeral password/hash.
+# Only bounded account-tool diagnostics and structured progress leave the guest;
+# no recipes, argv, recovery keys or info events. The report writer also removes
+# the exact ephemeral password/hash.
 print(json.dumps(result))
 """.replace("__PATH__", repr(log_path))
     return guest_call(access, private, program)
@@ -1313,6 +1409,19 @@ print(json.dumps(values))
                     invoked.append(process)
         progress = progress_evidence(access, private, preflight["log_path"])
         report["backend_progress"] = progress
+        if source["storage"]["composeFsBackend"] is False and any(
+            step.get("step_id") in ("flatpaks", "configure") for step in progress["steps"]
+        ):
+            try:
+                diagnostic = account_target_diagnostics(
+                    access, private, vm.target_spec["serial"], vm.source_spec["serial"]
+                )
+                diagnostic["observed_stage"] = progress["steps"][-1].get("step_id", "unknown")
+                report["account_diagnostics_latest"] = diagnostic
+                if diagnostic["target_status"] == "bound":
+                    report["account_diagnostics_bound"] = diagnostic
+            except (ValueError, RuntimeError, subprocess.SubprocessError) as error:
+                report["account_diagnostics_failure"] = type(error).__name__
         frame = screenshot("installation-progress.png")
         require(not progress["error"], "native backend reported installation error")
         words = LOGIN.words(frame)
