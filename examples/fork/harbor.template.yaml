@@ -1,0 +1,23 @@
+# Template only: initialize to a NEW pinned file before preparation.
+# Native package names are scoped to package families. No publish occurs.
+schema_version: 1
+image:
+  registry: localhost
+  namespace: harbor-preview
+targets:
+  variants: [yellowfin, grouper]
+  flavors: [gnome]
+  platforms: [linux/amd64]
+global:
+  branding:
+    wallpaper: assets/harbor-wallpaper.jpg
+    homepage: https://example.org/harbor
+    documentation: https://example.org/harbor/docs
+    support: https://example.org/harbor/support
+  packages:
+    add: [htop]
+overrides:
+  variants:
+    yellowfin:
+      packages:
+        optional: [fastfetch]
