@@ -69,7 +69,7 @@ so the next transition is a checklist instead of a search.
 
 | Location | What |
 |---|---|
-| `.github/build-config.yml` (`bonito` entry) | `base_image:` — the pin every build resolves, and `description:` alongside it, which feeds docs and the image label |
+| `tunaos.toml` (`bonito` entry) | `base_image:` — the pin every build resolves, and `description:` alongside it, which feeds docs and the image label |
 
 **Must be changed in the same PR.** None of these derive from the pin above:
 

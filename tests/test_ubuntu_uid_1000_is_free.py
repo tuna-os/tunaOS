@@ -133,8 +133,8 @@ def test_the_ubuntu_bases_this_applies_to_are_still_ubuntu():
     """If gurnard or grouper is ever rebased off Ubuntu the workaround stops
     applying, and this test says so instead of leaving dead code guarded by
     a flag nothing sets."""
-    config = BUILD_CONFIG.read_text()
+    import json
+    config = json.loads(BUILD_CONFIG.read_text())
+    variants = {entry["id"]: entry for entry in config["variants"]}
     for variant in ("gurnard", "grouper"):
-        start = config.index(f"- id: {variant}\n")
-        window = config[start:start + 600]
-        assert "docker.io/library/ubuntu" in window, variant
+        assert variants[variant]["base_image"].startswith("docker.io/library/ubuntu:"), variant

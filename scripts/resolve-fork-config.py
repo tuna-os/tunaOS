@@ -4,15 +4,18 @@
 Only --format legacy supports build consumption, and only for stock intent.
 Requires PyYAML, already used by the repository's Python tooling.
 """
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from lib import tunaos_config
+
 import argparse
 import copy
 import hashlib
 import json
 import os
-from pathlib import Path
 import re
 import subprocess
-import sys
 
 import yaml
 
@@ -68,7 +71,7 @@ def strings(value, where):
 
 def source_paths(root):
     """Source receipt, not a second package or variant catalog."""
-    patterns = (".github/build-config.yml", "image-versions.yaml", "registry-map.yaml",
+    patterns = ("tunaos.toml", "requirements-config.txt", "image-versions.yaml", "registry-map.yaml",
                 "Containerfile*", "manifests/**/*", "build_scripts/**/*", "scripts/**/*",
                 "Justfile", "just/**/*", ".containerignore", ".dockerignore", "custom/**/*",
                 "system_files/**/*", "system_files_overrides/**/*", "experiences/**/*")
@@ -189,7 +192,7 @@ def resolve(config, config_dir, root=ROOT, *, explain=False):
     catalog, catalog_path = load_catalog(root)
     # An environment override is supported only when byte-identical to the
     # pinned catalog. Otherwise the source receipt would falsely attest it.
-    if catalog_path.read_bytes() != (root / ".github/build-config.yml").read_bytes():
+    if catalog_path.read_bytes() != tunaos_config.render(tunaos_config.load(root / "tunaos.toml")).encode():
         raise ConfigError("TUNAOS_BUILD_CONFIG differs from the pinned catalog")
     if "image" in config:
         image = mapping(config["image"], ("registry", "namespace"), "image", ("registry", "namespace"))
