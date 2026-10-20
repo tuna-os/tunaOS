@@ -163,9 +163,8 @@ package_target = "debian"
 portals = "blocked on tuna-desktop session-start fix"
 
 [tuna_rollout.guppy]
-status = "unsupported"
+status = "admitted"
 package_target = "gentoo"
-reason = "unsupported until package target gentoo publishes tuna-desktop (tunaos-packages#838)"
 
 # Build stages (for reference — enforced by the workflow job graph):
 #
@@ -1589,6 +1588,15 @@ build_image = true
 id = "xfce"
 stage = 2
 build_image = true
+[[variants.guppy.flavors]]
+id = "tuna"
+platforms = ["linux/amd64"]
+stage = 2
+build_image = true
+build_iso = false
+build_qcow2 = false
+luks_e2e = false
+promotion_hold = true
 
 # NOT declared, and not an oversight:
 #   niri    — no ebuild in the Gentoo main tree at all. A search returns

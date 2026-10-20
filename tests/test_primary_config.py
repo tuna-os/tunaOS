@@ -207,6 +207,15 @@ def test_projection_does_not_mutate_source():
     projected["variants"][0]["flavors"].clear()
     assert document["variants"][next(iter(document["variants"]))]["flavors"]
 
+def test_promotion_hold_survives_toml_to_matrix_projection():
+    document = config.load()
+    guppy = document["variants"]["guppy"]
+    tuna = next(flavor for flavor in guppy["flavors"] if flavor["id"] == "tuna")
+    projected = config.matrix(document)
+    projected_guppy = next(v for v in projected["variants"] if v["id"] == "guppy")
+    projected_tuna = next(flavor for flavor in projected_guppy["flavors"] if flavor["id"] == "tuna")
+    assert tuna["promotion_hold"] is True
+    assert projected_tuna["promotion_hold"] is True
 
 def test_missing_both_toml_parsers_explains_dependency():
     code = '''import builtins, runpy, sys
