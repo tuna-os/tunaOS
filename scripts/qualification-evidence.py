@@ -346,7 +346,8 @@ def malformed_event(context: dict, at: str | None = None) -> dict:
 
 def load_events(path: Path, context: dict, evidence: dict[str, dict]) -> list[dict]:
     try:
-        data = path.read_bytes()
+        with path.open("rb") as stream:
+            data = stream.read(MAX_DOCUMENT_BYTES + 1)
     except OSError:
         return [malformed_event(context)]
 

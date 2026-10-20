@@ -276,7 +276,8 @@ def test_report_schema_uses_the_same_failure_reason_allowlist():
     schema = json.loads((ROOT / "schemas/qualification-report-v1.schema.json").read_text())
     validator = Draft202012Validator(schema)
     report = MODULE.build_report(evidence_context(), [event("boot", "failed", 1)])
-    report["assertions"][0]["reasonCode"] = "secret"
+    failed = next(row for row in report["assertions"] if row["name"] == "boot")
+    failed["reasonCode"] = "secret"
     assert not validator.is_valid(report)
     report = MODULE.build_report(evidence_context(), [event("boot", "failed", 1)])
     report["firstFailure"]["reasonCode"] = "secret"
@@ -368,6 +369,21 @@ def test_schemas_accept_receipts_decision_and_public_report():
     failed_without_evidence = MODULE.build_report(evidence_context(), [event("boot", "failed", 1)])
     failed_without_evidence["firstFailure"]["evidenceIds"] = []
     assert not report_validator.is_valid(failed_without_evidence)
+
+
+def test_report_schema_binds_reuse_ids_to_mode():
+    schema = json.loads((ROOT / "schemas/qualification-report-v1.schema.json").read_text())
+    validator = Draft202012Validator(schema)
+    reused = MODULE.build_report(evidence_context(), [event("build", "passed", 1)])
+    reused["reuse"]["artifactId"] = None
+    assert not validator.is_valid(reused)
+
+    built_context = evidence_context()
+    built_context["reuse"] = {"mode": "built", "producerRunId": None, "artifactId": None}
+    built = MODULE.build_report(built_context, [event("build", "passed", 1)])
+    validator.validate(built)
+    built["reuse"]["producerRunId"] = 123
+    assert not validator.is_valid(built)
 
 
 def test_duplicate_json_fields_are_rejected_without_last_value_wins(tmp_path):
