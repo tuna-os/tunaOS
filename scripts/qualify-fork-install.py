@@ -1122,7 +1122,7 @@ def process_evidence(access, private, helper):
     return guest_call(access, private, GUEST_PROCESSES.replace("__HELPER__", repr(helper)))
 
 
-def account_target_diagnostics(access, private, target_serial, source_serial):
+def account_target_diagnostics(access, private, target_serial, source_serial, collect_audit=False):
     """Read metadata only, bound to the previously guarded disposable target."""
     program = r'''
 import json,os,re,stat,subprocess
@@ -1132,6 +1132,41 @@ def run(args):
     value=subprocess.check_output(args,text=True,timeout=10)
     if len(value)>65536:raise ValueError("diagnostic command output exceeds bound")
     return value
+if __AUDIT__:
+    audit=subprocess.run(["journalctl","-b","--no-pager","-n","512","-o","json",
+        "_COMM=chpasswd","+","_TRANSPORT=audit","+","_TRANSPORT=kernel"],capture_output=True,text=True,timeout=10)
+    if len(audit.stdout.encode())>2*1024*1024:raise ValueError("account audit evidence exceeds bound")
+    result["account_audit"]={"query_returncode":audit.returncode,"records":[]}
+    for line in audit.stdout.splitlines():
+        try:event=json.loads(line)
+        except ValueError:continue
+        if not isinstance(event,dict):continue
+        raw=event.get("MESSAGE","")
+        if not isinstance(raw,str) or len(raw)>16384:continue
+        bound=event.get("_COMM")=="chpasswd" or re.search(r'(?:^|\s)comm=(?:"chpasswd"|chpasswd)(?:\s|$)',raw)
+        bound=bound or re.search(r'(?:^|\s)exe="/[^"\s]*/chpasswd"(?:\s|$)',raw)
+        if not bound:continue
+        record={"tool":"chpasswd"}
+        fields={"type":r"(?:[0-9]{4}|AVC|USER_AVC|USER_SELINUX_ERR)","pid":r"[0-9]{1,10}",
+            "errno":r"-?[0-9]{1,4}","exit":r"-?[0-9]{1,4}","res":r"(?:success|failed|denied)",
+            "success":r"(?:yes|no)","permissive":r"[01]",
+            "scontext":r"[a-zA-Z0-9_:.,-]{1,256}","tcontext":r"[a-zA-Z0-9_:.,-]{1,256}",
+            "tclass":r"[a-z_]{1,64}"}
+        for key,pattern in fields.items():
+            match=re.search(r"(?:^|\s)"+key+r"=("+pattern+r")(?:\s|[\"']|$)",raw)
+            if match:record[key]=match.group(1)
+        for prefix,classifier in (("Unknown class ","unknown-selinux-class"),("Unknown permission ","unknown-selinux-permission"),
+            ("avc:  unable to initialize SID table","selinux-sid-table-failed"),
+            ("avc:  unable to allocate audit buffer","selinux-audit-buffer-failed"),
+            ("avc:  could not determine enforcing mode:","selinux-enforcing-query-failed"),
+            ("avc: could not open selinux status page:","selinux-status-page-failed")):
+            if event.get("_COMM")=="chpasswd" and (raw.startswith(prefix) or raw.startswith("libselinux: "+prefix)):
+                record["class"]=classifier
+        denied=re.search(r"avc:\s+denied\s+\{\s*([a-z_ ]{1,256})\s*\}",raw)
+        if denied:record["denied_permissions"]=sorted(set(denied.group(1).split()))
+        context=event.get("_SELINUX_CONTEXT","")
+        if isinstance(context,str) and re.fullmatch(r"[a-zA-Z0-9_:.,-]{1,256}",context):record["journal_context"]=context
+        if len(record)>1:result["account_audit"]["records"]=(result["account_audit"]["records"]+[record])[-32:]
 packages=["shadow-utils","glibc","libselinux","libxcrypt","pam-libs","libeconf"]
 query=subprocess.run(["rpm","-q","--qf","%{NAME} %{EPOCHNUM}:%{VERSION}-%{RELEASE}.%{ARCH}\\n",*packages],text=True,capture_output=True,timeout=10)
 result["source_rpm_query_returncode"]=query.returncode
@@ -1153,7 +1188,10 @@ if target.get("type")!="disk" or target.get("size")!=64*1024**3:
 parts=target.get("children",[])
 allowed={p["maj:min"] for p in parts if p.get("type")=="part"}
 mounts=json.loads(run(["findmnt","--json","--list","--output","TARGET,SOURCE,FSTYPE,OPTIONS,MAJ:MIN"]))["filesystems"]
-mount=[m for m in mounts if m.get("target")=="/mnt/fisherman-target"]
+requested_mount=Path("/mnt/fisherman-target")
+canonical_mount=requested_mount.resolve()
+result["mountpoint"]={"requested":str(requested_mount),"resolved":str(canonical_mount)}
+mount=[m for m in mounts if m.get("target")==str(canonical_mount)]
 if mount:
     if len(mount)!=1 or mount[0].get("maj:min") not in allowed:
         raise ValueError("diagnostic mount is not on guarded target")
@@ -1161,7 +1199,7 @@ if mount:
     if any(m.get("target")=="/" and m.get("maj:min") in allowed for m in mounts):
         raise ValueError("diagnostic target unexpectedly backs running root")
     result["mount"]={k:mount.get(k) for k in ("target","source","fstype","options","maj:min")}
-    base=Path("/mnt/fisherman-target/ostree/deploy/default/deploy")
+    base=canonical_mount/"ostree/deploy/default/deploy"
     if base.exists() and base.resolve()!=base:raise ValueError("diagnostic deployment base has symlink components")
     roots=list(base.glob("*.0")) if base.is_dir() else []
     roots=[p for p in roots if re.fullmatch(r"[0-9a-f]{64}\.0",p.name)]
@@ -1172,6 +1210,8 @@ if mount:
         device=root.stat().st_dev
         if f"{os.major(device)}:{os.minor(device)}"!=mount["maj:min"]:
             raise ValueError("diagnostic deployment device differs from guarded mount")
+        if requested_mount.resolve()!=canonical_mount:
+            raise ValueError("diagnostic mountpoint alias changed")
         result["deployment"]=str(root)
         result["target_status"]="bound"
         result["pseudo_mounts"]={name:[{k:m.get(k) for k in ("target","fstype","options","maj:min")}
@@ -1184,10 +1224,22 @@ if mount:
                 result["account_files"][name]={"mode":oct(stat.S_IMODE(value.st_mode)),"uid":value.st_uid,"gid":value.st_gid,
                     "type":"regular" if stat.S_ISREG(value.st_mode) else "symlink" if stat.S_ISLNK(value.st_mode) else "directory" if stat.S_ISDIR(value.st_mode) else "other",
                     "size":value.st_size,"device":value.st_dev,"inode":value.st_ino}
+                if stat.S_ISREG(value.st_mode) or stat.S_ISDIR(value.st_mode):
+                    try:
+                        label=os.getxattr(path,"security.selinux",follow_symlinks=False).decode().rstrip("\x00")
+                        if re.fullmatch(r"[a-zA-Z0-9_:.,-]{1,256}",label):result["account_files"][name]["selinux_context"]=label
+                    except (OSError,UnicodeError):pass
             except FileNotFoundError:result["account_files"][name]={"absent":True}
+        binary=root/"usr/sbin/chpasswd"
+        result["chpasswd_context"]={"status":"unavailable"}
+        if binary.resolve()==binary and binary.is_file():
+            try:
+                label=os.getxattr(binary,"security.selinux",follow_symlinks=False).decode().rstrip("\x00")
+                if re.fullmatch(r"[a-zA-Z0-9_:.,-]{1,256}",label):result["chpasswd_context"]={"status":"read","selinux_context":label}
+            except (OSError,UnicodeError):pass
     else:result["target_status"]="deployment-unavailable-or-ambiguous"
 print(json.dumps(result))
-'''.replace("__TARGET__", repr(target_serial)).replace("__SOURCE__", repr(source_serial))
+'''.replace("__TARGET__", repr(target_serial)).replace("__SOURCE__", repr(source_serial)).replace("__AUDIT__", repr(collect_audit))
     return guest_call(access, private, program)
 
 
@@ -1414,7 +1466,7 @@ print(json.dumps(values))
         ):
             try:
                 diagnostic = account_target_diagnostics(
-                    access, private, vm.target_spec["serial"], vm.source_spec["serial"]
+                    access, private, vm.target_spec["serial"], vm.source_spec["serial"], collect_audit=progress["error"]
                 )
                 diagnostic["observed_stage"] = progress["steps"][-1].get("step_id", "unknown")
                 report["account_diagnostics_latest"] = diagnostic

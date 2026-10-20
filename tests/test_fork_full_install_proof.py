@@ -1692,7 +1692,7 @@ def test_progress_account_diagnostics_are_anchored_bounded_and_redacted(tmp_path
     assert diagnostics[-1] == {"tool": "chpasswd", "class": "password-crypt-failed"}
     assert all(value not in json.dumps(diagnostics) for value in ("$6$", "secret", "private-user", "private payload", "control", "+ chpasswd"))
 
-@pytest.mark.parametrize("change", ["valid", "wrong-serial", "wrong-mount", "root-disk", "symlink", "absent"])
+@pytest.mark.parametrize("change", ["valid", "mount-alias", "wrong-serial", "wrong-mount", "root-disk", "symlink", "absent"])
 def test_account_diagnostic_target_is_bound_and_metadata_only(tmp_path, monkeypatch, capsys, change):
     import os
     import subprocess
@@ -1721,22 +1721,69 @@ def test_account_diagnostic_target_is_bound_and_metadata_only(tmp_path, monkeypa
     if change == "absent":
         mounts = []
 
+    requested_mount = mountpoint
+    if change == "mount-alias":
+        requested_mount = tmp_path / "mnt-alias"
+        requested_mount.symlink_to(mountpoint, target_is_directory=True)
+
     def execute(access, private, code):
-        code = code.replace("/mnt/fisherman-target", str(mountpoint))
+        code = code.replace("/mnt/fisherman-target", str(requested_mount))
         monkeypatch.setattr(subprocess, "check_output", lambda args, **kwargs: json.dumps(blocks if args[0] == "lsblk" else {"filesystems": mounts}))
         monkeypatch.setattr(subprocess, "run", lambda args, **kwargs: SimpleNamespace(returncode=0, stdout="shadow-utils 0:4.15.0-13.el10.x86_64\n"))
         exec(code, {})  # noqa: S102 - production collector with synthetic mount metadata
         return json.loads(capsys.readouterr().out)
 
     monkeypatch.setattr(PROOF, "guest_call", execute)
-    if change not in ("valid", "absent"):
+    if change not in ("valid", "mount-alias", "absent"):
         with pytest.raises(ValueError, match="diagnostic"):
             PROOF.account_target_diagnostics({}, tmp_path, "target", "source")
         return
     result = PROOF.account_target_diagnostics({}, tmp_path, "target", "source")
     assert result["source_rpms"] == ["shadow-utils 0:4.15.0-13.el10.x86_64"]
-    assert result["target_status"] == ("bound" if change == "valid" else "unavailable")
+    assert result["target_status"] == ("bound" if change in ("valid", "mount-alias") else "unavailable")
     assert "synthetic-private-account-contents" not in json.dumps(result)
-    if change == "valid":
+    if change in ("valid", "mount-alias"):
         assert result["account_files"]["passwd"]["type"] == "regular"
         assert result["account_files"]["shadow"] == {"absent": True}
+
+
+@pytest.mark.parametrize("repetitions", [1, 30, 3000])
+def test_account_audit_exports_bound_identifiers_not_raw_payload(tmp_path, monkeypatch, capsys, repetitions):
+    import subprocess
+
+    events = [
+        {"_COMM": "kernel", "MESSAGE": 'type=1400 comm="chpasswd" avc: denied { passwd } for pid=42 scontext=system_u:system_r:passwd_t:s0 tcontext=system_u:system_r:passwd_t:s0 tclass=passwd permissive=0 proctitle=SECRET name=PRIVATE'},
+        {"_COMM": "audit", "MESSAGE": "type=USER_AVC msg=audit(123.456:99): pid=44 msg='avc: denied { passwd } for scontext=system_u:system_r:passwd_t:s0 tcontext=system_u:system_r:passwd_t:s0 tclass=passwd permissive=0 exe=\"/usr/sbin/chpasswd\" proctitle=PRIVATE res=failed'"},
+        {"_COMM": "other", "MESSAGE": 'type=1400 comm="other" avc: denied { read } for pid=43 secret=HIDDEN'},
+        {"_COMM": "chpasswd", "MESSAGE": 'libselinux: Unknown class PRIVATE_CLASS'},
+        {"_COMM": "chpasswd", "MESSAGE": 'type=SECRET pid=PASSWORD proctitle=PRIVATE'},
+    ]
+
+    events *= repetitions
+
+    def execute(access, private, code):
+        def run(args, **kwargs):
+            value = "\n".join(json.dumps(event) for event in events) if args[0] == "journalctl" else ""
+            return SimpleNamespace(returncode=0, stdout=value)
+
+        blocks = {"blockdevices": [{"path": "/dev/vda", "serial": "source"},
+                  {"path": "/dev/vdb", "serial": "target", "type": "disk", "size": 64 * 1024**3}]}
+        monkeypatch.setattr(subprocess, "run", run)
+        monkeypatch.setattr(subprocess, "check_output", lambda args, **kwargs: json.dumps(blocks if args[0] == "lsblk" else {"filesystems": []}))
+        exec(code, {})  # noqa: S102 - collector exercised with synthetic private audit records
+        return json.loads(capsys.readouterr().out)
+
+    monkeypatch.setattr(PROOF, "guest_call", execute)
+    if repetitions == 3000:
+        with pytest.raises(ValueError, match="audit evidence exceeds bound"):
+            PROOF.account_target_diagnostics({}, tmp_path, "target", "source", collect_audit=True)
+        return
+    result = PROOF.account_target_diagnostics({}, tmp_path, "target", "source", collect_audit=True)
+    records = result["account_audit"]["records"]
+    assert len(records) == min(3 * repetitions, 32)
+    assert records[-3]["pid"] == "42" and records[-3]["denied_permissions"] == ["passwd"]
+    assert records[-3]["permissive"] == "0"
+    assert records[-2]["type"] == "USER_AVC" and records[-2]["pid"] == "44"
+    assert records[-2]["res"] == "failed"
+    assert records[-1] == {"tool": "chpasswd", "class": "unknown-selinux-class"}
+    assert all(secret not in json.dumps(result) for secret in ("SECRET", "PRIVATE", "HIDDEN", "PASSWORD", "proctitle"))
