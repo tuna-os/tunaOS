@@ -34,9 +34,10 @@ def node(document, path):
     return document
 
 
-def test_full_golden_matrix_preserves_every_value_and_order():
+def test_historical_migration_preserves_every_value_and_order():
     expected = json.loads((FIXTURES / "matrix-before-migration.json").read_text())
-    actual = config.matrix(config.load())
+    source = FIXTURES / "matrix-source-at-4e03a122.toml"
+    actual = config.matrix(config.load(source))
     assert actual == expected
     # JSON object order, variant ordering, and nested list order are contractual.
     assert json.dumps(actual, ensure_ascii=False) == json.dumps(expected, ensure_ascii=False)
@@ -355,6 +356,7 @@ def test_alias_cannot_shadow_canonical_image_name(reserved):
 
 def test_alias_collision_is_checked_using_complete_published_tag():
     document = config.load()
+    document["variants"]["bonito-rawhide"]["publish_name"] = "fedora-development"
     document["variants"]["bonito-rawhide"]["tag_suffix"] = ""
     with pytest.raises(config.ConfigError, match="expected single-line string"):
         config.validate(document)
@@ -395,3 +397,49 @@ def test_offline_iso_payload_can_include_non_live_flavors():
     gnome = next(group for group in groups if group["suffix"] == "")
     assert "gnome" not in gnome["flavors"]
     assert "gnome" in gnome["offline_flavors"]
+
+
+def test_canonical_publication_collision_is_rejected():
+    document = config.load()
+    document["variants"]["yellowfin"]["publish_name"] = "albacore"
+    with pytest.raises(config.ConfigError, match="albacore:base also belongs to yellowfin"):
+        config.validate(document)
+
+
+def test_canonical_names_can_be_shared_when_complete_tags_differ():
+    document = config.load()
+    document["variants"]["yellowfin"]["publish_name"] = "albacore"
+    document["variants"]["yellowfin"]["tag_suffix"] = "kitten"
+    config.validate(document)
+
+
+def test_renovate_only_pin_update_keeps_live_suite_green(tmp_path):
+    import hashlib
+    import shutil
+    checkout = tmp_path / "checkout"
+    for name in ("tunaos.toml", "renovate.json", "requirements-config.txt",
+                 "scripts/config.py", "scripts/lib/tunaos_config.py",
+                 "scripts/lib/build-config.sh", "scripts/iso-e2e.sh",
+                 "just/utilities.just", "tests/test_primary_config.py"):
+        target = checkout / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(ROOT / name, target)
+    fixtures = checkout / "tests/fixtures/primary-config"
+    shutil.copytree(FIXTURES, fixtures)
+    before = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in fixtures.iterdir()}
+    primary = checkout / "tunaos.toml"
+    source = primary.read_text()
+    variant_id, old = next((name, v["base_image"]) for name, v in config.load()["variants"].items()
+                           if "@sha256:" in v["base_image"])
+    replacement = old.split("@sha256:")[0] + "@sha256:" + "b" * 64
+    primary.write_text(source.replace(old, replacement, 1))
+    # Run every core case except this recursive orchestration test. The child
+    # uses the changed live pin but the original historical fixtures.
+    result = subprocess.run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider",
+                             "tests/test_primary_config.py", "-k",
+                             "not renovate_only_pin_update_keeps_live_suite_green"],
+                            cwd=checkout, text=True, capture_output=True, timeout=120)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in fixtures.iterdir()} == before
+    emitted = config.matrix(config.load(primary))
+    assert next(v for v in emitted["variants"] if v["id"] == variant_id)["base_image"] == replacement

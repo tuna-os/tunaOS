@@ -152,14 +152,17 @@ def validate(config):
     flavor_ids = {f['id'] for v in variants.values() for f in v['flavors']}
     for name, variant in variants.items():
         suffix = variant.get('tag_suffix', '')
-        for alias in variant.get('aliases', []):
+        aliases = variant.get('aliases', [])
+        for alias in aliases:
             if alias in reserved:
                 raise ConfigError(f'variants.{name}.aliases: {alias!r} shadows a canonical image name')
+        destinations = [variant.get('publish_name', name), *aliases]
+        for destination in destinations:
             for flavor in variant['flavors']:
                 tag = flavor['id'] + (f'-{suffix}' if suffix else '')
-                key = (alias, tag)
-                if key in published:
-                    raise ConfigError(f'variants.{name}.aliases: {alias}:{tag} also belongs to {published[key]}')
+                key = (destination, tag)
+                if key in published and published[key] != name:
+                    raise ConfigError(f'variants.{name}: {destination}:{tag} also belongs to {published[key]}')
                 published[key] = name
     for i, group in enumerate(config['iso_groups']):
         # Offline payloads intentionally include flavors absent from the live menu.
