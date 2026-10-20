@@ -1,6 +1,6 @@
 # Image Factory Completion Gate & Definition of Done (#1283)
 
-This document establishes the unified **Image Factory Completion Gate** and **Definition of Done** for all supported TunaOS variants (`.github/build-config.yml`).
+This document establishes the unified **Image Factory Completion Gate** and **Definition of Done** for all supported TunaOS variants (`tunaos.toml`).
 
 ## 1. Goal
 

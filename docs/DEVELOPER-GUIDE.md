@@ -56,7 +56,7 @@ flowchart LR
 
 ## 2. The build matrix: 148 cells
 
-**`.github/build-config.yml`** drives everything CI does: 14 variants ×
+**`tunaos.toml`** drives everything CI does: 14 variants ×
 their flavors (5 desktops + `base` + hardware tiers) × declared platforms
 (amd64 / amd64-v2 / arm64). A **cell** is one `(variant, flavor)` pair —
 `yellowfin:gnome`, `bonito:kde-nvidia` — and there are 148 of them with
@@ -320,7 +320,7 @@ like successes* section of [MATRIX-STATUS.md](MATRIX-STATUS.md). Highlights:
 
 | Path | What lives there |
 | :--- | :--- |
-| `.github/build-config.yml` | The matrix — single source of truth |
+| `tunaos.toml` | The matrix — single source of truth |
 | `.github/green-criteria.yml` | The bar |
 | `.github/workflows/` | Per-variant entries, `build-variant.yml`, `reusable-build-image.yml`, sweeps and refreshers |
 | `Containerfile.*` | Per-family image definitions |
