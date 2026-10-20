@@ -179,6 +179,14 @@ def assert_result(case, log, returncode):
         raise ValueError("argument control did not execute external PID1")
 
 
+def read_serial(path):
+    """Return raw serial bytes and a decoded view without rewriting evidence."""
+    output = path.read_bytes()
+    if len(output) >= 4 * 1024 * 1024:
+        raise ValueError("serial output reached receipt bound")
+    return output, output.decode(errors="replace")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
@@ -295,11 +303,7 @@ def main():
                 code = result.returncode
             except subprocess.TimeoutExpired:
                 code = 124
-        output = serial.read_bytes()
-        if len(output) >= 4 * 1024 * 1024:
-            raise ValueError("serial output reached receipt bound")
-        log = output.decode(errors="replace")
-        (folder / "serial.log").write_text(log)
+        output, log = read_serial(serial)
         assert_result(case, log, code)
         report["cases"].append({"case": case, "exit_code": code, "serial_sha256": digest(output), "esp_sha256": digest(esp.read_bytes())})
         (out / "report.json").write_text(json.dumps(report, indent=2) + "\n")

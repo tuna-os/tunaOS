@@ -36,6 +36,19 @@ def test_download_handles_short_reads(monkeypatch, tmp_path):
     handoff.download("https://fixture.invalid/payload", target, handoff.digest(payload), size=len(payload))
     assert target.read_bytes() == payload
 
+def test_serial_evidence_keeps_raw_bytes(tmp_path):
+    path = tmp_path / "serial.log"
+    raw = b"boot\xff\n"
+    path.write_bytes(raw)
+
+    output, log = handoff.read_serial(path)
+
+    assert output == raw
+    assert path.read_bytes() == raw
+    assert log == "boot\ufffd\n"
+
+
+
 
 
 def test_selects_only_inline_regular_payload():
