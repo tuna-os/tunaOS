@@ -50,6 +50,14 @@ def _seed(config) -> int | None:
 
 
 def pytest_configure(config):
+    # Existing compatibility-reader tests must also work in a fresh checkout.
+    import importlib.util
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    spec = importlib.util.spec_from_file_location("primary_test_setup", root / "scripts/lib/tunaos_config.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    module.prepare(root)
     config._tunaos_seed = _seed(config)
 
 

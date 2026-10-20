@@ -28,6 +28,9 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Setup yq
+        uses: ./.github/actions/setup-yq
+
       - name: Validate Flavor
         id: validate
         env:
