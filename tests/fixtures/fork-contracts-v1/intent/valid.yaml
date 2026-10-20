@@ -1,0 +1,24 @@
+# Canonical RFC 013 v1 fixture. The source pin is refreshed only when the
+# reviewed TunaOS source receipt changes.
+schema_version: 1
+catalog:
+  sha256: 9419cf52aa759c590f084fa2a82e474549898fd89af2b996bd540b24ffa292fd
+image:
+  registry: registry.example
+  namespace: harbor
+targets:
+  variants: [yellowfin, grouper]
+  flavors: [gnome]
+  platforms: [linux/amd64]
+global:
+  branding:
+    homepage: https://harbor.example/home
+    documentation: https://harbor.example/docs
+    support: https://harbor.example/support
+  packages:
+    add: [htop]
+overrides:
+  variants:
+    yellowfin:
+      packages:
+        optional: [fastfetch]

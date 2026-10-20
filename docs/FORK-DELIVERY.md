@@ -27,11 +27,11 @@ image boots or installs.
    [#3381](https://github.com/tuna-os/tunaOS/issues/3381). Bind the verdict to
    image digest, variant, desktop, platform, config/source receipt, tools and
    test time. Reject expired, absent or skipped evidence. Reject mismatches.
-4. **Shared contracts.** [#3475](https://github.com/tuna-os/tunaOS/issues/3475)
-   tracks schema owners and common valid/invalid fixtures for brand settings,
-   packages, image identity and installer inputs. Reuse current contracts.
-   Put frontend changes in their own repositories and test the same fixture
-   version there. Keep differences in backend capabilities explicit.
+4. **Shared contracts.** Issue #3475 owns the schema list and common
+   valid/invalid fixtures in [FORK-CONTRACTS.md](FORK-CONTRACTS.md). They cover
+   brand settings, packages, image identity and installer inputs. Reuse these
+   contracts. Put frontend changes in their repositories. Test the same fixture
+   version there. State backend differences.
 5. **Fast tests and useful failures.**
    [#3476](https://github.com/tuna-os/tunaOS/issues/3476) tracks how to reuse verified images and invalidate results.
    It also defines bounded reports for the first failure. Separate

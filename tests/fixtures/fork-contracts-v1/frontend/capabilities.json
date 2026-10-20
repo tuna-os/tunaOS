@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "contract": "tunaos-installer-capabilities",
+  "fixture_version": "fork-contracts-v1",
+  "backends": {
+    "fisherman": {
+      "contract_version": 1,
+      "required_operations": [
+        "install",
+        "offline-image-discovery",
+        "fisherman-recipe"
+      ]
+    },
+    "bootc-installer": {
+      "contract_version": 1,
+      "required_operations": ["install"]
+    }
+  },
+  "frontends": [
+    {
+      "id": "gnome",
+      "repository": "tuna-os/bootc-installer",
+      "app_id": "org.bootcinstaller.Installer",
+      "backend": "bootc-installer",
+      "capabilities": [
+        "install",
+        "bootc-installer-recipe",
+        "readiness-stamp",
+        "product-name"
+      ],
+      "unsupported": [
+        "offline-image-discovery",
+        "fisherman-encryption-modes",
+        "fisherman-recipe"
+      ]
+    },
+    {
+      "id": "kde",
+      "repository": "tuna-os/tuna-installer-kde",
+      "app_id": "org.tunaos.InstallerKde",
+      "backend": "fisherman",
+      "capabilities": [
+        "install",
+        "offline-image-discovery",
+        "fisherman-recipe",
+        "readiness-stamp",
+        "product-name"
+      ],
+      "unsupported": [
+        "bootc-installer-recipe",
+        "fisherman-encryption-modes"
+      ]
+    },
+    {
+      "id": "cosmic",
+      "repository": "tuna-os/tuna-installer-cosmic",
+      "app_id": "org.tunaos.InstallerCosmic",
+      "backend": "fisherman",
+      "capabilities": [
+        "install",
+        "offline-image-discovery",
+        "fisherman-encryption-modes",
+        "fisherman-recipe",
+        "readiness-stamp",
+        "product-name"
+      ],
+      "unsupported": ["bootc-installer-recipe"]
+    },
+    {
+      "id": "niri",
+      "repository": "tuna-os/tuna-installer-niri",
+      "app_id": "org.tunaos.InstallerNiri",
+      "backend": "fisherman",
+      "capabilities": [
+        "install",
+        "offline-image-discovery",
+        "fisherman-encryption-modes",
+        "fisherman-recipe",
+        "readiness-stamp",
+        "product-name"
+      ],
+      "unsupported": ["bootc-installer-recipe"]
+    },
+    {
+      "id": "xfce",
+      "repository": "tuna-os/tuna-installer-xfce",
+      "app_id": "org.tunaos.InstallerXfce",
+      "backend": "fisherman",
+      "capabilities": [
+        "install",
+        "offline-image-discovery",
+        "fisherman-encryption-modes",
+        "fisherman-recipe",
+        "readiness-stamp",
+        "product-name"
+      ],
+      "unsupported": ["bootc-installer-recipe"]
+    }
+  ]
+}

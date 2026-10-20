@@ -1,0 +1,14 @@
+schema_version: 1
+image:
+  registry: registry.example
+  namespace: harbor
+targets:
+  variants: [yellowfin]
+  flavors: [gnome]
+  platforms: [linux/amd64]
+global:
+  branding:
+    urls:
+      homepage: https://example.test
+  packages:
+    add: [htop]
