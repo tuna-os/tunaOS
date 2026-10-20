@@ -58,7 +58,9 @@ def test_source_receipt_preserves_package_and_identity_inputs(plan):
     files = plan["sources"]["files"]
     # The editable primary source and its trusted compiler own desktop policy.
     # Generated adapters must not become a second pinned source of truth.
-    assert not any(name.startswith("manifests/desktops/") for name in files)
+    derived = ("manifests/desktops/", "manifests/desktop-plans/",
+               "manifests/desktop-contracts/")
+    assert not any(name.startswith(derived) for name in files)
     for name in ("tunaos.toml", "scripts/lib/tunaos_packages.py", "scripts/lib/desktop_operations.json"):
         assert files[name] == hashlib.sha256((ROOT / name).read_bytes()).hexdigest()
     for name in ("build_scripts/10-base-packages.sh", "build_scripts/20-packages.sh",
