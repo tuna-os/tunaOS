@@ -31,6 +31,14 @@
 
 set -uo pipefail
 
+MODE=verify
+if [[ "${1:-}" == --list-packages || "${1:-}" == --show-ppa ]]; then
+	MODE="$1"
+	shift
+fi
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+python3 "${REPO_ROOT}/scripts/config.py" generate >/dev/null || exit 2
+YQ="${YQ:-yq}"
 MANIFEST="${1:?usage: verify-manifest-packages.sh <manifest.yaml> [series] [arch]}"
 SERIES="${2:-noble}"
 ARCH="${3:-amd64}"
@@ -50,13 +58,8 @@ command -v python3 >/dev/null 2>&1 || {
 
 DAS="https://api.launchpad.net/1.0/ubuntu/${SERIES}/${ARCH}"
 
-# The manifest's apt package list. Comments are stripped; the list ends at the
-# next top-level key.
-mapfile -t PKGS < <(
-	awk '/^    packages:$/{f=1;next}
-	     f && /^    - /{n=$2; sub(/#.*/,"",n); gsub(/[ \t]/,"",n); if (n != "") print n}
-	     f && /^[a-z_]+:$/{exit}' "$MANIFEST"
-)
+# Parse the generated JSON/YAML adapter structurally, preserving list order.
+mapfile -t PKGS < <("$YQ" -r '(.packages.apt | select(tag == "!!seq")) // .packages.apt.packages // [] | .[]' "$MANIFEST")
 [[ "${#PKGS[@]}" -gt 0 ]] || {
 	echo "ERROR: no apt packages parsed from ${MANIFEST}" >&2
 	exit 2
@@ -65,7 +68,16 @@ mapfile -t PKGS < <(
 # The PPA it declares, as a Launchpad archive URL. Absent is fine — then every
 # name must come from the primary archive.
 PPA_URL=""
-ppa_spec="$(awk '/repo: *"ppa:/{ if (match($0, /ppa:[^"]+/)) print substr($0, RSTART+4, RLENGTH-4); exit }' "$MANIFEST")"
+ppa_spec="$("$YQ" -r '.packages.apt.ppa[0].repo // ""' "$MANIFEST" 2>/dev/null || true)"
+ppa_spec="${ppa_spec#ppa:}"
+if [[ "$MODE" == --list-packages ]]; then
+	printf '%s\n' "${PKGS[@]}"
+	exit 0
+fi
+if [[ "$MODE" == --show-ppa ]]; then
+	printf '%s\n' "$ppa_spec"
+	exit 0
+fi
 if [[ -n "$ppa_spec" ]]; then
 	owner="${ppa_spec%%/*}"
 	name="${ppa_spec#*/}"
