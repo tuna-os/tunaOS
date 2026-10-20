@@ -53,7 +53,11 @@ CHECK_GREETER
 # layer, so Enter selects its GDM tile and the password authenticates it.
 "$CORRAL" key "$NAME" ret
 sleep 2
+"$CORRAL" screenshot "$NAME" -o "${OUT}/gdm-user-selected.png" --require-paint
+sleep 2
 "$CORRAL" type "$NAME" "$TEST_PASSWORD" --enter
+sleep 3
+"$CORRAL" screenshot "$NAME" -o "${OUT}/gdm-after-password.png" --require-paint
 
 graphical_session() {
 	guest bash -s -- "$TEST_USER" <<'FIND_SESSION'
@@ -81,6 +85,22 @@ for _ in $(seq 1 60); do
 done
 [[ -n "$session_id" ]] || {
 	echo "GDM did not start an active Wayland session for ${TEST_USER}" >&2
+	"$CORRAL" screenshot "$NAME" -o "${OUT}/gdm-login-failed.png" --require-paint || true
+	guest bash -s -- "$TEST_USER" <<'GDM_DIAGNOSTICS'
+set -u
+user="$1"
+echo "==> loginctl sessions"
+loginctl list-sessions --no-legend || true
+while read -r id _ name _; do
+	[[ "$name" == "$user" ]] || continue
+	echo "==> session $id"
+	loginctl show-session "$id" -p Name -p Type -p Seat -p Active -p State -p Service -p LockedHint || true
+done < <(loginctl list-sessions --no-legend)
+echo "==> GDM service"
+systemctl status gdm.service --no-pager || true
+echo "==> recent GDM and PAM journal"
+journalctl -b --no-pager | grep -Ei 'gdm|pam.*(fail|authentication)|session opened|session closed' | tail -n 120 || true
+GDM_DIAGNOSTICS
 	exit 1
 }
 echo "TUNAOS_GDM_LOGIN_OK user=${TEST_USER} session=${session_id}"
