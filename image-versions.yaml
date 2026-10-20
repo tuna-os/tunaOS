@@ -71,6 +71,9 @@ packages:
 
 # Pinned binary downloads (managed by Renovate)
 downloads:
+  # Independent schema oracle for contract tests; not an image runtime package.
+  # renovate: datasource=pypi depName=jsonschema
+  jsonschema: "4.26.0"
   # renovate: datasource=github-releases depName=ublue-os/uupd
   uupd: "v1.5.1"
   # renovate: datasource=github-releases depName=ledif/kcm_ublue
