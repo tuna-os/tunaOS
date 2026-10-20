@@ -26,3 +26,22 @@ producer; a later collector must verify trusted workflow and artifact context.
 - The later collector and adapters need review and actual matching-media proof.
 - Plain and encrypted offline installs and target-only reboot remain required.
 - Existing downloads and retained objects remain available.
+
+## Follow-on: read-only artifact snapshot adapter
+
+On 2026-10-20, the maintainer approved the adapter and negative tests in
+[issue #3381](https://github.com/tuna-os/tunaOS/issues/3381#issuecomment-6280438100).
+It checks one selected run of iso-builder CI on main.
+It checks the reviewed source, workflow, artifact ID and archive bytes.
+It has a read-only transport that the caller supplies, with no production caller.
+
+The first adapter rejects reruns. GitHub binds an artifact to a run but omits
+its upload sequence. Before and after collection, the current run must have
+`run_attempt: 1` and agree with the selected run endpoint.
+This snapshot check depends on fresh authoritative responses.
+It does not provide an atomic snapshot or an attestation.
+Rerun support needs a separate design that proves the upload sequence.
+
+This phase does not extract archive members, issue credentials, migrate receipt
+emitters, or enable qualification. Those integrations still need review and
+matching-media installation proof.
