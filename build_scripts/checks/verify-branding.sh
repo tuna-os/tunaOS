@@ -53,6 +53,25 @@ fail() {
 }
 pass() { echo "  ok: $*"; }
 
+# A generated fork input changes only its explicitly supplied URL expectations.
+# Validate the persisted contract and applied asset hashes first. Every other
+# stock check below still runs, including fish identity, vendor and Plymouth.
+fork_manifest=/usr/share/tunaos/fork/fork-config.json
+fork_branding_valid=false
+if [[ -e "$fork_manifest" || -L "$fork_manifest" ]]; then
+	if [[ -f /usr/libexec/tunaos/fork-branding.sh ]]; then
+		# shellcheck source=/dev/null
+		source /usr/libexec/tunaos/fork-branding.sh
+		if tunaos_verify_fork_branding; then
+			fork_branding_valid=true
+		else
+			fail "fork branding manifest or applied values do not match"
+		fi
+	else
+		fail "fork branding manifest exists but its runtime verifier is missing"
+	fi
+fi
+
 # /etc/os-release is conventionally a symlink to /usr/lib/os-release, but the
 # latter is the canonical file: an image can ship it without the /etc link.
 # Reading only /etc/os-release there would report *every* field as unset and
@@ -162,7 +181,14 @@ fi
 # (docs/BRANDING.md). A field no check reads is a field nobody notices.
 for field in HOME_URL DOCUMENTATION_URL SUPPORT_URL BUG_REPORT_URL; do
 	v="$(osr "$field")"
-	if [[ "$v" == *tuna-os* || "$v" == *tunaos* ]]; then
+	fork_url=""
+	if [[ "$fork_branding_valid" == true ]]; then
+		fork_url="$(tunaos_fork_branding_url "$fork_manifest" "$field")"
+	fi
+	if [[ -n "$fork_url" ]]; then
+		# The helper compared the exact escaped value in both os-release files.
+		pass "${field}=${fork_url} (validated fork override)"
+	elif [[ "$v" == *tuna-os* || "$v" == *tunaos* ]]; then
 		pass "${field}=${v}"
 	else
 		fail "${field} is '${v}' — points away from TunaOS"
@@ -213,8 +239,14 @@ else
 	[[ "$jname" == "$variant" ]] && pass "image-name=${jname}" ||
 		fail "image-name is '${jname}', want '${variant}'"
 	jvendor="$(python3 -c "import json;print(json.load(open('${info}')).get('image-vendor',''))" 2>/dev/null || echo)"
-	[[ "$jvendor" == tuna-os ]] && pass "image-vendor=${jvendor}" ||
-		fail "image-vendor is '${jvendor}', want 'tuna-os'"
+	if [[ "$fork_branding_valid" == true ]]; then
+		# The validated fork receipt also checked registry, canonical image
+		# name and exact image-ref; a namespace alone cannot prove identity.
+		pass "image-vendor=${jvendor} (validated fork namespace)"
+	else
+		[[ "$jvendor" == tuna-os ]] && pass "image-vendor=${jvendor}" ||
+			fail "image-vendor is '${jvendor}', want 'tuna-os'"
+	fi
 fi
 
 # ------------------------------------------------------------ desktop look --
