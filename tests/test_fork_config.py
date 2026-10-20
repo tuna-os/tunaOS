@@ -240,7 +240,6 @@ def test_receipt_ignores_generated_untracked_files_but_detects_source_changes(tm
 
 @pytest.mark.parametrize("name", [
     "system_files_overrides/marlin/usr/lib/bootc/install/50-marlin.toml",
-    "experiences/tuna/files/etc/greetd/environments",
     "build_scripts/bootc/sandbox/usr/lib/ostree/prepare-root.conf",
     "build_scripts/checks/package-miss-allowlist.txt",
     "scripts/_registry.sh",

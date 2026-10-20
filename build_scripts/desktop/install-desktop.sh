@@ -570,9 +570,17 @@ EOF
 		echo "ERROR: ${_TD_MANIFEST} has a packages.apt section but no packages parsed" >&2
 		exit 1
 	fi
-	# Enable display manager
-	_TD_DM=$($YQ -r '.display_manager' "${_TD_MANIFEST}")
-	if [[ -n "${_TD_DM}" ]]; then
+	# Enable display manager after package installation, preferring apt's base-specific unit.
+	# Debian-family managers may differ from the shared default (gdm3 vs
+	# gdm). Respect a map-shaped apt section's explicit display manager.
+	_TD_DM=""
+	if [[ "${_TD_APT_TYPE}" == "!!map" ]]; then
+		_TD_DM=$($YQ -r '.packages.apt.display_manager // ""' "${_TD_MANIFEST}")
+	fi
+	if [[ -z "${_TD_DM}" || "${_TD_DM}" == "null" ]]; then
+		_TD_DM=$($YQ -r '.display_manager // ""' "${_TD_MANIFEST}")
+	fi
+	if [[ -n "${_TD_DM}" && "${_TD_DM}" != "null" ]]; then
 		systemctl enable "${_TD_DM}" || true
 	fi
 	printf "::endgroup::\n"
