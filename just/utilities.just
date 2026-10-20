@@ -105,6 +105,11 @@ _ensure_test_deps: _ensure_check_deps
     cd {{ justfile_directory() }}
     if ! command -v bats &> /dev/null; then brew install bats-core; fi
     if ! python3 -c "import pytest" 2>/dev/null; then pip3 install pytest --break-system-packages 2>/dev/null || pip3 install pytest --user; fi
+    command -v yq >/dev/null || { echo "yq is required to read test dependency pins" >&2; exit 1; }
+    schema_version=$(yq -r '.downloads.jsonschema // ""' image-versions.yaml)
+    [[ "$schema_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Invalid jsonschema test pin" >&2; exit 1; }
+    installed=$(python3 -c 'import importlib.metadata; print(importlib.metadata.version("jsonschema"))' 2>/dev/null || true)
+    if [[ "$installed" != "$schema_version" ]]; then python3 -m pip install "jsonschema==$schema_version" --break-system-packages || python3 -m pip install "jsonschema==$schema_version" --user; fi
 
 test: _ensure_test_deps
     #!/usr/bin/env bash
