@@ -98,10 +98,13 @@ jobs:
               echo "::error::Could not read resolver ${resolver}; refusing to prune"
               exit 1
             fi
-            if ! current="$(jq -er '
-              select(.schema == "TunaOSIsoResolution/v1") | .iso |
+            if ! current="$(jq -er -s '
+              if length != 1 then error("resolver must contain one JSON document")
+              else .[0]
+              end
+              | select(.schema == "TunaOSIsoResolution/v1") | .iso |
               select(type == "string" and
-                     test("^[A-Za-z0-9][A-Za-z0-9._+~-]*\\.iso$"))
+                     test("\\A[A-Za-z0-9][A-Za-z0-9._+~-]*\\.iso\\z"))
             ' <<<"$payload")"; then
               echo "::error::Invalid resolver ${resolver}; refusing to prune"
               exit 1
