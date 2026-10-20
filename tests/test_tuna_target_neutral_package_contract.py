@@ -14,12 +14,17 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "build_scripts/checks/verify-desktop-experience.sh"
-FUNCTIONS = (
-    SCRIPT.read_text()
-    .split("tuna_package_backend() {", 1)[1]
-    .split("TUNAOS_CONTRACT_WAIVED=0", 1)[0]
-)
-FUNCTIONS = "tuna_package_backend() {" + FUNCTIONS
+
+
+def source_contract(os_release=None):
+    lines = [
+        "export TUNAOS_CONTRACT_LIBRARY_ONLY=true",
+        "export IS_HUMMINGBIRD=false",
+    ]
+    if os_release is not None:
+        lines.append(f"export TUNAOS_OS_RELEASE={shlex.quote(str(os_release))}")
+    lines.append(f"source {shlex.quote(str(SCRIPT))} gnome")
+    return "\n".join(lines)
 
 
 def execute(tmp_path, command, output="", returncode=0, body=""):
@@ -35,15 +40,14 @@ def execute(tmp_path, command, output="", returncode=0, body=""):
             'sys.exit(int(os.environ["QUERY_EXIT"]))\n'
         )
         tool.chmod(0o755)
-    env = dict(
-        os.environ,
-        PATH=str(tools) + os.pathsep + os.environ["PATH"],
-        QUERY_LOG=str(log),
-        QUERY_OUTPUT=output,
-        QUERY_EXIT=str(returncode),
-    )
+    env = {
+        "PATH": str(tools) + os.pathsep + os.environ.get("PATH", "/usr/bin:/bin"),
+        "QUERY_LOG": str(log),
+        "QUERY_OUTPUT": output,
+        "QUERY_EXIT": str(returncode),
+    }
     result = subprocess.run(
-        ["bash", "-euo", "pipefail", "-c", (body or FUNCTIONS) + "\n" + command],
+        ["bash", "-euo", "pipefail", "-c", (body or source_contract()) + "\n" + command],
         env=env,
         check=False,
         text=True,
@@ -145,7 +149,7 @@ def test_actual_tuna_branch_rejects_foreign_or_failed_owner_query(
         "\n\tdone", 1
     )[0] + "\n\tdone"
     body = (
-        FUNCTIONS
+        source_contract()
         + "\nrequire_command() { command -v \"$1\" >/dev/null; }\n"
         + "tuna_installed_file_owner() { printf '%s' \"$QUERY_OUTPUT\"; return \"$QUERY_EXIT\"; }\n"
         + "tuna_backend=dpkg\n"
@@ -194,24 +198,28 @@ def test_actual_calendar_server_paths_are_cross_distribution(tmp_path, present):
 
 
 @pytest.mark.parametrize(
-    "os_id,backend",
+    "os_id,id_like,backend",
     [
-        ("arch", "pacman"),
-        ("ubuntu", "dpkg"),
-        ("debian", "dpkg"),
-        ("gentoo", "portage"),
-        ("almalinux", "rpm"),
-        ("centos", "rpm"),
-        ("fedora", "rpm"),
-        ("eln", "rpm"),
-        ("hummingbird", "rpm"),
-        ("opensuse-tumbleweed", "rpm"),
+        ("arch", "", "pacman"),
+        ("ubuntu", "", "dpkg"),
+        ("debian", "", "dpkg"),
+        ("gentoo", "", "portage"),
+        ("almalinux", "", "rpm"),
+        ("centos", "", "rpm"),
+        ("fedora", "", "rpm"),
+        ("eln", "", "rpm"),
+        ("hummingbird", "", "rpm"),
+        ("opensuse-tumbleweed", "", "rpm"),
+        ("linuxmint", "debian", "dpkg"),
+        ("rocky", "rhel fedora", "rpm"),
     ],
 )
-def test_runtime_backend_uses_os_release_without_build_context(tmp_path, os_id, backend):
+def test_runtime_backend_uses_os_release_without_build_context(
+    tmp_path, os_id, id_like, backend
+):
     release = tmp_path / "os-release"
-    release.write_text(f"ID={os_id}\n")
-    body = FUNCTIONS.replace("source /etc/os-release", f'source "{release}"')
+    release.write_text(f"ID={os_id}\nID_LIKE={shlex.quote(id_like)}\n")
+    body = source_contract(release)
     result, _ = execute(tmp_path, "tuna_package_backend", body=body)
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == backend
@@ -223,7 +231,7 @@ def test_unknown_backend_cannot_default_to_rpm(tmp_path):
     result, _ = execute(
         tmp_path,
         "tuna_package_backend",
-        body=FUNCTIONS.replace("source /etc/os-release", f'source "{release}"'),
+        body=source_contract(release),
     )
     assert result.returncode != 0
 
@@ -295,8 +303,8 @@ def test_tuna_branch_rejects_missing_or_wrong_privacy_routing(tmp_path):
         )[0]
     )
     body = (
-        "desktop=tuna\nmode=build\n"
-        + FUNCTIONS
+        source_contract()
+        + "\ndesktop=tuna\nmode=build\n"
         + "\n"
         + portal_parser
         + "\n"
@@ -325,7 +333,7 @@ require_unit() { return 0; }
         portals.write_text(content)
         result = subprocess.run(
             ["bash", "-euo", "pipefail", "-c", body],
-            env={**os.environ, "PATH": f"{tools}{os.pathsep}{os.environ['PATH']}"},
+            env={"PATH": f"{tools}{os.pathsep}{os.environ.get('PATH', '/usr/bin:/bin')}"},
             text=True,
             capture_output=True,
             check=False,
@@ -346,7 +354,7 @@ def test_actual_tuna_branch_rejects_old_or_nonmatching_installed_name(tmp_path, 
         tmp_path,
         case,
         answer,
-        body=FUNCTIONS.replace("tuna_package_backend() {", "unused_backend() {")
+        body=source_contract()
         + "\ntuna_package_backend() { echo dpkg; }\n",
     )
     assert result.returncode != 0

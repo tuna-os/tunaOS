@@ -31,7 +31,7 @@ detected_os 2>/dev/null || true
 # os-release remains available after /run/context is removed at image boot.
 tuna_package_backend() {
 	local ID="" ID_LIKE=""
-	source /etc/os-release
+	source "${TUNAOS_OS_RELEASE:-/etc/os-release}"
 	case "$ID" in
 	arch | archlinux) echo pacman ;;
 	ubuntu | debian) echo dpkg ;;
@@ -396,6 +396,15 @@ gdm_autologin_enabled() {
 		END { exit !found }
 	' "$config"
 }
+
+# Tests may source the function library without running the desktop checks.
+if [[ "${TUNAOS_CONTRACT_LIBRARY_ONLY:-false}" == true ]]; then
+	if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then
+		return 0
+	fi
+	exit 0
+fi
+
 case "$desktop" in
 gnome)
 	experience="projectbluefin/bluefin-lts"
