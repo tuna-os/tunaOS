@@ -1,11 +1,11 @@
 # ThinkPad X13s support
 
-**Status:** image profile defined; the first child build for ARM64 and its
-generated inspection report still need to run. TunaOS has not booted,
-installed, or qualified this profile on a ThinkPad X13s.
+**Status:** image profile defined; the first ARM64 child build and its generated
+inspection report are not yet available. TunaOS has not booted, installed, or
+qualified this profile on a ThinkPad X13s.
 
 This page is for the X13s Gen 1 from Lenovo (`lenovo,thinkpad-x13s`).
-They use the Qualcomm SC8280XP / Snapdragon 8cx Gen 3 SoC. This page excludes
+It uses the Qualcomm SC8280XP / Snapdragon 8cx Gen 3 SoC. This page excludes
 laptops with Snapdragon X Elite and all other Windows-on-ARM laptops.
 
 Issues: [qualification epic #3368](https://github.com/tuna-os/tunaOS/issues/3368)
@@ -34,8 +34,8 @@ W2 will add the complete early-boot payload to the initramfs.
 
 ## Stock Fedora payload measured before admission
 
-The following is a pre-admission inspection of the payload from the pinned
-ARM64 parent. This is not evidence from a completed `bonito:gnome-x13s` build.
+The following records an inspection made before admission using the ARM64
+parent image. This is not evidence from a completed `bonito:gnome-x13s` build.
 The source profile resolved on 2026-10-17 to:
 
 ```text

@@ -27,7 +27,8 @@ def resolve(variant: str, flavor: str) -> dict[str, str]:
     values = {}
     for line in proc.stdout.splitlines():
         key, raw = line.split("=", 1)
-        values[key] = shlex.split(raw)[0]
+        parts = shlex.split(raw)
+        values[key] = parts[0] if parts else ""
     return values
 
 

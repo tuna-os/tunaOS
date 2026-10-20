@@ -9,7 +9,7 @@ inventory_file() {
 		[[ -f "$candidate" ]] && matches+=("$candidate")
 	done
 	if ((${#matches[@]})); then
-		mapfile -t matches < <(printf '%s\n' "${matches[@]}" | sort)
+		mapfile -t matches < <(printf '%s\n' "${matches[@]}" | LC_ALL=C sort)
 		printf 'PRESENT %s -> %s\n' "$expected" "${matches[*]}"
 	else
 		printf 'MISSING %s\n' "$expected"

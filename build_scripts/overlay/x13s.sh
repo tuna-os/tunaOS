@@ -158,10 +158,23 @@ trap 'rm -f "${tmp_report}"' EXIT
 	printf 'missing_kconfig_count=%d\n' "${#missing_kconfig[@]}"
 	echo
 	echo "[modules]"
+	declare -A module_paths=()
+	if [[ -d "${module_dir}/kernel" ]]; then
+		while IFS= read -r path; do
+			module_file="${path##*/}"
+			module_name="${module_file%.zst}"
+			module_name="${module_name%.xz}"
+			module_name="${module_name%.ko}"
+			module_paths["$module_name"]="$path"
+		done < <(
+			find "${module_dir}/kernel" -type f \
+				\( -name '*.ko' -o -name '*.ko.xz' -o -name '*.ko.zst' \) \
+				-print 2>/dev/null | LC_ALL=C sort || true
+		)
+	fi
 	for module in "${inspect_modules[@]}"; do
 		module_alt="${module//_/-}"
-		path="$(find "${module_dir}/kernel" -type f \
-			\( -name "${module}.ko*" -o -name "${module_alt}.ko*" \) -print -quit)"
+		path="${module_paths[$module]:-${module_paths[$module_alt]:-}}"
 		if [[ -n "${path}" ]]; then
 			printf 'MODULE %s -> %s\n' "${module}" "${path}"
 		else
@@ -170,7 +183,9 @@ trap 'rm -f "${tmp_report}"' EXIT
 	done
 	echo
 	echo "[dtbs]"
-	find "${module_dir}/dtb" -type f -name '*x13s*.dtb' -print | sort
+	if [[ -d "${module_dir}/dtb" ]]; then
+		find "${module_dir}/dtb" -type f -name '*x13s*.dtb' -print | LC_ALL=C sort
+	fi
 	x13s_dtb="${module_dir}/dtb/qcom/sc8280xp-lenovo-thinkpad-x13s.dtb"
 	if [[ ! -s "${x13s_dtb}" ]]; then
 		echo "ERROR: Fedora kernel payload has no X13s DTB at ${x13s_dtb}" >&2
