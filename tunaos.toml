@@ -1023,7 +1023,7 @@ emoji = "🎏"
 upstream_track = "experimental"
 description = "Based on Fedora ELN (EL11 preview, rolling)"
 experimental = true
-base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:65cb894471d80a3d62eda87ab37246f7d7d8a87d314adfebf6d1feceb2039390"
+base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:61563a359ce3f05a4740584a38cec087d63210dc364f21d00c2da19698f25c29"
 # No alias: `eln` is Fedora's identifier for a moving development target,
 # and an alias tag is a stability promise this lane deliberately does not
 # make. Revisit if/when ELN gains a versioned publish.
