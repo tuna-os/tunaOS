@@ -140,6 +140,10 @@ def compile_cells(config_path, root=ROOT, identity_staging=False):
     return plan, cells, assets
 
 
+def is_directory_source(path):
+    return path.is_dir() and not path.is_symlink()
+
+
 def prepare(config_path, output, root=ROOT, identity_staging=False):
     reserved = tuple(root / "manifests" / name for name in (
         "fork-config.json", "fork-assets", "fork-identity.json", "fork-identity-assets"))
@@ -163,7 +167,7 @@ def prepare(config_path, output, root=ROOT, identity_staging=False):
         context.mkdir()
         for relative in filter(None, tracked):
             src, dst = root / relative, context / relative
-            if src.is_dir():
+            if is_directory_source(src):
                 raise ConfigError(f"submodule/directory source needs an explicit receipt: {relative}")
             dst.parent.mkdir(parents=True, exist_ok=True)
             if src.is_symlink():
