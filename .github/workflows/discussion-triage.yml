@@ -63,24 +63,22 @@ jobs:
               | jq 'add' > discussions.json
           fi
 
+      - name: Fetch issue trackers
+        run: |
+          set -euo pipefail
+          gh api --paginate --slurp \
+            "repos/${REPO}/issues?state=all&per_page=100" \
+            | jq 'add' > issues.json
+
       - name: Select oldest unanswered Q&A
         run: |
           set -euo pipefail
           python3 scripts/triage-discussions.py \
             --input discussions.json \
+            --existing-issues issues.json \
             --output candidate.json
           if [[ "$(jq -r 'if . == null then "none" else "candidate" end' candidate.json)" == "none" ]]; then
-            echo "No unanswered Q&A discussions."
-            exit 0
-          fi
-
-          marker="$(jq -r '.marker' candidate.json)"
-          existing="$(gh issue list --repo "${REPO}" --state all --limit 1000 \
-            --json number,body \
-            | jq -r --arg marker "${marker}" \
-                'first(.[] | select((.body // "") | contains($marker)) | .number) // empty')"
-          if [[ -n "${existing}" ]]; then
-            echo "Tracker #${existing} already covers the oldest unanswered Q&A."
+            echo "No unanswered Q&A discussions without a tracker."
             exit 0
           fi
 
