@@ -68,6 +68,7 @@ def identifier(value, path):
 def repository_name(value, path):
     if not isinstance(value, str) or not REPOSITORY_NAME.fullmatch(value):
         raise ConfigError(f"{path}: expected lowercase repository name")
+
 @lru_cache(maxsize=1)
 def package_policy():
     spec = importlib.util.spec_from_file_location('tunaos_package_policy', Path(__file__).with_name('tunaos_packages.py'))
