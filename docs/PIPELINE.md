@@ -60,9 +60,10 @@ Stage 4:  gnome-nvidia-hwe                              (layer on gnome-hwe)
 2. **Stage 1** — builds `base` (Containerfile `base-no-de` target)
 3. **Stage 2** — builds DE images via `install-desktop.sh <de>` (reads YAML manifests)
 4. **Stage 3-4** — layers HWE/nvidia via `Containerfile.overlay`
-5. **Rechunk** — chunkah makes ostree-optimized layers for delta updates
-6. **Boot gate** — Corral boots the `-testing` image under QEMU, and Promote waits for the result (see [Boot gates](#boot-gates))
-7. **Publish** — multi-arch manifest pushed to GHCR, signed with cosign
+5. **Rechunk** — chunkah makes ostree-optimized layers for delta updates. The relabel stage writes `/usr/share/tunaos/build-info.json` with image provenance. This prevents an empty filesystem layer.
+6. **Artifact check** — the check runs on zstd layers under 50 bytes after decompression. It accepts tar entries with content and rejects tar layers that are empty.
+7. **Boot gate** — Corral boots the `-testing` image under QEMU, and Promote waits for the result (see [Boot gates](#boot-gates))
+8. **Publish** — multi-arch manifest pushed to GHCR, signed with cosign
 
 ---
 

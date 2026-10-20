@@ -465,18 +465,20 @@ jobs:
           }
           scripts/check-bootc-installable-layers \
             "${IMAGE_REGISTRY}/${IMAGE_NAME}@${REMOTE_IMAGE_DIGEST}"
-      - name: Verify rechunk metadata preserved
+      - name: Verify pushed layer metadata
         if: ${{ inputs.publish }}
         env:
           IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
           IMAGE_NAME: ${{ env.IMAGE_NAME }}
           DEFAULT_TAG: ${{ inputs.default-tag }}
           SAFE_PLATFORM: ${{ matrix.safeplatform }}
+          DIGEST: ${{ steps.push.outputs.remote_image_digest }}
         run: |
           # chunkah packs layers with ostree component annotations; if a
           # podman/skopeo regression strips them during push, client delta
-          # updates silently degrade. Advisory check (warn, don't block).
-          REF="docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}"
+          # updates silently degrade. The annotation check remains advisory.
+          #
+          REF="docker://${IMAGE_REGISTRY}/${IMAGE_NAME}@${DIGEST}"
           RAW=$(sudo skopeo inspect --raw "$REF")
           LAYERS=$(echo "$RAW" | jq '.layers | length')
           ANNOTATED=$(echo "$RAW" | jq '[.layers[].annotations // {} | keys[]] | map(select(test("ostree|chunkah"))) | length')
