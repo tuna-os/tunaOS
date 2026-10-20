@@ -86,9 +86,9 @@ map_ref() {
 
 @test "FEDORA-BASE-POLICY.md names the file a transition actually has to edit" {
   # A currency policy that does not say where the version lives cannot be
-  # executed. build-config.yml is the authoritative pin; the policy must point
+  # executed. tunaos.toml is the authoritative pin; the policy must point
   # at it, not just at the release cadence.
-  run grep -F 'build-config.yml' "${REPO_ROOT}/FEDORA-BASE-POLICY.md"
+  run grep -F 'tunaos.toml' "${REPO_ROOT}/FEDORA-BASE-POLICY.md"
   [ "$status" -eq 0 ]
 }
 

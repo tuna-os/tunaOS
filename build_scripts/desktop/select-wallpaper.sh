@@ -3,13 +3,9 @@
 #
 #   select-wallpaper.sh <desktop> [root]
 #
-# Artwork is per variant AND per desktop where someone has painted one
-# (wahoo-gnome.jpg: the koinobori scene in GNOME's calm style), else per
-# variant (wahoo.jpg, the rendered emoji scene, which 90-image-info.sh already
-# installed), else the generic TunaOS scene. The winner is copied over
-# tunaos-default.jpg, the one path every desktop's config names, so no desktop
-# needs to know about variants. Runs from both desktop call sites, before the
-# per-desktop branding.
+# Explicit per-desktop artwork wins, then shared anime for the variant. Keep the rendered
+# emoji scene as a fallback: the wallpaper renderer only owns <variant>.jpg.
+# Copy the winner over tunaos-default.jpg, the path every desktop names.
 
 set -euo pipefail
 
@@ -25,7 +21,7 @@ fi
 # gnome-nvidia, kde-cachyos, ... are the same desktop.
 desktop="${desktop%%-*}"
 
-for candidate in "${variant}-${desktop}.jpg" "${variant}.jpg"; do
+for candidate in "${variant}-${desktop}.jpg" "${variant}-anime.jpg" "${variant}.jpg"; do
 	[[ -n "$variant" && -f "${dir}/${candidate}" ]] || continue
 	install -m0644 "${dir}/${candidate}" "${dir}/tunaos-default.jpg"
 	echo "Wallpaper: ${candidate} (variant=${variant} desktop=${desktop})"
