@@ -144,15 +144,18 @@ def prune_steps() -> list[tuple[str, str, list[tuple[str, str]]]]:
                 pattern = filter_pattern
             rules.append((kind, pattern))
         if "--filter-from" in code:
-            with tempfile.NamedTemporaryFile(mode="w", suffix=".json") as config_json:
-                json.dump(yaml.safe_load(CONFIG.read_text(encoding="utf-8")), config_json)
-                config_json.flush()
+            with tempfile.TemporaryDirectory() as directory:
+                config_json = Path(directory) / "build-config.json"
+                config_json.write_text(
+                    json.dumps(yaml.safe_load(CONFIG.read_text(encoding="utf-8"))),
+                    encoding="utf-8",
+                )
                 generated = subprocess.run(
                     [
                         sys.executable,
                         str(POLICY),
                         "--config-json",
-                        config_json.name,
+                        str(config_json),
                         "retention-filters",
                     ],
                     text=True,

@@ -247,6 +247,8 @@ def read_matrix() -> dict[str, Any]:
         raise PolicyError(f"matrix input is not JSON: {exc}") from exc
     if not isinstance(matrix, dict) or not isinstance(matrix.get("include"), list):
         raise PolicyError("matrix input must be an object with an include list")
+    if not all(isinstance(row, dict) for row in matrix["include"]):
+        raise PolicyError("matrix include entries must be objects")
     return matrix
 
 
@@ -288,6 +290,13 @@ def object_is_retained(config: dict[str, Any], object_name: str) -> bool:
     return object_name in retained_isos(policy_for(config))
 
 
+def print_retained_objects(config: dict[str, Any]) -> None:
+    for iso in retained_isos(policy_for(config)):
+        print(iso)
+        print(f"{iso}.sha256")
+        print(f"{iso}.sigstore.json")
+
+
 def print_retention_filters(config: dict[str, Any]) -> None:
     policy = policy_for(config)
     for iso in retained_isos(policy):
@@ -317,7 +326,7 @@ def parse_args() -> argparse.Namespace:
         "command",
         choices=(
             "validate", "annotate-target-matrix", "annotate-group-matrix",
-            "retention-filters", "object-protected",
+            "retained-objects", "retention-filters", "object-protected",
         ),
     )
     parser.add_argument("--object")
@@ -335,6 +344,8 @@ def main() -> int:
             annotate_targets(config, active)
         elif args.command == "annotate-group-matrix":
             annotate_groups(config, active)
+        elif args.command == "retained-objects":
+            print_retained_objects(config)
         elif args.command == "retention-filters":
             print_retention_filters(config)
         else:

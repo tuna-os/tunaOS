@@ -363,12 +363,17 @@ def test_stable_download_failure_can_fallback_but_resolved_cannot():
 
 
 @pytest.mark.parametrize(
-    ("resolver_mode", "expected_status"),
-    [("absent", 0), ("read-error", 1), ("empty", 1), ("invalid", 1),
-     ("download-error", 1)],
+    ("resolver_mode", "expected_status", "expected_error"),
+    [
+        ("absent", 0, None),
+        ("read-error", 1, "Cannot read resolver fish-latest.json"),
+        ("empty", 1, "Empty resolver fish-latest.json"),
+        ("invalid", 1, "Invalid resolver fish-latest.json"),
+        ("download-error", 1, "Resolver target snapshot.iso is unavailable"),
+    ],
 )
 def test_resolver_download_falls_back_only_when_resolver_is_absent(
-    tmp_path, resolver_mode, expected_status
+    tmp_path, resolver_mode, expected_status, expected_error
 ):
     script = (
         download_step()["run"]
@@ -381,9 +386,11 @@ def test_resolver_download_falls_back_only_when_resolver_is_absent(
     rclone = fake_bin / "rclone"
     rclone.write_text(
         "#!/bin/sh\n"
+        "resolver=''\n"
+        "for arg do case \"$arg\" in /*.json) resolver=${arg#/} ;; esac; done\n"
         "case \"$1:$RESOLVER_MODE\" in\n"
         "  lsf:absent) exit 0 ;;\n"
-        "  lsf:*) printf 'fish-gnome-latest.json\\n' ;;\n"
+        "  lsf:*) printf '%s\\n' \"$resolver\" ;;\n"
         "  cat:read-error) exit 1 ;;\n"
         "  cat:empty) exit 0 ;;\n"
         "  cat:invalid) printf '{}\\n' ;;\n"
@@ -411,5 +418,5 @@ def test_resolver_download_falls_back_only_when_resolver_is_absent(
     if resolver_mode == "absent":
         assert "fish-gnome-latest.iso" in github_env.read_text()
     else:
-        assert "refusing" in proc.stderr
+        assert expected_error in proc.stderr
         assert not github_env.exists()
