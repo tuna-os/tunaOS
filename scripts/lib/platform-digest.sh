@@ -12,13 +12,19 @@ platform_manifest_digest() {
 
 	local -a override=(--override-os "$os" --override-arch "$arch")
 	[[ -z "${variant:-}" ]] || override+=(--override-variant "$variant")
-	if digest="$(skopeo inspect "${override[@]}" --format '{{.Digest}}' \
-		"containers-storage:${image}" 2>/dev/null)" &&
-		[[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+	local inspect_output
+	if inspect_output="$(skopeo inspect "${override[@]}" --format '{{.Digest}}' \
+		"containers-storage:${image}" 2>&1)" &&
+		[[ "$inspect_output" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+		digest="$inspect_output"
 		printf '%s\n' "$digest"
 		return 0
 	fi
 
-	echo "platform digest: cannot resolve ${platform} from local image ${image}" >&2
+	local reason="${inspect_output//$'\n'/ }"
+	if ((${#reason} > 240)); then
+		reason="${reason:0:237}..."
+	fi
+	echo "platform digest: cannot resolve ${platform} from local image ${image}: ${reason:-skopeo returned no diagnostic}" >&2
 	return 1
 }

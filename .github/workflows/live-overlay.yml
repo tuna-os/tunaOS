@@ -297,11 +297,13 @@ jobs:
             registry_token="$(
               printf 'user = "%s:%s"\n' "$GITHUB_ACTOR" "$GH_TOKEN" |
                 curl --config - --fail --silent --show-error \
+                  --retry 5 --retry-delay 2 --retry-max-time 60 \
                   "https://ghcr.io/token?service=ghcr.io&scope=repository:tuna-os/live-overlay:pull,push" |
                 jq -er .token
             )"
             printf 'header = "Authorization: Bearer %s"\n' "$registry_token" |
               curl --config - --fail --silent --show-error \
+                --retry 5 --retry-delay 2 --retry-max-time 60 \
                 --request PUT \
                 --header "Content-Type: application/vnd.oci.image.manifest.v1+json" \
                 --data-binary "@${annotated}" \

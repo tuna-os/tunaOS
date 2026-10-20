@@ -50,11 +50,18 @@ PYEOF
 }
 
 installer_asset_for_arch() {
-	if [[ "$1" == "x86_64" ]]; then
-		printf '%s\n' "org.bootcinstaller.Installer.flatpak"
-	else
-		printf '%s\n' "org.bootcinstaller.Installer-$1.flatpak"
-	fi
+	case "${1,,}" in
+		x86_64|amd64|linux/amd64|linux/amd64/v2)
+			printf '%s\n' "org.bootcinstaller.Installer.flatpak"
+			;;
+		aarch64|arm64|linux/arm64)
+			printf '%s\n' "org.bootcinstaller.Installer-aarch64.flatpak"
+			;;
+		*)
+			echo "customize-live: unsupported installer architecture: $1" >&2
+			return 2
+			;;
+	esac
 }
 
 # Behavior probe for the architecture-specific release asset. Unlike the

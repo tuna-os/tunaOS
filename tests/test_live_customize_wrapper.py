@@ -38,6 +38,8 @@ def test_overlay_staging_tags_are_unique_per_run_and_attempt():
 
     workflow = yaml.safe_load((ROOT / ".github/workflows/live-overlay.yml").read_text())
     step = next(step for job in workflow["jobs"].values() for step in job.get("steps", []) if step.get("name") == "Run live customize and publish overlay")
+    assert step["run"].count("--retry 5") >= 2
+    assert "--retry-max-time 60" in step["run"]
     assignment = next(line.strip() for line in step["run"].splitlines() if line.strip().startswith('OUT='))
     tags = set()
     for run, attempt in [("123", "1"), ("124", "1"), ("123", "2")]:
