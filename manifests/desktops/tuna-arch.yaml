@@ -25,6 +25,8 @@ packages:
     # ships its own greeter, and nothing on Marlin may enable a second
     # display manager to race it for seat0/VT1.
     - gdm
+    - accountsservice
+    - glib2-devel
     - xorg-xwayland
     - ibus
     # Screen Reader: Tuna Desktop starts and stops Orca from GNOME's
@@ -61,6 +63,7 @@ packages:
 versionlock: []
 post_install:
   - tuna-flatpak-remote.sh
+  - tuna-gdm.sh
   # No greetd-system-integration.sh (it points display-manager.service at
   # greetd) and no greetd-gtkgreet.sh (nothing installs gtkgreet on Marlin,
   # and the script no-ops without it): GDM owns the login screen here.

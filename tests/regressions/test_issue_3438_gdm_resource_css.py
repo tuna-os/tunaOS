@@ -1,4 +1,9 @@
-"""GDM's resource verifier must accept the stylesheet layouts its hook writes."""
+"""tunaOS#3438: GDM's resource verifier must accept the stylesheet layouts its hook writes.
+
+Falsification: root-only selectors reject the nested Yaru stylesheet fixtures,
+while the behavioral rebuild tests verify root and nested resources preserve
+non-CSS assets and leave the original resource untouched on compile failure.
+"""
 
 import os
 from pathlib import Path
