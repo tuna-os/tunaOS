@@ -383,4 +383,13 @@ def test_iso_prune_protects_resolved_snapshot_and_sidecars(tmp_path):
     positions = [filter_lines.index(rule) for rule in protected]
     first_include = filter_lines.index("+ *.iso")
     assert max(positions) < first_include
+    rules = [
+        ("include" if line.startswith("+ ") else "exclude", line[2:])
+        for line in filter_lines
+        if line.startswith(("+ ", "- "))
+    ]
+    assert verdict("snapshot.iso", rules) == "keep"
+    assert verdict("snapshot.iso.sha256", rules) == "keep"
+    assert verdict("snapshot.iso.sigstore.json", rules) == "keep"
+    assert verdict("superseded-snapshot.iso", rules) == "delete"
     assert "- *" in filter_lines
