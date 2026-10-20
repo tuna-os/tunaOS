@@ -33,6 +33,7 @@ def main():
                     raise tunaos_config.ConfigError(f'{target}: refusing symlink')
                 target.write_text(content, encoding='utf-8')
             print(target)
+            return 0
         elif args.command == 'verify-debian-image':
             if not all((args.image, args.variant, args.desktop, args.platform)):
                 parser.error('verify-debian-image requires --image, --variant, --desktop and --platform')
