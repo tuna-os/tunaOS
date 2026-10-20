@@ -211,3 +211,8 @@ replace a canonical variant name or a declared publish name.
 ISO live flavors and offline payloads are separate lists. A GNOME NVIDIA live
 image can carry non-NVIDIA GNOME in its offline store. Both lists must name
 flavors that exist in the matrix.
+
+The Marlin GDM override also belongs to `[desktops.tuna-arch]`. Its generated
+adapter has the same precedence as the former tracked YAML. The regression
+fixture at commit `aa9810e9` preserves the complete package and hook contract;
+other Tuna Desktop cells retain their existing display manager.

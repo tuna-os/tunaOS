@@ -29,7 +29,7 @@ def test_complete_ordered_profile_parity(name):
 
 
 def test_live_primary_source_owns_all_profiles():
-    assert len(r.legacy_profiles(live()))==15
+    assert len(r.legacy_profiles(live()))==16
     d=live()
     d['desktops']['gnome-debian']['packages']['apt']['required'].append('fixture-native-tool')
     assert r.resolve(d,'gnome',manager='apt',os_id='debian')['sections'][-1][1]['required'][-1]=='fixture-native-tool'
