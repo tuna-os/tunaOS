@@ -51,6 +51,11 @@ teardown() {
   run grep -F "upload-r2: \${{ inputs.skip_upload != true && !matrix.r2_cutover }}" "$PUBLISH_WF"
   [ "$status" -eq 0 ]
 }
+@test "manual publisher annotates its matrix before applying cutover gating" {
+  grep -q 'annotate-target-matrix' "$PUBLISH_WF"
+  grep -q 'r2_cutover' "$PUBLISH_WF"
+}
+
 
 @test "publish-isos exists as an opt-in and is off by default" {
   run grep -A9 '^      publish-isos:' "$VARIANT_WF"
@@ -76,6 +81,15 @@ teardown() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"if: inputs.upload-r2"* ]]
 }
+@test "the shared uploader rechecks the exact cutover policy" {
+  local gate
+  gate="$(grep -n 'name: Enforce R2 cutover policy' "$ARTIFACTS_WF" | cut -d: -f1)"
+  [ -n "$gate" ]
+  sed -n "${gate},$((gate + 30))p" "$ARTIFACTS_WF" | grep -q 'annotate-target-matrix'
+  sed -n "${gate},$((gate + 30))p" "$ARTIFACTS_WF" | grep -q 'r2_cutover'
+  sed -n "${gate},$((gate + 30))p" "$ARTIFACTS_WF" | grep -q 'refusing a caller upload override'
+}
+
 
 @test "the checked-in empty policy validates and keeps normal publication" {
   yq -o=json '.' "$CONFIG" > "$TEST_TMPDIR/config.json"

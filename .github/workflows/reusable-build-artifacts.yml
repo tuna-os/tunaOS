@@ -128,6 +128,7 @@ jobs:
       - name: Setup yq
         uses: ./.github/actions/setup-yq
       - name: Fetch the digest this run published for this cell
+
         id: cell_digest
         if: inputs.image-digest-artifact != ''
         continue-on-error: true
@@ -135,6 +136,27 @@ jobs:
         with:
           name: ${{ inputs.image-digest-artifact }}
           path: /tmp/cell-digest
+      - name: Enforce R2 cutover policy
+        if: inputs.upload-r2
+        env:
+          VARIANT: ${{ inputs.variant }}
+          FLAVOR: ${{ inputs.flavor }}
+          PLATFORM: ${{ inputs.platform }}
+        run: |
+          set -euo pipefail
+          CONFIG_JSON="${RUNNER_TEMP}/build-config.json"
+          yq -o=json '.' .github/build-config.yml > "$CONFIG_JSON"
+          matrix="$(jq -cn \
+            --arg variant "$VARIANT" \
+            --arg flavor "$FLAVOR" \
+            --arg platform "$PLATFORM" \
+            '{include: [{variant: $variant, flavor: $flavor, platform: $platform}]}')"
+          annotated="$(printf '%s\n' "$matrix" | python3 scripts/iso-delivery-policy.py \
+            --config-json "$CONFIG_JSON" annotate-target-matrix)"
+          if jq -e '.include[0].r2_cutover == true' <<<"$annotated" >/dev/null; then
+            echo "::error::${VARIANT}:${FLAVOR}:${PLATFORM} is in the R2 cutover set; refusing a caller upload override."
+            exit 1
+          fi
 
       - name: "Provenance gate: this run published the image this ISO is built from"
         if: inputs.image-digest-artifact != ''
