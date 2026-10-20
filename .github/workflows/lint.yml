@@ -52,6 +52,9 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Validate and prepare primary configuration
+        uses: ./.github/actions/prepare-config
+
       - name: Setup Homebrew
         uses: Homebrew/actions/setup-homebrew@2ebcf16054461267868620b1414507f3ccc765c1 # main as of 2026-06-09
 

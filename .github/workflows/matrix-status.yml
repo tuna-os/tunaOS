@@ -19,7 +19,9 @@ on:
       - "scripts/gen-matrix-status.py"
       - "scripts/gen-platform-coverage.py"
       - "scripts/matrix_evaluator.py"
-      - ".github/build-config.yml"
+      - "tunaos.toml"
+      - "scripts/config.py"
+      - "scripts/lib/tunaos_config.py"
       - "docs/MATRIX-STATUS.md"
       - "ROADMAP.md"
 
@@ -58,6 +60,9 @@ jobs:
 
       - name: Install deps
         run: pip install --quiet pyyaml
+
+      - name: Prepare build configuration
+        uses: ./.github/actions/prepare-config
 
       - name: Regenerate
         if: github.event_name != 'pull_request'
