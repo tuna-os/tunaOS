@@ -755,14 +755,15 @@ if [[ "${_TD_OS}" == "el10" || "${_TD_OS}" == "fedora" || "${_TD_OS}" == "rawhid
 		for exc in "${_TD_EXCLUDES[@]}"; do
 			[[ -n "$exc" ]] && _TD_EXCL_ARGS+=("-x" "$exc")
 		done
-		# Hummingbird's ordinary desktop lists remain best-effort because their
-		# upstream package gap is measured separately. Tuna is admitted only
-		# with a complete required package set, so its strict path must fail
-		# rather than turn a missing package into a wishlist entry.
+		# Hummingbird's ordinary non-Tuna desktop lists remain best-effort
+		# because their upstream package gap is measured separately. Tuna is
+		# admitted only with a complete required package set, so its strict
+		# path must fail rather than turn a missing package into a wishlist
+		# entry.
 		install_dnf_packages "${_TD_PKGS[@]}"
-		if [[ "${IS_HUMMINGBIRD:-false}" == "true" ]]; then
-			# Whichever tolerant branch ran, --skip-unavailable can have
-			# dropped packages without saying so; record what landed.
+		if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${_TD_DESKTOP}" != "tuna" ]]; then
+			# The tolerant path can drop packages without saying so; record
+			# what landed for the non-Tuna Hummingbird desktop.
 			record_unsatisfied_requests "install-desktop.sh:${_TD_DESKTOP}" "${_TD_PKGS[@]}"
 		fi
 	fi

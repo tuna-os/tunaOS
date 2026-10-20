@@ -109,6 +109,14 @@ def test_every_hummingbird_exemption_counts_what_it_waives():
         f"{exemptions} require_* exemptions but only {counted} call waive() — "
         "an uncounted exemption can still report a pass over a broken image"
     )
-    assert src.count(
-        '&& "${desktop:-}" != cosmic && "${desktop:-}" != tuna'
-    ) == exemptions
+    guard_re = re.compile(
+        r'if\s+\[\[\s*(?P<condition>[^\]]*IS_HUMMINGBIRD[^\]]*==\s*"true"[^\]]*)\]\]\s*;\s*then',
+        re.S,
+    )
+    guard_conditions = [match.group("condition") for match in guard_re.finditer(src)]
+    assert len(guard_conditions) == exemptions
+    assert all(
+        re.search(r'\$\{desktop:-\}"?\s*!=\s*cosmic', condition)
+        and re.search(r'\$\{desktop:-\}"?\s*!=\s*tuna', condition)
+        for condition in guard_conditions
+    )
