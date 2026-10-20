@@ -1416,6 +1416,7 @@ build_iso = true
 # about wanting kde or niri on hummingbird; it is a statement that they
 # do not exist yet and should not be advertised as though they do.
 id = "cosmic"
+platforms = ["linux/amd64"]
 stage = 2
 build_image = true
 build_iso = true
