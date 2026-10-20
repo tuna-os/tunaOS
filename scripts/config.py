@@ -9,7 +9,7 @@ from lib import tunaos_config, iso_builder_config
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=('validate', 'generate', 'show', 'generate-builder-config', 'check-builder-config', 'generate-builder-flavors', 'check-builder-flavors', 'generate-debian-contract', 'prepare-debian-context', 'verify-debian-image'))
+    parser.add_argument('command', choices=('validate', 'generate', 'show', 'generate-builder-config', 'check-builder-config', 'generate-builder-flavors', 'check-builder-flavors', 'generate-flatpak-policy', 'check-flatpak-policy', 'generate-debian-contract', 'prepare-debian-context', 'verify-debian-image'))
     parser.add_argument('--root', type=Path, default=tunaos_config.ROOT)
     parser.add_argument('--output', type=Path)
     parser.add_argument('--image')
@@ -18,7 +18,18 @@ def main():
     parser.add_argument('--platform')
     args = parser.parse_args()
     try:
-        if args.command in ('generate-builder-config', 'check-builder-config', 'generate-builder-flavors', 'check-builder-flavors'):
+        if args.command in ('generate-flatpak-policy', 'check-flatpak-policy'):
+            content = tunaos_config.flatpak_policy().render(tunaos_config.load(args.root / 'tunaos.toml'))
+            target = args.output or args.root / 'build_scripts/desktop/flatpak-preinstall.tsv'
+            if target.is_symlink() or any(parent.is_symlink() for parent in target.parents):
+                raise tunaos_config.ConfigError('generated Flatpak policy path must not be a symlink')
+            if args.command.startswith('check-'):
+                if not target.is_file() or target.read_text(encoding='utf-8') != content:
+                    raise tunaos_config.ConfigError('generated Flatpak policy drift; run generate-flatpak-policy')
+            else:
+                target.write_text(content, encoding='utf-8')
+            print(target)
+        elif args.command in ('generate-builder-config', 'check-builder-config', 'generate-builder-flavors', 'check-builder-flavors'):
             flavors = args.command.endswith('-flavors')
             render = iso_builder_config.render_flavors if flavors else iso_builder_config.render
             content = render(tunaos_config.load(args.root / 'tunaos.toml'))

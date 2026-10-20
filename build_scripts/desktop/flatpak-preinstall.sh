@@ -3,9 +3,8 @@
 # and make sure the mechanism that installs it actually runs.
 #
 # Sourced by install-desktop.sh via each desktop manifest's post_install
-# list, AFTER any desktop-specific script that writes its own preinstall
-# file (kcm-ublue.sh writes bazaar.preinstall on dnf KDE images), so the
-# already-declared guard below keeps entries unique across files.
+# list. The already-declared guard keeps inherited entries unique across
+# files. This recipe owns new declarations through primary TOML.
 #
 # WHY. TunaOS images shipped with no browser and — outside dnf KDE and the
 # zirconium niri payload — no software store: gnome-software is deliberately
@@ -20,14 +19,10 @@
 # favorite-apps pins org.mozilla.firefox.desktop and its setup hook installs
 # the Firefox flatpak's systemconfig extension).
 #
-# The common curated set is deliberately small:
-#   io.github.kolunmi.Bazaar   the software store (every desktop; replaces
-#                              the excluded gnome-software / hidden discover)
-#   org.mozilla.firefox        the browser (every desktop; Bluefin's choice)
-# GNOME additionally gets Extension Manager. It provides an explicit,
-# user-controlled route to extensions without baking any extension into the
-# image. Per-desktop additions need a matching assertion in
-# verify-desktop-experience.sh — assert exactly what is added.
+# The primary TOML owns the declaration set. Its generated adapter is copied
+# into the image so the build/runtime verifier reads the same intended policy.
+# These are declarations, not installed inventory or verified remote identity.
+# Independent fixture tests pin the pre-migration behavior.
 #
 # Test hooks: TUNAOS_PREINSTALL_DIR and TUNAOS_SYSTEMD_SYSTEM_DIR redirect
 # the paths (same pattern as 40-services.sh); systemctl resolves via PATH.
@@ -42,29 +37,43 @@ _FP_FILE="${_FP_DIR}/tunaos-${_FP_DESKTOP}.preinstall"
 mkdir -p "$_FP_DIR"
 
 _fp_declared() {
-	grep -rqs "^\[Flatpak Preinstall $1\]" "$_FP_DIR"
+	grep -rFxsq -- "[Flatpak Preinstall $1]" "$_FP_DIR"
 }
 
 _fp_add_app() {
-	local app="$1"
+	local app="$1" branch="$2"
 	if _fp_declared "$app"; then
 		echo "flatpak-preinstall: ${app} already declared, skipping"
 		return 0
 	fi
 	{
 		echo "[Flatpak Preinstall ${app}]"
-		echo "Branch=stable"
+		echo "Branch=${branch}"
 		echo "IsRuntime=false"
 		echo
 	} >>"$_FP_FILE"
 	echo "flatpak-preinstall: declared ${app} for ${_FP_DESKTOP}"
 }
 
-_fp_add_app io.github.kolunmi.Bazaar
-_fp_add_app org.mozilla.firefox
-if [[ "$_FP_DESKTOP" == "gnome" ]]; then
-	_fp_add_app com.mattjakeman.ExtensionManager
-fi
+_FP_POLICY="$(dirname -- "${BASH_SOURCE[0]}")/flatpak-preinstall.tsv"
+[[ -f "$_FP_POLICY" ]] || {
+	echo "missing generated Flatpak policy" >&2
+	exit 1
+}
+_FP_INSTALLED_POLICY="${_FP_DIR}/../tunaos-preinstall-policy.tsv"
+[[ ! -L "$_FP_INSTALLED_POLICY" ]] || {
+	echo "refusing linked Flatpak policy" >&2
+	exit 1
+}
+: >"$_FP_INSTALLED_POLICY"
+chmod 0644 "$_FP_INSTALLED_POLICY"
+while IFS=$'\t' read -r _fp_scope _fp_app _fp_branch; do
+	[[ "$_fp_scope" == '#'* || -z "$_fp_scope" ]] && continue
+	if [[ "$_fp_scope" == '*' || "$_fp_scope" == "$_FP_DESKTOP" ]]; then
+		printf '%s\t%s\t%s\n' "$_fp_scope" "$_fp_app" "$_fp_branch" >>"$_FP_INSTALLED_POLICY"
+		_fp_add_app "$_fp_app" "$_fp_branch"
+	fi
+done <"$_FP_POLICY"
 
 # A preinstall file with nothing to run it is decoration. flatpak ships the
 # unit on current Fedora/EL; where a base does not ship it yet, say so
