@@ -70,7 +70,7 @@ future support.
 | GUI installer recipe | The recipe has `bootloader`, `composeFsBackend`, and `filesystem` fields. [`live-iso/common/src/installer-recipe-backend.sh`](../../live-iso/common/src/installer-recipe-backend.sh) derives those three values from image contents. [`customize-live.sh`](../../live-iso/common/src/customize-live.sh) rewrites the recipe at ISO build time. | A sealed-UKI capability and its negative cases are not represented. `systemd` plus `composeFsBackend=true` is not a signed-UKI declaration. |
 | Fisherman path | The ISO E2E harness probes the image, writes a fisherman recipe, and runs the installer bundled by the selected frontend. The same file documents the current recipe's `to-filesystem` path. A separate generic LUKS test still invokes `bootc install to-disk` directly. | The installer must expose an explicit sealed-UKI capability. A plain bootc/fisherman success cannot be promoted to sealed-UKI support. |
 | Secure Boot | [`docs/SECURE-BOOT.md`](../SECURE-BOOT.md) describes current variant-level Secure Boot behavior. It does not qualify a new UKI chain, SBAT/revocation behavior, or a sealed-image update path. | The mode needs artifact-specific trust evidence, including negative tests. Existing variant prose is not a substitute. |
-| Lifecycle | The bootc lifecycle workflow tests update, rebase, and rollback for bootc deployments. | A sealed-UKI lifecycle must additionally prove UKI byte preservation, ESP capacity, loader selection, target-only boot, and recovery. |
+| Lifecycle | [`bootc-lifecycle.yml`](../../.github/workflows/bootc-lifecycle.yml) checks published-image metadata, aliases, install configuration, and selected desktop contracts. It does not update, rebase, or roll back an installed deployment. | A sealed-UKI lifecycle must additionally prove UKI byte preservation, ESP capacity, loader selection, target-only boot, and recovery. |
 | Browser/native media | Native and browser-produced ISO paths are separate delivery tracks; parity is tracked by #3470. | Qualification MUST identify both media producers. Passing a native ISO does not qualify a browser-produced ISO. |
 | Historical DDI work | [`docs/mkosi-investigation.md`](../mkosi-investigation.md) and [ADR 0003](../adr/0003-mkosi-co-build-poc.md) distinguish bootc OCI output from the systemd-sysupdate + dm-verity + UKI DDI model. The DDI investigation did not produce a boot proof. | A DDI/UKI design is a separate deployment model, not a transparent second packaging of the current OCI image. |
 
@@ -88,7 +88,7 @@ These references constrain the design; none authorizes a TunaOS implementation.
 - [bootc #2132](https://github.com/bootc-dev/bootc/issues/2132) is specifically about ESP capacity for current, next, and rollback UKIs. It is not evidence that every sealed image has enough space. [bootc #2532](https://github.com/bootc-dev/bootc/pull/2532) remains open for a systemd 262/repart sizing follow-up.
 - [bootc #2512](https://github.com/bootc-dev/bootc/pull/2512) remains open because systemd-boot can bypass shim when bootupd does not own the install. Its description separates the shim chain from a direct systemd-boot install. It also notes that its Secure Boot tests run with Secure Boot disabled.
 - [fisherman #28](https://github.com/frostyard/fisherman/pull/28) records a signed-byte mutation caused by a UKI section read with `objcopy` without an output file. It also records that the suspected bootc mutation was a misattribution. A future verifier MUST use read-only inspection and hash the artifact before and after each handoff.
-- The correction in [snosi #516](https://github.com/snosi/snosi/issues/516#issuecomment-5207120626) keeps this issue separate from the fisherman defect. The two findings MUST NOT combine into an unsupported claim about a particular TunaOS build.
+- The correction in [snosi #516](https://github.com/frostyard/snosi/issues/516#issuecomment-5207120626) keeps this issue separate from the fisherman defect. The two findings MUST NOT combine into an unsupported claim about a particular TunaOS build.
 
 ## Proposed versioned contract
 
@@ -227,8 +227,11 @@ must choose one model before implementation begins.
 The recommended next action is a maintainer-reviewed choice between these
 models, followed by one disposable **plain** target. The first prototype MUST
 not change the production matrix, replace current artifacts, or include
-LUKS/TPM qualification. Use an ADR only after the maintainer approves that
-architecture. This draft is not an ADR.
+LUKS/TPM qualification. This draft is not implementation approval.
+Under [`RFC-PROCESS.md`](../../RFC-PROCESS.md), a companion ADR MUST be
+recorded when this contract/investigation scope is approved and merged; that
+ADR records the scope and the non-implementation boundary. A later ADR records
+the chosen architecture after the maintainer approves it.
 
 ## Sequencing
 
