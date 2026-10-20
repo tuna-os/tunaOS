@@ -26,7 +26,7 @@ packages:
     # display manager to race it for seat0/VT1.
     - gdm
     - accountsservice
-    - glib2-devel
+    - glib2
     - xorg-xwayland
     - ibus
     # Screen Reader: Tuna Desktop starts and stops Orca from GNOME's

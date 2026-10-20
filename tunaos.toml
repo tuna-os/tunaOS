@@ -3810,7 +3810,7 @@ required = [
   "tunaos/tuna-desktop=1.0.0beta.1-1",
   "gdm",
   "accountsservice",
-  "glib2-devel",
+  "glib2",
   "xorg-xwayland",
   "ibus",
   "orca",

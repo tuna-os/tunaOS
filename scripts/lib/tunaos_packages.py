@@ -148,13 +148,11 @@ def validate(document):
             where = f'desktops.{name}.packages.{family}'
             allowed = NATIVE_FIELDS
             if family in {'apt', 'pacman', 'cachyos', 'zypper', 'emerge'}:
-                allowed = {'required', 'include'}
+                allowed = {'required', 'include', 'display_manager'}
                 if family in {'apt', 'cachyos', 'zypper'}:
                     allowed |= {'repos'}
                 if family == 'apt':
                     allowed |= {'ppa'}
-                if family in {'apt', 'zypper'}:
-                    allowed |= {'display_manager'}
             known(policy, allowed, where)
             for key, value in policy.items():
                 if key in LIST_FIELDS | {'include'}:

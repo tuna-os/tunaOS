@@ -20,7 +20,7 @@ packages:
     - gdm
     - accountsservice
     # GDM's compiled GNOME Shell theme is rebuilt by tuna-gdm.sh.
-    - glib2-devel
+    - glib2
     - xorg-xwayland
     - ibus
     # Screen Reader: Tuna Desktop starts and stops Orca from GNOME's
