@@ -68,7 +68,7 @@ The configured image matrix now has 147 cells. Eleven of them are Tuna Desktop (
 
 `.github/green-criteria.yml` sets the bar. The sheet marks a cell green only when every criterion that blocks that cell and applies to it carries a current affirmative result. A criterion that nobody ran, nobody asserted, or that CI skipped renders ⬜, and the sheet does not count it as satisfied. These criteria block today: `builds`, `desktop`, `boots`, `parity`, `no_silent_omissions`.
 
-These criteria stay advisory — the sections below measure them, and they do not block yet: `iso`, `install`, `lifecycle`, `rebuildable`, `arch_honesty`. Unimplemented: . To graduate a criterion, edit `enforcement:` in that file. The table and the README count then tighten with no code change.
+These criteria stay advisory — the sections below measure them, and they do not block yet: `iso`, `install`, `lifecycle`, `rebuildable`, `arch_honesty`. Unimplemented: none. To graduate a criterion, edit `enforcement:` in that file. The table and the README count then tighten with no code change.
 
 **124 of 147** published cells are composite-green.
 
