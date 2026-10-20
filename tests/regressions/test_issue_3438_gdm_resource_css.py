@@ -1,10 +1,12 @@
 """GDM's resource verifier must accept the stylesheet layouts its hook writes."""
 
+import os
 from pathlib import Path
 import subprocess
 
 
 ROOT = Path(__file__).resolve().parents[2]
+HELPER = ROOT / "build_scripts/desktop/lib/tuna-gdm-resource.sh"
 VERIFY = ROOT / "build_scripts/checks/verify-desktop-experience.sh"
 
 
@@ -36,3 +38,102 @@ esac
             text=True,
         )
         assert (result.returncode == 0) is accepted, (resource, result.stderr)
+
+
+def _run_rebuild(tmp_path: Path, *, compile_failure: bool = False) -> tuple[subprocess.CompletedProcess[str], Path]:
+    resource = tmp_path / "gnome-shell-theme.gresource"
+    resource.write_bytes(b"ORIGINAL RESOURCE")
+    (tmp_path / "gnome-shell-theme.gresource.list").write_text(
+        "\n".join(
+            [
+                "/org/gnome/shell/theme/gnome-shell.css",
+                "/org/gnome/shell/theme/HighContrast/gnome-shell-high-contrast.css",
+                "/org/gnome/shell/theme/assets/logo.svg",
+            ]
+        )
+        + "\n"
+    )
+    theme = tmp_path / "tuna-gdm.css"
+    theme.write_text("/* TunaOS GDM theme overrides */\n")
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    gresource = bin_dir / "gresource"
+    gresource.write_text(
+        """#!/usr/bin/env bash
+set -euo pipefail
+case "$1" in
+  list) cat "$RESOURCE.list" ;;
+  extract) printf 'payload:%s\\n' "$3" ;;
+esac
+"""
+    )
+    compiler = bin_dir / "glib-compile-resources"
+    compiler.write_text(
+        """#!/usr/bin/env bash
+set -euo pipefail
+xml="$1"
+source_dir=""
+target=""
+for arg in "${@:2}"; do
+  case "$arg" in
+    --sourcedir=*) source_dir="${arg#*=}" ;;
+    --target=*) target="${arg#*=}" ;;
+  esac
+done
+if [[ "${FAIL_COMPILE:-0}" == 1 ]]; then
+  exit 7
+fi
+{
+  cat "$xml"
+  while IFS= read -r tag; do
+    relative="${tag#<file>}"
+    relative="${relative%</file>}"
+    cat "$source_dir/$relative"
+  done < <(grep -o '<file>[^<]*</file>' "$xml")
+} >"$target"
+"""
+    )
+    gresource.chmod(0o755)
+    compiler.chmod(0o755)
+    env = os.environ | {
+        "PATH": f"{bin_dir}:{os.environ['PATH']}",
+        "RESOURCE": str(resource),
+        "FAIL_COMPILE": "1" if compile_failure else "0",
+    }
+    result = subprocess.run(
+        [
+            "bash",
+            "-euo",
+            "pipefail",
+            "-c",
+            'source "$1"; tuna_gdm_rebuild_resource "$2" "$3"',
+            "gdm-resource-test",
+            str(HELPER),
+            str(resource),
+            str(theme),
+        ],
+        env=env,
+        text=True,
+        capture_output=True,
+    )
+    return result, resource
+
+
+def test_rebuild_resource_preserves_root_nested_stylesheets_and_assets(tmp_path: Path):
+    result, resource = _run_rebuild(tmp_path)
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "2"
+    rebuilt = resource.read_text()
+    assert "<file>gnome-shell.css</file>" in rebuilt
+    assert "<file>HighContrast/gnome-shell-high-contrast.css</file>" in rebuilt
+    assert "<file>assets/logo.svg</file>" in rebuilt
+    assert rebuilt.count("TunaOS GDM theme overrides") == 2
+    assert "payload:/org/gnome/shell/theme/assets/logo.svg" in rebuilt
+
+
+def test_rebuild_resource_compile_failure_keeps_original(tmp_path: Path):
+    result, resource = _run_rebuild(tmp_path, compile_failure=True)
+
+    assert result.returncode != 0
+    assert resource.read_bytes() == b"ORIGINAL RESOURCE"
