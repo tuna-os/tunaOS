@@ -34,6 +34,27 @@ set -xeuo pipefail
 
 MODULES_ROOT="${TUNAOS_MODULES_ROOT:-/usr/lib/modules}"
 BOOT_DIR="${TUNAOS_BOOT_DIR:-/boot}"
+APT_ROOT="${TUNAOS_APT_ROOT:-/etc/apt}"
+SNAPSHOT_SOURCE_DIR="$APT_ROOT/sources.list.d"
+SNAPSHOT_PREF_DIR="$APT_ROOT/preferences.d"
+APT_OPTIONS=()
+if [[ "$APT_ROOT" != /etc/apt ]]; then
+	mkdir -p "$APT_ROOT/lists/partial" "$APT_ROOT/cache/archives/partial"
+	APT_OPTIONS=(
+		-o "Dir::Etc::sourcelist=/dev/null"
+		-o "Dir::Etc::sourceparts=$SNAPSHOT_SOURCE_DIR"
+		-o "Dir::Etc::preferences=/dev/null"
+		-o "Dir::Etc::preferencesparts=$SNAPSHOT_PREF_DIR"
+		-o "Dir::State::lists=$APT_ROOT/lists"
+		-o "Dir::Cache::archives=$APT_ROOT/cache/archives"
+	)
+fi
+cleanup_snapshot_config() {
+	rm -f "$SNAPSHOT_SOURCE_DIR"/tunaos-nvidia-kernel-snapshot.*.sources
+	rm -f "$SNAPSHOT_PREF_DIR"/tunaos-nvidia-kernel-snapshot.*
+}
+trap cleanup_snapshot_config EXIT
+
 KVER="${1:-}"
 
 # Refuse an empty or malformed kernel name before it reaches the rm -rf below
@@ -57,7 +78,7 @@ series_le() {
 	[[ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | tail -1)" == "$2" ]]
 }
 
-DRIVER="$(apt-cache show --no-all-versions nvidia-kernel-dkms 2>/dev/null | sed -n 's/^Version: //p' | head -1)"
+DRIVER="$(apt-cache "${APT_OPTIONS[@]}" show --no-all-versions nvidia-kernel-dkms 2>/dev/null | sed -n 's/^Version: //p' | head -1)"
 if [[ -z "$DRIVER" ]]; then
 	echo "ERROR: apt has no candidate for nvidia-kernel-dkms; is non-free enabled?" >&2
 	exit 1
@@ -80,9 +101,9 @@ HELD=""
 while read -r cand; do
 	[[ -n "$cand" ]] || continue
 	series_le "$(grep -oE '^[0-9]+\.[0-9]+' <<<"$cand")" "$CEILING" || continue
-	apt-cache show "linux-headers-${cand}" >/dev/null 2>&1 || continue
+	apt-cache "${APT_OPTIONS[@]}" show "linux-headers-${cand}" >/dev/null 2>&1 || continue
 	HELD="$cand"
-done < <(apt-cache pkgnames linux-image- |
+done < <(apt-cache "${APT_OPTIONS[@]}" pkgnames linux-image- |
 	sed -nE "s/^linux-image-([0-9]+\.[0-9]+\.[0-9]+\+deb[0-9]+-${FLAVOUR})$/\1/p" |
 	sort -V)
 
@@ -99,17 +120,17 @@ if [[ -z "$HELD" ]]; then
 		fi
 		echo "==> snapshot fallback selected kernel ${HELD}"
 	else
-		echo "ERROR: nvidia-kernel-dkms ${DRIVER} does not build on kernel ${SERIES} (ceiling ${CEILING})," >&2
-		echo "       and no Debian snapshot fallback is available for this overlay" >&2
+		echo "ERROR: nvidia-kernel-dkms ${DRIVER} does not build on kernel ${SERIES} (ceiling ${CEILING})." >&2
+		echo "       No Debian snapshot fallback is available; refresh the measured snapshot or update the driver ceiling before publishing." >&2
 		exit 1
 	fi
 fi
 
 echo "==> holding kernel at ${HELD}: ${KVER} is above the ${CEILING} ceiling for ${DRIVER_UPSTREAM}"
 export DEBIAN_FRONTEND=noninteractive
-apt-get install -y --no-install-recommends "linux-image-${HELD}"
+apt-get "${APT_OPTIONS[@]}" install -y --no-install-recommends "linux-image-${HELD}"
 # Also removes linux-image-amd64/-generic, which depend on the exact ABI.
-apt-get purge -y "linux-image-${KVER}"
+apt-get "${APT_OPTIONS[@]}" purge -y "linux-image-${KVER}"
 # dracut's initramfs.img (and Containerfile.debian's vmlinuz copy) are not
 # owned by the package, so the purge leaves the tree behind, and
 # verify-nvidia-debian.sh requires exactly one.
