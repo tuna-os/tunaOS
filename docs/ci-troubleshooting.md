@@ -1772,8 +1772,8 @@ need the trusted build receipt before browser qualification can proceed.
 
 ### Catalog admission accepts installation evidence for a different ISO
 
-**Symptom:** A synthetic browser build observation and native qualification
-receipt identify different ISO digests, but the catalog reports `qualified`.
+**Symptom:** Synthetic evidence from the browser build and native test names
+different ISO digests, but the catalog reports `qualified`.
 
 **Measured cause:** At PR #3431 commit `ce442239`, admission matched the browser
 observation to `build_provenance` but did not compare its `iso_digest` with the
@@ -1781,7 +1781,7 @@ native receipt's `resolved_inputs.media`. All four raw/projected receipt cases
 in `test_native_install_and_browser_build_must_identify_the_same_iso` failed
 before the fix, even with valid receipt checksums.
 
-**Fix:** Require those media digests to match. Keep the positive fixture bound
+**Fix:** Check that those media digests match. Keep the positive fixture bound
 to one ISO. The regression changes either media digest, recalculates the receipt
 checksum, and expects admission to fail. The production collector still supplies
 no trusted browser observation, so this fix does not open admission or qualify
@@ -1853,3 +1853,33 @@ Buffer the output of each try. If a page fails, discard all output from that
 try. After three failures, retain the command's exit status and diagnostic.
 Keep README unchanged; do not publish a partial table.
 See `tests/test_readme_status_api_retries.py` for regression tests.
+
+### Fork preparation reports changed sources with a desktop override
+
+Symptom: the test for source receipts rejects a tracked desktop adapter, or preparation
+reports `sources changed during preparation` before a build starts.
+Cause: commit `aa9810e9` added `manifests/desktops/tuna-arch.yaml` after
+TOML became the primary owner of desktop policy. The source index includes this ignored
+path, but `git add --all` in the prepared context omits it.
+
+Fix: `[desktops.tuna-arch]` owns the override for GDM on Marlin in `tunaos.toml`.
+The compiler emits its ignored adapter. The regression test compares every
+package, its order, hooks and display manager with the historical source.
+Other cells still use greetd. No package pin changes in this repair.
+
+### `Test` fails after a `tomli` dependency update
+
+**Symptom:** The `Test` workflow fails in `tests/test_primary_config.py` on
+Python 3.10. `test_parser_keeps_the_shared_toml10_grammar` reports
+`Failed: DID NOT RAISE TOMLDecodeError` for TOML 1.1-only fixtures, and the
+smoke test for Renovate-only changes fails because it runs the same suite.
+
+**Measured cause:** `tomli==2.5.0` accepts trailing commas in inline tables and
+`\xNN` escapes. The repository's Python 3.10/3.11 compatibility contract still
+needs TOML 1.0 grammar; Python 3.11's stdlib `tomllib` rejects both inputs.
+[Run 39421110868](https://github.com/tuna-os/tunaos/actions/runs/39421110868)
+shows the failure after `tomli` 2.5.0 merged.
+
+**Fix:** Keep `tomli` at the last compatible `2.2.1` release and cap Renovate
+updates below `2.5.0`. Lift the cap only when the configuration contract and
+both parser paths move to TOML 1.1 together.
