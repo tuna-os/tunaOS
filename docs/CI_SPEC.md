@@ -27,7 +27,7 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 | `build-archlinuxarm-base.yml` | post-merge + scheduled | Build Arch Linux ARM base | push, `40 2 * * 1`, manual | — |
 | `build-bonito-rawhide.yml` | post-merge + scheduled | Build Bonito-rawhide | `20 15 * * *`, manual | — |
 | `build-bonito.yml` | post-merge + scheduled | Build Bonito | `20 11 * * *`, manual | — |
-| `build-flavor.yml` | post-merge | Build Flavor | manual | — |
+| `build-flavor.yml` | PR-deterministic + manual | Build Flavor | Tuna input paths, manual | — |
 | `build-flounder-sid.yml` | post-merge + scheduled | Build Flounder-sid | `20 23 * * *`, manual | — |
 | `build-flounder.yml` | post-merge + scheduled | Build Flounder | `20 21 * * *`, manual | — |
 | `build-grouper.yml` | post-merge + scheduled | Build Grouper | `20 17 * * *`, manual | — |
@@ -38,7 +38,6 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 | `build-sailfin.yml` | post-merge + scheduled | Build Sailfin | `20 19 * * *`, manual | — |
 | `build-skipjack.yml` | post-merge + scheduled | Build Skipjack | `20 9 * * *`, manual | — |
 | `build-toolchain.yml` | post-merge | build-toolchain | push, manual | — |
-| `build-tuna-pr.yml` | PR-deterministic | Tuna PR images | each PR | — |
 | `build-variant.yml` | PR-deterministic + post-merge + scheduled | Unified Build | caller cadence | — |
 | `build-wahoo.yml` | post-merge | Build Wahoo [experimental] | manual | — |
 | `build-yellowfin.yml` | post-merge + scheduled | Build Yellowfin | `20 0 * * *`, manual | — |
