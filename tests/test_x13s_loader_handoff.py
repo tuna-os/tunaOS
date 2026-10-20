@@ -8,6 +8,8 @@ from types import SimpleNamespace
 import pytest
 
 spec = importlib.util.spec_from_file_location("handoff", Path(__file__).parents[1] / "scripts/test-x13s-loader-handoff.py")
+if spec is None or spec.loader is None:
+    raise RuntimeError("unable to load X13s handoff module")
 handoff = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(handoff)
 
@@ -69,6 +71,11 @@ def test_rejects_duplicate_member():
     data = handoff.newc([("payload", stat.S_IFREG, b"a"), ("./payload", stat.S_IFREG, b"b")])
     with pytest.raises(ValueError, match="duplicate"):
         handoff.member_from_newc(data, "payload")
+
+def test_rejects_normalized_duplicate_member():
+    data = handoff.newc([("a/b", stat.S_IFREG, b"a"), ("a//b", stat.S_IFREG, b"b")])
+    with pytest.raises(ValueError, match="duplicate"):
+        handoff.member_from_newc(data, "a/b")
 
 def test_rejects_invalid_archive_name_encoding():
     data = handoff.newc([("payload", stat.S_IFREG | 0o644, b"bytes")])

@@ -6,6 +6,7 @@ import io
 import json
 import os
 import re
+import subprocess
 from pathlib import Path, PurePosixPath
 import platform
 import stat
@@ -96,6 +97,7 @@ def member_from_newc(data, wanted):
             break
         canonical = name[2:] if name.startswith("./") else name
         path = PurePosixPath(canonical)
+        canonical = path.as_posix()
         if path.is_absolute() or ".." in path.parts or canonical in seen:
             raise ValueError("unsafe or duplicate archive name")
         seen.add(canonical)
