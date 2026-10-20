@@ -51,13 +51,20 @@ def _stub(bindir: Path, name: str, body: str) -> None:
     path.chmod(0o755)
 
 
-def _run(tmp_path: Path, kver: str, driver: str, archive: list[str], snapshot_kernel: str | None = None):
+def _run(tmp_path: Path, kver: str, driver: str, archive: list[str], snapshot_kernel: str | None = None, preexisting_snapshot_config: bool = False):
     modules = tmp_path / "modules"
     apt_root = tmp_path / "apt"
     boot = tmp_path / "boot"
     bindir = tmp_path / "bin"
     for d in (modules / kver, boot, bindir):
         d.mkdir(parents=True, exist_ok=True)
+    if preexisting_snapshot_config:
+        source = apt_root / "sources.list.d/tunaos-nvidia-kernel-snapshot.preexisting.sources"
+        preference = apt_root / "preferences.d/tunaos-nvidia-kernel-snapshot.preexisting"
+        source.parent.mkdir(parents=True)
+        preference.parent.mkdir(parents=True)
+        source.write_text("keep\n")
+        preference.write_text("keep\n")
     (modules / kver / "initramfs.img").write_bytes(b"old")
     log = tmp_path / "apt.log"
     pkgnames = "\n".join(
@@ -290,6 +297,17 @@ def test_no_kernel_under_the_ceiling_fails_loudly(tmp_path):
     assert trees == ["7.2.7+deb14-amd64"] and calls == []
 
 
+def test_preexisting_snapshot_config_survives_cleanup(tmp_path):
+    proc, _, _, _ = _run(
+        tmp_path,
+        "7.2.7+deb14-amd64",
+        "550.163.01-5.1",
+        ["7.2.6+deb14-amd64", "7.2.7+deb14-amd64"],
+        snapshot_kernel="7.1.13+deb14-amd64",
+        preexisting_snapshot_config=True,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert (tmp_path / "apt/sources.list.d/tunaos-nvidia-kernel-snapshot.preexisting.sources").read_text() == "keep\n"
 def test_shipped_snapshot_helper_is_invocable_without_execute_bits():
     assert SNAPSHOT.stat().st_mode & 0o111 == 0
     assert 'HELD="$(bash "$SNAPSHOT_SCRIPT"' in HOLD.read_text(encoding="utf-8")

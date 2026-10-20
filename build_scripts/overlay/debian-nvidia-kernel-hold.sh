@@ -52,9 +52,30 @@ if [[ "$APT_ROOT" != /etc/apt ]]; then
 		-o "Dir::Cache::archives=$APT_ROOT/cache/archives"
 	)
 fi
+SNAPSHOT_SOURCE_OLD=()
+for path in "$SNAPSHOT_SOURCE_DIR"/tunaos-nvidia-kernel-snapshot.*.sources; do
+	[[ -e "$path" || -L "$path" ]] && SNAPSHOT_SOURCE_OLD+=("$path")
+done
+SNAPSHOT_PREF_OLD=()
+for path in "$SNAPSHOT_PREF_DIR"/tunaos-nvidia-kernel-snapshot.*; do
+	[[ -e "$path" || -L "$path" ]] && SNAPSHOT_PREF_OLD+=("$path")
+done
 cleanup_snapshot_config() {
-	rm -f "$SNAPSHOT_SOURCE_DIR"/tunaos-nvidia-kernel-snapshot.*.sources
-	rm -f "$SNAPSHOT_PREF_DIR"/tunaos-nvidia-kernel-snapshot.*
+	local path old
+	for path in "$SNAPSHOT_SOURCE_DIR"/tunaos-nvidia-kernel-snapshot.*.sources; do
+		[[ -e "$path" || -L "$path" ]] || continue
+		for old in "${SNAPSHOT_SOURCE_OLD[@]}"; do
+			[[ "$path" == "$old" ]] && continue 2
+		done
+		rm -f -- "$path"
+	done
+	for path in "$SNAPSHOT_PREF_DIR"/tunaos-nvidia-kernel-snapshot.*; do
+		[[ -e "$path" || -L "$path" ]] || continue
+		for old in "${SNAPSHOT_PREF_OLD[@]}"; do
+			[[ "$path" == "$old" ]] && continue 2
+		done
+		rm -f -- "$path"
+	done
 }
 trap cleanup_snapshot_config EXIT
 

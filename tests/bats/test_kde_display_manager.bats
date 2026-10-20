@@ -176,6 +176,9 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
   [ -n "$post_line" ] && [ -n "$preset_line" ] && [ -n "$experience_line" ]
   [ "$preset_line" -gt "$post_line" ]
   [ "$preset_line" -lt "$experience_line" ]
+  run grep -q '/etc/systemd/system-preset/99-tunaos-desktop.preset' "$script"
+  [ "$status" -eq 0 ]
+  [ "$(grep -cF 'write_display_manager_preset "${_TD_PRESET_DM}"' "$script")" -eq 1 ]
 }
 
 # ── Contract checks must accept either unit ───────────────────────────────
