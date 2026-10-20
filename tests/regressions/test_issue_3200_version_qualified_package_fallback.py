@@ -14,7 +14,6 @@ the pinned request.
 
 from __future__ import annotations
 
-import re
 import subprocess
 from pathlib import Path
 
@@ -24,10 +23,23 @@ PACKAGE = "tuna-desktop-1.0.0~beta.1-1.bfin1"
 
 
 def _extract_install_available() -> str:
-    source = LIB.read_text(encoding="utf-8")
-    match = re.search(r"^install_available\(\) \{.*?^\}$", source, re.M | re.S)
-    assert match, "install_available() no longer matches the extracted harness shape"
-    return match.group(0)
+    result = subprocess.run(
+        [
+            "/bin/bash",
+            "-c",
+            'source "$1" >/dev/null 2>&1; declare -f install_available',
+            "build_scripts/lib.sh",
+            str(LIB),
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert result.stdout.startswith("install_available ()"), (
+        "lib.sh no longer exposes install_available as a shell function"
+    )
+    return result.stdout
 
 
 def test_version_qualified_package_is_installed_by_the_retry(tmp_path: Path):
