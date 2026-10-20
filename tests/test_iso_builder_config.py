@@ -18,7 +18,7 @@ SPEC2.loader.exec_module(primary)
 
 
 def config():
-    return builder.project(primary.load())
+    return json.loads((ROOT / 'tests/fixtures/builder-config/v1.json').read_text())
 
 
 def test_generated_artifact_is_exact_primary_projection():
@@ -92,7 +92,7 @@ def test_app_and_channel_references_checked():
 
 def test_primary_default_must_be_build_enabled_cell():
     doc = primary.load()
-    doc['iso_builder']['default_selection']['platform'] = 'linux/amd64/v3'
+    doc['iso_builder']['default_selection']['leaf_id'] = 'yellowfin:gnome:linux/amd64/v3'
     with pytest.raises(builder.ConfigError):
         builder.project(doc)
     doc = primary.load()

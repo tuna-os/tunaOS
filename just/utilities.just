@@ -64,6 +64,7 @@ check: _ensure_check_deps ste
     cd {{ justfile_directory() }}
     python3 "{{ justfile_directory() }}/scripts/config.py" generate >/dev/null || exit 1
     python3 "{{ justfile_directory() }}/scripts/config.py" check-builder-config >/dev/null || exit 1
+    python3 "{{ justfile_directory() }}/scripts/config.py" check-builder-flavors >/dev/null || exit 1
     echo "Checking syntax of shell scripts..."
     find . -not -path './.git/*' -not -path './system_files/usr/share/gnome-shell/extensions/*' -not -path './packages-repo/*' -not -path './.build/*' -iname "*.sh" -type f -exec shellcheck --exclude=SC1091 "{}" ";"
     # `just fix` WROTE shell formatting and nothing ever CHECKED it, so the

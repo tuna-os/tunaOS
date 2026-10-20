@@ -60,9 +60,10 @@ def entries(value, fields):
 
 
 def validate(document):
-    table(document, ('schema_version', 'preview_only', 'brand', 'presentation', 'output', 'desktops', 'variants', 'default_selection', 'curated_app_sets'), ('ddi_channels',))
-    if type(document['schema_version']) is not int or document['schema_version'] != 1:
-        raise ConfigError('schema_version must be integer 1')
+    if not isinstance(document, dict) or type(document.get('schema_version')) is not int or document['schema_version'] not in (1, 2):
+        raise ConfigError('schema_version must be integer 1 or 2')
+    v2 = document['schema_version'] == 2
+    table(document, ('schema_version', 'preview_only', 'brand', 'presentation', 'output', 'desktops', 'default_selection', 'curated_app_sets', 'selection' if v2 else 'variants'), ('ddi_channels',))
     if type(document['preview_only']) is not bool:
         raise ConfigError('preview_only must be boolean')
     brand = document['brand']
@@ -74,17 +75,26 @@ def validate(document):
             url(value, asset=key in ('logo_url', 'favicon_url'))
         else:
             text(value)
-    table(document['presentation'], ('headline', 'intro', 'accent_color'))
-    for value in document['presentation'].values():
-        text(value)
+    table(document['presentation'], ('headline', 'intro', 'accent_color'), ('colors', 'choice_style', 'font_family') if v2 else ())
+    for key in ('headline', 'intro', 'accent_color'):
+        text(document['presentation'][key])
+    for key, allowed in (('choice_style', ('illustrated', 'thumbnail')), ('font_family', ('system', 'inter', 'dm-sans'))):
+        if key in document['presentation'] and document['presentation'][key] not in allowed:
+            raise ConfigError(f'unsupported presentation {key}')
+    if 'colors' in document['presentation']:
+        colors = document['presentation']['colors']
+        table(colors, ('background', 'surface', 'text', 'muted', 'accent', 'accent_text'), ('border', 'hover_surface', 'focus', 'selected_surface'))
+        for color in colors.values():
+            pattern(color, r'#[0-9a-fA-F]{6}')
     pattern(document['presentation']['accent_color'], r'#[0-9a-fA-F]{6}')
     table(document['output'], ('volume_label', 'filename_prefix'))
     pattern(document['output']['volume_label'], r'[A-Z0-9_]{1,32}')
     pattern(document['output']['filename_prefix'], r'[a-z0-9][a-z0-9_-]{0,63}')
-    desktops = entries(document['desktops'], ('id', 'name', 'description', 'default_flatpaks'))
+    desktops = entries(document['desktops'], ('id', 'default_flatpaks') if v2 else ('id', 'name', 'description', 'default_flatpaks'))
     for desktop in document['desktops']:
-        text(desktop['name'])
-        text(desktop['description'])
+        if not v2:
+            text(desktop['name'])
+            text(desktop['description'])
         apps = desktop['default_flatpaks']
         if not isinstance(apps, list):
             raise ConfigError('default_flatpaks must be a list')
@@ -92,22 +102,25 @@ def validate(document):
             pattern(app, r'[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+){2,}')
         if len(apps) != len(set(apps)):
             raise ConfigError('duplicate Flatpak')
-    variants = entries(document['variants'], ('id', 'name'))
-    for variant in document['variants']:
-        text(variant['name'])
-    selection = document['default_selection']
-    if not isinstance(selection, dict) or selection.get('kind') not in ('catalog', 'image'):
-        raise ConfigError('default_selection.kind must be catalog or image')
-    if selection['kind'] == 'catalog':
-        table(selection, ('kind', 'variant', 'flavor', 'platform'))
-        if not isinstance(selection['variant'], str) or not isinstance(selection['flavor'], str) or selection['variant'] not in variants or selection['flavor'] not in desktops:
-            raise ConfigError('default selection must reference configured variant and desktop')
+    if v2:
+        validate_selection(document)
     else:
-        table(selection, ('kind', 'image', 'platform'))
-        # Syntax only. Inspection, relay admission and qualification remain engine policy.
-        pattern(selection['image'], r'[a-z0-9.-]+(?::[0-9]+)?/[a-z0-9._/-]+(?::[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}|@sha256:[0-9a-f]{64})')
-    if selection['platform'] not in ('linux/amd64', 'linux/amd64/v2', 'linux/amd64/v3', 'linux/arm64'):
-        raise ConfigError('unsupported platform')
+        variants = entries(document['variants'], ('id', 'name'))
+        for variant in document['variants']:
+            text(variant['name'])
+        selection = document['default_selection']
+        if not isinstance(selection, dict) or selection.get('kind') not in ('catalog', 'image'):
+            raise ConfigError('default_selection.kind must be catalog or image')
+        if selection['kind'] == 'catalog':
+            table(selection, ('kind', 'variant', 'flavor', 'platform'))
+            if not isinstance(selection['variant'], str) or not isinstance(selection['flavor'], str) or selection['variant'] not in variants or selection['flavor'] not in desktops:
+                raise ConfigError('default selection must reference configured variant and desktop')
+        else:
+            table(selection, ('kind', 'image', 'platform'))
+            # Syntax only. Inspection, relay admission and qualification remain engine policy.
+            pattern(selection['image'], r'[a-z0-9.-]+(?::[0-9]+)?/[a-z0-9._/-]+(?::[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}|@sha256:[0-9a-f]{64})')
+        if selection['platform'] not in ('linux/amd64', 'linux/amd64/v2', 'linux/amd64/v3', 'linux/arm64'):
+            raise ConfigError('unsupported platform')
     entries(document['curated_app_sets'], ('id', 'label', 'desktops', 'url', 'format'))
     for collection in document['curated_app_sets']:
         text(collection['label'])
@@ -132,6 +145,9 @@ def project(primary):
     result = copy.deepcopy(primary['iso_builder'])
     validate(result)
     variants = primary['variants']
+    if result['schema_version'] == 2:
+        validate_primary_selection(primary, result)
+        return result
     if any(item['id'] not in variants for item in result['variants']):
         raise ConfigError('builder variant does not exist in primary matrix')
     selection = result['default_selection']
@@ -145,3 +161,137 @@ def project(primary):
 
 def render(primary):
     return json.dumps(project(primary), ensure_ascii=False, indent=2) + '\n'
+
+
+FACETS = {'family', 'base', 'desktop', 'hardware', 'platform', 'graphics', 'edition', 'gaming_mode', 'channel', 'graphics_generation'}
+PLATFORMS = {'linux/amd64', 'linux/amd64/v2', 'linux/amd64/v3', 'linux/arm64'}
+
+
+def leaf_id(value):
+    pattern(value, r'[a-z0-9][a-z0-9:/._-]{0,191}')
+
+
+def selection_text(value):
+    text(value)
+    if len(value) > 2048 or '<' in value or '>' in value:
+        raise ConfigError('selection text must be plain text of at most 2048 characters')
+
+
+def validate_selection(document):
+    selection = document['selection']
+    table(selection, ('paths', 'default_path', 'facets', 'recommendations'))
+    paths = entries(selection['paths'], ('id', 'label', 'facets'))
+    if not 1 <= len(paths) <= 4:
+        raise ConfigError('selection requires 1..4 paths')
+    facets = selection['facets']
+    if not isinstance(facets, list) or not 1 <= len(facets) <= len(FACETS):
+        raise ConfigError('selection requires known facets')
+    seen = set()
+    values = {}
+    for facet in facets:
+        table(facet, ('id', 'label', 'values'), ('description',))
+        if not isinstance(facet['id'], str) or facet['id'] not in FACETS or facet['id'] in seen:
+            raise ConfigError('unknown or duplicate facet')
+        seen.add(facet['id'])
+        selection_text(facet['label'])
+        if 'description' in facet:
+            selection_text(facet['description'])
+        if not isinstance(facet['values'], list) or not 1 <= len(facet['values']) <= 256:
+            raise ConfigError('facet requires 1..256 values')
+        ids = set()
+        for value in facet['values']:
+            table(value, ('id', 'label'), ('description', 'card'))
+            if 'card' in value:
+                card = value['card']
+                table(card, ('image_url', 'image_alt'), ('badge',))
+                url(card['image_url'], asset=True)
+                selection_text(card['image_alt'])
+                if 'badge' in card:
+                    selection_text(card['badge'])
+            if facet['id'] == 'platform':
+                if not isinstance(value['id'], str) or value['id'] not in PLATFORMS:
+                    raise ConfigError('unsupported facet platform')
+            else:
+                pattern(value['id'], r'[a-z0-9][a-z0-9-]{0,63}')
+            if value['id'] in ids:
+                raise ConfigError('duplicate facet value')
+            ids.add(value['id'])
+            selection_text(value['label'])
+            if 'description' in value:
+                selection_text(value['description'])
+        values[facet['id']] = ids
+    for path in selection['paths']:
+        pattern(path['id'], r'[a-z0-9][a-z0-9-]{0,63}')
+        selection_text(path['label'])
+        ids = path['facets']
+        if not isinstance(ids, list) or not ids or any(not isinstance(i, str) or i not in seen for i in ids) or len(set(ids)) != len(ids):
+            raise ConfigError('path must reference unique configured facets')
+    if not isinstance(selection['default_path'], str) or selection['default_path'] not in paths:
+        raise ConfigError('unknown default path')
+    if {d['id'] for d in document['desktops']} - values.get('desktop', set()):
+        raise ConfigError('desktop app policy must reference a configured desktop facet')
+    recommendations = selection['recommendations']
+    if not isinstance(recommendations, list) or len(recommendations) > 8:
+        raise ConfigError('expected at most 8 recommendations')
+    recommended = set()
+    for recommendation in recommendations:
+        table(recommendation, ('leaf_id', 'label', 'reason'))
+        leaf_id(recommendation['leaf_id'])
+        if recommendation['leaf_id'] in recommended:
+            raise ConfigError('duplicate recommended leaf')
+        recommended.add(recommendation['leaf_id'])
+        selection_text(recommendation['label'])
+        selection_text(recommendation['reason'])
+    default = document['default_selection']
+    if not isinstance(default, dict) or default.get('kind') not in ('leaf', 'none'):
+        raise ConfigError('default_selection.kind must be leaf or none')
+    table(default, ('kind', 'leaf_id') if default['kind'] == 'leaf' else ('kind',))
+    if default['kind'] == 'leaf':
+        leaf_id(default['leaf_id'])
+
+
+def flavor_metadata(primary):
+    metadata = primary.get('flavor_metadata')
+    if not isinstance(metadata, dict):
+        raise ConfigError('flavor_metadata must be a table')
+    expected = {f['id'] for v in primary['variants'].values() for f in v['flavors']}
+    if set(metadata) != expected:
+        raise ConfigError('flavor_metadata must cover exact primary flavor IDs')
+    for value in metadata.values():
+        table(value, ('desktop', 'edition'))
+        for item in value.values():
+            pattern(item, r'[a-z0-9][a-z0-9-]{0,63}')
+        if value['desktop'] not in set(primary.get('desktops', {})) | {'none'}:
+            raise ConfigError('flavor desktop must reference primary desktop policy or none')
+    return {'schema_version': 1, 'kind': 'builder-flavor-metadata', 'flavors': [dict(id=key, **metadata[key]) for key in sorted(metadata)]}
+
+
+def render_flavors(primary):
+    return json.dumps(flavor_metadata(primary), ensure_ascii=False, indent=2) + '\n'
+
+
+def validate_primary_selection(primary, document):
+    flavor_metadata(primary)
+    values = {f['id']: {v['id'] for v in f['values']} for f in document['selection']['facets']}
+    if values.get('base', set()) - set(primary['variants']):
+        raise ConfigError('unknown primary base facet')
+    metadata = primary['flavor_metadata']
+    for key in ('desktop', 'edition'):
+        if values.get(key, set()) - {v[key] for v in metadata.values()}:
+            raise ConfigError('unknown primary flavor facet')
+    cells = {}
+    for variant_id, variant in primary['variants'].items():
+        for flavor in variant['flavors']:
+            if flavor['build_image']:
+                for platform in flavor.get('platforms', variant['platforms']):
+                    cells[f"{variant_id}:{flavor['id']}:{platform}"] = (variant_id, flavor['id'], platform)
+    references = [r['leaf_id'] for r in document['selection']['recommendations']]
+    if document['default_selection']['kind'] == 'leaf':
+        references.append(document['default_selection']['leaf_id'])
+    for reference in references:
+        if reference not in cells:
+            raise ConfigError('default/recommendation must reference a build-enabled primary cell')
+        base, flavor, platform = cells[reference]
+        facets = {'base': base, 'platform': platform, **metadata[flavor]}
+        if any(key in values and value not in values[key] for key, value in facets.items()):
+            raise ConfigError('default/recommendation excluded by configured facets')
