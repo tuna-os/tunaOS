@@ -118,6 +118,14 @@ for drv in xfs ext4 btrfs; do
 	driver_is_module "$drv" && DRIVERS+=("$drv")
 done
 
+# Early KMS display drivers: without these in the initramfs, fbcon defers console
+# takeover, Plymouth cannot render its graphical boot splash, and systems with
+# disk encryption (LUKS) boot to a blank screen until late userspace starts the
+# display manager. Probed against the module tree like the filesystems above.
+for drv in i915 amdgpu nouveau virtio_gpu; do
+	driver_is_module "$drv" && DRIVERS+=("$drv")
+done
+
 # ── 4. modules ───────────────────────────────────────────────────────────────
 # crypt/dm are named explicitly rather than left to autodetection: openSUSE's
 # dracut defaults to hostonly, so a rebuild on a machine that is not itself

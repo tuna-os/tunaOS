@@ -405,6 +405,23 @@ variants:
         build_qcow2: false
 """
 
+    def setUp(self):
+        import yaml
+        # Matrix input now crosses the primary TOML loader. Keep the real
+        # projection and report flag logic; only replace the parsed source.
+        document = gbr.tunaos_config.load()
+        variant = document["variants"]["yellowfin"]
+        variant["flavors"] = [
+            {"stage": 2, "build_image": True, **flavor}
+            for flavor in yaml.safe_load(self.YAML)["variants"][0]["flavors"]
+        ]
+        document["variants"] = {"yellowfin": variant}
+        document["iso_groups"] = []  # No grouped ISO in this deliberately small report fixture.
+        document["tuna_rollout"] = {"yellowfin": document["tuna_rollout"]["yellowfin"]}
+        patcher = mock.patch.object(gbr.tunaos_config, "load", return_value=document)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def _patch_path(self):
         cfg = mock.MagicMock()
         cfg.read_text.return_value = self.YAML

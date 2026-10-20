@@ -22,6 +22,11 @@ Usage:
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from lib import tunaos_config
+
 import argparse
 import datetime
 import difflib
@@ -29,12 +34,10 @@ import json
 import os
 import re
 import subprocess
-import sys
 import tempfile
 import time
 import urllib.request
 from collections import defaultdict
-from pathlib import Path
 
 # The scoring rules live in a pure module beside this script (tunaOS#2532).
 # Tests load this file by path, so its directory is not always on sys.path.
@@ -224,6 +227,8 @@ def main_runs(workflow: str, limit: int = 10) -> list[dict]:
 
 def load_build_config(config_path: Path = CONFIG) -> dict:
     """Load .github/build-config.yml using PyYAML or internal fallback parser."""
+    if config_path == CONFIG:
+        return tunaos_config.matrix(tunaos_config.load())
     try:
         import yaml
         return yaml.safe_load(config_path.read_text())

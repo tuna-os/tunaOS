@@ -2,6 +2,19 @@
 
 Thank you for your contribution to TunaOS — an image factory that builds bootc-based images for desktop operating systems.
 
+<!-- hive-contribute-plea: donated-compute appeal, keep in sync across repos -->
+## Contribute compute — no code needed
+
+**[Donate time with your AI CLI](https://hub.tunaos.org/#contribute).**
+
+Your machine runs one task at a time using your signed-in AI coding CLI.
+The relay alternates between eligible **School** (OS) and **Reef** (apps)
+hives after each task. If one hive has no work, the other can continue.
+
+The guide covers prerequisites, verified `just` setup, credentials, provider
+costs, and how to stop with Ctrl+C. Your subscription quota or API charges apply.
+Never post account credentials or API keys in issues or pull requests.
+
 ## Quick Start
 
 ```bash
@@ -33,6 +46,7 @@ Work through the [pre-write claim checklist](docs/CONTENT-CLAIM-CHECKLIST.md) be
 
 Ways to contribute without changes to the build pipeline:
 
+- **Compute through Hive** — [donate time with your AI CLI](https://hub.tunaos.org/#contribute) through the hub's existing round-robin setup; no code needed
 - **Docs & guides** — the [docs site](https://github.com/tuna-os/docs) has its own `good first issue` backlog and takes content PRs for guides, FAQs, and variant pages. Run the [claim checklist](docs/CONTENT-CLAIM-CHECKLIST.md) before you write
 - **Community** — help triage [open issues](https://github.com/tuna-os/tunaOS/issues), answer questions in [Matrix](https://matrix.to/#/%23tunaos:reilly.asia), or improve the [adopters list](ADOPTERS.md) if your org uses TunaOS
 - **Labels** — anyone outside the project can take issues tagged `help wanted`
@@ -112,7 +126,7 @@ versionlock: [glib2]
 EOF
 
 # 2. Add stage to Containerfile (copy from existing DE pattern)
-# 3. Add flavor to .github/build-config.yml
+# 3. Add flavor to tunaos.toml
 # 4. That's it — install-desktop.sh handles the rest
 ```
 
@@ -158,6 +172,7 @@ just verify-disk image.qcow2  # QEMU boot verification
 
 ## Community
 
+- [Donate time through Hive](https://hub.tunaos.org/#contribute)
 - [GitHub Issues](https://github.com/tuna-os/tunaOS/issues)
 - [Matrix: #tunaos:reilly.asia](https://matrix.to/#/%23tunaos:reilly.asia)
 
@@ -165,9 +180,14 @@ just verify-disk image.qcow2  # QEMU boot verification
 
 [Apache 2.0](LICENSE)
 
-<!-- hive-contribute-plea: donated-compute appeal, keep in sync across repos -->
-## Contribute compute — no code needed
+### Primary config
 
-No time to write code? You can still push this project's backlog forward. A TunaOS AI-agent hive works on this repository. Lend the hive your AI subscription or API tokens, and your machine runs tasks from this project's backlog.
+Edit `tunaos.toml` for matrix changes. Run `python3 scripts/config.py validate`
+to check it, or `python3 scripts/config.py show` to view the build input.
+`python3 scripts/config.py generate` writes the ignored compatibility file.
+Build setup runs this step too. Do not edit that generated file.
 
-- 🏫 [Contribute compute to the school hive](https://school.tunaos.org/contribute)
+Python 3.10 needs `python3 -m pip install -r requirements-config.txt`; later
+Python versions use the standard library. This parser runs on the build host;
+it is not an image package choice. Packages and brand settings still
+follow the staged [migration plan](docs/PRIMARY-CONFIG-MIGRATION.md).
