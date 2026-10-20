@@ -635,7 +635,7 @@ tuna)
 	tuna_gdm_css_applied=0
 	while IFS= read -r resource_name; do
 		case "$resource_name" in
-		/org/gnome/shell/theme/gnome-shell*.css)
+		/org/gnome/shell/theme/gnome-shell*.css|/org/gnome/shell/theme/*/gnome-shell*.css)
 			if gresource extract "$tuna_gdm_resource" "$resource_name" >"$tuna_gdm_css_dump" &&
 				grep -qF 'TunaOS GDM theme overrides' "$tuna_gdm_css_dump"; then
 				tuna_gdm_css_applied=1
