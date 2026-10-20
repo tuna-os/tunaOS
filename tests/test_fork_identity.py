@@ -153,7 +153,8 @@ def test_existing_brand_adapter_reaches_identity_on_both_families(staged, tmp_pa
     (context / "build_scripts/lib").mkdir(parents=True)
     for name in ("fork-branding.sh", "fork-identity.py"):
         shutil.copyfile(ROOT / "build_scripts/lib" / name, context / "build_scripts/lib" / name)
-    run = subprocess.run(["bash", "-c", 'set -euo pipefail; source "$1"; tunaos_apply_fork_branding "$2" "$3"',
+    run = subprocess.run(["bash", "-c", 'set -euo pipefail; uname() { printf "x86_64\\n"; }; '
+                          'source "$1"; tunaos_apply_fork_branding "$2" "$3"',
                           "test", str(context / "build_scripts/lib/fork-branding.sh"), str(context), str(root)],
                          env={**os.environ, "IMAGE_NAME_VARIANT": variant, "TUNAOS_IMAGE_FLAVOR": "gnome", "PKG_MGR": manager},
                          capture_output=True, text=True)

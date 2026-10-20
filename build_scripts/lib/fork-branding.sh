@@ -282,6 +282,12 @@ tunaos_verify_fork_branding() {
 		[[ -n "$value" ]] || continue
 		expected="$field=$(_tunaos_fork_branding_osr_value "$value")"
 		for file in "$root/usr/lib/os-release" "$root/etc/os-release"; do
+			# Absolute os-release links are rooted in the image, not the build
+			# host. Resolve the one supported absolute target inside $root.
+			if [[ "$file" == "$root/etc/os-release" &&
+				"$(readlink "$file" 2>/dev/null || true)" == /usr/lib/os-release ]]; then
+				file="$root/usr/lib/os-release"
+			fi
 			[[ -e "$file" ]] || {
 				[[ "$file" == "$root/etc/os-release" ]] && continue
 				return 1
