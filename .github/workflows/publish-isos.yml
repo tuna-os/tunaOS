@@ -141,6 +141,7 @@ jobs:
       contents: read
       packages: read
       id-token: write
+      actions: read
     # Builds the ISO from the platform-qualified promoted image, boot-gates it
     # in QEMU, and only publishes to R2 if the gate passes. The reusable
     # workflow resolves this promoted tag to its immutable platform digest.
@@ -152,10 +153,6 @@ jobs:
       safeplatform: ${{ matrix.safeplatform }}
       image-tag: ${{ matrix.flavor }}
       upload-r2: ${{ inputs.skip_upload != true }}
-      # Delivery cutover: same per-target gate as the nightly path above.
-      # matrix.cutover is stamped in generate-matrix; a row without it
-      # evaluates to false (current behavior).
-      cutover-check: ${{ matrix.cutover == true }}
 
     secrets:
       R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
