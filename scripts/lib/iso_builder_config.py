@@ -128,7 +128,7 @@ def validate(document):
         else:
             table(selection, ('kind', 'image', 'platform'))
             # Syntax only. Inspection, relay admission and qualification remain engine policy.
-            pattern(selection['image'], r'[a-z0-9.-]+(?::[0-9]+)?/[a-z0-9._/-]+(?::[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}|@sha256:[0-9a-f]{64})')
+            pattern(selection['image'], r'[a-z0-9.-]+(?::[0-9]+)?/[a-z0-9._-]+(?:/[a-z0-9._-]+)*(?::[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}(?:@sha256:[0-9a-f]{64})?|@sha256:[0-9a-f]{64})')
         if selection['platform'] not in ('linux/amd64', 'linux/amd64/v2', 'linux/amd64/v3', 'linux/arm64'):
             raise ConfigError('unsupported platform')
     entries(

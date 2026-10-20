@@ -1326,7 +1326,7 @@ upstream_track = "experimental"
 # not a rebuild of an existing one. Read docs/HUMMINGBIRD.md before
 # reasoning about what its package set should contain.
 description = "Fedora Hummingbird (hardened rolling Rawhide fork, bootc)"
-base_image = "quay.io/hummingbird-community/bootc-os:latest@sha256:cfbd877853849ed8307fa38f492dffdc24e0e0f4340293ef536ceee1fa8afaa5"
+base_image = "quay.io/hummingbird-community/bootc-os:latest@sha256:903939d52c9ac991e5a95c673bf0bc0fdfe55589042bda2051f87b7c24c57354"
 # amd64 only, because aarch64 has nothing to build FROM yet: the base
 # stage's mandatory xfsprogs guard (build_scripts/10-base-packages.sh) has
 # no repository that can satisfy it on arm64, so every hummingbird arm64
@@ -1964,7 +1964,7 @@ build_iso = true
 emoji = "🚀"
 upstream_track = "rolling"
 description = "Based on Arch Linux (rolling)"
-base_image = "docker.io/archlinux/archlinux:latest@sha256:666eb320e594ee9fa47f58efe108ae861af6e38de779e1708e1bb29cd9e9d6a5"
+base_image = "docker.io/archlinux/archlinux:latest@sha256:24bd9134f828780b847419581105bd40b6dd9182ea7b12a0a0bb42b8562f9796"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["arch", "archlinux"]
 # arm64 legs use ghcr.io/tuna-os/archlinuxarm instead (docker.io/archlinux
@@ -4761,3 +4761,46 @@ common = [
 
 [flatpak_preinstall.desktop_additions]
 gnome = [{ id = "com.mattjakeman.ExtensionManager", branch = "stable" }]
+
+# Marlin GDM override from aa9810e9 (tunaOS#3438). The generated -arch
+# adapter takes precedence over tuna.yaml on pacman bases. Other tuna
+# profiles retain greetd. Package order and beta pin are unchanged.
+[desktops.tuna-arch]
+display_manager = "gdm"
+versionlock = []
+after_install = ["tuna-flatpak-remote", "flatpak-preinstall"]
+
+[desktops.tuna-arch.packages.pacman]
+required = [
+  "tunaos/tuna-desktop=1.0.0beta.1-1",
+  "gdm",
+  "xorg-xwayland",
+  "ibus",
+  "orca",
+  "gnome-shell",
+  "gnome-settings-daemon",
+  "gnome-control-center",
+  "gnome-keyring",
+  "evolution-data-server",
+  "xdg-desktop-portal-gnome",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs",
+  "gvfs",
+  "nautilus",
+  "ptyxis",
+  "networkmanager",
+  "libsecret",
+  "pipewire",
+  "wireplumber",
+  "gst-plugin-pipewire",
+  "gst-plugins-good",
+  "power-profiles-daemon",
+  "upower",
+  "flatpak",
+  "plymouth",
+  "adwaita-icon-theme",
+  "noto-fonts",
+  "noto-fonts-emoji",
+  "ttf-dejavu",
+  "ttf-liberation",
+]
