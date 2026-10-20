@@ -110,6 +110,7 @@ def test_identity_logo_rejects_symlinked_path(staged, tmp_path):
 def test_identity_valid_name_returns_bool():
     assert IDENTITY.valid_name("Harbor") is True
     assert IDENTITY.valid_name(" bad") is False
+
 def test_asset_tamper_and_cell_mismatch_fail_before_writes(staged, tmp_path):
     manifest, root, _, _ = materialize(staged, tmp_path)
     original = (root / "usr/lib/os-release").read_bytes()

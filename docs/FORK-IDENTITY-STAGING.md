@@ -9,7 +9,7 @@ It does not enable a partially branded image. Stock builds keep their previous b
 Use the existing pinned config, with both `branding.name` and `branding.logo`.
 `examples/fork/identity.template.yaml` is a template; supply a single-frame PNG
 named `logo.png` beside the initialized file. Name is 1–64 ASCII letters,
-digits, spaces, dots, underscores or hyphens, The first character must be a letter or digit. The name cannot end with a space. This restricted preview does not claim support
+digits, spaces, dots, underscores or hyphens. The first character must be a letter or digit. The name cannot end with a space. This restricted preview does not claim support
 for arbitrary scripts or fonts.
 
 ```sh

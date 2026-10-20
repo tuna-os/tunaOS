@@ -4,6 +4,7 @@ import base64
 import hashlib
 import importlib.util
 import io
+import math
 from pathlib import Path
 
 SPEC = importlib.util.spec_from_file_location("fork_identity", Path(__file__).resolve().parents[1] / "build_scripts/lib/fork-identity.py")
@@ -50,8 +51,8 @@ def prepare(branding, cell, directory, source):
         font = ImageFont.load_default(size=48)
     except TypeError as exc:
         raise ValueError("identity staging requires Pillow 10.1+ for its bundled font") from exc
-    logo.thumbnail((128, 128))
-    width = int(font.getlength(name)) + 160
+    logo.thumbnail((128, 128), resample=Image.Resampling.LANCZOS, reducing_gap=3.0)
+    width = math.ceil(font.getlength(name)) + 160
     lettermark = Image.new("RGBA", (width, 160))
     lettermark.alpha_composite(logo, (0, (160 - logo.height) // 2))
     ImageDraw.Draw(lettermark).text((152, 80), name, font=font, anchor="lm", fill="white")
