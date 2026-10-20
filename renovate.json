@@ -109,7 +109,8 @@
       "matchDepNames": [
         "tuna-os/remora",
         "twpayne/chezmoi",
-        "AvengeMedia/DankMaterialShell"
+        "AvengeMedia/DankMaterialShell",
+        "tuna-os/bootc-installer"
       ],
       "automerge": false
     },

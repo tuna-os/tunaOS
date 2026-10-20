@@ -199,7 +199,7 @@ No new shell script needed. `install-desktop.sh` handles it.
 |------|-----------------|
 | `tunaos.toml` | The build matrix (variants × flavors × platforms × stages) |
 | `PACKAGE-SOURCING.md` | Package sourcing policy (tiering, Tideforge-first, allowlist, #1319) |
-| `image-versions.yaml` | Pinned image digests + download versions |
+| `image-versions.yaml` | Pinned image digests and download versions/checksums, including the verified live-ISO installer bundle |
 | `registry-map.yaml` | Registry mirror overrides |
 | `renovate.json` | Automated dependency updates (automerge all) |
 
