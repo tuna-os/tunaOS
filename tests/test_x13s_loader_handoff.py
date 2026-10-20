@@ -110,3 +110,20 @@ def test_requires_explicit_approved_signature_receipt(keyid):
 def test_unsigned_wrong_signer_or_unverified_rpm_is_rejected(output, code):
     with pytest.raises(ValueError, match="explicitly verified"):
         handoff.signature_receipt(output, code, FINGERPRINT)
+
+
+@pytest.mark.parametrize("armored", [True, False])
+def test_approved_key_export_requires_armor_and_exact_fingerprint(monkeypatch, tmp_path, armored):
+    from types import SimpleNamespace
+    data = b"-----BEGIN PGP PUBLIC KEY BLOCK-----\nfixture\n-----END PGP PUBLIC KEY BLOCK-----\n" if armored else b"binary"
+    calls = []
+    def fake_run(args, **kwargs):
+        calls.append(args)
+        return SimpleNamespace(stdout=data)
+    monkeypatch.setattr(handoff, "run", fake_run)
+    if armored:
+        assert handoff.export_approved_key(tmp_path, FINGERPRINT) == data
+    else:
+        with pytest.raises(ValueError, match="armored"):
+            handoff.export_approved_key(tmp_path, FINGERPRINT)
+    assert calls == [["gpg", "--homedir", tmp_path, "--batch", "--armor", "--export", FINGERPRINT]]

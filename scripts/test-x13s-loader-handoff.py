@@ -36,6 +36,15 @@ def download(url, target, expected, size=None):
     target.write_bytes(data)
 
 
+def export_approved_key(home, fingerprint):
+    # RPM 4.x import requires ASCII armor, unlike GnuPG's default binary export.
+    data = run(["gpg", "--homedir", home, "--batch", "--armor", "--export", fingerprint],
+               capture_output=True).stdout
+    if not data.startswith(b"-----BEGIN PGP PUBLIC KEY BLOCK-----") or b"-----END PGP PUBLIC KEY BLOCK-----" not in data:
+        raise ValueError("approved key export is not armored")
+    return data
+
+
 def signature_receipt(output, returncode, fingerprint):
     """Fail closed unless rpmkeys -Kv explicitly verified the approved RSA signature.
 
@@ -178,7 +187,7 @@ def main():
     db.mkdir()
     run(["gpg", "--homedir", home, "--batch", "--import", key], capture_output=True)
     approved_key = out / "approved-fedora44.gpg"
-    approved_key.write_bytes(run(["gpg", "--homedir", home, "--batch", "--export", pins["fingerprint"]], capture_output=True).stdout)
+    approved_key.write_bytes(export_approved_key(home, pins["fingerprint"]))
     run(["rpm", "--dbpath", db, "--import", approved_key])
     payloads = {}
     for pin in pins["packages"]:
