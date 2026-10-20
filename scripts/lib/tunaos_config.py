@@ -106,8 +106,8 @@ def validate(config):
         strings(variant['platforms'], where + '.platforms', platform=True)
         if 'aliases' in variant:
             strings(variant['aliases'], where + '.aliases')
-            for alias in variant['aliases']:
-                repository_name(alias, where + '.aliases')
+            for i, alias in enumerate(variant['aliases']):
+                repository_name(alias, f'{where}.aliases[{i}]')
         flavors = variant['flavors']
         if not isinstance(flavors, list) or not flavors:
             raise ConfigError(f'{where}.flavors: expected nonempty list')
@@ -173,9 +173,11 @@ def validate(config):
     for name, variant in variants.items():
         suffix = variant.get('tag_suffix', '')
         aliases = variant.get('aliases', [])
-        for alias in aliases:
+        for i, alias in enumerate(aliases):
             if alias in reserved:
-                raise ConfigError(f'variants.{name}.aliases: {alias!r} shadows a canonical image name')
+                raise ConfigError(
+                    f'variants.{name}.aliases[{i}]: {alias!r} shadows a canonical image name'
+                )
         canonical = variant.get('publish_name', name)
         for flavor in variant['flavors']:
             tag = flavor['id'] + (f'-{suffix}' if suffix else '')

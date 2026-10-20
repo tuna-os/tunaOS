@@ -37,7 +37,7 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 | `build-marlin.yml` | post-merge + scheduled | Build Marlin | `20 13 * * *`, manual | — |
 | `build-sailfin.yml` | post-merge + scheduled | Build Sailfin | `20 19 * * *`, manual | — |
 | `build-skipjack.yml` | post-merge + scheduled | Build Skipjack | `20 9 * * *`, manual | — |
-| `build-stingray.yml` | post-merge | Build Stingray [experimental] | manual | — |
+| `build-stingray.yml` | manual | Build Stingray [experimental] | manual | — |
 | `build-toolchain.yml` | post-merge | build-toolchain | push, manual | — |
 | `build-variant.yml` | post-merge + scheduled | Unified Build | caller cadence | — |
 | `build-wahoo.yml` | post-merge | Build Wahoo [experimental] | manual | — |
