@@ -342,6 +342,21 @@ jobs:
             ]
           github-token: ${{ github.token }}
 
+      # Pin the exact provenance input consumed by the release report. The
+      # commit sidecar is needed because a retry may run after main advances.
+      - name: Attach matrix provenance snapshot
+        if: steps.release.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ steps.vars.outputs.tag }}
+        run: |
+          set -euo pipefail
+          cp docs/matrix-provenance.json matrix-provenance.json
+          git rev-parse HEAD > matrix-provenance-commit.txt
+          gh release upload "$TAG" --repo "$REPO" \
+            matrix-provenance.json matrix-provenance-commit.txt --clobber
+
       # create-release owns the changelog/release card. A retry may repair a
       # release whose first report append failed, but it must derive identity
       # from that release's body and attached SPDX inventory, never today's tag.
@@ -369,11 +384,27 @@ jobs:
           # `steps.existing == false` path.
           rm -rf _release-evidence
           mkdir _release-evidence
-          gh release download "$TAG" --repo "$REPO" --dir _release-evidence \
-            --pattern '*.spdx.json'
-          mapfile -t SBOMS < <(find _release-evidence -type f -name '*.spdx.json')
+          if ! gh release download "$TAG" --repo "$REPO" --dir _release-evidence \
+            --pattern '*.spdx.json' \
+            --pattern 'matrix-provenance.json' \
+            --pattern 'matrix-provenance-commit.txt'; then
+            echo "::error::release ${TAG} is missing its immutable provenance snapshot or SPDX inventory"
+            exit 1
+          fi
+          mapfile -t PROVENANCE < <(find _release-evidence -maxdepth 1 -type f -name 'matrix-provenance.json')
+          mapfile -t PROVENANCE_COMMITS < <(find _release-evidence -maxdepth 1 -type f -name 'matrix-provenance-commit.txt')
+          mapfile -t SBOMS < <(find _release-evidence -maxdepth 1 -type f -name '*.spdx.json')
+          if [[ "${#PROVENANCE[@]}" -ne 1 || "${#PROVENANCE_COMMITS[@]}" -ne 1 ]]; then
+            echo "::error::release ${TAG} must have exactly one matrix provenance JSON and commit sidecar"
+            exit 1
+          fi
           if [[ "${#SBOMS[@]}" -ne 1 ]]; then
             echo "::error::release ${TAG} must have exactly one attached SPDX inventory"
+            exit 1
+          fi
+          PROVENANCE_COMMIT="$(tr -d '\r\n' < "${PROVENANCE_COMMITS[0]}")"
+          if [[ ! "$PROVENANCE_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::release ${TAG} has an invalid provenance commit sidecar"
             exit 1
           fi
           SBOM_PACKAGES=$(jq '(.packages // []) | length' "${SBOMS[0]}")
@@ -393,10 +424,11 @@ jobs:
           DIGEST="${STORED[1]}"
 
           python3 scripts/render-release-verification.py \
+            --provenance "${PROVENANCE[0]}" \
             --image "$IMAGE" \
             --digest "$DIGEST" \
             --sbom-packages "$SBOM_PACKAGES" \
-            --provenance-commit "$(git rev-parse HEAD)" \
+            --provenance-commit "$PROVENANCE_COMMIT" \
             --body release-body.md \
             --output release-body-with-verification.md
           gh release edit "$TAG" --repo "$REPO" \
