@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// Prompts for painted TunaOS wallpapers: one per variant × desktop.
+// Prompts for painted TunaOS wallpapers; shared anime assets are documented in
+// docs/branding/anime-wallpapers.md. This CLI also supports desktop overrides.
 //
 // Each wallpaper mixes three things:
 //   * the variant's emoji, as the centrepiece of a seaside scene;

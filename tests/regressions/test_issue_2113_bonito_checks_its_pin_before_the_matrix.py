@@ -4,7 +4,7 @@ The repository-wide check passed on 2026-08-25 (run 32907984619), but Quay
 removed the digest before Bonito run 32965043165 started. Both base
 architectures then failed with ``manifest unknown``. In addition, build-config.yml
 lacked Renovate digest automation. Build workflows must probe their base image pin
-immediately before invoking the build matrix, and Renovate must track build-config.yml.
+immediately before invoking the build matrix, and Renovate must track the primary tunaos.toml source.
 
 Falsification: structural — remove the preflight step from build-variant.yml,
 its scoped command from check-base-image-pins.sh, or the build-config manager
@@ -45,9 +45,9 @@ def test_renovate_tracks_build_config_base_images() -> None:
     config = json.loads(RENOVATE.read_text(encoding="utf-8"))
     managers = config.get("customManagers", [])
     build_config_mgr = next(
-        (m for m in managers if any("build-config" in pat for pat in m.get("managerFilePatterns", []))),
+        (m for m in managers if any("tunaos" in pat for pat in m.get("managerFilePatterns", []))),
         None
     )
-    assert build_config_mgr is not None, "renovate.json must have a customManager for build-config.yml"
+    assert build_config_mgr is not None, "renovate.json must have a customManager for tunaos.toml"
     assert build_config_mgr.get("datasourceTemplate") == "docker"
     assert any("base_image" in s for s in build_config_mgr.get("matchStrings", []))

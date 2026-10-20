@@ -44,6 +44,9 @@ import sys
 import tempfile
 from typing import Iterable
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from lib import tunaos_config
+
 
 REPO = os.environ["GITHUB_REPOSITORY"]
 REPO_OWNER = REPO.split("/", 1)[0]
@@ -143,7 +146,6 @@ def load_combos() -> list[Combo]:
     plus the independent weekly QCOW2 screenshot matrix, so the report covers
     every cell that can produce screenshot evidence.
     """
-    config_path = pathlib.Path(".github/build-config.yml")
     # The runner doesn't have yq pre-installed in every workflow. Use Python
     # for YAML parsing so this script has no external deps beyond `gh`.
     try:
@@ -152,7 +154,7 @@ def load_combos() -> list[Combo]:
         subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "PyYAML"], check=True)
         import yaml  # type: ignore[import-untyped]
 
-    data = yaml.safe_load(config_path.read_text())
+    data = tunaos_config.matrix(tunaos_config.load())
 
     # `build_qcow2` controls release artifact publication, not the independent
     # weekly screenshot workflow. That workflow builds temporary QCOW2 disks
