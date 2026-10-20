@@ -151,6 +151,11 @@ def _run_packages(relative, tmp_path, *, refresh=True):
     shutil.copy2(FIXTURES / relative, manifest)
     root = tmp_path / "root"
     root.mkdir()
+    tools = tmp_path / "tools"
+    tools.mkdir()
+    uname = tools / "uname"
+    uname.write_text("#!/bin/sh\n[ \"$1\" = \"-m\" ] && echo x86_64 || /usr/bin/uname \"$@\"\n")
+    uname.chmod(0o755)
     refresh_body = "return 0" if refresh else "return 1"
     command = f"""
 set -euo pipefail
@@ -169,6 +174,7 @@ tunaos_apply_fork_packages "$2" "$3"
             "PKG_MGR": "dnf",
             "IMAGE_NAME_VARIANT": "yellowfin",
             "TUNAOS_IMAGE_FLAVOR": "gnome",
+            "PATH": f"{tools}:{env['PATH']}",
         }
     )
     return subprocess.run(
@@ -273,6 +279,13 @@ def test_capability_registry_is_closed_and_fails_without_a_fallback():
     assert {frontend["id"] for frontend in registry["frontends"]} == {
         "gnome", "kde", "cosmic", "niri", "xfce"
     }
+    assert {
+        frontend["repository"] for frontend in registry["frontends"]
+    } == {"tuna-os/bootc-installer"}
+    assert {
+        frontend["path"] for frontend in registry["frontends"]
+    } == {"bootc_installer", "frontends/kde", "frontends/cosmic",
+          "frontends/niri", "frontends/xfce"}
     for frontend in registry["frontends"]:
         for operation in frontend["capabilities"]:
             CAPABILITIES.require_capability(registry, frontend["id"], operation)
@@ -291,7 +304,7 @@ def test_capability_cli_rejects_unsupported_operation():
             "--frontend",
             "gnome",
             "--require",
-            "fisherman-recipe",
+            "bootc-installer-recipe",
         ],
         text=True,
         capture_output=True,
