@@ -550,7 +550,7 @@ jobs:
           }
           TUNA_LIVE_ENGINE_DIGEST="sha256:$(printf 'tacklebox:%s' "$TACKLEBOX_PIN" | sha256sum | awk '{print $1}')"
           export TUNA_LIVE_OVERLAY_REF="${OVERLAY_REF}@${TUNA_LIVE_OVERLAY_DIGEST}"
-          export TUNA_LIVE_ENGINE_DIGEST
+          export TUNA_LIVE_OVERLAY_DIGEST TUNA_LIVE_ENGINE_DIGEST
 
           sudo just build "$VARIANT" "$FLAVOR" "$PLATFORM" 1 "$FLAVOR"
           TUNA_LIVE_BASE_IMAGE="localhost/${VARIANT}:${FLAVOR}"
@@ -606,14 +606,37 @@ jobs:
             if [[ -n "$source_meta" ]]; then
               identity="$(
                 python3 -c '
-          import json, sys
+          import json, re, sys
           try:
               value = json.load(sys.stdin)
-          except (json.JSONDecodeError, TypeError):
-              raise SystemExit(0)
-          print("\t".join(str(value.get(key, "")) for key in
-                          ("base_image", "base_digest", "overlay_digest",
-                           "engine_digest", "platform")))
+          except (json.JSONDecodeError, UnicodeError):
+              print("::error::embedded provenance live-source.json is invalid JSON", file=sys.stderr)
+              raise SystemExit(1)
+          if not isinstance(value, dict):
+              print("::error::embedded provenance live-source.json is invalid: expected an object", file=sys.stderr)
+              raise SystemExit(1)
+          fields = ("base_image", "base_digest", "overlay_digest", "engine_digest", "platform")
+          invalid = False
+          for key in fields:
+              item = value.get(key)
+              reason = None
+              if key not in value or item == "":
+                  reason = "missing"
+              elif (not isinstance(item, str) or item != item.strip() or
+                    any(c.isspace() or ord(c) < 32 or ord(c) == 127 for c in item)):
+                  reason = "invalid"
+              elif item.lower() == "unknown":
+                  reason = "unknown"
+              elif key.endswith("_digest") and re.fullmatch(r"sha256:[0-9a-fA-F]{64}", item) is None:
+                  reason = "invalid"
+              elif key == "platform" and re.fullmatch(r"linux/(amd64(/v2)?|arm64)", item) is None:
+                  reason = "invalid"
+              if reason:
+                  print(f"::error::embedded provenance field {key} is {reason}", file=sys.stderr)
+                  invalid = True
+          if invalid:
+              raise SystemExit(1)
+          print("\t".join(value[key] for key in fields))
           ' <<<"$source_meta"
               )"
               IFS=$'\t' read -r candidate_ref candidate_source candidate_overlay candidate_engine candidate_platform <<<"$identity"
@@ -649,6 +672,10 @@ jobs:
               INSTALLER_DIGEST="sha256:${revision,,}"
             fi
           done
+          [[ -n "$SOURCE_REF" ]] || {
+            echo "::error::ISO does not contain embedded provenance (etc/tunaos/live-source.json)"
+            exit 1
+          }
           [[ "$SOURCE_DIGEST" =~ ^sha256:[0-9a-fA-F]{64}$ ]] || {
             echo "::error::ISO does not contain a valid embedded source digest"
             exit 1
@@ -661,7 +688,7 @@ jobs:
             echo "::error::ISO does not contain a valid embedded builder digest"
             exit 1
           }
-          [[ "$QUAL_PLATFORM" =~ ^linux/(amd64|arm64)(/v2)?$ ]] || {
+          [[ "$QUAL_PLATFORM" =~ ^linux/(amd64(/v2)?|arm64)$ ]] || {
             echo "::error::ISO does not contain a valid embedded platform"
             exit 1
           }
