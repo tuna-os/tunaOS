@@ -105,26 +105,29 @@ def validate_inputs(value: object) -> dict:
     build = inputs["build"]
     require(isinstance(build, dict) and 0 < len(build) <= MAX_INPUTS, "inputs.build: invalid inventory")
     for name, value_digest in build.items():
-        token(name, "inputs.build name")
-        digest(value_digest, "inputs.build digest")
+        where = f"inputs.build.{name}"
+        token(name, where)
+        digest(value_digest, f"{where}.digest")
     harness = inputs["harness"]
     require(isinstance(harness, dict) and len(harness) <= MAX_INPUTS, "inputs.harness: invalid inventory")
     for name, record in harness.items():
-        token(name, "inputs.harness name")
-        item = exact(record, {"digest", "assertions"}, "inputs.harness entry")
-        digest(item["digest"], "inputs.harness digest")
-        validate_assertion_names(item["assertions"], "inputs.harness assertions")
+        where = f"inputs.harness.{name}"
+        token(name, where)
+        item = exact(record, {"digest", "assertions"}, where)
+        digest(item["digest"], f"{where}.digest")
+        validate_assertion_names(item["assertions"], f"{where}.assertions")
     return inputs
 
 
 def validate_tools(value: object) -> dict:
     require(isinstance(value, dict) and 0 < len(value) <= 32, "tools: invalid inventory")
     for name, record in value.items():
-        token(name, "tools name")
-        item = exact(record, {"version", "assertions"}, "tools entry")
+        where = f"tools.{name}"
+        token(name, where)
+        item = exact(record, {"version", "assertions"}, where)
         require(isinstance(item["version"], str) and VERSION.fullmatch(item["version"]),
-                "tools.version: expected bounded version")
-        validate_assertion_names(item["assertions"], "tools.assertions")
+                f"{where}.version: expected bounded version")
+        validate_assertion_names(item["assertions"], f"{where}.assertions")
     return value
 
 
@@ -208,6 +211,8 @@ def evaluate_reuse(producer: object, current: object) -> dict:
                                                        expected["inputs"]["harness"])
     tool_changes, tool_assertions = changed_assertions(previous["tools"], expected["tools"])
     invalidated = sorted(set(invalidated) | set(tool_assertions))
+    require(len(harness_changes) <= MAX_INPUTS,
+            "reuse decision: changed harness inputs exceed bound")
     require(len(tool_changes) <= 32, "reuse decision: changed tools exceed bound")
     require(len(invalidated) <= MAX_ASSERTIONS,
             "reuse decision: invalidated assertions exceed bound")
@@ -410,10 +415,14 @@ def assertion_record(name: str, status: str = "not-run", at: str | None = None,
 
 
 def build_report(context_value: object, events: list[dict], *, evidence: dict[str, dict] | None = None) -> dict:
-    if evidence is None:
-        context, evidence = validate_context(context_value)
-    else:
-        context = context_value
+    context, validated_evidence = validate_context(context_value)
+    if evidence is not None:
+        require(evidence == validated_evidence, "build report: evidence does not match context")
+    return _build_report_validated(context, events, validated_evidence)
+
+
+def _build_report_validated(context: dict, events: list[dict],
+                            evidence: dict[str, dict]) -> dict:
     records = {name: assertion_record(name) for name in context["assertions"]}
 
     first_failure = None
@@ -502,7 +511,9 @@ def main() -> None:
         else:
             context = load_json(args.context)
             validated, evidence = validate_context(context)
-            result = build_report(validated, load_events(args.events, validated, evidence), evidence=evidence)
+            result = _build_report_validated(
+                validated, load_events(args.events, validated, evidence), evidence
+            )
         write_json(args.output, result)
     except (ContractError, OSError, json.JSONDecodeError) as exc:
         print(f"ERROR: qualification evidence: {exc}", file=sys.stderr)
