@@ -104,13 +104,18 @@ def os_release(data, m):
     return "\n".join(lines + [f'{key}="{value}"' for key, value in values.items()]) + "\n"
 
 
-def apply(manifest, root, check=False):
-    m = load(manifest)
-    root = root.resolve(strict=True)
+def staging_root(root):
+    root = Path(root).resolve(strict=True)
     if not root.is_dir():
         raise ValueError("identity staging root must be a directory")
     if root == Path("/"):
         raise ValueError("identity staging requires an explicit non-live root; builds remain blocked")
+    return root
+
+
+
+def apply(manifest, root, check=False):
+    root = staging_root(root)
     osr = target(root, "usr/lib/os-release")
     image_info = target(root, "usr/share/ublue-os/image-info.json")
     info = read_json(image_info)
@@ -178,6 +183,7 @@ def apply(manifest, root, check=False):
 
 
 def verify(root):
+    root = staging_root(root)
     m = load(target(root, "usr/share/tunaos/fork-identity/manifest.json"))
     applied = read_json(target(root, "usr/share/tunaos/fork-identity/applied.json"))
     link_state = read_json(target(root, "usr/share/tunaos/fork-identity/os-release-link.json"))

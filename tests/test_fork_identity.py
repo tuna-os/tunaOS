@@ -223,9 +223,10 @@ def test_live_root_refused(staged, tmp_path):
     manifest, _, _, _ = materialize(staged, tmp_path)
     alias = tmp_path / "live-root"
     alias.symlink_to("/")
-    for root in (Path("/"), alias):
-        with pytest.raises(ValueError, match="non-live"):
-            IDENTITY.apply(manifest, root)
+    for operation in (lambda root: IDENTITY.apply(manifest, root), IDENTITY.verify):
+        for root in (Path("/"), alias):
+            with pytest.raises(ValueError, match="non-live"):
+                operation(root)
 
 
 def test_check_performs_no_writes_and_link_change_fails(staged, tmp_path):
