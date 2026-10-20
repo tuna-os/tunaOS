@@ -146,6 +146,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+          source scripts/lib/platform-digest.sh
           IMG="ghcr.io/tuna-os/${VARIANT}:${FLAVOR}"
           # Each attempt owns its staging tag through annotation and digest capture.
           OUT="ghcr.io/tuna-os/live-overlay:${VARIANT}-${FLAVOR}-${SAFEPLATFORM}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
@@ -159,7 +160,11 @@ jobs:
           # that consumes overlays instead of re-running the customize
           # scripts needs this to detect staleness; without it a stale
           # overlay silently ships an old rootfs.
-          BASE_DIGEST="$(sudo podman image inspect --format '{{.Digest}}' "$IMG")"
+          BASE_DIGEST="$(
+            sudo bash -euo pipefail -c \
+              'source "$1"; platform_manifest_digest "$2" "$3"' \
+              _ "$PWD/scripts/lib/platform-digest.sh" "$IMG" "$PLATFORM"
+          )"
           echo "base digest: ${BASE_DIGEST}"
 
           # Installer bundle selection is arch-specific: the release carries
@@ -348,7 +353,6 @@ jobs:
 
       - name: Download current-run platform receipts
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        continue-on-error: true
         with:
           pattern: live-overlay-receipt-*
           path: receipts

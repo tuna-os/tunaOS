@@ -39,6 +39,8 @@ fi
 . "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
 # shellcheck source=lib/squashfs-compat.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/squashfs-compat.sh"
+# shellcheck source=lib/platform-digest.sh
+. "$(dirname "${BASH_SOURCE[0]}")/lib/platform-digest.sh"
 
 # Source registry resolution for TUNA_REGISTRY mirror overrides.
 # Falls back to hardcoded ref if _registry.sh is unavailable.
@@ -143,11 +145,7 @@ else
 		sudo -u "$REAL_USER" -H podman pull "$IMAGE_REF"
 	fi
 fi
-BASE_DIGEST="$(podman image inspect --format '{{.Digest}}' "$IMAGE_REF")"
-if [[ ! "$BASE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
-	echo "ERROR: cannot resolve platform manifest digest for ${IMAGE_REF}" >&2
-	exit 1
-fi
+BASE_DIGEST="$(platform_manifest_digest "$IMAGE_REF" "$SOURCE_PLATFORM")"
 
 # ponytail: tacklebox runner delegated to common.sh tunaos_run_tacklebox
 
