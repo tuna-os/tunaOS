@@ -58,3 +58,11 @@ live-lab-out/
 # teardown removes it, so it exists only while the suite runs — long enough
 # for a concurrent `git add -A` to commit it, which is how it got in once.
 tests/bats/test_root_tmp/
+
+# Runtime compatibility adapter generated from the primary tunaos.toml.
+/.github/build-config.yml
+
+# Runtime desktop policy projections from the same primary TOML.
+/manifests/desktops/*.yaml
+/manifests/desktop-plans/
+/manifests/desktop-contracts/

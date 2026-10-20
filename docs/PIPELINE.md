@@ -6,7 +6,7 @@ How images and ISOs get built, verified, and published. If you change CI, read t
 
 ## The Build Matrix
 
-`variant × desktop × hardware_layer`, defined in `.github/build-config.yml`.
+`variant × desktop × hardware_layer`, defined in `tunaos.toml`.
 
 Shell entrypoints resolve that contract through
 `scripts/lib/build-config.sh`. For tests that use an alternate contract, set
@@ -112,7 +112,7 @@ Three sources of image metadata, consolidated via `scripts/resolve-image.sh`:
 
 | Source | Contains |
 |--------|----------|
-| `.github/build-config.yml` | `base_image` per variant |
+| `tunaos.toml` | `base_image` per variant |
 | `image-versions.yaml` | Digest pins for common/brew/zirconium + download versions |
 | `registry-map.yaml` | Mirror overrides |
 

@@ -24,6 +24,11 @@ on:
       #   registry-map.yaml 4  files 2
       - 'scripts/**'
       - 'tests/**'
+      # Versioned contract schemas are executable test inputs.
+      - 'schemas/**'
+      # The fork-config contract suite initializes the stock/fork templates.
+      - 'examples/**'
+      - 'experiences/**'
       - 'build_scripts/**'
       # One entry rather than six. .github/scripts/**, changelogs.py,
       # workflows/**, green-criteria.yml, runs-on.yml and actions/** were all
@@ -42,6 +47,10 @@ on:
       - 'custom/**'
       - 'files/**'
       - 'Containerfile*'
+      - '.containerignore'
+      - '.dockerignore'
+      - 'tunaos.toml'
+      - 'requirements-config.txt'
       - 'image-versions.yaml'
       - 'registry-map.yaml'
       - 'renovate.json'
@@ -70,6 +79,23 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  primary-config-python310:
+    name: Primary config (Python 3.10)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.10'
+      - name: Install config test dependencies
+        run: python -m pip install pytest -r requirements-config.txt
+      - name: Verify primary config on the oldest supported Python
+        run: python -m pytest -q tests/test_primary_config.py
+
   unit-tests:
     name: Unit Tests
     runs-on: ubuntu-latest
@@ -102,6 +128,11 @@ jobs:
 
           # pytest for Python tests
           pip3 install pytest pytest-cov --break-system-packages 2>/dev/null || pip3 install pytest pytest-cov --user
+
+          # Independent schema oracle, pinned with the other external tools.
+          schema_version=$(yq -r '.downloads.jsonschema // ""' image-versions.yaml)
+          [[ "$schema_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Invalid jsonschema test pin" >&2; exit 1; }
+          python3 -m pip install "jsonschema==$schema_version" --break-system-packages || python3 -m pip install "jsonschema==$schema_version" --user
 
           # Pillow + requests for desktop-verify.py tests
           pip3 install pillow requests --break-system-packages 2>/dev/null || pip3 install pillow requests --user

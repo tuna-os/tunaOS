@@ -17,7 +17,7 @@ images:
   - name: zirconium
     image: ghcr.io/zirconium-dev/zirconium
     tag: latest
-    digest: sha256:9df8e25d93ebc5ff0115d00742aee5890345a7fb84b74f2edef9288ea4d3596b
+    digest: sha256:a4d1463797214b049c95980002ed4a7f7af3e30882327f7b4d679a23393e2ac7
 
   # Bluefin's GNOME 51 for Hummingbird (projectbluefin/utah-packages): a
   # createrepo_c repository shipped as an OCI image (`/repository`), signed
@@ -31,7 +31,7 @@ images:
   - name: utah-packages
     image: ghcr.io/projectbluefin/utah-packages
     tag: latest
-    digest: sha256:883f65e360e457292e7e25ede84cda439f83647facffb5c70b6a1eb91f2de299
+    digest: sha256:418e31e2961fe3b03a901a83f26ffba34794539ffa74da04ae5a98c1181a7a80
 
   # tunaOS' own GNOME 50 for EL10, from the gnome50-el10-x86_64 build chain in
   # tuna-os/tunaos-packages: a createrepo_c repository shipped as an OCI image
@@ -71,6 +71,9 @@ packages:
 
 # Pinned binary downloads (managed by Renovate)
 downloads:
+  # Independent schema oracle for contract tests; not an image runtime package.
+  # renovate: datasource=pypi depName=jsonschema
+  jsonschema: "4.26.0"
   # renovate: datasource=github-releases depName=ublue-os/uupd
   uupd: "v1.5.1"
   # renovate: datasource=github-releases depName=ledif/kcm_ublue
