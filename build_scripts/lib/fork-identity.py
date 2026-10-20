@@ -17,7 +17,7 @@ SHA = re.compile(r"[0-9a-f]{64}\Z")
 
 
 def valid_name(name):
-    return isinstance(name, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9 ._-]{0,63}", name) and name == name.strip()
+    return bool(isinstance(name, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9 ._-]{0,63}", name) and name == name.strip())
 
 
 def unique(pairs):
@@ -211,13 +211,19 @@ def apply_boot(manifest, root):
         path.write_bytes(data)
 
 
-def apply(manifest, root, check=False):
-    m = load(manifest)
-    root = root.resolve(strict=True)
+def staging_root(root):
+    root = Path(root).resolve(strict=True)
     if not root.is_dir():
         raise ValueError("identity staging root must be a directory")
     if root == Path("/"):
         raise ValueError("identity staging requires an explicit non-live root; builds remain blocked")
+    return root
+
+
+
+def apply(manifest, root, check=False):
+    m = load(manifest)
+    root = staging_root(root)
     osr = target(root, "usr/lib/os-release")
     image_info = target(root, "usr/share/ublue-os/image-info.json")
     info = read_json(image_info)
@@ -291,6 +297,7 @@ def apply(manifest, root, check=False):
 
 
 def verify(root):
+    root = staging_root(root)
     m = load(target(root, "usr/share/tunaos/fork-identity/manifest.json"))
     canonical = target(root, "usr/share/tunaos/fork/fork-config.json")
     if canonical.exists() and read_json(canonical) != read_json(target(root, "usr/share/tunaos/fork-identity/fork-config.json")):

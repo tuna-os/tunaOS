@@ -97,6 +97,19 @@ def test_name_contract(staged, name):
         PREPARE.compile_cells(staged, identity_staging=True)
 
 
+def test_identity_logo_rejects_symlinked_path(staged, tmp_path):
+    config = yaml.safe_load(staged.read_text())
+    config["global"]["branding"]["logo"] = "linked-logo.png"
+    (staged.parent / "linked-logo.png").symlink_to(staged.parent / "logo.png")
+    staged.write_text(yaml.safe_dump(config))
+    with pytest.raises(PREPARE.ConfigError, match="symlinked"):
+        PREPARE.compile_cells(staged, identity_staging=True)
+
+
+def test_identity_valid_name_returns_bool():
+    assert IDENTITY.valid_name("Harbor") is True
+    assert IDENTITY.valid_name(" bad") is False
+
 def test_asset_tamper_and_cell_mismatch_fail_before_writes(staged, tmp_path):
     manifest, root, _, _ = materialize(staged, tmp_path)
     original = (root / "usr/lib/os-release").read_bytes()
@@ -152,12 +165,33 @@ def test_existing_brand_adapter_reaches_identity_on_both_families(staged, tmp_pa
     (context / "build_scripts/lib").mkdir(parents=True)
     for name in ("fork-branding.sh", "fork-identity.py"):
         shutil.copyfile(ROOT / "build_scripts/lib" / name, context / "build_scripts/lib" / name)
-    run = subprocess.run(["bash", "-c", 'set -euo pipefail; source "$1"; tunaos_apply_fork_branding "$2" "$3"',
+    run = subprocess.run(["bash", "-c", 'set -euo pipefail; uname() { printf "x86_64\\n"; }; '
+                          'source "$1"; tunaos_apply_fork_branding "$2" "$3"',
                           "test", str(context / "build_scripts/lib/fork-branding.sh"), str(context), str(root)],
                          env={**os.environ, "IMAGE_NAME_VARIANT": variant, "TUNAOS_IMAGE_FLAVOR": "gnome", "PKG_MGR": manager},
                          capture_output=True, text=True)
     assert run.returncode == 0, run.stderr
     IDENTITY.verify(root)
+    (root / "etc/os-release").unlink()
+    (root / "etc/os-release").symlink_to("/usr/lib/os-release")
+    (root / "usr/share/tunaos").mkdir(parents=True, exist_ok=True)
+    (root / "usr/share/tunaos/identity.env").write_text(
+        f"TUNAOS_VARIANT='{variant}'\n"
+    )
+    verify = subprocess.run(
+        [
+            "bash",
+            "-c",
+            'set -euo pipefail; uname() { printf "x86_64\\n"; }; '
+            'source "$1"; tunaos_verify_fork_branding "$2"',
+            "test",
+            str(context / "build_scripts/lib/fork-branding.sh"),
+            str(root),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert verify.returncode == 0, verify.stderr
     for entry in ("install-desktop.sh", "configure-desktop-runtime.sh"):
         assert "tunaos_apply_fork_branding" in (ROOT / "build_scripts/desktop" / entry).read_text()
 
@@ -188,9 +222,10 @@ def test_live_root_refused(staged, tmp_path):
     manifest, _, _, _ = materialize(staged, tmp_path)
     alias = tmp_path / "live-root"
     alias.symlink_to("/")
-    for root in (Path("/"), alias):
-        with pytest.raises(ValueError, match="non-live"):
-            IDENTITY.apply(manifest, root)
+    for operation in (lambda root: IDENTITY.apply(manifest, root), IDENTITY.verify):
+        for root in (Path("/"), alias):
+            with pytest.raises(ValueError, match="non-live"):
+                operation(root)
 
 
 def test_check_performs_no_writes_and_link_change_fails(staged, tmp_path):

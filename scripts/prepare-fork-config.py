@@ -104,7 +104,7 @@ def compile_cells(config_path, root=ROOT, identity_staging=False):
             spec.loader.exec_module(module)
             try:
                 identity, blobs = module.prepare(branding, cell, config_path.parent, plan["sources"]["sha256"])
-            except (ValueError, ImportError, OSError) as exc:
+            except (ValueError, ImportError, OSError, TypeError, AttributeError) as exc:
                 raise ConfigError(f"identity staging: {exc}") from exc
             assets.update(blobs)
             # Internal URL/package adapter retains its closed contract. The
