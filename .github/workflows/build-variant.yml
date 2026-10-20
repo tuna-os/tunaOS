@@ -70,36 +70,6 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Download current catalog snapshot
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          snapshot_dir="$RUNNER_TEMP/catalog-facts"
-          mkdir -p "$snapshot_dir"
-          run_id="$(gh run list --repo "$GITHUB_REPOSITORY" \
-            --workflow catalog-facts.yml --branch main --status success --limit 1 \
-            --json databaseId --jq '.[0].databaseId // empty' 2>/dev/null || true)"
-          if [[ -n "$run_id" ]] && gh run download "$run_id" \
-              --repo "$GITHUB_REPOSITORY" --name catalog-facts --dir "$snapshot_dir"; then
-            echo "CATALOG_SNAPSHOT=$snapshot_dir/catalog-snapshot.json" >> "$GITHUB_ENV"
-          fi
-
-      - name: Install delivery input probe
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends python3-yaml skopeo
-
-      - name: Collect current delivery inputs
-        env:
-          CURRENT_INPUTS: ${{ runner.temp }}/current-delivery-inputs.json
-        run: |
-          set -euo pipefail
-          if python3 scripts/collect-current-inputs.py --output "$CURRENT_INPUTS"; then
-            echo "CURRENT_INPUTS=$CURRENT_INPUTS" >> "$GITHUB_ENV"
-          else
-            echo "::warning::current delivery inputs were unavailable; cutover annotations will remain false"
-          fi
 
       - name: Setup yq
         uses: ./.github/actions/setup-yq
@@ -264,19 +234,6 @@ jobs:
           ARTIFACT_S2_MATRIX=$(make_artifact_matrix 2)
           ARTIFACT_S3_MATRIX=$(make_artifact_matrix 3)
           ARTIFACT_S4_MATRIX=$(make_artifact_matrix 4)
-          # Delivery cutover (delivery-cutover.json): stamp each artifact row
-          # with whether its {variant, flavor, platform} target is cut over.
-          # With the empty initial policy every row gets cutover=false, so the
-          # cutover-check inputs below evaluate to current behavior.
-          SNAPSHOT_ARGS=()
-          if [[ -s "${CATALOG_SNAPSHOT:-}" && -s "${CURRENT_INPUTS:-}" ]]; then
-            SNAPSHOT_ARGS=(--snapshot "$CATALOG_SNAPSHOT" --current-inputs "$CURRENT_INPUTS")
-          elif [[ -s "${CATALOG_SNAPSHOT:-}" ]]; then
-            SNAPSHOT_ARGS=(--snapshot "$CATALOG_SNAPSHOT")
-          fi
-          ARTIFACT_S2_MATRIX=$(echo "$ARTIFACT_S2_MATRIX" | python3 scripts/delivery-cutover.py --annotate-matrix "${SNAPSHOT_ARGS[@]}")
-          ARTIFACT_S3_MATRIX=$(echo "$ARTIFACT_S3_MATRIX" | python3 scripts/delivery-cutover.py --annotate-matrix "${SNAPSHOT_ARGS[@]}")
-          ARTIFACT_S4_MATRIX=$(echo "$ARTIFACT_S4_MATRIX" | python3 scripts/delivery-cutover.py --annotate-matrix "${SNAPSHOT_ARGS[@]}")
           echo "artifact_s2_matrix=$ARTIFACT_S2_MATRIX" >> $GITHUB_OUTPUT
           echo "artifact_s3_matrix=$ARTIFACT_S3_MATRIX" >> $GITHUB_OUTPUT
           echo "artifact_s4_matrix=$ARTIFACT_S4_MATRIX" >> $GITHUB_OUTPUT
@@ -467,6 +424,7 @@ jobs:
       matrix: ${{ fromJson(needs.generate_matrix.outputs.artifact_s2_matrix) }}
     permissions:
       contents: read
+      actions: read
       packages: read
       id-token: write
     uses: ./.github/workflows/reusable-build-artifacts.yml
@@ -490,11 +448,6 @@ jobs:
       # manual publishing has its own workflow (publish-isos.yml), and
       # publish-isos above forces it here.
       upload-r2: ${{ github.event_name == 'schedule' || inputs.publish-isos }}
-      # Delivery cutover: a cut-over cell additionally suppresses only the R2
-      # upload inside reusable-build-artifacts.yml (build, boot gate and
-      # signing still run). matrix.cutover is stamped by --annotate-matrix
-      # above; a row without it evaluates to false (current behavior).
-      cutover-check: ${{ matrix.cutover == true }}
       # Names the artifact this cell's OWN image leg uploads after a
       # successful push. Its existence is what makes the relaxed gate above
       # safe; see the provenance gate in reusable-build-artifacts.yml.
@@ -521,6 +474,7 @@ jobs:
       matrix: ${{ fromJson(needs.generate_matrix.outputs.artifact_s3_matrix) }}
     permissions:
       contents: read
+      actions: read
       packages: read
       id-token: write
     uses: ./.github/workflows/reusable-build-artifacts.yml
@@ -544,11 +498,6 @@ jobs:
       # manual publishing has its own workflow (publish-isos.yml), and
       # publish-isos above forces it here.
       upload-r2: ${{ github.event_name == 'schedule' || inputs.publish-isos }}
-      # Delivery cutover: a cut-over cell additionally suppresses only the R2
-      # upload inside reusable-build-artifacts.yml (build, boot gate and
-      # signing still run). matrix.cutover is stamped by --annotate-matrix
-      # above; a row without it evaluates to false (current behavior).
-      cutover-check: ${{ matrix.cutover == true }}
       # Names the artifact this cell's OWN image leg uploads after a
       # successful push. Its existence is what makes the relaxed gate above
       # safe; see the provenance gate in reusable-build-artifacts.yml.
@@ -573,6 +522,7 @@ jobs:
       matrix: ${{ fromJson(needs.generate_matrix.outputs.artifact_s4_matrix) }}
     permissions:
       contents: read
+      actions: read
       packages: read
       id-token: write
     uses: ./.github/workflows/reusable-build-artifacts.yml
@@ -596,11 +546,6 @@ jobs:
       # manual publishing has its own workflow (publish-isos.yml), and
       # publish-isos above forces it here.
       upload-r2: ${{ github.event_name == 'schedule' || inputs.publish-isos }}
-      # Delivery cutover: a cut-over cell additionally suppresses only the R2
-      # upload inside reusable-build-artifacts.yml (build, boot gate and
-      # signing still run). matrix.cutover is stamped by --annotate-matrix
-      # above; a row without it evaluates to false (current behavior).
-      cutover-check: ${{ matrix.cutover == true }}
       # Names the artifact this cell's OWN image leg uploads after a
       # successful push. Its existence is what makes the relaxed gate above
       # safe; see the provenance gate in reusable-build-artifacts.yml.

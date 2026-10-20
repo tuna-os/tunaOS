@@ -1,6 +1,7 @@
 name: Artifacts
 permissions:
   contents: read
+  actions: read
   packages: read
   id-token: write
 # Reusable ISO build + boot gate + publish for one {variant, flavor} cell.
@@ -66,16 +67,6 @@ on:
         required: false
         type: boolean
         default: true
-      cutover-check:
-        description: >-
-          Delivery-cutover gate for this {variant, flavor, platform} cell
-          (computed by the caller from delivery-cutover.json via
-          scripts/delivery-cutover.py). When true the R2 upload below is
-          skipped for a cut-over target; build, boot gate and signing still
-          run. Defaults to false, which is current behavior.
-        required: false
-        type: boolean
-        default: false
       capture-installer:
         description: "Also capture the installer walkthrough flow (screenshots ride the e2e artifact)"
         required: false
@@ -200,7 +191,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          pkgs=(just jq rclone golang-go git skopeo systemd-boot-efi mtools squashfs-tools xorriso dosfstools gdisk e2fsprogs btrfs-progs)
+          pkgs=(just jq rclone golang-go git skopeo python3-yaml systemd-boot-efi mtools squashfs-tools xorriso dosfstools gdisk e2fsprogs btrfs-progs)
           if sudo sh -c 'command -v podman' >/dev/null 2>&1; then
             echo "podman already present: $(sudo sh -c 'command -v podman') ($(sudo podman --version))"
           else
@@ -251,6 +242,13 @@ jobs:
             echo "invalid live overlay digest: ${OVERLAY_DIGEST}" >&2
             exit 1
           }
+          OVERLAY_BASE_DIGEST="$(skopeo inspect "${SKOPEO_PLATFORM[@]}" \
+            --format '{{ index .Labels "org.tunaos.live-overlay.base-digest" }}' \
+            "docker://${OVERLAY_REF}")"
+          if [[ "$OVERLAY_BASE_DIGEST" != "$IMAGE_DIGEST" ]]; then
+            echo "live overlay base digest ${OVERLAY_BASE_DIGEST:-<missing>} does not match promoted image ${IMAGE_DIGEST}" >&2
+            exit 1
+          fi
           TACKLEBOX_PIN="$(awk -F'"' '/^[[:space:]]*tacklebox:/ { print $2; exit }' image-versions.yaml)"
           [[ "$TACKLEBOX_PIN" =~ ^[0-9a-f]{40}$ ]] || {
             echo "invalid tacklebox pin: ${TACKLEBOX_PIN}" >&2
@@ -439,6 +437,40 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+      - name: Reevaluate delivery cutover
+        id: cutover
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VARIANT: ${{ inputs.variant }}
+          FLAVOR: ${{ inputs.flavor }}
+          PLATFORM: ${{ inputs.platform }}
+          SNAPSHOT_DIR: ${{ runner.temp }}/catalog-facts
+          CURRENT_INPUTS: ${{ runner.temp }}/current-delivery-inputs.json
+        run: |
+          set -euo pipefail
+          echo "suppress=false" >> "$GITHUB_OUTPUT"
+          mkdir -p "$SNAPSHOT_DIR"
+          run_id="$(gh run list --repo "$GITHUB_REPOSITORY" \
+            --workflow catalog-facts.yml --branch main --status success --limit 1 \
+            --json databaseId --jq '.[0].databaseId // empty' 2>/dev/null || true)"
+          if [[ -z "$run_id" ]] || ! gh run download "$run_id" \
+              --repo "$GITHUB_REPOSITORY" --name catalog-facts --dir "$SNAPSHOT_DIR"; then
+            echo "::warning::current catalog snapshot unavailable; R2 publication remains enabled"
+            exit 0
+          fi
+          snapshot="$SNAPSHOT_DIR/catalog-snapshot.json"
+          if ! python3 scripts/collect-current-inputs.py \
+              --variant "$VARIANT" --flavor "$FLAVOR" --platform "$PLATFORM" \
+              --output "$CURRENT_INPUTS"; then
+            echo "::warning::current delivery inputs unavailable; R2 publication remains enabled"
+            exit 0
+          fi
+          if python3 scripts/delivery-cutover.py --check \
+              --variant "$VARIANT" --flavor "$FLAVOR" --platform "$PLATFORM" \
+              --snapshot "$snapshot" --current-inputs "$CURRENT_INPUTS"; then
+            echo "suppress=true" >> "$GITHUB_OUTPUT"
+          fi
+
       # Publish only runs if the boot gate above passed.
       - name: Upload ISO to Cloudflare R2
         if: inputs.upload-r2
@@ -453,13 +485,12 @@ jobs:
           VARIANT: ${{ inputs.variant }}
           FLAVOR: ${{ inputs.flavor }}
           PLATFORM: ${{ inputs.platform }}
-          CUTOVER_SUPPRESS: ${{ inputs.cutover-check }}
+          CUTOVER_SUPPRESS: ${{ steps.cutover.outputs.suppress }}
         run: |
-          # Delivery cutover (delivery-cutover.json): suppression is
-          # upload-only. Build, boot gate and signing above already ran; a
-          # cut-over target just stops publishing to R2.
+          # Cutover was reevaluated after this run published the image. A
+          # failed snapshot or input probe leaves suppression false.
           if [[ "${CUTOVER_SUPPRESS}" == "true" ]]; then
-            echo "Cut over per delivery-cutover.json — skipping R2 upload for ${VARIANT}:${FLAVOR} (${PLATFORM})"
+            echo "Cut over per current delivery evidence — skipping R2 upload for ${VARIANT}:${FLAVOR} (${PLATFORM})"
             exit 0
           fi
           if [[ -z "${R2_BUCKET}" ]]; then
@@ -474,13 +505,28 @@ jobs:
             rclone copy --log-level INFO --checksum --s3-no-check-bucket \
               "$artifact" "R2:${R2_BUCKET}/live-isos/"
           done
-          # AMD64/v2 is the canonical ordinary Alma target and owns the
-          # historical bare pointer. Generic AMD64 gets a distinct pointer so
-          # two x86 matrix legs cannot overwrite one another's ISO, checksum,
-          # or signature bundle.
+          # AMD64/v2 owns the historical bare pointer when it exists. Generic
+          # AMD64 retains that pointer for cells with no v2 sibling.
+          HAS_V2="$(python3 - "$VARIANT" "$FLAVOR" <<'PY'
+          import sys
+          from scripts.lib import tunaos_config
+          variant_id, flavor_id = sys.argv[1:]
+          config = tunaos_config.matrix(tunaos_config.load())
+          variant = next(v for v in config["variants"] if v["id"] == variant_id)
+          flavor = next(f for f in variant["flavors"] if f["id"] == flavor_id)
+          platforms = flavor.get("platforms") or variant.get("platforms") or config["config"]["global_platforms"]
+          print("true" if "linux/amd64/v2" in platforms else "false")
+          PY
+          )"
           case "${PLATFORM}" in
             linux/amd64/v2) LATEST="${VARIANT}-${FLAVOR}-latest.iso" ;;
-            linux/amd64) LATEST="${VARIANT}-${FLAVOR}-latest-amd64.iso" ;;
+            linux/amd64)
+              if [[ "$HAS_V2" == true ]]; then
+                LATEST="${VARIANT}-${FLAVOR}-latest-amd64.iso"
+              else
+                LATEST="${VARIANT}-${FLAVOR}-latest.iso"
+              fi
+              ;;
             linux/arm64) LATEST="${VARIANT}-${FLAVOR}-latest-arm64.iso" ;;
             *) echo "::error::unsupported canonical platform: ${PLATFORM}"; exit 1 ;;
           esac
