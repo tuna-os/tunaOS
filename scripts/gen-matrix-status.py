@@ -376,13 +376,8 @@ def _is_beta_lifecycle_cell(cell: str) -> bool:
     )
 
 
-def lifecycle_sweep_jobs(config: dict | None = None) -> set[str]:
-    """Exact validating job names in an unfiltered lifecycle matrix.
-
-    The BETA lane only probes tag existence. It is intentionally absent from
-    both lifecycle scoring and full-sweep coverage until that lane executes
-    the actual lifecycle assertions.
-    """
+def lifecycle_validation_jobs(config: dict | None = None) -> set[str]:
+    """Exact validating job names, including cells formerly in the stable lane."""
     config = config or load_build_config(CONFIG)
     jobs = set()
     for variant in config.get("variants", []):
@@ -392,16 +387,22 @@ def lifecycle_sweep_jobs(config: dict | None = None) -> set[str]:
             if (not flavor.get("build_image") or flavor_id == "base"
                     or flavor_id.startswith("base-")):
                 continue
-            cell = f"{variant_id}:{flavor_id}"
-            if _is_beta_lifecycle_cell(cell):
-                continue
             platforms = flavor.get("platforms")
             if platforms is None:
                 platforms = variant.get("platforms") or []
+            cell = f"{variant_id}:{flavor_id}"
             for architecture in ("amd64", "arm64"):
                 if f"linux/{architecture}" in platforms:
                     jobs.add(f"{cell} ({architecture})")
     return jobs
+
+
+def lifecycle_sweep_jobs(config: dict | None = None) -> set[str]:
+    """Exact validating job names in an unfiltered stable lifecycle matrix."""
+    return {
+        job for job in lifecycle_validation_jobs(config)
+        if not _is_beta_lifecycle_cell(job.rsplit(" (", 1)[0])
+    }
 
 
 def _collect_latest_results(
@@ -812,8 +813,8 @@ def _axis_from_results(results: dict, key: str) -> str:
 
 # bootc-lifecycle job names carry an arch suffix, and the beta lane adds a
 # display-only "BETA " prefix. The collector uses a prefix-neutral identity for
-# full-sweep coverage, while lifecycle_results excludes the beta lane because
-# its jobs only probe tag existence and do not assert update/rollback behavior.
+# full-sweep coverage. Lifecycle scoring accepts unprefixed validating jobs from
+# either lane's historical routing, but never beta existence probes.
 _LIFECYCLE_NAME = re.compile(
     r"^(?:BETA\s+)?(?P<cell>[a-z0-9-]+:[a-z0-9-]+)\s+\((?P<arch>[a-z0-9]+)\)$"
 )
@@ -845,8 +846,8 @@ def _result_order(hit: tuple[str, str, str]) -> tuple[str, int | str]:
 def lifecycle_results(
     raw_results: dict[str, tuple[str, str, str]] | None = None,
 ) -> dict[str, tuple[str, str, str]]:
-    """Newest current validation per cell, worst-of-architectures."""
-    allowed = lifecycle_sweep_jobs()
+    """Newest unprefixed validation per cell, worst-of-architectures."""
+    allowed = lifecycle_validation_jobs()
     if raw_results is None:
         raw_results = latest_results("bootc-lifecycle.yml", r":")
     newest_by_job: dict[str, tuple[str, str, str]] = {}
@@ -1419,8 +1420,9 @@ def build() -> str:
         f"({tested} tested, {total - tested} never tested).",
         "",
         (
-            "Checks update, rebase, rollback and aliases with bootc. "
-            "Also checks system contracts after a switch between published desktops."
+            "Checks image metadata, `bootc install print-configuration`, "
+            "and the configured desktop contract. It does not exercise "
+            "update, rebase, or rollback transitions."
         ),
         "",
     ]

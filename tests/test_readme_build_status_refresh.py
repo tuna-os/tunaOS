@@ -203,6 +203,10 @@ def test_every_new_release_appends_the_same_generated_verification_data():
     assert "steps.existing.outputs.exists == 'true'" in report_step["if"]
     assert "gh release download" in report_block
     assert "--stored-identity release-body.md" in report_block
+    assert "matrix-provenance.json" in report_block
+    assert "matrix-provenance-commit.txt" in report_block
+    assert "--provenance" in report_block
+    assert "PROVENANCE_COMMIT" in report_block
     assert "CURRENT_DIGEST" not in report_block
     assert "CURRENT_SBOM_PACKAGES" not in report_block
     assert "EXISTING" not in report_block

@@ -683,7 +683,7 @@ class LifecycleResultsNormalisation(unittest.TestCase):
         with mock.patch.object(gms, "latest_results", return_value=raw):
             return gms.lifecycle_results()
 
-    def test_current_validations_normalise_and_beta_history_is_excluded(self):
+    def test_current_validations_normalise_and_beta_probes_are_excluded(self):
         got = self._with_raw({
             "yellowfin:gnome (amd64)": ("success", "2026-08-17", "1"),
             "yellowfin:kde (amd64)": ("failure", "2026-08-17", "1"),
@@ -694,8 +694,9 @@ class LifecycleResultsNormalisation(unittest.TestCase):
         })
         self.assertEqual(got["yellowfin:gnome"][0], "success")
         self.assertEqual(got["yellowfin:kde"][0], "failure")
-        self.assertNotIn("guppy:gnome", got)
-        self.assertNotIn("bonito-rawhide:gnome", got)
+        self.assertEqual(got["guppy:gnome"][0], "failure")
+        self.assertEqual(got["bonito-rawhide:gnome"][0], "failure")
+        self.assertNotIn("BETA guppy:gnome", got)
 
     def test_renamed_job_uses_newest_result_before_merging_architectures(self):
         # Display-name whitespace can change without changing a cell or arch.
