@@ -1,4 +1,7 @@
-"""tunaOS#3380: installed qualification must trust only matching guest evidence."""
+"""tunaOS#3380: installed qualification must trust only matching guest evidence.
+
+Falsification: behavioral -- feed a wrong desktop, digest, session, or failure marker to the validator; an unfixed validator reaches result writing and the corresponding assertion fails.
+"""
 
 from __future__ import annotations
 
