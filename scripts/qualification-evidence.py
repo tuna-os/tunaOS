@@ -28,6 +28,7 @@ REASON_CODES = frozenset({
     "assertion-failed", "cleanup-failed", "contract-mismatch", "malformed-evidence",
     "runner-unavailable", "timeout", "unknown",
 })
+SKIP_REASON_CODES = frozenset({"blocked-by-prior-failure", "not-applicable"})
 
 
 class ContractError(ValueError):
@@ -107,7 +108,7 @@ def validate_inputs(value: object) -> dict:
     for name, value_digest in build.items():
         where = f"inputs.build.{name}"
         token(name, where)
-        digest(value_digest, f"{where}.digest")
+        digest(value_digest, where)
     harness = inputs["harness"]
     require(isinstance(harness, dict) and len(harness) <= MAX_INPUTS, "inputs.harness: invalid inventory")
     for name, record in harness.items():
@@ -164,12 +165,12 @@ def validate_verdicts(value: object) -> dict[str, str]:
     return value
 
 
-def validate_reuse_document(value: object, *, producer: bool) -> dict:
+def validate_reuse_document(value: object, *, producer: bool, where: str = "reuse receipt") -> dict:
     fields = {"schemaVersion", "image", "inputs", "platform", "tools"}
     if producer:
         fields |= {"producer", "assertions"}
-    document = exact(value, fields, "reuse receipt")
-    require(document["schemaVersion"] == 1, "reuse receipt: unsupported schemaVersion")
+    document = exact(value, fields, where)
+    require(document["schemaVersion"] == 1, f"{where}: unsupported schemaVersion")
     validate_image(document["image"])
     validate_inputs(document["inputs"])
     validate_platform(document["platform"])
@@ -181,7 +182,7 @@ def validate_reuse_document(value: object, *, producer: bool) -> dict:
         affected = [record for group in (document["inputs"]["harness"], document["tools"])
                     for record in group.values()]
         require(all(set(record["assertions"]) <= declared for record in affected),
-                "reuse receipt: input or tool names an undeclared assertion")
+                f"{where}: input or tool names an undeclared assertion")
     return document
 
 
@@ -200,8 +201,8 @@ def changed_assertions(original: dict, current: dict) -> tuple[list[str], list[s
 
 
 def evaluate_reuse(producer: object, current: object) -> dict:
-    previous = validate_reuse_document(producer, producer=True)
-    expected = validate_reuse_document(current, producer=False)
+    previous = validate_reuse_document(producer, producer=True, where="producer receipt")
+    expected = validate_reuse_document(current, producer=False, where="current inputs")
     require(previous["image"] == expected["image"], "image identity mismatch; rebuild required")
     require(previous["platform"] == expected["platform"], "platform mismatch; rebuild required")
     for field in ("sourceReceipt", "configReceipt", "build"):
@@ -301,7 +302,9 @@ def validate_event(value: object, assertions: set[str], evidence: dict[str, dict
         exact(value, common, "event")
     elif status == "skipped":
         event = exact(value, common | {"reasonCode"}, "event")
-        token(event["reasonCode"], "event.reasonCode")
+        require(isinstance(event["reasonCode"], str)
+                and event["reasonCode"] in SKIP_REASON_CODES,
+                "event.reasonCode: invalid skip reason")
     elif status == "failed":
         event = exact(value, common | {"failure"}, "event")
         failure = exact(event["failure"], {"classification", "reasonCode", "commandId",

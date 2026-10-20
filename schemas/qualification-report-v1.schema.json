@@ -80,6 +80,9 @@
       "type": ["string", "null"],
       "pattern": "^[a-z0-9][a-z0-9._-]{0,79}$"
     },
+    "skipReason": {
+      "enum": ["blocked-by-prior-failure", "not-applicable"]
+    },
     "command": {
       "type": ["string", "null"],
       "pattern": "^[a-z0-9][a-z0-9._-]{0,79}$"
@@ -116,7 +119,7 @@
             "properties": {
               "timestamp": { "$ref": "#/$defs/timestamp" },
               "classification": { "type": "null" },
-              "reasonCode": { "$ref": "#/$defs/token" },
+              "reasonCode": { "$ref": "#/$defs/skipReason" },
               "commandId": { "type": "null" },
               "exitCode": { "type": "null" },
               "evidenceIds": { "maxItems": 0 }

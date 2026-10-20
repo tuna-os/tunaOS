@@ -257,6 +257,21 @@ def test_public_report_lists_pass_fail_skip_and_never_run_with_exact_image():
     assert report["reuse"] == {"mode": "reused", "producerRunId": 123, "artifactId": 456}
 
 
+@pytest.mark.parametrize("reason", ["secret", 1, {}])
+def test_skipped_events_accept_only_bounded_reason_codes(reason):
+    bad = event("login", "skipped", 1, reason=reason)
+    with pytest.raises(MODULE.ContractError, match="invalid skip reason"):
+        MODULE.build_report(evidence_context(), [bad])
+
+
+def test_report_schema_uses_the_same_skip_reason_allowlist():
+    schema = json.loads((ROOT / "schemas/qualification-report-v1.schema.json").read_text())
+    validator = Draft202012Validator(schema)
+    report = MODULE.build_report(evidence_context(), [event("login", "skipped", 1)])
+    skipped = next(row for row in report["assertions"] if row["name"] == "login")
+    skipped["reasonCode"] = "secret"
+    assert not validator.is_valid(report)
+
 def test_welcome_screenshot_never_counts_as_install_success():
     report = MODULE.build_report(evidence_context(), [
         event("build", "passed", 1), event("boot", "passed", 2),
@@ -423,7 +438,7 @@ def test_malformed_tail_preserves_prior_failure(tmp_path, tail):
 @pytest.mark.parametrize(
     ("mutation", "path"),
     [
-        ("build", "inputs.build.bad.digest"),
+        ("build", "inputs.build.bad"),
         ("harness", "inputs.harness.bad.digest"),
     ],
 )
