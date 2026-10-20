@@ -7,31 +7,33 @@ base-level arm64 gap.
 """
 from __future__ import annotations
 
+import importlib.util
 import pathlib
 
-import yaml
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
+SPEC = importlib.util.spec_from_file_location(
+    "tunaos_config_under_test", ROOT / "scripts" / "lib" / "tunaos_config.py")
+tunaos_config = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(tunaos_config)
 
 PINNED_AMD64_ONLY = {"gnome", "cosmic"}
 
 
 def _hummingbird() -> dict:
-    cfg = yaml.safe_load(
-        (ROOT / ".github" / "build-config.yml").read_text(encoding="utf-8"))
+    cfg = tunaos_config.matrix(tunaos_config.load(ROOT / "tunaos.toml"))
     return next(v for v in cfg["variants"] if v["id"] == "hummingbird")
-
 
 def test_desktop_flavors_without_aarch64_package_sources_are_amd64_only():
     hb = _hummingbird()
     for flavor in hb["flavors"]:
         if flavor["id"] in PINNED_AMD64_ONLY:
-            assert flavor.get("platforms") == ["linux/amd64"], (
+            platforms = flavor.get("platforms") or hb["platforms"]
+            assert platforms == ["linux/amd64"], (
                 f"hummingbird:{flavor['id']} declares "
-                f"{flavor.get('platforms', hb['platforms'])} — re-adding "
-                f"arm64 requires measuring the desktop's manifest set "
-                f"against the live aarch64 index and removing the flavor "
-                f"from PINNED_AMD64_ONLY in the same change")
+                f"{platforms} — re-adding arm64 requires measuring the "
+                f"flavor's manifest set against the live aarch64 index and "
+                f"removing the flavor from PINNED_AMD64_ONLY in the same change")
 
 
 

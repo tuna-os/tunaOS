@@ -84,7 +84,7 @@ variant — but it is a *port*, not a *rebuild*, and the difference matters:
 - Hardening and minimalism are the *point*. A package being absent is often a
   deliberate upstream choice, not an oversight to be reported as a bug.
 
-### GNOME and COSMIC consume utah-packages (updated 2026-10-17)
+### GNOME and COSMIC consume utah-packages (updated 2026-10-20)
 
 Bluefin builds GNOME 51 for Hummingbird. The same factory builds the desktop
 dependencies. Both use Hummingbird's own build root
@@ -96,12 +96,13 @@ image by digest. `Containerfile.el10` bind-mounts `/repository` at
 manifests expose it to dnf as a `file://` repository.
 
 The configured pin is
-`sha256:fb4ef19676127430af4a7aa5ea5f9ee2cebdcfdf17e665c509eefb6896cdfc76`.
-Registry inspection on 2026-10-17 resolved that exact digest to an amd64 OCI
-manifest created at `2026-10-17T02:39:14Z`, revision
-`7ee7b00c90e2a2c05e5ff9b0f51a996a40f21cc6`, factory run `38991457966`.
-Its embedded factory state records 421 source inputs and no failed source
-builds. The dependency sources relevant to the two desktops include:
+`sha256:dad5b8e00e554a84ab44a425bfce2eceb788f1885e875b7489dd9f67c0766763`.
+Registry inspection on 2026-10-20 resolved that exact digest to an amd64 OCI
+manifest created at `2026-10-20T09:40:29Z`, revision
+`0c14c2e9f23067b39ae2c10273a2e19de5c1a8d3`, factory run `39365057180`.
+Its embedded factory state records 451 source inputs and a failed `git` input
+marker (`eb7236fb4cbeef24`). The dependency sources relevant to the two
+desktops include:
 
 | source in the configured Utah factory state | desktop dependency it closes |
 |---|---|
@@ -111,9 +112,9 @@ builds. The dependency sources relevant to the two desktops include:
 | `evolution-data-server`, `libcanberra`, `samba` | GNOME Shell, control center and GVFS |
 | `gnome-shell`, `gnome-session`, `gdm` | the GNOME 51 session |
 
-This registry evidence aligns with the configured digest and proves its source
-closure and architecture. It does not replace the Hummingbird COSMIC build and
-installed-session contract, which must prove binary dependency resolution.
+This registry evidence aligns with the configured digest and records its source
+inventory and architecture. It does not replace the Hummingbird COSMIC build
+and installed-session contract, which must prove binary dependency resolution.
 
 Build Hummingbird run 38660870261 showed the remaining repository wiring bug.
 The contract for GNOME found GNOME 51. The COSMIC build loaded only

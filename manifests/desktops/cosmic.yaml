@@ -202,11 +202,13 @@ packages:
   # Hummingbird run 38660870261 still could not install the session:
   # libsndfile had no libvorbis provider, cosmic-greeter had no fprintd-pam,
   # and cosmic-files had no installable udisks2. The configured
-  # projectbluefin/utah-packages repository now carries those dependencies
+  # projectbluefin/utah-packages repository carries those dependencies
   # in the configured OCI image, pinned in image-versions.yaml at
-  # sha256:fb4ef19676127430af4a7aa5ea5f9ee2cebdcfdf17e665c509eefb6896cdfc76.
-  # Its measured dependency inventory has 1,446 binary names (2026-10-17).
-  # overlapping packages in the supplemental tunaOS snapshot at priority 5;
+  # sha256:dad5b8e00e554a84ab44a425bfce2eceb788f1885e875b7489dd9f67c0766763.
+  # Its factory state records 451 source inputs, including libvorbis, fprintd,
+  # libfprint, udisks2, and the GNOME sources used by the shared closure.
+  # The Utah repository takes precedence over overlapping packages in the
+  # supplemental tunaOS snapshot at priority 5;
   # COSMIC itself still comes from tunaos-hummingbird.
   #
   # Both repositories are x86_64 today. The snapshot uses `$basearch`, but
