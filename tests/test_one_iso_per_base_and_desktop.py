@@ -198,6 +198,28 @@ def _annotate_group(tmp_path: Path, config: dict) -> subprocess.CompletedProcess
         check=False,
     )
 
+def test_matrix_annotation_rejects_non_object_rows(tmp_path: Path):
+    config_path = tmp_path / "config.json"
+    config_path.write_text(
+        json.dumps(_group_policy_config([], [])), encoding="utf-8"
+    )
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(POLICY),
+            "--config-json",
+            str(config_path),
+            "annotate-target-matrix",
+        ],
+        input='{"include":[null]}',
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 1
+    assert "matrix include entries must be objects" in result.stderr
+
 
 def test_nonempty_cutover_is_rejected_until_receipts_are_integrated(tmp_path: Path):
     result = _annotate_group(

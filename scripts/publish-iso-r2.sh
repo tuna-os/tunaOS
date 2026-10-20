@@ -3,6 +3,14 @@
 
 set -euo pipefail
 
+error() {
+	if [[ -n "${GITHUB_ACTIONS:-}" ]]; then
+		echo "::error::$*" >&2
+	else
+		echo "ERROR: $*" >&2
+	fi
+}
+
 if [[ $# -ne 4 ]]; then
 	echo "usage: $0 ISO LATEST_NAME CONFIG_JSON R2_DEST" >&2
 	exit 2
@@ -21,37 +29,31 @@ safe_iso_basename() {
 	[[ "$1" =~ ^[A-Za-z0-9][A-Za-z0-9._+~-]*\.iso$ ]]
 }
 if ! safe_iso_basename "$versioned" || ! safe_iso_basename "$latest"; then
-	echo "ERROR: ISO and latest names must be safe single-line basenames ending in .iso" >&2
+	error "ISO and latest names must be safe single-line basenames ending in .iso"
 	exit 2
 fi
 
 for source in "$iso" "$checksum" "$bundle"; do
 	[[ -f "$source" ]] || {
-		echo "ERROR: missing signed ISO artifact: $source" >&2
+		error "missing signed ISO artifact: $source"
 		exit 1
 	}
 done
 
-if ! python3 "$policy" --config-json "$config_json" validate >/dev/null; then
-	echo "ERROR: refusing R2 publication because the ISO delivery policy is invalid" >&2
+tmpdir=$(mktemp -d)
+trap 'rm -rf "$tmpdir"' EXIT
+retained_file="$tmpdir/retained-objects"
+if ! python3 "$policy" --config-json "$config_json" retained-objects >"$retained_file"; then
+	error "refusing R2 publication because the ISO delivery policy is invalid"
 	exit 1
 fi
+declare -A retained_objects=()
+while IFS= read -r object; do
+	[[ -n "$object" ]] && retained_objects["$object"]=1
+done <"$retained_file"
 
 is_retained() {
-	local result
-	if ! result="$(python3 "$policy" --config-json "$config_json" \
-		object-protected --object "$1")"; then
-		echo "ERROR: could not evaluate retention policy for $1" >&2
-		return 2
-	fi
-	case "$result" in
-	true) return 0 ;;
-	false) return 1 ;;
-	*)
-		echo "ERROR: retention policy returned an invalid verdict for $1: $result" >&2
-		return 2
-		;;
-	esac
+	[[ -n "${retained_objects[$1]+present}" ]]
 }
 
 copy_unless_retained() {
@@ -79,7 +81,7 @@ if [[ -z "$publication_id" ]]; then
 	publication_id="$(date -u +%Y%m%dT%H%M%S%N)-${BASHPID}"
 fi
 if [[ ! "$publication_id" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
-	echo "ERROR: publication id contains unsafe object-name characters: ${publication_id}" >&2
+	error "publication id contains unsafe object-name characters: ${publication_id}"
 	exit 1
 fi
 
@@ -97,8 +99,6 @@ publication_name() {
 	esac
 }
 
-tmpdir=$(mktemp -d)
-trap 'rm -rf "$tmpdir"' EXIT
 
 publish_iso_as() {
 	local object=$1
@@ -110,11 +110,11 @@ publish_iso_as() {
 			local existing
 			if ! existing="$(rclone lsf --s3-no-check-bucket --files-only \
 				--include "/${candidate}" "${destination}/")"; then
-				echo "ERROR: could not check whether snapshot object exists: ${candidate}" >&2
+				error "could not check whether snapshot object exists: ${candidate}"
 				return 1
 			fi
 			if [[ -n "$existing" ]]; then
-				echo "ERROR: refusing to reactivate existing snapshot object: ${candidate}" >&2
+				error "refusing to reactivate existing snapshot object: ${candidate}"
 				return 1
 			fi
 		done
