@@ -50,14 +50,11 @@ CHECK_GREETER
 "$CORRAL" screenshot "$NAME" -o "${OUT}/gdm-greeter.png" --require-paint
 
 # Corral creates exactly one regular, non-sudo user in a disposable image
-# layer, so Enter selects its GDM tile and the password authenticates it.
-"$CORRAL" key "$NAME" ret
-sleep 2
-"$CORRAL" screenshot "$NAME" -o "${OUT}/gdm-user-selected.png" --require-paint
-sleep 2
-"$CORRAL" type "$NAME" "$TEST_PASSWORD" --enter
+# layer. Slower greeters may still be assigning keyboard focus when the first
+# frame paints, so settle before sending any keys. GDM versions also differ in
+# what opens the tile (pre-focused Enter, Tab-then-Enter, or type-ahead
+# selection); the attempt loop below tries each in turn.
 sleep 3
-"$CORRAL" screenshot "$NAME" -o "${OUT}/gdm-after-password.png" --require-paint
 
 graphical_session() {
 	guest bash -s -- "$TEST_USER" <<'FIND_SESSION'
@@ -77,11 +74,22 @@ FIND_SESSION
 }
 
 session_id=""
-for _ in $(seq 1 60); do
-	if session_id="$(graphical_session)"; then
-		break
-	fi
+for attempt in 1 2 3; do
+	case "$attempt" in
+	1) "$CORRAL" key "$NAME" ret ;;
+	2) "$CORRAL" key "$NAME" tab; sleep 1; "$CORRAL" key "$NAME" ret ;;
+	3) "$CORRAL" type "$NAME" "$TEST_USER"; sleep 1; "$CORRAL" key "$NAME" ret ;;
+	esac
 	sleep 2
+	"$CORRAL" screenshot "$NAME" -o "${OUT}/gdm-attempt-${attempt}.png" --require-paint
+	sleep 2
+	"$CORRAL" type "$NAME" "$TEST_PASSWORD" --enter
+	for _ in $(seq 1 20); do
+		if session_id="$(graphical_session)"; then
+			break 2
+		fi
+		sleep 2
+	done
 done
 [[ -n "$session_id" ]] || {
 	echo "GDM did not start an active Wayland session for ${TEST_USER}" >&2
