@@ -17,6 +17,8 @@ def builder_target(root, output, relative):
         raise tunaos_config.ConfigError(f'{target}: generated output escapes checkout')
     if target.exists() and not target.is_file():
         raise tunaos_config.ConfigError(f'{target}: expected regular output file')
+    if not target.parent.is_dir():
+        raise tunaos_config.ConfigError(f'{target}: output parent must be an existing directory: {target.parent}')
     return target
 
 
@@ -36,7 +38,7 @@ def main():
             target = builder_target(args.root, args.output, 'docs/iso-builder.config.json')
             if args.command == 'check-builder-config':
                 if not target.is_file() or target.read_text(encoding='utf-8') != content:
-                    raise tunaos_config.ConfigError(f'{target}: generated builder config drift; run generate-builder-config')
+                    raise tunaos_config.ConfigError(f'{target}: generated builder config drift; run generate-builder-config with the same --root and --output arguments')
             else:
                 target.write_text(content, encoding='utf-8')
             print(target)

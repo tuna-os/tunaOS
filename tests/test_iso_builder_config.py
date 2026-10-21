@@ -319,3 +319,100 @@ def test_builder_output_directory_contract(tmp_path, command, kind):
     assert result.returncode == (0 if kind in ('checkout-link', 'external') else 1), result.stderr
     assert victim.read_text() == payload
     assert 'Traceback' not in result.stderr
+
+
+@pytest.mark.parametrize('path,value,expected', [
+    (('brand',), [], 'brand:'),
+    (('brand', 'name'), '', 'brand.name:'),
+    (('brand', 'homepage_url'), 'http://example.org', 'brand.homepage_url:'),
+    (('brand', 'logo_url'), '/bad path.png', 'brand.logo_url:'),
+    (('presentation', 'intro'), False, 'presentation.intro:'),
+    (('presentation', 'accent_color'), 'red', 'presentation.accent_color:'),
+    (('output', 'volume_label'), 'bad label', 'output.volume_label:'),
+    (('desktops', 0), {}, 'desktops[0]:'),
+    (('desktops', 0, 'id'), 'BAD', 'desktops[0].id:'),
+    (('desktops', 0, 'description'), '', 'desktops[0].description:'),
+    (('desktops', 0, 'default_flatpaks'), ['bad'], 'desktops[0].default_flatpaks[0]:'),
+    (('variants', 0, 'name'), '', 'variants[0].name:'),
+    (('curated_app_sets', 0, 'url'), 'http://example.org', 'curated_app_sets[0].url:'),
+    (('ddi_channels', 0, 'stem'), 'BAD', 'ddi_channels[0].stem:'),
+    (('default_selection', 'platform'), 'linux/bad', 'default_selection.platform:'),
+])
+def test_validation_errors_identify_the_field(path, value, expected):
+    document = config()
+    target = document
+    for key in path[:-1]:
+        target = target[key]
+    target[path[-1]] = value
+    with pytest.raises(builder.ConfigError) as error:
+        builder.validate(document)
+    assert expected in str(error.value)
+
+
+def test_named_image_reference_keeps_fixture_acceptance():
+    cases = json.loads((ROOT / 'tests/fixtures/builder-config-image-references.json').read_text())
+    for case in cases:
+        assert bool(re.fullmatch(builder.IMAGE_REFERENCE, case['reference'])) is case['valid']
+
+
+@pytest.mark.parametrize('failure', ['no-spec', 'no-loader', 'missing-file', 'unreadable-file'])
+def test_primary_builder_loader_reports_config_error(monkeypatch, failure):
+    document = primary.load()
+    original = primary.importlib.util.spec_from_file_location
+
+    class BrokenLoader:
+        def create_module(self, spec):
+            return None
+
+        def exec_module(self, module):
+            if failure == 'missing-file':
+                raise FileNotFoundError('synthetic absent validator')
+            raise PermissionError('synthetic unreadable validator')
+
+    def spec_for(name, path, *args, **kwargs):
+        spec = original(name, path, *args, **kwargs)
+        if name != 'iso_builder_config':
+            return spec
+        if failure == 'no-spec':
+            return None
+        spec.loader = None if failure == 'no-loader' else BrokenLoader()
+        return spec
+
+    monkeypatch.setattr(primary.importlib.util, 'spec_from_file_location', spec_for)
+    with pytest.raises(primary.ConfigError) as error:
+        primary.validate(document)
+    assert 'iso_builder:' in str(error.value)
+    assert 'iso_builder_config.py' in str(error.value)
+    if failure.endswith('-file'):
+        assert isinstance(error.value.__cause__, OSError)
+
+
+@pytest.mark.parametrize('command', ['generate-builder-config', 'check-builder-config'])
+@pytest.mark.parametrize('kind', ['absent', 'regular-file'])
+def test_output_parent_error_is_explicit_without_creating_directories(tmp_path, command, kind):
+    parent = tmp_path / 'parent'
+    if kind == 'regular-file':
+        parent.write_text('preserve this file')
+    target = parent / 'config.json'
+    result = subprocess.run([sys.executable, str(ROOT / 'scripts/config.py'), command,
+                             '--output', str(target)], capture_output=True, text=True)
+    assert result.returncode == 1
+    assert 'output parent must be an existing directory' in result.stderr
+    assert str(parent) in result.stderr
+    assert 'Traceback' not in result.stderr
+    if kind == 'regular-file':
+        assert parent.read_text() == 'preserve this file'
+    else:
+        assert not parent.exists()
+
+
+def test_custom_output_drift_names_matching_regeneration_arguments(tmp_path):
+    target = tmp_path / 'custom.json'
+    target.write_text('{}')
+    result = subprocess.run([sys.executable, str(ROOT / 'scripts/config.py'),
+                             'check-builder-config', '--output', str(target)],
+                            capture_output=True, text=True)
+    assert result.returncode == 1
+    assert str(target) in result.stderr
+    assert 'generate-builder-config with the same --root and --output arguments' in result.stderr
+    assert target.read_text() == '{}'
