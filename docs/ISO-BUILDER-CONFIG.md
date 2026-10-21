@@ -129,6 +129,27 @@ Review selection needs availability and must meet the existing policy for offere
 Execution must pass the existing gate for qualification. Recommendations grant
 no qualification, and preview leaves never enter image inspection or build APIs.
 
+### Primary image declarations
+
+`[flatpak_preinstall]` in `tunaos.toml` owns the app IDs.
+Run `python3 scripts/config.py generate-flatpak-policy` to write the image file.
+Run `python3 scripts/config.py generate-builder-config` to write the builder file.
+Run each `check-...` command to test for drift.
+Do not edit the files that the tools write.
+Do not add `default_flatpaks` to the builder tables in TOML.
+
+The hook writes its own `tunaos-<desktop>.preinstall` file on each run.
+It deletes the old file first, then it writes the current IDs.
+A cut-down set thus drops the old IDs.
+An empty set leaves no file from this hook.
+
+Files from other sources stay in place.
+The hook still skips IDs that other files already declare.
+An empty set does not delete apps or files from other sources.
+These files state intent.
+They are not proof of install, boot, or qualification.
+
+
 ## Image reference syntax
 
 Image defaults use the path and DNS label rules from [distribution/reference v0.6.0](https://github.com/distribution/reference/blob/v0.6.0/regexp.go).

@@ -217,7 +217,7 @@ flavors that exist in the matrix.
 `[iso_builder]` now owns the bounded browser presentation and default choices.
 See [ISO Builder configuration](ISO-BUILDER-CONFIG.md) for export, validation,
 drift checks and catalog authority boundaries. This does not move installed
-image identity, artwork or installer branding into primary configuration.
+image identity, artwork or installer brand into primary configuration.
 
 The Marlin GDM override also belongs to `[desktops.tuna-arch]`. Its generated
 adapter has the same precedence as the former tracked YAML. The regression

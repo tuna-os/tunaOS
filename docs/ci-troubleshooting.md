@@ -1802,3 +1802,11 @@ shows the failure after `tomli` 2.5.0 merged.
 **Fix:** Keep `tomli` at the last compatible `2.2.1` release and cap Renovate
 updates below `2.5.0`. Lift the cap only when the configuration contract and
 both parser paths move to TOML 1.1 together.
+
+### Removed Flatpak IDs stay in the hook file
+
+**Symptom:** A cut-down ID stays in `tunaos-<desktop>.preinstall`.
+
+**Cause:** The hook adds new IDs but it never deletes old IDs.
+
+**Fix:** Delete the owned file at the start of each run. Keep files from other sources. Reject a linked file before you change files.

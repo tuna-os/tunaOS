@@ -65,6 +65,14 @@ _FP_INSTALLED_POLICY="${_FP_DIR}/../tunaos-preinstall-policy.tsv"
 	echo "refusing linked Flatpak policy" >&2
 	return 1 2>/dev/null || exit 1
 }
+[[ ! -L "$_FP_FILE" && (! -e "$_FP_FILE" || -f "$_FP_FILE") ]] || {
+	echo "refusing non-regular Flatpak declarations" >&2
+	return 1 2>/dev/null || exit 1
+}
+# Reconcile this recipe's own output before the cross-file duplicate guard.
+# Otherwise removing an app (including an explicit empty policy) leaves the
+# old declaration active when a desktop hook runs again in an inherited layer.
+rm -f -- "$_FP_FILE"
 : >"$_FP_INSTALLED_POLICY"
 chmod 0644 "$_FP_INSTALLED_POLICY"
 while IFS=$'\t' read -r _fp_scope _fp_app _fp_branch; do

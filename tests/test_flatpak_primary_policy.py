@@ -146,6 +146,38 @@ def test_empty_generated_policy_declares_no_apps(tmp_path):
     assert not list((tmp_path / 'preinstall.d').glob('*.preinstall'))
 
 
+@pytest.mark.parametrize('declarations', [[], [{'id': 'org.example.Replacement', 'branch': 'stable'}]])
+def test_reapplying_policy_replaces_only_owned_declarations(tmp_path, declarations):
+    script = tmp_path / 'flatpak-preinstall.sh'
+    script.write_bytes((ROOT / 'build_scripts/desktop/flatpak-preinstall.sh').read_bytes())
+    source = primary.load()
+    source['flatpak_preinstall']['desktop_additions'] = {}
+    adapter = tmp_path / 'flatpak-preinstall.tsv'
+    output = tmp_path / 'preinstall.d'
+    command = ['bash', str(script)]
+    environment = {
+        'PATH': '/usr/bin:/bin', 'DESKTOP_FLAVOR': 'gnome',
+        'TUNAOS_PREINSTALL_DIR': str(output),
+        'TUNAOS_SYSTEMD_SYSTEM_DIR': str(tmp_path / 'no-unit'),
+    }
+    adapter.write_text(policy.render(source))
+    subprocess.run(command, env=environment, check=True, capture_output=True)
+    inherited = output / 'upstream.preinstall'
+    inherited.write_text('[Flatpak Preinstall org.example.Upstream]\nBranch=stable\n')
+    source['flatpak_preinstall']['common'] = declarations
+    adapter.write_text(policy.render(source))
+    for _ in range(2):
+        subprocess.run(command, env=environment, check=True, capture_output=True)
+        owned = output / 'tunaos-gnome.preinstall'
+        expected = ''.join(
+            f'[Flatpak Preinstall {app["id"]}]\nBranch={app["branch"]}\nIsRuntime=false\n\n'
+            for app in declarations)
+        assert (owned.read_text() if owned.exists() else '') == expected
+        assert (tmp_path / 'tunaos-preinstall-policy.tsv').read_text() == ''.join(
+            f'*\t{app["id"]}\t{app["branch"]}\n' for app in declarations)
+        assert inherited.read_text() == '[Flatpak Preinstall org.example.Upstream]\nBranch=stable\n'
+
+
 def test_materialization_receipt_includes_declaration_source_and_adapter():
     spec = importlib.util.spec_from_file_location('flatpak_receipt', ROOT / 'scripts/resolve-fork-config.py')
     compiler = importlib.util.module_from_spec(spec)
@@ -177,20 +209,30 @@ def test_kcm_cannot_bypass_the_primary_declaration_list():
 
 
 @pytest.mark.parametrize('sourced', [False, True])
-@pytest.mark.parametrize('failure', ['missing-policy', 'linked-policy'])
+@pytest.mark.parametrize('failure', ['missing-policy', 'linked-policy', 'linked-declarations'])
 def test_recipe_failure_is_nonzero_in_both_hook_contexts(tmp_path, sourced, failure):
     script = tmp_path / 'flatpak-preinstall.sh'
     script.write_bytes((ROOT / 'build_scripts/desktop/flatpak-preinstall.sh').read_bytes())
     protected = tmp_path / 'protected'
     protected.write_text('preserve\n')
-    if failure == 'linked-policy':
+    if failure != 'missing-policy':
         (tmp_path / 'flatpak-preinstall.tsv').write_bytes(
             (ROOT / 'build_scripts/desktop/flatpak-preinstall.tsv').read_bytes())
-        (tmp_path / 'tunaos-preinstall-policy.tsv').symlink_to(protected)
+        if failure == 'linked-policy':
+            (tmp_path / 'tunaos-preinstall-policy.tsv').symlink_to(protected)
+        else:
+            output = tmp_path / 'preinstall.d'
+            output.mkdir()
+            (output / 'tunaos-desktop.preinstall').symlink_to(protected)
+            (tmp_path / 'tunaos-preinstall-policy.tsv').write_text('preserve prior policy\n')
     command = ['bash', '-c', 'source "$1"', 'hook-test', str(script)] if sourced else ['bash', str(script)]
     result = subprocess.run(command, env={
         'PATH': '/usr/bin:/bin', 'TUNAOS_PREINSTALL_DIR': str(tmp_path / 'preinstall.d'),
         'TUNAOS_SYSTEMD_SYSTEM_DIR': str(tmp_path / 'no-unit')}, capture_output=True)
     assert result.returncode == 1
     assert protected.read_text() == 'preserve\n'
-    assert not list((tmp_path / 'preinstall.d').glob('*.preinstall'))
+    if failure == 'linked-declarations':
+        assert (tmp_path / 'tunaos-preinstall-policy.tsv').read_text() == 'preserve prior policy\n'
+        assert (tmp_path / 'preinstall.d/tunaos-desktop.preinstall').is_symlink()
+    else:
+        assert not list((tmp_path / 'preinstall.d').glob('*.preinstall'))
