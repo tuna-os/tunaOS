@@ -49,7 +49,7 @@ def parse(source, path='<string>'):
         if isinstance(source, bytes):
             source = source.decode('utf-8')
         return tomllib.loads(source)
-    except (tomllib.TOMLDecodeError, UnicodeError, RecursionError) as exc:
+    except (ValueError, RecursionError) as exc:
         raise ConfigError(f'{path}: {exc}') from exc
 
 

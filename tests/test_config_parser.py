@@ -55,7 +55,8 @@ array = [1, 2,]
 def hostile_sources():
     return ['value = ' + '[' * 1000 + '0' + ']' * 1000,
             '.'.join(['part'] * (sys.getrecursionlimit() + 1)) + '=1',
-            b'value = "\xff"', 'value = {key=1,}']
+            b'value = "\xff"', 'value = {key=1,}',
+            'schema_version = ' + '9' * 5000]
 
 
 @pytest.mark.parametrize('source', hostile_sources())
@@ -170,3 +171,26 @@ def test_supported_host_jobs_keep_the_same_grammar_gate():
         assert not job.get('continue-on-error', False)
         assert any('tests/test_config_parser.py' in step.get('run', '') for step in job['steps'])
     assert 'pytest.skip' not in (ROOT / 'tests/test_primary_config.py').read_text()
+
+
+@pytest.mark.parametrize('command', ['search', 'add'])
+@pytest.mark.parametrize('source', hostile_sources())
+def test_authoring_rejects_hostile_input_without_traceback(tmp_path, command, source):
+    path = tmp_path / 'tunaos.toml'
+    data = source.encode() if isinstance(source, str) else source
+    path.write_bytes(data)
+    result = subprocess.run(
+        [sys.executable, str(ROOT / 'scripts/config-packages.py'), command, 'htop',
+         '--config', str(path), '--target', 'gnome:apt'],
+        text=True, capture_output=True, timeout=15)
+    assert result.returncode == 1
+    assert 'ERROR:' in result.stderr and 'Traceback' not in result.stderr
+    assert str(path) in result.stderr
+    assert path.read_bytes() == data
+
+
+def test_parse_retains_the_original_failure_cause():
+    with pytest.raises(config.ConfigError) as caught:
+        config.parse('value = {key=1,}', 'bad.toml')
+    assert isinstance(caught.value.__cause__, ValueError)
+    assert str(caught.value).startswith('bad.toml:')

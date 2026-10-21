@@ -43,7 +43,7 @@ def main(argv=None):
         source = author.read_config(args.config)
         indexes = assignments(args.index, '--index')
         if args.command == 'search':
-            document = tunaos_config.validate(tunaos_config.tomllib.loads(source.decode('utf-8')))
+            document = tunaos_config.validate(tunaos_config.parse(source, args.config))
             scope = author.targets(document, args.target)
             if set(indexes) != set(scope):
                 raise author.AuthoringError('--index TARGET=RECEIPT is required exactly once for every selected target')
@@ -55,7 +55,7 @@ def main(argv=None):
         else:
             document, scope, resolved, evidence = author.plan(
                 source, args.target, indexes, args.package,
-                assignments(args.native, '--native'), args.max_age_days)
+                assignments(args.native, '--native'), args.max_age_days, source_path=args.config)
             result = author.edit(source, document, scope, resolved)
             print(json.dumps({'resolved': resolved, 'evidence': evidence}, indent=2))
             print('Scope: shared desktop/family policies. Index presence is not per-variant or transaction verification.')
