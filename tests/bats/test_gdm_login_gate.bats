@@ -71,6 +71,8 @@ exit 0
 STUB
   cat >"${FAKEBIN}/ssh" <<'STUB'
 #!/usr/bin/env bash
+STATE="${GDM_GATE_STATE:?}"
+echo "ssh $*" >>"${STATE}/calls"
 while [[ $# -gt 0 ]]; do
   case "$1" in
   *@*) shift; break ;;
@@ -159,6 +161,7 @@ run_gate() {
   grep -Fq 'key testvm tab' "${STATE}/calls"
   grep -Fq 'key testvm esc' "${STATE}/calls"
   grep -Fqx 'Session=tuna' "${ROOT}/accts/tuna-ci-login"
+  grep -Fq 'systemctl restart gdm.service' "${STATE}/calls"
   [ -f "${OUT}/gdm-attempt-1.png" ]
   [ -f "${OUT}/gdm-attempt-2.png" ]
   [ ! -e "${OUT}/gdm-attempt-3.png" ]
