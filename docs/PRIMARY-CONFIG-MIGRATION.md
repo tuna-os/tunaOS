@@ -188,6 +188,11 @@ Survey existing TunaOS package-query, resolver and validation tooling first.
 Native dnf, apt, pacman, zypper and portage adapters must state their support
 limits. Never infer a portable package name from string similarity alone.
 
+See the [package command guide](PACKAGE-AUTHORING.md) for the first
+index-backed implementation. It edits explicit existing policy
+sections using supplied native indexes. Automatic configured-repository discovery
+and per-variant transaction verification remain outside that first slice.
+
 ## Local migration experiment (not production code)
 
 Against main `83362754`, a read-only prototype translated all 14 variants,

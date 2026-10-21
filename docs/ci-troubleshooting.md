@@ -1794,3 +1794,19 @@ shows the failure after `tomli` 2.5.0 merged.
 **Fix:** Keep `tomli` at the last compatible `2.2.1` release and cap Renovate
 updates below `2.5.0`. Lift the cap only when the configuration contract and
 both parser paths move to TOML 1.1 together.
+
+## Package authoring refuses an add or asks for an editor dependency
+
+**Symptom:** `config-packages.py add` reports a missing/ambiguous native package,
+a stale index, a receipt hash mismatch, or a missing `tomlkit` dependency.
+
+**Cause:** The offline editor needs native names for every selected policy before
+it writes. `tests/test_package_authoring.py` tests additions for apt and Gentoo.
+An ambiguous Gentoo category or a failed index leaves the TOML file unchanged.
+Read-only config validation does not need the optional editor dependency.
+
+**Fix:** Install `requirements-package-authoring.txt` explicitly to edit files.
+Refresh the native index and its receipt together, or use `search` followed by an
+explicit `--native TARGET=exact-name` for a verified mapping. Do not remove a
+failed target to imply all-base coverage. See the [package command guide](PACKAGE-AUTHORING.md)
+for policy scope, provenance and native formats.
