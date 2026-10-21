@@ -89,12 +89,13 @@ def test_same_run_requires_exact_environment(monkeypatch):
     run.update(status='in_progress', conclusion=None, run_attempt=1, run_started_at='2026-10-21T12:00:00Z')
     artifact.update(name='skipjack-gnome-live-iso-attempt-1', created_at='2026-10-21T12:01:00Z')
     monkeypatch.setenv('GITHUB_RUN_ATTEMPT', '1')
+    monkeypatch.setenv('GITHUB_REPOSITORY', args.repository)
     monkeypatch.setenv('NATIVE_SAME_RUN', 'true')
     monkeypatch.setenv('GITHUB_RUN_ID', '2')
     with pytest.raises(ValueError):
         module.validate(run, artifact, args)
     monkeypatch.setenv('GITHUB_RUN_ID', '1')
-    module.validate(run, artifact, args)
+    module.validate(run, artifact, args, native_jobs(args))
 
 
 @pytest.mark.parametrize('identity_lines', [1, 0, 2])
@@ -168,6 +169,7 @@ def test_same_run_rejects_old_attempt_artifact(monkeypatch):
     args, run, artifact = records()
     run.update(status='in_progress', conclusion=None, run_attempt=2, run_started_at='2026-10-21T12:00:00Z')
     artifact.update(name='skipjack-gnome-live-iso-attempt-2', created_at='2026-10-21T11:00:00Z')
+    monkeypatch.setenv('GITHUB_REPOSITORY', args.repository)
     monkeypatch.setenv('NATIVE_SAME_RUN', 'true')
     monkeypatch.setenv('GITHUB_RUN_ID', '1')
     monkeypatch.setenv('GITHUB_RUN_ATTEMPT', '2')
@@ -408,3 +410,72 @@ def test_diagnostic_enumeration_and_skip_report_are_bounded(tmp_path):
     assert report['skipped_report_truncated']
     assert len(report['skipped']) == 2
     assert all(len(name) <= 12 for name in report['skipped'])
+
+
+def native_jobs(args):
+    return dict(total_count=1, jobs=[dict(id=3, name='build', run_id=args.run_id, run_attempt=1,
+                head_sha=args.source_sha, status='completed', conclusion='success',
+                started_at='2026-10-21T12:00:10Z', completed_at='2026-10-21T12:02:00Z')])
+
+
+def active_native_records(monkeypatch):
+    args, run, artifact = records()
+    args.attempt = 1
+    run.update(status='queued', conclusion=None, run_attempt=1, run_started_at='2026-10-21T12:00:00Z')
+    artifact.update(name='skipjack-gnome-live-iso-attempt-1', created_at='2026-10-21T12:01:00Z')
+    monkeypatch.setenv('GITHUB_REPOSITORY', args.repository)
+    monkeypatch.setenv('NATIVE_SAME_RUN', 'true')
+    monkeypatch.setenv('GITHUB_RUN_ID', '1')
+    monkeypatch.setenv('GITHUB_RUN_ATTEMPT', '1')
+    return args, run, artifact, native_jobs(args)
+
+
+@pytest.mark.parametrize('status', ['queued', 'in_progress'])
+def test_active_aggregate_needs_exact_successful_build(monkeypatch, status):
+    args, run, artifact, jobs = active_native_records(monkeypatch)
+    run['status'] = status
+    assert module.validate(run, artifact, args, jobs) == 3
+    with pytest.raises(ValueError, match='producer jobs required'):
+        module.validate(run, artifact, args)
+
+
+@pytest.mark.parametrize('field,value', [('run_id', 9), ('run_attempt', 2), ('head_sha', 'c'*40),
+                                         ('status', 'in_progress'), ('conclusion', 'failure'),
+                                         ('conclusion', 'cancelled'), ('conclusion', 'timed_out'),
+                                         ('name', 'other-build')])
+def test_same_run_rejects_wrong_builder(monkeypatch, field, value):
+    args, run, artifact, jobs = active_native_records(monkeypatch)
+    jobs['jobs'][0][field] = value
+    with pytest.raises(ValueError):
+        module.validate(run, artifact, args, jobs)
+
+
+@pytest.mark.parametrize('status,conclusion', [('completed', 'failure'), ('completed', 'cancelled'),
+                                               ('completed', 'timed_out'), ('queued', 'failure'),
+                                               ('in_progress', 'cancelled'), ('waiting', None)])
+def test_successful_builder_cannot_override_bad_aggregate(monkeypatch, status, conclusion):
+    args, run, artifact, jobs = active_native_records(monkeypatch)
+    run.update(status=status, conclusion=conclusion)
+    with pytest.raises(ValueError, match='producer is not admissible'):
+        module.validate(run, artifact, args, jobs)
+
+
+@pytest.mark.parametrize('case', ['duplicate', 'truncated', 'outside-window'])
+def test_same_run_rejects_ambiguous_or_mistimed_builder(monkeypatch, case):
+    args, run, artifact, jobs = active_native_records(monkeypatch)
+    if case == 'duplicate':
+        jobs['jobs'].append(dict(jobs['jobs'][0]))
+        jobs['total_count'] = 2
+    elif case == 'truncated':
+        jobs['total_count'] = 101
+    else:
+        artifact['created_at'] = '2026-10-21T12:03:00Z'
+    with pytest.raises(ValueError):
+        module.validate(run, artifact, args, jobs)
+
+
+def test_same_run_rejects_other_current_repository(monkeypatch):
+    args, run, artifact, jobs = active_native_records(monkeypatch)
+    monkeypatch.setenv('GITHUB_REPOSITORY', 'other/repo')
+    with pytest.raises(ValueError, match='current repository'):
+        module.validate(run, artifact, args, jobs)

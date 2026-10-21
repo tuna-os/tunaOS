@@ -59,18 +59,23 @@ def api(repo, suffix):
     return json.loads(output.getvalue())
 
 
-def validate(run, artifact, args):
+def validate(run, artifact, args, jobs=None):
     if not re.fullmatch(r"[0-9a-f]{40}", args.source_sha):
         raise ValueError("source SHA must be a full commit")
     if not re.fullmatch(r"sha256:[0-9a-f]{64}", args.archive_digest):
         raise ValueError("archive digest must be sha256:<64 lowercase hex>")
     same_run = (os.environ.get("NATIVE_SAME_RUN") == "true"
                 and str(args.run_id) == os.environ.get("GITHUB_RUN_ID"))
+    if same_run and args.repository != os.environ.get("GITHUB_REPOSITORY"):
+        raise ValueError("same-run producer must belong to the current repository")
     if same_run and str(run.get("run_attempt")) != os.environ.get("GITHUB_RUN_ATTEMPT"):
         raise ValueError("same-run artifact must belong to the current producer attempt")
     completed = run.get("status") == "completed" and run.get("conclusion") == "success"
-    if run.get("id") != args.run_id or not (completed or (same_run and run.get("status") == "in_progress")):
-        raise ValueError("producer must be successful, or this run's completed dependent build")
+    active = (same_run and run.get("status") in ("queued", "in_progress")
+              and run.get("conclusion") is None)
+    if run.get("id") != args.run_id or not (completed or active):
+        raise ValueError(f"producer is not admissible: id={run.get('id')} "
+                         f"status={run.get('status')} conclusion={run.get('conclusion')} same_run={same_run}")
     if run.get("head_sha") != args.source_sha or run.get("path") != ".github/workflows/live-iso-bootc.yml":
         raise ValueError("producer source SHA or workflow mismatch")
     if run.get("repository", {}).get("full_name") != args.repository or run.get("head_repository", {}).get("full_name") != args.repository:
@@ -96,6 +101,23 @@ def validate(run, artifact, args):
         raise ValueError("artifact producer mismatch")
     if not 0 < artifact.get("size_in_bytes", 0) <= MAX_BYTES:
         raise ValueError("artifact size out of bounds")
+    if same_run:
+        if not isinstance(jobs, dict) or jobs.get("total_count") != len(jobs.get("jobs", [])):
+            raise ValueError("complete bounded same-attempt producer jobs required")
+        builders = [job for job in jobs["jobs"] if job.get("name") == "build"]
+        if len(builders) != 1:
+            raise ValueError("exactly one native build job required")
+        builder = builders[0]
+        if (builder.get("run_id") != args.run_id or builder.get("run_attempt") != attempt
+                or builder.get("head_sha") != args.source_sha
+                or builder.get("status") != "completed" or builder.get("conclusion") != "success"):
+            raise ValueError("native build job must succeed on this exact run, attempt and source")
+        built_start = datetime.fromisoformat(builder["started_at"].replace("Z", "+00:00"))
+        built_end = datetime.fromisoformat(builder["completed_at"].replace("Z", "+00:00"))
+        if not built_start <= created <= built_end:
+            raise ValueError("artifact was not created during the successful native build")
+        return builder["id"]
+    return None
 
 
 def digest(path):
@@ -196,7 +218,14 @@ def main():
             parser.error("invalid target")
     run = api(args.repository, f"actions/runs/{args.run_id}")
     artifact = api(args.repository, f"actions/artifacts/{args.artifact_id}")
-    validate(run, artifact, args)
+    print(json.dumps({"producer_run": run.get("id"), "status": run.get("status"),
+                      "conclusion": run.get("conclusion"), "attempt": run.get("run_attempt"),
+                      "head_sha": run.get("head_sha")}), flush=True)
+    jobs = None
+    if os.environ.get("NATIVE_SAME_RUN") == "true" and str(args.run_id) == os.environ.get("GITHUB_RUN_ID"):
+        # Query the requested attempt, never the API's mutable latest-attempt view.
+        jobs = api(args.repository, f"actions/runs/{args.run_id}/attempts/{args.attempt or run.get('run_attempt')}/jobs?per_page=100")
+    builder_id = validate(run, artifact, args, jobs)
     args.output.mkdir(parents=True, exist_ok=False)
     archive = args.output / "native-iso.zip"
     with archive.open("xb") as target:
@@ -211,7 +240,9 @@ def main():
     harness_sha = harness.getvalue().decode().strip()
     if not re.fullmatch(r"[0-9a-f]{40}", harness_sha):
         raise ValueError("invalid checked-out harness SHA")
-    receipt = {"harness_sha": harness_sha, "producer_run": args.run_id, "producer_sha": args.source_sha,
+    receipt = {"producer_build_job": builder_id, "producer_status": run.get("status"),
+               "producer_conclusion": run.get("conclusion"), "producer_attempt": run.get("run_attempt"),
+               "harness_sha": harness_sha, "producer_run": args.run_id, "producer_sha": args.source_sha,
                "artifact_id": args.artifact_id, "archive_digest": args.archive_digest,
                "media_digest": media_digest, "media_size": iso.stat().st_size,
                "media_filename": iso.name, "status": "download_verified_not_boot_tested"}
