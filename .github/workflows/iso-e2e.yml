@@ -886,9 +886,17 @@ jobs:
             "${{ matrix.variant }}:${{ matrix.flavor }}" iso iso-e2e-out
       - name: Validate strict qualification evidence
         if: steps.filter.outputs.skip != 'true' && steps.e2e.outcome == 'success' && steps.e2e.outputs.rc == '0'
+        env:
+          ISO_SOURCE: ${{ inputs.source }}
         run: |
-          python3 scripts/verify-experience-manifest.py \
-            iso-e2e-out/qualification-evidence.json
+          set -euo pipefail
+          if [[ "$ISO_SOURCE" == "native-artifact" ]]; then
+            python3 scripts/native-iso-qualification.py validate \
+              iso-e2e-out/qualification-evidence.json
+          else
+            python3 scripts/verify-experience-manifest.py \
+              iso-e2e-out/qualification-evidence.json
+          fi
 
 
       - name: Job summary

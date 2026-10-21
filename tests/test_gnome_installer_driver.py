@@ -57,13 +57,22 @@ class FakeScreen:
     def __init__(self, state, mode='plain', encrypted=False, tpm=False, valid=True):
         self.state = state
         self.encrypted, self.tpm = encrypted, tpm
-        self.lines = ['Welcome to TunaOS', 'Strong passphrase'] if state != 'summary' else [
+        self.lines = ['Welcome to TunaOS', 'Install TunaOS', 'Installs to your internal disk.',
+                      'Power Off', 'Strong passphrase'] if state != 'summary' else [
             'Disk', '/dev/vda (64.0 GiB)', 'Encryption',
             'No encryption' if mode == 'plain' else 'Passphrase',
             'Everything on /dev/vda will be erased. This cannot be undone.']
         if not valid:
             self.lines = ['Confirm installation', 'No encryption']
     def box(self, label):
+        if self.state == 'welcome':
+            boxes = {'Welcome to TunaOS': (505,277,775,304),
+                     'Install TunaOS': (395,341,498,355),
+                     'Installs to your internal disk.': (395,361,553,374),
+                     'Power Off': (367,403,463,418)}
+            if label not in boxes:
+                raise driver.Unverified('unknown welcome control')
+            return boxes[label]
         if self.state == 'summary' and label not in self.lines and label != 'Install':
             raise driver.Unverified('missing summary label')
         return (100, 40, 200, 70) if label == 'Next' else (100, 200, 300, 230)
@@ -248,3 +257,33 @@ def test_rfb_protocol_without_socket_creation(monkeypatch, tmp_path, case):
     else:
         driver.click_unix(tmp_path/'vnc.sock',420,490,1280,800)
         assert sent[-3:] == [struct.pack('!BBHH',5,b,420,490) for b in (0,1,0)]
+
+
+@pytest.mark.parametrize('mode', ['plain', 'luks'])
+def test_real_welcome_action_is_not_header_next(mode):
+    data = json.loads((ROOT/'tests/fixtures/gnome-installer/run39647418167.json').read_text())[mode]
+    screen = object.__new__(driver.Screen)
+    screen.width, screen.height = data['width'], data['height']
+    screen.rows = data['rows']; screen.lines = [row[0] for row in screen.rows]
+    assert driver.classify(screen.lines) == 'welcome'
+    assert driver.welcome_action(screen) == 'Install Skipjack'
+    with pytest.raises(driver.Unverified):
+        screen.box('Next')
+
+
+@pytest.mark.parametrize('bad', ['duplicate', 'wrong-product', 'missing-subtitle', 'thumbnail', 'misaligned', 'header-next-only'])
+def test_welcome_action_fails_closed_for_ambiguous_or_wrong_geometry(bad):
+    data = json.loads((ROOT/'tests/fixtures/gnome-installer/run39647418167.json').read_text())['plain']
+    screen = object.__new__(driver.Screen)
+    screen.width, screen.height = data['width'], data['height']
+    screen.rows = data['rows']
+    action = next(row for row in screen.rows if row[0] == 'Install Skipjack')
+    if bad == 'duplicate': screen.rows.append(action)
+    elif bad == 'wrong-product': action[0] = 'Install Albacore'
+    elif bad == 'missing-subtitle': screen.rows = [row for row in screen.rows if row[0] != 'Installs to your internal disk.']
+    elif bad == 'thumbnail':
+        screen.rows = [(text, [coordinate//2 for coordinate in box]) for text, box in screen.rows]
+    elif bad == 'misaligned': action[1][0] += 250
+    else: action[0] = 'Next'; action[1] = [960,45,1000,60]
+    screen.lines = [row[0] for row in screen.rows]
+    with pytest.raises(driver.Unverified): driver.welcome_action(screen)

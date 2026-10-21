@@ -165,3 +165,20 @@ def test_harness_native_branch_does_not_reach_browser_emitter():
     assert '"passphrase_prompt": os.environ["STRICT_FRAG_PROMPT"] == "1"' in script
     parity=(ROOT/'.github/workflows/iso-builder-parity.yml').read_text()
     assert 'TUNAOS_QUAL_EXECUTION_KIND' not in parity
+
+
+@pytest.mark.parametrize('source', ['native-artifact', 'build', 'r2-latest', ''])
+@pytest.mark.parametrize('kind', ['native', 'browser'])
+def test_final_workflow_validator_selects_source_contract(tmp_path, source, kind):
+    workflow = yaml.safe_load((ROOT/'.github/workflows/iso-e2e.yml').read_text())
+    step = next(s for s in workflow['jobs']['e2e']['steps'] if s.get('name') == 'Validate strict qualification evidence')
+    assert step['env']['ISO_SOURCE'] == '${{ inputs.source }}'
+    scripts = tmp_path/'scripts'; scripts.mkdir()
+    for name in ('native-iso-qualification.py', 'verify-experience-manifest.py'):
+        (scripts/name).symlink_to(ROOT/'scripts'/name)
+    output = tmp_path/'iso-e2e-out'; output.mkdir()
+    data = evidence() if kind == 'native' else BROWSER_TEST.manifest()
+    (output/'qualification-evidence.json').write_text(json.dumps(data))
+    result = subprocess.run(['bash', '-c', step['run']], cwd=tmp_path,
+        env=dict(os.environ, ISO_SOURCE=source), capture_output=True, text=True)
+    assert (result.returncode == 0) is ((source == 'native-artifact') == (kind == 'native')), result.stderr

@@ -55,6 +55,34 @@ def classify(lines):
     return 'unknown'
 
 
+def welcome_action(screen):
+    """Exact pinned welcome ActionRow, distinct from the final Install button."""
+    titles = [line for line in screen.lines if normal(line).startswith('welcome to ')]
+    if len(titles) != 1:
+        raise Unverified('welcome heading is absent or ambiguous')
+    match = re.fullmatch(r'Welcome to ([A-Za-z0-9][A-Za-z0-9 ._-]{0,63})', titles[0])
+    if not match:
+        raise Unverified('unsupported welcome product heading')
+    label = 'Install ' + match[1]
+    title, action = screen.box(titles[0]), screen.box(label)
+    description = screen.box('Installs to your internal disk.')
+    power = screen.box('Power Off')
+    # A full-size heading and ordered, aligned action rows establish this
+    # foreground page. A shell overview thumbnail must not earn input.
+    if not (20 <= title[3]-title[1] <= 40
+            and abs((title[0]+title[2])/2-screen.width/2) <= screen.width*.15
+            and screen.height*.15 <= title[1] <= screen.height*.5
+            and 12 <= action[3]-action[1] <= 26
+            and 20 <= action[1]-title[3] <= 100
+            and title[0]-200 <= action[0] <= title[0]+50
+            and 2 <= description[1]-action[3] <= 30
+            and abs(description[0]-action[0]) <= 8
+            and 15 <= power[1]-description[3] <= 70
+            and abs(power[0]-action[0]) <= 40):
+        raise Unverified('welcome action geometry does not prove a foreground installer')
+    return label
+
+
 class Screen:
     def __init__(self, path):
         self.path = Path(path)
@@ -269,14 +297,9 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest,
         if mode not in ('plain', 'luks') or not re.fullmatch('[a-z0-9_.-]{8,64}', password):
             raise Unverified('unsupported mode or test-only passphrase format')
         screen = transition('unknown', 'welcome')
-        # Large heading plus header control is positive full-window evidence;
-        # pixel deltas alone never establish overview/frontmost state.
-        title = next(line for line in screen.lines if normal(line).startswith('welcome to '))
-        bounds = screen.box(title)
-        if bounds[3]-bounds[1] < 20 or screen.box('Next')[3] > 120:
-            raise Unverified('installer is not verified as a full-size foreground window')
+        action = welcome_action(screen)
         evidence['frontmost'] = True
-        click(screen, 'Next', enabled=True)
+        click(screen, action)
         screen = transition('welcome', 'encryption')
         screen = toggle(screen, 'Encrypt this disk', mode == 'luks')
         if mode == 'luks':
