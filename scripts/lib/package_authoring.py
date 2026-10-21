@@ -219,9 +219,9 @@ def resolve(query, names, family):
     return matches.pop()
 
 
-def plan(source, selected, indexes, query, native=None, max_age_days=7):
+def plan(source, selected, indexes, query, native=None, max_age_days=7, *, source_path='<package config>'):
     """Resolve every target before touching a TOML object or the original file."""
-    document = tunaos_config.validate(tunaos_config.tomllib.loads(source.decode('utf-8')))
+    document = tunaos_config.validate(tunaos_config.parse(source, source_path))
     scope = targets(document, selected)
     if set(indexes) != set(scope):
         raise AuthoringError('--index TARGET=RECEIPT is required exactly once for every selected target')
@@ -281,7 +281,7 @@ def edit(source, document, scope, resolved):
     result = tomlkit.dumps(edited).encode('utf-8')
     if len(result) > MAX_CONFIG_BYTES:
         raise AuthoringError('edited config exceeds 8 MiB limit; no write performed')
-    actual = tunaos_config.validate(tunaos_config.tomllib.loads(result.decode('utf-8')))
+    actual = tunaos_config.validate(tunaos_config.parse(result, '<edited package config>'))
     if actual != expected:
         raise AuthoringError('lossless edit changed unrelated configuration; no write performed')
     return result

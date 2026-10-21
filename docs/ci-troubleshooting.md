@@ -1791,9 +1791,23 @@ needs TOML 1.0 grammar; Python 3.11's stdlib `tomllib` rejects both inputs.
 [Run 39421110868](https://github.com/tuna-os/tunaos/actions/runs/39421110868)
 shows the failure after `tomli` 2.5.0 merged.
 
-**Fix:** Keep `tomli` at the last compatible `2.2.1` release and cap Renovate
-updates below `2.5.0`. Lift the cap only when the configuration contract and
-both parser paths move to TOML 1.1 together.
+**Fix:** Use the bundled Tomli 2.3.2 source on every host.
+Tomli 2.4.0 first added TOML 1.1, so a `<2.5.0` cap did not hold the grammar.
+The 2.3.2 release keeps TOML 1.0 and includes the key and nesting limit fixes.
+Review grammar changes with the same tests on all supported hosts.
+
+### Config works on one Python host but fails on another
+
+**Symptom:** Python 3.15 accepts a config that Python 3.10 rejects.
+
+**Cause:** The old loader used the host's standard library when present.
+Python 3.15's parser accepts TOML 1.1. The config contract still uses TOML 1.0.
+The test `test_parser_keeps_the_shared_toml10_grammar` covers this split.
+
+**Fix:** Use the bundled Tomli parser on every host, with no standard library fallback.
+Restore the reviewed source checkout if its parser files are absent.
+Config reads need no pip install or special sudo environment.
+Run `python3 scripts/check-vendored-parser.py` to check the file hashes.
 
 ## Package authoring refuses an add or asks for an editor dependency
 

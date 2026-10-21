@@ -93,9 +93,26 @@ jobs:
         with:
           python-version: '3.10' # Compatibility floor; protected by the scoped Renovate rule.
       - name: Install config test dependencies
-        run: python -m pip install pytest -r requirements-config.txt -r requirements-package-authoring.txt
+        run: python -m pip install pytest PyYAML -r requirements-config.txt -r requirements-package-authoring.txt
       - name: Verify primary config on the oldest supported Python
-        run: python -m pytest -q tests/test_primary_config.py tests/test_package_authoring.py
+        run: python -m pytest -q tests/test_primary_config.py tests/test_config_parser.py tests/test_package_authoring.py
+
+  primary-config-python315:
+    name: Primary config (Python 3.15)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.15'
+      - name: Install config test dependencies
+        run: python -m pip install pytest PyYAML -r requirements-config.txt -r requirements-package-authoring.txt
+      - name: Verify primary config with a TOML 1.1 capable stdlib
+        run: python -m pytest -q tests/test_primary_config.py tests/test_config_parser.py tests/test_package_authoring.py
 
   unit-tests:
     name: Unit Tests
