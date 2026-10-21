@@ -25,6 +25,30 @@ guest() {
 	# shellcheck disable=SC2029
 	ssh "${SSH_OPTS[@]}" "${SSH_USER}@${SSH_HOST}" "$@"
 }
+guest_gdm_diagnostics() {
+	# $1 = test user, $2 = session id when one is known.
+	guest bash -s -- "$1" "${2:-}" <<'GDM_DIAGNOSTICS'
+set -u
+user="$1"
+session="${2:-}"
+echo "==> loginctl sessions"
+loginctl list-sessions --no-legend || true
+if [[ -n "$session" ]]; then
+	echo "==> session $session"
+	loginctl show-session "$session" -p Name -p Type -p Seat -p Active -p State -p Service -p LockedHint -p IdleHint || true
+else
+	while read -r id _ name _; do
+		[[ "$name" == "$user" ]] || continue
+		echo "==> session $id"
+		loginctl show-session "$id" -p Name -p Type -p Seat -p Active -p State -p Service -p LockedHint -p IdleHint || true
+	done < <(loginctl list-sessions --no-legend)
+fi
+echo "==> GDM service"
+systemctl status gdm.service --no-pager || true
+echo "==> recent greeter, shell, lock and PAM journal"
+journalctl -b --no-pager | grep -Ei 'gdm|gnome-shell|gnome-session|mutter|LockHint|lock-screen|pam.*(fail|authentication)|session opened|session closed' | tail -n 150 || true
+GDM_DIAGNOSTICS
+}
 
 echo "==> waiting for Corral SSH to inspect the GDM greeter"
 for _ in $(seq 1 60); do
@@ -94,21 +118,7 @@ done
 [[ -n "$session_id" ]] || {
 	echo "GDM did not start an active Wayland session for ${TEST_USER}" >&2
 	"$CORRAL" screenshot "$NAME" -o "${OUT}/gdm-login-failed.png" --require-paint || true
-	guest bash -s -- "$TEST_USER" <<'GDM_DIAGNOSTICS'
-set -u
-user="$1"
-echo "==> loginctl sessions"
-loginctl list-sessions --no-legend || true
-while read -r id _ name _; do
-	[[ "$name" == "$user" ]] || continue
-	echo "==> session $id"
-	loginctl show-session "$id" -p Name -p Type -p Seat -p Active -p State -p Service -p LockedHint || true
-done < <(loginctl list-sessions --no-legend)
-echo "==> GDM service"
-systemctl status gdm.service --no-pager || true
-echo "==> recent GDM and PAM journal"
-journalctl -b --no-pager | grep -Ei 'gdm|pam.*(fail|authentication)|session opened|session closed' | tail -n 120 || true
-GDM_DIAGNOSTICS
+	guest_gdm_diagnostics "$TEST_USER" || true
 	exit 1
 }
 echo "TUNAOS_GDM_LOGIN_OK user=${TEST_USER} session=${session_id}"
@@ -126,6 +136,8 @@ for _ in $(seq 1 30); do
 done
 [[ "$locked" == 1 ]] || {
 	echo "the Tuna desktop did not report its session locked" >&2
+	"$CORRAL" screenshot "$NAME" -o "${OUT}/gdm-lock-failed.png" --require-paint || true
+	guest_gdm_diagnostics "$TEST_USER" "$session_id" || true
 	exit 1
 }
 echo "TUNAOS_GDM_LOCK_OK user=${TEST_USER} session=${session_id}"
@@ -148,6 +160,8 @@ for _ in $(seq 1 30); do
 done
 [[ "$unlocked" == 1 ]] || {
 	echo "the Tuna desktop did not unlock with the test user's password" >&2
+	"$CORRAL" screenshot "$NAME" -o "${OUT}/gdm-unlock-failed.png" --require-paint || true
+	guest_gdm_diagnostics "$TEST_USER" "$session_id" || true
 	exit 1
 }
 echo "TUNAOS_GDM_UNLOCK_OK user=${TEST_USER} session=${session_id}"
