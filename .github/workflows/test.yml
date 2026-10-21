@@ -207,7 +207,7 @@ jobs:
 
       - name: Summarize test failures
         id: test_failure_summary
-        if: always() && steps.test_diagnostics.outputs.report_root != ''
+        if: failure() && steps.test_diagnostics.outputs.report_root != ''
         env:
           TEST_REPORT_ROOT: ${{ steps.test_diagnostics.outputs.report_root }}
         run: |

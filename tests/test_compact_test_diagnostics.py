@@ -707,3 +707,19 @@ def test_cleanup_rejects_unowned_paths(tmp_path, kind):
                             env=env, cwd=tmp_path, capture_output=True)
     assert result.returncode == 0
     assert (protected / 'keep').read_text() == 'unchanged'
+
+
+def test_successful_tests_do_not_run_optional_failure_summary(tmp_path):
+    binary, env = environment(tmp_path)
+    fake(binary, 'python3', 'echo passing-tests; exit 0\n')
+    result = subprocess.run(['bash', '-eo', 'pipefail', '-c', STEPS['Run pytest tests']['run']],
+                            env=env, cwd=tmp_path, capture_output=True)
+    assert result.returncode == 0
+    assert STEPS['Summarize test failures']['if'] == "failure() && steps.test_diagnostics.outputs.report_root != ''"
+    fake(binary, 'python3', 'exit 11\n')
+    # Evaluate the workflow's failure predicate for this successful test result.
+    summary = None
+    if result.returncode != 0:
+        summary = subprocess.run(['bash', '-eo', 'pipefail', '-c', STEPS['Summarize test failures']['run']],
+                                 env=env, cwd=tmp_path, capture_output=True)
+    assert summary is None and result.returncode == 0
