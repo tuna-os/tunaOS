@@ -104,6 +104,7 @@ GDM_DIAGNOSTICS
 	exit 1
 }
 echo "TUNAOS_GDM_LOGIN_OK user=${TEST_USER} session=${session_id}"
+sleep 3
 "$CORRAL" screenshot "$NAME" -o "${OUT}/gdm-logged-in.png" --require-paint
 
 guest loginctl lock-session "$session_id"
@@ -120,7 +121,10 @@ done
 	exit 1
 }
 echo "TUNAOS_GDM_LOCK_OK user=${TEST_USER} session=${session_id}"
-"$CORRAL" screenshot "$NAME" -o "${OUT}/gdm-locked.png" --require-paint
+# GNOME deactivates outputs on lock in headless VNC, so the locked frame is a
+# blank placeholder by design. LockedHint=yes above is the lock proof; keep
+# the screenshot as evidence without requiring paint.
+"$CORRAL" screenshot "$NAME" -o "${OUT}/gdm-locked.png"
 
 # Wake the lock screen, then authenticate through the desktop's PAM path.
 "$CORRAL" key "$NAME" ret
