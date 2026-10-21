@@ -62,9 +62,8 @@ on:
         default: ""
         type: string
       qual_platform:
-        description: "Target platform recorded in the qualification evidence"
-        required: false
-        default: ""
+        description: "Canonical target platform: linux/amd64, linux/amd64/v2, or linux/arm64"
+        required: true
         type: string
       qual_cpu_baseline:
         description: "Target CPU baseline recorded in the qualification evidence"
@@ -83,8 +82,9 @@ on:
 jobs:
   parity:
     name: ${{ inputs.variant }}:${{ inputs.flavor }} browser/CI strict offline GUI parity
-    runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    runs-on: ${{ inputs.qual_platform == 'linux/arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    # Each ISO needs a separate bounded plain+encrypted install/reboot pass.
+    timeout-minutes: 130
     permissions:
       contents: read
       actions: read
@@ -93,6 +93,16 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      - name: Validate qualification platform
+        env:
+          PLATFORM: ${{ inputs.qual_platform }}
+        run: |
+          set -euo pipefail
+          case "$PLATFORM" in
+            linux/amd64|linux/amd64/v2|linux/arm64) ;;
+            *) echo "::error::unsupported canonical qualification platform: ${PLATFORM}" >&2; exit 1 ;;
+          esac
 
       - name: Download CI ISO and manifest
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -113,14 +123,21 @@ jobs:
           github-token: ${{ secrets.artifact_token || github.token }}
 
       - name: Install E2E dependencies
+        env:
+          PLATFORM: ${{ inputs.qual_platform }}
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends qemu-system-x86 qemu-utils ovmf socat sshpass imagemagick swtpm tesseract-ocr
+          if [[ "$PLATFORM" == linux/arm64 ]]; then
+            sudo apt-get install -y --no-install-recommends qemu-system-arm qemu-efi-aarch64 qemu-utils socat sshpass imagemagick swtpm tesseract-ocr
+          else
+            sudo apt-get install -y --no-install-recommends qemu-system-x86 ovmf qemu-utils socat sshpass imagemagick swtpm tesseract-ocr
+          fi
 
       - name: Validate and compare experience manifests
         env:
           VARIANT: ${{ inputs.variant }}
           FLAVOR: ${{ inputs.flavor }}
+          PLATFORM: ${{ inputs.qual_platform }}
         run: |
           set -euo pipefail
           for source in ci browser; do
@@ -129,8 +146,8 @@ jobs:
             test -f "$manifest" || { echo "missing $manifest" >&2; exit 1; }
             test -f "$iso" || { echo "missing $iso" >&2; exit 1; }
             python3 scripts/verify-experience-manifest.py "$manifest"
-            jq -e --arg v "$VARIANT" --arg f "$FLAVOR" \
-              '.variant == $v and .flavor == $f' "$manifest" >/dev/null
+            jq -e --arg v "$VARIANT" --arg f "$FLAVOR" --arg p "$PLATFORM" \
+              '.variant == $v and .flavor == $f and .platform == $p' "$manifest" >/dev/null
             expected="$(jq -r '.resolved_inputs.media' "$manifest")"
             actual="sha256:$(sha256sum "$iso" | awk '{print $1}')"
             [[ "$expected" == "$actual" ]] || {
@@ -142,6 +159,7 @@ jobs:
             parity/ci/experience-manifest.json \
             --compare parity/browser/experience-manifest.json
       - name: Run strict offline GUI qualification against CI ISO
+        timeout-minutes: 60
         env:
           VARIANT: ${{ inputs.variant }}
           FLAVOR: ${{ inputs.flavor }}
@@ -173,6 +191,7 @@ jobs:
           ./scripts/iso-e2e.sh "$iso" --strict-offline-gui --output parity/ci-e2e
 
       - name: Run strict offline GUI qualification against browser ISO
+        timeout-minutes: 60
         env:
           VARIANT: ${{ inputs.variant }}
           FLAVOR: ${{ inputs.flavor }}

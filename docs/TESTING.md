@@ -150,6 +150,40 @@ Run the dispatcher's unit tests with the rest of the suite:
 bats tests/bats/test_functional_run.bats
 ```
 
+## Browser/CI ISO parity before publication
+
+The reusable `iso-builder-parity.yml` workflow takes the two artifacts that
+the trusted collector selected. It does not read or write R2. A candidate
+need not replace a public download before this workflow can test it.
+
+Callers must set `qual_platform` to `linux/amd64`, `linux/amd64/v2`, or
+`linux/arm64`. Both manifests must match this independent target. ARM64 uses
+the native ARM runner with AArch64 QEMU and firmware. Each ISO has a
+60-minute strict pass; the job allows 130 minutes for both passes and setup.
+
+For a local runtime probe, use the exact ISO selected by the trusted collector:
+
+```bash
+sudo -E ./scripts/iso-e2e.sh ./yellowfin-gnome-candidate.iso --strict-offline-gui --output parity/candidate-e2e
+python3 scripts/verify-experience-manifest.py parity/candidate-e2e/qualification-evidence.json
+```
+
+The caller must first supply the independently verified `TUNAOS_QUAL_*`
+identities and measured browser profile. Do not derive authorization from a
+candidate's own manifest. Keep the bytes of the browser ISO identical
+between the browser build and the native installation probe. QEMU needs
+matching firmware, scratch disk space for the VM, and the harness
+dependencies. This generic UEFI probe needs no physical device write or
+reboot.
+
+A native probe that passes does not authenticate the browser producer.
+RFC014's offline checker returns `not_authenticated`; its transport adapter
+and the retained-media extension do not authorize production admission.
+Qualification still needs trusted producer collection, cold/warm browser
+measurements, plain and encrypted offline GUI installs, and target-only
+reboots of the same media.
+Existing downloads and the strict published-media gate stay unchanged.
+
 ## Writing New Tests
 
 For desktop environment changes:

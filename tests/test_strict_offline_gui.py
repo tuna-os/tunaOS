@@ -1,12 +1,12 @@
-"""Static strict-offline-GUI qualification checks (no VMs, no KVM).
+"""Strict-offline-GUI qualification checks (no VMs, no KVM).
 
-Asserts source-text properties of the harness, walkthrough, and parity
-workflow plus argument-parsing behavior only. Never boots QEMU.
+Check harness/workflow contracts and execute bounded CLI/preflight paths.
 """
 
 import re
 import json
 import os
+import shutil
 
 import pytest
 import yaml
@@ -187,3 +187,95 @@ def test_iso_evidence_status_requires_completed_success(tmp_path, outcome, rc, e
     assert result.returncode == 0, result.stderr
     metadata = json.loads((tmp_path / "evidence/albacore/gnome/amd64/metadata.json").read_text())
     assert metadata["status"] == expected
+
+
+def _parity_job():
+    return yaml.safe_load(_text(WORKFLOW))["jobs"]["parity"]
+
+
+def _parity_step(name):
+    return next(step for step in _parity_job()["steps"] if step.get("name") == name)
+
+
+@pytest.mark.parametrize("platform,accepted", [
+    ("linux/amd64", True),
+    ("linux/amd64/v2", True),
+    ("linux/arm64", True),
+    ("", False),
+    ("aarch64", False),
+    ("linux/arm64/v2", False),
+    ("windows/amd64", False),
+])
+def test_parity_platform_preflight_is_fail_closed(platform, accepted):
+    step = _parity_step("Validate qualification platform")
+    result = subprocess.run(
+        ["bash", "-e", "-c", step["run"]],
+        env={**os.environ, "PLATFORM": platform},
+        text=True, capture_output=True, timeout=10,
+    )
+    assert (result.returncode == 0) is accepted, result.stderr
+    if not accepted:
+        assert "unsupported canonical qualification platform" in result.stderr
+
+
+@pytest.mark.parametrize("platform,system,firmware,absent", [
+    ("linux/amd64", "qemu-system-x86", "ovmf", "qemu-system-arm"),
+    ("linux/amd64/v2", "qemu-system-x86", "ovmf", "qemu-system-arm"),
+    ("linux/arm64", "qemu-system-arm", "qemu-efi-aarch64", "qemu-system-x86"),
+])
+def test_parity_installs_target_qemu_and_firmware(tmp_path, platform, system, firmware, absent):
+    sudo = tmp_path / "sudo"
+    sudo.write_text('#!/bin/sh\nprintf "%s\\n" "$*"\n')
+    sudo.chmod(0o755)
+    step = _parity_step("Install E2E dependencies")
+    result = subprocess.run(
+        ["bash", "-e", "-c", step["run"]],
+        env={**os.environ, "PATH": f"{tmp_path}:{os.environ['PATH']}", "PLATFORM": platform},
+        text=True, capture_output=True, timeout=10,
+    )
+    assert result.returncode == 0, result.stderr
+    packages = result.stdout.split()
+    assert system in packages
+    assert firmware in packages
+    assert absent not in packages
+
+
+def test_parity_requires_explicit_platform_and_native_arm_runner():
+    data = yaml.safe_load(_text(WORKFLOW))
+    platform = data[True]["workflow_call"]["inputs"]["qual_platform"]
+    assert platform["required"] is True
+    assert "default" not in platform
+    job = _parity_job()
+    assert job["runs-on"] == (
+        "${{ inputs.qual_platform == 'linux/arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}"
+    )
+    names = [step.get("name") for step in job["steps"]]
+    assert names.index("Validate qualification platform") < names.index("Download CI ISO and manifest")
+
+
+def test_parity_job_budget_covers_both_strict_passes():
+    job = _parity_job()
+    strict_steps = [step for step in job["steps"] if "--strict-offline-gui" in step.get("run", "")]
+    assert len(strict_steps) == 2
+    assert all(step["timeout-minutes"] == 60 for step in strict_steps)
+    assert job["timeout-minutes"] >= sum(step["timeout-minutes"] for step in strict_steps) + 10
+
+
+@pytest.mark.skipif(shutil.which("jq") is None, reason="jq is required by the workflow")
+@pytest.mark.parametrize("claimed", ["linux/amd64", "linux/amd64/v2", "linux/arm64"])
+def test_parity_checks_manifest_platform_against_independent_request(tmp_path, claimed):
+    step = _parity_step("Validate and compare experience manifests")
+    # Exercise the exact workflow admission expression, before any harness call.
+    match = re.search(r"jq -e .*?\"\$manifest\" >/dev/null", step["run"], re.S)
+    assert match
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(json.dumps({
+        "variant": "yellowfin", "flavor": "gnome", "platform": claimed,
+    }))
+    result = subprocess.run(
+        ["bash", "-e", "-c", match.group(0)],
+        env={**os.environ, "VARIANT": "yellowfin", "FLAVOR": "gnome",
+             "PLATFORM": "linux/arm64", "manifest": str(manifest)},
+        text=True, capture_output=True, timeout=10,
+    )
+    assert (result.returncode == 0) is (claimed == "linux/arm64")

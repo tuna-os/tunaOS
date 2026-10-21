@@ -1880,6 +1880,42 @@ needs TOML 1.0 grammar; Python 3.11's stdlib `tomllib` rejects both inputs.
 [Run 39421110868](https://github.com/tuna-os/tunaos/actions/runs/39421110868)
 shows the failure after `tomli` 2.5.0 merged.
 
-**Fix:** Keep `tomli` at the last compatible `2.2.1` release and cap Renovate
-updates below `2.5.0`. Lift the cap only when the configuration contract and
-both parser paths move to TOML 1.1 together.
+**Fix:** Keep `tomli` pinned to the verified `2.2.1` release in both requirements
+and Renovate. The former `<2.5.0` rule admitted `2.4.1`, which failed the same
+grammar cases in [run 39499589269](https://github.com/tuna-os/tunaOS/actions/runs/39499589269).
+Tomli introduced TOML 1.1 in `2.4.0`. Change the pin only after a grammar review
+that covers both Python parser paths; preserve the rejection tests.
+
+## Browser/CI parity uses the wrong QEMU or ends before its second install
+
+**Symptom:** A parity candidate for ARM64 lands on an x86-only runner setup,
+or the job ends a strict pass early.
+
+**Cause:** At `cd4129f0`, PR #3431 pinned the runner and package list to x86.
+One job covered 90 minutes for two strict passes with no separate step
+limits. A single pass gets a full hour on its own.
+ARM64 follows the native-runner selection in `iso-e2e.yml`
+(`ubuntu-24.04-arm` for `linux/arm64`, `ubuntu-24.04` otherwise) with the
+matching QEMU package set for each target.
+
+**Fix:** Set an explicit canonical platform before artifact downloads.
+Compare it with both manifests, select the native runner and matching QEMU
+firmware, and allow 130 minutes for both 60-minute passes and setup.
+`tests/test_strict_offline_gui.py` checks platform rejection and package
+selection with no package install and no VM start.
+
+### A legacy R2 failure is not proof of a publication dependency cycle
+
+Run [39499589268](https://github.com/tuna-os/tunaOS/actions/runs/39499589268)
+failed before installation: the downloaded Albacore ISO had no embedded
+`etc/tunaos/live-source.json`. Keep that gate closed. Repeated runs cannot
+add provenance to retained media.
+
+The parity workflow uses Actions artifacts, never R2. This lets the team
+test candidates before public delivery; it does not establish browser
+authenticity. The separate path in ISO E2E with `source=build` also avoids
+R2, but at `cd4129f0` it combines a published live overlay with a newly
+local payload. Do not call that matching-media evidence without proof of
+their base linkage. Do not merge or publish unsafe media to make the old
+download pass. Use exact candidate artifacts and preserve the independent
+producer/transport and installation requirements in `docs/TESTING.md`.
