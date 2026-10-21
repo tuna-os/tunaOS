@@ -90,9 +90,17 @@ def package_policy():
     return module
 
 
+@lru_cache(maxsize=1)
+def package_catalog_schema():
+    spec = importlib.util.spec_from_file_location('tunaos_package_catalogs', Path(__file__).with_name('package_catalogs.py'))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def validate(config):
     """Validate the implemented surface; reject inert future sections."""
-    table(config, ('schema_version', 'build', 'iso_groups', 'sibling_images', 'tuna_rollout', 'variants', 'package_groups', 'desktops'),
+    table(config, ('schema_version', 'build', 'iso_groups', 'sibling_images', 'tuna_rollout', 'variants', 'package_groups', 'desktops', 'package_catalogs'),
           ('schema_version', 'build', 'iso_groups', 'sibling_images', 'tuna_rollout', 'variants'), 'config')
     if 'desktops' in config or 'package_groups' in config:
         tunaos_packages = package_policy()
@@ -223,6 +231,12 @@ def validate(config):
             unknown = set(group[key]) - flavor_ids
             if unknown:
                 raise ConfigError(f'iso_groups[{i}].{key}: unknown flavors {sorted(unknown)}')
+    if 'package_catalogs' in config:
+        catalogs = package_catalog_schema()
+        try:
+            catalogs.validate_document(config)
+        except catalogs.CatalogError as exc:
+            raise ConfigError(f'package_catalogs: {exc}') from exc
     return config
 
 
