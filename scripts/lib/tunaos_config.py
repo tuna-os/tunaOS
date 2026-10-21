@@ -100,7 +100,7 @@ def package_catalog_schema():
 
 def validate(config):
     """Validate the implemented surface; reject inert future sections."""
-    table(config, ('schema_version', 'build', 'iso_groups', 'sibling_images', 'tuna_rollout', 'variants', 'package_groups', 'desktops', 'package_catalogs'),
+    table(config, ('schema_version', 'build', 'iso_groups', 'sibling_images', 'tuna_rollout', 'variants', 'package_groups', 'desktops', 'iso_builder', 'package_catalogs'),
           ('schema_version', 'build', 'iso_groups', 'sibling_images', 'tuna_rollout', 'variants'), 'config')
     if 'desktops' in config or 'package_groups' in config:
         tunaos_packages = package_policy()
@@ -231,6 +231,20 @@ def validate(config):
             unknown = set(group[key]) - flavor_ids
             if unknown:
                 raise ConfigError(f'iso_groups[{i}].{key}: unknown flavors {sorted(unknown)}')
+    if 'iso_builder' in config:
+        module_path = Path(__file__).with_name('iso_builder_config.py')
+        spec = importlib.util.spec_from_file_location('iso_builder_config', module_path)
+        if spec is None or spec.loader is None:
+            raise ConfigError(f'iso_builder: cannot load validator at {module_path}')
+        module = importlib.util.module_from_spec(spec)
+        try:
+            spec.loader.exec_module(module)
+        except OSError as exc:
+            raise ConfigError(f'iso_builder: cannot read validator at {module_path}: {exc}') from exc
+        try:
+            module.project(config)
+        except module.ConfigError as exc:
+            raise ConfigError(f'iso_builder: {exc}') from exc
     if 'package_catalogs' in config:
         catalogs = package_catalog_schema()
         try:

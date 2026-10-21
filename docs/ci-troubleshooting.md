@@ -1765,6 +1765,14 @@ try. After three failures, retain the command's exit status and diagnostic.
 Keep README unchanged; do not publish a partial table.
 See `tests/test_readme_status_api_retries.py` for regression tests.
 
+### ISO Builder presentation export drift
+
+Symptom: `check-builder-config` reports drift in the generated builder configuration.
+Cause: `docs/iso-builder.config.json` differs from `[iso_builder]` in primary
+`tunaos.toml`. The regression test compares the complete deterministic export.
+Fix: edit TOML, run `python3 scripts/config.py generate-builder-config`, then
+run `python3 scripts/config.py check-builder-config`. Do not edit the JSON copy.
+
 ### Fork preparation reports changed sources with a desktop override
 
 Symptom: the test for source receipts rejects a tracked desktop adapter, or preparation

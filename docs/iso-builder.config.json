@@ -1,0 +1,206 @@
+{
+  "brand": {
+    "documentation_url": "https://tunaos.org/docs/iso-builder",
+    "favicon_url": "/favicon-32.png",
+    "homepage_url": "https://tunaos.org",
+    "logo_url": "/logo.png",
+    "name": "TunaOS",
+    "support_url": "https://github.com/tuna-os"
+  },
+  "curated_app_sets": [
+    {
+      "desktops": [
+        "gnome",
+        "xfce",
+        "cosmic"
+      ],
+      "format": "brewfile",
+      "id": "bluefin-system",
+      "label": "Bluefin core apps",
+      "url": "https://raw.githubusercontent.com/projectbluefin/common/main/system_files/bluefin/usr/share/ublue-os/homebrew/system-flatpaks.Brewfile"
+    },
+    {
+      "desktops": [
+        "gnome",
+        "xfce",
+        "cosmic"
+      ],
+      "format": "brewfile",
+      "id": "bluefin-full",
+      "label": "Bluefin full desktop",
+      "url": "https://raw.githubusercontent.com/projectbluefin/common/main/system_files/bluefin/usr/share/ublue-os/homebrew/full-desktop.Brewfile"
+    },
+    {
+      "desktops": [
+        "gnome",
+        "xfce",
+        "cosmic"
+      ],
+      "format": "brewfile",
+      "id": "bluefin-dx",
+      "label": "Bluefin developer apps",
+      "url": "https://raw.githubusercontent.com/projectbluefin/common/main/system_files/bluefin/usr/share/ublue-os/homebrew/system-dx-flatpaks.Brewfile"
+    },
+    {
+      "desktops": [
+        "kde"
+      ],
+      "format": "brewfile",
+      "id": "aurora-system",
+      "label": "Aurora core apps",
+      "url": "https://raw.githubusercontent.com/get-aurora-dev/common/main/system_files/shared/usr/share/ublue-os/homebrew/system-flatpaks.Brewfile"
+    },
+    {
+      "desktops": [
+        "kde"
+      ],
+      "format": "brewfile",
+      "id": "aurora-full",
+      "label": "Aurora full desktop",
+      "url": "https://raw.githubusercontent.com/get-aurora-dev/common/main/system_files/shared/usr/share/ublue-os/homebrew/full-desktop.Brewfile"
+    },
+    {
+      "desktops": [
+        "kde"
+      ],
+      "format": "brewfile",
+      "id": "aurora-dx",
+      "label": "Aurora developer apps",
+      "url": "https://raw.githubusercontent.com/get-aurora-dev/common/main/system_files/shared/usr/share/ublue-os/homebrew/system-dx-flatpaks.Brewfile"
+    },
+    {
+      "desktops": [
+        "niri"
+      ],
+      "format": "preinstall",
+      "id": "zirconium",
+      "label": "Zirconium apps",
+      "url": "https://raw.githubusercontent.com/zirconium-dev/zirconium/main/mkosi.extra/usr/share/flatpak/preinstall.d/zirconium.preinstall"
+    }
+  ],
+  "ddi_channels": [
+    {
+      "desktop": "gnome",
+      "id": "snowfield",
+      "name": "Frostyard Snowfield — GNOME (DDI)",
+      "stem": "snowfield-ab"
+    },
+    {
+      "desktop": "gnome",
+      "id": "snow",
+      "name": "Frostyard Snow — GNOME (DDI)",
+      "stem": "snow-ab"
+    },
+    {
+      "desktop": "none",
+      "id": "cayo",
+      "name": "Frostyard Cayo — headless (DDI)",
+      "stem": "cayo-ab"
+    }
+  ],
+  "default_selection": {
+    "flavor": "gnome",
+    "kind": "catalog",
+    "platform": "linux/amd64/v2",
+    "variant": "yellowfin"
+  },
+  "desktops": [
+    {
+      "default_flatpaks": [
+        "io.github.kolunmi.Bazaar",
+        "org.mozilla.firefox",
+        "org.gnome.TextEditor"
+      ],
+      "description": "A clean, focused desktop with an app overview.",
+      "id": "gnome",
+      "name": "GNOME"
+    },
+    {
+      "default_flatpaks": [
+        "io.github.kolunmi.Bazaar",
+        "org.mozilla.firefox",
+        "org.kde.kate"
+      ],
+      "description": "A familiar layout with a taskbar and lots of customization.",
+      "id": "kde",
+      "name": "KDE Plasma"
+    },
+    {
+      "default_flatpaks": [
+        "io.github.kolunmi.Bazaar",
+        "org.mozilla.firefox"
+      ],
+      "description": "Flexible workspaces with optional window tiling.",
+      "id": "cosmic",
+      "name": "COSMIC"
+    },
+    {
+      "default_flatpaks": [
+        "io.github.kolunmi.Bazaar",
+        "org.mozilla.firefox"
+      ],
+      "description": "A scrolling, keyboard-focused window layout.",
+      "id": "niri",
+      "name": "Niri"
+    },
+    {
+      "default_flatpaks": [
+        "io.github.kolunmi.Bazaar",
+        "org.mozilla.firefox",
+        "org.gnome.TextEditor"
+      ],
+      "description": "A lightweight, traditional desktop.",
+      "id": "xfce",
+      "name": "XFCE"
+    }
+  ],
+  "output": {
+    "filename_prefix": "tunaos",
+    "volume_label": "TUNAOS"
+  },
+  "presentation": {
+    "accent_color": "#5b9cf6",
+    "headline": "Make TunaOS your own",
+    "intro": "Choose your desktop, apps and image settings."
+  },
+  "preview_only": false,
+  "schema_version": 1,
+  "variants": [
+    {
+      "id": "yellowfin",
+      "name": "AlmaLinux Kitten 10 (flagship)"
+    },
+    {
+      "id": "bonito",
+      "name": "Fedora 44"
+    },
+    {
+      "id": "sailfin",
+      "name": "openSUSE Tumbleweed"
+    },
+    {
+      "id": "flounder",
+      "name": "Debian 13 Trixie"
+    },
+    {
+      "id": "grouper",
+      "name": "Ubuntu 26.04"
+    },
+    {
+      "id": "marlin",
+      "name": "Arch Linux"
+    },
+    {
+      "id": "skipjack",
+      "name": "CentOS Stream 10"
+    },
+    {
+      "id": "albacore",
+      "name": "AlmaLinux 10"
+    },
+    {
+      "id": "guppy",
+      "name": "Gentoo (source-based)"
+    }
+  ]
+}

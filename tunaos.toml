@@ -4364,6 +4364,168 @@ required = [
   "gnome-base/gnome-keyring",
 ]
 
+# ISO Builder presentation only. CatalogSnapshot v1 still owns availability,
+# target references and qualification. Export; never hand-edit the JSON adapter.
+[iso_builder]
+schema_version = 1
+preview_only = false
+
+[iso_builder.brand]
+name = "TunaOS"
+logo_url = "/logo.png"
+favicon_url = "/favicon-32.png"
+homepage_url = "https://tunaos.org"
+documentation_url = "https://tunaos.org/docs/iso-builder"
+support_url = "https://github.com/tuna-os"
+
+[iso_builder.presentation]
+headline = "Make TunaOS your own"
+intro = "Choose your desktop, apps and image settings."
+accent_color = "#5b9cf6"
+
+[iso_builder.output]
+volume_label = "TUNAOS"
+filename_prefix = "tunaos"
+
+[iso_builder.default_selection]
+kind = "catalog"
+variant = "yellowfin"
+flavor = "gnome"
+platform = "linux/amd64/v2"
+
+[[iso_builder.desktops]]
+id = "gnome"
+name = "GNOME"
+description = "A clean, focused desktop with an app overview."
+default_flatpaks = ["io.github.kolunmi.Bazaar", "org.mozilla.firefox", "org.gnome.TextEditor"]
+
+[[iso_builder.desktops]]
+id = "kde"
+name = "KDE Plasma"
+description = "A familiar layout with a taskbar and lots of customization."
+default_flatpaks = ["io.github.kolunmi.Bazaar", "org.mozilla.firefox", "org.kde.kate"]
+
+[[iso_builder.desktops]]
+id = "cosmic"
+name = "COSMIC"
+description = "Flexible workspaces with optional window tiling."
+default_flatpaks = ["io.github.kolunmi.Bazaar", "org.mozilla.firefox"]
+
+[[iso_builder.desktops]]
+id = "niri"
+name = "Niri"
+description = "A scrolling, keyboard-focused window layout."
+default_flatpaks = ["io.github.kolunmi.Bazaar", "org.mozilla.firefox"]
+
+[[iso_builder.desktops]]
+id = "xfce"
+name = "XFCE"
+description = "A lightweight, traditional desktop."
+default_flatpaks = ["io.github.kolunmi.Bazaar", "org.mozilla.firefox", "org.gnome.TextEditor"]
+
+[[iso_builder.variants]]
+id = "yellowfin"
+name = "AlmaLinux Kitten 10 (flagship)"
+
+[[iso_builder.variants]]
+id = "bonito"
+name = "Fedora 44"
+
+[[iso_builder.variants]]
+id = "sailfin"
+name = "openSUSE Tumbleweed"
+
+[[iso_builder.variants]]
+id = "flounder"
+name = "Debian 13 Trixie"
+
+[[iso_builder.variants]]
+id = "grouper"
+name = "Ubuntu 26.04"
+
+[[iso_builder.variants]]
+id = "marlin"
+name = "Arch Linux"
+
+[[iso_builder.variants]]
+id = "skipjack"
+name = "CentOS Stream 10"
+
+[[iso_builder.variants]]
+id = "albacore"
+name = "AlmaLinux 10"
+
+[[iso_builder.variants]]
+id = "guppy"
+name = "Gentoo (source-based)"
+
+[[iso_builder.curated_app_sets]]
+id = "bluefin-system"
+label = "Bluefin core apps"
+desktops = ["gnome", "xfce", "cosmic"]
+url = "https://raw.githubusercontent.com/projectbluefin/common/main/system_files/bluefin/usr/share/ublue-os/homebrew/system-flatpaks.Brewfile"
+format = "brewfile"
+
+[[iso_builder.curated_app_sets]]
+id = "bluefin-full"
+label = "Bluefin full desktop"
+desktops = ["gnome", "xfce", "cosmic"]
+url = "https://raw.githubusercontent.com/projectbluefin/common/main/system_files/bluefin/usr/share/ublue-os/homebrew/full-desktop.Brewfile"
+format = "brewfile"
+
+[[iso_builder.curated_app_sets]]
+id = "bluefin-dx"
+label = "Bluefin developer apps"
+desktops = ["gnome", "xfce", "cosmic"]
+url = "https://raw.githubusercontent.com/projectbluefin/common/main/system_files/bluefin/usr/share/ublue-os/homebrew/system-dx-flatpaks.Brewfile"
+format = "brewfile"
+
+[[iso_builder.curated_app_sets]]
+id = "aurora-system"
+label = "Aurora core apps"
+desktops = ["kde"]
+url = "https://raw.githubusercontent.com/get-aurora-dev/common/main/system_files/shared/usr/share/ublue-os/homebrew/system-flatpaks.Brewfile"
+format = "brewfile"
+
+[[iso_builder.curated_app_sets]]
+id = "aurora-full"
+label = "Aurora full desktop"
+desktops = ["kde"]
+url = "https://raw.githubusercontent.com/get-aurora-dev/common/main/system_files/shared/usr/share/ublue-os/homebrew/full-desktop.Brewfile"
+format = "brewfile"
+
+[[iso_builder.curated_app_sets]]
+id = "aurora-dx"
+label = "Aurora developer apps"
+desktops = ["kde"]
+url = "https://raw.githubusercontent.com/get-aurora-dev/common/main/system_files/shared/usr/share/ublue-os/homebrew/system-dx-flatpaks.Brewfile"
+format = "brewfile"
+
+[[iso_builder.curated_app_sets]]
+id = "zirconium"
+label = "Zirconium apps"
+desktops = ["niri"]
+url = "https://raw.githubusercontent.com/zirconium-dev/zirconium/main/mkosi.extra/usr/share/flatpak/preinstall.d/zirconium.preinstall"
+format = "preinstall"
+
+[[iso_builder.ddi_channels]]
+id = "snowfield"
+stem = "snowfield-ab"
+name = "Frostyard Snowfield — GNOME (DDI)"
+desktop = "gnome"
+
+[[iso_builder.ddi_channels]]
+id = "snow"
+stem = "snow-ab"
+name = "Frostyard Snow — GNOME (DDI)"
+desktop = "gnome"
+
+[[iso_builder.ddi_channels]]
+id = "cayo"
+stem = "cayo-ab"
+name = "Frostyard Cayo — headless (DDI)"
+desktop = "none"
+
 # Marlin GDM override from aa9810e9 (tunaOS#3438). The generated -arch
 # adapter takes precedence over tuna.yaml on pacman bases. Other tuna
 # profiles retain greetd. Package order and beta pin are unchanged.

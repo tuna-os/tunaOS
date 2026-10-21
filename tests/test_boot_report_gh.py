@@ -422,6 +422,10 @@ variants:
             if catalog["variant"] in document["variants"]
         }
         document["iso_groups"] = []  # No grouped ISO in this deliberately small report fixture.
+        # This report-only fixture has no builder presentation. Do not retain
+        # stock facet/default references after replacing its matrix flavors.
+        document.pop("iso_builder", None)
+        document.pop("flavor_metadata", None)
         document["tuna_rollout"] = {"yellowfin": document["tuna_rollout"]["yellowfin"]}
         patcher = mock.patch.object(gbr.tunaos_config, "load", return_value=document)
         patcher.start()
