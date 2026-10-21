@@ -3,6 +3,9 @@ set -euo pipefail
 
 desktop="${1:?usage: verify-desktop-experience.sh <gnome|kde|niri|cosmic|xfce|pantheon|tuna> [--runtime]}"
 mode="${2:-build}"
+if [[ "$mode" == --runtime ]]; then
+	echo "tunaos desktop contract starting: desktop=${desktop}" | tee /dev/ttyS0 2>/dev/null || true
+fi
 
 # At runtime the E2E gate greps ttyS0 for a contract marker; a silent early
 # exit (e.g. a require_* failing under set -e) would leave the gate waiting
@@ -16,10 +19,14 @@ emit_fail_on_early_exit() {
 		# their failure actionable in a serial-only Gate: without this, the
 		# harness only gets `early_exit rc=1` and cannot distinguish a missing
 		# session, portal, keyring, or display-manager unit.
-		local line="${BASH_LINENO[0]:-unknown}"
-		local command="${BASH_COMMAND:-unknown}"
-		printf 'TUNAOS_DESKTOP_CONTRACT_FAIL desktop=%s reason=early_exit rc=%s line=%s command=%q\n' \
-			"${desktop}" "${rc}" "${line}" "${command}" | tee /dev/ttyS0 2>/dev/null || true
+	local line="${BASH_LINENO[0]:-unknown}"
+	local command="${BASH_COMMAND:-unknown}"
+	local stack="" i
+	for i in "${!BASH_LINENO[@]}"; do
+		stack+=" ${BASH_SOURCE[$i]:-?}:${BASH_LINENO[$i]:-?}:${FUNCNAME[$((i + 1))]:-main}"
+	done
+	printf 'TUNAOS_DESKTOP_CONTRACT_FAIL desktop=%s reason=early_exit rc=%s line=%s command=%q stack=%s\n' \
+		"${desktop}" "${rc}" "${line}" "${command}" "${stack:-none}" | tee /dev/ttyS0 2>/dev/null || true
 	fi
 }
 trap emit_fail_on_early_exit EXIT
