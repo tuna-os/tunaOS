@@ -79,6 +79,12 @@ if loginctl list-sessions --no-legend | awk -v user="$user" '$3 == user { found=
 	exit 1
 fi
 CHECK_GREETER
+# Pin the session GDM starts: a fresh image has no per-user history, so
+# without this GDM falls back to its own default (currently the GNOME
+# session, which is broken on newer GNOME) instead of Tuna.
+guest_accts_dir="${TUNAOS_GDM_ACCOUNTS_DIR:-/var/lib/AccountsService/users}"
+guest mkdir -p "$guest_accts_dir"
+printf '[User]\nSession=tuna\n' | guest tee "$guest_accts_dir/$TEST_USER" >/dev/null
 "$CORRAL" screenshot "$NAME" -o "${OUT}/gdm-greeter.png" --require-paint
 
 # Corral creates exactly one regular, non-sudo user in a disposable image
@@ -138,6 +144,13 @@ done
 	exit 1
 }
 echo "TUNAOS_GDM_LOGIN_OK user=${TEST_USER} session=${session_id}"
+# Record which desktop actually started: the gate must validate the Tuna
+# session, not whatever GDM falls back to. Best effort only.
+guest_leader="$(guest loginctl show-session "$session_id" -p Leader --value 2>/dev/null || true)"
+if [[ -n "$guest_leader" ]]; then
+	echo "==> session leader: $(guest ps -p "$guest_leader" -o comm= 2>/dev/null || echo unknown)"
+	echo "==> session desktop: $(guest cat "/proc/$guest_leader/environ" 2>/dev/null | tr '\0' '\n' | grep '^XDG_CURRENT_DESKTOP=' || echo unknown)"
+fi
 sleep 3
 "$CORRAL" screenshot "$NAME" -o "${OUT}/gdm-logged-in.png" --require-paint
 

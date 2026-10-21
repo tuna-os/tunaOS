@@ -19,6 +19,7 @@ JSON
   export GDM_GATE_STATE="${STATE}"
   export GDM_GATE_USER="tuna-ci-login"
   export TUNAOS_GDM_TEST_PASSWORD="test-password"
+  export TUNAOS_GDM_ACCOUNTS_DIR="${ROOT}/accts"
   export CORRAL="${FAKEBIN}/corral"
   export GDM_GATE_TAB_WORKS=1
   export GDM_GATE_TYPEAHEAD_WORKS=1
@@ -157,6 +158,7 @@ run_gate() {
   grep -Fq 'TUNAOS_GDM_UNLOCK_OK user=tuna-ci-login session=41' <<<"$output"
   grep -Fq 'key testvm tab' "${STATE}/calls"
   grep -Fq 'key testvm esc' "${STATE}/calls"
+  grep -Fqx 'Session=tuna' "${ROOT}/accts/tuna-ci-login"
   [ -f "${OUT}/gdm-attempt-1.png" ]
   [ -f "${OUT}/gdm-attempt-2.png" ]
   [ ! -e "${OUT}/gdm-attempt-3.png" ]

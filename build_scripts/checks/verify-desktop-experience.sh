@@ -635,6 +635,12 @@ tuna)
 		echo "GDM automatic login is enabled; the login screen is bypassed" >&2
 		exit 1
 	fi
+	# Fresh installs have no per-user history, so GDM would fall back to its
+	# own default session instead of Tuna without this pin.
+	grep -qx 'DefaultSession=tuna.desktop' "$tuna_gdm_config" || {
+		echo "GDM does not default to the Tuna session in $tuna_gdm_config" >&2
+		exit 1
+	}
 	require_unit "$tuna_gdm_unit"
 
 	# Preserve each Tuna variant's distro-derived accent without replacing the
