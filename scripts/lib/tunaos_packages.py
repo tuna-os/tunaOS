@@ -3,10 +3,6 @@ import copy
 import json
 import re
 from pathlib import Path
-try:
-    import tomllib
-except ModuleNotFoundError:
-    import tomli as tomllib
 
 # Transitional implementation registry. Package-bearing operations remain
 # inventoried until their arguments move into typed configuration inputs.

@@ -60,7 +60,7 @@ def main():
             import hashlib
             import subprocess
             source = (args.root / 'tunaos.toml').read_bytes()
-            document = tunaos_config.validate(tunaos_config.tomllib.loads(source.decode('utf-8')))
+            document = tunaos_config.validate(tunaos_config.parse(source, args.root / 'tunaos.toml'))
             policy = tunaos_config.package_policy()
             try:
                 expected = policy.installation_contract(document, hashlib.sha256(source).hexdigest(),

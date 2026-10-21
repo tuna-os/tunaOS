@@ -1799,9 +1799,70 @@ needs TOML 1.0 grammar; Python 3.11's stdlib `tomllib` rejects both inputs.
 [Run 39421110868](https://github.com/tuna-os/tunaos/actions/runs/39421110868)
 shows the failure after `tomli` 2.5.0 merged.
 
-**Fix:** Keep `tomli` at the last compatible `2.2.1` release and cap Renovate
-updates below `2.5.0`. Lift the cap only when the configuration contract and
-both parser paths move to TOML 1.1 together.
+**Fix:** Use the bundled Tomli 2.3.2 source on every host.
+Tomli 2.4.0 first added TOML 1.1, so a `<2.5.0` cap did not hold the grammar.
+The 2.3.2 release keeps TOML 1.0 and includes the key and nesting limit fixes.
+Review grammar changes with the same tests on all supported hosts.
+
+### Config works on one Python host but fails on another
+
+**Symptom:** Python 3.15 accepts a config that Python 3.10 rejects.
+
+**Cause:** The old loader used the host's standard library when present.
+Python 3.15's parser accepts TOML 1.1. The config contract still uses TOML 1.0.
+The test `test_parser_keeps_the_shared_toml10_grammar` covers this split.
+
+**Fix:** Use the bundled Tomli parser on every host, with no standard library fallback.
+Restore the reviewed source checkout if its parser files are absent.
+Config reads need no pip install or special sudo environment.
+Run `python3 scripts/check-vendored-parser.py` to check the file hashes.
+
+## Package authoring refuses an add or asks for an editor dependency
+
+**Symptom:** `config-packages.py add` reports a missing/ambiguous native package,
+a stale index, a receipt hash mismatch, or a missing `tomlkit` dependency.
+
+**Cause:** The offline editor needs native names for every selected policy before
+it writes. `tests/test_package_authoring.py` tests additions for apt and Gentoo.
+An ambiguous Gentoo category or a failed index leaves the TOML file unchanged.
+Read-only config validation does not need the optional editor dependency.
+
+**Fix:** Install `requirements-package-authoring.txt` explicitly to edit files.
+Refresh the native index and its receipt together, or use `search` followed by an
+explicit `--native TARGET=exact-name` for a verified mapping. Do not remove a
+failed target to imply all-base coverage. See the [package command guide](PACKAGE-AUTHORING.md)
+for policy scope, provenance and native formats.
+
+## Package addition conflicts with a DNF exclusion or exceeds the size limit
+
+**Symptom:** An added package matches a DNF exclusion such as `htop*`, or a
+config near 8 MiB cannot pass the next read after an addition.
+
+**Cause:** The check used equality. It did not support globs. The input-size guard did
+not cover serialized output. The regression cases in
+`tests/test_package_authoring.py` cover direct and inherited exclusion patterns,
+negative matches, and the no-write size boundary.
+
+**Fix:** Check name globs for DNF after package-group expansion and reject oversized
+output before replacement. For DNF, the installer passes exclusions through `-x`.
+The [DNF rules](https://dnf5.readthedocs.io/en/latest/misc/specs.7.html#globs)
+define this syntax. This check does not replace native transaction resolution.
+
+### Retained browser candidate fails the v2 media join
+
+A manifest in R2 is not a member of a GitHub ZIP archive.
+Diagnostic observations from its producer are not a browser v2 receipt.
+A false `artifact.mediaPath` misstates the location of the media.
+An absent receipt anchor in GitHub loses the producer association.
+
+Use the explicit branch for retained media. Preserve the run, artifact ID, and
+archive hash. Verify the exact receipt member and its hash.
+Pin the manifest hash independently before any chunk read.
+
+The tiny fixtures in `tests/test_iso_retained_media_transport.py` reject wrong
+origins, runs, and `runAttempt` values. They reject replay, changed manifests,
+absent chunks, wrong whole-ISO identity, and unsafe members in ZIP archives.
+These tests check consistency. They do not prove a real producer or installation.
 
 ### Removed Flatpak IDs stay in the hook file
 
