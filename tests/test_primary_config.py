@@ -341,7 +341,28 @@ def test_tomli_dependency_ceiling_preserves_shared_toml_grammar():
         if "tomli" in rule.get("matchPackageNames", [])
     ]
     assert len(rules) == 1
-    assert rules[0]["allowedVersions"] == "<2.5.0"
+    rule = rules[0]
+    assert rule["matchManagers"] == ["pip_requirements"]
+    assert rule["matchFileNames"] == ["requirements-config.txt"]
+    assert rule["allowedVersions"] == "==2.2.1"
+    # pip_requirements strips environment markers and extracts the PEP 440
+    # specifier as currentValue; packageName is normalized to "tomli".
+    # https://github.com/renovatebot/renovate/blob/44.166.0/lib/modules/manager/pip_requirements/extract.ts
+    from packaging.requirements import Requirement
+    from packaging.specifiers import SpecifierSet
+    requirements = [Requirement(line) for line in
+                    (ROOT / "requirements-config.txt").read_text().splitlines()
+                    if line.strip() and not line.startswith("#")]
+    dependency, = requirements
+    assert dependency.name == "tomli"
+    assert str(dependency.specifier) == rule["allowedVersions"]
+    assert dependency.marker.evaluate({"python_version": "3.10"})
+    assert not dependency.marker.evaluate({"python_version": "3.11"})
+    allowed = SpecifierSet(rule["allowedVersions"])
+    assert "2.2.1" in allowed
+    for version in ("2.2.0", "2.2.2", "2.3.2", "2.4.0", "2.4.1", "2.5.0", "3.0.0"):
+        assert version not in allowed
+
 
 
 @pytest.mark.parametrize("recipe", ["check:", "_ensure_test_deps:", "clean:"])
