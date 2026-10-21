@@ -12,47 +12,52 @@ import re
 HTTPS_URL = '^(?![\\s\\S]*[\\x00-\\x20\\x7f\\u0085\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff\\\\])https://(?:(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])(?:\\.(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])){3}|(?=[^/?#:]{1,253}(?::443)?(?:[/?#]|$))(?!(?:[^./?#:]+\\.)*(?:[0-9]+|0[xX][0-9A-Fa-f]*)\\.?(?::443)?(?:[/?#]|$))[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*\\.?)(?::443)?(?:[/?#][^\\x00-\\x20\\x7f\\u0085\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff\\\\]*)?(?![\\s\\S])'
 
 
+# distribution/reference v0.6.0 path labels; syntax grants no transport authority.
+IMAGE_REFERENCE = r'[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*(?::[0-9]+)?/[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*(?:/[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*)*(?::[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}(?:@sha256:[0-9a-f]{64})?|@sha256:[0-9a-f]{64})'
+
+
 class ConfigError(ValueError):
     """Invalid presentation input; do not substitute stock branding."""
 
 
-def table(value, required, optional=()):
+def table(value, required, optional=(), *, path="$"):
     if not isinstance(value, dict):
-        raise ConfigError('expected object')
+        raise ConfigError(f'{path}: expected object')
     unknown = set(value) - set(required) - set(optional)
     missing = set(required) - set(value)
     if unknown or missing:
-        raise ConfigError(f'unknown keys {sorted(unknown)}; missing keys {sorted(missing)}')
+        raise ConfigError(f'{path}: unknown keys {sorted(unknown)}; missing keys {sorted(missing)}')
 
 
-def text(value):
+def text(value, path="$"):
     if not isinstance(value, str) or not value.strip() or any(ord(c) < 32 or ord(c) == 127 for c in value):
-        raise ConfigError('expected nonempty single-line string')
+        raise ConfigError(f'{path}: expected nonempty single-line string')
 
 
-def pattern(value, regex):
-    text(value)
+def pattern(value, regex, path="$"):
+    text(value, path)
     if not re.fullmatch(regex, value):
-        raise ConfigError(f'invalid value: {value!r}')
+        raise ConfigError(f'{path}: invalid value: {value!r}')
 
 
-def url(value, asset=False):
-    text(value)
+def url(value, asset=False, *, path="$"):
+    text(value, path)
     if '\\' in value or any(c.isspace() for c in value):
-        raise ConfigError('URL must not contain whitespace or backslashes')
+        raise ConfigError(f'{path}: URL must not contain whitespace or backslashes')
     if asset and re.fullmatch(r'/(?:[A-Za-z0-9_-]+/)*[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*', value):
         return
     if not re.fullmatch(HTTPS_URL, value):
-        raise ConfigError('expected HTTPS URL with DNS or canonical IPv4 host, no credentials or custom port')
+        raise ConfigError(f'{path}: expected HTTPS URL with DNS or canonical IPv4 host, no credentials or custom port')
 
 
 def entries(value, fields, collection):
     if not isinstance(value, list):
         raise ConfigError(f'{collection}: expected list')
     seen = set()
-    for entry in value:
-        table(entry, fields)
-        pattern(entry['id'], r'[a-z0-9][a-z0-9-]*')
+    for index, entry in enumerate(value):
+        path = f"{collection}[{index}]"
+        table(entry, fields, path=path)
+        pattern(entry['id'], r'[a-z0-9][a-z0-9-]*', f"{path}.id")
         if entry['id'] in seen:
             raise ConfigError(f'{collection}: duplicate id {entry["id"]!r}')
         seen.add(entry['id'])
@@ -67,46 +72,48 @@ def validate(document):
     if type(document['preview_only']) is not bool:
         raise ConfigError('preview_only must be boolean')
     brand = document['brand']
-    table(brand, ('name', 'homepage_url', 'documentation_url'), ('logo_url', 'favicon_url', 'support_url', 'disclaimer'))
+    table(brand, ('name', 'homepage_url', 'documentation_url'), ('logo_url', 'favicon_url', 'support_url', 'disclaimer'), path='brand')
     if document['preview_only'] and 'disclaimer' not in brand:
         raise ConfigError('preview_only requires an affiliation disclaimer')
     for key, value in brand.items():
         if key.endswith('_url'):
-            url(value, asset=key in ('logo_url', 'favicon_url'))
+            url(value, asset=key in ('logo_url', 'favicon_url'), path=f'brand.{key}')
         else:
-            text(value)
-    table(document['presentation'], ('headline', 'intro', 'accent_color'), ('colors', 'choice_style', 'font_family') if v2 else ())
+            text(value, f'brand.{key}')
+    table(document['presentation'], ('headline', 'intro', 'accent_color'), ('colors', 'choice_style', 'font_family') if v2 else (), path='presentation')
     for key in ('headline', 'intro', 'accent_color'):
-        text(document['presentation'][key])
+        text(document['presentation'][key], f'presentation.{key}')
     for key, allowed in (('choice_style', ('illustrated', 'thumbnail')), ('font_family', ('system', 'inter', 'dm-sans'))):
         if key in document['presentation'] and document['presentation'][key] not in allowed:
             raise ConfigError(f'unsupported presentation {key}')
     if 'colors' in document['presentation']:
         colors = document['presentation']['colors']
-        table(colors, ('background', 'surface', 'text', 'muted', 'accent', 'accent_text'), ('border', 'hover_surface', 'focus', 'selected_surface'))
-        for color in colors.values():
-            pattern(color, r'#[0-9a-fA-F]{6}')
-    pattern(document['presentation']['accent_color'], r'#[0-9a-fA-F]{6}')
-    table(document['output'], ('volume_label', 'filename_prefix'))
-    pattern(document['output']['volume_label'], r'[A-Z0-9_]{1,32}')
-    pattern(document['output']['filename_prefix'], r'[a-z0-9][a-z0-9_-]{0,63}')
+        table(colors, ('background', 'surface', 'text', 'muted', 'accent', 'accent_text'), ('border', 'hover_surface', 'focus', 'selected_surface'), path='presentation.colors')
+        for key, color in colors.items():
+            pattern(color, r'#[0-9a-fA-F]{6}', f'presentation.colors.{key}')
+    pattern(document['presentation']['accent_color'], r'#[0-9a-fA-F]{6}', 'presentation.accent_color')
+    table(document['output'], ('volume_label', 'filename_prefix'), path='output')
+    pattern(document['output']['volume_label'], r'[A-Z0-9_]{1,32}', 'output.volume_label')
+    pattern(document['output']['filename_prefix'], r'[a-z0-9][a-z0-9_-]{0,63}', 'output.filename_prefix')
     desktops = entries(
         document['desktops'],
         ('id', 'default_flatpaks') if v2 else ('id', 'name', 'description', 'default_flatpaks'),
         'desktops',
     )
-    for desktop in document['desktops']:
+    for index, desktop in enumerate(document['desktops']):
+        path = f'desktops[{index}]'
         if not v2:
-            text(desktop['name'])
-            text(desktop['description'])
+            text(desktop['name'], f'{path}.name')
+            text(desktop['description'], f'{path}.description')
         apps = desktop['default_flatpaks']
         if not isinstance(apps, list):
             raise ConfigError(f'desktops.{desktop["id"]}.default_flatpaks: expected list')
         seen_apps = set()
-        for app in apps:
-            pattern(app, r'(?:[A-Za-z_][A-Za-z0-9_]*\.){2,}[A-Za-z_-][A-Za-z0-9_-]*')
+        for app_index, app in enumerate(apps):
+            app_path = f'{path}.default_flatpaks[{app_index}]'
+            pattern(app, r'(?:[A-Za-z_][A-Za-z0-9_]*\.){2,}[A-Za-z_-][A-Za-z0-9_-]*', app_path)
             if len(app) > 255:
-                raise ConfigError('Flatpak app ID exceeds 255 characters')
+                raise ConfigError(f'{app_path}: Flatpak app ID exceeds 255 characters')
             if app in seen_apps:
                 raise ConfigError(
                     f'desktops.{desktop["id"]}.default_flatpaks: duplicate Flatpak {app!r}'
@@ -116,41 +123,37 @@ def validate(document):
         validate_selection(document)
     else:
         variants = entries(document['variants'], ('id', 'name'), 'variants')
-        for variant in document['variants']:
-            text(variant['name'])
+        for index, variant in enumerate(document['variants']):
+            text(variant['name'], f'variants[{index}].name')
         selection = document['default_selection']
         if not isinstance(selection, dict) or selection.get('kind') not in ('catalog', 'image'):
             raise ConfigError('default_selection.kind must be catalog or image')
         if selection['kind'] == 'catalog':
-            table(selection, ('kind', 'variant', 'flavor', 'platform'))
+            table(selection, ('kind', 'variant', 'flavor', 'platform'), path='default_selection')
             if not isinstance(selection['variant'], str) or not isinstance(selection['flavor'], str) or selection['variant'] not in variants or selection['flavor'] not in desktops:
                 raise ConfigError('default selection must reference configured variant and desktop')
         else:
-            table(selection, ('kind', 'image', 'platform'))
-            # distribution/reference v0.6.0 path and DNS labels; lowercase host scope.
-            # Syntax does not grant inspection, relay admission or qualification.
-            pattern(selection['image'], r'[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*(?::[0-9]+)?/[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*(?:/[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*)*(?::[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}(?:@sha256:[0-9a-f]{64})?|@sha256:[0-9a-f]{64})')
+            table(selection, ('kind', 'image', 'platform'), path='default_selection')
+            pattern(selection['image'], IMAGE_REFERENCE, 'default_selection.image')
         if selection['platform'] not in ('linux/amd64', 'linux/amd64/v2', 'linux/amd64/v3', 'linux/arm64'):
-            raise ConfigError('unsupported platform')
-    entries(
-        document['curated_app_sets'],
-        ('id', 'label', 'desktops', 'url', 'format'),
-        'curated_app_sets',
-    )
-    for collection in document['curated_app_sets']:
-        text(collection['label'])
-        url(collection['url'])
+            raise ConfigError('default_selection.platform: unsupported platform')
+    entries(document['curated_app_sets'], ('id', 'label', 'desktops', 'url', 'format'), 'curated_app_sets')
+    for index, collection in enumerate(document['curated_app_sets']):
+        path = f'curated_app_sets[{index}]'
+        text(collection['label'], f'{path}.label')
+        url(collection['url'], path=f'{path}.url')
         selected = collection['desktops']
         if not isinstance(selected, list) or any(not isinstance(item, str) for item in selected) or len(set(selected)) != len(selected) or set(selected) - desktops:
-            raise ConfigError('collection desktops must be unique configured ids')
+            raise ConfigError(f'{path}.desktops: collection desktops must be unique configured ids')
         if collection['format'] not in ('brewfile', 'preinstall'):
-            raise ConfigError('unsupported collection format')
+            raise ConfigError(f'{path}.format: unsupported collection format')
     entries(document.get('ddi_channels', []), ('id', 'stem', 'name', 'desktop'), 'ddi_channels')
-    for channel in document.get('ddi_channels', []):
-        pattern(channel['stem'], r'[a-z0-9][a-z0-9-]*')
-        text(channel['name'])
+    for index, channel in enumerate(document.get('ddi_channels', [])):
+        path = f'ddi_channels[{index}]'
+        pattern(channel['stem'], r'[a-z0-9][a-z0-9-]*', f'{path}.stem')
+        text(channel['name'], f'{path}.name')
         if not isinstance(channel['desktop'], str) or channel['desktop'] not in desktops | {'none'}:
-            raise ConfigError('DDI desktop must reference configured desktop or none')
+            raise ConfigError(f'{path}.desktop: DDI desktop must reference configured desktop or none')
     return document
 
 

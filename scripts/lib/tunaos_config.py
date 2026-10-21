@@ -245,9 +245,15 @@ def validate(config):
         except flatpak_policy().PolicyError as exc:
             raise ConfigError(str(exc)) from exc
     if 'iso_builder' in config or 'flavor_metadata' in config:
-        spec = importlib.util.spec_from_file_location('iso_builder_config', Path(__file__).with_name('iso_builder_config.py'))
+        module_path = Path(__file__).with_name('iso_builder_config.py')
+        spec = importlib.util.spec_from_file_location('iso_builder_config', module_path)
+        if spec is None or spec.loader is None:
+            raise ConfigError(f'iso_builder: cannot load validator at {module_path}')
         module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
+        try:
+            spec.loader.exec_module(module)
+        except OSError as exc:
+            raise ConfigError(f'iso_builder: cannot read validator at {module_path}: {exc}') from exc
         try:
             if 'flavor_metadata' in config:
                 module.flavor_metadata(config)
