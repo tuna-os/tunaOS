@@ -816,10 +816,18 @@ jobs:
           fi
 
           echo "Running diff..."
-          ./scripts/diff-images.sh "$BASE_IMAGE" "$TARGET_IMAGE" "diff_report.md"
-
-          # Add a header to the report
-          sed -i '1s/^/## 🔍 Image Diff Report\n\n/' diff_report.md
+          # The diff only feeds an informational PR comment (the post step
+          # skips when the report is absent), while a failing container
+          # runtime here is runner-state flake, not image quality: the
+          # target image already booted and passed every gate above. Never
+          # fail a green image over the comment.
+          if ./scripts/diff-images.sh "$BASE_IMAGE" "$TARGET_IMAGE" "diff_report.md"; then
+            # Add a header to the report
+            sed -i '1s/^/## 🔍 Image Diff Report\n\n/' diff_report.md
+          else
+            echo "::warning::Image diff failed; skipping the PR diff comment."
+            rm -f diff_report.md
+          fi
 
       - name: Post Diff Comment
         if: github.event_name == 'pull_request' && hashFiles('diff_report.md') != ''
