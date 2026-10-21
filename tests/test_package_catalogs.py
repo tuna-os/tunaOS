@@ -238,3 +238,14 @@ def test_primary_hook_rejects_unknown_catalog_fields():
     document['package_catalogs']['debian-trixie']['unexpected'] = True
     with pytest.raises(tunaos_config.ConfigError, match='package_catalogs'):
         tunaos_config.validate(document)
+
+
+def test_primary_catalog_reference_must_exist():
+    from lib import tunaos_config
+    document = tunaos_config.load()
+    assert tunaos_config.validate(document) is document
+    document['package_catalogs']['debian-trixie']['variant'] = 'missing-variant'
+    with pytest.raises(tunaos_config.ConfigError, match='catalog refers to unknown variant'):
+        tunaos_config.validate(document)
+    document['package_catalogs'] = {}
+    assert tunaos_config.validate(document) is document

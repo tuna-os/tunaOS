@@ -416,6 +416,11 @@ variants:
             for flavor in yaml.safe_load(self.YAML)["variants"][0]["flavors"]
         ]
         document["variants"] = {"yellowfin": variant}
+        # Keep optional source references within this deliberately reduced matrix.
+        document["package_catalogs"] = {
+            name: catalog for name, catalog in document.get("package_catalogs", {}).items()
+            if catalog["variant"] in document["variants"]
+        }
         document["iso_groups"] = []  # No grouped ISO in this deliberately small report fixture.
         document["tuna_rollout"] = {"yellowfin": document["tuna_rollout"]["yellowfin"]}
         patcher = mock.patch.object(gbr.tunaos_config, "load", return_value=document)
