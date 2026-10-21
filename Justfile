@@ -178,7 +178,7 @@ iso variant='skipjack' flavor='gnome' repo='local' tag='' dev='0':
         {{ just }} build "{{ variant }}" "{{ flavor }}" "" "0" "$_tag" "" "1"
         _repo="local"
     fi
-    sudo -E bash ./scripts/build-iso-tacklebox.sh "{{ variant }}" "{{ flavor }}" "$_repo" "$_tag" "{{ dev }}"
+    sudo -E env "PYTHONPATH=${TUNAOS_CONFIG_PYTHONPATH:-}" "TUNAOS_CONFIG_PYTHON=${TUNAOS_CONFIG_PYTHON:-$(command -v python3)}" bash ./scripts/build-iso-tacklebox.sh "{{ variant }}" "{{ flavor }}" "$_repo" "$_tag" "{{ dev }}"
 
 # Build ONE combined dedup ISO containing every desktop in an iso_group (#455).
 # group: '' / default (flagship gnome+hwe), community (kde/cosmic/niri), nvidia.

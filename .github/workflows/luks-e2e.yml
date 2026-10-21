@@ -622,7 +622,7 @@ jobs:
           # reason as the two below it: `sudo -E` is subject to sudoers
           # env_keep/env_reset, and a gate flag that silently fails to arrive
           # turns a gate back into a warning without saying so.
-          sudo -E env FISHERMAN_OVERRIDE="$FISHERMAN_OVERRIDE" \
+          sudo -E env "PYTHONPATH=${TUNAOS_CONFIG_PYTHONPATH:-}" FISHERMAN_OVERRIDE="$FISHERMAN_OVERRIDE" \
             E2E_WALL_CLOCK_DEADLINE="$E2E_WALL_CLOCK_DEADLINE" \
             TUNAOS_E2E_VERIFY_TPM_AUTOUNLOCK="$TUNAOS_E2E_VERIFY_TPM_AUTOUNLOCK" \
             E2E_CHECKPOINT_STRICT="$E2E_CHECKPOINT_STRICT" \

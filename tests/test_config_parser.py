@@ -222,8 +222,15 @@ def privileged_prefixes():
                     if line.lstrip().startswith('sudo ') and ('just iso' in line or 'just build' in line or '"$just" build' in line):
                         marker = 'timeout --kill-after' if 'timeout --kill-after' in line else 'just '
                         result.append((name, line[:line.index(marker)].strip()))
-    line = next(line for line in (ROOT / 'Justfile').read_text().splitlines() if 'sudo --preserve-env=' in line and 'build-iso-group.sh' in line)
-    result.append(('Justfile', line[:line.index('bash ./scripts/build-iso-group.sh')].strip()))
+    workflow = yaml.safe_load((ROOT / '.github/workflows/luks-e2e.yml').read_text())
+    for job in workflow['jobs'].values():
+        for step in job.get('steps', []):
+            for line in step.get('run', '').replace('\\\n', ' ').splitlines():
+                if line.lstrip().startswith('sudo ') and './scripts/iso-e2e.sh' in line and '--luks' in line:
+                    result.append(('luks-install', line[:line.index('./scripts/iso-e2e.sh')].strip()))
+    for script in ('build-iso-group.sh', 'build-iso-tacklebox.sh'):
+        line = next(line for line in (ROOT / 'Justfile').read_text().splitlines() if 'sudo ' in line and script in line)
+        result.append(('Justfile:' + script, line[:line.index('bash ./scripts/' + script)].strip()))
     return result
 
 
@@ -253,7 +260,9 @@ os.execvpe(args[0], args, env)
     sudo.chmod(0o755)
     command = prefix + ' ' + shlex.quote(sys.executable) + ' -c ' + shlex.quote('import private_parser_marker; assert private_parser_marker.VALUE == 232')
     env = {**os.environ, 'PATH': str(bins) + os.pathsep + os.environ['PATH'],
-           'TUNAOS_CONFIG_PYTHONPATH': str(private), 'PYTHONPATH': '/must/not/be/forwarded'}
+           'TUNAOS_CONFIG_PYTHONPATH': str(private), 'PYTHONPATH': '/must/not/be/forwarded',
+           'FISHERMAN_OVERRIDE': '', 'E2E_WALL_CLOCK_DEADLINE': '',
+           'TUNAOS_E2E_VERIFY_TPM_AUTOUNLOCK': '', 'E2E_CHECKPOINT_STRICT': ''}
     result = subprocess.run(['/bin/bash', '-eu', '-c', command], env=env, text=True, capture_output=True)
     assert result.returncode == 0, (name, result.stderr)
 
@@ -266,8 +275,9 @@ def test_remote_build_sets_up_its_own_parser_before_build(name):
     assert 'export PATH=/data/tunaos/.venv/bin:\\$PATH' in source
 
 
+@pytest.mark.parametrize('script', ['build-iso-group.sh', 'build-iso-tacklebox.sh'])
 @pytest.mark.parametrize('mode', ['active-venv', 'explicit-spaces', 'missing', 'not-executable'])
-def test_local_venv_grouped_iso_keeps_selected_interpreter_under_sudo(tmp_path, mode):
+def test_local_venv_iso_keeps_selected_interpreter_under_sudo(tmp_path, mode, script):
     import shlex
     import shutil
     repo = tmp_path / 'repository'
@@ -276,18 +286,20 @@ def test_local_venv_grouped_iso_keeps_selected_interpreter_under_sudo(tmp_path, 
     # Use the current tested venv interpreter through a path containing spaces.
     selected = tmp_path / 'operator venv' / 'python3'
     selected.parent.mkdir()
-    selected.write_text(f'#!/bin/sh\nexec {shlex.quote(sys.executable)} "$@"\n')
+    import tomli
+    parser_path = str(Path(tomli.__file__).parent.parent)
+    selected.write_text(f'#!/bin/sh\nexec env PYTHONPATH={shlex.quote(parser_path)} {shlex.quote(sys.executable)} -S "$@"\n')
     selected.chmod(0o755)
     (repo / 'scripts/config.py').write_text('import tomli\nassert tomli.__version__ == "2.3.2"\nprint(__file__)\n')
-    (repo / 'scripts/build-iso-group.sh').write_text('source ./scripts/lib/build-config.sh\ntunaos_build_config\n')
+    (repo / 'scripts' / script).write_text('source ./scripts/lib/build-config.sh\ntunaos_build_config\n')
     bins = tmp_path / 'bin'
     bins.mkdir()
     sudo = bins / 'sudo'
     sudo.write_text('#!/bin/bash\nwhile [[ "$1" == -* ]]; do shift; done\nexec /usr/bin/env -i PATH=/usr/bin:/bin "$@"\n')
     sudo.chmod(0o755)
     (bins / 'python3').symlink_to(selected)
-    line = next(line.strip() for line in (ROOT / 'Justfile').read_text().splitlines() if 'sudo --preserve-env=' in line and 'build-iso-group.sh' in line)
-    env = {**os.environ, 'PATH': str(bins) + os.pathsep + os.environ['PATH']}
+    line = next(line.strip() for line in (ROOT / 'Justfile').read_text().splitlines() if 'sudo ' in line and script in line)
+    env = {**os.environ, 'PATH': str(bins) + os.pathsep + os.environ['PATH'], '_repo': 'local', '_tag': 'gnome'}
     env.pop('TUNAOS_CONFIG_PYTHONPATH', None)
     env.pop('TUNAOS_CONFIG_PYTHON', None)
     invalid = mode in ('missing', 'not-executable')
@@ -305,3 +317,86 @@ def test_local_venv_grouped_iso_keeps_selected_interpreter_under_sudo(tmp_path, 
     else:
         assert result.returncode == 0, result.stderr
         assert result.stdout.strip() == str(repo / 'scripts/config.py')
+
+
+@pytest.mark.parametrize('script,workflow', [
+    ('build-iso-tacklebox.sh', 'live-iso-bootc.yml'),
+    ('build-iso-group.sh', 'publish-iso-groups.yml'),
+])
+@pytest.mark.parametrize('dev', [False, True])
+def test_actual_config_resolution_through_both_sudo_boundaries(tmp_path, script, workflow, dev):
+    import shlex
+    import shutil
+    repo = tmp_path / 'repo'
+    (repo / 'scripts').mkdir(parents=True)
+    shutil.copytree(ROOT / 'scripts/lib', repo / 'scripts/lib', ignore=shutil.ignore_patterns('__pycache__'))
+    for name in ('config.py', 'published-image-ref.sh'):
+        shutil.copyfile(ROOT / 'scripts' / name, repo / 'scripts' / name)
+    shutil.copyfile(ROOT / 'tunaos.toml', repo / 'tunaos.toml')
+    bins = tmp_path / 'bin'
+    bins.mkdir()
+    # Model sudo's removal of Python variables even with -E and its secure PATH.
+    sudo = bins / 'sudo'
+    sudo.write_text(f'#!{sys.executable}\n' + '''import os, sys
+args = sys.argv[1:]
+keep = set()
+while args and args[0].startswith('-'):
+    flag = args.pop(0)
+    if flag == '-E': keep.update(os.environ)
+    elif flag.startswith('--preserve-env='): keep.update(flag.split('=', 1)[1].split(','))
+env = {k: v for k, v in os.environ.items() if k in keep}
+env.pop('PYTHONPATH', None)
+env['PATH'] = ''' + repr(str(bins) + ':/usr/bin:/bin') + '''
+os.execvpe(args[0], args, env)
+''')
+    sudo.chmod(0o755)
+    # Only yq is stubbed: it reads the real generated JSON adapter.
+    yq = bins / 'yq'
+    yq.write_text(f'#!{sys.executable}\n' + '''import json, os, sys
+v = next(v for v in json.load(open(sys.argv[-1]))['variants'] if v['id'] == os.environ['VARIANT_ID'])
+print(v.get('tag_suffix', '') if 'tag_suffix' in sys.argv[2] else v.get('publish_name', v['id']))
+''')
+    yq.chmod(0o755)
+    inner = next(line.strip() for line in (ROOT / 'Justfile').read_text().splitlines() if 'sudo ' in line and script in line)
+    inner = inner[:inner.index('bash ./scripts/' + script)] + 'bash ./resolve.sh'
+    if script == 'build-iso-tacklebox.sh':
+        recipe = (ROOT / 'Justfile').read_text().split("iso variant=", 1)[1].split('\n# Build ONE', 1)[0]
+        recipe = '\n'.join(line[4:] for line in recipe.splitlines()[1:] if line.startswith('    '))
+        for name, value in {'variant': 'skipjack', 'flavor': 'gnome', 'tag': 'gnome', 'repo': 'local', 'dev': str(int(dev)), 'just': 'bash ./dev-build.sh'}.items():
+            recipe = recipe.replace('{{ ' + name + ' }}', value)
+        recipe = recipe.replace('bash ./scripts/build-iso-tacklebox.sh', 'bash ./resolve.sh')
+        inner = recipe
+        (repo / 'dev-build.sh').write_text('bash ./scripts/published-image-ref.sh skipjack gnome ghcr > dev-build-ref\n')
+    (repo / 'inner.sh').write_text(inner + '\n')
+    (repo / 'resolve.sh').write_text('source ./scripts/lib/image.sh\ntunaos_image_ref skipjack gnome ghcr\n')
+    steps = yaml.safe_load((ROOT / '.github/workflows' / workflow).read_text())['jobs']
+    outer = next(line.strip() for job in steps.values() for step in job.get('steps', [])
+                 for line in step.get('run', '').replace('\\\n', ' ').splitlines()
+                 if line.lstrip().startswith('sudo ') and 'just iso' in line)
+    outer = outer[:outer.index('just iso')] + 'bash ./inner.sh'
+    private = tmp_path / 'private parser'
+    import tomli
+    shutil.copytree(Path(tomli.__file__).parent, private / 'tomli')
+    env = {**os.environ, 'PATH': str(bins) + os.pathsep + os.environ['PATH'],
+           'TUNAOS_CONFIG_PYTHONPATH': str(private)}
+    env.pop('TUNAOS_BUILD_CONFIG', None)
+    env.pop('TUNAOS_CONFIG_PYTHON', None)
+    result = subprocess.run(['/bin/bash', '-eu', '-c', outer], cwd=repo, env=env, text=True, capture_output=True)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == 'ghcr.io/tuna-os/skipjack:gnome'
+    assert (repo / '.github/build-config.yml').is_file()
+    if script == 'build-iso-tacklebox.sh' and dev:
+        assert (repo / 'dev-build-ref').read_text().strip() == 'ghcr.io/tuna-os/skipjack:gnome'
+
+
+def test_remote_lifecycle_iso_uses_the_prepared_remote_interpreter():
+    source = (ROOT / 'scripts/lifecycle-test.sh').read_text()
+    assert 'sudo env TMPDIR=/data/tmp TUNAOS_CONFIG_PYTHON=/data/tunaos/.venv/bin/python bash ./scripts/build-iso-tacklebox.sh' in source
+    custom = (ROOT / 'just/custom-overlay.just').read_text()
+    assert '"TUNAOS_CONFIG_PYTHON=${TUNAOS_CONFIG_PYTHON:-$(command -v python3)}" bash ./scripts/build-iso-tacklebox.sh' in custom
+
+
+@pytest.mark.parametrize('path', ['CONTRIBUTING.md', 'docs/AGENT_GUIDE.md'])
+def test_clean_venv_quick_start_installs_workflow_yaml_dependency(path):
+    source = (ROOT / path).read_text()
+    assert source.index('just setup-config') < source.index('python3 -m pip install PyYAML') < source.index('just fix && just check')

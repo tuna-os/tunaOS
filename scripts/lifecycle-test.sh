@@ -90,7 +90,7 @@ _time "Generate ISO" \
 	_ssh "$ISO_TIMEOUT" "
         cd /data/tunaos
         export TMPDIR=/data/tmp
-        sudo TMPDIR=/data/tmp bash ./scripts/build-iso-tacklebox.sh ${VARIANT} ${FLAVOR} local ${FLAVOR}
+        sudo env TMPDIR=/data/tmp TUNAOS_CONFIG_PYTHON=/data/tunaos/.venv/bin/python bash ./scripts/build-iso-tacklebox.sh ${VARIANT} ${FLAVOR} local ${FLAVOR}
     " || exit 1
 
 # ── Step 3: Boot + Verify ────────────────────────────────────────────────────
