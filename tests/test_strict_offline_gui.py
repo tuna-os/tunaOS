@@ -120,7 +120,8 @@ def test_published_media_has_bounded_display_and_serial_identity_fallback():
     )
     assert "STRICT_PUBLISHED_MEDIA=1" in workflow
     assert "STRICT_PUBLISHED_MEDIA=0" in workflow
-    assert "native-qemu" not in workflow
+    assert "TUNAOS_QUAL_BROWSER_NAME=native" not in workflow
+    assert "TUNAOS_QUAL_EXECUTION_KIND=native-qemu" in workflow
 
 def test_parity_workflow_upload_has_no_disk_suffixed_paths():
     text = _text(WORKFLOW)

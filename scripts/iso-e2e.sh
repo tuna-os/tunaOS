@@ -3997,13 +3997,15 @@ verify_strict_installed_boot() {
 		STRICT_FRAG_SOURCE="$STRICT_SOURCE_DIGEST" STRICT_FRAG_BOOTED="$booted_digest" \
 		STRICT_FRAG_REF="$booted_ref" STRICT_FRAG_DUR="$total_s" \
 		STRICT_FRAG_COLD="$cold_s" STRICT_FRAG_WARM="$warm_s" \
-		STRICT_FRAG_INSTALL_DUR="$install_dur" \
+		STRICT_FRAG_INSTALL_DUR="$install_dur" STRICT_FRAG_PROMPT="$saw_prompt" \
 		python3 - <<'PYEOF'
 import json, os
 frag = {
     "mode": os.environ["STRICT_FRAG_MODE"],
     "installed_boot": True,
     "desktop_contract": True,
+    "cold_boot": True, "warm_boot": True, "media_detached": True,
+    "passphrase_prompt": os.environ["STRICT_FRAG_PROMPT"] == "1",
     "source_digest": os.environ["STRICT_FRAG_SOURCE"],
     "booted_digest": os.environ["STRICT_FRAG_BOOTED"],
     "target_imgref": os.environ["STRICT_FRAG_REF"],
@@ -4019,6 +4021,21 @@ PYEOF
 }
 
 emit_qualification_evidence() {
+	if [[ "${TUNAOS_QUAL_EXECUTION_KIND:-browser}" == "native-qemu" ]]; then
+		python3 "${SCRIPT_DIR}/native-iso-qualification.py" emit \
+			--directory "$OUTPUT_DIR" --output "$QUAL_EVIDENCE_JSON" \
+			--binding "${TUNAOS_NATIVE_BINDING:?native artifact binding is required}" \
+			--repository "${GITHUB_REPOSITORY:?}" --run-id "${GITHUB_RUN_ID:?}" \
+			--attempt "${GITHUB_RUN_ATTEMPT:?}" --qemu "$QEMU" \
+			--artifact-id "${TUNAOS_NATIVE_ARTIFACT_ID:?}" --archive-digest "${TUNAOS_NATIVE_ARCHIVE_DIGEST:?}" \
+			--source-sha "${TUNAOS_NATIVE_SOURCE_SHA:?}" \
+			--variant "$VARIANT" --flavor "$FLAVOR" --platform "$TUNAOS_QUAL_PLATFORM" \
+			--cpu-model "$CPU_ARG" \
+			--source "$STRICT_SOURCE_DIGEST" --overlay "$STRICT_OVERLAY_DIGEST" \
+			--installer "$STRICT_INSTALLER_DIGEST" --engine "$STRICT_ENGINE_DIGEST" \
+			--media "$STRICT_MEDIA_DIGEST"
+		return $?
+	fi
 	# Combine both per-mode fragments with the measured immutable inputs
 	# and the env-supplied target/browser profile into
 	# qualification-evidence.json (QualificationEvidence v1), then
@@ -4126,6 +4143,8 @@ PYEOF
 }
 
 run_strict_offline_gui() {
+	# Never upload success evidence left by an older invocation.
+	rm -f "$QUAL_EVIDENCE_JSON"
 	e2e_phase "Strict offline GUI qualification (${STRICT_OFFLINE_GUI_MODES})..."
 	: >"$STRICT_EVIDENCE_LOG"
 	if ! command -v python3 &>/dev/null; then
@@ -4157,6 +4176,12 @@ run_strict_offline_gui() {
 	STRICT_INSTALLER_DIGEST="${TUNAOS_QUAL_INSTALLER_DIGEST:-}"
 	strict_offline_evidence "iso=${ISO_PATH} overlay_digest=${STRICT_OVERLAY_DIGEST} media_digest=${STRICT_MEDIA_DIGEST} engine_digest=${STRICT_ENGINE_DIGEST}"
 	IFS=',' read -ra _strict_run_modes <<<"$STRICT_OFFLINE_GUI_MODES"
+	# Reset both modes even for a requested subset. Old LUKS evidence must
+	# never combine with a fresh plain leg (or the reverse).
+	local _reset_mode
+	for _reset_mode in plain luks; do
+		rm -f "${OUTPUT_DIR}/strict-qual-${_reset_mode}.json" "${OUTPUT_DIR}/walkthrough-${_reset_mode}/walkthrough-gnome.json"
+	done
 	local rc=0 mrc
 	for _m in ${_strict_run_modes[@]+"${_strict_run_modes[@]}"}; do
 		# Both legs must consume the exact admitted media, never a replacement.

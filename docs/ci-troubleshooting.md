@@ -2012,3 +2012,17 @@ Its release is `v2026.10.19-9f582fe0`; its frontend source is
 A different bundle fails before GUI input until a reviewer checks its contract.
 Synthetic tests and OCR fixtures do not prove an ISO installed.
 Only CI with the same artifact can prove install and cold/warm reboot behavior.
+
+### Native ISO setup fails during a Chromium Snap download (run 39634319715)
+
+The ISO build succeeded. The test runner then failed before artifact download
+because Ubuntu Chromium pulled a Snap assertion that returned HTTP 408.
+Native QEMU tests do not use Chromium. The shared workflow now installs it only
+for the existing browser-profile routes.
+
+Native runs emit `NativeISOQualification/v1`, with the exact artifact binding,
+producer and harness revisions, input digests, and measured QEMU executable.
+Both modes must prove GUI completion and cold/warm boot with the media detached.
+The native receipt has no browser profile. Each validator rejects evidence of the other kind.
+A receipt hash binds the bytes but does not authenticate a producer. Use the trusted run and its artifact
+admission checks as the source of that proof.

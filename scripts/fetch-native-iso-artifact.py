@@ -240,7 +240,9 @@ def main():
     harness_sha = harness.getvalue().decode().strip()
     if not re.fullmatch(r"[0-9a-f]{40}", harness_sha):
         raise ValueError("invalid checked-out harness SHA")
-    receipt = {"producer_build_job": builder_id, "producer_status": run.get("status"),
+    receipt = {"repository": args.repository, "producer_workflow": run.get("path"),
+               "producer_build_conclusion": "success" if builder_id is not None else None,
+               "producer_build_job": builder_id, "producer_status": run.get("status"),
                "producer_conclusion": run.get("conclusion"), "producer_attempt": run.get("run_attempt"),
                "harness_sha": harness_sha, "producer_run": args.run_id, "producer_sha": args.source_sha,
                "artifact_id": args.artifact_id, "archive_digest": args.archive_digest,

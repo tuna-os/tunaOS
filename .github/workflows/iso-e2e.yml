@@ -361,26 +361,44 @@ jobs:
         if: steps.filter.outputs.skip != 'true'
         env:
           PLATFORM: ${{ matrix.platform }}
+          ISO_SOURCE: ${{ inputs.source }}
+          NATIVE_ARTIFACT_ID: ${{ inputs.native_artifact_id }}
+          NATIVE_ARCHIVE_DIGEST: ${{ inputs.native_archive_digest }}
+          NATIVE_SOURCE_SHA: ${{ inputs.native_source_sha }}
         run: |
           set -euo pipefail
+          # Native QEMU qualification never executes a browser. Ubuntu Chromium
+          # pulls Snap assertions, which failed with HTTP408 in run39634319715.
+          browser_packages=()
+          if [[ "$ISO_SOURCE" != "native-artifact" ]]; then
+            browser_packages+=(chromium)
+          fi
           sudo apt-get update -qq
           if [[ "$PLATFORM" == "linux/arm64" ]]; then
             sudo apt-get install -y --no-install-recommends \
               qemu-system-arm qemu-efi-aarch64 qemu-utils socat swtpm \
-              rclone sshpass skopeo python3-yaml chromium imagemagick \
+              rclone sshpass skopeo python3-yaml "${browser_packages[@]}" imagemagick \
               tesseract-ocr xorriso squashfs-tools
             QEMU_BIN="$(command -v qemu-system-aarch64)"
           else
             sudo apt-get install -y --no-install-recommends \
               qemu-system-x86 qemu-utils ovmf socat swtpm \
-              rclone sshpass skopeo python3-yaml chromium imagemagick \
+              rclone sshpass skopeo python3-yaml "${browser_packages[@]}" imagemagick \
               tesseract-ocr xorriso squashfs-tools
             QEMU_BIN="$(command -v qemu-system-x86_64)"
           fi
           {
             echo "TUNAOS_QEMU_DIGEST=sha256:$(sha256sum "$QEMU_BIN" | awk '{print $1}')"
-            echo "TUNAOS_QUAL_BROWSER_NAME=chromium"
-            echo "TUNAOS_QUAL_BROWSER_VERSION=$(chromium --version | awk '{print $2}')"
+            if [[ "$ISO_SOURCE" == "native-artifact" ]]; then
+              echo "TUNAOS_QUAL_EXECUTION_KIND=native-qemu"
+              echo "TUNAOS_NATIVE_ARTIFACT_ID=$NATIVE_ARTIFACT_ID"
+              echo "TUNAOS_NATIVE_ARCHIVE_DIGEST=$NATIVE_ARCHIVE_DIGEST"
+              echo "TUNAOS_NATIVE_SOURCE_SHA=$NATIVE_SOURCE_SHA"
+              echo "TUNAOS_NATIVE_BINDING=${GITHUB_WORKSPACE}/native-iso-input/artifact-binding.json"
+            else
+              echo "TUNAOS_QUAL_BROWSER_NAME=chromium"
+              echo "TUNAOS_QUAL_BROWSER_VERSION=$(chromium --version | awk '{print $2}')"
+            fi
           } >> "$GITHUB_ENV"
 
       # The R2 source is the default — it tests the artifact users actually
@@ -818,7 +836,7 @@ jobs:
           KVM_FLAG=""
           [[ -r /dev/kvm && -w /dev/kvm ]] || KVM_FLAG="--no-kvm"
           set +e
-          sudo --preserve-env=KVM_FLAG,VARIANT,FLAVOR,TUNAOS_QUAL_SOURCE_DIGEST,TUNAOS_QUAL_OVERLAY_DIGEST,TUNAOS_QUAL_INSTALLER_DIGEST,TUNAOS_QUAL_ENGINE_DIGEST,TUNAOS_QUAL_MEDIA_DIGEST,STRICT_PUBLISHED_MEDIA,TUNAOS_QUAL_PLATFORM,TUNAOS_QUAL_CPU_BASELINE,TUNAOS_QUAL_HARDWARE_SCOPE,TUNAOS_QUAL_BROWSER_NAME,TUNAOS_QUAL_BROWSER_VERSION,TUNAOS_QUAL_BROWSER_MEMORY_GIB,TUNAOS_QUAL_BROWSER_FREE_DISK_GIB \
+          sudo --preserve-env=GITHUB_REPOSITORY,GITHUB_RUN_ID,GITHUB_RUN_ATTEMPT,TUNAOS_QUAL_EXECUTION_KIND,TUNAOS_NATIVE_BINDING,TUNAOS_NATIVE_ARTIFACT_ID,TUNAOS_NATIVE_ARCHIVE_DIGEST,TUNAOS_NATIVE_SOURCE_SHA,KVM_FLAG,VARIANT,FLAVOR,TUNAOS_QUAL_SOURCE_DIGEST,TUNAOS_QUAL_OVERLAY_DIGEST,TUNAOS_QUAL_INSTALLER_DIGEST,TUNAOS_QUAL_ENGINE_DIGEST,TUNAOS_QUAL_MEDIA_DIGEST,STRICT_PUBLISHED_MEDIA,TUNAOS_QUAL_PLATFORM,TUNAOS_QUAL_CPU_BASELINE,TUNAOS_QUAL_HARDWARE_SCOPE,TUNAOS_QUAL_BROWSER_NAME,TUNAOS_QUAL_BROWSER_VERSION,TUNAOS_QUAL_BROWSER_MEMORY_GIB,TUNAOS_QUAL_BROWSER_FREE_DISK_GIB \
             ./scripts/iso-e2e.sh "${ISO_PATH}" \
               --output iso-e2e-out \
               --strict-offline-gui \

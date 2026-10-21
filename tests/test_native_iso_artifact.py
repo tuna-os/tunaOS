@@ -356,7 +356,8 @@ def test_bounded_strict_diagnostics_excludes_heavy_and_symlink_inputs(tmp_path):
     assert len(report['skipped']) == 2
 
 
-def test_failed_plain_leg_cannot_consume_luks_tpm(tmp_path):
+@pytest.mark.parametrize("modes", ["plain,luks", "plain"])
+def test_failed_plain_leg_cannot_consume_luks_tpm(tmp_path, modes):
     import hashlib
     import os
     import subprocess
@@ -364,6 +365,12 @@ def test_failed_plain_leg_cannot_consume_luks_tpm(tmp_path):
     iso = tmp_path / 'input.iso'
     iso.write_bytes(b'fixture')
     digest = 'sha256:' + hashlib.sha256(b'fixture').hexdigest()
+    for stale in ('qualification-evidence.json', 'strict-qual-plain.json', 'strict-qual-luks.json'):
+        (tmp_path / stale).write_text('stale evidence')
+    for mode in ('plain', 'luks'):
+        directory = tmp_path / f'walkthrough-{mode}'
+        directory.mkdir()
+        (directory / 'walkthrough-gnome.json').write_text('stale GUI evidence')
     body = (ROOT / 'scripts/iso-e2e.sh').read_text().split('run_strict_offline_gui() {', 1)[1].split('\n}\n', 1)[0]
     shell = '''
     e2e_phase() { :; }
@@ -381,14 +388,19 @@ def test_failed_plain_leg_cannot_consume_luks_tpm(tmp_path):
     result = subprocess.run(['bash', '-euc', shell], capture_output=True, text=True,
                             env={**os.environ, 'OUTPUT_DIR': str(tmp_path), 'TRACE': str(tmp_path / 'trace'),
                                  'ISO_PATH': str(iso), 'QEMU': '/bin/true',
-                                 'STRICT_OFFLINE_GUI_MODES': 'plain,luks',
+                                 'STRICT_OFFLINE_GUI_MODES': modes,
                                  'STRICT_EVIDENCE_LOG': str(tmp_path / 'evidence.log'),
+                                 'QUAL_EVIDENCE_JSON': str(tmp_path / 'qualification-evidence.json'),
                                  'TUNAOS_QUAL_MEDIA_DIGEST': digest,
                                  'TUNAOS_QUAL_OVERLAY_DIGEST': digest,
                                  'TUNAOS_QUAL_ENGINE_DIGEST': digest})
     assert result.returncode == 1
-    assert (tmp_path / 'trace').read_text().splitlines() == [
-        'install:plain:', 'start', 'install:luks:live-tpm', 'verify:luks']
+    for stale in ('qualification-evidence.json', 'strict-qual-plain.json', 'strict-qual-luks.json'):
+        assert not (tmp_path / stale).exists()
+    for mode in ('plain', 'luks'):
+        assert not (tmp_path / f'walkthrough-{mode}' / 'walkthrough-gnome.json').exists()
+    assert (tmp_path / 'trace').read_text().splitlines() == (['install:plain:'] if modes == 'plain' else [
+        'install:plain:', 'start', 'install:luks:live-tpm', 'verify:luks'])
 
 
 def test_diagnostic_enumeration_and_skip_report_are_bounded(tmp_path):
