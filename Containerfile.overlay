@@ -1,12 +1,13 @@
-# Containerfile.overlay — Unified HWE, NVIDIA, CachyOS, and Asahi overlay.
+# Containerfile.overlay — Unified hardware-specific image overlays.
 #
-# Replaces Containerfile.hwe, Containerfile.nvidia, and Containerfile.cachyos.
-# Parameterized by OVERLAY_TYPE (hwe|nvidia|cachyos|asahi) and DESKTOP_FLAVOR.
+# Parameterized by OVERLAY_TYPE
+# (hwe|nvidia|cachyos|asahi|t2|x13s) and DESKTOP_FLAVOR.
 #
 # Usage (via Justfile):
 #   buildah build --build-arg OVERLAY_TYPE=hwe --target=desktop ...
 #   buildah build --build-arg OVERLAY_TYPE=nvidia --target=desktop ...
 #   buildah build --build-arg OVERLAY_TYPE=asahi --target=desktop ...   # aarch64 only
+#   buildah build --build-arg OVERLAY_TYPE=x13s --target=desktop ...   # aarch64 only
 
 ARG BASE_IMAGE
 ARG IMAGE_NAME
@@ -77,7 +78,14 @@ RUN \
   --mount=type=bind,from=akmods_nvidia_open,src=/rpms,dst=/tmp/akmods-nvidia-open-rpms \
   --mount=type=bind,from=akmods_nvidia_open,src=/kernel-rpms,dst=/tmp/kernel-rpms \
   --mount=type=bind,from=context,source=/,target=/run/context \
-    bash -c 'if [ "${OVERLAY_TYPE}" = "hwe" ]; then /run/context/build_scripts/overlay/hwe.sh; elif [ "${OVERLAY_TYPE}" = "cachyos" ]; then /run/context/build_scripts/overlay/cachyos.sh; elif [ "${OVERLAY_TYPE}" = "asahi" ]; then /run/context/build_scripts/overlay/asahi.sh; elif [ "${OVERLAY_TYPE}" = "t2" ]; then /run/context/build_scripts/overlay/t2.sh; else /run/context/build_scripts/overlay/nvidia.sh; fi'
+    bash -c 'case "${OVERLAY_TYPE}" in \
+      hwe) /run/context/build_scripts/overlay/hwe.sh ;; \
+      cachyos) /run/context/build_scripts/overlay/cachyos.sh ;; \
+      asahi) /run/context/build_scripts/overlay/asahi.sh ;; \
+      t2) /run/context/build_scripts/overlay/t2.sh ;; \
+      x13s) /run/context/build_scripts/overlay/x13s.sh ;; \
+      *) /run/context/build_scripts/overlay/nvidia.sh ;; \
+    esac'
 # The second akmods mount above is the kmod↔kernel alignment mechanism: every
 # ublue akmods image ships BOTH /rpms (the kmods) and /kernel-rpms (the exact
 # kernel those kmods were built against — akmods' Containerfile.in copies

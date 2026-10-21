@@ -1765,6 +1765,19 @@ try. After three failures, retain the command's exit status and diagnostic.
 Keep README unchanged; do not publish a partial table.
 See `tests/test_readme_status_api_retries.py` for regression tests.
 
+
+### X13s inspection reports firmware present when only a backup exists
+
+**Symptom:** `x13s-inspection.txt` reports `PRESENT` for an absent firmware payload.
+
+**Cause:** The W1 inspector matched `basename.*`. A fixture with only
+`amss.bin.bak` reproduced the false result. Signature files and compound suffixes
+such as `.xz.bak` also matched.
+
+**Fix:** Match the exact filename, `.xz`, or `.zst`. Follow symlinks to shared payloads. Reject links without a target. Run
+`python3 -m pytest -q tests/test_x13s_profile.py` to check those cases.
+The report lists files; it does not prove firmware validity or
+hardware operation.
 ### Fork preparation reports changed sources with a desktop override
 
 Symptom: the test for source receipts rejects a tracked desktop adapter, or preparation

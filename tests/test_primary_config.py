@@ -125,9 +125,9 @@ def test_prepare_refreshes_mutated_source_and_acceptance_cell(source_root):
     projected = json.loads(target.read_text())
     bonito = next(v for v in projected["variants"] if v["id"] == "bonito")
     assert bonito["flavors"][-1] == {
-        "id": "gnome-x13s", "stage": 3, "platforms": ["linux/arm64"],
+        "id": "gnome-acceptance-arm64", "stage": 3, "platforms": ["linux/arm64"],
         "build_image": True, "build_iso": False, "build_qcow2": False, "luks_e2e": False}
-    assert all(f["id"] != "gnome-x13s" for f in config.load()["variants"]["bonito"]["flavors"])
+    assert all(f["id"] != "gnome-acceptance-arm64" for f in config.load()["variants"]["bonito"]["flavors"])
 
 
 def test_invalid_source_never_replaces_existing_adapter(source_root):

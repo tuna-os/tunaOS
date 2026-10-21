@@ -28,9 +28,9 @@ are green, per variant -- not which desktops exist -- so a variant can read
 
 `base` is excluded because every variant has one and only the base-centric
 rows mention it, and the hardware/storage suffixes (-hwe, -nvidia, -cachyos,
--asahi, -t2, -zfs) are excluded because the column lists desktops, not the
-matrix. Change either convention and this test needs to change with it, which
-is the point: the rule becomes explicit instead of remembered.
+-asahi, -t2, -x13s, -zfs) are excluded because the column lists desktops,
+not the matrix. Change either convention and this test needs to change with it,
+which is the point: the rule becomes explicit instead of remembered.
 """
 from __future__ import annotations
 
@@ -47,7 +47,7 @@ CONFIG = ROOT / ".github" / "build-config.yml"
 
 # Longest first: -nvidia-hwe must strip before -hwe.
 HARDWARE_SUFFIXES = ("-nvidia-hwe", "-nvidia", "-hwe", "-cachyos",
-                     "-asahi", "-t2", "-zfs")
+                     "-asahi", "-t2", "-x13s", "-zfs")
 
 
 def _desktop_of(flavor_id: str) -> str:

@@ -1626,14 +1626,9 @@ jobs:
           IMAGE_VARIANT: ${{ inputs.image-variant }}
           FLAVOR: ${{ inputs.flavor }}
         run: |
-          # Strip overlay suffixes from flavor (e.g. gnome-nvidia -> gnome)
-          DESKTOP="${FLAVOR}"
-          for _suffix in -nvidia-hwe -nvidia -hwe -cachyos -asahi -zfs; do
-            if [[ "$DESKTOP" == *"$_suffix" ]]; then
-              DESKTOP="${DESKTOP%"$_suffix"}"
-              break
-            fi
-          done
+          # Keep suffix normalization shared with scripts/boot-gate.sh.
+          source scripts/lib/flavor-desktop.sh
+          DESKTOP="$(tunaos_desktop_flavor "$FLAVOR")"
           echo "### 🧪 Tier-1 Functional Checks (advisory) — ${IMAGE_VARIANT}:${FLAVOR} (${DESKTOP})" >> "$GITHUB_STEP_SUMMARY"
           if grep -q "TUNAOS_DESKTOP_CONTRACT_OK" verify-out/serial.log 2>/dev/null; then
             echo "Desktop experience contract: PASS" >> "$GITHUB_STEP_SUMMARY"
@@ -1772,14 +1767,9 @@ jobs:
           IMAGE_VARIANT: ${{ inputs.image-variant }}
         run: |
           set -euo pipefail
-          # Strip overlay suffixes from flavor (e.g. gnome-nvidia -> gnome)
-          DESKTOP="${FLAVOR}"
-          for _suffix in -nvidia-hwe -nvidia -hwe -cachyos -asahi -zfs; do
-            if [[ "$DESKTOP" == *"$_suffix" ]]; then
-              DESKTOP="${DESKTOP%"$_suffix"}"
-              break
-            fi
-          done
+          # Keep suffix normalization shared with scripts/boot-gate.sh.
+          source scripts/lib/flavor-desktop.sh
+          DESKTOP="$(tunaos_desktop_flavor "$FLAVOR")"
 
           is_hb=false
           [[ "${IMAGE_VARIANT}" == hummingbird* ]] && is_hb=true
