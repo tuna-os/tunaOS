@@ -346,3 +346,107 @@ def test_common_text_fields_preserve_python_acceptance():
             else:
                 with pytest.raises(builder.ConfigError):
                     builder.text(case['value'])
+
+
+@pytest.mark.parametrize('identifier,accepted', [
+    ('a' * 64, True), ('a' * 65, False), ('gnome-hwe', True),
+    ('gnome\n', False), ('gnome\r\n', False), ('gnome\u2028', False),
+    ('gnome\x00', False), ('gnome\ufeff', False), ('foo.bar', False),
+    ('foo/bar', False), ('Upper', False), ('', False),
+])
+def test_flavor_metadata_export_bounds_its_identifier_keys(identifier, accepted):
+    schema = pytest.importorskip('jsonschema')
+    # Isolate the exporter with matching source IDs; a wide primary identifier
+    # must not bypass the narrower portable contract at this boundary.
+    document = {
+        'variants': {'example': {'flavors': [{'id': identifier}]}},
+        'desktops': {'gnome': {}},
+        'flavor_metadata': {identifier: {'desktop': 'gnome', 'edition': 'standard'}},
+    }
+    if accepted:
+        exported = builder.flavor_metadata(document)
+        assert exported['flavors'][0]['id'] == identifier
+        schema.validate(exported, json.loads((ROOT / 'docs/iso-builder-flavors.schema.json').read_text()))
+    else:
+        with pytest.raises(builder.ConfigError, match='flavor_metadata'):
+            builder.flavor_metadata(document)
+
+
+def test_every_projected_field_boundary_is_schema_valid_or_rejected():
+    schema = pytest.importorskip('jsonschema')
+    validator = schema.Draft202012Validator(json.loads((ROOT / 'docs/iso-builder-config.schema.json').read_text()))
+    source = primary.load()
+    v1 = json.loads((ROOT / 'tests/fixtures/builder-config/v1.json').read_text())
+    if 'flatpak_preinstall' in source:
+        # The canonical policy supplies these fields in the defaults projection.
+        for desktop in v1['desktops']:
+            desktop.pop('default_flatpaks')
+    for presentation in (v1, source['iso_builder']):
+        baseline = copy.deepcopy(source)
+        baseline['iso_builder'] = presentation
+        validator.validate(builder.project(baseline))
+        fields = []
+
+        def collect(value, path=()):
+            if isinstance(value, dict):
+                for key, child in value.items():
+                    collect(child, (*path, key))
+            elif isinstance(value, list):
+                fields.append((path, value))
+                for index, child in enumerate(value):
+                    collect(child, (*path, index))
+            elif isinstance(value, str):
+                fields.append((path, value))
+
+        collect(presentation)
+        for path, original in fields:
+            if isinstance(original, str):
+                candidates = ['', original + '\n', original + '\r\n', original + '\x00',
+                              '\u0085', '\ufeff', 'a' * 64, 'a' * 65,
+                              '\U0001f41f' * 2048, '\U0001f41f' * 2049]
+            else:
+                candidates = [[]]
+                if original:
+                    candidates += [[copy.deepcopy(original[0]) for _ in range(size)]
+                                   for size in (1, 4, 5, 8, 9, 10, 11, 256, 257)]
+            for candidate in candidates:
+                document = copy.deepcopy(baseline)
+                node = document['iso_builder']
+                for part in path[:-1]:
+                    node = node[part]
+                node[path[-1]] = candidate
+                try:
+                    exported = builder.project(document)
+                except builder.ConfigError:
+                    continue
+                errors = list(validator.iter_errors(exported))
+                assert not errors, (path, errors[0].message)
+
+
+def test_flavor_export_array_and_value_boundaries():
+    schema = pytest.importorskip('jsonschema')
+    validator = schema.Draft202012Validator(json.loads((ROOT / 'docs/iso-builder-flavors.schema.json').read_text()))
+    empty = {'variants': {}, 'desktops': {}, 'flavor_metadata': {}}
+    with pytest.raises(builder.ConfigError, match='flavor_metadata'):
+        builder.flavor_metadata(empty)
+    for count in (1, 64, 256, 257):
+        document = {
+            'variants': {'example': {'flavors': [{'id': f'flavor-{i}'} for i in range(count)]}},
+            'desktops': {'gnome': {}},
+            'flavor_metadata': {f'flavor-{i}': {'desktop': 'gnome', 'edition': 'standard'} for i in range(count)},
+        }
+        validator.validate(builder.flavor_metadata(document))
+    for field in ('desktop', 'edition'):
+        for value in ('a' * 64, 'a' * 65, 'gnome', 'none', '', 'gnome\n', 'gnome\r\n',
+                      'gnome\x00', '\u0085', '\ufeff', 'foo.bar', 'foo/bar'):
+            document = {
+                'variants': {'example': {'flavors': [{'id': 'gnome'}]}},
+                'desktops': {'gnome': {}, 'a' * 64: {}, 'a' * 65: {}},
+                'flavor_metadata': {'gnome': {'desktop': 'gnome', 'edition': 'standard'}},
+            }
+            document['flavor_metadata']['gnome'][field] = value
+            try:
+                exported = builder.flavor_metadata(document)
+            except builder.ConfigError:
+                continue
+            validator.validate(exported)
