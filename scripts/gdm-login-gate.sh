@@ -146,7 +146,9 @@ sleep 3
 locked=0
 for round in 1 2 3; do
 	echo "==> lock attempt $round/3 for session $session_id"
-	guest loginctl lock-session "$session_id"
+	# Do not fail fast here: a session that died right after login must
+	# reach the polling loop and the diagnostics branch, not die silently.
+	guest loginctl lock-session "$session_id" || true
 	for _ in $(seq 1 20); do
 		if [[ "$(guest loginctl show-session "$session_id" -p LockedHint --value 2>/dev/null || true)" == yes ]]; then
 			locked=1
