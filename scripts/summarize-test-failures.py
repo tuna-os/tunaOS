@@ -294,25 +294,23 @@ def summarize(root, direct=False):
             issue(result['pytest'], 'missing-direct-summary' if error.errno == errno.ENOENT else 'unreadable-direct-summary')
         except ValueError:
             issue(result['pytest'], 'invalid-direct-summary')
-    try:
-        parse_junit(read_report(root, 'pytest.xml', budget), result['pytest'], source_budget)
-    except ReportError as error:
-        issue(result['pytest'], error.code)
-        if error.size is not None:
-            result['pytest']['report_size_bytes'] = error.size
-    except UnicodeDecodeError:
-        issue(result['pytest'], 'invalid-utf8-junit')
-    except ET.ParseError:
-        issue(result['pytest'], 'invalid-xml-junit')
-    except OSError as error:
-        issue(result['pytest'], 'missing-junit' if error.errno == errno.ENOENT else
-              'unsafe-junit-path' if error.errno in (errno.ELOOP, errno.ENOTDIR) else 'unreadable-junit')
-    except ValueError:
-        issue(result['pytest'], 'invalid-junit')
+    if not direct:
+        try:
+            parse_junit(read_report(root, 'pytest.xml', budget), result['pytest'], source_budget)
+        except ReportError as error:
+            issue(result['pytest'], error.code)
+            if error.size is not None:
+                result['pytest']['report_size_bytes'] = error.size
+        except UnicodeDecodeError:
+            issue(result['pytest'], 'invalid-utf8-junit')
+        except ET.ParseError:
+            issue(result['pytest'], 'invalid-xml-junit')
+        except OSError as error:
+            issue(result['pytest'], 'missing-junit' if error.errno == errno.ENOENT else
+                  'unsafe-junit-path' if error.errno in (errno.ELOOP, errno.ENOTDIR) else 'unreadable-junit')
+        except ValueError:
+            issue(result['pytest'], 'invalid-junit')
     if direct_result is not None:
-        result['junit_issues'] = result['pytest']['issues']
-        if 'report_size_bytes' in result['pytest']:
-            result['junit_report_size_bytes'] = result['pytest']['report_size_bytes']
         result['pytest'] = direct_result
         result['pytest_source'] = 'direct'
     reports = []

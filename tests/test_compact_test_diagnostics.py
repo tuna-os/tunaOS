@@ -117,7 +117,8 @@ def fake(root, name, body):
 def environment(tmp_path):
     binary = tmp_path / 'bin'
     binary.mkdir()
-    return binary, {**os.environ, 'PATH': str(binary) + ':' + os.environ['PATH'], 'RUNNER_TEMP': str(tmp_path / 'temp')}
+    (tmp_path / 'temp/tunaos-test-results').mkdir(parents=True)
+    return binary, {**os.environ, 'TEST_REPORT_ROOT': str(tmp_path / 'temp/tunaos-test-results'), 'PATH': str(binary) + ':' + os.environ['PATH'], 'RUNNER_TEMP': str(tmp_path / 'temp')}
 
 
 def test_pytest_wrapper_keeps_exit_and_stdout(tmp_path):
@@ -125,12 +126,12 @@ def test_pytest_wrapper_keeps_exit_and_stdout(tmp_path):
     fake(binary, 'python3', 'printf "%s\\n" "$@"; echo original-output; exit 7\n')
     result = subprocess.run(['bash', '-eo', 'pipefail', '-c', STEPS['Run pytest tests']['run']], env=env, cwd=tmp_path, text=True, capture_output=True)
     assert result.returncode == 7 and 'original-output' in result.stdout
-    assert '--junitxml=' in result.stdout
+    assert '--junitxml=' not in result.stdout
     assert (tmp_path / 'temp/tunaos-test-results/pytest.exit').read_text() == '7\n'
     assert 'PYTEST_ADDOPTS' not in STEPS['Run pytest tests']['run']
 
 
-@pytest.mark.parametrize('bats_code,tee_code', [(9, 0), (0, 4)])
+@pytest.mark.parametrize('bats_code,tee_code', [(9, 0), (0, 4), (9, 4)])
 def test_bats_and_tee_failures_keep_gate(tmp_path, bats_code, tee_code):
     binary, env = environment(tmp_path)
     path = tmp_path / 'tests/bats/a.bats'
@@ -140,9 +141,11 @@ def test_bats_and_tee_failures_keep_gate(tmp_path, bats_code, tee_code):
     if tee_code:
         fake(binary, 'tee', f'cat; exit {tee_code}\n')
     result = subprocess.run(['bash', '-eo', 'pipefail', '-c', STEPS['Run BATS tests']['run']], env=env, cwd=tmp_path, text=True, capture_output=True)
-    assert result.returncode == 1 and 'original-output' in result.stdout
+    assert result.returncode == (1 if bats_code else 0) and 'original-output' in result.stdout
     code = (tmp_path / 'temp/tunaos-test-results/bats/tests/bats/a.bats.tap.exit').read_text()
-    assert int(code) == (tee_code or bats_code)
+    assert int(code) == bats_code
+    if tee_code:
+        assert 'BATS diagnostic output could not be saved' in result.stdout
 
 
 def test_workflow_upload_is_narrow_and_pinned():
@@ -150,9 +153,10 @@ def test_workflow_upload_is_narrow_and_pinned():
     assert upload['if'] == "failure() && steps.test_failure_summary.outcome == 'success'"
     assert STEPS['Summarize test failures']['id'] == 'test_failure_summary'
     assert upload['uses'] == STEPS['Archive Python coverage']['uses']
-    assert upload['with']['path'] == '${{ runner.temp }}/tunaos-test-failures.json'
+    assert upload['with']['path'] == '${{ steps.test_diagnostics.outputs.report_root }}/failures.json'
     assert upload['with']['retention-days'] == 7
     assert STEPS['Run pytest tests']['if'] == 'always()'
+    assert STEPS['Run BATS tests']['if'] == 'always()'
     assert STEPS['Run BATS tests']['shell'] == 'bash'  # GitHub's explicit bash enables pipefail.
     assert not any(step.get('continue-on-error') for step in STEPS.values())
 
@@ -273,7 +277,7 @@ def test_unresolvable_source_identifiers_are_not_guessed(tmp_path):
 
 @pytest.mark.parametrize('kind', ['directory', 'symlink', 'fifo', 'file'])
 def test_workflow_preserves_existing_output_and_cannot_enable_upload(tmp_path, kind):
-    output = tmp_path / 'tunaos-test-failures.json'
+    output = tmp_path / 'failures.json'
     protected = tmp_path / 'protected'
     protected.write_text('credential-do-not-upload')
     if kind == 'directory':
@@ -287,7 +291,7 @@ def test_workflow_preserves_existing_output_and_cannot_enable_upload(tmp_path, k
         output.write_text(protected.read_text())
     before = output.lstat()
     result = subprocess.run(['bash', '-eo', 'pipefail', '-c', STEPS['Summarize test failures']['run']],
-                            cwd=ROOT, env={**os.environ, 'RUNNER_TEMP': str(tmp_path)},
+                            cwd=ROOT, env={**os.environ, 'RUNNER_TEMP': str(tmp_path), 'TEST_REPORT_ROOT': str(tmp_path)},
                             capture_output=True, timeout=5)
     assert result.returncode != 0
     assert (output.lstat().st_mode, output.lstat().st_ino) == (before.st_mode, before.st_ino)
@@ -297,14 +301,15 @@ def test_workflow_preserves_existing_output_and_cannot_enable_upload(tmp_path, k
 
 
 def test_workflow_publishes_only_a_regular_complete_summary(tmp_path):
-    reports(tmp_path / 'tunaos-test-results')
+    reports(tmp_path)
     result = subprocess.run(['bash', '-eo', 'pipefail', '-c', STEPS['Summarize test failures']['run']],
-                            cwd=ROOT, env={**os.environ, 'RUNNER_TEMP': str(tmp_path)},
+                            cwd=ROOT, env={**os.environ, 'RUNNER_TEMP': str(tmp_path), 'TEST_REPORT_ROOT': str(tmp_path)},
                             capture_output=True, timeout=5)
     assert result.returncode == 0, result.stderr
-    output = tmp_path / 'tunaos-test-failures.json'
+    output = tmp_path / 'failures.json'
     assert output.is_file() and not output.is_symlink()
     assert json.loads(output.read_text())['pytest']['exit_code'] == 1
+    assert 'missing-direct-summary' in json.loads(output.read_text())['pytest']['issues']
     assert '[[ -f ' in STEPS['Summarize test failures']['run']
     assert '&& ! -L ' in STEPS['Summarize test failures']['run']
 
@@ -365,7 +370,7 @@ def test_direct_summary_recovers_ids_with_invalid_junit_but_keeps_issue(tmp_path
     (root / 'pytest-static.json').write_text(json.dumps(direct_document()))
     result = module.summarize(root, direct=True)
     assert result['pytest_source'] == 'direct'
-    assert result['junit_issues'] == ['missing-junit']
+    assert 'junit_issues' not in result
     assert result['pytest']['failure_details'] == direct_document()['pytest']['failure_details']
     assert result['pytest']['exit_code'] == 1
 
@@ -468,19 +473,17 @@ def test_recursive_source_ast_cannot_break_summary(tmp_path, monkeypatch):
     assert result['pytest']['exit_code'] == 1
 
 
-def test_direct_keeps_numeric_oversized_junit_metadata(tmp_path, monkeypatch):
+def test_direct_does_not_read_intentionally_absent_junit(tmp_path, monkeypatch):
     root = reports(tmp_path)
     (root / 'pytest-static.json').write_text(json.dumps(direct_document()))
     original = module.read_report
-    def oversized(root, relative, budget):
-        if relative == 'pytest.xml':
-            raise module.ReportError('oversized-report', 9000000)
+    def no_junit(root, relative, budget):
+        assert relative != 'pytest.xml'
         return original(root, relative, budget)
-    monkeypatch.setattr(module, 'read_report', oversized)
+    monkeypatch.setattr(module, 'read_report', no_junit)
     result = module.summarize(root, direct=True)
     assert result['pytest_source'] == 'direct'
-    assert result['junit_issues'] == ['oversized-report']
-    assert result['junit_report_size_bytes'] == 9000000
+    assert not result['pytest']['issues']
 
 
 def test_workflow_activates_direct_reporter_only_on_outer_command(tmp_path):
@@ -586,3 +589,121 @@ def test_junit_overlong_candidate_path_cannot_hide_competing_interpretation(monk
     classname = 'tests.' + 'a' * 200 + '.' + 'b' * 200 + '.' + 'c' * 73
     assert len(classname) == 481
     assert module.source_test_id(classname, 'test_same', [0]) == 'unresolved-test'
+
+
+@pytest.mark.parametrize('status', [0, 2, 7])
+def test_failed_pytest_status_write_preserves_original_exit(tmp_path, status):
+    binary, env = environment(tmp_path)
+    path = tmp_path / 'temp/tunaos-test-results/pytest.exit'
+    path.mkdir(parents=True)
+    fake(binary, 'python3', f'echo original-output; exit {status}\n')
+    result = subprocess.run(['bash', '-eo', 'pipefail', '-c', STEPS['Run pytest tests']['run']],
+                            env=env, cwd=tmp_path, text=True, capture_output=True)
+    assert result.returncode == status
+    assert 'original-output' in result.stdout
+    assert path.is_dir()
+
+
+@pytest.mark.parametrize('status', [0, 9])
+def test_failed_bats_status_write_does_not_skip_later_suites(tmp_path, status):
+    binary, env = environment(tmp_path)
+    directory = tmp_path / 'tests/bats'
+    directory.mkdir(parents=True)
+    for name in ('a.bats', 'b.bats'):
+        (directory / name).write_text('fixture')
+    path = tmp_path / 'temp/tunaos-test-results/bats/tests/bats/a.bats.tap.exit'
+    path.mkdir(parents=True)
+    fake(binary, 'bats', f'echo "1..1"; echo "ok 1 original-output"; echo "$*" >> "{tmp_path}/calls"; exit {status}\n')
+    result = subprocess.run(['bash', '-eo', 'pipefail', '-c', STEPS['Run BATS tests']['run']],
+                            env=env, cwd=tmp_path, text=True, capture_output=True)
+    assert result.returncode == (1 if status else 0)
+    assert len((tmp_path / 'calls').read_text().splitlines()) == 2
+    assert path.is_dir()
+
+
+@pytest.mark.parametrize('failure', ['mktemp', 'output'])
+def test_diagnostic_setup_failure_never_suppresses_core_tests(tmp_path, failure):
+    binary, env = environment(tmp_path)
+    output = tmp_path / 'step-output'
+    if failure == 'mktemp':
+        fake(binary, 'mktemp', 'exit 1\n')
+    else:
+        output.mkdir()
+    env['GITHUB_OUTPUT'] = str(output)
+    setup = subprocess.run(['bash', '-eo', 'pipefail', '-c', STEPS['Prepare test diagnostics']['run']],
+                           env=env, cwd=tmp_path, text=True, capture_output=True)
+    assert setup.returncode == 0
+    assert not output.is_file() or not output.read_text()
+    env['TEST_REPORT_ROOT'] = ''
+    fake(binary, 'python3', 'printf "%s\\n" "$@"; echo original-pytest; exit 7\n')
+    path = tmp_path / 'tests/bats'
+    path.mkdir(parents=True)
+    (path / 'a.bats').write_text('fixture')
+    fake(binary, 'bats', 'echo original-bats; exit 9\n')
+    py = subprocess.run(['bash', '-eo', 'pipefail', '-c', STEPS['Run pytest tests']['run']],
+                        env=env, cwd=tmp_path, text=True, capture_output=True)
+    bats = subprocess.run(['bash', '-eo', 'pipefail', '-c', STEPS['Run BATS tests']['run']],
+                          env=env, cwd=tmp_path, text=True, capture_output=True)
+    assert py.returncode == 7 and 'original-pytest' in py.stdout
+    assert '--compact-test-report' not in py.stdout and '--junitxml' not in py.stdout
+    assert bats.returncode == 1 and 'original-bats' in bats.stdout
+    assert not list((tmp_path / 'temp').glob('tunaos-test-results.*'))
+
+
+def test_unique_report_root_and_cleanup_preserve_other_paths(tmp_path):
+    _, env = environment(tmp_path)
+    output = tmp_path / 'step-output'
+    env['GITHUB_OUTPUT'] = str(output)
+    stale = tmp_path / 'temp/tunaos-test-results.stale'
+    stale.mkdir()
+    (stale / 'preserve').write_text('unchanged')
+    setup = subprocess.run(['bash', '-eo', 'pipefail', '-c', STEPS['Prepare test diagnostics']['run']],
+                           env=env, cwd=tmp_path, capture_output=True)
+    assert setup.returncode == 0
+    root = Path(output.read_text().strip().split('=', 1)[1])
+    assert root.parent == tmp_path / 'temp' and root != stale
+    (root / 'owned-report').write_text('fixture')
+    env['TEST_REPORT_ROOT'] = str(root)
+    cleanup = subprocess.run(['bash', '-eo', 'pipefail', '-c', STEPS['Clean up test diagnostics']['run']],
+                             env=env, cwd=tmp_path, capture_output=True)
+    assert cleanup.returncode == 0 and not root.exists()
+    assert (stale / 'preserve').read_text() == 'unchanged'
+    names = list(STEPS)
+    assert names.index('Archive test failure summary') < names.index('Clean up test diagnostics')
+    assert "steps.test_diagnostics.outputs.report_root != ''" in STEPS['Summarize test failures']['if']
+
+
+def test_bats_report_directory_failure_still_runs_all_suites(tmp_path):
+    binary, env = environment(tmp_path)
+    path = tmp_path / 'tests/bats'
+    path.mkdir(parents=True)
+    for name in ('a.bats', 'b.bats'):
+        (path / name).write_text('fixture')
+    fake(binary, 'mkdir', 'exit 1\n')
+    fake(binary, 'bats', f'echo "$*" >> "{tmp_path}/calls"; exit 9\n')
+    result = subprocess.run(['bash', '-eo', 'pipefail', '-c', STEPS['Run BATS tests']['run']],
+                            env=env, cwd=tmp_path, capture_output=True)
+    assert result.returncode == 1
+    assert len((tmp_path / 'calls').read_text().splitlines()) == 2
+
+
+@pytest.mark.parametrize('kind', ['outside', 'nested', 'symlink'])
+def test_cleanup_rejects_unowned_paths(tmp_path, kind):
+    _, env = environment(tmp_path)
+    protected = tmp_path / 'protected'
+    protected.mkdir()
+    (protected / 'keep').write_text('unchanged')
+    if kind == 'outside':
+        root = protected
+    elif kind == 'nested':
+        parent = tmp_path / 'temp/tunaos-test-results.parent'
+        parent.mkdir()
+        root = parent / '../../protected'
+    else:
+        root = tmp_path / 'temp/tunaos-test-results.link'
+        root.symlink_to(protected, target_is_directory=True)
+    env['TEST_REPORT_ROOT'] = str(root)
+    result = subprocess.run(['bash', '-eo', 'pipefail', '-c', STEPS['Clean up test diagnostics']['run']],
+                            env=env, cwd=tmp_path, capture_output=True)
+    assert result.returncode == 0
+    assert (protected / 'keep').read_text() == 'unchanged'
