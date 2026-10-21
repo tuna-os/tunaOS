@@ -171,9 +171,9 @@ jobs:
           # the whole thing in another plain `sudo` drops the environment
           # again, which is why installer-smoke.yml and
           # installer-screenshots.yml both call it unsudoed with
-          # `sudo -E env "PATH=$PATH"` instead — the form measured green
+          # `sudo -E env "PATH=$PATH" "PYTHONPATH=${TUNAOS_CONFIG_PYTHONPATH:-}"` instead — the form measured green
           # there.
-          sudo -E env "PATH=$PATH" \
+          sudo -E env "PATH=$PATH" "PYTHONPATH=${TUNAOS_CONFIG_PYTHONPATH:-}" \
             just iso "${{ matrix.variant }}" "${{ matrix.flavor }}" ghcr "${{ matrix.flavor }}"
 
       - name: Boot ISO and capture desktop screenshot

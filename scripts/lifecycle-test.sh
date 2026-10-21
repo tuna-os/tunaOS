@@ -77,6 +77,9 @@ _time "Build ${VARIANT}:${FLAVOR}" \
         podman system prune -f >/dev/null 2>&1 || true
         export SKIP_SUBMODULES=1 SKIP_RECHUNK=1 TMPDIR=/data/tmp
         ${RHSM_EXPORT}
+        python3 -m venv /data/tunaos/.venv || exit 1
+        /data/tunaos/.venv/bin/python -m pip install -r /data/tunaos/requirements-config.txt || exit 1
+        export PATH=/data/tunaos/.venv/bin:\$PATH
         just build ${VARIANT} ${FLAVOR} linux/amd64 0 latest '' 1
     " || exit 1
 

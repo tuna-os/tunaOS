@@ -118,6 +118,9 @@ for flavor in "${FLAVORS[@]}"; do
         mkdir -p /data/tmp
         ${RHSM_EXPORT}
         podman system prune -f 2>/dev/null || true
+        python3 -m venv /data/tunaos/.venv || exit 1
+        /data/tunaos/.venv/bin/python -m pip install -r /data/tunaos/requirements-config.txt || exit 1
+        export PATH=/data/tunaos/.venv/bin:\$PATH
         just build ${VARIANT} ${flavor} linux/amd64 0 latest '' 1
     " 2>&1 | tee "/tmp/corral-build-${VARIANT}-${flavor}.log" | tail -3; then
 		BUILD_SECS=$(($(date +%s) - BUILD_START))

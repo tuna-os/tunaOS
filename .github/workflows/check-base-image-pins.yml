@@ -48,6 +48,9 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Prepare build configuration
+        uses: ./.github/actions/prepare-config
+
       - name: Install PyYAML
         run: pip install pyyaml
 

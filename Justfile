@@ -186,7 +186,7 @@ iso-group variant='yellowfin' group='default' repo='ghcr':
     # --preserve-env: the inner sudo must not strip the CI-pinned tacklebox
     # source build vars (a plain sudo here silently fell back to the stale
     # ghcr tacklebox image while CI believed it was testing pinned fixes).
-    sudo --preserve-env=GITHUB_REPOSITORY_OWNER,TACKLEBOX_FROM_SOURCE,TACKLEBOX_SHA,TACKLEBOX_IMAGE,TACKLEBOX_CACHE bash ./scripts/build-iso-group.sh "{{ variant }}" "{{ group }}" "{{ repo }}"
+    sudo --preserve-env=GITHUB_REPOSITORY_OWNER,TACKLEBOX_FROM_SOURCE,TACKLEBOX_SHA,TACKLEBOX_IMAGE,TACKLEBOX_CACHE,TUNAOS_CONFIG_PYTHONPATH env "PYTHONPATH=${TUNAOS_CONFIG_PYTHONPATH:-}" "TUNAOS_CONFIG_PYTHON=${TUNAOS_CONFIG_PYTHON:-$(command -v python3)}" bash ./scripts/build-iso-group.sh "{{ variant }}" "{{ group }}" "{{ repo }}"
 # ==============================================================================
 #  QCOW2 DISK-IMAGE BUILD
 # ==============================================================================

@@ -149,9 +149,9 @@ else:
         assert github_env.read_text() == ''
         assert len(log.read_text().splitlines()) == 1
         return
-    name, value = github_env.read_text().strip().split('=', 1)
-    assert name == 'PYTHONPATH' and value.endswith(':/prior/path')
-    env[name] = value
+    exported = dict(line.split('=', 1) for line in github_env.read_text().splitlines())
+    assert exported['PYTHONPATH'] == exported['TUNAOS_CONFIG_PYTHONPATH'] + ':/prior/path'
+    env.update(exported)
     generate = subprocess.run(['bash', '-e', '-o', 'pipefail', '-c', steps[1]['run']],
                               cwd=tmp_path, env=env, text=True, capture_output=True)
     assert generate.returncode == 0, generate.stderr
@@ -196,3 +196,112 @@ def test_target_build_consumers_use_generated_adapters_without_host_pythonpath()
         assert 'PYTHONPATH' not in text
     build = (ROOT / 'scripts/build-image-inner.sh').read_text()
     assert build.index('scripts/config.py prepare-debian-context') < build.index('${BUILDER} build')
+
+
+@pytest.mark.parametrize('filename,job', [
+    ('check-base-image-pins.yml', 'package-repos'), ('corral-boot-gate.yml', 'gate'),
+    ('live-iso-bootc.yml', 'build'), ('iso-e2e.yml', 'e2e'),
+])
+def test_independent_jobs_prepare_parser_after_checkout_before_commands(filename, job):
+    steps = yaml.safe_load((ROOT / '.github/workflows' / filename).read_text())['jobs'][job]['steps']
+    checkout = next(i for i, step in enumerate(steps) if step.get('uses', '').startswith('actions/checkout@'))
+    setup = next(i for i, step in enumerate(steps) if step.get('uses') == './.github/actions/prepare-config')
+    assert setup == checkout + 1
+
+
+def privileged_prefixes():
+    paths = ['reusable-build-image.yml', 'publish-iso-groups.yml', 'live-iso-bootc.yml',
+             'iso-e2e.yml', 'installer-smoke.yml', 'installer-screenshots.yml',
+             'luks-e2e.yml', 'weekly-desktop-screenshots.yml']
+    result = []
+    for name in paths:
+        workflow = yaml.safe_load((ROOT / '.github/workflows' / name).read_text())
+        for job in workflow['jobs'].values():
+            for step in job.get('steps', []):
+                for line in step.get('run', '').replace('\\\n', ' ').splitlines():
+                    if line.lstrip().startswith('sudo ') and ('just iso' in line or 'just build' in line or '"$just" build' in line):
+                        marker = 'timeout --kill-after' if 'timeout --kill-after' in line else 'just '
+                        result.append((name, line[:line.index(marker)].strip()))
+    line = next(line for line in (ROOT / 'Justfile').read_text().splitlines() if 'sudo --preserve-env=' in line and 'build-iso-group.sh' in line)
+    result.append(('Justfile', line[:line.index('bash ./scripts/build-iso-group.sh')].strip()))
+    return result
+
+
+@pytest.mark.parametrize('name,prefix', privileged_prefixes())
+def test_private_parser_survives_sanitized_privileged_boundary(tmp_path, name, prefix):
+    import shlex
+    assert 'PYTHONPATH=${TUNAOS_CONFIG_PYTHONPATH:-}' in prefix, name
+    private = tmp_path / 'private'
+    private.mkdir()
+    (private / 'private_parser_marker.py').write_text('VALUE = 232\n')
+    bins = tmp_path / 'bin'
+    bins.mkdir()
+    sudo = bins / 'sudo'
+    sudo.write_text(f'#!{sys.executable}\n' + '''import os, sys
+args = sys.argv[1:]
+keep = set()
+while args and args[0].startswith('-'):
+    flag = args.pop(0)
+    if flag == '-E':
+        keep.update(os.environ)
+    elif flag.startswith('--preserve-env='):
+        keep.update(flag.split('=', 1)[1].split(','))
+env = {k: v for k, v in os.environ.items() if k in keep or k == 'PATH'}
+env.pop('PYTHONPATH', None)
+os.execvpe(args[0], args, env)
+''')
+    sudo.chmod(0o755)
+    command = prefix + ' ' + shlex.quote(sys.executable) + ' -c ' + shlex.quote('import private_parser_marker; assert private_parser_marker.VALUE == 232')
+    env = {**os.environ, 'PATH': str(bins) + os.pathsep + os.environ['PATH'],
+           'TUNAOS_CONFIG_PYTHONPATH': str(private), 'PYTHONPATH': '/must/not/be/forwarded'}
+    result = subprocess.run(['/bin/bash', '-eu', '-c', command], env=env, text=True, capture_output=True)
+    assert result.returncode == 0, (name, result.stderr)
+
+
+@pytest.mark.parametrize('name', ['corral-build.sh', 'lifecycle-test.sh'])
+def test_remote_build_sets_up_its_own_parser_before_build(name):
+    source = (ROOT / 'scripts' / name).read_text()
+    install = '/data/tunaos/.venv/bin/python -m pip install -r /data/tunaos/requirements-config.txt || exit 1'
+    assert source.index('python3 -m venv /data/tunaos/.venv || exit 1') < source.index(install) < source.index('        just build ')
+    assert 'export PATH=/data/tunaos/.venv/bin:\\$PATH' in source
+
+
+@pytest.mark.parametrize('mode', ['active-venv', 'explicit-spaces', 'missing', 'not-executable'])
+def test_local_venv_grouped_iso_keeps_selected_interpreter_under_sudo(tmp_path, mode):
+    import shlex
+    import shutil
+    repo = tmp_path / 'repository'
+    (repo / 'scripts/lib').mkdir(parents=True)
+    shutil.copyfile(ROOT / 'scripts/lib/build-config.sh', repo / 'scripts/lib/build-config.sh')
+    # Use the current tested venv interpreter through a path containing spaces.
+    selected = tmp_path / 'operator venv' / 'python3'
+    selected.parent.mkdir()
+    selected.write_text(f'#!/bin/sh\nexec {shlex.quote(sys.executable)} "$@"\n')
+    selected.chmod(0o755)
+    (repo / 'scripts/config.py').write_text('import tomli\nassert tomli.__version__ == "2.3.2"\nprint(__file__)\n')
+    (repo / 'scripts/build-iso-group.sh').write_text('source ./scripts/lib/build-config.sh\ntunaos_build_config\n')
+    bins = tmp_path / 'bin'
+    bins.mkdir()
+    sudo = bins / 'sudo'
+    sudo.write_text('#!/bin/bash\nwhile [[ "$1" == -* ]]; do shift; done\nexec /usr/bin/env -i PATH=/usr/bin:/bin "$@"\n')
+    sudo.chmod(0o755)
+    (bins / 'python3').symlink_to(selected)
+    line = next(line.strip() for line in (ROOT / 'Justfile').read_text().splitlines() if 'sudo --preserve-env=' in line and 'build-iso-group.sh' in line)
+    env = {**os.environ, 'PATH': str(bins) + os.pathsep + os.environ['PATH']}
+    env.pop('TUNAOS_CONFIG_PYTHONPATH', None)
+    env.pop('TUNAOS_CONFIG_PYTHON', None)
+    invalid = mode in ('missing', 'not-executable')
+    if mode == 'explicit-spaces':
+        env['TUNAOS_CONFIG_PYTHON'] = str(selected)
+    elif mode == 'missing':
+        env['TUNAOS_CONFIG_PYTHON'] = str(tmp_path / 'missing interpreter')
+    elif mode == 'not-executable':
+        selected.chmod(0o644)
+        env['TUNAOS_CONFIG_PYTHON'] = str(selected)
+    result = subprocess.run(['/bin/bash', '-eu', '-c', line], cwd=repo, env=env, text=True, capture_output=True)
+    if invalid:
+        assert result.returncode != 0
+        assert 'config Python interpreter is unavailable' in result.stderr
+    else:
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.strip() == str(repo / 'scripts/config.py')

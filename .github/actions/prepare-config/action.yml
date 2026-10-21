@@ -13,6 +13,7 @@ runs:
         python3 -m pip install --disable-pip-version-check --no-deps \
           --only-binary=:all: --platform any --target "$config_deps" \
           -r requirements-config.txt
+        printf 'TUNAOS_CONFIG_PYTHONPATH=%s\n' "$config_deps" >> "$GITHUB_ENV"
         printf 'PYTHONPATH=%s\n' "${config_deps}${PYTHONPATH:+:${PYTHONPATH}}" >> "$GITHUB_ENV"
     - name: Generate build configuration
       shell: bash
