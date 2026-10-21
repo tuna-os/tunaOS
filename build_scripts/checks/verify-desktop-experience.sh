@@ -637,9 +637,9 @@ tuna)
 			exit 1
 		}
 	done
-	tuna_gdm_shell_desktop=/usr/share/gdm/greeter/applications/org.gnome.Shell.desktop
-	require_glob "$tuna_gdm_shell_desktop"
-	grep -Fq 'Exec=env G_RESOURCE_OVERLAYS=/org/gnome/shell/theme=/usr/share/tunaos/gdm-theme ' "$tuna_gdm_shell_desktop" || {
+	tuna_gdm_theme_drop_in=/etc/systemd/user/org.gnome.Shell@gdm.service.d/tunaos-gdm-theme.conf
+	require_glob "$tuna_gdm_theme_drop_in"
+	grep -Fqx 'Environment=G_RESOURCE_OVERLAYS=/org/gnome/shell/theme=/usr/share/tunaos/gdm-theme' "$tuna_gdm_theme_drop_in" || {
 		echo "the GDM greeter is not configured to load the Tuna theme overlay" >&2
 		exit 1
 	}

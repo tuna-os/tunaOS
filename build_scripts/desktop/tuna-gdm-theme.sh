@@ -18,22 +18,20 @@ print(ByteArray.toString(bytes.get_data()));
 '
 }
 
+# GDM runs its greeter shell as the `gdm` instance of the shell's systemd user
+# template (Requires=org.gnome.Shell@gdm.service in
+# gnome-session@gnome-login.target.d); regular user sessions use the
+# wayland/x11 instances. Scoping the overlay to the gdm instance therefore
+# themes only the login screen. This avoids depending on the
+# /usr/share/applications/org.gnome.Shell.desktop session component, which
+# current gnome-shell packages no longer ship.
 _tuna_gdm_theme_install() {
 	local test_root="${TUNAOS_GDM_THEME_ROOT:-}"
 	local resource_file="${test_root}/usr/share/gnome-shell/gnome-shell-theme.gresource"
 	local theme_dir="${test_root}/usr/share/tunaos/gdm-theme"
 	local identity_file="${test_root}/usr/share/tunaos/identity.env"
-	local shell_desktop="${test_root}/usr/share/applications/org.gnome.Shell.desktop"
-	local greeter_apps_dir="${test_root}/usr/share/gdm/greeter/applications"
-	local accent stylesheet resource_path staged_theme greeter_desktop_tmp
-
-	if [[ -z "$test_root" ]]; then
-		resource_file="/usr/share/gnome-shell/gnome-shell-theme.gresource"
-		theme_dir="/usr/share/tunaos/gdm-theme"
-		identity_file="/usr/share/tunaos/identity.env"
-		shell_desktop="/usr/share/applications/org.gnome.Shell.desktop"
-		greeter_apps_dir="/usr/share/gdm/greeter/applications"
-	fi
+	local greeter_unit_dir="${test_root}/etc/systemd/user/org.gnome.Shell@gdm.service.d"
+	local accent stylesheet resource_path staged_theme
 
 	[[ -r "$identity_file" ]] || {
 		echo "Tuna variant identity is missing: $identity_file" >&2
@@ -48,16 +46,12 @@ _tuna_gdm_theme_install() {
 		echo "GNOME Shell theme resource is missing: $resource_file" >&2
 		return 1
 	}
-	[[ -r "$shell_desktop" ]] || {
-		echo "GNOME Shell session component is missing: $shell_desktop" >&2
-		return 1
-	}
 	command -v gjs >/dev/null 2>&1 || {
 		echo "gjs is required to theme the GDM greeter" >&2
 		return 1
 	}
 
-	mkdir -p "${theme_dir%/*}" "$greeter_apps_dir"
+	mkdir -p "${theme_dir%/*}" "$greeter_unit_dir"
 	staged_theme="$(mktemp -d "${theme_dir}.tmp.XXXXXX")"
 	for stylesheet in gnome-shell-dark.css gnome-shell-light.css gnome-shell-high-contrast.css; do
 		resource_path="/org/gnome/shell/theme/$stylesheet"
@@ -77,24 +71,10 @@ CSS
 	rm -rf "$theme_dir"
 	mv "$staged_theme" "$theme_dir"
 
-	# GDM puts /usr/share/gdm/greeter first in the greeter's XDG_DATA_DIRS.
-	# Shadow only its GNOME Shell session component so regular user sessions do
-	# not inherit the resource overlay.
-	greeter_desktop_tmp="$(mktemp "${greeter_apps_dir}/.org.gnome.Shell.desktop.XXXXXX")"
-	if ! awk '
-		BEGIN { replaced = 0 }
-		/^Exec=/ && !replaced {
-			sub(/^Exec=/, "Exec=env G_RESOURCE_OVERLAYS=/org/gnome/shell/theme=/usr/share/tunaos/gdm-theme ")
-			replaced = 1
-		}
-		{ print }
-		END { if (!replaced) exit 1 }
-	' "$shell_desktop" >"$greeter_desktop_tmp"; then
-		rm -f "$greeter_desktop_tmp"
-		echo "GNOME Shell session component has no Exec entry: $shell_desktop" >&2
-		return 1
-	fi
-	mv "$greeter_desktop_tmp" "$greeter_apps_dir/org.gnome.Shell.desktop"
+	cat >"$greeter_unit_dir/tunaos-gdm-theme.conf" <<UNIT
+[Service]
+Environment=G_RESOURCE_OVERLAYS=/org/gnome/shell/theme=/usr/share/tunaos/gdm-theme
+UNIT
 }
 
 _tuna_gdm_theme_install
