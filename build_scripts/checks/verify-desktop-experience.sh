@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+set -E
 
 desktop="${1:?usage: verify-desktop-experience.sh <gnome|kde|niri|cosmic|xfce|pantheon|tuna> [--runtime]}"
 mode="${2:-build}"
@@ -12,6 +13,10 @@ fi
 # out its full timeout with no evidence. Guarantee a terminal FAIL marker on
 # any premature death; the normal paths below disarm this trap.
 marker_emitted=0
+# BASH_LINENO/BASH_COMMAND inside an EXIT trap do not name the failed command,
+# so record the real location when an unguarded command dies (errtrace).
+err_line=""
+err_command=""
 emit_fail_on_early_exit() {
 	local rc=$?
 	if [[ "$mode" == --runtime && "$rc" -ne 0 && "$marker_emitted" -eq 0 ]]; then
@@ -19,8 +24,8 @@ emit_fail_on_early_exit() {
 		# their failure actionable in a serial-only Gate: without this, the
 		# harness only gets `early_exit rc=1` and cannot distinguish a missing
 		# session, portal, keyring, or display-manager unit.
-	local line="${BASH_LINENO[0]:-unknown}"
-	local command="${BASH_COMMAND:-unknown}"
+	local line="${err_line:-${BASH_LINENO[0]:-unknown}}"
+	local command="${err_command:-${BASH_COMMAND:-unknown}}"
 	local stack="" i
 	for i in "${!BASH_LINENO[@]}"; do
 		stack+=" ${BASH_SOURCE[$i]:-?}:${BASH_LINENO[$i]:-?}:${FUNCNAME[$((i + 1))]:-main}"
@@ -29,6 +34,7 @@ emit_fail_on_early_exit() {
 		"${desktop}" "${rc}" "${line}" "${command}" "${stack:-none}" | tee /dev/ttyS0 2>/dev/null || true
 	fi
 }
+trap 'err_line="${BASH_LINENO[0]:-unknown}"; err_command="${BASH_COMMAND:-unknown}"' ERR
 trap emit_fail_on_early_exit EXIT
 
 source /run/context/build_scripts/lib.sh 2>/dev/null || true
