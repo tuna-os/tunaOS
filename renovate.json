@@ -105,11 +105,11 @@
       "automerge": true
     },
     {
-      "description": "Keep the verified TOML 1.0 parser until a grammar review. Tomli 2.4.0 introduced TOML 1.1; the former <2.5.0 ceiling admitted it.",
+      "description": "Keep the reviewed TOML 1.0 parser with key and nesting limits on every host. Tomli 2.4.0 introduced TOML 1.1; grammar changes need cross-version review.",
       "matchPackageNames": [
         "tomli"
       ],
-      "allowedVersions": "==2.2.1",
+      "allowedVersions": "==2.3.2",
       "matchManagers": [
         "pip_requirements"
       ],

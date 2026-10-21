@@ -131,16 +131,24 @@ Do not claim this goal is complete through the unchanged customization stack.
 
 ## Compatibility and verification
 
-The optional resolver states that it supports Python 3.10. Current CI uses
-`ubuntu-latest` without a Python pin. The inspected development interpreter is
-3.12.14. These facts do not establish every supported host's Python version.
+Keep support for configuration tools on Python 3.10+.
+Every host uses `tomli==2.3.2` from `requirements-config.txt`.
+This release keeps TOML 1.0 and adds limits for key depth and nested values.
+The [reviewed parser source](https://github.com/hukkin/tomli/blob/d326dd59d8e10d621cba4de3ee110a7db6324ddd/src/tomli/_parser.py)
+sets both limits. Python 3.15's `tomllib` accepts TOML 1.1, so it is not a fallback.
 
-Keep support for configuration tools on Python 3.10. Use standard-library `tomllib` on 3.11+
-and a pinned, tested `tomli` on 3.10. Resolve both through one parser adapter.
-A missing dependency reports the exact install command; it never downloads
-code on demand. Test both parsers against the same TOML fixtures. PyPI reports
-`tomli` 2.2.1 supports Python >=3.8; the pure-Python wheel SHA-256 is
-`cb55c73c5f4408779d0cf3eef9f762b9c9f147a77de7b258bef0a5628adc85cc`.
+Run `just setup-config` in an active virtual environment before the first read.
+`just setup` runs this step before its tests read configuration.
+CI installs a private pure-Python wheel before it generates the build input.
+This wheel works if a later CI step selects a different Python version.
+
+Target image builds read generated YAML or JSON with shell helpers and yq.
+For Debian, the helper checks a hash of the TOML source bytes without a parser.
+The host prepares these adapters before the container build starts.
+
+A missing or wrong parser reports the exact install command.
+Config commands never download code. Excess depth gives a clear error.
+The Python 3.10 and 3.15 jobs run the same grammar and setup tests.
 
 Keep the TOML 1.0 grammar shared with Python 3.11. The edit layer must preserve comments and reparse its output through this core.
 Generated JSON/YAML remains consumable by target images without Python or TOML

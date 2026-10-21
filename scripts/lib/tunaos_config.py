@@ -1,6 +1,6 @@
 """Primary TOML matrix and desktop policy with generated compatibility adapters.
 
-Python 3.10 uses the pinned tomli parser; 3.11+ uses the standard library.
+All supported Python versions use the same reviewed TOML 1.0 parser.
 Base/shared package and branding ownership remain later migration milestones.
 """
 from __future__ import annotations
@@ -15,16 +15,21 @@ from pathlib import Path
 import re
 import tempfile
 
+TOMLI_VERSION = '2.3.2'
+PARSER_SETUP = 'python3 -m pip install -r requirements-config.txt'
 try:
-    import tomllib
-except ModuleNotFoundError:
-    try:
-        import tomli as tomllib
-    except ModuleNotFoundError as exc:
-        raise SystemExit(
-            "Python 3.10 requires tomli. Install the reviewed dependencies: "
-            "python3 -m pip install -r requirements-config.txt"
-        ) from exc
+    import tomli as tomllib
+except ModuleNotFoundError as exc:
+    raise SystemExit(
+        f'TunaOS requires tomli=={TOMLI_VERSION} on every Python version. '
+        f'Install the reviewed dependencies: {PARSER_SETUP}'
+    ) from exc
+if getattr(tomllib, '__version__', None) != TOMLI_VERSION:
+    raise SystemExit(
+        f'TunaOS requires tomli=={TOMLI_VERSION}; found '
+        f'{getattr(tomllib, "__version__", "unknown")}. '
+        f'Install the reviewed dependencies: {PARSER_SETUP}'
+    )
 
 ROOT = Path(__file__).resolve().parents[2]
 ID = re.compile(r"[a-z0-9][a-z0-9-]*\Z")
@@ -33,6 +38,16 @@ PLATFORMS = {"linux/amd64", "linux/amd64/v2", "linux/amd64/v3", "linux/arm64"}
 
 class ConfigError(ValueError):
     """Invalid primary configuration; never fall back to stock data."""
+
+
+def parse(source, path='<string>'):
+    """Parse the host-independent grammar and report resource limits cleanly."""
+    try:
+        if isinstance(source, bytes):
+            source = source.decode('utf-8')
+        return tomllib.loads(source)
+    except (tomllib.TOMLDecodeError, UnicodeError, RecursionError) as exc:
+        raise ConfigError(f'{path}: {exc}') from exc
 
 
 def table(value, allowed, required, path):
@@ -228,11 +243,10 @@ def publication_tags_overlap(left, left_dated, right, right_dated):
 def load(path=None):
     path = Path(path) if path is not None else ROOT / 'tunaos.toml'
     try:
-        with path.open('rb') as stream:
-            config = tomllib.load(stream)
-    except (OSError, tomllib.TOMLDecodeError) as exc:
+        source = path.read_bytes()
+    except OSError as exc:
         raise ConfigError(f'{path}: {exc}') from exc
-    return validate(config)
+    return validate(parse(source, path))
 
 
 def matrix(config):
@@ -318,7 +332,7 @@ def prepare_debian_contract(root, variant, desktop, platform):
     import hashlib
     root = Path(root)
     source = (root / 'tunaos.toml').read_bytes()
-    document = validate(tomllib.loads(source.decode('utf-8')))
+    document = validate(parse(source, root / 'tunaos.toml'))
     try:
         contract = package_policy().installation_contract(document, hashlib.sha256(source).hexdigest(),
                                                          variant, desktop, platform,

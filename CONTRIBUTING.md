@@ -20,6 +20,9 @@ Never post account credentials or API keys in issues or pull requests.
 ```bash
 brew install just podman shellcheck shfmt yq
 git clone https://github.com/tuna-os/tunaOS.git && cd tunaOS
+python3 -m venv .venv
+source .venv/bin/activate
+just setup-config
 just fix && just check
 ```
 
@@ -187,7 +190,9 @@ to check it, or `python3 scripts/config.py show` to view the build input.
 `python3 scripts/config.py generate` writes the ignored compatibility file.
 Build setup runs this step too. Do not edit that generated file.
 
-Python 3.10 needs `python3 -m pip install -r requirements-config.txt`; later
-Python versions use the standard library. This parser runs on the build host;
+All Python 3.10+ hosts need `just setup-config` in an active virtual environment.
+This installs the exact parser from `requirements-config.txt` before any config read.
+`just setup` runs this step first too. Config commands never install packages.
+This parser runs on the build host;
 it is not an image package choice. Packages and brand settings still
 follow the staged [migration plan](docs/PRIMARY-CONFIG-MIGRATION.md).

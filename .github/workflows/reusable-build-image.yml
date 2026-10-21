@@ -960,7 +960,7 @@ jobs:
             done
           }
           # Install necessary packages for building and pushing the image
-          apk_install jq git podman uutils bash conmon crun netavark fuse-overlayfs libstdc++ yq python3
+          apk_install jq git podman uutils bash conmon crun netavark fuse-overlayfs libstdc++ yq python3 py3-pip
           # Point /bin/sh at bash WITHOUT `ln -sf`.
           #
           # This step installs uutils, which replaces coreutils in PATH, so the

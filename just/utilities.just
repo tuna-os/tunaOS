@@ -144,13 +144,17 @@ test-pytest: _ensure_test_deps
 # what `just test-cell` and `just test-e2e` reproduce one cell at a time.
 
 # Install the tools the checks and tests need (brew/pip), then print versions
-setup: _ensure_test_deps
+setup: setup-config _ensure_test_deps
     #!/usr/bin/env bash
     cd {{ justfile_directory() }}
     for t in shellcheck shfmt yamllint jq actionlint bats yq node; do
         printf '%-11s %s\n' "$t" "$(command -v "$t" >/dev/null && $t --version 2>&1 | head -1 || echo MISSING)"
     done
     python3 -c 'import pytest, yaml; print("pytest", pytest.__version__, "pyyaml", yaml.__version__)'
+
+# Install the host parser explicitly before any config read (use an active venv).
+setup-config:
+    python3 -m pip install -r "{{ justfile_directory() }}/requirements-config.txt"
 
 # Fast feedback: the Python suites only, stop at the first failure
 test-fast: _ensure_test_deps

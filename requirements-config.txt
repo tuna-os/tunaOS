@@ -1,6 +1,6 @@
-# Python 3.11+ uses stdlib tomllib. Python 3.10 retains supported authoring.
+# Every supported Python uses this reviewed TOML 1.0 parser.
 # Explicit installation only; config tools never download dependencies.
-# Tomli 2.4.0 introduced TOML 1.1; keep the verified TOML 1.0 parser.
-# https://github.com/hukkin/tomli/blob/2.4.0/CHANGELOG.md
+# 2.3.2 includes the key-complexity and inline-nesting limit backports.
+# https://github.com/hukkin/tomli/blob/d326dd59d8e10d621cba4de3ee110a7db6324ddd/src/tomli/_parser.py
 # Update the matching Renovate rule only after a cross-version grammar review.
-tomli==2.2.1 ; python_version < "3.11"
+tomli==2.3.2

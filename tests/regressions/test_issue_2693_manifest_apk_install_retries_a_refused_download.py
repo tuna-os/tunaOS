@@ -32,7 +32,7 @@ yaml = pytest.importorskip("yaml")
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github/workflows/reusable-build-image.yml"
-PACKAGES = "jq git podman uutils bash conmon crun netavark fuse-overlayfs libstdc++ yq python3"
+PACKAGES = "jq git podman uutils bash conmon crun netavark fuse-overlayfs libstdc++ yq python3 py3-pip"
 
 STUB_APK = """#!/bin/sh
 state="$STUB_DIR/adds"

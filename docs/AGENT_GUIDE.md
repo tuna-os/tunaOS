@@ -105,6 +105,9 @@ Defined in `tunaos.toml`. The workflow is `build-variant.yml` → `reusable-buil
 ```bash
 brew install just podman shellcheck shfmt yq
 git clone https://github.com/tuna-os/tunaOS.git && cd tunaOS
+python3 -m venv .venv
+source .venv/bin/activate
+just setup-config
 just fix && just check   # validate everything
 just --list              # see all commands
 ```

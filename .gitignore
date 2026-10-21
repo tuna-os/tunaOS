@@ -42,6 +42,7 @@ ubuntu.txt
 .pi-subagents/
 
 # Python bytecode
+.venv/
 __pycache__/
 *.py[cod]
 
