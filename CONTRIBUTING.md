@@ -187,8 +187,9 @@ to check it, or `python3 scripts/config.py show` to view the build input.
 `python3 scripts/config.py generate` writes the ignored compatibility file.
 Build setup runs this step too. Do not edit that generated file.
 
-Install the reviewed config dependencies with
-`python3 -m pip install -r requirements-config.txt`. The pinned `tomli`
-keeps the accepted grammar at TOML 1.0 across Python releases; Python 3.10
-also requires it because no standard-library parser is available. This parser
-runs on the build host, not in the image.
+Python 3.10+ uses Tomli from this repository. The source has a fixed version.
+Config reads need no parser installation and never download code.
+See [parser updates](docs/VENDORED-PARSER.md) before a version change.
+This parser runs on the build host;
+it is not an image package choice. Packages and brand settings still
+follow the staged [migration plan](docs/PRIMARY-CONFIG-MIGRATION.md).
