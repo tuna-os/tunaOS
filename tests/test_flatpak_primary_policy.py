@@ -236,3 +236,13 @@ def test_recipe_failure_is_nonzero_in_both_hook_contexts(tmp_path, sourced, fail
         assert (tmp_path / 'preinstall.d/tunaos-desktop.preinstall').is_symlink()
     else:
         assert not list((tmp_path / 'preinstall.d').glob('*.preinstall'))
+
+
+@pytest.mark.parametrize('case', json.loads((ROOT / 'tests/fixtures/builder-config-flatpak-ids.json').read_text()))
+def test_canonical_policy_uses_shared_flatpak_id_vectors(case):
+    declarations = [{'id': case['id'], 'branch': 'stable'}]
+    if case['valid']:
+        assert policy._apps(declarations) == {case['id']}
+    else:
+        with pytest.raises(policy.PolicyError):
+            policy._apps(declarations)

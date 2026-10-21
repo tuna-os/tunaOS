@@ -17,7 +17,7 @@ def _apps(value):
     seen = set()
     for app in value:
         _keys(app, ('id', 'branch'))
-        if not isinstance(app['id'], str) or not re.fullmatch(r'[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+){2,}', app['id']) or len(app['id']) > 255:
+        if not isinstance(app['id'], str) or not re.fullmatch(r'(?:[A-Za-z_][A-Za-z0-9_]*\.){2,}[A-Za-z_-][A-Za-z0-9_-]*', app['id']) or len(app['id']) > 255:
             raise PolicyError('invalid Flatpak app ID')
         if app['branch'] != 'stable':
             raise PolicyError('only stable declarations are supported by the current builder projection')
