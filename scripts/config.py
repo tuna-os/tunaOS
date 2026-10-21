@@ -40,7 +40,8 @@ def main():
             target = builder_target(args.root, args.output, 'docs/iso-builder.flavors.json' if flavors else 'docs/iso-builder.config.json')
             if args.command.startswith('check-'):
                 if not target.is_file() or target.read_text(encoding='utf-8') != content:
-                    raise tunaos_config.ConfigError(f'{target}: generated builder config drift; run generate-builder-config with the same --root and --output arguments')
+                    command = 'generate-builder-flavors' if flavors else 'generate-builder-config'
+                    raise tunaos_config.ConfigError(f'{target}: generated builder config drift; run {command} with the same --root and --output arguments')
             else:
                 target.write_text(content, encoding='utf-8')
             print(target)

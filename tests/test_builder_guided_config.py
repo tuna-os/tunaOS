@@ -120,3 +120,105 @@ def test_graphics_generation_is_explicit_supported_facet():
 def test_flavor_export_matches_portable_schema():
     schema=pytest.importorskip('jsonschema')
     schema.validate(builder.flavor_metadata(primary.load()),json.loads((ROOT/'docs/iso-builder-flavors.schema.json').read_text()))
+
+
+SELECTION_TEXT_FIELDS = [
+    ('paths', 0, 'label'), ('facets', 0, 'label'),
+    ('facets', 0, 'description'), ('facets', 0, 'values', 0, 'label'),
+    ('facets', 0, 'values', 0, 'description'),
+    ('facets', 0, 'values', 0, 'card', 'image_alt'),
+    ('facets', 0, 'values', 0, 'card', 'badge'),
+    ('recommendations', 0, 'label'), ('recommendations', 0, 'reason'),
+]
+
+
+@pytest.mark.parametrize('path', SELECTION_TEXT_FIELDS)
+@pytest.mark.parametrize('value,accepted', [
+    ('Visible text', True), ('a' * 2048, True),
+    ('\U0001f41f' * 2048, True), ('\U0001f41f' * 2049, False),
+    ('<', False), ('>', False), ('a<b', False), ('a>b', False),
+    ('', False), ('   ', False), ('a\n', False), ('a\x7f', False),
+    ('a' * 2049, False), ('\u0085', False), ('\ufeff', True),
+    ('text\u0085', True), ('text\ufeff', True),
+])
+def test_selection_text_schema_and_reference_parity(path, value, accepted):
+    schema = pytest.importorskip('jsonschema')
+    document = config()
+    document['selection']['facets'][0]['values'][0]['card'] = {
+        'image_url': '/art.png', 'image_alt': 'Artwork', 'badge': 'Preview',
+    }
+    node = document['selection']
+    for part in path[:-1]:
+        node = node[part]
+    node[path[-1]] = value
+    validator = schema.Draft202012Validator(json.loads((ROOT / 'docs/iso-builder-config.schema.json').read_text()))
+    assert validator.is_valid(document) is accepted
+    if accepted:
+        assert builder.validate(document) == document
+    else:
+        with pytest.raises(builder.ConfigError):
+            builder.validate(document)
+
+
+@pytest.mark.parametrize('facet', builder.FACETS)
+@pytest.mark.parametrize('value', [
+    'normal-id', 'linux/amd64', 'linux/amd64/v2', 'linux/amd64/v3',
+    'linux/arm64', 'linux/mips64', 'foo.bar', 'foo/bar', '<',
+    'Upper', 'a' * 64, 'a' * 65, 'id\n', 'id\x7f',
+])
+def test_facet_value_schema_and_reference_parity(facet, value):
+    import re
+    schema = pytest.importorskip('jsonschema')
+    document = config()
+    document['desktops'] = []
+    document['curated_app_sets'] = []
+    document['ddi_channels'] = []
+    document['selection'] = {
+        'paths': [{'id': 'choose', 'label': 'Choose', 'facets': [facet]}],
+        'default_path': 'choose', 'recommendations': [],
+        'facets': [{'id': facet, 'label': 'Choice', 'values': [{'id': value, 'label': 'Value'}]}],
+    }
+    document['default_selection'] = {'kind': 'none'}
+    accepted = value in builder.PLATFORMS if facet == 'platform' else bool(re.fullmatch(r'[a-z0-9][a-z0-9-]{0,63}', value))
+    validator = schema.Draft202012Validator(json.loads((ROOT / 'docs/iso-builder-config.schema.json').read_text()))
+    assert validator.is_valid(document) is accepted
+    if accepted:
+        assert builder.validate(document) == document
+    else:
+        with pytest.raises(builder.ConfigError):
+            builder.validate(document)
+
+
+def test_selection_schema_text_patterns_match_ecmascript_whitespace():
+    # Preserve Python strip semantics: lone FEFF is accepted, lone 0085 is not.
+    # This is an explicit nonblank policy, not a visible-character guarantee.
+    import re
+    import shutil
+    import subprocess
+    node = shutil.which('node')
+    if node is None:
+        pytest.skip('Node is needed to verify ECMAScript regex behavior')
+    document = json.loads((ROOT / 'docs/iso-builder-config.schema.json').read_text())
+    patterns = []
+
+    def collect(value):
+        if isinstance(value, dict):
+            if value.get('maxLength') == 2048 and 'pattern' in value:
+                patterns.append(value['pattern'])
+            for child in value.values():
+                collect(child)
+        elif isinstance(value, list):
+            for child in value:
+                collect(child)
+
+    collect(document['oneOf'][1]['properties']['selection'])
+    assert len(patterns) == 9
+    fixture = json.loads((ROOT / 'tests/fixtures/builder-config-selection-text.json').read_text())
+    values = [case['value'] for case in fixture['cases']]
+    cases = [[pattern, value] for pattern in patterns for value in values]
+    script = 'let s="";process.stdin.on("data",x=>s+=x);process.stdin.on("end",()=>process.stdout.write(JSON.stringify(JSON.parse(s).map(([p,v])=>Array.from(v).length<=2048&&new RegExp(p).test(v)))));'
+    result = subprocess.run([node, '-e', script], input=json.dumps(cases), text=True,
+                            capture_output=True, check=True)
+    expected = [len(value) <= 2048 and bool(re.search(pattern, value)) for pattern, value in cases]
+    assert expected == [case['valid'] for _ in patterns for case in fixture['cases']]
+    assert json.loads(result.stdout) == expected

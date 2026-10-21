@@ -408,13 +408,14 @@ def test_output_parent_error_is_explicit_without_creating_directories(tmp_path, 
         assert not parent.exists()
 
 
-def test_custom_output_drift_names_matching_regeneration_arguments(tmp_path):
+@pytest.mark.parametrize('artifact', ['config', 'flavors'])
+def test_custom_output_drift_names_matching_regeneration_arguments(tmp_path, artifact):
     target = tmp_path / 'custom.json'
     target.write_text('{}')
     result = subprocess.run([sys.executable, str(ROOT / 'scripts/config.py'),
-                             'check-builder-config', '--output', str(target)],
+                             f'check-builder-{artifact}', '--output', str(target)],
                             capture_output=True, text=True)
     assert result.returncode == 1
     assert str(target) in result.stderr
-    assert 'generate-builder-config with the same --root and --output arguments' in result.stderr
+    assert f'generate-builder-{artifact} with the same --root and --output arguments' in result.stderr
     assert target.read_text() == '{}'
