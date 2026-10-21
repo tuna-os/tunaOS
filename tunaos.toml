@@ -458,7 +458,7 @@ platforms = ["linux/amd64"]
 [variants.albacore]
 emoji = "🐟"
 description = "Based on AlmaLinux 10"
-base_image = "quay.io/almalinuxorg/almalinux-bootc:10@sha256:236fcee7e4debc06dd2977344a2ae2fff3765c17e88d71d210cc34b9a9463269"
+base_image = "quay.io/almalinuxorg/almalinux-bootc:10@sha256:f6d1c4c77d50fa52408550a16203aca6e3cf3eda623afbd16413dfa344e0cad0"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["almalinux"]
 platforms = ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
@@ -1023,7 +1023,7 @@ emoji = "🎏"
 upstream_track = "experimental"
 description = "Based on Fedora ELN (EL11 preview, rolling)"
 experimental = true
-base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:adaa2427d2637e2c70cb13fcf01ec6a55d123ec266199e26cf9320ac54e94d93"
+base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:c06226f1bab02f0fd27541aea58c7452acd4c8a32ff7654ff14e7b4ad56e9650"
 # No alias: `eln` is Fedora's identifier for a moving development target,
 # and an alias tag is a stability promise this lane deliberately does not
 # make. Revisit if/when ELN gains a versioned publish.
@@ -1326,7 +1326,7 @@ upstream_track = "experimental"
 # not a rebuild of an existing one. Read docs/HUMMINGBIRD.md before
 # reasoning about what its package set should contain.
 description = "Fedora Hummingbird (hardened rolling Rawhide fork, bootc)"
-base_image = "quay.io/hummingbird-community/bootc-os:latest@sha256:903939d52c9ac991e5a95c673bf0bc0fdfe55589042bda2051f87b7c24c57354"
+base_image = "quay.io/hummingbird-community/bootc-os:latest@sha256:7197f14260120b815bbbaa13414c46b29415f6d879c45c8680b1916dfed0a815"
 # amd64 only, because aarch64 has nothing to build FROM yet: the base
 # stage's mandatory xfsprogs guard (build_scripts/10-base-packages.sh) has
 # no repository that can satisfy it on arm64, so every hummingbird arm64
@@ -2124,7 +2124,7 @@ build_qcow2 = false
 [variants.flounder]
 emoji = "🐡"
 description = "Based on Debian 13 Trixie (stable)"
-base_image = "docker.io/library/debian:trixie@sha256:913f6706df59a68922d1dd08f78c2476560a8d367897200a6005b00e5f67c2d5"
+base_image = "docker.io/library/debian:trixie@sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["debian"]
 platforms = ["linux/amd64"]
@@ -2283,7 +2283,7 @@ tag_suffix = "sid"
 emoji = "☢️"
 upstream_track = "rolling"
 description = "Based on Debian Sid (unstable, rolling)"
-base_image = "docker.io/library/debian:sid@sha256:c53e050391cca6c8517c4a075230b798a0f980faa5d3ed0a912249ea882e40b5"
+base_image = "docker.io/library/debian:sid@sha256:92d7265e51d67d3a2094c1aad9faa88c74cf9d52e6c354200e429cd60237cc55"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["debian"]
 platforms = ["linux/amd64"]
