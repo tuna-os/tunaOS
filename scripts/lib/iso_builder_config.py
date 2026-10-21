@@ -104,7 +104,9 @@ def validate(document):
             raise ConfigError(f'desktops.{desktop["id"]}.default_flatpaks: expected list')
         seen_apps = set()
         for app in apps:
-            pattern(app, r'[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+){2,}')
+            pattern(app, r'(?:[A-Za-z_][A-Za-z0-9_]*\.){2,}[A-Za-z_-][A-Za-z0-9_-]*')
+            if len(app) > 255:
+                raise ConfigError('Flatpak app ID exceeds 255 characters')
             if app in seen_apps:
                 raise ConfigError(
                     f'desktops.{desktop["id"]}.default_flatpaks: duplicate Flatpak {app!r}'
