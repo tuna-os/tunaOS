@@ -53,9 +53,6 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Prepare build configuration
-        uses: ./.github/actions/prepare-config
-
       - name: Free up disk space
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \

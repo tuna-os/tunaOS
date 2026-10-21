@@ -208,20 +208,15 @@ def test_projection_does_not_mutate_source():
     assert document["variants"][next(iter(document["variants"]))]["flavors"]
 
 
-def test_missing_pinned_parser_explains_dependency_without_stdlib_fallback():
-    code = '''import builtins, runpy, sys
-original = builtins.__import__
-def blocked(name, *args, **kwargs):
-    if name == "tomli":
-        raise ModuleNotFoundError(name)
-    return original(name, *args, **kwargs)
-builtins.__import__ = blocked
-runpy.run_path(sys.argv[1])
-'''
-    result = subprocess.run([sys.executable, "-c", code, str(ROOT / "scripts/lib/tunaos_config.py")],
-                            text=True, capture_output=True)
+def test_missing_vendor_parser_explains_restore_without_download(tmp_path):
+    import shutil
+    target = tmp_path / 'tunaos_config.py'
+    shutil.copyfile(ROOT / 'scripts/lib/tunaos_config.py', target)
+    result = subprocess.run([sys.executable, str(target)], text=True, capture_output=True)
     assert result.returncode != 0
-    assert "requirements-config.txt" in result.stderr
+    assert 'restore the reviewed source checkout' in result.stderr
+    assert 'pip install' not in result.stderr
+    assert 'Traceback' not in result.stderr
 
 
 def test_pinned_parser_does_not_import_stdlib_parser():
@@ -233,7 +228,7 @@ def blocked(name, *args, **kwargs):
     return original(name, *args, **kwargs)
 builtins.__import__ = blocked
 module = runpy.run_path(sys.argv[1])
-assert module["tomllib"].__name__ == "tomli"
+assert module["tomllib"].__name__.startswith("_tunaos_tomli_")
 assert module["tomllib"].__version__ == "2.3.2"
 assert module["load"]()["schema_version"] == 1
 '''
@@ -295,6 +290,7 @@ def test_shell_reader_prepares_absent_adapter_in_fresh_checkout(tmp_path):
         target = tmp_path / name
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(ROOT / name, target)
+    shutil.copytree(ROOT / "scripts/lib/_vendor", tmp_path / "scripts/lib/_vendor")
     result = subprocess.run(["bash", "-c", 'source "$1"; tunaos_build_config', "bash",
                              str(tmp_path / "scripts/lib/build-config.sh")],
                             text=True, capture_output=True, check=True)
@@ -332,35 +328,13 @@ def test_parser_keeps_the_shared_toml10_grammar(toml11):
         config.tomllib.loads(toml11)
 
 
-def test_tomli_dependency_ceiling_preserves_shared_toml_grammar():
-    settings = json.loads((ROOT / "renovate.json").read_text())
-    rules = [
-        rule for rule in settings["packageRules"]
-        if "tomli" in rule.get("matchPackageNames", [])
-    ]
-    assert len(rules) == 1
-    rule = rules[0]
-    assert rule["matchManagers"] == ["pip_requirements"]
-    assert rule["matchFileNames"] == ["requirements-config.txt"]
-    assert rule["allowedVersions"] == "==2.3.2"
-    # pip_requirements strips environment markers and extracts the PEP 440
-    # specifier as currentValue; packageName is normalized to "tomli".
-    # https://github.com/renovatebot/renovate/blob/44.166.0/lib/modules/manager/pip_requirements/extract.ts
-    from packaging.requirements import Requirement
-    from packaging.specifiers import SpecifierSet
-    requirements = [Requirement(line) for line in
-                    (ROOT / "requirements-config.txt").read_text().splitlines()
-                    if line.strip() and not line.startswith("#")]
-    dependency, = requirements
-    assert dependency.name == "tomli"
-    assert str(dependency.specifier) == rule["allowedVersions"]
-    assert dependency.marker is None
-    assert config.TOMLI_VERSION == "2.3.2"
-    allowed = SpecifierSet(rule["allowedVersions"])
-    assert "2.3.2" in allowed
-    for version in ("2.2.0", "2.2.1", "2.2.2", "2.3.1", "2.3.3", "2.4.0", "2.4.1", "2.5.0", "3.0.0"):
-        assert version not in allowed
-
+def test_parser_is_bundled_without_an_external_dependency_pin():
+    requirements = [line for line in (ROOT / 'requirements-config.txt').read_text().splitlines()
+                    if line.strip() and not line.startswith('#')]
+    assert requirements == []
+    assert config.TOMLI_VERSION == '2.3.2'
+    provenance = json.loads((ROOT / 'scripts/lib/_vendor/tomli-provenance.json').read_text())
+    assert provenance['version'] == config.TOMLI_VERSION
 
 
 @pytest.mark.parametrize("recipe", ["check:", "_ensure_test_deps:", "clean:"])
@@ -457,6 +431,7 @@ def test_renovate_only_pin_update_keeps_live_suite_green(tmp_path):
         target = checkout / name
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(ROOT / name, target)
+    shutil.copytree(ROOT / "scripts/lib/_vendor", checkout / "scripts/lib/_vendor")
     fixtures = checkout / "tests/fixtures/primary-config"
     shutil.copytree(FIXTURES, fixtures)
     before = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in fixtures.iterdir()}

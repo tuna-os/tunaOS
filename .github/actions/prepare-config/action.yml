@@ -4,17 +4,6 @@ description: Generate the ignored build matrix adapter from authoritative tunaos
 runs:
   using: composite
   steps:
-    - name: Install primary config parser
-      shell: bash
-      run: |
-        # A private pure-Python wheel works even if later setup changes Python.
-        # --target leaves externally managed and shared runner installs alone.
-        config_deps=$(mktemp -d "${RUNNER_TEMP}/tunaos-config-python.XXXXXX")
-        python3 -m pip install --disable-pip-version-check --no-deps \
-          --only-binary=:all: --platform any --target "$config_deps" \
-          -r requirements-config.txt
-        printf 'TUNAOS_CONFIG_PYTHONPATH=%s\n' "$config_deps" >> "$GITHUB_ENV"
-        printf 'PYTHONPATH=%s\n' "${config_deps}${PYTHONPATH:+:${PYTHONPATH}}" >> "$GITHUB_ENV"
     - name: Generate build configuration
       shell: bash
       run: python3 scripts/config.py generate

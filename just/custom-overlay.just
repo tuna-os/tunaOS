@@ -79,4 +79,4 @@ custom-iso base_image='':
         [[ -n "$T" ]] && TAG="$T"
     fi
     echo "==> Generating live ISO for localhost/${TAG}:latest..."
-    sudo -E env "PYTHONPATH=${TUNAOS_CONFIG_PYTHONPATH:-}" "TUNAOS_CONFIG_PYTHON=${TUNAOS_CONFIG_PYTHON:-$(command -v python3)}" bash ./scripts/build-iso-tacklebox.sh "custom" "${TAG}" "local" "${TAG}" "1"
+    sudo -E bash ./scripts/build-iso-tacklebox.sh "custom" "${TAG}" "local" "${TAG}" "1"

@@ -1,6 +1,3 @@
-# Every supported Python uses this reviewed TOML 1.0 parser.
-# Explicit installation only; config tools never download dependencies.
-# 2.3.2 includes the key-complexity and inline-nesting limit backports.
-# https://github.com/hukkin/tomli/blob/d326dd59d8e10d621cba4de3ee110a7db6324ddd/src/tomli/_parser.py
-# Update the matching Renovate rule only after a cross-version grammar review.
-tomli==2.3.2
+# Compatibility include for config-authoring tools.
+# The reviewed TOML parser is bundled in scripts/lib/_vendor/tomli.
+# Reading or generating configuration needs no pip dependencies.

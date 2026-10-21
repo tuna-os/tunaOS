@@ -132,23 +132,21 @@ Do not claim this goal is complete through the unchanged customization stack.
 ## Compatibility and verification
 
 Keep support for configuration tools on Python 3.10+.
-Every host uses `tomli==2.3.2` from `requirements-config.txt`.
+Every host uses the pure Tomli 2.3.2 source bundled in `scripts/lib/_vendor/tomli`.
 This release keeps TOML 1.0 and adds limits for key depth and nested values.
 The [reviewed parser source](https://github.com/hukkin/tomli/blob/d326dd59d8e10d621cba4de3ee110a7db6324ddd/src/tomli/_parser.py)
 sets both limits. Python 3.15's `tomllib` accepts TOML 1.1, so it is not a fallback.
 
-Run `just setup-config` in an active virtual environment before the first read.
-`just setup` runs this step before its tests read configuration.
-CI installs a private pure-Python wheel before it generates the build input.
-This wheel works if a later CI step selects a different Python version.
+Config reads need no pip install, special environment, or network access.
+The source includes the MIT license and exact file hashes.
+See [parser updates](VENDORED-PARSER.md) for the explicit update procedure.
+If the checkout is incomplete, the read fails with an error.
+It does not select a host parser.
 
 Target image builds read generated YAML or JSON with shell helpers and yq.
 For Debian, the helper checks a hash of the TOML source bytes without a parser.
 The host prepares these adapters before the container build starts.
-
-A missing or wrong parser reports the exact install command.
-Config commands never download code. Excess depth gives a clear error.
-The Python 3.10 and 3.15 jobs run the same grammar and setup tests.
+The Python 3.10 and 3.15 jobs run the same grammar and parse-limit tests.
 
 Keep the TOML 1.0 grammar shared with Python 3.11. The edit layer must preserve comments and reparse its output through this core.
 Generated JSON/YAML remains consumable by target images without Python or TOML
@@ -195,6 +193,11 @@ Do not create a second config implementation. This is a later workstream, not ex
 Survey existing TunaOS package-query, resolver and validation tooling first.
 Native dnf, apt, pacman, zypper and portage adapters must state their support
 limits. Never infer a portable package name from string similarity alone.
+
+See the [package command guide](PACKAGE-AUTHORING.md) for the first
+index-backed implementation. It edits explicit existing policy
+sections using supplied native indexes. Automatic configured-repository discovery
+and per-variant transaction verification remain outside that first slice.
 
 ## Local migration experiment (not production code)
 

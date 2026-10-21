@@ -107,6 +107,7 @@ _ensure_test_deps: _ensure_check_deps
     python3 "{{ justfile_directory() }}/scripts/config.py" generate >/dev/null || exit 1
     if ! command -v bats &> /dev/null; then brew install bats-core; fi
     if ! python3 -c "import pytest" 2>/dev/null; then pip3 install pytest --break-system-packages 2>/dev/null || pip3 install pytest --user; fi
+    python3 -m pip install -r requirements-package-authoring.txt --break-system-packages || python3 -m pip install -r requirements-package-authoring.txt --user
     command -v yq >/dev/null || { echo "yq is required to read test dependency pins" >&2; exit 1; }
     schema_version=$(yq -r '.downloads.jsonschema // ""' image-versions.yaml)
     [[ "$schema_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Invalid jsonschema test pin" >&2; exit 1; }
@@ -144,17 +145,13 @@ test-pytest: _ensure_test_deps
 # what `just test-cell` and `just test-e2e` reproduce one cell at a time.
 
 # Install the tools the checks and tests need (brew/pip), then print versions
-setup: setup-config _ensure_test_deps
+setup: _ensure_test_deps
     #!/usr/bin/env bash
     cd {{ justfile_directory() }}
     for t in shellcheck shfmt yamllint jq actionlint bats yq node; do
         printf '%-11s %s\n' "$t" "$(command -v "$t" >/dev/null && $t --version 2>&1 | head -1 || echo MISSING)"
     done
     python3 -c 'import pytest, yaml; print("pytest", pytest.__version__, "pyyaml", yaml.__version__)'
-
-# Install the host parser explicitly before any config read (use an active venv).
-setup-config:
-    python3 -m pip install -r "{{ justfile_directory() }}/requirements-config.txt"
 
 # Fast feedback: the Python suites only, stop at the first failure
 test-fast: _ensure_test_deps

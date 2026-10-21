@@ -7,7 +7,6 @@ Nothing here publishes images, changes admission, or qualifies a desktop for rel
 ## Start a new fork config
 
 Use Python 3.10+, PyYAML and the existing build tools (`yq`, `jq`, Git, Bash).
-Run `just setup-config` in an active virtual environment before these commands.
 Install Pillow on the preparation host only if the config supplies a wallpaper.
 
 ```sh

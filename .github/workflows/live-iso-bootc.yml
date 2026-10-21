@@ -113,9 +113,6 @@ jobs:
           persist-credentials: false
           submodules: recursive
 
-      - name: Prepare build configuration
-        uses: ./.github/actions/prepare-config
-
       - name: Install dependencies
         run: |
           sudo apt-get update
@@ -242,7 +239,7 @@ jobs:
 
       - name: Build OS image
         run: |
-          sudo --preserve-env=TUNAOS_CONFIG_PYTHONPATH env "PYTHONPATH=${TUNAOS_CONFIG_PYTHONPATH:-}" just build "$VARIANT" "$FLAVOR" linux/amd64 1 "$FLAVOR"
+          sudo just build "$VARIANT" "$FLAVOR" linux/amd64 1 "$FLAVOR"
 
       - name: Build Live ISO
         # No R2 credentials here on purpose. This step used to export the
@@ -269,7 +266,7 @@ jobs:
           # `sudo just build` already puts the image in ROOT storage, so with
           # the ISO built as root too the save|load hop is not just
           # unnecessary, it was the thing that forced the slow path.
-          sudo -E env "PATH=$PATH" "PYTHONPATH=${TUNAOS_CONFIG_PYTHONPATH:-}" just iso "$VARIANT" "$FLAVOR" local "$FLAVOR"
+          sudo -E env "PATH=$PATH" just iso "$VARIANT" "$FLAVOR" local "$FLAVOR"
 
       # RETENTION IS NOT OPTIONAL ON A MULTI-GIGABYTE ARTIFACT.
       #

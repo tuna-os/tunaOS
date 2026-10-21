@@ -323,8 +323,7 @@ jobs:
           # --preserve-env: sudo otherwise strips the cache/rechunk knobs
           # (the old layer cache never worked for exactly this reason).
           rc=0
-          sudo --preserve-env=BUILDAH_CACHE_FLAGS,SKIP_RECHUNK,PUBLIC_IMAGE_NAME,TUNAOS_CONFIG_PYTHONPATH \
-            env "PYTHONPATH=${TUNAOS_CONFIG_PYTHONPATH:-}" \
+          sudo --preserve-env=BUILDAH_CACHE_FLAGS,SKIP_RECHUNK,PUBLIC_IMAGE_NAME \
             timeout --kill-after=60s "${BUILD_BOUND_MINUTES}m" \
             "$just" build "${IMAGE_VARIANT}" "${FLAVOR}" "${PLATFORM}" 1 "${DEFAULT_TAG}" "${CHAIN_BASE_IMAGE}" || rc=$?
           echo "BUILD_SECONDS=$(( $(date +%s) - build_start ))" >> "$GITHUB_ENV"
@@ -961,7 +960,7 @@ jobs:
             done
           }
           # Install necessary packages for building and pushing the image
-          apk_install jq git podman uutils bash conmon crun netavark fuse-overlayfs libstdc++ yq python3 py3-pip
+          apk_install jq git podman uutils bash conmon crun netavark fuse-overlayfs libstdc++ yq python3
           # Point /bin/sh at bash WITHOUT `ln -sf`.
           #
           # This step installs uutils, which replaces coreutils in PATH, so the

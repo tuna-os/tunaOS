@@ -204,9 +204,6 @@ jobs:
       #    availability check happens here and is exported as an output the
       #    later steps already gate on. When the secrets ARE present this
       #    changes nothing and the job stays fully gating.
-      - name: Prepare build configuration
-        uses: ./.github/actions/prepare-config
-
       - name: Preflight (dispatch filter, R2 credentials)
         id: filter
         env:
@@ -473,8 +470,8 @@ jobs:
           # is what one bare-invocation failure looked like. Root storage also
           # makes the save|load hop unnecessary: the image is already where
           # tacklebox will look for it.
-          sudo --preserve-env=TUNAOS_CONFIG_PYTHONPATH env "PYTHONPATH=${TUNAOS_CONFIG_PYTHONPATH:-}" just build "$VARIANT" "$FLAVOR" linux/amd64 1 "$FLAVOR"
-          sudo -E env "PATH=$PATH" "PYTHONPATH=${TUNAOS_CONFIG_PYTHONPATH:-}" just iso "$VARIANT" "$FLAVOR" local "$FLAVOR"
+          sudo just build "$VARIANT" "$FLAVOR" linux/amd64 1 "$FLAVOR"
+          sudo -E env "PATH=$PATH" just iso "$VARIANT" "$FLAVOR" local "$FLAVOR"
           ISO="$(find . -maxdepth 3 -name '*.iso' -newermt '-2 hours' -print -quit)"
           if [[ -z "$ISO" ]]; then
             echo "::error::build produced no ISO for ${VARIANT}:${FLAVOR}"

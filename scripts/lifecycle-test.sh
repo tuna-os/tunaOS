@@ -77,9 +77,6 @@ _time "Build ${VARIANT}:${FLAVOR}" \
         podman system prune -f >/dev/null 2>&1 || true
         export SKIP_SUBMODULES=1 SKIP_RECHUNK=1 TMPDIR=/data/tmp
         ${RHSM_EXPORT}
-        python3 -m venv /data/tunaos/.venv || exit 1
-        /data/tunaos/.venv/bin/python -m pip install -r /data/tunaos/requirements-config.txt || exit 1
-        export PATH=/data/tunaos/.venv/bin:\$PATH
         just build ${VARIANT} ${FLAVOR} linux/amd64 0 latest '' 1
     " || exit 1
 
@@ -90,7 +87,7 @@ _time "Generate ISO" \
 	_ssh "$ISO_TIMEOUT" "
         cd /data/tunaos
         export TMPDIR=/data/tmp
-        sudo env TMPDIR=/data/tmp TUNAOS_CONFIG_PYTHON=/data/tunaos/.venv/bin/python bash ./scripts/build-iso-tacklebox.sh ${VARIANT} ${FLAVOR} local ${FLAVOR}
+        sudo TMPDIR=/data/tmp bash ./scripts/build-iso-tacklebox.sh ${VARIANT} ${FLAVOR} local ${FLAVOR}
     " || exit 1
 
 # ── Step 3: Boot + Verify ────────────────────────────────────────────────────

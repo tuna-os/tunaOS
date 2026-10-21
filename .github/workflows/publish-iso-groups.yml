@@ -221,8 +221,7 @@ jobs:
           # pin itself -- while the override held this job a month behind, on
           # a tacklebox whose customize commit is not bounded at all.
         run: |
-          sudo --preserve-env=GITHUB_REPOSITORY_OWNER,TACKLEBOX_FROM_SOURCE,TACKLEBOX_SHA,TUNAOS_CONFIG_PYTHONPATH \
-            env "PYTHONPATH=${TUNAOS_CONFIG_PYTHONPATH:-}" \
+          sudo --preserve-env=GITHUB_REPOSITORY_OWNER,TACKLEBOX_FROM_SOURCE,TACKLEBOX_SHA \
             just iso-group "${{ matrix.variant }}" "${{ matrix.group }}" ghcr
 
       - name: Install QEMU for boot gate

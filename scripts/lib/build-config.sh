@@ -4,18 +4,13 @@
 # GitHub-specific storage location.
 
 tunaos_build_config() {
-	local library_dir repo_root config python
+	local library_dir repo_root config
 	library_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 	repo_root="$(cd "${library_dir}/../.." && pwd)"
 	if [[ -n "${TUNAOS_BUILD_CONFIG:-}" ]]; then
 		config="$TUNAOS_BUILD_CONFIG"
 	else
-		python="${TUNAOS_CONFIG_PYTHON:-python3}"
-		if ! command -v -- "$python" >/dev/null 2>&1 || [[ "$python" == */* && ! -x "$python" ]]; then
-			echo "ERROR: config Python interpreter is unavailable" >&2
-			return 1
-		fi
-		config="$("$python" "${repo_root}/scripts/config.py" generate --root "$repo_root")" || return 1
+		config="$(python3 "${repo_root}/scripts/config.py" generate --root "$repo_root")" || return 1
 	fi
 
 	if [[ ! -f "$config" ]]; then

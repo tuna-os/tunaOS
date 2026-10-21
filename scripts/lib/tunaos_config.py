@@ -6,6 +6,8 @@ Base/shared package and branding ownership remain later migration milestones.
 from __future__ import annotations
 
 import copy
+import hashlib
+import sys
 import importlib.util
 from functools import lru_cache
 from datetime import datetime
@@ -16,20 +18,21 @@ import re
 import tempfile
 
 TOMLI_VERSION = '2.3.2'
-PARSER_SETUP = 'python3 -m pip install -r requirements-config.txt'
+_VENDOR = Path(__file__).with_name('_vendor') / 'tomli'
+# A path-specific namespace keeps copied checkout imports independent.
+_VENDOR_NAME = '_tunaos_tomli_' + hashlib.sha256(str(_VENDOR.resolve()).encode()).hexdigest()
 try:
-    import tomli as tomllib
-except ModuleNotFoundError as exc:
-    raise SystemExit(
-        f'TunaOS requires tomli=={TOMLI_VERSION} on every Python version. '
-        f'Install the reviewed dependencies: {PARSER_SETUP}'
-    ) from exc
-if getattr(tomllib, '__version__', None) != TOMLI_VERSION:
-    raise SystemExit(
-        f'TunaOS requires tomli=={TOMLI_VERSION}; found '
-        f'{getattr(tomllib, "__version__", "unknown")}. '
-        f'Install the reviewed dependencies: {PARSER_SETUP}'
-    )
+    _spec = importlib.util.spec_from_file_location(
+        _VENDOR_NAME, _VENDOR / '__init__.py', submodule_search_locations=[str(_VENDOR)])
+    if _spec is None or _spec.loader is None:
+        raise ImportError('vendored parser loader is unavailable')
+    tomllib = importlib.util.module_from_spec(_spec)
+    sys.modules[_VENDOR_NAME] = tomllib
+    _spec.loader.exec_module(tomllib)
+    if getattr(tomllib, '__version__', None) != TOMLI_VERSION:
+        raise ImportError('vendored parser version mismatch')
+except (ImportError, OSError) as exc:
+    raise SystemExit(f'TunaOS vendored Tomli {TOMLI_VERSION} is unavailable; restore the reviewed source checkout: {exc}') from exc
 
 ROOT = Path(__file__).resolve().parents[2]
 ID = re.compile(r"[a-z0-9][a-z0-9-]*\Z")
