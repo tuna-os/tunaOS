@@ -76,26 +76,60 @@ def issue(result, message):
 
 
 def source_test_id(classname, name, source_budget):
-    # Only emit identifiers confirmed in repository source. Parameter values,
-    # arbitrary failure text and dynamic test labels never enter the artifact.
+    # JUnit does not carry an explicit file boundary. Competing interpretations
+    # must stay unresolved rather than selecting a plausible but wrong test.
     name = name.split('[', 1)[0]
-    if len(classname) > 512 or not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_.]*', classname):
+    if len(classname) + len('.py') > 480 or not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_.]*', classname):
         return 'unresolved-test'
     if not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', name):
         return 'unresolved-test'
     parts = classname.split('.')
+    candidates = []
     for length in range(len(parts), 0, -1):
         relative = '/'.join(parts[:length]) + '.py'
         if not relative.startswith('tests/'):
             continue
         try:
-            tree = ast.parse(read_report(SOURCE_ROOT, relative, source_budget))
-        except (OSError, ValueError, SyntaxError):
-            continue
-        names = {node.name for node in ast.walk(tree)
-                 if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))}
-        return relative + '::' + (name if name in names else 'unresolved-test')
-    return 'unresolved-test'
+            identifier = source_node_id(relative, parts[length:], name, source_budget, strict_read=True)
+        except (OSError, ValueError, SyntaxError, RecursionError, MemoryError):
+            return 'unresolved-test'
+        if identifier != 'unresolved-test':
+            candidates.append(identifier)
+    return candidates[0] if len(candidates) == 1 else 'unresolved-test'
+
+
+def source_node_id(relative, scope, name, source_budget, strict_read=False):
+    # Direct reports carry an exact file boundary; never guess it from dots.
+    if not re.fullmatch(r'tests/(?:[A-Za-z_][A-Za-z0-9_]*/)*[A-Za-z_][A-Za-z0-9_]*\.py', relative) or len(relative) > 480:
+        return 'unresolved-test'
+    if any(not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', part) for part in scope + [name]):
+        return 'unresolved-test'
+    try:
+        body = ast.parse(read_report(SOURCE_ROOT, relative, source_budget)).body
+    except FileNotFoundError:
+        return 'unresolved-test'
+    except (OSError, ValueError, SyntaxError, RecursionError, MemoryError):
+        if strict_read:
+            raise
+        return 'unresolved-test'
+    for class_name in scope:
+        classes = [node for node in body if isinstance(node, ast.ClassDef) and node.name == class_name]
+        if len(classes) != 1:
+            return relative + '::unresolved-test'
+        body = classes[0].body
+    names = {node.name for node in body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))}
+    return relative + '::' + ('::'.join(scope + [name]) if name in names else 'unresolved-test')
+
+
+def source_collection_id(relative, source_budget):
+    # Collection can fail before valid Python exists; confirm only the file.
+    if len(relative) > 480 or not re.fullmatch(r'tests/(?:[A-Za-z_][A-Za-z0-9_]*/)*[A-Za-z_][A-Za-z0-9_]*\.py', relative):
+        return 'unresolved-test'
+    try:
+        read_report(SOURCE_ROOT, relative, source_budget)
+    except (OSError, ValueError):
+        return 'unresolved-test'
+    return relative + '::unresolved-test'
 
 
 def source_report_id(relative, source_budget):
@@ -113,6 +147,9 @@ def source_report_id(relative, source_budget):
 
 
 def failure(result, identifier, kind):
+    if len(identifier.encode('utf-8')) > 512:
+        identifier = 'unresolved-test'
+        result['truncated'] = True
     if len(result['failure_details']) < MAX_FAILURES:
         result['failure_details'].append({'test': bounded(identifier, 512), 'kind': kind})
     else:
@@ -149,6 +186,59 @@ def parse_junit(text, result, source_budget):
         node.clear()
 
 
+def parse_direct_summary(text, recorded_exit, source_budget):
+    """Validate a bounded, source-checked summary; never trust arbitrary JSON."""
+    if len(text.encode('utf-8')) > MAX_OUTPUT:
+        raise ReportError('oversized-direct-summary')
+    def pairs(items):
+        result = {}
+        for key, value in items:
+            if key in result:
+                raise ReportError('invalid-direct-summary')
+            result[key] = value
+        return result
+    try:
+        document = json.loads(text, object_pairs_hook=pairs)
+    except (ValueError, RecursionError) as error:
+        raise ReportError('invalid-direct-summary') from error
+    if not isinstance(document, dict) or set(document) != {'schema_version', 'kind', 'pytest'} or type(document['schema_version']) is not int or document['schema_version'] != 1 or document['kind'] != 'pytest-static-summary':
+        raise ReportError('invalid-direct-summary')
+    result = document['pytest']
+    fields = set(empty()) | {'exit_code'}
+    if not isinstance(result, dict) or set(result) != fields:
+        raise ReportError('invalid-direct-summary')
+    for key in ('tests', 'failures', 'errors', 'skipped'):
+        if type(result[key]) is not int or not 0 <= result[key] <= 1000000000:
+            raise ReportError('invalid-direct-summary')
+    if type(result['exit_code']) is not int or not 0 <= result['exit_code'] <= 255 or result['exit_code'] != recorded_exit:
+        raise ReportError('direct-exit-code-mismatch')
+    if type(result['truncated']) is not bool or not isinstance(result['issues'], list) or len(result['issues']) > 100 or any(code != 'direct-reporter-error' for code in result['issues']):
+        raise ReportError('invalid-direct-summary')
+    details = result['failure_details']
+    if not isinstance(details, list) or len(details) > MAX_FAILURES:
+        raise ReportError('invalid-direct-summary')
+    for detail in details:
+        if not isinstance(detail, dict) or set(detail) != {'test', 'kind'} or detail['kind'] not in ('failure', 'error') or not isinstance(detail['test'], str):
+            raise ReportError('invalid-direct-summary')
+        identifier = detail['test']
+        if identifier == 'unresolved-test':
+            continue
+        match = re.fullmatch(r'(tests/(?:[A-Za-z_][A-Za-z0-9_]*/)*[A-Za-z_][A-Za-z0-9_]*\.py)::((?:[A-Za-z_][A-Za-z0-9_]*::)*[A-Za-z_][A-Za-z0-9_]*|unresolved-test)', identifier)
+        if not match or len(identifier) > 512:
+            raise ReportError('invalid-direct-source-id')
+        module, name = match.groups()
+        if name == 'unresolved-test':
+            if source_collection_id(module, source_budget) != identifier:
+                raise ReportError('invalid-direct-source-id')
+        elif source_node_id(module, name.split('::')[:-1], name.split('::')[-1], source_budget) != identifier:
+            raise ReportError('invalid-direct-source-id')
+    if any(sum(d['kind'] == kind for d in details) > result[count] for kind, count in (('failure', 'failures'), ('error', 'errors'))):
+        raise ReportError('invalid-direct-summary')
+    if len(details) < result['failures'] + result['errors'] and not result['truncated'] and not result['issues']:
+        raise ReportError('incomplete-direct-summary')
+    return result
+
+
 def exit_code(text):
     if not re.fullmatch(r'(?:0|[1-9][0-9]{0,2})\n?', text) or int(text) > 255:
         raise ValueError('invalid recorded exit code')
@@ -179,30 +269,50 @@ def parse_tap(text, result, identifier):
         raise ValueError('missing or incomplete TAP plan')
 
 
-def summarize(root):
+def summarize(root, direct=False):
     root = Path(root)
     result = {'schema_version': 1, 'pytest': empty(), 'bats': empty()}
     budget = [0]
     source_budget = [0]
-    try:
-        parse_junit(read_report(root, 'pytest.xml', budget), result['pytest'], source_budget)
-    except ReportError as error:
-        issue(result['pytest'], error.code)
-        if error.size is not None:
-            result['pytest']['report_size_bytes'] = error.size
-    except UnicodeDecodeError:
-        issue(result['pytest'], 'invalid-utf8-junit')
-    except ET.ParseError:
-        issue(result['pytest'], 'invalid-xml-junit')
-    except OSError as error:
-        issue(result['pytest'], 'missing-junit' if error.errno == errno.ENOENT else
-              'unsafe-junit-path' if error.errno in (errno.ELOOP, errno.ENOTDIR) else 'unreadable-junit')
-    except ValueError:
-        issue(result['pytest'], 'invalid-junit')
+    direct_result = None
+    # Validate the compact report first so JUnit cannot exhaust its budget.
     try:
         result['pytest']['exit_code'] = exit_code(read_report(root, 'pytest.exit', budget))
     except (OSError, ValueError):
         issue(result['pytest'], 'invalid-or-missing-exit-code')
+    if direct:
+        try:
+            if 'exit_code' not in result['pytest']:
+                raise ReportError('missing-direct-exit-code')
+            direct_result = parse_direct_summary(
+                read_report(root, 'pytest-static.json', budget), result['pytest']['exit_code'], source_budget)
+        except ReportError as error:
+            issue(result['pytest'], error.code)
+        except UnicodeDecodeError:
+            issue(result['pytest'], 'invalid-utf8-direct-summary')
+        except OSError as error:
+            issue(result['pytest'], 'missing-direct-summary' if error.errno == errno.ENOENT else 'unreadable-direct-summary')
+        except ValueError:
+            issue(result['pytest'], 'invalid-direct-summary')
+    if not direct:
+        try:
+            parse_junit(read_report(root, 'pytest.xml', budget), result['pytest'], source_budget)
+        except ReportError as error:
+            issue(result['pytest'], error.code)
+            if error.size is not None:
+                result['pytest']['report_size_bytes'] = error.size
+        except UnicodeDecodeError:
+            issue(result['pytest'], 'invalid-utf8-junit')
+        except ET.ParseError:
+            issue(result['pytest'], 'invalid-xml-junit')
+        except OSError as error:
+            issue(result['pytest'], 'missing-junit' if error.errno == errno.ENOENT else
+                  'unsafe-junit-path' if error.errno in (errno.ELOOP, errno.ENOTDIR) else 'unreadable-junit')
+        except ValueError:
+            issue(result['pytest'], 'invalid-junit')
+    if direct_result is not None:
+        result['pytest'] = direct_result
+        result['pytest_source'] = 'direct'
     reports = []
     directory_limit = False
     bats = root / 'bats'
@@ -276,8 +386,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--reports', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--direct', action='store_true')
     args = parser.parse_args()
-    data = (json.dumps(summarize(args.reports), sort_keys=True, indent=2) + '\n').encode()
+    data = (json.dumps(summarize(args.reports, direct=args.direct), sort_keys=True, indent=2) + '\n').encode()
     write_summary(args.output, data)
 
 
