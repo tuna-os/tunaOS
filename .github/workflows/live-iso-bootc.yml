@@ -68,6 +68,10 @@ concurrency:
 
 jobs:
   build:
+    outputs:
+      artifact_id: ${{ steps.native_iso.outputs.artifact-id }}
+      archive_digest: sha256:${{ steps.native_iso.outputs.artifact-digest }}
+      source_sha: ${{ github.event.pull_request.head.sha || github.sha }}
     # The stock GitHub runner's container storage corrupts the rpmdb sqlite
     # across layer commits (#1823: every stage-2 script's guard found the db
     # malformed again; the lossy rebuilds eventually drop system-release and
@@ -110,13 +114,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
           submodules: recursive
 
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y just podman jq rclone golang-go git systemd-boot-efi mtools squashfs-tools xorriso dosfstools gdisk e2fsprogs btrfs-progs
+          sudo apt-get install -y just podman jq skopeo rclone golang-go git systemd-boot-efi mtools squashfs-tools xorriso dosfstools gdisk e2fsprogs btrfs-progs
 
       # Same wedge and same fix as installer-smoke.yml: the runner image's
       # podman 5.8.4 cannot run/commit containers (tunaOS#1893) and its conmon
@@ -237,9 +242,23 @@ jobs:
             echo "\`podman unshare\` succeeded after configuration."
           } >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
 
+      - name: Resolve canonical native platform
+        run: |
+          set -euo pipefail
+          platform="$(jq -r --arg v "$VARIANT" --arg f "$FLAVOR" '
+            .variants[] | select(.id == $v) as $variant |
+            ($variant.flavors[] | select(.id == $f)) as $flavor |
+            ($flavor.platforms // $variant.platforms // ["linux/amd64"]) |
+            if index("linux/amd64/v2") != null then "linux/amd64/v2"
+            elif index("linux/amd64") != null then "linux/amd64"
+            else error("native builder requires an amd64 target") end
+          ' .github/build-config.yml)"
+          [[ "$platform" == linux/amd64 || "$platform" == linux/amd64/v2 ]]
+          echo "PLATFORM=$platform" >> "$GITHUB_ENV"
+
       - name: Build OS image
         run: |
-          sudo just build "$VARIANT" "$FLAVOR" linux/amd64 1 "$FLAVOR"
+          sudo just build "$VARIANT" "$FLAVOR" "$PLATFORM" 1 "$FLAVOR"
 
       - name: Build Live ISO
         # No R2 credentials here on purpose. This step used to export the
@@ -266,7 +285,40 @@ jobs:
           # `sudo just build` already puts the image in ROOT storage, so with
           # the ISO built as root too the save|load hop is not just
           # unnecessary, it was the thing that forced the slow path.
-          sudo -E env "PATH=$PATH" just iso "$VARIANT" "$FLAVOR" local "$FLAVOR"
+          set -euo pipefail
+          # Resolve operation inputs once. Never invent an overlay identity or
+          # substitute the local image ID for its OCI manifest digest.
+          TUNA_LIVE_BASE_IMAGE="localhost/${VARIANT}:${FLAVOR}"
+          source_manifest="$(mktemp)"
+          trap 'rm -f "$source_manifest"' EXIT
+          sudo skopeo inspect --raw "containers-storage:${TUNA_LIVE_BASE_IMAGE}" | tee "$source_manifest" >/dev/null
+          TUNA_LIVE_BASE_DIGEST="sha256:$(sha256sum "$source_manifest" | awk '{print $1}')"
+          [[ "$TUNA_LIVE_BASE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || exit 1
+          export TUNA_LIVE_BASE_IMAGE TUNA_LIVE_BASE_DIGEST
+          sudo -E env -u XDG_DATA_HOME -u XDG_CONFIG_HOME HOME=/root \
+            bash scripts/build-native-live-overlay.sh "$VARIANT" "$FLAVOR" "$PLATFORM" \
+            "$TUNA_LIVE_BASE_IMAGE" "$TUNA_LIVE_BASE_DIGEST" "$RUNNER_TEMP/native-overlay.env"
+          source "$RUNNER_TEMP/native-overlay.env"
+          export TUNA_LIVE_OVERLAY_REF TUNA_LIVE_OVERLAY_DIGEST
+          export TUNA_LIVE_PAYLOAD_REF="ghcr.io/tuna-os/${VARIANT}:${FLAVOR}@${TUNA_LIVE_BASE_DIGEST}"
+          # lib/tacklebox.sh measures the executed binary after acquisition and
+          # places that digest into the staged customization wrapper.
+          sudo -E env "PATH=$PATH" just iso "$VARIANT" "$FLAVOR" local "$FLAVOR" 0 "$PLATFORM"
+          # The source's raw manifest and the manifest in the copied offline
+          # store are distinct observations. Require exact preservation for
+          # this OSTree qualification path; do not relabel a transformed image.
+          store="$PWD/.build/iso-tacklebox/${VARIANT}-${FLAVOR}/tbox-offline-store"
+          [[ -d "$store" ]] || { echo "::error::native qualification needs the OSTree offline store"; exit 1; }
+          runroot="$(sudo mktemp -d /tmp/native-store-XXXXXX)"
+          sudo skopeo inspect --raw \
+            "containers-storage:[overlay@${store}+${runroot}]${TUNA_LIVE_PAYLOAD_REF}" \
+            | tee "$RUNNER_TEMP/native-payload-manifest.json" >/dev/null
+          payload_digest="sha256:$(sha256sum "$RUNNER_TEMP/native-payload-manifest.json" | awk '{print $1}')"
+          [[ "$payload_digest" == "$TUNA_LIVE_BASE_DIGEST" ]] || {
+            echo "::error::embedded payload manifest differs from measured source"
+            exit 1
+          }
+          echo "native source and copied offline payload: $payload_digest"
 
       # RETENTION IS NOT OPTIONAL ON A MULTI-GIGABYTE ARTIFACT.
       #
@@ -278,42 +330,31 @@ jobs:
       # `compression-level: 0` because an ISO is already compressed: level 6
       # burns minutes to save nothing.
       - name: Upload Artifact
+        id: native_iso
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: ${{ env.VARIANT }}-${{ env.FLAVOR }}-live-iso
+          name: ${{ env.VARIANT }}-${{ env.FLAVOR }}-live-iso-attempt-${{ github.run_attempt }}
           path: "*.iso"
           if-no-files-found: error
           compression-level: 0
           retention-days: 1
 
-      # Boot verification deliberately does NOT live here.
-      #
-      # It used to: `Install QEMU`, `Boot ISO and capture desktop screenshot`,
-      # `Upload desktop screenshot` and two PR-reporting steps. They could
-      # never have worked on this runner. The job runs on
-      # `runs-on=.../runner=build-amd64`, whose families in
-      # .github/runs-on.yml are ["c6a", "c6i", "c5a", "c5"] -- ordinary EC2
-      # instances. EC2 exposes /dev/kvm only on .metal types, so every run
-      # ended:
-      #
-      #   ==> Booting ./skipjack-gnome-10-x86_64.iso in QEMU (headless, KVM)...
-      #   Could not access KVM kernel module: No such file or directory
-      #   qemu-system-x86_64: failed to initialize kvm: No such file or directory
-      #
-      # (runs 32690010127 and 32696543980, both after the ISO built fine).
-      # That is not capacity flakiness to retry around; it is the instance
-      # family, and no change in this repository alters it.
-      #
-      # The verification itself is not lost -- it is done properly elsewhere.
-      # installer-smoke.yml boots the ISO on `ubuntu-latest`, which does
-      # provide KVM, then SSHes into the guest and asserts the compositor and
-      # installer frontend are running, drives the installer through its
-      # screens, and captures the session journal. It covers all five flavors
-      # rather than this job's single hardcoded one. Tonight it booted gnome
-      # (desktop session + installer frontend confirmed) and xfce (which is
-      # how xfwl4's exit was finally diagnosed).
-      #
-      # So this job builds and uploads the ISO, which is what it can actually
-      # do. Keeping a boot gate here that has never once executed would report
-      # a verification nobody performed -- the failure mode this branch exists
-      # to remove.
+      # The dependent job below runs QEMU on a separate GitHub-hosted runner.
+      # It consumes this exact artifact; the builder need not expose KVM.
+
+  qualify-native-iso:
+    name: Qualify exact native ISO
+    needs: build
+    permissions:
+      contents: read
+      actions: read
+    uses: ./.github/workflows/iso-e2e.yml
+    with:
+      variant: ${{ github.event.inputs.variant || 'skipjack' }}
+      flavors: ${{ github.event.inputs.flavor || 'gnome' }}
+      source: native-artifact
+      native_run_id: ${{ format('{0}', github.run_id) }}
+      native_artifact_id: ${{ needs.build.outputs.artifact_id }}
+      native_attempt: ${{ format('{0}', github.run_attempt) }}
+      native_source_sha: ${{ needs.build.outputs.source_sha }}
+      native_archive_digest: ${{ needs.build.outputs.archive_digest }}

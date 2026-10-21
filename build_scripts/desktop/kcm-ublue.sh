@@ -152,13 +152,8 @@ else
 fi
 rm -rf "${KRUNNER_BAZAAR_SRC}"
 
-# Flatpak preinstall — Bazaar will be installed on first boot
-mkdir -p /usr/share/flatpak/preinstall.d
-cat >/usr/share/flatpak/preinstall.d/bazaar.preinstall <<'EOF'
-[Flatpak Preinstall io.github.kolunmi.Bazaar]
-Branch=stable
-IsRuntime=false
-EOF
+# App declarations come from primary TOML through flatpak-preinstall.sh.
+# The desktop operation runs that step after this KCM integration.
 
 # Associate .flatpakref files with Bazaar (same as Aurora)
 mkdir -p /usr/share/applications

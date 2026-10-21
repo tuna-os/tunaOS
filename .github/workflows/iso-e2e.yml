@@ -24,12 +24,38 @@ name: ISO E2E Smoke
 # GitHub runner (measured, run 32768030728) and the ISO is deleted with the
 # runner, so a sweep costs runner minutes and nothing else.
 #
-# It replaces a `source: artifact` option that was offered in the dispatch UI
-# and NEVER IMPLEMENTED — there is no download-artifact step in this file, so
-# choosing it skipped the R2 fetch and left ISO_PATH unset. Building in-job
-# rather than via an artifact also avoids paying to store the ISO twice.
+# native-artifact verifies and consumes the exact output of Live ISOs.
+# The reusable same-run call is gated by the successful native build job.
+# A separately selected historical artifact gets diagnostic GUI smoke first;
+# missing provenance still prevents strict qualification.
 
 on:
+  workflow_call:
+    inputs:
+      variant:
+        type: string
+        required: true
+      flavors:
+        type: string
+        required: true
+      source:
+        type: string
+        required: true
+      native_run_id:
+        type: string
+        required: true
+      native_artifact_id:
+        type: string
+        required: true
+      native_source_sha:
+        type: string
+        required: true
+      native_attempt:
+        type: string
+        required: true
+      native_archive_digest:
+        type: string
+        required: true
   workflow_dispatch:
     inputs:
       variant:
@@ -60,6 +86,23 @@ on:
         options:
           - r2-latest      # Download the latest published ISO from Cloudflare R2.
           - build          # Build the ISO on the runner and test it in place.
+          - native-artifact # Verify and test an exact previous native build.
+      native_run_id:
+        description: 'Exact successful Live ISOs producer run (native-artifact only)'
+        type: string
+      native_artifact_id:
+        description: 'Exact native ISO artifact ID (native-artifact only)'
+        type: string
+      native_attempt:
+        description: 'Producer attempt (0 only for legacy unsuffixed artifacts)'
+        type: string
+        default: '0'
+      native_source_sha:
+        description: 'Full producer head SHA (native-artifact only)'
+        type: string
+      native_archive_digest:
+        description: 'Expected sha256 archive digest from GitHub (native-artifact only)'
+        type: string
   # PR trigger only when the harness itself changes. Building a per-PR ISO
   # to test arbitrary Containerfile/build_scripts changes would take ~40 min
   # and isn't wired up yet (the workflow currently downloads from R2, which
@@ -96,7 +139,7 @@ concurrency:
   # workflow_dispatch gets a per-run group so a deliberate multi-cell sweep
   # never cancels its own siblings — the repo's plain `<name>-${{ github.ref }}`
   # form would, since every cell of a sweep shares one branch.
-  group: iso-e2e-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.event_name }}
+  group: iso-e2e-${{ inputs.source }}-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.event_name }}
   cancel-in-progress: true
 
 jobs:
@@ -108,6 +151,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ inputs.source == 'native-artifact' && inputs.native_run_id == format('{0}', github.run_id) && inputs.native_source_sha || github.sha }}
           persist-credentials: false
       - uses: ./.github/actions/setup-yq
 
@@ -195,7 +239,8 @@ jobs:
     # Strict plain+encrypted GUI qualification declares 60 minutes. The
     # build path adds another 60; allow ten minutes for setup/artifact upload
     # on each path so the job cannot preempt its own strict phase.
-    timeout-minutes: ${{ (github.event_name == 'workflow_dispatch' && inputs.source == 'build') && 130 || 70 }}
+    # Artifact transfer can take 20 minutes; historical diagnostics add 20.
+    timeout-minutes: ${{ inputs.source == 'native-artifact' && 120 || ((github.event_name == 'workflow_dispatch' && inputs.source == 'build') && 130 || 70) }}
     strategy:
       # Don't cancel the other leg if one fails — we want to see both signals.
       fail-fast: false
@@ -205,6 +250,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ inputs.source == 'native-artifact' && inputs.native_run_id == format('{0}', github.run_id) && inputs.native_source_sha || github.sha }}
           persist-credentials: false
 
       # Two preflight gates, both meaning "this cell must not go on", and
@@ -237,7 +283,7 @@ jobs:
           R2_BUCKET: ${{ secrets.R2_BUCKET }}
           # Mirrors the `if:` on the download step below: source=build
           # never touches R2, so it must not be blocked on R2 secrets.
-          NEEDS_R2: ${{ github.event_name != 'workflow_dispatch' || inputs.source == 'r2-latest' }}
+          NEEDS_R2: ${{ inputs.source == '' || inputs.source == 'r2-latest' }}
           EVENT_NAME: ${{ github.event_name }}
         run: |
           # THE DISPATCH FILTER IS GONE, and this is the only thing that used
@@ -342,7 +388,7 @@ jobs:
       - name: Download latest ISO from R2
         if: |
           steps.filter.outputs.skip != 'true' &&
-          (github.event_name != 'workflow_dispatch' || inputs.source == 'r2-latest')
+          (inputs.source == '' || inputs.source == 'r2-latest')
         env:
           RCLONE_CONFIG_R2_TYPE: s3
           RCLONE_CONFIG_R2_PROVIDER: Cloudflare
@@ -428,6 +474,42 @@ jobs:
             echo "FLAVOR=${FLAVOR}"
             echo "PLATFORM=${PLATFORM}"
           } >> "$GITHUB_ENV"
+
+      - name: Fetch exact native ISO artifact
+        if: inputs.source == 'native-artifact'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PRODUCER_RUN: ${{ inputs.native_run_id }}
+          ARTIFACT_ID: ${{ inputs.native_artifact_id }}
+          PRODUCER_ATTEMPT: ${{ inputs.native_attempt }}
+          SOURCE_SHA: ${{ inputs.native_source_sha }}
+          ARCHIVE_DIGEST: ${{ inputs.native_archive_digest }}
+          NATIVE_SAME_RUN: ${{ inputs.native_run_id == format('{0}', github.run_id) }}
+          VARIANT: ${{ matrix.variant }}
+          FLAVOR: ${{ matrix.flavor }}
+        run: |
+          df -h . /tmp
+          python3 scripts/fetch-native-iso-artifact.py \
+            --repository "$GITHUB_REPOSITORY" --run-id "$PRODUCER_RUN" \
+            --artifact-id "$ARTIFACT_ID" --attempt "$PRODUCER_ATTEMPT" --source-sha "$SOURCE_SHA" \
+            --archive-digest "$ARCHIVE_DIGEST" --variant "$VARIANT" \
+            --flavor "$FLAVOR" --output native-iso-input
+
+      # This is deliberately diagnostic only. Old native artifacts may lack
+      # provenance; still observe their actual GUI before strict admission fails.
+      - name: Native artifact live boot and installer GUI smoke (not qualification)
+        id: native_smoke
+        if: inputs.source == 'native-artifact' && inputs.native_run_id != format('{0}', github.run_id)
+        continue-on-error: true
+        timeout-minutes: 20
+        env:
+          TUNAOS_PUBLISHED_STRICT: '1'
+        run: |
+          mkdir -p iso-e2e-out/native-smoke
+          echo "${NATIVE_MEDIA_DIGEST#sha256:}  ${ISO_PATH}" | sha256sum --check --strict
+          sudo --preserve-env=VARIANT,FLAVOR,TUNAOS_PUBLISHED_STRICT \
+            ./scripts/iso-e2e.sh "$ISO_PATH" --published \
+            --output iso-e2e-out/native-smoke --timeout 600
 
       # Both published and in-place media must carry immutable source,
       # overlay, installer, platform, and media identities before the strict
@@ -580,7 +662,7 @@ jobs:
           VARIANT: ${{ matrix.variant }}
           FLAVOR: ${{ matrix.flavor }}
           PLATFORM: ${{ matrix.platform }}
-          PUBLISHED_MEDIA: ${{ github.event_name != 'workflow_dispatch' || inputs.source == 'r2-latest' }}
+          PUBLISHED_MEDIA: ${{ inputs.source != 'build' }}
         run: |
           set -euo pipefail
           # Source and overlay identities are read from the media's own
@@ -590,6 +672,10 @@ jobs:
           trap 'rm -rf "$receipt_dir"' EXIT
           mkdir -p iso-e2e-out
           MEDIA_DIGEST="sha256:$(sha256sum "$ISO_PATH" | awk '{print $1}')"
+          if [[ -n "${NATIVE_MEDIA_DIGEST:-}" && "$MEDIA_DIGEST" != "$NATIVE_MEDIA_DIGEST" ]]; then
+            echo "::error::native ISO changed after verified extraction"
+            exit 1
+          fi
           printf '%s  %s\n' "${MEDIA_DIGEST#sha256:}" "$ISO_PATH" > iso-e2e-out/media.sha256
           # Capture the command status before mapfile; process substitution hides it.
           python3 scripts/extract-iso-payloads.py "$ISO_PATH" "$receipt_dir" \
@@ -725,6 +811,7 @@ jobs:
         if: steps.filter.outputs.skip != 'true'
         timeout-minutes: 60
         run: |
+          df -h . /tmp
           mkdir -p iso-e2e-out
           # Free runners get KVM via /dev/kvm permissions; if it's not
           # readable we fall back to TCG (slower but functional).
@@ -791,6 +878,7 @@ jobs:
             echo "| Field | Value |"
             echo "|---|---|"
             echo "| ISO | \`${ISO_PATH:-not set}\` |"
+            echo "| Native GUI smoke (not install/reboot qualification) | ${{ steps.native_smoke.outcome || 'not run' }} |"
             echo "| Exit code | ${{ steps.e2e.outputs.rc || 'n/a' }} |"
             echo ""
             if [[ -f iso-e2e-out/serial.log ]]; then
@@ -813,6 +901,8 @@ jobs:
           # as PNG). Same evidence, a fraction of the bytes.
           path: |
             iso-e2e-out/serial.log
+            native-iso-input/artifact-binding.json
+            iso-e2e-out/native-smoke/
             iso-e2e-out/media.sha256
             iso-e2e-out/media-payloads.txt
             iso-e2e-out/*.png

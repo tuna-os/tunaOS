@@ -532,14 +532,14 @@ _run_container_adapter() {
 	cat >"${cache}/tacklebox" <<'FAKE'
 #!/bin/sh
 case "$1" in
-version) echo "tacklebox deadbeef" ;;
+version) echo "tacklebox deadbeefdeadbeefdeadbeefdeadbeefdeadbeef" ;;
 build) env | grep '^TBOX_' >"$FAKE_ENV_LOG" ;;
 esac
 FAKE
 	chmod +x "${cache}/tacklebox"
 	run env -u TBOX_CUSTOMIZE_COMMIT_TIMEOUT \
 		FAKE_ENV_LOG="${TEST_ROOT}/env.log" TACKLEBOX_FROM_SOURCE=1 \
-		TACKLEBOX_SHA=deadbeef TACKLEBOX_CACHE="$cache" \
+		TACKLEBOX_SHA=deadbeefdeadbeefdeadbeefdeadbeefdeadbeef TACKLEBOX_CACHE="$cache" \
 		TUNAOS_TACKLEBOX_TIMEOUT_SECONDS=30 \
 		bash -c 'set -euo pipefail; source "$1"
 			tunaos_run_tacklebox "$2/recipe.json" "$2/out" "$2/out/test.iso"' \

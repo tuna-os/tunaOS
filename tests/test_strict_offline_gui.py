@@ -141,7 +141,8 @@ def test_parity_workflow_sets_retention_and_compression():
 
 def test_strict_job_budget_covers_both_input_paths():
     text = _text(ISO_WORKFLOW)
-    assert "&& 130 || 70 }}" in text
+    assert "&& 130 || 70) }}" in text
+    assert "inputs.source == 'native-artifact' && 120" in text
     assert text.count("timeout-minutes: 60") == 2
 
 

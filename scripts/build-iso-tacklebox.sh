@@ -189,7 +189,7 @@ BASE_DIGEST="${TUNA_LIVE_BASE_DIGEST:-$BASE_DIGEST}"
 	printf 'export TUNA_LIVE_ENGINE_DIGEST=%q\n' "${TUNA_LIVE_ENGINE_DIGEST:-unknown}"
 	printf 'export TUNA_LIVE_PLATFORM=%q\n' "${PLATFORM:-unknown}"
 	cat "${REPO_ROOT}/live-iso/common/src/customize-live.sh"
-} > "${CUSTOMIZE_DIR}/customize-live.sh"
+} >"${CUSTOMIZE_DIR}/customize-live.sh"
 chmod +x "${CUSTOMIZE_DIR}/customize-live.sh"
 if [[ "$DEV" == "1" ]]; then
 	touch "${CUSTOMIZE_DIR}/.enable-sshd"
@@ -284,8 +284,11 @@ ARCH=$(podman run --rm --log-driver=k8s-file --security-opt label=disable \
 	"$IMAGE_REF" uname -m)
 if [[ -n "$PLATFORM" ]]; then
 	case "$PLATFORM" in
-	linux/amd64|linux/amd64/v2|linux/arm64) ;;
-	*) echo "ERROR: unsupported canonical platform: ${PLATFORM}" >&2; exit 1 ;;
+	linux/amd64 | linux/amd64/v2 | linux/arm64) ;;
+	*)
+		echo "ERROR: unsupported canonical platform: ${PLATFORM}" >&2
+		exit 1
+		;;
 	esac
 	FILENAME_PLATFORM="${PLATFORM//\//-}"
 else

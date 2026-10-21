@@ -4155,6 +4155,11 @@ run_strict_offline_gui() {
 	IFS=',' read -ra _strict_run_modes <<<"$STRICT_OFFLINE_GUI_MODES"
 	local rc=0 mrc
 	for _m in ${_strict_run_modes[@]+"${_strict_run_modes[@]}"}; do
+		# Both legs must consume the exact admitted media, never a replacement.
+		[[ "sha256:$(sha256sum "$ISO_PATH" | awk '{print $1}')" == "$STRICT_MEDIA_DIGEST" ]] || {
+			echo "ERROR: ISO media changed before strict ${_m} installation" >&2
+			return 1
+		}
 		date +%s >"${OUTPUT_DIR}/strict-${_m}-started.txt"
 		mrc=0
 		run_strict_gui_install "$_m" || mrc=$?
@@ -4168,6 +4173,10 @@ run_strict_offline_gui() {
 		echo "ERROR: strict offline GUI qualification failed (see ${OUTPUT_DIR})" >&2
 		return "$rc"
 	fi
+	[[ "sha256:$(sha256sum "$ISO_PATH" | awk '{print $1}')" == "$STRICT_MEDIA_DIGEST" ]] || {
+		echo "ERROR: ISO media changed during strict qualification" >&2
+		return 1
+	}
 	emit_qualification_evidence || return $?
 }
 
