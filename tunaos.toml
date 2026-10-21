@@ -1023,7 +1023,7 @@ emoji = "🎏"
 upstream_track = "experimental"
 description = "Based on Fedora ELN (EL11 preview, rolling)"
 experimental = true
-base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:65cb894471d80a3d62eda87ab37246f7d7d8a87d314adfebf6d1feceb2039390"
+base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:adaa2427d2637e2c70cb13fcf01ec6a55d123ec266199e26cf9320ac54e94d93"
 # No alias: `eln` is Fedora's identifier for a moving development target,
 # and an alias tag is a stability promise this lane deliberately does not
 # make. Revisit if/when ELN gains a versioned publish.
@@ -1337,7 +1337,7 @@ upstream_track = "experimental"
 # not a rebuild of an existing one. Read docs/HUMMINGBIRD.md before
 # reasoning about what its package set should contain.
 description = "Fedora Hummingbird (hardened rolling Rawhide fork, bootc)"
-base_image = "quay.io/hummingbird-community/bootc-os:latest@sha256:cfbd877853849ed8307fa38f492dffdc24e0e0f4340293ef536ceee1fa8afaa5"
+base_image = "quay.io/hummingbird-community/bootc-os:latest@sha256:7197f14260120b815bbbaa13414c46b29415f6d879c45c8680b1916dfed0a815"
 # amd64 only, because aarch64 has nothing to build FROM yet: the base
 # stage's mandatory xfsprogs guard (build_scripts/10-base-packages.sh) has
 # no repository that can satisfy it on arm64, so every hummingbird arm64
@@ -1975,7 +1975,7 @@ build_iso = true
 emoji = "🚀"
 upstream_track = "rolling"
 description = "Based on Arch Linux (rolling)"
-base_image = "docker.io/archlinux/archlinux:latest@sha256:666eb320e594ee9fa47f58efe108ae861af6e38de779e1708e1bb29cd9e9d6a5"
+base_image = "docker.io/archlinux/archlinux:latest@sha256:24bd9134f828780b847419581105bd40b6dd9182ea7b12a0a0bb42b8562f9796"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["arch", "archlinux"]
 # arm64 legs use ghcr.io/tuna-os/archlinuxarm instead (docker.io/archlinux
@@ -2367,3 +2367,2053 @@ stage = 3
 build_image = true
 build_iso = false
 build_qcow2 = false
+
+# Desktop policy: the same editable source as the build matrix.
+[package_groups]
+
+[package_groups.gnome-fedora]
+required = [
+  "ModemManager",
+  "NetworkManager-adsl",
+  "NetworkManager-wifi",
+  "linux-firmware",
+  "amd-gpu-firmware",
+  "intel-gpu-firmware",
+  "iwlwifi-mvm-firmware",
+  "wireless-regdb",
+  "iw",
+  "NetworkManager-openconnect-gnome",
+  "NetworkManager-openvpn-gnome",
+  "NetworkManager-ppp",
+  "NetworkManager-ssh-gnome",
+  "NetworkManager-vpnc-gnome",
+  "NetworkManager-wwan",
+  "avahi",
+  "dconf",
+  "fprintd-pam",
+  "gdm",
+  "glib-networking",
+  "gnome-backgrounds",
+  "gnome-bluetooth",
+  "gnome-browser-connector",
+  "gnome-color-manager",
+  "gnome-control-center",
+  "gnome-disk-utility",
+  "gnome-initial-setup",
+  "gnome-remote-desktop",
+  "gnome-session-wayland-session",
+  "gnome-settings-daemon",
+  "gnome-shell",
+  "gnome-system-monitor",
+  "gnome-user-docs",
+  "gnome-user-share",
+  "gvfs-afc",
+  "gvfs-fuse",
+  "gvfs-goa",
+  "gvfs-gphoto2",
+  "gvfs-mtp",
+  "gvfs-smb",
+  "librsvg2",
+  "libsane-hpaio",
+  "mesa-dri-drivers",
+  "mesa-libEGL",
+  "mesa-vulkan-drivers",
+  "nautilus",
+  "polkit",
+  "ptyxis",
+  "xdg-desktop-portal-gnome",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs-gtk",
+  "yelp",
+  "desktop-backgrounds-gnome",
+  "pinentry-gnome3",
+  "qadwaitadecorations-qt5",
+  "evince-thumbnailer",
+  "evince-previewer",
+  "totem-video-thumbnailer",
+]
+
+[package_groups.cosmic-fedora]
+required = [
+  "dconf",
+  "NetworkManager-wifi",
+  "linux-firmware",
+  "amd-gpu-firmware",
+  "intel-gpu-firmware",
+  "iwlwifi-mvm-firmware",
+  "wireless-regdb",
+  "iw",
+  "cosmic-session",
+  "cosmic-comp",
+  "cosmic-panel",
+  "cosmic-app-library",
+  "cosmic-applets",
+  "cosmic-bg",
+  "cosmic-files",
+  "cosmic-idle",
+  "cosmic-launcher",
+  "cosmic-notifications",
+  "cosmic-osd",
+  "cosmic-randr",
+  "cosmic-screenshot",
+  "cosmic-settings",
+  "cosmic-settings-daemon",
+  "cosmic-term",
+  "cosmic-wallpapers",
+  "cosmic-workspaces",
+  "cosmic-greeter",
+  "cosmic-icon-theme",
+  "greetd",
+  "xdg-desktop-portal-cosmic",
+  "pop-icon-theme",
+  "mesa-vulkan-drivers",
+]
+optional = [
+  "cosmic-edit",
+  "cosmic-store",
+]
+
+[desktops]
+
+# COSMIC Desktop Manifest — Arch Linux / CachyOS
+#
+# Arch ships COSMIC in [extra], but two names differ from the Fedora set in
+# cosmic.yaml: cosmic-term is `cosmic-terminal` and cosmic-edit is
+# `cosmic-text-editor`. Using the Fedora names fails the whole build, because
+# pacman aborts the transaction on the first unknown target — the same way an
+# AUR-only package took marlin:kde down (tuna-os/tunaos-packages#126).
+#
+# Every package below was verified present in core/extra for x86_64.
+[desktops.cosmic-arch]
+display_manager = "greetd"
+versionlock = []
+after_install = [
+  "tuna-flatpak-remote",
+  "flatpak-preinstall",
+  "cosmic-dock",
+]
+
+[desktops.cosmic-arch.packages]
+
+[desktops.cosmic-arch.packages.pacman]
+required = [
+  "cosmic-session",
+  "cosmic-comp",
+  "cosmic-greeter",
+  "greetd",
+  "cosmic-panel",
+  "cosmic-app-library",
+  "cosmic-applets",
+  "cosmic-bg",
+  "cosmic-launcher",
+  "cosmic-notifications",
+  "cosmic-osd",
+  "cosmic-workspaces",
+  "cosmic-idle",
+  "cosmic-settings",
+  "cosmic-settings-daemon",
+  "cosmic-randr",
+  "cosmic-screenshot",
+  "cosmic-files",
+  "cosmic-terminal",
+  "cosmic-text-editor",
+  "cosmic-store",
+  "cosmic-icon-theme",
+  "cosmic-wallpapers",
+  "pop-icon-theme",
+  "xdg-desktop-portal-cosmic",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs",
+  "networkmanager",
+  "pipewire",
+  "wireplumber",
+  "flatpak",
+  "wl-clipboard",
+  "power-profiles-daemon",
+  "fwupd",
+  "plymouth",
+  "vulkan-icd-loader",
+  "vulkan-swrast",
+]
+
+[desktops.cosmic-arch.packages.cachyos]
+required = [
+  "linux-cachyos",
+  "linux-cachyos-headers",
+  "cachyos-settings",
+]
+
+[[desktops.cosmic-arch.packages.cachyos.repos]]
+name = "cachyos"
+url = "https://mirror.cachyos.org/repo/$arch/cachyos"
+
+[[desktops.cosmic-arch.packages.cachyos.repos]]
+name = "cachyos-extra"
+url = "https://mirror.cachyos.org/repo/$arch/cachyos-extra"
+
+# COSMIC Desktop Manifest
+[desktops.cosmic]
+display_manager = "greetd"
+after_inline = [
+  "compile-glib-schemas",
+  "normalize-greetd-keyring-pam",
+  "repair-cosmic-greeter-pam",
+]
+after_install = [
+  "tuna-flatpak-remote",
+  "greetd-system-integration",
+  "greetd-gtkgreet",
+  "flatpak-preinstall",
+  "cosmic-dock",
+]
+
+[desktops.cosmic.packages]
+
+[desktops.cosmic.packages.apt]
+required = [
+  "cosmic-session",
+  "cosmic-comp",
+  "cosmic-panel",
+  "cosmic-app-library",
+  "cosmic-applets",
+  "cosmic-bg",
+  "cosmic-files",
+  "cosmic-idle",
+  "cosmic-launcher",
+  "cosmic-notifications",
+  "cosmic-osd",
+  "cosmic-randr",
+  "cosmic-screenshot",
+  "cosmic-settings",
+  "cosmic-settings-daemon",
+  "cosmic-term",
+  "cosmic-wallpapers",
+  "cosmic-workspaces",
+  "cosmic-icons",
+  "pop-icon-theme",
+  "cosmic-greeter",
+  "greetd",
+  "xdg-desktop-portal-cosmic",
+  "mesa-vulkan-drivers",
+]
+
+[[desktops.cosmic.packages.apt.repos]]
+name = "tideforge"
+uri = "https://repo.tunaos.org/tideforge/ubuntu/"
+suite = "./"
+keyring_url = "https://repo.tunaos.org/tideforge/ubuntu/tideforge.gpg"
+condition = "ubuntu"
+
+[[desktops.cosmic.packages.apt.ppa]]
+repo = "ppa:hepp3n/cosmic-epoch"
+condition = "ubuntu"
+
+[desktops.cosmic.packages.fedora]
+include = [
+  "cosmic-fedora",
+]
+
+[desktops.cosmic.packages.hummingbird]
+include = [
+  "cosmic-fedora",
+]
+
+[[desktops.cosmic.packages.hummingbird.repos]]
+name = "tunaos-hummingbird"
+baseurl = "https://repo.tunaos.org/hummingbird/20251124-$basearch/"
+priority = 5
+
+[desktops.cosmic.packages.eln]
+required = [
+  "dconf",
+  "cosmic-session",
+  "cosmic-comp",
+  "cosmic-panel",
+  "cosmic-app-library",
+  "cosmic-applets",
+  "cosmic-bg",
+  "cosmic-files",
+  "cosmic-idle",
+  "cosmic-launcher",
+  "cosmic-notifications",
+  "cosmic-osd",
+  "cosmic-randr",
+  "cosmic-screenshot",
+  "cosmic-settings",
+  "cosmic-settings-daemon",
+  "cosmic-term",
+  "cosmic-workspaces",
+  "cosmic-greeter",
+  "cosmic-icon-theme",
+  "greetd",
+  "xdg-desktop-portal-cosmic",
+  "pop-icon-theme",
+  "mesa-vulkan-drivers",
+]
+optional = [
+  "cosmic-wallpapers",
+  "cosmic-edit",
+  "cosmic-store",
+]
+
+[desktops.cosmic.packages.el10]
+display_manager = "cosmic-greeter"
+required = [
+  "flatpak",
+  "pipewire",
+  "wireplumber",
+  "wl-clipboard",
+  "xdg-user-dirs",
+  "zram-generator",
+  "cosmic-session",
+  "cosmic-comp",
+  "cosmic-panel",
+  "cosmic-app-library",
+  "cosmic-applets",
+  "cosmic-bg",
+  "cosmic-files",
+  "cosmic-idle",
+  "cosmic-launcher",
+  "cosmic-notifications",
+  "cosmic-osd",
+  "cosmic-randr",
+  "cosmic-screenshot",
+  "cosmic-settings",
+  "cosmic-settings-daemon",
+  "cosmic-term",
+  "cosmic-wallpapers",
+  "cosmic-workspaces",
+  "cosmic-icon-theme",
+  "xdg-desktop-portal-cosmic",
+  "cosmic-greeter",
+  "greetd",
+  "gnome-keyring",
+  "gnome-keyring-pam",
+  "mesa-vulkan-drivers",
+]
+optional = [
+  "brightnessctl",
+  "playerctl",
+  "cosmic-edit",
+  "cosmic-store",
+]
+
+[[desktops.cosmic.packages.el10.repos]]
+name = "tunaos-cosmic"
+baseurl = "https://repo.tunaos.org/repo/10-stream-x86_64/"
+priority = 10
+
+[desktops.cosmic.packages.zypper]
+required = [
+  "cosmic-comp",
+  "cosmic-session",
+  "cosmic-panel",
+  "cosmic-launcher",
+  "cosmic-applets",
+  "cosmic-bg",
+  "cosmic-idle",
+  "cosmic-notifications",
+  "cosmic-osd",
+  "cosmic-randr",
+  "cosmic-workspaces",
+  "cosmic-files",
+  "cosmic-term",
+  "cosmic-edit",
+  "cosmic-store",
+  "cosmic-screenshot",
+  "cosmic-icons",
+  "cosmic-wallpapers",
+  "greetd",
+  "gtkgreet",
+  "cage",
+  "xdg-desktop-portal",
+  "xdg-desktop-portal-cosmic",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs",
+  "gvfs",
+  "gvfs-backends",
+  "gvfs-fuse",
+  "gnome-keyring",
+  "gnome-keyring-pam",
+  "pipewire",
+  "pipewire-pulseaudio",
+  "wireplumber",
+  "pavucontrol",
+  "wl-clipboard",
+  "Mesa-dri",
+  "Mesa-libEGL1",
+  "libvulkan_lvp",
+]
+
+# GNOME Desktop Manifest — Arch Linux / CachyOS
+[desktops.gnome-arch]
+display_manager = "gdm"
+versionlock = []
+after_install = [
+  "tuna-flatpak-remote",
+  "flatpak-preinstall",
+]
+
+[desktops.gnome-arch.packages]
+
+[desktops.gnome-arch.packages.pacman]
+required = [
+  "gdm",
+  "gnome-shell",
+  "gnome-control-center",
+  "gnome-settings-daemon",
+  "gnome-session",
+  "gnome-backgrounds",
+  "gnome-color-manager",
+  "gnome-disk-utility",
+  "gnome-system-monitor",
+  "gnome-user-docs",
+  "gnome-remote-desktop",
+  "gnome-bluetooth-3.0",
+  "gnome-browser-connector",
+  "gnome-keyring",
+  "nautilus",
+  "ptyxis",
+  "yelp",
+  "xdg-desktop-portal-gnome",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs-gtk",
+  "gvfs",
+  "gvfs-mtp",
+  "gvfs-smb",
+  "gvfs-gphoto2",
+  "gvfs-afc",
+  "gvfs-goa",
+  "gvfs-onedrive",
+  "gst-thumbnailers",
+  "evince",
+  "networkmanager",
+  "pipewire",
+  "wireplumber",
+  "flatpak",
+  "wl-clipboard",
+  "mesa",
+  "vulkan-icd-loader",
+  "xdg-user-dirs",
+  "ttf-dejavu",
+  "ttf-liberation",
+  "noto-fonts",
+  "noto-fonts-emoji",
+  "ttf-jetbrains-mono-nerd",
+]
+
+[desktops.gnome-arch.packages.cachyos]
+required = [
+  "linux-cachyos",
+  "linux-cachyos-headers",
+  "cachyos-settings",
+]
+
+[[desktops.gnome-arch.packages.cachyos.repos]]
+name = "cachyos"
+url = "https://mirror.cachyos.org/repo/$arch/cachyos"
+
+# GNOME Desktop Manifest — Debian override (see install-desktop.sh:
+# <desktop>-debian.yaml beats <desktop>.yaml on Debian bases).
+#
+# The generic gnome.yaml apt list is Ubuntu-only (ubuntu-desktop-minimal
+# does not exist in Debian). Debian's supported GNOME baseline is the
+# gnome-core metapackage; pkg_install runs --no-install-recommends so
+# the extras we actually want are listed explicitly.
+[desktops.gnome-debian]
+display_manager = "gdm3"
+after_install = [
+  "tuna-flatpak-remote",
+  "flatpak-preinstall",
+]
+
+[desktops.gnome-debian.packages]
+
+[desktops.gnome-debian.packages.apt]
+required = [
+  "gnome-core",
+  "gnome-disk-utility",
+  "gnome-system-monitor",
+  "nautilus",
+  "xdg-desktop-portal-gnome",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs-gtk",
+  "libglib2.0-dev-bin",
+]
+
+# GNOME Desktop Manifest
+[desktops.gnome]
+display_manager = "gdm"
+minimum_version = 50
+emerge_accept_keywords = [
+  "gnome-base/gdm",
+  "gnome-base/gnome-control-center",
+  "gnome-base/gnome-keyring",
+  "gnome-base/gnome-session",
+  "gnome-base/gnome-settings-daemon",
+  "gnome-base/gnome-shell",
+  "gnome-base/gsettings-desktop-schemas",
+  "gui-libs/gtk",
+  "gui-libs/libadwaita",
+  "sys-apps/xdg-desktop-portal-gnome",
+  "x11-wm/mutter",
+]
+versionlock = [
+  "glib2",
+  "fontconfig",
+  "gdm",
+  "gnome-shell",
+  "mutter",
+  "gnome-session-wayland-session",
+  "gnome-settings-daemon",
+  "gnome-control-center",
+  "gsettings-desktop-schemas",
+  "gtk4",
+  "libadwaita",
+  "pango",
+  "xdg-desktop-portal",
+  "xdg-desktop-portal-gnome",
+]
+after_install = [
+  "tuna-flatpak-remote",
+  "flatpak-preinstall",
+]
+
+[desktops.gnome.packages]
+
+[desktops.gnome.packages.apt]
+required = [
+  "ubuntu-desktop-minimal",
+  "gnome-session",
+  "ubuntu-session",
+  "gnome-browser-connector",
+  "gnome-disk-utility",
+  "gnome-system-monitor",
+  "gnome-user-docs",
+  "nautilus",
+  "yelp",
+  "plymouth-theme-spinner",
+  "xdg-desktop-portal-gnome",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs-gtk",
+  "gnome-keyring",
+  "libpam-gnome-keyring",
+]
+
+[desktops.gnome.packages.fedora]
+include = [
+  "gnome-fedora",
+]
+optional = [
+  "gvfs-afp",
+  "gvfs-archive",
+]
+exclude = [
+  "PackageKit",
+  "PackageKit-command-not-found",
+  "gnome-software",
+  "gnome-software-fedora-langpacks",
+]
+
+[desktops.gnome.packages.hummingbird]
+include = [
+  "gnome-fedora",
+]
+
+[[desktops.gnome.packages.hummingbird.repos]]
+name = "tunaos-hummingbird"
+baseurl = "https://repo.tunaos.org/hummingbird/20251124-$basearch/"
+priority = 5
+
+[[desktops.gnome.packages.hummingbird.repos]]
+name = "utah-packages"
+baseurl = "file:///run/utah-packages"
+priority = 4
+unsigned = true
+
+[desktops.gnome.packages.eln]
+required = [
+  "ModemManager",
+  "NetworkManager-adsl",
+  "NetworkManager-openvpn-gnome",
+  "NetworkManager-ppp",
+  "NetworkManager-wwan",
+  "avahi",
+  "dconf",
+  "fprintd-pam",
+  "gdm",
+  "glib-networking",
+  "gnome-bluetooth",
+  "gnome-browser-connector",
+  "gnome-color-manager",
+  "gnome-control-center",
+  "gnome-disk-utility",
+  "gnome-initial-setup",
+  "gnome-keyring",
+  "gnome-keyring-pam",
+  "gnome-remote-desktop",
+  "gnome-session-wayland-session",
+  "gnome-settings-daemon",
+  "gnome-shell",
+  "gnome-system-monitor",
+  "gnome-user-docs",
+  "gvfs-fuse",
+  "gvfs-goa",
+  "gvfs-gphoto2",
+  "gvfs-mtp",
+  "gvfs-smb",
+  "librsvg2",
+  "libsane-hpaio",
+  "mesa-dri-drivers",
+  "mesa-libEGL",
+  "mesa-vulkan-drivers",
+  "nautilus",
+  "polkit",
+  "ptyxis",
+  "xdg-desktop-portal-gnome",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs-gtk",
+  "yelp",
+  "desktop-backgrounds-gnome",
+  "pinentry-gnome3",
+]
+optional = [
+  "NetworkManager-openconnect-gnome",
+  "NetworkManager-ssh-gnome",
+  "NetworkManager-vpnc-gnome",
+  "evince-previewer",
+  "evince-thumbnailer",
+  "gnome-backgrounds",
+  "gnome-user-share",
+  "gvfs-afc",
+  "qadwaitadecorations-qt5",
+  "totem-video-thumbnailer",
+  "gvfs-afp",
+  "gvfs-archive",
+]
+exclude = [
+  "PackageKit",
+  "PackageKit-command-not-found",
+  "gnome-software",
+  "gnome-software-fedora-langpacks",
+]
+
+[desktops.gnome.packages.el10]
+before_install = [
+  "upgrade-el10-gnome-runtime",
+  "install-el10-gnome-compat",
+  "remove-el10-gnome-shell-common",
+]
+groups = [
+  "Common NetworkManager submodules",
+  "Core",
+  "Fonts",
+  "Guest Desktop Agents",
+  "Hardware Support",
+  "Printing Client",
+  "Standard",
+  "Workstation product core",
+]
+group_options = "--nobest --allowerasing"
+group_exclude = [
+  "PackageKit",
+  "PackageKit-command-not-found",
+]
+required = [
+  "gdm",
+  "glib2",
+  "gnome-bluetooth",
+  "gnome-color-manager",
+  "gnome-control-center",
+  "gnome-initial-setup",
+  "gnome-remote-desktop",
+  "gnome-session-wayland-session",
+  "gnome-settings-daemon",
+  "gnome-shell",
+  "gnome-shell-common",
+  "gnome-user-docs",
+  "gvfs-fuse",
+  "gvfs-goa",
+  "gvfs-gphoto2",
+  "gvfs-mtp",
+  "gvfs-smb",
+  "libsane-hpaio",
+  "nautilus",
+  "dbus-daemon",
+  "orca",
+  "ptyxis",
+  "sane-backends-drivers-scanners",
+  "xdg-desktop-portal-gnome",
+  "xdg-user-dirs-gtk",
+  "yelp-tools",
+  "gnome-disk-utility",
+  "NetworkManager-adsl",
+]
+exclude = [
+  "gnome-software",
+  "gnome-extensions-app",
+  "PackageKit",
+  "PackageKit-command-not-found",
+  "gnome-software-fedora-langpacks",
+]
+
+[[desktops.gnome.packages.el10.repos]]
+name = "gnome50-el10-packages"
+baseurl = "file:///run/gnome50-el10-packages"
+priority = 1
+unsigned = true
+
+[desktops.gnome.packages.zypper]
+required = [
+  "patterns-gnome-gnome",
+  "patterns-gnome-gnome_basis",
+  "gdm",
+  "gnome-session",
+  "gnome-settings-daemon",
+  "gnome-control-center",
+  "gnome-browser-connector",
+  "gnome-menus",
+  "gnome-backgrounds",
+  "nautilus",
+  "gvfs",
+  "gvfs-backends",
+  "gvfs-fuse",
+  "gnome-keyring",
+  "gnome-keyring-pam",
+  "xdg-desktop-portal-gnome",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs-gtk",
+  "ModemManager",
+  "NetworkManager-openvpn",
+  "NetworkManager-openconnect",
+  "NetworkManager-vpnc",
+  "gnome-bluetooth",
+  "power-profiles-daemon",
+  "switcheroo-control",
+  "fwupd",
+  "fprintd-pam",
+  "gnome-color-manager",
+  "gnome-disk-utility",
+  "simple-scan",
+  "gnome-initial-setup",
+  "gnome-software",
+  "gnome-system-monitor",
+  "gnome-console",
+  "gnome-text-editor",
+  "gnome-calculator",
+  "gnome-font-viewer",
+  "gnome-characters",
+  "gnome-logs",
+  "loupe",
+  "evince",
+  "file-roller",
+  "baobab",
+  "seahorse",
+  "gnome-online-accounts",
+  "gnome-remote-desktop",
+  "gnome-user-share",
+  "localsearch",
+  "tinysparql",
+  "orca",
+  "yelp",
+  "gnome-user-docs",
+  "Mesa-dri",
+  "Mesa-libEGL1",
+  "Mesa-vulkan-device-select",
+  "librsvg-2-2",
+  "glib-networking",
+  "avahi",
+  "dconf",
+  "polkit",
+  "pinentry-gnome3",
+]
+
+[desktops.gnome.packages.emerge]
+required = [
+  "gnome-base/gnome-light",
+  "gnome-base/gdm",
+  "gnome-base/dconf",
+]
+
+# KDE Plasma Desktop Manifest — Arch Linux / CachyOS
+# Pacman package names differ from RPM/apt names.
+[desktops.kde-arch]
+display_manager = "sddm"
+versionlock = []
+disable_desktop_files = [
+  "org.kde.discover.desktop",
+  "org.kde.discover.urlhandler.desktop",
+]
+after_install = [
+  "tuna-flatpak-remote",
+  "kcm-ublue",
+  "flatpak-preinstall",
+]
+
+[desktops.kde-arch.packages]
+
+[desktops.kde-arch.packages.pacman]
+required = [
+  "plasma-desktop",
+  "sddm",
+  "dolphin",
+  "konsole",
+  "kate",
+  "ark",
+  "kdeconnect",
+  "xdg-desktop-portal-kde",
+  "qt6-wayland",
+  "qt5-wayland",
+  "ksshaskpass",
+  "ksystemlog",
+  "libratbag",
+  "solaar",
+  "pam-u2f",
+  "yubikey-manager",
+  "nvtop",
+  "networkmanager",
+  "pipewire",
+  "wireplumber",
+  "xdg-user-dirs",
+  "flatpak",
+  "wl-clipboard",
+  "power-profiles-daemon",
+  "fwupd",
+  "plymouth",
+]
+
+[desktops.kde-arch.packages.cachyos]
+required = [
+  "linux-cachyos",
+  "linux-cachyos-headers",
+  "cachyos-settings",
+  "cachyos-keyring",
+  "cachyos-mirrorlist",
+]
+
+[[desktops.kde-arch.packages.cachyos.repos]]
+name = "cachyos"
+url = "https://mirror.cachyos.org/repo/$arch/cachyos"
+
+[[desktops.kde-arch.packages.cachyos.repos]]
+name = "cachyos-extra"
+url = "https://mirror.cachyos.org/repo/$arch/cachyos-extra"
+
+# KDE Plasma Desktop Manifest — Debian
+# Uses the same apt path as Ubuntu but with Debian-specific package names.
+[desktops.kde-debian]
+display_manager = "sddm"
+versionlock = []
+disable_desktop_files = [
+  "org.kde.discover.desktop",
+]
+after_install = [
+  "tuna-flatpak-remote",
+  "flatpak-preinstall",
+]
+
+[desktops.kde-debian.packages]
+
+[desktops.kde-debian.packages.apt]
+required = [
+  "kde-plasma-desktop",
+  "sddm",
+  "dolphin",
+  "konsole",
+  "kate",
+  "ark",
+  "kdeconnect",
+  "xdg-desktop-portal-kde",
+  "qt6-wayland",
+  "network-manager",
+  "pipewire",
+  "wireplumber",
+  "flatpak",
+  "fwupd",
+  "plymouth",
+  "power-profiles-daemon",
+]
+
+# KDE Plasma Desktop Manifest
+# Declares what goes into a KDE image — packages, services, config.
+# The generic installer (install-desktop.sh) reads this and applies it.
+[desktops.kde]
+display_manager = "sddm"
+versionlock = [
+  "plasma-desktop",
+  "qt6-*",
+]
+disable_desktop_files = [
+  "org.kde.discover.desktop",
+  "org.kde.discover.urlhandler.desktop",
+]
+after_install = [
+  "tuna-flatpak-remote",
+  "kcm-ublue",
+  "flatpak-preinstall",
+]
+
+[desktops.kde.packages]
+
+[desktops.kde.packages.apt]
+required = [
+  "kde-plasma-desktop",
+  "sddm",
+  "dolphin",
+  "konsole",
+  "kate",
+  "ark",
+  "kdeconnect",
+  "xdg-desktop-portal-kde",
+  "qt6-wayland",
+]
+
+[desktops.kde.packages.fedora]
+groups = [
+  "kde-desktop",
+]
+required = [
+  "sddm",
+  "dolphin",
+  "konsole",
+  "kate",
+  "ark",
+  "plasma-discover",
+  "kde-connect",
+  "xdg-desktop-portal-kde",
+  "qt5-qtwayland",
+  "qt6-qtwayland",
+  "ksshaskpass",
+  "ksystemlog",
+  "input-remapper",
+  "evtest",
+  "tesseract",
+  "libratbag-ratbagd",
+  "solaar-udev",
+  "openrgb-udev-rules",
+  "pam-u2f",
+  "pam_yubico",
+  "pamu2fcfg",
+  "yubikey-manager",
+  "nvtop",
+]
+exclude = [
+  "PackageKit",
+  "PackageKit-command-not-found",
+]
+
+[desktops.kde.packages.eln]
+display_manager = "plasmalogin"
+groups = [
+  "kde-desktop",
+]
+required = [
+  "dolphin",
+  "konsole",
+  "kate",
+  "ark",
+  "plasma-discover",
+  "kde-connect",
+  "xdg-desktop-portal-kde",
+  "qt5-qtwayland",
+  "qt6-qtwayland",
+  "ksshaskpass",
+  "ksystemlog",
+  "tesseract",
+  "pam-u2f",
+  "pam_yubico",
+  "nvtop",
+]
+optional = [
+  "input-remapper",
+  "evtest",
+  "libratbag-ratbagd",
+  "solaar-udev",
+  "openrgb-udev-rules",
+  "pamu2fcfg",
+  "yubikey-manager",
+]
+exclude = [
+  "PackageKit",
+  "PackageKit-command-not-found",
+]
+
+[desktops.kde.packages.el10]
+groups = [
+  "KDE Plasma Workspaces",
+  "Common NetworkManager submodules",
+  "Core",
+  "Fonts",
+  "Guest Desktop Agents",
+  "Hardware Support",
+  "Printing Client",
+  "Standard",
+]
+group_options = "--nobest"
+group_exclude = [
+  "plasma-discover",
+  "plasma-discover-notifier",
+  "plasma-nm-vpnc",
+  "pinentry-qt",
+  "plasma-workspace-wayland",
+  "plasma-workspace-geolocation",
+  "plasma-drkonqi",
+]
+required = [
+  "plasma-desktop",
+  "plasma-workspace",
+  "sddm",
+  "dolphin",
+  "konsole",
+  "kate",
+  "ark",
+  "xdg-desktop-portal-kde",
+  "qt5-qtwayland",
+  "qt6-qtwayland",
+]
+exclude = [
+  "PackageKit",
+  "PackageKit-command-not-found",
+]
+optional = [
+  "kde-connect",
+  "ksshaskpass",
+  "ksystemlog",
+  "input-remapper",
+  "evtest",
+  "tesseract",
+  "libratbag-ratbagd",
+  "solaar-udev",
+  "openrgb-udev-rules",
+  "pam-u2f",
+  "pam_yubico",
+  "pamu2fcfg",
+  "yubikey-manager",
+  "nvtop",
+]
+optional_group = [
+  "fcitx5",
+  "fcitx5-chewing",
+  "fcitx5-chinese-addons",
+  "fcitx5-gtk",
+  "fcitx5-hangul",
+  "fcitx5-m17n",
+  "fcitx5-mozc",
+  "fcitx5-qt",
+  "fcitx5-sayura",
+  "fcitx5-unikey",
+  "kcm-fcitx5",
+]
+
+[desktops.kde.packages.zypper]
+required = [
+  "patterns-kde-kde",
+  "patterns-kde-kde_plasma",
+  "sddm",
+  "dolphin",
+  "konsole",
+  "kate",
+  "ark",
+  "gwenview",
+  "okular",
+  "spectacle",
+  "kcalc",
+  "filelight",
+  "kfind",
+  "kwalletmanager",
+  "khelpcenter",
+  "kdeconnect-kde",
+  "partitionmanager",
+  "plasma6-nm",
+  "plasma6-pa",
+  "plasma6-systemmonitor",
+  "plasma6-disks",
+  "plasma6-firewall",
+  "plasma6-thunderbolt",
+  "bluedevil6",
+  "kdeplasma6-addons",
+  "plasma6-workspace-wallpapers",
+  "xdg-desktop-portal",
+  "xdg-desktop-portal-kde6",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs",
+  "xdg-user-dirs-gtk",
+  "kio-extras",
+  "kdegraphics-thumbnailers",
+  "ffmpegthumbs",
+  "kf6-kimageformats",
+  "kdenetwork-filesharing",
+  "gvfs",
+  "gvfs-backends",
+  "gvfs-fuse",
+  "NetworkManager-openvpn",
+  "NetworkManager-openconnect",
+  "NetworkManager-vpnc",
+  "power-profiles-daemon",
+  "switcheroo-control",
+  "fwupd",
+  "Mesa-dri",
+  "Mesa-libEGL1",
+]
+
+[desktops.kde.packages.emerge]
+required = [
+  "kde-plasma/plasma-meta",
+  "x11-misc/sddm",
+  "kde-apps/dolphin",
+  "kde-apps/konsole",
+  "kde-apps/kate",
+  "kde-apps/ark",
+]
+
+# niri Desktop Manifest — Arch Linux / CachyOS
+#
+# niri.yaml builds the Fedora set out of three COPRs (yalter/niri-git,
+# avengemedia/danklinux, avengemedia/dms-git). Arch ships niri itself in
+# [extra], so no third-party repo is needed here — but the DankMaterialShell
+# pieces (quickshell, dms, dms-greeter) have no Arch equivalent in the official
+# repos, so this is a plain niri session rather than a DMS one.
+#
+# Two name differences from the Fedora list: SwayNotificationCenter is `swaync`
+# and adw-gtk3-theme is `adw-gtk-theme`.
+#
+# Every package below was verified present in core/extra for x86_64.
+
+# GREETER: there is no DMS greeter here, but there IS an official graphical one.
+#
+# This file used to claim "Arch has no official equivalent" and left greetd on
+# its packaged config. That config runs `agreety --cmd /bin/sh`, and agreety is
+# NOT part of Arch's greetd package: it ships in greetd-agreety, which nothing
+# installed. So greetd came up pointed at a binary that was not on the image:
+#
+#   $ pacman -Ql greetd | grep bin/
+#   greetd /usr/bin/greetd          <- and nothing else
+#   $ pacman -F usr/bin/agreety
+#   usr/bin/agreety is owned by extra/greetd-agreety
+#
+# With Restart=always in the packaged unit that is a restart loop, not the text
+# prompt the old comment assumed. Arch does carry the same fallback stack
+# openSUSE uses, greetd-gtkgreet (/usr/bin/gtkgreet) and cage, both in
+# [extra], so wire that up instead, via the shared greetd-gtkgreet.sh below.
+#
+# Still absent, and still a real gap: the DankMaterialShell session (quickshell,
+# dms, dms-greeter) has no official Arch packaging, so this is a plain niri
+# session with a gtkgreet login rather than a DMS one.
+[desktops.niri-arch]
+display_manager = "greetd"
+versionlock = []
+after_install = [
+  "tuna-flatpak-remote",
+  "greetd-gtkgreet",
+  "flatpak-preinstall",
+]
+
+[desktops.niri-arch.packages]
+
+[desktops.niri-arch.packages.pacman]
+required = [
+  "niri",
+  "greetd",
+  "greetd-gtkgreet",
+  "cage",
+  "xwayland-satellite",
+  "waybar",
+  "fuzzel",
+  "swaync",
+  "swaylock",
+  "swayidle",
+  "swaybg",
+  "cliphist",
+  "xdg-desktop-portal-gnome",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs",
+  "xdg-user-dirs-gtk",
+  "polkit-gnome",
+  "gnome-keyring",
+  "wl-clipboard",
+  "networkmanager",
+  "pipewire",
+  "wireplumber",
+  "pavucontrol",
+  "brightnessctl",
+  "playerctl",
+  "blueman",
+  "power-profiles-daemon",
+  "fwupd",
+  "plymouth",
+  "nautilus",
+  "flatpak",
+  "adw-gtk-theme",
+  "papirus-icon-theme",
+  "vulkan-icd-loader",
+  "vulkan-swrast",
+]
+
+[desktops.niri-arch.packages.cachyos]
+required = [
+  "linux-cachyos",
+  "linux-cachyos-headers",
+  "cachyos-settings",
+]
+
+[[desktops.niri-arch.packages.cachyos.repos]]
+name = "cachyos"
+url = "https://mirror.cachyos.org/repo/$arch/cachyos"
+
+[[desktops.niri-arch.packages.cachyos.repos]]
+name = "cachyos-extra"
+url = "https://mirror.cachyos.org/repo/$arch/cachyos-extra"
+
+# Niri (Tiling Wayland Compositor) + DMS Desktop Manifest
+[desktops.niri]
+display_manager = "greetd"
+versionlock = [
+  "glib2",
+]
+after_inline = [
+  "compile-glib-schemas",
+  "normalize-greetd-keyring-pam",
+]
+after_install = [
+  "tuna-flatpak-remote",
+  "greetd-gtkgreet",
+  "dms-qml-payload",
+  "flatpak-preinstall",
+]
+
+[desktops.niri.packages]
+
+[desktops.niri.packages.fedora]
+required = [
+  "greetd",
+  "greetd-selinux",
+  "swaylock",
+  "SwayNotificationCenter",
+  "waybar",
+  "fuzzel",
+  "swayidle",
+  "swaybg",
+  "wl-clipboard",
+  "xdg-desktop-portal-gnome",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs",
+  "pipewire",
+  "wireplumber",
+  "NetworkManager-tui",
+  "brightnessctl",
+  "playerctl",
+  "blueman",
+  "pavucontrol",
+  "gnome-keyring",
+  "gnome-keyring-pam",
+  "nautilus",
+  "adw-gtk3-theme",
+  "papirus-icon-theme",
+  "mesa-vulkan-drivers",
+]
+optional = [
+  "polkit-gnome",
+]
+
+[[desktops.niri.packages.fedora.copr]]
+repo = "yalter/niri-git"
+packages = [
+  "niri",
+]
+
+[[desktops.niri.packages.fedora.copr]]
+repo = "avengemedia/danklinux"
+packages = [
+  "quickshell-git",
+  "dms-greeter",
+]
+
+[[desktops.niri.packages.fedora.copr]]
+repo = "avengemedia/dms-git"
+packages = [
+  "dms",
+  "dms-cli",
+]
+
+[desktops.niri.packages.el10]
+required = [
+  "xdg-desktop-portal-gnome",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs",
+  "pipewire",
+  "wireplumber",
+  "polkit-kde",
+  "NetworkManager-tui",
+  "nautilus",
+  "pavucontrol",
+  "gnome-keyring",
+  "gnome-keyring-pam",
+  "papirus-icon-theme",
+  "mesa-vulkan-drivers",
+]
+
+[[desktops.niri.packages.el10.copr]]
+repo = "yalter/niri-git"
+packages = [
+  "niri",
+]
+
+[[desktops.niri.packages.el10.copr]]
+repo = "yselkowitz/wlroots-epel"
+packages = [
+  "swaylock",
+  "SwayNotificationCenter",
+  "waybar",
+  "fuzzel",
+  "swayidle",
+  "wl-clipboard",
+  "brightnessctl",
+  "playerctl",
+]
+
+[[desktops.niri.packages.el10.copr]]
+repo = "yselkowitz/cosmic-epel"
+packages = [
+  "greetd",
+  "greetd-selinux",
+  "adw-gtk3-theme",
+]
+options = "--nobest --allowerasing"
+
+[[desktops.niri.packages.el10.copr]]
+repo = "avengemedia/danklinux"
+packages = [
+  "quickshell-git",
+  "dms-greeter",
+]
+
+[[desktops.niri.packages.el10.copr]]
+repo = "avengemedia/dms-git"
+packages = [
+  "dms",
+  "dms-cli",
+]
+options = "--enablerepo=copr:copr.fedorainfracloud.org:yselkowitz:cosmic-epel"
+
+[desktops.niri.packages.zypper]
+required = [
+  "niri",
+  "greetd",
+  "gtkgreet",
+  "cage",
+  "swaybg",
+  "xwayland-satellite",
+  "waybar",
+  "fuzzel",
+  "SwayNotificationCenter",
+  "swayidle",
+  "swaylock",
+  "wl-clipboard",
+  "alacritty",
+  "nautilus",
+  "gvfs",
+  "gvfs-backends",
+  "gvfs-fuse",
+  "gnome-keyring",
+  "gnome-keyring-pam",
+  "polkit-gnome",
+  "xdg-desktop-portal",
+  "xdg-desktop-portal-gnome",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs",
+  "pipewire",
+  "pipewire-pulseaudio",
+  "wireplumber",
+  "pavucontrol",
+  "NetworkManager-applet",
+  "blueman",
+  "brightnessctl",
+  "playerctl",
+  "papirus-icon-theme",
+  "adwaita-icon-theme",
+  "Mesa-dri",
+  "Mesa-libEGL1",
+  "libvulkan_lvp",
+]
+
+# Pantheon Desktop Manifest (elementary OS)
+#
+# Pantheon is NOT in the Ubuntu archive. Verified against ubuntu:resolute with
+# main+universe+restricted+multiverse all enabled: gala, wingpanel,
+# pantheon-session and switchboard are all ABSENT; only `plank` exists. The
+# desktop comes exclusively from elementary's own PPA.
+#
+# That PPA publishes for **noble (24.04) and jammy (22.04) only** — there is
+# nothing for resolute (26.04). This is why Pantheon is a variant on a noble
+# base rather than a grouper flavour: grouper is Ubuntu 26.04, where this
+# desktop cannot be installed at all today.
+#
+# Every package name below was verified published for noble via the Launchpad
+# API (getPublishedBinaries, exact_match, status=Published) rather than
+# guessed. Names in this ecosystem are not guessable — the reverse-DNS
+# `io.elementary.*` scheme is used for some components and bare names for
+# others, and several obvious guesses resolve to nothing:
+#   pantheon-desktop            -> does not exist
+#   pantheon-session            -> does not exist (see io.elementary.session)
+#   io.elementary.files         -> not published for noble in this PPA
+#   pantheon-session-settings   -> not published for noble in this PPA
+# Do not add an unverified name here. An unresolvable name is what shipped a
+# desktop-less image in tunaos-packages#132.
+[desktops.pantheon]
+display_manager = "lightdm"
+after_install = [
+  "tuna-flatpak-remote",
+  "flatpak-preinstall",
+]
+
+[desktops.pantheon.packages]
+
+[desktops.pantheon.packages.apt]
+required = [
+  "gala",
+  "io.elementary.wingpanel",
+  "wingpanel",
+  "io.elementary.greeter",
+  "pantheon-agent-polkit",
+  "elementary-default-settings",
+  "elementary-icon-theme",
+  "io.elementary.terminal",
+  "io.elementary.settings-daemon",
+  "pantheon-xsession-settings",
+  "lightdm",
+  "xserver-xorg",
+  "accountsservice",
+  "xdg-desktop-portal",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs-gtk",
+  "gnome-keyring",
+  "gvfs",
+  "gvfs-backends",
+  "gvfs-fuse",
+]
+
+[[desktops.pantheon.packages.apt.ppa]]
+repo = "ppa:elementary-os/stable"
+condition = "ubuntu"
+
+# Tuna Desktop (formerly Roost, renamed in tuna-desktop#536) on every TunaOS
+# variant with a published package target (tuna-desktop ADR 0008, epic #577).
+# Marlin was the first cell (tunaOS#2990); its Containerfile installs the
+# in-house Tideforge key/repository and qualifies this package so official
+# packages stay first. tuna-desktop provides roost and ships its compat
+# names, so nothing here may name the old `roost` package.
+#
+# Variants without a cell are recorded with their reason under
+# `unsupported_flavors` in .github/build-config.yml.
+[desktops.tuna]
+display_manager = "greetd"
+versionlock = []
+after_install = [
+  "tuna-flatpak-remote",
+  "greetd-system-integration",
+  "greetd-gtkgreet",
+  "flatpak-preinstall",
+]
+
+[desktops.tuna.packages]
+
+[desktops.tuna.packages.pacman]
+required = [
+  "tunaos/tuna-desktop=1.0.0beta.1-1",
+  "greetd",
+  "greetd-gtkgreet",
+  "cage",
+  "xorg-xwayland",
+  "ibus",
+  "orca",
+  "gnome-shell",
+  "gnome-settings-daemon",
+  "gnome-control-center",
+  "gnome-keyring",
+  "evolution-data-server",
+  "xdg-desktop-portal-gnome",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs",
+  "gvfs",
+  "nautilus",
+  "ptyxis",
+  "networkmanager",
+  "libsecret",
+  "pipewire",
+  "wireplumber",
+  "gst-plugin-pipewire",
+  "gst-plugins-good",
+  "power-profiles-daemon",
+  "upower",
+  "flatpak",
+  "plymouth",
+  "adwaita-icon-theme",
+  "noto-fonts",
+  "noto-fonts-emoji",
+  "ttf-dejavu",
+  "ttf-liberation",
+]
+
+[desktops.tuna.packages.el10]
+display_manager = "greetd"
+required = [
+  "tuna-desktop-1.0.0~beta.1-1.el10",
+  "dbus-tools",
+  "orca",
+  "greetd",
+  "gtkgreet",
+  "cage",
+  "xorg-x11-server-Xwayland",
+  "ibus",
+  "gnome-shell",
+  "gnome-settings-daemon",
+  "gnome-control-center",
+  "gnome-keyring",
+  "evolution-data-server",
+  "xdg-desktop-portal-gnome",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs",
+  "gvfs",
+  "nautilus",
+  "ptyxis",
+  "NetworkManager",
+  "libsecret",
+  "pipewire",
+  "wireplumber",
+  "pipewire-gstreamer",
+  "gstreamer1-plugins-good",
+  "upower",
+  "flatpak",
+  "plymouth",
+  "adwaita-icon-theme",
+  "google-noto-sans-fonts",
+  "google-noto-color-emoji-fonts",
+  "dejavu-sans-fonts",
+  "liberation-fonts",
+]
+
+[[desktops.tuna.packages.el10.repos]]
+name = "tunaos-el10"
+baseurl = "https://repo.tunaos.org/repo/10/x86_64/"
+priority = 100
+
+[[desktops.tuna.packages.el10.repos]]
+name = "tunaos-xfce"
+baseurl = "https://repo.tunaos.org/xfce/10-stream-x86_64/"
+priority = 100
+
+[desktops.tuna.packages.fedora]
+display_manager = "greetd"
+required = [
+  "tuna-desktop-1.0.0~beta.1-1.fc44",
+  "dbus-tools",
+  "orca",
+  "greetd",
+  "gtkgreet",
+  "cage",
+  "xorg-x11-server-Xwayland",
+  "ibus",
+  "gnome-shell",
+  "gnome-settings-daemon",
+  "gnome-control-center",
+  "gnome-keyring",
+  "evolution-data-server",
+  "xdg-desktop-portal-gnome",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs",
+  "gvfs",
+  "nautilus",
+  "ptyxis",
+  "NetworkManager",
+  "libsecret",
+  "pipewire",
+  "wireplumber",
+  "pipewire-gstreamer",
+  "gstreamer1-plugins-good",
+  "tuned-ppd",
+  "upower",
+  "flatpak",
+  "plymouth",
+  "adwaita-icon-theme",
+  "google-noto-sans-fonts",
+  "google-noto-color-emoji-fonts",
+  "dejavu-sans-fonts",
+  "liberation-fonts",
+]
+
+[[desktops.tuna.packages.fedora.repos]]
+name = "tunaos-fedora"
+baseurl = "https://repo.tunaos.org/xfce/44-x86_64/"
+priority = 100
+
+[desktops.tuna.packages.eln]
+display_manager = "greetd"
+required = [
+  "tuna-desktop-1.0.0~beta.1-1.eln159",
+  "dbus-tools",
+  "orca",
+  "greetd",
+  "gtkgreet",
+  "cage",
+  "xorg-x11-server-Xwayland",
+  "ibus",
+  "gnome-shell",
+  "gnome-settings-daemon",
+  "gnome-control-center",
+  "gnome-keyring",
+  "evolution-data-server",
+  "xdg-desktop-portal-gnome",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs",
+  "gvfs",
+  "nautilus",
+  "ptyxis",
+  "NetworkManager",
+  "libsecret",
+  "pipewire",
+  "wireplumber",
+  "pipewire-gstreamer",
+  "gstreamer1-plugins-good",
+  "tuned-ppd",
+  "upower",
+  "flatpak",
+  "plymouth",
+  "adwaita-icon-theme",
+  "google-noto-sans-fonts",
+  "google-noto-color-emoji-fonts",
+  "dejavu-sans-fonts",
+  "liberation-fonts",
+]
+
+[[desktops.tuna.packages.eln.repos]]
+name = "tunaos-eln"
+baseurl = "https://repo.tunaos.org/rpm/eln/x86_64/"
+priority = 100
+
+[desktops.tuna.packages.rawhide]
+display_manager = "greetd"
+required = [
+  "tuna-desktop-1.0.0~beta.1-1.fc46",
+  "dbus-tools",
+  "orca",
+  "greetd",
+  "gtkgreet",
+  "cage",
+  "xorg-x11-server-Xwayland",
+  "ibus",
+  "gnome-shell",
+  "gnome-settings-daemon",
+  "gnome-control-center",
+  "gnome-keyring",
+  "evolution-data-server",
+  "xdg-desktop-portal-gnome",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs",
+  "gvfs",
+  "nautilus",
+  "ptyxis",
+  "NetworkManager",
+  "libsecret",
+  "pipewire",
+  "wireplumber",
+  "pipewire-gstreamer",
+  "gstreamer1-plugins-good",
+  "tuned-ppd",
+  "upower",
+  "flatpak",
+  "plymouth",
+  "adwaita-icon-theme",
+  "google-noto-sans-fonts",
+  "google-noto-color-emoji-fonts",
+  "dejavu-sans-fonts",
+  "liberation-fonts",
+]
+
+[[desktops.tuna.packages.rawhide.repos]]
+name = "tunaos-rawhide"
+baseurl = "https://repo.tunaos.org/rpm/rawhide/x86_64/"
+priority = 100
+
+[desktops.tuna.packages.apt]
+required = [
+  "tuna-desktop=1.0.0~beta.1-1",
+  "orca",
+  "greetd",
+  "gtkgreet",
+  "cage",
+  "xwayland",
+  "ibus",
+  "gnome-shell",
+  "gnome-settings-daemon",
+  "gnome-control-center",
+  "gnome-keyring",
+  "libpam-gnome-keyring",
+  "evolution-data-server",
+  "xdg-desktop-portal-gnome",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs",
+  "gvfs",
+  "nautilus",
+  "ptyxis",
+  "network-manager",
+  "libsecret-1-0",
+  "pipewire",
+  "wireplumber",
+  "gstreamer1.0-pipewire",
+  "gstreamer1.0-plugins-good",
+  "power-profiles-daemon",
+  "upower",
+  "flatpak",
+  "plymouth",
+  "adwaita-icon-theme",
+  "fonts-noto-core",
+  "fonts-noto-color-emoji",
+  "fonts-dejavu-core",
+  "fonts-liberation",
+]
+
+[[desktops.tuna.packages.apt.repos]]
+name = "tideforge"
+uri = "https://repo.tunaos.org/tideforge/ubuntu/"
+suite = "./"
+keyring_url = "https://repo.tunaos.org/tideforge/ubuntu/tideforge.gpg"
+condition = "ubuntu"
+
+[[desktops.tuna.packages.apt.repos]]
+name = "tideforge"
+uri = "https://repo.tunaos.org/tideforge/debian-sid/"
+suite = "./"
+keyring_url = "https://repo.tunaos.org/tideforge/debian-sid/tideforge.gpg"
+condition = "debian-sid"
+
+[[desktops.tuna.packages.apt.repos]]
+name = "tideforge"
+uri = "https://repo.tunaos.org/tideforge/debian-trixie/"
+suite = "./"
+keyring_url = "https://repo.tunaos.org/tideforge/debian-trixie/tideforge.gpg"
+condition = "debian-trixie"
+
+[desktops.tuna.packages.zypper]
+display_manager = "greetd"
+required = [
+  "tuna-desktop-1.0.0~beta.1-1",
+  "dbus-1-tools",
+  "orca",
+  "greetd",
+  "gtkgreet",
+  "cage",
+  "xwayland",
+  "ibus",
+  "gnome-shell",
+  "gnome-shell-calendar",
+  "gnome-settings-daemon",
+  "gnome-control-center",
+  "gnome-keyring",
+  "gnome-keyring-pam",
+  "evolution-data-server",
+  "xdg-desktop-portal-gnome",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs",
+  "gvfs",
+  "nautilus",
+  "ptyxis",
+  "NetworkManager",
+  "libsecret-1-0",
+  "pipewire",
+  "wireplumber",
+  "gstreamer-plugin-pipewire",
+  "gstreamer-plugins-good",
+  "power-profiles-daemon",
+  "upower",
+  "flatpak",
+  "plymouth",
+  "adwaita-icon-theme",
+  "google-noto-sans-fonts",
+  "google-noto-coloremoji-fonts",
+  "dejavu-fonts",
+  "liberation-fonts",
+]
+
+[[desktops.tuna.packages.zypper.repos]]
+name = "tunaos-opensuse"
+baseurl = "https://repo.tunaos.org/rpm/opensuse-tumbleweed/x86_64/"
+
+# XFCE Desktop Manifest — Arch Linux / CachyOS
+#
+# xfce.yaml installs Fedora's `xfce-desktop` group. Arch has an `xfce4` group
+# too, but groups expand to whatever the mirror holds on the day and pacman
+# --noconfirm takes all of it, so the set is listed explicitly here instead —
+# a build should not change shape because a group gained a member upstream.
+#
+# Note this is the X11 xfwm4 session. tunaOS prefers a Wayland compositor for
+# XFCE where one exists (xfwl4/labwc, see live-iso/common/src/desktop-xfce.sh),
+# and Arch has no xfwl4 package — so on marlin, XFCE is X11 only until
+# tuna-os/tunaos-packages#123 lands.
+#
+# Every package below was verified present in core/extra for x86_64.
+[desktops.xfce-arch]
+display_manager = "gdm"
+versionlock = []
+after_install = [
+  "tuna-flatpak-remote",
+  "flatpak-preinstall",
+]
+
+[desktops.xfce-arch.packages]
+
+[desktops.xfce-arch.packages.pacman]
+required = [
+  "xfce4-session",
+  "xfwm4",
+  "xfce4-panel",
+  "xfce4-settings",
+  "xfce4-appfinder",
+  "xfconf",
+  "xfdesktop",
+  "gdm",
+  "xfce4-power-manager",
+  "xfce4-notifyd",
+  "xfce4-screenshooter",
+  "xfce4-taskmanager",
+  "xfce4-pulseaudio-plugin",
+  "thunar",
+  "thunar-volman",
+  "thunar-archive-plugin",
+  "xfce4-terminal",
+  "mousepad",
+  "ristretto",
+  "file-roller",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs",
+  "xdg-user-dirs-gtk",
+  "network-manager-applet",
+  "networkmanager",
+  "pipewire",
+  "wireplumber",
+  "flatpak",
+  "wl-clipboard",
+  "power-profiles-daemon",
+  "fwupd",
+  "plymouth",
+]
+
+[desktops.xfce-arch.packages.cachyos]
+required = [
+  "linux-cachyos",
+  "linux-cachyos-headers",
+  "cachyos-settings",
+]
+
+[[desktops.xfce-arch.packages.cachyos.repos]]
+name = "cachyos"
+url = "https://mirror.cachyos.org/repo/$arch/cachyos"
+
+[[desktops.xfce-arch.packages.cachyos.repos]]
+name = "cachyos-extra"
+url = "https://mirror.cachyos.org/repo/$arch/cachyos-extra"
+
+# XFCE Desktop Manifest — Debian override.
+#
+# Debian sid's gdm3 pulls the GNOME stack. During the GNOME 50→51
+# transition, sid's libgjs0 explicitly Breaks the available gnome-shell,
+# which makes an otherwise independent XFCE build impossible to resolve.
+# XFCE does not require GNOME or gdm3, so use LightDM on Debian bases.
+[desktops.xfce-debian]
+display_manager = "lightdm"
+after_install = [
+  "tuna-flatpak-remote",
+  "flatpak-preinstall",
+]
+
+[desktops.xfce-debian.packages]
+
+[desktops.xfce-debian.packages.apt]
+required = [
+  "xfce4",
+  "xfce4-goodies",
+  "lightdm",
+  "lightdm-gtk-greeter",
+  "xserver-xorg",
+  "accountsservice",
+  "xdg-desktop-portal-gtk",
+  "thunar",
+  "mousepad",
+]
+
+# XFCE 4.20 Desktop Manifest (Wayland — xfwl4 compositor)
+[desktops.xfce]
+display_manager = "gdm"
+versionlock = [
+  "glib2",
+]
+after_install = [
+  "xfce-greeter",
+  "xfwm4-theme",
+  "tuna-flatpak-remote",
+  "flatpak-preinstall",
+]
+
+[desktops.xfce.packages]
+
+[desktops.xfce.packages.fedora]
+groups = [
+  "xfce-desktop",
+]
+required = [
+  "gdm",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs-gtk",
+  "thunar",
+  "mousepad",
+  "ristretto",
+  "xfce4-terminal",
+]
+optional = [
+  "xfce4-wayland",
+]
+
+[desktops.xfce.packages.el10]
+display_manager = "greetd"
+required = [
+  "xfwl4",
+  "xfce4-session",
+  "xfce4-panel",
+  "xfce4-settings",
+  "xfdesktop",
+  "thunar",
+  "tumbler",
+  "xfce4-terminal",
+  "xfce4-appfinder",
+  "xfce4-notifyd",
+  "xfce4-power-manager",
+  "xfce4-screenshooter",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs-gtk",
+]
+optional = [
+  "xfce4-whiskermenu-plugin",
+  "xfce4-clipman-plugin",
+  "mousepad",
+  "ristretto",
+]
+
+[[desktops.xfce.packages.el10.repos]]
+name = "tunaos-xfce"
+baseurl = "https://repo.tunaos.org/xfce/10-stream-x86_64/"
+priority = 10
+
+[[desktops.xfce.packages.el10.copr]]
+repo = "yselkowitz/cosmic-epel"
+packages = [
+  "greetd",
+  "greetd-selinux",
+]
+options = "--nobest --allowerasing"
+
+[desktops.xfce.packages.apt]
+required = [
+  "xfce4",
+  "xfce4-goodies",
+  "gdm3",
+  "xdg-desktop-portal-gtk",
+  "thunar",
+  "mousepad",
+]
+
+[desktops.xfce.packages.zypper]
+display_manager = "lightdm"
+required = [
+  "patterns-xfce-xfce",
+  "patterns-xfce-xfce_basis",
+  "lightdm",
+  "lightdm-gtk-greeter",
+  "thunar",
+  "thunar-volman",
+  "thunar-archive-plugin",
+  "tumbler",
+  "engrampa",
+  "xfce4-terminal",
+  "mousepad",
+  "ristretto",
+  "xfce4-screenshooter",
+  "xfce4-taskmanager",
+  "xfce4-appfinder",
+  "xfce4-notifyd",
+  "xfce4-power-manager",
+  "xfce4-clipman-plugin",
+  "xfce4-whiskermenu-plugin",
+  "xfce4-pulseaudio-plugin",
+  "xfce4-battery-plugin",
+  "gvfs",
+  "gvfs-backends",
+  "gvfs-fuse",
+  "xdg-desktop-portal",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs",
+  "xdg-user-dirs-gtk",
+  "NetworkManager-applet",
+  "blueman",
+  "pavucontrol",
+  "gnome-keyring",
+  "gnome-keyring-pam",
+  "polkit-gnome",
+  "Mesa-dri",
+  "Mesa-libEGL1",
+  "adwaita-icon-theme",
+]
+
+[desktops.xfce.packages.emerge]
+required = [
+  "xfce-base/xfce4-meta",
+  "x11-misc/lightdm",
+  "xfce-base/thunar",
+  "xfce-base/tumbler",
+  "x11-terms/xfce4-terminal",
+  "sys-apps/xdg-desktop-portal",
+  "sys-apps/xdg-desktop-portal-gtk",
+  "gnome-base/gvfs",
+  "gnome-base/gnome-keyring",
+]
+
+# Marlin GDM override from aa9810e9 (tunaOS#3438). The generated -arch
+# adapter takes precedence over tuna.yaml on pacman bases. Other tuna
+# profiles retain greetd. Package order and beta pin are unchanged.
+[desktops.tuna-arch]
+display_manager = "gdm"
+versionlock = []
+after_install = ["tuna-flatpak-remote", "flatpak-preinstall"]
+
+[desktops.tuna-arch.packages.pacman]
+required = [
+  "tunaos/tuna-desktop=1.0.0beta.1-1",
+  "gdm",
+  "xorg-xwayland",
+  "ibus",
+  "orca",
+  "gnome-shell",
+  "gnome-settings-daemon",
+  "gnome-control-center",
+  "gnome-keyring",
+  "evolution-data-server",
+  "xdg-desktop-portal-gnome",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs",
+  "gvfs",
+  "nautilus",
+  "ptyxis",
+  "networkmanager",
+  "libsecret",
+  "pipewire",
+  "wireplumber",
+  "gst-plugin-pipewire",
+  "gst-plugins-good",
+  "power-profiles-daemon",
+  "upower",
+  "flatpak",
+  "plymouth",
+  "adwaita-icon-theme",
+  "noto-fonts",
+  "noto-fonts-emoji",
+  "ttf-dejavu",
+  "ttf-liberation",
+]

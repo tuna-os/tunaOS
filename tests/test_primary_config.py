@@ -295,6 +295,7 @@ def test_renovate_updates_only_primary_source_and_adapter_follows(tmp_path):
 def test_shell_reader_prepares_absent_adapter_in_fresh_checkout(tmp_path):
     import shutil
     for name in ("tunaos.toml", "scripts/config.py", "scripts/lib/tunaos_config.py",
+                 "scripts/lib/tunaos_packages.py", "scripts/lib/desktop_operations.json",
                  "scripts/lib/build-config.sh"):
         target = tmp_path / name
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -330,6 +331,37 @@ def test_parser_keeps_the_shared_toml10_grammar(toml11):
     # 3.10 and 3.11 must reject edits only newer TOML parsers understand.
     with pytest.raises(config.tomllib.TOMLDecodeError):
         config.tomllib.loads(toml11)
+
+
+def test_tomli_dependency_ceiling_preserves_shared_toml_grammar():
+    settings = json.loads((ROOT / "renovate.json").read_text())
+    rules = [
+        rule for rule in settings["packageRules"]
+        if "tomli" in rule.get("matchPackageNames", [])
+    ]
+    assert len(rules) == 1
+    rule = rules[0]
+    assert rule["matchManagers"] == ["pip_requirements"]
+    assert rule["matchFileNames"] == ["requirements-config.txt"]
+    assert rule["allowedVersions"] == "==2.2.1"
+    # pip_requirements strips environment markers and extracts the PEP 440
+    # specifier as currentValue; packageName is normalized to "tomli".
+    # https://github.com/renovatebot/renovate/blob/44.166.0/lib/modules/manager/pip_requirements/extract.ts
+    from packaging.requirements import Requirement
+    from packaging.specifiers import SpecifierSet
+    requirements = [Requirement(line) for line in
+                    (ROOT / "requirements-config.txt").read_text().splitlines()
+                    if line.strip() and not line.startswith("#")]
+    dependency, = requirements
+    assert dependency.name == "tomli"
+    assert str(dependency.specifier) == rule["allowedVersions"]
+    assert dependency.marker.evaluate({"python_version": "3.10"})
+    assert not dependency.marker.evaluate({"python_version": "3.11"})
+    allowed = SpecifierSet(rule["allowedVersions"])
+    assert "2.2.1" in allowed
+    for version in ("2.2.0", "2.2.2", "2.3.2", "2.4.0", "2.4.1", "2.5.0", "3.0.0"):
+        assert version not in allowed
+
 
 
 @pytest.mark.parametrize("recipe", ["check:", "_ensure_test_deps:", "clean:"])
@@ -419,6 +451,7 @@ def test_renovate_only_pin_update_keeps_live_suite_green(tmp_path):
     checkout = tmp_path / "checkout"
     for name in ("tunaos.toml", "renovate.json", "requirements-config.txt",
                  "scripts/config.py", "scripts/lib/tunaos_config.py",
+                 "scripts/lib/tunaos_packages.py", "scripts/lib/desktop_operations.json",
                  "scripts/lib/build-config.sh", "scripts/iso-e2e.sh",
                  "just/utilities.just", ".github/workflows/reusable-build-image.yml",
                  "tests/test_primary_config.py"):

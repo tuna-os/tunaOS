@@ -1,8 +1,8 @@
 # ThinkPad X13s support
 
-**Status:** image profile defined; the first ARM64 child build and its generated
-inspection report are not yet available. TunaOS has not booted, installed, or
-qualified this profile on a ThinkPad X13s.
+**Status:** `bonito:gnome-x13s` builds for `linux/arm64`, and this page
+records its generated inspection report below. TunaOS has not booted,
+installed, or qualified this profile on a ThinkPad X13s.
 
 This page is for the X13s Gen 1 from Lenovo (`lenovo,thinkpad-x13s`).
 It uses the Qualcomm SC8280XP / Snapdragon 8cx Gen 3 SoC. This page excludes
@@ -71,6 +71,27 @@ called complete.
 The first normal ARM64 child build will create the immutable digest and full
 generated report recorded by issue #3377. Until that succeeds, only the dated
 parent-payload measurement above is available.
+
+## Admitted child build and generated inspection report
+
+The first `bonito:gnome-x13s` child built for `linux/arm64` through the
+normal image pipeline against the immutable parent above. Local pre-chunk
+digest (not a published image):
+
+```text
+localhost/tuna-x13s-w1:inspection (linux/arm64)
+sha256:ad91df8a615be6ac76e695d64fd39a66fa2fc8419bb3f4e2752d575af676af85
+```
+
+The inspection report lists the Fedora kernel `7.2.11-200.fc44.aarch64`
+from stock `kernel-core` (`Fedora Project` vendor), alongside
+`missing_kconfig_count=0` and both X13s DTBs listed above.
+`i2c_hid_of`, `i2c_qcom_geni` and `pcie_qcom` are built in; the remaining
+inspected modules resolve to `.ko.xz` objects. Board Wi-Fi and Bluetooth
+payloads are present as compressed Fedora files. The `qcom/a660_*` GPU
+files and the `qcom/sc8280xp/LENOVO/21BX/` DSP/topology directory remain
+missing, which confirms the W2 gap measured in the parent. A CI build of
+the admitted child must still record its own published digest and report.
 
 ## DTB boot-path decision for W4
 

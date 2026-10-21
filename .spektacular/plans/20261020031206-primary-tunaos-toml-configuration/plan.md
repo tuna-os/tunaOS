@@ -12,7 +12,7 @@ document_status: draft
 
 ## Overview
 
-Give TunaOS and its customizers one readable product configuration for variants, packages and branding. Move ownership in verified stages so people can change defaults without a separate stock-only catalog, then add shared inspection and package-editing tools. Only the matrix milestone is approved for current implementation; the full requirement remains tracked.
+Give TunaOS and its customizers one readable product configuration for variants, packages and branding. Move ownership in verified stages so people can change defaults without a separate stock-only catalog, then add shared inspection and package-editing tools. The matrix draft is verified. A bounded desktop-profile ownership slice and Debian GNOME apt contract are approved for local implementation; the full requirement remains tracked.
 
 ## Conventions
 
@@ -92,7 +92,7 @@ Required project gates remain mandatory. Built-image, boot and real-install evid
 
 ### Milestone 1: Primary matrix authority
 
-**What changes**: Complete matrix defaults move to TOML and every runtime reader derives its adapter safely. This is the only bounded implementation currently approved.
+**What changes**: Complete matrix defaults move to TOML and every runtime reader derives its adapter safely. This remains a separate draft awaiting design acceptance and landing.
 
 #### - [ ] Phase 1.1: Capture complete matrix ownership
 **Repo:** tunaos
@@ -222,3 +222,28 @@ No unresolved design question blocks the approved matrix milestone. Later native
 - No modification or repinning of existing PR3445 frozen image and installer qualification evidence.
 - No claim that the previous fork-only preview or the current matrix milestone completes primary configuration ownership.
 - Package/input migration, branding/installer migration and the authoring CLI are outside the currently approved implementation slice; they remain explicit milestones 2–4 in this plan and delivery epic #3474.
+
+
+## Local phase 2 slice (2026-10-20)
+
+The reviewed local slice moves all 15 desktop profile trees into the same TOML,
+with 48 native sections and 36 repository declarations. Named package groups
+preserve the existing YAML aliases. Named trusted operations replace executable
+configuration strings; three EL10 GNOME operations temporarily retain embedded
+package policy and must remain inventoried until typed inputs replace it.
+
+Start with shared install/verification resolution for Debian GNOME apt. Other
+families retain equivalent generated adapters and explicit verification limits.
+Reject unknown native families; require explicit EL10 target evidence. Keep
+existing supported selectors and transaction order. Generate before all six
+Containerfile context copies and content-addressed context hashes.
+
+Acceptance remains open until complete profile parity, command-recording and
+failure tests, scoped hand-edit tests, pre-hash generation tests, mandatory gates
+and native CI pass. Generic `add htop` uses fixture repository evidence only.
+No production package changes, network queries, or publication are in this slice.
+Base/shared policy, shared pins, branding and authoring CLI milestones stay open.
+
+The local prototype has 55 passing tests on Python 3.12 and 3.10, including full
+profile equality and strict-versus-tolerated named pre-install failures. This is
+prototype evidence, not an image or complete package-policy qualification.
