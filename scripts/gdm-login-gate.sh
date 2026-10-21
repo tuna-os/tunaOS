@@ -45,8 +45,8 @@ else
 fi
 echo "==> GDM service"
 systemctl status gdm.service --no-pager || true
-echo "==> recent greeter, shell, lock and PAM journal"
-journalctl -b --no-pager | grep -Ei 'gdm|gnome-shell|gnome-session|mutter|LockHint|lock-screen|pam.*(fail|authentication)|session opened|session closed' | tail -n 150 || true
+echo "==> recent greeter, shell, lock and PAM journal (guest SSH sessions excluded)"
+journalctl -b --no-pager | grep -Ei 'gdm|gnome-shell|gnome-session|mutter|LockHint|lock-screen|pam.*(fail|authentication)|session opened|session closed' | grep -Ev 'sshd-session|sshd\[' | tail -n 200 || true
 GDM_DIAGNOSTICS
 }
 
@@ -125,13 +125,19 @@ echo "TUNAOS_GDM_LOGIN_OK user=${TEST_USER} session=${session_id}"
 sleep 3
 "$CORRAL" screenshot "$NAME" -o "${OUT}/gdm-logged-in.png" --require-paint
 
-guest loginctl lock-session "$session_id"
+# Slow software-rendered shells may not have their lock path ready when the
+# first request lands; re-issue it until the hint flips.
 locked=0
-for _ in $(seq 1 30); do
-	if [[ "$(guest loginctl show-session "$session_id" -p LockedHint --value 2>/dev/null || true)" == yes ]]; then
-		locked=1
-		break
-	fi
+for round in 1 2 3; do
+	echo "==> lock attempt $round/3 for session $session_id"
+	guest loginctl lock-session "$session_id"
+	for _ in $(seq 1 20); do
+		if [[ "$(guest loginctl show-session "$session_id" -p LockedHint --value 2>/dev/null || true)" == yes ]]; then
+			locked=1
+			break 2
+		fi
+		sleep 2
+	done
 	sleep 2
 done
 [[ "$locked" == 1 ]] || {
