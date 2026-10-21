@@ -164,7 +164,7 @@ jobs:
           echo "=== pytest Tests ==="
           report_root="$RUNNER_TEMP/tunaos-test-results"
           mkdir -p "$report_root"
-          if python3 -m pytest tests/ tests/pytest/ -v --tb=short --cov=. --cov-report=term --cov-report=xml:coverage-python.xml --junitxml="$report_root/pytest.xml" -o junit_logging=no -o junit_log_passing_tests=false; then
+          if python3 -m pytest -p scripts.compact_pytest_report --compact-test-report="$report_root/pytest-static.json" tests/ tests/pytest/ -v --tb=short --cov=. --cov-report=term --cov-report=xml:coverage-python.xml --junitxml="$report_root/pytest.xml" -o junit_logging=no -o junit_log_passing_tests=false; then
             status=0
           else
             status=$?
@@ -176,7 +176,7 @@ jobs:
         id: test_failure_summary
         if: always()
         run: |
-          python3 scripts/summarize-test-failures.py --reports "$RUNNER_TEMP/tunaos-test-results" --output "$RUNNER_TEMP/tunaos-test-failures.json"
+          python3 scripts/summarize-test-failures.py --direct --reports "$RUNNER_TEMP/tunaos-test-results" --output "$RUNNER_TEMP/tunaos-test-failures.json"
 
           [[ -f "$RUNNER_TEMP/tunaos-test-failures.json" && ! -L "$RUNNER_TEMP/tunaos-test-failures.json" ]]
 

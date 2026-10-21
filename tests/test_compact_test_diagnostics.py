@@ -350,3 +350,190 @@ def test_changed_junit_has_fixed_reason_and_original_exit(tmp_path, monkeypatch)
     assert result['issues'] == ['report-changed-during-read']
     assert result['report_size_bytes'] == 123
     assert result['exit_code'] == 1
+
+
+def direct_document():
+    result = module.empty()
+    result.update(tests=1, failures=1, exit_code=1,
+                  failure_details=[{'test': 'tests/sample.py::test_failure', 'kind': 'failure'}])
+    return {'schema_version': 1, 'kind': 'pytest-static-summary', 'pytest': result}
+
+
+def test_direct_summary_recovers_ids_with_invalid_junit_but_keeps_issue(tmp_path):
+    root = reports(tmp_path)
+    (root / 'pytest.xml').unlink()
+    (root / 'pytest-static.json').write_text(json.dumps(direct_document()))
+    result = module.summarize(root, direct=True)
+    assert result['pytest_source'] == 'direct'
+    assert result['junit_issues'] == ['missing-junit']
+    assert result['pytest']['failure_details'] == direct_document()['pytest']['failure_details']
+    assert result['pytest']['exit_code'] == 1
+
+
+@pytest.mark.parametrize('change', [
+    lambda d: d.update(secret='credential'),
+    lambda d: d.update(schema_version=True),
+    lambda d: d.update(kind='untrusted'),
+    lambda d: d['pytest'].update(tests=True),
+    lambda d: d['pytest'].update(failures=-1),
+    lambda d: d['pytest'].update(exit_code=0),
+    lambda d: d['pytest'].update(truncated=1),
+    lambda d: d['pytest'].update(issues=['credential']),
+    lambda d: d['pytest'].update(message='credential'),
+    lambda d: d['pytest']['failure_details'][0].update(message='credential'),
+    lambda d: d['pytest']['failure_details'][0].update(test='../secret.py::test_failure'),
+    lambda d: d['pytest']['failure_details'][0].update(test='tests/missing.py::test_failure'),
+    lambda d: d['pytest']['failure_details'][0].update(test='tests/sample.py::test_missing'),
+    lambda d: d['pytest']['failure_details'][0].update(test='tests/sample.py::test_failure[credential]'),
+    lambda d: d['pytest']['failure_details'][0].update(kind='credential'),
+    lambda d: d['pytest'].update(failures=0),
+    lambda d: d['pytest'].update(failure_details=[{'test': 'unresolved-test', 'kind': 'failure'}] * 101),
+])
+def test_direct_summary_is_strict_and_never_echoes_invalid_values(tmp_path, change):
+    root = reports(tmp_path)
+    document = direct_document()
+    change(document)
+    (root / 'pytest-static.json').write_text(json.dumps(document))
+    result = module.summarize(root, direct=True)
+    assert result.get('pytest_source') != 'direct'
+    assert result['pytest']['exit_code'] == 1
+    assert any('direct' in code for code in result['pytest']['issues'])
+    assert 'credential' not in json.dumps(result)
+
+
+def test_missing_direct_output_never_infers_pass(tmp_path):
+    root = reports(tmp_path)
+    result = module.summarize(root, direct=True)
+    assert 'missing-direct-summary' in result['pytest']['issues']
+    assert result['pytest']['exit_code'] == 1
+
+
+def test_direct_duplicate_json_keys_are_rejected(tmp_path):
+    root = reports(tmp_path)
+    text = json.dumps(direct_document()).replace('"schema_version": 1', '"schema_version": 1, "schema_version": 1')
+    (root / 'pytest-static.json').write_text(text)
+    assert 'invalid-direct-summary' in module.summarize(root, direct=True)['pytest']['issues']
+
+
+def test_direct_output_size_and_incomplete_counts_are_rejected(tmp_path, monkeypatch):
+    root = reports(tmp_path)
+    document = direct_document()
+    document['pytest']['failure_details'] = []
+    (root / 'pytest-static.json').write_text(json.dumps(document))
+    assert 'incomplete-direct-summary' in module.summarize(root, direct=True)['pytest']['issues']
+    monkeypatch.setattr(module, 'MAX_OUTPUT', 16)
+    assert 'oversized-direct-summary' in module.summarize(root, direct=True)['pytest']['issues']
+
+
+def test_collection_id_does_not_require_valid_python_but_rejects_symlink(tmp_path, monkeypatch):
+    source = tmp_path / 'source'
+    (source / 'tests').mkdir(parents=True)
+    (source / 'tests/test_broken.py').write_text('def invalid syntax\n')
+    monkeypatch.setattr(module, 'SOURCE_ROOT', source)
+    identifier = 'tests/test_broken.py::unresolved-test'
+    assert module.source_collection_id('tests/test_broken.py', [0]) == identifier
+    document = direct_document()
+    document['pytest']['failure_details'][0]['test'] = identifier
+    assert module.parse_direct_summary(json.dumps(document), 1, [0])['failure_details'][0]['test'] == identifier
+    (source / 'tests/test_link.py').symlink_to(source / 'tests/test_broken.py')
+    assert module.source_collection_id('tests/test_link.py', [0]) == 'unresolved-test'
+    document['pytest']['failure_details'][0]['test'] = 'tests/test_link.py::unresolved-test'
+    with pytest.raises(module.ReportError, match='invalid-direct-source-id'):
+        module.parse_direct_summary(json.dumps(document), 1, [0])
+
+
+def test_direct_validation_has_priority_over_junit_source_budget(tmp_path, monkeypatch):
+    root = reports(tmp_path)
+    document = direct_document()
+    (root / 'pytest-static.json').write_text(json.dumps(document))
+    original = module.parse_junit
+    def exhaust(text, result, budget):
+        original(text, result, budget)
+        budget[0] = module.MAX_TOTAL
+    monkeypatch.setattr(module, 'parse_junit', exhaust)
+    result = module.summarize(root, direct=True)
+    assert result['pytest_source'] == 'direct'
+    assert result['pytest']['failure_details'] == document['pytest']['failure_details']
+
+
+def test_recursive_source_ast_cannot_break_summary(tmp_path, monkeypatch):
+    root = reports(tmp_path)
+    source = tmp_path / 'source'
+    (source / 'tests').mkdir(parents=True)
+    (source / 'tests/sample.py').write_text('def test_failure(): pass\nx=' + '1+' * 10000 + '1\n')
+    monkeypatch.setattr(module, 'SOURCE_ROOT', source)
+    (root / 'pytest-static.json').write_text(json.dumps(direct_document()))
+    result = module.summarize(root, direct=True)
+    assert 'invalid-direct-source-id' in result['pytest']['issues']
+    assert result['pytest']['exit_code'] == 1
+
+
+def test_direct_keeps_numeric_oversized_junit_metadata(tmp_path, monkeypatch):
+    root = reports(tmp_path)
+    (root / 'pytest-static.json').write_text(json.dumps(direct_document()))
+    original = module.read_report
+    def oversized(root, relative, budget):
+        if relative == 'pytest.xml':
+            raise module.ReportError('oversized-report', 9000000)
+        return original(root, relative, budget)
+    monkeypatch.setattr(module, 'read_report', oversized)
+    result = module.summarize(root, direct=True)
+    assert result['pytest_source'] == 'direct'
+    assert result['junit_issues'] == ['oversized-report']
+    assert result['junit_report_size_bytes'] == 9000000
+
+
+def test_workflow_activates_direct_reporter_only_on_outer_command(tmp_path):
+    binary, env = environment(tmp_path)
+    env.pop('PYTEST_ADDOPTS', None)
+    env.pop('PYTEST_PLUGINS', None)
+    fake(binary, 'python3', '''[[ -z "${PYTEST_ADDOPTS+x}" && -z "${PYTEST_PLUGINS+x}" ]] || exit 92
+printf '%s\\n' "$@"
+echo original-console
+exit 7
+''')
+    result = subprocess.run(['bash', '-eo', 'pipefail', '-c', STEPS['Run pytest tests']['run']],
+                            env=env, cwd=tmp_path, text=True, capture_output=True)
+    assert result.returncode == 7
+    assert 'original-console' in result.stdout
+    assert '-p\nscripts.compact_pytest_report\n' in result.stdout
+    assert '--compact-test-report=' + env['RUNNER_TEMP'] + '/tunaos-test-results/pytest-static.json' in result.stdout
+    assert (tmp_path / 'temp/tunaos-test-results/pytest.exit').read_text() == '7\n'
+    assert '--direct' in STEPS['Summarize test failures']['run']
+    for step in STEPS.values():
+        assert 'PYTEST_ADDOPTS' not in step.get('env', {})
+        assert 'PYTEST_PLUGINS' not in step.get('env', {})
+    assert 'PYTEST_ADDOPTS' not in WORKFLOW.get('env', {})
+    assert 'PYTEST_PLUGINS' not in WORKFLOW.get('env', {})
+    for job in WORKFLOW['jobs'].values():
+        assert 'PYTEST_ADDOPTS' not in job.get('env', {})
+        assert 'PYTEST_PLUGINS' not in job.get('env', {})
+
+
+def test_class_scope_is_validated_and_preserved(tmp_path, monkeypatch):
+    source = tmp_path / 'source'
+    (source / 'tests').mkdir(parents=True)
+    (source / 'tests/sample.py').write_text('class TestOne:\n    def test_same(self): pass\nclass TestTwo:\n    def test_same(self): pass\n')
+    monkeypatch.setattr(module, 'SOURCE_ROOT', source)
+    for name in ('TestOne', 'TestTwo'):
+        identifier = 'tests/sample.py::' + name + '::test_same'
+        assert module.source_test_id('tests.sample.' + name, 'test_same', [0]) == identifier
+        document = direct_document()
+        document['pytest']['failure_details'][0]['test'] = identifier
+        assert module.parse_direct_summary(json.dumps(document), 1, [0])['failure_details'][0]['test'] == identifier
+    assert module.source_test_id('tests.sample.Unknown', 'test_same', [0]) == 'tests/sample.py::unresolved-test'
+    document['pytest']['failure_details'][0]['test'] = 'tests/sample.py::Unknown::test_same'
+    with pytest.raises(module.ReportError, match='invalid-direct-source-id'):
+        module.parse_direct_summary(json.dumps(document), 1, [0])
+
+
+def test_direct_validator_uses_explicit_file_boundary(tmp_path, monkeypatch):
+    source = tmp_path / 'source'
+    (source / 'tests/sample').mkdir(parents=True)
+    (source / 'tests/sample.py').write_text('class TestOne:\n    def test_same(self): pass\n')
+    (source / 'tests/sample/TestOne.py').write_text('def test_same(): pass\n')
+    monkeypatch.setattr(module, 'SOURCE_ROOT', source)
+    document = direct_document()
+    identifier = 'tests/sample.py::TestOne::test_same'
+    document['pytest']['failure_details'][0]['test'] = identifier
+    assert module.parse_direct_summary(json.dumps(document), 1, [0])['failure_details'][0]['test'] == identifier
