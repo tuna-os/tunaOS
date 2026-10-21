@@ -1794,3 +1794,19 @@ shows the failure after `tomli` 2.5.0 merged.
 **Fix:** Keep `tomli` at the last compatible `2.2.1` release and cap Renovate
 updates below `2.5.0`. Lift the cap only when the configuration contract and
 both parser paths move to TOML 1.1 together.
+
+### Retained browser candidate fails the v2 media join
+
+A manifest in R2 is not a member of a GitHub ZIP archive.
+Diagnostic observations from its producer are not a browser v2 receipt.
+A false `artifact.mediaPath` misstates the location of the media.
+An absent receipt anchor in GitHub loses the producer association.
+
+Use the explicit branch for retained media. Preserve the run, artifact ID, and
+archive hash. Verify the exact receipt member and its hash.
+Pin the manifest hash independently before any chunk read.
+
+The tiny fixtures in `tests/test_iso_retained_media_transport.py` reject wrong
+origins, runs, and `runAttempt` values. They reject replay, changed manifests,
+absent chunks, wrong whole-ISO identity, and unsafe members in ZIP archives.
+These tests check consistency. They do not prove a real producer or installation.
