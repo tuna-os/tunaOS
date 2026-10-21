@@ -849,8 +849,13 @@ E2E_SERIAL_ARGS=(
 # screendump has no surface and every screenshot in this repo silently fails.
 # (VNC alone does not fix screendump under GL scanout — see screenshot().)
 # VNC on a unix socket materialises the framebuffer without opening a port.
-if [[ "${QEMU_NEEDS_VNC_SURFACE:-0}" == "1" ]]; then
+if [[ "${QEMU_NEEDS_VNC_SURFACE:-0}" == "1" || "$STRICT_OFFLINE_GUI" -eq 1 ]]; then
 	QEMU_GPU_ARGS+=(-vnc "unix:${OUTPUT_DIR}/vnc.sock")
+fi
+
+# Strict real pointer input must be absolute, including software-rendered GNOME.
+if [[ "$STRICT_OFFLINE_GUI" -eq 1 ]]; then
+	QEMU_GPU_ARGS+=(-device qemu-xhci -device usb-tablet)
 fi
 
 # ── Guest SSH transport ─────────────────────────────────────────────────────
@@ -3592,7 +3597,10 @@ run_strict_gui_install() {
 	esac
 	local saved_disk="$INSTALL_DISK"
 	INSTALL_DISK="$disk"
-	qemu-img create -f qcow2 "$disk" 32G || {
+	# Installer 9f582fe0 rejects targets below 50 GiB (run 39619460539).
+	# Sparse 64 GiB adds bounded target headroom without preallocating 64 GiB.
+	df -h "$OUTPUT_DIR"
+	qemu-img create -f qcow2 "$disk" 64G || {
 		rc=$?
 		INSTALL_DISK="$saved_disk"
 		return "$rc"
@@ -3623,7 +3631,7 @@ run_strict_gui_install() {
 			e2e_phase "Strict GUI install (${mode}): driving the bundled installer..."
 			python3 "$walkthrough" "$MONITOR_SOCK" "$wt_out" \
 				"${TUNAOS_STRICT_WALKTHROUGH_STEPS:-12}" "${FLAVOR:-de}" \
-				--strict "--mode=${mode}" 2>&1 | tee -a "${SERIAL_LOG}" || rc=$?
+				--strict "--mode=${mode}" "--vnc=${OUTPUT_DIR}/vnc.sock" 2>&1 | tee -a "${SERIAL_LOG}" || rc=$?
 			if [[ "$rc" -ne 0 ]]; then
 				echo "ERROR: strict GUI walkthrough (${mode}) failed; see ${wt_out}" >&2
 			fi

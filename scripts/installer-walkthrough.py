@@ -142,7 +142,7 @@ def vnc_capture(png):
             and shutil.which("vncdo") and shutil.which("socat")):
         return False
     bridge = subprocess.Popen(
-        ["socat", f"TCP-LISTEN:{vnc_port},reuseaddr,fork",
+        ["socat", f"TCP-LISTEN:{vnc_port},bind=127.0.0.1,reuseaddr,fork",
          f"UNIX-CONNECT:{vnc_sock}"],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
@@ -225,7 +225,8 @@ def shot(idx, label):
 
     # VNC first: on the virgl path it is the only thing that works, and on the
     # non-GL path there is no vnc.sock so this costs one os.path.exists().
-    if vnc_capture(png):
+    # The strict GNOME contract uses software rendering and no TCP bridge.
+    if not (mode_explicit and flavor == "gnome") and vnc_capture(png):
         print(f"captured step {idx}: {label} -> {png} (vnc)", flush=True)
         return png
 
@@ -495,6 +496,13 @@ def maybe_configure_encryption(png):
         note("plain mode: leaving the encryption default (none) selected")
     return True
 
+# Explicit GNOME qualification has a measured, ordered GUI contract. Keep the
+# legacy multi-frontend click-through path separate from strict evidence.
+if mode_explicit and flavor == "gnome":
+    from lib.gnome_installer_driver import drive
+    sys.exit(drive(outdir, walk_mode, vnc_sock, shot, send_keys, _type_text,
+                   os.environ.get("TUNAOS_QUAL_INSTALLER_DIGEST", ""), WALK_LUKS_PASS))
+
 # ── Capture ──────────────────────────────────────────────────────────────
 time.sleep(5)  # let the installer settle on its first screen
 frames = []
@@ -682,7 +690,7 @@ for i in range(1, steps + 1):
                 # Primary action buttons ("Get Started", "Next", "Continue") sit near bottom right / center bottom
                 print("  # keyboard navigation exhausted — attempting VNC mouse click on primary action button", flush=True)
                 bridge = subprocess.Popen(
-                    ["socat", f"TCP-LISTEN:{vnc_port},reuseaddr,fork", f"UNIX-CONNECT:{vnc_sock}"],
+                    ["socat", f"TCP-LISTEN:{vnc_port},bind=127.0.0.1,reuseaddr,fork", f"UNIX-CONNECT:{vnc_sock}"],
                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 try:
                     time.sleep(1)

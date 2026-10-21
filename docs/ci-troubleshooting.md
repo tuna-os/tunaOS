@@ -1987,3 +1987,28 @@ provenance fail before strict GUI qualification.
 Only the strict plain and encrypted GUI installation,
 target-disk reboot and installed identity/desktop checks can qualify the artifact.
 A GUI smoke test of old media is diagnostic and cannot qualify it.
+
+### Strict GNOME ISO walkthrough stops at disk/encryption/recovery (run 39619460539)
+
+The run had a 32 GiB target. The installer needs at least 50 GiB.
+The plain leg also left encryption enabled. Blind input reached a placeholder
+for a recovery key. OCR incorrectly called that page installation progress.
+Neither leg installed.
+
+The strict target is now a sparse 64 GiB disk. It logs the free space on the host.
+GNOME uses real pointer input through a UNIX socket owned by QEMU.
+It checks encryption off for plain, or passphrase-only with two equal fields for LUKS.
+The frontend skips pages with one valid disk or image.
+The summary must identify `/dev/vda (64 GiB)`, the requested mode, and the erase warning.
+
+A click on Install is distinct from accepted progress. The driver checks each
+transition in order. A tour title or a placeholder for recovery is not proof of success.
+The actual done page must appear before the harness tests the installed system.
+
+The driver supports one measured bundle:
+`sha256:04252eaf80ee5675aa37bdb482847c77310efbee058dc63ba161a1d5991f9823`.
+Its release is `v2026.10.19-9f582fe0`; its frontend source is
+`9f582fe0ecc19561be1115dfef64a59e91ea5072`.
+A different bundle fails before GUI input until a reviewer checks its contract.
+Synthetic tests and OCR fixtures do not prove an ISO installed.
+Only CI with the same artifact can prove install and cold/warm reboot behavior.
