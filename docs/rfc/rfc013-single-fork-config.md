@@ -35,8 +35,8 @@ repositories, show the change, then write once. If a name is missing or has
 more than one match, explain the problem before any write. Preserve comments
 and allow hand edits. The example does not add `htop` to stock images.
 
-Python 3.10 remains supported with the pinned parser in
-`requirements-config.txt`. Python 3.11 and later use `tomllib`.
+Python 3.10+ uses the same reviewed parser bundled in `scripts/lib/_vendor/tomli`.
+Config reads need no parser installation or network access.
 Unknown fields fail with a field path. Tests compare all old values and
 orders and show that an edit reaches the build input. Source tests do not
 prove that an image boots or that hardware works.
