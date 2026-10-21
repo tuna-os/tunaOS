@@ -70,21 +70,32 @@ guest true || {
 	exit 1
 }
 
+# Pin the session GDM starts: a fresh image has no per-user history, so
+# without this GDM falls back to its own default (currently the GNOME
+# session, which is broken on newer GNOME) instead of Tuna. The greeter
+# only picks this up on startup, so restart it after writing the selection.
+guest_accts_dir="${TUNAOS_GDM_ACCOUNTS_DIR:-/var/lib/AccountsService/users}"
+guest mkdir -p "$guest_accts_dir"
+printf '[User]\nSession=tuna\n' | guest tee "$guest_accts_dir/$TEST_USER" >/dev/null
+guest systemctl restart gdm.service
+for _ in $(seq 1 60); do
+	if guest systemctl is-active --quiet display-manager.service; then
+		break
+	fi
+	sleep 2
+done
+guest systemctl is-active --quiet display-manager.service || {
+	echo "GDM did not come back after restart for the Tuna session selection" >&2
+	exit 1
+}
 guest bash -s -- "$TEST_USER" <<'CHECK_GREETER'
 set -euo pipefail
 user="$1"
-systemctl is-active --quiet display-manager.service
 if loginctl list-sessions --no-legend | awk -v user="$user" '$3 == user { found=1 } END { exit !found }'; then
 	echo "test account already has a session before keyboard input" >&2
 	exit 1
 fi
 CHECK_GREETER
-# Pin the session GDM starts: a fresh image has no per-user history, so
-# without this GDM falls back to its own default (currently the GNOME
-# session, which is broken on newer GNOME) instead of Tuna.
-guest_accts_dir="${TUNAOS_GDM_ACCOUNTS_DIR:-/var/lib/AccountsService/users}"
-guest mkdir -p "$guest_accts_dir"
-printf '[User]\nSession=tuna\n' | guest tee "$guest_accts_dir/$TEST_USER" >/dev/null
 "$CORRAL" screenshot "$NAME" -o "${OUT}/gdm-greeter.png" --require-paint
 
 # Corral creates exactly one regular, non-sudo user in a disposable image
