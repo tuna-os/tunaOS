@@ -7,6 +7,19 @@ import sys
 from lib import tunaos_config, iso_builder_config
 
 
+def builder_target(root, output, relative):
+    """Confine stock outputs to the resolved checkout; trust explicit directories."""
+    root = root.resolve()
+    target = output if output is not None else root / relative
+    if target.is_symlink():
+        raise tunaos_config.ConfigError(f'{target}: refusing symlink')
+    if output is None and not target.parent.resolve().is_relative_to(root):
+        raise tunaos_config.ConfigError(f'{target}: generated output escapes checkout')
+    if target.exists() and not target.is_file():
+        raise tunaos_config.ConfigError(f'{target}: expected regular output file')
+    return target
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('command', choices=('validate', 'generate', 'show', 'generate-builder-config', 'check-builder-config', 'generate-debian-contract', 'prepare-debian-context', 'verify-debian-image'))
@@ -20,15 +33,11 @@ def main():
     try:
         if args.command in ('generate-builder-config', 'check-builder-config'):
             content = iso_builder_config.render(tunaos_config.load(args.root / 'tunaos.toml'))
-            target = args.output or args.root / 'docs/iso-builder.config.json'
+            target = builder_target(args.root, args.output, 'docs/iso-builder.config.json')
             if args.command == 'check-builder-config':
-                if target.is_symlink():
-                    raise tunaos_config.ConfigError(f'{target}: refusing symlink')
                 if not target.is_file() or target.read_text(encoding='utf-8') != content:
                     raise tunaos_config.ConfigError(f'{target}: generated builder config drift; run generate-builder-config')
             else:
-                if target.is_symlink():
-                    raise tunaos_config.ConfigError(f'{target}: refusing symlink')
                 target.write_text(content, encoding='utf-8')
             print(target)
             return 0

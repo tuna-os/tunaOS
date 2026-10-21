@@ -10,7 +10,11 @@ python3 scripts/config.py check-builder-config
 The exporter writes `docs/iso-builder.config.json`; this is not a second source.
 `just check` and a test in pytest reject changes that do not match TOML.
 `--output PATH` exports or checks another deployment artifact without a change to
-source ownership. Consumers may generate a JavaScript projection for the browser from this JSON; they must check that projection for drift too.
+source ownership. Stock outputs stay inside the resolved checkout, including when
+the checkout path is a symlink. An explicit output path selects its own directory.
+Both modes reject symlinks and nonregular files at the final output path.
+
+Consumers may generate a JavaScript projection for the browser from this JSON; they must check that projection for drift too.
 
 Other projects can produce the same portable JSON from their own configuration.
 They do not need a TunaOS matrix or repository at runtime. `iso-builder-config.schema.json` defines the shape. The dependency-free reference validator is
@@ -40,6 +44,16 @@ that the configured default is a build-enabled matrix cell.
   and desktop ID (or `none`). It cannot change the DDI transport endpoint.
 
 Links use HTTPS with no credentials, whitespace, backslashes or custom ports.
+Hosts use ASCII DNS names or canonical dotted IPv4. Use punycode for international
+names. The contract does not support IPv6 or encoded hosts.
+DNS labels have at most 63 characters; the host has at most 253.
+The optional port is 443.
+
+The contract allows HTTPS paths, queries, and fragments.
+See [RFC 3986](https://www.rfc-editor.org/rfc/rfc3986#section-3.2.2) for decimal IPv4 syntax.
+Other numeric forms that browsers normalize do not pass validation.
+The pattern also rejects whitespace as defined by either Python or ECMAScript.
+
 Logo/favicon may instead use asset paths relative to the root (no `//`, `..`,
 query, fragment or backslash). A configured URL does not authorize a new proxy,
 relay, registry, Flatpak remote, icon host or arbitrary fetch mechanism.
