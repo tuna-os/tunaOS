@@ -21,7 +21,7 @@ SPEC2.loader.exec_module(primary)
 
 
 def config():
-    return builder.project(primary.load())
+    return json.loads((ROOT / 'tests/fixtures/builder-config/v1.json').read_text())
 
 
 def test_generated_artifact_is_exact_primary_projection():
@@ -108,7 +108,7 @@ def test_app_and_channel_references_checked():
 
 def test_primary_default_must_be_build_enabled_cell():
     doc = primary.load()
-    doc['iso_builder']['default_selection']['platform'] = 'linux/amd64/v3'
+    doc['iso_builder']['default_selection']['leaf_id'] = 'yellowfin:gnome:linux/amd64/v3'
     with pytest.raises(builder.ConfigError):
         builder.project(doc)
     doc = primary.load()
@@ -283,7 +283,7 @@ def test_url_fixture_uses_the_production_pattern():
     assert URL_VECTORS['https_pattern'] == builder.HTTPS_URL
 
 
-@pytest.mark.parametrize('command', ['generate-builder-config', 'check-builder-config'])
+@pytest.mark.parametrize('command', ['generate-builder-config', 'check-builder-config', 'generate-builder-flavors', 'check-builder-flavors'])
 @pytest.mark.parametrize('kind', ['checkout-link', 'escape', 'external', 'final-link', 'fifo'])
 def test_builder_output_directory_contract(tmp_path, command, kind):
     import os
@@ -293,15 +293,17 @@ def test_builder_output_directory_contract(tmp_path, command, kind):
     docs = root / 'docs'
     outside = tmp_path / 'outside'
     outside.mkdir()
-    payload = builder.render(primary.load())
-    victim = outside / 'iso-builder.config.json'
+    flavors = command.endswith('-flavors')
+    filename = 'iso-builder.flavors.json' if flavors else 'iso-builder.config.json'
+    payload = (builder.render_flavors if flavors else builder.render)(primary.load())
+    victim = outside / filename
     victim.write_text(payload)
     args = [sys.executable, str(ROOT / 'scripts/config.py'), command, '--root', str(root)]
     if kind == 'escape':
         docs.symlink_to(outside, target_is_directory=True)
     else:
         docs.mkdir()
-        (docs / 'iso-builder.config.json').write_text(payload)
+        (docs / filename).write_text(payload)
     if kind == 'checkout-link':
         alias = tmp_path / 'alias'
         alias.symlink_to(root, target_is_directory=True)
@@ -406,13 +408,14 @@ def test_output_parent_error_is_explicit_without_creating_directories(tmp_path, 
         assert not parent.exists()
 
 
-def test_custom_output_drift_names_matching_regeneration_arguments(tmp_path):
+@pytest.mark.parametrize('artifact', ['config', 'flavors'])
+def test_custom_output_drift_names_matching_regeneration_arguments(tmp_path, artifact):
     target = tmp_path / 'custom.json'
     target.write_text('{}')
     result = subprocess.run([sys.executable, str(ROOT / 'scripts/config.py'),
-                             'check-builder-config', '--output', str(target)],
+                             f'check-builder-{artifact}', '--output', str(target)],
                             capture_output=True, text=True)
     assert result.returncode == 1
     assert str(target) in result.stderr
-    assert 'generate-builder-config with the same --root and --output arguments' in result.stderr
+    assert f'generate-builder-{artifact} with the same --root and --output arguments' in result.stderr
     assert target.read_text() == '{}'

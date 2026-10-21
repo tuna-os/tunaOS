@@ -119,7 +119,8 @@ def test_prepare_refreshes_mutated_source_and_acceptance_cell(source_root):
     target = config.prepare(source_root)
     initial = target.read_bytes()
     source = source_root / "tunaos.toml"
-    source.write_text(source.read_text() + "\n" + (FIXTURES / "bonito-gnome-x13s.toml").read_text())
+    source.write_text(source.read_text() + "\n" + (FIXTURES / "bonito-gnome-x13s.toml").read_text() +
+                      '\n[flavor_metadata.gnome-x13s]\ndesktop = "gnome"\nedition = "x13s"\n')
     assert config.prepare(source_root) == target
     assert target.read_bytes() != initial
     projected = json.loads(target.read_text())
@@ -241,7 +242,8 @@ def test_failed_atomic_replace_keeps_previous_adapter_and_removes_temp(source_ro
     target = config.prepare(source_root)
     old_bytes = target.read_bytes()
     source = source_root / "tunaos.toml"
-    source.write_text(source.read_text() + "\n" + (FIXTURES / "bonito-gnome-x13s.toml").read_text())
+    source.write_text(source.read_text() + "\n" + (FIXTURES / "bonito-gnome-x13s.toml").read_text() +
+                      '\n[flavor_metadata.gnome-x13s]\ndesktop = "gnome"\nedition = "x13s"\n')
 
     def refuse_replace(self, destination):
         raise OSError("injected atomic replacement failure")

@@ -1,4 +1,4 @@
-# ISO Builder presentation configuration v1
+# ISO Builder presentation configuration
 
 Edit `[iso_builder]` in root `tunaos.toml` for TunaOS. Export it with:
 
@@ -22,9 +22,12 @@ They do not need a TunaOS matrix or repository at runtime. `iso-builder-config.s
 checks beyond JSON Schema. The primary projection also checks variant IDs and
 that the configured default is a build-enabled matrix cell.
 
-## Fields and boundaries
+## Version 1 compatibility fields
 
-- `schema_version` is integer `1`; unknown fields and versions are errors.
+The current primary config uses version 2, described below. The validator also
+accepts version 1 with these fields. Unknown fields and versions are errors.
+
+- `schema_version` is integer `1` for this compatibility contract.
 - `preview_only` is a required boolean. `true` disables inspection, automatic
   inspection, and build entry points. `false` grants no new build permission.
 - `brand` owns name, homepage, documentation, optional support/disclaimer and
@@ -80,6 +83,65 @@ This is the current ISO Builder presentation/default slice only. It does not
 complete the migration of source brand values, installed desktop identity, wallpaper, installer
 brand values, registry policy, or shared/base package migration. Those remain in
 `PRIMARY-CONFIG-MIGRATION.md`; this slice does not claim a source contract for them.
+
+## Guided selection v2
+
+Version 2 replaces `variants` and desktop display text with `selection.facets`.
+The `desktops` array retains only each ID and its default Flatpaks. This keeps
+one editable source for labels and one for app policy. Existing v1 documents
+remain accepted explicitly; a frozen fixture checks the v1 contract.
+A v1 consumer must reject v2 and must not ignore the new fields.
+
+`selection.paths` defines one to four question orders. `default_path` references
+one of those IDs. `facets` contains the labels and ordered value subsets for
+family, base, desktop, hardware, platform, graphics, edition, gaming_mode, channel or graphics_generation. A value can have a description and a card with safe `image_url`,
+`image_alt` and optional plain-text `badge`. Paths and facet values have unique
+IDs.
+
+`recommendations` has at most eight leaf IDs, labels and reasons.
+`default_selection` is either `{kind: "leaf", leaf_id: "..."}` or `{kind: "none"}`.
+No image reference belongs in this presentation document.
+
+`presentation.colors` is optional. It needs these colors in hex: background, surface,
+text, muted, accent and accent_text. Consumers apply these as fixed theme tokens.
+Optional border, hover_surface, focus and selected_surface tokens also use hex colors.
+They never evaluate arbitrary CSS.
+
+The optional `choice_style` accepts illustrated or thumbnail; illustrated is the default.
+The optional `font_family` is system, inter or dm-sans; system is the default.
+Fonts must come from reviewed local bundles with a verified license.
+The config cannot supply a font URL.
+
+ Existing asset URL restrictions apply to card
+images. Selection text is plain single-line text with at most 2048 characters.
+
+The primary `[flavor_metadata.<exact-flavor-id>]` tables own desktop and edition
+semantics. They cover every primary flavor exactly; consumers must not split a
+flavor name to infer its desktop. `scripts/config.py generate-builder-flavors`
+exports the sorted portable `docs/iso-builder.flavors.json` artifact.
+`check-builder-flavors` detects drift and does not write. The normal check runs both
+builder drift gates. The metadata has schema_version 1, kind
+`builder-flavor-metadata`, and flavors with ID, desktop and edition fields.
+
+The repository for ISO Builder owns its CatalogSnapshot. It imports reviewed config
+and flavor metadata bytes at an immutable source commit, then generates its
+GuidedCatalog from that exact local snapshot. The source repository does not
+copy a snapshot or fetch a moving branch.
+
+Each leaf uses the existing targetKey. It derives base, platform and hardware
+from the joined target. Desktop and edition come from the imported metadata
+for that exact flavor.
+The projection binds snapshotDigest. A mismatch causes an error. A flavor without metadata also causes an error.
+
+The validator checks references within the portable config. The primary export also checks each default and recommendation. Each ID must
+name a cell enabled for builds. Its base, platform, desktop and edition must
+pass the configured filters. The deployment join checks other facets, including
+hardware, and every referenced leaf against its actual guided catalog. An absent default or explicit
+choice becomes a visible unavailable selection; it never selects another row.
+
+Review selection needs availability and must meet the existing policy for offered images.
+Execution must pass the existing gate for qualification. Recommendations grant
+no qualification, and preview leaves never enter image inspection or build APIs.
 
 ## Image reference syntax
 

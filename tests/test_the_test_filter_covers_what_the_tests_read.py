@@ -153,6 +153,8 @@ def test_a_path_the_suite_reads_also_triggers_the_suite(name: str):
 @pytest.mark.parametrize("path", [
     "docs/iso-builder.config.json",
     "docs/iso-builder-config.schema.json",
+    "docs/iso-builder.flavors.json",
+    "docs/iso-builder-flavors.schema.json",
 ])
 def test_builder_contract_only_changes_run_validation(path):
     """An export-only or schema-only PR must execute its contract tests."""

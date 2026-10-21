@@ -70,6 +70,8 @@ on:
       # Portable builder exports and schemas are test inputs, not prose.
       - 'docs/iso-builder.config.json'
       - 'docs/iso-builder-config.schema.json'
+      - 'docs/iso-builder.flavors.json'
+      - 'docs/iso-builder-flavors.schema.json'
   push:
     branches: [main]
   workflow_dispatch:

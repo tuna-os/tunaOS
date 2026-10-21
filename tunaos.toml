@@ -4364,10 +4364,128 @@ required = [
   "gnome-base/gnome-keyring",
 ]
 
-# ISO Builder presentation only. CatalogSnapshot v1 still owns availability,
-# target references and qualification. Export; never hand-edit the JSON adapter.
+# Exact flavor semantics for guided image selection. These values describe the
+# primary matrix; they do not establish published availability or qualification.
+
+[flavor_metadata.base]
+desktop = "none"
+edition = "standard"
+
+[flavor_metadata.base-hwe]
+desktop = "none"
+edition = "hwe"
+
+[flavor_metadata.base-nvidia]
+desktop = "none"
+edition = "nvidia"
+
+[flavor_metadata.cosmic]
+desktop = "cosmic"
+edition = "standard"
+
+[flavor_metadata.cosmic-cachyos]
+desktop = "cosmic"
+edition = "cachyos"
+
+[flavor_metadata.cosmic-hwe]
+desktop = "cosmic"
+edition = "hwe"
+
+[flavor_metadata.cosmic-nvidia]
+desktop = "cosmic"
+edition = "nvidia"
+
+[flavor_metadata.gnome]
+desktop = "gnome"
+edition = "standard"
+
+[flavor_metadata.gnome-asahi]
+desktop = "gnome"
+edition = "asahi"
+
+[flavor_metadata.gnome-cachyos]
+desktop = "gnome"
+edition = "cachyos"
+
+[flavor_metadata.gnome-hwe]
+desktop = "gnome"
+edition = "hwe"
+
+[flavor_metadata.gnome-nvidia]
+desktop = "gnome"
+edition = "nvidia"
+
+[flavor_metadata.gnome-nvidia-hwe]
+desktop = "gnome"
+edition = "nvidia-hwe"
+
+[flavor_metadata.gnome-t2]
+desktop = "gnome"
+edition = "t2"
+
+[flavor_metadata.gnome-zfs]
+desktop = "gnome"
+edition = "zfs"
+
+[flavor_metadata.kde]
+desktop = "kde"
+edition = "standard"
+
+[flavor_metadata.kde-cachyos]
+desktop = "kde"
+edition = "cachyos"
+
+[flavor_metadata.kde-hwe]
+desktop = "kde"
+edition = "hwe"
+
+[flavor_metadata.kde-nvidia]
+desktop = "kde"
+edition = "nvidia"
+
+[flavor_metadata.niri]
+desktop = "niri"
+edition = "standard"
+
+[flavor_metadata.niri-cachyos]
+desktop = "niri"
+edition = "cachyos"
+
+[flavor_metadata.niri-hwe]
+desktop = "niri"
+edition = "hwe"
+
+[flavor_metadata.niri-nvidia]
+desktop = "niri"
+edition = "nvidia"
+
+[flavor_metadata.pantheon]
+desktop = "pantheon"
+edition = "standard"
+
+[flavor_metadata.tuna]
+desktop = "tuna"
+edition = "standard"
+
+[flavor_metadata.xfce]
+desktop = "xfce"
+edition = "standard"
+
+[flavor_metadata.xfce-cachyos]
+desktop = "xfce"
+edition = "cachyos"
+
+[flavor_metadata.xfce-hwe]
+desktop = "xfce"
+edition = "hwe"
+
+[flavor_metadata.xfce-nvidia]
+desktop = "xfce"
+edition = "nvidia"
+
+# ISO Builder presentation; catalog evidence remains authoritative.
 [iso_builder]
-schema_version = 1
+schema_version = 2
 preview_only = false
 
 [iso_builder.brand]
@@ -4388,76 +4506,188 @@ volume_label = "TUNAOS"
 filename_prefix = "tunaos"
 
 [iso_builder.default_selection]
-kind = "catalog"
-variant = "yellowfin"
-flavor = "gnome"
-platform = "linux/amd64/v2"
+kind = "leaf"
+leaf_id = "yellowfin:gnome:linux/amd64/v2"
 
 [[iso_builder.desktops]]
 id = "gnome"
-name = "GNOME"
-description = "A clean, focused desktop with an app overview."
 default_flatpaks = ["io.github.kolunmi.Bazaar", "org.mozilla.firefox", "org.gnome.TextEditor"]
 
 [[iso_builder.desktops]]
 id = "kde"
-name = "KDE Plasma"
-description = "A familiar layout with a taskbar and lots of customization."
 default_flatpaks = ["io.github.kolunmi.Bazaar", "org.mozilla.firefox", "org.kde.kate"]
 
 [[iso_builder.desktops]]
 id = "cosmic"
-name = "COSMIC"
-description = "Flexible workspaces with optional window tiling."
 default_flatpaks = ["io.github.kolunmi.Bazaar", "org.mozilla.firefox"]
 
 [[iso_builder.desktops]]
 id = "niri"
-name = "Niri"
-description = "A scrolling, keyboard-focused window layout."
 default_flatpaks = ["io.github.kolunmi.Bazaar", "org.mozilla.firefox"]
 
 [[iso_builder.desktops]]
 id = "xfce"
-name = "XFCE"
-description = "A lightweight, traditional desktop."
 default_flatpaks = ["io.github.kolunmi.Bazaar", "org.mozilla.firefox", "org.gnome.TextEditor"]
 
-[[iso_builder.variants]]
+[iso_builder.selection]
+default_path = "desktop-first"
+
+[[iso_builder.selection.paths]]
+id = "desktop-first"
+label = "Start with a desktop"
+facets = ["desktop", "base", "edition", "hardware", "platform"]
+
+[[iso_builder.selection.paths]]
+id = "base-first"
+label = "Start with a base"
+facets = ["base", "desktop", "edition", "hardware", "platform"]
+
+[[iso_builder.selection.facets]]
+id = "desktop"
+label = "Desktop"
+
+[[iso_builder.selection.facets.values]]
+id = "gnome"
+label = "GNOME"
+description = "A clean, focused desktop with an app overview."
+
+[[iso_builder.selection.facets.values]]
+id = "kde"
+label = "KDE Plasma"
+description = "A familiar layout with a taskbar and lots of customization."
+
+[[iso_builder.selection.facets.values]]
+id = "cosmic"
+label = "COSMIC"
+description = "Flexible workspaces with optional window tiling."
+
+[[iso_builder.selection.facets.values]]
+id = "niri"
+label = "Niri"
+description = "A scrolling, keyboard-focused window layout."
+
+[[iso_builder.selection.facets.values]]
+id = "xfce"
+label = "XFCE"
+description = "A lightweight, traditional desktop."
+
+[[iso_builder.selection.facets]]
+id = "base"
+label = "Base"
+
+[[iso_builder.selection.facets.values]]
 id = "yellowfin"
-name = "AlmaLinux Kitten 10 (flagship)"
+label = "AlmaLinux Kitten 10 (flagship)"
 
-[[iso_builder.variants]]
+[[iso_builder.selection.facets.values]]
 id = "bonito"
-name = "Fedora 44"
+label = "Fedora 44"
 
-[[iso_builder.variants]]
+[[iso_builder.selection.facets.values]]
 id = "sailfin"
-name = "openSUSE Tumbleweed"
+label = "openSUSE Tumbleweed"
 
-[[iso_builder.variants]]
+[[iso_builder.selection.facets.values]]
 id = "flounder"
-name = "Debian 13 Trixie"
+label = "Debian 13 Trixie"
 
-[[iso_builder.variants]]
+[[iso_builder.selection.facets.values]]
 id = "grouper"
-name = "Ubuntu 26.04"
+label = "Ubuntu 26.04"
 
-[[iso_builder.variants]]
+[[iso_builder.selection.facets.values]]
 id = "marlin"
-name = "Arch Linux"
+label = "Arch Linux"
 
-[[iso_builder.variants]]
+[[iso_builder.selection.facets.values]]
 id = "skipjack"
-name = "CentOS Stream 10"
+label = "CentOS Stream 10"
 
-[[iso_builder.variants]]
+[[iso_builder.selection.facets.values]]
 id = "albacore"
-name = "AlmaLinux 10"
+label = "AlmaLinux 10"
 
-[[iso_builder.variants]]
+[[iso_builder.selection.facets.values]]
 id = "guppy"
-name = "Gentoo (source-based)"
+label = "Gentoo (source-based)"
+
+[[iso_builder.selection.facets]]
+id = "edition"
+label = "Image edition"
+
+[[iso_builder.selection.facets.values]]
+id = "standard"
+label = "Standard"
+
+[[iso_builder.selection.facets.values]]
+id = "hwe"
+label = "Hardware enablement"
+
+[[iso_builder.selection.facets.values]]
+id = "nvidia"
+label = "NVIDIA"
+
+[[iso_builder.selection.facets.values]]
+id = "nvidia-hwe"
+label = "NVIDIA hardware enablement"
+
+[[iso_builder.selection.facets.values]]
+id = "asahi"
+label = "Apple Silicon"
+
+[[iso_builder.selection.facets.values]]
+id = "t2"
+label = "Apple T2"
+
+[[iso_builder.selection.facets.values]]
+id = "zfs"
+label = "ZFS"
+
+[[iso_builder.selection.facets.values]]
+id = "cachyos"
+label = "CachyOS kernel"
+
+[[iso_builder.selection.facets]]
+id = "hardware"
+label = "Computer type"
+
+[[iso_builder.selection.facets.values]]
+id = "generic"
+label = "Generic computer"
+
+[[iso_builder.selection.facets.values]]
+id = "apple-silicon"
+label = "Apple Silicon"
+
+[[iso_builder.selection.facets.values]]
+id = "apple-t2"
+label = "Apple T2"
+
+
+[[iso_builder.selection.facets]]
+id = "platform"
+label = "Computer architecture"
+
+[[iso_builder.selection.facets.values]]
+id = "linux/amd64"
+label = "x86-64"
+
+[[iso_builder.selection.facets.values]]
+id = "linux/amd64/v2"
+label = "x86-64 v2"
+
+[[iso_builder.selection.facets.values]]
+id = "linux/amd64/v3"
+label = "x86-64 v3"
+
+[[iso_builder.selection.facets.values]]
+id = "linux/arm64"
+label = "ARM64"
+
+[[iso_builder.selection.recommendations]]
+leaf_id = "yellowfin:gnome:linux/amd64/v2"
+label = "Recommended starting point"
+reason = "The flagship base with the GNOME desktop. Check your target computer architecture before continuing."
 
 [[iso_builder.curated_app_sets]]
 id = "bluefin-system"

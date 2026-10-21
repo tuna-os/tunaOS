@@ -24,7 +24,7 @@ def builder_target(root, output, relative):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=('validate', 'generate', 'show', 'generate-builder-config', 'check-builder-config', 'generate-debian-contract', 'prepare-debian-context', 'verify-debian-image'))
+    parser.add_argument('command', choices=('validate', 'generate', 'show', 'generate-builder-config', 'check-builder-config', 'generate-builder-flavors', 'check-builder-flavors', 'generate-debian-contract', 'prepare-debian-context', 'verify-debian-image'))
     parser.add_argument('--root', type=Path, default=tunaos_config.ROOT)
     parser.add_argument('--output', type=Path)
     parser.add_argument('--image')
@@ -33,12 +33,15 @@ def main():
     parser.add_argument('--platform')
     args = parser.parse_args()
     try:
-        if args.command in ('generate-builder-config', 'check-builder-config'):
-            content = iso_builder_config.render(tunaos_config.load(args.root / 'tunaos.toml'))
-            target = builder_target(args.root, args.output, 'docs/iso-builder.config.json')
-            if args.command == 'check-builder-config':
+        if args.command in ('generate-builder-config', 'check-builder-config', 'generate-builder-flavors', 'check-builder-flavors'):
+            flavors = args.command.endswith('-flavors')
+            render = iso_builder_config.render_flavors if flavors else iso_builder_config.render
+            content = render(tunaos_config.load(args.root / 'tunaos.toml'))
+            target = builder_target(args.root, args.output, 'docs/iso-builder.flavors.json' if flavors else 'docs/iso-builder.config.json')
+            if args.command.startswith('check-'):
                 if not target.is_file() or target.read_text(encoding='utf-8') != content:
-                    raise tunaos_config.ConfigError(f'{target}: generated builder config drift; run generate-builder-config with the same --root and --output arguments')
+                    command = 'generate-builder-flavors' if flavors else 'generate-builder-config'
+                    raise tunaos_config.ConfigError(f'{target}: generated builder config drift; run {command} with the same --root and --output arguments')
             else:
                 target.write_text(content, encoding='utf-8')
             print(target)
