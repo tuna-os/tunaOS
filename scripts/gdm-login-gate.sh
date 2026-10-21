@@ -41,7 +41,9 @@ if [[ -n "$session" ]]; then
 		echo "==> user manager state for $user (uid $uid)"
 		sudo -u "#$uid" XDG_RUNTIME_DIR="/run/user/$uid" systemctl --user is-system-running 2>&1 || true
 		sudo -u "#$uid" XDG_RUNTIME_DIR="/run/user/$uid" systemctl --user list-units --type=target --no-legend 2>&1 | head -n 20 || true
-	fi
+		echo "==> failed user units for $user (uid $uid)"
+		sudo -u "#$uid" XDG_RUNTIME_DIR="/run/user/$uid" systemctl --user list-units --state=failed --no-legend 2>&1 | head -n 20 || true
+fi
 else
 	while read -r id _ name _; do
 		[[ "$name" == "$user" ]] || continue
@@ -105,15 +107,23 @@ FIND_SESSION
 
 session_id=""
 for attempt in 1 2 3; do
+	# Each round starts from the tile list: Esc backs out of any prompt a
+	# previous round left open, so attempts cannot poison each other with
+	# half-typed input. The sleeps let slow software-rendered greeters
+	# finish their transitions before keys land.
+	"$CORRAL" key "$NAME" esc
+	sleep 2
 	case "$attempt" in
 	1) "$CORRAL" key "$NAME" ret ;;
 	2) "$CORRAL" key "$NAME" tab; sleep 1; "$CORRAL" key "$NAME" ret ;;
 	3) "$CORRAL" type "$NAME" "$TEST_USER"; sleep 1; "$CORRAL" key "$NAME" ret ;;
 	esac
-	sleep 2
+	sleep 3
 	"$CORRAL" screenshot "$NAME" -o "${OUT}/gdm-attempt-${attempt}.png" --require-paint
 	sleep 2
-	"$CORRAL" type "$NAME" "$TEST_PASSWORD" --enter
+	"$CORRAL" type "$NAME" "$TEST_PASSWORD"
+	sleep 1
+	"$CORRAL" key "$NAME" ret
 	for _ in $(seq 1 20); do
 		if session_id="$(graphical_session)"; then
 			break 2
@@ -159,9 +169,13 @@ echo "TUNAOS_GDM_LOCK_OK user=${TEST_USER} session=${session_id}"
 "$CORRAL" screenshot "$NAME" -o "${OUT}/gdm-locked.png"
 
 # Wake the lock screen, then authenticate through the desktop's PAM path.
+# Type and submit separately so a slow shield finishes painting the prompt
+# before the password lands and Enter submits it.
 "$CORRAL" key "$NAME" ret
 sleep 1
-"$CORRAL" type "$NAME" "$TEST_PASSWORD" --enter
+"$CORRAL" type "$NAME" "$TEST_PASSWORD"
+sleep 1
+"$CORRAL" key "$NAME" ret
 unlocked=0
 for _ in $(seq 1 30); do
 	if [[ "$(guest loginctl show-session "$session_id" -p LockedHint --value 2>/dev/null || true)" == no ]]; then
