@@ -46,6 +46,12 @@ key)
   echo "key $*" >>"${STATE}/calls"
   touch "${STATE}/input-seen"
   if [[ "$*" == *tab* && "${GDM_GATE_TAB_WORKS:-1}" == 1 ]]; then touch "${STATE}/tabbed"; fi
+  if [[ "$*" == *ret* && -f "${STATE}/pw-typed" ]]; then
+    rm -f "${STATE}/pw-typed"
+    if [[ -f "${STATE}/session-preseed" || -f "${STATE}/tabbed" || -f "${STATE}/typed-user" ]]; then
+      rm -f "${STATE}/locked"
+    fi
+  fi
   ;;
 type)
   echo "type $*" >>"${STATE}/calls"
@@ -54,10 +60,8 @@ type)
   if [[ "$text" == "${GDM_GATE_USER:?}" && "$*" != *--enter* && "${GDM_GATE_TYPEAHEAD_WORKS:-1}" == 1 ]]; then
     touch "${STATE}/typed-user"
   fi
-  if [[ "$*" == *--enter* && "$text" == "${TUNAOS_GDM_TEST_PASSWORD:?}" ]]; then
-    if [[ -f "${STATE}/session-preseed" || -f "${STATE}/tabbed" || -f "${STATE}/typed-user" ]]; then
-      rm -f "${STATE}/locked"
-    fi
+  if [[ "$text" == "${TUNAOS_GDM_TEST_PASSWORD:?}" && "$*" != *--enter* ]]; then
+    touch "${STATE}/pw-typed"
   fi
   ;;
 *) echo "unexpected corral call: $sub $*" >&2; exit 1 ;;
@@ -152,6 +156,7 @@ run_gate() {
   grep -Fq 'TUNAOS_GDM_LOCK_OK user=tuna-ci-login session=41' <<<"$output"
   grep -Fq 'TUNAOS_GDM_UNLOCK_OK user=tuna-ci-login session=41' <<<"$output"
   grep -Fq 'key testvm tab' "${STATE}/calls"
+  grep -Fq 'key testvm esc' "${STATE}/calls"
   [ -f "${OUT}/gdm-attempt-1.png" ]
   [ -f "${OUT}/gdm-attempt-2.png" ]
   [ ! -e "${OUT}/gdm-attempt-3.png" ]
