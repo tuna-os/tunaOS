@@ -257,3 +257,67 @@ def test_schema_and_reference_flatpak_identity_parity(app_id, valid):
     else:
         with pytest.raises(builder.ConfigError):
             builder.validate(doc)
+
+
+URL_VECTORS = json.loads((ROOT / 'tests/fixtures/builder-config-urls.json').read_text())
+
+
+@pytest.mark.parametrize('case', URL_VECTORS['cases'], ids=range(len(URL_VECTORS['cases'])))
+def test_shared_url_authority_policy(case):
+    import jsonschema
+    config = builder.project(primary.load())
+    key = 'logo_url' if case['asset'] else 'homepage_url'
+    config['brand'][key] = case['url']
+    schema = json.loads((ROOT / 'docs/iso-builder-config.schema.json').read_text())
+    if case['valid']:
+        builder.validate(config)
+        jsonschema.validate(config, schema)
+    else:
+        with pytest.raises(builder.ConfigError):
+            builder.validate(config)
+        with pytest.raises(jsonschema.ValidationError):
+            jsonschema.validate(config, schema)
+
+
+def test_url_fixture_uses_the_production_pattern():
+    assert URL_VECTORS['https_pattern'] == builder.HTTPS_URL
+
+
+@pytest.mark.parametrize('command', ['generate-builder-config', 'check-builder-config', 'generate-builder-flavors', 'check-builder-flavors'])
+@pytest.mark.parametrize('kind', ['checkout-link', 'escape', 'external', 'final-link', 'fifo'])
+def test_builder_output_directory_contract(tmp_path, command, kind):
+    import os
+    root = tmp_path / 'checkout'
+    root.mkdir()
+    (root / 'tunaos.toml').write_bytes((ROOT / 'tunaos.toml').read_bytes())
+    docs = root / 'docs'
+    outside = tmp_path / 'outside'
+    outside.mkdir()
+    flavors = command.endswith('-flavors')
+    filename = 'iso-builder.flavors.json' if flavors else 'iso-builder.config.json'
+    payload = (builder.render_flavors if flavors else builder.render)(primary.load())
+    victim = outside / filename
+    victim.write_text(payload)
+    args = [sys.executable, str(ROOT / 'scripts/config.py'), command, '--root', str(root)]
+    if kind == 'escape':
+        docs.symlink_to(outside, target_is_directory=True)
+    else:
+        docs.mkdir()
+        (docs / filename).write_text(payload)
+    if kind == 'checkout-link':
+        alias = tmp_path / 'alias'
+        alias.symlink_to(root, target_is_directory=True)
+        args[-1] = str(alias)
+    elif kind == 'external':
+        args += ['--output', str(victim)]
+    elif kind in ('final-link', 'fifo'):
+        target = outside / 'selected.json'
+        if kind == 'final-link':
+            target.symlink_to(victim)
+        else:
+            os.mkfifo(target)
+        args += ['--output', str(target)]
+    result = subprocess.run(args, capture_output=True, text=True, timeout=10)
+    assert result.returncode == (0 if kind in ('checkout-link', 'external') else 1), result.stderr
+    assert victim.read_text() == payload
+    assert 'Traceback' not in result.stderr

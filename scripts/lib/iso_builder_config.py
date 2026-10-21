@@ -6,7 +6,10 @@ import importlib.util
 from pathlib import Path
 import json
 import re
-from urllib.parse import urlsplit
+
+
+# Bounded portable HTTPS authority: ASCII DNS or canonical dotted IPv4.
+HTTPS_URL = '^(?![\\s\\S]*[\\x00-\\x20\\x7f\\u0085\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff\\\\])https://(?:(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])(?:\\.(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])){3}|(?=[^/?#:]{1,253}(?::443)?(?:[/?#]|$))(?!(?:[^./?#:]+\\.)*(?:[0-9]+|0[xX][0-9A-Fa-f]+)\\.?(?::443)?(?:[/?#]|$))[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*\\.?)(?::443)?(?:[/?#][^\\x00-\\x20\\x7f\\u0085\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff\\\\]*)?(?![\\s\\S])'
 
 
 class ConfigError(ValueError):
@@ -39,13 +42,8 @@ def url(value, asset=False):
         raise ConfigError('URL must not contain whitespace or backslashes')
     if asset and re.fullmatch(r'/(?:[A-Za-z0-9_-]+/)*[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*', value):
         return
-    try:
-        parsed = urlsplit(value)
-        port = parsed.port
-    except ValueError as exc:
-        raise ConfigError('invalid URL') from exc
-    if not re.fullmatch(r'https://[^\s/@\\:]+(?::443)?(?:[/?#][^\s\\]*)?', value) or parsed.scheme != 'https' or not parsed.hostname or parsed.username is not None or parsed.password is not None or port not in (None, 443):
-        raise ConfigError('expected HTTPS URL without credentials or custom port')
+    if not re.fullmatch(HTTPS_URL, value):
+        raise ConfigError('expected HTTPS URL with DNS or canonical IPv4 host, no credentials or custom port')
 
 
 def entries(value, fields, collection):

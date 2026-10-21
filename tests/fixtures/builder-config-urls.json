@@ -1,0 +1,331 @@
+{
+  "schema_version": 1,
+  "https_pattern": "^(?![\\s\\S]*[\\x00-\\x20\\x7f\\u0085\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff\\\\])https://(?:(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])(?:\\.(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])){3}|(?=[^/?#:]{1,253}(?::443)?(?:[/?#]|$))(?!(?:[^./?#:]+\\.)*(?:[0-9]+|0[xX][0-9A-Fa-f]+)\\.?(?::443)?(?:[/?#]|$))[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*\\.?)(?::443)?(?:[/?#][^\\x00-\\x20\\x7f\\u0085\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff\\\\]*)?(?![\\s\\S])",
+  "cases": [
+    {
+      "url": "https://example.org",
+      "asset": false,
+      "valid": true
+    },
+    {
+      "url": "https://EXAMPLE.org/",
+      "asset": false,
+      "valid": true
+    },
+    {
+      "url": "https://example.org:443/a?q=1#part",
+      "asset": false,
+      "valid": true
+    },
+    {
+      "url": "https://localhost/",
+      "asset": false,
+      "valid": true
+    },
+    {
+      "url": "https://xn--bcher-kva.example/",
+      "asset": false,
+      "valid": true
+    },
+    {
+      "url": "https://a-b.example./",
+      "asset": false,
+      "valid": true
+    },
+    {
+      "url": "https://0.0.0.0/",
+      "asset": false,
+      "valid": true
+    },
+    {
+      "url": "https://255.255.255.255:443/",
+      "asset": false,
+      "valid": true
+    },
+    {
+      "url": "https://192.168.1.2/?x=y#part",
+      "asset": false,
+      "valid": true
+    },
+    {
+      "url": "https://123a.example/",
+      "asset": false,
+      "valid": true
+    },
+    {
+      "url": "https://example.org/characters/leaping.webp",
+      "asset": false,
+      "valid": true
+    },
+    {
+      "url": "https://example.org?query",
+      "asset": false,
+      "valid": true
+    },
+    {
+      "url": "https://example.org/#fragment",
+      "asset": false,
+      "valid": true
+    },
+    {
+      "url": "https://0xg/",
+      "asset": false,
+      "valid": true
+    },
+    {
+      "url": "https://?query",
+      "asset": false,
+      "valid": false
+    },
+    {
+      "url": "https://#fragment",
+      "asset": false,
+      "valid": false
+    },
+    {
+      "url": "https://[example.org]/",
+      "asset": false,
+      "valid": false
+    },
+    {
+      "url": "https://[::1]/",
+      "asset": false,
+      "valid": false
+    },
+    {
+      "url": "https://%zz/",
+      "asset": false,
+      "valid": false
+    },
+    {
+      "url": "https://%65xample.org/",
+      "asset": false,
+      "valid": false
+    },
+    {
+      "url": "https://999.999.999.999/",
+      "asset": false,
+      "valid": false
+    },
+    {
+      "url": "https://256.0.0.1/",
+      "asset": false,
+      "valid": false
+    },
+    {
+      "url": "https://127.1/",
+      "asset": false,
+      "valid": false
+    },
+    {
+      "url": "https://2130706433/",
+      "asset": false,
+      "valid": false
+    },
+    {
+      "url": "https://0177.0.0.1/",
+      "asset": false,
+      "valid": false
+    },
+    {
+      "url": "https://0x7f000001/",
+      "asset": false,
+      "valid": false
+    },
+    {
+      "url": "https://0x7f.0.0.1/",
+      "asset": false,
+      "valid": false
+    },
+    {
+      "url": "https://127.0.0.1./",
+      "asset": false,
+      "valid": false
+    },
+    {
+      "url": "https://example.123/",
+      "asset": false,
+      "valid": false
+    },
+    {
+      "url": "https://example.0xff/",
+      "asset": false,
+      "valid": false
+    },
+    {
+      "url": "https://user:pass@example.org/",
+      "asset": false,
+      "valid": false
+    },
+    {
+      "url": "https://example.org:444/",
+      "asset": false,
+      "valid": false
+    },
+    {
+      "url": "https://example.org:0443/",
+      "asset": false,
+      "valid": false
+    },
+    {
+      "url": "https://example..org/",
+      "asset": false,
+      "valid": false
+    },
+    {
+      "url": "https://-example.org/",
+      "asset": false,
+      "valid": false
+    },
+    {
+      "url": "https://example_.org/",
+      "asset": false,
+      "valid": false
+    },
+    {
+      "url": "https://b\u00fccher.example/",
+      "asset": false,
+      "valid": false
+    },
+    {
+      "url": "https://example.org\n",
+      "asset": false,
+      "valid": false
+    },
+    {
+      "url": "https://example.org/\u0000",
+      "asset": false,
+      "valid": false
+    },
+    {
+      "url": "https://example.org/\u007f",
+      "asset": false,
+      "valid": false
+    },
+    {
+      "url": "https://example.org/a b",
+      "asset": false,
+      "valid": false
+    },
+    {
+      "url": "https://example.org\\evil/",
+      "asset": false,
+      "valid": false
+    },
+    {
+      "url": "http://example.org/",
+      "asset": false,
+      "valid": false
+    },
+    {
+      "url": "https://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.org/",
+      "asset": false,
+      "valid": false
+    },
+    {
+      "url": "/logo.png",
+      "asset": true,
+      "valid": true
+    },
+    {
+      "url": "/images/a-b.webp",
+      "asset": true,
+      "valid": true
+    },
+    {
+      "url": "//evil.org/a",
+      "asset": true,
+      "valid": false
+    },
+    {
+      "url": "/../logo.png",
+      "asset": true,
+      "valid": false
+    },
+    {
+      "url": "/a?query",
+      "asset": true,
+      "valid": false
+    },
+    {
+      "url": "/a#fragment",
+      "asset": true,
+      "valid": false
+    },
+    {
+      "url": "https://example.org/a\u0085b",
+      "asset": false,
+      "valid": false
+    },
+    {
+      "url": "https://exam\u0085ple.org/",
+      "asset": false,
+      "valid": false
+    },
+    {
+      "url": "https://example.org/a\ufeffb",
+      "asset": false,
+      "valid": false
+    },
+    {
+      "url": "https://exam\ufeffple.org/",
+      "asset": false,
+      "valid": false
+    },
+    {
+      "url": "https://example.org/a\u00a0b",
+      "asset": false,
+      "valid": false
+    },
+    {
+      "url": "https://exam\u00a0ple.org/",
+      "asset": false,
+      "valid": false
+    },
+    {
+      "url": "https://example.org/a\u2007b",
+      "asset": false,
+      "valid": false
+    },
+    {
+      "url": "https://exam\u2007ple.org/",
+      "asset": false,
+      "valid": false
+    },
+    {
+      "url": "https://example.org/a\u2028b",
+      "asset": false,
+      "valid": false
+    },
+    {
+      "url": "https://exam\u2028ple.org/",
+      "asset": false,
+      "valid": false
+    },
+    {
+      "url": "https://example.org/a\u2029b",
+      "asset": false,
+      "valid": false
+    },
+    {
+      "url": "https://exam\u2029ple.org/",
+      "asset": false,
+      "valid": false
+    },
+    {
+      "url": "https://example.org/a\u3000b",
+      "asset": false,
+      "valid": false
+    },
+    {
+      "url": "https://exam\u3000ple.org/",
+      "asset": false,
+      "valid": false
+    },
+    {
+      "url": "https://example.org/\u65e5\u672c\u8a9e?q=%20#part",
+      "asset": false,
+      "valid": true
+    }
+  ]
+}
