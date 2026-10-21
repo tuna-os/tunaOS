@@ -277,11 +277,13 @@ REPO_ROOT="${REPO_ROOT:-.}"
 # --log-driver=k8s-file: same conmon-without-journald gap as
 # build-image-inner.sh's chunkah run (tacklebox#235) — the RunsOn runners
 # cannot run any container on the default journald log driver.
+# Customized overlays can retain a shell ENTRYPOINT. Override it for probes
+# rather than passing another executable as input to that inherited shell.
 VERSION_ID=$(podman run --rm --log-driver=k8s-file --security-opt label=disable \
-	"$IMAGE_REF" \
-	sh -c '. /usr/lib/os-release && echo "${VERSION_ID}"')
+	--entrypoint /bin/sh "$IMAGE_REF" \
+	-c '. /usr/lib/os-release && echo "${VERSION_ID}"')
 ARCH=$(podman run --rm --log-driver=k8s-file --security-opt label=disable \
-	"$IMAGE_REF" uname -m)
+	--entrypoint /usr/bin/uname "$IMAGE_REF" -m)
 if [[ -n "$PLATFORM" ]]; then
 	case "$PLATFORM" in
 	linux/amd64 | linux/amd64/v2 | linux/arm64) ;;

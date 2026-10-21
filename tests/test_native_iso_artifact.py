@@ -282,3 +282,38 @@ def test_strict_installed_boot_uses_primary_config_resolver():
     script = (ROOT / 'scripts/iso-e2e.sh').read_text()
     assert 'TUNAOS_BUILD_CONFIG="${SCRIPT_DIR}/../.github/build-config.yml"' not in script
     assert '"${SCRIPT_DIR}/published-image-ref.sh" "${VARIANT:-}" "${FLAVOR:-}" ghcr' in script
+
+
+def test_iso_filename_probes_override_customized_image_entrypoint(tmp_path):
+    import os
+    import subprocess
+
+    # Model a customized overlay with ENTRYPOINT=/usr/bin/sh: any implicit
+    # command would be interpreted by that shell as an input filename.
+    podman = tmp_path / 'podman'
+    podman.write_text('''#!/usr/bin/env python3
+import sys
+args = sys.argv[1:]
+if '--entrypoint' not in args:
+    sys.exit(126)
+i = args.index('--entrypoint')
+entrypoint, image, *command = args[i+1:]
+assert image == 'localhost/overlay@sha256:' + 'a'*64
+if entrypoint == '/bin/sh':
+    assert command[0] == '-c' and 'os-release' in command[1]
+    print('10.0')
+elif entrypoint == '/usr/bin/uname':
+    assert command == ['-m']
+    print('x86_64')
+else:
+    sys.exit(127)
+''')
+    podman.chmod(0o755)
+    script = (ROOT / 'scripts/build-iso-tacklebox.sh').read_text()
+    probes = script[script.index('VERSION_ID=$(podman'):script.index('if [[ -n "$PLATFORM" ]]', script.index('VERSION_ID=$(podman'))]
+    result = subprocess.run(['bash', '-euc', probes + '\nprintf "%s %s\\n" "$VERSION_ID" "$ARCH"'],
+                            capture_output=True, text=True,
+                            env={**os.environ, 'PATH': str(tmp_path) + ':' + os.environ['PATH'],
+                                 'IMAGE_REF': 'localhost/overlay@sha256:' + 'a'*64})
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == '10.0 x86_64'
