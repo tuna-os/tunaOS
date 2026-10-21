@@ -72,6 +72,12 @@ else
 		loginctl show-session "$id" -p Name -p Type -p Seat -p Active -p State -p Service -p LockedHint -p IdleHint || true
 	done < <(loginctl list-sessions --no-legend)
 fi
+echo "==> AccountsService selection for $user"
+cat "/var/lib/AccountsService/users/$user" 2>/dev/null || echo "(no AccountsService file)"
+_diag_uid="$(id -u "$user" 2>/dev/null || true)"
+if [[ -n "$_diag_uid" ]]; then
+	busctl get-property org.freedesktop.Accounts "/org/freedesktop/Accounts/User${_diag_uid}" org.freedesktop.Accounts.User Session 2>&1 || true
+fi
 echo "==> GDM service"
 systemctl status gdm.service --no-pager || true
 echo "==> recent greeter, shell, lock and PAM journal (guest SSH sessions excluded)"
@@ -97,7 +103,7 @@ guest true || {
 # only picks this up on startup, so restart it after writing the selection.
 guest_accts_dir="${TUNAOS_GDM_ACCOUNTS_DIR:-/var/lib/AccountsService/users}"
 guest mkdir -p "$guest_accts_dir"
-printf '[User]\nSession=tuna\n' | guest tee "$guest_accts_dir/$TEST_USER" >/dev/null
+printf '[User]\nSession=tuna\nXSession=tuna\n' | guest tee "$guest_accts_dir/$TEST_USER" >/dev/null
 guest systemctl restart gdm.service
 for _ in $(seq 1 60); do
 	if guest systemctl is-active --quiet display-manager.service; then
