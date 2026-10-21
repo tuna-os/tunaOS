@@ -232,9 +232,15 @@ def validate(config):
             if unknown:
                 raise ConfigError(f'iso_groups[{i}].{key}: unknown flavors {sorted(unknown)}')
     if 'iso_builder' in config or 'flavor_metadata' in config:
-        spec = importlib.util.spec_from_file_location('iso_builder_config', Path(__file__).with_name('iso_builder_config.py'))
+        module_path = Path(__file__).with_name('iso_builder_config.py')
+        spec = importlib.util.spec_from_file_location('iso_builder_config', module_path)
+        if spec is None or spec.loader is None:
+            raise ConfigError(f'iso_builder: cannot load validator at {module_path}')
         module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
+        try:
+            spec.loader.exec_module(module)
+        except OSError as exc:
+            raise ConfigError(f'iso_builder: cannot read validator at {module_path}: {exc}') from exc
         try:
             if 'flavor_metadata' in config:
                 module.flavor_metadata(config)
