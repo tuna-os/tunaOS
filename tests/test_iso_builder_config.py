@@ -239,3 +239,21 @@ def test_schema_and_reference_image_identity_parity(reference, valid):
     else:
         with pytest.raises(builder.ConfigError):
             builder.validate(doc)
+
+
+@pytest.mark.parametrize('app_id,valid', [
+    (case['id'], case['valid'])
+    for case in json.loads((ROOT / 'tests/fixtures/builder-config-flatpak-ids.json').read_text())
+])
+def test_schema_and_reference_flatpak_identity_parity(app_id, valid):
+    # Flatpak 1.16.1 common/flatpak-ref-utils.c: flatpak_is_valid_name.
+    jsonschema = pytest.importorskip('jsonschema')
+    schema = json.loads((ROOT / 'docs/iso-builder-config.schema.json').read_text())
+    doc = config()
+    doc['desktops'][0]['default_flatpaks'] = [app_id]
+    assert jsonschema.Draft202012Validator(schema).is_valid(doc) is valid
+    if valid:
+        builder.validate(doc)
+    else:
+        with pytest.raises(builder.ConfigError):
+            builder.validate(doc)

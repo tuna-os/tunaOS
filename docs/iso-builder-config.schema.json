@@ -154,7 +154,8 @@
             "uniqueItems": true,
             "items": {
               "type": "string",
-              "pattern": "^(?![\\s\\S]*[\\u0000-\\u001f\\u007f])[A-Za-z0-9_-]+(?:\\.[A-Za-z0-9_-]+){2,}(?![\\s\\S])"
+              "pattern": "^(?:[A-Za-z_][A-Za-z0-9_]*\\.){2,}[A-Za-z_-][A-Za-z0-9_-]*(?![\\s\\S])",
+              "maxLength": 255
             }
           }
         }
