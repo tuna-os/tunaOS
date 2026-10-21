@@ -35,7 +35,9 @@ MOCK
     grep -Fq "/* packaged upstream stylesheet: /org/gnome/shell/theme/${stylesheet} */" "$path"
     grep -Fqx '  background-color: #1793D1;' "$path"
     [ "$(grep -Fc 'background-color: #1793D1;' "$path")" -eq 1 ]
+    [ "$(stat -c %a "$path")" = 644 ]
   done
+  [ "$(stat -c %a "${ROOT}/usr/share/tunaos/gdm-theme")" = 755 ]
 
   [ "$(cat "${ROOT}/usr/share/gnome-shell/gnome-shell-theme.gresource")" = "unchanged package resource" ]
 
