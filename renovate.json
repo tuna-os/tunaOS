@@ -86,7 +86,7 @@
         "/^tunaos\\.toml$/"
       ],
       "matchStrings": [
-        "base_image\\s*=\\s*\"(?<depName>(?<packageName>[^:]+)):(?<currentValue>[^@\\n\"]+)@(?<currentDigest>sha256:[a-f0-9]+)\""
+        "(?:^|\\n)[ \\t]*base_image\\s*=\\s*\"(?<depName>(?<packageName>[^:]+)):(?<currentValue>[^@\\n\"]+)@(?<currentDigest>sha256:[a-f0-9]+)\""
       ],
       "datasourceTemplate": "docker",
       "depNameTemplate": "{{{packageName}}}"

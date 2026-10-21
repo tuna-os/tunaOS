@@ -285,7 +285,7 @@ def test_renovate_updates_only_primary_source_and_adapter_follows(tmp_path):
 def test_shell_reader_prepares_absent_adapter_in_fresh_checkout(tmp_path):
     import shutil
     for name in ("tunaos.toml", "scripts/config.py", "scripts/lib/tunaos_config.py",
-                 "scripts/lib/tunaos_packages.py", "scripts/lib/desktop_operations.json",
+                 "scripts/lib/tunaos_packages.py", "scripts/lib/package_catalogs.py", "scripts/lib/desktop_operations.json",
                  "scripts/lib/build-config.sh"):
         target = tmp_path / name
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -424,7 +424,7 @@ def test_renovate_only_pin_update_keeps_live_suite_green(tmp_path):
     checkout = tmp_path / "checkout"
     for name in ("tunaos.toml", "renovate.json", "requirements-config.txt",
                  "scripts/config.py", "scripts/lib/tunaos_config.py",
-                 "scripts/lib/tunaos_packages.py", "scripts/lib/desktop_operations.json",
+                 "scripts/lib/tunaos_packages.py", "scripts/lib/package_catalogs.py", "scripts/lib/desktop_operations.json",
                  "scripts/lib/build-config.sh", "scripts/iso-e2e.sh",
                  "just/utilities.just", ".github/workflows/reusable-build-image.yml",
                  "tests/test_primary_config.py"):
