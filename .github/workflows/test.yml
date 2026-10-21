@@ -137,22 +137,102 @@ jobs:
           # Pillow + requests for desktop-verify.py tests
           pip3 install pillow requests --break-system-packages 2>/dev/null || pip3 install pillow requests --user
 
+      - name: Prepare test diagnostics
+        id: test_diagnostics
+        if: always()
+        run: |
+          if report_root=$(mktemp -d "$RUNNER_TEMP/tunaos-test-results.XXXXXX"); then
+            if ! printf 'report_root=%s\n' "$report_root" >> "$GITHUB_OUTPUT"; then
+              rmdir -- "$report_root" || true
+            fi
+          else
+            echo "::warning::Test diagnostics are unavailable; core tests will still run."
+          fi
+
       - name: Run BATS tests
+        if: always()
+        shell: bash
+        env:
+          TEST_REPORT_ROOT: ${{ steps.test_diagnostics.outputs.report_root }}
         run: |
           echo "=== BATS Tests ==="
           FAILED=0
           for f in tests/bats/*.bats; do
             [[ -f "$f" ]] || continue
             echo "  Running: $f"
-            bats --formatter tap "$f" || FAILED=1
+            report=""
+            if [[ -n "$TEST_REPORT_ROOT" && -d "$TEST_REPORT_ROOT" && ! -L "$TEST_REPORT_ROOT" ]]; then
+              candidate="$TEST_REPORT_ROOT/bats/$f.tap"
+              if mkdir -p "$(dirname "$candidate")"; then
+                report="$candidate"
+              fi
+            fi
+            if [[ -n "$report" ]]; then
+              if bats --formatter tap "$f" | tee --output-error=warn "$report"; then
+                pipeline_status=("${PIPESTATUS[@]}")
+              else
+                pipeline_status=("${PIPESTATUS[@]}")
+              fi
+              status=${pipeline_status[0]}
+              if [[ "${pipeline_status[1]}" != 0 ]]; then
+                echo "::warning::BATS diagnostic output could not be saved."
+              fi
+              printf '%s\n' "$status" > "$report.exit" || true
+            else
+              if bats --formatter tap "$f"; then status=0; else status=$?; fi
+            fi
+            if [[ "$status" != 0 ]]; then FAILED=1; fi
           done
-          exit $FAILED
+          exit "$FAILED"
 
       - name: Run pytest tests
         if: always()
+        env:
+          TEST_REPORT_ROOT: ${{ steps.test_diagnostics.outputs.report_root }}
         run: |
           echo "=== pytest Tests ==="
-          python3 -m pytest tests/ tests/pytest/ -v --tb=short --cov=. --cov-report=term --cov-report=xml:coverage-python.xml
+          report_args=()
+          if [[ -n "$TEST_REPORT_ROOT" && -d "$TEST_REPORT_ROOT" && ! -L "$TEST_REPORT_ROOT" ]]; then
+            report_args=(-p scripts.compact_pytest_report --compact-test-report="$TEST_REPORT_ROOT/pytest-static.json")
+          fi
+          if python3 -m pytest "${report_args[@]}" tests/ tests/pytest/ -v --tb=short --cov=. --cov-report=term --cov-report=xml:coverage-python.xml; then
+            status=0
+          else
+            status=$?
+          fi
+          if [[ ${#report_args[@]} != 0 ]]; then
+            printf '%s\n' "$status" > "$TEST_REPORT_ROOT/pytest.exit" || true
+          fi
+          exit "$status"
+
+      - name: Summarize test failures
+        id: test_failure_summary
+        if: failure() && steps.test_diagnostics.outputs.report_root != ''
+        env:
+          TEST_REPORT_ROOT: ${{ steps.test_diagnostics.outputs.report_root }}
+        run: |
+          python3 scripts/summarize-test-failures.py --direct --reports "$TEST_REPORT_ROOT" --output "$TEST_REPORT_ROOT/failures.json"
+          [[ -f "$TEST_REPORT_ROOT/failures.json" && ! -L "$TEST_REPORT_ROOT/failures.json" ]]
+
+      - name: Archive test failure summary
+        if: failure() && steps.test_failure_summary.outcome == 'success'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: test-failures-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ steps.test_diagnostics.outputs.report_root }}/failures.json
+          retention-days: 7
+          if-no-files-found: warn
+
+      - name: Clean up test diagnostics
+        if: always() && steps.test_diagnostics.outputs.report_root != ''
+        env:
+          TEST_REPORT_ROOT: ${{ steps.test_diagnostics.outputs.report_root }}
+        run: |
+          if [[ "$TEST_REPORT_ROOT" == "$RUNNER_TEMP"/tunaos-test-results.* && "$(dirname -- "$TEST_REPORT_ROOT")" == "$RUNNER_TEMP" && -d "$TEST_REPORT_ROOT" && ! -L "$TEST_REPORT_ROOT" ]]; then
+            if ! rm -rf -- "$TEST_REPORT_ROOT"; then
+              echo "::warning::Owned test diagnostics could not be cleaned up."
+            fi
+          fi
 
       # npm 10 (the runner image default) and npm 11 (what Renovate uses to
       # write services/countme/package-lock.json) disagree on the lockfile once
