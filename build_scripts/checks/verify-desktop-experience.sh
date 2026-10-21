@@ -642,6 +642,17 @@ tuna)
 		exit 1
 	}
 	require_unit "$tuna_gdm_unit"
+	# GDM offers every visible Wayland session and falls back to its own
+	# default when nothing is pre-selected, so only Tuna may be offered.
+	for tuna_gdm_other in /usr/share/wayland-sessions/*.desktop; do
+		case "$(basename "$tuna_gdm_other")" in
+		tuna*.desktop | roost.desktop) continue ;;
+		esac
+		if ! grep -qx 'NoDisplay=true' "$tuna_gdm_other"; then
+			echo "GDM offers a second, non-Tuna session: $tuna_gdm_other" >&2
+			exit 1
+		fi
+	done
 
 	# Preserve each Tuna variant's distro-derived accent without replacing the
 	# GNOME Shell resource shipped by its package.

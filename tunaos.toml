@@ -3801,6 +3801,7 @@ after_install = [
   "tuna-flatpak-remote",
   "tuna-gdm-theme",
   "tuna-gdm-default-session",
+  "tuna-hide-other-sessions",
   "flatpak-preinstall",
 ]
 
@@ -4358,7 +4359,7 @@ required = [
 [desktops.tuna-arch]
 display_manager = "gdm"
 versionlock = []
-after_install = ["tuna-flatpak-remote", "tuna-gdm-theme", "tuna-gdm-default-session", "flatpak-preinstall"]
+after_install = ["tuna-flatpak-remote", "tuna-gdm-theme", "tuna-gdm-default-session", "tuna-hide-other-sessions", "flatpak-preinstall"]
 
 [desktops.tuna-arch.packages.pacman]
 required = [

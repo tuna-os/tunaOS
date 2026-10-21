@@ -135,6 +135,11 @@ lock-session)
     exit 1
   fi
   ;;
+session-status)
+  echo "41 - tuna-ci-login (1000)"
+  echo "           Since: now; Leader: PID 41 (tuna-session)"
+  echo "          tuna-session(41) ─┬─tuna-compositor(100)"
+  ;;
 *) echo "unexpected loginctl call: $cmd $*" >&2; exit 1 ;;
 esac
 exit 0
@@ -169,6 +174,7 @@ run_gate() {
   grep -Fq 'key testvm esc' "${STATE}/calls"
   grep -Fqx 'Session=tuna' "${ROOT}/accts/tuna-ci-login"
   grep -Fq 'systemctl restart gdm.service' "${STATE}/calls"
+  grep -Fq 'tuna-session(41)' <<<"$output"
   [ -f "${OUT}/gdm-attempt-1.png" ]
   [ -f "${OUT}/gdm-attempt-2.png" ]
   [ ! -e "${OUT}/gdm-attempt-3.png" ]
