@@ -245,6 +245,7 @@ jobs:
       - name: Resolve canonical native platform
         run: |
           set -euo pipefail
+          BUILD_CONFIG_JSON="$(python3 scripts/config.py show)"
           platform="$(jq -r --arg v "$VARIANT" --arg f "$FLAVOR" '
             .variants[] | select(.id == $v) as $variant |
             ($variant.flavors[] | select(.id == $f)) as $flavor |
@@ -252,7 +253,7 @@ jobs:
             if index("linux/amd64/v2") != null then "linux/amd64/v2"
             elif index("linux/amd64") != null then "linux/amd64"
             else error("native builder requires an amd64 target") end
-          ' .github/build-config.yml)"
+          ' <<<"$BUILD_CONFIG_JSON")"
           [[ "$platform" == linux/amd64 || "$platform" == linux/amd64/v2 ]]
           echo "PLATFORM=$platform" >> "$GITHUB_ENV"
 

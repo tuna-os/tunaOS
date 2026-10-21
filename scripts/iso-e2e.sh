@@ -3781,8 +3781,7 @@ verify_strict_installed_boot() {
 	# guess and then only requires targetImgref to be non-empty (warned).
 	local expected_ref="" ref_strict=1
 	if expected_ref="$(
-		TUNAOS_BUILD_CONFIG="${SCRIPT_DIR}/../.github/build-config.yml" \
-			"${SCRIPT_DIR}/published-image-ref.sh" "${VARIANT:-}" "${FLAVOR:-}" ghcr 2>/dev/null
+		"${SCRIPT_DIR}/published-image-ref.sh" "${VARIANT:-}" "${FLAVOR:-}" ghcr 2>/dev/null
 	)" && [[ -n "$expected_ref" ]]; then
 		:
 	else

@@ -246,3 +246,39 @@ def test_nonsentinel_zip64_cannot_override_directory_bound(tmp_path):
     archive.write_bytes(data[:-22] + record + locator + data[-22:])
     with pytest.raises(ValueError):
         module.check_zip_directory(archive)
+
+
+def test_native_platform_resolution_from_clean_checkout(tmp_path):
+    """The primary TOML is tracked; the old matrix adapter is generated."""
+    import os
+    import shutil
+    import subprocess
+    import yaml
+
+    shutil.copytree(ROOT / 'scripts', tmp_path / 'scripts')
+    shutil.copy2(ROOT / 'tunaos.toml', tmp_path / 'tunaos.toml')
+    assert not (tmp_path / '.github/build-config.yml').exists()
+    workflow = yaml.safe_load((ROOT / '.github/workflows/live-iso-bootc.yml').read_text())
+    script = next(step['run'] for step in workflow['jobs']['build']['steps']
+                  if step.get('name') == 'Resolve canonical native platform')
+    envfile = tmp_path / 'github-env'
+    result = subprocess.run(['bash', '-euc', script], cwd=tmp_path, capture_output=True,
+                            text=True, env={**os.environ, 'VARIANT': 'skipjack',
+                                            'FLAVOR': 'gnome', 'GITHUB_ENV': str(envfile)})
+    assert result.returncode == 0, result.stderr
+    assert envfile.read_text() == 'PLATFORM=linux/amd64/v2\n'
+    e2e = yaml.safe_load((ROOT / '.github/workflows/iso-e2e.yml').read_text())
+    matrix = next(step['run'] for step in e2e['jobs']['generate-matrix']['steps']
+                  if step.get('id') == 'gen')
+    out = tmp_path / 'github-output'
+    result = subprocess.run(['bash', '-euc', matrix], cwd=tmp_path, capture_output=True,
+                            text=True, env={**os.environ, 'DISPATCH_VARIANT': 'skipjack',
+                                            'DISPATCH_FLAVORS': 'gnome', 'GITHUB_OUTPUT': str(out)})
+    assert result.returncode == 0, result.stderr
+    assert 'linux/amd64/v2' in out.read_text()
+
+
+def test_strict_installed_boot_uses_primary_config_resolver():
+    script = (ROOT / 'scripts/iso-e2e.sh').read_text()
+    assert 'TUNAOS_BUILD_CONFIG="${SCRIPT_DIR}/../.github/build-config.yml"' not in script
+    assert '"${SCRIPT_DIR}/published-image-ref.sh" "${VARIANT:-}" "${FLAVOR:-}" ghcr' in script

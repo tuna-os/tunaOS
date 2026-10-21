@@ -185,7 +185,7 @@ jobs:
           DISPATCH_FLAVORS: ${{ inputs.flavors }}
         run: |
           set -euo pipefail
-          BUILD_CONFIG_JSON="$(yq -o=json '.' .github/build-config.yml)"
+          BUILD_CONFIG_JSON="$(python3 scripts/config.py show)"
           canonical_platform() {
             jq -r --arg variant "$1" --arg flavor "$2" '
               .variants[] | select(.id == $variant) as $variant |
