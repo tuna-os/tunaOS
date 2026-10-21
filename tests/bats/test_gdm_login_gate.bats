@@ -221,3 +221,53 @@ STUB
   grep -Fq '==> session 41' <<<"$output"
   [ -f "${OUT}/gdm-lock-failed.png" ]
 }
+
+@test "lock retries until a slow shell engages the hint" {
+  touch "${STATE}/session-preseed"
+  # The first lock request lands before the shell is ready and is lost; the
+  # retry engages it.
+  cat >"${FAKEBIN}/loginctl" <<'STUB'
+#!/usr/bin/env bash
+STATE="${GDM_GATE_STATE:?}"
+cmd="$1"; shift
+case "$cmd" in
+list-sessions)
+  if [[ -f "${STATE}/input-seen" ]]; then
+    echo "41 1000 tuna-ci-login seat0 9999 user tty1 no"
+  fi
+  ;;
+show-session)
+  shift
+  value_only=0
+  if [[ "$*" == *--value* ]]; then value_only=1; fi
+  locked=no
+  if [[ -f "${STATE}/locked" ]]; then locked=yes; fi
+  for a in "$@"; do
+    case "$a" in
+    Type) v=wayland ;;
+    Seat) v=seat0 ;;
+    Active) v=yes ;;
+    LockedHint) v="$locked" ;;
+    *) continue ;;
+    esac
+    if [[ "$value_only" == 1 ]]; then echo "$v"; else echo "$a=$v"; fi
+  done
+  ;;
+lock-session)
+  echo "lock $*" >>"${STATE}/calls"
+  if [[ -f "${STATE}/lock-armed" ]]; then
+    touch "${STATE}/locked"
+  else
+    touch "${STATE}/lock-armed"
+  fi
+  ;;
+*) exit 1 ;;
+esac
+exit 0
+STUB
+  chmod +x "${FAKEBIN}/loginctl"
+  run_gate
+  [ "$status" -eq 0 ]
+  grep -Fq 'TUNAOS_GDM_LOCK_OK user=tuna-ci-login session=41' <<<"$output"
+  [ "$(grep -c '^lock ' "${STATE}/calls")" -ge 2 ]
+}

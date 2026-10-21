@@ -6,6 +6,9 @@ desktop="${1:?usage: verify-desktop-experience.sh <gnome|kde|niri|cosmic|xfce|pa
 mode="${2:-build}"
 if [[ "$mode" == --runtime ]]; then
 	echo "tunaos desktop contract starting: desktop=${desktop}" | tee /dev/ttyS0 2>/dev/null || true
+	# The serial gate only sees console output; mirror stderr there too so a
+	# failing require_* names its missing path instead of dying silently.
+	exec 2> >(tee /dev/ttyS0 >&2)
 fi
 
 # At runtime the E2E gate greps ttyS0 for a contract marker; a silent early
