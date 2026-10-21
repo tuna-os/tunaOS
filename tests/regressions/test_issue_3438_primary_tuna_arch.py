@@ -22,6 +22,7 @@ def expected_with_theme():
     profile = expected()
     profile['post_install'].insert(1, 'tuna-gdm-theme.sh')
     profile['post_install'].insert(2, 'tuna-gdm-default-session.sh')
+    profile['post_install'].insert(3, 'tuna-hide-other-sessions.sh')
     return profile
 
 
@@ -37,6 +38,7 @@ def test_complete_ordered_gdm_override_preserves_the_previous_package_set():
         'tuna-flatpak-remote.sh',
         'tuna-gdm-theme.sh',
         'tuna-gdm-default-session.sh',
+        'tuna-hide-other-sessions.sh',
         'flatpak-preinstall.sh',
     ]
 
@@ -64,6 +66,7 @@ def test_native_resolution_selects_gdm_for_every_tuna_base_family():
         assert removed.isdisjoint(required)
     assert 'tuna-gdm-theme' in resolved['after_install']
     assert 'tuna-gdm-default-session' in resolved['after_install']
+    assert 'tuna-hide-other-sessions' in resolved['after_install']
 
 
 def test_adapter_is_regenerated_and_source_receipt_excludes_it(tmp_path):
