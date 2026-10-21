@@ -26,6 +26,8 @@ on:
       - 'tests/**'
       # Versioned contract schemas are executable test inputs.
       - 'schemas/**'
+      # Signed package-search observations and public trust fixtures.
+      - 'config/**'
       # The fork-config contract suite initializes the stock/fork templates.
       - 'examples/**'
       - 'experiences/**'
@@ -98,7 +100,10 @@ jobs:
       - name: Install config test dependencies
         run: python -m pip install pytest PyYAML -r requirements-config.txt -r requirements-package-authoring.txt
       - name: Verify primary config on the oldest supported Python
-        run: python -m pytest -q tests/test_primary_config.py tests/test_config_parser.py tests/test_package_authoring.py
+        run: |
+          gpg --version
+          python -m pytest -q tests/test_primary_config.py tests/test_config_parser.py tests/test_package_authoring.py \
+            tests/test_package_catalogs.py tests/test_signed_apt.py tests/test_search_base_packages.py
 
   primary-config-python315:
     name: Primary config (Python 3.15)
@@ -115,7 +120,10 @@ jobs:
       - name: Install config test dependencies
         run: python -m pip install pytest PyYAML -r requirements-config.txt -r requirements-package-authoring.txt
       - name: Verify primary config with a TOML 1.1 capable stdlib
-        run: python -m pytest -q tests/test_primary_config.py tests/test_config_parser.py tests/test_package_authoring.py
+        run: |
+          gpg --version
+          python -m pytest -q tests/test_primary_config.py tests/test_config_parser.py tests/test_package_authoring.py \
+            tests/test_package_catalogs.py tests/test_signed_apt.py tests/test_search_base_packages.py
 
   unit-tests:
     name: Unit Tests

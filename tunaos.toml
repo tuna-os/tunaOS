@@ -4568,3 +4568,55 @@ required = [
   "ttf-dejavu",
   "ttf-liberation",
 ]
+
+# Optional base-image search sources; these do not change build repositories.
+[package_catalogs.debian-trixie]
+schema_version = 1
+coverage = "base-image-only"
+variant = "flounder"
+family = "apt"
+os_id = "debian"
+release = "trixie"
+platforms = ["linux/amd64"]
+observed_base_image = "docker.io/library/debian:trixie@sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308"
+source_observation = "config/package-observations/flounder-amd64.json"
+source_observation_sha256 = "1b4857d081dc460381e537a1fb5f3a72407a7883313b78fb0301db6627b075b6"
+
+[[package_catalogs.debian-trixie.sources]]
+id = "trixie"
+uri = "https://deb.debian.org/debian/"
+suite = "trixie"
+origin = "Debian"
+codename = "trixie"
+components = ["main"]
+keyring = "config/package-keys/debian-trixie.pgp"
+keyring_sha256 = "506b815cbb32d9b6066b4a2aa524071e071761e7e7f68c3ac74f3061ba852017"
+primary_fingerprints = ["04B54C3CDCA79751B16BC6B5225629DF75B188BD", "41587F7DB8C774BCCF131416762F67A0B2C39DE4"]
+clock_skew_seconds = 10
+freshness = { mode = "pinned-release", inrelease_sha256 = "0584fba32e13e0ab8285fb16c27adea1ec03a73669c18702821094fd6ca86675" }
+
+[[package_catalogs.debian-trixie.sources]]
+id = "trixie-updates"
+uri = "https://deb.debian.org/debian/"
+suite = "trixie-updates"
+origin = "Debian"
+codename = "trixie-updates"
+components = ["main"]
+keyring = "config/package-keys/debian-trixie.pgp"
+keyring_sha256 = "506b815cbb32d9b6066b4a2aa524071e071761e7e7f68c3ac74f3061ba852017"
+primary_fingerprints = ["04B54C3CDCA79751B16BC6B5225629DF75B188BD"]
+clock_skew_seconds = 10
+freshness = { mode = "signed-valid-until", max_age_seconds = 604800 }
+
+[[package_catalogs.debian-trixie.sources]]
+id = "trixie-security"
+uri = "https://deb.debian.org/debian-security/"
+suite = "trixie-security"
+origin = "Debian"
+codename = "trixie-security"
+components = ["main"]
+keyring = "config/package-keys/debian-trixie.pgp"
+keyring_sha256 = "506b815cbb32d9b6066b4a2aa524071e071761e7e7f68c3ac74f3061ba852017"
+primary_fingerprints = ["5E04A1E3223A19A20706E20F9904613D4CCE68C6"]
+clock_skew_seconds = 10
+freshness = { mode = "signed-valid-until", max_age_seconds = 604800 }
