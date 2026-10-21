@@ -222,3 +222,127 @@ def test_selection_schema_text_patterns_match_ecmascript_whitespace():
     expected = [len(value) <= 2048 and bool(re.search(pattern, value)) for pattern, value in cases]
     assert expected == [case['valid'] for _ in patterns for case in fixture['cases']]
     assert json.loads(result.stdout) == expected
+
+
+@pytest.mark.parametrize('field', ['id', 'desktop', 'edition'])
+@pytest.mark.parametrize('suffix', ['\n', '\r', '\r\n', '\u0085', '\u2028', '\u2029', '\x00', '\x1f', '\x7f', ' ', '\ufeff'])
+def test_flavor_schema_rejects_nonidentifier_suffixes(field, suffix):
+    schema = pytest.importorskip('jsonschema')
+    document = {'schema_version': 1, 'kind': 'builder-flavor-metadata',
+                'flavors': [{'id': 'gnome', 'desktop': 'gnome', 'edition': 'standard'}]}
+    document['flavors'][0][field] += suffix
+    with pytest.raises(schema.ValidationError):
+        schema.validate(document, json.loads((ROOT / 'docs/iso-builder-flavors.schema.json').read_text()))
+    with pytest.raises(builder.ConfigError):
+        builder.pattern(document['flavors'][0][field], r'[a-z0-9][a-z0-9-]{0,63}')
+
+
+def test_all_builder_schema_patterns_use_strict_end_assertions():
+    # Falsification: adding a terminal-dollar pattern reintroduces LF acceptance.
+    patterns = []
+
+    def collect(value):
+        if isinstance(value, dict):
+            if 'pattern' in value:
+                patterns.append(value['pattern'])
+            for child in value.values():
+                collect(child)
+        elif isinstance(value, list):
+            for child in value:
+                collect(child)
+
+    for name in ('iso-builder-config.schema.json', 'iso-builder-flavors.schema.json'):
+        collect(json.loads((ROOT / 'docs' / name).read_text()))
+    assert patterns
+    assert all(pattern.endswith(r'(?![\s\S])') for pattern in patterns)
+
+
+def test_flavor_schema_identifier_patterns_match_ecmascript():
+    import re
+    import shutil
+    import subprocess
+    node = shutil.which('node')
+    if node is None:
+        pytest.skip('Node is needed to verify ECMAScript regex behavior')
+    schema = json.loads((ROOT / 'docs/iso-builder-flavors.schema.json').read_text())
+    patterns = [item['pattern'] for item in schema['properties']['flavors']['items']['properties'].values()]
+    values = ['gnome', 'kde-nvidia', 'none', 'a' * 64, 'a' * 65, 'gnome\n',
+              'gnome\r', 'gnome\u2028', 'gnome\u2029', 'gnome\x00', 'gnome\ufeff', '']
+    cases = [[pattern, value] for pattern in patterns for value in values]
+    script = 'let s="";process.stdin.on("data",x=>s+=x);process.stdin.on("end",()=>process.stdout.write(JSON.stringify(JSON.parse(s).map(([p,v])=>new RegExp(p).test(v)))));'
+    result = subprocess.run([node, '-e', script], input=json.dumps(cases), text=True,
+                            capture_output=True, check=True)
+    expected = [bool(re.fullmatch(r'[a-z0-9][a-z0-9-]{0,63}', value)) for _, value in cases]
+    assert json.loads(result.stdout) == expected
+
+
+def test_all_schema_string_constraints_match_ecmascript_corpus():
+    import re
+    import shutil
+    import subprocess
+    node = shutil.which('node')
+    if node is None:
+        pytest.skip('Node is needed to verify ECMAScript regex behavior')
+    constraints = []
+
+    def collect(value):
+        if isinstance(value, dict):
+            if 'pattern' in value:
+                constraints.append({key: value[key] for key in ('pattern', 'minLength', 'maxLength') if key in value})
+            for child in value.values():
+                collect(child)
+        elif isinstance(value, list):
+            for child in value:
+                collect(child)
+
+    for name in ('iso-builder-config.schema.json', 'iso-builder-flavors.schema.json'):
+        collect(json.loads((ROOT / 'docs' / name).read_text()))
+    unique = {json.dumps(item, sort_keys=True): item for item in constraints}
+    samples = ['', 'gnome', 'kde-nvidia', 'linux/amd64', 'linux/amd64/v3',
+               'ghcr.io/example/image:stable', '/assets/logo.png', '#abcdef',
+               'ORG_LABEL', 'org.example.Application', 'leaf:gnome:linux/amd64',
+               'https://example.org/path', 'Readable text', '<', 'a>b']
+    suffixes = ['', '\n', '\r\n', '\x00', '\x1f', '\x7f', '\u0085', '\ufeff',
+                '\u00a0', '\u1680', '\u2000', '\u2028', '\u2029', '\u202f', '\u205f', '\u3000']
+    values = [sample + suffix for sample in samples for suffix in suffixes]
+    values += [char * size for char in ('a', '\U0001f41f')
+               for size in (1, 31, 32, 33, 63, 64, 65, 127, 128, 129, 191, 192, 193, 254, 255, 256, 2048, 2049)]
+    expected = []
+    for item in unique.values():
+        for value in values:
+            expected.append(bool(re.search(item['pattern'], value)) and
+                            len(value) >= item.get('minLength', 0) and
+                            len(value) <= item.get('maxLength', len(value)))
+    script = 'let s="";process.stdin.on("data",x=>s+=x);process.stdin.on("end",()=>{const [ps,vs]=JSON.parse(s);process.stdout.write(JSON.stringify(ps.flatMap(p=>vs.map(v=>{const n=Array.from(v).length;return new RegExp(p.pattern).test(v)&&n>=(p.minLength??0)&&n<=(p.maxLength??n)}))))});'
+    result = subprocess.run([node, '-e', script], input=json.dumps([list(unique.values()), values]),
+                            text=True, capture_output=True, check=True)
+    assert json.loads(result.stdout) == expected
+
+
+def test_common_text_fields_preserve_python_acceptance():
+    schema = pytest.importorskip('jsonschema')
+    document = json.loads((ROOT / 'docs/iso-builder-config.schema.json').read_text())
+    fixture = json.loads((ROOT / 'tests/fixtures/builder-config-common-text.json').read_text())
+    fields = []
+
+    def collect(value):
+        if isinstance(value, dict):
+            if 'pattern' in value and '[^' + fixture['python_whitespace_class'] + ']' in value['pattern']:
+                fields.append(value)
+            for child in value.values():
+                collect(child)
+        elif isinstance(value, list):
+            for child in value:
+                collect(child)
+
+    collect(document)
+    assert len(fields) == 15
+    for field in fields:
+        validator = schema.Draft202012Validator(field)
+        for case in fixture['cases']:
+            assert validator.is_valid(case['value']) is case['valid']
+            if case['valid']:
+                builder.text(case['value'])
+            else:
+                with pytest.raises(builder.ConfigError):
+                    builder.text(case['value'])
