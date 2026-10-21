@@ -4511,23 +4511,18 @@ leaf_id = "yellowfin:gnome:linux/amd64/v2"
 
 [[iso_builder.desktops]]
 id = "gnome"
-default_flatpaks = ["io.github.kolunmi.Bazaar", "org.mozilla.firefox", "org.gnome.TextEditor"]
 
 [[iso_builder.desktops]]
 id = "kde"
-default_flatpaks = ["io.github.kolunmi.Bazaar", "org.mozilla.firefox", "org.kde.kate"]
 
 [[iso_builder.desktops]]
 id = "cosmic"
-default_flatpaks = ["io.github.kolunmi.Bazaar", "org.mozilla.firefox"]
 
 [[iso_builder.desktops]]
 id = "niri"
-default_flatpaks = ["io.github.kolunmi.Bazaar", "org.mozilla.firefox"]
 
 [[iso_builder.desktops]]
 id = "xfce"
-default_flatpaks = ["io.github.kolunmi.Bazaar", "org.mozilla.firefox", "org.gnome.TextEditor"]
 
 [iso_builder.selection]
 default_path = "desktop-first"
@@ -4755,6 +4750,17 @@ id = "cayo"
 stem = "cayo-ab"
 name = "Frostyard Cayo — headless (DDI)"
 desktop = "none"
+
+# Image preinstall declarations, not proof of installed apps or remote identity.
+[flatpak_preinstall]
+schema_version = 1
+common = [
+  { id = "io.github.kolunmi.Bazaar", branch = "stable" },
+  { id = "org.mozilla.firefox", branch = "stable" },
+]
+
+[flatpak_preinstall.desktop_additions]
+gnome = [{ id = "com.mattjakeman.ExtensionManager", branch = "stable" }]
 
 # Marlin GDM override from aa9810e9 (tunaOS#3438). The generated -arch
 # adapter takes precedence over tuna.yaml on pacman bases. Other tuna

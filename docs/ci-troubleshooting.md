@@ -1863,3 +1863,11 @@ The tiny fixtures in `tests/test_iso_retained_media_transport.py` reject wrong
 origins, runs, and `runAttempt` values. They reject replay, changed manifests,
 absent chunks, wrong whole-ISO identity, and unsafe members in ZIP archives.
 These tests check consistency. They do not prove a real producer or installation.
+
+### Removed Flatpak IDs stay in the hook file
+
+**Symptom:** A cut-down ID stays in `tunaos-<desktop>.preinstall`.
+
+**Cause:** The hook adds new IDs but it never deletes old IDs.
+
+**Fix:** Delete the owned file at the start of each run. Keep files from other sources. Reject a linked file before you change files.

@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import copy
+import importlib.util
+from pathlib import Path
 import json
 import re
 
@@ -159,6 +161,20 @@ def project(primary):
     if 'iso_builder' not in primary:
         raise ConfigError('iso_builder is required for builder export; no stock fallback')
     result = copy.deepcopy(primary['iso_builder'])
+    if 'flatpak_preinstall' in primary:
+        if not isinstance(result, dict):
+            raise ConfigError('expected builder object')
+        entries(result.get('desktops'), ('id',) if result.get('schema_version') == 2 else ('id', 'name', 'description'), 'desktops')
+        spec = importlib.util.spec_from_file_location('builder_flatpak_policy', Path(__file__).with_name('flatpak_preinstall.py'))
+        policy = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(policy)
+        try:
+            for desktop in result['desktops']:
+                if 'default_flatpaks' in desktop:
+                    raise ConfigError('primary image declarations own builder defaults; remove duplicate default_flatpaks')
+                desktop['default_flatpaks'] = [app['id'] for app in policy.apps(primary, desktop['id'])]
+        except policy.PolicyError as exc:
+            raise ConfigError(str(exc)) from exc
     validate(result)
     variants = primary['variants']
     if result['schema_version'] == 2:

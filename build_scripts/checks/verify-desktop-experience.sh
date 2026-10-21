@@ -1019,22 +1019,35 @@ else
 	# Asserts exactly what the build now lays down, nothing aspirational:
 	# tuna-flatpak-remote.sh bakes the Flathub remote on every base, and
 	# flatpak-preinstall.sh declares the common curated set
-	# (io.github.kolunmi.Bazaar and org.mozilla.firefox), plus Extension
-	# Manager on GNOME. It enables flatpak-preinstall.service where available.
-	# Guarded on flatpak existing so a hypothetical flatpak-less image is
-	# out of scope rather than red. The per-app grep list below is kept in
-	# lockstep with flatpak-preinstall.sh by
-	# tests/bats/test_build_scripts_remaining.bats — change both together.
+	# from the primary policy and enables its service where available.
+	# Installed apps remain separate from declarations. The generated policy
+	# adapter is installed by the recipe and checked against a frozen fixture.
 	if command -v flatpak >/dev/null 2>&1; then
 		require_glob '/etc/flatpak/remotes.d/flathub.flatpakrepo'
-		require_glob '/usr/share/flatpak/preinstall.d/*.preinstall'
-		_fp_apps=(io.github.kolunmi.Bazaar org.mozilla.firefox)
-		if [[ "$desktop" == "gnome" ]]; then
-			_fp_apps+=(com.mattjakeman.ExtensionManager)
+		_fp_policy=/usr/share/flatpak/tunaos-preinstall-policy.tsv
+		require_glob "$_fp_policy"
+		_fp_apps=()
+		while IFS=$'\t' read -r _fp_scope _fp_app _fp_branch; do
+			[[ "$_fp_scope" == '#'* || -z "$_fp_scope" ]] && continue
+			if [[ "$_fp_scope" == '*' || "$_fp_scope" == "$desktop" ]]; then
+				_fp_apps+=("${_fp_app}:${_fp_branch}")
+			fi
+		done <"$_fp_policy"
+		if [[ ${#_fp_apps[@]} -gt 0 ]]; then
+			require_glob '/usr/share/flatpak/preinstall.d/*.preinstall'
 		fi
-		for _fp_app in "${_fp_apps[@]}"; do
-			if ! grep -rqs "^\[Flatpak Preinstall ${_fp_app}\]" /usr/share/flatpak/preinstall.d; then
-				echo "missing flatpak preinstall declaration: ${_fp_app}" >&2
+		for _fp_spec in "${_fp_apps[@]}"; do
+			_fp_app="${_fp_spec%:*}"
+			_fp_branch="${_fp_spec##*:}"
+			if ! awk -v header="[Flatpak Preinstall ${_fp_app}]" -v branch="$_fp_branch" '
+				function finish() { if (active) { found = 1; if (value != branch) bad = 1 } }
+				FNR == 1 { finish(); active = 0; value = "" }
+				{ sub(/\r$/, "") }
+				/^\[/ { finish(); active = ($0 == header); value = ""; next }
+				active && /^Branch=/ { value = substr($0, 8) }
+				END { finish(); exit (!found || bad) }
+			' /usr/share/flatpak/preinstall.d/*.preinstall; then
+				echo "missing or conflicting flatpak preinstall declaration: ${_fp_app}/${_fp_branch}" >&2
 				if [[ "${IS_HUMMINGBIRD:-false}" != "true" ]]; then
 					exit 1
 				fi

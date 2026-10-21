@@ -377,6 +377,10 @@ def test_every_projected_field_boundary_is_schema_valid_or_rejected():
     validator = schema.Draft202012Validator(json.loads((ROOT / 'docs/iso-builder-config.schema.json').read_text()))
     source = primary.load()
     v1 = json.loads((ROOT / 'tests/fixtures/builder-config/v1.json').read_text())
+    if 'flatpak_preinstall' in source:
+        # The canonical policy supplies these fields in the defaults projection.
+        for desktop in v1['desktops']:
+            desktop.pop('default_flatpaks')
     for presentation in (v1, source['iso_builder']):
         baseline = copy.deepcopy(source)
         baseline['iso_builder'] = presentation
