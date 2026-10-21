@@ -537,3 +537,52 @@ def test_direct_validator_uses_explicit_file_boundary(tmp_path, monkeypatch):
     identifier = 'tests/sample.py::TestOne::test_same'
     document['pytest']['failure_details'][0]['test'] = identifier
     assert module.parse_direct_summary(json.dumps(document), 1, [0])['failure_details'][0]['test'] == identifier
+
+
+def test_junit_competing_module_and_class_paths_stay_unresolved(tmp_path, monkeypatch):
+    source = tmp_path / 'source'
+    (source / 'tests/sample').mkdir(parents=True)
+    (source / 'tests/sample.py').write_text('class TestOne:\n    def test_same(self): pass\n')
+    (source / 'tests/sample/TestOne.py').write_text('def test_same(): pass\n')
+    monkeypatch.setattr(module, 'SOURCE_ROOT', source)
+    result = module.empty()
+    module.parse_junit('<testsuite><testcase classname="tests.sample.TestOne" name="test_same"><failure/></testcase></testsuite>', result, [0])
+    assert result['failure_details'] == [{'test': 'unresolved-test', 'kind': 'failure'}]
+
+
+def test_junit_long_static_name_is_not_silently_shortened(tmp_path, monkeypatch):
+    source = tmp_path / 'source'
+    (source / 'tests').mkdir(parents=True)
+    name = 'test_' + 'a' * 600
+    (source / 'tests/sample.py').write_text('def ' + name + '(): pass\n')
+    monkeypatch.setattr(module, 'SOURCE_ROOT', source)
+    result = module.empty()
+    module.parse_junit('<testsuite><testcase classname="tests.sample" name="' + name + '"><failure/></testcase></testsuite>', result, [0])
+    assert result['failure_details'] == [{'test': 'unresolved-test', 'kind': 'failure'}]
+    assert result['truncated']
+
+
+def test_long_bats_identity_keeps_case_unknown_instead_of_shortening():
+    result = module.empty()
+    module.failure(result, 'tests/' + 'a' * 500 + '.bats::case-123', 'failure')
+    assert result['failure_details'] == [{'test': 'unresolved-test', 'kind': 'failure'}]
+    assert result['truncated']
+
+
+def test_junit_candidate_budget_failure_cannot_select_wrong_interpretation(tmp_path, monkeypatch):
+    source = tmp_path / 'source'
+    (source / 'tests/sample').mkdir(parents=True)
+    (source / 'tests/sample.py').write_text('class TestOne:\n    def test_same(self): pass\n')
+    (source / 'tests/sample/TestOne.py').write_text('def test_same(): pass\n')
+    monkeypatch.setattr(module, 'SOURCE_ROOT', source)
+    monkeypatch.setattr(module, 'MAX_TOTAL', 40)
+    assert module.source_test_id('tests.sample.TestOne', 'test_same', [0]) == 'unresolved-test'
+
+
+def test_junit_overlong_candidate_path_cannot_hide_competing_interpretation(monkeypatch):
+    def must_not_guess(*args, **kwargs):
+        raise AssertionError('must reject before interpreting partial source paths')
+    monkeypatch.setattr(module, 'source_node_id', must_not_guess)
+    classname = 'tests.' + 'a' * 200 + '.' + 'b' * 200 + '.' + 'c' * 73
+    assert len(classname) == 481
+    assert module.source_test_id(classname, 'test_same', [0]) == 'unresolved-test'

@@ -76,36 +76,29 @@ def issue(result, message):
 
 
 def source_test_id(classname, name, source_budget):
-    # Only emit identifiers confirmed in repository source. Parameter values,
-    # arbitrary failure text and dynamic test labels never enter the artifact.
+    # JUnit does not carry an explicit file boundary. Competing interpretations
+    # must stay unresolved rather than selecting a plausible but wrong test.
     name = name.split('[', 1)[0]
-    if len(classname) > 512 or not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_.]*', classname):
+    if len(classname) + len('.py') > 480 or not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_.]*', classname):
         return 'unresolved-test'
     if not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', name):
         return 'unresolved-test'
     parts = classname.split('.')
+    candidates = []
     for length in range(len(parts), 0, -1):
         relative = '/'.join(parts[:length]) + '.py'
         if not relative.startswith('tests/'):
             continue
         try:
-            tree = ast.parse(read_report(SOURCE_ROOT, relative, source_budget))
+            identifier = source_node_id(relative, parts[length:], name, source_budget, strict_read=True)
         except (OSError, ValueError, SyntaxError, RecursionError, MemoryError):
-            continue
-        scope = parts[length:]
-        body = tree.body
-        for class_name in scope:
-            classes = [node for node in body if isinstance(node, ast.ClassDef) and node.name == class_name]
-            if len(classes) != 1:
-                return relative + '::unresolved-test'
-            body = classes[0].body
-        names = {node.name for node in body
-                 if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))}
-        return relative + '::' + ('::'.join(scope + [name]) if name in names else 'unresolved-test')
-    return 'unresolved-test'
+            return 'unresolved-test'
+        if identifier != 'unresolved-test':
+            candidates.append(identifier)
+    return candidates[0] if len(candidates) == 1 else 'unresolved-test'
 
 
-def source_node_id(relative, scope, name, source_budget):
+def source_node_id(relative, scope, name, source_budget, strict_read=False):
     # Direct reports carry an exact file boundary; never guess it from dots.
     if not re.fullmatch(r'tests/(?:[A-Za-z_][A-Za-z0-9_]*/)*[A-Za-z_][A-Za-z0-9_]*\.py', relative) or len(relative) > 480:
         return 'unresolved-test'
@@ -113,7 +106,11 @@ def source_node_id(relative, scope, name, source_budget):
         return 'unresolved-test'
     try:
         body = ast.parse(read_report(SOURCE_ROOT, relative, source_budget)).body
+    except FileNotFoundError:
+        return 'unresolved-test'
     except (OSError, ValueError, SyntaxError, RecursionError, MemoryError):
+        if strict_read:
+            raise
         return 'unresolved-test'
     for class_name in scope:
         classes = [node for node in body if isinstance(node, ast.ClassDef) and node.name == class_name]
@@ -150,6 +147,9 @@ def source_report_id(relative, source_budget):
 
 
 def failure(result, identifier, kind):
+    if len(identifier.encode('utf-8')) > 512:
+        identifier = 'unresolved-test'
+        result['truncated'] = True
     if len(result['failure_details']) < MAX_FAILURES:
         result['failure_details'].append({'test': bounded(identifier, 512), 'kind': kind})
     else:
