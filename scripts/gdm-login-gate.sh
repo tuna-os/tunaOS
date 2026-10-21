@@ -36,6 +36,12 @@ loginctl list-sessions --no-legend || true
 if [[ -n "$session" ]]; then
 	echo "==> session $session"
 	loginctl show-session "$session" -p Name -p Type -p Seat -p Active -p State -p Service -p LockedHint -p IdleHint || true
+	uid="$(id -u "$user" 2>/dev/null || true)"
+	if [[ -n "$uid" && -d "/run/user/$uid" ]]; then
+		echo "==> user manager state for $user (uid $uid)"
+		sudo -u "#$uid" XDG_RUNTIME_DIR="/run/user/$uid" systemctl --user is-system-running 2>&1 || true
+		sudo -u "#$uid" XDG_RUNTIME_DIR="/run/user/$uid" systemctl --user list-units --type=target --no-legend 2>&1 | head -n 20 || true
+	fi
 else
 	while read -r id _ name _; do
 		[[ "$name" == "$user" ]] || continue

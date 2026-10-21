@@ -70,6 +70,11 @@ CSS
 	done
 	rm -rf "$theme_dir"
 	mv "$staged_theme" "$theme_dir"
+	# mktemp creates the staging dir mode 0700; the greeter user must be able
+	# to read the overlay, otherwise the shell logs "Permission denied" and
+	# silently falls back to the packaged stylesheet.
+	chmod 0755 "$theme_dir"
+	chmod 0644 "$theme_dir"/gnome-shell-*.css
 
 	cat >"$greeter_unit_dir/tunaos-gdm-theme.conf" <<UNIT
 [Service]

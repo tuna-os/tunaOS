@@ -572,11 +572,11 @@ tuna)
 	if [[ "$tuna_backend" == dpkg ]]; then
 		tuna_gdm_command=gdm3
 		tuna_gdm_package=gdm3
-		if [[ "${IS_UBUNTU:-false}" == true ]]; then
-			tuna_gdm_config=/etc/gdm3/custom.conf
-		else
-			tuna_gdm_config=/etc/gdm3/daemon.conf
-		fi
+		# Debian and Ubuntu disagree on the config filename, and IS_UBUNTU is
+		# only set at build time (detected_os has no /run/context in a booted
+		# image), so read whichever file the base actually ships.
+		tuna_gdm_config=/etc/gdm3/custom.conf
+		[[ -r "$tuna_gdm_config" ]] || tuna_gdm_config=/etc/gdm3/daemon.conf
 	else
 		tuna_gdm_command=gdm
 		tuna_gdm_package=gdm
