@@ -9,6 +9,7 @@ import bz2
 from datetime import datetime, timezone
 import difflib
 import fcntl
+from fnmatch import fnmatchcase
 import gzip
 import hashlib
 import io
@@ -32,6 +33,7 @@ FORMATS = {
     'emerge': 'gentoo-tree', **dict.fromkeys(
         ('fedora', 'rawhide', 'hummingbird', 'eln', 'el10', 'zypper'), 'rpm-primary'),
 }
+DNF_FAMILIES = {'fedora', 'rawhide', 'hummingbird', 'eln', 'el10'}
 NAME = re.compile(r'[A-Za-z0-9][A-Za-z0-9+_.-]*\Z')
 ATOM = re.compile(r'[a-z0-9][a-z0-9+_.-]*/[A-Za-z0-9][A-Za-z0-9+_.-]*\Z')
 
@@ -234,6 +236,27 @@ def plan(source, selected, indexes, query, native=None, max_age_days=7):
     return document, scope, resolved, evidence
 
 
+
+def name_excluded(name, family, exclusions):
+    """Match DNF name globs only; other policy families retain literal names.
+
+    install-desktop.sh forwards DNF exclusions as -x arguments. DNF supports
+    both ! and ^ bracket negation, unlike Python's !-only fnmatch syntax:
+    https://dnf5.readthedocs.io/en/latest/misc/specs.7.html#globs
+    This is not NEVRA/version/dependency transaction resolution.
+    """
+    if family not in DNF_FAMILIES:
+        return name in exclusions
+    for exclusion in exclusions:
+        for pattern in exclusion.split(','):
+            pattern = pattern.strip()
+            if any(token in pattern for token in ('\\', '[[:', '[[.', '[[=')) or any(c.isspace() for c in pattern):
+                raise AuthoringError('DNF exclusion syntax needs native transaction review; no write performed')
+            if fnmatchcase(name, pattern.replace('[^', '[!')):
+                return True
+    return False
+
+
 def edit(source, document, scope, resolved):
     try:
         import tomlkit
@@ -246,7 +269,7 @@ def edit(source, document, scope, resolved):
         policy = document['desktops'][desktop]['packages'][family]
         expanded = tunaos_config.package_policy().expand(document['package_groups'], policy)
         name = resolved[target]
-        if name in expanded.get('exclude', []):
+        if name_excluded(name, family, expanded.get('exclude', [])):
             raise AuthoringError(f'{target}: {name} is excluded; reconcile policy manually')
         if name in expanded.get('required', []):
             continue
@@ -256,6 +279,8 @@ def edit(source, document, scope, resolved):
         target_policy['required'].append(name)
         expected['desktops'][desktop]['packages'][family].setdefault('required', []).append(name)
     result = tomlkit.dumps(edited).encode('utf-8')
+    if len(result) > MAX_CONFIG_BYTES:
+        raise AuthoringError('edited config exceeds 8 MiB limit; no write performed')
     actual = tunaos_config.validate(tunaos_config.tomllib.loads(result.decode('utf-8')))
     if actual != expected:
         raise AuthoringError('lossless edit changed unrelated configuration; no write performed')
@@ -271,6 +296,8 @@ def diff(source, result, path):
 def atomic_write(path, source, result):
     """Serialize cooperating authors; detect intervening edits before replacement."""
     path = Path(path)
+    if len(result) > MAX_CONFIG_BYTES:
+        raise AuthoringError('edited config exceeds 8 MiB limit; no write performed')
     if path.is_symlink() or not path.is_file() or path.stat().st_nlink != 1:
         raise AuthoringError('config must be a regular, non-symlink, single-link file')
     lock = path.with_name('.' + path.name + '.packages.lock')

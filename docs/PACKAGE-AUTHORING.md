@@ -119,9 +119,18 @@ can install an added package.
 ## Write safety
 
 Resolution, TOML parse/schema validation and semantic comparison finish before
-any write. Failed targets do not leave partial updates. Reconcile the exclusions manually. The command preserves the original mode.
+any write. Failed targets do not leave partial updates. Reconcile the exclusions manually.
+
+DNF policies also check name globs from shared
+package groups. Other native families keep literal-name checks.
+Escape or locale-class syntax in DNF exclusions needs a native check.
+The editor rejects that syntax.
+
+The command preserves the original mode.
 It flushes a temporary file in the same directory, then atomically renames it.
 It also flushes the directory.
+
+The edited output must fit the same 8 MiB limit.
 
 A persistent hidden `.NAME.packages.lock` serializes these commands.
 Do not remove that lock while a command runs.

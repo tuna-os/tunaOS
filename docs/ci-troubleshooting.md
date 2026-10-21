@@ -1810,3 +1810,18 @@ Refresh the native index and its receipt together, or use `search` followed by a
 explicit `--native TARGET=exact-name` for a verified mapping. Do not remove a
 failed target to imply all-base coverage. See the [package command guide](PACKAGE-AUTHORING.md)
 for policy scope, provenance and native formats.
+
+## Package addition conflicts with a DNF exclusion or exceeds the size limit
+
+**Symptom:** An added package matches a DNF exclusion such as `htop*`, or a
+config near 8 MiB cannot pass the next read after an addition.
+
+**Cause:** The check used equality. It did not support globs. The input-size guard did
+not cover serialized output. The regression cases in
+`tests/test_package_authoring.py` cover direct and inherited exclusion patterns,
+negative matches, and the no-write size boundary.
+
+**Fix:** Check name globs for DNF after package-group expansion and reject oversized
+output before replacement. For DNF, the installer passes exclusions through `-x`.
+The [DNF rules](https://dnf5.readthedocs.io/en/latest/misc/specs.7.html#globs)
+define this syntax. This check does not replace native transaction resolution.

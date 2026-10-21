@@ -298,3 +298,80 @@ def test_directory_fsync_failure_reports_committed_outcome(config, monkeypatch):
     with pytest.raises(author.AuthoringError, match='file replaced; durability unconfirmed'):
         author.atomic_write(config, source, result)
     assert config.read_bytes() == result
+
+
+@pytest.mark.parametrize('inherited', [False, True])
+@pytest.mark.parametrize('pattern', ['htop*', 'h?op', '[h]top', '[^a]top', 'vim*,htop*'])
+def test_dnf_exclusion_patterns_reject_direct_and_inherited_adds(config, inherited, pattern):
+    import tomlkit
+    tree = tomlkit.parse(config.read_text())
+    policy = tree['desktops']['gnome']['packages']['fedora']
+    if inherited:
+        tree['package_groups']['author-excludes'] = {'exclude': [pattern]}
+        policy['include'].append('author-excludes')
+    else:
+        policy['exclude'] = [pattern]
+    source = tomlkit.dumps(tree).encode()
+    config.write_bytes(source)
+    rpm = b'<metadata xmlns="http://linux.duke.edu/metadata/common"><package type="rpm"><name>htop</name><arch>x86_64</arch></package></metadata>'
+    index = receipt(config.parent, 'fedora', rpm)
+    result = command(config, 'add', 'htop', '--target', 'gnome:fedora',
+                     '--index', f'gnome:fedora={index}', '--write')
+    assert result.returncode == 1 and 'excluded' in result.stderr
+    assert config.read_bytes() == source
+    assert not list(config.parent.glob('.*.lock'))
+
+
+@pytest.mark.parametrize('family', sorted(author.DNF_FAMILIES))
+def test_dnf_name_globs_do_not_match_unrelated_names(family):
+    assert author.name_excluded('htop', family, ['htop*'])
+    assert not author.name_excluded('htop', family, ['htop-devel', 'vim*,other*', '[^h]top'])
+
+
+def test_glob_rules_are_not_applied_to_other_native_families():
+    for family in ('apt', 'pacman', 'cachyos', 'emerge', 'zypper'):
+        assert not author.name_excluded('htop', family, ['htop*'])
+        assert author.name_excluded('htop', family, ['htop'])
+
+
+def test_unsupported_dnf_exclusion_syntax_fails_closed():
+    with pytest.raises(author.AuthoringError, match='native transaction review'):
+        author.name_excluded('htop', 'fedora', [r'h\top'])
+
+
+def test_oversized_edited_output_is_rejected_before_cli_write(config, tmp_path, monkeypatch):
+    import importlib.util
+    spec = importlib.util.spec_from_file_location('package_author_cli_boundary', ROOT / 'scripts/config-packages.py')
+    cli = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cli)
+    source = config.read_bytes()
+    index = receipt(tmp_path, 'apt', apt('htop'))
+    monkeypatch.setattr(author, 'MAX_CONFIG_BYTES', len(source))
+    assert author.read_config(config) == source  # Input exactly at the limit is valid.
+    result = cli.main(['add', 'htop', '--config', str(config), '--target', 'gnome:apt',
+                       '--index', f'gnome:apt={index}', '--write'])
+    assert result == 1
+    assert config.read_bytes() == source
+    assert not list(tmp_path.glob('.*.lock'))
+    with pytest.raises(author.AuthoringError, match='edited config exceeds'):
+        author.atomic_write(config, source, source + b'\n')
+    assert config.read_bytes() == source
+
+
+@pytest.mark.parametrize('inherited', [False, True])
+def test_unrelated_exclusions_allow_add_without_changing_policy(config, inherited):
+    import tomlkit
+    tree = tomlkit.parse(config.read_text())
+    policy = tree['desktops']['gnome']['packages']['fedora']
+    if inherited:
+        tree['package_groups']['author-excludes'] = {'exclude': ['other*']}
+        policy['include'].append('author-excludes')
+    else:
+        policy['exclude'] = ['other*']
+    source = tomlkit.dumps(tree).encode()
+    document = author.tunaos_config.validate(author.tunaos_config.tomllib.loads(source.decode()))
+    result = author.edit(source, document, {'gnome:fedora': ('gnome', 'fedora')}, {'gnome:fedora': 'htop'})
+    parsed = author.tunaos_config.tomllib.loads(result.decode())
+    assert parsed['desktops']['gnome']['packages']['fedora']['required'][-1] == 'htop'
+    assert parsed['package_groups'] == document['package_groups']
+    assert parsed['desktops']['gnome']['packages']['fedora'].get('exclude') == document['desktops']['gnome']['packages']['fedora'].get('exclude')
