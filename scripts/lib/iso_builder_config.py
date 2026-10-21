@@ -268,12 +268,13 @@ def validate_selection(document):
 
 def flavor_metadata(primary):
     metadata = primary.get('flavor_metadata')
-    if not isinstance(metadata, dict):
-        raise ConfigError('flavor_metadata must be a table')
+    if not isinstance(metadata, dict) or not metadata:
+        raise ConfigError('flavor_metadata must be a nonempty table')
     expected = {f['id'] for v in primary['variants'].values() for f in v['flavors']}
     if set(metadata) != expected:
         raise ConfigError('flavor_metadata must cover exact primary flavor IDs')
-    for value in metadata.values():
+    for key, value in metadata.items():
+        pattern(key, r'[a-z0-9][a-z0-9-]{0,63}', f'flavor_metadata.{key}')
         table(value, ('desktop', 'edition'))
         for item in value.values():
             pattern(item, r'[a-z0-9][a-z0-9-]{0,63}')
