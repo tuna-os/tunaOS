@@ -3648,6 +3648,8 @@ run_strict_gui_install() {
 		echo "==> no live SSH; LUKS-header corroboration skipped (installed-boot prompt observation below is the mandatory proof)"
 	fi
 	poweroff_and_wait_vm || true
+	# Keep each leg's backend/boot serial before the next VM reuses SERIAL_LOG.
+	cp -f "$SERIAL_LOG" "${OUTPUT_DIR}/strict-${mode}-live-serial.log" 2>/dev/null || true
 	INSTALL_DISK="$saved_disk"
 	dur1=$(date +%s)
 	echo "$((dur1 - dur0))" >"${OUTPUT_DIR}/strict-${mode}-install-duration.txt"
@@ -4146,11 +4148,6 @@ run_strict_offline_gui() {
 	STRICT_SOURCE_DIGEST="${TUNAOS_QUAL_SOURCE_DIGEST:-}"
 	STRICT_INSTALLER_DIGEST="${TUNAOS_QUAL_INSTALLER_DIGEST:-}"
 	strict_offline_evidence "iso=${ISO_PATH} overlay_digest=${STRICT_OVERLAY_DIGEST} media_digest=${STRICT_MEDIA_DIGEST} engine_digest=${STRICT_ENGINE_DIGEST}"
-	# TPM for the luks leg: fresh here, restarted with preserved state
-	# before each installed boot (same lifecycle as --luks).
-	if [[ ",${STRICT_OFFLINE_GUI_MODES}," == *",luks,"* ]]; then
-		start_swtpm || return $?
-	fi
 	IFS=',' read -ra _strict_run_modes <<<"$STRICT_OFFLINE_GUI_MODES"
 	local rc=0 mrc
 	for _m in ${_strict_run_modes[@]+"${_strict_run_modes[@]}"}; do
@@ -4159,6 +4156,12 @@ run_strict_offline_gui() {
 			echo "ERROR: ISO media changed before strict ${_m} installation" >&2
 			return 1
 		}
+		# A previous QEMU disconnect ends swtpm. Start a fresh TPM only
+		# for this encrypted install; its installed boots preserve state.
+		TPM_ARGS=""
+		if [[ "$_m" == "luks" ]]; then
+			start_swtpm || return $?
+		fi
 		date +%s >"${OUTPUT_DIR}/strict-${_m}-started.txt"
 		mrc=0
 		run_strict_gui_install "$_m" || mrc=$?

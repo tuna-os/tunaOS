@@ -848,6 +848,10 @@ jobs:
             convert "$ppm" "${ppm%.ppm}.png" || true
           done
 
+      - name: Stage bounded strict diagnostics
+        if: always() && steps.filter.outputs.skip != 'true'
+        run: python3 scripts/collect-iso-diagnostics.py iso-e2e-out
+
       - name: Collect evidence
         if: always() && steps.filter.outputs.skip != 'true'
         env:
@@ -903,6 +907,7 @@ jobs:
             iso-e2e-out/serial.log
             native-iso-input/artifact-binding.json
             iso-e2e-out/native-smoke/
+            iso-e2e-out/strict-diagnostics/
             iso-e2e-out/media.sha256
             iso-e2e-out/media-payloads.txt
             iso-e2e-out/*.png

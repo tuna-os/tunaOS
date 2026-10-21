@@ -317,3 +317,94 @@ else:
                                  'IMAGE_REF': 'localhost/overlay@sha256:' + 'a'*64})
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == '10.0 x86_64'
+
+
+def test_strict_tpm_starts_per_luks_install_not_before_plain():
+    script = (ROOT / 'scripts/iso-e2e.sh').read_text()
+    body = script.split('run_strict_offline_gui() {', 1)[1].split('\n}\n', 1)[0]
+    loop = body.index('for _m in ')
+    assert 'start_swtpm' not in body[:loop]
+    assert body.index('TPM_ARGS=""', loop) < body.index('if [[ "$_m" == "luks" ]]', loop)
+    assert body.index('start_swtpm', loop) < body.index('run_strict_gui_install "$_m"', loop)
+    assert 'strict-${mode}-live-serial.log' in script.split('run_strict_gui_install() {', 1)[1].split('\n}\n', 1)[0]
+
+
+def test_bounded_strict_diagnostics_excludes_heavy_and_symlink_inputs(tmp_path):
+    diag_spec = importlib.util.spec_from_file_location('iso_diagnostics', ROOT / 'scripts/collect-iso-diagnostics.py')
+    diag = importlib.util.module_from_spec(diag_spec)
+    diag_spec.loader.exec_module(diag)
+    (tmp_path / 'walkthrough-plain').mkdir()
+    (tmp_path / 'walkthrough-plain/frame.png').write_bytes(b'png')
+    (tmp_path / 'walkthrough-plain/result.json').write_text('{}')
+    (tmp_path / 'strict-plain-live-serial.log').write_text('backend diagnostic')
+    (tmp_path / 'strict-luks-live-serial.log').symlink_to(tmp_path / 'strict-plain-live-serial.log')
+    (tmp_path / 'disk.qcow2').write_bytes(b'not evidence')
+    (tmp_path / 'walkthrough-plain/frame.ppm').write_bytes(b'not evidence')
+    diag.MAX_FILE = 10
+    diag.collect(tmp_path)
+    staged = tmp_path / 'strict-diagnostics'
+    assert (staged / 'walkthrough-plain/frame.png').read_bytes() == b'png'
+    assert not (staged / 'disk.qcow2').exists()
+    assert not (staged / 'walkthrough-plain/frame.ppm').exists()
+    assert not (staged / 'strict-luks-live-serial.log').exists()
+    assert not (staged / 'strict-plain-live-serial.log').exists()
+    import json
+    report = json.loads((staged / 'collection.json').read_text())
+    assert report['files'] == 2
+    assert len(report['skipped']) == 2
+
+
+def test_failed_plain_leg_cannot_consume_luks_tpm(tmp_path):
+    import hashlib
+    import os
+    import subprocess
+
+    iso = tmp_path / 'input.iso'
+    iso.write_bytes(b'fixture')
+    digest = 'sha256:' + hashlib.sha256(b'fixture').hexdigest()
+    body = (ROOT / 'scripts/iso-e2e.sh').read_text().split('run_strict_offline_gui() {', 1)[1].split('\n}\n', 1)[0]
+    shell = '''
+    e2e_phase() { :; }
+    qemu-img() { :; }
+    strict_require_digest() { :; }
+    strict_offline_evidence() { :; }
+    start_swtpm() { echo start >> "$TRACE"; TPM_ARGS=live-tpm; }
+    run_strict_gui_install() {
+        echo "install:$1:$TPM_ARGS" >> "$TRACE"
+        if [[ "$1" == plain ]]; then TPM_ARGS=stale; return 1; fi
+    }
+    verify_strict_installed_boot() { echo "verify:$1" >> "$TRACE"; }
+    run_strict_offline_gui() {
+    ''' + body + '\n}\nrun_strict_offline_gui\n'
+    result = subprocess.run(['bash', '-euc', shell], capture_output=True, text=True,
+                            env={**os.environ, 'OUTPUT_DIR': str(tmp_path), 'TRACE': str(tmp_path / 'trace'),
+                                 'ISO_PATH': str(iso), 'QEMU': '/bin/true',
+                                 'STRICT_OFFLINE_GUI_MODES': 'plain,luks',
+                                 'STRICT_EVIDENCE_LOG': str(tmp_path / 'evidence.log'),
+                                 'TUNAOS_QUAL_MEDIA_DIGEST': digest,
+                                 'TUNAOS_QUAL_OVERLAY_DIGEST': digest,
+                                 'TUNAOS_QUAL_ENGINE_DIGEST': digest})
+    assert result.returncode == 1
+    assert (tmp_path / 'trace').read_text().splitlines() == [
+        'install:plain:', 'start', 'install:luks:live-tpm', 'verify:luks']
+
+
+def test_diagnostic_enumeration_and_skip_report_are_bounded(tmp_path):
+    import json
+    diag_spec = importlib.util.spec_from_file_location('iso_diagnostics_overflow', ROOT / 'scripts/collect-iso-diagnostics.py')
+    diag = importlib.util.module_from_spec(diag_spec)
+    diag_spec.loader.exec_module(diag)
+    for number in range(12):
+        (tmp_path / f'strict-{number:02d}-oversize.log').write_bytes(b'oversize')
+    diag.MAX_FILE = 1
+    diag.MAX_CANDIDATES = 5
+    diag.MAX_SKIPPED = 2
+    diag.MAX_NAME = 12
+    diag.collect(tmp_path)
+    report = json.loads((tmp_path / 'strict-diagnostics/collection.json').read_text())
+    assert report['enumerated'] == 5
+    assert report['enumeration_truncated']
+    assert report['skipped_count'] <= 5
+    assert report['skipped_report_truncated']
+    assert len(report['skipped']) == 2
+    assert all(len(name) <= 12 for name in report['skipped'])
