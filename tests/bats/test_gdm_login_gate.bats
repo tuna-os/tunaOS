@@ -42,6 +42,13 @@ screenshot)
   done
   mkdir -p "$(dirname "$file")"
   : >"$file"
+  # The first frame is blank (fresh greeter); everything after paints.
+  if [[ -f "${STATE}/shot-once" ]]; then
+    echo "Screenshot written to $file (1280x800, deviation 0.5000 — painted)"
+  else
+    touch "${STATE}/shot-once"
+    echo "Screenshot written to $file (1280x800, deviation 0.0000 — blank)"
+  fi
   ;;
 key)
   echo "key $*" >>"${STATE}/calls"

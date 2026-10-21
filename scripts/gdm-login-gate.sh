@@ -25,6 +25,27 @@ guest() {
 	# shellcheck disable=SC2029
 	ssh "${SSH_OPTS[@]}" "${SSH_USER}@${SSH_HOST}" "$@"
 }
+
+wait_for_paint() {
+	# GDM can take minutes to first-paint on software rendering, and a
+	# restarted greeter always starts blank. Poll for a painted frame
+	# instead of failing on the first blank one.
+	local file="$1" tries="${2:-30}" i=1 line
+	while [[ "$i" -le "$tries" ]]; do
+		if line="$("$CORRAL" screenshot "$NAME" -o "$file" 2>&1)"; then
+			echo "$line"
+			case "$line" in
+			*"— painted"*) return 0 ;;
+			esac
+		else
+			echo "$line"
+		fi
+		sleep 10
+		i=$((i + 1))
+	done
+	echo "no painted frame appeared in $file after $tries tries" >&2
+	return 1
+}
 guest_gdm_diagnostics() {
 	# $1 = test user, $2 = session id when one is known.
 	guest bash -s -- "$1" "${2:-}" <<'GDM_DIAGNOSTICS'
@@ -96,7 +117,7 @@ if loginctl list-sessions --no-legend | awk -v user="$user" '$3 == user { found=
 	exit 1
 fi
 CHECK_GREETER
-"$CORRAL" screenshot "$NAME" -o "${OUT}/gdm-greeter.png" --require-paint
+wait_for_paint "${OUT}/gdm-greeter.png" 30
 
 # Corral creates exactly one regular, non-sudo user in a disposable image
 # layer. Slower greeters may still be assigning keyboard focus when the first
