@@ -5,15 +5,9 @@ setup() {
   SCRIPT="${REPO_ROOT}/build_scripts/desktop/tuna-gdm-theme.sh"
   ROOT="${BATS_TEST_TMPDIR}/root"
   mkdir -p "${ROOT}/usr/share/gnome-shell" "${ROOT}/usr/bin" \
-    "${ROOT}/usr/share/tunaos" "${ROOT}/usr/share/applications"
+    "${ROOT}/usr/share/tunaos"
   printf 'unchanged package resource\n' >"${ROOT}/usr/share/gnome-shell/gnome-shell-theme.gresource"
   printf "TUNAOS_ACCENT='#1793D1'\n" >"${ROOT}/usr/share/tunaos/identity.env"
-  cat >"${ROOT}/usr/share/applications/org.gnome.Shell.desktop" <<'DESKTOP'
-[Desktop Entry]
-Name=GNOME Shell
-Exec=/usr/bin/gnome-shell --mode=gdm
-Type=Application
-DESKTOP
   export TUNAOS_GDM_THEME_ROOT="${ROOT}"
   export PATH="${ROOT}/usr/bin:${PATH}"
   cat >"${ROOT}/usr/bin/gjs" <<'MOCK'
@@ -44,25 +38,26 @@ MOCK
   done
 
   [ "$(cat "${ROOT}/usr/share/gnome-shell/gnome-shell-theme.gresource")" = "unchanged package resource" ]
-  grep -Fqx 'Exec=/usr/bin/gnome-shell --mode=gdm' \
-    "${ROOT}/usr/share/applications/org.gnome.Shell.desktop"
-  grep -Fqx 'Exec=env G_RESOURCE_OVERLAYS=/org/gnome/shell/theme=/usr/share/tunaos/gdm-theme /usr/bin/gnome-shell --mode=gdm' \
-    "${ROOT}/usr/share/gdm/greeter/applications/org.gnome.Shell.desktop"
+
+  local drop_in="${ROOT}/etc/systemd/user/org.gnome.Shell@gdm.service.d/tunaos-gdm-theme.conf"
+  [ -f "$drop_in" ]
+  grep -Fqx '[Service]' "$drop_in"
+  grep -Fqx 'Environment=G_RESOURCE_OVERLAYS=/org/gnome/shell/theme=/usr/share/tunaos/gdm-theme' "$drop_in"
 
   run bash "$SCRIPT"
   [ "$status" -eq 0 ]
   [ "$(grep -Fc 'background-color: #1793D1;' "${ROOT}/usr/share/tunaos/gdm-theme/gnome-shell-dark.css")" -eq 1 ]
 }
 
-@test "GDM theme does not set the overlay on the daemon or regular user sessions" {
+@test "GDM theme overlay applies only to the greeter shell instance" {
   run bash "$SCRIPT"
   [ "$status" -eq 0 ]
   [ ! -d "${ROOT}/etc/systemd/system/gdm.service.d" ]
   [ ! -d "${ROOT}/etc/systemd/system/gdm3.service.d" ]
-  run grep -Fq G_RESOURCE_OVERLAYS "${ROOT}/usr/share/applications/org.gnome.Shell.desktop"
-  [ "$status" -ne 0 ]
+  [ ! -e "${ROOT}/usr/share/gdm/greeter/applications/org.gnome.Shell.desktop" ]
+  [ ! -e "${ROOT}/usr/share/applications/org.gnome.Shell.desktop" ]
   grep -Fq G_RESOURCE_OVERLAYS \
-    "${ROOT}/usr/share/gdm/greeter/applications/org.gnome.Shell.desktop"
+    "${ROOT}/etc/systemd/user/org.gnome.Shell@gdm.service.d/tunaos-gdm-theme.conf"
 }
 
 @test "GDM theme keeps the last complete theme if resource extraction fails" {
