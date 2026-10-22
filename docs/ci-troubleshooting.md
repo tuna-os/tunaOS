@@ -1871,3 +1871,17 @@ These tests check consistency. They do not prove a real producer or installation
 **Cause:** The hook adds new IDs but it never deletes old IDs.
 
 **Fix:** Delete the owned file at the start of each run. Keep files from other sources. Reject a linked file before you change files.
+
+## Workflow inherits repository token defaults (#2916)
+
+**Symptom:** `check-workflow-permissions.py` reports `missing top-level permissions`,
+even when a job has its own map.
+
+**Cause:** A job map covers only that job. Other jobs inherit the repository
+or organization defaults. The regression fixture with only a job map fails
+the checker; the fixture with a workflow map and a job that inherits it passes.
+
+**Fix:** Declare `permissions: {}` or `contents: read` at workflow scope,
+then grant write access only to the job that uses it. Check reusable callers
+too. Run `python3 scripts/check-workflow-permissions.py` and
+`python3 -m pytest -q tests/test_workflow_permissions.py`.
