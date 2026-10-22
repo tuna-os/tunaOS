@@ -7,7 +7,7 @@
 #   buildah build --target=base-no-de --file Containerfile.arch .
 #   buildah build --target=kde --file Containerfile.arch .
 
-ARG BASE_IMAGE="docker.io/archlinux/archlinux:latest@sha256:09d7c61fa6a0b6ec21020d75dec1cf901208ee601407fe6ef0f7988c05b94d19"
+ARG BASE_IMAGE="docker.io/archlinux/archlinux:latest@sha256:33586c0ae3def39b47d1fe0caa5b695cbbd4e6b49ce730983a8b49a23ad95934"
 ARG COMMON_IMAGE_REF="ghcr.io/projectbluefin/common:unpinned-must-override"
 
 ARG DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
