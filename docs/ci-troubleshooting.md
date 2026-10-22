@@ -1947,6 +1947,20 @@ used the correct owner.
 namespace. `tests/test_publish_destination.py` checks the precedence and the
 split.
 
+## Workflow inherits repository token defaults (#2916)
+
+**Symptom:** `check-workflow-permissions.py` reports `missing top-level permissions`,
+even when a job has its own map.
+
+**Cause:** A job map covers only that job. Other jobs inherit the repository
+or organization defaults. The regression fixture with only a job map fails
+the checker; the fixture with a workflow map and a job that inherits it passes.
+
+**Fix:** Declare `permissions: {}` or `contents: read` at workflow scope,
+then grant write access only to the job that uses it. Check reusable callers
+too. Run `python3 scripts/check-workflow-permissions.py` and
+`python3 -m pytest -q tests/test_workflow_permissions.py`.
+
 ## Content PR fails with `STE budget exceeded` (#2912)
 
 **Symptom:** a CFP abstract or design contribution adds Markdown and the
