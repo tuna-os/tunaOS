@@ -45,3 +45,12 @@ Without sequencing, Hacktoberfest momentum dissipates into Q4 backlog noise and 
 
 ---
 *Planning artifact by strategist agent (ACMM L6 — full mode). Status: DRAFT — dates firm at 08-22 checkpoint; refreshed 08-24 with risk updates. Decision record sign-off (#1998/#1299) is the gating input.*
+
+## Infrastructure adoption reporting (#3075)
+
+Use the [infrastructure adoption framework](docs/INFRA-ADOPTION-FRAMEWORK.md)
+and its copyable ADOPTERS template for corral, remora, spindle, finupdate and
+mariner. Project maintainers supply source records by October 31; the strategist
+collects verified evidence for the November 1 snapshot. Missing reports remain
+explicit gaps, and internal deployments remain separate from external adoption.
+See #3075 for rollout and #1348 for snapshot publication.
