@@ -1,110 +1,102 @@
-# GNOME 51.0 Release-Week Content & Packaging Hook
+# GNOME 51 content and publication handoff
 
-> Status: **draft** — for maintainer review before GNOME 51 release week (~September 2026).
-> Tracking issue: [#1334](https://github.com/tuna-os/tunaOS/issues/1334) (GNOME 51.0 release-week content — packaging hook).
-> Prepared: 2026-08-29. Target window: GNOME 51.0 release week (~Sep 12–19, 2026).
+> Unpublished draft. The release-week window has passed; this is not an
+> availability announcement. Tracking: [#3064](https://github.com/tuna-os/tunaos/issues/3064).
+> The original tracker [#1334](https://github.com/tuna-os/tunaos/issues/1334)
+> was closed by a maintainer on September 24 because release week had passed.
 
----
+## Upstream timing and scope
 
-## Strategic Context
+GNOME 51 was released on **September 16, 2026**, rather than the September 12
+estimate in the original campaign. Sources: the [GNOME release calendar](https://release.gnome.org/calendar/)
+and [release announcement](https://discourse.gnome.org/t/gnome-51-released/38820).
+Do not backdate a TunaOS post or describe a later publication as release-day
+coordination. No GNOME communications agreement or embargo is recorded here.
 
-Enterprise Linux users (AlmaLinux 10, CentOS Stream 10, RHEL 10) typically wait years for major GNOME desktop environment upgrades. TunaOS bridges this gap by packaging current GNOME releases—specifically **GNOME 51.0**—on top of Enterprise Linux bases on day one, delivered as atomic, rollback-capable `bootc` container images.
+The [upstream release notes](https://release.gnome.org/51/) describe improvements
+to Settings, Files and Calendar. For desktop administrators, these are topics
+for compatibility and user-workflow testing, not evidence that a particular
+TunaOS image contains or supports every upstream feature.
 
-### The Packaging Hook
-- **Tier-based Mock Builds**: TunaOS packages the GNOME 51 desktop stack (`mutter`, `gnome-shell`, `gtk4`, `libadwaita`, `nautilus`, `gdm`, `ptyxis`, and `orca`) through an automated, mock-based build pipeline.
-- **Native RPM Repository on Cloudflare R2**: Packages are built in-house and distributed directly from the TunaOS Cloudflare R2 RPM repository instead of unmaintained third-party PPAs or stale COPR repositories (aligning with org package sourcing policy #1319).
-- **Atomic Image Assembly**: The resulting RPMs are layered into bootable OCI container images (`Yellowfin:gnome`, `Albacore:gnome`, `Skipjack:gnome`) and cryptographically signed with Sigstore/cosign keyless signing.
+## Blog outline for a later verified availability announcement
 
----
+Proposed title: **GNOME 51 on TunaOS: evaluating a current desktop on an EL10 base**.
 
-## Ready-to-Publish Content Drafts
+1. Credit GNOME and link its release notes. Explain which upstream changes
+   matter to desktop administrators, using only features verified in the image.
+2. Explain the TunaOS image-factory approach: an OS base and a desktop assembled
+   into a bootable OCI image. Link the [pipeline](PIPELINE.md) and
+   [package sourcing policy](../PACKAGE-SOURCING.md).
+3. Name only the variants and architectures with published, inspected GNOME 51
+   artifacts and passing boot/login evidence. Packaging source or a successful
+   package build alone does not establish image availability.
+4. Describe testing and deployment using the [installation guide](INSTALL.md), after
+   checking its commands against the qualified artifact. An EL base lifecycle
+   does not promise the same support period for the added desktop stack.
+5. Invite feedback through [the issue tracker](https://github.com/tuna-os/tunaos/issues).
+   Link the actual published article and verified download page; do not invent
+   a future blog URL.
 
-### 1. Blog Post Draft (`tunaos.org/blog`)
+## Social and upstream-community copy
 
-**Title**: `GNOME 51 on Enterprise Linux: Day-One Desktop Modernity with TunaOS bootc`
-**Date**: `2026-09-12`
-**Author**: `TunaOS Team`
+These upstream-focused drafts make no TunaOS availability claim. An authorized
+maintainer chooses whether and where to publish them, checks community rules,
+and confirms links immediately before posting.
 
-```markdown
-# GNOME 51 on Enterprise Linux: Day-One Desktop Modernity with TunaOS bootc
+**Short social post**
 
-Today marks the official release of GNOME 51, bringing major architectural improvements, refined Adwaita styling, performance gains in Mutter, and next-generation Wayland enhancements to the Linux desktop.
+> Congratulations to GNOME on version 51! Explore the upstream release notes:
+> https://release.gnome.org/51/ . Follow TunaOS's GNOME testing and rollout work:
+> https://github.com/tuna-os/tunaos/issues/3064 .
 
-Traditionally, running the latest GNOME meant choosing between rapid-release upstream distributions (like Fedora or Arch) or accepting years-old desktop packages on an Enterprise Linux (EL) LTS base.
+**GNOME community note**
 
-With **TunaOS**, you no longer have to compromise.
+> Congratulations on GNOME 51, and thank you to its contributors. TunaOS is an
+> image factory exploring current desktops on multiple OS bases. We welcome
+> packaging and desktop-testing feedback through our public tracker:
+> https://github.com/tuna-os/tunaos/issues/3064 . Upstream release details:
+> https://release.gnome.org/51/ .
 
-Starting today, TunaOS delivers **GNOME 51 on Enterprise Linux 10** (AlmaLinux 10 and CentOS Stream 10 bases) as atomic, bootable container images.
+## Availability CTA: held until qualified
 
-### How it works: Enterprise Base + Modern Desktop Stack
+The intended CTA is “Try GNOME 51 on Albacore.” Before using it, verify the
+published `ghcr.io/tuna-os/albacore:gnome` artifact actually contains GNOME 51
+and passes the required gates. The mutable tag does not select a GNOME major.
 
-TunaOS packages the complete GNOME 51 user space natively against EL10:
-- **Core Shell & Compositor**: GNOME Shell 51, Mutter 51 with variable refresh rate (VRR) and fractional scaling improvements.
-- **Modern App Toolkit**: GTK 4.x and Libadwaita updates backported without breaking base system glibc or core runtime compatibility.
-- **Cloudflare R2 Native RPMs**: In compliance with our package sourcing policy, all backported RPMs are built in clean mock environments and hosted on high-availability Cloudflare R2 storage.
-- **Transactional bootc Deployment**: Upgrading is atomic. Run `bootc upgrade` to transition your workstation to GNOME 51. If any regression occurs, `bootc rollback` returns you to your previous working snapshot in seconds.
+Only after that verification, on an existing compatible bootc installation,
+the deployment example is:
 
-### Trying GNOME 51 on TunaOS
-
-To run GNOME 51 on TunaOS:
 ```bash
-# Pull and switch to the GNOME 51 image on Albacore (EL10)
 sudo bootc switch ghcr.io/tuna-os/albacore:gnome
-
-# Or test in a local container / VM
-podman run -d --name tuna-gnome-test ghcr.io/tuna-os/albacore:gnome
 ```
 
-Downloadable x86_64 ISOs are available immediately at [tunaos.org/download](https://tunaos.org/download).
-```
+Follow the [installation guide](INSTALL.md) for reboot and rollback procedures. Switching
+changes the deployed OS; evaluate in a disposable bootable VM first. A normal
+`podman run` does not boot or validate a GNOME desktop session. Do not advertise
+an ISO, architecture, immediate upgrade, or production readiness without its
+own evidence.
 
----
+## Publication checklist
 
-### 2. Reddit / Lemmy Announcement Draft
+Work through the [content claim checklist](CONTENT-CLAIM-CHECKLIST.md).
+Keep live qualification evidence in the publication review rather than copying
+an image-status table into this draft.
 
-**Target Communities**: r/gnome, r/linux, r/AlmaLinux, r/CentOS, Lemmy `!linux@lemmy.ml`
+- [ ] Select the actual announcement scope and publication date; release week
+      is over. Obtain maintainer approval for public messaging and accounts.
+- [ ] Resolve a published digest for each advertised variant and architecture
+      (including Albacore, Yellowfin and Bonito if all three are advertised).
+- [ ] Record image inspection proving the installed GNOME version and package
+      closure, plus boot/login runs for those same digests and architectures.
+- [ ] Apply [GREEN-CRITERIA.md](GREEN-CRITERIA.md) and consult generated
+      [MATRIX-STATUS.md](MATRIX-STATUS.md); build success alone is insufficient.
+- [ ] Replace the outline with evidence-backed copy and validate the CTA,
+      download links, supported features and rollback instructions.
+- [ ] If GNOME communications coordination is desired, have an authorized
+      maintainer agree timing with that team; do not imply endorsement.
+- [ ] Have the authorized publisher post the approved blog and social copy.
+- [ ] Record public URLs, publication time, campaign referral parameters and
+      the resulting monthly referral data in [ADOPTION-METRICS.md](../ADOPTION-METRICS.md).
 
-**Title**: `TunaOS brings GNOME 51 to Enterprise Linux 10 on release day — bootc images with atomic rollback`
-
-**Body**:
-> GNOME 51 is out today, and we've packaged the full desktop stack for Enterprise Linux 10 (AlmaLinux 10 and CentOS Stream 10) in TunaOS.
->
-> If you love Enterprise Linux stability for the base system and kernel, but don't want to be locked into an outdated desktop environment for the next 5 years, this is built for you:
->
-> - **Full GNOME 51 stack**: Shell, Mutter, GTK4/Libadwaita apps, Nautilus, Ptyxis, GDM.
-> - **Atomic bootc updates**: Delivered as OCI container images. Updates are transactional and reversible (`bootc rollback`).
-> - **Native package sourcing**: Built in-house via isolated mock pipelines and served from Cloudflare R2 (no abandoned COPRs).
-> - **Multi-arch**: x86_64 and aarch64 container images published to GHCR.
->
-> Download ISOs: https://tunaos.org/download
-> Technical details & blog post: https://tunaos.org/blog/2026/09/12/gnome-51-coming-to-tunaos
-> Issue & discussion: https://github.com/tuna-os/tunaOS/issues/1334
-
----
-
-### 3. GNOME Discourse / Planet GNOME Community Note
-
-**Topic**: `Packaging GNOME 51 for Enterprise Linux via bootc containers`
-
-> Hello GNOME community!
->
-> Congratulations on the GNOME 51 release. The TunaOS project has published packaging and bootable container images enabling GNOME 51 on AlmaLinux 10 and CentOS Stream 10.
->
-> Our goal is to make the latest GNOME innovations immediately accessible to workstation users in enterprise and research environments that need EL10 lifecycles. All packaging is maintained openly, built against EL10 sysroots, and tested across both x86_64 and aarch64.
->
-> We welcome feedback from GNOME developers and packagers:
-> - Repository: https://github.com/tuna-os/tunaOS
-> - Discussion & Package Manifests: https://github.com/tuna-os/tunaOS/tree/main/manifests/desktops/gnome.yaml
-
----
-
-## Distribution Checklist
-
-- [ ] Verify GNOME 51 RPM build tiers green in CI
-- [ ] Confirm R2 repository index generated and signed
-- [ ] Verify `Yellowfin:gnome`, `Albacore:gnome`, and `Skipjack:gnome` container builds passing
-- [ ] Publish blog post to `tunaos.org/blog`
-- [ ] Post Reddit/Lemmy announcements (maintainer account)
-- [ ] Post Fediverse toot (using Toot 2 from [FEDIVERSE-PLAYBOOK.md](FEDIVERSE-PLAYBOOK.md))
-- [ ] Share on GNOME Discourse packaging forum
-- [ ] Log referral deltas in [ADOPTION-METRICS.md](../ADOPTION-METRICS.md)
+Repository edits can prepare this handoff. Public posting, external coordination
+and post-publication measurements remain with the authorized campaign owner.
