@@ -64,6 +64,71 @@ The maintainer keeps one 30-minute slot each week for contributor work. During t
 
 This is a lightweight queue-management commitment, not a promise of immediate review. Contributors should expect an acknowledgement or status update within the next weekly triage slot.
 
+### Weekly hold-review sweep
+
+The triage maintainer reserves 15 minutes each week for an
+async hold-review sweep. Review every open PR with `hold`, oldest hold
+first. For a hive-wide sweep, the coordinator repeats this procedure in each
+authorized repository; this repository's policy does not grant write access
+elsewhere. Record the repositories covered and any not yet reviewed.
+
+When you apply `hold`, leave a PR comment with:
+
+- **Reason and evidence:** the check/run that failed, dependency, or exact decision.
+- **Owner:** the person or team who can unblock it.
+- **Unhold trigger:** an observable condition, such as a linked CI fix that passes.
+- **Next review:** a date no later than the next weekly sweep.
+
+Use the label event in the PR timeline to measure dwell since the current
+hold began. PR creation time and last update time are not hold age. Query
+PRs from GitHub for current evidence:
+
+```bash
+gh pr list --repo tuna-os/tunaos --state open --label hold --limit 1000 \
+  --json number,url,title,labels
+```
+
+For each PR, read its discussion, timeline, latest checks and linked blockers,
+then record one disposition in a comment:
+
+1. **Ready:** evidence meets the trigger; an authorized reviewer removes `hold`
+   and requests review. Existing checks, approval requirements and merge gates
+   still apply; contributors never merge their own PRs.
+2. **CI or external dependency:** retain `hold`, link the blocker and its
+   owner, and set the next review date. Group PRs with the same blocker. Review the
+   infrastructure fix first. After it lands, recheck each PR's CI
+   before you remove its hold; do not assume it unholds automatically.
+3. **Decision required:** retain `hold`, add `needs-direction` (a maintainer
+   creates the label if absent), and state the precise question and decision
+   owner. The label requests a decision. It does not give permission to bypass it.
+4. **Superseded or resolved:** verify the replacement or resolution, then an
+   authorized reviewer closes with an explanation and evidence link. Age alone
+   is not grounds for closure; preserve unique work and discussion.
+
+A hold without a reason comment after 48 hours is overdue for review. Ask its
+setter for the missing reason, owner and trigger, and escalate to the triage
+maintainer at the next sweep. Do not auto-close it: the
+[triage policy](TRIAGE-POLICY.md#3-resolution-verified-closure-not-calendar-age-closure)
+calls for verification before closure.
+
+Post a dated summary of each sweep in the issue (for this rollout,
+[#2911](https://github.com/tuna-os/tunaos/issues/2911)). Include:
+
+- Repositories covered and open holds in each.
+- Oldest current hold date and number of holds over 30 days.
+- Holds without reason comments and decisions that need owners.
+- Links to disposition comments.
+- New holds and holds released or closed since the last sweep.
+- Number of PRs merged over the same seven-day window.
+
+Compare the same repository scope week over week. Check merge counts as well
+as hold counts to detect a queue that has stopped.
+
+The rollout target from #2911 is fewer than 10 hive-wide holds within a week
+of the linked CI fixes. The merge target is at least two main-branch merges
+per day. Measure these goals without bypass of review or closure rules.
+If the queue misses a target, name the blockers and owners in the next summary.
+
 ## Pre-Commit (mandatory)
 
 ```bash
