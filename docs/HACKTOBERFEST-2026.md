@@ -14,6 +14,69 @@ composition) and
 [tunaos#2304](https://github.com/tuna-os/tunaos/issues/2304) (pool
 consumption).
 
+## Start contributing
+
+Choose an [open, unassigned starter issue in an active repository](https://github.com/issues?q=org%3Atuna-os+is%3Aissue+is%3Aopen+archived%3Afalse+no%3Aassignee+label%3A%22good+first+issue%22).
+Read its acceptance criteria and recent comments, then comment to claim it.
+An unassigned issue can still have a claim in its comments; confirm availability
+before starting. Follow that repository's `CONTRIBUTING.md` for setup and checks;
+for the image factory, use [our contributor guide](../CONTRIBUTING.md#fork--pr-loop).
+
+Ask questions in [Matrix, #tunaos:reilly.asia](https://matrix.to/#/%23tunaos:reilly.asia).
+For office hours, ask there for the next contributor triage slot; this document
+does not promise a scheduled live session. Include the issue URL, what you tried,
+and the error or question so someone can help asynchronously.
+
+## Repeatable organization audit
+
+Run from the checkout with Python 3 and an authenticated GitHub CLI:
+
+```bash
+python3 scripts/hacktoberfest-audit.py > /tmp/hacktoberfest-audit.json
+```
+
+The read-only audit enumerates all public organization repositories, rather
+than assuming the historical total of 40. It paginates repository, label and
+issue responses, includes zero-GFI repositories, and records archived or
+issue-disabled repositories as excluded. An API failure fails the audit;
+it must not be interpreted as zero coverage. The timestamped JSON receipt
+contains label coverage, open and unassigned counts, counts with both
+`good first issue` and `help wanted`, and unassigned starter URLs.
+Assignment is only a proxy for availability: check comments and acceptance
+criteria before promoting any result. Neither label spelling nor a count
+establishes Hacktoberfest eligibility.
+
+Use this receipt to review `gtk-office-suite`, `tunaos-packages`, `wootc`,
+`tunaos`, `docs`, `iso-builder`, `bootc-migrate`, and `bootc-installer` first.
+Follow the curation checklist below before applying labels or opening seeds;
+include non-GNOME tasks and preserve the issue #3065 target of at least 15
+usable tasks across at least six repositories. Do not manufacture tasks to
+fill a quota. The historical census below is evidence from September,
+not today's inventory; use the audit receipt for current decisions.
+
+For each seed, use this description template:
+
+```markdown
+## Task
+Files or pages to change, the observed problem, and a single bounded outcome.
+
+## Acceptance criteria
+- Observable result and the command or review steps that verify it.
+- Dependencies and changes that are out of scope.
+
+## Getting started
+Link this repository's CONTRIBUTING.md and the relevant setup/check commands.
+Comment to claim; check existing comments for prior claims.
+Ask in Matrix: https://matrix.to/#/%23tunaos:reilly.asia
+Ask there for the next contributor triage/office-hours slot.
+```
+
+Announcements on Matrix, GitHub Discussions and social channels should link
+the curated search and explain how to claim a task. Publish only after checking
+availability and event eligibility; retain each announcement URL with the audit
+receipt. Seeding, channel publication and the October 31 conversion target remain
+tracked by [#3065](https://github.com/tuna-os/tunaos/issues/3065).
+
 ## Launch target
 
 Before October 1, maintainers should publish 10–15 open issues that are both
