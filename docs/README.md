@@ -41,6 +41,7 @@ user-facing site:
 | [ASAHI-HARDWARE-TIERS.md](ASAHI-HARDWARE-TIERS.md) | Real Apple Silicon hardware CI: rented Scaleway rental + personal-machine tiers, and the m1n1/boot.bin safety rule both must follow |
 | [ASAHI-EL10-OBS-PROJECT.md](ASAHI-EL10-OBS-PROJECT.md) | Open Build Service project for EL10 Asahi packages (#777) |
 | [BRANCH-HYGIENE.md](BRANCH-HYGIENE.md) | Operational checklist for finding and cleaning stale branches |
+| [REDFIN.md](REDFIN.md) | Redfin local-build alpha acceptance and enterprise outreach strategy |
 | [rhel-setup.md](rhel-setup.md) | RHEL 10 (Redfin) local-build instructions |
 | [ROLL_YOUR_OWN.md](ROLL_YOUR_OWN.md) | Guide to building custom TunaOS variants for your own use |
 | [SECURE-BOOT.md](SECURE-BOOT.md) | Secure Boot support by variant |

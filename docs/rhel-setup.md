@@ -2,6 +2,8 @@
 
 **Redfin** is TunaOS built on Red Hat Enterprise Linux 10. Because the RHEL EULA prohibits redistribution of derived images, this variant is **local-build only** — images are not published to the public ghcr.io registry.
 
+For alpha evidence requirements and enterprise positioning, see [Redfin tracking and outreach](REDFIN.md).
+
 ## Prerequisites
 
 ### 1. Red Hat Account

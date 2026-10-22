@@ -249,7 +249,7 @@ See [SECURITY.md](./SECURITY.md) for vulnerability reporting.
 | Package signing / SBOM | sec-check | Supply chain, #1187 |
 | **Package sourcing policy (system-repos/tideforge-first + allowlist)** | strategist | #1319, #1323 (audit → #1187) |
 | Bonito (Fedora 44) GA carryover | ci-maintainer | #272 — nvidia regression closed (#1499), T2 profile merged (#1256); re-scored STAFF at T-9 refresh |
-| Redfin (RHEL 10) alpha GA | ci-maintainer | #609 |
+| Redfin (RHEL 10) local-build alpha | ci-maintainer | #1123, #3002 — acceptance: record a reproducible local build, boot/install and update evidence for a named desktop and architecture, plus local ISO verification; see [Redfin tracking and outreach gates](docs/REDFIN.md). Public ISO publication and CI matrix admission remain out of scope under the existing local-build policy |
 | Fedora 45 base readiness | ci-maintainer | #1171 — [FEDORA-BASE-POLICY.md](./FEDORA-BASE-POLICY.md) adopted 08-13: N+rawhide model, Fedora 45 planning sequenced after Bonito (#272) GA, not parallel |
 | Adoption metrics / usage telemetry | strategist | #1174 |
 | **Adoption evidence (ADOPTERS.md production entries)** | strategist | #1348 — zero public production adopters vs "Mature" claim; first entries at 2026-11-01 snapshot |
