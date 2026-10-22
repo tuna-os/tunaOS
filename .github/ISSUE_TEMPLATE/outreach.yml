@@ -1,0 +1,44 @@
+name: Outreach proposal
+description: Propose ecosystem partnership, conference, or content outreach
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before filing, follow the [outreach pre-filing check](https://github.com/tuna-os/tunaos/blob/main/CONTRIBUTING.md#before-filing-outreach-issues).
+        Reuse existing coordination threads for prepared drafts awaiting a send.
+  - type: input
+    id: target
+    attributes:
+      label: Target and channel
+      description: Name the organization, event, or publication and the channel.
+    validations:
+      required: true
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Check existing outreach
+      options:
+        - label: I checked docs/ADOPTION-OUTREACH-STATUS.md for this target/channel.
+          required: true
+        - label: I searched docs/README.md for existing drafts and similar titles.
+          required: true
+        - label: I searched closed outreach-labelled issues and open issues/PRs.
+          required: true
+  - type: textarea
+    id: existing-work
+    attributes:
+      label: Existing work and search results
+      description: |
+        Link matching ledger rows, drafts, and issues/PRs. If none match,
+        record the target names and search terms checked.
+    validations:
+      required: true
+  - type: textarea
+    id: action
+    attributes:
+      label: Distinct remaining action
+      description: |
+        What new action is needed, and why is it not covered by existing work?
+        A prepared draft awaiting maintainer send is not a new campaign.
+    validations:
+      required: true

@@ -226,6 +226,13 @@ Six more, each measured while fixing the live-ISO and install path
 ### Issue tracker
 GitHub Issues for `tuna-os/tunaos`, operated via `gh` CLI.
 
+### Outreach issue generation
+Before filing ecosystem-partnership, conference, or content-campaign issues,
+follow the [outreach pre-filing check](CONTRIBUTING.md#before-filing-outreach-issues):
+check the status ledger, docs index, and closed `outreach` issues, then open work.
+Include the results and the distinct remaining action in generated issue bodies.
+Prepared drafts awaiting maintainer send are existing work, not new campaigns.
+
 ### Triage labels
 `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`.
 
