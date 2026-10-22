@@ -97,6 +97,25 @@ the desktop contract's own check against a filesystem with no session file,
 and holds that it fails. `tests/test_regression_convention.py` enforces the
 naming.
 
+## Roadmap before launch
+
+Before you publish a new product or distribution channel, confirm that its
+repository has `ROADMAP.md` at the root of its default branch. This applies to
+desktop tools, shared infrastructure, Flatpak/Flathub apps, downloadable binaries,
+and package-manager entries. Include the roadmap link and release prerequisite issue
+links in the release PR so reviewers can check the gate before publication.
+Keep stability goals, important dependencies, and acceptance evidence in that
+local roadmap; do not infer readiness from the file's existence.
+
+For the organization-wide audit, run `python3 scripts/gen-roadmap-coverage.py`
+in tunaos and review the generated [coverage inventory](ROADMAP.md#per-repo-roadmaps).
+It checks every active public repository, including tools such as bluefin-cli
+and wootc, using each repository's default branch. Track remaining omissions in
+[#2820](https://github.com/tuna-os/tunaos/issues/2820). Coverage is broader than
+shipped products: a missing roadmap is a plan gap, not proof that a product
+has shipped. Do not turn live cross-repository coverage into a PR gate; use
+`--check-structure` for changes to the generated block here.
+
 ## Building Images
 
 ```bash
