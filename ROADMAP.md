@@ -256,6 +256,23 @@ See [SECURITY.md](./SECURITY.md) for vulnerability reporting.
 | Variant lifecycle policy (admission + Beta→Stable exit criteria) | strategist | #1196, #1175, #1270, #1254, #1294, #1763 — [VARIANT-LIFECYCLE.md](./VARIANT-LIFECYCLE.md) |
 | **Windows conversion channel (wootc) — beta gate + winget** | strategist / wootc maintainer | #1988, wootc#211, wootc#221 — Q3 carryover. Q4 scope: full-tier matrix green (wootc#222), BitLocker path (wootc#223), winget package live, and wootc's adoption numbers folded into the #1174 metrics snapshot and #1743 Q4 sequencing. This is the org's only adoption channel that reaches users not already running Linux |
 
+### protota cross-team adoption gates
+
+The [protota Q4 roadmap](https://github.com/tuna-os/protota/blob/main/ROADMAP.md#current-quarter-2026-q4--mature)
+sets CI stability as a prerequisite for adoption by gtk-office-suite / suite-common.
+These goals are part of the org's Q4 exit review ([#2923](https://github.com/tuna-os/tunaos/issues/2923)):
+
+| Goal | Owner | Dependencies / exit evidence |
+|------|-------|------------------------------|
+| protota reference-capture CI stability | protota | [Broadway Reference Capture tracker #255](https://github.com/tuna-os/protota/issues/255); disks and text-editor must render consistently under Broadway, with stable scheduled reference captures before Q4 exit |
+| protota diagnostics default-on | protota | Stable CI signal; observability metrics emitted and collected in workflow runs |
+| protota suite-common integration evaluation | TBD (per protota roadmap) | CI stability gate above; gtk-office-suite / suite-common evaluation complete and roadmap/scope decision documented |
+
+Use the linked tracker and workflow evidence for current CI status. The source
+roadmap still names #255 as a blocker, but the issue was closed on 2026-10-17
+without a closing commit in its timeline; closure alone does not establish the
+reference-capture exit criterion.
+
 **Milestone fidelity (#1307, 2026-08-12)**: 7 of the 9 goal trackers above were
 filed without being attached to the Q4 milestone (#3), so the milestone
 undercounted real progress (e.g. keyless signing landing 08-10 for #1187
