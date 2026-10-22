@@ -1871,3 +1871,17 @@ These tests check consistency. They do not prove a real producer or installation
 **Cause:** The hook adds new IDs but it never deletes old IDs.
 
 **Fix:** Delete the owned file at the start of each run. Keep files from other sources. Reject a linked file before you change files.
+
+### Countme audit disagrees with image coverage tests
+
+**Symptom:** #3056 describes image coverage as not started and the backend as
+unprovisioned even though countme source checks pass.
+
+**Measured cause:** At `293b99d8`, the client/image/CI suite passes 213 cases;
+the plan still leaves full installed-guest acceptance unchecked. ADR 0011 and
+the plan record deployment evidence separately from those boot requirements.
+
+**Fix:** Follow [the observability audit](OBSERVABILITY-AUDIT.md) to regenerate
+the matrix and rerun the contracts. Require final-image and guest evidence before
+marking rollout complete; consult the ADR and deployment record before treating
+an old issue description as infrastructure state.
