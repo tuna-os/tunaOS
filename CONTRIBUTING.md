@@ -85,6 +85,41 @@ scheduled build matrix. The rest of the contributor contract:
 | `just test-cell <variant> <flavor>` | the desktop contract against one published image, as the nightly sweep runs it |
 | `just test-e2e <iso>` | boot an ISO under QEMU and assert the live environment reaches readiness |
 
+## Prose checks (STE)
+
+Run `just ste` before you submit Markdown changes. It uses the shared linter
+revision from `.github/workflows/ste.yml`, with the same `.ste-budget` as CI.
+The budget covers the whole repository. It only goes down; do not raise it
+to pass a content PR. There is no repository-local `.stelint` path config.
+
+Apply this policy by the purpose of the text:
+
+| Location or purpose | STE policy |
+|---|---|
+| README, CONTRIBUTING, API docs, runbooks, and technical instructions | Keep STE checks. Fix new findings. |
+| `docs/outreach/`, CFP abstracts, blog and campaign copy | A reasoned opt-out is allowed for audience-facing copy. |
+| Design guides, including wallpaper contributions | Keep checks on setup and submission steps. An opt-out is allowed for the creative brief or art direction. |
+
+A directory name alone does not skip checks. In a mixed page, mark only the
+content that needs a different voice. Use the exact lowercase directives:
+
+```markdown
+<!-- ste-disable: conference abstract uses the event audience's terms -->
+Audience-facing abstract goes here.
+<!-- ste-enable -->
+```
+
+For a page made entirely of such content, put this directive on its first line:
+
+Start with `<!-- ste-disable-file:`, add a page-specific reason, and close
+that same line with `-->`. For example, the reason can state that campaign
+copy uses the target audience's voice.
+
+State a specific reason for that page or region.
+The uppercase `<!-- STE-DISABLE -->` form does not work. File opt-outs appear
+with their reasons in the linter report. Reviewers still check claims, links,
+and technical accuracy in all content; an STE opt-out only changes prose checks.
+
 ## Every incident becomes a regression test
 
 A bug that let an unusable or wrongly-promoted image ship stays open until a
