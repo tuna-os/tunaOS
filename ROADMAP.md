@@ -223,6 +223,9 @@ See [SECURITY.md](./SECURITY.md) for vulnerability reporting.
 | **Flavor equality mandate (docs wording + cadence parity)** | strategist | #1315, #1254 | 🟡 In progress — catalog parity gate merged 08-11 (#1322, #1281 closed); cadence parity pending (#1316) |
 | **NVIDIA flavor family (6 editions, 0 assets since 07-05)** | ci-maintainer | #1383 | 🔴 Broken — nightly overlay regressed 08-12 (#1382); 13/13 variant matrix red 08-14 (#1570) incl. nvidia cells (#1561/#1562/#1564/#1565); staff test: nightly green + gnome-nvidia assets republished by 09-01 (#1376/#1379) |
 | **Windows conversion channel (wootc)** | strategist / wootc maintainer | #1988, #1958, wootc#210 | 🟡 In progress — `v0.1.0-alpha.1` shipped 2026-08-22 (five branded installers + deployer artifacts + `SHA256SUMS`, E2E-gated); nightly auto pre-releases live. wootc's own [ROADMAP](https://github.com/tuna-os/wootc/blob/main/ROADMAP.md) (refreshed 08-22) carries the v0.1.0-alpha → v1.0.0 ladder with milestone trackers M2–M5 (wootc#210–#213). Gaps closing under #1988: no Windows entry point from this repo (`README.md`/`MIGRATION.md` have zero wootc references; user ask #1958 filed 08-22 untriaged), and `winget install TunaOS.wootc` blocked on the maintainer-only `WINGET_TOKEN` secret (wootc#221). Next gate: **v0.2.0-alpha — proven on real hardware** (wootc#210) |
+| **Flatpak remote ownership and production drift gate** | strategist / accountable remote owner to be named | #2922, #2921; [flatpak-index ROADMAP](https://github.com/tuna-os/flatpak-index/blob/main/ROADMAP.md) | Q3 exit requirement: record the owner and production source in both flatpak-index and docs; define publish-to-availability freshness SLO, incident ownership and rollback; measure catalog, digest, architecture and metadata drift from the served endpoint. Ownership decision precedes Q4 publisher consolidation |
+| **Homebrew channel ownership, currency and validation** | strategist / tap and upstream publisher owners | #2922; [homebrew-tap#12](https://github.com/tuna-os/homebrew-tap/issues/12), [#7](https://github.com/tuna-os/homebrew-tap/issues/7); [ROADMAP](https://github.com/tuna-os/homebrew-tap/blob/main/ROADMAP.md) | Q3 exit requirement: each supported entry has an authoritative release source and working publisher or named manual owner; eligible releases reach the tap or receive a visible exception within 48 hours. Resolve publisher credentials through an org admin and explicit package admission; producer-consumer URL, checksum and install validation gates Q4 currency automation |
+| **Scoop channel launch and release drift gate** | strategist / bucket and producer owners | #2922; [scoop-bucket#4](https://github.com/tuna-os/scoop-bucket/issues/4), [#14](https://github.com/tuna-os/scoop-bucket/issues/14); [ROADMAP](https://github.com/tuna-os/scoop-bucket/blob/main/ROADMAP.md) | Q3 exit requirement: name publication owner and least-privilege credential model; publish and validate bluefin-cli Windows amd64/arm64 manifest; prove clean Windows bucket-add/install/version journey; make stable-release drift beyond 24 hours owner-visible. Launch evidence precedes Q4 channel expansion |
 | **Package sourcing policy (system-repos/tideforge-first + allowlist)** | strategist | #1319, #1323 | 🟡 In progress — PACKAGE-SOURCING.md merged; DNF/COPR audit done 08-13, ahead of the 08-22 checkpoint (2 violations, 6-COPR niri gap, negativo17/rpmfusion allowlist candidates confirmed — #1453); apt/AUR/OBS bases still unaudited, maintainer allowlist sign-off and Phase 2 migration still pending |
 
 ---
@@ -255,6 +258,12 @@ See [SECURITY.md](./SECURITY.md) for vulnerability reporting.
 | **Adoption evidence (ADOPTERS.md production entries)** | strategist | #1348 — zero public production adopters vs "Mature" claim; first entries at 2026-11-01 snapshot |
 | Variant lifecycle policy (admission + Beta→Stable exit criteria) | strategist | #1196, #1175, #1270, #1254, #1294, #1763 — [VARIANT-LIFECYCLE.md](./VARIANT-LIFECYCLE.md) |
 | **Windows conversion channel (wootc) — beta gate + winget** | strategist / wootc maintainer | #1988, wootc#211, wootc#221 — Q3 carryover. Q4 scope: full-tier matrix green (wootc#222), BitLocker path (wootc#223), winget package live, and wootc's adoption numbers folded into the #1174 metrics snapshot and #1743 Q4 sequencing. This is the org's only adoption channel that reaches users not already running Linux |
+
+**Distribution-channel sequencing (#2922)**: Flatpak publisher consolidation,
+Homebrew scheduled currency/install checks, and Scoop catalog expansion depend
+on the Q3 ownership, freshness and validation gates above. These are exit
+requirements, not assertions of current channel health; use each linked local
+roadmap and its release/install evidence when assessing completion.
 
 **Milestone fidelity (#1307, 2026-08-12)**: 7 of the 9 goal trackers above were
 filed without being attached to the Q4 milestone (#3), so the milestone
@@ -297,6 +306,13 @@ that every repository use the same milestone structure. The Community inventory
 above is the source of truth for active-repository coverage; update it when a
 repository is archived, adopts a roadmap, or moves its roadmap onto the default
 branch.
+
+Infrastructure distribution channels with near-term quarterly milestones must
+also have an org goal-table row naming an accountable owner (or an explicit
+ownership decision), release-currency objective, producer/consumer validation
+exit evidence, and local roadmap/tracker links. Carry unfinished gates forward
+as dependencies of the next quarter's automation or expansion work; a local
+roadmap alone does not satisfy org planning visibility (#2922).
 
 See [SECURITY.md](./SECURITY.md) for vulnerability reporting.
 
