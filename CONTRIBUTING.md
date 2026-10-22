@@ -53,6 +53,10 @@ Ways to contribute without changes to the build pipeline:
 
 When you pick an issue, say so in a comment (prevents double work) and ask in Matrix if you get stuck — someone is usually around.
 
+The [October core contributor cohort runbook](docs/CONTRIBUTOR-COHORT.md)
+defines the campaign review cadence, weekly evidence receipt, and the
+three-person core-repository target tracked in #2999.
+
 ### Weekly contributor triage
 
 The maintainer keeps one 30-minute slot each week for contributor work. During that slot:
