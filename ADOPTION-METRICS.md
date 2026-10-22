@@ -1,11 +1,15 @@
 # TunaOS Adoption Metrics Plan
 
-**Last updated**: 2026-08-14 | **Owner**: strategist (snapshot), ci-maintainer (R2/Releases data), guide (publishing)
+**Last updated**: 2026-10-22 | **Owner**: strategist (snapshot), ci-maintainer (R2/Releases data), guide (publishing)
 **Tracking**: [tunaos#1174](https://github.com/tuna-os/tunaos/issues/1174)
 
 ---
 
 ## Why
+
+The following motivation and baseline table record the August planning context.
+For measured October signals and remaining gaps, use the dated report linked
+under [Cadence & publication](#cadence--publication).
 
 tunaOS ships 179+ downloadable ISOs across 9+ variants × 5 desktops, yet has
 **zero usage telemetry**. Roadmap themes (Q3 "Expand", Q4 "Mature") are executed
@@ -51,6 +55,16 @@ publish, and *how* the snapshot feeds roadmap decisions.
 
 ## Cadence & publication
 
+- **Preliminary baseline captured**: [2026-10-22 report](docs/adoption-metrics/snapshots/2026-10-22.md)
+  ([JSON receipt](docs/adoption-metrics/snapshots/2026-10-22.json)). This is not
+  the November checkpoint. The historical baseline column above remains dated.
+- **Monthly collection**: `.github/workflows/adoption-metrics.yml` collects
+  public GitHub counters on the first day at 09:00 UTC. See the
+  [collection and publication runbook](docs/adoption-metrics/README.md).
+  R2 downloads, pageviews, the human contribution census and adoption-call
+  conversion remain unavailable until their owners supply reviewed inputs.
+  The separate [countme service](services/countme/README.md) now exists;
+  its weekly report estimates must not be read as unique monthly users.
 - **Monthly snapshot**, published in the ROADMAP **Community** section (first:
   **2026-11-01**, covering October — aligns with Q4 "Mature" opening).
 - Snapshot format: downloads by variant × desktop (top 10), stars/forks,

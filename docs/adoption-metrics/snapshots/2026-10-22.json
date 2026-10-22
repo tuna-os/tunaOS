@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "repository": "tuna-os/tunaos",
+  "collection_started_at": "2026-10-22T01:29:52+00:00",
+  "collected_at": "2026-10-22T01:29:57+00:00",
+  "source_commit": "0d7603e29aac52fe159f853503ac85b03c124988",
+  "sources": {
+    "repository": "https://api.github.com/repos/tuna-os/tunaos",
+    "releases": "https://api.github.com/repos/tuna-os/tunaos/releases?per_page=100",
+    "discussions": "https://api.github.com/repos/tuna-os/tunaos/discussions?per_page=100",
+    "adopters": "ADOPTERS.md at source_commit"
+  },
+  "discovery": {
+    "stars": 60,
+    "forks": 7
+  },
+  "releases": {
+    "published_releases": 315,
+    "iso_assets": [
+      {
+        "id": 467503338,
+        "name": "grouper-xfce-26.04-x86_64.iso",
+        "url": "https://github.com/tuna-os/tunaOS/releases/download/xfce-20260705/grouper-xfce-26.04-x86_64.iso",
+        "downloads": 0
+      },
+      {
+        "id": 467510282,
+        "name": "grouper-niri-26.04-x86_64.iso",
+        "url": "https://github.com/tuna-os/tunaOS/releases/download/niri-20260705/grouper-niri-26.04-x86_64.iso",
+        "downloads": 0
+      },
+      {
+        "id": 474815291,
+        "name": "flounder-gnome-13-x86_64.iso",
+        "url": "https://github.com/tuna-os/tunaOS/releases/download/gnome-20260712/flounder-gnome-13-x86_64.iso",
+        "downloads": 0
+      }
+    ],
+    "iso_downloads_lifetime": 0,
+    "non_iso_assets": 777,
+    "non_iso_downloads_lifetime": 1185
+  },
+  "discussions": {
+    "threads": 4,
+    "top_level_comments": 6,
+    "urls": [
+      "https://github.com/orgs/tuna-os/discussions/4",
+      "https://github.com/orgs/tuna-os/discussions/652",
+      "https://github.com/orgs/tuna-os/discussions/688",
+      "https://github.com/orgs/tuna-os/discussions/93"
+    ]
+  },
+  "external_adopter_entries": {
+    "production": 0,
+    "evaluation": 0,
+    "internal_excluded": 2
+  },
+  "unavailable": {
+    "r2_iso_downloads": "No export of R2 access counts; ci-maintainer supplies it.",
+    "iso_tracker_pageviews": "No export of Cloudflare pageviews; guide supplies it.",
+    "external_human_contributions": "Needs a reviewed org-wide human/contributor census; strategist owns it.",
+    "adoption_call_conversion": "Needs published Discussion URL and consent-confirmed follow-ups; see docs/ADOPTION-CALL.md."
+  }
+}
