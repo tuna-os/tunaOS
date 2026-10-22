@@ -22,6 +22,32 @@ The failure happens during `git push`, before a pull request exists. A normal
 non-workflow commit may push successfully with the same token, which can make
 the installation look healthy when it is not.
 
+## Contributor-tier handoff
+
+For contributor-tier Hive agents, missing Workflows permission is an ACMM
+ceiling, not permission to try access recovery. The owner actions below
+are for authorized owners; agents must not bypass the write gate or obtain
+broader credentials. This applies even when the agent operates at ACMM L6
+([#2882](https://github.com/tuna-os/tunaos/issues/2882)).
+
+If your credentials cannot publish a workflow fix, file an issue or update
+the current issue. Include:
+
+1. The target repository and base branch, base commit SHA, affected paths,
+   and the complete rejection message, with secrets removed.
+2. A mechanical unified diff in a fenced `diff` block (or an attached patch),
+   including every required companion change. Generate it against the stated
+   base, for example `git diff upstream/main...HEAD`, and review it for secrets.
+3. The exact validation commands, their results, and any checks that could not
+   run. State the intended behavior so the recipient can verify the patch.
+4. A request for a maintainer or an authorized `ISSUES_PRS_MERGE` tier agent
+   to apply and validate the patch. The recipient needs permission to publish
+   workflows and open the PR. Link related issues or PRs to avoid duplicate work.
+
+An issue with a patch is the handoff. It does not prove that the workflow fix
+has landed. Keep the implementation issue open until an authorized contributor
+delivers the fix. Do not repeatedly retry a known permission rejection.
+
 ## Restore the hive App path
 
 Two parties may need to act, in this order:

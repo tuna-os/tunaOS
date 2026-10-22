@@ -10,6 +10,22 @@ that touched 36 files across `.github/`, `build_scripts/`, `live-iso/`,
 
 ## Failure Catalog
 
+### Workflow push rejected without `workflows` permission
+
+**Symptom:** GitHub rejects a workflow commit with
+`refusing to allow a GitHub App to create or update workflow without workflows permission`.
+
+**Cause:** [#2882](https://github.com/tuna-os/tunaos/issues/2882) records this
+rejection for contributor-tier Hive credentials. App-level Workflows write
+access is separate from the workflow runtime token's `permissions:` map.
+
+**Fix:** Preserve the patch and validation results in the issue with
+the [contributor-tier handoff](CI-WORKFLOW-PUBLISHING.md#contributor-tier-handoff).
+A maintainer or authorized tier must publish it; an agent must not
+bypass the ceiling. Only authorized App owners can use the runbook's access
+recovery steps.
+
+
 ### 1. `flatpak: command not found` in live ISO customization
 
 **Affected workflows:** `LUKS E2E` (yellowfin:kde), any live ISO build for EL10

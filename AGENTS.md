@@ -226,6 +226,22 @@ Six more, each measured while fixing the live-ISO and install path
 ### Issue tracker
 GitHub Issues for `tuna-os/tunaos`, operated via `gh` CLI.
 
+### Workflow publishing permission ceiling
+
+Contributor-tier Hive credentials cannot publish changes to
+`.github/workflows/**` without App-level Workflows write permission. Issue
+[#2882](https://github.com/tuna-os/tunaos/issues/2882) records GitHub's rejection:
+`refusing to allow a GitHub App to create or update workflow without workflows permission`.
+This is an ACMM isolation boundary, even for an agent operating at L6.
+
+Do not bypass the write gate, seek broader credentials, or change workflow
+`permissions:` to try to grant App access. When this ceiling applies, deliver
+workflow fixes as an issue with a mechanical patch and validation results for
+a maintainer or an authorized `ISSUES_PRS_MERGE` tier agent to publish. Follow
+the [handoff checklist](docs/CI-WORKFLOW-PUBLISHING.md#contributor-tier-handoff).
+Non-workflow changes can still use the normal fork PR path. In other affected
+repositories, follow their local contribution guide and preserve this boundary.
+
 ### Triage labels
 `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`.
 
