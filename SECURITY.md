@@ -9,11 +9,25 @@ See [VERSIONING.md](VERSIONING.md) for the full tagging scheme.
 
 | Variant | Base OS | Status |
 |---|---|---|
-| Yellowfin | AlmaLinux Kitten 10 | ✅ Supported |
-| Albacore | AlmaLinux 10 | ✅ Supported |
+| Yellowfin | AlmaLinux Kitten 10 | ✅ Stable |
+| Albacore | AlmaLinux 10 | ✅ Stable |
 | Skipjack | CentOS Stream 10 | ⚠️ Beta |
-| Bonito | Fedora 44 | ⚠️ In progress |
+| Bonito | Fedora 44 | ⚠️ Beta |
+| Bonito Rawhide | Fedora Rawhide | ⚠️ Beta (rolling) |
+| Wahoo | Fedora ELN (EL11 preview) | 🧪 Experimental |
+| Hummingbird | Fedora Hummingbird (Rawhide) | 🧪 Experimental |
+| Sailfin | openSUSE Tumbleweed | ⚠️ Beta (rolling) |
+| Guppy | Gentoo Linux | ⚠️ Beta (rolling) |
+| Gurnard | Ubuntu 24.04 Noble | 🧪 Experimental |
+| Grouper | Ubuntu 26.04 | ⚠️ Beta (RFC 010) |
+| Marlin | Arch Linux (rolling) | ⚠️ Beta (rolling) |
+| Flounder | Debian 13 Trixie | ⚠️ Beta |
+| Flounder Sid | Debian Sid (rolling) | ⚠️ Beta (rolling) |
 | Redfin | RHEL 10 | 🔒 Local-build only |
+
+`Rolling` describes upstream input cadence, not a separate lifecycle stage.
+Redfin is intentionally not published; its local-build security status is
+described in [`docs/rhel-setup.md`](docs/rhel-setup.md).
 
 ## Reporting a Vulnerability
 
