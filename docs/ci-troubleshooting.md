@@ -1876,3 +1876,20 @@ These tests check consistency. They do not prove a real producer or installation
 **Cause:** The hook adds new IDs but it never deletes old IDs.
 
 **Fix:** Delete the owned file at the start of each run. Keep files from other sources. Reject a linked file before you change files.
+
+## Content PR fails with `STE budget exceeded` (#2912)
+
+**Symptom:** a CFP abstract or design contribution adds Markdown and the
+`ste / Simplified Technical English` check fails with `STE budget exceeded`.
+
+**Cause:** the shared linter counts findings across the repository, against
+`.ste-budget`. Content directories have no automatic exemption. The pinned
+linter supports lowercase `ste-disable-file: reason` and paired
+`ste-disable: reason` / `ste-enable` comments; `<!-- STE-DISABLE -->` does not
+match those directives.
+
+**Fix:** run `just ste` and fix new findings in technical instructions. For
+outreach copy or creative briefs, use the reasoned region or file opt-out in
+[the contributor prose policy](../CONTRIBUTING.md#prose-checks-ste). Keep
+technical steps checked on mixed pages. Run `just ste` again; do not increase
+`.ste-budget` or exclude a whole directory to pass one content change.
