@@ -484,3 +484,23 @@ def test_build_report_revalidates_context_when_evidence_is_supplied():
     del context["image"]
     with pytest.raises(MODULE.ContractError, match="invalid fields"):
         MODULE.build_report(context, [], evidence=evidence)
+
+
+def test_reuse_decision_verdict_map_always_validates_against_reuse_schema():
+    schema = json.loads((ROOT / "schemas/qualification-reuse-v1.schema.json").read_text())
+    validator = Draft202012Validator(schema)
+    producer = producer_receipt()
+    producer["assertions"] = {f"a{i}": "passed" for i in range(MODULE.MAX_ASSERTIONS)}
+    current = current_inputs()
+    current["inputs"]["harness"]["login-probe"]["assertions"] = ["a0"]
+    producer["inputs"]["harness"] = copy.deepcopy(current["inputs"]["harness"])
+    producer["tools"] = {"podman": {"version": "5", "assertions": ["a1"]}}
+    current["tools"] = {"podman": {"version": "6", "assertions": ["extra-new"]}}
+    current["inputs"]["harness"]["installer-driver"]["assertions"] = ["a2"]
+    producer["inputs"]["harness"]["installer-driver"]["assertions"] = ["a2"]
+    with pytest.raises(MODULE.ContractError, match="did not declare"):
+        MODULE.evaluate_reuse(producer, current)
+    current["tools"]["podman"]["assertions"] = ["a3"]
+    result = MODULE.evaluate_reuse(producer, current)
+    assert not list(validator.iter_errors(result))
+    assert set(result["assertions"]) == set(producer["assertions"])

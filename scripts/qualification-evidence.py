@@ -219,6 +219,8 @@ def evaluate_reuse(producer: object, current: object) -> dict:
     require(len(invalidated) <= MAX_ASSERTIONS,
             "reuse decision: invalidated assertions exceed bound")
     verdicts = dict(previous["assertions"])
+    require(set(invalidated) <= set(verdicts),
+            "reuse decision: current inputs name an assertion the producer did not declare")
     for name in invalidated:
         verdicts[name] = "not-run"
     result = {
