@@ -261,12 +261,14 @@ homepage = "https://acme.example/os"
 documentation = "https://acme.example/os/docs"
 support = "https://acme.example/os/support"
 bug_report = "https://acme.example/os/issues"
+plymouth = "acmeos"        # boot splash for an image name that is no known variant
 
 [variants.yellowfin]
 codename = "Wile E"       # os-release VERSION_CODENAME
 # Accent colour (ANSI_COLOR, /etc/issue, fastfetch, KDE, wallpapers), the
-# nearest GNOME accent name, the base label and a short colour note.
-branding = { accent = "#E87D0D", gnome_accent = "orange", base = "AlmaLinux Kitten", homage = "Acme orange" }
+# nearest GNOME accent name, the base label, a short colour note and the
+# boot splash theme.
+branding = { accent = "#E87D0D", gnome_accent = "orange", base = "AlmaLinux Kitten", homage = "Acme orange", plymouth = "acmeos" }
 ```
 
 Then regenerate the files every image build reads, and commit them with
@@ -275,10 +277,12 @@ Then regenerate the files every image build reads, and commit them with
 ```bash
 python3 scripts/config.py generate-identity
 python3 scripts/config.py generate-variant-identity
+python3 scripts/config.py generate-variant-aliases
 ```
 
-`just check` fails if `build_scripts/lib/identity.env` or
-`build_scripts/lib/variant-identity.tsv` disagrees with `tunaos.toml`. Each
+`just check` fails if `build_scripts/lib/identity.env`,
+`build_scripts/lib/variant-identity.tsv` or
+`build_scripts/lib/variant-aliases.tsv` disagrees with `tunaos.toml`. Each
 variant's name (Yellowfin, Marlin) comes from its id, or its `publish_name`.
 
 The variant's mark, lettermark and fastfetch letters follow its `emoji`, name
