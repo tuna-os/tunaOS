@@ -1,11 +1,16 @@
 #!/usr/bin/env bash
-# x13s.sh — inspect the stock Fedora ARM64 payload for ThinkPad X13s W1.
+# x13s.sh — make bonito:gnome boot and work on the ThinkPad X13s (W2), and
+# record what the image carries.
 #
-# This overlay deliberately installs no replacement kernel, firmware, boot
-# loader, or hardware defaults. Its job is to make the ARM64-only profile fail
-# on a dishonest platform declaration and preserve a build-time inventory for
-# the W2/W4 decisions. Missing firmware is reported rather than filled here;
-# shipping early-boot dependencies belongs to W2 (#3368).
+# Fedora's stock kernel already has every SC8280XP driver and both X13s DTBs
+# (W1 inventory). This overlay adds what a working X13s install needs on top,
+# each taken from what postmarketOS boots this laptop with:
+#   - the GPU and DSP/audio firmware (Fedora's qcom-firmware);
+#   - the DTB, carried per deployment by ostree (see below);
+#   - the kernel arguments, through bootc kargs.d;
+#   - display, keyboard and storage drivers in the initramfs, so the LUKS
+#     passphrase prompt is visible and typeable.
+# It then writes the inventory and fails if anything is still missing.
 set -euo pipefail
 
 if [[ "$(uname -m)" != "aarch64" ]]; then
@@ -51,6 +56,75 @@ if ! rpm -q --qf '%{VENDOR}\n' kernel-core | grep -q '^Fedora Project$'; then
 	echo "ERROR: X13s W1 requires Fedora's stock kernel-core package" >&2
 	exit 1
 fi
+
+# ── W2: what the X13s needs beyond the stock payload ─────────────────────────
+x13s_dtb="${module_dir}/dtb/qcom/sc8280xp-lenovo-thinkpad-x13s.dtb"
+if [[ ! -s "${x13s_dtb}" ]]; then
+	echo "ERROR: Fedora kernel payload has no X13s DTB at ${x13s_dtb}" >&2
+	exit 1
+fi
+
+# Adreno 690 (qcom/a660_*) and the board's DSP, audio topology and battery
+# manager (qcom/sc8280xp/LENOVO/21BX/). The parent image ships neither.
+# The package is in Fedora itself; skip the metadata of the parent's other
+# repositories (RPM Fusion, openh264, the updates archive).
+dnf -y --repo=fedora --repo=updates install qcom-firmware
+dnf clean all
+
+# The firmware boots Linux with ACPI tables, but this laptop needs its device
+# tree. ostree deploys /usr/lib/modules/$kver/devicetree into each
+# deployment's /boot and writes a `devicetree` line into its boot entry,
+# which Fedora's GRUB (blscfg) and systemd-boot both load. Every deployment
+# and rollback therefore boots the DTB built with its own kernel. With only
+# the dtb/ directory, ostree writes `fdtdir`, which GRUB ignores.
+install -m 0644 "${x13s_dtb}" "${module_dir}/devicetree"
+
+# The arguments postmarketOS boots the X13s with: pointer authentication is
+# broken in the firmware, and unused clocks and power domains must stay on
+# until their drivers load or the display and USB drop out.
+install -d -m 0755 /usr/lib/bootc/kargs.d
+cat >/usr/lib/bootc/kargs.d/10-x13s.toml <<'EOF'
+# ThinkPad X13s (SC8280XP), written by build_scripts/overlay/x13s.sh.
+kargs = ["arm64.nopauth", "clk_ignore_unused", "pd_ignore_unused"]
+match-architectures = ["aarch64"]
+EOF
+
+# Early-boot drivers: postmarketOS's device-lenovo-21bx modules-initfs list,
+# kept to the modules this kernel actually ships (some are built in). Without
+# them the initramfs has no display or keyboard, and a LUKS prompt is blind.
+early_modules=(
+	apr dispcc_sc8280xp dwc3 dwc3_qcom extcon_core gpio_sbu_mux gpucc_sc8280xp
+	hci_uart hid_generic hid_multitouch i2c_hid_of i2c_hid_of_elan i2c_qcom_cci
+	i2c_qcom_geni icc_bwmon icc_osm_l3 leds_gpio leds_qcom_lpg llcc_qcom
+	lpasscc_sc8280xp msm nvme panel_edp pci_pwrctrl_pwrseq pcie_qcom phy_qcom_edp
+	phy_qcom_qmp_combo phy_qcom_qmp_pcie phy_qcom_qmp_usb phy_qcom_snps_femto_v2
+	pinctrl_sc8280xp_lpass_lpi pmic_glink pmic_glink_altmode pwm_bl pwrseq_core
+	pwrseq_qcom_wcn q6apm_dai q6apm_lpass_dais q6prm q6prm_clocks
+	qcom_pm8008_regulator qcom_battmgr qcom_camss qcom_common qcom_pm8008
+	qcom_pon qcom_q6v5_pas qcom_rng qcom_spmi_adc5 qcom_spmi_adc_tm5
+	qcom_spmi_temp_alarm qcom_stats qcom_wdt qrtr qrtr_smd rtc_pm8xxx typec
+	videocc_sm8350
+)
+loadable=()
+for module in "${early_modules[@]}"; do
+	if modinfo -k "${kver}" -F filename "${module}" 2>/dev/null | grep -q '\.ko'; then
+		loadable+=("${module}")
+	fi
+done
+cat >/usr/lib/dracut/dracut.conf.d/90-x13s.conf <<EOF
+# ThinkPad X13s early boot, written by build_scripts/overlay/x13s.sh.
+add_drivers+=" ${loadable[*]} "
+add_dracutmodules+=" crypt "
+EOF
+printf 'x13s.sh: %d of %d early-boot modules are loadable modules; the rest are built in or absent\n' \
+	"${#loadable[@]}" "${#early_modules[@]}"
+
+# Rebuild the initramfs the way 26-packages-post.sh does for Fedora.
+mkdir -p /var/roothome
+chmod 0700 /var/roothome
+export DRACUT_NO_XATTR=1
+/usr/bin/dracut --tmpdir /tmp --no-hostonly --kver "${kver}" --reproducible --zstd --add ostree \
+	-f "${module_dir}/initramfs.img"
 
 required_kconfigs=(
 	CONFIG_ARCH_QCOM
@@ -190,11 +264,29 @@ trap 'rm -f "${tmp_report}"' EXIT
 	if [[ -d "${module_dir}/dtb" ]]; then
 		find "${module_dir}/dtb" -type f -name '*x13s*.dtb' -print | LC_ALL=C sort
 	fi
-	x13s_dtb="${module_dir}/dtb/qcom/sc8280xp-lenovo-thinkpad-x13s.dtb"
-	if [[ ! -s "${x13s_dtb}" ]]; then
-		echo "ERROR: Fedora kernel payload has no X13s DTB at ${x13s_dtb}" >&2
-		exit 1
+	echo
+	echo "[boot]"
+	if cmp -s "${x13s_dtb}" "${module_dir}/devicetree"; then
+		echo "PRESENT devicetree -> ${module_dir}/devicetree (sc8280xp-lenovo-thinkpad-x13s.dtb)"
+	else
+		echo "MISSING devicetree ${module_dir}/devicetree"
 	fi
+	grep -h '^kargs' /usr/lib/bootc/kargs.d/10-x13s.toml || echo "MISSING kargs /usr/lib/bootc/kargs.d/10-x13s.toml"
+	echo
+	echo "[initramfs]"
+	initramfs_list="$(lsinitrd "${module_dir}/initramfs.img")"
+	for module in "${loadable[@]}" crypt; do
+		if [[ "${module}" == crypt ]]; then
+			pattern='systemd-cryptsetup'
+		else
+			pattern="/${module//_/[-_]}\.ko"
+		fi
+		if grep -qE "${pattern}" <<<"${initramfs_list}"; then
+			echo "PRESENT ${module}"
+		else
+			echo "MISSING ${module} (initramfs)"
+		fi
+	done
 	echo
 	echo "[firmware]"
 	for firmware in "${inspect_firmware[@]}"; do
@@ -205,3 +297,11 @@ trap 'rm -f "${tmp_report}"' EXIT
 install -d -m 0755 "${report_dir}"
 install -m 0644 "${tmp_report}" "${report}"
 echo "x13s.sh: inspection stored at ${report}"
+
+# W2 ships a bootable payload: a missing symbol, DTB, argument, early module
+# or firmware file fails the build instead of shipping a blind or dark laptop.
+if grep -q '^MISSING ' "${report}"; then
+	echo "ERROR: X13s payload incomplete:" >&2
+	grep '^MISSING ' "${report}" >&2
+	exit 1
+fi

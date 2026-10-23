@@ -1,8 +1,8 @@
 # ThinkPad X13s support
 
-**Status:** image profile defined; the first ARM64 child build and its generated
-inspection report are not yet available. TunaOS has not booted, installed, or
-qualified this profile on a ThinkPad X13s.
+**Status:** `bonito:gnome-x13s` carries the W2 payload: firmware, DTB, kernel
+arguments and early-boot drivers. TunaOS has not yet booted, installed or
+qualified it on a ThinkPad X13s. Use the procedure below to try it.
 
 This page is for the X13s Gen 1 from Lenovo (`lenovo,thinkpad-x13s`).
 It uses the Qualcomm SC8280XP / Snapdragon 8cx Gen 3 SoC. This page excludes
@@ -29,8 +29,20 @@ The inventory records:
 - the board firmware list, including compressed Fedora filenames and explicit
   missing entries.
 
-Missing firmware remains evidence in W1, not an opportunistic download.
-W2 will add the complete early-boot payload to the initramfs.
+## W2 bootable payload
+
+W2 adds what the X13s needs on top of the stock payload. Each item
+copies what postmarketOS boots this laptop with:
+
+| Item | How the image carries it |
+|---|---|
+| GPU firmware (`qcom/a660_*`), DSP, audio topology and battery firmware (`qcom/sc8280xp/LENOVO/21BX/`) | Fedora's `qcom-firmware` package |
+| Device tree | `/usr/lib/modules/$kver/devicetree`. ostree copies it into every deployment and writes a `devicetree` line in its boot entry. GRUB and systemd-boot load that line. |
+| `arm64.nopauth clk_ignore_unused pd_ignore_unused` | `/usr/lib/bootc/kargs.d/10-x13s.toml`, aarch64 only |
+| Display, keyboard, NVMe and USB drivers before the root unlocks | `/usr/lib/dracut/dracut.conf.d/90-x13s.conf`, from the postmarketOS `modules-initfs` list, plus the dracut `crypt` module |
+
+The overlay rebuilds the initramfs and writes the inventory. The build fails
+if the inventory has a `MISSING` line.
 
 ## Stock Fedora payload measured before admission
 
@@ -85,9 +97,10 @@ that supplies the image modules and must preserve the ARM64 `BOOTAA64.EFI`
 chain. Generic ARM64 QEMU can prove that this image still boots. It cannot
 prove that SC8280XP selects the DTB. It also cannot prove support for X13s.
 
-The installed-system mechanism remains a W3/W5 question: Fisherman and bootc
-must preserve a kernel-matched DTB for every deployment and rollback. No
-one-time copy to the ESP satisfies that lifecycle requirement.
+For an installed system, W2 uses the ostree `devicetree` file. Each deployment
+gets the DTB from its own kernel, and a rollback boots the old pair. The GRUB
+`devicetree` command works only with Secure Boot off. The ISO path still
+needs a W4 decision.
 
 Primary design evidence:
 
@@ -97,8 +110,35 @@ Primary design evidence:
 - [postmarketOS early-module inventory](https://gitlab.postmarketos.org/postmarketOS/pmaports/-/blob/main/device/community/device-lenovo-21bx/modules-initfs)
 - [postmarketOS firmware inventory](https://gitlab.postmarketos.org/postmarketOS/pmaports/-/blob/main/device/community/device-lenovo-21bx/firmware.files)
 
+## Try it on an X13s that runs postmarketOS
+
+Do not use bootc-migrate on this laptop yet. It does not recognise an apk
+system or a LUKS root. Its in-place mode empties `/boot`, which on
+postmarketOS is the ESP with the kernel, the DTB and the boot entry. It has
+no undo for package systems yet. Use these stages instead. Each stage keeps
+postmarketOS bootable.
+
+1. **Back up.** Copy these to an external disk: an image of the ESP and the
+   LUKS header (`cryptsetup luksHeaderBackup`). Also copy the partition table
+   (`sfdisk -d`), the output of `efibootmgr -v` and your home directory.
+2. **Boot from USB.** On the X13s, write the image to a USB disk with
+   `bootc install to-disk`. Give the USB device, never the NVMe disk. Start
+   the laptop from the F12 boot menu. Check the display, keyboard, touchpad,
+   Wi-Fi, Bluetooth, audio, battery and suspend. To go back, remove the disk.
+3. **Install next to postmarketOS.** Boot from the USB disk. Shrink the
+   postmarketOS file system, its LUKS mapping and its partition. In the free
+   space, make a new ESP, an ext4 `/boot` and a LUKS root for TunaOS. Install
+   with `bootc install to-filesystem` and `--karg rd.luks.uuid=<new LUKS UUID>`.
+   Then add a firmware boot entry for the new ESP. The postmarketOS ESP and
+   its systemd-boot entry do not change.
+4. **Go back or commit.** To go back, put postmarketOS first in the boot order.
+   Delete the TunaOS partitions and its boot entry. Then grow the postmarketOS
+   partition, LUKS mapping and file system again. To commit, copy your data
+   and remove the postmarketOS partitions.
+
 ## Safety boundary
 
-W1 does not write to real hardware, boot it, or change its partitions or
-firmware. It makes no Secure Boot, modem, camera, audio, suspend or installer
-claim. Those claims need the later work packages and physical results.
+This repository does not write to real hardware, boot it, or change its
+partitions or firmware. The procedure above is for the owner of the laptop.
+TunaOS makes no Secure Boot, modem, camera, audio, suspend or installer claim
+until physical results exist.

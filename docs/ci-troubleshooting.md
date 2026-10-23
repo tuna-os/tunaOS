@@ -1787,7 +1787,6 @@ try. After three failures, retain the command's exit status and diagnostic.
 Keep README unchanged; do not publish a partial table.
 See `tests/test_readme_status_api_retries.py` for regression tests.
 
-
 ### X13s inspection reports firmware present when only a backup exists
 
 **Symptom:** `x13s-inspection.txt` reports `PRESENT` for an absent firmware payload.

@@ -4423,6 +4423,10 @@ edition = "nvidia-hwe"
 desktop = "gnome"
 edition = "t2"
 
+[flavor_metadata.gnome-x13s]
+desktop = "gnome"
+edition = "x13s"
+
 [flavor_metadata.gnome-zfs]
 desktop = "gnome"
 edition = "zfs"
