@@ -36,11 +36,12 @@
 #   TUNAOS_QCOW2_FILESYSTEM  root filesystem override, as for `just qcow2`
 #   GATE_NAME              VM name (default: tunaos-gate-<pid>-<epoch>, unique per run)
 #   GATE_CPUS / GATE_MEMORY / GATE_DISK  (default: 4 / 4G / 40G)
+#   TUNAOS_GDM_LOGIN_CHECK  set to 1 to require manual GDM login and lock/unlock
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=lib/backend.sh
+# shellcheck source=scripts/lib/backend.sh
 source "${SCRIPT_DIR}/lib/backend.sh"
 
 IMAGE="${1:?usage: $0 <image-ref> <output-dir> [timeout-seconds]}"
@@ -95,19 +96,36 @@ trap '"$CORRAL" delete "$NAME" -f >/dev/null 2>&1 || true' EXIT
 # console=ttyS0,115200n8 first; naming ttyS0 again after tty0 keeps it the
 # primary console, where systemd and the base contract write.
 rc=0
-"$CORRAL" vmtest "$NAME" \
-	--bootc "$IMAGE" \
-	--cpu "${GATE_CPUS:-4}" --mem "${GATE_MEMORY:-4G}" --disk "${GATE_DISK:-40G}" \
-	--filesystem "$FS" \
-	--karg console=tty0 --karg console=ttyS0,115200n8 \
-	--karg systemd.journald.forward_to_console=1 \
-	--karg systemd.unit=graphical.target \
-	--karg tunaos.countme=0 \
-	--ready-marker "$READY" \
-	--fail-marker "$FAIL" \
-	--timeout "${TIMEOUT}s" \
-	--artifacts "${OUT}/corral" \
-	--video || rc=$?
+GDM_LOGIN_CHECK="${TUNAOS_GDM_LOGIN_CHECK:-0}"
+case "$GDM_LOGIN_CHECK" in
+0) ;;
+1) ;;
+*)
+	echo "ERROR: TUNAOS_GDM_LOGIN_CHECK must be 0 or 1, got '${GDM_LOGIN_CHECK}'" >&2
+	exit 1
+	;;
+esac
+VMTEST_ARGS=(vmtest "$NAME"
+	--bootc "$IMAGE"
+	--cpu "${GATE_CPUS:-4}" --mem "${GATE_MEMORY:-4G}" --disk "${GATE_DISK:-40G}"
+	--filesystem "$FS"
+	--karg console=tty0 --karg "console=ttyS0,115200n8"
+	--karg systemd.journald.forward_to_console=1
+	--karg systemd.unit=graphical.target
+	--karg tunaos.countme=0
+	--ready-marker "$READY"
+	--fail-marker "$FAIL"
+	--timeout "${TIMEOUT}s"
+	--artifacts "${OUT}/corral"
+	--video)
+GDM_TEST_USER=tuna-ci-login
+GDM_TEST_PASSWORD=""
+if [[ "$GDM_LOGIN_CHECK" == 1 ]]; then
+	GDM_TEST_PASSWORD="$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')"
+	printf '::add-mask::%s\n' "$GDM_TEST_PASSWORD"
+	VMTEST_ARGS+=(--user "$GDM_TEST_USER" --password "$GDM_TEST_PASSWORD")
+fi
+"$CORRAL" "${VMTEST_ARGS[@]}" || rc=$?
 
 # The live console, which keeps growing after the copy in the artifacts. Corral
 # keeps its VMs under the invoking user's home, which is root's here.
@@ -141,6 +159,10 @@ if [[ "$rc" -eq 0 ]]; then
 		"$CORRAL" screenshot "$NAME" -o "${OUT}/10-ready.png" --require-paint >/dev/null 2>&1 && break
 		sleep 5
 	done
+	if [[ "$rc" -eq 0 && "$GDM_LOGIN_CHECK" == 1 ]]; then
+		TUNAOS_GDM_TEST_PASSWORD="$GDM_TEST_PASSWORD" \
+			"${SCRIPT_DIR}/gdm-login-gate.sh" "$NAME" "$OUT" "$GDM_TEST_USER" || rc=$?
+	fi
 fi
 
 cp -f "$SERIAL" "${OUT}/serial.log" 2>/dev/null || true
