@@ -204,7 +204,7 @@ def test_repository_probe_cannot_consume_remaining_loop_input():
     probe = text.split('while IFS= read -r repo', 1)[1].split('done <', 1)[0]
     assert '|| [[ -n "$repo" ]]' in probe
     assert 'pacman-conf --repo "$repo" SigLevel' in probe
-    assert 'native-global-siglevel.txt' in probe
+    assert 'native-repo-$repo.siglevel.txt' in probe
     assert '</dev/null' in probe
 
 
