@@ -153,10 +153,10 @@ if not reached_login:
 
 # Graceful power off so swtpm state + LUKS metadata flush cleanly.
 #
-# Unless the caller still has work to do inside this guest. iso-e2e.sh's
-# greeter-login phase logs in over SSH and sendkey on THIS boot, and a guest
-# powered off here is one it cannot reach: it would report "no sshd" on a
-# healthy image. When that phase is running, iso-e2e.sh sets
+# Unless the caller still has work to do inside this guest. iso-e2e.sh
+# photographs the installed desktop on THIS boot (a powerdown sent here raced
+# that capture and left a black frame, tunaOS#979), and its greeter-login phase
+# logs in over SSH and sendkey. So iso-e2e.sh always sets
 # TUNAOS_LUKS_NO_POWEROFF=1 and powers the guest down itself afterwards.
 if os.environ.get("TUNAOS_LUKS_NO_POWEROFF") == "1":
     print("\n>>> leaving the guest running for the caller's session phase",

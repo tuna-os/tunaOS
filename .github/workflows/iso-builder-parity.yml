@@ -6,6 +6,7 @@
 # exact same LUKS harness against both ISO paths. There is intentionally no
 # browser-specific E2E implementation here.
 name: ISO Builder Parity
+permissions: {}
 
 on:
   workflow_call:

@@ -5,9 +5,8 @@
 # least one asset. It was red on all 15 runs it ever had, and could not have
 # been anything else:
 #
-#   * reusable-build-artifacts.yml's `attach-release` input DEFAULTS TO FALSE,
-#     so "Attach ISO to GitHub Release" is skipped on every cell while
-#     "Upload ISO to Cloudflare R2" succeeds beside it.
+#   * routine reusable-build-artifacts.yml callers publish to R2, while the
+#     emergency publish-isos.yml workflow owns the separate release job.
 #   * The releases that exist are per desktop (gnome-20260916), not per
 #     flavor, so no tag started with "gnome-nvidia-".
 #   * Those releases carry 0 assets.

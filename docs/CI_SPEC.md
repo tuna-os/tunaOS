@@ -46,6 +46,7 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 | `check-base-image-pins.yml` | post-merge + scheduled | `rebuildable`, `arch_honesty` | `20 22 * * *`, manual | `rebuildable`: 2d, `arch_honesty`: 2d |
 | `check-download-checksums.yml` | PR-deterministic + post-merge + scheduled | Check download checksums | each PR, `35 22 * * *`, manual | — |
 | `content-filter.yaml` | post-merge | Check for Spammy Issue Comments | issue_comment | — |
+| `corral-boot-gate.yml` | PR-deterministic + post-merge | Corral Boot Gate | each PR, manual | — |
 | `daily-verify.yml` | post-merge + scheduled | Daily Image Verification | `0 4 * * *`, manual | — |
 | `dead-gate-report.yml` | post-merge + scheduled | Dead gate report | `17 6 * * 1`, manual | — |
 | `desktop-contract-sweep.yml` | post-merge + scheduled | `desktop`, `no_silent_omissions` | `0 8 * * *`, manual | `desktop`: 2d, `no_silent_omissions`: 2d |
@@ -60,6 +61,7 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 | `installer-smoke.yml` | post-merge | Installer Smoke | manual | — |
 | `iso-builder-parity.yml` | post-merge | ISO Builder Parity | caller cadence | — |
 | `iso-e2e.yml` | PR-deterministic + post-merge + scheduled | `iso` | each PR, `0 6 * * 1`, manual | `iso`: 8d |
+| `issue-intake-check.yml` | post-merge | Issue intake check | issues | — |
 | `just-fix.yml` | PR-deterministic + post-merge | Just Fix | each PR, push | — |
 | `lint.yml` | PR-deterministic + post-merge | Lint and Check | each PR, push | — |
 | `live-initramfs.yml` | post-merge | Live Initramfs Artifacts | manual | — |
@@ -87,10 +89,6 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 | `validate-renovate.yaml` | PR-deterministic + post-merge | Validate Renovate Config | each PR, push | — |
 | `verify-asahi-one.yml` | post-merge + scheduled | Verify Asahi image (one) | caller cadence | — |
 | `verify-asahi.yml` | post-merge + scheduled | Verify Asahi image | `40 5 * * *`, manual | — |
-| `watch-aurora.yml` | post-merge + scheduled | Watch Aurora Upstream | `0 8 * * 1`, manual | — |
-| `watch-bluefin-lts.yml` | post-merge + scheduled | Watch bluefin-lts Upstream | `0 8 * * 1`, manual | — |
-| `watch-upstream.yml` | post-merge + scheduled | Watch upstream (reusable) | caller cadence | — |
-| `watch-zirconium.yml` | post-merge + scheduled | Watch Zirconium Upstream | `0 8 * * 1`, manual | — |
 | `weekly-boot-report.yml` | post-merge + scheduled | Weekly Boot Screenshot Report | `0 10 * * 1`, manual | — |
 | `weekly-desktop-screenshots.yml` | post-merge + scheduled | Weekly Desktop Screenshots | `0 2 * * 1`, manual | — |
 | `weekly-qcow2-screenshots.yml` | post-merge + scheduled | Weekly QCOW2 Boot Screenshots | `0 20 * * 0`, manual | — |

@@ -82,6 +82,9 @@ jobs:
       #
       # This is the same list installer-smoke.yml installs, and for the same
       # reason — it has always built its ISOs from source.
+      - name: Setup yq
+        uses: ./.github/actions/setup-yq
+
       - name: Install dependencies
         run: |
           sudo apt-get update -qq
@@ -90,7 +93,6 @@ jobs:
             systemd-boot-efi xorriso mtools squashfs-tools dosfstools gdisk \
             qemu-system-x86 qemu-utils ovmf socat netpbm python3-pil \
             tesseract-ocr imagemagick
-          sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
 
       # The runner image ships podman 5.8.4, which wedges committing a
       # live-customized rootfs (#1893). Every ISO build needs the Kubic one

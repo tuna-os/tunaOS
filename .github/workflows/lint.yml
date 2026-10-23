@@ -1,14 +1,22 @@
 name: Lint and Check
 
 # Runs static analysis on shell scripts, YAML, JSON, Justfiles, and
-# GitHub Actions workflows. Uses the project's existing `just check`
-# command which wraps shellcheck, yamllint, jq, actionlint, and just fmt.
+# GitHub Actions workflows, plus the package source policy. Uses the same
+# tools and excludes as `just check`: shellcheck, yamllint, jq, actionlint
+# and just fmt.
 #
 # Triggered on every PR and push to main to catch regressions before
 # they land. Complements `just-fix.yml` (auto-formatting) by adding
 # enforcement of code quality rules.
 #
-# This is a hold-gated PR — human review required before merge.
+# ONE job, not a matrix. This used to be a six-cell matrix plus a source
+# policy job and a summary job: eight jobs per PR push, every cell paying
+# ~80s of checkout + Homebrew + tool install to run a check that takes
+# seconds. On the org's shared 60-job runner pool that was the largest
+# per-PR fan-out in this repo. Each check is still its own step and runs
+# even when an earlier check failed (`!cancelled()`), so a red Lint job
+# still names every failing check, as the matrix's fail-fast: false did.
+#
 # See quality agent finding: https://github.com/tuna-os/tunaOS/issues/150
 
 on:
@@ -33,26 +41,22 @@ concurrency:
 
 jobs:
   lint:
-    name: Lint (${{ matrix.check }})
+    name: Lint
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        check:
-          - shellcheck
-          - yamllint
-          - json-validate
-          - actionlint
-          - action-pins
-          - justfmt
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Full history: the package source policy diffs against the
+          # merge base (`BASE...HEAD`).
+          fetch-depth: 0
+          persist-credentials: false
 
       - name: Setup Homebrew
         uses: Homebrew/actions/setup-homebrew@2ebcf16054461267868620b1414507f3ccc765c1 # main as of 2026-06-09
 
       - name: Install tools
+        id: tools
         run: |
           # Install all lint tools; brew is idempotent for already-installed
           brew install just shellcheck shfmt yamllint jq actionlint 2>/dev/null || true
@@ -77,7 +81,7 @@ jobs:
           just --version
 
       - name: Run shellcheck
-        if: matrix.check == 'shellcheck'
+        if: ${{ !cancelled() && steps.tools.outcome == 'success' }}
         run: |
           echo "==> Running shellcheck on all .sh files..."
           # Exclude third-party extensions and build artifacts
@@ -90,7 +94,7 @@ jobs:
             -exec shellcheck --severity=error --exclude=SC1091,SC2114 --format=tty {} +
 
       - name: Run yamllint
-        if: matrix.check == 'yamllint'
+        if: ${{ !cancelled() && steps.tools.outcome == 'success' }}
         run: |
           echo "==> Running yamllint on all YAML files..."
           find . \
@@ -102,7 +106,7 @@ jobs:
             -exec yamllint -c ./.yamllint.yml {} +
 
       - name: Validate JSON files
-        if: matrix.check == 'json-validate'
+        if: ${{ !cancelled() && steps.tools.outcome == 'success' }}
         run: |
           echo "==> Validating JSON syntax..."
           find . \
@@ -113,7 +117,7 @@ jobs:
             -exec sh -c 'jq . "$1" > /dev/null || { echo "ERROR: invalid JSON in $1"; exit 1; }' _ {} \;
 
       - name: Run actionlint
-        if: matrix.check == 'actionlint'
+        if: ${{ !cancelled() && steps.tools.outcome == 'success' }}
         continue-on-error: true  # actionlint is informative, not blocking
         run: |
           echo "==> Running actionlint on workflows..."
@@ -127,11 +131,11 @@ jobs:
             .github/workflows/*.yml .github/workflows/*.yaml
 
       - name: Check action pins
-        if: matrix.check == 'action-pins'
+        if: ${{ !cancelled() }}
         run: python3 .github/scripts/check-action-pins.py
 
       - name: Check Justfile formatting
-        if: matrix.check == 'justfmt'
+        if: ${{ !cancelled() && steps.tools.outcome == 'success' }}
         run: |
           echo "==> Checking Justfile format..."
           just --unstable --fmt --check -f Justfile
@@ -142,55 +146,13 @@ jobs:
             -name "*.just" -type f \
             -exec just --unstable --fmt --check -f {} \;
 
-  package-source-policy:
-    name: Package source policy
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
       - name: Install YAML parser
+        id: pyyaml
+        if: ${{ !cancelled() }}
         run: python3 -m pip install pyyaml --break-system-packages
-      - name: Reject new non-system package sources
+
+      - name: Package source policy
+        if: ${{ !cancelled() && steps.pyyaml.outcome == 'success' }}
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: python3 scripts/check-package-sources.py --base "$BASE_SHA"
-
-  # Summary job: aggregates results and posts a single status check
-  #
-  # A cancelled shard is NOT a lint failure. `cancel-in-progress` cancels this
-  # workflow on every superseding push, and treating anything != success as a
-  # failure turned each of those into a red "Lint Summary" check reporting
-  # lint problems that did not exist: six consecutive cancelled runs on one PR
-  # branch (30596589325 through 30598179346), every one of them red, each
-  # sending autofix chasing a phantom. Only a real failure fails this job;
-  # cancelled and skipped are reported as-is.
-  lint-summary:
-    name: Lint Summary
-    needs: [lint, package-source-policy]
-    if: always()
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check lint results
-        env:
-          LINT_RESULT: ${{ needs.lint.result }}
-          SOURCE_POLICY_RESULT: ${{ needs['package-source-policy'].result }}
-        run: |
-          echo "## Lint Results" >> "$GITHUB_STEP_SUMMARY"
-          case "${LINT_RESULT}" in
-            success)
-              echo "✅ All lint checks passed" >> "$GITHUB_STEP_SUMMARY"
-              ;;
-            cancelled | skipped)
-              echo "⚪ Lint shards were ${LINT_RESULT} (superseded by a newer run); nothing was linted, so nothing failed." >> "$GITHUB_STEP_SUMMARY"
-              ;;
-            *)
-              echo "❌ Some lint checks failed, see job details above" >> "$GITHUB_STEP_SUMMARY"
-              exit 1
-              ;;
-          esac
-          if [[ "${SOURCE_POLICY_RESULT}" != success ]]; then
-            echo "❌ Package source policy check did not pass" >> "$GITHUB_STEP_SUMMARY"
-            exit 1
-          fi

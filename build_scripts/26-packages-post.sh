@@ -59,6 +59,16 @@ echo "add_dracutmodules+=\" resume \"" >/etc/dracut.conf.d/resume.conf 2>/dev/nu
 # Omit optional modules that aren't available in container builds
 echo "omit_dracutmodules+=\" pcsc bluetooth pcmcia syslog \"" >/etc/dracut.conf.d/omit-optional.conf 2>/dev/null || true
 
+# /root is a symlink to var/roothome in bootc images, and the AlmaLinux
+# bootc base ships it dangling: /var/roothome does not exist yet (it is
+# created later by 99-cleanup.sh). dracut unconditionally replicates /root
+# into the initramfs skeleton and dracut-install fails on the dangling
+# link with `ERROR: installing '/root'`. The error is non-fatal (dracut
+# continues and writes a good initramfs) but reads as a build failure in
+# CI logs, so pre-create the target; same mkdir 99-cleanup.sh performs.
+mkdir -p /var/roothome
+chmod 0700 /var/roothome
+
 # Update kernel module dependencies
 depmod -a "$(find /lib/modules/ -maxdepth 1 -mindepth 1 -type d -printf '%f\n' | sort | tail -1)"
 

@@ -1,7 +1,7 @@
 # README & Landing Page Hero Demo Technical Specification
 
 > Status: **draft** — for maintainer review and asset capture.  
-> Tracking issue: [#1760](https://github.com/tuna-os/tunaOS/issues/1760).  
+> Tracker issue: [#1760](https://github.com/tuna-os/tunaOS/issues/1760).  
 > Supports: [#1333](https://github.com/tuna-os/tunaOS/issues/1333) (DistroWatch),
 > [#1346](https://github.com/tuna-os/tunaOS/issues/1346) (Reddit/Lemmy),
 > [#1534](https://github.com/tuna-os/tunaOS/issues/1534) (Tech Press),
@@ -14,7 +14,7 @@
 
 First-time visitors to the GitHub repository (`README.md`) and the project website (`tunaos.org`) now encounter text descriptions and build matrices without immediate visual proof of the user experience.
 
-A concise, high-polish **25–30 second boot-to-desktop demo** (available as a lightweight animated WebP/GIF and an embedded high-definition MP4/WebM video) serves as the top-of-funnel conversion asset for onboarding new users, contributors, and media reviewers.
+A concise, high-polish **25–30 second boot-to-desktop demo** serves as the top-of-funnel conversion asset. It is available as a lightweight animated WebP/GIF and an embedded high-definition MP4/WebM video. It helps to onboard new users, contributors, and media reviewers.
 
 ---
 
@@ -49,14 +49,14 @@ sequenceDiagram
 ```
 
 ### Timeline & Actions:
-- **0:00 – 0:05 | System Boot:** Fast UEFI boot sequence displaying the TunaOS Plymouth boot splash.
-- **0:05 – 0:12 | Desktop Launch:** Seamless auto-login to GNOME 51 / clean modern desktop wallpaper and top bar.
-- **0:12 – 0:20 | Terminal & Diagnostics:** Opening a terminal to execute:
+- **0:00 – 0:05 | System Boot:** Fast UEFI boot sequence that shows the TunaOS Plymouth boot splash.
+- **0:05 – 0:12 | Desktop Launch:** Uninterrupted auto-login to GNOME 51 / clean, modern desktop wallpaper and top bar.
+- **0:12 – 0:20 | Terminal & Diagnostics:** Open a terminal to execute:
   ```bash
   fastfetch
   bootc status
   ```
-  *(Highlights the active container image hash, keyless Sigstore signature status, and AlmaLinux 10 base).*
+  *(Highlights the hash of the active container image, the status of the keyless Sigstore signature, and the AlmaLinux 10 base).*
 - **0:20 – 0:28 | Atomic Operations:** Short command showcase:
   ```bash
   sudo bootc upgrade

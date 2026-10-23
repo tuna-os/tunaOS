@@ -216,6 +216,42 @@ chmod 644 /usr/share/ublue-os/image-info.json
 [ -d /var/spool/plymouth ] && rm -rf /var/spool/plymouth/*
 [ -d /var/roothome/buildinfo ] && rm -rf /var/roothome/buildinfo
 
+# No SSH host keys in the image (tunaOS#3287). Debian's and Ubuntu's
+# openssh-server postinst runs `ssh-keygen -A` when 40-services.sh installs
+# it, so every install from flounder, flounder-sid and grouper shared one set
+# of host private keys. The other families generate them on the machine and
+# never reach this with keys present.
+#
+# The Debian/Ubuntu generator is openssh-server's own sshd-keygen.service,
+# which runs `ssh-keygen -A` before ssh.service but only under
+# ConditionFirstBoot=yes. On a bootc machine that condition is not a
+# guarantee: an upgrade from a digest that still baked keys drops them in
+# the /etc merge (they are unmodified image defaults) on a boot that is not
+# the first. The drop-in resets the conditions (an empty assignment clears
+# them all), restores the two path checks, and runs whenever a key is
+# missing. `ssh-keygen -A` only creates the missing types.
+#
+# Images whose openssh has no sshd-keygen.service keep their keys: removing
+# them there would leave sshd with none and nothing to make them.
+if compgen -G '/etc/ssh/ssh_host_*' >/dev/null; then
+	if [[ -f /usr/lib/systemd/system/sshd-keygen.service ]] &&
+		grep -q '^ExecStart=.*ssh-keygen -A' /usr/lib/systemd/system/sshd-keygen.service; then
+		install -d -m 0755 /usr/lib/systemd/system/sshd-keygen.service.d
+		cat >/usr/lib/systemd/system/sshd-keygen.service.d/10-tunaos-missing-keys.conf <<'EOF'
+[Unit]
+ConditionFirstBoot=
+ConditionPathIsReadWrite=/etc/ssh
+ConditionPathIsSymbolicLink=!/etc/ssh
+ConditionPathExists=|!/etc/ssh/ssh_host_ed25519_key
+ConditionPathExists=|!/etc/ssh/ssh_host_ecdsa_key
+ConditionPathExists=|!/etc/ssh/ssh_host_rsa_key
+EOF
+		rm -f /etc/ssh/ssh_host_*
+	else
+		echo "WARNING: /etc/ssh carries host keys and no sshd-keygen.service regenerates them; leaving them" >&2
+	fi
+fi
+
 # The --fix option (containers/bootc#1152) was closed without merging.
 # lint_image runs `bootc container lint --fatal-warnings`, surfaces every
 # finding into the build-log group + GitHub step summary (so e.g. bonito's
