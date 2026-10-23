@@ -16,6 +16,7 @@ import pytest
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from scripts.contracts import evidence, health, targets
 from test_contract_evidence import ATTEMPT, FACTORY, IMAGE, NOW, PUBLICATION, TARGET
 
