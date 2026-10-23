@@ -63,6 +63,7 @@ user-facing site:
 | [CHAINGUARD-COLLABORATION.md](CHAINGUARD-COLLABORATION.md) | Chainguard supply-chain security collaboration angle brief (#1339) |
 | [FEDORA-OUTREACH-READINESS.md](FEDORA-OUTREACH-READINESS.md) | Bonito completeness evidence and fedora-desktop outreach handoff (#3001) |
 | [ADOPTION-OUTREACH-STATUS.md](ADOPTION-OUTREACH-STATUS.md) | Evidence ledger for DistroWatch, CNCF, and adopter outreach |
+| [outreach/DESKTOP-PARTNERSHIPS.md](outreach/DESKTOP-PARTNERSHIPS.md) | KDE, COSMIC, and Niri pitch drafts, evidence checks, and maintainer handoff (#3018) |
 | [PANTHEON-FEEDBACK-LOOP.md](PANTHEON-FEEDBACK-LOOP.md) | How Gurnard's Pantheon packaging findings get back to elementary (#1469) |
 | [SNAPDRAGON-X13S-OUTREACH.md](SNAPDRAGON-X13S-OUTREACH.md) | Draft plan for reaching the Snapdragon X13s Linux community |
 | [TECH-PRESS-PITCHES.md](TECH-PRESS-PITCHES.md) | Pitch pack for Linux technology press, with guardrails on what we may claim |
