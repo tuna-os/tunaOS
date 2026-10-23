@@ -27,7 +27,7 @@ jobs:
             -H "Authorization: Bearer $GH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
             -o "$ARCHIVE" \
-            https://api.github.com/repos/tuna-os/tunaOS/actions/artifacts/12472695010/zip
+            https://api.github.com/repos/tuna-os/tunaOS/actions/artifacts/12476197813/zip
           unset GH_TOKEN
           python3 - <<'PY'
           import base64
@@ -40,8 +40,8 @@ jobs:
           import struct
 
           archive = Path(os.environ["ARCHIVE"]).read_bytes()
-          expected = "4b3689dd5a3e03a4e8450c11adc403dc3339641f7471068cc3bead2d2d048673"
-          if len(archive) != 13343558 or hashlib.sha256(archive).hexdigest() != expected:
+          expected = "8099438a3dc55758bd487a66992a2cfe6dbe2e53b7adde4ffe022d43cdd11075"
+          if len(archive) != 6791769 or hashlib.sha256(archive).hexdigest() != expected:
               raise SystemExit("pinned archive size or digest mismatch")
           allowed = frozenset(("unknown", "welcome", "encryption", "disk", "summary",
                                "progress", "done", "overview", "failed", "no-disk", "recovery"))
@@ -75,12 +75,12 @@ jobs:
                       item = value.get(key)
                       result[key] = item if type(item) is bool else None
                   print("Retained GNOME observations: " + json.dumps(result, sort_keys=True))
-                  for index in (3, 4):
+                  for index in ((5,) if mode == "plain" else (8,)):
                       frame = frames[index] if len(frames) > index else None
                       filename = f"walkthrough-gnome-{index:02d}.png"
-                      if (not isinstance(frame, dict) or frame.get("state") != "welcome"
+                      if (not isinstance(frame, dict) or frame.get("state") != "summary"
                               or frame.get("file") != filename):
-                          raise SystemExit("selected frame identity or welcome state mismatch")
+                          raise SystemExit("selected frame identity or summary state mismatch")
                       image_name = f"iso-e2e-out/strict-diagnostics/walkthrough-{mode}/{filename}"
                       images = [entry for entry in members if entry.filename == image_name]
                       if len(images) != 1 or images[0].file_size > 1024 * 1024:
@@ -100,6 +100,6 @@ jobs:
                       for offset in range(0, len(encoded), 4096):
                           print(f"ISO_PNG {mode} {index:02d} {offset // 4096} "
                                 + encoded[offset:offset + 4096])
-          print("Artifact 12472695010, run 39881426883, source d6136e52.")
+          print("Artifact 12476197813, run 39891435048, source b9cdebc9.")
           print("Observations only; not input delivery or installation qualification.")
           PY
