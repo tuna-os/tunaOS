@@ -458,7 +458,7 @@ platforms = ["linux/amd64"]
 [variants.albacore]
 emoji = "🐟"
 description = "Based on AlmaLinux 10"
-base_image = "quay.io/almalinuxorg/almalinux-bootc:10@sha256:f6d1c4c77d50fa52408550a16203aca6e3cf3eda623afbd16413dfa344e0cad0"
+base_image = "quay.io/almalinuxorg/almalinux-bootc:10@sha256:61e7963066ef53e6c729826117ddfb1e2afc5fce8ceb591b5992a7d1d6e36878"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["almalinux"]
 platforms = ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
@@ -730,7 +730,7 @@ platforms = ["linux/amd64"]
 [variants.skipjack]
 emoji = "🍣"
 description = "Based on CentOS Stream 10"
-base_image = "quay.io/centos-bootc/centos-bootc:stream10@sha256:9aedf2d189b85c498697f9b83112c893b084d359268da7dd6d5d848478d260de"
+base_image = "quay.io/centos-bootc/centos-bootc:stream10@sha256:ec1bd8cb6479d1f2f61c85372afce319b932b6b1f671648f0887e9da01e48272"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["centos"]
 # Note: linux/amd64/v2 intentionally omitted — verify builder support before adding.
@@ -1023,7 +1023,7 @@ emoji = "🎏"
 upstream_track = "experimental"
 description = "Based on Fedora ELN (EL11 preview, rolling)"
 experimental = true
-base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:c06226f1bab02f0fd27541aea58c7452acd4c8a32ff7654ff14e7b4ad56e9650"
+base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:1016362d84dff225a9aef458c845a3abfae3f6715e8c03644710ef3093305963"
 # No alias: `eln` is Fedora's identifier for a moving development target,
 # and an alias tag is a stability promise this lane deliberately does not
 # make. Revisit if/when ELN gains a versioned publish.
@@ -1326,7 +1326,7 @@ upstream_track = "experimental"
 # not a rebuild of an existing one. Read docs/HUMMINGBIRD.md before
 # reasoning about what its package set should contain.
 description = "Fedora Hummingbird (hardened rolling Rawhide fork, bootc)"
-base_image = "quay.io/hummingbird-community/bootc-os:latest@sha256:af01769a2e6a9489041464359d3009e5aaf245878faa1b04976c7417b0dc6c28"
+base_image = "quay.io/hummingbird-community/bootc-os:latest@sha256:2891db1406ded6c16623e169293aeb70fdd3614a7fcd62d8d64a35acc5d01051"
 # amd64 only, because aarch64 has nothing to build FROM yet: the base
 # stage's mandatory xfsprogs guard (build_scripts/10-base-packages.sh) has
 # no repository that can satisfy it on arm64, so every hummingbird arm64
@@ -1964,7 +1964,7 @@ build_iso = true
 emoji = "🚀"
 upstream_track = "rolling"
 description = "Based on Arch Linux (rolling)"
-base_image = "docker.io/archlinux/archlinux:latest@sha256:09d7c61fa6a0b6ec21020d75dec1cf901208ee601407fe6ef0f7988c05b94d19"
+base_image = "docker.io/archlinux/archlinux:latest@sha256:33586c0ae3def39b47d1fe0caa5b695cbbd4e6b49ce730983a8b49a23ad95934"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["arch", "archlinux"]
 # arm64 legs use ghcr.io/tuna-os/archlinuxarm instead (docker.io/archlinux

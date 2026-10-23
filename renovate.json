@@ -154,6 +154,20 @@
       ],
       "matchCurrentValue": "/^3\\.10(?:\\.|$)/",
       "allowedVersions": "<3.11"
+    },
+    {
+      "description": "Same floor, matched by depName. Renovate reported this dependency as `python` (type uses-with) whose package is actions/python-versions, and the rule above, keyed on matchPackageNames, did not stop it: PR #3552 moved the floor job 3.10 -> 3.15 and merged on 2026-10-21, turning Unit Tests red on main. matchDepNames matches the name Renovate displays, so this rule applies whichever field the rule above was being compared against. Both are kept: tests/test_primary_python_floor.py pins each.",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchDepNames": [
+        "python"
+      ],
+      "matchFileNames": [
+        ".github/workflows/test.yml"
+      ],
+      "matchCurrentValue": "/^3\\.10(?:\\.|$)/",
+      "allowedVersions": "<3.11"
     }
   ]
 }
