@@ -1,104 +1,90 @@
-# CNCF Ecosystem Showcase — TunaOS as a Bootable Container (bootc) Reference Implementation
+# CNCF / bootc desktop case study draft
 
-> Status: **draft** — for maintainer review and community engagement.
-> Issue that tracks this work: [#1340](https://github.com/tuna-os/tunaOS/issues/1340) (showcase for the CNCF bootc ecosystem — TunaOS as a bootc).
-> Target: CNCF Blog, bootc-dev community channels, Cloud Native Computing Foundation ecosystem landscape.
-> Prepared: 2026-08-29.
+Prepared for [#1340](https://github.com/tuna-os/tunaOS/issues/1340) and
+[#3115](https://github.com/tuna-os/tunaOS/issues/3115). **Draft, not
+submitted.** For external submission, use
+[#3240](https://github.com/tuna-os/tunaOS/issues/3240).
 
----
+## Positioning and sources
 
-## Executive Summary
+[CNCF lists bootc at Sandbox maturity](https://www.cncf.io/projects/bootc/).
+That describes bootc's project status; it does not establish CNCF endorsement,
+certification, or sponsorship of TunaOS. TunaOS is a downstream image factory.
+Its relationship to bootc belongs under upstream dependencies, as recorded in
+[ADOPTERS.md](../ADOPTERS.md). It is not an organizational adopter of TunaOS.
 
-[bootc](https://github.com/containers/bootc) is a CNCF Sandbox project that establishes the standard for container-native, transactional operating systems. **TunaOS** is one of the most comprehensive real-world desktop and workstation implementations of `bootc`. It ships 37 published editions across 7 distribution families (AlmaLinux 10, CentOS Stream 10, Fedora, Ubuntu, Debian, Gentoo, Arch, and openSUSE).
+Use [bootc-dev/bootc](https://github.com/bootc-dev/bootc) for upstream
+coordination. Its [adopter
+list](https://github.com/bootc-dev/bootc/blob/main/ADOPTERS.md) already includes
+Universal Blue and desktop implementations. Ask where a TunaOS entry fits before
+a proposal for another desktop list in the README. The [desktop strategy
+pack](BOOTC-DESKTOP-STRATEGY.md) has a tailored request and blog draft. For the
+broader proposal, use [#2886](https://github.com/tuna-os/tunaOS/issues/2886).
 
-This document is a complete case study for the ecosystem showcase. It shows how TunaOS uses `bootc` for enterprise workstations, for cloud-native virtualization via KubeVirt/Corral, and for supply-chain pipelines with cryptographic verification.
-
----
-
-## Architecture & CNCF Alignment
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    TunaOS OCI Image                         │
-│  (Base OS + Desktop Shell + Sigstore Attestation + SBOM)    │
-└──────────────────────────────┬──────────────────────────────┘
-                               │
-                               ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    bootc Runtime Layer                      │
-│   • Transactional bootc upgrade / bootc rollback            │
-│   • ostree / bootc storage engine & kernel handoff          │
-│   • Declarative container image layering                    │
-└──────────────────────────────┬──────────────────────────────┘
-                               │
-                               ▼
-┌─────────────────────────────────────────────────────────────┐
-│                     Target Platform                         │
-│   • Bare Metal (x86_64, aarch64, ARM laptops)               │
-│   • Cloud / Homelab Virtualization (Corral / KubeVirt)       │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### Key Technical Pillars
-
-1. **Transactional Host Upgrades via OCI**:
-   TunaOS delivers the entire operating system as a container image. This replaces the drift of a mutable package manager. TunaOS applies updates atomically through `bootc upgrade`. If a regression occurs, `bootc rollback` gives an instant rollback.
-
-2. **Supply-Chain Integrity with CNCF Projects**:
-   - **Sigstore / Cosign**: All container images and native package repositories are keyless-signed using Sigstore and logged to the Rekor transparency log.
-   - **SPDX SBOMs**: Every release generates and publishes the SPDX Software Bills of Materials, in a machine-readable form.
-
-3. **Kubernetes-Native Desktop Virtualization (Corral)**:
-   With [Corral](https://github.com/tuna-os/corral), TunaOS workstation VMs are declarative Kubernetes CRDs that KubeVirt manages. Enterprise platform teams can then manage developer desktops with familiar cloud-native workflows (`kubectl apply`, GitOps).
-
----
-
-## CNCF Case Study Submission Draft
-
-**Title**: *Case Study: How TunaOS Delivers Workstations for Enterprises with CNCF bootc and Cloud-Native Pipelines*
+## Submission copy: Desktop Linux through an OCI image factory
 
 ### Challenge
-Enterprise IT departments have trouble with the lifecycle management of desktop operating systems. The problems are configuration drift across machines, complex rollback procedures after failed upgrades, and disparate management tools between datacenter containers and desktop workstations.
 
-### Solution
-TunaOS standardizes the desktop operating system on the CNCF `bootc` container standard:
-- TunaOS writes workstation OS images with standard Containerfiles.
-- CI/CD pipelines build, test, sign, and publish the multi-arch images directly to OCI registries (GHCR).
-- Client systems sync their host state directly to container image digests. The result is a workstation environment that is 100% reproducible.
+Desktop image builders need a way to compose an OS, deliver updates, and verify
+that the desktop still works. Different base distributions bring different
+package managers and integration requirements. TunaOS explores a common workflow
+for image delivery across those differences.
 
-### Results & Metrics
-- **37 published editions** across 7 Linux distribution families.
-- **100% transactional upgrade success/rollback guarantee** on client devices.
-- **Zero-touch image factory in CI**: it produces verified boot reports for every commit.
+### Approach
 
----
+TunaOS combines bases with desktops and hardware layers in bootc images. The
+[build configuration](../tunaos.toml) describes combinations across Enterprise
+Linux, Fedora, Debian, Ubuntu, Arch, openSUSE, and Gentoo. The configuration
+describes composition. It does not establish verification or support for every
+combination.
 
-## Community Outreach & Pitch Plan
+[bootc](https://bootc.dev/bootc/) provides transactional OS updates using OCI
+images. TunaOS's [pipeline](PIPELINE.md) builds desktop images around that
+model; consumers can use the [verification guide](VERIFY-ARTIFACTS.md) to check
+signatures and attestations. A signature verifies the provenance of an artifact.
+To establish readiness, test the desktop separately.
 
-### Channel 1: bootc-dev & CNCF Community Slack
-- **Audience**: CNCF tag-runtime, bootc maintainers and adopters (`#bootc`, `#container-runtimes`).
-- **Pitch**: Share TunaOS's multi-desktop and multi-base container recipes as a showcase of `bootc` versatility outside traditional headless server/edge use cases.
+The enterprise evaluation path includes Redfin, the RHEL 10 configuration. It is
+**local-build only**, as the [project README](../README.md) and [Redfin
+guide](rhel-setup.md) specify. Do not offer a public Redfin image or infer a
+vendor support agreement from the base distribution.
 
-### Channel 2: CNCF Blog Guest Article
-- **Focus**: "Beyond the Server: Run Container-Native Linux on Enterprise Desktops with bootc".
+### Evidence to attach before submission
 
-### Channel 3: Conference Talks
-- **FOSDEM 2027**: Containers Devroom (see [CFP-FOSDEM-2027.md](CFP-FOSDEM-2027.md)).
-- **KubeCon + CloudNativeCon**: Session proposal on declarative desktop infrastructure.
+The focus is architecture. Deployment claims need measurements and consent from
+an adopter. Do not claim success at fleet scale without that evidence.
 
----
+- Select a cell from current [matrix evidence](MATRIX-STATUS.md) and include its
+  source revision, image digest, architecture, and dated test-run URLs.
+- Attach installed boot, upgrade, and rollback observations for that cell,
+  including failures and limits under [GREEN-CRITERIA.md](GREEN-CRITERIA.md).
+  A build or a screenshot cannot prove the lifecycle.
+- Use [ADOPTION-METRICS.md](../ADOPTION-METRICS.md) for adoption measures and
+  consent-confirmed [adopter entries](../ADOPTERS.md) for deployment claims.
+  Image pulls and GitHub stars do not establish production users or fleet size.
 
-## Ecosystem Honesty & Transparency Boundary
+The former draft's edition totals, claims about signatures for every artifact,
+and “100%” rollback guarantee had no linked measurements. This draft replaces
+them with evidence requirements. Rollback changes the OS deployment; it is not a
+backup of user data or a guarantee that every hardware configuration recovers.
 
-In adherence to project documentation discipline:
-- **Clarity on Upstream vs Adopter**: TunaOS is a downstream consumer and showcase of `bootc` (CNCF Sandbox). [ADOPTERS.md](../ADOPTERS.md) lists `bootc` under upstream dependencies, not organizational adopters.
-- **Cold Outreach Discipline**: TunaOS makes outreach to CNCF channels transparently, through official project maintainers. It does not assume that there are already relationships with contributors (as documented in issue #1340 and #1524).
+## Editorial and outreach handoff
 
----
+Use the [content claim checklist](CONTENT-CLAIM-CHECKLIST.md). A maintainer
+chooses the recipient, confirms the editorial route with CNCF, reviews the
+evidence, and sends or authorizes the pitch. Do not assume Sandbox has a
+case-study submission portal, a publication commitment, or a reserved event
+slot.
 
-## Action Checklist
+Proposed pitch:
 
-- [ ] Maintainer review of CNCF showcase proposal
-- [ ] Submit showcase proposal to the `bootc-dev` email list or Slack channel
-- [ ] Pitch the draft case study to CNCF blog editors
-- [ ] Track outreach status and responses in [ADOPTION-OUTREACH-STATUS.md](ADOPTION-OUTREACH-STATUS.md)
+> Would an architecture article about desktop Linux images built with bootc fit
+> your editorial scope? TunaOS can show its multi-base build configuration and a
+> measured example of a desktop lifecycle. We would welcome upstream terminology
+> review and will distinguish tested behavior from planned work.
+
+Coordinate any talk with [the FOSDEM draft](CFP-FOSDEM-2027.md) and #1135 after
+a check of the event's current CFP. Record the sent date, public thread,
+response, and published URL in [the outreach
+ledger](ADOPTION-OUTREACH-STATUS.md). A pitch does not count as a published case
+study or an agreed partnership.
