@@ -21,31 +21,92 @@ import subprocess
 import zipfile
 
 MAX_BYTES = 12 * 1024**3
+MAX_STDERR = 16 * 1024
+ARCHIVE_IDLE_SECONDS = 120
 
 
-def bounded_command(command, destination, limit, timeout):
+def archive_deadline(size):
+    """Bound large transfers by measured size, with a fixed one-hour ceiling."""
+    if type(size) is not int or not 0 < size <= MAX_BYTES:
+        raise ValueError('artifact size out of bounds')
+    minimum_rate = 2 * 1024**2
+    return min(3600, max(1200, (size+minimum_rate-1)//minimum_rate + 120))
+
+
+def transfer_category(stderr):
+    """Return fixed labels only; never expose URLs, tokens or arbitrary stderr."""
+    text = stderr.decode('utf-8', errors='replace').lower()
+    for code in (401, 403, 404, 408, 429, 500, 502, 503, 504):
+        if re.search(rf'\bhttp(?: status)?[ :]+{code}\b', text):
+            return 'http_' + str(code)
+    for marker, label in (('unexpected eof', 'unexpected_eof'),
+                          ('connection reset', 'connection_reset'),
+                          ('connection refused', 'connection_refused'),
+                          ('tls handshake timeout', 'tls_timeout'),
+                          ('i/o timeout', 'io_timeout'),
+                          ('context deadline exceeded', 'context_deadline'),
+                          ('no space left on device', 'disk_full')):
+        if marker in text:
+            return label
+    return 'unclassified'
+
+
+def bounded_command(command, destination, limit, timeout, idle_timeout=None):
     """Bound output bytes and elapsed time before writing untrusted output."""
-    deadline = time.monotonic() + timeout
+    started = time.monotonic()
+    deadline = started + timeout
+    last_progress = started
     count = 0
-    with subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL) as process:
+    stderr = bytearray()
+    stderr_count = 0
+    with subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as process:
+        def failure(reason):
+            details = {'bytes_received': count,
+                       'elapsed_seconds': round(max(0, time.monotonic()-started), 3),
+                       'returncode': process.poll(),
+                       'stderr_bytes': stderr_count,
+                       'stderr_truncated': stderr_count > MAX_STDERR,
+                       'category': transfer_category(stderr)}
+            return ValueError(reason + '; ' + json.dumps(details, sort_keys=True))
         try:
             with selectors.DefaultSelector() as selector:
                 selector.register(process.stdout, selectors.EVENT_READ)
-                while True:
-                    remaining = deadline - time.monotonic()
+                selector.register(process.stderr, selectors.EVENT_READ)
+                while selector.get_map():
+                    now = time.monotonic()
+                    remaining = deadline - now
                     if remaining <= 0:
-                        raise ValueError("GitHub transfer deadline exceeded")
-                    if not selector.select(min(remaining, 1)):
-                        continue
-                    chunk = os.read(process.stdout.fileno(), 1024 * 1024)
-                    if not chunk:
-                        break
-                    count += len(chunk)
-                    if count > limit:
-                        raise ValueError("GitHub transfer byte limit exceeded")
-                    destination.write(chunk)
-            if process.wait(timeout=max(0.001, deadline - time.monotonic())):
-                raise ValueError("GitHub transfer failed")
+                        raise failure("GitHub transfer deadline exceeded")
+                    if idle_timeout is not None:
+                        idle_remaining = last_progress + idle_timeout - now
+                        if idle_remaining <= 0:
+                            raise failure("GitHub transfer idle deadline exceeded")
+                        remaining = min(remaining, idle_remaining)
+                    for key, _ in selector.select(min(remaining, 1)):
+                        is_stderr = key.fileobj is process.stderr
+                        chunk = os.read(key.fd, 16 * 1024 if is_stderr else 1024 * 1024)
+                        if not chunk:
+                            selector.unregister(key.fileobj)
+                            continue
+                        if is_stderr:
+                            stderr_count += len(chunk)
+                            stderr.extend(chunk[:max(0, MAX_STDERR-len(stderr))])
+                            continue
+                        count += len(chunk)
+                        if count > limit:
+                            raise failure("GitHub transfer byte limit exceeded")
+                        destination.write(chunk)
+                        last_progress = time.monotonic()
+            wait_deadline = deadline if idle_timeout is None else min(deadline, last_progress + idle_timeout)
+            if process.wait(timeout=max(0.001, wait_deadline - time.monotonic())):
+                raise failure("GitHub transfer failed")
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait()
+            reason = ("GitHub transfer idle deadline exceeded" if idle_timeout is not None
+                      and last_progress + idle_timeout < deadline
+                      else "GitHub transfer deadline exceeded")
+            raise failure(reason) from None
         except BaseException:
             process.kill()
             process.wait()
@@ -229,8 +290,12 @@ def main():
     args.output.mkdir(parents=True, exist_ok=False)
     archive = args.output / "native-iso.zip"
     with archive.open("xb") as target:
+        timeout = archive_deadline(artifact['size_in_bytes'])
+        print(json.dumps({'archive_bytes': artifact['size_in_bytes'],
+                          'transfer_deadline_seconds': timeout,
+                          'idle_deadline_seconds': ARCHIVE_IDLE_SECONDS}), flush=True)
         bounded_command(["gh", "api", f"repos/{args.repository}/actions/artifacts/{args.artifact_id}/zip"],
-                        target, artifact["size_in_bytes"], 1200)
+                        target, artifact["size_in_bytes"], timeout, ARCHIVE_IDLE_SECONDS)
     if archive.stat().st_size != artifact["size_in_bytes"] or digest(archive) != args.archive_digest:
         raise ValueError("downloaded archive does not match producer artifact")
     iso = extract(archive, args.output, args.variant, args.flavor)

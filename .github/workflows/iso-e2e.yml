@@ -239,8 +239,11 @@ jobs:
     # Strict plain+encrypted GUI qualification declares 60 minutes. The
     # build path adds another 60; allow ten minutes for setup/artifact upload
     # on each path so the job cannot preempt its own strict phase.
-    # Artifact transfer can take 20 minutes; historical diagnostics add 20.
-    timeout-minutes: ${{ inputs.source == 'native-artifact' && 120 || ((github.event_name == 'workflow_dispatch' && inputs.source == 'build') && 130 || 70) }}
+    # Native archive transfer is hard-capped at 60 minutes; historical GUI
+    # smoke adds 20, strict plain+LUKS (including detached cold/warm boots)
+    # keeps its full 60, extraction allows ten, and setup/API/hash/evidence
+    # get ten more: 160 total.
+    timeout-minutes: ${{ inputs.source == 'native-artifact' && 160 || ((github.event_name == 'workflow_dispatch' && inputs.source == 'build') && 130 || 70) }}
     strategy:
       # Don't cancel the other leg if one fails — we want to see both signals.
       fail-fast: false

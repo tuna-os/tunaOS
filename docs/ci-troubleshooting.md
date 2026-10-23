@@ -2133,3 +2133,33 @@ label on its purple button. The test did not prove completion or detached boots.
 Check all three same-frame markers, measured positions and original-pixel
 checks. Read the button with one crop of its inverted text; do not click it. Keep the
 host-driven media removal and cold and warm boot checks after completion.
+
+### Native ISO archive transfer stops before guest launch
+
+Run `39974344360` failed on archive download before guest launch on both tries.
+Diagnostic run `40004841098` verified artifact `12515006303`: 6,158,287,146 bytes
+in 259 seconds. This proves access to the archive, not the extended deadline.
+
+The fetcher budgets transfer at two MiB/s plus 120 seconds. It sets a 20-minute
+floor, 60-minute ceiling and 120-second stdout-idle limit. Diagnostics use fixed
+categories and bounded counters, never raw stderr or URLs. There is no retry.
+
+The native job reserves 160 minutes:
+
+- 60 for transfer;
+- 20 for GUI smoke of historical artifacts (not used for the same run);
+- 60 for strict plain+LUKS GUI completion and detached cold/warm boots;
+- ten for extraction;
+- ten for setup, API calls, hashes and evidence.
+
+Hash, provenance and producer checks remain mandatory. Source changes need a
+fresh build. Do not qualify a new source with an old failed aggregate run.
+
+
+### Native overlay lacks the installer pin file
+
+Run `40004972683` stopped before ISO upload: `live customization payload lacks
+image-versions.yaml`. The native overlay copied the scripts but omitted the
+root pin file after the installer began to verify digests. Copy that exact
+file into the same payload. Do not bypass the pin or hash checks. The regression
+runs the copy commands and rejects an absent pin file before customization.
