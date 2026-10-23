@@ -170,6 +170,7 @@ CUSTOMIZE_DIR="${OUT_DIR}/live-customize"
 rm -rf "$CUSTOMIZE_DIR"
 mkdir -p "$CUSTOMIZE_DIR"
 cp -a "${REPO_ROOT}/live-iso/common/src/." "$CUSTOMIZE_DIR/"
+cp "${REPO_ROOT}/image-versions.yaml" "$CUSTOMIZE_DIR/"
 if [[ "$DEV" == "1" ]]; then
 	touch "${CUSTOMIZE_DIR}/.enable-sshd"
 fi

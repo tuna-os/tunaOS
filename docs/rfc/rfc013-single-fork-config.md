@@ -6,6 +6,41 @@ Status: Partially accepted. Issue: [#3433](https://github.com/tuna-os/tunaOS/iss
 for opt-in consumers. The broader rollout remains a draft; image acceptance gates
 and normal merge checks still apply.
 
+## Draft revision: TunaOS uses its own config
+
+The maintainer asks for one editable `tunaos.toml` that TunaOS itself uses.
+TOML was the requested format. The package lists and comments in
+[Utah](https://github.com/projectbluefin/utah/blob/main/packages/utah.toml)
+are the style reference. Utah uses a separate Bluefin contract; TunaOS must
+not keep a separate stock-only source for the same settings.
+
+This draft changes the long-term source ownership in the sections below.
+It does not change the past decisions in ADR 0012 and ADR 0013.
+The new ownership takes effect as each tested part lands. Issue
+[#3433](https://github.com/tuna-os/tunaOS/issues/3433) tracks the work.
+
+The first part moves the whole matrix into `tunaos.toml`. Builds and local
+tools derive `.github/build-config.yml` from that source. Git ignores the derived file. Renovate edits TOML; build setup refreshes
+the derived file without a bot commit. The old matrix remains only as a test fixture.
+
+The goal also covers packages, repositories, image names, brand settings,
+logos, wallpapers, emoji and shared installer settings. These are later
+steps, not a claim that the matrix change completes the goal. Assets can
+stay in files named by the config. See the
+[migration plan](../PRIMARY-CONFIG-MIGRATION.md) for the ownership map.
+
+The config tools must use the same parser and rules as builds. The requested
+example is `tunaos config add htop`: check the selected bases and their real
+repositories, show the change, then write once. If a name is missing or has
+more than one match, explain the problem before any write. Preserve comments
+and allow hand edits. The example does not add `htop` to stock images.
+
+Python 3.10+ uses the same reviewed parser bundled in `scripts/lib/_vendor/tomli`.
+Config reads need no parser installation or network access.
+Unknown fields fail with a field path. Tests compare all old values and
+orders and show that an edit reaches the build input. Source tests do not
+prove that an image boots or that hardware works.
+
 ## Problem and choice
 
 A fork should own one YAML file for its image namespace, supported targets,
