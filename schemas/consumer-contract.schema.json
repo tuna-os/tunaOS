@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.tunaos.org/consumer-contract.schema.json",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "integer"
+    },
+    "kind": {
+      "const": "consumer-contract",
+      "type": "string"
+    },
+    "target": {
+      "$ref": "identity.schema.json#/$defs/target"
+    },
+    "sourceRevision": {
+      "$ref": "identity.schema.json#/$defs/revision"
+    },
+    "contractDigest": {
+      "$ref": "identity.schema.json#/$defs/digest"
+    },
+    "baseDigest": {
+      "$ref": "identity.schema.json#/$defs/digest"
+    },
+    "packageRequirements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "constraint": {
+            "type": "string",
+            "minLength": 1
+          },
+          "provider": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 1
+    },
+    "approvedSources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "identity.schema.json#/$defs/identifier"
+          },
+          "url": {
+            "$ref": "identity.schema.json#/$defs/url"
+          },
+          "signingIdentity": {
+            "type": "string",
+            "minLength": 1
+          },
+          "snapshotDigest": {
+            "$ref": "identity.schema.json#/$defs/digest"
+          }
+        },
+        "required": [
+          "id",
+          "url",
+          "signingIdentity"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 1
+    },
+    "requiredChecks": {
+      "type": "array",
+      "items": {
+        "$ref": "identity.schema.json#/$defs/identifier"
+      },
+      "minItems": 1
+    },
+    "publication": {
+      "$ref": "identity.schema.json#/$defs/publication"
+    },
+    "packageManager": {
+      "enum": [
+        "dnf",
+        "apt",
+        "pacman",
+        "zypper",
+        "portage"
+      ]
+    },
+    "baseReference": {
+      "type": "string",
+      "pattern": "^[^\\s@]+@sha256:[0-9a-f]{64}$"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "kind",
+    "target",
+    "sourceRevision",
+    "contractDigest",
+    "baseDigest",
+    "packageRequirements",
+    "approvedSources",
+    "requiredChecks",
+    "packageManager",
+    "baseReference"
+  ],
+  "additionalProperties": false
+}

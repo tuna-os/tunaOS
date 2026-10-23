@@ -69,6 +69,13 @@ packages:
   # upstream 3.11+ build is demonstrated by the same boot contract.
   el10_rolling_libselinux: "3.10-2.el10"
 
+# Python tools for versioned image/factory contracts.
+python_packages:
+  # renovate: datasource=pypi depName=jsonschema
+  jsonschema: "4.23.0"
+  # renovate: datasource=pypi depName=PyYAML
+  PyYAML: "6.0.2"
+
 # Pinned binary downloads (managed by Renovate)
 downloads:
   # renovate: datasource=github-releases depName=ublue-os/uupd
