@@ -107,8 +107,9 @@ def test_values_that_would_corrupt_os_release_are_rejected(path, value):
         config.validate(source)
 
 
-def test_codename_stays_out_of_the_build_matrix():
-    assert all("codename" not in variant for variant in config.matrix(config.load())["variants"])
+def test_identity_stays_out_of_the_build_matrix():
+    assert all("codename" not in variant and "branding" not in variant
+               for variant in config.matrix(config.load())["variants"])
 
 
 def test_kde_about_page_shows_the_configured_project(tmp_path):
@@ -143,3 +144,64 @@ def test_branding_contract_checks_the_configured_codename(tmp_path, written, pas
     output = result.stdout + result.stderr
     assert ("ok: VERSION_CODENAME=Wile E" in output) is passes
     assert ("FAIL: VERSION_CODENAME" in output) is not passes
+
+
+# The hand-written variant-identity.tsv rows before the migration (main @ 8b11ad7c).
+STOCK_VARIANT_ROWS = """\
+yellowfin	#FFC702	yellow	AlmaLinux Kitten	the yellow petal of the AlmaLinux flower
+albacore	#0069DA	blue	AlmaLinux	the blue petal of the AlmaLinux flower
+skipjack	#932279	purple	CentOS Stream	CentOS purple
+wahoo	#294172	blue	Fedora ELN	Fedora's deep blue
+bonito	#51A2DA	blue	Fedora	Fedora's light blue
+hummingbird	#1E9E8A	teal	Fedora Hummingbird	a hummingbird's teal
+sailfin	#73BA25	green	openSUSE Tumbleweed	openSUSE green
+guppy	#54487A	purple	Gentoo	Gentoo purple
+bonito-rawhide	#3C6EB4	blue	Fedora Rawhide	Fedora blue
+gurnard	#3689E6	blue	Ubuntu + Pantheon	elementary's blueberry
+grouper	#E95420	orange	Ubuntu	Ubuntu orange
+marlin	#1793D1	blue	Arch Linux	Arch blue
+flounder	#D70751	red	Debian	the Debian swirl
+flounder-sid	#A80030	red	Debian Sid	Debian's darker red
+""".splitlines()
+
+
+def data_rows(tsv):
+    return [line for line in tsv.splitlines() if line and not line.startswith("#")]
+
+
+def test_stock_variant_branding_is_unchanged_by_the_migration():
+    assert data_rows(config.render_variant_identity(config.load())) == STOCK_VARIANT_ROWS
+
+
+def test_committed_variant_identity_matches_the_toml():
+    committed = (ROOT / "build_scripts/lib/variant-identity.tsv").read_text(encoding="utf-8")
+    assert committed == config.render_variant_identity(config.load())
+
+
+def test_a_fork_changes_variant_branding_only_in_toml():
+    fork = copy.deepcopy(config.load())
+    fork["variants"]["marlin"]["branding"] = {"accent": "#123ABC", "gnome_accent": "green",
+                                              "base": "Acme Linux", "homage": "Acme's own green"}
+    rows = data_rows(config.render_variant_identity(fork))
+    assert "marlin\t#123ABC\tgreen\tAcme Linux\tAcme's own green" in rows
+
+
+def test_variant_identity_cannot_be_generated_with_a_gap():
+    source = copy.deepcopy(config.load())
+    del source["variants"]["grouper"]["branding"]
+    with pytest.raises(config.ConfigError):
+        config.render_variant_identity(source)
+
+
+@pytest.mark.parametrize("key,value", [
+    ("accent", "#ffc702"),            # readers expect canonical uppercase hex
+    ("accent", "FFC702"),
+    ("gnome_accent", "magenta"),      # GNOME has a fixed list of accents
+    ("base", 'Alma "Kitten"'),        # lands in a JSON heredoc (fastfetch)
+    ("homage", "a `whale`"),
+])
+def test_unusable_variant_branding_is_rejected(key, value):
+    source = copy.deepcopy(config.load())
+    source["variants"]["yellowfin"]["branding"][key] = value
+    with pytest.raises(config.ConfigError):
+        config.validate(source)

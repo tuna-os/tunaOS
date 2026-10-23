@@ -45,6 +45,15 @@ DISPLAY_TEXT = re.compile(r"[A-Za-z0-9][A-Za-z0-9 .,()+_-]*\Z")
 HTTPS_URL = re.compile(r"https://[^\s/\"'\\|`$]+(?:/[^\s\"'\\|`$]*)?\Z")
 CPE_PART = re.compile(r"[a-z0-9][a-z0-9._-]*\Z")
 BRANDING_URLS = ('homepage', 'documentation', 'support', 'bug_report')
+# Labels such as "Fedora's deep blue" reach /etc/issue and a JSON heredoc:
+# apostrophes are fine there, double quotes and shell metacharacters are not.
+LABEL_TEXT = re.compile(r"[A-Za-z0-9][A-Za-z0-9 .,()+_'-]*\Z")
+ACCENT = re.compile(r"#[0-9A-F]{6}\Z")
+# GNOME takes only these fixed accent names, not an arbitrary colour.
+GNOME_ACCENTS = {'blue', 'teal', 'green', 'yellow', 'orange', 'red', 'pink', 'purple', 'slate'}
+VARIANT_BRANDING = ('accent', 'gnome_accent', 'base', 'homage')
+# Identity-only variant keys: they have their own adapters, not the matrix.
+IDENTITY_KEYS = ('codename', 'branding')
 
 
 class ConfigError(ValueError):
@@ -149,13 +158,23 @@ def validate(config):
         where = f'variants.{name}'
         identifier(name, where)
         table(variant, ('emoji', 'description', 'base_image', 'aliases', 'platforms', 'flavors',
-                        'upstream_track', 'experimental', 'akmods', 'publish_name', 'tag_suffix', 'codename'),
+                        'upstream_track', 'experimental', 'akmods', 'publish_name', 'tag_suffix', 'codename', 'branding'),
               ('emoji', 'description', 'base_image', 'platforms', 'flavors'), where)
         for key in ('emoji', 'description', 'base_image', 'upstream_track', 'akmods', 'publish_name', 'tag_suffix'):
             if key in variant:
                 text(variant[key], where + '.' + key)
         if 'codename' in variant and (not isinstance(variant['codename'], str) or not DISPLAY_TEXT.fullmatch(variant['codename'])):
             raise ConfigError(f'{where}.codename: expected plain words (letters, digits, spaces, .,()+_-)')
+        if 'branding' in variant:
+            branding = variant['branding']
+            table(branding, VARIANT_BRANDING, VARIANT_BRANDING, where + '.branding')
+            if not isinstance(branding['accent'], str) or not ACCENT.fullmatch(branding['accent']):
+                raise ConfigError(f'{where}.branding.accent: expected #RRGGBB in uppercase hex')
+            if branding['gnome_accent'] not in GNOME_ACCENTS:
+                raise ConfigError(f'{where}.branding.gnome_accent: expected one of {sorted(GNOME_ACCENTS)}')
+            for key in ('base', 'homage'):
+                if not isinstance(branding[key], str) or not LABEL_TEXT.fullmatch(branding[key]):
+                    raise ConfigError(f"{where}.branding.{key}: expected plain words (letters, digits, spaces, .,()+_'-)")
         if 'experimental' in variant and type(variant['experimental']) is not bool:
             raise ConfigError(f'{where}.experimental: expected boolean')
         strings(variant['platforms'], where + '.platforms', platform=True)
@@ -323,11 +342,12 @@ def load(path=None):
 def matrix(config):
     """Project the old consumer shape without inventing defaults or losing flags."""
     validate(config)
-    # Identity (codename) has its own adapter; keep it out of the build matrix
-    # so every jq/yq consumer of build-config.yml sees the unchanged shape.
+    # Identity (codename, branding) has its own adapters; keep it out of the
+    # build matrix so every jq/yq consumer of build-config.yml sees the
+    # unchanged shape.
     return copy.deepcopy({'config': config['build'], 'iso_groups': config['iso_groups'],
                           'sibling_images': config['sibling_images'], 'tuna_rollout': config['tuna_rollout'],
-                          'variants': [{'id': name, **{k: v for k, v in value.items() if k != 'codename'}}
+                          'variants': [{'id': name, **{k: v for k, v in value.items() if k not in IDENTITY_KEYS}}
                                        for name, value in config['variants'].items()]})
 
 
@@ -362,6 +382,37 @@ def render_identity(config):
     # Keys quoted: unquoted, shfmt rewrites [bonito-rawhide] as arithmetic.
     lines += [f'\t["{name}"]={shlex.quote(variant["codename"])}' for name, variant in config['variants'].items()]
     return '\n'.join(lines + [')']) + '\n'
+
+
+VARIANT_IDENTITY_HEADER = """\
+# Per-variant identity: what makes each variant look like itself.
+# Generated from each variant's `branding` in tunaos.toml by
+# `scripts/config.py generate-variant-identity`; do not edit. `just check`
+# fails when this file and tunaos.toml disagree.
+#
+# Every variant is TunaOS first, but wears one accent colour borrowed from the
+# distro it is built on, as a nod to that project: Arch blue for marlin,
+# Ubuntu orange for grouper, openSUSE green for sailfin, and so on.
+#
+# Read by build_scripts/90-image-info.sh and the desktop branding hooks at
+# build time, and by the scripts/branding/ generators when artwork is redrawn.
+#
+# gnome_accent is the nearest of GNOME's fixed accent names (blue teal green
+# yellow orange red pink purple slate); GNOME cannot take an arbitrary colour.
+#
+# id\taccent\tgnome_accent\tbase\thomage
+"""
+
+
+def render_variant_identity(config):
+    """build_scripts/lib/variant-identity.tsv, at its existing path and format."""
+    validate(config)
+    unbranded = [name for name, variant in config['variants'].items() if 'branding' not in variant]
+    if unbranded:
+        raise ConfigError('variant identity needs branding for ' + ', '.join(unbranded))
+    rows = ['\t'.join([name] + [variant['branding'][key] for key in VARIANT_BRANDING])
+            for name, variant in config['variants'].items()]
+    return VARIANT_IDENTITY_HEADER + '\n'.join(rows) + '\n'
 
 
 def prepare(root=ROOT):

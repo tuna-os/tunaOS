@@ -202,6 +202,7 @@ reason = "unsupported until package target gentoo publishes tuna-desktop (tunaos
 [variants.yellowfin]
 emoji = "🐠"
 codename = "Thunnus albacares"
+branding = { accent = "#FFC702", gnome_accent = "yellow", base = "AlmaLinux Kitten", homage = "the yellow petal of the AlmaLinux flower" }
 description = "Based on AlmaLinux Kitten 10"
 base_image = "quay.io/almalinuxorg/almalinux-bootc:10-kitten@sha256:fabe22d605a5638cb1fbf2df38d6d9b9ace35f15cb1c10c7db87d475a039d58a"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
@@ -475,6 +476,7 @@ platforms = ["linux/amd64"]
 [variants.albacore]
 emoji = "🐟"
 codename = "Thunnus alalunga"
+branding = { accent = "#0069DA", gnome_accent = "blue", base = "AlmaLinux", homage = "the blue petal of the AlmaLinux flower" }
 description = "Based on AlmaLinux 10"
 base_image = "quay.io/almalinuxorg/almalinux-bootc:10@sha256:61e7963066ef53e6c729826117ddfb1e2afc5fce8ceb591b5992a7d1d6e36878"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
@@ -748,6 +750,7 @@ platforms = ["linux/amd64"]
 [variants.skipjack]
 emoji = "🍣"
 codename = "Katsuwonus pelamis"
+branding = { accent = "#932279", gnome_accent = "purple", base = "CentOS Stream", homage = "CentOS purple" }
 description = "Based on CentOS Stream 10"
 base_image = "quay.io/centos-bootc/centos-bootc:stream10@sha256:ec1bd8cb6479d1f2f61c85372afce319b932b6b1f671648f0887e9da01e48272"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
@@ -1040,6 +1043,7 @@ build_qcow2 = false
 [variants.wahoo]
 emoji = "🎏"
 codename = "Acanthocybium solandri"
+branding = { accent = "#294172", gnome_accent = "blue", base = "Fedora ELN", homage = "Fedora's deep blue" }
 upstream_track = "experimental"
 description = "Based on Fedora ELN (EL11 preview, rolling)"
 experimental = true
@@ -1118,6 +1122,7 @@ luks_e2e = false
 [variants.bonito]
 emoji = "🎣"
 codename = "Sarda sarda"
+branding = { accent = "#51A2DA", gnome_accent = "blue", base = "Fedora", homage = "Fedora's light blue" }
 description = "Based on Fedora 44"
 # Unpinned 2026-09-17. The note this replaces named the condition itself:
 # "If quay GCs this one inside a day as well, that is the second strike and
@@ -1341,6 +1346,7 @@ build_qcow2 = false
 [variants.hummingbird]
 emoji = "🐦"
 codename = "Trochilidae"
+branding = { accent = "#1E9E8A", gnome_accent = "teal", base = "Fedora Hummingbird", homage = "a hummingbird's teal" }
 upstream_track = "experimental"
 # Rolling, security-hardened fork tracking Fedora RAWHIDE -- not Fedora 43,
 # whatever the .fc43 dist tags suggest -- and shipping NO desktop upstream.
@@ -1447,6 +1453,7 @@ build_iso = true
 [variants.sailfin]
 emoji = "⛵"
 codename = "Istiophorus platypterus"
+branding = { accent = "#73BA25", gnome_accent = "green", base = "openSUSE Tumbleweed", homage = "openSUSE green" }
 upstream_track = "rolling"
 description = "Based on openSUSE Tumbleweed (rolling)"
 # NOT digest-pinned, for the same reason as bonito-rawhide below.
@@ -1571,6 +1578,7 @@ luks_e2e = false
 [variants.guppy]
 emoji = "🌈"
 codename = "Poecilia reticulata"
+branding = { accent = "#54487A", gnome_accent = "purple", base = "Gentoo", homage = "Gentoo purple" }
 upstream_track = "rolling"
 description = "Based on Gentoo Linux (source-based)"
 # Digest-pinned to match Containerfile.gentoo's FROM exactly. This value
@@ -1636,6 +1644,7 @@ publish_name = "bonito"
 tag_suffix = "rawhide"
 emoji = "🐉"
 codename = "Sarda sarda"
+branding = { accent = "#3C6EB4", gnome_accent = "blue", base = "Fedora Rawhide", homage = "Fedora blue" }
 upstream_track = "rolling"
 description = "Based on Fedora Rawhide (rolling)"
 # NOT digest-pinned, and this is the only base image here that is not.
@@ -1847,6 +1856,7 @@ build_qcow2 = false
 [variants.gurnard]
 emoji = "🤖"
 codename = "Chelidonichthys lucerna"
+branding = { accent = "#3689E6", gnome_accent = "blue", base = "Ubuntu + Pantheon", homage = "elementary's blueberry" }
 description = "Based on Ubuntu 24.04 Noble Numbat with the Pantheon desktop"
 base_image = "docker.io/library/ubuntu:noble@sha256:68ee22004a9109b44973313b02ff7b1de250f1de0f5ecb628d73f579aaff33ac"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
@@ -1867,6 +1877,7 @@ build_iso = true
 [variants.grouper]
 emoji = "🪸"
 codename = "Epinephelus marginatus"
+branding = { accent = "#E95420", gnome_accent = "orange", base = "Ubuntu", homage = "Ubuntu orange" }
 description = "Based on Ubuntu 26.04 Resolute Raccoon"
 base_image = "docker.io/library/ubuntu:resolute@sha256:c098726dd9b9733f3e885f8de0ef375206a311b0a317eadc40d347b1115fb944"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
@@ -1990,6 +2001,7 @@ build_iso = true
 [variants.marlin]
 emoji = "🚀"
 codename = "Makaira nigricans"
+branding = { accent = "#1793D1", gnome_accent = "blue", base = "Arch Linux", homage = "Arch blue" }
 upstream_track = "rolling"
 description = "Based on Arch Linux (rolling)"
 base_image = "docker.io/archlinux/archlinux:latest@sha256:33586c0ae3def39b47d1fe0caa5b695cbbd4e6b49ce730983a8b49a23ad95934"
@@ -2152,6 +2164,7 @@ build_qcow2 = false
 [variants.flounder]
 emoji = "🐡"
 codename = "Platichthys flesus"
+branding = { accent = "#D70751", gnome_accent = "red", base = "Debian", homage = "the Debian swirl" }
 description = "Based on Debian 13 Trixie (stable)"
 base_image = "docker.io/library/debian:trixie@sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
@@ -2311,6 +2324,7 @@ publish_name = "flounder"
 tag_suffix = "sid"
 emoji = "☢️"
 codename = "Platichthys flesus"
+branding = { accent = "#A80030", gnome_accent = "red", base = "Debian Sid", homage = "Debian's darker red" }
 upstream_track = "rolling"
 description = "Based on Debian Sid (unstable, rolling)"
 base_image = "docker.io/library/debian:sid@sha256:92d7265e51d67d3a2094c1aad9faa88c74cf9d52e6c354200e429cd60237cc55"

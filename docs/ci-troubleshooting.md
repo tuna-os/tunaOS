@@ -1894,17 +1894,20 @@ outreach copy or creative briefs, use the reasoned region or file opt-out in
 technical steps checked on mixed pages. Run `just ste` again; do not increase
 `.ste-budget` or exclude a whole directory to pass one content change.
 
-### Image build stops with `identity.env is missing` or `generated identity drift`
+### Image build stops with `identity.env is missing` or an identity drift error
 
 **Symptom:** `90-image-info.sh` exits with `build_scripts/lib/identity.env is
-missing`, or `just check` reports `generated identity drift`.
+missing`, or `just check` reports `generated identity drift` or
+`generated variant-identity drift`.
 
-**Cause:** The project name, URLs, CPE and variant codenames come from
-`tunaos.toml` through `build_scripts/lib/identity.env`. The image build reads
-only that generated file and has no built-in fallback, so a fork never gets
-TunaOS identity by accident. A changed `tunaos.toml` without a regenerated file,
-or a hand edit to the file, makes the two disagree.
+**Cause:** The project name, URLs, CPE, variant codenames and variant accent
+colours come from `tunaos.toml`, through `build_scripts/lib/identity.env` and
+`build_scripts/lib/variant-identity.tsv`. The image build reads only those
+generated files and has no built-in fallback, so a fork never gets TunaOS
+identity by accident. A changed `tunaos.toml` without regenerated files, or a
+hand edit to either file, makes them disagree.
 
-**Fix:** Run `python3 scripts/config.py generate-identity` and commit
-`tunaos.toml` and `build_scripts/lib/identity.env` together. A new variant also
-needs a `codename`; the generator names any variant without one.
+**Fix:** Run `python3 scripts/config.py generate-identity` and
+`python3 scripts/config.py generate-variant-identity`, then commit them with
+`tunaos.toml`. A new variant also needs a `codename` and a `branding` table;
+the generators name any variant without one.

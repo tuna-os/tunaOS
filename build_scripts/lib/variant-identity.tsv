@@ -1,14 +1,14 @@
-# Per-variant identity: what makes each TunaOS variant look like itself.
+# Per-variant identity: what makes each variant look like itself.
+# Generated from each variant's `branding` in tunaos.toml by
+# `scripts/config.py generate-variant-identity`; do not edit. `just check`
+# fails when this file and tunaos.toml disagree.
 #
 # Every variant is TunaOS first, but wears one accent colour borrowed from the
 # distro it is built on, as a nod to that project: Arch blue for marlin,
-# Ubuntu orange for grouper, openSUSE green for sailfin, and so on. The mark is
-# the variant's Noto Emoji (system_files/usr/share/tunaos/logos/<id>.svg,
-# matching .github/build-config.yml).
+# Ubuntu orange for grouper, openSUSE green for sailfin, and so on.
 #
-# Read by build_scripts/90-image-info.sh at build time and by
-# scripts/branding/render-wallpapers.mjs when the wallpapers are regenerated.
-# tests/bats/test_variant_identity.bats keeps it in step with build-config.
+# Read by build_scripts/90-image-info.sh and the desktop branding hooks at
+# build time, and by the scripts/branding/ generators when artwork is redrawn.
 #
 # gnome_accent is the nearest of GNOME's fixed accent names (blue teal green
 # yellow orange red pink purple slate); GNOME cannot take an arbitrary colour.
