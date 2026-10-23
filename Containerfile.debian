@@ -209,7 +209,8 @@ RUN --mount=type=bind,from=context,source=/,target=/run/context \
     bash -c "source /run/context/build_scripts/lib.sh && source /run/context/build_scripts/10-base-packages.sh"
 
 RUN --mount=type=bind,from=context,source=/,target=/run/context \
-    /run/context/build_scripts/20-packages.sh
+    /run/context/build_scripts/20-packages.sh && \
+    /run/context/build_scripts/30-image-packages.sh
 
 # remora — the desktop experience contract requires it, and this base does
 # not run 26-packages-post.sh, which is what installs remora on the dnf

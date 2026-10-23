@@ -184,9 +184,25 @@ installed.
 
 ### System-wide packages and config
 
-Desktop manifests only cover what goes into the DE layer. For packages
-that should be in *every* image (base layer), edit
-`build_scripts/20-packages.sh`.
+Desktop manifests only cover what goes into the DE layer. To add packages to
+*every* image of a variant, base flavors included, use `tunaos.toml`:
+
+```toml
+[defaults.packages]            # every variant
+add = ["htop"]
+
+[variants.yellowfin.packages]  # one variant, after the defaults
+add = ["tree"]
+optional = ["btop"]            # installed when available
+repositories = [{ id = "acme", url = "https://repo.acme.example/el10", key_url = "https://repo.acme.example/key.asc" }]
+```
+
+Use the native package name of each variant's package manager. Gentoo needs
+`category/name`, so put names that differ by distribution under the variant.
+Repositories work on dnf and zypper only, and each needs a GPG key. Removals
+are not supported yet. Run `python3 scripts/config.py generate-image-packages`;
+`just check` fails if a name does not suit a variant's package manager. The
+list of base packages stays in `build_scripts/20-packages.sh`.
 
 For system-wide config files, add them to `system_files/`:
 

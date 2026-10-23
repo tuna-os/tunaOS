@@ -27,6 +27,7 @@ IDENTITY_ADAPTERS = {
     'identity': (tunaos_config.render_identity, 'build_scripts/lib/identity.env'),
     'variant-identity': (tunaos_config.render_variant_identity, 'build_scripts/lib/variant-identity.tsv'),
     'variant-aliases': (tunaos_config.render_variant_aliases, 'build_scripts/lib/variant-aliases.tsv'),
+    'image-packages': (tunaos_config.render_image_packages, 'build_scripts/lib/image-packages.tsv'),
 }
 
 

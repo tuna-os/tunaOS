@@ -376,11 +376,13 @@ RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=bind,from=context,source=/,target=/run/context \
   bash -c "source /run/context/build_scripts/lib.sh && source /run/context/build_scripts/10-base-packages.sh"
 
-# Desktop-agnostic additional packages (apt branch in the script).
+# Desktop-agnostic additional packages (apt branch in the script), then the
+# image-wide additions from tunaos.toml.
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
-   /run/context/build_scripts/20-packages.sh
+   /run/context/build_scripts/20-packages.sh && \
+   /run/context/build_scripts/30-image-packages.sh
 
 # remora — the desktop experience contract requires it, and this base does
 # not run 26-packages-post.sh, which is what installs remora on the dnf

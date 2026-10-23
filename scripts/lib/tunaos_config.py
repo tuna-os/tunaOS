@@ -16,6 +16,7 @@ import os
 from pathlib import Path
 import re
 import shlex
+import subprocess
 import tempfile
 
 TOMLI_VERSION = '2.3.2'
@@ -55,8 +56,20 @@ GNOME_ACCENTS = {'blue', 'teal', 'green', 'yellow', 'orange', 'red', 'pink', 'pu
 PLYMOUTH_THEME = re.compile(r"[a-z0-9][a-z0-9-]*\Z")
 DEFAULT_BRANDING = BRANDING_URLS + ('plymouth',)
 VARIANT_BRANDING = ('accent', 'gnome_accent', 'base', 'homage', 'plymouth')
-# Identity-only variant keys: they have their own adapters, not the matrix.
-IDENTITY_KEYS = ('codename', 'branding')
+# Variant keys with their own adapters under build_scripts/lib/, not the matrix.
+IDENTITY_KEYS = ('codename', 'branding', 'packages')
+# Image-wide package additions ([defaults.packages], variants.<v>.packages).
+# Plain native names only: no options, URLs, local archives or expressions.
+PACKAGE_DELTA_KEYS = ('add', 'optional', 'repositories')
+PACKAGE_NAME = r"[A-Za-z0-9][A-Za-z0-9+_.-]*"
+PACKAGE_NAMES = {'apt': re.compile(r"[a-z0-9][a-z0-9+.-]*\Z"),
+                 'emerge': re.compile(PACKAGE_NAME + '/' + PACKAGE_NAME + r'\Z')}
+PACKAGE_ARCHIVE = re.compile(r"\.(rpm|deb|udeb|ebuild|tbz2|gpkg\.tar|pkg\.tar(\.[a-z0-9]+)?)\Z", re.I)
+REPOSITORY_ID = re.compile(r"[a-z0-9][a-z0-9_-]*\Z")
+REPOSITORY_URL = re.compile(r"https://[A-Za-z0-9][A-Za-z0-9.-]*(?::[0-9]{1,5})?(?:/[A-Za-z0-9._~%+,:=@/-]*)?\Z")
+# The Containerfile a variant builds with decides its package manager.
+ROUTE_MANAGERS = {'Containerfile.el10': 'dnf', 'Containerfile.ubuntu': 'apt', 'Containerfile.debian': 'apt',
+                  'Containerfile.arch': 'pacman', 'Containerfile.opensuse': 'zypper', 'Containerfile.gentoo': 'emerge'}
 
 
 class ConfigError(ValueError):
@@ -107,6 +120,32 @@ def plymouth_theme(value, path):
         raise ConfigError(f"{path}: expected a theme directory name (lowercase letters, digits, -)")
 
 
+def package_delta(value, path):
+    """Shape of [defaults.packages] / variants.<v>.packages; names are checked
+    against the variant's package manager when the adapter is rendered."""
+    if isinstance(value, dict) and 'remove' in value:
+        raise ConfigError(f'{path}.remove: package removals are not supported; a removal can take out '
+                          'packages the base or desktop needs, and no protected removal exists yet (#3668)')
+    table(value, PACKAGE_DELTA_KEYS, (), path)
+    for key in ('add', 'optional'):
+        if key in value:
+            strings(value[key], f'{path}.{key}')
+            for name in value[key]:
+                if not re.fullmatch(PACKAGE_NAME + f'(?:/{PACKAGE_NAME})?', name) or PACKAGE_ARCHIVE.search(name):
+                    raise ConfigError(f'{path}.{key}: {name!r} is not a plain native package name')
+    repositories = value.get('repositories', [])
+    if not isinstance(repositories, list) or (not repositories and 'repositories' in value):
+        raise ConfigError(f'{path}.repositories: expected nonempty list of tables')
+    for index, repo in enumerate(repositories):
+        where = f'{path}.repositories[{index}]'
+        table(repo, ('id', 'url', 'key_url'), ('id', 'url', 'key_url'), where)
+        if not isinstance(repo['id'], str) or not REPOSITORY_ID.fullmatch(repo['id']):
+            raise ConfigError(f'{where}.id: expected a lowercase filename-safe token')
+        for key in ('url', 'key_url'):
+            if not isinstance(repo[key], str) or not REPOSITORY_URL.fullmatch(repo[key]):
+                raise ConfigError(f'{where}.{key}: expected a literal https:// URL without query, fragment or credentials')
+
+
 @lru_cache(maxsize=1)
 def package_policy():
     spec = importlib.util.spec_from_file_location('tunaos_package_policy', Path(__file__).with_name('tunaos_packages.py'))
@@ -153,7 +192,9 @@ def validate(config):
         if not isinstance(config['project']['cpe_vendor'], str) or not CPE_PART.fullmatch(config['project']['cpe_vendor']):
             raise ConfigError('project.cpe_vendor: expected a lowercase CPE component such as tunaos')
     if 'defaults' in config:
-        table(config['defaults'], ('branding',), ('branding',), 'defaults')
+        table(config['defaults'], ('branding', 'packages'), ('branding',), 'defaults')
+        if 'packages' in config['defaults']:
+            package_delta(config['defaults']['packages'], 'defaults.packages')
         table(config['defaults']['branding'], DEFAULT_BRANDING, DEFAULT_BRANDING, 'defaults.branding')
         for key in BRANDING_URLS:
             value = config['defaults']['branding'][key]
@@ -167,7 +208,8 @@ def validate(config):
         where = f'variants.{name}'
         identifier(name, where)
         table(variant, ('emoji', 'description', 'base_image', 'aliases', 'platforms', 'flavors',
-                        'upstream_track', 'experimental', 'akmods', 'publish_name', 'tag_suffix', 'codename', 'branding'),
+                        'upstream_track', 'experimental', 'akmods', 'publish_name', 'tag_suffix', 'codename', 'branding',
+                        'packages'),
               ('emoji', 'description', 'base_image', 'platforms', 'flavors'), where)
         for key in ('emoji', 'description', 'base_image', 'upstream_track', 'akmods', 'publish_name', 'tag_suffix'):
             if key in variant:
@@ -185,6 +227,8 @@ def validate(config):
                 if not isinstance(branding[key], str) or not LABEL_TEXT.fullmatch(branding[key]):
                     raise ConfigError(f"{where}.branding.{key}: expected plain words (letters, digits, spaces, .,()+_'-)")
             plymouth_theme(branding['plymouth'], where + '.branding.plymouth')
+        if 'packages' in variant:
+            package_delta(variant['packages'], where + '.packages')
         if 'experimental' in variant and type(variant['experimental']) is not bool:
             raise ConfigError(f'{where}.experimental: expected boolean')
         strings(variant['platforms'], where + '.platforms', platform=True)
@@ -453,6 +497,78 @@ def render_variant_aliases(config):
         for alias in variant.get('aliases', []):
             owners.setdefault(alias, name)
     return VARIANT_ALIASES_HEADER + ''.join(f'{alias}\t{name}\n' for alias, name in owners.items())
+
+
+IMAGE_PACKAGES_HEADER = """\
+# Image-wide package additions per variant. Generated from [defaults.packages]
+# and each variant's `packages` in tunaos.toml by `scripts/config.py
+# generate-image-packages`; do not edit. `just check` fails when this file and
+# tunaos.toml disagree.
+#
+# build_scripts/30-image-packages.sh installs a variant's rows in the base
+# stage of every Containerfile, so every flavor has them. A variant with no
+# rows builds exactly as before. Removals are not supported.
+#
+# variant\tmanager\tadd|optional\tname
+# variant\tmanager\trepository\tid\turl\tkey_url
+"""
+
+
+def variant_managers(config, names, root=ROOT):
+    """The package manager each variant builds with, from its Containerfile route."""
+    managers = {}
+    for name in names:
+        found = set()
+        for flavor in config['variants'][name]['flavors']:
+            output = subprocess.run(['bash', str(Path(root) / 'scripts/resolve-flavor.sh'), name, flavor['id']],
+                                    capture_output=True, text=True, check=True).stdout
+            routing = {key: json.loads(value) for key, value in (line.split('=', 1) for line in output.splitlines())}
+            if routing['CONTAINERFILE'] in ROUTE_MANAGERS:
+                found.add(ROUTE_MANAGERS[routing['CONTAINERFILE']])
+        if len(found) != 1:
+            raise ConfigError(f'variants.{name}: expected one package manager route, found {sorted(found)}')
+        managers[name] = found.pop()
+    return managers
+
+
+def image_packages(config, managers=None):
+    """Effective additions per variant: [defaults.packages] first, then its own."""
+    validate(config)
+    defaults = config.get('defaults', {}).get('packages', {})
+    deltas = {}
+    for name, variant in config['variants'].items():
+        own = variant.get('packages', {})
+        add = list(dict.fromkeys(defaults.get('add', []) + own.get('add', [])))
+        optional = list(dict.fromkeys(defaults.get('optional', []) + own.get('optional', [])))
+        if set(add) & set(optional):
+            raise ConfigError(f'variants.{name}.packages: both required and optional: {sorted(set(add) & set(optional))}')
+        repositories = {}
+        for repo in defaults.get('repositories', []) + own.get('repositories', []):
+            if repositories.setdefault(repo['id'], repo) != repo:
+                raise ConfigError(f"variants.{name}.packages: repository {repo['id']!r} is defined twice, differently")
+        if add or optional or repositories:
+            deltas[name] = {'add': add, 'optional': optional, 'repositories': list(repositories.values())}
+    managers = managers or variant_managers(config, deltas)
+    for name, delta in deltas.items():
+        manager = delta['manager'] = managers[name]
+        pattern = PACKAGE_NAMES.get(manager, re.compile(PACKAGE_NAME + r'\Z'))
+        for package in delta['add'] + delta['optional']:
+            if not pattern.fullmatch(package):
+                raise ConfigError(f'variants.{name}.packages: {package!r} is not a valid package name for {manager}'
+                                  + (' (use category/name)' if manager == 'emerge' else ''))
+        if delta['repositories'] and manager not in ('dnf', 'zypper'):
+            raise ConfigError(f'variants.{name}.packages: repositories are supported on dnf and zypper only, not {manager}')
+    return deltas
+
+
+def render_image_packages(config, managers=None):
+    """build_scripts/lib/image-packages.tsv, read by 30-image-packages.sh."""
+    rows = []
+    for name, delta in image_packages(config, managers).items():
+        rows += [f"{name}\t{delta['manager']}\t{kind}\t{package}" for kind in ('add', 'optional') for package in delta[kind]]
+        rows += [f"{name}\t{delta['manager']}\trepository\t{repo['id']}\t{repo['url']}\t{repo['key_url']}"
+                 for repo in delta['repositories']]
+    return IMAGE_PACKAGES_HEADER + ''.join(row + '\n' for row in rows)
 
 
 def missing_drawn_artwork(config, root=ROOT):

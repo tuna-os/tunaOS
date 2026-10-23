@@ -1,0 +1,11 @@
+# Image-wide package additions per variant. Generated from [defaults.packages]
+# and each variant's `packages` in tunaos.toml by `scripts/config.py
+# generate-image-packages`; do not edit. `just check` fails when this file and
+# tunaos.toml disagree.
+#
+# build_scripts/30-image-packages.sh installs a variant's rows in the base
+# stage of every Containerfile, so every flavor has them. A variant with no
+# rows builds exactly as before. Removals are not supported.
+#
+# variant	manager	add|optional	name
+# variant	manager	repository	id	url	key_url
