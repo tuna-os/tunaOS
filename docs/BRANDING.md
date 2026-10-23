@@ -123,14 +123,18 @@ colour of the base and the style of the desktop.
 ### Generated assets
 
 These scripts make files that are in the repository. The build does not run
-them.
+them. The first three read `tunaos.toml`, and
+`scripts/branding/check-artwork.py` (run in CI) fails if their committed
+output does not match it; `--write` regenerates them. They need the pinned
+`requirements-branding.txt`.
 
-| script | output |
-|---|---|
-| `scripts/branding/make-lettermarks.py` | `/usr/share/tunaos/lettermarks/` |
-| `scripts/branding/make-fastfetch-logos.py` | `/usr/share/tunaos/fastfetch/` |
-| `scripts/branding/make-plymouth-theme.py` | `/usr/share/plymouth/themes/<theme>/` |
-| `scripts/branding/render-wallpapers.mjs` | `/usr/share/backgrounds/tunaos/` |
+| script | output | from |
+|---|---|---|
+| `scripts/branding/make-logos.py` | `/usr/share/tunaos/logos/` | each variant's `emoji` |
+| `scripts/branding/make-lettermarks.py` | `/usr/share/tunaos/lettermarks/` | mark, name, `branding.accent` |
+| `scripts/branding/make-fastfetch-logos.py` | `/usr/share/tunaos/fastfetch/` | name |
+| `scripts/branding/make-plymouth-theme.py` | `/usr/share/plymouth/themes/<theme>/` | drawn |
+| `scripts/branding/render-wallpapers.mjs` | `/usr/share/backgrounds/tunaos/` | drawn |
 
 ## The rule
 

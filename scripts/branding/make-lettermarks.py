@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """Render each variant's lettermark: its emoji, its name, its accent.
 
-    scripts/branding/make-lettermarks.py
+    scripts/branding/make-lettermarks.py [--output DIR] [--logos DIR]
 
 The variant is the brand: GDM, the Plasma splash and the installer show
 "Marlin" or "Sailfin", never "TunaOS". Each lettermark is the variant's Noto
-Emoji, its name set in Baloo 2 ExtraBold (SIL Open Font License), and an
-underline in the accent borrowed from its base distro
-(build_scripts/lib/variant-identity.tsv).
+Emoji (system_files/usr/share/tunaos/logos/, from scripts/branding/make-logos.py),
+its display name set in Baloo 2 ExtraBold (SIL Open Font License), and an
+underline in its `branding.accent`. Names and accents come from tunaos.toml.
 
 The text is converted to outlines, so the SVGs need no font at runtime.
 Writes, per variant:
@@ -15,10 +15,15 @@ Writes, per variant:
     system_files/usr/share/tunaos/lettermarks/<variant>.svg        light text, for dark screens
     system_files/usr/share/tunaos/lettermarks/<variant>-dark.svg   dark text, for light screens
 
-Needs fontTools and uharfbuzz; fetches Baloo 2 from google/fonts into a cache.
-The output is committed; builds never run this.
+Needs the pinned requirements-branding.txt; fetches Baloo 2 at a pinned
+google/fonts commit, verified by SHA-256, into a cache. The output is
+committed and checked by scripts/branding/check-artwork.py; builds never run
+this.
 """
 
+import argparse
+import hashlib
+import importlib.util
 import io
 import re
 import urllib.request
@@ -31,25 +36,31 @@ from fontTools.ttLib import TTFont
 from fontTools.varLib.instancer import instantiateVariableFont
 
 REPO = Path(__file__).resolve().parents[2]
-TSV = REPO / "build_scripts/lib/variant-identity.tsv"
 LOGOS = REPO / "system_files/usr/share/tunaos/logos"
 OUT = REPO / "system_files/usr/share/tunaos/lettermarks"
-FONT_URL = "https://raw.githubusercontent.com/google/fonts/main/ofl/baloo2/Baloo2%5Bwght%5D.ttf"
+# Pinned so the committed lettermarks stay reproducible: Baloo 2 v1.700, the
+# only revision of this file in google/fonts (2021-11-25, #3981).
+FONT_URL = ("https://raw.githubusercontent.com/google/fonts/"
+            "8e0cd05881f3ae5e933ba4161103005a3e841ce0/ofl/baloo2/Baloo2%5Bwght%5D.ttf")
+FONT_SHA256 = "d47a6852548059b1db49a1319d06d499d546c3fa2237cf9eee9c43c8abb025c2"
 CACHE = Path.home() / ".cache/tunaos-branding/Baloo2.ttf"
 WEIGHT = 800
 SIZE = 100  # font size in SVG units
 LIGHT, DARK = "#F4F7FB", "#0D1B2A"
 
-# The name os-release shows: bonito-rawhide publishes as bonito, and
-# flounder-sid as flounder. Their colour and emoji tell them apart.
-DISPLAY = {"bonito-rawhide": "Bonito", "flounder-sid": "Flounder"}
+_spec = importlib.util.spec_from_file_location("tunaos_config", REPO / "scripts/lib/tunaos_config.py")
+tunaos_config = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(tunaos_config)
 
 
 def font_bytes():
-    if not CACHE.exists():
+    if not CACHE.is_file() or hashlib.sha256(CACHE.read_bytes()).hexdigest() != FONT_SHA256:
         CACHE.parent.mkdir(parents=True, exist_ok=True)
         with urllib.request.urlopen(FONT_URL, timeout=60) as r:
-            CACHE.write_bytes(r.read())
+            data = r.read()
+        if hashlib.sha256(data).hexdigest() != FONT_SHA256:
+            raise SystemExit(f"Baloo 2 download does not match the pinned SHA-256: {FONT_URL}")
+        CACHE.write_bytes(data)
     tt = TTFont(str(CACHE))
     inst = instantiateVariableFont(tt, {"wght": WEIGHT})
     buf = io.BytesIO()
@@ -82,8 +93,8 @@ def text_path(data, text):
     return pen.getCommands(), x * scale, os2.sCapHeight * scale
 
 
-def emoji_body(vid):
-    raw = (LOGOS / f"{vid}.svg").read_text()
+def emoji_body(vid, logos):
+    raw = (logos / f"{vid}.svg").read_text()
     raw = re.sub(r"<\?xml[^>]*>|<!--[\s\S]*?-->", "", raw)
     vb = re.search(r'viewBox="([^"]+)"', raw).group(1)
     body = re.sub(r"^[\s\S]*?<svg\b[^>]*>", "", raw, count=1)
@@ -95,10 +106,9 @@ def emoji_body(vid):
     return vb, body
 
 
-def lettermark(data, vid, accent, colour):
-    name = DISPLAY.get(vid, vid.capitalize())
+def lettermark(data, vid, name, accent, colour, logos):
     d, advance, cap = text_path(data, name)
-    vb, body = emoji_body(vid)
+    vb, body = emoji_body(vid, logos)
     mark = cap * 1.55  # the emoji stands a little taller than the capitals
     gap = SIZE * 0.18
     pad = SIZE * 0.08
@@ -120,14 +130,18 @@ def lettermark(data, vid, accent, colour):
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--output", type=Path, default=OUT)
+    parser.add_argument("--logos", type=Path, default=LOGOS, help="variant marks to embed")
+    args = parser.parse_args()
+    config = tunaos_config.load(REPO / "tunaos.toml")
+    names = tunaos_config.display_names(config)
     data = font_bytes()
-    OUT.mkdir(parents=True, exist_ok=True)
-    for row in TSV.read_text().splitlines():
-        if not row or row.startswith("#"):
-            continue
-        vid, accent = row.split("\t")[:2]
-        (OUT / f"{vid}.svg").write_text(lettermark(data, vid, accent, LIGHT))
-        (OUT / f"{vid}-dark.svg").write_text(lettermark(data, vid, accent, DARK))
+    args.output.mkdir(parents=True, exist_ok=True)
+    for vid, variant in config["variants"].items():
+        accent = variant["branding"]["accent"]
+        (args.output / f"{vid}.svg").write_text(lettermark(data, vid, names[vid], accent, LIGHT, args.logos))
+        (args.output / f"{vid}-dark.svg").write_text(lettermark(data, vid, names[vid], accent, DARK, args.logos))
         print(f"{vid}")
 
 

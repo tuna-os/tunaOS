@@ -279,9 +279,20 @@ python3 scripts/config.py generate-variant-identity
 
 `just check` fails if `build_scripts/lib/identity.env` or
 `build_scripts/lib/variant-identity.tsv` disagrees with `tunaos.toml`. Each
-variant's name (Yellowfin, Marlin) comes from its id in `tunaos.toml`. Logos,
-wallpapers, the boot splash and the installer's own name still come from the
-image files under `system_files/` (#3668).
+variant's name (Yellowfin, Marlin) comes from its id, or its `publish_name`.
+
+The variant's mark, lettermark and fastfetch letters follow its `emoji`, name
+and `branding.accent`. After you change those, regenerate the artwork:
+
+```bash
+python3 -m pip install -r requirements-branding.txt
+python3 scripts/branding/check-artwork.py --write
+```
+
+A new emoji needs its drawing: copy its file from Noto Emoji's `svg/` folder to
+`scripts/branding/emoji/`. CI fails if the committed artwork does not match
+`tunaos.toml`. Wallpapers, the boot splash and the installer's own name still
+come from the image files under `system_files/` (#3668).
 
 For GNOME defaults, create a gschema override:
 
