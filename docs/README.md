@@ -17,6 +17,7 @@ user-facing site:
 
 | Doc | What it covers |
 |-----|----------------|
+| [BETA-RELEASE-READINESS.md](BETA-RELEASE-READINESS.md) | BETA product release gates, owners, audit and consumer documentation handoff (#2935) |
 | [AGENT_GUIDE.md](AGENT_GUIDE.md) | Repo architecture: variants, flavors, build stages, key files |
 | [HUMMINGBIRD.md](HUMMINGBIRD.md) | Fedora Hummingbird variant architecture, rolling release model, and package snapshot state |
 | [architecture/reusable-build-image-decomposition.md](architecture/reusable-build-image-decomposition.md) | Architectural plan for decomposing reusable-build-image.yml monolith |
