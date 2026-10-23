@@ -67,6 +67,7 @@ user-facing site:
 | [FEDORA45-RELEASE-OUTREACH.md](FEDORA45-RELEASE-OUTREACH.md) | Fedora release-window positioning, shared adopter call, showcase evidence, and media notes (#3089) |
 | [FEDORA-OUTREACH-READINESS.md](FEDORA-OUTREACH-READINESS.md) | Bonito completeness evidence and fedora-desktop outreach handoff (#3001) |
 | [ADOPTION-OUTREACH-STATUS.md](ADOPTION-OUTREACH-STATUS.md) | Evidence ledger for DistroWatch, CNCF, and adopter outreach |
+| [outreach/Q4-PRODUCTION-PROSPECTS.md](outreach/Q4-PRODUCTION-PROSPECTS.md) | Five proposed contacts, evaluation requests, and follow-up dates for #3146 |
 | [PANTHEON-FEEDBACK-LOOP.md](PANTHEON-FEEDBACK-LOOP.md) | How Gurnard's Pantheon packaging findings get back to elementary (#1469) |
 | [SNAPDRAGON.md](SNAPDRAGON.md) | Copilot-PC support boundary, boot prerequisites, NPU evidence, test reports and prepared Discussion #93 reply |
 | [SNAPDRAGON-X13S-OUTREACH.md](SNAPDRAGON-X13S-OUTREACH.md) | Draft plan for reaching the Snapdragon X13s Linux community |
