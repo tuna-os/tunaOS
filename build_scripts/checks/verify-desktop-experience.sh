@@ -27,14 +27,14 @@ emit_fail_on_early_exit() {
 		# their failure actionable in a serial-only Gate: without this, the
 		# harness only gets `early_exit rc=1` and cannot distinguish a missing
 		# session, portal, keyring, or display-manager unit.
-	local line="${err_line:-${BASH_LINENO[0]:-unknown}}"
-	local command="${err_command:-${BASH_COMMAND:-unknown}}"
-	local stack="" i
-	for i in "${!BASH_LINENO[@]}"; do
-		stack+=" ${BASH_SOURCE[$i]:-?}:${BASH_LINENO[$i]:-?}:${FUNCNAME[$((i + 1))]:-main}"
-	done
-	printf 'TUNAOS_DESKTOP_CONTRACT_FAIL desktop=%s reason=early_exit rc=%s line=%s command=%q stack=%s\n' \
-		"${desktop}" "${rc}" "${line}" "${command}" "${stack:-none}" | tee /dev/ttyS0 2>/dev/null || true
+		local line="${err_line:-${BASH_LINENO[0]:-unknown}}"
+		local command="${err_command:-${BASH_COMMAND:-unknown}}"
+		local stack="" i
+		for i in "${!BASH_LINENO[@]}"; do
+			stack+=" ${BASH_SOURCE[$i]:-?}:${BASH_LINENO[$i]:-?}:${FUNCNAME[$((i + 1))]:-main}"
+		done
+		printf 'TUNAOS_DESKTOP_CONTRACT_FAIL desktop=%s reason=early_exit rc=%s line=%s command=%q stack=%s\n' \
+			"${desktop}" "${rc}" "${line}" "${command}" "${stack:-none}" | tee /dev/ttyS0 2>/dev/null || true
 	fi
 }
 trap 'err_line="${BASH_LINENO[0]:-unknown}"; err_command="${BASH_COMMAND:-unknown}"' ERR
