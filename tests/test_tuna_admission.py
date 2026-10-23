@@ -147,6 +147,16 @@ def test_tuna_package_signatures_cannot_be_silently_disabled():
     assert "install-desktop.sh tuna" in stage
     assert "RUN bootc container lint" in stage
 
+def test_hummingbird_network_repo_requires_rpm_signature():
+    base_packages = (ROOT / "build_scripts/10-base-packages.sh").read_text()
+    repo = base_packages.split(
+        "cat >/etc/yum.repos.d/tunaos-hummingbird.repo <<'REPO'\n", 1
+    )[1].split("\nREPO", 1)[0]
+    assert "baseurl=https://repo.tunaos.org/hummingbird/20251124-$basearch/" in repo
+    assert "gpgcheck=1" in repo
+    assert "gpgkey=https://repo.tunaos.org/public.gpg" in repo
+    assert "gpgcheck=0" not in repo
+
 
 def test_tuna_contract_is_a_known_desktop_with_session_and_pam_requirements():
     script = (ROOT / "build_scripts/checks/verify-desktop-experience.sh").read_text()
