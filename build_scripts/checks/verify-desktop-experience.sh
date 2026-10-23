@@ -874,8 +874,81 @@ if [[ "$mode" == --runtime ]]; then
 	elif [[ ! "$dm_id" =~ $dm_pattern ]]; then
 		report_fail "dm_mismatch dm=${dm_id:-unknown} expected=${dm_pattern}"
 	fi
+	session_user="unknown"
+	session_class="unknown"
+	session_type="unknown"
+	session_process="unknown"
+	if [[ "$(cat /sys/class/dmi/id/product_version 2>/dev/null || true)" == "tunaos-offline-gui-qualification" ]]; then
+		case "$desktop" in
+		gnome) session_processes="gnome-shell" ;;
+		kde) session_processes="kwin_wayland plasmashell" ;;
+		cosmic) session_processes="cosmic-comp" ;;
+		niri) session_processes="niri" ;;
+		xfce) session_processes="xfwm4 xfwl4 labwc wayfire" ;;
+		pantheon) session_processes="gala" ;;
+		tuna) session_processes="tuna-compositor tuna-shell-host" ;;
+		*) session_processes="" ;;
+		esac
+		session_deadline=$((SECONDS + 210))
+		while ((SECONDS < session_deadline)); do
+			while read -r session_id _; do
+				[[ -n "$session_id" ]] || continue
+				session_details="$(loginctl show-session "$session_id" \
+					-p Active -p Class -p Type -p Name 2>/dev/null || true)"
+				active="$(sed -n 's/^Active=//p' <<<"$session_details")"
+				class="$(sed -n 's/^Class=//p' <<<"$session_details")"
+				type="$(sed -n 's/^Type=//p' <<<"$session_details")"
+				user="$(sed -n 's/^Name=//p' <<<"$session_details")"
+				if [[ "$active" != yes || "$class" != user || ! "$type" =~ ^(wayland|x11)$ || -z "$user" ]]; then
+					continue
+				fi
+				for process in $session_processes; do
+					if pgrep -u "$user" -x "$process" >/dev/null 2>&1; then
+						session_user="$user"
+						session_class="$class"
+						session_type="$type"
+						session_process="$process"
+						break 3
+					fi
+				done
+			done < <(loginctl list-sessions --no-legend 2>/dev/null || true)
+			sleep 2
+		done
+		if [[ "$session_class" != user ]]; then
+			report_fail "installed_desktop_session_missing expected=${session_processes// /,}"
+		fi
+	fi
 	if [[ "$ok" -eq 1 ]]; then
-		echo "TUNAOS_DESKTOP_CONTRACT_OK desktop=$desktop experience=$experience" | tee /dev/ttyS0 2>/dev/null || true
+		# Select imageDigest only below the booted deployment. Staged and
+		# rollback deployments carry the same key and are not this system.
+		source_image_digest="unknown"
+		if command -v bootc >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
+			bootc_status="$(bootc status --json 2>/dev/null ||
+				bootc status --format json 2>/dev/null || true)"
+			parsed_digest="$(python3 -c '
+import json, re, sys
+try:
+    booted = json.load(sys.stdin).get("status", {}).get("booted", {})
+except (AttributeError, json.JSONDecodeError):
+    raise SystemExit(0)
+stack = [booted]
+found = set()
+while stack:
+    value = stack.pop()
+    if isinstance(value, dict):
+        digest = value.get("imageDigest")
+        if isinstance(digest, str) and re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
+            found.add(digest)
+        stack.extend(value.values())
+    elif isinstance(value, list):
+        stack.extend(value)
+if len(found) == 1:
+    print(found.pop())
+' <<<"$bootc_status" 2>/dev/null || true)"
+			[[ -n "$parsed_digest" ]] && source_image_digest="$parsed_digest"
+		fi
+		echo "TUNAOS_DESKTOP_CONTRACT_OK desktop=$desktop experience=$experience source_image_digest=$source_image_digest session_user=$session_user session_class=$session_class session_type=$session_type session_process=$session_process" |
+			tee /dev/ttyS0 2>/dev/null || true
 	fi
 	# Always emit a final summary marker (OK or FAIL) so the gate has a
 	# deterministic signal regardless of which individual reason fired.

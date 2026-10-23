@@ -41,7 +41,9 @@ MAGICK_STUB = r"""#!/bin/bash
 #   magick in.png ... %[fx:standard_deviation] ... -> MAGICK_STDDEV to stdout
 #   magick in out                                 -> copy/convert (any bytes ok)
 if [ "$1" = "compare" ]; then
-  echo "${MAGICK_AE:-0}" >&2
+  nn=$(printf '%s\n' "$@" | sed -n 's/.*-\([0-9][0-9]\)\.png$/\1/p' | tail -1)
+  var="MAGICK_AE_${nn}"
+  echo "${!var:-${MAGICK_AE:-0}}" >&2
   exit 0
 fi
 for a in "$@"; do
@@ -133,7 +135,7 @@ class FakeQEMUMonitor:
 
 def run_walkthrough(tess, magick_ae=5000, magick_stddev=0.5, steps="2",
                     flavor="de", strict=False, timeout=120, tess_neg=None,
-                    spec=None):
+                    spec=None, qualification=None, passphrase=None):
     """Run the script against the fake monitor + stubs.
 
     *tess* maps frame number (str) -> OCR text. *tess_neg* is the same for the
@@ -157,18 +159,29 @@ def run_walkthrough(tess, magick_ae=5000, magick_stddev=0.5, steps="2",
 
         env = dict(os.environ)
         env["PATH"] = str(fakebin) + os.pathsep + env.get("PATH", "")
-        env["MAGICK_AE"] = str(magick_ae)
+        if isinstance(magick_ae, dict):
+            env["MAGICK_AE"] = "5000"
+            for k, v in magick_ae.items():
+                env[f"MAGICK_AE_{k}"] = str(v)
+        else:
+            env["MAGICK_AE"] = str(magick_ae)
         env["MAGICK_STDDEV"] = str(magick_stddev)
         for k, v in tess.items():
             env[f"TESS_{k}"] = v
         for k, v in (tess_neg or {}).items():
             env[f"TESSNEG_{k}"] = v
+        if qualification is not None:
+            env["TUNAOS_QUALIFICATION_POLL"] = "0"
+        if passphrase is not None:
+            env["TUNAOS_QUALIFICATION_PASSPHRASE"] = passphrase
 
         cmd = [sys.executable, str(SCRIPT), sock, str(outdir), steps, flavor]
         if strict:
             cmd.append("--strict")
         if spec is not None:
             cmd.append(f"--spec={spec}")
+        if qualification is not None:
+            cmd.append(f"--qualification={qualification}")
         proc = subprocess.run(cmd, capture_output=True, text=True, env=env,
                               timeout=timeout)
 
@@ -200,6 +213,221 @@ class TestRendersAdvancesScreens:
         assert summary["screens"]["disk"] is True
         assert "ok - de: reached 'welcome' screen" in proc.stdout
         assert "ok - de: reached 'disk' screen" in proc.stdout
+
+    @pytest.mark.parametrize("profile", ["plain", "encrypted"])
+    def test_qualification_requires_every_screen_in_order_and_completion(self, profile):
+        proc, summary = run_walkthrough(
+            {
+                "00": "Welcome to TunaOS installer. Get Started",
+                "01": "Select Target Disk",
+                "02": "Disk Encryption. Enter passphrase",
+                "03": "Confirm Installation. Ready to install",
+                "04": "Installation Progress. Writing image",
+                "05": "Installation complete. Remove the installation media",
+            },
+            steps="8",
+            qualification=profile,
+        )
+        assert proc.returncode == 0, proc.stdout + proc.stderr
+        assert summary["qualification_profile"] == profile
+        assert summary["qualification_complete"] is True
+        assert list(k for k, reached in summary["screens"].items() if reached) == [
+            "welcome", "disk", "encryption", "summary", "install", "done"
+        ]
+        if profile == "encrypted":
+            assert summary["encryption_configured"] is True
+            assert any(command == "sendkey t" for command in run_walkthrough.last_commands)
+
+    @pytest.mark.parametrize("flavor", ["gnome", "gnome-hwe", "pantheon"])
+    def test_gnome_frontend_encrypted_profiles_preserve_default_enabled_switch(
+        self, flavor
+    ):
+        proc, summary = run_walkthrough(
+            {
+                "00": "Welcome to TunaOS installer. Get Started",
+                "01": "Select Target Disk",
+                "02": "Disk Encryption. Enter passphrase",
+                "03": "Confirm Installation. Ready to install",
+                "04": "Installation Progress. Writing image",
+                "05": "Installation complete. Remove the installation media",
+            },
+            steps="8",
+            flavor=flavor,
+            qualification="encrypted",
+        )
+        assert proc.returncode == 0, proc.stdout + proc.stderr
+        assert summary["encryption_configured"] is True
+        assert "sendkey spc" not in run_walkthrough.last_commands
+
+    def test_gnome_plain_profile_disables_default_enabled_switch_once(self):
+        proc, summary = run_walkthrough(
+            {
+                "00": "Welcome to TunaOS installer. Get Started",
+                "01": "Select Target Disk",
+                "02": "Disk Encryption. Enter passphrase",
+                "03": "Confirm Installation. Ready to install",
+                "04": "Installation Progress. Writing image",
+                "05": "Installation complete. Remove the installation media",
+            },
+            steps="8",
+            flavor="gnome-hwe",
+            qualification="plain",
+        )
+        assert proc.returncode == 0, proc.stdout + proc.stderr
+        commands = run_walkthrough.last_commands
+        assert commands.count("sendkey spc") == 1
+        assert commands[commands.index("sendkey spc") + 1 :].count("sendkey ret") >= 1
+        assert summary["qualification_complete"] is True
+
+    def test_forked_frontend_selects_luks_passphrase_before_typing(self):
+        proc, summary = run_walkthrough(
+            {
+                "00": "Welcome to TunaOS installer. Get Started",
+                "01": "Select Target Disk",
+                "02": "Disk Encryption. Enter passphrase",
+                "03": "Confirm Installation. Ready to install",
+                "04": "Installation Progress. Writing image",
+                "05": "Installation complete. Remove the installation media",
+            },
+            steps="8",
+            flavor="xfce-hwe",
+            qualification="encrypted",
+        )
+        assert proc.returncode == 0, proc.stdout + proc.stderr
+        commands = run_walkthrough.last_commands
+        start = commands.index("sendkey home")
+        assert commands[start : start + 5] == [
+            "sendkey home",
+            "sendkey down",
+            "sendkey spc",
+            "sendkey tab",
+            "sendkey t",
+        ]
+        assert summary["qualification_complete"] is True
+
+    def test_qualification_contextually_recognizes_gnome_progress(self):
+        proc, summary = run_walkthrough(
+            {
+                "00": "Welcome to TunaOS installer. Get Started",
+                "01": "Select Target Disk",
+                "02": "Disk Encryption. Enter passphrase",
+                "03": "Confirm Installation. Ready to install",
+                # The GNOME page deliberately has no safe global OCR keyword.
+                "04": "Installing TunaOS. 0:00 elapsed",
+                "05": "Installation complete. Remove the installation media",
+            },
+            steps="8",
+            qualification="plain",
+        )
+        assert proc.returncode == 0, proc.stdout + proc.stderr
+        assert summary["screens"]["install"] is True
+
+    def test_qualification_never_escalates_input_during_static_install_progress(self):
+        frames = {
+            "00": "Welcome to TunaOS installer. Get Started",
+            "01": "Select Target Disk",
+            "02": "Disk Encryption. Enter passphrase",
+            "03": "Confirm Installation. Ready to install",
+            "04": "Installation Progress. Writing image",
+            "15": "Installation complete. Remove the installation media",
+        }
+        frames.update({
+            f"{index:02d}": "Installation Progress. Writing image"
+            for index in range(5, 15)
+        })
+        proc, summary = run_walkthrough(
+            frames,
+            magick_ae={f"{index:02d}": 0 for index in range(5, 15)},
+            steps="16",
+            qualification="plain",
+        )
+        assert proc.returncode == 0, proc.stdout + proc.stderr
+        assert summary["qualification_complete"] is True
+        # One Escape is the intentional pre-walkthrough shell-overview probe.
+        # Static backend frames must not add another one.
+        assert run_walkthrough.last_commands.count("sendkey esc") == 1
+        assert "continuing observation without input" in proc.stdout
+
+    def test_qualification_rejects_summary_to_done_without_install_state(self):
+        proc, summary = run_walkthrough(
+            {
+                "00": "Welcome to TunaOS installer. Get Started",
+                "01": "Select Target Disk",
+                "02": "Disk Encryption. Enter passphrase",
+                "03": "Confirm Installation. Ready to install",
+                "04": "Installation complete. Remove the installation media",
+            },
+            steps="6",
+            qualification="plain",
+        )
+        assert proc.returncode == 1
+        assert summary["screens"]["install"] is False
+        assert "not ok - de: reached 'install' screen" in proc.stdout
+    def test_qualification_rejects_unrecognized_changed_frame_as_progress(self):
+        proc, summary = run_walkthrough(
+            {
+                "00": "Welcome to TunaOS installer. Get Started",
+                "01": "Select Target Disk",
+                "02": "Disk Encryption. Enter passphrase",
+                "03": "Confirm Installation. Ready to install",
+                "04": "Reviewing unrelated release notes",
+                "05": "Installation complete. Remove the installation media",
+            },
+            steps="8",
+            qualification="plain",
+        )
+        assert proc.returncode == 1
+        assert summary["screens"]["install"] is False
+
+    def test_encrypted_qualification_preserves_uppercase_passphrase(self):
+        proc, summary = run_walkthrough(
+            {
+                "00": "Welcome to TunaOS installer. Get Started",
+                "01": "Select Target Disk",
+                "02": "Disk Encryption. Enter passphrase",
+                "03": "Confirm Installation. Ready to install",
+                "04": "Installation Progress. Writing image",
+                "05": "Installation complete. Remove the installation media",
+            },
+            steps="8",
+            qualification="encrypted",
+            passphrase="Test123",
+        )
+        assert proc.returncode == 0, proc.stdout + proc.stderr
+        assert summary["qualification_complete"] is True
+        assert "sendkey shift-t" in run_walkthrough.last_commands
+
+
+    def test_encrypted_qualification_rejects_unsupported_passphrase_characters(self):
+        proc, summary = run_walkthrough(
+            {
+                "00": "Welcome to TunaOS installer. Get Started",
+                "01": "Select Target Disk",
+                "02": "Disk Encryption. Enter passphrase",
+            },
+            steps="4",
+            qualification="encrypted",
+            passphrase="Bad!",
+        )
+        assert proc.returncode != 0
+        assert summary is None
+        assert "unsupported qualification input character: '!'" in proc.stderr
+
+    def test_qualification_fails_when_optional_walkthrough_screen_is_skipped(self):
+        proc, summary = run_walkthrough(
+            {
+                "00": "Welcome to TunaOS installer. Get Started",
+                "01": "Select Target Disk",
+                "02": "Confirm Installation. Ready to install",
+                "03": "Installation Progress. Writing image",
+                "04": "Installation complete. Remove the installation media",
+            },
+            steps="6",
+            qualification="plain",
+        )
+        assert proc.returncode == 1
+        assert summary["screens"]["encryption"] is False
+        assert "not ok - de: reached 'encryption' screen" in proc.stdout
 
     def test_prose_on_welcome_does_not_credit_later_screens(self):
         # The positional fix: welcome prose that mentions disk keywords must

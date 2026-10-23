@@ -98,6 +98,46 @@ Test outputs are uploaded as GitHub Actions artifacts:
 - `screenshot.png` — Desktop screenshot via QEMU monitor
 - `serial.log` — Full boot serial console output
 
+
+### Strict offline GUI qualification
+
+`.github/workflows/iso-builder-parity.yml` runs two installations for each CI
+and browser-built ISO on hosted QEMU runners. Both runs use the ISO's bundled
+graphical installer and a virtio display in software. The `plain` and `encrypted`
+profiles use separate fresh 32 GiB disks, no guest NIC
+or vsock, and no host-provided image or Fisherman binary.
+
+The harness checks that the manifest's `hardware_scope` matches the
+selected QEMU accelerator. It provisions a disposable account in the installed
+disk's mutable `/etc`. It drives the shipped screens for disk unlock and login
+through the QEMU monitor. The requested desktop's compositor must run as that
+user. The immutable deployment remains unchanged, and each disk boots with the
+ISO detached.
+
+`experience-manifest.json` is an input declaration, not a test result.
+`scripts/verify-experience-manifest.py` validates these fields:
+
+- target identity: variant, flavor, platform, architecture, and hardware scope;
+- immutable source, base, overlay, and ISO SHA-256 digests;
+- full installer, builder, and engine Git revisions;
+- browser identity for browser builds and an explicit CI build path;
+- the CPU, memory, and disk resource profile.
+
+After both runs, the validator combines the two result files into
+`qualification-receipt.json`. Each result carries the validated ISO digest and
+the SHA-256 digest of the manifest used by that run. The validator rejects a
+result if either identity differs from the declaration.
+A valid receipt also proves these facts:
+
+- The GUI showed every wizard screen in order and completed the install.
+- The deployment root has the encryption state for its profile.
+- The installed system passed its desktop contract.
+- The source digest from the booted system matches the manifest.
+
+The receipt also has the time for each leg. The workflow uploads only JSON,
+logs, PNG/PPM screenshots, and text diagnostics. It does not upload input ISOs,
+VM disks, or UEFI variable files.
+
 ## Test Files
 
 | File | Purpose |

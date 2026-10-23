@@ -1685,6 +1685,15 @@ capture first, then sends the graceful powerdown itself before the kill.
 
 **Fix:** The pinned download moved into shared `build_scripts/install-uupd.sh` (same `image-versions.yaml` pin; stages the binary plus `uupd.service`, `uupd.timer`, `uupd-manual.service` before install; smoke with `UUPD_CONTEXT="$PWD" UUPD_ROOT="$scratch"` into a disposable root). The apt and dnf branches of `10-base-packages.sh` delegate to it unchanged in behavior, and `Containerfile.arch` carries the pin file and runs the installer before `40-services.sh`. The context exact-set test now treats `install-uupd.sh` as a consumer of the pin file.
 
+### Offline qualification rejects a valid test fixture (#3399)
+
+**Symptom:** Bats reports `MODE: unbound variable` in the helper for VM shutdown.
+
+**Cause:** The test extracted that helper but did not set the mode. The new offline branch reads this value to select the monitor.
+
+**Fix:** Set the mode in the driver and test both paths. Assert that offline shutdown never calls SSH. Check each QEMU launch for its serial log and disk boot order.
+
+**Disk check:** A LUKS partition alone does not prove root encryption. Test a plaintext deployment beside an unrelated LUKS partition; the encrypted profile must reject it before account writes.
 ## Fork source pin changes after tests
 
 Symptom: the fork review tool reports a catalog pin mismatch after Python tests.

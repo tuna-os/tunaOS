@@ -142,6 +142,7 @@ artifacts.
 |---|---|---|
 | `--luks`, `--ssh-only`, `--kickstart`, `--app-launch` | SSH | **dev ISOs only** |
 | `--published` | QEMU monitor (`sendkey` + `screendump` + OCR) | **any ISO, including published** |
+| `--qualification plain\|encrypted --manifest FILE` | QEMU monitor + serial console; no guest network device | **offline qualification candidates** |
 
 Production images ship sshd disabled (`40-services.sh` turns it off unless
 `ENABLE_SSHD=1`), so every SSH-based mode fails on media a user can download
@@ -172,6 +173,35 @@ The harness names the image from the ISO FILENAME (`<variant>-<flavor>-…`).
 Keep that shape when you rename a download. Otherwise the harness probes
 `ghcr.io/tuna-os/published:marlin` and fails for a reason that has nothing to
 do with the ISO.
+
+Strict qualification is intentionally separate from `--published`. Run both
+profiles into fresh output directories:
+
+```bash
+sudo -E ./scripts/iso-e2e.sh ./yellowfin-gnome.iso \
+  --qualification plain --manifest experience-manifest.json \
+  --output out/plain --memory 8192 --cpus 4
+sudo -E ./scripts/iso-e2e.sh ./yellowfin-gnome.iso \
+  --qualification encrypted --manifest experience-manifest.json \
+  --output out/encrypted --memory 8192 --cpus 4
+python3 scripts/verify-experience-manifest.py experience-manifest.json \
+  --result out/plain/qualification-result.json \
+  --result out/encrypted/qualification-result.json \
+  --write-receipt out/qualification-receipt.json
+```
+
+The mode refuses `FISHERMAN_OVERRIDE` and `TBOX_E2E_IMAGE`.
+It gives the live guest one new target disk and no NIC or vsock.
+It checks all six screens in order and needs the manifest's
+`hardware_scope` to match the selected QEMU accelerator.
+It also checks the encryption state on the stopped disk.
+An encrypted profile must store its deployment root inside the unlocked LUKS volume.
+An unrelated encrypted partition does not meet this rule.
+
+The installed boot has no ISO attached. Its serial contract marker must report
+the manifest's exact `source_image_digest`. Each result is bound to the
+validated ISO digest and the SHA-256 digest of the manifest used in that run. Receipt artifacts contain JSON, logs, and screenshots only. Never
+upload the input ISO, `*.qcow2`, or UEFI variable files.
 
 ---
 
