@@ -127,6 +127,28 @@ jobs:
           python -m pytest -q tests/test_primary_config.py tests/test_config_parser.py tests/test_package_authoring.py \
             tests/test_package_catalogs.py tests/test_signed_apt.py tests/test_search_base_packages.py
 
+  gnome-summary-ocr:
+    name: GNOME summary OCR
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install measured OCR dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            python3-pytest imagemagick=8:6.9.12.98+dfsg1-5.2build2 \
+            imagemagick-6.q16=8:6.9.12.98+dfsg1-5.2build2 \
+            tesseract-ocr=5.3.4-1build5 libtesseract5=5.3.4-1build5 \
+            tesseract-ocr-eng=1:4.1.0-2 tesseract-ocr-osd=1:4.1.0-2
+          dpkg-query -W imagemagick imagemagick-6.q16 tesseract-ocr libtesseract5 tesseract-ocr-eng tesseract-ocr-osd
+      - name: Verify retained summary pixels without optional skips
+        run: python3 -m pytest -q tests/ocr/gnome_summary_capture.py
+
   unit-tests:
     name: Unit Tests
     runs-on: ubuntu-latest

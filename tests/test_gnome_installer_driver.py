@@ -56,6 +56,7 @@ class FakeScreen:
     width, height = 1280, 800
     def __init__(self, state, mode='plain', encrypted=False, tpm=False, valid=True):
         self.state = state
+        self.mode, self.valid = mode, valid
         self.encrypted, self.tpm = encrypted, tpm
         self.lines = ['Welcome to TunaOS', 'Install TunaOS', 'Installs to your internal disk.',
                       'Power Off', 'Strong passphrase'] if state != 'summary' else [
@@ -76,6 +77,16 @@ class FakeScreen:
         if self.state == 'summary' and label not in self.lines and label != 'Install':
             raise driver.Unverified('missing summary label')
         return (100, 40, 200, 70) if label == 'Next' else (100, 200, 300, 230)
+    def summary_cards(self):
+        if not self.valid:
+            raise driver.Unverified('missing summary cards')
+        return {
+            'Disk': [('Disk', (14, 17, 102, 52)),
+                     ('/dev/vda (64 GiB)', (13, 78, 313, 111))],
+            'Encryption': [('Encryption', (15, 17, 234, 61)),
+                           ('No encryption' if self.mode == 'plain' else 'Passphrase',
+                            (15, 81, 255, 117))],
+        }
     def switch(self, label):
         return self.encrypted if label == 'Encrypt this disk' else self.tpm
     def enabled(self, label):
@@ -473,3 +484,139 @@ def test_unowned_or_non_socket_endpoint_rejected_before_connect(monkeypatch, tmp
     monkeypatch.setattr(driver.socket, 'socket', forbidden)
     with pytest.raises(driver.Unverified):
         driver.click_unix(path,420,490,1280,800)
+
+
+SUMMARY = json.loads((ROOT / 'tests/fixtures/gnome-installer/summary39891435048.json').read_text())
+
+
+def captured_rows(words, strict=True):
+    import csv
+    import io
+    fields = ('level', 'page_num', 'block_num', 'par_num', 'line_num',
+              'word_num', 'left', 'top', 'width', 'height', 'conf', 'text')
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fields, delimiter='\t', extrasaction='ignore')
+    writer.writeheader()
+    writer.writerows(words)
+    return driver.ocr_rows(output.getvalue(), strict=strict)
+
+
+def measured_cards(mode, key='gray_crop'):
+    return {item['region'].title(): captured_rows(item['words'])[1]
+            for item in SUMMARY[key] if item['mode'] == mode}
+
+
+@pytest.mark.parametrize('mode', ['plain', 'luks'])
+def test_retained_summary_ocr_exact_target_and_mode(mode):
+    cards = measured_cards(mode)
+    driver.verify_summary_cards(cards, mode)
+    with pytest.raises(driver.Unverified):
+        driver.verify_summary_cards(measured_cards(mode, 'threshold_crop'), mode)
+    original = next(item for item in SUMMARY['full_frame'] if item['mode'] == mode)
+    screen = object.__new__(driver.Screen)
+    screen.words, screen.rows = captured_rows(original['words'])
+    with pytest.raises(driver.Unverified):
+        screen.box('Disk')  # Captured icon token shares the title's OCR line.
+
+
+@pytest.mark.parametrize('mode', ['plain', 'luks'])
+@pytest.mark.parametrize('change', [
+    'wrong-device', 'wrong-capacity', 'wrong-unit', 'device-suffix',
+    'wrong-encryption', 'duplicate-row', 'wrong-row', 'extra-token',
+    'unassociated-value', 'out-of-bounds', 'wrong-title',
+])
+def test_summary_card_negatives_fail_closed(mode, change):
+    cards = measured_cards(mode)
+    disk, encryption = cards['Disk'], cards['Encryption']
+    text, box = disk[1]
+    if change == 'wrong-device':
+        disk[1] = (text.replace('/dev/vda', '/dev/vdb'), box)
+    elif change == 'wrong-capacity':
+        disk[1] = (text.replace('64', '640'), box)
+    elif change == 'wrong-unit':
+        disk[1] = (text.replace('GiB', 'GB'), box)
+    elif change == 'device-suffix':
+        disk[1] = (text.replace('/dev/vda', '/dev/vda1'), box)
+    elif change == 'wrong-encryption':
+        encryption[1] = ('Passphrase' if mode == 'plain' else 'No encryption', encryption[1][1])
+    elif change == 'duplicate-row':
+        disk.append(disk[1])
+    elif change == 'wrong-row':
+        disk.reverse()
+    elif change == 'extra-token':
+        disk[1] = (text + ' /dev/vdb', box)
+    elif change == 'unassociated-value':
+        disk[1] = (text, (200, 78, 500, 111))
+    elif change == 'out-of-bounds':
+        disk[1] = (text, (13, 78, 313, 136))
+    elif change == 'wrong-title':
+        disk[0] = ('Other Disk', disk[0][1])
+    with pytest.raises(driver.Unverified):
+        driver.verify_summary_cards(cards, mode)
+
+
+@pytest.mark.parametrize('mode', ['plain', 'luks'])
+def test_summary_warning_and_full_frame_mode_must_agree(mode):
+    screen = FakeScreen('summary', mode=mode)
+    driver.verify_summary(screen, mode)
+    for lines in (
+        [line.replace('/dev/vda', '/dev/vdb') for line in screen.lines],
+        screen.lines + ['Everything on /dev/vdb will be erased. This cannot be undone.'],
+        [line for line in screen.lines if line not in ('No encryption', 'Passphrase')],
+    ):
+        changed = FakeScreen('summary', mode=mode)
+        changed.lines = lines
+        with pytest.raises(driver.Unverified):
+            driver.verify_summary(changed, mode)
+
+
+@pytest.mark.parametrize('change', [
+    'missing-Disk', 'duplicate-Disk', 'misplaced-Disk',
+    'missing-Encryption', 'duplicate-Encryption', 'misplaced-Encryption',
+    'missing-heading', 'duplicate-heading', 'misplaced-heading', 'resolution', 'state',
+])
+def test_summary_anchors_reject_before_crop(monkeypatch, change):
+    screen = object.__new__(driver.Screen)
+    screen.width, screen.height, screen.state = 1280, 800, 'summary'
+    source = SUMMARY['full_frame'][0]
+    screen.words, screen.rows = captured_rows(source['words'])
+    screen.rows.append(('Confirm installation', (510, 277, 770, 304)))
+    if change.endswith('-Disk') or change.endswith('-Encryption'):
+        operation, label = change.split('-')
+        if operation == 'missing':
+            screen.words = [word for word in screen.words if word['text'] != label]
+        elif operation == 'duplicate':
+            screen.words.append(next(word.copy() for word in screen.words if word['text'] == label))
+        else:
+            next(word for word in screen.words if word['text'] == label)['left'] = '500'
+    elif change == 'missing-heading':
+        screen.rows = [row for row in screen.rows if row[0] != 'Confirm installation']
+    elif change == 'duplicate-heading':
+        screen.rows.append(screen.rows[-1])
+    elif change == 'misplaced-heading':
+        screen.rows[-1] = ('Confirm installation', (510, 100, 770, 127))
+    elif change == 'resolution':
+        screen.width = 1920
+    else:
+        screen.state = 'overview'
+    monkeypatch.setattr(driver.subprocess, 'run',
+                        lambda *a, **k: pytest.fail('unverified layout must not invoke crop OCR'))
+    with pytest.raises(driver.Unverified):
+        screen.summary_cards()
+
+
+def test_summary_ocr_uncertain_word_is_not_silently_dropped():
+    word = dict(SUMMARY['gray_crop'][0]['words'][0], conf=39)
+    with pytest.raises(driver.Unverified):
+        captured_rows([word])
+
+
+def test_retained_image_regression_is_explicit_ci_job():
+    workflow = (ROOT / '.github/workflows/test.yml').read_text()
+    job = workflow.split('  gnome-summary-ocr:', 1)[1].split('  unit-tests:', 1)[0]
+    assert 'ubuntu-24.04' in job
+    assert 'tesseract-ocr=5.3.4-1build5' in job
+    assert 'imagemagick=8:6.9.12.98+dfsg1-5.2build2' in job
+    assert 'python3 -m pytest -q tests/ocr/gnome_summary_capture.py' in job
+    assert 'continue-on-error' not in job
+    assert 'if:' not in job

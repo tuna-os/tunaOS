@@ -83,6 +83,32 @@ def welcome_action(screen):
     return label
 
 
+
+def ocr_rows(tsv, strict=False):
+    """Keep word geometry separately from line grouping; never infer a device."""
+    if len(tsv) > 1024 * 1024:
+        raise Unverified('OCR output exceeded bound')
+    groups, kept = {}, []
+    for word in csv.DictReader(io.StringIO(tsv), delimiter='\t'):
+        if not word.get('text', '').strip():
+            continue
+        confidence = float(word['conf'])
+        if not 40 <= confidence <= 100:
+            if strict:
+                raise Unverified('summary crop contains uncertain OCR words')
+            continue
+        kept.append(word)
+        key = tuple(word[k] for k in ('block_num', 'par_num', 'line_num'))
+        groups.setdefault(key, []).append(word)
+    rows = []
+    for words in groups.values():
+        left = min(int(w['left']) for w in words)
+        top = min(int(w['top']) for w in words)
+        right = max(int(w['left']) + int(w['width']) for w in words)
+        bottom = max(int(w['top']) + int(w['height']) for w in words)
+        rows.append((' '.join(w['text'] for w in words), (left, top, right, bottom)))
+    return kept, rows
+
 class Screen:
     def __init__(self, path):
         self.path = Path(path)
@@ -102,20 +128,7 @@ class Screen:
             result = subprocess.run(['tesseract', prepared.name, 'stdout',
                                      '--psm', '11', 'tsv'],
                                     capture_output=True, text=True, timeout=30, check=True)
-        if len(result.stdout) > 1024 * 1024:
-            raise Unverified('OCR output exceeded bound')
-        groups = {}
-        for word in csv.DictReader(io.StringIO(result.stdout), delimiter='\t'):
-            if word.get('text', '').strip() and float(word['conf']) >= 40:
-                key = tuple(word[k] for k in ('block_num', 'par_num', 'line_num'))
-                groups.setdefault(key, []).append(word)
-        self.rows = []
-        for words in groups.values():
-            left = min(int(w['left']) for w in words)
-            top = min(int(w['top']) for w in words)
-            right = max(int(w['left']) + int(w['width']) for w in words)
-            bottom = max(int(w['top']) + int(w['height']) for w in words)
-            self.rows.append((' '.join(w['text'] for w in words), (left, top, right, bottom)))
+        self.words, self.rows = ocr_rows(result.stdout)
         self.lines = [row[0] for row in self.rows]
         self.state = classify(self.lines)
         self._pixels = None
@@ -125,6 +138,45 @@ class Screen:
         if len(boxes) != 1:
             raise Unverified(f'expected one exact control label: {label}; got {len(boxes)}')
         return boxes[0]
+
+
+    def summary_cards(self):
+        """One measured OCR path, anchored to unique full-frame label words.
+
+        The current contract is deliberately limited to the retained 1280x800
+        layout. Unsupported geometry fails closed instead of probing crops.
+        """
+        if (self.width, self.height) != (1280, 800) or self.state != 'summary':
+            raise Unverified('unsupported summary framebuffer or state')
+        heading = self.box('Confirm installation')
+        if not (20 <= heading[3]-heading[1] <= 40
+                and abs((heading[0]+heading[2])/2-640) <= 80
+                and 260 <= heading[1] <= 290):
+            raise Unverified('summary heading does not prove the measured foreground layout')
+        crops = {}
+        for label, expected_y in (('Disk', 341), ('Encryption', 506)):
+            anchors = [word for word in self.words if word['text'] == label]
+            if len(anchors) != 1:
+                raise Unverified('summary label word is absent or ambiguous')
+            anchor = anchors[0]
+            x, y, w, h = (int(anchor[key]) for key in ('left', 'top', 'width', 'height'))
+            if not (abs(x-395) <= 4 and abs(y-expected_y) <= 4
+                    and 10 <= h <= 18 and 20 <= w <= 90):
+                raise Unverified('summary label anchor is outside the measured card layout')
+            crops[label] = f'560x45+{x-5}+{y-6}'
+        cards = {}
+        for label, crop in crops.items():
+            with tempfile.NamedTemporaryFile(suffix='.png') as prepared:
+                # Unlike the full-frame navigation OCR, preserve antialiasing.
+                # The thresholded retained card misreads the device path.
+                subprocess.run(['convert', str(self.path), '-crop', crop, '+repage',
+                                '-resize', '300%', '-colorspace', 'gray', prepared.name],
+                               capture_output=True, timeout=20, check=True)
+                result = subprocess.run(['tesseract', prepared.name, 'stdout',
+                                         '--psm', '6', 'tsv'],
+                                        capture_output=True, text=True, timeout=30, check=True)
+            _, cards[label] = ocr_rows(result.stdout, strict=True)
+        return cards
 
     def rgb(self, x, y):
         if self._pixels is None:
@@ -253,17 +305,41 @@ def click_unix(path, x, y, width, height):
 BUNDLE_DIGEST = 'sha256:04252eaf80ee5675aa37bdb482847c77310efbee058dc63ba161a1d5991f9823'
 
 
+def verify_summary_cards(cards, mode):
+    """Exact label/value association, never a fuzzy path or whole-page match."""
+    if mode not in ('plain', 'luks') or set(cards) != {'Disk', 'Encryption'}:
+        raise Unverified('invalid summary card contract')
+    expected = {'Disk': '/dev/vda (64 GiB)',
+                'Encryption': 'No encryption' if mode == 'plain' else 'Passphrase'}
+    for label, value in expected.items():
+        rows = cards[label]
+        if len(rows) != 2:
+            raise Unverified('summary card has absent or ambiguous rows')
+        title, subtitle = rows
+        if (' '.join(title[0].split()) != label
+                or ' '.join(subtitle[0].split()) != value):
+            raise Unverified('summary card does not exactly match the intended target or encryption')
+        a, b = title[1], subtitle[1]
+        if not (all(len(box) == 4 and 0 <= box[0] < box[2] <= 1680
+                    and 0 <= box[1] < box[3] <= 135 for box in (a, b))
+                and 10 <= a[1] <= 25 and 25 <= a[3]-a[1] <= 50
+                and 70 <= b[1] <= 90 and 25 <= b[3]-b[1] <= 45
+                and 10 <= b[1]-a[3] <= 45 and abs(a[0]-b[0]) <= 8):
+            raise Unverified('summary label/value row association is unverified')
+
+
 def verify_summary(screen, mode):
-    text = '\n'.join(screen.lines).lower()
-    for label in ('Disk', 'Encryption'):
-        screen.box(label)
-    if not re.search(r'/dev/vda\s*\(64(?:[.,]0+)?\s*(?:gib|gb)', text):
-        raise Unverified('summary does not identify the owned 64 GiB /dev/vda target')
-    if 'will be erased' not in text or 'cannot be undone' not in text:
-        raise Unverified('summary erase warning absent')
+    verify_summary_cards(screen.summary_cards(), mode)
+    warning = 'Everything on /dev/vda will be erased. This cannot be undone.'
+    warnings = [' '.join(line.split()) for line in screen.lines
+                if 'will be erased' in line.lower()]
+    if warnings != [warning]:
+        raise Unverified('summary erase warning does not uniquely match the intended target')
+    # Independent full-frame mode observation must agree with the card crop.
     expected = 'No encryption' if mode == 'plain' else 'Passphrase'
     screen.box(expected)
-    if mode == 'luks' and ('tpm' in text or 'hardware backed' in normal(text)):
+    if mode == 'luks' and any('tpm' in line.lower() or 'hardware backed' in normal(line)
+                              for line in screen.lines):
         raise Unverified('summary selected hardware encryption instead of passphrase-only')
 
 
