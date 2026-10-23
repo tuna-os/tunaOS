@@ -234,6 +234,13 @@ jobs:
           ARTIFACT_S2_MATRIX=$(make_artifact_matrix 2)
           ARTIFACT_S3_MATRIX=$(make_artifact_matrix 3)
           ARTIFACT_S4_MATRIX=$(make_artifact_matrix 4)
+          # Delivery cutover (delivery-cutover.json): stamp each artifact row
+          # with whether its {variant, flavor, platform} target is cut over.
+          # With the empty initial policy every row gets cutover=false, so the
+          # cutover-check inputs below evaluate to current behavior.
+          ARTIFACT_S2_MATRIX=$(echo "$ARTIFACT_S2_MATRIX" | python3 scripts/delivery-cutover.py --annotate-matrix)
+          ARTIFACT_S3_MATRIX=$(echo "$ARTIFACT_S3_MATRIX" | python3 scripts/delivery-cutover.py --annotate-matrix)
+          ARTIFACT_S4_MATRIX=$(echo "$ARTIFACT_S4_MATRIX" | python3 scripts/delivery-cutover.py --annotate-matrix)
           echo "artifact_s2_matrix=$ARTIFACT_S2_MATRIX" >> $GITHUB_OUTPUT
           echo "artifact_s3_matrix=$ARTIFACT_S3_MATRIX" >> $GITHUB_OUTPUT
           echo "artifact_s4_matrix=$ARTIFACT_S4_MATRIX" >> $GITHUB_OUTPUT
@@ -447,6 +454,12 @@ jobs:
       # manual publishing has its own workflow (publish-isos.yml), and
       # publish-isos above forces it here.
       upload-r2: ${{ github.repository == 'tuna-os/tunaOS' && github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || inputs.publish-isos) }}
+      # Delivery cutover: the existing upload-r2 expression above is
+      # unchanged; a cut-over cell additionally suppresses only the R2
+      # upload inside reusable-build-artifacts.yml (build, boot gate and
+      # signing still run). matrix.cutover is stamped by --annotate-matrix
+      # above; a row without it evaluates to false (current behavior).
+      cutover-check: ${{ matrix.cutover == true }}
       # Names the artifact this cell's OWN image leg uploads after a
       # successful push. Its existence is what makes the relaxed gate above
       # safe; see the provenance gate in reusable-build-artifacts.yml.
@@ -496,6 +509,12 @@ jobs:
       # manual publishing has its own workflow (publish-isos.yml), and
       # publish-isos above forces it here.
       upload-r2: ${{ github.repository == 'tuna-os/tunaOS' && github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || inputs.publish-isos) }}
+      # Delivery cutover: the existing upload-r2 expression above is
+      # unchanged; a cut-over cell additionally suppresses only the R2
+      # upload inside reusable-build-artifacts.yml (build, boot gate and
+      # signing still run). matrix.cutover is stamped by --annotate-matrix
+      # above; a row without it evaluates to false (current behavior).
+      cutover-check: ${{ matrix.cutover == true }}
       # Names the artifact this cell's OWN image leg uploads after a
       # successful push. Its existence is what makes the relaxed gate above
       # safe; see the provenance gate in reusable-build-artifacts.yml.
@@ -543,6 +562,12 @@ jobs:
       # manual publishing has its own workflow (publish-isos.yml), and
       # publish-isos above forces it here.
       upload-r2: ${{ github.repository == 'tuna-os/tunaOS' && github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || inputs.publish-isos) }}
+      # Delivery cutover: the existing upload-r2 expression above is
+      # unchanged; a cut-over cell additionally suppresses only the R2
+      # upload inside reusable-build-artifacts.yml (build, boot gate and
+      # signing still run). matrix.cutover is stamped by --annotate-matrix
+      # above; a row without it evaluates to false (current behavior).
+      cutover-check: ${{ matrix.cutover == true }}
       # Names the artifact this cell's OWN image leg uploads after a
       # successful push. Its existence is what makes the relaxed gate above
       # safe; see the provenance gate in reusable-build-artifacts.yml.
