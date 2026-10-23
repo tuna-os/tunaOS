@@ -243,16 +243,18 @@ recipe['tour'] = new_tour
 
 # The variant is the name people see; the installer's stock slides name the
 # project (tunaos.toml [project] name, e.g. your new TunaOS workstation). Swap
-# it in every text value, leaving image references alone.
-def rename(v):
-    if isinstance(v, dict):
-        return {k: (x if k in ('imgref', 'image', 'distro_logo') else rename(x)) for k, x in v.items()}
-    if isinstance(v, list):
-        return [rename(x) for x in v]
-    if isinstance(v, str):
-        return v.replace('${TUNAOS_PROJECT_NAME}', '${IMAGE_PRETTY_NAME}')
-    return v
-recipe = rename(recipe)
+# it in display text only: each slide's title and description. Paths, image
+# references (imgref, local_imgref) and step names are data, and a project
+# named like one of them (tunaos) must not rewrite them. The name also stays
+# whole inside a longer word, path or domain (repo.tunaos.org).
+import re
+project = re.compile(r'(?<![A-Za-z0-9_@/.:-])' + re.escape('${TUNAOS_PROJECT_NAME}') + r'(?![.]?[A-Za-z0-9_@/-])')
+def rename(text):
+    return project.sub(lambda _: '${IMAGE_PRETTY_NAME}', text)
+for slide in recipe['tour'].values():
+    for key in ('title', 'description'):
+        if isinstance(slide.get(key), str):
+            slide[key] = rename(slide[key])
 
 with open('${RECIPE_FILE}', 'w') as f:
     json.dump(recipe, f, indent=2)
