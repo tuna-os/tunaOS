@@ -291,11 +291,12 @@ peak_concurrency() { cat "${STUB_LOGDIR}/max" 2>/dev/null || echo 0; }
 	calls | grep -q "org=acme"
 }
 
-@test "matrix: defaults GATE_TIMEOUT and REPO_ORGANIZATION when unset" {
+# The publish namespace default now lives in scripts/publish-destination.sh,
+# which boot-gate.sh calls itself (tests/test_publish_destination.py).
+@test "matrix: defaults GATE_TIMEOUT when unset" {
 	run bash "${MATRIX}" yellowfin:gnome
 	[ "$status" -eq 0 ]
 	calls | grep -q "timeout=1200"
-	calls | grep -q "org=tuna-os"
 }
 
 @test "matrix: gives each launch a unique GATE_NAME" {

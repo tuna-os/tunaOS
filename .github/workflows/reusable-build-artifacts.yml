@@ -217,6 +217,9 @@ jobs:
           FLAVOR: ${{ inputs.flavor }}
           IMAGE_TAG: ${{ inputs.image-tag }}
           PLATFORM: ${{ inputs.platform }}
+          # Operator override; empty falls through to tunaos.toml
+          # [build.publish], then ghcr.io/<owner> (scripts/publish-destination.sh).
+          IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY }}
         run: |
           set -euo pipefail
           export TACKLEBOX_FROM_SOURCE=1
