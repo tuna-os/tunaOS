@@ -17,6 +17,8 @@ user-facing site:
 
 | Doc | What it covers |
 |-----|----------------|
+| [CONTRIBUTOR-FIRST-PR.md](CONTRIBUTOR-FIRST-PR.md) | Five small tasks, fork commands, checks, and review help |
+| [CONTRIBUTOR-ROADMAP.md](CONTRIBUTOR-ROADMAP.md) | Learning stages, weekly help, recognition, and program goals |
 | [BETA-RELEASE-READINESS.md](BETA-RELEASE-READINESS.md) | BETA product release gates, owners, audit and consumer documentation handoff (#2935) |
 | [AGENT_GUIDE.md](AGENT_GUIDE.md) | Repo architecture: variants, flavors, build stages, key files |
 | [HUMMINGBIRD.md](HUMMINGBIRD.md) | Fedora Hummingbird variant architecture, rolling release model, and package snapshot state |
@@ -103,6 +105,7 @@ These live at the repository root rather than in this folder:
 - [VISION.md](../VISION.md) — project philosophy
 - [GOAL.md](../GOAL.md) — current objective
 - [CONTRIBUTING.md](../CONTRIBUTING.md) — how to set up, build, and contribute
+- [CONTRIBUTORS.md](../CONTRIBUTORS.md) — public credits with merged contribution links
 - [VARIANT-LIFECYCLE.md](../VARIANT-LIFECYCLE.md) — Stable/Beta/Alpha admission gates and deprecation rules
 - [RFC-PROCESS.md](../RFC-PROCESS.md) — how RFCs are proposed, reviewed, and decided
 - [PACKAGE-SOURCING.md](../PACKAGE-SOURCING.md) — package origin rules, Tideforge-first, and allowlist (#1319)
