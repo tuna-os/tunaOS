@@ -120,6 +120,7 @@ jobs:
         env:
           FILTER_VARIANT: ${{ inputs.variant || 'all' }}
           FILTER_FLAVOR: ${{ inputs.flavor || 'all' }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           # Flatten config into one entry per {variant, flavor}, applying filters.
           #
@@ -152,7 +153,7 @@ jobs:
             | .flavors[]
             | select(env.FILTER_FLAVOR == "all" or .id == env.FILTER_FLAVOR)
             | select(.build_image // false)
-            | select($event != "pull_request" or .id == "gnome")
+            | select($event != "pull_request" or .id == "gnome" or .id == "tuna")
             | {
                 variant:       $v.id,
                 image_name:    ($v.publish_name // $v.id),

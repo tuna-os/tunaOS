@@ -1,0 +1,203 @@
+name: Fork PR simulation
+
+# Weekly execution of the fork-sensitive, act-compatible pull_request lanes.
+# Every PR workflow is classified in scripts/fork-simulation.py. Heavy image,
+# ISO and KVM lanes stay under the static fork-safety contract rather than
+# being rebuilt three times here (the unscoped attempt was closed in #2604).
+# The selected workflows execute real steps against a synthetic untrusted head,
+# not an expression parser. Repository secrets are absent. The external persona
+# receives GitHub's read-only fork token; internal personas receive the normal
+# declared write scopes, which avoids turning valid bot writes into false reds.
+on:
+  schedule:
+    - cron: "17 8 * * 1"
+  workflow_dispatch:
+
+permissions: {}
+
+env:
+  ACT_VERSION: v0.2.89
+  ACT_SHA256: 0191d6f1f3b716b5c55820032605d05fc3c1cdbf581ebeff655019e5dd1524c0
+  ACT_IMAGE: ghcr.io/catthehacker/ubuntu:act-22.04@sha256:f5f5c29208c4fd541704fe7b8df33d3bf620ce4ac46f36853b7abeb0159705c4
+
+jobs:
+  simulate-fork:
+    name: Exercise first-time fork PRs
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install simulation tools
+        run: |
+          set -euo pipefail
+          pip3 install --quiet pyyaml --break-system-packages
+          archive="$RUNNER_TEMP/act.tar.gz"
+          curl --fail --location --silent --show-error \
+            "https://github.com/nektos/act/releases/download/${ACT_VERSION}/act_Linux_x86_64.tar.gz" \
+            --output "$archive"
+          echo "${ACT_SHA256}  ${archive}" | sha256sum --check --strict
+          tar -xzf "$archive" -C "$RUNNER_TEMP" act
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+
+      - name: Run with a downgraded token and empty repository secrets
+        env:
+          SIMULATION_GITHUB_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          RESULTS_FILE: ${{ runner.temp }}/fork.tsv
+        run: scripts/run-fork-simulation.sh first-time-external
+
+      - name: Upload fork results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: fork-simulation-external
+          path: ${{ runner.temp }}/fork.tsv
+          if-no-files-found: error
+
+  simulate-internal:
+    name: Exercise internal contributor personas
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      actions: read
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install simulation tools
+        run: |
+          set -euo pipefail
+          pip3 install --quiet pyyaml --break-system-packages
+          archive="$RUNNER_TEMP/act.tar.gz"
+          curl --fail --location --silent --show-error \
+            "https://github.com/nektos/act/releases/download/${ACT_VERSION}/act_Linux_x86_64.tar.gz" \
+            --output "$archive"
+          echo "${ACT_SHA256}  ${archive}" | sha256sum --check --strict
+          tar -xzf "$archive" -C "$RUNNER_TEMP" act
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+
+      - name: Run with normal internal scopes and empty repository secrets
+        env:
+          SIMULATION_GITHUB_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          RESULTS_FILE: ${{ runner.temp }}/internal.tsv
+        run: scripts/run-fork-simulation.sh same-repo-contributor renovate
+
+      - name: Upload internal results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: fork-simulation-internal
+          path: ${{ runner.temp }}/internal.tsv
+          if-no-files-found: error
+
+  report:
+    name: Fork-safety report
+    if: always()
+    needs: [simulate-fork, simulate-internal]
+    concurrency:
+      group: fork-simulation-report
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      issues: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install PyYAML
+        run: pip3 install --quiet pyyaml --break-system-packages
+
+      - name: Download results
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: fork-simulation-*
+          path: results
+          merge-multiple: true
+
+      - name: Build the per-workflow report
+        id: report
+        run: |
+          set -euo pipefail
+          classifications="$(python3 scripts/fork-simulation.py classifications)"
+          {
+            echo "## Fork pull-request simulation"
+            echo
+            echo "Repository secrets were empty. The external token had contents:read and actions:read only."
+            echo
+            echo "| workflow | first-time external | same-repo contributor | Renovate |"
+            echo "| :-- | :--: | :--: | :--: |"
+            mapfile -t workflows < <(jq -r '.simulated[]' <<< "$classifications")
+            for workflow in "${workflows[@]}"; do
+              row="| \`${workflow}\`"
+              for persona in first-time-external same-repo-contributor renovate; do
+                status="$(awk -F '\t' -v w="$workflow" -v p="$persona" \
+                  '$1 == w && $2 == p { print $3 }' results/*.tsv 2>/dev/null || true)"
+                case "$status" in
+                  pass) cell='✅ pass' ;;
+                  timeout) cell='⏱️ timeout' ;;
+                  *) cell='❌ fail' ;;
+                esac
+                row+=" | ${cell}"
+              done
+              echo "${row} |"
+            done
+            echo
+            echo "### Classified outside dynamic scope"
+            echo
+            jq -r '.excluded | to_entries[] | "- `\(.key)`: \(.value)"' <<< "$classifications"
+            echo
+            echo "Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          } | tee report.md >> "$GITHUB_STEP_SUMMARY"
+          if grep -Eq '❌|⏱️' report.md; then
+            echo "failed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "failed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Open or refresh one failure issue
+        if: steps.report.outputs.failed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          title="[ci] fork pull-request simulation is failing"
+          marker='<!-- fork-simulation -->'
+          body="$(mktemp)"
+          {
+            echo "$marker"
+            echo "The weekly simulation found a pull_request workflow that did not survive its contributor trust boundary."
+            echo
+            cat report.md
+            echo
+            echo "Inspect the failed persona log. Guard fork writes and secret-dependent work while preserving useful read-only feedback."
+          } > "$body"
+          search='in:title "[ci] fork pull-request simulation is failing"'
+          existing="$(gh issue list --state open --search "$search" \
+            --json number --jq '.[0].number // empty')"
+          if [[ -n "$existing" ]]; then
+            gh issue edit "$existing" --title "$title" --body-file "$body"
+          else
+            gh issue create --title "$title" --body-file "$body" --label ci
+          fi
+
+      - name: Fail when a simulation failed
+        if: steps.report.outputs.failed == 'true'
+        run: exit 1

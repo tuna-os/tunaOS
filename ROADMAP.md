@@ -1,6 +1,6 @@
 # tunaOS Roadmap
 
-**Last updated**: 2026-08-23 (Windows conversion channel added to Q3 + Q4 after wootc `v0.1.0-alpha.1` shipped 08-22 — #1988) | **Maintainer**: tuna-os (hanthor)
+**Last updated**: 2026-10-23 (Q3 outcomes closed and Q4 evidence gates refreshed — #3050) | **Maintainer**: tuna-os (hanthor)
 
 ---
 
@@ -21,7 +21,7 @@ status; a planned outcome or a green draft PR is not a shipped result.
 
 ---
 
-## Current Status (August 2026)
+## Current Status (October 2026)
 
 ### Active Variants
 
@@ -104,7 +104,7 @@ The scheduled Asahi sweep can continue to inspect old tags after a build cell is
 
 | Flavor | Owner | Stage | Acceptance / tracker |
 |--------|-------|-------|----------------------|
-| Marlin Tuna Desktop, formerly Roost (amd64, rolling) | @hanthor | Proposal, best effort; capacity confirmed and signed served `tuna-desktop` package install verified 2026-10-09 (tunaos-packages run 37881967008); experimental image build enabled; flavor renamed `roost` → `tuna` after [tuna-desktop#536](https://github.com/tuna-os/tuna-desktop/pull/536); the old `marlin:roost` tag remains frozen at its last published image and is no longer updated | Signed Tideforge `tuna-desktop` package, greetd session picker, desktop contract and VM boot, then GHCR publication and bootc switch; [#2990](https://github.com/tuna-os/tunaOS/issues/2990), [upstream #69](https://github.com/tuna-os/tuna-desktop/issues/69). One image/boot cell; no new ISO or LUKS cells. |
+| Marlin Tuna Desktop, formerly Roost (amd64, rolling) | @hanthor | Proposal, best effort; capacity confirmed and signed served `tuna-desktop` package install verified 2026-10-09 (tunaos-packages run 37881967008); experimental image build enabled; flavor renamed `roost` → `tuna` after [tuna-desktop#536](https://github.com/tuna-os/tuna-desktop/pull/536); the old `marlin:roost` tag remains frozen at its last published image and is no longer updated | Signed Tideforge `tuna-desktop` package, GDM session picker, desktop contract and VM boot, then GHCR publication and bootc switch; [#2990](https://github.com/tuna-os/tunaOS/issues/2990), [upstream #69](https://github.com/tuna-os/tuna-desktop/issues/69). One image/boot cell; no new ISO or LUKS cells. |
 
 ### Build Health
 
@@ -204,26 +204,26 @@ See [SECURITY.md](./SECURITY.md) for vulnerability reporting.
 
 ---
 
-## Q3 2026 (July–September) — "Expand" 🟡 IN PROGRESS
+## Q3 2026 (July–September) — "Expand" CLOSED
 
 **Theme**: Expand variant coverage, harden architecture, grow community.
 
-**Mid-quarter update (2026-08-10)**: Q3 milestone populated; CI green (at the time — see 08-13 correction below); **downloads verified working** (179 ISOs, newest 08-07). ⚠️ **Q3 at risk — checkpoint 2026-08-22** (#1299): 4 open strategic goals (#272 Bonito GA, #1123 Redfin alpha, #1093 RFC governance, #1094 ADR coverage) with zero movement since 08-08 while CI/ops work lands daily. ⚠️ **Desktop parity crisis** (#1294): tunaos-packages#133 audit shows 24/37 published editions are too small to contain their desktop (non-RPM bases: sailfin/flounder/grouper). GitHub Releases gap fixed 08-08 (#1106/#1147 closed, `a4b147f8`).
-
-**Mid-quarter update 2 (2026-08-11)**: maintainer filed #1315 — **flavor equality mandate** (no GNOME-as-primary framing; all supported flavors equal tiers). This reframes desktop parity (#1294) from defect-fix to product strategy; flavor cadence parity (#1254, PR #1314) is its first deliverable. ✅ First deliverable landed 05:22Z: **browser ISO catalog parity gate merged** (#1322) — catalog generation now fails when any browser/on-demand flavor lacks a published catalog fact (#1281 closed). ~~Community signal: first external contributor (shimonenator, 08-10)~~ — **retracted 08-13** (#1317): confirmed an Antigravity-agent account, not a human contributor. #1308's starter backlog stands on its own merit regardless.
-
-**Mid-quarter update 3 (2026-08-11)**: maintainer directive #1319 — **package sourcing policy**: default to system repos / tideforge; no PPAs/COPRs/OBS/AUR; build in-house what the base lacks, with a small trusted third-party allowlist. Second directive in 24h; elevates the Q2 COPR-elimination win (#436) into org-wide supply-chain policy (#1323).
-
-**Correction (2026-08-13)**: the 08-10 "CI green" note above is stale. Bonito's nightly (`build-bonito.yml`) has been **red for 10/10 scheduled runs, 08-03 through 08-13** — verified via `gh run list`. Root cause is a cross-variant nvidia-overlay initramfs regression (`sr_mod`/`cdrom`/`virtio_blk` missing, `TUNAOS_NVIDIA_CONTRACT_FAIL`), independently confirmed also 100% red on Albacore, Marlin, and Yellowfin's nightlies over the same window — not Bonito-specific. Filed as #1499 (previously untracked; distinct from the closed, different-symptom #1118). Separately, `base`/arm64 jobs are failing on transient runner infra (`/libpod_lock` exhaustion), unrelated to the nvidia regression.
+**Quarter close (2026-10-23)**: the 2026-08-22 checkpoint decision sheet was
+never signed; tracker #1299 was closed on 2026-09-24. The final Q3 record below
+therefore uses merged artifacts and repository evidence, not the unsigned
+STAFF/DESCOPE recommendations. Bonito completeness and Redfin's local-build
+alpha shipped, RFC/ADR governance landed, and release-stream parity is now an
+enforced gate. Work that still lacks its product evidence is carried into the
+Q4 gates rather than left behind an elapsed checkpoint date.
 
 | Goal | Owner | Tracking | Status |
 |------|-------|----------|--------|
 | **Fix ISO downloads** | ci-maintainer | #543, #561 | ✅ Done — downloads verified working (R2, 08-07) |
-| Bonito (Fedora 44) GA | ci-maintainer | #272 | 🟡 Progress — T2 bootc profile **#1256 merged 08-18**; nvidia initramfs regression **#1499 closed** (fixes #1503/#1523 merged 08-14); still Beta, GA exit per VARIANT-LIFECYCLE.md; staff test at 09-01 checkpoint review |
-| Redfin (RHEL 10) alpha | ci-maintainer | #609 (closed, shipped 08-09), #1123 | 🟡 Local-build alpha shipped (systemd auto-update timer units, #609/#1182/#1219) — intentionally **not** in `.github/build-config.yml`'s CI matrix (RHEL EULA forbids redistribution + no RHSM creds on CI runners, see `scripts/get-base-image.sh`); build via `just build redfin <desktop>` or `scripts/corral-build.sh`, see [docs/rhel-setup.md](docs/rhel-setup.md). Remaining: no automated build/publish path is possible by design, so "alpha" here means local-build-verified, not downloadable |
-| Ship KDE, COSMIC, Niri, XFCE variants | ci-maintainer | #285 | 🟡 Published but **desktop-completeness unverified** — 24/37 editions undersized per tunaos-packages#133 / #1294 |
+| Bonito (Fedora 44) completeness | ci-maintainer | #272 | Delivered — #272 closed 2026-10-11 after clean scheduled builds and ISO publication were recorded. Bonito remains **Beta** in the canonical variant table until an explicit [VARIANT-LIFECYCLE.md](VARIANT-LIFECYCLE.md) promotion records all-cell evidence |
+| Redfin (RHEL 10) alpha | ci-maintainer | #609, #1123 | Delivered as a reproducible local-build alpha; #1123 closed 2026-10-11. Public CI and publication remain out of scope because RHEL redistribution and RHSM credentials are unavailable to the public runners; see [docs/rhel-setup.md](docs/rhel-setup.md) |
+| Ship KDE, COSMIC, Niri, XFCE variants | ci-maintainer | #285, #1254, #2550 | Published; tier-1 stream parity is enforced by PR #2959. A partial release day now fails the cross-stream gate instead of passing silently |
 | GitHub Releases page carries ISO assets | ci-maintainer | #1106 | ✅ Verified 08-09 — `gnome-20260809` published with assets; cadence resumed |
-| Release-cadence health gate (no silent skip) | ci-maintainer | #1147 | 🟡 Root cause fixed 08-08 (`a4b147f8` fails on dropped release) — verify no silent skip 08-09 |
+| Release-cadence health gate (no silent skip) | ci-maintainer | #1147, #2550 | Delivered — per-stream lookup failures fail closed, and PR #2959 requires every tier-1 stream to publish the same dated release with its required assets |
 | Containerfile deduplication | architect | #305 | ✅ Done |
 | Hardcoded registry → configurable | architect | #304 | ✅ Done |
 | Justfile modular decomposition | architect | #308 | ✅ Done |
@@ -236,15 +236,15 @@ See [SECURITY.md](./SECURITY.md) for vulnerability reporting.
 | Populate Q3 milestone | strategist | #562 | ✅ Done (2026-08-08, 9 issues) |
 | **User-proven ISO installs roadmap** | ci-maintainer | #763 | 🟡 In progress (Phase 1 baseline dispatched #761; GUI gate #577) |
 | **Apple Silicon (Asahi Linux) support** | architect / ci-maintainer | #781 | 🟡 In progress (Bonito & Grouper 36/36 verified #776; D0–D4 installer track active) |
-| **Desktop parity floor (non-RPM bases)** | packaging | tunaos-packages#133, tunaos-packages#323, #1294 (successor tunaos-packages#507) | ⬜ Not started — P0 for Q4 (see #1294) |
-| **Q3 checkpoint (08-22): staff or descope #272/#1123/#1093/#1094** | strategist | #1299 | 🟡 Date elapsed 08-22 — T-9 refresh 2026-08-23 (evidence updated: nvidia regression closed, Bonito T2 profile merged, wootc shipped); **decisions pending maintainer sign-off by 09-01 staff-test deadline** |
-| **Flavor equality mandate (docs wording + cadence parity)** | strategist | #1315, #1254 | 🟡 In progress — catalog parity gate merged 08-11 (#1322, #1281 closed); cadence parity pending (#1316) |
-| **NVIDIA flavor family (6 editions, 0 assets since 07-05)** | ci-maintainer | #1383 | 🔴 Broken — nightly overlay regressed 08-12 (#1382); 13/13 variant matrix red 08-14 (#1570) incl. nvidia cells (#1561/#1562/#1564/#1565); staff test: nightly green + gnome-nvidia assets republished by 09-01 (#1376/#1379) |
-| **Windows conversion channel (wootc)** | strategist / wootc maintainer | #1988, #1958, wootc#210 | 🟡 In progress — `v0.1.0-alpha.1` shipped 2026-08-22 (five branded installers + deployer artifacts + `SHA256SUMS`, E2E-gated); nightly auto pre-releases live. wootc's own [ROADMAP](https://github.com/tuna-os/wootc/blob/main/ROADMAP.md) (refreshed 08-22) carries the v0.1.0-alpha → v1.0.0 ladder with milestone trackers M2–M5 (wootc#210–#213). Gaps closing under #1988: no Windows entry point from this repo (`README.md`/`MIGRATION.md` have zero wootc references; user ask #1958 filed 08-22 untriaged), and `winget install TunaOS.wootc` blocked on the maintainer-only `WINGET_TOKEN` secret (wootc#221). Next gate: **v0.2.0-alpha — proven on real hardware** (wootc#210) |
+| **Desktop and release parity** | packaging / ci-maintainer | #1294, #2550 | Closed — the size-only desktop finding in #1294 was retired in favor of the release contract in #2550; PR #2959 merged 2026-10-15 with a cross-stream parity job and regression tests. Per-cell installation evidence remains a Q4 lifecycle gate |
+| **Q3 checkpoint (08-22): staff or descope #272/#1123/#1093/#1094** | strategist | #1299 | Closed without a signed decision record on 2026-09-24. Final evidence: #272 and #1123 closed 2026-10-11; RFC lifecycle #1093 and ADR coverage #1094 closed 2026-09-24 |
+| **Flavor equality mandate (docs wording + cadence parity)** | strategist | #1315, #1254, #2550 | Delivered for release cadence — #1254/#1316 closed and PR #2959 enforces equal dated assets across GNOME, KDE, COSMIC, Niri, and XFCE |
+| **NVIDIA flavor family** | ci-maintainer | #1383 | Q3 tracker closed 2026-09-24. NVIDIA publication is judged by the same release and per-cell qualification gates as every other advertised flavor; it is not an exception to flavor equality |
+| **Windows conversion channel (wootc)** | wootc maintainer | #1988; wootc#221, wootc#222 | Moved out of this repository's roadmap: #1988 was closed 2026-09-24 with the maintainer decision that wootc work belongs in `tuna-os/wootc`. The Q4 scope boundary and current external gates are recorded below |
 | **Flatpak remote ownership and production drift gate** | strategist / accountable remote owner to be named | #2922, #2921; [flatpak-index ROADMAP](https://github.com/tuna-os/flatpak-index/blob/main/ROADMAP.md) | Q3 exit requirement: record the owner and production source in both flatpak-index and docs; define publish-to-availability freshness SLO, incident ownership and rollback; measure catalog, digest, architecture and metadata drift from the served endpoint. Ownership decision precedes Q4 publisher consolidation |
 | **Homebrew channel ownership, currency and validation** | strategist / tap and upstream publisher owners | #2922; [homebrew-tap#12](https://github.com/tuna-os/homebrew-tap/issues/12), [#7](https://github.com/tuna-os/homebrew-tap/issues/7); [ROADMAP](https://github.com/tuna-os/homebrew-tap/blob/main/ROADMAP.md) | Q3 exit requirement: each supported entry has an authoritative release source and working publisher or named manual owner; eligible releases reach the tap or receive a visible exception within 48 hours. Resolve publisher credentials through an org admin and explicit package admission; producer-consumer URL, checksum and install validation gates Q4 currency automation |
 | **Scoop channel launch and release drift gate** | strategist / bucket and producer owners | #2922; [scoop-bucket#4](https://github.com/tuna-os/scoop-bucket/issues/4), [#14](https://github.com/tuna-os/scoop-bucket/issues/14); [ROADMAP](https://github.com/tuna-os/scoop-bucket/blob/main/ROADMAP.md) | Q3 exit requirement: name publication owner and least-privilege credential model; publish and validate bluefin-cli Windows amd64/arm64 manifest; prove clean Windows bucket-add/install/version journey; make stable-release drift beyond 24 hours owner-visible. Launch evidence precedes Q4 channel expansion |
-| **Package sourcing policy (system-repos/tideforge-first + allowlist)** | strategist | #1319, #1323 | 🟡 In progress — PACKAGE-SOURCING.md merged; DNF/COPR audit done 08-13, ahead of the 08-22 checkpoint (2 violations, 6-COPR niri gap, negativo17/rpmfusion allowlist candidates confirmed — #1453); apt/AUR/OBS bases still unaudited, maintainer allowlist sign-off and Phase 2 migration still pending |
+| **Package sourcing policy (system-repos/tideforge-first + allowlist)** | strategist / sec-check | #1319, #1323; [PACKAGE-SOURCING.md](PACKAGE-SOURCING.md) | Policy and cross-family audit delivered: DNF/COPR audited 2026-08-13; apt, Arch, openSUSE, and Gentoo follow-up added 2026-08-31; CI blocks newly introduced unapproved sources. Formal allowlist decisions, remaining migrations, and final source-graph attestation carry into Q4 |
 
 ---
 
@@ -252,30 +252,33 @@ See [SECURITY.md](./SECURITY.md) for vulnerability reporting.
 
 **Theme**: Enterprise readiness, community governance, ecosystem integration.
 
-**Planning started (2026-08-08)**: Q4 milestone #3 created; tracking issue #1159 open. **All 9 Q4 goals now tracked** (#1167 branch protection, #1168 governance, #1186 release automation, #1187 package signing/SBOM). Stale dependency refs (#306/#307/#212/#301 closed) still flagged in #1159. Extended 08-08 evening: adoption metrics (#1174) and variant lifecycle policy (#1175) added as strategist-owned goals. **Update 08-13**: All stale Q4 dependency refs now resolved — Supply chain hardening re-tracked under #1193 (was #212/#301, both closed), Tacklebox decoupling under #1192 (was #306, closed), Upstream snapshot automation under #1194 (was #307, closed). Both #1192 and #1194 already existed and already carried the Q4 milestone — this was a ROADMAP linking gap, not a missing-tracker gap. #1159's recommendation #3 (refresh stale dependency refs) is complete.
+**Evidence refresh (2026-10-23)**: milestone #3 reports 11 closed trackers and
+0 open trackers, but issue closure is not completion evidence. The operative
+contract remains [Q4-MATURE-DEFINITION.md](Q4-MATURE-DEFINITION.md): each claim
+needs its named artifact, run, ruleset, or public snapshot. The rows below state
+the gate and current evidence boundary instead of inferring success from a
+closed planning issue.
 
-**Progress note (2026-08-11)**: keyless Cosign signing + signed SBOM attestations **landed 08-10** for published ISOs and container images (#1303, #1305) — first Q4 supply-chain deliverable. Remaining scope for #1187: signed SBOMs for **every** release artifact across all flavors (blocked on Releases cadence parity #1254) and tunaos-packages artifacts. Package sourcing policy (#1319/#1323) drafted as [PACKAGE-SOURCING.md](./PACKAGE-SOURCING.md) — source inventory feeds the #1187 attestation graph in Q4.
-
-| Goal | Owner | Dependencies |
-|------|-------|--------------|
-| Tacklebox decoupling | architect | #1192 (tracker; #306 closed) — audited 2026-08-14: of #306's 4 recommendations, 3 already landed (`TACKLEBOX_SHA`/`TACKLEBOX_IMAGE` version pinning via `scripts/lib/common.sh`; tacklebox runs as a `ghcr.io/tuna-os/tacklebox` container image, not a host-installed binary; the flagged `ghcr.io/hanthor/bluefin:lts` `iso.toml` reference no longer exists in this repo's own build path). Real remaining gap: **the version pin has no single source of truth** — `image-versions.yaml` (`4fa6041`, renovate-tracked) diverges from hardcoded overrides in `publish-iso-groups.yml` (`a105d6d3`) and `luks-e2e.yml` (`fd95174`, the documented floor SHA, not the current pin). Consolidating those onto one pin needs real boot evidence before merging (see Build Health note above on why `publish-iso-groups.yml`'s divergence was left as a deliberate, not accidental, gap) — flagged as the concrete next step, not actioned blind |
+| Goal | Owner | Gate / current evidence |
+|------|-------|-------------------------|
+| Tacklebox dependency | architect | **Pin-consolidation gate met.** `image-versions.yaml` is the single Renovate-tracked `versions.tacklebox` pin; `publish-iso-groups.yml` and `luks-e2e.yml` no longer carry divergent SHA overrides. Future bumps must preserve the documented ancestry floors and pass the live-boot and LUKS paths that consume this pin |
 | Upstream snapshot automation | ci-maintainer | #1194 (tracker; #307 closed) — **live (weekly refresh PRs merging; `snapshot-upstreams.yml` runs Mondays 09:00 UTC)** |
 | Branch protection + required CI | strategist | CI health, #1167 — audited 2026-08-13: [BRANCH-PROTECTION.md](./docs/BRANCH-PROTECTION.md), active `main` ruleset has no required-status-checks rule; proposed list is `lint`, `unit-tests` |
 | Supply chain hardening | sec-check | #1193 (tracker; #212/#301 closed) — coordinates with #1187 (package signing/SBOM is the largest hardening item, tracked there in detail) |
-| Release automation | ci-maintainer | CI health, VERSIONING.md, #1186 |
+| Release automation | ci-maintainer | PR #2959 enforces same-day GNOME/KDE/COSMIC/Niri/XFCE releases and required assets. Q4 exit still requires the [Q4 maturity contract](Q4-MATURE-DEFINITION.md) evidence: at least two consecutive weekly cycles plus installation qualification for every advertised release cell |
 | Community governance model | strategist | #1168 — [docs/GOVERNANCE.md](./docs/GOVERNANCE.md) |
-| **Flavor equality mandate** | strategist | #1315, #1316 (cadence parity #1254) |
+| **Flavor equality mandate** | strategist | Release-cadence dependency met by PR #2959. Promotion remains downstream of exact-image boot, installation, update, and recovery evidence for every advertised cell; a green default desktop cannot promote sibling cells |
 | **tromso first stable release** | ci-maintainer | tromso#83 |
 | Issue triage policy (queue actionability) | strategist | #1195 — ✅ Done ([TRIAGE-POLICY.md](./TRIAGE-POLICY.md) adopted: milestone-only roadmap signal, verify-before-trust closure, tiered SLA) |
 | Package signing / SBOM | sec-check | Supply chain, #1187 |
-| **Package sourcing policy (system-repos/tideforge-first + allowlist)** | strategist | #1319, #1323 (audit → #1187) |
-| Bonito (Fedora 44) GA carryover | ci-maintainer | #272 — nvidia regression closed (#1499), T2 profile merged (#1256); re-scored STAFF at T-9 refresh |
-| Redfin (RHEL 10) alpha GA | ci-maintainer | #609 |
-| Fedora 45 base readiness | ci-maintainer | #1171 — [FEDORA-BASE-POLICY.md](./FEDORA-BASE-POLICY.md) adopted 08-13: N+rawhide model, Fedora 45 planning sequenced after Bonito (#272) GA, not parallel |
-| Adoption metrics / usage telemetry | strategist | #1174 |
-| **Adoption evidence (ADOPTERS.md production entries)** | strategist | #1348 — zero public production adopters vs "Mature" claim; first entries at 2026-11-01 snapshot |
-| Variant lifecycle policy (admission + Beta→Stable exit criteria) | strategist | #1196, #1175, #1270, #1254, #1294, #1763 — [VARIANT-LIFECYCLE.md](./VARIANT-LIFECYCLE.md) |
-| **Windows conversion channel (wootc) — beta gate + winget** | strategist / wootc maintainer | #1988, wootc#211, wootc#221 — Q3 carryover. Q4 scope: full-tier matrix green (wootc#222), BitLocker path (wootc#223), winget package live, and wootc's adoption numbers folded into the #1174 metrics snapshot and #1743 Q4 sequencing. This is the org's only adoption channel that reaches users not already running Linux |
+| **Package sourcing policy (system-repos/tideforge-first + allowlist)** | strategist / sec-check | Audit complete and new-source CI enforcement active. At the 2026-11-15 Q4 health check, every candidate in [PACKAGE-SOURCING.md](PACKAGE-SOURCING.md) must have either maintainer/security sign-off with a review date or a linked migration. By Q4 close, the resulting source inventory must feed the release attestation graph |
+| Bonito (Fedora 44) promotion | ci-maintainer | Q3 completeness tracker #272 is closed; Bonito remains Beta. Promotion requires the all-cell evidence ledger in [VARIANT-LIFECYCLE.md](VARIANT-LIFECYCLE.md), including release parity and exact-image installation qualification |
+| Redfin (RHEL 10) local-build alpha | ci-maintainer | Q3 outcome complete. Reproducible local builds and [docs/rhel-setup.md](docs/rhel-setup.md) are the supported scope; no public CI/publish dependency is implied |
+| Fedora base readiness | ci-maintainer | #1171 — [FEDORA-BASE-POLICY.md](./FEDORA-BASE-POLICY.md) sequences the next Fedora base after Bonito's explicit lifecycle decision, not merely after closure of #272 |
+| Adoption metrics / usage telemetry | strategist | [ADOPTION-METRICS.md](ADOPTION-METRICS.md) defines the data sources and monthly cadence. First snapshot: **2026-11-01**, covering October; it must report Releases/R2 downloads, stars/forks, external contributors, adoption-call conversion, and the external `ADOPTERS.md` count |
+| **Adoption evidence** | strategist | Current baseline: 0 production and 0 external evaluation entries in [ADOPTERS.md](ADOPTERS.md). Q4 "Mature" floor: at least 1 consent-confirmed production adopter with a verifiable reference. Q4 funnel target: 2–3 external production/evaluation entries. Count monthly from `ADOPTERS.md`; ecosystem dependencies and project self-use do not count |
+| Variant lifecycle policy (admission + Beta→Stable exit criteria) | strategist | [VARIANT-LIFECYCLE.md](./VARIANT-LIFECYCLE.md) is the gate. Release parity is a prerequisite, not sufficient evidence: every advertised cell also needs fresh boot, installation, update, and recovery results |
+| **Windows conversion channel (wootc) — external scope** | wootc maintainer | Not a tunaOS Q4 completion gate after the maintainer's #1988 scope decision. In `tuna-os/wootc`, #221 remains blocked on the owner adding `WINGET_TOKEN`, then dispatching submission, passing moderation, and proving a clean install; #222 requires one full-tier matrix with no unexplained reds. BitLocker tracker #223 is closed. Include wootc figures in a tunaOS adoption snapshot only when the snapshot names wootc as its source |
 
 **Distribution-channel sequencing (#2922)**: Flatpak publisher consolidation,
 Homebrew scheduled currency/install checks, and Scoop catalog expansion depend
@@ -283,13 +286,13 @@ on the Q3 ownership, freshness and validation gates above. These are exit
 requirements, not assertions of current channel health; use each linked local
 roadmap and its release/install evidence when assessing completion.
 
-**Milestone fidelity (#1307, 2026-08-12)**: 7 of the 9 goal trackers above were
-filed without being attached to the Q4 milestone (#3), so the milestone
-undercounted real progress (e.g. keyless signing landing 08-10 for #1187
-while the milestone still showed 0 closed). All 7 (#1174/#1175/#1186/#1187/
-#1192/#1193/#1194) are now attached. Going forward: **every goal tracker must
-set its milestone at creation**, not as a follow-up sweep — a tracker without
-a milestone is invisible to milestone-based reporting by construction.
+**Milestone fidelity (2026-10-23)**: milestone #3 currently reports 11 closed
+trackers and 0 open trackers. That metadata is useful for queue accounting, not
+for the "Mature" claim: adoption entries, the 2026-11-01 snapshot, ruleset
+configuration, release assets, and qualification runs remain independently
+verifiable exit evidence. Assess the quarter against
+[Q4-MATURE-DEFINITION.md](Q4-MATURE-DEFINITION.md), and reopen or replace a
+tracker when its required evidence is absent.
 
 ---
 
@@ -335,4 +338,4 @@ roadmap alone does not satisfy org planning visibility (#2922).
 See [SECURITY.md](./SECURITY.md) for vulnerability reporting.
 
 ---
-*Generated by strategist agent at ACMM L6. Updated 2026-08-11 for flavor equality mandate (#1315) + first external contributor (#1317). Signed-off-by: hanthor-hive-agent[bot] <290068839+hanthor-hive-agent[bot]@users.noreply.github.com>*
+*Maintained by the tunaOS strategist role. Last evidence refresh: 2026-10-23 (#3050).*
