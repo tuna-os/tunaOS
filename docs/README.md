@@ -52,6 +52,7 @@ user-facing site:
 | [IMAGE-FACTORY-GATE.md](IMAGE-FACTORY-GATE.md) | Image factory completion gate & definition of done (#1283) |
 | [IMAGE-FACTORY-LIFECYCLE-GATE.md](IMAGE-FACTORY-LIFECYCLE-GATE.md) | Image factory lifecycle coverage & required gate (#1278) |
 | [../VARIANT-LIFECYCLE.md](../VARIANT-LIFECYCLE.md) | Variant/flavor admission, capacity, promotion, and deprecation policy (#1196, #1175) |
+| [CONFERENCE-STRATEGY-2026-2027.md](CONFERENCE-STRATEGY-2026-2027.md) | Q4/Q1 conference priorities, dated organizer research and speaker tracking (#3017) |
 | [CFP-FOSDEM-2027.md](CFP-FOSDEM-2027.md) | FOSDEM 2027 CFP draft |
 | [CFP-DEMO-SCRIPT.md](CFP-DEMO-SCRIPT.md) | Shot list for the 3–5 min CFP demo video, shared by both 2027 submissions |
 | [CFP-SCALE-24X.md](CFP-SCALE-24X.md) | SCaLE 24x CFP draft, adapted from the FOSDEM abstract |
