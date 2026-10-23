@@ -181,7 +181,7 @@ EOF
   [[ "$output" != *"SIGSTORE_OUTAGE"* ]]
 }
 
-@test "cosign_retry: past the deadline emits SIGSTORE_OUTAGE and returns the command's rc" {
+@test "cosign_retry: past the deadline emits SIGSTORE_OUTAGE and returns command status" {
   SIGN_DEADLINE_MINUTES=0
   local cmd
   cmd="$(make_cmd 99 "rekor.sigstore.dev status 502")"
@@ -189,4 +189,16 @@ EOF
   [ "$status" -eq 3 ]
   [[ "$output" == *"SIGSTORE_OUTAGE"* ]]
   [ ! -s "${STUB_DIR}/sleep.log" ]
+}
+
+@test "_cosign_run: a hung external command is killed by its budget" {
+  local hung="${STUB_DIR}/hung_cmd"
+  printf '#!/usr/bin/env bash\nwhile :; do :; done\n' > "$hung"
+  chmod +x "$hung"
+  local started elapsed
+  started="$(date +%s)"
+  run _cosign_run 1 "$hung"
+  elapsed=$(( $(date +%s) - started ))
+  [ "$status" -eq 124 ]
+  [ "$elapsed" -le 3 ]
 }
