@@ -86,7 +86,8 @@ jobs:
                    platform: $plats[]}
                 | select(.platform == "linux/amd64" or .platform == "linux/arm64")
                 | {variant, flavor, platform,
-                   safeplatform: (.platform | gsub("/"; "-"))}
+                   safeplatform: (.platform | gsub("/"; "-")),
+                   runner: (if .platform == "linux/arm64" then "ubuntu-24.04-arm" else "ubuntu-latest" end)}
               ]
             }')
           COUNT=$(echo "$MATRIX" | jq '.include | length')
@@ -99,7 +100,7 @@ jobs:
     name: ${{ matrix.variant }}:${{ matrix.flavor }} [${{ matrix.platform }}]
     needs: generate-matrix
     if: ${{ needs.generate-matrix.outputs.count != '0' }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
     strategy:
       fail-fast: false
@@ -219,19 +220,28 @@ jobs:
           # first NAME=VALUE, so `env HOME=/root -u XDG_DATA_HOME` treats
           # `-u` as the command to run and dies with
           # `env: '-u': No such file or directory`. Options first.
-          # TUNA_INSTALLER_ARCH / TUNA_INSTALLER_APP / TUNA_INSTALLER_REVISION
-          # travel the same env into the customize container so the script and
-          # the OCI labels below agree on what was installed.
+          # The pinned tacklebox forwards only its own allowlisted variables
+          # into the customization container. Generate the script it hashes
+          # with explicit exports so target identity both reaches the
+          # container and participates in tacklebox's cache key.
+          CUSTOMIZE_SCRIPT="$PWD/live-iso/common/src/.customize-live-${SAFEPLATFORM}.sh"
+          trap 'rm -f "$CUSTOMIZE_SCRIPT"' EXIT
+          {
+            echo '#!/usr/bin/env bash'
+            printf 'export TUNA_INSTALLER_ARCH=%q\n' "$INSTALLER_ARCH"
+            printf 'export TUNA_INSTALLER_APP=%q\n' "$INSTALLER_APP"
+            printf 'export TUNA_INSTALLER_REVISION=%q\n' "$INSTALLER_REV"
+            printf 'export TUNA_LIVE_BASE_IMAGE=%q\n' "$IMG"
+            printf 'export TUNA_LIVE_BASE_DIGEST=%q\n' "$BASE_DIGEST"
+            printf 'export TUNA_LIVE_PLATFORM=%q\n' "$PLATFORM"
+            tail -n +2 "$PWD/live-iso/common/src/customize-live.sh"
+          } > "$CUSTOMIZE_SCRIPT"
+          chmod 0755 "$CUSTOMIZE_SCRIPT"
+
           sudo -E env -u XDG_DATA_HOME -u XDG_CONFIG_HOME HOME=/root \
-            "TUNA_INSTALLER_ARCH=${INSTALLER_ARCH}" \
-            "TUNA_INSTALLER_APP=${INSTALLER_APP}" \
-            "TUNA_INSTALLER_REVISION=${INSTALLER_REV}" \
-            "TUNA_LIVE_BASE_IMAGE=${IMG}" \
-            "TUNA_LIVE_BASE_DIGEST=${BASE_DIGEST}" \
-            "TUNA_LIVE_PLATFORM=${PLATFORM}" \
             "${TACKLEBOX_BIN}" customize-live \
             --image "$IMG" \
-            --script "$PWD/live-iso/common/src/customize-live.sh" \
+            --script "$CUSTOMIZE_SCRIPT" \
             --tag "$OUT" \
             --label "org.tunaos.live-overlay.base=${IMG}" \
             --label "org.tunaos.live-overlay.base-digest=${BASE_DIGEST}" \
@@ -241,3 +251,39 @@ jobs:
 
           sudo podman push "$OUT"
           echo "published $OUT"
+
+  publish-compatible-index:
+    name: Publish compatible multi-platform tags
+    needs: [generate-matrix, overlay]
+    if: ${{ needs.generate-matrix.outputs.count != '0' }}
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    env:
+      MATRIX: ${{ needs.generate-matrix.outputs.matrix }}
+    steps:
+      - name: Log in to GHCR
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$GITHUB_TOKEN" | podman login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+
+      - name: Publish existing unsuffixed tags as platform indexes
+        run: |
+          set -euo pipefail
+          jq -r '.include | unique_by([.variant, .flavor])[] | [.variant, .flavor] | @tsv' \
+            <<<"$MATRIX" |
+          while IFS=$'\t' read -r variant flavor; do
+            index="ghcr.io/tuna-os/live-overlay:${variant}-${flavor}"
+            podman manifest rm "$index" >/dev/null 2>&1 || true
+            podman manifest create "$index"
+            while read -r safeplatform; do
+              podman manifest add "$index" \
+                "docker://ghcr.io/tuna-os/live-overlay:${variant}-${flavor}-${safeplatform}"
+            done < <(
+              jq -r --arg variant "$variant" --arg flavor "$flavor" \
+                '.include[] | select(.variant == $variant and .flavor == $flavor) | .safeplatform' \
+                <<<"$MATRIX"
+            )
+            podman manifest push --all "$index" "docker://$index"
+            echo "published $index"
+          done

@@ -23,19 +23,25 @@ def attempt_status(jobs: list[dict[str, Any]]) -> tuple[str, list[str]]:
     if not isinstance(jobs, list):
         return "unknown", ["invalid-job-observation"]
     indexed = {}
+    invalid_phase = False
     for job in jobs:
         if (not isinstance(job, dict)
                 or job.get("phase") not in PHASES | PREREQUISITES):
-            return "unknown", ["invalid-job-phase"]
+            invalid_phase = True
+            continue
         phase = job["phase"]
         if phase in indexed:
             return "unknown", ["ambiguous-job-phase"]
         indexed[phase] = job
-    # A failed build with a skipped downstream gate is still a failed attempt.
+    # A failed recognized phase dominates an unrelated phase name. Otherwise
+    # a newly introduced job can hide the actionable failure that stopped the
+    # required pipeline.
     failed = sorted(phase for phase, job in indexed.items()
                     if job.get("conclusion") in {"failure", "timed_out", "startup_failure"})
     if failed:
         return "failed", [phase + "-failed" for phase in failed]
+    if invalid_phase:
+        return "unknown", ["invalid-job-phase"]
     cancelled = sorted(phase for phase, job in indexed.items() if job.get("conclusion") == "cancelled")
     if cancelled:
         return "blocked", [phase + "-cancelled" for phase in cancelled]

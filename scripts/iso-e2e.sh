@@ -4002,6 +4002,7 @@ emit_qualification_evidence() {
 		STRICT_EV_PLATFORM="${TUNAOS_QUAL_PLATFORM:-$(uname -m)}" \
 		STRICT_EV_CPU="${TUNAOS_QUAL_CPU_BASELINE:-unknown}" \
 		STRICT_EV_SCOPE="${TUNAOS_QUAL_HARDWARE_SCOPE:-qemu}" \
+		STRICT_EV_ISO="$STRICT_ISO_DIGEST" \
 		STRICT_EV_SOURCE="$STRICT_SOURCE_DIGEST" STRICT_EV_OVERLAY="$STRICT_OVERLAY_DIGEST" \
 		STRICT_EV_INSTALLER="$STRICT_INSTALLER_DIGEST" STRICT_EV_ENGINE="$STRICT_ENGINE_DIGEST" \
 		STRICT_EV_BNAME="${TUNAOS_QUAL_BROWSER_NAME:-unknown}" \
@@ -4031,6 +4032,7 @@ evidence = {
     "platform": os.environ["STRICT_EV_PLATFORM"],
     "cpu_baseline": os.environ["STRICT_EV_CPU"],
     "hardware_scope": os.environ["STRICT_EV_SCOPE"],
+    "iso_sha256": os.environ["STRICT_EV_ISO"],
     "resolved_inputs": {
         "source": os.environ["STRICT_EV_SOURCE"],
         "overlay": os.environ["STRICT_EV_OVERLAY"],
@@ -4082,20 +4084,20 @@ run_strict_offline_gui() {
 	# to a host transfer.
 	export TUNAOS_WALKTHROUGH_LUKS_PASS="${TUNAOS_WALKTHROUGH_LUKS_PASS:-tunaos-e2e-luks}"
 	E2E_LUKS_PASS="$TUNAOS_WALKTHROUGH_LUKS_PASS"
-	# Immutable inputs measurable without a guest: the live media itself
-	# (overlay) and the virtualization engine binary (engine). Source and
-	# installer come from env or the live guest (strict_capture_live_inputs).
+	# Immutable inputs measurable without a guest: the ISO artifact checksum
+	# and the virtualization engine binary. The overlay is a distinct build
+	# input and must come from the producer's manifest; substituting the ISO
+	# checksum would make parity require byte-identical ISO metadata.
+	STRICT_ISO_DIGEST="sha256:$(sha256sum "$ISO_PATH" | awk '{print $1}')"
 	STRICT_OVERLAY_DIGEST="${TUNAOS_QUAL_OVERLAY_DIGEST:-}"
-	if [[ -z "$STRICT_OVERLAY_DIGEST" ]]; then
-		STRICT_OVERLAY_DIGEST="sha256:$(sha256sum "$ISO_PATH" | awk '{print $1}')"
-	fi
+	strict_require_digest "$STRICT_OVERLAY_DIGEST" "overlay" || return 1
 	STRICT_ENGINE_DIGEST="${TUNAOS_QUAL_ENGINE_DIGEST:-}"
 	if [[ -z "$STRICT_ENGINE_DIGEST" ]]; then
 		STRICT_ENGINE_DIGEST="sha256:$(sha256sum "$QEMU" | awk '{print $1}')"
 	fi
 	STRICT_SOURCE_DIGEST="${TUNAOS_QUAL_SOURCE_DIGEST:-}"
 	STRICT_INSTALLER_DIGEST="${TUNAOS_QUAL_INSTALLER_DIGEST:-}"
-	strict_offline_evidence "iso=${ISO_PATH} overlay_digest=${STRICT_OVERLAY_DIGEST} engine_digest=${STRICT_ENGINE_DIGEST}"
+	strict_offline_evidence "iso=${ISO_PATH} iso_sha256=${STRICT_ISO_DIGEST} overlay_digest=${STRICT_OVERLAY_DIGEST} engine_digest=${STRICT_ENGINE_DIGEST}"
 	# TPM for the luks leg: fresh here, restarted with preserved state
 	# before each installed boot (same lifecycle as --luks).
 	if [[ ",${STRICT_OFFLINE_GUI_MODES}," == *",luks,"* ]]; then

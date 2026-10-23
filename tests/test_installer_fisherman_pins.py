@@ -101,6 +101,41 @@ def test_the_gitmodules_parser_reads_the_right_submodule() -> None:
     assert mod.audit({"gnome": got})
 
 
+
+def test_collect_uses_the_committed_gitlink_not_the_tracking_branch(monkeypatch):
+    committed = "f" * 40
+    gitmodules = f"""
+[submodule "fisherman"]
+\tpath = fisherman
+\turl = {LIVE}
+\tbranch = main
+"""
+    manifest = json.dumps({
+        "modules": [{
+            "name": "fisherman",
+            "sources": [{"type": "git", "url": LIVE, "commit": mod.FLOOR_COMMIT}],
+        }],
+    })
+
+    monkeypatch.setattr(
+        mod,
+        "fetch",
+        lambda _repo, path: gitmodules if path == ".gitmodules" else manifest,
+    )
+
+    def fake_api(url):
+        if url.endswith("/contents/fisherman"):
+            return {"sha": committed}
+        if "/compare/" in url:
+            return {"status": "ahead"}
+        raise AssertionError(url)
+
+    monkeypatch.setattr(mod, "api_json", fake_api)
+    source = mod.collect()["gnome"]
+    assert source["commit"] == committed
+    assert source["resolved"] == committed
+    assert "branch" not in source
+
 def test_the_manifest_parser_finds_the_fisherman_module() -> None:
     manifest = json.dumps(
         {
