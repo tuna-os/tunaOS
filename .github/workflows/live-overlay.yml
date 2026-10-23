@@ -225,9 +225,14 @@ jobs:
           # The pinned tacklebox forwards only its own allowlisted variables
           # into the customization container. Generate the script it hashes
           # with explicit exports so target identity both reaches the
-          # container and participates in tacklebox's cache key.
-          CUSTOMIZE_SCRIPT="$PWD/live-iso/common/src/.customize-live-${SAFEPLATFORM}.sh"
-          trap 'rm -f "$CUSTOMIZE_SCRIPT"' EXIT
+          # container and participates in tacklebox's cache key. The script
+          # sits beside the payload files it sources.
+          CUSTOMIZE_DIR="$RUNNER_TEMP/live-customize"
+          rm -rf "$CUSTOMIZE_DIR"
+          mkdir -p "$CUSTOMIZE_DIR"
+          cp -a "$PWD/live-iso/common/src/." "$CUSTOMIZE_DIR/"
+          cp "$PWD/image-versions.yaml" "$CUSTOMIZE_DIR/"
+          CUSTOMIZE_SCRIPT="$CUSTOMIZE_DIR/customize-live.sh"
           {
             echo '#!/usr/bin/env bash'
             printf 'export TUNA_INSTALLER_ARCH=%q\n' "$INSTALLER_ARCH"

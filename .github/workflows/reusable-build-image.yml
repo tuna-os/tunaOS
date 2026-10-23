@@ -178,7 +178,7 @@ jobs:
         uses: ./.github/actions/prepare-config
 
       - name: Setup runner
-        uses: projectbluefin/actions/bootc-build/setup-runner@59f783ed76fd9d449ef6887a6649446801bd5434 # v1 as of 2026-07-02
+        uses: projectbluefin/actions/bootc-build/setup-runner@d18642a8b4b325c2551eabd9a65c1ad12b4ebb30 # v1 as of 2026-07-02
         with:
           storage-backend: btrfs
           update-podman: "true"
@@ -442,6 +442,7 @@ jobs:
           # config selects ext4, and the unsealed probe would otherwise pick
           # xfs, which its GRUB cannot read.
           TUNAOS_QCOW2_FILESYSTEM: ${{ inputs.image-variant == 'hummingbird' && 'ext4' || '' }}
+          TUNAOS_GDM_LOGIN_CHECK: ${{ inputs.flavor == 'tuna' && '1' || '0' }}
         run: |
           mkdir -p verify-out
           IMAGE="localhost/${IMAGE_VARIANT}:${DEFAULT_TAG}"
@@ -453,8 +454,15 @@ jobs:
           # evidence-upload step below already runs under `if: always()`, so
           # dropping the swallow doesn't lose any diagnostics — it just makes
           # the check red when the boot actually failed.
-          sudo --preserve-env=TUNAOS_QCOW2_FILESYSTEM \
+          sudo --preserve-env=TUNAOS_QCOW2_FILESYSTEM,TUNAOS_GDM_LOGIN_CHECK \
             ./scripts/corral-boot-gate.sh "$IMAGE" verify-out 300
+
+      - name: Normalize PR verification evidence ownership
+        if: always() && github.event_name == 'pull_request' && contains(matrix.platform, 'amd64')
+        run: |
+          if [[ -d verify-out ]]; then
+            sudo chown -R "$USER:$(id -gn)" verify-out
+          fi
 
       - name: Upload PR verification evidence
         if: always() && github.event_name == 'pull_request' && contains(matrix.platform, 'amd64')
@@ -866,10 +874,18 @@ jobs:
           fi
 
           echo "Running diff..."
-          ./scripts/diff-images.sh "$BASE_IMAGE" "$TARGET_IMAGE" "diff_report.md"
-
-          # Add a header to the report
-          sed -i '1s/^/## 🔍 Image Diff Report\n\n/' diff_report.md
+          # The diff only feeds an informational PR comment (the post step
+          # skips when the report is absent), while a failing container
+          # runtime here is runner-state flake, not image quality: the
+          # target image already booted and passed every gate above. Never
+          # fail a green image over the comment.
+          if ./scripts/diff-images.sh "$BASE_IMAGE" "$TARGET_IMAGE" "diff_report.md"; then
+            # Add a header to the report
+            sed -i '1s/^/## 🔍 Image Diff Report\n\n/' diff_report.md
+          else
+            echo "::warning::Image diff failed; skipping the PR diff comment."
+            rm -f diff_report.md
+          fi
 
       - name: Post Diff Comment
         if: github.event_name == 'pull_request' && hashFiles('diff_report.md') != ''
@@ -942,7 +958,7 @@ jobs:
     needs:
       - build_push
     container:
-      image: cgr.dev/chainguard/wolfi-base@sha256:21042af242bc52ed638450dbb224f9d3738f36f70f1317c640eda0eca8d15934  # :latest linux/amd64 as of 2026-06-13
+      image: cgr.dev/chainguard/wolfi-base@sha256:340abe305ba813e2b6198a6d455e2063a53311f2e249d396e14c007caa5f53ac  # :latest linux/amd64 as of 2026-06-13
       # This job only performs registry/API operations (podman login and
       # manifest create/add/annotate/push). It does not run or build a
       # container or mount a host filesystem -- but podman itself needs
@@ -1615,9 +1631,10 @@ jobs:
           # untouched -- the variable is unset for them and the probe decides
           # exactly as before.
           TUNAOS_QCOW2_FILESYSTEM: ${{ inputs.image-variant == 'hummingbird' && 'ext4' || '' }}
+          TUNAOS_GDM_LOGIN_CHECK: ${{ inputs.flavor == 'tuna' && '1' || '0' }}
         run: |
           mkdir -p verify-out
-          sudo --preserve-env=TUNAOS_QCOW2_FILESYSTEM \
+          sudo --preserve-env=TUNAOS_QCOW2_FILESYSTEM,TUNAOS_GDM_LOGIN_CHECK \
             ./scripts/corral-boot-gate.sh "$TEST_IMAGE" verify-out 900
 
       - name: Build qcow2 from testing image (virgl)
@@ -1866,11 +1883,14 @@ jobs:
           # neither can drift from the other.
           is_eln=false
           [[ "${IMAGE_VARIANT}" == wahoo* ]] && is_eln=true
+          is_ubuntu=false
+          [[ "${IMAGE_VARIANT}" == grouper* || "${IMAGE_VARIANT}" == gurnard* ]] && is_ubuntu=true
 
           sudo podman run --rm \
             -v "$PWD/build_scripts/checks/verify-desktop-experience.sh:/vde.sh:z" \
             -e IS_HUMMINGBIRD="$is_hb" \
             -e IS_ELN="$is_eln" \
+            -e IS_UBUNTU="$is_ubuntu" \
             --entrypoint /bin/bash "${TEST_IMAGE}" /vde.sh "${DESKTOP}"
 
       - name: Verify package wishlist

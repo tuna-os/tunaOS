@@ -35,6 +35,11 @@ def test_live_primary_source_owns_all_profiles():
     assert r.resolve(d,'gnome',manager='apt',os_id='debian')['sections'][-1][1]['required'][-1]=='fixture-native-tool'
 
 
+def test_apt_profile_uses_the_canonical_gdm_service():
+    result=r.resolve(live(),'tuna',manager='apt',os_id='debian')
+    assert result['display_manager']=='gdm'
+
+
 def fixture_requested_packages(requested, targets, evidence):
     """Fixture-only intent preflight, not a repository lookup or production add."""
     r.string_list(requested, 'requested')
@@ -193,6 +198,13 @@ def test_projection_is_deterministic_and_matches_frozen_profiles():
 def test_unsupported_apt_policy_is_rejected_instead_of_ignored():
     document=live()
     document['desktops']['gnome-debian']['packages']['apt']['optional']=['fixture-tool']
+    with pytest.raises(r.PolicyError,match='known fields'):
+        r.validate(document)
+
+
+def test_unknown_scalar_native_policy_is_rejected_instead_of_ignored():
+    document=live()
+    document['desktops']['gnome-debian']['packages']['apt']['unexpected']='fixture'
     with pytest.raises(r.PolicyError,match='known fields'):
         r.validate(document)
 

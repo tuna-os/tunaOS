@@ -25,20 +25,56 @@ just fix && just check
 
 ## Contributor onboarding
 
+For five small tasks and a command-by-command fork workflow, start with
+[your first PR](docs/CONTRIBUTOR-FIRST-PR.md). The
+[contributor roadmap](docs/CONTRIBUTOR-ROADMAP.md) covers the next steps.
+See [contributor credits](CONTRIBUTORS.md) for merged work.
+
 New here? Start with an **[org-wide good first issue](https://github.com/issues?q=org%3Atuna-os+is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)** — a curated, maintainer-sized task for documentation parity, a small script fix, or test coverage. Before you start, leave a comment to say you take the issue, so that nobody duplicates the work. The [Hacktoberfest 2026 contributor plan](docs/HACKTOBERFEST-2026.md) tracks the current pool and census. The [weekly contributor triage](#weekly-contributor-triage) below labels new bounded tasks `good first issue`.
 
 The current starter runway lives in the **[org-wide good first issue](https://github.com/issues?q=org%3Atuna-os+is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)** pool. Most of it is in `tuna-os/docs` (docs-parity and guide tasks — e.g. desktop quick-starts, verification guides, cheat sheets). These tasks are intentionally independent of the image build pipeline, and maintainers curate them for first-time contributors. If another contributor claims one, or if it closes, pick another bounded task from the same search.
+
+For the repository map, voluntary mentorship ladder, requests for a mentor, office
+hours, and review escalation, see [the ecosystem guide](CONTRIBUTING-ADVANCED.md).
 
 ### Fork → PR loop
 
 1. Fork `tuna-os/tunaos` on GitHub and clone your fork.
 2. Create a focused branch: `git switch -c docs/short-description`.
 3. Make the smallest change that satisfies the issue's acceptance criteria.
-4. Run the checks listed below, then commit and push the branch to your fork.
+4. Run the checks listed below, then commit with `git commit -s` and push the branch to your fork. See [DCO sign-off](#dco-sign-off).
 5. Open a PR against `tuna-os/tunaos:main`, link the issue with `Fixes #NNN`, and include the checks you ran.
 6. Keep the branch available while review is in progress; you can push follow-up fixes to the same PR.
 
 You do not need write access to the upstream repository. GitHub's fork-based PR flow is the normal path for external contributors. If CI fails, include the job that failed and a short reproduction in the PR instead of a silent retry. If GitHub rejects a push because the GitHub App does not have `workflows` permission, follow the [runbook for workflow publication](docs/CI-WORKFLOW-PUBLISHING.md). Workflow YAML in the repository cannot grant that App-level permission.
+
+### DCO sign-off
+
+Every commit needs a `Signed-off-by` trailer for the Developer Certificate of
+Origin (DCO) check. Before you commit, check your author identity:
+
+```bash
+git var GIT_AUTHOR_IDENT
+git commit -s -m "docs: describe the change"
+git log -1 --format=full
+```
+
+The sign-off name and email must match the commit author. `-s` adds the
+trailer; you do not need a cryptographic key. If your latest unpublished commit
+has no sign-off, add one with `git commit --amend --no-edit -s`, then check
+the log again. Sign off every commit in a PR.
+
+### Curate a starter task
+
+Use the [starter task form](https://github.com/tuna-os/tunaos/issues/new?template=starter-task.yml)
+to propose a small task. Include the code or page to change, acceptance
+criteria, local checks, a parent issue, and a contact for questions.
+Maintainers confirm availability and scope, then add `good first issue`
+and `help wanted`. The form does not apply those labels.
+
+For help with a first PR, comment on the task or ask in
+[Matrix](https://matrix.to/#/%23tunaos:reilly.asia). Include the command you
+ran and its output when a local check fails.
 
 For the Hacktoberfest 2026 backlog, see the [contributor plan](docs/HACKTOBERFEST-2026.md) for current candidates, acceptance standards, and event dates.
 
@@ -64,6 +100,71 @@ The maintainer keeps one 30-minute slot each week for contributor work. During t
 
 This is a lightweight queue-management commitment, not a promise of immediate review. Contributors should expect an acknowledgement or status update within the next weekly triage slot.
 
+### Weekly hold-review sweep
+
+The triage maintainer reserves 15 minutes each week for an
+async hold-review sweep. Review every open PR with `hold`, oldest hold
+first. For a hive-wide sweep, the coordinator repeats this procedure in each
+authorized repository; this repository's policy does not grant write access
+elsewhere. Record the repositories covered and any not yet reviewed.
+
+When you apply `hold`, leave a PR comment with:
+
+- **Reason and evidence:** the check/run that failed, dependency, or exact decision.
+- **Owner:** the person or team who can unblock it.
+- **Unhold trigger:** an observable condition, such as a linked CI fix that passes.
+- **Next review:** a date no later than the next weekly sweep.
+
+Use the label event in the PR timeline to measure dwell since the current
+hold began. PR creation time and last update time are not hold age. Query
+PRs from GitHub for current evidence:
+
+```bash
+gh pr list --repo tuna-os/tunaos --state open --label hold --limit 1000 \
+  --json number,url,title,labels
+```
+
+For each PR, read its discussion, timeline, latest checks and linked blockers,
+then record one disposition in a comment:
+
+1. **Ready:** evidence meets the trigger; an authorized reviewer removes `hold`
+   and requests review. Existing checks, approval requirements and merge gates
+   still apply; contributors never merge their own PRs.
+2. **CI or external dependency:** retain `hold`, link the blocker and its
+   owner, and set the next review date. Group PRs with the same blocker. Review the
+   infrastructure fix first. After it lands, recheck each PR's CI
+   before you remove its hold; do not assume it unholds automatically.
+3. **Decision required:** retain `hold`, add `needs-direction` (a maintainer
+   creates the label if absent), and state the precise question and decision
+   owner. The label requests a decision. It does not give permission to bypass it.
+4. **Superseded or resolved:** verify the replacement or resolution, then an
+   authorized reviewer closes with an explanation and evidence link. Age alone
+   is not grounds for closure; preserve unique work and discussion.
+
+A hold without a reason comment after 48 hours is overdue for review. Ask its
+setter for the missing reason, owner and trigger, and escalate to the triage
+maintainer at the next sweep. Do not auto-close it: the
+[triage policy](TRIAGE-POLICY.md#3-resolution-verified-closure-not-calendar-age-closure)
+calls for verification before closure.
+
+Post a dated summary of each sweep in the issue (for this rollout,
+[#2911](https://github.com/tuna-os/tunaos/issues/2911)). Include:
+
+- Repositories covered and open holds in each.
+- Oldest current hold date and number of holds over 30 days.
+- Holds without reason comments and decisions that need owners.
+- Links to disposition comments.
+- New holds and holds released or closed since the last sweep.
+- Number of PRs merged over the same seven-day window.
+
+Compare the same repository scope week over week. Check merge counts as well
+as hold counts to detect a queue that has stopped.
+
+The rollout target from #2911 is fewer than 10 hive-wide holds within a week
+of the linked CI fixes. The merge target is at least two main-branch merges
+per day. Measure these goals without bypass of review or closure rules.
+If the queue misses a target, name the blockers and owners in the next summary.
+
 ## Pre-Commit (mandatory)
 
 ```bash
@@ -85,6 +186,41 @@ scheduled build matrix. The rest of the contributor contract:
 | `just test-cell <variant> <flavor>` | the desktop contract against one published image, as the nightly sweep runs it |
 | `just test-e2e <iso>` | boot an ISO under QEMU and assert the live environment reaches readiness |
 
+## Prose checks (STE)
+
+Run `just ste` before you submit Markdown changes. It uses the shared linter
+revision from `.github/workflows/ste.yml`, with the same `.ste-budget` as CI.
+The budget covers the whole repository. It only goes down; do not raise it
+to pass a content PR. There is no repository-local `.stelint` path config.
+
+Apply this policy by the purpose of the text:
+
+| Location or purpose | STE policy |
+|---|---|
+| README, CONTRIBUTING, API docs, runbooks, and technical instructions | Keep STE checks. Fix new findings. |
+| `docs/outreach/`, CFP abstracts, blog and campaign copy | A reasoned opt-out is allowed for audience-facing copy. |
+| Design guides, including wallpaper contributions | Keep checks on setup and submission steps. An opt-out is allowed for the creative brief or art direction. |
+
+A directory name alone does not skip checks. In a mixed page, mark only the
+content that needs a different voice. Use the exact lowercase directives:
+
+```markdown
+<!-- ste-disable: conference abstract uses the event audience's terms -->
+Audience-facing abstract goes here.
+<!-- ste-enable -->
+```
+
+For a page made entirely of such content, put this directive on its first line:
+
+Start with `<!-- ste-disable-file:`, add a page-specific reason, and close
+that same line with `-->`. For example, the reason can state that campaign
+copy uses the target audience's voice.
+
+State a specific reason for that page or region.
+The uppercase `<!-- STE-DISABLE -->` form does not work. File opt-outs appear
+with their reasons in the linter report. Reviewers still check claims, links,
+and technical accuracy in all content; an STE opt-out only changes prose checks.
+
 ## Every incident becomes a regression test
 
 A bug that let an unusable or wrongly-promoted image ship stays open until a
@@ -96,6 +232,25 @@ the issue and the run or log that measured the failure. The seed example is
 the desktop contract's own check against a filesystem with no session file,
 and holds that it fails. `tests/test_regression_convention.py` enforces the
 naming.
+
+## Roadmap before launch
+
+Before you publish a new product or distribution channel, confirm that its
+repository has `ROADMAP.md` at the root of its default branch. This applies to
+desktop tools, shared infrastructure, Flatpak/Flathub apps, downloadable binaries,
+and package-manager entries. Include the roadmap link and the links to the release
+prerequisite issues in the release PR so reviewers can check the gate before publication.
+Keep stability goals, important dependencies, and acceptance evidence in that
+local roadmap; do not infer readiness from the file's existence.
+
+For the organization-wide audit, run `python3 scripts/gen-roadmap-coverage.py`
+in tunaos and review the generated [coverage inventory](ROADMAP.md#per-repo-roadmaps).
+It checks every active public repository, including tools such as bluefin-cli
+and wootc, using each repository's default branch. Track remaining omissions in
+[#2820](https://github.com/tuna-os/tunaos/issues/2820). Coverage is broader than
+shipped products: a missing roadmap is a plan gap, not proof that a product
+has shipped. Do not turn live cross-repository coverage into a PR gate; use
+`--check-structure` for changes to the generated block here.
 
 ## Building Images
 

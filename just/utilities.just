@@ -98,6 +98,15 @@ check: _ensure_check_deps ste
     echo "Checking workflow drift..."
     python3 {{ justfile_directory() }}/scripts/generate-workflows.py --check || exit 1
     python3 {{ justfile_directory() }}/scripts/gen-ci-lanes.py --check
+    # Check only generated per-variant wrappers; build-variant.yml is shared workflow source.
+    generated_workflows=()
+    while IFS= read -r variant; do
+        generated_workflows+=(".github/workflows/build-${variant}.yml")
+    done < <(yq -r '.variants[].id' .github/build-config.yml)
+    if ! git diff --exit-code -- "${generated_workflows[@]}"; then
+        echo "::error::Generated workflow files are stale. Run 'just generate-workflows' and commit the changes."
+        exit 1
+    fi
 
 # --- Test Targets ---
 _ensure_test_deps: _ensure_check_deps

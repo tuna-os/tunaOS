@@ -59,26 +59,14 @@ jobs:
         with:
           persist-credentials: true
 
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.15"
 
       - name: Install deps
         run: |
-          python - <<'PY'
-          import re
-          import subprocess
-          import sys
-          from pathlib import Path
-          text = Path("image-versions.yaml").read_text()
-          packages = []
-          for name in ("PyYAML", "jsonschema"):
-              matches = re.findall(r'^  ' + re.escape(name) + r': "([0-9.]+)"$', text, re.M)
-              if len(matches) != 1:
-                  raise ValueError("missing or ambiguous central dependency pin")
-              packages.append(f"{name}=={matches[0]}")
-          subprocess.run([sys.executable, "-m", "pip", "install", *packages], check=True)
-          PY
+          mapfile -t packages < <(python scripts/python-package-pins.py image-versions.yaml PyYAML jsonschema)
+          python -m pip install "${packages[@]}"
 
       - name: Observe required target health
         env:

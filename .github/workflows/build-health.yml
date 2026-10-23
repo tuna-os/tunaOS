@@ -32,27 +32,10 @@ jobs:
           python-version: "3.14"
       - name: Install pinned dependencies
         run: |
-          python - <<'PY'
-          import subprocess
-          import sys
-          import re
-          from pathlib import Path
-          # Read only the exact scalar pins before installing the YAML parser.
-          text = Path("image-versions.yaml").read_text()
-          pins = {}
-          for name in ("PyYAML", "jsonschema", "pytest"):
-              matches = re.findall(r'^  ' + re.escape(name) + r': "([0-9.]+)"$', text, re.M)
-              if len(matches) != 1:
-                  raise ValueError("missing or ambiguous central dependency pin")
-              pins[name] = matches[0]
-          package_specs = [
-              f"{name}=={pins[name]}" for name in ("PyYAML", "jsonschema", "pytest")
-          ]
-          install = [sys.executable, "-m", "pip", "install", *package_specs]
-          result = subprocess.run(install + ["--break-system-packages"])
-          if result.returncode:
-              subprocess.run(install + ["--user"], check=True)
-          PY
+          # Read the python_packages section before installing the YAML parser.
+          mapfile -t package_specs < <(python scripts/python-package-pins.py image-versions.yaml PyYAML jsonschema pytest)
+          python -m pip install "${package_specs[@]}" --break-system-packages ||
+            python -m pip install "${package_specs[@]}" --user
       - name: Verify health and native platform boundaries
         run: python -m pytest tests/test_build_health.py tests/test_build_health_fetch.py tests/test_build_health_receipts.py tests/test_consumer_contract.py tests/regressions/test_issue_2513_selected_display_manager_survives_first_boot.py tests/test_rawhide_gnome_vpn_replacement.py tests/test_eln_fwupd_family_upgrade.py tests/test_asahi_native_kernel_evidence.py tests/regressions/test_issue_2513_waived_desktop_contract_cannot_pass.py tests/test_candidate_image_publication.py tests/test_debian_nvidia_snapshot.py tests/regressions/test_issue_2696_debian_nvidia_holds_a_kernel_the_driver_builds_on.py tests/test_candidate_flavor_selection.py
       - name: Collect required target observations
