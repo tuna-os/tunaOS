@@ -506,30 +506,10 @@ jobs:
               "$artifact" "R2:${R2_BUCKET}/live-isos/"
           done
           # AMD64/v2 owns the historical bare pointer when it exists. Generic
-          # AMD64 retains that pointer for cells with no v2 sibling.
-          HAS_V2="$(python3 - "$VARIANT" "$FLAVOR" <<'PY'
-          import sys
-          from scripts.lib import tunaos_config
-          variant_id, flavor_id = sys.argv[1:]
-          config = tunaos_config.matrix(tunaos_config.load())
-          variant = next(v for v in config["variants"] if v["id"] == variant_id)
-          flavor = next(f for f in variant["flavors"] if f["id"] == flavor_id)
-          platforms = flavor.get("platforms") or variant.get("platforms") or config["config"]["global_platforms"]
-          print("true" if "linux/amd64/v2" in platforms else "false")
-          PY
-          )"
-          case "${PLATFORM}" in
-            linux/amd64/v2) LATEST="${VARIANT}-${FLAVOR}-latest.iso" ;;
-            linux/amd64)
-              if [[ "$HAS_V2" == true ]]; then
-                LATEST="${VARIANT}-${FLAVOR}-latest-amd64.iso"
-              else
-                LATEST="${VARIANT}-${FLAVOR}-latest.iso"
-              fi
-              ;;
-            linux/arm64) LATEST="${VARIANT}-${FLAVOR}-latest-arm64.iso" ;;
-            *) echo "::error::unsupported canonical platform: ${PLATFORM}"; exit 1 ;;
-          esac
+          # AMD64 retains that pointer for cells with no v2 sibling. The same
+          # helper names the object in iso-e2e.yml, so both sides agree.
+          SUFFIX="$(python3 scripts/iso-latest-suffix.py "$VARIANT" "$FLAVOR" "$PLATFORM")"
+          LATEST="${VARIANT}-${FLAVOR}-latest${SUFFIX}.iso"
           rclone copyto --log-level INFO --s3-no-check-bucket \
             "$ISO" "R2:${R2_BUCKET}/live-isos/${LATEST}"
           DIGEST=$(sha256sum "$ISO" | awk '{print $1}')
