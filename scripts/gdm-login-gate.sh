@@ -80,7 +80,7 @@ if [[ -n "$_diag_uid" ]]; then
 fi
 echo "==> ScreenSaver state for $user"
 if [[ -n "$_diag_uid" ]]; then
-	runuser -u "$user" -- env "XDG_RUNTIME_DIR=/run/user/${_diag_uid}" busctl --user call org.gnome.ScreenSaver /org/gnome/ScreenSaver org.gnome.ScreenSaver GetActive 2>&1 || true
+	busctl --machine="${user}@.host" --user call org.gnome.ScreenSaver /org/gnome/ScreenSaver org.gnome.ScreenSaver GetActive 2>&1 || true
 fi
 echo "==> GDM service"
 systemctl status gdm.service --no-pager || true
@@ -158,10 +158,11 @@ FIND_SESSION
 # confirmed lock state. Tuna does not subscribe to logind's Lock signal and
 # never sets LockedHint, so those only serve as a fallback.
 screensaver_call() {
-	local uid
-	uid="$(guest id -u "$TEST_USER")" || return 1
-	guest runuser -u "$TEST_USER" -- env "XDG_RUNTIME_DIR=/run/user/${uid}" \
-		busctl --user call org.gnome.ScreenSaver /org/gnome/ScreenSaver org.gnome.ScreenSaver "$1"
+	# --machine reaches the user's bus through systemd's own proxy. Opening the
+	# bus socket directly as the user is refused ("Operation not permitted")
+	# from the SSH login context on SELinux images.
+	guest busctl --machine="${TEST_USER}@.host" --user call \
+		org.gnome.ScreenSaver /org/gnome/ScreenSaver org.gnome.ScreenSaver "$1"
 }
 
 # Prints yes, no or unknown. unknown never counts as a confirmation either way.
