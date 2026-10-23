@@ -20,6 +20,15 @@ export TUNAOS_COVERAGE_CAPTURE=1 TUNAOS_COVERAGE_SOURCE_SHA="$DIAGNOSTIC_SOURCE_
 export TUNAOS_COVERAGE_WORKFLOW_SHA="${DIAGNOSTIC_WORKFLOW_SHA:?workflow SHA required}"
 export E2E_WALL_CLOCK_DEADLINE="$(($(date +%s) + 90 * 60))"
 export E2E_CHECKPOINT_STRICT=0 TUNAOS_E2E_VERIFY_TPM_AUTOUNLOCK=0
+qemu_args=()
+case "${DIAGNOSTIC_QEMU_FLAG:-}" in
+"") ;;
+--no-kvm) qemu_args=(--no-kvm) ;;
+*)
+	echo 'Unsupported diagnostic QEMU flag' >&2
+	exit 2
+	;;
+esac
 mkdir -p coverage-diagnostic
 trap 'sudo chown -R "$(id -u):$(id -g)" coverage-diagnostic 2>/dev/null || true' EXIT
 # No push, gallery publication, registry credentials, or external state mutation.
@@ -45,7 +54,7 @@ sudo -E env FISHERMAN_OVERRIDE="$FISHERMAN_OVERRIDE" \
 	TUNAOS_COVERAGE_WORKFLOW_SHA="$TUNAOS_COVERAGE_WORKFLOW_SHA" \
 	E2E_WALL_CLOCK_DEADLINE="$E2E_WALL_CLOCK_DEADLINE" \
 	E2E_CHECKPOINT_STRICT=0 TUNAOS_E2E_VERIFY_TPM_AUTOUNLOCK=0 \
-	scripts/iso-e2e.sh "${isos[0]}" --luks --output coverage-diagnostic --memory 10240 --timeout 1200
+	scripts/iso-e2e.sh "${isos[0]}" --luks "${qemu_args[@]}" --output coverage-diagnostic --memory 10240 --timeout 1200
 rc=$?
 set -e
 sudo chown -R "$(id -u):$(id -g)" coverage-diagnostic

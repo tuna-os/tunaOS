@@ -38,3 +38,21 @@ def test_premerge_canary_requires_explicit_exact_head_approval_label():
     assert 'github.event.pull_request.head.repo.full_name == github.repository' in workflow
     assert 'synchronize' not in workflow and 'opened' not in workflow
     assert 'pull_request_target' not in workflow
+
+
+def test_canary_has_explicit_tcg_fallback_and_rejects_other_flags():
+    import os
+    import subprocess
+    workflow = (ROOT / '.github/workflows/iso-coverage-canary.yml').read_text()
+    script = (ROOT / 'scripts/iso-coverage-canary.sh').read_text()
+    assert 'if [[ -e /dev/kvm ]]; then' in workflow
+    assert 'DIAGNOSTIC_QEMU_FLAG=--no-kvm' in workflow
+    assert '--luks "${qemu_args[@]}" --output' in script
+    assert 'tests/test_ci_lanes.py' in (ROOT / '.github/workflows/iso-coverage-checks.yml').read_text()
+    head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
+    result = subprocess.run(['bash', 'scripts/iso-coverage-canary.sh'], cwd=ROOT,
+                            env={**os.environ, 'DIAGNOSTIC_SOURCE_SHA': head,
+                                 'DIAGNOSTIC_WORKFLOW_SHA': head, 'GITHUB_RUN_ATTEMPT': '1',
+                                 'DIAGNOSTIC_QEMU_FLAG': '--arbitrary'}, capture_output=True, text=True)
+    assert result.returncode == 2
+    assert 'Unsupported diagnostic QEMU flag' in result.stderr

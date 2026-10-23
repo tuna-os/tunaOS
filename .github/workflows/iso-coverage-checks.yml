@@ -30,5 +30,6 @@ jobs:
           PYTEST_DISABLE_PLUGIN_AUTOLOAD: '1'
         run: |
           python -m pytest -q tests/test_iso_coverage_*.py \
-            tests/test_workflow_expressions_parse.py tests/test_workflow_conditions_name_real_inputs.py
+            tests/test_workflow_expressions_parse.py tests/test_workflow_conditions_name_real_inputs.py \
+            tests/test_ci_lanes.py
           bash -n scripts/iso-e2e.sh scripts/iso-coverage-canary.sh

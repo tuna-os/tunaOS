@@ -2099,3 +2099,11 @@ Both caller and callee refuse reruns. This prevents a budget bypass through old 
 Do not reset the budget or accept PR artifacts as production proof.
 Use the exact-head diagnostic in [the coverage plan](ISO-COVERAGE-PLAN.md) only after approval.
 A legacy LUKS pass does not qualify a plain GUI install.
+
+
+### New ISO coverage workflow fails the CI lane tests
+
+Run `scripts/gen-ci-lanes.py` after adding a workflow. The generated table must match.
+Test run `39951065131` found a stale table and an unconditional KVM device change.
+Use `--no-kvm` when the hosted runner has no KVM device, under the same time limit.
+The cheap coverage gate now runs `tests/test_ci_lanes.py` to check both contracts.

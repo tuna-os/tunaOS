@@ -59,7 +59,11 @@ jobs:
           for path in /usr/local/bin/podman /usr/local/sbin/podman; do
             if [[ -e "$path" ]] && ! dpkg -S "$path" >/dev/null 2>&1; then sudo rm -f "$path"; fi
           done
-          sudo chmod a+rw /dev/kvm
+          if [[ -e /dev/kvm ]]; then
+            sudo chmod a+rw /dev/kvm
+          else
+            echo 'DIAGNOSTIC_QEMU_FLAG=--no-kvm' >> "$GITHUB_ENV"
+          fi
           mkdir -p ~/.config/containers
           printf '[engine]\ncgroup_manager = "cgroupfs"\n' > ~/.config/containers/containers.conf
       - name: Run one diagnostic legacy install with exact-head capture

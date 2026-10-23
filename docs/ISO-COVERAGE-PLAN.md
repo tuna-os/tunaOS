@@ -2,7 +2,9 @@
 
 This candidate adds an inventory, a bounded schedule, receipts, and diagnostic tests.
 It reconstructs evidence from authenticated Actions artifacts.
-It has **not run a live canary**. It does not claim that any cell passed.
+The [approved canary](https://github.com/tuna-os/tunaOS/actions/runs/39951111670) passed at `fb71f4b4`.
+It showed a legacy install with LUKS and a passphrase boot, not strict GUI or production coverage.
+The later TCG fallback has source tests only; no second canary was run.
 This work does not change repository variables, remote state, or existing schedules.
 
 ## Scope and cadence
