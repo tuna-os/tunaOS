@@ -49,10 +49,13 @@ boolean such as the repository's current `SEALED=1` probe is insufficient.
 | UKI byte integrity | The exact PE/COFF UKI bytes, including signed sections and the Authenticode certificate table, survive every inspection, copy, install, update, and rollback step. | Firmware trust, root integrity, or encryption. |
 | UKI signature validity | The signature on those exact bytes verifies against the declared signer and policy. | That the firmware trusts the signer. |
 | Firmware trust | The actual firmware → shim (if present) → bootloader → UKI chain accepts the payload with the intended Secure Boot state, including SBAT and revocation behavior. | That a signature merely exists or verifies with an arbitrary tool key. |
-| Root integrity | The installed root has the declared fs-verity or dm-verity protection and the boot path checks the declared root identity. | A signed UKI or an encrypted volume. |
+| Root integrity | The installed root has the declared fs-verity or dm-verity protection. The declared root identity is authenticated by the signed UKI, and the boot path verifies the root against that identity. | A signed UKI alone, or an encrypted volume. |
 | Encryption | LUKS, passphrase recovery, TPM policy, and resealing behavior are separately qualified. | Any of the four assurances above. |
 
-Composefs gives root integrity only when fs-verity passes its check.
+Composefs gives root integrity only when fs-verity passes its check against a
+root identity that the signed UKI carries. A root hash that the installed system
+reads from an unsigned source does not give a sealed root.
+
 An image can carry a valid UKI signature while its firmware chain remains
 unqualified. This image has a signature but no Secure Boot qualification.
 
@@ -130,6 +133,8 @@ root:
   filesystem: ext4                    # explicit; no xfs fallback for fs-verity
   integrity: fs-verity                # fs-verity or dm-verity, explicit
   identity: <root-digest-or-tree-id>
+  identity_binding: signed-uki-cmdline  # the only accepted binding
+  cmdline_parameter: <name-of-signed-root-identity-parameter>
 
 encryption:
   mode: none                           # `luks2` is a separate qualification
@@ -193,6 +198,19 @@ provenance:
 8. `encryption.mode: none` is the only initial proof target. Any encrypted
    record is invalid until passphrase recovery, TPM policy, and TPM reseal after
    update have their own evidence.
+9. The root identity MUST be bound to the signed UKI cmdline and verified
+   through the trusted boot chain. `root.identity` MUST be a value in
+   `boot.uki.kernel_parameters` at the `root.cmdline_parameter` key. The
+   signature and firmware trust of rule 4 then cover it. A verifier MUST accept
+   a root identity only when all of these are true:
+   - the signed UKI carries it;
+   - the firmware chain accepts that UKI; and
+   - the boot path verifies the installed root against that exact value.
+
+   A verifier MUST reject an unsigned or host-supplied root identity. Examples
+   are a value from the ESP, a loader entry, the installed root, `--karg`, or an
+   installer recipe. A change to the root identity needs a new UKI, a new
+   signature, and a new recorded digest.
 
 ## Qualification evidence required for support
 
@@ -204,11 +222,11 @@ measurements. Do not treat current bootc or ISO gates as equivalent.
 | Exact artifact | Build one disposable target from one exact image/UKI digest on one architecture. | Source revision, image digest, UKI digest, config digest, tool versions, architecture. | Reject the record if any identity is missing or inferred. |
 | Byte preservation | Hash the UKI before and after read-only inspection, OCI/DDI extraction, installer staging, ESP copy, update, and rollback. | Ordered before/after hashes plus signature verification at each handoff. | Stop before boot or update; never repair by re-signing silently. |
 | Secure Boot chain | Boot with the intended firmware state through the declared shim/loader chain. | Firmware mode, loader paths, signer identity, SBAT generation/policy, revocation state, verification logs. | Valid signature without firmware trust is a failed qualification. |
-| Trust negatives | Test tampered bytes, wrong-key bytes, revoked/SBAT-invalid assets, unsigned assets, and an otherwise valid asset under the wrong firmware trust store. | The exact test artifact and the expected rejection point. | Fail closed before installing or booting; retain the working slot. |
+| Trust negatives | Test tampered bytes, wrong-key bytes, revoked/SBAT-invalid assets, unsigned assets, and an otherwise valid asset under the wrong firmware trust store. Also test a swapped root identity: an unsigned cmdline or loader-entry override, and a root that does not match the signed identity. | The exact test artifact and the expected rejection point. | Fail closed before installing or booting; retain the working slot. |
 | ESP capacity | Measure current + next + rollback UKIs, shim/loader assets, firmware assets, and update overlap for each architecture. | Partition layout, byte budget, free-space floor, and the exact payload sizes. | Reject insufficient space before modifying the working boot path. |
 | Interrupted update | Interrupt a write at each boot-critical handoff and retry/reboot. | Pre/post ESP tree and boot result; old slot hash and bootability. | Preserve and boot the last known-good slot; no partial replacement. |
 | Offline plain install | Run the actual shipped installer from native and browser-produced media with network unavailable. | Media digests, installer revision, recipe/contract, target-only boot logs, and screenshots or serial evidence. | No support if the installer needs an unrecorded fallback or network pull. |
-| Target-only boot | Remove the build host, live media, and network dependency; boot the installed target alone. | Firmware boot entry, loader/UKI path, root-integrity verification, and desktop/service readiness. | Treat any host/live fallback as a failed install. |
+| Target-only boot | Remove the build host, live media, and network dependency; boot the installed target alone. | Firmware boot entry, loader/UKI path, verification of the root against the signed identity, and desktop/service readiness. | Treat any host/live fallback as a failed install. |
 | Update and rollback | Apply an update, boot it, intentionally fail a candidate, and roll back. | Current/next/rollback UKI hashes, boot selection, update logs, and post-rollback identity. | Keep the prior bootable slot; do not claim bootc lifecycle coverage alone. |
 | Rescue | Exercise a bad update, revoked asset, failed write, and lost TPM state where applicable. | A tested rescue route and the exact remaining guarantees. | Stop promotion if recovery requires undocumented firmware or key operations. |
 | Encryption | Repeat plain gates separately for passphrase recovery, TPM enrollment, and resealing across updates. | Encryption-specific evidence and failure recovery. | Out of scope for the initial plain prototype. |
