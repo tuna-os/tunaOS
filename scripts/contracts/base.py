@@ -85,9 +85,9 @@ def validate_base(record: dict[str, Any], target: dict, configured_reference: st
     index, _ = _blob(record['indexBytes'], record['indexDigest'])
     child, child_size = _blob(record['childBytes'], record['childDigest'])
     config, config_size = _blob(record['configBytes'], record['configDigest'])
-    if type(index.get('schemaVersion')) is not int or index['schemaVersion'] != 2 or index.get('mediaType') not in INDEX_TYPES or not isinstance(index.get('manifests'), list):
-        raise EvidenceError('base index is not a supported OCI index')
-    if type(child.get('schemaVersion')) is not int or child['schemaVersion'] != 2 or child.get('mediaType') not in IMAGE_TYPES or not isinstance(child.get('layers'), list):
+    if type(index.get('schemaVersion')) is not int or index['schemaVersion'] != 2 or (not isinstance(index.get('mediaType'), str) or index['mediaType'] not in INDEX_TYPES | IMAGE_TYPES):
+        raise EvidenceError('base root is not a supported OCI index or image')
+    if type(child.get('schemaVersion')) is not int or child['schemaVersion'] != 2 or (not isinstance(child.get('mediaType'), str) or child['mediaType'] not in IMAGE_TYPES) or not isinstance(child.get('layers'), list):
         raise EvidenceError('base child is not a supported OCI image manifest')
     config_descriptor = _descriptor(child.get('config'))
     if config_descriptor['mediaType'] not in CONFIG_TYPES or config_descriptor['digest'] != record['configDigest'] or config_descriptor['size'] != config_size:
@@ -97,8 +97,20 @@ def validate_base(record: dict[str, Any], target: dict, configured_reference: st
     if record['platform'] != target['platform'] or record['cpuBaseline'] != target['cpuBaseline']:
         raise EvidenceError('base platform or CPU baseline differs from consumer')
     os_name, arch, variant = split_platform(target['platform'])
+    # A single-image root carries platform identity in its actual config.
+    # Keep the root digest/bytes in the index fields without inventing an index.
+    single = index.get('mediaType') in IMAGE_TYPES
+    if single:
+        if record['indexDigest'] != record['childDigest'] or record['indexBytes'] != record['childBytes']:
+            raise EvidenceError('single-image root must be the exact selected child')
+        descriptors = [{'mediaType': child['mediaType'], 'digest': record['childDigest'],
+                        'size': child_size, 'platform': {key: config[key] for key in ('os', 'architecture', 'variant') if key in config}}]
+    else:
+        if not isinstance(index.get('manifests'), list):
+            raise EvidenceError('base index requires manifest descriptors')
+        descriptors = index['manifests']
     matches = []
-    for raw_descriptor in index['manifests']:
+    for raw_descriptor in descriptors:
         descriptor = _descriptor(raw_descriptor)
         platform = descriptor.get('platform')
         if platform is None:
@@ -196,11 +208,34 @@ def resolve_public_base(configured_reference: str, target: dict, baseline_eviden
         except (urllib.error.URLError, TimeoutError, UnicodeError) as exc:
             raise EvidenceError('public registry metadata unavailable') from None
 
+    def document(raw: bytes) -> dict:
+        try:
+            return loads(raw.decode('utf-8'))
+        except UnicodeError as exc:
+            raise EvidenceError('OCI metadata is not valid UTF-8') from exc
+
     index_bytes = get(base_url + '/manifests/' + selected_ref)
     index_digest = 'sha256:' + hashlib.sha256(index_bytes).hexdigest()
-    index = loads(index_bytes.decode('utf-8'))
+    index = document(index_bytes)
+    if not isinstance(index.get('mediaType'), str):
+        raise EvidenceError('public root media type must be a string')
+    if index.get('mediaType') in IMAGE_TYPES:
+        child_digest = index_digest
+        child_bytes = index_bytes
+        config_digest = _descriptor(index.get('config'))['digest']
+        config_bytes = get(base_url + '/blobs/' + config_digest)
+        record = {'configuredReference': configured_reference,
+                  'reference': _repository(configured_reference) + '@' + child_digest,
+                  'indexDigest': index_digest, 'childDigest': child_digest, 'configDigest': config_digest,
+                  'platform': target['platform'], 'cpuBaseline': target['cpuBaseline'],
+                  'indexBytes': base64.b64encode(index_bytes).decode('ascii'),
+                  'childBytes': base64.b64encode(child_bytes).decode('ascii'),
+                  'configBytes': base64.b64encode(config_bytes).decode('ascii'),
+                  'baselineEvidence': baseline_evidence}
+        validate_base(record, target, configured_reference)
+        return record
     if index.get('mediaType') not in INDEX_TYPES or not isinstance(index.get('manifests'), list):
-        raise EvidenceError('public base is not an indexed image; exact platform evidence unavailable')
+        raise EvidenceError('public base has unsupported manifest identity')
     os_name, architecture, variant = split_platform(target['platform'])
     candidates = []
     for value in index['manifests']:
@@ -217,7 +252,7 @@ def resolve_public_base(configured_reference: str, target: dict, baseline_eviden
         raise EvidenceError('required exact platform child absent or ambiguous')
     child_digest = candidates[0]['digest']
     child_bytes = get(base_url + '/manifests/' + child_digest)
-    child = loads(child_bytes.decode('utf-8'))
+    child = document(child_bytes)
     config_digest = _descriptor(child.get('config'))['digest']
     config_bytes = get(base_url + '/blobs/' + config_digest)
     repository = _repository(configured_reference)
