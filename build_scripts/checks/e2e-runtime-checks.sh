@@ -210,6 +210,7 @@ dm_id=$(systemctl show -P Id display-manager.service 2>/dev/null || true)
 emit "# display manager: ${dm_id:-unknown}"
 case "$DESKTOP" in
 gnome) dm_pattern='^(gdm|gdm3)\.service$' ;;
+tuna) dm_pattern='^(gdm|gdm3)\.service$' ;;
 kde) dm_pattern='^(sddm|plasmalogin)\.service$' ;; # KDE 6.5+ renamed sddm
 niri) dm_pattern='^greetd\.service$' ;;
 # cosmic-greeter IS greetd (ExecStart=greetd --config

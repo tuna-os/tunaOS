@@ -148,7 +148,7 @@ jobs:
             | .flavors[]
             | select(($selection == null and (env.FILTER_FLAVOR == "all" or .id == env.FILTER_FLAVOR)) or $selection[$v.id][.id] != null)
             | select(.build_image // false)
-            | select($event != "pull_request" or .id == "gnome")
+            | select($event != "pull_request" or .id == "gnome" or .id == "tuna")
             | {
                 variant:       $v.id,
                 image_name:    ($v.publish_name // $v.id),

@@ -2056,3 +2056,12 @@ The GNOME driver can finish the VNC handshake without moving the pointer to the 
 Source: [QEMU 8.2.2 VNC implementation](https://github.com/qemu/qemu/blob/v8.2.2/ui/vnc.c), `vnc_connect`, `set_encodings`, and `pointer_event`.
 
 Send raw `SetEncodings` before pointer events. The socket test checks that order; a source-path model checks the omitted-message case. These tests do not prove that the guest receives input. Run 39652890852 remains unqualified until we inspect its frames and actual installation and reboot pass.
+
+### Test stops before any job starts
+
+Run 39918031076 rejected the PR merge because two branches added `EVENT_NAME`
+at different positions in the same YAML map. Keep one binding at the same position.
+Run 39918774666 then rejected the new Tuna caller: it allowed no Actions access,
+but the existing artifact jobs need `actions: read`. Give that caller read access,
+not write access. Keep all artifact and install checks. The caller regression
+checks this scope and the unique event binding; it does not prove installation.
