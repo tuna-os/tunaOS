@@ -19,13 +19,17 @@
 
 </div>
 
-> 🎃 **Hacktoberfest 2026:** Join us! Is this your first open-source PR? See our [good first issues](https://github.com/tuna-os/tunaOS/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22). You can also join the office hours for maintainers in October on Matrix.
+> 🎃 **Hacktoberfest 2026:** Start with the [org-wide good first issues](https://github.com/issues?q=org%3Atuna-os+is%3Aissue+is%3Aopen+archived%3Afalse+label%3A%22good+first+issue%22). See [the ecosystem guide](CONTRIBUTING-ADVANCED.md) for a map of repositories, mentorship, Q&A, and office hours.
 
 ## About TunaOS
 
 TunaOS builds **bootc-based desktop operating systems** with atomic updates and straightforward rollbacks. Choose an Enterprise Linux base for long-term stability or an alternative distribution for a faster release cadence. Both choices use the same image-based management model.
 
 [Visit tunaos.org](https://tunaos.org/) or read the [User Guide](docs/USER-GUIDE.md).
+
+[Make your first contribution](docs/CONTRIBUTOR-FIRST-PR.md) ·
+[Meet the contributors](CONTRIBUTORS.md) ·
+[Contributor roadmap](docs/CONTRIBUTOR-ROADMAP.md)
 
 - **Modern Desktops**: GNOME, KDE Plasma, COSMIC, Niri, and XFCE — equal first-class options across distribution bases
 - **Up-to-Date Desktop Stack**: Fresh desktop features and updates backported to Enterprise and community bases
@@ -84,29 +88,29 @@ _Each cell reports the newest conclusive main-branch run that asserted it, so a 
 
 | Variant | Green image cells | Latest run | Failing | Not reached |
 | :--- | ---: | :--- | :--- | :--- |
-| 🐠 `yellowfin` | **19/19** | [✅ 2026-10-18](https://github.com/tuna-os/tunaOS/actions/runs/39097778979) | — | — |
-| 🐟 `albacore` | **19/19** | [✅ 2026-10-18](https://github.com/tuna-os/tunaOS/actions/runs/39107135596) | — | — |
-| 🍣 `skipjack` | **17/17** | [✅ 2026-10-18](https://github.com/tuna-os/tunaOS/actions/runs/39131119144) | — | — |
+| 🐠 `yellowfin` | **19/19** | [❌ 2026-10-22](https://github.com/tuna-os/tunaOS/actions/runs/39724851741) | — | — |
+| 🐟 `albacore` | **19/19** | [✅ 2026-10-22](https://github.com/tuna-os/tunaOS/actions/runs/39742606903) | — | — |
+| 🍣 `skipjack` | **17/17** | [❌ 2026-10-22](https://github.com/tuna-os/tunaOS/actions/runs/39796515417) | — | — |
 | 🎏 `wahoo` | **4/5** | [❌ 2026-10-16](https://github.com/tuna-os/tunaOS/actions/runs/38906627617) | tuna | — |
-| 🎣 `bonito` | **17/17** | [✅ 2026-10-17](https://github.com/tuna-os/tunaOS/actions/runs/39039813105) | — | — |
+| 🎣 `bonito` | **17/17** | [✅ 2026-10-21](https://github.com/tuna-os/tunaOS/actions/runs/39630438457) | — | — |
 | 🐦 `hummingbird` | **1/3** | [❌ 2026-10-15](https://github.com/tuna-os/tunaOS/actions/runs/38660870261) | gnome | cosmic |
-| ⛵ `sailfin` | **7/7** | [✅ 2026-10-17](https://github.com/tuna-os/tunaOS/actions/runs/39071258903) | — | — |
-| 🌈 `guppy` | **3/4** | [❌ 2026-10-18](https://github.com/tuna-os/tunaOS/actions/runs/39122421394) | — | gnome |
-| 🐉 `bonito-rawhide` | **13/15** | [❌ 2026-10-17](https://github.com/tuna-os/tunaOS/actions/runs/39055616402) | tuna | gnome |
-| 🤖 `gurnard` | **2/2** | [✅ 2026-10-18](https://github.com/tuna-os/tunaOS/actions/runs/39113290668) | — | — |
-| 🪸 `grouper` | **8/8** | [✅ 2026-10-17](https://github.com/tuna-os/tunaOS/actions/runs/39062417791) | — | — |
-| 🚀 `marlin` | **17/17** | [✅ 2026-10-18](https://github.com/tuna-os/tunaOS/actions/runs/39105271156) | — | — |
-| 🐡 `flounder` | **6/6** | [✅ 2026-10-17](https://github.com/tuna-os/tunaOS/actions/runs/39078075191) | — | — |
-| ☢️ `flounder-sid` | **5/8** | [❌ 2026-10-18](https://github.com/tuna-os/tunaOS/actions/runs/39085082950) | — | gnome-nvidia,kde-nvidia,xfce-nvidia |
+| ⛵ `sailfin` | **7/7** | [✅ 2026-10-22](https://github.com/tuna-os/tunaOS/actions/runs/39865052345) | — | — |
+| 🌈 `guppy` | **3/4** | [❌ 2026-10-23](https://github.com/tuna-os/tunaOS/actions/runs/39948234797) | — | gnome |
+| 🐉 `bonito-rawhide` | **14/15** | [❌ 2026-10-22](https://github.com/tuna-os/tunaOS/actions/runs/39838360929) | — | gnome |
+| 🤖 `gurnard` | **2/2** | [✅ 2026-10-23](https://github.com/tuna-os/tunaOS/actions/runs/39931676521) | — | — |
+| 🪸 `grouper` | **8/8** | [✅ 2026-10-22](https://github.com/tuna-os/tunaOS/actions/runs/39849977660) | — | — |
+| 🚀 `marlin` | **17/17** | [❌ 2026-10-22](https://github.com/tuna-os/tunaOS/actions/runs/39827814045) | — | — |
+| 🐡 `flounder` | **6/6** | [✅ 2026-10-23](https://github.com/tuna-os/tunaOS/actions/runs/39875388237) | — | — |
+| ☢️ `flounder-sid` | **5/8** | [❌ 2026-10-23](https://github.com/tuna-os/tunaOS/actions/runs/39884547800) | — | gnome-nvidia,kde-nvidia,xfce-nvidia |
 
 **Sibling images from separate repositories.** These TunaOS-family bootc images use BuildStream on freedesktop-sdk. They do not use packages from a distribution. Thus, the matrix above has no cells for them, and `green-criteria.yml` does not score them. Each repository runs its own checks for the build, live ISO, plain installation, and LUKS installation. The status shows the latest complete build from the main branch of that repository.
 
 | Image | Built by | Desktop | Latest main build |
 | :--- | :--- | :--- | :--- |
-| 🏔️ `ghcr.io/tuna-os/tromso` | [tromso](https://github.com/tuna-os/tromso) | KDE | [❌ 2026-10-17](https://github.com/tuna-os/tromso/actions/runs/39003961947) |
-| 🐭 `ghcr.io/tuna-os/xfce-linux` | [xfce-linux](https://github.com/tuna-os/xfce-linux) | XFCE | [❌ 2026-10-18](https://github.com/tuna-os/xfce-linux/actions/runs/39086080951) |
+| 🏔️ `ghcr.io/tuna-os/tromso` | [tromso](https://github.com/tuna-os/tromso) | KDE | [❌ 2026-10-23](https://github.com/tuna-os/tromso/actions/runs/39904310861) |
+| 🐭 `ghcr.io/tuna-os/xfce-linux` | [xfce-linux](https://github.com/tuna-os/xfce-linux) | XFCE | [✅ 2026-10-23](https://github.com/tuna-os/xfce-linux/actions/runs/39885598766) |
 
-**Built 138/147 · composite green 124/147 (93% built)** — The remainder has **3 failures** and **6 never reached** (stale: 1); no job asserted the latter. We show the two values separately. A cell with no job has no test, but it can still work.
+**Built 139/147 · composite green 120/147 (94% built)** — The remainder has **2 failures** and **6 never reached** (stale: 5); no job asserted the latter. We show the two values separately. A cell with no job has no test, but it can still work.
 
 **Factory health: 124/147 cells green**
 
