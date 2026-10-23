@@ -48,6 +48,50 @@ hours, and review escalation, see [the ecosystem guide](CONTRIBUTING-ADVANCED.md
 
 You do not need write access to the upstream repository. GitHub's fork-based PR flow is the normal path for external contributors. If CI fails, include the job that failed and a short reproduction in the PR instead of a silent retry. If GitHub rejects a push because the GitHub App does not have `workflows` permission, follow the [runbook for workflow publication](docs/CI-WORKFLOW-PUBLISHING.md). Workflow YAML in the repository cannot grant that App-level permission.
 
+### Worked example: fix one local documentation link
+
+Use the [fork and branch commands](docs/CONTRIBUTOR-FIRST-PR.md#from-claim-to-review)
+to start a focused branch. Choose a link whose label names an existing page,
+but whose path has a typo. This fictional example assumes that the Tests link
+in `CONTRIBUTING.md` reads `[Tests](docs/TESTNG.md)`; do not add that typo
+to the repository to follow along.
+
+1. Inspect the target from the repository root:
+
+   ```bash
+   ls docs/TEST*
+   sed -n '1,40p' docs/TESTING.md
+   ```
+
+   Read the page to confirm it is the intended destination. Local Markdown
+   paths start at the directory of the file that contains the link. Here,
+   `CONTRIBUTING.md` is at the root, so the path starts with `docs/`.
+2. In your editor, change only the link target:
+
+   ```diff
+   -[Tests](docs/TESTNG.md)
+   +[Tests](docs/TESTING.md)
+   ```
+
+3. Check that the corrected file exists, then review the change:
+
+   ```bash
+   test -f docs/TESTING.md
+   git diff -- CONTRIBUTING.md
+   git diff --check
+   ```
+
+   Open the corrected link in a Markdown preview. Confirm that it reaches
+   the page you inspected and that the diff changes only the intended link.
+   Run the [mandatory pre-commit checks](#pre-commit-mandatory) and
+   [Markdown prose check](#prose-checks-ste) before you submit.
+4. Follow the [commit, push, and PR steps](docs/CONTRIBUTOR-FIRST-PR.md#from-claim-to-review).
+   For this fictional fix, use a title such as `docs: fix the Tests link`.
+   Describe the result: "The Tests link pointed to `docs/TESTNG.md`, which
+   does not exist. It now points to `docs/TESTING.md`."
+   List the checks you ran and their actual results, including any setup
+   errors. Link the issue as the fork workflow describes.
+
 ### DCO sign-off
 
 Every commit needs a `Signed-off-by` trailer for the Developer Certificate of
