@@ -2163,3 +2163,13 @@ image-versions.yaml`. The native overlay copied the scripts but omitted the
 root pin file after the installer began to verify digests. Copy that exact
 file into the same payload. Do not bypass the pin or hash checks. The regression
 runs the copy commands and rejects an absent pin file before customization.
+
+### Chunkah source build rejects duplicate writable mount options
+
+Run `40025622951` built the OS image but stopped before ISO creation. The image pull failed for Chunkah; the log suppressed its error, so the cause is unknown.
+The source fallback failed with `rw, shared, rw, bind` on Podman 4.9.3.
+
+That cache parser adds explicit `rw` and its default `rw` twice. For that measured
+version, use a temporary Containerfile with only the known cache `rw` removed.
+Keep writable bind mounts and all read-only options. Reject a Containerfile whose bytes differ from the reviewed file.
+Record source and file hashes; these observations do not make mutable source a pin.
