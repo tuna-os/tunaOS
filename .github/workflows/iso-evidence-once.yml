@@ -117,7 +117,7 @@ jobs:
                               original.write_bytes(png)
                               subprocess.run(["convert", str(original), "-crop", crop, "+repage",
                                               "-resize", "300%", "-colorspace", "gray",
-                                              "-threshold", "90%", str(prepared)],
+                                              str(prepared)],
                                              capture_output=True, timeout=20, check=True)
                               result = subprocess.run(["tesseract", str(prepared), "stdout",
                                                        "--psm", "6", "tsv"],
