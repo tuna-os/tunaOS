@@ -12,6 +12,7 @@ that touched 36 files across `.github/`, `build_scripts/`, `live-iso/`,
 
 | Symptom | Measured cause | Fix |
 |---|---|---|
+| Architecture tracker repeats completed or duplicate UI extractions (#3025) | `gh issue view` on Spindle #494 points to #493/#551; Corral #305 links the command work merged in #580. The original meta-issue still lists the earlier findings. | Read local discussions and verify merge evidence before editing. Use the [boundary plan](UI-ORCHESTRATION-BOUNDARIES.md) to track remaining dependency access rather than historical file sizes. |
 | Bonito build succeeds despite bootc lint findings (#3001) | `99-cleanup.sh` calls `lint_image`; `lib.sh` returns success after findings unless `BOOTC_LINT_FATAL=1`. | Read the grouped output and step summary. Re-run lint against the candidate digest; apply the [Fedora readiness review](FEDORA-OUTREACH-READINESS.md) before outreach. |
 
 ### 1. `flatpak: command not found` in live ISO customization

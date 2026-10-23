@@ -12,6 +12,11 @@ Bring a modern, cloud-native experience to the Enterprise Linux Desktop. tunaOS 
 
 ## Delivery priority: one-config reference journey
 
+For UI and orchestration refactors across the application repositories, use
+the [boundary migration plan](docs/UI-ORCHESTRATION-BOUNDARIES.md) tracked by
+[#3025](https://github.com/tuna-os/tunaos/issues/3025). It defines one-flow
+extractions and the test evidence needed before removing full-state access.
+
 The near-term outcome is a repeatable branded Yellowfin/RPM and Grouper/APT
 installation from one fork-owned config. See the [delivery plan](docs/FORK-DELIVERY.md)
 and [tracking epic #3474](https://github.com/tuna-os/tunaOS/issues/3474) for the
