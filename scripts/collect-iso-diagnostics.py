@@ -18,6 +18,77 @@ DIRECTORIES = {'': ('serial.log', 'strict-*.log', 'current-phase.txt', 'boot-dia
                'walkthrough-luks': ('*.png', '*.json')}
 
 
+SUMMARY_STATES = frozenset(('unknown', 'welcome', 'encryption', 'disk', 'summary',
+                            'progress', 'done', 'overview', 'failed', 'no-disk', 'recovery'))
+MAX_SUMMARY_BYTES = 1024 * 1024
+MAX_SUMMARY_FRAMES = 128
+
+
+SUMMARY_ACTIONS = frozenset(('welcome-install', 'encrypt-disk', 'hardware-encryption',
+                             'password-field', 'confirm-password-field', 'next', 'submit-install'))
+
+
+def safe_click(value):
+    """Never copy free-form labels, OCR, errors, or typed data into job logs."""
+    invalid = {'diagnostic': 'invalid'}
+    if not isinstance(value, dict):
+        return invalid
+    action, state = value.get('action'), value.get('state')
+    transport = value.get('transport')
+    if (not isinstance(action, str) or action not in SUMMARY_ACTIONS
+            or not isinstance(state, str) or state not in SUMMARY_STATES
+            or transport not in ('uncertain', 'server-response')):
+        return invalid
+    frame, box, point = (value.get(key) for key in ('frame', 'box', 'point'))
+    if any(not isinstance(values, list) or len(values) != size
+           or any(type(item) is not int for item in values)
+           for values, size in ((frame,2),(box,4),(point,2))):
+        return invalid
+    width, height = frame
+    left, top, right, bottom = box
+    if not (640 <= width <= 1920 and 480 <= height <= 1200
+            and 0 <= left < right <= width and 0 <= top < bottom <= height
+            and point == [(left+right)//2, (top+bottom)//2]):
+        return invalid
+    return dict(action=action, state=state, transport=transport,
+                frame=frame, box=box, point=point)
+
+
+def walkthrough_summary(root, mode):
+    """Return allowlisted observations only, never OCR text or qualification."""
+    if mode not in ('plain', 'luks'):
+        return {'mode': 'invalid', 'diagnostic': 'unavailable'}
+    result = {'mode': mode, 'diagnostic': 'unavailable'}
+    path = Path(root) / ('walkthrough-' + mode) / 'walkthrough-gnome.json'
+    try:
+        with path.open('rb') as source:
+            raw = source.read(MAX_SUMMARY_BYTES + 1)
+        if len(raw) > MAX_SUMMARY_BYTES:
+            return result
+        value = json.loads(raw)
+        if not isinstance(value, dict):
+            return result
+        frames, transitions = value.get('frames'), value.get('transitions')
+        clicks = value.get('clicks', [])
+        if (not isinstance(frames, list) or len(frames) > MAX_SUMMARY_FRAMES
+                or not isinstance(transitions, list) or len(transitions) > MAX_SUMMARY_FRAMES
+                or not isinstance(clicks, list) or len(clicks) > 32):
+            return result
+        def state(item):
+            return item if isinstance(item, str) and item in SUMMARY_STATES else 'invalid'
+        result.update(diagnostic='available',
+                      states=[state(frame.get('state')) if isinstance(frame, dict)
+                              else 'invalid' for frame in frames],
+                      transitions=[state(item) for item in transitions],
+                      clicks=[safe_click(item) for item in clicks])
+        for key in ('frontmost', 'submit_attempted', 'submitted', 'accepted', 'completed'):
+            item = value.get(key)
+            result[key] = item if type(item) is bool else None
+        return result
+    except (OSError, ValueError, RecursionError):
+        return result
+
+
 def candidates(root, report):
     # Bound enumeration itself, even when a directory contains unrelated files.
     for directory, patterns in DIRECTORIES.items():
@@ -74,6 +145,10 @@ def collect(root):
                 remaining -= len(chunk)
         count += 1
     (dest / 'collection.json').write_text(json.dumps(dict(files=count, bytes=total, skipped=skipped, **report), indent=2))
+
+    # Read staged files only; this output does not change the strict verdict.
+    for mode in ('plain', 'luks'):
+        print('GNOME diagnostic: ' + json.dumps(walkthrough_summary(dest, mode), sort_keys=True))
 
 
 if __name__ == '__main__':

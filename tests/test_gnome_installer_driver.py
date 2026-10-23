@@ -82,7 +82,8 @@ class FakeScreen:
         return True
 
 
-def execute(tmp_path, screens, mode='plain', digest=driver.BUNDLE_DIGEST):
+def execute(tmp_path, screens, mode='plain', digest=driver.BUNDLE_DIGEST,
+            pointer_error_at=None):
     events = []
     def capture(index, label):
         events.append(('capture', label))
@@ -91,11 +92,16 @@ def execute(tmp_path, screens, mode='plain', digest=driver.BUNDLE_DIGEST):
         if not screens:
             raise driver.Unverified('fixture exhausted')
         return screens.pop(0)
+    def pointer(*args):
+        events.append(('click', args))
+        if sum(event[0] == 'click' for event in events) == pointer_error_at:
+            raise socket.timeout('simulated response missing after release')
+        return True
     rc = driver.drive(tmp_path, mode, tmp_path/'vnc.sock', capture,
                       lambda *k: events.append(('key', k)),
                       lambda p: events.append(('type', len(p))), digest,
                       'test-only-passphrase', screen_factory=factory,
-                      pointer=lambda *p: events.append(('click', p)), sleep=lambda _: None)
+                      pointer=pointer, sleep=lambda _: None)
     return rc, json.loads((tmp_path/'walkthrough-gnome.json').read_text()), events
 
 
@@ -146,12 +152,18 @@ def test_overview_preserves_before_after_and_fails(tmp_path):
 
 
 def test_unix_rfb_pointer_and_geometry(tmp_path):
+    """Real UNIX transport: no close until a fragmented response prefix arrives."""
+    from concurrent.futures import ThreadPoolExecutor
+    import select
     path = tmp_path/'vnc.sock'
     server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    server.settimeout(5)
     server.bind(str(path)); server.listen(1)
-    received = []
+    request_seen, allow_reply = threading.Event(), threading.Event()
+    received, peers = [], []
     def serve():
         with server.accept()[0] as conn:
+            peers.append(conn)
             conn.settimeout(5)
             conn.sendall(b'RFB 003.008\n')
             assert driver._read(conn, 12) == b'RFB 003.008\n'
@@ -160,16 +172,36 @@ def test_unix_rfb_pointer_and_geometry(tmp_path):
             conn.sendall(b'\0'*4)
             assert driver._read(conn, 1) == b'\x01'
             conn.sendall(struct.pack('!HH',1280,800)+b'\0'*16+struct.pack('!I',4)+b'test')
-            received.append(driver._read(conn,8))
-            received.append(driver._read(conn,18))
-    thread = threading.Thread(target=serve); thread.start()
-    driver.click_unix(path, 420, 490, 1280, 800)
-    thread.join(timeout=5); server.close()
-    assert not thread.is_alive()
-    assert received == [struct.pack('!BBHi', 2, 0, 1, 0),
-                        b''.join(struct.pack('!BBHH',5,button,420,490) for button in (0,1,0))]
+            received.extend([driver._read(conn,8), driver._read(conn,18),
+                             driver._read(conn,10)])
+            request_seen.set()
+            assert allow_reply.wait(3)
+            reply = struct.pack('!BBHHHHHi',0,0,1,0,0,16,1,0)
+            for chunk in (reply[:2], reply[2:7], reply[7:]):
+                conn.sendall(chunk)
+            assert conn.recv(1) == b''
+    try:
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            server_result = pool.submit(serve)
+            client_result = pool.submit(driver.click_unix, path,420,490,1280,800)
+            try:
+                assert request_seen.wait(3)
+                assert not client_result.done()
+                poll = select.poll()
+                poll.register(peers[0], select.POLLIN | select.POLLHUP)
+                assert not poll.poll(0)
+            finally:
+                allow_reply.set()
+            assert client_result.result(timeout=5) is True
+            server_result.result(timeout=5)
+    finally:
+        allow_reply.set()
+        server.close()
+    assert received == [struct.pack('!BBHi',2,0,1,0),
+                        b''.join(struct.pack('!BBHH',5,b,420,490) for b in (0,1,0)),
+                        struct.pack('!BBHHHH',3,0,0,0,1,1)]
     with pytest.raises(driver.Unverified):
-        driver.click_unix(path, -1, 490, 1280,800)
+        driver.click_unix(path,-1,490,1280,800)
 
 
 def test_strict_harness_capacity_and_unix_pointer():
@@ -227,20 +259,23 @@ def test_rejected_submit_is_never_accepted_or_retried(tmp_path):
     assert sum(e[0] == 'click' for e in events) == 3
 
 
-@pytest.mark.parametrize('case', ['good', 'geometry', 'security', 'protocol'])
+@pytest.mark.parametrize('case', ['good', 'geometry', 'security', 'protocol', 'security-result', 'name', 'truncated-init'])
 def test_rfb_protocol_without_socket_creation(monkeypatch, tmp_path, case):
     """Exercise client framing separately; does not substitute for the real socket test."""
     import stat
     from types import SimpleNamespace
     payload = bytearray(b'RFB 003.007\n' if case == 'protocol' else b'RFB 003.008\n')
     payload.extend(b'\x01\x02' if case == 'security' else b'\x01\x01')
-    payload.extend(b'\0'*4)
-    payload.extend(struct.pack('!HH',1024 if case == 'geometry' else 1280,800)+b'\0'*16+struct.pack('!I',4)+b'test')
+    payload.extend(b'\0\0\0\1' if case == 'security-result' else b'\0'*4)
+    payload.extend(struct.pack('!HH',1024 if case == 'geometry' else 1280,800)+b'\0'*16+struct.pack('!I',4097 if case == 'name' else 4)+b'test')
+    if case == 'truncated-init':
+        payload = payload[:20]
+    payload.extend(struct.pack('!BBHHHHHi', 0,0,1,0,0,16,1,0))
     sent = []
     class Connection:
         def __enter__(self): return self
         def __exit__(self, *args): pass
-        def settimeout(self, timeout): assert timeout == 5
+        def settimeout(self, timeout): assert 0 < timeout <= 5
         def connect(self, path): assert path == str(tmp_path/'vnc.sock')
         def recv(self, count):
             chunk = bytes(payload[:min(count,3)])
@@ -261,7 +296,8 @@ def test_rfb_protocol_without_socket_creation(monkeypatch, tmp_path, case):
         driver.click_unix(tmp_path/'vnc.sock',420,490,1280,800)
         raw = struct.pack('!BBHi', 2, 0, 1, 0)
         pointer_packets = [struct.pack('!BBHH',5,b,420,490) for b in (0,1,0)]
-        assert sent == [b'RFB 003.008\n', b'\x01', b'\x01', raw, *pointer_packets]
+        assert sent == [b'RFB 003.008\n', b'\x01', b'\x01', raw, *pointer_packets,
+                        struct.pack('!BBHHHH',3,0,0,0,1,1)]
 
         def qemu82_events(packets):
             # Minimal source-path model, not guest input proof:
@@ -283,7 +319,7 @@ def test_rfb_protocol_without_socket_creation(monkeypatch, tmp_path, case):
                 last = (x, y)
             return events
 
-        assert qemu82_events(sent[3:]) == [
+        assert qemu82_events(sent[3:-1]) == [
             ('absolute', b, 420, 490) for b in (0,1,0)]
         # Negative control: removing negotiation yields only zero motion.
         assert qemu82_events(pointer_packets) == [
@@ -318,3 +354,122 @@ def test_welcome_action_fails_closed_for_ambiguous_or_wrong_geometry(bad):
     else: action[0] = 'Next'; action[1] = [960,45,1000,60]
     screen.lines = [row[0] for row in screen.rows]
     with pytest.raises(driver.Unverified): driver.welcome_action(screen)
+
+
+def test_qemu_hup_priority_model_discards_readable_release():
+    """Linux socket behavior plus QEMU 8.2.2 dispatch model, not a QEMU VM."""
+    import select
+    sender, receiver = socket.socketpair()
+    release = struct.pack('!BBHH',5,0,420,490)
+    try:
+        sender.sendall(release)
+        sender.close()
+        poll = select.poll()
+        poll.register(receiver, select.POLLIN | select.POLLHUP)
+        flags = poll.poll(1000)[0][1]
+        assert flags & select.POLLIN and flags & select.POLLHUP
+        # ui/vnc.c vnc_client_io checks HUP/ERR before reading.
+        consumed = b'' if flags & (select.POLLHUP | select.POLLERR) else receiver.recv(6)
+        assert consumed == b''
+        assert receiver.recv(6, socket.MSG_PEEK) == release
+    finally:
+        sender.close()
+        receiver.close()
+
+
+class BarrierSocket:
+    def __init__(self, reply):
+        self.reply = bytearray(reply)
+        self.sent = []
+    def settimeout(self, timeout):
+        assert 0 < timeout <= 5
+    def sendall(self, packet):
+        self.sent.append(packet)
+    def recv(self, count):
+        part = bytes(self.reply[:min(count, 2)])
+        del self.reply[:len(part)]
+        return part
+
+
+@pytest.mark.parametrize('size', range(16))
+def test_release_barrier_truncated_response_fails(size):
+    response = struct.pack('!BBHHHHHi',0,0,1,0,0,16,1,0)
+    with pytest.raises(driver.Unverified):
+        driver._pointer_barrier(BarrierSocket(response[:size]),1280,800,
+                                driver.time.monotonic()+5)
+
+
+@pytest.mark.parametrize('response', [
+    struct.pack('!BBH',2,0,1),
+    struct.pack('!BBH',0,0,0),
+    struct.pack('!BBH',0,0,4097),
+    struct.pack('!BBHHHHHi',0,0,1,0,0,16,1,1),
+    struct.pack('!BBHHHHHi',0,0,1,1279,0,16,1,0),
+    struct.pack('!BBHHHHHi',0,0,1,0,800,16,1,0),
+    struct.pack('!BBHHHHHi',0,0,1,0,0,0,1,0),
+])
+def test_release_barrier_rejects_unrelated_or_invalid_response(response):
+    with pytest.raises(driver.Unverified):
+        driver._pointer_barrier(BarrierSocket(response),1280,800,
+                                driver.time.monotonic()+5)
+
+
+def test_release_barrier_timeout_is_not_acknowledgement():
+    class TimeoutSocket(BarrierSocket):
+        def recv(self, count):
+            raise socket.timeout('no reply')
+    with pytest.raises(socket.timeout):
+        driver._pointer_barrier(TimeoutSocket(b''),1280,800,
+                                driver.time.monotonic()+5)
+
+
+def test_transaction_deadline_bounds_trickled_fragments(monkeypatch):
+    ticks = iter(range(20))
+    monkeypatch.setattr(driver.time, 'monotonic', lambda: next(ticks))
+    with pytest.raises(driver.Unverified, match='deadline'):
+        driver._read(BarrierSocket(b'x'*32),32,deadline=5)
+
+
+@pytest.mark.parametrize('mode', ['plain','luks'])
+def test_retained_welcome_does_not_retry_or_submit(tmp_path, mode):
+    rc, result, events = execute(tmp_path, [FakeScreen('welcome') for _ in range(13)], mode)
+    assert rc == 1
+    assert sum(e[0] == 'click' for e in events) == 1
+    assert result['transitions'] == ['welcome']
+    assert not result['submit_attempted'] and not result['submitted']
+    assert not result['accepted'] and not result['completed']
+    assert result['clicks'] == [{
+        'action': 'welcome-install', 'state': 'welcome',
+        'box': [395,341,498,355], 'point': [446,348], 'frame': [1280,800],
+        'transport': 'server-response',
+    }]
+
+
+def test_final_submit_response_timeout_records_uncertainty_without_retry(tmp_path):
+    rc, result, events = execute(tmp_path, [FakeScreen('welcome'),
+        FakeScreen('encryption'), FakeScreen('summary')], pointer_error_at=3)
+    assert rc == 1 and result['submit_attempted']
+    assert not result['submitted'] and not result['accepted'] and not result['completed']
+    assert result['clicks'][-1]['action'] == 'submit-install'
+    assert result['clicks'][-1]['transport'] == 'uncertain'
+    assert sum(e[0] == 'click' for e in events) == 3
+    assert events[-1][0] == 'click'
+
+
+@pytest.mark.parametrize('kind', ['file','symlink','wrong-owner'])
+def test_unowned_or_non_socket_endpoint_rejected_before_connect(monkeypatch, tmp_path, kind):
+    import stat
+    from types import SimpleNamespace
+    path = tmp_path/'vnc.sock'
+    if kind == 'file':
+        path.write_text('not a socket')
+    elif kind == 'symlink':
+        path.symlink_to(tmp_path/'missing')
+    else:
+        monkeypatch.setattr(driver.Path, 'lstat', lambda _: SimpleNamespace(
+            st_mode=stat.S_IFSOCK, st_uid=driver.os.getuid()+1))
+    def forbidden(*args):
+        raise AssertionError('socket creation must not occur')
+    monkeypatch.setattr(driver.socket, 'socket', forbidden)
+    with pytest.raises(driver.Unverified):
+        driver.click_unix(path,420,490,1280,800)

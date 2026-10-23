@@ -167,14 +167,47 @@ class Screen:
         return r > 100 and b > 100 and g < r*.65 and b > g*1.1
 
 
-def _read(sock, size):
+def _read(sock, size, deadline=None):
     data = b''
     while len(data) < size:
+        if deadline is not None:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise Unverified('VNC transaction deadline exceeded')
+            sock.settimeout(remaining)
         chunk = sock.recv(size-len(data))
         if not chunk:
             raise Unverified('VNC disconnected')
         data += chunk
     return data
+
+
+def _send(sock, data, deadline):
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise Unverified('VNC transaction deadline exceeded')
+    sock.settimeout(remaining)
+    sock.sendall(data)
+
+
+def _pointer_barrier(sock, width, height, deadline):
+    """Observe QEMU's first update reply after release, not guest activation."""
+    # No earlier update request or pseudo-encoding is sent on this connection.
+    # Stream order makes this reply a server-side processing barrier. QEMU
+    # 8.2.2 otherwise handles HUP before IN and can discard a queued release.
+    _send(sock, struct.pack('!BBHHHH', 3, 0, 0, 0, 1, 1), deadline)
+    def read(size):
+        return _read(sock, size, deadline)
+
+    kind, _, rectangles = struct.unpack('!BBH', read(4))
+    if kind != 0 or not 1 <= rectangles <= 4096:
+        raise Unverified('VNC release response is not a bounded update')
+    x, y, w, h, encoding = struct.unpack('!HHHHi', read(12))
+    if encoding != 0 or not (w > 0 and h > 0 and x+w <= width and y+h <= height):
+        raise Unverified('VNC release response rectangle is invalid')
+    # The validated reply prefix is sufficient: the request was processed.
+    # Pixel content and guest UI progress are not inferred from this barrier.
+    return True
 
 
 def click_unix(path, x, y, width, height):
@@ -185,32 +218,36 @@ def click_unix(path, x, y, width, height):
     if not stat.S_ISSOCK(info.st_mode) or info.st_uid != os.getuid():
         raise Unverified('VNC endpoint is not an owned UNIX socket')
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+        deadline = time.monotonic() + 5
         sock.settimeout(5)
+        def read(size):
+            return _read(sock, size, deadline)
         sock.connect(str(path))
-        if _read(sock, 12) != b'RFB 003.008\n':
+        if read(12) != b'RFB 003.008\n':
             raise Unverified('unsupported VNC protocol')
-        sock.sendall(b'RFB 003.008\n')
-        count = _read(sock, 1)[0]
-        if not 0 < count <= 16 or 1 not in _read(sock, count):
+        _send(sock, b'RFB 003.008\n', deadline)
+        count = read(1)[0]
+        if not 0 < count <= 16 or 1 not in read(count):
             raise Unverified('local VNC does not offer no-auth transport')
-        sock.sendall(b'\x01')
-        if _read(sock, 4) != b'\0\0\0\0':
+        _send(sock, b'\x01', deadline)
+        if read(4) != b'\0\0\0\0':
             raise Unverified('local VNC handshake failed')
-        sock.sendall(b'\x01')
-        init = _read(sock, 24)
+        _send(sock, b'\x01', deadline)
+        init = read(24)
         actual_width, actual_height = struct.unpack('!HH', init[:4])
         length = struct.unpack('!I', init[20:24])[0]
         if length > 4096 or (actual_width, actual_height) != (width, height):
             raise Unverified('VNC geometry differs from verified capture')
-        _read(sock, length)
+        read(length)
         # QEMU 8.2.2 initializes this client's absolute pointer mode in
         # set_encodings(), even with raw only (ui/vnc.c). Without it, a
         # fresh connection can treat these coordinates as relative motion.
-        sock.sendall(struct.pack('!BBHi', 2, 0, 1, 0))
-        sock.sendall(struct.pack('!BBHH', 5, 0, x, y))
-        sock.sendall(struct.pack('!BBHH', 5, 1, x, y))
+        _send(sock, struct.pack('!BBHi', 2, 0, 1, 0), deadline)
+        _send(sock, struct.pack('!BBHH', 5, 0, x, y), deadline)
+        _send(sock, struct.pack('!BBHH', 5, 1, x, y), deadline)
         time.sleep(.1)
-        sock.sendall(struct.pack('!BBHH', 5, 0, x, y))
+        _send(sock, struct.pack('!BBHH', 5, 0, x, y), deadline)
+        return _pointer_barrier(sock, width, height, deadline)
 
 
 BUNDLE_DIGEST = 'sha256:04252eaf80ee5675aa37bdb482847c77310efbee058dc63ba161a1d5991f9823'
@@ -240,7 +277,8 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest,
     """
     evidence = {'driver': 'gnome-9f582fe0', 'installer_digest': installer_digest,
                 'mode': mode, 'frames': [], 'transitions': [],
-                'submitted': False, 'accepted': False, 'completed': False}
+                'submitted': False, 'submit_attempted': False, 'accepted': False,
+                'completed': False, 'clicks': []}
     deadline = clock() + 1200
     counter = 0
 
@@ -272,8 +310,24 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest,
         box = screen.box(label)
         if enabled and not screen.enabled(label):
             raise Unverified(f'control is disabled or its state is unknown: {label}')
-        pointer(vnc, (box[0]+box[2])//2, (box[1]+box[3])//2,
-                screen.width, screen.height)
+        action = ('welcome-install' if screen.state == 'welcome' else {
+            'Encrypt this disk': 'encrypt-disk',
+            'Use hardware-backed encryption': 'hardware-encryption',
+            'Password': 'password-field', 'Confirm Password': 'confirm-password-field',
+            'Next': 'next', 'Install': 'submit-install',
+        }.get(label))
+        if action is None:
+            raise Unverified('unsupported diagnostic control')
+        point = [(box[0]+box[2])//2, (box[1]+box[3])//2]
+        attempt = {'action': action, 'state': screen.state, 'box': list(box),
+                   'point': point, 'frame': [screen.width, screen.height],
+                   'transport': 'uncertain'}
+        evidence['clicks'].append(attempt)
+        if action == 'submit-install':
+            evidence['submit_attempted'] = True
+        if pointer(vnc, *point, screen.width, screen.height) is not True:
+            raise Unverified('pointer transport did not acknowledge release')
+        attempt['transport'] = 'server-response'
         sleep(2)
 
     def transition(previous, expected):
