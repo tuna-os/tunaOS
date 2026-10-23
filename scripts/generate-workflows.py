@@ -67,6 +67,7 @@ def main():
     # repo, pushes images to GHCR, and signs with GitHub OIDC (keyless cosign).
     permissions_block = """permissions:
   contents: read
+  actions: read
   packages: write
   id-token: write
 """

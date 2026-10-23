@@ -41,14 +41,14 @@ on:
         default: false
         type: boolean
 
-permissions:
-  contents: read
-  actions: read
 
 jobs:
   generate-matrix:
     name: Generate ISO matrix
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
     outputs:
       matrix: ${{ steps.build.outputs.matrix }}
       count: ${{ steps.build.outputs.count }}

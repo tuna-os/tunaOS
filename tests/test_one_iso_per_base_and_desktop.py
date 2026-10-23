@@ -21,9 +21,9 @@ and a typo here is a silently missing ISO rather than an error.
 """
 from __future__ import annotations
 
-from pathlib import Path
-
+import hashlib
 import importlib.util
+from pathlib import Path
 
 import yaml
 
@@ -149,6 +149,72 @@ def _full_group_entries(cfg: dict, variant: str, suffix: str) -> list[dict]:
     return entries
 
 
+def _qualified_snapshot(entries: list[dict]) -> dict:
+    """Build a valid current catalog fixture for the supplied cutover entries."""
+    from contracts.targets import _canonical_json, _oci_platform
+
+    targets = []
+    for entry in entries:
+        target = DC.canonical_target(**entry["target"])
+        key = DC.target_key(target)
+        manifest_digest = "sha256:" + "01" * 32
+        targets.append({
+            "target": target,
+            "targetKey": key,
+            "required": True,
+            "scheduled": True,
+            "publication": {
+                "repository": f"ghcr.io/tuna-os/{target['variant']}",
+                "tag": target["flavor"],
+                "ref": f"ghcr.io/tuna-os/{target['variant']}:{target['flavor']}",
+            },
+            "availability": {
+                "available": True,
+                "ociPlatform": _oci_platform(target["platform"]),
+            },
+            "resolvedInputs": {
+                "platformManifestDigest": manifest_digest,
+                "indexDigest": "sha256:" + "02" * 32,
+                "configDigest": None,
+                "liveOverlayDigest": None,
+                "liveOverlayBaseDigest": None,
+                "installerRevision": "test-installer",
+                "engineRevision": "test-engine",
+            },
+            "facts": {
+                "digest": manifest_digest,
+                "desktop": target["flavor"].split("-")[0],
+                "kernelVer": "",
+                "hasSdBoot": False,
+                "pkgManager": "",
+                "repoFamily": "",
+                "layerCount": 0,
+                "compressedSize": 0,
+                "bootc": True,
+            },
+            "qualification": {
+                "status": "qualified",
+                "reason": None,
+                "qualifiedAt": entry["evidence"]["qualifiedAt"],
+                "receiptDigest": entry["evidence"]["receiptDigest"],
+                "browser": None,
+                "resources": None,
+            },
+        })
+    targets.sort(key=lambda candidate: candidate["targetKey"])
+    return {
+        "schemaVersion": 1,
+        "kind": "catalog-snapshot",
+        "producerRevision": "test",
+        "generatedAt": "2026-10-01T00:00:00Z",
+        "coverageDigest": "sha256:" + "03" * 32,
+        "snapshotDigest": "sha256:" + hashlib.sha256(
+            _canonical_json(targets)
+        ).hexdigest(),
+        "targets": targets,
+    }
+
+
 def test_empty_policy_covers_no_group_so_every_group_still_publishes():
     """The default path: with the empty initial policy no group's upload is
     suppressed, so the universal-publication shape above is what ships."""
@@ -174,9 +240,11 @@ def test_cut_over_group_suppresses_only_that_group():
     cfg = config()
     live, offline = DC.group_members(cfg, "yellowfin", "kde")
     assert live and offline
-    policy = {"cutover": _full_group_entries(cfg, "yellowfin", "kde"), "retained": []}
+    entries = _full_group_entries(cfg, "yellowfin", "kde")
+    policy = {"cutover": entries, "retained": []}
+    snapshot = _qualified_snapshot(entries)
     assert DC.group_covered(
-        policy, "yellowfin", "kde", live, offline, config=cfg
+        policy, "yellowfin", "kde", live, offline, config=cfg, snapshot=snapshot
     ) is True
     for suffix in ("", "cosmic", "niri", "xfce"):
         other_live, other_offline = DC.group_members(cfg, "yellowfin", suffix)
