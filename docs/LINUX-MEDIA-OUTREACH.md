@@ -35,30 +35,33 @@ available; omit growth figures without a dated source and comparison period.
 
 Each draft needs a named sender and the evidence packet below. Send one relevant angle
 per outlet. These are proposals for coverage, not publication commitments. Consult the
-official guidance links again on the contact date.
+official guidance links again on the contact date. LWN needs a human author to write
+original copy; its notes below are internal research, not a draft to send.
 
-### LWN: the engineering trade-offs
+### LWN: internal research for a human author
 
-**Subject:** Story idea: bootc desktop delivery across Linux bases
+**Do not send this agent-generated material to LWN.** The official [author
+guide](https://lwn.net/op/AuthorGuide.lwn), checked on October 23, 2026, rejects
+machine-generated pitches and articles. An eligible human author must independently
+research and write original copy before contact. A human must not approve or edit this
+draft and submit it as original copy.
 
-TunaOS applies a bootable-container pipeline to desktops across multiple Linux bases.
-Would an engineering-focused look at the factory interest LWN? Where does a shared
-desktop manifest work? Where are packages specific to a base necessary? How does the
-project test verification and rollback? The source and pipeline documentation are
-public.
+Internal research topics for that author:
 
-A maintainer could discuss a single reproducible image and its test evidence, including
-limitations.
+- Where shared desktop manifests work across bases and where packages must differ.
+- How the factory tests verification, updates, and rollback on one reproducible image.
+- Which limitations the test evidence reveals and what a maintainer can demonstrate.
 
-Use the news-tip route in the [LWN FAQ](https://lwn.net/op/FAQ.lwn). For a commissioned
-contributor article, consult the separate [author
-guide](https://lwn.net/op/AuthorGuide.lwn) first.
+Use the [LWN FAQ](https://lwn.net/op/FAQ.lwn) to check the news-tip route. For a
+commissioned contributor article, follow the separate author guide and agree the topic
+with LWN before an article. Do not send this generated copy through either route.
 
 ### DistroWatch: distribution discovery
 
-Use the existing [submission draft](DISTROWATCH-SUBMISSION.md) and its [#1333
-tracker](https://github.com/tuna-os/tunaos/issues/1333). Coordinate with that owner
-before you submit so this campaign does not duplicate a submission. The angle is a
+Use the existing [submission draft](DISTROWATCH-SUBMISSION.md) and its closed [#1333
+tracker](https://github.com/tuna-os/tunaos/issues/1333) for history. Read its closure
+and any submission receipts with the maintainer before further contact. A closed
+tracker alone does not prove submission or listing. The angle is a
 desktop image factory with multiple bases; provide a verified path for installation and
 the project's lifecycle policy. Do not describe a draft or submission receipt as a
 listing. Record a listing URL only after publication.

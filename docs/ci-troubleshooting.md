@@ -12,6 +12,7 @@ that touched 36 files across `.github/`, `build_scripts/`, `live-iso/`,
 
 | Symptom | Measured cause | Fix |
 |---|---|---|
+| Media handoff PR is returned in review (#3676) | The PR body used `Closes #3019` while sends and outcomes remained open; the linked LWN author guide rejects machine-generated pitches and articles. | Use `Refs #3019`. Keep LWN material as internal research and require independent human authorship before contact; see [the handoff](LINUX-MEDIA-OUTREACH.md). |
 | ARM64 build passes but Snapdragon laptop support is unclear (#3116) | #3368 records postmarketOS observations and open TunaOS boot/install/update/rollback gates; an architecture manifest does not test board firmware or DTB selection. | Use [SNAPDRAGON.md](SNAPDRAGON.md) and report the exact device, image digest and hardware results. |
 | Bonito build succeeds despite bootc lint findings (#3001) | `99-cleanup.sh` calls `lint_image`; `lib.sh` returns success after findings unless `BOOTC_LINT_FATAL=1`. | Read the grouped output and step summary. Re-run lint against the candidate digest; apply the [Fedora readiness review](FEDORA-OUTREACH-READINESS.md) before outreach. |
 
