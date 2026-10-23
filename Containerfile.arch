@@ -7,7 +7,7 @@
 #   buildah build --target=base-no-de --file Containerfile.arch .
 #   buildah build --target=kde --file Containerfile.arch .
 
-ARG BASE_IMAGE="docker.io/archlinux/archlinux:latest@sha256:666eb320e594ee9fa47f58efe108ae861af6e38de779e1708e1bb29cd9e9d6a5"
+ARG BASE_IMAGE="docker.io/archlinux/archlinux:latest@sha256:ef1b2d7b71ac9f1f5fe78b5ae66c3b3fa8f6f2a4486620233b7ed31b1d0c3aaf"
 ARG COMMON_IMAGE_REF="ghcr.io/projectbluefin/common:unpinned-must-override"
 
 ARG DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
@@ -41,6 +41,7 @@ COPY system_files /files
 COPY system_files_overrides /overrides
 COPY build_scripts /build_scripts
 COPY manifests /manifests
+COPY tunaos.toml /tunaos.toml
 COPY image-versions.yaml /image-versions.yaml
 COPY experiences /experiences
 

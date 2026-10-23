@@ -1,0 +1,26 @@
+{
+  "before": {
+    "upgrade-el10-gnome-runtime": "dnf -y upgrade glib2 fontconfig gobject-introspection gjs",
+    "install-el10-gnome-compat": "dnf_retry -y install --allowerasing gnome50-el10-compat",
+    "remove-el10-gnome-shell-common": "warn_on_fail dnf_retry -y remove --noautoremove gnome-shell-common"
+  },
+  "after": {
+    "tuna-flatpak-remote": "tuna-flatpak-remote.sh",
+    "tuna-gdm-theme": "tuna-gdm-theme.sh",
+    "tuna-gdm-default-session": "tuna-gdm-default-session.sh",
+    "tuna-hide-other-sessions": "tuna-hide-other-sessions.sh",
+    "flatpak-preinstall": "flatpak-preinstall.sh",
+    "cosmic-dock": "cosmic-dock.sh",
+    "greetd-system-integration": "greetd-system-integration.sh",
+    "greetd-gtkgreet": "greetd-gtkgreet.sh",
+    "kcm-ublue": "kcm-ublue.sh",
+    "dms-qml-payload": "dms-qml-payload.sh",
+    "xfce-greeter": "xfce-greeter.sh",
+    "xfwm4-theme": "xfwm4-theme.sh"
+  },
+  "inline": {
+    "compile-glib-schemas": "glib-compile-schemas /usr/share/glib-2.0/schemas || true",
+    "normalize-greetd-keyring-pam": "if [ -f /etc/pam.d/greetd ]; then sed --sandbox -i -e '/gnome_keyring.so/ s/-auth/auth/ ; /gnome_keyring.so/ s/-session/session/' /etc/pam.d/greetd; fi",
+    "repair-cosmic-greeter-pam": "if [ -f /etc/pam.d/cosmic-greeter ] && [ -f /etc/pam.d/greetd ] && [ ! -e /etc/pam.d/common-auth ] && grep -q '^@include common-' /etc/pam.d/cosmic-greeter; then cp /etc/pam.d/greetd /etc/pam.d/cosmic-greeter; fi"
+  }
+}

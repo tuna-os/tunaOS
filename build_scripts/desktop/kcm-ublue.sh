@@ -25,6 +25,12 @@ printf "::group:: === KCM Ublue + Bazaar + Oversteer Udev ===\n"
 
 # ---- Version pins --------------------------------------------------------
 KCM_UBLUE_VERSION=$(grep '^\s*kcm_ublue:' /run/context/image-versions.yaml | sed 's/.*"\(.*\)".*/\1/')
+# renovate: datasource=git-refs depName=bazaar-org/krunner-bazaar ref=v1.3.0
+KRUNNER_BAZAAR_REF="dbed96fa4c2e709c38432eb63e58289636f01b33"
+if [[ ! "$KRUNNER_BAZAAR_REF" =~ ^[0-9a-f]{40}$ ]]; then
+	echo "ERROR: krunner_bazaar_src must be a 40-character commit SHA" >&2
+	return 1 2>/dev/null || exit 1
+fi
 
 ARCH=$(uname -m)
 # GitHub release arch naming: x86_64 → x86_64, aarch64 → aarch64
@@ -122,7 +128,6 @@ fi
 # replaces, for reference on what the plugin needs at runtime).
 echo "Installing krunner-bazaar and setting up Bazaar Flatpak..."
 
-KRUNNER_BAZAAR_VERSION="v1.3.0"
 KRUNNER_BAZAAR_SRC="/tmp/krunner-bazaar-src"
 
 # Build deps — most already present from KDE group install. This plugin is
@@ -135,15 +140,15 @@ if dnf_retry -y install \
 	kf6-krunner-devel kf6-ki18n-devel kf6-kconfig-devel \
 	qt6-qtbase-devel qt6-qtdeclarative-devel; then
 	rm -rf "${KRUNNER_BAZAAR_SRC}"
-	if curl -fsSL "https://github.com/bazaar-org/krunner-bazaar/archive/refs/tags/${KRUNNER_BAZAAR_VERSION}.tar.gz" |
-		tar -xzf - -C /tmp &&
-		mv "/tmp/krunner-bazaar-${KRUNNER_BAZAAR_VERSION#v}" "${KRUNNER_BAZAAR_SRC}" &&
+	mkdir -p "${KRUNNER_BAZAAR_SRC}"
+	if curl -fsSL "https://github.com/bazaar-org/krunner-bazaar/archive/${KRUNNER_BAZAAR_REF}.tar.gz" |
+		tar --strip-components=1 -xzf - -C "${KRUNNER_BAZAAR_SRC}" &&
 		cmake -B "${KRUNNER_BAZAAR_SRC}/_build" -S "${KRUNNER_BAZAAR_SRC}" \
 			-DCMAKE_INSTALL_PREFIX=/usr \
 			-DCMAKE_BUILD_TYPE=Release 2>&1 &&
 		cmake --build "${KRUNNER_BAZAAR_SRC}/_build" --parallel "$(nproc)" &&
 		cmake --install "${KRUNNER_BAZAAR_SRC}/_build"; then
-		echo "krunner-bazaar ${KRUNNER_BAZAAR_VERSION} built and installed from source."
+		echo "krunner-bazaar ${KRUNNER_BAZAAR_REF} built and installed from source."
 	else
 		echo "Warning: krunner-bazaar download or build failed, skipping plugin."
 	fi
@@ -152,13 +157,8 @@ else
 fi
 rm -rf "${KRUNNER_BAZAAR_SRC}"
 
-# Flatpak preinstall — Bazaar will be installed on first boot
-mkdir -p /usr/share/flatpak/preinstall.d
-cat >/usr/share/flatpak/preinstall.d/bazaar.preinstall <<'EOF'
-[Flatpak Preinstall io.github.kolunmi.Bazaar]
-Branch=stable
-IsRuntime=false
-EOF
+# App declarations come from primary TOML through flatpak-preinstall.sh.
+# The desktop operation runs that step after this KCM integration.
 
 # Associate .flatpakref files with Bazaar (same as Aurora)
 mkdir -p /usr/share/applications
