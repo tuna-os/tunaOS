@@ -1872,3 +1872,19 @@ These tests check consistency. They do not prove a real producer or installation
 **Cause:** The hook adds new IDs but it never deletes old IDs.
 
 **Fix:** Delete the owned file at the start of each run. Keep files from other sources. Reject a linked file before you change files.
+
+### A fork's image records the tuna-os vendor
+
+**Symptom:** CI pushes a fork's image to `ghcr.io/<fork owner>`, but its
+`image-info.json` names `tuna-os` as the vendor and `ghcr.io/tuna-os/...` as
+its image reference.
+
+**Cause:** The build step runs `just build` under `sudo`, and `sudo` resets
+the environment. `GITHUB_REPOSITORY_OWNER` did not reach the build, so the
+namespace fell back to `tuna-os`. The push steps run without `sudo`, so they
+used the correct owner.
+
+**Fix:** The build step keeps `IMAGE_REGISTRY` (`ghcr.io/<owner>`) through
+`sudo`, and `scripts/lib/publish-destination.sh` splits it into host and
+namespace. `tests/test_publish_destination.py` checks the precedence and the
+split.
