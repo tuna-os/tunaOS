@@ -212,6 +212,7 @@ run_gate() {
   grep -Fq 'key testvm tab' "${STATE}/calls"
   grep -Fq 'key testvm esc' "${STATE}/calls"
   grep -Fqx 'Session=tuna' "${ROOT}/accts/tuna-ci-login"
+  grep -Fq 'systemctl restart accounts-daemon.service' "${STATE}/calls"
   grep -Fq 'systemctl restart gdm.service' "${STATE}/calls"
   grep -Fq 'tuna-session(41)' <<<"$output"
   grep -Fq 'busctl lock' "${STATE}/calls"

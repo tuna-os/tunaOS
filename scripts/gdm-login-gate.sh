@@ -113,6 +113,11 @@ guest true || {
 guest_accts_dir="${TUNAOS_GDM_ACCOUNTS_DIR:-/var/lib/AccountsService/users}"
 guest mkdir -p "$guest_accts_dir"
 printf '[User]\nSession=tuna\nXSession=tuna\n' | guest tee "$guest_accts_dir/$TEST_USER" >/dev/null
+# AccountsService caches each user's Session after its first read; Ubuntu's
+# daemon keeps serving the empty value it loaded before this file existed (the
+# bus property reads ""), so GDM falls back to GNOME. Restart it so the
+# selection above is what GDM reads.
+guest systemctl restart accounts-daemon.service || true
 guest systemctl restart gdm.service
 for _ in $(seq 1 60); do
 	if guest systemctl is-active --quiet display-manager.service; then
