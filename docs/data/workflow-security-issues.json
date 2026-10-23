@@ -1,0 +1,2047 @@
+{
+  "generated_at": "2026-10-23T19:27:24+00:00",
+  "queries": [
+    "org:tuna-os is:issue is:open in:title permissions",
+    "org:tuna-os is:issue is:open in:title unpinned",
+    "org:tuna-os is:issue is:open in:title pin action"
+  ],
+  "issues": [
+    {
+      "repository": "tuna-os/.github",
+      "number": 91,
+      "title": "[sec-check] missing top-level permissions blocks in publish-flatpak and ste-lint workflows",
+      "url": "https://github.com/tuna-os/.github/issues/91",
+      "updated_at": "2026-10-23T05:00:58Z"
+    },
+    {
+      "repository": "tuna-os/.github",
+      "number": 129,
+      "title": "[sec-check] GitHub Actions not pinned to commit SHAs in publish-flatpak.yml",
+      "url": "https://github.com/tuna-os/.github/issues/129",
+      "updated_at": "2026-10-23T17:37:29Z"
+    },
+    {
+      "repository": "tuna-os/.github",
+      "number": 163,
+      "title": "[sec-check] GitHub Actions runners should use pinned Ubuntu versions instead of ubuntu-latest",
+      "url": "https://github.com/tuna-os/.github/issues/163",
+      "updated_at": "2026-10-20T08:54:04Z"
+    },
+    {
+      "repository": "tuna-os/.github",
+      "number": 169,
+      "title": "[sec-check] Missing permissions blocks in 2 shared workflows",
+      "url": "https://github.com/tuna-os/.github/issues/169",
+      "updated_at": "2026-10-23T05:01:06Z"
+    },
+    {
+      "repository": "tuna-os/.github",
+      "number": 174,
+      "title": "[sec-check] Unpinned GitHub Actions enable supply-chain attacks",
+      "url": "https://github.com/tuna-os/.github/issues/174",
+      "updated_at": "2026-10-23T16:39:16Z"
+    },
+    {
+      "repository": "tuna-os/.github",
+      "number": 184,
+      "title": "[sec-check] Missing top-level permissions blocks in 2 reusable workflows",
+      "url": "https://github.com/tuna-os/.github/issues/184",
+      "updated_at": "2026-10-23T05:01:11Z"
+    },
+    {
+      "repository": "tuna-os/.github",
+      "number": 296,
+      "title": "[sec-check] Internal actions pinned to mutable @main in central CI repository",
+      "url": "https://github.com/tuna-os/.github/issues/296",
+      "updated_at": "2026-10-20T08:54:24Z"
+    },
+    {
+      "repository": "tuna-os/.github",
+      "number": 322,
+      "title": "[sec-check] Unpinned internal workflow actions (@main references)",
+      "url": "https://github.com/tuna-os/.github/issues/322",
+      "updated_at": "2026-10-20T08:54:43Z"
+    },
+    {
+      "repository": "tuna-os/bluefin-cli",
+      "number": 303,
+      "title": "[sec-check] GitHub Actions not pinned to commit SHAs in CI workflows",
+      "url": "https://github.com/tuna-os/bluefin-cli/issues/303",
+      "updated_at": "2026-10-18T23:18:12Z"
+    },
+    {
+      "repository": "tuna-os/bluefin-cli",
+      "number": 304,
+      "title": "[sec-check] Security: 5 workflows missing top-level permissions block",
+      "url": "https://github.com/tuna-os/bluefin-cli/issues/304",
+      "updated_at": "2026-10-18T23:23:03Z"
+    },
+    {
+      "repository": "tuna-os/bluefin-cli",
+      "number": 324,
+      "title": "[sec-check] GitHub Actions should be pinned to commit SHAs",
+      "url": "https://github.com/tuna-os/bluefin-cli/issues/324",
+      "updated_at": "2026-10-19T00:53:22Z"
+    },
+    {
+      "repository": "tuna-os/bluefin-cli",
+      "number": 334,
+      "title": "[sec-check] Pin GitHub Actions to commit SHAs and update outdated versions",
+      "url": "https://github.com/tuna-os/bluefin-cli/issues/334",
+      "updated_at": "2026-10-19T00:38:18Z"
+    },
+    {
+      "repository": "tuna-os/bluefin-cli",
+      "number": 338,
+      "title": "[sec-check] Unpinned GitHub Actions enable supply-chain attacks",
+      "url": "https://github.com/tuna-os/bluefin-cli/issues/338",
+      "updated_at": "2026-10-19T08:05:44Z"
+    },
+    {
+      "repository": "tuna-os/bluefin-cli",
+      "number": 345,
+      "title": "[sec-check] fix: pin GitHub Action versions to specific commits",
+      "url": "https://github.com/tuna-os/bluefin-cli/issues/345",
+      "updated_at": "2026-10-19T08:36:05Z"
+    },
+    {
+      "repository": "tuna-os/bluefin-cli",
+      "number": 349,
+      "title": "[sec-check] CRITICAL: GitHub Actions unpinned to floating version tags \u2014 supply-chain fix required",
+      "url": "https://github.com/tuna-os/bluefin-cli/issues/349",
+      "updated_at": "2026-10-19T08:49:24Z"
+    },
+    {
+      "repository": "tuna-os/bluefin-cli",
+      "number": 350,
+      "title": "[sec-check] GitHub Actions use mutable version tags instead of pinned SHAs",
+      "url": "https://github.com/tuna-os/bluefin-cli/issues/350",
+      "updated_at": "2026-10-20T08:55:54Z"
+    },
+    {
+      "repository": "tuna-os/bluefin-cli",
+      "number": 390,
+      "title": "[sec-check] Replace nonexistent action SHAs in PR #385 workflow pins",
+      "url": "https://github.com/tuna-os/bluefin-cli/issues/390",
+      "updated_at": "2026-10-20T08:56:08Z"
+    },
+    {
+      "repository": "tuna-os/blueshell",
+      "number": 44,
+      "title": "[sec-check] 11 mutable nix-installer-action@main refs in release workflows holding signing secrets (pin to SHA)",
+      "url": "https://github.com/tuna-os/blueshell/issues/44",
+      "updated_at": "2026-10-19T12:16:51Z"
+    },
+    {
+      "repository": "tuna-os/blueshell",
+      "number": 80,
+      "title": "[sec-check] Workflows lack default top-level permissions: contents: read (least privilege)",
+      "url": "https://github.com/tuna-os/blueshell/issues/80",
+      "updated_at": "2026-10-19T12:56:42Z"
+    },
+    {
+      "repository": "tuna-os/blueshell",
+      "number": 91,
+      "title": "[sec-check] Workflows lack default top-level permissions block",
+      "url": "https://github.com/tuna-os/blueshell/issues/91",
+      "updated_at": "2026-10-19T13:13:49Z"
+    },
+    {
+      "repository": "tuna-os/blueshell",
+      "number": 92,
+      "title": "[sec-check] Workflows lack default top-level permissions",
+      "url": "https://github.com/tuna-os/blueshell/issues/92",
+      "updated_at": "2026-10-19T13:19:18Z"
+    },
+    {
+      "repository": "tuna-os/blueshell",
+      "number": 96,
+      "title": "[sec-check] Workflows lack default top-level permissions set to read-all or contents: read",
+      "url": "https://github.com/tuna-os/blueshell/issues/96",
+      "updated_at": "2026-10-19T13:27:23Z"
+    },
+    {
+      "repository": "tuna-os/blueshell",
+      "number": 109,
+      "title": "[sec-check] GitHub Actions: Unpinned action versions in Nix + Flatpak workflows",
+      "url": "https://github.com/tuna-os/blueshell/issues/109",
+      "updated_at": "2026-10-19T13:51:04Z"
+    },
+    {
+      "repository": "tuna-os/blueshell",
+      "number": 111,
+      "title": "[sec-check] Add explicit permissions to workflows lacking them",
+      "url": "https://github.com/tuna-os/blueshell/issues/111",
+      "updated_at": "2026-10-19T13:41:39Z"
+    },
+    {
+      "repository": "tuna-os/blueshell",
+      "number": 114,
+      "title": "[sec-check] GitHub Actions not pinned to commit SHAs in blueshell",
+      "url": "https://github.com/tuna-os/blueshell/issues/114",
+      "updated_at": "2026-10-19T13:49:10Z"
+    },
+    {
+      "repository": "tuna-os/blueshell",
+      "number": 118,
+      "title": "[sec-check] 16 workflows missing explicit permissions declarations",
+      "url": "https://github.com/tuna-os/blueshell/issues/118",
+      "updated_at": "2026-10-19T14:05:46Z"
+    },
+    {
+      "repository": "tuna-os/blueshell",
+      "number": 119,
+      "title": "[sec-check] Actions pinned to @main instead of commit SHA",
+      "url": "https://github.com/tuna-os/blueshell/issues/119",
+      "updated_at": "2026-10-19T14:03:39Z"
+    },
+    {
+      "repository": "tuna-os/blueshell",
+      "number": 121,
+      "title": "[sec-check] Unpinned GitHub Actions enable supply-chain attacks",
+      "url": "https://github.com/tuna-os/blueshell/issues/121",
+      "updated_at": "2026-10-19T14:15:24Z"
+    },
+    {
+      "repository": "tuna-os/blueshell",
+      "number": 122,
+      "title": "[sec-check] Missing explicit workflow permissions in 16 GitHub Actions workflows",
+      "url": "https://github.com/tuna-os/blueshell/issues/122",
+      "updated_at": "2026-10-19T14:19:03Z"
+    },
+    {
+      "repository": "tuna-os/blueshell",
+      "number": 123,
+      "title": "[sec-check] fix: pin unpinned GitHub Actions to specific commits",
+      "url": "https://github.com/tuna-os/blueshell/issues/123",
+      "updated_at": "2026-10-19T14:22:46Z"
+    },
+    {
+      "repository": "tuna-os/blueshell",
+      "number": 150,
+      "title": "[sec-check] Pin GitHub actions to commit SHAs for supply chain security",
+      "url": "https://github.com/tuna-os/blueshell/issues/150",
+      "updated_at": "2026-10-19T15:40:23Z"
+    },
+    {
+      "repository": "tuna-os/blueshell",
+      "number": 151,
+      "title": "[sec-check] Unpinned GitHub Actions and missing permissions blocks",
+      "url": "https://github.com/tuna-os/blueshell/issues/151",
+      "updated_at": "2026-10-19T15:43:11Z"
+    },
+    {
+      "repository": "tuna-os/blueshell",
+      "number": 153,
+      "title": "Pin nix-installer-action in release workflows",
+      "url": "https://github.com/tuna-os/blueshell/issues/153",
+      "updated_at": "2026-10-21T09:23:51Z"
+    },
+    {
+      "repository": "tuna-os/blueshell",
+      "number": 154,
+      "title": "Pin nix-installer-action in test workflow",
+      "url": "https://github.com/tuna-os/blueshell/issues/154",
+      "updated_at": "2026-10-21T09:23:49Z"
+    },
+    {
+      "repository": "tuna-os/blueshell",
+      "number": 155,
+      "title": "Pin checkout actions in downstream workflows",
+      "url": "https://github.com/tuna-os/blueshell/issues/155",
+      "updated_at": "2026-10-21T09:23:47Z"
+    },
+    {
+      "repository": "tuna-os/blueshell",
+      "number": 158,
+      "title": "[ci-maintainer] Pin mutable workflow actions and reusable workflow refs",
+      "url": "https://github.com/tuna-os/blueshell/issues/158",
+      "updated_at": "2026-10-19T16:29:35Z"
+    },
+    {
+      "repository": "tuna-os/bootc-installer",
+      "number": 177,
+      "title": "[sec-check] Pin GitHub Actions to commit SHAs and update to modern versions",
+      "url": "https://github.com/tuna-os/bootc-installer/issues/177",
+      "updated_at": "2026-10-18T08:54:48Z"
+    },
+    {
+      "repository": "tuna-os/bootc-installer",
+      "number": 222,
+      "title": "[sec-check] GitHub Actions use mutable version tags instead of pinned SHAs",
+      "url": "https://github.com/tuna-os/bootc-installer/issues/222",
+      "updated_at": "2026-10-18T08:54:59Z"
+    },
+    {
+      "repository": "tuna-os/bootc-installer",
+      "number": 224,
+      "title": "[sec-check] GitHub Actions should pin to commit SHAs, not mutable version tags",
+      "url": "https://github.com/tuna-os/bootc-installer/issues/224",
+      "updated_at": "2026-10-18T08:55:01Z"
+    },
+    {
+      "repository": "tuna-os/bootc-migrate",
+      "number": 254,
+      "title": "[sec-check] missing top-level permissions block in ste.yml workflow",
+      "url": "https://github.com/tuna-os/bootc-migrate/issues/254",
+      "updated_at": "2026-10-18T08:55:44Z"
+    },
+    {
+      "repository": "tuna-os/bootc-migrate",
+      "number": 325,
+      "title": "[sec-check] restrict GitHub token permissions in all CI/CD workflows",
+      "url": "https://github.com/tuna-os/bootc-migrate/issues/325",
+      "updated_at": "2026-10-18T08:55:52Z"
+    },
+    {
+      "repository": "tuna-os/bootc-migrate",
+      "number": 391,
+      "title": "[sec-check] GitHub Actions use mutable version tags instead of pinned SHAs",
+      "url": "https://github.com/tuna-os/bootc-migrate/issues/391",
+      "updated_at": "2026-10-18T08:55:59Z"
+    },
+    {
+      "repository": "tuna-os/bootc-migrate",
+      "number": 392,
+      "title": "[sec-check] GitHub Actions should pin to commit SHAs, not mutable version tags",
+      "url": "https://github.com/tuna-os/bootc-migrate/issues/392",
+      "updated_at": "2026-10-18T08:56:00Z"
+    },
+    {
+      "repository": "tuna-os/bootc-migrate",
+      "number": 401,
+      "title": "[sec-check] ste.yml missing top-level permissions block",
+      "url": "https://github.com/tuna-os/bootc-migrate/issues/401",
+      "updated_at": "2026-10-18T03:32:00Z"
+    },
+    {
+      "repository": "tuna-os/bootsahi",
+      "number": 137,
+      "title": "[strategist] Add top-level permissions blocks to ste.yml and bootsahi-app-build.yml workflows",
+      "url": "https://github.com/tuna-os/bootsahi/issues/137",
+      "updated_at": "2026-10-18T08:55:20Z"
+    },
+    {
+      "repository": "tuna-os/bootsahi",
+      "number": 139,
+      "title": "[strategist] security: add top-level permissions block to bootsahi-app-build.yml",
+      "url": "https://github.com/tuna-os/bootsahi/issues/139",
+      "updated_at": "2026-10-18T08:55:22Z"
+    },
+    {
+      "repository": "tuna-os/bootsahi",
+      "number": 140,
+      "title": "[strategist] security: add top-level permissions block to ste.yml",
+      "url": "https://github.com/tuna-os/bootsahi/issues/140",
+      "updated_at": "2026-10-18T08:55:23Z"
+    },
+    {
+      "repository": "tuna-os/bootsahi",
+      "number": 143,
+      "title": "[sec-check] workflows: add top-level permissions blocks to 2 workflows for least-privilege hardening",
+      "url": "https://github.com/tuna-os/bootsahi/issues/143",
+      "updated_at": "2026-10-18T08:55:24Z"
+    },
+    {
+      "repository": "tuna-os/bootsahi",
+      "number": 144,
+      "title": "[sec-check] Security: 6 workflows missing top-level permissions block",
+      "url": "https://github.com/tuna-os/bootsahi/issues/144",
+      "updated_at": "2026-10-18T08:55:26Z"
+    },
+    {
+      "repository": "tuna-os/bootsahi",
+      "number": 147,
+      "title": "[sec-check] bootc-installer-asahi: missing top-level permissions blocks in workflows",
+      "url": "https://github.com/tuna-os/bootsahi/issues/147",
+      "updated_at": "2026-10-18T08:55:29Z"
+    },
+    {
+      "repository": "tuna-os/bootsahi",
+      "number": 158,
+      "title": "[sec-check] GitHub Actions use mutable version tags instead of pinned SHAs",
+      "url": "https://github.com/tuna-os/bootsahi/issues/158",
+      "updated_at": "2026-10-18T08:55:36Z"
+    },
+    {
+      "repository": "tuna-os/branding",
+      "number": 53,
+      "title": "[sec-check] branding: missing top-level permissions block in ste.yml workflow",
+      "url": "https://github.com/tuna-os/branding/issues/53",
+      "updated_at": "2026-10-19T14:18:05Z"
+    },
+    {
+      "repository": "tuna-os/branding",
+      "number": 56,
+      "title": "[sec-check] ste: missing top-level permissions block in GitHub Actions workflow",
+      "url": "https://github.com/tuna-os/branding/issues/56",
+      "updated_at": "2026-10-18T08:56:21Z"
+    },
+    {
+      "repository": "tuna-os/branding",
+      "number": 61,
+      "title": "[sec-check] workflows: add top-level permissions block to ste.yml for least-privilege hardening",
+      "url": "https://github.com/tuna-os/branding/issues/61",
+      "updated_at": "2026-10-18T08:56:25Z"
+    },
+    {
+      "repository": "tuna-os/branding",
+      "number": 68,
+      "title": "[sec-check] restrict GitHub token permissions in CI workflows (4 jobs)",
+      "url": "https://github.com/tuna-os/branding/issues/68",
+      "updated_at": "2026-10-18T08:56:30Z"
+    },
+    {
+      "repository": "tuna-os/branding",
+      "number": 71,
+      "title": "[sec-check] Missing permissions block in ste.yml workflow",
+      "url": "https://github.com/tuna-os/branding/issues/71",
+      "updated_at": "2026-10-18T08:56:34Z"
+    },
+    {
+      "repository": "tuna-os/branding",
+      "number": 75,
+      "title": "[sec-check] ste.yml workflow missing top-level permissions block",
+      "url": "https://github.com/tuna-os/branding/issues/75",
+      "updated_at": "2026-10-18T08:56:36Z"
+    },
+    {
+      "repository": "tuna-os/branding",
+      "number": 79,
+      "title": "[sec-check] GitHub Actions use mutable version tags instead of pinned SHAs",
+      "url": "https://github.com/tuna-os/branding/issues/79",
+      "updated_at": "2026-10-18T08:56:38Z"
+    },
+    {
+      "repository": "tuna-os/branding",
+      "number": 83,
+      "title": "[sec-check] GitHub Actions should pin to commit SHAs, not mutable version tags",
+      "url": "https://github.com/tuna-os/branding/issues/83",
+      "updated_at": "2026-10-18T08:56:43Z"
+    },
+    {
+      "repository": "tuna-os/branding",
+      "number": 86,
+      "title": "[sec-check] missing permissions block in ste.yml and mutable action tags in ci.yml",
+      "url": "https://github.com/tuna-os/branding/issues/86",
+      "updated_at": "2026-10-18T08:56:44Z"
+    },
+    {
+      "repository": "tuna-os/bst-ci",
+      "number": 38,
+      "title": "[sec-check] planning job has no permissions block \u2014 privileged container inherits the caller's token scope",
+      "url": "https://github.com/tuna-os/bst-ci/issues/38",
+      "updated_at": "2026-10-18T03:11:26Z"
+    },
+    {
+      "repository": "tuna-os/bst-ci",
+      "number": 72,
+      "title": "[strategist] security: add top-level permissions blocks to build/CI workflows",
+      "url": "https://github.com/tuna-os/bst-ci/issues/72",
+      "updated_at": "2026-10-18T08:56:52Z"
+    },
+    {
+      "repository": "tuna-os/bst-ci",
+      "number": 77,
+      "title": "[sec-check] workflows: add top-level permissions blocks to 2 workflows for least-privilege hardening",
+      "url": "https://github.com/tuna-os/bst-ci/issues/77",
+      "updated_at": "2026-10-18T08:56:58Z"
+    },
+    {
+      "repository": "tuna-os/bst-ci",
+      "number": 79,
+      "title": "[sec-check] Security: 2 workflows missing top-level permissions block",
+      "url": "https://github.com/tuna-os/bst-ci/issues/79",
+      "updated_at": "2026-10-18T08:57:00Z"
+    },
+    {
+      "repository": "tuna-os/bst-ci",
+      "number": 80,
+      "title": "[sec-check] workflows: add top-level permissions blocks for least-privilege",
+      "url": "https://github.com/tuna-os/bst-ci/issues/80",
+      "updated_at": "2026-10-18T08:57:01Z"
+    },
+    {
+      "repository": "tuna-os/bst-ci",
+      "number": 81,
+      "title": "[sec-check] unpinned GitHub Actions in workflows",
+      "url": "https://github.com/tuna-os/bst-ci/issues/81",
+      "updated_at": "2026-10-18T08:57:02Z"
+    },
+    {
+      "repository": "tuna-os/bst-ci",
+      "number": 86,
+      "title": "[sec-check] planning job lacks permissions block \u2014 defaults to full access",
+      "url": "https://github.com/tuna-os/bst-ci/issues/86",
+      "updated_at": "2026-10-18T08:57:05Z"
+    },
+    {
+      "repository": "tuna-os/bst-ci",
+      "number": 87,
+      "title": "[sec-check] Pin GitHub Actions to commit SHAs in workflows",
+      "url": "https://github.com/tuna-os/bst-ci/issues/87",
+      "updated_at": "2026-10-18T08:57:06Z"
+    },
+    {
+      "repository": "tuna-os/bst-ci",
+      "number": 90,
+      "title": "[sec-check] mutable GitHub Action tags should be pinned to exact commit SHAs",
+      "url": "https://github.com/tuna-os/bst-ci/issues/90",
+      "updated_at": "2026-10-18T08:57:08Z"
+    },
+    {
+      "repository": "tuna-os/bst-ci",
+      "number": 95,
+      "title": "[sec-check] GitHub Actions use mutable version tags instead of pinned SHAs",
+      "url": "https://github.com/tuna-os/bst-ci/issues/95",
+      "updated_at": "2026-10-18T08:57:10Z"
+    },
+    {
+      "repository": "tuna-os/bst-ci",
+      "number": 108,
+      "title": "[ci-maintainer] Pin mutable action references in shared workflows",
+      "url": "https://github.com/tuna-os/bst-ci/issues/108",
+      "updated_at": "2026-10-23T02:18:14Z"
+    },
+    {
+      "repository": "tuna-os/ccleft",
+      "number": 10,
+      "title": "[sec-check] Workflows use unpinned action version tags instead of commit SHAs",
+      "url": "https://github.com/tuna-os/ccleft/issues/10",
+      "updated_at": "2026-10-17T07:45:01Z"
+    },
+    {
+      "repository": "tuna-os/ccleft",
+      "number": 14,
+      "title": "[sec-check] GitHub Actions not pinned to commit SHAs",
+      "url": "https://github.com/tuna-os/ccleft/issues/14",
+      "updated_at": "2026-10-17T07:45:03Z"
+    },
+    {
+      "repository": "tuna-os/ccleft",
+      "number": 17,
+      "title": "[sec-check] Unpinned container base images and GitHub Actions create supply chain risks",
+      "url": "https://github.com/tuna-os/ccleft/issues/17",
+      "updated_at": "2026-10-18T02:58:19Z"
+    },
+    {
+      "repository": "tuna-os/ccleft",
+      "number": 34,
+      "title": "[sec-check] Unpinned GitHub Actions enable supply-chain attacks",
+      "url": "https://github.com/tuna-os/ccleft/issues/34",
+      "updated_at": "2026-10-18T03:03:25Z"
+    },
+    {
+      "repository": "tuna-os/ccleft",
+      "number": 42,
+      "title": "[sec-check] fix: pin GitHub Action versions to specific commits",
+      "url": "https://github.com/tuna-os/ccleft/issues/42",
+      "updated_at": "2026-10-18T03:04:38Z"
+    },
+    {
+      "repository": "tuna-os/ccleft",
+      "number": 57,
+      "title": "[sec-check] Pin GitHub Actions to commit SHAs (ci.yml, publish.yml)",
+      "url": "https://github.com/tuna-os/ccleft/issues/57",
+      "updated_at": "2026-10-18T03:07:32Z"
+    },
+    {
+      "repository": "tuna-os/compass",
+      "number": 282,
+      "title": "[sec-check] Pin internal action versions to commit SHAs instead of @main",
+      "url": "https://github.com/tuna-os/compass/issues/282",
+      "updated_at": "2026-10-18T03:05:17Z"
+    },
+    {
+      "repository": "tuna-os/docs",
+      "number": 423,
+      "title": "[sec-check] GitHub Actions: Unpinned action versions in documentation workflows",
+      "url": "https://github.com/tuna-os/docs/issues/423",
+      "updated_at": "2026-10-22T01:40:36Z"
+    },
+    {
+      "repository": "tuna-os/docs",
+      "number": 433,
+      "title": "[sec-check] GitHub Actions not pinned to commit SHAs across multiple workflows",
+      "url": "https://github.com/tuna-os/docs/issues/433",
+      "updated_at": "2026-10-22T02:47:01Z"
+    },
+    {
+      "repository": "tuna-os/docs",
+      "number": 435,
+      "title": "[sec-check] workflows: add top-level permissions block to ste.yml for least-privilege hardening",
+      "url": "https://github.com/tuna-os/docs/issues/435",
+      "updated_at": "2026-10-22T02:35:44Z"
+    },
+    {
+      "repository": "tuna-os/docs",
+      "number": 436,
+      "title": "[sec-check] Security: workflows missing top-level permissions block",
+      "url": "https://github.com/tuna-os/docs/issues/436",
+      "updated_at": "2026-10-22T04:13:42Z"
+    },
+    {
+      "repository": "tuna-os/docs",
+      "number": 438,
+      "title": "[sec-check] workflows: add top-level permissions blocks for least-privilege",
+      "url": "https://github.com/tuna-os/docs/issues/438",
+      "updated_at": "2026-10-22T04:16:16Z"
+    },
+    {
+      "repository": "tuna-os/docs",
+      "number": 442,
+      "title": "[sec-check] GitHub Actions not pinned to commit SHAs",
+      "url": "https://github.com/tuna-os/docs/issues/442",
+      "updated_at": "2026-10-22T10:35:25Z"
+    },
+    {
+      "repository": "tuna-os/docs",
+      "number": 462,
+      "title": "[sec-check] restrict GitHub token permissions in CI workflows (16 jobs)",
+      "url": "https://github.com/tuna-os/docs/issues/462",
+      "updated_at": "2026-10-22T06:03:07Z"
+    },
+    {
+      "repository": "tuna-os/docs",
+      "number": 468,
+      "title": "[sec-check] Workflow missing explicit permissions and action pinned to @main",
+      "url": "https://github.com/tuna-os/docs/issues/468",
+      "updated_at": "2026-10-23T18:41:14Z"
+    },
+    {
+      "repository": "tuna-os/docs",
+      "number": 473,
+      "title": "[sec-check] GitHub Actions not consistently pinned to commit SHAs",
+      "url": "https://github.com/tuna-os/docs/issues/473",
+      "updated_at": "2026-10-22T06:46:49Z"
+    },
+    {
+      "repository": "tuna-os/docs",
+      "number": 478,
+      "title": "[sec-check] Missing permissions block in flatpak-sanity.yml workflow",
+      "url": "https://github.com/tuna-os/docs/issues/478",
+      "updated_at": "2026-10-18T08:57:39Z"
+    },
+    {
+      "repository": "tuna-os/docs",
+      "number": 486,
+      "title": "[sec-check] Unpinned GitHub Actions enable supply-chain attacks",
+      "url": "https://github.com/tuna-os/docs/issues/486",
+      "updated_at": "2026-10-22T07:20:44Z"
+    },
+    {
+      "repository": "tuna-os/docs",
+      "number": 493,
+      "title": "[sec-check] missing top-level permissions blocks in 10 GitHub Actions workflows",
+      "url": "https://github.com/tuna-os/docs/issues/493",
+      "updated_at": "2026-10-22T08:34:13Z"
+    },
+    {
+      "repository": "tuna-os/docs",
+      "number": 495,
+      "title": "[sec-check] fix: pin GitHub Action versions to specific commits",
+      "url": "https://github.com/tuna-os/docs/issues/495",
+      "updated_at": "2026-10-22T09:50:54Z"
+    },
+    {
+      "repository": "tuna-os/docs",
+      "number": 512,
+      "title": "[sec-check] GitHub Actions use mutable version tags instead of pinned SHAs",
+      "url": "https://github.com/tuna-os/docs/issues/512",
+      "updated_at": "2026-10-22T15:05:09Z"
+    },
+    {
+      "repository": "tuna-os/docs",
+      "number": 515,
+      "title": "[sec-check] flatpak-sanity.yml missing top-level permissions block",
+      "url": "https://github.com/tuna-os/docs/issues/515",
+      "updated_at": "2026-10-22T15:09:40Z"
+    },
+    {
+      "repository": "tuna-os/dualcut",
+      "number": 105,
+      "title": "[sec-check] Unpinned flatpak-cargo-generator.py fetched from flatpak-builder-tools master runs in --privileged container (supply chain)",
+      "url": "https://github.com/tuna-os/dualcut/issues/105",
+      "updated_at": "2026-10-17T22:00:40Z"
+    },
+    {
+      "repository": "tuna-os/dualcut",
+      "number": 152,
+      "title": "[sec-check] Workflows lack default top-level permissions: contents: read",
+      "url": "https://github.com/tuna-os/dualcut/issues/152",
+      "updated_at": "2026-10-17T22:00:43Z"
+    },
+    {
+      "repository": "tuna-os/dualcut",
+      "number": 168,
+      "title": "[sec-check] Workflows lack default top-level permissions block",
+      "url": "https://github.com/tuna-os/dualcut/issues/168",
+      "updated_at": "2026-10-22T18:05:36Z"
+    },
+    {
+      "repository": "tuna-os/dualcut",
+      "number": 188,
+      "title": "[sec-check] GitHub Actions not pinned to commit SHAs in dualcut",
+      "url": "https://github.com/tuna-os/dualcut/issues/188",
+      "updated_at": "2026-10-22T20:01:12Z"
+    },
+    {
+      "repository": "tuna-os/dualcut",
+      "number": 191,
+      "title": "[sec-check] Workflows lack default top-level permissions blocks",
+      "url": "https://github.com/tuna-os/dualcut/issues/191",
+      "updated_at": "2026-10-22T20:01:20Z"
+    },
+    {
+      "repository": "tuna-os/dualcut",
+      "number": 195,
+      "title": "[sec-check] GitHub Actions should be pinned to commit SHAs",
+      "url": "https://github.com/tuna-os/dualcut/issues/195",
+      "updated_at": "2026-10-22T20:01:29Z"
+    },
+    {
+      "repository": "tuna-os/dualcut",
+      "number": 198,
+      "title": "[sec-check] Pin GitHub Actions to commit SHAs and update v7/v2",
+      "url": "https://github.com/tuna-os/dualcut/issues/198",
+      "updated_at": "2026-10-22T21:04:14Z"
+    },
+    {
+      "repository": "tuna-os/dualcut",
+      "number": 200,
+      "title": "[sec-check] Unpinned GitHub Actions enable supply-chain attacks",
+      "url": "https://github.com/tuna-os/dualcut/issues/200",
+      "updated_at": "2026-10-22T21:04:19Z"
+    },
+    {
+      "repository": "tuna-os/dualcut",
+      "number": 204,
+      "title": "[sec-check] fix: pin GitHub Action versions to specific commits",
+      "url": "https://github.com/tuna-os/dualcut/issues/204",
+      "updated_at": "2026-10-22T21:04:36Z"
+    },
+    {
+      "repository": "tuna-os/dualcut",
+      "number": 207,
+      "title": "[sec-check] Add explicit top-level permissions blocks to workflows",
+      "url": "https://github.com/tuna-os/dualcut/issues/207",
+      "updated_at": "2026-10-22T23:10:04Z"
+    },
+    {
+      "repository": "tuna-os/dualcut",
+      "number": 212,
+      "title": "[sec-check] Update outdated GitHub actions and pin reusable workflow references",
+      "url": "https://github.com/tuna-os/dualcut/issues/212",
+      "updated_at": "2026-10-22T23:10:14Z"
+    },
+    {
+      "repository": "tuna-os/finupdate",
+      "number": 128,
+      "title": "[sec-check] finupdate: missing top-level permissions blocks in GitHub Actions workflows",
+      "url": "https://github.com/tuna-os/finupdate/issues/128",
+      "updated_at": "2026-10-18T08:58:03Z"
+    },
+    {
+      "repository": "tuna-os/finupdate",
+      "number": 160,
+      "title": "[strategist] security: add top-level permissions blocks to build/CI workflows",
+      "url": "https://github.com/tuna-os/finupdate/issues/160",
+      "updated_at": "2026-10-18T08:58:14Z"
+    },
+    {
+      "repository": "tuna-os/finupdate",
+      "number": 164,
+      "title": "[sec-check] workflows: add top-level permissions blocks to 2 workflows for least-privilege hardening",
+      "url": "https://github.com/tuna-os/finupdate/issues/164",
+      "updated_at": "2026-10-18T08:58:19Z"
+    },
+    {
+      "repository": "tuna-os/finupdate",
+      "number": 166,
+      "title": "[sec-check] Security: 4 workflows missing top-level permissions block",
+      "url": "https://github.com/tuna-os/finupdate/issues/166",
+      "updated_at": "2026-10-18T08:58:21Z"
+    },
+    {
+      "repository": "tuna-os/finupdate",
+      "number": 167,
+      "title": "[sec-check] workflows: add top-level permissions blocks for least-privilege",
+      "url": "https://github.com/tuna-os/finupdate/issues/167",
+      "updated_at": "2026-10-18T08:58:22Z"
+    },
+    {
+      "repository": "tuna-os/finupdate",
+      "number": 168,
+      "title": "[sec-check] finupdate: missing top-level permissions blocks in ci and ste workflows",
+      "url": "https://github.com/tuna-os/finupdate/issues/168",
+      "updated_at": "2026-10-18T08:58:23Z"
+    },
+    {
+      "repository": "tuna-os/finupdate",
+      "number": 170,
+      "title": "[sec-check] restrict GitHub token permissions in CI workflows (5 jobs)",
+      "url": "https://github.com/tuna-os/finupdate/issues/170",
+      "updated_at": "2026-10-18T08:58:25Z"
+    },
+    {
+      "repository": "tuna-os/finupdate",
+      "number": 173,
+      "title": "[sec-check] Workflows lack permissions blocks \u2014 default to full access",
+      "url": "https://github.com/tuna-os/finupdate/issues/173",
+      "updated_at": "2026-10-18T08:58:28Z"
+    },
+    {
+      "repository": "tuna-os/finupdate",
+      "number": 174,
+      "title": "[sec-check] CI: Missing top-level permissions block and unpinned GitHub Actions",
+      "url": "https://github.com/tuna-os/finupdate/issues/174",
+      "updated_at": "2026-10-18T08:58:29Z"
+    },
+    {
+      "repository": "tuna-os/finupdate",
+      "number": 175,
+      "title": "[sec-check] Missing top-level permissions blocks in workflows",
+      "url": "https://github.com/tuna-os/finupdate/issues/175",
+      "updated_at": "2026-10-18T08:58:30Z"
+    },
+    {
+      "repository": "tuna-os/finupdate",
+      "number": 178,
+      "title": "[sec-check] missing top-level permissions block in ci.yml and ste.yml workflows",
+      "url": "https://github.com/tuna-os/finupdate/issues/178",
+      "updated_at": "2026-10-18T08:58:32Z"
+    },
+    {
+      "repository": "tuna-os/finupdate",
+      "number": 179,
+      "title": "[sec-check] mutable GitHub Action tags should be pinned to exact commit SHAs",
+      "url": "https://github.com/tuna-os/finupdate/issues/179",
+      "updated_at": "2026-10-18T08:58:33Z"
+    },
+    {
+      "repository": "tuna-os/finupdate",
+      "number": 187,
+      "title": "[sec-check] GitHub Actions use mutable version tags instead of pinned SHAs",
+      "url": "https://github.com/tuna-os/finupdate/issues/187",
+      "updated_at": "2026-10-18T08:58:40Z"
+    },
+    {
+      "repository": "tuna-os/finupdate",
+      "number": 193,
+      "title": "[sec-check] Mutable GitHub Actions and external action pinned to @main",
+      "url": "https://github.com/tuna-os/finupdate/issues/193",
+      "updated_at": "2026-10-18T03:31:54Z"
+    },
+    {
+      "repository": "tuna-os/finupdate",
+      "number": 194,
+      "title": "[sec-check] ci.yml and ste.yml workflows missing top-level permissions blocks",
+      "url": "https://github.com/tuna-os/finupdate/issues/194",
+      "updated_at": "2026-10-18T03:31:52Z"
+    },
+    {
+      "repository": "tuna-os/fisherman",
+      "number": 243,
+      "title": "[sec-check] GitHub Actions: 41 unpinned action versions in CI/CD workflows",
+      "url": "https://github.com/tuna-os/fisherman/issues/243",
+      "updated_at": "2026-10-18T02:55:24Z"
+    },
+    {
+      "repository": "tuna-os/fisherman",
+      "number": 247,
+      "title": "[sec-check] Restrict promote.yml workflow token permissions",
+      "url": "https://github.com/tuna-os/fisherman/issues/247",
+      "updated_at": "2026-10-18T02:56:59Z"
+    },
+    {
+      "repository": "tuna-os/fisherman",
+      "number": 285,
+      "title": "[sec-check] GitHub Actions use mutable version tags instead of pinned SHAs",
+      "url": "https://github.com/tuna-os/fisherman/issues/285",
+      "updated_at": "2026-10-18T08:58:54Z"
+    },
+    {
+      "repository": "tuna-os/flatpak-index",
+      "number": 81,
+      "title": "[sec-check] Pin actions in check-metadata workflow",
+      "url": "https://github.com/tuna-os/flatpak-index/issues/81",
+      "updated_at": "2026-10-23T18:40:43Z"
+    },
+    {
+      "repository": "tuna-os/flatpak-index",
+      "number": 82,
+      "title": "[sec-check] Pin actions in Pages deployment workflow",
+      "url": "https://github.com/tuna-os/flatpak-index/issues/82",
+      "updated_at": "2026-10-23T18:40:16Z"
+    },
+    {
+      "repository": "tuna-os/flatpak-index",
+      "number": 83,
+      "title": "[sec-check] Pin actions in tests workflow",
+      "url": "https://github.com/tuna-os/flatpak-index/issues/83",
+      "updated_at": "2026-10-23T18:40:19Z"
+    },
+    {
+      "repository": "tuna-os/flatpak-index",
+      "number": 84,
+      "title": "[sec-check] Pin the STE reusable workflow and set read-only permissions",
+      "url": "https://github.com/tuna-os/flatpak-index/issues/84",
+      "updated_at": "2026-10-23T18:40:47Z"
+    },
+    {
+      "repository": "tuna-os/flatpak-index",
+      "number": 102,
+      "title": "[sec-check] GitHub Actions not pinned to commit SHAs",
+      "url": "https://github.com/tuna-os/flatpak-index/issues/102",
+      "updated_at": "2026-10-23T00:07:25Z"
+    },
+    {
+      "repository": "tuna-os/flatpak-index",
+      "number": 112,
+      "title": "[sec-check] Pin GitHub Actions to commit SHAs and update v7/v5/v6 versions",
+      "url": "https://github.com/tuna-os/flatpak-index/issues/112",
+      "updated_at": "2026-10-23T18:40:25Z"
+    },
+    {
+      "repository": "tuna-os/flatpak-index",
+      "number": 114,
+      "title": "[sec-check] Unpinned GitHub Actions enable supply-chain attacks",
+      "url": "https://github.com/tuna-os/flatpak-index/issues/114",
+      "updated_at": "2026-10-23T18:40:28Z"
+    },
+    {
+      "repository": "tuna-os/flatpak-index",
+      "number": 118,
+      "title": "[sec-check] Pin GitHub Actions to commit SHAs + ste.yml permissions block (consolidates gh-75,78,81,82,83,84,92,95,102,108,109,112,114)",
+      "url": "https://github.com/tuna-os/flatpak-index/issues/118",
+      "updated_at": "2026-10-23T18:41:34Z"
+    },
+    {
+      "repository": "tuna-os/flatpak-index",
+      "number": 119,
+      "title": "[sec-check] fix: pin GitHub Action versions to specific commits",
+      "url": "https://github.com/tuna-os/flatpak-index/issues/119",
+      "updated_at": "2026-10-23T18:41:39Z"
+    },
+    {
+      "repository": "tuna-os/flatpak-index",
+      "number": 128,
+      "title": "[sec-check] GitHub Actions use mutable version tags instead of pinned SHAs",
+      "url": "https://github.com/tuna-os/flatpak-index/issues/128",
+      "updated_at": "2026-10-23T18:40:35Z"
+    },
+    {
+      "repository": "tuna-os/flatpak-index",
+      "number": 152,
+      "title": "[sec-check] Unpinned upstream workflow (@main reference)",
+      "url": "https://github.com/tuna-os/flatpak-index/issues/152",
+      "updated_at": "2026-10-23T13:57:32Z"
+    },
+    {
+      "repository": "tuna-os/gnome-hive-monitor",
+      "number": 33,
+      "title": "[sec-check] Restrict STE workflow token permissions",
+      "url": "https://github.com/tuna-os/gnome-hive-monitor/issues/33",
+      "updated_at": "2026-10-18T02:54:26Z"
+    },
+    {
+      "repository": "tuna-os/gnome-hive-monitor",
+      "number": 53,
+      "title": "[sec-check] Unpinned GitHub Actions enable supply-chain attacks",
+      "url": "https://github.com/tuna-os/gnome-hive-monitor/issues/53",
+      "updated_at": "2026-10-18T03:03:22Z"
+    },
+    {
+      "repository": "tuna-os/hive",
+      "number": 58,
+      "title": "[sec-check] ste.yml workflow lacks default top-level permissions block",
+      "url": "https://github.com/tuna-os/hive/issues/58",
+      "updated_at": "2026-10-18T02:52:48Z"
+    },
+    {
+      "repository": "tuna-os/hive",
+      "number": 63,
+      "title": "[sec-check] ste workflow lacks default top-level permissions block",
+      "url": "https://github.com/tuna-os/hive/issues/63",
+      "updated_at": "2026-10-18T02:53:13Z"
+    },
+    {
+      "repository": "tuna-os/hive",
+      "number": 64,
+      "title": "[sec-check] missing top-level permissions block in ste.yml workflow",
+      "url": "https://github.com/tuna-os/hive/issues/64",
+      "updated_at": "2026-10-18T09:00:54Z"
+    },
+    {
+      "repository": "tuna-os/hive",
+      "number": 87,
+      "title": "[sec-check] workflows: add top-level permissions blocks for least-privilege",
+      "url": "https://github.com/tuna-os/hive/issues/87",
+      "updated_at": "2026-10-18T09:01:04Z"
+    },
+    {
+      "repository": "tuna-os/hive",
+      "number": 92,
+      "title": "[sec-check] Add explicit permissions to ste.yml workflow",
+      "url": "https://github.com/tuna-os/hive/issues/92",
+      "updated_at": "2026-10-18T02:57:14Z"
+    },
+    {
+      "repository": "tuna-os/hive",
+      "number": 107,
+      "title": "[sec-check] GitHub Actions runners should use pinned Ubuntu versions instead of ubuntu-latest",
+      "url": "https://github.com/tuna-os/hive/issues/107",
+      "updated_at": "2026-10-18T03:21:31Z"
+    },
+    {
+      "repository": "tuna-os/hive",
+      "number": 113,
+      "title": "[sec-check] Missing permissions block in ste.yml workflow",
+      "url": "https://github.com/tuna-os/hive/issues/113",
+      "updated_at": "2026-10-18T09:01:08Z"
+    },
+    {
+      "repository": "tuna-os/hive",
+      "number": 135,
+      "title": "[sec-check] ste.yml workflow missing top-level permissions block",
+      "url": "https://github.com/tuna-os/hive/issues/135",
+      "updated_at": "2026-10-18T03:32:13Z"
+    },
+    {
+      "repository": "tuna-os/hive",
+      "number": 138,
+      "title": "[sec-check] minor: missing permissions in ste.yml and mutable tag in go-security-analysis.yml",
+      "url": "https://github.com/tuna-os/hive/issues/138",
+      "updated_at": "2026-10-18T09:01:11Z"
+    },
+    {
+      "repository": "tuna-os/hive-operator",
+      "number": 7,
+      "title": "[sec-check] Workflows lack default top-level permissions: {} restriction",
+      "url": "https://github.com/tuna-os/hive-operator/issues/7",
+      "updated_at": "2026-10-18T02:52:49Z"
+    },
+    {
+      "repository": "tuna-os/hive-operator",
+      "number": 10,
+      "title": "[sec-check] Workflows lack default top-level permissions block (image.yml)",
+      "url": "https://github.com/tuna-os/hive-operator/issues/10",
+      "updated_at": "2026-10-18T02:53:23Z"
+    },
+    {
+      "repository": "tuna-os/hive-operator",
+      "number": 11,
+      "title": "[sec-check] Workflows lack default top-level permissions block in image.yml",
+      "url": "https://github.com/tuna-os/hive-operator/issues/11",
+      "updated_at": "2026-10-18T02:53:29Z"
+    },
+    {
+      "repository": "tuna-os/hive-operator",
+      "number": 30,
+      "title": "[sec-check] GitHub Actions not pinned to commit SHAs",
+      "url": "https://github.com/tuna-os/hive-operator/issues/30",
+      "updated_at": "2026-10-18T02:57:47Z"
+    },
+    {
+      "repository": "tuna-os/hive-operator",
+      "number": 54,
+      "title": "[sec-check] Unpinned GitHub Actions with @vN tags (mutable references)",
+      "url": "https://github.com/tuna-os/hive-operator/issues/54",
+      "updated_at": "2026-10-18T03:00:59Z"
+    },
+    {
+      "repository": "tuna-os/hive-operator",
+      "number": 58,
+      "title": "[sec-check] Unpinned GitHub Actions enable supply-chain attacks",
+      "url": "https://github.com/tuna-os/hive-operator/issues/58",
+      "updated_at": "2026-10-18T03:03:23Z"
+    },
+    {
+      "repository": "tuna-os/hive-operator",
+      "number": 64,
+      "title": "[sec-check] fix: pin GitHub Action versions to specific commits",
+      "url": "https://github.com/tuna-os/hive-operator/issues/64",
+      "updated_at": "2026-10-18T03:04:36Z"
+    },
+    {
+      "repository": "tuna-os/hive-operator",
+      "number": 70,
+      "title": "[sec-check] Pin Dockerfile base images and GitHub Actions to immutable SHAs",
+      "url": "https://github.com/tuna-os/hive-operator/issues/70",
+      "updated_at": "2026-10-18T03:05:56Z"
+    },
+    {
+      "repository": "tuna-os/hive-operator",
+      "number": 79,
+      "title": "[sec-check] Pin GitHub Actions to commit SHAs instead of major versions",
+      "url": "https://github.com/tuna-os/hive-operator/issues/79",
+      "updated_at": "2026-10-18T03:10:21Z"
+    },
+    {
+      "repository": "tuna-os/homebrew-tap",
+      "number": 54,
+      "title": "[sec-check] workflows: add top-level permissions block to ste.yml for least-privilege hardening",
+      "url": "https://github.com/tuna-os/homebrew-tap/issues/54",
+      "updated_at": "2026-10-18T09:01:20Z"
+    },
+    {
+      "repository": "tuna-os/homebrew-tap",
+      "number": 57,
+      "title": "[sec-check] Missing permissions block in ste.yml workflow",
+      "url": "https://github.com/tuna-os/homebrew-tap/issues/57",
+      "updated_at": "2026-10-18T09:01:24Z"
+    },
+    {
+      "repository": "tuna-os/homebrew-tap",
+      "number": 65,
+      "title": "[sec-check] ste.yml workflow missing top-level permissions block",
+      "url": "https://github.com/tuna-os/homebrew-tap/issues/65",
+      "updated_at": "2026-10-18T09:01:31Z"
+    },
+    {
+      "repository": "tuna-os/homebrew-tap",
+      "number": 66,
+      "title": "[sec-check] Workflow hardening: ste.yml needs permissions block and drop-bot-review-requests uses ubuntu-latest",
+      "url": "https://github.com/tuna-os/homebrew-tap/issues/66",
+      "updated_at": "2026-10-18T09:01:33Z"
+    },
+    {
+      "repository": "tuna-os/homebrew-tap",
+      "number": 69,
+      "title": "[sec-check] GitHub Actions use mutable version tags instead of pinned SHAs",
+      "url": "https://github.com/tuna-os/homebrew-tap/issues/69",
+      "updated_at": "2026-10-18T09:01:35Z"
+    },
+    {
+      "repository": "tuna-os/homebrew-tap",
+      "number": 72,
+      "title": "[sec-check] ste.yml missing top-level permissions block",
+      "url": "https://github.com/tuna-os/homebrew-tap/issues/72",
+      "updated_at": "2026-10-18T03:31:45Z"
+    },
+    {
+      "repository": "tuna-os/iso-builder",
+      "number": 138,
+      "title": "[ci-maintainer] pin CI actions to immutable commits",
+      "url": "https://github.com/tuna-os/iso-builder/issues/138",
+      "updated_at": "2026-10-18T03:10:47Z"
+    },
+    {
+      "repository": "tuna-os/iso-builder",
+      "number": 164,
+      "title": "[sec-check] Undeclared GITHUB_TOKEN permissions in ci.yml workflow",
+      "url": "https://github.com/tuna-os/iso-builder/issues/164",
+      "updated_at": "2026-10-18T03:13:44Z"
+    },
+    {
+      "repository": "tuna-os/iso-builder",
+      "number": 201,
+      "title": "[architect] Boot gate executes an unpinned cross-repository harness",
+      "url": "https://github.com/tuna-os/iso-builder/issues/201",
+      "updated_at": "2026-10-18T09:01:43Z"
+    },
+    {
+      "repository": "tuna-os/iso-builder",
+      "number": 205,
+      "title": "[sec-check] missing top-level permissions blocks in ci.yml and ste.yml workflows",
+      "url": "https://github.com/tuna-os/iso-builder/issues/205",
+      "updated_at": "2026-10-18T09:01:45Z"
+    },
+    {
+      "repository": "tuna-os/iso-builder",
+      "number": 222,
+      "title": "[strategist] security: add top-level permissions block to ci.yml",
+      "url": "https://github.com/tuna-os/iso-builder/issues/222",
+      "updated_at": "2026-10-18T09:01:50Z"
+    },
+    {
+      "repository": "tuna-os/iso-builder",
+      "number": 223,
+      "title": "[strategist] security: add top-level permissions block to ste.yml",
+      "url": "https://github.com/tuna-os/iso-builder/issues/223",
+      "updated_at": "2026-10-18T09:01:51Z"
+    },
+    {
+      "repository": "tuna-os/iso-builder",
+      "number": 225,
+      "title": "[sec-check] workflows: add top-level permissions blocks to 2 workflows for least-privilege hardening",
+      "url": "https://github.com/tuna-os/iso-builder/issues/225",
+      "updated_at": "2026-10-18T09:01:52Z"
+    },
+    {
+      "repository": "tuna-os/iso-builder",
+      "number": 227,
+      "title": "[sec-check] workflows: add top-level permissions blocks for least-privilege",
+      "url": "https://github.com/tuna-os/iso-builder/issues/227",
+      "updated_at": "2026-10-18T09:01:54Z"
+    },
+    {
+      "repository": "tuna-os/iso-builder",
+      "number": 228,
+      "title": "[sec-check] iso-builder: missing top-level permissions blocks in ci and ste workflows",
+      "url": "https://github.com/tuna-os/iso-builder/issues/228",
+      "updated_at": "2026-10-18T09:01:55Z"
+    },
+    {
+      "repository": "tuna-os/iso-builder",
+      "number": 229,
+      "title": "[sec-check] restrict GitHub token permissions in CI workflows (11 jobs)",
+      "url": "https://github.com/tuna-os/iso-builder/issues/229",
+      "updated_at": "2026-10-18T09:01:57Z"
+    },
+    {
+      "repository": "tuna-os/iso-builder",
+      "number": 235,
+      "title": "[sec-check] Multiple workflows lack permissions blocks \u2014 default to full access",
+      "url": "https://github.com/tuna-os/iso-builder/issues/235",
+      "updated_at": "2026-10-18T09:01:58Z"
+    },
+    {
+      "repository": "tuna-os/iso-builder",
+      "number": 236,
+      "title": "[sec-check] CI: Missing top-level permissions block in .github/workflows/ci.yml",
+      "url": "https://github.com/tuna-os/iso-builder/issues/236",
+      "updated_at": "2026-10-18T09:01:59Z"
+    },
+    {
+      "repository": "tuna-os/iso-builder",
+      "number": 237,
+      "title": "[sec-check] CI: Unpinned GitHub Actions use mutable version tags",
+      "url": "https://github.com/tuna-os/iso-builder/issues/237",
+      "updated_at": "2026-10-18T09:02:00Z"
+    },
+    {
+      "repository": "tuna-os/iso-builder",
+      "number": 238,
+      "title": "[sec-check] Pin GitHub Actions to commit SHAs in CI workflows",
+      "url": "https://github.com/tuna-os/iso-builder/issues/238",
+      "updated_at": "2026-10-18T09:02:02Z"
+    },
+    {
+      "repository": "tuna-os/iso-builder",
+      "number": 240,
+      "title": "[sec-check] missing top-level permissions block in ci.yml and ste.yml workflows",
+      "url": "https://github.com/tuna-os/iso-builder/issues/240",
+      "updated_at": "2026-10-18T09:02:04Z"
+    },
+    {
+      "repository": "tuna-os/iso-builder",
+      "number": 241,
+      "title": "[sec-check] mutable GitHub Action tags should be pinned to exact commit SHAs",
+      "url": "https://github.com/tuna-os/iso-builder/issues/241",
+      "updated_at": "2026-10-18T09:02:06Z"
+    },
+    {
+      "repository": "tuna-os/iso-builder",
+      "number": 242,
+      "title": "[sec-check] Missing top-level permissions block in ci.yml workflow",
+      "url": "https://github.com/tuna-os/iso-builder/issues/242",
+      "updated_at": "2026-10-18T09:02:07Z"
+    },
+    {
+      "repository": "tuna-os/iso-builder",
+      "number": 246,
+      "title": "[sec-check] Missing top-level permissions blocks in 2 workflows",
+      "url": "https://github.com/tuna-os/iso-builder/issues/246",
+      "updated_at": "2026-10-18T09:02:13Z"
+    },
+    {
+      "repository": "tuna-os/iso-builder",
+      "number": 255,
+      "title": "[sec-check] GitHub Actions use mutable version tags instead of pinned SHAs",
+      "url": "https://github.com/tuna-os/iso-builder/issues/255",
+      "updated_at": "2026-10-18T09:02:18Z"
+    },
+    {
+      "repository": "tuna-os/iso-builder",
+      "number": 258,
+      "title": "[sec-check] GitHub Actions should pin to commit SHAs, not mutable version tags",
+      "url": "https://github.com/tuna-os/iso-builder/issues/258",
+      "updated_at": "2026-10-18T09:02:20Z"
+    },
+    {
+      "repository": "tuna-os/iso-builder",
+      "number": 259,
+      "title": "[sec-check] Two workflows missing top-level permissions blocks",
+      "url": "https://github.com/tuna-os/iso-builder/issues/259",
+      "updated_at": "2026-10-18T03:31:39Z"
+    },
+    {
+      "repository": "tuna-os/iso-builder",
+      "number": 263,
+      "title": "[sec-check] missing top-level permissions blocks in workflows",
+      "url": "https://github.com/tuna-os/iso-builder/issues/263",
+      "updated_at": "2026-10-18T09:02:21Z"
+    },
+    {
+      "repository": "tuna-os/mandelbrot",
+      "number": 116,
+      "title": "[sec-check] Workflows lack default top-level permissions block in drop-bot-review-requests.yml and matrixrtc-e2e.yml",
+      "url": "https://github.com/tuna-os/mandelbrot/issues/116",
+      "updated_at": "2026-10-18T02:52:58Z"
+    },
+    {
+      "repository": "tuna-os/mandelbrot",
+      "number": 153,
+      "title": "[sec-check] GitHub Actions not pinned to commit SHAs",
+      "url": "https://github.com/tuna-os/mandelbrot/issues/153",
+      "updated_at": "2026-10-18T02:57:44Z"
+    },
+    {
+      "repository": "tuna-os/mandelbrot",
+      "number": 163,
+      "title": "[sec-check] Unpinned GitHub Actions enable supply-chain attacks",
+      "url": "https://github.com/tuna-os/mandelbrot/issues/163",
+      "updated_at": "2026-10-18T03:03:16Z"
+    },
+    {
+      "repository": "tuna-os/mandelbrot",
+      "number": 164,
+      "title": "[sec-check] fix: pin GitHub Action versions to specific commits",
+      "url": "https://github.com/tuna-os/mandelbrot/issues/164",
+      "updated_at": "2026-10-18T03:04:34Z"
+    },
+    {
+      "repository": "tuna-os/mandelbrot",
+      "number": 165,
+      "title": "[sec-check] Pin unpinned workflow and action versions to commit SHAs/@tags",
+      "url": "https://github.com/tuna-os/mandelbrot/issues/165",
+      "updated_at": "2026-10-18T03:05:22Z"
+    },
+    {
+      "repository": "tuna-os/mariner",
+      "number": 86,
+      "title": "[sec-check] fix: pin GitHub Actions to full commit SHAs",
+      "url": "https://github.com/tuna-os/mariner/issues/86",
+      "updated_at": "2026-10-18T02:55:48Z"
+    },
+    {
+      "repository": "tuna-os/mariner",
+      "number": 95,
+      "title": "[sec-check] PR Flatpak builds inherit secrets with write-capable permissions",
+      "url": "https://github.com/tuna-os/mariner/issues/95",
+      "updated_at": "2026-10-18T09:02:45Z"
+    },
+    {
+      "repository": "tuna-os/mariner",
+      "number": 97,
+      "title": "[sec-check] Security: 4 workflows missing top-level permissions block",
+      "url": "https://github.com/tuna-os/mariner/issues/97",
+      "updated_at": "2026-10-18T09:02:47Z"
+    },
+    {
+      "repository": "tuna-os/mariner",
+      "number": 122,
+      "title": "[sec-check] restrict GitHub token permissions in CI workflows (8 jobs)",
+      "url": "https://github.com/tuna-os/mariner/issues/122",
+      "updated_at": "2026-10-18T09:03:05Z"
+    },
+    {
+      "repository": "tuna-os/PaperWM",
+      "number": 16,
+      "title": "[sec-check] Restrict rebase workflow token permissions",
+      "url": "https://github.com/tuna-os/PaperWM/issues/16",
+      "updated_at": "2026-10-20T08:03:59Z"
+    },
+    {
+      "repository": "tuna-os/PaperWM",
+      "number": 28,
+      "title": "[sec-check] Unpinned nixpkgs inputs in flake.nix",
+      "url": "https://github.com/tuna-os/PaperWM/issues/28",
+      "updated_at": "2026-10-18T02:56:12Z"
+    },
+    {
+      "repository": "tuna-os/PaperWM",
+      "number": 29,
+      "title": "[sec-check] GitHub Actions workflow lacks explicit default permissions",
+      "url": "https://github.com/tuna-os/PaperWM/issues/29",
+      "updated_at": "2026-10-18T02:56:31Z"
+    },
+    {
+      "repository": "tuna-os/PaperWM",
+      "number": 30,
+      "title": "[sec-check] Workflow lacks permissions block and uses unpinned action",
+      "url": "https://github.com/tuna-os/PaperWM/issues/30",
+      "updated_at": "2026-10-18T02:56:42Z"
+    },
+    {
+      "repository": "tuna-os/PaperWM",
+      "number": 31,
+      "title": "[sec-check] Restrict rebase workflow token permissions and pin github-script",
+      "url": "https://github.com/tuna-os/PaperWM/issues/31",
+      "updated_at": "2026-10-18T02:56:57Z"
+    },
+    {
+      "repository": "tuna-os/PaperWM",
+      "number": 40,
+      "title": "[sec-check] Workflow lacks default top-level permissions block",
+      "url": "https://github.com/tuna-os/PaperWM/issues/40",
+      "updated_at": "2026-10-18T02:58:57Z"
+    },
+    {
+      "repository": "tuna-os/PaperWM",
+      "number": 44,
+      "title": "[sec-check] Insecure permissions on config directory",
+      "url": "https://github.com/tuna-os/PaperWM/issues/44",
+      "updated_at": "2026-10-18T03:01:45Z"
+    },
+    {
+      "repository": "tuna-os/PaperWM",
+      "number": 59,
+      "title": "[sec-check] Pin GitHub Actions to commit SHAs in rebase-pr.yaml",
+      "url": "https://github.com/tuna-os/PaperWM/issues/59",
+      "updated_at": "2026-10-18T03:07:33Z"
+    },
+    {
+      "repository": "tuna-os/protota",
+      "number": 321,
+      "title": "[sec-check] protota: Workflows lack default top-level permissions block in ste.yml",
+      "url": "https://github.com/tuna-os/protota/issues/321",
+      "updated_at": "2026-10-18T02:52:52Z"
+    },
+    {
+      "repository": "tuna-os/protota",
+      "number": 324,
+      "title": "[sec-check] fix: expression injection and missing permissions in GitHub Actions workflows",
+      "url": "https://github.com/tuna-os/protota/issues/324",
+      "updated_at": "2026-10-18T02:52:59Z"
+    },
+    {
+      "repository": "tuna-os/protota",
+      "number": 341,
+      "title": "[sec-check] GitHub Actions: 20 unpinned action versions",
+      "url": "https://github.com/tuna-os/protota/issues/341",
+      "updated_at": "2026-10-18T02:55:25Z"
+    },
+    {
+      "repository": "tuna-os/protota",
+      "number": 352,
+      "title": "[sec-check] workflows: add top-level permissions block to ste.yml for least-privilege hardening",
+      "url": "https://github.com/tuna-os/protota/issues/352",
+      "updated_at": "2026-10-18T09:03:39Z"
+    },
+    {
+      "repository": "tuna-os/protota",
+      "number": 353,
+      "title": "[sec-check] Security: 4 workflows missing top-level permissions block",
+      "url": "https://github.com/tuna-os/protota/issues/353",
+      "updated_at": "2026-10-18T09:03:40Z"
+    },
+    {
+      "repository": "tuna-os/protota",
+      "number": 354,
+      "title": "[sec-check] workflows: add top-level permissions block to ste.yml",
+      "url": "https://github.com/tuna-os/protota/issues/354",
+      "updated_at": "2026-10-18T09:03:41Z"
+    },
+    {
+      "repository": "tuna-os/protota",
+      "number": 363,
+      "title": "[sec-check] GitHub Actions not pinned to commit SHAs",
+      "url": "https://github.com/tuna-os/protota/issues/363",
+      "updated_at": "2026-10-18T02:57:46Z"
+    },
+    {
+      "repository": "tuna-os/protota",
+      "number": 376,
+      "title": "[sec-check] Workflow lacks default top-level permissions block",
+      "url": "https://github.com/tuna-os/protota/issues/376",
+      "updated_at": "2026-10-18T02:58:55Z"
+    },
+    {
+      "repository": "tuna-os/protota",
+      "number": 379,
+      "title": "[sec-check] restrict GitHub token permissions in CI workflows (9 jobs)",
+      "url": "https://github.com/tuna-os/protota/issues/379",
+      "updated_at": "2026-10-18T09:03:48Z"
+    },
+    {
+      "repository": "tuna-os/protota",
+      "number": 398,
+      "title": "[sec-check] mutable GitHub Action tags should be pinned to exact commit SHAs",
+      "url": "https://github.com/tuna-os/protota/issues/398",
+      "updated_at": "2026-10-18T09:03:53Z"
+    },
+    {
+      "repository": "tuna-os/protota",
+      "number": 399,
+      "title": "[sec-check] Pin GitHub Actions to commit SHAs and update v7 to v4/v6",
+      "url": "https://github.com/tuna-os/protota/issues/399",
+      "updated_at": "2026-10-18T03:23:25Z"
+    },
+    {
+      "repository": "tuna-os/protota",
+      "number": 403,
+      "title": "[sec-check] Unpinned GitHub Actions enable supply-chain attacks",
+      "url": "https://github.com/tuna-os/protota/issues/403",
+      "updated_at": "2026-10-18T03:23:54Z"
+    },
+    {
+      "repository": "tuna-os/protota",
+      "number": 415,
+      "title": "[sec-check] fix: pin GitHub Action versions to specific commits",
+      "url": "https://github.com/tuna-os/protota/issues/415",
+      "updated_at": "2026-10-18T03:26:30Z"
+    },
+    {
+      "repository": "tuna-os/protota",
+      "number": 434,
+      "title": "[sec-check] GitHub Actions use mutable version tags instead of pinned SHAs",
+      "url": "https://github.com/tuna-os/protota/issues/434",
+      "updated_at": "2026-10-18T09:03:57Z"
+    },
+    {
+      "repository": "tuna-os/protota",
+      "number": 461,
+      "title": "[sec-check] Update outdated GitHub actions and pin reusable workflow",
+      "url": "https://github.com/tuna-os/protota/issues/461",
+      "updated_at": "2026-10-18T03:35:23Z"
+    },
+    {
+      "repository": "tuna-os/quickcast",
+      "number": 1,
+      "title": "[sec-check] Workflows lack default top-level permissions block",
+      "url": "https://github.com/tuna-os/quickcast/issues/1",
+      "updated_at": "2026-10-17T07:45:54Z"
+    },
+    {
+      "repository": "tuna-os/quickcast",
+      "number": 5,
+      "title": "[sec-check] quickcast: Workflows lack default top-level permissions block",
+      "url": "https://github.com/tuna-os/quickcast/issues/5",
+      "updated_at": "2026-10-20T15:58:06Z"
+    },
+    {
+      "repository": "tuna-os/quickcast",
+      "number": 11,
+      "title": "[sec-check] Workflows lack default top-level permissions set to read-all or contents: read",
+      "url": "https://github.com/tuna-os/quickcast/issues/11",
+      "updated_at": "2026-10-18T02:53:28Z"
+    },
+    {
+      "repository": "tuna-os/quickcast",
+      "number": 24,
+      "title": "[sec-check] fix: pin GitHub Actions to full commit SHAs",
+      "url": "https://github.com/tuna-os/quickcast/issues/24",
+      "updated_at": "2026-10-18T02:55:47Z"
+    },
+    {
+      "repository": "tuna-os/quickcast",
+      "number": 27,
+      "title": "[sec-check] Workflows use unpinned action version tags and mutable shared workflow ref",
+      "url": "https://github.com/tuna-os/quickcast/issues/27",
+      "updated_at": "2026-10-18T02:56:35Z"
+    },
+    {
+      "repository": "tuna-os/quickcast",
+      "number": 30,
+      "title": "[sec-check] GitHub Actions not pinned to commit SHAs",
+      "url": "https://github.com/tuna-os/quickcast/issues/30",
+      "updated_at": "2026-10-18T02:57:48Z"
+    },
+    {
+      "repository": "tuna-os/quickcast",
+      "number": 38,
+      "title": "[sec-check] Add default top-level permissions to GitHub Actions workflows",
+      "url": "https://github.com/tuna-os/quickcast/issues/38",
+      "updated_at": "2026-10-18T02:59:10Z"
+    },
+    {
+      "repository": "tuna-os/quickcast",
+      "number": 47,
+      "title": "[sec-check] Update outdated GitHub Actions and pin commit SHAs",
+      "url": "https://github.com/tuna-os/quickcast/issues/47",
+      "updated_at": "2026-10-18T03:02:50Z"
+    },
+    {
+      "repository": "tuna-os/quickcast",
+      "number": 49,
+      "title": "[sec-check] Unpinned GitHub Actions enable supply-chain attacks",
+      "url": "https://github.com/tuna-os/quickcast/issues/49",
+      "updated_at": "2026-10-18T03:03:24Z"
+    },
+    {
+      "repository": "tuna-os/quickcast",
+      "number": 51,
+      "title": "[sec-check] fix: pin GitHub Action versions to specific commits",
+      "url": "https://github.com/tuna-os/quickcast/issues/51",
+      "updated_at": "2026-10-18T03:04:37Z"
+    },
+    {
+      "repository": "tuna-os/remora",
+      "number": 66,
+      "title": "[sec-check] Release path runs unpinned third-party actions with contents:write \u2014 the binary every TunaOS image installs",
+      "url": "https://github.com/tuna-os/remora/issues/66",
+      "updated_at": "2026-10-18T03:13:22Z"
+    },
+    {
+      "repository": "tuna-os/remora",
+      "number": 105,
+      "title": "[sec-check] remora: missing top-level permissions blocks in workflows",
+      "url": "https://github.com/tuna-os/remora/issues/105",
+      "updated_at": "2026-10-18T09:04:12Z"
+    },
+    {
+      "repository": "tuna-os/remora",
+      "number": 115,
+      "title": "[sec-check] Pin GitHub Actions to commit SHAs in workflows",
+      "url": "https://github.com/tuna-os/remora/issues/115",
+      "updated_at": "2026-10-18T09:04:20Z"
+    },
+    {
+      "repository": "tuna-os/remora",
+      "number": 136,
+      "title": "[sec-check] Pin GitHub Actions to commit SHAs in all workflows (supply chain security)",
+      "url": "https://github.com/tuna-os/remora/issues/136",
+      "updated_at": "2026-10-18T09:04:39Z"
+    },
+    {
+      "repository": "tuna-os/remora",
+      "number": 140,
+      "title": "[sec-check] GitHub Actions not pinned to commit SHAs",
+      "url": "https://github.com/tuna-os/remora/issues/140",
+      "updated_at": "2026-10-18T09:04:43Z"
+    },
+    {
+      "repository": "tuna-os/remora",
+      "number": 141,
+      "title": "[sec-check] GitHub Actions use mutable version tags instead of pinned SHAs",
+      "url": "https://github.com/tuna-os/remora/issues/141",
+      "updated_at": "2026-10-18T09:04:44Z"
+    },
+    {
+      "repository": "tuna-os/remora",
+      "number": 145,
+      "title": "[sec-check] GitHub Actions should pin to commit SHAs, not mutable version tags",
+      "url": "https://github.com/tuna-os/remora/issues/145",
+      "updated_at": "2026-10-18T09:04:47Z"
+    },
+    {
+      "repository": "tuna-os/scoop-bucket",
+      "number": 57,
+      "title": "[sec-check] workflows: add top-level permissions block to ste.yml for least-privilege hardening",
+      "url": "https://github.com/tuna-os/scoop-bucket/issues/57",
+      "updated_at": "2026-10-18T09:05:11Z"
+    },
+    {
+      "repository": "tuna-os/scoop-bucket",
+      "number": 62,
+      "title": "[sec-check] restrict GitHub token permissions in CI workflows (3 jobs)",
+      "url": "https://github.com/tuna-os/scoop-bucket/issues/62",
+      "updated_at": "2026-10-18T09:05:14Z"
+    },
+    {
+      "repository": "tuna-os/scoop-bucket",
+      "number": 79,
+      "title": "[sec-check] GitHub Actions use mutable version tags instead of pinned SHAs",
+      "url": "https://github.com/tuna-os/scoop-bucket/issues/79",
+      "updated_at": "2026-10-18T09:05:30Z"
+    },
+    {
+      "repository": "tuna-os/scoop-bucket",
+      "number": 82,
+      "title": "[sec-check] ste.yml and ci.yml missing top-level permissions blocks",
+      "url": "https://github.com/tuna-os/scoop-bucket/issues/82",
+      "updated_at": "2026-10-18T03:31:49Z"
+    },
+    {
+      "repository": "tuna-os/spindle",
+      "number": 521,
+      "title": "[sec-check] restrict GitHub token permissions in CI workflows (26 jobs)",
+      "url": "https://github.com/tuna-os/spindle/issues/521",
+      "updated_at": "2026-10-18T09:05:52Z"
+    },
+    {
+      "repository": "tuna-os/spindle",
+      "number": 599,
+      "title": "[sec-check] release.yml lacks job-level permissions blocks (principle of least privilege)",
+      "url": "https://github.com/tuna-os/spindle/issues/599",
+      "updated_at": "2026-10-18T09:06:07Z"
+    },
+    {
+      "repository": "tuna-os/tacklebox",
+      "number": 317,
+      "title": "[sec-check] tacklebox: missing top-level permissions block in 3 workflow files",
+      "url": "https://github.com/tuna-os/tacklebox/issues/317",
+      "updated_at": "2026-10-18T09:06:26Z"
+    },
+    {
+      "repository": "tuna-os/tacklebox",
+      "number": 339,
+      "title": "[strategist] security: add top-level permissions blocks to 8 workflows",
+      "url": "https://github.com/tuna-os/tacklebox/issues/339",
+      "updated_at": "2026-10-18T09:06:32Z"
+    },
+    {
+      "repository": "tuna-os/tacklebox",
+      "number": 340,
+      "title": "[sec-check] workflows: add top-level permissions blocks to 8 workflows for least-privilege hardening",
+      "url": "https://github.com/tuna-os/tacklebox/issues/340",
+      "updated_at": "2026-10-18T09:06:33Z"
+    },
+    {
+      "repository": "tuna-os/tacklebox",
+      "number": 342,
+      "title": "[sec-check] Security: 10 workflows missing top-level permissions block",
+      "url": "https://github.com/tuna-os/tacklebox/issues/342",
+      "updated_at": "2026-10-18T09:06:36Z"
+    },
+    {
+      "repository": "tuna-os/tacklebox",
+      "number": 343,
+      "title": "[sec-check] workflows: add top-level permissions blocks for least-privilege",
+      "url": "https://github.com/tuna-os/tacklebox/issues/343",
+      "updated_at": "2026-10-18T09:06:37Z"
+    },
+    {
+      "repository": "tuna-os/tacklebox",
+      "number": 346,
+      "title": "[sec-check] restrict GitHub token permissions in CI workflows (9 jobs)",
+      "url": "https://github.com/tuna-os/tacklebox/issues/346",
+      "updated_at": "2026-10-18T09:06:41Z"
+    },
+    {
+      "repository": "tuna-os/tacklebox",
+      "number": 347,
+      "title": "[sec-check] Missing top-level permissions blocks in 8 workflows",
+      "url": "https://github.com/tuna-os/tacklebox/issues/347",
+      "updated_at": "2026-10-18T09:06:42Z"
+    },
+    {
+      "repository": "tuna-os/tacklebox",
+      "number": 353,
+      "title": "[sec-check] missing top-level permissions blocks in 10 GitHub Actions workflows",
+      "url": "https://github.com/tuna-os/tacklebox/issues/353",
+      "updated_at": "2026-10-18T09:06:49Z"
+    },
+    {
+      "repository": "tuna-os/tacklebox",
+      "number": 362,
+      "title": "[sec-check] GitHub Actions use mutable version tags instead of pinned SHAs",
+      "url": "https://github.com/tuna-os/tacklebox/issues/362",
+      "updated_at": "2026-10-18T09:06:54Z"
+    },
+    {
+      "repository": "tuna-os/tacklebox",
+      "number": 366,
+      "title": "[sec-check] Eight workflows missing top-level permissions blocks",
+      "url": "https://github.com/tuna-os/tacklebox/issues/366",
+      "updated_at": "2026-10-18T03:32:05Z"
+    },
+    {
+      "repository": "tuna-os/tacklebox",
+      "number": 367,
+      "title": "[sec-check] Inconsistent GitHub Actions pinning; mutable v7 version tags",
+      "url": "https://github.com/tuna-os/tacklebox/issues/367",
+      "updated_at": "2026-10-18T03:32:06Z"
+    },
+    {
+      "repository": "tuna-os/Tavern",
+      "number": 226,
+      "title": "[sec-check] Unpinned GitHub Actions enable supply-chain attacks",
+      "url": "https://github.com/tuna-os/Tavern/issues/226",
+      "updated_at": "2026-10-19T07:27:28Z"
+    },
+    {
+      "repository": "tuna-os/Tavern",
+      "number": 228,
+      "title": "[sec-check] fix: pin GitHub Action versions to specific commits",
+      "url": "https://github.com/tuna-os/Tavern/issues/228",
+      "updated_at": "2026-10-19T11:40:55Z"
+    },
+    {
+      "repository": "tuna-os/tromso",
+      "number": 271,
+      "title": "[sec-check] just dashboard executes an unpinned script fetched from another repo's main",
+      "url": "https://github.com/tuna-os/tromso/issues/271",
+      "updated_at": "2026-10-18T03:11:32Z"
+    },
+    {
+      "repository": "tuna-os/tromso",
+      "number": 321,
+      "title": "[sec-check] missing top-level permissions blocks in GitHub Actions workflows",
+      "url": "https://github.com/tuna-os/tromso/issues/321",
+      "updated_at": "2026-10-18T09:07:08Z"
+    },
+    {
+      "repository": "tuna-os/tromso",
+      "number": 323,
+      "title": "[sec-check] missing top-level permissions block in GitHub workflows",
+      "url": "https://github.com/tuna-os/tromso/issues/323",
+      "updated_at": "2026-10-18T09:07:09Z"
+    },
+    {
+      "repository": "tuna-os/tromso",
+      "number": 341,
+      "title": "[strategist] security: add top-level permissions blocks to 5 workflows",
+      "url": "https://github.com/tuna-os/tromso/issues/341",
+      "updated_at": "2026-10-18T09:07:14Z"
+    },
+    {
+      "repository": "tuna-os/tromso",
+      "number": 342,
+      "title": "[sec-check] workflows: add top-level permissions blocks to 5 workflows for least-privilege hardening",
+      "url": "https://github.com/tuna-os/tromso/issues/342",
+      "updated_at": "2026-10-18T09:07:15Z"
+    },
+    {
+      "repository": "tuna-os/tromso",
+      "number": 346,
+      "title": "[sec-check] Security: 13 workflows missing top-level permissions block",
+      "url": "https://github.com/tuna-os/tromso/issues/346",
+      "updated_at": "2026-10-18T09:07:18Z"
+    },
+    {
+      "repository": "tuna-os/tromso",
+      "number": 348,
+      "title": "[sec-check] workflows: add top-level permissions blocks for least-privilege",
+      "url": "https://github.com/tuna-os/tromso/issues/348",
+      "updated_at": "2026-10-18T09:07:20Z"
+    },
+    {
+      "repository": "tuna-os/tromso",
+      "number": 353,
+      "title": "[sec-check] restrict GitHub token permissions in CI workflows (20 jobs)",
+      "url": "https://github.com/tuna-os/tromso/issues/353",
+      "updated_at": "2026-10-18T09:07:21Z"
+    },
+    {
+      "repository": "tuna-os/tromso",
+      "number": 357,
+      "title": "[sec-check] Missing top-level permissions blocks in 5 workflows",
+      "url": "https://github.com/tuna-os/tromso/issues/357",
+      "updated_at": "2026-10-18T09:07:23Z"
+    },
+    {
+      "repository": "tuna-os/tromso",
+      "number": 375,
+      "title": "[sec-check] GitHub Actions use mutable version tags instead of pinned SHAs",
+      "url": "https://github.com/tuna-os/tromso/issues/375",
+      "updated_at": "2026-10-18T09:07:33Z"
+    },
+    {
+      "repository": "tuna-os/tuna-desktop",
+      "number": 361,
+      "title": "[GNOME 51 gap] Qualify Apps permissions, global shortcuts, default handlers and removable media",
+      "url": "https://github.com/tuna-os/tuna-desktop/issues/361",
+      "updated_at": "2026-10-18T03:24:58Z"
+    },
+    {
+      "repository": "tuna-os/tunaOS",
+      "number": 2768,
+      "title": "[strategist] security: add top-level permissions blocks to 24 workflows (build-*, iso-builder-parity, publish-*)",
+      "url": "https://github.com/tuna-os/tunaOS/issues/2768",
+      "updated_at": "2026-10-22T01:08:22Z"
+    },
+    {
+      "repository": "tuna-os/tunaOS",
+      "number": 2802,
+      "title": "[sec-check] workflows: add top-level permissions blocks to 27 workflows for least-privilege hardening",
+      "url": "https://github.com/tuna-os/tunaOS/issues/2802",
+      "updated_at": "2026-10-22T01:11:35Z"
+    },
+    {
+      "repository": "tuna-os/tunaOS",
+      "number": 2916,
+      "title": "[meta-issue] Organization-wide: GitHub Actions workflows lack explicit permissions blocks",
+      "url": "https://github.com/tuna-os/tunaOS/issues/2916",
+      "updated_at": "2026-10-18T09:08:44Z"
+    },
+    {
+      "repository": "tuna-os/tunaOS",
+      "number": 2962,
+      "title": "[sec-check] 27 workflows missing top-level permissions blocks (security hardening)",
+      "url": "https://github.com/tuna-os/tunaOS/issues/2962",
+      "updated_at": "2026-10-22T20:37:56Z"
+    },
+    {
+      "repository": "tuna-os/tunaOS",
+      "number": 3049,
+      "title": "[sec-check] meta: missing top-level permissions blocks across 12+ workflows in multiple repos",
+      "url": "https://github.com/tuna-os/tunaOS/issues/3049",
+      "updated_at": "2026-10-23T04:31:49Z"
+    },
+    {
+      "repository": "tuna-os/tunaOS",
+      "number": 3166,
+      "title": "[sec-check] Twenty-seven workflows missing top-level permissions blocks",
+      "url": "https://github.com/tuna-os/tunaOS/issues/3166",
+      "updated_at": "2026-10-18T03:32:07Z"
+    },
+    {
+      "repository": "tuna-os/tunaOS",
+      "number": 3286,
+      "title": "[strategist] Security hardening roadmap: coordinate org-wide workflows permissions audit (20+ workflows, 415 actions/checkout)",
+      "url": "https://github.com/tuna-os/tunaOS/issues/3286",
+      "updated_at": "2026-10-18T03:35:38Z"
+    },
+    {
+      "repository": "tuna-os/tunaos-packages",
+      "number": 717,
+      "title": "[sec-check] Unpinned remote script execution via curl | sudo bash in CI workflows",
+      "url": "https://github.com/tuna-os/tunaos-packages/issues/717",
+      "updated_at": "2026-10-18T08:59:56Z"
+    },
+    {
+      "repository": "tuna-os/tunaos-packages",
+      "number": 718,
+      "title": "[sec-check] Missing top-level permissions: blocks in 7 workflows",
+      "url": "https://github.com/tuna-os/tunaos-packages/issues/718",
+      "updated_at": "2026-10-18T08:59:58Z"
+    },
+    {
+      "repository": "tuna-os/tunaos-packages",
+      "number": 724,
+      "title": "[sec-check] tunaos-packages: missing top-level permissions block in workflow files",
+      "url": "https://github.com/tuna-os/tunaos-packages/issues/724",
+      "updated_at": "2026-10-18T09:00:02Z"
+    },
+    {
+      "repository": "tuna-os/tunaos-packages",
+      "number": 726,
+      "title": "[sec-check] github-copr: missing top-level permissions: blocks in 7 workflows",
+      "url": "https://github.com/tuna-os/tunaos-packages/issues/726",
+      "updated_at": "2026-10-18T09:00:03Z"
+    },
+    {
+      "repository": "tuna-os/tunaos-packages",
+      "number": 749,
+      "title": "[sec-check] Missing top-level permissions blocks in 7 workflows",
+      "url": "https://github.com/tuna-os/tunaos-packages/issues/749",
+      "updated_at": "2026-10-18T09:00:11Z"
+    },
+    {
+      "repository": "tuna-os/tunaos-packages",
+      "number": 753,
+      "title": "[strategist] security: add top-level permissions blocks to build/CI workflows",
+      "url": "https://github.com/tuna-os/tunaos-packages/issues/753",
+      "updated_at": "2026-10-18T09:00:13Z"
+    },
+    {
+      "repository": "tuna-os/tunaos-packages",
+      "number": 754,
+      "title": "[strategist] security: add top-level permissions blocks to build/CI workflows",
+      "url": "https://github.com/tuna-os/tunaos-packages/issues/754",
+      "updated_at": "2026-10-18T09:00:14Z"
+    },
+    {
+      "repository": "tuna-os/tunaos-packages",
+      "number": 759,
+      "title": "[sec-check] workflows: add top-level permissions blocks to 7 workflows for least-privilege hardening",
+      "url": "https://github.com/tuna-os/tunaos-packages/issues/759",
+      "updated_at": "2026-10-18T09:00:17Z"
+    },
+    {
+      "repository": "tuna-os/tunaos-packages",
+      "number": 760,
+      "title": "[sec-check] Security: 24 workflows missing top-level permissions block",
+      "url": "https://github.com/tuna-os/tunaos-packages/issues/760",
+      "updated_at": "2026-10-18T09:00:18Z"
+    },
+    {
+      "repository": "tuna-os/tunaos-packages",
+      "number": 761,
+      "title": "[sec-check] Security: workflows missing top-level permissions block",
+      "url": "https://github.com/tuna-os/tunaos-packages/issues/761",
+      "updated_at": "2026-10-18T09:00:19Z"
+    },
+    {
+      "repository": "tuna-os/tunaos-packages",
+      "number": 762,
+      "title": "[sec-check] workflows: add top-level permissions blocks for least-privilege",
+      "url": "https://github.com/tuna-os/tunaos-packages/issues/762",
+      "updated_at": "2026-10-18T09:00:21Z"
+    },
+    {
+      "repository": "tuna-os/tunaos-packages",
+      "number": 781,
+      "title": "[sec-check] restrict GitHub token permissions across package factory CI (110 workflows jobs)",
+      "url": "https://github.com/tuna-os/tunaos-packages/issues/781",
+      "updated_at": "2026-10-18T09:00:25Z"
+    },
+    {
+      "repository": "tuna-os/tunaos-packages",
+      "number": 786,
+      "title": "[sec-check] CI: Unpinned remote script execution via curl | sudo bash",
+      "url": "https://github.com/tuna-os/tunaos-packages/issues/786",
+      "updated_at": "2026-10-18T09:00:26Z"
+    },
+    {
+      "repository": "tuna-os/tunaos-packages",
+      "number": 816,
+      "title": "[sec-check] GitHub Actions use mutable version tags instead of pinned SHAs",
+      "url": "https://github.com/tuna-os/tunaos-packages/issues/816",
+      "updated_at": "2026-10-18T09:00:33Z"
+    },
+    {
+      "repository": "tuna-os/tunaos-packages",
+      "number": 826,
+      "title": "[sec-check] Inconsistent GitHub Actions pinning; mutable :latest Docker tag",
+      "url": "https://github.com/tuna-os/tunaos-packages/issues/826",
+      "updated_at": "2026-10-18T03:31:39Z"
+    },
+    {
+      "repository": "tuna-os/tunaos-packages",
+      "number": 827,
+      "title": "[sec-check] Inconsistent GitHub Actions pinning and mutable docker://rhysd/actionlint:latest",
+      "url": "https://github.com/tuna-os/tunaos-packages/issues/827",
+      "updated_at": "2026-10-18T03:32:19Z"
+    },
+    {
+      "repository": "tuna-os/xfce-linux",
+      "number": 175,
+      "title": "[sec-check] fix: scope top-level workflow permissions in ste.yml",
+      "url": "https://github.com/tuna-os/xfce-linux/issues/175",
+      "updated_at": "2026-10-18T09:11:08Z"
+    },
+    {
+      "repository": "tuna-os/xfce-linux",
+      "number": 183,
+      "title": "[sec-check] missing top-level permissions block in GitHub Actions workflows",
+      "url": "https://github.com/tuna-os/xfce-linux/issues/183",
+      "updated_at": "2026-10-18T09:11:13Z"
+    },
+    {
+      "repository": "tuna-os/xfce-linux",
+      "number": 197,
+      "title": "[sec-check] workflows: add top-level permissions blocks to 7 workflows for least-privilege hardening",
+      "url": "https://github.com/tuna-os/xfce-linux/issues/197",
+      "updated_at": "2026-10-18T09:11:18Z"
+    },
+    {
+      "repository": "tuna-os/xfce-linux",
+      "number": 199,
+      "title": "[sec-check] Security: workflows missing top-level permissions block",
+      "url": "https://github.com/tuna-os/xfce-linux/issues/199",
+      "updated_at": "2026-10-18T09:11:20Z"
+    },
+    {
+      "repository": "tuna-os/xfce-linux",
+      "number": 200,
+      "title": "[sec-check] workflows: add top-level permissions blocks for least-privilege",
+      "url": "https://github.com/tuna-os/xfce-linux/issues/200",
+      "updated_at": "2026-10-18T09:11:21Z"
+    },
+    {
+      "repository": "tuna-os/xfce-linux",
+      "number": 205,
+      "title": "[sec-check] Missing top-level permissions blocks in 7 workflows",
+      "url": "https://github.com/tuna-os/xfce-linux/issues/205",
+      "updated_at": "2026-10-18T09:11:23Z"
+    },
+    {
+      "repository": "tuna-os/xfce-linux",
+      "number": 224,
+      "title": "[sec-check] GitHub Actions use mutable version tags instead of pinned SHAs",
+      "url": "https://github.com/tuna-os/xfce-linux/issues/224",
+      "updated_at": "2026-10-18T09:11:36Z"
+    },
+    {
+      "repository": "tuna-os/xfce-linux",
+      "number": 227,
+      "title": "[sec-check] Seven workflows missing top-level permissions blocks",
+      "url": "https://github.com/tuna-os/xfce-linux/issues/227",
+      "updated_at": "2026-10-18T03:31:34Z"
+    }
+  ]
+}

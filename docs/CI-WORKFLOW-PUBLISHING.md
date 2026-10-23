@@ -82,6 +82,12 @@ permission.
 - Link the replacement PR and close the incident only after the workflow file
   is visible in the PR and its checks start.
 
+## Coordinate an organization rollout
+
+Use the [rollout runbook](WORKFLOW-SECURITY-ROLLOUT.md) to group local reports
+and link the consumer PRs. Refresh its generated issue index before each batch.
+The index counts reports; the permission audit measures workflow gaps.
+
 ## Current incident references
 
 - [#2769](https://github.com/tuna-os/tunaos/issues/2769) — read-only token

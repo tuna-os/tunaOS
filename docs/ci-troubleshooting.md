@@ -1930,3 +1930,16 @@ outreach copy or creative briefs, use the reasoned region or file opt-out in
 [the contributor prose policy](../CONTRIBUTING.md#prose-checks-ste). Keep
 technical steps checked on mixed pages. Run `just ste` again; do not increase
 `.ste-budget` or exclude a whole directory to pass one content change.
+
+## Duplicate reports of workflow permission gaps (#3152)
+
+**Symptom:** several security issues name the same workflow, but their counts
+do not match the permission audit.
+
+**Cause:** `scripts/gen-workflow-security-rollout.py --refresh` retrieves open
+issue reports by title. Its snapshot preserves duplicate reports and does not
+inspect workflow contents. Counts in issue titles can describe old commits.
+
+**Fix:** use the [generated issue index](WORKFLOW-SECURITY-ROLLOUT-INDEX.md) to
+group reports by repository. Follow the [rollout runbook](WORKFLOW-SECURITY-ROLLOUT.md)
+to reproduce each gap on the required base and link its merged fix and workflow run.
