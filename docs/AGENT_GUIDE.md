@@ -89,14 +89,23 @@ Defined in `tunaos.toml`. The workflow is `build-variant.yml` → `reusable-buil
 | `yellowfin` | 🐠 | AlmaLinux Kitten 10 | dnf | Stable |
 | `albacore` | 🐟 | AlmaLinux 10 | dnf | Stable |
 | `skipjack` | 🍣 | CentOS Stream 10 | dnf | Beta |
+| `wahoo` | 🎏 | Fedora ELN (EL11 preview, rolling) | dnf | Experimental |
 | `bonito` | 🎣 | Fedora 44 | dnf | Beta |
 | `bonito-rawhide` | 🐉 | Fedora Rawhide (rolling) | dnf | Beta |
+| `hummingbird` | 🐦 | Fedora Hummingbird (hardened rolling Rawhide) | dnf | Experimental |
 | `sailfin` | ⛵ | openSUSE Tumbleweed (rolling) | zypper | Beta |
 | `guppy` | 🌈 | Gentoo Linux (source-based) | portage | Beta |
+| `gurnard` | 🤖 | Ubuntu 24.04 Noble Numbat + Pantheon | apt | Experimental |
 | `grouper` | 🪸 | Ubuntu 26.04 | apt | Beta |
 | `marlin` | 🚀 | Arch Linux (rolling), CachyOS kernel overlay | pacman | Beta |
 | `flounder` | 🐡 | Debian 13 Trixie (stable) | apt | Beta |
 | `flounder-sid` | ☢️ | Debian Sid (unstable, rolling) | apt | Beta |
+| `redfin` | 🔒 | RHEL 10 (local-build only) | dnf | Local-only |
+
+`wahoo` and `hummingbird` are experimental upstream tracks; `gurnard` is an
+experimental Ubuntu/Pantheon variant. `redfin` is intentionally absent from
+the CI matrix and public registry because of the RHEL redistribution terms.
+Build it locally using [`docs/rhel-setup.md`](rhel-setup.md).
 
 ---
 
