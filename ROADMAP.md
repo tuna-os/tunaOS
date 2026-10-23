@@ -122,16 +122,16 @@ The scheduled Asahi sweep can continue to inspect old tags after a build cell is
 - ⚠️ Adoption metrics untracked — no usage/telemetry data on the 179 downloadable ISOs (#1174); **plan published 08-10** ([ADOPTION-METRICS.md](./ADOPTION-METRICS.md)) — first monthly download/usage snapshot targeted 2026-11-01 (Q4 "Mature")
 <!-- BEGIN GENERATED — scripts/gen-roadmap-coverage.py -->
 
-- 🟡 **Per-repo ROADMAP coverage — 36 of 44 active repos (82%)**, measured 2026-10-03 by [`scripts/gen-roadmap-coverage.py`](./scripts/gen-roadmap-coverage.py).
+- 🟡 **Per-repo ROADMAP coverage — 37 of 43 active repos (86%)**, measured 2026-10-22 by [`scripts/gen-roadmap-coverage.py`](./scripts/gen-roadmap-coverage.py).
   Scope is every non-archived, non-private repo in the `tuna-os` org; a repo counts as
   planned when `ROADMAP.md` is at the root of its **default branch**. Archived repos are out
   of scope because a read-only repo cannot be planned.
 
-  **Planned (36)**: .github, bluefin-cli, blueshell, bootc-installer, bootc-installer-asahi, bootc-migrate, branding, bst-ci, changelog-action, corral, docs, dualcut, finupdate, fisherman, flatpak-index, gnome-hive-monitor, gtk-office-suite, hive, homebrew-tap, iced, iso-builder, mandelbrot, mariner, protota, remora, scoop-bucket, spindle, suite-common, suite-common-rust, tacklebox, Tavern, tromso, tunaOS, tunaos-packages, wootc, xfce-linux.
+  **Planned (37)**: .github, bluefin-cli, blueshell, bootc-installer, bootc-migrate, bootsahi, branding, bst-ci, changelog-action, compass, corral, docs, dualcut, finupdate, fisherman, flatpak-index, gnome-hive-monitor, gtk-office-suite, hive, homebrew-tap, iced, iso-builder, mandelbrot, mariner, protota, quickcast, remora, scoop-bucket, spindle, tacklebox, Tavern, tromso, tuna-desktop, tunaOS, tunaos-packages, wootc, xfce-linux.
 
   Counted on a non-`main` default branch: `blueshell` on `ptyxis-port`, `bootc-installer` on `dev`, `changelog-action` on `master`, `fisherman` on `dev`, `hive` on `v4`, `iced` on `master`, `mariner` on `master` — these are the repos' own default branches, not strandings.
 
-  **Unplanned (8)**: ccleft, compass, hive-operator, libcosmic, PaperWM, quickcast, rdocx, rust-atomicwrites. Tracked by #2820.
+  **Unplanned (6)**: ccleft, hive-operator, libcosmic, PaperWM, rdocx, rust-atomicwrites. Tracked by #2820.
 
 <!-- END GENERATED -->
 - ⚪ **"First external contributor" claim retracted (#1317, corrected 2026-08-13)**: the shimonenator commits (EL10/OBS design fixing #777, image-factory completion gate) are **not** a human contribution — maintainer confirmed the account is misattributed by GitHub because the Google Antigravity agent is listed as commit author; `git log` shows `commit.author.name: antigravity` on every one of that account's commits. **Superseded 2026-08-14**: the **first external human contributions landed and merged the same day** — docs #234 (QEMU/KVM guide, dchaudhari7177) and docs #239 (Gurnard Pantheon fix, Elonon901001), both verified human GitHub accounts (created 2022, real-name profiles). These are docs-repo contributions, not core-code: bus-factor risk (#1095) for core repos is unchanged, but the onboarding loop (seed → PR → merge) is now demonstrably end-to-end, which materially strengthens the Hacktoberfest seeding case (#1537).
@@ -148,6 +148,24 @@ at the repo root on its default branch. This file plans tunaOS the image; it is
 not a place for package, installer, or ecosystem repos to state their milestones.
 New repos scaffolded from the `.github` project-starter template start with one
 ([tuna-os/.github#13](https://github.com/tuna-os/.github/pull/13)).
+
+Before launching a shipped product or distribution channel (Flatpak/Flathub,
+binary release, or package-manager entry), its repository must have a root
+`ROADMAP.md` on its default branch. This includes desktop tools, shared
+infrastructure, and package-manager integrations. The release PR must link the
+roadmap and its launch-blocking issues; a roadmap's presence alone does not
+establish product readiness. See the [contributor release check](CONTRIBUTING.md#roadmap-before-launch).
+
+For the three repositories named in [#2927](https://github.com/tuna-os/tunaos/issues/2927),
+use their local plans and tracking issues rather than duplicating milestones here:
+
+- [mariner roadmap](https://github.com/tuna-os/mariner/blob/master/ROADMAP.md)
+  and [planning tracker #123](https://github.com/tuna-os/mariner/issues/123).
+- [hive roadmap](https://github.com/tuna-os/hive/blob/v4/ROADMAP.md)
+  and [planning tracker #106](https://github.com/tuna-os/hive/issues/106).
+  App permission changes remain owner-only work ([#1557](https://github.com/tuna-os/tunaos/issues/1557)).
+- [scoop-bucket roadmap](https://github.com/tuna-os/scoop-bucket/blob/main/ROADMAP.md)
+  and [planning tracker #64](https://github.com/tuna-os/scoop-bucket/issues/64).
 
 Coverage is **measured, not asserted**. The block in [Community](#community) is
 regenerated by [`scripts/gen-roadmap-coverage.py`](./scripts/gen-roadmap-coverage.py)
