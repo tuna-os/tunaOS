@@ -115,20 +115,33 @@ jobs:
 
                       if (width, height) != (1280, 800):
                           raise SystemExit("button diagnostic requires measured framebuffer")
-                      for variant in ("full-threshold90", "button-gray"):
+                      for variant in ("button-interior-inverted",):
                           with tempfile.TemporaryDirectory() as directory:
                               original = Path(directory) / "frame.png"
                               prepared = Path(directory) / "prepared.png"
                               original.write_bytes(png)
-                              args = (["-colorspace", "gray", "-threshold", "90%"]
-                                      if variant == "full-threshold90" else
-                                      ["-crop", "130x60+575+565", "+repage", "-resize",
-                                       "300%", "-colorspace", "gray"])
+                              rgb = subprocess.run(
+                                  ["convert", str(original), "-depth", "8", "rgb:-"],
+                                  capture_output=True, timeout=20, check=True).stdout
+                              if len(rgb) != width * height * 3:
+                                  raise SystemExit("invalid bounded original pixel buffer")
+                              points = ((610, 594), (670, 594), (640, 580), (640, 608),
+                                        (580, 594), (700, 594), (640, 568), (640, 620))
+                              pixels = [{"point": [x, y],
+                                         "rgb": list(rgb[(y*width+x)*3:(y*width+x)*3+3])}
+                                        for x, y in points]
+                              print("ISO_BUTTON_PIXELS " + json.dumps(
+                                  {"mode": mode, "index": index, "pixels": pixels},
+                                  sort_keys=True))
+                              # Modern Tesseract expects dark text on a light background.
+                              # The verified white label lies within this purple-only interior.
+                              args = ["-crop", "70x30+605+579", "+repage", "-resize",
+                                      "300%", "-colorspace", "gray", "-negate"]
                               subprocess.run(["convert", str(original), *args, str(prepared)],
                                              capture_output=True, timeout=20, check=True)
                               result = subprocess.run(
                                   ["tesseract", str(prepared), "stdout", "--psm",
-                                   "11" if variant == "full-threshold90" else "6", "tsv"],
+                                   "7", "tsv"],
                                   capture_output=True, text=True, timeout=30, check=True)
                           if len(result.stdout) > 1024 * 1024:
                               raise SystemExit("OCR output exceeded byte bound")
@@ -143,9 +156,7 @@ jobs:
                               if any(not 0 <= item <= 10000 for item in numeric.values()):
                                   raise SystemExit("OCR numeric field outside bound")
                               x, y, w, h = (numeric[key] for key in ("left", "top", "width", "height"))
-                              inside = (575 <= x < x+w <= 705 and 565 <= y < y+h <= 625
-                                        if variant == "full-threshold90" else
-                                        0 <= x < x+w <= 390 and 0 <= y < y+h <= 180)
+                              inside = 0 <= x < x+w <= 210 and 0 <= y < y+h <= 90
                               if not inside:
                                   continue
                               confidence = float(word["conf"])
