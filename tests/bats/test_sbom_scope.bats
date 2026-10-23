@@ -18,52 +18,43 @@
 
 REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
 WORKFLOW="${REPO_ROOT}/.github/workflows/reusable-build-image.yml"
+SBOM_ACTION="${REPO_ROOT}/.github/actions/generate-sbom-spdx/action.yml"
+SBOM_SCRIPT="${REPO_ROOT}/scripts/generate-sbom.sh"
 # SBOM attestation lives in its own `workflow_run` workflow since #2282, so a
 # transparency-log outage gets its own run conclusion and cannot turn a
 # nightly that built everything red.
 ATTEST_WORKFLOW="${REPO_ROOT}/.github/workflows/attest-sbom.yml"
 
 @test "SBOM scans the squashed image view" {
-  run grep -E -- '--scope squashed' "$WORKFLOW"
+  run grep -E -- '--scope squashed' "$SBOM_SCRIPT"
   [ "$status" -eq 0 ]
-  run grep -E -- '--scope all-layers' "$WORKFLOW"
+  run grep -E -- '--scope all-layers' "$SBOM_SCRIPT"
   [ "$status" -ne 0 ]
 }
 
 @test "SBOM output is still validated, not merely produced" {
-  # Unchanged by the blocking/non-blocking switch: a scan that returns
-  # something useless must still fail. An empty package list is the shape a
-  # silently-degraded scan takes.
-  grep -q 'length > 0' "$WORKFLOW"
-  grep -q 'startswith("SPDX-")' "$WORKFLOW"
-  grep -q 'if-no-files-found: error' "$WORKFLOW"
+  # Both the Syft and fallback producers reject empty or non-SPDX output.
+  grep -q 'length > 0' "$SBOM_SCRIPT"
+  grep -q 'startswith("SPDX-")' "$SBOM_SCRIPT"
+  grep -q 'if-no-files-found: error' "$SBOM_ACTION"
 }
 
 @test "a failed SBOM scan costs the SBOM, not the variant" {
-  # The inverse of this file's original assertion -- see the header.
-  run bash -c "sed -n '/- name: Generate SBOM/,/- name: Upload SBOM/p' '$WORKFLOW' | grep -c 'continue-on-error: true'"
+  run grep -c 'continue-on-error: true' "$SBOM_ACTION"
   [ "$status" -eq 0 ]
+  [ "$output" -ge 3 ]
 
-  # ...and the soft failure must not be converted straight back into a hard
-  # one. `Upload SBOM` carries `if-no-files-found: error`, so with the job
-  # left green by continue-on-error it would otherwise run against a file
-  # that was never written.
-  grep -q "steps.sbom.outcome == 'success'" "$WORKFLOW"
+  # The upload runs only when one producer actually succeeded.
+  grep -q "steps.sbom.outcome == 'success'" "$SBOM_ACTION"
 }
 
 @test "the scan is bounded by memory as well as by time" {
-  # Two bounds, two different faults. `timeout-minutes` is enforced by the
-  # runner agent and so cannot fire when the agent is the casualty (#1567:
-  # the step overran its 20-minute limit by 51 minutes and uploaded no logs).
-  # The wall clock added by #1572 catches a scan that is slow -- but on the
-  # 2026-08-16 nightly the runner died at 7m56s, inside it, because the scan
-  # was hungry rather than slow. GOMEMLIMIT is advisory; only a cgroup cap
-  # makes the kernel kill syft instead of the agent.
-  grep -q '^        timeout-minutes: 20$' "$WORKFLOW"
-  grep -q 'timeout --kill-after' "$WORKFLOW"
-  grep -q 'systemd-run' "$WORKFLOW"
-  grep -q 'MemoryMax' "$WORKFLOW"
-  grep -q 'MemorySwapMax=0' "$WORKFLOW"
+  # The shell wall clock covers a slow scan; the cgroup keeps a hungry scan
+  # from killing the runner agent.
+  grep -q 'timeout --kill-after' "$SBOM_SCRIPT"
+  grep -q 'systemd-run' "$SBOM_SCRIPT"
+  grep -q 'MemoryMax' "$SBOM_SCRIPT"
+  grep -q 'MemorySwapMax=0' "$SBOM_SCRIPT"
 }
 
 @test "published images use keyless signing and signed SPDX attestations" {

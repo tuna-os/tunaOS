@@ -1,0 +1,68 @@
+name: Publish package manifest
+description: Extract the installed package set and publish it as an OCI artifact
+inputs:
+  image-name:
+    description: Published image name
+    required: true
+  image-registry:
+    description: OCI registry containing the image
+    required: true
+  default-tag:
+    description: Image tag
+    required: true
+  safe-platform:
+    description: Filename-safe platform identifier
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Publish package manifest
+      continue-on-error: true
+      shell: bash
+      env:
+        IMAGE_NAME: ${{ inputs.image-name }}
+        IMAGE_REGISTRY: ${{ inputs.image-registry }}
+        DEFAULT_TAG: ${{ inputs.default-tag }}
+        SAFE_PLATFORM: ${{ inputs.safe-platform }}
+      run: |
+        set -euo pipefail
+        REF="${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}"
+        OUT="packages-${IMAGE_NAME}-${DEFAULT_TAG}-${SAFE_PLATFORM}.txt"
+
+        # Enumerate the image already in local storage. Covers rpm, dpkg,
+        # pacman, and portage-based variants.
+        sudo podman run --rm --entrypoint sh "$REF" -c '
+          if   command -v rpm        >/dev/null 2>&1; then rpm -qa --qf "%{NAME}\t%{VERSION}-%{RELEASE}\n"
+          elif command -v dpkg-query >/dev/null 2>&1; then dpkg-query -W -f "${Package}\t${Version}\n"
+          elif command -v pacman     >/dev/null 2>&1; then pacman -Q | tr " " "\t"
+          elif command -v qlist      >/dev/null 2>&1; then qlist -ICv
+          else echo "UNKNOWN-PACKAGE-MANAGER" >&2; exit 1
+          fi' | LC_ALL=C sort -u > "$OUT"
+
+        # Images whose package DB lives under /var cannot enumerate it after
+        # bootc empties /var. Publish an explicit marker rather than an empty
+        # manifest that claims the edition has no packages (#135).
+        COUNT=$(wc -l < "$OUT")
+        if [ "$COUNT" -lt 20 ]; then
+          echo "::warning::${REF} reported only ${COUNT} packages — the package database is likely absent (see tunaos-packages#135). Publishing a marker instead of an empty manifest."
+          printf '# NO PACKAGE DATABASE IN IMAGE\n# %s\n# see https://github.com/tuna-os/tunaos-packages/issues/135\n' "$REF" > "$OUT"
+        fi
+
+        echo "${COUNT} packages recorded for ${REF}"
+        head -3 "$OUT"
+
+        command -v oras >/dev/null 2>&1 || {
+          curl -fsSL "https://github.com/oras-project/oras/releases/download/v1.2.0/oras_1.2.0_linux_amd64.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin oras
+        }
+        oras push "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}.packages" \
+          --artifact-type application/vnd.tunaos.packages.v1 \
+          "${OUT}:text/plain"
+
+    - name: Upload package manifest
+      continue-on-error: true
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      with:
+        name: packages-${{ inputs.image-name }}-${{ inputs.default-tag }}-${{ inputs.safe-platform }}
+        path: packages-*.txt
+        if-no-files-found: warn

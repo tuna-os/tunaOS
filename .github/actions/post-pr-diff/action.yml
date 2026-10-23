@@ -1,0 +1,78 @@
+name: Post PR image diff
+description: Add testing instructions and one amd64 image diff comment to a pull request
+inputs:
+  image-registry:
+    description: OCI registry containing the images
+    required: true
+  image-name:
+    description: Published image name
+    required: true
+  default-tag:
+    description: Image tag
+    required: true
+  safe-platform:
+    description: Filename-safe platform identifier
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Add PR testing instructions
+      shell: bash
+      env:
+        IMAGE_REGISTRY: ${{ inputs.image-registry }}
+        IMAGE_NAME: ${{ inputs.image-name }}
+        DEFAULT_TAG: ${{ inputs.default-tag }}
+        SAFE_PLATFORM: ${{ inputs.safe-platform }}
+      run: |
+        TEST_IMAGE_REF="${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}"
+        STABLE_IMAGE_REF="${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}"
+        {
+          echo "### 🧪 Testing Instructions for ${IMAGE_NAME}:${DEFAULT_TAG}"
+          echo "To test this image, run the following command:"
+          echo '```bash'
+          echo "sudo bootc switch --enforce-container-sigpolicy ${TEST_IMAGE_REF}"
+          echo '```'
+          echo "To go back to the stable version of this flavor:"
+          echo '```bash'
+          echo "sudo bootc switch --enforce-container-sigpolicy ${STABLE_IMAGE_REF}"
+          echo '```'
+        } >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Generate PR diff
+      shell: bash
+      env:
+        IMAGE_REGISTRY: ${{ inputs.image-registry }}
+        IMAGE_NAME: ${{ inputs.image-name }}
+        DEFAULT_TAG: ${{ inputs.default-tag }}
+        SAFE_PLATFORM: ${{ inputs.safe-platform }}
+      run: |
+        # Only one platform posts a diff, avoiding duplicate PR comments.
+        if [[ "${SAFE_PLATFORM}" != *"amd64"* ]]; then
+          echo "Skipping diff for non-amd64 platform"
+          exit 0
+        fi
+
+        BASE_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}"
+        TARGET_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}"
+        echo "Pulling base image $BASE_IMAGE..."
+        if ! sudo podman pull "$BASE_IMAGE"; then
+          echo "Failed to pull $BASE_IMAGE. Skipping diff."
+          exit 0
+        fi
+
+        echo "Running diff..."
+        # This report is informational. A runtime failure here must not turn a
+        # boot-verified image red.
+        if ./scripts/diff-images.sh "$BASE_IMAGE" "$TARGET_IMAGE" "diff_report.md"; then
+          sed -i '1s/^/## 🔍 Image Diff Report\n\n/' diff_report.md
+        else
+          echo "::warning::Image diff failed; skipping the PR diff comment."
+          rm -f diff_report.md
+        fi
+
+    - name: Post diff comment
+      if: hashFiles('diff_report.md') != ''
+      uses: thollander/actions-comment-pull-request@24bffb9b452ba05a4f3f77933840a6a841d1b32b # v3.0.1
+      with:
+        filePath: diff_report.md
+        comment_tag: diff-${{ inputs.image-name }}

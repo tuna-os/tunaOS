@@ -1,0 +1,111 @@
+name: Build image
+description: Configure the distributed cache, build one platform, and report telemetry
+inputs:
+  image-registry:
+    description: Registry containing the shared build cache
+    required: true
+  image-name:
+    description: Published image name used in the telemetry summary
+    required: true
+  image-variant:
+    description: TunaOS variant to build
+    required: true
+  flavor:
+    description: Image flavor to build
+    required: true
+  default-tag:
+    description: Local image tag produced by the build
+    required: true
+  public-image-name:
+    description: Public image name passed to the build engine
+    required: true
+  platform:
+    description: OCI platform to build
+    required: true
+  chain-base-image:
+    description: Optional parent image for chained builds
+    required: false
+    default: ""
+  is-pr:
+    description: Whether this is a pull request build
+    required: true
+  build-bound-minutes:
+    description: Wall-clock bound for the build process
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Configure buildah registry layer cache
+      shell: bash
+      env:
+        IMAGE_REGISTRY: ${{ inputs.image-registry }}
+        IS_PR: ${{ inputs.is-pr }}
+      run: |
+        CACHE_REPO="${IMAGE_REGISTRY}/tunaos-buildcache"
+        FLAGS="--layers --cache-from ${CACHE_REPO}"
+        # Only trusted (non-PR) runs may write cache entries.
+        if [ "$IS_PR" != "true" ]; then
+          FLAGS="$FLAGS --cache-to ${CACHE_REPO}"
+        fi
+        echo "BUILDAH_CACHE_FLAGS=${FLAGS}" >> "$GITHUB_ENV"
+
+    - name: Build image
+      shell: bash
+      env:
+        FLAVOR: ${{ inputs.flavor }}
+        IMAGE_VARIANT: ${{ inputs.image-variant }}
+        DEFAULT_TAG: ${{ inputs.default-tag }}
+        PUBLIC_IMAGE_NAME: ${{ inputs.public-image-name }}
+        PLATFORM: ${{ inputs.platform }}
+        CHAIN_BASE_IMAGE: ${{ inputs.chain-base-image }}
+        # PR builds never publish; skip the two-pass chunkah rechunk + relabel.
+        SKIP_RECHUNK: ${{ inputs.is-pr == 'true' && '1' || '0' }}
+        BUILD_BOUND_MINUTES: ${{ inputs.build-bound-minutes }}
+      run: |
+        set -x
+        just=$(which just)
+        # Pre-pull the OS base with retries: quay's CDN drops blobs
+        # mid-transfer often enough to kill nightly builds (rawhide: #675).
+        # Platform-aware because some single-arch bases have an arm64 override.
+        BASE=$(./scripts/get-base-image.sh "${IMAGE_VARIANT}" "${PLATFORM}" 2>/dev/null || \
+          yq -r ".variants[] | select(.id == \"${IMAGE_VARIANT}\") | .base_image // \"\"" .github/build-config.yml)
+        if [ -n "$BASE" ] && [ -z "${CHAIN_BASE_IMAGE}" ]; then
+          for i in 1 2 3 4; do
+            sudo podman pull --platform "${PLATFORM}" "$BASE" && break
+            echo "base pull attempt $i failed; retrying..."
+            sleep $((i * 15))
+          done
+        fi
+        build_start=$(date +%s)
+        # Run in a root-owned process group so timeout can terminate buildah.
+        # Preserve the cache/rechunk knobs that sudo otherwise strips.
+        rc=0
+        sudo --preserve-env=BUILDAH_CACHE_FLAGS,SKIP_RECHUNK,PUBLIC_IMAGE_NAME \
+          timeout --kill-after=60s "${BUILD_BOUND_MINUTES}m" \
+          "$just" build "${IMAGE_VARIANT}" "${FLAVOR}" "${PLATFORM}" 1 "${DEFAULT_TAG}" "${CHAIN_BASE_IMAGE}" || rc=$?
+        echo "BUILD_SECONDS=$(( $(date +%s) - build_start ))" >> "$GITHUB_ENV"
+        if [ "$rc" -eq 124 ] || [ "$rc" -eq 137 ]; then
+          echo "::error title=Build hit its wall-clock bound::${IMAGE_VARIANT}:${DEFAULT_TAG} (${PLATFORM}) was still running after ${BUILD_BOUND_MINUTES} minutes and was killed. This is a clock, not a stall detector: the last line of build output above says whether it was wedged or merely slow."
+          exit 1
+        fi
+        [ "$rc" -eq 0 ] || exit "$rc"
+
+    - name: Build telemetry
+      if: always()
+      shell: bash
+      env:
+        IMAGE_NAME: ${{ inputs.image-name }}
+        IMAGE_VARIANT: ${{ inputs.image-variant }}
+        DEFAULT_TAG: ${{ inputs.default-tag }}
+        PLATFORM: ${{ inputs.platform }}
+      run: |
+        IMAGE="localhost/${IMAGE_VARIANT}:${DEFAULT_TAG}"
+        SIZE=$(sudo podman image inspect --format '{{.Size}}' "$IMAGE" 2>/dev/null || echo 0)
+        LAYERS=$(sudo podman image inspect --format '{{len .RootFS.Layers}}' "$IMAGE" 2>/dev/null || echo 0)
+        {
+          echo "### 📊 Build telemetry — ${IMAGE_NAME}:${DEFAULT_TAG} (${PLATFORM})"
+          echo ""
+          echo "| build time | image size | layers |"
+          echo "|---|---|---|"
+          echo "| ${BUILD_SECONDS:-?}s | $(numfmt --to=iec "${SIZE}" 2>/dev/null || echo "${SIZE}") | ${LAYERS} |"
+        } >> "$GITHUB_STEP_SUMMARY"

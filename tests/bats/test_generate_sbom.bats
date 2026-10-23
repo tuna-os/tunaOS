@@ -185,33 +185,3 @@ EOF
   run "$SCRIPT"
   [ "$status" -ne 0 ]
 }
-
-@test "the workflow's inline copy has not drifted from the script" {
-  wf="${REPO_ROOT}/.github/workflows/reusable-build-image.yml"
-  [ -f "$wf" ]
-
-  # Everything from the first `set -euo pipefail` down is the shared body;
-  # the lines above it are this file's own header.
-  script_body="${BATS_TEST_TMPDIR}/from-script"
-  sed -n '/^set -euo pipefail$/,$p' "$SCRIPT" >"$script_body"
-  [ -s "$script_body" ]
-
-  # The inline copy: the `run: |` block of the step whose id is `sbom`,
-  # dedented by the 10 spaces YAML block scalars carry.
-  inline_body="${BATS_TEST_TMPDIR}/from-workflow"
-  awk '
-    /^        id: sbom$/            { in_step = 1; next }
-    in_step && /^        run: \|$/  { in_run = 1; in_step = 0; next }
-    in_run {
-      if ($0 ~ /^[[:space:]]*$/) { print ""; next }
-      match($0, /^ */)
-      if (RLENGTH <= 8) { exit }
-      print substr($0, 11)
-    }
-  ' "$wf" >"$inline_body"
-  [ -s "$inline_body" ]
-
-  # Trailing blank lines are an artifact of where the YAML block ends.
-  diff -u <(sed -e :a -e '/^\n*$/{$d;N;};/\n$/ba' "$script_body") \
-          <(sed -e :a -e '/^\n*$/{$d;N;};/\n$/ba' "$inline_body")
-}
