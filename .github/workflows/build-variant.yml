@@ -115,7 +115,6 @@ jobs:
         id: set-matrix
         env:
           CATALOG_SNAPSHOT: ${{ steps.catalog-snapshot.outputs.snapshot }}
-          EVENT_NAME: ${{ github.event_name }}
           FILTER_VARIANT: ${{ inputs.variant || 'all' }}
           FILTER_FLAVOR: ${{ inputs.flavor || 'all' }}
           EVENT_NAME: ${{ github.event_name }}

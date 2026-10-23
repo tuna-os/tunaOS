@@ -201,9 +201,9 @@ def test_pull_request_matrix_includes_tuna_in_stage_one():
     event = "pull_request" if matrix_step.get("env", {}).get("EVENT_NAME") == \
         "${{ github.event_name }}" else ""
     text = workflow_path.read_text()
-    query = text.split('--arg event "${EVENT_NAME}" \'', 1)[1].split("' | jq -c -s '.'", 1)[0]
+    query = text.split('--arg event "${EVENT_NAME}" --argjson selection "$CANDIDATE_SELECTION" \'', 1)[1].split("' | jq -c -s '.'", 1)[0]
     result = subprocess.run(
-        ["jq", "-c", "--arg", "event", event, query],
+        ["jq", "-c", "--arg", "event", event, "--argjson", "selection", "null", query],
         input=json.dumps(yaml.safe_load((ROOT / ".github/build-config.yml").read_text())),
         text=True, capture_output=True,
         env=dict(os.environ, FILTER_VARIANT="marlin", FILTER_FLAVOR="tuna"),
