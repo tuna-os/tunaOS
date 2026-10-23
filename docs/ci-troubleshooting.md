@@ -1078,7 +1078,7 @@ The contract also prints the names of the failed units in a `TUNAOS_BASE_CONTRAC
 **Symptom:** the README snapshot gave `bonito` **1/16**. All sixteen bonito cells had promoted that day. All sixteen tags were live.
 
 ```
-| 🎣 `bonito` | **1/16** | [✅ 2026-09-13](.../34768771243) | — | base,base-hwe,base-nvidia,
+| 🎣 `bonito` | **1/16** | [✅ 2026-09-13](https://github.com/tuna-os/tunaOS/actions/runs/34768771243) | — | base,base-hwe,base-nvidia,
   gnome,cosmic,kde,niri,xfce,gnome-hwe,gnome-asahi,gnome-nvidia,cosmic-nvidia,
   kde-nvidia,niri-nvidia,xfce-nvidia |
 ```
@@ -1544,7 +1544,7 @@ uses the previous defect: the report must query a matrix cell with
 
 **Measured cause:** On main `7c9efe4f`, `scripts/resolve-flavor.sh` sets `DESKTOP_FLAVOR=desktop` for overlays and `build_scripts/90-image-info.sh` writes `image-tag=latest`. These values describe build defaults. The build passes the canonical variant apart from its publish name. Preserve it for Rawhide/Sid reports.
 
-**Fix:** Do not infer adoption categories from these defaults. Preserve the original variant and requested full flavor in separate metadata and verify each final image after desktop/overlay copies. See the [countme proposal](rfc/countme-proposal.md). `tests/test_countme_images.py` checks metadata and masks in installer output for every matrix flavor. The original flavor travels through `TUNAOS_IMAGE_FLAVOR`, apart from the stage name.
+**Fix:** Do not infer adoption categories from these defaults. Preserve the original variant and requested full flavor in separate metadata and verify each final image after desktop/overlay copies. See the [private adoption metrics RFC](rfc/rfc012-private-adoption-metrics.md). `tests/test_countme_images.py` checks metadata and masks in installer output for every matrix flavor. The original flavor travels through `TUNAOS_IMAGE_FLAVOR`, apart from the stage name.
 
 
 ### Missing-tool test fails when the tool exists on the host
