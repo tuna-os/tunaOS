@@ -64,19 +64,16 @@ on:
         default: ""
         type: string
       qual_platform:
-        description: "Target platform recorded in the qualification evidence"
-        required: false
-        default: ""
+        description: "Canonical target platform recorded in the qualification evidence"
+        required: true
         type: string
       qual_cpu_baseline:
-        description: "Target CPU baseline recorded in the qualification evidence"
-        required: false
-        default: ""
+        description: "Canonical target CPU baseline recorded in the qualification evidence"
+        required: true
         type: string
       qual_hardware_scope:
-        description: "Target hardware scope recorded in the qualification evidence"
-        required: false
-        default: ""
+        description: "Canonical target hardware scope recorded in the qualification evidence"
+        required: true
         type: string
     secrets:
       artifact_token:
@@ -124,6 +121,8 @@ jobs:
           VARIANT: ${{ inputs.variant }}
           FLAVOR: ${{ inputs.flavor }}
           QUAL_PLATFORM: ${{ inputs.qual_platform }}
+          QUAL_CPU_BASELINE: ${{ inputs.qual_cpu_baseline }}
+          QUAL_HARDWARE_SCOPE: ${{ inputs.qual_hardware_scope }}
         run: |
           set -euo pipefail
           for source in ci browser; do
@@ -133,13 +132,13 @@ jobs:
             test -f "$iso" || { echo "missing $iso" >&2; exit 1; }
             python3 scripts/verify-experience-manifest.py "$manifest"
             jq -e --arg v "$VARIANT" --arg f "$FLAVOR" \
-              '.variant == $v and .flavor == $f' "$manifest" >/dev/null
-            if [[ -n "${QUAL_PLATFORM:-}" ]]; then
-              jq -e --arg p "$QUAL_PLATFORM" '.platform == $p' "$manifest" >/dev/null || {
-                echo "::error::${source} manifest platform does not match canonical target ${QUAL_PLATFORM}"
-                exit 1
-              }
-            fi
+              --arg p "$QUAL_PLATFORM" --arg c "$QUAL_CPU_BASELINE" \
+              --arg s "$QUAL_HARDWARE_SCOPE" \
+              '.variant == $v and .flavor == $f and .platform == $p and
+               .cpu_baseline == $c and .hardware_scope == $s' "$manifest" >/dev/null || {
+              echo "::error::${source} manifest does not match canonical target ${VARIANT}:${FLAVOR}:${QUAL_PLATFORM}/${QUAL_CPU_BASELINE}/${QUAL_HARDWARE_SCOPE}"
+              exit 1
+            }
             expected="$(jq -er '.iso_sha256' "$manifest")"
             actual="sha256:$(sha256sum "$iso" | awk '{print $1}')"
             if [[ "$actual" != "$expected" ]]; then
@@ -211,6 +210,35 @@ jobs:
             test -f "$ev" || { echo "missing $ev" >&2; exit 1; }
             python3 scripts/verify-experience-manifest.py "$ev"
           done
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          target_fields = ("variant", "flavor", "platform",
+                           "cpu_baseline", "hardware_scope")
+          input_fields = ("source", "overlay", "installer")
+          for source in ("ci", "browser"):
+              producer = json.loads(
+                  Path(f"parity/{source}/experience-manifest.json").read_text()
+              )
+              qualification = json.loads(
+                  Path(f"parity/{source}-e2e/qualification-evidence.json").read_text()
+              )
+              mismatches = [
+                  field for field in target_fields
+                  if producer[field] != qualification[field]
+              ]
+              mismatches.extend(
+                  f"resolved_inputs.{field}" for field in input_fields
+                  if producer["resolved_inputs"][field]
+                  != qualification["resolved_inputs"][field]
+              )
+              if mismatches:
+                  raise SystemExit(
+                      f"{source} qualification does not match its producer "
+                      f"manifest: {', '.join(mismatches)}"
+                  )
+          PY
           python3 scripts/verify-experience-manifest.py \
             parity/ci-e2e/qualification-evidence.json \
             --compare parity/browser-e2e/qualification-evidence.json

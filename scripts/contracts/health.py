@@ -72,6 +72,27 @@ def timestamp(value: str, now: dt.datetime) -> dt.datetime:
     return measured
 
 
+def _apply_readiness_freshness(readiness: dict[str, Any],
+                               package_observation: dict[str, Any],
+                               now: dt.datetime,
+                               build_seconds: int) -> None:
+    """Keep package readiness honest independently of image/publication state."""
+    if readiness["status"] != "healthy":
+        return
+    latest_factory = package_observation.get("latestAttempt")
+    try:
+        measured = timestamp(package_observation["measuredAt"], now)
+        latest_measured = timestamp(latest_factory["measuredAt"], now)
+    except (EvidenceError, KeyError, TypeError):
+        readiness["status"] = "unknown"
+        readiness["measuredAt"] = None
+        return
+    oldest = min(measured, latest_measured)
+    readiness["measuredAt"] = oldest.isoformat().replace("+00:00", "Z")
+    if (now - oldest).total_seconds() > build_seconds:
+        readiness["status"] = "stale"
+
+
 def evaluate_row(required: dict[str, Any], attempt: dict | None,
                  publication: dict | None, package: dict | None,
                  image: dict | None, *, collection_available: bool,
@@ -137,6 +158,9 @@ def evaluate_row(required: dict[str, Any], attempt: dict | None,
             readiness["measuredAt"] = latest_factory.get("measuredAt")
         elif latest_factory.get("identity") != package["attemptIdentity"]:
             readiness["status"] = "blocked"
+        _apply_readiness_freshness(
+            readiness, package_observation, now, build_seconds
+        )
     if image is not None:
         checks = image["checks"]
         statuses = {check["status"] for check in checks}

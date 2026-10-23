@@ -295,8 +295,13 @@ def main() -> int:
     if problems:
         print(f"\n{len(problems)} installer(s) failed the fisherman source check.")
         return 1
-    print(f"\nall {len(sources)} installers build fisherman from {CANONICAL} "
-          f"at or after the floor {FLOOR_COMMIT[:12]}.")
+    if unknown:
+        print(f"\n{len(sources) - len(unknown)} installer(s) passed the fisherman "
+              f"source check; floor ancestry remains unresolved for "
+              f"{len(unknown)} installer(s) (warning only).")
+    else:
+        print(f"\nall {len(sources)} installers build fisherman from {CANONICAL} "
+              f"at or after the floor {FLOOR_COMMIT[:12]}.")
     return 0
 
 

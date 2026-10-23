@@ -86,6 +86,11 @@ def test_duplicate_json_keys_are_rejected(text):
     with pytest.raises(evidence.EvidenceError, match="duplicate JSON key"):
         evidence.loads(text)
 
+@pytest.mark.parametrize("text", ['{"value": 1e400}', '{"value": -1e400}'])
+def test_non_finite_decimal_numbers_are_rejected(text):
+    with pytest.raises(evidence.EvidenceError, match="non-finite JSON number"):
+        evidence.loads(text)
+
 
 @pytest.mark.parametrize("document", DOCUMENTS, ids=lambda d: d["kind"])
 @pytest.mark.parametrize("change", [{"schemaVersion": 2}, {"schemaVersion": True},
