@@ -2029,8 +2029,8 @@ admission checks as the source of that proof.
 
 ### VNC pointer packets do not initialize absolute input
 
-The GNOME driver can finish the VNC handshake without moving the pointer to the requested control. In QEMU 8.2.2, a new client starts with relative pointer state. `set_encodings()` calls `check_pointer_type_change()` even when the client advertises only raw encoding. Without that message or a later input-mode notification, repeated coordinates can produce zero relative motion.
+The GNOME driver can finish the VNC handshake without moving the pointer to the requested control. In QEMU 8.2.2, a new client starts with relative pointer state. `set_encodings()` calls `check_pointer_type_change()` for a client that selects `Raw`. Without that message or a later input-mode notification, repeated coordinates do not move the pointer.
 
 Source: [QEMU 8.2.2 VNC implementation](https://github.com/qemu/qemu/blob/v8.2.2/ui/vnc.c), `vnc_connect`, `set_encodings`, and `pointer_event`.
 
-Send raw `SetEncodings` before pointer events. The socket test checks that order; a source-path model checks the omitted-message case. Neither proves guest input delivery. Run 39652890852 remains unqualified until its frames are inspected and actual installation and reboot pass.
+Send raw `SetEncodings` before pointer events. The socket test checks that order; a source-path model checks the omitted-message case. These tests do not prove that the guest receives input. Run 39652890852 remains unqualified until we inspect its frames and actual installation and reboot pass.
