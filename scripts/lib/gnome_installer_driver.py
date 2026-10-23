@@ -109,6 +109,32 @@ def ocr_rows(tsv, strict=False):
         rows.append((' '.join(w['text'] for w in words), (left, top, right, bottom)))
     return kept, rows
 
+
+def install_box_from_rows(rows, left, top):
+    """Map one measured, exact Install label back to original capture pixels."""
+    if len(rows) != 1 or ' '.join(rows[0][0].split()) != 'Install':
+        raise Unverified('final control label is absent, wrong or ambiguous')
+    box = rows[0][1]
+    if not (len(box) == 4 and all(type(value) is int for value in box)
+            and 25 <= box[0] <= 55 and 155 <= box[2] <= 185
+            and 18 <= box[1] <= 36 and 50 <= box[3] <= 75
+            and 90 <= box[2]-box[0] <= 150 and 25 <= box[3]-box[1] <= 45):
+        raise Unverified('final control text geometry is unverified')
+    return (left + box[0]//3, top + box[1]//3,
+            left + (box[2]+2)//3, top + (box[3]+2)//3)
+
+
+def control_target(screen, label, enabled=False):
+    """Resolve all local guards before recording or sending any input."""
+    box = screen.box(label)
+    if not (len(box) == 4 and all(type(value) is int for value in box)
+            and 0 <= box[0] < box[2] <= screen.width
+            and 0 <= box[1] < box[3] <= screen.height):
+        raise Unverified('control box is outside the capture')
+    if enabled and not screen.enabled(label):
+        raise Unverified(f'control is disabled or its state is unknown: {label}')
+    return box, [(box[0]+box[2])//2, (box[1]+box[3])//2]
+
 class Screen:
     def __init__(self, path):
         self.path = Path(path)
@@ -132,8 +158,12 @@ class Screen:
         self.lines = [row[0] for row in self.rows]
         self.state = classify(self.lines)
         self._pixels = None
+        self._summary_verified = False
+        self._install_box_cache = None
 
     def box(self, label):
+        if label == 'Install':
+            return self.install_box()
         boxes = [box for text, box in self.rows if normal(text) == normal(label)]
         if len(boxes) != 1:
             raise Unverified(f'expected one exact control label: {label}; got {len(boxes)}')
@@ -148,6 +178,8 @@ class Screen:
         """
         if (self.width, self.height) != (1280, 800) or self.state != 'summary':
             raise Unverified('unsupported summary framebuffer or state')
+        if any(normal(text) == 'install' for text, _ in self.rows):
+            raise Unverified('unexpected additional full-frame Install control')
         heading = self.box('Confirm installation')
         if not (20 <= heading[3]-heading[1] <= 40
                 and abs((heading[0]+heading[2])/2-640) <= 80
@@ -177,6 +209,37 @@ class Screen:
                                         capture_output=True, text=True, timeout=30, check=True)
             _, cards[label] = ocr_rows(result.stdout, strict=True)
         return cards
+
+
+    def install_box(self):
+        """One inverted text-interior crop, only after exact summary proof."""
+        if any(normal(text) == 'install' for text, _ in self.rows):
+            raise Unverified('unexpected additional full-frame Install control')
+        if (not getattr(self, '_summary_verified', False) or self.state != 'summary'
+                or (self.width, self.height) != (1280, 800)):
+            raise Unverified('final control needs the verified summary layout')
+        heading = self.box('Confirm installation')
+        if not (20 <= heading[3]-heading[1] <= 40
+                and abs((heading[0]+heading[2])/2-640) <= 4
+                and 273 <= heading[1] <= 281):
+            raise Unverified('final control heading anchor is unverified')
+        cx, cy = self.width//2, heading[1]+317
+        left, top = cx-35, cy-15
+        self._install_center = (cx, cy)
+        if getattr(self, '_install_box_cache', None) is None:
+            with tempfile.NamedTemporaryFile(suffix='.png') as prepared:
+                # White text on purple needs inversion, not the navigation
+                # threshold. See Tesseract ImproveQuality, Inverting images.
+                subprocess.run(['convert', str(self.path), '-crop',
+                                f'70x30+{left}+{top}', '+repage', '-resize', '300%',
+                                '-colorspace', 'gray', '-negate', prepared.name],
+                               capture_output=True, timeout=20, check=True)
+                result = subprocess.run(['tesseract', prepared.name, 'stdout',
+                                         '--psm', '7', 'tsv'],
+                                        capture_output=True, text=True, timeout=30, check=True)
+            _, rows = ocr_rows(result.stdout, strict=True)
+            self._install_box_cache = install_box_from_rows(rows, left, top)
+        return self._install_box_cache
 
     def rgb(self, x, y):
         if self._pixels is None:
@@ -214,6 +277,19 @@ class Screen:
 
     def enabled(self, label):
         box = self.box(label)
+        if label == 'Install':
+            # The enabled state and button boundary come from ORIGINAL pixels,
+            # never the inverted OCR input. All four inside/outside pairs agree.
+            cx, cy = self._install_center
+            inside = ((cx-30, cy), (cx+30, cy), (cx, cy-14), (cx, cy+14))
+            outside = ((cx-60, cy), (cx+60, cy), (cx, cy-26), (cx, cy+26))
+            def purple(point):
+                r, g, b = self.rgb(*point)
+                return r > 100 and b > 100 and g < r*.65 and b > g*1.1
+            def background(point):
+                rgb = self.rgb(*point)
+                return min(rgb) >= 245 and max(rgb)-min(rgb) <= 4
+            return all(map(purple, inside)) and all(map(background, outside))
         # Text is white; sample the button background immediately beside it.
         r, g, b = self.rgb(box[0]-7, (box[1]+box[3])//2)
         return r > 100 and b > 100 and g < r*.65 and b > g*1.1
@@ -329,6 +405,7 @@ def verify_summary_cards(cards, mode):
 
 
 def verify_summary(screen, mode):
+    screen._summary_verified = False
     verify_summary_cards(screen.summary_cards(), mode)
     warning = 'Everything on /dev/vda will be erased. This cannot be undone.'
     warnings = [' '.join(line.split()) for line in screen.lines
@@ -341,6 +418,7 @@ def verify_summary(screen, mode):
     if mode == 'luks' and any('tpm' in line.lower() or 'hardware backed' in normal(line)
                               for line in screen.lines):
         raise Unverified('summary selected hardware encryption instead of passphrase-only')
+    screen._summary_verified = True
 
 
 def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest,
@@ -383,9 +461,7 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest,
         return screen
 
     def click(screen, label, enabled=False):
-        box = screen.box(label)
-        if enabled and not screen.enabled(label):
-            raise Unverified(f'control is disabled or its state is unknown: {label}')
+        box, point = control_target(screen, label, enabled)
         action = ('welcome-install' if screen.state == 'welcome' else {
             'Encrypt this disk': 'encrypt-disk',
             'Use hardware-backed encryption': 'hardware-encryption',
@@ -394,7 +470,6 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest,
         }.get(label))
         if action is None:
             raise Unverified('unsupported diagnostic control')
-        point = [(box[0]+box[2])//2, (box[1]+box[3])//2]
         attempt = {'action': action, 'state': screen.state, 'box': list(box),
                    'point': point, 'frame': [screen.width, screen.height],
                    'transport': 'uncertain'}

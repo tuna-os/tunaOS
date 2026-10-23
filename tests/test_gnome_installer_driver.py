@@ -620,3 +620,71 @@ def test_retained_image_regression_is_explicit_ci_job():
     assert 'python3 -m pytest -q tests/ocr/gnome_summary_capture.py' in job
     assert 'continue-on-error' not in job
     assert 'if:' not in job
+
+
+BUTTON = json.loads((ROOT / 'tests/fixtures/gnome-installer/button39897665901.json').read_text())
+
+
+@pytest.mark.parametrize('capture', BUTTON['inverted'])
+def test_real_button_words_map_to_original_pixels(capture):
+    _, rows = captured_rows(capture['words'])
+    assert driver.install_box_from_rows(rows, 605, 579) == (618, 588, 662, 599)
+
+
+@pytest.mark.parametrize('rows', [
+    [], [('Install', (39, 27, 169, 60))]*2,
+    [('Install now', (39, 27, 169, 60))],
+    [('Cancel', (39, 27, 169, 60))],
+    [('Install', (0, 27, 130, 60))],
+    [('Install', (39, 0, 169, 33))],
+    [('Install', (39, 27, 209, 60))],
+    [('Install', (39, 27, 169, 90))],
+])
+def test_final_label_rejects_wrong_ambiguous_or_misplaced_text(rows):
+    with pytest.raises(driver.Unverified):
+        driver.install_box_from_rows(rows, 605, 579)
+
+
+@pytest.mark.parametrize('change', [
+    'unverified', 'state', 'resolution', 'heading', 'duplicate-heading', 'extra-install',
+])
+def test_final_control_requires_summary_and_unique_foreground(monkeypatch, change):
+    screen = object.__new__(driver.Screen)
+    screen.width, screen.height, screen.state = 1280, 800, 'summary'
+    screen._summary_verified = True
+    screen.rows = [('Confirm installation', (510, 277, 770, 304))]
+    if change == 'unverified': screen._summary_verified = False
+    elif change == 'state': screen.state = 'overview'
+    elif change == 'resolution': screen.width = 1920
+    elif change == 'heading': screen.rows[0] = ('Confirm installation', (510, 100, 770, 127))
+    elif change == 'duplicate-heading': screen.rows *= 2
+    else: screen.rows.append(('Install', (800, 580, 850, 600)))
+    monkeypatch.setattr(driver.subprocess, 'run',
+                        lambda *a, **k: pytest.fail('invalid layout must fail before OCR'))
+    with pytest.raises(driver.Unverified):
+        screen.box('Install')
+
+
+@pytest.mark.parametrize('box', [(-1, 0, 20, 20), (0, 0, 1281, 20),
+                                (0, 0, 20, 801), (20, 0, 0, 20),
+                                (True, 0, 20, 20)])
+def test_control_target_rejects_invalid_coordinates_before_input(box):
+    screen = FakeScreen('summary')
+    screen.box = lambda label: box
+    with pytest.raises(driver.Unverified):
+        driver.control_target(screen, 'Install', enabled=True)
+
+
+def test_failed_summary_invalidates_prior_proof():
+    screen = FakeScreen('summary')
+    driver.verify_summary(screen, 'plain')
+    assert screen._summary_verified
+    screen.lines = [line.replace('/dev/vda', '/dev/vdb') for line in screen.lines]
+    with pytest.raises(driver.Unverified):
+        driver.verify_summary(screen, 'plain')
+    assert not screen._summary_verified
+
+
+def test_retained_button_failures_remain_negative_evidence():
+    assert len(BUTTON['rejected']) == 4
+    assert all(item['words'] == [] for item in BUTTON['rejected'])

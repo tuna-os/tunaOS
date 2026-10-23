@@ -1971,7 +1971,7 @@ These tests check consistency. They do not prove a real producer or installation
 **Symptom:** a CFP abstract or design contribution adds Markdown and the
 `ste / Simplified Technical English` check fails with `STE budget exceeded`.
 
-**Cause:** the shared linter counts findings across the repository, against
+**Cause:** the linter counts findings across the repository, against
 `.ste-budget`. Content directories have no automatic exemption. The pinned
 linter supports lowercase `ste-disable-file: reason` and paired
 `ste-disable: reason` / `ste-enable` comments; `<!-- STE-DISABLE -->` does not
