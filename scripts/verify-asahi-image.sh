@@ -96,6 +96,10 @@ for mod in asahi.ko appledrm.ko nvme-apple.ko hci_bcm4377.ko brcmfmac.ko \
            apple-dart.ko macsmc.ko apple-isp.ko spi-hid-apple.ko \
            apple-admac.ko apple-soc-cpufreq.ko dockchannel-hid.ko; do
     if grep -qE "/${mod}(\.xz|\.zst|\.gz)?:" "$deps" 2>/dev/null; then ok "$mod"
+    elif [[ "$mod" == "macsmc.ko" ]] &&
+         grep -qx 'CONFIG_MFD_MACSMC=y' "$M/config" 2>/dev/null &&
+         grep -qx 'kernel/drivers/mfd/macsmc.ko' "$M/modules.builtin" 2>/dev/null; then
+        ok "$mod built into this kernel (config + modules.builtin)"
     elif [[ "$is_el10" == "true" && "$mod" == "apple-isp.ko" ]]; then note "$mod not in modules.dep (known EL10 packaging gap)"
     else bad "$mod not in modules.dep"; fi
 done
