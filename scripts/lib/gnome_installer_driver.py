@@ -203,6 +203,10 @@ def click_unix(path, x, y, width, height):
         if length > 4096 or (actual_width, actual_height) != (width, height):
             raise Unverified('VNC geometry differs from verified capture')
         _read(sock, length)
+        # QEMU 8.2.2 initializes this client's absolute pointer mode in
+        # set_encodings(), even with raw only (ui/vnc.c). Without it, a
+        # fresh connection can treat these coordinates as relative motion.
+        sock.sendall(struct.pack('!BBHi', 2, 0, 1, 0))
         sock.sendall(struct.pack('!BBHH', 5, 0, x, y))
         sock.sendall(struct.pack('!BBHH', 5, 1, x, y))
         time.sleep(.1)

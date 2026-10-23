@@ -152,6 +152,7 @@ def test_unix_rfb_pointer_and_geometry(tmp_path):
     received = []
     def serve():
         with server.accept()[0] as conn:
+            conn.settimeout(5)
             conn.sendall(b'RFB 003.008\n')
             assert driver._read(conn, 12) == b'RFB 003.008\n'
             conn.sendall(b'\x01\x01')
@@ -159,12 +160,14 @@ def test_unix_rfb_pointer_and_geometry(tmp_path):
             conn.sendall(b'\0'*4)
             assert driver._read(conn, 1) == b'\x01'
             conn.sendall(struct.pack('!HH',1280,800)+b'\0'*16+struct.pack('!I',4)+b'test')
+            received.append(driver._read(conn,8))
             received.append(driver._read(conn,18))
     thread = threading.Thread(target=serve); thread.start()
     driver.click_unix(path, 420, 490, 1280, 800)
     thread.join(timeout=5); server.close()
     assert not thread.is_alive()
-    assert received == [b''.join(struct.pack('!BBHH',5,button,420,490) for button in (0,1,0))]
+    assert received == [struct.pack('!BBHi', 2, 0, 1, 0),
+                        b''.join(struct.pack('!BBHH',5,button,420,490) for button in (0,1,0))]
     with pytest.raises(driver.Unverified):
         driver.click_unix(path, -1, 490, 1280,800)
 
@@ -256,7 +259,35 @@ def test_rfb_protocol_without_socket_creation(monkeypatch, tmp_path, case):
         assert not any(data[:1] == b'\x05' for data in sent)
     else:
         driver.click_unix(tmp_path/'vnc.sock',420,490,1280,800)
-        assert sent[-3:] == [struct.pack('!BBHH',5,b,420,490) for b in (0,1,0)]
+        raw = struct.pack('!BBHi', 2, 0, 1, 0)
+        pointer_packets = [struct.pack('!BBHH',5,b,420,490) for b in (0,1,0)]
+        assert sent == [b'RFB 003.008\n', b'\x01', b'\x01', raw, *pointer_packets]
+
+        def qemu82_events(packets):
+            # Minimal source-path model, not guest input proof:
+            # qemu/qemu v8.2.2 ui/vnc.c, set_encodings()/pointer_event().
+            # A fresh client starts relative, with last_x == -1.
+            absolute, last = False, None
+            events = []
+            for packet in packets:
+                if packet == raw:
+                    # Strict harness supplies an already-active USB tablet.
+                    absolute = True
+                    continue
+                kind, buttons, x, y = struct.unpack('!BBHH', packet)
+                assert kind == 5
+                if absolute:
+                    events.append(('absolute', buttons, x, y))
+                elif last is not None:
+                    events.append(('relative', buttons, x-last[0], y-last[1]))
+                last = (x, y)
+            return events
+
+        assert qemu82_events(sent[3:]) == [
+            ('absolute', b, 420, 490) for b in (0,1,0)]
+        # Negative control: removing negotiation yields only zero motion.
+        assert qemu82_events(pointer_packets) == [
+            ('relative', b, 0, 0) for b in (1,0)]
 
 
 @pytest.mark.parametrize('mode', ['plain', 'luks'])
