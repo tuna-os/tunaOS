@@ -79,6 +79,10 @@ The fastest way to get added: open an issue using the
 — tell us your tier, variants, and use case, and we'll open the ADOPTERS.md
 entry for you.
 
+Want to share a fuller report? Use the [case study template and submission
+flow](docs/ADOPTER-CASE-STUDIES.md). You approve the final report and choose
+whether to add a named adopter entry.
+
 Prefer to do it yourself? You can also open a PR directly:
 
 1. Add your entry to the **Production Users** or **Development & Evaluation** table
