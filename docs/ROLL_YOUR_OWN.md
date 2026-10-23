@@ -298,8 +298,11 @@ You supply the drawn art. Each variant needs a wallpaper at
 `branding.plymouth` names its boot splash, a theme folder under
 `system_files/usr/share/plymouth/themes/`. An image name that is not a known
 variant gets the theme in `[defaults.branding] plymouth`. `just check` fails
-and names the file when one of these is missing. The installer's own name
-still comes from the image files under `system_files/` (#3668).
+and names the file when one of these is missing.
+
+The installer's slides come from `system_files/etc/bootc-installer/recipe.json`.
+Write them with your `[project] name`: the build puts the variant name in its
+place. The GNOME installer logo still uses TunaOS marks (#3668).
 
 For GNOME defaults, create a gschema override:
 

@@ -174,3 +174,32 @@ def test_containerfile_order_and_final_writer_contract():
     source = (ROOT / "build_scripts/90-image-info.sh").read_text()
     assert source.index("/build_scripts/desktop/select-wallpaper.sh") < source.index("tunaos_apply_fork_branding")
     assert 'VARIANT_WALLPAPER=' not in source
+
+
+def test_a_forks_project_name_gives_way_to_the_variant(tmp_path):
+    """The installer slides and Plasma names swap tunaos.toml's [project] name,
+    not a literal "TunaOS", for the variant; image references stay put."""
+    image = Image(tmp_path, "marlin", "kde")
+    project = "Acme (OS) 2.0+"   # every regex special [project] name allows
+    identity = image.context / "build_scripts/lib/identity.env"
+    identity.write_text(identity.read_text().replace("TUNAOS_PROJECT_NAME=TunaOS", f"TUNAOS_PROJECT_NAME='{project}'"))
+    image.env.update({f"IS_{base}": "false" for base in (
+        "FEDORA", "HUMMINGBIRD", "ALMALINUX", "ALMALINUXKITTEN", "CENTOS", "UBUNTU",
+        "DEBIAN", "OPENSUSE", "GENTOO")}, IS_ARCH="true", IMAGE_FLAVOR="kde")
+    recipe = image.root / "etc/bootc-installer/recipe.json"
+    recipe.parent.mkdir(parents=True)
+    stock = (ROOT / "system_files/etc/bootc-installer/recipe.json").read_text()
+    recipe.write_text(stock.replace("TunaOS", project))
+    meta = image.root / "usr/share/wallpapers/TunaOS/metadata.json"
+    meta.parent.mkdir(parents=True)
+    meta.write_text(json.dumps({"KPlugin": {"Authors": [{"Name": f"{project} Contributors"}], "Name": project}},
+                               indent=4))
+    image.info()
+    written = json.loads(recipe.read_text())
+    assert written["tour"]["completed"]["description"] == \
+        "Reboot your machine to enter your new Marlin workstation environment!"
+    assert written["tour"]["distro"]["title"] == "Built on Arch Linux"
+    assert written["imgref"] == json.loads(stock)["imgref"]
+    assert project not in json.dumps({k: v for k, v in written.items() if k not in ("imgref", "local_imgref")})
+    plugin = json.loads(meta.read_text())["KPlugin"]
+    assert plugin["Name"] == "Marlin" and plugin["Authors"][0]["Name"] == f"{project} Contributors"

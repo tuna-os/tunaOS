@@ -250,16 +250,16 @@ if 'completed' in tour:
 
 recipe['tour'] = new_tour
 
-# The variant is the name people see; the installer's stock slides say
-# TunaOS (e.g. your new TunaOS workstation). Swap it in every text value,
-# leaving image references alone.
+# The variant is the name people see; the installer's stock slides name the
+# project (tunaos.toml [project] name, e.g. your new TunaOS workstation). Swap
+# it in every text value, leaving image references alone.
 def rename(v):
     if isinstance(v, dict):
         return {k: (x if k in ('imgref', 'image', 'distro_logo') else rename(x)) for k, x in v.items()}
     if isinstance(v, list):
         return [rename(x) for x in v]
     if isinstance(v, str):
-        return v.replace('TunaOS', '${IMAGE_PRETTY_NAME}')
+        return v.replace('${TUNAOS_PROJECT_NAME}', '${IMAGE_PRETTY_NAME}')
     return v
 recipe = rename(recipe)
 
@@ -357,12 +357,17 @@ EOF
 	fi
 
 	# Names people can see in settings: the Plasma global theme and wallpaper
-	# are called after the variant, not "TunaOS".
+	# are called after the variant, not the project. tunaos.toml allows only
+	# . ( ) + of the extended-regex specials in the name; escape those.
+	PROJECT_NAME_RE="${TUNAOS_PROJECT_NAME//'.'/'\.'}"
+	PROJECT_NAME_RE="${PROJECT_NAME_RE//'('/'\('}"
+	PROJECT_NAME_RE="${PROJECT_NAME_RE//')'/'\)'}"
+	PROJECT_NAME_RE="${PROJECT_NAME_RE//'+'/'\+'}"
 	for meta in /usr/share/plasma/look-and-feel/org.tunaos.desktop/metadata.json \
 		/usr/share/plasma/look-and-feel/org.tunaos.light.desktop/metadata.json \
 		/usr/share/wallpapers/TunaOS/metadata.json; do
 		[[ -f "${meta}" ]] || continue
-		sed -i -E "s/(\"Name\": *\")TunaOS( Light)?\"/\\1${IMAGE_PRETTY_NAME}\\2\"/" "${meta}"
+		sed -i -E "s/(\"Name\": *\")${PROJECT_NAME_RE}( Light)?\"/\\1${IMAGE_PRETTY_NAME}\\2\"/" "${meta}"
 	done
 
 	# Console login banner. Upstream's names the upstream distro ("Ubuntu
