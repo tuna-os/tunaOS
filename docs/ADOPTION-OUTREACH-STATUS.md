@@ -1,12 +1,11 @@
 # Adoption outreach status
 
-**As of:** 2026-08-14
-**Owner:** strategist, with maintainer approval for external contact
+**As of:** 2026-08-14 **Owner:** strategist, with maintainer approval for external
+contact
 
-This is an evidence ledger, not a prospect list. It separates
-prepared material from outreach that was sent, on purpose. We list no organization
-as a TunaOS adopter without consent-confirmed public evidence in
-[ADOPTERS.md](../ADOPTERS.md).
+This is an evidence ledger, not a prospect list. It separates prepared material from
+outreach that was sent, on purpose. We list no organization as a TunaOS adopter without
+consent-confirmed public evidence in [ADOPTERS.md](../ADOPTERS.md).
 
 | Channel | Prepared material | Sent? | Evidence / next action |
 |---|---|---|---|
@@ -15,6 +14,15 @@ as a TunaOS adopter without consent-confirmed public evidence in
 | CNCF / bootc showcase | [Showcase draft](CNCF-BOOTC-SHOWCASE.md) & [FOSDEM/CNCF section](CFP-FOSDEM-2027.md), tracked by [#1340](https://github.com/tuna-os/tunaOS/issues/1340) | No — pitch explicitly not sent | A maintainer must approve the recipient/channel, send the pitch, and record the public thread or response. A bootc dependency is not an adoption reference. |
 | Chainguard supply chain | [Collaboration brief](CHAINGUARD-COLLABORATION.md), tracked by [#1339](https://github.com/tuna-os/tunaOS/issues/1339) | No — draft ready | Maintainer review required before initiating cold outreach on supply-chain collaboration. |
 | Public adopter call | [Consent workflow](ADOPTION-CALL.md), tracked by [#1367](https://github.com/tuna-os/tunaOS/issues/1367) | No Discussion URL yet | Create the Show-and-tell Discussion, then record response and consent-confirmed-entry counts in the call and monthly snapshot. |
+
+## AlmaLinux proposal handoff (#3016)
+
+The [AlmaLinux proposal pack](outreach/ALMALINUX-ENGAGEMENT.md) provides SIG outreach
+copy, an editorial pitch, a talk abstract, and a consent-based case-study workflow. This
+entry records preparation only. After contact, the authorized sender should add the
+first sent date and durable thread URL here. Record blog review, CFP submission, and
+evaluation evidence separately. These drafts establish no external contact, partnership,
+or adopter.
 
 ## Update rules
 
