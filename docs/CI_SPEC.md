@@ -94,6 +94,10 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 
 <!-- END GENERATED CI LANES -->
 
+For checks that are required or advisory, timeout budgets, and the read-only
+organization audit, see [CI enforcement and signal review](CI-ENFORCEMENT.md).
+Image promotion still follows the green-criteria contract.
+
 ## Overview
 This specification defines the target design for the matrix-driven CI/CD pipeline
 for TunaOS, consolidating redundant workflows and optimizing the build process.

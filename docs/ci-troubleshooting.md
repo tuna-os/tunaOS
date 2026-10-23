@@ -8,6 +8,22 @@ that touched 36 files across `.github/`, `build_scripts/`, `live-iso/`,
 
 ---
 
+## CI enforcement differs between repositories (#3011)
+
+**Symptom:** A red check leaves a PR on hold. Its name does not explain
+whether it blocks a merge or whether the failure is transient.
+
+**Measured cause:** `.github/workflows/ste.yml` delegates to the shared
+`ste-lint.yml`; it has no local linter. Required check settings
+are separate from workflow YAML, and reusable callees own their job timeouts.
+The shared lint workflow also treats actionlint as advisory. The name of a caller does not establish enforcement.
+
+**Fix:** Run `scripts/audit-org-ci.py --output /tmp/ci-audit.json` and compare
+protection and effective rules with the workflow and callee at the recorded
+ref. Treat inaccessible settings as unknown. Follow the
+[signal escalation steps](CI-ENFORCEMENT.md#escalate-a-failed-signal) with run
+links before you request a retry or a change to enforcement.
+
 ## Failure Catalog
 
 ### 1. `flatpak: command not found` in live ISO customization

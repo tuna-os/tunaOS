@@ -64,6 +64,8 @@ The maintainer keeps one 30-minute slot each week for contributor work. During t
 
 This is a lightweight queue-management commitment, not a promise of immediate review. Contributors should expect an acknowledgement or status update within the next weekly triage slot.
 
+For failed or uncertain CI results, follow the [CI signal escalation guide](docs/CI-ENFORCEMENT.md#escalate-a-failed-signal). It distinguishes code fixes from CI diagnosis and documents the organization audit.
+
 ## Pre-Commit (mandatory)
 
 ```bash

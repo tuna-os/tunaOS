@@ -217,6 +217,10 @@ Six more, each measured while fixing the live-ISO and install path
   wrong answer. When a default exists, test the unrecognised case
   explicitly.
 
+A CI audit must distinguish unknown API access from absent enforcement.
+Reusable callers delegate timeouts and failure behavior to the callee; inspect
+the pinned implementation before reporting a missing gate (#3011).
+
 ## Agent Skills
 
 - A parser import is a grammar choice. Use the reviewed parser on every host;
