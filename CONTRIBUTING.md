@@ -205,8 +205,8 @@ naming.
 Before you publish a new product or distribution channel, confirm that its
 repository has `ROADMAP.md` at the root of its default branch. This applies to
 desktop tools, shared infrastructure, Flatpak/Flathub apps, downloadable binaries,
-and package-manager entries. Include the roadmap link and release prerequisite issue
-links in the release PR so reviewers can check the gate before publication.
+and package-manager entries. Include the roadmap link and the links to the release
+prerequisite issues in the release PR so reviewers can check the gate before publication.
 Keep stability goals, important dependencies, and acceptance evidence in that
 local roadmap; do not infer readiness from the file's existence.
 
