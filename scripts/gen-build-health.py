@@ -238,7 +238,15 @@ def collect(config: dict, source_revision: str, fetch: Callable, *, now=None,
         try:
             runs = fetch_runs(fetch, workflow)
             walked = 0
+            variant_keys = {
+                (variant, row['target']['flavor'], row['target']['platform'])
+                for row in rows if row['target']['variant'] == variant
+            }
             for run in runs:
+                # Once every required row has its latest observation, older
+                # attempts cannot change it. Keep the existing history bounds.
+                if variant_keys <= found.keys():
+                    break
                 if timestamp(run["run_started_at"]) > now:
                     raise CollectionError("future run timestamp")
                 if run["status"] == "completed":

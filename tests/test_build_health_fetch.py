@@ -71,6 +71,23 @@ def test_success_without_authenticated_receipts_is_blocked():
         assert row['packageReadiness']['status'] != 'healthy'
 
 
+def test_older_jobs_are_not_fetched_after_all_latest_targets_are_observed():
+    calls = []
+
+    def fetch(endpoint):
+        if '/workflows/' in endpoint:
+            older = run(identity=2)
+            older['run_started_at'] = '2026-10-09T19:00:00Z'
+            return {'workflow_runs': [run(), older]}
+        calls.append(endpoint)
+        assert '/runs/1/attempts/2/jobs?' in endpoint
+        return {'jobs': jobs(), 'total_count': len(jobs())}
+
+    result = collector.collect(configuration(), SOURCE, fetch, now=NOW)
+    assert len(calls) == 1
+    assert all(row['latestAttempt']['identity']['runId'] == 1 for row in result['targets'])
+
+
 @pytest.mark.parametrize('phase', ['linux-amd64-v2', 'Gate', 'Promote'])
 def test_failed_phase_survives_downstream_skipped_jobs(phase):
     observations = jobs('skipped')
