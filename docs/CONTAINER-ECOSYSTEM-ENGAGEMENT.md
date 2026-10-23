@@ -9,7 +9,7 @@ open on the issue.
 
 Use one conversation per community. Check #3021,
 [#2886](https://github.com/tuna-os/tunaOS/issues/2886), and
-[the proposal in PR #3616](https://github.com/tuna-os/tunaOS/pull/3616)
+[the proposal in PR #3711](https://github.com/tuna-os/tunaOS/pull/3711)
 before contact. That proposal covers bootc, Universal Blue, Bluefin, and Asahi;
 this pack adds Podman and container/developer community proposals. Coordinate the
 bootc case study there. Coordinate CNCF
@@ -124,8 +124,10 @@ get technical review, and agree on partner credits and placement. Link the
 published content and partner acknowledgement back to #3021 and the related
 tracker. A prepared draft or sent pitch is not an accepted collaboration.
 
-The repository preparation is complete when these tailored asks and demo review
-criteria are available. #3021 stays open until receipts of contact
+This PR prepares the tailored asks and demo review criteria; it does not
+complete #3021. Keep the PR description linked with `Refs #3021`.
+
+#3021 stays open until receipts of contact
 cover bootc and Podman. Record a response to the joint content proposal.
 Document the outcome of the CNCF/community spotlight or ambassador exploration
 (including a decline). Record which Fedora/CentOS group responds too. Do not
