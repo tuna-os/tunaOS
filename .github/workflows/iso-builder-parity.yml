@@ -166,8 +166,8 @@ jobs:
           manifest="parity/ci/experience-manifest.json"
           if [ -f "$manifest" ]; then
             export TUNAOS_QUAL_SOURCE_DIGEST TUNAOS_QUAL_OVERLAY_DIGEST
-            TUNAOS_QUAL_SOURCE_DIGEST="$(jq -r '.resolved_inputs.source // .source_image_digest // empty' "$manifest")"
-            TUNAOS_QUAL_OVERLAY_DIGEST="$(jq -r '.resolved_inputs.overlay // empty' "$manifest")"
+            TUNAOS_QUAL_SOURCE_DIGEST="$(jq -r '.resolved_inputs["source"] // .source_image_digest // empty' "$manifest")"
+            TUNAOS_QUAL_OVERLAY_DIGEST="$(jq -r '.resolved_inputs["overlay"] // empty' "$manifest")"
           fi
           ./scripts/iso-e2e.sh "$iso" --strict-offline-gui --output parity/ci-e2e
 
@@ -189,8 +189,8 @@ jobs:
           manifest="parity/browser/experience-manifest.json"
           if [ -f "$manifest" ]; then
             export TUNAOS_QUAL_SOURCE_DIGEST TUNAOS_QUAL_OVERLAY_DIGEST
-            TUNAOS_QUAL_SOURCE_DIGEST="$(jq -r '.resolved_inputs.source // .source_image_digest // empty' "$manifest")"
-            TUNAOS_QUAL_OVERLAY_DIGEST="$(jq -r '.resolved_inputs.overlay // empty' "$manifest")"
+            TUNAOS_QUAL_SOURCE_DIGEST="$(jq -r '.resolved_inputs["source"] // .source_image_digest // empty' "$manifest")"
+            TUNAOS_QUAL_OVERLAY_DIGEST="$(jq -r '.resolved_inputs["overlay"] // empty' "$manifest")"
           fi
           ./scripts/iso-e2e.sh "$iso" --strict-offline-gui --output parity/browser-e2e
 
