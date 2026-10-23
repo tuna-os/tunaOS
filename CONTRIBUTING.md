@@ -39,6 +39,9 @@ hours, and review escalation, see [the ecosystem guide](CONTRIBUTING-ADVANCED.md
 
 ### Fork → PR loop
 
+For definitions of the terms below, see the
+[Git terms glossary](CONTRIBUTING-ADVANCED.md#git-terms).
+
 1. Fork `tuna-os/tunaos` on GitHub and clone your fork.
 2. Create a focused branch: `git switch -c docs/short-description`.
 3. Make the smallest change that satisfies the issue's acceptance criteria.
