@@ -1,0 +1,78 @@
+name: One-time ISO evidence analysis
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/iso-evidence-once.yml'
+permissions: {}
+jobs:
+  analyze:
+    if: github.repository == 'tuna-os/tunaOS' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+    steps:
+      - name: Read pinned retained diagnostics without executing artifact content
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          ARCHIVE="$(mktemp)"
+          export ARCHIVE
+          trap 'rm -f "$ARCHIVE"' EXIT
+          curl --fail --silent --show-error --location \
+            --proto '=https' --proto-redir '=https' \
+            --max-time 120 --max-filesize 16777216 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -o "$ARCHIVE" \
+            https://api.github.com/repos/tuna-os/tunaOS/actions/artifacts/12472695010/zip
+          unset GH_TOKEN
+          python3 - <<'PY'
+          import hashlib
+          import io
+          import json
+          import os
+          from pathlib import Path
+          import zipfile
+
+          archive = Path(os.environ["ARCHIVE"]).read_bytes()
+          expected = "4b3689dd5a3e03a4e8450c11adc403dc3339641f7471068cc3bead2d2d048673"
+          if len(archive) != 13343558 or hashlib.sha256(archive).hexdigest() != expected:
+              raise SystemExit("pinned archive size or digest mismatch")
+          allowed = frozenset(("unknown", "welcome", "encryption", "disk", "summary",
+                               "progress", "done", "overview", "failed", "no-disk", "recovery"))
+          def state(value):
+              return value if isinstance(value, str) and value in allowed else "invalid"
+          with zipfile.ZipFile(io.BytesIO(archive)) as bundle:
+              members = bundle.infolist()
+              if len(members) > 256:
+                  raise SystemExit("archive member bound exceeded")
+              for mode in ("plain", "luks"):
+                  name = f"iso-e2e-out/strict-diagnostics/walkthrough-{mode}/walkthrough-gnome.json"
+                  matches = [entry for entry in members if entry.filename == name]
+                  if len(matches) != 1 or matches[0].file_size > 1024 * 1024:
+                      raise SystemExit("expected bounded diagnostic member absent or ambiguous")
+                  with bundle.open(matches[0]) as source:
+                      raw = source.read(1024 * 1024 + 1)
+                  if len(raw) > 1024 * 1024:
+                      raise SystemExit("diagnostic member exceeded byte bound")
+                  value = json.loads(raw)
+                  if not isinstance(value, dict):
+                      raise SystemExit("diagnostic must be an object")
+                  frames, transitions = value.get("frames"), value.get("transitions")
+                  if (not isinstance(frames, list) or len(frames) > 128
+                          or not isinstance(transitions, list) or len(transitions) > 128):
+                      raise SystemExit("invalid diagnostic sequence bounds")
+                  result = {"mode": mode,
+                            "states": [state(frame.get("state")) if isinstance(frame, dict)
+                                       else "invalid" for frame in frames],
+                            "transitions": [state(item) for item in transitions]}
+                  for key in ("frontmost", "submitted", "accepted", "completed"):
+                      item = value.get(key)
+                      result[key] = item if type(item) is bool else None
+                  print("Retained GNOME observations: " + json.dumps(result, sort_keys=True))
+          print("Artifact 12472695010, run 39881426883, source d6136e52.")
+          print("Observations only; not input delivery or installation qualification.")
+          PY
