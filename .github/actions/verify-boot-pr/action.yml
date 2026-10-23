@@ -1,0 +1,78 @@
+name: Verify PR image boot
+description: Boot the locally built amd64 image with Corral and upload diagnostic evidence
+inputs:
+  image-name:
+    description: Published image name used for the evidence artifact
+    required: true
+  image-variant:
+    description: TunaOS variant under test
+    required: true
+  flavor:
+    description: Image flavor under test
+    required: true
+  default-tag:
+    description: Local image tag under test
+    required: true
+  safe-platform:
+    description: Filename-safe platform identifier
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Enable KVM for verification
+      shell: bash
+      run: |
+        echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | \
+          sudo tee /etc/udev/rules.d/99-kvm4all.rules
+        sudo udevadm control --reload-rules
+        sudo udevadm trigger --name-match=kvm || true
+        sudo apt-get install -y qemu-system-x86 qemu-utils ovmf ffmpeg
+
+    - name: Set up Go for corral
+      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+      with:
+        go-version: "1.27"
+        cache: false
+
+    - name: Install corral
+      shell: bash
+      run: |
+        scripts/install-corral.sh "$RUNNER_TEMP/corral-bin"
+        sudo install -m 0755 "$RUNNER_TEMP/corral-bin/corral" /usr/local/bin/corral
+
+    - name: Boot-verify image
+      shell: bash
+      env:
+        IMAGE_VARIANT: ${{ inputs.image-variant }}
+        DEFAULT_TAG: ${{ inputs.default-tag }}
+        TUNAOS_QCOW2_FILESYSTEM: ${{ inputs.image-variant == 'hummingbird' && 'ext4' || '' }}
+        TUNAOS_GDM_LOGIN_CHECK: ${{ inputs.flavor == 'tuna' && '1' || '0' }}
+      run: |
+        mkdir -p verify-out
+        IMAGE="localhost/${IMAGE_VARIANT}:${DEFAULT_TAG}"
+        # The release gate uses this same harness. Do not swallow failures:
+        # evidence upload runs under always(), so a failed boot remains red.
+        sudo --preserve-env=TUNAOS_QCOW2_FILESYSTEM,TUNAOS_GDM_LOGIN_CHECK \
+          ./scripts/corral-boot-gate.sh "$IMAGE" verify-out 300
+
+    - name: Normalize PR verification evidence ownership
+      if: always()
+      shell: bash
+      run: |
+        if [[ -d verify-out ]]; then
+          sudo chown -R "$USER:$(id -gn)" verify-out
+        fi
+
+    - name: Upload PR verification evidence
+      if: always()
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      with:
+        name: pr-boot-verify-${{ inputs.image-name }}-${{ inputs.default-tag }}-${{ inputs.safe-platform }}
+        path: |
+          verify-out/serial.log
+          verify-out/*.png
+          verify-out/timelapse.webm
+          verify-out/corral/result.json
+          verify-out/corral/diagnostics/
+        if-no-files-found: warn
+        retention-days: 7

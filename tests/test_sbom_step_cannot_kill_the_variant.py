@@ -41,11 +41,18 @@ yaml = pytest.importorskip("yaml")
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/reusable-build-image.yml"
+SBOM_ACTION = ROOT / ".github/actions/generate-sbom-spdx/action.yml"
+SBOM_SCRIPT = ROOT / "scripts/generate-sbom.sh"
 ATTEST_WORKFLOW = ROOT / ".github/workflows/attest-sbom.yml"
 
 
 @pytest.fixture(scope="module")
 def build_push():
+    return yaml.safe_load(SBOM_ACTION.read_text())["runs"]
+
+
+@pytest.fixture(scope="module")
+def workflow_build_push():
     return yaml.safe_load(WORKFLOW.read_text())["jobs"]["build_push"]
 
 
@@ -62,7 +69,7 @@ def test_the_scan_is_memory_bounded_not_only_time_bounded(build_push):
     Only a kernel-level cap turns "runner disappears, no logs, variant lost"
     into "syft is killed, step fails, logs intact".
     """
-    run = step(build_push, "Generate SBOM")["run"]
+    run = SBOM_SCRIPT.read_text()
     assert "systemd-run" in run, "syft is not run under a cgroup, so nothing bounds its memory"
     assert "MemoryMax" in run, "systemd-run is used without a MemoryMax cap"
     assert "MemorySwapMax=0" in run, (
@@ -76,12 +83,12 @@ def test_the_wall_clock_bound_is_kept_too(build_push):
     A scan that is merely slow, rather than hungry, is still only caught by
     the wall clock.
     """
-    assert "timeout --kill-after" in step(build_push, "Generate SBOM")["run"]
+    assert "timeout --kill-after" in SBOM_SCRIPT.read_text()
 
 
 def test_a_missing_cgroup_tool_is_announced_not_silently_ignored(build_push):
     """Falling back without saying so would restore the original failure quietly."""
-    run = step(build_push, "Generate SBOM")["run"]
+    run = SBOM_SCRIPT.read_text()
     assert "::warning::" in run, "the unbounded fallback path emits no warning"
     assert "NOT memory-bounded" in run
 
@@ -102,14 +109,14 @@ def test_a_failed_scan_does_not_fail_the_build_job(build_push):
     )
 
 
-def test_the_digest_artifact_does_not_depend_on_the_sbom(build_push):
+def test_the_digest_artifact_does_not_depend_on_the_sbom(workflow_build_push):
     """`Manifest` fans in on this. It must survive a dead scan.
 
     This is the step whose skipping caused the cascade, so its condition must
     not acquire an SBOM dependency.
     """
     for name in ("Create Job Outputs", "Upload Output Artifacts"):
-        condition = str(step(build_push, name).get("if", ""))
+        condition = str(step(workflow_build_push, name).get("if", ""))
         assert "sbom" not in condition.lower(), (
             f"{name!r} is gated on the SBOM, so a failed scan loses the digest "
             "artifact and the variant with it"
@@ -155,7 +162,7 @@ def _cap_mib(total_mib: int, build_push) -> int:
     import re
     import subprocess
 
-    run = step(build_push, "Generate SBOM")["run"]
+    run = SBOM_SCRIPT.read_text()
     start = run.index('mem_total_mib=')
     end = run.index('echo "runner memory')
     body = run[start:end]
@@ -187,7 +194,7 @@ def test_the_cap_is_derived_from_the_runner_not_hardcoded(build_push):
     the cap holds on a runner nobody told us about -- including the arm64
     leg, which is a different image from `ubuntu-latest`.
     """
-    run = step(build_push, "Generate SBOM")["run"]
+    run = SBOM_SCRIPT.read_text()
     assert "free -m" in run, "the cap is not sized from the runner's actual memory"
     assert _cap_mib(4096, build_push) < 4096, (
         "the cap exceeds physical memory on a small runner, so it caps nothing"

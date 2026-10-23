@@ -1,0 +1,69 @@
+name: Annotate OCI metadata
+description: Generate OCI and ArtifactHub labels for a TunaOS image manifest
+inputs:
+  image-name:
+    description: Published image name
+    required: true
+  image-description:
+    description: Human-readable image description
+    required: true
+  default-tag:
+    description: Manifest tag
+    required: true
+  major-version:
+    description: Distribution major version
+    required: true
+  repository-owner:
+    description: Repository owner and OCI vendor
+    required: true
+  revision:
+    description: Source revision used for generated links
+    required: true
+  maintainer-name:
+    description: ArtifactHub maintainer name
+    required: true
+  maintainer-email:
+    description: ArtifactHub maintainer email
+    required: false
+    default: ""
+outputs:
+  labels:
+    description: Newline-delimited OCI labels
+    value: ${{ steps.metadata.outputs.labels }}
+  tags:
+    description: Newline-delimited image tags
+    value: ${{ steps.metadata.outputs.tags }}
+runs:
+  using: composite
+  steps:
+    - name: Get current date
+      id: date
+      shell: bash
+      run: echo "date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+    - name: Image metadata
+      id: metadata
+      uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+      env:
+        README_URL: https://raw.githubusercontent.com/${{ inputs.repository-owner }}/${{ inputs.image-name }}/${{ inputs.revision }}/README.md
+        SOURCE_URL: https://github.com/${{ inputs.repository-owner }}/${{ inputs.image-name }}/blob/${{ inputs.revision }}/Containerfile.el10
+      with:
+        tags: |
+          type=raw,value=${{ inputs.default-tag }}
+        labels: |
+          io.artifacthub.package.readme-url=${{ env.README_URL }}
+          org.opencontainers.image.created=${{ steps.date.outputs.date }}
+          org.opencontainers.image.description=${{ inputs.image-description }}
+          org.opencontainers.image.documentation=https://tunaos.org/docs/intro
+          org.opencontainers.image.source=${{ env.SOURCE_URL }}
+          org.opencontainers.image.title=${{ inputs.image-name }}
+          org.opencontainers.image.url=https://tunaos.org
+          org.opencontainers.image.vendor=${{ inputs.repository-owner }}
+          org.opencontainers.image.version=${{ inputs.major-version }}
+          io.artifacthub.package.deprecated=false
+          io.artifacthub.package.keywords=bootc,tunaos
+          io.artifacthub.package.license=Apache-2.0
+          io.artifacthub.package.logo-url=https://avatars.githubusercontent.com/u/223733964?s=200&v=4
+          io.artifacthub.package.maintainers=[{"name":"${{ inputs.maintainer-name }}","email":"${{ inputs.maintainer-email }}"}]
+          io.artifacthub.package.prerelease=true
+          containers.bootc=1

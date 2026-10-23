@@ -28,8 +28,8 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
 # runner that has passwordless sudo is barely better.
 PIPE_TO_SHELL='(curl|wget)[^|;&]*\|[[:space:]]*(sudo[[:space:]]+)?(bash|sh)([[:space:]]|$)'
 
-@test "no workflow pipes a downloaded script into a shell" {
-  run grep -rInE "$PIPE_TO_SHELL" "${REPO_ROOT}/.github/workflows"
+@test "no workflow or local action pipes a downloaded script into a shell" {
+  run grep -rInE "$PIPE_TO_SHELL" "${REPO_ROOT}/.github/workflows" "${REPO_ROOT}/.github/actions"
   # grep exits 1 on no match, which is the passing case. Print what it found so
   # a failure names the file and line rather than just going red.
   if [ "$status" -eq 0 ]; then
@@ -54,10 +54,10 @@ PIPE_TO_SHELL='(curl|wget)[^|;&]*\|[[:space:]]*(sudo[[:space:]]+)?(bash|sh)([[:s
 # ── the replacement is verified, not merely pinned ────────────────────────
 
 @test "the just/yq installer checksums what it downloads" {
-  local wf="${REPO_ROOT}/.github/workflows/reusable-build-image.yml"
+  local installer="${REPO_ROOT}/.github/actions/setup-build-tools/action.yml"
   # A version pin still trusts the bytes the CDN returns. Both downloads must
   # be checked before install.
-  run grep -c 'sha256sum -c -' "$wf"
+  run grep -c 'sha256sum -c -' "$installer"
   [ "$status" -eq 0 ]
   [ "$output" -ge 2 ]
 }
@@ -65,15 +65,15 @@ PIPE_TO_SHELL='(curl|wget)[^|;&]*\|[[:space:]]*(sudo[[:space:]]+)?(bash|sh)([[:s
 @test "the just/yq installer verifies before writing anything root-owned" {
   # The old step did `sudo wget -qO /usr/bin/yq ...`, so unverified bytes became
   # a system binary before any check could object. Downloads must land in /tmp.
-  local wf="${REPO_ROOT}/.github/workflows/reusable-build-image.yml"
-  run grep -nE '^\s*sudo (wget|curl)' "$wf"
+  local installer="${REPO_ROOT}/.github/actions/setup-build-tools/action.yml"
+  run grep -nE '^\s*sudo (wget|curl)' "$installer"
   [ "$status" -ne 0 ]
 }
 
 @test "an architecture with no pinned checksum fails instead of guessing" {
   # Silently continuing on an unknown arch would reintroduce the hole on the
   # exact runner nobody tested.
-  local wf="${REPO_ROOT}/.github/workflows/reusable-build-image.yml"
-  run grep -F 'no pinned yq/just checksum for' "$wf"
+  local installer="${REPO_ROOT}/.github/actions/setup-build-tools/action.yml"
+  run grep -F 'no pinned yq/just checksum for' "$installer"
   [ "$status" -eq 0 ]
 }

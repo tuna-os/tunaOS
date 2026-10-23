@@ -1,19 +1,10 @@
 #!/usr/bin/env bash
 # Generate an SPDX SBOM for a just-built image with syft, under a memory cap.
 #
-# Extracted verbatim from the `Generate SBOM` step of
-# .github/workflows/reusable-build-image.yml (tunaOS#1987) so that the cap
-# arithmetic, the floor clamp and the systemd-run fallback are reachable by
-# tests/bats/test_generate_sbom.bats instead of only by a nightly build.
-# Behaviour is unchanged; the caller still supplies every input through the
-# environment and still decides whether a failure here is fatal.
-#
-# The workflow step still inlines this body rather than calling the file:
-# swapping it for `run: scripts/generate-sbom.sh` needs the `workflows`
-# permission, which the agent App does not hold. Until a maintainer makes
-# that one-line change the two copies are kept identical by the drift guard
-# in tests/bats/test_generate_sbom.bats, so the tests below are testing the
-# code CI actually runs.
+# Extracted from the image workflow in tunaOS#1987 so the cap arithmetic,
+# floor clamp, and systemd-run fallback are directly testable. The
+# generate-sbom-spdx composite action invokes this file; there is no inline
+# copy to drift from the tested implementation.
 #
 # Required environment:
 #   SYFT_CMD                  path to (or name of) the syft binary

@@ -29,7 +29,8 @@ import pytest
 yaml = pytest.importorskip("yaml")
 
 ROOT = Path(__file__).resolve().parents[1]
-WORKFLOW = ROOT / ".github/workflows/reusable-build-image.yml"
+SBOM_ACTION = ROOT / ".github/actions/generate-sbom-spdx/action.yml"
+SBOM_SCRIPT = ROOT / "scripts/generate-sbom.sh"
 GENERATOR = ROOT / "scripts/packages_to_spdx.py"
 
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -38,7 +39,7 @@ import packages_to_spdx as gen  # noqa: E402
 
 @pytest.fixture(scope="module")
 def build_push():
-    return yaml.safe_load(WORKFLOW.read_text())["jobs"]["build_push"]
+    return yaml.safe_load(SBOM_ACTION.read_text())["runs"]
 
 
 def step(build_push, name):
@@ -218,7 +219,7 @@ def test_either_producer_satisfies_the_upload(build_push):
 
 def test_both_producers_agree_on_the_filename(build_push):
     """The upload globs `sbom-*.spdx.json`; a differently-named file is invisible."""
-    scan = step(build_push, "Generate SBOM")["run"]
+    scan = SBOM_SCRIPT.read_text()
     fallback = step(build_push, "Synthesize SBOM from the package manifest")["run"]
     name = 'OUT="sbom-${IMAGE_NAME}-${DEFAULT_TAG}-${SAFE_PLATFORM}.spdx.json"'
     assert name in scan
