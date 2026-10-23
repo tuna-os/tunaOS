@@ -119,7 +119,8 @@ def test_prepare_refreshes_mutated_source_and_acceptance_cell(source_root):
     target = config.prepare(source_root)
     initial = target.read_bytes()
     source = source_root / "tunaos.toml"
-    source.write_text(source.read_text() + "\n" + (FIXTURES / "bonito-gnome-x13s.toml").read_text())
+    source.write_text(source.read_text() + "\n" + (FIXTURES / "bonito-gnome-x13s.toml").read_text() +
+                      '\n[flavor_metadata.gnome-x13s]\ndesktop = "gnome"\nedition = "x13s"\n')
     assert config.prepare(source_root) == target
     assert target.read_bytes() != initial
     projected = json.loads(target.read_text())
@@ -241,7 +242,8 @@ def test_failed_atomic_replace_keeps_previous_adapter_and_removes_temp(source_ro
     target = config.prepare(source_root)
     old_bytes = target.read_bytes()
     source = source_root / "tunaos.toml"
-    source.write_text(source.read_text() + "\n" + (FIXTURES / "bonito-gnome-x13s.toml").read_text())
+    source.write_text(source.read_text() + "\n" + (FIXTURES / "bonito-gnome-x13s.toml").read_text() +
+                      '\n[flavor_metadata.gnome-x13s]\ndesktop = "gnome"\nedition = "x13s"\n')
 
     def refuse_replace(self, destination):
         raise OSError("injected atomic replacement failure")
@@ -285,7 +287,8 @@ def test_renovate_updates_only_primary_source_and_adapter_follows(tmp_path):
 def test_shell_reader_prepares_absent_adapter_in_fresh_checkout(tmp_path):
     import shutil
     for name in ("tunaos.toml", "scripts/config.py", "scripts/lib/tunaos_config.py",
-                 "scripts/lib/tunaos_packages.py", "scripts/lib/desktop_operations.json",
+                 "scripts/lib/tunaos_packages.py", "scripts/lib/package_catalogs.py", "scripts/lib/desktop_operations.json",
+                 "scripts/lib/iso_builder_config.py", "scripts/lib/flatpak_preinstall.py",
                  "scripts/lib/build-config.sh"):
         target = tmp_path / name
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -424,7 +427,8 @@ def test_renovate_only_pin_update_keeps_live_suite_green(tmp_path):
     checkout = tmp_path / "checkout"
     for name in ("tunaos.toml", "renovate.json", "requirements-config.txt",
                  "scripts/config.py", "scripts/lib/tunaos_config.py",
-                 "scripts/lib/tunaos_packages.py", "scripts/lib/desktop_operations.json",
+                 "scripts/lib/tunaos_packages.py", "scripts/lib/package_catalogs.py", "scripts/lib/desktop_operations.json",
+                 "scripts/lib/iso_builder_config.py", "scripts/lib/flatpak_preinstall.py",
                  "scripts/lib/build-config.sh", "scripts/iso-e2e.sh",
                  "just/utilities.just", ".github/workflows/reusable-build-image.yml",
                  "tests/test_primary_config.py"):

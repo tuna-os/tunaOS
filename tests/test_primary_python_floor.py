@@ -33,3 +33,23 @@ def test_renovate_floor_rule_is_narrow_and_allows_patch_updates():
     assert re.search(pattern, '3.10') and re.search(pattern, '3.10.22')
     assert not re.search(pattern, '3.15')
     assert not re.search(pattern, '3.11')
+
+
+def test_renovate_floor_rule_also_matches_by_dep_name():
+    """The floor is pinned by depName as well as by packageName.
+
+    Renovate listed this dependency as `python` (type uses-with) with the package
+    actions/python-versions, and the matchPackageNames rule above did not stop
+    PR #3552 moving the floor to 3.15. A second rule keyed on matchDepNames
+    covers the name Renovate displays. Dropping either rule reopens the gap.
+    """
+    settings = json.loads((ROOT / 'renovate.json').read_text())
+    rules = [rule for rule in settings['packageRules']
+             if rule.get('matchManagers') == ['github-actions']
+             and rule.get('matchDepNames') == ['python']
+             and rule.get('matchFileNames') == ['.github/workflows/test.yml']]
+    assert len(rules) == 1
+    rule = rules[0]
+    assert rule['matchCurrentValue'] == r'/^3\.10(?:\.|$)/'
+    assert rule['allowedVersions'] == '<3.11'
+    assert rule.get('enabled', True) is True

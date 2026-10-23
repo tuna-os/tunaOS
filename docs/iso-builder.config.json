@@ -1,0 +1,341 @@
+{
+  "brand": {
+    "documentation_url": "https://tunaos.org/docs/iso-builder",
+    "favicon_url": "/favicon-32.png",
+    "homepage_url": "https://tunaos.org",
+    "logo_url": "/logo.png",
+    "name": "TunaOS",
+    "support_url": "https://github.com/tuna-os"
+  },
+  "curated_app_sets": [
+    {
+      "desktops": [
+        "gnome",
+        "xfce",
+        "cosmic"
+      ],
+      "format": "brewfile",
+      "id": "bluefin-system",
+      "label": "Bluefin core apps",
+      "url": "https://raw.githubusercontent.com/projectbluefin/common/main/system_files/bluefin/usr/share/ublue-os/homebrew/system-flatpaks.Brewfile"
+    },
+    {
+      "desktops": [
+        "gnome",
+        "xfce",
+        "cosmic"
+      ],
+      "format": "brewfile",
+      "id": "bluefin-full",
+      "label": "Bluefin full desktop",
+      "url": "https://raw.githubusercontent.com/projectbluefin/common/main/system_files/bluefin/usr/share/ublue-os/homebrew/full-desktop.Brewfile"
+    },
+    {
+      "desktops": [
+        "gnome",
+        "xfce",
+        "cosmic"
+      ],
+      "format": "brewfile",
+      "id": "bluefin-dx",
+      "label": "Bluefin developer apps",
+      "url": "https://raw.githubusercontent.com/projectbluefin/common/main/system_files/bluefin/usr/share/ublue-os/homebrew/system-dx-flatpaks.Brewfile"
+    },
+    {
+      "desktops": [
+        "kde"
+      ],
+      "format": "brewfile",
+      "id": "aurora-system",
+      "label": "Aurora core apps",
+      "url": "https://raw.githubusercontent.com/get-aurora-dev/common/main/system_files/shared/usr/share/ublue-os/homebrew/system-flatpaks.Brewfile"
+    },
+    {
+      "desktops": [
+        "kde"
+      ],
+      "format": "brewfile",
+      "id": "aurora-full",
+      "label": "Aurora full desktop",
+      "url": "https://raw.githubusercontent.com/get-aurora-dev/common/main/system_files/shared/usr/share/ublue-os/homebrew/full-desktop.Brewfile"
+    },
+    {
+      "desktops": [
+        "kde"
+      ],
+      "format": "brewfile",
+      "id": "aurora-dx",
+      "label": "Aurora developer apps",
+      "url": "https://raw.githubusercontent.com/get-aurora-dev/common/main/system_files/shared/usr/share/ublue-os/homebrew/system-dx-flatpaks.Brewfile"
+    },
+    {
+      "desktops": [
+        "niri"
+      ],
+      "format": "preinstall",
+      "id": "zirconium",
+      "label": "Zirconium apps",
+      "url": "https://raw.githubusercontent.com/zirconium-dev/zirconium/main/mkosi.extra/usr/share/flatpak/preinstall.d/zirconium.preinstall"
+    }
+  ],
+  "ddi_channels": [
+    {
+      "desktop": "gnome",
+      "id": "snowfield",
+      "name": "Frostyard Snowfield — GNOME (DDI)",
+      "stem": "snowfield-ab"
+    },
+    {
+      "desktop": "gnome",
+      "id": "snow",
+      "name": "Frostyard Snow — GNOME (DDI)",
+      "stem": "snow-ab"
+    },
+    {
+      "desktop": "none",
+      "id": "cayo",
+      "name": "Frostyard Cayo — headless (DDI)",
+      "stem": "cayo-ab"
+    }
+  ],
+  "default_selection": {
+    "kind": "leaf",
+    "leaf_id": "yellowfin:gnome:linux/amd64/v2"
+  },
+  "desktops": [
+    {
+      "default_flatpaks": [
+        "io.github.kolunmi.Bazaar",
+        "org.mozilla.firefox",
+        "com.mattjakeman.ExtensionManager"
+      ],
+      "id": "gnome"
+    },
+    {
+      "default_flatpaks": [
+        "io.github.kolunmi.Bazaar",
+        "org.mozilla.firefox"
+      ],
+      "id": "kde"
+    },
+    {
+      "default_flatpaks": [
+        "io.github.kolunmi.Bazaar",
+        "org.mozilla.firefox"
+      ],
+      "id": "cosmic"
+    },
+    {
+      "default_flatpaks": [
+        "io.github.kolunmi.Bazaar",
+        "org.mozilla.firefox"
+      ],
+      "id": "niri"
+    },
+    {
+      "default_flatpaks": [
+        "io.github.kolunmi.Bazaar",
+        "org.mozilla.firefox"
+      ],
+      "id": "xfce"
+    }
+  ],
+  "output": {
+    "filename_prefix": "tunaos",
+    "volume_label": "TUNAOS"
+  },
+  "presentation": {
+    "accent_color": "#5b9cf6",
+    "headline": "Make TunaOS your own",
+    "intro": "Choose your desktop, apps and image settings."
+  },
+  "preview_only": false,
+  "schema_version": 2,
+  "selection": {
+    "default_path": "desktop-first",
+    "facets": [
+      {
+        "id": "desktop",
+        "label": "Desktop",
+        "values": [
+          {
+            "description": "A clean, focused desktop with an app overview.",
+            "id": "gnome",
+            "label": "GNOME"
+          },
+          {
+            "description": "A familiar layout with a taskbar and lots of customization.",
+            "id": "kde",
+            "label": "KDE Plasma"
+          },
+          {
+            "description": "Flexible workspaces with optional window tiling.",
+            "id": "cosmic",
+            "label": "COSMIC"
+          },
+          {
+            "description": "A scrolling, keyboard-focused window layout.",
+            "id": "niri",
+            "label": "Niri"
+          },
+          {
+            "description": "A lightweight, traditional desktop.",
+            "id": "xfce",
+            "label": "XFCE"
+          }
+        ]
+      },
+      {
+        "id": "base",
+        "label": "Base",
+        "values": [
+          {
+            "id": "yellowfin",
+            "label": "AlmaLinux Kitten 10 (flagship)"
+          },
+          {
+            "id": "bonito",
+            "label": "Fedora 44"
+          },
+          {
+            "id": "sailfin",
+            "label": "openSUSE Tumbleweed"
+          },
+          {
+            "id": "flounder",
+            "label": "Debian 13 Trixie"
+          },
+          {
+            "id": "grouper",
+            "label": "Ubuntu 26.04"
+          },
+          {
+            "id": "marlin",
+            "label": "Arch Linux"
+          },
+          {
+            "id": "skipjack",
+            "label": "CentOS Stream 10"
+          },
+          {
+            "id": "albacore",
+            "label": "AlmaLinux 10"
+          },
+          {
+            "id": "guppy",
+            "label": "Gentoo (source-based)"
+          }
+        ]
+      },
+      {
+        "id": "edition",
+        "label": "Image edition",
+        "values": [
+          {
+            "id": "standard",
+            "label": "Standard"
+          },
+          {
+            "id": "hwe",
+            "label": "Hardware enablement"
+          },
+          {
+            "id": "nvidia",
+            "label": "NVIDIA"
+          },
+          {
+            "id": "nvidia-hwe",
+            "label": "NVIDIA hardware enablement"
+          },
+          {
+            "id": "asahi",
+            "label": "Apple Silicon"
+          },
+          {
+            "id": "t2",
+            "label": "Apple T2"
+          },
+          {
+            "id": "zfs",
+            "label": "ZFS"
+          },
+          {
+            "id": "cachyos",
+            "label": "CachyOS kernel"
+          }
+        ]
+      },
+      {
+        "id": "hardware",
+        "label": "Computer type",
+        "values": [
+          {
+            "id": "generic",
+            "label": "Generic computer"
+          },
+          {
+            "id": "apple-silicon",
+            "label": "Apple Silicon"
+          },
+          {
+            "id": "apple-t2",
+            "label": "Apple T2"
+          }
+        ]
+      },
+      {
+        "id": "platform",
+        "label": "Computer architecture",
+        "values": [
+          {
+            "id": "linux/amd64",
+            "label": "x86-64"
+          },
+          {
+            "id": "linux/amd64/v2",
+            "label": "x86-64 v2"
+          },
+          {
+            "id": "linux/amd64/v3",
+            "label": "x86-64 v3"
+          },
+          {
+            "id": "linux/arm64",
+            "label": "ARM64"
+          }
+        ]
+      }
+    ],
+    "paths": [
+      {
+        "facets": [
+          "desktop",
+          "base",
+          "edition",
+          "hardware",
+          "platform"
+        ],
+        "id": "desktop-first",
+        "label": "Start with a desktop"
+      },
+      {
+        "facets": [
+          "base",
+          "desktop",
+          "edition",
+          "hardware",
+          "platform"
+        ],
+        "id": "base-first",
+        "label": "Start with a base"
+      }
+    ],
+    "recommendations": [
+      {
+        "label": "Recommended starting point",
+        "leaf_id": "yellowfin:gnome:linux/amd64/v2",
+        "reason": "The flagship base with the GNOME desktop. Check your target computer architecture before continuing."
+      }
+    ]
+  }
+}

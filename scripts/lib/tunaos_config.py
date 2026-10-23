@@ -90,9 +90,25 @@ def package_policy():
     return module
 
 
+@lru_cache(maxsize=1)
+def flatpak_policy():
+    spec = importlib.util.spec_from_file_location('flatpak_preinstall_policy', Path(__file__).with_name('flatpak_preinstall.py'))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+@lru_cache(maxsize=1)
+def package_catalog_schema():
+    spec = importlib.util.spec_from_file_location('tunaos_package_catalogs', Path(__file__).with_name('package_catalogs.py'))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def validate(config):
     """Validate the implemented surface; reject inert future sections."""
-    table(config, ('schema_version', 'build', 'iso_groups', 'sibling_images', 'tuna_rollout', 'variants', 'package_groups', 'desktops'),
+    table(config, ('schema_version', 'build', 'iso_groups', 'sibling_images', 'tuna_rollout', 'variants', 'package_groups', 'desktops', 'iso_builder', 'flavor_metadata', 'flatpak_preinstall', 'package_catalogs'),
           ('schema_version', 'build', 'iso_groups', 'sibling_images', 'tuna_rollout', 'variants'), 'config')
     if 'desktops' in config or 'package_groups' in config:
         tunaos_packages = package_policy()
@@ -223,6 +239,34 @@ def validate(config):
             unknown = set(group[key]) - flavor_ids
             if unknown:
                 raise ConfigError(f'iso_groups[{i}].{key}: unknown flavors {sorted(unknown)}')
+    if 'flatpak_preinstall' in config:
+        try:
+            flatpak_policy().validate(config)
+        except flatpak_policy().PolicyError as exc:
+            raise ConfigError(str(exc)) from exc
+    if 'iso_builder' in config or 'flavor_metadata' in config:
+        module_path = Path(__file__).with_name('iso_builder_config.py')
+        spec = importlib.util.spec_from_file_location('iso_builder_config', module_path)
+        if spec is None or spec.loader is None:
+            raise ConfigError(f'iso_builder: cannot load validator at {module_path}')
+        module = importlib.util.module_from_spec(spec)
+        try:
+            spec.loader.exec_module(module)
+        except OSError as exc:
+            raise ConfigError(f'iso_builder: cannot read validator at {module_path}: {exc}') from exc
+        try:
+            if 'flavor_metadata' in config:
+                module.flavor_metadata(config)
+            if 'iso_builder' in config:
+                module.project(config)
+        except module.ConfigError as exc:
+            raise ConfigError(f'iso_builder: {exc}') from exc
+    if 'package_catalogs' in config:
+        catalogs = package_catalog_schema()
+        try:
+            catalogs.validate_document(config)
+        except catalogs.CatalogError as exc:
+            raise ConfigError(f'package_catalogs: {exc}') from exc
     return config
 
 

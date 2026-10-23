@@ -10,6 +10,10 @@ that touched 36 files across `.github/`, `build_scripts/`, `live-iso/`,
 
 ## Failure Catalog
 
+| Symptom | Measured cause | Fix |
+|---|---|---|
+| Bonito build succeeds despite bootc lint findings (#3001) | `99-cleanup.sh` calls `lint_image`; `lib.sh` returns success after findings unless `BOOTC_LINT_FATAL=1`. | Read the grouped output and step summary. Re-run lint against the candidate digest; apply the [Fedora readiness review](FEDORA-OUTREACH-READINESS.md) before outreach. |
+
 ### 1. `flatpak: command not found` in live ISO customization
 
 **Affected workflows:** `LUKS E2E` (yellowfin:kde), any live ISO build for EL10
@@ -214,6 +218,7 @@ each one from scratch.
 | 55 | Bonito (or other digest-pinned variants) fails on both base architectures with `manifest unknown` / 404 (run 32965043165) | Quay/Docker garbage-collects untagged base image manifests upstream after newer builds land. The repository-wide scheduled check at 22:20 UTC was too far from the 11:20 UTC build to catch midday upstream deletions, and `.github/build-config.yml` lacked Renovate digest automation | (1) Added Renovate `customManager` in `renovate.json` for `.github/build-config.yml` `base_image:` pins; (2) added scoped variant preflight to `scripts/check-base-image-pins.sh`; (3) `build-variant.yml` runs `check-base-image-pins.sh` for the target variant in `generate_matrix` before matrix execution. Regression test: `tests/regressions/test_issue_2113_bonito_checks_its_pin_before_the_matrix.py` (tunaOS#2113) |
 | 56 | The `regenerate` check (`gen-matrix-status.py --check-structure`) fails on every pull request after about 14 minutes with `RuntimeError: gh run view 38592759334 ... returned nothing after 3 attempts`. The log shows `HTTP 502: Server Error (.../runs/38592759334/jobs?per_page=100)` | `gh run view --json jobs` always asks for 100 jobs per page. For some large runs (31224494825, 38713238238, 38592759334, with 113 to 153 jobs) the API returns HTTP 502 for that page size on every attempt. With `per_page=50` the same runs return in seconds. The build walk raised on the failed query | `run_jobs()` tries `gh run view` first, then `gh api --paginate` with `per_page=50`. If both fail, the build walk skips that run with a warning, and an older run scores its cells. If a cell has no verdict from a readable run after a skip, the refresh still raises. Test: `tests/test_an_unreadable_run_is_skipped_not_fatal.py` |
 | 57 | An artifact matches a workflow run but its upload attempt cannot be established | GitHub artifact metadata exposes run and head identity, but no upload-attempt field; receipt names and timestamps do not prove that linkage | The RFC014 read-only adapter accepts only a run observed at successful attempt one before and after archive verification. Reject reruns and missing linkage; preserve `authentication: not_authenticated` until a trusted caller and separate proof exist. Tests mutate the attempt before and after collection. |
+| 58 | `Unit Tests` is red on `main` and on every pull request, but BATS is clean and only one pytest fails: `tests/test_primary_python_floor.py::test_primary_job_runs_python310_not_latest_runtime` (1 failed of 5064). The job named "Primary config (Python 3.10)" passes | Renovate PR #3552 changed `python-version: '3.10'` to `'3.15'` in `primary-config-python310` and merged on 2026-10-21. The job kept its name and stayed green while testing 3.15, so it stopped guarding the floor. The scoped rule keyed on `matchPackageNames: ["python"]` did not stop it: Renovate listed the dependency as `python` (type `uses-with`) with package `actions/python-versions`, and `Unit Tests` was not required to merge | Restore `'3.10'` and add a second rule keyed on `matchDepNames`. Measured: the floor suite (six files, 333 tests) passes on real Python 3.10.20 with the job's own requirements, so the floor had not drifted. A rule that cannot be verified here is not proof: if Renovate reopens the bump, read its Dependency Dashboard (#724) for which matcher it evaluated. |
 
 **Pattern to notice (bugs #1-14):** almost every bug here was a live-squash-specific
 environment gap (missing package, missing locale, missing remote, wrong
@@ -1765,6 +1770,14 @@ try. After three failures, retain the command's exit status and diagnostic.
 Keep README unchanged; do not publish a partial table.
 See `tests/test_readme_status_api_retries.py` for regression tests.
 
+### ISO Builder presentation export drift
+
+Symptom: `check-builder-config` reports drift in the generated builder configuration.
+Cause: `docs/iso-builder.config.json` differs from `[iso_builder]` in primary
+`tunaos.toml`. The regression test compares the complete deterministic export.
+Fix: edit TOML, run `python3 scripts/config.py generate-builder-config`, then
+run `python3 scripts/config.py check-builder-config`. Do not edit the JSON copy.
+
 ### Fork preparation reports changed sources with a desktop override
 
 Symptom: the test for source receipts rejects a tracked desktop adapter, or preparation
@@ -1855,3 +1868,28 @@ The tiny fixtures in `tests/test_iso_retained_media_transport.py` reject wrong
 origins, runs, and `runAttempt` values. They reject replay, changed manifests,
 absent chunks, wrong whole-ISO identity, and unsafe members in ZIP archives.
 These tests check consistency. They do not prove a real producer or installation.
+
+### Removed Flatpak IDs stay in the hook file
+
+**Symptom:** A cut-down ID stays in `tunaos-<desktop>.preinstall`.
+
+**Cause:** The hook adds new IDs but it never deletes old IDs.
+
+**Fix:** Delete the owned file at the start of each run. Keep files from other sources. Reject a linked file before you change files.
+
+## Content PR fails with `STE budget exceeded` (#2912)
+
+**Symptom:** a CFP abstract or design contribution adds Markdown and the
+`ste / Simplified Technical English` check fails with `STE budget exceeded`.
+
+**Cause:** the shared linter counts findings across the repository, against
+`.ste-budget`. Content directories have no automatic exemption. The pinned
+linter supports lowercase `ste-disable-file: reason` and paired
+`ste-disable: reason` / `ste-enable` comments; `<!-- STE-DISABLE -->` does not
+match those directives.
+
+**Fix:** run `just ste` and fix new findings in technical instructions. For
+outreach copy or creative briefs, use the reasoned region or file opt-out in
+[the contributor prose policy](../CONTRIBUTING.md#prose-checks-ste). Keep
+technical steps checked on mixed pages. Run `just ste` again; do not increase
+`.ste-budget` or exclude a whole directory to pass one content change.

@@ -4,12 +4,27 @@ import argparse
 from pathlib import Path
 import sys
 
-from lib import tunaos_config
+from lib import tunaos_config, iso_builder_config
+
+
+def builder_target(root, output, relative):
+    """Confine stock outputs to the resolved checkout; trust explicit directories."""
+    root = root.resolve()
+    target = output if output is not None else root / relative
+    if target.is_symlink():
+        raise tunaos_config.ConfigError(f'{target}: refusing symlink')
+    if output is None and not target.parent.resolve().is_relative_to(root):
+        raise tunaos_config.ConfigError(f'{target}: generated output escapes checkout')
+    if target.exists() and not target.is_file():
+        raise tunaos_config.ConfigError(f'{target}: expected regular output file')
+    if not target.parent.is_dir():
+        raise tunaos_config.ConfigError(f'{target}: output parent must be an existing directory: {target.parent}')
+    return target
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=('validate', 'generate', 'show', 'generate-debian-contract', 'prepare-debian-context', 'verify-debian-image'))
+    parser.add_argument('command', choices=('validate', 'generate', 'show', 'generate-builder-config', 'check-builder-config', 'generate-builder-flavors', 'check-builder-flavors', 'generate-flatpak-policy', 'check-flatpak-policy', 'generate-debian-contract', 'prepare-debian-context', 'verify-debian-image'))
     parser.add_argument('--root', type=Path, default=tunaos_config.ROOT)
     parser.add_argument('--output', type=Path)
     parser.add_argument('--image')
@@ -18,7 +33,31 @@ def main():
     parser.add_argument('--platform')
     args = parser.parse_args()
     try:
-        if args.command == 'verify-debian-image':
+        if args.command in ('generate-flatpak-policy', 'check-flatpak-policy'):
+            content = tunaos_config.flatpak_policy().render(tunaos_config.load(args.root / 'tunaos.toml'))
+            target = args.output or args.root / 'build_scripts/desktop/flatpak-preinstall.tsv'
+            if target.is_symlink() or any(parent.is_symlink() for parent in target.parents):
+                raise tunaos_config.ConfigError('generated Flatpak policy path must not be a symlink')
+            if args.command.startswith('check-'):
+                if not target.is_file() or target.read_text(encoding='utf-8') != content:
+                    raise tunaos_config.ConfigError('generated Flatpak policy drift; run generate-flatpak-policy')
+            else:
+                target.write_text(content, encoding='utf-8')
+            print(target)
+        elif args.command in ('generate-builder-config', 'check-builder-config', 'generate-builder-flavors', 'check-builder-flavors'):
+            flavors = args.command.endswith('-flavors')
+            render = iso_builder_config.render_flavors if flavors else iso_builder_config.render
+            content = render(tunaos_config.load(args.root / 'tunaos.toml'))
+            target = builder_target(args.root, args.output, 'docs/iso-builder.flavors.json' if flavors else 'docs/iso-builder.config.json')
+            if args.command.startswith('check-'):
+                if not target.is_file() or target.read_text(encoding='utf-8') != content:
+                    command = 'generate-builder-flavors' if flavors else 'generate-builder-config'
+                    raise tunaos_config.ConfigError(f'{target}: generated builder config drift; run {command} with the same --root and --output arguments')
+            else:
+                target.write_text(content, encoding='utf-8')
+            print(target)
+            return 0
+        elif args.command == 'verify-debian-image':
             if not all((args.image, args.variant, args.desktop, args.platform)):
                 parser.error('verify-debian-image requires --image, --variant, --desktop and --platform')
             import hashlib
@@ -50,7 +89,7 @@ def main():
                 print(tunaos_config.render(config), end='')
             else:
                 print('Primary TunaOS configuration is valid.')
-    except (tunaos_config.ConfigError, OSError) as exc:
+    except (tunaos_config.ConfigError, iso_builder_config.ConfigError, OSError) as exc:
         print(f'ERROR: {exc}', file=sys.stderr)
         return 1
     return 0

@@ -122,16 +122,16 @@ The scheduled Asahi sweep can continue to inspect old tags after a build cell is
 - ⚠️ Adoption metrics untracked — no usage/telemetry data on the 179 downloadable ISOs (#1174); **plan published 08-10** ([ADOPTION-METRICS.md](./ADOPTION-METRICS.md)) — first monthly download/usage snapshot targeted 2026-11-01 (Q4 "Mature")
 <!-- BEGIN GENERATED — scripts/gen-roadmap-coverage.py -->
 
-- 🟡 **Per-repo ROADMAP coverage — 36 of 44 active repos (82%)**, measured 2026-10-03 by [`scripts/gen-roadmap-coverage.py`](./scripts/gen-roadmap-coverage.py).
+- 🟡 **Per-repo ROADMAP coverage — 37 of 43 active repos (86%)**, measured 2026-10-22 by [`scripts/gen-roadmap-coverage.py`](./scripts/gen-roadmap-coverage.py).
   Scope is every non-archived, non-private repo in the `tuna-os` org; a repo counts as
   planned when `ROADMAP.md` is at the root of its **default branch**. Archived repos are out
   of scope because a read-only repo cannot be planned.
 
-  **Planned (36)**: .github, bluefin-cli, blueshell, bootc-installer, bootc-installer-asahi, bootc-migrate, branding, bst-ci, changelog-action, corral, docs, dualcut, finupdate, fisherman, flatpak-index, gnome-hive-monitor, gtk-office-suite, hive, homebrew-tap, iced, iso-builder, mandelbrot, mariner, protota, remora, scoop-bucket, spindle, suite-common, suite-common-rust, tacklebox, Tavern, tromso, tunaOS, tunaos-packages, wootc, xfce-linux.
+  **Planned (37)**: .github, bluefin-cli, blueshell, bootc-installer, bootc-migrate, bootsahi, branding, bst-ci, changelog-action, compass, corral, docs, dualcut, finupdate, fisherman, flatpak-index, gnome-hive-monitor, gtk-office-suite, hive, homebrew-tap, iced, iso-builder, mandelbrot, mariner, protota, quickcast, remora, scoop-bucket, spindle, tacklebox, Tavern, tromso, tuna-desktop, tunaOS, tunaos-packages, wootc, xfce-linux.
 
   Counted on a non-`main` default branch: `blueshell` on `ptyxis-port`, `bootc-installer` on `dev`, `changelog-action` on `master`, `fisherman` on `dev`, `hive` on `v4`, `iced` on `master`, `mariner` on `master` — these are the repos' own default branches, not strandings.
 
-  **Unplanned (8)**: ccleft, compass, hive-operator, libcosmic, PaperWM, quickcast, rdocx, rust-atomicwrites. Tracked by #2820.
+  **Unplanned (6)**: ccleft, hive-operator, libcosmic, PaperWM, rdocx, rust-atomicwrites. Tracked by #2820.
 
 <!-- END GENERATED -->
 - ⚪ **"First external contributor" claim retracted (#1317, corrected 2026-08-13)**: the shimonenator commits (EL10/OBS design fixing #777, image-factory completion gate) are **not** a human contribution — maintainer confirmed the account is misattributed by GitHub because the Google Antigravity agent is listed as commit author; `git log` shows `commit.author.name: antigravity` on every one of that account's commits. **Superseded 2026-08-14**: the **first external human contributions landed and merged the same day** — docs #234 (QEMU/KVM guide, dchaudhari7177) and docs #239 (Gurnard Pantheon fix, Elonon901001), both verified human GitHub accounts (created 2022, real-name profiles). These are docs-repo contributions, not core-code: bus-factor risk (#1095) for core repos is unchanged, but the onboarding loop (seed → PR → merge) is now demonstrably end-to-end, which materially strengthens the Hacktoberfest seeding case (#1537).
@@ -148,6 +148,24 @@ at the repo root on its default branch. This file plans tunaOS the image; it is
 not a place for package, installer, or ecosystem repos to state their milestones.
 New repos scaffolded from the `.github` project-starter template start with one
 ([tuna-os/.github#13](https://github.com/tuna-os/.github/pull/13)).
+
+Before launching a shipped product or distribution channel (Flatpak/Flathub,
+binary release, or package-manager entry), its repository must have a root
+`ROADMAP.md` on its default branch. This includes desktop tools, shared
+infrastructure, and package-manager integrations. The release PR must link the
+roadmap and its launch-blocking issues; a roadmap's presence alone does not
+establish product readiness. See the [contributor release check](CONTRIBUTING.md#roadmap-before-launch).
+
+For the three repositories named in [#2927](https://github.com/tuna-os/tunaos/issues/2927),
+use their local plans and tracking issues rather than duplicating milestones here:
+
+- [mariner roadmap](https://github.com/tuna-os/mariner/blob/master/ROADMAP.md)
+  and [planning tracker #123](https://github.com/tuna-os/mariner/issues/123).
+- [hive roadmap](https://github.com/tuna-os/hive/blob/v4/ROADMAP.md)
+  and [planning tracker #106](https://github.com/tuna-os/hive/issues/106).
+  App permission changes remain owner-only work ([#1557](https://github.com/tuna-os/tunaos/issues/1557)).
+- [scoop-bucket roadmap](https://github.com/tuna-os/scoop-bucket/blob/main/ROADMAP.md)
+  and [planning tracker #64](https://github.com/tuna-os/scoop-bucket/issues/64).
 
 Coverage is **measured, not asserted**. The block in [Community](#community) is
 regenerated by [`scripts/gen-roadmap-coverage.py`](./scripts/gen-roadmap-coverage.py)
@@ -223,6 +241,9 @@ See [SECURITY.md](./SECURITY.md) for vulnerability reporting.
 | **Flavor equality mandate (docs wording + cadence parity)** | strategist | #1315, #1254 | 🟡 In progress — catalog parity gate merged 08-11 (#1322, #1281 closed); cadence parity pending (#1316) |
 | **NVIDIA flavor family (6 editions, 0 assets since 07-05)** | ci-maintainer | #1383 | 🔴 Broken — nightly overlay regressed 08-12 (#1382); 13/13 variant matrix red 08-14 (#1570) incl. nvidia cells (#1561/#1562/#1564/#1565); staff test: nightly green + gnome-nvidia assets republished by 09-01 (#1376/#1379) |
 | **Windows conversion channel (wootc)** | strategist / wootc maintainer | #1988, #1958, wootc#210 | 🟡 In progress — `v0.1.0-alpha.1` shipped 2026-08-22 (five branded installers + deployer artifacts + `SHA256SUMS`, E2E-gated); nightly auto pre-releases live. wootc's own [ROADMAP](https://github.com/tuna-os/wootc/blob/main/ROADMAP.md) (refreshed 08-22) carries the v0.1.0-alpha → v1.0.0 ladder with milestone trackers M2–M5 (wootc#210–#213). Gaps closing under #1988: no Windows entry point from this repo (`README.md`/`MIGRATION.md` have zero wootc references; user ask #1958 filed 08-22 untriaged), and `winget install TunaOS.wootc` blocked on the maintainer-only `WINGET_TOKEN` secret (wootc#221). Next gate: **v0.2.0-alpha — proven on real hardware** (wootc#210) |
+| **Flatpak remote ownership and production drift gate** | strategist / accountable remote owner to be named | #2922, #2921; [flatpak-index ROADMAP](https://github.com/tuna-os/flatpak-index/blob/main/ROADMAP.md) | Q3 exit requirement: record the owner and production source in both flatpak-index and docs; define publish-to-availability freshness SLO, incident ownership and rollback; measure catalog, digest, architecture and metadata drift from the served endpoint. Ownership decision precedes Q4 publisher consolidation |
+| **Homebrew channel ownership, currency and validation** | strategist / tap and upstream publisher owners | #2922; [homebrew-tap#12](https://github.com/tuna-os/homebrew-tap/issues/12), [#7](https://github.com/tuna-os/homebrew-tap/issues/7); [ROADMAP](https://github.com/tuna-os/homebrew-tap/blob/main/ROADMAP.md) | Q3 exit requirement: each supported entry has an authoritative release source and working publisher or named manual owner; eligible releases reach the tap or receive a visible exception within 48 hours. Resolve publisher credentials through an org admin and explicit package admission; producer-consumer URL, checksum and install validation gates Q4 currency automation |
+| **Scoop channel launch and release drift gate** | strategist / bucket and producer owners | #2922; [scoop-bucket#4](https://github.com/tuna-os/scoop-bucket/issues/4), [#14](https://github.com/tuna-os/scoop-bucket/issues/14); [ROADMAP](https://github.com/tuna-os/scoop-bucket/blob/main/ROADMAP.md) | Q3 exit requirement: name publication owner and least-privilege credential model; publish and validate bluefin-cli Windows amd64/arm64 manifest; prove clean Windows bucket-add/install/version journey; make stable-release drift beyond 24 hours owner-visible. Launch evidence precedes Q4 channel expansion |
 | **Package sourcing policy (system-repos/tideforge-first + allowlist)** | strategist | #1319, #1323 | 🟡 In progress — PACKAGE-SOURCING.md merged; DNF/COPR audit done 08-13, ahead of the 08-22 checkpoint (2 violations, 6-COPR niri gap, negativo17/rpmfusion allowlist candidates confirmed — #1453); apt/AUR/OBS bases still unaudited, maintainer allowlist sign-off and Phase 2 migration still pending |
 
 ---
@@ -255,6 +276,12 @@ See [SECURITY.md](./SECURITY.md) for vulnerability reporting.
 | **Adoption evidence (ADOPTERS.md production entries)** | strategist | #1348 — zero public production adopters vs "Mature" claim; first entries at 2026-11-01 snapshot |
 | Variant lifecycle policy (admission + Beta→Stable exit criteria) | strategist | #1196, #1175, #1270, #1254, #1294, #1763 — [VARIANT-LIFECYCLE.md](./VARIANT-LIFECYCLE.md) |
 | **Windows conversion channel (wootc) — beta gate + winget** | strategist / wootc maintainer | #1988, wootc#211, wootc#221 — Q3 carryover. Q4 scope: full-tier matrix green (wootc#222), BitLocker path (wootc#223), winget package live, and wootc's adoption numbers folded into the #1174 metrics snapshot and #1743 Q4 sequencing. This is the org's only adoption channel that reaches users not already running Linux |
+
+**Distribution-channel sequencing (#2922)**: Flatpak publisher consolidation,
+Homebrew scheduled currency/install checks, and Scoop catalog expansion depend
+on the Q3 ownership, freshness and validation gates above. These are exit
+requirements, not assertions of current channel health; use each linked local
+roadmap and its release/install evidence when assessing completion.
 
 **Milestone fidelity (#1307, 2026-08-12)**: 7 of the 9 goal trackers above were
 filed without being attached to the Q4 milestone (#3), so the milestone
@@ -297,6 +324,13 @@ that every repository use the same milestone structure. The Community inventory
 above is the source of truth for active-repository coverage; update it when a
 repository is archived, adopts a roadmap, or moves its roadmap onto the default
 branch.
+
+Infrastructure distribution channels with near-term quarterly milestones must
+also have an org goal-table row naming an accountable owner (or an explicit
+ownership decision), release-currency objective, producer/consumer validation
+exit evidence, and local roadmap/tracker links. Carry unfinished gates forward
+as dependencies of the next quarter's automation or expansion work; a local
+roadmap alone does not satisfy org planning visibility (#2922).
 
 See [SECURITY.md](./SECURITY.md) for vulnerability reporting.
 
