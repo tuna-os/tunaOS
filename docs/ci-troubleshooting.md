@@ -1880,16 +1880,17 @@ These tests check consistency. They do not prove a real producer or installation
 ### Countme audit disagrees with image coverage tests
 
 **Symptom:** #3056 describes image coverage as not started and the backend as
-unprovisioned even though countme source checks pass.
+unprovisioned even though the countme source checks still pass.
 
 **Measured cause:** At `293b99d8`, the client/image/CI suite passes 213 cases;
-the plan still leaves full installed-guest acceptance unchecked. ADR 0011 and
-the plan record deployment evidence separately from those boot requirements.
+the plan keeps full installed-guest acceptance open. ADR 0011 and the plan
+record the deployment evidence apart from those boot requirements.
 
 **Fix:** Follow [the observability audit](OBSERVABILITY-AUDIT.md) to regenerate
-the matrix and rerun the contracts. Require final-image and guest evidence before
-marking rollout complete; consult the ADR and deployment record before treating
-an old issue description as infrastructure state.
+the matrix and rerun the contracts. You need final-image and guest evidence
+before you mark the rollout complete. Read the ADR and the deployment record
+before you treat an old issue description as infrastructure state.
+
 ## Content PR fails with `STE budget exceeded` (#2912)
 
 **Symptom:** a CFP abstract or design contribution adds Markdown and the
