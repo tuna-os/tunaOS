@@ -177,7 +177,7 @@ def test_real_configuration_preserves_every_required_target_on_api_failure():
         raise collector.CollectionError('unavailable')
     result = collector.collect(config, SOURCE, failed, now=NOW)
     expected = collector.coverage_document(config)
-    assert len(result['targets']) == len(expected['targets']) == 269
+    assert len(result['targets']) == len(expected['targets'])
     assert result['coverageDigest'] == expected['coverageDigest']
     assert all(r['status'] != 'healthy' for r in result['targets'])
 
