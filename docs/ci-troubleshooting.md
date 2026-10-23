@@ -1894,6 +1894,18 @@ These tests check consistency. They do not prove a real producer or installation
 
 **Fix:** Delete the owned file at the start of each run. Keep files from other sources. Reject a linked file before you change files.
 
+## Repeated ROADMAP PRs wait for review (#3140)
+
+**Symptom:** Several open PRs refresh the same roadmap and later conflict.
+
+**Cause:** The snapshot in [#3140](https://github.com/tuna-os/tunaos/issues/3140)
+found repeated refresh attempts in at least 12 repositories. Authors did not
+check the changed file paths of open PRs. Green CI did not resolve the review queue.
+
+**Fix:** Use the [flow-health preflight and review sweep](FLOW-HEALTH.md).
+Compare scope and diffs before you call a PR a duplicate. Preserve unique work,
+link the chosen PR, and measure queue age and duplicate counts again in 14 days.
+
 ## Content PR fails with `STE budget exceeded` (#2912)
 
 **Symptom:** a CFP abstract or design contribution adds Markdown and the

@@ -39,6 +39,11 @@ hours, and review escalation, see [the ecosystem guide](CONTRIBUTING-ADVANCED.md
 
 ### Fork → PR loop
 
+Before you edit and again before you open a PR, check open PRs for the same
+deliverable and changed files. Use the [file-path check](docs/FLOW-HEALTH.md#author-preflight)
+even when titles differ. Add missing evidence to the existing PR if it covers
+your task. Explain distinct scope when files overlap.
+
 1. Fork `tuna-os/tunaos` on GitHub and clone your fork.
 2. Create a focused branch: `git switch -c docs/short-description`.
 3. Make the smallest change that satisfies the issue's acceptance criteria.
@@ -69,6 +74,10 @@ The maintainer keeps one 30-minute slot each week for contributor work. During t
 2. Check the claimed starter issues for unanswered questions, stale claims, or duplicate work.
 3. Review open contributor PRs, respond to blockers, and keep CI failures distinguishable from code-review requests.
 4. Refresh the starter links above when tasks finish, move to another repository, or give way to newer tasks.
+
+Use the [flow-health review sweep](docs/FLOW-HEALTH.md#review-sweep) for PRs
+whose checks pass and have no hold. Start with the docs and plan queue,
+verify duplicate candidates, and record a follow-up measurement in 14 days.
 
 This is a lightweight queue-management commitment, not a promise of immediate review. Contributors should expect an acknowledgement or status update within the next weekly triage slot.
 
