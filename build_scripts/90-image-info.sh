@@ -146,11 +146,16 @@ fi
 # albacore (#1007) or marlin (#1015) — the substitution matched no line and
 # exited 0.
 osr_set() {
-	local key="$1" value="$2" file
+	local key="$1" value="$2" file replacement
+	# The value is a sed REPLACEMENT: `&` there means "the matched text", and
+	# `\` and the `|` delimiter end or alter it. A configured URL such as
+	# https://x.example/?a=1&b=2 is valid, so escape all three; unescaped, the
+	# `&` pasted the old KEY=... line into the field.
+	replacement="$(printf '%s' "$value" | sed 's/[\\&|]/\\&/g')"
 	for file in "${OS_RELEASE_FILES[@]}"; do
 		if grep -q "^${key}=" "$file"; then
 			# `|` delimiter rather than `/`: values may contain slashes (URLs).
-			sed -i "s|^${key}=.*|${key}=\"${value}\"|" "$file"
+			sed -i "s|^${key}=.*|${key}=\"${replacement}\"|" "$file"
 		else
 			echo "${key}=\"${value}\"" >>"$file"
 		fi
