@@ -10,6 +10,10 @@ that touched 36 files across `.github/`, `build_scripts/`, `live-iso/`,
 
 ## Failure Catalog
 
+| Symptom | Measured cause | Fix |
+|---|---|---|
+| Bonito build succeeds despite bootc lint findings (#3001) | `99-cleanup.sh` calls `lint_image`; `lib.sh` returns success after findings unless `BOOTC_LINT_FATAL=1`. | Read the grouped output and step summary. Re-run lint against the candidate digest; apply the [Fedora readiness review](FEDORA-OUTREACH-READINESS.md) before outreach. |
+
 ### 1. `flatpak: command not found` in live ISO customization
 
 **Affected workflows:** `LUKS E2E` (yellowfin:kde), any live ISO build for EL10
@@ -1888,3 +1892,20 @@ used the correct owner.
 `sudo`, and `scripts/lib/publish-destination.sh` splits it into host and
 namespace. `tests/test_publish_destination.py` checks the precedence and the
 split.
+
+## Content PR fails with `STE budget exceeded` (#2912)
+
+**Symptom:** a CFP abstract or design contribution adds Markdown and the
+`ste / Simplified Technical English` check fails with `STE budget exceeded`.
+
+**Cause:** the shared linter counts findings across the repository, against
+`.ste-budget`. Content directories have no automatic exemption. The pinned
+linter supports lowercase `ste-disable-file: reason` and paired
+`ste-disable: reason` / `ste-enable` comments; `<!-- STE-DISABLE -->` does not
+match those directives.
+
+**Fix:** run `just ste` and fix new findings in technical instructions. For
+outreach copy or creative briefs, use the reasoned region or file opt-out in
+[the contributor prose policy](../CONTRIBUTING.md#prose-checks-ste). Keep
+technical steps checked on mixed pages. Run `just ste` again; do not increase
+`.ste-budget` or exclude a whole directory to pass one content change.
