@@ -20,6 +20,11 @@ import subprocess
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
+DERIVED_MANIFEST_PREFIXES = (
+    "manifests/desktops/",
+    "manifests/desktop-plans/",
+    "manifests/desktop-contracts/",
+)
 
 
 class ConfigError(ValueError):
@@ -76,9 +81,10 @@ def source_paths(root):
                 "Justfile", "just/**/*", ".containerignore", ".dockerignore", "custom/**/*",
                 "system_files/**/*", "system_files_overrides/**/*", "experiences/**/*")
     tracked = set(subprocess.check_output(["git", "-C", str(root), "ls-files", "-z"], text=True).split("\0"))
-    return sorted({p.relative_to(root).as_posix() for pattern in patterns
-                   for p in root.glob(pattern)
-                   if (p.is_file() or p.is_symlink()) and p.relative_to(root).as_posix() in tracked})
+    paths = {p.relative_to(root).as_posix() for pattern in patterns
+             for p in root.glob(pattern)
+             if (p.is_file() or p.is_symlink()) and p.relative_to(root).as_posix() in tracked}
+    return sorted(name for name in paths if not name.startswith(DERIVED_MANIFEST_PREFIXES))
 
 
 def source_receipt(root):
