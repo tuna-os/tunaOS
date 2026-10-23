@@ -24,6 +24,13 @@ on:
       #   registry-map.yaml 4  files 2
       - 'scripts/**'
       - 'tests/**'
+      # Versioned contract schemas are executable test inputs.
+      - 'schemas/**'
+      # Signed package-search observations and public trust fixtures.
+      - 'config/**'
+      # The fork-config contract suite initializes the stock/fork templates.
+      - 'examples/**'
+      - 'experiences/**'
       - 'build_scripts/**'
       # One entry rather than six. .github/scripts/**, changelogs.py,
       # workflows/**, green-criteria.yml, runs-on.yml and actions/** were all
@@ -42,6 +49,11 @@ on:
       - 'custom/**'
       - 'files/**'
       - 'Containerfile*'
+      - '.containerignore'
+      - '.dockerignore'
+      - 'tunaos.toml'
+      - 'requirements-config.txt'
+      - 'requirements-package-authoring.txt'
       - 'image-versions.yaml'
       - 'registry-map.yaml'
       - 'renovate.json'
@@ -55,21 +67,66 @@ on:
       # docs/ is prose and generated content, gated by `ste` and `regenerate`;
       # see the test named above for why docs/** is deliberately absent.
       - 'docs/CI_SPEC.md'
+      # Portable builder exports and schemas are test inputs, not prose.
+      - 'docs/iso-builder.config.json'
+      - 'docs/iso-builder-config.schema.json'
+      - 'docs/iso-builder.flavors.json'
+      - 'docs/iso-builder-flavors.schema.json'
   push:
     branches: [main]
   workflow_dispatch:
 
+# Read-only baseline. Jobs that run repository code (tests, builds) never hold
+# id-token: write, because pull-request code would be able to mint an OIDC
+# token; the Codecov upload is a separate job that executes no repository code.
 permissions:
   contents: read
-  # Codecov authenticates uploads with GitHub OIDC; no long-lived repository
-  # token is exposed to pull-request jobs.
-  id-token: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
+  primary-config-python310:
+    name: Primary config (Python 3.10)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.10' # Compatibility floor; protected by the scoped Renovate rule.
+      - name: Install config test dependencies
+        run: python -m pip install pytest PyYAML -r requirements-config.txt -r requirements-package-authoring.txt
+      - name: Verify primary config on the oldest supported Python
+        run: |
+          gpg --version
+          python -m pytest -q tests/test_primary_config.py tests/test_config_parser.py tests/test_package_authoring.py \
+            tests/test_package_catalogs.py tests/test_signed_apt.py tests/test_search_base_packages.py
+
+  primary-config-python315:
+    name: Primary config (Python 3.15)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.15'
+      - name: Install config test dependencies
+        run: python -m pip install pytest PyYAML -r requirements-config.txt -r requirements-package-authoring.txt
+      - name: Verify primary config with a TOML 1.1 capable stdlib
+        run: |
+          gpg --version
+          python -m pytest -q tests/test_primary_config.py tests/test_config_parser.py tests/test_package_authoring.py \
+            tests/test_package_catalogs.py tests/test_signed_apt.py tests/test_search_base_packages.py
+
   unit-tests:
     name: Unit Tests
     runs-on: ubuntu-latest
@@ -80,7 +137,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup TunaOS Build Environment
-        uses: projectbluefin/actions/bootc-build/setup-runner@59f783ed76fd9d449ef6887a6649446801bd5434 # v1 as of 2026-07-02
+        uses: projectbluefin/actions/bootc-build/setup-runner@d18642a8b4b325c2551eabd9a65c1ad12b4ebb30 # v1 as of 2026-07-02
         with:
           storage-backend: ""
           update-podman: "false"
@@ -101,27 +158,114 @@ jobs:
           brew install bats-core
 
           # pytest for Python tests
-          pip3 install pytest pytest-cov --break-system-packages 2>/dev/null || pip3 install pytest pytest-cov --user
+          pip3 install pytest pytest-cov -r requirements-config.txt --break-system-packages 2>/dev/null || pip3 install pytest pytest-cov -r requirements-config.txt --user
+
+          python3 -m pip install -r requirements-package-authoring.txt --break-system-packages || python3 -m pip install -r requirements-package-authoring.txt --user
+
+          # Independent schema oracle, pinned with the other external tools.
+          schema_version=$(yq -r '.downloads.jsonschema // ""' image-versions.yaml)
+          [[ "$schema_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Invalid jsonschema test pin" >&2; exit 1; }
+          python3 -m pip install "jsonschema==$schema_version" --break-system-packages || python3 -m pip install "jsonschema==$schema_version" --user
 
           # Pillow + requests for desktop-verify.py tests
           pip3 install pillow requests --break-system-packages 2>/dev/null || pip3 install pillow requests --user
 
+      - name: Prepare test diagnostics
+        id: test_diagnostics
+        if: always()
+        run: |
+          if report_root=$(mktemp -d "$RUNNER_TEMP/tunaos-test-results.XXXXXX"); then
+            if ! printf 'report_root=%s\n' "$report_root" >> "$GITHUB_OUTPUT"; then
+              rmdir -- "$report_root" || true
+            fi
+          else
+            echo "::warning::Test diagnostics are unavailable; core tests will still run."
+          fi
+
       - name: Run BATS tests
+        if: always()
+        shell: bash
+        env:
+          TEST_REPORT_ROOT: ${{ steps.test_diagnostics.outputs.report_root }}
         run: |
           echo "=== BATS Tests ==="
           FAILED=0
           for f in tests/bats/*.bats; do
             [[ -f "$f" ]] || continue
             echo "  Running: $f"
-            bats --formatter tap "$f" || FAILED=1
+            report=""
+            if [[ -n "$TEST_REPORT_ROOT" && -d "$TEST_REPORT_ROOT" && ! -L "$TEST_REPORT_ROOT" ]]; then
+              candidate="$TEST_REPORT_ROOT/bats/$f.tap"
+              if mkdir -p "$(dirname "$candidate")"; then
+                report="$candidate"
+              fi
+            fi
+            if [[ -n "$report" ]]; then
+              if bats --formatter tap "$f" | tee --output-error=warn "$report"; then
+                pipeline_status=("${PIPESTATUS[@]}")
+              else
+                pipeline_status=("${PIPESTATUS[@]}")
+              fi
+              status=${pipeline_status[0]}
+              if [[ "${pipeline_status[1]}" != 0 ]]; then
+                echo "::warning::BATS diagnostic output could not be saved."
+              fi
+              printf '%s\n' "$status" > "$report.exit" || true
+            else
+              if bats --formatter tap "$f"; then status=0; else status=$?; fi
+            fi
+            if [[ "$status" != 0 ]]; then FAILED=1; fi
           done
-          exit $FAILED
+          exit "$FAILED"
 
       - name: Run pytest tests
         if: always()
+        env:
+          TEST_REPORT_ROOT: ${{ steps.test_diagnostics.outputs.report_root }}
         run: |
           echo "=== pytest Tests ==="
-          python3 -m pytest tests/ tests/pytest/ -v --tb=short --cov=. --cov-report=term --cov-report=xml:coverage-python.xml
+          report_args=()
+          if [[ -n "$TEST_REPORT_ROOT" && -d "$TEST_REPORT_ROOT" && ! -L "$TEST_REPORT_ROOT" ]]; then
+            report_args=(-p scripts.compact_pytest_report --compact-test-report="$TEST_REPORT_ROOT/pytest-static.json")
+          fi
+          if python3 -m pytest "${report_args[@]}" tests/ tests/pytest/ -v --tb=short --cov=. --cov-report=term --cov-report=xml:coverage-python.xml; then
+            status=0
+          else
+            status=$?
+          fi
+          if [[ ${#report_args[@]} != 0 ]]; then
+            printf '%s\n' "$status" > "$TEST_REPORT_ROOT/pytest.exit" || true
+          fi
+          exit "$status"
+
+      - name: Summarize test failures
+        id: test_failure_summary
+        if: failure() && steps.test_diagnostics.outputs.report_root != ''
+        env:
+          TEST_REPORT_ROOT: ${{ steps.test_diagnostics.outputs.report_root }}
+        run: |
+          python3 scripts/summarize-test-failures.py --direct --reports "$TEST_REPORT_ROOT" --output "$TEST_REPORT_ROOT/failures.json"
+          [[ -f "$TEST_REPORT_ROOT/failures.json" && ! -L "$TEST_REPORT_ROOT/failures.json" ]]
+
+      - name: Archive test failure summary
+        if: failure() && steps.test_failure_summary.outcome == 'success'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: test-failures-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ steps.test_diagnostics.outputs.report_root }}/failures.json
+          retention-days: 7
+          if-no-files-found: warn
+
+      - name: Clean up test diagnostics
+        if: always() && steps.test_diagnostics.outputs.report_root != ''
+        env:
+          TEST_REPORT_ROOT: ${{ steps.test_diagnostics.outputs.report_root }}
+        run: |
+          if [[ "$TEST_REPORT_ROOT" == "$RUNNER_TEMP"/tunaos-test-results.* && "$(dirname -- "$TEST_REPORT_ROOT")" == "$RUNNER_TEMP" && -d "$TEST_REPORT_ROOT" && ! -L "$TEST_REPORT_ROOT" ]]; then
+            if ! rm -rf -- "$TEST_REPORT_ROOT"; then
+              echo "::warning::Owned test diagnostics could not be cleaned up."
+            fi
+          fi
 
       # npm 10 (the runner image default) and npm 11 (what Renovate uses to
       # write services/countme/package-lock.json) disagree on the lockfile once
@@ -154,15 +298,6 @@ jobs:
           echo "Run locally: \`just test\`" >> "$GITHUB_STEP_SUMMARY"
           echo "| Python coverage | Codecov + xml artifact |" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload Python coverage to Codecov
-        if: always()
-        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
-        with:
-          use_oidc: true
-          files: coverage-python.xml
-          flags: python
-          fail_ci_if_error: false
-
       - name: Archive Python coverage
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -171,3 +306,98 @@ jobs:
           path: coverage-python.xml
           retention-days: 30
           if-no-files-found: ignore
+
+  # Codecov authenticates uploads with GitHub OIDC. This job holds the only
+  # id-token: write in the workflow and runs no repository code: it checks out
+  # data, downloads the coverage report the unit-tests job produced, and hands
+  # it to the pinned upload action. Fork pull requests are skipped; GitHub does
+  # not issue them an OIDC token anyway.
+  coverage-upload:
+    name: Upload coverage
+    needs: unit-tests
+    if: >-
+      always() &&
+      (github.event_name != 'pull_request' ||
+       github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Download Python coverage
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: coverage-python
+        continue-on-error: true
+
+      - name: Upload Python coverage to Codecov
+        if: hashFiles('coverage-python.xml') != ''
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          use_oidc: true
+          files: coverage-python.xml
+          flags: python
+          fail_ci_if_error: false
+
+  tuna_build_inputs:
+    name: Detect Tuna image inputs
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      relevant: ${{ steps.filter.outputs.relevant }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Detect Tuna image input changes
+        id: filter
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          files="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" --jq '.[].filename')"
+          if printf '%s\n' "$files" | bash .github/scripts/tuna-pr-build-inputs.sh; then
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "relevant=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  tuna_pr_images:
+    name: "${{ matrix.variant }}:tuna"
+    needs: tuna_build_inputs
+    if: github.event_name == 'pull_request' && needs.tuna_build_inputs.outputs.relevant == 'true'
+    # The reusable image jobs declare publishing scopes. Their PR path disables
+    # publish/SBOM and does not receive the R2 secrets passed by manual builds.
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        variant:
+          - marlin
+          - yellowfin
+          - albacore
+          - skipjack
+          - bonito
+          - wahoo
+          - bonito-rawhide
+          - grouper
+          - flounder
+          - flounder-sid
+          - sailfin
+    uses: ./.github/workflows/build-variant.yml
+    with:
+      variant: ${{ matrix.variant }}
+      flavor: tuna

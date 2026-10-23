@@ -19,6 +19,9 @@ Invoked by:
 | `build-image-inner.sh` | The build engine (env-var driven) |
 | `evidence-bundle.sh` | Normalizes a gate's logs and verdicts under `evidence/<variant>/<flavor>/<arch>/` |
 | `gen-ci-lanes.py` | Generates the PR/post-merge/scheduled workflow inventory in `docs/CI_SPEC.md` |
+| `fork-simulation.py` | Classifies PR workflows and generates synthetic fork events for the weekly `act` simulation |
+| `run-fork-simulation.sh` | Executes the classified workflows under `act` for the requested contributor personas |
+| `fork-simulation-gh` | Serves the synthetic PR API fixture for simulated workflows; rejects every unlisted request without contacting GitHub |
 | `sync-upstream-snapshots.sh` | Syncs and drift-checks the `_upstream-snapshots/` tree |
 | `iso-e2e.sh` | Orchestrates ISO/disk E2E modes: live smoke, SSH, `--luks` install + unlock, app launches |
 | `lib/e2e-visual.sh` | Captures and evaluates QEMU framebuffer evidence for the E2E harness; unit-testable without a VM |
@@ -30,3 +33,10 @@ Invoked by:
 See `docs/AGENT_GUIDE.md`'s Key Files table for the fuller list and how
 these fit into the overall build pipeline (`docs/PIPELINE.md`,
 `docs/build-pipeline.md`).
+
+## Fork config review
+
+`resolve-fork-config.py` validates opt-in fork intent and emits a review plan.
+Its stock-only legacy export uses the existing `TUNAOS_BUILD_CONFIG` seam.
+It does not apply package or brand changes. See [RFC 013](../docs/rfc/rfc013-single-fork-config.md)
+for the schema, compatibility checks and consumer migration plan.

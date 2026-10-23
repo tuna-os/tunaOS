@@ -2,7 +2,7 @@ images:
   - name: centos-bootc
     image: quay.io/centos-bootc/centos-bootc
     tag: c10s
-    digest: sha256:9aedf2d189b85c498697f9b83112c893b084d359268da7dd6d5d848478d260de
+    digest: sha256:ec1bd8cb6479d1f2f61c85372afce319b932b6b1f671648f0887e9da01e48272
   - name: common
     image: ghcr.io/projectbluefin/common
     tag: latest
@@ -10,14 +10,14 @@ images:
   - name: brew
     image: ghcr.io/ublue-os/brew
     tag: latest
-    digest: sha256:5bdf54dc7c21c22db29df6550e3711788719c5123549ea6dc5645d5af47795e3
+    digest: sha256:393b567da078f0f0638450c388e229011dae06f94a90017cb7525b57d9faa46e
 
   # RFC 010: pre-built Zirconium image for DMS/Niri system files
   # on grouper (Ubuntu) — not available from Ubuntu apt.
   - name: zirconium
     image: ghcr.io/zirconium-dev/zirconium
     tag: latest
-    digest: sha256:cf148db4bc2ebdf42c1d7666c1c398f501eacac2353327bdf2f565908117844f
+    digest: sha256:958afe3ae872816e608cbf5a5af5435835661cdc4a643390d6d18c537db433fc
 
   # Bluefin's GNOME 51 for Hummingbird (projectbluefin/utah-packages): a
   # createrepo_c repository shipped as an OCI image (`/repository`), signed
@@ -31,7 +31,7 @@ images:
   - name: utah-packages
     image: ghcr.io/projectbluefin/utah-packages
     tag: latest
-    digest: sha256:951d030dd39deaef334d877cf6478f2f8168e777015615793bd612ba156ed611
+    digest: sha256:2af3fc6758902f3b2d112e911d33134490d827a94f548c03c2c41586a05b856d
 
   # tunaOS' own GNOME 50 for EL10, from the gnome50-el10-x86_64 build chain in
   # tuna-os/tunaos-packages: a createrepo_c repository shipped as an OCI image
@@ -71,8 +71,11 @@ packages:
 
 # Pinned binary downloads (managed by Renovate)
 downloads:
+  # Independent schema oracle for contract tests; not an image runtime package.
+  # renovate: datasource=pypi depName=jsonschema
+  jsonschema: "4.26.0"
   # renovate: datasource=github-releases depName=ublue-os/uupd
-  uupd: "v1.5.0"
+  uupd: "v1.5.1"
   # renovate: datasource=github-releases depName=ledif/kcm_ublue
   kcm_ublue: "v0.6.1"
   # renovate: datasource=github-releases depName=mvdan/sh
@@ -99,6 +102,15 @@ downloads:
   chezmoi_sha256:
     amd64: "74c239da8b55ae9955a833304b87adc4cf82336647f31d317ccbb7952ad58d46"
     arm64: "4b5df8d925b79abbe265af25e4c585a4da91aadbae573a0dcc8e2bfcf63e6f1a"
+  # The GNOME/Pantheon live ISO imports this Flatpak bundle into its local
+  # installer remote. Keep the release immutable and verify GitHub's
+  # release-asset digest before Flatpak parses it (tunaOS#2536). These values
+  # come from the release API's assets[].digest fields.
+  # renovate: datasource=github-releases depName=tuna-os/bootc-installer
+  bootc_installer: "v2026.10.19-9f582fe0"
+  bootc_installer_sha256:
+    x86_64: "04252eaf80ee5675aa37bdb482847c77310efbee058dc63ba161a1d5991f9823"
+    aarch64: "39e33f4ca6c7f9dd6d8bf1859c9eabbf8189cdb4218ba9b122062f64b568d339"
   # The boot gate's harness (scripts/corral-boot-gate.sh, installed by
   # scripts/install-corral.sh). The commit of the v0.7.0 tag, the first release
   # with `vmtest --fail-marker`/`--karg` and local composefs builds. corral

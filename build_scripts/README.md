@@ -27,6 +27,7 @@ build_scripts/
 ├── 99-cleanup.sh              # final cleanup (always last)
 │
 │   # ── called directly by Containerfiles, not part of the numeric run ──
+├── install-uupd.sh             # install the pinned uupd binary and units
 ├── free-uid-1000.sh           # remove the stock account at UID 1000 so a
 │                              #   live ISO can place its own user there.
 │                              #   Takes no distro flags, so any Containerfile
@@ -44,10 +45,11 @@ build_scripts/
 │   │                          #   only caller — gnome, kde, cosmic and
 │   │                          #   pantheon are on the manifest path.
 │   ├── zfs.sh                 #   grouper gnome-zfs flavor add-on
-│   └── kcm-ublue.sh tuna-flatpak-remote.sh flatpak-preinstall.sh
-│                              #   post-install helpers; manifests reference
-│                              #   them by bare name (resolved to this dir)
-│
+│   ├── kcm-ublue.sh
+│   ├── tuna-flatpak-remote.sh
+│   ├── flatpak-preinstall.sh
+│   └── tuna-gdm-theme.sh      #   layers the variant accent over GDM styles
+│                              #   manifests reference helpers by bare name
 ├── overlay/                   # Containerfile.overlay, keyed by OVERLAY_TYPE
 │   ├── hwe.sh                 #   OVERLAY_TYPE=hwe
 │   ├── nvidia.sh              #   OVERLAY_TYPE=nvidia

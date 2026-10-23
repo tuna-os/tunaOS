@@ -12,20 +12,24 @@
 ---
 
 [![License](https://img.shields.io/github/license/tuna-os/tunaOS?style=for-the-badge)](https://github.com/tuna-os/tunaOS/blob/main/LICENSE)
-[![GitHub Stars](https://img.shields.io/github/stars/tuna-os/tunaOS?style=for-the-badge)](https://github.com/tuna-os/tunaOS/stargazers)
+[![GitHub Stars](https://img.shields.io/github/stars/tuna-os/tunaOS?style=for-the-badge)](https://github.com/tuna-os/tunaOS)
 [![Issues](https://img.shields.io/github/issues/tuna-os/tunaOS?style=for-the-badge)](https://github.com/tuna-os/tunaOS/issues)
 [![External adoption evidence](https://img.shields.io/badge/adoption-0_external_adopters-6c757d?style=for-the-badge)](ADOPTERS.md)
-[![Discord](https://img.shields.io/badge/Discord-join-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/MXSTqB8Nv)
+[![Discussions](https://img.shields.io/badge/Discussions-ask_a_question-2ea44f?style=for-the-badge&logo=github&logoColor=white)](https://github.com/tuna-os/tunaOS/discussions)
 
 </div>
 
-> 🎃 **Hacktoberfest 2026:** Join us! Is this your first open-source PR? See our [good first issues](https://github.com/tuna-os/tunaOS/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22). You can also join the office hours for maintainers in October on Matrix.
+> 🎃 **Hacktoberfest 2026:** Start with the [org-wide good first issues](https://github.com/issues?q=org%3Atuna-os+is%3Aissue+is%3Aopen+archived%3Afalse+label%3A%22good+first+issue%22). See [the ecosystem guide](CONTRIBUTING-ADVANCED.md) for a map of repositories, mentorship, Q&A, and office hours.
 
 ## About TunaOS
 
 TunaOS builds **bootc-based desktop operating systems** with atomic updates and straightforward rollbacks. Choose an Enterprise Linux base for long-term stability or an alternative distribution for a faster release cadence. Both choices use the same image-based management model.
 
-[Visit tunaos.org](https://tunaos.org/) or read the [launch announcement](https://tunaos.org/blog/modern-enterprise-linux-desktops-with-tunaos).
+[Visit tunaos.org](https://tunaos.org/) or read the [User Guide](docs/USER-GUIDE.md).
+
+[Make your first contribution](docs/CONTRIBUTOR-FIRST-PR.md) ·
+[Meet the contributors](CONTRIBUTORS.md) ·
+[Contributor roadmap](docs/CONTRIBUTOR-ROADMAP.md)
 
 - **Modern Desktops**: GNOME, KDE Plasma, COSMIC, Niri, and XFCE — equal first-class options across distribution bases
 - **Up-to-Date Desktop Stack**: Fresh desktop features and updates backported to Enterprise and community bases
@@ -76,7 +80,7 @@ Hardware requirements and ARM laptop status: [docs/HARDWARE.md](docs/HARDWARE.md
 
 ## Live build matrix
 
-The configured matrix now has 147 image cells. Eleven of them are Tuna Desktop (formerly Roost) cells for amd64: `marlin:tuna`, `yellowfin:tuna`, `albacore:tuna`, `skipjack:tuna`, `wahoo:tuna`, `bonito:tuna`, `bonito:tuna-rawhide`, `grouper:tuna`, `flounder:tuna`, `flounder:tuna-sid` and `sailfin:tuna`. The `tuna_rollout` record in `.github/build-config.yml` gives each other variant its reason to stay unsupported. The `guppy:gnome` cell is back (2026-10-07, #2450). The former `marlin:roost` tags get no more updates; existing installs must follow the [explicit switch and recovery procedure](experiences/tuna/README.md#switch-an-existing-roost-install). The status snapshot below is from before those additions and does not prove image publication or a successful boot. Tuna Desktop adds no ISO or LUKS cells.
+The configured matrix now has 147 image cells. Eleven of them are Tuna Desktop (formerly Roost) cells for amd64: `marlin:tuna`, `yellowfin:tuna`, `albacore:tuna`, `skipjack:tuna`, `wahoo:tuna`, `bonito:tuna`, `bonito:tuna-rawhide`, `grouper:tuna`, `flounder:tuna`, `flounder:tuna-sid` and `sailfin:tuna`. The `tuna_rollout` record in `tunaos.toml` gives each other variant its reason to stay unsupported. The `guppy:gnome` cell is back (2026-10-07, #2450). The former `marlin:roost` tags get no more updates; existing installs must follow the [explicit switch and recovery procedure](experiences/tuna/README.md#switch-an-existing-roost-install). The status snapshot below is from before those additions and does not prove image publication or a successful boot. Tuna Desktop adds no ISO or LUKS cells.
 
 <!-- build-status:start -->
 
@@ -84,31 +88,31 @@ _Each cell reports the newest conclusive main-branch run that asserted it, so a 
 
 | Variant | Green image cells | Latest run | Failing | Not reached |
 | :--- | ---: | :--- | :--- | :--- |
-| 🐠 `yellowfin` | **18/18** | [❌ 2026-10-13](https://github.com/tuna-os/tunaOS/actions/runs/38358892772) | — | — |
-| 🐟 `albacore` | **18/18** | [❌ 2026-10-13](https://github.com/tuna-os/tunaOS/actions/runs/38377179784) | — | — |
-| 🍣 `skipjack` | **16/16** | [❌ 2026-10-12](https://github.com/tuna-os/tunaOS/actions/runs/38295405544) | — | — |
-| 🎏 `wahoo` | **4/4** | [❌ 2026-09-27](https://github.com/tuna-os/tunaOS/actions/runs/36310655873) | — | — |
-| 🎣 `bonito` | **16/16** | [✅ 2026-10-11](https://github.com/tuna-os/tunaOS/actions/runs/38156349877) | — | — |
-| 🐦 `hummingbird` | **1/3** | [❌ 2026-10-13](https://github.com/tuna-os/tunaOS/actions/runs/38339913744) | gnome | cosmic |
-| ⛵ `sailfin` | **6/6** | [✅ 2026-10-13](https://github.com/tuna-os/tunaOS/actions/runs/38332038238) | — | — |
-| 🌈 `guppy` | **3/3** | [✅ 2026-10-13](https://github.com/tuna-os/tunaOS/actions/runs/38412094504) | — | — |
-| 🐉 `bonito-rawhide` | **14/14** | [❌ 2026-10-12](https://github.com/tuna-os/tunaOS/actions/runs/38317069618) | — | — |
-| 🤖 `gurnard` | **2/2** | [✅ 2026-10-13](https://github.com/tuna-os/tunaOS/actions/runs/38393525785) | — | — |
-| 🪸 `grouper` | **7/7** | [✅ 2026-10-11](https://github.com/tuna-os/tunaOS/actions/runs/38174405534) | — | — |
-| 🚀 `marlin` | **17/17** | [❌ 2026-10-12](https://github.com/tuna-os/tunaOS/actions/runs/38312659861) | — | — |
-| 🐡 `flounder` | **5/5** | [✅ 2026-10-13](https://github.com/tuna-os/tunaOS/actions/runs/38337678655) | — | — |
-| ☢️ `flounder-sid` | **4/7** | [❌ 2026-10-13](https://github.com/tuna-os/tunaOS/actions/runs/38342365645) | — | gnome-nvidia,kde-nvidia,xfce-nvidia |
+| 🐠 `yellowfin` | **19/19** | [❌ 2026-10-22](https://github.com/tuna-os/tunaOS/actions/runs/39724851741) | — | — |
+| 🐟 `albacore` | **19/19** | [✅ 2026-10-22](https://github.com/tuna-os/tunaOS/actions/runs/39742606903) | — | — |
+| 🍣 `skipjack` | **17/17** | [❌ 2026-10-22](https://github.com/tuna-os/tunaOS/actions/runs/39796515417) | — | — |
+| 🎏 `wahoo` | **4/5** | [❌ 2026-10-16](https://github.com/tuna-os/tunaOS/actions/runs/38906627617) | tuna | — |
+| 🎣 `bonito` | **17/17** | [✅ 2026-10-21](https://github.com/tuna-os/tunaOS/actions/runs/39630438457) | — | — |
+| 🐦 `hummingbird` | **1/3** | [❌ 2026-10-15](https://github.com/tuna-os/tunaOS/actions/runs/38660870261) | gnome | cosmic |
+| ⛵ `sailfin` | **7/7** | [✅ 2026-10-22](https://github.com/tuna-os/tunaOS/actions/runs/39865052345) | — | — |
+| 🌈 `guppy` | **3/4** | [❌ 2026-10-23](https://github.com/tuna-os/tunaOS/actions/runs/39948234797) | — | gnome |
+| 🐉 `bonito-rawhide` | **14/15** | [❌ 2026-10-22](https://github.com/tuna-os/tunaOS/actions/runs/39838360929) | — | gnome |
+| 🤖 `gurnard` | **2/2** | [✅ 2026-10-23](https://github.com/tuna-os/tunaOS/actions/runs/39931676521) | — | — |
+| 🪸 `grouper` | **8/8** | [✅ 2026-10-22](https://github.com/tuna-os/tunaOS/actions/runs/39849977660) | — | — |
+| 🚀 `marlin` | **17/17** | [❌ 2026-10-22](https://github.com/tuna-os/tunaOS/actions/runs/39827814045) | — | — |
+| 🐡 `flounder` | **6/6** | [✅ 2026-10-23](https://github.com/tuna-os/tunaOS/actions/runs/39875388237) | — | — |
+| ☢️ `flounder-sid` | **5/8** | [❌ 2026-10-23](https://github.com/tuna-os/tunaOS/actions/runs/39884547800) | — | gnome-nvidia,kde-nvidia,xfce-nvidia |
 
 **Sibling images from separate repositories.** These TunaOS-family bootc images use BuildStream on freedesktop-sdk. They do not use packages from a distribution. Thus, the matrix above has no cells for them, and `green-criteria.yml` does not score them. Each repository runs its own checks for the build, live ISO, plain installation, and LUKS installation. The status shows the latest complete build from the main branch of that repository.
 
 | Image | Built by | Desktop | Latest main build |
 | :--- | :--- | :--- | :--- |
-| 🏔️ `ghcr.io/tuna-os/tromso` | [tromso](https://github.com/tuna-os/tromso) | KDE | [✅ 2026-10-13](https://github.com/tuna-os/tromso/actions/runs/38359745054) |
-| 🐭 `ghcr.io/tuna-os/xfce-linux` | [xfce-linux](https://github.com/tuna-os/xfce-linux) | XFCE | [✅ 2026-10-13](https://github.com/tuna-os/xfce-linux/actions/runs/38342979234) |
+| 🏔️ `ghcr.io/tuna-os/tromso` | [tromso](https://github.com/tuna-os/tromso) | KDE | [❌ 2026-10-23](https://github.com/tuna-os/tromso/actions/runs/39904310861) |
+| 🐭 `ghcr.io/tuna-os/xfce-linux` | [xfce-linux](https://github.com/tuna-os/xfce-linux) | XFCE | [✅ 2026-10-23](https://github.com/tuna-os/xfce-linux/actions/runs/39885598766) |
 
-**Built 131/136 · composite green 117/136 (96% built)** — The remainder has **1 failure** and **4 never reached** (stale: 4); no job asserted the latter. We show the two values separately. A cell with no job has no test, but it can still work.
+**Built 139/147 · composite green 120/147 (94% built)** — The remainder has **2 failures** and **6 never reached** (stale: 5); no job asserted the latter. We show the two values separately. A cell with no job has no test, but it can still work.
 
-The score for composite green uses published cells, per [docs/MATRIX-STATUS.md](docs/MATRIX-STATUS.md). [`.github/green-criteria.yml`](.github/green-criteria.yml) provides the score. Today, these criteria prevent publication: `boots`, `builds`, `desktop`, `no_silent_omissions`. A cell must satisfy each criterion.
+The score for composite green uses published cells, per [docs/MATRIX-STATUS.md](docs/MATRIX-STATUS.md). [`.github/green-criteria.yml`](.github/green-criteria.yml) provides the score. Today, these criteria prevent publication: `boots`, `builds`, `desktop`, `no_silent_omissions`, `parity`. A cell must satisfy each criterion.
 
 Skipped cells and cells with no test do not count as green. The full per-axis board is [docs/MATRIX-STATUS.md](docs/MATRIX-STATUS.md). This snapshot of CI shows one point in time. It does not promise a support tier.
 
@@ -128,7 +132,22 @@ Skipped cells and cells with no test do not count as green. The full per-axis bo
 For local media builds, signature and SBOM checks, registry authentication,
 and pull help, read [docs/INSTALL.md](docs/INSTALL.md).
 
+<!-- hive-contribute-plea: donated-compute appeal, keep in sync across repos -->
+## Contribute compute — no code needed
+
+**[Donate time with your AI CLI](https://hub.tunaos.org/#contribute).**
+
+Your machine runs one task at a time using your signed-in AI coding CLI.
+The relay alternates between eligible **School** (OS) and **Reef** (apps)
+hives after each task. If one hive has no work, the other can continue.
+
+The guide covers prerequisites, verified `just` setup, credentials, provider
+costs, and how to stop with Ctrl+C. Your subscription quota or API charges apply.
+Never post account credentials or API keys in issues or pull requests.
+
 ## Contributing
+
+**[Contribute through Hive](https://hub.tunaos.org/#contribute)** to donate time with your AI CLI.
 
 Contributions welcome! See [`CONTRIBUTING.md`](CONTRIBUTING.md) for development
 environment setup, the build workflow and pre-commit checklist, pull request
@@ -136,9 +155,10 @@ guidelines, and an architecture overview.
 
 ## Community and support
 
+- **Contribute through Hive:** [Donate time with your AI CLI](https://hub.tunaos.org/#contribute)
 - 🐛 **Report Issues:** [GitHub Issues](https://github.com/tuna-os/tunaOS/issues)
 - [m] **Chat**: [#tunaos:reilly.asia](https://matrix.to/#/%23tunaos:reilly.asia)
-- 🎮 **Discord:** [TunaOS](https://discord.gg/MXSTqB8Nv)
+- 💬 **Questions and ideas:** [GitHub Discussions](https://github.com/tuna-os/tunaOS/discussions)
 
 Related communities: [Universal Blue Discord](https://discord.gg/WEu6BdFEtp) ·
 [AlmaLinux Atomic SIG](https://chat.almalinux.org/almalinux/channels/sigatomic)
@@ -173,24 +193,8 @@ The full index of every guide, policy, and project plan is at
 <img width="100" height="130" alt="Bootc_Logo" src="https://raw.githubusercontent.com/containers/common/main/logos/bootc-logo-full-vert.png" />
 </a>
 
----
-
-This repository and many [tuna-os](https://github.com/tuna-os) repositories
-use **[Hive](https://hive.tunaos.org)** for development and maintenance. Hive
-is a development platform for AI agents. It uses
-[KubeStellar](https://kubestellar.io/) for orchestration.
-
----
-
 *Inspired by [Bluefin](https://projectbluefin.io) and the [Universal Blue](https://universal-blue.org/) Community*
 
 *Licensed under [Apache 2.0](https://github.com/tuna-os/tunaOS/blob/main/LICENSE)*
 
 </div>
-
-<!-- hive-contribute-plea: donated-compute appeal, keep in sync across repos -->
-## Contribute compute — no code needed
-
-No time to write code? You can still push this project's backlog forward. A TunaOS AI-agent hive works on this repository. Lend the hive your AI subscription or API tokens, and your machine runs tasks from this project's backlog.
-
-- 🏫 [Contribute compute to the school hive](https://school.tunaos.org/contribute)

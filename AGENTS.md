@@ -184,6 +184,9 @@ Six more, each measured while fixing the live-ISO and install path
 - **Load the data the desktop uses.** The GNOME binary passed the contract
   without its schema RPM (Yellowfin, #2750). Query the compiled schema with
   GLib. The XML can exist without a compiled schema.
+- **Test the last writer.** Desktop selection can pass and still be overwritten
+  by `90-image-info.sh` or an overlay file copy (PR #3465). Run the final writer
+  sequence too; preserve explicit fork branding after stock selection.
 - **Verify a fix in the built artifact, not in the source tree.** The guard
   above was present in the script, committed, reviewed and merged, and
   absent from every image. `just build` then `podman run --rm <image>` to
@@ -216,8 +219,17 @@ Six more, each measured while fixing the live-ISO and install path
 
 ## Agent Skills
 
+- A parser import is a grammar choice. Use the reviewed parser on every host;
+  do not let a newer standard library accept a different config language.
+  `tests/test_config_parser.py` checks setup, backend version and parse limits.
+
 ### Issue tracker
 GitHub Issues for `tuna-os/tunaos`, operated via `gh` CLI.
 
 ### Triage labels
 `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`.
+
+For retained ISO media, preserve the GitHub receipt/archive anchor.
+Use the explicit branch for R2 media; never invent an archive member for R2 bytes.
+The negative fixtures in `tests/test_iso_retained_media_transport.py` distinguish
+byte consistency from trust in API freshness and producer authentication.

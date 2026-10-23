@@ -7,7 +7,7 @@
 #   buildah build --build-arg BASE_IMAGE=docker.io/library/debian:trixie \
 #     --target=kde --file Containerfile.debian .
 
-ARG BASE_IMAGE="docker.io/library/debian:trixie@sha256:913f6706df59a68922d1dd08f78c2476560a8d367897200a6005b00e5f67c2d5"
+ARG BASE_IMAGE="docker.io/library/debian:trixie@sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308"
 ARG COMMON_IMAGE_REF="ghcr.io/projectbluefin/common:unpinned-must-override"
 
 ARG DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
@@ -31,6 +31,7 @@ ARG ORAS_VERSION=1.2.0
 ARG ORAS_SHA256_AMD64=5b3f1cbb86d869eee68120b9b45b9be983f3738442f87ee5f06b00edd0bab336
 ARG ORAS_SHA256_ARM64=27df680a39fc2fcedc549cb737891623bc696c9a92a03fd341e9356a35836bae
 ARG TARGETARCH
+ARG BOOTC_VERSION
 RUN apt-get update -y && \
     apt-get install -y --no-install-recommends curl ca-certificates tar gzip && \
     case "${TARGETARCH}" in \
@@ -44,7 +45,7 @@ RUN apt-get update -y && \
     rm -f /tmp/oras.tar.gz && \
     case "${BASE_IMAGE}" in *sid*) TC=sid ;; *) TC=trixie ;; esac && \
     mkdir -p /fetch /output && cd /fetch && \
-    oras pull "ghcr.io/tuna-os/bootc-toolchain-${TC}:latest-${TARGETARCH}" && \
+    oras pull "ghcr.io/tuna-os/bootc-toolchain-${TC}:${BOOTC_VERSION}-${TARGETARCH}" && \
     tar -xzf toolchain.tar.gz -C /output && \
     rm -rf /fetch
 
@@ -54,6 +55,7 @@ COPY system_files /files
 COPY system_files_overrides /overrides
 COPY build_scripts /build_scripts
 COPY manifests /manifests
+COPY tunaos.toml /tunaos.toml
 # Only Tuna's curated files: install-desktop.sh applies experiences/<desktop>
 # whenever it is present, and the other desktops' trees are not part of the
 # apt images today.

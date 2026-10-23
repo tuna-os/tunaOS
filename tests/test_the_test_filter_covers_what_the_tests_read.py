@@ -127,6 +127,14 @@ def test_the_selectors_find_something():
             f"expected the suite to read {known}; parsed {sorted(reads)}")
 
 
+def test_schema_only_changes_trigger_the_contract_suite():
+    """Schema inputs need coverage even below the MIN_REFS heuristic."""
+    assert _is_covered("schemas", _filter_paths()), (
+        "the ISO media contract tests read schemas/, but a schema-only pull "
+        "request runs no Unit Tests. Add schemas/** to test.yml's paths filter."
+    )
+
+
 @pytest.mark.parametrize(
     "name", sorted(n for n in _paths_the_suite_reads()
                    if n not in GATED_ELSEWHERE))
@@ -140,3 +148,14 @@ def test_a_path_the_suite_reads_also_triggers_the_suite(name: str):
         f"without a path filter, as `ste` does for prose -- add it to "
         f"GATED_ELSEWHERE with that reason."
     )
+
+
+@pytest.mark.parametrize("path", [
+    "docs/iso-builder.config.json",
+    "docs/iso-builder-config.schema.json",
+    "docs/iso-builder.flavors.json",
+    "docs/iso-builder-flavors.schema.json",
+])
+def test_builder_contract_only_changes_run_validation(path):
+    """An export-only or schema-only PR must execute its contract tests."""
+    assert _is_covered(path, _filter_paths())
