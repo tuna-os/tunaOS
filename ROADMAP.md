@@ -114,6 +114,7 @@ The scheduled Asahi sweep can continue to inspect old tags after a build cell is
 
 ### Community
 
+- [October 2026 interim adoption snapshot](docs/adoption-metrics/OCTOBER-2026.md) (#3149): dated ISO census and missing inputs; final month totals and site publication remain due November 1.
 - Pre-Q4 Baseline (2026-08): 56 stars, 3 forks (API), 0 GitHub Release downloads, 0 external production adopters (ADOPTERS.md)
 - CONTRIBUTING.md, SECURITY.md, CODE_OF_CONDUCT.md published (June 2026)
 - Discussions enabled
