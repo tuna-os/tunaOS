@@ -54,7 +54,7 @@ jobs:
           with open(os.environ['GITHUB_ENV'], 'a') as output:
               output.write('ISO_PREFLIGHT_ROOT=' + str(target) + '\n')
           print('Verified and staged 14 fixed reviewed inputs; no guest input or installation.')
-          
+
           PY
       - name: Test all pre-submit guards and local transport regressions
         env:
