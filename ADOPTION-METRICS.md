@@ -55,6 +55,11 @@ publish, and *how* the snapshot feeds roadmap decisions.
 
 ## Cadence & publication
 
+The [October 2026 interim snapshot](docs/adoption-metrics/OCTOBER-2026.md)
+records a dated ISO census and the gaps for #3149.
+It separates lifetime counters from October activity. Final publication remains
+due on November 1, after the month ends.
+
 - **Preliminary baseline captured**: [2026-10-22 report](docs/adoption-metrics/snapshots/2026-10-22.md)
   ([JSON receipt](docs/adoption-metrics/snapshots/2026-10-22.json)). This is not
   the November checkpoint. The historical baseline column above remains dated.

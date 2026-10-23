@@ -12,6 +12,7 @@ that touched 36 files across `.github/`, `build_scripts/`, `live-iso/`,
 
 | Symptom | Measured cause | Fix |
 |---|---|---|
+| Release downloads rise but the ISO rank stays empty (#3149) | The 2026-10-23 [census](adoption-metrics/2026-10-23-release-census.md) finds three retained ISOs, all with zero lifetime downloads; other counters include cards and SBOMs. | Run `scripts/release-asset-census.py` with a new dated output path. Keep ISO and other counters separate; get October R2 logs before a monthly rank. |
 | ARM64 build passes but Snapdragon laptop support is unclear (#3116) | #3368 records postmarketOS observations and open TunaOS boot/install/update/rollback gates; an architecture manifest does not test board firmware or DTB selection. | Use [SNAPDRAGON.md](SNAPDRAGON.md) and report the exact device, image digest and hardware results. |
 | Bonito build succeeds despite bootc lint findings (#3001) | `99-cleanup.sh` calls `lint_image`; `lib.sh` returns success after findings unless `BOOTC_LINT_FATAL=1`. | Read the grouped output and step summary. Re-run lint against the candidate digest; apply the [Fedora readiness review](FEDORA-OUTREACH-READINESS.md) before outreach. |
 

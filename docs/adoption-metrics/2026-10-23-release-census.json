@@ -1,0 +1,548 @@
+{
+  "schema": 1,
+  "started_at": "2026-10-23T18:58:44.145186+00:00",
+  "source_commit": "c68517e22344279d6e78d99df7511d0750429109",
+  "config_sha256": "ebbca382c2d274edd51651e1274460201d6bed1b030a2864f1d348360525d3df",
+  "endpoints": [
+    "repos/tuna-os/tunaos",
+    "repos/tuna-os/tunaos/releases?per_page=100"
+  ],
+  "repository": {
+    "html_url": "https://github.com/tuna-os/tunaOS",
+    "stargazers_count": 60,
+    "forks_count": 7
+  },
+  "data": {
+    "public_non_prerelease_releases": 323,
+    "non_iso_assets": 801,
+    "non_iso_lifetime_downloads": 1197,
+    "iso_assets": [
+      {
+        "id": 467503338,
+        "name": "grouper-xfce-26.04-x86_64.iso",
+        "url": "https://github.com/tuna-os/tunaOS/releases/download/xfce-20260705/grouper-xfce-26.04-x86_64.iso",
+        "tag": "xfce-20260705",
+        "created_at": "2026-07-05T23:11:07Z",
+        "updated_at": "2026-07-05T23:11:44Z",
+        "lifetime_downloads": 0,
+        "variant": "grouper",
+        "desktop": "xfce"
+      },
+      {
+        "id": 467510282,
+        "name": "grouper-niri-26.04-x86_64.iso",
+        "url": "https://github.com/tuna-os/tunaOS/releases/download/niri-20260705/grouper-niri-26.04-x86_64.iso",
+        "tag": "niri-20260705",
+        "created_at": "2026-07-05T23:24:45Z",
+        "updated_at": "2026-07-05T23:25:31Z",
+        "lifetime_downloads": 0,
+        "variant": "grouper",
+        "desktop": "niri"
+      },
+      {
+        "id": 474815291,
+        "name": "flounder-gnome-13-x86_64.iso",
+        "url": "https://github.com/tuna-os/tunaOS/releases/download/gnome-20260712/flounder-gnome-13-x86_64.iso",
+        "tag": "gnome-20260712",
+        "created_at": "2026-07-12T23:09:11Z",
+        "updated_at": "2026-07-12T23:09:52Z",
+        "lifetime_downloads": 0,
+        "variant": "flounder",
+        "desktop": "gnome"
+      }
+    ],
+    "cells": [
+      {
+        "variant": "albacore",
+        "desktop": "cosmic",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": true
+      },
+      {
+        "variant": "albacore",
+        "desktop": "gnome",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": true
+      },
+      {
+        "variant": "albacore",
+        "desktop": "kde",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": true
+      },
+      {
+        "variant": "albacore",
+        "desktop": "niri",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": true
+      },
+      {
+        "variant": "albacore",
+        "desktop": "xfce",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": true
+      },
+      {
+        "variant": "bonito",
+        "desktop": "cosmic",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": true
+      },
+      {
+        "variant": "bonito",
+        "desktop": "gnome",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": true
+      },
+      {
+        "variant": "bonito",
+        "desktop": "kde",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": true
+      },
+      {
+        "variant": "bonito",
+        "desktop": "niri",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": true
+      },
+      {
+        "variant": "bonito",
+        "desktop": "xfce",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": true
+      },
+      {
+        "variant": "bonito-rawhide",
+        "desktop": "cosmic",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": true
+      },
+      {
+        "variant": "bonito-rawhide",
+        "desktop": "gnome",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": true
+      },
+      {
+        "variant": "bonito-rawhide",
+        "desktop": "kde",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": true
+      },
+      {
+        "variant": "bonito-rawhide",
+        "desktop": "niri",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": true
+      },
+      {
+        "variant": "bonito-rawhide",
+        "desktop": "xfce",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": true
+      },
+      {
+        "variant": "flounder",
+        "desktop": "cosmic",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": false
+      },
+      {
+        "variant": "flounder",
+        "desktop": "gnome",
+        "assets": 1,
+        "lifetime_downloads": 0,
+        "iso_enabled": false
+      },
+      {
+        "variant": "flounder",
+        "desktop": "kde",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": true
+      },
+      {
+        "variant": "flounder",
+        "desktop": "niri",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": false
+      },
+      {
+        "variant": "flounder",
+        "desktop": "xfce",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": false
+      },
+      {
+        "variant": "flounder-sid",
+        "desktop": "cosmic",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": false
+      },
+      {
+        "variant": "flounder-sid",
+        "desktop": "gnome",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": false
+      },
+      {
+        "variant": "flounder-sid",
+        "desktop": "kde",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": false
+      },
+      {
+        "variant": "flounder-sid",
+        "desktop": "niri",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": false
+      },
+      {
+        "variant": "flounder-sid",
+        "desktop": "xfce",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": false
+      },
+      {
+        "variant": "grouper",
+        "desktop": "cosmic",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": false
+      },
+      {
+        "variant": "grouper",
+        "desktop": "gnome",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": true
+      },
+      {
+        "variant": "grouper",
+        "desktop": "kde",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": true
+      },
+      {
+        "variant": "grouper",
+        "desktop": "niri",
+        "assets": 1,
+        "lifetime_downloads": 0,
+        "iso_enabled": false
+      },
+      {
+        "variant": "grouper",
+        "desktop": "xfce",
+        "assets": 1,
+        "lifetime_downloads": 0,
+        "iso_enabled": true
+      },
+      {
+        "variant": "guppy",
+        "desktop": "cosmic",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": false
+      },
+      {
+        "variant": "guppy",
+        "desktop": "gnome",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": false
+      },
+      {
+        "variant": "guppy",
+        "desktop": "kde",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": false
+      },
+      {
+        "variant": "guppy",
+        "desktop": "niri",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": false
+      },
+      {
+        "variant": "guppy",
+        "desktop": "xfce",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": false
+      },
+      {
+        "variant": "gurnard",
+        "desktop": "cosmic",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": false
+      },
+      {
+        "variant": "gurnard",
+        "desktop": "gnome",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": false
+      },
+      {
+        "variant": "gurnard",
+        "desktop": "kde",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": false
+      },
+      {
+        "variant": "gurnard",
+        "desktop": "niri",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": false
+      },
+      {
+        "variant": "gurnard",
+        "desktop": "xfce",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": false
+      },
+      {
+        "variant": "hummingbird",
+        "desktop": "cosmic",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": true
+      },
+      {
+        "variant": "hummingbird",
+        "desktop": "gnome",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": true
+      },
+      {
+        "variant": "hummingbird",
+        "desktop": "kde",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": false
+      },
+      {
+        "variant": "hummingbird",
+        "desktop": "niri",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": false
+      },
+      {
+        "variant": "hummingbird",
+        "desktop": "xfce",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": false
+      },
+      {
+        "variant": "marlin",
+        "desktop": "cosmic",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": false
+      },
+      {
+        "variant": "marlin",
+        "desktop": "gnome",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": true
+      },
+      {
+        "variant": "marlin",
+        "desktop": "kde",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": true
+      },
+      {
+        "variant": "marlin",
+        "desktop": "niri",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": false
+      },
+      {
+        "variant": "marlin",
+        "desktop": "xfce",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": false
+      },
+      {
+        "variant": "sailfin",
+        "desktop": "cosmic",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": false
+      },
+      {
+        "variant": "sailfin",
+        "desktop": "gnome",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": false
+      },
+      {
+        "variant": "sailfin",
+        "desktop": "kde",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": false
+      },
+      {
+        "variant": "sailfin",
+        "desktop": "niri",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": false
+      },
+      {
+        "variant": "sailfin",
+        "desktop": "xfce",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": false
+      },
+      {
+        "variant": "skipjack",
+        "desktop": "cosmic",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": true
+      },
+      {
+        "variant": "skipjack",
+        "desktop": "gnome",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": true
+      },
+      {
+        "variant": "skipjack",
+        "desktop": "kde",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": true
+      },
+      {
+        "variant": "skipjack",
+        "desktop": "niri",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": true
+      },
+      {
+        "variant": "skipjack",
+        "desktop": "xfce",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": true
+      },
+      {
+        "variant": "wahoo",
+        "desktop": "cosmic",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": false
+      },
+      {
+        "variant": "wahoo",
+        "desktop": "gnome",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": false
+      },
+      {
+        "variant": "wahoo",
+        "desktop": "kde",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": false
+      },
+      {
+        "variant": "wahoo",
+        "desktop": "niri",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": false
+      },
+      {
+        "variant": "wahoo",
+        "desktop": "xfce",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": false
+      },
+      {
+        "variant": "yellowfin",
+        "desktop": "cosmic",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": true
+      },
+      {
+        "variant": "yellowfin",
+        "desktop": "gnome",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": true
+      },
+      {
+        "variant": "yellowfin",
+        "desktop": "kde",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": true
+      },
+      {
+        "variant": "yellowfin",
+        "desktop": "niri",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": true
+      },
+      {
+        "variant": "yellowfin",
+        "desktop": "xfce",
+        "assets": 0,
+        "lifetime_downloads": 0,
+        "iso_enabled": true
+      }
+    ]
+  },
+  "finished_at": "2026-10-23T18:58:48.408934+00:00"
+}
