@@ -26,6 +26,7 @@ because "which ones are fine" is as useful as "which one broke".
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 import urllib.error
@@ -53,6 +54,11 @@ class Pin:
     # {version} is the tag (v1.2.3); {num} is the tag without the leading v.
     checksums_url: str
     asset: str
+    # Per-architecture overrides for releases whose filenames are not uniform.
+    assets: dict[str, str] = field(default_factory=dict)
+    # Most projects publish a text checksum file. GitHub also records digests
+    # directly in release metadata for assets without an upstream sums file.
+    checksum_format: str = "text"
     # Which architectures this download is pinned per. Most ship one asset per
     # arch; a payload that is the same bytes everywhere (QML, scripts) has a
     # single checksum and uses ("noarch",) so the loop below runs once and the
@@ -79,6 +85,21 @@ PINS = [
         checksum_re=r'^\s+{arch}:\s*"([0-9a-f]{{64}})"',
         checksums_url="https://github.com/twpayne/chezmoi/releases/download/{version}/chezmoi_{num}_checksums.txt",
         asset="chezmoi_{num}_linux_{arch}.deb",
+    ),
+    Pin(
+        name="bootc-installer",
+        version_file="image-versions.yaml",
+        version_re=r'^\s+bootc_installer:\s*"(v[^"]+)"',
+        checksum_file="image-versions.yaml",
+        checksum_re=r'^\s+{arch}:\s*"([0-9a-f]{{64}})"',
+        checksums_url="https://api.github.com/repos/tuna-os/bootc-installer/releases/tags/{version}",
+        asset="",
+        arches=("x86_64", "aarch64"),
+        assets={
+            "x86_64": "org.bootcinstaller.Installer.flatpak",
+            "aarch64": "org.bootcinstaller.Installer-aarch64.flatpak",
+        },
+        checksum_format="github-release-json",
     ),
     # The DMS QML payload, consumed by build_scripts/install-dms-qml-fallback.sh
     # on every EL10 niri image. Added after its pinned checksum turned out to
@@ -137,10 +158,21 @@ def fetch_published(pin: Pin, version: str) -> dict[str, str]:
         sys.exit(
             f"::error::{pin.name} {version}: cannot fetch {url} ({exc.code}). "
             "Either the version pin names a release that does not exist, or the "
-            "release did not publish a checksums file."
+            "release did not publish checksum metadata."
         )
     except urllib.error.URLError as exc:
         sys.exit(f"::error::{pin.name} {version}: cannot reach {url} ({exc.reason})")
+
+    if pin.checksum_format == "github-release-json":
+        try:
+            release = json.loads(body)
+        except json.JSONDecodeError as exc:
+            sys.exit(f"::error::{pin.name} {version}: invalid release metadata: {exc}")
+        return {
+            asset["name"]: asset["digest"].removeprefix("sha256:")
+            for asset in release.get("assets", [])
+            if re.fullmatch(r"sha256:[0-9a-f]{64}", asset.get("digest") or "")
+        }
 
     sums = {}
     for line in body.splitlines():
@@ -171,7 +203,7 @@ def main() -> int:
 
         for arch in pin.arches:
             pattern, pinned = find_checksum(pin, arch)
-            asset = pin.asset.format(arch=arch, num=version.lstrip("v"))
+            asset = pin.assets.get(arch, pin.asset.format(arch=arch, num=version.lstrip("v")))
             want = published.get(asset)
 
             if want is None:
