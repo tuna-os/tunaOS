@@ -79,6 +79,12 @@ that the authors use TunaOS. Keep the contribution count separate from
 production/evaluation entries in `ADOPTERS.md`; only a consent-confirmed report
 belongs in the adopter funnel.
 
+For the October campaign, use the [conversion report and review procedure](docs/HACKTOBERFEST-2026.md#campaign-pulse-closing-report-and-retention-3148).
+It separates raw PR activity from reviewed new human contributions and
+links follow-up PRs to an earlier merge. Without a reviewed cohort,
+conversion remains unmeasured. Retain the dated receipt with the monthly
+snapshot, and keep the October and post-event windows separate.
+
 ## Decision linkage
 
 Each snapshot must answer two questions for the roadmap:
