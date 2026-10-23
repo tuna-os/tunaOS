@@ -510,7 +510,7 @@ jobs:
 
       - name: Publish release after evidence verification
         if: >-
-          !cancelled() &&
+          success() &&
           steps.check.outputs.skip == 'false' &&
           inputs.dry_run != true
         env:
