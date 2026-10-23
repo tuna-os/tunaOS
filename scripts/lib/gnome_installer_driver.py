@@ -170,6 +170,18 @@ def control_target(screen, label, enabled=False):
         raise Unverified(f'control is disabled or its state is unknown: {label}')
     return box, [(box[0]+box[2])//2, (box[1]+box[3])//2]
 
+
+def verify_restart_rows(rows):
+    """Observe the measured done-page label; never click or infer a reboot."""
+    if len(rows) != 1 or rows[0][0] != 'Restart now':
+        raise Unverified('completion control label is absent or ambiguous')
+    box = rows[0][1]
+    bounds = ((30, 48), (20, 35), (280, 305), (50, 72))
+    if (len(box) != 4 or any(type(value) is not int for value in box)
+            or not all(low <= value <= high for value, (low, high) in zip(box, bounds))):
+        raise Unverified('completion control geometry is unverified')
+    return 'Restart now'
+
 class Screen:
     def __init__(self, path):
         self.path = Path(path)
@@ -195,8 +207,71 @@ class Screen:
         self._pixels = None
         self._summary_verified = False
         self._install_box_cache = None
+        if self.state in ('unknown', 'done'):
+            self.verify_completion_panel()
         if self.state == 'unknown':
             self.verify_progress_panel()
+
+    def verify_completion_panel(self):
+        """Same-frame installed title, media instruction and measured Restart label."""
+        if self.state not in ('unknown', 'done'):
+            return
+        self.state = 'unknown'
+        if (self.width, self.height) != (1280, 800):
+            return
+        exclusions = ('installation failed', 'save your recovery key', 'authentication',
+                      'type to search', 'confirm installation', 'elapsed',
+                      'do not power off', 'installation finished')
+        if any(marker in normal(line) for marker in exclusions for line in self.lines):
+            return
+        if any(progress_title(line) for line in self.lines):
+            return
+        titles = [(text, box) for text, box in self.rows
+                  if re.fullmatch(r'[A-Z][A-Za-z0-9 ._-]{0,63} is installed', text)]
+        instruction = 'Remove the installation media and restart the computer.'
+        media = [(text, box) for text, box in self.rows
+                 if 'remove the installation media' in normal(text)]
+        restarts = [(text, box) for text, box in self.rows if 'restart now' in normal(text)]
+        if len(titles) != 1 or len(media) != 1 or media[0][0] != instruction or len(restarts) > 1:
+            return
+        title, box = titles[0]
+        mbox = media[0][1]
+        if not (273 <= box[1] <= 281 and 22 <= box[3]-box[1] <= 32
+                and abs((box[0]+box[2])/2-640) <= 4
+                and 200 <= box[2]-box[0] <= 600
+                and 310 <= mbox[1] <= 318 and 10 <= mbox[3]-mbox[1] <= 18
+                and abs((mbox[0]+mbox[2])/2-640) <= 4
+                and 370 <= mbox[2]-mbox[0] <= 400):
+            return
+        # Anchor the text-only crop to the measured heading; reject unsupported
+        # layout and dimmed/disabled/covered original pixels before OCR.
+        cx, cy = self.width//2+72, box[1]+98
+        background = [(220, 270), (1060, 270), (220, 410), (1060, 410),
+                      (cx-77, cy), (cx+78, cy), (cx-72, cy-20), (cx+73, cy+20)]
+        if any(any(abs(value-expected) > 4 for value, expected in zip(self.rgb(x, y), (250, 250, 251)))
+               for x, y in background):
+            return
+        if any(any(abs(value-expected) > 4 for value, expected in zip(self.rgb(x, y), (145, 65, 172)))
+               for x, y in ((cx-67, cy), (cx+68, cy))):
+            return
+        if restarts and (restarts[0][0] != 'Restart now' or not
+                         (660 <= restarts[0][1][0] <= 680 and 365 <= restarts[0][1][1] <= 375
+                          and 745 <= restarts[0][1][2] <= 765 and 375 <= restarts[0][1][3] <= 385)):
+            return
+        with tempfile.NamedTemporaryFile(suffix='.png') as prepared:
+            subprocess.run(['convert', str(self.path), '-crop', f'110x30+{cx-55}+{cy-15}',
+                            '+repage', '-resize', '300%', '-alpha', 'off',
+                            '-colorspace', 'gray', '-negate', prepared.name],
+                           capture_output=True, timeout=20, check=True)
+            result = subprocess.run(['tesseract', prepared.name, 'stdout', '--psm', '7', 'tsv'],
+                                    capture_output=True, text=True, timeout=30, check=True)
+        try:
+            _, rows = ocr_rows(result.stdout, strict=True)
+            label = verify_restart_rows(rows)
+        except Unverified:
+            return
+        self.completion_markers = [title, instruction, label]
+        self.state = 'done'
 
     def verify_progress_panel(self):
         """One measured crop, not a fallback OCR sequence or completion proof."""

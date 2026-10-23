@@ -2086,3 +2086,13 @@ Full-frame OCR also lost letters and punctuation in the warning and timer.
 Use one measured crop with the exact title, warning, elapsed time and percentage.
 Check their positions and the foreground panel. Keep failure and completion
 checks separate. Observe progress without more input or a success claim.
+
+### Installed page appears but completion stays unknown
+
+Run 39949178878 reached the installed page in both modes. The full-frame OCR
+read the title and remove-media instruction, but missed the white `Restart now`
+label on its purple button. The test did not prove completion or detached boots.
+
+Check all three same-frame markers, measured positions and original-pixel
+checks. Read the button with one crop of its inverted text; do not click it. Keep the
+host-driven media removal and cold and warm boot checks after completion.

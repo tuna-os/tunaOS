@@ -745,3 +745,53 @@ def test_progress_never_overrides_foreground_state(monkeypatch, state, line):
     monkeypatch.setattr(driver.subprocess, 'run', lambda *a, **kw: pytest.fail('excluded page reached OCR'))
     screen.verify_progress_panel()
     assert screen.state == state
+
+
+@pytest.mark.parametrize('rows', [[], [('Restart', (39, 27, 293, 60))],
+    [('Restart now', (39, 27, 293, 60))]*2,
+    [('Restart now', (0, 27, 293, 60))], [('Restart now', (39, 27, 330, 60))],
+    [('Restart now', (39, 27, 293, 90))], [('Restart now', (True, 27, 293, 60))]])
+def test_completion_restart_label_is_exact_and_bounded(rows):
+    with pytest.raises(driver.Unverified):
+        driver.verify_restart_rows(rows)
+
+
+def test_completion_restart_label_observation_only():
+    assert driver.verify_restart_rows([('Restart now', (39, 27, 293, 60))]) == 'Restart now'
+
+
+@pytest.mark.parametrize('mutation', ['failed', 'recovery', 'overview', 'authentication',
+    'progress', 'elapsed', 'missing-title', 'duplicate-title', 'wrong-title-box',
+    'missing-media', 'duplicate-media', 'wrong-media', 'wrong-media-box',
+    'extra-restart', 'duplicate-restart', 'dimensions', 'dimmed', 'disabled'])
+@pytest.mark.parametrize('initial', ['unknown', 'done'])
+def test_completion_never_bypasses_same_frame_guards(monkeypatch, mutation, initial):
+    screen = object.__new__(driver.Screen)
+    screen.width, screen.height, screen.state = 1280, 800, initial
+    screen.rows = [('Skipjack is installed', (511, 277, 767, 304)),
+                   ('Remove the installation media and restart the computer.', (447, 314, 832, 328))]
+    extra = {'failed': 'Installation failed', 'recovery': 'Save your recovery key',
+             'overview': 'Type to search', 'authentication': 'Authentication required',
+             'progress': 'Almost ready...', 'elapsed': '5:00 elapsed'}
+    if mutation in extra:
+        screen.rows.append((extra[mutation], (230, 675, 450, 695)))
+    elif mutation == 'missing-title': screen.rows.pop(0)
+    elif mutation == 'duplicate-title': screen.rows.append(screen.rows[0])
+    elif mutation == 'wrong-title-box': screen.rows[0] = (screen.rows[0][0], (511, 177, 767, 204))
+    elif mutation == 'missing-media': screen.rows.pop(1)
+    elif mutation == 'duplicate-media': screen.rows.append(screen.rows[1])
+    elif mutation == 'wrong-media': screen.rows[1] = ('Remove the installation media later.', screen.rows[1][1])
+    elif mutation == 'wrong-media-box': screen.rows[1] = (screen.rows[1][0], (447, 214, 832, 228))
+    elif mutation in ('extra-restart', 'duplicate-restart'):
+        screen.rows += [('Restart now', (900, 500, 990, 515))] * (2 if mutation == 'duplicate-restart' else 1)
+    elif mutation == 'dimensions': screen.width = 1024
+    screen.lines = [text for text, _ in screen.rows]
+    def rgb(x, y):
+        if mutation == 'dimmed': return (180, 180, 180)
+        if (x, y) in ((645, 375), (780, 375)):
+            return (220, 220, 220) if mutation == 'disabled' else (145, 65, 172)
+        return (250, 250, 251)
+    screen.rgb = rgb
+    monkeypatch.setattr(driver.subprocess, 'run', lambda *a, **kw: pytest.fail('invalid completion reached OCR'))
+    screen.verify_completion_panel()
+    assert screen.state == 'unknown'
