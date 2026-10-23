@@ -73,6 +73,7 @@ user-facing site:
 | [XFCE-OLD-LAPTOP-PITCH.md](XFCE-OLD-LAPTOP-PITCH.md) | Old-laptop and e-waste repurposing pitch for the XFCE Linux companion project (#1682) |
 | [YOUTUBER-REVIEW-KIT.md](YOUTUBER-REVIEW-KIT.md) | Linux YouTuber review kit — verified working downloads, ARM story (#1535) |
 | [FEDORA-MAGAZINE-PITCH.md](FEDORA-MAGAZINE-PITCH.md) | Guest-post pitch draft for Fedora Magazine |
+| [outreach/FEDORA-MAGAZINE-SERIES.md](outreach/FEDORA-MAGAZINE-SERIES.md) | Desktop Linux at Scale: four-part proposal, article briefs, and submission handoff (#3114) |
 | [FEDORA45-TESTING-CALL.md](FEDORA45-TESTING-CALL.md) | Fedora 45 Beta testing call guide for Bonito variant (#1609) |
 | [GNOME51-BETA-TESTING-CALL.md](GNOME51-BETA-TESTING-CALL.md) | GNOME 51 canary test plan and phased rollout decision (#1775) |
 | [ELEMENTARY-CROSSPOST.md](ELEMENTARY-CROSSPOST.md) | Gurnard cross-post draft for the elementary OS community |
