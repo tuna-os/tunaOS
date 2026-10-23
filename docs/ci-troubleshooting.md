@@ -1774,3 +1774,19 @@ Buffer the output of each try. If a page fails, discard all output from that
 try. After three failures, retain the command's exit status and diagnostic.
 Keep README unchanged; do not publish a partial table.
 See `tests/test_readme_status_api_retries.py` for regression tests.
+
+### `Test` fails after a `tomli` dependency update
+
+**Symptom:** `Test` fails in `tests/test_primary_config.py` on Python 3.10.
+`test_parser_keeps_the_shared_toml10_grammar` reports
+`Failed: DID NOT RAISE TOMLDecodeError` for TOML 1.1 fixtures. The Renovate
+smoke test also fails.
+
+**Measured cause:** `tomli==2.5.0` accepts trailing commas in inline tables and
+`\xNN` escapes. The config contract for Python 3.10 and 3.11 uses TOML 1.0;
+Python 3.11 stdlib `tomllib` rejects both inputs. Run
+[39421110868](https://github.com/tuna-os/tunaos/actions/runs/39421110868)
+shows the failure after `tomli` 2.5.0 merged.
+
+**Fix:** Keep `tomli` at compatible `2.2.1`; cap Renovate below `2.5.0`. Lift
+the cap when the config contract and both parsers accept TOML 1.1.
