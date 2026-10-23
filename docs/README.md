@@ -19,6 +19,7 @@ user-facing site:
 |-----|----------------|
 | [CONTRIBUTOR-FIRST-PR.md](CONTRIBUTOR-FIRST-PR.md) | Five small tasks, fork commands, checks, and review help |
 | [CONTRIBUTOR-ROADMAP.md](CONTRIBUTOR-ROADMAP.md) | Learning stages, weekly help, recognition, and program goals |
+| [BUG-REPORT-EXAMPLE.md](BUG-REPORT-EXAMPLE.md) | Fictional bug report with reproduction steps, evidence, and privacy placeholders |
 | [BETA-RELEASE-READINESS.md](BETA-RELEASE-READINESS.md) | BETA product release gates, owners, audit and consumer documentation handoff (#2935) |
 | [AGENT_GUIDE.md](AGENT_GUIDE.md) | Repo architecture: variants, flavors, build stages, key files |
 | [HUMMINGBIRD.md](HUMMINGBIRD.md) | Fedora Hummingbird variant architecture, rolling release model, and package snapshot state |
