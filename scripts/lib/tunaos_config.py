@@ -1,11 +1,13 @@
 """Primary TOML matrix and desktop policy with generated compatibility adapters.
 
-Python 3.10 uses the pinned tomli parser; 3.11+ uses the standard library.
+All supported Python versions use the same reviewed TOML 1.0 parser.
 Base/shared package and branding ownership remain later migration milestones.
 """
 from __future__ import annotations
 
 import copy
+import hashlib
+import sys
 import importlib.util
 from functools import lru_cache
 from datetime import datetime
@@ -15,16 +17,22 @@ from pathlib import Path
 import re
 import tempfile
 
+TOMLI_VERSION = '2.3.2'
+_VENDOR = Path(__file__).with_name('_vendor') / 'tomli'
+# A path-specific namespace keeps copied checkout imports independent.
+_VENDOR_NAME = '_tunaos_tomli_' + hashlib.sha256(str(_VENDOR.resolve()).encode()).hexdigest()
 try:
-    import tomllib
-except ModuleNotFoundError:
-    try:
-        import tomli as tomllib
-    except ModuleNotFoundError as exc:
-        raise SystemExit(
-            "Python 3.10 requires tomli. Install the reviewed dependencies: "
-            "python3 -m pip install -r requirements-config.txt"
-        ) from exc
+    _spec = importlib.util.spec_from_file_location(
+        _VENDOR_NAME, _VENDOR / '__init__.py', submodule_search_locations=[str(_VENDOR)])
+    if _spec is None or _spec.loader is None:
+        raise ImportError('vendored parser loader is unavailable')
+    tomllib = importlib.util.module_from_spec(_spec)
+    sys.modules[_VENDOR_NAME] = tomllib
+    _spec.loader.exec_module(tomllib)
+    if getattr(tomllib, '__version__', None) != TOMLI_VERSION:
+        raise ImportError('vendored parser version mismatch')
+except (ImportError, OSError) as exc:
+    raise SystemExit(f'TunaOS vendored Tomli {TOMLI_VERSION} is unavailable; restore the reviewed source checkout: {exc}') from exc
 
 ROOT = Path(__file__).resolve().parents[2]
 ID = re.compile(r"[a-z0-9][a-z0-9-]*\Z")
@@ -33,6 +41,16 @@ PLATFORMS = {"linux/amd64", "linux/amd64/v2", "linux/amd64/v3", "linux/arm64"}
 
 class ConfigError(ValueError):
     """Invalid primary configuration; never fall back to stock data."""
+
+
+def parse(source, path='<string>'):
+    """Parse the host-independent grammar and report resource limits cleanly."""
+    try:
+        if isinstance(source, bytes):
+            source = source.decode('utf-8')
+        return tomllib.loads(source)
+    except (ValueError, RecursionError) as exc:
+        raise ConfigError(f'{path}: {exc}') from exc
 
 
 def table(value, allowed, required, path):
@@ -72,9 +90,25 @@ def package_policy():
     return module
 
 
+@lru_cache(maxsize=1)
+def flatpak_policy():
+    spec = importlib.util.spec_from_file_location('flatpak_preinstall_policy', Path(__file__).with_name('flatpak_preinstall.py'))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+@lru_cache(maxsize=1)
+def package_catalog_schema():
+    spec = importlib.util.spec_from_file_location('tunaos_package_catalogs', Path(__file__).with_name('package_catalogs.py'))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def validate(config):
     """Validate the implemented surface; reject inert future sections."""
-    table(config, ('schema_version', 'build', 'iso_groups', 'sibling_images', 'tuna_rollout', 'variants', 'package_groups', 'desktops'),
+    table(config, ('schema_version', 'build', 'iso_groups', 'sibling_images', 'tuna_rollout', 'variants', 'package_groups', 'desktops', 'iso_builder', 'flavor_metadata', 'flatpak_preinstall', 'package_catalogs'),
           ('schema_version', 'build', 'iso_groups', 'sibling_images', 'tuna_rollout', 'variants'), 'config')
     if 'desktops' in config or 'package_groups' in config:
         tunaos_packages = package_policy()
@@ -205,6 +239,34 @@ def validate(config):
             unknown = set(group[key]) - flavor_ids
             if unknown:
                 raise ConfigError(f'iso_groups[{i}].{key}: unknown flavors {sorted(unknown)}')
+    if 'flatpak_preinstall' in config:
+        try:
+            flatpak_policy().validate(config)
+        except flatpak_policy().PolicyError as exc:
+            raise ConfigError(str(exc)) from exc
+    if 'iso_builder' in config or 'flavor_metadata' in config:
+        module_path = Path(__file__).with_name('iso_builder_config.py')
+        spec = importlib.util.spec_from_file_location('iso_builder_config', module_path)
+        if spec is None or spec.loader is None:
+            raise ConfigError(f'iso_builder: cannot load validator at {module_path}')
+        module = importlib.util.module_from_spec(spec)
+        try:
+            spec.loader.exec_module(module)
+        except OSError as exc:
+            raise ConfigError(f'iso_builder: cannot read validator at {module_path}: {exc}') from exc
+        try:
+            if 'flavor_metadata' in config:
+                module.flavor_metadata(config)
+            if 'iso_builder' in config:
+                module.project(config)
+        except module.ConfigError as exc:
+            raise ConfigError(f'iso_builder: {exc}') from exc
+    if 'package_catalogs' in config:
+        catalogs = package_catalog_schema()
+        try:
+            catalogs.validate_document(config)
+        except catalogs.CatalogError as exc:
+            raise ConfigError(f'package_catalogs: {exc}') from exc
     return config
 
 
@@ -228,11 +290,10 @@ def publication_tags_overlap(left, left_dated, right, right_dated):
 def load(path=None):
     path = Path(path) if path is not None else ROOT / 'tunaos.toml'
     try:
-        with path.open('rb') as stream:
-            config = tomllib.load(stream)
-    except (OSError, tomllib.TOMLDecodeError) as exc:
+        source = path.read_bytes()
+    except OSError as exc:
         raise ConfigError(f'{path}: {exc}') from exc
-    return validate(config)
+    return validate(parse(source, path))
 
 
 def matrix(config):
@@ -318,7 +379,7 @@ def prepare_debian_contract(root, variant, desktop, platform):
     import hashlib
     root = Path(root)
     source = (root / 'tunaos.toml').read_bytes()
-    document = validate(tomllib.loads(source.decode('utf-8')))
+    document = validate(parse(source, root / 'tunaos.toml'))
     try:
         contract = package_policy().installation_contract(document, hashlib.sha256(source).hexdigest(),
                                                          variant, desktop, platform,

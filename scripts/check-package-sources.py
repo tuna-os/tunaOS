@@ -46,7 +46,7 @@ def at_revision(base: str, path: Path) -> object | None:
 
 
 def primary_profiles(text):
-    document = tunaos_config.tomllib.loads(text)
+    document = tunaos_config.parse(text)
     return tunaos_packages.legacy_profiles({key: document[key] for key in ('package_groups', 'desktops')})
 
 
@@ -54,7 +54,7 @@ def baseline_profiles(base):
     try:
         source = subprocess.check_output(['git', 'show', f'{base}:tunaos.toml'], text=True,
                                          stderr=subprocess.DEVNULL)
-        parsed = tunaos_config.tomllib.loads(source)
+        parsed = tunaos_config.parse(source, f'{base}:tunaos.toml')
         if 'desktops' in parsed:
             return primary_profiles(source)
     except subprocess.CalledProcessError:

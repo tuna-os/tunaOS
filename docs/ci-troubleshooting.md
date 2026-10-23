@@ -1775,18 +1775,109 @@ try. After three failures, retain the command's exit status and diagnostic.
 Keep README unchanged; do not publish a partial table.
 See `tests/test_readme_status_api_retries.py` for regression tests.
 
+### ISO Builder presentation export drift
+
+Symptom: `check-builder-config` reports drift in the generated builder configuration.
+Cause: `docs/iso-builder.config.json` differs from `[iso_builder]` in primary
+`tunaos.toml`. The regression test compares the complete deterministic export.
+Fix: edit TOML, run `python3 scripts/config.py generate-builder-config`, then
+run `python3 scripts/config.py check-builder-config`. Do not edit the JSON copy.
+
+### Fork preparation reports changed sources with a desktop override
+
+Symptom: the test for source receipts rejects a tracked desktop adapter, or preparation
+reports `sources changed during preparation` before a build starts.
+Cause: commit `aa9810e9` added `manifests/desktops/tuna-arch.yaml` after
+TOML became the primary owner of desktop policy. The source index includes this ignored
+path, but `git add --all` in the prepared context omits it.
+
+Fix: `[desktops.tuna-arch]` owns the override for GDM on Marlin in `tunaos.toml`.
+The compiler emits its ignored adapter. The regression test compares every
+package, its order, hooks and display manager with the historical source.
+Other cells still use greetd. No package pin changes in this repair.
+
 ### `Test` fails after a `tomli` dependency update
 
-**Symptom:** `Test` fails in `tests/test_primary_config.py` on Python 3.10.
-`test_parser_keeps_the_shared_toml10_grammar` reports
-`Failed: DID NOT RAISE TOMLDecodeError` for TOML 1.1 fixtures. The Renovate
-smoke test also fails.
+**Symptom:** The `Test` workflow fails in `tests/test_primary_config.py` on
+Python 3.10. `test_parser_keeps_the_shared_toml10_grammar` reports
+`Failed: DID NOT RAISE TOMLDecodeError` for TOML 1.1-only fixtures, and the
+smoke test for Renovate-only changes fails because it runs the same suite.
 
 **Measured cause:** `tomli==2.5.0` accepts trailing commas in inline tables and
-`\xNN` escapes. The config contract for Python 3.10 and 3.11 uses TOML 1.0;
-Python 3.11 stdlib `tomllib` rejects both inputs. Run
-[39421110868](https://github.com/tuna-os/tunaos/actions/runs/39421110868)
+`\xNN` escapes. The repository's Python 3.10/3.11 compatibility contract still
+needs TOML 1.0 grammar; Python 3.11's stdlib `tomllib` rejects both inputs.
+[Run 39421110868](https://github.com/tuna-os/tunaos/actions/runs/39421110868)
 shows the failure after `tomli` 2.5.0 merged.
 
-**Fix:** Keep `tomli` at compatible `2.2.1`; cap Renovate below `2.5.0`. Lift
-the cap when the config contract and both parsers accept TOML 1.1.
+**Fix:** Use the bundled Tomli 2.3.2 source on every host.
+Tomli 2.4.0 first added TOML 1.1, so a `<2.5.0` cap did not hold the grammar.
+The 2.3.2 release keeps TOML 1.0 and includes the key and nesting limit fixes.
+Review grammar changes with the same tests on all supported hosts.
+
+### Config works on one Python host but fails on another
+
+**Symptom:** Python 3.15 accepts a config that Python 3.10 rejects.
+
+**Cause:** The old loader used the host's standard library when present.
+Python 3.15's parser accepts TOML 1.1. The config contract still uses TOML 1.0.
+The test `test_parser_keeps_the_shared_toml10_grammar` covers this split.
+
+**Fix:** Use the bundled Tomli parser on every host, with no standard library fallback.
+Restore the reviewed source checkout if its parser files are absent.
+Config reads need no pip install or special sudo environment.
+Run `python3 scripts/check-vendored-parser.py` to check the file hashes.
+
+## Package authoring refuses an add or asks for an editor dependency
+
+**Symptom:** `config-packages.py add` reports a missing/ambiguous native package,
+a stale index, a receipt hash mismatch, or a missing `tomlkit` dependency.
+
+**Cause:** The offline editor needs native names for every selected policy before
+it writes. `tests/test_package_authoring.py` tests additions for apt and Gentoo.
+An ambiguous Gentoo category or a failed index leaves the TOML file unchanged.
+Read-only config validation does not need the optional editor dependency.
+
+**Fix:** Install `requirements-package-authoring.txt` explicitly to edit files.
+Refresh the native index and its receipt together, or use `search` followed by an
+explicit `--native TARGET=exact-name` for a verified mapping. Do not remove a
+failed target to imply all-base coverage. See the [package command guide](PACKAGE-AUTHORING.md)
+for policy scope, provenance and native formats.
+
+## Package addition conflicts with a DNF exclusion or exceeds the size limit
+
+**Symptom:** An added package matches a DNF exclusion such as `htop*`, or a
+config near 8 MiB cannot pass the next read after an addition.
+
+**Cause:** The check used equality. It did not support globs. The input-size guard did
+not cover serialized output. The regression cases in
+`tests/test_package_authoring.py` cover direct and inherited exclusion patterns,
+negative matches, and the no-write size boundary.
+
+**Fix:** Check name globs for DNF after package-group expansion and reject oversized
+output before replacement. For DNF, the installer passes exclusions through `-x`.
+The [DNF rules](https://dnf5.readthedocs.io/en/latest/misc/specs.7.html#globs)
+define this syntax. This check does not replace native transaction resolution.
+
+### Retained browser candidate fails the v2 media join
+
+A manifest in R2 is not a member of a GitHub ZIP archive.
+Diagnostic observations from its producer are not a browser v2 receipt.
+A false `artifact.mediaPath` misstates the location of the media.
+An absent receipt anchor in GitHub loses the producer association.
+
+Use the explicit branch for retained media. Preserve the run, artifact ID, and
+archive hash. Verify the exact receipt member and its hash.
+Pin the manifest hash independently before any chunk read.
+
+The tiny fixtures in `tests/test_iso_retained_media_transport.py` reject wrong
+origins, runs, and `runAttempt` values. They reject replay, changed manifests,
+absent chunks, wrong whole-ISO identity, and unsafe members in ZIP archives.
+These tests check consistency. They do not prove a real producer or installation.
+
+### Removed Flatpak IDs stay in the hook file
+
+**Symptom:** A cut-down ID stays in `tunaos-<desktop>.preinstall`.
+
+**Cause:** The hook adds new IDs but it never deletes old IDs.
+
+**Fix:** Delete the owned file at the start of each run. Keep files from other sources. Reject a linked file before you change files.
