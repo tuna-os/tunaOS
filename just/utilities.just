@@ -63,6 +63,9 @@ check: _ensure_check_deps ste
     #!/usr/bin/env bash
     cd {{ justfile_directory() }}
     python3 "{{ justfile_directory() }}/scripts/config.py" generate >/dev/null || exit 1
+    python3 "{{ justfile_directory() }}/scripts/config.py" check-builder-config >/dev/null || exit 1
+    python3 "{{ justfile_directory() }}/scripts/config.py" check-flatpak-policy >/dev/null || exit 1
+    python3 "{{ justfile_directory() }}/scripts/config.py" check-builder-flavors >/dev/null || exit 1
     echo "Checking syntax of shell scripts..."
     find . -not -path './.spektacular/repos/*' -not -path './.git/*' -not -path './system_files/usr/share/gnome-shell/extensions/*' -not -path './packages-repo/*' -not -path './.build/*' -iname "*.sh" -type f -exec shellcheck --exclude=SC1091 "{}" ";"
     # `just fix` WROTE shell formatting and nothing ever CHECKED it, so the
@@ -103,6 +106,7 @@ _ensure_test_deps: _ensure_check_deps
     python3 "{{ justfile_directory() }}/scripts/config.py" generate >/dev/null || exit 1
     if ! command -v bats &> /dev/null; then brew install bats-core; fi
     if ! python3 -c "import pytest" 2>/dev/null; then pip3 install pytest --break-system-packages 2>/dev/null || pip3 install pytest --user; fi
+    python3 -m pip install -r requirements-package-authoring.txt --break-system-packages || python3 -m pip install -r requirements-package-authoring.txt --user
     command -v yq >/dev/null || { echo "yq is required to read test dependency pins" >&2; exit 1; }
     schema_version=$(yq -r '.downloads.jsonschema // ""' image-versions.yaml)
     [[ "$schema_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Invalid jsonschema test pin" >&2; exit 1; }
