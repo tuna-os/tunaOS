@@ -568,3 +568,50 @@ def test_transfer_stderr_flood_preserves_whole_deadline():
     details = json.loads(str(error.value).split('; ', 1)[1])
     assert details['bytes_received'] == 0 and details['stderr_truncated']
     assert 'PRIVATE_SENTINEL' not in str(error.value)
+
+
+@pytest.mark.parametrize('size,expected', [(1, 1200), (1024**3, 1200),
+    (6158287146, 3057), (12*1024**3, 3600)])
+def test_archive_deadline_is_size_aware_and_hard_capped(size, expected):
+    assert module.archive_deadline(size) == expected
+
+
+@pytest.mark.parametrize('size', [0, -1, True, '123', 1.5, 12*1024**3+1])
+def test_archive_deadline_rejects_invalid_sizes(size):
+    with pytest.raises(ValueError):
+        module.archive_deadline(size)
+
+
+@pytest.mark.parametrize('code', [
+    'import time;time.sleep(5)',
+    'import os\nwhile True:os.write(2,b"PRIVATE_SENTINEL"*1024)',
+    'import os,time;os.close(1);os.close(2);time.sleep(5)',
+])
+def test_transfer_idle_timeout_is_not_reset_by_stderr_or_closed_pipes(code):
+    import io
+    import sys
+    import time
+    started = time.monotonic()
+    with pytest.raises(ValueError, match='idle deadline exceeded') as error:
+        module.bounded_command([sys.executable, '-c', code], io.BytesIO(), 100, 5, .1)
+    assert time.monotonic()-started < 3
+    assert 'PRIVATE_SENTINEL' not in str(error.value)
+
+
+def test_transfer_real_stdout_progress_resets_idle_not_total_deadline():
+    import io
+    import sys
+    output = io.BytesIO()
+    code = 'import os,time\nfor _ in range(20):\n os.write(1,b"x");time.sleep(.04)'
+    with pytest.raises(ValueError, match='GitHub transfer deadline exceeded'):
+        module.bounded_command([sys.executable, '-c', code], output, 100, .3, .15)
+    assert 1 < len(output.getvalue()) < 20
+
+
+def test_transfer_incremental_success_with_idle_bound():
+    import io
+    import sys
+    output = io.BytesIO()
+    code = 'import os,time\nfor _ in range(3):\n os.write(1,b"x");time.sleep(.03)'
+    assert module.bounded_command([sys.executable, '-c', code], output, 3, 5, .5) == 3
+    assert output.getvalue() == b'xxx'
