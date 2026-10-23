@@ -202,21 +202,8 @@ EOF
 
 # ── os-release identity ─────────────────────────────────────────────────────
 
-# Every variant shipped HOME_URL and DOCUMENTATION_URL pointing at
-# projectbluefin.io, inherited from the upstream script. The contract only read
-# SUPPORT_URL and BUG_REPORT_URL, which were already ours, so nothing noticed.
-@test "os-release URLs all point at TunaOS" {
-  local info="${REPO_ROOT}/build_scripts/90-image-info.sh"
-  run grep -E '^(HOME_URL|DOCUMENTATION_URL|SUPPORT_URL|BUG_SUPPORT_URL)=' "$info"
-  [ "$status" -eq 0 ]
-  [ "$(echo "$output" | wc -l)" -eq 4 ]
-  echo "$output" | grep -qv 'tuna' && {
-    echo "an os-release URL points away from TunaOS:" >&2
-    echo "$output" >&2
-    return 1
-  }
-  return 0
-}
+# The four os-release URLs (once inherited from projectbluefin.io) now come from
+# tunaos.toml; tests/test_identity_config.py freezes their stock values.
 
 @test "the branding contract checks all four os-release URLs" {
   grep -q 'for field in HOME_URL DOCUMENTATION_URL SUPPORT_URL BUG_REPORT_URL' \

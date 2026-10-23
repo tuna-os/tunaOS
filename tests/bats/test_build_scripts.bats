@@ -208,16 +208,6 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
   fi
 }
 
-@test "build_scripts/90-image-info.sh maps variants to scientific fish names" {
-  local script="${REPO_ROOT}/build_scripts/90-image-info.sh"
-  grep -q 'yellowfin) CODE_NAME="Thunnus albacares"' "$script"
-  grep -q 'albacore) CODE_NAME="Thunnus alalunga"' "$script"
-  grep -q 'skipjack) CODE_NAME="Katsuwonus pelamis"' "$script"
-  grep -q 'grouper) CODE_NAME="Epinephelus marginatus"' "$script"
-  run grep -F 'CODE_NAME="Achillobator"' "$script"
-  [ "$status" -ne 0 ]
-}
-
 # The codename table is keyed on the canonical variant id, not IMAGE_NAME.
 # IMAGE_NAME is the *publish* name (bonito for bonito-rawhide) and, on bases
 # whose Containerfile does not pin it, whatever lib.sh derived from the base
@@ -229,8 +219,9 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
   local harness="${BATS_TEST_TMPDIR}/codename.sh"
   {
     echo 'set -euo pipefail'
+    echo "source '${REPO_ROOT}/build_scripts/lib/identity.env'"
     awk '/^canonical_variant\(\) \{/,/^\}/' "$script"
-    awk '/^VARIANT_KEY=/,/^esac/' "$script"
+    awk '/^VARIANT_KEY=/,/^fi$/' "$script"
     echo 'echo "${VARIANT_KEY}:${CODE_NAME}"'
   } >"$harness"
 

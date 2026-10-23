@@ -80,20 +80,23 @@ if [[ -n "$accent_rgb" ]]; then
 	done
 fi
 
-# The About page (Info Center) is one of the two places TunaOS is named at
-# all; the variant is the brand everywhere else. Plasma shows Variant= under
+# The About page (Info Center) is one of the two places the project is named
+# at all; the variant is the brand everywhere else. Plasma shows Variant= under
 # the OS name, so it reads "Marlin / part of TunaOS", with the variant's mark
-# and our website. Written after the install: Fedora's kde-settings ships its
-# own copy with a Fedora logo and website.
+# and the project website, both from tunaos.toml via lib/identity.env.
+# Written after the install: Fedora's kde-settings ships its own copy with a
+# Fedora logo and website.
 # Only on a real build (no file arguments) or when a test names the path.
 if [[ $# -eq 0 || -n "${TUNAOS_KCM_ABOUT:-}" ]]; then
+	# shellcheck source=../lib/identity.env
+	source "${TUNAOS_IDENTITY_ENV:-$(dirname "${BASH_SOURCE[0]}")/../lib/identity.env}"
 	about="${TUNAOS_KCM_ABOUT:-/etc/xdg/kcm-about-distrorc}"
 	mkdir -p "$(dirname "$about")"
-	cat >"$about" <<'ABOUT'
+	cat >"$about" <<ABOUT
 [General]
 LogoPath=/usr/share/pixmaps/tunaos.svg
-Website=https://github.com/tuna-os/tunaos
-Variant=part of TunaOS
+Website=${TUNAOS_HOME_URL}
+Variant=part of ${TUNAOS_PROJECT_NAME}
 ABOUT
 fi
 

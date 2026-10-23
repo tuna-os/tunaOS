@@ -248,13 +248,34 @@ packages are best-effort — they won't fail the build if unavailable.
 
 ### Changing branding, wallpapers, defaults
 
-The image branding is set by environment variables in the Containerfile:
+Your project's name, links and codenames live in `tunaos.toml`:
 
-```dockerfile
-ENV IMAGE_NAME="myproject"
-ENV IMAGE_VENDOR="mycompany"
-ENV IMAGE_NAME_VARIANT="myvariant"
+```toml
+[project]
+name = "Acme OS"          # fastfetch and the KDE About page: "part of Acme OS"
+id = "acmeos"             # lowercase; the product part of CPE_NAME
+cpe_vendor = "acme"       # the vendor part of CPE_NAME
+
+[defaults.branding]       # os-release HOME_URL, DOCUMENTATION_URL, SUPPORT_URL, BUG_REPORT_URL
+homepage = "https://acme.example/os"
+documentation = "https://acme.example/os/docs"
+support = "https://acme.example/os/support"
+bug_report = "https://acme.example/os/issues"
+
+[variants.yellowfin]
+codename = "Wile E"       # os-release VERSION_CODENAME
 ```
+
+Then regenerate the file every image build reads, and commit both:
+
+```bash
+python3 scripts/config.py generate-identity
+```
+
+`just check` fails if `build_scripts/lib/identity.env` and `tunaos.toml`
+disagree. Each variant's name (Yellowfin, Marlin) comes from its id in
+`tunaos.toml`. Logos, wallpapers, the boot splash and the installer's own
+name still come from the image files under `system_files/` (#3668).
 
 For GNOME defaults, create a gschema override:
 

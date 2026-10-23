@@ -261,7 +261,7 @@ def test_stock_verification_is_retained_and_fork_urls_need_validation():
     source = (ROOT / "build_scripts/checks/verify-branding.sh").read_text()
     assert 'if tunaos_verify_fork_branding; then' in source
     assert 'if [[ "$fork_branding_valid" == true ]]; then' in source
-    for check in ('want_codename="${FISH[$variant]:-}"', '[[ "$jvendor" == tuna-os ]]',
+    for check in ('[[ "$jvendor" == tuna-os ]]',
                   "TunaOS plymouth theme active", 'names_upstream "$got_pretty"'):
         assert check in source
     info = (ROOT / "build_scripts/90-image-info.sh").read_text()

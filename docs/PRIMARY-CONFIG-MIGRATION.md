@@ -60,6 +60,10 @@ schema_version = 1
 
 [project]
 name = "TunaOS"
+id = "tunaos"
+cpe_vendor = "jamesreilly"
+
+[build.publish]   # optional; omitted, CI publishes to ghcr.io/<repository owner>
 registry = "ghcr.io"
 namespace = "tuna-os"
 
@@ -67,6 +71,7 @@ namespace = "tuna-os"
 homepage = "https://github.com/tuna-os/tunaos"
 documentation = "https://github.com/tuna-os/tunaos/tree/main/docs"
 support = "https://github.com/tuna-os/tunaos/issues/"
+bug_report = "https://github.com/tuna-os/tunaos/issues/"
 
 [defaults.packages]
 # Shared additions; native names must be valid for every selected family.

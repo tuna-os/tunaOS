@@ -244,6 +244,9 @@ gnome | kde | niri | cosmic | xfce | pantheon)
 	/run/context/build_scripts/checks/verify-branding.sh "${IMAGE_NAME:-$desktop}"
 	install -Dm0755 /run/context/build_scripts/checks/verify-branding.sh \
 		/usr/libexec/tunaos/verify-branding
+	# The installed checker's expected identity (same generated adapter).
+	install -Dm0644 /run/context/build_scripts/lib/identity.env \
+		/usr/share/tunaos/identity-config.env
 	# Per-desktop artwork, when a variant has some (docs/BRANDING.md).
 	/run/context/build_scripts/desktop/select-wallpaper.sh "$desktop"
 	if [[ -e /run/context/manifests/fork-config.json ]]; then

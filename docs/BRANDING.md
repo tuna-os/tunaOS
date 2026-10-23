@@ -25,14 +25,19 @@ The brand lands partly, and the part that lands fools a spot check. We wrote
 ### 1. Identity — what the system calls itself
 
 `/usr/lib/os-release` and `/usr/share/ublue-os/image-info.json`.
-`build_scripts/90-image-info.sh` writes both, and every base runs it.
+`build_scripts/90-image-info.sh` writes both, and every base runs it. The name,
+URLs, CPE and codenames come from `[project]`, `[defaults.branding]` and each
+variant's `codename` in `tunaos.toml`, through the generated
+`build_scripts/lib/identity.env`. `verify-branding.sh` checks against the same
+file, so a fork's values pass the contract.
 
 | field | value |
 |---|---|
 | `PRETTY_NAME`, `NAME` | the variant, never the upstream distro |
-| `VERSION_CODENAME` | the variant's fish, e.g. `Makaira nigricans` |
+| `VERSION_CODENAME` | the variant's `codename`, e.g. `Makaira nigricans` |
 | `LOGO` | `tunaos` |
-| `HOME_URL`, `DOCUMENTATION_URL`, `SUPPORT_URL`, `BUG_REPORT_URL` | ours |
+| `HOME_URL`, `DOCUMENTATION_URL`, `SUPPORT_URL`, `BUG_REPORT_URL` | `[defaults.branding]` |
+| `CPE_NAME` | `cpe:/o:<cpe_vendor>:<variant>-<project id>` |
 | `VARIANT`, `VARIANT_ID`, `IMAGE_ID`, `IMAGE_VERSION`, `DEFAULT_HOSTNAME` | set |
 
 One variant's identity must never name another project. Until 2026-09-17 every

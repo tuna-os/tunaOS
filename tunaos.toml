@@ -7,6 +7,22 @@ schema_version = 1
 [build]
 global_platforms = ["linux/amd64", "linux/arm64"]
 
+# ── Identity ──────────────────────────────────────────────────────────────────
+# What every image calls itself. A fork changes these to become a new
+# distribution; build_scripts/lib/identity.env is generated from them
+# (`python3 scripts/config.py generate-identity`) and 90-image-info.sh reads
+# only that file. `just check` fails if the two drift apart.
+[project]
+name = "TunaOS"
+id = "tunaos"
+cpe_vendor = "jamesreilly"
+
+[defaults.branding]
+homepage = "https://github.com/tuna-os/tunaos"
+documentation = "https://github.com/tuna-os/tunaos/tree/main/docs"
+support = "https://github.com/tuna-os/tunaos/issues/"
+bug_report = "https://github.com/tuna-os/tunaos/issues/"
+
 # ── Grouped dedup ISOs (issue #455) ───────────────────────────────────────────
 # Per-desktop-per-flavor ISOs are wasteful: all desktops on a variant share the
 # same Enterprise-Linux base, so tacklebox `shared_store.dedup` packs several
@@ -185,6 +201,7 @@ reason = "unsupported until package target gentoo publishes tuna-desktop (tunaos
 
 [variants.yellowfin]
 emoji = "🐠"
+codename = "Thunnus albacares"
 description = "Based on AlmaLinux Kitten 10"
 base_image = "quay.io/almalinuxorg/almalinux-bootc:10-kitten@sha256:fabe22d605a5638cb1fbf2df38d6d9b9ace35f15cb1c10c7db87d475a039d58a"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
@@ -457,6 +474,7 @@ platforms = ["linux/amd64"]
 
 [variants.albacore]
 emoji = "🐟"
+codename = "Thunnus alalunga"
 description = "Based on AlmaLinux 10"
 base_image = "quay.io/almalinuxorg/almalinux-bootc:10@sha256:61e7963066ef53e6c729826117ddfb1e2afc5fce8ceb591b5992a7d1d6e36878"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
@@ -729,6 +747,7 @@ platforms = ["linux/amd64"]
 
 [variants.skipjack]
 emoji = "🍣"
+codename = "Katsuwonus pelamis"
 description = "Based on CentOS Stream 10"
 base_image = "quay.io/centos-bootc/centos-bootc:stream10@sha256:ec1bd8cb6479d1f2f61c85372afce319b932b6b1f671648f0887e9da01e48272"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
@@ -1020,6 +1039,7 @@ build_qcow2 = false
 # Promotion to a cron lane needs the capacity note the gate asks for.
 [variants.wahoo]
 emoji = "🎏"
+codename = "Acanthocybium solandri"
 upstream_track = "experimental"
 description = "Based on Fedora ELN (EL11 preview, rolling)"
 experimental = true
@@ -1097,6 +1117,7 @@ luks_e2e = false
 
 [variants.bonito]
 emoji = "🎣"
+codename = "Sarda sarda"
 description = "Based on Fedora 44"
 # Unpinned 2026-09-17. The note this replaces named the condition itself:
 # "If quay GCs this one inside a day as well, that is the second strike and
@@ -1319,6 +1340,7 @@ build_qcow2 = false
 # (Konflux hermetic build model, CKI ARK kernel).
 [variants.hummingbird]
 emoji = "🐦"
+codename = "Trochilidae"
 upstream_track = "experimental"
 # Rolling, security-hardened fork tracking Fedora RAWHIDE -- not Fedora 43,
 # whatever the .fc43 dist tags suggest -- and shipping NO desktop upstream.
@@ -1424,6 +1446,7 @@ build_iso = true
 # Sailfin Tumbleweed: rolling-release, zypper-based.
 [variants.sailfin]
 emoji = "⛵"
+codename = "Istiophorus platypterus"
 upstream_track = "rolling"
 description = "Based on openSUSE Tumbleweed (rolling)"
 # NOT digest-pinned, for the same reason as bonito-rawhide below.
@@ -1547,6 +1570,7 @@ luks_e2e = false
 # Guppy: source-based, emerge/portage. Compiles everything from source.
 [variants.guppy]
 emoji = "🌈"
+codename = "Poecilia reticulata"
 upstream_track = "rolling"
 description = "Based on Gentoo Linux (source-based)"
 # Digest-pinned to match Containerfile.gentoo's FROM exactly. This value
@@ -1611,6 +1635,7 @@ build_image = true
 publish_name = "bonito"
 tag_suffix = "rawhide"
 emoji = "🐉"
+codename = "Sarda sarda"
 upstream_track = "rolling"
 description = "Based on Fedora Rawhide (rolling)"
 # NOT digest-pinned, and this is the only base image here that is not.
@@ -1821,6 +1846,7 @@ build_qcow2 = false
 # Revisit collapsing this into grouper when elementary publishes for 26.04.
 [variants.gurnard]
 emoji = "🤖"
+codename = "Chelidonichthys lucerna"
 description = "Based on Ubuntu 24.04 Noble Numbat with the Pantheon desktop"
 base_image = "docker.io/library/ubuntu:noble@sha256:68ee22004a9109b44973313b02ff7b1de250f1de0f5ecb628d73f579aaff33ac"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
@@ -1840,6 +1866,7 @@ build_iso = true
 
 [variants.grouper]
 emoji = "🪸"
+codename = "Epinephelus marginatus"
 description = "Based on Ubuntu 26.04 Resolute Raccoon"
 base_image = "docker.io/library/ubuntu:resolute@sha256:c098726dd9b9733f3e885f8de0ef375206a311b0a317eadc40d347b1115fb944"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
@@ -1962,6 +1989,7 @@ build_iso = true
 # up the ostree/composefs filesystem layout.
 [variants.marlin]
 emoji = "🚀"
+codename = "Makaira nigricans"
 upstream_track = "rolling"
 description = "Based on Arch Linux (rolling)"
 base_image = "docker.io/archlinux/archlinux:latest@sha256:33586c0ae3def39b47d1fe0caa5b695cbbd4e6b49ce730983a8b49a23ad95934"
@@ -2123,6 +2151,7 @@ build_qcow2 = false
 # Flounder: Debian Trixie (13) stable. Uses Containerfile.debian.
 [variants.flounder]
 emoji = "🐡"
+codename = "Platichthys flesus"
 description = "Based on Debian 13 Trixie (stable)"
 base_image = "docker.io/library/debian:trixie@sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
@@ -2281,6 +2310,7 @@ build_qcow2 = false
 publish_name = "flounder"
 tag_suffix = "sid"
 emoji = "☢️"
+codename = "Platichthys flesus"
 upstream_track = "rolling"
 description = "Based on Debian Sid (unstable, rolling)"
 base_image = "docker.io/library/debian:sid@sha256:92d7265e51d67d3a2094c1aad9faa88c74cf9d52e6c354200e429cd60237cc55"
