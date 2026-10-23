@@ -17,7 +17,7 @@ verified `just` setup, credentials, and how to stop the relay with Ctrl+C.
 1. **Try it**: `bootc switch --enforce-container-sigpolicy ghcr.io/tuna-os/yellowfin:gnome`
 2. **Report issues**: [GitHub Issues](https://github.com/tuna-os/tunaOS/issues)
 3. **Read the docs**: [CONTRIBUTING.md](CONTRIBUTING.md), [AGENT_GUIDE.md](docs/AGENT_GUIDE.md)
-4. **Add yourself**: If your org uses TunaOS, add it to [ADOPTERS.md](ADOPTERS.md)
+4. **Add yourself**: If your org uses TunaOS, [submit the adoption request](https://github.com/tuna-os/.github/issues/new?template=adoption.yml); see the [public adoption call](docs/ADOPTION-CALL.md). We add only public, consent-confirmed reports—not private or unverified claims.
 
 ### Contribution Ladder
 
@@ -108,7 +108,7 @@ keep going (#1136).
 | Downloads | `ghcr.io/tuna-os` pull counts |
 | Active variants | Yellowfin, Albacore, Skipjack, Bonito, Redfin |
 | Active desktops | GNOME, GNOME 50, KDE, COSMIC, Niri |
-| Adopters | [See ADOPTERS.md](ADOPTERS.md) — organizations using TunaOS |
+| Adopters | [See ADOPTERS.md](ADOPTERS.md) — consent-confirmed public entries; [submit an adoption request](https://github.com/tuna-os/.github/issues/new?template=adoption.yml) or read the [consent workflow](docs/ADOPTION-CALL.md) |
 
 ### Code of Conduct
 
