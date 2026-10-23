@@ -79,3 +79,54 @@ def test_retained_summary_png_exact_pre_submit_proof(tmp_path, monkeypatch, run,
     with pytest.raises(driver.Unverified):
         _, cards['Disk'] = driver.ocr_rows(result.stdout, strict=True)
         driver.verify_summary_cards(cards, mode)
+
+
+@pytest.mark.parametrize('name,digest,title,elapsed,percent', [
+    ('plain-07', '9e6e8016f971721ed90a23651e5070157e56396b3aa02ad8509fe3474873a890', 'Almost ready...', '0:00 elapsed', '1%'),
+    ('plain-18', 'a547c6bb2986fce8fc86874fe109a9273bb1093aedd83a6943a831c3cf59f639', 'Installing Skipjack...', '2:03 elapsed', '24%'),
+    ('luks-09', '85cdbfc135619ae100656d73620be8720dbd6353ac7e72255dd3cd41779a7bce', 'Securing your drive...', '0:00 elapsed', '1%'),
+    ('luks-20', '388f0b59ee422ae14afdf1c492943ae867b9927a661e381e9fd72ebbfa3a433f', 'Installing Skipjack...', '1:59 elapsed', '25%'),
+])
+def test_retained_progress_png_same_frame_proof(monkeypatch, name, digest, title, elapsed, percent):
+    capture = FIXTURES / f'progress39932865285-{name}.png'
+    assert hashlib.sha256(capture.read_bytes()).hexdigest() == digest
+    screen = driver.Screen(capture)
+    assert driver.classify(screen.lines) == 'unknown'  # Old full-frame OCR still fails.
+    assert screen.state == 'progress'
+    assert screen.progress_markers == [title, 'Do not power off the computer.', elapsed, percent]
+    assert driver.classify(screen.progress_markers) != 'done'
+    # A modelled modal dims the original lower panel; the text crop alone
+    # cannot establish foreground progress. This is not a captured modal image.
+    original_rgb = screen.rgb
+    monkeypatch.setattr(screen, 'rgb', lambda x, y: (180, 180, 180))
+    screen.state = 'unknown'
+    screen.verify_progress_panel()
+    assert screen.state == 'unknown'
+    monkeypatch.setattr(screen, 'rgb', original_rgb)
+    screen.rows.append((title, (230, 675, 450, 692)))
+    screen.verify_progress_panel()
+    assert screen.state == 'unknown'
+
+
+@pytest.mark.parametrize('mode,initial,last', [('plain', '07', '18'), ('luks', '09', '20')])
+def test_retained_progress_uses_completion_budget_without_more_input(tmp_path, mode, initial, last):
+    # Real progress pixels inside a model transaction; pointer/key functions
+    # are test doubles. Repeated progress must never become completion.
+    spec = importlib.util.spec_from_file_location('driver_unit_fixture', ROOT / 'tests/test_gnome_installer_driver.py')
+    unit = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(unit)
+    first = unit.driver.Screen(FIXTURES / f'progress39932865285-{mode}-{initial}.png')
+    later = unit.driver.Screen(FIXTURES / f'progress39932865285-{mode}-{last}.png')
+    if mode == 'plain':
+        prefix = [unit.FakeScreen('welcome'), unit.FakeScreen('encryption', encrypted=True),
+                  unit.FakeScreen('encryption'), unit.FakeScreen('summary')]
+    else:
+        prefix = [unit.FakeScreen('welcome'), unit.FakeScreen('encryption', encrypted=True, tpm=True),
+                  unit.FakeScreen('encryption', encrypted=True), unit.FakeScreen('encryption', encrypted=True),
+                  unit.FakeScreen('encryption', encrypted=True), unit.FakeScreen('summary', mode='luks')]
+    rc, evidence, events = unit.execute(tmp_path, prefix + [first] + [later] * 80, mode)
+    assert rc == 1 and evidence['accepted'] and not evidence['completed']
+    assert evidence['transitions'] == ['welcome', 'encryption', 'summary', 'progress']
+    assert sum(event == ('capture', 'await-completion') for event in events) == 80
+    accepted = events.index(('capture', 'await-progress'))
+    assert all(event[0] == 'capture' for event in events[accepted:])

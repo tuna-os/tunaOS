@@ -39,10 +39,6 @@ def classify(lines):
             and 'restart now' in text and 'remove the installation media' in text
             and 'elapsed' not in text):
         return 'done'
-    if ('installing' in [normal(line) for line in lines]
-            and 'do not power off the computer' in text
-            and any(re.search(r'\d+:\d{2} elapsed', line.lower()) for line in lines)):
-        return 'progress'
     for state, headings in (
         ('summary', ('confirm installation', 'review your choices')),
         ('encryption', ('disk encryption',)),
@@ -53,6 +49,45 @@ def classify(lines):
                    for line in lines) for heading in headings):
             return state
     return 'unknown'
+
+
+PROGRESS_TITLES = {
+    'Checking your drive', 'Setting up your drive', 'Preparing the boot system',
+    'Securing your drive', 'Formatting your drive', 'Almost ready',
+    'Preparing data storage', 'Setting up auto-unlock', 'Installing your apps',
+    'Configuring your system', 'Finishing up',
+}
+
+
+def progress_title(text):
+    text = text.removesuffix('...').removesuffix('…')
+    return text in PROGRESS_TITLES or bool(re.fullmatch(
+        r'Installing [A-Z][A-Za-z0-9 ._-]{0,63}', text))
+
+
+def verify_progress_rows(rows, heading):
+    """Require independent same-frame title, warning, clock and percentage."""
+    predicates = [progress_title,
+                  lambda text: text == 'Do not power off the computer.',
+                  lambda text: bool(re.fullmatch(r'(?:0|[1-9][0-9]{0,2}):[0-5][0-9] elapsed', text)),
+                  lambda text: bool(re.fullmatch(r'(?:[0-9]|[1-9][0-9]|100)%', text))]
+    bounds = [(5, 35, 15, 45, 90, 1500, 65, 100),
+              (5, 35, 150, 185, 480, 610, 190, 220),
+              (5, 35, 240, 275, 170, 390, 280, 315),
+              (2280, 2420, 70, 105, 2450, 2495, 120, 155)]
+    selected = []
+    for predicate, limit in zip(predicates, bounds):
+        matches = [(text, box) for text, box in rows if predicate(text)]
+        if len(matches) != 1:
+            raise Unverified('progress marker is absent or ambiguous')
+        text, box = matches[0]
+        if (len(box) != 4 or any(type(value) is not int for value in box)
+                or not all(limit[2*i] <= box[i] <= limit[2*i+1] for i in range(4))):
+            raise Unverified('progress marker geometry is not verified')
+        selected.append(text)
+    if selected[0] != heading:
+        raise Unverified('progress title disagrees with full capture')
+    return selected
 
 
 def welcome_action(screen):
@@ -160,6 +195,42 @@ class Screen:
         self._pixels = None
         self._summary_verified = False
         self._install_box_cache = None
+        if self.state == 'unknown':
+            self.verify_progress_panel()
+
+    def verify_progress_panel(self):
+        """One measured crop, not a fallback OCR sequence or completion proof."""
+        if self.state != 'unknown' or (self.width, self.height) != (1280, 800):
+            return
+        exclusions = ('installation failed', 'is installed', 'restart now',
+                      'remove the installation media', 'save your recovery key',
+                      'authentication', 'type to search', 'confirm installation')
+        if any(marker in normal(line) for marker in exclusions for line in self.lines):
+            return
+        titles = [(text, box) for text, box in self.rows if progress_title(text)]
+        if len(titles) != 1:
+            return
+        heading, box = titles[0]
+        if not (225 <= box[0] <= 240 and 670 <= box[1] <= 685
+                and 300 <= box[2] <= 730 and 685 <= box[3] <= 705):
+            return
+        # A dimmed/background panel must not qualify through a foreground modal.
+        if any(any(abs(value-expected) > 4 for value, expected in zip(self.rgb(x, y), (250, 250, 251)))
+               for x, y in ((220, 670), (1060, 670), (220, 780), (1060, 780))):
+            return
+        with tempfile.NamedTemporaryFile(suffix='.png') as prepared:
+            subprocess.run(['convert', str(self.path), '-crop', '840x110+225+665',
+                            '+repage', '-resize', '300%', '-alpha', 'off',
+                            '-colorspace', 'gray', prepared.name],
+                           capture_output=True, timeout=20, check=True)
+            result = subprocess.run(['tesseract', prepared.name, 'stdout', '--psm', '11', 'tsv'],
+                                    capture_output=True, text=True, timeout=30, check=True)
+        _, rows = ocr_rows(result.stdout)
+        try:
+            self.progress_markers = verify_progress_rows(rows, heading)
+        except Unverified:
+            return
+        self.state = 'progress'
 
     def box(self, label):
         if label == 'Install':

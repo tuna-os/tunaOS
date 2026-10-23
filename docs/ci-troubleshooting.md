@@ -2076,3 +2076,13 @@ Bind the final live recipe to the exact offline payload and measured digest.
 Keep the remote target for updates separate from the local install source. Reject
 missing or mismatched inputs; do not fall back to a network pull. Recipe tests
 do not prove installation. Both modes still need completion and detached-media boots.
+
+### Progress appears but the GUI test reports an unknown state
+
+Run 39932865285 showed disk writes at 24% and 25% in the two modes.
+The test expected the title `Installing`, not the actual stage title.
+Full-frame OCR also lost letters and punctuation in the warning and timer.
+
+Use one measured crop with the exact title, warning, elapsed time and percentage.
+Check their positions and the foreground panel. Keep failure and completion
+checks separate. Observe progress without more input or a success claim.
