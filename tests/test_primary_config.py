@@ -333,6 +333,16 @@ def test_parser_keeps_the_shared_toml10_grammar(toml11):
         config.tomllib.loads(toml11)
 
 
+def test_tomli_dependency_ceiling_preserves_shared_toml_grammar():
+    settings = json.loads((ROOT / "renovate.json").read_text())
+    rules = [
+        rule for rule in settings["packageRules"]
+        if "tomli" in rule.get("matchPackageNames", [])
+    ]
+    assert len(rules) == 1
+    assert rules[0]["allowedVersions"] == "<2.5.0"
+
+
 @pytest.mark.parametrize("recipe", ["check:", "_ensure_test_deps:", "clean:"])
 def test_just_config_preparation_stops_before_consumers(recipe):
     body = (ROOT / "just/utilities.just").read_text().split(recipe, 1)[1]
