@@ -246,6 +246,21 @@ See [SECURITY.md](./SECURITY.md) for vulnerability reporting.
 | **Scoop channel launch and release drift gate** | strategist / bucket and producer owners | #2922; [scoop-bucket#4](https://github.com/tuna-os/scoop-bucket/issues/4), [#14](https://github.com/tuna-os/scoop-bucket/issues/14); [ROADMAP](https://github.com/tuna-os/scoop-bucket/blob/main/ROADMAP.md) | Q3 exit requirement: name publication owner and least-privilege credential model; publish and validate bluefin-cli Windows amd64/arm64 manifest; prove clean Windows bucket-add/install/version journey; make stable-release drift beyond 24 hours owner-visible. Launch evidence precedes Q4 channel expansion |
 | **Package sourcing policy (system-repos/tideforge-first + allowlist)** | strategist | #1319, #1323 | 🟡 In progress — PACKAGE-SOURCING.md merged; DNF/COPR audit done 08-13, ahead of the 08-22 checkpoint (2 violations, 6-COPR niri gap, negativo17/rpmfusion allowlist candidates confirmed — #1453); apt/AUR/OBS bases still unaudited, maintainer allowlist sign-off and Phase 2 migration still pending |
 
+### Infrastructure release prerequisites (#2915)
+
+These are Q3 exit gates carried into Q4 until their evidence is available;
+feature completion alone does not satisfy them. Owners are the responsible
+repository maintainers, coordinated by strategist. Source roadmaps and the
+additional-tool audit are linked in [the release tracking rule](docs/INFRASTRUCTURE-RELEASE-GATES.md).
+This table defines acceptance, not a snapshot of release availability.
+
+| Goal | Owner | Tracking | Exit evidence |
+|------|-------|----------|---------------|
+| finupdate versioned updater baseline | finupdate maintainer | [release planning #65](https://github.com/tuna-os/finupdate/issues/65), #2915 | Tagged release, matching versioned OCI reference and GitHub Release; consumer pin and rollback documented |
+| tacklebox versioned media baseline | tacklebox maintainer | [tacklebox#237](https://github.com/tuna-os/tacklebox/issues/237), #1192, #2915 | amd64/arm64 binaries and checksums, matching immutable container reference, unit/block/ISO/cross-platform smoke evidence, compatibility and rollback notes |
+| branding versioned consumer contract | branding maintainer | [branding#7](https://github.com/tuna-os/branding/issues/7), #2915 | Tagged assets and manifest with digests/source revision, documented consumer pin, and consumer freshness check |
+| remora build-verified release baseline | remora maintainer | [remora#55](https://github.com/tuna-os/remora/issues/55), [remora#44](https://github.com/tuna-os/remora/issues/44), #2915 | Generator fix exercised by a real package-install build on a shipped bootc base, stable-digest rebuild check, release carrying the fix and downstream pin review |
+
 ---
 
 ## Q4 2026 (October–December) — "Mature"
@@ -258,6 +273,11 @@ See [SECURITY.md](./SECURITY.md) for vulnerability reporting.
 
 | Goal | Owner | Dependencies |
 |------|-------|--------------|
+| finupdate release cadence and pin review | finupdate maintainer / strategist | #2915; Q3 baseline above, versioned builds discoverable through the Flatpak index, documented upgrade/rollback results |
+| tacklebox release adoption | tacklebox maintainer / architect | #2915, [tacklebox#237](https://github.com/tuna-os/tacklebox/issues/237), #1192; Q3 baseline above, downstream immutable pin review with boot evidence and 30-day install/use feedback |
+| branding consumer synchronization | branding maintainer | #2915, [branding#7](https://github.com/tuna-os/branding/issues/7); Q3 contract above, consumer synchronization verified against the pinned manifest |
+| remora release qualification | remora maintainer | #2915, [remora#55](https://github.com/tuna-os/remora/issues/55); Q3 build gate above, downstream release pin checked against package-install and rebuild evidence |
+| Additional infrastructure release audit | strategist | #2915; [audit scope and follow-up gates](docs/INFRASTRUCTURE-RELEASE-GATES.md#additional-tool-audit), including flatpak-index and debian-copr |
 | Tacklebox decoupling | architect | #1192 (tracker; #306 closed) — audited 2026-08-14: of #306's 4 recommendations, 3 already landed (`TACKLEBOX_SHA`/`TACKLEBOX_IMAGE` version pinning via `scripts/lib/common.sh`; tacklebox runs as a `ghcr.io/tuna-os/tacklebox` container image, not a host-installed binary; the flagged `ghcr.io/hanthor/bluefin:lts` `iso.toml` reference no longer exists in this repo's own build path). Real remaining gap: **the version pin has no single source of truth** — `image-versions.yaml` (`4fa6041`, renovate-tracked) diverges from hardcoded overrides in `publish-iso-groups.yml` (`a105d6d3`) and `luks-e2e.yml` (`fd95174`, the documented floor SHA, not the current pin). Consolidating those onto one pin needs real boot evidence before merging (see Build Health note above on why `publish-iso-groups.yml`'s divergence was left as a deliberate, not accidental, gap) — flagged as the concrete next step, not actioned blind |
 | Upstream snapshot automation | ci-maintainer | #1194 (tracker; #307 closed) — **live (weekly refresh PRs merging; `snapshot-upstreams.yml` runs Mondays 09:00 UTC)** |
 | Branch protection + required CI | strategist | CI health, #1167 — audited 2026-08-13: [BRANCH-PROTECTION.md](./docs/BRANCH-PROTECTION.md), active `main` ruleset has no required-status-checks rule; proposed list is `lint`, `unit-tests` |
