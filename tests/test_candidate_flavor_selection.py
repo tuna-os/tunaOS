@@ -68,6 +68,16 @@ def test_fork_main_is_still_candidate_scope():
     assert select(config(), "gnome-nvidia", repository="fork/tunaOS", ref="refs/heads/main") is not None
 
 
+def test_null_platform_override_inherits_variant_for_requested_and_parent():
+    value = config()
+    value["variants"][0]["flavors"][1]["platforms"] = None
+    value["variants"][0]["flavors"][3]["platforms"] = None
+    assert select(value, "gnome-nvidia") == {"flounder-sid": {
+        "gnome": ["linux/amd64", "linux/arm64"],
+        "gnome-nvidia": ["linux/amd64", "linux/arm64"],
+    }}
+
+
 @pytest.mark.parametrize("problem", ["disabled", "missing", "platform", "stage"])
 def test_unavailable_parent_fails_without_production_fallback(problem):
     value = config()
@@ -111,8 +121,10 @@ def test_actual_sid_config_and_jq_matrix_consume_parent_platform_selection(monke
                for row in rows)
 
 
-def test_matrix_step_explicitly_supplies_event_identity():
+def test_matrix_step_retains_event_identity_for_jq_and_cli_uses_standard_environment():
     workflow = yaml.safe_load((ROOT / ".github/workflows/build-variant.yml").read_text())
     step = next(step for step in workflow["jobs"]["generate_matrix"]["steps"]
                 if step.get("id") == "set-matrix")
     assert step["env"]["EVENT_NAME"] == "${{ github.event_name }}"
+    source = (ROOT / "scripts/candidate-flavor-selection.py").read_text()
+    assert 'os.environ["GITHUB_EVENT_NAME"]' in source

@@ -25,6 +25,10 @@ def parent_flavor(variant, flavor):
     return values[0] if values else ""
 
 
+
+def configured_platforms(variant, flavor):
+    return flavor.get("platforms") if flavor.get("platforms") is not None else variant["platforms"]
+
 def select(config, variant_filter, flavor_filter, event, repository, ref, resolver=parent_flavor):
     if (event != "workflow_dispatch" or flavor_filter == "all" or
             (repository == "tuna-os/tunaOS" and ref == "refs/heads/main")):
@@ -46,7 +50,7 @@ def select(config, variant_filter, flavor_filter, event, repository, ref, resolv
             row = flavors.get(fid)
             if not row or not row.get("build_image", False):
                 raise ValueError(f"required candidate parent is unavailable: {vid}:{fid}")
-            allowed = row.get("platforms", variant["platforms"])
+            allowed = configured_platforms(variant, row)
             if not set(platforms) <= set(allowed):
                 raise ValueError(f"candidate parent lacks required platform: {vid}:{fid}")
             needed[fid] = sorted(set(needed.get(fid, [])) | set(platforms))
@@ -56,12 +60,12 @@ def select(config, variant_filter, flavor_filter, event, repository, ref, resolv
                     raise ValueError(f"candidate parent must precede child stage: {vid}:{fid}")
                 visit(parent, platforms, visiting | {fid})
 
-        visit(flavor_filter, requested.get("platforms", variant["platforms"]), set())
+        visit(flavor_filter, configured_platforms(variant, requested), set())
     return selection
 
 
 if __name__ == "__main__":
     result = select(json.load(sys.stdin), os.environ["FILTER_VARIANT"],
-                    os.environ["FILTER_FLAVOR"], os.environ["EVENT_NAME"],
+                    os.environ["FILTER_FLAVOR"], os.environ["GITHUB_EVENT_NAME"],
                     os.environ["GITHUB_REPOSITORY"], os.environ["GITHUB_REF"])
     print(json.dumps(result, separators=(",", ":")))

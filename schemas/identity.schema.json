@@ -21,7 +21,7 @@
     },
     "url": {
       "type": "string",
-      "pattern": "^https://[^\\s]+$",
+      "pattern": "^https://[^/@\\s]+(?:\\.[^/@\\s]+)*(?::[0-9]+)?(?:/[^\\s]*)?$",
       "format": "uri"
     },
     "attemptIdentity": {
@@ -67,6 +67,9 @@
           "type": "string",
           "minLength": 1
         },
+        "tag": {
+          "$ref": "identity.schema.json#/$defs/identifier"
+        },
         "digest": {
           "$ref": "identity.schema.json#/$defs/digest"
         },
@@ -80,6 +83,7 @@
       },
       "required": [
         "repository",
+        "tag",
         "digest",
         "evidence"
       ],

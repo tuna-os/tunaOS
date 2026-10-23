@@ -189,19 +189,22 @@ def fetch_jobs(fetch: Callable, run: dict):
 
 
 def normalized_jobs(jobs: list[dict], target: dict):
-    """Exact suffixes preserve full OCI platform; global gates apply per flavor.
-
-    The wrapper name is authored by build-<variant>.yml. Unknown names for a
-    known flavor explicitly poison that observation instead of silently dropping
-    a failed build. Known ancillary jobs remain outside these three phases.
-    """
+    """Map exact target jobs plus promotion prerequisites into verdict phases."""
     wrapper = WRAPPERS.get(target['variant'])
     if wrapper is None:
         raise CollectionError("unknown workflow wrapper")
     prefix = f"{wrapper} / {target['flavor']} / "
-    phases = {platform_slug(target["platform"]): "build", "Gate": "gate", "Promote": "promote"}
-    ancillary = {"Manifest", "Sign", "Asahi manifest gate", "Desktop contract",
-                 "Attest SBOM", "SBOM", "Scan", "Prune"}
+    asahi = target["hardwareScope"] == "apple-silicon"
+    phases = {
+        platform_slug(target["platform"]): "build",
+        "Asahi manifest gate" if asahi else "Gate": "gate",
+        "Promote": "promote",
+    }
+    ignored_gates = {"Gate"} if asahi else {"Asahi manifest gate"}
+    prerequisites = {
+        "Manifest": "manifest", "Sign": "sign", "Desktop contract": "desktop-contract",
+    }
+    ancillary = {"Attest SBOM", "SBOM", "Scan", "Prune"} | ignored_gates
     platforms = {"linux-amd64", "linux-amd64-v2", "linux-arm64"}
     normalized = []
     for job in jobs:
@@ -215,6 +218,10 @@ def normalized_jobs(jobs: list[dict], target: dict):
         if suffix in phases:
             normalized.append({"phase": phases[suffix], "status": job.get("status"),
                                "conclusion": job.get("conclusion")})
+        elif suffix in prerequisites:
+            if job.get("conclusion") != "skipped":
+                normalized.append({"phase": prerequisites[suffix], "status": job.get("status"),
+                                   "conclusion": job.get("conclusion")})
         elif suffix not in ancillary | platforms:
             normalized.append({"phase": "unknown", "status": job.get("status"),
                                "conclusion": job.get("conclusion")})
@@ -280,7 +287,7 @@ def collect(config: dict, source_revision: str, fetch: Callable, *, now=None,
                                      "workflow": f".github/workflows/{workflow}",
                                      "runId": run["id"], "runAttempt": run["run_attempt"],
                                      "sourceRevision": run["head_sha"], "startedAt": run["run_started_at"]},
-                        "status": status, "measuredAt": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                        "status": status, "measuredAt": run["run_started_at"],
                         "evidence": [{"url": f"https://github.com/{REPOSITORY}/actions/runs/{run['id']}/attempts/{run['run_attempt']}"}],
                     }
         except CollectionError:

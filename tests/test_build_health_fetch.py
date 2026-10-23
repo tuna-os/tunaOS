@@ -71,6 +71,42 @@ def test_success_without_authenticated_receipts_is_blocked():
         assert row['packageReadiness']['status'] != 'healthy'
 
 
+def test_historical_attempt_keeps_run_timestamp_not_collection_time():
+    document = collector.collect(configuration(), SOURCE, fetcher(), now=NOW)
+    assert {row["latestAttempt"]["measuredAt"] for row in document["targets"]} == {
+        "2026-10-10T19:00:00Z"
+    }
+
+
+@pytest.mark.parametrize("name", ["Manifest", "Sign", "Desktop contract"])
+def test_failed_promotion_prerequisite_dominates_skipped_promote(name):
+    observations = jobs()
+    next(job for job in observations if job["name"].endswith("/ Promote"))["conclusion"] = "skipped"
+    observations.append({
+        "id": 10, "run_id": 1, "run_attempt": 2, "head_sha": SOURCE,
+        "head_branch": "main", "name": f"🐟-albacore / cosmic / {name}",
+        "status": "completed", "conclusion": "failure",
+    })
+    document = collector.collect(configuration(), SOURCE, fetcher(job_rows=observations), now=NOW)
+    assert all(row["latestAttempt"]["status"] == "failed" for row in document["targets"])
+
+
+def test_asahi_uses_asahi_manifest_gate_and_ignores_skipped_generic_gate():
+    target = {
+        "variant": "bonito", "flavor": "gnome-asahi", "platform": "linux/arm64",
+        "cpuBaseline": "armv8-a", "hardwareScope": "apple-silicon",
+    }
+    rows = [
+        {"name": f"🎣-bonito / gnome-asahi / {name}", "status": "completed",
+         "conclusion": conclusion}
+        for name, conclusion in [
+            ("linux-arm64", "success"), ("Gate", "skipped"),
+            ("Asahi manifest gate", "success"), ("Promote", "success"),
+        ]
+    ]
+    assert collector.attempt_status(collector.normalized_jobs(rows, target)) == ("success", [])
+
+
 def test_older_jobs_are_not_fetched_after_all_latest_targets_are_observed():
     calls = []
 

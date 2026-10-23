@@ -15,6 +15,7 @@ from .evidence import EvidenceError, canonical_json, validate
 from .targets import target_key
 
 PHASES = frozenset({"build", "gate", "promote"})
+PREREQUISITES = frozenset({"manifest", "sign", "desktop-contract"})
 
 
 def attempt_status(jobs: list[dict[str, Any]]) -> tuple[str, list[str]]:
@@ -23,7 +24,8 @@ def attempt_status(jobs: list[dict[str, Any]]) -> tuple[str, list[str]]:
         return "unknown", ["invalid-job-observation"]
     indexed = {}
     for job in jobs:
-        if not isinstance(job, dict) or job.get("phase") not in PHASES:
+        if (not isinstance(job, dict)
+                or job.get("phase") not in PHASES | PREREQUISITES):
             return "unknown", ["invalid-job-phase"]
         phase = job["phase"]
         if phase in indexed:
@@ -160,7 +162,15 @@ def evaluate_row(required: dict[str, Any], attempt: dict | None,
                          readiness["status"] if readiness["status"] in {"running", "stale", "unknown"} else "blocked")
         reasons.append("package-or-image-contract-" + row["status"])
         return row
-    if (publication is None or not attempt.get("imageDigest")
+    expected_publication = required.get("publication")
+    if (publication is None or not isinstance(expected_publication, dict)
+        or publication.get("repository") != expected_publication.get("repository")
+        or publication.get("tag") != expected_publication.get("tag")
+        or image["publication"].get("repository") != expected_publication.get("repository")
+        or image["publication"].get("tag") != expected_publication.get("tag")
+        or package["publication"].get("repository") != expected_publication.get("repository")
+        or package["publication"].get("tag") != expected_publication.get("tag")
+        or not attempt.get("imageDigest")
         or publication["digest"] != attempt["imageDigest"]
         or image["imageDigest"] != attempt["imageDigest"]
         or image["attemptIdentity"] != attempt["identity"]

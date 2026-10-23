@@ -198,6 +198,21 @@ def test_distinct_requested_sources_are_not_collapsed_to_a_factory_provider(tmp_
     assert evidence.validate(doc) == doc
 
 
+def test_source_declarations_never_serialize_endpoint_credentials(tmp_path):
+    manifest = {"packages": {"el10": {"repos": [{
+        "name": "private",
+        "baseurl": "https://user:super-secret@repo.tunaos.org/repo/",
+        "packages": [],
+    }]}}}
+    document = resolve(tmp_path, manifest)
+    encoded = json.dumps(document)
+    assert "super-secret" not in encoded
+    assert "user:" not in encoded
+    assert document["sourceDeclarations"][0]["declaration"]["baseurl"] == (
+        "https://repo.tunaos.org/repo/"
+    )
+
+
 def test_groups_exclusions_and_locks_stay_explicit_until_native_resolution(tmp_path):
     doc = resolve(tmp_path, {"packages": {"el10": {"groups": ["cosmic-desktop"],
         "group_options": "--with-optional", "group_exclude": ["legacy-theme"], "exclude": ["old-session"],

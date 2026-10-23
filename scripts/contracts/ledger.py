@@ -43,7 +43,7 @@ def read_ledger(path: str | Path, target: dict, *, now: dt.datetime | None = Non
     if now.tzinfo is None or now.utcoffset() != dt.timedelta(0):
         raise EvidenceError("ledger validation time must be UTC")
     path = Path(path)
-    raw = path.read_bytes()
+    raw = path.read_bytes() if path.exists() else b""
     if len(raw) > 32 * 1024 * 1024:
         raise EvidenceError("package request ledger exceeds size limit")
     starts: dict[str, dict] = {}
@@ -129,12 +129,16 @@ def reconcile(contract: dict, ledger: dict, base_inventory: list[dict], final_in
         gaps.add("forbidden-new-package-source")
     if contract["sourcePolicy"]["policyRevision"] is None:
         gaps.add("missing-policy-revision")
-    requirements = {(item["nativeExpression"], item["manager"], item["scope"]): item for item in contract["packageRequirements"]}
+    requirements = {
+        (item["nativeExpression"], item["manager"], item["scope"], item.get("requestedSource")): item
+        for item in contract["packageRequirements"]
+    }
     if len(requirements) != len(contract["packageRequirements"]):
         raise EvidenceError("ambiguous native requirement source intents")
+    requirement_requests = {key[:3] for key in requirements}
     for item in observed_requirements(ledger):
         key = (item["nativeExpression"], item["manager"], item["scope"])
-        if key not in requirements:
+        if key not in requirement_requests:
             gaps.add("unexplained-observed-package-request")
     measured = native_proof.get("requirements", [])
     if not isinstance(measured, list) or any(not isinstance(item, dict) for item in measured):
@@ -143,7 +147,10 @@ def reconcile(contract: dict, ledger: dict, base_inventory: list[dict], final_in
     for item in measured:
         if any(not isinstance(item.get(field), str) for field in ("nativeExpression", "manager", "scope")):
             raise EvidenceError("invalid native requirement measurement identity")
-        key = (item.get("nativeExpression"), item.get("manager"), item.get("scope"))
+        source = item.get("requestedSource")
+        if source is not None and not isinstance(source, str):
+            raise EvidenceError("invalid native requirement measurement source")
+        key = (item["nativeExpression"], item["manager"], item["scope"], source)
         if key in measurements:
             raise EvidenceError("duplicate native requirement measurement")
         measurements[key] = item
@@ -164,17 +171,20 @@ def reconcile(contract: dict, ledger: dict, base_inventory: list[dict], final_in
             continue
         if measurement.get("status") != "satisfied" or not packages or any(canonical_json(item) not in final_records for item in packages):
             gaps.add("unsatisfied-final-package-requirement")
-        if requirement.get("provider") and measurement.get("provider") != requirement["provider"]:
+        if requirement.get("requestedSource") and measurement.get("provider") != requirement["requestedSource"]:
             gaps.add("native-provider-mismatch")
     dispositions = native_proof.get("requestDispositions", {})
     if not isinstance(dispositions, dict):
         raise EvidenceError("native request dispositions must be a record")
     for event in ledger["requests"]:
         disposition = dispositions.get(event["requestId"])
-        allowed = {"satisfied", "approved-replacement", "no-package-mutation"}
-        if not event["required"]:
+        succeeded = event.get("result", {}).get("exitCode") == 0
+        allowed = {"satisfied", "approved-replacement", "no-package-mutation"} if succeeded else {
+            "approved-replacement"
+        }
+        if succeeded and not event["required"]:
             allowed.add("optional-missing")
-        if event["scope"] == "transient":
+        if succeeded and event["scope"] == "transient":
             allowed.add("transient-removed")
         if disposition not in allowed:
             gaps.add("unresolved-package-request")
