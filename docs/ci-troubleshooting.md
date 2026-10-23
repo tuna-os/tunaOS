@@ -2086,3 +2086,16 @@ Full-frame OCR also lost letters and punctuation in the warning and timer.
 Use one measured crop with the exact title, warning, elapsed time and percentage.
 Check their positions and the foreground panel. Keep failure and completion
 checks separate. Observe progress without more input or a success claim.
+
+### ISO coverage plan stops before execution
+
+Read the history diagnostics in `coverage-plan.json`. Incomplete API history,
+absent receipts, or an exhausted daily budget can stop the plan without an install.
+
+Tests prove that a cron job can skip and that admission refuses a rerun of failed jobs.
+The importer needs API proof that all jobs skipped before it can ignore an absent plan.
+Both caller and callee refuse reruns. This prevents a budget bypass through old outputs.
+
+Do not reset the budget or accept PR artifacts as production proof.
+Use the exact-head diagnostic in [the coverage plan](ISO-COVERAGE-PLAN.md) only after approval.
+A legacy LUKS pass does not qualify a plain GUI install.
