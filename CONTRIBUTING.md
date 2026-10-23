@@ -69,6 +69,10 @@ The maintainer keeps one 30-minute slot each week for contributor work. During t
 2. Check the claimed starter issues for unanswered questions, stale claims, or duplicate work.
 3. Review open contributor PRs, respond to blockers, and keep CI failures distinguishable from code-review requests.
 4. Refresh the starter links above when tasks finish, move to another repository, or give way to newer tasks.
+5. Check outstanding [quarterly roadmap refreshes](ROADMAP.md#quarterly-refresh-cadence).
+   Reuse local trackers, link their PRs to the coordination issue, and keep
+   overdue refreshes on the agenda until merged. The review is due within
+   seven calendar days of each quarter close.
 
 This is a lightweight queue-management commitment, not a promise of immediate review. Contributors should expect an acknowledgement or status update within the next weekly triage slot.
 

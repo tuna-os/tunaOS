@@ -317,7 +317,55 @@ Priorities listed above — pick an issue labeled `good first issue` or comment 
 
 ## Roadmap Governance
 
-This roadmap is maintained by the strategist agent. Updates published after major milestones or quarterly. Propose changes via PR to this file with issue reference.
+This roadmap is maintained by the strategist agent. Propose changes via PR to
+this file with an issue reference.
+
+### Quarterly refresh cadence
+
+The strategist coordinates a review of active repositories' roadmaps after
+each calendar quarter closes. Each repository's maintainer reviews its local
+priorities; contributors can prepare the documentation PR. Complete the review
+within seven calendar days of quarter close: **January 7, April 7, July 7, and
+October 7 (UTC)**. Also update affected rows when a major milestone lands.
+
+Use the generated Community inventory above to find local roadmaps. At the
+[weekly contributor triage](CONTRIBUTING.md#weekly-contributor-triage), check
+which refreshes still need a PR or review. An overdue refresh stays on that
+agenda until its PR merges; opening a tracker alone does not refresh a roadmap.
+
+For each repository:
+
+1. Read the roadmap on its default branch and check open issues and PRs for
+   existing refresh work. Reuse one tracker per repository and link it to the
+   coordination issue in this repository. File a local issue only when none
+   covers the gap, with acceptance criteria scoped to one documentation PR.
+2. Label the closed quarter as historical and the new quarter as current.
+   Record completed goals with merged-PR or release evidence. Carry unfinished
+   goals forward with their owner, tracker, blocker, and next action. A closed
+   tracker must have a completed outcome or a linked successor.
+3. Check claims against source issues, release records, and workflow results.
+   Link generated evidence for changing counts and CI status instead of
+   copying a live-status table. Keep unresolved decisions explicit; do not
+   invent priorities or mark a goal complete because its quarter ended.
+4. Update the review date only after checking the content. Date any retained
+   historical measurements separately. Include evidence links and the local
+   tracker in the PR, using that repository's required target branch and checks.
+5. Link the local PR from the coordination issue. Check the org goal rows for
+   affected dependencies and update them in a separate org-roadmap PR when
+   needed. Close each local tracker when its refresh merges.
+
+The initial coordination task is [#3131](https://github.com/tuna-os/tunaOS/issues/3131).
+Reuse these local trackers for its three refreshes:
+
+- [mariner#158](https://github.com/tuna-os/mariner/issues/158): separate the
+  closed Q3 goals from current Q4 priorities and verify their blockers.
+- [remora#144](https://github.com/tuna-os/remora/issues/144): replace the Q3
+  exit/Q4 transition framing with current Q4 goals and dated Q3 outcomes.
+- [fisherman#286](https://github.com/tuna-os/fisherman/issues/286): label the
+  Q3 near-term section as historical and Q4 as current.
+
+These links define the follow-up scope. Read the local trackers for progress;
+completion of the coordination task does not imply those refreshes have merged.
 
 Roadmap coverage is an organization-level planning signal, not a requirement
 that every repository use the same milestone structure. The Community inventory
