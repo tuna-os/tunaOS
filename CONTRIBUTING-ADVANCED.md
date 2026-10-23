@@ -4,6 +4,22 @@ Start with [CONTRIBUTING.md](CONTRIBUTING.md) for the fork workflow and
 required checks. This guide helps you choose a repository, ask for a mentor,
 and progress from a first contribution to helping other contributors.
 
+## Git terms
+
+These terms describe the [fork workflow](CONTRIBUTING.md#fork--pr-loop)
+for this project.
+
+| Term | Meaning in this project |
+|---|---|
+| Fork | A fork is your copy of `tuna-os/tunaos` on GitHub, where you can push changes. |
+| Clone | A clone is a local copy of a repository and its Git history, such as the copy of your fork on your computer. |
+| Origin | `origin` is the remote name for your contributor fork in the local clone. |
+| Upstream | `upstream` is the remote name for the source repository, `tuna-os/tunaos`, in the local clone. |
+| Branch | A branch is a named line of work, such as `docs/my-first-change`, that keeps your commits separate from `main`. |
+| Commit | A commit is a saved snapshot of the files Git tracks, with an author and a message that describes the change. |
+| Pull request (PR) | A pull request asks maintainers to merge changes from your fork's branch into `tuna-os/tunaos:main`, the PR base branch. |
+| Review | A review is feedback on a pull request to check its changes and decide whether it is ready to merge. |
+
 ## Find the right repository
 
 Follow the change through its producer and consumer before opening a PR.
