@@ -163,8 +163,8 @@ downloads:
   # trusted on its own:
   #
   #   curl -sSL https://github.com/AvengeMedia/DankMaterialShell/releases/\
-  #     download/v1.6.1/dms-qml.tar.gz.sha256
-  #   904ad2709a2075f10dbb089b42a9f4eb39d8f06cb2634fd4c95fa739ef9c4a2d  dms-qml.tar.gz
+  #     download/v2.0.0/dms-qml.tar.gz.sha256
+  #   866cb3a23c39da8aea7645dd46a5c24661747086d4d1f91204893812e21f7c2e  dms-qml.tar.gz
   #
   # That value matches the asset on two separate fetches, and the archive
   # holds what the fallback asserts: DMSGreeter.qml, and a
@@ -173,7 +173,7 @@ downloads:
   # local sha256sum of whatever arrived, whenever this version moves.
   # renovate: datasource=github-releases depName=AvengeMedia/DankMaterialShell
   dms_qml: "v2.0.0"
-  dms_qml_sha256: "f8f3884aff9d29b008a50fd0d164b512a680a6cce209a8b62a690534fdfd4c80"
+  dms_qml_sha256: "866cb3a23c39da8aea7645dd46a5c24661747086d4d1f91204893812e21f7c2e"
 
   # Zirconium's mkosi.extra payload, fetched as a source tarball by
   # build_scripts/install-zirconium.sh (niri stages only). Pinned to a commit
