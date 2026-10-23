@@ -301,7 +301,8 @@ jobs:
             "$TUNA_LIVE_BASE_IMAGE" "$TUNA_LIVE_BASE_DIGEST" "$RUNNER_TEMP/native-overlay.env"
           source "$RUNNER_TEMP/native-overlay.env"
           export TUNA_LIVE_OVERLAY_REF TUNA_LIVE_OVERLAY_DIGEST
-          export TUNA_LIVE_PAYLOAD_REF="ghcr.io/tuna-os/${VARIANT}:${FLAVOR}@${TUNA_LIVE_BASE_DIGEST}"
+          install_target="$(GITHUB_REPOSITORY_OWNER=tuna-os bash scripts/published-image-ref.sh "$VARIANT" "$FLAVOR" ghcr)"
+          export TUNA_LIVE_PAYLOAD_REF="${install_target}@${TUNA_LIVE_BASE_DIGEST}"
           # lib/tacklebox.sh measures the executed binary after acquisition and
           # places that digest into the staged customization wrapper.
           sudo -E env "PATH=$PATH" just iso "$VARIANT" "$FLAVOR" local "$FLAVOR" 0 "$PLATFORM"

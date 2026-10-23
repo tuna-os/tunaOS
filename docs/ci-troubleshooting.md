@@ -2065,3 +2065,14 @@ Run 39918774666 then rejected the new Tuna caller: it allowed no Actions access,
 but the existing artifact jobs need `actions: read`. Give that caller read access,
 not write access. Keep all artifact and install checks. The caller regression
 checks this scope and the unique event binding; it does not prove installation.
+
+### GUI rejects the local source after Install
+
+Run 39920189464 reached final submission in both modes, then showed
+`required local source is absent or unreadable`. The store mounted, but the
+stock GUI recipe still named `tunaos:latest`; the ISO contained `skipjack:gnome`.
+
+Bind the final live recipe to the exact offline payload and measured digest.
+Keep the remote target for updates separate from the local install source. Reject
+missing or mismatched inputs; do not fall back to a network pull. Recipe tests
+do not prove installation. Both modes still need completion and detached-media boots.

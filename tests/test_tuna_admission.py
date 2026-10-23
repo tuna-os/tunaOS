@@ -96,6 +96,7 @@ def test_pull_requests_build_every_admitted_tuna_image_in_ci():
         "needs.tuna_build_inputs.outputs.relevant == 'true'"
     )
     assert job["permissions"] == {
+        "actions": "read",
         "contents": "read",
         "packages": "write",
         "id-token": "write",

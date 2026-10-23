@@ -185,6 +185,11 @@ BASE_DIGEST="${TUNA_LIVE_BASE_DIGEST:-$BASE_DIGEST}"
 {
 	printf 'export TUNA_LIVE_BASE_IMAGE=%q\n' "$BASE_IMAGE"
 	printf 'export TUNA_LIVE_BASE_DIGEST=%q\n' "$BASE_DIGEST"
+	if [[ -n "${TUNA_LIVE_PAYLOAD_REF+x}" ]]; then
+		printf 'export TUNA_LIVE_PAYLOAD_REF=%q\n' "$TUNA_LIVE_PAYLOAD_REF"
+		install_target="$(GITHUB_REPOSITORY_OWNER=tuna-os bash scripts/published-image-ref.sh "$VARIANT" "$FLAVOR" ghcr)"
+		printf 'export TUNA_LIVE_INSTALL_TARGET=%q\n' "$install_target"
+	fi
 	printf 'export TUNA_LIVE_OVERLAY_DIGEST=%q\n' "${TUNA_LIVE_OVERLAY_DIGEST:-unknown}"
 	printf 'export TUNA_LIVE_ENGINE_DIGEST=%q\n' "${TUNA_LIVE_ENGINE_DIGEST:-unknown}"
 	printf 'export TUNA_LIVE_PLATFORM=%q\n' "${PLATFORM:-unknown}"

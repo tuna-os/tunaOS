@@ -1017,6 +1017,13 @@ STORESEOF
 # load-bearing for the same reason documented there: bootupd payload first, so
 # a SEALED image that still ships bootupd stays on the ostree path.
 RECIPE_FILE="/etc/bootc-installer/recipe.json"
+if [[ -n "${TUNA_LIVE_PAYLOAD_REF+x}" ]]; then
+	# The final native media stage knows the canonical alias and measured
+	# digest of its offline store. Never keep the stock tunaos:latest source.
+	python3 "${SCRIPT_DIR}/installer-source-binding.py" "$RECIPE_FILE" \
+		"$TUNA_LIVE_PAYLOAD_REF" "${TUNA_LIVE_BASE_DIGEST:-}" \
+		"${TUNA_LIVE_INSTALL_TARGET:-}"
+fi
 if [[ -f "$RECIPE_FILE" ]]; then
 	# Fatal on failure, deliberately. An image we cannot classify must not get
 	# a guessed recipe: 10 seconds of ISO build is a better place to learn this
