@@ -5,23 +5,21 @@ This runbook prepares the tuna-os organization for Hacktoberfest 2026
 contributors arrive at a useful, reviewed backlog instead of an empty label
 search.
 
-Tracker issue: [tunaos#1331](https://github.com/tuna-os/tunaos/issues/1331)
-— **closed**, so it is a historical reference, not a live tracker.
-Current open trackers for this work are
-[tunaos#1537](https://github.com/tuna-os/tunaos/issues/1537) (seed rate),
-[tunaos#1780](https://github.com/tuna-os/tunaos/issues/1780) (pool
-composition) and
-[tunaos#2304](https://github.com/tuna-os/tunaos/issues/2304) (pool
-consumption).
+Execution tracker: [tunaos#3148](https://github.com/tuna-os/tunaos/issues/3148).
+Maintainers closed the older [#1331](https://github.com/tuna-os/tunaos/issues/1331)
+and [#1537](https://github.com/tuna-os/tunaos/issues/1537) trackers.
+The September census below is historical evidence. Run the pool report for
+current availability; check comments for claims before you start work.
 
 ## Launch target
 
-Before October 1, maintainers should publish 10–15 open issues that are both
-`good first issue` and `help wanted` in the repositories that take part. The
-backlog should include at least three repositories and no repository should
-account for more than half of the tasks.
+Issue #3148 carries the Q4 target: 15–20 usable tasks across at least six
+repositories. Keep at least three tasks in each of the six primary
+repositories (18 total). Each task needs `good first issue` and `help wanted`
+labels. Check the event rules before you add event labels or topics.
+No repository should account for more than half of the tasks.
 
-The initial participation scope is:
+The initial participation scope was (historical; #3148 supersedes it):
 
 - [tunaos](https://github.com/tuna-os/tunaos)
 - [docs](https://github.com/tuna-os/docs)
@@ -55,7 +53,7 @@ it is there. A first-timer who follows the banner and finds three shell-test
 issues, all near-identical, has had the experience this runbook exists to
 prevent.
 
-## Unblocked candidate: bootc-installer
+## Historical candidate: bootc-installer (September 2)
 
 [`tuna-os/bootc-installer`](https://github.com/tuna-os/bootc-installer) is a
 strong candidate repo for contributors: its GTK 4/Libadwaita frontend and
@@ -82,7 +80,7 @@ launch-task quota. It now has an open issue channel and zero other starter
 tasks. So it is the cheapest place to add repository breadth toward the
 "at least three repositories" rule.
 
-## Current TunaOS candidates
+## Historical TunaOS candidates (September 2)
 
 Re-verified live on 2026-09-02 with
 [`scripts/gfi-pool-report.sh`](../scripts/gfi-pool-report.sh), which applies
@@ -245,3 +243,104 @@ time to first maintainer response. After the event, record which contributors
 returned for another issue or PR. These values feed the community rows in
 [`ADOPTION-METRICS.md`](../ADOPTION-METRICS.md); do not treat GitHub stars or
 raw PR volume as retention by themselves.
+
+## Campaign pulse, closing report, and retention (#3148)
+
+Use the scope in [#3148](https://github.com/tuna-os/tunaos/issues/3148):
+`tunaos`, `docs`, `tunaos-packages`, `tromso`, `xfce-linux`, and `tacklebox` are
+primary repositories. `bootc-installer` and `bootc-migrate` are secondary. The
+older candidate list above can supply alternates. Record a scope change in the
+tracker; do not silently replace a repository to meet the target.
+
+### Collect PR evidence
+
+Run the report with Python 3 and `gh` authenticated through `GH_TOKEN`:
+
+```bash
+# The end date is exclusive, in UTC. This pulse covers October 1–14.
+python3 scripts/hacktoberfest-conversion.py --end 2026-10-15 > /tmp/pulse.json
+# The closing window covers October 1–31 in all eight repositories.
+python3 scripts/hacktoberfest-conversion.py > /tmp/closing.json
+# Repeat --repo to use an explicit scope; retain the same scope between runs.
+python3 scripts/hacktoberfest-conversion.py --repo tuna-os/docs > /tmp/docs.json
+```
+
+The report reads each repository's PR pages until their update dates precede the
+window. It includes PRs opened in the window and older PRs merged in it. An API
+error exits with code 2 and emits no JSON. An empty output file is not evidence
+of zero activity. Each receipt records its scope and collection time. Retain it
+with the tracker report; do not commit a table of live counts.
+
+Results describe the data at collection time, not a historical snapshot of
+review state. `currently_open` is the state when collected. Re-run after October
+31 to get the full event window.
+
+Raw PR counts include automation. A `User` account or a GitHub author
+association does not prove human authorship, external status, or a first
+contribution. Without a reviewed cohort, `new_human_conversion` is `null`. That
+means unmeasured, not zero and not target met.
+
+The outreach owner must review each author before they count a contribution.
+Exclude maintainers, bots, and user accounts that run agents. Check the public
+history of PRs across the organization for earlier contributions. Include only
+external humans whose first contribution to the organization occurred in the
+event window. Record evidence for human authorship and first-contribution
+status; leave uncertain cases out and report the uncertainty.
+
+Do not ask for private data about identity. Keep pre-event contributors in a
+separate report.
+
+Store that review as a JSON array, with one `login` and a nonempty `evidence`
+string per person. Evidence must cite public review or contribution links and
+explain the classification. Then run:
+
+```bash
+python3 scripts/hacktoberfest-conversion.py --cohort /tmp/reviewed-new-humans.json > /tmp/reviewed-closing.json
+```
+
+The result gives counts of merged PRs and unique authors with merges. It also
+gives counts of added and deleted lines. These totals do not measure impact. The
+merge target is 10. A return needs a new PR after that author's first merge in
+the window. Two PRs already in progress do not prove a return.
+
+A follow-up PR need not have merged. Scope limits apply to all these counts. The
+report does not prove acceptance by Hacktoberfest or adoption.
+
+### Run the coordination loop
+
+At each pulse, the outreach owner posts a dated comment in #3148:
+
+1. Attach the report scope, collection time, command, and retained receipt.
+   Include raw activity and reviewed conversions as separate values.
+2. Check open contributor PRs for unanswered questions. Record the PR link,
+   blocker, review contact, and next review date. Follow the repository's
+   review process and [weekly triage](../CONTRIBUTING.md#weekly-contributor-triage).
+3. Review the available starter pool with the curation checklist above.
+   For a repository with no active starter PR, check claims and linked PRs
+   before you seed more tasks. New issues need a user impact, acceptance criteria,
+   a time estimate, code links, local checks, and a contact for questions.
+4. Verify repository topics and event eligibility against the
+   [official event guidance](https://hacktoberfest.com/participation/).
+   An authorized maintainer applies settings and labels. Record failed
+   writes for handoff; do not bypass a write gate.
+5. Publish approved updates in Discussions, Matrix, and the relevant channels
+   for desktop communities. Link the available tasks and first-PR guide. Record
+   the publisher, sent date, and URL in the tracker. A prepared draft does
+   not count as a published announcement.
+
+On October 31, compare reviewed merges with 10, retained new humans with 5, and
+authors with follow-up PRs with 2. For this report, retention needs a new
+contribution after a first merge. This can be a new PR or a substantive task or
+review with a link. Record evidence other than PRs separately; the script counts
+only follow-up PRs. Link each result to its evidence.
+
+Thank contributors in their PR threads, and offer one available next task with a
+review contact. Record the invitation and any response; an invitation alone is
+not retention.
+
+Recheck on November 14 for returns after the event. Use a separate post-event
+receipt and preserve the October report. Publish wins, gaps, and lessons in
+#3148, then feed the verified counts into
+[ADOPTION-METRICS.md](../ADOPTION-METRICS.md). Leave unmet outcomes open with an
+owner and next review date. Do not treat the August merges as October
+conversions, or count this report PR as a human acquisition result.
