@@ -5,6 +5,11 @@ This process extends the [adoption call](ADOPTION-CALL.md). It captures real
 usage; a star, contribution, download, or upstream dependency is not proof of
 adoption. This document makes no new claims of adoption.
 
+This guide prepares the template and submission process for #3020. Keep that
+issue open for invitations to 5–10 teams, actual case studies, approved
+publication, and consented Production entries in ADOPTERS.md. This guide
+does not complete those outcomes.
+
 ## Submit a report
 
 Reply to the adoption call's Show-and-tell Discussion with the template below.
