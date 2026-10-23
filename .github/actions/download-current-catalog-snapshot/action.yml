@@ -1,0 +1,37 @@
+name: Download current catalog snapshot
+description: Fetch the qualified catalog snapshot produced from this exact commit
+inputs:
+  token:
+    description: GitHub token with actions:read
+    required: true
+outputs:
+  snapshot:
+    description: Verified snapshot path, or empty when this commit has no catalog run
+    value: ${{ steps.download.outputs.snapshot }}
+runs:
+  using: composite
+  steps:
+    - id: download
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+      run: |
+        set -euo pipefail
+        run_id="$(gh run list --repo "$GITHUB_REPOSITORY" \
+          --workflow catalog-facts.yml --commit "$GITHUB_SHA" \
+          --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
+        if [[ -z "$run_id" ]]; then
+          echo "::notice::No successful catalog snapshot for commit ${GITHUB_SHA}; delivery publication remains enabled"
+          echo "snapshot=" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        destination="${RUNNER_TEMP}/current-catalog-snapshot"
+        rm -rf "$destination"
+        mkdir -p "$destination"
+        gh run download "$run_id" --repo "$GITHUB_REPOSITORY" \
+          --name catalog-facts --dir "$destination"
+        (
+          cd "$destination"
+          sha256sum --check --strict catalog-snapshot.json.sha256
+        )
+        echo "snapshot=${destination}/catalog-snapshot.json" >> "$GITHUB_OUTPUT"

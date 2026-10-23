@@ -1,15 +1,21 @@
 import copy
+import hashlib
 import importlib.util
 import json
 from pathlib import Path
+import os
+import subprocess
 
 import pytest
+import yaml
 
 
 SCRIPT = Path(__file__).parents[1] / "scripts" / "verify-experience-manifest.py"
 SPEC = importlib.util.spec_from_file_location("experience_manifest", SCRIPT)
 MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
+ROOT = SCRIPT.parents[1]
+PARITY_WORKFLOW = ROOT / ".github/workflows/iso-builder-parity.yml"
 
 
 def _digest(char="a"):
@@ -303,3 +309,47 @@ def test_main_invalid_manifest_returns_error(tmp_path, monkeypatch, capsys):
     assert MODULE.main() == 1
     captured = capsys.readouterr()
     assert "error:" in captured.err
+
+
+def test_parity_workflow_binds_each_iso_to_its_own_manifest(tmp_path):
+    document = yaml.safe_load(PARITY_WORKFLOW.read_text(encoding="utf-8"))
+    step = next(
+        item
+        for item in document["jobs"]["parity"]["steps"]
+        if item.get("name") == "Validate and compare experience manifests"
+    )
+    script = step["run"].replace("parity/", f"{tmp_path}/")
+
+    for source, content in (("ci", b"ci image"), ("browser", b"browser image")):
+        directory = tmp_path / source
+        directory.mkdir()
+        (directory / f"{source}.iso").write_bytes(content)
+        evidence = manifest(
+            iso_sha256="sha256:" + hashlib.sha256(content).hexdigest()
+        )
+        (directory / "experience-manifest.json").write_text(
+            json.dumps(evidence), encoding="utf-8"
+        )
+
+    env = os.environ | {"VARIANT": "yellowfin", "FLAVOR": "gnome"}
+    valid = subprocess.run(
+        ["bash", "-c", script],
+        cwd=ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert valid.returncode == 0, valid.stderr
+
+    (tmp_path / "ci/ci.iso").write_bytes(b"wrong producer output")
+    mismatched = subprocess.run(
+        ["bash", "-c", script],
+        cwd=ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert mismatched.returncode != 0
+    assert "ci ISO does not match its producer manifest" in mismatched.stdout
