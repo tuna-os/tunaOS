@@ -8,11 +8,20 @@ permissions: {}
 jobs:
   analyze:
     if: github.repository == 'tuna-os/tunaOS' && github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       actions: read
     steps:
+      - name: Install the same OCR package versions as the retained native run
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            imagemagick=8:6.9.12.98+dfsg1-5.2build2 \
+            imagemagick-6.q16=8:6.9.12.98+dfsg1-5.2build2 \
+            tesseract-ocr=5.3.4-1build5 libtesseract5=5.3.4-1build5 \
+            tesseract-ocr-eng=1:4.1.0-2 tesseract-ocr-osd=1:4.1.0-2
+          dpkg-query -W imagemagick imagemagick-6.q16 tesseract-ocr libtesseract5 tesseract-ocr-eng tesseract-ocr-osd
       - name: Read pinned retained diagnostics without executing artifact content
         env:
           GH_TOKEN: ${{ github.token }}
@@ -30,7 +39,9 @@ jobs:
             https://api.github.com/repos/tuna-os/tunaOS/actions/artifacts/12476197813/zip
           unset GH_TOKEN
           python3 - <<'PY'
-          import base64
+          import csv
+          import subprocess
+          import tempfile
           import hashlib
           import io
           import json
@@ -94,12 +105,56 @@ jobs:
                       width, height = struct.unpack("!II", png[16:24])
                       if not (640 <= width <= 1920 and 480 <= height <= 1200):
                           raise SystemExit("PNG dimensions outside driver bounds")
-                      print(f"ISO_PNG_META {mode} {index:02d} {width} {height} "
-                            f"{len(png)} {hashlib.sha256(png).hexdigest()}")
-                      encoded = base64.b64encode(png).decode("ascii")
-                      for offset in range(0, len(encoded), 4096):
-                          print(f"ISO_PNG {mode} {index:02d} {offset // 4096} "
-                                + encoded[offset:offset + 4096])
+                      # Analyze the original full frame with the exact driver commands.
+                      # Export only the disk and encryption cards; exclude hostname.
+                      with tempfile.TemporaryDirectory() as directory:
+                          original = Path(directory) / "frame.png"
+                          prepared = Path(directory) / "prepared.png"
+                          original.write_bytes(png)
+                          subprocess.run(["convert", str(original), "-colorspace", "gray",
+                                          "-threshold", "90%", str(prepared)],
+                                         capture_output=True, timeout=20, check=True)
+                          result = subprocess.run(["tesseract", str(prepared), "stdout",
+                                                   "--psm", "11", "tsv"],
+                                                  capture_output=True, text=True,
+                                                  timeout=30, check=True)
+                      if len(result.stdout) > 1024 * 1024:
+                          raise SystemExit("OCR output exceeded byte bound")
+                      selected = []
+                      allowed_words = frozenset((
+                          "disk", "/dev/vda", "(64", "gib)", "encryption", "no",
+                          "passphrase", "everything", "on", "will", "be", "erased.",
+                          "this", "cannot", "undone."))
+                      numeric_fields = ("level", "page_num", "block_num", "par_num",
+                                        "line_num", "word_num", "left", "top",
+                                        "width", "height")
+                      for word in csv.DictReader(io.StringIO(result.stdout), delimiter="\t"):
+                          if word.get("level") != "5" or not word.get("text", "").strip():
+                              continue
+                          x, y, w, h = (int(word[key]) for key in
+                                        ("left", "top", "width", "height"))
+                          region = ("disk" if 330 <= y and y+h <= 420 else
+                                    "encryption" if 490 <= y and y+h <= 555 else None)
+                          if region is None or not (350 <= x < x+w <= 960 and h > 0):
+                              continue
+                          if len(word["text"]) > 80 or len(selected) >= 128:
+                              raise SystemExit("OCR token bound exceeded")
+                          numeric = {key: int(word[key]) for key in numeric_fields}
+                          if any(not 0 <= item <= 10000 for item in numeric.values()):
+                              raise SystemExit("OCR numeric field outside bound")
+                          confidence = float(word["conf"])
+                          if not -1 <= confidence <= 100:
+                              raise SystemExit("OCR confidence outside bound")
+                          token = word["text"]
+                          selected.append({
+                              "region": region, **numeric, "conf": confidence,
+                              "token_length": len(token),
+                              "text": token if token.lower() in allowed_words else "[redacted]",
+                              "redacted": token.lower() not in allowed_words})
+                      print("ISO_SUMMARY_OCR " + json.dumps(
+                          {"mode": mode, "index": index, "width": width, "height": height,
+                           "png_sha256": hashlib.sha256(png).hexdigest(),
+                           "words": selected}, ensure_ascii=True, sort_keys=True))
           print("Artifact 12476197813, run 39891435048, source b9cdebc9.")
           print("Observations only; not input delivery or installation qualification.")
           PY
