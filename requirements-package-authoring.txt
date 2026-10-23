@@ -1,0 +1,4 @@
+# Optional lossless TOML editor; read/validate/build do not need this dependency.
+# Explicit installation only. No package authoring command downloads code.
+-r requirements-config.txt
+tomlkit==0.13.3

@@ -1,14 +1,25 @@
 #!/usr/bin/env bash
 set -euo pipefail
+set -E
 
 desktop="${1:?usage: verify-desktop-experience.sh <gnome|kde|niri|cosmic|xfce|pantheon|tuna> [--runtime]}"
 mode="${2:-build}"
+if [[ "$mode" == --runtime ]]; then
+	echo "tunaos desktop contract starting: desktop=${desktop}" | tee /dev/ttyS0 2>/dev/null || true
+	# The serial gate only sees console output; mirror stderr there too so a
+	# failing require_* names its missing path instead of dying silently.
+	exec 2> >(tee /dev/ttyS0 >&2)
+fi
 
 # At runtime the E2E gate greps ttyS0 for a contract marker; a silent early
 # exit (e.g. a require_* failing under set -e) would leave the gate waiting
 # out its full timeout with no evidence. Guarantee a terminal FAIL marker on
 # any premature death; the normal paths below disarm this trap.
 marker_emitted=0
+# BASH_LINENO/BASH_COMMAND inside an EXIT trap do not name the failed command,
+# so record the real location when an unguarded command dies (errtrace).
+err_line=""
+err_command=""
 emit_fail_on_early_exit() {
 	local rc=$?
 	if [[ "$mode" == --runtime && "$rc" -ne 0 && "$marker_emitted" -eq 0 ]]; then
@@ -16,12 +27,17 @@ emit_fail_on_early_exit() {
 		# their failure actionable in a serial-only Gate: without this, the
 		# harness only gets `early_exit rc=1` and cannot distinguish a missing
 		# session, portal, keyring, or display-manager unit.
-		local line="${BASH_LINENO[0]:-unknown}"
-		local command="${BASH_COMMAND:-unknown}"
-		printf 'TUNAOS_DESKTOP_CONTRACT_FAIL desktop=%s reason=early_exit rc=%s line=%s command=%q\n' \
-			"${desktop}" "${rc}" "${line}" "${command}" | tee /dev/ttyS0 2>/dev/null || true
+	local line="${err_line:-${BASH_LINENO[0]:-unknown}}"
+	local command="${err_command:-${BASH_COMMAND:-unknown}}"
+	local stack="" i
+	for i in "${!BASH_LINENO[@]}"; do
+		stack+=" ${BASH_SOURCE[$i]:-?}:${BASH_LINENO[$i]:-?}:${FUNCNAME[$((i + 1))]:-main}"
+	done
+	printf 'TUNAOS_DESKTOP_CONTRACT_FAIL desktop=%s reason=early_exit rc=%s line=%s command=%q stack=%s\n' \
+		"${desktop}" "${rc}" "${line}" "${command}" "${stack:-none}" | tee /dev/ttyS0 2>/dev/null || true
 	fi
 }
+trap 'err_line="${BASH_LINENO[0]:-unknown}"; err_command="${BASH_COMMAND:-unknown}"' ERR
 trap emit_fail_on_early_exit EXIT
 
 source /run/context/build_scripts/lib.sh 2>/dev/null || true
@@ -529,22 +545,11 @@ tuna)
 	grep -qx 'Exec=tuna-session' /usr/share/wayland-sessions/roost.desktop
 	grep -qx 'NoDisplay=true' /usr/share/wayland-sessions/roost.desktop
 	require_glob '/etc/pam.d/roost-lock'
-	# Login screen per base (tunaOS#3438): Marlin (pacman) runs stock GDM,
-	# every other tuna flavor still runs greetd/gtkgreet. GDM lists
-	# /usr/share/wayland-sessions itself, so it needs the session entry
-	# but no environments file and no launcher.
-	if [[ "$tuna_backend" == pacman ]]; then
-		grep -qx 'Name=Tuna Desktop' /usr/share/wayland-sessions/tuna.desktop
-	else
-		# gtkgreet lists environments lines verbatim, so the picker must show
-		# the session's name, and greetd's `exec <line>` must reach the same
-		# supervisor as tuna.desktop (tunaOS#3110).
-		require_glob '/etc/greetd/environments'
-		grep -qx 'Tuna Desktop' /etc/greetd/environments
-		grep -qx 'Name=Tuna Desktop' /usr/share/wayland-sessions/tuna.desktop
-		require_command Tuna
-		grep -qx 'exec tuna-session' "$(command -v Tuna)"
-	fi
+	# GDM enumerates Wayland sessions directly; Tuna needs its named session,
+	# not a greetd environments list or a second launcher.
+	require_glob '/usr/share/wayland-sessions/tuna.desktop'
+	grep -qx 'Name=Tuna Desktop' /usr/share/wayland-sessions/tuna.desktop
+	grep -qx 'Exec=tuna-session' /usr/share/wayland-sessions/tuna.desktop
 	require_glob '/usr/share/xdg-desktop-portal/tuna-portals.conf'
 	for portal in ScreenCast Screenshot; do
 		require_portal_preference /usr/share/xdg-desktop-portal/tuna-portals.conf "org.freedesktop.impl.portal.$portal" gnome
@@ -561,17 +566,33 @@ tuna)
 	# without it every portal fails (tuna-os/tuna-desktop#691).
 	require_command dbus-update-activation-environment
 	require_command wpctl
-	# Greeter frontend per base (tunaOS#3438): GDM ships its own on Marlin.
-	if [[ "$tuna_backend" == pacman ]]; then
-		require_command gdm
-		grep -qx 'gdm' <<<"$installed_packages" || {
-			echo "the gdm package is not installed; Marlin has no login screen" >&2
-			exit 1
-		}
+	# Every Tuna base uses the canonical gdm.service unit. Debian and Ubuntu
+	# retain gdm3 as the package and executable name.
+	tuna_gdm_unit=gdm
+	if [[ "$tuna_backend" == dpkg ]]; then
+		tuna_gdm_command=gdm3
+		tuna_gdm_package=gdm3
+		# Debian and Ubuntu disagree on the config filename, and IS_UBUNTU is
+		# only set at build time (detected_os has no /run/context in a booted
+		# image), so read whichever file the base actually ships.
+		tuna_gdm_config=/etc/gdm3/custom.conf
+		[[ -r "$tuna_gdm_config" ]] || tuna_gdm_config=/etc/gdm3/daemon.conf
 	else
-		require_command gtkgreet
-		require_command cage
+		tuna_gdm_command=gdm
+		tuna_gdm_package=gdm
+		tuna_gdm_config=/etc/gdm/custom.conf
 	fi
+	require_command "$tuna_gdm_command"
+	grep -qx "$tuna_gdm_package" <<<"$installed_packages" || {
+		echo "the ${tuna_gdm_package} package is not installed; Tuna has no login screen" >&2
+		exit 1
+	}
+	for tuna_removed_package in greetd greetd-gtkgreet gtkgreet cage; do
+		if grep -qx "$tuna_removed_package" <<<"$installed_packages"; then
+			echo "the ${tuna_removed_package} package remains after Tuna migrated to GDM" >&2
+			exit 1
+		fi
+	done
 	require_any_glob '/usr/libexec/xdg-desktop-portal-gnome' '/usr/lib/xdg-desktop-portal-gnome'
 	require_any_glob '/usr/libexec/xdg-desktop-portal-gtk' '/usr/lib/xdg-desktop-portal-gtk'
 	# Power profiles on the Fedora and EL bases come from tuned-ppd, the
@@ -596,42 +617,66 @@ tuna)
 		echo "the image ships SSH host keys:" /etc/ssh/ssh_host_* >&2
 		exit 1
 	fi
-	# Display manager per base (tunaOS#3438): GDM on Marlin, greetd
-	# everywhere else. Exactly one may own display-manager.service and
-	# VT1; catch the wrong one at build time, not at the boot gate.
+	# Exactly one display manager may own display-manager.service and VT1.
 	tuna_dm="$(readlink -f /etc/systemd/system/display-manager.service 2>/dev/null || true)"
-	if [[ "$tuna_backend" == pacman ]]; then
-		[[ "${tuna_dm##*/}" == gdm.service ]] || {
-			echo "display-manager.service is '${tuna_dm:-unset}', not gdm.service" >&2
-			exit 1
-		}
-		if [[ -e /etc/systemd/system/graphical.target.wants/greetd.service ]]; then
-			echo "greetd.service is enabled beside GDM; two display managers would race for seat0/VT1" >&2
-			exit 1
-		fi
-		if gdm_autologin_enabled /etc/gdm/custom.conf; then
-			echo "GDM automatic login is enabled; the login screen is bypassed" >&2
-			exit 1
-		fi
-		require_unit gdm
-		dm_pattern='^gdm\.service$'
-	else
-		# Another display manager's preset (gdm, installed because
-		# gnome-shell requires its gdm-libs) takes display-manager.service
-		# and VT1, and greetd then dies with EPERM on the terminal.
-		[[ "${tuna_dm##*/}" == greetd.service ]] || {
-			echo "display-manager.service is '${tuna_dm:-unset}', not greetd.service" >&2
-			exit 1
-		}
-		if [[ -f /usr/lib/systemd/system/gdm.service ]]; then
-			[[ "$(readlink /etc/systemd/system/gdm.service 2>/dev/null || true)" == /dev/null ]] || {
-				echo "gdm.service is installed beside greetd but not masked; a first-boot preset would start it on VT1" >&2
-				exit 1
-			}
-		fi
-		require_unit greetd
-		dm_pattern='^greetd\.service$'
+	[[ "${tuna_dm##*/}" == "${tuna_gdm_unit}.service" ]] || {
+		echo "display-manager.service is '${tuna_dm:-unset}', not ${tuna_gdm_unit}.service" >&2
+		exit 1
+	}
+	if [[ -e /etc/systemd/system/graphical.target.wants/greetd.service ]]; then
+		echo "greetd.service is enabled beside GDM; two display managers would race for seat0/VT1" >&2
+		exit 1
 	fi
+	[[ -r "$tuna_gdm_config" ]] || {
+		echo "GDM configuration is missing or unreadable: $tuna_gdm_config" >&2
+		exit 1
+	}
+	if gdm_autologin_enabled "$tuna_gdm_config"; then
+		echo "GDM automatic login is enabled; the login screen is bypassed" >&2
+		exit 1
+	fi
+	# Fresh installs have no per-user history, so GDM would fall back to its
+	# own default session instead of Tuna without this pin.
+	grep -qx 'DefaultSession=tuna.desktop' "$tuna_gdm_config" || {
+		echo "GDM does not default to the Tuna session in $tuna_gdm_config" >&2
+		exit 1
+	}
+	require_unit "$tuna_gdm_unit"
+	# GDM offers every visible Wayland session and falls back to its own
+	# default when nothing is pre-selected, so only Tuna may be offered.
+	for tuna_gdm_other in /usr/share/wayland-sessions/*.desktop; do
+		case "$(basename "$tuna_gdm_other")" in
+		tuna*.desktop | roost.desktop) continue ;;
+		esac
+		if ! grep -qx 'NoDisplay=true' "$tuna_gdm_other"; then
+			echo "GDM offers a second, non-Tuna session: $tuna_gdm_other" >&2
+			exit 1
+		fi
+	done
+
+	# Preserve each Tuna variant's distro-derived accent without replacing the
+	# GNOME Shell resource shipped by its package.
+	require_glob /usr/share/tunaos/identity.env
+	tuna_gdm_accent="$(awk -F"'" '$1 == "TUNAOS_ACCENT=" { print $2; exit }' /usr/share/tunaos/identity.env)"
+	[[ "$tuna_gdm_accent" =~ ^#[[:xdigit:]]{6}$ ]] || {
+		echo "Tuna variant accent is invalid in /usr/share/tunaos/identity.env" >&2
+		exit 1
+	}
+	for tuna_gdm_stylesheet in gnome-shell-dark.css gnome-shell-light.css gnome-shell-high-contrast.css; do
+		tuna_gdm_theme_file="/usr/share/tunaos/gdm-theme/$tuna_gdm_stylesheet"
+		require_glob "$tuna_gdm_theme_file"
+		grep -Fqx "  background-color: ${tuna_gdm_accent};" "$tuna_gdm_theme_file" || {
+			echo "Tuna GDM theme overlay lacks the variant accent: $tuna_gdm_theme_file" >&2
+			exit 1
+		}
+	done
+	tuna_gdm_theme_drop_in=/etc/systemd/user/org.gnome.Shell@gdm.service.d/tunaos-gdm-theme.conf
+	require_glob "$tuna_gdm_theme_drop_in"
+	grep -Fqx 'Environment=G_RESOURCE_OVERLAYS=/org/gnome/shell/theme=/usr/share/tunaos/gdm-theme' "$tuna_gdm_theme_drop_in" || {
+		echo "the GDM greeter is not configured to load the Tuna theme overlay" >&2
+		exit 1
+	}
+	dm_pattern="^${tuna_gdm_unit}\\.service$"
 	;;
 niri)
 	experience="zirconium-dev/zirconium"
@@ -783,6 +828,24 @@ esac
 # ended up with lightdm it needs an X server.
 x11_display_manager_has_a_server
 
+# A graphical login is not operable without the system message bus. Some
+# display managers (SDDM and greetd) remain active when dbus-broker has failed,
+# so the display-manager check below cannot stand in for this one. That exact
+# shape emitted DESKTOP_CONTRACT_OK on yellowfin:niri in tunaOS#2664.
+#
+# Resolve dbus.service instead of assuming dbus-broker: supported bases may use
+# dbus-daemon, and the contract is about the bus rather than its implementation.
+verify_system_bus() {
+	local bus_unit state
+	bus_unit=$(systemctl show -P Id dbus.service 2>/dev/null || true)
+	bus_unit="${bus_unit:-dbus.service}"
+	if systemctl is-active --quiet "$bus_unit" 2>/dev/null; then
+		return 0
+	fi
+	state=$(systemctl is-active "$bus_unit" 2>/dev/null || true)
+	report_fail "system_bus_inactive unit=${bus_unit} state=${state:-unknown}"
+}
+
 if [[ "$mode" == --runtime ]]; then
 	# Each check is individually gated so a single failure doesn't
 	# kill the script silently via `set -e`. The final marker is
@@ -793,6 +856,7 @@ if [[ "$mode" == --runtime ]]; then
 		echo "TUNAOS_DESKTOP_CONTRACT_FAIL reason=${reason}" | tee /dev/ttyS0 2>/dev/null || true
 		ok=0
 	}
+	verify_system_bus
 	if ! command -v remora >/dev/null 2>&1; then
 		report_fail remora_not_found
 	fi
@@ -1019,22 +1083,35 @@ else
 	# Asserts exactly what the build now lays down, nothing aspirational:
 	# tuna-flatpak-remote.sh bakes the Flathub remote on every base, and
 	# flatpak-preinstall.sh declares the common curated set
-	# (io.github.kolunmi.Bazaar and org.mozilla.firefox), plus Extension
-	# Manager on GNOME. It enables flatpak-preinstall.service where available.
-	# Guarded on flatpak existing so a hypothetical flatpak-less image is
-	# out of scope rather than red. The per-app grep list below is kept in
-	# lockstep with flatpak-preinstall.sh by
-	# tests/bats/test_build_scripts_remaining.bats — change both together.
+	# from the primary policy and enables its service where available.
+	# Installed apps remain separate from declarations. The generated policy
+	# adapter is installed by the recipe and checked against a frozen fixture.
 	if command -v flatpak >/dev/null 2>&1; then
 		require_glob '/etc/flatpak/remotes.d/flathub.flatpakrepo'
-		require_glob '/usr/share/flatpak/preinstall.d/*.preinstall'
-		_fp_apps=(io.github.kolunmi.Bazaar org.mozilla.firefox)
-		if [[ "$desktop" == "gnome" ]]; then
-			_fp_apps+=(com.mattjakeman.ExtensionManager)
+		_fp_policy=/usr/share/flatpak/tunaos-preinstall-policy.tsv
+		require_glob "$_fp_policy"
+		_fp_apps=()
+		while IFS=$'\t' read -r _fp_scope _fp_app _fp_branch; do
+			[[ "$_fp_scope" == '#'* || -z "$_fp_scope" ]] && continue
+			if [[ "$_fp_scope" == '*' || "$_fp_scope" == "$desktop" ]]; then
+				_fp_apps+=("${_fp_app}:${_fp_branch}")
+			fi
+		done <"$_fp_policy"
+		if [[ ${#_fp_apps[@]} -gt 0 ]]; then
+			require_glob '/usr/share/flatpak/preinstall.d/*.preinstall'
 		fi
-		for _fp_app in "${_fp_apps[@]}"; do
-			if ! grep -rqs "^\[Flatpak Preinstall ${_fp_app}\]" /usr/share/flatpak/preinstall.d; then
-				echo "missing flatpak preinstall declaration: ${_fp_app}" >&2
+		for _fp_spec in "${_fp_apps[@]}"; do
+			_fp_app="${_fp_spec%:*}"
+			_fp_branch="${_fp_spec##*:}"
+			if ! awk -v header="[Flatpak Preinstall ${_fp_app}]" -v branch="$_fp_branch" '
+				function finish() { if (active) { found = 1; if (value != branch) bad = 1 } }
+				FNR == 1 { finish(); active = 0; value = "" }
+				{ sub(/\r$/, "") }
+				/^\[/ { finish(); active = ($0 == header); value = ""; next }
+				active && /^Branch=/ { value = substr($0, 8) }
+				END { finish(); exit (!found || bad) }
+			' /usr/share/flatpak/preinstall.d/*.preinstall; then
+				echo "missing or conflicting flatpak preinstall declaration: ${_fp_app}/${_fp_branch}" >&2
 				if [[ "${IS_HUMMINGBIRD:-false}" != "true" ]]; then
 					exit 1
 				fi

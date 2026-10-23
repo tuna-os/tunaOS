@@ -297,13 +297,12 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
   grep -qF "require_glob '/etc/flatpak/remotes.d/flathub.flatpakrepo'" "$contract" || { echo "FAIL: contract does not require the flathub remote" >&2; fail=1; }
   grep -qF "require_glob '/usr/share/flatpak/preinstall.d/*.preinstall'" "$contract" || { echo "FAIL: contract does not require a preinstall declaration" >&2; fail=1; }
 
-  # (c) every curated app is named by both the declaration script and the
-  # image contract. Behavioral tests cover GNOME's conditional addition.
-  local app
-  for app in io.github.kolunmi.Bazaar org.mozilla.firefox com.mattjakeman.ExtensionManager; do
-    grep -qF "$app" "$preinstall" || { echo "FAIL: preinstall script does not declare $app" >&2; fail=1; }
-    grep -qF "$app" "$contract" || { echo "FAIL: contract does not assert $app" >&2; fail=1; }
-  done
+  # (c) both consumers read the single generated policy. Behavioral fixture
+  # tests independently assert the exact pre-migration app/branch set.
+  grep -qF 'flatpak-preinstall.tsv' "$preinstall" || fail=1
+  grep -qF 'tunaos-preinstall-policy.tsv' "$contract" || fail=1
+  run python3 "${REPO_ROOT}/scripts/config.py" check-flatpak-policy
+  [ "$status" -eq 0 ] || fail=1
 
   # (d) the service that makes declarations real is enabled by the script
   # and enforced by the contract wherever the unit exists.
