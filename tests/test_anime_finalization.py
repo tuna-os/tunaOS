@@ -176,9 +176,10 @@ def test_containerfile_order_and_final_writer_contract():
     assert 'VARIANT_WALLPAPER=' not in source
 
 
-def test_a_forks_project_name_gives_way_to_the_variant(tmp_path):
+def test_a_forks_installer_and_plasma_names_follow_tunaos_toml(tmp_path):
     """The installer slides and Plasma names swap tunaos.toml's [project] name,
-    not a literal "TunaOS", for the variant; image references stay put."""
+    not a literal "TunaOS", for the variant; image references stay put; the
+    installer logo is the variant's own mark, which this build installs."""
     image = Image(tmp_path, "marlin", "kde")
     project = "Acme (OS) 2.0+"   # every regex special [project] name allows
     identity = image.context / "build_scripts/lib/identity.env"
@@ -194,6 +195,9 @@ def test_a_forks_project_name_gives_way_to_the_variant(tmp_path):
     meta.parent.mkdir(parents=True)
     meta.write_text(json.dumps({"KPlugin": {"Authors": [{"Name": f"{project} Contributors"}], "Name": project}},
                                indent=4))
+    mark = image.root / "usr/share/tunaos/logos/marlin.svg"
+    mark.parent.mkdir(parents=True, exist_ok=True)
+    mark.write_text("<svg><!-- the fork's marlin mark --></svg>\n")
     image.info()
     written = json.loads(recipe.read_text())
     assert written["tour"]["completed"]["description"] == \
@@ -203,3 +207,6 @@ def test_a_forks_project_name_gives_way_to_the_variant(tmp_path):
     assert project not in json.dumps({k: v for k, v in written.items() if k not in ("imgref", "local_imgref")})
     plugin = json.loads(meta.read_text())["KPlugin"]
     assert plugin["Name"] == "Marlin" and plugin["Authors"][0]["Name"] == f"{project} Contributors"
+    logo = Path(written["distro_logo"])
+    assert logo == image.root / "usr/share/pixmaps/tunaos.svg"   # the harness re-roots /usr/
+    assert logo.read_text() == mark.read_text()

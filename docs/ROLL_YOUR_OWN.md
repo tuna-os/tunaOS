@@ -302,7 +302,7 @@ and names the file when one of these is missing.
 
 The installer's slides come from `system_files/etc/bootc-installer/recipe.json`.
 Write them with your `[project] name`: the build puts the variant name in its
-place. The GNOME installer logo still uses TunaOS marks (#3668).
+place. The installer logo is the variant's mark, made from its `emoji`.
 
 For GNOME defaults, create a gschema override:
 

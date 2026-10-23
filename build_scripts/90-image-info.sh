@@ -189,29 +189,15 @@ if [[ -f "${RECIPE_FILE}" ]]; then
 	if [[ "${IMAGE_FLAVOR}" == "xfce" || "${IMAGE_FLAVOR}" == *"xfce"* ]]; then DESKTOP_PRETTY_NAME="XFCE"; fi
 	if [[ "${IMAGE_FLAVOR}" == "pantheon" || "${IMAGE_FLAVOR}" == *"pantheon"* ]]; then DESKTOP_PRETTY_NAME="Pantheon"; fi
 
-	# Pick the variant mark that ACTUALLY EXISTS in the installer's GResource.
-	#
-	# This line used to build 'images/${IMAGE_NAME}.png' unconditionally. Every
-	# TunaOS mark in that bundle is an .svg — only bluefin, bluefin-lts and
-	# dakota are .png — so the path never resolved. bootc-installer's
-	# apply_icon() catches the failure and logs a warning, so the welcome
-	# screen silently showed GTK's broken-image placeholder above a correctly
-	# branded "Welcome to Skipjack". Seen on the live-ISO screenshot for
-	# tuna-os/tunaOS#1056.
-	#
-	# The set below is upstream's, from bootc_installer/bootc-installer.gresource.xml:
-	#   images/tunaos.svg  bonito.svg  skipjack.svg  albacore.svg  yellowfin.svg
-	# grouper, marlin, redfin and sailfin have no mark of their own, and would
-	# hit exactly the same broken placeholder — they fall back to the TunaOS
-	# mark, which is branding rather than breakage.
-	case "${IMAGE_NAME}" in
-	tunaos | bonito | skipjack | albacore | yellowfin)
-		DISTRO_LOGO_RES="resource:///org/bootcinstaller/Installer/images/${IMAGE_NAME}.svg"
-		;;
-	*)
-		DISTRO_LOGO_RES="resource:///org/bootcinstaller/Installer/images/tunaos.svg"
-		;;
-	esac
+	# The installer shows the mark this image already carries: the variant's
+	# emoji from tunaos.toml (scripts/branding/make-logos.py), installed as
+	# /usr/share/pixmaps/tunaos.svg below, or the generic mark for a name with
+	# none. bootc-installer reads an absolute path as a file and maps /usr/
+	# to /run/host/usr/ in its Flatpak, so every variant and every fork gets
+	# its own mark. The installer's bundled GResource held marks for only five
+	# TunaOS names (tunaos, bonito, skipjack, albacore, yellowfin); the rest
+	# showed the TunaOS fish (tuna-os/tunaOS#1056, #3668).
+	DISTRO_LOGO_RES="/usr/share/pixmaps/tunaos.svg"
 
 	python3 -c "
 import json
