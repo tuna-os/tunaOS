@@ -58,6 +58,10 @@ jobs:
             --source-revision "$GITHUB_SHA" --api-version "$api_version" \
             --output health/build-health.json --markdown health/BUILD-HEALTH.md
           cat health/BUILD-HEALTH.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Generate workflow inventory for review
+        run: |
+          python scripts/gen-ci-lanes.py
+          cp docs/CI_SPEC.md health/CI_SPEC.md
       - name: Preserve observed health
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
