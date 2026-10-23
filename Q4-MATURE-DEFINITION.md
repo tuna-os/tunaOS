@@ -27,7 +27,7 @@ checkpoint (#1299). Q4 must close with evidence, not wishes.
 
 | Goal | Tracker | Exit criterion (evidence required) |
 |------|---------|-------------------------------------|
-| Adoption metrics / usage telemetry | #1174 | First monthly download/usage snapshot **published by 2026-11-01**; dashboard or doc with numbers, not prose |
+| Adoption metrics / usage telemetry | #1174, #3149 | First monthly download/usage snapshot **published by 2026-11-01**; dashboard or doc with numbers, not prose. [October interim evidence](docs/adoption-metrics/OCTOBER-2026.md) leaves the final report and missing inputs open |
 | Installer qualification | [#3405](https://github.com/tuna-os/tunaos/issues/3405), [#3380](https://github.com/tuna-os/tunaos/issues/3380), [#3474](https://github.com/tuna-os/tunaos/issues/3474) | Maintainer-owned release gate: every advertised release cell must have fresh exact-image offline plain/encrypted installation, media-detached target boot, expected desktop/source identity, update and recovery evidence. Use [MATRIX-STATUS.md](docs/MATRIX-STATUS.md) for generated cell status; otherwise narrow the release claim explicitly. Source tests and installer launch are insufficient |
 | Adoption evidence | #1348 | ≥1 production adopter listed in ADOPTERS.md with a verifiable reference (deployment, testimonial, case study) |
 | Community governance model | #1168 | Governance doc merged (maintainer roles, decision rights, contribution ladder) and referenced from CONTRIBUTING.md |

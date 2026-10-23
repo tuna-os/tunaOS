@@ -51,6 +51,11 @@ publish, and *how* the snapshot feeds roadmap decisions.
 
 ## Cadence & publication
 
+The [October 2026 interim snapshot](docs/adoption-metrics/OCTOBER-2026.md)
+records a dated ISO census and the gaps for #3149.
+It separates lifetime counters from October activity. Final publication remains
+due on November 1, after the month ends.
+
 - **Monthly snapshot**, published in the ROADMAP **Community** section (first:
   **2026-11-01**, covering October — aligns with Q4 "Mature" opening).
 - Snapshot format: downloads by variant × desktop (top 10), stars/forks,
