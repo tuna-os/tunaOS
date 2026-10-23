@@ -279,8 +279,9 @@ FORK_URLS = {
 def fork_identity():
     fork = copy.deepcopy(config.load())
     fork["project"] = {"name": "Acme OS", "id": "acmeos", "cpe_vendor": "acme"}
-    fork["defaults"]["branding"] = {"homepage": FORK_URLS["HOME_URL"], "documentation": FORK_URLS["DOCUMENTATION_URL"],
-                                    "support": FORK_URLS["SUPPORT_URL"], "bug_report": FORK_URLS["BUG_REPORT_URL"]}
+    # Change only the URLs: the table carries other required keys (plymouth).
+    fork["defaults"]["branding"].update(homepage=FORK_URLS["HOME_URL"], documentation=FORK_URLS["DOCUMENTATION_URL"],
+                                        support=FORK_URLS["SUPPORT_URL"], bug_report=FORK_URLS["BUG_REPORT_URL"])
     return config.render_identity(fork)
 
 
