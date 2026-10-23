@@ -96,9 +96,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
-          python-version: '3.15' # Compatibility floor; protected by the scoped Renovate rule.
+          python-version: '3.10' # Compatibility floor; protected by the scoped Renovate rule.
       - name: Install config test dependencies
         run: python -m pip install pytest PyYAML -r requirements-config.txt -r requirements-package-authoring.txt
       - name: Verify primary config on the oldest supported Python
@@ -116,7 +116,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.15'
       - name: Install config test dependencies
@@ -137,7 +137,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup TunaOS Build Environment
-        uses: projectbluefin/actions/bootc-build/setup-runner@59f783ed76fd9d449ef6887a6649446801bd5434 # v1 as of 2026-07-02
+        uses: projectbluefin/actions/bootc-build/setup-runner@b541b99e9d798cd818987004405f205891e65de1 # v1 as of 2026-07-02
         with:
           storage-backend: ""
           update-podman: "false"
