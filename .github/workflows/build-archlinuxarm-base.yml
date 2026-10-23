@@ -159,7 +159,6 @@ jobs:
           set -euo pipefail
           SUBJECT="oci://$CANDIDATE_NAME@$CANDIDATE_DIGEST"
           POLICY=(--repo "$GITHUB_REPOSITORY"
-            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/build-archlinuxarm-base.yml"
             --cert-identity "https://github.com/$GITHUB_WORKFLOW_REF"
             --source-digest "$GITHUB_SHA" --source-ref "$GITHUB_REF"
             --deny-self-hosted-runners --bundle-from-oci --format json)
