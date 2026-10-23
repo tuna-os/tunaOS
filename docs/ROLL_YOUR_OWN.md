@@ -358,6 +358,9 @@ dnf:
   - btop
   - syncthing
   - "-gnome-tour"     # remove packages with a minus prefix
+# Supported keys: apt, dnf, zypper, pacman, and emerge.
+# Optional packages use `optional`; Fedora COPR repositories use `copr`.
+# Flathub app IDs use `flatpak`; `custom/flatpaks.list` is additive.
 ```
 
 Also available: `custom/files/` (config file overlay), `custom/systemd/`

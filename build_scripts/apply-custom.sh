@@ -17,74 +17,59 @@ fi
 # 2. Parse and Install Packages from packages.yaml
 if [[ -f "${CUSTOM_DIR}/packages.yaml" ]]; then
 	printf "==> Installing custom packages...\n"
-	python3 - <<-PYTHONEOF
-		import os, subprocess, re
+	CUSTOM_PACKAGES_TOOL="/run/context/build_scripts/lib/custom_packages.py"
+	CUSTOM_PACKAGES_FILE="${CUSTOM_DIR}/packages.yaml"
 
-		def parse_simple_yaml(file_path):
-		    data = {}
-		    current_key = None
-		    with open(file_path, 'r') as f:
-		        for line in f:
-		            line_strip = line.strip()
-		            if not line_strip or line_strip.startswith('#'):
-		                continue
-		            m_key = re.match(r'^([a-zA-Z0-9_-]+)\s*:\s*(.*)$', line_strip)
-		            if m_key:
-		                current_key = m_key.group(1)
-		                rest = m_key.group(2).strip()
-		                if rest == '[]':
-		                    data[current_key] = []
-		                else:
-		                    data[current_key] = []
-		                continue
-		            m_item = re.match(r'^-\s*(.+)$', line_strip)
-		            if m_item and current_key:
-		                val = m_item.group(1).strip().strip('"').strip("'")
-		                data[current_key].append(val)
-		    return data
+	python3 "${CUSTOM_PACKAGES_TOOL}" --validate "${CUSTOM_PACKAGES_FILE}"
+	custom_package_items() {
+		python3 "${CUSTOM_PACKAGES_TOOL}" --items "$1" "${CUSTOM_PACKAGES_FILE}"
+	}
 
-		pkg_mgr = os.environ.get("PKG_MGR", "dnf")
-		yaml_path = "${CUSTOM_DIR}/packages.yaml"
-		if os.path.exists(yaml_path):
-		    data = parse_simple_yaml(yaml_path)
-		    pkgs = data.get(pkg_mgr, [])
-		    install_pkgs = []
-		    remove_pkgs = []
-		    for p in pkgs:
-		        if p.startswith('-'):
-		            remove_pkgs.append(p[1:])
-		        else:
-		            install_pkgs.append(p)
+	pkg_mgr="${PKG_MGR:-dnf}"
+	mapfile -t package_entries < <(custom_package_items "${pkg_mgr}")
+	install_pkgs=()
+	remove_pkgs=()
+	for package in "${package_entries[@]}"; do
+		if [[ "${package}" == -* ]]; then
+			remove_pkgs+=("${package#-}")
+		else
+			install_pkgs+=("${package}")
+		fi
+	done
 
-		    # Handle package removals
-		    if remove_pkgs:
-		        print(f"Removing {len(remove_pkgs)} packages for {pkg_mgr}: {', '.join(remove_pkgs)}")
-		        subprocess.run(["bash", "-c", f"source /run/context/build_scripts/lib.sh && pkg_remove {' '.join(remove_pkgs)}"], check=True)
+	if ((${#remove_pkgs[@]})); then
+		printf "Removing %d packages for %s: %s\n" \
+			"${#remove_pkgs[@]}" "${pkg_mgr}" "${remove_pkgs[*]}"
+		pkg_remove "${remove_pkgs[@]}"
+	fi
 
-		    # Handle package installs
-		    if install_pkgs:
-		        print(f"Installing {len(install_pkgs)} packages for {pkg_mgr}: {', '.join(install_pkgs)}")
-		        subprocess.run(["bash", "-c", f"source /run/context/build_scripts/lib.sh && pkg_install {' '.join(install_pkgs)}"], check=True)
+	if ((${#install_pkgs[@]})); then
+		printf "Installing %d packages for %s: %s\n" \
+			"${#install_pkgs[@]}" "${pkg_mgr}" "${install_pkgs[*]}"
+		pkg_install "${install_pkgs[@]}"
+	fi
 
-		    # Handle optional packages
-		    optional_pkgs = data.get("optional", [])
-		    if optional_pkgs:
-		        print(f"Installing optional packages: {', '.join(optional_pkgs)}")
-		        subprocess.run(["bash", "-c", f"source /run/context/build_scripts/lib.sh && install_available {' '.join(optional_pkgs)}"], check=False)
+	mapfile -t optional_pkgs < <(custom_package_items optional)
+	if ((${#optional_pkgs[@]})); then
+		printf "Installing optional packages: %s\n" "${optional_pkgs[*]}"
+		install_available "${optional_pkgs[@]}" || true
+	fi
 
-		    # Handle Fedora/CentOS/RHEL COPRs if on dnf
-		    if pkg_mgr == "dnf" and "copr" in data:
-		        for copr in data["copr"]:
-		            print(f"Enabling COPR repository: {copr}")
-		            subprocess.run(["dnf", "copr", "enable", "-y", copr], check=True)
+	if [[ "${pkg_mgr}" == dnf ]]; then
+		mapfile -t coprs < <(custom_package_items copr)
+		for copr in "${coprs[@]}"; do
+			printf "Enabling COPR repository: %s\n" "${copr}"
+			dnf copr enable -y "${copr}"
+		done
+	fi
 
-		    # Handle Flatpaks if specified in packages.yaml
-		    flatpaks = data.get("flatpak", [])
-		    if flatpaks:
-		        print(f"Pre-installing flatpaks: {', '.join(flatpaks)}")
-		        for fp in flatpaks:
-		            subprocess.run(["flatpak", "install", "--system", "-y", "flathub", fp], check=True)
-	PYTHONEOF
+	mapfile -t flatpaks < <(custom_package_items flatpak)
+	if ((${#flatpaks[@]})); then
+		printf "Pre-installing Flatpaks: %s\n" "${flatpaks[*]}"
+		for flatpak in "${flatpaks[@]}"; do
+			flatpak install --system -y flathub "${flatpak}"
+		done
+	fi
 fi
 
 # 2b. Install Flatpaks from flatpaks.list if present
