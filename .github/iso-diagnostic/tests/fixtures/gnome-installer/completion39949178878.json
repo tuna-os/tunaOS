@@ -1,0 +1,23 @@
+{
+  "run": 39949178878,
+  "source_sha": "f318ce0d39ae69df17487a4ce7ad09041ecec8c3",
+  "artifact": 12508769210,
+  "archive_sha256": "6a7736c31945171608551d00bb9b7c1c8130c2b2c20bd5e128e150a2f961710f",
+  "frames": [
+    {
+      "mode": "plain",
+      "frame": 23,
+      "file": "completion39949178878-plain.png",
+      "sha256": "c17d5f262114282f8c4021b475076c3b90b5f55e359096d259b1f404f0b99e9a",
+      "bytes": 504421
+    },
+    {
+      "mode": "luks",
+      "frame": 26,
+      "file": "completion39949178878-luks.png",
+      "sha256": "a8e28f6010de89be454ef6e9ff64462de78df3a7cc7a85c7df3957002373f1d9",
+      "bytes": 503875
+    }
+  ],
+  "scope": "Actual synthetic CI installed-screen observations, not detached-boot proof."
+}
