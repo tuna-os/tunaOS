@@ -3787,20 +3787,21 @@ condition = "ubuntu"
 
 # Tuna Desktop (formerly Roost, renamed in tuna-desktop#536) on every TunaOS
 # variant with a published package target (tuna-desktop ADR 0008, epic #577).
-# Marlin was the first cell (tunaOS#2990); its Containerfile installs the
-# in-house Tideforge key/repository and qualifies this package so official
-# packages stay first. tuna-desktop provides roost and ships its compat
-# names, so nothing here may name the old `roost` package.
+# Every admitted base uses its native GDM unit (`gdm` or `gdm3`), with the
+# variant accent layered over GNOME Shell's packaged greeter stylesheets.
+# tuna-desktop provides roost and ships its compat names, so nothing here may
+# name the old `roost` package.
 #
 # Variants without a cell are recorded with their reason under
 # `unsupported_flavors` in .github/build-config.yml.
 [desktops.tuna]
-display_manager = "greetd"
+display_manager = "gdm"
 versionlock = []
 after_install = [
   "tuna-flatpak-remote",
-  "greetd-system-integration",
-  "greetd-gtkgreet",
+  "tuna-gdm-theme",
+  "tuna-gdm-default-session",
+  "tuna-hide-other-sessions",
   "flatpak-preinstall",
 ]
 
@@ -3809,9 +3810,7 @@ after_install = [
 [desktops.tuna.packages.pacman]
 required = [
   "tunaos/tuna-desktop=1.0.0beta.1-1",
-  "greetd",
-  "greetd-gtkgreet",
-  "cage",
+  "gdm",
   "xorg-xwayland",
   "ibus",
   "orca",
@@ -3844,14 +3843,12 @@ required = [
 ]
 
 [desktops.tuna.packages.el10]
-display_manager = "greetd"
+display_manager = "gdm"
 required = [
   "tuna-desktop-1.0.0~beta.1-1.el10",
   "dbus-tools",
   "orca",
-  "greetd",
-  "gtkgreet",
-  "cage",
+  "gdm",
   "xorg-x11-server-Xwayland",
   "ibus",
   "gnome-shell",
@@ -3892,14 +3889,12 @@ baseurl = "https://repo.tunaos.org/xfce/10-stream-x86_64/"
 priority = 100
 
 [desktops.tuna.packages.fedora]
-display_manager = "greetd"
+display_manager = "gdm"
 required = [
   "tuna-desktop-1.0.0~beta.1-1.fc44",
   "dbus-tools",
   "orca",
-  "greetd",
-  "gtkgreet",
-  "cage",
+  "gdm",
   "xorg-x11-server-Xwayland",
   "ibus",
   "gnome-shell",
@@ -3936,14 +3931,12 @@ baseurl = "https://repo.tunaos.org/xfce/44-x86_64/"
 priority = 100
 
 [desktops.tuna.packages.eln]
-display_manager = "greetd"
+display_manager = "gdm"
 required = [
   "tuna-desktop-1.0.0~beta.1-1.eln159",
   "dbus-tools",
   "orca",
-  "greetd",
-  "gtkgreet",
-  "cage",
+  "gdm",
   "xorg-x11-server-Xwayland",
   "ibus",
   "gnome-shell",
@@ -3980,14 +3973,12 @@ baseurl = "https://repo.tunaos.org/rpm/eln/x86_64/"
 priority = 100
 
 [desktops.tuna.packages.rawhide]
-display_manager = "greetd"
+display_manager = "gdm"
 required = [
   "tuna-desktop-1.0.0~beta.1-1.fc46",
   "dbus-tools",
   "orca",
-  "greetd",
-  "gtkgreet",
-  "cage",
+  "gdm",
   "xorg-x11-server-Xwayland",
   "ibus",
   "gnome-shell",
@@ -4024,12 +4015,12 @@ baseurl = "https://repo.tunaos.org/rpm/rawhide/x86_64/"
 priority = 100
 
 [desktops.tuna.packages.apt]
+display_manager = "gdm"
 required = [
   "tuna-desktop=1.0.0~beta.1-1",
   "orca",
-  "greetd",
-  "gtkgreet",
-  "cage",
+  "gdm3",
+  "gjs",
   "xwayland",
   "ibus",
   "gnome-shell",
@@ -4083,14 +4074,12 @@ keyring_url = "https://repo.tunaos.org/tideforge/debian-trixie/tideforge.gpg"
 condition = "debian-trixie"
 
 [desktops.tuna.packages.zypper]
-display_manager = "greetd"
+display_manager = "gdm"
 required = [
   "tuna-desktop-1.0.0~beta.1-1",
   "dbus-1-tools",
   "orca",
-  "greetd",
-  "gtkgreet",
-  "cage",
+  "gdm",
   "xwayland",
   "ibus",
   "gnome-shell",
@@ -4768,7 +4757,7 @@ gnome = [{ id = "com.mattjakeman.ExtensionManager", branch = "stable" }]
 [desktops.tuna-arch]
 display_manager = "gdm"
 versionlock = []
-after_install = ["tuna-flatpak-remote", "flatpak-preinstall"]
+after_install = ["tuna-flatpak-remote", "tuna-gdm-theme", "tuna-gdm-default-session", "tuna-hide-other-sessions", "flatpak-preinstall"]
 
 [desktops.tuna-arch.packages.pacman]
 required = [
