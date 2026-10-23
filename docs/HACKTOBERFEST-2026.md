@@ -61,10 +61,15 @@ check these three repositories individually even when the org total passes.
 The maintainer's Discussion and Matrix office-hours announcement should link
 these tasks directly after those checks, point newcomers to each repository's
 CONTRIBUTING guide, and invite them to comment before starting. Record claims,
-first-time contributor PRs, and merged outcomes in
-[#2883](https://github.com/tuna-os/tunaos/issues/2883) through October 31.
-Label application, channel announcements, and conversion follow-through
-remain on [#2946](https://github.com/tuna-os/tunaos/issues/2946).
+first-time contributor PRs, and merged outcomes through October 31 in
+[#2946](https://github.com/tuna-os/tunaos/issues/2946).
+On 2026-10-23, `gh issue view 2883 --repo tuna-os/tunaOS --json state`
+returned `CLOSED` for the original conversion tracker,
+[#2883](https://github.com/tuna-os/tunaos/issues/2883).
+A maintainer must reopen it or link a replacement before moving these records
+there. Keep #2946 open until label application, channel
+announcements, and conversion follow-through are complete; this packet
+only prepares the tasks.
 
 ## Launch target
 
