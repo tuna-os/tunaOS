@@ -58,9 +58,11 @@ jobs:
           #
           # EXACT FILTER (jq, below): build_image == true AND the flavor id
           # matches a desktop family with an optional hardware/kernel layer
-          # suffix — ^(gnome|kde|cosmic|niri|xfce|pantheon|tuna)(-(hwe|nvidia|
-          # nvidia-hwe|cachyos|zfs))?$. That includes the -hwe/-nvidia/
-          # -nvidia-hwe/-cachyos/-zfs layers CI qualifies, and excludes:
+          # suffix — ^(gnome|kde|cosmic|niri|xfce|pantheon)(-(hwe|nvidia|
+          # nvidia-hwe|cachyos|zfs))?$. `tuna` is excluded until its greetd
+          # session is supported by the production live baseline. The filter
+          # includes -hwe/-nvidia/-nvidia-hwe/-cachyos/-zfs layers CI qualifies,
+          # and excludes:
           #   * base and base-* (no desktop, no live session to customize),
           #   * *-asahi / *-t2 (device-specific install paths -- the
           #     asahi-installer / T2 flows, not the live ISO -- even where
@@ -76,7 +78,7 @@ jobs:
               include: [
                 . as $root | .variants[] as $var | $var.flavors[]
                 | select(.build_image == true)
-                | select(.id | test("^(gnome|kde|cosmic|niri|xfce|pantheon|tuna)(-(hwe|nvidia|nvidia-hwe|cachyos|zfs))?$"))
+                | select(.id | test("^(gnome|kde|cosmic|niri|xfce|pantheon)(-(hwe|nvidia|nvidia-hwe|cachyos|zfs))?$"))
                 | select($v == "all" or $var.id == $v)
                 | select($f == "all" or .id == $f)
                 | {variant: $var.id, flavor: .id,
@@ -252,12 +254,28 @@ jobs:
           sudo podman push "$OUT"
           echo "published $OUT"
 
+          jq -n \
+            --arg variant "$VARIANT" \
+            --arg flavor "$FLAVOR" \
+            --arg platform "$PLATFORM" \
+            '{variant: $variant, flavor: $flavor, platform: $platform}' \
+            >"${RUNNER_TEMP}/live-overlay-receipt-${VARIANT}-${FLAVOR}-${SAFEPLATFORM}.json"
+
+      - name: Upload current-run platform receipt
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: live-overlay-receipt-${{ matrix.variant }}-${{ matrix.flavor }}-${{ matrix.safeplatform }}
+          path: ${{ runner.temp }}/live-overlay-receipt-${{ matrix.variant }}-${{ matrix.flavor }}-${{ matrix.safeplatform }}.json
+          if-no-files-found: error
+          retention-days: 1
+
   publish-compatible-index:
     name: Publish compatible multi-platform tags
     needs: [generate-matrix, overlay]
-    if: ${{ needs.generate-matrix.outputs.count != '0' }}
+    if: ${{ always() && needs.generate-matrix.outputs.count != '0' }}
     runs-on: ubuntu-latest
     permissions:
+      actions: read
       packages: write
     env:
       MATRIX: ${{ needs.generate-matrix.outputs.matrix }}
@@ -267,12 +285,38 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: echo "$GITHUB_TOKEN" | podman login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
 
-      - name: Publish existing unsuffixed tags as platform indexes
+      - name: Download current-run platform receipts
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        continue-on-error: true
+        with:
+          pattern: live-overlay-receipt-*
+          path: receipts
+          merge-multiple: true
+
+      - name: Publish complete current-run platform groups
         run: |
           set -euo pipefail
+          shopt -s nullglob
+          receipt_files=(receipts/*.json)
+          receipts='[]'
+          if ((${#receipt_files[@]})); then
+            receipts="$(jq -s '.' "${receipt_files[@]}")"
+          fi
           jq -r '.include | unique_by([.variant, .flavor])[] | [.variant, .flavor] | @tsv' \
             <<<"$MATRIX" |
           while IFS=$'\t' read -r variant flavor; do
+            expected="$(jq -c --arg variant "$variant" --arg flavor "$flavor" \
+              '[.include[] | select(.variant == $variant and .flavor == $flavor) |
+                {platform}] | unique_by(.platform) | sort_by(.platform)' <<<"$MATRIX")"
+            current="$(jq -c --arg variant "$variant" --arg flavor "$flavor" \
+              '[.[] | select(.variant == $variant and .flavor == $flavor)] |
+                unique_by(.platform) | sort_by(.platform)' <<<"$receipts")"
+            if ! jq -e --argjson expected "$expected" \
+              'map({platform}) == $expected and length == ($expected | length)' \
+              <<<"$current" >/dev/null; then
+              echo "skipping ${variant}:${flavor}: current-run platform set is incomplete"
+              continue
+            fi
             index="ghcr.io/tuna-os/live-overlay:${variant}-${flavor}"
             podman manifest rm "$index" >/dev/null 2>&1 || true
             podman manifest create "$index"
