@@ -36,12 +36,13 @@ jobs:
             -H "Authorization: Bearer $GH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
             -o "$ARCHIVE" \
-            https://api.github.com/repos/tuna-os/tunaOS/actions/artifacts/12476197813/zip
+            https://api.github.com/repos/tuna-os/tunaOS/actions/artifacts/12479231151/zip
           unset GH_TOKEN
           python3 - <<'PY'
           import csv
           import subprocess
           import tempfile
+          import base64
           import hashlib
           import io
           import json
@@ -51,8 +52,8 @@ jobs:
           import struct
 
           archive = Path(os.environ["ARCHIVE"]).read_bytes()
-          expected = "8099438a3dc55758bd487a66992a2cfe6dbe2e53b7adde4ffe022d43cdd11075"
-          if len(archive) != 6791769 or hashlib.sha256(archive).hexdigest() != expected:
+          expected = "dd6845664fef36f0c19db45fa8cd6ff464c3a8cd5c896c07cf0447dc2a93d9e7"
+          if len(archive) != 5296912 or hashlib.sha256(archive).hexdigest() != expected:
               raise SystemExit("pinned archive size or digest mismatch")
           allowed = frozenset(("unknown", "welcome", "encryption", "disk", "summary",
                                "progress", "done", "overview", "failed", "no-disk", "recovery"))
@@ -86,7 +87,7 @@ jobs:
                       item = value.get(key)
                       result[key] = item if type(item) is bool else None
                   print("Retained GNOME observations: " + json.dumps(result, sort_keys=True))
-                  for index in ((5,) if mode == "plain" else (8,)):
+                  for index in ((6,) if mode == "plain" else (8,)):
                       frame = frames[index] if len(frames) > index else None
                       filename = f"walkthrough-gnome-{index:02d}.png"
                       if (not isinstance(frame, dict) or frame.get("state") != "summary"
@@ -105,60 +106,61 @@ jobs:
                       width, height = struct.unpack("!II", png[16:24])
                       if not (640 <= width <= 1920 and 480 <= height <= 1200):
                           raise SystemExit("PNG dimensions outside driver bounds")
+                      print(f"ISO_PNG_META {mode} {index:02d} {width} {height} "
+                            f"{len(png)} {hashlib.sha256(png).hexdigest()}")
+                      encoded = base64.b64encode(png).decode("ascii")
+                      for offset in range(0, len(encoded), 4096):
+                          print(f"ISO_PNG {mode} {index:02d} {offset // 4096} "
+                                + encoded[offset:offset + 4096])
+
                       if (width, height) != (1280, 800):
-                          raise SystemExit("fixed crops require measured framebuffer dimensions")
-                      # Fixed text-only cards measured in the verified summary PNGs.
-                      # No hostnames, icons, or other regions enter these crops.
-                      for region, crop in (("disk", "560x45+390+335"),
-                                           ("encryption", "560x45+390+500")):
+                          raise SystemExit("button diagnostic requires measured framebuffer")
+                      for variant in ("full-threshold90", "button-gray"):
                           with tempfile.TemporaryDirectory() as directory:
                               original = Path(directory) / "frame.png"
                               prepared = Path(directory) / "prepared.png"
                               original.write_bytes(png)
-                              subprocess.run(["convert", str(original), "-crop", crop, "+repage",
-                                              "-resize", "300%", "-colorspace", "gray",
-                                              str(prepared)],
+                              args = (["-colorspace", "gray", "-threshold", "90%"]
+                                      if variant == "full-threshold90" else
+                                      ["-crop", "130x60+575+565", "+repage", "-resize",
+                                       "300%", "-colorspace", "gray"])
+                              subprocess.run(["convert", str(original), *args, str(prepared)],
                                              capture_output=True, timeout=20, check=True)
-                              result = subprocess.run(["tesseract", str(prepared), "stdout",
-                                                       "--psm", "6", "tsv"],
-                                                      capture_output=True, text=True,
-                                                      timeout=30, check=True)
+                              result = subprocess.run(
+                                  ["tesseract", str(prepared), "stdout", "--psm",
+                                   "11" if variant == "full-threshold90" else "6", "tsv"],
+                                  capture_output=True, text=True, timeout=30, check=True)
                           if len(result.stdout) > 1024 * 1024:
                               raise SystemExit("OCR output exceeded byte bound")
-                          selected = []
-                          allowed_words = frozenset((
-                              "disk", "/dev/vda", "(64", "gib)", "encryption", "no",
-                              "passphrase", "everything", "on", "will", "be", "erased.",
-                              "this", "cannot", "undone."))
+                          words = []
                           numeric_fields = ("level", "page_num", "block_num", "par_num",
                                             "line_num", "word_num", "left", "top",
                                             "width", "height")
                           for word in csv.DictReader(io.StringIO(result.stdout), delimiter="\t"):
                               if word.get("level") != "5" or not word.get("text", "").strip():
                                   continue
-                              x, y, w, h = (int(word[key]) for key in
-                                            ("left", "top", "width", "height"))
-                              if not (0 <= x < x+w <= 1680 and 0 <= y < y+h <= 135):
-                                  raise SystemExit("OCR word outside cropped image")
-                              if len(word["text"]) > 80 or len(selected) >= 128:
-                                  raise SystemExit("OCR token bound exceeded")
                               numeric = {key: int(word[key]) for key in numeric_fields}
                               if any(not 0 <= item <= 10000 for item in numeric.values()):
                                   raise SystemExit("OCR numeric field outside bound")
+                              x, y, w, h = (numeric[key] for key in ("left", "top", "width", "height"))
+                              inside = (575 <= x < x+w <= 705 and 565 <= y < y+h <= 625
+                                        if variant == "full-threshold90" else
+                                        0 <= x < x+w <= 390 and 0 <= y < y+h <= 180)
+                              if not inside:
+                                  continue
                               confidence = float(word["conf"])
                               if not -1 <= confidence <= 100:
                                   raise SystemExit("OCR confidence outside bound")
                               token = word["text"]
-                              selected.append({
-                                  "region": region, **numeric, "conf": confidence,
-                                  "token_length": len(token),
-                                  "text": token if token.lower() in allowed_words else "[redacted]",
-                                  "redacted": token.lower() not in allowed_words})
-                          print("ISO_SUMMARY_OCR " + json.dumps(
-                              {"mode": mode, "region": region, "crop": crop, "scale": 3,
-                               "index": index, "width": width, "height": height,
-                               "png_sha256": hashlib.sha256(png).hexdigest(),
-                               "words": selected}, ensure_ascii=True, sort_keys=True))
-          print("Artifact 12476197813, run 39891435048, source b9cdebc9.")
+                              if len(token) > 80 or len(words) >= 16:
+                                  raise SystemExit("button token bound exceeded")
+                              words.append({**numeric, "conf": confidence,
+                                            "text": "Install" if token == "Install" else "[redacted]",
+                                            "redacted": token != "Install", "token_length": len(token)})
+                          print("ISO_BUTTON_OCR " + json.dumps(
+                              {"mode": mode, "index": index, "variant": variant,
+                               "png_sha256": hashlib.sha256(png).hexdigest(), "words": words},
+                              ensure_ascii=True, sort_keys=True))
+          print("Artifact 12479231151, run 39897665901, source 2d9072db.")
           print("Observations only; not input delivery or installation qualification.")
           PY
