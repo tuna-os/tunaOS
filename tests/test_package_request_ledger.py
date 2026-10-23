@@ -62,6 +62,25 @@ def test_native_requests_preserve_constraints(manager, args, expression):
     assert normalized['coverageGaps'] == []
 
 
+@pytest.mark.parametrize('manager,args,option', [
+    ('dnf', ['--setopt', 'install_weak_deps=False', 'install', 'cosmic-session'],
+     '--setopt=install_weak_deps=False'),
+    ('dnf', ['--config', '/etc/dnf/dnf.conf', 'install', 'cosmic-session'],
+     '--config=/etc/dnf/dnf.conf'),
+    ('apt', ['-o', 'Dir::Etc::sourcelist=/tmp/list', 'install', 'cosmic-session'],
+     '-o=Dir::Etc::sourcelist=/tmp/list'),
+])
+def test_global_option_operands_are_consumed_before_the_subcommand(manager, args, option):
+    normalized = recorder.normalize(manager, args)
+    assert normalized['requests'] == ['cosmic-session']
+    assert option in normalized['options']
+
+
+def test_global_option_without_its_operand_is_a_coverage_gap():
+    normalized = recorder.normalize('dnf', ['--config'])
+    assert normalized['requests'] == []
+    assert 'unsupported-option-arity' in normalized['coverageGaps']
+
 @pytest.mark.parametrize('manager,args', [('dnf', ['repoquery', 'foo']), ('apt', ['update']),
                                          ('rpm', ['-q', 'foo']), ('dpkg', ['--print-architecture'])])
 def test_queries_are_not_mutating_requests(manager, args):
@@ -210,6 +229,17 @@ def reconciliation_fixture(tmp_path, scope='final', required=True, status='satis
                                                   ('transient', True, 'transient-removed')])
 def test_measured_lifecycle_reconciliation(tmp_path, scope, required, status):
     assert ledger.reconcile(*reconciliation_fixture(tmp_path, scope, required, status))['status'] == 'complete'
+
+
+def test_transient_removed_requirement_still_checks_provider_identity(tmp_path):
+    args = reconciliation_fixture(tmp_path, scope='transient', status='transient-removed')
+    args[0]['packageRequirements'][0]['requestedSource'] = 'legacy/a'
+    args[0]['contractDigest'] = evidence.contract_digest(args[0])
+    args[-1]['contractDigest'] = args[0]['contractDigest']
+    args[-1]['requirements'][0].update(requestedSource='legacy/a', provider='legacy/b')
+    result = ledger.reconcile(*args)
+    assert result['status'] == 'blocked'
+    assert 'native-provider-mismatch' in result['reasons']
 
 
 def test_requested_source_is_part_of_measurement_identity(tmp_path):

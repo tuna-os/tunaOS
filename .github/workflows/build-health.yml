@@ -9,6 +9,7 @@ on:
       - "image-versions.yaml"
       - "scripts/gen-build-health.py"
       - "scripts/contracts/**"
+      - "schemas/**"
       - "tests/test_build_health*.py"
 
 permissions:
@@ -44,9 +45,13 @@ jobs:
               if len(matches) != 1:
                   raise ValueError("missing or ambiguous central dependency pin")
               pins[name] = matches[0]
-          subprocess.run([sys.executable, "-m", "pip", "install", *[
+          package_specs = [
               f"{name}=={pins[name]}" for name in ("PyYAML", "jsonschema", "pytest")
-          ]], check=True)
+          ]
+          install = [sys.executable, "-m", "pip", "install", *package_specs]
+          result = subprocess.run(install + ["--break-system-packages"])
+          if result.returncode:
+              subprocess.run(install + ["--user"], check=True)
           PY
       - name: Verify health and native platform boundaries
         run: python -m pytest tests/test_build_health.py tests/test_build_health_fetch.py tests/test_build_health_receipts.py tests/test_consumer_contract.py tests/regressions/test_issue_2513_selected_display_manager_survives_first_boot.py tests/test_rawhide_gnome_vpn_replacement.py tests/test_eln_fwupd_family_upgrade.py tests/test_asahi_native_kernel_evidence.py tests/regressions/test_issue_2513_waived_desktop_contract_cannot_pass.py tests/test_candidate_image_publication.py tests/test_debian_nvidia_snapshot.py tests/regressions/test_issue_2696_debian_nvidia_holds_a_kernel_the_driver_builds_on.py tests/test_candidate_flavor_selection.py

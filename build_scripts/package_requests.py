@@ -25,11 +25,65 @@ FLAGS = {"-y", "--assumeyes", "--noconfirm", "--needed", "--non-interactive", "-
 SAFE_EXPRESSION = re.compile(r"[A-Za-z0-9@+_.:*?!<>=~^%/-]+\Z")
 SAFE_REPO = re.compile(r"[A-Za-z0-9_.:*,-]+\Z")
 SETOPTS = {"install_weak_deps", "keepcache", "tsflags", "skip_if_unavailable", "gpgcheck", "repo_gpgcheck", "best", "timeout", "retries", "exclude", "module_platform_id"}
+GLOBAL_OPTION_ARITY = {
+    "dnf": {"--config": 1, "--installroot": 1, "--releasever": 1, "--setopt": 1,
+            "--disableplugin": 1, "--enableplugin": 1, "--enablerepo": 1,
+            "--disablerepo": 1},
+    "apt": {"-o": 1, "--option": 1, "-c": 1, "--config-file": 1,
+            "-t": 1, "--target-release": 1},
+    "pacman": {"--config": 1, "--root": 1, "--cachedir": 1, "--dbpath": 1,
+               "--gpgdir": 1, "--hookdir": 1},
+    "zypper": {"--root": 1, "--config": 1, "--reposd-dir": 1,
+               "--cache-dir": 1},
+}
 PACMAN_COMPACT = {
     "-S": "install", "-Sy": "install", "-Syu": "install", "-Syy": "install",
     "-U": "install", "-R": "remove", "-Rdd": "remove", "-Rns": "remove",
     "-Scc": "remove",
 }
+
+
+def _locate_operation(manager: str, args: list[str]):
+    """Find the subcommand without treating option operands as commands."""
+    options: list[str] = []
+    remaining: list[str] = []
+    gaps: set[str] = set()
+    arity = GLOBAL_OPTION_ARITY.get(manager, {})
+    index = 0
+    while index < len(args):
+        arg = args[index]
+        if arg in READ_ONLY.get(manager, set()):
+            return None, [], options, gaps, True
+        if arg in OPERATIONS.get(manager, set()):
+            return arg, remaining + args[index + 1:], options, gaps, False
+        if arg in FLAGS or arg.startswith(("--setopt=", "--enablerepo=",
+                                           "--disablerepo=", "--exclude=")):
+            remaining.append(arg)
+            index += 1
+            continue
+        if arg in arity:
+            count = arity[arg]
+            if index + count >= len(args):
+                gaps.add("unsupported-option-arity")
+                return None, [], options, gaps, False
+            operand = args[index + 1]
+            if not SAFE_EXPRESSION.fullmatch(operand):
+                gaps.add("unsupported-option-operand")
+                return None, [], options, gaps, False
+            if arg == "--setopt":
+                remaining.append(f"--setopt={operand}")
+            elif arg in {"--enablerepo", "--disablerepo"}:
+                remaining.append(f"{arg}={operand}")
+            else:
+                options.append(f"{arg}={operand}")
+            index += 1 + count
+            continue
+        if arg.startswith("-"):
+            gaps.add("unsupported-manager-option")
+            return None, [], options, gaps, False
+        remaining.append(arg)
+        index += 1
+    return None, [], options, gaps, False
 
 
 def normalize(manager: str, arguments: list[str]) -> dict | None:
@@ -80,15 +134,13 @@ def normalize(manager: str, arguments: list[str]) -> dict | None:
             return None
         operation = "remove" if any(a in {"--unmerge", "--deselect", "-C"} for a in args) else "install"
     else:
-        for index, arg in enumerate(args):
-            if arg in READ_ONLY.get(canonical, set()):
-                return None
-            if arg in OPERATIONS.get(canonical, set()):
-                operation = arg
-                args = args[:index] + args[index + 1:]
-                break
-        if operation is None and any(a in {"--version", "--help", "-h"} for a in args):
+        if any(a in {"--version", "--help", "-h"} for a in args):
             return None
+        operation, args, pre_options, scan_gaps, readonly = _locate_operation(canonical, args)
+        if readonly:
+            return None
+        gaps.update(scan_gaps)
+        options.extend(pre_options)
     if operation is None or operation == "unknown":
         gaps.add("unknown-manager-operation")
         args = []  # An unknown option's value might be a secret.
