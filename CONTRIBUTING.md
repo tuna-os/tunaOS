@@ -25,6 +25,11 @@ just fix && just check
 
 ## Contributor onboarding
 
+For five small tasks and a command-by-command fork workflow, start with
+[your first PR](docs/CONTRIBUTOR-FIRST-PR.md). The
+[contributor roadmap](docs/CONTRIBUTOR-ROADMAP.md) covers the next steps.
+See [contributor credits](CONTRIBUTORS.md) for merged work.
+
 New here? Start with an **[org-wide good first issue](https://github.com/issues?q=org%3Atuna-os+is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)** — a curated, maintainer-sized task for documentation parity, a small script fix, or test coverage. Before you start, leave a comment to say you take the issue, so that nobody duplicates the work. The [Hacktoberfest 2026 contributor plan](docs/HACKTOBERFEST-2026.md) tracks the current pool and census. The [weekly contributor triage](#weekly-contributor-triage) below labels new bounded tasks `good first issue`.
 
 The current starter runway lives in the **[org-wide good first issue](https://github.com/issues?q=org%3Atuna-os+is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)** pool. Most of it is in `tuna-os/docs` (docs-parity and guide tasks — e.g. desktop quick-starts, verification guides, cheat sheets). These tasks are intentionally independent of the image build pipeline, and maintainers curate them for first-time contributors. If another contributor claims one, or if it closes, pick another bounded task from the same search.

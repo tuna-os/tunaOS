@@ -27,6 +27,10 @@ TunaOS builds **bootc-based desktop operating systems** with atomic updates and 
 
 [Visit tunaos.org](https://tunaos.org/) or read the [User Guide](docs/USER-GUIDE.md).
 
+[Make your first contribution](docs/CONTRIBUTOR-FIRST-PR.md) ·
+[Meet the contributors](CONTRIBUTORS.md) ·
+[Contributor roadmap](docs/CONTRIBUTOR-ROADMAP.md)
+
 - **Modern Desktops**: GNOME, KDE Plasma, COSMIC, Niri, and XFCE — equal first-class options across distribution bases
 - **Up-to-Date Desktop Stack**: Fresh desktop features and updates backported to Enterprise and community bases
 - **Homebrew**: Baked into the image — all your CLI apps and fonts are a `brew` command away
