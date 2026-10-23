@@ -25,7 +25,7 @@ publish, and *how* the snapshot feeds roadmap decisions.
 |------|--------|--------|--------------------------|------------------------------|
 | Discovery | GitHub stars / forks | GitHub API | 56 / 3 | ≥100 stars |
 | Discovery | Docs site visits, top variant pages | Cloudflare analytics on tunaos.org | not measured | ≥1k visits/mo, variant-page ranking |
-| Discovery | DistroWatch referral traffic | Cloudflare analytics referrer field, tunaos.org | See [submission evidence](docs/ADOPTION-OUTREACH-STATUS.md) and [measurement contract](#distrowatch-referral-measurement) (#2885) | Submission live; referral share visible in the monthly snapshot |
+| Discovery | DistroWatch referral traffic | Cloudflare analytics referrer field, tunaos.org | not submitted; not measured ([#2885](https://github.com/tuna-os/tunaos/issues/2885)); see [submission evidence](docs/ADOPTION-OUTREACH-STATUS.md) and [measurement contract](#distrowatch-referral-measurement) | Submission live; referral share visible in the monthly snapshot |
 | Download | ISO downloads by variant+desktop | R2 access logs (tunaos.org/download) | **not measured** | ≥1k ISO downloads/mo; variant ranking |
 | Download | GitHub Release asset downloads | Releases API (resumed 08-09, #1106) | 0 (assets were empty shells) | assets present on all flavors; downloads counted |
 | Install | Installs / successful boots | opt-in telemetry or boot-report gating | **not measured** | Q4 design decision (#577 GUI gate, #763) |
@@ -105,13 +105,10 @@ Q4 2026 goal: **"Adoption metrics / usage telemetry"** (owner: strategist,
 tunaos#1174) — first monthly snapshot published 2026-11-01 and Q4 target
 metrics above met or explicitly re-baselined in the ROADMAP.
 
----
-*Filed by strategist agent (ACMM L6 — full mode) — planning artifact for tunaos#1174.*
-
 ## DistroWatch referral measurement
 
 Tracking: [#2885](https://github.com/tuna-os/tunaos/issues/2885).
-Outreach owns submission evidence; the site/analytics owner supplies aggregate
+Outreach owns submission evidence; guide supplies aggregate
 exports; strategist includes the result in each monthly snapshot and the Q4
 report. The [submission draft](docs/DISTROWATCH-SUBMISSION.md) defines the
 proposed campaign URL. Adding UTM parameters alone does not activate analytics.
@@ -151,3 +148,6 @@ DistroWatch with other measured channels, and disclose missing intervals.
 GitHub star changes may be reported alongside referrals but cannot be attributed
 to DistroWatch without independent evidence. Visits and downloads do not prove
 new users, installations, or organizational adoption.
+
+---
+*Filed by strategist agent (ACMM L6 — full mode) — planning artifact for tunaos#1174.*

@@ -96,7 +96,7 @@ image, BuildStream-built).
   active repos in the org (per ROADMAP, 2026-08-12)
 - **Daily CI builds**: multi-arch images published to GHCR; verified boot
   reports on every release; ISO boot gates
-- **DistroWatch**: listing draft in-repo, submission in progress
+- **DistroWatch**: [listing draft in-repo](DISTROWATCH-SUBMISSION.md); submission not recorded in the [outreach ledger](ADOPTION-OUTREACH-STATUS.md)
 - **Keyless signatures** on the native RPM/DEB repos (R2-hosted), which
   replace the legacy COPR backports
 - **Single-maintainer project today** — the project actively looks for its
