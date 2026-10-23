@@ -27,14 +27,17 @@ WORKFLOW="${REPO_ROOT}/.github/workflows/test.yml"
 @test "test.yml: no job that runs repository code can mint an OIDC token (#3392)" {
   # Pull-request code runs in the test and build jobs, so none of them may hold
   # id-token: write, at workflow scope or job scope. Only the upload job may,
-  # and it must execute no repository code.
+  # and it must execute no repository code. tuna_pr_images is the one other
+  # holder: it only calls the reusable build workflow (it has no steps here),
+  # and GitHub gives fork pull requests a read-only token without id-token.
   holders="$(yq -r '
     (.permissions["id-token"] // "none") as $top
     | .jobs | to_entries[]
     | select(((.value.permissions // {})["id-token"] // $top) == "write")
     | .key' "$WORKFLOW")"
   [ "$(yq -r '.permissions["id-token"] // "none"' "$WORKFLOW")" = none ]
-  [ "$holders" = "coverage-upload" ]
+  [ "$holders" = "$(printf 'coverage-upload\ntuna_pr_images')" ]
+  [ "$(yq -r '.jobs.tuna_pr_images | has("steps")' "$WORKFLOW")" = false ]
   run yq -r '.jobs["coverage-upload"].steps[] | select(has("run")) | .name' "$WORKFLOW"
   [ -z "$output" ]
 }
