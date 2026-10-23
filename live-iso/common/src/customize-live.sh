@@ -676,51 +676,20 @@ if [[ -n "${INSTALLER_APP}" ]]; then
 		# that `flatpak run`/`flatpak list` need; installing from a local
 		# file:// remote goes through the full deploy pipeline.
 		#
-		# Primary source: the tuna-os/bootc-installer fork's release. It
-		# MUST be the fork, not upstream projectbluefin: installer-smoke's
-		# readiness assert requires the tuna-installer-ready stamp the fork
-		# writes on window map (bootc-installer#7/#8), and the upstream
-		# release predates it — smoke run 32408962415's gnome leg had the
-		# session and installer process fully up yet failed on exactly the
-		# missing stamp. Fallback: tuna-os/tuna-installer, which mirrors
-		# the same app ID as a release asset.
+		# The tuna-os fork is required: installer-smoke's readiness assertion
+		# depends on the tuna-installer-ready stamp added in bootc-installer#7/#8.
+		# The exact release and GitHub-published asset digests are reviewed in
+		# image-versions.yaml. fetch-installer-bundle.sh downloads only that
+		# immutable tag and fails closed before these bytes reach Flatpak.
 		INSTALLER_FLATPAK_FILE="/tmp/bootc-installer.flatpak"
-		# A flatpak bundle carries refs for ONE architecture, so the asset has
-		# to match the host. The release was x86_64-only and the name carried
-		# no arch, so an aarch64 ISO downloaded it, imported
-		# app/org.bootcinstaller.Installer/x86_64/master, and then:
-		#
-		#   error: Nothing matches org.bootcinstaller.Installer in remote
-		#          installer-local
-		#
-		# (gurnard run 32495176056, iso:pantheon linux-arm64.) x86_64 keeps
-		# the bare name — every existing consumer fetches that exact URL, and
-		# renaming it would break them for no gain. See
-		# tuna-os/bootc-installer#25.
-		# TUNA_INSTALLER_ARCH is the matrix platform's arch, threaded through
-		# by live-overlay.yml so the bundle matches the TARGET, not whatever
-		# the build host happens to report. Defaults to the host arch for the
-		# ISO build path, which never sets it.
-		_installer_arch="${TUNA_INSTALLER_ARCH:-$(uname -m)}"
-		_installer_asset="org.bootcinstaller.Installer.flatpak"
-		if [[ "${_installer_arch}" != "x86_64" ]]; then
-			_installer_asset="org.bootcinstaller.Installer-${_installer_arch}.flatpak"
+		INSTALLER_VERSIONS_FILE="${SCRIPT_DIR}/image-versions.yaml"
+		if [[ ! -f "$INSTALLER_VERSIONS_FILE" ]]; then
+			echo "ERROR: live customization payload lacks image-versions.yaml" >&2
+			exit 1
 		fi
-		if ! curl --retry 3 --fail --location --max-time 300 \
-			"https://github.com/tuna-os/bootc-installer/releases/latest/download/${_installer_asset}" \
-			-o "${INSTALLER_FLATPAK_FILE}" 2>/dev/null; then
-			echo "tuna-os/bootc-installer unavailable, falling back to tuna-os/tuna-installer..."
-			if ! curl --retry 3 --fail --location --max-time 300 \
-				"https://github.com/tuna-os/tuna-installer/releases/latest/download/${_installer_asset}" \
-				-o "${INSTALLER_FLATPAK_FILE}"; then
-				# Name the arch. Without this the next failure reads as
-				# "Nothing matches ... in remote installer-local" three
-				# commands later, which looks like a corrupt download rather
-				# than an asset that was never published.
-				echo "ERROR: no ${_installer_asset} published for ${_installer_arch}" >&2
-				exit 1
-			fi
-		fi
+		"${SCRIPT_DIR}/fetch-installer-bundle.sh" \
+			"$INSTALLER_VERSIONS_FILE" "$INSTALLER_FLATPAK_FILE" \
+			"${TUNA_INSTALLER_ARCH:-$(uname -m)}"
 		INSTALLER_LOCAL_REPO="/tmp/installer-local-repo"
 		ostree init --repo="${INSTALLER_LOCAL_REPO}" --mode=archive-z2
 		flatpak build-import-bundle "${INSTALLER_LOCAL_REPO}" "${INSTALLER_FLATPAK_FILE}"

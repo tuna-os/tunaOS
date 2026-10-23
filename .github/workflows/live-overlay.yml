@@ -223,6 +223,7 @@ jobs:
           rm -rf "$CUSTOMIZE_DIR"
           mkdir -p "$CUSTOMIZE_DIR"
           cp -a "$PWD/live-iso/common/src/." "$CUSTOMIZE_DIR/"
+          cp "$PWD/image-versions.yaml" "$CUSTOMIZE_DIR/"
           CUSTOMIZE_SCRIPT="$CUSTOMIZE_DIR/customize-live-with-provenance.sh"
           TACKLEBOX_PIN="$(awk -F'"' '/^[[:space:]]*tacklebox:/ { print $2; exit }' image-versions.yaml)"
           [[ "$TACKLEBOX_PIN" =~ ^[0-9a-f]{40}$ ]] || {
@@ -243,6 +244,10 @@ jobs:
             cat "$CUSTOMIZE_DIR/customize-live.sh"
           } > "$CUSTOMIZE_SCRIPT"
           chmod +x "$CUSTOMIZE_SCRIPT"
+          # NOTE the argument order: GNU env stops parsing options at the
+          # first NAME=VALUE, so `env HOME=/root -u XDG_DATA_HOME` treats
+          # `-u` as the command to run and dies with
+          # `env: '-u': No such file or directory`. Options first.
           sudo -E env -u XDG_DATA_HOME -u XDG_CONFIG_HOME HOME=/root \
             "${TACKLEBOX_BIN}" customize-live \
             --image "$IMG" \

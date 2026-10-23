@@ -196,6 +196,7 @@ BASE_DIGEST="${TUNA_LIVE_BASE_DIGEST:-$BASE_DIGEST}"
 	cat "${REPO_ROOT}/live-iso/common/src/customize-live.sh"
 } >"${CUSTOMIZE_DIR}/customize-live.sh"
 chmod +x "${CUSTOMIZE_DIR}/customize-live.sh"
+cp "${REPO_ROOT}/image-versions.yaml" "$CUSTOMIZE_DIR/"
 if [[ "$DEV" == "1" ]]; then
 	touch "${CUSTOMIZE_DIR}/.enable-sshd"
 fi

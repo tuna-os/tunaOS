@@ -169,7 +169,7 @@ jobs:
         uses: ./.github/actions/prepare-config
 
       - name: Setup runner
-        uses: projectbluefin/actions/bootc-build/setup-runner@b541b99e9d798cd818987004405f205891e65de1 # v1 as of 2026-07-02
+        uses: projectbluefin/actions/bootc-build/setup-runner@d18642a8b4b325c2551eabd9a65c1ad12b4ebb30 # v1 as of 2026-07-02
         with:
           storage-backend: btrfs
           update-podman: "true"
