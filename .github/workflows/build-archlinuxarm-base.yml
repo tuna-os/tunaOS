@@ -150,6 +150,27 @@ jobs:
           predicate-path: rootfs-evidence/producer-receipt.json
           push-to-registry: true
 
+      - name: Verify published candidate attestations
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_NAME: ${{ steps.candidate.outputs.name }}
+          CANDIDATE_DIGEST: ${{ steps.candidate.outputs.digest }}
+        run: |
+          set -euo pipefail
+          SUBJECT="oci://$CANDIDATE_NAME@$CANDIDATE_DIGEST"
+          POLICY=(--repo "$GITHUB_REPOSITORY"
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/build-archlinuxarm-base.yml"
+            --cert-identity "https://github.com/$GITHUB_WORKFLOW_REF"
+            --source-digest "$GITHUB_SHA" --source-ref "$GITHUB_REF"
+            --deny-self-hosted-runners --bundle-from-oci --format json)
+          gh attestation verify "$SUBJECT" "${POLICY[@]}" \
+            --predicate-type https://slsa.dev/provenance/v1 \
+            > rootfs-evidence/build-attestation-verification.json
+          gh attestation verify "$SUBJECT" "${POLICY[@]}" \
+            --predicate-type https://tunaos.org/attestations/archlinuxarm-base/v1 \
+            > rootfs-evidence/receipt-attestation-verification.json
+          python3 scripts/verify-archlinuxarm-rootfs.py verified-attestations --directory rootfs-evidence
+
       - name: Preserve candidate verification evidence
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

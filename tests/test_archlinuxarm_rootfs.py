@@ -206,3 +206,48 @@ def test_attestation_has_unprivileged_docker_registry_credentials():
     assert 'registry: ghcr.io' in login
     assert 'username: ${{ github.actor }}' in login
     assert 'password: ${{ github.token }}' in login
+
+
+def attestation_fixture(directory):
+    receipt = {'imageDigest': 'sha256:' + 'a' * 64, 'imageRepository': 'ghcr.io/tuna-os/archlinuxarm',
+               'producerIdentity': {'sourceRevision': 'b' * 40, 'runId': '123'}}
+    (directory / 'producer-receipt.json').write_text(json.dumps(receipt))
+    for name, predicate_type, predicate in [
+            ('build-attestation-verification.json', 'https://slsa.dev/provenance/v1', {}),
+            ('receipt-attestation-verification.json', 'https://tunaos.org/attestations/archlinuxarm-base/v1', receipt)]:
+        rows = [{'verificationResult': {'statement': {'predicateType': predicate_type, 'predicate': predicate,
+                 'subject': [{'name': receipt['imageRepository'], 'digest': {'sha256': 'a' * 64}}]}}}]
+        (directory / name).write_text(json.dumps(rows))
+
+
+def test_verified_receipt_reconciliation_preserves_exact_subject_and_content(tmp_path):
+    attestation_fixture(tmp_path)
+    alarm.verified_attestations(tmp_path)
+    result = json.loads((tmp_path / 'attestation-reconciliation.json').read_text())
+    assert result['imageDigest'] == 'sha256:' + 'a' * 64
+    assert result['readiness'] is False
+    assert result['cpuBaselineVerified'] is False
+
+
+@pytest.mark.parametrize('field,value', [('predicateType', 'https://wrong.example/predicate'),
+                                       ('subject', [{'name': 'another-image', 'digest': {'sha256': 'a' * 64}}]),
+                                       ('predicate', {'imageDigest': 'sha256:' + 'c' * 64})])
+def test_verified_receipt_reconciliation_rejects_substitutions(tmp_path, field, value):
+    attestation_fixture(tmp_path)
+    path = tmp_path / 'receipt-attestation-verification.json'
+    rows = json.loads(path.read_text())
+    rows[0]['verificationResult']['statement'][field] = value
+    path.write_text(json.dumps(rows))
+    with pytest.raises(alarm.VerificationError):
+        alarm.verified_attestations(tmp_path)
+
+
+def test_workflow_runs_crypto_verification_with_exact_ci_policy():
+    text = (Path(__file__).parents[1] / '.github/workflows/build-archlinuxarm-base.yml').read_text()
+    step = text.split('name: Verify published candidate attestations', 1)[1].split('- name:', 1)[0]
+    for required in ('gh attestation verify', '--signer-workflow', '--cert-identity',
+                     '--source-digest "$GITHUB_SHA"', '--source-ref "$GITHUB_REF"',
+                     '--bundle-from-oci', '--deny-self-hosted-runners',
+                     '--predicate-type https://tunaos.org/attestations/archlinuxarm-base/v1'):
+        assert required in step
+    assert step.index('gh attestation verify') < step.index('verified-attestations --directory')
