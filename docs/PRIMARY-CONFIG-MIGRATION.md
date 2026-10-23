@@ -9,6 +9,11 @@ TunaOS itself uses `tunaos.toml`. A person changes that same file to choose
 variants, packages, image names and brand assets. There is no catalog for stock values beneath a customization file. Assets remain local referenced files.
 The compiler emits the formats that build and installer consumers need.
 
+The purpose is to make a new distribution from a fork easy. A fork edits
+`tunaos.toml` and its own asset files; it does not edit the build framework.
+Use one test for each value: if a fork would change it, it belongs in
+`tunaos.toml`. If it only makes the build work, it stays in code.
+
 The maintainer selected TOML on 2026-10-20. This changes RFC 013's earlier
 choice to keep legacy sources authoritative and add optional fork deltas.
 The strict validators and consumer tests from that work remain useful.
@@ -22,17 +27,22 @@ The name `tunaos.toml` alone would not make those deltas meet the new requiremen
 | Variant IDs, aliases, emoji, bases, platforms, flavor order and holds | .github/build-config.yml | Generated matrix at the existing path |
 | ISO groups, sibling images and Tuna Desktop admission records | .github/build-config.yml | The same generated matrix, with all metadata retained |
 | Desktop package profiles, family overrides, optional/excluded sets and repository policy | manifests/desktops/*.yaml | Generated desktop manifests consumed by install-desktop.sh |
-| Shared and base-family package policy | 10-base-packages.sh, 20-packages.sh and package-bearing helpers | Ordered typed package plans; scripts retain mechanisms |
-| Image and download versions, digest pins and package ceilings | image-versions.yaml | Generated version adapter; Renovate edits TOML inputs |
-| Registry mirrors | registry-map.yaml | Generated mirror adapter |
+| Image-wide package additions and removals over the base list | 10-base-packages.sh, 20-packages.sh and package-bearing helpers | Ordered typed package plans; scripts retain the base list and mechanisms |
 | Names, species codenames, URLs and logo assets | 90-image-info.sh and identity/brand source files | Resolved identity, os-release, Plymouth and desktop adapters |
 | Wallpaper assets and desktop/variant precedence | select-wallpaper.sh and asset naming conventions | Explicit resolved artwork selection with existing stock precedence |
 | Installer name, logos and shared presentation settings | installer customization/projection sources | One versioned frontend-neutral brand payload for all frontends |
 | Flatpak remotes and selected application sets | desktop helper scripts | Typed generated policy consumed by existing installers |
 
-Execution scripts, Containerfiles and checks remain code. Credentials are not
-configuration data. Do not put shell commands, remote includes or secret values in TOML. Existing trusted post-install steps become named, validated operations;
-this migration does not add arbitrary hooks.
+Containerfiles, base-image mechanics, execution scripts and checks are the
+build framework and remain code. The maintainer confirmed this on 2026-10-23.
+The digest-pinned `base_image` choice for each variant is already in
+`tunaos.toml`. Tool and download pins in `image-versions.yaml` and the
+mirrors in `registry-map.yaml` stay there; Renovate keeps its current
+targets.
+
+Credentials are not configuration data. Do not put shell commands, remote
+includes or secret values in TOML. Existing trusted post-install steps become
+named, validated operations; this migration does not add arbitrary hooks.
 
 ## Utah reference
 
@@ -113,10 +123,10 @@ family-specific. Selection never enables a held or unsupported cell.
 2. Move the complete matrix into TOML. Generate the old adapter without losing
    any value, order, flag, alias, ISO group or rollout record. Add a read-only
    drift gate and `just config-generate` / `just config-check`. The generator marks the adapter as derived. Both local and CI builds validate it before consumption.
-3. Move all desktop profiles and base/shared package policy, in reviewed groups.
-   Compare the complete resolved package/repository operation sequence to the
-   old path for every supported family and cell. Migrate the pins/mirror
-   writers and Renovate at the same boundary as their generated adapters.
+3. Move all desktop profiles and the image-wide package additions and
+   removals, in reviewed groups. Compare the complete resolved
+   package/repository operation sequence to the old path for every supported
+   family and cell. Tool pins and mirrors stay in their build-framework files.
 4. Move actual image identity, artwork and installer defaults. TunaOS's own
    values pass through the same compiler and consumers as customized values.
    Reuse the reviewed mechanisms in consumers and check final writers. No stock-only bypass remains.
