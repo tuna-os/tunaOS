@@ -83,7 +83,7 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 | `scorecard.yml` | post-merge + scheduled | Scorecard supply-chain security | push, `38 0 * * 4`, branch_protection_rule | — |
 | `snapshot-upstreams.yml` | post-merge + scheduled | Snapshot upstreams | `0 9 * * 1`, manual | — |
 | `ste.yml` | PR-deterministic + post-merge | Prose | each PR, push, manual | — |
-| `test.yml` | PR-deterministic + post-merge | Test | each PR, push, manual | — |
+| `test.yml` | PR-deterministic + post-merge | `builds` | each PR, push, manual | `builds`: 2d |
 | `update-build-status.yml` | post-merge + scheduled | Update README build status | `30 13 * * *`, manual | — |
 | `validate-renovate.yaml` | PR-deterministic + post-merge | Validate Renovate Config | each PR, push | — |
 | `verify-asahi-one.yml` | post-merge + scheduled | Verify Asahi image (one) | caller cadence | — |
@@ -98,29 +98,23 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 This specification defines the target design for the matrix-driven CI/CD pipeline
 for TunaOS, consolidating redundant workflows and optimizing the build process.
 
-## Central Configuration (`.github/build-config.yml`)
-A single YAML file will serve as the source of truth for all buildable variants, flavors, and platforms.
+## Central Configuration (`tunaos.toml`)
 
-### Structure Example:
-```yaml
-config:
-  global_platforms: ["linux/amd64", "linux/arm64"]
-  
-variants:
-  - id: yellowfin
-    platforms: ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
-    flavors:
-      - id: gnome
-        build_image: true
-        build_iso: true
-        build_qcow2: true
-      - id: gnome-hwe
-        build_image: true
-      - id: gnome-nvidia
-        build_image: true
-      - id: kde
-        build_image: true
-        build_iso: true
+`tunaos.toml` owns the matrix. CI creates the ignored
+`.github/build-config.yml` adapter before legacy `yq` readers run.
+Edit TOML and run `python3 scripts/config.py validate` to check the result.
+The [migration plan](PRIMARY-CONFIG-MIGRATION.md) lists the later package and
+brand steps; the matrix move does not complete those steps.
+
+This excerpt shows the flavor shape inside the existing full config:
+
+```toml
+[[variants.yellowfin.flavors]]
+id = "gnome"
+stage = 2
+build_image = true
+build_iso = true
+build_qcow2 = true
 ```
 
 ## Workflow Architecture (`.github/workflows/main-build.yml`)
@@ -147,6 +141,6 @@ variants:
 - **`actions/publish-image`**: Manages rechunking, SBOM generation, and signing.
 
 ## Benefits
-- **Maintainability**: Adding a new variant or flavor only requires updating the YAML config.
+- **Maintainability**: Edit the primary TOML to add a variant or flavor.
 - **Efficiency**: Parallel matrix builds reduce total CI time.
 - **Consistency**: All flavors use the same underlying build and publish logic.

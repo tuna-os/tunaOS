@@ -546,7 +546,23 @@ EOF
 	"!!map") readarray -t _TD_PKGS < <($YQ -r '.packages.apt.packages // [] | .[]' "${_TD_MANIFEST}") ;;
 	"!!seq") readarray -t _TD_PKGS < <($YQ -r '.packages.apt[]' "${_TD_MANIFEST}") ;;
 	esac
-	if ((${#_TD_PKGS[@]} > 0)); then
+	if [[ "${IS_DEBIAN:-false}" == true && "${TUNAOS_IMAGE_FLAVOR:-}" == gnome && "$_TD_DESKTOP" == gnome ]]; then
+		# The host binds this contract to the original flavor and native target.
+		# HWE/NVIDIA stages retain the existing adapter path until separately tested.
+		# shellcheck source=build_scripts/lib/desktop-contract.sh
+		source "${_TD_CTX}/build_scripts/lib/desktop-contract.sh"
+		_TD_NATIVE_ARCH=$(dpkg --print-architecture)
+		case "$_TD_NATIVE_ARCH" in
+		amd64 | arm64) ;;
+		*)
+			echo "ERROR: unsupported Debian contract architecture: $_TD_NATIVE_ARCH" >&2
+			exit 1
+			;;
+		esac
+		tunaos_desktop_contract_install \
+			"${_TD_CTX}/manifests/desktop-contracts/${IMAGE_NAME_VARIANT:?}/gnome/linux-${_TD_NATIVE_ARCH}.json" \
+			"${_TD_CTX}/tunaos.toml" "$IMAGE_NAME_VARIANT" gnome "linux/${_TD_NATIVE_ARCH}"
+	elif ((${#_TD_PKGS[@]} > 0)); then
 		pkg_install "${_TD_PKGS[@]}"
 	elif [[ "${_TD_APT_TYPE}" != "!!null" ]]; then
 		# Fail loudly: an apt section exists but nothing parsed out of it.
@@ -1007,6 +1023,18 @@ for cmd in "${_TD_POST_INLINE[@]}"; do
 	fi
 done
 
+# Fork deltas follow legacy package hooks, before experience/runtime checks.
+# Validate branding before changing packages so a malformed generated input
+# cannot partially apply. An absent file leaves the legacy path untouched.
+if [[ -e "${_TD_CTX}/manifests/fork-config.json" || -L "${_TD_CTX}/manifests/fork-config.json" ]]; then
+	# shellcheck source=/dev/null
+	source "${_TD_CTX}/build_scripts/lib/fork-branding.sh"
+	tunaos_validate_fork_branding "${_TD_CTX}"
+	# shellcheck source=/dev/null
+	source "${_TD_CTX}/build_scripts/lib/fork-packages.sh"
+	tunaos_apply_fork_packages "${_TD_CTX}"
+fi
+
 # Desktop communities own their curated defaults as plain files. This keeps
 # opinions reviewable and portable without creating a package for a few config
 # files; any contributor can maintain experiences/<desktop>/files/.
@@ -1037,6 +1065,10 @@ if [[ "${_TD_DESKTOP}" == gnome || "${_TD_DESKTOP}" == kde || "${_TD_DESKTOP}" =
 	install -Dm0755 "${_TD_CTX}/build_scripts/checks/e2e-runtime-checks.sh" \
 		/usr/libexec/tunaos/e2e-runtime-checks
 
+	if [[ -e "${_TD_CTX}/manifests/fork-config.json" ]]; then
+		tunaos_apply_fork_branding "${_TD_CTX}"
+	fi
+
 	# Branding contract — common to every desktop, plus per-desktop surfaces.
 	# Same pattern as the desktop-experience check: run at build time, install
 	# as a runtime unit for the VM promotion gate. The branding scripts take
@@ -1046,6 +1078,9 @@ if [[ "${_TD_DESKTOP}" == gnome || "${_TD_DESKTOP}" == kde || "${_TD_DESKTOP}" =
 		/usr/libexec/tunaos/verify-branding
 	# Per-desktop artwork, when a variant has some (docs/BRANDING.md).
 	"${_TD_CTX}/build_scripts/desktop/select-wallpaper.sh" "${_TD_DESKTOP}"
+	if [[ -e "${_TD_CTX}/manifests/fork-config.json" ]]; then
+		tunaos_apply_fork_branding "${_TD_CTX}"
+	fi
 	BRANDING_EXTRA=""
 	case "${_TD_DESKTOP}" in
 	gnome)
@@ -1082,6 +1117,11 @@ if [[ "${_TD_DESKTOP}" == gnome || "${_TD_DESKTOP}" == kde || "${_TD_DESKTOP}" =
 		BRANDING_EXTRA="ExecStart=-/usr/libexec/tunaos/verify-branding-niri ${IMAGE_NAME:-${_TD_DESKTOP}} --runtime"
 		;;
 	esac
+	# KDE rewrites its About website; reassert the supplied homepage afterward.
+	if [[ -e "${_TD_CTX}/manifests/fork-config.json" ]]; then
+		tunaos_apply_fork_branding "${_TD_CTX}"
+		tunaos_verify_fork_branding
+	fi
 	cat >/usr/lib/systemd/system/tunaos-desktop-contract.service <<EOF
 [Unit]
 Description=Verify TunaOS ${_TD_DESKTOP} desktop experience
@@ -1119,5 +1159,11 @@ fi
 "${_TD_CTX}/build_scripts/install-countme.sh"
 
 emit_packages_manifest
+
+# A failed hook, branding check, or package-manifest emission never leaves a
+# successful package receipt. Native package presence is checked by verification.
+if [[ "${_TUNA_DESKTOP_INSTALLED:-0}" == 1 ]]; then
+	tunaos_desktop_contract_commit /usr/share/tunaos/desktop-package-contract.json
+fi
 
 printf "::endgroup::\n"

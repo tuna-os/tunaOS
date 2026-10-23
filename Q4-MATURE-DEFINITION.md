@@ -28,6 +28,7 @@ checkpoint (#1299). Q4 must close with evidence, not wishes.
 | Goal | Tracker | Exit criterion (evidence required) |
 |------|---------|-------------------------------------|
 | Adoption metrics / usage telemetry | #1174 | First monthly download/usage snapshot **published by 2026-11-01**; dashboard or doc with numbers, not prose |
+| Installer qualification | #3405, #3380, #3474 | Maintainer-owned release gate: every advertised release cell has fresh exact-image offline plain/encrypted installation, media-detached target boot, expected desktop/source identity, update and recovery evidence; otherwise narrow the release claim explicitly. Source tests and installer launch are insufficient |
 | Adoption evidence | #1348 | ≥1 production adopter listed in ADOPTERS.md with a verifiable reference (deployment, testimonial, case study) |
 | Community governance model | #1168 | Governance doc merged (maintainer roles, decision rights, contribution ladder) and referenced from CONTRIBUTING.md |
 | Branch protection + required CI | #1167 | Active `main` ruleset on tunaos contains a `required_status_checks` rule for `lint` and `unit-tests`; verify the rule and a clean merge-queue evaluation from a non-bypass PR |
@@ -47,6 +48,7 @@ checkpoint (#1299). Q4 must close with evidence, not wishes.
 
 At 2026-12-30, the org can claim "Mature" only if **all of** the following hold:
 
+- [ ] Installer qualification is verified per advertised release cell; missing or stale evidence blocks the claim
 - [ ] Downloads are verified working and release cadence is multi-flavor, not gnome-only
 - [ ] Adoption metrics snapshot exists (published 11-01) and ADOPTERS.md has ≥1 production entry
 - [ ] Branch protection is enforced on the primary repo
@@ -62,8 +64,8 @@ At 2026-12-30, the org can claim "Mature" only if **all of** the following hold:
 | Date | Check |
 |------|-------|
 | 2026-09-30 | Q3 closes; Q4 tracker list finalized with descope decisions recorded |
-| 2026-10-31 | Monthly: milestone count vs tracker states; adoption snapshot draft review |
-| 2026-11-30 | Monthly: milestone count; mid-quarter checkpoint (format per Q3 #1299) |
+| 2026-10-31 | Monthly: milestone count vs tracker states; adoption snapshot draft review; installer evidence and exclusions |
+| 2026-11-30 | Monthly: milestone count; installer evidence and exclusions; mid-quarter checkpoint (format per Q3 #1299) |
 | 2026-12-30 | Q4 closes; exit criteria verified item-by-item; ROADMAP updated |
 
 ---

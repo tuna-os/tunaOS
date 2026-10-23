@@ -81,12 +81,12 @@
     },
     {
       "customType": "regex",
-      "description": "Update base image digests in .github/build-config.yml. Automates freshness for digest-pinned base images so Renovate opens freshness bumps before upstream garbage collection causes manifest-unknown build failures (tunaOS#2113).",
+      "description": "Update base image digests in tunaos.toml. Automates freshness for digest-pinned base images so Renovate opens freshness bumps before upstream garbage collection causes manifest-unknown build failures (tunaOS#2113).",
       "managerFilePatterns": [
-        "/^\\.github/build-config\\.yml$/"
+        "/^tunaos\\.toml$/"
       ],
       "matchStrings": [
-        "base_image:\\s*\"(?<depName>(?<packageName>[^:]+)):(?<currentValue>[^@\\n\"]+)@(?<currentDigest>sha256:[a-f0-9]+)\""
+        "(?:^|\\n)[ \\t]*base_image\\s*=\\s*\"(?<depName>(?<packageName>[^:]+)):(?<currentValue>[^@\\n\"]+)@(?<currentDigest>sha256:[a-f0-9]+)\""
       ],
       "datasourceTemplate": "docker",
       "depNameTemplate": "{{{packageName}}}"
@@ -140,6 +140,34 @@
         "bootc-dev/bootc"
       ],
       "allowedVersions": "<=1.16.10"
+    },
+    {
+      "description": "Keep the primary-config compatibility job on Python 3.10; other runtime jobs may advance.",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchPackageNames": [
+        "python"
+      ],
+      "matchFileNames": [
+        ".github/workflows/test.yml"
+      ],
+      "matchCurrentValue": "/^3\\.10(?:\\.|$)/",
+      "allowedVersions": "<3.11"
+    },
+    {
+      "description": "Same floor, matched by depName. Renovate reported this dependency as `python` (type uses-with) whose package is actions/python-versions, and the rule above, keyed on matchPackageNames, did not stop it: PR #3552 moved the floor job 3.10 -> 3.15 and merged on 2026-10-21, turning Unit Tests red on main. matchDepNames matches the name Renovate displays, so this rule applies whichever field the rule above was being compared against. Both are kept: tests/test_primary_python_floor.py pins each.",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchDepNames": [
+        "python"
+      ],
+      "matchFileNames": [
+        ".github/workflows/test.yml"
+      ],
+      "matchCurrentValue": "/^3\\.10(?:\\.|$)/",
+      "allowedVersions": "<3.11"
     }
   ]
 }

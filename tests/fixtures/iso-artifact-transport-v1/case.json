@@ -1,0 +1,164 @@
+{
+  "description": "Synthetic workflow_dispatch run/artifact IDs and ZIP bytes. Repository/workflow/source coordinates were independently reviewed; no real execution or authenticated evidence is represented. Public run 39321317858 is push-triggered and inadmissible.",
+  "policy": {
+    "repository": "tuna-os/iso-builder",
+    "repository_id": 1305022978,
+    "workflow_id": 315782939,
+    "workflow_path": ".github/workflows/ci.yml",
+    "source_revision": "fc0b1375ac61b1180add8469db702a083709b844",
+    "ref": "refs/heads/main",
+    "archive_sha256": "sha256:679b75fbc7deeb01326de6fc2f6daafd44e478523ac3580a9b6a864c003d2c91",
+    "max_archive_bytes": 4096
+  },
+  "selection": {
+    "run_id": 900000000001,
+    "attempt": 1,
+    "artifact_id": 900000000002
+  },
+  "currentBefore": {
+    "id": 900000000001,
+    "run_attempt": 1,
+    "event": "workflow_dispatch",
+    "head_branch": "main",
+    "head_sha": "fc0b1375ac61b1180add8469db702a083709b844",
+    "path": ".github/workflows/ci.yml",
+    "workflow_id": 315782939,
+    "status": "completed",
+    "conclusion": "success",
+    "repository": {
+      "id": 1305022978,
+      "full_name": "tuna-os/iso-builder",
+      "fork": false
+    },
+    "head_repository": {
+      "id": 1305022978,
+      "full_name": "tuna-os/iso-builder",
+      "fork": false
+    },
+    "pull_requests": [],
+    "created_at": "2026-01-01T00:00:00Z",
+    "unrelated_api_field": "allowed"
+  },
+  "attempt": {
+    "id": 900000000001,
+    "run_attempt": 1,
+    "event": "workflow_dispatch",
+    "head_branch": "main",
+    "head_sha": "fc0b1375ac61b1180add8469db702a083709b844",
+    "path": ".github/workflows/ci.yml",
+    "workflow_id": 315782939,
+    "status": "completed",
+    "conclusion": "success",
+    "repository": {
+      "id": 1305022978,
+      "full_name": "tuna-os/iso-builder",
+      "fork": false
+    },
+    "head_repository": {
+      "id": 1305022978,
+      "full_name": "tuna-os/iso-builder",
+      "fork": false
+    },
+    "pull_requests": [],
+    "created_at": "2026-01-01T00:00:00Z",
+    "unrelated_api_field": "allowed"
+  },
+  "artifact": {
+    "id": 900000000002,
+    "name": "synthetic-adapter-fixture",
+    "digest": "sha256:679b75fbc7deeb01326de6fc2f6daafd44e478523ac3580a9b6a864c003d2c91",
+    "size_in_bytes": 168,
+    "expired": false,
+    "workflow_run": {
+      "id": 900000000001,
+      "repository_id": 1305022978,
+      "head_repository_id": 1305022978,
+      "head_branch": "main",
+      "head_sha": "fc0b1375ac61b1180add8469db702a083709b844"
+    }
+  },
+  "currentAfter": {
+    "id": 900000000001,
+    "run_attempt": 1,
+    "event": "workflow_dispatch",
+    "head_branch": "main",
+    "head_sha": "fc0b1375ac61b1180add8469db702a083709b844",
+    "path": ".github/workflows/ci.yml",
+    "workflow_id": 315782939,
+    "status": "completed",
+    "conclusion": "success",
+    "repository": {
+      "id": 1305022978,
+      "full_name": "tuna-os/iso-builder",
+      "fork": false
+    },
+    "head_repository": {
+      "id": 1305022978,
+      "full_name": "tuna-os/iso-builder",
+      "fork": false
+    },
+    "pull_requests": [],
+    "created_at": "2026-01-01T00:00:00Z",
+    "unrelated_api_field": "allowed"
+  },
+  "archiveBase64": "UEsDBBQAAAAAAAAAIVxstZdlLAAAACwAAAANAAAAc3ludGhldGljLnR4dFN5bnRoZXRpYyBhcmNoaXZlOyBub3QgcHJvZHVjdGlvbiBldmlkZW5jZS4KUEsBAhQDFAAAAAAAAAAhXGy1l2UsAAAALAAAAA0AAAAAAAAAAAAAAIABAAAAAHN5bnRoZXRpYy50eHRQSwUGAAAAAAEAAQA7AAAAVwAAAAAA",
+  "archiveSha256": "sha256:679b75fbc7deeb01326de6fc2f6daafd44e478523ac3580a9b6a864c003d2c91",
+  "archiveSizeBytes": 168,
+  "expectedPaths": [
+    [
+      "json",
+      "/repos/tuna-os/iso-builder/actions/runs/900000000001"
+    ],
+    [
+      "json",
+      "/repos/tuna-os/iso-builder/actions/runs/900000000001/attempts/1"
+    ],
+    [
+      "json",
+      "/repos/tuna-os/iso-builder/actions/artifacts/900000000002"
+    ],
+    [
+      "archive",
+      "/repos/tuna-os/iso-builder/actions/artifacts/900000000002/zip"
+    ],
+    [
+      "json",
+      "/repos/tuna-os/iso-builder/actions/artifacts/900000000002"
+    ],
+    [
+      "json",
+      "/repos/tuna-os/iso-builder/actions/runs/900000000001"
+    ]
+  ],
+  "artifactAfter": {
+    "id": 900000000002,
+    "name": "synthetic-adapter-fixture",
+    "digest": "sha256:679b75fbc7deeb01326de6fc2f6daafd44e478523ac3580a9b6a864c003d2c91",
+    "size_in_bytes": 168,
+    "expired": false,
+    "workflow_run": {
+      "id": 900000000001,
+      "repository_id": 1305022978,
+      "head_repository_id": 1305022978,
+      "head_branch": "main",
+      "head_sha": "fc0b1375ac61b1180add8469db702a083709b844"
+    }
+  },
+  "expectedResult": {
+    "metadata_checks_passed": true,
+    "archive_digest_verified": true,
+    "attempt_policy": "first_attempt_only",
+    "authentication": "not_authenticated",
+    "repository": "tuna-os/iso-builder",
+    "repositoryId": 1305022978,
+    "workflowId": 315782939,
+    "workflowPath": ".github/workflows/ci.yml",
+    "sourceRevision": "fc0b1375ac61b1180add8469db702a083709b844",
+    "ref": "refs/heads/main",
+    "runId": 900000000001,
+    "runAttempt": 1,
+    "artifactId": 900000000002,
+    "archiveSha256": "sha256:679b75fbc7deeb01326de6fc2f6daafd44e478523ac3580a9b6a864c003d2c91",
+    "sizeBytes": 168
+  }
+}
