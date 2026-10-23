@@ -19,6 +19,12 @@ set -exo pipefail
 # This persistent live-only marker survives /run becoming a tmpfs at boot.
 mkdir -p "${TUNA_SESSION_ROOT:-}/etc/tunaos"
 touch "${TUNA_SESSION_ROOT:-}/etc/tunaos/live-session"
+# The installer backend's live-ISO flag: an empty sentinel alongside the
+# live-session marker above, so fisherman's bootc path can tell live media
+# (install the running squash's payload) from a containerized invocation
+# without probing for session files.
+mkdir -p "${TUNA_SESSION_ROOT:-}/etc/bootc-installer"
+touch "${TUNA_SESSION_ROOT:-}/etc/bootc-installer/live-iso-mode"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -62,6 +68,13 @@ pantheon) INSTALLER_APP="org.bootcinstaller.Installer" ;;
 # install-flatpaks.sh there) rather than from the tuna-os Flatpak remote.
 *) INSTALLER_APP="org.bootcinstaller.Installer" ;;
 esac
+
+# Provenance captured during the pre-install below and recorded in
+# /etc/tunaos/live-installer-info + /etc/tunaos/live-source.json, so the
+# overlay carries its own installer receipt (the workflow mirrors the app
+# id and revision into OCI labels from the same values).
+INSTALLER_REVISION="${TUNA_INSTALLER_REVISION:-unknown}"
+INSTALLER_BUNDLE_SHA256="remote"
 
 # Test hook: report detection and stop before any system mutation.
 if [[ "${TUNA_DETECT_ONLY:-0}" == "1" ]]; then
@@ -684,9 +697,14 @@ if [[ -n "${INSTALLER_APP}" ]]; then
 		# the bare name — every existing consumer fetches that exact URL, and
 		# renaming it would break them for no gain. See
 		# tuna-os/bootc-installer#25.
+		# TUNA_INSTALLER_ARCH is the matrix platform's arch, threaded through
+		# by live-overlay.yml so the bundle matches the TARGET, not whatever
+		# the build host happens to report. Defaults to the host arch for the
+		# ISO build path, which never sets it.
+		_installer_arch="${TUNA_INSTALLER_ARCH:-$(uname -m)}"
 		_installer_asset="org.bootcinstaller.Installer.flatpak"
-		if [[ "$(uname -m)" != "x86_64" ]]; then
-			_installer_asset="org.bootcinstaller.Installer-$(uname -m).flatpak"
+		if [[ "${_installer_arch}" != "x86_64" ]]; then
+			_installer_asset="org.bootcinstaller.Installer-${_installer_arch}.flatpak"
 		fi
 		if ! curl --retry 3 --fail --location --max-time 300 \
 			"https://github.com/tuna-os/bootc-installer/releases/latest/download/${_installer_asset}" \
@@ -706,6 +724,11 @@ if [[ -n "${INSTALLER_APP}" ]]; then
 		INSTALLER_LOCAL_REPO="/tmp/installer-local-repo"
 		ostree init --repo="${INSTALLER_LOCAL_REPO}" --mode=archive-z2
 		flatpak build-import-bundle "${INSTALLER_LOCAL_REPO}" "${INSTALLER_FLATPAK_FILE}"
+		# Receipt for the overlay: the exact bytes imported, hashed before the
+		# file is removed. A missing sha256sum must not fail an otherwise good
+		# install; "unknown" says so honestly downstream.
+		INSTALLER_BUNDLE_SHA256="$(sha256sum "${INSTALLER_FLATPAK_FILE}" 2>/dev/null | cut -d' ' -f1 || true)"
+		INSTALLER_BUNDLE_SHA256="${INSTALLER_BUNDLE_SHA256:-unknown}"
 		rm -f "${INSTALLER_FLATPAK_FILE}"
 		flatpak remote-add --system --no-gpg-verify installer-local "file://${INSTALLER_LOCAL_REPO}"
 		# On failure, say WHAT THE REMOTES ACTUALLY OFFER. The error flatpak
@@ -854,9 +877,33 @@ if [[ -n "${INSTALLER_APP}" ]]; then
 		# the plain one. The ln below then resolves through the symlink either way.
 		mkdir -p "$(readlink -m /usr/local/bin)"
 		ln -sf "${FISHERMAN_BIN}" /usr/local/bin/fisherman
-	else
+else
 		echo "WARNING: fisherman not found inside ${INSTALLER_APP}" >&2
+fi
+fi
+
+# ── 4a2. Installer receipt ────────────────────────────────────────────────
+# What section 3 actually installed, as facts rather than labels: the app id,
+# the deployed commit (preferred over the workflow's release-tag guess, which
+# names what was LATEST rather than what landed here), and the bundle digest
+# ("remote" for the tuna-os-remote path, which downloads no bundle file).
+# Plain file writes only -- deliberately no podman/skopeo/containers-storage
+# inspection here. The pure/tacklebox live boot has no host store: there is
+# no graphroot to query, and assuming one fails the customize outright.
+# Every probe below is best-effort (`|| true`); "unknown" is the honest miss.
+if [[ -n "${INSTALLER_APP:-}" ]]; then
+	_installed_commit="$(flatpak info --system --show-commit "${INSTALLER_APP}" 2>/dev/null || true)"
+	if [[ -n "${_installed_commit}" ]]; then
+		INSTALLER_REVISION="${_installed_commit}"
 	fi
+	mkdir -p /etc/tunaos
+	cat >/etc/tunaos/live-installer-info <<INFOEOF
+# Written by tunaOS customize-live.sh: the installer payload in this squash.
+INSTALLER_APP=${INSTALLER_APP}
+INSTALLER_REVISION=${INSTALLER_REVISION}
+INSTALLER_BUNDLE_SHA256=${INSTALLER_BUNDLE_SHA256}
+INFOEOF
+	echo "customize-live: installer ${INSTALLER_APP}@${INSTALLER_REVISION} (bundle ${INSTALLER_BUNDLE_SHA256})"
 fi
 
 # ── 4b. Polkit: passwordless install for the live session ────────────────────
@@ -991,6 +1038,36 @@ PYEOF
 	echo "customize-live: installer recipe bootloader=${_bootloader}" \
 		"composefs=${_composefs_backend} filesystem=${_filesystem}"
 fi
+
+# ── 5c. Live source metadata: what this squash IS ─────────────────────────
+# Coherent source metadata for the overlay/ISO consumer: the base image ref
+# and digest this squash was customized FROM, the platform it was built for,
+# and the installer payload from section 4a2 above. The workflow feeds the
+# base fields in (TUNA_LIVE_* env, mirrored into OCI labels); the ISO build
+# path never sets them, so "unknown" there is expected, not an error.
+#
+# File writes only -- no podman/skopeo/containers-storage queries. The
+# pure/tacklebox live boot has no host containers-storage graphroot, and a
+# build-container store lookup would answer about the BUILD host, not the
+# base image. Base facts travel in via env; installer facts come from section
+# 4a2 above (the refined in-squat values, not the workflow's release guess).
+mkdir -p /etc/tunaos
+python3 - "${INSTALLER_APP:-${TUNA_INSTALLER_APP:-}}" "${INSTALLER_REVISION:-${TUNA_INSTALLER_REVISION:-unknown}}" <<'PYEOF'
+import json
+import os
+import sys
+meta = {
+    "base_image": os.environ.get("TUNA_LIVE_BASE_IMAGE", "unknown"),
+    "base_digest": os.environ.get("TUNA_LIVE_BASE_DIGEST", "unknown"),
+    "platform": os.environ.get("TUNA_LIVE_PLATFORM", "unknown"),
+    "installer_app_id": sys.argv[1],
+    "installer_revision": sys.argv[2],
+}
+with open("/etc/tunaos/live-source.json", "w") as f:
+    json.dump(meta, f, indent=2)
+    f.write("\n")
+PYEOF
+echo "customize-live: source metadata written to /etc/tunaos/live-source.json"
 
 # ── /var/tmp headroom ─────────────────────────────────────────────────────────
 # The live overlay puts /var on a small RAM overlay; bootc needs real space
