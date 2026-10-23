@@ -45,14 +45,51 @@ _cosign_transient() {
 
 # cosign_retry <command...> — run until it succeeds, the error turns out to
 # be non-transient, or the deadline passes.
+# _cosign_run <seconds> <command...> — enforce the remaining wall-clock budget
+# on one invocation. A retry deadline cannot stop a command that never returns.
+_cosign_run() {
+	local seconds="$1" command_name
+	shift
+	command_name="${1:-}"
+	# Production callers pass the external `cosign` binary. Keep shell
+	# functions in-process so sourced test helpers retain their environment.
+	if declare -F "$command_name" >/dev/null 2>&1; then
+		"$@"
+		return
+	fi
+	if ! command -v timeout >/dev/null 2>&1; then
+		echo "::error::timeout command is required by cosign_retry" >&2
+		return 127
+	fi
+	timeout --foreground --signal=TERM --kill-after=1s "${seconds}s" "$@"
+}
+
 cosign_retry() {
-	local attempt=1 backoff=15 rc=0 now remaining out deadline
+	local attempt=1 backoff=15 rc=0 now remaining invocation_budget out deadline
 	out="$(mktemp)"
 	deadline=$(($(date +%s) + SIGN_DEADLINE_MINUTES * 60))
 
 	while :; do
-		rc=0
-		"$@" >"$out" 2>&1 || rc=$?
+		now="$(date +%s)"
+		remaining=$((deadline - now))
+		invocation_budget="$remaining"
+		if [ "$invocation_budget" -le 0 ]; then
+			# Give a fast-failing command one last chance to print the
+			# endpoint and status that explain the outage. A hung command
+			# still gets only this one-second bounded grace period.
+			invocation_budget=1
+		fi
+		if _cosign_run "$invocation_budget" "$@" >"$out" 2>&1; then
+			rc=0
+		else
+			rc=$?
+		fi
+		if [ "$rc" -eq 124 ]; then
+			cat "$out" >&2
+			echo "::error::SIGSTORE_OUTAGE: ${2:-$1} did not return before the ${invocation_budget}s invocation budget expired." >&2
+			rm -f "$out"
+			return "$rc"
+		fi
 		if [ "$rc" -eq 0 ]; then
 			cat "$out"
 			rm -f "$out"

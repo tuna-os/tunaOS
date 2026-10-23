@@ -25,6 +25,7 @@ outage is not.
 from __future__ import annotations
 
 import re
+import shlex
 import subprocess
 import textwrap
 from pathlib import Path
@@ -423,3 +424,23 @@ def test_the_helper_does_not_sleep_after_its_last_attempt(tmp_path):
     )
     elapsed = int(re.search(r"ELAPSED=(\d+)", proc.stdout).group(1))
     assert elapsed <= 62, f"helper overran its 60s deadline by {elapsed - 60}s of dead sleep"
+
+
+def test_the_helper_kills_a_hung_external_command(tmp_path):
+    """A stalled Cosign process must not hold the runner until job timeout."""
+    hung = tmp_path / "hung-cosign"
+    hung.write_text("#!/usr/bin/env bash\nwhile :; do :; done\n")
+    hung.chmod(0o755)
+    proc = subprocess.run(
+        [
+            "bash",
+            "-c",
+            f"source {shlex.quote(str(HELPER))}; "
+            f"_cosign_run 1 {shlex.quote(str(hung))}",
+        ],
+        capture_output=True,
+        text=True,
+        env={"PATH": "/usr/bin:/bin"},
+        timeout=5,
+    )
+    assert proc.returncode == 124

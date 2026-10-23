@@ -1,6 +1,6 @@
 # CI Troubleshooting Playbook
 
-Last updated: 2026-07-16 (by `fix/r2-cost-reduction` investigation)
+Last updated: 2026-10-22 (Cosign invocation timeout investigation)
 
 Quick reference to diagnose CI failures that recur. A branch-integration push
 that touched 36 files across `.github/`, `build_scripts/`, `live-iso/`,
@@ -1872,3 +1872,27 @@ These tests check consistency. They do not prove a real producer or installation
 **Cause:** The hook adds new IDs but it never deletes old IDs.
 
 **Fix:** Delete the owned file at the start of each run. Keep files from other sources. Reject a linked file before you change files.
+
+## Attest SBOM hangs after Cosign stops responding
+
+**Symptom:** `Attest SBOMs` remains in `Attest SPDX SBOMs` until GitHub cancels
+the job after about 55 minutes. Runs 39860616142, 39858776475, 39845822595,
+39835555899, 39770470703, 39768872291, and 39761287778 showed this shape;
+the newer runs 39874044726 and 39874802916 were still in progress when
+investigated. Issue [#3373](https://github.com/tuna-os/tunaos/issues/3373)
+tracks the recurring failure.
+
+**Measured cause:** `.github/scripts/cosign-retry.sh` used
+`SIGN_DEADLINE_MINUTES` only after a Cosign process returned. A stalled HTTP
+call never returned to the retry loop, so the deadline could not stop it.
+The workflow's 40-minute step and 45-minute job ceilings did not prevent the
+observed cancellation.
+
+**Fix:** Run each Cosign invocation through a real process timeout using the
+remaining retry budget. Emit `SIGSTORE_OUTAGE` when the invocation times out,
+so `rerun-infra-failures.yml` retains its recovery classification. Keep the
+attestation workflow off the image-build critical path.
+
+**Verification:** `tests/bats/test_cosign_retry.bats` and
+`tests/test_sign_step_retries_cosign.py` prove a hung command is terminated
+and that the timeout status remains visible to the caller.
