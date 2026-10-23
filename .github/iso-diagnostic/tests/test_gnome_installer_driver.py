@@ -23,7 +23,7 @@ def test_captured_ocr_classification(name, state):
 def test_progress_tour_is_not_done():
     assert driver.classify(['Installation Finished', 'Reboot your machine']) == 'unknown'
     assert driver.classify(['Installing', 'Do not power off the computer.', '2:14 elapsed',
-                            'Installation Finished']) == 'progress'
+                            'Installation Finished']) == 'unknown'  # Text alone cannot prove progress.
     assert driver.classify(['TunaOS is installed', 'Remove the installation media and restart the computer.',
                             'Restart now']) == 'done'
     assert driver.classify(['Save your recovery key', 'Installing']) == 'recovery'
@@ -688,3 +688,60 @@ def test_failed_summary_invalidates_prior_proof():
 def test_retained_button_failures_remain_negative_evidence():
     assert len(BUTTON['rejected']) == 4
     assert all(item['words'] == [] for item in BUTTON['rejected'])
+
+
+PROGRESS_ROWS = [
+    ('Almost ready...', (16, 30, 400, 81)),
+    ('Do not power off the computer.', (18, 168, 543, 203)),
+    ('0:00 elapsed', (18, 255, 237, 290)),
+    ('1%', (2390, 87, 2469, 132)),
+]
+
+
+@pytest.mark.parametrize('title', sorted(driver.PROGRESS_TITLES) + ['Installing Skipjack'])
+def test_source_progress_titles_need_same_frame_markers(title):
+    rows = [(title+'...', PROGRESS_ROWS[0][1])] + PROGRESS_ROWS[1:]
+    assert driver.verify_progress_rows(rows, title+'...')[0] == title+'...'
+
+
+@pytest.mark.parametrize('index', range(4))
+@pytest.mark.parametrize('mutation', ['missing', 'duplicate', 'wrong-position'])
+def test_progress_marker_ambiguity_or_geometry_fails(index, mutation):
+    rows = list(PROGRESS_ROWS)
+    if mutation == 'missing':
+        rows.pop(index)
+    elif mutation == 'duplicate':
+        rows.append(rows[index])
+    else:
+        rows[index] = (rows[index][0], (0, 0, 10, 10))
+    with pytest.raises(driver.Unverified):
+        driver.verify_progress_rows(rows, 'Almost ready...')
+
+
+@pytest.mark.parametrize('index,value', [(0, 'Installation Finished'), (0, 'Installing'),
+    (1, 'Do not pawer off the computer.'), (2, '0:60 elapsed'),
+    (2, '159 elapsed'), (2, '1000:00 elapsed'), (3, '101%'), (3, '-1%'), (3, 'A%')])
+def test_progress_wrong_text_is_not_fuzzily_accepted(index, value):
+    rows = list(PROGRESS_ROWS)
+    rows[index] = (value, rows[index][1])
+    with pytest.raises(driver.Unverified):
+        driver.verify_progress_rows(rows, 'Almost ready...')
+
+
+def test_progress_title_crop_must_agree_with_full_frame():
+    with pytest.raises(driver.Unverified):
+        driver.verify_progress_rows(PROGRESS_ROWS, 'Securing your drive...')
+
+
+@pytest.mark.parametrize('state,line', [('failed', 'Installation failed'),
+    ('done', 'Skipjack is installed'), ('recovery', 'Save your recovery key'),
+    ('summary', 'Confirm installation'), ('unknown', 'Authentication required'),
+    ('unknown', 'Restart now')])
+def test_progress_never_overrides_foreground_state(monkeypatch, state, line):
+    screen = object.__new__(driver.Screen)
+    screen.width, screen.height, screen.state = 1280, 800, state
+    screen.lines = ['Almost ready...', line]
+    screen.rows = [('Almost ready...', (230, 675, 359, 692))]
+    monkeypatch.setattr(driver.subprocess, 'run', lambda *a, **kw: pytest.fail('excluded page reached OCR'))
+    screen.verify_progress_panel()
+    assert screen.state == state
