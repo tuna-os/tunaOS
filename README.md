@@ -112,6 +112,13 @@ _Each cell reports the newest conclusive main-branch run that asserted it, so a 
 
 **Built 139/147 · composite green 120/147 (94% built)** — The remainder has **2 failures** and **6 never reached** (stale: 5); no job asserted the latter. We show the two values separately. A cell with no job has no test, but it can still work.
 
+**Factory health: 124/147 cells green**
+
+**Install-tested: 110/110 · Lifecycle-tested: 41/52 · Never tested: 33**
+
+**Known regressions: 11 `blocking`, 86 advisory**
+
+**Last full sweep: 46 days ago (2026-09-01)**
 The score for composite green uses published cells, per [docs/MATRIX-STATUS.md](docs/MATRIX-STATUS.md). [`.github/green-criteria.yml`](.github/green-criteria.yml) provides the score. Today, these criteria prevent publication: `boots`, `builds`, `desktop`, `no_silent_omissions`, `parity`. A cell must satisfy each criterion.
 
 Skipped cells and cells with no test do not count as green. The full per-axis board is [docs/MATRIX-STATUS.md](docs/MATRIX-STATUS.md). This snapshot of CI shows one point in time. It does not promise a support tier.
