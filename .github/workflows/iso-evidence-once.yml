@@ -30,12 +30,14 @@ jobs:
             https://api.github.com/repos/tuna-os/tunaOS/actions/artifacts/12472695010/zip
           unset GH_TOKEN
           python3 - <<'PY'
+          import base64
           import hashlib
           import io
           import json
           import os
           from pathlib import Path
           import zipfile
+          import struct
 
           archive = Path(os.environ["ARCHIVE"]).read_bytes()
           expected = "4b3689dd5a3e03a4e8450c11adc403dc3339641f7471068cc3bead2d2d048673"
@@ -73,6 +75,31 @@ jobs:
                       item = value.get(key)
                       result[key] = item if type(item) is bool else None
                   print("Retained GNOME observations: " + json.dumps(result, sort_keys=True))
+                  for index in (3, 4):
+                      frame = frames[index] if len(frames) > index else None
+                      filename = f"walkthrough-gnome-{index:02d}.png"
+                      if (not isinstance(frame, dict) or frame.get("state") != "welcome"
+                              or frame.get("file") != filename):
+                          raise SystemExit("selected frame identity or welcome state mismatch")
+                      image_name = f"iso-e2e-out/strict-diagnostics/walkthrough-{mode}/{filename}"
+                      images = [entry for entry in members if entry.filename == image_name]
+                      if len(images) != 1 or images[0].file_size > 1024 * 1024:
+                          raise SystemExit("expected bounded PNG absent or ambiguous")
+                      with bundle.open(images[0]) as source:
+                          png = source.read(1024 * 1024 + 1)
+                      if (len(png) > 1024 * 1024 or len(png) < 33
+                              or png[:8] != b"\x89PNG\r\n\x1a\n"
+                              or png[8:16] != b"\x00\x00\x00\x0dIHDR"):
+                          raise SystemExit("invalid bounded PNG header")
+                      width, height = struct.unpack("!II", png[16:24])
+                      if not (640 <= width <= 1920 and 480 <= height <= 1200):
+                          raise SystemExit("PNG dimensions outside driver bounds")
+                      print(f"ISO_PNG_META {mode} {index:02d} {width} {height} "
+                            f"{len(png)} {hashlib.sha256(png).hexdigest()}")
+                      encoded = base64.b64encode(png).decode("ascii")
+                      for offset in range(0, len(encoded), 4096):
+                          print(f"ISO_PNG {mode} {index:02d} {offset // 4096} "
+                                + encoded[offset:offset + 4096])
           print("Artifact 12472695010, run 39881426883, source d6136e52.")
           print("Observations only; not input delivery or installation qualification.")
           PY
