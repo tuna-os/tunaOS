@@ -67,6 +67,7 @@ jobs:
           RCLONE_CONFIG_R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
           DRY_RUN: ${{ inputs.dry_run || 'false' }}
         run: |
+          set -euo pipefail
           if [[ -z "${RCLONE_CONFIG_R2_ACCESS_KEY_ID:-}" ]]; then
             echo "::notice::R2 credentials not configured; skipping prune."
             exit 0
@@ -98,10 +99,14 @@ jobs:
           # initial policy this list is empty and the FLAGS below are
           # identical to today. Dry runs list the retained names.
           KEPT=()
+          if ! RETENTION_RULES=$(python3 scripts/delivery-cutover.py --retained); then
+            echo "::error::Could not load delivery cutover retention inventory; refusing to prune"
+            exit 1
+          fi
           while IFS= read -r rule; do
             [[ -n "$rule" ]] || continue
             KEPT+=(--filter "$rule")
-          done < <(python3 scripts/delivery-cutover.py --retained || true)
+          done <<< "$RETENTION_RULES"
           if ((${#KEPT[@]} > 0)); then
             echo "==> Retained by delivery-cutover.json (excluded from prune):"
             printf '    %s\n' "${KEPT[@]}"

@@ -413,6 +413,45 @@ def test_retained_cli_empty_policy_emits_nothing():
     assert proc.stdout == ""
 
 
+def test_prune_aborts_before_rclone_when_retention_inventory_fails(tmp_path):
+    workflow = yaml.safe_load(PRUNE_WF.read_text(encoding="utf-8"))
+    prune_step = next(
+        step
+        for step in workflow["jobs"]["prune"]["steps"]
+        if step.get("name", "").startswith("Prune dated ISOs")
+    )
+    script = prune_step["run"].replace(
+        "${{ secrets.R2_BUCKET }}", "test-bucket"
+    )
+
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    (bin_dir / "python3").write_text("#!/bin/sh\nexit 23\n", encoding="utf-8")
+    rclone_marker = tmp_path / "rclone-called"
+    (bin_dir / "rclone").write_text(
+        f"#!/bin/sh\ntouch {rclone_marker}\n", encoding="utf-8"
+    )
+    for command in ("python3", "rclone"):
+        (bin_dir / command).chmod(0o755)
+
+    proc = subprocess.run(
+        ["bash", "-c", script],
+        cwd=ROOT,
+        env={
+            "PATH": f"{bin_dir}:/usr/bin:/bin",
+            "RCLONE_CONFIG_R2_ACCESS_KEY_ID": "configured",
+            "DRY_RUN": "false",
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert proc.returncode != 0
+    assert "refusing to prune" in proc.stdout
+    assert not rclone_marker.exists()
+
+
 # annotate-matrix.
 def test_annotate_matrix_marks_only_cut_over_rows(config):
     policy = make_policy([make_entry("bonito", "gnome", "linux/amd64")])
