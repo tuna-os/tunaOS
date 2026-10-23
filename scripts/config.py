@@ -26,12 +26,13 @@ def builder_target(root, output, relative):
 IDENTITY_ADAPTERS = {
     'identity': (tunaos_config.render_identity, 'build_scripts/lib/identity.env'),
     'variant-identity': (tunaos_config.render_variant_identity, 'build_scripts/lib/variant-identity.tsv'),
+    'variant-aliases': (tunaos_config.render_variant_aliases, 'build_scripts/lib/variant-aliases.tsv'),
 }
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=('validate', 'generate', 'show', 'generate-builder-config', 'check-builder-config', 'generate-builder-flavors', 'check-builder-flavors', 'generate-flatpak-policy', 'check-flatpak-policy', *(f'{verb}-{name}' for name in IDENTITY_ADAPTERS for verb in ('generate', 'check')), 'generate-debian-contract', 'prepare-debian-context', 'verify-debian-image'))
+    parser.add_argument('command', choices=('validate', 'generate', 'show', 'generate-builder-config', 'check-builder-config', 'generate-builder-flavors', 'check-builder-flavors', 'generate-flatpak-policy', 'check-flatpak-policy', *(f'{verb}-{name}' for name in IDENTITY_ADAPTERS for verb in ('generate', 'check')), 'check-drawn-artwork', 'generate-debian-contract', 'prepare-debian-context', 'verify-debian-image'))
     parser.add_argument('--root', type=Path, default=tunaos_config.ROOT)
     parser.add_argument('--output', type=Path)
     parser.add_argument('--image')
@@ -53,6 +54,11 @@ def main():
             else:
                 target.write_text(content, encoding='utf-8')
             print(target)
+        elif args.command == 'check-drawn-artwork':
+            missing = tunaos_config.missing_drawn_artwork(tunaos_config.load(args.root / 'tunaos.toml'), args.root)
+            if missing:
+                raise tunaos_config.ConfigError('drawn artwork missing for tunaos.toml:\n  ' + '\n  '.join(missing))
+            print('Every variant has its wallpaper and boot splash.')
         elif args.command in ('generate-flatpak-policy', 'check-flatpak-policy'):
             content = tunaos_config.flatpak_policy().render(tunaos_config.load(args.root / 'tunaos.toml'))
             target = args.output or args.root / 'build_scripts/desktop/flatpak-preinstall.tsv'

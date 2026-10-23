@@ -13,6 +13,7 @@ import copy
 import importlib.util
 import os
 from pathlib import Path
+import shutil
 import subprocess
 
 import pytest
@@ -65,7 +66,8 @@ def test_committed_adapter_matches_the_toml():
 def test_a_fork_changes_identity_only_in_toml(tmp_path):
     fork = copy.deepcopy(config.load())
     fork["project"] = {"name": "Acme OS", "id": "acmeos", "cpe_vendor": "acme"}
-    fork["defaults"]["branding"] = {key: f"https://acme.example/{key}" for key in config.BRANDING_URLS}
+    fork["defaults"]["branding"] = {**{key: f"https://acme.example/{key}" for key in config.BRANDING_URLS},
+                                    "plymouth": "acme"}
     fork["variants"]["yellowfin"]["codename"] = "Wile E"
     values, codenames = sourced(config.render_identity(fork), tmp_path)
     assert values["TUNAOS_PROJECT_NAME"] == "Acme OS"
@@ -165,25 +167,78 @@ flounder-sid	#A80030	red	Debian Sid	Debian's darker red
 """.splitlines()
 
 
+# The variant -> theme case in plymouth-set-theme.sh before #3668 F3d.
+STOCK_PLYMOUTH = {
+    "yellowfin": "tropical-fish", "albacore": "tunaos", "skipjack": "sushi", "wahoo": "carp-streamer",
+    "bonito": "fishing-pole", "hummingbird": "bird", "sailfin": "sailboat", "guppy": "rainbow",
+    "bonito-rawhide": "dragon", "gurnard": "robot", "grouper": "coral", "marlin": "rocket",
+    "flounder": "pufferfish", "flounder-sid": "radioactive",
+}
+# canonical_variant() in 90-image-info.sh before #3668 F3d.
+STOCK_ALIASES = {
+    "almalinux-kitten": "yellowfin", "almalinux": "albacore", "centos": "skipjack", "fedora": "bonito",
+    "opensuse": "sailfin", "tumbleweed": "sailfin", "gentoo": "guppy", "elementary": "gurnard",
+    "ubuntu": "grouper", "arch": "marlin", "archlinux": "marlin", "debian": "flounder",
+}
+
+
 def data_rows(tsv):
     return [line for line in tsv.splitlines() if line and not line.startswith("#")]
 
 
 def test_stock_variant_branding_is_unchanged_by_the_migration():
-    assert data_rows(config.render_variant_identity(config.load())) == STOCK_VARIANT_ROWS
+    rows = [row.split("\t") for row in data_rows(config.render_variant_identity(config.load()))]
+    assert ["\t".join(row[:5]) for row in rows] == STOCK_VARIANT_ROWS
+    assert {row[0]: row[5] for row in rows} == STOCK_PLYMOUTH
 
 
-def test_committed_variant_identity_matches_the_toml():
-    committed = (ROOT / "build_scripts/lib/variant-identity.tsv").read_text(encoding="utf-8")
-    assert committed == config.render_variant_identity(config.load())
+def test_stock_aliases_are_unchanged_by_the_migration():
+    rows = data_rows(config.render_variant_aliases(config.load()))
+    assert dict(row.split("\t") for row in rows) == STOCK_ALIASES
+
+
+@pytest.mark.parametrize("adapter", ["variant-identity", "variant-aliases"])
+def test_committed_variant_adapters_match_the_toml(adapter):
+    render = getattr(config, "render_" + adapter.replace("-", "_"))
+    committed = (ROOT / f"build_scripts/lib/{adapter}.tsv").read_text(encoding="utf-8")
+    assert committed == render(config.load())
 
 
 def test_a_fork_changes_variant_branding_only_in_toml():
     fork = copy.deepcopy(config.load())
     fork["variants"]["marlin"]["branding"] = {"accent": "#123ABC", "gnome_accent": "green",
-                                              "base": "Acme Linux", "homage": "Acme's own green"}
+                                              "base": "Acme Linux", "homage": "Acme's own green",
+                                              "plymouth": "acme"}
     rows = data_rows(config.render_variant_identity(fork))
-    assert "marlin\t#123ABC\tgreen\tAcme Linux\tAcme's own green" in rows
+    assert "marlin\t#123ABC\tgreen\tAcme Linux\tAcme's own green\tacme" in rows
+
+
+def test_a_forks_aliases_fold_onto_its_variant():
+    fork = copy.deepcopy(config.load())
+    fork["variants"]["marlin"]["aliases"] = ["acme"]
+    aliases = dict(row.split("\t") for row in data_rows(config.render_variant_aliases(fork)))
+    assert aliases["acme"] == "marlin" and "arch" not in aliases
+
+
+def test_a_forks_plymouth_choice_reaches_the_build(tmp_path):
+    """plymouth-set-theme.sh reads the theme, aliases and default from TOML."""
+    fork = copy.deepcopy(config.load())
+    fork["defaults"]["branding"]["plymouth"] = "acme-default"
+    fork["variants"]["marlin"]["branding"]["plymouth"] = "acme-rocket"
+    lib = tmp_path / "build_scripts/lib"
+    lib.mkdir(parents=True)
+    shutil.copy2(ROOT / "build_scripts/plymouth-set-theme.sh", tmp_path / "build_scripts")
+    (lib / "identity.env").write_text(config.render_identity(fork))
+    (lib / "variant-identity.tsv").write_text(config.render_variant_identity(fork))
+    (lib / "variant-aliases.tsv").write_text(config.render_variant_aliases(fork))
+
+    def theme(name):
+        return subprocess.run(["bash", str(tmp_path / "build_scripts/plymouth-set-theme.sh"), "--print", name],
+                              check=True, capture_output=True, text=True).stdout.strip()
+
+    assert theme("marlin") == theme("archlinux") == "acme-rocket"
+    assert theme("grouper") == "coral"
+    assert theme("not-a-variant") == "acme-default"
 
 
 def test_variant_identity_cannot_be_generated_with_a_gap():
@@ -199,6 +254,8 @@ def test_variant_identity_cannot_be_generated_with_a_gap():
     ("gnome_accent", "magenta"),      # GNOME has a fixed list of accents
     ("base", 'Alma "Kitten"'),        # lands in a JSON heredoc (fastfetch)
     ("homage", "a `whale`"),
+    ("plymouth", "../rocket"),        # a directory name, joined onto a path
+    ("plymouth", "Rocket"),
 ])
 def test_unusable_variant_branding_is_rejected(key, value):
     source = copy.deepcopy(config.load())

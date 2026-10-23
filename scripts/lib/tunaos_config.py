@@ -51,7 +51,10 @@ LABEL_TEXT = re.compile(r"[A-Za-z0-9][A-Za-z0-9 .,()+_'-]*\Z")
 ACCENT = re.compile(r"#[0-9A-F]{6}\Z")
 # GNOME takes only these fixed accent names, not an arbitrary colour.
 GNOME_ACCENTS = {'blue', 'teal', 'green', 'yellow', 'orange', 'red', 'pink', 'purple', 'slate'}
-VARIANT_BRANDING = ('accent', 'gnome_accent', 'base', 'homage')
+# A theme directory under system_files/usr/share/plymouth/themes/.
+PLYMOUTH_THEME = re.compile(r"[a-z0-9][a-z0-9-]*\Z")
+DEFAULT_BRANDING = BRANDING_URLS + ('plymouth',)
+VARIANT_BRANDING = ('accent', 'gnome_accent', 'base', 'homage', 'plymouth')
 # Identity-only variant keys: they have their own adapters, not the matrix.
 IDENTITY_KEYS = ('codename', 'branding')
 
@@ -97,6 +100,11 @@ def strings(value, path, platform=False):
 def identifier(value, path):
     if not isinstance(value, str) or not ID.fullmatch(value):
         raise ConfigError(f"{path}: expected lowercase identifier")
+
+
+def plymouth_theme(value, path):
+    if not isinstance(value, str) or not PLYMOUTH_THEME.fullmatch(value):
+        raise ConfigError(f"{path}: expected a theme directory name (lowercase letters, digits, -)")
 
 
 @lru_cache(maxsize=1)
@@ -146,11 +154,12 @@ def validate(config):
             raise ConfigError('project.cpe_vendor: expected a lowercase CPE component such as tunaos')
     if 'defaults' in config:
         table(config['defaults'], ('branding',), ('branding',), 'defaults')
-        table(config['defaults']['branding'], BRANDING_URLS, BRANDING_URLS, 'defaults.branding')
+        table(config['defaults']['branding'], DEFAULT_BRANDING, DEFAULT_BRANDING, 'defaults.branding')
         for key in BRANDING_URLS:
             value = config['defaults']['branding'][key]
             if not isinstance(value, str) or not HTTPS_URL.fullmatch(value):
                 raise ConfigError(f'defaults.branding.{key}: expected an https:// URL')
+        plymouth_theme(config['defaults']['branding']['plymouth'], 'defaults.branding.plymouth')
     variants = config['variants']
     if not isinstance(variants, dict) or not variants:
         raise ConfigError('variants: expected nonempty table')
@@ -175,6 +184,7 @@ def validate(config):
             for key in ('base', 'homage'):
                 if not isinstance(branding[key], str) or not LABEL_TEXT.fullmatch(branding[key]):
                     raise ConfigError(f"{where}.branding.{key}: expected plain words (letters, digits, spaces, .,()+_'-)")
+            plymouth_theme(branding['plymouth'], where + '.branding.plymouth')
         if 'experimental' in variant and type(variant['experimental']) is not bool:
             raise ConfigError(f'{where}.experimental: expected boolean')
         strings(variant['platforms'], where + '.platforms', platform=True)
@@ -377,6 +387,8 @@ def render_identity(config):
              f"TUNAOS_DOCUMENTATION_URL={shlex.quote(urls['documentation'])}",
              f"TUNAOS_SUPPORT_URL={shlex.quote(urls['support'])}",
              f"TUNAOS_BUG_REPORT_URL={shlex.quote(urls['bug_report'])}",
+             # Boot splash for a variant that has no branding row.
+             f"TUNAOS_PLYMOUTH_THEME={shlex.quote(urls['plymouth'])}",
              # -g: stays global even when a caller sources this inside a function.
              'declare -gA TUNAOS_CODENAMES=(']
     # Keys quoted: unquoted, shfmt rewrites [bonito-rawhide] as arithmetic.
@@ -394,13 +406,14 @@ VARIANT_IDENTITY_HEADER = """\
 # distro it is built on, as a nod to that project: Arch blue for marlin,
 # Ubuntu orange for grouper, openSUSE green for sailfin, and so on.
 #
-# Read by build_scripts/90-image-info.sh and the desktop branding hooks at
-# build time, and by the scripts/branding/ generators when artwork is redrawn.
+# Read by build_scripts/90-image-info.sh, plymouth-set-theme.sh and the
+# desktop branding hooks at build time.
 #
 # gnome_accent is the nearest of GNOME's fixed accent names (blue teal green
 # yellow orange red pink purple slate); GNOME cannot take an arbitrary colour.
+# plymouth is the boot splash, a theme under system_files/usr/share/plymouth/themes/.
 #
-# id\taccent\tgnome_accent\tbase\thomage
+# id\taccent\tgnome_accent\tbase\thomage\tplymouth
 """
 
 
@@ -413,6 +426,55 @@ def render_variant_identity(config):
     rows = ['\t'.join([name] + [variant['branding'][key] for key in VARIANT_BRANDING])
             for name, variant in config['variants'].items()]
     return VARIANT_IDENTITY_HEADER + '\n'.join(rows) + '\n'
+
+
+VARIANT_ALIASES_HEADER = """\
+# Friendly alias tags and the variant each belongs to. Generated from each
+# variant's `aliases` in tunaos.toml by `scripts/config.py
+# generate-variant-aliases`; do not edit. `just check` fails when this file
+# and tunaos.toml disagree.
+#
+# An alias is a second tag for the same digest, so it never becomes the
+# image's identity. Builds that derive IMAGE_NAME from the base distro arrive
+# as the alias (sailfin as "opensuse"); 90-image-info.sh and
+# plymouth-set-theme.sh fold it back with this table. When two variants share
+# an alias (bonito and bonito-rawhide both publish "fedora"), the first in
+# tunaos.toml owns it.
+#
+# alias\tvariant
+"""
+
+
+def render_variant_aliases(config):
+    """build_scripts/lib/variant-aliases.tsv: alias -> canonical variant."""
+    validate(config)
+    owners = {}
+    for name, variant in config['variants'].items():
+        for alias in variant.get('aliases', []):
+            owners.setdefault(alias, name)
+    return VARIANT_ALIASES_HEADER + ''.join(f'{alias}\t{name}\n' for alias, name in owners.items())
+
+
+def missing_drawn_artwork(config, root=ROOT):
+    """Drawn art each variant needs, which no generator can make from TOML.
+
+    Wallpapers and boot splashes are fork-supplied: select-wallpaper.sh picks
+    <variant>.jpg (an optional <variant>-anime.jpg or <variant>-<desktop>.jpg
+    wins over it), and plymouth-set-theme.sh installs branding.plymouth.
+    """
+    validate(config)
+    root = Path(root)
+    backgrounds = root / 'system_files/usr/share/backgrounds/tunaos'
+    themes = root / 'system_files/usr/share/plymouth/themes'
+    wanted = {f'{backgrounds.relative_to(root)}/tunaos-default.jpg (the generic wallpaper)': backgrounds / 'tunaos-default.jpg'}
+    splashes = {config['defaults']['branding']['plymouth']: 'defaults.branding.plymouth'}
+    for name, variant in config['variants'].items():
+        wanted[f'{backgrounds.relative_to(root)}/{name}.jpg (variants.{name})'] = backgrounds / f'{name}.jpg'
+        splashes.setdefault(variant['branding']['plymouth'], f'variants.{name}.branding.plymouth')
+    for theme, owner in splashes.items():
+        for suffix in ('plymouth', 'script'):
+            wanted[f'{themes.relative_to(root)}/{theme}/{theme}.{suffix} ({owner})'] = themes / theme / f'{theme}.{suffix}'
+    return [label for label, path in wanted.items() if not path.is_file()]
 
 
 def display_names(config):

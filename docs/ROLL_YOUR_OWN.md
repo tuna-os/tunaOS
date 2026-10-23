@@ -291,8 +291,15 @@ python3 scripts/branding/check-artwork.py --write
 
 A new emoji needs its drawing: copy its file from Noto Emoji's `svg/` folder to
 `scripts/branding/emoji/`. CI fails if the committed artwork does not match
-`tunaos.toml`. Wallpapers, the boot splash and the installer's own name still
-come from the image files under `system_files/` (#3668).
+`tunaos.toml`.
+
+You supply the drawn art. Each variant needs a wallpaper at
+`system_files/usr/share/backgrounds/tunaos/<variant>.jpg`. Each variant's
+`branding.plymouth` names its boot splash, a theme folder under
+`system_files/usr/share/plymouth/themes/`. An image name that is not a known
+variant gets the theme in `[defaults.branding] plymouth`. `just check` fails
+and names the file when one of these is missing. The installer's own name
+still comes from the image files under `system_files/` (#3668).
 
 For GNOME defaults, create a gschema override:
 

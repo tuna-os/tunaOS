@@ -133,8 +133,12 @@ output does not match it; `--write` regenerates them. They need the pinned
 | `scripts/branding/make-logos.py` | `/usr/share/tunaos/logos/` | each variant's `emoji` |
 | `scripts/branding/make-lettermarks.py` | `/usr/share/tunaos/lettermarks/` | mark, name, `branding.accent` |
 | `scripts/branding/make-fastfetch-logos.py` | `/usr/share/tunaos/fastfetch/` | name |
-| `scripts/branding/make-plymouth-theme.py` | `/usr/share/plymouth/themes/<theme>/` | drawn |
+| `scripts/branding/make-plymouth-theme.py` | `/usr/share/plymouth/themes/<theme>/` | drawn; `branding.plymouth` picks it |
 | `scripts/branding/render-wallpapers.mjs` | `/usr/share/backgrounds/tunaos/` | drawn |
+
+No script can make the drawn art from `tunaos.toml`. `scripts/config.py
+check-drawn-artwork` (in `just check`) makes sure each variant has its
+`<variant>.jpg` and its `branding.plymouth` theme.
 
 ## The rule
 

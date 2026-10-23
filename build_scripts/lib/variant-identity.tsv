@@ -7,24 +7,25 @@
 # distro it is built on, as a nod to that project: Arch blue for marlin,
 # Ubuntu orange for grouper, openSUSE green for sailfin, and so on.
 #
-# Read by build_scripts/90-image-info.sh and the desktop branding hooks at
-# build time, and by the scripts/branding/ generators when artwork is redrawn.
+# Read by build_scripts/90-image-info.sh, plymouth-set-theme.sh and the
+# desktop branding hooks at build time.
 #
 # gnome_accent is the nearest of GNOME's fixed accent names (blue teal green
 # yellow orange red pink purple slate); GNOME cannot take an arbitrary colour.
+# plymouth is the boot splash, a theme under system_files/usr/share/plymouth/themes/.
 #
-# id	accent	gnome_accent	base	homage
-yellowfin	#FFC702	yellow	AlmaLinux Kitten	the yellow petal of the AlmaLinux flower
-albacore	#0069DA	blue	AlmaLinux	the blue petal of the AlmaLinux flower
-skipjack	#932279	purple	CentOS Stream	CentOS purple
-wahoo	#294172	blue	Fedora ELN	Fedora's deep blue
-bonito	#51A2DA	blue	Fedora	Fedora's light blue
-hummingbird	#1E9E8A	teal	Fedora Hummingbird	a hummingbird's teal
-sailfin	#73BA25	green	openSUSE Tumbleweed	openSUSE green
-guppy	#54487A	purple	Gentoo	Gentoo purple
-bonito-rawhide	#3C6EB4	blue	Fedora Rawhide	Fedora blue
-gurnard	#3689E6	blue	Ubuntu + Pantheon	elementary's blueberry
-grouper	#E95420	orange	Ubuntu	Ubuntu orange
-marlin	#1793D1	blue	Arch Linux	Arch blue
-flounder	#D70751	red	Debian	the Debian swirl
-flounder-sid	#A80030	red	Debian Sid	Debian's darker red
+# id	accent	gnome_accent	base	homage	plymouth
+yellowfin	#FFC702	yellow	AlmaLinux Kitten	the yellow petal of the AlmaLinux flower	tropical-fish
+albacore	#0069DA	blue	AlmaLinux	the blue petal of the AlmaLinux flower	tunaos
+skipjack	#932279	purple	CentOS Stream	CentOS purple	sushi
+wahoo	#294172	blue	Fedora ELN	Fedora's deep blue	carp-streamer
+bonito	#51A2DA	blue	Fedora	Fedora's light blue	fishing-pole
+hummingbird	#1E9E8A	teal	Fedora Hummingbird	a hummingbird's teal	bird
+sailfin	#73BA25	green	openSUSE Tumbleweed	openSUSE green	sailboat
+guppy	#54487A	purple	Gentoo	Gentoo purple	rainbow
+bonito-rawhide	#3C6EB4	blue	Fedora Rawhide	Fedora blue	dragon
+gurnard	#3689E6	blue	Ubuntu + Pantheon	elementary's blueberry	robot
+grouper	#E95420	orange	Ubuntu	Ubuntu orange	coral
+marlin	#1793D1	blue	Arch Linux	Arch blue	rocket
+flounder	#D70751	red	Debian	the Debian swirl	pufferfish
+flounder-sid	#A80030	red	Debian Sid	Debian's darker red	radioactive

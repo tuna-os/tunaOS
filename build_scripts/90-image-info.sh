@@ -19,23 +19,19 @@ source "${IDENTITY_ENV}"
 
 # Fold a friendly alias tag onto the canonical variant id it belongs to.
 #
-# Mirrors the `aliases:` lists in .github/build-config.yml. An alias is only a
-# second tag for the same digest, so it must never become the image's identity
+# The table is generated from each variant's `aliases` in tunaos.toml
+# (scripts/config.py generate-variant-aliases). An alias is only a second tag
+# for the same digest, so it must never become the image's identity
 # (VARIANT_ID/hostname) and it is not a valid key for the codename table below.
+VARIANT_ALIASES="${TUNAOS_VARIANT_ALIASES:-/run/context/build_scripts/lib/variant-aliases.tsv}"
+if [[ ! -f "${VARIANT_ALIASES}" ]]; then
+	echo "ERROR: ${VARIANT_ALIASES} is missing; run scripts/config.py generate-variant-aliases" >&2
+	exit 1
+fi
 canonical_variant() {
-	case "$1" in
-	almalinux-kitten) echo yellowfin ;;
-	almalinux) echo albacore ;;
-	centos) echo skipjack ;;
-	fedora) echo bonito ;;
-	opensuse | tumbleweed) echo sailfin ;;
-	gentoo) echo guppy ;;
-	elementary) echo gurnard ;;
-	ubuntu) echo grouper ;;
-	arch | archlinux) echo marlin ;;
-	debian) echo flounder ;;
-	*) echo "$1" ;;
-	esac
+	local owner
+	owner="$(awk -F'\t' -v alias="$1" '$1 == alias { print $2 }' "${VARIANT_ALIASES}")"
+	echo "${owner:-$1}"
 }
 
 # lib.sh derives IMAGE_NAME from the detected base whenever the Containerfile
@@ -323,7 +319,7 @@ if [[ -f "${IDENTITY_TSV}" ]]; then
 	IDENTITY_ROW="$(awk -F'\t' -v id="${VARIANT_KEY}" '$1 == id' "${IDENTITY_TSV}")"
 fi
 if [[ -n "${IDENTITY_ROW}" ]]; then
-	IFS=$'\t' read -r _ ACCENT GNOME_ACCENT BASE_LABEL HOMAGE <<<"${IDENTITY_ROW}"
+	IFS=$'\t' read -r _ ACCENT GNOME_ACCENT BASE_LABEL HOMAGE _ <<<"${IDENTITY_ROW}"
 	ACCENT_HEX="${ACCENT#\#}"
 	ACCENT_R=$((16#${ACCENT_HEX:0:2}))
 	ACCENT_G=$((16#${ACCENT_HEX:2:2}))

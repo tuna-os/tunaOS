@@ -78,3 +78,29 @@ def test_logo_generator_writes_one_mark_per_variant(tmp_path):
     subprocess.run([sys.executable, str(ROOT / "scripts/branding/make-logos.py"), "--output", str(tmp_path)],
                    check=True, capture_output=True)
     assert {p.stem for p in tmp_path.iterdir()} == set(config.load()["variants"])
+
+
+def test_every_stock_variant_has_its_drawn_artwork():
+    assert config.missing_drawn_artwork(config.load()) == []
+
+
+def test_a_fork_without_its_drawings_is_told_which_files_to_add(tmp_path):
+    """Wallpapers and splashes are fork-supplied; a missing one names the file."""
+    fork = copy.deepcopy(config.load())
+    fork["variants"]["marlin"]["branding"]["plymouth"] = "anchor"
+    walls = tmp_path / "system_files/usr/share/backgrounds/tunaos"
+    themes = tmp_path / "system_files/usr/share/plymouth/themes"
+    walls.mkdir(parents=True)
+    for name in [*fork["variants"], "tunaos-default"]:
+        if name != "marlin":
+            (walls / f"{name}.jpg").touch()
+    for theme in {v["branding"]["plymouth"] for v in fork["variants"].values()} | {"tunaos"}:
+        if theme != "anchor":
+            (themes / theme).mkdir(parents=True, exist_ok=True)
+            for suffix in ("plymouth", "script"):
+                (themes / theme / f"{theme}.{suffix}").touch()
+    assert config.missing_drawn_artwork(fork, tmp_path) == [
+        "system_files/usr/share/backgrounds/tunaos/marlin.jpg (variants.marlin)",
+        "system_files/usr/share/plymouth/themes/anchor/anchor.plymouth (variants.marlin.branding.plymouth)",
+        "system_files/usr/share/plymouth/themes/anchor/anchor.script (variants.marlin.branding.plymouth)",
+    ]
