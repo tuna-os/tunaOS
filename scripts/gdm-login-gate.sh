@@ -78,6 +78,10 @@ _diag_uid="$(id -u "$user" 2>/dev/null || true)"
 if [[ -n "$_diag_uid" ]]; then
 	busctl get-property org.freedesktop.Accounts "/org/freedesktop/Accounts/User${_diag_uid}" org.freedesktop.Accounts.User Session 2>&1 || true
 fi
+echo "==> ScreenSaver state for $user"
+if [[ -n "$_diag_uid" ]]; then
+	runuser -u "$user" -- env "XDG_RUNTIME_DIR=/run/user/${_diag_uid}" busctl --user call org.gnome.ScreenSaver /org/gnome/ScreenSaver org.gnome.ScreenSaver GetActive 2>&1 || true
+fi
 echo "==> GDM service"
 systemctl status gdm.service --no-pager || true
 echo "==> recent greeter, shell, lock and PAM journal (guest SSH sessions excluded)"
@@ -149,6 +153,33 @@ exit 1
 FIND_SESSION
 }
 
+# The desktop's lock contract is org.gnome.ScreenSaver on the user's session
+# bus: Tuna and GNOME both publish it, and it reports the compositor's
+# confirmed lock state. Tuna does not subscribe to logind's Lock signal and
+# never sets LockedHint, so those only serve as a fallback.
+screensaver_call() {
+	local uid
+	uid="$(guest id -u "$TEST_USER")" || return 1
+	guest runuser -u "$TEST_USER" -- env "XDG_RUNTIME_DIR=/run/user/${uid}" \
+		busctl --user call org.gnome.ScreenSaver /org/gnome/ScreenSaver org.gnome.ScreenSaver "$1"
+}
+
+# Prints yes, no or unknown. unknown never counts as a confirmation either way.
+lock_state() {
+	local out hint
+	if out="$(screensaver_call GetActive 2>/dev/null)"; then
+		case "$out" in
+		"b true"*) echo yes; return ;;
+		"b false"*) echo no; return ;;
+		esac
+	fi
+	hint="$(guest loginctl show-session "$session_id" -p LockedHint --value 2>/dev/null || true)"
+	case "$hint" in
+	yes | no) echo "$hint" ;;
+	*) echo unknown ;;
+	esac
+}
+
 session_id=""
 for attempt in 1 2 3; do
 	# Each round starts from the tile list: Esc backs out of any prompt a
@@ -189,16 +220,17 @@ guest loginctl session-status "$session_id" 2>/dev/null | head -n 25 || true
 sleep 3
 "$CORRAL" screenshot "$NAME" -o "${OUT}/gdm-logged-in.png" --require-paint
 
-# Slow software-rendered shells may not have their lock path ready when the
-# first request lands; re-issue it until the hint flips.
+# Lock through the desktop's own contract (org.gnome.ScreenSaver), falling back
+# to logind. Slow software-rendered shells may not have it ready when the first
+# request lands, so re-issue until the lock is confirmed.
 locked=0
 for round in 1 2 3; do
 	echo "==> lock attempt $round/3 for session $session_id"
 	# Do not fail fast here: a session that died right after login must
 	# reach the polling loop and the diagnostics branch, not die silently.
-	guest loginctl lock-session "$session_id" || true
+	screensaver_call Lock >/dev/null 2>&1 || guest loginctl lock-session "$session_id" || true
 	for _ in $(seq 1 20); do
-		if [[ "$(guest loginctl show-session "$session_id" -p LockedHint --value 2>/dev/null || true)" == yes ]]; then
+		if [[ "$(lock_state)" == yes ]]; then
 			locked=1
 			break 2
 		fi
@@ -228,7 +260,7 @@ sleep 1
 "$CORRAL" key "$NAME" ret
 unlocked=0
 for _ in $(seq 1 30); do
-	if [[ "$(guest loginctl show-session "$session_id" -p LockedHint --value 2>/dev/null || true)" == no ]]; then
+	if [[ "$(lock_state)" == no ]]; then
 		unlocked=1
 		break
 	fi

@@ -144,6 +144,44 @@ session-status)
 esac
 exit 0
 STUB
+  cat >"${FAKEBIN}/id" <<'STUB'
+#!/usr/bin/env bash
+if [[ "${1:-}" == "-u" && "${2:-}" == "${GDM_GATE_USER:?}" ]]; then echo 1000; exit 0; fi
+exec /usr/bin/id "$@"
+STUB
+  cat >"${FAKEBIN}/runuser" <<'STUB'
+#!/usr/bin/env bash
+# runuser -u USER -- command...
+shift 3
+exec "$@"
+STUB
+  cat >"${FAKEBIN}/busctl" <<'STUB'
+#!/usr/bin/env bash
+# Stand-in for the org.gnome.ScreenSaver contract on the user's session bus.
+STATE="${GDM_GATE_STATE:?}"
+if [[ -f "${STATE}/no-screensaver" ]]; then
+  echo "Failed to call: service org.gnome.ScreenSaver is not available" >&2
+  exit 1
+fi
+method="${!#}"
+case "$method" in
+GetActive)
+  if [[ -f "${STATE}/locked" ]]; then echo "b true"; else echo "b false"; fi
+  ;;
+Lock)
+  echo "busctl lock" >>"${STATE}/calls"
+  if [[ -f "${STATE}/screensaver-stuck" ]]; then
+    :
+  elif [[ -f "${STATE}/lock-lossy" && ! -f "${STATE}/lock-armed" ]]; then
+    touch "${STATE}/lock-armed"
+  elif [[ -f "${STATE}/session-preseed" || -f "${STATE}/tabbed" || -f "${STATE}/typed-user" ]]; then
+    touch "${STATE}/locked"
+  fi
+  ;;
+*) echo "unexpected busctl call: $*" >&2; exit 1 ;;
+esac
+exit 0
+STUB
   cat >"${FAKEBIN}/systemctl" <<'STUB'
 #!/usr/bin/env bash
 if [[ "${1:-}" == "is-active" ]]; then exit 0; fi
@@ -155,7 +193,8 @@ STUB
 echo "stub journal"
 STUB
   chmod +x "${FAKEBIN}/sleep" "${FAKEBIN}/corral" "${FAKEBIN}/ssh" \
-    "${FAKEBIN}/loginctl" "${FAKEBIN}/systemctl" "${FAKEBIN}/journalctl"
+    "${FAKEBIN}/loginctl" "${FAKEBIN}/systemctl" "${FAKEBIN}/journalctl" \
+    "${FAKEBIN}/id" "${FAKEBIN}/runuser" "${FAKEBIN}/busctl"
   export PATH="${FAKEBIN}:${PATH}"
 }
 
@@ -175,6 +214,7 @@ run_gate() {
   grep -Fqx 'Session=tuna' "${ROOT}/accts/tuna-ci-login"
   grep -Fq 'systemctl restart gdm.service' "${STATE}/calls"
   grep -Fq 'tuna-session(41)' <<<"$output"
+  grep -Fq 'busctl lock' "${STATE}/calls"
   [ -f "${OUT}/gdm-attempt-1.png" ]
   [ -f "${OUT}/gdm-attempt-2.png" ]
   [ ! -e "${OUT}/gdm-attempt-3.png" ]
@@ -206,7 +246,8 @@ run_gate() {
 }
 
 @test "lock reports the session state when the hint never flips" {
-  # The session appears once the gate starts typing; the hint stays stuck.
+  # The session appears once the gate starts typing; the lock never engages.
+  touch "${STATE}/screensaver-stuck"
   cat >"${FAKEBIN}/loginctl" <<'STUB'
 #!/usr/bin/env bash
 STATE="${GDM_GATE_STATE:?}"
@@ -245,52 +286,19 @@ STUB
   [ -f "${OUT}/gdm-lock-failed.png" ]
 }
 
-@test "lock retries until a slow shell engages the hint" {
-  touch "${STATE}/session-preseed"
-  # The first lock request lands before the shell is ready and is lost; the
-  # retry engages it.
-  cat >"${FAKEBIN}/loginctl" <<'STUB'
-#!/usr/bin/env bash
-STATE="${GDM_GATE_STATE:?}"
-cmd="$1"; shift
-case "$cmd" in
-list-sessions)
-  if [[ -f "${STATE}/input-seen" ]]; then
-    echo "41 1000 tuna-ci-login seat0 9999 user tty1 no"
-  fi
-  ;;
-show-session)
-  shift
-  value_only=0
-  if [[ "$*" == *--value* ]]; then value_only=1; fi
-  locked=no
-  if [[ -f "${STATE}/locked" ]]; then locked=yes; fi
-  for a in "$@"; do
-    case "$a" in
-    Type) v=wayland ;;
-    Seat) v=seat0 ;;
-    Active) v=yes ;;
-    LockedHint) v="$locked" ;;
-    *) continue ;;
-    esac
-    if [[ "$value_only" == 1 ]]; then echo "$v"; else echo "$a=$v"; fi
-  done
-  ;;
-lock-session)
-  echo "lock $*" >>"${STATE}/calls"
-  if [[ -f "${STATE}/lock-armed" ]]; then
-    touch "${STATE}/locked"
-  else
-    touch "${STATE}/lock-armed"
-  fi
-  ;;
-*) exit 1 ;;
-esac
-exit 0
-STUB
-  chmod +x "${FAKEBIN}/loginctl"
+@test "lock retries until a slow shell engages the ScreenSaver" {
+  # The first Lock request lands before the shell is ready and is lost.
+  touch "${STATE}/lock-lossy"
   run_gate
   [ "$status" -eq 0 ]
   grep -Fq 'TUNAOS_GDM_LOCK_OK user=tuna-ci-login session=41' <<<"$output"
-  [ "$(grep -c '^lock ' "${STATE}/calls")" -ge 2 ]
+  [ "$(grep -c '^busctl lock' "${STATE}/calls")" -ge 2 ]
+}
+
+@test "lock falls back to logind when the ScreenSaver service is absent" {
+  touch "${STATE}/no-screensaver"
+  run_gate
+  [ "$status" -eq 0 ]
+  grep -Fq 'TUNAOS_GDM_LOCK_OK user=tuna-ci-login session=41' <<<"$output"
+  grep -Fq 'TUNAOS_GDM_UNLOCK_OK user=tuna-ci-login session=41' <<<"$output"
 }
