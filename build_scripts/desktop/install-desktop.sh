@@ -710,7 +710,7 @@ if [[ "${_TD_OS}" == "el10" || "${_TD_OS}" == "fedora" || "${_TD_OS}" == "hummin
 	# Optional packages (best-effort)
 	readarray -t _TD_OPTIONAL < <($YQ -r ".packages.${_TD_OS}.optional[]" "${_TD_MANIFEST}" 2>/dev/null || true)
 	if ((${#_TD_OPTIONAL[@]} > 0)); then
-		install_available "${_TD_OPTIONAL[@]}"
+		TUNAOS_PACKAGE_REQUIRED=false install_available "${_TD_OPTIONAL[@]}"
 	fi
 
 	# Optional group (e.g. fcitx5 — install all if the first one is available)
@@ -718,7 +718,7 @@ if [[ "${_TD_OS}" == "el10" || "${_TD_OS}" == "fedora" || "${_TD_OS}" == "hummin
 	if ((${#_TD_OPT_GROUP[@]} > 0)); then
 		_TD_FIRST="${_TD_OPT_GROUP[0]}"
 		if dnf repoquery --available --qf '%{name}\n' "$_TD_FIRST" 2>/dev/null | grep -qx "$_TD_FIRST"; then
-			dnf_retry -y install "${_TD_OPT_GROUP[@]}"
+			TUNAOS_PACKAGE_REQUIRED=false dnf_retry -y install "${_TD_OPT_GROUP[@]}"
 		else
 			echo "Skipping optional group (${_TD_FIRST} not available in repos)"
 		fi

@@ -14,6 +14,12 @@ DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
 export SCRIPTS_PATH
 export DESKTOP_FLAVOR
 
+# Recording is independent of wishlist omissions: failed requests stay in both
+# records. Exported functions cover child Bash; final inventory reconciliation
+# must detect other-shell or absolute-path transactions that bypass them.
+# shellcheck source=build_scripts/package-recording.sh
+source "$(dirname "${BASH_SOURCE[0]}")/package-recording.sh"
+
 # ── Cached OS Detection ──────────────────────────────────────────────────────
 # OS detection (reading os-release, image-info.json, deriving IS_* flags) runs
 # every time lib.sh is sourced. Since each Containerfile RUN invokes a fresh

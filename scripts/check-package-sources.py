@@ -7,12 +7,11 @@ import argparse
 import subprocess
 import sys
 from pathlib import Path
-from urllib.parse import urlparse
 
 import yaml
 
-FORBIDDEN_KEYS = {"copr", "ppa", "obs", "aur"}
-ALLOWED_REPO_HOSTS = ("repo.tunaos.org", "tideforge.org")
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from contracts.sources import ALLOWED_REPO_HOSTS, FORBIDDEN_KEYS, classify_policy, violations
 
 
 def changed_files(base: str) -> list[Path]:
@@ -41,24 +40,6 @@ def at_revision(base: str, path: Path) -> object | None:
         # An unparseable baseline cannot exonerate anything; fall back to
         # reporting the whole file rather than silently passing it.
         return None
-
-
-def violations(value: object, path: str = "") -> list[str]:
-    found: list[str] = []
-    if isinstance(value, dict):
-        for key, child in value.items():
-            key_path = f"{path}.{key}" if path else str(key)
-            if str(key).lower() in FORBIDDEN_KEYS:
-                found.append(f"{key_path}: {key} is not an approved package source")
-            found.extend(violations(child, key_path))
-    elif isinstance(value, list):
-        for index, child in enumerate(value):
-            found.extend(violations(child, f"{path}[{index}]"))
-    elif isinstance(value, str) and path.endswith(".baseurl"):
-        host = urlparse(value).hostname or ""
-        if value.startswith(("http://", "https://")) and host not in ALLOWED_REPO_HOSTS:
-            found.append(f"{path}: external repository {value!r} is not approved")
-    return found
 
 
 def main() -> int:
@@ -101,8 +82,7 @@ def main() -> int:
         if args.base:
             baseline = at_revision(args.base, path)
             if baseline is not None:
-                already = set(violations(baseline))
-                found = [error for error in found if error not in already]
+                found = classify_policy(document, baseline)["forbiddenNew"]
         errors.extend(f"{path}: {error}" for error in found)
     if errors:
         print("Package source policy violations:", file=sys.stderr)

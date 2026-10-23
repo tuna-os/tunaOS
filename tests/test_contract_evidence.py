@@ -27,11 +27,24 @@ PROVENANCE = {"sourceRevision": REVISION, "buildrootDigest": DIGEST,
               "sourceArtifacts": [{"url": "https://example.org/source.tar.gz", "digest": DIGEST}], "buildrootInventory": [], "compilerFlags": [], "evidence": []}
 CONSUMER = {"schemaVersion": 1, "kind": "consumer-contract", "target": TARGET,
             "sourceRevision": REVISION,
-            "contractDigest": "sha256:d194c62e74bbfa6efc82afb2557bce15e2bcaa7ee9cac191ccbfc471433361a7",
+            "contractDigest": "sha256:53fdbc1b437b55c4063e23a74c05f2c735b520c31ebb5d994ec9b41191d3640a",
             "baseDigest": DIGEST, "packageManager": "dnf",
-            "baseReference": "ghcr.io/tuna-os/yellowfin-base@" + DIGEST, "packageRequirements": [{"name": "cosmic-session"}],
+            "baseReference": "ghcr.io/tuna-os/yellowfin-base@" + DIGEST, "packageRequirements": [{"name": "cosmic-session", "nativeExpression": "cosmic-session",
+                "manager": "dnf", "scope": "final", "required": True,
+                "origins": [{"path": "manifests/desktops/cosmic.yaml", "phase": "desktop"}]}],
             "approvedSources": [{"id": "factory", "url": "https://packages.tunaos.org/el10",
-                                 "signingIdentity": "tunaos-factory"}], "requiredChecks": ["install"]}
+                                 "signingIdentity": "tunaos-factory"}], "requiredChecks": ["install"],
+            "baseResolution": {"configuredReference": "ghcr.io/tuna-os/yellowfin-base:latest",
+                "reference": "ghcr.io/tuna-os/yellowfin-base@" + DIGEST, "indexDigest": DIGEST,
+                "childDigest": DIGEST, "configDigest": DIGEST, "platform": "linux/amd64/v2",
+                "cpuBaseline": "x86-64-v2", "observedPlatform": {"os": "linux", "architecture": "amd64", "variant": "v2"},
+                "baselineEvidence": [{"url": "https://example.org/baseline", "digest": DIGEST}]},
+            "adapter": "almalinux-kitten-10", "sourceDeclarations": [], "nativeGroups": [],
+            "nativeExcludes": [], "nativeVersionLocks": [], "hooks": [],
+            "inputs": [{"path": "manifests/desktops/cosmic.yaml", "digest": DIGEST}],
+            "resolution": {"status": "incomplete", "unresolved": [{"code": "native-proof-required",
+                "origin": "manifests/desktops/cosmic.yaml", "detail": "Resolve with native package manager"}]},
+            "sourcePolicy": {"inherited": [], "forbiddenNew": [], "policyRevision": REVISION, "baselineDigest": DIGEST}}
 FACTORY = {"schemaVersion": 1, "kind": "factory-receipt", "target": TARGET,
            "contractDigest": CONSUMER["contractDigest"], "baseDigest": DIGEST,
            "attemptIdentity": ATTEMPT, "checks": [{"name": "install", "status": "pass", "evidence": [{"url": "https://example.org/check.json", "digest": DIGEST}]}],
@@ -104,7 +117,7 @@ def test_commit_and_artifact_identities_are_full_and_canonical(field, value):
 
 
 def test_consumer_hash_is_canonical_and_detects_changed_content():
-    assert evidence.contract_digest(CONSUMER) == "sha256:d194c62e74bbfa6efc82afb2557bce15e2bcaa7ee9cac191ccbfc471433361a7"
+    assert evidence.contract_digest(CONSUMER) == "sha256:53fdbc1b437b55c4063e23a74c05f2c735b520c31ebb5d994ec9b41191d3640a"
     reordered = dict(reversed(list(CONSUMER.items())))
     assert evidence.validate(reordered, now=NOW) == CONSUMER
     candidate = copy.deepcopy(CONSUMER)
@@ -289,3 +302,32 @@ def test_image_receipt_rejects_incomplete_or_obsolete_factory_links(field, value
     candidate[field] = value
     with pytest.raises(evidence.EvidenceError):
         evidence.validate(candidate, now=NOW)
+
+
+@pytest.mark.parametrize("field,value", [
+    ("childDigest", "sha256:" + "3" * 64),
+    ("reference", "ghcr.io/tuna-os/yellowfin-base@sha256:" + "3" * 64),
+    ("platform", "linux/arm64"),
+    ("cpuBaseline", "armv8-a"),
+    ("observedPlatform", {"os": "linux", "architecture": "arm64", "variant": "v8"}),
+])
+def test_consumer_base_resolution_agrees_with_target_and_declared_child(field, value):
+    candidate = copy.deepcopy(CONSUMER)
+    candidate["baseResolution"][field] = value
+    with pytest.raises(evidence.EvidenceError):
+        evidence.validate(candidate, verify_digest=False, now=NOW)
+
+
+@pytest.mark.parametrize("field", ["requestLedgerDigest", "resolutionEvidence"])
+def test_complete_consumer_requires_measured_resolution_proof(field):
+    candidate = copy.deepcopy(CONSUMER)
+    candidate["resolution"] = {"status": "complete", "unresolved": []}
+    candidate["requestLedgerDigest"] = DIGEST
+    candidate["resolutionEvidence"] = [{"url": "https://example.org/native-proof.json", "digest": DIGEST}]
+    candidate["approvedSources"][0]["snapshotDigest"] = DIGEST
+    candidate["packageRequirements"][0]["provider"] = "factory"
+    candidate["packageRequirements"][0]["providerEvidence"] = [{"url": "https://example.org/provider.json", "digest": DIGEST}]
+    assert evidence.validate(candidate, verify_digest=False, now=NOW) == candidate
+    del candidate[field]
+    with pytest.raises(evidence.EvidenceError):
+        evidence.validate(candidate, verify_digest=False, now=NOW)
