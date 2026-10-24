@@ -136,6 +136,8 @@ def validate(config):
             text(name, f'iso_delivery.retained_r2_isos[{i}]')
             if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._+~-]*\.iso', name):
                 raise ConfigError(f'iso_delivery.retained_r2_isos[{i}]: unsafe ISO basename')
+        if len(policy['retained_r2_isos']) != len(set(policy['retained_r2_isos'])):
+            raise ConfigError('iso_delivery.retained_r2_isos: duplicate ISO basename')
         target_fields = ('variant', 'flavor', 'platform', 'qualification', 'qualified_at', 'evidence')
         for i, target in enumerate(policy['cutover_targets']):
             where = f'iso_delivery.cutover_targets[{i}]'

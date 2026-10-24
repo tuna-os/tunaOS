@@ -217,6 +217,17 @@ def test_iso_delivery_retained_inventory_survives_projection():
     ]
 
 
+def test_iso_delivery_retained_inventory_rejects_duplicates():
+    document = config.load()
+    document["iso_delivery"]["retained_r2_isos"] = [
+        "yellowfin-gnome-10-x86_64.iso",
+        "yellowfin-gnome-10-x86_64.iso",
+    ]
+
+    with pytest.raises(config.ConfigError, match="duplicate ISO basename"):
+        config.validate(document)
+
+
 def test_missing_vendor_parser_explains_restore_without_download(tmp_path):
     import shutil
     target = tmp_path / 'tunaos_config.py'

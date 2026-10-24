@@ -252,6 +252,39 @@ def test_target_matrix_annotation_rejects_invalid_identity(tmp_path: Path, row: 
     assert reason in result.stderr
 
 
+@pytest.mark.parametrize(
+    "row, reason",
+    [
+        ({"platform": "linux/amd64", "required_flavors": ["gnome"]}, ".variant"),
+        ({"variant": "fish", "required_flavors": ["gnome"]}, ".platform"),
+        ({"variant": "fish", "platform": "linux/riscv64", "required_flavors": ["gnome"]}, ".platform"),
+        ({"variant": "fish", "platform": "linux/amd64", "required_flavors": [""]}, "required_flavors"),
+        ({"variant": "fish", "platform": "linux/amd64", "required_flavors": [7]}, "required_flavors"),
+    ],
+)
+def test_group_matrix_annotation_rejects_invalid_identity(tmp_path: Path, row: dict, reason: str):
+    config_path = tmp_path / "config.json"
+    config_path.write_text(
+        json.dumps(_group_policy_config([], [])), encoding="utf-8"
+    )
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(POLICY),
+            "--config-json",
+            str(config_path),
+            "annotate-group-matrix",
+        ],
+        input=json.dumps({"include": [row]}),
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 1
+    assert reason in result.stderr
+
+
 def test_nonempty_cutover_is_rejected_until_receipts_are_integrated(tmp_path: Path):
     result = _annotate_group(
         tmp_path,

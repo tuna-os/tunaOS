@@ -278,12 +278,25 @@ def annotate_groups(
 ) -> None:
     del config
     matrix = read_matrix()
-    for row in matrix["include"]:
+    for index, row in enumerate(matrix["include"]):
         variant = row.get("variant")
-        platform = row.get("platform", "linux/amd64")
-        required = row.get("required_flavors", [])
-        if not isinstance(required, list):
-            raise PolicyError("group matrix required_flavors must be a list")
+        platform = row.get("platform")
+        required = row.get("required_flavors")
+        if not isinstance(variant, str) or not variant.strip():
+            raise PolicyError(
+                f"group matrix include[{index}].variant must be a non-empty string"
+            )
+        if not isinstance(platform, str) or platform not in PLATFORM_ARCH:
+            raise PolicyError(
+                f"group matrix include[{index}].platform must be a supported platform"
+            )
+        if (
+            not isinstance(required, list)
+            or not all(isinstance(flavor, str) and flavor.strip() for flavor in required)
+        ):
+            raise PolicyError(
+                f"group matrix include[{index}].required_flavors must be a list of non-empty strings"
+            )
         row["r2_cutover"] = bool(required) and all(
             (variant, flavor, platform) in active for flavor in required
         )
