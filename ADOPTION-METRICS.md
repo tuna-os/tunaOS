@@ -63,6 +63,10 @@ publish, and *how* the snapshot feeds roadmap decisions.
 - Ownership: **strategist** compiles; **ci-maintainer** supplies R2/Releases
   exports; **guide** publishes on tunaos.org/blog.
 
+The [November 1 handoff](docs/MONTHLY-ADOPTION-SNAPSHOT.md) assigns dated
+collection and publication steps for #3038 and provides the report template.
+It remains a plan until the reviewed blog post is live.
+
 ## Outreach evidence
 
 The current outreach record is kept in

@@ -67,6 +67,8 @@ user-facing site:
 | [CHAINGUARD-COLLABORATION.md](CHAINGUARD-COLLABORATION.md) | Chainguard supply-chain security collaboration angle brief (#1339) |
 | [FEDORA45-RELEASE-OUTREACH.md](FEDORA45-RELEASE-OUTREACH.md) | Fedora release-window positioning, shared adopter call, showcase evidence, and media notes (#3089) |
 | [FEDORA-OUTREACH-READINESS.md](FEDORA-OUTREACH-READINESS.md) | Bonito completeness evidence and fedora-desktop outreach handoff (#3001) |
+| [MONTHLY-ADOPTION-SNAPSHOT.md](MONTHLY-ADOPTION-SNAPSHOT.md) | November 1 collection schedule, evidence rules and blog publication handoff (#3038) |
+| [templates/monthly-adoption-snapshot.md](templates/monthly-adoption-snapshot.md) | Monthly adoption report draft template |
 | [ADOPTION-OUTREACH-STATUS.md](ADOPTION-OUTREACH-STATUS.md) | Evidence ledger for DistroWatch, CNCF, and adopter outreach |
 | [outreach/Q4-PRODUCTION-PROSPECTS.md](outreach/Q4-PRODUCTION-PROSPECTS.md) | Five proposed contacts, evaluation requests, and follow-up dates for #3146 |
 | [PANTHEON-FEEDBACK-LOOP.md](PANTHEON-FEEDBACK-LOOP.md) | How Gurnard's Pantheon packaging findings get back to elementary (#1469) |
