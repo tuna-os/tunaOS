@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
@@ -40,8 +40,12 @@ jobs:
               relative = pathlib.PurePosixPath(item['path'])
               if relative.is_absolute() or '..' in relative.parts:
                   raise SystemExit('invalid fixed preflight path')
-              path = source.joinpath(*relative.parts)
-              if any(parent.is_symlink() for parent in (path, *path.parents)):
+              controlled = [source]
+              path = source
+              for part in relative.parts:
+                  path = path / part
+                  controlled.append(path)
+              if any(candidate.is_symlink() for candidate in controlled):
                   raise SystemExit('preflight input symlink rejected')
               if not path.is_file() or path.stat().st_size != item['size']:
                   raise SystemExit('preflight input size mismatch')
@@ -73,7 +77,7 @@ jobs:
       contents: read
       actions: read
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false

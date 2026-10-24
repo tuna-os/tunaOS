@@ -121,7 +121,7 @@ def vnc_capture(png):
             and shutil.which("vncdo") and shutil.which("socat")):
         return False
     bridge = subprocess.Popen(
-        ["socat", f"TCP-LISTEN:{vnc_port},reuseaddr",
+        ["socat", f"TCP-LISTEN:{vnc_port},bind=127.0.0.1,reuseaddr",
          f"UNIX-CONNECT:{vnc_sock}"],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
@@ -538,7 +538,7 @@ for i in range(1, steps + 1):
                 # Primary action buttons ("Get Started", "Next", "Continue") sit near bottom right / center bottom
                 print("  # keyboard navigation exhausted — attempting VNC mouse click on primary action button", flush=True)
                 bridge = subprocess.Popen(
-                    ["socat", f"TCP-LISTEN:{vnc_port},reuseaddr",
+                    ["socat", f"TCP-LISTEN:{vnc_port},bind=127.0.0.1,reuseaddr",
                      f"UNIX-CONNECT:{vnc_sock}"],
                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 try:
