@@ -63,12 +63,14 @@ def test_oo7_is_confined_to_eln():
 
 def contract_functions():
     source = CHECK.read_text()
-    waive = re.search(r"^waive\(\) \{.*\}$", source, re.M)
-    assert waive, "the desktop contract has no waive()"
-    bodies = ["TUNAOS_CONTRACT_WAIVED=0", waive.group(0)]
-    for name in ("require_any_glob", "require_any_executable", "require_secret_service"):
+    bodies = ["TUNAOS_CONTRACT_WAIVED=0"]
+    for name in (
+        "waive", "require_any_glob", "require_any_executable",
+        "require_secret_service",
+    ):
         match = re.search(
-            rf"^(?:function[ \t]+)?{name}[ \t]*(?:\(\))?[ \t]*\{{.*?^[ \t]*\}}",
+            rf"^(?:function[ \t]+)?{name}[ \t]*(?:\(\))?[ \t]*\{{"
+            rf"(?:[^\n]*\}}|.*?^[ \t]*\}})",
             source,
             re.M | re.S,
         )

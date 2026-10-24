@@ -2920,12 +2920,8 @@ baseurl = "file:///run/utah-packages"
 priority = 4
 unsigned = true
 
-# Fedora ELN replaced gnome-keyring with oo7 (tunaOS#3810). Measured against
-# dl.fedoraproject.org/pub/eln/1 on 2026-10-24: no ELN repository publishes
-# gnome-keyring or gnome-keyring-pam; oo7-daemon (Secret Service D-Bus API)
-# obsoletes gnome-keyring < 51, pam_oo7 obsoletes gnome-keyring-pam < 51, and
-# ELN's gdm requires pam_oo7 and wires it into its PAM stacks. Same
-# capability, ELN's own provider; the other targets keep gnome-keyring.
+# ELN uses oo7 for Secret Service and PAM; see tunaOS#3810 and
+# docs/ci-troubleshooting.md. Other targets keep gnome-keyring.
 [desktops.gnome.packages.eln]
 required = [
   "ModemManager",
