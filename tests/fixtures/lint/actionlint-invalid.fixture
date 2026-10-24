@@ -1,0 +1,8 @@
+name: Invalid actionlint fixture
+on: push
+permissions: {}
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ unknown_context.value }}"

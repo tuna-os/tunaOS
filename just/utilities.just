@@ -13,41 +13,22 @@ simulate-matrix:
 default:
     @{{ just }} --list
 
-# Refuse to format with a shfmt other than the pinned one.
+# Refuse to format or lint with anything except the reviewed toolchain.
 #
-# shfmt is a formatter, so its version IS the formatting. Two contributors on
-# different versions produce different trees and each sees the other's as
-# unformatted -- and AGENTS.md makes `just fix && just check` mandatory before
-# every commit, so everyone hits it at once. Failing loudly with the two
-# version numbers costs one line; silently rewriting the tree costs a review
-# cycle and buries the real diff.
-#
-# Advisory when shfmt is absent entirely (nothing to compare); fatal only on a
-# genuine mismatch, and overridable with TUNAOS_ALLOW_SHFMT_DRIFT=1 for anyone
-# deliberately testing a new version.
-_check_shfmt_version:
+# CI and contributors both read toolchain/lint-tools.json. The bootstrap checks
+# release-asset SHA-256 digests before installation; this check then rejects a
+# missing or shadowed binary before any formatter or linter can touch the tree.
+_check_lint_tool_versions:
     #!/usr/bin/env bash
     cd {{ justfile_directory() }}
-    command -v shfmt &>/dev/null || exit 0
-    want="$(sed -n 's/^  shfmt: "v\{0,1\}\([^"]*\)"$/\1/p' image-versions.yaml | head -1)"
-    [[ -z "$want" ]] && exit 0
-    have="$(shfmt --version 2>/dev/null | tr -d 'v')"
-    if [[ "$have" != "$want" ]]; then
-        echo "::error::shfmt ${have} but this repo is formatted with ${want} (image-versions.yaml)." >&2
-        echo "  A different shfmt reformats the whole tree. Install the pinned one:" >&2
-        echo "    go install mvdan.cc/sh/v3/cmd/shfmt@v${want}" >&2
-        echo "  or set TUNAOS_ALLOW_SHFMT_DRIFT=1 if you are deliberately testing a new version." >&2
-        [[ "${TUNAOS_ALLOW_SHFMT_DRIFT:-0}" == "1" ]] || exit 1
-    fi
+    python3 scripts/lint_tools.py verify
 
-_ensure_check_deps: _check_shfmt_version
+_ensure_check_deps: _check_lint_tool_versions
     #!/usr/bin/env bash
     cd {{ justfile_directory() }}
-    if ! command -v shellcheck &> /dev/null; then brew install shellcheck; fi
-    if ! command -v shfmt &> /dev/null; then brew install shfmt; fi
-    if ! command -v yamllint &> /dev/null; then brew install yamllint; fi
+    if ! command -v yamllint &> /dev/null; then python3 -m pip install yamllint --break-system-packages 2>/dev/null || python3 -m pip install yamllint --user; fi
     if ! command -v jq &> /dev/null; then brew install jq; fi
-    if ! command -v actionlint &> /dev/null; then brew install actionlint; fi
+    if ! command -v yq &> /dev/null; then brew install yq; fi
     if ! command -v node &> /dev/null; then brew install node; fi
 
 # Check prose with the same pinned shared linter and budget as CI. This is a
@@ -67,34 +48,17 @@ check: _ensure_check_deps ste
     python3 "{{ justfile_directory() }}/scripts/config.py" check-flatpak-policy >/dev/null || exit 1
     python3 "{{ justfile_directory() }}/scripts/config.py" check-builder-flavors >/dev/null || exit 1
     echo "Checking syntax of shell scripts..."
-    find . -not -path './.git/*' -not -path './system_files/usr/share/gnome-shell/extensions/*' -not -path './packages-repo/*' -not -path './.build/*' -iname "*.sh" -type f -exec shellcheck --exclude=SC1091 "{}" ";"
-    # `just fix` WROTE shell formatting and nothing ever CHECKED it, so the
-    # .editorconfig could disagree with every file in the repo indefinitely --
-    # and did. A formatter you do not verify is a formatter that drifts.
-    # shfmt -l LISTS files needing formatting; test its OUTPUT, not an exit
-    # code. `find ... -exec shfmt --diff {} \;` returns 0 even when shfmt
-    # itself exits 1 -- find does not propagate the child's status -- so the
-    # obvious spelling of this check is a gate that can never fail. Measured:
-    # shfmt --diff on a bad file exits 1, the same command under find -exec
-    # exits 0.
+    ./scripts/run-config-lint.sh shellcheck
     echo "Checking shell formatting (shfmt)..."
-    unformatted="$(find . -not -path './.git/*' -not -path './system_files/usr/share/gnome-shell/extensions/*' -not -path './packages-repo/*' -not -path './.build/*' -not -path './_upstream-snapshots/*' -iname "*.sh" -type f -print0 | xargs -0 shfmt -l 2>/dev/null || true)"
-    if [[ -n "$unformatted" ]]; then
-        echo "::error::Shell formatting drift. Run 'just fix' and commit the result."
-        echo "$unformatted"
-        exit 1
-    fi
-    find . -path './.git' -prune -o \
-        -not -path './system_files/usr/share/gnome-shell/extensions/*' \
-        -not -path './packages-repo/*' -not -path './.build/*' -type f \( \
-        -name "*.yaml" -exec yamllint -c ./.yamllint.yml {} \; -o \
-        -name "*.yml" -exec yamllint {} \; \
-        \) 2>/dev/null || true
-    find . -not -path './.git/*' -not -path './system_files/usr/share/gnome-shell/extensions/*' -not -path './packages-repo/*' -not -path './.build/*' -type f -name "*.json" -exec sh -c 'jq . "$1" > /dev/null' _ {} \; 2>/dev/null || true
-    if command -v actionlint &> /dev/null; then
-        actionlint -ignore "permission \"id-token\" is unknown" -ignore "SC2086" -ignore "SC2129" -ignore "SC2001" -ignore "SC2034" -ignore "SC2015" -ignore "SC1001" -ignore "SC2295" -ignore "SC2016" -ignore "save-always" -ignore "cannot be filtered" .github/workflows/*.yml .github/workflows/*.yaml || { exit 1; }
-    fi
-    just --unstable --fmt --check -f Justfile
+    ./scripts/run-config-lint.sh shfmt
+    echo "Checking YAML..."
+    ./scripts/run-config-lint.sh yaml
+    echo "Checking JSON..."
+    ./scripts/run-config-lint.sh json
+    echo "Checking GitHub Actions workflows..."
+    ./scripts/run-config-lint.sh actionlint
+    echo "Checking Justfile formatting..."
+    ./scripts/run-config-lint.sh just
     echo "Checking workflow drift..."
     python3 {{ justfile_directory() }}/scripts/generate-workflows.py
     python3 {{ justfile_directory() }}/scripts/gen-ci-lanes.py --check
@@ -152,11 +116,19 @@ test-pytest: _ensure_test_deps
 # matrix, boot gates, installer E2E, lifecycle) are NOT part of it; they are
 # what `just test-cell` and `just test-e2e` reproduce one cell at a time.
 
-# Install the tools the checks and tests need (brew/pip), then print versions
-setup: _ensure_test_deps
+# Install checksum-verified lint tools, then the remaining test dependencies.
+# TUNAOS_LINT_BIN_DIR supports an isolated prefix; ~/.local/bin is the default
+# so the same bootstrap works without root on Linux and macOS.
+setup:
     #!/usr/bin/env bash
+    set -euo pipefail
     cd {{ justfile_directory() }}
-    for t in shellcheck shfmt yamllint jq actionlint bats yq node; do
+    bin_dir="${TUNAOS_LINT_BIN_DIR:-$HOME/.local/bin}"
+    python3 scripts/lint_tools.py install --bin-dir "$bin_dir"
+    export PATH="$bin_dir:$PATH"
+    just _ensure_test_deps
+    python3 scripts/lint_tools.py verify
+    for t in yamllint jq bats yq node; do
         printf '%-11s %s\n' "$t" "$(command -v "$t" >/dev/null && $t --version 2>&1 | head -1 || echo MISSING)"
     done
     python3 -c 'import pytest, yaml; print("pytest", pytest.__version__, "pyyaml", yaml.__version__)'
@@ -216,7 +188,7 @@ generate-workflows:
     cd {{ justfile_directory() }}
     chmod +x {{ justfile_directory() }}/scripts/generate-workflows.py && python3 {{ justfile_directory() }}/scripts/generate-workflows.py
 
-fix: _check_shfmt_version
+fix: _check_lint_tool_versions
     #!/usr/bin/env bash
     cd {{ justfile_directory() }}
     # _upstream-snapshots is VENDORED upstream code kept for reference. Its

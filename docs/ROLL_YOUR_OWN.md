@@ -642,8 +642,11 @@ tunaos/
 
 ```bash
 # ── Setup ──────────────────────────────────────────────────────
-brew install just podman shellcheck shfmt yq
+brew install podman
 gh repo fork tuna-os/tunaos --clone && cd tunaos
+python3 scripts/lint_tools.py install --bin-dir "$HOME/.local/bin"
+export PATH="$HOME/.local/bin:$PATH"
+just setup
 
 # ── Local builds ───────────────────────────────────────────────
 just build yellowfin gnome           # build one image

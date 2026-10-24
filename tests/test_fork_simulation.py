@@ -122,14 +122,6 @@ def test_act_homebrew_path_is_persisted_for_following_steps() -> None:
     assert 'brew_prefix="$("$brew_bin" --prefix)"' in action
     assert '"$GITHUB_PATH"' in action
     assert '"$GITHUB_ENV"' in action
-    just_fix = (ROOT / ".github/workflows/just-fix.yml").read_text(encoding="utf-8")
-    assert "- name: Persist Homebrew path" in just_fix
-    assert 'brew_prefix="$("$brew_bin" --prefix)"' in just_fix
-    assert '"$GITHUB_PATH"' in just_fix
-    assert '"$GITHUB_ENV"' in just_fix
-    assert "brew install just" in just_fix
-    assert "mvdan.cc/sh/v3/cmd/shfmt@v" in just_fix
-    assert 'GOBIN="$RUNNER_TEMP/bin"' in just_fix
     assert "GITHUB_STEP_SUMMARY" in runner
     assert "fork fallback was not reached" in runner
 

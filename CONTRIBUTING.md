@@ -18,8 +18,11 @@ Never post account credentials or API keys in issues or pull requests.
 ## Quick Start
 
 ```bash
-brew install just podman shellcheck shfmt yq
+brew install podman
 git clone https://github.com/tuna-os/tunaOS.git && cd tunaOS
+python3 scripts/lint_tools.py install --bin-dir "$HOME/.local/bin"
+export PATH="$HOME/.local/bin:$PATH"
+just setup
 just fix && just check
 ```
 
@@ -226,6 +229,10 @@ If the queue misses a target, name the blockers and owners in the next summary.
 just fix     # format shell scripts and Justfile
 just check   # shellcheck, yamllint, actionlint
 ```
+
+The configuration-sensitive binaries and their release-asset checksums are
+repository-pinned. Follow the [lint tool contract](docs/LINTING.md) instead of
+installing current Homebrew versions.
 
 `just ci` runs what the PR gate runs — `check`, the CI contract, and every
 unit suite. A green `just ci` locally is a green PR, minus the
