@@ -116,6 +116,7 @@ def staging_root(root):
 
 def apply(manifest, root, check=False):
     root = staging_root(root)
+    m = load(manifest)
     osr = target(root, "usr/lib/os-release")
     image_info = target(root, "usr/share/ublue-os/image-info.json")
     info = read_json(image_info)
