@@ -780,6 +780,7 @@ def new_evidence(config: PilotConfig) -> dict[str, Any]:
         },
     }
 
+
 def require_boot_proof(details: Any, expected_reference: str) -> dict[str, Any]:
     """Reject boot-stage results that are not an installed deployment booted from the image.
 

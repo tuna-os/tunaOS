@@ -140,6 +140,7 @@ def run_pilot(pilot_config):
 def schema_errors(document):
     return list(Draft202012Validator(SCHEMA).iter_errors(document))
 
+
 def test_success_is_exact_a_to_b_to_a_and_schema_validates(tmp_path):
     evidence, passed = run_pilot(config(tmp_path))
 
