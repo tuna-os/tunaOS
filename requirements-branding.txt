@@ -1,0 +1,9 @@
+# Artwork generators in scripts/branding/ (lettermarks, fastfetch letters).
+# Exact pins: the committed artwork is checked byte-for-byte against these
+# versions by scripts/branding/check-artwork.py, so a bump that changes
+# rendering shows up as a drift to regenerate, never as silent churn.
+# Explicit installation only; image builds never need these.
+-r requirements-config.txt
+fonttools==4.67.0
+pyfiglet==1.0.4
+uharfbuzz==0.56.4
