@@ -90,6 +90,7 @@ user-facing site:
 | [HACKTOBERFEST-2026.md](HACKTOBERFEST-2026.md) | Hacktoberfest 2026 contributor runbook |
 | [IMPROVEMENT_PLAN.md](IMPROVEMENT_PLAN.md) | Historical record of the May 2026 sprint + remaining roadmap items |
 | [Q4-2026-PROMOTION-CALENDAR.md](Q4-2026-PROMOTION-CALENDAR.md) | Fedora 45, Hacktoberfest, All Things Open, and KubeCon NA promotion plan |
+| [CFP-LPC-2027.md](CFP-LPC-2027.md) | Linux Plumbers Conference timeline audit, 45-min Refereed Track and Microconference proposals, and speaker handoff (#3299) |
 | [agents/](agents/) | Hive agent guides (issue-tracker, triage-labels, domain) |
 | [adr/](adr/README.md) | Architecture Decision Records |
 | [architecture/shared-just-recipes.md](architecture/shared-just-recipes.md) | Delivery contract for shared Just modules across tuna-os repositories (#1977, #508) |
