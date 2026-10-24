@@ -54,6 +54,10 @@ GNOME_ACCENTS = {'blue', 'teal', 'green', 'yellow', 'orange', 'red', 'pink', 'pu
 VARIANT_BRANDING = ('accent', 'gnome_accent', 'base', 'homage')
 # Identity-only variant keys: they have their own adapters, not the matrix.
 IDENTITY_KEYS = ('codename', 'branding')
+# OCI distribution grammar: a registry host with an optional port, and
+# lowercase repository path components separated by "/".
+REGISTRY = re.compile(r"(?:localhost|[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+)(?::[0-9]{1,5})?\Z")
+NAMESPACE = re.compile(r"[a-z0-9]+(?:(?:\.|_|__|-+)[a-z0-9]+)*(?:/[a-z0-9]+(?:(?:\.|_|__|-+)[a-z0-9]+)*)*\Z")
 
 
 class ConfigError(ValueError):
@@ -135,7 +139,7 @@ def validate(config):
             raise ConfigError(str(exc)) from exc
     if type(config['schema_version']) is not int or config['schema_version'] != 1:
         raise ConfigError('schema_version: expected integer 1')
-    table(config['build'], ('global_platforms',), ('global_platforms',), 'build')
+    table(config['build'], ('global_platforms', 'publish'), ('global_platforms',), 'build')
     strings(config['build']['global_platforms'], 'build.global_platforms', platform=True)
     if 'project' in config:
         table(config['project'], ('name', 'id', 'cpe_vendor'), ('name', 'id', 'cpe_vendor'), 'project')
@@ -151,6 +155,15 @@ def validate(config):
             value = config['defaults']['branding'][key]
             if not isinstance(value, str) or not HTTPS_URL.fullmatch(value):
                 raise ConfigError(f'defaults.branding.{key}: expected an https:// URL')
+    if 'publish' in config['build']:
+        # Optional: a fork's own destination. Omitted, CI publishes to the
+        # repository owner's namespace, so the stock file stays fork-neutral.
+        publish = config['build']['publish']
+        table(publish, ('registry', 'namespace'), ('registry', 'namespace'), 'build.publish')
+        if not isinstance(publish['registry'], str) or not REGISTRY.fullmatch(publish['registry']):
+            raise ConfigError('build.publish.registry: expected a lowercase registry host such as ghcr.io')
+        if not isinstance(publish['namespace'], str) or not NAMESPACE.fullmatch(publish['namespace']):
+            raise ConfigError('build.publish.namespace: expected lowercase OCI path components such as acme')
     variants = config['variants']
     if not isinstance(variants, dict) or not variants:
         raise ConfigError('variants: expected nonempty table')
