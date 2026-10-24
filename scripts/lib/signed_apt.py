@@ -140,7 +140,11 @@ def parse_release(payload):
     if len(payload) > MAX_RELEASE:
         raise CatalogError('Release exceeds size bound')
     fields, checksums, current = {}, {}, None
-    for line in payload.decode('utf-8').splitlines():
+    try:
+        text = payload.decode('utf-8')
+    except UnicodeError as exc:
+        raise CatalogError('Release has invalid UTF-8 encoding') from exc
+    for line in text.splitlines():
         if not line:
             continue
         if line.startswith(' '):

@@ -42,7 +42,8 @@ def test_bad_pin_and_missing_verifier(monkeypatch):
         acquire.verify_inrelease(envelope, b'key', source)
 
 
-@pytest.mark.parametrize('payload', [b'Origin: Debian\nOrigin: Debian\n',
+@pytest.mark.parametrize('payload', [b'\xff',
+    b'Origin: Debian\nOrigin: Debian\n',
     b'SHA256:\n bad 1 main/Packages.xz\n',
     ('SHA256:\n '+'a'*64+' 1 ../Packages.xz\n').encode(),
     ('SHA256:\n '+('a'*64+' 1 main/Packages.xz\n ')*2).strip().encode(),
