@@ -58,7 +58,7 @@ no boot.
 
 ---
 
-The configured image matrix now has 147 cells. Eleven of them are Tuna Desktop (formerly Roost) cells for amd64: Marlin, Yellowfin, Albacore, Skipjack, Wahoo, Bonito, Bonito Rawhide, Grouper, Flounder, Flounder Sid and Sailfin. The `guppy:gnome` cell is back (2026-10-07, #2450). This status snapshot is from before these additions and does not mark them green; each needs its own image, desktop and boot evidence.
+The configured image matrix now has 151 cells. Eleven of them are Tuna Desktop (formerly Roost) cells for amd64: Marlin, Yellowfin, Albacore, Skipjack, Wahoo, Bonito, Bonito Rawhide, Grouper, Flounder, Flounder Sid and Sailfin. The `guppy:gnome` cell returned on 2026-10-07 (#2450). Issue #3252 adds four cells for dispatch-only Stingray evaluation. This status snapshot is from before these additions and does not mark them green; each needs its own image, desktop and boot evidence.
 
 <!-- BEGIN GENERATED — scripts/gen-matrix-status.py -->
 
@@ -136,7 +136,7 @@ Green criterion 7 (`parity`), first cadence: `package-parity.yml` runs `scripts/
 
 ## LUKS E2E
 
-**13 of 52** cells green (52 tested, 0 never tested).
+**29 of 110** cells green (110 tested, 0 never tested).
 
 The denominator is the set `luks-e2e.yml` schedules: every published desktop image (`build_image`), not only the ones that ship an ISO. That is wider than the ISO matrix below on purpose. The browser ISO builder can make an ISO from any image, so the image-only variants (`sailfin`, `guppy`, `flounder-sid`) need boot and install coverage too.
 
@@ -189,7 +189,7 @@ Newest result 2026-10-22.
 
 ## Bootc Lifecycle
 
-**39 of 52** cells green (52 tested, 0 never tested).
+**36 of 52** cells green (41 tested, 11 never tested).
 
 Validates bootc image update, rebase, rollback, alias resolution, and post-switch system contracts across published stream deployments.
 

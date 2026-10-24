@@ -152,6 +152,11 @@ package_target = "ubuntu"
 # ships it; the per-variant results are on tuna-desktop#577.
 portals = "blocked on tuna-desktop session-start fix"
 
+[tuna_rollout.stingray]
+status = "unsupported"
+package_target = "stonking"
+reason = "unsupported until package target stonking exists and publishes tuna-desktop; the package factory currently targets Ubuntu resolute only"
+
 [tuna_rollout.flounder]
 status = "admitted"
 package_target = "trixie"
@@ -1955,6 +1960,44 @@ id = "xfce"
 stage = 2
 build_image = true
 build_iso = true
+
+# Ubuntu 26.10 is admitted as an experimental, dispatch-only proposal under
+# #3252. Reuse the release-agnostic Ubuntu bootcification path, but start with
+# only the archive-backed desktop set. No Tuna flavor until tunaos-packages
+# gains a stonking target; no Asahi or ZFS profile until each clears its own
+# hardware/filesystem admission gate.
+[variants.stingray]
+emoji = "🐟"
+upstream_track = "experimental"
+description = "Based on Ubuntu 26.10 Stonking Stingray"
+base_image = "docker.io/library/ubuntu:stonking@sha256:93e29beff5257b2cdf1c024d831f6d2997e53655a653ff76a811fc9e6564a719"
+aliases = ["ubuntu-26.10"]
+platforms = ["linux/amd64", "linux/arm64"]
+experimental = true
+
+[[variants.stingray.flavors]]
+id = "base"
+stage = 1
+build_image = true
+
+[[variants.stingray.flavors]]
+id = "gnome"
+stage = 2
+build_image = true
+build_iso = true
+
+[[variants.stingray.flavors]]
+id = "kde"
+stage = 2
+build_image = true
+build_iso = true
+
+[[variants.stingray.flavors]]
+id = "xfce"
+stage = 2
+build_image = true
+build_iso = true
+
 
 # ── Arch Linux ─────────────────────────────────────────────────────────────
 # Marlin: rolling-release Arch Linux on bootc. Uses Containerfile.arch

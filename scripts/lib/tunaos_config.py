@@ -36,6 +36,7 @@ except (ImportError, OSError) as exc:
 
 ROOT = Path(__file__).resolve().parents[2]
 ID = re.compile(r"[a-z0-9][a-z0-9-]*\Z")
+REPOSITORY_NAME = re.compile(r"[a-z0-9]+(?:(?:[._]|__|[-]+)[a-z0-9]+)*\Z")
 PLATFORMS = {"linux/amd64", "linux/amd64/v2", "linux/amd64/v3", "linux/arm64"}
 # OCI distribution grammar: a registry host with an optional port, and
 # lowercase repository path components separated by "/".
@@ -86,6 +87,10 @@ def identifier(value, path):
         raise ConfigError(f"{path}: expected lowercase identifier")
 
 
+def repository_name(value, path):
+    if not isinstance(value, str) or not REPOSITORY_NAME.fullmatch(value):
+        raise ConfigError(f"{path}: expected lowercase repository name")
+
 @lru_cache(maxsize=1)
 def package_policy():
     spec = importlib.util.spec_from_file_location('tunaos_package_policy', Path(__file__).with_name('tunaos_packages.py'))
@@ -108,7 +113,6 @@ def package_catalog_schema():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
-
 
 def validate(config):
     """Validate the implemented surface; reject inert future sections."""
@@ -150,8 +154,8 @@ def validate(config):
         strings(variant['platforms'], where + '.platforms', platform=True)
         if 'aliases' in variant:
             strings(variant['aliases'], where + '.aliases')
-            for alias in variant['aliases']:
-                identifier(alias, where + '.aliases')
+            for i, alias in enumerate(variant['aliases']):
+                repository_name(alias, f'{where}.aliases[{i}]')
         flavors = variant['flavors']
         if not isinstance(flavors, list) or not flavors:
             raise ConfigError(f'{where}.flavors: expected nonempty list')
@@ -217,9 +221,11 @@ def validate(config):
     for name, variant in variants.items():
         suffix = variant.get('tag_suffix', '')
         aliases = variant.get('aliases', [])
-        for alias in aliases:
+        for i, alias in enumerate(aliases):
             if alias in reserved:
-                raise ConfigError(f'variants.{name}.aliases: {alias!r} shadows a canonical image name')
+                raise ConfigError(
+                    f'variants.{name}.aliases[{i}]: {alias!r} shadows a canonical image name'
+                )
         canonical = variant.get('publish_name', name)
         for flavor in variant['flavors']:
             tag = flavor['id'] + (f'-{suffix}' if suffix else '')

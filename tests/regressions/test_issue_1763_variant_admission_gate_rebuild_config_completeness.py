@@ -117,7 +117,7 @@ def _get_os_section_for_variant(variant_id: str) -> str:
         return "emerge"
     if variant_id in ("marlin",):
         return "pacman"
-    if variant_id in ("grouper", "gurnard"):
+    if variant_id in ("grouper", "stingray", "gurnard"):
         return "apt"
     if variant_id in ("bonito", "bonito-rawhide"):
         return "fedora"

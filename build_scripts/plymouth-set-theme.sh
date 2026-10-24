@@ -33,7 +33,7 @@ fi
 # tests/bats/test_plymouth_themes.bats checks both.
 case "$variant" in
 yellowfin | almalinux-kitten) theme=tropical-fish ;; # 🐠
-albacore | almalinux) theme=tunaos ;;                # 🐟
+albacore | almalinux | stingray) theme=tunaos ;;     # 🐟
 skipjack | centos) theme=sushi ;;                    # 🍣
 wahoo) theme=carp-streamer ;;                        # 🎏
 bonito | fedora) theme=fishing-pole ;;               # 🎣

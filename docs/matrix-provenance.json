@@ -4352,12 +4352,12 @@
    "total": 147
   },
   "desktop": {
-   "passed": 50,
+   "passed": 43,
    "tested": 52,
    "total": 52
   },
   "factory_health": {
-   "green": 124,
+   "green": 120,
    "total": 147
   },
   "install": {
