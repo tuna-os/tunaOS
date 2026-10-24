@@ -1,0 +1,60 @@
+name: Starter task
+description: Propose a small, verifiable task for a first contribution.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Keep this task to one focused PR that needs no secrets or special hardware.
+        A maintainer reviews scope and availability before adding `good first issue`
+        and `help wanted`. This form does not apply those labels.
+
+        First PR? Follow [CONTRIBUTING.md](https://github.com/tuna-os/tunaos/blob/main/CONTRIBUTING.md)
+        for the fork workflow, local checks, and `git commit -s` DCO sign-off.
+        Ask questions on the issue or in [Matrix](https://matrix.to/#/%23tunaos:reilly.asia).
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem and scope
+      description: Describe the problem, the expected result, and what is out of scope.
+      placeholder: Include a reproduction or an example of the missing behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: code
+    attributes:
+      label: Where to start
+      description: Link the files, functions, pages, or tests to change and one useful example.
+      placeholder: Use repository file links so a newcomer can find the code.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: List observable results that a reviewer can check in one focused PR.
+      placeholder: State what must pass and what behavior must stay the same.
+    validations:
+      required: true
+  - type: textarea
+    id: verification
+    attributes:
+      label: Local verification
+      description: Give setup steps, exact check commands, and expected results. Name any dependencies.
+      placeholder: Include just fix && just check and any checks specific to the task.
+    validations:
+      required: true
+  - type: input
+    id: tracker
+    attributes:
+      label: Tracking issue or milestone
+      description: Link the epic, event tracker, or milestone that this task supports.
+    validations:
+      required: true
+  - type: textarea
+    id: support
+    attributes:
+      label: Help and review contact
+      description: Name a confirmed contact, or request one for maintainer triage. Do not assign someone without agreement.
+      placeholder: A maintainer must confirm a first responder and that the task is unclaimed before labeling it.
+    validations:
+      required: true

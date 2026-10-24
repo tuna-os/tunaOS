@@ -60,7 +60,9 @@ criteria:
   - id: builds
     name: Image builds and promotes
     proves: The image builds for every declared architecture and reaches its published tag.
-    asserted_by: .github/workflows/reusable-build-image.yml (build_push, Manifest, Promote)
+    asserted_by: >-
+      .github/workflows/reusable-build-image.yml (build_push, Manifest, Promote) +
+      .github/workflows/test.yml (primary configuration host compatibility)
     enforcement: blocking
     freshness_sla_days: 2
     gates:
@@ -69,6 +71,13 @@ criteria:
           build_push: Build Image
           manifest: Push Manifest
           tag-image: Pull Image and Apply Tags
+      - workflow: .github/workflows/test.yml
+        jobs:
+          primary-config-python310: Verify primary config on the oldest supported Python
+          primary-config-python315: Verify primary config with a TOML 1.1 capable stdlib
+        scripts:
+          - tests/test_primary_config.py
+          - tests/test_config_parser.py
     status_2026_08_17: "84 of 142 cells"
 
   - id: desktop

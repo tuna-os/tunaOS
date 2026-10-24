@@ -252,10 +252,15 @@ def test_tuna_branch_rejects_missing_or_wrong_privacy_routing(tmp_path):
     tools = tmp_path / "tools"
     portals = root / "usr/share/xdg-desktop-portal/tuna-portals.conf"
     sessions = root / "usr/share/wayland-sessions"
-    (root / "etc/greetd").mkdir(parents=True)
+    gdm_config = root / "etc/gdm3/daemon.conf"
+    theme = root / "usr/share/tunaos/gdm-theme"
+    drop_in = root / "etc/systemd/user/org.gnome.Shell@gdm.service.d/tunaos-gdm-theme.conf"
     (root / "etc/systemd/system").mkdir(parents=True)
     portals.parent.mkdir(parents=True)
     sessions.mkdir(parents=True)
+    gdm_config.parent.mkdir(parents=True)
+    theme.mkdir(parents=True)
+    drop_in.parent.mkdir(parents=True)
     tools.mkdir()
     (sessions / "tuna.desktop").write_text(
         "[Desktop Entry]\nExec=tuna-session\nDesktopNames=Tuna;GNOME;\nName=Tuna Desktop\n"
@@ -263,9 +268,20 @@ def test_tuna_branch_rejects_missing_or_wrong_privacy_routing(tmp_path):
     (sessions / "roost.desktop").write_text(
         "[Desktop Entry]\nExec=tuna-session\nNoDisplay=true\n"
     )
-    (root / "etc/greetd/environments").write_text("Tuna Desktop\n")
+    gdm_config.write_text("[daemon]\nDefaultSession=tuna.desktop\nAutomaticLoginEnable=false\n")
+    (theme.parent / "identity.env").write_text("TUNAOS_ACCENT='#1793D1'\n")
+    for stylesheet in (
+        "gnome-shell-dark.css",
+        "gnome-shell-light.css",
+        "gnome-shell-high-contrast.css",
+    ):
+        (theme / stylesheet).write_text("  background-color: #1793D1;\n")
+    drop_in.write_text(
+        "[Service]\n"
+        f"Environment=G_RESOURCE_OVERLAYS=/org/gnome/shell/theme={theme}\n"
+    )
     (root / "etc/systemd/system/display-manager.service").symlink_to(
-        "greetd.service"
+        "gdm.service"
     )
     for binary in (
         "tuna-compositor",
@@ -279,15 +295,10 @@ def test_tuna_branch_rejects_missing_or_wrong_privacy_routing(tmp_path):
         "gnome-keyring-daemon",
         "dbus-update-activation-environment",
         "wpctl",
-        "gtkgreet",
-        "cage",
     ):
         command = tools / binary
         command.write_text("#!/bin/sh\nexit 0\n")
         command.chmod(0o755)
-    launcher = tools / "Tuna"
-    launcher.write_text("#!/bin/sh\nexec tuna-session\n")
-    launcher.chmod(0o755)
 
     case = case.replace("/usr", str(root / "usr")).replace(
         "/etc", str(root / "etc")
@@ -310,7 +321,7 @@ def test_tuna_branch_rejects_missing_or_wrong_privacy_routing(tmp_path):
         + "\n"
         + """
 tuna_package_backend() { echo dpkg; }
-tuna_installed_package_names() { printf 'tuna-desktop\\npower-profiles-daemon\\n'; }
+tuna_installed_package_names() { printf 'tuna-desktop\ngdm3\npower-profiles-daemon\n'; }
 tuna_installed_file_owner() { echo tuna-desktop; }
 require_command() { return 0; }
 require_glob() { return 0; }
