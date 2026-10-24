@@ -65,6 +65,18 @@ EOF
 	[[ "$output" != *"github-test-token"* ]]
 }
 
+
+@test "stock owner destination accepts GitHub bot actors" {
+	export PUBLISH_DESTINATION="ghcr.io/Tuna-OS"
+	export GITHUB_ACTOR="github-actions[bot]"
+	export REGISTRY_LOGIN_CLIENTS="podman"
+
+	run "$SCRIPT"
+
+	[ "$status" -eq 0 ]
+	grep -Fq -- '--username github-actions[bot] --password-stdin ghcr.io' "$LOGIN_LOG"
+}
+
 @test "approved alternate registry uses the complete custom credential pair" {
 	export PUBLISH_DESTINATION="quay.io/acme"
 	export PUBLISH_REGISTRY_USERNAME="acme+publisher"

@@ -76,8 +76,12 @@ else
 	credential_source="custom publish"
 fi
 
-if [[ ! "$username" =~ ^[A-Za-z0-9][A-Za-z0-9_.@+-]*$ ]]; then
+if [[ "$credential_source" == "custom publish" &&
+	! "$username" =~ ^[A-Za-z0-9][A-Za-z0-9_.@+-]*$ ]]; then
 	fail "registry username contains unsupported characters"
+fi
+if [[ "$username" == *$'\n'* || "$username" == *$'\r'* ]]; then
+	fail "registry username must be a single line"
 fi
 if [[ "$token" == *$'\n'* || "$token" == *$'\r'* ]]; then
 	fail "registry token must be a single line"

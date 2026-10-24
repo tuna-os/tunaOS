@@ -1744,7 +1744,7 @@ jobs:
     uses: ./.github/workflows/verify-asahi-one.yml
     with:
       image: ${{ vars.IMAGE_REGISTRY || inputs.image-registry || format('ghcr.io/{0}', github.repository_owner) }}/${{ inputs.image-name }}:${{ inputs.default-tag }}-testing
-      registry-destination: ${{ vars.IMAGE_REGISTRY || inputs.image-registry || format('ghcr.io/{0}', github.repository_owner) }}
+      registry_destination: ${{ vars.IMAGE_REGISTRY || inputs.image-registry || format('ghcr.io/{0}', github.repository_owner) }}
     secrets:
       PUBLISH_REGISTRY_USERNAME: ${{ secrets.PUBLISH_REGISTRY_USERNAME }}
       PUBLISH_REGISTRY_TOKEN: ${{ secrets.PUBLISH_REGISTRY_TOKEN }}

@@ -12,7 +12,7 @@ on:
         description: "Asahi image ref to verify"
         required: true
         type: string
-      registry-destination:
+      registry_destination:
         description: Resolved <registry>/<namespace> containing the image.
         required: false
         type: string
@@ -45,7 +45,7 @@ jobs:
       - name: Login to image registry
         uses: ./.github/actions/registry-login
         with:
-          destination: ${{ inputs.registry-destination || format('ghcr.io/{0}', github.repository_owner) }}
+          destination: ${{ inputs.registry_destination || format('ghcr.io/{0}', github.repository_owner) }}
           registry-username: ${{ secrets.PUBLISH_REGISTRY_USERNAME }}
           registry-token: ${{ secrets.PUBLISH_REGISTRY_TOKEN }}
           clients: podman
