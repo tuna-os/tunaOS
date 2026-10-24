@@ -115,17 +115,23 @@ readme_adoption_badge() {
   [ "$status" -eq 0 ]
 }
 
+# A bare '3305' matches a digest, a date range or an unrelated issue number, so
+# both of these assert the full Markdown issue link plus the wording that
+# carries the policy — the gate, not just the citation.
+
 @test "Q4 mature definition gates on production user baseline and cites #3305" {
   local dod="${REPO_ROOT}/Q4-MATURE-DEFINITION.md"
-  run grep -F '3305' "$dod"
+  run grep -F '[#3305](https://github.com/tuna-os/tunaos/issues/3305)' "$dod"
   [ "$status" -eq 0 ]
   run grep -F 'production user baseline' "$dod"
+  [ "$status" -eq 0 ]
+  run grep -F 'unmet baseline (0 external production adopters) blocks' "$dod"
   [ "$status" -eq 0 ]
 }
 
 @test "ADOPTERS.md states the Q4 Mature baseline requirement citing #3305" {
-  run grep -F '3305' "$ADOPTERS"
+  run grep -F '[#3305](https://github.com/tuna-os/tunaos/issues/3305)' "$ADOPTERS"
   [ "$status" -eq 0 ]
-  run grep -F 'baseline requirement' "$ADOPTERS"
+  run grep -F 'Q4 "Mature" baseline requirement' "$ADOPTERS"
   [ "$status" -eq 0 ]
 }
