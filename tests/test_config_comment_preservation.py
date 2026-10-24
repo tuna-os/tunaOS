@@ -13,7 +13,7 @@ from lib import tunaos_config as config
 from lib import iso_builder_config as builder
 
 
-def comments(source):
+def full_line_comments(source):
     return [line for line in source.splitlines() if line.lstrip().startswith(b'#')]
 
 
@@ -25,7 +25,7 @@ def test_package_edit_preserves_all_primary_section_comments():
     scope = {'gnome:emerge': ('gnome', 'emerge')}
     resolved = {'gnome:emerge': 'sys-process/tunaos-comment-test'}
     edited = author.edit(source, document, scope, resolved)
-    assert comments(edited) == comments(source)
+    assert full_line_comments(edited) == full_line_comments(source)
     inserted = b'  "sys-process/tunaos-comment-test",\n'
     assert edited.count(inserted) == 1
     assert edited.replace(inserted, b'', 1) == source
@@ -43,7 +43,8 @@ def test_comment_only_edits_do_not_change_generated_adapters():
     assert json.dumps(before, ensure_ascii=False) == json.dumps(after, ensure_ascii=False)
     for render in (config.render, builder.render, builder.render_flavors,
                    config.flatpak_policy().render):
-        assert render(before) == render(after) == render(after)
+        rendered_after = render(after)
+        assert render(before) == rendered_after
     policy = config.package_policy()
     select = lambda document: {key: document[key] for key in ('package_groups', 'desktops')}
     assert policy.desktop_outputs(select(before)) == policy.desktop_outputs(select(after))
@@ -80,7 +81,7 @@ def test_renovate_pin_match_preserves_comments_and_unrelated_bytes():
     digest = 'sha256:' + '0' * 64
     start, end = match.span('currentDigest')
     edited = source[:start] + digest + source[end:]
-    assert comments(edited.encode()) == comments(source.encode())
+    assert full_line_comments(edited.encode()) == full_line_comments(source.encode())
     assert '# trailing pin guidance' in edited
     assert edited[:start] == source[:start] and edited[start + len(digest):] == source[end:]
     expected = copy.deepcopy(document)
