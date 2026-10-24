@@ -20,16 +20,14 @@
 #   USE_CACHE          — 1 to enable local dnf cache mounts
 #   IS_CI              — 1 if running in CI
 #   SKIP_RECHUNK       — 1 to skip chunkah passes (PR builds)
-#   IMAGE_REGISTRY     — defaults to ghcr.io
-#   REPO_ORGANIZATION  — defaults to tuna-os
+#   IMAGE_REGISTRY     — publish registry host; overrides [build.publish]
+#   REPO_ORGANIZATION  — publish namespace; overrides [build.publish]
 #   CHUNKAH_IMAGE      — override chunkah image ref
 #   BUILDAH_CACHE_FLAGS — extra flags for buildah layer cache
 
 set -euxo pipefail
 
 # ── Defaults ──────────────────────────────────────────────────────────────────
-IMAGE_REGISTRY="${IMAGE_REGISTRY:-ghcr.io}"
-REPO_ORGANIZATION="${REPO_ORGANIZATION:-tuna-os}"
 IS_CI="${IS_CI:-0}"
 USE_CACHE="${USE_CACHE:-0}"
 SKIP_RECHUNK="${SKIP_RECHUNK:-0}"
@@ -41,6 +39,9 @@ source scripts/_registry.sh
 # shellcheck source=lib/build-config.sh
 source scripts/lib/build-config.sh
 BUILD_CONFIG="$(tunaos_build_config)"
+# shellcheck source=lib/publish-destination.sh
+source scripts/lib/publish-destination.sh
+read -r IMAGE_REGISTRY REPO_ORGANIZATION < <(tunaos_publish_destination "$BUILD_CONFIG")
 
 # ── Resolve image refs from image-versions.yaml ───────────────────────────────
 common_image="${COMMON_IMAGE:-ghcr.io/projectbluefin/common}"

@@ -65,6 +65,7 @@ jobs:
       artifact_s2_count: ${{ steps.set-matrix.outputs.artifact_s2_count }}
       artifact_s3_count: ${{ steps.set-matrix.outputs.artifact_s3_count }}
       artifact_s4_count: ${{ steps.set-matrix.outputs.artifact_s4_count }}
+      image_registry: ${{ steps.publish.outputs.image_registry }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -73,6 +74,15 @@ jobs:
 
       - name: Setup yq
         uses: ./.github/actions/setup-yq
+
+      # A fork's destination from tunaos.toml [build.publish]. Empty means
+      # the stock behaviour: ghcr.io/<repository owner>.
+      - name: Resolve publish destination
+        id: publish
+        run: |
+          registry="$(yq -r '.config.publish.registry // ""' .github/build-config.yml)"
+          namespace="$(yq -r '.config.publish.namespace // ""' .github/build-config.yml)"
+          echo "image_registry=${registry:+${registry}/${namespace}}" >> "$GITHUB_OUTPUT"
 
       - name: Validate Inputs
         env:
@@ -110,6 +120,7 @@ jobs:
         env:
           FILTER_VARIANT: ${{ inputs.variant || 'all' }}
           FILTER_FLAVOR: ${{ inputs.flavor || 'all' }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           # Flatten config into one entry per {variant, flavor}, applying filters.
           #
@@ -142,7 +153,7 @@ jobs:
             | .flavors[]
             | select(env.FILTER_FLAVOR == "all" or .id == env.FILTER_FLAVOR)
             | select(.build_image // false)
-            | select($event != "pull_request" or .id == "gnome")
+            | select($event != "pull_request" or .id == "gnome" or .id == "tuna")
             | {
                 variant:       $v.id,
                 image_name:    ($v.publish_name // $v.id),
@@ -254,6 +265,7 @@ jobs:
     uses: ./.github/workflows/reusable-build-image.yml
     with:
       image-name: ${{ matrix.image_name }}
+      image-registry: ${{ needs.generate_matrix.outputs.image_registry }}
       image-aliases: ${{ matrix.image_aliases }}
       image-variant: ${{ matrix.variant }}
       image-desc: ${{ matrix.description }}
@@ -306,6 +318,7 @@ jobs:
     uses: ./.github/workflows/reusable-build-image.yml
     with:
       image-name: ${{ matrix.image_name }}
+      image-registry: ${{ needs.generate_matrix.outputs.image_registry }}
       image-aliases: ${{ matrix.image_aliases }}
       image-variant: ${{ matrix.variant }}
       image-desc: ${{ matrix.description }}
@@ -348,6 +361,7 @@ jobs:
     uses: ./.github/workflows/reusable-build-image.yml
     with:
       image-name: ${{ matrix.image_name }}
+      image-registry: ${{ needs.generate_matrix.outputs.image_registry }}
       image-aliases: ${{ matrix.image_aliases }}
       image-variant: ${{ matrix.variant }}
       image-desc: ${{ matrix.description }}
@@ -381,6 +395,7 @@ jobs:
     uses: ./.github/workflows/reusable-build-image.yml
     with:
       image-name: ${{ matrix.image_name }}
+      image-registry: ${{ needs.generate_matrix.outputs.image_registry }}
       image-aliases: ${{ matrix.image_aliases }}
       image-variant: ${{ matrix.variant }}
       image-desc: ${{ matrix.description }}

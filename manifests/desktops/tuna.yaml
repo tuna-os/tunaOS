@@ -1,18 +1,17 @@
 {
-  "display_manager": "greetd",
+  "display_manager": "gdm",
   "versionlock": [],
   "post_install": [
     "tuna-flatpak-remote.sh",
-    "greetd-system-integration.sh",
-    "greetd-gtkgreet.sh",
+    "tuna-gdm-theme.sh",
+    "tuna-gdm-default-session.sh",
+    "tuna-hide-other-sessions.sh",
     "flatpak-preinstall.sh"
   ],
   "packages": {
     "pacman": [
       "tunaos/tuna-desktop=1.0.0beta.1-1",
-      "greetd",
-      "greetd-gtkgreet",
-      "cage",
+      "gdm",
       "xorg-xwayland",
       "ibus",
       "orca",
@@ -44,14 +43,12 @@
       "ttf-liberation"
     ],
     "el10": {
-      "display_manager": "greetd",
+      "display_manager": "gdm",
       "packages": [
         "tuna-desktop-1.0.0~beta.1-1.el10",
         "dbus-tools",
         "orca",
-        "greetd",
-        "gtkgreet",
-        "cage",
+        "gdm",
         "xorg-x11-server-Xwayland",
         "ibus",
         "gnome-shell",
@@ -94,14 +91,12 @@
       ]
     },
     "fedora": {
-      "display_manager": "greetd",
+      "display_manager": "gdm",
       "packages": [
         "tuna-desktop-1.0.0~beta.1-1.fc44",
         "dbus-tools",
         "orca",
-        "greetd",
-        "gtkgreet",
-        "cage",
+        "gdm",
         "xorg-x11-server-Xwayland",
         "ibus",
         "gnome-shell",
@@ -140,14 +135,12 @@
       ]
     },
     "hummingbird": {
-      "display_manager": "greetd",
+      "display_manager": "gdm",
       "packages": [
         "tuna-desktop-1.0.0~beta.1-1.bfin1",
         "dbus-tools",
         "orca",
-        "greetd",
-        "gtkgreet",
-        "cage",
+        "gdm",
         "xorg-x11-server-Xwayland",
         "ibus",
         "gnome-shell",
@@ -201,14 +194,12 @@
       ]
     },
     "eln": {
-      "display_manager": "greetd",
+      "display_manager": "gdm",
       "packages": [
         "tuna-desktop-1.0.0~beta.1-1.eln159",
         "dbus-tools",
         "orca",
-        "greetd",
-        "gtkgreet",
-        "cage",
+        "gdm",
         "xorg-x11-server-Xwayland",
         "ibus",
         "gnome-shell",
@@ -247,14 +238,12 @@
       ]
     },
     "rawhide": {
-      "display_manager": "greetd",
+      "display_manager": "gdm",
       "packages": [
         "tuna-desktop-1.0.0~beta.1-1.fc46",
         "dbus-tools",
         "orca",
-        "greetd",
-        "gtkgreet",
-        "cage",
+        "gdm",
         "xorg-x11-server-Xwayland",
         "ibus",
         "gnome-shell",
@@ -293,12 +282,12 @@
       ]
     },
     "apt": {
+      "display_manager": "gdm",
       "packages": [
         "tuna-desktop=1.0.0~beta.1-1",
         "orca",
-        "greetd",
-        "gtkgreet",
-        "cage",
+        "gdm3",
+        "gjs",
         "xwayland",
         "ibus",
         "gnome-shell",
@@ -354,14 +343,12 @@
       ]
     },
     "zypper": {
-      "display_manager": "greetd",
+      "display_manager": "gdm",
       "packages": [
         "tuna-desktop-1.0.0~beta.1-1",
         "dbus-1-tools",
         "orca",
-        "greetd",
-        "gtkgreet",
-        "cage",
+        "gdm",
         "xwayland",
         "ibus",
         "gnome-shell",

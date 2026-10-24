@@ -131,16 +131,22 @@ Do not claim this goal is complete through the unchanged customization stack.
 
 ## Compatibility and verification
 
-The optional resolver states that it supports Python 3.10. Current CI uses
-`ubuntu-latest` without a Python pin. The inspected development interpreter is
-3.12.14. These facts do not establish every supported host's Python version.
+Keep support for configuration tools on Python 3.10+.
+Every host uses the pure Tomli 2.3.2 source bundled in `scripts/lib/_vendor/tomli`.
+This release keeps TOML 1.0 and adds limits for key depth and nested values.
+The [reviewed parser source](https://github.com/hukkin/tomli/blob/d326dd59d8e10d621cba4de3ee110a7db6324ddd/src/tomli/_parser.py)
+sets both limits. Python 3.15's `tomllib` accepts TOML 1.1, so it is not a fallback.
 
-Keep support for configuration tools on Python 3.10. Use standard-library `tomllib` on 3.11+
-and a pinned, tested `tomli` on 3.10. Resolve both through one parser adapter.
-A missing dependency reports the exact install command; it never downloads
-code on demand. Test both parsers against the same TOML fixtures. PyPI reports
-`tomli` 2.2.1 supports Python >=3.8; the pure-Python wheel SHA-256 is
-`cb55c73c5f4408779d0cf3eef9f762b9c9f147a77de7b258bef0a5628adc85cc`.
+Config reads need no pip install, special environment, or network access.
+The source includes the MIT license and exact file hashes.
+See [parser updates](VENDORED-PARSER.md) for the explicit update procedure.
+If the checkout is incomplete, the read fails with an error.
+It does not select a host parser.
+
+Target image builds read generated YAML or JSON with shell helpers and yq.
+For Debian, the helper checks a hash of the TOML source bytes without a parser.
+The host prepares these adapters before the container build starts.
+The Python 3.10 and 3.15 jobs run the same grammar and parse-limit tests.
 
 Keep the TOML 1.0 grammar shared with Python 3.11. The edit layer must preserve comments and reparse its output through this core.
 Generated JSON/YAML remains consumable by target images without Python or TOML
@@ -188,6 +194,11 @@ Survey existing TunaOS package-query, resolver and validation tooling first.
 Native dnf, apt, pacman, zypper and portage adapters must state their support
 limits. Never infer a portable package name from string similarity alone.
 
+See the [package command guide](PACKAGE-AUTHORING.md) for the first
+index-backed implementation. It edits explicit existing policy
+sections using supplied native indexes. Automatic configured-repository discovery
+and per-variant transaction verification remain outside that first slice.
+
 ## Local migration experiment (not production code)
 
 Against main `83362754`, a read-only prototype translated all 14 variants,
@@ -211,3 +222,15 @@ replace a canonical variant name or a declared publish name.
 ISO live flavors and offline payloads are separate lists. A GNOME NVIDIA live
 image can carry non-NVIDIA GNOME in its offline store. Both lists must name
 flavors that exist in the matrix.
+
+## ISO Builder presentation slice
+
+`[iso_builder]` now owns the bounded browser presentation and default choices.
+See [ISO Builder configuration](ISO-BUILDER-CONFIG.md) for export, validation,
+drift checks and catalog authority boundaries. This does not move installed
+image identity, artwork or installer appearance into primary configuration.
+
+The Marlin GDM override also belongs to `[desktops.tuna-arch]`. Its generated
+adapter has the same precedence as the former tracked YAML. The regression
+fixture at commit `aa9810e9` preserves the complete package and hook contract;
+other Tuna Desktop cells retain their existing display manager.
