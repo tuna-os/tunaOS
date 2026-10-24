@@ -1,0 +1,174 @@
+{
+  "reviewed_collector_commit": "15d82e5efcd37035322567f4d39cc30337c70218",
+  "catalog_except_target_pin": {
+    "schema_version": 2,
+    "coverage": "configured-target",
+    "variant": "flounder",
+    "family": "apt",
+    "os_id": "debian",
+    "release": "trixie",
+    "platforms": [
+      "linux/amd64"
+    ],
+    "flavors": [
+      "base",
+      "kde",
+      "xfce"
+    ],
+    "observed_base_image": "docker.io/library/debian:trixie@sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308",
+    "source_observation": "config/package-observations/flounder-amd64.json",
+    "source_observation_sha256": "1b4857d081dc460381e537a1fb5f3a72407a7883313b78fb0301db6627b075b6",
+    "target_observation": "config/package-observations/flounder-target-amd64.json",
+    "sources": [
+      {
+        "id": "trixie",
+        "role": "base",
+        "uri": "https://deb.debian.org/debian/",
+        "suite": "trixie",
+        "origin": "Debian",
+        "label": "Debian",
+        "codename": "trixie",
+        "components": [
+          "main"
+        ],
+        "keyring": "config/package-keys/debian-trixie.pgp",
+        "keyring_sha256": "506b815cbb32d9b6066b4a2aa524071e071761e7e7f68c3ac74f3061ba852017",
+        "primary_fingerprints": [
+          "04B54C3CDCA79751B16BC6B5225629DF75B188BD",
+          "41587F7DB8C774BCCF131416762F67A0B2C39DE4"
+        ],
+        "clock_skew_seconds": 10,
+        "freshness": {
+          "mode": "pinned-release",
+          "inrelease_sha256": "0584fba32e13e0ab8285fb16c27adea1ec03a73669c18702821094fd6ca86675"
+        }
+      },
+      {
+        "id": "trixie-updates",
+        "role": "base",
+        "uri": "https://deb.debian.org/debian/",
+        "suite": "trixie-updates",
+        "origin": "Debian",
+        "label": "Debian",
+        "codename": "trixie-updates",
+        "components": [
+          "main"
+        ],
+        "keyring": "config/package-keys/debian-trixie.pgp",
+        "keyring_sha256": "506b815cbb32d9b6066b4a2aa524071e071761e7e7f68c3ac74f3061ba852017",
+        "primary_fingerprints": [
+          "04B54C3CDCA79751B16BC6B5225629DF75B188BD"
+        ],
+        "clock_skew_seconds": 10,
+        "freshness": {
+          "mode": "signed-valid-until",
+          "max_age_seconds": 604800
+        }
+      },
+      {
+        "id": "trixie-security",
+        "role": "base",
+        "uri": "https://deb.debian.org/debian-security/",
+        "suite": "trixie-security",
+        "origin": "Debian",
+        "label": "Debian-Security",
+        "codename": "trixie-security",
+        "components": [
+          "main"
+        ],
+        "keyring": "config/package-keys/debian-trixie.pgp",
+        "keyring_sha256": "506b815cbb32d9b6066b4a2aa524071e071761e7e7f68c3ac74f3061ba852017",
+        "primary_fingerprints": [
+          "5E04A1E3223A19A20706E20F9904613D4CCE68C6"
+        ],
+        "clock_skew_seconds": 10,
+        "freshness": {
+          "mode": "signed-valid-until",
+          "max_age_seconds": 604800
+        }
+      },
+      {
+        "id": "tailscale",
+        "role": "build",
+        "uri": "https://pkgs.tailscale.com/stable/debian/",
+        "suite": "trixie",
+        "origin": "Tailscale",
+        "label": "Tailscale",
+        "codename": "trixie",
+        "components": [
+          "main"
+        ],
+        "declaration_url": "https://pkgs.tailscale.com/stable/debian/trixie.tailscale-keyring.list",
+        "declaration_sha256": "5a1b21b30892bf22fb5d7c4f52fefe9b65efda2100e82abba2e0849da2a2264b",
+        "keyring_url": "https://pkgs.tailscale.com/stable/debian/trixie.noarmor.gpg",
+        "keyring": "config/package-keys/tailscale-trixie.gpg",
+        "keyring_sha256": "3e03dacf222698c60b8e2f990b809ca1b3e104de127767864284e6c228f1fb39",
+        "primary_fingerprints": [
+          "2596A99EAAB33821893C0A79458CA832957F5868"
+        ],
+        "clock_skew_seconds": 10,
+        "freshness": {
+          "mode": "signed-date",
+          "max_age_seconds": 604800
+        }
+      }
+    ]
+  },
+  "unchanged_files": {
+    "config/package-observations/flounder-amd64.json": "1b4857d081dc460381e537a1fb5f3a72407a7883313b78fb0301db6627b075b6",
+    "config/package-keys/debian-trixie.pgp": "506b815cbb32d9b6066b4a2aa524071e071761e7e7f68c3ac74f3061ba852017",
+    "config/package-keys/tailscale-trixie.gpg": "3e03dacf222698c60b8e2f990b809ca1b3e104de127767864284e6c228f1fb39",
+    "tests/fixtures/package-catalog/debian-trixie.InRelease": "0584fba32e13e0ab8285fb16c27adea1ec03a73669c18702821094fd6ca86675",
+    "tests/fixtures/package-catalog/tailscale-trixie.InRelease": "65b731b93c7cdbdd84d90bdc665b0162d34affda38e59b24423277b8b31a17b9"
+  },
+  "original_target_observation": {
+    "schema_version": 1,
+    "variant": "flounder",
+    "flavors": [
+      "base",
+      "kde",
+      "xfce"
+    ],
+    "platform": "linux/amd64",
+    "base_image": "docker.io/library/debian:trixie@sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308",
+    "observed_at": "2026-10-24T02:30:03Z",
+    "configuration_files": {
+      "Containerfile.debian": {
+        "sha256": "66cc16aacc5e69a9fbe6692fc1a1e28322dce6ed72de7ce6c51d19c50b071022",
+        "size": 18383
+      },
+      "build_scripts/20-packages.sh": {
+        "sha256": "76dfeec44ef4d8b489e511af3cbadd6535578213086e828074317a5b84d3a149",
+        "size": 7585
+      },
+      "build_scripts/desktop/install-desktop.sh": {
+        "sha256": "2d4a2d92ac4b21890f7ec0f9a33d4b8ef702442084ab243dc9600fec8d9a3d44",
+        "size": 61254
+      },
+      "scripts/build-image-inner.sh": {
+        "sha256": "3f3fcafccaf9ad92b04cfe0f910efa4f2f14a31110b588d0a31e1a279b826411",
+        "size": 20911
+      },
+      "image-versions.yaml": {
+        "sha256": "bf2b2593316fd1377e8fac1a7e684e18bd9da3b409c97bb701d560020b03420c",
+        "size": 12701
+      }
+    },
+    "copied_package_source_files": {},
+    "common_image": "ghcr.io/projectbluefin/common@sha256:f7934f263b4357cba6ad253e7a3ce8d667cd478798a137be8f3a18c04806cbee",
+    "build_sources": [
+      {
+        "id": "tailscale",
+        "uri": "https://pkgs.tailscale.com/stable/debian/",
+        "suite": "trixie",
+        "components": [
+          "main"
+        ],
+        "declaration_url": "https://pkgs.tailscale.com/stable/debian/trixie.tailscale-keyring.list",
+        "declaration_sha256": "5a1b21b30892bf22fb5d7c4f52fefe9b65efda2100e82abba2e0849da2a2264b",
+        "keyring_sha256": "3e03dacf222698c60b8e2f990b809ca1b3e104de127767864284e6c228f1fb39",
+        "keyring_url": "https://pkgs.tailscale.com/stable/debian/trixie.noarmor.gpg"
+      }
+    ]
+  }
+}

@@ -1963,3 +1963,15 @@ outreach copy or creative briefs, use the reasoned region or file opt-out in
 [the contributor prose policy](../CONTRIBUTING.md#prose-checks-ste). Keep
 technical steps checked on mixed pages. Run `just ste` again; do not increase
 `.ste-budget` or exclude a whole directory to pass one content change.
+
+
+### Collector fails after an unrelated version pin changes
+
+Symptom: tests for configured targets fail with `effective package-source
+configuration changed; refresh observation`. On main `cab19ddd` plus collector
+`15d82e5e`, six tests failed. The receipt for `image-versions.yaml` predated an
+update to the Utah digest. Hashes for the other four inputs matched.
+Follow the [source-only review procedure](BASE-PACKAGE-SEARCH.md#source-only-review-of-an-unrelated-input-change)
+only after you prove that all effective source and trust inputs match.
+Preserve whole-file rejection and signed metadata expiry. A target receipt
+refresh is not new upstream metadata or installed-image evidence.

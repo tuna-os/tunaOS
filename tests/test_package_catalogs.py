@@ -1,13 +1,16 @@
-"""Synthetic schema/freshness tests; no signature or live-image proof is claimed."""
+"""Schema and freshness tests with frozen signatures; no live-image proof."""
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+import hashlib
+import json
+import shutil
 import pytest
 from pathlib import Path
 import sys
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 from lib.package_catalogs import CatalogError, check_authenticated_dates, index_path, validate
-from lib import package_catalogs
+from lib import package_catalogs, signed_apt, tunaos_config
 
 
 def fixture():
@@ -418,3 +421,62 @@ def test_primary_catalog_reference_must_exist():
         tunaos_config.validate(document)
     document['package_catalogs'] = {}
     assert tunaos_config.validate(document) is document
+
+
+BASELINE = json.loads((ROOT / 'tests/fixtures/package-catalog/source-review-baseline.json').read_text())
+INPUTS = tuple(BASELINE['original_target_observation']['configuration_files'])
+
+
+def target(tmp_path):
+    document = tunaos_config.load()
+    catalog = document['package_catalogs']['debian-trixie']
+    for name in (*INPUTS, catalog['target_observation']):
+        destination = tmp_path / name
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(ROOT / name, destination)
+    return document, catalog
+
+
+@pytest.mark.parametrize('name', INPUTS)
+def test_source_review_keeps_whole_file_binding(tmp_path, name):
+    document, catalog = target(tmp_path)
+    package_catalogs.bind_target_configuration(catalog, document, tmp_path, 'base')
+    path = tmp_path / name
+    # Even a comment with no package-source effect needs a new source review.
+    path.write_bytes(path.read_bytes() + b'\n# unrelated edit\n')
+    with pytest.raises(package_catalogs.CatalogError, match='configuration changed'):
+        package_catalogs.bind_target_configuration(catalog, document, tmp_path, 'base')
+
+
+def test_source_review_preserves_original_upstream_trust():
+    catalog = tunaos_config.load()['package_catalogs']['debian-trixie']
+    assert {k: v for k, v in catalog.items() if k != 'target_observation_sha256'} == BASELINE['catalog_except_target_pin']
+    for name, expected in BASELINE['unchanged_files'].items():
+        assert hashlib.sha256((ROOT / name).read_bytes()).hexdigest() == expected, name
+    original = BASELINE['original_target_observation']
+    current = json.loads((ROOT / catalog['target_observation']).read_text())
+    # Only source-review time and the reviewed version-file receipt can change.
+    assert datetime.fromisoformat(current['observed_at'].replace('Z', '+00:00')) > datetime.fromisoformat(original['observed_at'].replace('Z', '+00:00'))
+    current['observed_at'] = original['observed_at']
+    current['configuration_files']['image-versions.yaml'] = original['configuration_files']['image-versions.yaml']
+    assert current == original
+
+
+def test_new_source_review_does_not_renew_expired_signed_metadata(tmp_path):
+    document, catalog = target(tmp_path)
+    source = next(s for s in catalog['sources'] if s['id'] == 'tailscale')
+    envelope = (ROOT / 'tests/fixtures/package-catalog/tailscale-trixie.InRelease').read_bytes()
+    key = (ROOT / source['keyring']).read_bytes()
+    # Real frozen signature; no transport or current upstream freshness claim.
+    payload, _ = signed_apt.verify_inrelease(envelope, key, source)
+    fields, _ = signed_apt.parse_release(payload)
+    expired = package_catalogs.signed_timestamp(fields) + timedelta(seconds=source['freshness']['max_age_seconds'])
+    observation_path = tmp_path / catalog['target_observation']
+    observation = json.loads(observation_path.read_text())
+    observation['observed_at'] = expired.isoformat()
+    raw = (json.dumps(observation, indent=2) + '\n').encode()
+    observation_path.write_bytes(raw)
+    catalog['target_observation_sha256'] = hashlib.sha256(raw).hexdigest()
+    package_catalogs.bind_target_configuration(catalog, document, tmp_path, 'base')
+    with pytest.raises(package_catalogs.CatalogError, match='signed metadata expired'):
+        package_catalogs.check_authenticated_dates(source, fields, expired, hashlib.sha256(envelope).hexdigest())

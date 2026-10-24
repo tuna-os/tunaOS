@@ -25,7 +25,7 @@ stale metadata, changed image or configuration file, invalid signature, wrong
 release or architecture, partial index, or unsupported target fails the whole
 search. There is no add or write option.
 
-`configuration_observed_at` identifies the reviewed extraction that binds the
+`configuration_observed_at` identifies the source review that binds the
 collector to the effective target. The observation pins
 `Containerfile.debian`, `build_scripts/20-packages.sh`,
 `build_scripts/desktop/install-desktop.sh`, `scripts/build-image-inner.sh`, and
@@ -111,3 +111,45 @@ source inventory, verify public trust material, authenticate all metadata, and
 record the new identities. A source or key change needs separate review. A
 failed signature never triggers key retrieval. The collector has no write or
 automatic trust-refresh path.
+
+
+### Source-only review of an unrelated input change
+
+A hash covers the complete file, including unrelated edits. A narrow source
+review can update a target receipt only when the effective package sources and
+all upstream trust inputs remain unchanged. It cannot replace the full refresh
+above when an image, source declaration, key, repository set, or trust policy
+changes. If you cannot prove equivalence, stop and do the full review.
+
+1. Record the collector commit and exact integration tree. Compare all five
+   recorded files against the original receipt, then review every changed byte.
+   Check the pins for the Flounder base and common image. Check copied sources, keys, and enabled flavors.
+   Check each desktop's repositories and pre-install operations. Trace changed inputs to their actual consumers.
+2. Compare the base observation and source declarations with the reviewed collector.
+   Compare keys, fingerprints, envelope pins, and freshness limits. Compare each byte of the frozen metadata. Do not change their
+   timestamps or hashes to make an unrelated input pass.
+3. Record the measured reason the delta cannot affect those sources. Update
+   only the receipt for the changed file and the target's source-review time.
+   Hash the complete target observation and update its TOML pin. Keep the checks on complete files; never omit the version file or ignore hash drift.
+4. Run the catalog, signed-APT, search and primary-config tests on the exact
+   integration tree. Verify that stale receipts still fail. A new review time must not extend the validity of signed metadata.
+   Record failures from aggregate checks separately. A later input change needs another review.
+
+For the fresh review on 2026-10-24 at 18:44:02 UTC, local validation used collector
+`15d82e5efcd37035322567f4d39cc30337c70218` with
+main `cab19ddd5a5bf9f3bf0c6066bd2c2fa0bcad88df` (pre-repair integration tree
+`fe9f8d8fc917dea9a84e83a60e81239242f63d2e`). Four recorded files still matched.
+The only version-file change was the Utah package digest from `5f09530b` to
+`d3b5bac2`. The build script passes that input to the Hummingbird RPM path;
+`Containerfile.debian` does not consume it. The Flounder base and common image
+pins match the original receipt. All four declarations, public keys, copied-source inventory,
+and KDE/XFCE repository policies match too. The two new main merges change
+an Arch base pin and the Renovate validator, neither a Flounder source input.
+
+The regression fixture `source-review-baseline.json` records the original
+collector's trust values and file hashes. An intentional update to trust
+needs a full review and an explicit fixture update. This review changed
+no base observation or signed metadata. It did not fetch fresh metadata,
+inspect a new image, resolve a package transaction, or verify a boot/install.
+The target timestamp records this new source review only. This implementation
+uses repository source. It does not import the separately saved repair.
