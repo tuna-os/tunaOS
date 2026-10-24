@@ -63,7 +63,9 @@ def test_oo7_is_confined_to_eln():
 
 def contract_functions():
     source = CHECK.read_text()
-    bodies = []
+    waive = re.search(r"^waive\(\) \{.*\}$", source, re.M)
+    assert waive, "the desktop contract has no waive()"
+    bodies = ["TUNAOS_CONTRACT_WAIVED=0", waive.group(0)]
     for name in ("require_any_glob", "require_any_executable", "require_secret_service"):
         match = re.search(
             rf"^(?:function[ \t]+)?{name}[ \t]*(?:\(\))?[ \t]*\{{.*?^\}}",
@@ -76,7 +78,7 @@ def contract_functions():
 
 
 def image(
-    tmp_path, os_id, files, *, quoted_id=False, variant_id=None, executable=True
+    tmp_path, os_id, files, *, quoted_id=False, variant_id=None, executable=True, env=None
 ):
     (tmp_path / "usr/lib").mkdir(parents=True)
     value = f'"{os_id}"' if quoted_id else os_id
@@ -90,8 +92,12 @@ def image(
         path.write_text("")
         if executable and path.name in {"oo7-daemon", "gnome-keyring-daemon"}:
             path.chmod(0o755)
-    script = contract_functions() + f'\nrequire_secret_service "{tmp_path}"\necho satisfied\n'
-    return subprocess.run(["bash", "-c", script], capture_output=True, text=True, env={"PATH": "/usr/bin:/bin"})
+    script = contract_functions() + (
+        f'\nrequire_secret_service "{tmp_path}"\necho "satisfied waived=$TUNAOS_CONTRACT_WAIVED"\n'
+    )
+    return subprocess.run(
+        ["bash", "-c", script], capture_output=True, text=True, env={"PATH": "/usr/bin:/bin", **(env or {})}
+    )
 
 
 OO7_FILES = ["usr/libexec/oo7-daemon", "usr/lib64/security/pam_oo7.so"]
@@ -115,7 +121,7 @@ def test_the_contract_accepts_each_base_native_provider(
         tmp_path, os_id, files, quoted_id=quoted_id, variant_id=variant_id
     )
     assert result.returncode == 0, result.stderr
-    assert result.stdout == "satisfied\n"
+    assert result.stdout == "satisfied waived=0\n"
 
 
 @pytest.mark.parametrize(
@@ -137,6 +143,29 @@ def test_the_contract_rejects_a_missing_native_provider(tmp_path, os_id, files):
 
 def test_the_contract_rejects_a_non_executable_daemon(tmp_path):
     result = image(tmp_path, "fedora", KEYRING_FILES, executable=False)
+    assert result.returncode == 1
+    assert "satisfied" not in result.stdout
+
+
+@pytest.mark.parametrize(
+    "os_id,files,waived",
+    [
+        ("fedora", [], 1),
+        ("fedora", OO7_FILES, 1),
+        ("eln", ["usr/lib64/security/pam_oo7.so"], 1),
+        ("eln", KEYRING_FILES, 2),
+    ],
+)
+def test_hummingbird_bootstrap_waiver_still_applies(tmp_path, os_id, files, waived):
+    # Every require_* honours the hummingbird bootstrap waiver except on
+    # cosmic (tunaOS#2513); the executable check must not be the exception.
+    result = image(tmp_path, os_id, files, env={"IS_HUMMINGBIRD": "true", "desktop": "gnome"})
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == f"satisfied waived={waived}\n"
+
+
+def test_hummingbird_cosmic_gets_no_waiver(tmp_path):
+    result = image(tmp_path, "fedora", [], env={"IS_HUMMINGBIRD": "true", "desktop": "cosmic"})
     assert result.returncode == 1
     assert "satisfied" not in result.stdout
 
