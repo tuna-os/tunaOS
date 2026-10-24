@@ -96,6 +96,13 @@ def retained_context(root: Path, data: bytes = b"{}") -> dict:
     }
 
 
+def write_retained_input(root: Path, payload, raw: str | None = None) -> Path:
+    path = root / "docs/matrix-snapshots/inputs.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(raw if raw is not None else json.dumps(payload))
+    return path
+
+
 def test_one_snapshot_passes_without_mutating_evidence():
     document, payload = pair()
     original = copy.deepcopy(payload)
@@ -226,10 +233,15 @@ def test_generator_build_keeps_document_only_compatibility(monkeypatch):
 
 def test_replay_rejects_changed_configuration(tmp_path, monkeypatch):
     payload = json.loads(RETAINED.read_text())
+    recorded = dict(payload["context"]["configuration_sha256"])
     payload["context"]["configuration_sha256"]["tunaos.toml"] = "0" * 64
-    path = tmp_path / "input.json"
-    path.write_text(json.dumps(payload))
-    monkeypatch.chdir(ROOT)
+    path = write_retained_input(tmp_path, payload)
+    monkeypatch.setattr(
+        matrix_snapshot,
+        "configuration_digest",
+        lambda name, root=Path("."): recorded[name],
+    )
+    monkeypatch.chdir(tmp_path)
     with pytest.raises(ValueError, match="configuration changed"):
         load_retained_inputs(path)
 
@@ -257,9 +269,8 @@ def test_retained_assertions_need_manifested_dated_sources(tmp_path, monkeypatch
         next(iter(payload["luks"].values()))[1] = "not-a-date"
     else:
         next(stage for stage in payload["stage"].values() if stage["jobs"])["cell_run"] = {}
-    path = tmp_path / "inputs.json"
-    path.write_text(json.dumps(payload))
-    monkeypatch.chdir(ROOT)
+    path = write_retained_input(tmp_path, payload)
+    monkeypatch.chdir(tmp_path)
     with pytest.raises(ValueError, match=message):
         load_retained_inputs(path)
 
@@ -287,19 +298,19 @@ def test_malformed_retained_input_raises_one_clear_error(tmp_path, monkeypatch, 
         payload["evaluation_date"] = "23/10/2026"
     elif change == "bad-assertion-date":
         next(iter(payload["luks"].values()))[1] = "yesterday"
-    path = tmp_path / "inputs.json"
-    path.write_text("{" if change == "not-json" else json.dumps(payload))
-    monkeypatch.chdir(ROOT)
+    path = write_retained_input(
+        tmp_path,
+        payload,
+        raw="{" if change == "not-json" else None,
+    )
+    monkeypatch.chdir(tmp_path)
     with pytest.raises(ValueError, match=message):
         load_retained_inputs(path)
 
 
-def test_retained_input_outside_the_checkout_is_rejected(tmp_path, monkeypatch):
-    payload = json.loads(RETAINED.read_text())
-    recorded = payload["context"]["configuration_sha256"]
-    monkeypatch.setattr(matrix_snapshot, "configuration_digest", lambda name, root=Path("."): recorded[name])
+def test_retained_input_outside_the_checkout_is_rejected_before_reading(tmp_path, monkeypatch):
     path = tmp_path / "inputs.json"
-    path.write_text(json.dumps(payload))
+    path.write_text("{")
     monkeypatch.chdir(ROOT)
     with pytest.raises(ValueError, match="inside the repository checkout"):
         load_retained_inputs(path)
