@@ -12,16 +12,17 @@ from scripts.lib import iso_builder_config as builder
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def full_line_comments(source):
+def full_line_comments(source: bytes) -> list[bytes]:
     return [line for line in source.splitlines() if line.lstrip().startswith(b'#')]
 
 
 def test_package_edit_preserves_all_primary_section_comments():
     source = (ROOT / 'tunaos.toml').read_bytes()
-    anchor = b'"gnome-base/gnome-light",'
-    assert source.count(anchor) == 1
-    source = source.replace(anchor, anchor + b' # inline edit sentinel', 1)
     document = config.validate(config.parse(source))
+    required = document['desktops']['gnome']['packages']['emerge']['required']
+    anchors = [f'"{package}",'.encode() for package in required]
+    anchor = next(candidate for candidate in anchors if source.count(candidate) == 1)
+    source = source.replace(anchor, anchor + b' # inline edit sentinel', 1)
     scope = {'gnome:emerge': ('gnome', 'emerge')}
     resolved = {'gnome:emerge': 'sys-process/tunaos-comment-test'}
     edited = author.edit(source, document, scope, resolved)
@@ -29,7 +30,7 @@ def test_package_edit_preserves_all_primary_section_comments():
     inserted = b'  "sys-process/tunaos-comment-test",\n'
     assert edited.count(inserted) == 1
     assert edited.replace(inserted, b'', 1) == source
-    assert b'"gnome-base/gnome-light", # inline edit sentinel' in edited
+    assert anchor + b' # inline edit sentinel' in edited
     expected = copy.deepcopy(document)
     expected['desktops']['gnome']['packages']['emerge']['required'].append(resolved['gnome:emerge'])
     assert config.parse(edited) == expected
