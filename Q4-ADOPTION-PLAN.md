@@ -28,6 +28,14 @@ Without sequencing, Hacktoberfest momentum dissipates into Q4 backlog noise and 
 
 ## Lever owners
 
+The [production prospect sprint](docs/outreach/Q4-PRODUCTION-PROSPECTS.md)
+supports the November 1 adopter milestone and the November 15 health check
+in [#3146](https://github.com/tuna-os/tunaOS/issues/3146). It proposes five
+contacts, evaluation requests, consent steps, and follow-up dates. Contact
+evidence belongs in the [outreach ledger](docs/ADOPTION-OUTREACH-STATUS.md);
+production reports belong in [ADOPTERS.md](ADOPTERS.md). A prospect or a
+prepared invitation does not satisfy the production-entry milestone.
+
 | Lever | Tracker | Owner |
 |-------|---------|-------|
 | Hacktoberfest seeding + conversion | #1537 | strategist / guide |

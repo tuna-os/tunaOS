@@ -60,6 +60,66 @@ installer launch or Welcome page is not installation. A harness error is not
 proof of a product defect and cannot produce a release pass. A moved tag invalidates the affected verdict until the next test.
 A change to an input used by that test does the same.
 
+## Qualification reuse and first-failure contract
+
+`scripts/qualification-evidence.py` is the shared fail-closed boundary for
+qualification adapters. `schemas/qualification-reuse-v1.schema.json` defines
+producer receipts, current inputs and reuse decisions. A producer names the
+exact manifest and config digests, source and config receipts, consumed build
+inputs, platform, tool versions, workflow run and artifact. Run and artifact URLs must agree with their numeric GitHub IDs.
+Tags and partial receipts cause a rebuild. Changed build inputs, identities or platforms also cause a rebuild.
+After review, refresh the source receipt in the same push as a change to build source.
+Never edit the digest alone.
+
+Harness inputs and tools name the assertions they affect. Their changes may
+reuse the exact image bytes. The decision sets the affected assertions to
+`not-run`. The new harness cannot use an old verdict.
+
+Build inputs include installer, engine and overlay pins, config assets and
+package sources. Keep the existing limits for artifact retention and size. The
+contract does not upload artifacts. It does not extend retention or approve
+new storage.
+
+Collect the current inputs independently. Then verify them against a producer
+receipt:
+
+```sh
+python3 scripts/qualification-evidence.py verify-reuse \
+  --producer producer-receipt.json \
+  --current current-inputs.json \
+  --output reuse-decision.json
+```
+
+`schemas/qualification-report-v1.schema.json` is the public diagnostic
+allowlist. Write each event as one JSON object on its own line. Keep execution
+order. Then run:
+
+```sh
+python3 scripts/qualification-evidence.py report \
+  --context qualification-context.json \
+  --events qualification-events.jsonl \
+  --output qualification-report.json
+```
+
+The context declares every required assertion and retained evidence URL.
+Unreported assertions remain `not-run`; skipped and failed assertions remain
+distinct. A Welcome screenshot is its own assertion and never changes
+`install` or `target-reboot`. The report keeps the first failed event. A later
+cleanup failure stays visible but does not replace the original cause.
+
+Failed events use one of `product`, `harness`, `runner` or `unknown`. Each event
+cites an evidence ID from the context. The tool never infers a product defect.
+The `unknown` class remains `unknown`.
+
+Use bounded identifiers for commands. Do not put raw argument vectors in the
+report. The closed schema has no field for a message, raw log, environment,
+host path, credential or installer user data.
+
+The tool marks a bad event stream with a bounded `harness` /
+`malformed-evidence` first failure. The report does not copy the bad contents.
+The tool limits each report to 256 KiB. Any failed, skipped or not-run
+assertion keeps `releasePass` false.
+
 ## Dependency and review boundaries
 
 The compatibility foundation is [#3434](https://github.com/tuna-os/tunaOS/pull/3434)

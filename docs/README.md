@@ -19,6 +19,7 @@ user-facing site:
 |-----|----------------|
 | [CONTRIBUTOR-FIRST-PR.md](CONTRIBUTOR-FIRST-PR.md) | Five small tasks, fork commands, checks, and review help |
 | [CONTRIBUTOR-ROADMAP.md](CONTRIBUTOR-ROADMAP.md) | Learning stages, weekly help, recognition, and program goals |
+| [BUG-REPORT-EXAMPLE.md](BUG-REPORT-EXAMPLE.md) | Fictional bug report with reproduction steps, evidence, and privacy placeholders |
 | [BETA-RELEASE-READINESS.md](BETA-RELEASE-READINESS.md) | BETA product release gates, owners, audit and consumer documentation handoff (#2935) |
 | [AGENT_GUIDE.md](AGENT_GUIDE.md) | Repo architecture: variants, flavors, build stages, key files |
 | [HUMMINGBIRD.md](HUMMINGBIRD.md) | Fedora Hummingbird variant architecture, rolling release model, and package snapshot state |
@@ -64,12 +65,15 @@ user-facing site:
 | [GNOME-51-RELEASE-CONTENT.md](GNOME-51-RELEASE-CONTENT.md) | GNOME 51.0 release-week content and packaging hook (#1334) |
 | [CNCF-BOOTC-SHOWCASE.md](CNCF-BOOTC-SHOWCASE.md) | CNCF bootc ecosystem showcase and case study draft (#1340) |
 | [CHAINGUARD-COLLABORATION.md](CHAINGUARD-COLLABORATION.md) | Chainguard supply-chain security collaboration angle brief (#1339) |
+| [FEDORA45-RELEASE-OUTREACH.md](FEDORA45-RELEASE-OUTREACH.md) | Fedora release-window positioning, shared adopter call, showcase evidence, and media notes (#3089) |
 | [FEDORA-OUTREACH-READINESS.md](FEDORA-OUTREACH-READINESS.md) | Bonito completeness evidence and fedora-desktop outreach handoff (#3001) |
 | [ADOPTION-OUTREACH-STATUS.md](ADOPTION-OUTREACH-STATUS.md) | Evidence ledger for DistroWatch, CNCF, and adopter outreach |
+| [outreach/Q4-PRODUCTION-PROSPECTS.md](outreach/Q4-PRODUCTION-PROSPECTS.md) | Five proposed contacts, evaluation requests, and follow-up dates for #3146 |
 | [PANTHEON-FEEDBACK-LOOP.md](PANTHEON-FEEDBACK-LOOP.md) | How Gurnard's Pantheon packaging findings get back to elementary (#1469) |
 | [SNAPDRAGON.md](SNAPDRAGON.md) | Copilot-PC support boundary, boot prerequisites, NPU evidence, test reports and prepared Discussion #93 reply |
 | [SNAPDRAGON-X13S-OUTREACH.md](SNAPDRAGON-X13S-OUTREACH.md) | Draft plan for reaching the Snapdragon X13s Linux community |
 | [TECH-PRESS-PITCHES.md](TECH-PRESS-PITCHES.md) | Pitch pack for Linux technology press, with guardrails on what we may claim |
+| [outreach/LWN-FEATURE-PROPOSAL.md](outreach/LWN-FEATURE-PROPOSAL.md) | LWN feature research, author policy, and outreach handoff (#3113) |
 | [ADOPTION-CALL.md](ADOPTION-CALL.md) | Public call for adopters and evaluation feedback |
 | [ALMALINUX-COMMUNITY-INTRO.md](ALMALINUX-COMMUNITY-INTRO.md) | Introduction draft for the AlmaLinux community |
 | [FEDIVERSE-PLAYBOOK.md](FEDIVERSE-PLAYBOOK.md) | Release-announcement playbook for Fediverse communities |
