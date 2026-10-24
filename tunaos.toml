@@ -6,6 +6,13 @@ schema_version = 1
 
 [build]
 global_platforms = ["linux/amd64", "linux/arm64"]
+[iso_delivery]
+# Cutover entries remain empty until qualification supplies a current catalog
+# and matching receipts. Keep the retained inventory here, not in generated
+# .github/build-config.yml, so setup-yq cannot discard rollback protection.
+cutover_targets = []
+retained_r2_isos = []
+
 
 # ── Grouped dedup ISOs (issue #455) ───────────────────────────────────────────
 # Per-desktop-per-flavor ISOs are wasteful: all desktops on a variant share the

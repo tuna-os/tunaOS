@@ -1722,6 +1722,13 @@ capture first, then sends the graceful powerdown itself before the kill.
 
 **Fix:** The pinned download moved into shared `build_scripts/install-uupd.sh` (same `image-versions.yaml` pin; stages the binary plus `uupd.service`, `uupd.timer`, `uupd-manual.service` before install; smoke with `UUPD_CONTEXT="$PWD" UUPD_ROOT="$scratch"` into a disposable root). The apt and dnf branches of `10-base-packages.sh` delegate to it unchanged in behavior, and `Containerfile.arch` carries the pin file and runs the installer before `40-services.sh`. The context exact-set test now treats `install-uupd.sh` as a consumer of the pin file.
 
+### Matrix test cannot find `FULL_MATRIX` (#3395)
+
+**Symptom:** `test_the_build_matrix_honours_build_image.py` raises `ValueError: substring not found` in `_flatten_step`.
+
+**Cause:** The workflow converts YAML in `CONFIG_JSON` before it builds the matrix with jq. The test still searched for an inline yq call.
+
+**Fix:** Locate the `FULL_MATRIX` assignment. Keep the assertions for `.variants[]`, `.flavors[]`, and the `build_image` filter.
 ### STE fails on matrix prose
 
 **Symptom:** STE reports 1610 findings with a budget of 1609.

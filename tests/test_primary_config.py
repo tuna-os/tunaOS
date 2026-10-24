@@ -208,6 +208,25 @@ def test_projection_does_not_mutate_source():
     projected["variants"][0]["flavors"].clear()
     assert document["variants"][next(iter(document["variants"]))]["flavors"]
 
+def test_iso_delivery_retained_inventory_survives_projection():
+    document = config.load()
+    document["iso_delivery"]["retained_r2_isos"] = ["yellowfin-gnome-10-x86_64.iso"]
+    generated = json.loads(config.render(document))
+    assert generated["iso_delivery"]["retained_r2_isos"] == [
+        "yellowfin-gnome-10-x86_64.iso"
+    ]
+
+
+def test_iso_delivery_retained_inventory_rejects_duplicates():
+    document = config.load()
+    document["iso_delivery"]["retained_r2_isos"] = [
+        "yellowfin-gnome-10-x86_64.iso",
+        "yellowfin-gnome-10-x86_64.iso",
+    ]
+
+    with pytest.raises(config.ConfigError, match="duplicate ISO basename"):
+        config.validate(document)
+
 
 def test_missing_vendor_parser_explains_restore_without_download(tmp_path):
     import shutil
@@ -512,3 +531,25 @@ def test_publication_validator_tracks_workflow_tag_producers():
     assert '$IMAGE_REGISTRY/$IMAGE_NAME:${tag}-testing' in workflow
     assert canonical + '-${SAFE_PLATFORM}"' in workflow
     assert canonical + '-${SAFE_PLATFORM}.packages"' in workflow
+def test_iso_delivery_cutover_target_semantics_are_strict():
+    document = config.load()
+    target = {
+        "variant": "bonito",
+        "flavor": "gnome",
+        "platform": "linux/amd64",
+        "qualification": "browser-qualified",
+        "qualified_at": "2026-10-18",
+        "evidence": "qualification/bonito-gnome.json",
+    }
+    valid = copy.deepcopy(document)
+    valid["iso_delivery"]["cutover_targets"] = [target]
+    config.validate(valid)
+    for key, value, message in (
+        ("platform", "linux/mips64", "unsupported platform"),
+        ("qualification", "accepted", "expected browser-qualified"),
+        ("qualified_at", "2026-02-30", "invalid ISO date"),
+    ):
+        broken = copy.deepcopy(valid)
+        broken["iso_delivery"]["cutover_targets"][0][key] = value
+        with pytest.raises(config.ConfigError, match=message):
+            config.validate(broken)

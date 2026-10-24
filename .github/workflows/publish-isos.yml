@@ -62,7 +62,9 @@ jobs:
           WANT_VARIANT: ${{ inputs.variant || 'all' }}
           WANT_FLAVOR: ${{ inputs.flavor || 'all' }}
         run: |
-          MATRIX=$(yq -o json .github/build-config.yml | jq -c \
+          CONFIG_JSON="${RUNNER_TEMP}/build-config.json"
+          yq -o=json '.' .github/build-config.yml > "$CONFIG_JSON"
+          MATRIX=$(jq -c \
             --arg v "$WANT_VARIANT" --arg f "$WANT_FLAVOR" '{
               include: [
                 .variants[] | . as $var |
@@ -70,9 +72,10 @@ jobs:
                 select(.build_iso == true) |
                 select($v == "all" or $var.id == $v) |
                 select($f == "all" or .id == $f) |
-                {variant: $var.id, flavor: .id}
+                {variant: $var.id, flavor: .id, platform: "linux/amd64"}
               ]
-            }')
+            }' "$CONFIG_JSON" | python3 scripts/iso-delivery-policy.py \
+              --config-json "$CONFIG_JSON" annotate-target-matrix)
           COUNT=$(echo "$MATRIX" | jq '.include | length')
           echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
           echo "count=$COUNT" >> "$GITHUB_OUTPUT"
@@ -97,7 +100,7 @@ jobs:
       variant: ${{ matrix.variant }}
       flavor: ${{ matrix.flavor }}
       image-tag: ${{ matrix.flavor }}
-      upload-r2: ${{ inputs.skip_upload != true }}
+      upload-r2: ${{ inputs.skip_upload != true && !matrix.r2_cutover }}
     secrets:
       R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
       R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
