@@ -37,7 +37,7 @@ def test_tuna_cells_are_amd64_images_without_iso_expansion():
         flavor = next(f for f in variant["flavors"] if f["id"] == "tuna")
         assert flavor["stage"] == 2
         assert flavor["platforms"] == ["linux/amd64"]
-        assert flavor.get("promotion_hold", False) is (variant["id"] == "guppy")
+        assert flavor.get("promotion_hold", False) == (variant["id"] == "guppy")
         assert not flavor["build_iso"]
         assert not flavor["build_qcow2"]
         assert flavor["luks_e2e"] is False
@@ -284,6 +284,7 @@ def test_gentoo_cell_installs_the_pinned_signed_native_package_and_session_depen
     assert "COPY experiences /experiences" in context
     assert "\nFROM desktop AS tuna\n" in containerfile
 
+
 def test_gentoo_tuna_configures_wlroots_and_user_audio_services(tmp_path):
     import subprocess
 
@@ -341,7 +342,6 @@ def test_gentoo_tuna_configures_wlroots_and_user_audio_services(tmp_path):
     )
     assert result.returncode != 0
     assert "requires systemctl" in result.stderr
-
 
 def test_tuna_package_signatures_cannot_be_silently_disabled():
     key = (ROOT / "experiences/tuna/tideforge-public.gpg").read_bytes()
@@ -425,7 +425,6 @@ def test_portage_backend_needs_only_the_installed_database(tmp_path):
 
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == "portage"
-
 
 def test_portage_package_names_and_file_owners_use_the_installed_database(tmp_path):
     import subprocess

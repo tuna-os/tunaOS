@@ -96,6 +96,11 @@ def validate_source_records(records, kind, family, where):
                     raise PolicyError(item + ': unsupported local repository mount')
             elif not re.fullmatch(r'https://[A-Za-z0-9.-]+/[A-Za-z0-9_./$+-]*', value):
                 raise PolicyError(item + '.' + key + ': expected supported HTTPS source URL')
+        if kind == 'binrepos' and family == 'emerge':
+            if not record['verify_signature']:
+                raise PolicyError(item + ': emerge binrepos must require package signatures')
+            if not record['sync_uri'].startswith('https://repo.tunaos.org/'):
+                raise PolicyError(item + ': emerge binrepos must use a TunaOS HTTPS source')
         if record.get('unsigned') and not record.get('baseurl', '').startswith('file:///run/'):
             raise PolicyError(item + ': unsigned remote repositories are unsupported')
 
