@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "image": {
+    "registry": "registry.example",
+    "namespace": "harbor"
+  },
+  "variant": "yellowfin",
+  "flavor": "gnome",
+  "platform": "linux/amd64",
+  "package_manager": "dnf",
+  "intent": {
+    "branding": {
+      "homepage": "https://harbor.example/home",
+      "documentation": "https://harbor.example/docs",
+      "support": "https://harbor.example/support"
+    },
+    "packages": {
+      "add": [],
+      "remove": [],
+      "optional": [],
+      "repositories": []
+    }
+  },
+  "sources": {
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "assets": {}
+}

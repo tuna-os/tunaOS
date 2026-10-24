@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "status": "complete",
+  "variant": "yellowfin",
+  "flavor": "gnome",
+  "platform": "linux/amd64",
+  "package_manager": "dnf",
+  "image": {
+    "registry": "registry.example",
+    "namespace": "harbor"
+  },
+  "manifest_sha256": "e8e70093f500439df57da5c5e4547b1fdc5b66b3c1fc706cbf36fd7fa44ac3c1",
+  "sources": {
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "repositories": [],
+  "remove": [],
+  "required_installed": ["htop"],
+  "optional_installed": [],
+  "optional_missing": ["missing"]
+}
