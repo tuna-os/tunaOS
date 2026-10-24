@@ -41,7 +41,7 @@ PLATFORMS = {"linux/amd64", "linux/amd64/v2", "linux/amd64/v3", "linux/arm64"}
 # Identity values land in os-release (written as KEY="value" through a sed with
 # "|" as delimiter) and in JSON heredocs, so no quote, backslash, pipe, backtick
 # or dollar may appear. Names and codenames are plain words.
-DISPLAY_TEXT = re.compile(r"[A-Za-z0-9][A-Za-z0-9 .,()+_-]*\Z")
+DISPLAY_TEXT = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9 .,()+_-]*[A-Za-z0-9.,()+_-])?\Z")
 HTTPS_URL = re.compile(r"https://[^\s/\"'\\|`$]+(?:/[^\s\"'\\|`$]*)?\Z")
 CPE_PART = re.compile(r"[a-z0-9][a-z0-9._-]*\Z")
 BRANDING_URLS = ('homepage', 'documentation', 'support', 'bug_report')
@@ -359,8 +359,13 @@ def render_identity(config):
     validate(config)
     missing = [key for key in ('project', 'defaults') if key not in config]
     unnamed = [name for name, variant in config['variants'].items() if 'codename' not in variant]
-    if missing or unnamed:
-        raise ConfigError(f'identity needs {missing or ""} {"codename for " + ", ".join(unnamed) if unnamed else ""}'.strip())
+    needs = []
+    if missing:
+        needs.append('identity needs sections: ' + ', '.join(missing))
+    if unnamed:
+        needs.append('identity needs a codename for variants: ' + ', '.join(unnamed))
+    if needs:
+        raise ConfigError('; '.join(needs))
     project, urls = config['project'], config['defaults']['branding']
     lines = ['# Generated from tunaos.toml by `scripts/config.py generate-identity`; do not edit.',
              f"TUNAOS_PROJECT_NAME={shlex.quote(project['name'])}",
@@ -372,8 +377,8 @@ def render_identity(config):
              f"TUNAOS_BUG_REPORT_URL={shlex.quote(urls['bug_report'])}",
              # -g: stays global even when a caller sources this inside a function.
              'declare -gA TUNAOS_CODENAMES=(']
-    # Keys quoted: unquoted, shfmt rewrites [bonito-rawhide] as arithmetic.
-    lines += [f'\t["{name}"]={shlex.quote(variant["codename"])}' for name, variant in config['variants'].items()]
+    # Keys and values stay quoted for deterministic, diff-friendly shell.
+    lines += [f'\t["{name}"]="{variant["codename"]}"' for name, variant in config['variants'].items()]
     return '\n'.join(lines + [')']) + '\n'
 
 
