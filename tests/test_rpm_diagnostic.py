@@ -8,6 +8,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 HERE = ROOT / 'scripts/diagnostics'
@@ -99,6 +100,22 @@ def test_proxy_inspection():
         runner.verify_proxy_inspect(details, 'internal', 'egress')
 
 
+def test_workload_mounts_require_readonly_input_and_writable_output():
+    details = {'NetworkSettings': {'Networks': {'internal': {}}},
+               'HostConfig': {'Privileged': False, 'NetworkMode': 'internal', 'Dns': ['127.0.0.1'],
+               'SecurityOpt': ['no-new-privileges:true'], 'CapDrop': ['NET_ADMIN', 'NET_RAW']},
+               'Mounts': [{'Destination': '/output', 'Type': 'bind', 'RW': True},
+                          {'Destination': '/input', 'Type': 'bind', 'RW': False},
+                          {'Destination': '/run', 'Type': 'tmpfs', 'RW': True}]}
+    runner.verify_workload_inspect(details, 'internal')
+    details['Mounts'].append({'Destination': '/host', 'Type': 'bind', 'RW': True})
+    with pytest.raises(ValueError, match='unexpected workload bind mounts'):
+        runner.verify_workload_inspect(details, 'internal')
+    details['Mounts'][-1] = {'Destination': '/var/cache', 'Type': 'volume', 'RW': True}
+    with pytest.raises(ValueError, match='unexpected volume mount'):
+        runner.verify_workload_inspect(details, 'internal')
+
+
 def test_cleanup_continues_after_timeout(monkeypatch, tmp_path):
     calls = []
     def run(*args, **_kwargs):
@@ -137,6 +154,28 @@ def test_proxy_evidence_requires_denials(monkeypatch):
         runner.summarize_proxy(log, {'proxy_denials': ['repo.tunaos.org'], 'direct_denials': []})
 
 
+
+def strings(node):
+    if isinstance(node, dict):
+        for key, value in node.items():
+            yield from strings(key)
+            yield from strings(value)
+    elif isinstance(node, list):
+        for item in node:
+            yield from strings(item)
+    elif isinstance(node, str):
+        yield node
+
+
+def test_workflow_manual_readonly_bounded():
+    document = yaml.safe_load((ROOT / '.github/workflows/diagnostic-oci-rpm-consumer.yml').read_text())
+    assert set(document.get(True) or document['on']) == {'workflow_dispatch'}  # PyYAML reads 'on' as True
+    assert document['permissions'] == {'contents': 'read', 'packages': 'read'}
+    job = document['jobs']['diagnostic']
+    assert job['timeout-minutes'] == 120
+    checkout = [s for s in job['steps'] if str(s.get('uses', '')).startswith('actions/checkout@')]
+    assert [s['with']['persist-credentials'] for s in checkout] == [False]
+    assert not [text for text in strings(document) if 'secrets.' in text]
 
 
 def test_every_docker_command_pins_local_socket(monkeypatch):

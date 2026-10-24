@@ -131,6 +131,23 @@ def internal_address(network: dict) -> str:
     return str(address)
 
 
+def bind_layout(mounts: list[dict], tmpfs: frozenset[str] = frozenset()) -> dict:
+    """Map reviewed bind destinations to their RW flag.
+
+    Docker reports /etc/hosts, /etc/hostname and /etc/resolv.conf through
+    HostsPath, HostnamePath and ResolvConfPath, not through Mounts, so every
+    entry here was requested by this run and must match the reviewed boundary.
+    """
+    layout = {}
+    for mount in mounts:
+        if mount['Type'] == 'tmpfs' and mount['Destination'] in tmpfs:
+            continue
+        if mount['Type'] != 'bind':
+            raise ValueError(f"unexpected {mount['Type']} mount at {mount['Destination']}")
+        layout[mount['Destination']] = bool(mount['RW'])
+    return layout
+
+
 def verify_workload_inspect(details: dict, internal: str) -> None:
     host = details['HostConfig']
     if (set(details['NetworkSettings']['Networks']) != {internal}
@@ -142,24 +159,20 @@ def verify_workload_inspect(details: dict, internal: str) -> None:
             or set(host.get('CapAdd') or [])
             or not {'NET_ADMIN', 'NET_RAW'}.issubset(set(host.get('CapDrop') or []))):
         raise ValueError('workload Docker isolation does not match the reviewed boundary')
-    mounts = details.get('Mounts', [])
-    if ({m['Destination'] for m in mounts if m['Type'] == 'bind'} != {'/input', '/output'}
-            or any(m['RW'] for m in mounts if m['Destination'] == '/input')
-            or any(m['Type'] != 'bind' and not (m['Type'] == 'tmpfs' and m['Destination'] == '/run') for m in mounts)):
+    if (bind_layout(details.get('Mounts', []), frozenset({'/run'}))
+            != {'/input': False, '/output': True}):
         raise ValueError('unexpected workload bind mounts')
 
 
 def verify_proxy_inspect(details: dict, internal: str, egress: str) -> None:
     host = details['HostConfig']
-    mounts = details.get('Mounts', [])
     if (set(details['NetworkSettings']['Networks']) != {internal, egress}
             or host['Privileged'] or host.get('PublishAllPorts') or host.get('PortBindings')
             or not host.get('ReadonlyRootfs') or host.get('CapAdd')
             or set(host.get('CapDrop') or []) != {'ALL'}
             or 'no-new-privileges:true' not in host.get('SecurityOpt', [])
             or details['Config'].get('User') != '65534:65534'
-            or len(mounts) != 1 or mounts[0]['Destination'] != '/input'
-            or mounts[0]['Type'] != 'bind' or mounts[0]['RW']):
+            or bind_layout(details.get('Mounts', [])) != {'/input': False}):
         raise ValueError('proxy Docker isolation does not match the reviewed boundary')
 
 
