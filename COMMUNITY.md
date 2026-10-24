@@ -53,7 +53,7 @@ curated `good first issue` tasks, and weekly maintainer triage documented in
 
 - **GitHub Issues**: Bug reports, feature requests, discussion
 - **GitHub Discussions**: General topics, ideas, Q&A
-- **PR Reviews**: All contributions reviewed within 48 hours
+- **PR Reviews**: Use the [fork → PR workflow](CONTRIBUTING.md#fork--pr-loop); maintainers review contributor work during [weekly contributor triage](CONTRIBUTING.md#weekly-contributor-triage). Expect an acknowledgement or status update within the next weekly triage slot.
 - **Matrix**: [#tunaos:reilly.asia](https://matrix.to/#/%23tunaos:reilly.asia) — real-time chat, weekly release notes, monthly office hours (see below)
 
 ### Matrix room cadence
