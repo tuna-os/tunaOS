@@ -15,6 +15,15 @@ that touched 36 files across `.github/`, `build_scripts/`, `live-iso/`,
 | ARM64 build passes but Snapdragon laptop support is unclear (#3116) | #3368 records postmarketOS observations and open TunaOS boot/install/update/rollback gates; an architecture manifest does not test board firmware or DTB selection. | Use [SNAPDRAGON.md](SNAPDRAGON.md) and report the exact device, image digest and hardware results. |
 | Bonito build succeeds despite bootc lint findings (#3001) | `99-cleanup.sh` calls `lint_image`; `lib.sh` returns success after findings unless `BOOTC_LINT_FATAL=1`. | Read the grouped output and step summary. Re-run lint against the candidate digest; apply the [Fedora readiness review](FEDORA-OUTREACH-READINESS.md) before outreach. |
 
+### Adoption report shows downloads while ISO use is unknown
+
+**Symptom:** A count of downloads from GitHub looks like adoption of ISOs.
+**Cause:** The 2026-10-22 API baseline includes release cards, SBOMs and other
+non-ISO assets; R2 downloads are outside the Releases API.
+**Fix:** Run `scripts/adoption-snapshot.py` and keep the ISO and non-ISO
+counters separate. Use the dated JSON receipt to check asset IDs and source
+URLs. Request an export from R2 before you rank variants or claim usage.
+
 ### 1. `flatpak: command not found` in live ISO customization
 
 **Affected workflows:** `LUKS E2E` (yellowfin:kde), any live ISO build for EL10
