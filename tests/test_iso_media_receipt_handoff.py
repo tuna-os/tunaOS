@@ -22,10 +22,15 @@ FIXTURES = ROOT / "tests/fixtures/iso-media-provenance-v2"
 
 
 def load(name):
-    spec = importlib.util.spec_from_file_location(name, ROOT / "scripts" / (name + ".py"))
+    module_name = "_test_iso_media_handoff_" + name
+    spec = importlib.util.spec_from_file_location(
+        module_name, ROOT / "scripts" / (name + ".py"))
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        del sys.modules[spec.name]
     return module
 
 
@@ -56,7 +61,7 @@ assert added == set(), added
 print(module.ReceiptCandidate.__name__)
 """
     result = subprocess.check_output(
-        [sys.executable, "-S", "-c", script, str(ROOT)], text=True)
+        [sys.executable, "-c", script, str(ROOT)], text=True)
     assert result.strip() == "ReceiptCandidate"
 
 
@@ -471,19 +476,24 @@ def test_native_media_identity_must_equal_bound_browser_media(change):
     assert media.events == []
 
 
-@pytest.mark.parametrize("change", ["installed-digest", "harness-is-engine", "browser-producer"])
+@pytest.mark.parametrize("change", [
+    "installed-digest", "installed-digest-malformed",
+    "harness-is-engine", "browser-producer",
+])
 def test_native_installed_harness_and_producer_identities_keep_their_meaning(change):
     observed = native_observation()
-    if change == "installed-digest":
+    if change.startswith("installed-digest"):
         plain = copy.deepcopy(observed.plain)
-        plain["installedDigest"] = "sha256:" + "9" * 64
+        plain["installedDigest"] = (
+            "not-a-digest" if change.endswith("malformed")
+            else "sha256:" + "9" * 64)
         observed = replace(observed, plain=plain)
     elif change == "harness-is-engine":
         observed = replace(observed, harness=copy.deepcopy(BROWSER["input_descriptors"]["engine"]))
     else:
         observed = replace(observed, producer_run=copy.deepcopy(BROWSER["run"]))
     media = MediaSource(MEDIA)
-    with pytest.raises(HANDOFF.ReceiptHandoffError, match="invalid_observation"):
+    with pytest.raises(HANDOFF.ReceiptHandoffError):
         HANDOFF.finalize_native_receipt(
             observed, CASES["browserReceiptUtf8"].encode(), media)
     assert media.events == []

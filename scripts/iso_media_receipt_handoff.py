@@ -349,8 +349,11 @@ def finalize_native_receipt(observed, browser_receipt_bytes, supplied_media):
     _validate_receipt(document, "native")
     source_digest = browser["input_descriptors"]["source"]["digest"]
     for mode in ("plain", "encrypted"):
-        _same(document["observed"][mode]["sourceDigest"], source_digest,
+        mode_observed = document["observed"][mode]
+        _same(mode_observed["sourceDigest"], source_digest,
               mode + ".sourceDigest")
+        _same(mode_observed["bootedDigest"], source_digest,
+              mode + ".bootedDigest")
     # browser["media"] passed the v2 contract and equals observed.media above;
     # bound it locally too so no contract change can drive an oversized read.
     expected_size = browser["media"]["sizeBytes"]
