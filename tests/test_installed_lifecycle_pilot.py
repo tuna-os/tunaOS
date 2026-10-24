@@ -70,7 +70,7 @@ class FakeBackend:
         self.calls.append(name)
         if self.failure_at == name:
             raise MODULE.PilotFailure(self.failure_category, f"{name} failed")
-        return result or {"operation": name}
+        return {"operation": name} if result is None else result
 
     def preflight(self):
         return self._call("preflight", {"images": {"a": A, "b": B}})
@@ -211,6 +211,28 @@ def test_unexpected_empty_exception_message_still_produces_valid_evidence(tmp_pa
         "category": "internal_error",
         "message": "AssertionError",
     }
+
+
+def test_interruption_persists_incomplete_stage_evidence(tmp_path, monkeypatch):
+    snapshots = []
+
+    def interrupt(_backend):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(FakeBackend, "start_vm", interrupt)
+    with pytest.raises(KeyboardInterrupt):
+        MODULE.execute_pilot(
+            config(tmp_path),
+            FakeBackend,
+            progress=lambda evidence: snapshots.append(
+                json.loads(json.dumps(evidence))
+            ),
+        )
+
+    latest = snapshots[-1]
+    assert latest["result"]["runtime_acceptance"] == "incomplete"
+    assert stage_map(latest)["cold_boot_a"]["outcome"] == "pending"
+    assert "started_at" in stage_map(latest)["cold_boot_a"]
 
 
 def test_symlinked_path_ancestors_are_detected(tmp_path):
@@ -485,6 +507,16 @@ def test_wait_for_ssh_never_probes_past_its_deadline(tmp_path, monkeypatch):
     assert probe_timeouts and all(t <= 10 for t in probe_timeouts)
     assert clock.now <= 23 + 1
 
+
+
+@pytest.mark.parametrize("operation", ["start_vm", "_drain_qemu"])
+def test_missing_qemu_preflight_state_is_an_internal_error(tmp_path, operation):
+    backend = MODULE.LocalQemuBackend(config(tmp_path), [])
+
+    with pytest.raises(MODULE.PilotFailure) as error:
+        getattr(backend, operation)()
+
+    assert error.value.category == "internal_error"
 
 def test_qemu_port_binding_failure_is_classified_from_startup_output(tmp_path):
     class ExitedProcess:
