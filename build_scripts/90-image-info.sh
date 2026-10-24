@@ -53,6 +53,14 @@ cat >$IMAGE_INFO <<EOF
   }
 EOF
 
+# verify-branding.sh runs here at build time and again inside the booted image,
+# where no build environment exists. Persist the namespace this script just
+# stamped (resolved from tunaos.toml [build.publish], the operator override or
+# the repository owner by scripts/lib/publish-destination.sh) so the verifier
+# expects the same namespace instead of a hardcoded tuna-os.
+install -d /usr/share/tunaos
+printf '%s\n' "${IMAGE_VENDOR}" >/usr/share/tunaos/image-vendor
+
 # Every variant shipped these two pointing at projectbluefin.io, inherited
 # verbatim from the bluefin-lts script this one started as, while SUPPORT_URL
 # and BUG_REPORT_URL were already ours. A user running `gnome-control-center

@@ -1,461 +1,377 @@
-# Tuna Desktop (formerly Roost, renamed in tuna-desktop#536) on every TunaOS
-# variant with a published package target (tuna-desktop ADR 0008, epic #577).
-# Marlin was the first cell (tunaOS#2990); its Containerfile installs the
-# in-house Tideforge key/repository and qualifies this package so official
-# packages stay first. tuna-desktop provides roost and ships its compat
-# names, so nothing here may name the old `roost` package.
-#
-# Variants without a cell are recorded with their reason under
-# `unsupported_flavors` in .github/build-config.yml.
-display_manager: greetd
-
-packages:
-  pacman:
-    # Pinned to the published v1.0.0-beta.1 release (ADR 0008 in
-    # tuna-os/tuna-desktop: image flavors follow beta tags). pacman resolves
-    # the repo-qualified `name=version` target exactly and fails the build if
-    # the served repository no longer carries it, so a new beta is an
-    # explicit bump here, never a silent drift.
-    - tunaos/tuna-desktop=1.0.0beta.1-1
-    - greetd
-    - greetd-gtkgreet
-    - cage
-    - xorg-xwayland
-    - ibus
-    # Screen Reader: Tuna Desktop starts and stops Orca from GNOME's
-    # screen-reader-enabled key, as GNOME does; without the package the
-    # key does nothing (published-image qualification, tuna-desktop#273).
-    - orca
-    - gnome-shell
-    - gnome-settings-daemon
-    - gnome-control-center
-    - gnome-keyring
-    - evolution-data-server
-    - xdg-desktop-portal-gnome
-    - xdg-desktop-portal-gtk
-    - xdg-user-dirs
-    - gvfs
-    - nautilus
-    - ptyxis
-    - networkmanager
-    - libsecret
-    - pipewire
-    - wireplumber
-    - gst-plugin-pipewire
-    - gst-plugins-good
-    - power-profiles-daemon
-    - upower
-    - flatpak
-    - plymouth
-    - adwaita-icon-theme
-    - noto-fonts
-    - noto-fonts-emoji
-    - ttf-dejavu
-    - ttf-liberation
-
-  # EL10 (yellowfin, albacore, skipjack). tuna-desktop, gtk4-layer-shell,
-  # libseat and greetd are TunaOS factory builds (repo/10 is the el10
-  # target's x86_64 published index); gtkgreet comes from the factory's xfce
-  # tier; cage is EPEL. Priority 100 sits behind the distro repositories
-  # (99), so these tiers only supply what the base lacks: repo/10 also
-  # carries a GNOME 50 pre-release, and a session must not mix it into the
-  # base's GNOME. Power profiles come from the base's tuned-ppd
-  # (10-base-packages.sh), the provider the EL10 GNOME flavors ship; it
-  # conflicts with power-profiles-daemon, so this list names neither.
-  # x86_64 only: the xfce tier publishes no aarch64 gtkgreet.
-  el10:
-    display_manager: greetd
-    # gnome-shell requires gdm-libs, which gdm provides, so gdm cannot be
-    # excluded (the transaction fails). gdm's preset would then own
-    # display-manager.service and VT1, and greetd fails with "unable to take
-    # controlling terminal: EPERM" (measured on an albacore:tuna VM), so
-    # greetd-system-integration.sh masks gdm.service.
-    repos:
-      - name: tunaos-el10
-        baseurl: https://repo.tunaos.org/repo/10/x86_64/
-        priority: 100
-      - name: tunaos-xfce
-        baseurl: https://repo.tunaos.org/xfce/10-stream-x86_64/
-        priority: 100
-    packages:
-      # Pinned like the pacman entry above: dnf installs this exact NEVR or
-      # fails the build. install-desktop.sh reads a flat list, so the fedora
-      # section repeats the session set instead of aliasing it.
-      - tuna-desktop-1.0.0~beta.1-1.el10
-      # beta.1's compositor imports the session environment with
-      # dbus-update-activation-environment, which EL and Fedora ship here.
-      # Without it graphical-session.target never starts and every portal
-      # fails (measured on a bonito VM; tuna-os/tuna-desktop#691 drops the
-      # need). Remove with the beta that carries #691.
-      - dbus-tools
-      - orca
-      - greetd
-      - gtkgreet
-      - cage
-      - xorg-x11-server-Xwayland
-      - ibus
-      - gnome-shell
-      - gnome-settings-daemon
-      - gnome-control-center
-      - gnome-keyring
-      - evolution-data-server
-      - xdg-desktop-portal-gnome
-      - xdg-desktop-portal-gtk
-      - xdg-user-dirs
-      - gvfs
-      - nautilus
-      - ptyxis
-      - NetworkManager
-      - libsecret
-      - pipewire
-      - wireplumber
-      - pipewire-gstreamer
-      - gstreamer1-plugins-good
-      - upower
-      - flatpak
-      - plymouth
-      - adwaita-icon-theme
-      - google-noto-sans-fonts
-      - google-noto-color-emoji-fonts
-      - dejavu-sans-fonts
-      - liberation-fonts
-
-  # Fedora 44 (bonito). Only tuna-desktop is a factory build, published in
-  # the fedora target's x86_64 index; greetd (with greetd-selinux), gtkgreet,
-  # cage, gtk4-layer-shell and libseat are Fedora's own.
-  fedora:
-    display_manager: greetd
-    repos:
-      - name: tunaos-fedora
-        baseurl: https://repo.tunaos.org/xfce/44-x86_64/
-        priority: 100
-    packages:
-      - tuna-desktop-1.0.0~beta.1-1.fc44
-      # See the el10 section: needed by beta.1 until tuna-desktop#691.
-      - dbus-tools
-      - orca
-      - greetd
-      - gtkgreet
-      - cage
-      - xorg-x11-server-Xwayland
-      - ibus
-      - gnome-shell
-      - gnome-settings-daemon
-      - gnome-control-center
-      - gnome-keyring
-      - evolution-data-server
-      - xdg-desktop-portal-gnome
-      - xdg-desktop-portal-gtk
-      - xdg-user-dirs
-      - gvfs
-      - nautilus
-      - ptyxis
-      - NetworkManager
-      - libsecret
-      - pipewire
-      - wireplumber
-      - pipewire-gstreamer
-      - gstreamer1-plugins-good
-      # tuned-ppd, as bonito's GNOME, KDE and XFCE flavors ship. It conflicts
-      # with power-profiles-daemon and answers the same D-Bus API.
-      - tuned-ppd
-      - upower
-      - flatpak
-      - plymouth
-      - adwaita-icon-theme
-      - google-noto-sans-fonts
-      - google-noto-color-emoji-fonts
-      - dejavu-sans-fonts
-      - liberation-fonts
-
-  # Fedora ELN (wahoo, tunaOS#3198). tuna-desktop and gtkgreet are factory
-  # builds in the eln target's x86_64 index (tunaos-packages#829, #874);
-  # greetd and cage come from ELN's own eln-extras, the rest from ELN's
-  # BaseOS and AppStream. The fedora list resolves in full on the pinned
-  # eln-bootc digest (`dnf install --assumeno`, tuned-ppd included).
-  # dbus-tools for beta.1, as above.
-  eln:
-    display_manager: greetd
-    repos:
-      - name: tunaos-eln
-        baseurl: https://repo.tunaos.org/rpm/eln/x86_64/
-        priority: 100
-    packages:
-      - tuna-desktop-1.0.0~beta.1-1.eln159
-      - dbus-tools
-      - orca
-      - greetd
-      - gtkgreet
-      - cage
-      - xorg-x11-server-Xwayland
-      - ibus
-      - gnome-shell
-      - gnome-settings-daemon
-      - gnome-control-center
-      - gnome-keyring
-      - evolution-data-server
-      - xdg-desktop-portal-gnome
-      - xdg-desktop-portal-gtk
-      - xdg-user-dirs
-      - gvfs
-      - nautilus
-      - ptyxis
-      - NetworkManager
-      - libsecret
-      - pipewire
-      - wireplumber
-      - pipewire-gstreamer
-      - gstreamer1-plugins-good
-      - tuned-ppd
-      - upower
-      - flatpak
-      - plymouth
-      - adwaita-icon-theme
-      - google-noto-sans-fonts
-      - google-noto-color-emoji-fonts
-      - dejavu-sans-fonts
-      - liberation-fonts
-
-  # Fedora Rawhide (bonito-rawhide, tunaOS#3203). The same set as fedora
-  # above, with the factory's Rawhide build of tuna-desktop
-  # (tunaos-packages#831, #870). install-desktop.sh picks this section on a
-  # Rawhide base. dbus-tools for beta.1, as above.
-  rawhide:
-    display_manager: greetd
-    repos:
-      - name: tunaos-rawhide
-        baseurl: https://repo.tunaos.org/rpm/rawhide/x86_64/
-        priority: 100
-    packages:
-      - tuna-desktop-1.0.0~beta.1-1.fc46
-      - dbus-tools
-      - orca
-      - greetd
-      - gtkgreet
-      - cage
-      - xorg-x11-server-Xwayland
-      - ibus
-      - gnome-shell
-      - gnome-settings-daemon
-      - gnome-control-center
-      - gnome-keyring
-      - evolution-data-server
-      - xdg-desktop-portal-gnome
-      - xdg-desktop-portal-gtk
-      - xdg-user-dirs
-      - gvfs
-      - nautilus
-      - ptyxis
-      - NetworkManager
-      - libsecret
-      - pipewire
-      - wireplumber
-      - pipewire-gstreamer
-      - gstreamer1-plugins-good
-      - tuned-ppd
-      - upower
-      - flatpak
-      - plymouth
-      - adwaita-icon-theme
-      - google-noto-sans-fonts
-      - google-noto-color-emoji-fonts
-      - dejavu-sans-fonts
-      - liberation-fonts
-
-  # Ubuntu 26.04 (grouper), Debian sid (flounder-sid) and Debian 13 trixie
-  # (flounder). Only tuna-desktop is a factory build, served from the signed
-  # Tideforge apt index for each base (tunaos-packages#835, #836, #837);
-  # greetd, gtkgreet and cage are the distribution's own. On Ubuntu and sid
-  # tuna-desktop links the distribution's gtk4-layer-shell 1.3; trixie's
-  # libgtk4-layer-shell0 is 1.0, too old, so the trixie build carries a
-  # private copy and must not be paired with Debian's (nothing here names it,
-  # and tuna-desktop does not depend on it there). install-desktop.sh adds
-  # only the repository whose condition matches the base. Measured with
-  # `apt-get install --no-install-recommends` of this list on ubuntu:resolute,
-  # debian:sid and debian:trixie: nothing pulls in gdm3 (only libgdm1, for
-  # gnome-shell), so there is no display manager to mask. dbus-update-
-  # activation-environment, which beta.1 needs (tuna-os/tuna-desktop#691),
-  # comes from dbus-bin, a Depends of the tuna-desktop deb itself.
-  apt:
-    repos:
-      - name: tideforge
-        uri: https://repo.tunaos.org/tideforge/ubuntu/
-        suite: ./
-        keyring_url: https://repo.tunaos.org/tideforge/ubuntu/tideforge.gpg
-        condition: "ubuntu"
-      - name: tideforge
-        uri: https://repo.tunaos.org/tideforge/debian-sid/
-        suite: ./
-        keyring_url: https://repo.tunaos.org/tideforge/debian-sid/tideforge.gpg
-        condition: "debian-sid"
-      - name: tideforge
-        uri: https://repo.tunaos.org/tideforge/debian-trixie/
-        suite: ./
-        keyring_url: https://repo.tunaos.org/tideforge/debian-trixie/tideforge.gpg
-        condition: "debian-trixie"
-    packages:
-      # Pinned like the pacman and RPM entries: apt installs exactly this
-      # version or fails the build.
-      - tuna-desktop=1.0.0~beta.1-1
-      - orca
-      - greetd
-      - gtkgreet
-      - cage
-      - xwayland
-      - ibus
-      - gnome-shell
-      - gnome-settings-daemon
-      - gnome-control-center
-      - gnome-keyring
-      - libpam-gnome-keyring
-      - evolution-data-server
-      - xdg-desktop-portal-gnome
-      - xdg-desktop-portal-gtk
-      - xdg-user-dirs
-      - gvfs
-      - nautilus
-      - ptyxis
-      - network-manager
-      - libsecret-1-0
-      - pipewire
-      - wireplumber
-      - gstreamer1.0-pipewire
-      - gstreamer1.0-plugins-good
-      - power-profiles-daemon
-      - upower
-      - flatpak
-      - plymouth
-      - adwaita-icon-theme
-      - fonts-noto-core
-      - fonts-noto-color-emoji
-      - fonts-dejavu-core
-      - fonts-liberation
-
-  # openSUSE Tumbleweed (sailfin, tunaOS#3201). Only tuna-desktop is a
-  # factory build, served from the signed opensuse-tumbleweed index
-  # (tunaos-packages#833); greetd, gtkgreet, cage and gtk4-layer-shell are
-  # Tumbleweed's own. That index also serves a greetd for the niri/DMS stack;
-  # the repository carries no priority, so zypper takes Tumbleweed's newer
-  # build. Names that differ from Fedora's: google-noto-coloremoji-fonts,
-  # gnome-keyring-pam, gstreamer-plugin-pipewire, gnome-shell-calendar (the
-  # calendar server, split out of gnome-shell), and dbus-1-tools for
-  # dbus-update-activation-environment, which beta.1 needs
-  # (tuna-os/tuna-desktop#691). power-profiles-daemon, as sailfin's GNOME
-  # flavor ships. Measured with `zypper install --dry-run --no-recommends`
-  # of this list on registry.opensuse.org/opensuse/tumbleweed.
-  zypper:
-    display_manager: greetd
-    repos:
-      - name: tunaos-opensuse
-        baseurl: https://repo.tunaos.org/rpm/opensuse-tumbleweed/x86_64/
-    packages:
-      - tuna-desktop-1.0.0~beta.1-1
-      - dbus-1-tools
-      - orca
-      - greetd
-      - gtkgreet
-      - cage
-      - xwayland
-      - ibus
-      - gnome-shell
-      - gnome-shell-calendar
-      - gnome-settings-daemon
-      - gnome-control-center
-      - gnome-keyring
-      - gnome-keyring-pam
-      - evolution-data-server
-      - xdg-desktop-portal-gnome
-      - xdg-desktop-portal-gtk
-      - xdg-user-dirs
-      - gvfs
-      - nautilus
-      - ptyxis
-      - NetworkManager
-      - libsecret-1-0
-      - pipewire
-      - wireplumber
-      - gstreamer-plugin-pipewire
-      - gstreamer-plugins-good
-      - power-profiles-daemon
-      - upower
-      - flatpak
-      - plymouth
-      - adwaita-icon-theme
-      - google-noto-sans-fonts
-      - google-noto-coloremoji-fonts
-      - dejavu-fonts
-      - liberation-fonts
-
-  # Gentoo stage3 (guppy, tunaOS#3202). tuna-desktop is the factory's signed
-  # native gpkg; every supporting package remains a Gentoo atom. Cage is not
-  # in ::gentoo, so its exact native ebuild comes from the Gentoo GURU overlay
-  # instead of importing an Arch archive or substituting a GNOME session.
-  #
-  # The TunaOS key follows the same getuto trust path as Gentoo's binhost:
-  # import, verify this fingerprint, locally sign it, update the trustdb and
-  # require a package signature. The package atom pins beta.1 and the tunaos
-  # repository, so a source overlay or a later beta cannot silently replace it.
-  # Sourcing exception: PACKAGE-SOURCING.md admits the GURU Cage ebuild for
-  # `guppy:tuna` only; review it by 2026-12-31 while Tideforge packaging is
-  # tracked under tunaOS#3202.
-  emerge:
-    display_manager: greetd
-    source_repositories:
-      - name: guru
-        sync_uri: https://github.com/gentoo/guru.git
-    binrepos:
-      - name: tunaos
-        priority: 10
-        sync_uri: https://repo.tunaos.org/gentoo/binpkgs/amd64
-        verify_signature: true
-        key: experiences/tuna/tideforge-public.gpg
-        fingerprint: 4E5CC9F8B3B521793D95266E629BE6EA45188366
-    packages:
-      - =gui-wm/tuna-desktop-1.0.0_beta1::tunaos
-      - gui-libs/greetd
-      - gui-apps/gtkgreet
-      - =gui-wm/cage-0.3.1::guru
-      - x11-base/xwayland
-      - app-i18n/ibus
-      - app-accessibility/orca
-      - gnome-base/gnome-shell
-      - gnome-base/gnome-settings-daemon
-      - gnome-base/gnome-control-center
-      - gnome-base/gnome-keyring
-      - gnome-extra/evolution-data-server
-      - sys-apps/xdg-desktop-portal-gnome
-      - sys-apps/xdg-desktop-portal-gtk
-      - x11-misc/xdg-user-dirs
-      - gnome-base/gvfs
-      - gnome-base/nautilus
-      - x11-terms/gnome-terminal
-      - net-misc/networkmanager
-      - app-crypt/libsecret
-      - media-video/pipewire
-      - media-video/wireplumber
-      - sys-power/power-profiles-daemon
-      - sys-power/upower
-      - sys-apps/flatpak
-      - sys-boot/plymouth
-      - x11-themes/adwaita-icon-theme
-      - media-fonts/noto
-      - media-fonts/noto-emoji
-      - media-fonts/dejavu
-      - media-fonts/liberation-fonts
-
-# Gentoo carries gtkgreet and GURU's cage as ~amd64. The exact cage atom above
-# and these explicit keywords keep the greeter path bounded while the native
-# Tuna greeter still lacks real authentication qualification (desktop#584/#366).
-emerge_accept_keywords:
-  - gui-apps/gtkgreet
-  - gui-wm/cage::guru
-
-versionlock: []
-post_install:
-  - tuna-flatpak-remote.sh
-  # Before greetd-gtkgreet.sh: it needs the greeter account. A no-op where
-  # the distribution's greetd ships its own (Arch, Fedora, Debian, Ubuntu).
-  - greetd-system-integration.sh
-  - greetd-gtkgreet.sh
-  - gentoo-pipewire-user-services.sh
-  - flatpak-preinstall.sh
+{
+  "display_manager": "gdm",
+  "versionlock": [],
+  "post_install": [
+    "tuna-flatpak-remote.sh",
+    "tuna-gdm-theme.sh",
+    "tuna-gdm-default-session.sh",
+    "tuna-hide-other-sessions.sh",
+    "gentoo-pipewire-user-services.sh",
+    "flatpak-preinstall.sh"
+  ],
+  "packages": {
+    "pacman": [
+      "tunaos/tuna-desktop=1.0.0beta.1-1",
+      "gdm",
+      "xorg-xwayland",
+      "ibus",
+      "orca",
+      "gnome-shell",
+      "gnome-settings-daemon",
+      "gnome-control-center",
+      "gnome-keyring",
+      "evolution-data-server",
+      "xdg-desktop-portal-gnome",
+      "xdg-desktop-portal-gtk",
+      "xdg-user-dirs",
+      "gvfs",
+      "nautilus",
+      "ptyxis",
+      "networkmanager",
+      "libsecret",
+      "pipewire",
+      "wireplumber",
+      "gst-plugin-pipewire",
+      "gst-plugins-good",
+      "power-profiles-daemon",
+      "upower",
+      "flatpak",
+      "plymouth",
+      "adwaita-icon-theme",
+      "noto-fonts",
+      "noto-fonts-emoji",
+      "ttf-dejavu",
+      "ttf-liberation"
+    ],
+    "el10": {
+      "display_manager": "gdm",
+      "packages": [
+        "tuna-desktop-1.0.0~beta.1-1.el10",
+        "dbus-tools",
+        "orca",
+        "gdm",
+        "xorg-x11-server-Xwayland",
+        "ibus",
+        "gnome-shell",
+        "gnome-settings-daemon",
+        "gnome-control-center",
+        "gnome-keyring",
+        "evolution-data-server",
+        "xdg-desktop-portal-gnome",
+        "xdg-desktop-portal-gtk",
+        "xdg-user-dirs",
+        "gvfs",
+        "nautilus",
+        "ptyxis",
+        "NetworkManager",
+        "libsecret",
+        "pipewire",
+        "wireplumber",
+        "pipewire-gstreamer",
+        "gstreamer1-plugins-good",
+        "upower",
+        "flatpak",
+        "plymouth",
+        "adwaita-icon-theme",
+        "google-noto-sans-fonts",
+        "google-noto-color-emoji-fonts",
+        "dejavu-sans-fonts",
+        "liberation-fonts"
+      ],
+      "repos": [
+        {
+          "name": "tunaos-el10",
+          "baseurl": "https://repo.tunaos.org/repo/10/x86_64/",
+          "priority": 100
+        },
+        {
+          "name": "tunaos-xfce",
+          "baseurl": "https://repo.tunaos.org/xfce/10-stream-x86_64/",
+          "priority": 100
+        }
+      ]
+    },
+    "fedora": {
+      "display_manager": "gdm",
+      "packages": [
+        "tuna-desktop-1.0.0~beta.1-1.fc44",
+        "dbus-tools",
+        "orca",
+        "gdm",
+        "xorg-x11-server-Xwayland",
+        "ibus",
+        "gnome-shell",
+        "gnome-settings-daemon",
+        "gnome-control-center",
+        "gnome-keyring",
+        "evolution-data-server",
+        "xdg-desktop-portal-gnome",
+        "xdg-desktop-portal-gtk",
+        "xdg-user-dirs",
+        "gvfs",
+        "nautilus",
+        "ptyxis",
+        "NetworkManager",
+        "libsecret",
+        "pipewire",
+        "wireplumber",
+        "pipewire-gstreamer",
+        "gstreamer1-plugins-good",
+        "tuned-ppd",
+        "upower",
+        "flatpak",
+        "plymouth",
+        "adwaita-icon-theme",
+        "google-noto-sans-fonts",
+        "google-noto-color-emoji-fonts",
+        "dejavu-sans-fonts",
+        "liberation-fonts"
+      ],
+      "repos": [
+        {
+          "name": "tunaos-fedora",
+          "baseurl": "https://repo.tunaos.org/xfce/44-x86_64/",
+          "priority": 100
+        }
+      ]
+    },
+    "emerge": {
+      "display_manager": "gdm",
+      "binrepos": [
+        {
+          "name": "tunaos",
+          "priority": 10,
+          "sync_uri": "https://repo.tunaos.org/gentoo/binpkgs/amd64",
+          "verify_signature": true,
+          "key": "experiences/tuna/tideforge-public.gpg",
+          "fingerprint": "4E5CC9F8B3B521793D95266E629BE6EA45188366"
+        }
+      ],
+      "packages": [
+        "=gui-wm/tuna-desktop-1.0.0_beta1::tunaos",
+        "gnome-base/gdm",
+        "x11-base/xwayland",
+        "app-i18n/ibus",
+        "app-accessibility/orca",
+        "gnome-base/gnome-shell",
+        "gnome-base/gnome-settings-daemon",
+        "gnome-base/gnome-control-center",
+        "gnome-base/gnome-keyring",
+        "gnome-extra/evolution-data-server",
+        "sys-apps/xdg-desktop-portal-gnome",
+        "sys-apps/xdg-desktop-portal-gtk",
+        "x11-misc/xdg-user-dirs",
+        "gnome-base/gvfs",
+        "gnome-base/nautilus",
+        "x11-terms/gnome-terminal",
+        "net-misc/networkmanager",
+        "app-crypt/libsecret",
+        "media-video/pipewire",
+        "media-video/wireplumber",
+        "sys-power/power-profiles-daemon",
+        "sys-power/upower",
+        "sys-apps/flatpak",
+        "sys-boot/plymouth",
+        "x11-themes/adwaita-icon-theme",
+        "media-fonts/noto",
+        "media-fonts/noto-emoji",
+        "media-fonts/dejavu",
+        "media-fonts/liberation-fonts"
+      ]
+    },
+    "eln": {
+      "display_manager": "gdm",
+      "packages": [
+        "tuna-desktop-1.0.0~beta.1-1.eln159",
+        "dbus-tools",
+        "orca",
+        "gdm",
+        "xorg-x11-server-Xwayland",
+        "ibus",
+        "gnome-shell",
+        "gnome-settings-daemon",
+        "gnome-control-center",
+        "gnome-keyring",
+        "evolution-data-server",
+        "xdg-desktop-portal-gnome",
+        "xdg-desktop-portal-gtk",
+        "xdg-user-dirs",
+        "gvfs",
+        "nautilus",
+        "ptyxis",
+        "NetworkManager",
+        "libsecret",
+        "pipewire",
+        "wireplumber",
+        "pipewire-gstreamer",
+        "gstreamer1-plugins-good",
+        "tuned-ppd",
+        "upower",
+        "flatpak",
+        "plymouth",
+        "adwaita-icon-theme",
+        "google-noto-sans-fonts",
+        "google-noto-color-emoji-fonts",
+        "dejavu-sans-fonts",
+        "liberation-fonts"
+      ],
+      "repos": [
+        {
+          "name": "tunaos-eln",
+          "baseurl": "https://repo.tunaos.org/rpm/eln/x86_64/",
+          "priority": 100
+        }
+      ]
+    },
+    "rawhide": {
+      "display_manager": "gdm",
+      "packages": [
+        "tuna-desktop-1.0.0~beta.1-1.fc46",
+        "dbus-tools",
+        "orca",
+        "gdm",
+        "xorg-x11-server-Xwayland",
+        "ibus",
+        "gnome-shell",
+        "gnome-settings-daemon",
+        "gnome-control-center",
+        "gnome-keyring",
+        "evolution-data-server",
+        "xdg-desktop-portal-gnome",
+        "xdg-desktop-portal-gtk",
+        "xdg-user-dirs",
+        "gvfs",
+        "nautilus",
+        "ptyxis",
+        "NetworkManager",
+        "libsecret",
+        "pipewire",
+        "wireplumber",
+        "pipewire-gstreamer",
+        "gstreamer1-plugins-good",
+        "tuned-ppd",
+        "upower",
+        "flatpak",
+        "plymouth",
+        "adwaita-icon-theme",
+        "google-noto-sans-fonts",
+        "google-noto-color-emoji-fonts",
+        "dejavu-sans-fonts",
+        "liberation-fonts"
+      ],
+      "repos": [
+        {
+          "name": "tunaos-rawhide",
+          "baseurl": "https://repo.tunaos.org/rpm/rawhide/x86_64/",
+          "priority": 100
+        }
+      ]
+    },
+    "apt": {
+      "display_manager": "gdm",
+      "packages": [
+        "tuna-desktop=1.0.0~beta.1-1",
+        "orca",
+        "gdm3",
+        "gjs",
+        "xwayland",
+        "ibus",
+        "gnome-shell",
+        "gnome-settings-daemon",
+        "gnome-control-center",
+        "gnome-keyring",
+        "libpam-gnome-keyring",
+        "evolution-data-server",
+        "xdg-desktop-portal-gnome",
+        "xdg-desktop-portal-gtk",
+        "xdg-user-dirs",
+        "gvfs",
+        "nautilus",
+        "ptyxis",
+        "network-manager",
+        "libsecret-1-0",
+        "pipewire",
+        "wireplumber",
+        "gstreamer1.0-pipewire",
+        "gstreamer1.0-plugins-good",
+        "power-profiles-daemon",
+        "upower",
+        "flatpak",
+        "plymouth",
+        "adwaita-icon-theme",
+        "fonts-noto-core",
+        "fonts-noto-color-emoji",
+        "fonts-dejavu-core",
+        "fonts-liberation"
+      ],
+      "repos": [
+        {
+          "name": "tideforge",
+          "uri": "https://repo.tunaos.org/tideforge/ubuntu/",
+          "suite": "./",
+          "keyring_url": "https://repo.tunaos.org/tideforge/ubuntu/tideforge.gpg",
+          "condition": "ubuntu"
+        },
+        {
+          "name": "tideforge",
+          "uri": "https://repo.tunaos.org/tideforge/debian-sid/",
+          "suite": "./",
+          "keyring_url": "https://repo.tunaos.org/tideforge/debian-sid/tideforge.gpg",
+          "condition": "debian-sid"
+        },
+        {
+          "name": "tideforge",
+          "uri": "https://repo.tunaos.org/tideforge/debian-trixie/",
+          "suite": "./",
+          "keyring_url": "https://repo.tunaos.org/tideforge/debian-trixie/tideforge.gpg",
+          "condition": "debian-trixie"
+        }
+      ]
+    },
+    "zypper": {
+      "display_manager": "gdm",
+      "packages": [
+        "tuna-desktop-1.0.0~beta.1-1",
+        "dbus-1-tools",
+        "orca",
+        "gdm",
+        "xwayland",
+        "ibus",
+        "gnome-shell",
+        "gnome-shell-calendar",
+        "gnome-settings-daemon",
+        "gnome-control-center",
+        "gnome-keyring",
+        "gnome-keyring-pam",
+        "evolution-data-server",
+        "xdg-desktop-portal-gnome",
+        "xdg-desktop-portal-gtk",
+        "xdg-user-dirs",
+        "gvfs",
+        "nautilus",
+        "ptyxis",
+        "NetworkManager",
+        "libsecret-1-0",
+        "pipewire",
+        "wireplumber",
+        "gstreamer-plugin-pipewire",
+        "gstreamer-plugins-good",
+        "power-profiles-daemon",
+        "upower",
+        "flatpak",
+        "plymouth",
+        "adwaita-icon-theme",
+        "google-noto-sans-fonts",
+        "google-noto-coloremoji-fonts",
+        "dejavu-fonts",
+        "liberation-fonts"
+      ],
+      "repos": [
+        {
+          "name": "tunaos-opensuse",
+          "baseurl": "https://repo.tunaos.org/rpm/opensuse-tumbleweed/x86_64/"
+        }
+      ]
+    }
+  }
+}

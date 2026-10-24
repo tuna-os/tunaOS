@@ -50,12 +50,38 @@ if [[ ! -f "${_TD_MANIFEST}" ]]; then
 fi
 
 # Ensure yq is available inside the container for manifest parsing.
-# yq is a static binary — download once, use for the rest of the build.
+# yq is a static binary — download once, verify it, and use it for the rest
+# of the build.
 YQ="${YQ:-yq}"
 if ! command -v "$YQ" &>/dev/null; then
-	YQ_ARCH="$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"
-	curl -fsSL "https://github.com/mikefarah/yq/releases/download/v4.53.3/yq_linux_${YQ_ARCH}" -o /usr/bin/yq
-	chmod +x /usr/bin/yq
+	YQ_VERSION="v4.53.3"
+	case "$(uname -m)" in
+	x86_64)
+		YQ_ARCH="amd64"
+		YQ_SHA256="fa52a4e758c63d38299163fbdd1edfb4c4963247918bf9c1c5d31d84789eded4"
+		;;
+	aarch64)
+		YQ_ARCH="arm64"
+		YQ_SHA256="578648e463a11c1b6db6010cbf41eafed6bee79466fcffa1bb446672cf7945ea"
+		;;
+	*)
+		echo "ERROR: no pinned yq checksum for $(uname -m)" >&2
+		exit 1
+		;;
+	esac
+
+	# Keep the temporary file beside the destination so the final rename is
+	# atomic. The directory is private until the checksum has passed.
+	YQ_TMP="$(mktemp -d /usr/bin/.yq.XXXXXX)"
+	trap 'rm -rf "$YQ_TMP"' EXIT
+	curl -fsSL \
+		"https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_${YQ_ARCH}" \
+		-o "$YQ_TMP/yq"
+	echo "${YQ_SHA256}  $YQ_TMP/yq" | sha256sum -c -
+	chmod 0755 "$YQ_TMP/yq"
+	mv -fT "$YQ_TMP/yq" /usr/bin/yq
+	rm -rf "$YQ_TMP"
+	trap - EXIT
 	YQ=/usr/bin/yq
 fi
 printf "::group:: === install-desktop: %s ===\n" "${_TD_DESKTOP}"
@@ -665,9 +691,17 @@ EOF
 		echo "ERROR: ${_TD_MANIFEST} has a packages.apt section but no packages parsed" >&2
 		exit 1
 	fi
-	# Enable display manager
-	_TD_DM=$($YQ -r '.display_manager' "${_TD_MANIFEST}")
-	if [[ -n "${_TD_DM}" ]]; then
+	# Enable display manager after package installation, preferring apt's base-specific unit.
+	# Debian-family managers may differ from the shared default (gdm3 vs
+	# gdm). Respect a map-shaped apt section's explicit display manager.
+	_TD_DM=""
+	if [[ "${_TD_APT_TYPE}" == "!!map" ]]; then
+		_TD_DM=$($YQ -r '.packages.apt.display_manager // ""' "${_TD_MANIFEST}")
+	fi
+	if [[ -z "${_TD_DM}" || "${_TD_DM}" == "null" ]]; then
+		_TD_DM=$($YQ -r '.display_manager // ""' "${_TD_MANIFEST}")
+	fi
+	if [[ -n "${_TD_DM}" && "${_TD_DM}" != "null" ]]; then
 		systemctl enable "${_TD_DM}" || true
 	fi
 	printf "::endgroup::\n"
