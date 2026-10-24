@@ -18,6 +18,7 @@ from pathlib import Path
 import re
 import shlex
 import subprocess
+import threading
 import sys
 from typing import BinaryIO
 
@@ -38,6 +39,8 @@ PACKAGE = re.compile(r"[A-Za-z0-9][A-Za-z0-9+_.-]*(?:/[A-Za-z0-9][A-Za-z0-9+_.-]
 APT_PACKAGE = re.compile(r"[a-z0-9][a-z0-9+.-]*\Z")
 EMERGE_PACKAGE = re.compile(r"[A-Za-z0-9][A-Za-z0-9+_.-]*/[A-Za-z0-9][A-Za-z0-9+_.-]*\Z")
 SOURCE_FILES = {"tunaos.toml", "build_scripts/lib/image-packages.tsv"}
+COMMAND_OUTPUT_LIMIT = 1024 * 1024
+TRUNCATION_MARKER = f"\n[output truncated after {COMMAND_OUTPUT_LIMIT} bytes]\n".encode()
 
 
 class QualificationError(ValueError):
@@ -124,9 +127,9 @@ def validate_plan(value: object) -> dict:
         require(isinstance(cell["package"], str) and PACKAGE.fullmatch(cell["package"]),
                 f"{where}.package: invalid native package name")
         base = cell["baseImage"]
-        require(isinstance(base, str) and IMAGE_REF.fullmatch(base) and "@" in base
-                and DIGEST.fullmatch(base.rsplit("@", 1)[1]),
-                f"{where}.baseImage: expected digest-pinned reference")
+        require(isinstance(base, str) and IMAGE_REF.fullmatch(base) and "://" not in base
+                and "@" in base and DIGEST.fullmatch(base.rsplit("@", 1)[1]),
+                f"{where}.baseImage: expected transport-less digest-pinned reference")
         if cell["images"] is not None:
             required = {"stockBase", *DIRECT_ROLES}
             if route == "el10":
@@ -163,16 +166,46 @@ class CommandLog:
         return self
 
     def __exit__(self, *_args: object) -> None:
-        assert self.stream is not None
-        self.stream.close()
+        if self.stream is not None:
+            self.stream.close()
+            self.stream = None
 
     def run(
         self, args: list[str], *, cwd: Path | None = None
     ) -> subprocess.CompletedProcess[bytes]:
         valid_args = all(isinstance(arg, str) and "\0" not in arg for arg in args)
         require(valid_args, "command: invalid argv")
-        result = subprocess.run(args, cwd=cwd, capture_output=True, check=False)
-        assert self.stream is not None
+        process = subprocess.Popen(args, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if process.stdout is None or process.stderr is None:
+            process.kill()
+            raise QualificationError("command: failed to capture output")
+
+        captured = {"stdout": bytearray(), "stderr": bytearray()}
+
+        def drain(name: str, pipe: BinaryIO) -> None:
+            truncated = False
+            while chunk := pipe.read(64 * 1024):
+                remaining = max(0, COMMAND_OUTPUT_LIMIT - len(captured[name]))
+                captured[name].extend(chunk[:remaining])
+                truncated |= len(chunk) > remaining
+            pipe.close()
+            if truncated:
+                captured[name].extend(TRUNCATION_MARKER)
+
+        threads = [
+            threading.Thread(target=drain, args=("stdout", process.stdout)),
+            threading.Thread(target=drain, args=("stderr", process.stderr)),
+        ]
+        for thread in threads:
+            thread.start()
+        returncode = process.wait()
+        for thread in threads:
+            thread.join()
+        result = subprocess.CompletedProcess(
+            args, returncode, bytes(captured["stdout"]), bytes(captured["stderr"])
+        )
+        if self.stream is None:
+            raise QualificationError("command log is not open")
         self.stream.write(("$ " + shlex.join(args) + "\n").encode())
         self.stream.write(f"exit={result.returncode}\nstdout:\n".encode())
         self.stream.write(result.stdout)
@@ -214,8 +247,9 @@ def validate_package_name(manager: str, package: str) -> None:
 
 
 def validate_source(plan: dict, root: Path, log: CommandLog) -> dict:
+    require(not root.is_symlink(), "source: expected a real checkout directory")
     root = root.resolve()
-    require(root.is_dir() and not root.is_symlink(), "source: expected a real checkout directory")
+    require(root.is_dir(), "source: expected a real checkout directory")
     head = git_text(log, root, "rev-parse", "HEAD")
     require(head == plan["modifiedCommit"], "source: checkout HEAD differs from modifiedCommit")
     require(not git_text(log, root, "status", "--porcelain", "--untracked-files=all"),

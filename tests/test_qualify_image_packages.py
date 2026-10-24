@@ -8,6 +8,7 @@ import importlib.util
 import json
 from pathlib import Path
 import subprocess
+import sys
 
 import pytest
 
@@ -97,6 +98,11 @@ def test_plan_requires_all_six_routes_pinned_bases_and_overlay():
     with pytest.raises(MODULE.QualificationError, match="digest-pinned"):
         MODULE.validate_plan(mutable)
 
+    transported = copy.deepcopy(valid)
+    transported["cells"][0]["baseImage"] = "docker://" + transported["cells"][0]["baseImage"]
+    with pytest.raises(MODULE.QualificationError, match="transport-less"):
+        MODULE.validate_plan(transported)
+
     no_overlay = copy.deepcopy(valid)
     del no_overlay["cells"][0]["images"]["modifiedOverlay"]
     with pytest.raises(MODULE.QualificationError, match="invalid fields"):
@@ -154,10 +160,34 @@ def test_source_identity_requires_one_config_and_generated_adapter_commit(tmp_pa
         variant: ROUTE_MANAGERS[route] for route, variant in ROUTE_VARIANTS.items()
     }
 
+    linked = tmp_path / "linked-source"
+    linked.symlink_to(root, target_is_directory=True)
+    with MODULE.CommandLog(tmp_path / "symlink.log") as log:
+        with pytest.raises(MODULE.QualificationError, match="real checkout"):
+            MODULE.validate_source(qualification_plan, linked, log)
+
     (root / "untracked").write_text("not part of the build\n")
     with MODULE.CommandLog(tmp_path / "dirty.log") as log:
         with pytest.raises(MODULE.QualificationError, match="must be clean"):
             MODULE.validate_source(qualification_plan, root, log)
+
+
+def test_command_log_bounds_both_output_streams(tmp_path):
+    size = MODULE.COMMAND_OUTPUT_LIMIT + 4096
+    command = [
+        sys.executable,
+        "-c",
+        f"import sys; sys.stdout.buffer.write(b'x' * {size}); "
+        f"sys.stderr.buffer.write(b'y' * {size})",
+    ]
+    with MODULE.CommandLog(tmp_path / "command.log") as log:
+        result = log.run(command)
+
+    assert result.returncode == 0
+    assert result.stdout.endswith(MODULE.TRUNCATION_MARKER)
+    assert result.stderr.endswith(MODULE.TRUNCATION_MARKER)
+    assert len(result.stdout) == MODULE.COMMAND_OUTPUT_LIMIT + len(MODULE.TRUNCATION_MARKER)
+    assert len(result.stderr) == MODULE.COMMAND_OUTPUT_LIMIT + len(MODULE.TRUNCATION_MARKER)
 
 
 class FakeLog:
