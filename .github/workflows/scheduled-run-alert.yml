@@ -82,12 +82,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  # One workflow's tracking issue is read-modify-written here. Two completions
-  # for the same workflow must not race and open the issue twice.
-  group: scheduled-run-alert-${{ github.event.workflow_run.name }}
-  cancel-in-progress: false
-
 jobs:
   track:
     name: Track the scheduled run
@@ -104,6 +98,19 @@ jobs:
       github.event.workflow_run.event == 'schedule' &&
       contains(fromJSON('["success", "failure", "timed_out"]'),
                github.event.workflow_run.conclusion)
+    concurrency:
+      # On the job, not the workflow. One workflow's tracking issue is
+      # read-modify-written here, so two completions for the same workflow
+      # must not race and open the issue twice -- but a workflow-level group
+      # is entered before the `if` above is evaluated, so a
+      # `workflow_dispatch` completion or a cancelled run would queue in it
+      # too. A group holds one running and one pending run; an ignored
+      # completion taking that pending slot evicts the pending handler of a
+      # real scheduled failure, and the eviction is a cancellation with no
+      # other symptom. A job that `if` skips never enters its group, so
+      # keying the group here admits only the events this listener acts on.
+      group: scheduled-run-alert-${{ github.event.workflow_run.name }}
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -135,13 +142,25 @@ jobs:
           # rerun-infra-failures.yml waits 45 minutes and re-runs the failed
           # jobs of a red scheduled run, so that OLD run completes again as
           # attempt 2 after the next night's run has already concluded. Two
-          # deliveries therefore arrive out of order, and the stale one must
-          # not write: a late success would close the issue for a workflow
-          # that is red right now, and a late failure would re-open one that
-          # has already recovered. The newest concluded scheduled run of this
-          # workflow is the state; every earlier run and attempt is read-only
-          # here. `cancelled`, `skipped` and `startup_failure` carry no state,
-          # so they do not count as newer (same filter as the job condition).
+          # deliveries therefore arrive out of order, and acting on whichever
+          # one woke the step gets the state backwards: a late success closes
+          # the issue for a workflow that is red right now, and a late failure
+          # re-opens one that has already recovered.
+          #
+          # So the delivery is a trigger, not the subject. The subject is the
+          # newest concluded scheduled run of this workflow, read here and
+          # adopted below whenever the event is behind it. Exiting on a stale
+          # event instead would assume the newer run's own handler had already
+          # written, and nothing guarantees it ran: a concurrency group holds
+          # one running and one pending entry, so a delayed older delivery can
+          # take the slot the newer one was waiting in, and the newer handler
+          # is then cancelled without writing anything. Reporting the newest
+          # run's own state from whichever delivery arrives makes the order of
+          # the deliveries irrelevant, which is the only property obtainable
+          # here -- GitHub orders `workflow_run` deliveries by nothing.
+          #
+          # `cancelled`, `skipped` and `startup_failure` carry no state, so
+          # they are not candidates for newest (the job condition's filter).
           newest="$(
             gh api "repos/${GH_REPO}/actions/workflows/${WORKFLOW_ID}/runs?event=schedule&status=completed&per_page=30" \
               --jq '[.workflow_runs[]
@@ -149,24 +168,42 @@ jobs:
                               or .conclusion == "timed_out")]
                     | sort_by(.run_number, .run_attempt)
                     | last | select(. != null)
-                    | "\(.run_number) \(.run_attempt)"'
+                    | [(.run_number | tostring), (.run_attempt | tostring), .conclusion,
+                       (.id | tostring), .html_url, (.head_branch // ""), (.head_sha // "")]
+                    | @tsv'
           )" || newest=""
 
-          if [[ "$newest" =~ ^[0-9]+\ [0-9]+$ ]]; then
-            read -r newest_number newest_attempt <<<"$newest"
-            if (( newest_number > RUN_NUMBER )) ||
-               { (( newest_number == RUN_NUMBER )) && (( newest_attempt > RUN_ATTEMPT )); }; then
-              echo "Run ${RUN_NUMBER} attempt ${RUN_ATTEMPT} of ${WORKFLOW_NAME} is behind" \
-                   "run ${newest_number} attempt ${newest_attempt}; the tracker already" \
-                   "reflects that run, so this event changes nothing."
-              exit 0
-            fi
+          newest_number=""
+          newest_attempt=""
+          if [[ -n "$newest" ]]; then
+            IFS=$'\t' read -r newest_number newest_attempt newest_conclusion \
+              newest_id newest_url newest_branch newest_sha <<<"$newest"
           else
             # Reconciliation is not a gate on alerting. A listener that goes
             # quiet when the run-history query fails loses the incident
             # entirely, which is the silence this workflow exists to end.
             echo "::warning::no run history for ${WORKFLOW_NAME}; acting on this event unreconciled"
           fi
+
+          if [[ "$newest_number" =~ ^[0-9]+$ && "$newest_attempt" =~ ^[0-9]+$ ]] &&
+             { (( newest_number > RUN_NUMBER )) ||
+               { (( newest_number == RUN_NUMBER )) && (( newest_attempt > RUN_ATTEMPT )); }; }; then
+            echo "Run ${RUN_NUMBER} attempt ${RUN_ATTEMPT} of ${WORKFLOW_NAME} is behind run" \
+                 "${newest_number} attempt ${newest_attempt}; reporting that run instead."
+            CONCLUSION="$newest_conclusion"
+            RUN_ID="$newest_id"
+            RUN_URL="$newest_url"
+            RUN_NUMBER="$newest_number"
+            RUN_ATTEMPT="$newest_attempt"
+            HEAD_BRANCH="$newest_branch"
+            HEAD_SHA="$newest_sha"
+          fi
+
+          # One marker per run and attempt, written into every body this step
+          # produces. Adopting the newest run above means two deliveries can
+          # arrive at the same run, so what the issue already says is read
+          # back below rather than inferred from which event this is.
+          MARKER="<!-- scheduled-run-alert run=${RUN_ID} attempt=${RUN_ATTEMPT} -->"
 
           # The issues list endpoint, not search: a tracking issue opened
           # minutes ago is not reliably in the search index yet, and a missed
@@ -189,6 +226,22 @@ jobs:
               --comment "Recovered: the next scheduled run was green. ${RUN_URL}"
             echo "Closed #${existing} for ${WORKFLOW_NAME}."
             exit 0
+          fi
+
+          # Nothing to add when the issue already reports this run and attempt.
+          # Two deliveries can reach the same run once the newest one is
+          # adopted above, and the issue is the record of what was written, so
+          # it is read instead of guessed at from the event.
+          if [[ -n "$existing" ]]; then
+            recorded="$(
+              gh issue view "$existing" --json body,comments \
+                --jq '[.body] + [.comments[].body] | join("\n")'
+            )" || recorded=""
+            if [[ "$recorded" == *"$MARKER"* ]]; then
+              echo "#${existing} already reports run ${RUN_NUMBER} attempt ${RUN_ATTEMPT}" \
+                   "of ${WORKFLOW_NAME}; nothing to add."
+              exit 0
+            fi
           fi
 
           # Which legs went red. Without this the issue says only "it failed",
@@ -224,6 +277,7 @@ jobs:
           body="$(mktemp)"
           {
             echo "<!-- scheduled-run-alert -->"
+            echo "${MARKER}"
             echo "\`${WORKFLOW_NAME}\` concluded **${CONCLUSION}** on its scheduled run."
             echo
             echo "- Run: [${RUN_ID}](${RUN_URL}) (attempt ${RUN_ATTEMPT})"

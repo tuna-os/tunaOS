@@ -12,10 +12,17 @@
 # `gh` stubbed on PATH. The stub answers each call with a fixture and records
 # every invocation, so the requests themselves are assertable too.
 #
-# Two cases exist because a reviewer named them on PR #3874:
-#   - an out-of-order delivery must not write. rerun-infra-failures.yml re-runs
-#     the failed jobs of a red scheduled run 45 minutes later, so an OLD run
-#     completes again as attempt 2 after the next run has already concluded.
+# Three cases exist because a reviewer named them on PR #3874:
+#   - an out-of-order delivery must not write its own run's state.
+#     rerun-infra-failures.yml re-runs the failed jobs of a red scheduled run
+#     45 minutes later, so an OLD run completes again as attempt 2 after the
+#     next run has already concluded.
+#   - and it must not simply fall silent either. A concurrency group holds one
+#     running and one pending entry, so the late delivery can take the slot
+#     the newer run's handler was waiting in and cancel it; nothing else will
+#     ever report that run. Whichever delivery survives therefore reports the
+#     newest run, and a marker per run and attempt keeps the issue from
+#     collecting one comment per delivery.
 #   - the jobs query must not ask for 100 jobs per page. This repository's
 #     largest runs answer that page size with HTTP 502 every time (row 56 of
 #     docs/ci-troubleshooting.md), and a swallowed failure used to be reported
@@ -98,6 +105,11 @@ issue)
 	shift
 	case "$action" in
 	list) printf '%s' "${ISSUES_JSON}" ;;
+	view)
+		# What the tracker already says. `--json body,comments` with a jq
+		# filter, so the fixture is the joined text the step greps.
+		printf '%s' "${ISSUE_TEXT:-}"
+		;;
 	create | comment | close)
 		while (($#)); do
 			[[ "$1" == "--body-file" ]] && cp "$2" "$BODY_FILE"
@@ -139,6 +151,7 @@ STUB
 	  {"name":"Build marlin:kde","conclusion":"success","html_url":"https://x/2"},
 	  {"name":"Promote","conclusion":"timed_out","html_url":"https://x/3"}
 	]}'
+	export ISSUE_TEXT=''
 	export RUNS_QUERY_FAILS=0
 	export JOBS_QUERY_FAILS=0
 }
@@ -213,28 +226,122 @@ writes() {
 	[[ "$output" == *"nothing open"* ]]
 }
 
-@test "a late green event does not close an issue a newer red run owns" {
+@test "a late green event reports the newer red run instead of closing its issue" {
 	# The 45-minute re-run of run 10 goes green and completes as attempt 2,
 	# after run 11 has already failed and opened the issue. Closing here would
-	# say "recovered" about a workflow that is red right now.
+	# say "recovered" about a workflow that is red right now; so would writing
+	# nothing, if run 11's own handler never got to write.
 	export CONCLUSION=success
 	export RUN_ATTEMPT=2
 	export RUNS_JSON='{"workflow_runs":[
-	  {"run_number":11,"run_attempt":1,"conclusion":"failure"},
-	  {"run_number":10,"run_attempt":2,"conclusion":"success"}
+	  {"run_number":11,"run_attempt":1,"conclusion":"failure","id":9100,
+	   "html_url":"https://github.com/tuna-os/tunaos/actions/runs/9100",
+	   "head_branch":"main","head_sha":"cafef00d"},
+	  {"run_number":10,"run_attempt":2,"conclusion":"success","id":9001,
+	   "html_url":"https://github.com/tuna-os/tunaos/actions/runs/9001",
+	   "head_branch":"main","head_sha":"deadbeef"}
 	]}'
 	export ISSUES_JSON='[{"number":99,"title":"[operations] Build Bonito scheduled run failed"}]'
 	run_step
 	[ "$status" -eq 0 ]
-	[ -z "$(writes)" ]
+	[ "$(writes)" = "comment" ]
 	[[ "$output" == *"is behind"* ]]
+
+	# Run 11's state, down to its jobs: the event is the trigger, not the subject.
+	grep -qF 'concluded **failure**' "$BODY_FILE"
+	grep -qF '[9100](https://github.com/tuna-os/tunaos/actions/runs/9100) (attempt 1)' "$BODY_FILE"
+	grep -qF '`main` at `cafef00d`' "$BODY_FILE"
+	grep -qF 'actions/runs/9100/attempts/1/jobs?per_page=50' "$GH_LOG"
+	run grep -F 'actions/runs/9001/attempts' "$GH_LOG"
+	[ "$status" -ne 0 ]
+}
+
+@test "a newer failure with nothing open is filed by the stale delivery that wakes the step" {
+	# Three deliveries, the ordering a reviewer named on PR #3874: run 10
+	# fails, run 11 fails, and run 10's 45-minute re-run completes green. The
+	# group holds one running and one pending entry, so the delayed green
+	# delivery can take the slot run 11's handler was waiting in and cancel
+	# it. Nothing else will ever report run 11, so this delivery must.
+	export CONCLUSION=success
+	export RUN_ATTEMPT=2
+	export RUNS_JSON='{"workflow_runs":[
+	  {"run_number":11,"run_attempt":1,"conclusion":"failure","id":9100,
+	   "html_url":"https://github.com/tuna-os/tunaos/actions/runs/9100",
+	   "head_branch":"main","head_sha":"cafef00d"},
+	  {"run_number":10,"run_attempt":2,"conclusion":"success","id":9001,
+	   "html_url":"https://github.com/tuna-os/tunaos/actions/runs/9001",
+	   "head_branch":"main","head_sha":"deadbeef"}
+	]}'
+	run_step
+	[ "$status" -eq 0 ]
+	[ "$(writes)" = "create" ]
+	grep -qF '[9100](https://github.com/tuna-os/tunaos/actions/runs/9100) (attempt 1)' "$BODY_FILE"
+}
+
+@test "a stale delivery applies the newer run's recovery when that handler never did" {
+	# The mirror image: run 11 is green, run 10's re-run completes red after
+	# it, and run 11's handler was the one evicted. The issue still has to close.
+	export RUN_NUMBER=10
+	export RUN_ATTEMPT=2
+	export RUNS_JSON='{"workflow_runs":[
+	  {"run_number":11,"run_attempt":1,"conclusion":"success","id":9100,
+	   "html_url":"https://github.com/tuna-os/tunaos/actions/runs/9100",
+	   "head_branch":"main","head_sha":"cafef00d"},
+	  {"run_number":10,"run_attempt":2,"conclusion":"failure","id":9001,
+	   "html_url":"https://github.com/tuna-os/tunaos/actions/runs/9001",
+	   "head_branch":"main","head_sha":"deadbeef"}
+	]}'
+	export ISSUES_JSON='[{"number":99,"title":"[operations] Build Bonito scheduled run failed"}]'
+	run_step
+	[ "$status" -eq 0 ]
+	[ "$(writes)" = "close" ]
+	grep -qF 'actions/runs/9100' "$GH_LOG"
+}
+
+@test "a run the issue already reports is not reported twice" {
+	# Both run 11's own delivery and the stale one that follows it resolve to
+	# run 11. The second reads the issue and finds its own marker, so the
+	# tracker does not accumulate one comment per late delivery.
+	export CONCLUSION=success
+	export RUN_ATTEMPT=2
+	export RUNS_JSON='{"workflow_runs":[
+	  {"run_number":11,"run_attempt":1,"conclusion":"failure","id":9100,
+	   "html_url":"https://github.com/tuna-os/tunaos/actions/runs/9100",
+	   "head_branch":"main","head_sha":"cafef00d"},
+	  {"run_number":10,"run_attempt":2,"conclusion":"success","id":9001,
+	   "html_url":"https://github.com/tuna-os/tunaos/actions/runs/9001",
+	   "head_branch":"main","head_sha":"deadbeef"}
+	]}'
+	export ISSUES_JSON='[{"number":99,"title":"[operations] Build Bonito scheduled run failed"}]'
+	export ISSUE_TEXT='<!-- scheduled-run-alert -->
+<!-- scheduled-run-alert run=9100 attempt=1 -->
+Build Bonito concluded failure.'
+	run_step
+	[ "$status" -eq 0 ]
+	[ -z "$(writes)" ]
+	[[ "$output" == *"already reports run 11 attempt 1"* ]]
+}
+
+@test "an issue that reports an earlier run is still updated for this one" {
+	# The marker is per run and attempt: a tracker holding run 10 must not
+	# suppress run 11.
+	export ISSUES_JSON='[{"number":99,"title":"[operations] Build Bonito scheduled run failed"}]'
+	export ISSUE_TEXT='<!-- scheduled-run-alert run=8000 attempt=1 -->'
+	run_step
+	[ "$status" -eq 0 ]
+	[ "$(writes)" = "comment" ]
+	grep -qF '<!-- scheduled-run-alert run=9001 attempt=1 -->' "$BODY_FILE"
 }
 
 @test "a late red event does not re-open an incident a newer green run cleared" {
 	export RUN_NUMBER=9
 	export RUNS_JSON='{"workflow_runs":[
-	  {"run_number":10,"run_attempt":1,"conclusion":"success"},
-	  {"run_number":9,"run_attempt":1,"conclusion":"failure"}
+	  {"run_number":10,"run_attempt":1,"conclusion":"success","id":9050,
+	   "html_url":"https://github.com/tuna-os/tunaos/actions/runs/9050",
+	   "head_branch":"main","head_sha":"beefcafe"},
+	  {"run_number":9,"run_attempt":1,"conclusion":"failure","id":9001,
+	   "html_url":"https://github.com/tuna-os/tunaos/actions/runs/9001",
+	   "head_branch":"main","head_sha":"deadbeef"}
 	]}'
 	run_step
 	[ "$status" -eq 0 ]
@@ -242,7 +349,11 @@ writes() {
 }
 
 @test "an event for an attempt a later attempt of the same run superseded writes nothing" {
-	export RUNS_JSON='{"workflow_runs":[{"run_number":10,"run_attempt":2,"conclusion":"success"}]}'
+	export RUNS_JSON='{"workflow_runs":[
+	  {"run_number":10,"run_attempt":2,"conclusion":"success","id":9001,
+	   "html_url":"https://github.com/tuna-os/tunaos/actions/runs/9001",
+	   "head_branch":"main","head_sha":"deadbeef"}
+	]}'
 	run_step
 	[ "$status" -eq 0 ]
 	[ -z "$(writes)" ]

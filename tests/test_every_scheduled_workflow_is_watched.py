@@ -138,3 +138,32 @@ def test_a_green_scheduled_run_closes_the_issue() -> None:
     )
     assert "gh issue close" in script
     assert 'CONCLUSION" == "success"' in script
+
+
+def test_the_serializing_group_is_on_the_job_and_not_the_workflow() -> None:
+    """An ignored completion must not queue for the handler's one slot.
+
+    The listener subscribes to every completion of 47 workflows, and the job's
+    `if` drops most of them -- a `workflow_dispatch` leg, a cancelled run. A
+    workflow-level `concurrency:` is entered before that `if` is evaluated, so
+    those ignored runs would sit in the same group as the real handlers. A
+    group holds one running and one pending entry, so an ignored completion
+    taking the pending slot cancels the pending handler of a scheduled
+    failure, and that eviction has no other symptom: no issue, no comment, no
+    red job. A job that `if` skips never enters its group, so the group
+    belongs on the job.
+    """
+    doc = yaml.safe_load(ALERT.read_text()) or {}
+    assert "concurrency" not in doc, (
+        "a workflow-level group admits the completions the job's `if` drops; "
+        "they then compete for the handler's pending slot"
+    )
+    group = _alert_job()["concurrency"]
+    assert group["cancel-in-progress"] is False, (
+        "a cancelled handler is a dropped incident; the writes are serialized, "
+        "not superseded"
+    )
+    assert "github.event.workflow_run.name" in group["group"], (
+        "one tracking issue per watched workflow, so the group that serializes "
+        "the read-modify-write is per watched workflow too"
+    )
