@@ -146,16 +146,22 @@ gentoo)
 			set -eu
 			atom=$1
 			case "$atom" in
-				*/*) ;;
-				*) atom="*/${atom}" ;;
+				*/*)
+					if command -v portageq >/dev/null 2>&1; then
+						portageq match / "$atom" | grep -q .
+					elif command -v equery >/dev/null 2>&1; then
+						equery match "$atom" | grep -q .
+					else
+						exit 127
+					fi
+					;;
+				*)
+					for package_dir in /var/db/pkg/*/"$atom"-[0-9]*; do
+						[ -d "$package_dir" ] && exit 0
+					done
+					exit 1
+					;;
 			esac
-			if command -v portageq >/dev/null 2>&1; then
-				portageq match / "$atom" | grep -q .
-			elif command -v equery >/dev/null 2>&1; then
-				equery match "$atom" | grep -q .
-			else
-				exit 127
-			fi
 		' sh "$pkg" &>/dev/null; then
 			echo "❌ Missing package: ${pkg}"
 			FAILED=1
