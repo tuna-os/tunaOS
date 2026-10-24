@@ -37,14 +37,22 @@ EXPENSIVE = ["live-iso-bootc.yml", "iso-e2e.yml"]
 # `build-albacore-refs/heads/main`: three were cancelled at birth and the
 # kde run already in flight lost its walkthrough and R2 upload to the
 # newest one. So the same per-run rule applies to them.
+VARIANTS = (
+    yaml.safe_load((WORKFLOWS.parent / "build-config.yml").read_text()) or {}
+).get("variants", [])
 GENERATED_BUILDS = sorted(
     f"build-{variant['id']}.yml"
-    for variant in (
-        yaml.safe_load((WORKFLOWS.parent / "build-config.yml").read_text()) or {}
-    ).get("variants", [])
-    if variant["id"] != "stingray"
+    for variant in VARIANTS
+    if not variant.get("experimental")
 )
-assert GENERATED_BUILDS, "no generated build-<variant>.yml workflows found"
+EXPERIMENTAL_BUILDS = sorted(
+    f"build-{variant['id']}.yml"
+    for variant in VARIANTS
+    if variant.get("experimental")
+)
+assert GENERATED_BUILDS, "no stable generated build workflows found"
+assert EXPERIMENTAL_BUILDS, "no experimental generated build workflows found"
+assert {"build-stingray.yml", "build-wahoo.yml"} <= set(EXPERIMENTAL_BUILDS)
 
 
 def _concurrency(name):
@@ -52,7 +60,7 @@ def _concurrency(name):
     return doc.get("concurrency")
 
 
-@pytest.mark.parametrize("workflow", EXPENSIVE + GENERATED_BUILDS)
+@pytest.mark.parametrize("workflow", EXPENSIVE + GENERATED_BUILDS + EXPERIMENTAL_BUILDS)
 def test_it_cancels_superseded_runs(workflow):
     c = _concurrency(workflow)
     assert c, f"{workflow} has no concurrency block; every PR push starts another ISO build"
@@ -109,3 +117,22 @@ def test_pr_pushes_share_one_group(workflow):
     assert resolve("workflow_dispatch", "1") != resolve("workflow_dispatch", "2"), (
         "two dispatched sweep cells resolve to the same group and would cancel each other"
     )
+
+
+@pytest.mark.parametrize("workflow", EXPERIMENTAL_BUILDS)
+def test_experimental_dispatches_are_grouped_by_flavor(workflow):
+    """Experimental workflows fan out by flavor, not by run or PR event."""
+    group = _concurrency(workflow)["group"]
+    match = re.search(
+        r"\$\{\{\s*inputs\.flavor\s*\|\|\s*'([^']+)'\s*\}\}",
+        group,
+    )
+    assert match, f"unrecognised experimental group expression: {group!r}"
+
+    def resolve(flavor):
+        value = flavor or match.group(1)
+        return group[: match.start()] + value + group[match.end() :]
+
+    assert resolve("gnome") != resolve("kde")
+    assert resolve("") != resolve("gnome")
+    assert "github.run_id" not in group

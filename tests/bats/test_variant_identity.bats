@@ -233,11 +233,15 @@ rows() { grep -v '^#' "$TSV" | grep -v '^$'; }
   [ "$(cat "${root}/usr/share/backgrounds/tunaos/tunaos-default.jpg")" = painted ]
 }
 
-@test "every variant ships shared anime alongside its rendered fallback" {
+@test "every variant ships its rendered fallback and non-Stingray variants ship anime" {
   local id
   while IFS=$'\t' read -r id _; do
-    [ -s "${WALLS}/${id}-anime.jpg" ] || { echo "FAIL: no ${id}-anime.jpg" >&2; return 1; }
     [ -s "${WALLS}/${id}.jpg" ] || return 1
+    if [ "$id" = stingray ]; then
+      [ ! -e "${WALLS}/${id}-anime.jpg" ] || { echo "FAIL: Stingray unexpectedly has anime art" >&2; return 1; }
+    else
+      [ -s "${WALLS}/${id}-anime.jpg" ] || { echo "FAIL: no ${id}-anime.jpg" >&2; return 1; }
+    fi
   done < <(rows)
 }
 
@@ -250,8 +254,11 @@ rows() { grep -v '^#' "$TSV" | grep -v '^$'; }
     const manifest = JSON.parse(readFileSync(root + "/docs/branding/anime-wallpapers.json", "utf8"));
     const ids = readFileSync(root + "/build_scripts/lib/variant-identity.tsv", "utf8")
       .split("\n").filter(l => l && !l.startsWith("#")).map(l => l.split("\t")[0]);
-    if (new Set(manifest.assets.map(a => a.variant)).size !== ids.length) throw new Error("asset count mismatch");
-    for (const id of ids) {
+    const animeIds = ids.filter(id => id !== "stingray");
+    const manifestIds = new Set(manifest.assets.map(a => a.variant));
+    if (manifestIds.size !== animeIds.length) throw new Error("asset count mismatch");
+    if (manifestIds.has("stingray")) throw new Error("Stingray must use its vector fallback");
+    for (const id of animeIds) {
       const asset = manifest.assets.find(a => a.variant === id);
       if (!asset) throw new Error("missing manifest asset: " + id);
       const bytes = readFileSync(root + "/system_files/usr/share/backgrounds/tunaos/" + id + "-anime.jpg");

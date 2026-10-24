@@ -365,10 +365,13 @@ def luks_matrix() -> dict[str, set[str]]:
     return out
 
 
-def _is_beta_lifecycle_cell(cell: str) -> bool:
+def _is_beta_lifecycle_cell(
+    cell: str, experimental_variants: set[str] | None = None
+) -> bool:
     variant_id, flavor_id = cell.split(":", 1)
     return (
-        "rawhide" in variant_id
+        variant_id in (experimental_variants or set())
+        or "rawhide" in variant_id
         or "sid" in variant_id
         or variant_id == "guppy"
         or "asahi" in flavor_id
@@ -399,9 +402,14 @@ def lifecycle_validation_jobs(config: dict | None = None) -> set[str]:
 
 def lifecycle_sweep_jobs(config: dict | None = None) -> set[str]:
     """Exact validating job names in an unfiltered stable lifecycle matrix."""
+    config = config or load_build_config(CONFIG)
+    experimental = {
+        variant["id"] for variant in config.get("variants", [])
+        if variant.get("experimental") is True
+    }
     return {
         job for job in lifecycle_validation_jobs(config)
-        if not _is_beta_lifecycle_cell(job.rsplit(" (", 1)[0])
+        if not _is_beta_lifecycle_cell(job.rsplit(" (", 1)[0], experimental)
     }
 
 

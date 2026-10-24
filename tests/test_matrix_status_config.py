@@ -717,7 +717,7 @@ class LifecycleResultsNormalisation(unittest.TestCase):
             })
             self.assertEqual(got["bonito:gnome"][0], "failure")
 
-    def test_lifecycle_sweep_excludes_beta_probes_but_keeps_validating_experimental_jobs(self):
+    def test_lifecycle_sweep_excludes_beta_and_experimental_probe_jobs(self):
         config = {
             "variants": [
                 {
@@ -739,7 +739,6 @@ class LifecycleResultsNormalisation(unittest.TestCase):
             ]
         }
         assert gms.lifecycle_sweep_jobs(config) == {
-            "future:gnome (amd64)",
             "yellowfin:gnome (amd64)",
         }
         assert gms.lifecycle_job_key("BETA guppy:gnome (amd64)") == (
