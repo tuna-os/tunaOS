@@ -185,6 +185,20 @@ require_any_glob() {
 	exit 1
 }
 
+# Commands represented by fixed filesystem locations must still be executable.
+# This is separate from require_command so regression tests can inspect an
+# alternate image root without changing the test process's PATH.
+require_any_executable() {
+	local g path
+	for g in "$@"; do
+		for path in $g; do
+			[[ -x "$path" ]] && return 0
+		done
+	done
+	echo "missing executable: none of [$*] exist and are executable" >&2
+	exit 1
+}
+
 # User systemd units (session services like pipewire, wireplumber, portals).
 # Checked via systemctl --user list-unit-files or filesystem unit file globs.
 require_user_unit() {
@@ -233,11 +247,12 @@ require_any_user_unit() {
 # $1 is a filesystem root for the regression test; empty in the image.
 require_secret_service() {
 	local root="${1:-}"
-	if grep -qE '^ID="?eln"?$' "$root/etc/os-release" "$root/usr/lib/os-release" 2>/dev/null; then
-		require_any_glob "$root/usr/libexec/oo7-daemon"
+	if grep -qE '^(ID|VARIANT_ID)="?eln"?$' \
+		"$root/etc/os-release" "$root/usr/lib/os-release" 2>/dev/null; then
+		require_any_executable "$root/usr/libexec/oo7-daemon"
 		require_any_glob "$root/usr/lib*/security/pam_oo7.so"
 	else
-		require_any_glob "$root/usr/bin/gnome-keyring-daemon"
+		require_any_executable "$root/usr/bin/gnome-keyring-daemon"
 	fi
 }
 
