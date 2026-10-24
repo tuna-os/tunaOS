@@ -72,7 +72,10 @@ jobs:
 
       - name: Log in to GHCR
         if: steps.filter.outputs.skip != 'true'
-        uses: ./.github/actions/ghcr-login
+        uses: ./.github/actions/registry-login
+        with:
+          destination: ghcr.io/${{ github.repository_owner }}
+          clients: docker podman sudo-podman
 
       - name: Install dependencies
         if: steps.filter.outputs.skip != 'true'

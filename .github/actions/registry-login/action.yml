@@ -1,0 +1,34 @@
+name: Registry login
+description: Selects owner or custom publish credentials and authenticates only the requested OCI clients.
+
+inputs:
+  destination:
+    description: Resolved publish destination as <registry>/<namespace>.
+    required: true
+  registry-username:
+    description: Username for a non-owner publish destination.
+    required: false
+    default: ""
+  registry-token:
+    description: Token for a non-owner publish destination.
+    required: false
+    default: ""
+  clients:
+    description: Space-separated clients to authenticate (docker, podman, sudo-podman, cosign, skopeo).
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Select credentials and log in
+      shell: bash
+      env:
+        PUBLISH_DESTINATION: ${{ inputs.destination }}
+        PUBLISH_REGISTRY_USERNAME: ${{ inputs.registry-username }}
+        PUBLISH_REGISTRY_TOKEN: ${{ inputs.registry-token }}
+        REGISTRY_LOGIN_CLIENTS: ${{ inputs.clients }}
+        GITHUB_TOKEN: ${{ github.token }}
+        GITHUB_ACTOR: ${{ github.actor }}
+        GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
+        GITHUB_EVENT_NAME: ${{ github.event_name }}
+      run: "${GITHUB_ACTION_PATH}/../../../scripts/registry-login.sh"

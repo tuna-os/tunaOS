@@ -12,6 +12,16 @@ on:
         description: "Asahi image ref to verify"
         required: true
         type: string
+      registry-destination:
+        description: Resolved <registry>/<namespace> containing the image.
+        required: false
+        type: string
+        default: ""
+    secrets:
+      PUBLISH_REGISTRY_USERNAME:
+        required: false
+      PUBLISH_REGISTRY_TOKEN:
+        required: false
 
 permissions:
   contents: read
@@ -32,10 +42,13 @@ jobs:
         # initramfs-content checks with a warning instead of verifying them.
         run: sudo apt-get update -y && sudo apt-get install -y --no-install-recommends dracut-core
 
-      - name: Login to GHCR
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: echo "$GH_TOKEN" | podman login ghcr.io --username "${GITHUB_ACTOR}" --password-stdin
+      - name: Login to image registry
+        uses: ./.github/actions/registry-login
+        with:
+          destination: ${{ inputs.registry-destination || format('ghcr.io/{0}', github.repository_owner) }}
+          registry-username: ${{ secrets.PUBLISH_REGISTRY_USERNAME }}
+          registry-token: ${{ secrets.PUBLISH_REGISTRY_TOKEN }}
+          clients: podman
 
       - name: Verify image against Asahi golden manifest
         id: verify

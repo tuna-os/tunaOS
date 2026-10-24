@@ -1947,6 +1947,25 @@ used the correct owner.
 namespace. `tests/test_publish_destination.py` checks the precedence and the
 split.
 
+### A non-owner publish destination fails before build or registry login
+
+**Symptom:** A workflow configured for `quay.io/<namespace>` or a different
+GHCR organization reports that `PUBLISH_REGISTRY_USERNAME` and
+`PUBLISH_REGISTRY_TOKEN` are required, must be configured together, or
+conflict with the stock destination.
+
+**Cause:** Only the exact `ghcr.io/<repository-owner>` path can use the
+job-scoped `GITHUB_TOKEN`. Every other resolved destination needs the complete
+custom pair. A repository `IMAGE_REGISTRY` variable overrides TOML, so secrets
+for the TOML destination can mismatch the effective destination.
+
+**Fix:** Check the output of `scripts/publish-destination.sh`. For the stock
+owner path, remove both custom secrets. For any other path, configure both
+repository secrets for one least-privilege service account that can pull and
+push that namespace. Do not add credentials to TOML. A fork pull request
+cannot use either credential mode; run publishing only from a trusted branch
+event.
+
 ## Content PR fails with `STE budget exceeded` (#2912)
 
 **Symptom:** a CFP abstract or design contribution adds Markdown and the

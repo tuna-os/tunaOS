@@ -142,17 +142,42 @@ jobs:
             echo "Run [${RUN_ID}](https://github.com/${REPO}/actions/runs/${RUN_ID}) published no SBOM-bearing platform image."
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Resolve attestation registry
+        if: steps.fetch.outputs.refs != '0'
+        id: publish
+        run: |
+          set -euo pipefail
+          destination=""
+          while IFS= read -r ref_file; do
+            ref="$(<"$ref_file")"
+            candidate="${ref%%@*}"
+            candidate="${candidate%/*}"
+            if [[ -n "$destination" && "$candidate" != "$destination" ]]; then
+              echo "::error::build outputs span multiple publish destinations"
+              exit 1
+            fi
+            destination="$candidate"
+          done < <(find supply-chain/digests -name '*.ref' -print)
+          [[ -n "$destination" ]] || {
+            echo "::error::published image refs did not contain a registry destination"
+            exit 1
+          }
+          echo "destination=$destination" >> "$GITHUB_OUTPUT"
+
       - name: Install Cosign
         if: steps.fetch.outputs.refs != '0'
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
         with:
           cosign-release: v3.1.4
 
-      - name: Login to GitHub Container Registry
+      - name: Login to publish registry
         if: steps.fetch.outputs.refs != '0'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: echo "$GITHUB_TOKEN" | cosign login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
+        uses: ./.github/actions/registry-login
+        with:
+          destination: ${{ steps.publish.outputs.destination }}
+          registry-username: ${{ secrets.PUBLISH_REGISTRY_USERNAME }}
+          registry-token: ${{ secrets.PUBLISH_REGISTRY_TOKEN }}
+          clients: cosign
 
       - name: Attest SPDX SBOMs
         if: steps.fetch.outputs.refs != '0'
