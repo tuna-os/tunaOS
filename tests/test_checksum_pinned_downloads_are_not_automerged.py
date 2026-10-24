@@ -33,6 +33,7 @@ ROOT = Path(__file__).resolve().parents[1]
 RENOVATE = ROOT / "renovate.json"
 IMAGE_VERSIONS = ROOT / "image-versions.yaml"
 REMORA = ROOT / "build_scripts/install-remora.sh"
+TOOLCHAIN_DEBIAN = ROOT / "toolchain/Containerfile.debian"
 
 RENOVATE_MARKER = re.compile(r"#\s*renovate:\s*datasource=\S+\s+depName=(\S+)")
 
@@ -59,6 +60,15 @@ def checksum_paired_dep_names() -> set[str]:
         m = RENOVATE_MARKER.search(remora)
         assert m, "install-remora.sh pins a sha256 but carries no renovate marker"
         names.add(m.group(1))
+
+    # toolchain/Containerfile.debian: a renovate marker over RUSTUP_VERSION and a
+    # RUSTUP_SHA256 case table below it.
+    if TOOLCHAIN_DEBIAN.is_file():
+        toolchain_debian = TOOLCHAIN_DEBIAN.read_text()
+        if "RUSTUP_SHA256=" in toolchain_debian:
+            m = RENOVATE_MARKER.search(toolchain_debian)
+            assert m, "toolchain/Containerfile.debian pins a sha256 but carries no renovate marker"
+            names.add(m.group(1))
 
     return names
 
@@ -87,6 +97,7 @@ def test_the_derived_list_names_the_known_pairs():
     names = checksum_paired_dep_names()
     assert "tuna-os/remora" in names
     assert "twpayne/chezmoi" in names
+    assert "rust-lang/rustup" in names
 
 
 def test_every_checksum_paired_download_ends_up_not_automerged():

@@ -80,6 +80,7 @@ jobs:
             --build-arg BOOTUPD_VERSION="${{ steps.ver.outputs.bootupd }}" \
             --build-arg OSTREE_VERSION="${{ steps.ver.outputs.ostree }}" \
             --build-arg COMPOSEFS_VERSION="${{ steps.ver.outputs.composefs }}" \
+            --build-arg TARGETARCH="${{ matrix.arch }}" \
             -f "${{ matrix.containerfile }}" \
             -o "type=tar,dest=toolchain.tar" \
             .
