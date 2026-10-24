@@ -55,7 +55,7 @@ tuna_package_backend() {
 		echo rpm
 	elif command -v dpkg-query >/dev/null 2>&1; then
 		echo dpkg
-	elif command -v qlist >/dev/null 2>&1 && command -v qfile >/dev/null 2>&1; then
+	elif [[ -d "${TUNAOS_PORTAGE_DB:-/var/db/pkg}" ]]; then
 		echo portage
 	else
 		echo "no supported Tuna package backend (pacman, rpm, dpkg or portage) in this image" >&2
@@ -70,10 +70,22 @@ tuna_installed_package_names() {
 	# Installed only, read from the second (state) character: the first is the
 	# selection, so a held install is `hi`, and removed-but-not-purged is `rc`.
 	dpkg) dpkg-query -W -f '${db:Status-Abbrev} ${Package}\n' | awk 'substr($1, 2, 1) == "i" { print $2 }' ;;
-	# qlist prints category/package. The Tuna contract compares native package
-	# names across managers, so remove only the category, never versions via an
-	# availability query.
-	portage) qlist -IC | sed 's|.*/||' ;;
+	# Portage's installed package database is authoritative and part of Portage
+	# itself; gentoolkit's qlist is not present in a minimal stage3 image.
+	portage)
+		local package_dir pf
+		for package_dir in "${TUNAOS_PORTAGE_DB:-/var/db/pkg}"/*/*; do
+			[[ -d "$package_dir" ]] || continue
+			if [[ -r "$package_dir/PF" ]]; then
+				IFS= read -r pf <"$package_dir/PF"
+			else
+				pf="${package_dir##*/}"
+			fi
+			if [[ "$pf" =~ ^(.+)-[0-9][0-9A-Za-z._-]*$ ]]; then
+				printf '%s\n' "${BASH_REMATCH[1]}"
+			fi
+		done
+		;;
 	*) return 1 ;;
 	esac
 }
@@ -84,8 +96,27 @@ tuna_installed_file_owner() {
 	rpm) rpm -qf --qf '%{NAME}\n' "$2" ;;
 	# `dpkg -S` prints "<package>[:<arch>]: <path>".
 	dpkg) dpkg -S "$2" | sed -n '1s/[:,].*//p' ;;
-	# `qfile -q` prints category/package for an installed file owner.
-	portage) qfile -q "$2" | sed -n '1{s|.*/||;p;}' ;;
+	# CONTENTS is the installed VDB's file manifest. Match its path field
+	# exactly and return the owning package name without requiring qfile.
+	portage)
+		local contents package_dir pf
+		for contents in "${TUNAOS_PORTAGE_DB:-/var/db/pkg}"/*/*/CONTENTS; do
+			[[ -f "$contents" ]] || continue
+			if awk -v wanted="$2" '$2 == wanted { found=1; exit } END { exit !found }' "$contents"; then
+				package_dir="${contents%/CONTENTS}"
+				if [[ -r "$package_dir/PF" ]]; then
+					IFS= read -r pf <"$package_dir/PF"
+				else
+					pf="${package_dir##*/}"
+				fi
+				if [[ "$pf" =~ ^(.+)-[0-9][0-9A-Za-z._-]*$ ]]; then
+					printf '%s\n' "${BASH_REMATCH[1]}"
+					return 0
+				fi
+			fi
+		done
+		return 1
+		;;
 	*) return 1 ;;
 	esac
 }
