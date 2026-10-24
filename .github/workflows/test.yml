@@ -394,6 +394,7 @@ jobs:
           - wahoo
           - bonito-rawhide
           - grouper
+          - guppy
           - flounder
           - flounder-sid
           - sailfin
