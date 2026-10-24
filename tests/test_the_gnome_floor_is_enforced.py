@@ -7,6 +7,7 @@ GNOME 50 nor an unknown version can pass through a bootstrap waiver.
 
 from __future__ import annotations
 
+import importlib.util
 import os
 import re
 import stat
@@ -20,6 +21,13 @@ yaml = pytest.importorskip("yaml")
 ROOT = Path(__file__).resolve().parents[1]
 CHECK = ROOT / "build_scripts" / "checks" / "verify-desktop-experience.sh"
 MANIFEST = ROOT / "manifests" / "desktops" / "gnome.yaml"
+CONFIG_SPEC = importlib.util.spec_from_file_location(
+    "gnome_floor_tunaos_config", ROOT / "scripts/lib/tunaos_config.py"
+)
+if CONFIG_SPEC is None or CONFIG_SPEC.loader is None:
+    raise RuntimeError("cannot load scripts/lib/tunaos_config.py")
+tunaos_config = importlib.util.module_from_spec(CONFIG_SPEC)
+CONFIG_SPEC.loader.exec_module(tunaos_config)
 
 
 def _function_source(name: str) -> str:
@@ -77,18 +85,19 @@ def _run_floor(tmp_path: Path, floor: int, *, fakes: dict[str, str], env: dict |
 # ── The policy and the enforcement agree ─────────────────────────────────────
 
 
-def test_the_floor_is_fifty_one(monkeypatch):
-    monkeypatch.syspath_prepend(str(ROOT / "scripts"))
-    from lib import tunaos_config
-
-    assert tunaos_config.load(ROOT / "tunaos.toml")["desktops"]["gnome"]["minimum_version"] == 51
+def test_the_floor_is_fifty_one():
+    primary = tunaos_config.load(ROOT / "tunaos.toml")
+    assert primary["desktops"]["gnome"]["minimum_version"] == 51
     assert _manifest_floor() == 51
 
 
-def test_the_script_carries_the_same_floor_as_the_manifest():
-    assert _script_floor() == _manifest_floor(), (
-        "the contract enforces a different GNOME floor than gnome.yaml declares; "
-        "change both or neither"
+def test_the_script_and_generated_manifest_match_the_primary_config():
+    primary_floor = tunaos_config.load(
+        ROOT / "tunaos.toml"
+    )["desktops"]["gnome"]["minimum_version"]
+    assert _script_floor() == _manifest_floor() == primary_floor, (
+        "the GNOME floor drifted from authoritative tunaos.toml; regenerate "
+        "the desktop manifest and update the image contract together"
     )
 
 
