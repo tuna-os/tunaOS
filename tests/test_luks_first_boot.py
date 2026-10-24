@@ -336,3 +336,63 @@ class TestContractDetection:
         )
         assert res["exit_code"] == 0
         assert "LUKS_FIRST_BOOT_DESKTOP_CONTRACT=ok" in res["stdout"]
+
+
+# ── Per-boot GRUB kernel arguments (strict GUI LUKS leg) ─────────────────────
+
+GRUB_APPEND = "console=ttyS0,115200n8 rd.plymouth=0 plymouth.enable=0"
+GRUB_MENU = (
+    b"\x1b[02;42HGRUB version 2.12\r\n\x1b[04;02H"
+    b"      Press enter to boot the selected OS, `e' to edit the commands "
+    b"before booting or `c' for \r\n\x1b[05;03H*Skipjack (ostree:0)"
+)
+BLS_EDITOR = (
+    b"\x1b[02;03Hload_video\x1b[03;03Hset gfxpayload=keep\x1b[04;03Hinsmod gzio"
+    b"\x1b[05;03Hlinux ($root)/ostree/default-x/vmlinuz root=UUID=1 rw rhgb quiet"
+    b" rd.luks.name=abc=root\x1b[06;03Hinitrd ($root)/ostree/default-x/initramfs.img"
+    b"\x1b[20;03HMinimum Emacs-like screen editing is supported. Press Ctrl-x or F10 to boot"
+)
+
+
+class TestGrubAppend:
+    def test_appends_to_the_linux_line_then_unlocks(self, monkeypatch):
+        monkeypatch.setenv("TUNAOS_LUKS_GRUB_APPEND", GRUB_APPEND)
+        res = _run(
+            _argv(),
+            serial_chunks=[
+                GRUB_MENU,
+                BLS_EDITOR,
+                b"Please enter passphrase for disk root:",
+                b"skipjack login: ",
+            ],
+        )
+        assert res["exit_code"] == 0
+        # e, Ctrl-N past the three blscfg preamble lines, Ctrl-E, the kargs,
+        # Ctrl-X, then the passphrase at the prompt that now reaches serial.
+        assert res["serial_sent"] == (
+            "e" + "\x0e" * 3 + "\x05" + " " + GRUB_APPEND + "\x18" + "testpass\n"
+        )
+
+    def test_unknown_entry_layout_exits_5_without_typing(self, monkeypatch):
+        monkeypatch.setenv("TUNAOS_LUKS_GRUB_APPEND", GRUB_APPEND)
+        editor = b"\x1b[02;03Hsetparams 'Skipjack'" + BLS_EDITOR
+        res = _run(_argv(), serial_chunks=[GRUB_MENU, editor])
+        assert res["exit_code"] == 5
+        assert res["serial_sent"] == "e"
+        assert "not the blscfg layout" in res["stdout"]
+
+    def test_editor_that_never_opens_exits_5(self, monkeypatch):
+        monkeypatch.setenv("TUNAOS_LUKS_GRUB_APPEND", GRUB_APPEND)
+        res = _run(_argv(), serial_chunks=[GRUB_MENU])
+        assert res["exit_code"] == 5
+        assert res["serial_sent"] == "e"
+        assert "did not open with a linux line" in res["stdout"]
+
+    def test_unset_leaves_grub_alone(self, monkeypatch):
+        monkeypatch.delenv("TUNAOS_LUKS_GRUB_APPEND", raising=False)
+        res = _run(
+            _argv(),
+            serial_chunks=[GRUB_MENU, b"Passphrase for disk root:", b"login: "],
+        )
+        assert res["exit_code"] == 0
+        assert res["serial_sent"] == "testpass\n"

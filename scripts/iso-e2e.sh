@@ -3766,6 +3766,10 @@ print(f"{digest}|{ref}")
 PYEOF
 }
 
+# Per-boot kernel arguments for the strict LUKS installed boots; see the cold
+# boot below. Same serial/text-prompt set as append_installed_serial_kargs.
+STRICT_LUKS_GRUB_APPEND="console=ttyS0,115200n8 rd.plymouth=0 plymouth.enable=0"
+
 verify_strict_installed_boot() {
 	# $1 = plain|luks. Cold-boots the installed disk (ISO detached),
 	# verifies TUNAOS_DESKTOP_CONTRACT_OK on serial (never downgraded),
@@ -3822,9 +3826,16 @@ verify_strict_installed_boot() {
 	local cold0 cold1 cold_s
 	cold0=$(date +%s)
 	if [[ "$mode" == "luks" ]]; then
+		# The GUI-installed entry has `rhgb quiet` and no serial console, so
+		# its cryptsetup prompt never reached serial (run 40074592548). Type
+		# the same serial/text-prompt kargs the CLI LUKS gate bakes into BLS
+		# (append_installed_serial_kargs) at GRUB for each boot instead. The
+		# installed disk stays exactly as the GUI wrote it.
+		strict_offline_evidence "installed_${mode}_grub_append=${STRICT_LUKS_GRUB_APPEND// /,} scope=per-boot disk_modified=no"
 		local fb_serial="${OUTPUT_DIR}/strict-${mode}-serial.sock"
 		strict_launch_installed "$disk" "$fb_serial" "installed-${mode}-cold" || return $?
 		TUNAOS_LUKS_NO_POWEROFF=1 \
+			TUNAOS_LUKS_GRUB_APPEND="$STRICT_LUKS_GRUB_APPEND" \
 			python3 "${SCRIPT_DIR}/luks-first-boot.py" \
 			"$fb_serial" "$MONITOR_SOCK" "${E2E_LUKS_PASS:-tunaos-e2e-luks}" 900 300 \
 			2>&1 | tee "$installed_log" || {
@@ -3957,6 +3968,7 @@ verify_strict_installed_boot() {
 		local fb_serial2="${OUTPUT_DIR}/strict-${mode}-warm-serial.sock"
 		strict_launch_installed "$disk" "$fb_serial2" "installed-${mode}-warm" || return $?
 		TUNAOS_LUKS_NO_POWEROFF=1 \
+			TUNAOS_LUKS_GRUB_APPEND="$STRICT_LUKS_GRUB_APPEND" \
 			python3 "${SCRIPT_DIR}/luks-first-boot.py" \
 			"$fb_serial2" "$MONITOR_SOCK" "${E2E_LUKS_PASS:-tunaos-e2e-luks}" 900 300 \
 			2>&1 | tee "${OUTPUT_DIR}/strict-${mode}-warm-serial.log" || {

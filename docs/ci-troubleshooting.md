@@ -2285,3 +2285,22 @@ firmware did not try the CD. See `strict-luks-live-serial.log`.
 
 **Fix:** `run_strict_offline_gui` calls `reset_uefi_vars` before each leg.
 Regression: `tests/regressions/test_issue_3380_strict_legs_get_fresh_uefi_nvram.py`.
+
+### Strict LUKS installed boot never shows the passphrase prompt
+
+**Symptom:** Run [40074592548](https://github.com/tuna-os/tunaOS/actions/runs/40074592548)
+passed the LUKS GUI install with a LUKS header present. The detached cold boot
+then failed after 15 minutes with `passphrase prompt never appeared`. The
+framebuffer showed one kernel line.
+
+**Measured cause:** The GUI install writes `rhgb quiet` and no serial console
+into the BLS entry. The cryptsetup prompt went to Plymouth, and the serial log
+ends at the GRUB menu. The CLI LUKS gate never had this failure because it
+adds serial kargs to the installed BLS entries.
+
+**Fix:** The strict harness does not change the installed disk. For each LUKS
+boot, `luks-first-boot.py` opens the GRUB entry editor over serial. It appends
+`console=ttyS0,115200n8 rd.plymouth=0 plymouth.enable=0` to the linux line
+for that boot only, and the evidence log records the edit. An entry that is
+not in the blscfg layout exits 5. Regression:
+`tests/regressions/test_issue_3380_strict_luks_prompt_reaches_serial.py`.

@@ -11,6 +11,10 @@ auto-unlock: no passphrase prompt.
 
 Usage: luks-first-boot.py <serial.sock> <monitor.sock> <passphrase> [timeout]
 Exit 0 on success (passphrase accepted + userspace reached), non-zero else.
+
+TUNAOS_LUKS_GRUB_APPEND="<kargs>" types <kargs> onto the kernel line in GRUB's
+entry editor for THIS boot only; the installed disk is not modified. Exit 5
+when that edit cannot be made.
 """
 import os
 import re
@@ -91,6 +95,63 @@ def harvest_emergency(ser):
             # drain_until rather than cutting the harvest short.
             pass
 
+
+# A GUI install from published media boots with `rhgb quiet` and no serial
+# console, so the cryptsetup prompt goes to Plymouth and never reaches the
+# serial this script reads. Run 40074592548 sat for 15 minutes at a framebuffer
+# that showed one kernel line. The strict harness cannot add kargs at install
+# time without changing what it qualifies, so it asks for them per boot.
+# GRUB's menu is mirrored to the serial by OVMF, OVMF forwards serial input to
+# GRUB's EFI console, and GRUB maps control bytes from a serial terminal to
+# Ctrl-<key>.
+grub_append = os.environ.get("TUNAOS_LUKS_GRUB_APPEND", "").strip()
+grub_edited = not grub_append
+ANSI_RE = re.compile(r"\x1b\[[0-9;:?=]*[A-Za-z]")
+# blscfg (Fedora/CentOS grub2) generates every BLS menu entry as exactly
+# these commands, in this order, before `linux`; the editor opens on line 0.
+BLS_PREAMBLE = ("load_video", "set gfxpayload=keep", "insmod gzio")
+
+
+def edit_grub_entry(ser, extra):
+    print(f"\n>>> GRUB menu seen; appending for this boot only: {extra}", flush=True)
+    ser.sendall(b"e")
+    screen = b""
+    until = time.time() + 30
+    while time.time() < until:
+        try:
+            d = ser.recv(4096)
+        except socket.timeout:
+            d = b""
+        if d:
+            screen += d
+            sys.stdout.buffer.write(d)
+            sys.stdout.flush()
+        plain = ANSI_RE.sub("\n", screen.decode("utf-8", "replace"))
+        # The menu never shows command text, so a linux and an initrd line
+        # mean the editor is open and drawn through the end of the entry.
+        if re.search(r"(?m)^\s*linux\s[\s\S]*\binitrd\s", plain):
+            break
+    plain = ANSI_RE.sub("\n", screen.decode("utf-8", "replace"))
+    linux = re.search(r"(?m)^\s*linux\s", plain)
+    if not linux:
+        print("\n!!! GRUB entry editor did not open with a linux line", flush=True)
+        return False
+    head = plain[: linux.start()]
+    positions = [head.find(cmd) for cmd in BLS_PREAMBLE]
+    if -1 in positions or positions != sorted(positions) or "setparams" in head:
+        print("\n!!! GRUB entry is not the blscfg layout; refusing to guess the linux line", flush=True)
+        return False
+    ser.sendall(b"\x0e" * len(BLS_PREAMBLE))  # Ctrl-N: down to the linux line
+    time.sleep(0.5)
+    ser.sendall(b"\x05")  # Ctrl-E: end of the (wrapped) logical line
+    time.sleep(0.5)
+    ser.sendall(b" " + extra.encode())
+    time.sleep(1)
+    ser.sendall(b"\x18")  # Ctrl-X: boot the edited entry
+    print("\n>>> GRUB entry edited; booting", flush=True)
+    return True
+
+
 while time.time() < deadline:
     try:
         d = ser.recv(4096)
@@ -102,6 +163,12 @@ while time.time() < deadline:
         pass
 
     text = buf[-4000:].decode("utf-8", "replace")
+
+    if not grub_edited and "press enter to boot the selected os" in text.lower():
+        if not edit_grub_entry(ser, grub_append):
+            sys.exit(5)
+        grub_edited = True
+        continue
 
     if not sent and "passphrase for disk root" in text.lower():
         print("\n>>> injecting LUKS passphrase", flush=True)
