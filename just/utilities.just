@@ -68,6 +68,7 @@ check: _ensure_check_deps ste
     python3 "{{ justfile_directory() }}/scripts/config.py" check-identity >/dev/null || exit 1
     python3 "{{ justfile_directory() }}/scripts/config.py" check-variant-identity >/dev/null || exit 1
     python3 "{{ justfile_directory() }}/scripts/config.py" check-variant-aliases >/dev/null || exit 1
+    python3 "{{ justfile_directory() }}/scripts/config.py" check-image-packages >/dev/null || exit 1
     python3 "{{ justfile_directory() }}/scripts/config.py" check-drawn-artwork >/dev/null || exit 1
     python3 "{{ justfile_directory() }}/scripts/config.py" check-builder-flavors >/dev/null || exit 1
     echo "Checking syntax of shell scripts..."
