@@ -17,6 +17,11 @@ on:
     # block, and catches the generator breaking on a build-config change.
     paths:
       - "scripts/gen-matrix-status.py"
+      - "scripts/matrix_snapshot.py"
+      - "scripts/check-matrix-snapshot.py"
+      - "docs/matrix-provenance.json"
+      - "docs/matrix-snapshots/**"
+      - ".github/green-criteria.yml"
       - "scripts/gen-platform-coverage.py"
       - "scripts/matrix_evaluator.py"
       - "tunaos.toml"
@@ -76,6 +81,7 @@ jobs:
           # be worse than not updating at all.
           ./scripts/gen-matrix-status.py
           ./scripts/gen-platform-coverage.py
+          python3 scripts/check-matrix-snapshot.py
 
       # Byte-exact drift is enforced on the scheduled run (which pushes the
       # refresh PR), NOT here: the cells, tallies and provenance rows are a
@@ -91,6 +97,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          python3 scripts/check-matrix-snapshot.py
           ./scripts/gen-matrix-status.py --check-structure
           ./scripts/gen-platform-coverage.py --check
 
@@ -116,6 +123,7 @@ jobs:
           BRANCH: automation/matrix-status
         run: |
           set -euo pipefail
+          python3 scripts/check-matrix-snapshot.py
           if git diff --quiet -- ROADMAP.md docs/MATRIX-STATUS.md docs/matrix-provenance.json; then
             echo "No cells moved — nothing to commit."
             exit 0

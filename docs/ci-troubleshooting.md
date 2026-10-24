@@ -1963,3 +1963,17 @@ outreach copy or creative briefs, use the reasoned region or file opt-out in
 [the contributor prose policy](../CONTRIBUTING.md#prose-checks-ste). Keep
 technical steps checked on mixed pages. Run `just ste` again; do not increase
 `.ste-budget` or exclude a whole directory to pass one content change.
+
+## Matrix board and provenance disagree after a merge (#3813)
+
+**Symptom:** the committed-snapshot test reports 124 versus 120 green cells.
+
+**Cause:** merge `4912d39d` retained the newer board but an older summary.
+Identity PR #3681, Test run `40042245544`, failed only this pytest assertion
+(5,234 passed). The per-cell evidence included seven newer desktop failures;
+restoring the older matching pair would hide those failures.
+
+**Fix:** replay the reviewed [retained assertions](matrix-snapshots/README.md)
+and check the board/provenance identity before publication. Preserve the
+historical date and unknown overlay/full-sweep inputs. Do not hand-edit counts,
+roll back newer failures, or label the reconciliation as a fresh health run.

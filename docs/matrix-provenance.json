@@ -2391,9 +2391,9 @@
     "verdict": "fail"
    },
    "builds": {
-    "date": "",
-    "evidence": "",
-    "run": "",
+    "date": "2026-10-15",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/38660870261#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/38660870261",
     "verdict": "untested"
    },
    "desktop": {
@@ -3797,9 +3797,9 @@
     "verdict": "fail"
    },
    "builds": {
-    "date": "",
-    "evidence": "",
-    "run": "",
+    "date": "2026-10-16",
+    "evidence": "https://github.com/tuna-os/tunaOS/actions/runs/38906627617#artifacts",
+    "run": "https://github.com/tuna-os/tunaOS/actions/runs/38906627617",
     "verdict": "untested"
    }
   },
@@ -4340,24 +4340,169 @@
    }
   }
  },
+ "snapshot": {
+  "board_sha256": "82e6e3f6af6ccf6978bf12402a1755b5d440e2bd362f921ee794821b8ad4e28c",
+  "provenance_sha256": "0399d889daef142a7a18f37d7903ab924fa54bfde0833f156b39d038f5f1afdf",
+  "schema_version": 1
+ },
+ "snapshot_context": {
+  "configuration_sha256": {
+   ".github/green-criteria.yml": "5c8bd0307019fdca10d44eddfa983b02f6d511d905c9028fb12f4aad8d751133",
+   "tunaos.toml": "1e38ad4f557dbd9fcbede03a7d9c7954e613c2eb93d5dad85e8285b96d354325"
+  },
+  "evaluation_date": "2026-10-23",
+  "full_sweep_dates": "unknown; original collector inputs were not retained; no full-sweep freshness claim",
+  "kind": "historical-reconciliation",
+  "overlay_inventory": "unverified; verbatim historical board section from 94092878, not recollected",
+  "retained_inputs_path": "docs/matrix-snapshots/2026-10-23-reconciled.json",
+  "retained_inputs_sha256": "dc53ce772f28cf548de8aecfabf1207b88223d8e5b34942cf31dbd5f65ed1b94",
+  "retained_legacy_full_sweep_summary": "2026-09-01 (from 76a68ca5; not reasserted)",
+  "source_commit": "a6fcff42d2cf766bb30009e0d2ed0721516b3a88",
+  "source_configuration_sha256": {
+   ".github/green-criteria.yml": "410f6a56eac0b63d1aedbd8d2ec72d9535d7722b9b04483143eb6051a4f6264a",
+   "tunaos.toml": "f46a05832afb81637a7889b5db2b3e82820fcc2e900b0422765db97231f16e66"
+  },
+  "sources": [
+   {
+    "path": "jobs-31585741267.json",
+    "sha256": "58ec88feb93e0b86a97d6c455e4e332534811350740baf5b9124630db5bec6e9"
+   },
+   {
+    "path": "jobs-32238167029.json",
+    "sha256": "d40452a6cceec72a92f014c10999a58707983a1c0a499d8cd0db526e2634e0d8"
+   },
+   {
+    "path": "jobs-33506738063.json",
+    "sha256": "4471b4cb8f13159985f87ef07fb5258c3fea182cf0ea0c80a24107890def75ca"
+   },
+   {
+    "path": "jobs-34487443208.json",
+    "sha256": "c05343b7996acd4ec93d5fcf594b24356e6bb136c93b52f47810e54f8c94ceb6"
+   },
+   {
+    "path": "jobs-36047128286.json",
+    "sha256": "67efeee2afc18e191d4eb88615ffbe5dfe78733bf2421a467ed62881cf3d1c7d"
+   },
+   {
+    "path": "jobs-36873532817.json",
+    "sha256": "41f2eaef67ddb38d0af002aaf9711459eaec2701ab6bd10d996256540c4115d1"
+   },
+   {
+    "path": "jobs-36875090451.json",
+    "sha256": "5abe3b2b924ff4a99134e9e62e63da8b19b0050c79048203c43024522e364757"
+   },
+   {
+    "path": "jobs-38660870261.json",
+    "sha256": "ff1d54e61b2ef5bc1fb707858dd45fc6ee8415f63b1f2592abd33126a8336049"
+   },
+   {
+    "path": "jobs-38713238238.json",
+    "sha256": "30411770842d22b9c714e1344d79797ec08c3dc95f5e2a3ce427a656cc328841"
+   },
+   {
+    "path": "jobs-38906627617.json",
+    "sha256": "fdd44f608c18e547d1cc6bac19eb190e8f3a48dd6ce3db62530d594711bf51fa"
+   },
+   {
+    "path": "jobs-39417171639.json",
+    "sha256": "4545a343610781eb53935665cad17a242a0b683a784b2e9fa1a069dcaff3885b"
+   },
+   {
+    "path": "jobs-39482644710.json",
+    "sha256": "e590a21c72f0fc068bf70085d9e613d5a432526b632843f4cbb666cbd9dc90a6"
+   },
+   {
+    "path": "jobs-39546481120.json",
+    "sha256": "6f2c546ad09cf270c6341adc11c9bbc0282c24ca79f55866acd025e4a1006ce7"
+   },
+   {
+    "path": "jobs-39630438457.json",
+    "sha256": "c387cc819f5c71b1601b70d60e14d60f1990f9d18c7e48b5f8d21d24ab61d480"
+   },
+   {
+    "path": "jobs-39649763850.json",
+    "sha256": "805321204f8eb0308f9634b47d0bad0893406a2e417d81acc6333e85954543bf"
+   },
+   {
+    "path": "jobs-39660761990.json",
+    "sha256": "b2dca2fff6d6f77575ac4bad9df0e52924086e917746fda1f5edd346d3ee4dc6"
+   },
+   {
+    "path": "jobs-39724851741.json",
+    "sha256": "1213242b546c56050237126850a3fdcf69bd822a25b360dc37511f2e8b8b14db"
+   },
+   {
+    "path": "jobs-39742606903.json",
+    "sha256": "5cb994c720ecbbaa1c26f232fb1fb555258ac586f3f33698cf7459a0122362ce"
+   },
+   {
+    "path": "jobs-39755734047.json",
+    "sha256": "fb587b0397a9a6ca469c9103725d019f938fbbba594d1611e7bd7c3531320bbf"
+   },
+   {
+    "path": "jobs-39774703501.json",
+    "sha256": "a76441ef29a53dd93b3a2eaaa65d965aa6d31dcc9a6f2f16f20e70d29e84b19e"
+   },
+   {
+    "path": "jobs-39796515417.json",
+    "sha256": "0c1105153847f23e0216908faeeb1bda4a2fe54108c60925c5b06fcfadb52c7b"
+   },
+   {
+    "path": "jobs-39827814045.json",
+    "sha256": "d34b79f7799be088b558040c8711a71ab1bd4396b1ea751b2d1f7f24813ea82a"
+   },
+   {
+    "path": "jobs-39838360929.json",
+    "sha256": "04f7a655291d31a8c610973e51b8a7bdca4f9392dc8fe82d3cd5827c87621232"
+   },
+   {
+    "path": "jobs-39849977660.json",
+    "sha256": "7664bb409224de8b229189e3a1a2edfdfe6d76f45bac0cf2990c0e9d87aee9b2"
+   },
+   {
+    "path": "jobs-39865052345.json",
+    "sha256": "7097ed6f2f43fa272fab68a8f1f2b6380b7e1146ff07662585b555ec50f58ed2"
+   },
+   {
+    "path": "jobs-39875388237.json",
+    "sha256": "beb95c1098e85f4ae9cef5e24f80f212c315f2ffc9b6f027c62f57d7cff666d2"
+   },
+   {
+    "path": "jobs-39884547800.json",
+    "sha256": "bd0c2f30a8cc63c629d55f34e055e781a8ce6212a73a56d9cbf87d96c9d32aa5"
+   },
+   {
+    "artifact_id": 12429643657,
+    "member": "all.json",
+    "run_id": "39786083762",
+    "zip_sha256": "d998256aa4af1bb7512f49b4dbcab6189f0a291ba36f64655a9ac88bf8e73d47"
+   },
+   {
+    "artifact_id": 12431872510,
+    "member": "parity.json",
+    "run_id": "39792320470",
+    "zip_sha256": "df0f2077e1c2d7988d7397f35cbf09689dc951fba6bf4d6bce9fb1fc11d5b79c"
+   }
+  ]
+ },
  "summary": {
   "boots": {
-   "passed": 76,
+   "passed": 77,
    "tested": 79,
    "total": 84
   },
   "builds": {
-   "passed": 138,
-   "tested": 138,
+   "passed": 139,
+   "tested": 139,
    "total": 147
   },
   "desktop": {
-   "passed": 50,
+   "passed": 43,
    "tested": 52,
    "total": 52
   },
   "factory_health": {
-   "green": 124,
+   "green": 120,
    "total": 147
   },
   "install": {
@@ -4372,14 +4517,14 @@
   },
   "known_regressions": {
    "advisory": 86,
-   "blocking": 11
+   "blocking": 17
   },
-  "last_full_sweep": "2026-09-01",
+  "last_full_sweep": "",
   "lifecycle": {
    "passed": 36,
    "tested": 41,
    "total": 52
   },
-  "never_tested": 33
+  "never_tested": 32
  }
 }
