@@ -73,12 +73,34 @@ def test_api_failure_does_not_publish_zero_or_partial_report(monkeypatch, tmp_pa
     assert not (tmp_path / "report").exists()
 
 
+def test_discussion_comments_exclude_replies(monkeypatch):
+    discussions = [
+        {"number": 93, "html_url": "https://example.org/discussions/93"},
+        {"number": 652, "html_url": "https://example.org/discussions/652"},
+    ]
+    def fake_api(endpoint, pages=False):
+        if "93/comments" in endpoint:
+            return []
+        if "652/comments" in endpoint:
+            return [
+                {"id": 1, "parent_id": None},
+                {"id": 2, "parent_id": 1},
+                {"id": 3, "parent_id": 1},
+                {"id": 4, "parent_id": None},
+                {"id": 5, "parent_id": None},
+            ]
+        raise ValueError(endpoint)
+    monkeypatch.setattr(snapshot, "api", fake_api)
+    assert snapshot.top_level_discussion_comments(discussions) == 3
+
+
 def test_live_collection_path_writes_matching_report_and_receipt(monkeypatch, tmp_path):
     (tmp_path / "ADOPTERS.md").write_text("## Production Users\n## Development & Evaluation\n")
     responses = iter([
         {"stargazers_count": 60, "forks_count": 7},
         [{"draft": False, "assets": [asset("tuna.iso", 7)]}],
-        [{"comments": 2, "html_url": "https://example.org/discussions/1"}],
+        [{"number": 1, "comments": 2, "html_url": "https://example.org/discussions/1"}],
+        [{"id": 10, "parent_id": None}, {"id": 11, "parent_id": 10}],
     ])
     monkeypatch.setattr(snapshot, "ROOT", tmp_path)
     monkeypatch.setattr(snapshot, "api", lambda *args, **kwargs: next(responses))
@@ -89,6 +111,6 @@ def test_live_collection_path_writes_matching_report_and_receipt(monkeypatch, tm
     receipt = json.loads(next(output.glob("*.json")).read_text())
     assert next(output.glob("*.md")).read_text() == snapshot.render(receipt)
     assert receipt["releases"]["iso_downloads_lifetime"] == 7
-    assert receipt["discussions"]["top_level_comments"] == 2
+    assert receipt["discussions"]["top_level_comments"] == 1
     assert "r2_iso_downloads" in receipt["unavailable"]
     assert "not monthly downloads" in snapshot.render(receipt)

@@ -79,6 +79,15 @@ def release_counts(releases: list) -> dict:
     }
 
 
+def top_level_discussion_comments(discussions: list) -> int:
+    total = 0
+    for disc in discussions:
+        num = disc["number"]
+        comments = api(f"repos/{REPO}/discussions/{num}/comments", pages=True)
+        total += sum(1 for c in comments if c.get("parent_id") is None)
+    return total
+
+
 def collect() -> dict:
     started = datetime.now(timezone.utc).isoformat(timespec="seconds")
     repo = api(f"repos/{REPO}")
@@ -102,7 +111,7 @@ def collect() -> dict:
         "releases": release_counts(releases),
         "discussions": {
             "threads": len(discussions),
-            "top_level_comments": sum(item["comments"] for item in discussions),
+            "top_level_comments": top_level_discussion_comments(discussions),
             "urls": sorted(item["html_url"] for item in discussions),
         },
         "external_adopter_entries": adopter_counts((ROOT / "ADOPTERS.md").read_text()),
