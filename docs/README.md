@@ -102,6 +102,24 @@ user-facing site:
 | [GREEN-CRITERIA.md](GREEN-CRITERIA.md) | What "green" means for a cell — the criteria behind the composite score |
 | [GREEN-MASTER-PLAN.md](GREEN-MASTER-PLAN.md) | The workstreams driving the matrix to green |
 | [Q3_CHECKPOINT-2026-08-22.md](Q3_CHECKPOINT-2026-08-22.md) | In-repo copy of the Q3 "Expand Coverage" decision sheet |
+| [BASE-PACKAGE-SEARCH.md](BASE-PACKAGE-SEARCH.md) | Offline base-image package search, source receipts, and trust boundaries |
+| [BRANDING.md](BRANDING.md) | Brand identity, assets, and desktop ownership |
+| [CFP-EVERYTHING-OPEN-2027.md](CFP-EVERYTHING-OPEN-2027.md) | Everything Open 2027 CFP draft and submission evidence |
+| [FLATPAK-DECLARATIONS.md](FLATPAK-DECLARATIONS.md) | Primary Flatpak declarations and generated policy contract |
+| [FORK-BRANDING.md](FORK-BRANDING.md) | Fork brand consumer inputs, constraints, and runtime checks |
+| [FORK-CONFIG-PREVIEW.md](FORK-CONFIG-PREVIEW.md) | Local fork-config consumer preview and build workflow |
+| [FORK-DELIVERY.md](FORK-DELIVERY.md) | Fork-owned desktop delivery plan and evidence stages |
+| [GIT-HISTORY-REWRITE.md](GIT-HISTORY-REWRITE.md) | Auditable large-blob history rewrite runbook |
+| [GOVERNANCE.md](GOVERNANCE.md) | Community roles, authority, and decision process |
+| [INSTALL-PIPELINE-CHECKPOINTS.md](INSTALL-PIPELINE-CHECKPOINTS.md) | OCR and screen checkpoints for ISO install evidence |
+| [ISO-BUILDER-CONFIG.md](ISO-BUILDER-CONFIG.md) | ISO Builder presentation configuration and schema contract |
+| [PACKAGE-AUTHORING.md](PACKAGE-AUTHORING.md) | Offline package authoring and receipt-backed config edits |
+| [PRIMARY-CONFIG-MIGRATION.md](PRIMARY-CONFIG-MIGRATION.md) | Primary `tunaos.toml` configuration migration plan |
+| [RELEASE-AUTOMATION.md](RELEASE-AUTOMATION.md) | Q4 release cadence, asset, parity, and traceability gates |
+| [VENDORED-PARSER.md](VENDORED-PARSER.md) | Reviewed Tomli parser provenance and update procedure |
+| [metrics.md](metrics.md) | PR/build metrics intent and current status |
+| [quality.md](quality.md) | Green-criteria quality dashboard and evidence rules |
+| [review-rubric.md](review-rubric.md) | PR review checks beyond CI |
 
 ## Policies & planning (repo root)
 
