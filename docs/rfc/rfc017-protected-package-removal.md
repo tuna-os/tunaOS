@@ -159,7 +159,7 @@ result.
 A removal runs once for each image. It runs after the last package
 transaction of the last package stage of the image. That stage is the base
 stage for a base flavor and the desktop stage for a desktop flavor. The
-removal runs before `90-image-info.sh` and `99-cleanup.sh`.
+removal runs before `build_scripts/90-image-info.sh` and `build_scripts/99-cleanup.sh`.
 
 A desktop flavor starts from its base image. Thus a removal that the base
 stage did can return as a desktop dependency. The desktop stage then

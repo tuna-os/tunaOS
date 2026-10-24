@@ -27,7 +27,10 @@ def test_cited_contract_files_exist():
     for title in ("Current state", "Sources", "Gaps in the contracts", "Removal boundary"):
         for token in re.findall(r"`([^`\s]+)`", section(title)):
             path = token.split("::", 1)[0]
-            if "/" in path and re.search(r"\.(?:sh|py|toml|json|ya?ml)$", path):
+            if re.search(r"\.(?:sh|py|toml|json|ya?ml)$", path):
+                matches = [p for p in ROOT.rglob(path) if p.is_file()]
+                if "/" not in path and len(matches) == 1:
+                    path = matches[0].relative_to(ROOT).as_posix()
                 cited.add(path)
     # Paths that only exist in the open #3739 branch are named as such in the text.
     pending = {"tests/test_image_packages.py"}
@@ -39,5 +42,5 @@ def test_every_detected_package_family_has_an_evidence_row():
     lib = (ROOT / "build_scripts/lib.sh").read_text(encoding="utf-8")
     families = set(re.findall(r'PKG_MGR="(\w+)"', lib))
     assert families >= {"apt", "dnf", "pacman", "zypper", "emerge"}, families
-    rows = set(re.findall(r"^\| (\w+) \| `", section("Approval boundary and evidence"), re.M))
+    rows = set(re.findall(r"^\|\s*(\w+)\s*\|\s*`", section("Approval boundary and evidence"), re.M))
     assert families <= rows, families - rows
