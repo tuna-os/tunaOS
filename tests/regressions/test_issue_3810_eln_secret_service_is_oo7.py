@@ -78,7 +78,8 @@ def contract_functions():
 
 
 def image(
-    tmp_path, os_id, files, *, quoted_id=False, variant_id=None, executable=True, env=None
+    tmp_path, os_id, files, *, quoted_id=False, variant_id=None, executable=True,
+    directories=(), env=None
 ):
     (tmp_path / "usr/lib").mkdir(parents=True)
     value = f'"{os_id}"' if quoted_id else os_id
@@ -88,6 +89,9 @@ def image(
     (tmp_path / "usr/lib/os-release").write_text(os_release)
     for relative in files:
         path = tmp_path / relative
+        if relative in directories:
+            path.mkdir(parents=True)
+            continue
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("")
         if executable and path.name in {"oo7-daemon", "gnome-keyring-daemon"}:
@@ -143,6 +147,17 @@ def test_the_contract_rejects_a_missing_native_provider(tmp_path, os_id, files):
 
 def test_the_contract_rejects_a_non_executable_daemon(tmp_path):
     result = image(tmp_path, "fedora", KEYRING_FILES, executable=False)
+    assert result.returncode == 1
+    assert "satisfied" not in result.stdout
+
+
+def test_the_contract_rejects_an_executable_directory(tmp_path):
+    result = image(
+        tmp_path,
+        "fedora",
+        KEYRING_FILES,
+        directories=KEYRING_FILES,
+    )
     assert result.returncode == 1
     assert "satisfied" not in result.stdout
 
