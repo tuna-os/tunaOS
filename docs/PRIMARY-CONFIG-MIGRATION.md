@@ -11,8 +11,10 @@ The compiler emits the formats that build and installer consumers need.
 
 The purpose is to make a new distribution from a fork easy. A fork edits
 `tunaos.toml` and its own asset files; it does not edit the build framework.
-Use one test for each value: if a fork would change it, it belongs in
-`tunaos.toml`. If it only makes the build work, it stays in code.
+Use one test for each value: if a fork would change the distribution value,
+it belongs in `tunaos.toml`. Supply-chain implementation inputs are the explicit
+exception: tool/download pins stay in `image-versions.yaml`, registry mirrors
+stay in `registry-map.yaml`, and Renovate continues to maintain both.
 
 The maintainer selected TOML on 2026-10-20. This changes RFC 013's earlier
 choice to keep legacy sources authoritative and add optional fork deltas.
@@ -35,10 +37,13 @@ The name `tunaos.toml` alone would not make those deltas meet the new requiremen
 
 Containerfiles, base-image mechanics, execution scripts and checks are the
 build framework and remain code. The maintainer confirmed this on 2026-10-23.
-The per-variant `base_image` choice is already in `tunaos.toml`; some choices
-use immutable digests and others still use tags. Tool and download pins in
-`image-versions.yaml` and mirrors in `registry-map.yaml` stay in those files;
-Renovate keeps its current targets.
+The per-variant `base_image` choice is already in `tunaos.toml` because it
+selects what the distribution is built from, rather than how the build runs.
+Use a tag-plus-digest reference by default. A bare tag is acceptable only when
+the upstream registry garbage-collects pinned manifests sooner than TunaOS's
+build cadence; that build must resolve the tag once and use the resulting
+digest for every stage. Tool and download pins in `image-versions.yaml` and
+mirrors in `registry-map.yaml` remain build-framework inputs.
 
 Credentials are not configuration data. Do not put shell commands, remote
 includes or secret values in TOML. Existing trusted post-install steps become
