@@ -276,6 +276,8 @@ def test_login_passes_the_password_on_stdin_only(login, tool, argv):
     assert result.returncode == 0, result.stderr
     assert calls == argv
     assert stdin == SECRET_PASS
+    assert result.stdout == ""
+    assert f"publish login: {tool} -> quay.io/acme" in result.stderr
     assert SECRET_PASS not in result.stdout + result.stderr + "\n".join(calls)
     assert SECRET_USER not in result.stdout + result.stderr
 
@@ -304,7 +306,10 @@ def test_login_refuses_before_running_any_tool(login, overrides, reason):
     assert SECRET_PASS not in result.stdout + result.stderr
 
 
-@pytest.mark.parametrize("scope", ["quay.io", "https://quay.io/acme", "quay.io/acme\n::x", "QUAY.io/acme", ""])
+@pytest.mark.parametrize("scope", [
+    "quay.io", "https://quay.io/acme", "quay.io/acme\n::x", "QUAY.io/acme", "",
+    "registry/acme", "quay.io/acme/../evil", "quay.io/acme//evil", "quay.io/acme/",
+])
 def test_login_refuses_a_scope_the_resolver_cannot_print(login, scope):
     result, calls, _ = login("podman", scope=scope)
     assert result.returncode == 1 and calls == []

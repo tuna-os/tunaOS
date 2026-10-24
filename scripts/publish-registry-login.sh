@@ -29,8 +29,20 @@ die() {
 
 [[ "${TUNAOS_PUBLISH_MODE:-}" == registry-secret ]] ||
 	die "TUNAOS_PUBLISH_MODE is not registry-secret; the owner path uses GITHUB_TOKEN"
-[[ "$scope" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?(:[0-9]{1,5})?/[a-z0-9][a-z0-9._/-]*$ ]] ||
+registry_re='^(localhost|[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+)(:[0-9]{1,5})?$'
+namespace_component_re='^[a-z0-9]+([._][a-z0-9]+|__[a-z0-9]+|-+[a-z0-9]+)*$'
+[[ "$scope" == */* && "$scope" != */ && "$scope" != *//* &&
+	"$scope" != *$'\n'* && "$scope" != *$'\r'* ]] ||
 	die "scope must be the <registry>/<namespace> printed by publish-credential.py"
+registry="${scope%%/*}"
+namespace="${scope#*/}"
+[[ "$registry" =~ $registry_re ]] ||
+	die "scope must be the <registry>/<namespace> printed by publish-credential.py"
+IFS='/' read -r -a namespace_components <<<"$namespace"
+for component in "${namespace_components[@]}"; do
+	[[ "$component" =~ $namespace_component_re ]] ||
+		die "scope must be the <registry>/<namespace> printed by publish-credential.py"
+done
 [[ -n "$username" && -n "$password" ]] ||
 	die "TUNAOS_PUBLISH_USERNAME and TUNAOS_PUBLISH_PASSWORD must both be set"
 [[ "$username" =~ ^[A-Za-z0-9][A-Za-z0-9._@+-]*$ ]] ||
@@ -38,7 +50,6 @@ die() {
 [[ "$password" != *$'\n'* && "$password" != *$'\r'* ]] ||
 	die "TUNAOS_PUBLISH_PASSWORD contains a line break"
 
-registry="${scope%%/*}"
 case "$tool" in
 podman | skopeo) command=("$tool" login "--username=$username" --password-stdin "$scope") ;;
 sudo-podman | sudo-skopeo) command=(sudo "${tool#sudo-}" login "--username=$username" --password-stdin "$scope") ;;
@@ -48,4 +59,4 @@ esac
 
 # printf is a shell builtin: the password is never an argument of a process.
 printf '%s' "$password" | "${command[@]}" >/dev/null
-echo "publish login: ${tool} -> ${scope}"
+echo "publish login: ${tool} -> ${scope}" >&2

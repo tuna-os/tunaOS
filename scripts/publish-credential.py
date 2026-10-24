@@ -5,6 +5,7 @@ Inputs are environment variables so a workflow step can pass presence flags
 without the secret values:
 
   TUNAOS_PUBLISH_DESTINATION    effective "<registry>/<namespace>" (the job's IMAGE_REGISTRY)
+  TUNAOS_PUBLISH                "true" or "false": whether this job publishes
   GITHUB_REPOSITORY_OWNER       repository owner
   TUNAOS_PUBLISH_EVENT          event that decides trust: github.event_name, or the
                                 triggering run's event for a workflow_run job
@@ -12,9 +13,10 @@ without the secret values:
   TUNAOS_HAS_PUBLISH_USERNAME   "true" or "false": secrets.TUNAOS_PUBLISH_USERNAME != ''
   TUNAOS_HAS_PUBLISH_PASSWORD   "true" or "false": secrets.TUNAOS_PUBLISH_PASSWORD != ''
 
-Output is GITHUB_OUTPUT lines: mode, registry, namespace, scope. A refusal
-prints one ::error:: line and exits 1. No workflow calls this until the
-maintainer approves RFC 016.
+Output is mode, registry, namespace and scope lines on stdout. Workflow callers
+append those lines to ``$GITHUB_OUTPUT``; this program does not write that file
+directly. A refusal prints one ``::error::`` line and exits 1. No workflow calls
+this until the maintainer approves RFC 016.
 """
 import os
 import sys
