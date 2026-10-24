@@ -79,6 +79,17 @@
     },
     {
       "customType": "regex",
+      "description": "Update pinned kcm_ublue and oversteer source commits in build scripts",
+      "managerFilePatterns": [
+        "/^build_scripts\\/desktop\\/kcm-ublue\\.sh$/"
+      ],
+      "matchStrings": [
+        "#\\s*renovate:\\s*datasource=(?<datasource>[^\\s]+)\\s+depName=(?<depName>[^\\s]+)\\s+ref=(?<currentValue>[^\\s]+)\\n\\s*(?:KCM_UBLUE|OVERSTEER)_REF=\"(?<currentDigest>[0-9a-f]{40})\""
+      ],
+      "packageNameTemplate": "https://github.com/{{{depName}}}"
+    },
+    {
+      "customType": "regex",
       "description": "Update quay.io image digests in registry-map.yaml. tunaOS#1568: this file carried a digest pin for supply-chain safety that nothing bumped, and the pin was garbage-collected upstream (quay 404) before anyone noticed. Scoped to `registry: quay` entries so registryUrlTemplate is correct by construction; a ghcr entry that gains a digest needs its own block rather than silently resolving against the wrong registry.",
       "managerFilePatterns": [
         "/^registry-map\\.yaml$/"
