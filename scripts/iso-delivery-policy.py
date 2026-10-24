@@ -256,8 +256,18 @@ def annotate_targets(
     config: dict[str, Any], active: frozenset[tuple[str, str, str]]
 ) -> None:
     matrix = read_matrix()
-    for row in matrix["include"]:
-        identity = (row.get("variant"), row.get("flavor"), row.get("platform"))
+    for index, row in enumerate(matrix["include"]):
+        for field in ("variant", "flavor", "platform"):
+            value = row.get(field)
+            if not isinstance(value, str) or not value.strip():
+                raise PolicyError(
+                    f"target matrix include[{index}].{field} must be a non-empty string"
+                )
+        if row["platform"] not in PLATFORM_ARCH:
+            raise PolicyError(
+                f"target matrix include[{index}].platform {row['platform']!r} is unsupported"
+            )
+        identity = (row["variant"], row["flavor"], row["platform"])
         row["r2_cutover"] = identity in active
     json.dump(matrix, sys.stdout, separators=(",", ":"))
     sys.stdout.write("\n")

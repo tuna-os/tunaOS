@@ -221,6 +221,37 @@ def test_matrix_annotation_rejects_non_object_rows(tmp_path: Path):
     assert "matrix include entries must be objects" in result.stderr
 
 
+@pytest.mark.parametrize(
+    "row, reason",
+    [
+        ({"variant": "", "flavor": "gnome", "platform": "linux/amd64"}, ".variant"),
+        ({"variant": "fish", "flavor": 7, "platform": "linux/amd64"}, ".flavor"),
+        ({"variant": "fish", "flavor": "gnome", "platform": "linux/riscv64"}, "unsupported"),
+    ],
+)
+def test_target_matrix_annotation_rejects_invalid_identity(tmp_path: Path, row: dict, reason: str):
+    config_path = tmp_path / "config.json"
+    config_path.write_text(
+        json.dumps(_group_policy_config([], [])), encoding="utf-8"
+    )
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(POLICY),
+            "--config-json",
+            str(config_path),
+            "annotate-target-matrix",
+        ],
+        input=json.dumps({"include": [row]}),
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 1
+    assert reason in result.stderr
+
+
 def test_nonempty_cutover_is_rejected_until_receipts_are_integrated(tmp_path: Path):
     result = _annotate_group(
         tmp_path,

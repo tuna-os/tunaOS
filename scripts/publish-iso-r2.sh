@@ -11,6 +11,14 @@ error() {
 	fi
 }
 
+notice() {
+	if [[ -n "${GITHUB_ACTIONS:-}" ]]; then
+		echo "::notice::$*" >&2
+	else
+		echo "NOTICE: $*" >&2
+	fi
+}
+
 if [[ $# -ne 4 ]]; then
 	echo "usage: $0 ISO LATEST_NAME CONFIG_JSON R2_DEST" >&2
 	exit 2
@@ -61,7 +69,7 @@ copy_unless_retained() {
 	is_retained "$object" || retained_status=$?
 	case "$retained_status" in
 	0)
-		echo "::notice::retained R2 object is immutable; skipping ${object}"
+		notice "retained R2 object is immutable; skipping ${object}"
 		return
 		;;
 	1) ;;
