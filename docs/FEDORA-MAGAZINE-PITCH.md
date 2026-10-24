@@ -6,7 +6,12 @@
 
 > Before submission, complete the [Fedora outreach readiness review](FEDORA-OUTREACH-READINESS.md). Recheck this historical draft against the candidate image. Its preparation date does not establish current readiness.
 
-## Pitch email (≈300 words, submission-ready)
+> Use the [release-window handoff](FEDORA45-RELEASE-OUTREACH.md) for project
+> context and replacement facts for the release notes. Rework the historical copy
+> below before use; Bonito is not an official Fedora flavor. Coordinate one
+> submission through #1137 and check the submission route for the Magazine.
+
+## Historical pitch email — revise before submission
 
 **Subject: Guest post pitch — "Bonito: Fedora's newest immutable desktop flavor"**
 

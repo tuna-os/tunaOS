@@ -44,6 +44,10 @@ env:
   # not for a fortnight. If nothing shipped AND the newest published release
   # is older than this, the Releases page is rotting and the run goes red.
   MAX_RELEASE_AGE_DAYS: "8"
+concurrency:
+  group: generate-release-${{ github.repository }}
+  cancel-in-progress: false
+
 
 jobs:
   generate-release:
@@ -258,25 +262,6 @@ jobs:
             echo "::error::${CANDIDATES} build run(s) in the lookback window, none carrying a usable '${ARTIFACT}'"
           fi
 
-      # ── Fetch image digest ────────────────────────────────────────────────
-      - name: Fetch image digest
-        id: digest
-        if: steps.check.outputs.skip == 'false'
-        env:
-          VARIANT: ${{ steps.vars.outputs.variant }}
-          STREAM:  ${{ steps.vars.outputs.stream }}
-        run: |
-          set -euo pipefail
-          sudo apt-get install -y skopeo -q
-          IMAGE_REF="${IMAGE_REGISTRY}/${VARIANT}:${STREAM}"
-          DIGEST=$(skopeo inspect --no-tags "docker://${IMAGE_REF}" \
-            | python3 -c "import json,sys; print(json.load(sys.stdin)['Digest'])" \
-            2>/dev/null || echo "")
-          if [[ -z "${DIGEST}" ]]; then
-            echo "::warning::Could not fetch digest for ${IMAGE_REF}"
-          fi
-          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
-
       # ── Check if release already exists ──────────────────────────────────
       - name: Check for existing release
         id: existing
@@ -293,6 +278,34 @@ jobs:
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
+
+      # Resolve mutable registry tags only for a release that is about to be
+      # created. Existing releases recover their immutable identity from their
+      # own notes below; today's tag must never be used to repair them.
+      - name: Fetch image digest
+        id: digest
+        if: >-
+          steps.check.outputs.skip == 'false' &&
+          steps.existing.outputs.exists == 'false' &&
+          inputs.dry_run != true &&
+          (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+        env:
+          VARIANT: ${{ steps.vars.outputs.variant }}
+          STREAM:  ${{ steps.vars.outputs.stream }}
+        run: |
+          set -euo pipefail
+          sudo apt-get install -y skopeo -q
+          IMAGE_REF="${IMAGE_REGISTRY}/${VARIANT}:${STREAM}"
+          if ! DIGEST=$(skopeo inspect --no-tags "docker://${IMAGE_REF}" \
+            | jq -er '.Digest'); then
+            echo "::error::Could not fetch digest for ${IMAGE_REF}"
+            exit 1
+          fi
+          if [[ ! "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "::error::Registry returned an invalid digest for ${IMAGE_REF}: ${DIGEST}"
+            exit 1
+          fi
+          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
 
       # ── Create GitHub Release with SBOM diff + release card ──────────────
       - name: Create Release
@@ -327,7 +340,119 @@ jobs:
               {"sbom_name": "flatpak",       "label": "Flatpak"},
               {"sbom_name": "pipewire",      "label": "PipeWire"}
             ]
-          github-token: ${{ github.token }}
+          draft:              true
+          github-token:       ${{ github.token }}
+
+      # Pin the exact provenance input consumed by the release report. A
+      # failed upload can be retried only from the same workflow run, so a
+      # later dispatch cannot overwrite a draft with a newer checkout.
+      - name: Attach matrix provenance snapshot
+        if: >-
+          steps.check.outputs.skip == 'false' &&
+          inputs.dry_run != true &&
+          (steps.existing.outputs.exists == 'false' || github.run_attempt > 1) &&
+          (steps.release.outcome == 'success' || github.run_attempt > 1)
+        env:
+          GH_TOKEN:      ${{ github.token }}
+          REPO:          ${{ github.repository }}
+          TAG:           ${{ steps.vars.outputs.tag }}
+          RUN_ATTEMPT:   ${{ github.run_attempt }}
+          EXISTING:      ${{ steps.existing.outputs.exists }}
+        run: |
+          set -euo pipefail
+          cp docs/matrix-provenance.json matrix-provenance.json
+          git rev-parse HEAD > matrix-provenance-commit.txt
+          assets="$(gh release view "$TAG" --repo "$REPO" --json assets --jq '.assets[].name')"
+          missing=()
+          for asset in matrix-provenance.json matrix-provenance-commit.txt; do
+            grep -Fxq "$asset" <<<"$assets" || missing+=("$asset")
+          done
+          if (( ${#missing[@]} == 0 )); then
+            echo "Release ${TAG} already has its provenance snapshot"
+            exit 0
+          fi
+          if [[ "$EXISTING" == true && "$RUN_ATTEMPT" -le 1 ]]; then
+            echo "::error::draft ${TAG} is missing provenance; rerun the original workflow instead of using a newer checkout"
+            exit 1
+          fi
+          gh release upload "$TAG" --repo "$REPO" "${missing[@]}"
+
+      # create-release owns the changelog/release card. A retry may repair a
+      # release whose first report append failed, but it must derive identity
+      # from that release's body and attached SPDX inventory, never today's tag.
+      - name: Append release verification report
+        if: >-
+          steps.check.outputs.skip == 'false' &&
+          inputs.dry_run != true &&
+          (steps.release.outcome == 'success' || steps.existing.outputs.exists == 'true')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO:      ${{ github.repository }}
+          TAG:       ${{ steps.vars.outputs.tag }}
+          STREAM:    ${{ steps.vars.outputs.stream }}
+        run: |
+          set -euo pipefail
+          gh release view "$TAG" --repo "$REPO" --json body -q .body > release-body.md
+          if grep -Fq '<!-- release-verification:start -->' release-body.md; then
+            echo "Release ${TAG} already carries its verification snapshot"
+            exit 0
+          fi
+
+          # Always read the evidence from the published release. A concurrent
+          # create-release invocation can win after the earlier existence check,
+          # so current-build outputs are not authoritative even on the
+          # `steps.existing == false` path.
+          rm -rf _release-evidence
+          mkdir _release-evidence
+          if ! gh release download "$TAG" --repo "$REPO" --dir _release-evidence \
+            --pattern '*.spdx.json' \
+            --pattern 'matrix-provenance.json' \
+            --pattern 'matrix-provenance-commit.txt'; then
+            echo "::error::release ${TAG} is missing its immutable provenance snapshot or SPDX inventory"
+            exit 1
+          fi
+          mapfile -t PROVENANCE < <(find _release-evidence -maxdepth 1 -type f -name 'matrix-provenance.json')
+          mapfile -t PROVENANCE_COMMITS < <(find _release-evidence -maxdepth 1 -type f -name 'matrix-provenance-commit.txt')
+          mapfile -t SBOMS < <(find _release-evidence -maxdepth 1 -type f -name '*.spdx.json')
+          if [[ "${#PROVENANCE[@]}" -ne 1 || "${#PROVENANCE_COMMITS[@]}" -ne 1 ]]; then
+            echo "::error::release ${TAG} must have exactly one matrix provenance JSON and commit sidecar"
+            exit 1
+          fi
+          if [[ "${#SBOMS[@]}" -ne 1 ]]; then
+            echo "::error::release ${TAG} must have exactly one attached SPDX inventory"
+            exit 1
+          fi
+          PROVENANCE_COMMIT="$(tr -d '\r\n' < "${PROVENANCE_COMMITS[0]}")"
+          if [[ ! "$PROVENANCE_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::release ${TAG} has an invalid provenance commit sidecar"
+            exit 1
+          fi
+          SBOM_PACKAGES=$(jq '(.packages // []) | length' "${SBOMS[0]}")
+          if [[ "$SBOM_PACKAGES" -lt "$SBOM_MIN_PACKAGES" ]]; then
+            echo "::error::release ${TAG} attached SPDX inventory is an unusable stub"
+            exit 1
+          fi
+          mapfile -t STORED < <(
+            python3 scripts/render-release-verification.py \
+              --stored-identity release-body.md
+          )
+          if [[ "${#STORED[@]}" -ne 2 ]]; then
+            echo "::error::could not recover original image identity from ${TAG}"
+            exit 1
+          fi
+          IMAGE="${STORED[0]}:${STREAM}"
+          DIGEST="${STORED[1]}"
+
+          python3 scripts/render-release-verification.py \
+            --provenance "${PROVENANCE[0]}" \
+            --image "$IMAGE" \
+            --digest "$DIGEST" \
+            --sbom-packages "$SBOM_PACKAGES" \
+            --provenance-commit "$PROVENANCE_COMMIT" \
+            --body release-body.md \
+            --output release-body-with-verification.md
+          gh release edit "$TAG" --repo "$REPO" \
+            --notes-file release-body-with-verification.md
 
       # projectbluefin/actions/bootc-build/create-release has no note-injection
       # input (tunaos#1398 — a `handwritten:` input here was silently ignored,
@@ -382,6 +507,21 @@ jobs:
           fi
 
           echo "Verified ${ASSET_COUNT} uploaded asset(s), including an SPDX SBOM, for ${TAG}"
+
+      - name: Publish release after evidence verification
+        if: >-
+          success() &&
+          steps.check.outputs.skip == 'false' &&
+          inputs.dry_run != true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO:     ${{ github.repository }}
+          TAG:      ${{ steps.vars.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if [[ "$(gh release view "$TAG" --repo "$REPO" --json isDraft --jq .isDraft)" == "true" ]]; then
+            gh release edit "$TAG" --repo "$REPO" --draft=false
+          fi
 
       # ── Release cadence health gate (#1147) ───────────────────────────────
       # Before this existed, "we shipped nothing" and "we shipped" were the

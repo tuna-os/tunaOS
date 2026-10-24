@@ -56,18 +56,18 @@ YQ="${YQ:-yq}"
 if ! command -v "$YQ" &>/dev/null; then
 	YQ_VERSION="v4.53.3"
 	case "$(uname -m)" in
-		x86_64)
-			YQ_ARCH="amd64"
-			YQ_SHA256="fa52a4e758c63d38299163fbdd1edfb4c4963247918bf9c1c5d31d84789eded4"
-			;;
-		aarch64)
-			YQ_ARCH="arm64"
-			YQ_SHA256="578648e463a11c1b6db6010cbf41eafed6bee79466fcffa1bb446672cf7945ea"
-			;;
-		*)
-			echo "ERROR: no pinned yq checksum for $(uname -m)" >&2
-			exit 1
-			;;
+	x86_64)
+		YQ_ARCH="amd64"
+		YQ_SHA256="fa52a4e758c63d38299163fbdd1edfb4c4963247918bf9c1c5d31d84789eded4"
+		;;
+	aarch64)
+		YQ_ARCH="arm64"
+		YQ_SHA256="578648e463a11c1b6db6010cbf41eafed6bee79466fcffa1bb446672cf7945ea"
+		;;
+	*)
+		echo "ERROR: no pinned yq checksum for $(uname -m)" >&2
+		exit 1
+		;;
 	esac
 
 	# Keep the temporary file beside the destination so the final rename is

@@ -131,9 +131,26 @@ just verify-disk ./yellowfin-gnome.qcow2
 
 ### 6. That's your distro now
 
-Push to your fork. The CI workflows in `.github/workflows/` are already
-parameterized to push to `ghcr.io/<your-username>/...`. Commit, push, and
-your images build automatically.
+Push to your fork. With no other change, CI publishes to
+`ghcr.io/<your-username>/...`, and each image records that location as its
+vendor and update source. Commit, push, and your images build automatically.
+
+To publish somewhere else, for example another registry or an organization,
+set the destination in `tunaos.toml`:
+
+```toml
+[build.publish]
+registry = "quay.io"
+namespace = "acme"
+```
+
+Local builds, CI, ISOs and the boot gate all use this destination, and each
+image records it. The repository variable `IMAGE_REGISTRY` (for example
+`quay.io/acme`) still overrides it for one repository.
+
+CI signs in with the repository's own `GITHUB_TOKEN`. That token can push only
+to `ghcr.io` under the repository owner. CI cannot yet push to another
+registry or namespace; issue #3668 tracks the credentials for that case.
 
 ---
 

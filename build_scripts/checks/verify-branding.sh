@@ -244,8 +244,23 @@ else
 		# name and exact image-ref; a namespace alone cannot prove identity.
 		pass "image-vendor=${jvendor} (validated fork namespace)"
 	else
-		[[ "$jvendor" == tuna-os ]] && pass "image-vendor=${jvendor}" ||
-			fail "image-vendor is '${jvendor}', want 'tuna-os'"
+		# The expected namespace is the one 90-image-info.sh resolved from the
+		# same publish configuration and persisted. A fork that publishes to
+		# its own namespace is stamped with it, so a fixed 'tuna-os' here
+		# failed every zero-config fork desktop build. Build time also holds
+		# the resolved IMAGE_VENDOR; it must agree with the persisted value.
+		vendor_file=/usr/share/tunaos/image-vendor
+		want_vendor=""
+		[[ -r "$vendor_file" ]] && want_vendor="$(head -n 1 "$vendor_file")"
+		if [[ -z "$want_vendor" ]]; then
+			fail "no persisted publish namespace at ${vendor_file} (90-image-info.sh did not run)"
+		elif [[ -n "${IMAGE_VENDOR:-}" && "${IMAGE_VENDOR}" != "$want_vendor" ]]; then
+			fail "persisted namespace '${want_vendor}' disagrees with build IMAGE_VENDOR '${IMAGE_VENDOR}'"
+		elif [[ "$jvendor" == "$want_vendor" ]]; then
+			pass "image-vendor=${jvendor}"
+		else
+			fail "image-vendor is '${jvendor}', want '${want_vendor}'"
+		fi
 	fi
 fi
 

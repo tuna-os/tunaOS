@@ -1,0 +1,139 @@
+#!/usr/bin/env bash
+# Strict gh fixture for synthetic pull-request workflows. Never contacts GitHub.
+set -euo pipefail
+
+
+unexpected() {
+	printf '%s\n' "$*" >>"$SIMULATION_UNEXPECTED_LOG"
+	echo "unexpected synthetic GitHub request: $*" >&2
+	exit 64
+}
+: "${GITHUB_EVENT_PATH:?}"
+
+event_repo="$(jq -r '.repository.full_name' "$GITHUB_EVENT_PATH")"
+event_pr="$(jq -r '.pull_request.number' "$GITHUB_EVENT_PATH")"
+[[ "$event_repo" == "$GITHUB_REPOSITORY" && "$event_pr" == "$SIMULATION_PR" ]] ||
+	unexpected "fixture/event mismatch: ${event_repo}#${event_pr}"
+fixture_pr="$(jq -r '.simulation_fixture.pull_request.number' "$GITHUB_EVENT_PATH")"
+[[ "$fixture_pr" == "$SIMULATION_PR" ]] ||
+	unexpected "missing fixture for synthetic PR ${SIMULATION_PR}"
+
+if [[ "${1:-}" == run ]]; then
+	case "${2:-}" in
+	list)
+		printf '%s\n' '[]'
+		;;
+	view)
+		printf '%s\n' '{"jobs":[]}'
+		;;
+	*)
+		unexpected "unsupported synthetic gh run command: ${2:-missing}"
+		;;
+	esac
+	exit 0
+fi
+[[ "${1:-}" == api ]] || unexpected "unsupported command: ${1:-missing}"
+shift
+
+method=GET
+method_explicit=false
+endpoint=
+field=
+input_provided=false
+while (($#)); do
+	case "$1" in
+	-X | --method)
+		method="${2:?missing method}"
+		method_explicit=true
+		shift 2
+		;;
+	-F | --field | -f | --raw-field)
+		field="${2:?missing field}"
+		if [[ "$method_explicit" == false ]]; then
+			method=POST
+		fi
+		shift 2
+		;;
+	--paginate)
+		shift
+		;;
+	--jq)
+		shift 2
+		;;
+	--input)
+		[[ "${2:-}" == - ]] || unexpected "unsupported input: ${2:-missing}"
+		input_provided=true
+		if [[ "$method_explicit" == false ]]; then
+			method=POST
+		fi
+		cat >/dev/null
+		shift 2
+		;;
+	repos/*)
+		endpoint="$1"
+		shift
+		;;
+	*)
+		unexpected "unsupported gh api argument: $1"
+		;;
+	esac
+done
+
+repo="${GITHUB_REPOSITORY:?}"
+pr="${SIMULATION_PR:?}"
+printf '%s\t%s\n' "$method" "$endpoint" >>"$SIMULATION_API_LOG"
+
+allow_mutation() {
+	local required_scope="${1:?missing required permission scope}"
+	local token="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
+	[[ -n "$token" ]] || unexpected "unauthenticated mutation: $method $endpoint"
+	[[ -r "${GITHUB_EVENT_PATH:-}" ]] ||
+		unexpected "mutation without synthetic event: $method $endpoint"
+	jq -e --arg repo "$repo" \
+		'.pull_request.head.repo.fork == false and
+			.pull_request.head.repo.full_name == $repo' \
+		"$GITHUB_EVENT_PATH" >/dev/null ||
+		unexpected "fork mutation: $method $endpoint"
+	local job="${GITHUB_JOB:-}"
+	[[ -n "$job" ]] || unexpected "mutation without job identity: $method $endpoint"
+	jq -e --arg job "$job" --arg scope "$required_scope" \
+		'.simulation_fixture.permissions[$job][$scope] == "write"' \
+		"$GITHUB_EVENT_PATH" >/dev/null ||
+		unexpected "mutation without $required_scope:write for job $job"
+}
+
+case "$method:$endpoint" in
+"GET:repos/$repo/actions/workflows/"*)
+	[[ "$endpoint" == *"/runs?branch=main&per_page=1" ]] ||
+		unexpected "unsupported workflow run query: $endpoint"
+	printf '%s\n' '{"workflow_runs":[]}'
+	;;
+"GET:repos/$repo/pulls/$pr/files")
+	# The file list is generated into the matching synthetic event, not guessed
+	# from a hard-coded PR fixture.
+	jq -r '.simulation_fixture.pull_request.files[]' "$GITHUB_EVENT_PATH"
+	;;
+"GET:repos/$repo/pulls/$pr")
+	# Reviewers are likewise scoped to the synthetic event's isolated fixture.
+	jq -c '{
+		reviewers: (.simulation_fixture.pull_request.reviewers // []),
+		team_reviewers: []
+	}' "$GITHUB_EVENT_PATH"
+	;;
+"GET:repos/$repo/issues/$pr/comments")
+	# No prior synthetic reminder exists.
+	;;
+"POST:repos/$repo/issues/$pr/comments")
+	allow_mutation pull-requests
+	[[ ( "$field" == body=@* && -r "${field#body=@}" ) || "$input_provided" == true ]] ||
+		unexpected "invalid PR comment body"
+	printf '%s\n' '{}'
+	;;
+"DELETE:repos/$repo/pulls/$pr/requested_reviewers")
+	allow_mutation pull-requests
+	printf '%s\n' '{}'
+	;;
+*)
+	unexpected "$method $endpoint"
+	;;
+esac

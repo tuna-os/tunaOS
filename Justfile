@@ -1,4 +1,3 @@
-export repo_organization := env("GITHUB_REPOSITORY_OWNER", "tuna-os")
 export default_tag := env("DEFAULT_TAG", "latest")
 export common_image := env("COMMON_IMAGE", "ghcr.io/projectbluefin/common")
 export brew_image := env("BREW_IMAGE", "ghcr.io/ublue-os/brew")
@@ -44,8 +43,8 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
     export DESKTOP_FLAVOR="{{ desktop_flavor }}"
     export IS_CI="{{ is_ci_build }}"
     export ENABLE_SSHD="{{ enable_sshd_build }}"
-    export IMAGE_REGISTRY="${IMAGE_REGISTRY:-ghcr.io}"
-    export REPO_ORGANIZATION="{{ repo_organization }}"
+    # IMAGE_REGISTRY / REPO_ORGANIZATION pass through when set; otherwise
+    # build-image-inner.sh resolves [build.publish], then the GitHub owner.
     export COMMON_IMAGE="{{ common_image }}"
     export BREW_IMAGE="{{ brew_image }}"
     export COREOS_STABLE_VERSION="{{ coreos_stable_version }}"

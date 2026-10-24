@@ -194,7 +194,7 @@ test-cell variant='yellowfin' flavor='gnome':
     #!/usr/bin/env bash
     set -euo pipefail
     cd {{ justfile_directory() }}
-    ref="ghcr.io/{{ repo_organization }}/{{ variant }}:{{ flavor }}"
+    ref="$(./scripts/publish-destination.sh)/{{ variant }}:{{ flavor }}"
     desktop="${ref##*:}"; desktop="${desktop%%-*}"
     echo "==> $ref: desktop contract ($desktop)"
     sudo podman run --rm --pull=always \

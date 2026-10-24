@@ -180,8 +180,14 @@ lock_state() {
 	local out hint
 	if out="$(screensaver_call GetActive 2>/dev/null)"; then
 		case "$out" in
-		"b true"*) echo yes; return ;;
-		"b false"*) echo no; return ;;
+		"b true"*)
+			echo yes
+			return
+			;;
+		"b false"*)
+			echo no
+			return
+			;;
 		esac
 	fi
 	hint="$(guest loginctl show-session "$session_id" -p LockedHint --value 2>/dev/null || true)"
@@ -201,8 +207,16 @@ for attempt in 1 2 3; do
 	sleep 2
 	case "$attempt" in
 	1) "$CORRAL" key "$NAME" ret ;;
-	2) "$CORRAL" key "$NAME" tab; sleep 1; "$CORRAL" key "$NAME" ret ;;
-	3) "$CORRAL" type "$NAME" "$TEST_USER"; sleep 1; "$CORRAL" key "$NAME" ret ;;
+	2)
+		"$CORRAL" key "$NAME" tab
+		sleep 1
+		"$CORRAL" key "$NAME" ret
+		;;
+	3)
+		"$CORRAL" type "$NAME" "$TEST_USER"
+		sleep 1
+		"$CORRAL" key "$NAME" ret
+		;;
 	esac
 	sleep 3
 	"$CORRAL" screenshot "$NAME" -o "${OUT}/gdm-attempt-${attempt}.png" --require-paint

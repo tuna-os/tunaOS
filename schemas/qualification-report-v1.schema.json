@@ -1,0 +1,197 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tunaos.org/schemas/qualification-report-v1.schema.json",
+  "title": "Privacy-safe qualification report v1",
+  "$comment": "The closed public schema deliberately has no free-form log, environment, path, installer-user-data or message fields.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "qualificationId": { "$ref": "#/$defs/token" },
+    "generatedAt": { "$ref": "#/$defs/timestamp" },
+    "image": { "$ref": "#/$defs/image" },
+    "sourceReceipt": { "$ref": "#/$defs/digest" },
+    "configReceipt": { "$ref": "#/$defs/digest" },
+    "platform": { "$ref": "#/$defs/platform" },
+    "reuse": { "$ref": "#/$defs/reuse" },
+    "releasePass": { "type": "boolean" },
+    "summary": { "$ref": "#/$defs/summary" },
+    "assertions": {
+      "type": "array", "minItems": 1, "maxItems": 129,
+      "items": { "$ref": "#/$defs/assertion" }
+    },
+    "firstFailure": {
+      "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/firstFailure" }]
+    },
+    "evidence": {
+      "type": "array", "minItems": 1, "maxItems": 32,
+      "items": { "$ref": "#/$defs/evidence" }
+    }
+  },
+  "required": ["schemaVersion", "qualificationId", "generatedAt", "image", "sourceReceipt", "configReceipt", "platform", "reuse", "releasePass", "summary", "assertions", "firstFailure", "evidence"],
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "token": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,79}$" },
+    "timestamp": { "type": "string", "format": "date-time", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$", "maxLength": 20 },
+    "image": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "manifestDigest": { "$ref": "#/$defs/digest" },
+        "configDigest": { "$ref": "#/$defs/digest" }
+      },
+      "required": ["manifestDigest", "configDigest"]
+    },
+    "platform": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "os": { "const": "linux" },
+        "architecture": { "$ref": "#/$defs/token" },
+        "variant": { "type": ["string", "null"], "pattern": "^[A-Za-z0-9][A-Za-z0-9._+:-]{0,79}$" }
+      },
+      "required": ["os", "architecture", "variant"]
+    },
+    "reuse": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "mode": { "enum": ["built", "reused"] },
+        "producerRunId": { "type": ["integer", "null"], "minimum": 1 },
+        "artifactId": { "type": ["integer", "null"], "minimum": 1 }
+      },
+      "required": ["mode", "producerRunId", "artifactId"],
+      "allOf": [
+        {
+          "if": { "properties": { "mode": { "const": "built" } }, "required": ["mode"] },
+          "then": {
+            "properties": {
+              "producerRunId": { "type": "null" },
+              "artifactId": { "type": "null" }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "mode": { "const": "reused" } }, "required": ["mode"] },
+          "then": {
+            "properties": {
+              "producerRunId": { "type": "integer", "minimum": 1 },
+              "artifactId": { "type": "integer", "minimum": 1 }
+            }
+          }
+        }
+      ]
+    },
+    "evidence": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/token" },
+        "url": { "type": "string", "format": "uri", "pattern": "^https://[^@?#%]+(?:/[^?#%]*)?$", "maxLength": 512 },
+        "sha256": { "$ref": "#/$defs/digest" }
+      },
+      "required": ["id", "url", "sha256"]
+    },
+    "evidenceIds": {
+      "type": "array", "maxItems": 32, "uniqueItems": true,
+      "items": { "$ref": "#/$defs/token" }
+    },
+    "classification": {
+      "type": ["string", "null"],
+      "enum": ["product", "harness", "runner", "unknown", null]
+    },
+    "reason": {
+      "type": ["string", "null"],
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,79}$"
+    },
+    "skipReason": {
+      "enum": ["blocked-by-prior-failure", "not-applicable"]
+    },
+    "reasonCode": {
+      "enum": ["assertion-failed", "cleanup-failed", "contract-mismatch", "malformed-evidence", "runner-unavailable", "timeout", "unknown"]
+    },
+    "command": {
+      "type": ["string", "null"],
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,79}$"
+    },
+    "exitCode": { "type": ["integer", "null"], "minimum": -255, "maximum": 255 },
+    "assertion": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "name": { "$ref": "#/$defs/token" },
+        "status": { "enum": ["passed", "failed", "skipped", "not-run"] },
+        "timestamp": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/timestamp" }] },
+        "classification": { "$ref": "#/$defs/classification" },
+        "reasonCode": { "$ref": "#/$defs/reason" },
+        "commandId": { "$ref": "#/$defs/command" },
+        "exitCode": { "$ref": "#/$defs/exitCode" },
+        "evidenceIds": { "$ref": "#/$defs/evidenceIds" }
+      },
+      "required": ["name", "status", "timestamp", "classification", "reasonCode", "commandId", "exitCode", "evidenceIds"],
+      "allOf": [
+        {
+          "if": { "properties": { "status": { "const": "failed" } }, "required": ["status"] },
+          "then": {
+            "properties": {
+              "classification": { "enum": ["product", "harness", "runner", "unknown"] },
+              "reasonCode": { "$ref": "#/$defs/reasonCode" },
+              "evidenceIds": { "allOf": [{ "$ref": "#/$defs/evidenceIds" }, { "minItems": 1 }] }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "status": { "const": "skipped" } }, "required": ["status"] },
+          "then": {
+            "properties": {
+              "timestamp": { "$ref": "#/$defs/timestamp" },
+              "classification": { "type": "null" },
+              "reasonCode": { "$ref": "#/$defs/skipReason" },
+              "commandId": { "type": "null" },
+              "exitCode": { "type": "null" },
+              "evidenceIds": { "maxItems": 0 }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "status": { "enum": ["passed", "not-run"] } }, "required": ["status"] },
+          "then": {
+            "properties": {
+              "classification": { "type": "null" },
+              "reasonCode": { "type": "null" },
+              "commandId": { "type": "null" },
+              "exitCode": { "type": "null" },
+              "evidenceIds": { "maxItems": 0 }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "status": { "const": "passed" } }, "required": ["status"] },
+          "then": { "properties": { "timestamp": { "$ref": "#/$defs/timestamp" } } }
+        },
+        {
+          "if": { "properties": { "status": { "const": "not-run" } }, "required": ["status"] },
+          "then": { "properties": { "timestamp": { "type": "null" } } }
+        }
+      ]
+    },
+    "firstFailure": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "stage": { "$ref": "#/$defs/token" },
+        "timestamp": { "$ref": "#/$defs/timestamp" },
+        "classification": { "enum": ["product", "harness", "runner", "unknown"] },
+        "reasonCode": { "$ref": "#/$defs/reasonCode" },
+        "commandId": { "$ref": "#/$defs/command" },
+        "exitCode": { "$ref": "#/$defs/exitCode" },
+        "evidenceIds": { "allOf": [{ "$ref": "#/$defs/evidenceIds" }, { "minItems": 1 }] }
+      },
+      "required": ["stage", "timestamp", "classification", "reasonCode", "commandId", "exitCode", "evidenceIds"]
+    },
+    "summary": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "passed": { "type": "integer", "minimum": 0, "maximum": 129 },
+        "failed": { "type": "integer", "minimum": 0, "maximum": 129 },
+        "skipped": { "type": "integer", "minimum": 0, "maximum": 129 },
+        "not-run": { "type": "integer", "minimum": 0, "maximum": 129 }
+      },
+      "required": ["passed", "failed", "skipped", "not-run"]
+    }
+  }
+}

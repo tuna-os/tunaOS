@@ -8,6 +8,9 @@ source "$(dirname "${BASH_SOURCE[0]}")/gh-read-retry.sh"
 # latest completed main-branch run of each variant workflow.
 # Requires: gh, jq, yq. GITHUB_TOKEN must be able to read Actions metadata.
 
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd -- "${script_dir}/../.." && pwd)"
+criteria_file="${repo_root}/.github/green-criteria.yml"
 repo="${GITHUB_REPOSITORY:-tuna-os/tunaOS}"
 if [[ -n "${1:-}" ]]; then
 	config="$1"
@@ -30,8 +33,8 @@ composite_green=0
 
 # The boots criterion's scope, read from the criteria file so this script and
 # the composite scoreboard cannot disagree about which cells CI can boot.
-mapfile -t boots_excl_flavors < <(yq -r '.criteria[] | select(.id == "boots") | .scope.excludes_flavors[]?' .github/green-criteria.yml)
-mapfile -t boots_excl_suffixes < <(yq -r '.criteria[] | select(.id == "boots") | .scope.excludes_flavor_suffixes[]?' .github/green-criteria.yml)
+mapfile -t boots_excl_flavors < <(yq -r '.criteria[] | select(.id == "boots") | .scope.excludes_flavors[]?' "$criteria_file")
+mapfile -t boots_excl_suffixes < <(yq -r '.criteria[] | select(.id == "boots") | .scope.excludes_flavor_suffixes[]?' "$criteria_file")
 
 # Empty list renders as an em dash rather than a blank cell.
 join_or_dash() {
@@ -181,7 +184,7 @@ while IFS=$'\t' read -r variant emoji; do
 	composite_green=$((composite_green + cgreen))
 	total_unreached=$((total_unreached + ${#unreached[@]}))
 
-	builds_sla=$(yq -r '.criteria[] | select(.id == "builds") | .freshness_sla_days // 2' .github/green-criteria.yml 2>/dev/null || echo 2)
+	builds_sla=$(yq -r '.criteria[] | select(.id == "builds") | .freshness_sla_days // 2' "$criteria_file" 2>/dev/null || echo 2)
 	builds_sla="${builds_sla:-2}"
 	today=$(date -u +%F)
 	run_age=0
@@ -212,7 +215,7 @@ done < <(yq -r '.variants[] | [.id, .emoji] | @tsv' "$config")
 
 # Family images built elsewhere (build-config `sibling_images:`). Rendered
 # after the variant table and OUTSIDE its totals: they are not cells here.
-"$(dirname "${BASH_SOURCE[0]}")/sibling-images-status.sh" "$config" >>"$tmp_table"
+"${script_dir}/sibling-images-status.sh" "$config" >>"$tmp_table"
 
 percent=$((100 * total_green / total_cells))
 total_failing=$((total_cells - total_green - total_unreached))
@@ -234,7 +237,7 @@ failure_word="failures"
 # and so can differ from the table above). Refusing to publish at all was the
 # previous behaviour, and it froze the README block for two weeks after
 # `desktop` and `no_silent_omissions` graduated on 2026-08-19.
-mapfile -t blocking_ids < <(yq -r '.criteria[] | select(.enforcement == "blocking") | .id' .github/green-criteria.yml | sort)
+mapfile -t blocking_ids < <(yq -r '.criteria[] | select(.enforcement == "blocking") | .id' "$criteria_file" | sort)
 blocking=$(
 	IFS=,
 	echo "${blocking_ids[*]}"
@@ -265,9 +268,45 @@ if [[ "$scorable" == false ]]; then
 fi
 blocking_text=$(sed -E 's/,/`, `/g' <<<"$blocking")
 
+# The public headline comes from the matrix generator's machine-readable
+# payload. Do not independently reinterpret workflow results here: the README,
+# release notes, and website must all publish the same answer.
+health_json=${FACTORY_HEALTH_JSON:-${repo_root}/docs/matrix-provenance.json}
+if ! jq -e '.summary.factory_health and .summary.install and .summary.lifecycle and .summary.known_regressions' \
+	"$health_json" >/dev/null; then
+	echo "::error::${health_json} has no generated factory-health summary; run scripts/gen-matrix-status.py first" >&2
+	exit 1
+fi
+health_green=$(jq -r '.summary.factory_health.green' "$health_json")
+health_total=$(jq -r '.summary.factory_health.total' "$health_json")
+install_passed=$(jq -r '.summary.install.tested' "$health_json")
+install_total=$(jq -r '.summary.install.total' "$health_json")
+lifecycle_passed=$(jq -r '.summary.lifecycle.tested' "$health_json")
+lifecycle_total=$(jq -r '.summary.lifecycle.total' "$health_json")
+never_tested=$(jq -r '.summary.never_tested' "$health_json")
+blocking_regressions=$(jq -r '.summary.known_regressions.blocking' "$health_json")
+advisory_regressions=$(jq -r '.summary.known_regressions.advisory' "$health_json")
+last_sweep=$(jq -r '.summary.last_full_sweep // empty' "$health_json")
+last_sweep_age="unknown"
+if [[ "$last_sweep" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+	last_sweep_epoch=$(date -u -d "$last_sweep" +%s 2>/dev/null || echo 0)
+	now_epoch=$(date -u +%s)
+	if [[ "$last_sweep_epoch" -gt 0 && "$now_epoch" -ge "$last_sweep_epoch" ]]; then
+		last_sweep_age="$(((now_epoch - last_sweep_epoch) / 86400)) days ago"
+	fi
+fi
+
 {
 	echo
 	echo "**Built ${total_green}/${total_cells} · composite green ${composite_green}/${composite_total} (${percent}% built)** — The remainder has **${total_failing} ${failure_word}** and **${total_unreached} never reached** (stale: ${total_stale}); no job asserted the latter. We show the two values separately. A cell with no job has no test, but it can still work."
+	echo
+	echo "**Factory health: ${health_green}/${health_total} cells green**"
+	echo
+	echo "**Install-tested: ${install_passed}/${install_total} · Lifecycle-tested: ${lifecycle_passed}/${lifecycle_total} · Never tested: ${never_tested}**"
+	echo
+	echo "**Known regressions: ${blocking_regressions} \`blocking\`, ${advisory_regressions} advisory**"
+	echo
+	echo "**Last full sweep: ${last_sweep_age} (${last_sweep:-unknown})**"
 	echo
 	echo "The score for composite green uses ${composite_scope}. [\`.github/green-criteria.yml\`](.github/green-criteria.yml) provides the score. Today, these criteria prevent publication: \`${blocking_text}\`. A cell must satisfy each criterion."
 	echo

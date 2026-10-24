@@ -1,7 +1,7 @@
 """tunaOS#3396: KDE image builds consumed a mutable krunner-bazaar tag.
 
-The KDE image build compiled the Bazaar KRunner plugin as root from the
-`v1.3.0` tag. A moved tag could therefore put attacker-controlled source into
+The KDE image build compiled the Bazaar KRunner plugin as root from a
+mutable version tag. A moved tag could therefore put attacker-controlled source into
 every affected image. The source is now fetched from a Renovate-maintained
 40-character commit pin in the build script.
 
@@ -59,6 +59,6 @@ console.log(JSON.stringify(matches.map(m => ({...m.groups, packageName: manager.
     dependencies = json.loads(result.stdout)
     assert dependencies == [{
         "datasource": "git-refs", "depName": "bazaar-org/krunner-bazaar",
-        "currentValue": "v1.3.0", "currentDigest": re.search(r'KRUNNER_BAZAAR_REF="([0-9a-f]{40})"', SCRIPT.read_text()).group(1),
+        "currentValue": re.search(r"ref=(v[0-9.]+)", SCRIPT.read_text()).group(1), "currentDigest": re.search(r'KRUNNER_BAZAAR_REF="([0-9a-f]{40})"', SCRIPT.read_text()).group(1),
         "packageName": "https://github.com/bazaar-org/krunner-bazaar",
     }]
