@@ -94,7 +94,7 @@ BUG_SUPPORT_URL="${TUNAOS_BUG_REPORT_URL}"
 # the base image. IMAGE_NAME_VARIANT is the variant id build-image-inner.sh
 # passes verbatim, so prefer it and fall back to the canonicalized IMAGE_NAME.
 VARIANT_KEY="$(canonical_variant "${IMAGE_NAME_VARIANT:-${IMAGE_NAME}}")"
-CODE_NAME="${TUNAOS_CODENAMES[${VARIANT_KEY}]:-}"
+CODE_NAME="${TUNAOS_CODENAMES["${VARIANT_KEY}"]:-}"
 if [[ -z "${CODE_NAME}" ]]; then
 	echo "ERROR: no codename defined in tunaos.toml for variant: ${VARIANT_KEY}" \
 		"(IMAGE_NAME_VARIANT=${IMAGE_NAME_VARIANT:-unset}, IMAGE_NAME=${IMAGE_NAME})" >&2
