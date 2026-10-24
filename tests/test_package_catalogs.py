@@ -85,8 +85,7 @@ def test_source_rejects(key, value):
 
 @pytest.mark.parametrize(
     'change',
-    ['unknown', 'missing', 'duplicate', 'malformed-source',
-     'absent-security', 'weaken-security'])
+    ['unknown', 'missing', 'duplicate', 'malformed-source', 'weaken-security'])
 def test_complete_set_and_known_schema(change):
     data = fixture()
     if change == 'unknown':
@@ -97,11 +96,17 @@ def test_complete_set_and_known_schema(change):
         data['sources'].append(deepcopy(data['sources'][0]))
     elif change == 'malformed-source':
         data['sources'][0] = []
-    elif change == 'absent-security':
-        data['sources'].pop()
     else:
         data['sources'][2]['freshness'] = {'mode': 'pinned-release', 'inrelease_sha256': 'd' * 64}
     with pytest.raises(CatalogError):
+        validate(data)
+
+
+@pytest.mark.parametrize('absent', ['trixie-security', 'tailscale'])
+def test_absent_configured_source_names_missing_id(absent):
+    data = fixture()
+    data['sources'] = [source for source in data['sources'] if source['id'] != absent]
+    with pytest.raises(CatalogError, match=f'missing source ids: {absent}$'):
         validate(data)
 
 
@@ -144,6 +149,13 @@ def test_signed_date_source_uses_bounded_date_without_valid_until():
     fields = {'Date': 'Tue, 20 Oct 2026 00:00:00 UTC'}
     assert check_authenticated_dates(source, fields, NOW, 'd' * 64) == datetime(
         2026, 10, 27, tzinfo=timezone.utc)
+
+
+def test_stale_signed_date_source_fails_closed():
+    source = fixture()['sources'][3]
+    with pytest.raises(CatalogError, match='expired'):
+        check_authenticated_dates(
+            source, {'Date': 'Tue, 13 Oct 2026 23:59:59 UTC'}, NOW, 'd' * 64)
 
 
 @pytest.mark.parametrize('mode,age', [('signed-valid-until', True), ('signed-valid-until', 604801), ('ignore', 604800)])

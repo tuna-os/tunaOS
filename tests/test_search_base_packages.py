@@ -39,6 +39,7 @@ def test_result_is_explicitly_complete(monkeypatch, tmp_path, capsys):
     assert output['coverage'] == 'configured-target'
     assert output['cell_coverage_complete'] is True
     assert output['add_supported'] is False
+    assert 'does not prove dependency solvability or installability' in output['warning']
     assert output['flavor'] == 'base'
     assert len(output['sources']) == 4
     assert all(source['matches'] == ['htop'] for source in output['sources'])

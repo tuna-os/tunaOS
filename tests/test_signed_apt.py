@@ -1,5 +1,6 @@
 """Offline adversarial acquisition tests, with explicit fake transport/verifier."""
 from datetime import datetime, timezone
+import gzip
 import hashlib
 import io
 import lzma
@@ -98,12 +99,18 @@ def test_index_architecture_empty_and_bounds(monkeypatch):
     data = b'Package: htop\nArchitecture: amd64\n\nPackage: foreign\nArchitecture: arm64\n\n'
     assert acquire.index_names(lzma.compress(data)) == {'htop'}
     assert acquire.index_names(lzma.compress(b'')) == set()
-    assert acquire.index_names(__import__('gzip').compress(data), 'gzip') == {'htop'}
+    assert acquire.index_names(gzip.compress(data), 'gzip') == {'htop'}
     with pytest.raises(CatalogError):
         acquire.index_names(lzma.compress(data) + b'trailing')
+    with pytest.raises(CatalogError):
+        acquire.index_names(gzip.compress(data) + b'trailing', 'gzip')
+    with pytest.raises(CatalogError):
+        acquire.index_names(gzip.compress(data)[:-4], 'gzip')
     monkeypatch.setattr(acquire, 'MAX_INDEX', 200)
     with pytest.raises(CatalogError):
         acquire.index_names(lzma.compress(b'x' * 201))
+    with pytest.raises(CatalogError):
+        acquire.index_names(gzip.compress(b'x' * 201), 'gzip')
 
 
 @pytest.mark.parametrize('record',[b'Package: htop\nPackage: bad\nArchitecture: amd64\n',
@@ -114,7 +121,6 @@ def test_malformed_package_record(record):
 
 
 def fake_catalog():
-    import gzip
     catalog = fixture()
     envelopes, payloads, responses = {}, {}, {}
     for source in catalog['sources']:
@@ -180,6 +186,37 @@ def test_complete_configured_target_with_authenticated_empty_updates():
     assert all(url.startswith(('https://deb.debian.org/', 'https://pkgs.tailscale.com/'))
                for url in requested)
     assert not any(url.endswith(('.gpg', '.list')) for url in requested)
+
+
+def test_acquisition_runs_no_package_tool_and_claims_no_installability(monkeypatch):
+    catalog, fetch, verify, *_ = fake_catalog()
+    def forbidden(*args, **kwargs):
+        raise AssertionError(f'unexpected process: {args!r}')
+    for name in ('Popen', 'run', 'call', 'check_call', 'check_output'):
+        monkeypatch.setattr(acquire.subprocess, name, forbidden)
+    monkeypatch.setattr(acquire.os, 'system', forbidden)
+    results = acquire.acquire_catalog(
+        catalog, lambda _: b'key', datetime(2026, 10, 21, tzinfo=timezone.utc),
+        fetch, verify)
+    claims = {'installable', 'installed', 'solvable', 'transaction', 'add_supported'}
+    assert all(not claims & set(result) for result in results)
+
+
+def test_signature_verifier_is_the_only_native_process(monkeypatch):
+    source = fixture()['sources'][0]
+    source['keyring_sha256'] = hashlib.sha256(b'key').hexdigest()
+    commands = []
+    def popen(command, **kwargs):
+        commands.append(command)
+        raise OSError('stop before execution')
+    monkeypatch.setattr(acquire.subprocess, 'Popen', popen)
+    with pytest.raises(CatalogError, match='unavailable'):
+        acquire.verify_inrelease(
+            b'-----BEGIN PGP SIGNED MESSAGE-----\n', b'key', source, verifier='/opt/gpg')
+    [command] = commands
+    assert command[0] == '/opt/gpg' and '--decrypt' in command
+    assert {'--no-auto-key-retrieve', '--no-auto-key-import', '--no-default-keyring'} <= set(command)
+    assert not {'--import', '--recv-keys', '--fetch-keys'} & set(command)
 
 
 @pytest.mark.parametrize(

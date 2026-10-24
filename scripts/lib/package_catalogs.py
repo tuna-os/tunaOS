@@ -127,7 +127,9 @@ def validate(catalog):
         if type(skew) is not int or not 0 <= skew <= 10:
             raise CatalogError('invalid clock-skew bound')
     if ids != expected:
-        raise CatalogError('incomplete configured target source set')
+        missing = ', '.join(sorted(expected - ids)) or 'none'
+        raise CatalogError(
+            f'incomplete configured target source set; missing source ids: {missing}')
     return catalog
 
 
