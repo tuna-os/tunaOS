@@ -71,6 +71,11 @@ def test_handoff_module_loads_by_path_without_global_import_side_effects():
     assert result.strip() == "ReceiptCandidate"
 
 
+class UncopyableToken:
+    def __deepcopy__(self, memo):
+        raise TypeError("synthetic non-copyable snapshot token")
+
+
 class MediaSource:
     def __init__(self, data, *, browser=False):
         self.data = data
@@ -80,6 +85,8 @@ class MediaSource:
         self.events = []
         self.finish_error = None
         self.finish_result = None
+        self.token_error = None
+        self.uncopyable_token = False
         self.mutate_during_read = False
         self.reader_close_error = None
         self.oversized_read = False
@@ -94,6 +101,10 @@ class MediaSource:
     def snapshot_token(self):
         assert self.closed_sink
         self.events.append("snapshot")
+        if self.token_error:
+            raise self.token_error
+        if self.uncopyable_token:
+            return UncopyableToken()
         return (self.version, len(self.data))
 
     def open(self):
@@ -289,6 +300,22 @@ def test_stream_cannot_return_more_than_the_requested_read_bound():
         "invalid_media_interface",
         "media.stream.read",
     )
+
+
+@pytest.mark.parametrize("failure,code", [
+    ("raises", "media_io"),
+    ("uncopyable", "invalid_media_interface"),
+])
+def test_snapshot_token_call_and_copy_failures_are_classified_separately(failure, code):
+    media = MediaSource(MEDIA, browser=True)
+    if failure == "raises":
+        media.token_error = OSError("synthetic snapshot token failure")
+    else:
+        media.uncopyable_token = True
+    with pytest.raises(HANDOFF.ReceiptHandoffError) as caught:
+        HANDOFF.finalize_browser_receipt(browser_observation(), media)
+    assert (caught.value.code, caught.value.field) == (code, "media.snapshotBefore")
+    assert "open" not in media.events
 
 
 @pytest.mark.parametrize("field", [

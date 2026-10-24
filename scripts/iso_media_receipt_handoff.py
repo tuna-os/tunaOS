@@ -102,6 +102,9 @@ def _reject(code, field, cause=None):
     raise error from cause
 
 
+# Identity checks use exact types on purpose: ``isinstance`` would let ``True``
+# pass as an ``int`` size and let a dict/str subclass with a custom ``__eq__``
+# decide its own equality. A receipt boundary must not delegate that.
 def _same(actual, expected, field):
     if type(actual) is not type(expected) or actual != expected:
         _reject("identity_mismatch", field)
@@ -143,9 +146,15 @@ def _snapshot_token(media, field):
     if not callable(method):
         _reject("invalid_media_interface", field)
     try:
-        token = copy.deepcopy(method())
+        token = method()
     except Exception as exc:
         _reject("media_io", field, exc)
+    try:
+        token = copy.deepcopy(token)
+    except Exception as exc:
+        # A token the adapter cannot hold independently is an interface defect,
+        # not an I/O failure: the caller could still mutate it under us.
+        _reject("invalid_media_interface", field, exc)
     if token is None:
         _reject("invalid_media_interface", field)
     return token
@@ -194,6 +203,9 @@ def _measure_media(media, expected_size, *, finish):
             except OSError:
                 pass
         while True:
+            # Request one byte more than the bytes still expected. read(0) would
+            # return b"" at the boundary and hide trailing bytes as a clean EOF,
+            # so this +1 is what makes an overlong stream detectable below.
             requested = min(READ_SIZE, expected_size - measured + 1)
             chunk = reader(requested)
             if type(chunk) is not bytes or len(chunk) > requested:
