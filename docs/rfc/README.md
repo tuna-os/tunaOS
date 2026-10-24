@@ -9,3 +9,4 @@ sets the lifecycle, and each merged RFC has a decision record in [docs/adr/](../
 | [012](rfc012-private-adoption-metrics.md) | Private adoption metrics for TunaOS | Approved for publication | [ADR 0011](../adr/0011-private-adoption-metrics.md) |
 | [014](rfc014-iso-media-provenance.md) | ISO media provenance | Approved contract-stage approach | [ADR 0014](../adr/0014-iso-media-provenance-contract.md) |
 | [015](rfc015-sealed-uki-image-mode.md) | Sealed UKI image mode | Draft — contract and investigation only | — |
+| [016](rfc016-publish-credentials.md) | Credentials for non-owner publish destinations | Draft — design, resolver and stub tests; no workflow wiring | — |
