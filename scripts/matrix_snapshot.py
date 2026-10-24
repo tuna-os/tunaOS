@@ -38,17 +38,33 @@ def snapshot_identity(document: str, payload: dict) -> dict:
 
 def validate_snapshot(document: str, payload: dict, root: Path | None = None) -> None:
     """Reject mixed merges, including equal-count snapshots with different runs."""
+    if not isinstance(payload, dict):
+        raise ValueError("matrix provenance must be an object")
+    summary = payload.get("summary")
+    cells = payload.get("cells")
+    context = payload.get("snapshot_context", {})
+    if (not isinstance(summary, dict) or not isinstance(cells, dict)
+            or not isinstance(context, dict)
+            or any(not isinstance(axes, dict) for axes in cells.values())):
+        raise ValueError("matrix provenance has invalid summary, cells, or snapshot context")
     if payload.get("snapshot") != snapshot_identity(document, payload):
         raise ValueError("matrix snapshot identity mismatch; regenerate the pair together")
-    context = payload.get("snapshot_context", {})
     if context.get("kind") == "historical-reconciliation":
         expected = historical_notice(context.get("evaluation_date"))
         if expected not in document:
             raise ValueError("historical snapshot disclosure is missing or changed")
     if root is not None:
         validate_context(context, root)
+    required_summaries = {"factory_health", "install", "desktop",
+                          "lifecycle", "iso"}
+    missing_summaries = sorted(required_summaries - set(summary))
+    if missing_summaries:
+        raise ValueError(
+            "matrix provenance summary is missing required axes: "
+            + ", ".join(missing_summaries)
+        )
     match = re.search(r"\*\*(\d+) of (\d+)\*\* published cells are composite-green", document)
-    if not match or payload.get("summary", {}).get("factory_health") != {
+    if not match or summary["factory_health"] != {
         "green": int(match[1]), "total": int(match[2])
     }:
         raise ValueError("matrix composite headline disagrees with provenance summary")
@@ -71,9 +87,9 @@ def validate_snapshot(document: str, payload: dict, root: Path | None = None) ->
         expected = tally(axis)
         if not match or {"passed": int(match[1]), "total": int(match[2]), "tested": int(match[3])} != expected:
             raise ValueError(f"matrix {axis} headline disagrees with retained cells")
-        if axis in payload["summary"] and payload["summary"][axis] != expected:
+        if axis in summary and summary[axis] != expected:
             raise ValueError(f"matrix {axis} summary disagrees with retained cells")
-    if payload["summary"].get("iso") != tally("iso"):
+    if summary["iso"] != tally("iso"):
         raise ValueError("matrix iso summary disagrees with retained cells")
 
 
@@ -121,9 +137,8 @@ def load_retained_inputs(path):
     return payload
 
 
-def _validate_retained(payload: dict) -> None:
-    import datetime
 
+def _validate_retained(payload: dict) -> None:
     def parse_date(value, what):
         try:
             return datetime.date.fromisoformat(value)
