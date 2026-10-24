@@ -161,15 +161,26 @@ else
 	pass "PRETTY_NAME=${got_pretty}"
 fi
 
-# Every URL must point at us. help.ubuntu.com sends our users to a project
-# that cannot help them with our image.
+# Every URL must point at the project. help.ubuntu.com sends our users to a
+# project that cannot help them with our image.
 #
 # All four, not two. This loop read SUPPORT_URL and BUG_REPORT_URL alone, and
 # the two it skipped were wrong on every single variant — HOME_URL and
 # DOCUMENTATION_URL named projectbluefin.io, inherited from the upstream script
 # (docs/BRANDING.md). A field no check reads is a field nobody notices.
+#
+# Each field is compared with the value generated from tunaos.toml that
+# 90-image-info.sh wrote. A substring test for tuna-os/tunaos failed every fork
+# that names its own project, and passed any URL that merely contained it.
 for field in HOME_URL DOCUMENTATION_URL SUPPORT_URL BUG_REPORT_URL; do
 	v="$(osr "$field")"
+	case "$field" in
+	HOME_URL) want_var=TUNAOS_HOME_URL ;;
+	DOCUMENTATION_URL) want_var=TUNAOS_DOCUMENTATION_URL ;;
+	SUPPORT_URL) want_var=TUNAOS_SUPPORT_URL ;;
+	BUG_REPORT_URL) want_var=TUNAOS_BUG_REPORT_URL ;;
+	esac
+	want_url="${!want_var:-}"
 	fork_url=""
 	if [[ "$fork_branding_valid" == true ]]; then
 		fork_url="$(tunaos_fork_branding_url "$fork_manifest" "$field")"
@@ -177,10 +188,12 @@ for field in HOME_URL DOCUMENTATION_URL SUPPORT_URL BUG_REPORT_URL; do
 	if [[ -n "$fork_url" ]]; then
 		# The helper compared the exact escaped value in both os-release files.
 		pass "${field}=${fork_url} (validated fork override)"
-	elif [[ "$v" == *tuna-os* || "$v" == *tunaos* ]]; then
+	elif [[ -z "$want_url" ]]; then
+		fail "${field}: no expected URL (${want_var} is unset; identity adapter unreadable)"
+	elif [[ "$v" == "$want_url" ]]; then
 		pass "${field}=${v}"
 	else
-		fail "${field} is '${v}' — points away from TunaOS"
+		fail "${field} is '${v}', want '${want_url}'"
 	fi
 done
 
@@ -233,8 +246,23 @@ else
 		# name and exact image-ref; a namespace alone cannot prove identity.
 		pass "image-vendor=${jvendor} (validated fork namespace)"
 	else
-		[[ "$jvendor" == tuna-os ]] && pass "image-vendor=${jvendor}" ||
-			fail "image-vendor is '${jvendor}', want 'tuna-os'"
+		# The expected namespace is the one 90-image-info.sh resolved from the
+		# same publish configuration and persisted. A fork that publishes to
+		# its own namespace is stamped with it, so a fixed 'tuna-os' here
+		# failed every zero-config fork desktop build. Build time also holds
+		# the resolved IMAGE_VENDOR; it must agree with the persisted value.
+		vendor_file=/usr/share/tunaos/image-vendor
+		want_vendor=""
+		[[ -r "$vendor_file" ]] && want_vendor="$(head -n 1 "$vendor_file")"
+		if [[ -z "$want_vendor" ]]; then
+			fail "no persisted publish namespace at ${vendor_file} (90-image-info.sh did not run)"
+		elif [[ -n "${IMAGE_VENDOR:-}" && "${IMAGE_VENDOR}" != "$want_vendor" ]]; then
+			fail "persisted namespace '${want_vendor}' disagrees with build IMAGE_VENDOR '${IMAGE_VENDOR}'"
+		elif [[ "$jvendor" == "$want_vendor" ]]; then
+			pass "image-vendor=${jvendor}"
+		else
+			fail "image-vendor is '${jvendor}', want '${want_vendor}'"
+		fi
 	fi
 fi
 

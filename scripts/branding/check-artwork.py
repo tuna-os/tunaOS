@@ -10,8 +10,8 @@ name and accent, so a fork that edits those in tunaos.toml regenerates these
 files instead of keeping TunaOS artwork. Wallpapers and boot splashes are
 drawn, not derived, and are not covered here.
 
-Needs the pinned requirements-branding.txt and network access for the pinned
-Baloo 2 font on first run.
+Needs pinned requirements-branding.txt. The generator uses the vendored
+Baloo 2 source under scripts/branding/assets and never needs network access.
 """
 from __future__ import annotations
 

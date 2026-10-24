@@ -210,3 +210,35 @@ def test_a_forks_installer_and_plasma_names_follow_tunaos_toml(tmp_path):
     logo = Path(written["distro_logo"])
     assert logo == image.root / "usr/share/pixmaps/tunaos.svg"   # the harness re-roots /usr/
     assert logo.read_text() == mark.read_text()
+
+
+@pytest.mark.parametrize("project", ["tunaos", "latest", "usr"])
+def test_a_project_name_that_collides_with_recipe_data_only_renames_display_text(tmp_path, project):
+    """A [project] name is replaced in slide text, never in paths, image
+    references or step names. "tunaos" is inside local_imgref and log_file,
+    "latest" is its tag and "usr" is in credits_data; the old recursive
+    replace turned containers-storage:ghcr.io/tuna-os/tunaos:latest into
+    containers-storage:ghcr.io/tuna-os/Marlin:latest."""
+    image = Image(tmp_path, "marlin", "kde")
+    identity = image.context / "build_scripts/lib/identity.env"
+    identity.write_text(identity.read_text().replace("TUNAOS_PROJECT_NAME=TunaOS", f"TUNAOS_PROJECT_NAME='{project}'"))
+    image.env.update({f"IS_{base}": "false" for base in (
+        "FEDORA", "HUMMINGBIRD", "ALMALINUX", "ALMALINUXKITTEN", "CENTOS", "UBUNTU",
+        "DEBIAN", "OPENSUSE", "GENTOO")}, IS_ARCH="true", IMAGE_FLAVOR="kde")
+    recipe = image.root / "etc/bootc-installer/recipe.json"
+    recipe.parent.mkdir(parents=True)
+    stock = (ROOT / "system_files/etc/bootc-installer/recipe.json").read_text()
+    recipe.write_text(stock.replace("TunaOS", project))
+    image.info()
+    written, original = json.loads(recipe.read_text()), json.loads(stock)
+    # Display text follows the variant, including a project name inside a sentence.
+    assert written["tour"]["completed"]["description"] == \
+        "Reboot your machine to enter your new Marlin workstation environment!"
+    assert written["tour"]["welcome"]["title"] == "Welcome to Marlin"
+    # Data keeps its value: references, paths and step names.
+    for key in ("log_file", "credits_data", "imgref", "local_imgref", "steps", "bootloader", "filesystem"):
+        assert written[key] == original[key], key
+    assert written["local_imgref"] == "containers-storage:ghcr.io/tuna-os/tunaos:latest"
+    # A domain in a slide is not the project name.
+    assert written["tour"]["community"]["description"] == original["tour"]["community"]["description"]
+    assert written["tour"]["welcome"]["image"] == original["tour"]["welcome"]["image"]

@@ -61,6 +61,14 @@ cat >$IMAGE_INFO <<EOF
   }
 EOF
 
+# verify-branding.sh runs here at build time and again inside the booted image,
+# where no build environment exists. Persist the namespace this script just
+# stamped (resolved from tunaos.toml [build.publish], the operator override or
+# the repository owner by scripts/lib/publish-destination.sh) so the verifier
+# expects the same namespace instead of a hardcoded tuna-os.
+install -d /usr/share/tunaos
+printf '%s\n' "${IMAGE_VENDOR}" >/usr/share/tunaos/image-vendor
+
 # Every variant shipped these two pointing at projectbluefin.io, inherited
 # verbatim from the bluefin-lts script this one started as, while SUPPORT_URL
 # and BUG_REPORT_URL were already ours. A user running `gnome-control-center
@@ -70,7 +78,7 @@ EOF
 HOME_URL="${TUNAOS_HOME_URL}"
 DOCUMENTATION_URL="${TUNAOS_DOCUMENTATION_URL}"
 SUPPORT_URL="${TUNAOS_SUPPORT_URL}"
-BUG_SUPPORT_URL="${TUNAOS_BUG_REPORT_URL}"
+BUG_REPORT_URL="${TUNAOS_BUG_REPORT_URL}"
 
 # TunaOS variants are named for fish. Keep VERSION_CODENAME tied to that
 # identity instead of inheriting the unrelated legacy dinosaur codename.
@@ -82,7 +90,7 @@ BUG_SUPPORT_URL="${TUNAOS_BUG_REPORT_URL}"
 # the base image. IMAGE_NAME_VARIANT is the variant id build-image-inner.sh
 # passes verbatim, so prefer it and fall back to the canonicalized IMAGE_NAME.
 VARIANT_KEY="$(canonical_variant "${IMAGE_NAME_VARIANT:-${IMAGE_NAME}}")"
-CODE_NAME="${TUNAOS_CODENAMES[${VARIANT_KEY}]:-}"
+CODE_NAME="${TUNAOS_CODENAMES["${VARIANT_KEY}"]:-}"
 if [[ -z "${CODE_NAME}" ]]; then
 	echo "ERROR: no codename defined in tunaos.toml for variant: ${VARIANT_KEY}" \
 		"(IMAGE_NAME_VARIANT=${IMAGE_NAME_VARIANT:-unset}, IMAGE_NAME=${IMAGE_NAME})" >&2
@@ -146,11 +154,16 @@ fi
 # albacore (#1007) or marlin (#1015) — the substitution matched no line and
 # exited 0.
 osr_set() {
-	local key="$1" value="$2" file
+	local key="$1" value="$2" file replacement
+	# The value is a sed REPLACEMENT: `&` there means "the matched text", and
+	# `\` and the `|` delimiter end or alter it. A configured URL such as
+	# https://x.example/?a=1&b=2 is valid, so escape all three; unescaped, the
+	# `&` pasted the old KEY=... line into the field.
+	replacement="$(printf '%s' "$value" | sed 's/[\\&|]/\\&/g')"
 	for file in "${OS_RELEASE_FILES[@]}"; do
 		if grep -q "^${key}=" "$file"; then
 			# `|` delimiter rather than `/`: values may contain slashes (URLs).
-			sed -i "s|^${key}=.*|${key}=\"${value}\"|" "$file"
+			sed -i "s|^${key}=.*|${key}=\"${replacement}\"|" "$file"
 		else
 			echo "${key}=\"${value}\"" >>"$file"
 		fi
@@ -163,7 +176,9 @@ osr_set VERSION_CODENAME "${CODE_NAME}"
 osr_set VARIANT_ID "${IMAGE_NAME}"
 osr_set PRETTY_NAME "${IMAGE_PRETTY_NAME}"
 osr_set HOME_URL "${HOME_URL}"
-osr_set BUG_REPORT_URL "${BUG_SUPPORT_URL}"
+osr_set BUG_REPORT_URL "${BUG_REPORT_URL}"
+# The product part is IMAGE_NAME, the publish name (bonito for bonito-rawhide),
+# as TunaOS has always written it; VERSION_CODENAME carries the variant key.
 osr_set CPE_NAME "cpe:/o:${TUNAOS_CPE_VENDOR}:${IMAGE_NAME}-${TUNAOS_PROJECT_ID}"
 
 # Dynamically interpolate the specific variant name and logo path in the installer recipe.json
@@ -238,16 +253,18 @@ recipe['tour'] = new_tour
 
 # The variant is the name people see; the installer's stock slides name the
 # project (tunaos.toml [project] name, e.g. your new TunaOS workstation). Swap
-# it in every text value, leaving image references alone.
-def rename(v):
-    if isinstance(v, dict):
-        return {k: (x if k in ('imgref', 'image', 'distro_logo') else rename(x)) for k, x in v.items()}
-    if isinstance(v, list):
-        return [rename(x) for x in v]
-    if isinstance(v, str):
-        return v.replace('${TUNAOS_PROJECT_NAME}', '${IMAGE_PRETTY_NAME}')
-    return v
-recipe = rename(recipe)
+# it in display text only: each slide's title and description. Paths, image
+# references (imgref, local_imgref) and step names are data, and a project
+# named like one of them (tunaos) must not rewrite them. The name also stays
+# whole inside a longer word, path or domain (repo.tunaos.org).
+import re
+project = re.compile(r'(?<![A-Za-z0-9_@/.:-])' + re.escape('${TUNAOS_PROJECT_NAME}') + r'(?![.]?[A-Za-z0-9_@/-])')
+def rename(text):
+    return project.sub(lambda _: '${IMAGE_PRETTY_NAME}', text)
+for slide in recipe['tour'].values():
+    for key in ('title', 'description'):
+        if isinstance(slide.get(key), str):
+            slide[key] = rename(slide[key])
 
 with open('${RECIPE_FILE}', 'w') as f:
     json.dump(recipe, f, indent=2)

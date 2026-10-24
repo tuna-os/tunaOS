@@ -1,7 +1,7 @@
 # Q4 2026 "Mature" — Definition of Done
 
 **Milestone**: Q4 2026 "Mature" (milestone #3, closes 2026-12-30)
-**Tracker**: #1637 | **Prepared**: 2026-08-14 | **Decision authority**: maintainer
+**Installer gate tracker**: [#3405](https://github.com/tuna-os/tunaos/issues/3405) | **Decision authority**: maintainer
 
 This document defines what "Mature" means operationally for tunaOS at the end of Q4
 2026. It exists because Q3 demonstrated the cost of a milestone without exit
@@ -28,7 +28,7 @@ checkpoint (#1299). Q4 must close with evidence, not wishes.
 | Goal | Tracker | Exit criterion (evidence required) |
 |------|---------|-------------------------------------|
 | Adoption metrics / usage telemetry | #1174 | First monthly download/usage snapshot **published by 2026-11-01**; dashboard or doc with numbers, not prose |
-| Installer qualification | #3405, #3380, #3474 | Maintainer-owned release gate: every advertised release cell has fresh exact-image offline plain/encrypted installation, media-detached target boot, expected desktop/source identity, update and recovery evidence; otherwise narrow the release claim explicitly. Source tests and installer launch are insufficient |
+| Installer qualification | [#3405](https://github.com/tuna-os/tunaos/issues/3405), [#3380](https://github.com/tuna-os/tunaos/issues/3380), [#3474](https://github.com/tuna-os/tunaos/issues/3474) | Maintainer-owned release gate: every advertised release cell must have fresh exact-image offline plain/encrypted installation, media-detached target boot, expected desktop/source identity, update and recovery evidence. Use [MATRIX-STATUS.md](docs/MATRIX-STATUS.md) for generated cell status; otherwise narrow the release claim explicitly. Source tests and installer launch are insufficient |
 | Adoption evidence | #1348 | ≥1 production adopter listed in ADOPTERS.md with a verifiable reference (deployment, testimonial, case study) |
 | Community governance model | #1168 | Governance doc merged (maintainer roles, decision rights, contribution ladder) and referenced from CONTRIBUTING.md |
 | Branch protection + required CI | #1167 | Active `main` ruleset on tunaos contains a `required_status_checks` rule for `lint` and `unit-tests`; verify the rule and a clean merge-queue evaluation from a non-bypass PR |
@@ -69,5 +69,3 @@ At 2026-12-30, the org can claim "Mature" only if **all of** the following hold:
 | 2026-12-30 | Q4 closes; exit criteria verified item-by-item; ROADMAP updated |
 
 ---
-
-*Prepared by strategist agent (ACMM L6 — full mode). Related: #1637, #1299, #1307, #1348.*

@@ -25,6 +25,15 @@ just fix && just check
 
 ## Contributor onboarding
 
+For five small tasks and a command-by-command fork workflow, start with
+[your first PR](docs/CONTRIBUTOR-FIRST-PR.md). The
+[contributor roadmap](docs/CONTRIBUTOR-ROADMAP.md) covers the next steps.
+See [contributor credits](CONTRIBUTORS.md) for merged work.
+
+For an example of reproduction steps, version details, and a redacted log,
+see the [fictional bug report](docs/BUG-REPORT-EXAMPLE.md). Report suspected
+vulnerabilities privately through [SECURITY.md](SECURITY.md).
+
 New here? Start with an **[org-wide good first issue](https://github.com/issues?q=org%3Atuna-os+is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)** — a curated, maintainer-sized task for documentation parity, a small script fix, or test coverage. Before you start, leave a comment to say you take the issue, so that nobody duplicates the work. The [Hacktoberfest 2026 contributor plan](docs/HACKTOBERFEST-2026.md) tracks the current pool and census. The [weekly contributor triage](#weekly-contributor-triage) below labels new bounded tasks `good first issue`.
 
 The current starter runway lives in the **[org-wide good first issue](https://github.com/issues?q=org%3Atuna-os+is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)** pool. Most of it is in `tuna-os/docs` (docs-parity and guide tasks — e.g. desktop quick-starts, verification guides, cheat sheets). These tasks are intentionally independent of the image build pipeline, and maintainers curate them for first-time contributors. If another contributor claims one, or if it closes, pick another bounded task from the same search.
@@ -34,14 +43,89 @@ hours, and review escalation, see [the ecosystem guide](CONTRIBUTING-ADVANCED.md
 
 ### Fork → PR loop
 
+For definitions of the terms below, see the
+[Git terms glossary](CONTRIBUTING-ADVANCED.md#git-terms).
+
 1. Fork `tuna-os/tunaos` on GitHub and clone your fork.
 2. Create a focused branch: `git switch -c docs/short-description`.
 3. Make the smallest change that satisfies the issue's acceptance criteria.
-4. Run the checks listed below, then commit and push the branch to your fork.
+4. Run the checks listed below, then commit with `git commit -s` and push the branch to your fork. See [DCO sign-off](#dco-sign-off).
 5. Open a PR against `tuna-os/tunaos:main`, link the issue with `Fixes #NNN`, and include the checks you ran.
 6. Keep the branch available while review is in progress; you can push follow-up fixes to the same PR.
 
 You do not need write access to the upstream repository. GitHub's fork-based PR flow is the normal path for external contributors. If CI fails, include the job that failed and a short reproduction in the PR instead of a silent retry. If GitHub rejects a push because the GitHub App does not have `workflows` permission, follow the [runbook for workflow publication](docs/CI-WORKFLOW-PUBLISHING.md). Workflow YAML in the repository cannot grant that App-level permission.
+
+### Worked example: fix one local documentation link
+
+Use the [fork and branch commands](docs/CONTRIBUTOR-FIRST-PR.md#from-claim-to-review)
+to start a focused branch. Choose a link whose label names an existing page,
+but whose path has a typo. This fictional example assumes that the Tests link
+in `CONTRIBUTING.md` reads `[Tests](docs/TESTNG.md)`; do not add that typo
+to the repository to follow along.
+
+1. Inspect the target from the repository root:
+
+   ```bash
+   ls docs/TEST*
+   sed -n '1,40p' docs/TESTING.md
+   ```
+
+   Read the page to confirm it is the intended destination. Local Markdown
+   paths start at the directory of the file that contains the link. Here,
+   `CONTRIBUTING.md` is at the root, so the path starts with `docs/`.
+2. In your editor, change only the link target:
+
+   ```diff
+   -[Tests](docs/TESTNG.md)
+   +[Tests](docs/TESTING.md)
+   ```
+
+3. Check that the corrected file exists, then review the change:
+
+   ```bash
+   test -f docs/TESTING.md
+   git diff -- CONTRIBUTING.md
+   git diff --check
+   ```
+
+   Open the corrected link in a Markdown preview. Confirm that it reaches
+   the page you inspected and that the diff changes only the intended link.
+   Run the [mandatory pre-commit checks](#pre-commit-mandatory) and
+   [Markdown prose check](#prose-checks-ste) before you submit.
+4. Follow the [commit, push, and PR steps](docs/CONTRIBUTOR-FIRST-PR.md#from-claim-to-review).
+   For this fictional fix, use a title such as `docs: fix the Tests link`.
+   Describe the result: "The Tests link pointed to `docs/TESTNG.md`, which
+   does not exist. It now points to `docs/TESTING.md`."
+   List the checks you ran and their actual results, including any setup
+   errors. Link the issue as the fork workflow describes.
+
+### DCO sign-off
+
+Every commit needs a `Signed-off-by` trailer for the Developer Certificate of
+Origin (DCO) check. Before you commit, check your author identity:
+
+```bash
+git var GIT_AUTHOR_IDENT
+git commit -s -m "docs: describe the change"
+git log -1 --format=full
+```
+
+The sign-off name and email must match the commit author. `-s` adds the
+trailer; you do not need a cryptographic key. If your latest unpublished commit
+has no sign-off, add one with `git commit --amend --no-edit -s`, then check
+the log again. Sign off every commit in a PR.
+
+### Curate a starter task
+
+Use the [starter task form](https://github.com/tuna-os/tunaos/issues/new?template=starter-task.yml)
+to propose a small task. Include the code or page to change, acceptance
+criteria, local checks, a parent issue, and a contact for questions.
+Maintainers confirm availability and scope, then add `good first issue`
+and `help wanted`. The form does not apply those labels.
+
+For help with a first PR, comment on the task or ask in
+[Matrix](https://matrix.to/#/%23tunaos:reilly.asia). Include the command you
+ran and its output when a local check fails.
 
 For the Hacktoberfest 2026 backlog, see the [contributor plan](docs/HACKTOBERFEST-2026.md) for current candidates, acceptance standards, and event dates.
 
@@ -64,6 +148,10 @@ The maintainer keeps one 30-minute slot each week for contributor work. During t
 2. Check the claimed starter issues for unanswered questions, stale claims, or duplicate work.
 3. Review open contributor PRs, respond to blockers, and keep CI failures distinguishable from code-review requests.
 4. Refresh the starter links above when tasks finish, move to another repository, or give way to newer tasks.
+5. Check outstanding [quarterly roadmap refreshes](ROADMAP.md#quarterly-refresh-cadence).
+   Reuse local trackers, link their PRs to the coordination issue, and keep
+   overdue refreshes on the agenda until merged. The review is due within
+   seven calendar days of each quarter close.
 
 This is a lightweight queue-management commitment, not a promise of immediate review. Contributors should expect an acknowledgement or status update within the next weekly triage slot.
 
