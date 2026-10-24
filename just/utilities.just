@@ -103,7 +103,12 @@ check: _ensure_check_deps ste
     echo "Checking workflow drift..."
     python3 {{ justfile_directory() }}/scripts/generate-workflows.py
     python3 {{ justfile_directory() }}/scripts/gen-ci-lanes.py --check
-    if ! git diff --exit-code .github/workflows/build-*.yml; then
+    # Check only generated per-variant wrappers; build-variant.yml is shared workflow source.
+    generated_workflows=()
+    while IFS= read -r variant; do
+        generated_workflows+=(".github/workflows/build-${variant}.yml")
+    done < <(yq -r '.variants[].id' .github/build-config.yml)
+    if ! git diff --exit-code -- "${generated_workflows[@]}"; then
         echo "::error::Generated workflow files are stale. Run 'just generate-workflows' and commit the changes."
         exit 1
     fi
@@ -194,7 +199,7 @@ test-cell variant='yellowfin' flavor='gnome':
     #!/usr/bin/env bash
     set -euo pipefail
     cd {{ justfile_directory() }}
-    ref="ghcr.io/{{ repo_organization }}/{{ variant }}:{{ flavor }}"
+    ref="$(./scripts/publish-destination.sh)/{{ variant }}:{{ flavor }}"
     desktop="${ref##*:}"; desktop="${desktop%%-*}"
     echo "==> $ref: desktop contract ($desktop)"
     sudo podman run --rm --pull=always \

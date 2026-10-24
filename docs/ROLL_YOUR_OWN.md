@@ -131,9 +131,26 @@ just verify-disk ./yellowfin-gnome.qcow2
 
 ### 6. That's your distro now
 
-Push to your fork. The CI workflows in `.github/workflows/` are already
-parameterized to push to `ghcr.io/<your-username>/...`. Commit, push, and
-your images build automatically.
+Push to your fork. With no other change, CI publishes to
+`ghcr.io/<your-username>/...`, and each image records that location as its
+vendor and update source. Commit, push, and your images build automatically.
+
+To publish somewhere else, for example another registry or an organization,
+set the destination in `tunaos.toml`:
+
+```toml
+[build.publish]
+registry = "quay.io"
+namespace = "acme"
+```
+
+Local builds, CI, ISOs and the boot gate all use this destination, and each
+image records it. The repository variable `IMAGE_REGISTRY` (for example
+`quay.io/acme`) still overrides it for one repository.
+
+CI signs in with the repository's own `GITHUB_TOKEN`. That token can push only
+to `ghcr.io` under the repository owner. CI cannot yet push to another
+registry or namespace; issue #3668 tracks the credentials for that case.
 
 ---
 
@@ -277,12 +294,14 @@ homepage = "https://acme.example/os"
 documentation = "https://acme.example/os/docs"
 support = "https://acme.example/os/support"
 bug_report = "https://acme.example/os/issues"
+plymouth = "acmeos"        # boot splash for an image name that is no known variant
 
 [variants.yellowfin]
 codename = "Wile E"       # os-release VERSION_CODENAME
 # Accent colour (ANSI_COLOR, /etc/issue, fastfetch, KDE, wallpapers), the
-# nearest GNOME accent name, the base label and a short colour note.
-branding = { accent = "#E87D0D", gnome_accent = "orange", base = "AlmaLinux Kitten", homage = "Acme orange" }
+# nearest GNOME accent name, the base label, a short colour note and the
+# boot splash theme.
+branding = { accent = "#E87D0D", gnome_accent = "orange", base = "AlmaLinux Kitten", homage = "Acme orange", plymouth = "acmeos" }
 ```
 
 Then regenerate the files every image build reads, and commit them with
@@ -291,10 +310,12 @@ Then regenerate the files every image build reads, and commit them with
 ```bash
 python3 scripts/config.py generate-identity
 python3 scripts/config.py generate-variant-identity
+python3 scripts/config.py generate-variant-aliases
 ```
 
-`just check` fails if `build_scripts/lib/identity.env` or
-`build_scripts/lib/variant-identity.tsv` disagrees with `tunaos.toml`. Each
+`just check` fails if `build_scripts/lib/identity.env`,
+`build_scripts/lib/variant-identity.tsv` or
+`build_scripts/lib/variant-aliases.tsv` disagrees with `tunaos.toml`. Each
 variant's name (Yellowfin, Marlin) comes from its id, or its `publish_name`.
 
 The variant's mark, lettermark and fastfetch letters follow its `emoji`, name

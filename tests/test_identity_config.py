@@ -15,13 +15,17 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(Path(__file__).parent))
 SPEC = importlib.util.spec_from_file_location("identity_config_under_test", ROOT / "scripts/lib/tunaos_config.py")
 config = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(config)
+
+from test_anime_finalization import Image  # noqa: E402
 
 STOCK_CODENAMES = {
     "yellowfin": "Thunnus albacares", "albacore": "Thunnus alalunga", "skipjack": "Katsuwonus pelamis",
@@ -262,3 +266,100 @@ def test_unusable_variant_branding_is_rejected(key, value):
     source["variants"]["yellowfin"]["branding"][key] = value
     with pytest.raises(config.ConfigError):
         config.validate(source)
+
+
+FORK_URLS = {
+    "HOME_URL": "https://acme.example/?a=1&b=2&c=3",
+    "DOCUMENTATION_URL": "https://acme.example/docs?x=1&y=2",
+    "SUPPORT_URL": "https://acme.example/help?topic=a&lang=en",
+    "BUG_REPORT_URL": "https://acme.example/bugs?label=b&state=open",
+}
+
+
+def fork_identity():
+    fork = copy.deepcopy(config.load())
+    fork["project"] = {"name": "Acme OS", "id": "acmeos", "cpe_vendor": "acme"}
+    # Change only the URLs: the table carries other required keys (plymouth).
+    fork["defaults"]["branding"].update(homepage=FORK_URLS["HOME_URL"], documentation=FORK_URLS["DOCUMENTATION_URL"],
+                                        support=FORK_URLS["SUPPORT_URL"], bug_report=FORK_URLS["BUG_REPORT_URL"])
+    return config.render_identity(fork)
+
+
+def url_findings(tmp_path, written):
+    """Run the branding contract on an os-release carrying `written` URLs and return its URL lines."""
+    adapter = tmp_path / "identity.env"
+    adapter.write_text(fork_identity(), encoding="utf-8")
+    os_release = tmp_path / "os-release"
+    os_release.write_text("".join(f'{key}="{value}"\n' for key, value in written.items()), encoding="utf-8")
+    result = subprocess.run(["bash", str(ROOT / "build_scripts/checks/verify-branding.sh"), "yellowfin"],
+                            env={**os.environ, "TUNAOS_OS_RELEASE": str(os_release), "TUNAOS_IDENTITY_ENV": str(adapter)},
+                            text=True, capture_output=True)
+    return [line.strip() for line in (result.stdout + result.stderr).splitlines()
+            if line.strip().startswith(tuple(f"{p}: {key}" for p in ("ok", "FAIL") for key in FORK_URLS))]
+
+
+def test_branding_contract_accepts_the_configured_urls_of_a_fork(tmp_path):
+    # A fork that names its own project must not need tuna-os in its URLs.
+    assert url_findings(tmp_path, FORK_URLS) == [f"ok: {key}={value}" for key, value in FORK_URLS.items()]
+
+
+@pytest.mark.parametrize("wrong", [
+    STOCK["TUNAOS_HOME_URL"],               # TunaOS's value left on a fork
+    "https://help.ubuntu.com/",             # the upstream value
+    "https://evil.example/tunaos",          # contains the old substring but is not the configured URL
+])
+def test_branding_contract_rejects_a_url_other_than_the_configured_one(tmp_path, wrong):
+    written = {**FORK_URLS, "SUPPORT_URL": wrong}
+    # Failures go to stderr and passes to stdout, so compare as sets.
+    expected = {f"ok: {key}={value}" for key, value in FORK_URLS.items() if key != "SUPPORT_URL"}
+    expected.add(f"FAIL: SUPPORT_URL is '{wrong}', want '{FORK_URLS['SUPPORT_URL']}'")
+    assert set(url_findings(tmp_path, written)) == expected
+
+
+def test_branding_contract_still_matches_stock_urls(tmp_path):
+    adapter = tmp_path / "identity.env"
+    adapter.write_text(config.render_identity(config.load()), encoding="utf-8")
+    os_release = tmp_path / "os-release"
+    os_release.write_text("".join(f'{key}="{STOCK["TUNAOS_" + key]}"\n' for key in FORK_URLS), encoding="utf-8")
+    result = subprocess.run(["bash", str(ROOT / "build_scripts/checks/verify-branding.sh"), "yellowfin"],
+                            env={**os.environ, "TUNAOS_OS_RELEASE": str(os_release), "TUNAOS_IDENTITY_ENV": str(adapter)},
+                            text=True, capture_output=True)
+    for key in FORK_URLS:
+        assert f"ok: {key}={STOCK['TUNAOS_' + key]}" in result.stdout
+    assert "FAIL: HOME_URL" not in result.stderr
+
+
+@pytest.mark.parametrize("preexisting", [True, False], ids=["replaced", "appended"])
+def test_urls_with_ampersands_reach_os_release_verbatim(tmp_path, preexisting):
+    # osr_set writes through a sed replacement, where `&` means "the matched
+    # text". A valid URL query string must survive both the replace and the
+    # append path, in both os-release files.
+    image = Image(tmp_path)
+    (image.context / "build_scripts/lib/identity.env").write_text(fork_identity(), encoding="utf-8")
+    if preexisting:
+        seed = "".join(f'{key}="https://upstream.example/old"\n' for key in FORK_URLS)
+        for path in ("usr/lib/os-release", "etc/os-release"):
+            (image.root / path).write_text('NAME="Fixture"\n' + seed)
+    image.info()
+    for path in ("usr/lib/os-release", "etc/os-release"):
+        lines = (image.root / path).read_text().splitlines()
+        for key, value in FORK_URLS.items():
+            assert [line for line in lines if line.startswith(key + "=")] == [f'{key}="{value}"']
+
+
+@pytest.mark.parametrize("variant,image_name,fork,expected", [
+    ("yellowfin", "yellowfin", False, "cpe:/o:jamesreilly:yellowfin-tunaos"),
+    # The product is the publish name, as before the migration; the variant key
+    # selects only the codename.
+    ("bonito-rawhide", "bonito", False, "cpe:/o:jamesreilly:bonito-tunaos"),
+    ("yellowfin", "yellowfin", True, "cpe:/o:acme:yellowfin-acmeos"),
+])
+def test_cpe_name_comes_from_the_adapter_and_the_image_name(tmp_path, variant, image_name, fork, expected):
+    image = Image(tmp_path, variant=variant)
+    image.env["IMAGE_NAME"] = image_name
+    if fork:
+        (image.context / "build_scripts/lib/identity.env").write_text(fork_identity(), encoding="utf-8")
+    image.info()
+    for path in ("usr/lib/os-release", "etc/os-release"):
+        lines = (image.root / path).read_text().splitlines()
+        assert [line for line in lines if line.startswith("CPE_NAME=")] == [f'CPE_NAME="{expected}"']
