@@ -42,12 +42,22 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "scripts"))
-import matrix_snapshot  # noqa: E402
-from matrix_snapshot import (  # noqa: E402
-    BEGIN, CONFIGURATION_FILES, END, configuration_digest, historical_notice,
-    load_retained_inputs, snapshot_identity, validate_context, validate_snapshot,
+SPEC = importlib.util.spec_from_file_location(
+    "matrix_snapshot_under_test", ROOT / "scripts/matrix_snapshot.py"
 )
+if SPEC.loader is None:
+    raise RuntimeError("cannot load scripts/matrix_snapshot.py")
+matrix_snapshot = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(matrix_snapshot)
+BEGIN = matrix_snapshot.BEGIN
+CONFIGURATION_FILES = matrix_snapshot.CONFIGURATION_FILES
+END = matrix_snapshot.END
+configuration_digest = matrix_snapshot.configuration_digest
+historical_notice = matrix_snapshot.historical_notice
+load_retained_inputs = matrix_snapshot.load_retained_inputs
+snapshot_identity = matrix_snapshot.snapshot_identity
+validate_context = matrix_snapshot.validate_context
+validate_snapshot = matrix_snapshot.validate_snapshot
 
 RETAINED = ROOT / "docs/matrix-snapshots/2026-10-23-reconciled.json"
 
@@ -134,6 +144,13 @@ def test_handwritten_prose_is_not_part_of_generated_snapshot():
     validate_snapshot("# Human introduction\n" + document + "\nHuman footer", payload)
 
 
+def test_prose_metadata_is_not_part_of_generated_snapshot():
+    document, payload = pair()
+    identity = snapshot_identity(document, payload)
+    payload["about"] = {"description": "human-facing provenance help"}
+    assert snapshot_identity(document, payload) == identity
+
+
 def test_duplicate_markers_are_rejected():
     document, payload = pair()
     with pytest.raises(ValueError, match="exactly one"):
@@ -170,6 +187,7 @@ def test_retained_replay_is_offline_and_reproduces_committed_pair(monkeypatch):
         with pytest.raises(ValueError, match="configuration changed"):
             load_retained_inputs(RETAINED)
         return
+    monkeypatch.setitem(sys.modules, "matrix_snapshot", matrix_snapshot)
     spec = importlib.util.spec_from_file_location("replay_generator", ROOT / "scripts/gen-matrix-status.py")
     generator = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(generator)

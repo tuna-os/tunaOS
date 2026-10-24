@@ -1,6 +1,7 @@
 """Offline identity and count checks for the generated matrix snapshot pair."""
 
 import hashlib
+import importlib.util
 import json
 import re
 from pathlib import Path
@@ -21,7 +22,10 @@ def snapshot_identity(document: str, payload: dict) -> dict:
     if len(historical) > 1:
         raise ValueError("duplicate historical snapshot disclosure")
     block += "".join(historical)
-    evidence = {key: value for key, value in payload.items() if key != "snapshot"}
+    evidence = {
+        key: value for key, value in payload.items()
+        if key not in ("about", "snapshot")
+    }
     return {
         "schema_version": 1,
         "board_sha256": hashlib.sha256(block.encode()).hexdigest(),
@@ -77,10 +81,12 @@ RETAINED_KEYS = ("schema_version", "evaluation_date", "context", "luks", "lifecy
 
 
 def load_retained_inputs(path):
-    """Read the opt-in offline render input; never reinterpret missing evidence.
+    """Read and annotate the opt-in offline render input.
 
-    Every malformed input raises ValueError naming what is wrong, so callers
-    handle one error type instead of KeyError/TypeError from deep inside.
+    The returned object gains the retained input's repository-relative path
+    and byte digest in ``context``. Every malformed input raises ValueError
+    naming what is wrong, so callers handle one error type instead of
+    KeyError/TypeError from deep inside.
     """
     try:
         payload = json.loads(Path(path).read_text())
@@ -178,7 +184,14 @@ def historical_notice(date: str) -> str:
 def configuration_digest(name: str, root: Path = Path(".")) -> str:
     """Bind parsed configuration; comments are not matrix or criteria changes."""
     if name == "tunaos.toml":
-        from lib import tunaos_config
+        path = root / "scripts/lib/tunaos_config.py"
+        spec = importlib.util.spec_from_file_location(
+            "matrix_snapshot_tunaos_config", path
+        )
+        if spec is None or spec.loader is None:
+            raise ImportError(f"cannot load primary configuration parser: {path}")
+        tunaos_config = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(tunaos_config)
         value = tunaos_config.load(root / name)
     elif name == ".github/green-criteria.yml":
         import yaml
@@ -188,6 +201,8 @@ def configuration_digest(name: str, root: Path = Path(".")) -> str:
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
+# `.github/build-config.yml` is a generated, ignored adapter. `tunaos.toml`
+# is the matrix source consumed by the generator and is the identity bound here.
 CONFIGURATION_FILES = ("tunaos.toml", ".github/green-criteria.yml")
 
 
