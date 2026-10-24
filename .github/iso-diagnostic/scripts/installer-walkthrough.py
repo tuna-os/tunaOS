@@ -52,6 +52,9 @@ _mode_early = next((f.split("=", 1)[1] for f in flags if f.startswith("--mode=")
 if _mode_early not in ("plain", "luks"):
     print(f"error: --mode must be plain|luks, got {_mode_early!r}", file=sys.stderr)
     sys.exit(2)
+if len(args) < 2:
+    print("usage: installer-walkthrough.py <monitor.sock> <outdir> [steps] [flavor] [flags]", file=sys.stderr)
+    sys.exit(2)
 mon_path = args[0]
 outdir = args[1]
 steps = int(args[2]) if len(args) > 2 else 8
@@ -686,23 +689,30 @@ for i in range(1, steps + 1):
                 send_keys("esc")
                 time.sleep(2)
             elif os.path.exists(vnc_sock) and shutil.which("vncdo") and shutil.which("socat"):
-                # Fallback to mouse click on primary button location via VNC if keyboard navigation stalls
-                # Primary action buttons ("Get Started", "Next", "Continue") sit near bottom right / center bottom
-                print("  # keyboard navigation exhausted — attempting VNC mouse click on primary action button", flush=True)
-                bridge = subprocess.Popen(
-                    ["socat", f"TCP-LISTEN:{vnc_port},bind=127.0.0.1,reuseaddr,fork", f"UNIX-CONNECT:{vnc_sock}"],
-                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                try:
-                    time.sleep(1)
-                    # Click center-right / bottom-right region (x=700, y=550 for 1024x768 framebuffer)
-                    subprocess.run(["vncdo", "-s", f"127.0.0.1::{vnc_port}", "move", "700", "550", "click", "1"],
-                                   check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                finally:
-                    bridge.terminate()
+                geometry = png_geometry(prev) if prev else None
+                if geometry is None:
+                    print("  # keyboard navigation exhausted — no measured frame geometry for VNC fallback",
+                          flush=True)
+                else:
+                    # Scale the measured 1024x768 reference point to this frame.
+                    click_x = geometry[0] * 700 // 1024
+                    click_y = geometry[1] * 550 // 768
+                    print("  # keyboard navigation exhausted — attempting measured VNC mouse click on primary action button",
+                          flush=True)
+                    bridge = subprocess.Popen(
+                        ["socat", f"TCP-LISTEN:{vnc_port},bind=127.0.0.1,reuseaddr,fork", f"UNIX-CONNECT:{vnc_sock}"],
+                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                     try:
-                        bridge.wait(timeout=5)
-                    except Exception:
-                        bridge.kill()
+                        time.sleep(1)
+                        subprocess.run(["vncdo", "-s", f"127.0.0.1::{vnc_port}",
+                                        "move", str(click_x), str(click_y), "click", "1"],
+                                       check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    finally:
+                        bridge.terminate()
+                        try:
+                            bridge.wait(timeout=5)
+                        except Exception:
+                            bridge.kill()
 
 if mode_explicit and install_screen_seen and not install_started and not done_seen:
     # If the fixed navigation budget ended on the install page, still submit

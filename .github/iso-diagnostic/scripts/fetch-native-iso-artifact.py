@@ -214,6 +214,8 @@ def check_zip_directory(archive):
                 raise ValueError("invalid ZIP64 locator")
             stream.seek(position)
             record = stream.read(56)
+            if len(record) != 56:
+                raise ValueError("truncated ZIP64 end record")
             signature, record_size, _, _, disk, directory_disk, disk_count, count, directory_size, directory_offset = struct.unpack("<4sQ2H2L4Q", record)
             if signature != b"PK\x06\x06" or record_size != 44 or position + 12 + record_size != end_position - 20:
                 raise ValueError("invalid ZIP64 end record")

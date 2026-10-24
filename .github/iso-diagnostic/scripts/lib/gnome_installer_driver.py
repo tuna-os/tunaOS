@@ -137,6 +137,10 @@ def ocr_rows(tsv, strict=False):
         groups.setdefault(key, []).append(word)
     rows = []
     for words in groups.values():
+        words.sort(key=lambda word: (
+            int(word.get('word_num') or 0),
+            int(word['left']),
+        ))
         left = min(int(w['left']) for w in words)
         top = min(int(w['top']) for w in words)
         right = max(int(w['left']) + int(w['width']) for w in words)
