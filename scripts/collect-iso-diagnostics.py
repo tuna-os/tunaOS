@@ -15,7 +15,9 @@ MAX_SKIPPED = 64
 MAX_NAME = 240
 DIRECTORIES = {'': ('serial.log', 'strict-*.log', 'current-phase.txt', 'boot-diagnostics.txt'),
                'walkthrough-plain': ('*.png', '*.json'),
-               'walkthrough-luks': ('*.png', '*.json')}
+               'walkthrough-luks': ('*.png', '*.json'),
+               'strict-luks-cold-observation': ('frame-???.ppm', 'observations.json'),
+               'strict-luks-warm-observation': ('frame-???.ppm', 'observations.json')}
 
 
 SUMMARY_STATES = frozenset(('unknown', 'welcome', 'encryption', 'disk', 'summary',

@@ -5,13 +5,14 @@ from datetime import datetime, timezone
 import hashlib
 import json
 import math
+import os
 from pathlib import Path
 import re
 import shutil
 import subprocess
 import sys
 
-SCHEMA = 'NativeISOQualification/v1'
+SCHEMA = 'NativeISOQualification/v2'
 DIGEST = re.compile(r'sha256:[0-9a-f]{64}')
 SHA = re.compile(r'[0-9a-f]{40}')
 TRANSITIONS = ['welcome', 'encryption', 'summary', 'progress', 'done']
@@ -59,6 +60,7 @@ def number(value, positive=False):
 
 def validate(evidence):
     require(evidence.get('schema') == SCHEMA, 'not native ISO qualification evidence')
+    require(evidence.get('boot_policy') == 'unmodified-installed', 'unknown or modified installed boot policy')
     require('browser' not in evidence, 'native evidence must not claim a browser profile')
     require(evidence.get('execution_kind') == 'native-qemu', 'native execution kind required')
     for field in ('variant', 'flavor', 'platform', 'cpu_baseline', 'hardware_scope'):
@@ -94,6 +96,7 @@ def validate(evidence):
         require(observed.get('mode') == mode, f'{mode}: wrong mode')
         for field in ('installed_boot', 'desktop_contract', 'cold_boot', 'warm_boot', 'media_detached'):
             require(observed.get(field) is True, f'{mode}: {field} not proven')
+        require(observed.get('boot_arguments_unmodified') is True, f'{mode}: unchanged installed boot arguments not proven')
         require(observed.get('passphrase_prompt') is (mode == 'luks'), f'{mode}: encryption prompt mismatch')
         require(observed.get('source_digest') == inputs['source'] == observed.get('booted_digest'), f'{mode}: installed source mismatch')
         require(text(observed.get('target_imgref')), f'{mode}: missing installed ref')
@@ -112,6 +115,9 @@ def validate(evidence):
 
 
 def emit(args):
+    require(not os.environ.get('TUNAOS_LUKS_GRUB_APPEND', '')
+            and not os.environ.get('STRICT_LUKS_GRUB_APPEND', ''),
+            'diagnostic GRUB overrides cannot emit native qualification')
     binding = load(args.binding)
     harness = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True, timeout=10).strip()
     require(binding.get('repository') == args.repository, 'binding repository differs from current job')
@@ -132,6 +138,7 @@ def emit(args):
         frag['gui']['receipt_digest'] = canonical(gui)
         observed[mode] = frag
     result = {'schema': SCHEMA, 'execution_kind': 'native-qemu',
+              'boot_policy': 'unmodified-installed',
               'variant': args.variant, 'flavor': args.flavor, 'platform': args.platform,
               'cpu_baseline': BASELINES[args.platform], 'hardware_scope': 'qemu',
               'resolved_inputs': {key:getattr(args,key) for key in INPUTS},

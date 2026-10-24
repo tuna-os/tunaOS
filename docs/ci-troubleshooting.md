@@ -2112,7 +2112,7 @@ because Ubuntu Chromium pulled a Snap assertion that returned HTTP 408.
 Native QEMU tests do not use Chromium. The shared workflow now installs it only
 for the existing browser-profile routes.
 
-Native runs emit `NativeISOQualification/v1`, with the exact artifact binding,
+Native runs emit `NativeISOQualification/v2`, with the exact artifact binding,
 producer and harness revisions, input digests, and measured QEMU executable.
 Both modes must prove GUI completion and cold/warm boot with the media detached.
 The native receipt has no browser profile. Each validator rejects evidence of the other kind.
@@ -2293,14 +2293,46 @@ passed the LUKS GUI install with a LUKS header present. The detached cold boot
 then failed after 15 minutes with `passphrase prompt never appeared`. The
 framebuffer showed one kernel line.
 
-**Measured cause:** The GUI install writes `rhgb quiet` and no serial console
-into the BLS entry. The cryptsetup prompt went to Plymouth, and the serial log
-ends at the GRUB menu. The CLI LUKS gate never had this failure because it
-adds serial kargs to the installed BLS entries.
+**Observed limit:** The serial helper saw no prompt and did not type a
+passphrase. A Plymouth or console routing issue is a hypothesis, not proof
+that the shipped graphical prompt works.
 
-**Fix:** The strict harness does not change the installed disk. For each LUKS
-boot, `luks-first-boot.py` opens the GRUB entry editor over serial. It appends
-`console=ttyS0,115200n8 rd.plymouth=0 plymouth.enable=0` to the linux line
-for that boot only, and the evidence log records the edit. An entry that is
-not in the blscfg layout exits 5. Regression:
-`tests/regressions/test_issue_3380_strict_luks_prompt_reaches_serial.py`.
+**Diagnostic path, not strict qualification:** `luks-first-boot.py` retains
+its opt-in `TUNAOS_LUKS_GRUB_APPEND` support. It can open the GRUB entry editor
+and append serial/text-prompt arguments for that boot only. It does not write
+the installed disk, but it changes the runtime boot path. Such a result is a
+diagnostic result, not unchanged shipped-media qualification. Strict mode
+rejects these overrides and explicitly leaves this option empty.
+The helper's GRUB layout checks and tests remain in place.
+
+### Strict encrypted installed boot has no serial unlock prompt
+
+Run [40074592548](https://github.com/tuna-os/tunaOS/actions/runs/40074592548)
+completed both GUI installs. Plain cold and warm boots passed. The encrypted
+installed boot reached GRUB, then the serial unlock helper saw no prompt.
+The final image showed only a TDX warning. This does not prove that a password
+was rejected or that a working prompt was hidden.
+
+Strict encrypted cold and warm boots now collect passive frames during the
+existing unlock wait. See `strict-luks-{cold,warm}-observation/observations.json`
+and its frame files in the diagnostic artifact. The observer uses the existing
+local VNC socket, never HMP, keys or pointer events. It does not change the
+installed image or kernel arguments. It stops after 120 seconds, six frames,
+or 30 seconds without a changed frame. Each frame is bounded to 8 MiB;
+the diagnostic collection limit remains 128 MiB. Raw OCR text is not logged.
+
+Observer reports always say `qualified: false`. Failure to collect a frame
+must not change the boot verdict. This adds evidence, not an unlock fix.
+The strict gate separately requires the actual desktop contract and matching
+installed image identity on both cold and warm boots. A helper exit status
+alone cannot prove either requirement. No VM disk or password config is added
+to the diagnostic artifact.
+
+
+Native qualification v2 requires the `unmodified-installed` boot policy and
+explicit unchanged-argument proof from both strict boot fragments. The harness
+rejects GRUB edit traces before it writes those fragments. Legacy v1 receipts,
+including the green edited-boot receipt from run 40085763938, remain useful raw
+diagnostic evidence but are not accepted as current unchanged-boot proof.
+Do not relabel or promote old receipts. Native evidence is still separate from
+browser parity and cutover evidence.

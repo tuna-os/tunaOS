@@ -123,3 +123,20 @@ def test_invalid_click_fields_never_echo(tmp_path, field, value):
 def test_click_list_is_bounded(tmp_path):
     write_report(tmp_path, {'frames': [], 'transitions': [], 'clicks': [{}]*33})
     assert diagnostics.walkthrough_summary(tmp_path, 'plain')['diagnostic'] == 'unavailable'
+
+
+def test_observer_artifacts_are_allowlisted_without_credentials(tmp_path, capsys):
+    for phase in ('cold', 'warm'):
+        directory = tmp_path / f'strict-luks-{phase}-observation'
+        directory.mkdir()
+        (directory / 'frame-000.ppm').write_bytes(b'P6\n1 1\n255\n\0\0\0')
+        (directory / 'observations.json').write_text('{"qualified": false}')
+        (directory / 'password.json').write_text('SECRET')
+        (directory / 'raw-ocr.txt').write_text('SECRET')
+        (directory / 'guest.conf').write_text('SECRET')
+    diagnostics.collect(tmp_path)
+    for phase in ('cold', 'warm'):
+        staged = tmp_path / 'strict-diagnostics' / f'strict-luks-{phase}-observation'
+        assert sorted(p.name for p in staged.iterdir()) == ['frame-000.ppm', 'observations.json']
+    assert 'SECRET' not in capsys.readouterr().out
+    assert diagnostics.MAX_TOTAL == 128 * 1024 * 1024

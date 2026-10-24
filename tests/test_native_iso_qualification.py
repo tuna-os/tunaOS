@@ -37,7 +37,7 @@ def evidence():
                'media_size':1024, 'producer_sha':'a'*40, 'harness_sha':'a'*40,
                'archive_digest':'sha256:'+'b'*64, 'media_digest':'sha256:'+'c'*64,
                'status':'download_verified_not_boot_tested'}
-    data = {'schema':NATIVE.SCHEMA, 'execution_kind':'native-qemu', 'variant':'skipjack', 'flavor':'gnome',
+    data = {'schema':NATIVE.SCHEMA, 'boot_policy':'unmodified-installed', 'execution_kind':'native-qemu', 'variant':'skipjack', 'flavor':'gnome',
             'platform':'linux/amd64/v2', 'cpu_baseline':'x86-64-v2', 'hardware_scope':'qemu',
             'offline_network_disabled':True, 'resolved_inputs':{key:source for key in NATIVE.INPUTS},
             'artifact_binding':binding, 'artifact_binding_digest':NATIVE.canonical(binding),
@@ -46,7 +46,7 @@ def evidence():
     data['resolved_inputs']['media'] = binding['media_digest']
     for mode in ('plain','luks'):
         data['observed'][mode] = {'mode':mode, 'installed_boot':True, 'desktop_contract':True,
-            'cold_boot':True, 'warm_boot':True, 'media_detached':True,
+            'cold_boot':True, 'warm_boot':True, 'media_detached':True, 'boot_arguments_unmodified':True,
             'passphrase_prompt':mode == 'luks', 'source_digest':source, 'booted_digest':source,
             'target_imgref':'ghcr.io/tuna-os/skipjack:gnome', 'duration_s':100, 'install_duration_s':50,
             'cold_boot_s':25, 'warm_boot_s':25,
@@ -182,3 +182,57 @@ def test_final_workflow_validator_selects_source_contract(tmp_path, source, kind
     result = subprocess.run(['bash', '-c', step['run']], cwd=tmp_path,
         env=dict(os.environ, ISO_SOURCE=source), capture_output=True, text=True)
     assert (result.returncode == 0) is ((source == 'native-artifact') == (kind == 'native')), result.stderr
+
+
+@pytest.mark.parametrize('mode', ['plain', 'luks'])
+@pytest.mark.parametrize('value', [None, False, 'true', 1])
+def test_unchanged_boot_must_be_explicit_for_both_modes(mode, value):
+    receipt = evidence()
+    if value is None:
+        receipt['observed'][mode].pop('boot_arguments_unmodified')
+    else:
+        receipt['observed'][mode]['boot_arguments_unmodified'] = value
+    with pytest.raises(ValueError, match='unchanged installed boot arguments'):
+        NATIVE.validate(seal(receipt))
+
+
+@pytest.mark.parametrize('variable', ['TUNAOS_LUKS_GRUB_APPEND', 'STRICT_LUKS_GRUB_APPEND'])
+def test_diagnostic_override_cannot_emit_normal_native_receipt(monkeypatch, variable):
+    monkeypatch.setenv(variable, 'console=ttyS0')
+    with pytest.raises(ValueError, match='diagnostic GRUB overrides'):
+        NATIVE.emit(SimpleNamespace())  # Reject before reading/writing any files.
+
+
+def test_retained_edited_boot_receipt_is_not_unchanged_qualification():
+    receipt = json.loads((ROOT / 'tests/fixtures/native-iso/edited-boot-40085763938.json').read_text())
+    # This genuine old receipt has matching identities and green boot claims,
+    # but no record that GRUB args were changed. It must not promote/cut over.
+    with pytest.raises(ValueError, match='not native ISO qualification evidence'):
+        NATIVE.validate(receipt)
+
+
+@pytest.mark.parametrize('policy', [None, '', 'modified-grub', 'unknown', True])
+def test_missing_unknown_or_modified_boot_policy_is_not_qualification(policy):
+    receipt = evidence()
+    if policy is None:
+        receipt.pop('boot_policy')
+    else:
+        receipt['boot_policy'] = policy
+    with pytest.raises(ValueError, match='unknown or modified installed boot policy'):
+        NATIVE.validate(seal(receipt))
+
+
+def test_legacy_receipt_cannot_be_upgraded_by_only_relabeling_schema():
+    receipt = json.loads((ROOT / 'tests/fixtures/native-iso/edited-boot-40085763938.json').read_text())
+    receipt['schema'] = NATIVE.SCHEMA
+    receipt['boot_policy'] = 'unmodified-installed'
+    with pytest.raises(ValueError, match='unchanged installed boot arguments'):
+        NATIVE.validate(seal(receipt))
+
+
+
+def test_v1_is_rejected_even_with_new_policy_fields():
+    receipt = evidence()
+    receipt['schema'] = 'NativeISOQualification/v1'
+    with pytest.raises(ValueError, match='not native ISO qualification evidence'):
+        NATIVE.validate(seal(receipt))
