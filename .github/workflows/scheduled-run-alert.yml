@@ -118,9 +118,11 @@ jobs:
           # Bound to env, never interpolated into the script: the payload is
           # data (tests/test_untrusted_context_never_reaches_a_run_block_by_interpolation.py).
           WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
+          WORKFLOW_ID: ${{ github.event.workflow_run.workflow_id }}
           CONCLUSION: ${{ github.event.workflow_run.conclusion }}
           RUN_ID: ${{ github.event.workflow_run.id }}
           RUN_URL: ${{ github.event.workflow_run.html_url }}
+          RUN_NUMBER: ${{ github.event.workflow_run.run_number }}
           RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
           HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
@@ -128,6 +130,43 @@ jobs:
           set -euo pipefail
 
           TITLE="[operations] ${WORKFLOW_NAME} scheduled run failed"
+
+          # A late event is a replay, and this fleet produces them by design:
+          # rerun-infra-failures.yml waits 45 minutes and re-runs the failed
+          # jobs of a red scheduled run, so that OLD run completes again as
+          # attempt 2 after the next night's run has already concluded. Two
+          # deliveries therefore arrive out of order, and the stale one must
+          # not write: a late success would close the issue for a workflow
+          # that is red right now, and a late failure would re-open one that
+          # has already recovered. The newest concluded scheduled run of this
+          # workflow is the state; every earlier run and attempt is read-only
+          # here. `cancelled`, `skipped` and `startup_failure` carry no state,
+          # so they do not count as newer (same filter as the job condition).
+          newest="$(
+            gh api "repos/${GH_REPO}/actions/workflows/${WORKFLOW_ID}/runs?event=schedule&status=completed&per_page=30" \
+              --jq '[.workflow_runs[]
+                     | select(.conclusion == "success" or .conclusion == "failure"
+                              or .conclusion == "timed_out")]
+                    | sort_by(.run_number, .run_attempt)
+                    | last | select(. != null)
+                    | "\(.run_number) \(.run_attempt)"'
+          )" || newest=""
+
+          if [[ "$newest" =~ ^[0-9]+\ [0-9]+$ ]]; then
+            read -r newest_number newest_attempt <<<"$newest"
+            if (( newest_number > RUN_NUMBER )) ||
+               { (( newest_number == RUN_NUMBER )) && (( newest_attempt > RUN_ATTEMPT )); }; then
+              echo "Run ${RUN_NUMBER} attempt ${RUN_ATTEMPT} of ${WORKFLOW_NAME} is behind" \
+                   "run ${newest_number} attempt ${newest_attempt}; the tracker already" \
+                   "reflects that run, so this event changes nothing."
+              exit 0
+            fi
+          else
+            # Reconciliation is not a gate on alerting. A listener that goes
+            # quiet when the run-history query fails loses the incident
+            # entirely, which is the silence this workflow exists to end.
+            echo "::warning::no run history for ${WORKFLOW_NAME}; acting on this event unreconciled"
+          fi
 
           # The issues list endpoint, not search: a tracking issue opened
           # minutes ago is not reliably in the search index yet, and a missed
@@ -154,15 +193,33 @@ jobs:
 
           # Which legs went red. Without this the issue says only "it failed",
           # and the first triage step is always this API call.
+          #
+          # per_page=50, not 100: the jobs endpoint answers a 100-job page with
+          # HTTP 502 on this repository's largest runs, on every attempt -- LUKS
+          # E2E 31224494825 (113 jobs), Bootc Lifecycle 38713238238 (153) and
+          # Build Bonito 38592759334 (138), measured 2026-10-16 -- while the same
+          # runs answer per_page=50 in seconds. Row 56 of docs/ci-troubleshooting.md
+          # carries the evidence; scripts/gen-matrix-status.py holds the same
+          # constant as JOBS_PAGE for the same reason. The attempt-scoped endpoint,
+          # so a re-run's event reports the jobs of the attempt it is about.
+          jobs_read=1
           # shellcheck disable=SC2016  # jq reads `.name`; the shell must not.
           failed="$(
-            gh api --paginate "repos/${GH_REPO}/actions/runs/${RUN_ID}/jobs?per_page=100" \
+            gh api --paginate \
+              "repos/${GH_REPO}/actions/runs/${RUN_ID}/attempts/${RUN_ATTEMPT}/jobs?per_page=50" \
               --jq '.jobs[]
                     | select(.conclusion == "failure" or .conclusion == "timed_out")
-                    | "- `" + .name + "` (" + .conclusion + "): " + .html_url' \
-              || true
-          )"
-          [[ -n "$failed" ]] || failed="- (no failed job reported; the run itself concluded \`${CONCLUSION}\`)"
+                    | "- `" + .name + "` (" + .conclusion + "): " + .html_url'
+          )" || jobs_read=0
+
+          if (( jobs_read == 0 )); then
+            # Not the same sentence as "no failed job": an unread job list is a
+            # missing triage detail, and reporting that the run named no red job
+            # states a measurement nobody made.
+            failed="- (the jobs API did not answer for this run; job names unavailable)"
+          elif [[ -z "$failed" ]]; then
+            failed="- (no failed job reported; the run itself concluded \`${CONCLUSION}\`)"
+          fi
 
           body="$(mktemp)"
           {
