@@ -521,6 +521,7 @@ def test_idle_timeout_closes_stream_and_never_reaches_post_metadata():
         read_error=socket.timeout("synthetic idle stall"),
     )
     openers, _ = fake_servers(case)
+    del archive_response.headers["Content-Length"]
     openers = (openers[0], FakeServerOpener([archive_response]), openers[2])
 
     with pytest.raises(CALLER.AuthoritativeTransportError, match="idle_timeout"):
@@ -602,7 +603,7 @@ def test_undeclared_body_cannot_cross_total_byte_limit_and_is_closed():
     with pytest.raises(CALLER.AuthoritativeTransportError, match="total_byte_limit"):
         client.get_json(path)
 
-    assert api_response.read_sizes == [3]
+    assert api_response.read_sizes == [2]
     assert api_response.closed
 
 

@@ -112,11 +112,12 @@ class _ArtifactRedirect(urllib.request.HTTPRedirectHandler):
 class _BoundedResponse:
     """Context-managed response with shared wall-clock and byte budgets."""
 
-    def __init__(self, response, budget, limit, idle_timeout):
+    def __init__(self, response, budget, limit, idle_timeout, declared_length=None):
         self._response = response
         self._reader = _single_receive_reader(response)
         self._budget = budget
         self._remaining = limit
+        self._declared_remaining = declared_length
         self._idle_timeout = idle_timeout
         self._closed = False
 
@@ -162,18 +163,27 @@ class _BoundedResponse:
             # http.client drops its socket once the declared body is read; the
             # EOF read1 below would do no receive, so no timeout is needed.
             return b""
+        total_deadline_bound = remaining_time <= self._idle_timeout
         timeout = min(self._idle_timeout, remaining_time)
         _set_response_timeout(self._response, self._reader, timeout)
-        allowed = min(self._remaining, self._budget.remaining_bytes) + 1
+        if self._declared_remaining == 0:
+            return b""
+        if self._budget.remaining_bytes == 0:
+            raise AuthoritativeTransportError("total_byte_limit", "transport")
+        allowed = min(self._remaining + 1, self._budget.remaining_bytes)
+        if self._declared_remaining is not None:
+            allowed = min(allowed, self._declared_remaining)
         requested = min(size, allowed, MAX_READ_BYTES)
         try:
             chunk = self._reader.read1(requested)
         except (socket.timeout, TimeoutError) as exc:
-            code = "total_timeout" if self._budget.clock() >= self._budget.deadline else "idle_timeout"
+            code = "total_timeout" if total_deadline_bound else "idle_timeout"
             raise AuthoritativeTransportError(code, "response.read") from exc
         if type(chunk) is not bytes or len(chunk) > requested:
             raise AuthoritativeTransportError("invalid_response", "response.read")
         self._remaining -= len(chunk)
+        if self._declared_remaining is not None:
+            self._declared_remaining -= len(chunk)
         self._budget.consume(len(chunk))
         if self._remaining < 0:
             raise AuthoritativeTransportError("response_byte_limit", "response")
@@ -262,7 +272,9 @@ class AuthoritativeTransport:
         )
 
     def open_object(self, key):
-        if self._object_prefix is None or type(key) is not str or not key.startswith(self._object_prefix):
+        if self._object_prefix is None or type(key) is not str:
+            _fail("endpoint_rejected", "object.key")
+        if not key.startswith(self._object_prefix):
             _fail("endpoint_rejected", "object.key")
         relative = key[len(self._object_prefix):]
         if relative != "manifest.json" and re.fullmatch(r"chunks/[0-9]{5}", relative) is None:
@@ -311,13 +323,19 @@ class AuthoritativeTransport:
                 status = response.getcode()
             if status != 200:
                 _fail("http_status", "response.status")
-            final_url = response.geturl() if hasattr(response, "geturl") else request.full_url
+            if hasattr(response, "geturl"):
+                final_url = response.geturl()
+            else:
+                final_url = getattr(response, "url", None)
+            if type(final_url) is not str:
+                _fail("invalid_response", "response.url")
             if _url_origin(final_url) not in allowed_final_origins:
                 _fail("response_origin", "response.url")
             encoding = response.headers.get("Content-Encoding", "identity")
             if type(encoding) is not str or encoding.lower() != "identity":
                 _fail("content_encoding", "response.headers")
             length = response.headers.get("Content-Length")
+            declared = None
             if length is not None:
                 if type(length) is not str or re.fullmatch(r"[0-9]+", length) is None:
                     _fail("invalid_content_length", "response.headers")
@@ -331,6 +349,7 @@ class AuthoritativeTransport:
                 self._budget,
                 limit,
                 self._network.idle_timeout_seconds,
+                declared,
             )
         except urllib.error.HTTPError as exc:
             _close_quietly(response)
