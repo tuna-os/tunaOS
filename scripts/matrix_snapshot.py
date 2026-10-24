@@ -72,11 +72,49 @@ def validate_snapshot(document: str, payload: dict, root: Path | None = None) ->
         raise ValueError("matrix iso summary disagrees with retained cells")
 
 
+RETAINED_KEYS = ("schema_version", "evaluation_date", "context", "luks", "lifecycle", "smoke",
+                 "contract", "omissions", "parity", "stage", "overlay_section")
+
+
 def load_retained_inputs(path):
-    """Read the opt-in offline render input; never reinterpret missing evidence."""
+    """Read the opt-in offline render input; never reinterpret missing evidence.
+
+    Every malformed input raises ValueError naming what is wrong, so callers
+    handle one error type instead of KeyError/TypeError from deep inside.
+    """
+    try:
+        payload = json.loads(Path(path).read_text())
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError(f"unreadable retained matrix input {path}: {error}") from error
+    if not isinstance(payload, dict):
+        raise ValueError("retained matrix input must be a JSON object")
+    missing = [key for key in RETAINED_KEYS if key not in payload]
+    if missing:
+        raise ValueError(f"retained matrix input lacks required keys: {', '.join(missing)}")
+    try:
+        _validate_retained(payload)
+    except (KeyError, TypeError, AttributeError) as error:
+        raise ValueError(f"malformed retained matrix input: {type(error).__name__}: {error}") from error
+    # Replay reproduces the committed pair only under the configuration it was
+    # recorded with. Checked after the structure, so structural errors stay
+    # visible whatever the configuration.
+    for name, digest in payload["context"]["configuration_sha256"].items():
+        if configuration_digest(name) != digest:
+            raise ValueError(f"retained input configuration changed: {name}")
+    try:
+        relative = Path(path).resolve().relative_to(Path.cwd().resolve())
+    except ValueError as error:
+        raise ValueError("retained input path must be inside the repository checkout") from error
+    if relative.parts[:2] != ("docs", "matrix-snapshots"):
+        raise ValueError("retained input must be stored in docs/matrix-snapshots")
+    payload["context"]["retained_inputs_path"] = relative.as_posix()
+    payload["context"]["retained_inputs_sha256"] = hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    return payload
+
+
+def _validate_retained(payload: dict) -> None:
     import datetime
-    payload = json.loads(Path(path).read_text())
-    if payload.get("schema_version") != 1:
+    if payload["schema_version"] != 1:
         raise ValueError("unsupported retained matrix input schema")
     evaluation_date = datetime.date.fromisoformat(payload["evaluation_date"])
     context = payload["context"]
@@ -98,13 +136,7 @@ def load_retained_inputs(path):
         if datetime.date.fromisoformat(date) > evaluation_date:
             raise ValueError("retained assertion is later than its evaluation date")
 
-    for name, digest in context["configuration_sha256"].items():
-        if name not in ("tunaos.toml", ".github/green-criteria.yml"):
-            raise ValueError("unexpected retained configuration path")
-        if configuration_digest(name) != digest:
-            raise ValueError(f"retained input configuration changed: {name}")
-    if set(context["configuration_sha256"]) != {"tunaos.toml", ".github/green-criteria.yml"}:
-        raise ValueError("retained inputs must bind matrix and criteria")
+    validate_configuration_identity(context.get("configuration_sha256"))
     for axis in ("luks", "lifecycle", "smoke", "contract", "omissions", "parity"):
         for key, hit in payload[axis].items():
             allowed = {"pass", "fail", "missing", "error", "lost"} if axis == "contract" else {"success", "failure", "cancelled", "skipped", ""}
@@ -130,12 +162,6 @@ def load_retained_inputs(path):
         raise ValueError("retained overlay section must keep its original heading")
     if "\n## " in payload["overlay_section"] or BEGIN in payload["overlay_section"] or END in payload["overlay_section"]:
         raise ValueError("retained overlay observation contains another section")
-    relative = Path(path).resolve().relative_to(Path.cwd().resolve())
-    if relative.parts[:2] != ("docs", "matrix-snapshots"):
-        raise ValueError("retained input must be stored in docs/matrix-snapshots")
-    payload["context"]["retained_inputs_path"] = relative.as_posix()
-    payload["context"]["retained_inputs_sha256"] = hashlib.sha256(Path(path).read_bytes()).hexdigest()
-    return payload
 
 
 def historical_notice(date: str) -> str:
@@ -162,18 +188,40 @@ def configuration_digest(name: str, root: Path = Path(".")) -> str:
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
+CONFIGURATION_FILES = ("tunaos.toml", ".github/green-criteria.yml")
+
+
+def validate_configuration_identity(identities) -> None:
+    """The pair records which matrix and criteria it was generated under."""
+    if not isinstance(identities, dict) or set(identities) != set(CONFIGURATION_FILES):
+        raise ValueError("snapshot must record its matrix and criteria configuration")
+    for name, digest in identities.items():
+        if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+            raise ValueError(f"invalid configuration identity for {name}")
+
+
 def validate_context(context: dict, root: Path) -> None:
+    """Check the committed pair's collection context.
+
+    The recorded configuration identity is sealed into the snapshot, so a
+    mixed merge still fails. It is deliberately not compared with the
+    checkout's current configuration. tunaos.toml changes in most pull
+    requests, and the committed pair stays a faithful snapshot of when it was
+    generated. Board-shape drift caused by a configuration change is what
+    `gen-matrix-status.py --check-structure` catches. Requiring a digest match
+    here would turn every unrelated config edit red until the daily refresh
+    landed (#3813).
+    """
     if context.get("kind") not in ("live-collection", "historical-reconciliation"):
         raise ValueError("snapshot collection context is missing")
-    identities = context.get("configuration_sha256", {})
-    if set(identities) != {"tunaos.toml", ".github/green-criteria.yml"}:
-        raise ValueError("snapshot must bind current matrix and criteria")
-    for name, expected in identities.items():
-        if configuration_digest(name, root) != expected:
-            raise ValueError(f"snapshot configuration changed: {name}")
+    validate_configuration_identity(context.get("configuration_sha256"))
     if context["kind"] == "historical-reconciliation":
         relative = Path(context.get("retained_inputs_path", ""))
         if relative.is_absolute() or ".." in relative.parts or relative.parts[:2] != ("docs", "matrix-snapshots"):
             raise ValueError("invalid retained input identity path")
-        if hashlib.sha256((root / relative).read_bytes()).hexdigest() != context.get("retained_inputs_sha256"):
+        try:
+            retained = (root / relative).read_bytes()
+        except OSError as error:
+            raise ValueError(f"retained input is missing: {relative.as_posix()}") from error
+        if hashlib.sha256(retained).hexdigest() != context.get("retained_inputs_sha256"):
             raise ValueError("retained input bytes changed")
