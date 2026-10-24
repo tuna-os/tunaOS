@@ -381,7 +381,8 @@ def _is_beta_lifecycle_cell(
 
 def lifecycle_validation_jobs(config: dict | None = None) -> set[str]:
     """Exact validating job names, including cells formerly in the stable lane."""
-    config = config or load_build_config(CONFIG)
+    if config is None:
+        config = load_build_config(CONFIG)
     jobs = set()
     for variant in config.get("variants", []):
         variant_id = variant["id"]
@@ -402,7 +403,8 @@ def lifecycle_validation_jobs(config: dict | None = None) -> set[str]:
 
 def lifecycle_sweep_jobs(config: dict | None = None) -> set[str]:
     """Exact validating job names in an unfiltered stable lifecycle matrix."""
-    config = config or load_build_config(CONFIG)
+    if config is None:
+        config = load_build_config(CONFIG)
     experimental = {
         variant["id"] for variant in config.get("variants", [])
         if variant.get("experimental") is True

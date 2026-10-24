@@ -77,7 +77,7 @@ jobs:
   workflow_dispatch:
     inputs:
       flavor:
-        description: 'Flavor (all, {flavors})'
+        description: 'Flavor ({flavors})'
         default: 'all'
         type: string
 
@@ -108,7 +108,9 @@ jobs:
         experimental = variant.get('experimental', False)
 
         if experimental:
-            flavors = ", ".join(f["id"] for f in variant.get("flavors", []) if f.get("build_image"))
+            flavors = ", ".join(["all", *sorted({
+                f["id"] for f in variant.get("flavors", []) if f.get("build_image")
+            })])
             workflow_content = template_experimental.format(
                 name=name,
                 name_cap=name_cap,

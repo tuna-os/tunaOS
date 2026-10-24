@@ -452,6 +452,9 @@ class UndeclaredCellsAreNotCountedAgainstUs(unittest.TestCase):
         )
         self.assertIn("gnome", matrix.get("flounder-sid", set()))
 
+    def test_explicit_empty_config_does_not_load_repository_config(self):
+        self.assertEqual(gms.lifecycle_sweep_jobs({}), set())
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       flavor:
-        description: 'Flavor (all, base, gnome, cosmic, kde, tuna)'
+        description: 'Flavor (all, base, cosmic, gnome, kde, tuna)'
         default: 'all'
         type: string
 
