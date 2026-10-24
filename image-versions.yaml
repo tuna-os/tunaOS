@@ -31,7 +31,7 @@ images:
   - name: utah-packages
     image: ghcr.io/projectbluefin/utah-packages
     tag: latest
-    digest: sha256:2af3fc6758902f3b2d112e911d33134490d827a94f548c03c2c41586a05b856d
+    digest: sha256:5f09530b87086bfee0f009cf3b72190ef5d274238e157f09b741bafe50b7ee9e
 
   # tunaOS' own GNOME 50 for EL10, from the gnome50-el10-x86_64 build chain in
   # tuna-os/tunaos-packages: a createrepo_c repository shipped as an OCI image
@@ -219,7 +219,7 @@ downloads:
   # bases whose packaged libostree is older than bootc's required 2025.3 — e.g.
   # Debian trixie ships 2025.2. Newer bases (sid) use the packaged libostree.
   # renovate: datasource=github-releases depName=ostreedev/ostree
-  ostree: "v2026.4"
+  ostree: "v2026.5"
   # composefs: built from source (meson) and pkg-config-installed so the source
   # ostree can configure --with-composefs, on bases that don't package it (trixie).
   # renovate: datasource=github-releases depName=containers/composefs

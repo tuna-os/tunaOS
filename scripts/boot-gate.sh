@@ -9,7 +9,8 @@
 #   scripts/boot-gate.sh <variant> [flavor] [tag]
 #
 # Environment:
-#   REPO_ORGANIZATION  — GHCR org (default: tuna-os)
+#   REPO_ORGANIZATION  — publish namespace (default: [build.publish], then the GitHub owner, then tuna-os)
+#   IMAGE_REGISTRY     — publish registry host (default: [build.publish], then ghcr.io)
 #   CORRAL_NODE        — schedule the gate VM on this KubeVirt node (default: auto)
 #   GATE_DISK          — disk size (default: 32Gi)
 #   GATE_TIMEOUT       — seconds to wait for SSH (default: 1200)
@@ -24,8 +25,7 @@ VARIANT="${1:?Usage: $0 <variant> [flavor] [tag]}"
 FLAVOR="${2:-gnome}"
 TAG="${3:-$FLAVOR}"
 
-ORG="${REPO_ORGANIZATION:-tuna-os}"
-IMG="ghcr.io/${ORG}/${VARIANT}:${TAG}"
+IMG="$("${REPO_ROOT}/scripts/publish-destination.sh")/${VARIANT}:${TAG}"
 NAME="${GATE_NAME:-gate-${VARIANT}-${FLAVOR}-$(date +%H%M%S)}"
 DISK="${GATE_DISK:-32Gi}"
 TIMEOUT="${GATE_TIMEOUT:-1800}"

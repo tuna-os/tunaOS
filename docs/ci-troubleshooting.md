@@ -1547,7 +1547,7 @@ uses the previous defect: the report must query a matrix cell with
 
 **Measured cause:** On main `7c9efe4f`, `scripts/resolve-flavor.sh` sets `DESKTOP_FLAVOR=desktop` for overlays and `build_scripts/90-image-info.sh` writes `image-tag=latest`. These values describe build defaults. The build passes the canonical variant apart from its publish name. Preserve it for Rawhide/Sid reports.
 
-**Fix:** Do not infer adoption categories from these defaults. Preserve the original variant and requested full flavor in separate metadata and verify each final image after desktop/overlay copies. See the [countme proposal](rfc/countme-proposal.md). `tests/test_countme_images.py` checks metadata and masks in installer output for every matrix flavor. The original flavor travels through `TUNAOS_IMAGE_FLAVOR`, apart from the stage name.
+**Fix:** Do not infer adoption categories from these defaults. Preserve the original variant and requested full flavor in separate metadata and verify each final image after desktop/overlay copies. See the [private adoption metrics RFC](rfc/rfc012-private-adoption-metrics.md). `tests/test_countme_images.py` checks metadata and masks in installer output for every matrix flavor. The original flavor travels through `TUNAOS_IMAGE_FLAVOR`, apart from the stage name.
 
 
 ### Missing-tool test fails when the tool exists on the host
@@ -1662,6 +1662,26 @@ repository defaults for token scope.
 **Fix:** Set a narrow scope for each workflow. Give write access only to a job
 that changes GitHub state. The regression test for #2767 checks each workflow.
 
+### Fork simulation times out while rebuilding images
+
+**Symptom:** The fork rehearsal times out in an ISO, image, or KVM lane. It
+does not report token or secret failures.
+
+**Measured cause (#2257):** PR #2604 ran every pull-request workflow under
+`act` for three personas. The run included the heavyweight ISO and live-image
+lanes. Thus, the weekly job would rebuild or boot large artifacts for each
+persona. It would report resource timeouts as fork-safety failures.
+
+**Fix:** Keep an explicit, fail-closed classification in
+`scripts/fork-simulation.py`. Run only fork-sensitive, act-compatible lanes.
+Pass the intended `GITHUB_REPOSITORY` explicitly.
+
+For workflows that read or change pull-request state, mount
+`scripts/fork-simulation-gh`. Its fixture uses PR 1 from the event. It rejects
+unlisted requests without a call to GitHub. Record why heavyweight/read-only
+lanes remain under static checks. The classification test rejects each
+unreviewed pull-request workflow.
+
 ### Admitted variant with missing rebuild repository fails CI
 
 **Symptom:** A new variant fails nightly builds for declared desktops (e.g. 10+ red nights for Hummingbird).
@@ -1702,6 +1722,13 @@ capture first, then sends the graceful powerdown itself before the kill.
 
 **Fix:** The pinned download moved into shared `build_scripts/install-uupd.sh` (same `image-versions.yaml` pin; stages the binary plus `uupd.service`, `uupd.timer`, `uupd-manual.service` before install; smoke with `UUPD_CONTEXT="$PWD" UUPD_ROOT="$scratch"` into a disposable root). The apt and dnf branches of `10-base-packages.sh` delegate to it unchanged in behavior, and `Containerfile.arch` carries the pin file and runs the installer before `40-services.sh`. The context exact-set test now treats `install-uupd.sh` as a consumer of the pin file.
 
+### STE fails on matrix prose
+
+**Symptom:** STE reports 1610 findings with a budget of 1609.
+
+**Cause:** A long sentence or a cluster of nouns in `docs/MATRIX-STATUS.md` crosses the budget.
+
+**Fix:** Split the sentence. For text inside the generated block, edit `scripts/gen-matrix-status.py` and render it again. Keep the budget at 1609. Preserve the dates when you replay saved evidence.
 ## Fork source pin changes after tests
 
 Symptom: the fork review tool reports a catalog pin mismatch after Python tests.
@@ -1727,6 +1754,16 @@ clean `npm ci --ignore-scripts`, `npm test`, and `npm run build` in that directo
 Check each override edit with `npm ci`. The same npm major alone does not
 prove that the manifest and lockfile agree.
 
+### Matrix drift check fails when old results enter or leave the window
+
+**Symptom:** The check reports a change between `—` and a pass or fail glyph.
+Run [39161613161](https://github.com/tuna-os/tunaOS/actions/runs/39161613161) shows this for removed desktop cells.
+
+**Cause:** These tables show results for cells outside the current schedule.
+The check treated each `—` as a config change, even for those cells.
+
+**Fix:** Use each table's source matrix to mask only old pass and fail results outside its schedule.
+Keep scheduled cells and `⬜` distinct from `—`. Preserve the results and their dates in the output.
 ## Fork preview reuses stock packages/art or rejects a changed checkout
 
 **Cause:** The key for the cache had only a hash of shell scripts.
@@ -1786,6 +1823,7 @@ Buffer the output of each try. If a page fails, discard all output from that
 try. After three failures, retain the command's exit status and diagnostic.
 Keep README unchanged; do not publish a partial table.
 See `tests/test_readme_status_api_retries.py` for regression tests.
+
 
 ### X13s inspection reports firmware present when only a backup exists
 
@@ -1906,6 +1944,22 @@ These tests check consistency. They do not prove a real producer or installation
 **Cause:** The hook adds new IDs but it never deletes old IDs.
 
 **Fix:** Delete the owned file at the start of each run. Keep files from other sources. Reject a linked file before you change files.
+
+### A fork's image records the tuna-os vendor
+
+**Symptom:** CI pushes a fork's image to `ghcr.io/<fork owner>`, but its
+`image-info.json` names `tuna-os` as the vendor and `ghcr.io/tuna-os/...` as
+its image reference.
+
+**Cause:** The build step runs `just build` under `sudo`, and `sudo` resets
+the environment. `GITHUB_REPOSITORY_OWNER` did not reach the build, so the
+namespace fell back to `tuna-os`. The push steps run without `sudo`, so they
+used the correct owner.
+
+**Fix:** The build step keeps `IMAGE_REGISTRY` (`ghcr.io/<owner>`) through
+`sudo`, and `scripts/lib/publish-destination.sh` splits it into host and
+namespace. `tests/test_publish_destination.py` checks the precedence and the
+split.
 
 ## Content PR fails with `STE budget exceeded` (#2912)
 
