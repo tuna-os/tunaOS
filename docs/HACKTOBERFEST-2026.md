@@ -339,8 +339,9 @@ review contact. Record the invitation and any response; an invitation alone is
 not retention.
 
 Recheck on November 14 for returns after the event. Use a separate post-event
-receipt and preserve the October report. Publish wins, gaps, and lessons in
-#3148, then feed the verified counts into
+receipt and preserve the October report. Feed the October receipt into
+`--anchors` so first-merge anchors are preserved across observation windows.
+Publish wins, gaps, and lessons in #3148, then feed the verified counts into
 [ADOPTION-METRICS.md](../ADOPTION-METRICS.md). Leave unmet outcomes open with an
 owner and next review date. Do not treat the August merges as October
 conversions, or count this report PR as a human acquisition result.

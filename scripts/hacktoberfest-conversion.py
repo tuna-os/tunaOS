@@ -73,9 +73,50 @@ def load_cohort(path):
     return cohort
 
 
-def summarize(prs, start, end, cohort):
+def load_anchors(path):
+    """Load prior campaign receipt to anchor first merges across windows."""
+    if path is None:
+        return {}
+    data = json.loads(path.read_text())
+    prs = data.get("pull_requests") if isinstance(data, dict) else data
+    if not isinstance(prs, list):
+        raise ValueError("anchors must be a receipt JSON with pull_requests or a list of PRs")
+    anchors = {}
+    for row in prs:
+        if not isinstance(row, dict):
+            continue
+        author = row.get("author") or (row.get("user") or {}).get("login")
+        merged_at = row.get("merged_at")
+        if author and merged_at and row.get("reviewed_new_human", True):
+            t = timestamp(merged_at)
+            login = author.casefold()
+            if login not in anchors or t < anchors[login]:
+                anchors[login] = t
+    return anchors
+
+
+def summarize(prs, start, end, cohort, anchors=None):
     rows = []
     verified_merges = []
+    anchor_merges = {}
+    if anchors:
+        if isinstance(anchors, dict) and "pull_requests" in anchors:
+            anchors = anchors["pull_requests"]
+        if isinstance(anchors, list):
+            for row in anchors:
+                if not isinstance(row, dict):
+                    continue
+                author = row.get("author") or (row.get("user") or {}).get("login")
+                merged_at = row.get("merged_at")
+                if author and merged_at and row.get("reviewed_new_human", True):
+                    t = timestamp(merged_at)
+                    login = author.casefold()
+                    if login not in anchor_merges or t < anchor_merges[login]:
+                        anchor_merges[login] = t
+        elif isinstance(anchors, dict):
+            for k, v in anchors.items():
+                anchor_merges[k.casefold()] = v if isinstance(v, dt.datetime) else timestamp(v)
+
     for pr in sorted(prs, key=lambda item: item["html_url"]):
         author = pr.get("user") or {}
         login = author.get("login")
@@ -100,10 +141,17 @@ def summarize(prs, start, end, cohort):
     metrics = None
     if cohort is not None:
         authors = {row["author"].casefold() for row in verified_merges}
+        anchor_authors = {author for author in anchor_merges if author in cohort}
+        all_authors = sorted(authors | anchor_authors)
         returning = []
-        for author in sorted(authors):
-            first_merge = min(timestamp(row["merged_at"]) for row in verified_merges
-                              if row["author"].casefold() == author)
+        for author in all_authors:
+            author_merges = [timestamp(row["merged_at"]) for row in verified_merges
+                             if row["author"].casefold() == author]
+            if author in anchor_merges:
+                author_merges.append(anchor_merges[author])
+            if not author_merges:
+                continue
+            first_merge = min(author_merges)
             followups = [row["url"] for row in rows
                          if row["reviewed_new_human"]
                          and row["author"].casefold() == author
@@ -138,6 +186,7 @@ def main():
     parser.add_argument("--end", type=dt.date.fromisoformat, default=dt.date(2026, 11, 1),
                         help="exclusive UTC date (default: 2026-11-01)")
     parser.add_argument("--cohort", type=Path, help="reviewed new-human JSON ledger")
+    parser.add_argument("--anchors", type=Path, help="prior campaign receipt JSON to anchor first merges")
     args = parser.parse_args()
     if args.start >= args.end:
         parser.error("start must precede end")
@@ -150,8 +199,9 @@ def main():
     end = dt.datetime.combine(args.end, dt.time(), dt.timezone.utc)
     try:
         cohort = load_cohort(args.cohort)
+        anchors = load_anchors(args.anchors)
         prs = [pr for repo in repos for pr in campaign_prs(repo, start, end)]
-        report = summarize(prs, start, end, cohort)
+        report = summarize(prs, start, end, cohort, anchors=anchors)
         # Fetch diff totals only for reviewed conversions, not hundreds of bot PRs.
         additions = deletions = 0
         for row in report["pull_requests"]:

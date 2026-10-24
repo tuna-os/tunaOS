@@ -140,3 +140,51 @@ def test_cli_reports_reviewed_diff_totals_and_normalizes_scope(monkeypatch, tmp_
     assert report["new_human_conversion"]["additions"] == 12
     assert report["new_human_conversion"]["deletions"] == 3
     assert report["new_human_conversion"]["merged_prs"] == 1
+
+
+def test_post_event_window_consumes_prior_anchors_for_returning_authors():
+    cohort = {"new-person": {"login": "new-person", "evidence": "reviewed history URL"}}
+    prior_receipt = {
+        "pull_requests": [
+            pr(1, created="2026-10-10T00:00:00Z", merged="2026-10-15T00:00:00Z",
+               reviewed_new_human=True),
+        ]
+    }
+    nov_start = conversion.timestamp("2026-11-01T00:00:00Z")
+    nov_end = conversion.timestamp("2026-11-15T00:00:00Z")
+    nov_pr = pr(2, created="2026-11-05T00:00:00Z", merged=None, login="new-person")
+    report = conversion.summarize([nov_pr], nov_start, nov_end, cohort, anchors=prior_receipt)
+    metrics = report["new_human_conversion"]
+    assert metrics["merged_prs"] == 0
+    assert metrics["authors_with_followup_prs"] == [{
+        "login": "new-person",
+        "prs": ["https://github.com/tuna-os/example/pull/2"],
+    }]
+
+
+def test_cli_accepts_anchors_receipt(monkeypatch, tmp_path, capsys):
+    cohort_path = tmp_path / "cohort.json"
+    cohort_path.write_text(json.dumps([{"login": "new-person", "evidence": "reviewed history URL"}]))
+    anchors_path = tmp_path / "october_receipt.json"
+    anchors_path.write_text(json.dumps({
+        "pull_requests": [{
+            "repository": "tuna-os/example", "url": "https://github.com/tuna-os/example/pull/1",
+            "title": "Oct fix", "author": "new-person", "account_type": "User",
+            "author_association": "CONTRIBUTOR", "created_at": "2026-10-10T00:00:00Z",
+            "merged_at": "2026-10-15T00:00:00Z", "opened_in_window": True,
+            "merged_in_window": True, "currently_open": False, "reviewed_new_human": True,
+        }]
+    }))
+    monkeypatch.setattr(conversion.sys, "argv", [
+        "report", "--repo", "tuna-os/example", "--cohort", str(cohort_path),
+        "--start", "2026-11-01", "--end", "2026-11-15",
+        "--anchors", str(anchors_path),
+    ])
+    nov_pr = pr(2, created="2026-11-05T00:00:00Z", merged=None, login="new-person")
+    monkeypatch.setattr(conversion, "campaign_prs", lambda *args: [nov_pr])
+    assert conversion.main() == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["new_human_conversion"]["authors_with_followup_prs"] == [{
+        "login": "new-person",
+        "prs": ["https://github.com/tuna-os/example/pull/2"],
+    }]
