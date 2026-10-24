@@ -261,12 +261,13 @@ def test_no_partial_catalog_result(failure):
     elif failure == 'wrong-identity':
         key = envelopes['tailscale']
         payloads[key] = payloads[key].replace(b'Origin: Tailscale', b'Origin: Forged')
-    elif failure == 'changed-declaration':
-        responses[catalog['sources'][3]['declaration_url']] = b'changed'
-    elif failure == 'changed-trust-key':
-        responses[catalog['sources'][3]['keyring_url']] = b'changed'
+    elif failure in {'changed-declaration', 'changed-trust-key'}:
+        source = next(item for item in catalog['sources'] if item['id'] == 'tailscale')
+        field = 'declaration_url' if failure == 'changed-declaration' else 'keyring_url'
+        responses[source[field]] = b'changed'
     else:
-        catalog['sources'][0]['freshness']['inrelease_sha256'] = '0' * 64
+        source = next(item for item in catalog['sources'] if item['id'] == 'trixie')
+        source['freshness']['inrelease_sha256'] = '0' * 64
     with pytest.raises(CatalogError):
         acquire.acquire_catalog(
             catalog, lambda _: b'key',
@@ -299,7 +300,7 @@ def test_real_tailscale_signature_and_trust_pin(tmp_path, monkeypatch):
     root = Path(__file__).resolve().parents[1]
     envelope = (root / 'tests/fixtures/package-catalog/tailscale-trixie.InRelease').read_bytes()
     keyring = (root / 'config/package-keys/tailscale-trixie.gpg').read_bytes()
-    source = fixture()['sources'][3]
+    source = next(item for item in fixture()['sources'] if item['id'] == 'tailscale')
     source['keyring_sha256'] = hashlib.sha256(keyring).hexdigest()
     source['primary_fingerprints'] = ['2596A99EAAB33821893C0A79458CA832957F5868']
     monkeypatch.setattr(acquire.tempfile, 'tempdir', str(tmp_path))
