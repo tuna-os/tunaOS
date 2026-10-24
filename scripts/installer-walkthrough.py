@@ -113,10 +113,12 @@ def hmp(cmd):
 def stop_bridge(bridge):
     """Stop and reap a short-lived socat bridge without racing its client exit."""
     if bridge.poll() is not None:
+        bridge.wait()
         return
     try:
         bridge.terminate()
     except ProcessLookupError:
+        bridge.wait()
         return
     try:
         bridge.wait(timeout=5)
@@ -124,6 +126,7 @@ def stop_bridge(bridge):
         try:
             bridge.kill()
         except ProcessLookupError:
+            bridge.wait()
             return
         bridge.wait()
 
