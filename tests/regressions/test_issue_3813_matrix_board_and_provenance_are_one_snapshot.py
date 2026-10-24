@@ -79,6 +79,10 @@ def pair():
                                    ("lifecycle", "untested"), ("parity", "fail"), ("iso", "untested"))}
     payload = {"cells": {"test:gnome": axes}, "summary": {
         "factory_health": {"green": 1, "total": 1},
+        "install": {"passed": 1, "tested": 1, "total": 1},
+        "desktop": {"passed": 1, "tested": 1, "total": 1},
+        "lifecycle": {"passed": 0, "tested": 0, "total": 1},
+        "parity": {"passed": 0, "tested": 1, "total": 1},
         "iso": {"passed": 0, "tested": 0, "total": 1}}}
     payload["snapshot"] = snapshot_identity(document, payload)
     return document, payload
@@ -137,6 +141,21 @@ def test_composite_summary_must_match_board_even_when_resealed():
     payload["snapshot"] = snapshot_identity(document, payload)
     with pytest.raises(ValueError, match="composite headline"):
         validate_snapshot(document, payload)
+
+@pytest.mark.parametrize("axis", ["install", "desktop", "lifecycle", "iso"])
+def test_required_summary_axis_cannot_be_dropped_and_resealed(axis):
+    document, payload = pair()
+    del payload["summary"][axis]
+    payload["snapshot"] = snapshot_identity(document, payload)
+    with pytest.raises(ValueError, match="missing required axes"):
+        validate_snapshot(document, payload)
+
+
+@pytest.mark.parametrize("payload", [[], {"summary": [], "cells": {}},
+                                     {"summary": {}, "cells": [], "snapshot_context": {}}])
+def test_malformed_provenance_shapes_are_classified(payload):
+    with pytest.raises(ValueError, match="provenance"):
+        validate_snapshot("not a matrix", payload)
 
 
 def test_missing_identity_is_not_implicitly_adopted():

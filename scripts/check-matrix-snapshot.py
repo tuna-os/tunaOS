@@ -11,7 +11,7 @@ def main():
     try:
         validate_snapshot(Path("docs/MATRIX-STATUS.md").read_text(),
                           json.loads(Path("docs/matrix-provenance.json").read_text()), Path("."))
-    except (OSError, ValueError, KeyError, TypeError) as error:
+    except (OSError, ValueError, KeyError, TypeError, AttributeError) as error:
         print(f"Invalid committed matrix snapshot: {error}", file=sys.stderr)
         return 1
     print("Matrix board and provenance form one consistent snapshot")
