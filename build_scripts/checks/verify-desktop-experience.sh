@@ -253,9 +253,16 @@ require_any_user_unit() {
 # image does not have.
 # $1 is a filesystem root for the regression test; empty in the image.
 require_secret_service() {
-	local root="${1:-}"
-	if grep -qE '^(ID|VARIANT_ID)="?eln"?$' \
-		"$root/etc/os-release" "$root/usr/lib/os-release" 2>/dev/null; then
+	local root="${1:-}" os_release
+	local is_eln=false
+	for os_release in "$root/etc/os-release" "$root/usr/lib/os-release"; do
+		if [[ -r "$os_release" ]] &&
+			grep -qE '^(ID|VARIANT_ID)="?eln"?$' "$os_release"; then
+			is_eln=true
+			break
+		fi
+	done
+	if "$is_eln"; then
 		require_any_executable "$root/usr/libexec/oo7-daemon"
 		require_any_glob "$root/usr/lib*/security/pam_oo7.so"
 	else
