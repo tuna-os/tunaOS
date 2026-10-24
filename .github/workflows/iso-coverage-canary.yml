@@ -1,0 +1,85 @@
+name: ISO coverage diagnostic canary
+on:
+  # A new dispatch-only workflow cannot run before it reaches the default branch.
+  # A maintainer may explicitly approve exactly one reviewed internal PR head by
+  # adding label "iso:<full-head-sha>" after approval. Pushes never auto-retrigger.
+  pull_request:
+    types: [labeled]
+  workflow_dispatch:
+    inputs:
+      execute:
+        description: 'Explicitly approved one-cell diagnostic (never production qualification)'
+        type: boolean
+        default: false
+      source_sha:
+        description: 'Exact approved 40-character draft/PR commit SHA'
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: iso-coverage-diagnostic-canary
+  cancel-in-progress: false
+jobs:
+  diagnostic:
+    if: >-
+      github.run_attempt == '1' &&
+      ((github.event_name == 'workflow_dispatch' && inputs.execute) ||
+       (github.event_name == 'pull_request' &&
+        github.event.pull_request.head.repo.full_name == github.repository &&
+        github.event.label.name == format('iso:{0}', github.event.pull_request.head.sha)))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Require immutable approved checkout
+        env:
+          APPROVED_SHA: ${{ inputs.source_sha || github.event.pull_request.head.sha }}
+        run: '[[ "$APPROVED_SHA" =~ ^[a-f0-9]{40}$ ]]'
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.source_sha || github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/setup-tunaos
+      - name: Prepare isolated diagnostic runner
+        timeout-minutes: 15
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends qemu-system-x86 qemu-utils ovmf swtpm \
+            socat sshpass imagemagick systemd-boot-efi mtools squashfs-tools xorriso dosfstools \
+            gdisk ffmpeg tesseract-ocr python3-yaml skopeo jq
+          # Same required usable Podman source as existing ISO workflows (#1893).
+          sudo install -d /etc/apt/keyrings
+          repo='https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/unstable/xUbuntu_24.04'
+          curl -fsSL "$repo/Release.key" | gpg --dearmor | sudo tee /etc/apt/keyrings/kubic.gpg >/dev/null
+          echo "deb [signed-by=/etc/apt/keyrings/kubic.gpg] $repo/ /" | sudo tee /etc/apt/sources.list.d/kubic.list
+          sudo apt-get update -qq
+          sudo apt-get remove -y podman conmon crun || true
+          sudo apt-get install -y podman
+          for path in /usr/local/bin/podman /usr/local/sbin/podman; do
+            if [[ -e "$path" ]] && ! dpkg -S "$path" >/dev/null 2>&1; then sudo rm -f "$path"; fi
+          done
+          if [[ -e /dev/kvm ]]; then
+            sudo chmod a+rw /dev/kvm
+          else
+            echo 'DIAGNOSTIC_QEMU_FLAG=--no-kvm' >> "$GITHUB_ENV"
+          fi
+          mkdir -p ~/.config/containers
+          printf '[engine]\ncgroup_manager = "cgroupfs"\n' > ~/.config/containers/containers.conf
+      - name: Run one diagnostic legacy install with exact-head capture
+        env:
+          DIAGNOSTIC_SOURCE_SHA: ${{ inputs.source_sha || github.event.pull_request.head.sha }}
+          DIAGNOSTIC_WORKFLOW_SHA: ${{ github.workflow_sha }}
+        run: bash scripts/iso-coverage-canary.sh
+      - name: Retain diagnostic evidence (excluded from production importer)
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: iso-coverage-diagnostic-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            coverage-diagnostic/*.json
+            coverage-diagnostic/*.log
+            coverage-diagnostic/*.png
+            coverage-diagnostic/NOT-PRODUCTION.txt
+          retention-days: 14
+          if-no-files-found: warn

@@ -2774,6 +2774,23 @@ run_install() {
 		fi
 	done
 
+	# Optional coverage producer: measure the exact guest-selected offline manifest,
+	# media bytes and injected backend binary. Never infer identity from a tag or
+	# the embedded GUI bundle (this legacy lane runs FISHERMAN_OVERRIDE instead).
+	if [[ "${TUNAOS_COVERAGE_CAPTURE:-0}" == "1" ]]; then
+		if [[ "$found_local" -ne 1 || ! "$found_ref" =~ ^[a-zA-Z0-9._/:@-]+$ || ! -s "${FISHERMAN_OVERRIDE:-}" ]]; then
+			echo "ERROR: coverage capture requires measured offline source and injected installer" >&2
+			return 1
+		fi
+		"${ssh_cmd[@]}" "sudo skopeo inspect --raw 'containers-storage:${found_ref}'" >"${OUTPUT_DIR}/coverage-source-manifest.json" || return 1
+		python3 "${SCRIPT_DIR}/iso-coverage-producer.py" capture \
+			--source-manifest "${OUTPUT_DIR}/coverage-source-manifest.json" \
+			--iso "$ISO_PATH" --installer "$FISHERMAN_OVERRIDE" \
+			--source-sha "${TUNAOS_COVERAGE_SOURCE_SHA:-}" \
+			--workflow-sha "${TUNAOS_COVERAGE_WORKFLOW_SHA:-}" \
+			>"${OUTPUT_DIR}/coverage-identity.json" || return 1
+	fi
+
 	if [[ "$found_local" -eq 1 ]]; then
 		if [[ "$composefs_backend" == "false" && "$found_ref" == "$prod_ref" ]]; then
 			echo "==> Found canonical offline image ${found_ref} — using Fisherman bootcDirect (no OCI copy)"

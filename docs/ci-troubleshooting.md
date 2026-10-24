@@ -2157,6 +2157,26 @@ Use one measured crop with the exact title, warning, elapsed time and percentage
 Check their positions and the foreground panel. Keep failure and completion
 checks separate. Observe progress without more input or a success claim.
 
+### ISO coverage plan stops before execution
+
+Read the history diagnostics in `coverage-plan.json`. Incomplete API history,
+absent receipts, or an exhausted daily budget can stop the plan without an install.
+
+Tests prove that a cron job can skip and that admission refuses a rerun of failed jobs.
+The importer needs API proof that all jobs skipped before it can ignore an absent plan.
+Both caller and callee refuse reruns. This prevents a budget bypass through old outputs.
+
+Do not reset the budget or accept PR artifacts as production proof.
+Use the exact-head diagnostic in [the coverage plan](ISO-COVERAGE-PLAN.md) only after approval.
+A legacy LUKS pass does not qualify a plain GUI install.
+
+
+### New ISO coverage workflow fails the CI lane tests
+
+Run `scripts/gen-ci-lanes.py` after adding a workflow. The generated table must match.
+Test run `39951065131` found a stale table and an unconditional KVM device change.
+Use `--no-kvm` when the hosted runner has no KVM device, under the same time limit.
+The cheap coverage gate now runs `tests/test_ci_lanes.py` to check both contracts.
 ### Installed page appears but completion stays unknown
 
 Run 39949178878 reached the installed page in both modes. The full-frame OCR
