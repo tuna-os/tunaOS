@@ -32,6 +32,24 @@ user-facing site:
 | [../runbooks/rollback-a-bad-image-promotion.md](../runbooks/rollback-a-bad-image-promotion.md) | Containing a bad container image promotion: repointing the bare tag to a last-known-good dated tag |
 | [mkosi-investigation.md](mkosi-investigation.md) | Notes from the mkosi-based image build investigation |
 | [PIPELINE.md](PIPELINE.md) | Build pipeline reference: stages, workflows, artifact flow |
+| [BASE-PACKAGE-SEARCH.md](BASE-PACKAGE-SEARCH.md) | Search verified packages in supported upstream base-image indexes |
+| [FLATPAK-DECLARATIONS.md](FLATPAK-DECLARATIONS.md) | Primary Flatpak declarations, generated policy, and verification boundary |
+| [ISO-BUILDER-CONFIG.md](ISO-BUILDER-CONFIG.md) | Primary ISO-builder presentation configuration and exported contract |
+| [PACKAGE-AUTHORING.md](PACKAGE-AUTHORING.md) | Offline, receipt-backed package search and policy authoring |
+| [PRIMARY-CONFIG-MIGRATION.md](PRIMARY-CONFIG-MIGRATION.md) | Migration plan for `tunaos.toml` as the primary configuration source |
+| [RELEASE-AUTOMATION.md](RELEASE-AUTOMATION.md) | Q4 release cadence, asset completeness, fail-on-drop, stream parity, and release traceability (#1186) |
+| [VENDORED-PARSER.md](VENDORED-PARSER.md) | Reviewed TOML parser provenance, integrity checks, and update procedure |
+| [INSTALL-PIPELINE-CHECKPOINTS.md](INSTALL-PIPELINE-CHECKPOINTS.md) | OCR-backed install-pipeline screen checkpoints and evidence artifacts |
+| [GIT-HISTORY-REWRITE.md](GIT-HISTORY-REWRITE.md) | Auditable large-blob inventory and maintainer-only history rewrite runbook |
+| [GOVERNANCE.md](GOVERNANCE.md) | Community roles, decision process, and CODEOWNERS policy |
+| [BRANDING.md](BRANDING.md) | Image identity, branding layers, and artifact verification boundaries |
+| [FORK-BRANDING.md](FORK-BRANDING.md) | Supported inputs and safety limits for the opt-in fork-brand preview |
+| [FORK-CONFIG-PREVIEW.md](FORK-CONFIG-PREVIEW.md) | Local fork configuration preview workflow and generated receipts |
+| [FORK-DELIVERY.md](FORK-DELIVERY.md) | Fork-owned desktop delivery scope, evidence, and acceptance gates (#3474) |
+| [CFP-EVERYTHING-OPEN-2027.md](CFP-EVERYTHING-OPEN-2027.md) | Everything Open 2027 talk proposal draft and submission tracking (#1974) |
+| [metrics.md](metrics.md) | Current PR/build metrics status and existing point-in-time reports |
+| [quality.md](quality.md) | Green-criteria quality signal and evidence model |
+| [review-rubric.md](review-rubric.md) | Review checks beyond CI status and green-criteria impact |
 | [EDUCATION-PITCH.md](EDUCATION-PITCH.md) | Education & teaching lab adoption brief for CS departments (#1600) |
 | [CONTENT-CLAIM-CHECKLIST.md](CONTENT-CLAIM-CHECKLIST.md) | What a guide or campaign post must verify before it claims it — image refs, shipped tooling, hardware, readiness (#2289) |
 | [BRANCH-PROTECTION.md](BRANCH-PROTECTION.md) | Current-state audit + proposal for main-branch protection & required CI (#1167) |
