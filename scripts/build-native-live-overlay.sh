@@ -20,6 +20,7 @@ cp "$bin" "$work/tacklebox"
 chmod 0555 "$work/tacklebox"
 engine_digest="sha256:$(sha256sum "$work/tacklebox" | awk '{print $1}')"
 cp -a live-iso/common/src/. "$work/"
+cp image-versions.yaml "$work/"
 case "${flavor%%-*}" in
 kde) installer_app=org.tunaos.InstallerKde ;;
 niri) installer_app=org.tunaos.InstallerNiri ;;

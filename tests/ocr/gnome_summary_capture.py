@@ -130,3 +130,56 @@ def test_retained_progress_uses_completion_budget_without_more_input(tmp_path, m
     assert sum(event == ('capture', 'await-completion') for event in events) == 80
     accepted = events.index(('capture', 'await-progress'))
     assert all(event[0] == 'capture' for event in events[accepted:])
+
+
+@pytest.mark.parametrize('mode,digest', [
+    ('plain', 'c17d5f262114282f8c4021b475076c3b90b5f55e359096d259b1f404f0b99e9a'),
+    ('luks', 'a8e28f6010de89be454ef6e9ff64462de78df3a7cc7a85c7df3957002373f1d9'),
+])
+def test_retained_completion_requires_all_same_frame_markers(monkeypatch, mode, digest):
+    capture = FIXTURES / f'completion39949178878-{mode}.png'
+    assert hashlib.sha256(capture.read_bytes()).hexdigest() == digest
+    screen = driver.Screen(capture)
+    assert driver.classify(screen.lines) == 'unknown'  # Real original Restart OCR failure.
+    assert screen.state == 'done'
+    assert screen.completion_markers == ['Skipjack is installed',
+        'Remove the installation media and restart the computer.', 'Restart now']
+    # The crop is observation-only, never an input box exposed through rows.
+    with pytest.raises(driver.Unverified):
+        screen.box('Restart now')
+    original_rgb = screen.rgb
+    for point, value in [((220, 270), (180, 180, 180)), ((645, 375), (220, 220, 220)),
+                         ((635, 375), (145, 65, 172))]:
+        monkeypatch.setattr(screen, 'rgb', lambda x, y, p=point, c=value:
+                            c if (x, y) == p else original_rgb(x, y))
+        screen.verify_completion_panel()
+        assert screen.state == 'unknown'
+        monkeypatch.setattr(screen, 'rgb', original_rgb)
+        screen.verify_completion_panel()
+        assert screen.state == 'done'
+    screen.rows.append(('Restart now', (900, 500, 990, 515)))
+    screen.verify_completion_panel()
+    assert screen.state == 'unknown'
+
+
+@pytest.mark.parametrize('mode,initial', [('plain', '07'), ('luks', '09')])
+def test_actual_completion_observed_without_restart_input(tmp_path, mode, initial):
+    # Real captures inside a model transaction; this never boots a guest.
+    spec = importlib.util.spec_from_file_location('completion_unit_fixture', ROOT / 'tests/test_gnome_installer_driver.py')
+    unit = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(unit)
+    progress = unit.driver.Screen(FIXTURES / f'progress39932865285-{mode}-{initial}.png')
+    done = unit.driver.Screen(FIXTURES / f'completion39949178878-{mode}.png')
+    if mode == 'plain':
+        prefix = [unit.FakeScreen('welcome'), unit.FakeScreen('encryption', encrypted=True),
+                  unit.FakeScreen('encryption'), unit.FakeScreen('summary')]
+    else:
+        prefix = [unit.FakeScreen('welcome'), unit.FakeScreen('encryption', encrypted=True, tpm=True),
+                  unit.FakeScreen('encryption', encrypted=True), unit.FakeScreen('encryption', encrypted=True),
+                  unit.FakeScreen('encryption', encrypted=True), unit.FakeScreen('summary', mode='luks')]
+    rc, evidence, events = unit.execute(tmp_path, prefix + [progress, done], mode)
+    assert rc == 0 and evidence['accepted'] and evidence['completed']
+    assert evidence['transitions'] == ['welcome', 'encryption', 'summary', 'progress', 'done']
+    accepted = events.index(('capture', 'await-progress'))
+    assert all(event[0] == 'capture' for event in events[accepted:])
+    assert sum(event == ('capture', 'await-completion') for event in events) == 1

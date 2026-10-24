@@ -491,3 +491,141 @@ def test_same_run_rejects_other_current_repository(monkeypatch):
     monkeypatch.setenv('GITHUB_REPOSITORY', 'other/repo')
     with pytest.raises(ValueError, match='current repository'):
         module.validate(run, artifact, args, jobs)
+
+
+@pytest.mark.parametrize('message,category', [
+    ('HTTP 503: unavailable', 'http_503'),
+    ('unexpected EOF', 'unexpected_eof'),
+    ('read: connection reset by peer', 'connection_reset'),
+    ('dial: connection refused', 'connection_refused'),
+    ('TLS handshake timeout', 'tls_timeout'),
+    ('read: i/o timeout', 'io_timeout'),
+    ('context deadline exceeded', 'context_deadline'),
+    ('no space left on device', 'disk_full'),
+    ('unknown diagnostic', 'unclassified'),
+])
+def test_transfer_failure_reports_only_fixed_category_and_numbers(message, category, capsys):
+    import io
+    import json
+    import sys
+    secret = 'PRIVATE_SENTINEL https://example.invalid/object?token=do-not-log'
+    code = 'import sys;sys.stdout.write("abc");sys.stdout.flush();sys.stderr.write(%r);sys.exit(7)' % (message+' '+secret)
+    output = io.BytesIO()
+    with pytest.raises(ValueError) as error:
+        module.bounded_command([sys.executable, '-c', code], output, 32, 5)
+    rendered = str(error.value)
+    assert secret not in rendered and 'PRIVATE_SENTINEL' not in rendered and 'https://' not in rendered
+    details = json.loads(rendered.split('; ', 1)[1])
+    assert set(details) == {'bytes_received', 'elapsed_seconds', 'returncode', 'stderr_bytes',
+                            'stderr_truncated', 'category'}
+    assert details['bytes_received'] == 3 and details['returncode'] == 7
+    assert details['category'] == category and not details['stderr_truncated']
+    assert 0 <= details['elapsed_seconds'] < 5
+    assert output.getvalue() == b'abc'
+    assert capsys.readouterr().out == ''
+
+
+def test_transfer_stderr_is_drained_but_memory_is_bounded(monkeypatch):
+    import io
+    import json
+    import sys
+    original = module.transfer_category
+    def bounded(stderr):
+        assert len(stderr) == module.MAX_STDERR
+        return original(stderr)
+    monkeypatch.setattr(module, 'transfer_category', bounded)
+    code = 'import sys;sys.stderr.buffer.write(b"PRIVATE_SENTINEL"*100000);sys.stdout.write("ok");sys.exit(2)'
+    output = io.BytesIO()
+    with pytest.raises(ValueError) as error:
+        module.bounded_command([sys.executable, '-c', code], output, 32, 5)
+    assert 'PRIVATE_SENTINEL' not in str(error.value)
+    details = json.loads(str(error.value).split('; ', 1)[1])
+    assert details['stderr_truncated'] and details['stderr_bytes'] == 1600000
+    assert details['bytes_received'] == 2 and output.getvalue() == b'ok'
+
+
+def test_transfer_success_never_logs_stderr(capsys):
+    import io
+    import sys
+    output = io.BytesIO()
+    code = 'import sys;sys.stderr.write("PRIVATE_SENTINEL");sys.stdout.write("ok")'
+    assert module.bounded_command([sys.executable, '-c', code], output, 2, 5) == 2
+    captured = capsys.readouterr()
+    assert captured.out == '' and captured.err == ''
+
+
+def test_transfer_stderr_flood_preserves_whole_deadline():
+    import io
+    import json
+    import sys
+    import time
+    output = io.BytesIO()
+    started = time.monotonic()
+    code = 'import os\nwhile True: os.write(2,b"PRIVATE_SENTINEL"*1024)'
+    with pytest.raises(ValueError, match='deadline exceeded') as error:
+        module.bounded_command([sys.executable, '-c', code], output, 32, .1)
+    assert time.monotonic()-started < 3
+    details = json.loads(str(error.value).split('; ', 1)[1])
+    assert details['bytes_received'] == 0 and details['stderr_truncated']
+    assert 'PRIVATE_SENTINEL' not in str(error.value)
+
+
+@pytest.mark.parametrize('size,expected', [(1, 1200), (1024**3, 1200),
+    (6158287146, 3057), (12*1024**3, 3600)])
+def test_archive_deadline_is_size_aware_and_hard_capped(size, expected):
+    assert module.archive_deadline(size) == expected
+
+
+@pytest.mark.parametrize('size', [0, -1, True, '123', 1.5, 12*1024**3+1])
+def test_archive_deadline_rejects_invalid_sizes(size):
+    with pytest.raises(ValueError):
+        module.archive_deadline(size)
+
+
+@pytest.mark.parametrize('code', [
+    'import time;time.sleep(5)',
+    'import os\nwhile True:os.write(2,b"PRIVATE_SENTINEL"*1024)',
+    'import os,time;os.close(1);os.close(2);time.sleep(5)',
+])
+def test_transfer_idle_timeout_is_not_reset_by_stderr_or_closed_pipes(code):
+    import io
+    import sys
+    import time
+    started = time.monotonic()
+    with pytest.raises(ValueError, match='idle deadline exceeded') as error:
+        module.bounded_command([sys.executable, '-c', code], io.BytesIO(), 100, 5, .1)
+    assert time.monotonic()-started < 3
+    assert 'PRIVATE_SENTINEL' not in str(error.value)
+
+
+def test_transfer_real_stdout_progress_resets_idle_not_total_deadline():
+    import io
+    import sys
+    output = io.BytesIO()
+    code = 'import os,time\nfor _ in range(20):\n os.write(1,b"x");time.sleep(.04)'
+    with pytest.raises(ValueError, match='GitHub transfer deadline exceeded'):
+        module.bounded_command([sys.executable, '-c', code], output, 100, .3, .15)
+    assert 1 < len(output.getvalue()) < 20
+
+
+def test_transfer_incremental_success_with_idle_bound():
+    import io
+    import sys
+    output = io.BytesIO()
+    code = 'import os,time\nfor _ in range(3):\n os.write(1,b"x");time.sleep(.03)'
+    assert module.bounded_command([sys.executable, '-c', code], output, 3, 5, .5) == 3
+    assert output.getvalue() == b'xxx'
+
+
+def test_native_job_reserves_transfer_smoke_and_full_strict_gui_budget():
+    import yaml
+    workflow = yaml.safe_load((ROOT / '.github/workflows/iso-e2e.yml').read_text())
+    job = workflow['jobs']['e2e']
+    # 60 hard transfer ceiling + 20 historical smoke + 60 strict GUI + 10 extraction + 10 overhead.
+    assert "inputs.source == 'native-artifact' && 160 ||" in job['timeout-minutes']
+    strict = next(step for step in job['steps'] if step.get('id') == 'e2e')
+    assert strict['timeout-minutes'] == 60
+    assert '--strict-offline-gui' in strict['run']
+    smoke = next(step for step in job['steps'] if step.get('id') == 'native_smoke')
+    assert smoke['timeout-minutes'] == 20
+    assert "inputs.native_run_id != format('{0}', github.run_id)" in smoke['if']

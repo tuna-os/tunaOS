@@ -85,6 +85,14 @@ on:
         required: false
         type: string
         default: ""
+      image-registry:
+        description: >-
+          Publish destination from tunaos.toml [build.publish], as
+          "<registry>/<namespace>". Empty keeps ghcr.io/<repository owner>.
+          The repository variable IMAGE_REGISTRY still overrides both.
+        required: false
+        type: string
+        default: ""
     outputs:
       manifest_published:
         description: >-
@@ -139,7 +147,7 @@ jobs:
     env:
       IMAGE_NAME: ${{ inputs.image-name }}
       IMAGE_DESC: ${{ inputs.image-desc }}
-      IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY || format('ghcr.io/{0}', github.repository_owner) }}
+      IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY || inputs.image-registry || format('ghcr.io/{0}', github.repository_owner) }}
       DEFAULT_TAG: ${{ inputs.default-tag }}
       MAJOR_VERSION: ${{ inputs.major-version }}
       PLATFORMS: ${{ inputs.platforms }}
@@ -169,7 +177,7 @@ jobs:
         uses: ./.github/actions/prepare-config
 
       - name: Setup runner
-        uses: projectbluefin/actions/bootc-build/setup-runner@b541b99e9d798cd818987004405f205891e65de1 # v1 as of 2026-07-02
+        uses: projectbluefin/actions/bootc-build/setup-runner@d18642a8b4b325c2551eabd9a65c1ad12b4ebb30 # v1 as of 2026-07-02
         with:
           storage-backend: btrfs
           update-podman: "true"
@@ -321,9 +329,11 @@ jobs:
           # from root -- a non-root timeout cannot kill a root buildah.
           #
           # --preserve-env: sudo otherwise strips the cache/rechunk knobs
-          # (the old layer cache never worked for exactly this reason).
+          # (the old layer cache never worked for exactly this reason), and
+          # IMAGE_REGISTRY: without it a fork's image was stamped with the
+          # tuna-os vendor and image-ref while being pushed to the fork.
           rc=0
-          sudo --preserve-env=BUILDAH_CACHE_FLAGS,SKIP_RECHUNK,PUBLIC_IMAGE_NAME \
+          sudo --preserve-env=BUILDAH_CACHE_FLAGS,SKIP_RECHUNK,PUBLIC_IMAGE_NAME,IMAGE_REGISTRY \
             timeout --kill-after=60s "${BUILD_BOUND_MINUTES}m" \
             "$just" build "${IMAGE_VARIANT}" "${FLAVOR}" "${PLATFORM}" 1 "${DEFAULT_TAG}" "${CHAIN_BASE_IMAGE}" || rc=$?
           echo "BUILD_SECONDS=$(( $(date +%s) - build_start ))" >> "$GITHUB_ENV"
@@ -900,7 +910,7 @@ jobs:
     needs:
       - build_push
     container:
-      image: cgr.dev/chainguard/wolfi-base@sha256:340abe305ba813e2b6198a6d455e2063a53311f2e249d396e14c007caa5f53ac  # :latest linux/amd64 as of 2026-06-13
+      image: cgr.dev/chainguard/wolfi-base@sha256:386b367467aa64db0c41adc8f1a74c43379a87b0dff845538953e99a8725cb67  # :latest linux/amd64 as of 2026-06-13
       # This job only performs registry/API operations (podman login and
       # manifest create/add/annotate/push). It does not run or build a
       # container or mount a host filesystem -- but podman itself needs
@@ -938,7 +948,7 @@ jobs:
     env:
       IMAGE_NAME: ${{ inputs.image-name }}
       IMAGE_DESC: ${{ inputs.image-desc }}
-      IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY || format('ghcr.io/{0}', github.repository_owner) }}
+      IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY || inputs.image-registry || format('ghcr.io/{0}', github.repository_owner) }}
       DEFAULT_TAG: ${{ inputs.default-tag }}
       MAJOR_VERSION: ${{ inputs.major-version }}
       PLATFORMS: ${{ inputs.platforms }}
@@ -1293,7 +1303,7 @@ jobs:
       id-token: write
     env:
       IMAGE_NAME: ${{ inputs.image-name }}
-      IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY || format('ghcr.io/{0}', github.repository_owner) }}
+      IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY || inputs.image-registry || format('ghcr.io/{0}', github.repository_owner) }}
       DEFAULT_TAG: ${{ inputs.default-tag }}
       INDEX_DIGEST: ${{ needs.manifest.outputs.digest }}
       COSIGN_YES: "true"
@@ -1463,7 +1473,7 @@ jobs:
       packages: read
     env:
       IMAGE_NAME: ${{ inputs.image-name }}
-      IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY || format('ghcr.io/{0}', github.repository_owner) }}
+      IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY || inputs.image-registry || format('ghcr.io/{0}', github.repository_owner) }}
       DEFAULT_TAG: ${{ inputs.default-tag }}
     steps:
       - name: Checkout
@@ -1711,7 +1721,7 @@ jobs:
       endsWith(inputs.flavor, '-asahi')
     uses: ./.github/workflows/verify-asahi-one.yml
     with:
-      image: ${{ vars.IMAGE_REGISTRY || format('ghcr.io/{0}', github.repository_owner) }}/${{ inputs.image-name }}:${{ inputs.default-tag }}-testing
+      image: ${{ vars.IMAGE_REGISTRY || inputs.image-registry || format('ghcr.io/{0}', github.repository_owner) }}/${{ inputs.image-name }}:${{ inputs.default-tag }}-testing
     # No `secrets:` block: verify-asahi-one.yml's workflow_call declares no
     # explicit secrets input (it only uses the auto-provided GITHUB_TOKEN),
     # so `secrets: inherit` was passing every repo/org secret for nothing
@@ -1752,7 +1762,7 @@ jobs:
       packages: read
     env:
       IMAGE_NAME: ${{ inputs.image-name }}
-      IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY || format('ghcr.io/{0}', github.repository_owner) }}
+      IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY || inputs.image-registry || format('ghcr.io/{0}', github.repository_owner) }}
       DEFAULT_TAG: ${{ inputs.default-tag }}
     steps:
       - name: Checkout
@@ -1874,7 +1884,7 @@ jobs:
     env:
       IMAGE_NAME: ${{ inputs.image-name }}
       IMAGE_DESC: ${{ inputs.image-desc }}
-      IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY || format('ghcr.io/{0}', github.repository_owner) }}
+      IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY || inputs.image-registry || format('ghcr.io/{0}', github.repository_owner) }}
       DEFAULT_TAG: ${{ inputs.default-tag }}
       MAJOR_VERSION: ${{ inputs.major-version }}
       PLATFORMS: ${{ inputs.platforms }}

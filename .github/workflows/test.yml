@@ -76,11 +76,11 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Read-only baseline. Jobs that run repository code (tests, builds) never hold
+# id-token: write, because pull-request code would be able to mint an OIDC
+# token; the Codecov upload is a separate job that executes no repository code.
 permissions:
   contents: read
-  # Codecov authenticates uploads with GitHub OIDC; no long-lived repository
-  # token is exposed to pull-request jobs.
-  id-token: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -159,7 +159,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup TunaOS Build Environment
-        uses: projectbluefin/actions/bootc-build/setup-runner@b541b99e9d798cd818987004405f205891e65de1 # v1 as of 2026-07-02
+        uses: projectbluefin/actions/bootc-build/setup-runner@d18642a8b4b325c2551eabd9a65c1ad12b4ebb30 # v1 as of 2026-07-02
         with:
           storage-backend: ""
           update-podman: "false"
@@ -320,15 +320,6 @@ jobs:
           echo "Run locally: \`just test\`" >> "$GITHUB_STEP_SUMMARY"
           echo "| Python coverage | Codecov + xml artifact |" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload Python coverage to Codecov
-        if: always()
-        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
-        with:
-          use_oidc: true
-          files: coverage-python.xml
-          flags: python
-          fail_ci_if_error: false
-
       - name: Archive Python coverage
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -337,6 +328,43 @@ jobs:
           path: coverage-python.xml
           retention-days: 30
           if-no-files-found: ignore
+
+  # Codecov authenticates uploads with GitHub OIDC. This job holds the only
+  # id-token: write in the workflow and runs no repository code: it checks out
+  # data, downloads the coverage report the unit-tests job produced, and hands
+  # it to the pinned upload action. Fork pull requests are skipped; GitHub does
+  # not issue them an OIDC token anyway.
+  coverage-upload:
+    name: Upload coverage
+    needs: unit-tests
+    if: >-
+      always() &&
+      (github.event_name != 'pull_request' ||
+       github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Download Python coverage
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: coverage-python
+        continue-on-error: true
+
+      - name: Upload Python coverage to Codecov
+        if: hashFiles('coverage-python.xml') != ''
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          use_oidc: true
+          files: coverage-python.xml
+          flags: python
+          fail_ci_if_error: false
 
   tuna_build_inputs:
     name: Detect Tuna image inputs

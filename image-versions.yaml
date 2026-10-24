@@ -31,7 +31,7 @@ images:
   - name: utah-packages
     image: ghcr.io/projectbluefin/utah-packages
     tag: latest
-    digest: sha256:96e35bcafd25a498bb074810ea72762750af77294ac8efb8899fef44d01e8404
+    digest: sha256:2af3fc6758902f3b2d112e911d33134490d827a94f548c03c2c41586a05b856d
 
   # tunaOS' own GNOME 50 for EL10, from the gnome50-el10-x86_64 build chain in
   # tuna-os/tunaos-packages: a createrepo_c repository shipped as an OCI image
@@ -102,6 +102,15 @@ downloads:
   chezmoi_sha256:
     amd64: "74c239da8b55ae9955a833304b87adc4cf82336647f31d317ccbb7952ad58d46"
     arm64: "4b5df8d925b79abbe265af25e4c585a4da91aadbae573a0dcc8e2bfcf63e6f1a"
+  # The GNOME/Pantheon live ISO imports this Flatpak bundle into its local
+  # installer remote. Keep the release immutable and verify GitHub's
+  # release-asset digest before Flatpak parses it (tunaOS#2536). These values
+  # come from the release API's assets[].digest fields.
+  # renovate: datasource=github-releases depName=tuna-os/bootc-installer
+  bootc_installer: "v2026.10.19-9f582fe0"
+  bootc_installer_sha256:
+    x86_64: "04252eaf80ee5675aa37bdb482847c77310efbee058dc63ba161a1d5991f9823"
+    aarch64: "39e33f4ca6c7f9dd6d8bf1859c9eabbf8189cdb4218ba9b122062f64b568d339"
   # The boot gate's harness (scripts/corral-boot-gate.sh, installed by
   # scripts/install-corral.sh). The commit of the v0.7.0 tag, the first release
   # with `vmtest --fail-marker`/`--karg` and local composefs builds. corral
@@ -214,7 +223,7 @@ downloads:
   # bases whose packaged libostree is older than bootc's required 2025.3 — e.g.
   # Debian trixie ships 2025.2. Newer bases (sid) use the packaged libostree.
   # renovate: datasource=github-releases depName=ostreedev/ostree
-  ostree: "v2026.4"
+  ostree: "v2026.5"
   # composefs: built from source (meson) and pkg-config-installed so the source
   # ostree can configure --with-composefs, on bases that don't package it (trixie).
   # renovate: datasource=github-releases depName=containers/composefs

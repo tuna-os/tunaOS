@@ -239,8 +239,11 @@ jobs:
     # Strict plain+encrypted GUI qualification declares 60 minutes. The
     # build path adds another 60; allow ten minutes for setup/artifact upload
     # on each path so the job cannot preempt its own strict phase.
-    # Artifact transfer can take 20 minutes; historical diagnostics add 20.
-    timeout-minutes: ${{ inputs.source == 'native-artifact' && 120 || ((github.event_name == 'workflow_dispatch' && inputs.source == 'build') && 130 || 70) }}
+    # Native archive transfer is hard-capped at 60 minutes; historical GUI
+    # smoke adds 20, strict plain+LUKS (including detached cold/warm boots)
+    # keeps its full 60, extraction allows ten, and setup/API/hash/evidence
+    # get ten more: 160 total.
+    timeout-minutes: ${{ inputs.source == 'native-artifact' && 160 || ((github.event_name == 'workflow_dispatch' && inputs.source == 'build') && 130 || 70) }}
     strategy:
       # Don't cancel the other leg if one fails — we want to see both signals.
       fail-fast: false
@@ -452,12 +455,9 @@ jobs:
           # its desktop prefix -- gnome-hwe and gnome-nvidia all ride inside
           # the gnome group's offline store, so they resolve to the same ISO.
           DESKTOP="${FLAVOR%%-*}"
-          case "$PLATFORM" in
-            linux/amd64/v2) PLATFORM_SUFFIX="" ;;
-            linux/amd64) PLATFORM_SUFFIX="-amd64" ;;
-            linux/arm64) PLATFORM_SUFFIX="-arm64" ;;
-            *) echo "::error::unsupported canonical platform: ${PLATFORM}" >&2; exit 1 ;;
-          esac
+          # Same helper the producer uses: generic AMD64 gets `-amd64` only
+          # when the flavor also has a v2 sibling, else the bare name.
+          PLATFORM_SUFFIX="$(python3 scripts/iso-latest-suffix.py "$VARIANT" "$FLAVOR" "$PLATFORM")"
           if [[ "$DESKTOP" == "gnome" ]]; then
             GROUP_OBJECT="${VARIANT}-latest${PLATFORM_SUFFIX}.iso"
           else

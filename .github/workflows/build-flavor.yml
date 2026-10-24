@@ -2,8 +2,6 @@ name: Build Flavor
 permissions:
   actions: read
   contents: read
-  packages: write
-  id-token: write
 # Dispatch-only. The weekly Sunday "all flavors x all variants" schedule was
 # removed 2026-08-01: every nightly variant build already runs flavor=all, so
 # the weekly sweep rebuilt the exact same ~137 images a 12th time — as one
