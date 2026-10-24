@@ -82,6 +82,43 @@ launch-task quota. It now has an open issue channel and zero other starter
 tasks. So it is the cheapest place to add repository breadth toward the
 "at least three repositories" rule.
 
+## Four starter-task seeds for #3037
+
+This task list addresses
+[tunaos#3037](https://github.com/tuna-os/tunaos/issues/3037). Both repositories are in participation scope. Each issue names the source
+files, bounds the work, gives observable acceptance criteria, and links the
+roadmap, contributor guide, and help channel.
+
+| Repository | Starter task | Scope |
+|---|---|---|
+| corral | [#640](https://github.com/tuna-os/corral/issues/640) | Add context-command help descriptions and examples. |
+| corral | [#641](https://github.com/tuna-os/corral/issues/641) | Explain the default-backend set/read workflow in command help. |
+| iso-builder | [#289](https://github.com/tuna-os/iso-builder/issues/289) | Write a browser-user quickstart and link it from README. |
+| iso-builder | [#290](https://github.com/tuna-os/iso-builder/issues/290) | Document the existing offline JavaScript unit-test workflow. |
+
+Curation evidence: Corral commit `7ee4bbb28349bca1d62a0d28fd179c9f130f7443`
+already has unit-test CI, so adding that workflow would duplicate work.
+Its `cmd/context.go` and default-backend subcommands in `cmd/config.go`
+lack examples. ISO Builder commit
+`d2521c720432a939d9ab6137e4df9ea1c42a7424` has no browser-user quickstart
+under `docs/`; its contributor guide omits the Node unit suites. The curation pass checked open issues
+and PRs before it created these tasks.
+
+**Label follow-up required.** GitHub rejected the contributor's label
+updates with `AddLabelsToLabelable` permission errors. These seeds do not
+count toward the launch quota until a maintainer applies both
+`good first issue` and `help wanted`. To finish #3037:
+
+1. Recheck each issue for a claim or a PR that covers the work, then apply both labels.
+2. Confirm the labelled issues appear in the public contributor search.
+3. Run `scripts/gfi-pool-report.sh` and check the launch target above,
+   including paired labels, participation scope, and repository share.
+
+Four new seeds alone do not prove the full launch target. Do not infer a
+current pool count from this list or promote the backlog as ready before
+those checks pass. Record claims and conversions in the existing
+trackers; this list records the work seeded, not live availability.
+
 ## Current TunaOS candidates
 
 Re-verified live on 2026-09-02 with
