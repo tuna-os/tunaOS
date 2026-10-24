@@ -54,7 +54,7 @@ Key scripts:
 - `scripts/resolve-image.sh` — consolidated image ref lookups
 - `scripts/build-image-inner.sh` — the build engine (env-var driven)
 - `build_scripts/desktop/install-desktop.sh` — generic DE installer
-- `build_scripts/lib.sh` — shared library (OS detection, pkg abstraction)
+- `build_scripts/lib.sh` — compatibility facade; domain modules under `build_scripts/lib/` own platform, package, service, reporting, and orchestration boundaries
 - `build_scripts/README.md` — naming scheme (dirs = code path, numbers = phase order)
 
 Containerfiles:

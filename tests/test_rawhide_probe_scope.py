@@ -22,7 +22,7 @@ import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-LIB = ROOT / "build_scripts" / "lib.sh"
+LIB = ROOT / "build_scripts" / "lib" / "packages.sh"
 
 
 def probe_body() -> str:

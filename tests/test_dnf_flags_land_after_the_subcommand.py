@@ -35,7 +35,7 @@ import unittest
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-LIB = REPO / "build_scripts" / "lib.sh"
+LIB = REPO / "build_scripts" / "lib" / "packages.sh"
 
 # Options dnf5 accepts only AFTER the command word. Not an exhaustive list of
 # dnf5's command-scoped options — just the ones this repo actually uses, so a

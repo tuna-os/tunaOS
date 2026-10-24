@@ -56,9 +56,9 @@ ensure_openssh_installed() {
 	esac
 }
 
-# safe_enable / safe_disable are defined in lib.sh — they're called from
-# multiple build scripts, so the definition lives with the other shared
-# helpers (install_available, install_from_copr, etc.).
+# safe_enable / safe_disable are defined in build_scripts/lib/service-policy.sh;
+# they're called from multiple build scripts. Package helpers such as
+# install_available and install_from_copr live in build_scripts/lib/packages.sh.
 
 # This block sits ABOVE the package-manager branching on purpose. Each of the
 # apt and pacman/zypper/emerge paths below ends in `exit 0`, so anything placed
