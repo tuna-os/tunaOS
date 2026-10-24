@@ -164,7 +164,7 @@ For a KubeVirt cluster, `scripts/boot-gate.sh` checks for `--karg` support in bo
 
 Routine minor, patch, pin, and digest updates may automerge only after required
 CI and branch protection pass. Major updates and repository-specific holds
-require human review. The config gate runs both Renovate's schema validator
+need human review. The config gate runs both Renovate's schema validator
 and `scripts/check-renovate-automerge-policy.py`, because schema-valid rules
 can still violate the org automerge boundary. See
 [DEPENDENCY-FRESHNESS.md](DEPENDENCY-FRESHNESS.md) for the org policy,

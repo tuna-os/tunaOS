@@ -3,10 +3,6 @@ import copy
 import json
 import re
 from pathlib import Path
-try:
-    import tomllib
-except ModuleNotFoundError:
-    import tomli as tomllib
 
 # Transitional implementation registry. Package-bearing operations remain
 # inventoried until their arguments move into typed configuration inputs.
@@ -164,9 +160,11 @@ def validate(document):
                 if family == 'emerge':
                     allowed |= {'source_repositories', 'binrepos', 'display_manager'}
                 if family == 'apt':
-                    allowed |= {'ppa'}
-                if family == 'zypper':
-                    allowed |= {'display_manager'}
+                    allowed |= {'repos', 'ppa', 'display_manager'}
+                elif family == 'cachyos':
+                    allowed |= {'repos'}
+                elif family == 'zypper':
+                    allowed |= {'repos', 'display_manager'}
             known(policy, allowed, where)
             for key, value in policy.items():
                 if key in LIST_FIELDS | {'include'}:

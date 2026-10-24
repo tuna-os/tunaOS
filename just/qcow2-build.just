@@ -1,6 +1,6 @@
 # --- QCOW2 disk-image build (bootc install to-disk, via loopback in a privileged container) ---
 # Extracted from the root Justfile (#508: cross-repo Justfile inflation).
-# repo_organization, just, and platform are root-level export/assignment and remain visible here
+# just and platform are root-level export/assignment and remain visible here
 # (just's import shares one flat recipe/variable namespace).
 
 # Generate a QCOW2 disk image using bootc install to-disk (via loopback in a privileged container)
@@ -20,7 +20,7 @@ qcow2 variant flavor='gnome' repo='local' tag='':
         TAG="{{ tag }}"
         [[ -z "$TAG" ]] && TAG="{{ flavor }}"
 
-        if [ "{{ repo }}" = "ghcr" ]; then IMG_REF="ghcr.io/{{ repo_organization }}/{{ variant }}:$TAG"
+        if [ "{{ repo }}" = "ghcr" ]; then IMG_REF="$({{ justfile_directory() }}/scripts/publish-destination.sh)/{{ variant }}:$TAG"
         elif [ "{{ repo }}" = "local" ]; then IMG_REF="localhost/{{ variant }}:$TAG"
         else exit 1; fi
         OUTPUT_NAME="{{ variant }}"

@@ -1,0 +1,43 @@
+{
+  "display_manager": "gdm",
+  "packages": {
+    "pacman": [
+      "tunaos/tuna-desktop=1.0.0beta.1-1",
+      "gdm",
+      "xorg-xwayland",
+      "ibus",
+      "orca",
+      "gnome-shell",
+      "gnome-settings-daemon",
+      "gnome-control-center",
+      "gnome-keyring",
+      "evolution-data-server",
+      "xdg-desktop-portal-gnome",
+      "xdg-desktop-portal-gtk",
+      "xdg-user-dirs",
+      "gvfs",
+      "nautilus",
+      "ptyxis",
+      "networkmanager",
+      "libsecret",
+      "pipewire",
+      "wireplumber",
+      "gst-plugin-pipewire",
+      "gst-plugins-good",
+      "power-profiles-daemon",
+      "upower",
+      "flatpak",
+      "plymouth",
+      "adwaita-icon-theme",
+      "noto-fonts",
+      "noto-fonts-emoji",
+      "ttf-dejavu",
+      "ttf-liberation"
+    ]
+  },
+  "versionlock": [],
+  "post_install": [
+    "tuna-flatpak-remote.sh",
+    "flatpak-preinstall.sh"
+  ]
+}
