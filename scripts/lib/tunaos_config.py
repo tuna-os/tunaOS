@@ -1,11 +1,15 @@
-"""Primary TOML matrix contract and generated compatibility adapter.
+"""Primary TOML matrix and desktop policy with generated compatibility adapters.
 
-Python 3.10 uses the pinned tomli parser; 3.11+ uses the standard library.
-This first ownership migration does not yet consume package/branding sections.
+All supported Python versions use the same reviewed TOML 1.0 parser.
+Base/shared package and branding ownership remain later migration milestones.
 """
 from __future__ import annotations
 
 import copy
+import hashlib
+import sys
+import importlib.util
+from functools import lru_cache
 from datetime import datetime
 import json
 import os
@@ -13,24 +17,44 @@ from pathlib import Path
 import re
 import tempfile
 
+TOMLI_VERSION = '2.3.2'
+_VENDOR = Path(__file__).with_name('_vendor') / 'tomli'
+# A path-specific namespace keeps copied checkout imports independent.
+_VENDOR_NAME = '_tunaos_tomli_' + hashlib.sha256(str(_VENDOR.resolve()).encode()).hexdigest()
 try:
-    import tomllib
-except ModuleNotFoundError:
-    try:
-        import tomli as tomllib
-    except ModuleNotFoundError as exc:
-        raise SystemExit(
-            "Python 3.10 requires tomli. Install the reviewed dependencies: "
-            "python3 -m pip install -r requirements-config.txt"
-        ) from exc
+    _spec = importlib.util.spec_from_file_location(
+        _VENDOR_NAME, _VENDOR / '__init__.py', submodule_search_locations=[str(_VENDOR)])
+    if _spec is None or _spec.loader is None:
+        raise ImportError('vendored parser loader is unavailable')
+    tomllib = importlib.util.module_from_spec(_spec)
+    sys.modules[_VENDOR_NAME] = tomllib
+    _spec.loader.exec_module(tomllib)
+    if getattr(tomllib, '__version__', None) != TOMLI_VERSION:
+        raise ImportError('vendored parser version mismatch')
+except (ImportError, OSError) as exc:
+    raise SystemExit(f'TunaOS vendored Tomli {TOMLI_VERSION} is unavailable; restore the reviewed source checkout: {exc}') from exc
 
 ROOT = Path(__file__).resolve().parents[2]
 ID = re.compile(r"[a-z0-9][a-z0-9-]*\Z")
 PLATFORMS = {"linux/amd64", "linux/amd64/v2", "linux/amd64/v3", "linux/arm64"}
+# OCI distribution grammar: a registry host with an optional port, and
+# lowercase repository path components separated by "/".
+REGISTRY = re.compile(r"(?:localhost|[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+)(?::[0-9]{1,5})?\Z")
+NAMESPACE = re.compile(r"[a-z0-9]+(?:(?:\.|_|__|-+)[a-z0-9]+)*(?:/[a-z0-9]+(?:(?:\.|_|__|-+)[a-z0-9]+)*)*\Z")
 
 
 class ConfigError(ValueError):
     """Invalid primary configuration; never fall back to stock data."""
+
+
+def parse(source, path='<string>'):
+    """Parse the host-independent grammar and report resource limits cleanly."""
+    try:
+        if isinstance(source, bytes):
+            source = source.decode('utf-8')
+        return tomllib.loads(source)
+    except (ValueError, RecursionError) as exc:
+        raise ConfigError(f'{path}: {exc}') from exc
 
 
 def table(value, allowed, required, path):
@@ -62,14 +86,53 @@ def identifier(value, path):
         raise ConfigError(f"{path}: expected lowercase identifier")
 
 
+@lru_cache(maxsize=1)
+def package_policy():
+    spec = importlib.util.spec_from_file_location('tunaos_package_policy', Path(__file__).with_name('tunaos_packages.py'))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+@lru_cache(maxsize=1)
+def flatpak_policy():
+    spec = importlib.util.spec_from_file_location('flatpak_preinstall_policy', Path(__file__).with_name('flatpak_preinstall.py'))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+@lru_cache(maxsize=1)
+def package_catalog_schema():
+    spec = importlib.util.spec_from_file_location('tunaos_package_catalogs', Path(__file__).with_name('package_catalogs.py'))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def validate(config):
-    """Validate the complete phase-1 surface; reject inert future sections."""
-    table(config, ('schema_version', 'build', 'iso_groups', 'sibling_images', 'tuna_rollout', 'variants'),
+    """Validate the implemented surface; reject inert future sections."""
+    table(config, ('schema_version', 'build', 'iso_groups', 'sibling_images', 'tuna_rollout', 'variants', 'package_groups', 'desktops', 'iso_builder', 'flavor_metadata', 'flatpak_preinstall', 'package_catalogs'),
           ('schema_version', 'build', 'iso_groups', 'sibling_images', 'tuna_rollout', 'variants'), 'config')
+    if 'desktops' in config or 'package_groups' in config:
+        tunaos_packages = package_policy()
+        try:
+            tunaos_packages.validate({key: config[key] for key in ('package_groups', 'desktops') if key in config})
+        except tunaos_packages.PolicyError as exc:
+            raise ConfigError(str(exc)) from exc
     if type(config['schema_version']) is not int or config['schema_version'] != 1:
         raise ConfigError('schema_version: expected integer 1')
-    table(config['build'], ('global_platforms',), ('global_platforms',), 'build')
+    table(config['build'], ('global_platforms', 'publish'), ('global_platforms',), 'build')
     strings(config['build']['global_platforms'], 'build.global_platforms', platform=True)
+    if 'publish' in config['build']:
+        # Optional: a fork's own destination. Omitted, CI publishes to the
+        # repository owner's namespace, so the stock file stays fork-neutral.
+        publish = config['build']['publish']
+        table(publish, ('registry', 'namespace'), ('registry', 'namespace'), 'build.publish')
+        if not isinstance(publish['registry'], str) or not REGISTRY.fullmatch(publish['registry']):
+            raise ConfigError('build.publish.registry: expected a lowercase registry host such as ghcr.io')
+        if not isinstance(publish['namespace'], str) or not NAMESPACE.fullmatch(publish['namespace']):
+            raise ConfigError('build.publish.namespace: expected lowercase OCI path components such as acme')
     variants = config['variants']
     if not isinstance(variants, dict) or not variants:
         raise ConfigError('variants: expected nonempty table')
@@ -189,6 +252,34 @@ def validate(config):
             unknown = set(group[key]) - flavor_ids
             if unknown:
                 raise ConfigError(f'iso_groups[{i}].{key}: unknown flavors {sorted(unknown)}')
+    if 'flatpak_preinstall' in config:
+        try:
+            flatpak_policy().validate(config)
+        except flatpak_policy().PolicyError as exc:
+            raise ConfigError(str(exc)) from exc
+    if 'iso_builder' in config or 'flavor_metadata' in config:
+        module_path = Path(__file__).with_name('iso_builder_config.py')
+        spec = importlib.util.spec_from_file_location('iso_builder_config', module_path)
+        if spec is None or spec.loader is None:
+            raise ConfigError(f'iso_builder: cannot load validator at {module_path}')
+        module = importlib.util.module_from_spec(spec)
+        try:
+            spec.loader.exec_module(module)
+        except OSError as exc:
+            raise ConfigError(f'iso_builder: cannot read validator at {module_path}: {exc}') from exc
+        try:
+            if 'flavor_metadata' in config:
+                module.flavor_metadata(config)
+            if 'iso_builder' in config:
+                module.project(config)
+        except module.ConfigError as exc:
+            raise ConfigError(f'iso_builder: {exc}') from exc
+    if 'package_catalogs' in config:
+        catalogs = package_catalog_schema()
+        try:
+            catalogs.validate_document(config)
+        except catalogs.CatalogError as exc:
+            raise ConfigError(f'package_catalogs: {exc}') from exc
     return config
 
 
@@ -212,11 +303,10 @@ def publication_tags_overlap(left, left_dated, right, right_dated):
 def load(path=None):
     path = Path(path) if path is not None else ROOT / 'tunaos.toml'
     try:
-        with path.open('rb') as stream:
-            config = tomllib.load(stream)
-    except (OSError, tomllib.TOMLDecodeError) as exc:
+        source = path.read_bytes()
+    except OSError as exc:
         raise ConfigError(f'{path}: {exc}') from exc
-    return validate(config)
+    return validate(parse(source, path))
 
 
 def matrix(config):
@@ -235,7 +325,10 @@ def render(config):
 def prepare(root=ROOT):
     """Atomically refresh ignored legacy adapter from the primary source."""
     root = Path(root)
-    content = render(load(root / 'tunaos.toml'))
+    document = load(root / 'tunaos.toml')
+    content = render(document)
+    if 'desktops' in document:
+        prepare_desktops(root, document)
     target = root / '.github/build-config.yml'
     if target.is_symlink() or target.parent.is_symlink():
         raise ConfigError(f'{target}: generated adapter must not be a symlink')
@@ -258,3 +351,159 @@ def prepare(root=ROOT):
         if temporary is not None:
             temporary.unlink(missing_ok=True)
     return target
+
+
+def prepare_desktops(root=ROOT, document=None):
+    """Validate every desktop output before refreshing its compatibility file."""
+    root = Path(root)
+    document = load(root / 'tunaos.toml') if document is None else validate(document)
+    policy = {key: document[key] for key in ('package_groups', 'desktops')}
+    outputs = package_policy().desktop_outputs(policy)
+    targets = []
+    for relative in outputs:
+        target = root / relative
+        if any(parent.is_symlink() for parent in (target, *target.parents) if parent != root.parent):
+            raise ConfigError(f'{target}: generated desktop paths must not be symlinks')
+        if target.exists() and not target.is_file():
+            raise ConfigError(f'{target}: generated desktop adapter must be a regular file')
+        targets.append(target)
+    for target, content in zip(targets, outputs.values()):
+        if target.is_file() and target.read_text() == content:
+            continue
+        target.parent.mkdir(parents=True, exist_ok=True)
+        temporary = None
+        try:
+            with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', dir=target.parent,
+                                             prefix='.desktop-policy-', delete=False) as stream:
+                temporary = Path(stream.name)
+                stream.write(content)
+                stream.flush()
+                os.fsync(stream.fileno())
+            temporary.chmod(0o644)
+            temporary.replace(target)
+        finally:
+            if temporary is not None:
+                temporary.unlink(missing_ok=True)
+    return targets
+
+
+def prepare_debian_contract(root, variant, desktop, platform):
+    """Bind a declared Debian build cell before its context is hashed or copied."""
+    import hashlib
+    root = Path(root)
+    source = (root / 'tunaos.toml').read_bytes()
+    document = validate(parse(source, root / 'tunaos.toml'))
+    try:
+        contract = package_policy().installation_contract(document, hashlib.sha256(source).hexdigest(),
+                                                         variant, desktop, platform,
+                                                         manager='apt', os_id='debian')
+    except package_policy().PolicyError as exc:
+        raise ConfigError(str(exc)) from exc
+    target = root / 'manifests/desktop-contracts' / variant / desktop / (platform.replace('/', '-') + '.json')
+    if any(parent.is_symlink() for parent in (target, *target.parents) if parent != root.parent):
+        raise ConfigError(f'{target}: contract destination must not be a symlink')
+    content = json.dumps(contract, indent=2) + '\n'
+    if target.is_file() and target.read_text() == content:
+        return target
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', dir=target.parent,
+                                         prefix='.desktop-contract-', delete=False) as stream:
+            temporary = Path(stream.name)
+            stream.write(content)
+            stream.flush()
+            os.fsync(stream.fileno())
+        temporary.chmod(0o644)
+        temporary.replace(target)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+    return target
+
+
+def prepare_debian_build_context(root, output, variant, desktop, platforms):
+    """Copy reviewed tracked inputs and generate only the requested cell contracts."""
+    import hashlib
+    import shutil
+    import subprocess
+    root, output = Path(root).resolve(), Path(output).resolve()
+    if output.exists() or output.is_relative_to(root):
+        raise ConfigError('build context output must be new and outside the source checkout')
+    if not platforms or len(set(platforms)) != len(platforms):
+        raise ConfigError('build context requires distinct target platforms')
+    tracked = subprocess.check_output(['git', '-C', str(root), 'ls-files', '-z'], text=True).split('\0')
+    snapshot = {}
+    inputs = set(filter(None, tracked))
+    # Prepared preview contexts carry a validated manifest and content-addressed
+    # assets outside their Git index. Preserve only those explicit inputs.
+    payload = root / 'manifests/fork-config.json'
+    if payload.exists() or payload.is_symlink():
+        if payload.is_symlink() or not payload.is_file():
+            raise ConfigError('prepared customization manifest must be a regular file')
+        manifest = json.loads(payload.read_text())
+        inputs.add('manifests/fork-config.json')
+        assets = manifest.get('assets', {})
+        if not isinstance(assets, dict):
+            raise ConfigError('prepared customization assets must be a mapping')
+        for asset in assets.values():
+            if not isinstance(asset, dict) or set(asset) != {'path', 'sha256'}:
+                raise ConfigError('prepared customization asset requires path and sha256')
+            digest = asset['sha256']
+            if not isinstance(digest, str) or not re.fullmatch(r'[0-9a-f]{64}', digest):
+                raise ConfigError('prepared customization asset digest is invalid')
+            if asset['path'] != f'fork-assets/{digest}.jpg':
+                raise ConfigError('prepared customization asset path is invalid')
+            relative = 'manifests/' + asset['path']
+            path = root / relative
+            if path.is_symlink() or not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != digest:
+                raise ConfigError('prepared customization asset is missing or has changed')
+            inputs.add(relative)
+    for relative in sorted(inputs):
+        # Derived files can exist in an old checkout index during migration;
+        # they are never authorities and must not enter the source snapshot.
+        if relative.startswith(('manifests/desktops/', 'manifests/desktop-plans/', 'manifests/desktop-contracts/')):
+            continue
+        source = root / relative
+        if source.is_symlink():
+            content = b'symlink:' + os.readlink(source).encode()
+        elif source.is_file():
+            content = source.read_bytes()
+        else:
+            raise ConfigError(f'{relative}: unsupported directory/submodule source')
+        snapshot[relative] = {'sha256': hashlib.sha256(content).hexdigest(),
+                              'mode': source.lstat().st_mode & 0o777}
+    output.mkdir(parents=True)
+    for relative, digest in snapshot.items():
+        source, target = root / relative, output / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if source.is_symlink():
+            target.symlink_to(os.readlink(source))
+            content = b'symlink:' + os.readlink(target).encode()
+        else:
+            shutil.copy2(source, target)
+            content = target.read_bytes()
+        if (hashlib.sha256(content).hexdigest() != digest['sha256']
+                or target.lstat().st_mode & 0o777 != digest['mode']):
+            raise ConfigError('sources changed during context preparation; discard and retry')
+    # Detect edits to an earlier-copied input while later files were copied.
+    for relative, digest in snapshot.items():
+        source = root / relative
+        content = (b'symlink:' + os.readlink(source).encode()
+                   if source.is_symlink() else source.read_bytes())
+        if (hashlib.sha256(content).hexdigest() != digest['sha256']
+                or source.lstat().st_mode & 0o777 != digest['mode']):
+            raise ConfigError('sources changed during context preparation; discard and retry')
+    prepare(output)
+    for platform in platforms:
+        prepare_debian_contract(output, variant, desktop, platform)
+    # Hash only relative paths and bytes. Temporary directory names and another
+    # target's accumulated generated outputs cannot perturb this identity.
+    generated = {}
+    for path in sorted((output / 'manifests').rglob('*')):
+        if path.is_file():
+            generated[path.relative_to(output).as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
+    context_digest = hashlib.sha256(json.dumps({'source': snapshot, 'generated': generated}, sort_keys=True).encode()).hexdigest()
+    (output / 'desktop-context-receipt.json').write_text(json.dumps({'sha256': context_digest, 'sources': snapshot,
+                                                                   'generated': generated}, indent=2) + '\n')
+    return output

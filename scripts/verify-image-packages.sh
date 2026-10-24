@@ -14,6 +14,8 @@ fi
 IMAGE="$1"
 FLAVOR="$2"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Generated desktop adapters are prepared before every direct reader.
+python3 "${REPO_ROOT}/scripts/config.py" generate >/dev/null
 MANIFEST="${REPO_ROOT}/manifests/desktops/${FLAVOR}.yaml"
 
 if [[ ! -f "$MANIFEST" ]]; then
@@ -35,6 +37,15 @@ OS_ID=$(podman run --rm --entrypoint sh "$IMAGE" -c '
 
 OS_ID=$(echo "$OS_ID" | tr -d '\r\n')
 echo "Detected OS inside image: ${OS_ID}"
+
+if [[ "$OS_ID" == debian && "$FLAVOR" == gnome ]]; then
+	# The caller supplies its selected build cell. Never infer provenance from
+	# a mutable image tag or from the installed receipt being verified.
+	: "${VARIANT:?Debian GNOME verification requires selected VARIANT}"
+	: "${PLATFORM:?Debian GNOME verification requires selected PLATFORM}"
+	exec python3 "${REPO_ROOT}/scripts/config.py" verify-debian-image \
+		--image "$IMAGE" --variant "$VARIANT" --desktop "$FLAVOR" --platform "$PLATFORM"
+fi
 
 # 2) Extract package list based on OS type
 PACKAGES=()
@@ -63,10 +74,17 @@ fedora)
 	done < <(yq eval '.packages.fedora[]' "$MANIFEST" 2>/dev/null || true)
 	;;
 ubuntu | debian)
-	# Read apt packages list from manifest
+	# Apt sections may be a plain package list or a map carrying repositories
+	# and a per-base display-manager override.
+	apt_shape="$(yq eval '.packages.apt | tag' "$MANIFEST")"
+	if [[ "$apt_shape" == "!!map" ]]; then
+		apt_query='.packages.apt.packages[]'
+	else
+		apt_query='.packages.apt[]'
+	fi
 	while IFS= read -r pkg; do
 		[[ -n "$pkg" && "$pkg" != "null" ]] && PACKAGES+=("$pkg")
-	done < <(yq eval '.packages.apt[]' "$MANIFEST" 2>/dev/null || true)
+	done < <(yq eval "$apt_query" "$MANIFEST" 2>/dev/null || true)
 	;;
 gentoo)
 	# Read emerge packages list from manifest
@@ -107,7 +125,8 @@ for pkg in "${PACKAGES[@]}"; do
 		fi
 		;;
 	ubuntu | debian)
-		if ! podman run --rm --entrypoint dpkg-query "$IMAGE" -W -f='${Status}' "$pkg" 2>/dev/null | grep -q "ok installed"; then
+		query_pkg="${pkg%%=*}"
+		if ! podman run --rm --entrypoint dpkg-query "$IMAGE" -W -f='${Status}' "$query_pkg" 2>/dev/null | grep -q "ok installed"; then
 			echo "❌ Missing package: ${pkg}"
 			FAILED=1
 		else
@@ -164,6 +183,7 @@ SYSTEMD_SERVICES=(tailscaled.service systemd-resolved.service)
 # sddm to plasmalogin), and any one of them satisfies the check.
 case "${FLAVOR}" in
 gnome) SYSTEMD_SERVICES+=("gdm.service|gdm3.service") ;;
+tuna) SYSTEMD_SERVICES+=(gdm.service) ;;
 kde) SYSTEMD_SERVICES+=("sddm.service|plasmalogin.service") ;;
 niri | cosmic) SYSTEMD_SERVICES+=(greetd.service) ;;
 esac

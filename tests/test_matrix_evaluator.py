@@ -102,6 +102,26 @@ def test_plain_dicts_score_every_cell() -> None:
     assert result.advisory == ["iso"]
     assert result.unimplemented == ["parity"]
 
+def test_install_provenance_covers_an_image_only_overlay() -> None:
+    matrices = me.CellMatrices(
+        published={"albacore": {"gnome", "gnome-nvidia"}},
+        desktops={"albacore": {"gnome"}},
+        isos={"albacore": {"gnome"}},
+        install={"albacore": {"gnome", "gnome-nvidia"}},
+    )
+    evidence = me.AxisEvidence(
+        stage=_stage(gnome=("success", "success"),
+                     gnome_nvidia=("success", "success")),
+        luks={"LUKS albacore:gnome-nvidia": ("success", "2026-10-02", "400")},
+    )
+    per_cell, provenance = me.score_cell(
+        "albacore", "gnome-nvidia", matrices, evidence, REPO
+    )
+    assert per_cell["install"] == "pass"
+    assert provenance["install"]["run"].endswith("/400")
+
+
+
 
 def test_an_advisory_failure_is_recorded_but_does_not_block() -> None:
     result = me.evaluate_composite(CRITERIA, MATRICES, EVIDENCE, REPO, TODAY)
