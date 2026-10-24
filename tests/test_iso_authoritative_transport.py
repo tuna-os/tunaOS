@@ -3,6 +3,8 @@ import base64
 import copy
 import io
 import json
+import http.client
+import re
 from pathlib import Path
 import socket
 import sys
@@ -191,6 +193,10 @@ def test_authoritative_caller_uses_only_selected_endpoints_and_existing_validato
         ("currentBefore", ("repository", "fork"), True),
         ("currentBefore", ("head_repository", "full_name"), "fork/iso-builder"),
         ("currentBefore", ("pull_requests",), [{"number": 1}]),
+        ("currentBefore", ("workflow_id",), 1),
+        ("currentBefore", ("event",), "pull_request"),
+        ("currentBefore", ("repository", "full_name"), "tuna-os/other"),
+        ("attempt", ("head_sha",), "e" * 40),
         ("currentBefore", ("path",), ".github/workflows/other.yml"),
         ("currentBefore", ("head_sha",), "f" * 40),
         ("artifact", ("expired",), True),
@@ -302,6 +308,102 @@ def test_redirect_rejects_wrong_origin_insecure_credentials_and_second_hop(sourc
         handler.redirect_request(request, response, 302, "Found", {}, target)
 
     assert response.closed
+
+
+class RecordingFile(io.BytesIO):
+    """Raw HTTP bytes behind a real ``http.client.HTTPResponse``."""
+
+    def __init__(self, data):
+        super().__init__(data)
+        self.body_reads = 0
+
+    def read(self, size=-1):
+        self.body_reads += 1
+        return super().read(size)
+
+
+class FakeSocket:
+    def __init__(self, data):
+        self.file = RecordingFile(data)
+
+    def makefile(self, _mode):
+        return self.file
+
+
+class FakeHTTPSServer(urllib.request.BaseHandler):
+    """Serve queued raw HTTP responses to a real urllib opener chain."""
+
+    handler_order = 50  # ahead of ProxyHandler/HTTPSHandler: never touch a network
+
+    def __init__(self, exchanges):
+        self.exchanges = list(exchanges)
+        self.requests = []
+        self.files = []
+
+    def https_open(self, request):
+        url, status, headers, body = self.exchanges.pop(0)
+        assert request.full_url == url
+        self.requests.append((request.full_url, dict(request.header_items())))
+        lines = [f"HTTP/1.1 {status} {http.client.responses[status]}"]
+        lines += [f"{name}: {value}" for name, value in headers.items()]
+        lines.append(f"Content-Length: {len(body)}")
+        raw = ("\r\n".join(lines) + "\r\n\r\n").encode() + body
+        sock = FakeSocket(raw)
+        result = http.client.HTTPResponse(sock, method=request.get_method())
+        result.begin()
+        result.url = request.full_url
+        result.msg = result.reason
+        self.files.append(sock.file)
+        return result
+
+
+def test_real_urllib_chain_redirects_once_without_credential_or_redirect_drain():
+    case = copy.deepcopy(CASE)
+    run = f"{CALLER.API_ORIGIN}/repos/tuna-os/iso-builder/actions/runs/{case['selection']['run_id']}"
+    artifact = (
+        f"{CALLER.API_ORIGIN}/repos/tuna-os/iso-builder/actions/artifacts/"
+        f"{case['selection']['artifact_id']}"
+    )
+    signed = ARTIFACT_ORIGIN + "/signed/archive.zip?signature=synthetic"
+    api_server = FakeHTTPSServer(
+        (url, 200, {}, encode(case[name]))
+        for url, name in (
+            (run, "currentBefore"),
+            (run + "/attempts/1", "attempt"),
+            (artifact, "artifact"),
+            (artifact, "artifactAfter"),
+            (run, "currentAfter"),
+        )
+    )
+    archive_server = FakeHTTPSServer(
+        [
+            (artifact + "/zip", 302, {"Location": signed}, b"r" * 4096),
+            (signed, 200, {}, base64.b64decode(case["archiveBase64"], validate=True)),
+        ]
+    )
+    openers = (
+        urllib.request.build_opener(CALLER._NoRedirect(), api_server),
+        urllib.request.build_opener(CALLER._ArtifactRedirect((ARTIFACT_ORIGIN,)), archive_server),
+        urllib.request.build_opener(CALLER._NoRedirect(), FakeHTTPSServer(())),
+    )
+
+    result = CALLER.verify_authoritative_artifact_snapshot(
+        reviewed(case), selected(case), network_policy(), TOKEN, _openers=openers, _clock=Clock()
+    )
+
+    assert result == case["expectedResult"]
+    assert result["authentication"] == "not_authenticated"
+    assert api_server.exchanges == [] and archive_server.exchanges == []
+    assert all(h["Authorization"] == "Bearer " + TOKEN for _, h in api_server.requests)
+    (first_url, first), (second_url, second) = archive_server.requests
+    assert (first_url, first["Authorization"]) == (artifact + "/zip", "Bearer " + TOKEN)
+    assert second_url == signed
+    assert "Authorization" not in second
+    redirect_file, archive_file = archive_server.files
+    assert redirect_file.closed
+    assert redirect_file.body_reads == 0
+    assert archive_file.closed
+    assert all(f.closed for f in api_server.files)
 
 
 def test_metadata_and_object_redirect_rejection_closes_response():
@@ -506,6 +608,11 @@ def test_compressed_or_wrong_origin_response_is_rejected_and_closed():
         {"max_json_bytes": CALLER.MAX_JSON_BYTES + 1},
         {"max_object_bytes": ARTIFACT.MAX_CHUNK_BYTES + 1},
         {"max_total_bytes": CALLER.MAX_TOTAL_BYTES + 1},
+        {"artifact_redirect_origins": (["https://artifacts.example.test"],)},
+        {"artifact_redirect_origins": (None,)},
+        {"artifact_redirect_origins": (ARTIFACT_ORIGIN, ARTIFACT_ORIGIN)},
+        {"artifact_redirect_origins": [ARTIFACT_ORIGIN]},
+        {"artifact_redirect_origins": ()},
     ],
 )
 def test_network_policy_cannot_disable_origin_time_or_byte_bounds(changes):
@@ -525,3 +632,38 @@ def test_explicit_rerun_selection_fails_before_opening_any_endpoint():
         )
 
     assert all(not opener.calls for opener in openers)
+
+
+
+def test_policy_for_another_repository_fails_before_opening_any_endpoint():
+    case = copy.deepcopy(CASE)
+    case["policy"]["repository"] = "fork/iso-builder"
+    openers, _ = fake_servers(case)
+
+    with pytest.raises(CALLER.AuthoritativeTransportError, match="policy_mismatch"):
+        CALLER.verify_authoritative_artifact_snapshot(
+            reviewed(case), selected(case), network_policy(), TOKEN, _openers=openers, _clock=Clock()
+        )
+
+    assert all(not opener.calls for opener in openers)
+
+
+def test_retained_prefix_matches_the_v2_schema_manifest_key():
+    schema = json.loads((ROOT / "schemas/iso-media-provenance-v2.schema.json").read_text())
+    patterns = []
+
+    def collect(node):
+        if isinstance(node, dict):
+            pattern = node.get("pattern")
+            if isinstance(pattern, str) and "browser-iso/candidates" in pattern:
+                patterns.append(pattern)
+            for value in node.values():
+                collect(value)
+        elif isinstance(node, list):
+            for value in node:
+                collect(value)
+
+    collect(schema)
+    key = ARTIFACT.retained_candidate_prefix(900000000001, 1) + "manifest.json"
+    assert patterns
+    assert all(re.fullmatch(pattern, key) for pattern in patterns)

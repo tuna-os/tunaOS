@@ -90,7 +90,7 @@ class _ArtifactRedirect(urllib.request.HTTPRedirectHandler):
                 raise AuthoritativeTransportError("redirect_origin", "response.location")
             if code not in (301, 302, 303, 307, 308):
                 raise AuthoritativeTransportError("redirect_status", "response.status")
-            return urllib.request.Request(
+            redirected = urllib.request.Request(
                 newurl,
                 headers={
                     "Accept": "application/octet-stream",
@@ -102,6 +102,10 @@ class _ArtifactRedirect(urllib.request.HTTPRedirectHandler):
         except Exception:
             _close_quietly(fp)
             raise
+        # Close the redirect response here as well: urllib would otherwise
+        # drain its body with an unbounded read() before following the hop.
+        _close_quietly(fp)
+        return redirected
 
 
 class _BoundedResponse:
@@ -186,7 +190,7 @@ class AuthoritativeTransport:
         self._archive_path = artifact_path + "/zip"
         self._archive_limit = policy.max_archive_bytes
         self._object_prefix = (
-            f"browser-iso/candidates/{selection.run_id}/1/yellowfin-gnome/s1/"
+            artifact_transport.retained_candidate_prefix(selection.run_id, selection.attempt)
             if retained_policy is not None
             else None
         )
@@ -404,7 +408,7 @@ def _validate_network_policy(policy):
     origins = policy.artifact_redirect_origins
     if type(origins) is not tuple or not origins:
         _fail("invalid_input", "network_policy.artifact_redirect_origins")
-    if len(origins) != len(set(origins)):
+    if any(type(origin) is not str for origin in origins) or len(origins) != len(set(origins)):
         _fail("invalid_input", "network_policy.artifact_redirect_origins")
     for origin in origins:
         if _reviewed_origin(origin) != origin or origin == API_ORIGIN:
