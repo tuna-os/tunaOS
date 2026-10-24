@@ -1997,6 +1997,20 @@ build_image = true
 build_iso = true
 
 [[variants.marlin.flavors]]
+# ThinkPad X13s (SC8280XP): overlay/x13s.sh on marlin:gnome, arm64 only.
+# Composefs with systemd-boot, the layout an in-place migration from
+# postmarketOS shares one ESP with (tuna-os/bootc-migrate#461). The X13s DTB
+# is embedded in a systemd-stub kernel and selected by hardware ID; no
+# install artifacts until the profile has booted on hardware.
+id = "gnome-x13s"
+stage = 3
+platforms = ["linux/arm64"]
+build_image = true
+build_iso = false
+build_qcow2 = false
+luks_e2e = false
+
+[[variants.marlin.flavors]]
 # gnome-asahi: NOT declared, and not an oversight.
 #
 # The Asahi-ALARM repo's linux-asahi package is real (verified by
