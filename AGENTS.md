@@ -233,3 +233,8 @@ For retained ISO media, preserve the GitHub receipt/archive anchor.
 Use the explicit branch for R2 media; never invent an archive member for R2 bytes.
 The negative fixtures in `tests/test_iso_retained_media_transport.py` distinguish
 byte consistency from trust in API freshness and producer authentication.
+
+Workflow permission checks live in `scripts/check-workflow-permissions.py`.
+Jobs can inherit an explicit workflow baseline; a job map alone leaves other
+jobs dependent on repository defaults. See `docs/CI-WORKFLOW-PUBLISHING.md`
+for the organization audit and caller/callee permission constraints.
