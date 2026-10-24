@@ -47,9 +47,14 @@ permissions:
   # alone, on every PR, regardless of what it actually changed.
   actions: read
 
+# Publication runs (schedule, dispatch) share one group because they
+# force-push automation/matrix-status. Pull-request drift checks push nothing.
+# When they shared that group, GitHub kept only the newest pending run, so each
+# PR push cancelled other PRs' checks and could cancel a queued daily refresh.
+# 41 of the last 98 pull_request runs ended cancelled (2026-10-24, #3813).
 concurrency:
-  group: matrix-status
-  cancel-in-progress: false
+  group: matrix-status-${{ github.event_name == 'pull_request' && github.ref || 'publish' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   regenerate:
