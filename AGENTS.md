@@ -124,6 +124,10 @@ was measured. A PR that violates one of these gets closed, not reviewed.
    another PR by the time it was filed; #1828 raced a fix that was already
    further along. `git log --oneline -20` and a PR-list search cost a
    minute; a stale PR costs a review cycle.
+   Check paths of changed files as well as titles before you edit and before
+   you open a PR. For the same deliverable, add evidence to the existing PR
+   instead of a new refresh PR. File overlap alone does not make
+   distinct work a duplicate. Follow the [flow-health runbook](docs/FLOW-HEALTH.md).
 5. **Rebase before opening.** A PR based days behind main is reviewed
    against a repo that no longer exists. If the base moved under you while
    the PR was open, rebase and re-run rule 1 — the merge queue tests the

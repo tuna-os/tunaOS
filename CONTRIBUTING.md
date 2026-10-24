@@ -46,6 +46,11 @@ hours, and review escalation, see [the ecosystem guide](CONTRIBUTING-ADVANCED.md
 For definitions of the terms below, see the
 [Git terms glossary](CONTRIBUTING-ADVANCED.md#git-terms).
 
+Before you edit and again before you open a PR, check open PRs for the same
+deliverable and changed files. Use the [file-path check](docs/FLOW-HEALTH.md#author-preflight)
+even when titles differ. Add missing evidence to the existing PR if it covers
+your task. Explain distinct scope when files overlap.
+
 1. Fork `tuna-os/tunaos` on GitHub and clone your fork.
 2. Create a focused branch: `git switch -c docs/short-description`.
 3. Make the smallest change that satisfies the issue's acceptance criteria.
@@ -152,6 +157,10 @@ The maintainer keeps one 30-minute slot each week for contributor work. During t
    Reuse local trackers, link their PRs to the coordination issue, and keep
    overdue refreshes on the agenda until merged. The review is due within
    seven calendar days of each quarter close.
+
+Use the [flow-health review sweep](docs/FLOW-HEALTH.md#review-sweep) for PRs
+whose checks pass and have no hold. Start with the docs and plan queue,
+verify duplicate candidates, and record a follow-up measurement in 14 days.
 
 This is a lightweight queue-management commitment, not a promise of immediate review. Contributors should expect an acknowledgement or status update within the next weekly triage slot.
 
