@@ -226,6 +226,7 @@ def test_matrix_annotation_rejects_non_object_rows(tmp_path: Path):
     [
         ({"variant": "", "flavor": "gnome", "platform": "linux/amd64"}, ".variant"),
         ({"variant": "fish", "flavor": 7, "platform": "linux/amd64"}, ".flavor"),
+        ({"variant": " fish ", "flavor": "gnome", "platform": "linux/amd64"}, ".variant"),
         ({"variant": "fish", "flavor": "gnome", "platform": "linux/riscv64"}, "unsupported"),
     ],
 )
@@ -686,7 +687,9 @@ def test_frozen_resolver_remains_valid_after_later_publication(tmp_path: Path):
 def test_guarded_uploader_aborts_before_r2_write_on_invalid_policy(tmp_path: Path):
     iso = tmp_path / "fish-gnome-10.2-x86_64.iso"
     iso.write_bytes(b"iso")
-    (tmp_path / f"{iso.name}.sha256").write_text("digest  iso\n")
+    (tmp_path / f"{iso.name}.sha256").write_text(
+        f"{hashlib.sha256(b'iso').hexdigest()}  {iso.name}\n"
+    )
     (tmp_path / f"{iso.name}.sigstore.json").write_text("{}")
     config_path = tmp_path / "config.json"
     config_path.write_text(json.dumps({

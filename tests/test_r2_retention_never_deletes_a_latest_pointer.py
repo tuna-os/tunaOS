@@ -334,7 +334,23 @@ esac
 """,
         encoding="utf-8",
     )
-    for command in ("yq", "python3", "rclone"):
+    (bin_dir / "jq").write_text(
+        f"#!{sys.executable}\n"
+        "import json, re, sys\n"
+        "try:\n"
+        "    document = json.load(sys.stdin)\n"
+        "    value = document['iso']\n"
+        "    valid = document.get('schema') == 'TunaOSIsoResolution/v1'\n"
+        "    valid = valid and isinstance(value, str)\n"
+        "    valid = valid and re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._+~-]*[.]iso', value)\n"
+        "    if not valid:\n"
+        "        raise ValueError\n"
+        "except (KeyError, ValueError, json.JSONDecodeError):\n"
+        "    raise SystemExit(1)\n"
+        "print(value)\n",
+        encoding="utf-8",
+    )
+    for command in ("jq", "yq", "python3", "rclone"):
         (bin_dir / command).chmod(0o755)
     env = os.environ.copy()
     env.update({

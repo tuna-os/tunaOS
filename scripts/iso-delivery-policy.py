@@ -259,7 +259,7 @@ def annotate_targets(
     for index, row in enumerate(matrix["include"]):
         for field in ("variant", "flavor", "platform"):
             value = row.get(field)
-            if not isinstance(value, str) or not value.strip():
+            if not isinstance(value, str) or not value or value != value.strip():
                 raise PolicyError(
                     f"target matrix include[{index}].{field} must be a non-empty string"
                 )

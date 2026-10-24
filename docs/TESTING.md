@@ -108,7 +108,7 @@ case "$status" in
   200)
     resolved="$(jq -er '
       select(.schema == "TunaOSIsoResolution/v1")
-      | select(.iso | test("^[A-Za-z0-9][A-Za-z0-9._-]*[.]iso$"))
+      | select(.iso | test("^[A-Za-z0-9][A-Za-z0-9._+~-]*[.]iso$"))
       | select(.digest | test("^sha256:[0-9a-f]{64}$"))
       | [.iso, .digest] | @tsv
     ' "$resolution_file")"
