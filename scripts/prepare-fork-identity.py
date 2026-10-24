@@ -56,6 +56,7 @@ def prepare(branding, cell, directory, source):
     lettermark = Image.new("RGBA", (width, 160))
     lettermark.alpha_composite(logo, (0, (160 - logo.height) // 2))
     ImageDraw.Draw(lettermark).text((152, 80), name, font=font, anchor="lm", fill="white")
+    lettermark.thumbnail((640, 160))
     assets, blobs = {}, {}
     for kind, image in (("logo", logo), ("lettermark", lettermark)):
         output = io.BytesIO()
@@ -70,7 +71,24 @@ def prepare(branding, cell, directory, source):
         digest = hashlib.sha256(svg).hexdigest()
         target = f"fork-identity-assets/{digest}.svg"
         assets[kind] = {"path": target, "sha256": digest}
+        if kind == "lettermark":
+            png_digest = hashlib.sha256(png).hexdigest()
+            png_path = f"fork-identity-assets/{png_digest}.png"
+            assets["splash"] = {"path": png_path, "sha256": png_digest}
+            blobs[png_path] = png
         blobs[target] = svg
+    # Reuse the shipped prompt/keyboard callbacks, including encrypted-root
+    # password entry. A logo-only script would hide the unlock prompt.
+    script = (Path(__file__).resolve().parents[1] / "system_files/usr/share/plymouth/themes/tunaos/tunaos.script").read_text()
+    script = script.replace("FRAME_COUNT = 72;", "FRAME_COUNT = 1;")
+    script = script.replace('Image("fish-" + ZeroPad(i) + ".png")', 'Image("splash.png")')
+    script = script.replace("# TunaOS Plymouth boot animation", "# Fork Plymouth boot splash")
+    script = script.replace("# Displays the TunaOS fish emoji animation centered on a black background.", "# Displays the generated fork lettermark; preserves the stock prompt callbacks.")
+    data_script = script.encode()
+    digest = hashlib.sha256(data_script).hexdigest()
+    path_script = f"fork-identity-assets/{digest}.script"
+    assets["splash_script"] = {"path": path_script, "sha256": digest}
+    blobs[path_script] = data_script
     manifest = {"schema_version": 1, "status": "staging-only", "name": name,
                 "variant": cell["variant"], "flavor": cell["flavor"], "platform": cell["platform"],
                 "sources": {"sha256": source}, "logo_input_sha256": hashlib.sha256(data).hexdigest(),

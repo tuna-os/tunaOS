@@ -63,10 +63,38 @@ Implemented consumers:
 - An installed receipt and verification of applied bytes, source assets,
   image cell and display values. Repeated application is byte-stable.
 
-The adapter does not change installer recipes, catalogs, Plymouth themes, initramfs or other desktops. The source-level test is not proof that GTK rendered the SVG,
+The next slice generates a PNG lettermark and a one-frame version of the stock
+Plymouth script. It keeps the password, question and normal-display callbacks.
+The existing selector copies the theme before dracut runs. Tests use an explicit
+`TUNAOS_SYSROOT`; live-root writes still fail. Ubuntu and Debian refuse a failed
+fork selection. Stock behavior stays unchanged.
+
+The same fields generate `/etc/bootc-installer/branding.json`: `name`, `logo`,
+and supplied `home_url`, `docs_url`, `support_url`. The adapter keeps other
+existing fields. All frontends share this contract. The author does not maintain
+another file. The logo is `/usr/share/pixmaps/tunaos.svg`. The installer must
+translate host paths for Flatpak.
+
+The adapter also updates display fields in an existing recipe. It updates a
+catalog leaf only when its image reference is identical to the recipe value.
+It preserves other entries, image references, install options, IDs and hostname.
+It does not create a catalog when none exists. On standard live media, the
+installer uses the common identity on its welcome and completion pages.
+Explicit selection of another OS must still name that OS.
+
+The adapter replaces stock tour names and the stock install illustration.
+Custom illustrations stay intact. Tests of source code do not prove that the
+pinned binary can render these files.
+
+The receipt includes hashes of the theme and installer files. Runtime checks verify it
+before they use fork expectations for names and the splash. Stock checks for
+URLs, base identity, vendor, dconf and assets still apply. Corrupt receipts fail.
+These checks do not remove the build gate or prove that dracut copied the theme.
+
+The source-level test is not proof that GTK rendered the SVG,
 that the GDM logo is visible, or that a boot/install completed.
 
-## Why the installer is still blocked
+## Installer artifact qualification remains blocked
 
 Measured against bootc-installer dev commit
 `981141d348b9207f9ef93bbdcec80d6b5f5611e0` (source, not a shipped artifact):
@@ -96,8 +124,10 @@ renderer tests; then test the installer artifact at its pinned version.
 
 ## Remaining acceptance
 
-Add the installer contract above. Generate and select a fork Plymouth theme before each family builds its initramfs. Adapt runtime verification and retain the stock checks. Then test stock and fork canaries through build, boot, GDM/login and install. Record screenshots and immutable digests.
+Qualify the common installer contract in all frontend artifacts. Inspect the
+actual generated initramfs for the selected theme, PNG and prompt callbacks.
+Then test stock and fork canaries through build, boot, GDM/login and install. Record screenshots and immutable digests.
 
-The stock checks still need fish names. A staged name change fails those checks. Expand other desktops only
+The identity helper verifies the receipt before it checks display values for the fork. Expand other desktops only
 with their own consumers and evidence. No hold, source pin, release gate or
 production workflow changes here.

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Apply/verify experimental identity in an explicit staging root, never a live OS.
 
-The build engine refuses this payload. Installer and Plymouth remain incomplete.
+The build engine refuses this payload. Boot and installer artifacts remain unqualified.
 This helper exercises the real file formats/paths; it is not boot qualification.
 """
 import argparse
@@ -50,12 +50,12 @@ def load(path):
             or not isinstance(m["sources"]["sha256"], str) or not SHA.fullmatch(m["sources"]["sha256"])
             or not isinstance(m["logo_input_sha256"], str) or not SHA.fullmatch(m["logo_input_sha256"])):
         raise ValueError("invalid identity source receipt")
-    if not isinstance(m["assets"], dict) or set(m["assets"]) != {"logo", "lettermark"}:
+    if not isinstance(m["assets"], dict) or set(m["assets"]) != {"logo", "lettermark", "splash", "splash_script"}:
         raise ValueError("identity logo and lettermark required")
-    for asset in m["assets"].values():
+    for kind, asset in m["assets"].items():
         if (not isinstance(asset, dict) or set(asset) != {"path", "sha256"}
                 or not isinstance(asset["sha256"], str) or not SHA.fullmatch(asset["sha256"])
-                or asset["path"] != f"fork-identity-assets/{asset['sha256']}.svg"):
+                or asset["path"] != f"fork-identity-assets/{asset['sha256']}.{ {'splash': 'png', 'splash_script': 'script'}.get(kind, 'svg')}"):
             raise ValueError("invalid identity asset receipt")
         file = path.parent / asset["path"]
         if file.parent.is_symlink() or file.is_symlink() or not file.is_file():
@@ -104,6 +104,113 @@ def os_release(data, m):
     return "\n".join(lines + [f'{key}="{value}"' for key, value in values.items()]) + "\n"
 
 
+THEME = "fork-identity"
+THEME_DIR = "usr/share/plymouth/themes/" + THEME
+BOOT_FILES = {THEME_DIR + "/" + THEME + ".plymouth", THEME_DIR + "/splash.png",
+              THEME_DIR + "/splash.script", "etc/plymouth/plymouthd.conf"}
+INSTALLER_FILES = {"etc/bootc-installer/branding.json"}
+
+
+def json_bytes(value):
+    return (json.dumps(value, sort_keys=True, indent=2) + "\n").encode()
+
+
+def boot_updates(manifest, root, m):
+    """Select the generated script theme before dracut copies its assets."""
+    import configparser
+    conf = target(root, "etc/plymouth/plymouthd.conf")
+    settings = configparser.ConfigParser(interpolation=None)
+    settings.optionxform = str
+    if conf.exists():
+        settings.read_string(conf.read_text())
+    if not settings.has_section("Daemon"):
+        settings.add_section("Daemon")
+    settings.set("Daemon", "Theme", THEME)
+    import io
+    output = io.StringIO()
+    settings.write(output, space_around_delimiters=False)
+    theme = ("[Plymouth Theme]\nName=" + m["name"] + "\nModuleName=script\n"
+             "[script]\nImageDir=/" + THEME_DIR + "\nScriptFile=/" + THEME_DIR + "/splash.script\n")
+    return {conf: output.getvalue().encode(),
+            target(root, THEME_DIR + "/" + THEME + ".plymouth"): theme.encode(),
+            target(root, THEME_DIR + "/splash.script"): (manifest.parent / m["assets"]["splash_script"]["path"]).read_bytes(),
+            target(root, THEME_DIR + "/splash.png"): (manifest.parent / m["assets"]["splash"]["path"]).read_bytes()}
+
+
+def installer_updates(manifest, root, m):
+    """Project display intent only; never infer image references or routing IDs."""
+    base = read_json(manifest.parent / "fork-config.json")
+    path = target(root, "etc/bootc-installer/branding.json")
+    branding = read_json(path) if path.exists() else {}
+    if not isinstance(branding, dict):
+        raise ValueError("installer branding must be an object")
+    branding.update(name=m["name"], logo="/usr/share/pixmaps/tunaos.svg")
+    for source, dest in (("homepage", "home_url"), ("documentation", "docs_url"), ("support", "support_url")):
+        if source in base["intent"]["branding"]:
+            branding[dest] = base["intent"]["branding"][source]
+    updates = {path: json_bytes(branding)}
+    path = target(root, "etc/bootc-installer/recipe.json")
+    if path.exists():
+        recipe = read_json(path)
+        if not isinstance(recipe, dict):
+            raise ValueError("installer recipe must be an object")
+        old_name = recipe.get("distro_name", "TunaOS")
+        tour = recipe.get("tour", {})
+        if not isinstance(tour, dict):
+            raise ValueError("installer recipe tour must be an object")
+        for slide in tour.values():
+            if not isinstance(slide, dict):
+                raise ValueError("installer recipe slide must be an object")
+            for field in ("title", "description"):
+                if isinstance(slide.get(field), str):
+                    if isinstance(old_name, str) and old_name and old_name != m["name"]:
+                        pattern = "|".join(re.escape(name) for name in sorted({old_name, "TunaOS"}, key=len, reverse=True))
+                        slide[field] = re.sub(pattern, lambda _: m["name"], slide[field])
+            if slide.get("image") == "/run/host/usr/share/bootc-installer/images/tunaos-install.png":
+                # Legacy recipe tours read host paths directly; the common
+                # branding logo remains unprefixed for the shared resolver.
+                slide["image"] = "/run/host" + branding["logo"]
+        recipe.update(distro_name=m["name"], distro_logo=branding["logo"], welcome_title="Welcome to " + m["name"])
+        updates[path] = json_bytes(recipe)
+    # Existing catalog entries may include other distributions. Update only
+    # the leaf whose exact image ref matches the recipe; preserve every option.
+    path = target(root, "etc/bootc-installer/images.json")
+    if path.exists():
+        catalog = read_json(path)
+        if not isinstance(catalog, dict) or not isinstance(catalog.get("images"), list):
+            raise ValueError("installer catalog must contain an images list")
+        recipe_path = target(root, "etc/bootc-installer/recipe.json")
+        imgref = read_json(recipe_path).get("imgref") if recipe_path.exists() else None
+        def project(nodes, registry=""):
+            for node in nodes:
+                if not isinstance(node, dict):
+                    raise ValueError("invalid installer catalog node")
+                registry_here = node.get("registry", registry)
+                ref = node.get("imgref")
+                if ref is None and "tag" in node and registry_here:
+                    ref = f"{registry_here}:{node['tag']}"
+                if imgref and ref == imgref:
+                    node.update(name=m["name"], icon=branding["logo"])
+                if "children" in node:
+                    if not isinstance(node["children"], list):
+                        raise ValueError("invalid installer catalog children")
+                    project(node["children"], registry_here)
+        project(catalog["images"])
+        updates[path] = json_bytes(catalog)
+    return updates
+
+
+def apply_boot(manifest, root):
+    m = load(manifest)
+    root = root.resolve(strict=True)
+    if root == Path("/") or not root.is_dir():
+        raise ValueError("identity boot staging requires a non-live directory; builds remain blocked")
+    updates = boot_updates(manifest, root, m)
+    for path, data in updates.items():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+
+
 def staging_root(root):
     root = Path(root).resolve(strict=True)
     if not root.is_dir():
@@ -115,12 +222,16 @@ def staging_root(root):
 
 
 def apply(manifest, root, check=False):
+    m = load(manifest)
     root = staging_root(root)
     m = load(manifest)
     osr = target(root, "usr/lib/os-release")
     image_info = target(root, "usr/share/ublue-os/image-info.json")
     info = read_json(image_info)
     base = read_json(manifest.parent / "fork-config.json")
+    canonical = target(root, "usr/share/tunaos/fork/fork-config.json")
+    if canonical.exists() and read_json(canonical) != base:
+        raise ValueError("identity paired intent differs from canonical fork manifest")
     if "fork-config" in info and (not isinstance(info["fork-config"], dict) or any(
             info["fork-config"].get(k) != m[k] for k in ("sources", "variant", "flavor", "platform"))):
         raise ValueError("identity does not match image-info source/platform receipt")
@@ -157,6 +268,9 @@ def apply(manifest, root, check=False):
         data = (manifest.parent / m["assets"][kind]["path"]).read_bytes()
         for dest in destinations:
             updates[target(root, dest)] = data
+    updates[target(root, "usr/libexec/tunaos/fork-identity.py")] = Path(__file__).read_bytes()
+    updates.update(boot_updates(manifest, root, m))
+    updates.update(installer_updates(manifest, root, m))
     updates[target(root, "etc/issue")] = b"\\S{PRETTY_NAME}\n\\r (\\l)\n"
     # Plain JSON is accepted by fastfetch's JSONC reader. Preserve the existing
     # base/route metadata in image-info instead of inventing a fork CPE vendor.
@@ -170,8 +284,8 @@ def apply(manifest, root, check=False):
     updates[target(root, "usr/share/tunaos/fork-identity/os-release-link.json")] = (json.dumps(link_state, sort_keys=True) + "\n").encode()
     for asset in m["assets"].values():
         updates[target(root, "usr/share/tunaos/fork-identity/" + asset["path"])] = (manifest.parent / asset["path"]).read_bytes()
-    # Validate all inputs and destinations before writes. No installer/Plymouth
-    # changes: their unresolved contracts must not become a silent stock pass.
+    # Validate all inputs and destinations before writes. Source-level consumers
+    # do not qualify the installer artifact or the generated initramfs.
     if check:
         return
     for path, data in updates.items():
@@ -186,6 +300,9 @@ def apply(manifest, root, check=False):
 def verify(root):
     root = staging_root(root)
     m = load(target(root, "usr/share/tunaos/fork-identity/manifest.json"))
+    canonical = target(root, "usr/share/tunaos/fork/fork-config.json")
+    if canonical.exists() and read_json(canonical) != read_json(target(root, "usr/share/tunaos/fork-identity/fork-config.json")):
+        raise ValueError("identity paired intent differs from canonical fork manifest")
     applied = read_json(target(root, "usr/share/tunaos/fork-identity/applied.json"))
     link_state = read_json(target(root, "usr/share/tunaos/fork-identity/os-release-link.json"))
     etc = root / "etc/os-release"
@@ -202,13 +319,20 @@ def verify(root):
             info["fork-config"].get(k) != m[k] for k in ("sources", "variant", "flavor", "platform"))):
         raise ValueError("installed identity does not match image-info source/platform receipt")
     required = {"usr/lib/os-release", "usr/share/pixmaps/tunaos.svg", "usr/share/icons/hicolor/scalable/apps/tunaos.svg",
-                "usr/share/pixmaps/tunaos-lettermark.svg", "etc/issue", "etc/xdg/fastfetch/config.jsonc"}
+                "usr/share/pixmaps/tunaos-lettermark.svg", "etc/issue", "etc/xdg/fastfetch/config.jsonc", "usr/libexec/tunaos/fork-identity.py"} | BOOT_FILES | INSTALLER_FILES
+    for relative in ("etc/bootc-installer/recipe.json", "etc/bootc-installer/images.json"):
+        if target(root, relative).exists():
+            required.add(relative)
     if not isinstance(applied, dict) or set(applied) not in (required, required | {"etc/os-release"}):
         raise ValueError("invalid applied identity receipt")
     for relative, digest in applied.items():
         path = target(root, relative)
         if not isinstance(digest, str) or not SHA.fullmatch(digest) or hashlib.sha256(path.read_bytes()).hexdigest() != digest:
             raise ValueError(f"applied identity hash mismatch: {relative}")
+    installed_manifest = target(root, "usr/share/tunaos/fork-identity/manifest.json")
+    for path, data in {**boot_updates(installed_manifest, root, m), **installer_updates(installed_manifest, root, m)}.items():
+        if path.read_bytes() != data:
+            raise ValueError("boot or installer values do not match identity intent")
     for relative in ("usr/lib/os-release", "etc/os-release"):
         if relative not in applied:
             continue
@@ -225,12 +349,17 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("root", type=Path)
     parser.add_argument("--manifest", type=Path)
+    parser.add_argument("--boot-only", action="store_true", help="stage theme before initramfs generation")
     parser.add_argument("--check", action="store_true", help="validate all inputs and targets without writes")
     args = parser.parse_args()
     try:
-        if not args.root.is_absolute() or args.root.resolve() == Path("/"):
+        if not args.root.is_absolute() or ((args.manifest or args.boot_only) and args.root.resolve() == Path("/")):
             raise ValueError("identity staging requires an absolute non-live root")
-        if args.manifest:
+        if args.boot_only:
+            if not args.manifest or args.check:
+                raise ValueError("--boot-only needs --manifest and cannot use --check")
+            apply_boot(args.manifest, args.root)
+        elif args.manifest:
             apply(args.manifest, args.root, check=args.check)
         elif args.check:
             raise ValueError("--check needs --manifest")

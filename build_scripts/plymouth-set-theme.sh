@@ -29,6 +29,19 @@ if [[ -z "$variant" && -r /usr/lib/os-release ]]; then
 	variant="$(sed -n 's/^VARIANT_ID=//p' /usr/lib/os-release | tr -d '"')"
 fi
 
+# Fork assets must be selected here, before the first initramfs, rather than
+# in the later desktop branding pass. Identity builds are still gated.
+context="$(dirname "$(readlink -f "$0")")/.."
+if [[ -e "$context/manifests/fork-identity.json" || -L "$context/manifests/fork-identity.json" ]]; then
+	if $print_only; then
+		echo fork-identity
+	else
+		python3 "$context/build_scripts/lib/fork-identity.py" "${TUNAOS_SYSROOT:-/}" \
+			--manifest "$context/manifests/fork-identity.json" --boot-only
+	fi
+	exit 0
+fi
+
 # Keep in step with the variant's emoji in .github/build-config.yml;
 # tests/bats/test_plymouth_themes.bats checks both.
 case "$variant" in

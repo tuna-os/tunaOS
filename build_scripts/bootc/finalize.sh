@@ -18,7 +18,10 @@ KVER_DIR="$(find /usr/lib/modules -maxdepth 1 -mindepth 1 -type d | sort -V | ta
 KVER="$(basename "${KVER_DIR}")"
 # The variant's boot animation, selected before dracut copies it in.
 "${CTX}/build_scripts/plymouth-set-theme.sh" ||
-	echo "WARNING: plymouth-set-theme.sh failed; the distro boot splash stays" >&2
+	{
+		[[ ! -e "${CTX}/manifests/fork-identity.json" && ! -L "${CTX}/manifests/fork-identity.json" ]] || exit 1
+		echo "WARNING: plymouth-set-theme.sh failed; the distro boot splash stays" >&2
+	}
 dracut --force --zstd --reproducible --no-hostonly "${KVER_DIR}/initramfs.img" "${KVER}"
 
 # Bootcify: wipe /var and lay the composefs-backed bootc filesystem. apt is

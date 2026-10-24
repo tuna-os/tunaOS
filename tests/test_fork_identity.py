@@ -64,7 +64,6 @@ def test_fanout_receipts_and_default_refusal(staged, tmp_path):
 
 def test_real_paths_identity_idempotence_and_tamper(staged, tmp_path):
     manifest, root, _, _ = materialize(staged, tmp_path)
-    installer = (root / "etc/bootc-installer/recipe.json").read_bytes()
     IDENTITY.apply(manifest, root)
     before = {p.relative_to(root): p.read_bytes() for p in root.rglob("*") if p.is_file()}
     IDENTITY.apply(manifest, root)
@@ -73,7 +72,7 @@ def test_real_paths_identity_idempotence_and_tamper(staged, tmp_path):
     osr = (root / "usr/lib/os-release").read_text()
     assert 'NAME="Harbor"' in osr and "CPE_NAME" not in osr and "ID=almalinux" in osr
     assert (root / "etc/os-release").read_text() == osr
-    assert (root / "etc/bootc-installer/recipe.json").read_bytes() == installer
+    assert json.loads((root / "etc/bootc-installer/recipe.json").read_text())["distro_name"] == "Harbor"
     assert "TunaOS" not in (root / "etc/xdg/fastfetch/config.jsonc").read_text()
     (root / "usr/share/pixmaps/tunaos-lettermark.svg").write_text("tamper")
     with pytest.raises(ValueError, match="hash mismatch"):
@@ -296,3 +295,111 @@ def test_non_directory_ancestor_fails_before_writes(staged, tmp_path):
     with pytest.raises(ValueError, match="non-directory"):
         IDENTITY.apply(manifest, root)
     assert (root / "usr/lib/os-release").read_bytes() == original
+
+
+def test_boot_assets_and_selection_before_desktop_identity(staged, tmp_path):
+    manifest, root, _, _ = materialize(staged, tmp_path)
+    original = (root / "usr/lib/os-release").read_bytes()
+    IDENTITY.apply_boot(manifest, root)
+    assert (root / "usr/lib/os-release").read_bytes() == original
+    conf = (root / "etc/plymouth/plymouthd.conf").read_text()
+    assert "Theme=fork-identity" in conf
+    theme = root / IDENTITY.THEME_DIR
+    from PIL import Image
+    with Image.open(theme / "splash.png") as image:
+        assert image.format == "PNG" and image.width > 128
+    script = (theme / "splash.script").read_text()
+    assert 'Image("splash.png")' in script
+    assert "FRAME_COUNT = 1;" in script
+    for callback in ("SetDisplayPasswordFunction", "SetDisplayQuestionFunction", "SetDisplayNormalFunction"):
+        assert callback in script
+    IDENTITY.apply(manifest, root)
+    IDENTITY.verify(root)
+
+
+def test_installer_single_brand_projection_and_preserved_options(staged, tmp_path):
+    manifest, root, _, _ = materialize(staged, tmp_path)
+    recipe_path = root / "etc/bootc-installer/recipe.json"
+    recipe = {"imgref": "example.org/fork/os:gnome", "local_imgref": "containers-storage:example.org/fork/os:gnome",
+              "filesystem": "xfs", "steps": {"encryption": {"template": "encryption"}}}
+    recipe_path.write_text(json.dumps(recipe))
+    branding_path = root / "etc/bootc-installer/branding.json"
+    branding_path.write_text(json.dumps({"id": "existing-id", "vendor": "existing-vendor", "default_hostname": "existing-host"}))
+    catalog_path = root / "etc/bootc-installer/images.json"
+    other = {"name": "Other", "imgref": "example.org/other:latest", "icon": "resource:///other.svg"}
+    catalog_path.write_text(json.dumps({"images": [{"name": "Group", "registry": "example.org/fork/os", "children": [
+        {"name": "Stock", "imgref": None, "tag": "gnome", "filesystem": "xfs"}, other]}]}))
+    IDENTITY.apply(manifest, root)
+    brand = json.loads(branding_path.read_text())
+    assert brand == {"name": "Harbor", "logo": "/usr/share/pixmaps/tunaos.svg", "home_url": "https://example.org/harbor",
+                     "id": "existing-id", "vendor": "existing-vendor", "default_hostname": "existing-host"}
+    actual_recipe = json.loads(recipe_path.read_text())
+    assert all(actual_recipe[k] == v for k, v in recipe.items())
+    nodes = json.loads(catalog_path.read_text())["images"][0]["children"]
+    assert nodes[0] == {"name": "Harbor", "imgref": None, "tag": "gnome", "filesystem": "xfs", "icon": brand["logo"]}
+    assert nodes[1] == other
+    IDENTITY.verify(root)
+
+
+@pytest.mark.parametrize("relative", ["etc/bootc-installer/branding.json", "etc/plymouth/plymouthd.conf",
+                                      "usr/share/plymouth/themes/fork-identity/splash.png"])
+def test_new_consumer_symlinks_refused_before_mutation(staged, tmp_path, relative):
+    manifest, root, _, _ = materialize(staged, tmp_path)
+    path = root / relative
+    path.parent.mkdir(parents=True, exist_ok=True)
+    outside = tmp_path / "outside"
+    outside.write_text("protected")
+    path.symlink_to(outside)
+    original = (root / "usr/lib/os-release").read_bytes()
+    with pytest.raises(ValueError, match="symlink"):
+        IDENTITY.apply(manifest, root)
+    assert outside.read_text() == "protected"
+    assert (root / "usr/lib/os-release").read_bytes() == original
+
+
+def test_early_selector_reaches_staged_payload(staged, tmp_path):
+    import os
+    import shutil
+    manifest, root, _, _ = materialize(staged, tmp_path)
+    context = manifest.parent.parent
+    (context / "build_scripts/lib").mkdir(parents=True)
+    shutil.copyfile(ROOT / "build_scripts/lib/fork-identity.py", context / "build_scripts/lib/fork-identity.py")
+    shutil.copyfile(ROOT / "build_scripts/plymouth-set-theme.sh", context / "build_scripts/plymouth-set-theme.sh")
+    run = subprocess.run(["bash", str(context / "build_scripts/plymouth-set-theme.sh"), "yellowfin"],
+                         env={**os.environ, "TUNAOS_SYSROOT": str(root)}, capture_output=True, text=True)
+    assert run.returncode == 0, run.stderr
+    assert (root / "etc/plymouth/plymouthd.conf").read_text().strip() == "[Daemon]\nTheme=fork-identity"
+    # Same entry point remains closed to live image writes until qualification.
+    run = subprocess.run(["bash", str(context / "build_scripts/plymouth-set-theme.sh"), "yellowfin"],
+                         env={k: v for k, v in os.environ.items() if k != "TUNAOS_SYSROOT"}, capture_output=True, text=True)
+    assert run.returncode != 0 and "non-live" in run.stderr
+
+
+def test_recipe_tour_projects_stock_copy_and_art_only(staged, tmp_path):
+    manifest, root, _, _ = materialize(staged, tmp_path)
+    path = root / "etc/bootc-installer/recipe.json"
+    recipe = json.loads((ROOT / "system_files/etc/bootc-installer/recipe.json").read_text())
+    recipe["tour"]["custom"] = {"title": "Independent slide", "image": "/usr/share/custom.png"}
+    path.write_text(json.dumps(recipe))
+    IDENTITY.apply(manifest, root)
+    actual = json.loads(path.read_text())
+    assert "Harbor" in actual["tour"]["welcome"]["title"]
+    assert "TunaOS" not in actual["tour"]["completed"]["description"]
+    assert actual["tour"]["welcome"]["image"] == "/run/host/usr/share/pixmaps/tunaos.svg"
+    assert actual["tour"]["custom"] == recipe["tour"]["custom"]
+    assert actual["imgref"] == recipe["imgref"]
+    IDENTITY.verify(root)
+
+
+def test_identity_pair_must_match_canonical_intent(staged, tmp_path):
+    manifest, root, _, _ = materialize(staged, tmp_path)
+    canonical = root / "usr/share/tunaos/fork/fork-config.json"
+    canonical.parent.mkdir(parents=True)
+    canonical.write_bytes((manifest.parent / "fork-config.json").read_bytes())
+    IDENTITY.apply(manifest, root)
+    paired = root / "usr/share/tunaos/fork-identity/fork-config.json"
+    value = json.loads(paired.read_text())
+    value["intent"]["branding"]["homepage"] = "https://other.example/"
+    paired.write_text(json.dumps(value))
+    with pytest.raises(ValueError, match="canonical"):
+        IDENTITY.verify(root)
