@@ -84,6 +84,25 @@ def test_contract_reports_missing_and_unexpected_tools(tmp_path: Path) -> None:
     assert "unexpected ['surprise']" in message
 
 
+@pytest.mark.parametrize(
+    ("field", "value", "reason"),
+    [
+        ("version_args", "--version", "non-empty list of strings"),
+        ("version_args", ["--version", 7], "non-empty list of strings"),
+        ("version_regex", ["1.2.3"], "non-empty string"),
+        ("repository", 7, "non-empty string"),
+    ],
+)
+def test_contract_rejects_ill_typed_tool_fields(tmp_path: Path, field, value, reason) -> None:
+    document = json.loads(CONTRACT.read_text(encoding="utf-8"))
+    document["tools"]["actionlint"][field] = value
+    invalid = tmp_path / "lint-tools.json"
+    invalid.write_text(json.dumps(document), encoding="utf-8")
+
+    with pytest.raises(lint_tools.ContractError, match=reason):
+        lint_tools._load_contract(invalid)
+
+
 def test_matching_versions_are_accepted(tmp_path: Path, capsys) -> None:
     lint_tools.verify(_contract(), _matching_tool_dir(tmp_path))
 

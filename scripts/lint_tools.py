@@ -61,9 +61,20 @@ def _load_contract(path: Path) -> dict:
 
     for name in REQUIRED_TOOLS:
         tool = tools[name]
-        for field in ("version", "repository", "tag", "version_args", "version_regex"):
-            if not tool.get(field):
-                raise ContractError(f"{path}: {name}.{field} is required")
+        if not isinstance(tool, dict):
+            raise ContractError(f"{path}: {name} must be an object")
+        for field in ("version", "repository", "tag", "version_regex"):
+            if not isinstance(tool.get(field), str) or not tool[field]:
+                raise ContractError(f"{path}: {name}.{field} must be a non-empty string")
+        version_args = tool.get("version_args")
+        if (
+            not isinstance(version_args, list)
+            or not version_args
+            or not all(isinstance(argument, str) and argument for argument in version_args)
+        ):
+            raise ContractError(
+                f"{path}: {name}.version_args must be a non-empty list of strings"
+            )
         assets = tool.get("assets")
         if not isinstance(assets, dict) or set(assets) != set(platforms):
             raise ContractError(f"{path}: {name}.assets must cover every platform")

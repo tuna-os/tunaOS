@@ -52,6 +52,8 @@ jobs:
           set -euo pipefail
           bin_dir="$RUNNER_TEMP/lint-tools"
           python3 scripts/lint_tools.py install --bin-dir "$bin_dir"
+          export PATH="$bin_dir:$PATH"
+          python3 scripts/lint_tools.py verify
           echo "$bin_dir" >> "$GITHUB_PATH"
 
       - name: Run just fix

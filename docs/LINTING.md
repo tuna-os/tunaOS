@@ -52,8 +52,10 @@ remain outside formatter and lint ownership.
 ## Updating a tool
 
 1. Open the upstream GitHub release and select all four supported platform
-   assets. Copy the release API's `assets[].digest` SHA-256 values into
-   `toolchain/lint-tools.json`; do not calculate hashes from a mirror.
+   assets. Query the official release with
+   `gh api repos/OWNER/REPOSITORY/releases/tags/TAG --jq '.assets[] | [.name, .digest] | @tsv'`
+   and copy each `sha256:...` digest into `toolchain/lint-tools.json` (without
+   the prefix); do not calculate hashes from a mirror.
 2. Update the version, tag, asset names, archive members and exact version
    regular expression together.
 3. Run `python3 -m pytest tests/test_lint_tools.py`, bootstrap the updated
