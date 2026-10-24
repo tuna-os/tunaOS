@@ -1,0 +1,205 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tunaos.org/schemas/installed-lifecycle-evidence-v1.schema.json",
+  "title": "TunaOS installed-system lifecycle pilot evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "pilot",
+    "provenance",
+    "inputs",
+    "safety",
+    "started_at",
+    "finished_at",
+    "stages",
+    "commands",
+    "outcomes",
+    "result"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "pilot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["issue", "target", "scope", "rebase"],
+      "properties": {
+        "issue": { "const": "tuna-os/tunaos#3798" },
+        "target": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["variant", "flavor", "platform"],
+          "properties": {
+            "variant": { "const": "skipjack" },
+            "flavor": { "const": "gnome" },
+            "platform": { "const": "linux/amd64" }
+          }
+        },
+        "scope": { "const": "installed_update_and_rollback" },
+        "rebase": { "const": "not_tested" }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_run_id", "source_head_sha", "harness_sha"],
+      "properties": {
+        "source_run_id": { "type": "string", "pattern": "^[0-9]+(?:/[1-9][0-9]*)?$" },
+        "source_head_sha": { "$ref": "#/$defs/gitSha" },
+        "harness_sha": { "$ref": "#/$defs/gitSha" }
+      }
+    },
+    "inputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_disk", "image_a", "image_b"],
+      "properties": {
+        "source_disk": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path", "expected_sha256"],
+          "properties": {
+            "path": { "type": "string", "minLength": 1 },
+            "expected_sha256": { "$ref": "#/$defs/digest" }
+          }
+        },
+        "image_a": { "$ref": "#/$defs/imageReference" },
+        "image_b": { "$ref": "#/$defs/imageReference" }
+      }
+    },
+    "safety": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "disposable_overlay_only",
+        "installation_media_attached",
+        "host_root_or_block_device_targeted"
+      ],
+      "properties": {
+        "disposable_overlay_only": { "const": true },
+        "installation_media_attached": { "const": false },
+        "host_root_or_block_device_targeted": { "const": false }
+      }
+    },
+    "started_at": { "$ref": "#/$defs/timestamp" },
+    "finished_at": { "$ref": "#/$defs/timestamp" },
+    "stages": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 8,
+      "prefixItems": [
+        { "$ref": "#/$defs/preflightStage" },
+        { "$ref": "#/$defs/prepareStage" },
+        { "$ref": "#/$defs/coldStage" },
+        { "$ref": "#/$defs/updateStage" },
+        { "$ref": "#/$defs/warmStage" },
+        { "$ref": "#/$defs/rollbackStage" },
+        { "$ref": "#/$defs/recoveryStage" },
+        { "$ref": "#/$defs/cleanupStage" }
+      ],
+      "items": false
+    },
+    "commands": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/command" }
+    },
+    "outcomes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cold", "warm", "recovery"],
+      "properties": {
+        "cold": { "$ref": "#/$defs/outcome" },
+        "warm": { "$ref": "#/$defs/outcome" },
+        "recovery": { "$ref": "#/$defs/outcome" }
+      }
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["verdict", "runtime_acceptance", "first_failure"],
+      "properties": {
+        "verdict": { "enum": ["passed", "failed"] },
+        "runtime_acceptance": { "enum": ["passed", "failed"] },
+        "first_failure": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["stage", "category", "message"],
+              "properties": {
+                "stage": { "enum": [
+                  "preflight",
+                  "prepare_disk",
+                  "cold_boot_a",
+                  "stage_update_b",
+                  "warm_boot_b",
+                  "stage_rollback_a",
+                  "recovery_boot_a",
+                  "cleanup"
+                ] },
+                "category": { "type": "string", "minLength": 1, "maxLength": 128 },
+                "message": { "type": "string", "minLength": 1, "maxLength": 65536 }
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  "$defs": {
+    "gitSha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "imageReference": {
+      "type": "string",
+      "pattern": "^ghcr\\.io/tuna-os/skipjack@sha256:[0-9a-f]{64}$"
+    },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "outcome": { "enum": ["passed", "failed", "skipped"] },
+    "stageBase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "required", "outcome", "details"],
+      "properties": {
+        "id": { "type": "string" },
+        "required": { "const": true },
+        "outcome": { "$ref": "#/$defs/outcome" },
+        "details": { "type": "object" },
+        "started_at": { "$ref": "#/$defs/timestamp" },
+        "finished_at": { "$ref": "#/$defs/timestamp" }
+      }
+    },
+    "preflightStage": { "allOf": [{ "$ref": "#/$defs/stageBase" }, { "properties": { "id": { "const": "preflight" } } }] },
+    "prepareStage": { "allOf": [{ "$ref": "#/$defs/stageBase" }, { "properties": { "id": { "const": "prepare_disk" } } }] },
+    "coldStage": { "allOf": [{ "$ref": "#/$defs/stageBase" }, { "properties": { "id": { "const": "cold_boot_a" } } }] },
+    "updateStage": { "allOf": [{ "$ref": "#/$defs/stageBase" }, { "properties": { "id": { "const": "stage_update_b" } } }] },
+    "warmStage": { "allOf": [{ "$ref": "#/$defs/stageBase" }, { "properties": { "id": { "const": "warm_boot_b" } } }] },
+    "rollbackStage": { "allOf": [{ "$ref": "#/$defs/stageBase" }, { "properties": { "id": { "const": "stage_rollback_a" } } }] },
+    "recoveryStage": { "allOf": [{ "$ref": "#/$defs/stageBase" }, { "properties": { "id": { "const": "recovery_boot_a" } } }] },
+    "cleanupStage": { "allOf": [{ "$ref": "#/$defs/stageBase" }, { "properties": { "id": { "const": "cleanup" } } }] },
+    "command": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "argv",
+        "returncode",
+        "duration_seconds",
+        "stdout",
+        "stderr",
+        "stdout_truncated",
+        "stderr_truncated"
+      ],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "argv": { "type": "array", "items": { "type": "string" } },
+        "returncode": { "type": ["integer", "null"] },
+        "duration_seconds": { "type": "number", "minimum": 0 },
+        "stdout": { "type": "string", "maxLength": 65536 },
+        "stderr": { "type": "string", "maxLength": 65536 },
+        "stdout_truncated": { "type": "boolean" },
+        "stderr_truncated": { "type": "boolean" }
+      }
+    }
+  }
+}
