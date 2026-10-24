@@ -73,11 +73,27 @@ def wallpaper(path):
     return {"path": f"fork-assets/{digest}.{extension}", "sha256": digest}, data
 
 
+def load_identity_preparer(root):
+    path = root / "scripts/prepare-fork-identity.py"
+    spec = importlib.util.spec_from_file_location("prepare_identity", path)
+    if spec is None or spec.loader is None:
+        raise ConfigError(f"identity staging helper cannot be loaded: {path}")
+    module = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(module)
+    except (ImportError, OSError, TypeError, AttributeError) as exc:
+        raise ConfigError(f"identity staging helper cannot be loaded: {exc}") from exc
+    if not callable(getattr(module, "prepare", None)):
+        raise ConfigError("identity staging helper has no prepare function")
+    return module.prepare
+
+
 def compile_cells(config_path, root=ROOT, identity_staging=False):
     config = yaml.load(config_path.read_text(), Loader=COMPILER.UniqueLoader)
     plan = COMPILER.resolve(config, config_path.parent, root)
     if not config.get("targets"):
         raise ConfigError("preview requires explicit targets; select direct desktop flavors")
+    identity_prepare = load_identity_preparer(root) if identity_staging else None
     cells = []
     assets = {}
     for cell in plan["cells"]:
@@ -99,11 +115,10 @@ def compile_cells(config_path, root=ROOT, identity_staging=False):
         if set(branding) & {"name", "logo"}:
             if not identity_staging:
                 raise ConfigError("name/logo customization is deferred until embedded installer and Plymouth assets are integrated; use --identity-staging for non-buildable root staging")
-            spec = importlib.util.spec_from_file_location("prepare_identity", root / "scripts/prepare-fork-identity.py")
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
             try:
-                identity, blobs = module.prepare(branding, cell, config_path.parent, plan["sources"]["sha256"])
+                identity, blobs = identity_prepare(
+                    branding, cell, config_path.parent, plan["sources"]["sha256"]
+                )
             except (ValueError, ImportError, OSError, TypeError, AttributeError) as exc:
                 raise ConfigError(f"identity staging: {exc}") from exc
             assets.update(blobs)

@@ -33,9 +33,33 @@ def read_json(path):
     return json.loads(path.read_text(), object_pairs_hook=unique)
 
 
+def regular_file_within(root, relative, description):
+    """Return a regular file reached without symlinks below its context root."""
+    root = Path(root)
+    if root.is_symlink() or root.parent.is_symlink():
+        raise ValueError(f"{description} has a symlinked ancestor")
+    try:
+        resolved_root = root.resolve(strict=True)
+    except OSError as exc:
+        raise ValueError(f"{description} context is missing") from exc
+    candidate = root
+    for part in Path(relative).parts:
+        candidate /= part
+        if candidate.is_symlink():
+            raise ValueError(f"{description} is symlinked")
+    try:
+        resolved = candidate.resolve(strict=True)
+    except OSError as exc:
+        raise ValueError(f"{description} is missing") from exc
+    if not resolved.is_relative_to(resolved_root) or not resolved.is_file():
+        raise ValueError(f"{description} must be a regular file within its context")
+    return resolved
+
+
+
 def load(path):
-    if path.is_symlink() or not path.is_file():
-        raise ValueError("identity manifest must be a regular file")
+    path = Path(path)
+    path = regular_file_within(path.parent, path.name, "identity manifest")
     m = read_json(path)
     keys = {"schema_version", "status", "name", "variant", "flavor", "platform", "sources", "logo_input_sha256", "assets", "blocked_consumers"}
     if not isinstance(m, dict) or set(m) != keys:
@@ -57,14 +81,14 @@ def load(path):
                 or not isinstance(asset["sha256"], str) or not SHA.fullmatch(asset["sha256"])
                 or asset["path"] != f"fork-identity-assets/{asset['sha256']}.svg"):
             raise ValueError("invalid identity asset receipt")
-        file = path.parent / asset["path"]
-        if file.parent.is_symlink() or file.is_symlink() or not file.is_file():
-            raise ValueError("identity asset missing or symlinked")
+        file = regular_file_within(
+            path.parent, asset["path"], "identity asset"
+        )
         if hashlib.sha256(file.read_bytes()).hexdigest() != asset["sha256"]:
             raise ValueError("identity asset hash mismatch")
-    base = path.parent / "fork-config.json"
-    if base.is_symlink() or not base.is_file():
-        raise ValueError("identity needs its paired fork-config manifest")
+    base = regular_file_within(
+        path.parent, "fork-config.json", "paired fork-config manifest"
+    )
     source = read_json(base)
     if not isinstance(source, dict) or any(source.get(k) != m[k] for k in ("sources", "variant", "flavor", "platform")):
         raise ValueError("identity does not match paired fork-config source/cell")
@@ -92,10 +116,11 @@ def target(root, relative):
 
 
 def fields(m):
-    # Keep base ID/ID_LIKE, routing IDs and hostname: display name is not a new
-    # distro ID, CPE authority, package family or image publication identity.
-    return {"NAME": m["name"], "PRETTY_NAME": m["name"], "VARIANT": f'{m["name"]} {m["flavor"]}',
-            "LOGO": "tunaos", "VERSION_CODENAME": m["name"]}
+    # Keep base ID/ID_LIKE, release codename, routing IDs and hostname: a
+    # display name is not a distro ID, CPE authority, package family, release
+    # codename or image publication identity.
+    return {"NAME": m["name"], "PRETTY_NAME": m["name"],
+            "VARIANT": f'{m["name"]} {m["flavor"]}', "LOGO": "tunaos"}
 
 
 def os_release(data, m):

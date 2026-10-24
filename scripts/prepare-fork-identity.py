@@ -16,7 +16,11 @@ def prepare(branding, cell, directory, source):
     from PIL import Image, ImageDraw, ImageFont
     name = branding.get("name", "")
     if not IDENTITY.valid_name(name) or "logo" not in branding:
-        raise ValueError("identity staging needs both name (1..64 ASCII letters/digits/spaces/._-) and logo")
+        raise ValueError(
+            "identity staging needs a logo and a 1..64 character ASCII name "
+            "that starts with a letter or digit, uses only letters, digits, "
+            "spaces, periods, underscores, or hyphens, and has no surrounding spaces"
+        )
     if cell["flavor"] != "gnome" or cell["routing"]["CONTAINERFILE"] not in (
             "Containerfile.el10", "Containerfile.debian", "Containerfile.ubuntu"):
         raise ValueError("identity staging currently supports only direct RPM/Debian/Ubuntu GNOME")

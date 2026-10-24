@@ -39,8 +39,8 @@ def materialize(staged, tmp_path):
         dest.write_bytes(data)
     root = tmp_path / "root"
     for path, text in {
-        "usr/lib/os-release": 'ID=almalinux\nNAME="Yellowfin"\nCPE_NAME="cpe:/o:old:vendor"\n',
-        "etc/os-release": 'ID=almalinux\nNAME="Yellowfin"\nCPE_NAME="cpe:/o:old:vendor"\n',
+        "usr/lib/os-release": 'ID=almalinux\nNAME="Yellowfin"\nVERSION_CODENAME="Thunnus albacares"\nCPE_NAME="cpe:/o:old:vendor"\n',
+        "etc/os-release": 'ID=almalinux\nNAME="Yellowfin"\nVERSION_CODENAME="Thunnus albacares"\nCPE_NAME="cpe:/o:old:vendor"\n',
         "usr/share/ublue-os/image-info.json": json.dumps({"image-name": "yellowfin", "image-flavor": "gnome"}),
         "etc/bootc-installer/recipe.json": '{"distro_logo":"resource:///stock.svg"}',
     }.items():
@@ -72,6 +72,7 @@ def test_real_paths_identity_idempotence_and_tamper(staged, tmp_path):
     IDENTITY.verify(root)
     osr = (root / "usr/lib/os-release").read_text()
     assert 'NAME="Harbor"' in osr and "CPE_NAME" not in osr and "ID=almalinux" in osr
+    assert 'VERSION_CODENAME="Thunnus albacares"' in osr
     assert (root / "etc/os-release").read_text() == osr
     assert (root / "etc/bootc-installer/recipe.json").read_bytes() == installer
     assert "TunaOS" not in (root / "etc/xdg/fastfetch/config.jsonc").read_text()
@@ -107,9 +108,19 @@ def test_identity_logo_rejects_symlinked_path(staged, tmp_path):
         PREPARE.compile_cells(staged, identity_staging=True)
 
 
+def test_identity_manifest_rejects_a_symlinked_context_ancestor(staged, tmp_path):
+    manifest, _, _, _ = materialize(staged, tmp_path)
+    alias = tmp_path / "aliased-context"
+    alias.mkdir()
+    (alias / "manifests").symlink_to(manifest.parent, target_is_directory=True)
+    with pytest.raises(ValueError, match="symlinked ancestor"):
+        IDENTITY.load(alias / "manifests/fork-identity.json")
+
+
 def test_identity_valid_name_returns_bool():
     assert IDENTITY.valid_name("Harbor") is True
     assert IDENTITY.valid_name(" bad") is False
+
 
 def test_asset_tamper_and_cell_mismatch_fail_before_writes(staged, tmp_path):
     manifest, root, _, _ = materialize(staged, tmp_path)

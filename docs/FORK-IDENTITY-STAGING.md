@@ -55,8 +55,11 @@ Without `fork-identity.json`, nothing new runs or changes.
 
 Implemented consumers:
 
-- `NAME`, `PRETTY_NAME`, `VARIANT`, `VERSION_CODENAME` in both os-release copies.
-  The usual `/etc/os-release` symlink stays intact. Remove the stock CPE. Do not invent a fork CPE authority. Preserve base `ID`/`ID_LIKE`, route IDs, hostname and image references. A display name does not define package families or image names.
+- `NAME`, `PRETTY_NAME`, and `VARIANT` in both os-release copies. The usual
+  `/etc/os-release` symlink stays intact. Preserve the base release codename,
+  `ID`/`ID_LIKE`, route IDs, hostname and image references. Remove the stock
+  CPE; do not invent a fork CPE authority. A display name does not define
+  package families, release streams or image names.
 - The existing GNOME About icon and GDM lettermark paths, with exact hashes.
   GNOME's existing writer selects the lettermark; no runtime font is required.
 - The console banner reads `PRETTY_NAME`. The fastfetch config displays the fork's pretty name. It omits the fish mark and the “part of TunaOS” label. This intentionally replaces the staged stock layout.
