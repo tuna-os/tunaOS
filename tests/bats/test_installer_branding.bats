@@ -54,3 +54,80 @@ KNOWN_MARKS="tunaos bonito skipjack albacore yellowfin"
   [ "$status" -eq 0 ]
   [ "$output" -ge 1 ]
 }
+
+@test "90-image-info.sh: rewrites recipe.json with valid syntax and correct imgref" {
+  local tmp_dir="${BATS_TEST_TMPDIR}/recipe_test"
+  mkdir -p "${tmp_dir}/etc/bootc-installer"
+  local recipe_file="${tmp_dir}/etc/bootc-installer/recipe.json"
+  cat >"${recipe_file}" <<'JSON'
+{
+  "distro_name": "TunaOS",
+  "welcome_title": "Welcome to TunaOS",
+  "tour": {
+    "welcome": {"title": "Welcome to TunaOS", "description": "TunaOS workstation"}
+  }
+}
+JSON
+
+  # Test normal variant
+  run bash -c "
+    RECIPE_FILE='${recipe_file}'
+    IMAGE_NAME='bonito'
+    VARIANT_KEY='bonito'
+    IMAGE_FLAVOR='gnome'
+    IMAGE_PRETTY_NAME='Bonito'
+    DISTRO_LOGO_RES='resource:///org/bootcinstaller/Installer/images/bonito.svg'
+    BASE_OS_NAME='Fedora'
+    DESKTOP_PRETTY_NAME='GNOME'
+    IMAGE_REGISTRY='ghcr.io'
+    IMAGE_VENDOR='tuna-os'
+    $(sed -n '/TAG_SUFFIX=""/,/^PYEOF/p' "${SCRIPT}")
+  "
+  [ "$status" -eq 0 ]
+  run jq -r '.imgref' "${recipe_file}"
+  [ "$output" = "ghcr.io/tuna-os/bonito:gnome" ]
+  run jq -r '.local_imgref' "${recipe_file}"
+  [ "$output" = "containers-storage:ghcr.io/tuna-os/bonito:gnome" ]
+  run jq -r '.tour.welcome.title' "${recipe_file}"
+  [ "$output" = "Welcome to Bonito" ]
+
+  # Test tag-suffixed variant (bonito-rawhide)
+  run bash -c "
+    RECIPE_FILE='${recipe_file}'
+    IMAGE_NAME='bonito'
+    VARIANT_KEY='bonito-rawhide'
+    IMAGE_FLAVOR='gnome'
+    IMAGE_PRETTY_NAME='Bonito'
+    DISTRO_LOGO_RES='resource:///org/bootcinstaller/Installer/images/bonito.svg'
+    BASE_OS_NAME='Fedora Rawhide'
+    DESKTOP_PRETTY_NAME='GNOME'
+    IMAGE_REGISTRY='ghcr.io'
+    IMAGE_VENDOR='tuna-os'
+    $(sed -n '/TAG_SUFFIX=""/,/^PYEOF/p' "${SCRIPT}")
+  "
+  [ "$status" -eq 0 ]
+  run jq -r '.imgref' "${recipe_file}"
+  [ "$output" = "ghcr.io/tuna-os/bonito:gnome-rawhide" ]
+  run jq -r '.local_imgref' "${recipe_file}"
+  [ "$output" = "containers-storage:ghcr.io/tuna-os/bonito:gnome-rawhide" ]
+
+  # Test tag-suffixed variant (flounder-sid)
+  run bash -c "
+    RECIPE_FILE='${recipe_file}'
+    IMAGE_NAME='flounder'
+    VARIANT_KEY='flounder-sid'
+    IMAGE_FLAVOR='kde'
+    IMAGE_PRETTY_NAME='Flounder'
+    DISTRO_LOGO_RES='resource:///org/bootcinstaller/Installer/images/tunaos.svg'
+    BASE_OS_NAME='Debian Sid'
+    DESKTOP_PRETTY_NAME='KDE Plasma'
+    IMAGE_REGISTRY='ghcr.io'
+    IMAGE_VENDOR='tuna-os'
+    $(sed -n '/TAG_SUFFIX=""/,/^PYEOF/p' "${SCRIPT}")
+  "
+  [ "$status" -eq 0 ]
+  run jq -r '.imgref' "${recipe_file}"
+  [ "$output" = "ghcr.io/tuna-os/flounder:kde-sid" ]
+  run jq -r '.local_imgref' "${recipe_file}"
+  [ "$output" = "containers-storage:ghcr.io/tuna-os/flounder:kde-sid" ]
+}

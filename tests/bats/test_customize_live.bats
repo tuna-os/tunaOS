@@ -179,6 +179,10 @@ detect() {
 
 # ── Recipe wiring ─────────────────────────────────────────────────────────────
 
+@test "customize-live.sh: populates local_imgref from imgref for offline install" {
+  grep -q 'recipe\["local_imgref"\] = f"containers-storage:' "${SCRIPT}"
+}
+
 @test "build-iso-tacklebox.sh: recipe passes live_customize with customize-live.sh" {
   run grep 'live_customize.*customize-live.sh' "${REPO_ROOT}/scripts/build-iso-tacklebox.sh"
   [ "$status" -eq 0 ]
@@ -257,4 +261,50 @@ detect() {
 		echo "$unbounded" >&2
 		return 1
 	}
+}
+
+@test "customize-live.sh: rewrites recipe.json populating imgref and local_imgref" {
+  local tmp_dir="${BATS_TEST_TMPDIR}/customize_recipe_test"
+  mkdir -p "${tmp_dir}/etc/bootc-installer" "${tmp_dir}/usr/share/tunaos"
+  local recipe_file="${tmp_dir}/etc/bootc-installer/recipe.json"
+
+  # Case 1: bonito-rawhide with custom vendor
+  cat >"${recipe_file}" <<'JSON'
+{
+  "imgref": "ghcr.io/tuna-os/tunaos:latest",
+  "bootloader": "systemd",
+  "composeFsBackend": true,
+  "filesystem": "xfs"
+}
+JSON
+  echo "TUNAOS_VARIANT='bonito-rawhide'" >"${tmp_dir}/usr/share/tunaos/identity.env"
+  echo "acme-corp" >"${tmp_dir}/usr/share/tunaos/image-vendor"
+
+  # Extract the python snippet from customize-live.sh and execute
+  local py_code
+  py_code="$(sed -n '/python3 - "\$RECIPE_FILE"/,/^PYEOF/p' "${SCRIPT}" | sed '1d;$d')"
+  python3 -c "$py_code" "${recipe_file}" "systemd" "true" "xfs" "gnome" "${tmp_dir}"
+
+  run jq -r '.imgref' "${recipe_file}"
+  [ "$output" = "ghcr.io/acme-corp/bonito:gnome-rawhide" ]
+  run jq -r '.local_imgref' "${recipe_file}"
+  [ "$output" = "containers-storage:ghcr.io/acme-corp/bonito:gnome-rawhide" ]
+
+  # Case 2: flounder-sid default vendor
+  echo "TUNAOS_VARIANT='flounder-sid'" >"${tmp_dir}/usr/share/tunaos/identity.env"
+  rm -f "${tmp_dir}/usr/share/tunaos/image-vendor"
+  cat >"${recipe_file}" <<'JSON'
+{
+  "imgref": "",
+  "bootloader": "grub2",
+  "composeFsBackend": false,
+  "filesystem": "xfs"
+}
+JSON
+  python3 -c "$py_code" "${recipe_file}" "grub2" "false" "xfs" "kde" "${tmp_dir}"
+
+  run jq -r '.imgref' "${recipe_file}"
+  [ "$output" = "ghcr.io/tuna-os/flounder:kde-sid" ]
+  run jq -r '.local_imgref' "${recipe_file}"
+  [ "$output" = "containers-storage:ghcr.io/tuna-os/flounder:kde-sid" ]
 }

@@ -226,59 +226,91 @@ if [[ -f "${RECIPE_FILE}" ]]; then
 		;;
 	esac
 
-	python3 -c "
+	TAG_SUFFIX=""
+	case "${VARIANT_KEY}" in
+	bonito-rawhide) TAG_SUFFIX="rawhide" ;;
+	flounder-sid) TAG_SUFFIX="sid" ;;
+	esac
+
+	RECIPE_IMG_TAG="${IMAGE_FLAVOR}"
+	if [[ -n "${TAG_SUFFIX}" && "${RECIPE_IMG_TAG}" != *"-${TAG_SUFFIX}" && "${RECIPE_IMG_TAG}" != *"-${TAG_SUFFIX}-"* ]]; then
+		RECIPE_IMG_TAG="${RECIPE_IMG_TAG}-${TAG_SUFFIX}"
+	fi
+	RECIPE_IMGREF="${IMAGE_REGISTRY:-ghcr.io}/${IMAGE_VENDOR}/${IMAGE_NAME}:${RECIPE_IMG_TAG}"
+
+	python3 - "${RECIPE_FILE}" "${IMAGE_PRETTY_NAME}" "${DISTRO_LOGO_RES}" "${BASE_OS_NAME}" "${DESKTOP_PRETTY_NAME}" "${RECIPE_IMGREF}" <<'PYEOF' || true
 import json
-with open('${RECIPE_FILE}', 'r') as f:
+import sys
+
+path, pretty_name, distro_logo, base_os, desktop_name, imgref = sys.argv[1:7]
+with open(path, "r") as f:
     recipe = json.load(f)
-recipe['distro_name'] = '${IMAGE_PRETTY_NAME}'
-recipe['welcome_title'] = 'Welcome to ${IMAGE_PRETTY_NAME}'
-recipe['distro_logo'] = '${DISTRO_LOGO_RES}'
-recipe['tour']['welcome']['title'] = 'Welcome to ${IMAGE_PRETTY_NAME}'
-recipe['tour']['welcome']['description'] = '${IMAGE_PRETTY_NAME} is an immutable, container-native Linux operating system built for enterprise workstations and developers.'
 
-# Insert custom distro and desktop slides in order
-tour = recipe.get('tour', {})
+recipe["distro_name"] = pretty_name
+recipe["welcome_title"] = f"Welcome to {pretty_name}"
+recipe["distro_logo"] = distro_logo
+if "tour" in recipe and "welcome" in recipe["tour"]:
+    recipe["tour"]["welcome"]["title"] = f"Welcome to {pretty_name}"
+    recipe["tour"]["welcome"]["description"] = (
+        f"{pretty_name} is an immutable, container-native Linux operating system "
+        "built for enterprise workstations and developers."
+    )
+
+tour = recipe.get("tour", {})
 new_tour = {}
-if 'welcome' in tour:
-    new_tour['welcome'] = tour['welcome']
-if 'features' in tour:
-    new_tour['features'] = tour['features']
+if "welcome" in tour:
+    new_tour["welcome"] = tour["welcome"]
+if "features" in tour:
+    new_tour["features"] = tour["features"]
 
-new_tour['distro'] = {
-    'image': '/run/host/usr/share/bootc-installer/images/tunaos-install.png',
-    'title': 'Built on ${BASE_OS_NAME}',
-    'description': '${IMAGE_PRETTY_NAME} leverages the solid foundation of stable ${BASE_OS_NAME} packages to ensure maximum compatibility and package availability.'
+new_tour["distro"] = {
+    "image": "/run/host/usr/share/bootc-installer/images/tunaos-install.png",
+    "title": f"Built on {base_os}",
+    "description": (
+        f"{pretty_name} leverages the solid foundation of stable {base_os} packages "
+        "to ensure maximum compatibility and package availability."
+    ),
 }
 
-new_tour['desktop'] = {
-    'image': '/run/host/usr/share/bootc-installer/images/tunaos-install.png',
-    'title': '${DESKTOP_PRETTY_NAME} Desktop',
-    'description': 'Enjoy a custom-integrated, modern ${DESKTOP_PRETTY_NAME} workspace configured for performance, accessibility, and style.'
+new_tour["desktop"] = {
+    "image": "/run/host/usr/share/bootc-installer/images/tunaos-install.png",
+    "title": f"{desktop_name} Desktop",
+    "description": (
+        f"Enjoy a custom-integrated, modern {desktop_name} workspace configured for "
+        "performance, accessibility, and style."
+    ),
 }
 
-if 'community' in tour:
-    new_tour['community'] = tour['community']
-if 'completed' in tour:
-    new_tour['completed'] = tour['completed']
+if "community" in tour:
+    new_tour["community"] = tour["community"]
+if "completed" in tour:
+    new_tour["completed"] = tour["completed"]
 
-recipe['tour'] = new_tour
+recipe["tour"] = new_tour
+
+recipe["imgref"] = imgref
+recipe["local_imgref"] = f"containers-storage:{imgref}"
 
 # The variant is the name people see; the installer's stock slides say
 # TunaOS (e.g. your new TunaOS workstation). Swap it in every text value,
 # leaving image references alone.
 def rename(v):
     if isinstance(v, dict):
-        return {k: (x if k in ('imgref', 'image', 'distro_logo') else rename(x)) for k, x in v.items()}
+        return {
+            k: (x if k in ("imgref", "local_imgref", "image", "distro_logo") else rename(x))
+            for k, x in v.items()
+        }
     if isinstance(v, list):
         return [rename(x) for x in v]
     if isinstance(v, str):
-        return v.replace('TunaOS', '${IMAGE_PRETTY_NAME}')
+        return v.replace("TunaOS", pretty_name)
     return v
+
 recipe = rename(recipe)
 
-with open('${RECIPE_FILE}', 'w') as f:
+with open(path, "w") as f:
     json.dump(recipe, f, indent=2)
-" || true
+PYEOF
 fi
 
 osr_set DOCUMENTATION_URL "${DOCUMENTATION_URL}"
