@@ -71,9 +71,10 @@ def contract_functions():
     return "\n".join(bodies)
 
 
-def image(tmp_path, os_id, files):
+def image(tmp_path, os_id, files, *, quoted_id=False):
     (tmp_path / "usr/lib").mkdir(parents=True)
-    (tmp_path / "usr/lib/os-release").write_text(f"NAME=test\nID={os_id}\n")
+    value = f'"{os_id}"' if quoted_id else os_id
+    (tmp_path / "usr/lib/os-release").write_text(f"NAME=test\nID={value}\n")
     for relative in files:
         path = tmp_path / relative
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -87,11 +88,16 @@ KEYRING_FILES = ["usr/bin/gnome-keyring-daemon"]
 
 
 @pytest.mark.parametrize(
-    "os_id,files",
-    [("eln", OO7_FILES), ("fedora", KEYRING_FILES), ("almalinux", KEYRING_FILES)],
+    "os_id,files,quoted_id",
+    [
+        ("eln", OO7_FILES, False),
+        ("eln", ["usr/libexec/oo7-daemon", "usr/lib/security/pam_oo7.so"], True),
+        ("fedora", KEYRING_FILES, False),
+        ("almalinux", KEYRING_FILES, False),
+    ],
 )
-def test_the_contract_accepts_each_base_native_provider(tmp_path, os_id, files):
-    result = image(tmp_path, os_id, files)
+def test_the_contract_accepts_each_base_native_provider(tmp_path, os_id, files, quoted_id):
+    result = image(tmp_path, os_id, files, quoted_id=quoted_id)
     assert result.returncode == 0, result.stderr
     assert result.stdout == "satisfied\n"
 
@@ -114,10 +120,10 @@ def test_the_contract_rejects_a_missing_native_provider(tmp_path, os_id, files):
     assert "missing required path" in result.stderr
 
 
-@pytest.mark.parametrize("case", ["gnome)", "tuna)"])
+@pytest.mark.parametrize("case", ["gnome", "tuna"])
 def test_gnome_and_tuna_contracts_use_the_secret_service_check(case):
     source = CHECK.read_text()
-    start = source.index(f"\n{case}\n")
-    body = source[start:source.index("\n\t;;\n", start)]
-    assert "require_secret_service" in body
-    assert "gnome-keyring-daemon" not in body
+    match = re.search(rf"^[ \t]*{case}\)[ \t]*$.*?^[ \t]*;;[ \t]*$", source, re.M | re.S)
+    assert match, f"the desktop contract has no {case} case"
+    assert "require_secret_service" in match.group(0)
+    assert "gnome-keyring-daemon" not in match.group(0)

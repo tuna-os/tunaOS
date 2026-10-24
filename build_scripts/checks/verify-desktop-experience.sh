@@ -233,9 +233,9 @@ require_any_user_unit() {
 # $1 is a filesystem root for the regression test; empty in the image.
 require_secret_service() {
 	local root="${1:-}"
-	if grep -qsx 'ID=eln' "$root/etc/os-release" "$root/usr/lib/os-release"; then
+	if grep -qE '^ID="?eln"?$' "$root/etc/os-release" "$root/usr/lib/os-release" 2>/dev/null; then
 		require_any_glob "$root/usr/libexec/oo7-daemon"
-		require_any_glob "$root/usr/lib64/security/pam_oo7.so"
+		require_any_glob "$root/usr/lib*/security/pam_oo7.so"
 	else
 		require_any_glob "$root/usr/bin/gnome-keyring-daemon"
 	fi
