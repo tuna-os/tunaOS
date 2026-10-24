@@ -93,15 +93,14 @@ strip_comments() { grep -v '^[[:space:]]*#' || true; }
 }
 
 @test "image-versions.yaml is carried exactly where a build script reads it" {
-  # This one is deliberately NOT uniform. 10-base-packages.sh delegates the
-  # uupd install to install-uupd.sh, which reads
-  # /run/context/image-versions.yaml unguarded; 10-base-packages.sh runs on
-  # el10, debian and ubuntu, and Containerfile.arch invokes install-uupd.sh
-  # directly (marlin:gnome shipped uupd triggers without the uupd binary,
-  # tunaOS#3356). kcm-ublue.sh reads it too but returns early without dnf, so
-  # the other package-manager files never reach it. Asserted as an exact set
-  # so that adding the read to another script, or the file to another
-  # context, has to be a deliberate change to this list.
+  # This one is deliberately NOT uniform. 10-base-packages.sh reads
+  # /run/context/image-versions.yaml unguarded, and runs on el10, debian and
+  # ubuntu only; Containerfile.arch invokes install-uupd.sh directly, which
+  # reads the same pin (marlin:gnome shipped uupd triggers without the uupd
+  # binary, tunaOS#3356). kcm-ublue.sh reads it too but returns early without
+  # dnf, so the other package-manager files never reach it. Asserted as an
+  # exact set so that adding the read to another script, or the file to
+  # another context, has to be a deliberate change to this list.
   local f body has needs
   for f in "${CONTAINERFILES[@]}"; do
     body="$(context_stage "${REPO_ROOT}/$f" | strip_comments)"

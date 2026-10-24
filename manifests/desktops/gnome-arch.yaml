@@ -1,0 +1,68 @@
+{
+  "display_manager": "gdm",
+  "versionlock": [],
+  "post_install": [
+    "tuna-flatpak-remote.sh",
+    "flatpak-preinstall.sh"
+  ],
+  "packages": {
+    "pacman": [
+      "gdm",
+      "gnome-shell",
+      "gnome-control-center",
+      "gnome-settings-daemon",
+      "gnome-session",
+      "gnome-backgrounds",
+      "gnome-color-manager",
+      "gnome-disk-utility",
+      "gnome-system-monitor",
+      "gnome-user-docs",
+      "gnome-remote-desktop",
+      "gnome-bluetooth-3.0",
+      "gnome-browser-connector",
+      "gnome-keyring",
+      "nautilus",
+      "ptyxis",
+      "xdg-terminal-exec",
+      "yelp",
+      "xdg-desktop-portal-gnome",
+      "xdg-desktop-portal-gtk",
+      "xdg-user-dirs-gtk",
+      "gvfs",
+      "gvfs-mtp",
+      "gvfs-smb",
+      "gvfs-gphoto2",
+      "gvfs-afc",
+      "gvfs-goa",
+      "gvfs-onedrive",
+      "gst-thumbnailers",
+      "evince",
+      "networkmanager",
+      "pipewire",
+      "wireplumber",
+      "flatpak",
+      "wl-clipboard",
+      "mesa",
+      "vulkan-icd-loader",
+      "xdg-user-dirs",
+      "ttf-dejavu",
+      "ttf-liberation",
+      "noto-fonts",
+      "noto-fonts-emoji",
+      "ttf-jetbrains-mono-nerd"
+    ],
+    "cachyos": {
+      "packages": [
+        "linux-cachyos",
+        "linux-cachyos-headers",
+        "cachyos-settings"
+      ],
+      "repos": [
+        {
+          "name": "cachyos",
+          "url": "https://mirror.cachyos.org/repo/$arch/cachyos"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "display_manager": "gdm3",
+  "post_install": [
+    "tuna-flatpak-remote.sh",
+    "flatpak-preinstall.sh"
+  ],
+  "packages": {
+    "apt": [
+      "gnome-core",
+      "gnome-disk-utility",
+      "gnome-system-monitor",
+      "nautilus",
+      "xdg-terminal-exec",
+      "xdg-desktop-portal-gnome",
+      "xdg-desktop-portal-gtk",
+      "xdg-user-dirs-gtk",
+      "libglib2.0-dev-bin"
+    ]
+  }
+}

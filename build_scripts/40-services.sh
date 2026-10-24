@@ -485,7 +485,7 @@ fi
 # These package managers indicate Arch, openSUSE or Gentoo bases. They share
 # the service enablement pattern with the apt path (safe_enable, drop-ins)
 # rather than the dnf path (in-place sed on shipped unit files). The dnf
-# path below has Fedora/EL-specific tools (uupd, authselect, rpm-ostree,
+# path below has Fedora/EL-specific tools (authselect, rpm-ostree,
 # ublue-system-setup) that do not exist on these bases.
 if [[ "${PKG_MGR:-}" == "pacman" ]] || command -v zypper &>/dev/null || command -v emerge &>/dev/null; then
 	# Sleep-then-hibernate via drop-in (no /usr/lib/systemd/logind.conf on some bases)

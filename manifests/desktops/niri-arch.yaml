@@ -1,0 +1,66 @@
+{
+  "display_manager": "greetd",
+  "versionlock": [],
+  "post_install": [
+    "tuna-flatpak-remote.sh",
+    "greetd-gtkgreet.sh",
+    "flatpak-preinstall.sh"
+  ],
+  "packages": {
+    "pacman": [
+      "niri",
+      "greetd",
+      "greetd-gtkgreet",
+      "cage",
+      "xwayland-satellite",
+      "waybar",
+      "fuzzel",
+      "swaync",
+      "swaylock",
+      "swayidle",
+      "swaybg",
+      "cliphist",
+      "xdg-desktop-portal-gnome",
+      "xdg-desktop-portal-gtk",
+      "xdg-user-dirs",
+      "xdg-user-dirs-gtk",
+      "polkit-gnome",
+      "gnome-keyring",
+      "wl-clipboard",
+      "networkmanager",
+      "pipewire",
+      "wireplumber",
+      "pavucontrol",
+      "brightnessctl",
+      "playerctl",
+      "blueman",
+      "power-profiles-daemon",
+      "fwupd",
+      "plymouth",
+      "nautilus",
+      "xdg-terminal-exec",
+      "flatpak",
+      "adw-gtk-theme",
+      "papirus-icon-theme",
+      "vulkan-icd-loader",
+      "vulkan-swrast"
+    ],
+    "cachyos": {
+      "packages": [
+        "linux-cachyos",
+        "linux-cachyos-headers",
+        "cachyos-settings"
+      ],
+      "repos": [
+        {
+          "name": "cachyos",
+          "url": "https://mirror.cachyos.org/repo/$arch/cachyos"
+        },
+        {
+          "name": "cachyos-extra",
+          "url": "https://mirror.cachyos.org/repo/$arch/cachyos-extra"
+        }
+      ]
+    }
+  }
+}
