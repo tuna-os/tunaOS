@@ -56,7 +56,15 @@ tuna_package_backend() {
 	elif command -v dpkg-query >/dev/null 2>&1; then
 		echo dpkg
 	elif [[ -d "${TUNAOS_PORTAGE_DB:-/var/db/pkg}" ]]; then
-		echo portage
+		local package_dir
+		for package_dir in "${TUNAOS_PORTAGE_DB:-/var/db/pkg}"/*/*; do
+			if [[ -d "$package_dir" && ( -r "$package_dir/PF" || -r "$package_dir/CONTENTS" ) ]]; then
+				echo portage
+				return
+			fi
+		done
+		echo "no supported Tuna package backend (pacman, rpm, dpkg or portage) in this image" >&2
+		return 1
 	else
 		echo "no supported Tuna package backend (pacman, rpm, dpkg or portage) in this image" >&2
 		return 1
@@ -99,10 +107,11 @@ tuna_installed_file_owner() {
 	# CONTENTS is the installed VDB's file manifest. Match its path field
 	# exactly and return the owning package name without requiring qfile.
 	portage)
-		local contents package_dir pf
+		local contents package_dir pf _kind installed_path _rest
 		for contents in "${TUNAOS_PORTAGE_DB:-/var/db/pkg}"/*/*/CONTENTS; do
 			[[ -f "$contents" ]] || continue
-			if awk -v wanted="$2" '$2 == wanted { found=1; exit } END { exit !found }' "$contents"; then
+			while read -r _kind installed_path _rest; do
+				[[ "$installed_path" == "$2" ]] || continue
 				package_dir="${contents%/CONTENTS}"
 				if [[ -r "$package_dir/PF" ]]; then
 					IFS= read -r pf <"$package_dir/PF"
@@ -113,7 +122,7 @@ tuna_installed_file_owner() {
 					printf '%s\n' "${BASH_REMATCH[1]}"
 					return 0
 				fi
-			fi
+			done <"$contents"
 		done
 		return 1
 		;;
