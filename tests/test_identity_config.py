@@ -128,7 +128,8 @@ def test_kde_about_page_shows_the_configured_project(tmp_path):
     adapter.write_text(config.render_identity(fork), encoding="utf-8")
     about = tmp_path / "kcm-about-distrorc"
     subprocess.run(["bash", str(ROOT / "build_scripts/desktop/kde-set-look-and-feel.sh"), str(tmp_path / "unused")],
-                   env={**os.environ, "TUNAOS_KCM_ABOUT": str(about), "TUNAOS_IDENTITY_ENV": str(adapter)},
+                   env={**os.environ, "TUNAOS_KCM_ABOUT": str(about), "TUNAOS_IDENTITY_ENV": str(adapter),
+                        "TUNAOS_IDENTITY_TEST_OVERRIDE": "1"},
                    text=True, capture_output=True, check=True)
     lines = about.read_text(encoding="utf-8").splitlines()
     assert "Website=https://acme.example/os" in lines
@@ -140,12 +141,44 @@ def test_kde_about_rejects_a_non_file_identity_adapter(tmp_path):
         ["bash", str(ROOT / "build_scripts/desktop/kde-set-look-and-feel.sh"),
          str(tmp_path / "unused")],
         env={**os.environ, "TUNAOS_KCM_ABOUT": str(about),
-             "TUNAOS_IDENTITY_ENV": str(tmp_path)},
+             "TUNAOS_IDENTITY_ENV": str(tmp_path),
+             "TUNAOS_IDENTITY_TEST_OVERRIDE": "1"},
         text=True, capture_output=True,
     )
     assert result.returncode != 0
     assert "identity adapter is missing or unreadable" in result.stderr
     assert not about.exists()
+
+def test_kde_about_rejects_identity_override_outside_tests(tmp_path):
+    adapter = tmp_path / "identity.env"
+    adapter.write_text("TUNAOS_PROJECT_NAME=Untrusted\n", encoding="utf-8")
+    result = subprocess.run(
+        ["bash", str(ROOT / "build_scripts/desktop/kde-set-look-and-feel.sh"),
+         str(tmp_path / "unused")],
+        env={**os.environ, "TUNAOS_KCM_ABOUT": str(tmp_path / "about"),
+             "TUNAOS_IDENTITY_ENV": str(adapter)},
+        text=True, capture_output=True,
+    )
+    assert result.returncode != 0
+    assert "TUNAOS_IDENTITY_ENV is test-only" in result.stderr
+
+
+def test_branding_contract_rejects_identity_override_outside_tests(tmp_path):
+    adapter = tmp_path / "identity.env"
+    adapter.write_text(config.render_identity(config.load()), encoding="utf-8")
+    result = subprocess.run(
+        ["bash", str(ROOT / "build_scripts/checks/verify-branding.sh"), "yellowfin"],
+        env={**os.environ, "TUNAOS_IDENTITY_ENV": str(adapter)},
+        text=True,
+        capture_output=True,
+    )
+    assert result.returncode != 0
+    assert "TUNAOS_IDENTITY_ENV is test-only" in result.stderr
+
+
+def test_rendered_identity_always_quotes_hyphenated_subscripts():
+    rendered = config.render_identity(config.load())
+    assert '["bonito-rawhide"]=' in rendered
 
 
 @pytest.mark.parametrize("written,passes", [("Wile E", True), ("Achillobator", False)])
@@ -160,7 +193,8 @@ def test_branding_contract_checks_the_configured_codename(tmp_path, written, pas
     os_release = tmp_path / "os-release"
     os_release.write_text(f'VERSION_CODENAME="{written}"\nPRETTY_NAME="Yellowfin"\n', encoding="utf-8")
     result = subprocess.run(["bash", str(ROOT / "build_scripts/checks/verify-branding.sh"), "yellowfin"],
-                            env={**os.environ, "TUNAOS_OS_RELEASE": str(os_release), "TUNAOS_IDENTITY_ENV": str(adapter)},
+                            env={**os.environ, "TUNAOS_OS_RELEASE": str(os_release),
+                                 "TUNAOS_IDENTITY_ENV": str(adapter), "TUNAOS_IDENTITY_TEST_OVERRIDE": "1"},
                             text=True, capture_output=True)
     output = result.stdout + result.stderr
     assert ("ok: VERSION_CODENAME=Wile E" in output) is passes
@@ -325,7 +359,8 @@ def url_findings(tmp_path, written):
     os_release = tmp_path / "os-release"
     os_release.write_text("".join(f'{key}="{value}"\n' for key, value in written.items()), encoding="utf-8")
     result = subprocess.run(["bash", str(ROOT / "build_scripts/checks/verify-branding.sh"), "yellowfin"],
-                            env={**os.environ, "TUNAOS_OS_RELEASE": str(os_release), "TUNAOS_IDENTITY_ENV": str(adapter)},
+                            env={**os.environ, "TUNAOS_OS_RELEASE": str(os_release),
+                                 "TUNAOS_IDENTITY_ENV": str(adapter), "TUNAOS_IDENTITY_TEST_OVERRIDE": "1"},
                             text=True, capture_output=True)
     return [line.strip() for line in (result.stdout + result.stderr).splitlines()
             if line.strip().startswith(tuple(f"{p}: {key}" for p in ("ok", "FAIL") for key in FORK_URLS))]
@@ -355,7 +390,8 @@ def test_branding_contract_still_matches_stock_urls(tmp_path):
     os_release = tmp_path / "os-release"
     os_release.write_text("".join(f'{key}="{STOCK["TUNAOS_" + key]}"\n' for key in FORK_URLS), encoding="utf-8")
     result = subprocess.run(["bash", str(ROOT / "build_scripts/checks/verify-branding.sh"), "yellowfin"],
-                            env={**os.environ, "TUNAOS_OS_RELEASE": str(os_release), "TUNAOS_IDENTITY_ENV": str(adapter)},
+                            env={**os.environ, "TUNAOS_OS_RELEASE": str(os_release),
+                                 "TUNAOS_IDENTITY_ENV": str(adapter), "TUNAOS_IDENTITY_TEST_OVERRIDE": "1"},
                             text=True, capture_output=True)
     for key in FORK_URLS:
         assert f"ok: {key}={STOCK['TUNAOS_' + key]}" in result.stdout
