@@ -55,7 +55,7 @@ def pkg_mgr(base):
 
 # Layer flavours are built by Containerfile.overlay ON TOP of an already-built
 # desktop image, so they install no desktop of their own. base has no desktop.
-LAYER = ('-hwe', '-nvidia', '-asahi', '-cachyos', '-zfs', '-t2')
+LAYER = ('-hwe', '-nvidia', '-asahi', '-cachyos', '-zfs', '-t2', '-x13s')
 def desktop_of(flavor):
     if flavor == 'base' or flavor.startswith('base-'):
         return None
