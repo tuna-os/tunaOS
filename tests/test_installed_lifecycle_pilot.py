@@ -259,6 +259,14 @@ def test_retained_command_output_is_bounded():
     assert "output truncated" in value
 
 
+def test_retained_non_utf8_output_is_bounded_after_json_serialization():
+    value, truncated = MODULE.bounded_text(b"\xff\x00" * MODULE.MAX_LOG_BYTES)
+
+    assert truncated
+    assert len(json.dumps(value).encode()) - 2 <= MODULE.MAX_LOG_BYTES
+    assert "output truncated" in value
+
+
 @pytest.mark.parametrize(
     ("mutation", "category"),
     [
