@@ -22,7 +22,7 @@ open inside it, which is the actionable part now.
 | **September** | NVIDIA follow-up | Draft “CUDA on an Enterprise Linux desktop: TunaOS `-nvidia` flavors” as an optional companion post. Use the recovered `-nvidia` build results from [#1118](https://github.com/tuna-os/tunaOS/issues/1118) only after the current matrix is green. | Content owner; current amd64 and arm64 NVIDIA verification. | Reviewable draft and reproducible build/verification links. |
 | **September 25–October 1** | Hacktoberfest launch | Publish kickoff blog post, announce on Matrix/Discussions, and add README banner for October. | Outreach coordinator; GFI pool ≥8. | Blog post, Matrix announcement, and pinned banner. |
 | **October 1–31** | Hacktoberfest execution | Host 1-2 maintainer office-hours slots/week on Matrix. Weekly Monday sweeps to curate GFI pool. Support first-timers with a pinned 'first PR' discussion thread and DCO templates. | Outreach coordinator / Maintainers; active GFI tracker. | Office hours, weekly sweeps, first-PR thread, and DCO support. |
-| **Fedora 45 release week (~October 20–24)** | Fedora 45 | Publish the Bonito/Fedora 45 release-week post. Cover support status, what changed, download links, and the weekly release/verified-boot cadence. Coordinate the first public release-notes digest with the post. | Bonito maintainer; release artifacts and [#1136](https://github.com/tuna-os/tunaOS/issues/1136) digest template. | tunaos.org/blog post, Matrix announcement, and release-notes digest. |
+| **Confirmed Fedora 45 release week (R through R+2)** | Fedora 45 | Use the [release-window handoff](FEDORA45-RELEASE-OUTREACH.md) for the post, shared adopter call, showcase, and media notes. Name the tested base and link the candidate evidence. Move the post and digest together if Fedora moves R. | Bonito maintainer; release artifacts and [#1136](https://github.com/tuna-os/tunaOS/issues/1136) digest template. | tunaos.org/blog post, Matrix announcement, and release-notes digest. |
 | **October 13–15** | All Things Open 2026, Raleigh | Treat this as an attendance and informal-demo window, not a CFP. If a contributor attends, offer a short Bonito or bootc demo and record questions and contacts for follow-up. | Named attendee; portable demo and stable download URL. | Attendance note, demo links, and follow-up queue. |
 | **October 16–30** | Post-ATO follow-up | Publish a short event recap or Fedora post amplification. Route technical questions to the relevant project issues and avoid implying an official booth or talk. | Attendee plus outreach coordinator. | Recap, answered questions, and attributed referral links where practical. |
 | **November 9–13** | KubeCon + CloudNativeCon North America 2026 | Use the event as a hallway-track and blog-tie-in opportunity, not a submission. Lead with Corral (Kubernetes-native VMs), bootc’s CNCF Sandbox context, and the desktop/container-fleet connection. | Named attendee; current Corral and bootc references. | One-page conversation brief, demo links, and qualified follow-ups. |
@@ -33,8 +33,10 @@ open inside it, which is the actionable part now.
 
 ## Fedora 45 release-week post
 
-The post should be drafted in September and held for the confirmed release
-window. Suggested outline:
+Use [FEDORA45-RELEASE-OUTREACH.md](FEDORA45-RELEASE-OUTREACH.md) for the
+release-relative schedule, reviewed copy, evidence packet, and outcome record.
+Hold publication for the confirmed release window and candidate review.
+Suggested outline:
 
 1. What Fedora 45 means for Bonito and its current support status.
 2. The immutable desktop workflow: bootable OCI image, atomic updates, and

@@ -6,7 +6,7 @@ How images and ISOs get built, verified, and published. If you change CI, read t
 
 ## The Build Matrix
 
-`variant × desktop × hardware_layer`, defined in `.github/build-config.yml`.
+`variant × desktop × hardware_layer`, defined in `tunaos.toml`.
 
 Shell entrypoints resolve that contract through
 `scripts/lib/build-config.sh`. For tests that use an alternate contract, set
@@ -112,7 +112,7 @@ Three sources of image metadata, consolidated via `scripts/resolve-image.sh`:
 
 | Source | Contains |
 |--------|----------|
-| `.github/build-config.yml` | `base_image` per variant |
+| `tunaos.toml` | `base_image` per variant |
 | `image-versions.yaml` | Digest pins for common/brew/zirconium + download versions |
 | `registry-map.yaml` | Mirror overrides |
 
@@ -164,7 +164,7 @@ For a KubeVirt cluster, `scripts/boot-gate.sh` checks for `--karg` support in bo
 
 Routine minor, patch, pin, and digest updates may automerge only after required
 CI and branch protection pass. Major updates and repository-specific holds
-require human review. The config gate runs both Renovate's schema validator
+need human review. The config gate runs both Renovate's schema validator
 and `scripts/check-renovate-automerge-policy.py`, because schema-valid rules
 can still violate the org automerge boundary. See
 [DEPENDENCY-FRESHNESS.md](DEPENDENCY-FRESHNESS.md) for the org policy,

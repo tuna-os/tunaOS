@@ -56,8 +56,13 @@ def test_every_routing_result_matches_existing_resolver(plan):
 
 def test_source_receipt_preserves_package_and_identity_inputs(plan):
     files = plan["sources"]["files"]
-    for path in ROOT.glob("manifests/desktops/*.yaml"):
-        assert files[path.relative_to(ROOT).as_posix()] == hashlib.sha256(path.read_bytes()).hexdigest()
+    # The editable primary source and its trusted compiler own desktop policy.
+    # Generated adapters must not become a second pinned source of truth.
+    derived = ("manifests/desktops/", "manifests/desktop-plans/",
+               "manifests/desktop-contracts/")
+    assert not any(name.startswith(derived) for name in files)
+    for name in ("tunaos.toml", "scripts/lib/tunaos_packages.py", "scripts/lib/desktop_operations.json"):
+        assert files[name] == hashlib.sha256((ROOT / name).read_bytes()).hexdigest()
     for name in ("build_scripts/10-base-packages.sh", "build_scripts/20-packages.sh",
                  "build_scripts/90-image-info.sh", "build_scripts/lib/variant-identity.tsv",
                  "build_scripts/desktop/install-desktop.sh", "build_scripts/desktop/configure-desktop-runtime.sh"):
@@ -186,6 +191,28 @@ def test_plan_enabled_cells_match_the_real_workflow_query(plan):
     assert actual == expected
 
 
+def test_pull_request_matrix_includes_tuna_in_stage_one():
+    workflow_path = ROOT / ".github/workflows/build-variant.yml"
+    workflow = yaml.safe_load(workflow_path.read_text())
+    matrix_step = next(step for step in workflow["jobs"]["generate_matrix"]["steps"]
+                       if step.get("id") == "set-matrix")
+    event = "pull_request" if matrix_step.get("env", {}).get("EVENT_NAME") == \
+        "${{ github.event_name }}" else ""
+    text = workflow_path.read_text()
+    query = text.split('--arg event "${EVENT_NAME}" \'', 1)[1].split("' | jq -c -s '.'", 1)[0]
+    result = subprocess.run(
+        ["jq", "-c", "--arg", "event", event, query],
+        input=json.dumps(yaml.safe_load((ROOT / ".github/build-config.yml").read_text())),
+        text=True, capture_output=True,
+        env=dict(os.environ, FILTER_VARIANT="marlin", FILTER_FLAVOR="tuna"),
+        check=True)
+    row = next(json.loads(line) for line in result.stdout.splitlines()
+               if json.loads(line)["variant"] == "marlin")
+    assert row["flavor"] == "tuna"
+    assert row["stage"] == 1
+    assert row["platforms"] == "linux/amd64"
+
+
 def test_read_only_plan_is_deterministic(stock):
     assert MODULE.resolve(stock, ROOT) == MODULE.resolve(stock, ROOT)
 
@@ -237,7 +264,6 @@ def test_receipt_ignores_generated_untracked_files_but_detects_source_changes(tm
 
 @pytest.mark.parametrize("name", [
     "system_files_overrides/marlin/usr/lib/bootc/install/50-marlin.toml",
-    "experiences/tuna/files/etc/greetd/environments",
     "build_scripts/bootc/sandbox/usr/lib/ostree/prepare-root.conf",
     "build_scripts/checks/package-miss-allowlist.txt",
     "scripts/_registry.sh",

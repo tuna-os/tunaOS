@@ -230,12 +230,18 @@ jobs:
           # The pinned tacklebox forwards only its own allowlisted variables
           # into the customization container. Generate the script it hashes
           # with explicit exports so target identity both reaches the
-          # container and participates in tacklebox's cache key.
-          CUSTOMIZE_SCRIPT="$PWD/live-iso/common/src/.customize-live-${SAFEPLATFORM}.sh"
+          # container and participates in tacklebox's cache key. Keep the
+          # pin file beside that generated script for immutable bundle fetches.
+          CUSTOMIZE_DIR="$RUNNER_TEMP/live-customize-${SAFEPLATFORM}"
+          rm -rf "$CUSTOMIZE_DIR"
+          mkdir -p "$CUSTOMIZE_DIR"
+          cp -a "$PWD/live-iso/common/src/." "$CUSTOMIZE_DIR/"
+          cp "$PWD/image-versions.yaml" "$CUSTOMIZE_DIR/"
+          CUSTOMIZE_SCRIPT="$CUSTOMIZE_DIR/.customize-live-${SAFEPLATFORM}.sh"
           PROVENANCE_CTR=""
           PROVENANCE_FILE=""
           cleanup() {
-            rm -f "$CUSTOMIZE_SCRIPT"
+            rm -rf "$CUSTOMIZE_DIR"
             [[ -z "$PROVENANCE_FILE" ]] || sudo rm -f "$PROVENANCE_FILE"
             [[ -z "$PROVENANCE_CTR" ]] || sudo podman rm -f "$PROVENANCE_CTR" >/dev/null
           }

@@ -193,6 +193,7 @@ chmod 0755 "${CUSTOMIZE_DIR}/customize-live-real.sh"
 	echo 'exec bash "$(dirname "${BASH_SOURCE[0]}")/customize-live-real.sh" "$@"'
 } >"${CUSTOMIZE_DIR}/customize-live.sh"
 chmod 0755 "${CUSTOMIZE_DIR}/customize-live.sh"
+cp "${REPO_ROOT}/image-versions.yaml" "$CUSTOMIZE_DIR/"
 if [[ "$DEV" == "1" ]]; then
 	touch "${CUSTOMIZE_DIR}/.enable-sshd"
 fi
