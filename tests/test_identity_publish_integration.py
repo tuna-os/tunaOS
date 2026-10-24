@@ -20,9 +20,11 @@ def test_primary_identity_and_publish_destination_share_the_consumer_path(tmp_pa
     fork = copy.deepcopy(config.load())
     fork["build"]["publish"] = {"registry": "quay.io", "namespace": "acme"}
     fork["project"] = {"name": "Acme OS", "id": "acmeos", "cpe_vendor": "acme"}
-    fork["defaults"]["branding"] = {
+    # Replace only the URLs: [defaults.branding] also carries the required
+    # plymouth default (#3668 F3d).
+    fork["defaults"]["branding"].update({
         key: f"https://acme.example/{key}" for key in config.BRANDING_URLS
-    }
+    })
     fork["variants"]["yellowfin"]["codename"] = "Wile E"
     config.validate(fork)
     adapter = tmp_path / "build-config.yml"
