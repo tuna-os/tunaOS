@@ -134,7 +134,7 @@ def _validate_receipt(document, role):
     try:
         actual = contract.validate_document(document)
     except contract.ContractError as exc:
-        _reject("invalid_observation", role, exc)
+        _reject("invalid_observation", "receipt." + role, exc)
     _same(actual, role, "receipt.role")
 
 
@@ -351,8 +351,11 @@ def finalize_native_receipt(observed, browser_receipt_bytes, supplied_media):
     for mode in ("plain", "encrypted"):
         _same(document["observed"][mode]["sourceDigest"], source_digest,
               mode + ".sourceDigest")
-    # browser["media"] passed the v2 contract and equals observed.media above.
-    measured = _measure_media(supplied_media, browser["media"]["sizeBytes"], finish=False)
+    # browser["media"] passed the v2 contract and equals observed.media above;
+    # bound it locally too so no contract change can drive an oversized read.
+    expected_size = browser["media"]["sizeBytes"]
+    _size(expected_size, "browserReceipt.media.sizeBytes")
+    measured = _measure_media(supplied_media, expected_size, finish=False)
     _same(measured, observed.media, "media")
     receipt = _encode(document)
     run = document["run"]

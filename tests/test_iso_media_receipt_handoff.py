@@ -416,6 +416,33 @@ def test_candidate_handoff_keys_are_role_specific():
     assert not hasattr(browser, "handoff_id")
 
 
+@pytest.mark.parametrize("role", ["browser", "native"])
+def test_contract_rejection_reports_a_receipt_field_path(role):
+    with pytest.raises(HANDOFF.ReceiptHandoffError) as caught:
+        if role == "browser":
+            HANDOFF.finalize_browser_receipt(
+                replace(browser_observation(), overlay={}),
+                MediaSource(MEDIA, browser=True))
+        else:
+            HANDOFF.finalize_native_receipt(
+                replace(native_observation(), harness={}),
+                CASES["browserReceiptUtf8"].encode(), MediaSource(MEDIA))
+    assert (caught.value.code, caught.value.field) == (
+        "invalid_observation", "receipt." + role)
+    assert type(caught.value.__cause__).__name__ == "ContractError"
+
+
+def test_native_size_bound_is_checked_locally_before_any_media_read(monkeypatch):
+    monkeypatch.setattr(HANDOFF, "MAX_ISO_BYTES", len(MEDIA) - 1)
+    media = MediaSource(MEDIA)
+    with pytest.raises(HANDOFF.ReceiptHandoffError) as caught:
+        HANDOFF.finalize_native_receipt(
+            native_observation(), CASES["browserReceiptUtf8"].encode(), media)
+    assert (caught.value.code, caught.value.field) == (
+        "invalid_observation", "browserReceipt.media.sizeBytes")
+    assert media.events == []
+
+
 def test_source_and_overlay_observations_cannot_swap_meanings():
     observed = browser_observation()
     observed = replace(observed, source_manifest=observed.overlay,
