@@ -476,7 +476,7 @@ platforms = ["linux/amd64"]
 emoji = "🐟"
 codename = "Thunnus alalunga"
 description = "Based on AlmaLinux 10"
-base_image = "quay.io/almalinuxorg/almalinux-bootc:10@sha256:61e7963066ef53e6c729826117ddfb1e2afc5fce8ceb591b5992a7d1d6e36878"
+base_image = "quay.io/almalinuxorg/almalinux-bootc:10@sha256:2fc27d12a9f62fcf11d0ec034fc40d5df6602d383d035c57206220eda95db6b2"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["almalinux"]
 platforms = ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
@@ -1043,7 +1043,7 @@ codename = "Acanthocybium solandri"
 upstream_track = "experimental"
 description = "Based on Fedora ELN (EL11 preview, rolling)"
 experimental = true
-base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:d94eeeca2a6974b8772303f7d01eb4b8ddf98def2c6e6246140c0f8b4dcd0350"
+base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:7de9aba85a0dfa5b6c2f5c0ee02141e1728e57ffd3e0b1f54ece61ab86aa4671"
 # No alias: `eln` is Fedora's identifier for a moving development target,
 # and an alias tag is a stability promise this lane deliberately does not
 # make. Revisit if/when ELN gains a versioned publish.
