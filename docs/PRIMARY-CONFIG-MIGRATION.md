@@ -106,6 +106,22 @@ must have explicit replace/add/remove semantics; do not silently reinterpret
 an existing ordered package list as a set. Family-specific package names stay
 family-specific. Selection never enables a held or unsupported cell.
 
+## Protected package removal
+
+Image-wide additions may move through the primary package resolver, but
+removals remain rejected. A removal can cascade through boot, init, package
+manager, desktop/session, networking or update/recovery dependencies; a static
+denylist cannot describe those packages across native families.
+
+The [F4b protected-removal specification](../.spektacular/specs/20261024100000-protected-native-package-removal.md)
+defines the approval boundary, contract-derived protected set, family-native
+transaction qualification, adversarial fixtures and per-cell evidence required
+before any removal can be enabled. The protected set is projected from the
+effective package and runtime contracts in the exact build root, not maintained
+as a second package catalog. Missing or stale evidence fails closed. Source
+tests and solver dry-runs are kept separate from image build, boot, install,
+update and recovery proof.
+
 ## Ordered migration
 
 1. Record the ownership map and schema in the RFC/spec/plan. Inventory every
