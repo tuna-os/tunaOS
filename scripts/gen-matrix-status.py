@@ -44,7 +44,9 @@ from collections import defaultdict
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from lib.gh import gh_json as _gh_json  # noqa: E402
 import matrix_evaluator  # noqa: E402
-from matrix_snapshot import snapshot_identity, load_retained_inputs, configuration_digest, historical_notice  # noqa: E402
+from matrix_snapshot import (  # noqa: E402
+    CONFIGURATION_FILES, configuration_digest, historical_notice, load_retained_inputs, snapshot_identity,
+)
 
 # Re-exported for backwards-compatibility with callers (tunaOS#2532).
 composite_verdict = matrix_evaluator.composite_verdict
@@ -1188,11 +1190,11 @@ def build(inputs: dict | None = None) -> tuple[str, dict]:
     # LUKS numbers wrong in both directions: image-only variants were missing
     # from the total, while cells that ship no ISO were counted once a run
     # happened to touch them.
+    FULL_SWEEP_DATES.clear()
+    matrix = iso_matrix()
+    desktop_matrix = _matrix("build_image", desktops_only=True)
+    lmatrix = luks_matrix()
     if inputs is None:
-        FULL_SWEEP_DATES.clear()
-        matrix = iso_matrix()
-        desktop_matrix = _matrix("build_image", desktops_only=True)
-        lmatrix = luks_matrix()
         expected_install_cells = {
             f"{variant}:{flavor}"
             for variant, flavors in lmatrix.items()
@@ -1236,10 +1238,8 @@ def build(inputs: dict | None = None) -> tuple[str, dict]:
         smoke = latest_results("installer-smoke.yml", r"^(?!build )[^:]+:")
         tags = overlay_tags()
     else:
-        FULL_SWEEP_DATES.clear()
-        matrix = iso_matrix()
-        desktop_matrix = _matrix("build_image", desktops_only=True)
-        lmatrix = luks_matrix()
+        # Retained historical inputs carry no full-sweep dates, so
+        # FULL_SWEEP_DATES stays empty (unknown) rather than invented.
         luks = inputs["luks"]
         lifecycle = inputs["lifecycle"]
         smoke = inputs["smoke"]
@@ -1668,13 +1668,15 @@ def main() -> int:
     head, rest = text.split(BEGIN, 1)
     committed, tail = rest.split(END, 1)
     inputs = load_retained_inputs(args.inputs) if args.inputs else None
-    generated, provenance = build(inputs) if inputs is not None else build()
+    generated, provenance = build(inputs)
+    # The disclosure sits after the prose's existing blank line, directly
+    # above the generated block; stripping it restores that prose exactly.
     head = re.sub(
-        r"\n<!-- BEGIN HISTORICAL SNAPSHOT -->.*?<!-- END HISTORICAL SNAPSHOT -->\n",
-        "", head, flags=re.DOTALL,
+        r"\n*<!-- BEGIN HISTORICAL SNAPSHOT -->.*?<!-- END HISTORICAL SNAPSHOT -->\n",
+        "\n\n", head, flags=re.DOTALL,
     )
     if inputs is not None:
-        head += "\n" + historical_notice(inputs["evaluation_date"]) + "\n"
+        head += historical_notice(inputs["evaluation_date"]) + "\n"
     updated = head + generated + tail
 
     if args.check:
@@ -1727,7 +1729,7 @@ def main() -> int:
              "cells": provenance}
         payload["snapshot_context"] = inputs["context"] if inputs is not None else {
             "kind": "live-collection",
-            "configuration_sha256": {name: configuration_digest(name) for name in ("tunaos.toml", ".github/green-criteria.yml")},
+            "configuration_sha256": {name: configuration_digest(name) for name in CONFIGURATION_FILES},
         }
         payload["snapshot"] = snapshot_identity(updated, payload)
         PROV.write_text(json.dumps(payload, indent=1, sort_keys=True) + "\n")

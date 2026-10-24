@@ -35,8 +35,13 @@ history; they do not enter current coverage counts.
   only as unverified context, not as a new full-sweep assertion.
 - The input records selected historical assertions, not a newly enumerated
   workflow history. It makes no claim that no later runs exist.
-- Configuration hashes bind this replay to its reviewed inputs. A later
-  configuration change needs a reviewed new input, not a hash edit.
+- Configuration hashes bind this replay to its reviewed inputs. After a
+  configuration change, `--inputs` replay refuses to run. A new replay needs a
+  reviewed new input, not a hash edit. The committed pair stays valid: its
+  recorded hashes are sealed into the snapshot identity, but
+  `check-matrix-snapshot.py` does not compare them with the current checkout.
+  The daily live refresh replaces this snapshot. `--check-structure` catches
+  board-shape drift from a configuration change.
 
 ## Reproduce without network access
 
@@ -61,7 +66,7 @@ arbitrary user-supplied health claim. Job-list receipts were read through the
 GitHub connector, paginated to their reported total, and compared with the
 normalized assertions. Baseline ZIP digests were checked before extraction.
 The loader rejects unmanifested source runs, future assertions, conflicting
-evaluation dates and build results without per-cell source metadata. Current
-configuration binding uses parsed values, so comment-only edits do not change
-the matrix identity. Exact original configuration byte hashes remain in the
-receipt for audit.
+evaluation dates and build results without per-cell source metadata. Malformed
+input fails with one `ValueError` that names the problem. Configuration
+identity uses parsed values, so comment-only edits do not change it. Exact
+original configuration byte hashes remain in the receipt for audit.

@@ -1977,3 +1977,15 @@ restoring the older matching pair would hide those failures.
 and check the board/provenance identity before publication. Preserve the
 historical date and unknown overlay/full-sweep inputs. Do not hand-edit counts,
 roll back newer failures, or label the reconciliation as a fresh health run.
+
+**Symptom:** `check-matrix-snapshot.py` reports `snapshot configuration
+changed: tunaos.toml` on a PR that edits only a `tunaos.toml` description.
+
+**Cause:** an early #3839 draft compared the committed pair's recorded
+configuration hash with the checkout. One edited `description` string made
+the check exit 1 on otherwise valid files. On 2026-10-24, 16 open PRs touched
+`tunaos.toml`.
+
+**Fix:** the recorded hashes stay sealed in the snapshot identity. Only
+`--inputs` replay compares them with the checkout. `--check-structure`
+catches board-shape drift from configuration.
