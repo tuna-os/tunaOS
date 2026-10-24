@@ -1829,10 +1829,10 @@ See `tests/test_readme_status_api_retries.py` for regression tests.
 **Symptom:** A GNOME image passes the version contract with Shell 50, or an
 unknown version passes on Hummingbird.
 
-**Cause:** The former policy and runtime constant were both 50. The version
-helper also waived failures on Hummingbird. The tests in
-`tests/test_the_gnome_floor_is_enforced.py` reproduce both paths with fake
-installed binaries.
+**Cause:** The configured policy, generated manifest or runtime constant drifted
+below 51, or a bootstrap waiver let a missing/old provider pass. The tests in
+`tests/test_the_gnome_floor_is_enforced.py` reproduce the GNOME 50 and unknown
+version paths with fake installed binaries.
 
 **Fix:** Keep `desktops.gnome.minimum_version` in `tunaos.toml` and the runtime
 constant at 51. Generate the manifest adapter with `scripts/config.py generate`.
