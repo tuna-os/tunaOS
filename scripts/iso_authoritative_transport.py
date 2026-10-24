@@ -114,6 +114,7 @@ class _BoundedResponse:
 
     def __init__(self, response, budget, limit, idle_timeout):
         self._response = response
+        self._reader = _single_receive_reader(response)
         self._budget = budget
         self._remaining = limit
         self._idle_timeout = idle_timeout
@@ -157,14 +158,11 @@ class _BoundedResponse:
         """
         remaining_time = self._budget.remaining_seconds()
         timeout = min(self._idle_timeout, remaining_time)
-        _set_response_timeout(self._response, timeout)
+        _set_response_timeout(self._response, self._reader, timeout)
         allowed = min(self._remaining, self._budget.remaining_bytes) + 1
         requested = min(size, allowed, MAX_READ_BYTES)
-        receive = getattr(self._response, "read1", None)
-        if not callable(receive):
-            receive = self._response.read
         try:
-            chunk = receive(requested)
+            chunk = self._reader.read1(requested)
         except (socket.timeout, TimeoutError) as exc:
             code = "total_timeout" if self._budget.clock() >= self._budget.deadline else "idle_timeout"
             raise AuthoritativeTransportError(code, "response.read") from exc
@@ -224,6 +222,9 @@ class AuthoritativeTransport:
             self._object_opener = None
         else:
             if type(_openers) is not tuple or len(_openers) != 3:
+                _fail("invalid_input", "openers")
+            if any(not callable(getattr(opener, "open", None))
+                   for opener in _openers):
                 _fail("invalid_input", "openers")
             self._api_opener, self._archive_opener, self._object_opener = _openers
 
@@ -496,14 +497,36 @@ def _close_quietly(stream):
             pass
 
 
-def _set_response_timeout(response, timeout):
-    if hasattr(response, "settimeout"):
-        response.settimeout(timeout)
-        return
-    try:
-        response.fp.raw._sock.settimeout(timeout)
-    except AttributeError:
-        pass
+def _single_receive_reader(response):
+    """Resolve the stream whose read1 performs at most one receive."""
+    candidate = response
+    seen = set()
+    while candidate is not None and id(candidate) not in seen:
+        seen.add(id(candidate))
+        if callable(getattr(candidate, "read1", None)):
+            return candidate
+        candidate = getattr(candidate, "fp", None)
+    _fail("invalid_response", "response.reader")
+
+
+def _set_response_timeout(response, reader, timeout):
+    """Set the socket timeout on a response or its wrapped raw stream."""
+    pending = [reader, response]
+    seen = set()
+    while pending:
+        candidate = pending.pop(0)
+        if candidate is None or id(candidate) in seen:
+            continue
+        seen.add(id(candidate))
+        setter = getattr(candidate, "settimeout", None)
+        if callable(setter):
+            setter(timeout)
+            return
+        pending.extend(
+            getattr(candidate, attribute, None)
+            for attribute in ("fp", "raw", "_sock")
+        )
+    _fail("invalid_response", "response.timeout")
 
 
 def _unique_object(pairs):

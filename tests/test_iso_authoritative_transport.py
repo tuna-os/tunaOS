@@ -52,7 +52,7 @@ class FakeResponse:
         self.timeouts = []
         self.read_sizes = []
 
-    def read(self, size=-1):
+    def read1(self, size=-1):
         self.read_sizes.append(size)
         if self.clock is not None:
             self.clock.now += self.clock.advance
@@ -68,6 +68,25 @@ class FakeResponse:
 
     def settimeout(self, timeout):
         self.timeouts.append(timeout)
+
+
+class WrappedResponse:
+    """Model urllib's metadata wrapper around the actual HTTP response."""
+
+    def __init__(self, inner):
+        self.fp = inner
+        self.status = inner.status
+        self.headers = inner.headers
+        self.url = inner.url
+
+    def read(self, _size=-1):
+        raise AssertionError("wrapper.read must not aggregate socket receives")
+
+    def close(self):
+        self.fp.close()
+
+    def geturl(self):
+        return self.url
 
 
 class FakeServerOpener:
@@ -318,10 +337,14 @@ class RecordingFile(io.BytesIO):
     def __init__(self, data):
         super().__init__(data)
         self.body_reads = 0
+        self.timeouts = []
 
     def read(self, size=-1):
         self.body_reads += 1
         return super().read(size)
+
+    def settimeout(self, timeout):
+        self.timeouts.append(timeout)
 
 
 class FakeSocket:
@@ -343,6 +366,7 @@ class FakeHTTPSServer(urllib.request.BaseHandler):
         self.files = []
 
     def https_open(self, request):
+        assert self.exchanges, "unexpected HTTPS request"
         url, status, headers, body = self.exchanges.pop(0)
         assert request.full_url == url
         self.requests.append((request.full_url, dict(request.header_items())))
@@ -595,6 +619,31 @@ def test_compressed_or_wrong_origin_response_is_rejected_and_closed():
         with pytest.raises(CALLER.AuthoritativeTransportError):
             client.get_json(path)
         assert api_response.closed
+
+def test_wrapped_response_reads_and_times_the_underlying_single_receive_stream():
+    case = copy.deepcopy(CASE)
+    path = f"/repos/tuna-os/iso-builder/actions/runs/{case['selection']['run_id']}"
+    inner = response(case["currentBefore"], CALLER.API_ORIGIN + path)
+    api = FakeServerOpener([WrappedResponse(inner)])
+    client = transport(
+        case, openers=(api, FakeServerOpener(), FakeServerOpener()))
+
+    assert client.get_json(path) == case["currentBefore"]
+    assert inner.read_sizes
+    assert inner.timeouts
+    assert inner.closed
+
+
+@pytest.mark.parametrize("openers", [
+    (object(), FakeServerOpener(), FakeServerOpener()),
+    (FakeServerOpener(), object(), FakeServerOpener()),
+    (FakeServerOpener(), FakeServerOpener(), object()),
+])
+def test_injected_openers_must_implement_open(openers):
+    case = copy.deepcopy(CASE)
+    with pytest.raises(CALLER.AuthoritativeTransportError) as caught:
+        transport(case, openers=openers)
+    assert (caught.value.code, caught.value.field) == ("invalid_input", "openers")
 
 
 @pytest.mark.parametrize(
