@@ -15,7 +15,9 @@ import json
 import os
 from pathlib import Path
 import re
+import shlex
 import tempfile
+from urllib.parse import urlsplit
 
 TOMLI_VERSION = '2.3.2'
 _VENDOR = Path(__file__).with_name('_vendor') / 'tomli'
@@ -37,6 +39,13 @@ except (ImportError, OSError) as exc:
 ROOT = Path(__file__).resolve().parents[2]
 ID = re.compile(r"[a-z0-9][a-z0-9-]*\Z")
 PLATFORMS = {"linux/amd64", "linux/amd64/v2", "linux/amd64/v3", "linux/arm64"}
+# Identity values land in os-release (written as KEY="value" through a sed with
+# "|" as delimiter) and in JSON heredocs, so no quote, backslash, pipe, backtick
+# or dollar may appear. Names and codenames are plain words.
+DISPLAY_TEXT = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9 .,()+_-]*[A-Za-z0-9.,()+_-])?\Z")
+FORBIDDEN_URL_CHARACTER = re.compile(r"[\s\"'\\|`$]")
+CPE_PART = re.compile(r"[a-z0-9][a-z0-9._-]*\Z")
+BRANDING_URLS = ('homepage', 'documentation', 'support', 'bug_report')
 # OCI distribution grammar: a registry host with an optional port, and
 # lowercase repository path components separated by "/".
 REGISTRY = re.compile(r"(?:localhost|[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+)(?::[0-9]{1,5})?\Z")
@@ -64,6 +73,21 @@ def table(value, allowed, required, path):
     if unknown or missing:
         raise ConfigError(f"{path}: unknown keys {sorted(unknown)}; missing keys {sorted(missing)}")
 
+
+def https_url(value):
+    if not isinstance(value, str) or FORBIDDEN_URL_CHARACTER.search(value):
+        return False
+    try:
+        parsed = urlsplit(value)
+        parsed.port  # Validate an optional numeric port and its range.
+    except ValueError:
+        return False
+    return (
+        parsed.scheme == 'https'
+        and bool(parsed.hostname)
+        and parsed.username is None
+        and parsed.password is None
+    )
 
 def text(value, path, empty=False):
     if not isinstance(value, str) or (not empty and not value.strip()) or any(ord(c) < 32 for c in value):
@@ -112,7 +136,7 @@ def package_catalog_schema():
 
 def validate(config):
     """Validate the implemented surface; reject inert future sections."""
-    table(config, ('schema_version', 'build', 'iso_groups', 'sibling_images', 'tuna_rollout', 'variants', 'package_groups', 'desktops', 'iso_builder', 'flavor_metadata', 'flatpak_preinstall', 'package_catalogs'),
+    table(config, ('schema_version', 'build', 'iso_groups', 'sibling_images', 'tuna_rollout', 'variants', 'package_groups', 'desktops', 'iso_builder', 'flavor_metadata', 'flatpak_preinstall', 'package_catalogs', 'project', 'defaults'),
           ('schema_version', 'build', 'iso_groups', 'sibling_images', 'tuna_rollout', 'variants'), 'config')
     if 'desktops' in config or 'package_groups' in config:
         tunaos_packages = package_policy()
@@ -124,6 +148,21 @@ def validate(config):
         raise ConfigError('schema_version: expected integer 1')
     table(config['build'], ('global_platforms', 'publish'), ('global_platforms',), 'build')
     strings(config['build']['global_platforms'], 'build.global_platforms', platform=True)
+    if 'project' in config:
+        table(config['project'], ('name', 'id', 'cpe_vendor'), ('name', 'id', 'cpe_vendor'), 'project')
+        if not isinstance(config['project']['name'], str) or not DISPLAY_TEXT.fullmatch(config['project']['name']):
+            raise ConfigError('project.name: expected plain words (letters, digits, spaces, .,()+_-)')
+        identifier(config['project']['id'], 'project.id')
+        if not isinstance(config['project']['cpe_vendor'], str) or not CPE_PART.fullmatch(config['project']['cpe_vendor']):
+            raise ConfigError('project.cpe_vendor: expected a lowercase CPE vendor such as acme '
+                              '(letters, digits and ._-)')
+    if 'defaults' in config:
+        table(config['defaults'], ('branding',), ('branding',), 'defaults')
+        table(config['defaults']['branding'], BRANDING_URLS, BRANDING_URLS, 'defaults.branding')
+        for key in BRANDING_URLS:
+            value = config['defaults']['branding'][key]
+            if not https_url(value):
+                raise ConfigError(f'defaults.branding.{key}: expected an https:// URL')
     if 'publish' in config['build']:
         # Optional: a fork's own destination. Omitted, CI publishes to the
         # repository owner's namespace, so the stock file stays fork-neutral.
@@ -140,11 +179,13 @@ def validate(config):
         where = f'variants.{name}'
         identifier(name, where)
         table(variant, ('emoji', 'description', 'base_image', 'aliases', 'platforms', 'flavors',
-                        'upstream_track', 'experimental', 'akmods', 'publish_name', 'tag_suffix'),
+                        'upstream_track', 'experimental', 'akmods', 'publish_name', 'tag_suffix', 'codename'),
               ('emoji', 'description', 'base_image', 'platforms', 'flavors'), where)
         for key in ('emoji', 'description', 'base_image', 'upstream_track', 'akmods', 'publish_name', 'tag_suffix'):
             if key in variant:
                 text(variant[key], where + '.' + key)
+        if 'codename' in variant and (not isinstance(variant['codename'], str) or not DISPLAY_TEXT.fullmatch(variant['codename'])):
+            raise ConfigError(f'{where}.codename: expected plain words (letters, digits, spaces, .,()+_-)')
         if 'experimental' in variant and type(variant['experimental']) is not bool:
             raise ConfigError(f'{where}.experimental: expected boolean')
         strings(variant['platforms'], where + '.platforms', platform=True)
@@ -312,14 +353,54 @@ def load(path=None):
 def matrix(config):
     """Project the old consumer shape without inventing defaults or losing flags."""
     validate(config)
+    # Identity (codename) has its own adapter; keep it out of the build matrix
+    # so every jq/yq consumer of build-config.yml sees the unchanged shape.
     return copy.deepcopy({'config': config['build'], 'iso_groups': config['iso_groups'],
                           'sibling_images': config['sibling_images'], 'tuna_rollout': config['tuna_rollout'],
-                          'variants': [{'id': name, **value} for name, value in config['variants'].items()]})
+                          'variants': [{'id': name, **{k: v for k, v in value.items() if k != 'codename'}}
+                                       for name, value in config['variants'].items()]})
 
 
 def render(config):
     # JSON is also YAML; old jq/yq/PyYAML consumers keep their data contract.
     return json.dumps(matrix(config), ensure_ascii=False, indent=2) + '\n'
+
+
+def render_identity(config):
+    """Shell adapter sourced by build_scripts/90-image-info.sh in every image.
+
+    Committed beside the other build scripts so overlay and Debian contexts,
+    which do not carry manifests/, read the same values. TunaOS's own identity
+    passes through here exactly like a fork's; there is no stock fallback.
+    """
+    validate(config)
+    missing = [key for key in ('project', 'defaults') if key not in config]
+    unnamed = [name for name, variant in config['variants'].items() if 'codename' not in variant]
+    needs = []
+    if missing:
+        needs.append('identity needs sections: ' + ', '.join(missing))
+    if unnamed:
+        needs.append('identity needs a codename for variants: ' + ', '.join(unnamed))
+    if needs:
+        raise ConfigError('; '.join(needs))
+    project, urls = config['project'], config['defaults']['branding']
+    lines = ['# Generated from tunaos.toml by `scripts/config.py generate-identity`; do not edit.',
+             f"TUNAOS_PROJECT_NAME={shlex.quote(project['name'])}",
+             f"TUNAOS_PROJECT_ID={shlex.quote(project['id'])}",
+             f"TUNAOS_CPE_VENDOR={shlex.quote(project['cpe_vendor'])}",
+             f"TUNAOS_HOME_URL={shlex.quote(urls['homepage'])}",
+             f"TUNAOS_DOCUMENTATION_URL={shlex.quote(urls['documentation'])}",
+             f"TUNAOS_SUPPORT_URL={shlex.quote(urls['support'])}",
+             f"TUNAOS_BUG_REPORT_URL={shlex.quote(urls['bug_report'])}",
+             # -g: stays global even when a caller sources this inside a function.
+             'declare -gA TUNAOS_CODENAMES=(']
+    # Double-quote every key even when its characters happen to be shell-safe:
+    # formatters must never reinterpret a hyphenated associative subscript.
+    lines += [
+        f'\t[{json.dumps(name)}]={shlex.quote(config["variants"][name]["codename"])}'
+        for name in sorted(config['variants'])
+    ]
+    return '\n'.join(lines + [')']) + '\n'
 
 
 def prepare(root=ROOT):

@@ -42,6 +42,8 @@ class Image:
                         self.context / "build_scripts/lib/variant-identity.tsv")
         shutil.copyfile(ROOT / "build_scripts/lib/fork-branding.sh",
                         self.context / "build_scripts/lib/fork-branding.sh")
+        shutil.copyfile(ROOT / "build_scripts/lib/identity.env",
+                        self.context / "build_scripts/lib/identity.env")
         for path in ("build_scripts/90-image-info.sh", "build_scripts/desktop/select-wallpaper.sh"):
             source = (ROOT / path).read_text()
             # Keep the whole script and ordering; redirect literal filesystem roots.

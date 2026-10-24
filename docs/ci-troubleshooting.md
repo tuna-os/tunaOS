@@ -1963,3 +1963,34 @@ outreach copy or creative briefs, use the reasoned region or file opt-out in
 [the contributor prose policy](../CONTRIBUTING.md#prose-checks-ste). Keep
 technical steps checked on mixed pages. Run `just ste` again; do not increase
 `.ste-budget` or exclude a whole directory to pass one content change.
+
+### Image build stops with `identity.env is missing` or `generated identity drift`
+
+**Symptom:** `90-image-info.sh` exits with `build_scripts/lib/identity.env is
+missing`, or `just check` reports `generated identity drift`.
+
+**Cause:** The project name, URLs, CPE and variant codenames come from
+`tunaos.toml` through `build_scripts/lib/identity.env`. The image build reads
+only that generated file and has no built-in fallback, so a fork never gets
+TunaOS identity by accident. A changed `tunaos.toml` without a regenerated file,
+or a hand edit to the file, makes the two disagree.
+
+**Fix:** Run `python3 scripts/config.py generate-identity` and commit
+`tunaos.toml` and `build_scripts/lib/identity.env` together. A new variant also
+needs a `codename`; the generator names any variant without one.
+
+### Primary identity and publish changes conflict during integration
+
+**Symptom:** The identity and publish branches conflict in
+`scripts/lib/tunaos_config.py` and `tests/test_fork_branding.py`.
+
+**Cause:** Both changes add validators at the same locations. The identity
+change removes the old codename table check. The publish change replaces the
+fixed vendor check with the resolved namespace check.
+
+**Fix:** Keep both sets of validators and the resolved vendor check. Do not
+restore the old codename table assertion. Run
+`tests/test_identity_publish_integration.py` with the identity and publish
+suites. It checks one primary config through the real writer and verifier on
+a test filesystem, without a legacy fork manifest. This is not image build,
+registry push, boot or install proof.
