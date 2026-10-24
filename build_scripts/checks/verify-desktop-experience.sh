@@ -192,7 +192,7 @@ require_any_executable() {
 	local g path
 	for g in "$@"; do
 		for path in $g; do
-			[[ -x "$path" ]] && return 0
+			[[ -f "$path" && -x "$path" ]] && return 0
 		done
 	done
 	echo "missing executable: none of [$*] exist and are executable" >&2
@@ -246,8 +246,9 @@ require_any_user_unit() {
 # publishes gnome-keyring, oo7-daemon obsoletes gnome-keyring < 51 and pam_oo7
 # obsoletes gnome-keyring-pam < 51. On ELN the PAM module is required with the
 # daemon: ELN's gdm wires pam_oo7 into its stacks to unlock the store with the
-# login password, which is what gnome-keyring-pam did. Read os-release here:
-# IS_ELN comes from the build-time lib.sh, which a booted image does not have.
+# login password, which is what gnome-keyring-pam did. Read ID or VARIANT_ID
+# from os-release here; IS_ELN comes from the build-time lib.sh, which a booted
+# image does not have.
 # $1 is a filesystem root for the regression test; empty in the image.
 require_secret_service() {
 	local root="${1:-}"
