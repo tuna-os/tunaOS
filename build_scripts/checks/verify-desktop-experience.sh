@@ -185,6 +185,25 @@ require_any_glob() {
 	exit 1
 }
 
+# Shared libraries and PAM modules must be regular files, not merely matching
+# directory entries.
+require_any_file() {
+	local g path
+	local -a matches
+	for g in "$@"; do
+		mapfile -t matches < <(compgen -G "$g" || true)
+		for path in "${matches[@]}"; do
+			[[ -f "$path" ]] && return 0
+		done
+	done
+	echo "missing required file: none of [$*] exists" >&2
+	if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${desktop:-}" != cosmic ]]; then
+		waive
+		return 0
+	fi
+	exit 1
+}
+
 # Commands represented by fixed filesystem locations must still be executable.
 # This is separate from require_command so regression tests can inspect an
 # alternate image root without changing the test process's PATH.
@@ -197,7 +216,7 @@ require_any_executable() {
 			[[ -f "$path" && -x "$path" ]] && return 0
 		done
 	done
-	echo "missing executable: none of [$*] exist and are executable" >&2
+	echo "missing executable: none of [$*] exists and is executable" >&2
 	if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${desktop:-}" != cosmic ]]; then
 		waive
 		return 0
@@ -264,7 +283,7 @@ require_secret_service() {
 	done
 	if "$is_eln"; then
 		require_any_executable "$root/usr/libexec/oo7-daemon"
-		require_any_glob "$root/usr/lib*/security/pam_oo7.so"
+		require_any_file "$root/usr/lib*/security/pam_oo7.so"
 	else
 		require_any_executable "$root/usr/bin/gnome-keyring-daemon"
 	fi

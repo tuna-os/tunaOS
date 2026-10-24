@@ -65,7 +65,7 @@ def contract_functions():
     source = CHECK.read_text()
     bodies = ["TUNAOS_CONTRACT_WAIVED=0"]
     for name in (
-        "waive", "require_any_glob", "require_any_executable",
+        "waive", "require_any_glob", "require_any_file", "require_any_executable",
         "require_secret_service",
     ):
         match = re.search(
