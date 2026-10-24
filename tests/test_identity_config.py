@@ -125,7 +125,8 @@ def test_kde_about_page_shows_the_configured_project(tmp_path):
     adapter.write_text(config.render_identity(fork), encoding="utf-8")
     about = tmp_path / "kcm-about-distrorc"
     subprocess.run(["bash", str(ROOT / "build_scripts/desktop/kde-set-look-and-feel.sh"), str(tmp_path / "unused")],
-                   env={**os.environ, "TUNAOS_KCM_ABOUT": str(about), "TUNAOS_IDENTITY_ENV": str(adapter)},
+                   env={**os.environ, "TUNAOS_KCM_ABOUT": str(about), "TUNAOS_IDENTITY_ENV": str(adapter),
+                        "TUNAOS_IDENTITY_TEST_OVERRIDE": "1"},
                    text=True, capture_output=True, check=True)
     lines = about.read_text(encoding="utf-8").splitlines()
     assert "Website=https://acme.example/os" in lines
@@ -137,12 +138,26 @@ def test_kde_about_rejects_a_non_file_identity_adapter(tmp_path):
         ["bash", str(ROOT / "build_scripts/desktop/kde-set-look-and-feel.sh"),
          str(tmp_path / "unused")],
         env={**os.environ, "TUNAOS_KCM_ABOUT": str(about),
-             "TUNAOS_IDENTITY_ENV": str(tmp_path)},
+             "TUNAOS_IDENTITY_ENV": str(tmp_path),
+             "TUNAOS_IDENTITY_TEST_OVERRIDE": "1"},
         text=True, capture_output=True,
     )
     assert result.returncode != 0
     assert "identity adapter is missing or unreadable" in result.stderr
     assert not about.exists()
+
+def test_kde_about_rejects_identity_override_outside_tests(tmp_path):
+    adapter = tmp_path / "identity.env"
+    adapter.write_text("TUNAOS_PROJECT_NAME=Untrusted\n", encoding="utf-8")
+    result = subprocess.run(
+        ["bash", str(ROOT / "build_scripts/desktop/kde-set-look-and-feel.sh"),
+         str(tmp_path / "unused")],
+        env={**os.environ, "TUNAOS_KCM_ABOUT": str(tmp_path / "about"),
+             "TUNAOS_IDENTITY_ENV": str(adapter)},
+        text=True, capture_output=True,
+    )
+    assert result.returncode != 0
+    assert "TUNAOS_IDENTITY_ENV is test-only" in result.stderr
 
 
 @pytest.mark.parametrize("written,passes", [("Wile E", True), ("Achillobator", False)])

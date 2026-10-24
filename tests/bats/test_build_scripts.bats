@@ -172,7 +172,7 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
 # real unit is ssh.service (sshd.service is a compat symlink). Missing the
 # Debian spelling would ship published images with sshd running.
 @test "build_scripts/40-services.sh: apt disables both Debian SSH unit names" {
-  run awk '/^if \[\[ "\$\{PKG_MGR:-\}" == "apt" \]\]/,/^fi$/' \
+  run awk '/^if \[\[ "\$\{PKG_MGR:-\}" == "apt" \]\]/,/^[[:space:]]*fi$/' \
     "${REPO_ROOT}/build_scripts/40-services.sh"
   [ "$status" -eq 0 ]
   for unit in sshd.service ssh.service sshd.socket ssh.socket; do
@@ -221,7 +221,7 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
     echo 'set -euo pipefail'
     echo "source '${REPO_ROOT}/build_scripts/lib/identity.env'"
     awk '/^canonical_variant\(\) \{/,/^\}/' "$script"
-    awk '/^VARIANT_KEY=/,/^fi$/' "$script"
+    awk '/^VARIANT_KEY=/,/^[[:space:]]*fi$/' "$script"
     echo 'echo "${VARIANT_KEY}:${CODE_NAME}"'
   } >"$harness"
 

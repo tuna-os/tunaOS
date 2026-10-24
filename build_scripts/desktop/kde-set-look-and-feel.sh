@@ -88,7 +88,12 @@ fi
 # Fedora logo and website.
 # Only on a real build (no file arguments) or when a test names the path.
 if [[ $# -eq 0 || -n "${TUNAOS_KCM_ABOUT:-}" ]]; then
-	identity_env="${TUNAOS_IDENTITY_ENV:-$(dirname "${BASH_SOURCE[0]}")/../lib/identity.env}"
+	DEFAULT_IDENTITY_ENV="$(dirname "${BASH_SOURCE[0]}")/../lib/identity.env"
+	if [[ -n "${TUNAOS_IDENTITY_ENV:-}" && "${TUNAOS_IDENTITY_TEST_OVERRIDE:-}" != 1 ]]; then
+		echo "ERROR: TUNAOS_IDENTITY_ENV is test-only; build identity must use ${DEFAULT_IDENTITY_ENV}" >&2
+		exit 1
+	fi
+	identity_env="${TUNAOS_IDENTITY_ENV:-${DEFAULT_IDENTITY_ENV}}"
 	if [[ ! -f "$identity_env" || ! -r "$identity_env" ]]; then
 		echo "ERROR: identity adapter is missing or unreadable: ${identity_env}" >&2
 		exit 1
