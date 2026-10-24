@@ -58,6 +58,12 @@ PINNED_DOWNLOADS = {
         },
         True,
     ),
+    "uupd": (
+        "uupd",
+        "uupd_sha256",
+        "https://github.com/ublue-os/uupd/releases/download/{version}/uupd_Linux_{arch}.tar.gz",
+        True,
+    ),
 }
 
 

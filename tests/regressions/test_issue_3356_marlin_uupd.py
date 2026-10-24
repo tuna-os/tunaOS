@@ -13,6 +13,7 @@ installer before service setup.
 
 from __future__ import annotations
 
+import hashlib
 import io
 import os
 import stat
@@ -61,9 +62,6 @@ def test_uupd_installer_lays_down_binary_and_core_units(tmp_path: Path) -> None:
     fake_bin = tmp_path / "bin"
     context.mkdir()
     fake_bin.mkdir()
-    (context / "image-versions.yaml").write_text(
-        'downloads:\n  uupd: "v1.5.0"\n', encoding="utf-8"
-    )
 
     archive = tmp_path / "uupd.tar.gz"
     payload = b"#!/bin/sh\n[ \"${1:-}\" = --help ]\n"
@@ -73,6 +71,11 @@ def test_uupd_installer_lays_down_binary_and_core_units(tmp_path: Path) -> None:
         info.size = len(payload)
 
         tar.addfile(info, io.BytesIO(payload))
+    archive_sha = hashlib.sha256(archive.read_bytes()).hexdigest()
+    (context / "image-versions.yaml").write_text(
+        f'downloads:\n  uupd: "v1.5.0"\n  uupd_sha256:\n    x86_64: "{archive_sha}"\n    arm64: "{archive_sha}"\n',
+        encoding="utf-8",
+    )
     _fake_curl(fake_bin, archive)
 
     env = os.environ.copy()
@@ -81,6 +84,9 @@ def test_uupd_installer_lays_down_binary_and_core_units(tmp_path: Path) -> None:
             "PATH": f"{fake_bin}{os.pathsep}{env['PATH']}",
             "UUPD_CONTEXT": str(context),
             "UUPD_ROOT": str(image),
+            "UUPD_SERVICE_SHA256": hashlib.sha256(b"[Unit]\nDescription=uupd.service\n").hexdigest(),
+            "UUPD_TIMER_SHA256": hashlib.sha256(b"[Unit]\nDescription=uupd.timer\n").hexdigest(),
+            "UUPD_MANUAL_SERVICE_SHA256": hashlib.sha256(b"[Unit]\nDescription=uupd-manual.service\n").hexdigest(),
         }
     )
     result = subprocess.run(

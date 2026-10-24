@@ -1963,3 +1963,11 @@ outreach copy or creative briefs, use the reasoned region or file opt-out in
 [the contributor prose policy](../CONTRIBUTING.md#prose-checks-ste). Keep
 technical steps checked on mixed pages. Run `just ste` again; do not increase
 `.ste-budget` or exclude a whole directory to pass one content change.
+
+### Base image build fails on unverified uupd download or unit checksum mismatch (#3331)
+
+**Symptom:** `install-uupd.sh` exits non-zero with `uupd: missing or invalid SHA-256`, `missing or invalid immutable commit ref`, or a `sha256sum: FAILED` message during image construction.
+
+**Cause:** `uupd` binary archives and upstream systemd units require verified SHA-256 checksums and an immutable commit ref. A version bump that does not update `uupd_sha256` in `image-versions.yaml` or a unit file mismatch fails closed.
+
+**Fix:** Pin the per-architecture SHA-256 in `image-versions.yaml` (`uupd_sha256`) and run `python3 scripts/check-download-checksums.py` to confirm asset hashes. For unit files, use the immutable release commit ref and verify unit checksums.
