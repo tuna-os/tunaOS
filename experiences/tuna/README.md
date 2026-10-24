@@ -19,6 +19,7 @@ tuna-os/tuna-desktop ADR 0008 ships Tuna Desktop on every TunaOS variant, or rec
 
 - EL10 (`yellowfin:tuna`, `albacore:tuna`, `skipjack:tuna`) installs `tuna-desktop-1.0.0~beta.1-1.el10` and its supporting packages from the factory's el10 index (`repo.tunaos.org/repo/10/x86_64`); GDM and the rest of the desktop stack come from EL10.
 - Fedora 44 (`bonito:tuna`) installs `tuna-desktop-1.0.0~beta.1-1.fc44` from the factory's fedora index (`repo.tunaos.org/xfce/44-x86_64`); GDM and the rest are Fedora's.
+- Hummingbird (`hummingbird:tuna`) installs `tuna-desktop-1.0.0~beta.1-1.bfin1` from the signed native index and its GNOME closure from the digest-pinned Utah repository mounted during the build; GDM and the remaining desktop packages come from that same verified closure.
 - Fedora ELN (`wahoo:tuna`) installs `tuna-desktop-1.0.0~beta.1-1.eln159` from the factory's eln index (`repo.tunaos.org/rpm/eln/x86_64`); GDM and the rest are ELN's.
 - Fedora Rawhide (`bonito:tuna-rawhide`) installs `tuna-desktop-1.0.0~beta.1-1.fc46` from the factory's Rawhide index (`repo.tunaos.org/rpm/rawhide/x86_64`) through the manifest's `rawhide` section; GDM and the rest are Fedora's.
 - Ubuntu 26.04 (`grouper:tuna`), Debian 13 trixie (`flounder:tuna`) and Debian sid (`flounder:tuna-sid`) install `tuna-desktop=1.0.0~beta.1-1` from their signed Tideforge apt index (`repo.tunaos.org/tideforge/ubuntu/`, `repo.tunaos.org/tideforge/debian-trixie/` or `repo.tunaos.org/tideforge/debian-sid/`, `signed-by` its `tideforge.gpg`); the distribution's `gdm3` package provides the login screen. trixie's gtk4-layer-shell is 1.0, older than tuna-desktop needs, so the trixie build carries a private copy and Debian's `libgtk4-layer-shell0` is not installed.
@@ -26,7 +27,7 @@ tuna-os/tuna-desktop ADR 0008 ships Tuna Desktop on every TunaOS variant, or rec
 
 The dnf factory repositories keep `gpgcheck=1` against `https://repo.tunaos.org/public.gpg` and sit at priority 100, behind the distribution repositories, so they only supply what the base lacks. The openSUSE one has no priority, so where Tumbleweed ships the same package the newer build wins. These cells are amd64 only. They use the `tuna` stage of `Containerfile.el10`, `Containerfile.opensuse`, `Containerfile.ubuntu` or `Containerfile.debian` and the same GDM session, portal routing and desktop contract. The contract reads package ownership from the native pacman, RPM or dpkg database.
 
-On Fedora and EL, GDM is supplied by the distribution. Power profiles come from `tuned-ppd`, as on those bases' GNOME flavors. `dbus-tools` supplies `dbus-update-activation-environment`, which beta.1 needs to start `graphical-session.target` and the portals (tuna-os/tuna-desktop#691 removes that need).
+On Fedora, EL and Hummingbird, GDM is supplied by the distribution or its verified package closure. Power profiles come from `tuned-ppd`, as on those bases' GNOME flavors. `dbus-tools` supplies `dbus-update-activation-environment`, which beta.1 needs to start `graphical-session.target` and the portals (tuna-os/tuna-desktop#691 removes that need).
 
 On the apt bases, the manifest selects canonical `gdm.service`; the package and executable remain named `gdm3`. The package supplies GDM's PAM and `display-manager.service` configuration; power profiles come from `power-profiles-daemon`.
 

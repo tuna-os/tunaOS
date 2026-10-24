@@ -393,6 +393,7 @@ jobs:
           - bonito
           - wahoo
           - bonito-rawhide
+          - hummingbird
           - grouper
           - flounder
           - flounder-sid

@@ -1722,6 +1722,16 @@ capture first, then sends the graceful powerdown itself before the kill.
 
 **Fix:** The pinned download moved into shared `build_scripts/install-uupd.sh` (same `image-versions.yaml` pin; stages the binary plus `uupd.service`, `uupd.timer`, `uupd-manual.service` before install; smoke with `UUPD_CONTEXT="$PWD" UUPD_ROOT="$scratch"` into a disposable root). The apt and dnf branches of `10-base-packages.sh` delegate to it unchanged in behavior, and `Containerfile.arch` carries the pin file and runs the installer before `40-services.sh`. The context exact-set test now treats `install-uupd.sh` as a consumer of the pin file.
 
+### Hummingbird Tuna prose exceeds the STE budget (tunaOS#3338)
+
+**Symptom:** The prose check reports `1614 > 1609` at `d178e353`.
+
+**Cause:** The new Hummingbird and matrix text adds long sentences, passive
+voice and a long paragraph.
+
+**Fix:** Split the text and use active verbs. Run `scripts/run-ste-lint.sh`
+with the workflow's pinned linter. Keep `.ste-budget` unchanged. The package
+and promotion tests still apply; a prose pass does not qualify the image.
 ### STE fails on matrix prose
 
 **Symptom:** STE reports 1610 findings with a budget of 1609.

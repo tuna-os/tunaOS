@@ -58,7 +58,7 @@ no boot.
 
 ---
 
-The configured image matrix now has 147 cells. Eleven of them are Tuna Desktop (formerly Roost) cells for amd64: Marlin, Yellowfin, Albacore, Skipjack, Wahoo, Bonito, Bonito Rawhide, Grouper, Flounder, Flounder Sid and Sailfin. The `guppy:gnome` cell is back (2026-10-07, #2450). This status snapshot is from before these additions and does not mark them green; each needs its own image, desktop and boot evidence.
+The configured image matrix now has 148 cells. Twelve cells use Tuna Desktop for amd64: Marlin, Yellowfin, Albacore, Skipjack, Wahoo, Bonito, Bonito Rawhide, Hummingbird, Grouper, Flounder, Flounder Sid and Sailfin. This status snapshot is from before their additions and does not mark them green; each needs its own image, desktop and boot evidence. The `guppy:gnome` cell is back (2026-10-07, #2450).
 
 <!-- BEGIN GENERATED — scripts/gen-matrix-status.py -->
 

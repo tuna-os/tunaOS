@@ -560,6 +560,11 @@
     "arch": "x86_64"
   },
   {
+    "variant": "hummingbird",
+    "flavor": "tuna",
+    "arch": "x86_64"
+  },
+  {
     "variant": "marlin",
     "flavor": "base",
     "arch": "aarch64"

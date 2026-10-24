@@ -677,6 +677,21 @@ fi
 # differs is only WHICH repository satisfies the names, which the manifest's
 # hummingbird: section supplies. Leaving it out would route a dnf base down
 # the list-style path and produce that same yq error.
+# Tuna's admitted package set is a required desktop contract. It must use the
+# strict transaction even on Hummingbird, where other desktop lists remain
+# best-effort while that base's package gap is being measured.
+install_dnf_packages() {
+	local -a packages=("$@")
+	if [[ "${_TD_DESKTOP}" == "tuna" ]]; then
+		dnf_retry -y install "${_TD_EXCL_ARGS[@]}" "${packages[@]}"
+	elif [[ "${IS_HUMMINGBIRD:-false}" == "true" ]]; then
+		dnf_retry -y install --skip-unavailable "${_TD_EXCL_ARGS[@]}" "${packages[@]}" ||
+			install_available "${packages[@]}"
+	else
+		dnf_retry -y install "${_TD_EXCL_ARGS[@]}" "${packages[@]}"
+	fi
+}
+
 if [[ "${_TD_OS}" == "el10" || "${_TD_OS}" == "fedora" || "${_TD_OS}" == "rawhide" || "${_TD_OS}" == "hummingbird" || "${_TD_OS}" == "eln" ]]; then
 
 	# Plain (non-COPR) baseurl repos — e.g. the tuna-os xfce-wayland repo,
@@ -774,24 +789,16 @@ if [[ "${_TD_OS}" == "el10" || "${_TD_OS}" == "fedora" || "${_TD_OS}" == "rawhid
 		for exc in "${_TD_EXCLUDES[@]}"; do
 			[[ -n "$exc" ]] && _TD_EXCL_ARGS+=("-x" "$exc")
 		done
-		# --skip-unavailable is command-scoped in dnf5: it goes AFTER
-		# `install`, never between `-y` and it. Spelled the other way it
-		# is not a warning, it is `Unknown argument … (It has to be
-		# placed after the command.)` — and the `||` below then quietly
-		# re-runs the whole set through install_available, which ignores
-		# the exclude list above and forces install_weak_deps=False.
-		# Build Hummingbird #66 (run 32907940350) shipped all 52 gnome
-		# packages that way. tests/test_dnf_flags_land_after_the_
-		# subcommand.py lints for it tree-wide.
-		if [[ "${IS_HUMMINGBIRD:-false}" == "true" ]]; then
-			dnf_retry -y install --skip-unavailable "${_TD_EXCL_ARGS[@]}" "${_TD_PKGS[@]}" || install_available "${_TD_PKGS[@]}"
-			# Whichever branch ran, --skip-unavailable can have dropped
-			# packages without saying so. install_available reports its own
-			# misses; the transaction above reports nothing, so ask the rpm
-			# database what actually landed.
+		# Hummingbird's ordinary non-Tuna desktop lists remain best-effort
+		# because their upstream package gap is measured separately. Tuna is
+		# admitted only with a complete required package set, so its strict
+		# path must fail rather than turn a missing package into a wishlist
+		# entry.
+		install_dnf_packages "${_TD_PKGS[@]}"
+		if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${_TD_DESKTOP}" != "tuna" ]]; then
+			# The tolerant path can drop packages without saying so; record
+			# what landed for the non-Tuna Hummingbird desktop.
 			record_unsatisfied_requests "install-desktop.sh:${_TD_DESKTOP}" "${_TD_PKGS[@]}"
-		else
-			dnf_retry -y install "${_TD_EXCL_ARGS[@]}" "${_TD_PKGS[@]}"
 		fi
 	fi
 

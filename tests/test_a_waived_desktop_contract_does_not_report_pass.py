@@ -23,9 +23,9 @@ The report block is tested by RUNNING it, because "passed" was printed by
 code that had already seen the failures.
 """
 
+import shlex
 import subprocess
 import textwrap
-import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -89,23 +89,26 @@ def test_a_waived_contract_emits_a_greppable_marker(tmp_path):
     assert "TUNAOS_DESKTOP_CONTRACT_WAIVED desktop=gnome missing=3" in out, out
 
 
-def test_every_hummingbird_exemption_counts_what_it_waives():
-    """An exemption that doesn't count is invisible again."""
-    src = CHECK.read_text()
-    # Count STRUCTURALLY, not by matching one layout. This used to count the
-    # single-line form `... ]]; then waive; return 0; fi`, which meant a
-    # formatter expanding those one-liners into ordinary if-blocks dropped the
-    # count to 0 and failed a test whose subject had not changed at all.
-    # (shfmt does exactly that; see the .editorconfig fix in this PR.)
-    exemption_re = re.compile(
-        r'IS_HUMMINGBIRD:-false\}" == "true"[^\n]*\]\]; then(.*?)\n\s*fi\b',
-        re.S,
+def test_hummingbird_require_helpers_count_waived_failures():
+    """Run each shared waiver helper and record every waived failure."""
+    command = textwrap.dedent(
+        f"""
+        set -euo pipefail
+        export TUNAOS_CONTRACT_LIBRARY_ONLY=true
+        IS_HUMMINGBIRD=true
+        source {shlex.quote(str(CHECK))} gnome
+        TUNAOS_CONTRACT_WAIVED=0
+        waive() {{ TUNAOS_CONTRACT_WAIVED=$((TUNAOS_CONTRACT_WAIVED + 1)); }}
+        systemctl() {{ return 1; }}
+        require_command __missing_command_for_waiver_test
+        require_glob /__missing_glob_for_waiver_test
+        require_unit __missing_unit_for_waiver_test
+        require_any_unit __missing_unit_a __missing_unit_b
+        require_any_glob /__missing_glob_a /__missing_glob_b
+        require_user_unit __missing_user_unit_for_waiver_test
+        require_any_user_unit __missing_user_a __missing_user_b
+        [[ "$TUNAOS_CONTRACT_WAIVED" -eq 7 ]]
+        """
     )
-    blocks = exemption_re.findall(src)
-    exemptions = len(blocks)
-    counted = sum(1 for b in blocks if "waive" in b)
-    assert exemptions > 0, "the exemption shape changed; this test is stale"
-    assert counted == exemptions, (
-        f"{exemptions} require_* exemptions but only {counted} call waive() — "
-        "an uncounted exemption can still report a pass over a broken image"
-    )
+    result = subprocess.run(["bash", "-c", command], capture_output=True, text=True)
+    assert result.returncode == 0, result.stdout + result.stderr

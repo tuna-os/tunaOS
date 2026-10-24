@@ -129,9 +129,9 @@ status = "admitted"
 package_target = "rawhide"
 
 [tuna_rollout.hummingbird]
-status = "unsupported"
+status = "admitted"
 package_target = "hummingbird"
-reason = "unsupported until package target hummingbird publishes tuna-desktop (tunaos-packages#832)"
+reason = "blocked on tuna-desktop session-start fix"
 
 [tuna_rollout.sailfin]
 status = "admitted"
@@ -1419,6 +1419,14 @@ id = "cosmic"
 stage = 2
 build_image = true
 build_iso = true
+[[variants.hummingbird.flavors]]
+id = "tuna"
+platforms = ["linux/amd64"]
+stage = 2
+build_image = true
+build_iso = false
+build_qcow2 = false
+luks_e2e = false
 
 # ── Sailfin ──────────────────────────────────────────────────────────────
 # Sailfin Tumbleweed: rolling-release, zypper-based.
@@ -1662,7 +1670,7 @@ build_qcow2 = false
 [[variants.bonito-rawhide.flavors]]
 # Tuna Desktop (tuna_rollout above, tunaOS#3203): rawhide package
 # target, repo.tunaos.org/rpm/rawhide (tunaos-packages#870). Published
-# as bonito:tuna-rawhide.
+# as bonito-rawhide:tuna.
 id = "tuna"
 stage = 2
 platforms = ["linux/amd64"]
@@ -2296,7 +2304,7 @@ build_image = true
 [[variants.flounder-sid.flavors]]
 # Tuna Desktop (tuna_rollout above, tunaOS#3207): debian package
 # target, signed apt index repo.tunaos.org/tideforge/debian-sid.
-# Published as flounder:tuna-sid.
+# Published as flounder-sid:tuna.
 id = "tuna"
 stage = 2
 platforms = ["linux/amd64"]
@@ -3929,6 +3937,66 @@ required = [
 name = "tunaos-fedora"
 baseurl = "https://repo.tunaos.org/xfce/44-x86_64/"
 priority = 100
+
+# Hummingbird's desktop-less base combines the signed native package index with
+# the digest-pinned Utah repository for the GNOME closure. The latter is local
+# and explicitly unsigned because its OCI image is already pinned and verified.
+[desktops.tuna.packages.hummingbird]
+display_manager = "gdm"
+required = [
+  "tuna-desktop-1.0.0~beta.1-1.bfin1",
+  "dbus-tools",
+  "orca",
+  "gdm",
+  "xorg-x11-server-Xwayland",
+  "ibus",
+  "gnome-shell",
+  "gnome-settings-daemon",
+  "gnome-control-center",
+  "gnome-keyring",
+  "evolution-data-server",
+  "xdg-desktop-portal-gnome",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs",
+  "gvfs",
+  "nautilus",
+  "ptyxis",
+  "NetworkManager",
+  "NetworkManager-wifi",
+  "linux-firmware",
+  "amd-gpu-firmware",
+  "intel-gpu-firmware",
+  "iwlwifi-mvm-firmware",
+  "wireless-regdb",
+  "iw",
+  "libsecret",
+  "pipewire",
+  "wireplumber",
+  "pipewire-gstreamer",
+  "gstreamer1-plugins-good",
+  "gstreamer1-plugin-libav",
+  "ffmpeg",
+  "tuned-ppd",
+  "upower",
+  "flatpak",
+  "plymouth",
+  "adwaita-icon-theme",
+  "google-noto-sans-fonts",
+  "google-noto-color-emoji-fonts",
+  "dejavu-sans-fonts",
+  "liberation-fonts",
+]
+
+[[desktops.tuna.packages.hummingbird.repos]]
+name = "tunaos-hummingbird"
+baseurl = "https://repo.tunaos.org/hummingbird/20251124-$basearch/"
+priority = 5
+
+[[desktops.tuna.packages.hummingbird.repos]]
+name = "utah-packages"
+baseurl = "file:///run/utah-packages"
+priority = 4
+unsigned = true
 
 [desktops.tuna.packages.eln]
 display_manager = "gdm"

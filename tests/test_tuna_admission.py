@@ -1,10 +1,12 @@
 """Tuna Desktop (formerly Roost) admission must preserve signed sourcing and an installed-session gate."""
 import hashlib
+import os
 import subprocess
 from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
+CHECK = ROOT / "build_scripts" / "checks" / "verify-desktop-experience.sh"
 
 
 def rollout():
@@ -32,7 +34,7 @@ def test_every_variant_has_an_explicit_tuna_rollout_record():
 def test_tuna_cells_are_amd64_images_without_iso_expansion():
     config = rollout()
     admitted = [v for v in config["variants"] if config["tuna_rollout"][v["id"]]["status"] == "admitted"]
-    assert {v["id"] for v in admitted} == {"marlin", "yellowfin", "albacore", "skipjack", "wahoo", "bonito", "bonito-rawhide", "grouper", "flounder", "flounder-sid", "sailfin"}
+    assert {v["id"] for v in admitted} == {"marlin", "yellowfin", "albacore", "skipjack", "wahoo", "bonito", "bonito-rawhide", "hummingbird", "grouper", "flounder", "flounder-sid", "sailfin"}
     for variant in admitted:
         flavor = next(f for f in variant["flavors"] if f["id"] == "tuna")
         assert flavor["stage"] == 2
@@ -167,9 +169,166 @@ def test_rpm_cells_install_the_pinned_beta_from_signed_factory_repositories():
     containerfile = (ROOT / "Containerfile.el10").read_text()
     context = containerfile.split("FROM scratch as context\n", 1)[1].split("FROM ", 1)[0]
     assert "COPY experiences/tuna /experiences/tuna" in context
-    stage = containerfile.split("FROM base-no-de AS tuna\n", 1)[1]
+    stage = containerfile.split("FROM base-no-de AS tuna\n", 1)[1].split("\nFROM ", 1)[0]
     assert "install-desktop.sh tuna" in stage
+    assert "--mount=type=bind,from=utah-packages" not in stage
 
+def test_hummingbird_cell_uses_the_signed_native_target():
+    manifest = yaml.safe_load((ROOT / "manifests/desktops/tuna.yaml").read_text())
+    section = manifest["packages"]["hummingbird"]
+    assert section["display_manager"] == "gdm"
+    assert section["repos"] == [
+        {
+            "name": "tunaos-hummingbird",
+            "baseurl": "https://repo.tunaos.org/hummingbird/20251124-$basearch/",
+            "priority": 5,
+        },
+        {
+            "name": "utah-packages",
+            "baseurl": "file:///run/utah-packages",
+            "priority": 4,
+            "unsigned": True,
+        },
+    ]
+    assert section["packages"][0] == "tuna-desktop-1.0.0~beta.1-1.bfin1"
+    for package in (
+        "dbus-tools", "orca", "gdm",
+        "xorg-x11-server-Xwayland", "ibus", "gnome-shell",
+        "evolution-data-server", "xdg-desktop-portal-gnome",
+        "xdg-desktop-portal-gtk", "gvfs", "nautilus", "NetworkManager",
+        "NetworkManager-wifi", "linux-firmware", "amd-gpu-firmware",
+        "intel-gpu-firmware", "iwlwifi-mvm-firmware", "wireless-regdb", "iw",
+        "pipewire", "wireplumber", "pipewire-gstreamer",
+        "gstreamer1-plugins-good", "gstreamer1-plugin-libav", "ffmpeg",
+        "tuned-ppd", "flatpak",
+    ):
+        assert package in section["packages"], package
+
+    config = rollout()
+    variant = next(v for v in config["variants"] if v["id"] == "hummingbird")
+    flavor = next(f for f in variant["flavors"] if f["id"] == "tuna")
+    assert flavor == {
+        "id": "tuna",
+        "stage": 2,
+        "platforms": ["linux/amd64"],
+        "build_image": True,
+        "build_iso": False,
+        "build_qcow2": False,
+        "luks_e2e": False,
+    }
+
+    stage = (ROOT / "Containerfile.el10").read_text().split(
+        "FROM base-no-de AS tuna-hummingbird\n", 1
+    )[1]
+    assert "install-desktop.sh tuna" in stage
+    assert "--mount=type=bind,from=utah-packages,source=/repository,target=/run/utah-packages" in stage
+    base_packages = (ROOT / "build_scripts/10-base-packages.sh").read_text()
+    hummingbird = base_packages.split(
+        "if [[ $IS_HUMMINGBIRD == true ]]; then", 1
+    )[1].split("\nelif", 1)[0]
+    assert "gpgcheck=1" in hummingbird
+    assert "gpgkey=https://repo.tunaos.org/public.gpg" in hummingbird
+
+
+def _hummingbird_bootstrap_waiver() -> str:
+    script = (ROOT / "build_scripts/checks/verify-desktop-experience.sh").read_text()
+    start = script.index("hummingbird_bootstrap_waived() {")
+    end = script.index("\n}\n", start) + 2
+    return script[start:end]
+
+
+def test_hummingbird_bootstrap_waiver_excludes_admitted_tuna():
+    command = "\n".join(
+        [
+            _hummingbird_bootstrap_waiver(),
+            'IS_HUMMINGBIRD=true; desktop="$1"; hummingbird_bootstrap_waived',
+        ]
+    )
+    for desktop, accepted in (("gnome", True), ("cosmic", False), ("tuna", False)):
+        result = subprocess.run(
+            ["bash", "-c", command, "waiver-test", desktop],
+            capture_output=True,
+            text=True,
+        )
+        assert (result.returncode == 0) is accepted, (desktop, result.stderr)
+
+
+def test_library_only_env_cannot_bypass_an_executed_contract(tmp_path):
+    result = subprocess.run(
+        ["/bin/bash", str(CHECK), "gnome"],
+        capture_output=True,
+        text=True,
+        env={"PATH": str(tmp_path), "TUNAOS_CONTRACT_LIBRARY_ONLY": "true"},
+    )
+
+    assert result.returncode == 1
+    assert "missing required command: gnome-shell" in result.stderr
+
+
+def test_hummingbird_tuna_promotion_requires_the_release_gate():
+    build_variant = (ROOT / ".github/workflows/build-variant.yml").read_text()
+    assert (
+        "promote: ${{ matrix.variant != 'hummingbird' || matrix.flavor != 'tuna' }}"
+        in build_variant
+    )
+    reusable = (ROOT / ".github/workflows/reusable-build-image.yml").read_text()
+    promote = reusable.split("  tag-image:", 1)[1].split("  promote:", 1)[0]
+    assert "inputs.promote" in promote
+
+
+def test_hummingbird_tuna_required_packages_do_not_use_best_effort_fallback():
+    installer = (ROOT / "build_scripts/desktop/install-desktop.sh").read_text()
+    strict = installer.split('if [[ "${_TD_DESKTOP}" == "tuna" ]]; then', 1)[1].split(
+        "elif ", 1
+    )[0]
+    assert "dnf_retry -y install" in strict
+    assert "--skip-unavailable" not in strict
+
+
+def _run_hummingbird_tuna_codec_case(tmp_path: Path, *, decoders_rc: int):
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir(parents=True)
+    ffmpeg = bin_dir / "ffmpeg"
+    ffmpeg.write_text(
+        "#!/usr/bin/env bash\n"
+        'if [[ "$*" == *"-decoders"* ]]; then exit "$DECODERS_RC"; fi\n'
+        "exit 0\n"
+    )
+    ffmpeg.chmod(0o755)
+    script = "\n".join(
+        [
+            "set -euo pipefail",
+            "export TUNAOS_CONTRACT_LIBRARY_ONLY=true",
+            f"source {str(CHECK)!r} tuna",
+            "desktop=tuna",
+            "IS_HUMMINGBIRD=true",
+            "IS_ELN=false",
+            "TUNAOS_CONTRACT_WAIVED=0",
+            "waive() { TUNAOS_CONTRACT_WAIVED=$((TUNAOS_CONTRACT_WAIVED + 1)); }",
+            "require_any_glob() { :; }",
+            "require_command() { :; }",
+            "verify_codec_baseline",
+        ]
+    )
+    return subprocess.run(
+        ["bash", "-c", script],
+        capture_output=True,
+        text=True,
+        env={
+            "PATH": f"{bin_dir}:/usr/bin:/bin",
+            "DECODERS_RC": str(decoders_rc),
+        },
+    )
+
+
+def test_hummingbird_tuna_codec_failures_are_not_waived(tmp_path):
+    cannot_run = _run_hummingbird_tuna_codec_case(tmp_path / "cannot-run", decoders_rc=7)
+    assert cannot_run.returncode == 1, cannot_run.stdout + cannot_run.stderr
+    assert "would not run" in cannot_run.stderr
+
+    no_h264 = _run_hummingbird_tuna_codec_case(tmp_path / "no-h264", decoders_rc=0)
+    assert no_h264.returncode == 1, no_h264.stdout + no_h264.stderr
+    assert "cannot decode h264" in no_h264.stderr
 
 def test_apt_cells_install_the_pinned_beta_from_the_signed_tideforge_index_for_their_base():
     manifest = yaml.safe_load((ROOT / "manifests/desktops/tuna.yaml").read_text())
@@ -244,7 +403,6 @@ def test_gdm_migration_removes_tuna_specific_greetd_assets():
 
 
 def test_installed_portal_contract_rejects_missing_or_ambiguous_consent_routing(tmp_path):
-    import subprocess
 
     script = (ROOT / "build_scripts/checks/verify-desktop-experience.sh").read_text()
     function = script.split("require_portal_preference() {", 1)[1].split("\nrequire_unit()", 1)[0]
@@ -265,7 +423,6 @@ def test_installed_portal_contract_rejects_missing_or_ambiguous_consent_routing(
 
 
 def test_dpkg_installed_names_keep_held_packages_and_drop_removed_ones(tmp_path):
-    import subprocess
 
     script = (ROOT / "build_scripts/checks/verify-desktop-experience.sh").read_text()
     function = script.split("tuna_installed_package_names() {", 1)[1].split("\ntuna_installed_file_owner()", 1)[0]
@@ -332,3 +489,44 @@ def test_retired_flavor_has_an_explicit_switch_and_recovery_procedure():
     assert "sudo bootc rollback" in guide
     assert "/var/home" in guide
     assert "must still prove" in guide
+
+
+def test_hummingbird_tuna_build_uses_dedicated_container_target(tmp_path):
+    """The real build driver must route only this cell to its mounted stage."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    log = tmp_path / "builder.log"
+    podman = bin_dir / "podman"
+    podman.write_text(
+        "#!/usr/bin/env bash\nprintf '%s\\n' \"$@\" >>\"$BUILDER_LOG\"\n",
+        encoding="utf-8",
+    )
+    podman.chmod(0o755)
+    env = {
+        **os.environ,
+        "PATH": f"{bin_dir}:{os.environ['PATH']}",
+        "BUILDER_LOG": str(log),
+        "IMAGE_TAG": "local:hummingbird-tuna",
+        "VARIANT": "hummingbird",
+        "CONTAINERFILE": "Containerfile.el10",
+        "BASE_IMAGE": "example/hummingbird",
+        "PLATFORM": "linux/amd64",
+        "DESKTOP_FLAVOR": "tuna",
+        "TUNAOS_IMAGE_FLAVOR": "tuna",
+        "ENABLE_HWE": "0",
+        "ENABLE_NVIDIA": "0",
+        "ENABLE_SSHD": "0",
+        "SKIP_RECHUNK": "1",
+        "IS_CI": "0",
+    }
+    result = subprocess.run(
+        ["bash", "scripts/build-image-inner.sh"],
+        cwd=ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    args = log.read_text(encoding="utf-8").splitlines()
+    assert "--target=tuna-hummingbird" in args
+    assert "--target=tuna" not in args
