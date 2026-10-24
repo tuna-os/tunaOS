@@ -572,7 +572,7 @@ jobs:
           KVM_FLAG=""
           [[ -r /dev/kvm && -w /dev/kvm ]] || KVM_FLAG="--no-kvm"
           set +e
-          sudo --preserve-env=KVM_FLAG \
+          sudo --preserve-env=KVM_FLAG,VARIANT,FLAVOR \
             ./scripts/iso-e2e.sh "${ISO_PATH}" \
               --output iso-e2e-out \
               --timeout 600 \

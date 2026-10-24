@@ -284,6 +284,58 @@ def test_the_build_step_fails_when_it_produces_no_iso():
     assert "exit 1" in build["run"]
 
 
+def test_grouped_iso_identity_reaches_the_e2e_harness_through_sudo(tmp_path):
+    """Snapshot filenames omit the desktop, so the harness needs matrix identity."""
+    steps = workflow()["jobs"]["e2e"]["steps"]
+    body = next(step["run"] for step in steps if step.get("name") == "Run readiness e2e")
+
+    fake_bin = tmp_path / "bin"
+    scripts = tmp_path / "scripts"
+    fake_bin.mkdir()
+    scripts.mkdir()
+    capture = tmp_path / "identity"
+    sudo = fake_bin / "sudo"
+    sudo.write_text(
+        "#!/usr/bin/env bash\n"
+        "variant=${VARIANT-}; flavor=${FLAVOR-}; kvm=${KVM_FLAG-}\n"
+        "preserve=\n"
+        "if [[ ${1-} == --preserve-env=* ]]; then preserve=${1#*=}; shift; fi\n"
+        "[[ ${1-} == chown ]] && exit 0\n"
+        "unset VARIANT FLAVOR KVM_FLAG\n"
+        "[[ ,$preserve, == *,VARIANT,* ]] && export VARIANT=$variant\n"
+        "[[ ,$preserve, == *,FLAVOR,* ]] && export FLAVOR=$flavor\n"
+        "[[ ,$preserve, == *,KVM_FLAG,* ]] && export KVM_FLAG=$kvm\n"
+        'exec "$@"\n',
+        encoding="utf-8",
+    )
+    sudo.chmod(0o755)
+    harness = scripts / "iso-e2e.sh"
+    harness.write_text(
+        f"#!/usr/bin/env bash\nprintf '%s:%s:%s\\n' "
+        f'"${{VARIANT-unset}}" "${{FLAVOR-unset}}" "${{KVM_FLAG-unset}}" >"{capture}"\n',
+        encoding="utf-8",
+    )
+    harness.chmod(0o755)
+    github_output = tmp_path / "github-output"
+    proc = subprocess.run(
+        ["/bin/bash", "-eu", "-o", "pipefail", "-c", body],
+        cwd=tmp_path,
+        env=os.environ | {
+            "PATH": f"{fake_bin}:{os.environ['PATH']}",
+            "ISO_PATH": str(tmp_path / "yellowfin-snapshot-run-1.iso"),
+            "VARIANT": "yellowfin",
+            "FLAVOR": "gnome",
+            "GITHUB_OUTPUT": str(github_output),
+            "USER": os.environ.get("USER", "runner"),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert capture.read_text().split(":", 2)[:2] == ["yellowfin", "gnome"]
+
+
 def test_the_r2_step_still_guards_the_published_path():
     """Adding resolvers must not weaken the published-path hard failure."""
     body = WORKFLOW.read_text(encoding="utf-8")
