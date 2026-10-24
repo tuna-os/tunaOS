@@ -146,7 +146,7 @@ Inspect the config before you retry.
 
 ## Portable plan and transaction check
 
-`plan` maps one package intent to image targets. A target is a variant,
+`plan` maps the intent for one package to image targets. A target is a variant,
 flavor and platform from `tunaos.toml`. The default selection is every enabled
 image target. `--variant`, `--flavor` and `--platform` make the selection
 smaller.
@@ -164,6 +164,7 @@ The plan gets names only from the trusted collector in
 receipts. Each covered target binds the base image and source configuration
 before network access. Each collector authenticates its sources one time per
 invocation. The plan resolves every selected target before it shows a result.
+
 A match is an exact native name. For a rename, use
 `--native VARIANT:FLAVOR:PLATFORM=NAME`. The name must be in the authenticated
 index of that target. The command never makes a match from a similar name. It
@@ -178,29 +179,33 @@ Each target has three separate records:
   evidence.
 
 If one target is `unsupported`, `missing`, `ambiguous` or a `source-error`, the
-command prints the full report and exits with status 1. A target is
-`unsupported` when no collector covers it. Today the collector covers only
-flounder `base`, `kde` and `xfce` on `linux/amd64`. Thus the default selection
-fails and names every other target.
+command prints the full report and exits with status 1. A target without a
+collector is `unsupported`. Today the collector covers only flounder `base`,
+`kde` and `xfce` on `linux/amd64`. Thus the default selection fails and names
+every other target.
 
 `emission` shows the smallest addition scope that agrees with the resolved
 targets. An image-wide addition applies to all flavors and platforms of a
 variant. Thus a variant scope needs every enabled target of that variant.
 The `defaults` scope needs every enabled target. A subset never gets a
-`ready` emission. The plan reads the configuration and never writes it. The
-primary config has no image-wide `add` field yet. That field, and its lossless
-write, come from the native additions contract in #3739.
+`ready` emission.
 
-The apt schema has no `exclude` field, so the validator rejects an exclusion
-that conflicts with an apt addition before planning starts.
+The plan reads the configuration and never writes it. The primary config has
+no image-wide `add` field yet. That field, and its lossless write, come from
+the native additions contract in #3739.
+
+The apt schema has no `exclude` field. Thus the validator rejects an exclusion
+that conflicts with an apt addition before the plan starts.
 
 `verify-transaction` reads a complete plan and one resolved target. It runs
 `apt-get --simulate --no-remove` for that native name in a local image with a
 `@sha256` pin. The container is temporary, and `--pull=never` prevents an image
 download. The command refreshes the image's own package lists in that container
-and does not commit a package. The result is `solvable`, `already-installed`,
-`missing`, `solver-gap`, `protected-removal`, `source-error` or `error`. Each
-result other than the first two exits with status 1. The operator supplies the
-image reference, so the result marks the image binding as not authenticated.
-Other native families report `unsupported`. Each family needs a reviewed
-non-installing adapter.
+and does not commit a package.
+
+The result is `solvable`, `already-installed`, `missing`, `solver-gap`,
+`protected-removal`, `source-error` or `error`. Each result other than the
+first two exits with status 1. The operator supplies the image reference, so
+the result marks the image binding as not authenticated. Other native families
+report `unsupported`. Each family needs a reviewed adapter that does not install
+packages.
