@@ -36,12 +36,12 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if ! parsed_scope=$(env \
 	-u TUNAOS_PUBLISH_USERNAME \
 	-u TUNAOS_PUBLISH_PASSWORD \
-	python3 "${script_dir}/publish-credential.py" --validate-scope "$scope" 2>/dev/null); then
-	die "scope must be the <registry>/<namespace> printed by publish-credential.py"
+	python3 "${script_dir}/publish-credential.py" --validate-scope "$scope"); then
+	die "scope must be a valid, resolver-accepted <registry>/<namespace>"
 fi
 mapfile -t destination_parts <<<"$parsed_scope"
 [[ "${#destination_parts[@]}" -eq 2 ]] ||
-	die "scope must be the <registry>/<namespace> printed by publish-credential.py"
+	die "scope must resolve to separate registry and namespace lines"
 registry="${destination_parts[0]}"
 [[ -n "$username" && -n "$password" ]] ||
 	die "TUNAOS_PUBLISH_USERNAME and TUNAOS_PUBLISH_PASSWORD must both be set"
