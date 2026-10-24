@@ -238,3 +238,93 @@ The Marlin GDM override also belongs to `[desktops.tuna-arch]`. Its generated
 adapter has the same precedence as the former tracked YAML. The regression
 fixture at commit `aa9810e9` preserves the complete package and hook contract;
 other Tuna Desktop cells retain their existing display manager.
+
+## F5: Fork recipe and conformance gate (#3806)
+
+**Scope**: Configuration resolution validation and documented recipe.  
+**Blocked by**: F1–F4 delivery.  
+**Does NOT include**: Image builds, installs, or boot qualification (see #3474).
+
+### What this validates
+
+The fork recipe conformance test proves that a sample fork whose diff touches
+**only** `tunaos.toml` and asset files produces:
+
+- Different resolved destination (registry/namespace), identity, packages,
+  and Flatpak selections compared to stock.
+- Unchanged stock TunaOS resolution (determinism).
+- Rejection of any fork that tries to embed code (scripts, Containerfiles,
+  build hooks) into TOML.
+
+### Test structure
+
+`tests/test_fork_recipe_conformance.py` validates configuration resolution
+in four test classes:
+
+1. **Stock configuration determinism**: Stock TunaOS resolves to the same
+   output on repeated runs; plan has required structure.
+2. **Fork config-only edits**: A minimal "Acme OS" fork with tunaos.toml
+   changes (registry, namespace, branding URLs, packages) and assets produces
+   different resolved output from stock.
+3. **Fork reversion**: Removing fork edits returns to byte-identical stock
+   resolution.
+4. **Code rejection**: Asserts that Containerfiles, build scripts, and
+   structured script paths are code (not configuration).
+
+The test uses actual resolvers (`scripts/resolve-fork-config.py`) with no
+mocked builds, gates, or installs. It does not assert that the resolved
+configuration successfully builds an image or boots. That is #3474's proof.
+
+### Expected CI check shape
+
+After #3474 lands with install proof, the conformance gate will run in CI as:
+
+```bash
+just check  # includes pytest /tests/test_fork_recipe_conformance.py::*
+```
+
+For now, the test is local-only. Document the intended CI shape here;
+do not wire it until #3474 delivers install qualification.
+
+### Sample fork: Acme OS
+
+The test creates a minimal fork that demonstrates the recipe:
+
+```toml
+# acme.yaml (tunaos.toml fork)
+[build.publish]
+registry = "localhost"
+namespace = "acme-preview"
+
+[global.branding]
+homepage = "https://acme.example.org"
+wallpaper = "assets/acme-wallpaper.svg"
+
+[global.packages]
+add = ["htop", "git"]
+```
+
+Assets: `assets/acme-wallpaper.svg` (SVG in local assets/).
+
+Expected outcome: Acme OS images resolve under `localhost/acme-preview`,
+include `htop` and `git` globally, and reference Acme's homepage.
+
+### Conformance boundaries
+
+**This issue owns**:
+- Fixture: minimal fork config with only tunaos.toml and assets changed.
+- Test: resolution output validation (destination, identity, packages differ
+  from stock; stock itself is unchanged).
+- Documentation: step-by-step recipe in `docs/FORK-RECIPE.md`.
+- Documented CI shape (no wiring).
+
+**#3474 owns**:
+- Image build proof: resolved config → built, signed, published image.
+- Install proof: image boots, provisions correctly, survives reboot.
+- Reference journeys: Yellowfin (RPM/Fedora) and Grouper (APT/Debian) forks.
+
+### Acceptance
+
+All 15 tests in `test_fork_recipe_conformance.py` pass. Documentation exists.
+`just check` and `just fix` both succeed. No config edits needed at the code
+level; fork users only edit `tunaos.toml` and `assets/`.
