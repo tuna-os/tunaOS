@@ -65,8 +65,9 @@ def contract_functions():
     source = CHECK.read_text()
     bodies = ["TUNAOS_CONTRACT_WAIVED=0"]
     for name in (
-        "waive", "require_any_glob", "require_any_file", "require_any_executable",
-        "require_secret_service",
+        "waive", "require_any_matching", "accepts_any_path", "accepts_regular_file",
+        "accepts_executable_file", "require_any_glob", "require_any_file",
+        "require_any_executable", "require_secret_service",
     ):
         match = re.search(
             rf"^(?:function[ \t]+)?{name}[ \t]*(?:\(\))?[ \t]*\{{"
