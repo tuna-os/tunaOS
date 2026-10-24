@@ -72,6 +72,7 @@ user-facing site:
 | [PANTHEON-FEEDBACK-LOOP.md](PANTHEON-FEEDBACK-LOOP.md) | How Gurnard's Pantheon packaging findings get back to elementary (#1469) |
 | [SNAPDRAGON.md](SNAPDRAGON.md) | Copilot-PC support boundary, boot prerequisites, NPU evidence, test reports and prepared Discussion #93 reply |
 | [SNAPDRAGON-X13S-OUTREACH.md](SNAPDRAGON-X13S-OUTREACH.md) | Draft plan for reaching the Snapdragon X13s Linux community |
+| [LINUX-MEDIA-OUTREACH.md](LINUX-MEDIA-OUTREACH.md) | Linux publication pitches, evidence packet, and release/metrics handoff (#3019) |
 | [TECH-PRESS-PITCHES.md](TECH-PRESS-PITCHES.md) | Pitch pack for Linux technology press, with guardrails on what we may claim |
 | [outreach/LWN-FEATURE-PROPOSAL.md](outreach/LWN-FEATURE-PROPOSAL.md) | LWN feature research, author policy, and outreach handoff (#3113) |
 | [ADOPTION-CALL.md](ADOPTION-CALL.md) | Public call for adopters and evaluation feedback |
@@ -105,7 +106,7 @@ user-facing site:
 
 ## Policies & planning (repo root)
 
-These live at the repository root rather than in this folder:
+These live at the repository root:
 
 - [ROADMAP.md](../ROADMAP.md) — project direction and feature status
 - [VISION.md](../VISION.md) — project philosophy
@@ -116,7 +117,7 @@ These live at the repository root rather than in this folder:
 - [RFC-PROCESS.md](../RFC-PROCESS.md) — how RFCs are proposed, reviewed, and decided
 - [PACKAGE-SOURCING.md](../PACKAGE-SOURCING.md) — package origin rules, Tideforge-first, and allowlist (#1319)
 - [TRIAGE-POLICY.md](../TRIAGE-POLICY.md) — triage states and SLAs (adopted, #1195)
-- [FEDORA-BASE-POLICY.md](../FEDORA-BASE-POLICY.md) — adopted N+rawhide sequencing for Fedora-based variants (#1171)
+- [FEDORA-BASE-POLICY.md](../FEDORA-BASE-POLICY.md) — adopted N+rawhide order for Fedora-based variants (#1171)
 - [VERSIONING.md](../VERSIONING.md) — tag scheme and stability tiers
 - [MIGRATION.md](../MIGRATION.md) — switching from other distros
 - [SECURITY.md](../SECURITY.md) — vulnerability reporting and supported versions
