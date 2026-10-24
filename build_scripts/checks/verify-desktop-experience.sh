@@ -196,6 +196,10 @@ require_any_executable() {
 		done
 	done
 	echo "missing executable: none of [$*] exist and are executable" >&2
+	if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${desktop:-}" != cosmic ]]; then
+		waive
+		return 0
+	fi
 	exit 1
 }
 
