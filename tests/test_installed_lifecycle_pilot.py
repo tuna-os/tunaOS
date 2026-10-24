@@ -235,7 +235,7 @@ def test_interruption_persists_incomplete_stage_evidence(tmp_path, monkeypatch):
     assert "started_at" in stage_map(latest)["cold_boot_a"]
 
 
-def test_symlinked_path_ancestors_are_detected(tmp_path):
+def test_symlinked_path_ancestors_are_detected(tmp_path, monkeypatch):
     real = tmp_path / "real"
     real.mkdir()
     linked = tmp_path / "linked"
@@ -243,6 +243,31 @@ def test_symlinked_path_ancestors_are_detected(tmp_path):
 
     assert MODULE.has_symlink_component(linked / "nested" / "file")
     assert not MODULE.has_symlink_component(real / "nested" / "file")
+    monkeypatch.chdir(tmp_path)
+    assert MODULE.has_symlink_component(Path("linked/nested/file"))
+    assert not MODULE.has_symlink_component(Path("real/nested/file"))
+
+def test_interrupted_main_retains_partial_not_final_evidence(tmp_path, monkeypatch):
+    pilot_config = config(tmp_path)
+    partial = {"result": {"runtime_acceptance": "incomplete"}}
+
+    def interrupt(_config, progress):
+        progress(partial)
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(MODULE, "parse_args", lambda _argv: pilot_config)
+    monkeypatch.setattr(MODULE, "execute_pilot", interrupt)
+
+    with pytest.raises(KeyboardInterrupt):
+        MODULE.main([])
+
+    output = pilot_config.output_dir
+    assert not (output / "installed-lifecycle-evidence.json").exists()
+    assert json.loads(
+        (output / "installed-lifecycle-evidence.partial.json").read_text(
+            encoding="utf-8"
+        )
+    ) == partial
 
 
 def test_timeout_skips_all_dependent_stages_but_still_cleans_up(tmp_path):
