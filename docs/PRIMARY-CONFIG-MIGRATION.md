@@ -35,10 +35,10 @@ The name `tunaos.toml` alone would not make those deltas meet the new requiremen
 
 Containerfiles, base-image mechanics, execution scripts and checks are the
 build framework and remain code. The maintainer confirmed this on 2026-10-23.
-The digest-pinned `base_image` choice for each variant is already in
-`tunaos.toml`. Tool and download pins in `image-versions.yaml` and the
-mirrors in `registry-map.yaml` stay there; Renovate keeps its current
-targets.
+The per-variant `base_image` choice is already in `tunaos.toml`; some choices
+use immutable digests and others still use tags. Tool and download pins in
+`image-versions.yaml` and mirrors in `registry-map.yaml` stay in those files;
+Renovate keeps its current targets.
 
 Credentials are not configuration data. Do not put shell commands, remote
 includes or secret values in TOML. Existing trusted post-install steps become
@@ -162,8 +162,11 @@ Keep the TOML 1.0 grammar shared with Python 3.11. The edit layer must preserve 
 Generated JSON/YAML remains consumable by target images without Python or TOML
 libraries. Do not assume EL10, old Debian or a user's Mac has `tomllib`.
 
-Each base-image pin has one authoritative entry under its variant. Shared external inputs and tools have separate named entries.
-These entries do not repeat the base digest of any variant. Renovate edits the owning TOML entry. At runtime, generate adapters from that source. No bot commit of derived files is necessary.
+Each variant owns its base-image reference in `tunaos.toml`. Tool and download
+pins remain in `image-versions.yaml`, mirrors remain in `registry-map.yaml`, and
+Renovate keeps editing those current owners. Generate only the runtime adapters
+described by each implemented TOML section; do not move build-framework inputs
+into TOML or bot-commit derived files.
 
 Required tests include full matrix value/order equality, full flavor-route
 and base-image resolution equality, package sequence equality, and unchanged
