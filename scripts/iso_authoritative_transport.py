@@ -21,6 +21,7 @@ import iso_artifact_transport as artifact_transport
 API_ORIGIN = "https://api.github.com"
 USER_AGENT = "tunaos-rfc014-authoritative-transport/1"
 MAX_JSON_BYTES = 1024 * 1024
+MAX_READ_BYTES = 1024 * 1024
 MAX_TOTAL_BYTES = (
     artifact_transport.MAX_ISO_BYTES
     + artifact_transport.MAX_DIAGNOSTIC_BYTES
@@ -140,13 +141,30 @@ class _BoundedResponse:
             raise AuthoritativeTransportError("invalid_read", "response")
         if size == 0:
             return b""
+        if size > 0:
+            return self._receive(size)
+        chunks = []
+        while chunk := self._receive(MAX_READ_BYTES):
+            chunks.append(chunk)
+        return b"".join(chunks)
+
+    def _receive(self, size):
+        """Do at most one underlying receive, bounded by the remaining deadline.
+
+        ``read1`` returns after one socket receive, so a slow-drip body cannot
+        extend a single call past ``total_timeout_seconds``; ``read`` would
+        keep receiving, each time with a fresh socket timeout.
+        """
         remaining_time = self._budget.remaining_seconds()
         timeout = min(self._idle_timeout, remaining_time)
         _set_response_timeout(self._response, timeout)
         allowed = min(self._remaining, self._budget.remaining_bytes) + 1
-        requested = allowed if size < 0 else min(size, allowed)
+        requested = min(size, allowed, MAX_READ_BYTES)
+        receive = getattr(self._response, "read1", None)
+        if not callable(receive):
+            receive = self._response.read
         try:
-            chunk = self._response.read(requested)
+            chunk = receive(requested)
         except (socket.timeout, TimeoutError) as exc:
             code = "total_timeout" if self._budget.clock() >= self._budget.deadline else "idle_timeout"
             raise AuthoritativeTransportError(code, "response.read") from exc
@@ -195,11 +213,15 @@ class AuthoritativeTransport:
             else None
         )
         if _openers is None:
+            if retained_policy is not None:
+                # The R2 S3 API needs SigV4 with a read-only credential: a new
+                # secret and permission this caller does not add (RFC014).
+                _fail("retained_signer_required", "retained_policy")
             self._api_opener = urllib.request.build_opener(_NoRedirect())
             self._archive_opener = urllib.request.build_opener(
                 _ArtifactRedirect(network_policy.artifact_redirect_origins)
             )
-            self._object_opener = urllib.request.build_opener(_NoRedirect())
+            self._object_opener = None
         else:
             if type(_openers) is not tuple or len(_openers) != 3:
                 _fail("invalid_input", "openers")
@@ -354,7 +376,12 @@ def verify_authoritative_retained_candidate(
     _openers=None,
     _clock=time.monotonic,
 ):
-    """Collect selected GitHub/R2 bytes and invoke the retained-media validator."""
+    """Collect selected GitHub/R2 bytes and invoke the retained-media validator.
+
+    R2's S3 API needs SigV4 requests from a read-only key, which is a new
+    secret/permission outside this change. With the default openers this
+    therefore raises ``retained_signer_required`` before any request.
+    """
     transport = AuthoritativeTransport(
         policy,
         selection,

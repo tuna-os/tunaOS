@@ -8,6 +8,8 @@ import re
 from pathlib import Path
 import socket
 import sys
+import threading
+import time
 import urllib.error
 import urllib.request
 
@@ -679,3 +681,54 @@ def test_retained_prefix_matches_the_v2_schema_manifest_key():
     key = ARTIFACT.retained_candidate_prefix(900000000001, 1) + "manifest.json"
     assert patterns
     assert all(re.fullmatch(pattern, key) for pattern in patterns)
+
+
+def test_slow_drip_body_cannot_outlast_the_total_deadline():
+    server, client = socket.socketpair()
+    stop = threading.Event()
+
+    def drip():
+        try:
+            server.sendall(b"HTTP/1.1 200 OK\r\nContent-Length: 200\r\n\r\n")
+            for _ in range(200):
+                if stop.wait(0.05):
+                    return
+                server.sendall(b"x")
+        except OSError:
+            pass
+
+    thread = threading.Thread(target=drip, daemon=True)
+    thread.start()
+    response = http.client.HTTPResponse(client, method="GET")
+    response.begin()
+    budget = CALLER._Budget(network_policy(total_timeout_seconds=0.5), time.monotonic)
+    bounded = CALLER._BoundedResponse(response, budget, 1024, 5)
+    started = time.monotonic()
+    try:
+        with pytest.raises(CALLER.AuthoritativeTransportError, match="total_timeout"):
+            bounded.read()
+        elapsed = time.monotonic() - started
+    finally:
+        stop.set()
+        bounded.close()
+        server.close()
+        client.close()
+        thread.join(5)
+
+    # A 200-byte body at one byte per 50 ms needs about 10 s; one multi-receive
+    # read() would only see the deadline after it returned.
+    assert elapsed < 3
+
+
+def test_default_retained_collection_requires_a_reviewed_r2_signer():
+    case = copy.deepcopy(CASE)
+
+    with pytest.raises(CALLER.AuthoritativeTransportError) as caught:
+        CALLER.AuthoritativeTransport(
+            reviewed(case), selected(case), network_policy(), TOKEN, retained_policy()
+        )
+
+    assert (caught.value.code, caught.value.field) == (
+        "retained_signer_required",
+        "retained_policy",
+    )

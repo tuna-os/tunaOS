@@ -147,7 +147,13 @@ GitHub metadata calls cannot redirect. The artifact archive can redirect once
 from the GitHub API to an exact reviewed HTTPS origin, with the bearer
 credential removed. R2 reads use the configured endpoint, bucket and candidate
 namespace without that credential or redirects. Connect, idle and total
-elapsed-time limits combine with per-response and aggregate-byte limits.
+elapsed-time limits combine with per-response and aggregate-byte limits. Each
+read does one socket receive at most, within the remaining total time.
+
+R2 reads need a SigV4 signature from a read-only R2 key. That key is a new
+secret and permission, which this change does not add. Until a reviewer
+approves a signer, the caller stops the collection of retained media with
+`retained_signer_required`. It sends no request.
 
 The validator reads current run, attempt and artifact metadata before bytes,
 then rechecks artifact and run metadata afterward. These sequential REST and

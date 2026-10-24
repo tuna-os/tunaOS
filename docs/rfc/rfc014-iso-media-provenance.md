@@ -134,11 +134,20 @@ policy; the redirected request has no credential. Retained-object requests use
 only the configured R2 endpoint, bucket and exact candidate namespace. They
 never receive the GitHub credential and cannot redirect.
 
+R2 needs a SigV4 signature from an R2 key on each S3 API request.
+A read-only R2 key is a new secret and permission, so this change does not add
+one. Without a signer that a reviewer approves, the caller stops the collection
+of retained media with `retained_signer_required` before it sends a request.
+Retained-media collection is therefore deferred to that review.
+
 Reviewed limits bound connect, idle and total elapsed time, each JSON response,
 each archive or object response, and aggregate response bytes. The existing
 validators still enforce exact expected sizes and digests. Every response is
-closed after success or failure. Synthetic HTTP-server tests exercise these
-limits and origin rules without a credential or production request.
+closed after success or failure. Each read does one socket receive at most,
+with a timeout no longer than the remaining total time. Thus, a read cannot
+continue past the total limit when the body arrives slowly. Synthetic
+HTTP-server tests exercise these limits and origin rules without a credential
+or production request.
 
 This caller does not make the REST and R2 observations atomic. GitHub exposes
 no artifact upload-attempt identity, so first-attempt-only remains mandatory.
