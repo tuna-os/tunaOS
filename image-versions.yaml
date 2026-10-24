@@ -76,6 +76,9 @@ downloads:
   jsonschema: "4.26.0"
   # renovate: datasource=github-releases depName=ublue-os/uupd
   uupd: "v1.5.1"
+  uupd_sha256:
+    x86_64: "f9337ef247e03a101adac573d338474eef3ad1536c17862f7a21fbe840d864ae"
+    arm64: "1c86a325442c121347fdeb28c0bc4a80de1b3c9a494a775c4ec834db53bb4534"
   # renovate: datasource=github-releases depName=ledif/kcm_ublue
   kcm_ublue: "v0.6.1"
   # renovate: datasource=github-releases depName=mvdan/sh
