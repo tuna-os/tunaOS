@@ -122,7 +122,7 @@ def test_prepare_refreshes_mutated_source_and_acceptance_cell(source_root):
     source.write_text(
         source.read_text() + "\n"
         + (FIXTURES / "bonito-gnome-acceptance-arm64.toml").read_text()
-        + '\n[flavor_metadata.gnome-acceptance-arm64]\ndesktop = "gnome"\nedition = "x13s"\n'
+        + '\n[flavor_metadata.gnome-acceptance-arm64]\ndesktop = "gnome"\nedition = "acceptance-arm64"\n'
     )
     assert config.prepare(source_root) == target
     assert target.read_bytes() != initial
@@ -248,7 +248,7 @@ def test_failed_atomic_replace_keeps_previous_adapter_and_removes_temp(source_ro
     source.write_text(
         source.read_text() + "\n"
         + (FIXTURES / "bonito-gnome-acceptance-arm64.toml").read_text()
-        + '\n[flavor_metadata.gnome-acceptance-arm64]\ndesktop = "gnome"\nedition = "x13s"\n'
+        + '\n[flavor_metadata.gnome-acceptance-arm64]\ndesktop = "gnome"\nedition = "acceptance-arm64"\n'
     )
 
     def refuse_replace(self, destination):
