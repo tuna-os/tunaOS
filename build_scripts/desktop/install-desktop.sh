@@ -378,7 +378,7 @@ if [[ "${_TD_OS}" == "emerge" ]]; then
 	# Like zypper/apt, emerge accepts either the historical package list or a
 	# map with signed binary repositories and packages. Keep binrepo setup
 	# declarative so the package transaction cannot run before its trust policy.
-	_TD_EMERGE_NODE_TYPE=$($YQ -r '.packages.emerge | type' "${_TD_MANIFEST}" 2>/dev/null)
+	_TD_EMERGE_NODE_TYPE=$($YQ -r '.packages.emerge | type' "${_TD_MANIFEST}" 2>/dev/null || printf '!!seq\n')
 	if [[ "${_TD_EMERGE_NODE_TYPE}" == "!!map" ]]; then
 		readarray -t _TD_EMERGE_PKGS < <($YQ -r '.packages.emerge.packages[]' "${_TD_MANIFEST}" 2>/dev/null || true)
 	else

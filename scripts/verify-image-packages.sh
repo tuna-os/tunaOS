@@ -163,10 +163,15 @@ gentoo)
 					;;
 			esac
 		' sh "$pkg" &>/dev/null; then
-			echo "❌ Missing package: ${pkg}"
-			FAILED=1
-		else
 			echo "✓ ${pkg}"
+		else
+			status=$?
+			if [[ "$status" -eq 127 ]]; then
+				echo "❌ Cannot verify Gentoo atom ${pkg}: image has neither portageq nor equery"
+			else
+				echo "❌ Missing package: ${pkg}"
+			fi
+			FAILED=1
 		fi
 		;;
 	*)
