@@ -127,3 +127,48 @@ This phase has no network client or production caller.
 Fixtures record the reviewed source and use synthetic run and artifact IDs.
 They cannot prove a browser build. The existing producer emits records in v1,
 which remain outside v2 admission.
+
+## Diagnostic receipt construction and handoff
+
+`scripts/iso_media_receipt_handoff.py` defines the offline boundary between
+observed browser/native results and the existing v2 documents. It constructs
+receipt bytes only. Every returned candidate has `qualification: not-assessed`;
+it creates no producer context, archive identity, admission result, publication,
+or storage write.
+
+The browser interface accepts distinct observations for the source platform
+manifest and CPU baseline, overlay and base, deployed frontend commit and
+optional bundle, loaded WASM/source/shim, browser resources, request/config
+digests, and producer run. It has no catalog or request fallback. The selected
+operation must still be the completed operation. The adapter then calls the
+media sink's `finish()` itself. Only after that save and close succeeds does it
+take a stability token, reopen the closed bytes, stream their exact hash and
+size, close the reader, and confirm that the token did not change. An
+incomplete build, stale selection, failed write/close, byte-count mismatch, or
+changed saved object emits no receipt.
+
+The returned browser candidate contains the exact canonical receipt bytes,
+their external hash, the measured media identity, and the operation handoff ID.
+A retention caller may persist that diagnostic candidate immediately, before a
+guest harness runs. Retention therefore does not depend on a failing guest
+harness becoming successful. This interface does not add a retention backend or
+enable publication.
+
+The native interface accepts the raw browser receipt bytes, the browser receipt
+hash and run actually observed by the harness, the media identity measured
+before boot, the separate native harness/run identity, and explicit plain and
+encrypted results. It re-parses the raw browser bytes with duplicate-key
+rejection, checks the browser role/run/hash, and remeasures the exact supplied
+media. Each mode's source digest must equal the source digest in the bound
+browser receipt. Each mode must also report a completed offline GUI install,
+matching installed identity, target-only completed boot, and a passing desktop
+contract. Backend,
+partial, skipped, online, installation-media, and fixture results fail closed.
+Only then does it emit native v2 receipt bytes that name the exact raw browser
+receipt hash.
+
+These candidates feed the existing schema and `check_consistency` boundary.
+They remain diagnostics until the authoritative caller in #3795 supplies
+independently trusted transport/context and real same-media gates pass. Actual
+browser integration, native execution, authentication, qualification, and
+cutover remain separate work.
