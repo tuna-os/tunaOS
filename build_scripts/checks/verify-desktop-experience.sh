@@ -104,10 +104,20 @@ tuna_installed_file_owner() {
 	rpm) rpm -qf --qf '%{NAME}\n' "$2" ;;
 	# `dpkg -S` prints "<package>[:<arch>]: <path>".
 	dpkg) dpkg -S "$2" | sed -n '1s/[:,].*//p' ;;
-	# CONTENTS is the installed VDB's file manifest. Match its path field
-	# exactly and return the owning package name without requiring qfile.
+	# Prefer Portage's indexed owner query. Minimal recovery/test environments
+	# may lack portageq, so retain an exact VDB fallback there.
 	portage)
-		local contents package_dir pf _kind installed_path _rest
+		local owner contents package_dir pf _kind installed_path _rest
+		if command -v portageq >/dev/null 2>&1; then
+			while IFS= read -r owner; do
+				owner="${owner##*/}"
+				if [[ "$owner" =~ ^(.+)-[0-9][0-9A-Za-z._-]*$ ]]; then
+					printf '%s\n' "${BASH_REMATCH[1]}"
+					return 0
+				fi
+			done < <(portageq owners / "$2" 2>/dev/null || true)
+			return 1
+		fi
 		for contents in "${TUNAOS_PORTAGE_DB:-/var/db/pkg}"/*/*/CONTENTS; do
 			[[ -f "$contents" ]] || continue
 			while read -r _kind installed_path _rest; do

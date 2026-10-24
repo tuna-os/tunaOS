@@ -376,10 +376,8 @@ fi
 # ── Emerge path ────────────────────────────────────────────────────────────────
 if [[ "${_TD_OS}" == "emerge" ]]; then
 	# Like zypper/apt, emerge accepts either the historical package list or a
-	# map with repositories and packages. Tuna Desktop needs the map: its gpkg
-	# is served by TunaOS, while cage is a native ebuild in the Gentoo GURU
-	# repository. Keep repository setup declarative in the manifest so the
-	# package transaction cannot run before its trust/source policy exists.
+	# map with signed binary repositories and packages. Keep binrepo setup
+	# declarative so the package transaction cannot run before its trust policy.
 	_TD_EMERGE_NODE_TYPE=$($YQ -r '.packages.emerge | type' "${_TD_MANIFEST}" 2>/dev/null)
 	if [[ "${_TD_EMERGE_NODE_TYPE}" == "!!map" ]]; then
 		readarray -t _TD_EMERGE_PKGS < <($YQ -r '.packages.emerge.packages[]' "${_TD_MANIFEST}" 2>/dev/null || true)
@@ -406,28 +404,6 @@ if [[ "${_TD_OS}" == "emerge" ]]; then
 	fi
 
 	if [[ "${_TD_EMERGE_NODE_TYPE}" == "!!map" ]]; then
-		_TD_EMERGE_SOURCE_COUNT=$($YQ -r '.packages.emerge.source_repositories // [] | length' "${_TD_MANIFEST}")
-		for ((i = 0; i < _TD_EMERGE_SOURCE_COUNT; i++)); do
-			_TD_ER_NAME=$($YQ -r ".packages.emerge.source_repositories[$i].name" "${_TD_MANIFEST}")
-			_TD_ER_URI=$($YQ -r ".packages.emerge.source_repositories[$i].sync_uri" "${_TD_MANIFEST}")
-			[[ "${_TD_ER_NAME}" =~ ^[a-zA-Z0-9_-]+$ ]] || {
-				echo "ERROR: invalid emerge repository name: ${_TD_ER_NAME}" >&2
-				exit 1
-			}
-			[[ "${_TD_ER_URI}" == https://* ]] || {
-				echo "ERROR: emerge repository ${_TD_ER_NAME} does not use HTTPS: ${_TD_ER_URI}" >&2
-				exit 1
-			}
-			mkdir -p /etc/portage/repos.conf
-			cat >"/etc/portage/repos.conf/${_TD_ER_NAME}.conf" <<EOF
-[${_TD_ER_NAME}]
-location = /var/db/repos/${_TD_ER_NAME}
-sync-type = git
-sync-uri = ${_TD_ER_URI}
-auto-sync = yes
-EOF
-			emaint sync --repo "${_TD_ER_NAME}"
-		done
 
 		_TD_EMERGE_BINREPO_COUNT=$($YQ -r '.packages.emerge.binrepos // [] | length' "${_TD_MANIFEST}")
 		if ((_TD_EMERGE_BINREPO_COUNT > 0)); then
