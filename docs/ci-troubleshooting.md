@@ -14,6 +14,7 @@ that touched 36 files across `.github/`, `build_scripts/`, `live-iso/`,
 |---|---|---|
 | ARM64 build passes but Snapdragon laptop support is unclear (#3116) | #3368 records postmarketOS observations and open TunaOS boot/install/update/rollback gates; an architecture manifest does not test board firmware or DTB selection. | Use [SNAPDRAGON.md](SNAPDRAGON.md) and report the exact device, image digest and hardware results. |
 | Bonito build succeeds despite bootc lint findings (#3001) | `99-cleanup.sh` calls `lint_image`; `lib.sh` returns success after findings unless `BOOTC_LINT_FATAL=1`. | Read the grouped output and step summary. Re-run lint against the candidate digest; apply the [Fedora readiness review](FEDORA-OUTREACH-READINESS.md) before outreach. |
+| Debian toolchain build fails at rustup installer or checksum (#3414) | `toolchain/Containerfile.debian` downloads `rustup-init` pinned to `RUSTUP_VERSION` and verifies sha256 checksums per architecture (`amd64` / `arm64`). A missing `TARGETARCH` build arg or mismatched checksum fails closed. | Pass `--build-arg TARGETARCH=<arch>` during `podman build` (automated in `build-toolchain.yml`), and update `RUSTUP_VERSION` and `RUSTUP_SHA256` in lockstep. |
 
 ### Adoption report shows downloads while ISO use is unknown
 
