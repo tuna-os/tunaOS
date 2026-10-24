@@ -26,12 +26,24 @@ cli = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(cli)
 
 
+def target_tree(root):
+    """Copy the files the reviewed target observation binds."""
+    for name in ('config', 'build_scripts'):
+        shutil.copytree(ROOT / name, root / name)
+    (root / 'scripts').mkdir()
+    for name in ('Containerfile.debian', 'image-versions.yaml', 'scripts/build-image-inner.sh'):
+        shutil.copy(ROOT / name, root / name)
+
+
 def source_result(source, names):
-    return {'source': source, 'role': 'build' if source == 'tailscale' else 'base',
+    build = source == 'tailscale'
+    return {'source': source, 'role': 'build' if build else 'base',
             'source_url': f'https://example.invalid/{source}/InRelease', 'release': 'trixie',
             'architecture': 'amd64', 'signed_at': '2026-10-23T00:00:00+00:00',
             'retrieved_at': NOW.isoformat(), 'inrelease_sha256': 'a' * 64,
             'keyring_sha256': 'b' * 64, 'indexes': [{'url': 'u', 'sha256': 'c' * 64, 'size': 1}],
+            'declaration_sha256': 'd' * 64 if build else None,
+            'remote_keyring_sha256': 'b' * 64 if build else None,
             'names': set(names), 'signers': ['A' * 40],
             'freshness': {'mode': 'signed-valid-until', 'expires': None}}
 
@@ -187,9 +199,7 @@ def test_changed_base_image_blocks_lookup_without_network():
 
 
 def test_changed_source_configuration_blocks_lookup_without_network(tmp_path):
-    for name in ('config', 'build_scripts'):
-        shutil.copytree(ROOT / name, tmp_path / name)
-    shutil.copy(ROOT / 'Containerfile.debian', tmp_path / 'Containerfile.debian')
+    target_tree(tmp_path)
     (tmp_path / 'build_scripts/20-packages.sh').write_text('changed\n')
     calls = []
     report, _ = failure(root=tmp_path, acquire=acquirer(calls=calls), **flounder_covered())
@@ -213,10 +223,8 @@ def test_conflicting_apt_exclusion_is_rejected_before_any_collection(tmp_path, m
 
 
 def test_cli_plan_is_read_only_and_repeatable(tmp_path, monkeypatch, capsys):
-    for name in ('tunaos.toml', 'Containerfile.debian'):
-        shutil.copy(ROOT / name, tmp_path / name)
-    for name in ('config', 'build_scripts'):
-        shutil.copytree(ROOT / name, tmp_path / name)
+    target_tree(tmp_path)
+    shutil.copy(ROOT / 'tunaos.toml', tmp_path / 'tunaos.toml')
     config = tmp_path / 'tunaos.toml'
     before = config.read_bytes()
     monkeypatch.setattr(portable_add.signed_apt, 'acquire_catalog', acquirer())

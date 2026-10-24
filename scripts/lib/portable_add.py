@@ -73,6 +73,7 @@ def _source_evidence(results):
     return [{key: result[key] for key in ('source', 'role', 'source_url', 'release',
                                           'architecture', 'signed_at', 'retrieved_at',
                                           'inrelease_sha256', 'keyring_sha256', 'indexes',
+                                          'declaration_sha256', 'remote_keyring_sha256',
                                           'freshness')}
             for result in results]
 
