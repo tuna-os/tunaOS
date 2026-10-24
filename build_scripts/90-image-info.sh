@@ -72,6 +72,11 @@ EOF
 # expects the same namespace instead of a hardcoded tuna-os.
 install -d /usr/share/tunaos
 printf '%s\n' "${IMAGE_VENDOR}" >/usr/share/tunaos/image-vendor
+# The installed verifier runs after the build context is gone. Persist the
+# generated identity policy beside the runtime image identity on every path
+# that invokes this shared writer, including manifest-driven desktops and
+# overlays.
+install -Dm0644 "${IDENTITY_ENV}" /usr/share/tunaos/identity-config.env
 
 # Every variant shipped these two pointing at projectbluefin.io, inherited
 # verbatim from the bluefin-lts script this one started as, while SUPPORT_URL

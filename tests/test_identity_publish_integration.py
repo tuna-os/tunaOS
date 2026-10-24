@@ -6,7 +6,6 @@ No legacy fork manifest participates in this contract.
 import copy
 import json
 from pathlib import Path
-import shutil
 import sys
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -42,10 +41,10 @@ def test_primary_identity_and_publish_destination_share_the_consumer_path(tmp_pa
     assert 'VERSION_CODENAME="Wile E"' in release
     assert 'HOME_URL="https://acme.example/homepage"' in release
     assert not (image.context / "manifests/fork-config.json").exists()
-    # configure-desktop-runtime.sh installs this adapter separately from the
-    # final identity writer. Model that copy for the verifier's runtime path.
-    shutil.copyfile(image.context / "build_scripts/lib/identity.env",
-                    image.root / "usr/share/tunaos/identity-config.env")
+    installed_identity = image.root / "usr/share/tunaos/identity-config.env"
+    assert installed_identity.read_bytes() == (
+        image.context / "build_scripts/lib/identity.env"
+    ).read_bytes()
     for env in ({}, {"IMAGE_VENDOR": namespace}):
         output = verify(image, **env)
         assert vendor_lines(output) == ["ok: image-vendor=acme"]
