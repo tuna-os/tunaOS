@@ -132,9 +132,29 @@ def file_sha256(path: Path) -> str:
 
 
 def has_symlink_component(path: Path) -> bool:
-    """Reject a path whose leaf or any lexical ancestor is a symlink."""
-    candidate = path if path.is_absolute() else Path.cwd() / path
-    return any(component.is_symlink() for component in (candidate, *candidate.parents))
+    """Reject symlinks inside the caller-supplied path.
+
+    Relative paths are checked from (but not including) the process cwd.
+    Absolute paths treat the top-level directory as a system-managed anchor,
+    so layouts such as ``/home -> /var/home`` do not reject safe descendants.
+    The leaf is always checked.
+    """
+    if path.is_absolute():
+        parts = path.parts[1:]
+        if not parts:
+            return False
+        candidate = Path(path.anchor) / parts[0]
+        if len(parts) == 1:
+            return candidate.is_symlink()
+        parts = parts[1:]
+    else:
+        candidate = Path.cwd()
+        parts = path.parts
+    for part in parts:
+        candidate /= part
+        if candidate.is_symlink():
+            return True
+    return False
 
 
 def error_message(error: BaseException) -> str:
@@ -1018,11 +1038,15 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("refusing a symlink in the output directory path")
     config.output_dir.mkdir(parents=True, exist_ok=True)
     evidence_path = config.output_dir / "installed-lifecycle-evidence.json"
-    if evidence_path.exists():
-        raise SystemExit(f"refusing to overwrite existing evidence: {evidence_path}")
+    partial_path = config.output_dir / "installed-lifecycle-evidence.partial.json"
+    for path in (evidence_path, partial_path):
+        if path.exists():
+            raise SystemExit(f"refusing to overwrite existing evidence: {path}")
     evidence, passed = execute_pilot(
-        config, progress=lambda current: write_evidence(evidence_path, current)
+        config, progress=lambda current: write_evidence(partial_path, current)
     )
+    write_evidence(evidence_path, evidence)
+    partial_path.unlink(missing_ok=True)
     print(f"evidence: {evidence_path}")
     print(f"runtime acceptance: {evidence['result']['runtime_acceptance']}")
     return 0 if passed else 1
