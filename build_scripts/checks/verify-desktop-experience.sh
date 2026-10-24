@@ -221,6 +221,26 @@ require_any_user_unit() {
 	exit 1
 }
 
+# The Secret Service (org.freedesktop.secrets) provider the GNOME-family
+# sessions keep credentials in. It is /usr/bin/gnome-keyring-daemon on every
+# base except Fedora ELN, which dropped gnome-keyring for oo7 (tunaOS#3810;
+# measured against dl.fedoraproject.org/pub/eln/1 on 2026-10-24): no ELN repo
+# publishes gnome-keyring, oo7-daemon obsoletes gnome-keyring < 51 and pam_oo7
+# obsoletes gnome-keyring-pam < 51. On ELN the PAM module is required with the
+# daemon: ELN's gdm wires pam_oo7 into its stacks to unlock the store with the
+# login password, which is what gnome-keyring-pam did. Read os-release here:
+# IS_ELN comes from the build-time lib.sh, which a booted image does not have.
+# $1 is a filesystem root for the regression test; empty in the image.
+require_secret_service() {
+	local root="${1:-}"
+	if grep -qsx 'ID=eln' "$root/etc/os-release" "$root/usr/lib/os-release"; then
+		require_any_glob "$root/usr/libexec/oo7-daemon"
+		require_any_glob "$root/usr/lib64/security/pam_oo7.so"
+	else
+		require_any_glob "$root/usr/bin/gnome-keyring-daemon"
+	fi
+}
+
 # xfce's greeter is the one desktop piece NO other gate can see missing.
 # xfce.sh installs its DM stack via install_available: lightdm first, greetd
 # as the fallback — and greetd's stock config runs `agreety --cmd /bin/sh`,
@@ -305,7 +325,8 @@ xfce_greetd_greeter_contract() {
 #   openSUSE        /usr/libexec/gvfs/gvfsd        /usr/libexec/...
 #   Arch            /usr/lib/gvfsd                 /usr/lib/...
 #
-# gnome-keyring-daemon is /usr/bin/gnome-keyring-daemon on all five.
+# gnome-keyring-daemon is /usr/bin/gnome-keyring-daemon on all five; Fedora
+# ELN ships oo7 instead (require_secret_service).
 #
 # GNOME version floor. Maintainer directive 2026-09-03: nothing below GNOME 50
 # ships as a tunaOS GNOME image, and 51 is the target as it releases. Measured
@@ -445,11 +466,10 @@ gnome)
 		'/usr/lib/gvfs/gvfsd'
 	# Portal backend and keyring, measured the same way (table above the case):
 	# /usr/libexec on Fedora, EL, Debian, Ubuntu and openSUSE; /usr/lib on Arch.
-	# gnome-keyring-daemon is /usr/bin on all five.
 	require_any_glob \
 		'/usr/libexec/xdg-desktop-portal-gnome' \
 		'/usr/lib/xdg-desktop-portal-gnome'
-	require_any_glob '/usr/bin/gnome-keyring-daemon'
+	require_secret_service
 	# User systemd units: audio (pipewire/wireplumber) user unit definitions.
 	require_any_user_unit pipewire wireplumber
 	# Extensions are deliberately user-managed. Extension Manager is offered
@@ -561,7 +581,7 @@ tuna)
 	require_any_glob '/usr/lib/gnome-shell-calendar-server' '/usr/libexec/gnome-shell-calendar-server' '/usr/libexec/gnome-shell/gnome-shell-calendar-server'
 	require_command ibus-daemon
 	require_command orca
-	require_command gnome-keyring-daemon
+	require_secret_service
 	# beta.1 starts graphical-session.target only after this import succeeds;
 	# without it every portal fails (tuna-os/tuna-desktop#691).
 	require_command dbus-update-activation-environment
