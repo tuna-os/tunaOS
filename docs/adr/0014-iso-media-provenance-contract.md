@@ -135,3 +135,28 @@ These tests do not observe a real retained upload or installation.
 Every success continues to say `authentication: not_authenticated`.
 Receipt and storage consistency does not authorize qualification, publication,
 or cutover.
+
+## Follow-on: bounded authoritative transport caller
+
+The caller in `scripts/iso_authoritative_transport.py` closes the injected
+transport gap without activating a collector. It accepts reviewer-supplied
+policy, explicit run/artifact selection and bounded network policy. It exposes
+only the exact endpoints consumed by the existing snapshot validators.
+
+GitHub metadata calls cannot redirect. The artifact archive can redirect once
+from the GitHub API to an exact reviewed HTTPS origin, with the bearer
+credential removed. R2 reads use the configured endpoint, bucket and candidate
+namespace without that credential or redirects. Connect, idle and total
+elapsed-time limits combine with per-response and aggregate-byte limits.
+
+The validator reads current run, attempt and artifact metadata before bytes,
+then rechecks artifact and run metadata afterward. These sequential REST and
+R2 requests are not a transaction. A visible change rejects, but the APIs
+cannot establish an atomic snapshot or identify which rerun uploaded an
+artifact. The first-attempt-only restriction remains.
+
+This boundary has no production call site, new permission, admission decision
+or catalog effect. A successful HTTPS exchange does not authenticate the
+separately reviewed policy or the complete browser/native evidence, so existing
+results remain `authentication: not_authenticated`. Runtime integration and
+qualification remain gated separately.

@@ -1,6 +1,6 @@
 # RFC 014: ISO media provenance
 
-- Status: contract stage merged; read-only adapter under review
+- Status: contract stage merged; bounded read-only caller under review
 - Owner: hanthor
 - Branch: rfc014-iso-media-provenance
 - Tracks: [#3381](https://github.com/tuna-os/tunaOS/issues/3381), [#3470](https://github.com/tuna-os/tunaOS/issues/3470), [iso-builder#270](https://github.com/tuna-os/iso-builder/issues/270)
@@ -21,8 +21,9 @@ Define a v2 contract with separate browser and native roles. Add an offline
 checker and common test vectors first. Keep v1 records readable as diagnostics.
 The v2 contract rejects missing, unknown and old versions.
 
-The first stage has no production caller. A valid document or consistent pair
-is not enough to qualify a target. Keep downloads and publication policy unchanged until all gates pass.
+The initial contract stage had no network caller. A valid document, consistent
+pair or successful HTTP exchange is not enough to qualify a target. Keep
+downloads and publication policy unchanged until all gates pass.
 Those gates must check authenticated evidence and proof from tests in a real system.
 
 ## Identity and order
@@ -120,9 +121,37 @@ It checks artifact identity, size and expiration again after the hash.
 
 The result is not a v2 pair of transport records.
 It does not fabricate a native producer, interpret a receipt or qualify media.
-The caller must provide fresh, authenticated transport and reviewed configuration.
-That future caller must also enforce safe redirects and timeouts.
-This phase has no network client or production caller.
+
+`scripts/iso_authoritative_transport.py` supplies the bounded read-only caller.
+It accepts the reviewed policy and selected IDs as separate arguments.
+It permits only the exact run, first-attempt, artifact and archive paths that the
+existing validators construct. It never lists runs, selects the latest success,
+accepts a candidate URL or infers an upload attempt from timestamps.
+
+The caller sends the GitHub bearer credential only to `https://api.github.com`.
+An artifact download may redirect once to an exact origin in reviewed network
+policy; the redirected request has no credential. Retained-object requests use
+only the configured R2 endpoint, bucket and exact candidate namespace. They
+never receive the GitHub credential and cannot redirect.
+
+Reviewed limits bound connect, idle and total elapsed time, each JSON response,
+each archive or object response, and aggregate response bytes. The existing
+validators still enforce exact expected sizes and digests. Every response is
+closed after success or failure. Synthetic HTTP-server tests exercise these
+limits and origin rules without a credential or production request.
+
+This caller does not make the REST and R2 observations atomic. GitHub exposes
+no artifact upload-attempt identity, so first-attempt-only remains mandatory.
+The validators compare metadata before and after all byte reads and reject a
+visible change, but an API cannot prove that no transient change occurred
+between sequential requests.
+
+Endpoint authentication does not attest the separately reviewed policy or
+qualify browser/native evidence. Successful results therefore remain
+`authentication: not_authenticated` and contain no admission decision.
+There is no production call site, workflow permission change or catalog wiring.
+The exact-media receipt handoff and runtime integration/qualification gates
+remain separate work under #3796, #3797 and #3381.
 
 Fixtures record the reviewed source and use synthetic run and artifact IDs.
 They cannot prove a browser build. The existing producer emits records in v1,
