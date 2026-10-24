@@ -67,7 +67,7 @@ def test_x13s_overlay_rejects_a_wrong_architecture(tmp_path: Path):
     uname = tmp_path / "uname"
     uname.write_text("#!/usr/bin/env bash\necho x86_64\n", encoding="utf-8")
     uname.chmod(0o755)
-    env = os.environ | {"PATH": f"{tmp_path}:{os.environ['PATH']}"}
+    env = os.environ | {"PATH": f"{tmp_path}:{os.environ.get('PATH', '')}"}
 
     proc = subprocess.run(
         [str(OVERLAY)],

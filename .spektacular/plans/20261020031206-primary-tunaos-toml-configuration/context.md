@@ -15,7 +15,7 @@ Implementation is being developed in parallel. This document is a plan, not a co
 
 ### Phase 1.1: Capture complete matrix ownership
 
-**File changes:** tunaos.toml:1; tests/fixtures/primary-config/matrix-before-migration.json:1; tests/fixtures/primary-config/bonito-gnome-x13s.toml:1. Capture all 14 variants and 155 declared flavor records at the recorded baseline; preserve omitted flags and comments.
+**File changes:** tunaos.toml:1; tests/fixtures/primary-config/matrix-before-migration.json:1; tests/fixtures/primary-config/bonito-gnome-acceptance-arm64.toml:1. Capture all 14 variants and 155 declared flavor records at the recorded baseline; preserve omitted flags and comments.
 
 **Complexity:** Medium
 
