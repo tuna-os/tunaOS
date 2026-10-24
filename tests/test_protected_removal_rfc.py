@@ -13,6 +13,7 @@ import re
 
 ROOT = Path(__file__).resolve().parents[1]
 RFC = ROOT / "docs/rfc/rfc017-protected-package-removal.md"
+assert RFC.is_file(), f"RFC 017 is missing: {RFC.relative_to(ROOT)}"
 TEXT = RFC.read_text(encoding="utf-8")
 
 
@@ -41,7 +42,12 @@ def test_cited_contract_files_exist():
                     assert matches, path
                     cited.update(candidate.relative_to(ROOT).as_posix() for candidate in matches)
                     continue
-                if "/" not in path and len(matches) == 1:
+                if "/" not in path:
+                    assert matches, f"missing bare RFC reference: {path}"
+                    assert len(matches) == 1, (
+                        f"ambiguous bare RFC reference {path}: "
+                        + ", ".join(candidate.relative_to(ROOT).as_posix() for candidate in matches)
+                    )
                     path = matches[0].relative_to(ROOT).as_posix()
                 cited.add(path)
     # Paths that only exist in the open #3739 branch are named as such in the text.

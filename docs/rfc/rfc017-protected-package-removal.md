@@ -124,8 +124,8 @@ database changes.
 | 4 | The family is in the admission table in code. The table is empty now | `unsupported-family` |
 | 5 | Each name is an installed package with that exact name. A virtual name or a "provides" match is not enough | `not-installed`, `ambiguous-name` |
 | 6 | No name is in the protected set | `protected` |
-| 7 | The native simulation removes exactly the requested names | `dependency-induced` |
-| 8 | The simulator exists, exits with 0 and gives output that the parser accepts | `solver-unavailable` |
+| 7 | The simulator exists, exits with 0 and gives output that the parser accepts | `solver-unavailable` |
+| 8 | The native simulation removes exactly the requested names | `dependency-induced` |
 | 9 | The transaction runs with the same names and no force options | `transaction-failed` |
 | 10 | The inventory after the transaction equals the inventory before it, minus the names | `inventory-drift` |
 | 11 | The base and desktop contracts pass after the removal | the existing contract failure |
