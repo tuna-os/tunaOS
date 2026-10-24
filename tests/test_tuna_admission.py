@@ -333,6 +333,15 @@ def test_gentoo_tuna_configures_wlroots_and_user_audio_services(tmp_path):
     assert result.returncode == 0, result.stderr
     assert not record.exists()
 
+    result = subprocess.run(
+        ["/bin/bash", str(ROOT / "build_scripts/desktop/gentoo-pipewire-user-services.sh")],
+        env={"PKG_MGR": "emerge", "PATH": str(tmp_path / "missing")},
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode != 0
+    assert "requires systemctl" in result.stderr
+
 
 def test_tuna_package_signatures_cannot_be_silently_disabled():
     key = (ROOT / "experiences/tuna/tideforge-public.gpg").read_bytes()
@@ -393,18 +402,49 @@ def test_dpkg_installed_names_keep_held_packages_and_drop_removed_ones(tmp_path)
     assert result.stdout.split() == ["tuna-desktop", "power-profiles-daemon"]
 
 
+def test_portage_backend_needs_only_the_installed_database(tmp_path):
+    import subprocess
+
+    script = (ROOT / "build_scripts/checks/verify-desktop-experience.sh").read_text()
+    function = script.split("tuna_package_backend() {", 1)[1].split(
+        "\ntuna_installed_package_names()", 1
+    )[0]
+    database = tmp_path / "var/db/pkg"
+    database.mkdir(parents=True)
+    command = "tuna_package_backend() {" + function + "\ntuna_package_backend"
+
+    result = subprocess.run(
+        ["/bin/bash", "-c", command],
+        capture_output=True,
+        text=True,
+        env={
+            "PATH": str(tmp_path / "no-tools"),
+            "TUNAOS_PORTAGE_DB": str(database),
+        },
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "portage"
+
+
 def test_portage_package_names_and_file_owners_use_the_installed_database(tmp_path):
     import subprocess
 
     script = (ROOT / "build_scripts/checks/verify-desktop-experience.sh").read_text()
     names = script.split("tuna_installed_package_names() {", 1)[1].split("\ntuna_installed_file_owner()", 1)[0]
     owners = script.split("tuna_installed_file_owner() {", 1)[1].split("\n# How many requirements", 1)[0]
-    qlist = tmp_path / "qlist"
-    qlist.write_text("#!/bin/sh\nprintf 'gui-wm/tuna-desktop\\nsys-power/power-profiles-daemon\\n'\n")
-    qlist.chmod(0o755)
-    qfile = tmp_path / "qfile"
-    qfile.write_text("#!/bin/sh\nprintf 'gui-wm/tuna-desktop\\n'\n")
-    qfile.chmod(0o755)
+    database = tmp_path / "var/db/pkg"
+    tuna = database / "gui-wm/tuna-desktop-1.0.0_beta1-r1"
+    power = database / "sys-power/power-profiles-daemon-0.30.0"
+    tuna.mkdir(parents=True)
+    power.mkdir(parents=True)
+    (tuna / "PF").write_text("tuna-desktop-1.0.0_beta1-r1\n")
+    (power / "PF").write_text("power-profiles-daemon-0.30.0\n")
+    (tuna / "CONTENTS").write_text(
+        "obj /usr/bin/tuna-session deadbeef 1\n"
+        "obj /usr/bin/not-the-session deadbeef 1\n"
+    )
+    (power / "CONTENTS").write_text("obj /usr/bin/powerprofilesctl deadbeef 1\n")
     command = (
         "tuna_installed_package_names() {" + names
         + "\ntuna_installed_file_owner() {" + owners
@@ -413,10 +453,17 @@ def test_portage_package_names_and_file_owners_use_the_installed_database(tmp_pa
     )
     result = subprocess.run(
         ["bash", "-c", command], capture_output=True, text=True,
-        env={"PATH": f"{tmp_path}:/usr/bin:/bin"},
+        env={
+            "PATH": "/usr/bin:/bin",
+            "TUNAOS_PORTAGE_DB": str(database),
+        },
     )
     assert result.returncode == 0, result.stderr
-    assert result.stdout.split() == ["tuna-desktop", "power-profiles-daemon", "tuna-desktop"]
+    assert result.stdout.split() == [
+        "tuna-desktop",
+        "power-profiles-daemon",
+        "tuna-desktop",
+    ]
 
 
 
