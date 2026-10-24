@@ -414,9 +414,10 @@ def render_identity(config):
              f"TUNAOS_BUG_REPORT_URL={shlex.quote(urls['bug_report'])}",
              # -g: stays global even when a caller sources this inside a function.
              'declare -gA TUNAOS_CODENAMES=(']
-    # Keys and values stay quoted and sorted for deterministic, diff-friendly shell.
+    # Double-quote every key even when its characters happen to be shell-safe:
+    # formatters must never reinterpret a hyphenated associative subscript.
     lines += [
-        f'\t["{name}"]="{config["variants"][name]["codename"]}"'
+        f'\t[{json.dumps(name)}]={shlex.quote(config["variants"][name]["codename"])}'
         for name in sorted(config['variants'])
     ]
     return '\n'.join(lines + [')']) + '\n'
