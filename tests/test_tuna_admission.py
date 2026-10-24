@@ -276,7 +276,6 @@ def test_gentoo_cell_installs_the_pinned_signed_native_package_and_session_depen
         "verify-signature = true",
     ):
         assert trust_step in installer
-    assert "emaint sync --repo" in installer
     assert ".packages.emerge.packages[]" in installer
 
     containerfile = (ROOT / "Containerfile.gentoo").read_text()
@@ -468,6 +467,36 @@ def test_portage_package_names_and_file_owners_use_the_installed_database(tmp_pa
         "power-profiles-daemon",
         "tuna-desktop",
     ]
+
+def test_portage_file_owner_prefers_the_native_index(tmp_path):
+    import subprocess
+
+    script = (ROOT / "build_scripts/checks/verify-desktop-experience.sh").read_text()
+    owners = script.split("tuna_installed_file_owner() {", 1)[1].split(
+        "\n# How many requirements", 1
+    )[0]
+    portageq = tmp_path / "portageq"
+    portageq.write_text(
+        "#!/bin/sh\n"
+        "[ \"$1\" = owners ] && [ \"$2\" = / ] && "
+        "[ \"$3\" = /usr/bin/tuna-session ]\n"
+        "printf '%s\\n' gui-wm/tuna-desktop-1.0.0_beta1-r1\n"
+    )
+    portageq.chmod(0o755)
+    command = (
+        "tuna_installed_file_owner() {" + owners
+        + "\ntuna_installed_file_owner portage /usr/bin/tuna-session"
+    )
+
+    result = subprocess.run(
+        ["/bin/bash", "-c", command],
+        capture_output=True,
+        text=True,
+        env={"PATH": f"{tmp_path}:/usr/bin:/bin"},
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "tuna-desktop"
 
 
 

@@ -49,8 +49,6 @@ def validate_source_records(records, kind, family, where):
                 required = {'name', 'baseurl'}
             else:
                 raise PolicyError(item + ': repositories unsupported for this family')
-        elif kind == 'source_repositories' and family == 'emerge':
-            allowed = required = {'name', 'sync_uri'}
         elif kind == 'binrepos' and family == 'emerge':
             allowed = {'name', 'priority', 'sync_uri', 'verify_signature', 'key', 'fingerprint'}
             required = set(allowed)
@@ -164,7 +162,7 @@ def validate(document):
                 if family in {'apt', 'cachyos', 'zypper'}:
                     allowed |= {'repos'}
                 if family == 'emerge':
-                    allowed |= {'source_repositories', 'binrepos', 'display_manager'}
+                    allowed |= {'binrepos', 'display_manager'}
                 if family == 'apt':
                     allowed |= {'repos', 'ppa', 'display_manager'}
                 elif family == 'cachyos':
@@ -179,7 +177,7 @@ def validate(document):
                     operation_ids(value, 'before', where + '.' + key)
                 elif key in {'display_manager', 'group_options'}:
                     string_list([value], where + '.' + key)
-                elif key in {'repos', 'copr', 'ppa', 'source_repositories', 'binrepos'}:
+                elif key in {'repos', 'copr', 'ppa', 'binrepos'}:
                     validate_source_records(value, key, family, where + '.' + key)
             expanded = expand(groups, policy)
             known(expanded, allowed - {'include'}, where + ' (expanded)')

@@ -694,9 +694,9 @@ COPY --from=common /system_files/bluefin /
 RUN --mount=type=bind,from=context,source=/,target=/run/context \
     /run/context/build_scripts/install-countme.sh
 FROM desktop AS kde
-# Tuna Desktop uses the manifest-declared signed gpkg binhost and GURU's
-# native cage ebuild. The shared desktop stage performs the package ownership,
-# session, portal, greeter and Lockdown routing contract before this target is
+# Tuna Desktop uses the manifest-declared signed gpkg binhost and GDM. The
+# shared desktop stage performs the package ownership, session, portal,
+# display-manager and Lockdown routing contract before this target is
 # publishable.
 FROM desktop AS tuna
 # xfce is declared build_image: true for guppy in build-config.yml and
