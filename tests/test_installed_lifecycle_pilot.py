@@ -235,8 +235,8 @@ def test_real_backend_uses_documented_switch_then_rollback_commands(tmp_path, mo
     backend = MODULE.LocalQemuBackend(pilot_config, [])
     commands = []
     statuses = [
-        {"status": {"staged": {"image": B}}},
-        {"status": {"staged": {"image": A}}},
+        {"status": {"staged": {"image": {"image": {"image": B, "transport": "registry"}}}}},
+        {"status": {"staged": {"image": {"image": {"image": A, "transport": "registry"}}}}},
     ]
 
     def guest(command, **_kwargs):

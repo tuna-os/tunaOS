@@ -90,14 +90,27 @@ def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
+def _fit_utf8(text: str, limit: int) -> str:
+    encoded = text.encode("utf-8")
+    if len(encoded) <= limit:
+        return text
+    return encoded[:limit].decode("utf-8", errors="ignore")
+
+
 def bounded_text(raw: bytes, limit: int = MAX_LOG_BYTES) -> tuple[str, bool]:
-    if len(raw) <= limit:
-        return raw.decode("utf-8", errors="replace"), False
-    marker = b"\n...[output truncated by installed lifecycle pilot]...\n"
-    budget = max(0, limit - len(marker))
+    decoded = raw.decode("utf-8", errors="replace")
+    if len(decoded.encode("utf-8")) <= limit:
+        return decoded, False
+    marker = "\n...[output truncated by installed lifecycle pilot]...\n"
+    budget = max(0, limit - len(marker.encode("utf-8")))
     first = budget // 2
-    value = raw[:first] + marker + raw[-(budget - first) :]
-    return value.decode("utf-8", errors="replace"), True
+    prefix = _fit_utf8(raw[:first].decode("utf-8", errors="replace"), first)
+    remaining = budget - len(prefix.encode("utf-8"))
+    suffix = _fit_utf8(
+        raw[-remaining:].decode("utf-8", errors="replace") if remaining else "",
+        remaining,
+    )
+    return prefix + marker + suffix, True
 
 
 def file_sha256(path: Path) -> str:
@@ -295,10 +308,14 @@ class LocalQemuBackend:
                 "missing_identity",
                 f"resolved digest {document.get('Digest')!r} does not match {expected_digest}",
             )
-        if document.get("Architecture") != "amd64" or document.get("Os") != "linux":
+        os_name = document.get("Os")
+        architecture = document.get("Architecture")
+        if not isinstance(os_name, str) or not isinstance(architecture, str):
+            raise PilotFailure("missing_identity", f"{reference} lacks OS/architecture identity")
+        if architecture != "amd64" or os_name != "linux":
             raise PilotFailure(
                 "wrong_architecture",
-                f"{reference} resolved as {document.get('Os')}/{document.get('Architecture')}",
+                f"{reference} resolved as {os_name}/{architecture}",
             )
         labels = document.get("Labels") or {}
         if labels.get("org.opencontainers.image.title") != "TunaOS skipjack (gnome)":
@@ -312,8 +329,8 @@ class LocalQemuBackend:
             "reference": reference,
             "digest": expected_digest,
             "name": document.get("Name"),
-            "os": document["Os"],
-            "architecture": document["Architecture"],
+            "os": os_name,
+            "architecture": architecture,
             "title": labels["org.opencontainers.image.title"],
             "revision": labels.get("org.opencontainers.image.version"),
             "bootc_label": labels.get("containers.bootc"),
@@ -560,6 +577,18 @@ class LocalQemuBackend:
             raise PilotFailure("missing_identity", "bootc status booted identity is not textual")
         return reference, transport, booted
 
+    @staticmethod
+    def _staged_reference(status: dict[str, Any]) -> tuple[str, str]:
+        try:
+            image = status["status"]["staged"]["image"]["image"]
+            reference = image["image"]
+            transport = image["transport"]
+        except (KeyError, TypeError) as error:
+            raise PilotFailure("missing_identity", "bootc status lacks staged image identity") from error
+        if not isinstance(reference, str) or not isinstance(transport, str):
+            raise PilotFailure("missing_identity", "bootc status staged identity is not textual")
+        return reference, transport
+
     def verify_boot(self, expected_reference: str) -> dict[str, Any]:
         status = self._status()
         reference, transport, booted = self._booted_reference(status)
@@ -611,15 +640,23 @@ class LocalQemuBackend:
             event_name="bootc_switch_b",
         )
         status = self._status()
-        if self.config.image_b not in json.dumps(status, sort_keys=True):
-            raise PilotFailure("wrong_deployment", "bootc did not stage image B")
+        reference, transport = self._staged_reference(status)
+        if reference != self.config.image_b or transport != "registry":
+            raise PilotFailure(
+                "wrong_deployment",
+                f"bootc staged {transport}:{reference}, expected registry:{self.config.image_b}",
+            )
         return {"command": "bootc switch --retain", "staged_reference": self.config.image_b}
 
     def stage_rollback(self) -> dict[str, Any]:
         self.guest("bootc rollback", event_name="bootc_rollback_a")
         status = self._status()
-        if self.config.image_a not in json.dumps(status, sort_keys=True):
-            raise PilotFailure("wrong_deployment", "bootc did not stage image A for rollback")
+        reference, transport = self._staged_reference(status)
+        if reference != self.config.image_a or transport != "registry":
+            raise PilotFailure(
+                "wrong_deployment",
+                f"bootc staged {transport}:{reference}, expected registry:{self.config.image_a}",
+            )
         return {"command": "bootc rollback", "staged_reference": self.config.image_a}
 
     def cleanup(self) -> dict[str, Any]:
@@ -647,7 +684,7 @@ class LocalQemuBackend:
                     stdout_truncated=truncated or self.qemu_log_truncated,
                 )
         if not self.config.keep_disk:
-            for path in self.created_paths:
+            for path in sorted(self.created_paths):
                 try:
                     path.unlink(missing_ok=True)
                     removed.append(str(path))
