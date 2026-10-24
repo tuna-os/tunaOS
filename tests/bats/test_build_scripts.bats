@@ -221,7 +221,7 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
     echo 'set -euo pipefail'
     echo "source '${REPO_ROOT}/build_scripts/lib/identity.env'"
     awk '/^canonical_variant\(\) \{/,/^\}/' "$script"
-    awk '/^VARIANT_KEY=/,/^fi$/' "$script"
+    awk '/^VARIANT_KEY=/,/^[[:space:]]*fi$/' "$script"
     echo 'echo "${VARIANT_KEY}:${CODE_NAME}"'
   } >"$harness"
 
