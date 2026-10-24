@@ -82,22 +82,28 @@ def validate_snapshot(document: str, payload: dict, root: Path | None = None) ->
                 "tested": sum(value != "untested" for value in values),
                 "total": len(values)}
 
+    # Each headline states the same three counts in the order its prose reads.
     sections = {
-        "LUKS E2E": ("install", r"\*\*(\d+) of (\d+)\*\* cells green \((\d+) tested"),
-        "Desktop Contract Sweep": ("desktop", r"\*\*(\d+) of (\d+)\*\* cells satisfy .+?\((\d+) tested"),
-        "Bootc Lifecycle": ("lifecycle", r"\*\*(\d+) of (\d+)\*\* cells green \((\d+) tested"),
-        "Package parity": ("parity", r"\*\*(\d+) of (\d+)\*\* cells at parity \((\d+) measured"),
+        "LUKS E2E": ("install", r"\*\*(\d+) of (\d+)\*\* cells green \((\d+) tested",
+                     ("passed", "total", "tested")),
+        "Desktop Contract Sweep": ("desktop", r"\*\*(\d+) of (\d+)\*\* cells satisfy .+?\((\d+) tested",
+                                   ("passed", "total", "tested")),
+        "Bootc Lifecycle": ("lifecycle", r"\*\*(\d+) of (\d+)\*\* cells green \((\d+) tested",
+                            ("passed", "total", "tested")),
+        "Package parity": ("parity", r"\*\*(\d+) of (\d+)\*\* cells at parity \((\d+) measured",
+                           ("passed", "total", "tested")),
+        "Installer smoke": ("iso", r"\*\*(\d+) of (\d+)\*\* ISO cells have \*ever\* been tested"
+                                   r".*?(\d+) of those pass",
+                            ("tested", "total", "passed")),
     }
-    for title, (axis, pattern) in sections.items():
+    for title, (axis, pattern, order) in sections.items():
         body = document.split(f"## {title}\n", 1)
         match = re.search(pattern, body[1].split("\n## ", 1)[0], re.DOTALL) if len(body) == 2 else None
         expected = tally(axis)
-        if not match or {"passed": int(match[1]), "total": int(match[2]), "tested": int(match[3])} != expected:
+        if not match or dict(zip(order, (int(match[1]), int(match[2]), int(match[3])))) != expected:
             raise ValueError(f"matrix {axis} headline disagrees with retained cells")
         if axis in summary and summary[axis] != expected:
             raise ValueError(f"matrix {axis} summary disagrees with retained cells")
-    if summary["iso"] != tally("iso"):
-        raise ValueError("matrix iso summary disagrees with retained cells")
 
 
 RETAINED_KEYS = ("schema_version", "evaluation_date", "context", "luks", "lifecycle", "smoke",
@@ -267,10 +273,13 @@ def validate_context(context: dict, root: Path) -> None:
     here would turn every unrelated config edit red until the daily refresh
     landed (#3813).
     """
-    if context.get("kind") not in ("live-collection", "historical-reconciliation"):
+    kind = context.get("kind")
+    if kind is None:
         raise ValueError("snapshot collection context is missing")
+    if kind not in ("live-collection", "historical-reconciliation"):
+        raise ValueError(f"invalid snapshot collection context kind: {kind!r}")
     validate_configuration_identity(context.get("configuration_sha256"))
-    if context["kind"] == "historical-reconciliation":
+    if kind == "historical-reconciliation":
         relative = Path(context.get("retained_inputs_path", ""))
         if relative.is_absolute() or ".." in relative.parts or relative.parts[:2] != ("docs", "matrix-snapshots"):
             raise ValueError("invalid retained input identity path")

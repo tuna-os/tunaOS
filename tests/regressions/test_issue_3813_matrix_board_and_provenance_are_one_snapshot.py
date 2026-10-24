@@ -73,6 +73,8 @@ def pair():
 **0 of 1** cells green (0 tested, 1 never tested).
 ## Package parity
 **0 of 1** cells at parity (1 measured).
+## Installer smoke
+**0 of 1** ISO cells have *ever* been tested — 0% coverage. 0 of those pass.
 """ + END
     axes = {axis: {"verdict": verdict, "date": "2026-10-23", "run": "run/1"}
             for axis, verdict in (("install", "pass"), ("desktop", "pass"),
@@ -132,6 +134,26 @@ def test_counts_cannot_be_made_consistent_by_only_resealing_identity():
     payload["cells"]["test:gnome"]["install"]["verdict"] = "fail"
     payload["snapshot"] = snapshot_identity(document, payload)
     with pytest.raises(ValueError, match="install headline"):
+        validate_snapshot(document, payload)
+
+
+def test_iso_coverage_headline_must_match_retained_cells_even_when_resealed():
+    """The installer-smoke line is the ISO coverage claim; it is checked too."""
+    document, payload = pair()
+    document = document.replace(
+        "**0 of 1** ISO cells have *ever* been tested — 0% coverage.",
+        "**1 of 1** ISO cells have *ever* been tested — 100% coverage.",
+    )
+    payload["snapshot"] = snapshot_identity(document, payload)
+    with pytest.raises(ValueError, match="iso headline"):
+        validate_snapshot(document, payload)
+
+
+def test_board_without_an_installer_smoke_section_is_rejected():
+    document, payload = pair()
+    document = document.replace("## Installer smoke\n", "## Installer smoke notes\n")
+    payload["snapshot"] = snapshot_identity(document, payload)
+    with pytest.raises(ValueError, match="iso headline"):
         validate_snapshot(document, payload)
 
 
@@ -389,6 +411,21 @@ def test_retained_input_symlink_is_rejected(tmp_path):
 def test_pair_must_record_its_configuration_identity(tmp_path, identities):
     context = dict(retained_context(tmp_path), configuration_sha256=identities)
     with pytest.raises(ValueError, match="configuration"):
+        validate_context(context, tmp_path)
+
+
+@pytest.mark.parametrize("kind, message", [
+    (None, "collection context is missing"),
+    ("replayed", "invalid snapshot collection context kind: 'replayed'"),
+    (7, "invalid snapshot collection context kind: 7"),
+])
+def test_unsupported_context_kind_names_the_bad_value(tmp_path, kind, message):
+    context = dict(retained_context(tmp_path))
+    if kind is None:
+        del context["kind"]
+    else:
+        context["kind"] = kind
+    with pytest.raises(ValueError, match=re.escape(message)):
         validate_context(context, tmp_path)
 
 
