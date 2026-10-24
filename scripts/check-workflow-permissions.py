@@ -123,11 +123,17 @@ def main():
             parser.exit(2, f"Organization audit failed: {error}\n")
     else:
         directory = args.root / ".github/workflows"
+        if not directory.is_dir():
+            print(f"workflow directory not found: {directory}", file=sys.stderr)
+            return 1
         workflows = []
         for path in sorted(directory.glob("*")):
             if path.suffix in (".yml", ".yaml"):
                 workflows.append({"path": str(path.relative_to(args.root)),
                                   "findings": findings(path.read_text())})
+        if not workflows:
+            print(f"no workflow files found in {directory}", file=sys.stderr)
+            return 1
         records = [{"repository": str(args.root), "workflows": workflows}]
     if not args.org:
         for workflow in records[0]["workflows"]:

@@ -82,3 +82,16 @@ def test_audit_uses_immutable_tree_and_checks_blob(monkeypatch):
     assert record["workflows"][0]["findings"] == ["missing top-level permissions"]
     assert calls[1].endswith("/trees/tree?recursive=1")
     assert calls[2].endswith("/blobs/blob")
+
+
+def test_missing_or_empty_workflow_directory_exits_nonzero(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(CHECK.sys, "argv", ["check", str(tmp_path)])
+    assert CHECK.main() != 0
+    err = capsys.readouterr().err
+    assert "workflow directory not found" in err
+
+    wf_dir = tmp_path / ".github/workflows"
+    wf_dir.mkdir(parents=True)
+    assert CHECK.main() != 0
+    err = capsys.readouterr().err
+    assert "no workflow files found" in err
