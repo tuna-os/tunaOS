@@ -17,7 +17,7 @@ verified `just` setup, credentials, and how to stop the relay with Ctrl+C.
 1. **Try it**: `bootc switch --enforce-container-sigpolicy ghcr.io/tuna-os/yellowfin:gnome`
 2. **Report issues**: [GitHub Issues](https://github.com/tuna-os/tunaOS/issues)
 3. **Read the docs**: [CONTRIBUTING.md](CONTRIBUTING.md), [AGENT_GUIDE.md](docs/AGENT_GUIDE.md)
-4. **Add yourself**: If your org uses TunaOS, add it to [ADOPTERS.md](ADOPTERS.md)
+4. **Add yourself**: If your organization uses TunaOS, add it to [ADOPTERS.md](ADOPTERS.md). Submit the [adoption-request form](https://github.com/tuna-os/.github/issues/new?template=adoption.yml) or open a PR. Entries need public self-identification and consent under [docs/ADOPTION-CALL.md](docs/ADOPTION-CALL.md). Maintainers do not add unverified or private reports.
 
 ### Contribution Ladder
 
@@ -108,7 +108,9 @@ keep going (#1136).
 | Downloads | `ghcr.io/tuna-os` pull counts |
 | Active variants | Yellowfin, Albacore, Skipjack, Bonito, Redfin |
 | Active desktops | GNOME, GNOME 50, KDE, COSMIC, Niri |
-| Adopters | [See ADOPTERS.md](ADOPTERS.md) — organizations using TunaOS |
+| Adopters | [See ADOPTERS.md](ADOPTERS.md) — submit the [adoption-request form](https://github.com/tuna-os/.github/issues/new?template=adoption.yml) |
+
+[ADOPTERS.md](ADOPTERS.md) is the source of truth for organizations that use TunaOS. Entries need the respondent's public self-identification and consent under [docs/ADOPTION-CALL.md](docs/ADOPTION-CALL.md). Maintainers do not add unverified or private reports. Dependencies, downloads, stars, pulls, or CI runs do not prove adoption. To join the list, submit the [adoption-request form](https://github.com/tuna-os/.github/issues/new?template=adoption.yml) or open a PR.
 
 ### Code of Conduct
 
