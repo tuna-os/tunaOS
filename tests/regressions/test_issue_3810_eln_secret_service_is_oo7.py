@@ -1,0 +1,123 @@
+"""tunaOS#3810: Fedora ELN replaced gnome-keyring with oo7.
+
+wahoo:tuna failed Build Image in run 39989009540 (job 120596055953) with
+`No match for argument: gnome-keyring`. Measured against
+dl.fedoraproject.org/pub/eln/1 on 2026-10-24: no ELN repository publishes
+gnome-keyring or gnome-keyring-pam; oo7-daemon obsoletes gnome-keyring < 51,
+pam_oo7 obsoletes gnome-keyring-pam < 51, and ELN's gdm requires pam_oo7.
+
+Falsification: the ELN sections must name the oo7 provider and its PAM
+module, every other target keeps gnome-keyring, and the desktop contract
+rejects an ELN image without oo7 and a non-ELN image without gnome-keyring.
+"""
+from functools import cache
+from pathlib import Path
+import re
+import subprocess
+import sys
+
+import pytest
+
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "scripts"))
+from lib import tunaos_config  # noqa: E402
+
+CHECK = ROOT / "build_scripts/checks/verify-desktop-experience.sh"
+OO7 = {"oo7-daemon", "pam_oo7"}
+KEYRING = {"gnome-keyring", "gnome-keyring-pam"}
+
+
+@cache
+def desktops():
+    return tunaos_config.load()["desktops"]
+
+
+def packages(desktop, target):
+    section = desktops()[desktop]["packages"][target]
+    return {name for key in ("required", "optional") for name in section.get(key, [])}
+
+
+@pytest.mark.parametrize("desktop", ["gnome", "tuna"])
+def test_eln_names_the_oo7_secret_service_and_its_pam_module(desktop):
+    names = packages(desktop, "eln")
+    assert OO7 <= names, desktop
+    assert not KEYRING & names, f"ELN publishes no {sorted(KEYRING & names)}"
+
+
+@pytest.mark.parametrize(
+    "desktop,target",
+    [("gnome", "zypper"), ("tuna", "el10"), ("tuna", "fedora"), ("tuna", "rawhide")],
+)
+def test_other_targets_keep_gnome_keyring(desktop, target):
+    names = packages(desktop, target)
+    assert "gnome-keyring" in names
+    assert not OO7 & names
+
+
+def test_oo7_is_confined_to_eln():
+    for desktop, value in desktops().items():
+        for target in value.get("packages", {}):
+            if target != "eln":
+                assert not OO7 & packages(desktop, target), (desktop, target)
+
+
+def contract_functions():
+    source = CHECK.read_text()
+    bodies = []
+    for name in ("require_any_glob", "require_secret_service"):
+        match = re.search(rf"^{name}\(\) \{{.*?^\}}", source, re.M | re.S)
+        assert match, f"the desktop contract has no {name}"
+        bodies.append(match.group(0))
+    return "\n".join(bodies)
+
+
+def image(tmp_path, os_id, files):
+    (tmp_path / "usr/lib").mkdir(parents=True)
+    (tmp_path / "usr/lib/os-release").write_text(f"NAME=test\nID={os_id}\n")
+    for relative in files:
+        path = tmp_path / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("")
+    script = contract_functions() + f'\nrequire_secret_service "{tmp_path}"\necho satisfied\n'
+    return subprocess.run(["bash", "-c", script], capture_output=True, text=True, env={"PATH": "/usr/bin:/bin"})
+
+
+OO7_FILES = ["usr/libexec/oo7-daemon", "usr/lib64/security/pam_oo7.so"]
+KEYRING_FILES = ["usr/bin/gnome-keyring-daemon"]
+
+
+@pytest.mark.parametrize(
+    "os_id,files",
+    [("eln", OO7_FILES), ("fedora", KEYRING_FILES), ("almalinux", KEYRING_FILES)],
+)
+def test_the_contract_accepts_each_base_native_provider(tmp_path, os_id, files):
+    result = image(tmp_path, os_id, files)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "satisfied\n"
+
+
+@pytest.mark.parametrize(
+    "os_id,files",
+    [
+        ("eln", []),
+        ("eln", KEYRING_FILES),
+        ("eln", ["usr/libexec/oo7-daemon"]),
+        ("eln", ["usr/lib64/security/pam_oo7.so"]),
+        ("fedora", []),
+        ("fedora", OO7_FILES),
+    ],
+)
+def test_the_contract_rejects_a_missing_native_provider(tmp_path, os_id, files):
+    result = image(tmp_path, os_id, files)
+    assert result.returncode == 1
+    assert "satisfied" not in result.stdout
+    assert "missing required path" in result.stderr
+
+
+@pytest.mark.parametrize("case", ["gnome)", "tuna)"])
+def test_gnome_and_tuna_contracts_use_the_secret_service_check(case):
+    source = CHECK.read_text()
+    start = source.index(f"\n{case}\n")
+    body = source[start:source.index("\n\t;;\n", start)]
+    assert "require_secret_service" in body
+    assert "gnome-keyring-daemon" not in body
