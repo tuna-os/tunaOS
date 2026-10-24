@@ -4,19 +4,27 @@
 Only --format legacy supports build consumption, and only for stock intent.
 Requires PyYAML, already used by the repository's Python tooling.
 """
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from lib import tunaos_config
+
 import argparse
 import copy
 import hashlib
 import json
 import os
-from pathlib import Path
 import re
 import subprocess
-import sys
 
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
+DERIVED_MANIFEST_PREFIXES = (
+    "manifests/desktops/",
+    "manifests/desktop-plans/",
+    "manifests/desktop-contracts/",
+)
 
 
 class ConfigError(ValueError):
@@ -68,14 +76,15 @@ def strings(value, where):
 
 def source_paths(root):
     """Source receipt, not a second package or variant catalog."""
-    patterns = (".github/build-config.yml", "image-versions.yaml", "registry-map.yaml",
+    patterns = ("tunaos.toml", "requirements-config.txt", "image-versions.yaml", "registry-map.yaml",
                 "Containerfile*", "manifests/**/*", "build_scripts/**/*", "scripts/**/*",
                 "Justfile", "just/**/*", ".containerignore", ".dockerignore", "custom/**/*",
                 "system_files/**/*", "system_files_overrides/**/*", "experiences/**/*")
     tracked = set(subprocess.check_output(["git", "-C", str(root), "ls-files", "-z"], text=True).split("\0"))
-    return sorted({p.relative_to(root).as_posix() for pattern in patterns
-                   for p in root.glob(pattern)
-                   if (p.is_file() or p.is_symlink()) and p.relative_to(root).as_posix() in tracked})
+    paths = {p.relative_to(root).as_posix() for pattern in patterns
+             for p in root.glob(pattern)
+             if (p.is_file() or p.is_symlink()) and p.relative_to(root).as_posix() in tracked}
+    return sorted(name for name in paths if not name.startswith(DERIVED_MANIFEST_PREFIXES))
 
 
 def source_receipt(root):
@@ -189,7 +198,7 @@ def resolve(config, config_dir, root=ROOT, *, explain=False):
     catalog, catalog_path = load_catalog(root)
     # An environment override is supported only when byte-identical to the
     # pinned catalog. Otherwise the source receipt would falsely attest it.
-    if catalog_path.read_bytes() != (root / ".github/build-config.yml").read_bytes():
+    if catalog_path.read_bytes() != tunaos_config.render(tunaos_config.load(root / "tunaos.toml")).encode():
         raise ConfigError("TUNAOS_BUILD_CONFIG differs from the pinned catalog")
     if "image" in config:
         image = mapping(config["image"], ("registry", "namespace"), "image", ("registry", "namespace"))

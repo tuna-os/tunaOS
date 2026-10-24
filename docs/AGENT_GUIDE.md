@@ -78,7 +78,7 @@ Stage 3: gnome-hwe, kde-hwe, gnome-nvidia, kde-nvidia, etc.     (parallel)
 Stage 4: gnome-nvidia-hwe                                        (depends on stage 3)
 ```
 
-Defined in `.github/build-config.yml`. The workflow is `build-variant.yml` → `reusable-build-image.yml`.
+Defined in `tunaos.toml`. The workflow is `build-variant.yml` → `reusable-build-image.yml`.
 
 ---
 
@@ -90,13 +90,22 @@ Defined in `.github/build-config.yml`. The workflow is `build-variant.yml` → `
 | `albacore` | 🐟 | AlmaLinux 10 | dnf | Stable |
 | `skipjack` | 🍣 | CentOS Stream 10 | dnf | Beta |
 | `bonito` | 🎣 | Fedora 44 | dnf | Beta |
+| `wahoo` | 🎏 | Fedora ELN (EL11 preview, rolling) | dnf | Experimental |
 | `bonito-rawhide` | 🐉 | Fedora Rawhide (rolling) | dnf | Beta |
+| `hummingbird` | 🐦 | Fedora Hummingbird (hardened rolling Rawhide) | dnf | Experimental |
 | `sailfin` | ⛵ | openSUSE Tumbleweed (rolling) | zypper | Beta |
 | `guppy` | 🌈 | Gentoo Linux (source-based) | portage | Beta |
+| `gurnard` | 🤖 | Ubuntu 24.04 Noble | apt | Experimental |
 | `grouper` | 🪸 | Ubuntu 26.04 | apt | Beta |
 | `marlin` | 🚀 | Arch Linux (rolling), CachyOS kernel overlay | pacman | Beta |
 | `flounder` | 🐡 | Debian 13 Trixie (stable) | apt | Beta |
 | `flounder-sid` | ☢️ | Debian Sid (unstable, rolling) | apt | Beta |
+| `redfin` | 🔒 | RHEL 10 | dnf | Local-build only |
+
+Wahoo, Hummingbird, and Gurnard are experimental entries. Their configured
+builds do not imply complete flavor coverage or a publication promise. Redfin
+is intentionally absent from `.github/build-config.yml` because its EULA and
+required Red Hat credentials make it local-build only; see [`rhel-setup.md`](rhel-setup.md).
 
 ---
 
@@ -179,7 +188,7 @@ do with the ISO.
 
 1. Create `manifests/desktops/<name>.yaml` with package lists per OS family
 2. Add a stage in `Containerfile` (copy the pattern from existing DE stages)
-3. Add the flavor to `.github/build-config.yml` for each variant
+3. Add the flavor to `tunaos.toml` for each variant
 
 No new shell script needed. `install-desktop.sh` handles it.
 
@@ -187,7 +196,7 @@ No new shell script needed. `install-desktop.sh` handles it.
 
 1. Find/build a bootc-compatible base image
 2. Add detection to `build_scripts/lib.sh` (IS_* flag, PKG_MGR)
-3. Add the variant to `.github/build-config.yml`
+3. Add the variant to `tunaos.toml`
 4. Add pacman/apt/dnf sections to each desktop manifest
 5. (Optional) Create a `Containerfile.<variant>` if the variant needs bootc conversion
 
@@ -197,9 +206,9 @@ No new shell script needed. `install-desktop.sh` handles it.
 
 | File | What it controls |
 |------|-----------------|
-| `.github/build-config.yml` | The build matrix (variants × flavors × platforms × stages) |
+| `tunaos.toml` | The build matrix (variants × flavors × platforms × stages) |
 | `PACKAGE-SOURCING.md` | Package sourcing policy (tiering, Tideforge-first, allowlist, #1319) |
-| `image-versions.yaml` | Pinned image digests + download versions |
+| `image-versions.yaml` | Pinned image digests and download versions/checksums, including the verified live-ISO installer bundle |
 | `registry-map.yaml` | Registry mirror overrides |
 | `renovate.json` | Automated dependency updates (automerge all) |
 

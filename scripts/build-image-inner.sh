@@ -20,16 +20,14 @@
 #   USE_CACHE          — 1 to enable local dnf cache mounts
 #   IS_CI              — 1 if running in CI
 #   SKIP_RECHUNK       — 1 to skip chunkah passes (PR builds)
-#   IMAGE_REGISTRY     — defaults to ghcr.io
-#   REPO_ORGANIZATION  — defaults to tuna-os
+#   IMAGE_REGISTRY     — publish registry host; overrides [build.publish]
+#   REPO_ORGANIZATION  — publish namespace; overrides [build.publish]
 #   CHUNKAH_IMAGE      — override chunkah image ref
 #   BUILDAH_CACHE_FLAGS — extra flags for buildah layer cache
 
 set -euxo pipefail
 
 # ── Defaults ──────────────────────────────────────────────────────────────────
-IMAGE_REGISTRY="${IMAGE_REGISTRY:-ghcr.io}"
-REPO_ORGANIZATION="${REPO_ORGANIZATION:-tuna-os}"
 IS_CI="${IS_CI:-0}"
 USE_CACHE="${USE_CACHE:-0}"
 SKIP_RECHUNK="${SKIP_RECHUNK:-0}"
@@ -41,6 +39,9 @@ source scripts/_registry.sh
 # shellcheck source=lib/build-config.sh
 source scripts/lib/build-config.sh
 BUILD_CONFIG="$(tunaos_build_config)"
+# shellcheck source=lib/publish-destination.sh
+source scripts/lib/publish-destination.sh
+read -r IMAGE_REGISTRY REPO_ORGANIZATION < <(tunaos_publish_destination "$BUILD_CONFIG")
 
 # ── Resolve image refs from image-versions.yaml ───────────────────────────────
 common_image="${COMMON_IMAGE:-ghcr.io/projectbluefin/common}"
@@ -131,8 +132,23 @@ if [[ -n "${RHSM_USER:-}${RHSM_PASSWORD:-}${RHSM_ORG:-}${RHSM_ACTIVATION_KEY:-}"
 	BUILD_ARGS+=("--secret" "id=rhsm,src=${RHSM_SECRET_FILE}")
 fi
 
+# Existing resolved target facts select the first native receipt slice. Use a
+# private context so simultaneous targets cannot alter each other's COPY input.
+BUILD_CONTEXT="."
+BUILD_CONTAINERFILE="${CONTAINERFILE}"
+if [[ "${CONTAINERFILE}" == "Containerfile.debian" && "${TUNAOS_IMAGE_FLAVOR}" == "gnome" ]]; then
+	DESKTOP_CONTEXT_TMP=$(mktemp -d)
+	trap 'rm -rf "${DESKTOP_CONTEXT_TMP}"; if [[ -n "${RHSM_SECRET_FILE:-}" ]]; then rm -f "$RHSM_SECRET_FILE"; fi' EXIT
+	BUILD_CONTEXT=$(python3 scripts/config.py prepare-debian-context --output "$DESKTOP_CONTEXT_TMP/context" \
+		--variant "${VARIANT}" --desktop "${TUNAOS_IMAGE_FLAVOR}" --platform "${PLATFORM}")
+	BUILD_CONTAINERFILE="${BUILD_CONTEXT}/${CONTAINERFILE}"
+fi
+
 # Build scripts hash for cache invalidation
-build_scripts_hash=$(find build_scripts -type f -name '*.sh' -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -c1-16)
+build_scripts_hash=$(cd "${BUILD_CONTEXT}" && find build_scripts -type f -name '*.sh' -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -c1-16)
+if [[ -f "${BUILD_CONTEXT}/desktop-context-receipt.json" ]]; then
+	build_scripts_hash="${build_scripts_hash}-$($YQ -r '.sha256' "${BUILD_CONTEXT}/desktop-context-receipt.json")"
+fi
 # Generated fork payloads are bind-mounted context too. Their content must enter
 # the cache key, or a prior stock/other fork layer can be reused unchanged.
 if [[ -f manifests/fork-config.json ]]; then
@@ -181,9 +197,9 @@ build_primary_image() {
 		"${BUILD_ARGS[@]}" \
 		--tag "${PRE_CHUNK_TAG}" \
 		${PULL_FLAG} \
-		--file "${CONTAINERFILE}" \
+		--file "${BUILD_CONTAINERFILE}" \
 		${BUILDAH_CACHE_FLAGS:-} \
-		.
+		"${BUILD_CONTEXT}"
 }
 
 # Retry the whole build on failure. Two distinct transients, both of which

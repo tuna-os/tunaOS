@@ -4,17 +4,20 @@
 This preview supports direct desktop routes only. It validates all selected
 cells before writing. --build explicitly invokes the existing local build engine.
 """
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from lib import tunaos_config
+
 import argparse
 import hashlib
 import importlib.util
 import io
 import json
 import os
-from pathlib import Path
 import re
 import shutil
 import subprocess
-import sys
 
 import yaml
 
@@ -160,6 +163,7 @@ def prepare(config_path, output, root=ROOT):
         subprocess.run(["git", "-C", str(context), "add", "--all"], check=True)
         if COMPILER.source_receipt(context) != plan["sources"]:
             raise ConfigError("sources changed during preparation; discard output and retry after review")
+        tunaos_config.prepare(context)
         (context / "manifests/fork-config.json").write_text(json.dumps(manifest, indent=2) + "\n")
         for asset in manifest["assets"].values():
             destination = context / "manifests" / asset["path"]

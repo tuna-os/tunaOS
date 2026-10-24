@@ -22,6 +22,11 @@ Usage:
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from lib import tunaos_config
+
 import argparse
 import datetime
 import difflib
@@ -29,12 +34,10 @@ import json
 import os
 import re
 import subprocess
-import sys
 import tempfile
 import time
 import urllib.request
 from collections import defaultdict
-from pathlib import Path
 
 # The scoring rules live in a pure module beside this script (tunaOS#2532).
 # Tests load this file by path, so its directory is not always on sys.path.
@@ -53,6 +56,7 @@ DOC = Path("docs/MATRIX-STATUS.md")
 PROV = Path("docs/matrix-provenance.json")
 CONFIG = Path(".github/build-config.yml")
 GREEN_CRITERIA = Path(".github/green-criteria.yml")
+FULL_SWEEP_DATES: dict[str, str] = {}
 
 BEGIN = "<!-- BEGIN GENERATED — scripts/gen-matrix-status.py -->"
 END = "<!-- END GENERATED -->"
@@ -224,12 +228,37 @@ def main_runs(workflow: str, limit: int = 10) -> list[dict]:
 
 def load_build_config(config_path: Path = CONFIG) -> dict:
     """Load .github/build-config.yml using PyYAML or internal fallback parser."""
+    if config_path == CONFIG:
+        return tunaos_config.matrix(tunaos_config.load())
     try:
         import yaml
         return yaml.safe_load(config_path.read_text())
     except ImportError:
         pass
     content = config_path.read_text()
+    def parse_platforms(text: str, default: list[str]) -> list[str]:
+        inline = re.search(r"(?m)^[ \t]*platforms:\s*\[(.*?)\]", text)
+        if inline:
+            return [
+                value.strip().strip("\"'")
+                for value in inline.group(1).split(",")
+                if value.strip()
+            ]
+        block = re.search(
+            r"(?m)^[ \t]*platforms:\s*\n"
+            r"(?P<items>(?:[ \t]*-\s*[^#\n]+\n?)+)",
+            text,
+        )
+        if block:
+            values = []
+            for item in block.group("items").splitlines():
+                value = item.strip()[1:].split("#", 1)[0].strip().strip("\"'")
+                if value:
+                    values.append(value)
+            if values:
+                return values
+        return list(default)
+
     iso_groups = []
     if "iso_groups:" in content:
         ig_section = content.split("iso_groups:\n", 1)[1].split("\n\n", 1)[0]
@@ -260,11 +289,10 @@ def load_build_config(config_path: Path = CONFIG) -> dict:
             continue
         lines = rv.strip().splitlines()
         vid = lines[0].split("#")[0].strip().strip("\"'")
-        v_platforms = ["linux/amd64", "linux/arm64"]
-        header_part = rv.split("flavors:\n", 1)[0]
-        vp_match = re.search(r"platforms:\s*\[(.*?)\]", header_part)
-        if vp_match:
-            v_platforms = [p.strip().strip("\"'") for p in vp_match.group(1).split(",")]
+        v_platforms = parse_platforms(
+            rv.split("flavors:\n", 1)[0],
+            ["linux/amd64", "linux/arm64"],
+        )
         flavors = []
         if "flavors:" in rv:
             fl_text = rv.split("flavors:\n", 1)[1]
@@ -277,16 +305,13 @@ def load_build_config(config_path: Path = CONFIG) -> dict:
                 b_img = "build_image: true" in rf
                 b_iso = "build_iso: true" in rf
                 b_qcow2 = "build_qcow2: true" in rf
-                fp_match = re.search(r"platforms:\s*\[(.*?)\]", rf)
-                if fp_match:
-                    f_platforms = [p.strip().strip("\"'") for p in fp_match.group(1).split(",")]
-                else:
-                    f_platforms = list(v_platforms)
+                f_platforms = parse_platforms(rf, v_platforms)
                 flavors.append({
                     "id": fid,
                     "build_image": b_img,
                     "build_iso": b_iso,
                     "build_qcow2": b_qcow2,
+                    "luks_e2e": "luks_e2e: false" not in rf,
                     "platforms": f_platforms,
                 })
         variants.append({
@@ -318,35 +343,84 @@ def iso_matrix() -> dict[str, set[str]]:
 
 
 def luks_matrix() -> dict[str, set[str]]:
-    """Cells LUKS E2E actually covers — the denominator for that axis.
+    """Cells the default LUKS matrix actually schedules."""
+    cfg = load_build_config(CONFIG)
+    out: dict[str, set[str]] = {}
+    for variant in cfg.get("variants", []):
+        for flavor in variant.get("flavors", []):
+            flavor_id = flavor["id"]
+            if (
+                not flavor.get("build_image")
+                or flavor.get("luks_e2e", True) is False
+                or flavor_id == "base"
+                or flavor_id.startswith("base-")
+            ):
+                continue
+            platforms = flavor.get("platforms")
+            if platforms is None:
+                platforms = variant.get("platforms") or []
+            if "linux/amd64" not in platforms:
+                continue
+            out.setdefault(variant["id"], set()).add(flavor_id)
+    return out
 
-    luks-e2e.yml builds its matrix from build_image, NOT build_iso, and says
-    why: the browser ISO builder makes an ISO from any published image, so
-    image-only variants (sailfin, guppy, flounder-sid) need boot+install
-    coverage too. Measuring that axis against build_iso understated the work
-    being done and forced a "promote any result over not-built" special case
-    in cell() to stop sailfin's four tested cells from vanishing.
 
-    Using the workflow's own definition removes the special case: a cell is in
-    the LUKS denominator exactly when luks-e2e.yml would schedule it.
-    """
-    return _matrix("build_image", desktops_only=True)
+def _is_beta_lifecycle_cell(cell: str) -> bool:
+    variant_id, flavor_id = cell.split(":", 1)
+    return (
+        "rawhide" in variant_id
+        or "sid" in variant_id
+        or variant_id == "guppy"
+        or "asahi" in flavor_id
+        or "zfs" in flavor_id
+    )
 
 
-def latest_results(workflow: str, name_re: str) -> dict[str, tuple[str, str, str]]:
-    """Newest result per job name across recent runs.
+def lifecycle_validation_jobs(config: dict | None = None) -> set[str]:
+    """Exact validating job names, including cells formerly in the stable lane."""
+    config = config or load_build_config(CONFIG)
+    jobs = set()
+    for variant in config.get("variants", []):
+        variant_id = variant["id"]
+        for flavor in variant.get("flavors", []):
+            flavor_id = flavor["id"]
+            if (not flavor.get("build_image") or flavor_id == "base"
+                    or flavor_id.startswith("base-")):
+                continue
+            platforms = flavor.get("platforms")
+            if platforms is None:
+                platforms = variant.get("platforms") or []
+            cell = f"{variant_id}:{flavor_id}"
+            for architecture in ("amd64", "arm64"):
+                if f"linux/{architecture}" in platforms:
+                    jobs.add(f"{cell} ({architecture})")
+    return jobs
 
-    Returns {job_name: (conclusion, iso_date, run_id)}. Walking newest-first
-    and keeping the first hit means a cell re-run in isolation correctly
-    supersedes its result from the last full sweep.
-    """
+
+def lifecycle_sweep_jobs(config: dict | None = None) -> set[str]:
+    """Exact validating job names in an unfiltered stable lifecycle matrix."""
+    return {
+        job for job in lifecycle_validation_jobs(config)
+        if not _is_beta_lifecycle_cell(job.rsplit(" (", 1)[0])
+    }
+
+
+def _collect_latest_results(
+    workflow: str,
+    name_re: str,
+    full_sweep_cells: set[str] | None = None,
+    cell_name=None,
+) -> tuple[dict[str, tuple[str, str, str]], str]:
+    """Newest per-job results and newest run that covered the full cell set."""
     runs = gh_json(
         "run", "list", "--repo", REPO, "--workflow", workflow,
-        "--limit", str(FETCH_DEPTH),
+        "--branch", "main", "--limit", str(FETCH_DEPTH),
         "--json", "databaseId,createdAt,status",
     ) or []
     pattern = re.compile(name_re)
     found: dict[str, tuple[str, str, str]] = {}
+    full_sweep_date = ""
+    found_cells: set[str] = set()
     walked = 0
     deepest_was_new = False
     for run in runs:
@@ -357,15 +431,32 @@ def latest_results(workflow: str, name_re: str) -> dict[str, tuple[str, str, str
         walked += 1
         run_id, date = str(run["databaseId"]), run["createdAt"][:10]
         jobs = run_jobs(run_id) or []
+        run_cells: set[str] = set()
         deepest_was_new = False
         for job in jobs:
             name, conclusion = job.get("name", ""), job.get("conclusion")
             if not pattern.search(name) or conclusion not in ("success", "failure"):
                 continue
+            normalized = cell_name(name) if cell_name is not None else name
+            if not normalized:
+                continue
             if name not in found:
                 deepest_was_new = True
             found.setdefault(name, (conclusion, date, run_id))
+            run_cells.add(normalized)
+            found_cells.add(normalized)
+        if (
+            not full_sweep_date
+            and full_sweep_cells
+            and full_sweep_cells <= run_cells
+        ):
+            full_sweep_date = date
 
+        # Keep walking the bounded history after finding a full sweep. Targeted
+        # reruns can make the newest per-cell answers span older runs, including
+        # rawhide and sid cells that were not in the latest sweep. The sweep
+        # date records the newest complete assertion; it is not a reason to
+        # discard older authoritative cell results.
     # Say so when the window is the thing deciding the answer. RUN_DEPTH has now
     # been outgrown twice, and both times the only symptom was cells quietly
     # reading ⬜ "never tested" — the walk stopped mid-discovery and the page
@@ -385,7 +476,12 @@ def latest_results(workflow: str, name_re: str) -> dict[str, tuple[str, str, str
             "they have in fact been tested. Raise RUN_DEPTH.",
             file=sys.stderr,
         )
-    return found
+    return found, full_sweep_date
+
+
+def latest_results(workflow: str, name_re: str) -> dict[str, tuple[str, str, str]]:
+    """Newest result per matching job name across recent completed runs."""
+    return _collect_latest_results(workflow, name_re)[0]
 
 
 def overlay_tags() -> set[str]:
@@ -431,15 +527,18 @@ def _baseline_cells() -> tuple[list[dict], str, str]:
     global _BASELINE_CACHE
     if _BASELINE_CACHE is not None:
         return _BASELINE_CACHE
-    runs = gh_json(
-        "run", "list", "--repo", REPO, "--workflow", "desktop-contract-sweep.yml",
-        "--limit", "10", "--json", "databaseId,createdAt,status,conclusion",
-    ) or []
+    runs = gh_json_required(
+        "run", "list", "--repo", REPO, "--workflow",
+        "desktop-contract-sweep.yml", "--limit", "10",
+        "--json", "databaseId,createdAt,status,conclusion",
+    )
+    eligible = False
     for run in runs:
         if run.get("status") != "completed":
             continue
         if run.get("conclusion") not in ("success", "failure"):
             continue
+        eligible = True
         run_id, date = str(run["databaseId"]), run["createdAt"][:10]
         with tempfile.TemporaryDirectory() as tmp:
             try:
@@ -453,8 +552,16 @@ def _baseline_cells() -> tuple[list[dict], str, str]:
             all_json = Path(tmp) / "all.json"
             if not all_json.exists():
                 continue
-            _BASELINE_CACHE = (json.loads(all_json.read_text()), date, run_id)
+            cells = json.loads(all_json.read_text())
+            if not cells:
+                continue
+            _BASELINE_CACHE = (cells, date, run_id)
             return _BASELINE_CACHE
+    if eligible:
+        raise RuntimeError(
+            "desktop-contract-sweep has completed runs but no usable "
+            "desktop-contract-baseline artifact; refusing an empty snapshot"
+        )
     _BASELINE_CACHE = ([], "", "")
     return _BASELINE_CACHE
 
@@ -491,14 +598,16 @@ def parity_results() -> dict[str, tuple[str, str, str]]:
     """
     global _PARITY_CACHE
     if _PARITY_CACHE is None:
-        runs = gh_json(
+        runs = gh_json_required(
             "run", "list", "--repo", REPO, "--workflow", "package-parity.yml",
             "--limit", "10", "--json", "databaseId,createdAt,status,conclusion",
-        ) or []
+        )
+        eligible = False
         _PARITY_CACHE = ([], "", "")
         for run in runs:
             if run.get("status") != "completed" or run.get("conclusion") != "success":
                 continue
+            eligible = True
             run_id, date = str(run["databaseId"]), run["createdAt"][:10]
             with tempfile.TemporaryDirectory() as tmp:
                 try:
@@ -516,6 +625,11 @@ def parity_results() -> dict[str, tuple[str, str, str]]:
                     json.loads(parity_json.read_text()), date, run_id
                 )
                 break
+        if eligible and not _PARITY_CACHE[0]:
+            raise RuntimeError(
+                "package-parity has completed runs but no usable "
+                "package-parity-baseline artifact; refusing an empty snapshot"
+            )
     cells, date, run_id = _PARITY_CACHE
     out: dict[str, tuple[str, str, str]] = {}
     for c in cells:
@@ -697,30 +811,61 @@ def _axis_from_results(results: dict, key: str) -> str:
     return _stage_verdict(hit[0] if hit else None)
 
 
-# bootc-lifecycle job names carry an arch suffix, and the smoke-tier jobs a
-# BETA prefix: "yellowfin:gnome (amd64)", "BETA guppy:gnome (amd64)". The
-# composite and the Lifecycle section key cells as plain "variant:flavor".
+# bootc-lifecycle job names carry an arch suffix, and the beta lane adds a
+# display-only "BETA " prefix. The collector uses a prefix-neutral identity for
+# full-sweep coverage. Lifecycle scoring accepts unprefixed validating jobs from
+# either lane's historical routing, but never beta existence probes.
 _LIFECYCLE_NAME = re.compile(
-    r"^(?:BETA\s+)?(?P<cell>[a-z0-9-]+:[a-z0-9-]+)\s+\([a-z0-9]+\)$"
+    r"^(?:BETA\s+)?(?P<cell>[a-z0-9-]+:[a-z0-9-]+)\s+\((?P<arch>[a-z0-9]+)\)$"
 )
 
 
-def lifecycle_results() -> dict[str, tuple[str, str, str]]:
-    """Cell-keyed lifecycle verdicts, worst-of-arches.
+def lifecycle_job_key(name: str) -> str | None:
+    """Canonical job identity, preserving the architecture and dropping BETA."""
+    match = _LIFECYCLE_NAME.match(name)
+    if not match:
+        return None
+    return f"{match.group('cell')} ({match.group('arch')})"
 
-    The wiring below was written before Bootc Lifecycle had ever run, and
-    the first real sweep (run 32040213366, 168 jobs) proved the raw job
-    names never matched a cell lookup: every cell rendered ⬜ while 133
-    passes sat in the run. Normalise the names here, and merge a cell's
-    arch legs pessimistically — one green leg must not mask a red one, for
-    the same reason never-tested is not green.
-    """
-    merged: dict[str, tuple[str, str, str]] = {}
-    for name, hit in latest_results("bootc-lifecycle.yml", r":").items():
-        m = _LIFECYCLE_NAME.match(name)
-        if not m:
+
+def lifecycle_sweep_job_key(name: str) -> str | None:
+    """Return only real lifecycle validations for full-sweep coverage."""
+    if name.startswith("BETA "):
+        return None
+    return lifecycle_job_key(name)
+
+
+def _result_order(hit: tuple[str, str, str]) -> tuple[str, int | str]:
+    try:
+        run_id: int | str = int(hit[2])
+    except (TypeError, ValueError):
+        run_id = hit[2]
+    return hit[1], run_id
+
+
+def lifecycle_results(
+    raw_results: dict[str, tuple[str, str, str]] | None = None,
+) -> dict[str, tuple[str, str, str]]:
+    """Newest unprefixed validation per cell, worst-of-architectures."""
+    allowed = lifecycle_validation_jobs()
+    if raw_results is None:
+        raw_results = latest_results("bootc-lifecycle.yml", r":")
+    newest_by_job: dict[str, tuple[str, str, str]] = {}
+    for name, hit in raw_results.items():
+        # A successful BETA job only proves that a tag exists. It must not
+        # replace a lifecycle validation, even if the cell changed lanes.
+        if name.startswith("BETA "):
             continue
-        cell = m.group("cell")
+        job_key = lifecycle_job_key(name)
+        if job_key is None or job_key not in allowed:
+            continue
+        previous = newest_by_job.get(job_key)
+        if previous is None or _result_order(hit) > _result_order(previous):
+            newest_by_job[job_key] = hit
+
+    merged: dict[str, tuple[str, str, str]] = {}
+    for job_key, hit in newest_by_job.items():
+        cell = job_key.rsplit(" (", 1)[0]
         prev = merged.get(cell)
         if prev is None or (prev[0] == "success" and hit[0] == "failure"):
             merged[cell] = hit
@@ -728,7 +873,8 @@ def lifecycle_results() -> dict[str, tuple[str, str, str]]:
 
 
 def composite_section(criteria, stage, contract, luks, smoke, lifecycle,
-                      omissions, parity, today: datetime.date | str | None = None):
+                      omissions, parity, today: datetime.date | str | None = None,
+                      install_matrix: dict[str, set[str]] | None = None):
     """The bar itself: one table scored against the blocking criteria.
 
     This function does the I/O and the Markdown. It reads the cell matrices
@@ -742,6 +888,7 @@ def composite_section(criteria, stage, contract, luks, smoke, lifecycle,
         published=_matrix("build_image", desktops_only=False),
         desktops=desktops,
         isos=iso_matrix(),
+        install=install_matrix if install_matrix is not None else desktops,
     )
     evidence = matrix_evaluator.AxisEvidence(
         stage=stage, contract=contract, luks=luks, smoke=smoke,
@@ -896,28 +1043,17 @@ def tally(matrix, results, key_fmt):
     """Count only cells build-config actually schedules.
 
     A stale result for a cell the matrix no longer declares used to be counted,
-    because `hit` alone was enough to enter the denominator. That put
-    flounder:cosmic and flounder-sid:cosmic in the LUKS totals as permanent
-    failures: both flavours were removed on purpose in 491544d1 ("drop the
-    COSMIC flavours Debian cannot build"), so no run will ever turn them green,
-    and the board read 39 of 54 when the live set was 52.
-
-    Two cells is small; the dishonesty is not. It is the same one nvidia_tally
-    below was written to fix — a gap nobody is ever going to close, reported as
-    if someone should. Undeclared cells now get the same treatment: out of the
-    tally, and disclosed by count so the number visibly shrinks as they age out
-    rather than vanishing silently.
+    because `hit` alone was enough to enter the denominator. Iterate every
+    declared flavor rather than only the five desktop columns: install
+    coverage includes image-only overlays.
 
     This does NOT hide a failing cell. A cell build-config still declares is
     counted whether it passes, fails or has never run.
     """
     total = tested = passed = 0
-    for variant in variants_in_scope(matrix, results):
-        flavors = matrix.get(variant, set())
-        for d in DESKTOPS:
-            if d not in flavors:
-                continue
-            hit = results.get(key_fmt(variant, d))
+    for variant, flavors in matrix.items():
+        for flavor in flavors:
+            hit = results.get(key_fmt(variant, flavor))
             total += 1
             if hit:
                 tested += 1
@@ -926,42 +1062,123 @@ def tally(matrix, results, key_fmt):
     return total, tested, passed
 
 
-def undeclared_tally(matrix, results, key_fmt):
-    """Stale results for cells build-config no longer schedules.
+def undeclared_tally(configured_matrix, results, key_fmt):
+    """Stale results for cells no longer declared by build-config.
 
     Deliberately reported rather than dropped: a flavour that disappears from
-    build-config while red should not simply stop being mentioned. Returns the
+    build-config while red must not simply stop being mentioned. Returns the
     "variant:flavor" names so the disclosure can say which, and so the count
     reaching zero is checkable.
     """
     stale = []
-    for variant in variants_in_scope(matrix, results):
-        flavors = matrix.get(variant, set())
-        for d in DESKTOPS:
-            if d not in flavors and results.get(key_fmt(variant, d)):
-                stale.append(f"{variant}:{d}")
-    return sorted(stale)
+    for raw_key, hit in results.items():
+        if not hit:
+            continue
+        cell_key = raw_key.removeprefix("LUKS ")
+        if ":" not in cell_key:
+            continue
+        variant, flavor = cell_key.split(":", 1)
+        if flavor not in configured_matrix.get(variant, set()):
+            stale.append(cell_key)
+    return sorted(set(stale))
 
 
-def nvidia_tally(matrix, results, key_fmt):
-    """Count NVIDIA cells that still carry a stale result.
+def excluded_tally(configured_matrix, scheduled_matrix, results, key_fmt):
+    """Historical results for configured cells filtered from the LUKS matrix."""
+    excluded = []
+    for raw_key, hit in results.items():
+        if not hit:
+            continue
+        cell_key = raw_key.removeprefix("LUKS ")
+        if ":" not in cell_key:
+            continue
+        variant, flavor = cell_key.split(":", 1)
+        if (
+            flavor in configured_matrix.get(variant, set())
+            and flavor not in scheduled_matrix.get(variant, set())
+        ):
+            excluded.append(cell_key)
+    return sorted(set(excluded))
 
-    luks-e2e.yml deliberately excludes -nvidia (commit 5c730e9, 2026-07-24):
-    "-nvidia takes the identical LUKS path in headless QEMU (no GPU)". That is
-    a sound scoping decision, so these cells are OUT OF SCOPE, not failing.
 
-    Reporting them as "0 of 24 green" implied a 24-cell gap that nobody was
-    ever going to close, which is its own kind of dishonest status page — the
-    mirror image of the problem this document exists to fix. What is worth
-    surfacing is only how many stale pre-exclusion results are still lying
-    around, so the number shrinks to zero as they age out.
+def factory_health_summary(
+    provenance: dict,
+    generated: str,
+    full_sweep_dates=None,
+) -> dict:
+    """Public headline numbers derived from the same per-cell evidence board.
+
+    Keep this payload in matrix-provenance.json so the README, release notes,
+    and website consume one machine-readable answer instead of each
+    reinterpreting workflow state. A regression is one failing applicable
+    cell/criterion assertion; out-of-scope criteria do not enter any count.
     """
-    stale = 0
-    for variant, flavors in matrix.items():
-        for f in flavors:
-            if "nvidia" in f and results.get(key_fmt(variant, f)):
-                stale += 1
-    return stale
+    match = re.search(
+        r"\*\*(\d+) of (\d+)\*\* published cells are composite-green", generated
+    )
+    if not match:
+        raise RuntimeError("generated matrix has no composite-green headline")
+
+    criteria = {c["id"]: c for c in load_green_criteria()}
+    iso_cells = {
+        f"{variant}:{flavor}"
+        for variant, flavors in iso_matrix().items()
+        for flavor in flavors
+    }
+
+    def applicable_results(axis: str):
+        criterion = criteria.get(axis)
+        for cell_key, axes in provenance.items():
+            if axis not in axes:
+                continue
+            if axis == "iso" and cell_key not in iso_cells:
+                continue
+            flavor = cell_key.split(":", 1)[-1]
+            if criterion and not criterion_scope_allows(criterion, flavor):
+                continue
+            yield axes[axis]
+
+    def axis_tally(axis: str) -> dict[str, int]:
+        verdicts = [result["verdict"] for result in applicable_results(axis)]
+        return {
+            "passed": sum(verdict == "pass" for verdict in verdicts),
+            "tested": sum(verdict != "untested" for verdict in verdicts),
+            "total": len(verdicts),
+        }
+
+    regressions = {"blocking": 0, "advisory": 0}
+    never_tested = 0
+    for cell_key, axes in provenance.items():
+        flavor = cell_key.split(":", 1)[-1]
+        for axis, result in axes.items():
+            criterion = criteria.get(axis)
+            if criterion and not criterion_scope_allows(criterion, flavor):
+                continue
+            if result["verdict"] == "untested":
+                never_tested += 1
+            elif result["verdict"] == "fail" and criterion:
+                enforcement = criterion["enforcement"]
+                if enforcement in regressions:
+                    regressions[enforcement] += 1
+
+    if full_sweep_dates is None:
+        full_sweep_dates = FULL_SWEEP_DATES.values()
+    summary = {
+        "factory_health": {
+            "green": int(match.group(1)),
+            "total": int(match.group(2)),
+        },
+        "builds": axis_tally("builds"),
+        "boots": axis_tally("boots"),
+        "desktop": axis_tally("desktop"),
+        "install": axis_tally("install"),
+        "iso": axis_tally("iso"),
+        "lifecycle": axis_tally("lifecycle"),
+        "never_tested": never_tested,
+        "known_regressions": regressions,
+        "last_full_sweep": max((date for date in full_sweep_dates if date), default=""),
+    }
+    return summary
 
 
 def build() -> str:
@@ -970,9 +1187,35 @@ def build() -> str:
     # LUKS numbers wrong in both directions: image-only variants were missing
     # from the total, while cells that ship no ISO were counted once a run
     # happened to touch them.
+    FULL_SWEEP_DATES.clear()
     matrix = iso_matrix()
+    desktop_matrix = _matrix("build_image", desktops_only=True)
     lmatrix = luks_matrix()
-    luks = latest_results("luks-e2e.yml", r"^LUKS ")
+    expected_install_cells = {
+        f"{variant}:{flavor}"
+        for variant, flavors in lmatrix.items()
+        for flavor in flavors
+    }
+    expected_lifecycle_jobs = lifecycle_sweep_jobs()
+    luks, install_sweep = _collect_latest_results(
+        "luks-e2e.yml",
+        r"^LUKS ",
+        expected_install_cells,
+        lambda name: name.removeprefix("LUKS "),
+    )
+    lifecycle_raw, lifecycle_sweep = _collect_latest_results(
+        "bootc-lifecycle.yml",
+        r":",
+        expected_lifecycle_jobs,
+        lifecycle_sweep_job_key,
+    )
+    lifecycle = lifecycle_results(lifecycle_raw)
+    FULL_SWEEP_DATES.update(
+        {
+            "install": install_sweep,
+            "lifecycle": lifecycle_sweep,
+        }
+    )
     # NOT r":" — installer-smoke.yml has TWO jobs per cell and both carry a
     # colon:
     #
@@ -1040,33 +1283,27 @@ def build() -> str:
     # ── Composite ───────────────────────────────────────────────────────────
     # First, because everything below is an input to it: this is the section
     # that composes the axes into the one claim the word "green" now makes.
-    lifecycle = lifecycle_results()
+    # Collected with per-run coverage above so targeted reruns cannot advance
+    # the full-sweep date.
     omissions = omissions_results()
     parity = parity_results()
     composite_lines, _, _, provenance = composite_section(
         load_green_criteria(), build_stage_results(), contract, luks, smoke,
-        lifecycle, omissions, parity,
+        lifecycle, omissions, parity, install_matrix=lmatrix,
     )
     out += composite_lines
 
-    out += omissions_section(lmatrix, omissions)
-    out += parity_section(lmatrix, parity)
+    out += omissions_section(desktop_matrix, omissions)
+    out += parity_section(desktop_matrix, parity)
 
 
     # ── LUKS ────────────────────────────────────────────────────────────────
     total, tested, passed = tally(lmatrix, luks, luks_key)
-    # NOT lmatrix: it is desktops_only, so no flavor in it can ever contain
-    # "nvidia" and the stale count would be a permanent 0 — silently deleting
-    # the out-of-scope disclosure below, while section 3 still points at it.
-    # That is exactly the absence-of-evidence failure this document exists to
-    # prevent, so count over every published flavor instead.
-    nv_stale = nvidia_tally(
-        _matrix("build_image", desktops_only=False), luks, luks_key
+    configured_matrix = _matrix("build_image", desktops_only=False)
+    excluded = excluded_tally(
+        configured_matrix, lmatrix, luks, luks_key
     )
-    # lmatrix here, unlike the NVIDIA count above: this asks which of the
-    # DESKTOPS columns the table renders are no longer scheduled, and that is
-    # exactly the desktops_only matrix the table itself is built from.
-    undeclared = undeclared_tally(lmatrix, luks, luks_key)
+    undeclared = undeclared_tally(configured_matrix, luks, luks_key)
     out += [
         "## LUKS E2E",
         "",
@@ -1074,37 +1311,34 @@ def build() -> str:
         f"({tested} tested, {total - tested} never tested).",
         "",
         (
-            "The denominator is the set `luks-e2e.yml` schedules: every "
-            "published desktop image (`build_image`), not only the ones that "
-            "ship an ISO. That is wider than the ISO matrix below on purpose. "
-            "The browser ISO builder can make an ISO from any image, so the "
-            "image-only variants (`sailfin`, `guppy`, `flounder-sid`) need boot "
-            "and install coverage too."
+            "The denominator is the amd64 graphical image set that "
+            "`luks-e2e.yml` schedules: `build_image` is true, `luks_e2e` is "
+            "not false, and the flavor is not a headless base derivative. It "
+            "includes image-only variants and overlays such as `gnome-nvidia`, "
+            "not only flavors that ship an ISO."
         ),
         "",
     ]
     out += desktop_table(lmatrix, luks, luks_key)
-    # Unconditional: the blank line used to live inside the NVIDIA block, so
-    # when no stale NVIDIA results remained the next paragraph butted straight
-    # up against the table.
+    # Keep historical results visible, but distinguish workflow filtering from
+    # cells that were removed from build-config entirely.
     out += [""]
-    if nv_stale:
+    if excluded:
         out += [
-            f"NVIDIA cells are **out of scope** for this workflow — "
-            f"`luks-e2e.yml` excludes them deliberately, because `-nvidia` "
-            f"takes the identical LUKS path in headless QEMU. "
-            f"{nv_stale} stale pre-exclusion result(s) remain from before "
-            "that change; they are not a gap and will age out.",
+            "Historical results remain for "
+            + ", ".join(f"`{c}`" for c in excluded)
+            + ". These cells are still declared in "
+            + "`.github/build-config.yml` but excluded by current "
+            + "`luks-e2e.yml` filters; they are outside the scheduled matrix, "
+            + "not current coverage.",
             "",
         ]
 
-    # Named, not just counted, and left visible in the table above: a flavour
-    # that leaves build-config while red must not simply stop being mentioned.
-    # It is out of the tally because no run can ever move it, which is a
-    # different statement from "it passed".
+    # Named, not just counted, so historical evidence cannot disappear
+    # silently when a flavor leaves build-config.
     if undeclared:
         out += [
-            "The table above still shows a result for "
+            "Historical results remain for "
             + ", ".join(f"`{c}`" for c in undeclared)
             + ". `.github/build-config.yml` no longer declares "
             + ("that flavour" if len(undeclared) == 1 else "those flavours")
@@ -1114,8 +1348,8 @@ def build() -> str:
             + ("it" if len(undeclared) == 1 else "them")
             + " green. "
             + ("It is" if len(undeclared) == 1 else "They are")
-            + " excluded from the count above — a last-measured verdict kept "
-            "visible, not a gap. Same reasoning as the NVIDIA note.",
+            + " outside the current scheduled matrix; a last-measured verdict "
+            "is kept visible, not current coverage.",
             "",
         ]
 
@@ -1138,7 +1372,7 @@ def build() -> str:
     # it is not subject to the "CI cannot test four of five desktops" gap
     # documented in *Known systemic gaps* below — it is the one axis that
     # gap does not apply to.
-    total, tested, passed = tally(lmatrix, contract, contract_key)
+    total, tested, passed = tally(desktop_matrix, contract, contract_key)
     out += [
         "## Desktop Contract Sweep",
         "",
@@ -1149,14 +1383,13 @@ def build() -> str:
         (
             "The sweep pulls the **published** image and runs the contract "
             "script against it directly (`podman run`, with no boot). It uses "
-            "the same denominator as LUKS E2E above: `build_image`, limited to "
-            "the five desktop flavors. This catches a desktop whose packages "
-            "never landed, and it does not depend on whether hosted CI can boot "
-            "the image at all."
+            "the desktop-only `build_image` denominator. This catches a "
+            "desktop whose packages never landed, and it does not depend on "
+            "whether hosted CI can boot the image at all."
         ),
         "",
     ]
-    out += desktop_table(lmatrix, contract, contract_key)
+    out += desktop_table(desktop_matrix, contract, contract_key)
     out += [""]
     if contract_other:
         out += [
@@ -1179,7 +1412,7 @@ def build() -> str:
     # ── Bootc Lifecycle ──────────────────────────────────────────────────────
     # `lifecycle` itself was fetched up top, where the composite scores it.
     lifecycle_key = lambda v, d: f"{v}:{d}"            # noqa: E731
-    total, tested, passed = tally(lmatrix, lifecycle, lifecycle_key)
+    total, tested, passed = tally(desktop_matrix, lifecycle, lifecycle_key)
     out += [
         "## Bootc Lifecycle",
         "",
@@ -1187,12 +1420,13 @@ def build() -> str:
         f"({tested} tested, {total - tested} never tested).",
         "",
         (
-            "Validates bootc image update, rebase, rollback, alias resolution, "
-            "and post-switch system contracts across published stream deployments."
+            "Checks image metadata, `bootc install print-configuration`, "
+            "and the configured desktop contract. It does not exercise "
+            "update, rebase, or rollback transitions."
         ),
         "",
     ]
-    out += desktop_table(lmatrix, lifecycle, lifecycle_key)
+    out += desktop_table(desktop_matrix, lifecycle, lifecycle_key)
     out += [""]
     dates = sorted({v[1] for v in lifecycle.values()})
     if dates:
@@ -1204,7 +1438,7 @@ def build() -> str:
     out += [
         "## Installer smoke",
         "",
-        f"**{tested} of {total}** non-NVIDIA ISO cells have *ever* been "
+        f"**{tested} of {total}** ISO cells have *ever* been "
         f"tested — {pct}% coverage. {passed} of those pass.",
         "",
         "This is the only axis that checks whether a human could install the "
@@ -1247,12 +1481,12 @@ def build() -> str:
     ]
     if missing:
         out += [
-            f"Missing for {len(missing)} ISO cell(s): "
+            f"Missing for {len(missing)} non-NVIDIA, non-HWE ISO cell(s): "
             + ", ".join(f"`{m}`" for m in missing),
             "",
         ]
     else:
-        out += ["Every non-NVIDIA ISO cell has an overlay.", ""]
+        out += ["Every non-NVIDIA, non-HWE ISO cell has an overlay.", ""]
 
     # ── Provenance ──────────────────────────────────────────────────────────
     # Re-running a cell to the same verdict rewrites this table and nothing
@@ -1290,10 +1524,10 @@ VOLATILE_LINE = re.compile(
     r"^(?:"
     r"\| \d{4}-\d\d-\d\d \| \["          # provenance row
     r"|Newest result "                    # freshness of the LUKS data
-    r"|NVIDIA cells are "                 # present only while stale results remain
-    r"|The table above still shows a result for "  # same: only while they remain
+    r"|Historical results remain for "    # filtered historical LUKS results
+    r"|The table above still shows a result for "  # removed cells
     r"|Missing for "                      # depends on published overlay tags
-    r"|Every non-NVIDIA ISO cell has an overlay"
+    r"|Every non-NVIDIA, non-HWE ISO cell has an overlay"
     # Present only while the newest sweep has a cell that neither passed nor
     # failed. One sweep finishing mid-review makes this whole paragraph appear
     # or vanish, which broke the gate on tunaOS#2512 for a line no pull request
@@ -1303,8 +1537,8 @@ VOLATILE_LINE = re.compile(
     r")"
 )
 
-# A result glyph is live state; NA is structure, because it means build-config
-# does not schedule that cell at all.
+# Results are live state. NA is structural for scheduled cells; historical
+# results can replace NA outside a table's current matrix (see cell()).
 LIVE_GLYPH = re.compile(f"[{PASS}{FAIL}{UNTESTED}]")
 EVIDENCE_LINK = re.compile(
     rf"\[([{PASS}{FAIL}{UNTESTED}])\]\(https://github\.com/[^)]+#artifacts\)"
@@ -1343,13 +1577,24 @@ def structural(block: str, keep_rows: set[tuple[str, str]] | None = None) -> str
     So compare with live-derived content masked: cell results, every count, the
     data-freshness dates, the provenance rows, the overlay inventory. What
     survives is the shape of the document — its prose, its sections, and which
-    cells build-config schedules at all (NA versus scheduled) — which is exactly
-    the surface a PR can break. Byte-exact drift is still enforced on the
+    cells build-config schedules at all (NA versus scheduled). Historical
+    pass/fail results outside that set can appear and expire with the run
+    window, so they compare as NA. UNTESTED still means scheduled and is not
+    masked to NA. Byte-exact drift is still enforced on the
     scheduled run, which is what actually keeps the file fresh.
 
     keep_rows limits table rows to those both sides agree exist; pass the
     intersection of table_rows() from each side.
     """
+    desktop_matrix = _matrix("build_image", desktops_only=True)
+    historical_matrices = {
+        "## Silent omissions": desktop_matrix,
+        "## Package parity": desktop_matrix,
+        "## LUKS E2E": luks_matrix(),
+        "## Desktop Contract Sweep": desktop_matrix,
+        "## Bootc Lifecycle": desktop_matrix,
+        "## Installer smoke": iso_matrix(),
+    }
     section, lines = "", []
     for line in block.splitlines():
         if line.startswith("## "):
@@ -1367,6 +1612,14 @@ def structural(block: str, keep_rows: set[tuple[str, str]] | None = None) -> str
         # its run URL are live data, so neither belongs in the PR structural
         # drift comparison.
         line = EVIDENCE_LINK.sub(r"\1", line)
+        if match and section in historical_matrices:
+            scheduled = historical_matrices[section].get(match["variant"], set())
+            columns = line.split("|")
+            if len(columns) == len(DESKTOPS) + 3:
+                for index, desktop in enumerate(DESKTOPS, start=2):
+                    if desktop not in scheduled and columns[index].strip() in (PASS, FAIL):
+                        columns[index] = f" {NA} "
+                line = "|".join(columns)
         line = LIVE_GLYPH.sub("?", line)
         line = re.sub(r"\d+", "N", line)
         if not line.strip() and lines and not lines[-1].strip():
@@ -1442,6 +1695,9 @@ def main() -> int:
                       "MATRIX-STATUS.md; evidence links to the asserting "
                       "run's retained artifact bundle; empty run+date means "
                       "the axis has no current assertion for that cell.",
+             "summary": (
+                 factory_health_summary(provenance, generated) if provenance else {}
+             ),
              "cells": provenance},
             indent=1, sort_keys=True) + "\n")
     if updated == text:
