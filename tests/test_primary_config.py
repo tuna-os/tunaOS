@@ -119,7 +119,8 @@ def test_prepare_refreshes_mutated_source_and_acceptance_cell(source_root):
     target = config.prepare(source_root)
     initial = target.read_bytes()
     source = source_root / "tunaos.toml"
-    source.write_text(source.read_text() + "\n" + (FIXTURES / "bonito-gnome-x13s.toml").read_text())
+    source.write_text(source.read_text() + "\n" + (FIXTURES / "bonito-gnome-x13s.toml").read_text() +
+                      '\n[flavor_metadata.gnome-x13s]\ndesktop = "gnome"\nedition = "x13s"\n')
     assert config.prepare(source_root) == target
     assert target.read_bytes() != initial
     projected = json.loads(target.read_text())
@@ -216,31 +217,19 @@ def test_iso_delivery_retained_inventory_survives_projection():
     ]
 
 
-def test_missing_both_toml_parsers_explains_dependency():
-    code = '''import builtins, runpy, sys
-original = builtins.__import__
-def blocked(name, *args, **kwargs):
-    if name in ("tomllib", "tomli"):
-        raise ModuleNotFoundError(name)
-    return original(name, *args, **kwargs)
-builtins.__import__ = blocked
-runpy.run_path(sys.argv[1])
-'''
-    result = subprocess.run([sys.executable, "-c", code, str(ROOT / "scripts/lib/tunaos_config.py")],
-                            text=True, capture_output=True)
+def test_missing_vendor_parser_explains_restore_without_download(tmp_path):
+    import shutil
+    target = tmp_path / 'tunaos_config.py'
+    shutil.copyfile(ROOT / 'scripts/lib/tunaos_config.py', target)
+    result = subprocess.run([sys.executable, str(target)], text=True, capture_output=True)
     assert result.returncode != 0
-    assert "requirements-config.txt" in result.stderr
+    assert 'restore the reviewed source checkout' in result.stderr
+    assert 'pip install' not in result.stderr
+    assert 'Traceback' not in result.stderr
 
 
-def test_tomli_fallback_is_selected_when_stdlib_parser_is_missing():
-    # Use the standard parser behind a test-only tomli shim to exercise the
-    # import fallback without adding a dependency to >=3.11 test environments.
+def test_pinned_parser_does_not_import_stdlib_parser():
     code = '''import builtins, runpy, sys
-try:
-    import tomllib
-except ModuleNotFoundError:
-    import tomli as tomllib
-sys.modules["tomli"] = tomllib
 original = builtins.__import__
 def blocked(name, *args, **kwargs):
     if name == "tomllib":
@@ -248,6 +237,8 @@ def blocked(name, *args, **kwargs):
     return original(name, *args, **kwargs)
 builtins.__import__ = blocked
 module = runpy.run_path(sys.argv[1])
+assert module["tomllib"].__name__.startswith("_tunaos_tomli_")
+assert module["tomllib"].__version__ == "2.3.2"
 assert module["load"]()["schema_version"] == 1
 '''
     result = subprocess.run([sys.executable, "-c", code, str(ROOT / "scripts/lib/tunaos_config.py")],
@@ -259,7 +250,8 @@ def test_failed_atomic_replace_keeps_previous_adapter_and_removes_temp(source_ro
     target = config.prepare(source_root)
     old_bytes = target.read_bytes()
     source = source_root / "tunaos.toml"
-    source.write_text(source.read_text() + "\n" + (FIXTURES / "bonito-gnome-x13s.toml").read_text())
+    source.write_text(source.read_text() + "\n" + (FIXTURES / "bonito-gnome-x13s.toml").read_text() +
+                      '\n[flavor_metadata.gnome-x13s]\ndesktop = "gnome"\nedition = "x13s"\n')
 
     def refuse_replace(self, destination):
         raise OSError("injected atomic replacement failure")
@@ -303,11 +295,13 @@ def test_renovate_updates_only_primary_source_and_adapter_follows(tmp_path):
 def test_shell_reader_prepares_absent_adapter_in_fresh_checkout(tmp_path):
     import shutil
     for name in ("tunaos.toml", "scripts/config.py", "scripts/lib/tunaos_config.py",
-                 "scripts/lib/tunaos_packages.py", "scripts/lib/desktop_operations.json",
+                 "scripts/lib/tunaos_packages.py", "scripts/lib/package_catalogs.py", "scripts/lib/desktop_operations.json",
+                 "scripts/lib/iso_builder_config.py", "scripts/lib/flatpak_preinstall.py",
                  "scripts/lib/build-config.sh"):
         target = tmp_path / name
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(ROOT / name, target)
+    shutil.copytree(ROOT / "scripts/lib/_vendor", tmp_path / "scripts/lib/_vendor")
     result = subprocess.run(["bash", "-c", 'source "$1"; tunaos_build_config', "bash",
                              str(tmp_path / "scripts/lib/build-config.sh")],
                             text=True, capture_output=True, check=True)
@@ -334,11 +328,24 @@ def test_install_does_not_guess_an_image_when_resolution_fails(tmp_path, resolve
         assert "invalid-config" in result.stderr
 
 
-@pytest.mark.parametrize("toml11", ['value = {\n key = 1,\n}\n', 'value = "\\x41"\n'])
+@pytest.mark.parametrize("toml11", [
+    'value = {\n key = 1\n}\n', 'value = {key = 1,}\n',
+    'value = "\\x41"\n', 'value = "\\e"\n',
+    'value = 14:15\n', 'value = 2010-02-03T14:15Z\n',
+])
 def test_parser_keeps_the_shared_toml10_grammar(toml11):
-    # 3.10 and 3.11 must reject edits only newer TOML parsers understand.
+    # The same grammar applies even when the host stdlib accepts TOML 1.1.
     with pytest.raises(config.tomllib.TOMLDecodeError):
         config.tomllib.loads(toml11)
+
+
+def test_parser_is_bundled_without_an_external_dependency_pin():
+    requirements = [line for line in (ROOT / 'requirements-config.txt').read_text().splitlines()
+                    if line.strip() and not line.startswith('#')]
+    assert requirements == []
+    assert config.TOMLI_VERSION == '2.3.2'
+    provenance = json.loads((ROOT / 'scripts/lib/_vendor/tomli-provenance.json').read_text())
+    assert provenance['version'] == config.TOMLI_VERSION
 
 
 @pytest.mark.parametrize("recipe", ["check:", "_ensure_test_deps:", "clean:"])
@@ -428,13 +435,15 @@ def test_renovate_only_pin_update_keeps_live_suite_green(tmp_path):
     checkout = tmp_path / "checkout"
     for name in ("tunaos.toml", "renovate.json", "requirements-config.txt",
                  "scripts/config.py", "scripts/lib/tunaos_config.py",
-                 "scripts/lib/tunaos_packages.py", "scripts/lib/desktop_operations.json",
+                 "scripts/lib/tunaos_packages.py", "scripts/lib/package_catalogs.py", "scripts/lib/desktop_operations.json",
+                 "scripts/lib/iso_builder_config.py", "scripts/lib/flatpak_preinstall.py",
                  "scripts/lib/build-config.sh", "scripts/iso-e2e.sh",
                  "just/utilities.just", ".github/workflows/reusable-build-image.yml",
                  "tests/test_primary_config.py"):
         target = checkout / name
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(ROOT / name, target)
+    shutil.copytree(ROOT / "scripts/lib/_vendor", checkout / "scripts/lib/_vendor")
     fixtures = checkout / "tests/fixtures/primary-config"
     shutil.copytree(FIXTURES, fixtures)
     before = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in fixtures.iterdir()}

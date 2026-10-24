@@ -465,7 +465,7 @@ platforms = ["linux/amd64"]
 [variants.albacore]
 emoji = "🐟"
 description = "Based on AlmaLinux 10"
-base_image = "quay.io/almalinuxorg/almalinux-bootc:10@sha256:236fcee7e4debc06dd2977344a2ae2fff3765c17e88d71d210cc34b9a9463269"
+base_image = "quay.io/almalinuxorg/almalinux-bootc:10@sha256:2fc27d12a9f62fcf11d0ec034fc40d5df6602d383d035c57206220eda95db6b2"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["almalinux"]
 platforms = ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
@@ -737,7 +737,7 @@ platforms = ["linux/amd64"]
 [variants.skipjack]
 emoji = "🍣"
 description = "Based on CentOS Stream 10"
-base_image = "quay.io/centos-bootc/centos-bootc:stream10@sha256:9aedf2d189b85c498697f9b83112c893b084d359268da7dd6d5d848478d260de"
+base_image = "quay.io/centos-bootc/centos-bootc:stream10@sha256:ec1bd8cb6479d1f2f61c85372afce319b932b6b1f671648f0887e9da01e48272"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["centos"]
 # Note: linux/amd64/v2 intentionally omitted — verify builder support before adding.
@@ -1030,7 +1030,7 @@ emoji = "🎏"
 upstream_track = "experimental"
 description = "Based on Fedora ELN (EL11 preview, rolling)"
 experimental = true
-base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:61563a359ce3f05a4740584a38cec087d63210dc364f21d00c2da19698f25c29"
+base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:7de9aba85a0dfa5b6c2f5c0ee02141e1728e57ffd3e0b1f54ece61ab86aa4671"
 # No alias: `eln` is Fedora's identifier for a moving development target,
 # and an alias tag is a stability promise this lane deliberately does not
 # make. Revisit if/when ELN gains a versioned publish.
@@ -1333,7 +1333,7 @@ upstream_track = "experimental"
 # not a rebuild of an existing one. Read docs/HUMMINGBIRD.md before
 # reasoning about what its package set should contain.
 description = "Fedora Hummingbird (hardened rolling Rawhide fork, bootc)"
-base_image = "quay.io/hummingbird-community/bootc-os:latest@sha256:cfbd877853849ed8307fa38f492dffdc24e0e0f4340293ef536ceee1fa8afaa5"
+base_image = "quay.io/hummingbird-community/bootc-os:latest@sha256:d247ff418406c84cd9a22744eb380671c533a1d87c00f1ddc47c67f1dcce7e39"
 # amd64 only, because aarch64 has nothing to build FROM yet: the base
 # stage's mandatory xfsprogs guard (build_scripts/10-base-packages.sh) has
 # no repository that can satisfy it on arm64, so every hummingbird arm64
@@ -1971,7 +1971,7 @@ build_iso = true
 emoji = "🚀"
 upstream_track = "rolling"
 description = "Based on Arch Linux (rolling)"
-base_image = "docker.io/archlinux/archlinux:latest@sha256:666eb320e594ee9fa47f58efe108ae861af6e38de779e1708e1bb29cd9e9d6a5"
+base_image = "docker.io/archlinux/archlinux:latest@sha256:ef1b2d7b71ac9f1f5fe78b5ae66c3b3fa8f6f2a4486620233b7ed31b1d0c3aaf"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["arch", "archlinux"]
 # arm64 legs use ghcr.io/tuna-os/archlinuxarm instead (docker.io/archlinux
@@ -2131,7 +2131,7 @@ build_qcow2 = false
 [variants.flounder]
 emoji = "🐡"
 description = "Based on Debian 13 Trixie (stable)"
-base_image = "docker.io/library/debian:trixie@sha256:913f6706df59a68922d1dd08f78c2476560a8d367897200a6005b00e5f67c2d5"
+base_image = "docker.io/library/debian:trixie@sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["debian"]
 platforms = ["linux/amd64"]
@@ -2290,7 +2290,7 @@ tag_suffix = "sid"
 emoji = "☢️"
 upstream_track = "rolling"
 description = "Based on Debian Sid (unstable, rolling)"
-base_image = "docker.io/library/debian:sid@sha256:c53e050391cca6c8517c4a075230b798a0f980faa5d3ed0a912249ea882e40b5"
+base_image = "docker.io/library/debian:sid@sha256:92d7265e51d67d3a2094c1aad9faa88c74cf9d52e6c354200e429cd60237cc55"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["debian"]
 platforms = ["linux/amd64"]
@@ -3794,20 +3794,21 @@ condition = "ubuntu"
 
 # Tuna Desktop (formerly Roost, renamed in tuna-desktop#536) on every TunaOS
 # variant with a published package target (tuna-desktop ADR 0008, epic #577).
-# Marlin was the first cell (tunaOS#2990); its Containerfile installs the
-# in-house Tideforge key/repository and qualifies this package so official
-# packages stay first. tuna-desktop provides roost and ships its compat
-# names, so nothing here may name the old `roost` package.
+# Every admitted base uses its native GDM unit (`gdm` or `gdm3`), with the
+# variant accent layered over GNOME Shell's packaged greeter stylesheets.
+# tuna-desktop provides roost and ships its compat names, so nothing here may
+# name the old `roost` package.
 #
 # Variants without a cell are recorded with their reason under
 # `unsupported_flavors` in .github/build-config.yml.
 [desktops.tuna]
-display_manager = "greetd"
+display_manager = "gdm"
 versionlock = []
 after_install = [
   "tuna-flatpak-remote",
-  "greetd-system-integration",
-  "greetd-gtkgreet",
+  "tuna-gdm-theme",
+  "tuna-gdm-default-session",
+  "tuna-hide-other-sessions",
   "flatpak-preinstall",
 ]
 
@@ -3816,9 +3817,7 @@ after_install = [
 [desktops.tuna.packages.pacman]
 required = [
   "tunaos/tuna-desktop=1.0.0beta.1-1",
-  "greetd",
-  "greetd-gtkgreet",
-  "cage",
+  "gdm",
   "xorg-xwayland",
   "ibus",
   "orca",
@@ -3851,14 +3850,12 @@ required = [
 ]
 
 [desktops.tuna.packages.el10]
-display_manager = "greetd"
+display_manager = "gdm"
 required = [
   "tuna-desktop-1.0.0~beta.1-1.el10",
   "dbus-tools",
   "orca",
-  "greetd",
-  "gtkgreet",
-  "cage",
+  "gdm",
   "xorg-x11-server-Xwayland",
   "ibus",
   "gnome-shell",
@@ -3899,14 +3896,12 @@ baseurl = "https://repo.tunaos.org/xfce/10-stream-x86_64/"
 priority = 100
 
 [desktops.tuna.packages.fedora]
-display_manager = "greetd"
+display_manager = "gdm"
 required = [
   "tuna-desktop-1.0.0~beta.1-1.fc44",
   "dbus-tools",
   "orca",
-  "greetd",
-  "gtkgreet",
-  "cage",
+  "gdm",
   "xorg-x11-server-Xwayland",
   "ibus",
   "gnome-shell",
@@ -3943,14 +3938,12 @@ baseurl = "https://repo.tunaos.org/xfce/44-x86_64/"
 priority = 100
 
 [desktops.tuna.packages.eln]
-display_manager = "greetd"
+display_manager = "gdm"
 required = [
   "tuna-desktop-1.0.0~beta.1-1.eln159",
   "dbus-tools",
   "orca",
-  "greetd",
-  "gtkgreet",
-  "cage",
+  "gdm",
   "xorg-x11-server-Xwayland",
   "ibus",
   "gnome-shell",
@@ -3987,14 +3980,12 @@ baseurl = "https://repo.tunaos.org/rpm/eln/x86_64/"
 priority = 100
 
 [desktops.tuna.packages.rawhide]
-display_manager = "greetd"
+display_manager = "gdm"
 required = [
   "tuna-desktop-1.0.0~beta.1-1.fc46",
   "dbus-tools",
   "orca",
-  "greetd",
-  "gtkgreet",
-  "cage",
+  "gdm",
   "xorg-x11-server-Xwayland",
   "ibus",
   "gnome-shell",
@@ -4031,12 +4022,12 @@ baseurl = "https://repo.tunaos.org/rpm/rawhide/x86_64/"
 priority = 100
 
 [desktops.tuna.packages.apt]
+display_manager = "gdm"
 required = [
   "tuna-desktop=1.0.0~beta.1-1",
   "orca",
-  "greetd",
-  "gtkgreet",
-  "cage",
+  "gdm3",
+  "gjs",
   "xwayland",
   "ibus",
   "gnome-shell",
@@ -4090,14 +4081,12 @@ keyring_url = "https://repo.tunaos.org/tideforge/debian-trixie/tideforge.gpg"
 condition = "debian-trixie"
 
 [desktops.tuna.packages.zypper]
-display_manager = "greetd"
+display_manager = "gdm"
 required = [
   "tuna-desktop-1.0.0~beta.1-1",
   "dbus-1-tools",
   "orca",
-  "greetd",
-  "gtkgreet",
-  "cage",
+  "gdm",
   "xwayland",
   "ibus",
   "gnome-shell",
@@ -4370,3 +4359,496 @@ required = [
   "gnome-base/gvfs",
   "gnome-base/gnome-keyring",
 ]
+
+# Exact flavor semantics for guided image selection. These values describe the
+# primary matrix; they do not establish published availability or qualification.
+
+[flavor_metadata.base]
+desktop = "none"
+edition = "standard"
+
+[flavor_metadata.base-hwe]
+desktop = "none"
+edition = "hwe"
+
+[flavor_metadata.base-nvidia]
+desktop = "none"
+edition = "nvidia"
+
+[flavor_metadata.cosmic]
+desktop = "cosmic"
+edition = "standard"
+
+[flavor_metadata.cosmic-cachyos]
+desktop = "cosmic"
+edition = "cachyos"
+
+[flavor_metadata.cosmic-hwe]
+desktop = "cosmic"
+edition = "hwe"
+
+[flavor_metadata.cosmic-nvidia]
+desktop = "cosmic"
+edition = "nvidia"
+
+[flavor_metadata.gnome]
+desktop = "gnome"
+edition = "standard"
+
+[flavor_metadata.gnome-asahi]
+desktop = "gnome"
+edition = "asahi"
+
+[flavor_metadata.gnome-cachyos]
+desktop = "gnome"
+edition = "cachyos"
+
+[flavor_metadata.gnome-hwe]
+desktop = "gnome"
+edition = "hwe"
+
+[flavor_metadata.gnome-nvidia]
+desktop = "gnome"
+edition = "nvidia"
+
+[flavor_metadata.gnome-nvidia-hwe]
+desktop = "gnome"
+edition = "nvidia-hwe"
+
+[flavor_metadata.gnome-t2]
+desktop = "gnome"
+edition = "t2"
+
+[flavor_metadata.gnome-zfs]
+desktop = "gnome"
+edition = "zfs"
+
+[flavor_metadata.kde]
+desktop = "kde"
+edition = "standard"
+
+[flavor_metadata.kde-cachyos]
+desktop = "kde"
+edition = "cachyos"
+
+[flavor_metadata.kde-hwe]
+desktop = "kde"
+edition = "hwe"
+
+[flavor_metadata.kde-nvidia]
+desktop = "kde"
+edition = "nvidia"
+
+[flavor_metadata.niri]
+desktop = "niri"
+edition = "standard"
+
+[flavor_metadata.niri-cachyos]
+desktop = "niri"
+edition = "cachyos"
+
+[flavor_metadata.niri-hwe]
+desktop = "niri"
+edition = "hwe"
+
+[flavor_metadata.niri-nvidia]
+desktop = "niri"
+edition = "nvidia"
+
+[flavor_metadata.pantheon]
+desktop = "pantheon"
+edition = "standard"
+
+[flavor_metadata.tuna]
+desktop = "tuna"
+edition = "standard"
+
+[flavor_metadata.xfce]
+desktop = "xfce"
+edition = "standard"
+
+[flavor_metadata.xfce-cachyos]
+desktop = "xfce"
+edition = "cachyos"
+
+[flavor_metadata.xfce-hwe]
+desktop = "xfce"
+edition = "hwe"
+
+[flavor_metadata.xfce-nvidia]
+desktop = "xfce"
+edition = "nvidia"
+
+# ISO Builder presentation; catalog evidence remains authoritative.
+[iso_builder]
+schema_version = 2
+preview_only = false
+
+[iso_builder.brand]
+name = "TunaOS"
+logo_url = "/logo.png"
+favicon_url = "/favicon-32.png"
+homepage_url = "https://tunaos.org"
+documentation_url = "https://tunaos.org/docs/iso-builder"
+support_url = "https://github.com/tuna-os"
+
+[iso_builder.presentation]
+headline = "Make TunaOS your own"
+intro = "Choose your desktop, apps and image settings."
+accent_color = "#5b9cf6"
+
+[iso_builder.output]
+volume_label = "TUNAOS"
+filename_prefix = "tunaos"
+
+[iso_builder.default_selection]
+kind = "leaf"
+leaf_id = "yellowfin:gnome:linux/amd64/v2"
+
+[[iso_builder.desktops]]
+id = "gnome"
+
+[[iso_builder.desktops]]
+id = "kde"
+
+[[iso_builder.desktops]]
+id = "cosmic"
+
+[[iso_builder.desktops]]
+id = "niri"
+
+[[iso_builder.desktops]]
+id = "xfce"
+
+[iso_builder.selection]
+default_path = "desktop-first"
+
+[[iso_builder.selection.paths]]
+id = "desktop-first"
+label = "Start with a desktop"
+facets = ["desktop", "base", "edition", "hardware", "platform"]
+
+[[iso_builder.selection.paths]]
+id = "base-first"
+label = "Start with a base"
+facets = ["base", "desktop", "edition", "hardware", "platform"]
+
+[[iso_builder.selection.facets]]
+id = "desktop"
+label = "Desktop"
+
+[[iso_builder.selection.facets.values]]
+id = "gnome"
+label = "GNOME"
+description = "A clean, focused desktop with an app overview."
+
+[[iso_builder.selection.facets.values]]
+id = "kde"
+label = "KDE Plasma"
+description = "A familiar layout with a taskbar and lots of customization."
+
+[[iso_builder.selection.facets.values]]
+id = "cosmic"
+label = "COSMIC"
+description = "Flexible workspaces with optional window tiling."
+
+[[iso_builder.selection.facets.values]]
+id = "niri"
+label = "Niri"
+description = "A scrolling, keyboard-focused window layout."
+
+[[iso_builder.selection.facets.values]]
+id = "xfce"
+label = "XFCE"
+description = "A lightweight, traditional desktop."
+
+[[iso_builder.selection.facets]]
+id = "base"
+label = "Base"
+
+[[iso_builder.selection.facets.values]]
+id = "yellowfin"
+label = "AlmaLinux Kitten 10 (flagship)"
+
+[[iso_builder.selection.facets.values]]
+id = "bonito"
+label = "Fedora 44"
+
+[[iso_builder.selection.facets.values]]
+id = "sailfin"
+label = "openSUSE Tumbleweed"
+
+[[iso_builder.selection.facets.values]]
+id = "flounder"
+label = "Debian 13 Trixie"
+
+[[iso_builder.selection.facets.values]]
+id = "grouper"
+label = "Ubuntu 26.04"
+
+[[iso_builder.selection.facets.values]]
+id = "marlin"
+label = "Arch Linux"
+
+[[iso_builder.selection.facets.values]]
+id = "skipjack"
+label = "CentOS Stream 10"
+
+[[iso_builder.selection.facets.values]]
+id = "albacore"
+label = "AlmaLinux 10"
+
+[[iso_builder.selection.facets.values]]
+id = "guppy"
+label = "Gentoo (source-based)"
+
+[[iso_builder.selection.facets]]
+id = "edition"
+label = "Image edition"
+
+[[iso_builder.selection.facets.values]]
+id = "standard"
+label = "Standard"
+
+[[iso_builder.selection.facets.values]]
+id = "hwe"
+label = "Hardware enablement"
+
+[[iso_builder.selection.facets.values]]
+id = "nvidia"
+label = "NVIDIA"
+
+[[iso_builder.selection.facets.values]]
+id = "nvidia-hwe"
+label = "NVIDIA hardware enablement"
+
+[[iso_builder.selection.facets.values]]
+id = "asahi"
+label = "Apple Silicon"
+
+[[iso_builder.selection.facets.values]]
+id = "t2"
+label = "Apple T2"
+
+[[iso_builder.selection.facets.values]]
+id = "zfs"
+label = "ZFS"
+
+[[iso_builder.selection.facets.values]]
+id = "cachyos"
+label = "CachyOS kernel"
+
+[[iso_builder.selection.facets]]
+id = "hardware"
+label = "Computer type"
+
+[[iso_builder.selection.facets.values]]
+id = "generic"
+label = "Generic computer"
+
+[[iso_builder.selection.facets.values]]
+id = "apple-silicon"
+label = "Apple Silicon"
+
+[[iso_builder.selection.facets.values]]
+id = "apple-t2"
+label = "Apple T2"
+
+
+[[iso_builder.selection.facets]]
+id = "platform"
+label = "Computer architecture"
+
+[[iso_builder.selection.facets.values]]
+id = "linux/amd64"
+label = "x86-64"
+
+[[iso_builder.selection.facets.values]]
+id = "linux/amd64/v2"
+label = "x86-64 v2"
+
+[[iso_builder.selection.facets.values]]
+id = "linux/amd64/v3"
+label = "x86-64 v3"
+
+[[iso_builder.selection.facets.values]]
+id = "linux/arm64"
+label = "ARM64"
+
+[[iso_builder.selection.recommendations]]
+leaf_id = "yellowfin:gnome:linux/amd64/v2"
+label = "Recommended starting point"
+reason = "The flagship base with the GNOME desktop. Check your target computer architecture before continuing."
+
+[[iso_builder.curated_app_sets]]
+id = "bluefin-system"
+label = "Bluefin core apps"
+desktops = ["gnome", "xfce", "cosmic"]
+url = "https://raw.githubusercontent.com/projectbluefin/common/main/system_files/bluefin/usr/share/ublue-os/homebrew/system-flatpaks.Brewfile"
+format = "brewfile"
+
+[[iso_builder.curated_app_sets]]
+id = "bluefin-full"
+label = "Bluefin full desktop"
+desktops = ["gnome", "xfce", "cosmic"]
+url = "https://raw.githubusercontent.com/projectbluefin/common/main/system_files/bluefin/usr/share/ublue-os/homebrew/full-desktop.Brewfile"
+format = "brewfile"
+
+[[iso_builder.curated_app_sets]]
+id = "bluefin-dx"
+label = "Bluefin developer apps"
+desktops = ["gnome", "xfce", "cosmic"]
+url = "https://raw.githubusercontent.com/projectbluefin/common/main/system_files/bluefin/usr/share/ublue-os/homebrew/system-dx-flatpaks.Brewfile"
+format = "brewfile"
+
+[[iso_builder.curated_app_sets]]
+id = "aurora-system"
+label = "Aurora core apps"
+desktops = ["kde"]
+url = "https://raw.githubusercontent.com/get-aurora-dev/common/main/system_files/shared/usr/share/ublue-os/homebrew/system-flatpaks.Brewfile"
+format = "brewfile"
+
+[[iso_builder.curated_app_sets]]
+id = "aurora-full"
+label = "Aurora full desktop"
+desktops = ["kde"]
+url = "https://raw.githubusercontent.com/get-aurora-dev/common/main/system_files/shared/usr/share/ublue-os/homebrew/full-desktop.Brewfile"
+format = "brewfile"
+
+[[iso_builder.curated_app_sets]]
+id = "aurora-dx"
+label = "Aurora developer apps"
+desktops = ["kde"]
+url = "https://raw.githubusercontent.com/get-aurora-dev/common/main/system_files/shared/usr/share/ublue-os/homebrew/system-dx-flatpaks.Brewfile"
+format = "brewfile"
+
+[[iso_builder.curated_app_sets]]
+id = "zirconium"
+label = "Zirconium apps"
+desktops = ["niri"]
+url = "https://raw.githubusercontent.com/zirconium-dev/zirconium/main/mkosi.extra/usr/share/flatpak/preinstall.d/zirconium.preinstall"
+format = "preinstall"
+
+[[iso_builder.ddi_channels]]
+id = "snowfield"
+stem = "snowfield-ab"
+name = "Frostyard Snowfield — GNOME (DDI)"
+desktop = "gnome"
+
+[[iso_builder.ddi_channels]]
+id = "snow"
+stem = "snow-ab"
+name = "Frostyard Snow — GNOME (DDI)"
+desktop = "gnome"
+
+[[iso_builder.ddi_channels]]
+id = "cayo"
+stem = "cayo-ab"
+name = "Frostyard Cayo — headless (DDI)"
+desktop = "none"
+
+# Image preinstall declarations, not proof of installed apps or remote identity.
+[flatpak_preinstall]
+schema_version = 1
+common = [
+  { id = "io.github.kolunmi.Bazaar", branch = "stable" },
+  { id = "org.mozilla.firefox", branch = "stable" },
+]
+
+[flatpak_preinstall.desktop_additions]
+gnome = [{ id = "com.mattjakeman.ExtensionManager", branch = "stable" }]
+
+# Marlin GDM override from aa9810e9 (tunaOS#3438). The generated -arch
+# adapter takes precedence over tuna.yaml on pacman bases. Other tuna
+# profiles retain greetd. Package order and beta pin are unchanged.
+[desktops.tuna-arch]
+display_manager = "gdm"
+versionlock = []
+after_install = ["tuna-flatpak-remote", "tuna-gdm-theme", "tuna-gdm-default-session", "tuna-hide-other-sessions", "flatpak-preinstall"]
+
+[desktops.tuna-arch.packages.pacman]
+required = [
+  "tunaos/tuna-desktop=1.0.0beta.1-1",
+  "gdm",
+  "xorg-xwayland",
+  "ibus",
+  "orca",
+  "gnome-shell",
+  "gnome-settings-daemon",
+  "gnome-control-center",
+  "gnome-keyring",
+  "evolution-data-server",
+  "xdg-desktop-portal-gnome",
+  "xdg-desktop-portal-gtk",
+  "xdg-user-dirs",
+  "gvfs",
+  "nautilus",
+  "ptyxis",
+  "networkmanager",
+  "libsecret",
+  "pipewire",
+  "wireplumber",
+  "gst-plugin-pipewire",
+  "gst-plugins-good",
+  "power-profiles-daemon",
+  "upower",
+  "flatpak",
+  "plymouth",
+  "adwaita-icon-theme",
+  "noto-fonts",
+  "noto-fonts-emoji",
+  "ttf-dejavu",
+  "ttf-liberation",
+]
+
+# Optional base-image search sources; these do not change build repositories.
+[package_catalogs.debian-trixie]
+schema_version = 1
+coverage = "base-image-only"
+variant = "flounder"
+family = "apt"
+os_id = "debian"
+release = "trixie"
+platforms = ["linux/amd64"]
+observed_base_image = "docker.io/library/debian:trixie@sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308"
+source_observation = "config/package-observations/flounder-amd64.json"
+source_observation_sha256 = "1b4857d081dc460381e537a1fb5f3a72407a7883313b78fb0301db6627b075b6"
+
+[[package_catalogs.debian-trixie.sources]]
+id = "trixie"
+uri = "https://deb.debian.org/debian/"
+suite = "trixie"
+origin = "Debian"
+codename = "trixie"
+components = ["main"]
+keyring = "config/package-keys/debian-trixie.pgp"
+keyring_sha256 = "506b815cbb32d9b6066b4a2aa524071e071761e7e7f68c3ac74f3061ba852017"
+primary_fingerprints = ["04B54C3CDCA79751B16BC6B5225629DF75B188BD", "41587F7DB8C774BCCF131416762F67A0B2C39DE4"]
+clock_skew_seconds = 10
+freshness = { mode = "pinned-release", inrelease_sha256 = "0584fba32e13e0ab8285fb16c27adea1ec03a73669c18702821094fd6ca86675" }
+
+[[package_catalogs.debian-trixie.sources]]
+id = "trixie-updates"
+uri = "https://deb.debian.org/debian/"
+suite = "trixie-updates"
+origin = "Debian"
+codename = "trixie-updates"
+components = ["main"]
+keyring = "config/package-keys/debian-trixie.pgp"
+keyring_sha256 = "506b815cbb32d9b6066b4a2aa524071e071761e7e7f68c3ac74f3061ba852017"
+primary_fingerprints = ["04B54C3CDCA79751B16BC6B5225629DF75B188BD"]
+clock_skew_seconds = 10
+freshness = { mode = "signed-valid-until", max_age_seconds = 604800 }
+
+[[package_catalogs.debian-trixie.sources]]
+id = "trixie-security"
+uri = "https://deb.debian.org/debian-security/"
+suite = "trixie-security"
+origin = "Debian"
+codename = "trixie-security"
+components = ["main"]
+keyring = "config/package-keys/debian-trixie.pgp"
+keyring_sha256 = "506b815cbb32d9b6066b4a2aa524071e071761e7e7f68c3ac74f3061ba852017"
+primary_fingerprints = ["5E04A1E3223A19A20706E20F9904613D4CCE68C6"]
+clock_skew_seconds = 10
+freshness = { mode = "signed-valid-until", max_age_seconds = 604800 }
