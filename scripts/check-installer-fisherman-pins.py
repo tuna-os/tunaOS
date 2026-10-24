@@ -55,11 +55,15 @@ import urllib.request
 # The repository fisherman actually lives in now.
 CANONICAL = "tuna-os/fisherman"
 
-# Minimum fisherman revision every frontend must be at or after: the
-# MediaInput v1 commit. Full SHAs are compared (branches resolved to their
-# head SHA at fetch time); a source pinning anything older fails the floor
-# check below.
-FLOOR_COMMIT = "d349c31e47b1c05ef82d67811d5f4f9e77a62e2a"
+# Minimum fisherman revision every frontend must be at or after: the commit
+# that LANDED MediaInput v1 on fisherman's default branch (`dev`), i.e.
+# 02ac7097, the squash merge of tuna-os/fisherman#340. Not d349c31e, the
+# PR-branch commit: a squash merge never makes the branch commit an ancestor
+# of `dev`, so every frontend pinned at the landed change compared "diverged"
+# against it and failed (run 40057457412). Full SHAs are compared (branches
+# resolved to their head SHA at fetch time); a source pinning anything older
+# fails the floor check below.
+FLOOR_COMMIT = "02ac7097abb07a206479ea84a559c41db12bf629"
 
 # Where each desktop's installer declares its fisherman source. `manifest` is
 # a Flatpak manifest with a `fisherman` module; `submodule` is a .gitmodules

@@ -1,4 +1,10 @@
-"""Only the byte-reviewed Chunkah Containerfile receives cache compatibility."""
+"""#3809: Chunkah source fallback failed on duplicate cache `rw` (Podman 4.9.3).
+
+Run 40025622951 (job 120660952676) died in `scripts/build-chunkah.sh` with
+`invalid options "rw, shared, rw, bind", can only specify 1 'rw' or 'ro'
+option`. Only the byte-reviewed Chunkah Containerfile receives cache
+compatibility; bind-mount `rw` and every other byte stay intact.
+"""
 
 import importlib.util
 import os

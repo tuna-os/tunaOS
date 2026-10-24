@@ -2206,6 +2206,7 @@ That cache parser adds explicit `rw` and its default `rw` twice. For that measur
 version, use a temporary Containerfile with only the known cache `rw` removed.
 Keep writable bind mounts and all read-only options. Reject a Containerfile whose bytes differ from the reviewed file.
 Record source and file hashes; these observations do not make mutable source a pin.
+Regression: `tests/regressions/test_issue_3809_chunkah_cache_mounts.py` (#3809).
 
 ### Native artifact transfer resets before qualification
 
@@ -2233,3 +2234,30 @@ This is preventive transport hardening, not permission to qualify an artifact
 from a failed aggregate producer. Existing source, run, attempt, successful
 producer/build, expiry and digest admission rules remain unchanged. A rerun
 increments attempt and does not turn attempt-1 artifacts into attempt-2 media.
+
+### Installer fisherman floor names an unmerged branch commit
+
+**Symptom:** Run [40057457412](https://github.com/tuna-os/tunaOS/actions/runs/40057457412)
+failed `Installers build fisherman from tuna-os/fisherman`. All five frontends
+pinned `02ac7097`, and each was reported older than the floor `d349c31e`.
+
+**Measured cause:** `d349c31e` is a commit on the branch of fisherman#340.
+That PR was squash-merged into `dev` as `02ac7097`. The compare API returns
+`diverged` (ahead 4, behind 1), so the floor is never an ancestor of `dev`.
+The landed files are identical to the PR head; for example, `mediainput.go`
+has the same blob SHA in both commits.
+
+**Fix:** Set the floor to the landed commit `02ac7097` on `dev`. Keep the
+ancestry check fail-closed. A timestamp is not proof of content.
+
+### Base image pull returns HTTP 503 from quay.io
+
+**Symptom:** Run [40057457477](https://github.com/tuna-os/tunaOS/actions/runs/40057457477)
+failed `Build OS image` after three buildah attempts within 45 seconds.
+Each attempt reported `fetching blob: received unexpected HTTP status: 503`
+for `quay.io/centos-bootc/centos-bootc`.
+
+**Measured cause:** A quay.io outage. An anonymous range request for the same three blobs
+returned HTTP 206 about 30 minutes later. No repository change caused it.
+
+**Fix:** Run the job again. Do not change the base image pin.

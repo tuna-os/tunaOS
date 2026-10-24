@@ -169,6 +169,17 @@ def test_audit_passes_the_floor_sha_and_newer() -> None:
     assert mod.audit({"kde": newer}) == []
 
 
+def test_floor_is_the_landed_squash_merge_not_the_pr_branch_commit() -> None:
+    """Run 40057457412: fisherman#340 was squash-merged as 02ac7097 on `dev`.
+
+    Its PR-branch commit d349c31e is never an ancestor of `dev`, so a floor
+    naming it made every frontend pinned at the landed change "diverged" and
+    red. The floor must be the commit that is on the default branch.
+    """
+    assert mod.FLOOR_COMMIT == "02ac7097abb07a206479ea84a559c41db12bf629"
+    assert not mod.FLOOR_COMMIT.startswith("d349c31e")
+
+
 def test_unresolvable_pins_warn_dont_fail() -> None:
     """Matching main()'s blip policy: at_or_after_floor=None only warns."""
     assert mod.audit({"kde": {"url": LIVE, "commit": "abc123"}}) == []
