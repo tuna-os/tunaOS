@@ -90,8 +90,8 @@ Nothing turns a failed fork validation into a stock pass.
 Run focused source-level checks:
 
 ```sh
-python3 -m pytest tests/test_fork_branding.py -q
-bats tests/bats/test_gnome_branding.bats tests/bats/test_wallpaper_contract.bats tests/bats/test_installer_branding.bats
+python3 -m pytest tests/test_fork_branding.py tests/test_anime_finalization.py -q
+bats tests/bats/test_gnome_branding.bats tests/bats/test_wallpaper_contract.bats
 ```
 
 The Python tests execute the helper under a temporary root. They check that
