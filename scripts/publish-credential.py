@@ -31,6 +31,17 @@ def flag(name):
     return value == 'true'
 
 
+def validate_scope(value):
+    try:
+        registry, namespace = publish_credentials.parse_destination(value, what='scope')
+    except publish_credentials.CredentialError as exc:
+        print(f'publish scope: {exc}', file=sys.stderr)
+        return 1
+    print(registry)
+    print(namespace)
+    return 0
+
+
 def main():
     env = os.environ
     try:
@@ -61,4 +72,6 @@ def main():
 
 
 if __name__ == '__main__':
+    if len(sys.argv) == 3 and sys.argv[1] == '--validate-scope':
+        sys.exit(validate_scope(sys.argv[2]))
     sys.exit(main())

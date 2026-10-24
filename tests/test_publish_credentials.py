@@ -8,6 +8,7 @@ here are credential-free command stubs, and no workflow is wired yet.
 """
 from __future__ import annotations
 
+import importlib
 import importlib.util
 import os
 from pathlib import Path
@@ -18,8 +19,16 @@ import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "scripts"))
-from lib import publish_credentials as creds  # noqa: E402
+LIB_SPEC = importlib.util.spec_from_file_location(
+    "publish_credentials_test_lib",
+    ROOT / "scripts/lib/__init__.py",
+    submodule_search_locations=[str(ROOT / "scripts/lib")],
+)
+assert LIB_SPEC and LIB_SPEC.loader
+lib_package = importlib.util.module_from_spec(LIB_SPEC)
+sys.modules[LIB_SPEC.name] = lib_package
+LIB_SPEC.loader.exec_module(lib_package)
+creds = importlib.import_module(f"{LIB_SPEC.name}.publish_credentials")
 
 SPEC = importlib.util.spec_from_file_location("publish_credentials_config", ROOT / "scripts/lib/tunaos_config.py")
 config = importlib.util.module_from_spec(SPEC)
@@ -335,7 +344,10 @@ def test_login_accepts_scopes_the_resolver_can_print(login, scope):
     assert calls == [f"podman login --username=acme+ci-robot --password-stdin {scope}"]
 
 
-@pytest.mark.parametrize("scope", ["localhost:65536/acme", "localhost:99999/acme"])
+@pytest.mark.parametrize(
+    "scope",
+    ["localhost:0/acme", "localhost:00000/acme", "localhost:65536/acme", "localhost:99999/acme"],
+)
 def test_login_refuses_out_of_range_ports(login, scope):
     result, calls, _ = login("podman", scope=scope)
     assert result.returncode == 1 and calls == []

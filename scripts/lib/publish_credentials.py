@@ -64,6 +64,8 @@ def parse_destination(value: str, *, what: str = 'destination') -> tuple[str, st
     registry, namespace = value.split('/', 1)
     if not tunaos_config.REGISTRY.fullmatch(registry) or not tunaos_config.NAMESPACE.fullmatch(namespace):
         raise CredentialError(f'invalid-{what}', f'{_shown(value)} is not a lowercase registry host and namespace')
+    if ':' in registry and not 1 <= int(registry.rsplit(':', 1)[1]) <= 65535:
+        raise CredentialError(f'invalid-{what}', f'{_shown(value)} has an invalid registry port')
     return registry, namespace
 
 

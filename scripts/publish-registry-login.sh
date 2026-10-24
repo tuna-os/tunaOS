@@ -32,25 +32,17 @@ die() {
 
 [[ "${TUNAOS_PUBLISH_MODE:-}" == registry-secret ]] ||
 	die "TUNAOS_PUBLISH_MODE is not registry-secret; the owner path uses GITHUB_TOKEN"
-registry_re='^(localhost|[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+)(:[0-9]{1,5})?$'
-namespace_component_re='^[a-z0-9]+([._][a-z0-9]+|__[a-z0-9]+|-+[a-z0-9]+)*$'
-[[ "$scope" == */* && "$scope" != */ && "$scope" != *//* &&
-	"$scope" != *$'\n'* && "$scope" != *$'\r'* ]] ||
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if ! parsed_scope=$(env \
+	-u TUNAOS_PUBLISH_USERNAME \
+	-u TUNAOS_PUBLISH_PASSWORD \
+	python3 "${script_dir}/publish-credential.py" --validate-scope "$scope" 2>/dev/null); then
 	die "scope must be the <registry>/<namespace> printed by publish-credential.py"
-registry="${scope%%/*}"
-namespace="${scope#*/}"
-[[ "$registry" =~ $registry_re ]] ||
-	die "scope must be the <registry>/<namespace> printed by publish-credential.py"
-if [[ "$registry" == *:* ]]; then
-	port="${registry##*:}"
-	((10#$port <= 65535)) ||
-		die "scope must be the <registry>/<namespace> printed by publish-credential.py"
 fi
-IFS='/' read -r -a namespace_components <<<"$namespace"
-for component in "${namespace_components[@]}"; do
-	[[ "$component" =~ $namespace_component_re ]] ||
-		die "scope must be the <registry>/<namespace> printed by publish-credential.py"
-done
+mapfile -t destination_parts <<<"$parsed_scope"
+[[ "${#destination_parts[@]}" -eq 2 ]] ||
+	die "scope must be the <registry>/<namespace> printed by publish-credential.py"
+registry="${destination_parts[0]}"
 [[ -n "$username" && -n "$password" ]] ||
 	die "TUNAOS_PUBLISH_USERNAME and TUNAOS_PUBLISH_PASSWORD must both be set"
 [[ "$username" =~ ^[A-Za-z0-9][A-Za-z0-9._@+-]*$ ]] ||
