@@ -12,8 +12,12 @@ import json
 from pathlib import Path
 import sys
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import iso_media_provenance as contract  # noqa: E402
+SCRIPTS = str(Path(__file__).resolve().parent)
+sys.path.insert(0, SCRIPTS)
+try:
+    import iso_media_provenance as contract  # noqa: E402
+finally:
+    sys.path.remove(SCRIPTS)
 
 
 MAX_ISO_BYTES = 10 * 1024 ** 3
@@ -230,9 +234,10 @@ def finalize_browser_receipt(observed, saved_media):
     """Finish, reopen, and measure saved media before emitting browser v2 bytes.
 
     ``saved_media`` must provide ``finish()``, ``snapshot_token()``, and
-    ``open()``. ``finish`` performs the successful save and sink close; ``open``
-    returns a fresh binary stream over those closed bytes. The snapshot token
-    must change whenever the saved object changes.
+    ``open()``. ``finish`` performs the successful save and sink close and MUST
+    return ``None``; any other return value is a failed or ambiguous save.
+    ``open`` returns a fresh binary stream over those closed bytes. The snapshot
+    token must change whenever the saved object changes.
     """
     if type(observed) is not BrowserObservedInput:
         _reject("invalid_observation", "browser")
