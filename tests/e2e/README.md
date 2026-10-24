@@ -34,6 +34,13 @@ command output and every passed, failed, or skipped stage in
 Cleanup always runs; a cleanup failure is recorded without replacing the
 first lifecycle failure.
 
+During execution, `installed-lifecycle-evidence.partial.json` is only an
+in-progress recovery checkpoint. It can contain pending stages and an
+`incomplete` result, so it does not conform to the final evidence schema.
+Successful or normally failed runs replace it with the schema-valid
+`installed-lifecycle-evidence.json`; the partial file remains only after an
+interrupt or abrupt failure.
+
 A passing verdict is enforced twice. The harness accepts a boot stage only
 when it returns the booted registry deployment for the expected digest and a
 passed runtime desktop contract, and it passes only when all eight stages,

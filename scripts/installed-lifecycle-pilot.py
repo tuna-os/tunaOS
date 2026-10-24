@@ -123,6 +123,18 @@ def bounded_text(raw: bytes, limit: int = MAX_LOG_BYTES) -> tuple[str, bool]:
     return prefix + marker + suffix, True
 
 
+def bounded_file_text(stream: Any, limit: int = MAX_LOG_BYTES) -> tuple[str, bool]:
+    """Read bounded head/tail samples instead of loading an unbounded log."""
+    stream.seek(0, os.SEEK_END)
+    size = stream.tell()
+    stream.seek(0)
+    if size <= 2 * limit:
+        return bounded_text(stream.read(), limit)
+    prefix = stream.read(limit)
+    stream.seek(-limit, os.SEEK_END)
+    return bounded_text(prefix + stream.read(limit), limit)
+
+
 def file_sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as stream:
@@ -256,8 +268,8 @@ class CommandRunner:
                 timed_out = True
             stdout_file.seek(0)
             stderr_file.seek(0)
-            stdout, stdout_truncated = bounded_text(stdout_file.read())
-            stderr, stderr_truncated = bounded_text(stderr_file.read())
+            stdout, stdout_truncated = bounded_file_text(stdout_file)
+            stderr, stderr_truncated = bounded_file_text(stderr_file)
 
         event = {
             "name": event_name or Path(argv[0]).name,
@@ -943,15 +955,16 @@ def execute_pilot(
     ]
 
     blocked_by: str | None = None
-    for stage_id, action in functional_stages:
-        if blocked_by:
-            stages[stage_id]["outcome"] = "skipped"
-            stages[stage_id]["details"] = {"reason": f"blocked_by:{blocked_by}"}
-            continue
-        if not run_stage(stage_id, action):
-            blocked_by = stage_id
-
-    run_stage("cleanup", backend.cleanup)
+    try:
+        for stage_id, action in functional_stages:
+            if blocked_by:
+                stages[stage_id]["outcome"] = "skipped"
+                stages[stage_id]["details"] = {"reason": f"blocked_by:{blocked_by}"}
+                continue
+            if not run_stage(stage_id, action):
+                blocked_by = stage_id
+    finally:
+        run_stage("cleanup", backend.cleanup)
 
     evidence["outcomes"] = {
         "cold": stages["cold_boot_a"]["outcome"],
