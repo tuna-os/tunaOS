@@ -91,6 +91,14 @@
     <scolor>#05070d</scolor>
   </wallpaper>
   <wallpaper deleted="false">
+    <name>Stingray</name>
+    <filename>/usr/share/backgrounds/tunaos/stingray.jpg</filename>
+    <options>zoom</options>
+    <shade_type>solid</shade_type>
+    <pcolor>#E95420</pcolor>
+    <scolor>#05070d</scolor>
+  </wallpaper>
+  <wallpaper deleted="false">
     <name>Marlin</name>
     <filename>/usr/share/backgrounds/tunaos/marlin.jpg</filename>
     <options>zoom</options>

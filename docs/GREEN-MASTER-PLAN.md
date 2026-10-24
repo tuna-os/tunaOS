@@ -419,6 +419,12 @@ No known variant-specific blocker.
 | kde/xfce gates | broke 08-17 with the module-path regression, fixed (#1811) | verify on next nightly |
 | gnome-zfs | classified 2026-08-17: builds, signs; Gate died on the #1811/#1818 just-cwd class (fixed on main), Promote skipped behind it | clears on the first post-#1818 nightly; verify then |
 
+### stingray (Ubuntu 26.10, experimental) — proposal; dispatch-only
+| area | state | action |
+|---|---|---|
+| base + GNOME/KDE/XFCE | Configured by #3252 from the digest-pinned Ubuntu 26.10 Stonking base; no build or boot evidence yet | dispatch all declared cells; require image, desktop, boot, and LUKS evidence before Beta or scheduling |
+| Tuna/Asahi/ZFS | not declared; each lacks its package or profile-specific admission evidence | keep out until its own gate is satisfied |
+
 ### marlin (Arch) — 16/16 build, gates regressed
 | area | state | action |
 |---|---|---|

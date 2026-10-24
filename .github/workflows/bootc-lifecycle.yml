@@ -61,7 +61,7 @@ jobs:
             '{include: [ .variants[] | . as $variant | .id as $v | .aliases as $aliases
                | .flavors[] | select(.build_image == true) | select(.id != "base") | select(.id | startswith("base-") | not)
                | . as $flavor
-               | (($v | contains("rawhide")) or ($v | contains("sid")) or ($v == "guppy") or (.id | contains("asahi")) or (.id | contains("zfs"))) as $is_beta
+               | (($v | contains("rawhide")) or ($v | contains("sid")) or ($v == "guppy") or (.id | contains("asahi")) or (.id | contains("zfs")) or ($variant.experimental == true)) as $is_beta
                | select($is_beta == false)
                | ("amd64", "arm64") as $arch
                | select((.platforms // $variant.platforms // []) | index("linux/" + $arch))
@@ -75,7 +75,7 @@ jobs:
             '{include: [ .variants[] | . as $variant | .id as $v | .aliases as $aliases
                | .flavors[] | select(.build_image == true) | select(.id != "base") | select(.id | startswith("base-") | not)
                | . as $flavor
-               | (($v | contains("rawhide")) or ($v | contains("sid")) or ($v == "guppy") or (.id | contains("asahi")) or (.id | contains("zfs"))) as $is_beta
+               | (($v | contains("rawhide")) or ($v | contains("sid")) or ($v == "guppy") or (.id | contains("asahi")) or (.id | contains("zfs")) or ($variant.experimental == true)) as $is_beta
                | select($is_beta == true)
                | ("amd64", "arm64") as $arch
                | select((.platforms // $variant.platforms // []) | index("linux/" + $arch))
@@ -111,6 +111,7 @@ jobs:
   lifecycle:
     name: "${{ matrix.variant }}:${{ matrix.flavor }} (${{ matrix.arch }})"
     needs: generate-matrix
+    if: ${{ fromJSON(needs.generate-matrix.outputs.matrix || '{"include":[]}').include[0] }}
     runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
     timeout-minutes: 60
     strategy:

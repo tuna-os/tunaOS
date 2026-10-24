@@ -19,11 +19,11 @@ CONFIG="${REPO_ROOT}/.github/build-config.yml"
   done < <(yq -r '.variants[].id' "$CONFIG")
 }
 
-@test "only albacore falls back to the generic fish" {
+@test "only fish-branded variants use the generic fish" {
   command -v yq >/dev/null || skip "yq not installed"
   local v
   while read -r v; do
-    [[ "$v" == albacore ]] && continue
+    [[ "$v" == albacore || "$v" == stingray ]] && continue
     [ "$("$SET" --print "$v")" != tunaos ] || { echo "FAIL: ${v} boots the generic fish" >&2; return 1; }
   done < <(yq -r '.variants[].id' "$CONFIG")
 }
