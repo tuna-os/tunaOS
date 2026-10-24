@@ -1,11 +1,32 @@
-# TunaOS primary configuration. Matrix ownership migration, phase 1.
-# Edit this file; .github/build-config.yml is generated at setup.
-# Package and branding migration: docs/PRIMARY-CONFIG-MIGRATION.md.
+# TunaOS primary configuration (TOML 1.0). Edit this file, not its adapters.
+# Validate: python3 scripts/config.py validate
+# Generate matrix + desktop adapters: python3 scripts/config.py generate
+# Wiring, editing tools and remaining ownership gaps: docs/CONFIG-WIRING.md.
+# This is build/authoring input, not a live installed-system settings file.
+# Rebuild the affected artifact to apply changes; this does not update a host.
+# Never store credentials, tokens, private keys or shell commands here.
+# scripts/lib/tunaos_config.py rejects unknown fields, including future sketches
+# in docs/PRIMARY-CONFIG-MIGRATION.md; only implemented sections are accepted.
 
+# Primary schema version; integer 1 only (subsections version independently).
 schema_version = 1
 
 [build]
+# Coverage/reporting baseline, not a cap on variant/flavor platform lists.
+# Supported: linux/amd64, linux/amd64/v2, linux/amd64/v3, linux/arm64.
+# scripts/gen-platform-coverage.py reads this from the primary matrix projection.
 global_platforms = ["linux/amd64", "linux/arm64"]
+
+# Optional publishing section (intentionally omitted for owner-neutral forks):
+# [build.publish]
+# registry = "quay.io"  # Lowercase host, optional port; no scheme or credentials.
+# namespace = "example"  # Lowercase OCI path, possibly nested; NOT a token.
+# Both keys are required when the section is present. Per-field precedence in
+# scripts/lib/publish-destination.sh: IMAGE_REGISTRY / REPO_ORGANIZATION env,
+# then TOML, then GITHUB_REPOSITORY_OWNER (namespace), then ghcr.io / tuna-os.
+# Inspect with scripts/publish-destination.sh. This selects image destinations,
+# not authentication: CI credentials/permissions must also allow that destination.
+# It does not configure ISO hosting, installed branding or registry mirrors.
 
 # ── Grouped dedup ISOs (issue #455) ───────────────────────────────────────────
 # Per-desktop-per-flavor ISOs are wasteful: all desktops on a variant share the
@@ -16,9 +37,13 @@ global_platforms = ["linux/amd64", "linux/arm64"]
 # every environment by title.
 #
 # `scripts/build-iso-group.sh` intersects each group's `flavors` with the
-# variant's actual `build_image: true` flavors, so a variant that lacks a
-# Variants that lack certain desktops simply get a smaller ISO — no group
+# variant's actual `build_image: true` flavors. Variants that lack certain
+# desktops simply get a smaller ISO — no group
 # needs per-variant tailoring here.
+# All three fields are required; suffixes must be unique (empty = no suffix).
+# flavors is the live boot menu; offline_flavors is the installer payload set.
+# Lists name declared flavor IDs; neither enables a held build_image=false cell.
+# This grouping does not change desktop packages or prove an ISO is published.
 [[iso_groups]]
 # Desktop ISO group: boots GNOME NVIDIA by default, and embeds
 # both NVIDIA and non-NVIDIA flavors in the offline store for installer auto-detection.
@@ -71,6 +96,9 @@ offline_flavors = ["xfce", "xfce-hwe", "xfce-nvidia"]
 # .github/scripts/sibling-images-status.sh renders their latest main-branch
 # build into the README next to the variant matrix so the family is visible
 # in one place. `workflow` is the repo's SCHEDULED build workflow.
+# Required record fields: unique lowercase id, display emoji/description,
+# OCI image reference, GitHub owner/repo, workflow filename and desktop labels.
+# These are reporting inputs, not instructions to build or install a sibling.
 [[sibling_images]]
 id = "tromso"
 emoji = "🏔️"
@@ -98,6 +126,9 @@ desktops = ["XFCE"]
 # variants carry a `tuna` flavor below; `unsupported` ones must not until
 # the reason is resolved. tests/test_tuna_admission.py enforces both.
 # Per-variant evidence: tunaOS issues #3195-#3207 and tunaOS#2990 (marlin).
+# status: admitted or unsupported; unsupported requires reason. package_target
+# names the external factory target. Optional portals is an evidence/status note,
+# not a portal configuration switch. Every variant needs a rollout record.
 [tuna_rollout]
 
 [tuna_rollout.marlin]
@@ -181,6 +212,24 @@ reason = "unsupported until package target gentoo publishes tuna-desktop (tunaos
 #   stage: 2  → build_stage2    (needs: build_base)
 #   stage: 3  → build_stage3    (needs: build_stage2)
 #   stage: 4  → build_stage4    (needs: build_stage3)
+# Shared contract for the repeated variant/flavor records below:
+# Variant key = internal lowercase ID; emoji/description feed matrix/report UI.
+# base_image is the build input read by scripts/get-base-image.sh; digest pins
+# are updated in place by renovate.json, not in generated build-config.yml.
+# platforms is required; a flavor's platforms REPLACES it (may extend it).
+# .github/workflows/build-variant.yml selects build_image=true cells, then stage
+# 1..4. PR jobs further restrict flavors/platforms; a flag is not qualification.
+# build_iso/build_qcow2 are optional booleans, default false in that workflow.
+# luks_e2e defaults eligible unless false in .github/workflows/luks-e2e.yml;
+# other suite filters still apply. It does not enable disk encryption in an OS.
+# aliases adds publish names (default none); publish_name replaces the canonical
+# repository name (default variant ID), tag_suffix appends to flavor tags
+# (default none). Neither changes the internal ID nor the installed OS name.
+# experimental defaults false in scripts/generate-workflows.py; true selects
+# dispatch-only workflow generation, not a blanket exclusion from all tests.
+# upstream_track is descriptive metadata, not a package channel switch.
+# akmods defaults ublue-os in scripts/build-image-inner.sh; registry-map.yaml
+# still owns mirror resolution. It does not select a kernel by itself.
 [variants]
 
 [variants.yellowfin]
@@ -2358,6 +2407,12 @@ build_iso = false
 build_qcow2 = false
 
 # Desktop policy: the same editable source as the build matrix.
+# Reusable desktop-native package lists; not image-wide base package policy.
+# scripts/lib/tunaos_packages.py:expand concatenates included groups in order,
+# then local list entries. No deduplication or implicit remove/replace occurs.
+# include names another group; unknown names/cycles are rejected. Other fields:
+# required, optional, exclude, groups, group_exclude, optional_group (lists).
+# A field must also be supported by the consuming native family below.
 [package_groups]
 
 [package_groups.gnome-fedora]
@@ -2462,6 +2517,30 @@ optional = [
   "cosmic-store",
 ]
 
+# Desktop profiles -> generated manifests/desktops/<profile>.yaml via config.py
+# generate -> build_scripts/desktop/install-desktop.sh during image construction.
+# Existing <desktop>-debian and <desktop>-arch profiles replace the generic
+# profile on Debian and pacman respectively; they are not merged with it.
+# Family selection is native: apt, pacman, cachyos, emerge, zypper, fedora,
+# rawhide, eln, hummingbird, el10. Do not assume package names are portable.
+# required is the requested package list (not proof every package is installed).
+# RPM-family optional is best-effort; groups/group_exclude/group_options control
+# DNF group install, exclude controls its package transaction, optional_group
+# tries the whole list only when the first package is available. These fields
+# are not accepted for apt/pacman/cachyos/zypper/emerge (required/include only,
+# plus their explicitly supported repository/display-manager fields).
+# display_manager selects the image's greeter; a supported family override
+# beats the profile value. versionlock requests DNF locks; emerge_accept_keywords
+# writes Gentoo keyword policy. minimum_version declares the GNOME floor;
+# tests/test_the_gnome_floor_is_enforced.py ties it to the runtime check constant,
+# so editing this value alone does not change that check.
+# disable_desktop_files hides launchers, not packages. after_install,
+# after_inline and native before_install are allowlisted operation IDs from
+# scripts/lib/desktop_operations.json, never arbitrary shell snippets.
+# repos/copr/ppa are build package sources, not package search catalogs. HTTPS
+# sources must meet the validator's family-specific shape; unsigned=true is
+# restricted to the two reviewed file:///run/ OCI mounts, never remote repos.
+# Source policy/consumer details and safe editing: docs/CONFIG-WIRING.md.
 [desktops]
 
 # COSMIC Desktop Manifest — Arch Linux / CachyOS
@@ -4353,6 +4432,11 @@ required = [
   "gnome-base/gnome-keyring",
 ]
 
+# scripts/config.py generate-builder-flavors -> docs/iso-builder.flavors.json.
+# Every exact matrix flavor must have desktop + edition metadata; no suffix
+# guessing or package installation occurs here. desktop names an existing profile
+# or "none"; edition is a lowercase identifier. Validation lives in
+# scripts/lib/iso_builder_config.py:flavor_metadata.
 # Exact flavor semantics for guided image selection. These values describe the
 # primary matrix; they do not establish published availability or qualification.
 
@@ -4473,10 +4557,18 @@ desktop = "xfce"
 edition = "nvidia"
 
 # ISO Builder presentation; catalog evidence remains authoritative.
+# Export: python3 scripts/config.py generate-builder-config
+# Output: docs/iso-builder.config.json, not an installed-image brand payload.
+# Contract/defaults: docs/ISO-BUILDER-CONFIG.md and scripts/lib/iso_builder_config.py.
+# Current schema 2 uses leaf IDs/facets; version 1 is explicit compatibility.
+# Unknown keys fail validation. preview_only=true disables inspection/build UI;
+# false does not grant permission or establish publication/qualification.
 [iso_builder]
 schema_version = 2
 preview_only = false
 
+# Browser name/links/assets only. HTTPS URLs or safe root-relative logo/favicon;
+# no credentials. Missing optional assets must not inherit the stock brand.
 [iso_builder.brand]
 name = "TunaOS"
 logo_url = "/logo.png"
@@ -4485,19 +4577,25 @@ homepage_url = "https://tunaos.org"
 documentation_url = "https://tunaos.org/docs/iso-builder"
 support_url = "https://github.com/tuna-os"
 
+# Plain display text; accent_color is #RRGGBB, not arbitrary CSS.
 [iso_builder.presentation]
 headline = "Make TunaOS your own"
 intro = "Choose your desktop, apps and image settings."
 accent_color = "#5b9cf6"
 
+# ISO filename/volume presentation, not registry image names. Uppercase volume
+# label <=32 chars; lowercase filename prefix <=64 chars (validated grammar).
 [iso_builder.output]
 volume_label = "TUNAOS"
 filename_prefix = "tunaos"
 
+# kind="leaf" plus exact variant:flavor:platform ID, or kind="none". A default
+# must be build-enabled in TOML AND admitted by the runtime catalog to select it.
 [iso_builder.default_selection]
 kind = "leaf"
 leaf_id = "yellowfin:gnome:linux/amd64/v2"
 
+# Ordered desktop IDs (optional default Flatpaks), not a new build matrix.
 [[iso_builder.desktops]]
 id = "gnome"
 
@@ -4513,6 +4611,8 @@ id = "niri"
 [[iso_builder.desktops]]
 id = "xfce"
 
+# default_path references a path ID; paths order questions, facets label allowed
+# values, recommendations suggest exact leaves. None bypass catalog/hardware gates.
 [iso_builder.selection]
 default_path = "desktop-first"
 
@@ -4673,6 +4773,9 @@ leaf_id = "yellowfin:gnome:linux/amd64/v2"
 label = "Recommended starting point"
 reason = "The flagship base with the GNOME desktop. Check your target computer architecture before continuing."
 
+# Browser-selectable app lists: unique id/label, declared desktop IDs, HTTPS URL
+# and explicit format (brewfile or preinstall). Not native packages or a new
+# Flatpak remote; configured URLs do not authorize arbitrary fetch mechanisms.
 [[iso_builder.curated_app_sets]]
 id = "bluefin-system"
 label = "Bluefin core apps"
@@ -4722,6 +4825,8 @@ desktops = ["niri"]
 url = "https://raw.githubusercontent.com/zirconium-dev/zirconium/main/mkosi.extra/usr/share/flatpak/preinstall.d/zirconium.preinstall"
 format = "preinstall"
 
+# Optional DDI choice metadata (id/stem/name/desktop); desktop may be "none".
+# Does not override the DDI transport endpoint.
 [[iso_builder.ddi_channels]]
 id = "snowfield"
 stem = "snowfield-ab"
@@ -4741,6 +4846,13 @@ name = "Frostyard Cayo — headless (DDI)"
 desktop = "none"
 
 # Image preinstall declarations, not proof of installed apps or remote identity.
+# config.py generate-flatpak-policy -> build_scripts/desktop/flatpak-preinstall.tsv
+# -> build_scripts/desktop/flatpak-preinstall.sh -> /usr/share/flatpak/preinstall.d.
+# schema_version=1; each app requires id and branch="stable" (only supported branch).
+# common applies first, then desktop_additions for the logical desktop; duplicate
+# IDs across those scopes are rejected. No per-variant remove/override semantics.
+# Installation still depends on the image's Flatpak tooling and remote setup;
+# this table neither supplies remote credentials nor configures remote trust.
 [flatpak_preinstall]
 schema_version = 1
 common = [
@@ -4795,6 +4907,16 @@ required = [
 ]
 
 # Optional base-image search sources; these do not change build repositories.
+# scripts/search-base-packages.py is a read-only authoring tool; schema validation
+# lives in scripts/lib/package_catalogs.py. Only apt/Debian trixie, linux/amd64,
+# base-image-only coverage is supported here; not all desktop-added repositories.
+# observed_base_image + source_observation/hash bind the reviewed base evidence.
+# source paths/keyrings are repository-relative; SHA-256 binds bytes, not trust.
+# Each source requires the pinned Debian origin/codename/components and primary
+# fingerprints. Base freshness pins signed InRelease bytes; updates/security use
+# signed-valid-until with max_age_seconds <=604800. clock_skew_seconds is 0..10.
+# Do not refresh timestamps to disguise stale metadata or treat a search match
+# as transaction/installability proof. See docs/PACKAGE-AUTHORING.md for limits.
 [package_catalogs.debian-trixie]
 schema_version = 1
 coverage = "base-image-only"
