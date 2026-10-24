@@ -456,6 +456,10 @@ EOF
 				echo "ERROR: emerge binrepo ${_TD_EB_NAME} must require package signatures" >&2
 				exit 1
 			}
+			[[ "${_TD_EB_PRIORITY}" =~ ^[1-9][0-9]*$ ]] || {
+				echo "ERROR: emerge binrepo ${_TD_EB_NAME} priority must be a positive integer: ${_TD_EB_PRIORITY}" >&2
+				exit 1
+			}
 			_TD_EB_KEY_PATH="${_TD_CTX}/${_TD_EB_KEY#/}"
 			[[ -f "${_TD_EB_KEY_PATH}" ]] || {
 				echo "ERROR: emerge binrepo key is missing: ${_TD_EB_KEY_PATH}" >&2
