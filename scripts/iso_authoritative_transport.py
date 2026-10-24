@@ -41,7 +41,7 @@ class AuthoritativeTransportError(RuntimeError):
 class ReviewedNetworkPolicy:
     """Reviewer-supplied HTTP limits and exact artifact redirect origins."""
 
-    artifact_redirect_origins: tuple
+    artifact_redirect_origins: tuple[str, ...]
     connect_timeout_seconds: float
     idle_timeout_seconds: float
     total_timeout_seconds: float
@@ -406,13 +406,18 @@ def _validate_inputs(policy, selection, retained, network, token):
 
 def _validate_network_policy(policy):
     origins = policy.artifact_redirect_origins
+    field = "network_policy.artifact_redirect_origins"
     if type(origins) is not tuple or not origins:
-        _fail("invalid_input", "network_policy.artifact_redirect_origins")
+        _fail("invalid_input", field)
     if any(type(origin) is not str for origin in origins) or len(origins) != len(set(origins)):
-        _fail("invalid_input", "network_policy.artifact_redirect_origins")
+        _fail("invalid_input", field)
     for origin in origins:
-        if _reviewed_origin(origin) != origin or origin == API_ORIGIN:
-            _fail("invalid_origin", "network_policy.artifact_redirect_origins")
+        try:
+            reviewed = _reviewed_origin(origin)
+        except AuthoritativeTransportError as error:
+            raise AuthoritativeTransportError(error.code, field) from error
+        if reviewed != origin or origin == API_ORIGIN:
+            _fail("invalid_origin", field)
     for value, maximum, field in (
         (policy.connect_timeout_seconds, 60, "connect_timeout_seconds"),
         (policy.idle_timeout_seconds, 300, "idle_timeout_seconds"),

@@ -352,7 +352,6 @@ class FakeHTTPSServer(urllib.request.BaseHandler):
         result = http.client.HTTPResponse(sock, method=request.get_method())
         result.begin()
         result.url = request.full_url
-        result.msg = result.reason
         self.files.append(sock.file)
         return result
 
@@ -619,6 +618,19 @@ def test_network_policy_cannot_disable_origin_time_or_byte_bounds(changes):
     case = copy.deepcopy(CASE)
     with pytest.raises(CALLER.AuthoritativeTransportError):
         transport(case, policy=network_policy(**changes))
+
+
+def test_invalid_reviewed_origin_names_the_policy_field():
+    case = copy.deepcopy(CASE)
+    with pytest.raises(CALLER.AuthoritativeTransportError) as caught:
+        transport(
+            case,
+            policy=network_policy(
+                artifact_redirect_origins=("https://user@artifacts.example.test",)
+            ),
+        )
+    assert caught.value.code == "invalid_origin"
+    assert caught.value.field == "network_policy.artifact_redirect_origins"
 
 
 def test_explicit_rerun_selection_fails_before_opening_any_endpoint():
