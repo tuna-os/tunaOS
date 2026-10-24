@@ -47,6 +47,13 @@ def validate_snapshot(document: str, payload: dict, root: Path | None = None) ->
             or not isinstance(context, dict)
             or any(not isinstance(axes, dict) for axes in cells.values())):
         raise ValueError("matrix provenance has invalid summary, cells, or snapshot context")
+    for cell, axes in cells.items():
+        for axis, result in axes.items():
+            if not isinstance(result, dict) or "verdict" not in result:
+                raise ValueError(
+                    f"matrix provenance cell {cell!r} axis {axis!r} "
+                    "must be an object with a verdict"
+                )
     if payload.get("snapshot") != snapshot_identity(document, payload):
         raise ValueError("matrix snapshot identity mismatch; regenerate the pair together")
     if context.get("kind") == "historical-reconciliation":
