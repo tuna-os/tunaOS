@@ -144,3 +144,10 @@ Fork preview builds use `--no-cache`. Stock builds retain their cache behavior.
 Some legacy stages declare the cache argument after their base hooks. Gentoo
 has a separate branch for desktop builds. Tests must prove each stage before
 fork builds can reuse layers.
+
+### Experimental name/logo staging
+
+`--identity-staging` prepares identity inputs for GNOME from the same config. Image builds stay blocked. It exercises os-release, logo/lettermark, console and
+fastfetch consumers in a disposable root. See [the identity contract](FORK-IDENTITY-STAGING.md)
+for the contract, measured installer blockers and required canaries. Normal
+preparation still rejects name/logo; this is not a completed rebrand.

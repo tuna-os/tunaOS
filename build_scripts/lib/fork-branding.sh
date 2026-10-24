@@ -179,6 +179,11 @@ tunaos_apply_fork_branding() {
 		return 1
 	}
 	root="${root%/}"
+	# Refuse live-root/unsafe identity work before URL/art writes too.
+	if [[ -e "$context/manifests/fork-identity.json" || -L "$context/manifests/fork-identity.json" ]]; then
+		python3 "$context/build_scripts/lib/fork-identity.py" "${root:-/}" \
+			--manifest "$context/manifests/fork-identity.json" --check || return 1
+	fi
 	tunaos_validate_fork_branding "$context" || return 1
 	for file in "$root/usr/lib/os-release" "$root/usr/share/ublue-os/image-info.json"; do
 		[[ -f "$file" ]] || {
@@ -191,7 +196,8 @@ tunaos_apply_fork_branding() {
 		value="$(tunaos_fork_branding_url "$manifest" "$field")"
 		[[ -n "$value" ]] || continue
 		_tunaos_fork_branding_osr_set "$root/usr/lib/os-release" "$field" "$value" || return 1
-		if [[ -f "$root/etc/os-release" ]] && ! [[ "$root/etc/os-release" -ef "$root/usr/lib/os-release" ]]; then
+		if [[ -f "$root/etc/os-release" ]] && ! [[ "$root/etc/os-release" -ef "$root/usr/lib/os-release" ]] &&
+			[[ "$(readlink "$root/etc/os-release" || true)" != /usr/lib/os-release ]]; then
 			_tunaos_fork_branding_osr_set "$root/etc/os-release" "$field" "$value" || return 1
 		fi
 	done
@@ -235,6 +241,13 @@ tunaos_apply_fork_branding() {
 		'.["fork-config"] = ($manifest[0] | {schema_version, image, variant, flavor, platform, sources})' "$file" >"$tmp" || return 1
 	chmod --reference="$file" "$tmp"
 	mv "$tmp" "$file"
+	# Name/logo staging consumes the same resolved cell, after stock writers on
+	# both desktop paths. Its helper refuses the live root; image builds remain
+	# blocked until installer/Plymouth consumers and canaries are implemented.
+	if [[ -e "$context/manifests/fork-identity.json" || -L "$context/manifests/fork-identity.json" ]]; then
+		python3 "$context/build_scripts/lib/fork-identity.py" "${root:-/}" \
+			--manifest "$context/manifests/fork-identity.json" || return 1
+	fi
 }
 
 # Checks overridden values and the installed receipt without reading build env.
@@ -269,6 +282,12 @@ tunaos_verify_fork_branding() {
 		[[ -n "$value" ]] || continue
 		expected="$field=$(_tunaos_fork_branding_osr_value "$value")"
 		for file in "$root/usr/lib/os-release" "$root/etc/os-release"; do
+			# Absolute os-release links are rooted in the image, not the build
+			# host. Resolve the one supported absolute target inside $root.
+			if [[ "$file" == "$root/etc/os-release" &&
+				"$(readlink "$file" 2>/dev/null || true)" == /usr/lib/os-release ]]; then
+				file="$root/usr/lib/os-release"
+			fi
 			[[ -e "$file" ]] || {
 				[[ "$file" == "$root/etc/os-release" ]] && continue
 				return 1

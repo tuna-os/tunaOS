@@ -1784,6 +1784,14 @@ Fork previews also disable layer reuse with `--no-cache`. Some legacy stages
 declare the cache argument after their base hooks. Gentoo has a separate branch
 for desktop builds. Tests must prove each stage before fork builds can reuse layers.
 
+### Fork logo visible in a catalog row but missing in installer headers
+
+At bootc-installer dev `981141d348b9207f9ef93bbdcec80d6b5f5611e0`, `_make_icon` accepts absolute filenames in the catalog.
+`apply_icon` needs a resource URI or icon-theme name for welcome/done. A host SVG path becomes a theme name there;
+Flatpak host `/usr` is also under `/run/host/usr`. Do not substitute a filename
+for a resource URI and mark the installer branded. Keep builds with custom identity blocked until tests verify the shared renderer/path contract and the artifact.
+See [the source audit and identity contract](FORK-IDENTITY-STAGING.md).
+
 ### Anime wallpaper disappears after desktop setup
 
 **Symptom:** The selector chooses anime or a desktop override, but the final

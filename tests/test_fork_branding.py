@@ -119,11 +119,12 @@ def test_repeated_application_is_byte_idempotent(fixture):
     assert snapshot(root) == before
 
 
-def test_os_release_symlink_is_preserved(fixture):
+@pytest.mark.parametrize("target", ["../usr/lib/os-release", "/usr/lib/os-release"])
+def test_os_release_symlink_is_preserved(fixture, target):
     context, root, _, _ = fixture
     path = root / "etc/os-release"
     path.unlink()
-    path.symlink_to("../usr/lib/os-release")
+    path.symlink_to(target)
     result = run_helper(context, root)
     assert result.returncode == 0, result.stderr
     assert path.is_symlink()
