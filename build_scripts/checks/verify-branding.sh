@@ -121,9 +121,15 @@ names_upstream() {
 # reads the build context; the installed checker reads the copy
 # configure-desktop-runtime.sh ships beside it.
 identity_env=""
-for candidate in "${TUNAOS_IDENTITY_ENV:-}" "$(dirname "${BASH_SOURCE[0]}")/../lib/identity.env" \
-	/usr/share/tunaos/identity-config.env; do
-	if [[ -n "$candidate" && -r "$candidate" ]]; then
+local_identity="$(dirname "${BASH_SOURCE[0]}")/../lib/identity.env"
+identity_override=""
+# Only the source-tree checker accepts an override. The installed verifier must
+# read the root-owned adapter shipped in the image, never a caller-controlled path.
+if [[ -f "$local_identity" ]]; then
+	identity_override="${TUNAOS_IDENTITY_ENV:-}"
+fi
+for candidate in "$identity_override" "$local_identity" /usr/share/tunaos/identity-config.env; do
+	if [[ -n "$candidate" && -f "$candidate" && -r "$candidate" ]]; then
 		identity_env="$candidate"
 		break
 	fi
@@ -131,7 +137,10 @@ done
 declare -A TUNAOS_CODENAMES=()
 if [[ -n "$identity_env" ]]; then
 	# shellcheck source=../lib/identity.env
-	source "$identity_env"
+	if ! source "$identity_env"; then
+		fail "identity adapter could not be sourced: ${identity_env}"
+		identity_env=""
+	fi
 fi
 
 echo "== identity =="
