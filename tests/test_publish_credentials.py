@@ -205,28 +205,30 @@ def test_cli_reads_trust_from_the_explicit_event_not_github_event_name():
     # attest-sbom.yml runs on workflow_run; it passes the triggering run's event.
     assert cli(GITHUB_EVENT_NAME="workflow_run").returncode == 0
     result = cli(GITHUB_EVENT_NAME="schedule", TUNAOS_PUBLISH_EVENT="pull_request")
-    assert result.returncode == 1 and "untrusted-event" in result.stdout
+    assert result.returncode == 1 and "untrusted-event" in result.stderr
 
 
 def test_cli_refuses_with_one_error_line():
     result = cli(TUNAOS_HAS_PUBLISH_PASSWORD="false")
     assert result.returncode == 1
-    assert result.stdout.splitlines() == [
-        result.stdout.strip()] and result.stdout.startswith("::error::publish credential: partial-credentials:")
+    assert result.stdout == ""
+    assert result.stderr.splitlines() == [
+        result.stderr.strip()
+    ] and result.stderr.startswith("::error::publish credential: partial-credentials:")
 
 
 @pytest.mark.parametrize("name", ["TUNAOS_PUBLISH_USERNAME", "TUNAOS_PUBLISH_PASSWORD"])
 def test_cli_refuses_secret_values(name):
     result = cli(**{name: SECRET_PASS})
     assert result.returncode == 1
-    assert "secret-in-resolver" in result.stdout
+    assert "secret-in-resolver" in result.stderr
     assert SECRET_PASS not in result.stdout + result.stderr
 
 
 @pytest.mark.parametrize("value", ["", "1", "True", "yes"])
 def test_cli_flags_are_strict(value):
     result = cli(TUNAOS_HAS_PUBLISH_USERNAME=value)
-    assert result.returncode == 1 and "invalid-input" in result.stdout
+    assert result.returncode == 1 and "invalid-input" in result.stderr
 
 
 # ── Login helper with credential-free command stubs ───────────────────────────
@@ -268,8 +270,8 @@ def login(tmp_path):
                      "podman login --username=acme+ci-robot --password-stdin quay.io/acme"]),
     ("sudo-skopeo", ["sudo skopeo login --username=acme+ci-robot --password-stdin quay.io/acme",
                      "skopeo login --username=acme+ci-robot --password-stdin quay.io/acme"]),
-    ("cosign", ["cosign login quay.io --username=acme+ci-robot --password-stdin"]),
-    ("docker", ["docker login quay.io --username=acme+ci-robot --password-stdin"]),
+    ("cosign", ["cosign login --username=acme+ci-robot --password-stdin quay.io"]),
+    ("docker", ["docker login --username=acme+ci-robot --password-stdin quay.io"]),
 ])
 def test_login_passes_the_password_on_stdin_only(login, tool, argv):
     result, calls, stdin = login(tool)

@@ -53,7 +53,7 @@ done
 case "$tool" in
 podman | skopeo) command=("$tool" login "--username=$username" --password-stdin "$scope") ;;
 sudo-podman | sudo-skopeo) command=(sudo "${tool#sudo-}" login "--username=$username" --password-stdin "$scope") ;;
-docker | cosign) command=("$tool" login "$registry" "--username=$username" --password-stdin) ;;
+docker | cosign) command=("$tool" login "--username=$username" --password-stdin "$registry") ;;
 *) die "unknown tool '${tool}'; expected docker, podman, sudo-podman, skopeo, sudo-skopeo or cosign" ;;
 esac
 

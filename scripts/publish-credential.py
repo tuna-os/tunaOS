@@ -51,7 +51,7 @@ def main():
             has_password=flag('TUNAOS_HAS_PUBLISH_PASSWORD'),
         )
     except publish_credentials.CredentialError as exc:
-        print(f'::error::publish credential: {exc}')
+        print(f'::error::publish credential: {exc}', file=sys.stderr)
         return 1
     print(f'mode={selection.mode}')
     print(f'registry={selection.registry}')
