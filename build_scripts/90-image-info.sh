@@ -82,7 +82,7 @@ printf '%s\n' "${IMAGE_VENDOR}" >/usr/share/tunaos/image-vendor
 HOME_URL="${TUNAOS_HOME_URL}"
 DOCUMENTATION_URL="${TUNAOS_DOCUMENTATION_URL}"
 SUPPORT_URL="${TUNAOS_SUPPORT_URL}"
-BUG_SUPPORT_URL="${TUNAOS_BUG_REPORT_URL}"
+BUG_REPORT_URL="${TUNAOS_BUG_REPORT_URL}"
 
 # TunaOS variants are named for fish. Keep VERSION_CODENAME tied to that
 # identity instead of inheriting the unrelated legacy dinosaur codename.
@@ -180,7 +180,9 @@ osr_set VERSION_CODENAME "${CODE_NAME}"
 osr_set VARIANT_ID "${IMAGE_NAME}"
 osr_set PRETTY_NAME "${IMAGE_PRETTY_NAME}"
 osr_set HOME_URL "${HOME_URL}"
-osr_set BUG_REPORT_URL "${BUG_SUPPORT_URL}"
+osr_set BUG_REPORT_URL "${BUG_REPORT_URL}"
+# The product part is IMAGE_NAME, the publish name (bonito for bonito-rawhide),
+# as TunaOS has always written it; VERSION_CODENAME carries the variant key.
 osr_set CPE_NAME "cpe:/o:${TUNAOS_CPE_VENDOR}:${IMAGE_NAME}-${TUNAOS_PROJECT_ID}"
 
 # Dynamically interpolate the specific variant name and logo path in the installer recipe.json
