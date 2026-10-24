@@ -57,10 +57,11 @@
     },
     {
       "customType": "regex",
-      "description": "Update font/binary version pins in build scripts",
+      "description": "Update font/binary version pins in build scripts and toolchain",
       "managerFilePatterns": [
         "/^build_scripts/.+\\.sh$/",
-        "/^scripts/.+\\.sh$/"
+        "/^scripts/.+\\.sh$/",
+        "/^toolchain/.+$"
       ],
       "matchStrings": [
         "#\\s*renovate:\\s*datasource=(?<datasource>[^\\s]+)\\s+depName=(?<depName>[^\\s]+)\\n.*?(?<currentValue>v?\\d+\\.\\d+[^\\s/\"]*)"
@@ -121,7 +122,8 @@
         "tuna-os/remora",
         "twpayne/chezmoi",
         "AvengeMedia/DankMaterialShell",
-        "tuna-os/bootc-installer"
+        "tuna-os/bootc-installer",
+        "rust-lang/rustup"
       ],
       "automerge": false
     },

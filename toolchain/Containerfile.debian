@@ -60,8 +60,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Rust toolchain (minimal) for the bootc and bootupd cargo builds.
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
-        sh -s -- --profile minimal -y
+# renovate: datasource=github-tags depName=rust-lang/rustup
+ARG RUSTUP_VERSION=1.28.2
+ARG TARGETARCH
+RUN set -eux; \
+    case "${TARGETARCH}" in \
+      amd64) RUSTUP_ARCH=x86_64-unknown-linux-gnu; RUSTUP_SHA256=20a06e644b0d9bd2fbdbfd52d42540bdde820ea7df86e92e533c073da0cdd43c ;; \
+      arm64) RUSTUP_ARCH=aarch64-unknown-linux-gnu; RUSTUP_SHA256=e3853c5a252fca15252d07cb23a1bdd9377a8c6f3efa01531109281ae47f841c ;; \
+      *) echo "Unsupported Rustup architecture: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac; \
+    curl --fail --silent --show-error --location \
+      "https://static.rust-lang.org/rustup/archive/${RUSTUP_VERSION}/${RUSTUP_ARCH}/rustup-init" \
+      -o /tmp/rustup-init; \
+    echo "${RUSTUP_SHA256}  /tmp/rustup-init" | sha256sum --check --strict; \
+    chmod +x /tmp/rustup-init; \
+    /tmp/rustup-init -y --profile minimal; \
+    rm -f /tmp/rustup-init
 
 # ── composefs + libostree from source (trixie only) ──────────────────────────
 # ostree's configure finds composefs via pkg-config (not the git submodule), so

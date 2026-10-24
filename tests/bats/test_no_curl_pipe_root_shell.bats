@@ -43,7 +43,7 @@ PIPE_TO_SHELL='(curl|wget)[^|;&]*\|[[:space:]]*(sudo[[:space:]]+)?(bash|sh)([[:s
   # _upstream-snapshots/ is vendored third-party source, not ours to rewrite.
   run bash -c "grep -rInE '$PIPE_TO_SHELL' \
       --include='*.sh' --include='Justfile' --include='Containerfile*' \
-      '${REPO_ROOT}/scripts' '${REPO_ROOT}/build_scripts' '${REPO_ROOT}/Justfile' 2>/dev/null"
+      '${REPO_ROOT}/scripts' '${REPO_ROOT}/build_scripts' '${REPO_ROOT}/toolchain' '${REPO_ROOT}/Justfile' 2>/dev/null"
   if [ "$status" -eq 0 ]; then
     echo "curl|shell found:" >&2
     echo "$output" >&2
@@ -76,4 +76,16 @@ PIPE_TO_SHELL='(curl|wget)[^|;&]*\|[[:space:]]*(sudo[[:space:]]+)?(bash|sh)([[:s
   local wf="${REPO_ROOT}/.github/workflows/reusable-build-image.yml"
   run grep -F 'no pinned yq/just checksum for' "$wf"
   [ "$status" -eq 0 ]
+}
+
+@test "the debian toolchain rustup installer checksums what it downloads" {
+  local cf="${REPO_ROOT}/toolchain/Containerfile.debian"
+  run grep -F 'sha256sum --check --strict' "$cf"
+  [ "$status" -eq 0 ]
+}
+
+@test "the debian toolchain does not pipe curl into a shell" {
+  local cf="${REPO_ROOT}/toolchain/Containerfile.debian"
+  run bash -c "grep -E 'curl.*\\|.*(sh|bash)' '$cf' || grep -F 'sh.rustup.rs' '$cf'"
+  [ "$status" -ne 0 ]
 }
