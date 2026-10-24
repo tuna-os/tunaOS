@@ -51,6 +51,12 @@ def test_complete_fixture():
     assert validate(data) == data
 
 
+def test_catalog_flavor_membership_is_order_independent():
+    data = fixture()
+    data['flavors'].reverse()
+    assert validate(data) == data
+
+
 @pytest.mark.parametrize('key,value', [
     ('coverage', 'base-image-only'), ('variant', '../bad'), ('schema_version', True),
     ('schema_version', 1), ('family', 'fedora'), ('release', 'sid'),
@@ -247,6 +253,18 @@ def test_no_symlink_or_fifo_trust_inputs(tmp_path):
     with pytest.raises(CatalogError):package_catalogs._public_file(tmp_path,'link')
     os.mkfifo(tmp_path/'fifo')
     with pytest.raises(CatalogError):package_catalogs._public_file(tmp_path,'fifo')
+
+
+def test_copied_source_inventory_rejects_symlinked_directories_before_descent(tmp_path):
+    inventory_root = tmp_path / 'system_files/etc/apt'
+    inventory_root.mkdir(parents=True)
+    external = tmp_path / 'external'
+    external.mkdir()
+    (external / 'source.list').write_text('deb https://example.invalid stable main\n')
+    (inventory_root / 'linked').symlink_to(external, target_is_directory=True)
+
+    with pytest.raises(CatalogError, match='must not contain symlinks'):
+        package_catalogs._copied_package_source_files(tmp_path)
 
 
 @pytest.mark.parametrize('field,value', [

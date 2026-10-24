@@ -2,6 +2,7 @@
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import PurePosixPath
+import os
 import re
 from urllib.parse import urlsplit
 
@@ -50,7 +51,8 @@ def validate(catalog):
         raise CatalogError('unsupported family/release; never omit this target')
     if catalog['platforms'] != ['linux/amd64']:
         raise CatalogError('apt collector supports linux/amd64 only')
-    if catalog['flavors'] != ['base', 'kde', 'xfce']:
+    unique_strings(catalog['flavors'], 'catalog.flavors')
+    if set(catalog['flavors']) != {'base', 'kde', 'xfce'}:
         raise CatalogError('catalog must name the complete reviewed flavor set')
     if not isinstance(catalog['observed_base_image'], str) or not re.fullmatch(
             r'docker\.io/library/debian:trixie@sha256:[0-9a-f]{64}', catalog['observed_base_image']):
@@ -375,17 +377,22 @@ def _copied_package_source_files(config_directory):
             continue
         if not directory.is_dir():
             raise CatalogError('copied package-source inventory root is not a directory')
-        for candidate in sorted(directory.rglob('*')):
-            relative = candidate.relative_to(root).as_posix()
-            if candidate.is_symlink():
-                raise CatalogError('copied package-source paths must not contain symlinks')
-            if candidate.is_dir():
-                continue
-            content = _public_file(root, relative, limit=8 * 1024 * 1024)
-            inventory[relative] = {
-                'sha256': hashlib.sha256(content).hexdigest(),
-                'size': len(content),
-            }
+        for current, dirnames, filenames in os.walk(directory, followlinks=False):
+            current_path = Path(current)
+            for name in sorted(dirnames):
+                if (current_path / name).is_symlink():
+                    raise CatalogError('copied package-source paths must not contain symlinks')
+            dirnames.sort()
+            for name in sorted(filenames):
+                candidate = current_path / name
+                relative = candidate.relative_to(root).as_posix()
+                if candidate.is_symlink():
+                    raise CatalogError('copied package-source paths must not contain symlinks')
+                content = _public_file(root, relative, limit=8 * 1024 * 1024)
+                inventory[relative] = {
+                    'sha256': hashlib.sha256(content).hexdigest(),
+                    'size': len(content),
+                }
     return inventory
 
 
