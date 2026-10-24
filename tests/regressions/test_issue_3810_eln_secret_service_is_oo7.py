@@ -64,21 +64,32 @@ def test_oo7_is_confined_to_eln():
 def contract_functions():
     source = CHECK.read_text()
     bodies = []
-    for name in ("require_any_glob", "require_secret_service"):
-        match = re.search(rf"^{name}\(\) \{{.*?^\}}", source, re.M | re.S)
+    for name in ("require_any_glob", "require_any_executable", "require_secret_service"):
+        match = re.search(
+            rf"^(?:function[ \t]+)?{name}[ \t]*(?:\(\))?[ \t]*\{{.*?^\}}",
+            source,
+            re.M | re.S,
+        )
         assert match, f"the desktop contract has no {name}"
         bodies.append(match.group(0))
     return "\n".join(bodies)
 
 
-def image(tmp_path, os_id, files, *, quoted_id=False):
+def image(
+    tmp_path, os_id, files, *, quoted_id=False, variant_id=None, executable=True
+):
     (tmp_path / "usr/lib").mkdir(parents=True)
     value = f'"{os_id}"' if quoted_id else os_id
-    (tmp_path / "usr/lib/os-release").write_text(f"NAME=test\nID={value}\n")
+    os_release = f"NAME=test\nID={value}\n"
+    if variant_id is not None:
+        os_release += f"VARIANT_ID={variant_id}\n"
+    (tmp_path / "usr/lib/os-release").write_text(os_release)
     for relative in files:
         path = tmp_path / relative
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("")
+        if executable and path.name in {"oo7-daemon", "gnome-keyring-daemon"}:
+            path.chmod(0o755)
     script = contract_functions() + f'\nrequire_secret_service "{tmp_path}"\necho satisfied\n'
     return subprocess.run(["bash", "-c", script], capture_output=True, text=True, env={"PATH": "/usr/bin:/bin"})
 
@@ -88,16 +99,21 @@ KEYRING_FILES = ["usr/bin/gnome-keyring-daemon"]
 
 
 @pytest.mark.parametrize(
-    "os_id,files,quoted_id",
+    "os_id,files,quoted_id,variant_id",
     [
-        ("eln", OO7_FILES, False),
-        ("eln", ["usr/libexec/oo7-daemon", "usr/lib/security/pam_oo7.so"], True),
-        ("fedora", KEYRING_FILES, False),
-        ("almalinux", KEYRING_FILES, False),
+        ("eln", OO7_FILES, False, None),
+        ("eln", ["usr/libexec/oo7-daemon", "usr/lib/security/pam_oo7.so"], True, None),
+        ("fedora", OO7_FILES, False, "eln"),
+        ("fedora", KEYRING_FILES, False, None),
+        ("almalinux", KEYRING_FILES, False, None),
     ],
 )
-def test_the_contract_accepts_each_base_native_provider(tmp_path, os_id, files, quoted_id):
-    result = image(tmp_path, os_id, files, quoted_id=quoted_id)
+def test_the_contract_accepts_each_base_native_provider(
+    tmp_path, os_id, files, quoted_id, variant_id
+):
+    result = image(
+        tmp_path, os_id, files, quoted_id=quoted_id, variant_id=variant_id
+    )
     assert result.returncode == 0, result.stderr
     assert result.stdout == "satisfied\n"
 
@@ -117,7 +133,12 @@ def test_the_contract_rejects_a_missing_native_provider(tmp_path, os_id, files):
     result = image(tmp_path, os_id, files)
     assert result.returncode == 1
     assert "satisfied" not in result.stdout
-    assert "missing required path" in result.stderr
+
+
+def test_the_contract_rejects_a_non_executable_daemon(tmp_path):
+    result = image(tmp_path, "fedora", KEYRING_FILES, executable=False)
+    assert result.returncode == 1
+    assert "satisfied" not in result.stdout
 
 
 @pytest.mark.parametrize("case", ["gnome", "tuna"])
