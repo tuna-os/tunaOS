@@ -126,6 +126,12 @@ def fake_catalog():
     envelopes, payloads, responses = {}, {}, {}
     for source in catalog['sources']:
         name = source['id']
+        if name == 'tailscale':
+            declaration = b'deb [signed-by=/usr/share/keyrings/tailscale-archive-keyring.gpg] https://pkgs.tailscale.com/stable/debian trixie main\n'
+            source['declaration_sha256'] = hashlib.sha256(declaration).hexdigest()
+            source['keyring_sha256'] = hashlib.sha256(b'key').hexdigest()
+            responses[source['declaration_url']] = declaration
+            responses[source['keyring_url']] = b'key'
         root = source['uri'] + 'dists/' + source['suite'] + '/'
         envelope = ('signed fixture ' + name).encode()
         fields = {
@@ -182,11 +188,14 @@ def test_complete_configured_target_with_authenticated_empty_updates():
     assert results[3]['role'] == 'build'
     assert results[3]['source_url'].startswith('https://pkgs.tailscale.com/')
     assert len(results[3]['indexes']) == 2
-    assert results[3]['keyring_sha256'] == 'e' * 64
-    assert len(requested) == 9
+    assert results[3]['keyring_sha256'] == hashlib.sha256(b'key').hexdigest()
+    assert results[3]['declaration_sha256'] == hashlib.sha256(
+        responses[catalog['sources'][3]['declaration_url']]
+    ).hexdigest()
+    assert results[3]['remote_keyring_sha256'] == hashlib.sha256(b'key').hexdigest()
+    assert len(requested) == 11
     assert all(url.startswith(('https://deb.debian.org/', 'https://pkgs.tailscale.com/'))
                for url in requested)
-    assert not any(url.endswith(('.gpg', '.list')) for url in requested)
 
 
 def test_acquisition_runs_no_package_tool_and_claims_no_installability(monkeypatch):
@@ -223,7 +232,8 @@ def test_signature_verifier_is_the_only_native_process(monkeypatch):
 @pytest.mark.parametrize(
     'failure',
     ['missing-security', 'missing-tailscale', 'bad-index-hash',
-     'expired-security', 'wrong-identity', 'wrong-base-pin'])
+     'expired-security', 'wrong-identity', 'wrong-base-pin',
+     'changed-declaration', 'changed-trust-key'])
 def test_no_partial_catalog_result(failure):
     catalog, fetch, verify, envelopes, payloads, responses, requested = fake_catalog()
     if failure in {'missing-security', 'missing-tailscale'}:
@@ -243,6 +253,10 @@ def test_no_partial_catalog_result(failure):
     elif failure == 'wrong-identity':
         key = envelopes['tailscale']
         payloads[key] = payloads[key].replace(b'Origin: Tailscale', b'Origin: Forged')
+    elif failure == 'changed-declaration':
+        responses[catalog['sources'][3]['declaration_url']] = b'changed'
+    elif failure == 'changed-trust-key':
+        responses[catalog['sources'][3]['keyring_url']] = b'changed'
     else:
         catalog['sources'][0]['freshness']['inrelease_sha256'] = '0' * 64
     with pytest.raises(CatalogError):

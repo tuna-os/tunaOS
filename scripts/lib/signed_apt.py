@@ -1,7 +1,8 @@
 """Bounded, signed APT repository search for reviewed configured targets.
 
 GnuPG is an explicit existing native dependency, never installed by this module.
-No keys are installed, imported, fetched or added to the user's trust database.
+Remote trust bytes are fetched only to compare them with the reviewed keyring;
+no keys are installed, imported or added to the user's trust database.
 """
 import hashlib
 import zlib
@@ -21,6 +22,8 @@ from .package_catalogs import (CatalogError, validate, check_authenticated_dates
 
 MAX_RELEASE = 1024 * 1024
 MAX_INDEX = 128 * 1024 * 1024
+MAX_DECLARATION = 64 * 1024
+MAX_KEYRING = 1024 * 1024
 
 
 class SameHostRedirect(urllib.request.HTTPRedirectHandler):
@@ -213,10 +216,23 @@ def acquire_catalog(catalog, keyring_for, now, fetch=fetch_https, verify=verify_
     validate(catalog)
     complete = []
     for source in catalog['sources']:
+        source_keyring = keyring_for(source)
+        declaration_hash = None
+        remote_keyring_hash = None
+        if source['role'] == 'build':
+            declaration = fetch(source['declaration_url'], MAX_DECLARATION)
+            declaration_hash = hashlib.sha256(declaration).hexdigest()
+            remote_keyring = fetch(source['keyring_url'], MAX_KEYRING)
+            remote_keyring_hash = hashlib.sha256(remote_keyring).hexdigest()
+            if declaration_hash != source['declaration_sha256']:
+                raise CatalogError('build source declaration differs from reviewed bytes')
+            if (remote_keyring_hash != source['keyring_sha256']
+                    or remote_keyring != source_keyring):
+                raise CatalogError('build source trust key differs from reviewed bytes')
         root = source['uri'] + 'dists/' + source['suite'] + '/'
         metadata_url = root + 'InRelease'
         envelope = fetch(metadata_url, MAX_RELEASE)
-        payload, signers = verify(envelope, keyring_for(source), source)
+        payload, signers = verify(envelope, source_keyring, source)
         fields, checksums = parse_release(payload)
         envelope_hash = hashlib.sha256(envelope).hexdigest()
         expiry = check_authenticated_dates(source, fields, now, envelope_hash)
@@ -253,6 +269,8 @@ def acquire_catalog(catalog, keyring_for, now, fetch=fetch_https, verify=verify_
             'inrelease_sha256': envelope_hash,
             'keyring_sha256': source['keyring_sha256'],
             'indexes': indexes,
+            'declaration_sha256': declaration_hash,
+            'remote_keyring_sha256': remote_keyring_hash,
             'names': names,
             'signers': signers,
             'freshness': {

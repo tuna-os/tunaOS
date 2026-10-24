@@ -70,7 +70,8 @@ def validate(catalog):
         common = ('id', 'role', 'uri', 'suite', 'origin', 'label', 'codename',
                   'components', 'keyring', 'keyring_sha256', 'primary_fingerprints',
                   'freshness', 'clock_skew_seconds')
-        fields = common + (('declaration_url', 'keyring_url') if source.get('id') == 'tailscale' else ())
+        fields = common + (('declaration_url', 'declaration_sha256', 'keyring_url')
+                           if source.get('id') == 'tailscale' else ())
         exact(source, fields, 'source')
         name = source['id']
         if not isinstance(name, str) or not re.fullmatch(r'[a-z0-9][a-z0-9-]*', name) or name in ids:
@@ -96,6 +97,7 @@ def validate(catalog):
                     or source['keyring_url'] !=
                     'https://pkgs.tailscale.com/stable/debian/trixie.noarmor.gpg'):
                 raise CatalogError('Tailscale build source differs from reviewed configuration')
+            digest(source['declaration_sha256'])
         else:
             raise CatalogError('unsupported package source; adapter review required')
         uri = source['uri']
@@ -359,6 +361,50 @@ def bind_observation(catalog, config_directory):
     return observation, keys
 
 
+def _copied_package_source_files(config_directory):
+    """Identity every local source/trust file copied into the target."""
+    import hashlib
+    from pathlib import Path
+    root = Path(config_directory)
+    inventory = {}
+    for relative_root in ('system_files/etc/apt', 'system_files/usr/share/keyrings'):
+        directory = root / relative_root
+        if directory.is_symlink():
+            raise CatalogError('copied package-source paths must not contain symlinks')
+        if not directory.exists():
+            continue
+        if not directory.is_dir():
+            raise CatalogError('copied package-source inventory root is not a directory')
+        for candidate in sorted(directory.rglob('*')):
+            relative = candidate.relative_to(root).as_posix()
+            if candidate.is_symlink():
+                raise CatalogError('copied package-source paths must not contain symlinks')
+            if candidate.is_dir():
+                continue
+            content = _public_file(root, relative, limit=8 * 1024 * 1024)
+            inventory[relative] = {
+                'sha256': hashlib.sha256(content).hexdigest(),
+                'size': len(content),
+            }
+    return inventory
+
+
+def _common_image_reference(image_versions):
+    try:
+        text = image_versions.decode('utf-8')
+    except UnicodeError as exc:
+        raise CatalogError('image version input is not UTF-8') from exc
+    matches = re.findall(
+        r'(?m)^  - name: common\n    image: ([^\s]+)\n'
+        r'    tag: [^\s]+\n    digest: (sha256:[0-9a-f]{64})$',
+        text,
+    )
+    if len(matches) != 1:
+        raise CatalogError('common image pin is missing or ambiguous')
+    image, image_digest = matches[0]
+    return f'{image}@{image_digest}'
+
+
 def bind_target_configuration(catalog, document, config_directory, flavor):
     """Bind reviewed build-source claims and parsed desktop sources to one target."""
     import hashlib
@@ -367,7 +413,8 @@ def bind_target_configuration(catalog, document, config_directory, flavor):
         raise CatalogError('target source observation differs from reviewed pin')
     observation = _json(raw)
     exact(observation, ('schema_version', 'variant', 'flavors', 'platform', 'base_image',
-                       'observed_at', 'configuration_files', 'build_sources'),
+                       'observed_at', 'configuration_files', 'copied_package_source_files',
+                       'common_image', 'build_sources'),
           'target observation')
     if (type(observation['schema_version']) is not int or observation['schema_version'] != 1
             or observation['variant'] != catalog['variant']
@@ -383,9 +430,11 @@ def bind_target_configuration(catalog, document, config_directory, flavor):
         raise CatalogError('target observation timestamp needs timezone')
     files = observation['configuration_files']
     expected_files = {'Containerfile.debian', 'build_scripts/20-packages.sh',
-                      'build_scripts/desktop/install-desktop.sh'}
+                      'build_scripts/desktop/install-desktop.sh',
+                      'scripts/build-image-inner.sh', 'image-versions.yaml'}
     if not isinstance(files, dict) or set(files) != expected_files:
         raise CatalogError('target observation lacks complete configuration files')
+    configuration_bytes = {}
     for path, identity in files.items():
         exact(identity, ('sha256', 'size'), 'configuration file identity')
         digest(identity['sha256'])
@@ -394,6 +443,13 @@ def bind_target_configuration(catalog, document, config_directory, flavor):
         content = _public_file(config_directory, path, limit=8 * 1024 * 1024)
         if len(content) != identity['size'] or hashlib.sha256(content).hexdigest() != identity['sha256']:
             raise CatalogError('effective package-source configuration changed; refresh observation')
+        configuration_bytes[path] = content
+    copied_sources = _copied_package_source_files(config_directory)
+    if observation['copied_package_source_files'] != copied_sources:
+        raise CatalogError('copied package-source inventory changed; refresh observation')
+    common_image = _common_image_reference(configuration_bytes['image-versions.yaml'])
+    if observation['common_image'] != common_image:
+        raise CatalogError('resolved common image differs from reviewed observation')
     build_sources = [{
         'id': source['id'],
         'uri': source['uri'],
@@ -401,6 +457,8 @@ def bind_target_configuration(catalog, document, config_directory, flavor):
         'components': source['components'],
         'declaration_url': source['declaration_url'],
         'keyring_url': source['keyring_url'],
+        'declaration_sha256': source['declaration_sha256'],
+        'keyring_sha256': source['keyring_sha256'],
     } for source in catalog['sources'] if source['role'] == 'build']
     if observation['build_sources'] != build_sources:
         raise CatalogError('catalog does not cover the observed build source set')

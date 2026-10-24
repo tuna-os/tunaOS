@@ -21,8 +21,18 @@
     "build_scripts/desktop/install-desktop.sh": {
       "sha256": "2d4a2d92ac4b21890f7ec0f9a33d4b8ef702442084ab243dc9600fec8d9a3d44",
       "size": 61254
+    },
+    "scripts/build-image-inner.sh": {
+      "sha256": "3f3fcafccaf9ad92b04cfe0f910efa4f2f14a31110b588d0a31e1a279b826411",
+      "size": 20911
+    },
+    "image-versions.yaml": {
+      "sha256": "bf2b2593316fd1377e8fac1a7e684e18bd9da3b409c97bb701d560020b03420c",
+      "size": 12701
     }
   },
+  "copied_package_source_files": {},
+  "common_image": "ghcr.io/projectbluefin/common@sha256:f7934f263b4357cba6ad253e7a3ce8d667cd478798a137be8f3a18c04806cbee",
   "build_sources": [
     {
       "id": "tailscale",
@@ -32,6 +42,8 @@
         "main"
       ],
       "declaration_url": "https://pkgs.tailscale.com/stable/debian/trixie.tailscale-keyring.list",
+      "declaration_sha256": "5a1b21b30892bf22fb5d7c4f52fefe9b65efda2100e82abba2e0849da2a2264b",
+      "keyring_sha256": "3e03dacf222698c60b8e2f990b809ca1b3e104de127767864284e6c228f1fb39",
       "keyring_url": "https://pkgs.tailscale.com/stable/debian/trixie.noarmor.gpg"
     }
   ]
