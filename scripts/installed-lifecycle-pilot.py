@@ -464,8 +464,10 @@ class LocalQemuBackend:
         }
 
     def _drain_qemu(self) -> None:
-        assert self.qemu_process is not None and self.qemu_process.stdout is not None
-        while chunk := self.qemu_process.stdout.read(4096):
+        process = self.qemu_process
+        if process is None or process.stdout is None:
+            raise PilotFailure("internal_error", "QEMU log drain started without a readable process")
+        while chunk := process.stdout.read(4096):
             with self.qemu_log_lock:
                 remaining = MAX_LOG_BYTES - len(self.qemu_log)
                 if remaining > 0:
@@ -493,7 +495,8 @@ class LocalQemuBackend:
         return PilotFailure(category, summary)
 
     def start_vm(self) -> None:
-        assert self.qemu_bin and self.uefi_code
+        if not self.qemu_bin or not self.uefi_code:
+            raise PilotFailure("internal_error", "QEMU preflight state is incomplete")
         accel = "kvm" if Path("/dev/kvm").exists() and os.access("/dev/kvm", os.R_OK | os.W_OK) else "tcg"
         argv = [
             self.qemu_bin,
@@ -842,6 +845,7 @@ def require_staged(details: Any, expected_reference: str) -> dict[str, Any]:
 def execute_pilot(
     config: PilotConfig,
     backend_factory: Callable[[PilotConfig, list[dict[str, Any]]], Any] = LocalQemuBackend,
+    progress: Callable[[dict[str, Any]], None] | None = None,
 ) -> tuple[dict[str, Any], bool]:
     evidence = new_evidence(config)
     stages = {stage["id"]: stage for stage in evidence["stages"]}
@@ -852,6 +856,8 @@ def execute_pilot(
         nonlocal first_failure
         stage = stages[stage_id]
         stage["started_at"] = utc_now()
+        if progress is not None:
+            progress(evidence)
         try:
             stage["details"] = action()
             stage["outcome"] = "passed"
@@ -881,6 +887,8 @@ def execute_pilot(
         finally:
             stage["finished_at"] = utc_now()
 
+            if progress is not None:
+                progress(evidence)
     def preflight() -> dict[str, Any]:
         validate_static(config)
         return backend.preflight()
@@ -939,7 +947,20 @@ def execute_pilot(
         "first_failure": first_failure,
     }
     evidence["finished_at"] = utc_now()
+    if progress is not None:
+        progress(evidence)
     return evidence, passed
+
+
+def write_evidence(path: Path, evidence: dict[str, Any]) -> None:
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    try:
+        temporary.write_text(
+            json.dumps(evidence, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def parse_args(argv: list[str] | None = None) -> PilotConfig:
@@ -999,8 +1020,9 @@ def main(argv: list[str] | None = None) -> int:
     evidence_path = config.output_dir / "installed-lifecycle-evidence.json"
     if evidence_path.exists():
         raise SystemExit(f"refusing to overwrite existing evidence: {evidence_path}")
-    evidence, passed = execute_pilot(config)
-    evidence_path.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    evidence, passed = execute_pilot(
+        config, progress=lambda current: write_evidence(evidence_path, current)
+    )
     print(f"evidence: {evidence_path}")
     print(f"runtime acceptance: {evidence['result']['runtime_acceptance']}")
     return 0 if passed else 1
