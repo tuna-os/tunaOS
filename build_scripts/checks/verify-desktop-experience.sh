@@ -190,8 +190,10 @@ require_any_glob() {
 # alternate image root without changing the test process's PATH.
 require_any_executable() {
 	local g path
+	local -a matches
 	for g in "$@"; do
-		for path in $g; do
+		mapfile -t matches < <(compgen -G "$g" || true)
+		for path in "${matches[@]}"; do
 			[[ -f "$path" && -x "$path" ]] && return 0
 		done
 	done
