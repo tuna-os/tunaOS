@@ -1,6 +1,8 @@
 # Primary TunaOS configuration migration
 
-Status: draft for review. This is not a completed configuration interface.
+Status: design and migration history, not a copyable configuration interface.
+The adopted ownership boundary is tracked in [#3668](https://github.com/tuna-os/tunaOS/issues/3668).
+For implemented fields and commands, read [CONFIG-WIRING.md](CONFIG-WIRING.md).
 Related work: RFC 013, issue #3433 and delivery epic #3474.
 
 ## Goal
@@ -22,15 +24,17 @@ The name `tunaos.toml` alone would not make those deltas meet the new requiremen
 | Variant IDs, aliases, emoji, bases, platforms, flavor order and holds | .github/build-config.yml | Generated matrix at the existing path |
 | ISO groups, sibling images and Tuna Desktop admission records | .github/build-config.yml | The same generated matrix, with all metadata retained |
 | Desktop package profiles, family overrides, optional/excluded sets and repository policy | manifests/desktops/*.yaml | Generated desktop manifests consumed by install-desktop.sh |
-| Shared and base-family package policy | 10-base-packages.sh, 20-packages.sh and package-bearing helpers | Ordered typed package plans; scripts retain mechanisms |
-| Image and download versions, digest pins and package ceilings | image-versions.yaml | Generated version adapter; Renovate edits TOML inputs |
-| Registry mirrors | registry-map.yaml | Generated mirror adapter |
+| Configurable image-wide package additions (pending) | Existing base package scripts remain framework policy | Additions over inherited/base lists; removals remain rejected |
+| Variant base-image pins | Existing variant entries in tunaos.toml | Base-image resolver; Renovate edits the TOML pin |
 | Names, species codenames, URLs and logo assets | 90-image-info.sh and identity/brand source files | Resolved identity, os-release, Plymouth and desktop adapters |
 | Wallpaper assets and desktop/variant precedence | select-wallpaper.sh and asset naming conventions | Explicit resolved artwork selection with existing stock precedence |
 | Installer name, logos and shared presentation settings | installer customization/projection sources | One versioned frontend-neutral brand payload for all frontends |
 | Flatpak remotes and selected application sets | desktop helper scripts | Typed generated policy consumed by existing installers |
 
-Execution scripts, Containerfiles and checks remain code. Credentials are not
+Execution scripts, Containerfiles and checks remain code. Tool/download pins in
+`image-versions.yaml` and mirrors in `registry-map.yaml` also remain framework
+inputs; they are not migration targets. Inherited stock base-package policy is
+not replaced by the planned configurable additions. Credentials are not
 configuration data. Do not put shell commands, remote includes or secret values in TOML. Existing trusted post-install steps become named, validated operations;
 this migration does not add arbitrary hooks.
 
@@ -113,10 +117,10 @@ family-specific. Selection never enables a held or unsupported cell.
 2. Move the complete matrix into TOML. Generate the old adapter without losing
    any value, order, flag, alias, ISO group or rollout record. Add a read-only
    drift gate and `just config-generate` / `just config-check`. The generator marks the adapter as derived. Both local and CI builds validate it before consumption.
-3. Move all desktop profiles and base/shared package policy, in reviewed groups.
+3. Move desktop profiles and add configurable image-wide package additions in reviewed groups.
    Compare the complete resolved package/repository operation sequence to the
-   old path for every supported family and cell. Migrate the pins/mirror
-   writers and Renovate at the same boundary as their generated adapters.
+   old path for every supported family and cell. Keep tool/download pins and
+   registry mirrors in their existing framework files.
 4. Move actual image identity, artwork and installer defaults. TunaOS's own
    values pass through the same compiler and consumers as customized values.
    Reuse the reviewed mechanisms in consumers and check final writers. No stock-only bypass remains.

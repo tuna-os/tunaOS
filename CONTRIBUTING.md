@@ -392,14 +392,18 @@ just verify-disk image.qcow2  # QEMU boot verification
 
 ### Primary config
 
-Edit `tunaos.toml` for matrix changes. Run `python3 scripts/config.py validate`
+Edit `tunaos.toml` for matrix and desktop package policy changes. Run `python3 scripts/config.py validate`
 to check it, or `python3 scripts/config.py show` to view the build input.
-`python3 scripts/config.py generate` writes the ignored compatibility file.
-Build setup runs this step too. Do not edit that generated file.
+`python3 scripts/config.py generate` writes the matrix and desktop adapters.
+Build setup runs this step too. Do not edit those generated files.
+Start with [configuration wiring](docs/CONFIG-WIRING.md) for field consumers
+and [package authoring](docs/PACKAGE-AUTHORING.md) for safe add previews.
 
 Python 3.10+ uses Tomli from this repository. The source has a fixed version.
 Config reads need no parser installation and never download code.
 See [parser updates](docs/VENDORED-PARSER.md) before a version change.
 This parser runs on the build host;
-it is not an image package choice. Packages and brand settings still
-follow the staged [migration plan](docs/PRIMARY-CONFIG-MIGRATION.md).
+it is not an image package choice. Installed identity, artwork and image-wide
+package changes still follow [#3668](https://github.com/tuna-os/tunaOS/issues/3668).
+Do not copy proposed fields from the staged
+[migration plan](docs/PRIMARY-CONFIG-MIGRATION.md) into the current schema.
