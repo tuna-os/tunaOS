@@ -181,6 +181,9 @@ class _BoundedResponse:
             raise AuthoritativeTransportError(code, "response.read") from exc
         if type(chunk) is not bytes or len(chunk) > requested:
             raise AuthoritativeTransportError("invalid_response", "response.read")
+        if not chunk and self._declared_remaining:
+            # EOF before Content-Length bytes arrived: never accept the short body.
+            raise AuthoritativeTransportError("truncated_response", "response.read")
         self._remaining -= len(chunk)
         if self._declared_remaining is not None:
             self._declared_remaining -= len(chunk)
@@ -314,7 +317,11 @@ class AuthoritativeTransport:
         return request
 
     def _open_response(self, request, opener, limit, allowed_final_origins):
-        timeout = min(self._network.connect_timeout_seconds, self._budget.remaining_seconds())
+        remaining_time = self._budget.remaining_seconds()
+        # Record which bound applied so a timeout is classified by the bound
+        # that produced it, not by a clock re-read that can race the socket.
+        total_deadline_bound = remaining_time <= self._network.connect_timeout_seconds
+        timeout = min(self._network.connect_timeout_seconds, remaining_time)
         response = None
         try:
             response = opener.open(request, timeout=timeout)
@@ -331,10 +338,13 @@ class AuthoritativeTransport:
                 _fail("invalid_response", "response.url")
             if _url_origin(final_url) not in allowed_final_origins:
                 _fail("response_origin", "response.url")
-            encoding = response.headers.get("Content-Encoding", "identity")
+            headers = getattr(response, "headers", None)
+            if not callable(getattr(headers, "get", None)):
+                _fail("invalid_response", "response.headers")
+            encoding = headers.get("Content-Encoding", "identity")
             if type(encoding) is not str or encoding.lower() != "identity":
                 _fail("content_encoding", "response.headers")
-            length = response.headers.get("Content-Length")
+            length = headers.get("Content-Length")
             declared = None
             if length is not None:
                 if type(length) is not str or re.fullmatch(r"[0-9]+", length) is None:
@@ -358,13 +368,15 @@ class AuthoritativeTransport:
         except urllib.error.URLError as exc:
             _close_quietly(response)
             if isinstance(exc.reason, (socket.timeout, TimeoutError)):
-                code = (
-                    "total_timeout"
-                    if self._budget.clock() >= self._budget.deadline
-                    else "connect_timeout"
-                )
+                code = "total_timeout" if total_deadline_bound else "connect_timeout"
                 raise AuthoritativeTransportError(code, "request") from exc
             raise AuthoritativeTransportError("network_error", "request") from exc
+        except (socket.timeout, TimeoutError) as exc:
+            # An opener may raise the socket timeout unwrapped; classify it the
+            # same way instead of letting a raw exception escape the contract.
+            _close_quietly(response)
+            code = "total_timeout" if total_deadline_bound else "connect_timeout"
+            raise AuthoritativeTransportError(code, "request") from exc
         except Exception:
             _close_quietly(response)
             raise

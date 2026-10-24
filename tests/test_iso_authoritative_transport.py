@@ -25,7 +25,9 @@ try:
 finally:
     sys.path.remove(SCRIPTS)
 
-CASE = json.loads((ROOT / "tests/fixtures/iso-artifact-transport-v1/case.json").read_text())
+CASE = json.loads(
+    (ROOT / "tests/fixtures/iso-artifact-transport-v1/case.json").read_text(encoding="utf-8")
+)
 ARTIFACT_ORIGIN = "https://artifacts.example.test"
 TOKEN = "synthetic-token"
 
@@ -513,6 +515,36 @@ def test_connect_timeout_is_classified_before_any_response():
     assert api.calls[0][1] == 3
 
 
+def test_unwrapped_socket_timeout_from_an_opener_is_classified():
+    case = copy.deepcopy(CASE)
+    api = FakeServerOpener(error=socket.timeout("synthetic unwrapped stall"))
+    client = transport(case, openers=(api, FakeServerOpener(), FakeServerOpener()))
+    path = f"/repos/tuna-os/iso-builder/actions/runs/{case['selection']['run_id']}"
+
+    with pytest.raises(CALLER.AuthoritativeTransportError) as caught:
+        client.get_json(path)
+
+    assert (caught.value.code, caught.value.field) == ("connect_timeout", "request")
+
+
+def test_connect_timeout_bounded_by_the_total_budget_reports_total_timeout():
+    case = copy.deepcopy(CASE)
+    error = urllib.error.URLError(socket.timeout("synthetic connect stall"))
+    api = FakeServerOpener(error=error)
+    client = transport(
+        case,
+        policy=network_policy(connect_timeout_seconds=3, total_timeout_seconds=1),
+        openers=(api, FakeServerOpener(), FakeServerOpener()),
+    )
+    path = f"/repos/tuna-os/iso-builder/actions/runs/{case['selection']['run_id']}"
+
+    with pytest.raises(CALLER.AuthoritativeTransportError) as caught:
+        client.get_json(path)
+
+    assert (caught.value.code, caught.value.field) == ("total_timeout", "request")
+    assert api.calls[0][1] == 1
+
+
 def test_idle_timeout_closes_stream_and_never_reaches_post_metadata():
     case = copy.deepcopy(CASE)
     archive_response = FakeResponse(
@@ -604,6 +636,39 @@ def test_undeclared_body_cannot_cross_total_byte_limit_and_is_closed():
         client.get_json(path)
 
     assert api_response.read_sizes == [2]
+    assert api_response.closed
+
+
+def test_body_shorter_than_content_length_is_rejected_and_closed():
+    case = copy.deepcopy(CASE)
+    path = f"/repos/tuna-os/iso-builder/actions/runs/{case['selection']['run_id']}"
+    api_response = FakeResponse(
+        b'{"id":',
+        CALLER.API_ORIGIN + path,
+        headers={"Content-Length": "64"},
+    )
+    api = FakeServerOpener([api_response])
+    client = transport(case, openers=(api, FakeServerOpener(), FakeServerOpener()))
+
+    with pytest.raises(CALLER.AuthoritativeTransportError) as caught:
+        client.get_json(path)
+
+    assert (caught.value.code, caught.value.field) == ("truncated_response", "response.read")
+    assert api_response.closed
+
+
+def test_response_without_a_header_mapping_fails_closed():
+    case = copy.deepcopy(CASE)
+    path = f"/repos/tuna-os/iso-builder/actions/runs/{case['selection']['run_id']}"
+    api_response = response(case["currentBefore"], CALLER.API_ORIGIN + path)
+    api_response.headers = object()
+    api = FakeServerOpener([api_response])
+    client = transport(case, openers=(api, FakeServerOpener(), FakeServerOpener()))
+
+    with pytest.raises(CALLER.AuthoritativeTransportError) as caught:
+        client.get_json(path)
+
+    assert (caught.value.code, caught.value.field) == ("invalid_response", "response.headers")
     assert api_response.closed
 
 
@@ -713,7 +778,9 @@ def test_policy_for_another_repository_fails_before_opening_any_endpoint():
 
 
 def test_retained_prefix_matches_the_v2_schema_manifest_key():
-    schema = json.loads((ROOT / "schemas/iso-media-provenance-v2.schema.json").read_text())
+    schema = json.loads(
+        (ROOT / "schemas/iso-media-provenance-v2.schema.json").read_text(encoding="utf-8")
+    )
     patterns = []
 
     def collect(node):
