@@ -200,9 +200,10 @@ def test_audit_fails_a_below_floor_sha() -> None:
     assert "floor" in problems[0]
 
 def test_audit_fails_a_canonical_source_without_a_revision() -> None:
-    problems = mod.audit({"kde": {"url": LIVE}})
-    assert len(problems) == 1
-    assert "no revision pin" in problems[0]
+    for source in ({"url": LIVE}, {"url": LIVE, "at_or_after_floor": None}):
+        problems = mod.audit({"kde": source})
+        assert len(problems) == 1
+        assert "no revision pin" in problems[0]
 
 
 def test_audit_passes_the_floor_sha_and_newer() -> None:
@@ -249,6 +250,7 @@ def test_invalid_production_gitlink_fails_closed(monkeypatch) -> None:
 
     assert "source_error" in sources["gnome"]
     assert "invalid gitlink" in mod.audit(sources)[0]
+
 
 def test_non_object_gitlink_response_fails_closed(monkeypatch) -> None:
     monkeypatch.setattr(mod, "api_json", lambda _url: [])
@@ -307,6 +309,7 @@ def test_missing_production_manifest_fails_through_main(monkeypatch, capsys) -> 
 
     assert mod.main() == 1
     assert "production manifest" in capsys.readouterr().out
+
 
 def test_invalid_json_response_fails_closed(monkeypatch) -> None:
     class Response:

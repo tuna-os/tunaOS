@@ -149,7 +149,7 @@ def audit(sources: dict, floor: str = FLOOR_COMMIT) -> list[str]:
             )
             continue
         pin = source.get("resolved") or source.get("commit") or source.get("branch")
-        if not pin and "at_or_after_floor" not in source:
+        if not pin:
             problems.append(
                 f"{desktop}: canonical fisherman source has no revision pin. "
                 f"Pin a commit or branch at or after {floor[:12]}."

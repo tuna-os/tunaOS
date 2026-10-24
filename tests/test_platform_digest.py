@@ -54,6 +54,8 @@ def test_resolves_digest_from_the_local_store_for_registry_and_local_images(
     assert f"containers-storage:{image}" in args
     assert f"--override-arch {architecture}" in args
     assert "--override-os linux" in args
+
+
 def test_reports_skopeo_failure_cause(tmp_path: Path) -> None:
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
