@@ -28,58 +28,42 @@ expect_invalid() {
 	rm -f "$output"
 }
 
-shell_files() {
-	find . \
-		-not -path './.git/*' \
+# Every file walk prunes .git outright (it never descends into it) and skips
+# vendored or generated trees that are not ours to lint.
+repo_files() {
+	find . -path './.git' -prune -o \
 		-not -path './system_files/usr/share/gnome-shell/extensions/*' \
 		-not -path './packages-repo/*' \
 		-not -path './.build/*' \
 		-not -path './_upstream-snapshots/*' \
-		-iname '*.sh' -type f -print0
+		-type f "$@" -print0
 }
 
-yaml_files() {
-	find . \
-		-not -path './.git/*' \
-		-not -path './system_files/usr/share/gnome-shell/extensions/*' \
-		-not -path './packages-repo/*' \
-		-not -path './.build/*' \
-		-not -path './_upstream-snapshots/*' \
-		-type f \( -name '*.yaml' -o -name '*.yml' \) -print0
-}
+shell_files() { repo_files -iname '*.sh'; }
+yaml_files() { repo_files \( -name '*.yaml' -o -name '*.yml' \); }
+json_files() { repo_files -name '*.json'; }
 
-json_files() {
-	find . \
-		-not -path './.git/*' \
-		-not -path './system_files/usr/share/gnome-shell/extensions/*' \
-		-not -path './packages-repo/*' \
-		-not -path './.build/*' \
-		-not -path './_upstream-snapshots/*' \
-		-type f -name '*.json' -print0
-}
-
+# File lists are streamed through xargs -0 so the gates do not depend on the
+# whole repository fitting into one argv (ARG_MAX). xargs exits non-zero when
+# any batch fails, so a finding in any chunk still fails the gate.
 run_shellcheck() {
-	local -a files=()
-	while IFS= read -r -d '' file; do
-		files+=("$file")
-	done < <(shell_files)
-	if ! shellcheck --severity=style --exclude=SC1091,SC2114 "${files[@]}"; then
+	if ! shell_files | xargs -0 shellcheck --severity=style --exclude=SC1091,SC2114; then
 		echo "::warning::ShellCheck non-error findings are advisory; errors gate below."
 	fi
-	shellcheck --severity=error --exclude=SC1091,SC2114 "${files[@]}" >/dev/null
+	# Diagnostics stay on stdout so a failing gate names the file, line and rule.
+	shell_files | xargs -0 shellcheck --severity=error --exclude=SC1091,SC2114
 	shellcheck --severity=error --exclude=SC1091,SC2114 \
 		tests/fixtures/lint/shellcheck-valid.fixture
 	expect_invalid SC1046 shellcheck --severity=error --exclude=SC1091,SC2114 \
 		tests/fixtures/lint/shellcheck-invalid.fixture
 }
 
+# shfmt -l lists files needing formatting; test its output as well as its
+# status, because a formatting gate that only checks an exit code can pass
+# while drift exists.
 run_shfmt() {
-	local -a files=()
 	local output
-	while IFS= read -r -d '' file; do
-		files+=("$file")
-	done < <(shell_files)
-	output="$(shfmt -l "${files[@]}")"
+	output="$(shell_files | xargs -0 shfmt -l)"
 	if [[ -n "$output" ]]; then
 		echo "::error::Shell formatting drift. Run 'just fix' and commit the result."
 		echo "$output"
@@ -87,10 +71,21 @@ run_shfmt() {
 	fi
 }
 
+# CI installs yamllint with Homebrew; `just` bootstraps it with pip, which may
+# put the executable in a directory that is not on PATH yet. The module form
+# runs the same yamllint either way.
+yamllint_cmd() {
+	if command -v yamllint >/dev/null 2>&1; then
+		yamllint "$@"
+	else
+		python3 -m yamllint "$@"
+	fi
+}
+
 run_yaml() {
 	local failed=0
 	while IFS= read -r -d '' file; do
-		yamllint -c .yamllint.yml "$file" || failed=1
+		yamllint_cmd -c .yamllint.yml "$file" || failed=1
 	done < <(yaml_files)
 	return "$failed"
 }
@@ -137,13 +132,7 @@ run_just() {
 	local failed=0
 	while IFS= read -r -d '' file; do
 		just --unstable --fmt --check -f "$file" || failed=1
-	done < <(find . \
-		-not -path './.git/*' \
-		-not -path './system_files/usr/share/gnome-shell/extensions/*' \
-		-not -path './packages-repo/*' \
-		-not -path './.build/*' \
-		-not -path './_upstream-snapshots/*' \
-		-type f -name '*.just' -print0)
+	done < <(repo_files -name '*.just')
 	return "$failed"
 }
 

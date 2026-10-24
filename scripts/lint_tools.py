@@ -112,14 +112,25 @@ def _run_version(executable: Path, tool: dict) -> tuple[bool, str]:
 
 
 def verify(contract: dict, bin_dir: Path | None = None) -> None:
+    """Check every pinned tool's version.
+
+    Without bin_dir the tool that PATH resolves is checked, because that is
+    the binary the lint recipes will run. With bin_dir the check is strict:
+    the tool must be in that directory, with no PATH fallback, so an
+    incomplete install cannot pass on the strength of an unrelated copy.
+    """
     failures: list[str] = []
     for name, tool in contract["tools"].items():
-        executable = bin_dir / name if bin_dir else None
-        if executable is None or not executable.is_file():
+        if bin_dir is not None:
+            candidate = bin_dir.expanduser() / name
+            executable = candidate if candidate.is_file() else None
+            where = f" in {bin_dir}"
+        else:
             located = shutil.which(name)
             executable = Path(located) if located else None
+            where = " on PATH"
         if executable is None:
-            failures.append(f"{name}: missing (expected {tool['version']})")
+            failures.append(f"{name}: missing{where} (expected {tool['version']})")
             continue
         matches, output = _run_version(executable, tool)
         if not matches:

@@ -27,8 +27,11 @@ def _fake_tool(path: Path, output: str) -> None:
 
 
 def _matching_tool_dir(tmp_path: Path) -> Path:
+    tmp_path.mkdir(parents=True, exist_ok=True)
     outputs = {
-        "actionlint": "1.7.12",
+        # Verbatim first lines of the real `actionlint -version` (1.7.12,
+        # release asset): the version is a bare line, not "actionlint version".
+        "actionlint": "1.7.12\ninstalled by downloading from release page",
         "shellcheck": "ShellCheck\nversion: 0.11.0",
         "just": "just 1.59.0",
         "shfmt": "v3.14.1",
@@ -62,6 +65,21 @@ def test_matching_versions_are_accepted(tmp_path: Path, capsys) -> None:
     assert "shfmt 3.14.1" in output
 
 
+def test_explicit_bin_dir_never_falls_back_to_path(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """An incomplete install must fail even when PATH has a matching copy."""
+    on_path = _matching_tool_dir(tmp_path / "path")
+    monkeypatch.setenv("PATH", str(on_path))
+    install_dir = _matching_tool_dir(tmp_path / "install")
+    (install_dir / "shfmt").unlink()
+
+    with pytest.raises(lint_tools.ContractError) as raised:
+        lint_tools.verify(_contract(), install_dir)
+
+    assert f"shfmt: missing in {install_dir}" in str(raised.value)
+
+
 def test_wrong_version_fails_with_expected_and_observed_values(tmp_path: Path) -> None:
     tools = _matching_tool_dir(tmp_path)
     _fake_tool(tools / "actionlint", "1.7.7")
@@ -85,3 +103,15 @@ def test_install_rejects_an_asset_with_the_wrong_digest(
         lint_tools.install(contract, tmp_path)
 
     assert not any(tmp_path.iterdir())
+
+
+def test_homebrew_shfmt_version_format_is_accepted(tmp_path: Path) -> None:
+    """Release assets print `v3.14.1`; the Homebrew build prints `3.14.1`.
+
+    Both are shfmt 3.14.1. Rejecting the second reported
+    "expected 3.14.1, got 3.14.1", which is a contract bug, not drift.
+    """
+    tools = _matching_tool_dir(tmp_path)
+    _fake_tool(tools / "shfmt", "3.14.1")
+
+    lint_tools.verify(_contract(), tools)

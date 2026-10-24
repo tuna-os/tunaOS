@@ -111,7 +111,7 @@
       "repository": "mvdan/sh",
       "tag": "v3.14.1",
       "version_args": ["--version"],
-      "version_regex": "^v3\\.14\\.1$",
+      "version_regex": "^v?3\\.14\\.1$",
       "assets": {
         "linux-x86_64": {
           "name": "shfmt_v3.14.1_linux_amd64",

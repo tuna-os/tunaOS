@@ -21,12 +21,17 @@ default:
 _check_lint_tool_versions:
     #!/usr/bin/env bash
     cd {{ justfile_directory() }}
-    python3 scripts/lint_tools.py verify
+    python3 "{{ justfile_directory() }}/scripts/lint_tools.py" verify
 
 _ensure_check_deps: _check_lint_tool_versions
     #!/usr/bin/env bash
     cd {{ justfile_directory() }}
-    if ! command -v yamllint &> /dev/null; then python3 -m pip install yamllint --break-system-packages 2>/dev/null || python3 -m pip install yamllint --user; fi
+    # run-config-lint.sh falls back to `python3 -m yamllint`, so a pip --user
+    # install whose bin directory is not on PATH still runs. pip errors stay
+    # visible: a failed bootstrap should say why.
+    if ! command -v yamllint &> /dev/null && ! python3 -m yamllint --version &> /dev/null; then
+        python3 -m pip install yamllint --break-system-packages || python3 -m pip install yamllint --user
+    fi
     if ! command -v jq &> /dev/null; then brew install jq; fi
     if ! command -v yq &> /dev/null; then brew install yq; fi
     if ! command -v node &> /dev/null; then brew install node; fi
@@ -124,10 +129,10 @@ setup:
     set -euo pipefail
     cd {{ justfile_directory() }}
     bin_dir="${TUNAOS_LINT_BIN_DIR:-$HOME/.local/bin}"
-    python3 scripts/lint_tools.py install --bin-dir "$bin_dir"
+    python3 "{{ justfile_directory() }}/scripts/lint_tools.py" install --bin-dir "$bin_dir"
     export PATH="$bin_dir:$PATH"
     just _ensure_test_deps
-    python3 scripts/lint_tools.py verify
+    python3 "{{ justfile_directory() }}/scripts/lint_tools.py" verify
     for t in yamllint jq bats yq node; do
         printf '%-11s %s\n' "$t" "$(command -v "$t" >/dev/null && $t --version 2>&1 | head -1 || echo MISSING)"
     done
