@@ -1926,7 +1926,7 @@ jobs:
           destination: ${{ env.IMAGE_REGISTRY }}
           registry-username: ${{ secrets.PUBLISH_REGISTRY_USERNAME }}
           registry-token: ${{ secrets.PUBLISH_REGISTRY_TOKEN }}
-          clients: skopeo
+          clients: sudo-skopeo
 
       - name: Pull Image and Apply Tags
         id: tag

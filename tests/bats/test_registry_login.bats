@@ -55,13 +55,13 @@ EOF
 
 @test "stock owner destination uses only the GitHub credential for every client" {
 	export PUBLISH_DESTINATION="ghcr.io/Tuna-OS"
-	export REGISTRY_LOGIN_CLIENTS="docker podman sudo-podman cosign skopeo"
+	export REGISTRY_LOGIN_CLIENTS="docker podman sudo-podman cosign skopeo sudo-skopeo"
 
 	run "$SCRIPT"
 
 	[ "$status" -eq 0 ]
-	[ "$(wc -l <"$LOGIN_LOG")" -eq 5 ]
-	[ "$(grep -c '|github-test-token$' "$LOGIN_LOG")" -eq 5 ]
+	[ "$(wc -l <"$LOGIN_LOG")" -eq 6 ]
+	[ "$(grep -c '|github-test-token$' "$LOGIN_LOG")" -eq 6 ]
 	[[ "$output" != *"github-test-token"* ]]
 }
 
@@ -74,7 +74,7 @@ EOF
 	run "$SCRIPT"
 
 	[ "$status" -eq 0 ]
-	[ "$(grep -c 'quay.io --username acme+publisher --password-stdin|alternate-test-token$' "$LOGIN_LOG")" -eq 2 ]
+	[ "$(grep -c -- '--username acme+publisher --password-stdin quay.io|alternate-test-token$' "$LOGIN_LOG")" -eq 2 ]
 	[[ "$output" != *"alternate-test-token"* ]]
 }
 
@@ -87,7 +87,7 @@ EOF
 	run "$SCRIPT"
 
 	[ "$status" -eq 0 ]
-	grep -q 'podman|login ghcr.io --username publisher --password-stdin|namespace-test-token$' "$LOGIN_LOG"
+	grep -q 'podman|login --username publisher --password-stdin ghcr.io|namespace-test-token$' "$LOGIN_LOG"
 }
 
 @test "alternate destination without credentials fails before invoking a client" {
@@ -152,6 +152,32 @@ EOF
 		[ "$status" -ne 0 ]
 		[[ "$output" == *"invalid publish destination"* ]]
 	done
+	[ ! -s "$LOGIN_LOG" ]
+}
+
+@test "registry ports must fit the TCP port range" {
+	export PUBLISH_REGISTRY_USERNAME="publisher"
+	export PUBLISH_REGISTRY_TOKEN="registry-test-token"
+	export REGISTRY_LOGIN_CLIENTS="podman"
+
+	for destination in "quay.io:0/acme" "quay.io:65536/acme" "quay.io:99999/acme"; do
+		export PUBLISH_DESTINATION="$destination"
+		run "$SCRIPT"
+		[ "$status" -ne 0 ]
+		[[ "$output" == *"registry port must be between 1 and 65535"* ]]
+	done
+	[ ! -s "$LOGIN_LOG" ]
+}
+
+@test "the event name is required before authentication" {
+	unset GITHUB_EVENT_NAME
+	export PUBLISH_DESTINATION="ghcr.io/tuna-os"
+	export REGISTRY_LOGIN_CLIENTS="podman"
+
+	run "$SCRIPT"
+
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"GITHUB_EVENT_NAME is required"* ]]
 	[ ! -s "$LOGIN_LOG" ]
 }
 

@@ -2,9 +2,10 @@
 # Authenticate only the registry clients a publish job needs.
 #
 # Required environment:
+#   GITHUB_EVENT_NAME          event whose trust boundary is being evaluated
+#   GITHUB_REPOSITORY_OWNER    owner used to identify the stock GHCR destination
 #   PUBLISH_DESTINATION        resolved <registry>/<namespace>
 #   REGISTRY_LOGIN_CLIENTS     space-separated client names
-#
 # Optional credentials for non-owner destinations:
 #   PUBLISH_REGISTRY_USERNAME
 #   PUBLISH_REGISTRY_TOKEN
@@ -19,6 +20,7 @@ fail() {
 }
 
 event_name="${GITHUB_EVENT_NAME:-}"
+[[ -n "$event_name" ]] || fail "GITHUB_EVENT_NAME is required"
 case "$event_name" in
 pull_request | pull_request_target)
 	fail "registry authentication is disabled for untrusted pull request execution"
@@ -45,6 +47,11 @@ if [[ ! "$destination" =~ ^${registry_re}/${namespace_component}(/${namespace_co
 fi
 
 registry="${destination%%/*}"
+if [[ "$registry" == *:* ]]; then
+	port="${registry##*:}"
+	((10#$port >= 1 && 10#$port <= 65535)) ||
+		fail "invalid publish destination; registry port must be between 1 and 65535"
+fi
 custom_username="${PUBLISH_REGISTRY_USERNAME:-}"
 custom_token="${PUBLISH_REGISTRY_TOKEN:-}"
 
@@ -86,29 +93,34 @@ login_client() {
 	for ((attempt = 1; attempt <= max_retries; attempt++)); do
 		case "$client" in
 		docker)
-			if printf '%s\n' "$token" | docker login "$registry" --username "$username" --password-stdin; then
+			if printf '%s\n' "$token" | docker login --username "$username" --password-stdin "$registry"; then
 				return 0
 			fi
 			;;
 		podman)
-			if printf '%s\n' "$token" | podman login "$registry" --username "$username" --password-stdin; then
+			if printf '%s\n' "$token" | podman login --username "$username" --password-stdin "$registry"; then
 				return 0
 			fi
 			;;
 		sudo-podman)
 			sudo rm -f /dev/shm/libpod_lock* 2>/dev/null || true
 			sudo podman system renumber >/dev/null 2>&1 || true
-			if printf '%s\n' "$token" | sudo podman login "$registry" --username "$username" --password-stdin; then
+			if printf '%s\n' "$token" | sudo podman login --username "$username" --password-stdin "$registry"; then
 				return 0
 			fi
 			;;
 		cosign)
-			if printf '%s\n' "$token" | cosign login "$registry" --username "$username" --password-stdin; then
+			if printf '%s\n' "$token" | cosign login --username "$username" --password-stdin "$registry"; then
 				return 0
 			fi
 			;;
 		skopeo)
-			if printf '%s\n' "$token" | sudo skopeo login "$registry" --username "$username" --password-stdin; then
+			if printf '%s\n' "$token" | skopeo login --username "$username" --password-stdin "$registry"; then
+				return 0
+			fi
+			;;
+		sudo-skopeo)
+			if printf '%s\n' "$token" | sudo skopeo login --username "$username" --password-stdin "$registry"; then
 				return 0
 			fi
 			;;

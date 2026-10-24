@@ -148,7 +148,7 @@ jobs:
         run: |
           set -euo pipefail
           destination=""
-          while IFS= read -r ref_file; do
+          while IFS= read -r -d '' ref_file; do
             ref="$(<"$ref_file")"
             candidate="${ref%%@*}"
             candidate="${candidate%/*}"
@@ -157,7 +157,7 @@ jobs:
               exit 1
             fi
             destination="$candidate"
-          done < <(find supply-chain/digests -name '*.ref' -print)
+          done < <(find supply-chain/digests -name '*.ref' -print0)
           [[ -n "$destination" ]] || {
             echo "::error::published image refs did not contain a registry destination"
             exit 1
