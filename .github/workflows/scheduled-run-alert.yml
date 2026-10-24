@@ -1,0 +1,249 @@
+name: Scheduled run alert
+
+# A scheduled run that goes red is only visible in the Actions tab, and the
+# Actions tab is not an incident tracker. Of the 47 workflows this repository
+# runs on cron, exactly one (`Daily Image Verification`) filed anything when it
+# failed; the weekly lifecycle sweep's 2026-08-13 red run sat unnoticed for
+# four days for precisely this reason, which is the evidence
+# rerun-infra-failures.yml already carries in its own header (tunaOS#3307, W2).
+#
+# This is one listener rather than an `if: failure()` job copy-pasted into 47
+# workflows, for three measured reasons:
+#
+#   1. A per-workflow alert job is itself part of the run. It is skipped when
+#      the run is cancelled by a concurrency group, and it never exists at all
+#      for a run GitHub refused to start. A listener outside the run is not.
+#   2. 47 copies of a shell block drift. `rerun-infra-failures.yml` already
+#      proves the one-listener shape works for this fleet.
+#   3. The watch list below cannot silently miss a new cron workflow:
+#      tests/test_every_scheduled_workflow_is_watched.py fails when a workflow
+#      with a `schedule:` trigger is not named here, and when a name here
+#      matches no workflow (a rename drops a workflow out of `workflow_run`
+#      matching without any other symptom).
+#
+# What it does NOT cover, deliberately: a startup failure. GitHub emits no
+# `workflow_run` event for a run that never began -- measured against the 13
+# nightlies lost on 2026-08-21 (#1933) -- which is why rerun-startup-failures.yml
+# is a polled sweep. That sweep remains the detector for that shape.
+on:
+  workflow_run:
+    # Every workflow in .github/workflows with a `schedule:` trigger, by its
+    # `name:`. Keep in sync via `just test-fast` (the test named above).
+    workflows:
+      - "Asahi hardware smoke (Tier 2 rental)"
+      - "Audit NVIDIA release assets"
+      - "Bootc Lifecycle"
+      - "Build Albacore"
+      - "Build Arch Linux ARM base"
+      - "Build Bonito"
+      - "Build Bonito-rawhide"
+      - "Build Flounder"
+      - "Build Flounder-sid"
+      - "Build Grouper"
+      - "Build Guppy"
+      - "Build Gurnard"
+      - "Build Hummingbird"
+      - "Build Marlin"
+      - "Build Sailfin"
+      - "Build Skipjack"
+      - "Build Yellowfin"
+      - "Catalog Facts"
+      - "Check base image pins"
+      - "Check download checksums"
+      - "Daily Image Verification"
+      - "Dead gate report"
+      - "Desktop Contract Sweep"
+      - "Fork PR simulation"
+      - "frontend parity"
+      - "Generate Release"
+      - "GHCR Partial-Pull Compatibility Canary"
+      - "Graduation Check"
+      - "Installer fisherman pins"
+      - "Installer Walkthrough Screenshots"
+      - "ISO E2E Smoke"
+      - "Live Overlay Artifacts"
+      - "LUKS E2E"
+      - "Matrix Status"
+      - "Package Parity"
+      - "Post-Build LUKS E2E"
+      - "Prune R2 retention"
+      - "Publish Grouped Dedup ISOs to R2"
+      - "Randomized Tests"
+      - "Re-run startup failures"
+      - "Scorecard supply-chain security"
+      - "Snapshot upstreams"
+      - "Update README build status"
+      - "Verify Asahi image"
+      - "Weekly Boot Screenshot Report"
+      - "Weekly Desktop Screenshots"
+      - "Weekly QCOW2 Boot Screenshots"
+    types: [completed]
+
+permissions:
+  contents: read
+
+concurrency:
+  # One workflow's tracking issue is read-modify-written here. Two completions
+  # for the same workflow must not race and open the issue twice.
+  group: scheduled-run-alert-${{ github.event.workflow_run.name }}
+  cancel-in-progress: false
+
+jobs:
+  track:
+    name: Track the scheduled run
+    # `schedule` only: a `workflow_dispatch` of the same workflow is somebody
+    # watching the run they started, and a `push`/`pull_request` leg already
+    # reports through checks on the commit.
+    #
+    # `cancelled` is excluded on purpose -- it is a concurrency group or a
+    # human, not an incident. `success` IS handled: it closes the open issue,
+    # which is what keeps the tracker from filling with dead incidents and
+    # what absorbs the transient infra failures rerun-infra-failures.yml
+    # recovers from an hour later.
+    if: >-
+      github.event.workflow_run.event == 'schedule' &&
+      contains(fromJSON('["success", "failure", "timed_out"]'),
+               github.event.workflow_run.conclusion)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+      actions: read
+    steps:
+      - name: Open, update or close the tracking issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          # Bound to env, never interpolated into the script: the payload is
+          # data (tests/test_untrusted_context_never_reaches_a_run_block_by_interpolation.py).
+          WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
+          WORKFLOW_ID: ${{ github.event.workflow_run.workflow_id }}
+          CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          RUN_NUMBER: ${{ github.event.workflow_run.run_number }}
+          RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+
+          TITLE="[operations] ${WORKFLOW_NAME} scheduled run failed"
+
+          # A late event is a replay, and this fleet produces them by design:
+          # rerun-infra-failures.yml waits 45 minutes and re-runs the failed
+          # jobs of a red scheduled run, so that OLD run completes again as
+          # attempt 2 after the next night's run has already concluded. Two
+          # deliveries therefore arrive out of order, and the stale one must
+          # not write: a late success would close the issue for a workflow
+          # that is red right now, and a late failure would re-open one that
+          # has already recovered. The newest concluded scheduled run of this
+          # workflow is the state; every earlier run and attempt is read-only
+          # here. `cancelled`, `skipped` and `startup_failure` carry no state,
+          # so they do not count as newer (same filter as the job condition).
+          newest="$(
+            gh api "repos/${GH_REPO}/actions/workflows/${WORKFLOW_ID}/runs?event=schedule&status=completed&per_page=30" \
+              --jq '[.workflow_runs[]
+                     | select(.conclusion == "success" or .conclusion == "failure"
+                              or .conclusion == "timed_out")]
+                    | sort_by(.run_number, .run_attempt)
+                    | last | select(. != null)
+                    | "\(.run_number) \(.run_attempt)"'
+          )" || newest=""
+
+          if [[ "$newest" =~ ^[0-9]+\ [0-9]+$ ]]; then
+            read -r newest_number newest_attempt <<<"$newest"
+            if (( newest_number > RUN_NUMBER )) ||
+               { (( newest_number == RUN_NUMBER )) && (( newest_attempt > RUN_ATTEMPT )); }; then
+              echo "Run ${RUN_NUMBER} attempt ${RUN_ATTEMPT} of ${WORKFLOW_NAME} is behind" \
+                   "run ${newest_number} attempt ${newest_attempt}; the tracker already" \
+                   "reflects that run, so this event changes nothing."
+              exit 0
+            fi
+          else
+            # Reconciliation is not a gate on alerting. A listener that goes
+            # quiet when the run-history query fails loses the incident
+            # entirely, which is the silence this workflow exists to end.
+            echo "::warning::no run history for ${WORKFLOW_NAME}; acting on this event unreconciled"
+          fi
+
+          # The issues list endpoint, not search: a tracking issue opened
+          # minutes ago is not reliably in the search index yet, and a missed
+          # match opens a duplicate. Exact title comparison, not a search
+          # term, because the fleet contains titles that are prefixes of each
+          # other ("Build Bonito" / "Build Bonito-rawhide").
+          existing="$(
+            gh issue list --state open --label ci-failure --limit 500 \
+              --json number,title \
+              | jq -r --arg t "$TITLE" 'map(select(.title == $t)) | .[0].number // empty'
+          )"
+
+          if [[ "$CONCLUSION" == "success" ]]; then
+            if [[ -z "$existing" ]]; then
+              echo "Green, and nothing open for ${WORKFLOW_NAME}."
+              exit 0
+            fi
+            gh issue close "$existing" \
+              --reason completed \
+              --comment "Recovered: the next scheduled run was green. ${RUN_URL}"
+            echo "Closed #${existing} for ${WORKFLOW_NAME}."
+            exit 0
+          fi
+
+          # Which legs went red. Without this the issue says only "it failed",
+          # and the first triage step is always this API call.
+          #
+          # per_page=50, not 100: the jobs endpoint answers a 100-job page with
+          # HTTP 502 on this repository's largest runs, on every attempt -- LUKS
+          # E2E 31224494825 (113 jobs), Bootc Lifecycle 38713238238 (153) and
+          # Build Bonito 38592759334 (138), measured 2026-10-16 -- while the same
+          # runs answer per_page=50 in seconds. Row 56 of docs/ci-troubleshooting.md
+          # carries the evidence; scripts/gen-matrix-status.py holds the same
+          # constant as JOBS_PAGE for the same reason. The attempt-scoped endpoint,
+          # so a re-run's event reports the jobs of the attempt it is about.
+          jobs_read=1
+          # shellcheck disable=SC2016  # jq reads `.name`; the shell must not.
+          failed="$(
+            gh api --paginate \
+              "repos/${GH_REPO}/actions/runs/${RUN_ID}/attempts/${RUN_ATTEMPT}/jobs?per_page=50" \
+              --jq '.jobs[]
+                    | select(.conclusion == "failure" or .conclusion == "timed_out")
+                    | "- `" + .name + "` (" + .conclusion + "): " + .html_url'
+          )" || jobs_read=0
+
+          if (( jobs_read == 0 )); then
+            # Not the same sentence as "no failed job": an unread job list is a
+            # missing triage detail, and reporting that the run named no red job
+            # states a measurement nobody made.
+            failed="- (the jobs API did not answer for this run; job names unavailable)"
+          elif [[ -z "$failed" ]]; then
+            failed="- (no failed job reported; the run itself concluded \`${CONCLUSION}\`)"
+          fi
+
+          body="$(mktemp)"
+          {
+            echo "<!-- scheduled-run-alert -->"
+            echo "\`${WORKFLOW_NAME}\` concluded **${CONCLUSION}** on its scheduled run."
+            echo
+            echo "- Run: [${RUN_ID}](${RUN_URL}) (attempt ${RUN_ATTEMPT})"
+            echo "- Ref: \`${HEAD_BRANCH}\` at \`${HEAD_SHA}\`"
+            echo
+            echo "Failed jobs:"
+            echo
+            echo "${failed}"
+            echo
+            echo "This issue is opened and closed by \`.github/workflows/scheduled-run-alert.yml\`."
+            echo "It closes itself when the next scheduled run of this workflow is green, so"
+            echo "an open issue here means the workflow is red right now, not that it once was."
+          } > "$body"
+
+          if [[ -n "$existing" ]]; then
+            gh issue comment "$existing" --body-file "$body"
+            echo "Commented on #${existing} for ${WORKFLOW_NAME}."
+          else
+            gh issue create \
+              --title "$TITLE" \
+              --body-file "$body" \
+              --label ci-failure
+          fi
