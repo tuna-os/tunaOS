@@ -307,6 +307,32 @@ shipped products: a missing roadmap is a plan gap, not proof that a product
 has shipped. Do not turn live cross-repository coverage into a PR gate; use
 `--check-structure` for changes to the generated block here.
 
+### Distribution credentials
+
+Use the [distribution readiness checklist](docs/DISTRIBUTION-READINESS.md)
+before you advertise a new install channel. For each credential request, record
+the producer repository, destination, workflow, secret name, required access,
+maintainer owner, and target date in the release tracker issue. Include a
+rotation or revocation owner and a verification run. Keep secret values and
+private key material out of issues, logs, source files, and PRs.
+
+A maintainer provisions credentials through repository or organization secret
+settings. Limit access to the destination and release workflow that need it.
+For an organization secret, list each repository that needs access. Do not share
+a broad token between projects to make their secret names match.
+Record the access boundary and expiry, not the credential value. Where the
+publisher needs a different token type, link its documented requirement
+and have the maintainer review the scope.
+
+Requests for signatures also need the publisher identity, platforms, key
+custodian, renewal owner, and the maintainer's decision link. Certificate purchases,
+signature service setup, and brand permissions remain maintainer actions.
+After a maintainer adds or rotates a credential, run the publisher for the
+intended tag and verify the destination version and a clean-machine install. Confirm secret
+use through the publish result; never print a token to prove it is present.
+If an owner or date is missing, raise it in the shared release tracker and
+request a maintainer assignment. Keep the channel `pending` until its checks pass.
+
 ## Building Images
 
 ```bash
