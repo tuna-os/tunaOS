@@ -35,7 +35,7 @@ def main():
     env = os.environ
     try:
         leaked = [name for name in (publish_credentials.USERNAME_SECRET, publish_credentials.PASSWORD_SECRET)
-                  if name in env]
+                  if env.get(name, '') != '']
         if leaked:
             # The resolver needs presence flags only. Refusing the values here
             # keeps a wiring mistake from widening where secrets are exposed.

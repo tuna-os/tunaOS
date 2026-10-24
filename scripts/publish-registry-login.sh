@@ -26,6 +26,9 @@ die() {
 	printf '::error::publish login: %s\n' "$1" >&2
 	exit 1
 }
+[[ "$tool" != *$'\n'* && "$tool" != *$'\r'* ]] ||
+	die "tool contains a line break"
+
 
 [[ "${TUNAOS_PUBLISH_MODE:-}" == registry-secret ]] ||
 	die "TUNAOS_PUBLISH_MODE is not registry-secret; the owner path uses GITHUB_TOKEN"
@@ -38,6 +41,11 @@ registry="${scope%%/*}"
 namespace="${scope#*/}"
 [[ "$registry" =~ $registry_re ]] ||
 	die "scope must be the <registry>/<namespace> printed by publish-credential.py"
+if [[ "$registry" == *:* ]]; then
+	port="${registry##*:}"
+	((10#$port <= 65535)) ||
+		die "scope must be the <registry>/<namespace> printed by publish-credential.py"
+fi
 IFS='/' read -r -a namespace_components <<<"$namespace"
 for component in "${namespace_components[@]}"; do
 	[[ "$component" =~ $namespace_component_re ]] ||

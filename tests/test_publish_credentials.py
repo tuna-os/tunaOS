@@ -225,6 +225,12 @@ def test_cli_refuses_secret_values(name):
     assert SECRET_PASS not in result.stdout + result.stderr
 
 
+@pytest.mark.parametrize("name", ["TUNAOS_PUBLISH_USERNAME", "TUNAOS_PUBLISH_PASSWORD"])
+def test_cli_ignores_empty_secret_placeholders(name):
+    result = cli(**{name: ""})
+    assert result.returncode == 0, result.stderr
+
+
 @pytest.mark.parametrize("value", ["", "1", "True", "yes"])
 def test_cli_flags_are_strict(value):
     result = cli(TUNAOS_HAS_PUBLISH_USERNAME=value)
@@ -317,9 +323,33 @@ def test_login_refuses_a_scope_the_resolver_cannot_print(login, scope):
     assert result.returncode == 1 and calls == []
 
 
+@pytest.mark.parametrize("scope", [
+    "localhost:5000/acme",
+    "registry.example.com:65535/acme/sub_name",
+    "ghcr.io/acme-org/a--b",
+])
+def test_login_accepts_scopes_the_resolver_can_print(login, scope):
+    assert "/".join(creds.parse_destination(scope)) == scope
+    result, calls, _ = login("podman", scope=scope)
+    assert result.returncode == 0, result.stderr
+    assert calls == [f"podman login --username=acme+ci-robot --password-stdin {scope}"]
+
+
+@pytest.mark.parametrize("scope", ["localhost:65536/acme", "localhost:99999/acme"])
+def test_login_refuses_out_of_range_ports(login, scope):
+    result, calls, _ = login("podman", scope=scope)
+    assert result.returncode == 1 and calls == []
+
+
 def test_login_refuses_unknown_tools(login):
     result, calls, _ = login("oras")
     assert result.returncode == 1 and calls == []
+
+
+def test_login_refuses_tool_log_injection(login):
+    result, calls, _ = login("unknown\n::warning::injected")
+    assert result.returncode == 1 and calls == []
+    assert result.stderr.splitlines() == ["::error::publish login: tool contains a line break"]
 
 
 # ── Activation boundary ───────────────────────────────────────────────────────
