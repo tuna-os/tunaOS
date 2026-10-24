@@ -88,8 +88,13 @@ fi
 # Fedora logo and website.
 # Only on a real build (no file arguments) or when a test names the path.
 if [[ $# -eq 0 || -n "${TUNAOS_KCM_ABOUT:-}" ]]; then
+	identity_env="${TUNAOS_IDENTITY_ENV:-$(dirname "${BASH_SOURCE[0]}")/../lib/identity.env}"
+	if [[ ! -f "$identity_env" || ! -r "$identity_env" ]]; then
+		echo "ERROR: identity adapter is missing or unreadable: ${identity_env}" >&2
+		exit 1
+	fi
 	# shellcheck source=../lib/identity.env
-	source "${TUNAOS_IDENTITY_ENV:-$(dirname "${BASH_SOURCE[0]}")/../lib/identity.env}"
+	source "$identity_env"
 	about="${TUNAOS_KCM_ABOUT:-/etc/xdg/kcm-about-distrorc}"
 	mkdir -p "$(dirname "$about")"
 	cat >"$about" <<ABOUT

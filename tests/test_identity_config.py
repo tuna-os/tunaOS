@@ -95,6 +95,8 @@ def test_identity_cannot_be_generated_with_a_gap(remove):
     (("defaults", "branding", "homepage"), "http://insecure.example"),
     (("defaults", "branding", "support"), 'https://x.example/"quoted"'),
     (("defaults", "branding", "documentation"), "https://x.example/a|b"),
+    (("defaults", "branding", "homepage"), "https://user:secret@example.com/path"),
+    (("defaults", "branding", "homepage"), "https://example.com:not-a-port/path"),
     (("project", "name"), 'Acme "OS"'),
     (("project", "name"), "Acme\nOS"),
     (("project", "id"), "Acme"),
@@ -129,6 +131,19 @@ def test_kde_about_page_shows_the_configured_project(tmp_path):
     assert "Website=https://acme.example/os" in lines
     assert "Variant=part of Acme OS" in lines
 
+def test_kde_about_rejects_a_non_file_identity_adapter(tmp_path):
+    about = tmp_path / "kcm-about-distrorc"
+    result = subprocess.run(
+        ["bash", str(ROOT / "build_scripts/desktop/kde-set-look-and-feel.sh"),
+         str(tmp_path / "unused")],
+        env={**os.environ, "TUNAOS_KCM_ABOUT": str(about),
+             "TUNAOS_IDENTITY_ENV": str(tmp_path)},
+        text=True, capture_output=True,
+    )
+    assert result.returncode != 0
+    assert "identity adapter is missing or unreadable" in result.stderr
+    assert not about.exists()
+
 
 @pytest.mark.parametrize("written,passes", [("Wile E", True), ("Achillobator", False)])
 def test_branding_contract_checks_the_configured_codename(tmp_path, written, passes):
@@ -147,6 +162,24 @@ def test_branding_contract_checks_the_configured_codename(tmp_path, written, pas
     output = result.stdout + result.stderr
     assert ("ok: VERSION_CODENAME=Wile E" in output) is passes
     assert ("FAIL: VERSION_CODENAME" in output) is not passes
+
+def test_installed_branding_verifier_ignores_identity_override(tmp_path):
+    installed = tmp_path / "usr/libexec/tunaos/verify-branding"
+    installed.parent.mkdir(parents=True)
+    installed.write_bytes((ROOT / "build_scripts/checks/verify-branding.sh").read_bytes())
+    adapter = tmp_path / "attacker.env"
+    adapter.write_text('declare -A TUNAOS_CODENAMES=([yellowfin]="spoofed")\n')
+    os_release = tmp_path / "os-release"
+    os_release.write_text('VERSION_CODENAME="spoofed"\nPRETTY_NAME="Yellowfin"\n')
+    result = subprocess.run(
+        ["bash", str(installed), "yellowfin"],
+        env={**os.environ, "TUNAOS_OS_RELEASE": str(os_release),
+             "TUNAOS_IDENTITY_ENV": str(adapter)},
+        text=True, capture_output=True,
+    )
+    output = result.stdout + result.stderr
+    assert "ok: VERSION_CODENAME=spoofed" not in output
+    assert "no identity adapter readable" in output
 
 
 FORK_URLS = {
