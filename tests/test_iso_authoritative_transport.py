@@ -13,9 +13,13 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "scripts"))
-import iso_artifact_transport as ARTIFACT  # noqa: E402
-import iso_authoritative_transport as CALLER  # noqa: E402
+SCRIPTS = str(ROOT / "scripts")
+sys.path.insert(0, SCRIPTS)
+try:
+    import iso_artifact_transport as ARTIFACT  # noqa: E402
+    import iso_authoritative_transport as CALLER  # noqa: E402
+finally:
+    sys.path.remove(SCRIPTS)
 
 CASE = json.loads((ROOT / "tests/fixtures/iso-artifact-transport-v1/case.json").read_text())
 ARTIFACT_ORIGIN = "https://artifacts.example.test"
@@ -25,6 +29,7 @@ TOKEN = "synthetic-token"
 class Clock:
     def __init__(self):
         self.now = 100.0
+        self.advance = 0.0
 
     def __call__(self):
         return self.now
@@ -267,6 +272,16 @@ def test_artifact_redirect_allows_one_reviewed_origin_without_forwarding_credent
     assert redirected.full_url == ARTIFACT_ORIGIN + "/signed/value?signature=synthetic"
     assert redirected.get_header("Authorization") is None
     assert redirected.get_header("Accept-encoding") == "identity"
+
+
+def test_artifact_redirect_normalizes_explicit_default_https_port():
+    handler = CALLER._ArtifactRedirect((ARTIFACT_ORIGIN,))
+    request = urllib.request.Request(CALLER.API_ORIGIN + "/artifact", method="GET")
+    target = "https://artifacts.example.test:443/signed/value"
+
+    redirected = handler.redirect_request(request, None, 302, "Found", {}, target)
+
+    assert redirected.full_url == target
 
 
 @pytest.mark.parametrize(

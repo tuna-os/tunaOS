@@ -441,10 +441,7 @@ def _url_origin(url):
         or port not in (None, 443)
     ):
         _fail("invalid_origin", "url")
-    origin = "https://" + parsed.hostname.lower()
-    if port == 443:
-        origin += ":443"
-    return origin
+    return "https://" + parsed.hostname.lower()
 
 
 def _reviewed_origin(url):
