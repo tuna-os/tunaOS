@@ -34,9 +34,9 @@ def test_every_declared_lint_and_policy_check_is_gating() -> None:
 
 def _check_recipe() -> str:
     text = UTILITIES.read_text(encoding="utf-8")
-    body = text[text.index("\ncheck:") + 1 :]
-    end = re.search(r"\n\S", body)
-    return body[: end.start()] if end else body
+    match = re.search(r"(?m)^check:.*(?:\n(?:[ \t].*|$))*", text)
+    assert match, "missing check recipe"
+    return match.group(0)
 
 
 def test_local_check_runs_every_shared_linter() -> None:

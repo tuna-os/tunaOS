@@ -51,13 +51,13 @@ run_shellcheck() {
 	# Errors gate first. The all-severity advisory pass is useful only after
 	# known errors are absent; otherwise it prints a misleading advisory warning.
 	shell_files | xargs -0 bash -c \
-		'(( $# == 0 )) || shellcheck --severity=error --exclude=SC1091,SC2114 "$@"' _
-	shellcheck --severity=error --exclude=SC1091,SC2114 \
+		'(( $# == 0 )) || shellcheck --severity=error --exclude=SC1091,SC2114 -- "$@"' _
+	shellcheck --severity=error --exclude=SC1091,SC2114 -- \
 		tests/fixtures/lint/shellcheck-valid.fixture
-	expect_invalid SC1046 shellcheck --severity=error --exclude=SC1091,SC2114 \
+	expect_invalid SC1046 shellcheck --severity=error --exclude=SC1091,SC2114 -- \
 		tests/fixtures/lint/shellcheck-invalid.fixture
 	if ! shell_files | xargs -0 bash -c \
-		'(( $# == 0 )) || shellcheck --severity=style --exclude=SC1091,SC2114 "$@"' _; then
+		'(( $# == 0 )) || shellcheck --severity=style --exclude=SC1091,SC2114 -- "$@"' _; then
 		echo "::warning::ShellCheck non-error findings are advisory."
 	fi
 }
@@ -68,7 +68,7 @@ run_shellcheck() {
 run_shfmt() {
 	local output
 	output="$(shell_files | xargs -0 bash -c \
-		'(( $# == 0 )) || shfmt -l "$@"' _)"
+		'(( $# == 0 )) || shfmt -l -- "$@"' _)"
 	if [[ -n "$output" ]]; then
 		echo "::error::Shell formatting drift. Run 'just fix' and commit the result."
 		echo "$output"
@@ -90,7 +90,7 @@ yamllint_cmd() {
 run_yaml() {
 	local failed=0
 	while IFS= read -r -d '' file; do
-		yamllint_cmd -c .yamllint.yml "$file" || failed=1
+		yamllint_cmd -c .yamllint.yml -- "$file" || failed=1
 	done < <(yaml_files)
 	return "$failed"
 }
@@ -98,7 +98,7 @@ run_yaml() {
 run_json() {
 	local failed=0
 	while IFS= read -r -d '' file; do
-		jq . "$file" >/dev/null || {
+		jq . -- "$file" >/dev/null || {
 			echo "::error::invalid JSON in $file" >&2
 			failed=1
 		}
@@ -126,9 +126,9 @@ run_actionlint() {
 		workflows+=("$file")
 	done < <(find .github/workflows -maxdepth 1 -type f \
 		\( -name '*.yaml' -o -name '*.yml' \) -print0)
-	actionlint "${actionlint_args[@]}" "${workflows[@]}"
-	actionlint "${actionlint_args[@]}" tests/fixtures/lint/actionlint-valid.fixture
-	expect_invalid unknown_context actionlint "${actionlint_args[@]}" \
+	actionlint "${actionlint_args[@]}" -- "${workflows[@]}"
+	actionlint "${actionlint_args[@]}" -- tests/fixtures/lint/actionlint-valid.fixture
+	expect_invalid unknown_context actionlint "${actionlint_args[@]}" -- \
 		tests/fixtures/lint/actionlint-invalid.fixture
 }
 

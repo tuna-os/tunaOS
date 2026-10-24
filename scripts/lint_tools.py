@@ -141,7 +141,7 @@ def verify(contract: dict, bin_dir: Path | None = None) -> None:
         tool = contract["tools"][name]
         if bin_dir is not None:
             candidate = bin_dir.expanduser() / name
-            where = f" in {bin_dir}"
+            where = f" in {candidate.parent}"
             if candidate.is_file() and not os.access(candidate, os.X_OK):
                 failures.append(
                     f"{name}: not executable{where} (expected {tool['version']})"
