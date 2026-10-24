@@ -1,0 +1,163 @@
+{
+  "run_id": 39647418167,
+  "installer_digest": "sha256:04252eaf80ee5675aa37bdb482847c77310efbee058dc63ba161a1d5991f9823",
+  "note": "OCR rows measured from unmodified diagnostic PNGs; no VM success implied.",
+  "plain": {
+    "image_sha256": "1c7dc06893f8f14297f0c675aa6ce88691ca2f1a47b4615f798cf449c1680463",
+    "width": 1280,
+    "height": 800,
+    "rows": [
+      [
+        "= 0",
+        [
+          979,
+          43,
+          1038,
+          73
+        ]
+      ],
+      [
+        "as",
+        [
+          584,
+          159,
+          682,
+          194
+        ]
+      ],
+      [
+        "Welcome to Skipjack",
+        [
+          505,
+          277,
+          775,
+          304
+        ]
+      ],
+      [
+        "Install Skipjack",
+        [
+          395,
+          341,
+          498,
+          355
+        ]
+      ],
+      [
+        "Installs to your internal disk.",
+        [
+          395,
+          361,
+          553,
+          374
+        ]
+      ],
+      [
+        "\u00a9 Power Off",
+        [
+          367,
+          403,
+          463,
+          418
+        ]
+      ],
+      [
+        "Press to enable the screen reader",
+        [
+          507,
+          474,
+          773,
+          483
+        ]
+      ],
+      [
+        "Credits",
+        [
+          619,
+          502,
+          659,
+          512
+        ]
+      ]
+    ]
+  },
+  "luks": {
+    "image_sha256": "3cfc2eb09a4aac28fca95ff78da215b0c2d8c8612de8d9c88e6778045bd8d23e",
+    "width": 1280,
+    "height": 800,
+    "rows": [
+      [
+        "= 0",
+        [
+          979,
+          43,
+          1038,
+          73
+        ]
+      ],
+      [
+        "as",
+        [
+          584,
+          159,
+          682,
+          194
+        ]
+      ],
+      [
+        "Welcome to Skipjack",
+        [
+          505,
+          277,
+          775,
+          304
+        ]
+      ],
+      [
+        "Install Skipjack",
+        [
+          395,
+          341,
+          498,
+          355
+        ]
+      ],
+      [
+        "Installs to your internal disk.",
+        [
+          395,
+          361,
+          553,
+          374
+        ]
+      ],
+      [
+        "\u00a9 Power Off",
+        [
+          367,
+          403,
+          463,
+          418
+        ]
+      ],
+      [
+        "Press to enable the screen reader",
+        [
+          507,
+          474,
+          773,
+          483
+        ]
+      ],
+      [
+        "Credits",
+        [
+          619,
+          502,
+          659,
+          512
+        ]
+      ]
+    ]
+  }
+}

@@ -110,6 +110,27 @@ def hmp(cmd):
     return out.decode("utf-8", "replace")
 
 
+def stop_bridge(bridge):
+    """Stop and reap a short-lived socat bridge without racing its client exit."""
+    if bridge.poll() is not None:
+        bridge.wait()
+        return
+    try:
+        bridge.terminate()
+    except ProcessLookupError:
+        bridge.wait()
+        return
+    try:
+        bridge.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        try:
+            bridge.kill()
+        except ProcessLookupError:
+            bridge.wait()
+            return
+        bridge.wait()
+
+
 def vnc_capture(png):
     """Capture via the VNC client. Returns True if a non-empty PNG landed.
 
@@ -121,7 +142,7 @@ def vnc_capture(png):
             and shutil.which("vncdo") and shutil.which("socat")):
         return False
     bridge = subprocess.Popen(
-        ["socat", f"TCP-LISTEN:{vnc_port},reuseaddr,fork",
+        ["socat", f"TCP-LISTEN:{vnc_port},bind=127.0.0.1,reuseaddr",
          f"UNIX-CONNECT:{vnc_sock}"],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
@@ -130,11 +151,7 @@ def vnc_capture(png):
                        check=False,
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     finally:
-        bridge.terminate()
-        try:
-            bridge.wait(timeout=5)
-        except Exception:
-            bridge.kill()
+        stop_bridge(bridge)
     return os.path.exists(png) and os.path.getsize(png) > 0
 
 
@@ -537,7 +554,8 @@ for i in range(1, steps + 1):
                 # Primary action buttons ("Get Started", "Next", "Continue") sit near bottom right / center bottom
                 print("  # keyboard navigation exhausted — attempting VNC mouse click on primary action button", flush=True)
                 bridge = subprocess.Popen(
-                    ["socat", f"TCP-LISTEN:{vnc_port},reuseaddr,fork", f"UNIX-CONNECT:{vnc_sock}"],
+                    ["socat", f"TCP-LISTEN:{vnc_port},bind=127.0.0.1,reuseaddr",
+                     f"UNIX-CONNECT:{vnc_sock}"],
                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 try:
                     time.sleep(1)
@@ -545,11 +563,7 @@ for i in range(1, steps + 1):
                     subprocess.run(["vncdo", "-s", f"127.0.0.1::{vnc_port}", "move", "700", "550", "click", "1"],
                                    check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 finally:
-                    bridge.terminate()
-                    try:
-                        bridge.wait(timeout=5)
-                    except Exception:
-                        bridge.kill()
+                    stop_bridge(bridge)
 
 print(f"\n# walkthrough verification ({flavor}) — {len(frames)} frames, "
       f"strict={strict}\n", flush=True)
