@@ -402,7 +402,7 @@ def test_dpkg_installed_names_keep_held_packages_and_drop_removed_ones(tmp_path)
     assert result.stdout.split() == ["tuna-desktop", "power-profiles-daemon"]
 
 
-def test_portage_backend_needs_only_the_installed_database(tmp_path):
+def test_portage_backend_requires_an_installed_database_entry(tmp_path):
     import subprocess
 
     script = (ROOT / "build_scripts/checks/verify-desktop-experience.sh").read_text()
@@ -412,19 +412,24 @@ def test_portage_backend_needs_only_the_installed_database(tmp_path):
     database = tmp_path / "var/db/pkg"
     database.mkdir(parents=True)
     command = "tuna_package_backend() {" + function + "\ntuna_package_backend"
+    env = {
+        "PATH": str(tmp_path / "no-tools"),
+        "TUNAOS_PORTAGE_DB": str(database),
+    }
 
-    result = subprocess.run(
-        ["/bin/bash", "-c", command],
-        capture_output=True,
-        text=True,
-        env={
-            "PATH": str(tmp_path / "no-tools"),
-            "TUNAOS_PORTAGE_DB": str(database),
-        },
+    empty = subprocess.run(
+        ["/bin/bash", "-c", command], capture_output=True, text=True, env=env
     )
+    assert empty.returncode != 0
 
-    assert result.returncode == 0, result.stderr
-    assert result.stdout.strip() == "portage"
+    package = database / "gui-wm/tuna-desktop-1"
+    package.mkdir(parents=True)
+    (package / "PF").write_text("tuna-desktop-1\n")
+    populated = subprocess.run(
+        ["/bin/bash", "-c", command], capture_output=True, text=True, env=env
+    )
+    assert populated.returncode == 0, populated.stderr
+    assert populated.stdout.strip() == "portage"
 
 def test_portage_package_names_and_file_owners_use_the_installed_database(tmp_path):
     import subprocess

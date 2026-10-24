@@ -188,6 +188,8 @@ def test_remote_unsigned_source_is_rejected():
     [
         ("verify_signature", False, "must require package signatures"),
         ("sync_uri", "https://example.invalid/binpkgs", "TunaOS HTTPS source"),
+        ("fingerprint", "not-a-fingerprint", "40 uppercase hexadecimal"),
+        ("key", "../secret.gpg", "safe experiences-relative path"),
     ],
 )
 def test_emerge_binrepo_trust_matches_installer_contract(field, value, message):

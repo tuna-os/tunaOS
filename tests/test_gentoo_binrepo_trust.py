@@ -62,7 +62,7 @@ case "$*" in
   *'binrepos[0].sync_uri'*) printf '%s\\n' https://repo.tunaos.org/gentoo/binpkgs/amd64 ;;
   *'binrepos[0].key'*) printf '%s\\n' /experiences/tuna/tideforge-public.gpg ;;
   *'binrepos[0].fingerprint'*) printf '%s\\n' 4E5CC9F8B3B521793D95266E629BE6EA45188366 ;;
-  *'binrepos[0].priority'*) printf '%s\\n' 10 ;;
+  *'binrepos[0].priority'*) printf '%s\\n' "${TUNAOS_BINREPO_PRIORITY:-10}" ;;
   *'binrepos[0].verify_signature'*) printf '%s\\n' "${TUNAOS_VERIFY_SIGNATURE:-true}" ;;
   *'emerge_accept_keywords'*) exit 0 ;;
   *) printf '%s\\n' 0 ;;
@@ -132,9 +132,10 @@ getuto() {{ return 0; }}
         {"TUNAOS_ACTUAL_FINGERPRINT": "BAD"},
         {"TUNAOS_VERIFY_SIGNATURE": "false"},
         {"TUNAOS_IMPORT_STATUS": "1"},
+        {"TUNAOS_BINREPO_PRIORITY": "high"},
         {"sync_fail": "1", "TUNAOS_SOURCE_COUNT": "1"},
     ],
-    ids=["fingerprint-mismatch", "unsigned-repo", "key-import", "repo-sync"],
+    ids=["fingerprint-mismatch", "unsigned-repo", "key-import", "invalid-priority", "repo-sync"],
 )
 def test_trust_failures_reject_before_emerge(tmp_path: Path, emerge_branch: str, settings: dict[str, str]):
     result = run_emerge_branch(tmp_path, emerge_branch, **settings)

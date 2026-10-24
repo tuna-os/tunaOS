@@ -101,6 +101,12 @@ def validate_source_records(records, kind, family, where):
                 raise PolicyError(item + ': emerge binrepos must require package signatures')
             if not record['sync_uri'].startswith('https://repo.tunaos.org/'):
                 raise PolicyError(item + ': emerge binrepos must use a TunaOS HTTPS source')
+            if not re.fullmatch(r'[0-9A-F]{40}', record['fingerprint']):
+                raise PolicyError(item + '.fingerprint: expected 40 uppercase hexadecimal characters')
+            key = record['key']
+            if (not re.fullmatch(r'experiences/[A-Za-z0-9_./+-]+', key)
+                    or any(part in {'', '.', '..'} for part in key.split('/'))):
+                raise PolicyError(item + '.key: expected a safe experiences-relative path')
         if record.get('unsigned') and not record.get('baseurl', '').startswith('file:///run/'):
             raise PolicyError(item + ': unsigned remote repositories are unsupported')
 
