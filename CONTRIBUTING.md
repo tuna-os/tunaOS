@@ -189,9 +189,10 @@ then record one disposition in a comment:
    owner, and set the next review date. Group PRs with the same blocker. Review the
    infrastructure fix first. After it lands, recheck each PR's CI
    before you remove its hold; do not assume it unholds automatically.
-3. **Decision required:** retain `hold`, add `needs-direction` (a maintainer
-   creates the label if absent), and state the precise question and decision
-   owner. The label requests a decision. It does not give permission to bypass it.
+3. **Decision required:** retain `hold`, park the issue with the Hive relay's
+   needs-decision option, and state the precise question and decision owner.
+   The relay applies `stage/045-needs-decision`. The label requests a decision.
+   It does not give permission to bypass it.
 4. **Superseded or resolved:** verify the replacement or resolution, then an
    authorized reviewer closes with an explanation and evidence link. Age alone
    is not grounds for closure; preserve unique work and discussion.
