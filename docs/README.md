@@ -64,6 +64,7 @@ user-facing site:
 | [DISTROWATCH-SUBMISSION.md](DISTROWATCH-SUBMISSION.md) | DistroWatch project submission draft |
 | [GNOME-51-RELEASE-CONTENT.md](GNOME-51-RELEASE-CONTENT.md) | GNOME 51.0 release-week content and packaging hook (#1334) |
 | [CNCF-BOOTC-SHOWCASE.md](CNCF-BOOTC-SHOWCASE.md) | CNCF bootc ecosystem showcase and case study draft (#1340) |
+| [BOOTC-DESKTOP-STRATEGY.md](BOOTC-DESKTOP-STRATEGY.md) | Upstream desktop-link request, shared messaging, and bootc blog draft (#3115) |
 | [CHAINGUARD-COLLABORATION.md](CHAINGUARD-COLLABORATION.md) | Chainguard supply-chain security collaboration angle brief (#1339) |
 | [FEDORA45-RELEASE-OUTREACH.md](FEDORA45-RELEASE-OUTREACH.md) | Fedora release-window positioning, shared adopter call, showcase evidence, and media notes (#3089) |
 | [FEDORA-OUTREACH-READINESS.md](FEDORA-OUTREACH-READINESS.md) | Bonito completeness evidence and fedora-desktop outreach handoff (#3001) |
