@@ -141,14 +141,17 @@ manifest and CPU baseline, overlay and base, deployed frontend commit and
 optional bundle, loaded WASM/source/shim, browser resources, request/config
 digests, and producer run. It has no catalog or request fallback. The selected
 operation must still be the completed operation. The adapter then calls the
-media sink's `finish()` itself. Only after that save and close succeeds does it
-take a stability token, reopen the closed bytes, stream their exact hash and
-size, close the reader, and confirm that the token did not change. An
-incomplete build, stale selection, failed write/close, byte-count mismatch, or
-changed saved object emits no receipt.
+media sink's `finish()` itself and rejects any return value other than `None`
+as a failed or ambiguous save. Only after
+that save and close succeeds does it take a stability token, reopen the closed
+bytes, stream their exact hash and size, close the reader, and confirm that the
+token did not change. An incomplete build, stale selection, failed write/close,
+byte-count mismatch, or changed saved object emits no receipt.
 
 The returned browser candidate contains the exact canonical receipt bytes,
-their external hash, the measured media identity, and the operation handoff ID.
+their external hash, the measured media identity, and the completed
+operation's `selection_id`. A native candidate instead carries
+`bound_browser_receipt_sha256`; the two handoff keys never share one field.
 A retention caller may persist that diagnostic candidate immediately, before a
 guest harness runs. Retention therefore does not depend on a failing guest
 harness becoming successful. This interface does not add a retention backend or
@@ -166,6 +169,9 @@ contract. Backend,
 partial, skipped, online, installation-media, and fixture results fail closed.
 Only then does it emit native v2 receipt bytes that name the exact raw browser
 receipt hash.
+
+The native media size comes from the bound browser receipt. The adapter rejects
+a missing or changed media identity before it reads any media byte.
 
 These candidates feed the existing schema and `check_consistency` boundary.
 They remain diagnostics until the authoritative caller in #3795 supplies

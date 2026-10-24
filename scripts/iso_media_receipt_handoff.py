@@ -8,16 +8,23 @@ creates transport metadata, or admits media for qualification.
 from dataclasses import dataclass
 import copy
 import hashlib
+import importlib.util
 import json
 from pathlib import Path
-import sys
 
-SCRIPTS = str(Path(__file__).resolve().parent)
-sys.path.insert(0, SCRIPTS)
-try:
-    import iso_media_provenance as contract  # noqa: E402
-finally:
-    sys.path.remove(SCRIPTS)
+
+def _load_contract():
+    """Load the sibling v2 contract by path; no ``sys.path``/``sys.modules`` change."""
+    path = Path(__file__).resolve().with_name("iso_media_provenance.py")
+    spec = importlib.util.spec_from_file_location("_receipt_handoff_contract", path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"cannot load {path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+contract = _load_contract()
 
 
 MAX_ISO_BYTES = 10 * 1024 ** 3
@@ -68,7 +75,13 @@ class NativeObservedInput:
 
 @dataclass(frozen=True)
 class ReceiptCandidate:
-    """Exact receipt bytes for retention; never an admission or trust decision."""
+    """Exact receipt bytes for retention; never an admission or trust decision.
+
+    Handoff keys are role-specific and never share one field: a browser
+    candidate carries the completed operation's ``selection_id``; a native
+    candidate carries the exact raw ``bound_browser_receipt_sha256`` it names.
+    The key that does not apply to ``role`` is ``None``.
+    """
 
     role: str
     qualification: str
@@ -76,7 +89,8 @@ class ReceiptCandidate:
     receipt_sha256: str
     media_sha256: str
     media_size_bytes: int
-    handoff_id: str
+    selection_id: str | None
+    bound_browser_receipt_sha256: str | None
     run_id: int
     run_attempt: int
 
@@ -258,7 +272,8 @@ def finalize_browser_receipt(observed, saved_media):
     return ReceiptCandidate(
         role="browser", qualification="not-assessed", receipt_bytes=receipt,
         receipt_sha256=_digest(receipt), media_sha256=media["sha256"],
-        media_size_bytes=media["sizeBytes"], handoff_id=observed.selection_id,
+        media_size_bytes=media["sizeBytes"], selection_id=observed.selection_id,
+        bound_browser_receipt_sha256=None,
         run_id=run["runId"], run_attempt=run["runAttempt"],
     )
 
@@ -336,7 +351,8 @@ def finalize_native_receipt(observed, browser_receipt_bytes, supplied_media):
     for mode in ("plain", "encrypted"):
         _same(document["observed"][mode]["sourceDigest"], source_digest,
               mode + ".sourceDigest")
-    measured = _measure_media(supplied_media, observed.media.get("sizeBytes"), finish=False)
+    # browser["media"] passed the v2 contract and equals observed.media above.
+    measured = _measure_media(supplied_media, browser["media"]["sizeBytes"], finish=False)
     _same(measured, observed.media, "media")
     receipt = _encode(document)
     run = document["run"]
@@ -344,6 +360,7 @@ def finalize_native_receipt(observed, browser_receipt_bytes, supplied_media):
         role="native", qualification="not-assessed", receipt_bytes=receipt,
         receipt_sha256=_digest(receipt), media_sha256=measured["sha256"],
         media_size_bytes=measured["sizeBytes"],
-        handoff_id=observed.browser_receipt_sha256,
+        selection_id=None,
+        bound_browser_receipt_sha256=observed.browser_receipt_sha256,
         run_id=run["runId"], run_attempt=run["runAttempt"],
     )

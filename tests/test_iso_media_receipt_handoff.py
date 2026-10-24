@@ -38,16 +38,21 @@ NATIVE = json.loads(CASES["nativeReceiptUtf8"])
 SCHEMA = json.loads((ROOT / "schemas/iso-media-provenance-v2.schema.json").read_text())
 
 
-def test_handoff_module_loads_by_path_without_preloading_its_sibling():
+def test_handoff_module_loads_by_path_without_global_import_side_effects():
     script = """
 import importlib.util
 import pathlib
 import sys
 root = pathlib.Path(sys.argv[1])
+path_before = list(sys.path)
+modules_before = set(sys.modules)
 spec = importlib.util.spec_from_file_location("standalone_handoff", root / "scripts/iso_media_receipt_handoff.py")
 module = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = module
 spec.loader.exec_module(module)
+assert sys.path == path_before, "sys.path changed"
+added = {name for name in set(sys.modules) - modules_before if "iso_media" in name or "contract" in name}
+assert added == set(), added
 print(module.ReceiptCandidate.__name__)
 """
     result = subprocess.check_output(
@@ -397,3 +402,61 @@ def test_candidates_contain_no_transport_or_admission_claims():
         assert "archiveSha256" not in candidate.receipt_bytes.decode()
         assert "authentication" not in document
         assert "qualification" not in document
+
+
+def test_candidate_handoff_keys_are_role_specific():
+    browser = HANDOFF.finalize_browser_receipt(
+        browser_observation(), MediaSource(MEDIA, browser=True))
+    native = HANDOFF.finalize_native_receipt(
+        native_observation(), browser.receipt_bytes, MediaSource(MEDIA))
+    assert (browser.selection_id, browser.bound_browser_receipt_sha256) == (
+        "operation-101-attempt-2", None)
+    assert (native.selection_id, native.bound_browser_receipt_sha256) == (
+        None, browser.receipt_sha256)
+    assert not hasattr(browser, "handoff_id")
+
+
+def test_source_and_overlay_observations_cannot_swap_meanings():
+    observed = browser_observation()
+    observed = replace(observed, source_manifest=observed.overlay,
+                       overlay=observed.source_manifest)
+    media = MediaSource(MEDIA, browser=True)
+    with pytest.raises(HANDOFF.ReceiptHandoffError, match="invalid_observation"):
+        HANDOFF.finalize_browser_receipt(observed, media)
+    assert media.events == []
+
+
+@pytest.mark.parametrize("change", ["sha256", "missing-size"])
+def test_native_media_identity_must_equal_bound_browser_media(change):
+    observed = native_observation()
+    media_identity = copy.deepcopy(observed.media)
+    if change == "sha256":
+        media_identity["sha256"] = "sha256:" + "9" * 64
+    else:
+        del media_identity["sizeBytes"]
+    observed = replace(observed, media=media_identity)
+    media = MediaSource(MEDIA)
+    with pytest.raises(HANDOFF.ReceiptHandoffError) as caught:
+        HANDOFF.finalize_native_receipt(
+            observed, CASES["browserReceiptUtf8"].encode(), media)
+    assert (caught.value.code, caught.value.field) == (
+        "identity_mismatch", "browserReceipt.media")
+    assert media.events == []
+
+
+@pytest.mark.parametrize("change", ["installed-digest", "harness-is-engine", "browser-producer"])
+def test_native_installed_harness_and_producer_identities_keep_their_meaning(change):
+    observed = native_observation()
+    if change == "installed-digest":
+        plain = copy.deepcopy(observed.plain)
+        plain["installedDigest"] = "sha256:" + "9" * 64
+        observed = replace(observed, plain=plain)
+    elif change == "harness-is-engine":
+        observed = replace(observed, harness=copy.deepcopy(BROWSER["input_descriptors"]["engine"]))
+    else:
+        observed = replace(observed, producer_run=copy.deepcopy(BROWSER["run"]))
+    media = MediaSource(MEDIA)
+    with pytest.raises(HANDOFF.ReceiptHandoffError, match="invalid_observation"):
+        HANDOFF.finalize_native_receipt(
+            observed, CASES["browserReceiptUtf8"].encode(), media)
+    assert media.events == []
