@@ -8,6 +8,7 @@ and test_fork_package_consumer and are not repeated here.
 """
 from __future__ import annotations
 
+from functools import lru_cache
 from pathlib import Path
 import re
 
@@ -15,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 RFC = ROOT / "docs/rfc/rfc017-protected-package-removal.md"
 
 
+@lru_cache(maxsize=1)
 def rfc_text():
     assert RFC.is_file(), f"RFC 017 is missing: {RFC.relative_to(ROOT)}"
     return RFC.read_text(encoding="utf-8")
