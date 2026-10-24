@@ -68,7 +68,7 @@ def contract_functions():
     bodies = ["TUNAOS_CONTRACT_WAIVED=0", waive.group(0)]
     for name in ("require_any_glob", "require_any_executable", "require_secret_service"):
         match = re.search(
-            rf"^(?:function[ \t]+)?{name}[ \t]*(?:\(\))?[ \t]*\{{.*?^\}}",
+            rf"^(?:function[ \t]+)?{name}[ \t]*(?:\(\))?[ \t]*\{{.*?^[ \t]*\}}",
             source,
             re.M | re.S,
         )
