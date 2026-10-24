@@ -100,6 +100,65 @@ def test_shfmt_gate_handles_empty_inputs_and_reports_real_drift(tmp_path: Path) 
     assert log.read_text(encoding="utf-8").splitlines() == ["called"]
 
 
+def test_shfmt_gate_is_implemented_as_a_listing_gate() -> None:
+    """`find -exec shfmt --diff` exits 0 on drift; `shfmt -l` is testable output.
+
+    The behavioural coverage above proves the gate fails today; this keeps a
+    refactor from reintroducing the shape that cannot fail.
+    """
+    runner = (ROOT / "scripts" / "run-config-lint.sh").read_text(encoding="utf-8")
+    assert "shfmt -l" in runner
+    assert "-exec shfmt" not in runner
+    assert "shfmt --diff" not in runner
+
+
+def test_yaml_and_json_gates_batch_files_and_tolerate_empty_input(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "repo"
+    scripts = root / "scripts"
+    tools = tmp_path / "bin"
+    scripts.mkdir(parents=True)
+    tools.mkdir()
+    runner = scripts / "lint-runner"
+    shutil.copy2(ROOT / "scripts" / "run-config-lint.sh", runner)
+    log = tmp_path / "calls.log"
+    for name in ("yamllint", "jq"):
+        fake = tools / name
+        fake.write_text(
+            f'#!/bin/sh\nprintf "{name} %s\\n" "$#" >> "$LINT_LOG"\n',
+            encoding="utf-8",
+        )
+        fake.chmod(0o755)
+    env = {
+        **os.environ,
+        "PATH": f"{tools}:{os.environ['PATH']}",
+        "LINT_LOG": str(log),
+    }
+
+    for gate in ("yaml", "json"):
+        empty = subprocess.run(
+            ["bash", str(runner), gate], env=env, text=True, capture_output=True
+        )
+        assert empty.returncode == 0, empty.stdout + empty.stderr
+    assert not log.exists(), "a gate ran its tool on an empty file list"
+
+    for index in range(2):
+        (root / f"file{index}.yaml").write_text("a: 1\n", encoding="utf-8")
+        (root / f"file{index}.json").write_text("{}\n", encoding="utf-8")
+    for gate in ("yaml", "json"):
+        result = subprocess.run(
+            ["bash", str(runner), gate], env=env, text=True, capture_output=True
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+
+    calls = log.read_text(encoding="utf-8").splitlines()
+    # One batched process per gate, not one per file: yamllint receives
+    # -c .yamllint.yml -- plus both files, jq receives . -- plus both files.
+    assert [call for call in calls if call.startswith("yamllint")] == ["yamllint 5"]
+    assert [call for call in calls if call.startswith("jq")] == ["jq 4"]
+
+
 def test_file_walk_prunes_excluded_trees(tmp_path: Path) -> None:
     root = tmp_path / "repo"
     scripts = root / "scripts"

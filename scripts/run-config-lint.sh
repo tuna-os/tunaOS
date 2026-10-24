@@ -44,9 +44,11 @@ shell_files() { repo_files -iname '*.sh'; }
 yaml_files() { repo_files \( -name '*.yaml' -o -name '*.yml' \); }
 json_files() { repo_files -name '*.json'; }
 
-# File lists are streamed through xargs -0 so the gates do not depend on the
-# whole repository fitting into one argv (ARG_MAX). xargs exits non-zero when
-# any batch fails, so a finding in any chunk still fails the gate.
+# Every gate that takes a file list streams it through xargs -0, so no gate
+# depends on the whole repository fitting into one argv (ARG_MAX). xargs exits
+# non-zero when any batch fails, so a finding in any chunk still fails the
+# gate. The `just` gate is the one exception: `just --fmt --check` accepts a
+# single -f file, so it is driven one file at a time.
 run_shellcheck() {
 	# Errors gate first. The all-severity advisory pass is useful only after
 	# known errors are absent; otherwise it prints a misleading advisory warning.
@@ -86,24 +88,25 @@ yamllint_cmd() {
 		python3 -m yamllint "$@"
 	fi
 }
+export -f yamllint_cmd
 
 run_yaml() {
-	local failed=0
-	while IFS= read -r -d '' file; do
-		yamllint_cmd -c .yamllint.yml -- "$file" || failed=1
-	done < <(yaml_files)
-	return "$failed"
+	yaml_files | xargs -0 bash -c \
+		'(( $# == 0 )) || yamllint_cmd -c .yamllint.yml -- "$@"' _
 }
 
 run_json() {
-	local failed=0
+	if json_files | xargs -0 bash -c '(( $# == 0 )) || jq . -- "$@" >/dev/null' _; then
+		return 0
+	fi
+	# jq reports a parse error without naming the file when it is handed a
+	# batch, so a failing batch is replayed one file at a time to say which
+	# file is invalid.
 	while IFS= read -r -d '' file; do
-		jq . -- "$file" >/dev/null || {
+		jq . -- "$file" >/dev/null 2>&1 ||
 			echo "::error::invalid JSON in $file" >&2
-			failed=1
-		}
 	done < <(json_files)
-	return "$failed"
+	return 1
 }
 
 actionlint_args=(
