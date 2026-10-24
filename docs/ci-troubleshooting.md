@@ -222,6 +222,7 @@ each one from scratch.
 | 58 | `Unit Tests` is red on `main` and on every pull request, but BATS is clean and only one pytest fails: `tests/test_primary_python_floor.py::test_primary_job_runs_python310_not_latest_runtime` (1 failed of 5064). The job named "Primary config (Python 3.10)" passes | Renovate PR #3552 changed `python-version: '3.10'` to `'3.15'` in `primary-config-python310` and merged on 2026-10-21. The job kept its name and stayed green while testing 3.15, so it stopped guarding the floor. The scoped rule keyed on `matchPackageNames: ["python"]` did not stop it: Renovate listed the dependency as `python` (type `uses-with`) with package `actions/python-versions`, and `Unit Tests` was not required to merge | Restore `'3.10'` and add a second rule keyed on `matchDepNames`. Measured: the floor suite (six files, 333 tests) passes on real Python 3.10.20 with the job's own requirements, so the floor had not drifted. A rule that cannot be verified here is not proof: if Renovate reopens the bump, read its Dependency Dashboard (#724) for which matcher it evaluated. |
 
 | Renovate cannot update the Bazaar KRunner source pin (PR #3397) | The git-refs manager treated the commit SHA as a named ref and supplied no full repository URL | Capture the named ref as `currentValue` and the SHA as `currentDigest`; supply a full `packageNameTemplate` URL. `git ls-remote` resolves `v1.3.0` to the existing `dbed96fa…` pin. The build still downloads by commit |
+| 59 | KDE image builds execute mutable source content as root (#3391) | `build_scripts/desktop/kcm-ublue.sh` cloned `kcm_ublue` from a release tag and fetched Oversteer udev rules from `master`. A tag move or branch rewrite could change code executed as root during image builds | Pin `kcm_ublue` and `oversteer_udev` to commit SHAs in `image-versions.yaml`. Validate each SHA and fetch content-addressed commits. Test: `tests/regressions/test_issue_3391_kde_sources_are_pinned.py` |
 
 **Pattern to notice (bugs #1-14):** almost every bug here was a live-squash-specific
 environment gap (missing package, missing locale, missing remote, wrong
@@ -1946,6 +1947,14 @@ used the correct owner.
 `sudo`, and `scripts/lib/publish-destination.sh` splits it into host and
 namespace. `tests/test_publish_destination.py` checks the precedence and the
 split.
+
+### KDE image builds execute mutable third-party source content as root (#3391)
+
+**Symptom:** KDE image builds download third-party source code and udev rules from mutable release tags or branch heads.
+
+**Measured cause:** `build_scripts/desktop/kcm-ublue.sh` cloned `ledif/kcm_ublue` from a release tag and fetched Oversteer udev rules from `berarma/oversteer`'s `master` branch. The build compiles and installs these files as root, so an upstream branch or tag change could place unverified code into images.
+
+**Fix:** Pin `kcm_ublue` and `oversteer_udev` to immutable 40-character commit SHAs in `image-versions.yaml` with Renovate `git-refs` annotations. `kcm-ublue.sh` verifies each commit SHA before download and fetches content-addressed source files. `tests/regressions/test_issue_3391_kde_sources_are_pinned.py` checks that all KDE sources use commit pins and rejects mutable references.
 
 ## Content PR fails with `STE budget exceeded` (#2912)
 

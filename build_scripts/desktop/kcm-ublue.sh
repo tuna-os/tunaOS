@@ -24,11 +24,25 @@ fi
 printf "::group:: === KCM Ublue + Bazaar + Oversteer Udev ===\n"
 
 # ---- Version pins --------------------------------------------------------
-KCM_UBLUE_VERSION=$(grep '^\s*kcm_ublue:' /run/context/image-versions.yaml | sed 's/.*"\(.*\)".*/\1/')
+VERSIONS_FILE="${VERSIONS_FILE:-/run/context/image-versions.yaml}"
+
+KCM_UBLUE_REF=$(grep '^\s*kcm_ublue:' "$VERSIONS_FILE" 2>/dev/null | sed 's/.*"\(.*\)".*/\1/')
+if [[ ! "$KCM_UBLUE_REF" =~ ^[0-9a-f]{40}$ ]]; then
+	echo "ERROR: kcm_ublue must be a 40-character commit SHA" >&2
+	return 1 2>/dev/null || exit 1
+fi
+KCM_UBLUE_VERSION="$KCM_UBLUE_REF"
+
 # renovate: datasource=git-refs depName=bazaar-org/krunner-bazaar ref=v1.4.0
 KRUNNER_BAZAAR_REF="323fc8d684a60a7f864964e97d55371bd6a74d9c"
 if [[ ! "$KRUNNER_BAZAAR_REF" =~ ^[0-9a-f]{40}$ ]]; then
 	echo "ERROR: krunner_bazaar_src must be a 40-character commit SHA" >&2
+	return 1 2>/dev/null || exit 1
+fi
+
+OVERSTEER_REF=$(grep '^\s*oversteer_udev:' "$VERSIONS_FILE" 2>/dev/null | sed 's/.*"\(.*\)".*/\1/')
+if [[ ! "$OVERSTEER_REF" =~ ^[0-9a-f]{40}$ ]]; then
+	echo "ERROR: oversteer_udev must be a 40-character commit SHA" >&2
 	return 1 2>/dev/null || exit 1
 fi
 
@@ -95,14 +109,15 @@ else
 	BUILD_DIR=$(mktemp -d)
 	trap 'rm -rf "$BUILD_DIR"' EXIT
 
-	git clone --depth 1 --branch "${KCM_UBLUE_VERSION}" \
-		https://github.com/ledif/kcm_ublue.git "$BUILD_DIR"
+	curl -fsSL "https://github.com/ledif/kcm_ublue/archive/${KCM_UBLUE_REF}.tar.gz" |
+		tar --strip-components=1 -xzf - -C "$BUILD_DIR"
 
 	cd "$BUILD_DIR"
 	cmake -B build -DCMAKE_INSTALL_PREFIX=/usr
 	cmake --build build
 	cmake --install build
 	cd - >/dev/null
+	rm -rf "$BUILD_DIR"
 
 	# Clean up build dependencies
 	dnf -y remove "${BUILD_DEPS[@]}" || true
@@ -189,7 +204,7 @@ OVERSTEER_RULES=(
 
 for rule in "${OVERSTEER_RULES[@]}"; do
 	curl -fsSLo "${OVERSTEER_UDEV_DIR}/${rule}" \
-		"https://raw.githubusercontent.com/berarma/oversteer/master/data/udev/${rule}"
+		"https://raw.githubusercontent.com/berarma/oversteer/${OVERSTEER_REF}/data/udev/${rule}"
 	echo "  ${rule}"
 done
 
