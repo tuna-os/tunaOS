@@ -210,6 +210,16 @@ MAX_CHUNK_BYTES = 64 * 1024 * 1024
 MAX_CHUNKS = 160
 
 
+def retained_candidate_prefix(run_id, attempt):
+    """Return RFC014's retained-candidate R2 key namespace for one browser run.
+
+    The ``yellowfin-gnome/s1`` segments are the only retained target/stream the
+    v2 contract admits; ``schemas/iso-media-provenance-v2.schema.json`` pins the
+    same manifest key. Callers must not derive this from candidate content.
+    """
+    return f"browser-iso/candidates/{run_id}/{attempt}/yellowfin-gnome/s1/"
+
+
 def _strict_json(data, where):
     import json
     import math
@@ -415,7 +425,7 @@ def verify_retained_candidate_snapshot(policy, selection, retained_policy, trans
     _match(archive_sha256, policy.archive_sha256, "archive.sha256")
     receipt_bytes = _receipt_member(archive.getvalue(), retained)
     run, identity = _receipt_identity(receipt_bytes, policy, selection, retained)
-    prefix = f"browser-iso/candidates/{selection.run_id}/{selection.attempt}/yellowfin-gnome/s1/"
+    prefix = retained_candidate_prefix(selection.run_id, selection.attempt)
     manifest_key = prefix + "manifest.json"
     manifest_bytes = io.BytesIO()
     with transport.open_object(manifest_key) as stream:
