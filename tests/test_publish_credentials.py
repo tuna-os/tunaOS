@@ -252,7 +252,10 @@ def test_cli_flags_are_strict(value):
 
 STUB = """#!/usr/bin/env bash
 { printf '%s' "$(basename "$0")"; printf ' %s' "$@"; printf '\\n'; } >> "$STUB_LOG"
-if [[ "$(basename "$0")" == sudo ]]; then exec "$@"; fi
+if [[ "$(basename "$0")" == sudo ]]; then
+	if [[ "${1:-}" == -n ]]; then shift; fi
+	exec "$@"
+fi
 cat >> "$STUB_STDIN"
 """
 
@@ -283,9 +286,9 @@ def login(tmp_path):
 @pytest.mark.parametrize("tool,argv", [
     ("podman", ["podman login --username=acme+ci-robot --password-stdin quay.io/acme"]),
     ("skopeo", ["skopeo login --username=acme+ci-robot --password-stdin quay.io/acme"]),
-    ("sudo-podman", ["sudo podman login --username=acme+ci-robot --password-stdin quay.io/acme",
+    ("sudo-podman", ["sudo -n podman login --username=acme+ci-robot --password-stdin quay.io/acme",
                      "podman login --username=acme+ci-robot --password-stdin quay.io/acme"]),
-    ("sudo-skopeo", ["sudo skopeo login --username=acme+ci-robot --password-stdin quay.io/acme",
+    ("sudo-skopeo", ["sudo -n skopeo login --username=acme+ci-robot --password-stdin quay.io/acme",
                      "skopeo login --username=acme+ci-robot --password-stdin quay.io/acme"]),
     ("cosign", ["cosign login --username=acme+ci-robot --password-stdin quay.io"]),
     ("docker", ["docker login --username=acme+ci-robot --password-stdin quay.io"]),
@@ -332,6 +335,10 @@ def test_login_refuses_before_running_any_tool(login, overrides, reason):
 def test_login_refuses_a_scope_the_resolver_cannot_print(login, scope):
     result, calls, _ = login("podman", scope=scope)
     assert result.returncode == 1 and calls == []
+    # One ::error:: line carrying the resolver's reason, not two annotations.
+    assert result.stderr.splitlines() == [result.stderr.strip()]
+    assert result.stderr.startswith("::error::publish login: scope must be a valid")
+    assert "publish scope: invalid-scope:" in result.stderr
 
 
 @pytest.mark.parametrize("scope", [

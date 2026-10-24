@@ -107,10 +107,11 @@ Scope comparison is exact string equality. `quay.io/acme` does not authorize
 namespace is in lower case before comparison, as `publish-destination.sh`
 writes it.
 
-The resolver writes `mode`, `registry`, `namespace` and `scope` as
-`GITHUB_OUTPUT` lines. A refusal is one `::error::` line and exit status 1.
-Untrusted text in that line is in `repr()` form. Thus a newline in a value
-cannot start a workflow command.
+The resolver prints `mode`, `registry`, `namespace` and `scope` on standard
+output; the workflow step appends those lines to `$GITHUB_OUTPUT`. A refusal is
+one `::error::` line on standard error and exit status 1. Untrusted text in that
+line is in `repr()` form. Thus a newline in a value cannot start a workflow
+command.
 
 ### Login helper
 
@@ -121,12 +122,14 @@ two secrets. It runs only when `TUNAOS_PUBLISH_MODE=registry-secret`.
 |---|---|---|
 | `podman`, `sudo-podman` | `podman login --username=U --password-stdin <scope>` | `<registry>/<namespace>` |
 | `skopeo`, `sudo-skopeo` | `skopeo login --username=U --password-stdin <scope>` | `<registry>/<namespace>` |
-| `docker` | `docker login <registry> --username=U --password-stdin` | registry host (oras reads this file) |
-| `cosign` | `cosign login <registry> --username=U --password-stdin` | registry host |
+| `docker` | `docker login --username=U --password-stdin <registry>` | registry host (oras reads this file) |
+| `cosign` | `cosign login --username=U --password-stdin <registry>` | registry host |
 
 The password goes to the tool on standard input. The shell builtin `printf`
 writes it, so no process gets it as an argument. The helper rejects a username
 outside `[A-Za-z0-9][A-Za-z0-9._@+-]*` and a password with a line break.
+The `sudo-*` tools run `sudo -n`, so a host that would prompt fails at once
+instead of reading the password from standard input.
 
 Podman and skopeo store a namespace key, as `containers-auth.json(5)`
 specifies. Thus a `ghcr.io` entry from `GITHUB_TOKEN` stays usable for

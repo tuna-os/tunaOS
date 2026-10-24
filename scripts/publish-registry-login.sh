@@ -33,11 +33,14 @@ die() {
 [[ "${TUNAOS_PUBLISH_MODE:-}" == registry-secret ]] ||
 	die "TUNAOS_PUBLISH_MODE is not registry-secret; the owner path uses GITHUB_TOKEN"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# The validator prints registry and namespace on success and one diagnostic
+# line on failure. The scope is not secret, so its streams are merged and the
+# reason is kept in the single ::error:: line below.
 if ! parsed_scope=$(env \
 	-u TUNAOS_PUBLISH_USERNAME \
 	-u TUNAOS_PUBLISH_PASSWORD \
-	python3 "${script_dir}/publish-credential.py" --validate-scope "$scope"); then
-	die "scope must be a valid, resolver-accepted <registry>/<namespace>"
+	python3 "${script_dir}/publish-credential.py" --validate-scope "$scope" 2>&1); then
+	die "scope must be a valid, resolver-accepted <registry>/<namespace>: ${parsed_scope//[$'\n\r']/ }"
 fi
 mapfile -t destination_parts <<<"$parsed_scope"
 [[ "${#destination_parts[@]}" -eq 2 ]] ||
@@ -52,7 +55,7 @@ registry="${destination_parts[0]}"
 
 case "$tool" in
 podman | skopeo) command=("$tool" login "--username=$username" --password-stdin "$scope") ;;
-sudo-podman | sudo-skopeo) command=(sudo "${tool#sudo-}" login "--username=$username" --password-stdin "$scope") ;;
+sudo-podman | sudo-skopeo) command=(sudo -n "${tool#sudo-}" login "--username=$username" --password-stdin "$scope") ;;
 docker | cosign) command=("$tool" login "--username=$username" --password-stdin "$registry") ;;
 *) die "unknown tool '${tool}'; expected docker, podman, sudo-podman, skopeo, sudo-skopeo or cosign" ;;
 esac

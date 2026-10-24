@@ -62,8 +62,10 @@ def parse_destination(value: str, *, what: str = 'destination') -> tuple[str, st
     if not isinstance(value, str) or '/' not in value:
         raise CredentialError(f'invalid-{what}', f'{_shown(value)} is not "<registry>/<namespace>"')
     registry, namespace = value.split('/', 1)
-    if not tunaos_config.REGISTRY.fullmatch(registry) or not tunaos_config.NAMESPACE.fullmatch(namespace):
-        raise CredentialError(f'invalid-{what}', f'{_shown(value)} is not a lowercase registry host and namespace')
+    if not tunaos_config.REGISTRY.fullmatch(registry):
+        raise CredentialError(f'invalid-{what}', f'{_shown(value)} does not start with a lowercase registry host')
+    if not tunaos_config.NAMESPACE.fullmatch(namespace):
+        raise CredentialError(f'invalid-{what}', f'{_shown(value)} does not end with a lowercase namespace')
     if ':' in registry:
         try:
             port = int(registry.rsplit(':', 1)[1])
