@@ -123,6 +123,10 @@ names_upstream() {
 identity_env=""
 local_identity="$(dirname "${BASH_SOURCE[0]}")/../lib/identity.env"
 identity_override=""
+if [[ -f "$local_identity" && -n "${TUNAOS_IDENTITY_ENV:-}" && "${TUNAOS_IDENTITY_TEST_OVERRIDE:-}" != 1 ]]; then
+	echo "ERROR: TUNAOS_IDENTITY_ENV is test-only; branding verification must use ${local_identity}" >&2
+	exit 1
+fi
 # Only the source-tree checker accepts an override. The installed verifier must
 # read the root-owned adapter shipped in the image, never a caller-controlled path.
 if [[ -f "$local_identity" ]]; then
@@ -135,11 +139,12 @@ for candidate in "$identity_override" "$local_identity" /usr/share/tunaos/identi
 	fi
 done
 declare -A TUNAOS_CODENAMES=()
+identity_source_failed=false
 if [[ -n "$identity_env" ]]; then
 	# shellcheck source=../lib/identity.env
 	if ! source "$identity_env"; then
 		fail "identity adapter could not be sourced: ${identity_env}"
-		identity_env=""
+		identity_source_failed=true
 	fi
 fi
 
@@ -153,6 +158,8 @@ want_codename="${TUNAOS_CODENAMES[$variant]:-}"
 got_codename="$(osr VERSION_CODENAME)"
 if [[ -z "$identity_env" ]]; then
 	fail "no identity adapter readable (build_scripts/lib/identity.env or /usr/share/tunaos/identity-config.env)"
+elif "$identity_source_failed"; then
+	: # The source failure above is the authoritative adapter diagnostic.
 elif [[ -z "$want_codename" ]]; then
 	fail "no codename defined in tunaos.toml for variant '${variant}'"
 elif [[ "$got_codename" != "$want_codename" ]]; then
