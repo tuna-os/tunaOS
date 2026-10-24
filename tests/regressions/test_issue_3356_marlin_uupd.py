@@ -13,6 +13,7 @@ installer before service setup.
 
 from __future__ import annotations
 
+import hashlib
 import io
 import os
 import stat
@@ -61,10 +62,6 @@ def test_uupd_installer_lays_down_binary_and_core_units(tmp_path: Path) -> None:
     fake_bin = tmp_path / "bin"
     context.mkdir()
     fake_bin.mkdir()
-    (context / "image-versions.yaml").write_text(
-        'downloads:\n  uupd: "v1.5.0"\n', encoding="utf-8"
-    )
-
     archive = tmp_path / "uupd.tar.gz"
     payload = b"#!/bin/sh\n[ \"${1:-}\" = --help ]\n"
     with tarfile.open(archive, "w:gz") as tar:
@@ -73,6 +70,27 @@ def test_uupd_installer_lays_down_binary_and_core_units(tmp_path: Path) -> None:
         info.size = len(payload)
 
         tar.addfile(info, io.BytesIO(payload))
+    archive_sha = hashlib.sha256(archive.read_bytes()).hexdigest()
+
+    unit_hashes = {}
+    for unit in ("uupd.service", "uupd.timer", "uupd-manual.service"):
+        unit_hashes[unit] = hashlib.sha256(
+            f"[Unit]\nDescription={unit}\n".encode("utf-8")
+        ).hexdigest()
+
+    (context / "image-versions.yaml").write_text(
+        f"""downloads:
+  uupd: "v1.5.0"
+  uupd_sha256:
+    x86_64: "{archive_sha}"
+    aarch64: "{archive_sha}"
+  uupd_units_sha256:
+    uupd.service: "{unit_hashes['uupd.service']}"
+    uupd.timer: "{unit_hashes['uupd.timer']}"
+    uupd-manual.service: "{unit_hashes['uupd-manual.service']}"
+""",
+        encoding="utf-8",
+    )
     _fake_curl(fake_bin, archive)
 
     env = os.environ.copy()

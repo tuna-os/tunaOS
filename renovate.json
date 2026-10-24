@@ -121,7 +121,8 @@
         "tuna-os/remora",
         "twpayne/chezmoi",
         "AvengeMedia/DankMaterialShell",
-        "tuna-os/bootc-installer"
+        "tuna-os/bootc-installer",
+        "ublue-os/uupd"
       ],
       "automerge": false
     },
