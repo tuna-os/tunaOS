@@ -81,6 +81,7 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 | `rerun-startup-failures.yml` | post-merge + scheduled | Re-run startup failures | `0 */3 * * *`, manual | — |
 | `reusable-build-artifacts.yml` | PR-deterministic + post-merge + scheduled | Artifacts | caller cadence | — |
 | `reusable-build-image.yml` | PR-deterministic + post-merge + scheduled | `builds`, `desktop`, `boots`, `no_silent_omissions` | caller cadence | `builds`: 2d, `desktop`: 2d, `boots`: 2d, `no_silent_omissions`: 2d |
+| `scheduled-run-alert.yml` | post-merge | Scheduled run alert | workflow completion | — |
 | `scorecard.yml` | post-merge + scheduled | Scorecard supply-chain security | push, `38 0 * * 4`, branch_protection_rule | — |
 | `snapshot-upstreams.yml` | post-merge + scheduled | Snapshot upstreams | `0 9 * * 1`, manual | — |
 | `ste.yml` | PR-deterministic + post-merge | Prose | each PR, push, manual | — |
