@@ -185,6 +185,45 @@ require_any_glob() {
 	exit 1
 }
 
+# Shared libraries and PAM modules must be regular files, not merely matching
+# directory entries.
+require_any_file() {
+	local g path
+	local -a matches
+	for g in "$@"; do
+		mapfile -t matches < <(compgen -G "$g" || true)
+		for path in "${matches[@]}"; do
+			[[ -f "$path" ]] && return 0
+		done
+	done
+	echo "missing required file: none of [$*] exists" >&2
+	if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${desktop:-}" != cosmic ]]; then
+		waive
+		return 0
+	fi
+	exit 1
+}
+
+# Commands represented by fixed filesystem locations must still be executable.
+# This is separate from require_command so regression tests can inspect an
+# alternate image root without changing the test process's PATH.
+require_any_executable() {
+	local g path
+	local -a matches
+	for g in "$@"; do
+		mapfile -t matches < <(compgen -G "$g" || true)
+		for path in "${matches[@]}"; do
+			[[ -f "$path" && -x "$path" ]] && return 0
+		done
+	done
+	echo "missing executable: none of [$*] exists and is executable" >&2
+	if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${desktop:-}" != cosmic ]]; then
+		waive
+		return 0
+	fi
+	exit 1
+}
+
 # User systemd units (session services like pipewire, wireplumber, portals).
 # Checked via systemctl --user list-unit-files or filesystem unit file globs.
 require_user_unit() {
@@ -219,6 +258,35 @@ require_any_user_unit() {
 		return 0
 	fi
 	exit 1
+}
+
+# The Secret Service (org.freedesktop.secrets) provider the GNOME-family
+# sessions keep credentials in. It is /usr/bin/gnome-keyring-daemon on every
+# base except Fedora ELN, which dropped gnome-keyring for oo7 (tunaOS#3810;
+# measured against dl.fedoraproject.org/pub/eln/1 on 2026-10-24): no ELN repo
+# publishes gnome-keyring, oo7-daemon obsoletes gnome-keyring < 51 and pam_oo7
+# obsoletes gnome-keyring-pam < 51. On ELN the PAM module is required with the
+# daemon: ELN's gdm wires pam_oo7 into its stacks to unlock the store with the
+# login password, which is what gnome-keyring-pam did. Read ID or VARIANT_ID
+# from os-release here; IS_ELN comes from the build-time lib.sh, which a booted
+# image does not have.
+# $1 is a filesystem root for the regression test; empty in the image.
+require_secret_service() {
+	local root="${1:-}" os_release
+	local is_eln=false
+	for os_release in "$root/etc/os-release" "$root/usr/lib/os-release"; do
+		if [[ -r "$os_release" ]] &&
+			grep -qE '^(ID|VARIANT_ID)="?eln"?$' "$os_release"; then
+			is_eln=true
+			break
+		fi
+	done
+	if "$is_eln"; then
+		require_any_executable "$root/usr/libexec/oo7-daemon"
+		require_any_file "$root/usr/lib*/security/pam_oo7.so"
+	else
+		require_any_executable "$root/usr/bin/gnome-keyring-daemon"
+	fi
 }
 
 # xfce's greeter is the one desktop piece NO other gate can see missing.
@@ -305,7 +373,8 @@ xfce_greetd_greeter_contract() {
 #   openSUSE        /usr/libexec/gvfs/gvfsd        /usr/libexec/...
 #   Arch            /usr/lib/gvfsd                 /usr/lib/...
 #
-# gnome-keyring-daemon is /usr/bin/gnome-keyring-daemon on all five.
+# gnome-keyring-daemon is /usr/bin/gnome-keyring-daemon on all five; Fedora
+# ELN ships oo7 instead (require_secret_service).
 #
 # GNOME version floor. Maintainer directive 2026-09-03: nothing below GNOME 50
 # ships as a tunaOS GNOME image, and 51 is the target as it releases. Measured
@@ -445,11 +514,10 @@ gnome)
 		'/usr/lib/gvfs/gvfsd'
 	# Portal backend and keyring, measured the same way (table above the case):
 	# /usr/libexec on Fedora, EL, Debian, Ubuntu and openSUSE; /usr/lib on Arch.
-	# gnome-keyring-daemon is /usr/bin on all five.
 	require_any_glob \
 		'/usr/libexec/xdg-desktop-portal-gnome' \
 		'/usr/lib/xdg-desktop-portal-gnome'
-	require_any_glob '/usr/bin/gnome-keyring-daemon'
+	require_secret_service
 	# User systemd units: audio (pipewire/wireplumber) user unit definitions.
 	require_any_user_unit pipewire wireplumber
 	# Extensions are deliberately user-managed. Extension Manager is offered
@@ -561,7 +629,7 @@ tuna)
 	require_any_glob '/usr/lib/gnome-shell-calendar-server' '/usr/libexec/gnome-shell-calendar-server' '/usr/libexec/gnome-shell/gnome-shell-calendar-server'
 	require_command ibus-daemon
 	require_command orca
-	require_command gnome-keyring-daemon
+	require_secret_service
 	# beta.1 starts graphical-session.target only after this import succeeds;
 	# without it every portal fails (tuna-os/tuna-desktop#691).
 	require_command dbus-update-activation-environment
