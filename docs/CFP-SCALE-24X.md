@@ -1,105 +1,103 @@
-# SCaLE 24x — CFP Draft
+# SCaLE 24x — CFP draft
 
-> Status: **draft** — for maintainer review before submission.
-> Event: SCaLE 24x, Pasadena, April 1–4, 2027. CFP opened August 1, 2026 and closes November 1, 2026.
-> Tracking issue: [#1135](https://github.com/tuna-os/tunaOS/issues/1135) (Q1 2027 CFP season).
-> Adapted from [docs/CFP-FOSDEM-2027.md](./CFP-FOSDEM-2027.md) per
-> [docs/Q4-2026-PROMOTION-CALENDAR.md](./Q4-2026-PROMOTION-CALENDAR.md)'s
-> own plan ("adapt the FOSDEM abstract for SCaLE's format and audience... no
-> SCaLE-specific draft exists yet — write one from the FOSDEM abstract
-> instead of from scratch") — same underlying talk and project story, not
-> a second abstract written independently.
+Draft for a speaker to review and submit with their consent. Track preparation
+and responses in [#3179](https://github.com/tuna-os/tunaos/issues/3179). This
+adapts the [FOSDEM proposal](CFP-FOSDEM-2027.md) for Linux administrators. This
+document records no submission, speaker commitment or acceptance.
 
-## Why a separate draft, not just the FOSDEM one
+## Organizer research — 2026-10-24
 
-SCaLE's audience is broader than FOSDEM's Containers devroom: general
-open-source, sysadmin, and platform-engineering attendees, not
-container-specialists. FOSDEM's abstract leads with the bootc image model;
-this one leads with the more broadly legible "your desktop breaks the same
-way your server fleet used to" framing and pulls Corral (the
-Kubernetes-native VM angle) forward, since that's the piece platform
-engineers in this audience are more likely to already have a mental model
-for (declarative infra, GitOps) than bootc/OSTree internals specifically.
+The [official CFP](https://www.socallinuxexpo.org/scale/24x/cfp) confirms
+**SCaLE 24x, April 1–4, 2027, Pasadena**. It is a Q2 event with a Q4 CFP, not
+SCaLE 22x in March as #3179 estimates. The deadline is **November 1, 2026**;
+notifications begin December 1. The page gives no cutoff time zone. Resolve that
+in the portal before submission.
 
-## Talk title (working)
+Prefer **Systems & Infrastructure**. Cloud Native Days is an alternative for an
+atomic-OS session; confirm its route before submission. The call requests a
+title, short and long abstracts, track and level, plus speaker profiles. Each
+new profile needs a name, email, photo and third-person bio of at most 1,000
+characters.
 
-**Treating the Desktop Like Infrastructure: Atomic Updates and Kubernetes-Native VMs with TunaOS**
+Slots are about 45 minutes. Speakers must attend in person; they receive a
+conference pass but no financial assistance. Review the linked speaker agreement
+and code of conduct before submission.
 
-## Suggested track
+## Talk title
 
-- **DevOps / Infrastructure-as-Code** (primary)
-- **Containers & Virtualization** (secondary)
-- **Everything Open / general track** (fallback — SCaLE's broadest track,
-  a reasonable landing spot for a project talk that doesn't fit a narrower
-  category)
+**Desktop Linux at scale: atomic updates and rollback with TunaOS**
 
-## Abstract (≈230 words, submission-ready)
+“At scale” describes the operational questions, not a measured TunaOS fleet.
+Proposed level: intermediate Linux administration. No Kubernetes experience is
+required.
 
-Most teams have already made peace with treating servers as disposable,
-declarative infrastructure — but the desktop is usually the one machine
-still managed by hand: manual package upgrades, config drift, and a
-"don't touch it, it works" reluctance to update. TunaOS applies the same
-image-based model your Kubernetes cluster already uses to the desktop
-itself.
+## Short abstract
 
-We build bootc images — bootable OCI containers — on AlmaLinux 10, CentOS
-Stream 10, and Fedora, shipping current desktop environments (GNOME, KDE
-Plasma 6, COSMIC, Niri) as atomic, rollback-safe images with the same
-manifest-driven, CI-built, signed-artifact pipeline you'd expect for a
-production container image, not a desktop ISO.
+An image-based desktop changes how an operating system is built and updated, but
+it does not remove persistent state or the need to test recovery. This TunaOS
+walkthrough follows a configuration change to a bootc desktop image, then uses a
+recorded update and rollback to build a practical pilot checklist.
 
-The second half of the talk is Corral, our Kubernetes-native VM manager:
-desktop and service VMs declared as Kubernetes resources, scheduled across
-QEMU/KVM locally or a KubeVirt cluster, with snapshots and GPU passthrough
-as code. It also speaks a useful subset of the Proxmox VE API on top of
-KubeVirt, so existing Proxmox/Terraform/Ansible tooling can drive a
-Kubernetes cluster without knowing Corral is there.
+## Long abstract
 
-Live demos: an atomic desktop update and rollback, and standing up a
-declarative desktop VM with Corral. Attendees leave with a working model
-of image-based desktops, concrete manifests they can run themselves, and
-an honest comparison against Silverblue, uBlue, NixOS, and MicroOS — no
-vendor pitch.
+Desktop administrators need to know what changed, which machines received it,
+and how to recover when an update causes trouble. A reviewable image of the
+operating-system payload can help answer those questions. The operator must also
+understand the state that remains outside the image.
 
-## Demo video outline (3–5 min, reuse the FOSDEM recording if timing allows)
+This session follows a desktop configuration change through TunaOS's bootc image
+factory. We examine the source inputs, image assembly and artifact identity
+before moving into a recorded update and rollback exercise on a single
+disposable VM. The demonstration will name the tested image and show the booted
+deployment before and after reboot. We observe persistent files and application
+state separately. Image rollback does not provide a complete backup or a system
+for data recovery.
 
-Same outline as [docs/CFP-FOSDEM-2027.md](./CFP-FOSDEM-2027.md#demo-video-outline-3-5-min-attach-to-cfp)
-— one recording can serve both submissions if the CFP windows overlap
-closely enough; re-record only if SCaLE's review process wants a
-platform-engineering-first cut (Corral segment leading instead of the
-bootc segment).
+The second half turns that example into a rollout plan. We select a small pilot
+group, test representative hardware and desktop sessions, and define recovery
+criteria. We decide what evidence we need before expansion. TunaOS's
+verification contract distinguishes a successful build from a desktop that
+works. We also discuss the limits of a demonstration on one machine.
 
-## Logistics
+Attendees leave with a source walkthrough, a way to record artifact identity and
+a checklist to evaluate updates and recovery in their own environment. The talk
+is an engineering demonstration, with no claim of measured enterprise adoption
+or automatic fleet recovery.
 
-- Length: SCaLE talks are commonly 45 min including Q&A — expand the
-  FOSDEM 30-min outline with more Corral/KubeVirt depth (backend support
-  matrix, the Proxmox-API-compat layer) instead of padding the desktop
-  half
-- Speaker: maintainer or maintainer-designate; SCaLE offers speaker passes
-  (confirm current policy when the CFP opens) — budget-friendlier than
-  most US conferences but not free like FOSDEM
-- Materials: same as FOSDEM — bootc images already in GHCR, Corral runs
-  anywhere with KubeVirt or local QEMU
+## Outline and materials
+
+Proposed 45-minute session including questions:
+
+1. Operator questions and state boundaries: 5 minutes.
+2. Configuration change through image assembly: 10 minutes.
+3. Recorded update/reboot/rollback and observations: 5 minutes.
+4. Pilot design, hardware checks and recovery criteria: 15 minutes.
+5. Questions: 10 minutes.
+
+Reuse the rehearsed [FOSDEM
+video](CFP-FOSDEM-2027.md#demo-video-outline-3-5-min-attach-to-cfp) and its
+source evidence. Keep an offline copy and readable screenshots. Tell reviewers
+about any special setup. The author of the [demo runbook](CFP-DEMO-SCRIPT.md)
+did not execute it end to end. The speaker must capture a real rehearsal before
+they promise the demonstration.
+
+This draft omits the earlier abstract's Corral backend, Proxmox API and GPU
+claims. A separate Corral/KubeVirt talk would need source verification in that
+project, speaker consent and a suitable open call. This proposal does not need
+those claims to explain image updates.
 
 ## Submission checklist
 
-- [x] CFP portal opened August 1, 2026
-- [ ] Finalize title + abstract (this draft)
-- [ ] Decide: reuse the FOSDEM demo video, or re-cut with Corral leading
-- [ ] Ask 1–2 community members to proof the abstract for a
-      non-container-specialist audience (does the opening land without
-      bootc/OSTree background?)
-- [ ] Submit to DevOps/Infrastructure-as-Code track first; Containers &
-      Virtualization or Everything Open as fallback
-- [ ] Submit by November 1, 2026
+- [ ] Confirm a speaker's consent, in-person attendance and a travel budget.
+- [ ] Confirm the time zone for the deadline, portal limits, duration and selected track.
+- [ ] Review both abstracts against the [claim checklist](CONTENT-CLAIM-CHECKLIST.md).
+- [ ] Complete the recorded rehearsal with artifact and recovery evidence.
+- [ ] Supply the speaker's profile and review agreement and terms for video publication.
+- [ ] Submit through an authorized account by November 1; save a public-safe receipt.
+- [ ] Record the response, accepted session URL, slides and video in #3179.
 
-## Supporting material (for reviewers / talk page)
-
-Same as [docs/CFP-FOSDEM-2027.md](./CFP-FOSDEM-2027.md#supporting-material-for-reviewers--talk-page)
-— project repo, blog, ADOPTERS.md, and the Corral repo
-([github.com/tuna-os/corral](https://github.com/tuna-os/corral)) specifically,
-since this abstract leans on it more than the FOSDEM version does.
-
----
-
-*Draft prepared by outreach agent. Review, edit, and submit by November 1, 2026.*
+Use the [shared ledger
+template](CFP-FOSDEM-2027.md#submission-and-response-record) in #3179. The 2–4
+week early-submission window has passed as of this research; prioritize a
+complete, reviewed submission over adding another abstract. The issue remains
+open for submission and acceptance evidence.

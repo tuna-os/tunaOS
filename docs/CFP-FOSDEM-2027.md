@@ -1,122 +1,154 @@
-# FOSDEM 2027 — CFP Draft
+# FOSDEM 2027 — CFP draft
 
-> Status: **draft** — for maintainer review before submission.
-> Event: FOSDEM 2027, Brussels, 6–7 Feb 2027. CFP typically opens ~October 2026.
-> Tracking issue: [#1135](https://github.com/tuna-os/tunaOS/issues/1135) (Q1 2027 CFP season).
+Draft for a speaker to review and submit with their consent. Track preparation
+and outcomes in [#3179](https://github.com/tuna-os/tunaos/issues/3179). Earlier
+preparation is in [#1135](https://github.com/tuna-os/tunaos/issues/1135). This
+document records no submission or acceptance.
 
-## Talk title (working)
+## Organizer research — 2026-10-24
 
-**The Immutable Enterprise Desktop: bootc, Corral, and the case for cloud-native desktops**
+[FOSDEM's main-track call](https://fosdem.org/2027/news/call-for-main-track/)
+confirms **January 30–31, 2027, Brussels**. This replaces the February 6–7
+estimate in the draft. Main track closes **November 16, 2026** and offers 25- or
+50-minute slots including questions. This deadline applies only to main track.
+The call needs English, FOSS content and agreement to publication under FOSDEM's
+CC-BY terms and its code of conduct.
 
-## Suggested track / devroom
+The [announcement of accepted
+rooms](https://fosdem.org/2027/news/accepted-developer-rooms/) lists
+**Image-Based Linux and Boot Integrity**, **Containers**, **Distributions**, and
+**Virtualization and Cloud Infrastructure**. Prefer Image-Based Linux and Boot
+Integrity for the proposal below; Containers is an alternative if its call fits.
+The announcement does not establish deadlines for room submissions, durations or
+abstract limits. Record the selected room's own call before submission. Do not
+assume a room named “bootc” or “Desktops.”
 
-- **Containers devroom** (primary) — bootc/OSTree-based image model
-- **Desktops devroom** (secondary) — desktop UX angle
-- **Virtualization / infrastructure** (fallback) — Corral + KubeVirt
+For main track, first assess the call's broad-audience requirement. A room
+proposal should not be sent there solely because its deadline is known.
 
-## Abstract (≈250 words, submission-ready)
+## Talk title
 
-Enterprise Linux runs the world's servers but has never had a good answer
-for the desktop. RHEL, AlmaLinux and CentOS Stream ship desktops that track
-decade-old package sets, so most EL shops run something different on the
-desk — two package ecosystems, two update cadences, and a permanent
-server/desktop split.
+**Immutable enterprise desktops with bootc: what an image rollback restores**
 
-TunaOS closes that gap with the technology that already runs the datacenter:
-bootable containers. We build bootc images on AlmaLinux 10, CentOS Stream 10
-and Fedora, then ship current desktop environments — GNOME backported to the
-EL base, KDE Plasma 6, the Rust-built COSMIC, the scrollable-tiling Niri —
-as atomic, rollback-safe images. The desktop updates like a container fleet:
-one transaction, rollback on failure, verified upgrades.
+## Abstract
 
-This talk walks through the full stack. We cover the bootc image model and
-how EL bases make it enterprise-credible (10-year lifecycles, existing
-compliance and patch processes). We show the manifest-driven build pipeline
-that turns a YAML file into a published, multi-arch desktop image. And we
-demonstrate Corral, our Kubernetes-native VM manager, which treats desktop
-VMs as declarative resources — bringing the desktop into the same estate as
-the cluster, with schedules, snapshots, and GPU passthrough as code.
+What changes when a desktop operating system becomes an OCI image? Operators can
+review the build as infrastructure. For recovery, they must understand which
+state belongs to the image and which state persists outside it.
 
-Attendees leave with a working mental model of image-based desktops on EL,
-concrete YAML/podman recipes they can run, and an honest comparison of where
-this fits versus Silverblue, uBlue, NixOS, and MicroOS. No vendor pitch —
-this is an open-source project's architecture talk with live demos.
+This session uses TunaOS, an open-source image factory for bootc desktops, to
+explore that boundary on an Enterprise Linux base. We trace a desktop choice
+from primary configuration through package selection and image assembly. We then
+update and recover an artifact with a known identity. The walkthrough connects a
+review of source to the system a user boots. A successful build does not prove
+that every desktop works.
 
-## Demo video outline (3–5 min, attach to CFP)
+A recorded demonstration will compare the booted and staged image before and
+after an update. We will reboot into the new deployment and return to the prior
+deployment. We will show data that persists outside the image. An
+operating-system rollback does not promise to reverse application data or every
+configuration change. The speaker will identify the tested artifact and
+rehearsal evidence, and explain the limits of that example.
 
-The beats, in order:
+We finish with questions for a bounded desktop pilot. Which image did we test?
+Does its desktop session start? How did we exercise recovery? Which checks must
+we repeat on the intended hardware?
 
-1. `podman` pull of a TunaOS image; show the layered FS
-2. `bootc upgrade` on a live VM → atomic swap + `bootc rollback` on failure
-3. Corral: declare a desktop VM as a manifest, `kubectl apply`, watch it schedule
-4. Boot the updated image; GNOME session running on AlmaLinux 10
+Attendees leave with a source walkthrough and a recovery checklist they can
+adapt to their own image-based systems. Linux administration and basic OCI
+knowledge are useful; Kubernetes is not required.
 
-**To record it, use [CFP-DEMO-SCRIPT.md](./CFP-DEMO-SCRIPT.md)** — the
-shot list with the real commands (`just qcow2`, `scripts/run-vm.sh demo`,
-`just corral-build`), per-shot timings, what each shot has to prove to a
-reviewer, and the pre-pull step without which `bootc upgrade` does not fit in
-five minutes. The same recording is reused for SCaLE 24x instead of shot
-twice.
+## Outline and demo video
 
-## Logistics
+Proposed 25-minute version, including questions; adapt to the selected room:
 
-- Length: 30 min (25 + Q&A) — fits FOSDEM devroom format
-- Speaker: maintainer or maintainer-designate (travel: FOSDEM is free to attend; Brussels transit from most of Europe)
-- Materials: laptop + demo VMs pre-built (bootc images exist in GHCR; Corral runs anywhere with KubeVirt)
+1. Payload and persistent state: 4 minutes.
+2. Configuration to image walkthrough: 6 minutes.
+3. Recorded update, reboot and rollback: 5 minutes.
+4. Verification criteria and pilot checklist: 5 minutes.
+5. Questions: 5 minutes.
 
-## bootc / CNCF ecosystem angle (#1340)
+### Demo video outline (3-5 min, attach to CFP)
 
-bootc is a CNCF Sandbox project, and TunaOS is one of the more complete
-production bootc *desktop* deployments (37 published editions, daily GNOME
-releases, keyless-signed artifacts) — a concrete adoption story for a
-sandbox project working toward incubation.
+Use [CFP-DEMO-SCRIPT.md](CFP-DEMO-SCRIPT.md) as a guide for the update/rollback
+portion. That runbook states that its author did not execute it; it is not
+evidence of a successful demo. Rehearse on a disposable VM, capture before/after
+digests, booted deployments and persistent-state observations, and retain an
+offline video. Omit the Corral segment for this proposal. A separate Kubernetes
+session needs its own verified demonstration and a suitable call.
 
-**Correction (2026-08-13):** an earlier version of this section claimed
-Jorge Castro (castrojo, CNCF Developer Relations and a Universal Blue
-founder)'s "201-commit contributor and CODEOWNERS entry" status meant this
-wasn't cold outreach. That doesn't hold up — re-verified via the GitHub
-API: every one of castrojo's 201 commits predates `tuna-os/tunaOS`'s own
-creation (2025-07-30), the latest is 2025-05-28, and a search across this
-repo's issues/PRs turns up zero comments, authored issues, or reviews from
-castrojo, ever. Same pattern as the retracted shimonenator claim (#1317)
-and the tulilirockz "warm path" correction (#1339): the commits are
-inherited pre-fork history from bluefin-lts, not real engagement with this
-repo. `.github/CODEOWNERS` still lists castrojo (and tulilirockz), but
-given both show zero real post-fork activity, that file itself looks like
-it was carried over unchanged from the fork instead of reflecting actual
-current maintainers — worth a maintainer's separate look, not assumed here.
+## Evidence for the speaker
 
-Treat this as cold outreach unless a maintainer confirms an actual current
-relationship.
+- [Primary configuration](../tunaos.toml), [flavor resolver](../scripts/resolve-flavor.sh)
+  and [desktop installer](../build_scripts/desktop/install-desktop.sh): source walkthrough.
+- [Roadmap](../ROADMAP.md): planned work; not evidence that a feature shipped.
+- [Verification criteria](GREEN-CRITERIA.md) and [generated matrix evidence](MATRIX-STATUS.md):
+  select a tested artifact for rehearsal; do not quote a fixed edition count.
+- [Adopters and ecosystem dependencies](../ADOPTERS.md): upstream dependencies
+  do not establish external adoption, partnership or endorsement.
+- [Content claim checklist](CONTENT-CLAIM-CHECKLIST.md): apply before submission.
 
-This makes the FOSDEM talk (Containers devroom) a natural fit for a
-CNCF-adjacent bootc ecosystem showcase, not just a standalone project talk.
-**A pitch to bootc-dev / CNCF channels has not been sent** — that's a
-maintainer decision (it's an external, public action on the org's behalf),
-not something to originate from this doc. If a maintainer wants to make
-that pitch, this CFP abstract and the ADOPTERS.md ecosystem table (which
-already lists bootc-dev/bootc as an upstream dependency) are the supporting
-material to point to.
+This replaces the earlier production-deployment and automatic-recovery claims.
+Do not carry forward star counts, compliance language, lifecycle guarantees or
+an assumed CNCF relationship. The [CNCF pitch](CNCF-BOOTC-SHOWCASE.md) is
+separate outreach; an upstream dependency is not a confirmed relationship.
 
-## Submission checklist
+## Submission and response record
 
-- [ ] CFP portal opens (~Oct 2026) — confirm exact date
-- [ ] Finalize title + abstract (this draft)
-- [ ] Record demo video (3–5 min) — follow [CFP-DEMO-SCRIPT.md](./CFP-DEMO-SCRIPT.md);
-      its "Before you record" table is the concrete version of "needs a spare laptop/VM"
-- [ ] Ask 1–2 community members to proof the abstract (FOSDEM reviewers like demos + no-vendor-pitch)
-- [ ] Submit to Containers devroom first; fall back to Desktops if categories allow
-- [ ] (Optional, maintainer call) Pitch a bootc-ecosystem case-study feature to bootc-dev/CNCF channels — see #1340
+Use #3179 as the ledger for this proposal and the [SCaLE
+adaptation](CFP-SCALE-24X.md). Coordinate with [PR
+#3713](https://github.com/tuna-os/tunaos/pull/3713) (architecture abstracts) and
+[PR #3778](https://github.com/tuna-os/tunaos/pull/3778) (conference strategy)
+before submission to avoid duplicate sessions.
 
-## Supporting material (for reviewers / talk page)
+- [ ] A speaker volunteers, confirms attendance and supplies their own bio.
+- [ ] Record room, call URL, exact deadline/time zone, format and portal fields.
+- [ ] Review the abstract and complete the recorded rehearsal.
+- [ ] The speaker reviews the terms for publication and submits through their authorized account.
+- [ ] Record a public-safe receipt in #3179; keep private contact data out of GitHub.
+- [ ] Record response and, if accepted, session URL, final slides and video.
 
-- Project: [github.com/tuna-os/tunaOS](https://github.com/tuna-os/tunaOS) — 55 stars, 37 active repos
-  in the org, daily image builds *(counts as of 2026-08-14; re-check before submitting — the
-  previous figures were undated and had already drifted)*
-- Blog: [tunaos.org/blog](https://tunaos.org/blog) — 10 posts incl. "The Immutable Desktop Landscape" and "Modern Enterprise Linux Desktops with TunaOS"
-- Tech: bootc (CNCF Sandbox), KubeVirt, QEMU, BuildStream
-- ADOPTERS: [tuna-os/tunaOS/ADOPTERS.md](https://github.com/tuna-os/tunaOS/blob/main/ADOPTERS.md)
+Aim to submit 2–4 weeks before a verified deadline. For the November 16
+main-track deadline, that target window is October 19–November 2; use it only if
+main track is appropriate. Derive the room's schedule from its own call. Review
+the ledger weekly and after each organizer response. A receipt establishes
+submission; acceptance needs a response from an organizer or a link to a
+published session.
 
----
+Copy one record per proposal into #3179:
 
-*Draft prepared by outreach agent (ACMM L6 — full mode). Review, edit, and submit when the CFP portal opens.*
+```text
+Event / track / organizer call URL:
+Deadline, time zone and source checked on:
+Speaker and attendance consent link:
+Abstract revision / duration / portal requirements:
+Demo artifact and rehearsal evidence:
+State: preparing | submitted | accepted | declined | withdrawn
+Submission date / public-safe receipt:
+Notification date / next review:
+Accepted session URL / speaking date:
+Slides / recording URL:
+```
+
+## Other season targets — research on 2026-10-24
+
+[SCaLE 24x](CFP-SCALE-24X.md) is the immediate CFP priority and a Q2 event. Its
+November 1 deadline is eight days away; the requested 2–4 week lead time has
+passed. A speaker should evaluate it now. This preparation has missed the target
+window for early submission.
+
+For Australia, [Everything
+Open](https://2027.everythingopen.au/programme/proposals/) confirms January
+20–22 in Brisbane. Its call closed on September 20, 2026 at 23:59 AoE after an
+extension. The older [draft](CFP-EVERYTHING-OPEN-2027.md) lists the superseded
+September 6 deadline. Do not treat it as an open CFP or infer a separate
+linux.conf.au 2027 call.
+
+The [call for KubeCon
+Europe](https://events.linuxfoundation.org/kubecon-cloudnativecon-europe/program/cfp/)
+places the event in Barcelona, March 15–18, 2027; its October 11, 2026, 23:59
+CEST deadline has passed. Do not submit a Corral proposal against that closed
+call. [OSS
+NA](https://events.linuxfoundation.org/open-source-summit-north-america/) is May
+17–19 in Vancouver, outside Q1; that page supplies no CFP deadline. Reuse the
+[OSS NA proposal](CFP-OSS-NA-2027.md) when a dated call is available.
