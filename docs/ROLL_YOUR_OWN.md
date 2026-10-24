@@ -148,7 +148,11 @@ Local builds, CI, ISOs and the boot gate use this destination, and each image
 records it. The repository variable `IMAGE_REGISTRY` (for example
 `quay.io/acme`) overrides both TOML fields for an operator-controlled
 repository. The effective value must remain a lowercase
-`<registry>/<namespace>` OCI path.
+`<registry>/<namespace>` OCI path. The registry host is either `localhost` or
+a dotted lowercase name (`quay.io`, `registry.internal.example.com`, and
+dotted IPv4 literals), with an optional `:<port>` between 1 and 65535.
+Bracketed IPv6 literals and single-label in-network hosts such as
+`registry:5000` are not part of this contract and are rejected.
 
 ### CI credentials for the publish destination
 
