@@ -25,9 +25,14 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 
 
-def run(*args, timeout=120, check=True):
+def run(*args, timeout=120, check=True, output_path: Path | None = None):
     if args and args[0] == 'docker':
         args = ('docker', '--host', 'unix:///var/run/docker.sock', *args[1:])
+    if output_path is not None:
+        with output_path.open('xb') as stream:
+            return subprocess.run(
+                args, check=check, stdout=stream, stderr=subprocess.STDOUT, timeout=timeout
+            )
     return subprocess.run(args, check=check, capture_output=True, text=True, timeout=timeout)
 
 
@@ -166,10 +171,16 @@ def cleanup(output: Path, containers: list[str], networks: list[str]) -> bool:
                         if kind == 'container' else [['docker', 'network', 'rm', name]])
             for command in commands:
                 event = {'command': command, 'ok': False}
+                destination = output / (name + '-' + command[1] + '.txt')
                 try:
-                    result = run(*command, timeout=30, check=False)
+                    if command[1] == 'logs':
+                        result = run(
+                            *command, timeout=30, check=False, output_path=destination
+                        )
+                    else:
+                        result = run(*command, timeout=30, check=False)
+                        destination.write_text(result.stdout + result.stderr)
                     event.update(ok=result.returncode == 0, returncode=result.returncode)
-                    (output / (name + '-' + command[1] + '.txt')).write_text(result.stdout + result.stderr)
                 except (OSError, subprocess.SubprocessError) as error:
                     event['error'] = type(error).__name__
                 events.append(event)
@@ -260,8 +271,10 @@ def execute(output: Path) -> None:
             inspection = json.loads(run('docker', 'inspect', workload).stdout)[0]
             verify_workload_inspect(inspection, internal)
             (output / 'workload-inspection.json').write_text(json.dumps(inspection, indent=2))
-            result = run('docker', 'start', '--attach', workload, timeout=5400, check=False)
-            (output / 'workload-console.log').write_text(result.stdout + result.stderr)
+            result = run(
+                'docker', 'start', '--attach', workload, timeout=5400, check=False,
+                output_path=output / 'workload-console.log',
+            )
             terminal = json.loads(run('docker', 'inspect', workload).stdout)[0]
             if terminal['State']['Running'] or terminal['State']['ExitCode'] != 0:
                 raise ValueError('native diagnostic did not complete successfully')

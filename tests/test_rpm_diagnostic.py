@@ -15,6 +15,8 @@ HERE = ROOT / 'scripts/diagnostics'
 
 def module(name):
     spec = importlib.util.spec_from_file_location(name, HERE / f'{name}.py')
+    if spec is None or spec.loader is None:
+        raise ImportError(f"cannot load diagnostic module {name!r} from {HERE}")
     result = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(result)
     return result
@@ -142,6 +144,19 @@ def test_every_docker_command_pins_local_socket(monkeypatch):
     monkeypatch.setattr(runner.subprocess, 'run', lambda args, **kwargs: calls.append((args, kwargs)))
     runner.run('docker', 'info')
     assert calls[0][0] == ('docker', '--host', 'unix:///var/run/docker.sock', 'info')
+
+
+def test_long_command_output_streams_to_evidence_file(tmp_path):
+    evidence = tmp_path / 'command.log'
+    result = runner.run(
+        sys.executable,
+        '-c',
+        "import sys; sys.stdout.write('out'); sys.stderr.write('err')",
+        output_path=evidence,
+    )
+    assert result.returncode == 0
+    assert result.stdout is None
+    assert evidence.read_text() == 'outerr'
 
 
 def test_successful_controls_keep_concrete_failure_evidence(monkeypatch):
