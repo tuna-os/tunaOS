@@ -276,6 +276,11 @@ jobs:
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "24"
+          # Restore ~/.npm between runs, keyed on the checked-in lockfile, so
+          # `npm ci` below resolves from the local cache instead of re-downloading
+          # the same tarballs on every Unit Tests job (tuna-os/tunaos#3684).
+          cache: npm
+          cache-dependency-path: services/countme/package-lock.json
 
       - name: Test countme collector with D1
         run: |
