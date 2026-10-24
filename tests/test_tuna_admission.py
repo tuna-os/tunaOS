@@ -140,7 +140,11 @@ def test_rpm_cells_install_the_pinned_beta_from_signed_factory_repositories():
         section = manifest["packages"][target]
         assert section["display_manager"] == "gdm"
         assert nevr in section["packages"]
-        for package in ("gdm", "xdg-desktop-portal-gnome", "xdg-desktop-portal-gtk", "gnome-keyring"):
+        for package in ("gdm", "xdg-desktop-portal-gnome", "xdg-desktop-portal-gtk"):
+            assert package in section["packages"], (target, package)
+        # ELN publishes no gnome-keyring; oo7 is its Secret Service (tunaOS#3810).
+        secret_service = ("oo7-daemon", "pam_oo7") if target == "eln" else ("gnome-keyring",)
+        for package in secret_service:
             assert package in section["packages"], (target, package)
         assert {"greetd", "greetd-gtkgreet", "gtkgreet", "cage"}.isdisjoint(section["packages"]), target
         # tuned-ppd, as each base's GNOME flavor ships, conflicts with
