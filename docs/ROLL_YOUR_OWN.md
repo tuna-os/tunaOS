@@ -286,7 +286,7 @@ Your project's name, links and codenames live in `tunaos.toml`:
 ```toml
 [project]
 name = "Acme OS"          # fastfetch and the KDE About page: "part of Acme OS"
-id = "acmeos"             # lowercase; the product part of CPE_NAME
+id = "acmeos"             # lowercase; project-id suffix in the CPE product
 cpe_vendor = "acme"       # the vendor part of CPE_NAME
 
 [defaults.branding]       # os-release HOME_URL, DOCUMENTATION_URL, SUPPORT_URL, BUG_REPORT_URL

@@ -222,7 +222,7 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
     echo "source '${REPO_ROOT}/build_scripts/lib/identity.env'"
     echo "VARIANT_ALIASES='${REPO_ROOT}/build_scripts/lib/variant-aliases.tsv'"
     awk '/^canonical_variant\(\) \{/,/^\}/' "$script"
-    awk '/^VARIANT_KEY=/,/^fi$/' "$script"
+    awk '/^VARIANT_KEY=/,/^[[:space:]]*fi$/' "$script"
     echo 'echo "${VARIANT_KEY}:${CODE_NAME}"'
   } >"$harness"
 
