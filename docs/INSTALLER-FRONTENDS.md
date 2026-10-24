@@ -284,10 +284,10 @@ screen columns only, and tags them.
 
 | Frontend | Source | welcome | disk | encryption | summary | install | done |
 |----------|--------|---------|------|------------|---------|---------|------|
-| KDE | [capture](https://github.com/tuna-os/tuna-installer-kde/actions/runs/33746041451) | ✅ᶜ | ✅ᶜ | ✅ᶜ | ✅ᶜ | ✅ᶜ | ✅ᶜ |
+| KDE | — | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | COSMIC | — | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| Niri | [capture](https://github.com/tuna-os/tuna-installer-niri/actions/runs/32732384359) | ✅ᶜ | ✅ᶜ | ✅ᶜ | ✅ᶜ | ✅ᶜ | ✅ᶜ |
-| XFCE | [capture](https://github.com/tuna-os/tuna-installer-xfce/actions/runs/33726957852) | ✅ᶜ | ✅ᶜ | ⬜ᶜ | ✅ᶜ | ✅ᶜ | ✅ᶜ |
+| Niri | — | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| XFCE | — | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 
 ᶜ = GPU-less offscreen capture in the frontend's own repo.
 **It attests to screen parity only.** It drives pages in-process.
@@ -297,10 +297,10 @@ whether a keypress advances the wizard. The first three columns of
 the matrix above stay the job of the VM walkthrough, and a green
 row here does not replace one.
 
-- **KDE** — 6 pages, 6 passed the pixel audit, 5 transitions. Text from `qml-item-tree`.
-- **COSMIC** — no parity report imported (no run carried a parity report).
-- **Niri** — 6 pages, 6 passed the pixel audit, 5 transitions. Text from `widget-tree`.
-- **XFCE** — 8 pages, 8 passed the pixel audit, 7 transitions. Text from `widget-tree`.
+- **KDE** — no parity report imported (gh run list failed: HTTP 404: workflow screenshots.yml not found on the default branch (https://api.github.com/repos/tuna-os/tuna-installer-).
+- **COSMIC** — no parity report imported (gh run list failed: HTTP 404: workflow screenshots.yml not found on the default branch (https://api.github.com/repos/tuna-os/tuna-installer-).
+- **Niri** — no parity report imported (gh run list failed: HTTP 404: workflow screenshots.yml not found on the default branch (https://api.github.com/repos/tuna-os/tuna-installer-).
+- **XFCE** — no parity report imported (gh run list failed: HTTP 404: workflow screenshots.yml not found on the default branch (https://api.github.com/repos/tuna-os/tuna-installer-).
 
 <!-- END GENERATED — scripts/import-frontend-parity.py -->
 
