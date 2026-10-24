@@ -132,8 +132,10 @@ def validate(catalog):
             raise CatalogError('invalid clock-skew bound')
     if ids != expected:
         missing = ', '.join(sorted(expected - ids)) or 'none'
+        unexpected = ', '.join(sorted(ids - expected)) or 'none'
         raise CatalogError(
-            f'incomplete configured target source set; missing source ids: {missing}')
+            'configured target source set differs from the exact reviewed set; '
+            f'missing source ids: {missing}; unexpected source ids: {unexpected}')
     return catalog
 
 

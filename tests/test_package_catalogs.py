@@ -113,7 +113,9 @@ def test_complete_set_and_known_schema(change):
 def test_absent_configured_source_names_missing_id(absent):
     data = fixture()
     data['sources'] = [source for source in data['sources'] if source['id'] != absent]
-    with pytest.raises(CatalogError, match=f'missing source ids: {absent}$'):
+    with pytest.raises(
+            CatalogError,
+            match=f'missing source ids: {absent}; unexpected source ids: none$'):
         validate(data)
 
 
