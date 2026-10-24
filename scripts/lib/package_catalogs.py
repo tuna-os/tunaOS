@@ -364,7 +364,7 @@ def bind_observation(catalog, config_directory):
 
 
 def _copied_package_source_files(config_directory):
-    """Identity every local source/trust file copied into the target."""
+    """Identify every local source/trust file copied into the target."""
     import hashlib
     from pathlib import Path
     root = Path(config_directory)
@@ -425,7 +425,9 @@ def bind_target_configuration(catalog, document, config_directory, flavor):
           'target observation')
     if (type(observation['schema_version']) is not int or observation['schema_version'] != 1
             or observation['variant'] != catalog['variant']
-            or observation['flavors'] != catalog['flavors']
+            or not isinstance(observation['flavors'], list)
+            or not all(isinstance(item, str) for item in observation['flavors'])
+            or sorted(observation['flavors']) != sorted(catalog['flavors'])
             or observation['platform'] != 'linux/amd64'
             or observation['base_image'] != catalog['observed_base_image']):
         raise CatalogError('target observation does not match selected target')

@@ -304,6 +304,18 @@ def test_target_configuration_binds_build_and_desktop_sources():
         assert observation['build_sources'][0]['id'] == 'tailscale'
 
 
+def test_target_configuration_accepts_reordered_catalog_flavors():
+    from lib import tunaos_config
+    document = tunaos_config.load()
+    original = document['package_catalogs']['debian-trixie']
+    catalog = {**original, 'flavors': list(reversed(original['flavors']))}
+
+    observation = package_catalogs.bind_target_configuration(
+        catalog, document, ROOT, 'base')
+
+    assert set(observation['flavors']) == set(catalog['flavors'])
+
+
 def test_target_configuration_rejects_changed_source_logic(tmp_path):
     import shutil
     shutil.copytree(ROOT / 'config', tmp_path / 'config')
