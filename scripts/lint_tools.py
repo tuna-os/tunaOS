@@ -45,16 +45,22 @@ def _load_contract(path: Path) -> dict:
     if contract.get("schema") != 1:
         raise ContractError(f"{path}: unsupported schema {contract.get('schema')!r}")
     tools = contract.get("tools")
-    if not isinstance(tools, dict) or tuple(tools) != REQUIRED_TOOLS:
+    if not isinstance(tools, dict):
+        raise ContractError(f"{path}: tools must be an object")
+    missing = [name for name in REQUIRED_TOOLS if name not in tools]
+    unexpected = sorted(set(tools) - set(REQUIRED_TOOLS))
+    if missing or unexpected:
         raise ContractError(
-            f"{path}: tools must be ordered exactly as {', '.join(REQUIRED_TOOLS)}"
+            f"{path}: tools must contain exactly {', '.join(REQUIRED_TOOLS)}; "
+            f"missing {missing}; unexpected {unexpected}"
         )
 
     platforms = contract.get("platforms")
     if not isinstance(platforms, list) or not platforms:
         raise ContractError(f"{path}: platforms must be a non-empty list")
 
-    for name, tool in tools.items():
+    for name in REQUIRED_TOOLS:
+        tool = tools[name]
         for field in ("version", "repository", "tag", "version_args", "version_regex"):
             if not tool.get(field):
                 raise ContractError(f"{path}: {name}.{field} is required")
@@ -120,7 +126,8 @@ def verify(contract: dict, bin_dir: Path | None = None) -> None:
     incomplete install cannot pass on the strength of an unrelated copy.
     """
     failures: list[str] = []
-    for name, tool in contract["tools"].items():
+    for name in REQUIRED_TOOLS:
+        tool = contract["tools"][name]
         if bin_dir is not None:
             candidate = bin_dir.expanduser() / name
             executable = candidate if candidate.is_file() else None
@@ -212,7 +219,8 @@ def install(contract: dict, bin_dir: Path) -> None:
     if not bin_dir.is_dir():
         raise ContractError(f"install destination is not a directory: {bin_dir}")
 
-    for name, tool in contract["tools"].items():
+    for name in REQUIRED_TOOLS:
+        tool = contract["tools"][name]
         destination = bin_dir / name
         if destination.is_file() and _run_version(destination, tool)[0]:
             print(f"{name} {tool['version']} already installed at {destination}")

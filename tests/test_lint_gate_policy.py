@@ -1,4 +1,7 @@
+import os
 import re
+import shutil
+import subprocess
 from pathlib import Path
 
 import yaml
@@ -53,3 +56,45 @@ def test_ci_runs_every_shared_linter() -> None:
     text = WORKFLOW.read_text(encoding="utf-8")
     for linter in LINTERS:
         assert f"./scripts/run-config-lint.sh {linter}" in text, linter
+
+
+def test_shfmt_gate_handles_empty_inputs_and_reports_real_drift(tmp_path: Path) -> None:
+    root = tmp_path / "repo"
+    scripts = root / "scripts"
+    tools = tmp_path / "bin"
+    scripts.mkdir(parents=True)
+    tools.mkdir()
+    runner = scripts / "lint-runner"
+    shutil.copy2(ROOT / "scripts" / "run-config-lint.sh", runner)
+    log = tmp_path / "shfmt.log"
+    shfmt = tools / "shfmt"
+    shfmt.write_text(
+        "#!/usr/bin/env bash\n"
+        "printf 'called\\n' >> \"$SHFMT_LOG\"\n"
+        "[[ \"${SHFMT_DRIFT:-}\" != true ]] || printf '%s\\n' \"${@: -1}\"\n",
+        encoding="utf-8",
+    )
+    shfmt.chmod(0o755)
+    env = {
+        **os.environ,
+        "PATH": f"{tools}:{os.environ['PATH']}",
+        "SHFMT_LOG": str(log),
+    }
+
+    empty = subprocess.run(
+        ["bash", str(runner), "shfmt"], env=env, text=True, capture_output=True
+    )
+    assert empty.returncode == 0, empty.stdout + empty.stderr
+    assert not log.exists()
+
+    shell_file = root / "example.sh"
+    shell_file.write_text("#!/usr/bin/env bash\ntrue\n", encoding="utf-8")
+    drift = subprocess.run(
+        ["bash", str(runner), "shfmt"],
+        env={**env, "SHFMT_DRIFT": "true"},
+        text=True,
+        capture_output=True,
+    )
+    assert drift.returncode != 0
+    assert str(shell_file.relative_to(root)) in drift.stdout
+    assert log.read_text(encoding="utf-8").splitlines() == ["called"]

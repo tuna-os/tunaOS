@@ -55,6 +55,35 @@ def test_reviewed_contract_covers_every_supported_host() -> None:
             )
 
 
+def test_contract_tool_key_order_is_semantic_not_structural(
+    tmp_path: Path, capsys
+) -> None:
+    document = json.loads(CONTRACT.read_text(encoding="utf-8"))
+    document["tools"] = dict(reversed(tuple(document["tools"].items())))
+    reordered = tmp_path / "lint-tools.json"
+    reordered.write_text(json.dumps(document), encoding="utf-8")
+
+    loaded = lint_tools._load_contract(reordered)
+    lint_tools.verify(loaded, _matching_tool_dir(tmp_path / "bin"))
+
+    output_names = [line.split()[0] for line in capsys.readouterr().out.splitlines()]
+    assert output_names == list(lint_tools.REQUIRED_TOOLS)
+
+
+def test_contract_reports_missing_and_unexpected_tools(tmp_path: Path) -> None:
+    document = json.loads(CONTRACT.read_text(encoding="utf-8"))
+    document["tools"]["surprise"] = document["tools"].pop("shfmt")
+    invalid = tmp_path / "lint-tools.json"
+    invalid.write_text(json.dumps(document), encoding="utf-8")
+
+    with pytest.raises(lint_tools.ContractError) as raised:
+        lint_tools._load_contract(invalid)
+
+    message = str(raised.value)
+    assert "missing ['shfmt']" in message
+    assert "unexpected ['surprise']" in message
+
+
 def test_matching_versions_are_accepted(tmp_path: Path, capsys) -> None:
     lint_tools.verify(_contract(), _matching_tool_dir(tmp_path))
 

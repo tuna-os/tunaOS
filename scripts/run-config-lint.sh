@@ -47,11 +47,13 @@ json_files() { repo_files -name '*.json'; }
 # whole repository fitting into one argv (ARG_MAX). xargs exits non-zero when
 # any batch fails, so a finding in any chunk still fails the gate.
 run_shellcheck() {
-	if ! shell_files | xargs -0 shellcheck --severity=style --exclude=SC1091,SC2114; then
+	if ! shell_files | xargs -0 bash -c \
+		'(( $# == 0 )) || shellcheck --severity=style --exclude=SC1091,SC2114 "$@"' _; then
 		echo "::warning::ShellCheck non-error findings are advisory; errors gate below."
 	fi
 	# Diagnostics stay on stdout so a failing gate names the file, line and rule.
-	shell_files | xargs -0 shellcheck --severity=error --exclude=SC1091,SC2114
+	shell_files | xargs -0 bash -c \
+		'(( $# == 0 )) || shellcheck --severity=error --exclude=SC1091,SC2114 "$@"' _
 	shellcheck --severity=error --exclude=SC1091,SC2114 \
 		tests/fixtures/lint/shellcheck-valid.fixture
 	expect_invalid SC1046 shellcheck --severity=error --exclude=SC1091,SC2114 \
@@ -63,7 +65,8 @@ run_shellcheck() {
 # while drift exists.
 run_shfmt() {
 	local output
-	output="$(shell_files | xargs -0 shfmt -l)"
+	output="$(shell_files | xargs -0 bash -c \
+		'(( $# == 0 )) || shfmt -l "$@"' _)"
 	if [[ -n "$output" ]]; then
 		echo "::error::Shell formatting drift. Run 'just fix' and commit the result."
 		echo "$output"
