@@ -14,7 +14,7 @@ from pathlib import Path
 
 
 def _load_contract():
-    """Load the sibling v2 contract by path; no ``sys.path``/``sys.modules`` change."""
+    """Load by path without changing ``sys.path`` or registering this module."""
     path = Path(__file__).resolve().with_name("iso_media_provenance.py")
     spec = importlib.util.spec_from_file_location("_receipt_handoff_contract", path)
     if spec is None or spec.loader is None:
@@ -194,8 +194,9 @@ def _measure_media(media, expected_size, *, finish):
             except OSError:
                 pass
         while True:
-            chunk = reader(min(READ_SIZE, expected_size - measured + 1))
-            if type(chunk) is not bytes:
+            requested = min(READ_SIZE, expected_size - measured + 1)
+            chunk = reader(requested)
+            if type(chunk) is not bytes or len(chunk) > requested:
                 _reject("invalid_media_interface", "media.stream.read")
             if not chunk:
                 break

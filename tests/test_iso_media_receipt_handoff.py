@@ -82,6 +82,7 @@ class MediaSource:
         self.finish_result = None
         self.mutate_during_read = False
         self.reader_close_error = None
+        self.oversized_read = False
 
     def finish(self):
         self.events.append("finish")
@@ -104,6 +105,9 @@ class MediaSource:
             def read(self, size=-1):
                 owner.events.append("read")
                 chunk = super().read(size)
+                if owner.oversized_read:
+                    owner.oversized_read = False
+                    chunk += b"XX"
                 if chunk and owner.mutate_during_read:
                     owner.version += 1
                     owner.mutate_during_read = False
@@ -274,6 +278,19 @@ def test_malformed_stream_close_failure_does_not_escape_raw():
         "invalid_media_interface", "media.stream")
 
 
+def test_stream_cannot_return_more_than_the_requested_read_bound():
+    media = MediaSource(MEDIA)
+    media.oversized_read = True
+    with pytest.raises(HANDOFF.ReceiptHandoffError) as caught:
+        HANDOFF.finalize_native_receipt(
+            native_observation(), CASES["browserReceiptUtf8"].encode(), media
+        )
+    assert (caught.value.code, caught.value.field) == (
+        "invalid_media_interface",
+        "media.stream.read",
+    )
+
+
 @pytest.mark.parametrize("field", [
     "source_manifest", "overlay", "deployed_frontend", "loaded_engine",
     "browser", "resources", "producer_run",
@@ -365,8 +382,8 @@ def test_native_rejects_role_swapped_browser_input():
 
 
 def test_native_rejects_duplicate_key_browser_input():
-    raw = CASES["browserReceiptUtf8"].replace(
-        '{"browser":', '{"browser":{"product":"firefox","version":"1.0"},"browser":', 1).encode()
+    encoded = json.dumps(BROWSER, sort_keys=True, separators=(",", ":"))
+    raw = ('{"schemaVersion":1,' + encoded[1:]).encode()
     with pytest.raises(HANDOFF.ReceiptHandoffError, match="invalid_browser_receipt"):
         HANDOFF.finalize_native_receipt(native_observation(), raw, MediaSource(MEDIA))
 
