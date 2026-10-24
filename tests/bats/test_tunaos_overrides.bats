@@ -65,7 +65,9 @@ ASSETS="${REPO_ROOT}/build_scripts/assets/tunaos-overrides"
 			rm -f "$root/var/usrlocal/share/zsh/site-functions/_ujust"
 			printf stale >"$root/var/usrlocal/share/zsh/site-functions/_ujust"
 		fi
-		systemd-tmpfiles --root="$root" --create "$root/usr/lib/tmpfiles.d/tunaos-ujust.conf"
+		# CI runs unprivileged; tmpfiles can create the fixture but cannot chown
+		# its root-owned directories. Assertions below still verify the link.
+		systemd-tmpfiles --root="$root" --create "$root/usr/lib/tmpfiles.d/tunaos-ujust.conf" >/dev/null 2>&1 || true
 		[ -L "$root/var/usrlocal/share/zsh/site-functions/_ujust" ]
 		[ "$(readlink "$root/var/usrlocal/share/zsh/site-functions/_ujust")" = "/usr/share/zsh/site-functions/_ujust" ]
 		rm -rf "$root"
