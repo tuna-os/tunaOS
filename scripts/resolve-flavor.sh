@@ -78,9 +78,10 @@ if [[ "${VARIANT}" == "grouper" && "${FLAVOR}" == *"-asahi" ]]; then
 	CONTAINERFILE="Containerfile.ubuntu"
 	ENABLE_ASAHI="1"
 	DESKTOP_FLAVOR="${FLAVOR%-asahi}"
-elif [[ "${VARIANT}" == "bonito" && "${FLAVOR}" == *"-x13s" ]]; then
-	# ThinkPad X13s / SC8280XP inspection profile. The overlay hard-fails off
-	# aarch64 and on non-Fedora parents; W1 intentionally keeps Fedora's kernel.
+elif [[ ("${VARIANT}" == "bonito" || "${VARIANT}" == "marlin") && "${FLAVOR}" == *"-x13s" ]]; then
+	# ThinkPad X13s / SC8280XP profile on a Fedora (bonito) or Arch Linux ARM
+	# (marlin) desktop parent. The overlay hard-fails off aarch64 and on other
+	# parents.
 	CONTAINERFILE="Containerfile.overlay"
 	OVERLAY_TYPE="x13s"
 	DESKTOP_FLAVOR="desktop"

@@ -1,4 +1,4 @@
-"""Build-matrix and architecture contract for the X13s W1 profile (#3377)."""
+"""Build-matrix and architecture contract for the X13s profile (#3377, #3368)."""
 
 from __future__ import annotations
 
@@ -32,10 +32,11 @@ def resolve(variant: str, flavor: str) -> dict[str, str]:
     return values
 
 
-def test_bonito_x13s_is_an_arm64_only_non_artifact_cell():
+@pytest.mark.parametrize("variant_id", ["bonito", "marlin"])
+def test_x13s_is_an_arm64_only_non_artifact_cell(variant_id: str):
     config = yaml.safe_load(CONFIG.read_text(encoding="utf-8"))
-    bonito = next(v for v in config["variants"] if v["id"] == "bonito")
-    profile = next(f for f in bonito["flavors"] if f["id"] == "gnome-x13s")
+    variant = next(v for v in config["variants"] if v["id"] == variant_id)
+    profile = next(f for f in variant["flavors"] if f["id"] == "gnome-x13s")
 
     assert profile["platforms"] == ["linux/arm64"]
     assert profile["stage"] == 3
@@ -45,8 +46,9 @@ def test_bonito_x13s_is_an_arm64_only_non_artifact_cell():
     assert profile["luks_e2e"] is False
 
 
-def test_bonito_x13s_routes_to_the_gnome_hardware_overlay():
-    values = resolve("bonito", "gnome-x13s")
+@pytest.mark.parametrize("variant_id", ["bonito", "marlin"])
+def test_x13s_routes_to_the_gnome_hardware_overlay(variant_id: str):
+    values = resolve(variant_id, "gnome-x13s")
 
     assert values["CONTAINERFILE"] == "Containerfile.overlay"
     assert values["OVERLAY_TYPE"] == "x13s"

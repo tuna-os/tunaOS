@@ -31,18 +31,30 @@ The inventory records:
 
 ## W2 bootable payload
 
-W2 adds what the X13s needs on top of the stock payload. Each item
-copies what postmarketOS boots this laptop with:
+Two images carry the profile. `bonito:gnome-x13s` uses ostree and GRUB.
+`marlin:gnome-x13s` uses composefs and systemd-boot, the layout for a laptop
+that shares its ESP with postmarketOS
+([bootc-migrate#461](https://github.com/tuna-os/bootc-migrate/issues/461)).
+Each item copies what postmarketOS boots this laptop with:
 
-| Item | How the image carries it |
-|---|---|
-| GPU firmware (`qcom/a660_*`), DSP, audio topology and battery firmware (`qcom/sc8280xp/LENOVO/21BX/`) | Fedora's `qcom-firmware` package |
-| Device tree | `/usr/lib/modules/$kver/devicetree`. ostree copies it into every deployment and writes a `devicetree` line in its boot entry. GRUB and systemd-boot load that line. |
-| `arm64.nopauth clk_ignore_unused pd_ignore_unused` | `/usr/lib/bootc/kargs.d/10-x13s.toml`, aarch64 only |
-| Display, keyboard, NVMe and USB drivers before the root unlocks | `/usr/lib/dracut/dracut.conf.d/90-x13s.conf`, from the postmarketOS `modules-initfs` list, plus the dracut `crypt` module |
+| Item | bonito (Fedora) | marlin (Arch Linux ARM) |
+|---|---|---|
+| GPU firmware (`qcom/a660_*`), DSP, audio topology and battery firmware (`qcom/sc8280xp/LENOVO/21BX/`) | `qcom-firmware` | `linux-firmware-qcom` |
+| Device tree | `/usr/lib/modules/$kver/devicetree`. ostree writes a `devicetree` line into each boot entry. | The kernel is wrapped in systemd-stub with the DTB in a `.dtbauto` section. The stub selects it by hardware ID. bootc's composefs entries have no `devicetree` line. |
+| `arm64.nopauth clk_ignore_unused pd_ignore_unused` | `/usr/lib/bootc/kargs.d/10-x13s.toml` | same |
+| Display, keyboard, NVMe and USB drivers before the root unlocks | `/usr/lib/dracut/dracut.conf.d/90-x13s.conf`, from the postmarketOS `modules-initfs` list, plus the dracut `crypt` module | same |
 
-The overlay rebuilds the initramfs and writes the inventory. The build fails
+The same dracut file leaves out drivers for GPUs that this laptop does not
+have, and their firmware. The overlay takes the marlin DTB from the installed
+`linux-aarch64` package version and stops if the repository has a different
+version. It rebuilds the initramfs and writes the inventory. The build fails
 if the inventory has a `MISSING` line.
+
+Some options are optional, and the report shows them as `OPTIONAL-MISSING`.
+Arch Linux ARM's `linux-aarch64` 7.2.11 does not have these three:
+`CONFIG_I2C_HID_OF_ELAN` (the touchscreen on touchscreen models),
+`CONFIG_REGULATOR_QCOM_PM8008` (the camera) and `CONFIG_SQUASHFS_ZSTD` (live
+ISO only). The keyboard and touchpad use `CONFIG_I2C_HID_OF`, which is present.
 
 ## Stock Fedora payload measured before admission
 

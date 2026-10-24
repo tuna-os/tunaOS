@@ -18,12 +18,16 @@ if [[ "$(uname -m)" != "aarch64" ]]; then
 	exit 1
 fi
 
-# shellcheck disable=SC1091 # supplied by the Fedora parent image
+# shellcheck disable=SC1091 # supplied by the parent image
 . /etc/os-release
-if [[ "${ID}" != "fedora" ]]; then
-	echo "ERROR: the initial X13s profile is supported only on Fedora (bonito)" >&2
+case "${ID}" in
+fedora) family=fedora ;; # bonito: ostree, GRUB via bootupd
+archarm) family=arch ;;  # marlin: composefs, systemd-boot
+*)
+	echo "ERROR: the X13s profile supports Fedora (bonito) and Arch Linux ARM (marlin) parents, not ${ID}" >&2
 	exit 1
-fi
+	;;
+esac
 
 mapfile -t kernels < <(
 	find /usr/lib/modules -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort -V
@@ -41,43 +45,118 @@ fi
 module_dir="/usr/lib/modules/${kver}"
 
 config="${module_dir}/config"
-if [[ ! -r "${config}" ]]; then
-	config="/boot/config-${kver}"
-fi
+for candidate in "${module_dir}/config" "/boot/config-${kver}" "${module_dir}/build/.config"; do
+	if [[ -r "${candidate}" ]]; then
+		config="${candidate}"
+		break
+	fi
+done
 if [[ ! -r "${config}" ]]; then
 	echo "ERROR: no kernel configuration found for ${kver}" >&2
 	exit 1
 fi
 
-# W1 tests the distro payload before a kernel fork can be justified. A custom
-# hardware kernel here would turn the inspection into evidence about itself.
-rpm -q kernel-core >/dev/null
-if ! rpm -q --qf '%{VENDOR}\n' kernel-core | grep -q '^Fedora Project$'; then
-	echo "ERROR: X13s W1 requires Fedora's stock kernel-core package" >&2
-	exit 1
+# The distro's own kernel, not a hardware fork: W1 showed it already carries
+# every SC8280XP driver, and a custom kernel would make the inventory evidence
+# about itself.
+if [[ "${family}" == fedora ]]; then
+	rpm -q kernel-core >/dev/null
+	if ! rpm -q --qf '%{VENDOR}\n' kernel-core | grep -q '^Fedora Project$'; then
+		echo "ERROR: the X13s profile requires Fedora's stock kernel-core package" >&2
+		exit 1
+	fi
+else
+	# linux-aarch64 ships /boot/Image, which ostree-layout.sh copies to
+	# vmlinuz, so no package owns that file; match the version instead.
+	kernel_pkg_version="$(pacman -Q linux-aarch64 | awk '{print $2}')"
+	if [[ "${kver}" != "${kernel_pkg_version}-"* ]]; then
+		echo "ERROR: kernel ${kver} is not Arch Linux ARM's stock linux-aarch64 ${kernel_pkg_version}" >&2
+		exit 1
+	fi
 fi
 
 # ── W2: what the X13s needs beyond the stock payload ─────────────────────────
 x13s_dtb="${module_dir}/dtb/qcom/sc8280xp-lenovo-thinkpad-x13s.dtb"
-if [[ ! -s "${x13s_dtb}" ]]; then
-	echo "ERROR: Fedora kernel payload has no X13s DTB at ${x13s_dtb}" >&2
-	exit 1
+
+if [[ "${family}" == fedora ]]; then
+	if [[ ! -s "${x13s_dtb}" ]]; then
+		echo "ERROR: Fedora kernel payload has no X13s DTB at ${x13s_dtb}" >&2
+		exit 1
+	fi
+
+	# Adreno 690 (qcom/a660_*) and the board's DSP, audio topology and
+	# battery manager (qcom/sc8280xp/LENOVO/21BX/). The parent image ships
+	# neither. The package is in Fedora itself; skip the metadata of the
+	# parent's other repositories (RPM Fusion, openh264, the updates archive).
+	dnf -y --repo=fedora --repo=updates install qcom-firmware
+	dnf clean all
+
+	# The firmware boots Linux with ACPI tables, but this laptop needs its
+	# device tree. ostree deploys /usr/lib/modules/$kver/devicetree into each
+	# deployment's /boot and writes a `devicetree` line into its boot entry,
+	# which Fedora's GRUB (blscfg) and systemd-boot both load. Every
+	# deployment and rollback therefore boots the DTB built with its own
+	# kernel. With only the dtb/ directory, ostree writes `fdtdir`, which
+	# GRUB ignores.
+	install -m 0644 "${x13s_dtb}" "${module_dir}/devicetree"
+else
+	# linux-aarch64 ships its DTBs only under /boot/dtbs, which the base
+	# build deletes (bootc/ostree-layout.sh). Take the X13s DTB from the very
+	# package version that is installed; a newer one in the repository would
+	# describe a different kernel, so refuse it instead of mixing them.
+	pacman -Sy --noconfirm
+	repo_version="$(pacman -Si linux-aarch64 | awk -F': ' '/^Version/ {print $2; exit}')"
+	if [[ "${repo_version}" != "${kernel_pkg_version}" ]]; then
+		echo "ERROR: installed linux-aarch64 ${kernel_pkg_version} but the repository now has ${repo_version}; rebuild the parent first" >&2
+		exit 1
+	fi
+	pkg_cache="$(mktemp -d)"
+	pacman -Sw --noconfirm --cachedir "${pkg_cache}" linux-aarch64
+	install -d -m 0755 "${module_dir}/dtb/qcom"
+	# The cache also holds the detached .sig; read the package itself.
+	kernel_pkg="$(find "${pkg_cache}" -maxdepth 1 -name "linux-aarch64-${kernel_pkg_version}-*.pkg.tar.*" ! -name '*.sig' -print -quit)"
+	bsdtar -xOf "${kernel_pkg}" boot/dtbs/qcom/sc8280xp-lenovo-thinkpad-x13s.dtb >"${x13s_dtb}"
+	rm -rf "${pkg_cache}"
+	if [[ ! -s "${x13s_dtb}" ]]; then
+		echo "ERROR: linux-aarch64 ${kernel_pkg_version} has no X13s DTB" >&2
+		exit 1
+	fi
+
+	# GPU, DSP, audio topology and battery firmware, as on Fedora.
+	pacman -S --noconfirm --needed linux-firmware-qcom
+
+	# bootc's composefs systemd-boot entries carry no `devicetree` line
+	# (tuna-os/bootc-migrate#461, U3). Instead the kernel itself carries the
+	# DTB: wrap vmlinuz in systemd-stub with a .dtbauto section and the
+	# hardware-ID table, so the stub picks this DTB by the machine's CHID. The
+	# initramfs and command line still come from the boot entry; the stub
+	# adds no .cmdline. This is the mechanism of Fedora's kernel-dtb-loader.
+	# systemd-ukify pins systemd to its own version; installing it against a
+	# different systemd would be a partial upgrade of the init system.
+	# The dependency names a pkgver (systemd=262.1); pacman -Q adds -pkgrel.
+	ukify_systemd="$(pacman -Si systemd-ukify | sed -n 's/^Depends On *: .*systemd=\([^ ]*\).*/\1/p')"
+	installed_systemd="$(pacman -Q systemd | awk '{print $2}')"
+	if [[ "${installed_systemd%-*}" != "${ukify_systemd%-*}" ]]; then
+		echo "ERROR: systemd-ukify needs systemd ${ukify_systemd}; the parent has ${installed_systemd}; rebuild the parent first" >&2
+		exit 1
+	fi
+	pacman -S --noconfirm --needed systemd-ukify
+	ukify build \
+		--linux="${module_dir}/vmlinuz" \
+		--devicetree-auto="${x13s_dtb}" \
+		--hwids=/usr/lib/systemd/boot/hwids/aa64 \
+		--stub=/usr/lib/systemd/boot/efi/linuxaa64.efi.stub \
+		--uname="${kver}" \
+		--output=/tmp/vmlinuz.dtbauto
+	# Record the PE sections while pefile (a ukify dependency) is installed.
+	python3 -c 'import pefile, sys
+for s in pefile.PE(sys.argv[1], fast_load=True).sections:
+    print(s.Name.rstrip(b"\0").decode())' /tmp/vmlinuz.dtbauto >/tmp/x13s-stub-sections
+	install -m 0755 /tmp/vmlinuz.dtbauto "${module_dir}/vmlinuz"
+	rm -f /tmp/vmlinuz.dtbauto
+	pacman -Rns --noconfirm systemd-ukify
+	pacman -Scc --noconfirm >/dev/null
 fi
-
-# Adreno 690 (qcom/a660_*) and the board's DSP, audio topology and battery
-# manager (qcom/sc8280xp/LENOVO/21BX/). The parent image ships neither.
-# The package is in Fedora itself; skip the metadata of the parent's other
-# repositories (RPM Fusion, openh264, the updates archive).
-dnf -y --repo=fedora --repo=updates install qcom-firmware
-dnf clean all
-
-# The firmware boots Linux with ACPI tables, but this laptop needs its device
-# tree. ostree deploys /usr/lib/modules/$kver/devicetree into each
-# deployment's /boot and writes a `devicetree` line into its boot entry,
-# which Fedora's GRUB (blscfg) and systemd-boot both load. Every deployment
-# and rollback therefore boots the DTB built with its own kernel. With only
-# the dtb/ directory, ostree writes `fdtdir`, which GRUB ignores.
-install -m 0644 "${x13s_dtb}" "${module_dir}/devicetree"
 
 # The arguments postmarketOS boots the X13s with: pointer authentication is
 # broken in the firmware, and unused clocks and power domains must stay on
@@ -111,21 +190,37 @@ for module in "${early_modules[@]}"; do
 		loadable+=("${module}")
 	fi
 done
+# Drivers for GPUs this laptop does not have pull in their firmware (NVIDIA
+# GSP alone is about 100M); leaving them out keeps the boot set small enough
+# for an ESP shared with postmarketOS (tuna-os/bootc-migrate#461).
 cat >/usr/lib/dracut/dracut.conf.d/90-x13s.conf <<EOF
 # ThinkPad X13s early boot, written by build_scripts/overlay/x13s.sh.
 add_drivers+=" ${loadable[*]} "
 add_dracutmodules+=" crypt "
+omit_drivers+=" nouveau nvidia amdgpu radeon i915 xe "
 EOF
 printf 'x13s.sh: %d of %d early-boot modules are loadable modules; the rest are built in or absent\n' \
 	"${#loadable[@]}" "${#early_modules[@]}"
 
-# Rebuild the initramfs the way 26-packages-post.sh does for Fedora.
-mkdir -p /var/roothome
-chmod 0700 /var/roothome
-export DRACUT_NO_XATTR=1
-/usr/bin/dracut --tmpdir /tmp --no-hostonly --kver "${kver}" --reproducible --zstd --add ostree \
-	-f "${module_dir}/initramfs.img"
+# Rebuild the initramfs the way the parent built it.
+if [[ "${family}" == fedora ]]; then
+	# As 26-packages-post.sh does for Fedora.
+	mkdir -p /var/roothome
+	chmod 0700 /var/roothome
+	export DRACUT_NO_XATTR=1
+	/usr/bin/dracut --tmpdir /tmp --no-hostonly --kver "${kver}" --reproducible --zstd --add ostree \
+		-f "${module_dir}/initramfs.img"
+else
+	# As Containerfile.arch does: dracut-config.sh writes the composefs
+	# configuration, then dracut builds against the named kernel. The X13s
+	# GPU is msm; the default early-KMS list (i915 amdgpu nouveau) would add
+	# about 230M of other vendors' firmware.
+	TUNAOS_DRACUT_KMS_DRIVERS=msm /run/context/build_scripts/bootc/dracut-config.sh "${kver}"
+	dracut --force "${module_dir}/initramfs.img" "${kver}"
+fi
 
+# What the laptop needs to boot and work: SoC, display, keyboard and touchpad,
+# NVMe, USB-C, Wi-Fi, Bluetooth, audio, battery. A missing one fails the build.
 required_kconfigs=(
 	CONFIG_ARCH_QCOM
 	CONFIG_ARM_QCOM_CPUFREQ_HW
@@ -136,7 +231,6 @@ required_kconfigs=(
 	CONFIG_DRM_MSM
 	CONFIG_DRM_PANEL_EDP
 	CONFIG_I2C_HID_OF
-	CONFIG_I2C_HID_OF_ELAN
 	CONFIG_I2C_QCOM_GENI
 	CONFIG_PCIE_QCOM
 	CONFIG_PHY_QCOM_QMP_COMBO
@@ -145,13 +239,19 @@ required_kconfigs=(
 	CONFIG_QCOM_PMIC_GLINK
 	CONFIG_QCOM_Q6V5_PAS
 	CONFIG_QRTR
-	CONFIG_REGULATOR_QCOM_PM8008
 	CONFIG_RPMSG_QCOM_GLINK_SMEM
 	CONFIG_SND_SOC_SC8280XP
-	CONFIG_SQUASHFS_ZSTD
 	CONFIG_TYPEC
 	CONFIG_UCSI_PMIC_GLINK
 	CONFIG_USB_DWC3
+)
+
+# Features some X13s units or uses lack; reported, never silently dropped.
+# Arch Linux ARM's linux-aarch64 7.2.11 has none of these three.
+optional_kconfigs=(
+	CONFIG_I2C_HID_OF_ELAN       # Elan touchscreen (touchscreen models only)
+	CONFIG_REGULATOR_QCOM_PM8008 # camera sensor supplies
+	CONFIG_SQUASHFS_ZSTD         # live ISO root; this profile builds no ISO
 )
 
 # Names come from postmarketOS's device-lenovo-21bx early-module inventory.
@@ -213,14 +313,18 @@ tmp_report="$(mktemp)"
 trap 'rm -f "${tmp_report}"' EXIT
 
 {
-	echo "X13s stock Fedora payload inspection"
+	echo "X13s payload inspection (${family})"
 	echo "architecture=aarch64"
 	echo "os=${PRETTY_NAME}"
 	echo "kernel=${kver}"
 	echo "base_image=${BASE_IMAGE:-unknown}"
 	echo
 	echo "[kernel-packages]"
-	rpm -qa 'kernel*' --qf '%{NAME}-%{VERSION}-%{RELEASE}.%{ARCH}\n' | sort
+	if [[ "${family}" == fedora ]]; then
+		rpm -qa 'kernel*' --qf '%{NAME}-%{VERSION}-%{RELEASE}.%{ARCH}\n' | sort
+	else
+		pacman -Q linux-aarch64
+	fi
 	echo
 	echo "[kernel-config]"
 	missing_kconfig=()
@@ -234,6 +338,14 @@ trap 'rm -f "${tmp_report}"' EXIT
 		fi
 	done
 	printf 'missing_kconfig_count=%d\n' "${#missing_kconfig[@]}"
+	for symbol in "${optional_kconfigs[@]}"; do
+		line="$(grep -m1 -E "^${symbol}=(y|m)$" "${config}" || true)"
+		if [[ -n "${line}" ]]; then
+			echo "${line}"
+		else
+			printf 'OPTIONAL-MISSING %s\n' "${symbol}"
+		fi
+	done
 	echo
 	echo "[modules]"
 	declare -A module_paths=()
@@ -266,10 +378,20 @@ trap 'rm -f "${tmp_report}"' EXIT
 	fi
 	echo
 	echo "[boot]"
-	if cmp -s "${x13s_dtb}" "${module_dir}/devicetree"; then
-		echo "PRESENT devicetree -> ${module_dir}/devicetree (sc8280xp-lenovo-thinkpad-x13s.dtb)"
+	if [[ "${family}" == fedora ]]; then
+		if cmp -s "${x13s_dtb}" "${module_dir}/devicetree"; then
+			echo "PRESENT devicetree -> ${module_dir}/devicetree (sc8280xp-lenovo-thinkpad-x13s.dtb)"
+		else
+			echo "MISSING devicetree ${module_dir}/devicetree"
+		fi
 	else
-		echo "MISSING devicetree ${module_dir}/devicetree"
+		for section in linux dtbauto hwids; do
+			if grep -q "^\.${section}" /tmp/x13s-stub-sections; then
+				echo "PRESENT vmlinuz section .${section}"
+			else
+				echo "MISSING vmlinuz section .${section}"
+			fi
+		done
 	fi
 	grep -h '^kargs' /usr/lib/bootc/kargs.d/10-x13s.toml || echo "MISSING kargs /usr/lib/bootc/kargs.d/10-x13s.toml"
 	echo
