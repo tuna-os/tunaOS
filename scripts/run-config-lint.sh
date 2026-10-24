@@ -31,12 +31,13 @@ expect_invalid() {
 # Every file walk prunes .git outright (it never descends into it) and skips
 # vendored or generated trees that are not ours to lint.
 repo_files() {
-	find . -path './.git' -prune -o \
-		-not -path './system_files/usr/share/gnome-shell/extensions/*' \
-		-not -path './packages-repo/*' \
-		-not -path './.build/*' \
-		-not -path './_upstream-snapshots/*' \
-		-type f "$@" -print0
+	find . \( \
+		-path './.git' -o \
+		-path './system_files/usr/share/gnome-shell/extensions' -o \
+		-path './packages-repo' -o \
+		-path './.build' -o \
+		-path './_upstream-snapshots' \
+		\) -prune -o -type f "$@" -print0
 }
 
 shell_files() { repo_files -iname '*.sh'; }
@@ -47,17 +48,18 @@ json_files() { repo_files -name '*.json'; }
 # whole repository fitting into one argv (ARG_MAX). xargs exits non-zero when
 # any batch fails, so a finding in any chunk still fails the gate.
 run_shellcheck() {
-	if ! shell_files | xargs -0 bash -c \
-		'(( $# == 0 )) || shellcheck --severity=style --exclude=SC1091,SC2114 "$@"' _; then
-		echo "::warning::ShellCheck non-error findings are advisory; errors gate below."
-	fi
-	# Diagnostics stay on stdout so a failing gate names the file, line and rule.
+	# Errors gate first. The all-severity advisory pass is useful only after
+	# known errors are absent; otherwise it prints a misleading advisory warning.
 	shell_files | xargs -0 bash -c \
 		'(( $# == 0 )) || shellcheck --severity=error --exclude=SC1091,SC2114 "$@"' _
 	shellcheck --severity=error --exclude=SC1091,SC2114 \
 		tests/fixtures/lint/shellcheck-valid.fixture
 	expect_invalid SC1046 shellcheck --severity=error --exclude=SC1091,SC2114 \
 		tests/fixtures/lint/shellcheck-invalid.fixture
+	if ! shell_files | xargs -0 bash -c \
+		'(( $# == 0 )) || shellcheck --severity=style --exclude=SC1091,SC2114 "$@"' _; then
+		echo "::warning::ShellCheck non-error findings are advisory."
+	fi
 }
 
 # shfmt -l lists files needing formatting; test its output as well as its

@@ -134,6 +134,22 @@ def test_install_rejects_an_asset_with_the_wrong_digest(
     assert not any(tmp_path.iterdir())
 
 
+def test_install_rejects_a_known_host_missing_from_the_contract(
+    tmp_path: Path, monkeypatch
+) -> None:
+    contract = json.loads(CONTRACT.read_text(encoding="utf-8"))
+    contract["platforms"].remove("linux-x86_64")
+    for tool in contract["tools"].values():
+        del tool["assets"]["linux-x86_64"]
+    monkeypatch.setattr(lint_tools, "_host_platform", lambda: "linux-x86_64")
+
+    with pytest.raises(lint_tools.ContractError, match="host linux-x86_64") as raised:
+        lint_tools.install(contract, tmp_path / "bin")
+
+    assert "supported platforms:" in str(raised.value)
+    assert not (tmp_path / "bin").exists()
+
+
 def test_homebrew_shfmt_version_format_is_accepted(tmp_path: Path) -> None:
     """Release assets print `v3.14.1`; the Homebrew build prints `3.14.1`.
 

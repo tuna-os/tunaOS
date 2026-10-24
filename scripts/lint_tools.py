@@ -214,6 +214,12 @@ def _write_binary(source: BinaryIO, asset: dict, destination: Path) -> None:
 
 def install(contract: dict, bin_dir: Path) -> None:
     host = _host_platform()
+    if host not in contract["platforms"]:
+        supported = ", ".join(contract["platforms"])
+        raise ContractError(
+            f"host {host} is not supported by this contract; "
+            f"supported platforms: {supported}"
+        )
     bin_dir = bin_dir.expanduser()
     bin_dir.mkdir(parents=True, exist_ok=True)
     if not bin_dir.is_dir():
