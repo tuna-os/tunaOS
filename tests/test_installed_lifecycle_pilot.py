@@ -233,6 +233,8 @@ def test_interruption_persists_incomplete_stage_evidence(tmp_path, monkeypatch):
     assert latest["result"]["runtime_acceptance"] == "incomplete"
     assert stage_map(latest)["cold_boot_a"]["outcome"] == "pending"
     assert "started_at" in stage_map(latest)["cold_boot_a"]
+    assert FakeBackend.instances[-1].calls[-1] == "cleanup"
+    assert stage_map(latest)["cleanup"]["outcome"] == "passed"
 
 
 def test_symlinked_path_ancestors_are_detected(tmp_path, monkeypatch):
