@@ -126,6 +126,7 @@ jobs:
       # #2059 measured, which is a cell whose image never published at all.
 
       - name: Setup yq
+        if: inputs.upload-r2
         uses: ./.github/actions/setup-yq
       - name: Fetch the digest this run published for this cell
 

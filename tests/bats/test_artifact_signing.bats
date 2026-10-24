@@ -34,6 +34,18 @@ UPLOADER="${REPO_ROOT}/scripts/publish-iso-r2.sh"
   grep -q '"${ISO}.sha256" "${ISO}.sigstore.json"' "$PUBLISH_WORKFLOW"
 }
 
+@test "R2 uploader rejects a checksum that does not match the ISO bytes" {
+  iso="${BATS_TEST_TMPDIR}/fish-20261024.iso"
+  printf 'iso bytes\n' >"$iso"
+  printf '%064d  %s\n' 0 "${iso##*/}" >"${iso}.sha256"
+  printf '{}\n' >"${iso}.sigstore.json"
+
+  run "$UPLOADER" "$iso" fish-latest.iso /does/not/matter.json r2:test
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"signed checksum does not match ISO bytes"* ]]
+}
+
 @test "all reusable artifact callers grant OIDC token access" {
   command -v yq >/dev/null 2>&1 || skip "yq unavailable"
   # Per calling job, not a file-wide count: the image-build jobs grant

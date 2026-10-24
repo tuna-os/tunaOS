@@ -48,6 +48,13 @@ for source in "$iso" "$checksum" "$bundle"; do
 	}
 done
 
+digest=$(sha256sum "$iso" | awk '{print $1}')
+checksum_digest=$(awk 'NR == 1 { print $1; exit }' "$checksum")
+if [[ ! "$checksum_digest" =~ ^[0-9a-f]{64}$ || "$checksum_digest" != "$digest" ]]; then
+	error "signed checksum does not match ISO bytes: ${checksum}"
+	exit 1
+fi
+
 tmpdir=$(mktemp -d)
 trap 'rm -rf "$tmpdir"' EXIT
 retained_file="$tmpdir/retained-objects"
@@ -79,7 +86,6 @@ copy_unless_retained() {
 		"$source" "${destination}/${object}"
 }
 
-digest=$(sha256sum "$iso" | awk '{print $1}')
 digest_suffix=${digest:0:16}
 publication_id="${TUNAOS_PUBLICATION_ID:-}"
 if [[ -z "$publication_id" && -n "${GITHUB_RUN_ID:-}" ]]; then

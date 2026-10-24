@@ -80,8 +80,8 @@ check: _ensure_check_deps ste
     echo "Checking shell formatting (shfmt)..."
     unformatted="$(find . -not -path './.git/*' -not -path './system_files/usr/share/gnome-shell/extensions/*' -not -path './packages-repo/*' -not -path './.build/*' -not -path './_upstream-snapshots/*' -iname "*.sh" -type f -print0 | xargs -0 shfmt -l 2>/dev/null || true)"
     if [[ -n "$unformatted" ]]; then
-        echo "::error::Shell formatting drift. Run 'just fix' and commit the result."
-        echo "$unformatted"
+        echo "::error::Shell formatting drift. Run 'just fix' and commit the result." >&2
+        echo "$unformatted" >&2
         exit 1
     fi
     find . -path './.git' -prune -o \
@@ -104,11 +104,11 @@ check: _ensure_check_deps ste
         generated_workflows+=(".github/workflows/build-${variant}.yml")
     done < <(yq -r '.variants[].id' .github/build-config.yml)
     if ((${#generated_workflows[@]} == 0)); then
-        echo "::error::No generated build workflows were found; refusing an empty drift comparison."
+        echo "::error::No generated build workflows were found; refusing an empty drift comparison." >&2
         exit 1
     fi
     if ! git diff --exit-code -- "${generated_workflows[@]}"; then
-        echo "::error::Generated workflow files are stale. Run 'just generate-workflows' and commit the changes."
+        echo "::error::Generated workflow files are stale. Run 'just generate-workflows' and commit the changes." >&2
         exit 1
     fi
 
