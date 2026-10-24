@@ -9,7 +9,12 @@ source /run/context/build_scripts/lib.sh
 # adapter (scripts/config.py generate-identity), for TunaOS and forks alike.
 # There is deliberately no built-in fallback: a missing file is a broken
 # build context, not a reason to stamp stock TunaOS identity on a fork.
-IDENTITY_ENV="${TUNAOS_IDENTITY_ENV:-/run/context/build_scripts/lib/identity.env}"
+DEFAULT_IDENTITY_ENV=/run/context/build_scripts/lib/identity.env
+if [[ -n "${TUNAOS_IDENTITY_ENV:-}" && "${TUNAOS_IDENTITY_TEST_OVERRIDE:-}" != 1 ]]; then
+	echo "ERROR: TUNAOS_IDENTITY_ENV is test-only; build identity must use ${DEFAULT_IDENTITY_ENV}" >&2
+	exit 1
+fi
+IDENTITY_ENV="${TUNAOS_IDENTITY_ENV:-${DEFAULT_IDENTITY_ENV}}"
 if [[ ! -f "${IDENTITY_ENV}" || ! -r "${IDENTITY_ENV}" ]]; then
 	echo "ERROR: ${IDENTITY_ENV} is missing or unreadable; run scripts/config.py generate-identity" >&2
 	exit 1

@@ -35,10 +35,10 @@ def test_primary_identity_and_publish_destination_share_the_consumer_path(tmp_pa
         config.render_identity(fork), encoding="utf-8")
     image.env.update(IMAGE_REGISTRY=registry, IMAGE_VENDOR=namespace)
     image.info()
-    info = json.loads((image.root / "usr/share/ublue-os/image-info.json").read_text())
+    info = json.loads((image.root / "usr/share/ublue-os/image-info.json").read_text(encoding="utf-8"))
     assert info["image-vendor"] == "acme"
     assert info["image-ref"] == "ostree-image-signed:docker://quay.io/acme/yellowfin"
-    release = (image.root / "usr/lib/os-release").read_text()
+    release = (image.root / "usr/lib/os-release").read_text(encoding="utf-8")
     assert 'VERSION_CODENAME="Wile E"' in release
     assert 'HOME_URL="https://acme.example/homepage"' in release
     assert not (image.context / "manifests/fork-config.json").exists()
@@ -66,3 +66,22 @@ def test_image_info_reports_an_unreadable_identity_adapter(tmp_path):
 
     assert result.returncode != 0
     assert "missing or unreadable" in result.stderr
+
+
+def test_image_info_rejects_unreviewed_identity_override(tmp_path):
+    image = Image(tmp_path)
+    override = tmp_path / "outside.env"
+    override.write_text(
+        (image.context / "build_scripts/lib/identity.env").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        ["bash", str(image.context / "build_scripts/90-image-info.sh")],
+        env={**image.env, "TUNAOS_IDENTITY_ENV": str(override)},
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "test-only" in result.stderr

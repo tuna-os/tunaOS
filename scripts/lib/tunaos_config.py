@@ -396,7 +396,7 @@ def render_identity(config):
              'declare -gA TUNAOS_CODENAMES=(']
     # Keys and values stay quoted and sorted for deterministic, diff-friendly shell.
     lines += [
-        f'\t["{name}"]="{config["variants"][name]["codename"]}"'
+        f'\t[{shlex.quote(name)}]={shlex.quote(config["variants"][name]["codename"])}'
         for name in sorted(config['variants'])
     ]
     return '\n'.join(lines + [')']) + '\n'
