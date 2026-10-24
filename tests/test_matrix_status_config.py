@@ -524,9 +524,9 @@ class FactoryHealthSummary(unittest.TestCase):
 # ── main(): --check / --check-structure / default write ────────────────────
 
 class MainCliDispatch(unittest.TestCase):
-    """Argument handling and file I/O, with build() mocked.
+    """Argument handling and file I/O, with build_pair() mocked.
 
-    build()'s own orchestration (475-738) composes iso_matrix, luks_matrix,
+    build_pair()'s orchestration composes iso_matrix, luks_matrix,
     latest_results, contract_results, overlay_tags, cell, desktop_table,
     tally, undeclared_tally and excluded_tally — every one of which has its
     own unit tests above and in test_matrix_status_fetch.py — so mocking it
@@ -541,23 +541,21 @@ class MainCliDispatch(unittest.TestCase):
 
     @staticmethod
     def _wrap(body: str) -> str:
-        # build() always returns its own BEGIN/END markers (see build()'s
-        # `out = [BEGIN, ..., END]`); main() strips the committed doc's
-        # markers via str.split() and rebuilds entirely from what build()
-        # returns, so a mock standing in for build() must wrap its body the
-        # same way or head/tail reconstruction never matches the file.
+        # build_pair() returns its own BEGIN/END markers; main() strips the
+        # committed doc's markers and rebuilds entirely from that generated
+        # block, so the mock must preserve the same boundary.
         return f"{gms.BEGIN}\n{body}\n{gms.END}"
 
     def _write_doc(self, body: str):
         self.doc.write_text(f"# Matrix status\n\n{self._wrap(body)}\n")
 
     def _run_main(self, argv, generated_body="new content"):
-        # build() now returns (text, provenance); main writes the provenance
+        # build_pair() returns (text, provenance); main writes the provenance
         # JSON beside the doc, so point PROV into the same tmpdir.
         prov = Path(self.tmp.name) / "matrix-provenance.json"
         with mock.patch.object(gms, "DOC", self.doc), \
                 mock.patch.object(gms, "PROV", prov), \
-                mock.patch.object(gms, "build",
+                mock.patch.object(gms, "build_pair",
                                   return_value=(self._wrap(generated_body), {})), \
                 mock.patch.object(sys, "argv", ["gen-matrix-status.py", *argv]):
             return gms.main()

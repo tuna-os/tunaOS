@@ -1184,7 +1184,7 @@ def factory_health_summary(
     return summary
 
 
-def build(inputs: dict | None = None) -> tuple[str, dict]:
+def build_pair(inputs: dict | None = None) -> tuple[str, dict]:
     # Two different denominators on purpose — each axis is measured against the
     # set of cells that axis actually schedules. Sharing one matrix made the
     # LUKS numbers wrong in both directions: image-only variants were missing
@@ -1537,6 +1537,11 @@ def build(inputs: dict | None = None) -> tuple[str, dict]:
     return "\n".join(out), provenance
 
 
+def build(inputs: dict | None = None) -> str:
+    """Return the generated document for compatibility with import callers."""
+    return build_pair(inputs)[0]
+
+
 # Lines whose whole content is a readout of live CI or registry state.
 VOLATILE_LINE = re.compile(
     r"^(?:"
@@ -1668,7 +1673,7 @@ def main() -> int:
     head, rest = text.split(BEGIN, 1)
     committed, tail = rest.split(END, 1)
     inputs = load_retained_inputs(args.inputs) if args.inputs else None
-    generated, provenance = build(inputs)
+    generated, provenance = build_pair(inputs)
     # The disclosure sits after the prose's existing blank line, directly
     # above the generated block; stripping it restores that prose exactly.
     head = re.sub(
