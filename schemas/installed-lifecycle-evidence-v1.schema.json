@@ -30,9 +30,9 @@
           "additionalProperties": false,
           "required": ["variant", "flavor", "platform"],
           "properties": {
-            "variant": { "const": "skipjack" },
-            "flavor": { "const": "gnome" },
-            "platform": { "const": "linux/amd64" }
+            "variant": { "$ref": "#/$defs/requestedValue" },
+            "flavor": { "$ref": "#/$defs/requestedValue" },
+            "platform": { "$ref": "#/$defs/requestedValue" }
           }
         },
         "scope": { "const": "installed_update_and_rollback" },
@@ -44,9 +44,9 @@
       "additionalProperties": false,
       "required": ["source_run_id", "source_head_sha", "harness_sha"],
       "properties": {
-        "source_run_id": { "type": "string", "pattern": "^[0-9]+(?:/[1-9][0-9]*)?$" },
-        "source_head_sha": { "$ref": "#/$defs/gitSha" },
-        "harness_sha": { "$ref": "#/$defs/gitSha" }
+        "source_run_id": { "$ref": "#/$defs/requestedValue" },
+        "source_head_sha": { "$ref": "#/$defs/requestedValue" },
+        "harness_sha": { "$ref": "#/$defs/requestedValue" }
       }
     },
     "inputs": {
@@ -60,11 +60,11 @@
           "required": ["path", "expected_sha256"],
           "properties": {
             "path": { "type": "string", "minLength": 1 },
-            "expected_sha256": { "$ref": "#/$defs/digest" }
+            "expected_sha256": { "$ref": "#/$defs/requestedValue" }
           }
         },
-        "image_a": { "$ref": "#/$defs/imageReference" },
-        "image_b": { "$ref": "#/$defs/imageReference" }
+        "image_a": { "$ref": "#/$defs/requestedValue" },
+        "image_b": { "$ref": "#/$defs/requestedValue" }
       }
     },
     "safety": {
@@ -147,9 +147,74 @@
       }
     }
   },
+  "allOf": [
+    {
+      "$comment": "A passing verdict requires the exact target, immutable identities and every stage, including cleanup, to have passed; skipped, failed or pending stages cannot produce one. Failed evidence retains the requested values verbatim so rejected inputs stay visible.",
+      "if": {
+        "required": ["result"],
+        "properties": { "result": { "properties": { "verdict": { "const": "passed" } } } }
+      },
+      "then": {
+        "properties": {
+          "pilot": {
+            "properties": {
+              "target": {
+                "properties": {
+                  "variant": { "const": "skipjack" },
+                  "flavor": { "const": "gnome" },
+                  "platform": { "const": "linux/amd64" }
+                }
+              }
+            }
+          },
+          "provenance": {
+            "properties": {
+              "source_run_id": { "type": "string", "pattern": "^[0-9]+(?:/[1-9][0-9]*)?$" },
+              "source_head_sha": { "$ref": "#/$defs/gitSha" },
+              "harness_sha": { "$ref": "#/$defs/gitSha" }
+            }
+          },
+          "inputs": {
+            "properties": {
+              "source_disk": { "properties": { "expected_sha256": { "$ref": "#/$defs/digest" } } },
+              "image_a": { "$ref": "#/$defs/imageReference" },
+              "image_b": { "$ref": "#/$defs/imageReference" }
+            }
+          },
+          "stages": {
+            "not": { "contains": { "properties": { "outcome": { "not": { "const": "passed" } } } } }
+          },
+          "outcomes": {
+            "properties": {
+              "cold": { "const": "passed" },
+              "warm": { "const": "passed" },
+              "recovery": { "const": "passed" }
+            }
+          },
+          "result": {
+            "properties": {
+              "runtime_acceptance": { "const": "passed" },
+              "first_failure": { "type": "null" }
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "result": {
+            "properties": {
+              "runtime_acceptance": { "const": "failed" },
+              "first_failure": { "type": "object" }
+            }
+          }
+        }
+      }
+    }
+  ],
   "$defs": {
     "gitSha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
     "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "requestedValue": { "type": "string", "maxLength": 1024 },
     "imageReference": {
       "type": "string",
       "pattern": "^ghcr\\.io/tuna-os/skipjack@sha256:[0-9a-f]{64}$"
@@ -171,12 +236,34 @@
     },
     "preflightStage": { "allOf": [{ "$ref": "#/$defs/stageBase" }, { "properties": { "id": { "const": "preflight" } } }] },
     "prepareStage": { "allOf": [{ "$ref": "#/$defs/stageBase" }, { "properties": { "id": { "const": "prepare_disk" } } }] },
-    "coldStage": { "allOf": [{ "$ref": "#/$defs/stageBase" }, { "properties": { "id": { "const": "cold_boot_a" } } }] },
+    "coldStage": { "allOf": [{ "$ref": "#/$defs/stageBase" }, { "$ref": "#/$defs/bootProof" }, { "properties": { "id": { "const": "cold_boot_a" } } }] },
     "updateStage": { "allOf": [{ "$ref": "#/$defs/stageBase" }, { "properties": { "id": { "const": "stage_update_b" } } }] },
-    "warmStage": { "allOf": [{ "$ref": "#/$defs/stageBase" }, { "properties": { "id": { "const": "warm_boot_b" } } }] },
+    "warmStage": { "allOf": [{ "$ref": "#/$defs/stageBase" }, { "$ref": "#/$defs/bootProof" }, { "properties": { "id": { "const": "warm_boot_b" } } }] },
     "rollbackStage": { "allOf": [{ "$ref": "#/$defs/stageBase" }, { "properties": { "id": { "const": "stage_rollback_a" } } }] },
-    "recoveryStage": { "allOf": [{ "$ref": "#/$defs/stageBase" }, { "properties": { "id": { "const": "recovery_boot_a" } } }] },
+    "recoveryStage": { "allOf": [{ "$ref": "#/$defs/stageBase" }, { "$ref": "#/$defs/bootProof" }, { "properties": { "id": { "const": "recovery_boot_a" } } }] },
     "cleanupStage": { "allOf": [{ "$ref": "#/$defs/stageBase" }, { "properties": { "id": { "const": "cleanup" } } }] },
+    "bootProof": {
+      "$comment": "A passed boot stage must carry the booted installed deployment and runtime desktop contract; container or registry inspection cannot satisfy it.",
+      "if": { "properties": { "outcome": { "const": "passed" } } },
+      "then": {
+        "properties": {
+          "details": {
+            "type": "object",
+            "required": ["reference", "transport", "booted_deployment", "desktop_contract"],
+            "properties": {
+              "reference": { "$ref": "#/$defs/imageReference" },
+              "transport": { "const": "registry" },
+              "booted_deployment": { "type": "object", "minProperties": 1 },
+              "desktop_contract": {
+                "type": "object",
+                "required": ["outcome"],
+                "properties": { "outcome": { "const": "passed" } }
+              }
+            }
+          }
+        }
+      }
+    },
     "command": {
       "type": "object",
       "additionalProperties": false,

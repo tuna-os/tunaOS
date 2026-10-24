@@ -139,6 +139,12 @@ def normalized_digest(value: str) -> str:
     return match.group(1)
 
 
+def requested_disk_digest(value: str) -> str:
+    """Normalize a valid digest for evidence; retain an invalid one verbatim for preflight to reject."""
+    match = SHA256_RE.fullmatch(value)
+    return f"sha256:{match.group(1)}" if match else value
+
+
 def validate_static(config: PilotConfig) -> None:
     if not config.confirmed:
         raise PilotFailure(
@@ -277,6 +283,7 @@ class LocalQemuBackend:
         self.qemu_process: subprocess.Popen[bytes] | None = None
         self.qemu_thread: threading.Thread | None = None
         self.qemu_log = bytearray()
+        self.qemu_log_lock = threading.Lock()
         self.qemu_log_truncated = False
         self.qemu_started = 0.0
         self.created_paths: set[Path] = set()
@@ -317,7 +324,9 @@ class LocalQemuBackend:
         if document.get("Digest") != expected_digest:
             raise PilotFailure(
                 "missing_identity",
-                f"resolved digest {document.get('Digest')!r} does not match {expected_digest}",
+                f"resolved linux/amd64 digest {document.get('Digest')!r} does not match "
+                f"{expected_digest}; the pilot requires the linux/amd64 image manifest "
+                "digest, not an index or manifest-list digest",
             )
         os_name = document.get("Os")
         architecture = document.get("Architecture")
@@ -419,6 +428,9 @@ class LocalQemuBackend:
     def prepare_disk(self) -> dict[str, Any]:
         if not self.qemu_bin or not self.uefi_code or not self.uefi_vars_source:
             raise PilotFailure("internal_error", "preflight did not establish QEMU prerequisites")
+        if self.config.output_dir.is_symlink():
+            raise PilotFailure("unsafe_disk", "refusing a symlink output directory")
+        self.config.output_dir.mkdir(parents=True, exist_ok=True)
         self.created_paths.add(self.overlay)
         self.runner.run(
             [
@@ -447,11 +459,12 @@ class LocalQemuBackend:
     def _drain_qemu(self) -> None:
         assert self.qemu_process is not None and self.qemu_process.stdout is not None
         while chunk := self.qemu_process.stdout.read(4096):
-            remaining = MAX_LOG_BYTES - len(self.qemu_log)
-            if remaining > 0:
-                self.qemu_log.extend(chunk[:remaining])
-            if len(chunk) > remaining:
-                self.qemu_log_truncated = True
+            with self.qemu_log_lock:
+                remaining = MAX_LOG_BYTES - len(self.qemu_log)
+                if remaining > 0:
+                    self.qemu_log.extend(chunk[:remaining])
+                if len(chunk) > remaining:
+                    self.qemu_log_truncated = True
 
     def start_vm(self) -> None:
         assert self.qemu_bin and self.uefi_code
@@ -540,27 +553,37 @@ class LocalQemuBackend:
             event_name=event_name,
         )
 
-    def _ssh_ready(self) -> bool:
-        result = self.guest("true", check=False, timeout=10, event_name="ssh_probe")
+    def _ssh_ready(self, timeout: float) -> bool:
+        probe_timeout = max(1, min(10, int(timeout)))
+        result = self.guest("true", check=False, timeout=probe_timeout, event_name="ssh_probe")
         return result.returncode == 0
 
     def wait_for_ssh(self, timeout: int) -> None:
         deadline = time.monotonic() + timeout
-        while time.monotonic() < deadline:
+        while (remaining := deadline - time.monotonic()) > 0:
             if self.qemu_process and self.qemu_process.poll() is not None:
                 raise PilotFailure("vm_exited", "QEMU exited before SSH became ready")
-            if self._ssh_ready():
-                return
-            time.sleep(5)
+            try:
+                if self._ssh_ready(remaining):
+                    return
+            except PilotFailure as error:
+                if error.category != "timeout":
+                    raise
+            time.sleep(max(0.0, min(5.0, deadline - time.monotonic())))
         raise PilotFailure("timeout", "guest SSH did not become ready")
 
     def reboot(self) -> None:
         self.guest("systemctl reboot", check=False, timeout=30, event_name="guest_reboot")
         down_deadline = time.monotonic() + 90
-        while time.monotonic() < down_deadline:
-            if not self._ssh_ready():
+        while (remaining := down_deadline - time.monotonic()) > 0:
+            try:
+                if not self._ssh_ready(remaining):
+                    break
+            except PilotFailure as error:
+                if error.category != "timeout":
+                    raise
                 break
-            time.sleep(2)
+            time.sleep(max(0.0, min(2.0, down_deadline - time.monotonic())))
         else:
             raise PilotFailure("timeout", "guest never disconnected for reboot")
         self.wait_for_ssh(self.config.reboot_timeout)
@@ -686,13 +709,18 @@ class LocalQemuBackend:
                         errors.append("QEMU did not exit after SIGKILL")
             if self.qemu_thread:
                 self.qemu_thread.join(timeout=5)
-            output, truncated = bounded_text(bytes(self.qemu_log))
+                if self.qemu_thread.is_alive():
+                    errors.append("QEMU log drain did not stop; serial log may be incomplete")
+            with self.qemu_log_lock:
+                raw_log = bytes(self.qemu_log)
+                log_truncated = self.qemu_log_truncated
+            output, truncated = bounded_text(raw_log)
             if self.qemu_event is not None:
                 self.qemu_event.update(
                     returncode=self.qemu_process.returncode,
                     duration_seconds=round(time.monotonic() - self.qemu_started, 3),
                     stdout=output,
-                    stdout_truncated=truncated or self.qemu_log_truncated,
+                    stdout_truncated=truncated or log_truncated,
                 )
         if not self.config.keep_disk:
             for path in sorted(self.created_paths):
@@ -727,7 +755,7 @@ def new_evidence(config: PilotConfig) -> dict[str, Any]:
         "inputs": {
             "source_disk": {
                 "path": str(config.disk),
-                "expected_sha256": f"sha256:{normalized_digest(config.disk_sha256)}",
+                "expected_sha256": requested_disk_digest(config.disk_sha256),
             },
             "image_a": config.image_a,
             "image_b": config.image_b,
@@ -751,6 +779,37 @@ def new_evidence(config: PilotConfig) -> dict[str, Any]:
             "first_failure": None,
         },
     }
+
+def require_boot_proof(details: Any, expected_reference: str) -> dict[str, Any]:
+    """Reject boot-stage results that are not an installed deployment booted from the image.
+
+    Container or registry inspection carries no booted deployment and no runtime
+    desktop contract, so it can never satisfy a boot stage.
+    """
+    if (
+        not isinstance(details, dict)
+        or details.get("reference") != expected_reference
+        or details.get("transport") != "registry"
+        or not isinstance(details.get("booted_deployment"), dict)
+        or not details["booted_deployment"]
+        or not isinstance(details.get("desktop_contract"), dict)
+        or details["desktop_contract"].get("outcome") != "passed"
+    ):
+        raise PilotFailure(
+            "missing_boot_proof",
+            f"boot stage lacks booted installed-deployment proof for {expected_reference}",
+        )
+    return details
+
+
+def require_staged(details: Any, expected_reference: str) -> dict[str, Any]:
+    if not isinstance(details, dict) or details.get("staged_reference") != expected_reference:
+        raise PilotFailure(
+            "wrong_deployment",
+            f"staging did not report {expected_reference} as the staged deployment",
+        )
+    return details
+
 
 
 def execute_pilot(
@@ -793,27 +852,37 @@ def execute_pilot(
         finally:
             stage["finished_at"] = utc_now()
 
+    def preflight() -> dict[str, Any]:
+        validate_static(config)
+        return backend.preflight()
+
+    def cold_boot_a() -> dict[str, Any]:
+        backend.start_vm()
+        backend.wait_for_ssh(config.boot_timeout)
+        return require_boot_proof(backend.verify_boot(config.image_a), config.image_a)
+
+    def stage_update_b() -> dict[str, Any]:
+        return require_staged(backend.stage_update(), config.image_b)
+
+    def warm_boot_b() -> dict[str, Any]:
+        backend.reboot()
+        return require_boot_proof(backend.verify_boot(config.image_b), config.image_b)
+
+    def stage_rollback_a() -> dict[str, Any]:
+        return require_staged(backend.stage_rollback(), config.image_a)
+
+    def recovery_boot_a() -> dict[str, Any]:
+        backend.reboot()
+        return require_boot_proof(backend.verify_boot(config.image_a), config.image_a)
+
     functional_stages: list[tuple[str, Callable[[], dict[str, Any]]]] = [
-        ("preflight", lambda: (validate_static(config), backend.preflight())[1]),
+        ("preflight", preflight),
         ("prepare_disk", backend.prepare_disk),
-        (
-            "cold_boot_a",
-            lambda: (
-                backend.start_vm(),
-                backend.wait_for_ssh(config.boot_timeout),
-                backend.verify_boot(config.image_a),
-            )[2],
-        ),
-        ("stage_update_b", backend.stage_update),
-        (
-            "warm_boot_b",
-            lambda: (backend.reboot(), backend.verify_boot(config.image_b))[1],
-        ),
-        ("stage_rollback_a", backend.stage_rollback),
-        (
-            "recovery_boot_a",
-            lambda: (backend.reboot(), backend.verify_boot(config.image_a))[1],
-        ),
+        ("cold_boot_a", cold_boot_a),
+        ("stage_update_b", stage_update_b),
+        ("warm_boot_b", warm_boot_b),
+        ("stage_rollback_a", stage_rollback_a),
+        ("recovery_boot_a", recovery_boot_a),
     ]
 
     blocked_by: str | None = None
@@ -839,7 +908,9 @@ def execute_pilot(
         "warm": stages["warm_boot_b"]["outcome"],
         "recovery": stages["recovery_boot_a"]["outcome"],
     }
-    passed = all(stage["outcome"] == "passed" for stage in evidence["stages"])
+    passed = [stage["id"] for stage in evidence["stages"]] == list(STAGE_IDS) and all(
+        stage["outcome"] == "passed" for stage in evidence["stages"]
+    )
     evidence["result"] = {
         "verdict": "passed" if passed else "failed",
         "runtime_acceptance": "passed" if passed else "failed",
