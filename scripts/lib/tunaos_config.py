@@ -138,7 +138,8 @@ def validate(config):
             raise ConfigError('project.name: expected plain words (letters, digits, spaces, .,()+_-)')
         identifier(config['project']['id'], 'project.id')
         if not isinstance(config['project']['cpe_vendor'], str) or not CPE_PART.fullmatch(config['project']['cpe_vendor']):
-            raise ConfigError('project.cpe_vendor: expected a lowercase CPE component such as tunaos')
+            raise ConfigError('project.cpe_vendor: expected a lowercase CPE vendor such as acme '
+                              '(letters, digits and ._-)')
     if 'defaults' in config:
         table(config['defaults'], ('branding',), ('branding',), 'defaults')
         table(config['defaults']['branding'], BRANDING_URLS, BRANDING_URLS, 'defaults.branding')

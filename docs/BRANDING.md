@@ -37,7 +37,7 @@ file, so a fork's values pass the contract.
 | `VERSION_CODENAME` | the variant's `codename`, e.g. `Makaira nigricans` |
 | `LOGO` | `tunaos` |
 | `HOME_URL`, `DOCUMENTATION_URL`, `SUPPORT_URL`, `BUG_REPORT_URL` | `[defaults.branding]` |
-| `CPE_NAME` | `cpe:/o:<cpe_vendor>:<variant>-<project id>` |
+| `CPE_NAME` | `cpe:/o:<cpe_vendor>:<image name>-<project id>`; the image name is the publish name (`bonito` for `bonito-rawhide`) |
 | `VARIANT`, `VARIANT_ID`, `IMAGE_ID`, `IMAGE_VERSION`, `DEFAULT_HOSTNAME` | set |
 
 One variant's identity must never name another project. Until 2026-09-17 every

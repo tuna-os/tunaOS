@@ -225,3 +225,21 @@ def test_urls_with_ampersands_reach_os_release_verbatim(tmp_path, preexisting):
         lines = (image.root / path).read_text().splitlines()
         for key, value in FORK_URLS.items():
             assert [line for line in lines if line.startswith(key + "=")] == [f'{key}="{value}"']
+
+
+@pytest.mark.parametrize("variant,image_name,fork,expected", [
+    ("yellowfin", "yellowfin", False, "cpe:/o:jamesreilly:yellowfin-tunaos"),
+    # The product is the publish name, as before the migration; the variant key
+    # selects only the codename.
+    ("bonito-rawhide", "bonito", False, "cpe:/o:jamesreilly:bonito-tunaos"),
+    ("yellowfin", "yellowfin", True, "cpe:/o:acme:yellowfin-acmeos"),
+])
+def test_cpe_name_comes_from_the_adapter_and_the_image_name(tmp_path, variant, image_name, fork, expected):
+    image = Image(tmp_path, variant=variant)
+    image.env["IMAGE_NAME"] = image_name
+    if fork:
+        (image.context / "build_scripts/lib/identity.env").write_text(fork_identity(), encoding="utf-8")
+    image.info()
+    for path in ("usr/lib/os-release", "etc/os-release"):
+        lines = (image.root / path).read_text().splitlines()
+        assert [line for line in lines if line.startswith("CPE_NAME=")] == [f'CPE_NAME="{expected}"']
