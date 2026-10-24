@@ -141,7 +141,7 @@ RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
 ```
 
 Or edit an existing script directly — `20-packages.sh` installs
-system-wide packages, `00-workarounds.sh` applies early patches,
+system-wide packages, `01-workarounds.sh` applies early patches,
 `40-services.sh` enables services.
 
 ### 5. Build locally
@@ -216,7 +216,8 @@ Image-wide removal is deliberately unsupported by the primary interface.
 
 Desktop manifests only cover what goes into the DE layer. For packages
 that should be in *every* image (base layer), edit
-`build_scripts/20-packages.sh`.
+`build_scripts/20-packages.sh`. That is a framework change: TOML image-wide
+package additions are still pending in [#3739](https://github.com/tuna-os/tunaOS/pull/3739).
 
 For system-wide config files, add them to `system_files/`:
 
@@ -364,9 +365,10 @@ dnf:
   - "-gnome-tour"     # remove packages with a minus prefix
 ```
 
-Also available: `custom/files/` (config file overlay), `custom/systemd/`
-(units to enable), `custom/build.pre.sh` / `custom/build.post.sh` (hook
-scripts), `custom/just/` (custom ujust recipes).
+Optional extras, created only if you need them: `custom/files/` (config file
+overlay), `custom/systemd/` (units to copy and enable), `custom/flatpaks.list`,
+`custom/build.pre.sh` / `custom/build.post.sh` (hook scripts) and
+`custom/just/` (custom ujust recipes). `build_scripts/apply-custom.sh` applies them.
 
 The overlay is good for personal machines and quick experiments. For a
 project you intend to maintain and ship to others, the fork-edit-build
@@ -431,9 +433,8 @@ pattern in `Containerfile.ubuntu` or `Containerfile.debian`).
 In `build_scripts/lib.sh`, add OS detection and package-manager wiring:
 
 ```bash
-# In the OS detection section:
-IS_MYOS=false
-[[ "${BASE_IMAGE,,}" == *"myos"* ]] && IS_MYOS=true && IMAGE_NAME="myvariant" && IMAGE_PRETTY_NAME="MyVariant"
+# In the OS detection section, next to the existing BASE_IMAGE checks:
+[[ "${BASE_IMAGE,,}" == *"myos"* ]] && IS_MYOS=true && _derive_name "myvariant" "MyVariant"
 
 # In the package-manager section:
 if [[ "$IS_MYOS" == true ]]; then
@@ -492,7 +493,7 @@ review the publication workflow and permissions before pushing to your fork:
 | File | What it does |
 |---|---|
 | `.github/workflows/build-variant.yml` | Reads `.github/build-config.yml`, generates a matrix of builds, runs the 4-stage DAG |
-| `.github/workflows/reusable-build-image.yml` | Per-image build → push to GHCR → cosign sign → QEMU boot gate |
+| `.github/workflows/reusable-build-image.yml` | Per-image build → push to the resolved destination → cosign sign → QEMU boot gate |
 | `.github/workflows/reusable-build-artifacts.yml` | ISO and QCOW2 generation |
 
 Destination fields resolve independently: `IMAGE_REGISTRY` /
@@ -544,17 +545,15 @@ tunaos/
 ├── build_scripts/                   ← FRAMEWORK CODE, NOT CONFIGURATION
 │   ├── desktop/install-desktop.sh   #   generic manifest-driven DE installer
 │   ├── lib.sh                       #   shared library (OS detect, pkg wrappers)
-│   ├── 00-workarounds.sh            #   early patches and workarounds
+│   ├── 00-copy-files.sh             #   system_files → image
+│   ├── 01-workarounds.sh            #   early patches and workarounds
 │   ├── 10-base-packages.sh          #   base OS packages (no DE)
 │   ├── 20-packages.sh               #   system-wide packages
 │   ├── 26-packages-post.sh          #   post-package cleanup
 │   ├── 40-services.sh               #   systemd service enablement
 │   ├── 90-image-info.sh             #   image metadata stamping
-│   ├── HWE.sh                       #   HWE kernel installer
-│   ├── nvidia.sh                    #   NVIDIA driver installer
-│   ├── cachyos.sh                   #   CachyOS kernel overlay
-│   ├── copy-files.sh                #   system_files → image
-│   ├── cleanup.sh                   #   final cleanup
+│   ├── 99-cleanup.sh                #   final cleanup
+│   ├── overlay/                     #   HWE, NVIDIA, CachyOS, Asahi, T2 overlays
 │   └── ...
 │
 ├── system_files/                    ← EDIT THESE — SYSTEM CONFIG
@@ -575,8 +574,7 @@ tunaos/
 ├── custom/                          ← OVERLAY (lighter alternative)
 │   ├── image.yaml                   #   base image + tag
 │   ├── packages.yaml                #   add/remove packages
-│   ├── files/                       #   config file overlay
-│   └── systemd/                     #   systemd units
+│   └── build.pre.sh, build.post.sh  #   hooks; files/, systemd/ etc. are optional
 │
 ├── tunaos.toml                     ← EDIT THIS — PRIMARY BUILD/PACKAGE POLICY
 ├── .github/workflows/               ← CI PIPELINE
@@ -615,7 +613,7 @@ just run-custom-vm                   # boot it as a VM
 # ── Testing ────────────────────────────────────────────────────
 just test                            # bats + pytest
 just qcow2 yellowfin gnome           # produce VM disk
-just verify-disk disk.qcow2          # QEMU boot check
+just verify-disk ./yellowfin.qcow2   # QEMU boot check
 
 # ── Pre-commit (mandatory) ─────────────────────────────────────
 just fix && just check
