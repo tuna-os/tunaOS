@@ -166,10 +166,15 @@ jobs:
           # first NAME=VALUE, so `env HOME=/root -u XDG_DATA_HOME` treats
           # `-u` as the command to run and dies with
           # `env: '-u': No such file or directory`. Options first.
+          CUSTOMIZE_DIR="$RUNNER_TEMP/live-customize"
+          rm -rf "$CUSTOMIZE_DIR"
+          mkdir -p "$CUSTOMIZE_DIR"
+          cp -a "$PWD/live-iso/common/src/." "$CUSTOMIZE_DIR/"
+          cp "$PWD/image-versions.yaml" "$CUSTOMIZE_DIR/"
           sudo -E env -u XDG_DATA_HOME -u XDG_CONFIG_HOME HOME=/root \
             "${TACKLEBOX_BIN}" customize-live \
             --image "$IMG" \
-            --script "$PWD/live-iso/common/src/customize-live.sh" \
+            --script "$CUSTOMIZE_DIR/customize-live.sh" \
             --tag "$OUT" \
             --label "org.tunaos.live-overlay.base=${IMG}" \
             --label "org.tunaos.live-overlay.base-digest=${BASE_DIGEST}" \

@@ -17,6 +17,7 @@ import io
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "gen-matrix-status.py"
 
@@ -38,15 +39,13 @@ BLOCK = """\
 | **guppy** | ⬜ | ⬜ | — | — | ❌ |
 | **marlin** | ✅ | ⬜ | ⬜ | ⬜ | ⬜ |
 
-NVIDIA cells are **out of scope** for this workflow — 25 stale result(s) remain.
-
 Newest result 2026-08-06, oldest still-authoritative result 2026-08-05.
 
 ## Live overlay
 
 **41** tags published.
 
-Missing for 6 ISO cell(s): `gurnard-pantheon`, `hummingbird-base`
+Missing for 6 non-NVIDIA, non-HWE ISO cell(s): `gurnard-pantheon`, `hummingbird-base`
 
 ## Provenance
 
@@ -99,19 +98,13 @@ class LiveChurnIsIgnored(unittest.TestCase):
                           "result 2026-08-06.")
         )
 
-    def test_nvidia_stale_note_disappearing(self):
-        # The sentence exists only while stale pre-exclusion results remain, so
-        # it vanishes on its own as they age out.
-        self.assertSameStructure(
-            BLOCK.replace("NVIDIA cells are **out of scope** for this workflow "
-                          "— 25 stale result(s) remain.\n\n", "")
-        )
 
     def test_overlay_inventory_changing(self):
         published = BLOCK.replace("**41** tags published.", "**43** tags published.")
         published = published.replace(
-            "Missing for 6 ISO cell(s): `gurnard-pantheon`, `hummingbird-base`",
-            "Every non-NVIDIA ISO cell has an overlay.",
+            "Missing for 6 non-NVIDIA, non-HWE ISO cell(s): "
+            "`gurnard-pantheon`, `hummingbird-base`",
+            "Every non-NVIDIA, non-HWE ISO cell has an overlay.",
         )
         self.assertSameStructure(published)
 
@@ -150,6 +143,88 @@ class RealDriftIsCaught(unittest.TestCase):
             BLOCK.replace("| Variant | gnome | kde | cosmic | niri | xfce |",
                           "| Variant | gnome | kde | cosmic | niri |")
         )
+
+
+class HistoricalCellsAreLiveChurn(unittest.TestCase):
+    SECTIONS = (
+        "## Silent omissions", "## Package parity", "## LUKS E2E",
+        "## Desktop Contract Sweep", "## Bootc Lifecycle", "## Installer smoke",
+    )
+
+    def normalize(self, section, row, matrix):
+        with (
+            patch.object(gms, "_matrix", return_value=matrix),
+            patch.object(gms, "luks_matrix", return_value=matrix),
+            patch.object(gms, "iso_matrix", return_value=matrix),
+        ):
+            return gms.structural(section + "\n" + row)
+
+    def test_unscheduled_history_can_appear_and_expire(self):
+        # The Oct 18 PR #3317 gate failed when old niri jobs entered the LUKS
+        # window and removed desktop results left the lifecycle window.
+        empty = "| **flounder** | — | ⬜ | — | — | ⬜ |"
+        matrix = {"flounder": {"kde", "xfce"}}
+        for section in self.SECTIONS:
+            for verdict in (gms.PASS, gms.FAIL):
+                with self.subTest(section=section, verdict=verdict):
+                    history = empty.replace("| — | ⬜ |", f"| {verdict} | ⬜ |", 1)
+                    self.assertEqual(self.normalize(section, empty, matrix),
+                                     self.normalize(section, history, matrix))
+
+    def test_unknown_variant_history_is_not_current_coverage(self):
+        empty = "| **retired** | — | — | — | — | — |"
+        history = "| **retired** | ❌ | ✅ | — | — | — |"
+        self.assertEqual(self.normalize("## LUKS E2E", empty, {}),
+                         self.normalize("## LUKS E2E", history, {}))
+        results = {"LUKS retired:gnome": ("failure", "2026-08-01", "123")}
+        before = dict(results)
+        self.assertIn("❌", "\n".join(gms.desktop_table({}, results, lambda v, d: f"LUKS {v}:{d}")))
+        self.assertEqual(gms.tally({}, results, lambda v, d: f"LUKS {v}:{d}"), (0, 0, 0))
+        self.assertEqual(results, before)
+
+    def test_newly_scheduled_cell_still_requires_doc_update(self):
+        absent = "| **flounder** | — | ⬜ | — | — | ⬜ |"
+        matrix = {"flounder": {"gnome", "kde", "xfce"}}
+        for section in self.SECTIONS:
+            for glyph in (gms.PASS, gms.FAIL, gms.UNTESTED):
+                with self.subTest(section=section, glyph=glyph):
+                    scheduled = absent.replace("| — | ⬜ |", f"| {glyph} | ⬜ |", 1)
+                    self.assertNotEqual(self.normalize(section, absent, matrix),
+                                        self.normalize(section, scheduled, matrix))
+
+    def test_unscheduled_untested_cell_is_still_drift(self):
+        absent = "| **flounder** | — | ⬜ | — | — | ⬜ |"
+        old_schedule = absent.replace("| — | ⬜ |", "| ⬜ | ⬜ |", 1)
+        matrix = {"flounder": {"kde", "xfce"}}
+        self.assertNotEqual(self.normalize("## LUKS E2E", absent, matrix),
+                            self.normalize("## LUKS E2E", old_schedule, matrix))
+
+    def test_composite_is_not_a_historical_table(self):
+        absent = "| **retired** | — | — | — | — | — |"
+        result = absent.replace("| — |", "| ✅ |", 1)
+        self.assertNotEqual(self.normalize("## Composite green — the bar", absent, {}),
+                            self.normalize("## Composite green — the bar", result, {}))
+
+    def test_each_table_uses_its_own_schedule(self):
+        row = "| **sample** | ✅ | ✅ | ✅ | ✅ | ✅ |"
+        with (
+            patch.object(gms, "_matrix", return_value={"sample": {"gnome"}}),
+            patch.object(gms, "luks_matrix", return_value={"sample": {"xfce"}}),
+            patch.object(gms, "iso_matrix", return_value={"sample": {"kde"}}),
+        ):
+            for section in self.SECTIONS:
+                expected = {"## LUKS E2E": "xfce", "## Installer smoke": "kde"}.get(section, "gnome")
+                cells = gms.structural(section + "\n" + row).splitlines()[1].split("|")[2:-1]
+                self.assertEqual([c.strip() for c in cells],
+                                 ["?" if d == expected else gms.NA for d in gms.DESKTOPS])
+
+    def test_linked_historical_evidence_is_preserved(self):
+        empty = "| **retired** | — | — | — | — | — |"
+        linked = empty.replace("| — |", "| [✅](https://github.com/tuna-os/tunaOS/actions/runs/123#artifacts) |", 1)
+        original = linked
+        self.assertEqual(self.normalize("## LUKS E2E", empty, {}),
+                         self.normalize("## LUKS E2E", linked, {}))
+        self.assertEqual(linked, original)
 
 
 class RunWindowCountsCompletedRuns(unittest.TestCase):
@@ -258,8 +333,8 @@ class UndeclaredCellsAreNotCountedAgainstUs(unittest.TestCase):
     into the denominator — so the LUKS line read "39 of 54" when the live set
     was 52, with two cells no run could ever turn green.
 
-    That is the failure nvidia_tally() already documents: a gap reported as if
-    someone should close it, which is its own kind of dishonest status page.
+    That is the same stale-result distinction: a gap reported as if someone
+    should close it is its own kind of dishonest status page.
     These tests hold the line in both directions — undeclared cells leave the
     count, and declared ones stay in it however they did.
     """
@@ -289,6 +364,34 @@ class UndeclaredCellsAreNotCountedAgainstUs(unittest.TestCase):
         # xfce is declared and untested: in the total, not in tested.
         self.assertEqual((total, tested, passed), (3, 2, 1))
 
+    def test_declared_image_only_overlay_counts_for_install(self):
+        matrix = {"flounder": {"gnome", "gnome-nvidia"}}
+        results = {
+            "LUKS flounder:gnome": ("success", "2026-08-06"),
+            "LUKS flounder:gnome-nvidia": ("failure", "2026-08-06"),
+        }
+        self.assertEqual(
+            gms.tally(matrix, results, self.KEY), (2, 2, 1)
+        )
+
+    def test_configured_filtered_cell_is_disclosed(self):
+        configured = {"flounder": {"gnome", "base"}}
+        scheduled = {"flounder": {"gnome"}}
+        results = {"LUKS flounder:base": ("success", "2026-08-06")}
+        self.assertEqual(
+            gms.excluded_tally(configured, scheduled, results, self.KEY),
+            ["flounder:base"],
+        )
+
+    def test_scheduled_cell_is_not_disclosed_as_filtered(self):
+        configured = {"flounder": {"gnome"}}
+        scheduled = {"flounder": {"gnome"}}
+        results = {"LUKS flounder:gnome": ("success", "2026-08-06")}
+        self.assertEqual(
+            gms.excluded_tally(configured, scheduled, results, self.KEY), []
+        )
+
+
     def test_the_removed_flavor_is_still_disclosed(self):
         """Dropped from the count, but named — not silently forgotten."""
         results = {
@@ -312,7 +415,8 @@ class UndeclaredCellsAreNotCountedAgainstUs(unittest.TestCase):
         self.assertEqual(gms.undeclared_tally(self.MATRIX, {}, self.KEY), [])
 
     def test_the_disclosure_does_not_trip_the_drift_gate(self):
-        """It appears and vanishes with the run window, like the NVIDIA note.
+        """It appears and vanishes with the run window, like any
+        filtered-history note.
 
         The pull_request gate compares structure with live-derived content
         masked. A paragraph that exists only while a stale result does is live
@@ -320,7 +424,7 @@ class UndeclaredCellsAreNotCountedAgainstUs(unittest.TestCase):
         while such a result sits in the window, for something no PR caused.
         """
         line = (
-            "The table above still shows a result for `flounder:cosmic`. "
+            "Historical results remain for `flounder:cosmic`. "
             "`.github/build-config.yml` no longer declares that flavour, so "
             "..."
         )
@@ -332,77 +436,20 @@ class UndeclaredCellsAreNotCountedAgainstUs(unittest.TestCase):
             gms.VOLATILE_LINE,
         )
 
-    def test_the_real_build_config_declares_56_luks_cells(self):
-        """Ties the unit tests above to the actual denominator on disk.
-
-        If this number moves, the LUKS total moves with it, and that should be
-        a deliberate build-config edit rather than a surprise.
-
-        52 -> 56 on 2026-10-17: the dispatch-only Stingray proposal adds its
-        four declared desktops. Like Wahoo below, these cost monthly LUKS
-        sweep cells but no nightly build capacity (tunaOS#3252).
-
-        52 -> 51 on 2026-09-11: guppy:gnome is off. ::gentoo's main tree tops
-        out at GNOME 49.9, below the 50 floor
-        build_scripts/checks/verify-desktop-experience.sh enforces since
-        2026-09-03 -- manifests/desktops/gnome.yaml already documented this
-        as expected ("Gentoo (::gentoo tops out at 49.9). Their gnome cells
-        fail the desktop contract until a source that meets the floor is
-        wired, which is the honest state, not a bug in the check"), but the
-        build-config.yml flavor stayed declared, so every scheduled
-        Build Guppy run failed from 2026-09-03 onward burning 1-4h of CI a
-        day on a guaranteed-red cell. Tracked in tunaOS#2450; re-declare once
-        Gentoo ships a GNOME >=50 source.
-
-        53 -> 52 on 2026-09-05: flounder:gnome is off. Debian 13 trixie
-        ships GNOME 48.7 against a floor of 50, and the sid -> trixie
-        backport measures at 165 sources including rustc, debhelper 14 and
-        three LLVM toolchains, so the flavor cannot ship a conforming
-        desktop (tuna-os/tunaos-packages#687). Debian GNOME comes from
-        flounder-sid instead. gnome-nvidia is a stage-3 overlay on it and
-        goes with it, but only gnome carries LUKS, hence one cell not two.
-
-        53 -> 55 on 2026-10-17: dispatch-only Stingray keeps GNOME, KDE
-        and XFCE; COSMIC is deferred until its PPA publishes for Stonking.
-        The removed COSMIC cell was the single amd64-only Stingray desktop
-        entry; its PPA publishes only for Ubuntu Resolute, not Stonking.
-
-        53 -> 51 on 2026-08-25: hummingbird stopped declaring kde and niri.
-        Neither had a `packages.hummingbird` section in
-        manifests/desktops/*.yaml -- 0 packages against gnome's 52 -- so
-        neither could ever have installed a desktop, and both were failing
-        their image build. The denominator going DOWN by two is the point:
-        those two cells were counted as owed and could never be paid, and
-        while they failed beside gnome they also skipped gnome's ISO
-        (tuna-os/tunaOS#2059). Re-declaring either flavor puts its cell back.
-
-        51 -> 53 on 2026-08-26: wahoo declares cosmic and kde. Both were
-        repodata-measured against the pinned eln-bootc digest before the rows
-        were added -- COSMIC 1.6.0 from eln-extras at 23/24 packages, Plasma
-        6.7.4 via the eln-extras `kde-desktop` group at 16/23 explicit
-        packages -- which is the distinction the hummingbird drop above draws:
-        a cell is only honest when a package set exists to pay it. Niri and
-        XFCE stay undeclared for exactly that reason (ELN ships one package of
-        the Niri stack and zero `xfce*`), so they add nothing here.
-        """
+    def test_stingray_adds_only_its_three_archive_backed_luks_cells(self):
         matrix = gms.luks_matrix()
-        self.assertEqual(sum(len(v) for v in matrix.values()), 55)
-        # The control that makes the drop specific rather than merely smaller:
-        # hummingbird keeps exactly the desktops it has package sets for.
+        self.assertEqual(matrix.get("stingray"), {"gnome", "kde", "xfce"})
+        self.assertNotIn("base", matrix.get("albacore", set()))
+        self.assertIn("gnome-nvidia", matrix.get("albacore", set()))
         self.assertEqual(matrix.get("hummingbird"), {"gnome", "cosmic"})
-        # wahoo carries exactly the desktops ELN composes -- and notably NOT
-        # niri or xfce, which is what keeps this an honest denominator.
         self.assertEqual(matrix.get("wahoo"), {"gnome", "cosmic", "kde"})
         self.assertEqual(matrix.get("stingray"), {"gnome", "kde", "xfce"})
         self.assertNotIn("cosmic", matrix.get("flounder", set()))
         self.assertNotIn("cosmic", matrix.get("flounder-sid", set()))
-        # A control: the flavours flounder DOES declare are still there, so
-        # this is not passing because the matrix came back empty.
-        self.assertEqual(matrix.get("flounder"), {"kde", "xfce"})
-        # And the paired control on the descope: Debian GNOME did not go away,
-        # it moved. flounder-sid still owes a gnome cell, so a change that
-        # switched off Debian GNOME entirely would fail here rather than pass
-        # as a smaller-but-honest denominator.
+        self.assertEqual(
+            matrix.get("flounder"),
+            {"kde", "kde-nvidia", "xfce", "xfce-nvidia"},
+        )
         self.assertIn("gnome", matrix.get("flounder-sid", set()))
 
 

@@ -204,18 +204,37 @@ def _artifact_path(value, where, suffix):
         _fail(where, "unsafe archive path")
 
 
+def _retained_media(value, run, where):
+    _object(value, where, ("kind", "endpoint", "bucket", "manifestKey", "manifestSha256", "media"))
+    _same(value["kind"], "r2-chunked-candidate", where + ".kind")
+    _text(value["endpoint"], where + ".endpoint", r"https://[0-9a-f]{32}\.r2\.cloudflarestorage\.com")
+    _text(value["bucket"], where + ".bucket", r"[a-z0-9][a-z0-9-]{1,61}[a-z0-9]")
+    prefix = f"browser-iso/candidates/{run['runId']}/{run['runAttempt']}/yellowfin-gnome/s1/"
+    _same(value["manifestKey"], prefix + "manifest.json", where + ".manifestKey")
+    _digest(value["manifestSha256"], where + ".manifestSha256")
+    _media(value["media"], where + ".media")
+    if value["media"]["sizeBytes"] > 10 * 1024 ** 3:
+        _fail(where + ".media.sizeBytes", "exceeds 10 GiB candidate limit")
+    _same(run["repository"], "tuna-os/iso-builder", where + ".run.repository")
+    _same(run["workflowPath"], ".github/workflows/ci.yml", where + ".run.workflowPath")
+    _same(run["runAttempt"], 1, where + ".run.runAttempt")
+
+
 def _producer(value, where, browser):
-    _object(value, where, ("run", "artifact", "receiptSha256"))
+    _object(value, where, ("run", "artifact", "receiptSha256"), ("mediaTransport",) if browser else ())
     _run(value["run"], where + ".run")
     _digest(value["receiptSha256"], where + ".receiptSha256")
     artifact = value["artifact"]
-    fields = ("id", "archiveSha256", "expired", "receiptPath") + (("mediaPath",) if browser else ())
+    retained = "mediaTransport" in value
+    fields = ("id", "archiveSha256", "expired", "receiptPath") + (("mediaPath",) if browser and not retained else ())
     _object(artifact, where + ".artifact", fields)
     _positive(artifact["id"], where + ".artifact.id", integer=True)
     _digest(artifact["archiveSha256"], where + ".artifact.archiveSha256")
     _same(artifact["expired"], False, where + ".artifact.expired")
     _artifact_path(artifact["receiptPath"], where + ".artifact.receiptPath", ".json")
-    if browser:
+    if retained:
+        _retained_media(value["mediaTransport"], value["run"], where + ".mediaTransport")
+    elif browser:
         _artifact_path(artifact["mediaPath"], where + ".artifact.mediaPath", ".iso")
 
 
@@ -318,13 +337,18 @@ def check_consistency(browser_bytes, native_bytes, media, expected_context, obse
     """Check exact bytes and caller-supplied context, never producer authority.
 
 Media may be bytes or a binary stream positioned at its start. Transport metadata
-must describe independently measured archives; this function does not fetch them.
+must describe independently measured archives and any retained candidate; this
+function does not fetch them or establish the authority of a supplied snapshot.
 """
     browser, native = parse_document(browser_bytes), parse_document(native_bytes)
     for doc, role in ((browser, "browser"), (native, "native"),
                       (expected_context, "context"), (observed_transport, "transport")):
         _same(validate_document(doc), role, "document role")
     context = expected_context
+    # Retained media changes only location, never the GitHub receipt anchor.
+    retained = context["browserProducer"].get("mediaTransport")
+    if retained is not None:
+        _same(retained["media"], context["media"], "browserProducer.mediaTransport.media")
     # Reject cheap metadata mismatches before reading potentially multi-GB media.
     for doc in (browser, native):
         _same(doc["media"], context["media"], "media")

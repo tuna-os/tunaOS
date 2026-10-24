@@ -30,6 +30,7 @@ ARG ORAS_VERSION=1.2.0
 ARG ORAS_SHA256_AMD64=5b3f1cbb86d869eee68120b9b45b9be983f3738442f87ee5f06b00edd0bab336
 ARG ORAS_SHA256_ARM64=27df680a39fc2fcedc549cb737891623bc696c9a92a03fd341e9356a35836bae
 ARG TARGETARCH
+ARG BOOTC_VERSION
 RUN apt-get update -y && \
     apt-get install -y --no-install-recommends curl ca-certificates tar gzip && \
     case "${TARGETARCH}" in \
@@ -42,7 +43,7 @@ RUN apt-get update -y && \
     tar -xzf /tmp/oras.tar.gz -C /usr/local/bin oras && \
     rm -f /tmp/oras.tar.gz && \
     mkdir -p /fetch /output && cd /fetch && \
-    oras pull "ghcr.io/tuna-os/bootc-toolchain-sid:latest-${TARGETARCH}" && \
+    oras pull "ghcr.io/tuna-os/bootc-toolchain-sid:${BOOTC_VERSION}-${TARGETARCH}" && \
     tar -xzf toolchain.tar.gz -C /output && \
     rm -rf /fetch
 
