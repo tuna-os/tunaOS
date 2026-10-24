@@ -110,6 +110,24 @@ def hmp(cmd):
     return out.decode("utf-8", "replace")
 
 
+def stop_bridge(bridge):
+    """Stop and reap a short-lived socat bridge without racing its client exit."""
+    if bridge.poll() is not None:
+        return
+    try:
+        bridge.terminate()
+    except ProcessLookupError:
+        return
+    try:
+        bridge.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        try:
+            bridge.kill()
+        except ProcessLookupError:
+            return
+        bridge.wait()
+
+
 def vnc_capture(png):
     """Capture via the VNC client. Returns True if a non-empty PNG landed.
 
@@ -130,12 +148,7 @@ def vnc_capture(png):
                        check=False,
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     finally:
-        bridge.terminate()
-        try:
-            bridge.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            bridge.kill()
-            bridge.wait()
+        stop_bridge(bridge)
     return os.path.exists(png) and os.path.getsize(png) > 0
 
 
@@ -547,12 +560,7 @@ for i in range(1, steps + 1):
                     subprocess.run(["vncdo", "-s", f"127.0.0.1::{vnc_port}", "move", "700", "550", "click", "1"],
                                    check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 finally:
-                    bridge.terminate()
-                    try:
-                        bridge.wait(timeout=5)
-                    except subprocess.TimeoutExpired:
-                        bridge.kill()
-                        bridge.wait()
+                    stop_bridge(bridge)
 
 print(f"\n# walkthrough verification ({flavor}) — {len(frames)} frames, "
       f"strict={strict}\n", flush=True)
