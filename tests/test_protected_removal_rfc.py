@@ -28,7 +28,19 @@ def test_cited_contract_files_exist():
         for token in re.findall(r"`([^`\s]+)`", section(title)):
             path = token.split("::", 1)[0]
             if re.search(r"\.(?:sh|py|toml|json|ya?ml)$", path):
-                matches = [p for p in ROOT.rglob(path) if p.is_file()]
+                has_glob = any(character in path for character in "*?[")
+                if "/" in path:
+                    matches = [
+                        candidate for candidate in (
+                            ROOT.glob(path) if has_glob else (ROOT / path,)
+                        ) if candidate.is_file()
+                    ]
+                else:
+                    matches = [candidate for candidate in ROOT.rglob(path) if candidate.is_file()]
+                if has_glob:
+                    assert matches, path
+                    cited.update(candidate.relative_to(ROOT).as_posix() for candidate in matches)
+                    continue
                 if "/" not in path and len(matches) == 1:
                     path = matches[0].relative_to(ROOT).as_posix()
                 cited.add(path)
