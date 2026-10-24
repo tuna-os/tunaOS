@@ -20,11 +20,26 @@ fixed months earlier -- and no gate anywhere said so.
 Renovate cannot catch this class: a git source aimed at a repository that no
 longer moves has nothing to bump. Neither can anything that inspects the
 published Flatpak's build date. The only reliable signal is the SOURCE, which
-lives in five other repositories -- so this check reads them.
+lives in another repository -- so this check reads it.
 
-It is deliberately about the repository, not the revision. Pinning an older
-revision of the LIVE repo is a normal, visible choice; sourcing a repo that
-stopped moving is a silent one.
+CONSOLIDATION NOTE
+------------------
+The five per-desktop installer repos (tuna-os/tuna-installer-{kde,cosmic,
+niri,xfce} plus the gnome `.gitmodules` submodule in tuna-os/bootc-installer)
+have since been consolidated: every frontend now ships from
+tuna-os/bootc-installer, with one Flatpak manifest per desktop under
+`frontends/<desktop>/flatpak/`. The gnome frontend still builds fisherman
+from a `type: dir` source backed by the `fisherman` submodule entry in that
+same repo's `.gitmodules`. This check follows the consolidation -- one repo,
+five source paths -- instead of the old five-repo layout.
+
+It is deliberately about the repository AND a revision floor, not just the
+repository. Pinning an older revision of the LIVE repo used to be described
+here as a normal, visible choice; the MediaInput v1 incident showed the
+limit of that view. A floor pin (FLOOR_COMMIT, the MediaInput v1 commit)
+keeps every frontend at or after the revision the live ISOs qualify against,
+so a frontend that silently lags the floor fails here instead of at step 9
+of 10 on a user's machine.
 """
 
 from __future__ import annotations
@@ -32,25 +47,39 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 
 # The repository fisherman actually lives in now.
 CANONICAL = "tuna-os/fisherman"
 
+# Audit the production installer sources, not the default development branch.
+# Task 9 promotes dev to this branch before overlays may be rebuilt.
+INSTALLER_REF = "prod"
+
+# Minimum fisherman revision every frontend must be at or after: the
+# MediaInput v1 commit. Full SHAs are compared (branches resolved to their
+# head SHA at fetch time); a source pinning anything older fails the floor
+# check below.
+FLOOR_COMMIT = "d349c31e47b1c05ef82d67811d5f4f9e77a62e2a"
+
 # Where each desktop's installer declares its fisherman source. `manifest` is
 # a Flatpak manifest with a `fisherman` module; `submodule` is a .gitmodules
 # entry (gnome builds fisherman from a `type: dir` source backed by one).
+# All five frontends consolidated into tuna-os/bootc-installer, one manifest
+# per desktop under frontends/<desktop>/flatpak/.
 INSTALLERS = {
-    "kde": {"repo": "tuna-os/tuna-installer-kde",
-            "manifest": "flatpak/org.tunaos.InstallerKde.json"},
-    "cosmic": {"repo": "tuna-os/tuna-installer-cosmic",
-               "manifest": "flatpak/org.tunaos.InstallerCosmic.json"},
-    "niri": {"repo": "tuna-os/tuna-installer-niri",
-             "manifest": "flatpak/org.tunaos.InstallerNiri.json"},
-    "xfce": {"repo": "tuna-os/tuna-installer-xfce",
-             "manifest": "flatpak/org.tunaos.InstallerXfce.json"},
+    "kde": {"repo": "tuna-os/bootc-installer",
+            "manifest": "frontends/kde/flatpak/org.tunaos.InstallerKde.json"},
+    "cosmic": {"repo": "tuna-os/bootc-installer",
+               "manifest": "frontends/cosmic/flatpak/org.tunaos.InstallerCosmic.json"},
+    "niri": {"repo": "tuna-os/bootc-installer",
+             "manifest": "frontends/niri/flatpak/org.tunaos.InstallerNiri.json"},
+    "xfce": {"repo": "tuna-os/bootc-installer",
+             "manifest": "frontends/xfce/flatpak/org.tunaos.InstallerXfce.json"},
     "gnome": {"repo": "tuna-os/bootc-installer", "submodule": "fisherman"},
 }
 
@@ -94,10 +123,14 @@ def source_from_gitmodules(text: str, path: str) -> dict:
     return found
 
 
-def audit(sources: dict) -> list[str]:
+def audit(sources: dict, floor: str = FLOOR_COMMIT) -> list[str]:
     """Pure: {desktop: source_dict} -> list of problems. No network."""
     problems = []
     for desktop, source in sorted(sources.items()):
+        source_error = source.get("source_error")
+        if source_error:
+            problems.append(f"{desktop}: {source_error}")
+            continue
         url = source.get("url")
         if not url:
             problems.append(
@@ -114,11 +147,28 @@ def audit(sources: dict) -> list[str]:
                 f"stale silently -- Renovate has nothing to bump and the "
                 f"Flatpak keeps rebuilding, so nothing looks wrong."
             )
+            continue
+        pin = source.get("resolved") or source.get("commit") or source.get("branch")
+        if not pin:
+            problems.append(
+                f"{desktop}: canonical fisherman source has no revision pin. "
+                f"Pin a commit or branch at or after {floor[:12]}."
+            )
+            continue
+        # Full SHAs were resolved at fetch time (branches to their head SHA),
+        # so this compares exact revisions against the MediaInput v1 floor.
+        if source.get("at_or_after_floor") is False:
+            problems.append(
+                f"{desktop}: pins fisherman at {(pin or '?')[:12]}, older than "
+                f"or unrelated to the floor {floor[:12]} (MediaInput v1). "
+                f"Advance the pin to a revision at or after the floor."
+            )
     return problems
 
 
-def fetch(repo: str, path: str) -> str:
-    url = f"https://api.github.com/repos/{repo}/contents/{path}"
+def fetch(repo: str, path: str, ref: str = INSTALLER_REF) -> str:
+    query = urllib.parse.urlencode({"ref": ref})
+    url = f"https://api.github.com/repos/{repo}/contents/{path}?{query}"
     request = urllib.request.Request(
         url, headers={"Accept": "application/vnd.github.raw"}
     )
@@ -129,17 +179,141 @@ def fetch(repo: str, path: str) -> str:
         return response.read().decode()
 
 
+def api_json(url: str) -> dict:
+    request = urllib.request.Request(
+        url, headers={"Accept": "application/vnd.github+json"}
+    )
+    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    if token:
+        request.add_header("Authorization", f"Bearer {token}")
+    with urllib.request.urlopen(request, timeout=30) as response:
+        try:
+            value = json.loads(response.read().decode())
+        except json.JSONDecodeError as exc:
+            raise KeyError(f"{url} returned invalid JSON") from exc
+    if not isinstance(value, dict):
+        raise KeyError(f"{url} returned non-object JSON")
+    return value
+
+
+def resolve_sha(repo: str, ref: str) -> str:
+    """A branch (or short SHA) in repo -> its full 40-character HEAD SHA."""
+    sha = api_json(f"https://api.github.com/repos/{repo}/commits/{ref}").get("sha")
+    if not isinstance(sha, str) or re.fullmatch(r"[0-9a-f]{40}", sha) is None:
+        raise KeyError(f"{repo}@{ref} did not resolve to a full commit SHA")
+    return sha
+
+
+def submodule_sha(repo: str, path: str, ref: str = INSTALLER_REF) -> str:
+    """Return the exact gitlink committed by the installer production ref."""
+    query = urllib.parse.urlencode({"ref": ref})
+    value = api_json(
+        f"https://api.github.com/repos/{repo}/contents/{path}?{query}"
+    )
+    if not isinstance(value, dict):
+        raise KeyError(f"{repo}:{path}@{ref} returned non-object JSON")
+    sha = value.get("sha")
+    if not isinstance(sha, str) or re.fullmatch(r"[0-9a-f]{40}", sha) is None:
+        raise KeyError(f"{repo}:{path}@{ref} has no valid committed submodule SHA")
+    return sha
+
+
+def floor_is_ancestor(repo: str, sha: str, floor: str = FLOOR_COMMIT) -> bool | None:
+    """Is `floor` an ancestor of (or identical to) `sha`? None if unknowable."""
+    try:
+        status = api_json(
+            f"https://api.github.com/repos/{repo}/compare/{floor}...{sha}"
+        )["status"]
+    except urllib.error.HTTPError as exc:
+        # A missing commit is deterministic source drift, not a network blip.
+        return False if exc.code == 404 else None
+    except (urllib.error.URLError, TimeoutError, KeyError):
+        return None
+    # "ahead": sha descends from the floor; "identical": pinned exactly on it.
+    # "behind"/"diverged": the pin predates the floor (or left its line).
+    return status in ("ahead", "identical")
+
+
 def collect() -> dict:
     sources = {}
     for desktop, where in INSTALLERS.items():
         if "manifest" in where:
-            sources[desktop] = source_from_manifest(
-                fetch(where["repo"], where["manifest"])
-            )
+            try:
+                manifest = fetch(where["repo"], where["manifest"], INSTALLER_REF)
+            except urllib.error.HTTPError as exc:
+                if exc.code != 404:
+                    raise
+                sources[desktop] = {
+                    "source_error": (
+                        f"production manifest {where['manifest']} is missing at "
+                        f"{where['repo']}@{INSTALLER_REF}"
+                    )
+                }
+                continue
+            sources[desktop] = source_from_manifest(manifest)
         else:
-            sources[desktop] = source_from_gitmodules(
-                fetch(where["repo"], ".gitmodules"), where["submodule"]
-            )
+            try:
+                gitmodules = fetch(where["repo"], ".gitmodules", INSTALLER_REF)
+            except urllib.error.HTTPError as exc:
+                if exc.code != 404:
+                    raise
+                sources[desktop] = {
+                    "source_error": (
+                        f"production .gitmodules is missing at "
+                        f"{where['repo']}@{INSTALLER_REF}"
+                    )
+                }
+                continue
+            source = source_from_gitmodules(gitmodules, where["submodule"])
+            # A tracking branch is not the source used by the build. Git checks
+            # out the production ref's committed gitlink, so audit that SHA.
+            source.pop("branch", None)
+            try:
+                source["commit"] = submodule_sha(
+                    where["repo"], where["submodule"], INSTALLER_REF
+                )
+            except urllib.error.HTTPError as exc:
+                if exc.code == 404:
+                    source["source_error"] = (
+                        f"production gitlink {where['submodule']} is missing at "
+                        f"{where['repo']}@{INSTALLER_REF}"
+                    )
+                else:
+                    source["at_or_after_floor"] = None
+            except KeyError as exc:
+                source["source_error"] = str(exc)
+            except (urllib.error.URLError, TimeoutError):
+                source["at_or_after_floor"] = None
+            sources[desktop] = source
+    # Resolve every canonical-repo pin to a full SHA (branches to their head)
+    # so the floor check compares exact revisions, then record whether the
+    # MediaInput v1 floor is an ancestor of each pin. A resolution the API
+    # cannot answer stays None and only warns -- same policy as a fetch blip.
+    for desktop, source in sources.items():
+        url = source.get("url")
+        if not url or normalize_repo(url) != CANONICAL:
+            continue
+        ref = source.get("commit") or source.get("branch")
+        if not ref:
+            continue
+        try:
+            sha = ref if re.fullmatch(r"[0-9a-f]{40}", ref) else resolve_sha(CANONICAL, ref)
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                source["source_error"] = (
+                    f"fisherman revision {ref!r} does not exist in {CANONICAL}"
+                )
+            else:
+                source["at_or_after_floor"] = None
+            continue
+        except KeyError as exc:
+            source["source_error"] = str(exc)
+            continue
+        except (urllib.error.URLError, TimeoutError):
+            source["at_or_after_floor"] = None
+            continue
+        source["resolved"] = sha
+        source["at_or_after_floor"] = floor_is_ancestor(CANONICAL, sha)
     return sources
 
 
@@ -162,15 +336,16 @@ def main() -> int:
         print(json.dumps(sources, indent=2, sort_keys=True))
 
     for desktop, source in sorted(sources.items()):
-        pin = source.get("commit") or source.get("branch") or "?"
+        pin = source.get("resolved") or source.get("commit") or source.get("branch") or "?"
         print(f"  {desktop:<8} {normalize_repo(source.get('url', '?'))} @ {pin}")
 
     # Divergence is a warning, not an error: pinning different revisions of
     # the LIVE repo is a visible choice, and kde running ahead of the others
     # is normal for a day or two. It is worth saying out loud because that is
     # exactly the shape the silent drift took -- kde moved, nobody else did.
+    # (Below the floor is different: that is an error, raised by audit().)
     revisions = {
-        d: s.get("commit") or s.get("branch")
+        d: s.get("resolved") or s.get("commit") or s.get("branch")
         for d, s in sources.items()
         if s.get("url")
     }
@@ -178,13 +353,24 @@ def main() -> int:
         spread = ", ".join(f"{d}={(r or '?')[:8]}" for d, r in sorted(revisions.items()))
         print(f"::warning::installers disagree on the fisherman revision: {spread}")
 
+    # A floor the API could not resolve stays None: warn, do not fail --
+    # same policy as a fetch blip above.
+    unknown = sorted(
+        d for d, s in sources.items()
+        if s.get("url") and normalize_repo(s["url"]) == CANONICAL
+        and s.get("at_or_after_floor") is None
+    )
+    if unknown:
+        print(f"::warning::could not resolve the floor ancestry for: {', '.join(unknown)}")
+
     problems = audit(sources)
     for problem in problems:
         print(f"::error::{problem}")
     if problems:
-        print(f"\n{len(problems)} installer(s) build fisherman from the wrong repo.")
+        print(f"\n{len(problems)} installer(s) failed the fisherman source check.")
         return 1
-    print(f"\nall {len(sources)} installers build fisherman from {CANONICAL}.")
+    print(f"\nall {len(sources)} installers build fisherman from {CANONICAL} "
+          f"at or after the floor {FLOOR_COMMIT[:12]}.")
     return 0
 
 
