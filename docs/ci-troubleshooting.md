@@ -1963,3 +1963,18 @@ outreach copy or creative briefs, use the reasoned region or file opt-out in
 [the contributor prose policy](../CONTRIBUTING.md#prose-checks-ste). Keep
 technical steps checked on mixed pages. Run `just ste` again; do not increase
 `.ste-budget` or exclude a whole directory to pass one content change.
+
+### Opt-in OCI RPM consumer refuses a repository before DNF runs
+
+**Symptom:** `install-oci-rpm-repository.py` reports an absent transport, a checksum mismatch,
+a mutable reference or a controlled R2 URL in a repo/key field.
+
+**Cause:** The candidate needs an explicit path to the reviewed producer transport.
+It accepts only immutable snapshots with signatures and scope labels.
+RPM configuration can retain URLs for keys over HTTP, even when the repository is disabled.
+The offline cases in `tests/test_oci_rpm_consumer.py` reproduce these refusals without network access.
+
+**Fix:** Supply the reviewed tool, key and a real qualified snapshot.
+Remove the replaced persistent feed only through a reviewed migration of image stages.
+Keep the signature, scope and URL guards. See `docs/OCI-RPM-CONSUMER.md`.
+This helper does not switch production configuration. An absent snapshot remains a blocker.
