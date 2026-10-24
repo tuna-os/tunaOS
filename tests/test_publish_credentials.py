@@ -31,6 +31,7 @@ LIB_SPEC.loader.exec_module(lib_package)
 creds = importlib.import_module(f"{LIB_SPEC.name}.publish_credentials")
 
 SPEC = importlib.util.spec_from_file_location("publish_credentials_config", ROOT / "scripts/lib/tunaos_config.py")
+assert SPEC and SPEC.loader
 config = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(config)
 
@@ -156,6 +157,7 @@ def test_override_back_to_owner_ghcr_conflicts_with_a_configured_scope():
     "quay.io/acme\n::add-mask::x", "quay.io/acme\r\n::stop-commands::t", "https://quay.io/acme",
     "quay.io/../acme", "quay.io/acme:latest", "quay.io/acme@sha256:00", "QUAY.IO/acme", "quay.io/ acme",
     "quay.io", "/acme", "", "quay.io/acme/", "user:pw@quay.io/acme", "quay.io/acme;rm -rf /",
+    "example.com:abc/acme", "example.com:/acme",
 ])
 def test_malformed_destinations_are_refused_without_log_injection(destination):
     refused("invalid-destination", destination, scope="quay.io/acme", username=True, password=True)
