@@ -4,6 +4,10 @@ Run 40025622951 (job 120660952676) died in `scripts/build-chunkah.sh` with
 `invalid options "rw, shared, rw, bind", can only specify 1 'rw' or 'ro'
 option`. Only the byte-reviewed Chunkah Containerfile receives cache
 compatibility; bind-mount `rw` and every other byte stay intact.
+
+Run 40064779947 then reached that fallback after ONE silent pinned pull and
+died on a quay.io 503 inside it. The pinned pull is retried before the
+mutable source fallback is used.
 """
 
 import importlib.util
@@ -171,3 +175,86 @@ def test_unknown_bytes_fail_before_parse_or_output(tmp_path, unknown):
     assert result.returncode != 0
     assert not output.exists()
     assert source.read_bytes() == unknown
+
+
+INNER = ROOT / "scripts/build-image-inner.sh"
+
+
+def _pull_block() -> str:
+    """The pinned-pull/fallback block exactly as build-image-inner.sh runs it."""
+    lines = INNER.read_text().splitlines()
+    start = lines.index('if ! podman image inspect "${CHUNKAH_IMAGE}" &>/dev/null; then')
+    end = lines.index("fi", start)
+    return "\n".join(lines[start : end + 1])
+
+
+def _run_pull_block(tmp_path, failures: int, fallback_exit: int = 0):
+    (tmp_path / "scripts").mkdir()
+    fallback = tmp_path / "scripts/build-chunkah.sh"
+    fallback.write_text(f"#!/bin/sh\necho fallback-built\nexit {fallback_exit}\n")
+    fallback.chmod(0o755)
+    harness = f"""
+set -euo pipefail
+CHUNKAH_IMAGE=quay.io/coreos/chunkah@sha256:{"a" * 64}
+pulls=0
+sleep() {{ echo "slept $1"; }}
+podman() {{
+    case "$1" in
+    image) return 1 ;;
+    pull)
+        pulls=$((pulls + 1))
+        echo "pull $pulls"
+        if [[ "$pulls" -le {failures} ]]; then
+            echo "received unexpected HTTP status: 503" >&2
+            return 125
+        fi
+        ;;
+    esac
+}}
+{_pull_block()}
+echo "image=$CHUNKAH_IMAGE"
+"""
+    return subprocess.run(
+        ["bash", "-c", harness],
+        cwd=tmp_path,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+
+def test_pull_block_was_extracted():
+    block = _pull_block()
+    assert "podman pull" in block and "build-chunkah.sh" in block
+    assert "2>/dev/null" not in block, "podman pull errors must stay visible"
+
+
+def test_one_transient_pull_failure_keeps_the_pinned_image(tmp_path):
+    result = _run_pull_block(tmp_path, failures=1)
+    assert result.returncode == 0, result.stderr
+    assert "pull 2" in result.stdout and "slept 10" in result.stdout
+    assert "fallback-built" not in result.stdout
+    assert "image=quay.io/coreos/chunkah@sha256:" in result.stdout
+    assert "HTTP status: 503" in result.stderr
+
+
+def test_two_transient_pull_failures_keep_the_pinned_image(tmp_path):
+    result = _run_pull_block(tmp_path, failures=2)
+    assert result.returncode == 0, result.stderr
+    assert "pull 3" in result.stdout and "slept 20" in result.stdout
+    assert "fallback-built" not in result.stdout
+
+
+def test_persistent_pull_failure_uses_the_source_fallback_after_three(tmp_path):
+    result = _run_pull_block(tmp_path, failures=99)
+    assert result.returncode == 0, result.stderr
+    assert "pull 3" in result.stdout and "pull 4" not in result.stdout
+    assert "after 3 attempt(s)" in result.stdout
+    assert "fallback-built" in result.stdout
+    assert "image=localhost/chunkah:latest" in result.stdout
+
+
+def test_fallback_failure_fails_the_build(tmp_path):
+    result = _run_pull_block(tmp_path, failures=99, fallback_exit=125)
+    assert result.returncode == 125
+    assert "image=" not in result.stdout

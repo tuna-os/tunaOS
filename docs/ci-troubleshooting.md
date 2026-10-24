@@ -2207,6 +2207,9 @@ version, use a temporary Containerfile with only the known cache `rw` removed.
 Keep writable bind mounts and all read-only options. Reject a Containerfile whose bytes differ from the reviewed file.
 Record source and file hashes; these observations do not make mutable source a pin.
 Regression: `tests/regressions/test_issue_3809_chunkah_cache_mounts.py` (#3809).
+Run [40064779947](https://github.com/tuna-os/tunaOS/actions/runs/40064779947) ran the fallback with build file SHA256 `8f744160…`.
+Three of the four cache mounts (dnf, cargo, target) passed, and cargo finished the release build.
+The run then failed on a quay.io HTTP 503 in a later `FROM` (see below).
 
 ### Native artifact transfer resets before qualification
 
@@ -2250,14 +2253,21 @@ has the same blob SHA in both commits.
 **Fix:** Set the floor to the landed commit `02ac7097` on `dev`. Keep the
 ancestry check fail-closed. A timestamp is not proof of content.
 
-### Base image pull returns HTTP 503 from quay.io
+### quay.io returns HTTP 503 during the native ISO build
 
 **Symptom:** Run [40057457477](https://github.com/tuna-os/tunaOS/actions/runs/40057457477)
 failed `Build OS image` after three buildah attempts within 45 seconds.
 Each attempt reported `fetching blob: received unexpected HTTP status: 503`
-for `quay.io/centos-bootc/centos-bootc`.
+for `quay.io/centos-bootc/centos-bootc`. Run
+[40064779947](https://github.com/tuna-os/tunaOS/actions/runs/40064779947)
+built the image, made one pinned Chunkah pull, and used the source fallback
+2.8 seconds later. The fallback then failed with HTTP 503 on
+`quay.io/centos/centos:stream10`.
 
-**Measured cause:** A quay.io outage. An anonymous range request for the same three blobs
-returned HTTP 206 about 30 minutes later. No repository change caused it.
+**Measured cause:** quay.io returned HTTP 503 for some blob requests. An anonymous range request for the
+first three blobs returned HTTP 206 about 30 minutes later. The pinned Chunkah
+pull had one attempt and discarded stderr, so its error is not known.
 
-**Fix:** Run the job again. Do not change the base image pin.
+**Fix:** Do not change the base image pin. Run the job again. The pinned Chunkah pull now has three
+attempts with a 10 s and a 20 s delay, and its stderr is visible. The mutable
+source fallback runs only after the third failure.
