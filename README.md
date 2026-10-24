@@ -177,6 +177,7 @@ Start here:
 - [User Guide](docs/USER-GUIDE.md) — image choice, installation, updates, rollback, apps, and encryption
 - [Developer Guide](docs/DEVELOPER-GUIDE.md) — the complete pipeline with architecture diagrams
 - [Installation](docs/INSTALL.md) — media builds, verification, and registry access
+- [Customize a fork](docs/README.md#customize-a-fork-start-here) — current TOML inputs, package editing, and pending journey gates
 - [Hardware Support](docs/HARDWARE.md) — requirements and ARM laptop status
 - [Matrix Status](docs/MATRIX-STATUS.md) — quality status for each variant×desktop cell
 - [Roadmap](ROADMAP.md) — project direction and feature status

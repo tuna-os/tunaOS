@@ -14,13 +14,17 @@ image boots or installs.
 
 ## Deliver in this order
 
-1. **One config and an explanation.** [RFC 013](rfc/rfc013-single-fork-config.md)
+1. **One config and an explanation.** [#3668](https://github.com/tuna-os/tunaOS/issues/3668)
+   owns primary TOML implementation; [the wiring guide](CONFIG-WIRING.md)
+   describes current main, not pending fields. [RFC 013](rfc/rfc013-single-fork-config.md)
    and [#3433](https://github.com/tuna-os/tunaOS/issues/3433) own brand settings,
    package intent, target selection and image destination. Validate before
    mutation. Explain where each effective field came from. Keep strict source
    pins; a changed source needs review before the user accepts a new pin.
 2. **Two complete journeys.** Use the native reference lane in
-   [#3445](https://github.com/tuna-os/tunaOS/pull/3445). Prove build, boot, login, visible brand and actual installation.
+   [#3431](https://github.com/tuna-os/tunaOS/pull/3431), tracked by #3470.
+   #3445 is historical preview-config evidence, not qualification for new
+   primary-TOML inputs. Prove build, boot, login, visible brand and actual installation.
    Detach the install media, boot the target disk, then prove update and recovery. Record each stage as
    passed, failed or not run. Keep one investigation active in native CI.
 3. **Evidence for each exact image.** Extend the generated reports in
@@ -122,28 +126,19 @@ assertion keeps `releasePass` false.
 
 ## Dependency and review boundaries
 
-The compatibility foundation is [#3434](https://github.com/tuna-os/tunaOS/pull/3434)
-and [#3436](https://github.com/tuna-os/tunaOS/pull/3436). The consumer sequence is
-[#3439](https://github.com/tuna-os/tunaOS/pull/3439),
-[#3440](https://github.com/tuna-os/tunaOS/pull/3440), then
-[#3443](https://github.com/tuna-os/tunaOS/pull/3443). Package safety extends through
-[#3444](https://github.com/tuna-os/tunaOS/pull/3444),
-[#3446](https://github.com/tuna-os/tunaOS/pull/3446),
-[#3449](https://github.com/tuna-os/tunaOS/pull/3449) and
-[#3453](https://github.com/tuna-os/tunaOS/pull/3453). Package removal proof is
-separate from the baseline branded-install outcome.
+[#3668](https://github.com/tuna-os/tunaOS/issues/3668) owns the current
+implementation dependencies. [#3806](https://github.com/tuna-os/tunaOS/issues/3806)
+owns the config-and-assets-only recipe and conformance fixture; this journey
+owns actual installed-system acceptance. Use the current issue checklist and
+exact-head results rather than a copied PR status table.
 
-These links identify who owns each dependency. They are not a live status table.
-Read each PR's current base, exact-head checks and evidence before integration.
-Do not merge the stack as a unit on the strength of a source-test pass.
-Reconcile the shared catalog with [#3431](https://github.com/tuna-os/tunaOS/pull/3431)
-and its parent [#3143](https://github.com/tuna-os/tunaOS/pull/3143), and do not add another catalog. Keep one active change per shared contract surface.
-
-The opt-in preview uses `examples/fork/stock.template.yaml`. Initialize a new
-strictly pinned config with `--init-template` before you resolve or build it.
-Existing configs retain their reviewed pins and fail when source inputs change.
-Initialization never refreshes an existing config. See
-[FORK-CONFIG-PREVIEW.md](FORK-CONFIG-PREVIEW.md) for commands and supported intent.
+The older `examples/fork/stock.template.yaml` interface in
+[FORK-CONFIG-PREVIEW.md](FORK-CONFIG-PREVIEW.md) is an experimental preview,
+not the primary TOML recipe. Its consumer stack and existing receipts do not
+qualify a different source/config/image combination. Retirement and migration
+are tracked in [#3807](https://github.com/tuna-os/tunaOS/issues/3807).
+Do not merge a stack, dispatch another canary or change production routing
+because a documentation example or source test passes.
 
 ## What completes the milestone
 

@@ -8,9 +8,15 @@ base OS × desktop × kernel × drivers = image
 ```
 
 The repo is designed to be forked. The intended workflow is: fork, turn
-off the variants and desktops you don't want, edit the manifests in place,
-and build your own images. Every shipped desktop manifest and Containerfile
-is a starting point — not a locked artifact.
+off the variants and desktops you do not need, edit `tunaos.toml`, and build
+your images. Desktop manifests are generated adapters, not editable inputs.
+Read [configuration wiring](CONFIG-WIRING.md) before changing package policy.
+
+The complete config-and-assets-only branded journey is still being integrated
+under [#3668](https://github.com/tuna-os/tunaOS/issues/3668). This guide does
+not claim that pending identity, artwork or image-wide package fields work on
+main. Framework changes below are advanced development, not that promised
+config-only interface.
 
 This guide walks through that workflow, from a minimal single-desktop fork
 to a full custom CI pipeline.
@@ -41,6 +47,12 @@ This is the primary path. Fork, prune, edit, build.
 
 ### 1. Fork and clone
 
+Use Python 3.10+ for config reads; the parser is vendored. For builds, set up
+the container tools and permissions in [CONTRIBUTING.md](../CONTRIBUTING.md)
+and [the Agent Guide](AGENT_GUIDE.md#setup). Package-editor dependencies are
+separate; see [PACKAGE-AUTHORING.md](PACKAGE-AUTHORING.md). Local media generation
+needs root privileges and VM verification needs the documented QEMU setup.
+
 ```bash
 gh repo fork tuna-os/tunaos --clone
 cd tunaos
@@ -69,9 +81,11 @@ until tests support a change. If you remove a whole variant, also remove its
 `tuna_rollout` entry. Run `python3 scripts/config.py validate` after edits.
 Use `python3 scripts/config.py show` to inspect the effective matrix.
 
-Packages and brand settings still use the paths below in this first migration
-step. The [single-config plan](PRIMARY-CONFIG-MIGRATION.md) tracks their move
-into the same file.
+Desktop package profiles and Flatpak declarations also live in `tunaos.toml`.
+Installed identity, artwork and image-wide package deltas are not yet part of
+the main schema. The [migration plan](PRIMARY-CONFIG-MIGRATION.md) is a design
+reference, not a copyable configuration. `show` prints the matrix; it is not
+a full field-provenance or installed-package explanation.
 
 What to turn off and why:
 
@@ -87,13 +101,27 @@ What to turn off and why:
 The smaller your matrix, the faster your CI. A single-desktop build takes
 ~15 minutes cold, ~5 minutes warm.
 
-### 3. Edit: customize the desktop manifests
+### 3. Edit: customize the desktop policies
 
-Open `manifests/desktops/gnome.yaml` (or whichever desktop you kept). Add
-and remove packages, change group installs, add COPR repos. See [Common
-Customizations](#common-customizations-edit-in-place) below for recipes.
+Edit existing `[desktops.<profile>.packages.<family>]` tables in `tunaos.toml`.
+Do not edit `manifests/desktops/*.yaml`; generation overwrites those adapters.
+Use [the package editor](PACKAGE-AUTHORING.md) for index-backed search and a
+reviewable add preview, or edit the existing lists manually. The editor targets
+an existing desktop/family, not all variants automatically.
+
+```bash
+python3 scripts/config.py validate
+python3 scripts/config.py generate
+python3 scripts/config.py show
+```
+
+These commands check and project source intent. They do not install packages
+or prove that a package transaction will succeed.
 
 ### 4. Edit: customize the Containerfile
+
+Skip this step for changes already supported by TOML. It is an advanced
+framework modification, outside the config-and-assets-only contract.
 
 The Containerfile runs numbered build scripts in order. To add your own
 script, insert it into the pipeline:
@@ -113,7 +141,7 @@ RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
 ```
 
 Or edit an existing script directly — `20-packages.sh` installs
-system-wide packages, `00-workarounds.sh` applies early patches,
+system-wide packages, `01-workarounds.sh` applies early patches,
 `40-services.sh` enables services.
 
 ### 5. Build locally
@@ -126,10 +154,18 @@ This builds your customized image. Test it:
 
 ```bash
 just qcow2 yellowfin gnome
-just verify-disk ./yellowfin-gnome.qcow2
+just verify-disk ./yellowfin.qcow2
 ```
 
-### 6. That's your distro now
+A QCOW2 boot test is not an ISO GUI installation test. For ISO commands and
+checksum/signature verification, use [INSTALL.md](INSTALL.md). For installed
+updates and rollback commands, use [USER-GUIDE.md](USER-GUIDE.md). The branded
+Yellowfin/Grouper journey still needs matching build, login, visible branding,
+plain/LUKS install, media-detached boot, update and recovery receipts under
+[#3474](https://github.com/tuna-os/tunaOS/issues/3474). Do not infer these from
+`validate`, generated files or a successful image build.
+
+### 6. Publish only to an authorized destination
 
 Push to your fork. With no other change, CI publishes to
 `ghcr.io/<your-username>/...`, and each image records that location as its
@@ -161,49 +197,28 @@ separate directories — you're changing the source of truth.
 
 ### Changing packages in a desktop
 
-Edit `manifests/desktops/<de>.yaml`. Each desktop manifest has per-OS
-package lists:
+Edit the existing family table in `tunaos.toml`. For example, Ubuntu GNOME
+uses `[desktops.gnome.packages.apt]` and its `required` list. Debian GNOME
+uses `gnome-debian`; Arch GNOME uses `gnome-arch`. Family-specific profiles
+replace the generic profile; they are not extra layers on top of it.
 
-```yaml
-# manifests/desktops/gnome.yaml — add what you want, remove what you don't
-packages:
-  fedora:
-    packages:
-      - gdm
-      - gnome-shell
-      - gnome-terminal     # ← added
-      - nautilus
-      - gnome-text-editor   # ← added
-      # ... keep the rest ...
+For RPM families, inspect `include` groups as well as local `required`,
+`optional` and `exclude` fields. The schema differs by native family; use the
+existing section and [wiring reference](CONFIG-WIRING.md#package-fields-and-limits)
+instead of copying an RPM table into APT. Included groups expand before local
+entries, without deduplication. A shared policy can affect multiple variants.
 
-  el10:
-    packages:
-      - gdm
-      - gnome-shell
-      - gnome-terminal     # ← added
-      - nautilus
-      # ... keep the rest ...
-```
-
-To remove a package, delete its line or comment it out. The installer
-reads the manifest as the canonical list — whatever's there gets
-installed.
-
-> **Which OS key do I edit?** The installer auto-detects:
-> - `el10` — AlmaLinux, CentOS Stream, RHEL
-> - `fedora` — Fedora, Rawhide
-> - `apt` — Ubuntu, Debian
-> - `pacman` — Arch Linux, CachyOS
-> - `zypper` — openSUSE
-> - `emerge` — Gentoo
->
-> Edit the key for the variant you kept. Unused keys are skipped.
+Removing a name from an authored desktop list changes requested policy. It
+does not prove removal from an inherited base image or a dependency closure.
+Image-wide removal is deliberately unsupported by the primary interface.
 
 ### System-wide packages and config
 
 Desktop manifests only cover what goes into the DE layer. For packages
 that should be in *every* image (base layer), edit
-`build_scripts/20-packages.sh`.
+`build_scripts/20-packages.sh`. That is a framework change. Open PR
+[#3739](https://github.com/tuna-os/tunaOS/pull/3739) adds image-wide package
+additions to TOML; `main` does not have them yet.
 
 For system-wide config files, add them to `system_files/`:
 
@@ -226,46 +241,20 @@ These are copied into every image by `build_scripts/00-copy-files.sh` (step
 
 ### COPR repos, PPAs, and version locks
 
-These go in the desktop manifest under the relevant OS key:
-
-```yaml
-# manifests/desktops/gnome.yaml
-packages:
-  el10:
-    copr:
-      - repo: someuser/someproject
-        packages:
-          - package-from-copr
-          - another-package
-      - repo: jonathanmetz/cosmic-epoch
-        packages: []
-
-    optional:
-      - fish            # installed if available, skipped if not
-      - neovim
-
-    optional_group:     # install all or none (checks first item availability)
-      - fcitx5
-      - fcitx5-gtk
-      - fcitx5-mozc
-
-  apt:
-    ppa:
-      - repo: ppa:someuser/someproject
-        condition: ubuntu        # only on Ubuntu, not Debian
-
-versionlock:
-  - gnome-shell
-  - mutter
-  - "qt6-*"
-```
-
-`versionlock` runs `dnf versionlock add` on each pattern. `optional`
-packages are best-effort — they won't fail the build if unavailable.
+Edit the corresponding existing TOML family section. Repository, COPR and
+PPA shapes differ; see [package fields and limits](CONFIG-WIRING.md#package-fields-and-limits).
+The generated YAML carries them to the existing installer. Do not put tokens
+in repository URLs. Optional packages are best-effort, not installed-inventory
+proof. DNF version locks remain profile policy; they are not portable to APT.
 
 ### Changing branding, wallpapers, defaults
 
-The image branding is set by environment variables in the Containerfile:
+Main still uses framework identity and artwork writers. The pending primary
+identity stack is not enabled by adding `[project]` to current main. If you
+change framework branding below, inspect the final image: later writers can
+overwrite environment values. These are not config-only instructions.
+
+Existing Containerfile inputs include:
 
 ```dockerfile
 ENV IMAGE_NAME="myproject"
@@ -377,9 +366,10 @@ dnf:
   - "-gnome-tour"     # remove packages with a minus prefix
 ```
 
-Also available: `custom/files/` (config file overlay), `custom/systemd/`
-(units to enable), `custom/build.pre.sh` / `custom/build.post.sh` (hook
-scripts), `custom/just/` (custom ujust recipes).
+Optional extras, created only if you need them: `custom/files/` (config file
+overlay), `custom/systemd/` (units to copy and enable), `custom/flatpaks.list`,
+`custom/build.pre.sh` / `custom/build.post.sh` (hook scripts) and
+`custom/just/` (custom ujust recipes). `build_scripts/apply-custom.sh` applies them.
 
 The overlay is good for personal machines and quick experiments. For a
 project you intend to maintain and ship to others, the fork-edit-build
@@ -391,43 +381,13 @@ workflow is the right path.
 
 To add a desktop environment that isn't already in the repo:
 
-### 1. Create the manifest
+### 1. Define and generate the desktop policy
 
-Create `manifests/desktops/<name>.yaml`:
-
-```yaml
-# manifests/desktops/myde.yaml
-display_manager: lightdm
-
-packages:
-  fedora:
-    packages:
-      - lightdm
-      - myde-session
-      - myde-panel
-      - myde-launcher
-      - myde-terminal
-      - xdg-desktop-portal-gtk
-
-  el10:
-    packages:
-      - lightdm
-      - myde-session
-      - myde-panel
-
-  apt:
-    - lightdm
-    - myde-session
-    - myde-panel
-
-  pacman:
-    - lightdm
-    - myde-session
-    - myde-panel
-```
-
-Provide at least the package-manager keys your target variants use. Unused
-keys are skipped.
+Add a `[desktops.<name>]` profile to `tunaos.toml`, following an existing
+profile's validated family schema. Run `python3 scripts/config.py validate`
+and `python3 scripts/config.py generate`. The latter creates the desktop
+manifest. Adding a profile does not implement a Containerfile route or qualify
+the new desktop; the next steps are framework development.
 
 ### 2. Add a stage in each Containerfile you need
 
@@ -454,8 +414,8 @@ build_image = true
 build_iso = true
 ```
 
-That's it — one YAML file, one Containerfile stage, one matrix entry. No
-new shell scripts.
+Also update flavor routing and tests where required. A declared name is not
+a supported route until the build and runtime contracts accept it.
 
 ---
 
@@ -474,9 +434,8 @@ pattern in `Containerfile.ubuntu` or `Containerfile.debian`).
 In `build_scripts/lib.sh`, add OS detection and package-manager wiring:
 
 ```bash
-# In the OS detection section:
-IS_MYOS=false
-[[ "${BASE_IMAGE,,}" == *"myos"* ]] && IS_MYOS=true && IMAGE_NAME="myvariant" && IMAGE_PRETTY_NAME="MyVariant"
+# In the OS detection section, next to the existing BASE_IMAGE checks:
+[[ "${BASE_IMAGE,,}" == *"myos"* ]] && IS_MYOS=true && _derive_name "myvariant" "MyVariant"
 
 # In the package-manager section:
 if [[ "$IS_MYOS" == true ]]; then
@@ -511,15 +470,11 @@ package_target = "myos"
 reason = "Tuna Desktop packages for this base need tests."
 ```
 
-### 4. Add package sections to desktop manifests
+### 4. Extend the native package contract
 
-```yaml
-# manifests/desktops/gnome.yaml — add at the bottom of packages:
-  my-pkg-mgr:
-    - gnome-shell
-    - gnome-session
-    - gdm
-```
+A new package-manager key is not accepted automatically. Extend the schema,
+generator and installer contract with tests, then add the matching primary
+TOML policy. Reuse a supported family when its actual behavior matches.
 
 ### 5. Add build commands to the Justfile
 
@@ -531,25 +486,30 @@ build-myvariant flavor='gnome' *args: (build "myvariant" flavor +args)
 
 ## Running Your Own CI/CD
 
-Once you've pruned the matrix and customized your manifests, push to your
-fork. The existing workflows work out of the box:
+Once you have validated the primary config and tested the affected images,
+review the publication workflow and permissions before pushing to your fork:
 
 ### What's already wired up
 
 | File | What it does |
 |---|---|
 | `.github/workflows/build-variant.yml` | Reads `.github/build-config.yml`, generates a matrix of builds, runs the 4-stage DAG |
-| `.github/workflows/reusable-build-image.yml` | Per-image build → push to GHCR → cosign sign → QEMU boot gate |
+| `.github/workflows/reusable-build-image.yml` | Per-image build → push to the resolved destination → cosign sign → QEMU boot gate |
 | `.github/workflows/reusable-build-artifacts.yml` | ISO and QCOW2 generation |
 
-The workflows use `${{ github.repository_owner }}` as the registry
-namespace — forked, they automatically push to `ghcr.io/<your-username>/...`.
+Destination fields resolve independently: `IMAGE_REGISTRY` /
+`REPO_ORGANIZATION` environment overrides, then `[build.publish]`, then the
+GitHub repository owner for namespace, then `ghcr.io` / `tuna-os` defaults.
+Use `scripts/publish-destination.sh` to inspect the result. Resolution is not
+authorization to push; see the credential boundary in step 6.
 
 ### What you may need to set up
 
-- **Secrets** (optional): `COSIGN_PRIVATE_KEY` / `COSIGN_PUBLIC_KEY` for
-  image signing. Builds work without these — images are unsigned but still
-  functional.
+- **CI permissions:** the publishing workflow signs keylessly with GitHub
+  Actions OIDC (`id-token: write`); it does not need a project signing key.
+  Registry write access and workflow permissions must also be enabled. A fork
+  has its own signing identity; do not verify it with the upstream identity.
+  See [artifact verification](VERIFY-ARTIFACTS.md).
 - **RHSM credentials**: Only needed if you added a RHEL variant.
 
 ### Triggering builds
@@ -572,7 +532,7 @@ locally with `just build` — only push when you're ready to publish.
 
 ```
 tunaos/
-├── manifests/desktops/              ← EDIT THESE — DESKTOP DEFINITIONS
+├── manifests/desktops/              ← GENERATED FROM tunaos.toml; DO NOT EDIT
 │   ├── gnome.yaml                   #   packages, DM, copr repos, version locks
 │   ├── gnome-debian.yaml            #   Debian-specific overrides (apt package names)
 │   ├── gnome-arch.yaml              #   Arch-specific overrides (pacman package names)
@@ -583,20 +543,18 @@ tunaos/
 │   ├── niri.yaml
 │   └── xfce.yaml
 │
-├── build_scripts/                   ← EDIT THESE — BUILD ENGINE
-│   ├── install-desktop.sh           #   generic manifest-driven DE installer
+├── build_scripts/                   ← FRAMEWORK CODE, NOT CONFIGURATION
+│   ├── desktop/install-desktop.sh   #   generic manifest-driven DE installer
 │   ├── lib.sh                       #   shared library (OS detect, pkg wrappers)
-│   ├── 00-workarounds.sh            #   early patches and workarounds
+│   ├── 00-copy-files.sh             #   system_files → image
+│   ├── 01-workarounds.sh            #   early patches and workarounds
 │   ├── 10-base-packages.sh          #   base OS packages (no DE)
 │   ├── 20-packages.sh               #   system-wide packages
 │   ├── 26-packages-post.sh          #   post-package cleanup
 │   ├── 40-services.sh               #   systemd service enablement
 │   ├── 90-image-info.sh             #   image metadata stamping
-│   ├── HWE.sh                       #   HWE kernel installer
-│   ├── nvidia.sh                    #   NVIDIA driver installer
-│   ├── cachyos.sh                   #   CachyOS kernel overlay
-│   ├── copy-files.sh                #   system_files → image
-│   ├── cleanup.sh                   #   final cleanup
+│   ├── 99-cleanup.sh                #   final cleanup
+│   ├── overlay/                     #   HWE, NVIDIA, CachyOS, Asahi, T2 overlays
 │   └── ...
 │
 ├── system_files/                    ← EDIT THESE — SYSTEM CONFIG
@@ -606,7 +564,7 @@ tunaos/
 ├── system_files_overrides/          ← OVERRIDES (applied after system_files)
 │   └── ...
 │
-├── Containerfile.el10               ← EDIT THIS — MAIN BUILD (EL10/Fedora)
+├── Containerfile.el10               ← FRAMEWORK: MAIN BUILD (EL10/Fedora)
 ├── Containerfile.overlay            ← HWE/NVIDIA/CachyOS parameterized overlay
 ├── Containerfile.ubuntu             ← Ubuntu bootcification
 ├── Containerfile.debian             ← Debian bootcification
@@ -617,10 +575,9 @@ tunaos/
 ├── custom/                          ← OVERLAY (lighter alternative)
 │   ├── image.yaml                   #   base image + tag
 │   ├── packages.yaml                #   add/remove packages
-│   ├── files/                       #   config file overlay
-│   └── systemd/                     #   systemd units
+│   └── build.pre.sh, build.post.sh  #   hooks; files/, systemd/ etc. are optional
 │
-├── tunaos.toml                     ← EDIT THIS — BUILD MATRIX
+├── tunaos.toml                     ← EDIT THIS — PRIMARY BUILD/PACKAGE POLICY
 ├── .github/workflows/               ← CI PIPELINE
 │   ├── build-variant.yml            #   orchestrator (works as-is on forks)
 │   ├── reusable-build-image.yml     #   per-image build+push+sign
@@ -657,7 +614,7 @@ just run-custom-vm                   # boot it as a VM
 # ── Testing ────────────────────────────────────────────────────
 just test                            # bats + pytest
 just qcow2 yellowfin gnome           # produce VM disk
-just verify-disk disk.qcow2          # QEMU boot check
+just verify-disk ./yellowfin.qcow2   # QEMU boot check
 
 # ── Pre-commit (mandatory) ─────────────────────────────────────
 just fix && just check

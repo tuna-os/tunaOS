@@ -1,6 +1,8 @@
 # Primary TunaOS configuration migration
 
-Status: draft for review. This is not a completed configuration interface.
+Status: design and migration history, not a copyable configuration interface.
+Issue [#3668](https://github.com/tuna-os/tunaOS/issues/3668) records the adopted ownership boundary.
+For implemented fields and commands, read [CONFIG-WIRING.md](CONFIG-WIRING.md).
 Related work: RFC 013, issue #3433 and delivery epic #3474.
 
 ## Goal
@@ -16,21 +18,31 @@ The name `tunaos.toml` alone would not make those deltas meet the new requiremen
 
 ## Source ownership
 
-| Editable data in tunaos.toml | Current owner to retire | Consumer or generated adapter |
-|---|---|---|
-| Project registry, namespace and image names | build-image-inner.sh defaults and variant publication rules | Resolved build environment and image-info data |
-| Variant IDs, aliases, emoji, bases, platforms, flavor order and holds | .github/build-config.yml | Generated matrix at the existing path |
-| ISO groups, sibling images and Tuna Desktop admission records | .github/build-config.yml | The same generated matrix, with all metadata retained |
-| Desktop package profiles, family overrides, optional/excluded sets and repository policy | manifests/desktops/*.yaml | Generated desktop manifests consumed by install-desktop.sh |
-| Shared and base-family package policy | 10-base-packages.sh, 20-packages.sh and package-bearing helpers | Ordered typed package plans; scripts retain mechanisms |
-| Image and download versions, digest pins and package ceilings | image-versions.yaml | Generated version adapter; Renovate edits TOML inputs |
-| Registry mirrors | registry-map.yaml | Generated mirror adapter |
-| Names, species codenames, URLs and logo assets | 90-image-info.sh and identity/brand source files | Resolved identity, os-release, Plymouth and desktop adapters |
-| Wallpaper assets and desktop/variant precedence | select-wallpaper.sh and asset naming conventions | Explicit resolved artwork selection with existing stock precedence |
-| Installer name, logos and shared presentation settings | installer customization/projection sources | One versioned frontend-neutral brand payload for all frontends |
-| Flatpak remotes and selected application sets | desktop helper scripts | Typed generated policy consumed by existing installers |
+Status is for `main`. The validator on `main` rejects the fields of an open PR
+under #3668; do not copy them into `tunaos.toml` yet.
 
-Execution scripts, Containerfiles and checks remain code. Credentials are not
+| Fork-facing value | Status on main | TOML owner | Consumer or generated adapter |
+|---|---|---|---|
+| Publish registry and namespace | Implemented (#3736) | `[build.publish]` | `scripts/lib/publish-destination.sh`; non-owner CI credentials are F1b (#3801) |
+| Image names: aliases, publish name, tag suffix | Implemented | `variants.<id>` `aliases`, `publish_name`, `tag_suffix` | Generated matrix `.github/build-config.yml` |
+| Variant IDs, emoji, bases, platforms, flavor order and holds | Implemented | `variants`, `[[variants.<id>.flavors]]` | Generated matrix at the existing path |
+| ISO groups, sibling images and Tuna Desktop admission records | Implemented | `iso_groups`, `sibling_images`, `tuna_rollout` | The same generated matrix, with all metadata retained |
+| Desktop package profiles, family overrides, optional/excluded sets and repository policy | Implemented | `package_groups`, `desktops` | Generated `manifests/desktops/*.yaml` consumed by `install-desktop.sh` |
+| Variant base-image pins | Implemented | `variants.<id>.base_image` | `scripts/get-base-image.sh`; Renovate edits the TOML pin |
+| Default Flatpak applications | Implemented (#3553) | `[flatpak_preinstall]` | Generated `build_scripts/desktop/flatpak-preinstall.tsv` |
+| ISO Builder presentation and defaults | Implemented | `[iso_builder]`, `flavor_metadata` | Generated `docs/iso-builder.*.json` |
+| Project name, ID, CPE vendor, URLs, variant codenames | Open PR: F3a (#3681) | `[project]`, `[defaults.branding]`, `variants.<id>.codename` | Today: `90-image-info.sh` and `build_scripts/lib/variant-identity.tsv` |
+| Variant accent, GNOME accent, base label | Open PR: F3b (#3700) | `variants.<id>.branding` | Today: framework identity/brand sources |
+| Marks, lettermarks, Plymouth themes, wallpaper aliases | Open PR: F3c/F3d (#3701, #3705) | `branding.plymouth` plus generated artwork | Today: asset naming and `build_scripts/desktop/select-wallpaper.sh` |
+| Installer name and logo | Open PR: F3e (#3708) | Project name; logo is the in-image variant mark | Today: installer customization sources |
+| Image-wide package additions over inherited base lists | Open PR: F4 (#3739) | `[defaults.packages]`, `variants.<id>.packages` (`add`, `optional`, `repositories`) | Today: framework base package scripts |
+| Image-wide package removals | Rejected (F4b, #3803) | none | No protected-removal design yet |
+
+Execution scripts, Containerfiles and checks remain code. Tool/download pins in
+`image-versions.yaml`, registry mirrors in `registry-map.yaml` and the Flatpak
+remote setup also remain framework inputs; they are not migration targets.
+The planned additions do not replace the inherited stock base packages.
+Credentials are not
 configuration data. Do not put shell commands, remote includes or secret values in TOML. Existing trusted post-install steps become named, validated operations;
 this migration does not add arbitrary hooks.
 
@@ -51,72 +63,83 @@ configuration that looks supported.
 
 ## Readable shape
 
-The example below is a schema sketch with current values, not a complete build
-configuration. The complete file must contain every existing cell and policy.
-Omitted variant flavors here are not a proposal to disable them.
+The example below shows current values, not a complete build configuration.
+The complete file must contain every existing cell and policy. Omitted variant
+flavors here are not a proposal to disable them. Sections marked "open PR" use
+the shapes in those PRs and fail validation on `main` today.
 
 ```toml
 schema_version = 1
 
+# Implemented. Omitted in stock TunaOS; a fork sets both keys.
+[build.publish]
+registry = "quay.io"
+namespace = "acme"
+
+# Open PR: F3a (#3681).
 [project]
 name = "TunaOS"
-registry = "ghcr.io"
-namespace = "tuna-os"
+id = "tunaos"
+cpe_vendor = "jamesreilly"
 
+# Open PR: F3a (#3681).
 [defaults.branding]
 homepage = "https://github.com/tuna-os/tunaos"
 documentation = "https://github.com/tuna-os/tunaos/tree/main/docs"
 support = "https://github.com/tuna-os/tunaos/issues/"
+bug_report = "https://github.com/tuna-os/tunaos/issues/"
 
+# Open PR: F4 (#3739). Native names must be valid for every selected family.
 [defaults.packages]
-# Shared additions; native names must be valid for every selected family.
-packages = []
+add = []
 
+# Implemented, except codename (F3a) and branding (F3b/F3d), which are open PRs.
 [variants.yellowfin]
 emoji = "🐠"
 description = "Based on AlmaLinux Kitten 10"
 codename = "Thunnus albacares"
+base_image = "quay.io/almalinuxorg/almalinux-bootc:10-kitten@sha256:fabe22d605a5638cb1fbf2df38d6d9b9ace35f15cb1c10c7db87d475a039d58a"
 aliases = ["almalinux-kitten"]
 platforms = ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
-base_image = "quay.io/almalinuxorg/almalinux-bootc:10-kitten@sha256:fabe22d605a5638cb1fbf2df38d6d9b9ace35f15cb1c10c7db87d475a039d58a"
+branding = { accent = "#FFC702", gnome_accent = "yellow", base = "AlmaLinux Kitten", homage = "the yellow petal of the AlmaLinux flower", plymouth = "tropical-fish" }
 
-[variants.yellowfin.branding]
-logo = "system_files/usr/share/tunaos/logos/yellowfin.svg"
-wallpaper = "system_files/usr/share/backgrounds/tunaos/yellowfin-anime.jpg"
-
+# Open PR: F4 (#3739). Native RPM additions for this variant only.
 [variants.yellowfin.packages]
-# Put native RPM additions here rather than applying them to apt/portage cells.
-packages = []
+add = []
 
-# Package profiles preserve native package names and the current list order.
+# Implemented. Package profiles keep native package names and list order.
 [desktops.gnome-debian]
 display_manager = "gdm3"
 
-[desktops.gnome-debian.packages]
-apt = [
+[desktops.gnome-debian.packages.apt]
+required = [
   "gnome-core", "gnome-disk-utility", "gnome-system-monitor", "nautilus",
   "xdg-desktop-portal-gnome", "xdg-desktop-portal-gtk", "xdg-user-dirs-gtk",
   "libglib2.0-dev-bin",
 ]
 ```
 
-Common values live in defaults. Variant, desktop and exact-cell sections may
-override declared fields. Scalar values replace more general values. Lists
-must have explicit replace/add/remove semantics; do not silently reinterpret
-an existing ordered package list as a set. Family-specific package names stay
-family-specific. Selection never enables a held or unsupported cell.
+The order of desktop package lists matters: `include` groups expand first, then
+local entries, without deduplication. The image-wide `packages` tables from
+#3739 only add packages over the inherited base lists; the validator rejects
+removals until F4b. Do not
+silently reinterpret an existing ordered package list as a set. Family-specific
+package names stay family-specific. Selection never enables a held or
+unsupported cell.
 
 ## Ordered migration
 
 1. Record the ownership map and schema in the RFC/spec/plan. Inventory every
    relevant legacy reader and writer, including Renovate and workflow scripts.
 2. Move the complete matrix into TOML. Generate the old adapter without losing
-   any value, order, flag, alias, ISO group or rollout record. Add a read-only
-   drift gate and `just config-generate` / `just config-check`. The generator marks the adapter as derived. Both local and CI builds validate it before consumption.
-3. Move all desktop profiles and base/shared package policy, in reviewed groups.
+   any value, order, flag, alias, ISO group or rollout record. Generate with
+   `python3 scripts/config.py generate`; `just check` runs the read-only drift
+   checks. The matrix and desktop adapters are git-ignored and regenerated at
+   build setup. Both local and CI builds validate the source before consumption.
+3. Move desktop profiles and add configurable image-wide package additions in reviewed groups.
    Compare the complete resolved package/repository operation sequence to the
-   old path for every supported family and cell. Migrate the pins/mirror
-   writers and Renovate at the same boundary as their generated adapters.
+   old path for every supported family and cell. Keep tool/download pins and
+   registry mirrors in their existing framework files.
 4. Move actual image identity, artwork and installer defaults. TunaOS's own
    values pass through the same compiler and consumers as customized values.
    Reuse the reviewed mechanisms in consumers and check final writers. No stock-only bypass remains.
@@ -152,8 +175,10 @@ Keep the TOML 1.0 grammar shared with Python 3.11. The edit layer must preserve 
 Generated JSON/YAML remains consumable by target images without Python or TOML
 libraries. Do not assume EL10, old Debian or a user's Mac has `tomllib`.
 
-Each base-image pin has one authoritative entry under its variant. Shared external inputs and tools have separate named entries.
-These entries do not repeat the base digest of any variant. Renovate edits the owning TOML entry. At runtime, generate adapters from that source. No bot commit of derived files is necessary.
+Each base-image pin has one authoritative entry under its variant; Renovate edits
+that TOML entry. Tool/download pins stay in `image-versions.yaml` and mirrors in
+`registry-map.yaml`, outside TOML. Generate adapters from the TOML source at
+build setup. No bot commit of derived files is necessary.
 
 Required tests include full matrix value/order equality, full flavor-route
 and base-image resolution equality, package sequence equality, and unchanged

@@ -10,6 +10,19 @@ The old in-repo mdBook (`docs/book/`) was removed once tunaos.org went live — 
 duplicated the same user-facing content. (Its GitHub Pages deploy workflow was
 already retired separately.)
 
+## Customize a fork: start here
+
+1. [Roll your own](ROLL_YOUR_OWN.md) gives the current editing/build path.
+2. [Primary configuration wiring](CONFIG-WIRING.md) identifies editable inputs,
+   generated adapters, defaults, precedence and unsupported operations.
+3. [Package authoring](PACKAGE-AUTHORING.md) covers offline search/add previews;
+   [Flatpak declarations](FLATPAK-DECLARATIONS.md) cover the separate app policy.
+4. [Fork delivery](FORK-DELIVERY.md) defines the still-open branded install,
+   update and recovery acceptance journey. It is not a completed walkthrough.
+
+The [migration plan](PRIMARY-CONFIG-MIGRATION.md) and
+[legacy preview](FORK-CONFIG-PREVIEW.md) are not the current primary schema.
+
 ## What's in this folder
 
 These are **developer/maintainer references** that aren't part of the
