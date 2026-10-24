@@ -9,6 +9,7 @@ import json
 from pathlib import Path
 import subprocess
 import sys
+import time
 
 import pytest
 
@@ -50,7 +51,12 @@ def digest(data: bytes) -> str:
 
 
 def image_id(reference):
-    return digest(reference.encode())
+    return hashlib.sha256(reference.encode()).hexdigest()
+
+
+def reported_id(reference):
+    """Podman reports bare storage IDs; the Docker-compatible form also appears."""
+    return "sha256:" + image_id(reference) if "/stock-" in reference else image_id(reference)
 
 
 def reference_for_id(value, qualification_plan):
@@ -226,11 +232,27 @@ def test_command_log_closes_stdin_and_times_out(tmp_path):
     assert b"timed out" not in (tmp_path / "timeout.log").read_bytes()
 
 
+def test_command_log_deadline_reaches_descendants_holding_the_pipes(tmp_path):
+    command = [
+        sys.executable,
+        "-c",
+        "import subprocess, sys; subprocess.Popen("
+        "[sys.executable, '-c', 'import time; time.sleep(60)'],"
+        " stdout=sys.stdout, stderr=sys.stderr)",
+    ]
+    start = time.monotonic()
+    with MODULE.CommandLog(tmp_path / "descendants.log") as log:
+        with pytest.raises(MODULE.QualificationError, match="timed out"):
+            log.run(command, timeout=0.2)
+    assert time.monotonic() - start < 30
+
+
 class FakeLog:
     fail_ref = None
     mismatched_platform_ref = None
     bad_apt_status_ref = None
-    wrong_parent_ref = None
+    wrong_overlay_base_ref = None
+    rechunked_overlay_ref = None
     def __init__(self, path=None, qualification_plan=None):
         self.path = path
         self.qualification_plan = qualification_plan or QUALIFICATION_PLAN
@@ -271,10 +293,13 @@ class FakeLog:
             reference = args[3]
             parent = ""
             if reference.endswith(":gnome-hwe"):
-                parent = image_id(reference.removesuffix("gnome-hwe") + "gnome")
-            if reference == self.wrong_parent_ref:
-                parent = digest(b"unqualified-parent")
-            output = json.dumps([{"Id": image_id(reference), "Parent": parent}]).encode()
+                # A multi-instruction overlay build leaves a cached intermediate
+                # image as Podman's parent, not the FROM image.
+                parent = image_id("intermediate-" + reference)
+            if reference == self.rechunked_overlay_ref:
+                # A rechunked image is loaded from an archive: no parent at all.
+                parent = ""
+            output = json.dumps([{"Id": reported_id(reference), "Parent": parent}]).encode()
             return subprocess.CompletedProcess(args, 0, output, b"")
         if args[:3] == ["skopeo", "inspect", "--raw"]:
             ref = args[3]
@@ -284,8 +309,8 @@ class FakeLog:
             else:
                 output = f"manifest-{ref}".encode()
             return subprocess.CompletedProcess(args, 0, output, b"")
-        if args[:3] == ["skopeo", "inspect", "--config"]:
-            reference = args[3].removeprefix("containers-storage:")
+        if args[:4] == ["skopeo", "inspect", "--config", "--raw"]:
+            reference = args[4].removeprefix("containers-storage:")
             architecture = "arm64" if reference == self.mismatched_platform_ref else "amd64"
             output = json.dumps({"os": "linux", "architecture": architecture}).encode()
             return subprocess.CompletedProcess(args, 0, output, b"")
@@ -310,11 +335,18 @@ class FakeLog:
                     for cell in self.qualification_plan["cells"]
                     if cell["route"] == route
                 )
+                parent_ref = next(
+                    cell["images"]["modifiedDesktop"]["ref"]
+                    for cell in self.qualification_plan["cells"]
+                    if cell["route"] == route
+                )
+                if reference == self.wrong_overlay_base_ref:
+                    parent_ref = "localhost/unqualified:gnome"
                 info = {
                     "image-name": variant,
                     "image-flavor": target,
                     "sha": ("22222222" if modified else "11111111"),
-                    "base-image": "localhost/parent:gnome" if flavor == "gnome-hwe" else base,
+                    "base-image": parent_ref if flavor == "gnome-hwe" else base,
                 }
                 return subprocess.CompletedProcess(args, 0, json.dumps(info).encode(), b"")
             if entrypoint == "/usr/bin/cat":
@@ -361,18 +393,28 @@ def test_real_route_checks_cover_base_desktop_overlay_and_native_receipts(tmp_pa
         assert roles == expected
         assert all(image["manifestDigest"].startswith("sha256:") for image in result["images"])
         assert all(image["platform"] == "linux/amd64" for image in result["images"])
-        assert all(image["imageId"].startswith("sha256:") for image in result["images"])
+        # Podman storage IDs are normalized to bare hex from either reported form.
+        assert all(len(image["imageId"]) == 64 for image in result["images"])
+        assert {image["imageId"] for image in result["images"]} == {
+            image_id(image["sourceRef"]) for image in result["images"]
+        }
+        # The config digest covers the raw stored bytes, not a re-serialization.
+        raw_config = json.dumps({"os": "linux", "architecture": "amd64"}).encode()
+        assert all(image["configDigest"] == digest(raw_config) for image in result["images"])
 
 
-def test_rejects_wrong_platform_internal_desktop_and_unqualified_overlay_parent(tmp_path):
+def test_rejects_wrong_platform_internal_desktop_and_unqualified_overlay_base(tmp_path):
     qualification_plan = copy.deepcopy(QUALIFICATION_PLAN)
     ubuntu = next(cell for cell in qualification_plan["cells"] if cell["route"] == "ubuntu")
     bad_platform = ubuntu["images"]["modifiedDesktop"]["ref"]
     FakeLog.mismatched_platform_ref = bad_platform
     try:
         with FakeLog(tmp_path / "platform.log", qualification_plan) as log:
-            with pytest.raises(MODULE.CellError, match="expected linux/amd64"):
+            with pytest.raises(MODULE.CellError, match="expected linux/amd64") as failure:
                 MODULE.verify_cell(qualification_plan, ubuntu, tmp_path, SOURCE, log)
+        # The failing image keeps its resolved identity for replay.
+        assert failure.value.images[-1]["imageId"] == image_id(bad_platform)
+        assert failure.value.images[-1]["manifestDigest"] is None
     finally:
         FakeLog.mismatched_platform_ref = None
 
@@ -384,13 +426,27 @@ def test_rejects_wrong_platform_internal_desktop_and_unqualified_overlay_parent(
 
     el10 = next(cell for cell in qualification_plan["cells"] if cell["route"] == "el10")
     overlay_ref = el10["images"]["modifiedOverlay"]["ref"]
-    FakeLog.wrong_parent_ref = overlay_ref
+    FakeLog.wrong_overlay_base_ref = overlay_ref
     try:
         with FakeLog(tmp_path / "parent.log", qualification_plan) as log:
-            with pytest.raises(MODULE.CellError, match="parent is not the qualified"):
+            with pytest.raises(MODULE.CellError, match="wrong base-image"):
                 MODULE.verify_cell(qualification_plan, el10, tmp_path, SOURCE, log)
     finally:
-        FakeLog.wrong_parent_ref = None
+        FakeLog.wrong_overlay_base_ref = None
+
+
+def test_rechunked_overlay_without_a_storage_parent_still_qualifies(tmp_path):
+    qualification_plan = copy.deepcopy(QUALIFICATION_PLAN)
+    el10 = next(cell for cell in qualification_plan["cells"] if cell["route"] == "el10")
+    FakeLog.rechunked_overlay_ref = el10["images"]["modifiedOverlay"]["ref"]
+    try:
+        with FakeLog(tmp_path / "rechunked.log", qualification_plan) as log:
+            result = MODULE.verify_cell(qualification_plan, el10, tmp_path, SOURCE, log)
+    finally:
+        FakeLog.rechunked_overlay_ref = None
+    assert result["status"] == "passed"
+    overlay = next(image for image in result["images"] if image["role"] == "modifiedOverlay")
+    assert overlay["parentImageId"] == ""
 
 
 def test_apt_requires_fully_installed_status(tmp_path):
@@ -446,3 +502,9 @@ def test_one_failed_route_is_reported_without_hiding_other_families(tmp_path, mo
     }
     assert failed["images"][-1]["package"] == "unverified"
     assert (tmp_path / "evidence/report.json").is_file()
+    # Failed routes carry the same keys as passing ones.
+    ubuntu_cell = next(cell for cell in qualification_plan["cells"] if cell["route"] == "ubuntu")
+    assert all(set(route) == set(failed) for route in report["routes"])
+    assert failed["manager"] == ROUTE_MANAGERS["ubuntu"]
+    assert failed["package"] == ubuntu_cell["package"]
+    assert failed["baseImage"] == ubuntu_cell["baseImage"]

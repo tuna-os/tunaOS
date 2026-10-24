@@ -14,12 +14,15 @@ import argparse
 from datetime import datetime, timezone
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import shlex
+import signal
 import subprocess
 import threading
 import sys
+import time
 from typing import BinaryIO
 
 ROUTES = {
@@ -33,6 +36,7 @@ ROUTES = {
 DIRECT_ROLES = ("modifiedBase", "modifiedDesktop")
 COMMIT = re.compile(r"[0-9a-f]{40}\Z")
 DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
+STORAGE_ID = re.compile(r"(?:sha256:)?([0-9a-f]{64})\Z")
 TOKEN = re.compile(r"[a-z0-9](?:[a-z0-9._-]{0,79})\Z")
 IMAGE_REF = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,511}\Z")
 PACKAGE = re.compile(r"[A-Za-z0-9][A-Za-z0-9+_.-]*(?:/[A-Za-z0-9][A-Za-z0-9+_.-]*)?\Z")
@@ -42,6 +46,8 @@ SOURCE_FILES = {"tunaos.toml", "build_scripts/lib/image-packages.tsv"}
 COMMAND_OUTPUT_LIMIT = 1024 * 1024
 TRUNCATION_MARKER = f"\n[output truncated after {COMMAND_OUTPUT_LIMIT} bytes]\n".encode()
 COMMAND_TIMEOUT_SECONDS = 600
+DRAIN_GRACE_SECONDS = 5
+ABANDONED_MARKER = b"\n[output drain abandoned: descendants still hold the pipes]\n"
 
 
 class QualificationError(ValueError):
@@ -155,6 +161,14 @@ def validate_plan(value: object) -> dict:
     return plan
 
 
+def kill_process_group(pid: int) -> None:
+    """Kill a command and every descendant it left in its own process group."""
+    try:
+        os.killpg(pid, signal.SIGKILL)
+    except OSError:
+        pass
+
+
 class CommandLog:
     """Run fixed argv commands and retain bounded stdout/stderr evidence."""
 
@@ -177,44 +191,66 @@ class CommandLog:
     ) -> subprocess.CompletedProcess[bytes]:
         valid_args = all(isinstance(arg, str) and "\0" not in arg for arg in args)
         require(valid_args, "command: invalid argv")
+        # A new session makes the command its own process group leader, so the
+        # deadline below can reach descendants that outlive it holding the pipes.
         process = subprocess.Popen(
             args, cwd=cwd, stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            start_new_session=True,
         )
         if process.stdout is None or process.stderr is None:
-            process.kill()
+            kill_process_group(process.pid)
+            process.wait()
             raise QualificationError("command: failed to capture output")
 
         captured = {"stdout": bytearray(), "stderr": bytearray()}
+        lock = threading.Lock()
 
         def drain(name: str, pipe: BinaryIO) -> None:
             truncated = False
-            while chunk := pipe.read(64 * 1024):
-                remaining = max(0, COMMAND_OUTPUT_LIMIT - len(captured[name]))
-                captured[name].extend(chunk[:remaining])
-                truncated |= len(chunk) > remaining
-            pipe.close()
+            try:
+                while chunk := pipe.read(64 * 1024):
+                    with lock:
+                        remaining = max(0, COMMAND_OUTPUT_LIMIT - len(captured[name]))
+                        captured[name].extend(chunk[:remaining])
+                    truncated |= len(chunk) > remaining
+            except (OSError, ValueError):
+                pass
+            finally:
+                pipe.close()
             if truncated:
-                captured[name].extend(TRUNCATION_MARKER)
+                with lock:
+                    captured[name].extend(TRUNCATION_MARKER)
 
         threads = [
-            threading.Thread(target=drain, args=("stdout", process.stdout)),
-            threading.Thread(target=drain, args=("stderr", process.stderr)),
+            threading.Thread(target=drain, args=("stdout", process.stdout), daemon=True),
+            threading.Thread(target=drain, args=("stderr", process.stderr), daemon=True),
         ]
         for thread in threads:
             thread.start()
+        deadline = time.monotonic() + timeout
         timed_out = False
+        returncode: int | None = None
         try:
-            returncode = process.wait(timeout=timeout)
+            returncode = process.wait(timeout=max(0.0, deadline - time.monotonic()))
         except subprocess.TimeoutExpired:
-            process.kill()
-            returncode = process.wait()
             timed_out = True
         for thread in threads:
-            thread.join()
-        result = subprocess.CompletedProcess(
-            args, returncode, bytes(captured["stdout"]), bytes(captured["stderr"])
-        )
+            thread.join(max(0.0, deadline - time.monotonic()))
+        if timed_out or any(thread.is_alive() for thread in threads):
+            # Either the command itself overran, or it exited and left
+            # descendants holding stdout/stderr open past the same deadline.
+            timed_out = True
+            kill_process_group(process.pid)
+            returncode = process.wait()
+            for thread in threads:
+                thread.join(DRAIN_GRACE_SECONDS)
+        with lock:
+            stdout = bytes(captured["stdout"])
+            stderr = bytes(captured["stderr"])
+        if any(thread.is_alive() for thread in threads):
+            stderr += ABANDONED_MARKER
+        result = subprocess.CompletedProcess(args, returncode, stdout, stderr)
         if self.stream is None:
             raise QualificationError("command log is not open")
         self.stream.write(("$ " + shlex.join(args) + "\n").encode())
@@ -339,7 +375,15 @@ def podman(
     log: CommandLog, image: str, entrypoint: str, *args: str
 ) -> subprocess.CompletedProcess[bytes]:
     return log.run(["podman", "run", "--rm", "--pull=never", "--network=none",
-                    "--security-opt=no-new-privileges", "--entrypoint", entrypoint, image, *args])
+                    "--security-opt=no-new-privileges", "--cap-drop=all",
+                    "--entrypoint", entrypoint, image, *args])
+
+
+def storage_id(value: object, where: str) -> str:
+    """Accept a bare Podman storage ID or its "sha256:" form, normalized to hex."""
+    match = STORAGE_ID.fullmatch(value) if isinstance(value, str) else None
+    require(match is not None, where)
+    return match.group(1)
 
 
 def local_image(log: CommandLog, reference: str) -> dict[str, str]:
@@ -356,12 +400,15 @@ def local_image(log: CommandLog, reference: str) -> dict[str, str]:
         isinstance(values, list) and len(values) == 1 and isinstance(values[0], dict),
         f"local image {reference}: expected one image",
     )
-    image_id = values[0].get("Id")
-    parent_id = values[0].get("Parent") or ""
-    require(isinstance(image_id, str) and DIGEST.fullmatch(image_id),
-            f"local image {reference}: invalid immutable image ID")
-    require(isinstance(parent_id, str) and (not parent_id or DIGEST.fullmatch(parent_id)),
-            f"local image {reference}: invalid parent image ID")
+    # Podman reports local storage IDs as bare 64-character hex; the Docker
+    # compatible "sha256:" form also appears. Normalize to the bare storage ID.
+    image_id = storage_id(values[0].get("Id"),
+                          f"local image {reference}: invalid immutable image ID")
+    raw_parent = values[0].get("Parent") or ""
+    parent_id = ""
+    if raw_parent:
+        parent_id = storage_id(raw_parent,
+                               f"local image {reference}: invalid parent image ID")
     return {"imageId": image_id, "parentImageId": parent_id}
 
 
@@ -369,7 +416,7 @@ def image_identity(log: CommandLog, reference: str, image_id: str) -> dict:
     prefix = f"containers-storage:{reference}"
     manifest = checked(log, ["skopeo", "inspect", "--raw", prefix],
                        what=f"manifest {reference}")
-    config = checked(log, ["skopeo", "inspect", "--config", prefix],
+    config = checked(log, ["skopeo", "inspect", "--config", "--raw", prefix],
                      what=f"config {reference}")
     require(
         local_image(log, reference)["imageId"] == image_id,
@@ -494,7 +541,6 @@ def verify_cell(plan: dict, cell: dict, root: Path, source: dict, log: CommandLo
 
     verify_base_source(log, cell["baseImage"])
     collected = []
-    image_ids = {}
     ordered_roles = ["stockBase", *DIRECT_ROLES]
     if route == "el10":
         ordered_roles.append("modifiedOverlay")
@@ -507,27 +553,30 @@ def verify_cell(plan: dict, cell: dict, root: Path, source: dict, log: CommandLo
             require(isinstance(target, str) and target, f"{route}.{role}: resolver omitted target")
             local = local_image(log, reference)
             image_id = local["imageId"]
-            identity = image_identity(log, reference, image_id)
+            # Record the resolved immutable identity before the manifest and
+            # config reads, so a failure there still names the image it hit.
             image_record = {
                 "role": role,
                 "flavor": record["flavor"],
                 "sourceRef": reference,
                 **local,
-                **identity,
+                "manifestDigest": None,
+                "configDigest": None,
+                "platform": None,
                 "package": "unverified",
                 "receiptSha256": None,
             }
             collected.append(image_record)
-            image_ids[role] = image_id
-            if role == "modifiedOverlay":
-                require(
-                    local["parentImageId"] == image_ids["modifiedDesktop"],
-                    f"{route}.modifiedOverlay: parent is not the qualified modified desktop",
-                )
+            image_record.update(image_identity(log, reference, image_id))
             info = read_image_info(log, image_id)
             short_commit = (source["stockShortCommit"] if role == "stockBase"
                             else source["modifiedShortCommit"])
-            direct_base = None if role == "modifiedOverlay" else cell["baseImage"]
+            # The overlay's retained build input names its parent: Podman's
+            # Parent is empty for a loaded rechunked image and points at a
+            # cached intermediate for a multi-instruction build, so it is
+            # evidence only. The direct roles keep the pinned upstream base.
+            direct_base = (images["modifiedDesktop"]["ref"] if role == "modifiedOverlay"
+                           else cell["baseImage"])
             verify_info(info, variant=variant, target=target, short_commit=short_commit,
                         base_image=direct_base, where=f"{route}.{role}")
             query = package_query(log, manager, image_id, cell["package"])
@@ -558,8 +607,8 @@ def verify_cell(plan: dict, cell: dict, root: Path, source: dict, log: CommandLo
                 image_record["package"] = "installed"
         except (QualificationError, OSError) as exc:
             raise CellError(str(exc), collected) from exc
-    return {"route": route, "variant": variant, "manager": manager, "package": cell["package"],
-            "baseImage": cell["baseImage"], "status": "passed", "reason": None, "images": collected}
+    return {"route": route, "variant": variant, "status": "passed",
+            "reason": None, "images": collected}
 
 
 def qualify(plan: dict, root: Path, output: Path) -> tuple[dict, bool]:
@@ -574,16 +623,23 @@ def qualify(plan: dict, root: Path, output: Path) -> tuple[dict, bool]:
 
     results = []
     for cell in plan["cells"]:
+        # Every route keeps the same keys, whatever its status.
+        identity = {
+            "route": cell["route"],
+            "variant": cell["variant"],
+            "manager": source["managers"].get(cell["variant"]),
+            "package": cell["package"],
+            "baseImage": cell["baseImage"],
+        }
         log_path = output / f"{cell['route']}.log"
         with CommandLog(log_path) as log:
             try:
-                result = verify_cell(plan, cell, root, source, log)
+                result = {**identity, **verify_cell(plan, cell, root, source, log)}
             except CellError as exc:
-                result = {"route": cell["route"], "variant": cell["variant"], "status": "failed",
-                          "reason": str(exc), "images": exc.images}
+                result = {**identity, "status": "failed", "reason": str(exc),
+                          "images": exc.images}
             except (QualificationError, OSError) as exc:
-                result = {"route": cell["route"], "variant": cell["variant"], "status": "failed",
-                          "reason": str(exc), "images": []}
+                result = {**identity, "status": "failed", "reason": str(exc), "images": []}
         result["logSha256"] = sha256(log_path.read_bytes())
         results.append(result)
 

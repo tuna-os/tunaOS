@@ -147,11 +147,15 @@ The plan is a JSON object with `schemaVersion`, `platform`, full
 `null` records that family as `not-run`; it never passes the gate. Image records
 contain the local `ref` and requested `flavor`.
 
+The verifier requires a clean checkout, including untracked files, so keep both
+the plan and the evidence directory out of the source tree: the ignored
+`output/` directory, or any path outside the checkout.
+
 ```sh
 python3 scripts/qualify-image-packages.py \
-  --plan package-qualification-plan.json \
+  --plan output/package-qualification-plan.json \
   --source "$PWD" \
-  --output package-qualification-evidence
+  --output output/package-qualification-evidence
 ```
 
 The verifier reruns the primary generated-adapter check and route resolver. It
@@ -159,7 +163,10 @@ then binds each result to the registry bytes of the pinned base, local image
 manifest/config digests and `/usr/share/ublue-os/image-info.json`. The stock
 image must have neither the package nor a package-addition receipt. Every
 modified base, desktop and overlay image must contain the native package and an
-exact `/usr/share/tunaos/image-packages.tsv` receipt.
+exact `/usr/share/tunaos/image-packages.tsv` receipt. The direct roles record
+the pinned base as their `base-image`; the overlay records the qualified
+modified desktop reference it was built from, because a rechunked or
+multi-instruction build leaves no usable Podman storage parent.
 
 Retain the output directory with the build logs. `report.json` records each
 family as `passed`, `failed` or `not-run`; each route log and the source log
