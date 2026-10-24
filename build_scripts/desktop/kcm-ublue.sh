@@ -24,11 +24,31 @@ fi
 printf "::group:: === KCM Ublue + Bazaar + Oversteer Udev ===\n"
 
 # ---- Version pins --------------------------------------------------------
-KCM_UBLUE_VERSION=$(grep '^\s*kcm_ublue:' /run/context/image-versions.yaml | sed 's/.*"\(.*\)".*/\1/')
 # renovate: datasource=git-refs depName=bazaar-org/krunner-bazaar ref=v1.4.0
 KRUNNER_BAZAAR_REF="323fc8d684a60a7f864964e97d55371bd6a74d9c"
+# renovate: datasource=git-refs depName=ledif/kcm_ublue ref=v0.6.1
+KCM_UBLUE_REF="75cc31f81f5284bef7a31ff9b8219aae612dff0d"
+# renovate: datasource=git-refs depName=berarma/oversteer ref=master
+OVERSTEER_REF="74c748436a1dff2e42a340b581db0d0e4e0cafb2"
+
+VERSIONS_FILE="${VERSIONS_FILE:-/run/context/image-versions.yaml}"
+if [[ -f "$VERSIONS_FILE" ]]; then
+	_kcm_ref="$(grep '^\s*kcm_ublue:' "$VERSIONS_FILE" 2>/dev/null | sed 's/.*"\(.*\)".*/\1/' || true)"
+	[[ -n "$_kcm_ref" && "$_kcm_ref" =~ ^[0-9a-f]{40}$ ]] && KCM_UBLUE_REF="$_kcm_ref"
+	_oversteer_ref="$(grep '^\s*oversteer:' "$VERSIONS_FILE" 2>/dev/null | sed 's/.*"\(.*\)".*/\1/' || true)"
+	[[ -n "$_oversteer_ref" && "$_oversteer_ref" =~ ^[0-9a-f]{40}$ ]] && OVERSTEER_REF="$_oversteer_ref"
+fi
+
+if [[ ! "$KCM_UBLUE_REF" =~ ^[0-9a-f]{40}$ ]]; then
+	echo "ERROR: kcm_ublue_src must be a 40-character commit SHA" >&2
+	return 1 2>/dev/null || exit 1
+fi
 if [[ ! "$KRUNNER_BAZAAR_REF" =~ ^[0-9a-f]{40}$ ]]; then
 	echo "ERROR: krunner_bazaar_src must be a 40-character commit SHA" >&2
+	return 1 2>/dev/null || exit 1
+fi
+if [[ ! "$OVERSTEER_REF" =~ ^[0-9a-f]{40}$ ]]; then
+	echo "ERROR: oversteer_src must be a 40-character commit SHA" >&2
 	return 1 2>/dev/null || exit 1
 fi
 
@@ -37,7 +57,7 @@ ARCH=$(uname -m)
 RPM_ARCH="$ARCH"
 
 # ---- kcm_ublue: build from source ----------------------------------------
-echo "Building kcm_ublue ${KCM_UBLUE_VERSION} from source..."
+echo "Building kcm_ublue ${KCM_UBLUE_REF} from source..."
 
 # Install build dependencies (removed after build)
 BUILD_DEPS=(
@@ -95,20 +115,22 @@ else
 	BUILD_DIR=$(mktemp -d)
 	trap 'rm -rf "$BUILD_DIR"' EXIT
 
-	git clone --depth 1 --branch "${KCM_UBLUE_VERSION}" \
-		https://github.com/ledif/kcm_ublue.git "$BUILD_DIR"
+	curl -fsSL "https://github.com/ledif/kcm_ublue/archive/${KCM_UBLUE_REF}.tar.gz" |
+		tar --strip-components=1 -xzf - -C "$BUILD_DIR"
 
 	cd "$BUILD_DIR"
 	cmake -B build -DCMAKE_INSTALL_PREFIX=/usr
 	cmake --build build
 	cmake --install build
 	cd - >/dev/null
+	rm -rf "$BUILD_DIR"
+	trap - EXIT
 
 	# Clean up build dependencies
 	dnf -y remove "${BUILD_DEPS[@]}" || true
 	dnf -y autoremove || true
 
-	echo "kcm_ublue ${KCM_UBLUE_VERSION} installed."
+	echo "kcm_ublue ${KCM_UBLUE_REF} installed."
 fi
 
 # ---- Bazaar: Flatpak app store + KRunner plugin --------------------------
@@ -187,11 +209,30 @@ OVERSTEER_RULES=(
 	"99-thrustmaster-wheel-perms.rules"
 )
 
+declare -A OVERSTEER_RULE_SHA256=(
+	["99-logitech-wheel-perms.rules"]="622c5e38b3b80259dac4d2cf63c0731057f7be635234556099e44d5c1ed24a25"
+	["99-fanatec-wheel-perms.rules"]="a4b46b034ef9cce7033337b5d444d60c70df3345a0ae7d89aab00987aff980ef"
+	["99-thrustmaster-wheel-perms.rules"]="c6e3df320d4ce3b5a7e3c852942f15a77f08f435b79483505b80266d7f39ffbc"
+)
+
+OVERSTEER_TMP="$(mktemp -d)"
+trap 'rm -rf "$OVERSTEER_TMP"' EXIT
+
 for rule in "${OVERSTEER_RULES[@]}"; do
-	curl -fsSLo "${OVERSTEER_UDEV_DIR}/${rule}" \
-		"https://raw.githubusercontent.com/berarma/oversteer/master/data/udev/${rule}"
+	rule_tmp="${OVERSTEER_TMP}/${rule}"
+	curl -fsSL -o "$rule_tmp" \
+		"https://raw.githubusercontent.com/berarma/oversteer/${OVERSTEER_REF}/data/udev/${rule}"
+	expected_sha="${OVERSTEER_RULE_SHA256[$rule]}"
+	echo "${expected_sha}  ${rule_tmp}" | sha256sum --check --strict -
+done
+
+for rule in "${OVERSTEER_RULES[@]}"; do
+	install -Dm0644 "${OVERSTEER_TMP}/${rule}" "${OVERSTEER_UDEV_DIR}/${rule}"
 	echo "  ${rule}"
 done
+
+rm -rf "$OVERSTEER_TMP"
+trap - EXIT
 
 echo "oversteer udev rules installed."
 

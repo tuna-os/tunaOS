@@ -76,8 +76,10 @@ downloads:
   jsonschema: "4.26.0"
   # renovate: datasource=github-releases depName=ublue-os/uupd
   uupd: "v1.5.1"
-  # renovate: datasource=github-releases depName=ledif/kcm_ublue
-  kcm_ublue: "v0.6.1"
+  # renovate: datasource=git-refs depName=ledif/kcm_ublue
+  kcm_ublue: "75cc31f81f5284bef7a31ff9b8219aae612dff0d"
+  # renovate: datasource=git-refs depName=berarma/oversteer
+  oversteer: "74c748436a1dff2e42a340b581db0d0e4e0cafb2"
   # renovate: datasource=github-releases depName=mvdan/sh
   #
   # shfmt is a FORMATTER, so its version is part of the repo's formatting.
