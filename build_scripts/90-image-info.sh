@@ -61,6 +61,14 @@ cat >$IMAGE_INFO <<EOF
   }
 EOF
 
+# verify-branding.sh runs here at build time and again inside the booted image,
+# where no build environment exists. Persist the namespace this script just
+# stamped (resolved from tunaos.toml [build.publish], the operator override or
+# the repository owner by scripts/lib/publish-destination.sh) so the verifier
+# expects the same namespace instead of a hardcoded tuna-os.
+install -d /usr/share/tunaos
+printf '%s\n' "${IMAGE_VENDOR}" >/usr/share/tunaos/image-vendor
+
 # Every variant shipped these two pointing at projectbluefin.io, inherited
 # verbatim from the bluefin-lts script this one started as, while SUPPORT_URL
 # and BUG_REPORT_URL were already ours. A user running `gnome-control-center
@@ -70,7 +78,7 @@ EOF
 HOME_URL="${TUNAOS_HOME_URL}"
 DOCUMENTATION_URL="${TUNAOS_DOCUMENTATION_URL}"
 SUPPORT_URL="${TUNAOS_SUPPORT_URL}"
-BUG_SUPPORT_URL="${TUNAOS_BUG_REPORT_URL}"
+BUG_REPORT_URL="${TUNAOS_BUG_REPORT_URL}"
 
 # TunaOS variants are named for fish. Keep VERSION_CODENAME tied to that
 # identity instead of inheriting the unrelated legacy dinosaur codename.
@@ -82,7 +90,7 @@ BUG_SUPPORT_URL="${TUNAOS_BUG_REPORT_URL}"
 # the base image. IMAGE_NAME_VARIANT is the variant id build-image-inner.sh
 # passes verbatim, so prefer it and fall back to the canonicalized IMAGE_NAME.
 VARIANT_KEY="$(canonical_variant "${IMAGE_NAME_VARIANT:-${IMAGE_NAME}}")"
-CODE_NAME="${TUNAOS_CODENAMES[${VARIANT_KEY}]:-}"
+CODE_NAME="${TUNAOS_CODENAMES["${VARIANT_KEY}"]:-}"
 if [[ -z "${CODE_NAME}" ]]; then
 	echo "ERROR: no codename defined in tunaos.toml for variant: ${VARIANT_KEY}" \
 		"(IMAGE_NAME_VARIANT=${IMAGE_NAME_VARIANT:-unset}, IMAGE_NAME=${IMAGE_NAME})" >&2
@@ -168,7 +176,9 @@ osr_set VERSION_CODENAME "${CODE_NAME}"
 osr_set VARIANT_ID "${IMAGE_NAME}"
 osr_set PRETTY_NAME "${IMAGE_PRETTY_NAME}"
 osr_set HOME_URL "${HOME_URL}"
-osr_set BUG_REPORT_URL "${BUG_SUPPORT_URL}"
+osr_set BUG_REPORT_URL "${BUG_REPORT_URL}"
+# The product part is IMAGE_NAME, the publish name (bonito for bonito-rawhide),
+# as TunaOS has always written it; VERSION_CODENAME carries the variant key.
 osr_set CPE_NAME "cpe:/o:${TUNAOS_CPE_VENDOR}:${IMAGE_NAME}-${TUNAOS_PROJECT_ID}"
 
 # Dynamically interpolate the specific variant name and logo path in the installer recipe.json

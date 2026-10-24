@@ -220,6 +220,7 @@ each one from scratch.
 | 56 | The `regenerate` check (`gen-matrix-status.py --check-structure`) fails on every pull request after about 14 minutes with `RuntimeError: gh run view 38592759334 ... returned nothing after 3 attempts`. The log shows `HTTP 502: Server Error (.../runs/38592759334/jobs?per_page=100)` | `gh run view --json jobs` always asks for 100 jobs per page. For some large runs (31224494825, 38713238238, 38592759334, with 113 to 153 jobs) the API returns HTTP 502 for that page size on every attempt. With `per_page=50` the same runs return in seconds. The build walk raised on the failed query | `run_jobs()` tries `gh run view` first, then `gh api --paginate` with `per_page=50`. If both fail, the build walk skips that run with a warning, and an older run scores its cells. If a cell has no verdict from a readable run after a skip, the refresh still raises. Test: `tests/test_an_unreadable_run_is_skipped_not_fatal.py` |
 | 57 | An artifact matches a workflow run but its upload attempt cannot be established | GitHub artifact metadata exposes run and head identity, but no upload-attempt field; receipt names and timestamps do not prove that linkage | The RFC014 read-only adapter accepts only a run observed at successful attempt one before and after archive verification. Reject reruns and missing linkage; preserve `authentication: not_authenticated` until a trusted caller and separate proof exist. Tests mutate the attempt before and after collection. |
 | 58 | `Unit Tests` is red on `main` and on every pull request, but BATS is clean and only one pytest fails: `tests/test_primary_python_floor.py::test_primary_job_runs_python310_not_latest_runtime` (1 failed of 5064). The job named "Primary config (Python 3.10)" passes | Renovate PR #3552 changed `python-version: '3.10'` to `'3.15'` in `primary-config-python310` and merged on 2026-10-21. The job kept its name and stayed green while testing 3.15, so it stopped guarding the floor. The scoped rule keyed on `matchPackageNames: ["python"]` did not stop it: Renovate listed the dependency as `python` (type `uses-with`) with package `actions/python-versions`, and `Unit Tests` was not required to merge | Restore `'3.10'` and add a second rule keyed on `matchDepNames`. Measured: the floor suite (six files, 333 tests) passes on real Python 3.10.20 with the job's own requirements, so the floor had not drifted. A rule that cannot be verified here is not proof: if Renovate reopens the bump, read its Dependency Dashboard (#724) for which matcher it evaluated. |
+| 59 | `Unit Tests` fails during artwork validation on a runner reporting `Landlock ABI 10 or later is required to deny all network access; found ABI 7`, followed by `Process completed with exit code 128` | `scripts/branding/make-lettermarks.py` fetched the pinned Baloo 2 font from `raw.githubusercontent.com` on a cache miss; network-restricted runners cannot make that first-run request | Vendor the exact pinned font under `scripts/branding/assets/`, keep its OFL license beside it, and verify its SHA-256 before rendering |
 
 | Renovate cannot update the Bazaar KRunner source pin (PR #3397) | The git-refs manager treated the commit SHA as a named ref and supplied no full repository URL | Capture the named ref as `currentValue` and the SHA as `currentDigest`; supply a full `packageNameTemplate` URL. `git ls-remote` resolves `v1.3.0` to the existing `dbed96fa…` pin. The build still downloads by commit |
 
@@ -1722,6 +1723,13 @@ capture first, then sends the graceful powerdown itself before the kill.
 
 **Fix:** The pinned download moved into shared `build_scripts/install-uupd.sh` (same `image-versions.yaml` pin; stages the binary plus `uupd.service`, `uupd.timer`, `uupd-manual.service` before install; smoke with `UUPD_CONTEXT="$PWD" UUPD_ROOT="$scratch"` into a disposable root). The apt and dnf branches of `10-base-packages.sh` delegate to it unchanged in behavior, and `Containerfile.arch` carries the pin file and runs the installer before `40-services.sh`. The context exact-set test now treats `install-uupd.sh` as a consumer of the pin file.
 
+### STE fails on matrix prose
+
+**Symptom:** STE reports 1610 findings with a budget of 1609.
+
+**Cause:** A long sentence or a cluster of nouns in `docs/MATRIX-STATUS.md` crosses the budget.
+
+**Fix:** Split the sentence. For text inside the generated block, edit `scripts/gen-matrix-status.py` and render it again. Keep the budget at 1609. Preserve the dates when you replay saved evidence.
 ## Fork source pin changes after tests
 
 Symptom: the fork review tool reports a catalog pin mismatch after Python tests.
@@ -1747,6 +1755,16 @@ clean `npm ci --ignore-scripts`, `npm test`, and `npm run build` in that directo
 Check each override edit with `npm ci`. The same npm major alone does not
 prove that the manifest and lockfile agree.
 
+### Matrix drift check fails when old results enter or leave the window
+
+**Symptom:** The check reports a change between `—` and a pass or fail glyph.
+Run [39161613161](https://github.com/tuna-os/tunaOS/actions/runs/39161613161) shows this for removed desktop cells.
+
+**Cause:** These tables show results for cells outside the current schedule.
+The check treated each `—` as a config change, even for those cells.
+
+**Fix:** Use each table's source matrix to mask only old pass and fail results outside its schedule.
+Keep scheduled cells and `⬜` distinct from `—`. Preserve the results and their dates in the output.
 ## Fork preview reuses stock packages/art or rejects a changed checkout
 
 **Cause:** The key for the cache had only a hash of shell scripts.
@@ -1914,6 +1932,22 @@ These tests check consistency. They do not prove a real producer or installation
 
 **Fix:** Delete the owned file at the start of each run. Keep files from other sources. Reject a linked file before you change files.
 
+### A fork's image records the tuna-os vendor
+
+**Symptom:** CI pushes a fork's image to `ghcr.io/<fork owner>`, but its
+`image-info.json` names `tuna-os` as the vendor and `ghcr.io/tuna-os/...` as
+its image reference.
+
+**Cause:** The build step runs `just build` under `sudo`, and `sudo` resets
+the environment. `GITHUB_REPOSITORY_OWNER` did not reach the build, so the
+namespace fell back to `tuna-os`. The push steps run without `sudo`, so they
+used the correct owner.
+
+**Fix:** The build step keeps `IMAGE_REGISTRY` (`ghcr.io/<owner>`) through
+`sudo`, and `scripts/lib/publish-destination.sh` splits it into host and
+namespace. `tests/test_publish_destination.py` checks the precedence and the
+split.
+
 ## Content PR fails with `STE budget exceeded` (#2912)
 
 **Symptom:** a CFP abstract or design contribution adds Markdown and the
@@ -1948,3 +1982,19 @@ hand edit to either file, makes them disagree.
 `python3 scripts/config.py generate-variant-identity`, then commit them with
 `tunaos.toml`. A new variant also needs a `codename` and a `branding` table;
 the generators name any variant without one.
+
+### Primary identity and publish changes conflict during integration
+
+**Symptom:** The identity and publish branches conflict in
+`scripts/lib/tunaos_config.py` and `tests/test_fork_branding.py`.
+
+**Cause:** Both changes add validators at the same locations. The identity
+change removes the old codename table check. The publish change replaces the
+fixed vendor check with the resolved namespace check.
+
+**Fix:** Keep both sets of validators and the resolved vendor check. Do not
+restore the old codename table assertion. Run
+`tests/test_identity_publish_integration.py` with the identity and publish
+suites. It checks one primary config through the real writer and verifier on
+a test filesystem, without a legacy fork manifest. This is not image build,
+registry push, boot or install proof.

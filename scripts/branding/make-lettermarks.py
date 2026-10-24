@@ -15,10 +15,9 @@ Writes, per variant:
     system_files/usr/share/tunaos/lettermarks/<variant>.svg        light text, for dark screens
     system_files/usr/share/tunaos/lettermarks/<variant>-dark.svg   dark text, for light screens
 
-Needs the pinned requirements-branding.txt; fetches Baloo 2 at a pinned
-google/fonts commit, verified by SHA-256, into a cache. The output is
-committed and checked by scripts/branding/check-artwork.py; builds never run
-this.
+Uses the pinned Baloo 2 font vendored under scripts/branding/assets and
+verified by SHA-256. The output is committed and checked by
+scripts/branding/check-artwork.py; builds never run this.
 """
 
 import argparse
@@ -26,7 +25,6 @@ import hashlib
 import importlib.util
 import io
 import re
-import urllib.request
 from pathlib import Path
 
 import uharfbuzz as hb
@@ -39,11 +37,10 @@ REPO = Path(__file__).resolve().parents[2]
 LOGOS = REPO / "system_files/usr/share/tunaos/logos"
 OUT = REPO / "system_files/usr/share/tunaos/lettermarks"
 # Pinned so the committed lettermarks stay reproducible: Baloo 2 v1.700, the
-# only revision of this file in google/fonts (2021-11-25, #3981).
-FONT_URL = ("https://raw.githubusercontent.com/google/fonts/"
-            "8e0cd05881f3ae5e933ba4161103005a3e841ce0/ofl/baloo2/Baloo2%5Bwght%5D.ttf")
+# only revision of this file in google/fonts (2021-11-25, #3981). Keep its
+# OFL.txt license beside this vendored source.
+FONT_PATH = REPO / "scripts/branding/assets/Baloo2[wght].ttf"
 FONT_SHA256 = "d47a6852548059b1db49a1319d06d499d546c3fa2237cf9eee9c43c8abb025c2"
-CACHE = Path.home() / ".cache/tunaos-branding/Baloo2.ttf"
 WEIGHT = 800
 SIZE = 100  # font size in SVG units
 LIGHT, DARK = "#F4F7FB", "#0D1B2A"
@@ -54,14 +51,10 @@ _spec.loader.exec_module(tunaos_config)
 
 
 def font_bytes():
-    if not CACHE.is_file() or hashlib.sha256(CACHE.read_bytes()).hexdigest() != FONT_SHA256:
-        CACHE.parent.mkdir(parents=True, exist_ok=True)
-        with urllib.request.urlopen(FONT_URL, timeout=60) as r:
-            data = r.read()
-        if hashlib.sha256(data).hexdigest() != FONT_SHA256:
-            raise SystemExit(f"Baloo 2 download does not match the pinned SHA-256: {FONT_URL}")
-        CACHE.write_bytes(data)
-    tt = TTFont(str(CACHE))
+    data = FONT_PATH.read_bytes()
+    if hashlib.sha256(data).hexdigest() != FONT_SHA256:
+        raise SystemExit(f"Vendored Baloo 2 font does not match the pinned SHA-256: {FONT_PATH}")
+    tt = TTFont(io.BytesIO(data))
     inst = instantiateVariableFont(tt, {"wght": WEIGHT})
     buf = io.BytesIO()
     inst.save(buf)
