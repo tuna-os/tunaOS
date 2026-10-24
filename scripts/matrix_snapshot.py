@@ -1,5 +1,6 @@
 """Offline identity and count checks for the generated matrix snapshot pair."""
 
+import datetime
 import hashlib
 import importlib.util
 import json
@@ -41,7 +42,7 @@ def validate_snapshot(document: str, payload: dict, root: Path | None = None) ->
         raise ValueError("matrix snapshot identity mismatch; regenerate the pair together")
     context = payload.get("snapshot_context", {})
     if context.get("kind") == "historical-reconciliation":
-        expected = historical_notice(context["evaluation_date"])
+        expected = historical_notice(context.get("evaluation_date"))
         if expected not in document:
             raise ValueError("historical snapshot disclosure is missing or changed")
     if root is not None:
@@ -182,6 +183,12 @@ def _validate_retained(payload: dict) -> None:
 
 
 def historical_notice(date: str) -> str:
+    try:
+        datetime.date.fromisoformat(date)
+    except (TypeError, ValueError) as error:
+        raise ValueError(
+            "historical snapshot evaluation_date must be a valid YYYY-MM-DD date"
+        ) from error
     return (
         "<!-- BEGIN HISTORICAL SNAPSHOT -->\n"
         "> Historical reconciliation, evaluated on " + date
@@ -245,9 +252,21 @@ def validate_context(context: dict, root: Path) -> None:
         relative = Path(context.get("retained_inputs_path", ""))
         if relative.is_absolute() or ".." in relative.parts or relative.parts[:2] != ("docs", "matrix-snapshots"):
             raise ValueError("invalid retained input identity path")
+        expected_digest = context.get("retained_inputs_sha256")
+        if not isinstance(expected_digest, str) or not re.fullmatch(r"[0-9a-f]{64}", expected_digest):
+            raise ValueError("retained input digest must be a lowercase SHA-256")
+        candidate = root / relative
+        current = root
+        for part in relative.parts:
+            current /= part
+            if current.is_symlink():
+                raise ValueError("retained input identity path must not contain symlinks")
         try:
-            retained = (root / relative).read_bytes()
+            candidate.resolve().relative_to(root.resolve())
+            retained = candidate.read_bytes()
+        except ValueError as error:
+            raise ValueError("retained input identity path escapes the checkout") from error
         except OSError as error:
             raise ValueError(f"retained input is missing: {relative.as_posix()}") from error
-        if hashlib.sha256(retained).hexdigest() != context.get("retained_inputs_sha256"):
+        if hashlib.sha256(retained).hexdigest() != expected_digest:
             raise ValueError("retained input bytes changed")

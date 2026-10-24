@@ -185,6 +185,19 @@ def test_historical_warning_cannot_be_removed_or_resealed():
         validate_snapshot(document, payload)
 
 
+@pytest.mark.parametrize("evaluation_date", [None, 7, "not-a-date", "2026-02-30"])
+def test_historical_context_requires_a_valid_evaluation_date(evaluation_date):
+    document, payload = pair()
+    payload["snapshot_context"] = {
+        "kind": "historical-reconciliation",
+        "evaluation_date": evaluation_date,
+    }
+    payload["snapshot"] = snapshot_identity(document, payload)
+
+    with pytest.raises(ValueError, match="evaluation_date"):
+        validate_snapshot(document, payload)
+
+
 def test_retained_replay_is_offline_and_reproduces_committed_pair(monkeypatch):
     monkeypatch.chdir(ROOT)
     recorded = json.loads(RETAINED.read_text())["context"]["configuration_sha256"]
@@ -327,6 +340,25 @@ def test_actual_input_bytes_and_identity_paths_are_checked(tmp_path):
             validate_context(dict(context, retained_inputs_path=path), tmp_path)
     (tmp_path / "docs/matrix-snapshots/input.json").unlink()
     with pytest.raises(ValueError, match="retained input is missing"):
+        validate_context(context, tmp_path)
+
+
+@pytest.mark.parametrize("digest", [None, "", "0" * 63, "G" * 64])
+def test_retained_input_digest_shape_is_checked(tmp_path, digest):
+    context = dict(retained_context(tmp_path), retained_inputs_sha256=digest)
+    with pytest.raises(ValueError, match="digest"):
+        validate_context(context, tmp_path)
+
+
+def test_retained_input_symlink_is_rejected(tmp_path):
+    context = retained_context(tmp_path)
+    retained = tmp_path / context["retained_inputs_path"]
+    target = tmp_path / "outside.json"
+    target.write_bytes(retained.read_bytes())
+    retained.unlink()
+    retained.symlink_to(target)
+
+    with pytest.raises(ValueError, match="symlink"):
         validate_context(context, tmp_path)
 
 
