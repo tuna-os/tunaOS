@@ -19,6 +19,14 @@ provenance payload from another (test_mixed_snapshot_is_rejected) and
 validate_snapshot raises. Restore the configuration digest comparison in
 validate_context() and
 test_committed_pair_does_not_depend_on_current_configuration fails.
+Structural -- restore the shared `group: matrix-status` in
+.github/workflows/matrix-status.yml and
+test_pull_request_checks_do_not_cancel_each_other_or_publication fails.
+
+The PR check that runs check-matrix-snapshot.py must also run to completion.
+Its workflow shared one concurrency group across all events: 41 of the last 98
+pull_request runs ended cancelled on 2026-10-24, including this fix's own run
+40065011718.
 """
 
 from __future__ import annotations
@@ -284,3 +292,23 @@ def test_committed_pair_does_not_depend_on_current_configuration(tmp_path, monke
     validate_context(retained_context(tmp_path), tmp_path)
     validate_context({"kind": "live-collection",
                       "configuration_sha256": {name: "b" * 64 for name in CONFIGURATION_FILES}}, tmp_path)
+
+
+def test_pull_request_checks_do_not_cancel_each_other_or_publication():
+    import yaml
+    workflow = yaml.safe_load((ROOT / ".github/workflows/matrix-status.yml").read_text())
+    concurrency = workflow["concurrency"]
+    match = re.fullmatch(
+        r"matrix-status-\$\{\{ github\.event_name == 'pull_request' && github\.ref \|\| '(\w+)' \}\}",
+        concurrency["group"],
+    )
+    assert match, f"unexpected concurrency group {concurrency['group']!r}"
+
+    def group(event, ref):
+        return "matrix-status-" + (ref if event == "pull_request" else match[1])
+
+    publish = {group("schedule", "refs/heads/main"), group("workflow_dispatch", "refs/heads/main")}
+    assert len(publish) == 1, "publication runs must serialize on one group"
+    first, second = group("pull_request", "refs/pull/1/merge"), group("pull_request", "refs/pull/2/merge")
+    assert first != second and not {first, second} & publish
+    assert concurrency["cancel-in-progress"] == "${{ github.event_name == 'pull_request' }}"

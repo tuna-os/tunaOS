@@ -1989,3 +1989,16 @@ the check exit 1 on otherwise valid files. On 2026-10-24, 16 open PRs touched
 **Fix:** the recorded hashes stay sealed in the snapshot identity. Only
 `--inputs` replay compares them with the checkout. `--check-structure`
 catches board-shape drift from configuration.
+
+**Symptom:** the Matrix Status PR check ends `cancelled` with no jobs, even
+though no newer push was made to that PR.
+
+**Cause:** `matrix-status.yml` used one concurrency group, `matrix-status`,
+for every event. GitHub keeps only the newest pending run in a group, so a push
+to any PR cancelled every other pending PR run and could cancel a queued daily
+refresh. 41 of the last 98 `pull_request` runs ended cancelled on 2026-10-24,
+including run `40065011718` for #3839.
+
+**Fix:** PR runs group by `github.ref` and cancel only their own superseded
+runs. Schedule and dispatch runs still serialize in one `publish` group,
+because they force-push `automation/matrix-status`.
