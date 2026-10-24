@@ -157,6 +157,11 @@ class _BoundedResponse:
         keep receiving, each time with a fresh socket timeout.
         """
         remaining_time = self._budget.remaining_seconds()
+        isclosed = getattr(self._reader, "isclosed", None)
+        if callable(isclosed) and isclosed() is True:
+            # http.client drops its socket once the declared body is read; the
+            # EOF read1 below would do no receive, so no timeout is needed.
+            return b""
         timeout = min(self._idle_timeout, remaining_time)
         _set_response_timeout(self._response, self._reader, timeout)
         allowed = min(self._remaining, self._budget.remaining_bytes) + 1
