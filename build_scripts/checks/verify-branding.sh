@@ -196,7 +196,10 @@ for field in HOME_URL DOCUMENTATION_URL SUPPORT_URL BUG_REPORT_URL; do
 	DOCUMENTATION_URL) want_var=TUNAOS_DOCUMENTATION_URL ;;
 	SUPPORT_URL) want_var=TUNAOS_SUPPORT_URL ;;
 	BUG_REPORT_URL) want_var=TUNAOS_BUG_REPORT_URL ;;
-	*) fail "unsupported identity URL field: ${field}"; continue ;;
+	*)
+		fail "unsupported identity URL field: ${field}"
+		continue
+		;;
 	esac
 	want_url="${!want_var:-}"
 	fork_url=""
