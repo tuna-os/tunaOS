@@ -121,7 +121,7 @@ def vnc_capture(png):
             and shutil.which("vncdo") and shutil.which("socat")):
         return False
     bridge = subprocess.Popen(
-        ["socat", f"TCP-LISTEN:{vnc_port},reuseaddr,fork",
+        ["socat", f"TCP-LISTEN:{vnc_port},reuseaddr",
          f"UNIX-CONNECT:{vnc_sock}"],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
@@ -133,8 +133,9 @@ def vnc_capture(png):
         bridge.terminate()
         try:
             bridge.wait(timeout=5)
-        except Exception:
+        except subprocess.TimeoutExpired:
             bridge.kill()
+            bridge.wait()
     return os.path.exists(png) and os.path.getsize(png) > 0
 
 
@@ -537,7 +538,8 @@ for i in range(1, steps + 1):
                 # Primary action buttons ("Get Started", "Next", "Continue") sit near bottom right / center bottom
                 print("  # keyboard navigation exhausted — attempting VNC mouse click on primary action button", flush=True)
                 bridge = subprocess.Popen(
-                    ["socat", f"TCP-LISTEN:{vnc_port},reuseaddr,fork", f"UNIX-CONNECT:{vnc_sock}"],
+                    ["socat", f"TCP-LISTEN:{vnc_port},reuseaddr",
+                     f"UNIX-CONNECT:{vnc_sock}"],
                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 try:
                     time.sleep(1)
@@ -548,8 +550,9 @@ for i in range(1, steps + 1):
                     bridge.terminate()
                     try:
                         bridge.wait(timeout=5)
-                    except Exception:
+                    except subprocess.TimeoutExpired:
                         bridge.kill()
+                        bridge.wait()
 
 print(f"\n# walkthrough verification ({flavor}) — {len(frames)} frames, "
       f"strict={strict}\n", flush=True)

@@ -20,14 +20,12 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
-      - name: Install pinned OCR dependencies
+      - name: Install OCR dependencies
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
-            python3-pytest imagemagick=8:6.9.12.98+dfsg1-5.2build2 \
-            imagemagick-6.q16=8:6.9.12.98+dfsg1-5.2build2 \
-            tesseract-ocr=5.3.4-1build5 libtesseract5=5.3.4-1build5 \
-            tesseract-ocr-eng=1:4.1.0-2 tesseract-ocr-osd=1:4.1.0-2
+            python3-pytest imagemagick imagemagick-6.q16 \
+            tesseract-ocr libtesseract5 tesseract-ocr-eng tesseract-ocr-osd
           dpkg-query -W imagemagick imagemagick-6.q16 tesseract-ocr libtesseract5 tesseract-ocr-eng tesseract-ocr-osd
       - name: Verify and stage reviewed source and fixtures
         run: |
