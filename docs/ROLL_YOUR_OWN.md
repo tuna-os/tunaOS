@@ -42,8 +42,8 @@ This is the primary path. Fork, prune, edit, build.
 ### 1. Fork and clone
 
 ```bash
-gh repo fork tuna-os/tunaos --clone
-cd tunaos
+gh repo fork tuna-os/tunaOS --clone
+cd tunaOS
 ```
 
 ### 2. Prune: turn off what you don't want
@@ -643,7 +643,7 @@ tunaos/
 ```bash
 # ── Setup ──────────────────────────────────────────────────────
 brew install podman
-gh repo fork tuna-os/tunaos --clone && cd tunaos
+gh repo fork tuna-os/tunaOS --clone && cd tunaOS
 python3 scripts/lint_tools.py install --bin-dir "$HOME/.local/bin"
 export PATH="$HOME/.local/bin:$PATH"
 just setup

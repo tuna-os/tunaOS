@@ -55,7 +55,10 @@ remain outside formatter and lint ownership.
    assets. Query the official release with
    `gh api repos/OWNER/REPOSITORY/releases/tags/TAG --jq '.assets[] | [.name, .digest] | @tsv'`
    and copy each `sha256:...` digest into `toolchain/lint-tools.json` (without
-   the prefix); do not calculate hashes from a mirror.
+   the prefix); do not calculate hashes from a mirror. GitHub populates
+   `digest` for assets uploaded since mid-2025; if a release predates that and
+   reports `null`, download the official asset and hash it locally instead:
+   `gh release download TAG --repo OWNER/REPOSITORY --pattern 'ASSET' --output - | sha256sum`.
 2. Update the version, tag, asset names, archive members and exact version
    regular expression together.
 3. Run `python3 -m pytest tests/test_lint_tools.py`, bootstrap the updated
