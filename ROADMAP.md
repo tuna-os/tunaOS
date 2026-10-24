@@ -252,6 +252,11 @@ Q4 gates rather than left behind an elapsed checkpoint date.
 
 **Theme**: Enterprise readiness, community governance, ecosystem integration.
 
+Infrastructure roadmap currency (#3230): follow the [quarterly review and P0
+escalation procedure](docs/INFRASTRUCTURE-ROADMAP-CURRENCY.md). The weekly
+Infrastructure roadmap currency workflow derives freshness and escalation
+candidates from source repositories; release claims require linked evidence.
+
 **Evidence refresh (2026-10-23)**: milestone #3 reports 11 closed trackers and
 0 open trackers, but issue closure is not completion evidence. The operative
 contract remains [Q4-MATURE-DEFINITION.md](Q4-MATURE-DEFINITION.md): each claim

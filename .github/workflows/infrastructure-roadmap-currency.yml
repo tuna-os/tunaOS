@@ -1,0 +1,23 @@
+name: Infrastructure roadmap currency
+on:
+  schedule:
+    - cron: '20 9 * * 1'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate currency report
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 scripts/infrastructure-roadmap-currency.py > infrastructure-roadmap-currency.md
+          cat infrastructure-roadmap-currency.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: infrastructure-roadmap-currency
+          path: infrastructure-roadmap-currency.md
+          retention-days: 30
