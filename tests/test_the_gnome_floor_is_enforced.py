@@ -7,6 +7,7 @@ GNOME 50 nor an unknown version can pass through a bootstrap waiver.
 
 from __future__ import annotations
 
+from functools import cache
 import importlib.util
 import os
 import re
@@ -21,13 +22,16 @@ yaml = pytest.importorskip("yaml")
 ROOT = Path(__file__).resolve().parents[1]
 CHECK = ROOT / "build_scripts" / "checks" / "verify-desktop-experience.sh"
 MANIFEST = ROOT / "manifests" / "desktops" / "gnome.yaml"
-CONFIG_SPEC = importlib.util.spec_from_file_location(
-    "gnome_floor_tunaos_config", ROOT / "scripts/lib/tunaos_config.py"
-)
-if CONFIG_SPEC is None or CONFIG_SPEC.loader is None:
-    raise RuntimeError("cannot load scripts/lib/tunaos_config.py")
-tunaos_config = importlib.util.module_from_spec(CONFIG_SPEC)
-CONFIG_SPEC.loader.exec_module(tunaos_config)
+@cache
+def _primary_config():
+    spec = importlib.util.spec_from_file_location(
+        "gnome_floor_tunaos_config", ROOT / "scripts/lib/tunaos_config.py"
+    )
+    if spec is None or spec.loader is None:
+        raise RuntimeError("cannot load scripts/lib/tunaos_config.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.load(ROOT / "tunaos.toml")
 
 
 def _function_source(name: str) -> str:
@@ -86,15 +90,13 @@ def _run_floor(tmp_path: Path, floor: int, *, fakes: dict[str, str], env: dict |
 
 
 def test_the_floor_is_fifty_one():
-    primary = tunaos_config.load(ROOT / "tunaos.toml")
+    primary = _primary_config()
     assert primary["desktops"]["gnome"]["minimum_version"] == 51
     assert _manifest_floor() == 51
 
 
 def test_the_script_and_generated_manifest_match_the_primary_config():
-    primary_floor = tunaos_config.load(
-        ROOT / "tunaos.toml"
-    )["desktops"]["gnome"]["minimum_version"]
+    primary_floor = _primary_config()["desktops"]["gnome"]["minimum_version"]
     assert _script_floor() == _manifest_floor() == primary_floor, (
         "the GNOME floor drifted from authoritative tunaos.toml; regenerate "
         "the desktop manifest and update the image contract together"

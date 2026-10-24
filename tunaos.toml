@@ -2142,9 +2142,9 @@ build_image = true
 id = "gnome"
 stage = 2
 platforms = ["linux/amd64", "linux/arm64"]
-# Off: Debian 13 trixie ships GNOME 48.7 and the floor is 51
-# (manifests/desktops/gnome.yaml minimum_version), so this flavor
-# cannot ship a conforming desktop from its own base.
+# Off: Debian 13 trixie ships GNOME 48.7 and the authoritative
+# desktops.gnome.minimum_version policy in tunaos.toml requires 51, so this
+# flavor cannot ship a conforming desktop from its own base.
 #
 # Backporting was measured, not assumed. The sid -> trixie closure
 # for GNOME 50 is 165 source packages, 122 of them Rust crates, and
