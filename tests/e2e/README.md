@@ -34,6 +34,15 @@ command output and every passed, failed, or skipped stage in
 Cleanup always runs; a cleanup failure is recorded without replacing the
 first lifecycle failure.
 
+A passing verdict is enforced twice. The harness accepts a boot stage only
+when it returns the booted registry deployment for the expected digest and a
+passed runtime desktop contract, and it passes only when all eight stages,
+including cleanup, passed. The schema independently rejects a `passed`
+verdict with any failed or skipped stage, with a missing stage, with a boot
+stage that lacks booted-deployment proof, or with mutable or malformed
+identities. Failed reports keep rejected inputs verbatim, so they stay
+schema-valid and visible.
+
 ```bash
 scripts/installed-lifecycle-pilot.py \
   --disk installed-a.qcow2 \
