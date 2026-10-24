@@ -66,3 +66,6 @@ tests/bats/test_root_tmp/
 /manifests/desktops/*.yaml
 /manifests/desktop-plans/
 /manifests/desktop-contracts/
+
+# Stable advisory lock used by atomic package authoring (never remove while in use).
+.*.packages.lock

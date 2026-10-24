@@ -4,7 +4,14 @@
 > Tracking issue: [#1137](https://github.com/tuna-os/tunaOS/issues/1137) (Fedora Magazine guest post pitch ahead of Fedora 45).
 > Prepared: 2026-08-12. Suggested pitch window: August 2026 for a late-Sept/Oct 2026 slot (Magazine writers pitch 4–6 weeks ahead).
 
-## Pitch email (≈300 words, submission-ready)
+> Before submission, complete the [Fedora outreach readiness review](FEDORA-OUTREACH-READINESS.md). Recheck this historical draft against the candidate image. Its preparation date does not establish current readiness.
+
+> Use the [release-window handoff](FEDORA45-RELEASE-OUTREACH.md) for project
+> context and replacement facts for the release notes. Rework the historical copy
+> below before use; Bonito is not an official Fedora flavor. Coordinate one
+> submission through #1137 and check the submission route for the Magazine.
+
+## Historical pitch email — revise before submission
 
 **Subject: Guest post pitch — "Bonito: Fedora's newest immutable desktop flavor"**
 

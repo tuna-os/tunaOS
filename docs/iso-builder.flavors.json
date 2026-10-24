@@ -1,0 +1,151 @@
+{
+  "schema_version": 1,
+  "kind": "builder-flavor-metadata",
+  "flavors": [
+    {
+      "id": "base",
+      "desktop": "none",
+      "edition": "standard"
+    },
+    {
+      "id": "base-hwe",
+      "desktop": "none",
+      "edition": "hwe"
+    },
+    {
+      "id": "base-nvidia",
+      "desktop": "none",
+      "edition": "nvidia"
+    },
+    {
+      "id": "cosmic",
+      "desktop": "cosmic",
+      "edition": "standard"
+    },
+    {
+      "id": "cosmic-cachyos",
+      "desktop": "cosmic",
+      "edition": "cachyos"
+    },
+    {
+      "id": "cosmic-hwe",
+      "desktop": "cosmic",
+      "edition": "hwe"
+    },
+    {
+      "id": "cosmic-nvidia",
+      "desktop": "cosmic",
+      "edition": "nvidia"
+    },
+    {
+      "id": "gnome",
+      "desktop": "gnome",
+      "edition": "standard"
+    },
+    {
+      "id": "gnome-asahi",
+      "desktop": "gnome",
+      "edition": "asahi"
+    },
+    {
+      "id": "gnome-cachyos",
+      "desktop": "gnome",
+      "edition": "cachyos"
+    },
+    {
+      "id": "gnome-hwe",
+      "desktop": "gnome",
+      "edition": "hwe"
+    },
+    {
+      "id": "gnome-nvidia",
+      "desktop": "gnome",
+      "edition": "nvidia"
+    },
+    {
+      "id": "gnome-nvidia-hwe",
+      "desktop": "gnome",
+      "edition": "nvidia-hwe"
+    },
+    {
+      "id": "gnome-t2",
+      "desktop": "gnome",
+      "edition": "t2"
+    },
+    {
+      "id": "gnome-zfs",
+      "desktop": "gnome",
+      "edition": "zfs"
+    },
+    {
+      "id": "kde",
+      "desktop": "kde",
+      "edition": "standard"
+    },
+    {
+      "id": "kde-cachyos",
+      "desktop": "kde",
+      "edition": "cachyos"
+    },
+    {
+      "id": "kde-hwe",
+      "desktop": "kde",
+      "edition": "hwe"
+    },
+    {
+      "id": "kde-nvidia",
+      "desktop": "kde",
+      "edition": "nvidia"
+    },
+    {
+      "id": "niri",
+      "desktop": "niri",
+      "edition": "standard"
+    },
+    {
+      "id": "niri-cachyos",
+      "desktop": "niri",
+      "edition": "cachyos"
+    },
+    {
+      "id": "niri-hwe",
+      "desktop": "niri",
+      "edition": "hwe"
+    },
+    {
+      "id": "niri-nvidia",
+      "desktop": "niri",
+      "edition": "nvidia"
+    },
+    {
+      "id": "pantheon",
+      "desktop": "pantheon",
+      "edition": "standard"
+    },
+    {
+      "id": "tuna",
+      "desktop": "tuna",
+      "edition": "standard"
+    },
+    {
+      "id": "xfce",
+      "desktop": "xfce",
+      "edition": "standard"
+    },
+    {
+      "id": "xfce-cachyos",
+      "desktop": "xfce",
+      "edition": "cachyos"
+    },
+    {
+      "id": "xfce-hwe",
+      "desktop": "xfce",
+      "edition": "hwe"
+    },
+    {
+      "id": "xfce-nvidia",
+      "desktop": "xfce",
+      "edition": "nvidia"
+    }
+  ]
+}

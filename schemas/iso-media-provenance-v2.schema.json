@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://tunaos.org/schemas/iso-media-provenance-v2.schema.json",
   "title": "ISO media provenance v2 structural contract",
-  "$comment": "Structural validity is not producer authentication or qualification. Expected context must come from an independently trusted collector.",
+  "$comment": "Structural validity is not producer authentication or qualification. Expected context must come from an independently trusted collector. Additive media-location union: prior archive-only v2 consumers reject r2-chunked-candidate; browser/native receipt versions do not change. No downgrade to a fabricated archive member is permitted.",
   "oneOf": [
     {
       "$ref": "#/$defs/browser"
@@ -518,27 +518,6 @@
         "receiptPath"
       ]
     },
-    "producer": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "run": {
-          "$ref": "#/$defs/run"
-        },
-        "artifact": {
-          "$ref": "#/$defs/artifact"
-        },
-        "receiptSha256": {
-          "type": "string",
-          "pattern": "^sha256:[0-9a-f]{64}$"
-        }
-      },
-      "required": [
-        "run",
-        "artifact",
-        "receiptSha256"
-      ]
-    },
     "context": {
       "type": "object",
       "additionalProperties": false,
@@ -664,6 +643,126 @@
         "kind",
         "browserProducer",
         "nativeProducer"
+      ]
+    },
+    "githubArchiveProducer": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "run": {
+          "$ref": "#/$defs/run"
+        },
+        "artifact": {
+          "$ref": "#/$defs/artifact"
+        },
+        "receiptSha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "run",
+        "artifact",
+        "receiptSha256"
+      ]
+    },
+    "r2MediaTransport": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "r2-chunked-candidate"
+        },
+        "endpoint": {
+          "type": "string",
+          "pattern": "^https://[0-9a-f]{32}\\.r2\\.cloudflarestorage\\.com$"
+        },
+        "bucket": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$"
+        },
+        "manifestKey": {
+          "type": "string",
+          "pattern": "^browser-iso/candidates/[1-9][0-9]*/1/yellowfin-gnome/s1/manifest\\.json$"
+        },
+        "manifestSha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "media": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/media"
+            },
+            {
+              "properties": {
+                "sizeBytes": {
+                  "maximum": 10737418240
+                }
+              }
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "endpoint",
+        "bucket",
+        "manifestKey",
+        "manifestSha256",
+        "media"
+      ]
+    },
+    "r2MediaProducer": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "run": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/run"
+            },
+            {
+              "properties": {
+                "repository": {
+                  "const": "tuna-os/iso-builder"
+                },
+                "workflowPath": {
+                  "const": ".github/workflows/ci.yml"
+                },
+                "runAttempt": {
+                  "const": 1
+                }
+              }
+            }
+          ]
+        },
+        "artifact": {
+          "$ref": "#/$defs/nativeArtifact"
+        },
+        "receiptSha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "mediaTransport": {
+          "$ref": "#/$defs/r2MediaTransport"
+        }
+      },
+      "required": [
+        "run",
+        "artifact",
+        "receiptSha256",
+        "mediaTransport"
+      ]
+    },
+    "producer": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/githubArchiveProducer"
+        },
+        {
+          "$ref": "#/$defs/r2MediaProducer"
+        }
       ]
     }
   }
