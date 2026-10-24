@@ -19,8 +19,9 @@ def full_line_comments(source):
 
 def test_package_edit_preserves_all_primary_section_comments():
     source = (ROOT / 'tunaos.toml').read_bytes()
-    source = source.replace(b'"gnome-base/gnome-light",',
-                            b'"gnome-base/gnome-light", # inline edit sentinel')
+    anchor = b'"gnome-base/gnome-light",'
+    assert source.count(anchor) == 1
+    source = source.replace(anchor, anchor + b' # inline edit sentinel', 1)
     document = config.validate(config.parse(source))
     scope = {'gnome:emerge': ('gnome', 'emerge')}
     resolved = {'gnome:emerge': 'sys-process/tunaos-comment-test'}
@@ -40,6 +41,8 @@ def test_comment_only_edits_do_not_change_generated_adapters():
     source = (ROOT / 'tunaos.toml').read_bytes()
     before = config.validate(config.parse(source))
     after = config.validate(config.parse(b'# Additional author guidance.\n' + source))
+    assert before == after
+    # Unsorted JSON also pins key order, which the generated adapters inherit.
     assert json.dumps(before, ensure_ascii=False) == json.dumps(after, ensure_ascii=False)
     for render in (config.render, builder.render, builder.render_flavors,
                    config.flatpak_policy().render):
