@@ -88,9 +88,17 @@ def load_retained_inputs(path):
     naming what is wrong, so callers handle one error type instead of
     KeyError/TypeError from deep inside.
     """
+    candidate = Path(path).resolve()
     try:
-        payload = json.loads(Path(path).read_text())
-    except (OSError, json.JSONDecodeError) as error:
+        relative = candidate.relative_to(Path.cwd().resolve())
+    except ValueError as error:
+        raise ValueError("retained input path must be inside the repository checkout") from error
+    if relative.parts[:2] != ("docs", "matrix-snapshots"):
+        raise ValueError("retained input must be stored in docs/matrix-snapshots")
+    try:
+        raw = candidate.read_bytes()
+        payload = json.loads(raw)
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
         raise ValueError(f"unreadable retained matrix input {path}: {error}") from error
     if not isinstance(payload, dict):
         raise ValueError("retained matrix input must be a JSON object")
@@ -107,14 +115,8 @@ def load_retained_inputs(path):
     for name, digest in payload["context"]["configuration_sha256"].items():
         if configuration_digest(name) != digest:
             raise ValueError(f"retained input configuration changed: {name}")
-    try:
-        relative = Path(path).resolve().relative_to(Path.cwd().resolve())
-    except ValueError as error:
-        raise ValueError("retained input path must be inside the repository checkout") from error
-    if relative.parts[:2] != ("docs", "matrix-snapshots"):
-        raise ValueError("retained input must be stored in docs/matrix-snapshots")
     payload["context"]["retained_inputs_path"] = relative.as_posix()
-    payload["context"]["retained_inputs_sha256"] = hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    payload["context"]["retained_inputs_sha256"] = hashlib.sha256(raw).hexdigest()
     return payload
 
 
