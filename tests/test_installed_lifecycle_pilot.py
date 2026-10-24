@@ -141,6 +141,11 @@ def schema_errors(document):
     return list(Draft202012Validator(SCHEMA).iter_errors(document))
 
 
+def command_schema_errors(events):
+    document = {**SCHEMA["properties"]["commands"], "$defs": SCHEMA["$defs"]}
+    return list(Draft202012Validator(document).iter_errors(events))
+
+
 def test_success_is_exact_a_to_b_to_a_and_schema_validates(tmp_path):
     evidence, passed = run_pilot(config(tmp_path))
 
@@ -189,13 +194,17 @@ def test_invalid_identity_is_rejected_before_disk_preparation(tmp_path, override
     evidence, passed = run_pilot(config(tmp_path, **overrides))
 
     assert not passed
-    backend = FakeBackend.instances[-1]
-    assert backend.calls == ["cleanup"]
+    assert FakeBackend.instances == []  # Rejected before any backend exists.
     assert evidence["result"]["first_failure"]["category"] == category
     stages = stage_map(evidence)
     assert stages["preflight"]["outcome"] == "failed"
     assert stages["prepare_disk"]["outcome"] == "skipped"
-    assert stages["cleanup"]["outcome"] == "passed"
+    assert stages["cleanup"] == {
+        "id": "cleanup",
+        "required": True,
+        "outcome": "skipped",
+        "details": {"reason": "blocked_by:preflight"},
+    }
 
 
 def test_unexpected_empty_exception_message_still_produces_valid_evidence(tmp_path, monkeypatch):
@@ -459,6 +468,39 @@ def test_retained_non_utf8_output_is_bounded_after_json_serialization():
     assert truncated
     assert len(json.dumps(value).encode()) - 2 <= MODULE.MAX_LOG_BYTES
     assert "output truncated" in value
+
+
+def unexecutable_file(directory):
+    path = directory / "not-executable"
+    path.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    path.chmod(0o600)
+    return path
+
+
+@pytest.mark.parametrize(
+    ("make_argv0", "category"),
+    [
+        (lambda directory: directory / "absent-binary", "missing_dependency"),
+        (unexecutable_file, "command_failed"),
+    ],
+)
+def test_commands_that_never_start_are_recorded_and_classified(
+    tmp_path, make_argv0, category
+):
+    events = []
+
+    with pytest.raises(MODULE.PilotFailure) as error:
+        MODULE.CommandRunner(events).run(
+            [str(make_argv0(tmp_path))], timeout=5, event_name="launch"
+        )
+
+    assert error.value.category == category
+    assert "could not run" in str(error.value)
+    assert len(events) == 1
+    assert events[0]["name"] == "launch"
+    assert events[0]["returncode"] is None
+    assert events[0]["stderr"]
+    assert not command_schema_errors(events)
 
 
 @pytest.mark.parametrize(

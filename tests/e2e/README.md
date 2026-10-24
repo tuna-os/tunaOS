@@ -31,8 +31,10 @@ tags, equal A/B digests, another target or architecture, an unverified disk
 digest, and execution without `--confirm-disposable-vm`. It records bounded
 command output and every passed, failed, or skipped stage in
 [`schemas/installed-lifecycle-evidence-v1.schema.json`](../../schemas/installed-lifecycle-evidence-v1.schema.json).
-Cleanup always runs; a cleanup failure is recorded without replacing the
-first lifecycle failure.
+Statically rejected inputs are refused before a backend is constructed, so
+their cleanup stage is skipped because nothing was created. Once a backend
+exists, cleanup always runs, including after an interrupt; a cleanup failure
+is recorded without replacing the first lifecycle failure.
 
 During execution, `installed-lifecycle-evidence.partial.json` is only an
 in-progress recovery checkpoint. It can contain pending stages and an

@@ -251,6 +251,8 @@ class CommandRunner:
         event_name: str | None = None,
     ) -> CommandResult:
         started = time.monotonic()
+        launch_error: OSError | None = None
+        returncode: int | None
         with tempfile.TemporaryFile() as stdout_file, tempfile.TemporaryFile() as stderr_file:
             try:
                 completed = subprocess.run(
@@ -266,10 +268,16 @@ class CommandRunner:
             except subprocess.TimeoutExpired:
                 returncode = 124
                 timed_out = True
+            except OSError as error:  # The command never started; keep the evidence.
+                returncode = None
+                timed_out = False
+                launch_error = error
             stdout_file.seek(0)
             stderr_file.seek(0)
             stdout, stdout_truncated = bounded_file_text(stdout_file)
             stderr, stderr_truncated = bounded_file_text(stderr_file)
+        if launch_error is not None:
+            stderr = stderr or error_message(launch_error)
 
         event = {
             "name": event_name or Path(argv[0]).name,
@@ -282,6 +290,16 @@ class CommandRunner:
             "stderr_truncated": stderr_truncated,
         }
         self.events.append(event)
+        if launch_error is not None:
+            category = (
+                "missing_dependency"
+                if isinstance(launch_error, (FileNotFoundError, NotADirectoryError))
+                else "command_failed"
+            )
+            raise PilotFailure(
+                category,
+                f"{event['name']} could not run: {error_message(launch_error)}",
+            ) from launch_error
         if timed_out:
             raise PilotFailure("timeout", f"command timed out: {event['name']}")
         if check and returncode != 0:
@@ -881,7 +899,7 @@ def execute_pilot(
 ) -> tuple[dict[str, Any], bool]:
     evidence = new_evidence(config)
     stages = {stage["id"]: stage for stage in evidence["stages"]}
-    backend = backend_factory(config, evidence["commands"])
+    backend: Any = None
     first_failure: dict[str, str] | None = None
 
     def run_stage(stage_id: str, action: Callable[[], dict[str, Any]]) -> bool:
@@ -921,9 +939,15 @@ def execute_pilot(
 
             if progress is not None:
                 progress(evidence)
+
     def preflight() -> dict[str, Any]:
+        nonlocal backend
         validate_static(config)
+        backend = backend_factory(config, evidence["commands"])
         return backend.preflight()
+
+    def prepare_disk() -> dict[str, Any]:
+        return backend.prepare_disk()
 
     def cold_boot_a() -> dict[str, Any]:
         backend.start_vm()
@@ -946,7 +970,7 @@ def execute_pilot(
 
     functional_stages: list[tuple[str, Callable[[], dict[str, Any]]]] = [
         ("preflight", preflight),
-        ("prepare_disk", backend.prepare_disk),
+        ("prepare_disk", prepare_disk),
         ("cold_boot_a", cold_boot_a),
         ("stage_update_b", stage_update_b),
         ("warm_boot_b", warm_boot_b),
@@ -964,7 +988,11 @@ def execute_pilot(
             if not run_stage(stage_id, action):
                 blocked_by = stage_id
     finally:
-        run_stage("cleanup", backend.cleanup)
+        if backend is None:  # Static rejection created nothing to clean up.
+            stages["cleanup"]["outcome"] = "skipped"
+            stages["cleanup"]["details"] = {"reason": f"blocked_by:{blocked_by or 'preflight'}"}
+        else:
+            run_stage("cleanup", backend.cleanup)
 
     evidence["outcomes"] = {
         "cold": stages["cold_boot_a"]["outcome"],
