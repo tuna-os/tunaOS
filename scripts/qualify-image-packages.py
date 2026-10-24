@@ -231,8 +231,12 @@ def adapter_rows(data: bytes) -> list[list[str]]:
         lines = data.decode("utf-8").splitlines()
     except UnicodeError as exc:
         raise QualificationError("image-packages.tsv: invalid UTF-8") from exc
-    return [line.split("\t") for line in lines if line and not line.startswith("#")]
-
+    rows = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#"):
+            rows.append(stripped.split("\t"))
+    return rows
 
 def validate_package_name(manager: str, package: str) -> None:
     if manager == "emerge":
@@ -346,18 +350,24 @@ def local_image(log: CommandLog, reference: str) -> dict[str, str]:
     return {"imageId": image_id, "parentImageId": parent_id}
 
 
-def image_identity(log: CommandLog, image_id: str) -> dict:
-    prefix = f"containers-storage:{image_id}"
-    manifest = checked(log, ["skopeo", "inspect", "--raw", prefix], what=f"manifest {image_id}")
-    config = checked(log, ["skopeo", "inspect", "--config", prefix], what=f"config {image_id}")
+def image_identity(log: CommandLog, reference: str, image_id: str) -> dict:
+    prefix = f"containers-storage:{reference}"
+    manifest = checked(log, ["skopeo", "inspect", "--raw", prefix],
+                       what=f"manifest {reference}")
+    config = checked(log, ["skopeo", "inspect", "--config", prefix],
+                     what=f"config {reference}")
+    require(
+        local_image(log, reference)["imageId"] == image_id,
+        f"local image {reference}: reference changed during inspection",
+    )
     try:
         parsed = json.loads(config, object_pairs_hook=unique_object)
     except (UnicodeError, json.JSONDecodeError) as exc:
-        raise QualificationError(f"config {image_id}: invalid JSON") from exc
-    require(isinstance(parsed, dict), f"config {image_id}: expected object")
+        raise QualificationError(f"config {reference}: invalid JSON") from exc
+    require(isinstance(parsed, dict), f"config {reference}: expected object")
     require(
         parsed.get("os") == "linux" and parsed.get("architecture") == "amd64",
-        f"config {image_id}: expected linux/amd64",
+        f"config {reference}: expected linux/amd64",
     )
     return {
         "manifestDigest": sha256(manifest),
@@ -482,7 +492,7 @@ def verify_cell(plan: dict, cell: dict, root: Path, source: dict, log: CommandLo
             require(isinstance(target, str) and target, f"{route}.{role}: resolver omitted target")
             local = local_image(log, reference)
             image_id = local["imageId"]
-            identity = image_identity(log, image_id)
+            identity = image_identity(log, reference, image_id)
             image_record = {
                 "role": role,
                 "flavor": record["flavor"],

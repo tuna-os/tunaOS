@@ -108,19 +108,29 @@ def test_plan_requires_all_six_routes_pinned_bases_and_overlay():
         MODULE.validate_plan(missing)
 
     mutable = copy.deepcopy(valid)
-    mutable["cells"][0]["baseImage"] = "registry.example/el10:latest"
+    next(cell for cell in mutable["cells"] if cell["route"] == "el10")[
+        "baseImage"
+    ] = "registry.example/el10:latest"
     with pytest.raises(MODULE.QualificationError, match="digest-pinned"):
         MODULE.validate_plan(mutable)
 
     transported = copy.deepcopy(valid)
-    transported["cells"][0]["baseImage"] = "docker://" + transported["cells"][0]["baseImage"]
+    el10 = next(cell for cell in transported["cells"] if cell["route"] == "el10")
+    el10["baseImage"] = "docker://" + el10["baseImage"]
     with pytest.raises(MODULE.QualificationError, match="transport-less"):
         MODULE.validate_plan(transported)
 
     no_overlay = copy.deepcopy(valid)
-    del no_overlay["cells"][0]["images"]["modifiedOverlay"]
+    el10 = next(cell for cell in no_overlay["cells"] if cell["route"] == "el10")
+    del el10["images"]["modifiedOverlay"]
     with pytest.raises(MODULE.QualificationError, match="invalid fields"):
         MODULE.validate_plan(no_overlay)
+
+
+def test_adapter_rows_ignore_incidental_whitespace_and_indented_comments():
+    assert MODULE.adapter_rows(
+        b"  \n \t# generated adapter\n  guppy\temerge\tadd\tapp-misc/jq  \n"
+    ) == [["guppy", "emerge", "add", "app-misc/jq"]]
 
 
 def git(root, *args):
@@ -263,7 +273,7 @@ class FakeLog:
                 output = f"manifest-{ref}".encode()
             return subprocess.CompletedProcess(args, 0, output, b"")
         if args[:3] == ["skopeo", "inspect", "--config"]:
-            reference = reference_for_id(args[3].removeprefix("containers-storage:"))
+            reference = args[3].removeprefix("containers-storage:")
             architecture = "arm64" if reference == self.mismatched_platform_ref else "amd64"
             output = json.dumps({"os": "linux", "architecture": architecture}).encode()
             return subprocess.CompletedProcess(args, 0, output, b"")
