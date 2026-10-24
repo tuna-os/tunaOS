@@ -90,26 +90,37 @@ def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
-def _fit_utf8(text: str, limit: int) -> str:
-    encoded = text.encode("utf-8")
-    if len(encoded) <= limit:
+def _serialized_text_size(text: str) -> int:
+    return len(json.dumps(text).encode("utf-8")) - 2
+
+
+def _fit_serialized_text(text: str, limit: int, *, from_end: bool = False) -> str:
+    if _serialized_text_size(text) <= limit:
         return text
-    return encoded[:limit].decode("utf-8", errors="ignore")
+    low, high = 0, len(text)
+    while low < high:
+        size = (low + high + 1) // 2
+        candidate = text[-size:] if from_end else text[:size]
+        if _serialized_text_size(candidate) <= limit:
+            low = size
+        else:
+            high = size - 1
+    return text[-low:] if from_end and low else text[:low]
 
 
 def bounded_text(raw: bytes, limit: int = MAX_LOG_BYTES) -> tuple[str, bool]:
     decoded = raw.decode("utf-8", errors="replace")
-    if len(decoded.encode("utf-8")) <= limit:
+    if _serialized_text_size(decoded) <= limit:
         return decoded, False
-    marker = "\n...[output truncated by installed lifecycle pilot]...\n"
-    budget = max(0, limit - len(marker.encode("utf-8")))
-    first = budget // 2
-    prefix = _fit_utf8(raw[:first].decode("utf-8", errors="replace"), first)
-    remaining = budget - len(prefix.encode("utf-8"))
-    suffix = _fit_utf8(
-        raw[-remaining:].decode("utf-8", errors="replace") if remaining else "",
-        remaining,
+    marker = _fit_serialized_text(
+        "\n...[output truncated by installed lifecycle pilot]...\n",
+        limit,
     )
+    budget = max(0, limit - _serialized_text_size(marker))
+    prefix = _fit_serialized_text(decoded, budget // 2)
+    suffix_source = decoded[len(prefix):]
+    remaining = budget - _serialized_text_size(prefix)
+    suffix = _fit_serialized_text(suffix_source, remaining, from_end=True)
     return prefix + marker + suffix, True
 
 
