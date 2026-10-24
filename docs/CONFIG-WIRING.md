@@ -10,7 +10,7 @@ of their sections. Unknown fields are errors; they do not enable features.
 | Input | Generated adapter / reader | Effect |
 |---|---|---|
 | `build`, `variants`, `iso_groups`, `sibling_images`, `tuna_rollout` | `scripts/lib/tunaos_config.py:matrix` → `.github/build-config.yml` | Build selection and reporting; not proof of publication or boot qualification |
-| `build.publish` | `scripts/lib/publish-destination.sh` (via `scripts/build-image-inner.sh`, `scripts/published-image-ref.sh`, `scripts/publish-destination.sh`), `.github/workflows/build-variant.yml` | Registry/namespace selection; credentials and permissions remain separate |
+| `build.publish` | `scripts/publish-destination.sh` (CLI); `scripts/lib/publish-destination.sh` (library sourced by `scripts/build-image-inner.sh` and `scripts/published-image-ref.sh`); `.github/workflows/build-variant.yml` | Registry/namespace selection; credentials and permissions remain separate |
 | Variant `base_image` | `scripts/get-base-image.sh` | Base image used by the build; Renovate edits the TOML pin |
 | Variant/flavor IDs and stages | `scripts/resolve-flavor.sh`, `.github/workflows/build-variant.yml` | Existing Containerfile routing and workflow stages; adding a name does not implement a new route |
 | `package_groups`, `desktops` | `scripts/lib/tunaos_packages.py:desktop_outputs` → `manifests/desktops/*.yaml` → `build_scripts/desktop/install-desktop.sh` | Desktop packages, repositories, greeter and named operations during image construction |

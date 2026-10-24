@@ -4,13 +4,12 @@ import hashlib
 import json
 from pathlib import Path
 import re
-import sys
+
+from scripts.lib import package_authoring as author
+from scripts.lib import tunaos_config as config
+from scripts.lib import iso_builder_config as builder
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / 'scripts'))
-from lib import package_authoring as author
-from lib import tunaos_config as config
-from lib import iso_builder_config as builder
 
 
 def full_line_comments(source):
@@ -75,8 +74,9 @@ def test_renovate_pin_match_preserves_comments_and_unrelated_bytes():
                    if item.get('managerFilePatterns') == [r'/^tunaos\.toml$/'])
     # Convert named captures only; test the checked-in manager, not a parallel regex.
     pattern = re.sub(r'\(\?<([A-Za-z][A-Za-z0-9_]*)>', r'(?P<\1>', manager['matchStrings'][0])
-    source = (ROOT / 'tunaos.toml').read_text()
-    document = config.parse(source)
+    source_bytes = (ROOT / 'tunaos.toml').read_bytes()
+    source = source_bytes.decode('utf-8')
+    document = config.parse(source_bytes)
     old = document['variants']['yellowfin']['base_image']
     source = source.replace(f'base_image = "{old}"',
                             f'# Pin guidance sentinel\nbase_image = "{old}" # trailing pin guidance', 1)
@@ -89,4 +89,4 @@ def test_renovate_pin_match_preserves_comments_and_unrelated_bytes():
     assert edited[:start] == source[:start] and edited[start + len(digest):] == source[end:]
     expected = copy.deepcopy(document)
     expected['variants']['yellowfin']['base_image'] = old.split('@')[0] + '@' + digest
-    assert config.validate(config.parse(edited)) == expected
+    assert config.validate(config.parse(edited.encode('utf-8'))) == expected
