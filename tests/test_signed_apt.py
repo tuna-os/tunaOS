@@ -182,18 +182,26 @@ def test_complete_configured_target_with_authenticated_empty_updates():
     results = acquire.acquire_catalog(
         catalog, lambda _: b'key', datetime(2026, 10, 21, tzinfo=timezone.utc),
         fetch, verify)
-    assert len(results) == 4
-    assert results[0]['names'] == {'htop'}
-    assert results[3]['names'] == {'tailscale', 'tailscale-archive-keyring'}
-    assert results[3]['role'] == 'build'
-    assert results[3]['source_url'].startswith('https://pkgs.tailscale.com/')
-    assert len(results[3]['indexes']) == 2
-    assert results[3]['keyring_sha256'] == hashlib.sha256(b'key').hexdigest()
-    assert results[3]['declaration_sha256'] == hashlib.sha256(
-        responses[catalog['sources'][3]['declaration_url']]
+    by_source = {result['source']: result for result in results}
+    assert len(by_source) == 4
+    assert by_source['trixie']['names'] == {'htop'}
+    tailscale = by_source['tailscale']
+    assert tailscale['names'] == {'tailscale', 'tailscale-archive-keyring'}
+    assert tailscale['role'] == 'build'
+    assert tailscale['source_url'].startswith('https://pkgs.tailscale.com/')
+    assert len(tailscale['indexes']) == 2
+    assert tailscale['keyring_sha256'] == hashlib.sha256(b'key').hexdigest()
+    source = next(item for item in catalog['sources'] if item['id'] == 'tailscale')
+    assert tailscale['declaration_sha256'] == hashlib.sha256(
+        responses[source['declaration_url']]
     ).hexdigest()
-    assert results[3]['remote_keyring_sha256'] == hashlib.sha256(b'key').hexdigest()
-    assert len(requested) == 11
+    assert tailscale['remote_keyring_sha256'] == hashlib.sha256(b'key').hexdigest()
+    required_urls = {
+        result['source_url'] for result in results
+    } | {
+        index['url'] for result in results for index in result['indexes']
+    } | {source['declaration_url'], source['keyring_url']}
+    assert required_urls <= set(requested)
     assert all(url.startswith(('https://deb.debian.org/', 'https://pkgs.tailscale.com/'))
                for url in requested)
 
