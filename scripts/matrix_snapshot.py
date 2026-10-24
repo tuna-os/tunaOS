@@ -120,9 +120,16 @@ def load_retained_inputs(path):
 
 def _validate_retained(payload: dict) -> None:
     import datetime
+
+    def parse_date(value, where):
+        try:
+            return datetime.date.fromisoformat(value)
+        except (TypeError, ValueError) as error:
+            raise ValueError(f"invalid retained {where} date: {value!r}") from error
+
     if payload["schema_version"] != 1:
         raise ValueError("unsupported retained matrix input schema")
-    evaluation_date = datetime.date.fromisoformat(payload["evaluation_date"])
+    evaluation_date = parse_date(payload["evaluation_date"], "evaluation")
     context = payload["context"]
     if context.get("kind") != "historical-reconciliation" or not context.get("sources"):
         raise ValueError("retained matrix inputs require historical source identity")
@@ -139,7 +146,7 @@ def _validate_retained(payload: dict) -> None:
     def validate_source(date, run):
         if not isinstance(run, str) or run not in source_runs:
             raise ValueError("retained assertion has no manifested source run")
-        if datetime.date.fromisoformat(date) > evaluation_date:
+        if parse_date(date, "assertion") > evaluation_date:
             raise ValueError("retained assertion is later than its evaluation date")
 
     validate_configuration_identity(context.get("configuration_sha256"))

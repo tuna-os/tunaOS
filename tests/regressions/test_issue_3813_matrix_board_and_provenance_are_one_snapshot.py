@@ -45,7 +45,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SPEC = importlib.util.spec_from_file_location(
     "matrix_snapshot_under_test", ROOT / "scripts/matrix_snapshot.py"
 )
-if SPEC.loader is None:
+if SPEC is None or SPEC.loader is None:
     raise RuntimeError("cannot load scripts/matrix_snapshot.py")
 matrix_snapshot = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(matrix_snapshot)
@@ -189,6 +189,8 @@ def test_retained_replay_is_offline_and_reproduces_committed_pair(monkeypatch):
         return
     monkeypatch.setitem(sys.modules, "matrix_snapshot", matrix_snapshot)
     spec = importlib.util.spec_from_file_location("replay_generator", ROOT / "scripts/gen-matrix-status.py")
+    if spec is None or spec.loader is None:
+        raise RuntimeError("cannot load scripts/gen-matrix-status.py for replay")
     generator = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(generator)
 
@@ -199,7 +201,7 @@ def test_retained_replay_is_offline_and_reproduces_committed_pair(monkeypatch):
     monkeypatch.setattr(generator.urllib.request, "urlopen", network_forbidden)
     inputs = load_retained_inputs(RETAINED)
     assert inputs["context"]["retained_inputs_path"] == "docs/matrix-snapshots/2026-10-23-reconciled.json"
-    document, provenance = generator.build(inputs)
+    document, provenance = generator.build_pair(inputs)
     summary = generator.factory_health_summary(provenance, document)
     assert summary["last_full_sweep"] == ""
     committed = json.loads((ROOT / "docs/matrix-provenance.json").read_text())
@@ -207,6 +209,19 @@ def test_retained_replay_is_offline_and_reproduces_committed_pair(monkeypatch):
         assert provenance == committed["cells"]
         assert summary == committed["summary"]
         assert committed["snapshot_context"]["evaluation_date"] == "2026-10-23"
+
+
+def test_generator_build_keeps_document_only_compatibility(monkeypatch):
+    spec = importlib.util.spec_from_file_location(
+        "compatibility_generator", ROOT / "scripts/gen-matrix-status.py"
+    )
+    if spec is None or spec.loader is None:
+        raise RuntimeError("cannot load scripts/gen-matrix-status.py for compatibility test")
+    generator = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(generator)
+    monkeypatch.setattr(generator, "build_pair", lambda inputs=None: ("document", {"cells": {}}))
+
+    assert generator.build() == "document"
 
 
 def test_replay_rejects_changed_configuration(tmp_path, monkeypatch):
@@ -224,6 +239,8 @@ def test_replay_rejects_changed_configuration(tmp_path, monkeypatch):
     ("future", "later than its evaluation date"),
     ("source", "no manifested source run"),
     ("stage", "no cell source"),
+    ("invalid-evaluation-date", "invalid retained evaluation date"),
+    ("invalid-assertion-date", "invalid retained assertion date"),
 ])
 def test_retained_assertions_need_manifested_dated_sources(tmp_path, monkeypatch, change, message):
     payload = json.loads(RETAINED.read_text())
@@ -233,6 +250,11 @@ def test_retained_assertions_need_manifested_dated_sources(tmp_path, monkeypatch
         next(iter(payload["luks"].values()))[1] = "2027-01-01"
     elif change == "source":
         next(iter(payload["luks"].values()))[2] = "1"
+    elif change == "invalid-evaluation-date":
+        payload["evaluation_date"] = "not-a-date"
+        payload["context"]["evaluation_date"] = "not-a-date"
+    elif change == "invalid-assertion-date":
+        next(iter(payload["luks"].values()))[1] = "not-a-date"
     else:
         next(stage for stage in payload["stage"].values() if stage["jobs"])["cell_run"] = {}
     path = tmp_path / "inputs.json"
