@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 import subprocess
 import sys
+import textwrap
 
 import pytest
 from jsonschema import Draft202012Validator
@@ -25,6 +26,8 @@ def load(name):
     module_name = "_test_iso_media_handoff_" + name
     spec = importlib.util.spec_from_file_location(
         module_name, ROOT / "scripts" / (name + ".py"))
+    if spec is None or spec.loader is None:
+        raise ImportError(f"cannot load test module {module_name}")
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     try:
@@ -44,22 +47,25 @@ SCHEMA = json.loads((ROOT / "schemas/iso-media-provenance-v2.schema.json").read_
 
 
 def test_handoff_module_loads_by_path_without_global_import_side_effects():
-    script = """
-import importlib.util
-import pathlib
-import sys
-root = pathlib.Path(sys.argv[1])
-path_before = list(sys.path)
-modules_before = set(sys.modules)
-spec = importlib.util.spec_from_file_location("standalone_handoff", root / "scripts/iso_media_receipt_handoff.py")
-module = importlib.util.module_from_spec(spec)
-sys.modules[spec.name] = module
-spec.loader.exec_module(module)
-assert sys.path == path_before, "sys.path changed"
-added = {name for name in set(sys.modules) - modules_before if "iso_media" in name or "contract" in name}
-assert added == set(), added
-print(module.ReceiptCandidate.__name__)
-"""
+    script = textwrap.dedent(
+        """
+        import importlib.util
+        import pathlib
+        import sys
+        root = pathlib.Path(sys.argv[1])
+        path_before = list(sys.path)
+        modules_before = set(sys.modules)
+        spec = importlib.util.spec_from_file_location("standalone_handoff", root / "scripts/iso_media_receipt_handoff.py")
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = module
+        spec.loader.exec_module(module)
+        assert sys.path == path_before, "sys.path changed"
+        added = {name for name in set(sys.modules) - modules_before if "iso_media" in name or "contract" in name}
+        assert added == set(), added
+        print(module.ReceiptCandidate.__name__)
+        """
+    )
     result = subprocess.check_output(
         [sys.executable, "-c", script, str(ROOT)], text=True)
     assert result.strip() == "ReceiptCandidate"
