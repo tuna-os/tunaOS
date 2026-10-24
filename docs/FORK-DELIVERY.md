@@ -120,6 +120,55 @@ The tool marks a bad event stream with a bounded `harness` /
 The tool limits each report to 256 KiB. Any failed, skipped or not-run
 assertion keeps `releasePass` false.
 
+## Six-route package-addition evidence
+
+Issue [#3802](https://github.com/tuna-os/tunaOS/issues/3802) requires built-image
+proof for the EL10, Ubuntu, Debian, Arch, openSUSE and Gentoo Containerfile
+routes. Source tests and package-manager containers do not satisfy that gate.
+After the primary image-package consumer is integrated, use
+`scripts/qualify-image-packages.py` against local images built from one exact
+two-commit pair:
+
+- The stock commit has an empty generated
+  `build_scripts/lib/image-packages.tsv`.
+- Its single-child modified commit changes only `tunaos.toml` and that generated
+  adapter. The adapter contains one required, family-native addition for each
+  selected variant.
+- Every plan cell names a digest-pinned `baseImage`. Build that exact reference,
+  including a resolved digest for upstream sources that are normally tags.
+- Every route supplies stock base, modified base and modified desktop images.
+  EL10 also supplies a modified overlay image. These roles specifically prove
+  Gentoo's separate `system` and `desktop-build` placements, openSUSE's base
+  placement, desktop inheritance and overlay inheritance.
+
+The plan is a JSON object with `schemaVersion`, `platform`, full
+`stockCommit`/`modifiedCommit` values and exactly six `cells`. Each cell names
+`route`, `variant`, `package`, `baseImage` and `images`. An `images` value of
+`null` records that family as `not-run`; it never passes the gate. Image records
+contain the local `ref` and requested `flavor`.
+
+```sh
+python3 scripts/qualify-image-packages.py \
+  --plan package-qualification-plan.json \
+  --source "$PWD" \
+  --output package-qualification-evidence
+```
+
+The verifier reruns the primary generated-adapter check and route resolver. It
+then binds each result to the registry bytes of the pinned base, local image
+manifest/config digests and `/usr/share/ublue-os/image-info.json`. The stock
+image must have neither the package nor a package-addition receipt. Every
+modified base, desktop and overlay image must contain the native package and an
+exact `/usr/share/tunaos/image-packages.tsv` receipt.
+
+Retain the output directory with the build logs. `report.json` records each
+family as `passed`, `failed` or `not-run`; each route log and the source log
+have SHA-256 values in the report. A failed family does not hide later family
+results. Required-install failure, optional-missing handling, manager mismatch,
+signed repository handling, existing-repository refusal, apt no-removal and
+removal rejection remain source-level failure cases; run their primary F4
+suite on the same source commit and retain that log beside this image evidence.
+
 ## Dependency and review boundaries
 
 The compatibility foundation is [#3434](https://github.com/tuna-os/tunaOS/pull/3434)
