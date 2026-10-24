@@ -127,6 +127,26 @@ def test_explicit_bin_dir_never_falls_back_to_path(
 
     assert f"shfmt: missing in {install_dir}" in str(raised.value)
 
+def test_explicit_bin_dir_reports_non_executable_tool(tmp_path: Path) -> None:
+    install_dir = _matching_tool_dir(tmp_path / "install")
+    (install_dir / "shfmt").chmod(0o644)
+
+    with pytest.raises(lint_tools.ContractError) as raised:
+        lint_tools.verify(_contract(), install_dir)
+
+    assert f"shfmt: not executable in {install_dir}" in str(raised.value)
+
+
+def test_install_reports_bin_dir_that_is_an_existing_file(tmp_path: Path) -> None:
+    destination = tmp_path / "not-a-directory"
+    destination.write_text("occupied", encoding="utf-8")
+
+    with pytest.raises(lint_tools.ContractError) as raised:
+        lint_tools.install(_contract(), destination)
+
+    assert f"cannot create install destination {destination}" in str(raised.value)
+
+
 
 def test_wrong_version_fails_with_expected_and_observed_values(tmp_path: Path) -> None:
     tools = _matching_tool_dir(tmp_path)

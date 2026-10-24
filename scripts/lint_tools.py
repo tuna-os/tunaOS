@@ -141,8 +141,13 @@ def verify(contract: dict, bin_dir: Path | None = None) -> None:
         tool = contract["tools"][name]
         if bin_dir is not None:
             candidate = bin_dir.expanduser() / name
-            executable = candidate if candidate.is_file() else None
             where = f" in {bin_dir}"
+            if candidate.is_file() and not os.access(candidate, os.X_OK):
+                failures.append(
+                    f"{name}: not executable{where} (expected {tool['version']})"
+                )
+                continue
+            executable = candidate if candidate.is_file() else None
         else:
             located = shutil.which(name)
             executable = Path(located) if located else None
@@ -232,7 +237,12 @@ def install(contract: dict, bin_dir: Path) -> None:
             f"supported platforms: {supported}"
         )
     bin_dir = bin_dir.expanduser()
-    bin_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        bin_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise ContractError(
+            f"cannot create install destination {bin_dir}: {exc}"
+        ) from exc
     if not bin_dir.is_dir():
         raise ContractError(f"install destination is not a directory: {bin_dir}")
 

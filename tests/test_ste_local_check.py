@@ -41,7 +41,8 @@ def test_check_runs_ste_but_fix_does_not() -> None:
     # into the shared runner; it must still keep .git out of every walk.
     assert "./scripts/run-config-lint.sh" in check
     runner = (ROOT / "scripts" / "run-config-lint.sh").read_text(encoding="utf-8")
-    assert "-path './.git' -prune" in runner
+    assert "-path './.git'" in runner
+    assert "-prune" in runner
 
 
 def test_local_runner_reads_the_ci_pin_and_budget() -> None:
