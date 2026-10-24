@@ -2206,3 +2206,30 @@ That cache parser adds explicit `rw` and its default `rw` twice. For that measur
 version, use a temporary Containerfile with only the known cache `rw` removed.
 Keep writable bind mounts and all read-only options. Reject a Containerfile whose bytes differ from the reviewed file.
 Record source and file hashes; these observations do not make mutable source a pin.
+
+### Native artifact transfer resets before qualification
+
+Run [40039204976](https://github.com/tuna-os/tunaOS/actions/runs/40039204976),
+job 120743179663, failed on 2026-10-24 at 02:39 UTC with a connection reset
+at 3,886,055,424 of 6,158,287,146 archive bytes after 341.888 seconds. The
+size-derived deadline was 3,057 seconds; increasing that deadline would not
+fix this observed failure. GUI install and detached-boot qualification did
+not run.
+
+The local recovery candidate restarts the entire archive through the same
+GitHub CLI API endpoint, up to three total attempts under one transfer deadline
+and one last-stdout-progress idle clock. It does not request ranges or retain
+signed download URLs. Only classified connection-reset, unexpected-EOF,
+I/O-timeout and TLS-timeout failures with complete bounded stderr are eligible.
+HTTP responses, cancellation, deadline exhaustion, short successful responses,
+oversize content and integrity failures remain terminal. The file is truncated
+before each retry and complete size/SHA validation still precedes extraction.
+
+GitHub documents a one-minute-lived artifact download redirect, not a stable
+Range/ETag resume contract:
+https://docs.github.com/en/rest/actions/artifacts#download-an-artifact
+
+This is preventive transport hardening, not permission to qualify an artifact
+from a failed aggregate producer. Existing source, run, attempt, successful
+producer/build, expiry and digest admission rules remain unchanged. A rerun
+increments attempt and does not turn attempt-1 artifacts into attempt-2 media.

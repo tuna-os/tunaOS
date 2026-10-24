@@ -23,6 +23,19 @@ import zipfile
 MAX_BYTES = 12 * 1024**3
 MAX_STDERR = 16 * 1024
 ARCHIVE_IDLE_SECONDS = 120
+ARCHIVE_MAX_ATTEMPTS = 3
+RETRYABLE_TRANSFER_CATEGORIES = frozenset({
+    "connection_reset", "unexpected_eof", "io_timeout", "tls_timeout",
+})
+
+
+class TransferError(ValueError):
+    """Sanitized transport failure with a machine-readable retry decision."""
+
+    def __init__(self, reason, details):
+        self.reason = reason
+        self.details = details
+        super().__init__(reason + "; " + json.dumps(details, sort_keys=True))
 
 
 def archive_deadline(size):
@@ -36,9 +49,9 @@ def archive_deadline(size):
 def transfer_category(stderr):
     """Return fixed labels only; never expose URLs, tokens or arbitrary stderr."""
     text = stderr.decode('utf-8', errors='replace').lower()
-    for code in (401, 403, 404, 408, 429, 500, 502, 503, 504):
-        if re.search(rf'\bhttp(?: status)?[ :]+{code}\b', text):
-            return 'http_' + str(code)
+    status = re.search(r'\bhttp(?: status)?[ :]+([1-5][0-9]{2})\b', text)
+    if status:
+        return 'http_' + status.group(1)
     for marker, label in (('unexpected eof', 'unexpected_eof'),
                           ('connection reset', 'connection_reset'),
                           ('connection refused', 'connection_refused'),
@@ -51,11 +64,15 @@ def transfer_category(stderr):
     return 'unclassified'
 
 
-def bounded_command(command, destination, limit, timeout, idle_timeout=None):
+def bounded_command(command, destination, limit, timeout, idle_timeout=None, progress=None):
     """Bound output bytes and elapsed time before writing untrusted output."""
     started = time.monotonic()
-    deadline = started + timeout
-    last_progress = started
+    if progress is None:
+        progress = {"deadline": started + timeout, "last_progress": started}
+    deadline = progress["deadline"]
+    last_progress = progress["last_progress"]
+    if started >= deadline or (idle_timeout is not None and started >= last_progress + idle_timeout):
+        raise ValueError("GitHub transfer budget exhausted before launch")
     count = 0
     stderr = bytearray()
     stderr_count = 0
@@ -67,7 +84,7 @@ def bounded_command(command, destination, limit, timeout, idle_timeout=None):
                        'stderr_bytes': stderr_count,
                        'stderr_truncated': stderr_count > MAX_STDERR,
                        'category': transfer_category(stderr)}
-            return ValueError(reason + '; ' + json.dumps(details, sort_keys=True))
+            return TransferError(reason, details)
         try:
             with selectors.DefaultSelector() as selector:
                 selector.register(process.stdout, selectors.EVENT_READ)
@@ -97,6 +114,7 @@ def bounded_command(command, destination, limit, timeout, idle_timeout=None):
                             raise failure("GitHub transfer byte limit exceeded")
                         destination.write(chunk)
                         last_progress = time.monotonic()
+                        progress["last_progress"] = last_progress
             wait_deadline = deadline if idle_timeout is None else min(deadline, last_progress + idle_timeout)
             if process.wait(timeout=max(0.001, wait_deadline - time.monotonic())):
                 raise failure("GitHub transfer failed")
@@ -112,6 +130,45 @@ def bounded_command(command, destination, limit, timeout, idle_timeout=None):
             process.wait()
             raise
     return count
+
+
+def download_archive(command, target, size, timeout, idle_timeout=ARCHIVE_IDLE_SECONDS):
+    """Retry whole transfers only; never reuse a signed URL or append a range.
+
+    One deadline and last-progress clock span all attempts and backoff. The
+    caller still verifies the complete archive SHA before any extraction.
+    """
+    started = time.monotonic()
+    progress = {"deadline": started + timeout, "last_progress": started}
+    try:
+        for attempt in range(1, ARCHIVE_MAX_ATTEMPTS + 1):
+            target.seek(0)
+            target.truncate()
+            try:
+                count = bounded_command(command, target, size, timeout, idle_timeout, progress)
+                if count != size:
+                    raise ValueError("downloaded archive size does not match producer artifact")
+                return count
+            except TransferError as error:
+                if (error.reason != "GitHub transfer failed"
+                        or error.details["category"] not in RETRYABLE_TRANSFER_CATEGORIES
+                        or error.details.get("stderr_truncated", False)
+                        or error.details["returncode"] is None
+                        or error.details["returncode"] < 0
+                        or attempt == ARCHIVE_MAX_ATTEMPTS):
+                    raise
+                # No arbitrary stderr, URLs, or credentials reach diagnostics.
+                print(json.dumps({"archive_retry": attempt,
+                                  "category": error.details["category"],
+                                  "bytes_received": error.details["bytes_received"]}), flush=True)
+                remaining = min(progress["deadline"], progress["last_progress"] + idle_timeout) - time.monotonic()
+                if remaining <= 2:
+                    raise ValueError("GitHub transfer budget exhausted before retry") from None
+                time.sleep(2)
+    except BaseException:
+        target.seek(0)
+        target.truncate()
+        raise
 
 
 def api(repo, suffix):
@@ -294,8 +351,8 @@ def main():
         print(json.dumps({'archive_bytes': artifact['size_in_bytes'],
                           'transfer_deadline_seconds': timeout,
                           'idle_deadline_seconds': ARCHIVE_IDLE_SECONDS}), flush=True)
-        bounded_command(["gh", "api", f"repos/{args.repository}/actions/artifacts/{args.artifact_id}/zip"],
-                        target, artifact["size_in_bytes"], timeout, ARCHIVE_IDLE_SECONDS)
+        download_archive(["gh", "api", f"repos/{args.repository}/actions/artifacts/{args.artifact_id}/zip"],
+                         target, artifact["size_in_bytes"], timeout, ARCHIVE_IDLE_SECONDS)
     if archive.stat().st_size != artifact["size_in_bytes"] or digest(archive) != args.archive_digest:
         raise ValueError("downloaded archive does not match producer artifact")
     iso = extract(archive, args.output, args.variant, args.flavor)
