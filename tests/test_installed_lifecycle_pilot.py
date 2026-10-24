@@ -417,6 +417,8 @@ def test_retained_non_utf8_output_is_bounded_after_json_serialization():
     [
         ({"Architecture": "arm64"}, "wrong_architecture"),
         ({"Labels": {"containers.bootc": "1"}}, "missing_identity"),
+        ({"Labels": None}, "missing_identity"),
+        ({"Labels": []}, "missing_identity"),
         ({"Digest": "sha256:" + "f" * 64}, "missing_identity"),
     ],
 )
@@ -482,6 +484,30 @@ def test_wait_for_ssh_never_probes_past_its_deadline(tmp_path, monkeypatch):
     # whole wait stays within the deadline plus at most that one-second floor.
     assert probe_timeouts and all(t <= 10 for t in probe_timeouts)
     assert clock.now <= 23 + 1
+
+
+def test_qemu_port_binding_failure_is_classified_from_startup_output(tmp_path):
+    class ExitedProcess:
+        def poll(self):
+            return 1
+
+    class FinishedThread:
+        def join(self, timeout=None):
+            pass
+
+    backend = MODULE.LocalQemuBackend(config(tmp_path), [])
+    backend.qemu_process = ExitedProcess()
+    backend.qemu_thread = FinishedThread()
+    backend.qemu_log.extend(
+        b"qemu-system-x86_64: Could not set up host forwarding rule "
+        b"'tcp:127.0.0.1:2222-:22'"
+    )
+
+    with pytest.raises(MODULE.PilotFailure) as error:
+        backend.wait_for_ssh(10)
+
+    assert error.value.category == "port_unavailable"
+    assert "2222" in str(error.value)
 
 
 def test_prepare_disk_creates_the_output_directory(tmp_path, monkeypatch):

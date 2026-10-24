@@ -15,7 +15,6 @@ import json
 import os
 import re
 import shutil
-import socket
 import subprocess
 import sys
 import tempfile
@@ -348,7 +347,9 @@ class LocalQemuBackend:
                 "wrong_architecture",
                 f"{reference} resolved as {os_name}/{architecture}",
             )
-        labels = document.get("Labels") or {}
+        labels = document.get("Labels")
+        if not isinstance(labels, dict):
+            raise PilotFailure("missing_identity", f"{reference} lacks an object of image labels")
         if labels.get("org.opencontainers.image.title") != "TunaOS skipjack (gnome)":
             raise PilotFailure(
                 "missing_identity",
@@ -413,11 +414,6 @@ class LocalQemuBackend:
         self.uefi_vars_source = self._first_file(self.UEFI_VARS_CANDIDATES)
         if not self.uefi_code or not self.uefi_vars_source:
             raise PilotFailure("missing_dependency", "OVMF code and variables firmware are required")
-        with socket.socket() as probe:
-            try:
-                probe.bind(("127.0.0.1", self.config.ssh_port))
-            except OSError as error:
-                raise PilotFailure("port_unavailable", error_message(error)) from error
 
         return {
             "disk": {
@@ -476,6 +472,25 @@ class LocalQemuBackend:
                     self.qemu_log.extend(chunk[:remaining])
                 if len(chunk) > remaining:
                     self.qemu_log_truncated = True
+
+    def _qemu_exit_failure(self) -> PilotFailure:
+        if self.qemu_thread is not None:
+            self.qemu_thread.join(timeout=1)
+        with self.qemu_log_lock:
+            output, _ = bounded_text(bytes(self.qemu_log))
+        diagnostic = output.strip()
+        lowered = diagnostic.lower()
+        if "host forwarding rule" in lowered or (
+            "address already in use" in lowered and "hostfwd" in lowered
+        ):
+            category = "port_unavailable"
+            summary = f"QEMU could not bind SSH forward port {self.config.ssh_port}"
+        else:
+            category = "vm_exited"
+            summary = "QEMU exited before SSH became ready"
+        if diagnostic:
+            summary = f"{summary}: {diagnostic[-2000:]}"
+        return PilotFailure(category, summary)
 
     def start_vm(self) -> None:
         assert self.qemu_bin and self.uefi_code
@@ -573,7 +588,7 @@ class LocalQemuBackend:
         deadline = time.monotonic() + timeout
         while (remaining := deadline - time.monotonic()) > 0:
             if self.qemu_process and self.qemu_process.poll() is not None:
-                raise PilotFailure("vm_exited", "QEMU exited before SSH became ready")
+                raise self._qemu_exit_failure()
             try:
                 if self._ssh_ready(remaining):
                     return
@@ -909,13 +924,6 @@ def execute_pilot(
             blocked_by = stage_id
 
     run_stage("cleanup", backend.cleanup)
-    if stages["cleanup"]["outcome"] == "failed" and first_failure is None:
-        details = stages["cleanup"]["details"]
-        first_failure = {
-            "stage": "cleanup",
-            "category": details["category"],
-            "message": details["message"],
-        }
 
     evidence["outcomes"] = {
         "cold": stages["cold_boot_a"]["outcome"],
