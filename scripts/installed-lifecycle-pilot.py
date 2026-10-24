@@ -132,6 +132,17 @@ def file_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def has_symlink_component(path: Path) -> bool:
+    """Reject a path whose leaf or any lexical ancestor is a symlink."""
+    candidate = path if path.is_absolute() else Path.cwd() / path
+    return any(component.is_symlink() for component in (candidate, *candidate.parents))
+
+
+def error_message(error: BaseException) -> str:
+    """Return schema-safe evidence text for exceptions with empty messages."""
+    return str(error) or type(error).__name__
+
+
 def normalized_digest(value: str) -> str:
     match = SHA256_RE.fullmatch(value)
     if not match:
@@ -360,14 +371,14 @@ class LocalQemuBackend:
     def preflight(self) -> dict[str, Any]:
         configured_disk = self.config.disk
         disk = configured_disk.resolve()
-        if configured_disk.is_symlink() or not disk.is_file():
-            raise PilotFailure("unsafe_disk", "source disk must be a regular, non-symlink file")
+        if has_symlink_component(configured_disk) or not disk.is_file():
+            raise PilotFailure("unsafe_disk", "source disk and its parents must be regular, non-symlink paths")
         if disk.suffix != ".qcow2":
             raise PilotFailure("unsafe_disk", "source disk must have a .qcow2 suffix")
         configured_key = self.config.ssh_key
         key = configured_key.resolve()
-        if configured_key.is_symlink() or not key.is_file():
-            raise PilotFailure("missing_identity", "SSH key must be a regular, non-symlink file")
+        if has_symlink_component(configured_key) or not key.is_file():
+            raise PilotFailure("missing_identity", "SSH key and its parents must be regular, non-symlink paths")
         for output_path in (self.overlay, self.uefi_vars):
             if output_path.exists():
                 raise PilotFailure(
@@ -406,7 +417,7 @@ class LocalQemuBackend:
             try:
                 probe.bind(("127.0.0.1", self.config.ssh_port))
             except OSError as error:
-                raise PilotFailure("port_unavailable", str(error)) from error
+                raise PilotFailure("port_unavailable", error_message(error)) from error
 
         return {
             "disk": {
@@ -428,8 +439,8 @@ class LocalQemuBackend:
     def prepare_disk(self) -> dict[str, Any]:
         if not self.qemu_bin or not self.uefi_code or not self.uefi_vars_source:
             raise PilotFailure("internal_error", "preflight did not establish QEMU prerequisites")
-        if self.config.output_dir.is_symlink():
-            raise PilotFailure("unsafe_disk", "refusing a symlink output directory")
+        if has_symlink_component(self.config.output_dir):
+            raise PilotFailure("unsafe_disk", "refusing a symlink in the output directory path")
         self.config.output_dir.mkdir(parents=True, exist_ok=True)
         self.created_paths.add(self.overlay)
         self.runner.run(
@@ -831,23 +842,25 @@ def execute_pilot(
             stage["outcome"] = "passed"
             return True
         except PilotFailure as error:
+            message = error_message(error)
             stage["outcome"] = "failed"
-            stage["details"] = {"category": error.category, "message": str(error)}
+            stage["details"] = {"category": error.category, "message": message}
             if first_failure is None:
                 first_failure = {
                     "stage": stage_id,
                     "category": error.category,
-                    "message": str(error),
+                    "message": message,
                 }
             return False
         except Exception as error:  # Retain unexpected failures without losing cleanup.
+            message = error_message(error)
             stage["outcome"] = "failed"
-            stage["details"] = {"category": "internal_error", "message": str(error)}
+            stage["details"] = {"category": "internal_error", "message": message}
             if first_failure is None:
                 first_failure = {
                     "stage": stage_id,
                     "category": "internal_error",
-                    "message": str(error),
+                    "message": message,
                 }
             return False
         finally:
@@ -972,8 +985,8 @@ def parse_args(argv: list[str] | None = None) -> PilotConfig:
 
 def main(argv: list[str] | None = None) -> int:
     config = parse_args(argv)
-    if config.output_dir.is_symlink():
-        raise SystemExit("refusing a symlink output directory")
+    if has_symlink_component(config.output_dir):
+        raise SystemExit("refusing a symlink in the output directory path")
     config.output_dir.mkdir(parents=True, exist_ok=True)
     evidence_path = config.output_dir / "installed-lifecycle-evidence.json"
     if evidence_path.exists():

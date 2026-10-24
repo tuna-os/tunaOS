@@ -19,7 +19,7 @@ from jsonschema import Draft202012Validator
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts/installed-lifecycle-pilot.py"
 SCHEMA = json.loads(
-    (ROOT / "schemas/installed-lifecycle-evidence-v1.schema.json").read_text()
+    (ROOT / "schemas/installed-lifecycle-evidence-v1.schema.json").read_text(encoding="utf-8")
 )
 SPEC = importlib.util.spec_from_file_location("installed_lifecycle_pilot", SCRIPT)
 assert SPEC and SPEC.loader
@@ -196,6 +196,31 @@ def test_invalid_identity_is_rejected_before_disk_preparation(tmp_path, override
     assert stages["preflight"]["outcome"] == "failed"
     assert stages["prepare_disk"]["outcome"] == "skipped"
     assert stages["cleanup"]["outcome"] == "passed"
+
+
+def test_unexpected_empty_exception_message_still_produces_valid_evidence(tmp_path, monkeypatch):
+    def empty_failure(_backend):
+        raise AssertionError()
+
+    monkeypatch.setattr(FakeBackend, "preflight", empty_failure)
+    evidence, passed = run_pilot(config(tmp_path))
+
+    assert not passed
+    assert evidence["result"]["first_failure"] == {
+        "stage": "preflight",
+        "category": "internal_error",
+        "message": "AssertionError",
+    }
+
+
+def test_symlinked_path_ancestors_are_detected(tmp_path):
+    real = tmp_path / "real"
+    real.mkdir()
+    linked = tmp_path / "linked"
+    linked.symlink_to(real, target_is_directory=True)
+
+    assert MODULE.has_symlink_component(linked / "nested" / "file")
+    assert not MODULE.has_symlink_component(real / "nested" / "file")
 
 
 def test_timeout_skips_all_dependent_stages_but_still_cleans_up(tmp_path):
