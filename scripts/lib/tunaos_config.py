@@ -18,6 +18,7 @@ import re
 import shlex
 import subprocess
 import tempfile
+from urllib.parse import urlsplit
 
 TOMLI_VERSION = '2.3.2'
 _VENDOR = Path(__file__).with_name('_vendor') / 'tomli'
@@ -43,7 +44,7 @@ PLATFORMS = {"linux/amd64", "linux/amd64/v2", "linux/amd64/v3", "linux/arm64"}
 # "|" as delimiter) and in JSON heredocs, so no quote, backslash, pipe, backtick
 # or dollar may appear. Names and codenames are plain words.
 DISPLAY_TEXT = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9 .,()+_-]*[A-Za-z0-9.,()+_-])?\Z")
-HTTPS_URL = re.compile(r"https://[^\s/\"'\\|`$]+(?:/[^\s\"'\\|`$]*)?\Z")
+FORBIDDEN_URL_CHARACTER = re.compile(r"[\s\"'\\|`$]")
 CPE_PART = re.compile(r"[a-z0-9][a-z0-9._-]*\Z")
 BRANDING_URLS = ('homepage', 'documentation', 'support', 'bug_report')
 # Labels such as "Fedora's deep blue" reach /etc/issue and a JSON heredoc:
@@ -97,6 +98,21 @@ def table(value, allowed, required, path):
     if unknown or missing:
         raise ConfigError(f"{path}: unknown keys {sorted(unknown)}; missing keys {sorted(missing)}")
 
+
+def https_url(value):
+    if not isinstance(value, str) or FORBIDDEN_URL_CHARACTER.search(value):
+        return False
+    try:
+        parsed = urlsplit(value)
+        parsed.port  # Validate an optional numeric port and its range.
+    except ValueError:
+        return False
+    return (
+        parsed.scheme == 'https'
+        and bool(parsed.hostname)
+        and parsed.username is None
+        and parsed.password is None
+    )
 
 def text(value, path, empty=False):
     if not isinstance(value, str) or (not empty and not value.strip()) or any(ord(c) < 32 for c in value):
@@ -203,7 +219,7 @@ def validate(config):
         table(config['defaults']['branding'], DEFAULT_BRANDING, DEFAULT_BRANDING, 'defaults.branding')
         for key in BRANDING_URLS:
             value = config['defaults']['branding'][key]
-            if not isinstance(value, str) or not HTTPS_URL.fullmatch(value):
+            if not https_url(value):
                 raise ConfigError(f'defaults.branding.{key}: expected an https:// URL')
         plymouth_theme(config['defaults']['branding']['plymouth'], 'defaults.branding.plymouth')
     if 'publish' in config['build']:
@@ -454,8 +470,11 @@ def render_identity(config):
              f"TUNAOS_PLYMOUTH_THEME={shlex.quote(urls['plymouth'])}",
              # -g: stays global even when a caller sources this inside a function.
              'declare -gA TUNAOS_CODENAMES=(']
-    # Keys and values stay quoted for deterministic, diff-friendly shell.
-    lines += [f'\t["{name}"]="{variant["codename"]}"' for name, variant in config['variants'].items()]
+    # Keys and values stay quoted and sorted for deterministic, diff-friendly shell.
+    lines += [
+        f'\t["{name}"]="{config["variants"][name]["codename"]}"'
+        for name in sorted(config['variants'])
+    ]
     return '\n'.join(lines + [')']) + '\n'
 
 
