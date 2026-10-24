@@ -12,7 +12,7 @@ family — [Bluefin](https://projectbluefin.io) (GNOME),
 their artifacts directly where we can (`ghcr.io/projectbluefin/common`,
 `ghcr.io/ublue-os/brew`, `ublue-os/akmods` for NVIDIA, the Zirconium source
 tree for our Niri stack). Where we can't, we re-derive their patterns. What
-defines us is the same desktop on *thirteen different bases*, so most of
+defines us is the same desktop on *14 build variants*, so most of
 their Fedora-only machinery needs a base-agnostic equivalent here.
 
 ---
@@ -192,7 +192,7 @@ also need to update.
 | UTC | What |
 | --- | --- |
 | 22:20 | `check-base-image-pins` — every pinned base digest must still resolve (#1788: upstream GC'd three at once) |
-| staggered, 00:00-23:00 | All 13 `build-<variant>.yml` nightlies, each pinned to its own cron hour to spread runner load |
+| staggered, 00:00-23:00 | All 14 `build-<variant>.yml` nightlies, each pinned to its own cron hour to spread runner load |
 | 08:00 | Desktop contract sweep — pulls every **published** desktop image; §6 |
 | 13:30 | README build-status refresh → automation PR |
 | on cell movement | MATRIX-STATUS regeneration → automation PR |
