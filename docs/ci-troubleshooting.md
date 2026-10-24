@@ -1824,6 +1824,29 @@ try. After three failures, retain the command's exit status and diagnostic.
 Keep README unchanged; do not publish a partial table.
 See `tests/test_readme_status_api_retries.py` for regression tests.
 
+## GNOME 50 passes a GNOME 51 migration gate
+
+**Symptom:** A GNOME image passes the version contract with Shell 50, or an
+unknown version passes on Hummingbird.
+
+**Cause:** The configured policy, generated manifest or runtime constant drifted
+below 51, or a bootstrap waiver let a missing/old provider pass. The tests in
+`tests/test_the_gnome_floor_is_enforced.py` reproduce the GNOME 50 and unknown
+version paths with fake installed binaries.
+
+**Fix:** Keep `desktops.gnome.minimum_version` in `tunaos.toml` and the runtime
+constant at 51. Generate the manifest adapter with `scripts/config.py generate`.
+Do not waive this check for a missing provider. The Shell version is only
+a minimum requirement; it does not establish a complete desktop stack.
+
+Before a provider migration can ship, verify its published repository for each
+enabled architecture. Check compatible GDM, session, Shell/Mutter, GJS, schemas,
+portals, and their library closure. Use the full stack in
+`projectbluefin/utah-packages` as the reference, but do not use its Hummingbird
+RPMs as an EL10 replacement. Retain the verified old digest until a complete,
+signed GNOME 51 replacement exists; the old provider must fail the new gate.
+Then test the built image and desktop login. A source spec, renamed tag,
+or successful unit test is not publication or boot evidence.
 ### ISO Builder presentation export drift
 
 Symptom: `check-builder-config` reports drift in the generated builder configuration.

@@ -1,48 +1,40 @@
-"""Nothing below GNOME 50 ships. The desktop contract enforces it.
+"""GNOME 51 is the minimum for every TunaOS GNOME image.
 
-Maintainer directive, 2026-09-03: tunaOS is moving off GNOME 49 -- nothing
-below 50 ships as a GNOME image, and 51 is the target as it releases (51.0 is
-due 2026-09-12). Measured the same day from the published `.packages`
-artifacts (linux-amd64):
-
-    yellowfin  gnome-shell 49.5-13.el10.alma.12   EL 10.2's own GNOME
-    albacore   gnome-shell 49.4-8.el10_2.alma.1   EL 10.2's own GNOME
-    skipjack   gnome-shell 49.5-13.el10            EL 10.2's own GNOME
-    guppy      gnome-base/gnome-shell-49.7         ::gentoo tops out at 49.9
-    bonito     50.4    sailfin 50.4    marlin 50.4    wahoo 51~beta
-
-Three of those 49s were being called green under a manifest that declared
-GNOME 50. The contract had no notion of a version at all: `require_command
-gnome-shell` is satisfied by any gnome-shell. This test holds the floor in
-three places at once:
-
-  * the manifest states the policy (`minimum_version: 50`),
-  * the contract script carries the same number as a constant (it runs inside
-    the image with nothing but itself mounted, so it cannot read the manifest),
-  * `require_gnome_at_least` fails a 49, passes a 50 and a 51, reads the
-    version from the binary first and the package manager second, and refuses
-    to guess when neither answers.
-
-The helper is exercised by extracting it verbatim from the script and running
-it against a fake `gnome-shell` on PATH, the way the #858 regression exercises
-`require_glob`.
+The authoritative TOML policy, generated adapter, and in-image constant must
+agree. Exercise the installed-version check with fake package tools; neither
+GNOME 50 nor an unknown version can pass through a bootstrap waiver.
 """
 
 from __future__ import annotations
 
+import importlib.util
+from functools import cache
 import os
 import re
 import stat
 import subprocess
 from pathlib import Path
 
+
 import pytest
 
 yaml = pytest.importorskip("yaml")
 
 ROOT = Path(__file__).resolve().parents[1]
+SPEC = importlib.util.spec_from_file_location(
+    "gnome_floor_tunaos_config", ROOT / "scripts/lib/tunaos_config.py"
+)
+assert SPEC and SPEC.loader
+tunaos_config = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(tunaos_config)
+
 CHECK = ROOT / "build_scripts" / "checks" / "verify-desktop-experience.sh"
 MANIFEST = ROOT / "manifests" / "desktops" / "gnome.yaml"
+
+
+@cache
+def _primary_config():
+    return tunaos_config.load(ROOT / "tunaos.toml")
 
 
 def _function_source(name: str) -> str:
@@ -100,14 +92,17 @@ def _run_floor(tmp_path: Path, floor: int, *, fakes: dict[str, str], env: dict |
 # ── The policy and the enforcement agree ─────────────────────────────────────
 
 
-def test_the_floor_is_fifty():
-    assert _manifest_floor() == 50
+def test_the_floor_is_fifty_one():
+    primary = _primary_config()
+    assert primary["desktops"]["gnome"]["minimum_version"] == 51
+    assert _manifest_floor() == 51
 
 
-def test_the_script_carries_the_same_floor_as_the_manifest():
-    assert _script_floor() == _manifest_floor(), (
-        "the contract enforces a different GNOME floor than gnome.yaml declares; "
-        "change both or neither"
+def test_the_script_and_generated_manifest_match_the_primary_config():
+    primary_floor = _primary_config()["desktops"]["gnome"]["minimum_version"]
+    assert _script_floor() == _manifest_floor() == primary_floor, (
+        "the GNOME floor drifted from authoritative tunaos.toml; regenerate "
+        "the desktop manifest and update the image contract together"
     )
 
 
@@ -124,21 +119,21 @@ def test_the_gnome_branch_calls_the_floor_check():
 
 
 def test_a_gnome_49_image_fails_naming_the_floor(tmp_path):
-    r = _run_floor(tmp_path, 50, fakes={"gnome-shell": 'echo "GNOME Shell 49.5"'})
+    r = _run_floor(tmp_path, 51, fakes={"gnome-shell": 'echo "GNOME Shell 49.5"'})
     assert r.returncode != 0
     assert "GNOME 49 is below the floor" in r.stderr
-    assert "nothing below GNOME 50 ships" in r.stderr
+    assert "nothing below GNOME 51 ships" in r.stderr
 
 
-def test_a_gnome_50_image_passes(tmp_path):
-    r = _run_floor(tmp_path, 50, fakes={"gnome-shell": 'echo "GNOME Shell 50.4"'})
-    assert r.returncode == 0, r.stderr
-    assert "GNOME 50 meets the floor of 50" in r.stdout
+def test_a_gnome_50_image_fails(tmp_path):
+    r = _run_floor(tmp_path, 51, fakes={"gnome-shell": 'echo "GNOME Shell 50.4"'})
+    assert r.returncode != 0
+    assert "GNOME 50 is below the floor" in r.stderr
 
 
 def test_a_gnome_51_release_candidate_passes(tmp_path):
     """wahoo reports `GNOME Shell 51.rc` (and 51.beta before it): the major is 51."""
-    r = _run_floor(tmp_path, 50, fakes={"gnome-shell": 'echo "GNOME Shell 51.rc"'})
+    r = _run_floor(tmp_path, 51, fakes={"gnome-shell": 'echo "GNOME Shell 51.rc"'})
     assert r.returncode == 0, r.stderr
     assert "GNOME 51 meets the floor" in r.stdout
 
@@ -149,7 +144,7 @@ def test_the_package_manager_answers_when_the_binary_cannot(tmp_path):
     false fail: rpm knows the version."""
     r = _run_floor(
         tmp_path,
-        50,
+        51,
         fakes={
             "gnome-shell": "exit 1",
             "rpm": 'echo "49.5"',
@@ -160,20 +155,24 @@ def test_the_package_manager_answers_when_the_binary_cannot(tmp_path):
 
 
 def test_no_answer_at_all_is_a_failure_not_a_pass(tmp_path):
-    r = _run_floor(tmp_path, 50, fakes={"gnome-shell": "exit 1"})
+    r = _run_floor(tmp_path, 51, fakes={"gnome-shell": "exit 1"})
     assert r.returncode != 0
     assert "cannot determine the installed GNOME version" in r.stderr
 
 
-def test_the_hummingbird_bootstrap_waiver_still_applies(tmp_path):
-    """Hummingbird's contract is waived line by line while its repos are
-    incomplete; the floor follows the same rule so it does not become the one
-    check that hard-fails a bootstrap the others let through."""
+@pytest.mark.parametrize("version", ["49.5", "50.4", None])
+def test_hummingbird_cannot_waive_the_gnome_floor(tmp_path, version):
+    fake = f'echo "GNOME Shell {version}"' if version else "exit 1"
     r = _run_floor(
         tmp_path,
-        50,
-        fakes={"gnome-shell": 'echo "GNOME Shell 49.5"'},
+        51,
+        fakes={"gnome-shell": fake},
         env={"IS_HUMMINGBIRD": "true"},
     )
+    assert r.returncode != 0
+    assert "WAIVED" not in r.stdout
+
+
+def test_a_gnome_51_stable_image_passes(tmp_path):
+    r = _run_floor(tmp_path, 51, fakes={"gnome-shell": 'echo "GNOME Shell 51.0"'})
     assert r.returncode == 0, r.stderr
-    assert "WAIVED" in r.stdout
