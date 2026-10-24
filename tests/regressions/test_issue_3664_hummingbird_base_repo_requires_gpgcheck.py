@@ -44,22 +44,40 @@ REPO_HEREDOC = re.compile(
 )
 
 
-def _parse_fields(body: str) -> dict[str, str]:
-    fields: dict[str, str] = {}
+def _parse_sections(body: str) -> dict[str, dict[str, str]]:
+    """One `.repo` heredoc body -> {section name: {key: value}}.
+
+    dnf treats every `[section]` in a repo file as its own repo, so the fields
+    must stay grouped by section: flattening them would let a later section's
+    gpgcheck=1/gpgkey mask an earlier section that has neither (false negative)
+    or pin the failure on the wrong section (misreported violation). Keys that
+    appear before any header -- invalid for dnf, but possible in a malformed
+    heredoc -- are kept under "" rather than dropped, so a baseurl written
+    there is still gated instead of silently skipped.
+    """
+    sections: dict[str, dict[str, str]] = {"": {}}
+    current = sections[""]
     for line in body.splitlines():
         stripped = line.strip()
-        if not stripped or stripped.startswith("#") or stripped.startswith("["):
+        if not stripped or stripped.startswith("#") or stripped.startswith(";"):
+            continue
+        if stripped.startswith("[") and stripped.endswith("]"):
+            current = sections.setdefault(stripped[1:-1].strip(), {})
             continue
         if "=" in stripped:
             key, _, value = stripped.partition("=")
-            fields[key.strip()] = value.strip()
-    return fields
+            current[key.strip()] = value.strip()
+    if not sections[""]:
+        del sections[""]
+    return sections
 
 
-def repo_blocks(script: str | None = None) -> dict[str, dict[str, str]]:
-    """Every `*.repo` heredoc 10-base-packages.sh writes, parsed to fields."""
+def repo_blocks(script: str | None = None) -> dict[str, dict[str, dict[str, str]]]:
+    """Every `*.repo` heredoc 10-base-packages.sh writes, parsed per section."""
     text = script if script is not None else BASE_PACKAGES.read_text(encoding="utf-8")
-    return {m.group("target"): _parse_fields(m.group("body")) for m in REPO_HEREDOC.finditer(text)}
+    return {
+        m.group("target"): _parse_sections(m.group("body")) for m in REPO_HEREDOC.finditer(text)
+    }
 
 
 def test_the_script_still_writes_the_hummingbird_repo():
@@ -73,28 +91,47 @@ def test_the_script_still_writes_the_hummingbird_repo():
 
 
 def test_every_network_repo_this_script_writes_requires_gpgcheck():
-    """The package-admission gate, extended to 10-base-packages.sh: any
-    `*.repo` heredoc for a baseurl that is not file:// must require RPM
-    signature verification. The file:// digest-pinned exception
-    (tuna-os/tunaOS#1655) stays scoped to file:// and is untouched here."""
+    """The package-admission gate, extended to 10-base-packages.sh: every
+    `[section]` with a baseurl that is not file:// must require RPM signature
+    verification. Sections are checked individually because dnf enables them
+    individually. The file:// digest-pinned exception (tuna-os/tunaOS#1655)
+    stays scoped to file:// and is untouched here."""
     blocks = repo_blocks()
     assert blocks, "no *.repo heredoc found at all -- the regex is the thing under test"
-    for target, fields in blocks.items():
-        baseurl = fields.get("baseurl", "")
-        if baseurl.startswith("file://"):
-            continue
-        assert fields.get("gpgcheck") == "1", (
-            f"{target}: baseurl={baseurl!r} is fetched over the network and must "
-            f"set gpgcheck=1 (got gpgcheck={fields.get('gpgcheck')!r})"
-        )
-        assert fields.get("gpgkey", "").startswith("https://"), (
-            f"{target}: gpgcheck=1 with no gpgkey verifies nothing against any key "
-            f"(got gpgkey={fields.get('gpgkey')!r})"
-        )
+    gated = 0
+    for target, sections in blocks.items():
+        for section, fields in sections.items():
+            baseurl = fields.get("baseurl", "")
+            if not baseurl or baseurl.startswith("file://"):
+                continue
+            gated += 1
+            where = f"{target} [{section}]" if section else f"{target} (no section header)"
+            assert fields.get("gpgcheck") == "1", (
+                f"{where}: baseurl={baseurl!r} is fetched over the network and must "
+                f"set gpgcheck=1 (got gpgcheck={fields.get('gpgcheck')!r})"
+            )
+            # The policy is gpgcheck=1 plus a matching gpgkey, not a particular
+            # transport: dnf reads a local `file://` key just as well, so this
+            # gate only rejects an absent key (and a key fetched in cleartext,
+            # which would be substitutable in flight along with the RPMs it is
+            # meant to vouch for). Which key the Hummingbird repo must use is
+            # pinned exactly in the next test.
+            keys = fields.get("gpgkey", "").replace(",", " ").split()
+            assert keys, (
+                f"{where}: gpgcheck=1 with no gpgkey verifies nothing against any key "
+                f"(got gpgkey={fields.get('gpgkey')!r})"
+            )
+            for key in keys:
+                assert key.startswith(("https://", "file://")), (
+                    f"{where}: gpgkey={key!r} is neither a local file:// key nor "
+                    f"fetched over https://, so the key itself is unauthenticated"
+                )
+    assert gated, "no network baseurl in any section -- the gate would pass vacuously"
 
 
 def test_the_hummingbird_repo_specifically_uses_the_published_tunaos_key():
-    fields = repo_blocks()["/etc/yum.repos.d/tunaos-hummingbird.repo"]
+    sections = repo_blocks()["/etc/yum.repos.d/tunaos-hummingbird.repo"]
+    fields = sections["tunaos-hummingbird"]
     assert fields["baseurl"].startswith("https://repo.tunaos.org/hummingbird/")
     assert fields["gpgcheck"] == "1"
     # Same key install-desktop.sh's writer uses for every other repo.tunaos.org
@@ -115,6 +152,32 @@ def test_the_parser_catches_the_shape_this_file_actually_shipped():
         "priority=5\n"
         "REPO\n"
     )
-    fields = repo_blocks(shipped)["/etc/yum.repos.d/tunaos-hummingbird.repo"]
+    sections = repo_blocks(shipped)["/etc/yum.repos.d/tunaos-hummingbird.repo"]
+    fields = sections["tunaos-hummingbird"]
     assert fields["gpgcheck"] == "0"
     assert "gpgkey" not in fields
+
+
+def test_a_second_section_cannot_mask_an_unsigned_first_one():
+    """A flat parse would let the signed `[two]` below overwrite `[one]`'s
+    gpgcheck=0 and report the file as clean; parsing per section keeps the
+    violating repo visible and attributable."""
+    multi = (
+        "\tcat >/etc/yum.repos.d/multi.repo <<'REPO'\n"
+        "[one]\n"
+        "baseurl=https://repo.tunaos.org/one/\n"
+        "gpgcheck=0\n"
+        "[two]\n"
+        "baseurl=https://repo.tunaos.org/two/\n"
+        "gpgcheck=1\n"
+        "gpgkey=https://repo.tunaos.org/public.gpg\n"
+        "REPO\n"
+    )
+    sections = repo_blocks(multi)["/etc/yum.repos.d/multi.repo"]
+    assert sorted(sections) == ["one", "two"]
+    assert sections["one"] == {
+        "baseurl": "https://repo.tunaos.org/one/",
+        "gpgcheck": "0",
+    }
+    assert sections["two"]["gpgcheck"] == "1"
+    assert sections["two"]["gpgkey"] == "https://repo.tunaos.org/public.gpg"
