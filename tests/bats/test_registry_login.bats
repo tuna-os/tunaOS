@@ -141,6 +141,20 @@ EOF
 	[ ! -s "$LOGIN_LOG" ]
 }
 
+@test "destinations outside the primary registry grammar are rejected" {
+	export PUBLISH_REGISTRY_USERNAME="publisher"
+	export PUBLISH_REGISTRY_TOKEN="registry-test-token"
+	export REGISTRY_LOGIN_CLIENTS="podman"
+
+	for destination in "[::1]:5000/acme" "registry:5000/acme"; do
+		export PUBLISH_DESTINATION="$destination"
+		run "$SCRIPT"
+		[ "$status" -ne 0 ]
+		[[ "$output" == *"invalid publish destination"* ]]
+	done
+	[ ! -s "$LOGIN_LOG" ]
+}
+
 @test "untrusted pull request execution cannot authenticate" {
 	export GITHUB_EVENT_NAME="pull_request"
 	export PUBLISH_DESTINATION="quay.io/acme"

@@ -35,6 +35,9 @@ stock_destination="ghcr.io/${repository_owner,,}"
 if [[ "${destination,,}" == "$stock_destination" ]]; then
 	destination="$stock_destination"
 fi
+# Match [build.publish] exactly: localhost or a dotted lowercase host (including
+# dotted IPv4 syntax). Bracketed IPv6 and private single-label hosts are
+# intentionally outside the primary configuration contract.
 registry_re='(localhost|[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+)(:[0-9]{1,5})?'
 namespace_component='[a-z0-9]+((\.|_|__|-+)[a-z0-9]+)*'
 if [[ ! "$destination" =~ ^${registry_re}/${namespace_component}(/${namespace_component})*$ ]]; then
