@@ -154,6 +154,9 @@ def install(args) -> dict:
         raise ValueError('unsupported native architecture')
     if not 1 <= args.priority <= 99:
         raise ValueError('repository priority must be between 1 and 99')
+    if (args.packages.is_symlink() or not args.packages.is_file()
+            or args.packages.stat().st_size > 64 * 1024):
+        raise ValueError('package inventory must be a bounded regular, non-symlink file')
     packages = args.packages.read_text().splitlines()
     if not packages or any(not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9+_.:~-]*', p) for p in packages):
         raise ValueError('package inventory must contain one explicit package name per line')

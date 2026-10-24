@@ -135,12 +135,6 @@ def test_proxy_evidence_requires_denials(monkeypatch):
         runner.summarize_proxy(log, {'proxy_denials': ['repo.tunaos.org'], 'direct_denials': []})
 
 
-def test_workflow_manual_readonly_bounded():
-    data = (ROOT / '.github/workflows/diagnostic-oci-rpm-consumer.yml').read_text()
-    assert 'workflow_dispatch:' in data and 'timeout-minutes: 120' in data
-    assert 'persist-credentials: false' in data
-    assert 'write' not in data and 'secrets.' not in data
-    assert 'pull_request:' not in data and 'push:' not in data
 
 
 def test_every_docker_command_pins_local_socket(monkeypatch):

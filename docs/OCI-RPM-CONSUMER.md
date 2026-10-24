@@ -63,9 +63,10 @@ the EL10 GNOME tier uses 1. The accepted range is 1–99.
 
 ## Trust, receipts and cleanup
 
-Stdout contains a JSON receipt. It records the reference, signer, scope, requested
-packages, installed RPM inventory and hashes of keys, tools and configurations.
-Child processes send progress to stderr. Keep the receipt with external build evidence.
+Stdout contains a JSON receipt. It records the reference, signer, target,
+architecture, requested packages, installed RPM inventory and hashes of keys,
+tools and configurations. Child processes send progress to stderr. Keep the
+receipt with external build evidence.
 
 On success or exception, the consumer removes its repo, key file, caches, logs,
 transport copy and temporary state. It retains the RPM database, including imported
