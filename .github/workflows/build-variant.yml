@@ -46,6 +46,10 @@ on:
         required: false
       R2_BUCKET:
         required: false
+      PUBLISH_REGISTRY_USERNAME:
+        required: false
+      PUBLISH_REGISTRY_TOKEN:
+        required: false
 
 jobs:
   # ── Matrix Generation ───────────────────────────────────────────────────────
@@ -75,14 +79,13 @@ jobs:
       - name: Setup yq
         uses: ./.github/actions/setup-yq
 
-      # A fork's destination from tunaos.toml [build.publish]. Empty means
-      # the stock behaviour: ghcr.io/<repository owner>.
+      # Resolve the same destination used by local builds, image metadata and
+      # artifact jobs. The repository variable remains the operator override.
       - name: Resolve publish destination
         id: publish
-        run: |
-          registry="$(yq -r '.config.publish.registry // ""' .github/build-config.yml)"
-          namespace="$(yq -r '.config.publish.namespace // ""' .github/build-config.yml)"
-          echo "image_registry=${registry:+${registry}/${namespace}}" >> "$GITHUB_OUTPUT"
+        env:
+          IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY }}
+        run: echo "image_registry=$(scripts/publish-destination.sh)" >> "$GITHUB_OUTPUT"
 
       - name: Validate Inputs
         env:
@@ -275,6 +278,9 @@ jobs:
       default-tag: ${{ matrix.published_tag }}
       publish: ${{ github.event_name != 'pull_request' }}
       sbom: ${{ github.event_name != 'pull_request' }}
+    secrets:
+      PUBLISH_REGISTRY_USERNAME: ${{ secrets.PUBLISH_REGISTRY_USERNAME }}
+      PUBLISH_REGISTRY_TOKEN: ${{ secrets.PUBLISH_REGISTRY_TOKEN }}
 
   # ── Stage 2: base-hwe, base-nvidia, and desktop base flavors ──────────────────
   # Runs only after ALL stage-1 jobs pass. Includes:
@@ -328,6 +334,9 @@ jobs:
       default-tag: ${{ matrix.published_tag }}
       publish: true
       sbom: true
+    secrets:
+      PUBLISH_REGISTRY_USERNAME: ${{ secrets.PUBLISH_REGISTRY_USERNAME }}
+      PUBLISH_REGISTRY_TOKEN: ${{ secrets.PUBLISH_REGISTRY_TOKEN }}
 
   # ── Stage 3: Desktop HWE and nvidia flavors ───────────────────────────────────
   # Layers on stage-2 images:
@@ -368,6 +377,9 @@ jobs:
       default-tag: ${{ matrix.published_tag }}
       publish: true
       sbom: true
+    secrets:
+      PUBLISH_REGISTRY_USERNAME: ${{ secrets.PUBLISH_REGISTRY_USERNAME }}
+      PUBLISH_REGISTRY_TOKEN: ${{ secrets.PUBLISH_REGISTRY_TOKEN }}
 
   # ── Stage 4: Combined nvidia+HWE flavors ──────────────────────────────────────
   # Layers on stage-3 images:
@@ -402,6 +414,9 @@ jobs:
       default-tag: ${{ matrix.published_tag }}
       publish: true
       sbom: true
+    secrets:
+      PUBLISH_REGISTRY_USERNAME: ${{ secrets.PUBLISH_REGISTRY_USERNAME }}
+      PUBLISH_REGISTRY_TOKEN: ${{ secrets.PUBLISH_REGISTRY_TOKEN }}
 
   # ── Artifact builds per stage (ISO + QCOW2) ───────────────────────────────
   # Each stage's artifacts depend only on that stage's image builds.
@@ -466,6 +481,8 @@ jobs:
       R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
       R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
       R2_BUCKET: ${{ secrets.R2_BUCKET }}
+      PUBLISH_REGISTRY_USERNAME: ${{ secrets.PUBLISH_REGISTRY_USERNAME }}
+      PUBLISH_REGISTRY_TOKEN: ${{ secrets.PUBLISH_REGISTRY_TOKEN }}
 
   # Same cell logic for stage-3 ISOs (gnome-nvidia etc.). `!cancelled()` so a
   # single stage-3 image failure doesn't skip the artifacts that DID build.
@@ -514,6 +531,8 @@ jobs:
       R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
       R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
       R2_BUCKET: ${{ secrets.R2_BUCKET }}
+      PUBLISH_REGISTRY_USERNAME: ${{ secrets.PUBLISH_REGISTRY_USERNAME }}
+      PUBLISH_REGISTRY_TOKEN: ${{ secrets.PUBLISH_REGISTRY_TOKEN }}
 
   build_artifacts_s4:
     name: "iso:${{ matrix.flavor }} (${{ matrix.safeplatform }})"
@@ -560,3 +579,5 @@ jobs:
       R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
       R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
       R2_BUCKET: ${{ secrets.R2_BUCKET }}
+      PUBLISH_REGISTRY_USERNAME: ${{ secrets.PUBLISH_REGISTRY_USERNAME }}
+      PUBLISH_REGISTRY_TOKEN: ${{ secrets.PUBLISH_REGISTRY_TOKEN }}

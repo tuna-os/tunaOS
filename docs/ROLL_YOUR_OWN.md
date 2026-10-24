@@ -144,13 +144,53 @@ registry = "quay.io"
 namespace = "acme"
 ```
 
-Local builds, CI, ISOs and the boot gate all use this destination, and each
-image records it. The repository variable `IMAGE_REGISTRY` (for example
-`quay.io/acme`) still overrides it for one repository.
+Local builds, CI, ISOs and the boot gate use this destination, and each image
+records it. The repository variable `IMAGE_REGISTRY` (for example
+`quay.io/acme`) overrides both TOML fields for an operator-controlled
+repository. The effective value must remain a lowercase
+`<registry>/<namespace>` OCI path.
 
-CI signs in with the repository's own `GITHUB_TOKEN`. That token can push only
-to `ghcr.io` under the repository owner. CI cannot yet push to another
-registry or namespace; issue #3668 tracks the credentials for that case.
+### CI credentials for the publish destination
+
+The workflow selects one credential mode from the effective destination:
+
+| Effective destination | Credential source |
+|---|---|
+| Exactly `ghcr.io/<repository-owner>` | Built-in `github.actor` and job-scoped `GITHUB_TOKEN`; no added secret |
+| Any other registry or namespace | Repository secrets `PUBLISH_REGISTRY_USERNAME` and `PUBLISH_REGISTRY_TOKEN` |
+
+Create both custom secrets in the fork or derivative repository. Do not put
+their values or secret names in `tunaos.toml`:
+
+```bash
+gh secret set PUBLISH_REGISTRY_USERNAME
+gh secret set PUBLISH_REGISTRY_TOKEN
+```
+
+Use a registry robot or service account limited to pull and push in the
+configured namespace. It does not need account administration, repository
+deletion, or access to unrelated namespaces. For an alternate GHCR
+organization, the token needs package read/write access there and the account
+must already have permission to that organization.
+
+The contract fails closed:
+
+- an alternate destination with neither secret, or only one secret, stops
+  before login;
+- custom credentials on the stock owner destination are rejected as a
+  conflicting override;
+- a username/token that does not match the effective registry or namespace
+  fails that registry's login; CI never falls back to `ghcr.io/tuna-os`;
+- malformed destinations and usernames are rejected before any registry
+  command runs;
+- pull-request and `pull_request_target` execution cannot authenticate.
+  Fork PR builds remain build-only and receive no publish secrets.
+
+The selected token is sent only on standard input to the requested registry
+clients. Build scripts do not receive it. The same login contract covers image
+and manifest pushes, authenticated gate/ISO pulls, cosign signature uploads,
+and final promotion. Cosign still signs with the workflow's ephemeral GitHub
+OIDC identity; the registry token is not a signing key.
 
 ---
 

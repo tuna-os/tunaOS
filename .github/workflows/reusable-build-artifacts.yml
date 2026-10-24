@@ -80,6 +80,10 @@ on:
         required: false
       R2_BUCKET:
         required: false
+      PUBLISH_REGISTRY_USERNAME:
+        required: false
+      PUBLISH_REGISTRY_TOKEN:
+        required: false
 
 jobs:
   iso:
@@ -209,6 +213,20 @@ jobs:
           if ! grep -q "^${USER}:" /etc/subgid 2>/dev/null; then
             echo "${USER}:100000:65536" | sudo tee -a /etc/subgid
           fi
+
+      - name: Resolve image registry
+        id: publish
+        env:
+          IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY }}
+        run: echo "destination=$(scripts/publish-destination.sh)" >> "$GITHUB_OUTPUT"
+
+      - name: Login to image registry
+        uses: ./.github/actions/registry-login
+        with:
+          destination: ${{ steps.publish.outputs.destination }}
+          registry-username: ${{ secrets.PUBLISH_REGISTRY_USERNAME }}
+          registry-token: ${{ secrets.PUBLISH_REGISTRY_TOKEN }}
+          clients: sudo-podman
 
       - name: Build Live ISO
         env:

@@ -69,6 +69,8 @@ jobs:
       R2_SECRET_ACCESS_KEY: ${{{{ secrets.R2_SECRET_ACCESS_KEY }}}}
       R2_ENDPOINT: ${{{{ secrets.R2_ENDPOINT }}}}
       R2_BUCKET: ${{{{ secrets.R2_BUCKET }}}}
+      PUBLISH_REGISTRY_USERNAME: ${{{{ secrets.PUBLISH_REGISTRY_USERNAME }}}}
+      PUBLISH_REGISTRY_TOKEN: ${{{{ secrets.PUBLISH_REGISTRY_TOKEN }}}}
 """
 
     # Experimental variants: manual dispatch only — no cron schedule.
@@ -97,6 +99,8 @@ jobs:
       R2_SECRET_ACCESS_KEY: ${{{{ secrets.R2_SECRET_ACCESS_KEY }}}}
       R2_ENDPOINT: ${{{{ secrets.R2_ENDPOINT }}}}
       R2_BUCKET: ${{{{ secrets.R2_BUCKET }}}}
+      PUBLISH_REGISTRY_USERNAME: ${{{{ secrets.PUBLISH_REGISTRY_USERNAME }}}}
+      PUBLISH_REGISTRY_TOKEN: ${{{{ secrets.PUBLISH_REGISTRY_TOKEN }}}}
 """
 
 

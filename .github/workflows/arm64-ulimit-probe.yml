@@ -1,6 +1,6 @@
 # Diagnostic only. Measures the file-descriptor limits podman actually sees on
 # an arm64 runner, under the plain shell and under sudo, before anyone edits
-# .github/actions/ghcr-login. That action is on the critical path of every
+# .github/actions/registry-login. That action is on the critical path of every
 # build in this repository, so a guess pushed straight into it is a repo-wide
 # outage if the guess is wrong.
 #
@@ -81,9 +81,9 @@ jobs:
 
       - name: Can the sudo shell actually raise it to 4096?
         run: |
-          # This is the exact construct ghcr-login uses. `&&` means a failure
-          # here stops the login from ever running, so distinguish "the ulimit
-          # was rejected" from "podman ran and disliked what it got".
+          # This is the ulimit construct the retired ghcr-login action used.
+          # `&&` meant a failure here stopped the login from ever running, so
+          # distinguish "the ulimit was rejected" from "podman disliked it".
           if sudo bash -c 'ulimit -n 4096' 2>/tmp/ulimit.err; then
             echo "sudo ulimit -n 4096: OK"
             echo '| sudo `ulimit -n 4096` | accepted | |' >> "$GITHUB_STEP_SUMMARY"
@@ -134,16 +134,16 @@ jobs:
 
       # The measurement none of the above take: every prior step calls
       # `podman info` or a bare `ulimit` in isolation. Production never does
-      # that -- ghcr-login runs an UNSUDO `podman login` first, in the same
-      # job, and only then the sudo one that fails. `podman info` above
+      # that -- registry-login runs an UNSUDO `podman login` first, in the
+      # same job, and only then the sudo one that fails. `podman info` above
       # proved sudo's default 1024 is enough for a lock-file init done cold;
       # this checks whether an EARLIER unsudo login changes what the sudo
       # one sees -- shared XDG_RUNTIME_DIR state, a rootless storage graph
       # already initialized under the runner UID, anything the isolated
       # probes above could not catch by construction. Real credentials
       # (github.token), no ulimit override on either call, same order
-      # ghcr-login uses.
-      - name: Does the exact ghcr-login login sequence reproduce it?
+      # registry-login uses.
+      - name: Does the exact registry-login sequence reproduce it?
         env:
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_ACTOR: ${{ github.actor }}

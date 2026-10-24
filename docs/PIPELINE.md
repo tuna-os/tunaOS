@@ -62,7 +62,14 @@ Stage 4:  gnome-nvidia-hwe                              (layer on gnome-hwe)
 4. **Stage 3-4** — layers HWE/nvidia via `Containerfile.overlay`
 5. **Rechunk** — chunkah makes ostree-optimized layers for delta updates
 6. **Boot gate** — Corral boots the `-testing` image under QEMU, and Promote waits for the result (see [Boot gates](#boot-gates))
-7. **Publish** — multi-arch manifest pushed to GHCR, signed with cosign
+7. **Publish** — multi-arch manifest pushed to the resolved registry, signed with cosign
+
+`tunaos.toml` `[build.publish]` selects the registry and namespace. The exact
+`ghcr.io/<repository-owner>` destination uses the job-scoped `GITHUB_TOKEN`;
+every other destination requires the optional
+`PUBLISH_REGISTRY_USERNAME`/`PUBLISH_REGISTRY_TOKEN` repository-secret pair.
+One login action applies that choice to pushes, gate and artifact pulls,
+cosign uploads, and promotion. Pull-request events cannot authenticate.
 
 ---
 
