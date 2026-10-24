@@ -24,6 +24,7 @@ Invoked by:
 | `fork-simulation-gh` | Serves the synthetic PR API fixture for simulated workflows; rejects every unlisted request without contacting GitHub |
 | `sync-upstream-snapshots.sh` | Syncs and drift-checks the `_upstream-snapshots/` tree |
 | `iso-e2e.sh` | Orchestrates ISO/disk E2E modes: live smoke, SSH, `--luks` install + unlock, app launches |
+| `installed-lifecycle-pilot.py` | Boots a disposable installed Skipjack/GNOME qcow2 through an exact A → B update and B → A rollback, retaining schema-defined evidence |
 | `lib/e2e-visual.sh` | Captures and evaluates QEMU framebuffer evidence for the E2E harness; unit-testable without a VM |
 | `install-checkpoints.py` | OCRs the frames `iso-e2e.sh` captured and asserts them against `tests/install-pipeline-screens.yaml` (see `docs/INSTALL-PIPELINE-CHECKPOINTS.md`) |
 | `installer-walkthrough.py` | Drives the installer frontend with `sendkey` and asserts its pages against `tests/installer-screens.yaml` |
