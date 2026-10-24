@@ -23,8 +23,9 @@
 # The ceiling is keyed on the driver's upstream version, so a Debian driver
 # upload this table does not know about builds against the shipped kernel
 # unchanged; if that fails, dkms fails the build as it always did. When the
-# archive no longer carries any kernel under the ceiling, this exits 1 with
-# that reason rather than publishing a driverless image. trixie (6.12) is
+# archive no longer carries any kernel under the ceiling, recover the exact
+# measured pair from Debian snapshot for the known amd64 driver. Other
+# identities fail closed rather than publishing a driverless image. trixie (6.12) is
 # under every ceiling, so flounder never swaps.
 #
 # Test hooks (same pattern as 10-kernel-swap.sh): TUNAOS_MODULES_ROOT and
@@ -87,10 +88,14 @@ done < <(apt-cache pkgnames linux-image- |
 	sort -V)
 
 if [[ -z "$HELD" ]]; then
-	echo "ERROR: nvidia-kernel-dkms ${DRIVER} does not build on kernel ${SERIES} (ceiling ${CEILING})," >&2
-	echo "       and the archive no longer carries a linux-image-*-${FLAVOUR} at or below ${CEILING}" >&2
-	echo "       with matching headers. Needs a newer Debian nvidia driver; see this script's header." >&2
-	exit 1
+	# Sid retires old ABIs as it rolls. Recover only the exact measured native
+	# pair from Debian's authenticated archive; unsupported identities fail.
+	HELD="$(bash "$(dirname "$0")/debian-nvidia-snapshot.sh" "$DRIVER" "$KVER")" || {
+		echo "ERROR: nvidia-kernel-dkms ${DRIVER} does not build on kernel ${SERIES} (ceiling ${CEILING})," >&2
+		echo "       and the archive no longer carries a linux-image-*-${FLAVOUR} at or below ${CEILING}" >&2
+		echo "       with matching headers. Needs a newer Debian nvidia driver; see this script's header." >&2
+		exit 1
+	}
 fi
 
 echo "==> holding kernel at ${HELD}: ${KVER} is above the ${CEILING} ceiling for ${DRIVER_UPSTREAM}"
@@ -111,4 +116,9 @@ if [[ ! -s "${MODULES_ROOT}/${HELD}/vmlinuz" ]]; then
 	cp "${BOOT_DIR}/vmlinuz-${HELD}" "${MODULES_ROOT}/${HELD}/vmlinuz"
 fi
 test -s "${MODULES_ROOT}/${HELD}/vmlinuz"
+mapfile -t HELD_TREES < <(find "$MODULES_ROOT" -mindepth 1 -maxdepth 1 -type d ! -name '*.img' -printf '%f\n')
+if [[ "${#HELD_TREES[@]}" != 1 || "${HELD_TREES[0]}" != "$HELD" ]]; then
+	echo "ERROR: held kernel must be the sole bootable module tree: expected ${HELD}, found ${HELD_TREES[*]}" >&2
+	exit 1
+fi
 echo "==> kernel trees now: $(ls "$MODULES_ROOT")"

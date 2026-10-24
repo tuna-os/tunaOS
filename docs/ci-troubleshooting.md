@@ -1972,3 +1972,22 @@ outreach copy or creative briefs, use the reasoned region or file opt-out in
 [the contributor prose policy](../CONTRIBUTING.md#prose-checks-ste). Keep
 technical steps checked on mixed pages. Run `just ste` again; do not increase
 `.ste-budget` or exclude a whole directory to pass one content change.
+
+### Flounder-sid NVIDIA: no kernel below the driver ceiling (#3685)
+
+Symptom: `nvidia-kernel-dkms 550.163.01-5.1 does not build on kernel 7.2
+(ceiling 7.1)` followed by no matching archive kernel/headers (scheduled
+run [39884547800](https://github.com/tuna-os/tunaOS/actions/runs/39884547800)).
+Sid retired the live 7.1 pair used by #2698 while the driver remained at 550.
+The overlay now falls back to Debian's `20260909T000000Z` snapshot for the
+measured amd64 `7.1.13-1` image and headers. The snapshot InRelease signatures
+were verified with Debian's archive keyring; its amd64 Packages.xz SHA256 is
+`ad75dda481994a43b65b72015619ef2ff1424e98aa839962e375ce0a930218d6`.
+All seven package hashes in `debian-nvidia-snapshot.sh` match that index.
+
+The fallback retains APT signature/digest verification, disables expiration
+only for this historical source, and denies unrelated snapshot packages.
+Unknown driver revisions and architectures fail closed. This is a compatibility
+hold on an older kernel, not a kernel security update; remove it when Debian
+ships a driver measured to build against the current kernel. Successful image
+builds and scheduled artifacts still require verification in CI.

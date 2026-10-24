@@ -115,7 +115,7 @@ def test_an_unmeasured_driver_builds_against_the_shipped_kernel(tmp_path):
 
 def test_no_kernel_under_the_ceiling_fails_loudly(tmp_path):
     proc, trees, calls, _ = _run(
-        tmp_path, "7.2.7+deb14-amd64", "550.163.01-5.1", ["7.2.6+deb14-amd64", "7.2.7+deb14-amd64"]
+        tmp_path, "7.2.7+deb14-amd64", "550.163.01-5.2", ["7.2.6+deb14-amd64", "7.2.7+deb14-amd64"]
     )
     assert proc.returncode != 0
     assert "does not build on kernel 7.2" in proc.stderr
