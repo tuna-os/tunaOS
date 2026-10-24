@@ -973,34 +973,58 @@ if [[ -f "$RECIPE_FILE" ]]; then
 	_composefs_backend="$(sed -n 's/^composeFsBackend=//p' <<<"$_backend_kv")"
 	_filesystem="$(sed -n 's/^filesystem=//p' <<<"$_backend_kv")"
 
-	python3 - "$RECIPE_FILE" "$_bootloader" "$_composefs_backend" "$_filesystem" "${DESKTOP}" <<'PYEOF'
+	python3 - "$RECIPE_FILE" "$_bootloader" "$_composefs_backend" "$_filesystem" "${DESKTOP}" "${_SR}" <<'PYEOF'
 import json
 import os
 import sys
 
-path, bootloader, composefs, filesystem, desktop = sys.argv[1:6]
+path, bootloader, composefs, filesystem, desktop, sysroot = sys.argv[1:7]
 with open(path) as f:
     recipe = json.load(f)
 recipe["bootloader"] = bootloader
 recipe["composeFsBackend"] = composefs == "true"
 recipe["filesystem"] = filesystem
 
-# If imgref or local_imgref carries the generic placeholder, interpolate from image identity
+# If imgref carries the generic placeholder or is missing, interpolate from image identity
 imgref = recipe.get("imgref", "")
 if not imgref or "tuna-os/tunaos:latest" in imgref:
     variant = None
-    if os.path.exists("/usr/share/tunaos/identity.env"):
-        with open("/usr/share/tunaos/identity.env") as env_f:
+    id_path = os.path.join(sysroot, "usr/share/tunaos/identity.env".lstrip("/"))
+    if os.path.exists(id_path):
+        with open(id_path) as env_f:
             for line in env_f:
                 if line.startswith("TUNAOS_VARIANT="):
                     variant = line.split("=", 1)[1].strip().strip("'\"")
-    if not variant and os.path.exists("/etc/os-release"):
-        with open("/etc/os-release") as os_f:
+    osr_path = os.path.join(sysroot, "etc/os-release".lstrip("/"))
+    if not variant and os.path.exists(osr_path):
+        with open(osr_path) as os_f:
             for line in os_f:
                 if line.startswith("IMAGE_ID="):
                     variant = line.split("=", 1)[1].strip().strip("'\"")
+
+    vendor = "tuna-os"
+    v_path = os.path.join(sysroot, "usr/share/tunaos/image-vendor".lstrip("/"))
+    if os.path.exists(v_path):
+        with open(v_path) as vf:
+            v_val = vf.read().strip()
+            if v_val:
+                vendor = v_val
+
     if variant and desktop:
-        imgref = f"ghcr.io/tuna-os/{variant}:{desktop}"
+        publish_name = variant
+        tag_suffix = ""
+        if variant == "bonito-rawhide":
+            publish_name = "bonito"
+            tag_suffix = "rawhide"
+        elif variant == "flounder-sid":
+            publish_name = "flounder"
+            tag_suffix = "sid"
+
+        img_tag = desktop
+        if tag_suffix and not img_tag.endswith(f"-{tag_suffix}") and f"-{tag_suffix}-" not in img_tag:
+            img_tag = f"{img_tag}-{tag_suffix}"
+
+        imgref = f"ghcr.io/{vendor}/{publish_name}:{img_tag}"
         recipe["imgref"] = imgref
 
 if recipe.get("imgref"):
