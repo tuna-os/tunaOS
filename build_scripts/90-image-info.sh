@@ -10,12 +10,15 @@ source /run/context/build_scripts/lib.sh
 # There is deliberately no built-in fallback: a missing file is a broken
 # build context, not a reason to stamp stock TunaOS identity on a fork.
 IDENTITY_ENV="${TUNAOS_IDENTITY_ENV:-/run/context/build_scripts/lib/identity.env}"
-if [[ ! -f "${IDENTITY_ENV}" ]]; then
-	echo "ERROR: ${IDENTITY_ENV} is missing; run scripts/config.py generate-identity" >&2
+if [[ ! -f "${IDENTITY_ENV}" || ! -r "${IDENTITY_ENV}" ]]; then
+	echo "ERROR: ${IDENTITY_ENV} is missing or unreadable; run scripts/config.py generate-identity" >&2
 	exit 1
 fi
 # shellcheck source=lib/identity.env
-source "${IDENTITY_ENV}"
+if ! source "${IDENTITY_ENV}"; then
+	echo "ERROR: ${IDENTITY_ENV} could not be sourced; run scripts/config.py generate-identity" >&2
+	exit 1
+fi
 
 # Fold a friendly alias tag onto the canonical variant id it belongs to.
 #

@@ -6,6 +6,7 @@ No legacy fork manifest participates in this contract.
 import copy
 import json
 from pathlib import Path
+import subprocess
 import sys
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -49,3 +50,19 @@ def test_primary_identity_and_publish_destination_share_the_consumer_path(tmp_pa
         output = verify(image, **env)
         assert vendor_lines(output) == ["ok: image-vendor=acme"]
         assert "ok: HOME_URL=https://acme.example/homepage" in output
+
+
+def test_image_info_reports_an_unreadable_identity_adapter(tmp_path):
+    image = Image(tmp_path)
+    adapter = image.context / "build_scripts/lib/identity.env"
+    adapter.chmod(0)
+
+    result = subprocess.run(
+        ["bash", str(image.context / "build_scripts/90-image-info.sh")],
+        env=image.env,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "missing or unreadable" in result.stderr

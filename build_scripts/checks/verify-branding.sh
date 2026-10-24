@@ -118,8 +118,8 @@ names_upstream() {
 # Expected values come from the same generated adapter the writer used, so a
 # fork's own codenames pass and there is no second table to drift out of step
 # (two copies once disagreed for flounder-sid, LUKS run 31093350820). Build mode
-# reads the build context; the installed checker reads the copy
-# configure-desktop-runtime.sh ships beside it.
+# reads the generated build-context adapter; 90-image-info.sh installs that same
+# adapter at /usr/share/tunaos/identity-config.env for the runtime checker.
 identity_env=""
 local_identity="$(dirname "${BASH_SOURCE[0]}")/../lib/identity.env"
 identity_override=""
@@ -182,12 +182,14 @@ fi
 # 90-image-info.sh wrote. A substring test for tuna-os/tunaos failed every fork
 # that names its own project, and passed any URL that merely contained it.
 for field in HOME_URL DOCUMENTATION_URL SUPPORT_URL BUG_REPORT_URL; do
+	want_var=""
 	v="$(osr "$field")"
 	case "$field" in
 	HOME_URL) want_var=TUNAOS_HOME_URL ;;
 	DOCUMENTATION_URL) want_var=TUNAOS_DOCUMENTATION_URL ;;
 	SUPPORT_URL) want_var=TUNAOS_SUPPORT_URL ;;
 	BUG_REPORT_URL) want_var=TUNAOS_BUG_REPORT_URL ;;
+	*) fail "unsupported identity URL field: ${field}"; continue ;;
 	esac
 	want_url="${!want_var:-}"
 	fork_url=""
