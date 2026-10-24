@@ -323,11 +323,47 @@ def podman(
                     "--security-opt=no-new-privileges", "--entrypoint", entrypoint, image, *args])
 
 
-def image_identity(log: CommandLog, image: str) -> dict:
-    prefix = f"containers-storage:{image}"
-    manifest = checked(log, ["skopeo", "inspect", "--raw", prefix], what=f"manifest {image}")
-    config = checked(log, ["skopeo", "inspect", "--config", prefix], what=f"config {image}")
-    return {"manifestDigest": sha256(manifest), "configDigest": sha256(config)}
+def local_image(log: CommandLog, reference: str) -> dict[str, str]:
+    raw = checked(
+        log,
+        ["podman", "image", "inspect", reference],
+        what=f"local image {reference}",
+    )
+    try:
+        values = json.loads(raw, object_pairs_hook=unique_object)
+    except (UnicodeError, json.JSONDecodeError) as exc:
+        raise QualificationError(f"local image {reference}: invalid inspection JSON") from exc
+    require(
+        isinstance(values, list) and len(values) == 1 and isinstance(values[0], dict),
+        f"local image {reference}: expected one image",
+    )
+    image_id = values[0].get("Id")
+    parent_id = values[0].get("Parent") or ""
+    require(isinstance(image_id, str) and DIGEST.fullmatch(image_id),
+            f"local image {reference}: invalid immutable image ID")
+    require(isinstance(parent_id, str) and (not parent_id or DIGEST.fullmatch(parent_id)),
+            f"local image {reference}: invalid parent image ID")
+    return {"imageId": image_id, "parentImageId": parent_id}
+
+
+def image_identity(log: CommandLog, image_id: str) -> dict:
+    prefix = f"containers-storage:{image_id}"
+    manifest = checked(log, ["skopeo", "inspect", "--raw", prefix], what=f"manifest {image_id}")
+    config = checked(log, ["skopeo", "inspect", "--config", prefix], what=f"config {image_id}")
+    try:
+        parsed = json.loads(config, object_pairs_hook=unique_object)
+    except (UnicodeError, json.JSONDecodeError) as exc:
+        raise QualificationError(f"config {image_id}: invalid JSON") from exc
+    require(isinstance(parsed, dict), f"config {image_id}: expected object")
+    require(
+        parsed.get("os") == "linux" and parsed.get("architecture") == "amd64",
+        f"config {image_id}: expected linux/amd64",
+    )
+    return {
+        "manifestDigest": sha256(manifest),
+        "configDigest": sha256(config),
+        "platform": "linux/amd64",
+    }
 
 
 def read_image_info(log: CommandLog, image: str) -> dict:
@@ -413,6 +449,10 @@ def verify_cell(plan: dict, cell: dict, root: Path, source: dict, log: CommandLo
         desktop.get("CONTAINERFILE") == ROUTES[route],
         f"{route}: desktop flavor resolves elsewhere",
     )
+    require(
+        desktop.get("DESKTOP_FLAVOR") not in {"base", "base-no-de", "desktop"},
+        f"{route}: modifiedDesktop resolves to an internal build target",
+    )
     routes = {"stockBase": base_route, "modifiedBase": base_route, "modifiedDesktop": desktop}
     if route == "el10":
         overlay = resolve_flavor(root, variant, images["modifiedOverlay"]["flavor"], log)
@@ -421,48 +461,68 @@ def verify_cell(plan: dict, cell: dict, root: Path, source: dict, log: CommandLo
             and overlay.get("PARENT_FLAVOR"),
             "el10: overlay flavor does not inherit from a parent",
         )
+        require(
+            overlay["PARENT_FLAVOR"] == images["modifiedDesktop"]["flavor"],
+            "el10: overlay parent flavor is not the qualified modified desktop",
+        )
         routes["modifiedOverlay"] = overlay
 
     verify_base_source(log, cell["baseImage"])
     collected = []
+    image_ids = {}
     ordered_roles = ["stockBase", *DIRECT_ROLES]
     if route == "el10":
         ordered_roles.append("modifiedOverlay")
     for role in ordered_roles:
         record = images[role]
-        image = record["ref"]
+        reference = record["ref"]
         routing = routes[role]
         target = routing.get("DESKTOP_FLAVOR")
         try:
             require(isinstance(target, str) and target, f"{route}.{role}: resolver omitted target")
-            identity = image_identity(log, image)
-            image_record = {"role": role, "flavor": record["flavor"], **identity,
-                            "package": "unverified", "receiptSha256": None}
+            local = local_image(log, reference)
+            image_id = local["imageId"]
+            identity = image_identity(log, image_id)
+            image_record = {
+                "role": role,
+                "flavor": record["flavor"],
+                "sourceRef": reference,
+                **local,
+                **identity,
+                "package": "unverified",
+                "receiptSha256": None,
+            }
             collected.append(image_record)
-            info = read_image_info(log, image)
+            image_ids[role] = image_id
+            if role == "modifiedOverlay":
+                require(
+                    local["parentImageId"] == image_ids["modifiedDesktop"],
+                    f"{route}.modifiedOverlay: parent is not the qualified modified desktop",
+                )
+            info = read_image_info(log, image_id)
             short_commit = (source["stockShortCommit"] if role == "stockBase"
                             else source["modifiedShortCommit"])
             direct_base = None if role == "modifiedOverlay" else cell["baseImage"]
             verify_info(info, variant=variant, target=target, short_commit=short_commit,
                         base_image=direct_base, where=f"{route}.{role}")
-            query = package_query(log, manager, image, cell["package"])
+            query = package_query(log, manager, image_id, cell["package"])
             if role == "stockBase":
                 require(
                     query.returncode == 1,
                     f"{route}.stockBase: package query did not prove absence",
                 )
-                installed_receipt = receipt(log, image)
+                installed_receipt = receipt(log, image_id)
                 require(
                     installed_receipt.returncode == 1,
                     f"{route}.stockBase: stock package receipt exists",
                 )
                 image_record["package"] = "absent"
             else:
-                require(
-                    query.returncode == 0 and query.stdout.strip(),
-                    f"{route}.{role}: package is not installed",
-                )
-                installed_receipt = receipt(log, image)
+                installed = query.returncode == 0 and query.stdout.strip()
+                if manager == "apt":
+                    installed = installed and query.stdout.strip() == b"installed"
+                require(installed, f"{route}.{role}: package is not installed")
+                installed_receipt = receipt(log, image_id)
                 require(
                     installed_receipt.returncode == 0,
                     f"{route}.{role}: package receipt is missing",

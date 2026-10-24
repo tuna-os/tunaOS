@@ -49,6 +49,20 @@ def digest(data: bytes) -> str:
     return "sha256:" + hashlib.sha256(data).hexdigest()
 
 
+def image_id(reference):
+    return digest(reference.encode())
+
+
+def reference_for_id(value):
+    for cell in QUALIFICATION_PLAN["cells"]:
+        if cell["images"] is None:
+            continue
+        for record in cell["images"].values():
+            if image_id(record["ref"]) == value:
+                return record["ref"]
+    raise AssertionError(value)
+
+
 def plan(images=True):
     cells = []
     for route, variant in ROUTE_VARIANTS.items():
@@ -192,7 +206,9 @@ def test_command_log_bounds_both_output_streams(tmp_path):
 
 class FakeLog:
     fail_ref = None
-
+    mismatched_platform_ref = None
+    bad_apt_status_ref = None
+    wrong_parent_ref = None
     def __init__(self, path=None):
         self.path = path
 
@@ -229,6 +245,15 @@ class FakeLog:
                 f"{key}={json.dumps(value)}\n" for key, value in values.items()
             ).encode()
             return subprocess.CompletedProcess(args, 0, output, b"")
+        if args[:3] == ["podman", "image", "inspect"]:
+            reference = args[3]
+            parent = ""
+            if reference.endswith(":gnome-hwe"):
+                parent = image_id(reference.removesuffix("gnome-hwe") + "gnome")
+            if reference == self.wrong_parent_ref:
+                parent = digest(b"unqualified-parent")
+            output = json.dumps([{"Id": image_id(reference), "Parent": parent}]).encode()
+            return subprocess.CompletedProcess(args, 0, output, b"")
         if args[:3] == ["skopeo", "inspect", "--raw"]:
             ref = args[3]
             if ref.startswith("docker://"):
@@ -238,16 +263,20 @@ class FakeLog:
                 output = f"manifest-{ref}".encode()
             return subprocess.CompletedProcess(args, 0, output, b"")
         if args[:3] == ["skopeo", "inspect", "--config"]:
-            return subprocess.CompletedProcess(args, 0, f"config-{args[3]}".encode(), b"")
+            reference = reference_for_id(args[3].removeprefix("containers-storage:"))
+            architecture = "arm64" if reference == self.mismatched_platform_ref else "amd64"
+            output = json.dumps({"os": "linux", "architecture": architecture}).encode()
+            return subprocess.CompletedProcess(args, 0, output, b"")
         if args[:2] == ["podman", "run"]:
             entrypoint_index = args.index("--entrypoint")
             entrypoint = args[entrypoint_index + 1]
             image = args[entrypoint_index + 2]
+            reference = reference_for_id(image)
             command_args = args[entrypoint_index + 3:]
-            modified = "/modified-" in image
-            variant = image.split("-", 1)[1].split(":", 1)[0]
+            modified = "/modified-" in reference
+            variant = reference.split("-", 1)[1].split(":", 1)[0]
             route = next(key for key, value in ROUTE_VARIANTS.items() if value == variant)
-            flavor = image.rsplit(":", 1)[1]
+            flavor = reference.rsplit(":", 1)[1]
             image_info = ["/usr/share/ublue-os/image-info.json"]
             if entrypoint == "/usr/bin/cat" and command_args == image_info:
                 target = "desktop" if flavor == "gnome-hwe" else (
@@ -277,10 +306,14 @@ class FakeLog:
                 )
                 output = (header + f"required\t{package}\n").encode()
                 return subprocess.CompletedProcess(args, 0, output, b"")
-            if image == self.fail_ref:
+            if reference == self.fail_ref:
                 return subprocess.CompletedProcess(args, 1, b"", b"not installed")
-            return subprocess.CompletedProcess(args, 0 if modified else 1,
-                                               b"installed\n" if modified else b"", b"")
+            status = b"installed\n"
+            if reference == self.bad_apt_status_ref:
+                status = b"config-files\n"
+            return subprocess.CompletedProcess(
+                args, 0 if modified else 1, status if modified else b"", b""
+            )
         raise AssertionError(args)
 
 
@@ -305,6 +338,50 @@ def test_real_route_checks_cover_base_desktop_overlay_and_native_receipts(tmp_pa
             expected.add("modifiedOverlay")
         assert roles == expected
         assert all(image["manifestDigest"].startswith("sha256:") for image in result["images"])
+        assert all(image["platform"] == "linux/amd64" for image in result["images"])
+        assert all(image["imageId"].startswith("sha256:") for image in result["images"])
+
+
+def test_rejects_wrong_platform_internal_desktop_and_unqualified_overlay_parent(tmp_path):
+    qualification_plan = copy.deepcopy(QUALIFICATION_PLAN)
+    ubuntu = next(cell for cell in qualification_plan["cells"] if cell["route"] == "ubuntu")
+    bad_platform = ubuntu["images"]["modifiedDesktop"]["ref"]
+    FakeLog.mismatched_platform_ref = bad_platform
+    try:
+        with FakeLog(tmp_path / "platform.log") as log:
+            with pytest.raises(MODULE.CellError, match="expected linux/amd64"):
+                MODULE.verify_cell(qualification_plan, ubuntu, tmp_path, SOURCE, log)
+    finally:
+        FakeLog.mismatched_platform_ref = None
+
+    internal = copy.deepcopy(ubuntu)
+    internal["images"]["modifiedDesktop"]["flavor"] = "base-no-de"
+    with FakeLog(tmp_path / "internal.log") as log:
+        with pytest.raises(MODULE.QualificationError, match="internal build target"):
+            MODULE.verify_cell(qualification_plan, internal, tmp_path, SOURCE, log)
+
+    el10 = next(cell for cell in qualification_plan["cells"] if cell["route"] == "el10")
+    overlay_ref = el10["images"]["modifiedOverlay"]["ref"]
+    FakeLog.wrong_parent_ref = overlay_ref
+    try:
+        with FakeLog(tmp_path / "parent.log") as log:
+            with pytest.raises(MODULE.CellError, match="parent is not the qualified"):
+                MODULE.verify_cell(qualification_plan, el10, tmp_path, SOURCE, log)
+    finally:
+        FakeLog.wrong_parent_ref = None
+
+
+def test_apt_requires_fully_installed_status(tmp_path):
+    qualification_plan = copy.deepcopy(QUALIFICATION_PLAN)
+    ubuntu = next(cell for cell in qualification_plan["cells"] if cell["route"] == "ubuntu")
+    bad_status = ubuntu["images"]["modifiedDesktop"]["ref"]
+    FakeLog.bad_apt_status_ref = bad_status
+    try:
+        with FakeLog(tmp_path / "apt-status.log") as log:
+            with pytest.raises(MODULE.CellError, match="package is not installed"):
+                MODULE.verify_cell(qualification_plan, ubuntu, tmp_path, SOURCE, log)
+    finally:
+        FakeLog.bad_apt_status_ref = None
 
 
 def test_one_failed_route_is_reported_without_hiding_other_families(tmp_path, monkeypatch):
