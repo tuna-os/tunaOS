@@ -1,0 +1,92 @@
+name: Discussion response queue
+
+# GitHub Discussions does not provide a maintainer response SLA. This workflow
+# turns an unanswered Q&A into a visible issue without pretending that a bot
+# can answer it. A daily sweep handles the existing backlog; the event and
+# dispatch paths make new threads and manual backfills immediate.
+#
+# TRIAGE-POLICY.md section 1 permits one bounded automated finding per run.
+# Processing only the oldest unanswered Q&A keeps this from opening an issue
+# storm when several questions arrive together. The workflow never closes an
+# issue; a maintainer closes the tracker after answering the public thread.
+
+on:
+  discussion:
+    types: [created]
+  schedule:
+    - cron: "17 9 * * *"
+  workflow_dispatch:
+    inputs:
+      discussion_number:
+        description: "Optional discussion number to backfill immediately"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  discussions: read
+  issues: write
+
+concurrency:
+  group: discussion-response-queue
+  cancel-in-progress: false
+
+jobs:
+  triage:
+    name: Queue oldest unanswered Q&A
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+      DISCUSSION_NUMBER: ${{ github.event.discussion.number || inputs.discussion_number }}
+    steps:
+      - name: Checkout selector
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: scripts/triage-discussions.py
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Fetch discussions
+        run: |
+          set -euo pipefail
+          if [[ -n "${DISCUSSION_NUMBER}" ]]; then
+            if ! [[ "${DISCUSSION_NUMBER}" =~ ^[0-9]+$ ]]; then
+              echo "::error::discussion_number must contain only digits"
+              exit 1
+            fi
+            gh api "repos/${REPO}/discussions/${DISCUSSION_NUMBER}" > discussions.json
+          else
+            gh api --paginate --slurp \
+              "repos/${REPO}/discussions?per_page=100" \
+              | jq 'add' > discussions.json
+          fi
+
+      - name: Fetch issue trackers
+        run: |
+          set -euo pipefail
+          gh api --paginate --slurp \
+            "repos/${REPO}/issues?state=all&per_page=100" \
+            | jq 'add' > issues.json
+
+      - name: Select oldest unanswered Q&A
+        run: |
+          set -euo pipefail
+          python3 scripts/triage-discussions.py \
+            --input discussions.json \
+            --existing-issues issues.json \
+            --output candidate.json
+          if [[ "$(jq -r 'if . == null then "none" else "candidate" end' candidate.json)" == "none" ]]; then
+            echo "No unanswered Q&A discussions without a tracker."
+            exit 0
+          fi
+
+          jq -r '.issue_title' candidate.json > tracker-title.txt
+          jq -r '.issue_body' candidate.json > tracker.md
+          title="$(< tracker-title.txt)"
+          gh issue create --repo "${REPO}" \
+            --title "${title}" \
+            --body-file tracker.md \
+            --label community \
+            --label outreach
