@@ -19,19 +19,24 @@ python3 scripts/search-base-packages.py htop \
 All four sources must authenticate before the command prints any result. Each
 source reports its role, metadata URL, signed release, native architecture,
 signed and retrieval timestamps, metadata and index SHA-256 digests, signers,
-and freshness result. A missing source, stale metadata, changed image or
-configuration file, invalid signature, wrong release or architecture, partial
-index, or unsupported target fails the whole search. There is no add or write
-option.
+and freshness result. The Tailscale source also reports the fetched declaration
+and trust-key digests after both match the reviewed bytes. A missing source,
+stale metadata, changed image or configuration file, invalid signature, wrong
+release or architecture, partial index, or unsupported target fails the whole
+search. There is no add or write option.
 
 `configuration_observed_at` identifies the reviewed extraction that binds the
 collector to the effective target. The observation pins
-`Containerfile.debian`, `build_scripts/20-packages.sh`, and
-`build_scripts/desktop/install-desktop.sh`; the collector also reads the
-selected desktop policy from the same parsed `tunaos.toml`. A changed source
-path, source script, enabled target, or applicable desktop repository requires
-a reviewed observation and adapter update. Catalog assertions alone do not make
-a repository part of an authenticated target.
+`Containerfile.debian`, `build_scripts/20-packages.sh`,
+`build_scripts/desktop/install-desktop.sh`, `scripts/build-image-inner.sh`, and
+`image-versions.yaml`; inventories copied APT source/trust files under
+`system_files`; and records the resolved digest-pinned common image whose
+`/system_files/shared` tree is copied into the target. The collector also reads
+the selected desktop policy from the same parsed `tunaos.toml`. A changed source
+path, source script, copied inventory, common image, enabled target, or
+applicable desktop repository requires a reviewed observation and adapter
+update. Catalog assertions alone do not make a repository part of an
+authenticated target.
 
 ## Native adapter inventory
 
@@ -77,8 +82,11 @@ are reviewed extraction claims, not signatures.
 
 Repository metadata is independently verified against vendored public key
 bytes and full primary fingerprints. See
-[public key provenance](../config/package-keys/README.md). Search never fetches
-keys, imports them into a user keyring, or changes system trust.
+[public key provenance](../config/package-keys/README.md). For the mutable
+Tailscale endpoints, search performs bounded reads of the declaration and
+public key and requires byte identity with the reviewed hashes before trusting
+the signed metadata. It never imports fetched keys into a user keyring or
+changes system trust.
 
 Acquisition uses bounded HTTPS reads restricted to reviewed hosts. Debian
 indexes use signed SHA-256 by-hash paths. Tailscale does not publish by-hash, so

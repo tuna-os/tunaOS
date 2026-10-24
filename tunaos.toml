@@ -4809,7 +4809,7 @@ observed_base_image = "docker.io/library/debian:trixie@sha256:4c25275446ca371766
 source_observation = "config/package-observations/flounder-amd64.json"
 source_observation_sha256 = "1b4857d081dc460381e537a1fb5f3a72407a7883313b78fb0301db6627b075b6"
 target_observation = "config/package-observations/flounder-target-amd64.json"
-target_observation_sha256 = "3cdb17f12ecc6f589926f0e0cf3182b03a94b795c18e8117aca599871e67b4ca"
+target_observation_sha256 = "599e8fd5673dcc0bfaa633f8777d29282ec6d77302d03a48d16cd50a8f246d64"
 
 [[package_catalogs.debian-trixie.sources]]
 id = "trixie"
@@ -4866,6 +4866,7 @@ label = "Tailscale"
 codename = "trixie"
 components = ["main"]
 declaration_url = "https://pkgs.tailscale.com/stable/debian/trixie.tailscale-keyring.list"
+declaration_sha256 = "5a1b21b30892bf22fb5d7c4f52fefe9b65efda2100e82abba2e0849da2a2264b"
 keyring_url = "https://pkgs.tailscale.com/stable/debian/trixie.noarmor.gpg"
 keyring = "config/package-keys/tailscale-trixie.gpg"
 keyring_sha256 = "3e03dacf222698c60b8e2f990b809ca1b3e104de127767864284e6c228f1fb39"

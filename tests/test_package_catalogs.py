@@ -29,6 +29,7 @@ def fixture():
         suite='trixie', origin='Tailscale', label='Tailscale', codename='trixie',
         components=['main'],
         declaration_url='https://pkgs.tailscale.com/stable/debian/trixie.tailscale-keyring.list',
+        declaration_sha256='f' * 64,
         keyring_url='https://pkgs.tailscale.com/stable/debian/trixie.noarmor.gpg',
         keyring='keys/tailscale.gpg', keyring_sha256='e' * 64,
         primary_fingerprints=['B' * 40],
@@ -294,6 +295,48 @@ def test_target_configuration_rejects_changed_source_logic(tmp_path):
     catalog = document['package_catalogs']['debian-trixie']
     (tmp_path / 'build_scripts/20-packages.sh').write_text('changed\n')
     with pytest.raises(CatalogError, match='configuration changed'):
+        package_catalogs.bind_target_configuration(
+            catalog, document, tmp_path, 'base')
+
+
+def _copy_target_configuration(tmp_path):
+    import shutil
+
+    shutil.copytree(ROOT / 'config', tmp_path / 'config')
+    shutil.copytree(ROOT / 'build_scripts', tmp_path / 'build_scripts')
+    (tmp_path / 'scripts').mkdir()
+    shutil.copy(ROOT / 'scripts/build-image-inner.sh', tmp_path / 'scripts/build-image-inner.sh')
+    shutil.copy(ROOT / 'Containerfile.debian', tmp_path / 'Containerfile.debian')
+    shutil.copy(ROOT / 'image-versions.yaml', tmp_path / 'image-versions.yaml')
+
+
+def test_target_configuration_rejects_new_copied_apt_source(tmp_path):
+    _copy_target_configuration(tmp_path)
+    source = tmp_path / 'system_files/etc/apt/sources.list.d/unreviewed.list'
+    source.parent.mkdir(parents=True)
+    source.write_text('deb https://example.invalid stable main\n')
+    document = __import__('lib.tunaos_config', fromlist=['load']).load()
+
+    with pytest.raises(CatalogError, match='copied package-source inventory changed'):
+        package_catalogs.bind_target_configuration(
+            document['package_catalogs']['debian-trixie'], document, tmp_path, 'base')
+
+
+def test_target_configuration_binds_resolved_common_image(tmp_path):
+    import hashlib
+    import json
+
+    _copy_target_configuration(tmp_path)
+    document = __import__('lib.tunaos_config', fromlist=['load']).load()
+    catalog = deepcopy(document['package_catalogs']['debian-trixie'])
+    observation_path = tmp_path / catalog['target_observation']
+    observation = json.loads(observation_path.read_text())
+    observation['common_image'] = 'ghcr.io/projectbluefin/common@sha256:' + '0' * 64
+    raw = (json.dumps(observation, indent=2) + '\n').encode()
+    observation_path.write_bytes(raw)
+    catalog['target_observation_sha256'] = hashlib.sha256(raw).hexdigest()
+
+    with pytest.raises(CatalogError, match='resolved common image'):
         package_catalogs.bind_target_configuration(
             catalog, document, tmp_path, 'base')
 
