@@ -45,7 +45,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SPEC = importlib.util.spec_from_file_location(
     "matrix_snapshot_under_test", ROOT / "scripts/matrix_snapshot.py"
 )
-if SPEC.loader is None:
+if SPEC is None or SPEC.loader is None:
     raise RuntimeError("cannot load scripts/matrix_snapshot.py")
 matrix_snapshot = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(matrix_snapshot)
@@ -189,6 +189,8 @@ def test_retained_replay_is_offline_and_reproduces_committed_pair(monkeypatch):
         return
     monkeypatch.setitem(sys.modules, "matrix_snapshot", matrix_snapshot)
     spec = importlib.util.spec_from_file_location("replay_generator", ROOT / "scripts/gen-matrix-status.py")
+    if spec is None or spec.loader is None:
+        raise RuntimeError("cannot load scripts/gen-matrix-status.py")
     generator = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(generator)
 
@@ -248,6 +250,8 @@ def test_retained_assertions_need_manifested_dated_sources(tmp_path, monkeypatch
     ("missing-field", "malformed retained matrix input"),
     ("not-object", "must be a JSON object"),
     ("not-json", "unreadable retained matrix input"),
+    ("bad-evaluation-date", "invalid retained evaluation date '23/10/2026'"),
+    ("bad-assertion-date", "invalid retained assertion date 'yesterday'"),
 ])
 def test_malformed_retained_input_raises_one_clear_error(tmp_path, monkeypatch, change, message):
     payload = json.loads(RETAINED.read_text())
@@ -259,6 +263,10 @@ def test_malformed_retained_input_raises_one_clear_error(tmp_path, monkeypatch, 
         del next(iter(payload["stage"].values()))["cell_run"]
     elif change == "not-object":
         payload = []
+    elif change == "bad-evaluation-date":
+        payload["evaluation_date"] = "23/10/2026"
+    elif change == "bad-assertion-date":
+        next(iter(payload["luks"].values()))[1] = "yesterday"
     path = tmp_path / "inputs.json"
     path.write_text("{" if change == "not-json" else json.dumps(payload))
     monkeypatch.chdir(ROOT)
