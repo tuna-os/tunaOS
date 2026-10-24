@@ -1722,6 +1722,13 @@ capture first, then sends the graceful powerdown itself before the kill.
 
 **Fix:** The pinned download moved into shared `build_scripts/install-uupd.sh` (same `image-versions.yaml` pin; stages the binary plus `uupd.service`, `uupd.timer`, `uupd-manual.service` before install; smoke with `UUPD_CONTEXT="$PWD" UUPD_ROOT="$scratch"` into a disposable root). The apt and dnf branches of `10-base-packages.sh` delegate to it unchanged in behavior, and `Containerfile.arch` carries the pin file and runs the installer before `40-services.sh`. The context exact-set test now treats `install-uupd.sh` as a consumer of the pin file.
 
+### STE fails on matrix prose
+
+**Symptom:** STE reports 1610 findings with a budget of 1609.
+
+**Cause:** A long sentence or a cluster of nouns in `docs/MATRIX-STATUS.md` crosses the budget.
+
+**Fix:** Split the sentence. For text inside the generated block, edit `scripts/gen-matrix-status.py` and render it again. Keep the budget at 1609. Preserve the dates when you replay saved evidence.
 ## Fork source pin changes after tests
 
 Symptom: the fork review tool reports a catalog pin mismatch after Python tests.
@@ -1747,6 +1754,16 @@ clean `npm ci --ignore-scripts`, `npm test`, and `npm run build` in that directo
 Check each override edit with `npm ci`. The same npm major alone does not
 prove that the manifest and lockfile agree.
 
+### Matrix drift check fails when old results enter or leave the window
+
+**Symptom:** The check reports a change between `—` and a pass or fail glyph.
+Run [39161613161](https://github.com/tuna-os/tunaOS/actions/runs/39161613161) shows this for removed desktop cells.
+
+**Cause:** These tables show results for cells outside the current schedule.
+The check treated each `—` as a config change, even for those cells.
+
+**Fix:** Use each table's source matrix to mask only old pass and fail results outside its schedule.
+Keep scheduled cells and `⬜` distinct from `—`. Preserve the results and their dates in the output.
 ## Fork preview reuses stock packages/art or rejects a changed checkout
 
 **Cause:** The key for the cache had only a hash of shell scripts.
@@ -1913,6 +1930,22 @@ These tests check consistency. They do not prove a real producer or installation
 **Cause:** The hook adds new IDs but it never deletes old IDs.
 
 **Fix:** Delete the owned file at the start of each run. Keep files from other sources. Reject a linked file before you change files.
+
+### A fork's image records the tuna-os vendor
+
+**Symptom:** CI pushes a fork's image to `ghcr.io/<fork owner>`, but its
+`image-info.json` names `tuna-os` as the vendor and `ghcr.io/tuna-os/...` as
+its image reference.
+
+**Cause:** The build step runs `just build` under `sudo`, and `sudo` resets
+the environment. `GITHUB_REPOSITORY_OWNER` did not reach the build, so the
+namespace fell back to `tuna-os`. The push steps run without `sudo`, so they
+used the correct owner.
+
+**Fix:** The build step keeps `IMAGE_REGISTRY` (`ghcr.io/<owner>`) through
+`sudo`, and `scripts/lib/publish-destination.sh` splits it into host and
+namespace. `tests/test_publish_destination.py` checks the precedence and the
+split.
 
 ## Content PR fails with `STE budget exceeded` (#2912)
 
