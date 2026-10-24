@@ -11,7 +11,7 @@ SPEC = importlib.util.spec_from_file_location('search_base_packages', ROOT / 'sc
 cli = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(cli)
 ARGS = ['htop', '--catalog', 'debian-trixie', '--variant', 'flounder',
-        '--release', 'trixie', '--platform', 'linux/amd64']
+        '--flavor', 'base', '--release', 'trixie', '--platform', 'linux/amd64']
 
 
 def pipeline(monkeypatch, tmp_path):
@@ -20,21 +20,27 @@ def pipeline(monkeypatch, tmp_path):
     monkeypatch.setattr(cli.tunaos_config, 'parse', lambda *a, **k: {}, raising=False)
     monkeypatch.setattr(cli.tunaos_config, 'validate', lambda doc: doc)
     monkeypatch.setattr(cli.catalogs, 'select', lambda *a: {})
-    monkeypatch.setattr(cli.catalogs, 'bind_observation', lambda *a: ({'base_image': 'pinned-test-image'}, {}))
+    monkeypatch.setattr(
+        cli.catalogs, 'bind_observation',
+        lambda *a: ({'base_image': 'pinned-test-image'}, {}))
+    monkeypatch.setattr(
+        cli.catalogs, 'bind_target_configuration',
+        lambda *a: {'observed_at': '2026-10-24T00:00:00Z'})
     return path
 
 
-def test_result_is_explicitly_incomplete(monkeypatch, tmp_path, capsys):
+def test_result_is_explicitly_complete(monkeypatch, tmp_path, capsys):
     path = pipeline(monkeypatch, tmp_path)
     monkeypatch.setattr(cli.signed_apt, 'acquire_catalog', lambda *a: [
-        {'id': name, 'names': {'htop', 'other'}, 'expires': None}
-        for name in ['trixie', 'trixie-updates', 'trixie-security']])
+        {'source': name, 'names': {'htop', 'other'}, 'freshness': {'expires': None}}
+        for name in ['trixie', 'trixie-updates', 'trixie-security', 'tailscale']])
     assert cli.main(ARGS + ['--config', str(path)]) == 0
     output = json.loads(capsys.readouterr().out)
-    assert output['coverage'] == 'base-image-only'
-    assert output['cell_coverage_complete'] is False
+    assert output['coverage'] == 'configured-target'
+    assert output['cell_coverage_complete'] is True
     assert output['add_supported'] is False
-    assert len(output['sources']) == 3
+    assert output['flavor'] == 'base'
+    assert len(output['sources']) == 4
     assert all(source['matches'] == ['htop'] for source in output['sources'])
     assert path.read_text() == '# untouched config\n'
 
@@ -80,11 +86,14 @@ def test_real_parser_clean_error_before_acquisition(tmp_path, source):
 
 
 def test_real_config_and_observation_without_network(monkeypatch, capsys):
-    # Keep the actual parser, schema, target matching and observation binding.
+    # Keep the actual parser, schema, target matching and both observation bindings.
     def checked(catalog, keyring_for, now):
-        assert catalog['coverage'] == 'base-image-only'
-        assert all(len(keyring_for(source)) == 55918 for source in catalog['sources'])
+        assert catalog['coverage'] == 'configured-target'
+        assert [len(keyring_for(source)) for source in catalog['sources']] == [
+            55918, 55918, 55918, 2288]
         return []
     monkeypatch.setattr(cli.signed_apt, 'acquire_catalog', checked)
     assert cli.main(ARGS + ['--config', str(ROOT / 'tunaos.toml')]) == 0
-    assert json.loads(capsys.readouterr().out)['add_supported'] is False
+    output = json.loads(capsys.readouterr().out)
+    assert output['cell_coverage_complete'] is True
+    assert output['configuration_observed_at'] == '2026-10-24T02:30:03Z'

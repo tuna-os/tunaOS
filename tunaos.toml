@@ -4794,24 +4794,30 @@ required = [
   "ttf-liberation",
 ]
 
-# Optional base-image search sources; these do not change build repositories.
+# Optional read-only search sources for reviewed complete targets; these do not
+# change image builds or installer trust.
 [package_catalogs.debian-trixie]
-schema_version = 1
-coverage = "base-image-only"
+schema_version = 2
+coverage = "configured-target"
 variant = "flounder"
 family = "apt"
 os_id = "debian"
 release = "trixie"
 platforms = ["linux/amd64"]
+flavors = ["base", "kde", "xfce"]
 observed_base_image = "docker.io/library/debian:trixie@sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308"
 source_observation = "config/package-observations/flounder-amd64.json"
 source_observation_sha256 = "1b4857d081dc460381e537a1fb5f3a72407a7883313b78fb0301db6627b075b6"
+target_observation = "config/package-observations/flounder-target-amd64.json"
+target_observation_sha256 = "3cdb17f12ecc6f589926f0e0cf3182b03a94b795c18e8117aca599871e67b4ca"
 
 [[package_catalogs.debian-trixie.sources]]
 id = "trixie"
+role = "base"
 uri = "https://deb.debian.org/debian/"
 suite = "trixie"
 origin = "Debian"
+label = "Debian"
 codename = "trixie"
 components = ["main"]
 keyring = "config/package-keys/debian-trixie.pgp"
@@ -4822,9 +4828,11 @@ freshness = { mode = "pinned-release", inrelease_sha256 = "0584fba32e13e0ab8285f
 
 [[package_catalogs.debian-trixie.sources]]
 id = "trixie-updates"
+role = "base"
 uri = "https://deb.debian.org/debian/"
 suite = "trixie-updates"
 origin = "Debian"
+label = "Debian"
 codename = "trixie-updates"
 components = ["main"]
 keyring = "config/package-keys/debian-trixie.pgp"
@@ -4835,9 +4843,11 @@ freshness = { mode = "signed-valid-until", max_age_seconds = 604800 }
 
 [[package_catalogs.debian-trixie.sources]]
 id = "trixie-security"
+role = "base"
 uri = "https://deb.debian.org/debian-security/"
 suite = "trixie-security"
 origin = "Debian"
+label = "Debian-Security"
 codename = "trixie-security"
 components = ["main"]
 keyring = "config/package-keys/debian-trixie.pgp"
@@ -4845,3 +4855,20 @@ keyring_sha256 = "506b815cbb32d9b6066b4a2aa524071e071761e7e7f68c3ac74f3061ba8520
 primary_fingerprints = ["5E04A1E3223A19A20706E20F9904613D4CCE68C6"]
 clock_skew_seconds = 10
 freshness = { mode = "signed-valid-until", max_age_seconds = 604800 }
+
+[[package_catalogs.debian-trixie.sources]]
+id = "tailscale"
+role = "build"
+uri = "https://pkgs.tailscale.com/stable/debian/"
+suite = "trixie"
+origin = "Tailscale"
+label = "Tailscale"
+codename = "trixie"
+components = ["main"]
+declaration_url = "https://pkgs.tailscale.com/stable/debian/trixie.tailscale-keyring.list"
+keyring_url = "https://pkgs.tailscale.com/stable/debian/trixie.noarmor.gpg"
+keyring = "config/package-keys/tailscale-trixie.gpg"
+keyring_sha256 = "3e03dacf222698c60b8e2f990b809ca1b3e104de127767864284e6c228f1fb39"
+primary_fingerprints = ["2596A99EAAB33821893C0A79458CA832957F5868"]
+clock_skew_seconds = 10
+freshness = { mode = "signed-date", max_age_seconds = 604800 }

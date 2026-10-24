@@ -1,4 +1,4 @@
-"""Authoring-only base-repository catalog schema and reviewed observation binding."""
+"""Trusted configured-target package catalog schema and observation binding."""
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import PurePosixPath
@@ -36,89 +36,116 @@ def digest(value):
 
 
 def validate(catalog):
-    exact(catalog, ('schema_version', 'coverage', 'variant', 'family', 'os_id', 'release', 'platforms',
-                   'observed_base_image', 'source_observation',
-                   'source_observation_sha256', 'sources'), 'catalog')
-    if catalog['coverage'] != 'base-image-only':
-        raise CatalogError('only base-image repository coverage is supported')
+    exact(catalog, ('schema_version', 'coverage', 'variant', 'family', 'os_id', 'release',
+                   'platforms', 'flavors', 'observed_base_image', 'source_observation',
+                   'source_observation_sha256', 'target_observation',
+                   'target_observation_sha256', 'sources'), 'catalog')
+    if catalog['coverage'] != 'configured-target':
+        raise CatalogError('only complete configured-target repository coverage is supported')
     if not isinstance(catalog['variant'], str) or not re.fullmatch(r'[a-z0-9][a-z0-9-]*', catalog['variant']):
         raise CatalogError('invalid catalog variant')
-    if type(catalog['schema_version']) is not int or catalog['schema_version'] != 1:
+    if type(catalog['schema_version']) is not int or catalog['schema_version'] != 2:
         raise CatalogError('unsupported catalog schema version')
     if (catalog['family'], catalog['os_id'], catalog['release']) != ('apt', 'debian', 'trixie'):
         raise CatalogError('unsupported family/release; never omit this target')
     if catalog['platforms'] != ['linux/amd64']:
-        raise CatalogError('initial adapter supports linux/amd64 only')
+        raise CatalogError('apt collector supports linux/amd64 only')
+    if catalog['flavors'] != ['base', 'kde', 'xfce']:
+        raise CatalogError('catalog must name the complete reviewed flavor set')
     if not isinstance(catalog['observed_base_image'], str) or not re.fullmatch(
             r'docker\.io/library/debian:trixie@sha256:[0-9a-f]{64}', catalog['observed_base_image']):
         raise CatalogError('expected immutable supported base image observation')
-    relative_path(catalog['source_observation'])
-    digest(catalog['source_observation_sha256'])
+    for field in ('source_observation', 'target_observation'):
+        relative_path(catalog[field])
+    for field in ('source_observation_sha256', 'target_observation_sha256'):
+        digest(catalog[field])
     sources = catalog['sources']
     if not isinstance(sources, list) or not sources:
         raise CatalogError('missing sources')
     ids = set()
-    suites = set()
+    expected = {'trixie', 'trixie-updates', 'trixie-security', 'tailscale'}
     for source in sources:
-        exact(source, ('id', 'uri', 'suite', 'origin', 'codename', 'components',
-                       'keyring', 'keyring_sha256', 'primary_fingerprints',
-                       'freshness', 'clock_skew_seconds'), 'source')
+        if not isinstance(source, dict):
+            raise CatalogError('source: expected table')
+        common = ('id', 'role', 'uri', 'suite', 'origin', 'label', 'codename',
+                  'components', 'keyring', 'keyring_sha256', 'primary_fingerprints',
+                  'freshness', 'clock_skew_seconds')
+        fields = common + (('declaration_url', 'keyring_url') if source.get('id') == 'tailscale' else ())
+        exact(source, fields, 'source')
         name = source['id']
         if not isinstance(name, str) or not re.fullmatch(r'[a-z0-9][a-z0-9-]*', name) or name in ids:
             raise CatalogError('invalid or duplicate source id')
         ids.add(name)
         suite = source['suite']
-        if suite not in ('trixie', 'trixie-updates', 'trixie-security') or suite in suites:
-            raise CatalogError('unsupported or duplicate suite')
-        suites.add(suite)
+        if name in {'trixie', 'trixie-updates', 'trixie-security'}:
+            expected_path = '/debian-security/' if name == 'trixie-security' else '/debian/'
+            expected_label = 'Debian-Security' if name == 'trixie-security' else 'Debian'
+            if (source['role'], suite, source['origin'], source['label'], source['codename'],
+                    source['components']) != ('base', name, 'Debian', expected_label, name, ['main']):
+                raise CatalogError('unsupported Debian archive identity/components')
+            expected_host = 'deb.debian.org'
+        elif name == 'tailscale':
+            expected_path = '/stable/debian/'
+            if (source['role'], suite, source['origin'], source['label'], source['codename'],
+                    source['components']) != ('build', 'trixie', 'Tailscale', 'Tailscale',
+                                               'trixie', ['main']):
+                raise CatalogError('unsupported Tailscale archive identity/components')
+            expected_host = 'pkgs.tailscale.com'
+            if (source['declaration_url'] !=
+                    'https://pkgs.tailscale.com/stable/debian/trixie.tailscale-keyring.list'
+                    or source['keyring_url'] !=
+                    'https://pkgs.tailscale.com/stable/debian/trixie.noarmor.gpg'):
+                raise CatalogError('Tailscale build source differs from reviewed configuration')
+        else:
+            raise CatalogError('unsupported package source; adapter review required')
         uri = source['uri']
         if not isinstance(uri, str):
             raise CatalogError('expected HTTPS source')
         parsed = urlsplit(uri)
-        expected_path = '/debian-security/' if suite == 'trixie-security' else '/debian/'
-        if (parsed.scheme != 'https' or parsed.netloc != 'deb.debian.org'
+        if (parsed.scheme != 'https' or parsed.netloc != expected_host
                 or parsed.path != expected_path or parsed.query or parsed.fragment):
             raise CatalogError('unsupported source URI; requires adapter review')
-        if source['origin'] != 'Debian' or source['codename'] != suite or source['components'] != ['main']:
-            raise CatalogError('unsupported archive identity/components')
         relative_path(source['keyring'])
         digest(source['keyring_sha256'])
         unique_strings(source['primary_fingerprints'], 'fingerprints')
         if any(not re.fullmatch(r'[0-9A-F]{40}', x) for x in source['primary_fingerprints']):
             raise CatalogError('expected full primary fingerprint')
         freshness = source['freshness']
-        if suite == 'trixie':
+        if name == 'trixie':
             exact(freshness, ('mode', 'inrelease_sha256'), 'base freshness')
             if freshness['mode'] != 'pinned-release':
                 raise CatalogError('base metadata requires explicit signed-envelope pin')
             digest(freshness['inrelease_sha256'])
         else:
-            exact(freshness, ('mode', 'max_age_seconds'), 'update freshness')
+            exact(freshness, ('mode', 'max_age_seconds'), 'dynamic freshness')
+            expected_mode = 'signed-date' if name == 'tailscale' else 'signed-valid-until'
             age = freshness['max_age_seconds']
-            if (freshness['mode'] != 'signed-valid-until' or type(age) is not int
+            if (freshness['mode'] != expected_mode or type(age) is not int
                     or not 0 < age <= 604800):
-                raise CatalogError('updates/security require bounded signed validity')
+                raise CatalogError('dynamic metadata requires bounded signed freshness')
         skew = source['clock_skew_seconds']
         if type(skew) is not int or not 0 <= skew <= 10:
             raise CatalogError('invalid clock-skew bound')
-    if suites != {'trixie', 'trixie-updates', 'trixie-security'}:
-        raise CatalogError('incomplete configured base source set')
+    if ids != expected:
+        raise CatalogError('incomplete configured target source set')
     return catalog
+
+
+def signed_timestamp(fields, name='Date'):
+    try:
+        value = parsedate_to_datetime(fields[name])
+    except (KeyError, TypeError, ValueError, OverflowError) as exc:
+        raise CatalogError(f'invalid signed {name}') from exc
+    if value.tzinfo is None:
+        raise CatalogError(f'signed {name} needs timezone')
+    return value.astimezone(timezone.utc)
 
 
 def check_authenticated_dates(source, fields, now, envelope_sha256):
     """Only call after signature verification; this function does not authenticate."""
     if now.tzinfo is None:
         raise CatalogError('clock must include timezone')
-    def date(name):
-        try:
-            value = parsedate_to_datetime(fields[name])
-        except (KeyError, TypeError, ValueError, OverflowError) as exc:
-            raise CatalogError(f'invalid signed {name}') from exc
-        if value.tzinfo is None:
-            raise CatalogError(f'signed {name} needs timezone')
-        return value.astimezone(timezone.utc)
-    issued = date('Date')
+    issued = signed_timestamp(fields)
     if issued > now + timedelta(seconds=source['clock_skew_seconds']):
         raise CatalogError('signed Date exceeds future clock-skew bound')
     freshness = source['freshness']
@@ -132,11 +159,11 @@ def check_authenticated_dates(source, fields, now, envelope_sha256):
         except OverflowError as exc:
             raise CatalogError('signed Date exceeds supported range') from exc
     if 'Valid-Until' in fields:
-        validity = date('Valid-Until')
+        validity = signed_timestamp(fields, 'Valid-Until')
         if validity < issued:
             raise CatalogError('Valid-Until precedes Date')
         expiry = validity if expiry is None else min(expiry, validity)
-    elif freshness['mode'] != 'pinned-release':
+    elif freshness['mode'] == 'signed-valid-until':
         raise CatalogError('missing signed Valid-Until')
     if expiry is not None and now >= expiry:
         raise CatalogError('signed metadata expired')
@@ -144,17 +171,27 @@ def check_authenticated_dates(source, fields, now, envelope_sha256):
 
 
 def index_path(source, release, *, architecture, component):
-    """Exact Debian layout, after signature verification and before checksum lookup."""
+    """First native index path, after signature verification and identity checks."""
+    return index_specs(source, release, architecture=architecture, component=component)[0]['path']
+
+
+def index_specs(source, release, *, architecture, component):
     if architecture != 'amd64' or component != 'main':
         raise CatalogError('unsupported architecture/component')
-    suite = source['suite']
-    labels = {'trixie': 'Debian', 'trixie-updates': 'Debian', 'trixie-security': 'Debian-Security'}
-    if suite not in labels or release.get('Origin') != source['origin'] or release.get('Codename') != suite or release.get('Label') != labels[suite]:
+    native_component = 'updates/main' if source['id'] == 'trixie-security' else 'main'
+    if (release.get('Origin') != source['origin']
+            or release.get('Codename') != source['codename']
+            or release.get('Label') != source['label']):
         raise CatalogError('signed archive identity mismatch')
-    native_component = 'updates/main' if suite == 'trixie-security' else 'main'
-    if architecture not in release.get('Architectures', '').split() or native_component not in release.get('Components', '').split():
+    if (architecture not in release.get('Architectures', '').split()
+            or native_component not in release.get('Components', '').split()):
         raise CatalogError('signed archive does not declare selected architecture/component')
-    return 'main/binary-amd64/Packages.xz'
+    if source['id'] == 'tailscale':
+        return [
+            {'path': 'main/binary-amd64/Packages.gz', 'compression': 'gzip', 'by_hash': False},
+            {'path': 'main/binary-all/Packages.gz', 'compression': 'gzip', 'by_hash': False},
+        ]
+    return [{'path': 'main/binary-amd64/Packages.xz', 'compression': 'xz', 'by_hash': True}]
 
 
 def validate_document(document):
@@ -170,21 +207,22 @@ def validate_document(document):
     # No file, network, current-time or stale-observation check on the build path.
 
 
-def select(document, catalog_id, variant, release, platform):
+def select(document, catalog_id, variant, flavor, release, platform):
     catalogs = document.get('package_catalogs', {})
     if catalog_id not in catalogs:
         raise CatalogError('catalog unavailable; no target is silently omitted')
     catalog = validate(catalogs[catalog_id])
-    if variant != catalog['variant'] or release != catalog['release'] or platform not in catalog['platforms']:
-        raise CatalogError('catalog does not cover the explicit variant/release/platform')
+    if (variant != catalog['variant'] or flavor not in catalog['flavors']
+            or release != catalog['release'] or platform not in catalog['platforms']):
+        raise CatalogError('catalog does not cover the explicit variant/flavor/release/platform')
     entry = document['variants'].get(variant)
     if entry is None or entry['base_image'] != catalog['observed_base_image']:
         raise CatalogError('base image changed; refresh the reviewed source observation before lookup')
-    declared = set(entry['platforms'])
-    for flavor in entry['flavors']:
-        declared.update(flavor.get('platforms', []))
-    if platform not in declared:
-        raise CatalogError('platform is not declared for this variant')
+    selected = next((item for item in entry['flavors'] if item['id'] == flavor), None)
+    if selected is None or not selected.get('build_image', False):
+        raise CatalogError('flavor is not an enabled image target')
+    if platform not in selected.get('platforms', entry['platforms']):
+        raise CatalogError('platform is not declared for this flavor')
     return catalog
 
 
@@ -300,16 +338,80 @@ def bind_observation(catalog, config_directory):
     os_keys = [line.partition('=')[0] for line in os_lines if line and not line.startswith('#')]
     if len(os_keys) != len(set(os_keys)) or os_lines.count('ID=debian') != 1 or os_lines.count('VERSION_CODENAME=trixie') != 1:
         raise CatalogError('observed operating system does not match catalog')
-    declared = [(s['uri'], s['suite'], tuple(s['components'])) for s in catalog['sources']]
+    declared = [(s['uri'], s['suite'], tuple(s['components']))
+                for s in catalog['sources'] if s['role'] == 'base']
     if sorted(_native_sources(observation['source_text'])) != sorted(declared):
         raise CatalogError('catalog does not cover the exact observed base source set')
-    base = next(s for s in catalog['sources'] if s['suite'] == 'trixie')
+    base = next(s for s in catalog['sources'] if s['id'] == 'trixie')
     if observation['base_inrelease_sha256'] != base['freshness']['inrelease_sha256']:
         raise CatalogError('base metadata pin does not match reviewed observation')
     keys = {}
     for source in catalog['sources']:
         content = _public_file(config_directory, source['keyring'])
-        if files[key_path] != {'sha256': hashlib.sha256(content).hexdigest(), 'size': len(content)} or files[key_path]['sha256'] != source['keyring_sha256']:
-            raise CatalogError('keyring differs from observed and reviewed trust bytes')
+        if hashlib.sha256(content).hexdigest() != source['keyring_sha256']:
+            raise CatalogError('keyring differs from reviewed trust bytes')
+        if (source['role'] == 'base'
+                and files[key_path] != {'sha256': source['keyring_sha256'], 'size': len(content)}):
+            raise CatalogError('base keyring differs from observed image trust bytes')
         keys[source['id']] = content
     return observation, keys
+
+
+def bind_target_configuration(catalog, document, config_directory, flavor):
+    """Bind reviewed build-source claims and parsed desktop sources to one target."""
+    import hashlib
+    raw = _public_file(config_directory, catalog['target_observation'])
+    if hashlib.sha256(raw).hexdigest() != catalog['target_observation_sha256']:
+        raise CatalogError('target source observation differs from reviewed pin')
+    observation = _json(raw)
+    exact(observation, ('schema_version', 'variant', 'flavors', 'platform', 'base_image',
+                       'observed_at', 'configuration_files', 'build_sources'),
+          'target observation')
+    if (type(observation['schema_version']) is not int or observation['schema_version'] != 1
+            or observation['variant'] != catalog['variant']
+            or observation['flavors'] != catalog['flavors']
+            or observation['platform'] != 'linux/amd64'
+            or observation['base_image'] != catalog['observed_base_image']):
+        raise CatalogError('target observation does not match selected target')
+    try:
+        observed_at = datetime.fromisoformat(observation['observed_at'].replace('Z', '+00:00'))
+    except (AttributeError, TypeError, ValueError, OverflowError) as exc:
+        raise CatalogError('target observation timestamp is invalid') from exc
+    if observed_at.tzinfo is None:
+        raise CatalogError('target observation timestamp needs timezone')
+    files = observation['configuration_files']
+    expected_files = {'Containerfile.debian', 'build_scripts/20-packages.sh',
+                      'build_scripts/desktop/install-desktop.sh'}
+    if not isinstance(files, dict) or set(files) != expected_files:
+        raise CatalogError('target observation lacks complete configuration files')
+    for path, identity in files.items():
+        exact(identity, ('sha256', 'size'), 'configuration file identity')
+        digest(identity['sha256'])
+        if type(identity['size']) is not int or identity['size'] <= 0:
+            raise CatalogError('configuration file size is invalid')
+        content = _public_file(config_directory, path, limit=8 * 1024 * 1024)
+        if len(content) != identity['size'] or hashlib.sha256(content).hexdigest() != identity['sha256']:
+            raise CatalogError('effective package-source configuration changed; refresh observation')
+    build_sources = [{
+        'id': source['id'],
+        'uri': source['uri'],
+        'suite': source['suite'],
+        'components': source['components'],
+        'declaration_url': source['declaration_url'],
+        'keyring_url': source['keyring_url'],
+    } for source in catalog['sources'] if source['role'] == 'build']
+    if observation['build_sources'] != build_sources:
+        raise CatalogError('catalog does not cover the observed build source set')
+    if flavor != 'base':
+        profiles = document.get('desktops', {})
+        profile_name = flavor + '-debian' if flavor + '-debian' in profiles else flavor
+        policy = profiles.get(profile_name, {}).get('packages', {}).get('apt')
+        if not isinstance(policy, dict):
+            raise CatalogError('selected flavor has no supported apt package policy')
+        repositories = [item for item in policy.get('repos', [])
+                        if item.get('condition', '') in ('', 'debian-trixie')]
+        if repositories:
+            raise CatalogError('selected flavor has desktop repositories without a reviewed adapter')
+        if policy.get('before_install'):
+            raise CatalogError('selected flavor mutates package sources through an unreviewed operation')
+    return observation

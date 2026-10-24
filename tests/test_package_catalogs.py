@@ -13,16 +13,36 @@ from lib import package_catalogs
 def fixture():
     sources = []
     for suite in ('trixie', 'trixie-updates', 'trixie-security'):
-        sources.append(dict(id=suite, uri='https://deb.debian.org/' + (
-            'debian-security/' if suite == 'trixie-security' else 'debian/'),
-            suite=suite, origin='Debian', codename=suite, components=['main'],
-            keyring='keys/fixture.pgp', keyring_sha256='a' * 64,
-            primary_fingerprints=['A' * 40], freshness=(dict(mode='pinned-release', inrelease_sha256='d' * 64) if suite == 'trixie' else dict(mode='signed-valid-until', max_age_seconds=604800)), clock_skew_seconds=10))
-    return dict(schema_version=1, coverage='base-image-only', variant='flounder', family='apt', os_id='debian', release='trixie',
-                platforms=['linux/amd64'], observed_base_image=
-                'docker.io/library/debian:trixie@sha256:' + 'b' * 64,
-                source_observation='observations/fixture.json',
-                source_observation_sha256='c' * 64, sources=sources)
+        sources.append(dict(
+            id=suite, role='base', uri='https://deb.debian.org/' + (
+                'debian-security/' if suite == 'trixie-security' else 'debian/'),
+            suite=suite, origin='Debian',
+            label='Debian-Security' if suite == 'trixie-security' else 'Debian',
+            codename=suite, components=['main'], keyring='keys/fixture.pgp',
+            keyring_sha256='a' * 64, primary_fingerprints=['A' * 40],
+            freshness=(dict(mode='pinned-release', inrelease_sha256='d' * 64)
+                       if suite == 'trixie'
+                       else dict(mode='signed-valid-until', max_age_seconds=604800)),
+            clock_skew_seconds=10))
+    sources.append(dict(
+        id='tailscale', role='build', uri='https://pkgs.tailscale.com/stable/debian/',
+        suite='trixie', origin='Tailscale', label='Tailscale', codename='trixie',
+        components=['main'],
+        declaration_url='https://pkgs.tailscale.com/stable/debian/trixie.tailscale-keyring.list',
+        keyring_url='https://pkgs.tailscale.com/stable/debian/trixie.noarmor.gpg',
+        keyring='keys/tailscale.gpg', keyring_sha256='e' * 64,
+        primary_fingerprints=['B' * 40],
+        freshness=dict(mode='signed-date', max_age_seconds=604800),
+        clock_skew_seconds=10))
+    return dict(
+        schema_version=2, coverage='configured-target', variant='flounder',
+        family='apt', os_id='debian', release='trixie',
+        platforms=['linux/amd64'], flavors=['base', 'kde', 'xfce'],
+        observed_base_image='docker.io/library/debian:trixie@sha256:' + 'b' * 64,
+        source_observation='observations/fixture.json',
+        source_observation_sha256='c' * 64,
+        target_observation='observations/target.json',
+        target_observation_sha256='f' * 64, sources=sources)
 
 
 def test_complete_fixture():
@@ -31,11 +51,13 @@ def test_complete_fixture():
 
 
 @pytest.mark.parametrize('key,value', [
-    ('coverage', 'full-cell'), ('variant', '../bad'), ('schema_version', True), ('schema_version', 2), ('family', 'fedora'),
-    ('release', 'sid'), ('os_id', 'ubuntu'), ('platforms', ['linux/arm64']),
+    ('coverage', 'base-image-only'), ('variant', '../bad'), ('schema_version', True),
+    ('schema_version', 1), ('family', 'fedora'), ('release', 'sid'),
+    ('os_id', 'ubuntu'), ('platforms', ['linux/arm64']), ('flavors', ['base']),
     ('observed_base_image', 'docker.io/library/debian:trixie'),
     ('source_observation', '../secret'), ('source_observation', '/etc/key'),
-    ('source_observation_sha256', 'c' * 63), ('sources', []),
+    ('source_observation_sha256', 'c' * 63), ('target_observation', '../target'),
+    ('target_observation_sha256', 'f' * 63), ('sources', []),
 ])
 def test_catalog_rejects(key, value):
     data = fixture()
@@ -61,7 +83,10 @@ def test_source_rejects(key, value):
         validate(data)
 
 
-@pytest.mark.parametrize('change', ['unknown', 'missing', 'duplicate', 'absent-security', 'weaken-security'])
+@pytest.mark.parametrize(
+    'change',
+    ['unknown', 'missing', 'duplicate', 'malformed-source',
+     'absent-security', 'weaken-security'])
 def test_complete_set_and_known_schema(change):
     data = fixture()
     if change == 'unknown':
@@ -70,6 +95,8 @@ def test_complete_set_and_known_schema(change):
         del data['release']
     elif change == 'duplicate':
         data['sources'].append(deepcopy(data['sources'][0]))
+    elif change == 'malformed-source':
+        data['sources'][0] = []
     elif change == 'absent-security':
         data['sources'].pop()
     else:
@@ -112,6 +139,13 @@ def test_earlier_of_validity_and_age_cap():
     assert check_authenticated_dates(source, fields, NOW, 'd' * 64) == datetime(2026, 10, 22, tzinfo=timezone.utc)
 
 
+def test_signed_date_source_uses_bounded_date_without_valid_until():
+    source = fixture()['sources'][3]
+    fields = {'Date': 'Tue, 20 Oct 2026 00:00:00 UTC'}
+    assert check_authenticated_dates(source, fields, NOW, 'd' * 64) == datetime(
+        2026, 10, 27, tzinfo=timezone.utc)
+
+
 @pytest.mark.parametrize('mode,age', [('signed-valid-until', True), ('signed-valid-until', 604801), ('ignore', 604800)])
 def test_no_expiry_downgrade(mode, age):
     data = fixture()
@@ -137,15 +171,25 @@ def observed_catalog(root=ROOT):
     catalog.update(observed_base_image=observation['base_image'], source_observation=observation_path,
                    source_observation_sha256=hashlib.sha256(raw).hexdigest())
     for source in catalog['sources']:
-        source['keyring']='config/package-keys/debian-trixie.pgp'
-        source['keyring_sha256']=observation['files']['usr/share/keyrings/debian-archive-keyring.pgp']['sha256']
-        if source['suite']=='trixie':source['freshness']['inrelease_sha256']=observation['base_inrelease_sha256']
+        if source['role'] == 'base':
+            source['keyring'] = 'config/package-keys/debian-trixie.pgp'
+            source['keyring_sha256'] = observation['files'][
+                'usr/share/keyrings/debian-archive-keyring.pgp']['sha256']
+            if source['id'] == 'trixie':
+                source['freshness']['inrelease_sha256'] = observation['base_inrelease_sha256']
+        else:
+            source['keyring'] = 'config/package-keys/tailscale-trixie.gpg'
+            source['keyring_sha256'] = '3e03dacf222698c60b8e2f990b809ca1b3e104de127767864284e6c228f1fb39'
+    target_path = 'config/package-observations/flounder-target-amd64.json'
+    target_raw = (root / target_path).read_bytes()
+    catalog.update(target_observation=target_path,
+                   target_observation_sha256=hashlib.sha256(target_raw).hexdigest())
     return catalog
 
 
 def test_actual_observation_binding():
-    observation,keys=package_catalogs.bind_observation(observed_catalog(),ROOT)
-    assert observation['platform']=='linux/amd64' and len(keys)==3
+    observation, keys = package_catalogs.bind_observation(observed_catalog(), ROOT)
+    assert observation['platform'] == 'linux/amd64' and len(keys) == 4
 
 
 @pytest.mark.parametrize('change',['image','platform','sources','key','manifest','inventory','base-metadata'])
@@ -167,13 +211,15 @@ def test_observation_binding_rejects_tampering(tmp_path,change):
 
 
 def test_stale_observation_only_blocks_lookup():
-    catalog=observed_catalog()
-    document=dict(package_catalogs={'debian':catalog},variants={'flounder':dict(
-        base_image='docker.io/library/debian:trixie@sha256:'+'f'*64,
-        platforms=['linux/amd64'],flavors=[])})
+    catalog = observed_catalog()
+    document = dict(package_catalogs={'debian': catalog}, variants={'flounder': dict(
+        base_image='docker.io/library/debian:trixie@sha256:' + 'f' * 64,
+        platforms=['linux/amd64'],
+        flavors=[dict(id='base', stage=1, build_image=True)])})
     package_catalogs.validate_document(document)
-    with pytest.raises(CatalogError,match='refresh'):
-        package_catalogs.select(document,'debian','flounder','trixie','linux/amd64')
+    with pytest.raises(CatalogError, match='refresh'):
+        package_catalogs.select(
+            document, 'debian', 'flounder', 'base', 'trixie', 'linux/amd64')
 
 
 @pytest.mark.parametrize('relative',['../key','/etc/key','keys//key','keys/./key','keys/../key','keys\\key'])
@@ -215,6 +261,42 @@ def test_trust_input_byte_bound(tmp_path):
     (tmp_path / 'key').write_bytes(b'12345')
     with pytest.raises(CatalogError, match='size bound'):
         package_catalogs._public_file(tmp_path, 'key', limit=4)
+
+
+def test_target_configuration_binds_build_and_desktop_sources():
+    from lib import tunaos_config
+    document = tunaos_config.load()
+    catalog = document['package_catalogs']['debian-trixie']
+    for flavor in ('base', 'kde', 'xfce'):
+        observation = package_catalogs.bind_target_configuration(
+            catalog, document, ROOT, flavor)
+        assert observation['build_sources'][0]['id'] == 'tailscale'
+
+
+def test_target_configuration_rejects_changed_source_logic(tmp_path):
+    import shutil
+    shutil.copytree(ROOT / 'config', tmp_path / 'config')
+    shutil.copytree(ROOT / 'build_scripts', tmp_path / 'build_scripts')
+    shutil.copy(ROOT / 'Containerfile.debian', tmp_path / 'Containerfile.debian')
+    document = __import__('lib.tunaos_config', fromlist=['load']).load()
+    catalog = document['package_catalogs']['debian-trixie']
+    (tmp_path / 'build_scripts/20-packages.sh').write_text('changed\n')
+    with pytest.raises(CatalogError, match='configuration changed'):
+        package_catalogs.bind_target_configuration(
+            catalog, document, tmp_path, 'base')
+
+
+def test_target_configuration_rejects_uncovered_desktop_repository():
+    from lib import tunaos_config
+    document = tunaos_config.load()
+    document['desktops']['kde-debian']['packages']['apt']['repos'] = [{
+        'name': 'new', 'uri': 'https://example.test/repo/', 'suite': './',
+        'keyring_url': 'https://example.test/key.gpg',
+        'condition': 'debian-trixie',
+    }]
+    with pytest.raises(CatalogError, match='desktop repositories'):
+        package_catalogs.bind_target_configuration(
+            document['package_catalogs']['debian-trixie'], document, ROOT, 'kde')
 
 
 def test_primary_hook_is_structural_only(monkeypatch):

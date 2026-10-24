@@ -1,85 +1,105 @@
-# Search upstream base-image packages
+# Search configured target packages
 
-The optional `package_catalogs` table in `tunaos.toml` describes sources for the
-search tool. It does not change image builds or installer trust.
-The first adapter is for Debian trixie in the pinned flounder base on `linux/amd64`.
-It needs an installed GnuPG executable. The command does not install tools.
+The optional `package_catalogs` table in `tunaos.toml` describes read-only,
+trusted package-index collectors. It does not change image builds, package
+policy, or installer trust.
+
+The supported adapter covers the complete configured repository set for the
+`flounder` `base`, `kde`, and `xfce` targets on `linux/amd64`: the three
+repositories observed in the pinned Debian trixie base plus the Tailscale
+repository added by `build_scripts/20-packages.sh`. Those desktop profiles add
+no repositories. GnuPG must already be installed; the command never installs it.
 
 ```sh
-python3 scripts/search-base-packages.py htop --catalog debian-trixie \
-  --variant flounder --release trixie --platform linux/amd64
+python3 scripts/search-base-packages.py htop \
+  --catalog debian-trixie --variant flounder --flavor kde \
+  --release trixie --platform linux/amd64
 ```
 
-The command shows names from all three declared repositories.
-All sources must pass checks before the command prints a result. A missing source,
-expired metadata, changed image digest, invalid signature, or unsupported target
-fails the search. There is no add or write option. Index presence does not prove
-that a package can be installed, that dependencies resolve, or that an image boots.
+All four sources must authenticate before the command prints any result. Each
+source reports its role, metadata URL, signed release, native architecture,
+signed and retrieval timestamps, metadata and index SHA-256 digests, signers,
+and freshness result. A missing source, stale metadata, changed image or
+configuration file, invalid signature, wrong release or architecture, partial
+index, or unsupported target fails the whole search. There is no add or write
+option.
 
-## Scope and remaining work
+`configuration_observed_at` identifies the reviewed extraction that binds the
+collector to the effective target. The observation pins
+`Containerfile.debian`, `build_scripts/20-packages.sh`, and
+`build_scripts/desktop/install-desktop.sh`; the collector also reads the
+selected desktop policy from the same parsed `tunaos.toml`. A changed source
+path, source script, enabled target, or applicable desktop repository requires
+a reviewed observation and adapter update. Catalog assertions alone do not make
+a repository part of an authenticated target.
 
-Coverage is `base-image-only`. Output reports `cell_coverage_complete: false` and
-`add_supported: false`. It does not qualify a built desktop or a shared package
-policy. The existing offline receipt-backed editor remains a separate command.
+## Native adapter inventory
 
-`build_scripts/20-packages.sh` adds Tailscale's trixie repository and downloads its
-key during the Debian build. This search does not cover that repository. A full
-resolver must model and verify this source and its trust ownership first.
-`Containerfile.debian` also copies shared files from the selected common image.
-The GNOME stage copies its Bluefin files.
+Offline package-index parsing and trusted collection are separate capabilities.
+The authoring parser can read all formats below, but only the listed collector
+may fetch and authenticate configured repositories.
 
-The inspected shared layer had no apt sources or key files. This observation does
-not cover future digests, environment overrides, GNOME files, or later build
-scripts. A full resolver must account for desktop sources and later overlays
-before it can enable add.
+| Native manager | Index format | Trusted configured-source collector |
+|---|---|---|
+| apt | Debian `Packages` | Supported for reviewed flounder trixie `base`/`kde`/`xfce`, amd64 |
+| dnf | RPM `primary.xml` | Unsupported; no repository-set/trust adapter |
+| pacman | repository database | Unsupported; no repository-set/trust adapter |
+| zypper | RPM `primary.xml` | Unsupported; no repository-set/trust adapter |
+| portage | Gentoo ebuild tree | Unsupported; no repository-set/trust adapter and ebuilds are never executed |
 
-Other families, releases, and architectures fail closed. They need native
-metadata adapters, explicit trust provenance, source observations, and tests.
-The tool does not infer names from similar names. Gentoo needs category-qualified
-names in the offline editor.
+Other Flounder flavors also fail closed. `tuna` adds Tideforge, NVIDIA flavors
+enable additional Debian components, disabled GNOME is not an enabled build
+target, and Asahi mutates sources in an overlay. Each needs its own reviewed
+source-set coverage before the collector may claim a complete target.
+
+## Scope
+
+Output reports `coverage: configured-target`,
+`cell_coverage_complete: true`, and `add_supported: false`. Complete means that
+the collector authenticated every package repository configured for the
+selected target; it does not mean that dependencies solve, a transaction
+succeeds, a package is installed, or an image boots. Search never invokes apt,
+installs packages, executes ebuilds, or edits configuration. Transaction and
+installed-package receipts remain separate downstream checks.
+
+The bootc toolchain and other downloaded build artifacts are not package
+repositories and are outside this index collector. A later overlay or a runtime
+repository is likewise not silently attributed to these stage-1/stage-2
+targets.
 
 ## Trust and freshness
 
-The reviewed observation binds the immutable OCI index, platform manifest,
-layer identities, source-file inventory, OS identity, and public key bytes.
-The configuration pins its hash. Reviewers verify these extraction claims;
-the observation has no signature. The verifier checks signatures from repositories
-against the pinned public keys and full primary fingerprints.
-See [public key provenance](../config/package-keys/README.md).
+The base observation binds the immutable OCI index, platform manifest, layer
+identities, source-file inventory, OS identity, and Debian public key bytes.
+The target observation binds the reviewed build-source extraction and source
+configuration files. Both observations are hash-pinned in `tunaos.toml`; they
+are reviewed extraction claims, not signatures.
 
-Acquisition uses bounded HTTPS reads and native paths with SHA-256 hashes.
-XZ expansion and decoder memory have limits. The verifier has an isolated home.
-The adapter accepts the observed RSA and EdDSA algorithms with SHA-2 digests.
-Network requests use a thirty-second socket timeout and elapsed-time checks
-between reads. This does not impose a hard deadline on the whole request.
+Repository metadata is independently verified against vendored public key
+bytes and full primary fingerprints. See
+[public key provenance](../config/package-keys/README.md). Search never fetches
+keys, imports them into a user keyring, or changes system trust.
 
-The tool never fetches keys or changes system trust. All declared sources must
-finish successfully. Trust the configuration and its parent directory before use.
-The tool does not protect against hostile filesystem changes by the same user.
+Acquisition uses bounded HTTPS reads restricted to reviewed hosts. Debian
+indexes use signed SHA-256 by-hash paths. Tailscale does not publish by-hash, so
+its direct `Packages.gz` paths must match the size and SHA-256 in the verified
+InRelease. XZ output/dictionary and gzip output have explicit limits. Every
+source completes before any output is emitted.
 
-Debian stable metadata can omit `Valid-Until`. The observation pins its exact
-signed envelope without an arbitrary age limit. This does not prove that a newer
-point release is unavailable. Updates and security need signed expiry and expire
-no later than seven days after their signed date.
-
-The tool also enforces any signed expiry on base metadata. It rejects dates over
-ten seconds in the future. Correct local time is necessary. Fresh repository
-metadata does not prove that the installed base image has received updates.
+Debian stable metadata can omit `Valid-Until`; the base observation pins its
+exact signed envelope. Debian updates and security require signed expiry and
+expire no later than seven days after signed `Date`. Tailscale publishes no
+`Valid-Until`; its signed `Date` has a seven-day maximum age. All sources reject
+dates over ten seconds in the future. Correct local time is required.
 
 ## Refresh contract
 
-After an image change, lookup fails until you refresh its observation.
-Structural configuration validation and builds do not check network or freshness.
-This first slice has no automatic refresh command. Refresh needs an explicit
-reviewed change to the config and observation.
+After an image or effective package-source configuration change, lookup fails
+until its observations are reviewed and refreshed. Structural configuration
+validation and image builds do not perform network or freshness checks.
 
-Inspect the exact new OCI image and source inventory. Verify its public trust
-material, authenticate all declared metadata, and record the hashes. A source or
-key change needs separate review. A failed signature must never cause the tool
-to replace keys automatically.
-
-A future refresh command should emit a preview-bound patch and receipt.
-The apply step must revalidate the exact original config, image, source inventory,
-and signed metadata. An explicit write flag authorizes that exact patch; it does
-not establish that a person reviewed it. Trust and source identity changes must
-remain separate.
+Refresh is intentionally manual: inspect the exact OCI image and effective
+source inventory, verify public trust material, authenticate all metadata, and
+record the new identities. A source or key change needs separate review. A
+failed signature never triggers key retrieval. The collector has no write or
+automatic trust-refresh path.

@@ -12,6 +12,22 @@ trust roots. Search never installs the file into system trust or imports it into
 a user keyring. A key change needs a separate review; a failed signature does not
 trigger key retrieval.
 
+`tailscale-trixie.gpg` is the public package signing key served by the exact
+source URL configured in `build_scripts/20-packages.sh`:
+`https://pkgs.tailscale.com/stable/debian/trixie.noarmor.gpg`. Its SHA-256 is
+`3e03dacf222698c60b8e2f990b809ca1b3e104de127767864284e6c228f1fb39`;
+the allowed primary fingerprint is
+`2596A99EAAB33821893C0A79458CA832957F5868`. The reviewed target observation
+binds that source claim to the source-configuration files. The key remains
+lookup-only and is never installed or fetched by the collector.
+
+The Tailscale InRelease fixture under `tests/fixtures/package-catalog` was
+retrieved from
+`https://pkgs.tailscale.com/stable/debian/dists/trixie/InRelease` on
+2026-10-24. Its SHA-256 is
+`65b731b93c7cdbdd84d90bdc665b0162d34affda38e59b24423277b8b31a17b9`.
+It is deterministic signature/format evidence, not a current freshness claim.
+
 Debian's `debian-archive-keyring` copyright file states that the keys themselves
 are not copyrighted. No GPL package support scripts are included here.
 GnuPG is a separately installed native verifier; this repository does not vendor

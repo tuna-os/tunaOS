@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "variant": "flounder",
+  "flavors": [
+    "base",
+    "kde",
+    "xfce"
+  ],
+  "platform": "linux/amd64",
+  "base_image": "docker.io/library/debian:trixie@sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308",
+  "observed_at": "2026-10-24T02:30:03Z",
+  "configuration_files": {
+    "Containerfile.debian": {
+      "sha256": "66cc16aacc5e69a9fbe6692fc1a1e28322dce6ed72de7ce6c51d19c50b071022",
+      "size": 18383
+    },
+    "build_scripts/20-packages.sh": {
+      "sha256": "76dfeec44ef4d8b489e511af3cbadd6535578213086e828074317a5b84d3a149",
+      "size": 7585
+    },
+    "build_scripts/desktop/install-desktop.sh": {
+      "sha256": "2d4a2d92ac4b21890f7ec0f9a33d4b8ef702442084ab243dc9600fec8d9a3d44",
+      "size": 61254
+    }
+  },
+  "build_sources": [
+    {
+      "id": "tailscale",
+      "uri": "https://pkgs.tailscale.com/stable/debian/",
+      "suite": "trixie",
+      "components": [
+        "main"
+      ],
+      "declaration_url": "https://pkgs.tailscale.com/stable/debian/trixie.tailscale-keyring.list",
+      "keyring_url": "https://pkgs.tailscale.com/stable/debian/trixie.noarmor.gpg"
+    }
+  ]
+}

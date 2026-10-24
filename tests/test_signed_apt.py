@@ -95,14 +95,15 @@ def test_redirect_rejects_cross_origin():
 
 
 def test_index_architecture_empty_and_bounds(monkeypatch):
-    data=b'Package: htop\nArchitecture: amd64\n\nPackage: foreign\nArchitecture: arm64\n\n'
-    assert acquire.index_names(lzma.compress(data))=={'htop'}
-    assert acquire.index_names(lzma.compress(b''))==set()
+    data = b'Package: htop\nArchitecture: amd64\n\nPackage: foreign\nArchitecture: arm64\n\n'
+    assert acquire.index_names(lzma.compress(data)) == {'htop'}
+    assert acquire.index_names(lzma.compress(b'')) == set()
+    assert acquire.index_names(__import__('gzip').compress(data), 'gzip') == {'htop'}
     with pytest.raises(CatalogError):
-        acquire.index_names(lzma.compress(data)+b'trailing')
-    monkeypatch.setattr(acquire,'MAX_INDEX',200)
+        acquire.index_names(lzma.compress(data) + b'trailing')
+    monkeypatch.setattr(acquire, 'MAX_INDEX', 200)
     with pytest.raises(CatalogError):
-        acquire.index_names(lzma.compress(b'x'*201))
+        acquire.index_names(lzma.compress(b'x' * 201))
 
 
 @pytest.mark.parametrize('record',[b'Package: htop\nPackage: bad\nArchitecture: amd64\n',
@@ -113,49 +114,104 @@ def test_malformed_package_record(record):
 
 
 def fake_catalog():
-    catalog=fixture();envelopes={};payloads={};indexes={}
+    import gzip
+    catalog = fixture()
+    envelopes, payloads, responses = {}, {}, {}
     for source in catalog['sources']:
-        suite=source['suite'];envelope=('signed fixture '+suite).encode()
-        data=lzma.compress(b'Package: htop\nArchitecture: amd64\n\n' if suite=='trixie' else b'')
-        sha=hashlib.sha256(data).hexdigest()
-        fields={'Origin':'Debian','Label':'Debian-Security' if suite=='trixie-security' else 'Debian',
-                'Codename':suite,'Date':'Tue, 20 Oct 2026 00:00:00 UTC',
-                'Architectures':'amd64 all','Components':'updates/main' if suite=='trixie-security' else 'main',
-                'Acquire-By-Hash':'yes'}
-        if suite!='trixie':fields['Valid-Until']='Tue, 27 Oct 2026 00:00:00 UTC'
-        else:source['freshness']['inrelease_sha256']=hashlib.sha256(envelope).hexdigest()
-        payload=(''.join(k+': '+v+'\n' for k,v in fields.items())+'SHA256:\n '+sha+' '+str(len(data))+' main/binary-amd64/Packages.xz\n').encode()
-        envelopes[suite]=envelope;payloads[envelope]=payload;indexes[sha]=data
-    def fetch(url,limit):
-        if url.endswith('/InRelease'):return envelopes[url.split('/')[-2]]
-        return indexes[url.split('/')[-1]]
-    def verify(envelope,keyring,source):return payloads[envelope],['A'*40]
-    return catalog,fetch,verify,envelopes,payloads,indexes
+        name = source['id']
+        root = source['uri'] + 'dists/' + source['suite'] + '/'
+        envelope = ('signed fixture ' + name).encode()
+        fields = {
+            'Origin': source['origin'], 'Label': source['label'],
+            'Codename': source['codename'],
+            'Date': 'Tue, 20 Oct 2026 00:00:00 UTC',
+            'Architectures': 'amd64 all',
+            'Components': 'updates/main' if name == 'trixie-security' else 'main',
+        }
+        if source['role'] == 'base':
+            fields['Acquire-By-Hash'] = 'yes'
+        if source['freshness']['mode'] == 'signed-valid-until':
+            fields['Valid-Until'] = 'Tue, 27 Oct 2026 00:00:00 UTC'
+        if name == 'trixie':
+            source['freshness']['inrelease_sha256'] = hashlib.sha256(envelope).hexdigest()
+        records = (b'Package: tailscale\nArchitecture: amd64\n\n'
+                   if name == 'tailscale'
+                   else b'Package: htop\nArchitecture: amd64\n\n'
+                   if name == 'trixie' else b'')
+        specs = ([('main/binary-amd64/Packages.gz', gzip.compress(records)),
+                  ('main/binary-all/Packages.gz',
+                   gzip.compress(b'Package: tailscale-archive-keyring\nArchitecture: all\n\n'))]
+                 if name == 'tailscale'
+                 else [('main/binary-amd64/Packages.xz', lzma.compress(records))])
+        checksum_lines = []
+        for path, data in specs:
+            sha = hashlib.sha256(data).hexdigest()
+            checksum_lines.append(f' {sha} {len(data)} {path}\n')
+            url = (root + path if name == 'tailscale'
+                   else root + path.rsplit('/', 1)[0] + '/by-hash/SHA256/' + sha)
+            responses[url] = data
+        payload = (''.join(k + ': ' + v + '\n' for k, v in fields.items())
+                   + 'SHA256:\n' + ''.join(checksum_lines)).encode()
+        envelopes[name] = envelope
+        payloads[envelope] = payload
+        responses[root + 'InRelease'] = envelope
+    requested = []
+    def fetch(url, limit):
+        requested.append(url)
+        return responses[url]
+    def verify(envelope, keyring, source):
+        return payloads[envelope], ['A' * 40]
+    return catalog, fetch, verify, envelopes, payloads, responses, requested
 
 
-def test_all_three_sources_complete_with_authenticated_empty_updates():
-    catalog,fetch,verify,*_=fake_catalog()
-    results=acquire.acquire_catalog(catalog,lambda _:b'key',datetime(2026,10,21,tzinfo=timezone.utc),fetch,verify)
-    assert len(results)==3 and results[0]['names']=={'htop'} and results[1]['names']==set()
+def test_complete_configured_target_with_authenticated_empty_updates():
+    catalog, fetch, verify, envelopes, payloads, responses, requested = fake_catalog()
+    results = acquire.acquire_catalog(
+        catalog, lambda _: b'key', datetime(2026, 10, 21, tzinfo=timezone.utc),
+        fetch, verify)
+    assert len(results) == 4
+    assert results[0]['names'] == {'htop'}
+    assert results[3]['names'] == {'tailscale', 'tailscale-archive-keyring'}
+    assert results[3]['role'] == 'build'
+    assert results[3]['source_url'].startswith('https://pkgs.tailscale.com/')
+    assert len(results[3]['indexes']) == 2
+    assert results[3]['keyring_sha256'] == 'e' * 64
+    assert len(requested) == 9
+    assert all(url.startswith(('https://deb.debian.org/', 'https://pkgs.tailscale.com/'))
+               for url in requested)
+    assert not any(url.endswith(('.gpg', '.list')) for url in requested)
 
 
-@pytest.mark.parametrize('failure',['missing-security','bad-index-hash','expired-security','wrong-identity','wrong-base-pin'])
+@pytest.mark.parametrize(
+    'failure',
+    ['missing-security', 'missing-tailscale', 'bad-index-hash',
+     'expired-security', 'wrong-identity', 'wrong-base-pin'])
 def test_no_partial_catalog_result(failure):
-    catalog,fetch,verify,envelopes,payloads,indexes=fake_catalog()
-    if failure=='missing-security':
-        old=fetch
-        def fetch(url,limit):
-            if '/trixie-security/' in url:raise CatalogError('source unavailable')
-            return old(url,limit)
-    elif failure=='bad-index-hash':
-        for sha in indexes:indexes[sha]=b'bad'
-    elif failure=='expired-security':
-        key=envelopes['trixie-security'];payloads[key]=payloads[key].replace(b'27 Oct',b'20 Oct')
-    elif failure=='wrong-identity':
-        key=envelopes['trixie-security'];payloads[key]=payloads[key].replace(b'Origin: Debian',b'Origin: Ubuntu')
-    else:catalog['sources'][0]['freshness']['inrelease_sha256']='0'*64
+    catalog, fetch, verify, envelopes, payloads, responses, requested = fake_catalog()
+    if failure in {'missing-security', 'missing-tailscale'}:
+        blocked = 'trixie-security' if failure == 'missing-security' else 'pkgs.tailscale.com'
+        old = fetch
+        def fetch(url, limit):
+            if blocked in url:
+                raise CatalogError('source unavailable')
+            return old(url, limit)
+    elif failure == 'bad-index-hash':
+        for url in list(responses):
+            if not url.endswith('/InRelease'):
+                responses[url] = b'bad'
+    elif failure == 'expired-security':
+        key = envelopes['trixie-security']
+        payloads[key] = payloads[key].replace(b'27 Oct', b'20 Oct')
+    elif failure == 'wrong-identity':
+        key = envelopes['tailscale']
+        payloads[key] = payloads[key].replace(b'Origin: Tailscale', b'Origin: Forged')
+    else:
+        catalog['sources'][0]['freshness']['inrelease_sha256'] = '0' * 64
     with pytest.raises(CatalogError):
-        acquire.acquire_catalog(catalog,lambda _:b'key',datetime(2026,10,21,tzinfo=timezone.utc),fetch,verify)
+        acquire.acquire_catalog(
+            catalog, lambda _: b'key',
+            datetime(2026, 10, 21, tzinfo=timezone.utc), fetch, verify)
+    assert requested
 
 
 @pytest.mark.skipif(not acquire.shutil.which('gpg'), reason='native GnuPG verifier not installed')
@@ -178,11 +234,27 @@ def test_real_debian_signature_and_tamper(tmp_path,monkeypatch):
         acquire.verify_inrelease(envelope,keyring,source)
 
 
+@pytest.mark.skipif(not acquire.shutil.which('gpg'), reason='native GnuPG verifier not installed')
+def test_real_tailscale_signature_and_trust_pin(tmp_path, monkeypatch):
+    root = Path(__file__).resolve().parents[1]
+    envelope = (root / 'tests/fixtures/package-catalog/tailscale-trixie.InRelease').read_bytes()
+    keyring = (root / 'config/package-keys/tailscale-trixie.gpg').read_bytes()
+    source = fixture()['sources'][3]
+    source['keyring_sha256'] = hashlib.sha256(keyring).hexdigest()
+    source['primary_fingerprints'] = ['2596A99EAAB33821893C0A79458CA832957F5868']
+    monkeypatch.setattr(acquire.tempfile, 'tempdir', str(tmp_path))
+    payload, signers = acquire.verify_inrelease(envelope, keyring, source)
+    fields, checksums = acquire.parse_release(payload)
+    assert signers == source['primary_fingerprints']
+    assert fields['Origin'] == 'Tailscale'
+    assert 'main/binary-amd64/Packages.gz' in checksums
+
+
 def test_xz_dictionary_memory_bound():
     # An xz header can request far more decoder memory than the output size.
     data = lzma.compress(b'Package: htop\nArchitecture: amd64\n\n',
                          filters=[{'id': lzma.FILTER_LZMA2, 'dict_size': 256 * 1024 * 1024}])
-    with pytest.raises(CatalogError, match='invalid xz'):
+    with pytest.raises(CatalogError, match='invalid compressed index'):
         acquire.index_names(data)
 
 
