@@ -9,13 +9,21 @@ source /run/context/build_scripts/lib.sh
 # adapter (scripts/config.py generate-identity), for TunaOS and forks alike.
 # There is deliberately no built-in fallback: a missing file is a broken
 # build context, not a reason to stamp stock TunaOS identity on a fork.
-IDENTITY_ENV="${TUNAOS_IDENTITY_ENV:-/run/context/build_scripts/lib/identity.env}"
-if [[ ! -f "${IDENTITY_ENV}" ]]; then
-	echo "ERROR: ${IDENTITY_ENV} is missing; run scripts/config.py generate-identity" >&2
+DEFAULT_IDENTITY_ENV=/run/context/build_scripts/lib/identity.env
+if [[ -n "${TUNAOS_IDENTITY_ENV:-}" && "${TUNAOS_IDENTITY_TEST_OVERRIDE:-}" != 1 ]]; then
+	echo "ERROR: TUNAOS_IDENTITY_ENV is test-only; build identity must use ${DEFAULT_IDENTITY_ENV}" >&2
+	exit 1
+fi
+IDENTITY_ENV="${TUNAOS_IDENTITY_ENV:-${DEFAULT_IDENTITY_ENV}}"
+if [[ ! -f "${IDENTITY_ENV}" || ! -r "${IDENTITY_ENV}" ]]; then
+	echo "ERROR: ${IDENTITY_ENV} is missing or unreadable; run scripts/config.py generate-identity" >&2
 	exit 1
 fi
 # shellcheck source=lib/identity.env
-source "${IDENTITY_ENV}"
+if ! source "${IDENTITY_ENV}"; then
+	echo "ERROR: ${IDENTITY_ENV} could not be sourced; run scripts/config.py generate-identity" >&2
+	exit 1
+fi
 
 # Fold a friendly alias tag onto the canonical variant id it belongs to.
 #
@@ -68,6 +76,11 @@ EOF
 # expects the same namespace instead of a hardcoded tuna-os.
 install -d /usr/share/tunaos
 printf '%s\n' "${IMAGE_VENDOR}" >/usr/share/tunaos/image-vendor
+# The installed verifier runs after the build context is gone. Persist the
+# generated identity policy beside the runtime image identity on every path
+# that invokes this shared writer, including manifest-driven desktops and
+# overlays.
+install -Dm0644 "${IDENTITY_ENV}" /usr/share/tunaos/identity-config.env
 
 # Every variant shipped these two pointing at projectbluefin.io, inherited
 # verbatim from the bluefin-lts script this one started as, while SUPPORT_URL
