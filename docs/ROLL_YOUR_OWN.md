@@ -216,8 +216,9 @@ Image-wide removal is deliberately unsupported by the primary interface.
 
 Desktop manifests only cover what goes into the DE layer. For packages
 that should be in *every* image (base layer), edit
-`build_scripts/20-packages.sh`. That is a framework change: TOML image-wide
-package additions are still pending in [#3739](https://github.com/tuna-os/tunaOS/pull/3739).
+`build_scripts/20-packages.sh`. That is a framework change. Open PR
+[#3739](https://github.com/tuna-os/tunaOS/pull/3739) adds image-wide package
+additions to TOML; `main` does not have them yet.
 
 For system-wide config files, add them to `system_files/`:
 

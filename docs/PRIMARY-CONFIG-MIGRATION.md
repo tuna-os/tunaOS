@@ -1,7 +1,7 @@
 # Primary TunaOS configuration migration
 
 Status: design and migration history, not a copyable configuration interface.
-The adopted ownership boundary is tracked in [#3668](https://github.com/tuna-os/tunaOS/issues/3668).
+Issue [#3668](https://github.com/tuna-os/tunaOS/issues/3668) records the adopted ownership boundary.
 For implemented fields and commands, read [CONFIG-WIRING.md](CONFIG-WIRING.md).
 Related work: RFC 013, issue #3433 and delivery epic #3474.
 
@@ -18,8 +18,8 @@ The name `tunaos.toml` alone would not make those deltas meet the new requiremen
 
 ## Source ownership
 
-Status is for `main`. "Pending" fields are open PRs under #3668 and are rejected
-by the current validator; do not copy them into `tunaos.toml` yet.
+Status is for `main`. The validator on `main` rejects the fields of an open PR
+under #3668; do not copy them into `tunaos.toml` yet.
 
 | Fork-facing value | Status on main | TOML owner | Consumer or generated adapter |
 |---|---|---|---|
@@ -31,18 +31,18 @@ by the current validator; do not copy them into `tunaos.toml` yet.
 | Variant base-image pins | Implemented | `variants.<id>.base_image` | `scripts/get-base-image.sh`; Renovate edits the TOML pin |
 | Default Flatpak applications | Implemented (#3553) | `[flatpak_preinstall]` | Generated `build_scripts/desktop/flatpak-preinstall.tsv` |
 | ISO Builder presentation and defaults | Implemented | `[iso_builder]`, `flavor_metadata` | Generated `docs/iso-builder.*.json` |
-| Project name, ID, CPE vendor, URLs, variant codenames | Pending F3a (#3681) | `[project]`, `[defaults.branding]`, `variants.<id>.codename` | Today: `90-image-info.sh` and `build_scripts/lib/variant-identity.tsv` |
-| Variant accent, GNOME accent, base label | Pending F3b (#3700) | `variants.<id>.branding` | Today: framework identity/brand sources |
-| Marks, lettermarks, Plymouth themes, wallpaper aliases | Pending F3c/F3d (#3701, #3705) | `branding.plymouth` plus generated artwork | Today: asset naming and `build_scripts/desktop/select-wallpaper.sh` |
-| Installer name and logo | Pending F3e (#3708) | Project name; logo is the in-image variant mark | Today: installer customization sources |
-| Image-wide package additions over inherited base lists | Pending F4 (#3739) | `[defaults.packages]`, `variants.<id>.packages` (`add`, `optional`, `repositories`) | Today: framework base package scripts |
+| Project name, ID, CPE vendor, URLs, variant codenames | Open PR: F3a (#3681) | `[project]`, `[defaults.branding]`, `variants.<id>.codename` | Today: `90-image-info.sh` and `build_scripts/lib/variant-identity.tsv` |
+| Variant accent, GNOME accent, base label | Open PR: F3b (#3700) | `variants.<id>.branding` | Today: framework identity/brand sources |
+| Marks, lettermarks, Plymouth themes, wallpaper aliases | Open PR: F3c/F3d (#3701, #3705) | `branding.plymouth` plus generated artwork | Today: asset naming and `build_scripts/desktop/select-wallpaper.sh` |
+| Installer name and logo | Open PR: F3e (#3708) | Project name; logo is the in-image variant mark | Today: installer customization sources |
+| Image-wide package additions over inherited base lists | Open PR: F4 (#3739) | `[defaults.packages]`, `variants.<id>.packages` (`add`, `optional`, `repositories`) | Today: framework base package scripts |
 | Image-wide package removals | Rejected (F4b, #3803) | none | No protected-removal design yet |
 
 Execution scripts, Containerfiles and checks remain code. Tool/download pins in
 `image-versions.yaml`, registry mirrors in `registry-map.yaml` and the Flatpak
 remote setup also remain framework inputs; they are not migration targets.
-Inherited stock base-package policy is not replaced by the planned configurable
-additions. Credentials are not
+The planned additions do not replace the inherited stock base packages.
+Credentials are not
 configuration data. Do not put shell commands, remote includes or secret values in TOML. Existing trusted post-install steps become named, validated operations;
 this migration does not add arbitrary hooks.
 
@@ -65,8 +65,8 @@ configuration that looks supported.
 
 The example below shows current values, not a complete build configuration.
 The complete file must contain every existing cell and policy. Omitted variant
-flavors here are not a proposal to disable them. Sections marked "pending" use
-the shapes in their open PRs and fail validation on `main` today.
+flavors here are not a proposal to disable them. Sections marked "open PR" use
+the shapes in those PRs and fail validation on `main` today.
 
 ```toml
 schema_version = 1
@@ -76,24 +76,24 @@ schema_version = 1
 registry = "quay.io"
 namespace = "acme"
 
-# Pending F3a (#3681).
+# Open PR: F3a (#3681).
 [project]
 name = "TunaOS"
 id = "tunaos"
 cpe_vendor = "jamesreilly"
 
-# Pending F3a (#3681).
+# Open PR: F3a (#3681).
 [defaults.branding]
 homepage = "https://github.com/tuna-os/tunaos"
 documentation = "https://github.com/tuna-os/tunaos/tree/main/docs"
 support = "https://github.com/tuna-os/tunaos/issues/"
 bug_report = "https://github.com/tuna-os/tunaos/issues/"
 
-# Pending F4 (#3739). Native names must be valid for every selected family.
+# Open PR: F4 (#3739). Native names must be valid for every selected family.
 [defaults.packages]
 add = []
 
-# Implemented, except codename (F3a) and branding (F3b/F3d), which are pending.
+# Implemented, except codename (F3a) and branding (F3b/F3d), which are open PRs.
 [variants.yellowfin]
 emoji = "🐠"
 description = "Based on AlmaLinux Kitten 10"
@@ -103,7 +103,7 @@ aliases = ["almalinux-kitten"]
 platforms = ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
 branding = { accent = "#FFC702", gnome_accent = "yellow", base = "AlmaLinux Kitten", homage = "the yellow petal of the AlmaLinux flower", plymouth = "tropical-fish" }
 
-# Pending F4 (#3739). Native RPM additions for this variant only.
+# Open PR: F4 (#3739). Native RPM additions for this variant only.
 [variants.yellowfin.packages]
 add = []
 
@@ -119,9 +119,10 @@ required = [
 ]
 ```
 
-Desktop package lists are ordered: `include` groups expand first, then local
-entries, without deduplication. Pending image-wide `packages` tables only add
-packages over the inherited base lists; removals are rejected until F4b. Do not
+The order of desktop package lists matters: `include` groups expand first, then
+local entries, without deduplication. The image-wide `packages` tables from
+#3739 only add packages over the inherited base lists; the validator rejects
+removals until F4b. Do not
 silently reinterpret an existing ordered package list as a set. Family-specific
 package names stay family-specific. Selection never enables a held or
 unsupported cell.
