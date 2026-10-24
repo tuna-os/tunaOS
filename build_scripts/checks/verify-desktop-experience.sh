@@ -43,40 +43,56 @@ trap emit_fail_on_early_exit EXIT
 source /run/context/build_scripts/lib.sh 2>/dev/null || true
 detected_os 2>/dev/null || true
 
-# Tuna Desktop ships on Arch (pacman), the RPM bases and the apt bases (dpkg).
-# Query the native database for installed names and file owners, never
-# virtual provides or a repository's availability (adapted from tunaOS#3194).
+# Query installed names, not virtual provides or availability in a repository.
+# os-release remains available after /run/context is removed at image boot.
 tuna_package_backend() {
-	if command -v pacman >/dev/null 2>&1; then
-		echo pacman
-	# An rpm binary alone (installable on Debian) is not an RPM base.
-	elif command -v rpm >/dev/null 2>&1 && rpm -q rpm >/dev/null 2>&1; then
-		echo rpm
-	elif command -v dpkg-query >/dev/null 2>&1; then
-		echo dpkg
-	else
-		echo "no supported Tuna package backend (pacman, rpm or dpkg) in this image" >&2
-		return 1
-	fi
+	local ID="" ID_LIKE=""
+	source "${TUNAOS_OS_RELEASE:-/etc/os-release}"
+	case "$ID" in
+	arch | archlinux) echo pacman ;;
+	ubuntu | debian) echo dpkg ;;
+	gentoo) echo portage ;;
+	almalinux | centos | fedora | eln | rhel | hummingbird | opensuse*) echo rpm ;;
+	*)
+		case " $ID_LIKE " in
+		*" debian "*) echo dpkg ;;
+		*" rhel "* | *" fedora "* | *" suse "*) echo rpm ;;
+		*)
+			echo "unknown Tuna package backend: $ID" >&2
+			return 1
+			;;
+		esac
+		;;
+	esac
 }
 
 tuna_installed_package_names() {
 	case "$1" in
 	pacman) pacman -Qq ;;
 	rpm) rpm -qa --qf '%{NAME}\n' ;;
-	# Installed only, read from the second (state) character: the first is the
-	# selection, so a held install is `hi`, and removed-but-not-purged is `rc`.
-	dpkg) dpkg-query -W -f '${db:Status-Abbrev} ${Package}\n' | awk 'substr($1, 2, 1) == "i" { print $2 }' ;;
+	dpkg)
+		dpkg-query -W -f '${binary:Package}\t${db:Status-Status}\n' |
+			awk -F '\t' '$2 == "installed" { sub(/:[^:]+$/, "", $1); print $1 }'
+		;;
+	portage) qlist -ICF '%[PN]' ;;
 	*) return 1 ;;
 	esac
 }
 
 tuna_installed_file_owner() {
+	local owner
 	case "$1" in
 	pacman) pacman -Qqo "$2" ;;
 	rpm) rpm -qf --qf '%{NAME}\n' "$2" ;;
-	# `dpkg -S` prints "<package>[:<arch>]: <path>".
-	dpkg) dpkg -S "$2" | sed -n '1s/[:,].*//p' ;;
+	dpkg)
+		owner="$(dpkg-query -S "$2")" || return 1
+		# Architecture qualifiers are allowed; diversions or multiple owners
+		# remain ambiguous and cannot pass the exact owner comparison below.
+		[[ "$owner" != *$'\n'* && "$owner" != *,* && "$owner" == *": $2" ]] || return 1
+		owner=${owner%": $2"}
+		printf '%s\n' "${owner%%:*}"
+		;;
+	portage) qfile -CqPF '%[PN]' "$2" ;;
 	*) return 1 ;;
 	esac
 }
@@ -104,6 +120,7 @@ tuna_installed_file_owner() {
 # Exit status is deliberately unchanged: turning the waiver into a hard
 # failure would red-line every hummingbird build, which is a policy call for
 # a human, not a side effect of a logging fix.
+
 TUNAOS_CONTRACT_WAIVED=0
 waive() { TUNAOS_CONTRACT_WAIVED=$((TUNAOS_CONTRACT_WAIVED + 1)); }
 
@@ -395,6 +412,15 @@ gdm_autologin_enabled() {
 		END { exit !found }
 	' "$config"
 }
+
+# Tests may source the function library without running the desktop checks.
+if [[ "${TUNAOS_CONTRACT_LIBRARY_ONLY:-false}" == true ]]; then
+	if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then
+		return 0
+	fi
+	exit 0
+fi
+
 case "$desktop" in
 gnome)
 	experience="projectbluefin/bluefin-lts"
@@ -555,7 +581,6 @@ tuna)
 		require_portal_preference /usr/share/xdg-desktop-portal/tuna-portals.conf "org.freedesktop.impl.portal.$portal" gnome
 	done
 	require_portal_preference /usr/share/xdg-desktop-portal/tuna-portals.conf org.freedesktop.impl.portal.Access gtk
-	# Arch ships it under /usr/lib, Fedora, EL and Debian under /usr/libexec,
 	# openSUSE under /usr/libexec/gnome-shell (gnome-shell-calendar). The
 	# shell reaches it by D-Bus activation, so the path is the package's.
 	require_any_glob '/usr/lib/gnome-shell-calendar-server' '/usr/libexec/gnome-shell-calendar-server' '/usr/libexec/gnome-shell/gnome-shell-calendar-server'

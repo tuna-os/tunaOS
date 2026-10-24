@@ -1577,9 +1577,25 @@ uses the previous defect: the report must query a matrix cell with
 
 ### Marlin selects OSTree/XFS during disk installation
 
-On 2026-10-04 the Corral builder on AWS failed with `bootupd is required for ostree-based installs`. The Marlin image had bootupctl and systemd-boot but no GRUB update payload. Its shared installer configuration also reported an XFS root although prepare-root.conf enabled composefs.
+**Symptom:** The Corral builder on AWS fails with
+`bootupd is required for ostree-based installs`, or the installer log reports
+an XFS root while the image's `prepare-root.conf` enables composefs.
 
-The Marlin override `50-marlin.toml` selects systemd-boot and ext4. Containerfile.arch now applies the variant overrides and checks bootc's merged configuration before release. External installers must also select `--composefs-backend` when the image has systemd-boot without a GRUB update payload; the bootupctl executable alone does not identify an OSTree installation. Corral's corrected image probe reports composefs/ext4. The AWS boot result remains a separate qualification gate.
+**Measured cause:** On 2026-10-04, Marlin had `bootupctl` and systemd-boot but
+no GRUB update payload. The shared installer configuration still reported XFS,
+even though `prepare-root.conf` selected composefs. The bootupctl executable
+alone is not evidence of an OSTree backend.
+
+**Fix:** `50-marlin.toml` selects systemd-boot and ext4. `Containerfile.arch`
+applies the variant override and checks bootc's merged configuration before
+release. External installers must select `--composefs-backend` for an image
+with systemd-boot and no GRUB update payload. The corrected image probe reports
+composefs/ext4.
+
+**Verification:** Run `pytest -q tests/test_marlin_installer_defaults.py`.
+For a builder failure, inspect `gh run view <run-id> --log` and search for
+`bootupd|composefs|filesystem|backend`; the AWS boot result remains a separate
+qualification gate.
 
 
 ### Roost Screenshot consent cannot open its Access dialog
@@ -1591,6 +1607,29 @@ The Marlin override `50-marlin.toml` selects systemd-boot and ext4. Containerfil
 The image had both backends; the default preferred GNOME for Access.
 
 **Fix:** Select GTK for Access, and GNOME for Screenshot and ScreenCast. The contract for the installed desktop rejects missing, wrong, duplicate, or out-of-section preferences. The admission test runs the shell validator against the shipped configuration and broken variants. Verify the final image in its separate boot gate.
+
+### Tuna desktop contract reports false package absence outside Arch (#3194)
+
+**Symptom:** A Tuna desktop image on an RPM, Debian, or Gentoo base stops in
+`verify-desktop-experience.sh`. The contract invokes `pacman -Qq`, but that
+package database is not present. It exits before it can check binary ownership.
+
+**Measured cause:** At source commit
+`9cd82cd74568c11600f7c9587b5e08eaaf4186e5`, the non-Arch reproduction reaches
+the unconditional `pacman -Qq` query and exits before the native package
+manager can report the installed `tuna-desktop` package. The regression fixture
+in `tests/test_tuna_target_neutral_package_contract.py` reproduces the RPM,
+Debian, and Gentoo query paths and records the owner and calendar-server
+failure cases.
+
+**Fix:** Select the native package database from `os-release`. Check for the
+exact `tuna-desktop` package and confirm binary ownership. Accept each packaged
+path for the GNOME calendar server. Run the target-neutral package-contract
+test before you qualify the final image in its separate boot and authentication gate.
+
+**Verification:** `python3 -m pytest tests/test_tuna_admission.py
+tests/test_tuna_target_neutral_package_contract.py -q` passes 54 focused
+tests; a real image still needs the separate boot and authentication gate.
 
 ### guppy:gnome installs GNOME 49 and fails the version floor (#2450)
 
