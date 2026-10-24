@@ -1,293 +1,171 @@
 #!/usr/bin/env bats
-# Unit tests for scripts/verify-iso.sh
 #
-# Tests:
-#   - Argument validation (requires exactly 1 arg)
-#   - ISO file existence check
-#   - Missing limactl error
-#   - VM name construction / sanitization
-#   - Architecture detection (arm64 → aarch64)
-#   - Lima config generation essentials
-#   - Status checking after boot
-#   - Kernel panic detection in serial log
-#   - Boot indicator detection (GRUB, anaconda, login)
-#   - Final result: BOOT_OK flag logic
+# Exercise scripts/verify-iso.sh itself with a fake limactl and sleep. The
+# verifier still builds its real Lima config, parses real JSON status output,
+# reads the real serial-log path, and runs its real cleanup trap; only the
+# long-running VM operations are stubbed.
 
-# ── Argument Validation ───────────────────────────────────────────────────
+setup() {
+  REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
+  SCRIPT="${REPO_ROOT}/scripts/verify-iso.sh"
+  STUB_BIN="${BATS_TEST_TMPDIR}/bin"
+  mkdir -p "${STUB_BIN}" "${BATS_TEST_TMPDIR}/home"
+  HOME="${BATS_TEST_TMPDIR}/home"
+  export HOME
 
-@test "requires exactly 1 argument" {
-  run bash -c '
-    if [ "$#" -ne 1 ]; then
-      echo "Usage: $0 <iso_file>" >&2
-      exit 1
-    fi
-  '
+  cat >"${STUB_BIN}/limactl" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+case "${1:-}" in
+  list)
+    case "${2:-}" in
+      -q)
+        if [[ -n "${LIMA_EXISTING:-}" || -f "${LIMA_STARTED_MARKER}" ]]; then
+          printf '%s\n' "${LIMA_EXISTING:-$LIMA_TEST_NAME}"
+        fi
+        ;;
+      --json)
+        printf '{"name":"%s","status":"%s"}\n' \
+          "${LIMA_TEST_NAME}" "${LIMA_STATUS:-Running}"
+        ;;
+    esac
+    ;;
+  delete)
+    printf 'delete %s\n' "${2:-}" >>"${LIMA_EVENTS}"
+    ;;
+  start)
+    name=""
+    config=""
+    for arg in "$@"; do
+      case "$arg" in
+        --name=*) name="${arg#--name=}" ;;
+        *.yaml) config="$arg" ;;
+      esac
+    done
+    printf 'start %s\n' "$name" >>"${LIMA_EVENTS}"
+    : >"${LIMA_STARTED_MARKER}"
+    cp "$config" "${LIMA_CONFIG_CAPTURE}"
+    mkdir -p "${HOME}/.lima/${name}"
+    printf '%s\n' "${LIMA_SERIAL:-GRUB version 2.12}" \
+      >"${HOME}/.lima/${name}/serial.log"
+    ;;
+  *)
+    printf 'unexpected limactl call: %s\n' "$*" >&2
+    exit 2
+    ;;
+esac
+EOF
+  chmod +x "${STUB_BIN}/limactl"
+
+  cat >"${STUB_BIN}/sleep" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "${STUB_BIN}/sleep"
+
+  cat >"${STUB_BIN}/uname" <<'EOF'
+#!/usr/bin/env bash
+if [[ "${1:-}" == "-m" ]]; then
+  printf '%s\n' "${UNAME_MACHINE:-x86_64}"
+else
+  exec /usr/bin/uname "$@"
+fi
+EOF
+  chmod +x "${STUB_BIN}/uname"
+
+  ISO_FILE="${BATS_TEST_TMPDIR}/Yellowfin-GNOME-10-x86_64.iso"
+  : >"${ISO_FILE}"
+  LIMA_EVENTS="${BATS_TEST_TMPDIR}/limactl.events"
+  LIMA_STARTED_MARKER="${BATS_TEST_TMPDIR}/limactl.started"
+  LIMA_CONFIG_CAPTURE="${BATS_TEST_TMPDIR}/lima-config.yaml"
+  export ISO_FILE LIMA_EVENTS LIMA_STARTED_MARKER LIMA_CONFIG_CAPTURE
+  LIMA_TEST_NAME="verify-iso-yellowfin-gnome-10-x86-64"
+  export LIMA_TEST_NAME
+}
+
+@test "requires exactly one argument" {
+  run env PATH="/usr/bin:/bin" bash "${SCRIPT}"
+
   [ "$status" -eq 1 ]
   [[ "$output" == *"Usage:"* ]]
 }
 
-@test "rejects zero arguments" {
-  run bash -c '
-    set --
-    if [ "$#" -ne 1 ]; then echo "Usage: ..." >&2; exit 1; fi
-  '
-  [ "$status" -eq 1 ]
-}
+@test "rejects missing ISO before checking limactl" {
+  run env PATH="${STUB_BIN}:/usr/bin:/bin" bash "${SCRIPT}" \
+    "${BATS_TEST_TMPDIR}/missing.iso"
 
-@test "rejects two arguments" {
-  run bash -c '
-    set -- iso1.iso iso2.iso
-    if [ "$#" -ne 1 ]; then echo "Usage: ..." >&2; exit 1; fi
-  '
-  [ "$status" -eq 1 ]
-}
-
-# ── ISO File Check ────────────────────────────────────────────────────────
-
-@test "exits when ISO file does not exist" {
-  run bash -c '
-    ISO_PATH="/nonexistent/path.iso"
-    if [ ! -f "$ISO_PATH" ]; then
-      echo "Error: ISO file not found" >&2
-      exit 1
-    fi
-  '
   [ "$status" -eq 1 ]
   [[ "$output" == *"ISO file not found"* ]]
 }
 
-# ── VM Name Sanitization ──────────────────────────────────────────────────
+@test "rejects host without limactl" {
+  run env PATH="/usr/bin:/bin" bash "${SCRIPT}" "${ISO_FILE}"
 
-@test "constructs VM name from ISO filename (lowercase, dash-sanitized)" {
-  run bash -c '
-    ISO_FILE="Yellowfin-GNOME-10-x86_64.iso"
-    VM_NAME="verify-iso-$(basename "$ISO_FILE" .iso | tr "[:upper:]" "[:lower:]" | tr -c "[:alnum:]" "-" | sed "s/--*/-/g; s/^-//; s/-$//")"
-    echo "$VM_NAME"
-  '
-  [ "$status" -eq 0 ]
-  [[ "$output" == "verify-iso-yellowfin-gnome-10-x86-64" ]]
-}
-
-@test "trims leading and trailing dashes from VM name" {
-  run bash -c '
-    name="---test---vm---"
-    name=$(echo "$name" | sed "s/--*/-/g; s/^-//; s/-$//")
-    echo "$name"
-  '
-  [ "$status" -eq 0 ]
-  [[ "$output" == "test-vm" ]]
-}
-
-@test "collapses multiple dashes in VM name" {
-  run bash -c '
-    name="test----vm"
-    name=$(echo "$name" | sed "s/--*/-/g")
-    echo "$name"
-  '
-  [ "$status" -eq 0 ]
-  [[ "$output" == "test-vm" ]]
-}
-
-# ── Architecture Detection ────────────────────────────────────────────────
-
-@test "maps arm64 to aarch64" {
-  run bash -c '
-    ARCH="arm64"
-    if [ "$ARCH" = "arm64" ]; then LIMA_ARCH="aarch64"; else LIMA_ARCH="x86_64"; fi
-    echo "$LIMA_ARCH"
-  '
-  [ "$status" -eq 0 ]
-  [[ "$output" == "aarch64" ]]
-}
-
-@test "maps x86_64 to x86_64" {
-  run bash -c '
-    ARCH="x86_64"
-    if [ "$ARCH" = "arm64" ]; then LIMA_ARCH="aarch64"; else LIMA_ARCH="x86_64"; fi
-    echo "$LIMA_ARCH"
-  '
-  [ "$status" -eq 0 ]
-  [[ "$output" == "x86_64" ]]
-}
-
-# ── Lima Config Essentials ────────────────────────────────────────────────
-
-@test "generates config with ISO path and arch" {
-  ISO_PATH="/path/to/test.iso"
-  LIMA_ARCH="x86_64"
-  run bash -c '
-    ISO_PATH="/path/to/test.iso"; LIMA_ARCH="x86_64"
-    cat <<LIMAEOF
-images:
-  - location: "${ISO_PATH}"
-    arch: ${LIMA_ARCH}
-LIMAEOF
-  '
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"location:"*"test.iso"* ]]
-  [[ "$output" == *"arch: x86_64"* ]]
-}
-
-# ── VM Status Checking ────────────────────────────────────────────────────
-
-@test "detects missing VM status" {
-  run bash -c '
-    STATUS="missing"
-    if [[ "${STATUS}" == "missing" || "${STATUS}" == "Broken" ]]; then
-      echo "ERROR: Lima VM is gone or broken"
-      exit 1
-    fi
-  '
   [ "$status" -eq 1 ]
-  [[ "$output" == *"gone or broken"* ]]
+  [[ "$output" == *"limactl is not installed"* ]]
 }
 
-@test "detects Broken VM status" {
-  run bash -c '
-    STATUS="Broken"
-    if [[ "${STATUS}" == "missing" || "${STATUS}" == "Broken" ]]; then
-      echo "ERROR: Lima VM is gone or broken"
-      exit 1
-    fi
-  '
+@test "runs real verifier and emits x86 Lima config" {
+  run env PATH="${STUB_BIN}:/usr/bin:/bin" bash "${SCRIPT}" "${ISO_FILE}"
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Lima instance: ${LIMA_TEST_NAME}"* ]]
+  [[ "$output" == *"ISO Verification PASSED"* ]]
+  grep -Fq "location: \"${ISO_FILE}\"" "${LIMA_CONFIG_CAPTURE}"
+  grep -Fq "arch: x86_64" "${LIMA_CONFIG_CAPTURE}"
+  grep -Fq "plain: true" "${LIMA_CONFIG_CAPTURE}"
+  grep -Fq "vmType: qemu" "${LIMA_CONFIG_CAPTURE}"
+  grep -Fq "start ${LIMA_TEST_NAME}" "${LIMA_EVENTS}"
+  grep -Fq "delete ${LIMA_TEST_NAME}" "${LIMA_EVENTS}"
+}
+
+@test "maps arm64 host to aarch64 Lima architecture" {
+  run env PATH="${STUB_BIN}:/usr/bin:/bin" UNAME_MACHINE=arm64 \
+    bash "${SCRIPT}" "${ISO_FILE}"
+
+  [ "$status" -eq 0 ]
+  grep -Fq "arch: aarch64" "${LIMA_CONFIG_CAPTURE}"
+}
+
+@test "deletes pre-existing VM before starting replacement" {
+  run env PATH="${STUB_BIN}:/usr/bin:/bin" LIMA_EXISTING="${LIMA_TEST_NAME}" \
+    bash "${SCRIPT}" "${ISO_FILE}"
+
+  [ "$status" -eq 0 ]
+  [ "$(sed -n '1p' "${LIMA_EVENTS}")" = "delete ${LIMA_TEST_NAME}" ]
+  [ "$(sed -n '2p' "${LIMA_EVENTS}")" = "start ${LIMA_TEST_NAME}" ]
+}
+
+@test "fails when Lima reports missing VM" {
+  run env PATH="${STUB_BIN}:/usr/bin:/bin" LIMA_STATUS=missing \
+    bash "${SCRIPT}" "${ISO_FILE}"
+
   [ "$status" -eq 1 ]
-  [[ "$output" == *"gone or broken"* ]]
+  [[ "$output" == *"Lima VM is gone or broken"* ]]
 }
 
-@test "accepts Running VM status" {
-  run bash -c '
-    STATUS="Running"
-    if [[ "${STATUS}" == "missing" || "${STATUS}" == "Broken" ]]; then
-      echo "ERROR"
-      exit 1
-    fi
-    echo "VM still present"
-  '
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"still present"* ]]
-}
+@test "fails when Lima reports broken VM" {
+  run env PATH="${STUB_BIN}:/usr/bin:/bin" LIMA_STATUS=Broken \
+    bash "${SCRIPT}" "${ISO_FILE}"
 
-# ── Kernel Panic Detection ────────────────────────────────────────────────
-
-@test "detects kernel panic in serial log" {
-  run bash -c '
-    echo "Kernel panic - not syncing: Attempted to kill init!" > /tmp/test_serial.log
-    if grep -qi "kernel panic\|Kernel panic\|dracut-emergency\|Boot failed\|GRUB Error" /tmp/test_serial.log; then
-      echo "ERROR: Fatal boot error detected"
-      exit 1
-    fi
-    rm -f /tmp/test_serial.log
-  '
   [ "$status" -eq 1 ]
-  [[ "$output" == *"Fatal boot error"* ]]
+  [[ "$output" == *"Lima VM is gone or broken"* ]]
 }
 
-@test "detects dracut emergency shell" {
-  run bash -c '
-    echo "Entering dracut-emergency shell" > /tmp/test_serial.log
-    if grep -qi "kernel panic\|Kernel panic\|dracut-emergency\|Boot failed\|GRUB Error" /tmp/test_serial.log; then
-      echo "ERROR: Fatal boot error detected"
-      exit 1
-    fi
-    rm -f /tmp/test_serial.log
-  '
+@test "fails on fatal serial-log boot error" {
+  run env PATH="${STUB_BIN}:/usr/bin:/bin" \
+    LIMA_SERIAL="Kernel panic - not syncing: Attempted to kill init!" \
+    bash "${SCRIPT}" "${ISO_FILE}"
+
   [ "$status" -eq 1 ]
-  [[ "$output" == *"Fatal boot error"* ]]
+  [[ "$output" == *"Fatal boot error detected"* ]]
 }
 
-@test "clean serial log passes panic check" {
-  run bash -c '
-    echo "Starting systemd..." > /tmp/test_serial.log
-    if grep -qi "kernel panic\|Kernel panic\|dracut-emergency\|Boot failed\|GRUB Error" /tmp/test_serial.log; then
-      exit 1
-    fi
-    echo "no errors"
-    rm -f /tmp/test_serial.log
-  '
-  [ "$status" -eq 0 ]
-  [[ "$output" == "no errors" ]]
-}
+@test "fails when serial log has no boot indicator" {
+  run env PATH="${STUB_BIN}:/usr/bin:/bin" LIMA_SERIAL="random noise" \
+    bash "${SCRIPT}" "${ISO_FILE}"
 
-# ── Boot Indicator Detection ──────────────────────────────────────────────
-
-@test "detects GRUB version in serial log" {
-  run bash -c '
-    echo "GRUB version 2.12" > /tmp/test_serial.log
-    BOOT_OK=0
-    if grep -qi "GRUB version\|Booting .\+Live\|anaconda\|Started Anaconda\|Reached target\|Welcome to\|login:" /tmp/test_serial.log; then
-      BOOT_OK=1
-    fi
-    echo "BOOT_OK=$BOOT_OK"
-    rm -f /tmp/test_serial.log
-  '
-  [ "$status" -eq 0 ]
-  [[ "$output" == "BOOT_OK=1" ]]
-}
-
-@test "detects anaconda startup in serial log" {
-  run bash -c '
-    echo "Starting Anaconda installer..." > /tmp/test_serial.log
-    BOOT_OK=0
-    if grep -qi "GRUB version\|Booting .\+Live\|anaconda\|Started Anaconda\|Reached target\|Welcome to\|login:" /tmp/test_serial.log; then
-      BOOT_OK=1
-    fi
-    echo "BOOT_OK=$BOOT_OK"
-    rm -f /tmp/test_serial.log
-  '
-  [ "$status" -eq 0 ]
-  [[ "$output" == "BOOT_OK=1" ]]
-}
-
-@test "detects login prompt in serial log" {
-  run bash -c '
-    echo "Welcome to TunaOS! tunaos login:" > /tmp/test_serial.log
-    BOOT_OK=0
-    if grep -qi "GRUB version\|Booting .\+Live\|anaconda\|Started Anaconda\|Reached target\|Welcome to\|login:" /tmp/test_serial.log; then
-      BOOT_OK=1
-    fi
-    echo "BOOT_OK=$BOOT_OK"
-    rm -f /tmp/test_serial.log
-  '
-  [ "$status" -eq 0 ]
-  [[ "$output" == "BOOT_OK=1" ]]
-}
-
-@test "no boot indicators sets BOOT_OK=0" {
-  run bash -c '
-    echo "random noise" > /tmp/test_serial.log
-    BOOT_OK=0
-    if grep -qi "GRUB version\|Booting .\+Live\|anaconda\|Started Anaconda\|Reached target\|Welcome to\|login:" /tmp/test_serial.log; then
-      BOOT_OK=1
-    fi
-    echo "BOOT_OK=$BOOT_OK"
-    rm -f /tmp/test_serial.log
-  '
-  [ "$status" -eq 0 ]
-  [[ "$output" == "BOOT_OK=0" ]]
-}
-
-# ── Final Result ──────────────────────────────────────────────────────────
-
-@test "exits 1 when BOOT_OK=0" {
-  run bash -c '
-    BOOT_OK=0
-    if [ "${BOOT_OK}" -eq 0 ]; then
-      echo "ISO Verification FAILED"
-      exit 1
-    fi
-  '
   [ "$status" -eq 1 ]
-  [[ "$output" == *"FAILED"* ]]
-}
-
-@test "exits 0 when BOOT_OK=1" {
-  run bash -c '
-    BOOT_OK=1
-    if [ "${BOOT_OK}" -eq 0 ]; then
-      exit 1
-    fi
-    echo "ISO Verification PASSED"
-  '
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"PASSED"* ]]
+  [[ "$output" == *"no boot indicators in serial log"* ]]
 }
