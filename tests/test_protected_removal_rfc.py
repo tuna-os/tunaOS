@@ -13,12 +13,19 @@ import re
 
 ROOT = Path(__file__).resolve().parents[1]
 RFC = ROOT / "docs/rfc/rfc017-protected-package-removal.md"
-assert RFC.is_file(), f"RFC 017 is missing: {RFC.relative_to(ROOT)}"
-TEXT = RFC.read_text(encoding="utf-8")
+
+
+def rfc_text():
+    assert RFC.is_file(), f"RFC 017 is missing: {RFC.relative_to(ROOT)}"
+    return RFC.read_text(encoding="utf-8")
 
 
 def section(title):
-    match = re.search(rf"^#+ {re.escape(title)}\n(.*?)(?=^#+ |\Z)", TEXT, re.M | re.S)
+    match = re.search(
+        rf"^#+ {re.escape(title)}\n(.*?)(?=^#+ |\Z)",
+        rfc_text(),
+        re.M | re.S,
+    )
     assert match, title
     return match.group(1)
 
@@ -58,7 +65,15 @@ def test_cited_contract_files_exist():
 
 def test_every_detected_package_family_has_an_evidence_row():
     lib = (ROOT / "build_scripts/lib.sh").read_text(encoding="utf-8")
-    families = set(re.findall(r'PKG_MGR="(\w+)"', lib))
+    families = {
+        match[1] for match in re.findall(
+            r"""PKG_MGR\s*=\s*(['"])(\w+)\1""", lib
+        )
+    }
     assert families >= {"apt", "dnf", "pacman", "zypper", "emerge"}, families
-    rows = set(re.findall(r"^\|\s*(\w+)\s*\|\s*`", section("Approval boundary and evidence"), re.M))
+    rows = set()
+    for line in section("Approval boundary and evidence").splitlines():
+        cells = [cell.strip() for cell in line.split("|") if cell.strip()]
+        if cells and re.fullmatch(r"\w+", cells[0]):
+            rows.add(cells[0])
     assert families <= rows, families - rows
