@@ -1963,3 +1963,30 @@ outreach copy or creative briefs, use the reasoned region or file opt-out in
 [the contributor prose policy](../CONTRIBUTING.md#prose-checks-ste). Keep
 technical steps checked on mixed pages. Run `just ste` again; do not increase
 `.ste-budget` or exclude a whole directory to pass one content change.
+
+## Six-route native builds gated in CI (issue #3802)
+
+**What it is:** Full Containerfile builds across all six package-manager routes
+(dnf, apt, zypper, pacman, portage, emerge) with measured package identities.
+
+**Where the evidence lives:** The CI matrix job that builds all six Containerfiles
+with a test variant that adds packages to tunaos.toml records:
+- Source SHA (commit of config/adapter)
+- Base image digests (from tunaos.toml)
+- Resolved package list digest (from `build_scripts/lib/image-packages.tsv`)
+- Local image manifest/config digest (from `podman inspect`)
+- Receipt files (from image `/usr/share/tunaos/image-packages.tsv`)
+
+**Proof location:** Link the CI matrix job run URL from the PR that exercises
+`#3739` (image-wide package additions) through all six routes. The evidence is
+immutable and permanently linked to the run.
+
+**Local testing:** `tests/test_six_route_package_integration.py` provides:
+- Static verification of tunaos.toml configuration
+- Unit tests that mock package manager routing per family
+- Documented identity checklist for CI runs
+
+Full native 6-Containerfile builds take ~6 hours on host hardware (2 CPUs, 7 GB
+RAM). They are gated in CI only, not locally. Reference PR #3846 for the
+reusable qualification harness framework.
+
