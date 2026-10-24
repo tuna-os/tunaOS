@@ -10,6 +10,7 @@
 #   - Output path construction
 
 setup() {
+  REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
   TEST_ROOT="$(mktemp -d)"
   mkdir -p "${TEST_ROOT}/live-iso"
   cd "${TEST_ROOT}" || exit 1
@@ -168,17 +169,29 @@ teardown() {
   [ "$result" = "ghcr.io/tuna-os/bonito:v1.2.3" ]
 }
 
-@test "offline payload keeps a canonical installed-system ref" {
+@test "offline payload stays pinned to the promoted source image" {
 	SCRIPT_PATH="${REPO_ROOT:-$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)}/scripts/build-iso-tacklebox.sh"
-  grep -q 'PAYLOAD_REF=$(tunaos_image_ref "$VARIANT" "$FLAVOR" ghcr "$TAG")' "$SCRIPT_PATH"
-  grep -q '"source": "${IMAGE_REF}"' "$SCRIPT_PATH"
+  grep -q 'SOURCE_IMAGE_REF=$(tunaos_image_ref "$VARIANT" "$FLAVOR" "$REPO" "$TAG")' "$SCRIPT_PATH"
+  grep -q 'PAYLOAD_REF="${TUNA_LIVE_PAYLOAD_REF:-$SOURCE_IMAGE_REF}"' "$SCRIPT_PATH"
+  grep -q '"source": "${SOURCE_IMAGE_REF}"' "$SCRIPT_PATH"
   grep -q '"ref": "${PAYLOAD_REF}"' "$SCRIPT_PATH"
-  source_ref="localhost/yellowfin:kde"
-  canonical_ref="ghcr.io/tuna-os/yellowfin:kde"
-  recipe=$(printf '{"offline_payloads":[{"source":"%s","ref":"%s"}]}' "$source_ref" "$canonical_ref")
+  grep -q 'cp -a "${REPO_ROOT}/live-iso/common/src/." "$CUSTOMIZE_DIR/"' "$SCRIPT_PATH"
+  source_ref="ghcr.io/tuna-os/yellowfin:kde@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  recipe=$(printf '{"offline_payloads":[{"source":"%s","ref":"%s"}]}' "$source_ref" "$source_ref")
   run jq -r '.offline_payloads[0].source + " -> " + .offline_payloads[0].ref' <<<"$recipe"
   [ "$status" -eq 0 ]
-  [ "$output" = "localhost/yellowfin:kde -> ghcr.io/tuna-os/yellowfin:kde" ]
+  [ "$output" = "${source_ref} -> ${source_ref}" ]
+}
+
+@test "image source override does not replace canonical offline payload ref" {
+	cd "$REPO_ROOT" || exit 1
+	export TUNAOS_BUILD_CONFIG="$TEST_ROOT/build-config.yml"
+	export GITHUB_REPOSITORY_OWNER=tuna-os
+	printf '%s\n' '{"variants":[{"id":"yellowfin","publish_name":"yellowfin"}]}' > "$TUNAOS_BUILD_CONFIG"
+	source "${REPO_ROOT}/scripts/lib/image.sh"
+	TUNAOS_IMAGE_REF="ghcr.io/tuna-os/yellowfin:kde@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	[ "$(tunaos_image_ref yellowfin kde ghcr kde 1)" = "$TUNAOS_IMAGE_REF" ]
+	[ "$(tunaos_image_ref yellowfin kde ghcr kde 0)" = "ghcr.io/tuna-os/yellowfin:kde" ]
 }
 
 # ── Desktop detection ──────────────────────────────────────────────────────
@@ -336,6 +349,16 @@ JSON
   OUT_DIR=".build/iso-tacklebox/${VARIANT}-${FLAVOR}"
   ISO_OUT="${OUT_DIR}/tunaos-${VARIANT}-${FLAVOR}.iso"
   [ "$ISO_OUT" = ".build/iso-tacklebox/bonito-cosmic/tunaos-bonito-cosmic.iso" ]
+}
+
+@test "recipe: canonical v2 platform remains distinct in copied ISO name" {
+  VARIANT="albacore"
+  FLAVOR="gnome"
+  VERSION_ID="10.0"
+  PLATFORM="linux/amd64/v2"
+  FILENAME_PLATFORM="${PLATFORM//\//-}"
+  FINAL_ISO="${VARIANT}-${FLAVOR}-${VERSION_ID}-${FILENAME_PLATFORM}.iso"
+  [ "$FINAL_ISO" = "albacore-gnome-10.0-linux-amd64-v2.iso" ]
 }
 
 # ── Tacklebox mode selection ───────────────────────────────────────────────
@@ -509,14 +532,14 @@ _run_container_adapter() {
 	cat >"${cache}/tacklebox" <<'FAKE'
 #!/bin/sh
 case "$1" in
-version) echo "tacklebox deadbeef" ;;
+version) echo "tacklebox deadbeefdeadbeefdeadbeefdeadbeefdeadbeef" ;;
 build) env | grep '^TBOX_' >"$FAKE_ENV_LOG" ;;
 esac
 FAKE
 	chmod +x "${cache}/tacklebox"
 	run env -u TBOX_CUSTOMIZE_COMMIT_TIMEOUT \
 		FAKE_ENV_LOG="${TEST_ROOT}/env.log" TACKLEBOX_FROM_SOURCE=1 \
-		TACKLEBOX_SHA=deadbeef TACKLEBOX_CACHE="$cache" \
+		TACKLEBOX_SHA=deadbeefdeadbeefdeadbeefdeadbeefdeadbeef TACKLEBOX_CACHE="$cache" \
 		TUNAOS_TACKLEBOX_TIMEOUT_SECONDS=30 \
 		bash -c 'set -euo pipefail; source "$1"
 			tunaos_run_tacklebox "$2/recipe.json" "$2/out" "$2/out/test.iso"' \

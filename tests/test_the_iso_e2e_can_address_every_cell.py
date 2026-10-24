@@ -92,7 +92,8 @@ def test_the_matrix_is_generated_not_hardcoded():
 def test_a_dispatch_reaches_a_cell_that_was_previously_unaddressable(tmp_path):
     """albacore:kde — a published ISO with no cell to run in."""
     m = run_generator("albacore", "kde", tmp_path)
-    assert m["include"] == [{"variant": "albacore", "flavor": "kde"}], m
+    assert m["include"] == [{"variant": "albacore", "flavor": "kde",
+                             "platform": "linux/amd64/v2"}], m
 
 
 @needs_jq
@@ -101,6 +102,7 @@ def test_a_dispatch_sweeps_several_flavors_at_once(tmp_path):
     assert [c["flavor"] for c in m["include"]] == [
         "gnome", "kde", "cosmic", "niri", "xfce"], m
     assert {c["variant"] for c in m["include"]} == {"albacore"}, m
+    assert all(c["platform"] for c in m["include"]), m
 
 
 @needs_jq
@@ -109,6 +111,7 @@ def test_whitespace_and_empty_entries_do_not_become_cells(tmp_path):
     `<variant>--latest.iso` and fail for a reason nobody could read."""
     m = run_generator("marlin", "gnome, kde,", tmp_path)
     assert [c["flavor"] for c in m["include"]] == ["gnome", "kde"], m
+    assert all(c["platform"] for c in m["include"]), m
 
 
 @needs_jq
@@ -128,7 +131,8 @@ def test_no_dispatch_runs_one_small_fixed_cell_list(tmp_path):
     rather than a harness regression.
     """
     m = run_generator("", "", tmp_path)
-    assert m["include"] == [{"variant": "albacore", "flavor": "gnome"}], m
+    assert m["include"] == [{"variant": "albacore", "flavor": "gnome",
+                             "platform": "linux/amd64/v2"}], m
     assert len(m["include"]) <= 2, "the no-input default must stay a smoke test"
 
 
@@ -318,9 +322,9 @@ def download_step() -> dict:
 
 def test_the_lookup_tries_both_naming_schemes():
     run = download_step()["run"]
-    assert '${VARIANT}-${FLAVOR}-latest.iso' in run, run[-800:]
-    assert '${VARIANT}-latest.iso' in run, run[-800:]
-    assert '${VARIANT}-${DESKTOP}-latest.iso' in run, run[-800:]
+    assert '${VARIANT}-${FLAVOR}-latest${PLATFORM_SUFFIX}.iso' in run, run[-800:]
+    assert '${VARIANT}-latest${PLATFORM_SUFFIX}.iso' in run, run[-800:]
+    assert '${VARIANT}-${DESKTOP}-latest${PLATFORM_SUFFIX}.iso' in run, run[-800:]
 
 
 def test_gnome_maps_to_the_bare_variant_name():
@@ -330,7 +334,7 @@ def test_gnome_maps_to_the_bare_variant_name():
     assert 'DESKTOP="${FLAVOR%%-*}"' in run, run[-800:]
     gnome_branch = run[run.index('if [[ "$DESKTOP" == "gnome" ]]'):]
     head = gnome_branch[:gnome_branch.index("else")]
-    assert '${VARIANT}-latest.iso' in head, head
+    assert '${VARIANT}-latest${PLATFORM_SUFFIX}.iso' in head, head
     assert "${DESKTOP}" not in head, head
 
 

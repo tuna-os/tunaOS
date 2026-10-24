@@ -4,6 +4,54 @@
 # This library is sourced by common.sh as a compatibility facade. It must not
 # change shell options or the caller's working directory.
 
+# Acquire the pinned native executable for both local overlay and ISO builds.
+# Print only its path; build diagnostics go to stderr.
+tunaos_tacklebox_source_binary() {
+	# Pin the source SHA so CI doesn't silently track a moving HEAD.
+	local sha cache bin
+	sha="${TACKLEBOX_SHA:-$(grep '^\s*tacklebox:' image-versions.yaml 2>/dev/null | sed 's/.*"\(.*\)".*/\1/')}"
+	sha="${sha:-3b4598273efb2f71d17515947e442f0e6b26a6c5}"
+	[[ "$sha" =~ ^[0-9a-f]{40}$ ]] || return 1
+	cache="${TACKLEBOX_CACHE:-/var/cache/tunaos/tacklebox}"
+	bin="${cache}/tacklebox"
+
+	if [[ ! -x "$bin" ]] || [[ "$("$bin" version 2>/dev/null || echo)" != *"$sha"* ]]; then
+		echo "==> Building tacklebox @ ${sha}..." >&2
+		mkdir -p "$cache" || return 1
+		(
+			cd "$cache" || exit 1
+			if [[ ! -d .git ]]; then
+				git clone --quiet https://github.com/tuna-os/tacklebox.git . || exit 1
+			else
+				git fetch --quiet origin || exit 1
+			fi
+			git -c advice.detachedHead=false checkout --quiet "$sha" || exit 1
+			local go_bin=""
+			for g in /home/linuxbrew/.linuxbrew/bin/go /usr/bin/go go; do
+				if command -v "$g" &>/dev/null; then
+					go_bin="$g"
+					break
+				fi
+			done
+			if [[ -z "$go_bin" ]]; then
+				echo "ERROR: go not found; install go 1.22+ to build tacklebox" >&2
+				exit 1
+			fi
+			local candidate
+			candidate="$(mktemp "${cache}/.tacklebox-build.XXXXXX")" || exit 1
+			trap 'rm -f "$candidate"' EXIT
+			"$go_bin" build -o "$candidate" ./cmd/tacklebox || exit 1
+			[[ "$("$go_bin" version -m "$candidate" | awk -F= '$1 ~ /vcs.revision$/ {print $2}')" == "$sha" ]] || exit 1
+			mv "$candidate" "$bin" || exit 1
+		) || return 1
+	fi
+	[[ -x "$bin" ]] || {
+		echo "ERROR: tacklebox binary missing after build" >&2
+		return 1
+	}
+	printf '%s\n' "$bin"
+}
+
 # Resolve tacklebox (the published container image by default, or a pinned
 # source build when TACKLEBOX_FROM_SOURCE=1) and build the ISO described by
 # <recipe_file>. Shared by build-iso-tacklebox.sh (single flavor) and
@@ -74,42 +122,29 @@ tunaos_run_tacklebox() {
 
 	local -a tb
 	if [[ "$from_source" == "1" ]]; then
-		# Pin the source SHA so CI doesn't silently track a moving HEAD.
-		local sha cache bin
-		sha="${TACKLEBOX_SHA:-$(grep '^\s*tacklebox:' image-versions.yaml 2>/dev/null | sed 's/.*"\(.*\)".*/\1/')}"
-		sha="${sha:-3b4598273efb2f71d17515947e442f0e6b26a6c5}"
-		cache="${TACKLEBOX_CACHE:-/var/cache/tunaos/tacklebox}"
-		bin="${cache}/tacklebox"
-
-		if [[ ! -x "$bin" ]] || [[ "$("$bin" version 2>/dev/null || echo)" != *"$sha"* ]]; then
-			echo "==> Building tacklebox @ ${sha}..." >&2
-			mkdir -p "$cache"
-			(
-				cd "$cache" || exit 1
-				if [[ ! -d .git ]]; then
-					git clone --quiet https://github.com/tuna-os/tacklebox.git .
-				else
-					git fetch --quiet origin
-				fi
-				git -c advice.detachedHead=false checkout --quiet "$sha"
-				local go_bin=""
-				for g in /home/linuxbrew/.linuxbrew/bin/go /usr/bin/go go; do
-					if command -v "$g" &>/dev/null; then
-						go_bin="$g"
-						break
-					fi
-				done
-				if [[ -z "$go_bin" ]]; then
-					echo "ERROR: go not found; install go 1.22+ to build tacklebox" >&2
-					exit 1
-				fi
-				"$go_bin" build -o tacklebox ./cmd/tacklebox
-			)
+		local bin
+		bin="$(tunaos_tacklebox_source_binary)" || return $?
+		# Hash the executable actually invoked, not its source revision string.
+		# The single-flavor builder has already staged this private wrapper;
+		# update it before tacklebox executes customization inside the live root.
+		local customize_wrapper="${out_dir}/live-customize/customize-live.sh"
+		if [[ -f "$customize_wrapper" ]]; then
+			# Use a private per-build executable snapshot, so replacement of the
+			# shared acquisition cache cannot change the measured invocation.
+			local executable_snapshot
+			executable_snapshot="$(mktemp "${out_dir}/.tacklebox-exec.XXXXXX")"
+			cp "$bin" "$executable_snapshot"
+			chmod 0555 "$executable_snapshot"
+			bin="$executable_snapshot"
+			local engine_digest
+			engine_digest="sha256:$(sha256sum "$bin" | awk '{print $1}')"
+			[[ "$(grep -c '^export TUNA_LIVE_ENGINE_DIGEST=' "$customize_wrapper")" == 1 ]] || {
+				echo "ERROR: expected exactly one engine identity in native wrapper" >&2
+				return 1
+			}
+			sed -i "s/^export TUNA_LIVE_ENGINE_DIGEST=.*/export TUNA_LIVE_ENGINE_DIGEST=${engine_digest}/" "$customize_wrapper"
+			[[ "$(grep '^export TUNA_LIVE_ENGINE_DIGEST=' "$customize_wrapper")" == "export TUNA_LIVE_ENGINE_DIGEST=${engine_digest}" ]] || return 1
 		fi
-		[[ -x "$bin" ]] || {
-			echo "ERROR: tacklebox binary missing after build" >&2
-			return 1
-		}
 		tb=("$bin")
 	else
 		echo "==> Using tacklebox image: ${tacklebox_image}" >&2

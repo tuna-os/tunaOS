@@ -8,13 +8,15 @@
 # approach for simpler, more reliable ISO generation.
 #
 # Usage:
-#   sudo ./scripts/build-iso-tacklebox.sh <variant> <flavor> [<repo>] [<tag>]
+#   sudo ./scripts/build-iso-tacklebox.sh <variant> <flavor> [<repo>] [<tag>] [<dev>] [<platform>]
 #     variant   yellowfin | albacore | skipjack | bonito
 #     flavor    base | gnome | gnome-hwe | kde | …
-#     repo      local | ghcr   (default: local)
+#     repo      local | ghcr (default: local)
 #     tag       defaults to <flavor>
+#     dev       1 enables disposable live SSH (default: 0)
+#     platform  canonical target platform; /v2 is retained in the output name
 #
-# Outputs to project root as <variant>-<flavor>-<version>-<arch>.iso
+# Outputs to project root as <variant>-<flavor>-<version>-<arch-or-platform>.iso
 
 set -euo pipefail
 
@@ -51,6 +53,7 @@ FLAVOR="${2:?usage: $0 <variant> <flavor> [repo] [tag]}"
 REPO="${3:-local}"
 TAG="${4:-$FLAVOR}"
 DEV="${5:-0}"
+PLATFORM="${6:-}"
 
 if [[ "$EUID" -ne 0 ]]; then
 	echo "ERROR: tacklebox needs root for sgdisk / mkfs / mount" >&2
@@ -111,13 +114,13 @@ if [[ $EUID -eq 0 ]]; then
 	unset XDG_DATA_HOME XDG_CONFIG_HOME
 fi
 
-IMAGE_REF=$(tunaos_image_ref "$VARIANT" "$FLAVOR" "$REPO" "$TAG")
-# Keep the name embedded in the offline store independent of how this ISO was
-# built.  A developer can build from localhost/, but the installed system and
-# bootc's direct live-ISO path must resolve the published image reference.
-# Tacklebox copies IMAGE_REF into the store under this canonical ref; it does
-# not pull a second image or require a local podman tag.
-PAYLOAD_REF=$(tunaos_image_ref "$VARIANT" "$FLAVOR" ghcr "$TAG")
+SOURCE_IMAGE_REF=$(tunaos_image_ref "$VARIANT" "$FLAVOR" "$REPO" "$TAG")
+# The live overlay is an immutable OCI image containing the exact
+# live-customization delta published for this target. Build the live squash
+# from it when supplied, while keeping the installed/offline payload pinned to
+# the original promoted image.
+IMAGE_REF="${TUNA_LIVE_OVERLAY_REF:-$SOURCE_IMAGE_REF}"
+PAYLOAD_REF="${TUNA_LIVE_PAYLOAD_REF:-$SOURCE_IMAGE_REF}"
 if [[ "$REPO" == "local" ]]; then
 	tunaos_import_to_root_storage "$IMAGE_REF"
 else
@@ -170,6 +173,29 @@ CUSTOMIZE_DIR="${OUT_DIR}/live-customize"
 rm -rf "$CUSTOMIZE_DIR"
 mkdir -p "$CUSTOMIZE_DIR"
 cp -a "${REPO_ROOT}/live-iso/common/src/." "$CUSTOMIZE_DIR/"
+if [[ "$SOURCE_IMAGE_REF" == *@sha256:* ]]; then
+	BASE_IMAGE="${SOURCE_IMAGE_REF%@*}"
+	BASE_DIGEST="${SOURCE_IMAGE_REF##*@}"
+else
+	BASE_IMAGE="$SOURCE_IMAGE_REF"
+	BASE_DIGEST="unknown"
+fi
+BASE_IMAGE="${TUNA_LIVE_BASE_IMAGE:-$BASE_IMAGE}"
+BASE_DIGEST="${TUNA_LIVE_BASE_DIGEST:-$BASE_DIGEST}"
+{
+	printf 'export TUNA_LIVE_BASE_IMAGE=%q\n' "$BASE_IMAGE"
+	printf 'export TUNA_LIVE_BASE_DIGEST=%q\n' "$BASE_DIGEST"
+	if [[ -n "${TUNA_LIVE_PAYLOAD_REF+x}" ]]; then
+		printf 'export TUNA_LIVE_PAYLOAD_REF=%q\n' "$TUNA_LIVE_PAYLOAD_REF"
+		install_target="$(GITHUB_REPOSITORY_OWNER=tuna-os bash scripts/published-image-ref.sh "$VARIANT" "$FLAVOR" ghcr)"
+		printf 'export TUNA_LIVE_INSTALL_TARGET=%q\n' "$install_target"
+	fi
+	printf 'export TUNA_LIVE_OVERLAY_DIGEST=%q\n' "${TUNA_LIVE_OVERLAY_DIGEST:-unknown}"
+	printf 'export TUNA_LIVE_ENGINE_DIGEST=%q\n' "${TUNA_LIVE_ENGINE_DIGEST:-unknown}"
+	printf 'export TUNA_LIVE_PLATFORM=%q\n' "${PLATFORM:-unknown}"
+	cat "${REPO_ROOT}/live-iso/common/src/customize-live.sh"
+} >"${CUSTOMIZE_DIR}/customize-live.sh"
+chmod +x "${CUSTOMIZE_DIR}/customize-live.sh"
 cp "${REPO_ROOT}/image-versions.yaml" "$CUSTOMIZE_DIR/"
 if [[ "$DEV" == "1" ]]; then
 	touch "${CUSTOMIZE_DIR}/.enable-sshd"
@@ -208,7 +234,7 @@ cat >"$RECIPE_FILE" <<EOF
   ],
   "offline_payloads": [
     {
-      "source": "${IMAGE_REF}",
+      "source": "${SOURCE_IMAGE_REF}",
       "ref": "${PAYLOAD_REF}"
     }
   ]
@@ -257,13 +283,27 @@ REPO_ROOT="${REPO_ROOT:-.}"
 # --log-driver=k8s-file: same conmon-without-journald gap as
 # build-image-inner.sh's chunkah run (tacklebox#235) — the RunsOn runners
 # cannot run any container on the default journald log driver.
+# Customized overlays can retain a shell ENTRYPOINT. Override it for probes
+# rather than passing another executable as input to that inherited shell.
 VERSION_ID=$(podman run --rm --log-driver=k8s-file --security-opt label=disable \
-	"$IMAGE_REF" \
-	sh -c '. /usr/lib/os-release && echo "${VERSION_ID}"')
+	--entrypoint /bin/sh "$IMAGE_REF" \
+	-c '. /usr/lib/os-release && echo "${VERSION_ID}"')
 ARCH=$(podman run --rm --log-driver=k8s-file --security-opt label=disable \
-	"$IMAGE_REF" uname -m)
+	--entrypoint /usr/bin/uname "$IMAGE_REF" -m)
+if [[ -n "$PLATFORM" ]]; then
+	case "$PLATFORM" in
+	linux/amd64 | linux/amd64/v2 | linux/arm64) ;;
+	*)
+		echo "ERROR: unsupported canonical platform: ${PLATFORM}" >&2
+		exit 1
+		;;
+	esac
+	FILENAME_PLATFORM="${PLATFORM//\//-}"
+else
+	FILENAME_PLATFORM="$ARCH"
+fi
 
-FINAL_ISO="${REPO_ROOT}/${VARIANT}-${FLAVOR}-${VERSION_ID}-${ARCH}.iso"
+FINAL_ISO="${REPO_ROOT}/${VARIANT}-${FLAVOR}-${VERSION_ID}-${FILENAME_PLATFORM}.iso"
 cp "$ISO_OUT" "$FINAL_ISO"
 
 if [[ -n "${SUDO_USER:-}" ]]; then

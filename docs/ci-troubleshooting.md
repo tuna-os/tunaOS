@@ -1722,6 +1722,13 @@ capture first, then sends the graceful powerdown itself before the kill.
 
 **Fix:** The pinned download moved into shared `build_scripts/install-uupd.sh` (same `image-versions.yaml` pin; stages the binary plus `uupd.service`, `uupd.timer`, `uupd-manual.service` before install; smoke with `UUPD_CONTEXT="$PWD" UUPD_ROOT="$scratch"` into a disposable root). The apt and dnf branches of `10-base-packages.sh` delegate to it unchanged in behavior, and `Containerfile.arch` carries the pin file and runs the installer before `40-services.sh`. The context exact-set test now treats `install-uupd.sh` as a consumer of the pin file.
 
+### On-demand ISO-builder qualification — browser/IO bug chain
+
+| # | Symptom | Root cause | Fix |
+|---|---|---|---|
+| 60 | `layer_fetch` stalls at byte 12582912 with zero progress and no error | The layer reader issued one range request for the whole remainder past the 12 MiB chunk cap and never resumed it | Fetch in capped chunks, resume from the last committed byte, account progress per chunk |
+| 61 | Browser-built ISO is truncated against its manifest size while every phase reported success | Async JS sink backpressure: the writer closed with chunks still queued, so acknowledgments outran the flush | Await the sink ready/close handshake (drain before close) and verify output size against the manifest |
+| 62 | `scripts/iso-e2e.sh --strict-offline-gui` cannot bind its offline source on a flattened live root | The embedded payload store was never mounted nor listed in `additionalimagestores`, so the offline installer path had no source (same shape as §4 row 21) | Loop-mount the embedded store (`LiveOS/store.squashfs.img`) and point `/etc/containers/storage.conf` `additionalimagestores` at the mount point |
 ### STE fails on matrix prose
 
 **Symptom:** STE reports 1610 findings with a budget of 1609.
@@ -1754,6 +1761,81 @@ clean `npm ci --ignore-scripts`, `npm test`, and `npm run build` in that directo
 Check each override edit with `npm ci`. The same npm major alone does not
 prove that the manifest and lockfile agree.
 
+
+### ISO parity CI reports stale receipts and fixture failures
+
+**Symptom:** PR #3431 Unit Tests run 39248193947 reports catalog pin mismatches.
+It also reports `unqualified != qualified`, a stale assertion about the overlay,
+and a 90-minute job with two 60-minute steps.
+
+**Cause:** source changes invalidated the stock receipt. The positive fixture
+lacked the observed plain and encrypted boot records that the gate now needs.
+The test expected a hash of a checkout script. Runtime provenance now comes
+from the ISO payload. Strict qualification grew to a 60-minute step.
+
+**Fix:** refresh the stock receipt against the final tree in the same push.
+Use a schema-valid strict fixture for the positive case. Keep a negative test
+for a legacy receipt without observations. Check extraction of the installer
+receipt and the ISO hash. Reject the old checkout hash.
+
+Give build and R2 paths
+130 and 70 minutes each. Keep the 60-minute limits on individual steps.
+These CI repairs do not prove that a browser ISO installed.
+
+### Catalog qualification rejects raw status-only receipts
+
+A source digest and `status: passed` do not prove an offline installation.
+The catalog now validates the original `QualificationEvidence/v1` receipt.
+It checks both installed-boot records and the finite measured values.
+It checks the content checksum and the expected digest of each input.
+Those digests must come from the producer's descriptors and revision inputs.
+A projection cannot replace the original receipt's metadata.
+
+This is structural validation and input binding. A checksum does not identify
+who ran the test. The current catalog workflow does not supply trusted installer
+and engine digests, so its targets stay unqualified. Keep publication and download
+inventory intact while these inputs are absent.
+
+Before you admit production receipts, bind the artifact ID and digest to a
+trusted workflow run, its source commit, and its harness revision. The current
+collector's latest successful run lookup does not establish those bindings.
+Browser cold and warm runs plus offline plain and encrypted installs still need
+real evidence. Unit fixtures are synthetic and must never ship as that evidence.
+
+The gate also needs a separate observation of the browser build. It must bind
+the final ISO digest, build receipt and measured browser profile to the original
+qualification receipt. The producer must get this observation from a trusted
+workflow and artifact. No current caller supplies it, so admission stays closed.
+A native test does not prove the origin of a browser build. The gate rejects names and versions such as `unknown`.
+
+The R2 receipt extractor also used `-print`, which xorriso rejects. The test
+returned code 5 before any receipt read. Use `-exec echo`, decode the quoted
+paths as data, and extract each file to a distinct file path. Keep errors visible
+and check the command status before `mapfile`. A failed inventory command does
+not prove that a receipt is absent. Save the ISO checksum before this step.
+
+The strict harness no longer substitutes QEMU for the ISO builder or the ISO
+checksum for an OCI overlay digest. It records those runtime hashes separately.
+A backend executable also cannot identify the GUI installer. These identities
+need the trusted build receipt before browser qualification can proceed.
+
+### Catalog admission accepts installation evidence for a different ISO
+
+**Symptom:** Synthetic evidence from the browser build and native test names
+different ISO digests, but the catalog reports `qualified`.
+
+**Measured cause:** At PR #3431 commit `ce442239`, admission matched the browser
+observation to `build_provenance` but did not compare its `iso_digest` with the
+native receipt's `resolved_inputs.media`. All four raw/projected receipt cases
+in `test_native_install_and_browser_build_must_identify_the_same_iso` failed
+before the fix, even with valid receipt checksums.
+
+**Fix:** Check that those media digests match. Keep the positive fixture bound
+to one ISO. The regression changes either media digest, recalculates the receipt
+checksum, and expects admission to fail. The production collector still supplies
+no trusted browser observation, so this fix does not open admission or qualify
+any media.
+
 ### Matrix drift check fails when old results enter or leave the window
 
 **Symptom:** The check reports a change between `—` and a pass or fail glyph.
@@ -1783,6 +1865,13 @@ directory from a stable checkout.
 Fork previews also disable layer reuse with `--no-cache`. Some legacy stages
 declare the cache argument after their base hooks. Gentoo has a separate branch
 for desktop builds. Tests must prove each stage before fork builds can reuse layers.
+
+## Health reports require separate admission
+
+Receipt shape and reported success do not establish browser qualification.
+The collector keeps dates, hashes and durations from receipts as diagnostics.
+It reports these receipts as unqualified until the collector can verify trusted inputs.
+The catalog has its own gate; report generation must not bypass that gate.
 
 ### Anime wallpaper disappears after desktop setup
 
@@ -1952,7 +2041,7 @@ split.
 **Symptom:** a CFP abstract or design contribution adds Markdown and the
 `ste / Simplified Technical English` check fails with `STE budget exceeded`.
 
-**Cause:** the shared linter counts findings across the repository, against
+**Cause:** the linter counts findings across the repository, against
 `.ste-budget`. Content directories have no automatic exemption. The pinned
 linter supports lowercase `ste-disable-file: reason` and paired
 `ste-disable: reason` / `ste-enable` comments; `<!-- STE-DISABLE -->` does not
@@ -1963,3 +2052,287 @@ outreach copy or creative briefs, use the reasoned region or file opt-out in
 [the contributor prose policy](../CONTRIBUTING.md#prose-checks-ste). Keep
 technical steps checked on mixed pages. Run `just ste` again; do not increase
 `.ste-budget` or exclude a whole directory to pass one content change.
+
+### Native ISO succeeds but its E2E check tested a different image
+
+Measured in Live ISOs run `39499589282`: the build uploaded
+`skipjack-gnome-live-iso`, while E2E selected Albacore
+from R2. A successful native build therefore did not establish
+boot, install, or reboot behavior of its output.
+
+Live ISOs now calls the existing E2E workflow after its build job. It passes the
+artifact ID, archive SHA-256, producer run and source commit. It checks the metadata from GitHub and the complete archive.
+It extracts one ISO, then measures its separate media SHA-256. The same-run path uses no R2 fallback
+and no R2 secrets. Its build dependency must succeed; an older run
+also needs a successful result.
+
+Native provenance must identify the actual source manifest, overlay manifest,
+platform and executed Tacklebox binary. A revision-string hash is not an executable
+hash.
+
+The native job builds a local overlay from the fresh source with Tacklebox's
+shared customization command. This adds one customization and commit. It needs
+no registry upload. The final customization replaces the intermediate receipt
+with the measured overlay identity. Missing installer receipts or unknown
+provenance fail before strict GUI qualification.
+
+Only the strict plain and encrypted GUI installation,
+target-disk reboot and installed identity/desktop checks can qualify the artifact.
+A GUI smoke test of old media is diagnostic and cannot qualify it.
+
+### Strict GNOME ISO walkthrough stops at disk/encryption/recovery (run 39619460539)
+
+The run had a 32 GiB target. The installer needs at least 50 GiB.
+The plain leg also left encryption enabled. Blind input reached a placeholder
+for a recovery key. OCR incorrectly called that page installation progress.
+Neither leg installed.
+
+The strict target is now a sparse 64 GiB disk. It logs the free space on the host.
+GNOME uses real pointer input through a UNIX socket owned by QEMU.
+It checks encryption off for plain, or passphrase-only with two equal fields for LUKS.
+The frontend skips pages with one valid disk or image.
+The summary must identify `/dev/vda (64 GiB)`, the requested mode, and the erase warning.
+
+A click on Install is distinct from accepted progress. The driver checks each
+transition in order. A tour title or a placeholder for recovery is not proof of success.
+The actual done page must appear before the harness tests the installed system.
+
+The driver supports one measured bundle:
+`sha256:04252eaf80ee5675aa37bdb482847c77310efbee058dc63ba161a1d5991f9823`.
+Its release is `v2026.10.19-9f582fe0`; its frontend source is
+`9f582fe0ecc19561be1115dfef64a59e91ea5072`.
+A different bundle fails before GUI input until a reviewer checks its contract.
+Synthetic tests and OCR fixtures do not prove an ISO installed.
+Only CI with the same artifact can prove install and cold/warm reboot behavior.
+
+### Native ISO setup fails during a Chromium Snap download (run 39634319715)
+
+The ISO build succeeded. The test runner then failed before artifact download
+because Ubuntu Chromium pulled a Snap assertion that returned HTTP 408.
+Native QEMU tests do not use Chromium. The shared workflow now installs it only
+for the existing browser-profile routes.
+
+Native runs emit `NativeISOQualification/v2`, with the exact artifact binding,
+producer and harness revisions, input digests, and measured QEMU executable.
+Both modes must prove GUI completion and cold/warm boot with the media detached.
+The native receipt has no browser profile. Each validator rejects evidence of the other kind.
+A receipt hash binds the bytes but does not authenticate a producer. Use the trusted run and its artifact
+admission checks as the source of that proof.
+
+### VNC pointer packets do not initialize absolute input
+
+The GNOME driver can finish the VNC handshake without moving the pointer to the requested control. In QEMU 8.2.2, a new client starts with relative pointer state. `set_encodings()` calls `check_pointer_type_change()` for a client that selects `Raw`. Without that message or a later input-mode notification, repeated coordinates do not move the pointer.
+
+Source: [QEMU 8.2.2 VNC implementation](https://github.com/qemu/qemu/blob/v8.2.2/ui/vnc.c), `vnc_connect`, `set_encodings`, and `pointer_event`.
+
+Send raw `SetEncodings` before pointer events. The socket test checks that order; a source-path model checks the omitted-message case. These tests do not prove that the guest receives input. Run 39652890852 remains unqualified until we inspect its frames and actual installation and reboot pass.
+
+### Test stops before any job starts
+
+Run 39918031076 rejected the PR merge because two branches added `EVENT_NAME`
+at different positions in the same YAML map. Keep one binding at the same position.
+Run 39918774666 then rejected the new Tuna caller: it allowed no Actions access,
+but the existing artifact jobs need `actions: read`. Give that caller read access,
+not write access. Keep all artifact and install checks. The caller regression
+checks this scope and the unique event binding; it does not prove installation.
+
+### GUI rejects the local source after Install
+
+Run 39920189464 reached final submission in both modes, then showed
+`required local source is absent or unreadable`. The store mounted, but the
+stock GUI recipe still named `tunaos:latest`; the ISO contained `skipjack:gnome`.
+
+Bind the final live recipe to the exact offline payload and measured digest.
+Keep the remote target for updates separate from the local install source. Reject
+missing or mismatched inputs; do not fall back to a network pull. Recipe tests
+do not prove installation. Both modes still need completion and detached-media boots.
+
+### Progress appears but the GUI test reports an unknown state
+
+Run 39932865285 showed disk writes at 24% and 25% in the two modes.
+The test expected the title `Installing`, not the actual stage title.
+Full-frame OCR also lost letters and punctuation in the warning and timer.
+
+Use one measured crop with the exact title, warning, elapsed time and percentage.
+Check their positions and the foreground panel. Keep failure and completion
+checks separate. Observe progress without more input or a success claim.
+
+### Installed page appears but completion stays unknown
+
+Run 39949178878 reached the installed page in both modes. The full-frame OCR
+read the title and remove-media instruction, but missed the white `Restart now`
+label on its purple button. The test did not prove completion or detached boots.
+
+Check all three same-frame markers, measured positions and original-pixel
+checks. Read the button with one crop of its inverted text; do not click it. Keep the
+host-driven media removal and cold and warm boot checks after completion.
+
+### Native ISO archive transfer stops before guest launch
+
+Run `39974344360` failed on archive download before guest launch on both tries.
+Diagnostic run `40004841098` verified artifact `12515006303`: 6,158,287,146 bytes
+in 259 seconds. This proves access to the archive, not the extended deadline.
+
+The fetcher budgets transfer at two MiB/s plus 120 seconds. It sets a 20-minute
+floor, 60-minute ceiling and 120-second stdout-idle limit. Diagnostics use fixed
+categories and bounded counters, never raw stderr or URLs. There is no retry.
+
+The native job reserves 160 minutes:
+
+- 60 for transfer;
+- 20 for GUI smoke of historical artifacts (not used for the same run);
+- 60 for strict plain+LUKS GUI completion and detached cold/warm boots;
+- ten for extraction;
+- ten for setup, API calls, hashes and evidence.
+
+Hash, provenance and producer checks remain mandatory. Source changes need a
+fresh build. Do not qualify a new source with an old failed aggregate run.
+
+
+### Native overlay lacks the installer pin file
+
+Run `40004972683` stopped before ISO upload: `live customization payload lacks
+image-versions.yaml`. The native overlay copied the scripts but omitted the
+root pin file after the installer began to verify digests. Copy that exact
+file into the same payload. Do not bypass the pin or hash checks. The regression
+runs the copy commands and rejects an absent pin file before customization.
+
+### Chunkah source build rejects duplicate writable mount options
+
+Run `40025622951` built the OS image but stopped before ISO creation. The image pull failed for Chunkah; the log suppressed its error, so the cause is unknown.
+The source fallback failed with `rw, shared, rw, bind` on Podman 4.9.3.
+
+That cache parser adds explicit `rw` and its default `rw` twice. For that measured
+version, use a temporary Containerfile with only the known cache `rw` removed.
+Keep writable bind mounts and all read-only options. Reject a Containerfile whose bytes differ from the reviewed file.
+Record source and file hashes; these observations do not make mutable source a pin.
+Regression: `tests/regressions/test_issue_3809_chunkah_cache_mounts.py` (#3809).
+Run [40064779947](https://github.com/tuna-os/tunaOS/actions/runs/40064779947) ran the fallback with build file SHA256 `8f744160…`.
+Three of the four cache mounts (dnf, cargo, target) passed, and cargo finished the release build.
+The run then failed on a quay.io HTTP 503 in a later `FROM` (see below).
+
+### Native artifact transfer resets before qualification
+
+Run [40039204976](https://github.com/tuna-os/tunaOS/actions/runs/40039204976),
+job 120743179663, failed on 2026-10-24 at 02:39 UTC with a connection reset
+at 3,886,055,424 of 6,158,287,146 archive bytes after 341.888 seconds. The
+size-derived deadline was 3,057 seconds; increasing that deadline would not
+fix this observed failure. GUI install and detached-boot qualification did
+not run.
+
+The local recovery candidate restarts the entire archive through the same
+GitHub CLI API endpoint, up to three total attempts under one transfer deadline
+and one last-stdout-progress idle clock. It does not request ranges or retain
+signed download URLs. Only classified connection-reset, unexpected-EOF,
+I/O-timeout and TLS-timeout failures with complete bounded stderr are eligible.
+HTTP responses, cancellation, deadline exhaustion, short successful responses,
+oversize content and integrity failures remain terminal. The file is truncated
+before each retry and complete size/SHA validation still precedes extraction.
+
+GitHub documents a one-minute-lived artifact download redirect, not a stable
+Range/ETag resume contract:
+https://docs.github.com/en/rest/actions/artifacts#download-an-artifact
+
+This is preventive transport hardening, not permission to qualify an artifact
+from a failed aggregate producer. Existing source, run, attempt, successful
+producer/build, expiry and digest admission rules remain unchanged. A rerun
+increments attempt and does not turn attempt-1 artifacts into attempt-2 media.
+
+### Installer fisherman floor names an unmerged branch commit
+
+**Symptom:** Run [40057457412](https://github.com/tuna-os/tunaOS/actions/runs/40057457412)
+failed `Installers build fisherman from tuna-os/fisherman`. All five frontends
+pinned `02ac7097`, and each was reported older than the floor `d349c31e`.
+
+**Measured cause:** `d349c31e` is a commit on the branch of fisherman#340.
+That PR was squash-merged into `dev` as `02ac7097`. The compare API returns
+`diverged` (ahead 4, behind 1), so the floor is never an ancestor of `dev`.
+The landed files are identical to the PR head; for example, `mediainput.go`
+has the same blob SHA in both commits.
+
+**Fix:** Set the floor to the landed commit `02ac7097` on `dev`. Keep the
+ancestry check fail-closed. A timestamp is not proof of content.
+
+### quay.io returns HTTP 503 during the native ISO build
+
+**Symptom:** Run [40057457477](https://github.com/tuna-os/tunaOS/actions/runs/40057457477)
+failed `Build OS image` after three buildah attempts within 45 seconds.
+Each attempt reported `fetching blob: received unexpected HTTP status: 503`
+for `quay.io/centos-bootc/centos-bootc`. Run
+[40064779947](https://github.com/tuna-os/tunaOS/actions/runs/40064779947)
+built the image, made one pinned Chunkah pull, and used the source fallback
+2.8 seconds later. The fallback then failed with HTTP 503 on
+`quay.io/centos/centos:stream10`.
+
+**Measured cause:** quay.io returned HTTP 503 for some blob requests. An anonymous range request for the
+first three blobs returned HTTP 206 about 30 minutes later. The pinned Chunkah
+pull had one attempt and discarded stderr, so its error is not known.
+
+**Fix:** Do not change the base image pin. Run the job again. The pinned Chunkah pull now has three
+attempts with a 10 s and a 20 s delay, and its stderr is visible. The mutable
+source fallback runs only after the third failure.
+
+### Strict LUKS leg stops at `Shell>` after a passed plain leg
+
+**Symptom:** Run [40068149541](https://github.com/tuna-os/tunaOS/actions/runs/40068149541)
+passed the plain GUI install and its detached cold and warm boots. The LUKS
+walkthrough then reported `GUI did not transition from unknown to welcome`.
+
+**Measured cause:** Both legs used one OVMF NVRAM file. The plain install put
+`Boot000A "CentOS Stream"` first in the boot order. The LUKS live boot tried
+that shim on the new blank disk, and then started `EFI Internal Shell`. The
+firmware did not try the CD. See `strict-luks-live-serial.log`.
+
+**Fix:** `run_strict_offline_gui` calls `reset_uefi_vars` before each leg.
+Regression: `tests/regressions/test_issue_3380_strict_legs_get_fresh_uefi_nvram.py`.
+
+### Strict LUKS installed boot never shows the passphrase prompt
+
+**Symptom:** Run [40074592548](https://github.com/tuna-os/tunaOS/actions/runs/40074592548)
+passed the LUKS GUI install with a LUKS header present. The detached cold boot
+then failed after 15 minutes with `passphrase prompt never appeared`. The
+framebuffer showed one kernel line.
+
+**Observed limit:** The serial helper saw no prompt and did not type a
+passphrase. A Plymouth or console routing issue is a hypothesis, not proof
+that the shipped graphical prompt works.
+
+**Diagnostic path, not strict qualification:** `luks-first-boot.py` retains
+its opt-in `TUNAOS_LUKS_GRUB_APPEND` support. It can open the GRUB entry editor
+and append serial/text-prompt arguments for that boot only. It does not write
+the installed disk, but it changes the runtime boot path. Such a result is a
+diagnostic result, not unchanged shipped-media qualification. Strict mode
+rejects these overrides and explicitly leaves this option empty.
+The helper's GRUB layout checks and tests remain in place.
+
+### Strict encrypted installed boot has no serial unlock prompt
+
+Run [40074592548](https://github.com/tuna-os/tunaOS/actions/runs/40074592548)
+completed both GUI installs. Plain cold and warm boots passed. The encrypted
+installed boot reached GRUB, then the serial unlock helper saw no prompt.
+The final image showed only a TDX warning. This does not prove that a password
+was rejected or that a working prompt was hidden.
+
+Strict encrypted cold and warm boots now collect passive frames during the
+existing unlock wait. See `strict-luks-{cold,warm}-observation/observations.json`
+and its frame files in the diagnostic artifact. The observer uses the existing
+local VNC socket, never HMP, keys or pointer events. It does not change the
+installed image or kernel arguments. It stops after 120 seconds, six frames,
+or 30 seconds without a changed frame. Each frame is bounded to 8 MiB;
+the diagnostic collection limit remains 128 MiB. Raw OCR text is not logged.
+
+Observer reports always say `qualified: false`. Failure to collect a frame
+must not change the boot verdict. This adds evidence, not an unlock fix.
+The strict gate separately requires the actual desktop contract and matching
+installed image identity on both cold and warm boots. A helper exit status
+alone cannot prove either requirement. No VM disk or password config is added
+to the diagnostic artifact.
+
+
+Native qualification v2 requires the `unmodified-installed` boot policy and
+explicit unchanged-argument proof from both strict boot fragments. The harness
+rejects GRUB edit traces before it writes those fragments. Legacy v1 receipts,
+including the green edited-boot receipt from run 40085763938, remain useful raw
+diagnostic evidence but are not accepted as current unchanged-boot proof.
+Do not relabel or promote old receipts. Native evidence is still separate from
+browser parity and cutover evidence.

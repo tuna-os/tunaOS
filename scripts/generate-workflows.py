@@ -4,11 +4,35 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from lib import tunaos_config
 
-import yaml
 import os
+import json
+import argparse
+
+from contracts.targets import catalog_snapshot, coverage_document, validate_catalog_snapshot
 
 def main():
+    parser = argparse.ArgumentParser(description='Generate build wrappers and required coverage')
+    parser.add_argument('--check', action='store_true', help='Reject generated file drift')
+    args = parser.parse_args()
+    changed = []
+
+    def emit(path, body):
+        if args.check:
+            if not os.path.isfile(path) or open(path).read() != body:
+                changed.append(path)
+        else:
+            with open(path, 'w') as output:
+                output.write(body)
+            print(f"Generated {path}")
+
     config = tunaos_config.matrix(tunaos_config.load())
+
+    # Generate commitments independently of actual workflow execution coverage.
+    # PR narrowing and package-supply restrictions must remain visible gaps.
+    coverage = coverage_document(config)
+    validate_catalog_snapshot(catalog_snapshot(config))
+    coverage_path = 'required-targets.json'
+    emit(coverage_path, json.dumps(coverage, indent=2, sort_keys=True) + '\n')
 
     # Nightly schedule registry: keep this in lockstep with the
     # "Nightly schedule registry" comment block at the top of
@@ -37,8 +61,10 @@ def main():
 """
 
     # Least-privilege token for the called build-variant.yml: it reads the
-    # repo, pushes images to GHCR, and signs with GitHub OIDC (keyless cosign).
+    # repo and current Actions artifacts, pushes images to GHCR, and signs
+    # with GitHub OIDC (keyless cosign).
     permissions_block = """permissions:
+  actions: read
   contents: read
   packages: write
   id-token: write
@@ -126,9 +152,11 @@ jobs:
             )
 
         file_path = f'.github/workflows/build-{name}.yml'
-        with open(file_path, 'w') as f:
-            f.write(workflow_content)
-        print(f"Generated {file_path}")
+        emit(file_path, workflow_content)
+
+    if changed:
+        print('Generated files are stale: ' + ', '.join(changed), file=sys.stderr)
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()

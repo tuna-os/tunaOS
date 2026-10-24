@@ -261,12 +261,25 @@ if [[ -z "${CHUNKAH_IMAGE:-}" ]]; then
 	CHUNKAH_IMAGE="$(registry_ref coreos-chunkah)"
 fi
 echo "==> chunkah image: ${CHUNKAH_IMAGE}"
+# Prefer the pinned image; the source fallback is mutable upstream HEAD.
+# #3809: run 40064779947 made ONE pull attempt with stderr discarded, fell to
+# the source fallback 2.8s later, and that fallback then died on a quay.io
+# HTTP 503 for one of its own FROM images. The pin never got a second chance
+# and the log could not say why it failed. Retry the pin with the same bounded
+# backoff as the image build above, and keep podman's error visible.
 if ! podman image inspect "${CHUNKAH_IMAGE}" &>/dev/null; then
-	if ! podman pull "${CHUNKAH_IMAGE}" 2>/dev/null; then
-		echo "==> chunkah image not pullable, building from source..."
-		./scripts/build-chunkah.sh
-		CHUNKAH_IMAGE="localhost/chunkah:latest"
-	fi
+	chunkah_pull_attempt=1
+	until podman pull "${CHUNKAH_IMAGE}"; do
+		if [[ "${chunkah_pull_attempt}" -ge 3 ]]; then
+			echo "==> chunkah image not pullable after ${chunkah_pull_attempt} attempt(s), building from source..."
+			./scripts/build-chunkah.sh
+			CHUNKAH_IMAGE="localhost/chunkah:latest"
+			break
+		fi
+		echo "chunkah pull attempt ${chunkah_pull_attempt} failed; retrying in $((chunkah_pull_attempt * 10))s..." >&2
+		sleep "$((chunkah_pull_attempt * 10))"
+		chunkah_pull_attempt=$((chunkah_pull_attempt + 1))
+	done
 fi
 
 # If the target image has no rpmdb (e.g. Debian, Arch), chunkah would fail with

@@ -21,9 +21,10 @@ first_line() {
 }
 
 @test "luks-first-boot.py is always told to leave the guest running" {
+	# Default LUKS path plus the strict offline GUI cold and warm boots.
 	run grep -c -F 'TUNAOS_LUKS_NO_POWEROFF=1 \' "$SCRIPT"
 	[ "$status" -eq 0 ]
-	[ "$output" -eq 1 ]
+	[ "$output" -eq 3 ]
 	# No conditional form: a value of 0 restores the race.
 	run grep -E 'TUNAOS_LUKS_NO_POWEROFF="\$\{' "$SCRIPT"
 	[ "$status" -ne 0 ]

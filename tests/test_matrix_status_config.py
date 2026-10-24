@@ -517,7 +517,8 @@ class FactoryHealthSummary(unittest.TestCase):
         # applicable missing install evidence enters this count.
         self.assertEqual(got["never_tested"], 1)
         self.assertEqual(got["known_regressions"]["blocking"], 1)
-        self.assertEqual(got["known_regressions"]["advisory"], 1)
+        # ISO is advisory on this branch: both ISO failures plus lifecycle.
+        self.assertEqual(got["known_regressions"]["advisory"], 3)
         self.assertEqual(got["last_full_sweep"], "2026-08-14")
 
 

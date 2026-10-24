@@ -25,8 +25,13 @@ so on a GPU-less runner their frames are legitimately blank. Pass --strict only
 where rendering is expected (kde/cosmic/gnome in CI, everything on an iGPU host).
 
 Usage:
-  installer-walkthrough.py <monitor.sock> <outdir> [steps] [flavor] [--strict] [--spec FILE]
+  installer-walkthrough.py <monitor.sock> <outdir> [steps] [flavor] [--strict] [--spec FILE] [--mode=plain|luks]
 Exit: 0 if all enforced checks pass (non-strict never fails on render/advance).
+Pass --mode explicitly to drive a real install through welcome -> disk ->
+encryption -> summary -> install -> done (plain leaves the encryption default
+of none selected, luks selects the passphrase variant and types
+TUNAOS_WALKTHROUGH_LUKS_PASS): every screen in that sequence is then enforced
+in code and any skip exits 1.
 """
 import glob
 import json
@@ -40,6 +45,13 @@ import time
 
 args = [a for a in sys.argv[1:] if not a.startswith("--")]
 flags = [a for a in sys.argv[1:] if a.startswith("--")]
+# Validate --mode before touching positionals so a bad selector fails clean
+# (exit 2) instead of tripping over a missing monitor socket first.
+_mode_early = next((f.split("=", 1)[1] for f in flags if f.startswith("--mode=")),
+                   "plain")
+if _mode_early not in ("plain", "luks"):
+    print(f"error: --mode must be plain|luks, got {_mode_early!r}", file=sys.stderr)
+    sys.exit(2)
 mon_path = args[0]
 outdir = args[1]
 steps = int(args[2]) if len(args) > 2 else 8
@@ -48,6 +60,15 @@ strict = "--strict" in flags
 spec_path = next((f.split("=", 1)[1] for f in flags if f.startswith("--spec=")),
                  os.path.join(os.path.dirname(os.path.abspath(__file__)),
                               "..", "tests", "installer-screens.yaml"))
+# --mode=plain|luks selects the install variant to drive. The default is
+# plain, but NOTHING changes unless the flag is passed explicitly
+# (mode_explicit): without it this is the old click-through verification.
+walk_mode = next((f.split("=", 1)[1] for f in flags if f.startswith("--mode=")),
+                 "plain")
+mode_explicit = any(f.startswith("--mode=") for f in flags)
+if walk_mode not in ("plain", "luks"):
+    print(f"error: --mode must be plain|luks, got {walk_mode!r}", file=sys.stderr)
+    sys.exit(2)
 # QEMU's screendump answers "Error: no surface" the moment a Wayland compositor
 # scans out through virgl — which is every session this harness exists to
 # photograph on a GPU host. So on the one path where cosmic, niri and xfwl4
@@ -121,7 +142,7 @@ def vnc_capture(png):
             and shutil.which("vncdo") and shutil.which("socat")):
         return False
     bridge = subprocess.Popen(
-        ["socat", f"TCP-LISTEN:{vnc_port},reuseaddr,fork",
+        ["socat", f"TCP-LISTEN:{vnc_port},bind=127.0.0.1,reuseaddr,fork",
          f"UNIX-CONNECT:{vnc_sock}"],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
@@ -204,7 +225,8 @@ def shot(idx, label):
 
     # VNC first: on the virgl path it is the only thing that works, and on the
     # non-GL path there is no vnc.sock so this costs one os.path.exists().
-    if vnc_capture(png):
+    # The strict GNOME contract uses software rendering and no TCP bridge.
+    if not (mode_explicit and flavor == "gnome") and vnc_capture(png):
         print(f"captured step {idx}: {label} -> {png} (vnc)", flush=True)
         return png
 
@@ -400,6 +422,86 @@ def load_spec(path):
         pass
     return screens
 
+def screen_matches(png, screens, screen_id):
+    """Return whether OCR sees any keyword for a named installer screen."""
+    if not png or not shutil.which("tesseract"):
+        return False
+    screen = next((item for item in screens if item.get("id") == screen_id), None)
+    keywords = [str(keyword).lower() for keyword in (screen or {}).get("keywords", [])]
+    text = ocr(png) or ""
+    return bool(keywords) and any(keyword in text for keyword in keywords)
+
+
+# ── --mode=plain|luks strict install driving ─────────────────────────────
+# Only active when --mode is passed explicitly (mode_explicit): default runs
+# are the old click-through verification. In explicit mode the walkthrough
+# must drive the full install sequence welcome -> disk -> encryption ->
+# summary -> install -> done for the selected variant, and every screen in
+# that sequence is enforced in code at the end of the run (§4 below) —
+# tests/installer-screens.yaml is deliberately NOT touched, because flipping
+# required flags there would also gate every existing non-strict run.
+WALK_SEQUENCE = ["welcome", "disk", "encryption", "summary", "install", "done"]
+WALK_LUKS_PASS = os.environ.get("TUNAOS_WALKTHROUGH_LUKS_PASS", "tunaos-e2e-luks")
+
+
+def _walk_key_for_char(ch):
+    """HMP sendkey name for one passphrase character."""
+    if ch.isalpha():
+        return ch.lower() if ch.islower() else f"shift-{ch.lower()}"
+    if ch.isdigit():
+        return ch
+    return {"-": "minus", "_": "shift-minus", ".": "dot"}.get(ch)
+
+
+def _type_text(text):
+    """Type text through HMP sendkey, one key at a time."""
+    for ch in text:
+        key = _walk_key_for_char(ch)
+        if key is None:
+            raise ValueError(f"cannot type {ch!r} through HMP sendkey — "
+                             "keep TUNAOS_WALKTHROUGH_LUKS_PASS to [a-z0-9-_.]")
+        send_keys(key)
+
+
+def maybe_configure_encryption(png):
+    """Handle the encryption screen for an explicit --mode run.
+
+    Returns True once the screen has been seen and configured (plain: leave
+    the default none selected; luks: step onto the passphrase variant and
+    type the test passphrase twice). False when this frame is not the
+    encryption screen (or OCR is unavailable), so the caller keeps looking.
+    Detection is a heuristic; the enforced end-of-run sequence taps are the
+    real gate and fail closed if this never fires.
+    """
+    if not shutil.which("tesseract"):
+        return False
+    text = (ocr(png) or "")
+    if "passphrase" not in text and "disk encryption" not in text:
+        return False
+    if walk_mode == "luks":
+        # Best-effort across the five forks: step off the default ("none")
+        # onto the passphrase variant, tab into the passphrase field, type
+        # twice, then tab on so the primary-action driver continues.
+        send_keys("down")
+        time.sleep(1)
+        send_keys("tab")
+        time.sleep(1)
+        _type_text(WALK_LUKS_PASS)
+        send_keys("tab")
+        time.sleep(1)
+        _type_text(WALK_LUKS_PASS)
+        send_keys("tab")
+        note("luks mode: typed test passphrase on the encryption screen")
+    else:
+        note("plain mode: leaving the encryption default (none) selected")
+    return True
+
+# Explicit GNOME qualification has a measured, ordered GUI contract. Keep the
+# legacy multi-frontend click-through path separate from strict evidence.
+if mode_explicit and flavor == "gnome":
+    from lib.gnome_installer_driver import drive
+    sys.exit(drive(outdir, walk_mode, vnc_sock, shot, send_keys, _type_text,
+                   os.environ.get("TUNAOS_QUAL_INSTALLER_DIGEST", ""), WALK_LUKS_PASS))
 
 # ── Capture ──────────────────────────────────────────────────────────────
 time.sleep(5)  # let the installer settle on its first screen
@@ -484,13 +586,64 @@ MAX_TABS = 8
 # Set once the escape hatch below has been spent; cleared by any real
 # advance so a long run can escape more than one modal.
 escaped = False
+# Explicit --mode state: whether the encryption screen has been seen and
+# configured for this variant, and how many consecutive captures have
+# failed (an installer that exits before done stops producing frames).
+encryption_configured = False
+missed = 0
+walk_spec = load_spec(spec_path)
+install_screen_seen = False
+install_started = False
+done_seen = False
 for i in range(1, steps + 1):
-    send_keys(*(["tab"] * tabs), activation)
-    time.sleep(3)
+    if mode_explicit and install_started:
+        # The install action can take longer than one walkthrough step. Once
+        # submitted, never send another key into the installer: wait for a
+        # bounded completion capture instead.
+        time.sleep(5)
+    elif mode_explicit and install_screen_seen:
+        # The first install-screen frame is before activation. Submit that
+        # page's primary action exactly once, then switch to wait-only polls.
+        send_keys(*(["tab"] * tabs), activation)
+        time.sleep(3)
+        install_started = True
+    else:
+        send_keys(*(["tab"] * tabs), activation)
+        time.sleep(3)
     p = shot(i, f"after advance {i}")
+    if p and mode_explicit and not encryption_configured:
+        try:
+            if maybe_configure_encryption(p):
+                encryption_configured = True
+        except ValueError as exc:
+            tap(False, f"{flavor}: strict {walk_mode}: passphrase is typeable",
+                str(exc), enforced=True)
+            break
+    if not p and mode_explicit:
+        # A dead session/installer stops producing frames. Two consecutive
+        # misses mean it exited before done: fail immediately (exit 1 via
+        # the _fails path) instead of walking keys into the void.
+        missed += 1
+        if missed >= 2:
+            tap(False,
+                f"{flavor}: strict {walk_mode}: installer alive through done",
+                "two consecutive captures failed — the installer exited "
+                "before reaching done",
+                enforced=True)
+            break
     if p:
+        missed = 0
         prev = frames[-1] if frames else None
         frames.append(p)
+        if mode_explicit:
+            if screen_matches(p, walk_spec, "done"):
+                done_seen = True
+                note("strict walkthrough: installer completion screen reached")
+            if screen_matches(p, walk_spec, "install") and not install_screen_seen:
+                install_screen_seen = True
+                note("strict walkthrough: install screen reached; submitting once")
+        if done_seen:
+            break
         moved = bool(prev) and changed_pixels(prev, p) > DIFF_PIXELS
         if moved:
             tabs = 0          # new page: try its default action first, again
@@ -537,7 +690,7 @@ for i in range(1, steps + 1):
                 # Primary action buttons ("Get Started", "Next", "Continue") sit near bottom right / center bottom
                 print("  # keyboard navigation exhausted — attempting VNC mouse click on primary action button", flush=True)
                 bridge = subprocess.Popen(
-                    ["socat", f"TCP-LISTEN:{vnc_port},reuseaddr,fork", f"UNIX-CONNECT:{vnc_sock}"],
+                    ["socat", f"TCP-LISTEN:{vnc_port},bind=127.0.0.1,reuseaddr,fork", f"UNIX-CONNECT:{vnc_sock}"],
                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 try:
                     time.sleep(1)
@@ -550,6 +703,36 @@ for i in range(1, steps + 1):
                         bridge.wait(timeout=5)
                     except Exception:
                         bridge.kill()
+
+if mode_explicit and install_screen_seen and not install_started and not done_seen:
+    # If the fixed navigation budget ended on the install page, still submit
+    # its action once before entering the wait-only completion phase.
+    send_keys(*(["tab"] * tabs), activation)
+    time.sleep(3)
+    install_started = True
+    p = shot(steps + 1, "after submitting install")
+    if p:
+        frames.append(p)
+        done_seen = screen_matches(p, walk_spec, "done")
+
+if mode_explicit and install_started and not done_seen:
+    try:
+        completion_polls = max(0, int(os.environ.get(
+            "TUNAOS_WALKTHROUGH_COMPLETION_POLLS", "12")))
+    except ValueError:
+        completion_polls = 12
+    for poll in range(completion_polls):
+        time.sleep(5)
+        p = shot(steps + 2 + poll, f"waiting for installation completion {poll + 1}")
+        if p:
+            frames.append(p)
+            if screen_matches(p, walk_spec, "done"):
+                done_seen = True
+                note(f"strict walkthrough: completion observed after {poll + 1} poll(s)")
+                break
+    if not done_seen:
+        note(f"strict walkthrough: completion not observed after "
+             f"{completion_polls} bounded poll(s)")
 
 print(f"\n# walkthrough verification ({flavor}) — {len(frames)} frames, "
       f"strict={strict}\n", flush=True)
@@ -621,7 +804,7 @@ note(f"{advanced}/{max(len(frames) - 1, 0)} transitions changed >{DIFF_PIXELS}px
 # distinct visual states, and refuse to credit any screen beyond the first to
 # state 0. If the installer never advanced there is exactly one state, and the
 # only screen that can honestly be claimed is the one it opened on.
-spec = load_spec(spec_path)
+spec = walk_spec
 have_ocr = shutil.which("tesseract") is not None
 
 # Group frames into distinct visual states (consecutive near-identical frames
@@ -794,9 +977,30 @@ if have_ocr and _missing_required:
               "published capture and look at it before changing anything.",
               flush=True)
 
+# ── 4. STRICT SEQUENCE (explicit --mode runs only) ───────────────────────
+# An explicit --mode drives a real install, so every screen in the install
+# sequence must have been reached — enforced here in code rather than via
+# required flags in tests/installer-screens.yaml, which would also gate
+# existing non-strict runs. Any skip (or an installer that exited before
+# done, which shows up as a missing done screen) is an enforced failure and
+# exits 1 through the _fails path at the bottom of this file.
+if mode_explicit:
+    for sid in WALK_SEQUENCE:
+        tap(bool(reached.get(sid)),
+            f"{flavor}: strict {walk_mode}: reached '{sid}' screen",
+            f"'{sid}' was skipped in {walk_mode} mode "
+            f"(or the installer exited before reaching it)",
+            enforced=True)
+    if walk_mode == "luks" and not encryption_configured:
+        tap(False, f"{flavor}: strict luks: encryption screen was configured",
+            "the passphrase variant was never selected — no frame matched "
+            "the encryption screen while driving",
+            enforced=True)
+
 # ── Result for the parity matrix ─────────────────────────────────────────
 summary = {
     "flavor": flavor,
+    "mode": walk_mode,
     "frames": len(frames),
     "rendered_frames": rendered,
     "advanced_transitions": advanced,

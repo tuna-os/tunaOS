@@ -128,3 +128,119 @@ def test_url_forms_normalize_to_the_same_repo() -> None:
         "git@github.com:tuna-os/fisherman.git",
     ):
         assert mod.normalize_repo(url) == "tuna-os/fisherman"
+
+def test_all_five_frontends_share_the_consolidated_monorepo() -> None:
+    """Every desktop builds its installer from tuna-os/bootc-installer."""
+    assert set(mod.INSTALLERS) == {"kde", "cosmic", "niri", "xfce", "gnome"}
+    for desktop, where in mod.INSTALLERS.items():
+        assert where["repo"] == "tuna-os/bootc-installer", desktop
+
+
+def test_manifest_entries_live_under_frontends() -> None:
+    for desktop in ("kde", "cosmic", "niri", "xfce"):
+        manifest = mod.INSTALLERS[desktop]["manifest"]
+        assert manifest.startswith(f"frontends/{desktop}/flatpak/"), desktop
+        assert manifest.endswith(".json"), desktop
+
+
+def test_gnome_has_a_submodule_entry_and_no_manifest() -> None:
+    assert mod.INSTALLERS["gnome"]["submodule"] == "fisherman"
+    assert "manifest" not in mod.INSTALLERS["gnome"]
+
+
+def test_audit_fails_a_non_canonical_repo() -> None:
+    problems = mod.audit({"kde": {"url": DEAD, "commit": "d349c31e"}})
+    assert len(problems) == 1
+    assert mod.CANONICAL in problems[0]
+
+
+def test_audit_fails_a_below_floor_sha() -> None:
+    problems = mod.audit(
+        {"kde": {"url": LIVE, "commit": "00000001", "at_or_after_floor": False}}
+    )
+    assert len(problems) == 1
+    assert "floor" in problems[0]
+
+
+def test_audit_passes_the_floor_sha_and_newer() -> None:
+    floor = {"url": LIVE, "resolved": mod.FLOOR_COMMIT, "at_or_after_floor": True}
+    newer = {"url": LIVE, "resolved": "f" * 40, "at_or_after_floor": True}
+    assert mod.audit({"kde": floor}) == []
+    assert mod.audit({"kde": newer}) == []
+
+
+def test_floor_is_the_landed_squash_merge_not_the_pr_branch_commit() -> None:
+    """Run 40057457412: fisherman#340 was squash-merged as 02ac7097 on `dev`.
+
+    Its PR-branch commit d349c31e is never an ancestor of `dev`, so a floor
+    naming it made every frontend pinned at the landed change "diverged" and
+    red. The floor must be the commit that is on the default branch.
+    """
+    assert mod.FLOOR_COMMIT == "02ac7097abb07a206479ea84a559c41db12bf629"
+    assert not mod.FLOOR_COMMIT.startswith("d349c31e")
+
+
+def test_unresolvable_pins_warn_dont_fail() -> None:
+    """Matching main()'s blip policy: at_or_after_floor=None only warns."""
+    assert mod.audit({"kde": {"url": LIVE, "commit": "abc123"}}) == []
+    unknown = {"url": LIVE, "resolved": "a" * 40, "at_or_after_floor": None}
+    assert mod.audit({"kde": unknown}) == []
+
+
+def test_floor_ancestry_fast_path_needs_no_dates(monkeypatch) -> None:
+    """An ancestor pin passes on the compare call alone (one API call)."""
+    calls = []
+
+    def fake_api(url: str) -> dict:
+        calls.append(url)
+        return {"status": "ahead"}
+
+    monkeypatch.setattr(mod, "api_json", fake_api)
+    assert mod.floor_is_ancestor("tuna-os/fisherman", "f" * 40) is True
+    assert len(calls) == 1
+
+
+def test_floor_divergence_fails_closed_even_with_newer_timestamp(monkeypatch) -> None:
+    """A newer commit date cannot prove a divergent pin contains the floor."""
+    def fake_api(url: str) -> dict:
+        if "/compare/" in url:
+            return {"status": "diverged"}
+        if url.endswith(mod.FLOOR_COMMIT):
+            return {"commit": {"committer": {"date": "2026-10-17T00:00:00Z"}}}
+        return {"commit": {"committer": {"date": "2026-10-18T00:00:00Z"}}}
+
+    monkeypatch.setattr(mod, "api_json", fake_api)
+    assert mod.floor_is_ancestor("tuna-os/fisherman", "a" * 40) is False
+
+
+def test_floor_behind_fails_closed(monkeypatch) -> None:
+    def fake_api(url: str) -> dict:
+        assert "/compare/" in url
+        return {"status": "behind"}
+
+    monkeypatch.setattr(mod, "api_json", fake_api)
+    assert mod.floor_is_ancestor("tuna-os/fisherman", "0" * 40) is False
+
+
+def test_submodule_sha_uses_exact_gitlink_revision(monkeypatch) -> None:
+    calls = []
+
+    def fake_api(url: str) -> dict:
+        calls.append(url)
+        return {"sha": "b" * 40}
+
+    monkeypatch.setattr(mod, "api_json", fake_api)
+    assert mod.submodule_sha("tuna-os/bootc-installer", "fisherman") == "b" * 40
+    assert calls == [
+        "https://api.github.com/repos/tuna-os/bootc-installer/contents/fisherman"
+    ]
+
+
+def test_floor_unknown_warns_instead_of_failing(monkeypatch) -> None:
+    def fake_api(url: str) -> dict:
+        if "/compare/" in url:
+            return {"status": "unknown"}
+        raise TimeoutError("offline")
+
+    monkeypatch.setattr(mod, "api_json", fake_api)
+    assert mod.floor_is_ancestor("tuna-os/fisherman", "a" * 40) is None

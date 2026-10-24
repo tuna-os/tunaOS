@@ -181,10 +181,16 @@ def test_adapter_refuses_unimplemented_fork_application(stock, tmp_path, extra):
 def test_plan_enabled_cells_match_the_real_workflow_query(plan):
     """Execute the workflow's matrix expression, not a copied approximation."""
     workflow = (ROOT / ".github/workflows/build-variant.yml").read_text()
-    query = workflow.split("--arg event \"${EVENT_NAME}\" '", 1)[1].split("' | jq -c -s '.'", 1)[0]
-    result = subprocess.run(["jq", "-c", "--arg", "event", "workflow_dispatch", query],
-                            input=json.dumps(plan["legacy_catalog"]), text=True, capture_output=True,
-                            env=dict(os.environ, FILTER_VARIANT="all", FILTER_FLAVOR="all"), check=True)
+    query = workflow.split('--argjson selection "$CANDIDATE_SELECTION" \'', 1)[1].split("' | jq -c -s '.'", 1)[0]
+    env = dict(os.environ, FILTER_VARIANT="all", FILTER_FLAVOR="all")
+    config_json = json.dumps(plan["legacy_catalog"])
+    selection = subprocess.run(
+        ["python3", str(ROOT / "scripts/candidate-flavor-selection.py")],
+        input=config_json, text=True, capture_output=True, env=env, check=True)
+    result = subprocess.run(["jq", "-c", "--arg", "event", "workflow_dispatch",
+                             "--argjson", "selection", selection.stdout.strip(), query],
+                            input=config_json, text=True, capture_output=True,
+                            env=env, check=True)
     actual = {(row["variant"], row["flavor"], platform) for row in map(json.loads, result.stdout.splitlines())
               for platform in row["platforms"].split(",")}
     expected = {(c["variant"], c["flavor"], c["platform"]) for c in plan["cells"] if c["build_image"]}
@@ -199,18 +205,31 @@ def test_pull_request_matrix_includes_tuna_in_stage_one():
     event = "pull_request" if matrix_step.get("env", {}).get("EVENT_NAME") == \
         "${{ github.event_name }}" else ""
     text = workflow_path.read_text()
-    query = text.split('--arg event "${EVENT_NAME}" \'', 1)[1].split("' | jq -c -s '.'", 1)[0]
+    query = text.split('--argjson selection "$CANDIDATE_SELECTION" \'', 1)[1].split("' | jq -c -s '.'", 1)[0]
+    env = dict(os.environ, FILTER_VARIANT="marlin", FILTER_FLAVOR="tuna")
+    config_json = json.dumps(yaml.safe_load((ROOT / ".github/build-config.yml").read_text()))
+    selection = subprocess.run(
+        ["python3", str(ROOT / "scripts/candidate-flavor-selection.py")],
+        input=config_json, text=True, capture_output=True, env=env, check=True)
     result = subprocess.run(
-        ["jq", "-c", "--arg", "event", event, query],
-        input=json.dumps(yaml.safe_load((ROOT / ".github/build-config.yml").read_text())),
-        text=True, capture_output=True,
-        env=dict(os.environ, FILTER_VARIANT="marlin", FILTER_FLAVOR="tuna"),
-        check=True)
+        ["jq", "-c", "--arg", "event", event,
+         "--argjson", "selection", selection.stdout.strip(), query],
+        input=config_json, text=True, capture_output=True, env=env, check=True)
     row = next(json.loads(line) for line in result.stdout.splitlines()
                if json.loads(line)["variant"] == "marlin")
     assert row["flavor"] == "tuna"
     assert row["stage"] == 1
     assert row["platforms"] == "linux/amd64"
+
+
+def test_tuna_caller_keeps_artifact_read_scope_and_one_event_binding():
+    caller = yaml.safe_load((ROOT / ".github/workflows/test.yml").read_text())["jobs"]["tuna_pr_images"]
+    assert caller["uses"] == "./.github/workflows/build-variant.yml"
+    assert caller["permissions"]["actions"] == "read"
+    assert "secrets" not in caller
+    text = (ROOT / ".github/workflows/build-variant.yml").read_text()
+    matrix_env = text.split("      - name: Generate Matrix", 1)[1].split("        run:", 1)[0]
+    assert matrix_env.count("EVENT_NAME:") == 1
 
 
 def test_read_only_plan_is_deterministic(stock):

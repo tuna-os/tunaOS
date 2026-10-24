@@ -23,12 +23,27 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import importlib.util
+
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG = ROOT / ".github" / "build-config.yml"
 DESKTOPS = ["gnome", "kde", "cosmic", "niri", "xfce"]
 
+
+def _delivery_cutover():
+    spec = importlib.util.spec_from_file_location(
+        "delivery_cutover", ROOT / "scripts" / "delivery-cutover.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+DC = _delivery_cutover()
+
+DIGEST = "sha256:" + "ab" * 32
 
 def config() -> dict:
     return yaml.safe_load(CONFIG.read_text(encoding="utf-8"))
@@ -119,3 +134,118 @@ def test_the_intersection_that_makes_partial_variants_safe_still_exists():
         encoding="utf-8")
     assert "iso_groups ∩ variant flavors" in wf
     assert "select(($sel | length) > 0)" in wf
+
+def _full_group_entries(cfg: dict, variant: str, suffix: str) -> list[dict]:
+    """A cutover entry for every member x platform target of a group."""
+    live, offline = DC.group_members(cfg, variant, suffix)
+    entries = []
+    for flavor in dict.fromkeys(live + offline):
+        for platform in DC.required_platforms_for(cfg, variant, flavor):
+            entries.append({
+                "target": {"variant": variant, "flavor": flavor, "platform": platform},
+                "evidence": {"receiptDigest": DIGEST, "qualifiedAt": "2026-10-01T00:00:00Z"},
+                "preset": "test-preset",
+            })
+    return entries
+
+
+def test_empty_policy_covers_no_group_so_every_group_still_publishes():
+    """The default path: with the empty initial policy no group's upload is
+    suppressed, so the universal-publication shape above is what ships."""
+    cfg = config()
+    policy = {"cutover": [], "retained": []}
+    probed = 0
+    for group in groups():
+        suffix = group.get("suffix") or ""
+        for variant in cfg["variants"]:
+            live, offline = DC.group_members(cfg, variant["id"], suffix)
+            if not live and not offline:
+                continue
+            probed += 1
+            assert DC.group_covered(
+                policy, variant["id"], suffix, live, offline, config=cfg
+            ) is False, (variant["id"], suffix)
+    assert probed > 0, "no variant x group probed; the loop above is vacuous"
+
+
+def test_cut_over_group_suppresses_only_that_group():
+    """Per-target cutover: a fully qualified group stops publishing while
+    every other group and variant keeps publishing as today."""
+    cfg = config()
+    live, offline = DC.group_members(cfg, "yellowfin", "kde")
+    assert live and offline
+    entries = _full_group_entries(cfg, "yellowfin", "kde")
+    policy = {"cutover": entries, "retained": []}
+    from contracts.targets import _oci_platform, catalog_snapshot, cpu_baseline
+
+    descriptors = {}
+    receipts = {}
+    overlays = {}
+    for entry in entries:
+        target = entry["target"]
+        key = f"{target['variant']}:{target['flavor']}:{target['platform']}"
+        platform_digest = "sha256:" + "01" * 32
+        descriptors[key] = {
+            "platformManifestDigest": platform_digest,
+            "ociPlatform": _oci_platform(target["platform"]),
+        }
+        overlays[key] = {"liveOverlayDigest": DIGEST,
+                         "liveOverlayBaseDigest": platform_digest}
+        receipts[key] = strict_receipt(
+            target, source=platform_digest, overlay=DIGEST,
+            installer=DIGEST, engine=DIGEST,
+            cpu_baseline=cpu_baseline(target["variant"], target["platform"]))
+        entry["evidence"]["receiptDigest"] = receipts[key]["receiptDigest"]
+    snapshot = catalog_snapshot(
+        cfg, descriptors=descriptors, overlays=overlays, receipts=receipts,
+        installer_revision=DIGEST, engine_revision=DIGEST,
+        browser_builds={key: receipt["build_provenance"] for key, receipt in receipts.items()})
+    assert DC.group_covered(
+        policy, "yellowfin", "kde", live, offline,
+        config=cfg, snapshot=snapshot,
+        current_descriptors=descriptors,
+        current_overlays=overlays,
+        current_pins={"installerRevision": DIGEST, "engineRevision": DIGEST},
+    ) is True
+    for suffix in ("", "cosmic", "niri", "xfce"):
+        other_live, other_offline = DC.group_members(cfg, "yellowfin", suffix)
+        if not other_live and not other_offline:
+            continue
+        assert DC.group_covered(
+            policy, "yellowfin", suffix, other_live, other_offline, config=cfg
+        ) is False, suffix
+    bonito_live, bonito_offline = DC.group_members(cfg, "bonito", "kde")
+    assert DC.group_covered(
+        policy, "bonito", "kde", bonito_live, bonito_offline, config=cfg
+    ) is False
+
+
+import hashlib
+import json
+
+
+def strict_receipt(target, *, source, overlay, installer, engine, cpu_baseline):
+    observed = {
+        "installed_boot": True, "desktop_contract": True,
+        "source_digest": source, "booted_digest": source,
+        "target_imgref": "ghcr.io/tuna-os/test@" + source, "duration_s": 1,
+    }
+    receipt = {
+        "schema": "QualificationEvidence/v1", **target,
+        "cpu_baseline": cpu_baseline,
+        "hardware_scope": "qemu",
+        "resolved_inputs": {"source": source, "overlay": overlay,
+                            "installer": installer, "engine": engine,
+                            "media": source},
+        "browser": {"name": "chromium", "version": "140.0",
+                    "memory_gib": 8, "free_disk_gib": 20},
+        "offline_network_disabled": True,
+        "observed": {"plain": dict(observed), "encrypted": dict(observed)},
+        "measurements": {"cold": {"duration_s": 1}, "warm": {"duration_s": 1}},
+        "qualifiedAt": "2026-10-01T00:00:00Z",
+    }
+    receipt["build_provenance"] = {"origin": "browser", "receipt_digest": overlay,
+                                   "iso_digest": source, "browser": dict(receipt["browser"])}
+    receipt["receiptDigest"] = "sha256:" + hashlib.sha256(
+        json.dumps(receipt, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    return receipt

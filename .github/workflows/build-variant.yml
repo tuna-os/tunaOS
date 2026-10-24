@@ -1,7 +1,7 @@
 name: Unified Build
 permissions:
+  actions: read
   contents: read
-# ── Nightly schedule registry ────────────────────────────────────────────────
 # The org has a 20-concurrent-job ceiling. One variant's full build alone
 # demands more than that, so the per-variant nightlies (in build-<variant>.yml)
 # are staggered ~2h apart instead of the old 01:00–03:30 cluster, which put
@@ -75,6 +75,7 @@ jobs:
       - name: Setup yq
         uses: ./.github/actions/setup-yq
 
+
       # A fork's destination from tunaos.toml [build.publish]. Empty means
       # the stock behaviour: ghcr.io/<repository owner>.
       - name: Resolve publish destination
@@ -146,12 +147,15 @@ jobs:
           # runners and colouring runs red.
           # All inputs are in env vars — no direct interpolation of workflow
           # inputs into the script body, to prevent shell injection.
-          FULL_MATRIX=$(yq -o=json '.' .github/build-config.yml | jq -c --arg event "${EVENT_NAME}" '
+          # A filtered candidate overlay must build its immutable parents in
+          # this run. The resolver is authoritative; never pull main as fallback.
+          CANDIDATE_SELECTION=$(yq -o=json '.' .github/build-config.yml | python3 scripts/candidate-flavor-selection.py)
+          FULL_MATRIX=$(yq -o=json '.' .github/build-config.yml | jq -c --arg event "${EVENT_NAME}" --argjson selection "$CANDIDATE_SELECTION" '
             .variants[]
             | select(env.FILTER_VARIANT == "all" or .id == env.FILTER_VARIANT)
             | . as $v
             | .flavors[]
-            | select(env.FILTER_FLAVOR == "all" or .id == env.FILTER_FLAVOR)
+            | select(($selection == null and (env.FILTER_FLAVOR == "all" or .id == env.FILTER_FLAVOR)) or $selection[$v.id][.id] != null)
             | select(.build_image // false)
             | select($event != "pull_request" or .id == "gnome" or .id == "tuna")
             | {
@@ -162,8 +166,8 @@ jobs:
                 variant_emoji: ($v.emoji // "❓"),
                 description:   ($v.description // ""),
                 base_image:    $v.base_image,
-                platforms:     (if $event == "pull_request" then "linux/amd64" else ((.platforms // $v.platforms) | join(",")) end),
-                platforms_json: ((if $event == "pull_request" then ["linux/amd64"] else (.platforms // $v.platforms) end)
+                platforms:     (if $event == "pull_request" then "linux/amd64" else (($selection[$v.id][.id] // .platforms // $v.platforms) | join(",")) end),
+                platforms_json: ((if $event == "pull_request" then ["linux/amd64"] else ($selection[$v.id][.id] // .platforms // $v.platforms) end)
                                  | map({platform: ., safeplatform: (gsub("/"; "-"))}) | tostring),
                 flavor:        .id,
                 stage:         (if $event == "pull_request" then 1 else .stage end),
@@ -204,15 +208,11 @@ jobs:
           # Per-stage artifact matrices — each stage's ISOs/QCOW2s depend
           # only on that stage's image builds, avoiding the stage-4 artifact
           # jail where a gnome-nvidia-hwe failure blocked ALL ISOs (F10).
-          # One row per architecture platform (#1378): this used to hardcode
-          # platform: "linux/amd64" unconditionally, so flavors that publish
-          # arm64 images (per build-config.yml's platforms/global_platforms)
-          # never got arm64 ISO/QCOW2 artifacts — the same gap #230 closed
-          # without the fix landing. platforms_json (built above, per entry)
-          # already carries every {platform, safeplatform} pair the image
-          # matrix published; expand each artifact-eligible entry into one
-          # row per amd64/arm64 platform instead of one fixed amd64 row.
-          # /v2 (a CPU-feature variant, not a real target arch) is excluded.
+          # One row per canonical catalog platform (#1378): this used to
+          # hardcode generic linux/amd64, so flavors whose catalog target is
+          # linux/amd64/v2 could never be marked cut over. Keep /v2 distinct
+          # from the generic AMD64 target; the builder's safeplatform carries
+          # the same identity into the artifact name and image tag.
           make_artifact_matrix() {
             local STAGE=$1
             echo "$FULL_MATRIX" | jq -c --argjson stage "$STAGE" '{
@@ -220,7 +220,9 @@ jobs:
                 select(.stage == $stage and (.build_iso == true or .build_qcow2 == true))
                 | . as $e
                 | ($e.platforms_json | fromjson)[]
-                | select(.platform == "linux/amd64" or .platform == "linux/arm64")
+                | select(.platform == "linux/amd64" or
+                         .platform == "linux/amd64/v2" or
+                         .platform == "linux/arm64")
                 | {
                     variant:       $e.variant,
                     image_name:    $e.image_name,
@@ -326,7 +328,7 @@ jobs:
       platforms: ${{ matrix.platforms }}
       platforms-json: ${{ matrix.platforms_json }}
       default-tag: ${{ matrix.published_tag }}
-      publish: true
+      publish: ${{ github.event_name != 'pull_request' }}
       sbom: true
 
   # ── Stage 3: Desktop HWE and nvidia flavors ───────────────────────────────────
@@ -366,7 +368,7 @@ jobs:
       platforms: ${{ matrix.platforms }}
       platforms-json: ${{ matrix.platforms_json }}
       default-tag: ${{ matrix.published_tag }}
-      publish: true
+      publish: ${{ github.event_name != 'pull_request' }}
       sbom: true
 
   # ── Stage 4: Combined nvidia+HWE flavors ──────────────────────────────────────
@@ -400,7 +402,7 @@ jobs:
       platforms: ${{ matrix.platforms }}
       platforms-json: ${{ matrix.platforms_json }}
       default-tag: ${{ matrix.published_tag }}
-      publish: true
+      publish: ${{ github.event_name != 'pull_request' }}
       sbom: true
 
   # ── Artifact builds per stage (ISO + QCOW2) ───────────────────────────────
@@ -428,12 +430,14 @@ jobs:
       !cancelled() && needs.generate_matrix.result == 'success' &&
       needs.build_stage2.result != 'cancelled' &&
       github.event_name != 'pull_request' &&
+      github.repository == 'tuna-os/tunaOS' && github.ref == 'refs/heads/main' &&
       needs.generate_matrix.outputs.artifact_s2_count != '0'
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.generate_matrix.outputs.artifact_s2_matrix) }}
     permissions:
       contents: read
+      actions: read
       packages: read
       id-token: write
     uses: ./.github/workflows/reusable-build-artifacts.yml
@@ -476,12 +480,14 @@ jobs:
       !cancelled() && needs.generate_matrix.result == 'success' &&
       needs.build_stage3.result != 'cancelled' &&
       github.event_name != 'pull_request' &&
+      github.repository == 'tuna-os/tunaOS' && github.ref == 'refs/heads/main' &&
       needs.generate_matrix.outputs.artifact_s3_count != '0'
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.generate_matrix.outputs.artifact_s3_matrix) }}
     permissions:
       contents: read
+      actions: read
       packages: read
       id-token: write
     uses: ./.github/workflows/reusable-build-artifacts.yml
@@ -522,12 +528,14 @@ jobs:
       !cancelled() && needs.generate_matrix.result == 'success' &&
       needs.build_stage4.result != 'cancelled' &&
       github.event_name != 'pull_request' &&
+      github.repository == 'tuna-os/tunaOS' && github.ref == 'refs/heads/main' &&
       needs.generate_matrix.outputs.artifact_s4_count != '0'
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.generate_matrix.outputs.artifact_s4_matrix) }}
     permissions:
       contents: read
+      actions: read
       packages: read
       id-token: write
     uses: ./.github/workflows/reusable-build-artifacts.yml

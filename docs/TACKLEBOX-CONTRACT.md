@@ -16,29 +16,37 @@ The adapter emits one JSON object with these fields:
 | `size` | TunaOS | `10G`; the target filesystem must have room for the image and live payload. |
 | `shared_store.format` | TunaOS | `ext4`; Tacklebox uses the shared store for the bootable environment. |
 | `kargs` | TunaOS | Array of kernel arguments. `console=ttyS0` is required for serial diagnostics in CI. |
-| `bootable_environments` | TunaOS | Exactly one live environment for the selected variant/flavor. |
-| `offline_payloads` | TunaOS | Exactly one payload mapping for the same source image, using the canonical GHCR ref. |
+| `bootable_environments` | TunaOS | Exactly one live environment for the selected variant/flavor. Its `image` is the pinned live-overlay ref when the publication workflow supplies one; otherwise it is the source image. |
+| `offline_payloads` | TunaOS | Exactly one payload mapping for the promoted source image, using an immutable ref when one is available. |
 
 The environment object contains:
 
 - `id`: `<variant>-<flavor>`.
-- `image`: the resolved source image returned by `tunaos_image_ref`.
+- `image`: the pinned live-overlay image when the caller exports
+  `TUNA_LIVE_OVERLAY_REF`; otherwise the source image that
+  `tunaos_image_ref` resolves. The live root consumes the overlay; the
+  build does not merely record it as metadata.
 - `desktop`: the session-manager name (`gnome`, `kde`, `niri`, `cosmic`, or
   `xfce`) inferred from the flavor.
 - `live_customize`: a one-item array containing the generated
-  `customize-live.sh` path.
+  `customize-live.sh` path. The adapter copies the complete customization
+  source directory first because the script sources sibling desktop and
+  installer-backend files.
 - `modes`: exactly `["live"]` for this adapter.
 
-The payload mapping uses `source` equal to the resolved image and `ref` equal
-to the canonical published `ghcr.io/<owner>/<variant>:<tag>` reference. This
-keeps local builds and registry builds consistent with the image reference
-embedded in the installed system.
+The payload mapping's `source` and `ref` identify the promoted installed
+payload. CI passes the source manifest digest in both values; local builds may
+use the local manifest digest. This keeps the identity of the installed
+system separate from the identity of the live overlay, with a pin on each
+input.
 
 ## Invariants
 
 Changes to the adapter must preserve these invariants:
 
-1. The source image and offline payload refer to the same build input.
+1. The live environment and offline payload may use different refs. The
+   live overlay's recorded base digest must still identify the source
+   manifest that the offline payload uses.
 2. The environment is live-only and has one customization entry.
 3. The customization directory is private to the build output directory; a
    developer-only `.enable-sshd` marker must never modify the source tree.
@@ -46,7 +54,10 @@ Changes to the adapter must preserve these invariants:
    invocation.
 5. The final ISO is copied to the repository root using the filename contract
    consumed by publish and end-to-end workflows:
-   `<variant>-<flavor>-<VERSION_ID>-<arch>.iso`.
+   `<variant>-<flavor>-<VERSION_ID>-<arch-or-platform>.iso`. Local calls that
+   omit the optional platform retain the container-reported architecture;
+   canonical CI calls include `/v2` as `linux-amd64-v2` so distinct OCI
+   targets cannot overwrite one another.
 
 Tacklebox changes that alter the accepted recipe fields or the meaning of
 these invariants need updating this document and the adapter's tests in
