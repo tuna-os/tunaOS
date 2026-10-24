@@ -186,6 +186,8 @@ def index_path(source, release, *, architecture, component):
 def index_specs(source, release, *, architecture, component):
     if architecture != 'amd64' or component != 'main':
         raise CatalogError('unsupported architecture/component')
+    # deb.debian.org/debian-security declares `Components: updates/main ...` while its
+    # index paths stay under `main/`; the configured component names the path namespace.
     native_component = 'updates/main' if source['id'] == 'trixie-security' else 'main'
     if (release.get('Origin') != source['origin']
             or release.get('Codename') != source['codename']
@@ -372,9 +374,11 @@ def _copied_package_source_files(config_directory):
     root = Path(config_directory)
     inventory = {}
     for relative_root in ('system_files/etc/apt', 'system_files/usr/share/keyrings'):
-        directory = root / relative_root
-        if directory.is_symlink():
-            raise CatalogError('copied package-source paths must not contain symlinks')
+        directory = root
+        for part in relative_root.split('/'):
+            directory = directory / part
+            if directory.is_symlink():
+                raise CatalogError('copied package-source paths must not contain symlinks')
         if not directory.exists():
             continue
         if not directory.is_dir():

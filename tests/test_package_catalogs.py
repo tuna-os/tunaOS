@@ -269,6 +269,16 @@ def test_copied_source_inventory_rejects_symlinked_directories_before_descent(tm
         package_catalogs._copied_package_source_files(tmp_path)
 
 
+def test_copied_source_inventory_rejects_symlinked_ancestor(tmp_path):
+    external = tmp_path / 'external/etc/apt'
+    external.mkdir(parents=True)
+    (external / 'source.list').write_text('deb https://example.invalid stable main\n')
+    (tmp_path / 'system_files').symlink_to(tmp_path / 'external', target_is_directory=True)
+
+    with pytest.raises(CatalogError, match='must not contain symlinks'):
+        package_catalogs._copied_package_source_files(tmp_path)
+
+
 @pytest.mark.parametrize('field,value', [
     ('files', []), ('files', None), ('manifest_sha256', 42),
     ('source_text', []), ('image_index', None), ('schema_version', True),
