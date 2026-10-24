@@ -142,7 +142,7 @@ for pkg in "${PACKAGES[@]}"; do
 		# Category-qualified atoms go through Portage's atom matcher. Plain
 		# package names are matched against installed VDB directories instead;
 		# "*/name" is not valid Portage atom syntax.
-		if ! podman run --rm --entrypoint sh "$IMAGE" -c '
+		if podman run --rm --entrypoint sh "$IMAGE" -c '
 			set -eu
 			atom=$1
 			case "$atom" in
@@ -163,10 +163,15 @@ for pkg in "${PACKAGES[@]}"; do
 					;;
 			esac
 		' sh "$pkg" &>/dev/null; then
-			echo "❌ Missing package: ${pkg}"
-			FAILED=1
-		else
 			echo "✓ ${pkg}"
+		else
+			status=$?
+			if [[ "$status" -eq 127 ]]; then
+				echo "❌ Cannot verify Gentoo atom ${pkg}: image has neither portageq nor equery"
+			else
+				echo "❌ Missing package: ${pkg}"
+			fi
+			FAILED=1
 		fi
 		;;
 	*)

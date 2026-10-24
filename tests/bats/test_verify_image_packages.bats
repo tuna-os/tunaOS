@@ -20,6 +20,7 @@ if [[ "${joined}" == *"/etc/os-release"* ]]; then
   exit 0
 fi
 if [[ "${joined}" == *"portageq match"* ]]; then
+  [[ "${PORTAGE_TOOLS_MISSING:-}" != 1 ]] || exit 127
   [[ "${joined}" == *"grep -q ."* ]]
   exit 0
 fi
@@ -59,6 +60,20 @@ EOF
   run_verifier legacy
   [ "$status" -eq 0 ]
   grep -Fq -- 'app-editors/vim' "$PODMAN_LOG"
+}
+
+@test "missing Portage query tools are not reported as a missing package" {
+  cat >"${repo}/manifests/desktops/tuna.yaml" <<'EOF'
+packages:
+  emerge:
+    - gui-wm/tuna-desktop
+EOF
+
+  export PORTAGE_TOOLS_MISSING=1
+  run_verifier tuna
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Cannot verify Gentoo atom gui-wm/tuna-desktop"* ]]
+  [[ "$output" != *"Missing package: gui-wm/tuna-desktop"* ]]
 }
 
 teardown() {
