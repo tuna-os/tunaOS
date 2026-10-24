@@ -2271,3 +2271,17 @@ pull had one attempt and discarded stderr, so its error is not known.
 **Fix:** Do not change the base image pin. Run the job again. The pinned Chunkah pull now has three
 attempts with a 10 s and a 20 s delay, and its stderr is visible. The mutable
 source fallback runs only after the third failure.
+
+### Strict LUKS leg stops at `Shell>` after a passed plain leg
+
+**Symptom:** Run [40068149541](https://github.com/tuna-os/tunaOS/actions/runs/40068149541)
+passed the plain GUI install and its detached cold and warm boots. The LUKS
+walkthrough then reported `GUI did not transition from unknown to welcome`.
+
+**Measured cause:** Both legs used one OVMF NVRAM file. The plain install put
+`Boot000A "CentOS Stream"` first in the boot order. The LUKS live boot tried
+that shim on the new blank disk, and then started `EFI Internal Shell`. The
+firmware did not try the CD. See `strict-luks-live-serial.log`.
+
+**Fix:** `run_strict_offline_gui` calls `reset_uefi_vars` before each leg.
+Regression: `tests/regressions/test_issue_3380_strict_legs_get_fresh_uefi_nvram.py`.

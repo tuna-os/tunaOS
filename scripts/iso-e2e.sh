@@ -1026,13 +1026,18 @@ start_swtpm() {
 
 # Fresh OVMF NVRAM each run — UEFI writes state during install (boot order,
 # secure-boot vars). Reusing a stale one masks regressions.
-if [[ -n "$UEFI_VARS_SRC" ]]; then
-	cp -f "$UEFI_VARS_SRC" "$OVMF_VARS"
-else
-	# Some packaging only ships a combined OVMF.fd; create empty vars file
-	# as a fallback (UEFI will populate it).
-	truncate -s 4M "$OVMF_VARS"
-fi
+reset_uefi_vars() {
+	if [[ -n "$UEFI_VARS_SRC" ]]; then
+		cp -f "$UEFI_VARS_SRC" "$OVMF_VARS"
+	else
+		# Some packaging only ships a combined OVMF.fd; create empty vars file
+		# as a fallback (UEFI will populate it). Remove first: truncate keeps
+		# whatever an earlier boot wrote.
+		rm -f "$OVMF_VARS"
+		truncate -s 4M "$OVMF_VARS"
+	fi
+}
+reset_uefi_vars
 rm -f "$MONITOR_SOCK" "$SERIAL_LOG" "$QEMU_PIDFILE"
 
 # ── Cleanup on exit ─────────────────────────────────────────────────────────
@@ -4189,6 +4194,12 @@ run_strict_offline_gui() {
 			echo "ERROR: ISO media changed before strict ${_m} installation" >&2
 			return 1
 		}
+		# Each leg is a fresh machine. Run 40068149541: the plain install
+		# put "CentOS Stream" (its disk's shim) first in the shared NVRAM
+		# BootOrder. The LUKS live boot then tried that entry on the new
+		# blank disk, fell through to the EFI Internal Shell instead of the
+		# CD, and the walkthrough never saw the welcome page.
+		reset_uefi_vars
 		# A previous QEMU disconnect ends swtpm. Start a fresh TPM only
 		# for this encrypted install; its installed boots preserve state.
 		TPM_ARGS=""
