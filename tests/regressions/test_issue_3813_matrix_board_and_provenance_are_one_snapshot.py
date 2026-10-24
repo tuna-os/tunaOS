@@ -270,6 +270,8 @@ def test_retained_assertions_need_manifested_dated_sources(tmp_path, monkeypatch
     ("missing-field", "malformed retained matrix input"),
     ("not-object", "must be a JSON object"),
     ("not-json", "unreadable retained matrix input"),
+    ("bad-evaluation-date", "invalid retained evaluation date '23/10/2026'"),
+    ("bad-assertion-date", "invalid retained assertion date 'yesterday'"),
 ])
 def test_malformed_retained_input_raises_one_clear_error(tmp_path, monkeypatch, change, message):
     payload = json.loads(RETAINED.read_text())
@@ -281,6 +283,10 @@ def test_malformed_retained_input_raises_one_clear_error(tmp_path, monkeypatch, 
         del next(iter(payload["stage"].values()))["cell_run"]
     elif change == "not-object":
         payload = []
+    elif change == "bad-evaluation-date":
+        payload["evaluation_date"] = "23/10/2026"
+    elif change == "bad-assertion-date":
+        next(iter(payload["luks"].values()))[1] = "yesterday"
     path = tmp_path / "inputs.json"
     path.write_text("{" if change == "not-json" else json.dumps(payload))
     monkeypatch.chdir(ROOT)

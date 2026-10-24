@@ -121,11 +121,13 @@ def load_retained_inputs(path):
 def _validate_retained(payload: dict) -> None:
     import datetime
 
-    def parse_date(value, where):
+    def parse_date(value, what):
         try:
             return datetime.date.fromisoformat(value)
         except (TypeError, ValueError) as error:
-            raise ValueError(f"invalid retained {where} date: {value!r}") from error
+            raise ValueError(
+                f"invalid retained {what} date {value!r}: expected YYYY-MM-DD"
+            ) from error
 
     if payload["schema_version"] != 1:
         raise ValueError("unsupported retained matrix input schema")
