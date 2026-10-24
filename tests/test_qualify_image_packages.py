@@ -53,8 +53,8 @@ def image_id(reference):
     return digest(reference.encode())
 
 
-def reference_for_id(value):
-    for cell in QUALIFICATION_PLAN["cells"]:
+def reference_for_id(value, qualification_plan):
+    for cell in qualification_plan["cells"]:
         if cell["images"] is None:
             continue
         for record in cell["images"].values():
@@ -214,14 +214,26 @@ def test_command_log_bounds_both_output_streams(tmp_path):
     assert len(result.stderr) == MODULE.COMMAND_OUTPUT_LIMIT + len(MODULE.TRUNCATION_MARKER)
 
 
+def test_command_log_closes_stdin_and_times_out(tmp_path):
+    command = [
+        sys.executable,
+        "-c",
+        "import sys,time; assert sys.stdin.read() == ''; time.sleep(10)",
+    ]
+    with MODULE.CommandLog(tmp_path / "timeout.log") as log:
+        with pytest.raises(MODULE.QualificationError, match="timed out"):
+            log.run(command, timeout=0.05)
+    assert b"timed out" not in (tmp_path / "timeout.log").read_bytes()
+
+
 class FakeLog:
     fail_ref = None
     mismatched_platform_ref = None
     bad_apt_status_ref = None
     wrong_parent_ref = None
-    def __init__(self, path=None):
+    def __init__(self, path=None, qualification_plan=None):
         self.path = path
-
+        self.qualification_plan = qualification_plan or QUALIFICATION_PLAN
     def __enter__(self):
         if self.path is not None:
             self.path.write_bytes(b"")
@@ -281,7 +293,7 @@ class FakeLog:
             entrypoint_index = args.index("--entrypoint")
             entrypoint = args[entrypoint_index + 1]
             image = args[entrypoint_index + 2]
-            reference = reference_for_id(image)
+            reference = reference_for_id(image, self.qualification_plan)
             command_args = args[entrypoint_index + 3:]
             modified = "/modified-" in reference
             variant = reference.split("-", 1)[1].split(":", 1)[0]
@@ -295,7 +307,7 @@ class FakeLog:
                 )
                 base = next(
                     cell["baseImage"]
-                    for cell in QUALIFICATION_PLAN["cells"]
+                    for cell in self.qualification_plan["cells"]
                     if cell["route"] == route
                 )
                 info = {
@@ -358,7 +370,7 @@ def test_rejects_wrong_platform_internal_desktop_and_unqualified_overlay_parent(
     bad_platform = ubuntu["images"]["modifiedDesktop"]["ref"]
     FakeLog.mismatched_platform_ref = bad_platform
     try:
-        with FakeLog(tmp_path / "platform.log") as log:
+        with FakeLog(tmp_path / "platform.log", qualification_plan) as log:
             with pytest.raises(MODULE.CellError, match="expected linux/amd64"):
                 MODULE.verify_cell(qualification_plan, ubuntu, tmp_path, SOURCE, log)
     finally:
@@ -366,7 +378,7 @@ def test_rejects_wrong_platform_internal_desktop_and_unqualified_overlay_parent(
 
     internal = copy.deepcopy(ubuntu)
     internal["images"]["modifiedDesktop"]["flavor"] = "base-no-de"
-    with FakeLog(tmp_path / "internal.log") as log:
+    with FakeLog(tmp_path / "internal.log", qualification_plan) as log:
         with pytest.raises(MODULE.QualificationError, match="internal build target"):
             MODULE.verify_cell(qualification_plan, internal, tmp_path, SOURCE, log)
 
@@ -374,7 +386,7 @@ def test_rejects_wrong_platform_internal_desktop_and_unqualified_overlay_parent(
     overlay_ref = el10["images"]["modifiedOverlay"]["ref"]
     FakeLog.wrong_parent_ref = overlay_ref
     try:
-        with FakeLog(tmp_path / "parent.log") as log:
+        with FakeLog(tmp_path / "parent.log", qualification_plan) as log:
             with pytest.raises(MODULE.CellError, match="parent is not the qualified"):
                 MODULE.verify_cell(qualification_plan, el10, tmp_path, SOURCE, log)
     finally:
@@ -387,7 +399,7 @@ def test_apt_requires_fully_installed_status(tmp_path):
     bad_status = ubuntu["images"]["modifiedDesktop"]["ref"]
     FakeLog.bad_apt_status_ref = bad_status
     try:
-        with FakeLog(tmp_path / "apt-status.log") as log:
+        with FakeLog(tmp_path / "apt-status.log", qualification_plan) as log:
             with pytest.raises(MODULE.CellError, match="package is not installed"):
                 MODULE.verify_cell(qualification_plan, ubuntu, tmp_path, SOURCE, log)
     finally:
@@ -412,7 +424,11 @@ def test_one_failed_route_is_reported_without_hiding_other_families(tmp_path, mo
         for cell in qualification_plan["cells"] if cell["route"] == "ubuntu"
     )
     FakeLog.fail_ref = failed_ref
-    monkeypatch.setattr(MODULE, "CommandLog", FakeLog)
+    class PlannedFakeLog(FakeLog):
+        def __init__(self, path=None):
+            super().__init__(path, qualification_plan)
+
+    monkeypatch.setattr(MODULE, "CommandLog", PlannedFakeLog)
     monkeypatch.setattr(MODULE, "validate_source", lambda *_args: source)
     try:
         report, passed = MODULE.qualify(qualification_plan, tmp_path, tmp_path / "evidence")

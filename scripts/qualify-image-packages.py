@@ -41,6 +41,7 @@ EMERGE_PACKAGE = re.compile(r"[A-Za-z0-9][A-Za-z0-9+_.-]*/[A-Za-z0-9][A-Za-z0-9+
 SOURCE_FILES = {"tunaos.toml", "build_scripts/lib/image-packages.tsv"}
 COMMAND_OUTPUT_LIMIT = 1024 * 1024
 TRUNCATION_MARKER = f"\n[output truncated after {COMMAND_OUTPUT_LIMIT} bytes]\n".encode()
+COMMAND_TIMEOUT_SECONDS = 600
 
 
 class QualificationError(ValueError):
@@ -171,11 +172,15 @@ class CommandLog:
             self.stream = None
 
     def run(
-        self, args: list[str], *, cwd: Path | None = None
+        self, args: list[str], *, cwd: Path | None = None,
+        timeout: float = COMMAND_TIMEOUT_SECONDS,
     ) -> subprocess.CompletedProcess[bytes]:
         valid_args = all(isinstance(arg, str) and "\0" not in arg for arg in args)
         require(valid_args, "command: invalid argv")
-        process = subprocess.Popen(args, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        process = subprocess.Popen(
+            args, cwd=cwd, stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        )
         if process.stdout is None or process.stderr is None:
             process.kill()
             raise QualificationError("command: failed to capture output")
@@ -198,7 +203,13 @@ class CommandLog:
         ]
         for thread in threads:
             thread.start()
-        returncode = process.wait()
+        timed_out = False
+        try:
+            returncode = process.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            returncode = process.wait()
+            timed_out = True
         for thread in threads:
             thread.join()
         result = subprocess.CompletedProcess(
@@ -213,6 +224,10 @@ class CommandLog:
         self.stream.write(result.stderr)
         self.stream.write(b"\n\n")
         self.stream.flush()
+        if timed_out:
+            raise QualificationError(
+                f"command: timed out after {timeout:g} seconds: {shlex.join(args)}"
+            )
         return result
 
 
@@ -377,9 +392,9 @@ def image_identity(log: CommandLog, reference: str, image_id: str) -> dict:
 
 
 def read_image_info(log: CommandLog, image: str) -> dict:
-    raw = checked(log, ["podman", "run", "--rm", "--pull=never", "--network=none",
-                        "--security-opt=no-new-privileges", "--entrypoint", "/usr/bin/cat", image,
-                        "/usr/share/ublue-os/image-info.json"], what=f"image info {image}")
+    result = podman(log, image, "/usr/bin/cat", "/usr/share/ublue-os/image-info.json")
+    require(result.returncode == 0, f"image info {image}: command failed ({result.returncode})")
+    raw = result.stdout
     try:
         value = json.loads(raw, object_pairs_hook=unique_object)
     except (UnicodeError, json.JSONDecodeError) as exc:
