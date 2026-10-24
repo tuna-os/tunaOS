@@ -8,30 +8,28 @@ GNOME 50 nor an unknown version can pass through a bootstrap waiver.
 from __future__ import annotations
 
 from functools import cache
-import importlib.util
 import os
 import re
 import stat
 import subprocess
 from pathlib import Path
+import sys
 
 import pytest
 
 yaml = pytest.importorskip("yaml")
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "scripts"))
+from lib import tunaos_config  # noqa: E402
+
 CHECK = ROOT / "build_scripts" / "checks" / "verify-desktop-experience.sh"
 MANIFEST = ROOT / "manifests" / "desktops" / "gnome.yaml"
+
+
 @cache
 def _primary_config():
-    spec = importlib.util.spec_from_file_location(
-        "gnome_floor_tunaos_config", ROOT / "scripts/lib/tunaos_config.py"
-    )
-    if spec is None or spec.loader is None:
-        raise RuntimeError("cannot load scripts/lib/tunaos_config.py")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module.load(ROOT / "tunaos.toml")
+    return tunaos_config.load(ROOT / "tunaos.toml")
 
 
 def _function_source(name: str) -> str:
