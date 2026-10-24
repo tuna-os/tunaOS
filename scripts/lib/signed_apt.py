@@ -29,7 +29,8 @@ MAX_KEYRING = 1024 * 1024
 class SameHostRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         before, after = urlsplit(req.full_url), urlsplit(newurl)
-        if after.scheme != 'https' or after.netloc != before.netloc or after.username or after.password:
+        if (after.scheme != 'https' or after.netloc != before.netloc
+                or after.username or after.password or after.query or after.fragment):
             raise CatalogError('cross-host or insecure metadata redirect refused')
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
@@ -86,7 +87,7 @@ def valid_signers(status, allowed):
 def verify_inrelease(envelope, keyring, source, verifier=None):
     if len(envelope) > MAX_RELEASE or not envelope.startswith(b'-----BEGIN PGP SIGNED MESSAGE-----\n'):
         raise CatalogError('expected bounded clear-signed InRelease')
-    if len(keyring) > MAX_RELEASE or hashlib.sha256(keyring).hexdigest() != source['keyring_sha256']:
+    if len(keyring) > MAX_KEYRING or hashlib.sha256(keyring).hexdigest() != source['keyring_sha256']:
         raise CatalogError('keyring bytes do not match reviewed trust pin')
     executable = verifier or shutil.which('gpg')
     if not executable:
@@ -258,7 +259,7 @@ def acquire_catalog(catalog, keyring_for, now, fetch=fetch_https, verify=verify_
                 raise CatalogError('index hash or size differs from signed Release')
             names.update(index_names(data, spec['compression']))
             indexes.append({'url': url, 'sha256': sha, 'size': size})
-        complete.append({
+        result = {
             'source': source['id'],
             'role': source['role'],
             'source_url': metadata_url,
@@ -269,13 +270,15 @@ def acquire_catalog(catalog, keyring_for, now, fetch=fetch_https, verify=verify_
             'inrelease_sha256': envelope_hash,
             'keyring_sha256': source['keyring_sha256'],
             'indexes': indexes,
-            'declaration_sha256': declaration_hash,
-            'remote_keyring_sha256': remote_keyring_hash,
             'names': names,
             'signers': signers,
             'freshness': {
                 'mode': source['freshness']['mode'],
                 'expires': expiry.isoformat() if expiry else None,
             },
-        })
+        }
+        if source['role'] == 'build':
+            result['declaration_sha256'] = declaration_hash
+            result['remote_keyring_sha256'] = remote_keyring_hash
+        complete.append(result)
     return complete
