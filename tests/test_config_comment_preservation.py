@@ -4,25 +4,25 @@ import hashlib
 import json
 from pathlib import Path
 import re
-import sys
+
+from scripts.lib import package_authoring as author
+from scripts.lib import tunaos_config as config
+from scripts.lib import iso_builder_config as builder
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / 'scripts'))
-from lib import package_authoring as author
-from lib import tunaos_config as config
-from lib import iso_builder_config as builder
 
 
-def full_line_comments(source):
+def full_line_comments(source: bytes) -> list[bytes]:
     return [line for line in source.splitlines() if line.lstrip().startswith(b'#')]
 
 
 def test_package_edit_preserves_all_primary_section_comments():
     source = (ROOT / 'tunaos.toml').read_bytes()
-    anchor = b'"gnome-base/gnome-light",'
-    assert source.count(anchor) == 1
-    source = source.replace(anchor, anchor + b' # inline edit sentinel', 1)
     document = config.validate(config.parse(source))
+    required = document['desktops']['gnome']['packages']['emerge']['required']
+    anchors = [f'"{package}",'.encode() for package in required]
+    anchor = next(candidate for candidate in anchors if source.count(candidate) == 1)
+    source = source.replace(anchor, anchor + b' # inline edit sentinel', 1)
     scope = {'gnome:emerge': ('gnome', 'emerge')}
     resolved = {'gnome:emerge': 'sys-process/tunaos-comment-test'}
     edited = author.edit(source, document, scope, resolved)
@@ -30,7 +30,7 @@ def test_package_edit_preserves_all_primary_section_comments():
     inserted = b'  "sys-process/tunaos-comment-test",\n'
     assert edited.count(inserted) == 1
     assert edited.replace(inserted, b'', 1) == source
-    assert b'"gnome-base/gnome-light", # inline edit sentinel' in edited
+    assert anchor + b' # inline edit sentinel' in edited
     expected = copy.deepcopy(document)
     expected['desktops']['gnome']['packages']['emerge']['required'].append(resolved['gnome:emerge'])
     assert config.parse(edited) == expected
@@ -75,8 +75,9 @@ def test_renovate_pin_match_preserves_comments_and_unrelated_bytes():
                    if item.get('managerFilePatterns') == [r'/^tunaos\.toml$/'])
     # Convert named captures only; test the checked-in manager, not a parallel regex.
     pattern = re.sub(r'\(\?<([A-Za-z][A-Za-z0-9_]*)>', r'(?P<\1>', manager['matchStrings'][0])
-    source = (ROOT / 'tunaos.toml').read_text()
-    document = config.parse(source)
+    source_bytes = (ROOT / 'tunaos.toml').read_bytes()
+    source = source_bytes.decode('utf-8')
+    document = config.parse(source_bytes)
     old = document['variants']['yellowfin']['base_image']
     source = source.replace(f'base_image = "{old}"',
                             f'# Pin guidance sentinel\nbase_image = "{old}" # trailing pin guidance', 1)
@@ -89,4 +90,4 @@ def test_renovate_pin_match_preserves_comments_and_unrelated_bytes():
     assert edited[:start] == source[:start] and edited[start + len(digest):] == source[end:]
     expected = copy.deepcopy(document)
     expected['variants']['yellowfin']['base_image'] = old.split('@')[0] + '@' + digest
-    assert config.validate(config.parse(edited)) == expected
+    assert config.validate(config.parse(edited.encode('utf-8'))) == expected
