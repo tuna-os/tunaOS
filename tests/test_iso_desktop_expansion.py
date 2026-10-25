@@ -1,5 +1,6 @@
 """Inert contracts; synthetic fixtures are never actual runtime qualification."""
 import importlib.util
+import hashlib
 from pathlib import Path
 import sys
 
@@ -30,6 +31,7 @@ def evidence(desktop='xfce'):
     binding = data['artifact_binding']
     binding.update(variant=data['variant'], flavor=desktop, platform=data['platform'],
                    source_digest=data['resolved_inputs']['source'], storage_backend='ostree')
+    data['consumer_target']={key:binding[key] for key in ('variant','flavor','platform','source_digest','storage_backend')}
     data['artifact_binding_digest'] = NATIVE.canonical(binding)
     for mode, row in data['observed'].items():
         row.update(fresh_install=True, storage_backend='ostree', flavor=desktop,
@@ -39,6 +41,14 @@ def evidence(desktop='xfce'):
             observed_session.update(phase=phase, mode=mode, source_digest=data['resolved_inputs']['source'],
                 boot_id=({'plain': {'cold':'a','warm':'b'}, 'luks': {'cold':'c','warm':'d'}}[mode][phase])*8+'-1111-2222-3333-444444444444')
         row['gui'].update(desktop=desktop, frontend=DESKTOPS[desktop][0])
+    if desktop=='xfce':
+        from lib.xfce_candidate import APP, COMMIT, TRANSITIONS
+        data['resolved_inputs']['installer']='sha256:'+COMMIT
+        for row in data['observed'].values():
+            row['frontend_identity']=dict(app=APP,commit=COMMIT,receipt_app=APP,receipt_revision=COMMIT,receipt_digest=COMMIT,architecture='x86_64',running_app=APP,host_fisherman_digest='sha256:'+'d'*64)
+            row['gui'].update(installer_digest='sha256:'+COMMIT,transitions=TRANSITIONS,account_digest='sha256:'+hashlib.sha256(b'tuna12345678').hexdigest(),source_selection='live-self-install')
+            for value in row['sessions'].values():
+                value.update(account_digest='sha256:'+hashlib.sha256(b'tuna12345678').hexdigest(),storage_backend='ostree')
     return fixtures.seal(data)
 
 
@@ -83,8 +93,8 @@ def test_generalized_receipt_contract(desktop):
     (('observed','luks','sessions','cold','mode'),'plain'),
     (('flavor',),'kde'), (('platform',),'linux/arm64'), (('storage_backend',),'native-composefs'),
     (('manifest_digest',),'sha256:'+'0'*64), (('flavor',),'base'),
-    (('artifact_binding','source_digest'),'sha256:'+'b'*64),
-    (('artifact_binding','flavor'),'gnome'), (('artifact_binding','platform'),'linux/arm64'),
+    (('consumer_target','source_digest'),'sha256:'+'b'*64),
+    (('consumer_target','flavor'),'gnome'), (('consumer_target','platform'),'linux/arm64'),
     (('observed','plain','fresh_install'),False), (('observed','luks','fresh_install'),'true'),
     (('observed','plain','desktop_contract'),False), (('observed','luks','warm_boot'),False),
     (('observed','plain','sessions'),{}), (('observed','luks','sessions','warm','active'),False),
@@ -142,7 +152,7 @@ def test_guest_session_observer_uses_real_session_and_process(tmp_path):
     responses = {
         'journalctl': 'TUNAOS_DESKTOP_CONTRACT_OK desktop=xfce experience=tunaos/xfce',
         'pgrep': '123', 'uname': 'x86_64',
-        'bootc': json.dumps({'status': {'booted': {'image': {'imageDigest': 'sha256:'+'a'*64}}}}),
+        'bootc': json.dumps({'status': {'booted': {'image': {'imageDigest': 'sha256:'+'a'*64,'image':{'image':'ghcr.io/tuna-os/grouper:xfce'}}}}}),
     }
     properties = 'Active=yes\nClass=user\nRemote=no\nUser=1000\nDesktop=XFCE\nType=x11\nScope=session-1.scope'
     def command(*args):

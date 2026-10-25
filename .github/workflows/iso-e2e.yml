@@ -32,6 +32,11 @@ name: ISO E2E Smoke
 on:
   workflow_call:
     inputs:
+      candidate_xfce:
+        description: 'Opt-in Grouper/XFCE AMD64 candidate; no production admission'
+        type: boolean
+        default: false
+        required: false
       platform:
         description: 'Explicit platform for native artifact qualification'
         type: string
@@ -67,6 +72,11 @@ on:
         required: true
   workflow_dispatch:
     inputs:
+      candidate_xfce:
+        description: 'Opt-in Grouper/XFCE AMD64 candidate; no production admission'
+        type: boolean
+        default: false
+        required: false
       platform:
         description: 'Explicit platform for native artifact qualification'
         type: string
@@ -200,6 +210,7 @@ jobs:
       - name: Build the cell list
         id: gen
         env:
+          CANDIDATE_XFCE: ${{ inputs.candidate_xfce }}
           REQUESTED_PLATFORM: ${{ inputs.platform }}
           MAX_PARALLEL: ${{ inputs.max_parallel }}
           ISO_SOURCE: ${{ inputs.source }}
@@ -210,9 +221,14 @@ jobs:
           MAX_PARALLEL="${MAX_PARALLEL:-1}"
           [[ "$MAX_PARALLEL" == 1 || "$MAX_PARALLEL" == 2 ]] || { echo 'max_parallel must be 1 or 2' >&2; exit 1; }
           echo "max_parallel=$MAX_PARALLEL" >> "$GITHUB_OUTPUT"
+          candidate_flags=()
+          if [[ "${CANDIDATE_XFCE:-false}" == true ]]; then
+            [[ "${ISO_SOURCE:-}" == native-artifact ]] || exit 1
+            candidate_flags+=(--candidate-xfce)
+          fi
           if [[ "${ISO_SOURCE:-}" == native-artifact ]]; then
             # One artifact cannot stand in for several desktop/architecture targets.
-            python3 scripts/plan-iso-qualification.py --target "$DISPATCH_VARIANT:$DISPATCH_FLAVORS:$REQUESTED_PLATFORM" --max-parallel "$MAX_PARALLEL"
+            python3 scripts/plan-iso-qualification.py --target "$DISPATCH_VARIANT:$DISPATCH_FLAVORS:$REQUESTED_PLATFORM" --max-parallel "$MAX_PARALLEL" "${candidate_flags[@]}"
             M="$(jq -cn --arg v "$DISPATCH_VARIANT" --arg f "$DISPATCH_FLAVORS" --arg p "$REQUESTED_PLATFORM" '{include:[{variant:$v,flavor:$f,platform:$p}]}')"
             echo "matrix=$M" >> "$GITHUB_OUTPUT"
             exit 0
@@ -860,6 +876,8 @@ jobs:
 
       - name: Run strict offline GUI qualification
         id: e2e
+        env:
+          CANDIDATE_XFCE: ${{ inputs.candidate_xfce }}
         if: steps.filter.outputs.skip != 'true'
         timeout-minutes: 60
         run: |
@@ -869,13 +887,14 @@ jobs:
           # readable we fall back to TCG (slower but functional).
           KVM_FLAG=""
           [[ -r /dev/kvm && -w /dev/kvm ]] || KVM_FLAG="--no-kvm"
+          command=(./scripts/iso-e2e.sh "$ISO_PATH" --output iso-e2e-out --strict-offline-gui --timeout 600)
+          [[ -z "$KVM_FLAG" ]] || command+=("$KVM_FLAG")
+          if [[ "$CANDIDATE_XFCE" == true ]]; then
+            command=(python3 scripts/run-xfce-candidate.py --iso "$ISO_PATH" --output iso-e2e-out/xfce-candidate)
+          fi
           set +e
           sudo --preserve-env=GITHUB_REPOSITORY,GITHUB_RUN_ID,GITHUB_RUN_ATTEMPT,TUNAOS_QUAL_EXECUTION_KIND,TUNAOS_NATIVE_BINDING,TUNAOS_NATIVE_ARTIFACT_ID,TUNAOS_NATIVE_ARCHIVE_DIGEST,TUNAOS_NATIVE_SOURCE_SHA,KVM_FLAG,VARIANT,FLAVOR,TUNAOS_QUAL_SOURCE_DIGEST,TUNAOS_QUAL_OVERLAY_DIGEST,TUNAOS_QUAL_INSTALLER_DIGEST,TUNAOS_QUAL_ENGINE_DIGEST,TUNAOS_QUAL_MEDIA_DIGEST,STRICT_PUBLISHED_MEDIA,TUNAOS_QUAL_PLATFORM,TUNAOS_QUAL_CPU_BASELINE,TUNAOS_QUAL_HARDWARE_SCOPE,TUNAOS_QUAL_BROWSER_NAME,TUNAOS_QUAL_BROWSER_VERSION,TUNAOS_QUAL_BROWSER_MEMORY_GIB,TUNAOS_QUAL_BROWSER_FREE_DISK_GIB \
-            ./scripts/iso-e2e.sh "${ISO_PATH}" \
-              --output iso-e2e-out \
-              --strict-offline-gui \
-              --timeout 600 \
-              ${KVM_FLAG}
+            "${command[@]}"
 
           rc=$?
           set -e
@@ -905,7 +924,7 @@ jobs:
         run: python3 scripts/collect-iso-diagnostics.py iso-e2e-out
 
       - name: Collect evidence
-        if: always() && steps.filter.outputs.skip != 'true'
+        if: always() && steps.filter.outputs.skip != 'true' && !inputs.candidate_xfce
         env:
           EVIDENCE_ARCH: amd64
           E2E_OUTCOME: ${{ steps.e2e.outcome }}
@@ -922,9 +941,13 @@ jobs:
         if: steps.filter.outputs.skip != 'true' && steps.e2e.outcome == 'success' && steps.e2e.outputs.rc == '0'
         env:
           ISO_SOURCE: ${{ inputs.source }}
+          CANDIDATE_XFCE: ${{ inputs.candidate_xfce }}
         run: |
           set -euo pipefail
-          if [[ "$ISO_SOURCE" == "native-artifact" ]]; then
+          if [[ "${CANDIDATE_XFCE:-false}" == true ]]; then
+            python3 scripts/native-iso-qualification.py validate-candidate \
+              iso-e2e-out/xfce-candidate/qualification-evidence.json
+          elif [[ "$ISO_SOURCE" == "native-artifact" ]]; then
             python3 scripts/native-iso-qualification.py validate \
               iso-e2e-out/qualification-evidence.json
           else
@@ -972,6 +995,8 @@ jobs:
             iso-e2e-out/media-payloads.txt
             iso-e2e-out/*.png
             iso-e2e-out/qualification-evidence.json
+            iso-e2e-out/xfce-candidate/*.json
+            iso-e2e-out/xfce-candidate/walkthrough-*/*.json
             evidence/${{ matrix.variant }}/${{ matrix.flavor }}/amd64/
           if-no-files-found: warn
           retention-days: 7

@@ -22,10 +22,10 @@ def properties(value):
     return dict(line.split('=', 1) for line in value.splitlines() if '=' in line)
 
 
-def observe(desktop, platform, mode, phase, command=run, proc=Path('/proc')):
+def observe(desktop, platform, mode, phase, command=run, proc=Path('/proc'), contract_log=None):
     if desktop not in DESKTOPS:
         raise ValueError('headless or unknown desktop cannot satisfy GUI criterion')
-    log = command('journalctl', '-b', '-u', 'tunaos-desktop-contract.service', '--no-pager', '-o', 'cat')
+    log = contract_log if contract_log is not None else command('journalctl', '-b', '-u', 'tunaos-desktop-contract.service', '--no-pager', '-o', 'cat')
     if ('TUNAOS_DESKTOP_CONTRACT_FAIL' in log or not re.search(
             r'^TUNAOS_DESKTOP_CONTRACT_OK desktop=' + re.escape(desktop) + r'\s', log, re.M)):
         raise ValueError('matching desktop contract absent or failed')
@@ -36,7 +36,7 @@ def observe(desktop, platform, mode, phase, command=run, proc=Path('/proc')):
         if not re.fullmatch(r'[A-Za-z0-9]+', sid):
             raise ValueError('invalid session identifier')
         data = properties(command('loginctl', 'show-session', sid, '--no-pager'))
-        if data.get('Active') == 'yes' and data.get('Class') == 'user' and data.get('Remote') == 'no':
+        if data.get('Active') == 'yes' and data.get('Class') == 'user' and data.get('Remote') == 'no' and data.get('Type') in ('x11', 'wayland'):
             data['SessionId'] = sid
             candidates.append(data)
     if len(candidates) != 1:
@@ -64,7 +64,12 @@ def observe(desktop, platform, mode, phase, command=run, proc=Path('/proc')):
     source = image.get('imageDigest') or image.get('digest')
     if not isinstance(source, str) or not re.fullmatch(r'sha256:[0-9a-f]{64}', source):
         raise ValueError('booted source digest missing')
-    result = dict(desktop=desktop, architecture=command('uname', '-m'), desktop_contract=True,
+    ref = image.get('image', {})
+    if isinstance(ref, dict):
+        ref = ref.get('image') or ref.get('ref')
+    if not isinstance(ref, str) or not ref:
+        raise ValueError('booted reference missing')
+    result = dict(target_imgref=ref, account=data.get('Name'), desktop=desktop, architecture=command('uname', '-m'), desktop_contract=True,
                   active=True, remote=False, uid=uid, process_uid=process_uid, process_pid=pid,
                   session_desktop=data.get('Desktop'), type=data.get('Type'), process=process,
                   boot_id=(proc / 'sys/kernel/random/boot_id').read_text().strip(),

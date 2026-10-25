@@ -10,10 +10,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--target', action='append', default=[])
     parser.add_argument('--max-parallel', type=int, default=1)
+    parser.add_argument('--candidate-xfce', action='store_true')
     args = parser.parse_args()
     try:
         doc = manifest()
-        result = select(doc, args.target, args.max_parallel) if args.target else doc
+        result = select(doc, args.target, args.max_parallel, args.candidate_xfce) if args.target else doc
         print(json.dumps(result, sort_keys=True))
     except (ValueError, KeyError, TypeError) as exc:
         print(f'error: {exc}', file=sys.stderr)

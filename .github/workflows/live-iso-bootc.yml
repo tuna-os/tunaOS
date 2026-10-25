@@ -3,6 +3,11 @@ permissions: {}
 on:
   workflow_dispatch:
     inputs:
+      candidate_xfce:
+        description: 'Opt-in Grouper/XFCE AMD64 candidate; not production qualification'
+        required: false
+        default: false
+        type: boolean
       variant:
         description: 'Variant to build'
         required: true
@@ -81,7 +86,11 @@ jobs:
           VARIANT: ${{ inputs.variant || 'skipjack' }}
           FLAVOR: ${{ inputs.flavor || 'gnome' }}
           PLATFORM: ${{ inputs.platform || 'linux/amd64' }}
-        run: python3 scripts/plan-iso-qualification.py --target "$VARIANT:$FLAVOR:$PLATFORM" --max-parallel 1
+          CANDIDATE_XFCE: ${{ inputs.candidate_xfce }}
+        run: |
+          flags=()
+          [[ "$CANDIDATE_XFCE" == true ]] && flags+=(--candidate-xfce)
+          python3 scripts/plan-iso-qualification.py --target "$VARIANT:$FLAVOR:$PLATFORM" --max-parallel 1 "${flags[@]}"
 
   build:
     needs: preflight
@@ -262,9 +271,12 @@ jobs:
       - name: Resolve canonical native platform
         env:
           REQUESTED_PLATFORM: ${{ inputs.platform || 'linux/amd64' }}
+          CANDIDATE_XFCE: ${{ inputs.candidate_xfce }}
         run: |
           set -euo pipefail
-          python3 scripts/plan-iso-qualification.py --target "$VARIANT:$FLAVOR:$REQUESTED_PLATFORM" --max-parallel 1
+          flags=()
+          [[ "$CANDIDATE_XFCE" == true ]] && flags+=(--candidate-xfce)
+          python3 scripts/plan-iso-qualification.py --target "$VARIANT:$FLAVOR:$REQUESTED_PLATFORM" --max-parallel 1 "${flags[@]}"
           echo "PLATFORM=$REQUESTED_PLATFORM" >> "$GITHUB_ENV"
 
       - name: Build OS image
@@ -366,6 +378,7 @@ jobs:
       flavors: ${{ github.event.inputs.flavor || 'gnome' }}
       platform: ${{ inputs.platform || 'linux/amd64' }}
       max_parallel: 1
+      candidate_xfce: ${{ inputs.candidate_xfce || false }}
       source: native-artifact
       native_run_id: ${{ format('{0}', github.run_id) }}
       native_artifact_id: ${{ needs.build.outputs.artifact_id }}

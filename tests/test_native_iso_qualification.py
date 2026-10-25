@@ -156,7 +156,8 @@ def test_native_emitter_checks_current_context_and_preserves_failures(tmp_path, 
 def test_harness_native_branch_does_not_reach_browser_emitter():
     script=(ROOT/'scripts/iso-e2e.sh').read_text()
     native=script.split('emit_qualification_evidence() {',1)[1].split('\n\tfi',1)[0]
-    assert 'native-iso-qualification.py" emit' in native and 'return $?' in native
+    assert 'native-iso-qualification.py" "$emit_command"' in native and 'return $?' in native
+    assert 'local emit_command=emit' in native and 'emit_command=emit-candidate' in native
     assert 'BROWSER' not in native
     assert '--cpu-model "$CPU_ARG"' in native
     assert 'TUNAOS_QUAL_CPU_BASELINE' not in native

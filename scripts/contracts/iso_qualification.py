@@ -59,7 +59,7 @@ def manifest(path=None):
         if platform == 'linux/arm64':
             gaps.append('native producer architecture not implemented')
         if desktop not in STRICT_DRIVERS:
-            gaps.append('strict installer driver not implemented for this frontend')
+            gaps.append('production qualification driver not admitted for this frontend')
         row = dict(target=target, required=key in required, configured=key in configured,
                    desktop=desktop, backend='ostree', result='unrun', gaps=gaps,
                    runnable=not gaps, publication=required.get(key, {}).get('publication'), installer=DESKTOPS.get(desktop, (None,))[0])
@@ -74,7 +74,7 @@ def manifest(path=None):
     return doc
 
 
-def select(doc, keys, max_parallel=1):
+def select(doc, keys, max_parallel=1, candidate_xfce=False):
     if type(max_parallel) is not int or not 1 <= max_parallel <= 2:
         raise ValueError('max_parallel must be an integer from 1 to 2')
     if not 1 <= len(keys) <= 4 or len(set(keys)) != len(keys):
@@ -83,7 +83,10 @@ def select(doc, keys, max_parallel=1):
     selected = []
     for key in keys:
         row = index.get(key)
-        if row is None or not row['runnable']:
+        candidate = candidate_xfce and key == 'grouper:xfce:linux/amd64' and row is not None and row['gaps'] == ['production qualification driver not admitted for this frontend']
+        if candidate_xfce and (len(keys)!=1 or not candidate):
+            raise ValueError('candidate permits only Grouper XFCE AMD64')
+        if row is None or (not row['runnable'] and not candidate):
             raise ValueError(f'{key}: ' + '; '.join(row['gaps'] if row else ['target not configured']))
         selected.append(row)
     return dict(manifestDigest=doc['manifestDigest'], max_parallel=max_parallel,
