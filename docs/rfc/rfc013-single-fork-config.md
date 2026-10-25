@@ -191,7 +191,7 @@ pinned catalog/base inputs and provenance with each plan. Maintainers must sign 
 
 ## Local consumer preview
 
-See [FORK-CONFIG-PREVIEW.md](../FORK-CONFIG-PREVIEW.md) for the first opt-in consumer slice.
+The page for the first opt-in consumer slice no longer exists; see [#3807](https://github.com/tuna-os/tunaOS/issues/3807).
 The review command and stock export keep their prior behavior. An explicit
 command creates new configs from templates. Unsupported intent fails.
 Full brand support, safe removals, parent closure and image qualification remain
