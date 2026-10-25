@@ -389,6 +389,10 @@ class AuthoritativeTransport:
                 _fail("content_encoding", "response.headers")
             length = headers.get("Content-Length")
             declared = None
+            if length is not None and headers.get("Transfer-Encoding") is not None:
+                # http.client frames by chunks and ignores Content-Length, so the
+                # declared size would not bound the bytes actually delivered.
+                _fail("conflicting_framing", "response.headers")
             if length is not None:
                 if type(length) is not str or re.fullmatch(r"[0-9]+", length) is None:
                     _fail("invalid_content_length", "response.headers")

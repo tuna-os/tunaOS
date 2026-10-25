@@ -934,3 +934,30 @@ def test_default_openers_install_the_deadline_socket_class():
         if isinstance(h, urllib.request.HTTPSHandler)
     )
     assert issubclass(handler._context.sslsocket_class, CALLER._DeadlineSocketMixin)
+
+
+def test_chunked_response_with_content_length_is_rejected_before_reading():
+    server, client = socket.socketpair()
+    server.sendall(
+        b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nContent-Length: 3\r\n\r\n"
+        b"3\r\nabc\r\n3\r\ndef\r\n0\r\n\r\n"
+    )
+    response = http.client.HTTPResponse(client, method="GET")
+    response.begin()
+    response.status = 200
+    response.geturl = lambda: "https://api.github.com/x"
+    case = CASE
+    transport = CALLER.AuthoritativeTransport(
+        reviewed(case), selected(case), network_policy(), TOKEN
+    )
+    try:
+        with pytest.raises(CALLER.AuthoritativeTransportError, match="conflicting_framing"):
+            transport._open_response(
+                urllib.request.Request("https://api.github.com/x"),
+                FakeServerOpener([response]),
+                1024,
+                frozenset((CALLER.API_ORIGIN,)),
+            )
+    finally:
+        server.close()
+        client.close()
