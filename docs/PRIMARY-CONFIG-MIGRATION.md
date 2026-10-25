@@ -247,12 +247,12 @@ other Tuna Desktop cells retain their existing display manager.
 
 ### What this validates
 
-The fork recipe conformance test proves that a sample fork whose diff touches
-**only** `tunaos.toml` and asset files produces:
+The conformance test for the fork recipe proves that a sample fork changes
+**only** `tunaos.toml` and asset files, and that the fork produces:
 
 - Different resolved destination (registry/namespace), identity, packages,
   and Flatpak selections compared to stock.
-- Unchanged stock TunaOS resolution (determinism).
+- Stock TunaOS resolution that does not change (determinism).
 - Rejection of any fork that tries to embed code (scripts, Containerfiles,
   build hooks) into TOML.
 
@@ -263,11 +263,11 @@ in four test classes:
 
 1. **Stock configuration determinism**: Stock TunaOS resolves to the same
    output on repeated runs; plan has required structure.
-2. **Fork config-only edits**: A minimal "Acme OS" fork with tunaos.toml
-   changes (registry, namespace, branding URLs, packages) and assets produces
-   different resolved output from stock.
-3. **Fork reversion**: Removing fork edits returns to byte-identical stock
-   resolution.
+2. **Fork config-only edits**: A minimal "Acme OS" fork changes tunaos.toml
+   (registry, namespace, brand URLs, packages) and assets. Its resolved
+   output differs from stock.
+3. **Fork reversion**: When you remove the fork edits, the resolution is
+   byte-identical to stock.
 4. **Code rejection**: Asserts that Containerfiles, build scripts, and
    structured script paths are code (not configuration).
 
@@ -306,15 +306,15 @@ add = ["htop", "git"]
 
 Assets: `assets/acme-wallpaper.svg` (SVG in local assets/).
 
-Expected outcome: Acme OS images resolve under `localhost/acme-preview`,
-include `htop` and `git` globally, and reference Acme's homepage.
+Expected outcome: the images of Acme OS resolve under `localhost/acme-preview`,
+include `htop` and `git` globally, and use the homepage of Acme.
 
 ### Conformance boundaries
 
 **This issue owns**:
 - Fixture: minimal fork config with only tunaos.toml and assets changed.
-- Test: resolution output validation (destination, identity, packages differ
-  from stock; stock itself is unchanged).
+- Test: validation of the resolved output (destination, identity and
+  packages differ from stock; stock does not change).
 - Documentation: step-by-step recipe in `docs/FORK-RECIPE.md`.
 - Documented CI shape (no wiring).
 
