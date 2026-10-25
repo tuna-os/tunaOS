@@ -84,6 +84,10 @@ jobs:
        github.event.workflow_run.conclusion != 'skipped' &&
        github.event.workflow_run.event != 'pull_request')
     runs-on: ubuntu-latest
+    # RFC 016 decision 3: the credential lives in the `publish` environment (main
+    # only). Attached only when a fork set TUNAOS_PUBLISH_SCOPE; the stock owner
+    # path carries no environment. A workflow_run job runs on the default branch.
+    environment: ${{ vars.TUNAOS_PUBLISH_SCOPE != '' && 'publish' || '' }}
     permissions:
       contents: read
       packages: write
@@ -142,42 +146,54 @@ jobs:
             echo "Run [${RUN_ID}](https://github.com/${REPO}/actions/runs/${RUN_ID}) published no SBOM-bearing platform image."
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Resolve attestation registry
-        if: steps.fetch.outputs.refs != '0'
-        id: publish
-        run: |
-          set -euo pipefail
-          destination=""
-          while IFS= read -r -d '' ref_file; do
-            ref="$(<"$ref_file")"
-            candidate="${ref%%@*}"
-            candidate="${candidate%/*}"
-            if [[ -n "$destination" && "$candidate" != "$destination" ]]; then
-              echo "::error::build outputs span multiple publish destinations"
-              exit 1
-            fi
-            destination="$candidate"
-          done < <(find supply-chain/digests -name '*.ref' -print0)
-          [[ -n "$destination" ]] || {
-            echo "::error::published image refs did not contain a registry destination"
-            exit 1
-          }
-          echo "destination=$destination" >> "$GITHUB_OUTPUT"
-
       - name: Install Cosign
         if: steps.fetch.outputs.refs != '0'
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
         with:
           cosign-release: v3.1.4
 
-      - name: Login to publish registry
+      # RFC 016 (#3801): the destination is the one the build actually pushed to,
+      # read from its digest refs (<registry>/<namespace>/<image>@sha256:...).
+      # Trust follows the build run's event, not this workflow_run job's.
+      - name: Resolve publish credential
         if: steps.fetch.outputs.refs != '0'
-        uses: ./.github/actions/registry-login
-        with:
-          destination: ${{ steps.publish.outputs.destination }}
-          registry-username: ${{ secrets.PUBLISH_REGISTRY_USERNAME }}
-          registry-token: ${{ secrets.PUBLISH_REGISTRY_TOKEN }}
-          clients: cosign
+        id: publish_credential
+        env:
+          TUNAOS_PUBLISH_EVENT: ${{ github.event.workflow_run.event || github.event_name }}
+          TUNAOS_PUBLISH_SCOPE: ${{ vars.TUNAOS_PUBLISH_SCOPE }}
+          TUNAOS_HAS_PUBLISH_USERNAME: ${{ secrets.TUNAOS_PUBLISH_USERNAME != '' }}
+          TUNAOS_HAS_PUBLISH_PASSWORD: ${{ secrets.TUNAOS_PUBLISH_PASSWORD != '' }}
+        run: |
+          set -euo pipefail
+          destination=""
+          while IFS= read -r ref_file; do
+            ref="$(<"$ref_file")"
+            candidate="${ref%%@*}"
+            candidate="${candidate%/*}"
+            if [[ -n "$destination" && "$candidate" != "$destination" ]]; then
+              echo "::error::build outputs span more than one publish destination"
+              exit 1
+            fi
+            destination="$candidate"
+          done < <(find supply-chain/digests -name '*.ref' -print)
+          export TUNAOS_PUBLISH_DESTINATION="$destination"
+          export TUNAOS_PUBLISH=true
+          python3 scripts/publish-credential.py >> "$GITHUB_OUTPUT"
+
+      - name: Login to GitHub Container Registry
+        if: steps.fetch.outputs.refs != '0'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$GITHUB_TOKEN" | cosign login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
+
+      - name: Login to non-owner publish registry
+        if: steps.publish_credential.outputs.mode == 'registry-secret'
+        env:
+          TUNAOS_PUBLISH_MODE: ${{ steps.publish_credential.outputs.mode }}
+          TUNAOS_PUBLISH_USERNAME: ${{ secrets.TUNAOS_PUBLISH_USERNAME }}
+          TUNAOS_PUBLISH_PASSWORD: ${{ secrets.TUNAOS_PUBLISH_PASSWORD }}
+          PUBLISH_SCOPE: ${{ steps.publish_credential.outputs.scope }}
+        run: scripts/publish-registry-login.sh cosign "$PUBLISH_SCOPE"
 
       - name: Attest SPDX SBOMs
         if: steps.fetch.outputs.refs != '0'

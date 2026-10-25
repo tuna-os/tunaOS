@@ -144,57 +144,45 @@ registry = "quay.io"
 namespace = "acme"
 ```
 
-Local builds, CI, ISOs and the boot gate use this destination, and each image
-records it. The repository variable `IMAGE_REGISTRY` (for example
-`quay.io/acme`) overrides both TOML fields for an operator-controlled
-repository. The effective value must remain a lowercase
-`<registry>/<namespace>` OCI path. The registry host is either `localhost` or
-a dotted lowercase name (`quay.io`, `registry.internal.example.com`, and
-dotted IPv4 literals), with an optional `:<port>` between 1 and 65535.
-Bracketed IPv6 literals and single-label in-network hosts such as
-`registry:5000` are not part of this contract and are rejected.
+Local builds, CI, ISOs and the boot gate all use this destination, and each
+image records it. The repository variable `IMAGE_REGISTRY` (for example
+`quay.io/acme`) still overrides it for one repository.
 
-### CI credentials for the publish destination
+CI signs in to `ghcr.io/<repository owner>` with the repository `GITHUB_TOKEN`.
+That token cannot write anywhere else. For any other destination, CI uses the
+credential that [RFC 016](rfc/rfc016-publish-credentials.md) defines. It never
+falls back to `ghcr.io/<repository owner>`.
 
-The workflow selects one credential mode from the effective destination:
+| What | Name | Where |
+|---|---|---|
+| Registry user or robot account | `TUNAOS_PUBLISH_USERNAME` | secret in the `publish` environment |
+| Registry token for that account | `TUNAOS_PUBLISH_PASSWORD` | secret in the `publish` environment |
+| The one approved destination, for example `quay.io/acme` | `TUNAOS_PUBLISH_SCOPE` | repository variable |
 
-| Effective destination | Credential source |
-|---|---|
-| Exactly `ghcr.io/<repository-owner>` | Built-in `github.actor` and job-scoped `GITHUB_TOKEN`; no added secret |
-| Any other registry or namespace | Repository secrets `PUBLISH_REGISTRY_USERNAME` and `PUBLISH_REGISTRY_TOKEN` |
+Set it up once:
 
-Create both custom secrets in the fork or derivative repository. Do not put
-their values or secret names in `tunaos.toml`:
+1. Create the environment `publish`. Restrict its deployment branches to
+   `main`. Put both secrets in the environment, not in the repository.
+2. Set the variable `TUNAOS_PUBLISH_SCOPE` to the exact destination.
+3. Use a robot or deploy token that can write that one namespace. Do not use an
+   account or organization admin token.
+4. Make the published packages public. Users run `bootc upgrade` with no
+   registry login, and the boot, ISO and lifecycle jobs pull with none.
 
-```bash
-gh secret set PUBLISH_REGISTRY_USERNAME
-gh secret set PUBLISH_REGISTRY_TOKEN
-```
+`tunaos.toml` never holds a credential or a scope. A job refuses to start when:
 
-Use a registry robot or service account limited to pull and push in the
-configured namespace. It does not need account administration, repository
-deletion, or access to unrelated namespaces. For an alternate GHCR
-organization, the token needs package read/write access there and the account
-must already have permission to that organization.
+- the run is not a `push`, `schedule` or `workflow_dispatch` run;
+- one secret is set and the other is not;
+- the variable is not set, or is not equal to the destination. A prefix does
+  not match: `quay.io/acme` does not allow `quay.io/acme-evil`.
 
-The contract fails closed:
-
-- an alternate destination with neither secret, or only one secret, stops
-  before login;
-- custom credentials on the stock owner destination are rejected as a
-  conflicting override;
-- a username/token that does not match the effective registry or namespace
-  fails that registry's login; CI never falls back to `ghcr.io/tuna-os`;
-- malformed destinations and usernames are rejected before any registry
-  command runs;
-- pull-request and `pull_request_target` execution cannot authenticate.
-  Fork PR builds remain build-only and receive no publish secrets.
-
-The selected token is sent only on standard input to the requested registry
-clients. Build scripts do not receive it. The same login contract covers image
-and manifest pushes, authenticated gate/ISO pulls, cosign signature uploads,
-and final promotion. Cosign still signs with the workflow's ephemeral GitHub
-OIDC identity; the registry token is not a signing key.
+The error names the missing input. `scripts/publish-credential.py` makes this
+choice and sees only whether each secret is set, never its value. The password
+goes to each tool on standard input. The build steps never have it: login runs
+after **Build Image**, so the layer cache in a non-owner registry is read-only.
+A fork with a second destination must wait for a later extension: one
+repository has one scope. For `ghcr.io/<other-org>`, docker and cosign keep one
+`ghcr.io` entry, so they hold this token for all of `ghcr.io` in those jobs.
 
 ---
 
