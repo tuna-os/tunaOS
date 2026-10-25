@@ -2074,3 +2074,25 @@ pass. A test fails when a new file reads `image-versions.yaml`.
 A Renovate bump of an unrelated key now passes. A bump of the `common` digest
 still fails, which is correct, because that image supplies files that the build
 copies into the target.
+
+### Package catalog tests fail again after a change to a pinned build file
+
+**Symptom:** the same `effective package-source configuration changed; refresh
+observation` error returns on `main`, in 12 tests of
+`tests/test_package_catalogs.py` and in `tests/test_search_base_packages.py`.
+It followed #3739 (F4, image-wide package additions).
+
+**Cause:** #3739 made `Containerfile.debian` run the new
+`build_scripts/30-image-packages.sh` in the `20-packages.sh` step, so the
+pinned hash of `Containerfile.debian` was stale and the new script and its
+`build_scripts/lib/image-packages.sh` were not bound. Measured: the other five
+pinned files, both extracts and the copied-source inventory still matched. The
+new scripts add no apt source on this target. Apt rejects `repository` rows at
+generation and at run time. An apt name cannot start with `-` or hold `/`, `=`
+or `:`.
+
+**Fix:** bind both new scripts by file hash and run
+`python3 scripts/refresh-package-observation.py --catalog debian-trixie --write`.
+Binding also refuses any repository row or unsafe name for the target, so a
+later fork edit of the generated `image-packages.tsv` cannot add a source
+unnoticed. Adding a plain package name needs no refresh.

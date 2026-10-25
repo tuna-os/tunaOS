@@ -402,6 +402,55 @@ def _copied_package_source_files(config_directory):
     return inventory
 
 
+# Every file that runs, or is sourced, on the flounder path of Containerfile.debian
+# and can write an apt source, key or pin. Whole-file hashes: Renovate edits
+# none of them. 30-image-packages.sh and lib/image-packages.sh run in the same
+# RUN step as 20-packages.sh (F4, #3668).
+TARGET_CONFIGURATION_FILES = (
+    'Containerfile.debian',
+    'build_scripts/10-base-packages.sh',
+    'build_scripts/lib.sh',
+    'build_scripts/20-packages.sh',
+    'build_scripts/30-image-packages.sh',
+    'build_scripts/lib/image-packages.sh',
+    'build_scripts/desktop/install-desktop.sh',
+)
+
+# tunaos_config.PACKAGE_NAMES['apt'] (a test asserts they are equal). A name that
+# matches cannot start with `-`, so `apt-get install` cannot read it as an
+# option, and it holds no `/`, `=` or `:`, so it selects no suite or archive.
+_APT_IMAGE_PACKAGE_NAME = re.compile(r'[a-z0-9][a-z0-9+.-]*\Z')
+
+
+def _check_image_package_additions(config_directory, variant):
+    """Fail unless the image-wide additions for `variant` are plain names only.
+
+    build_scripts/30-image-packages.sh installs the rows of
+    build_scripts/lib/image-packages.tsv (generated from tunaos.toml). On apt it
+    refuses `repository` rows at run time and the generator rejects them. A
+    plain name installs from the repositories the catalog already
+    authenticates, so adding a name needs no refresh. A repository row, or a
+    name that apt could read as an option, suite or file, would change the
+    effective source configuration: binding and refresh both refuse it.
+    """
+    lib = 'build_scripts/lib/'
+    aliases = {}
+    for line in _utf8(_public_file(config_directory, lib + 'variant-aliases.tsv'),
+                      'variant aliases').splitlines():
+        fields = line.split('\t')
+        if not line.startswith('#') and len(fields) >= 2:
+            aliases.setdefault(fields[0], fields[1])
+    canonical = aliases.get(variant, variant)
+    for line in _utf8(_public_file(config_directory, lib + 'image-packages.tsv'),
+                      'image packages').splitlines():
+        fields = line.split('\t')
+        if line.startswith('#') or fields[0] != canonical:
+            continue
+        if len(fields) != 4 or fields[2] not in ('add', 'optional') \
+                or not _APT_IMAGE_PACKAGE_NAME.fullmatch(fields[3]):
+            raise CatalogError('image-wide package additions can change package sources')
+
+
 def _utf8(content, label):
     try:
         return content.decode('utf-8')
@@ -497,10 +546,7 @@ def bind_target_configuration(catalog, document, config_directory, flavor):
     if observed_at.tzinfo is None:
         raise CatalogError('target observation timestamp needs timezone')
     files = observation['configuration_files']
-    expected_files = {'Containerfile.debian', 'build_scripts/10-base-packages.sh',
-                      'build_scripts/lib.sh', 'build_scripts/20-packages.sh',
-                      'build_scripts/desktop/install-desktop.sh'}
-    if not isinstance(files, dict) or set(files) != expected_files:
+    if not isinstance(files, dict) or set(files) != set(TARGET_CONFIGURATION_FILES):
         raise CatalogError('target observation lacks complete configuration files')
     for path, identity in files.items():
         exact(identity, ('sha256', 'size'), 'configuration file identity')
@@ -518,6 +564,7 @@ def bind_target_configuration(catalog, document, config_directory, flavor):
         _public_file(config_directory, 'image-versions.yaml', limit=8 * 1024 * 1024))
     if observation['common_image'] != common_image:
         raise CatalogError('resolved common image differs from reviewed observation')
+    _check_image_package_additions(config_directory, catalog['variant'])
     build_sources = [{
         'id': source['id'],
         'uri': source['uri'],
@@ -543,3 +590,62 @@ def bind_target_configuration(catalog, document, config_directory, flavor):
         if policy.get('before_install'):
             raise CatalogError('selected flavor mutates package sources through an unreviewed operation')
     return observation
+
+
+def _file_identity(content):
+    import hashlib
+    return {'sha256': hashlib.sha256(content).hexdigest(), 'size': len(content)}
+
+
+def measure_target_configuration(config_directory):
+    """Measure every checkout-derived field of a target observation.
+
+    Raises the same errors as binding when an input is outside what the
+    reviewed extraction can describe, so a refresh cannot record an unsafe tree.
+    """
+    files = {path: _file_identity(_public_file(config_directory, path, limit=8 * 1024 * 1024))
+             for path in TARGET_CONFIGURATION_FILES}
+    extracts = {}
+    for path, (name, extract) in _CONFIGURATION_EXTRACTS.items():
+        extracts[path] = {'extract': name, **_file_identity(
+            extract(_public_file(config_directory, path, limit=8 * 1024 * 1024)))}
+    return {
+        'configuration_files': files,
+        'configuration_extracts': extracts,
+        'copied_package_source_files': _copied_package_source_files(config_directory),
+        'common_image': _common_image_reference(
+            _public_file(config_directory, 'image-versions.yaml', limit=8 * 1024 * 1024)),
+    }
+
+
+def refresh_target_observation(catalog, config_directory, now):
+    """Return (new observation bytes, changed field names) for a reviewed refresh.
+
+    Everything that comes from the checkout is re-measured; identity fields
+    (variant, platform, base image, build sources) are rebuilt from the
+    catalog, so a catalog that no longer matches fails binding afterwards
+    instead of being copied forward. `observed_at` changes only when another
+    field does.
+    """
+    import json
+    old = _json(_public_file(config_directory, catalog['target_observation']))
+    if not isinstance(old, dict):
+        raise CatalogError('target observation is not an object')
+    _check_image_package_additions(config_directory, catalog['variant'])
+    new = dict(old)
+    new.update(measure_target_configuration(config_directory))
+    new['schema_version'] = 2
+    new['variant'] = catalog['variant']
+    new['flavors'] = list(catalog['flavors'])
+    new['platform'] = 'linux/amd64'
+    new['base_image'] = catalog['observed_base_image']
+    new['build_sources'] = [{
+        key: source[key] for key in ('id', 'uri', 'suite', 'components', 'declaration_url',
+                                     'keyring_url', 'declaration_sha256', 'keyring_sha256')
+    } for source in catalog['sources'] if source['role'] == 'build']
+    changed = sorted(key for key in new if new[key] != old.get(key))
+    if changed:
+        new['observed_at'] = now.strftime('%Y-%m-%dT%H:%M:%SZ')
+    ordered = {key: new[key] for key in old if key in new}
+    ordered.update({key: value for key, value in new.items() if key not in ordered})
+    return (json.dumps(ordered, indent=2) + '\n').encode(), changed
