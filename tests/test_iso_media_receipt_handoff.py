@@ -562,3 +562,20 @@ def test_native_rejects_observation_mutated_during_media_io():
     with pytest.raises(HANDOFF.ReceiptHandoffError, match="media"):
         HANDOFF.finalize_native_receipt(
             observed, CASES["browserReceiptUtf8"].encode(), Mutating(altered))
+
+
+def test_browser_receipt_ignores_observation_mutated_during_finish_and_io():
+    expected = HANDOFF.finalize_browser_receipt(
+        browser_observation(), MediaSource(MEDIA, browser=True)).receipt_bytes
+    observed = browser_observation()
+
+    class Mutating(MediaSource):
+        def finish(self):
+            observed.producer_run["runId"] = observed.producer_run["runId"] + 1
+            observed.overlay["mutated"] = True
+            return super().finish()
+
+    candidate = HANDOFF.finalize_browser_receipt(observed, Mutating(MEDIA, browser=True))
+
+    assert candidate.receipt_bytes == expected
+    assert candidate.run_id != observed.producer_run["runId"]

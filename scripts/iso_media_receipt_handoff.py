@@ -276,9 +276,12 @@ def finalize_browser_receipt(observed, saved_media):
 
     placeholder = {"sha256": "sha256:" + "0" * 64,
                    "sizeBytes": observed.bytes_written}
-    _validate_receipt(_browser_document(observed, placeholder), "browser")
+    # Snapshot every caller-owned field once, before finish()/open()/read() can
+    # run; only the measured media is substituted afterwards.
+    document = _browser_document(observed, placeholder)
+    _validate_receipt(document, "browser")
     media = _measure_media(saved_media, observed.bytes_written, finish=True)
-    document = _browser_document(observed, media)
+    document["media"] = media
     _validate_receipt(document, "browser")
     receipt = _encode(document)
     run = document["run"]
