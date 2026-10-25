@@ -66,6 +66,7 @@ user-facing site:
 | [VERIFY-ARTIFACTS.md](VERIFY-ARTIFACTS.md) | Verify TunaOS artifacts — signatures and SBOM attestations |
 | [INSTALLER-FRONTENDS.md](INSTALLER-FRONTENDS.md) | Installer frontends (cosmic/kde/niri/xfce): verification & parity |
 | [SCREENSHOTS.md](SCREENSHOTS.md) | TunaOS screenshot gallery |
+| [SCREENSHOT-RELEASE.md](SCREENSHOT-RELEASE.md) | Screenshot URLs on the rolling `screenshots` release, mapped from the R2 keys (#3470) |
 | [IMAGE-FACTORY-GATE.md](IMAGE-FACTORY-GATE.md) | Image factory completion gate & definition of done (#1283) |
 | [IMAGE-FACTORY-LIFECYCLE-GATE.md](IMAGE-FACTORY-LIFECYCLE-GATE.md) | Image factory lifecycle coverage & required gate (#1278) |
 | [../VARIANT-LIFECYCLE.md](../VARIANT-LIFECYCLE.md) | Variant/flavor admission, capacity, promotion, and deprecation policy (#1196, #1175) |

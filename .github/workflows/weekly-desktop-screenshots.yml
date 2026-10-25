@@ -341,3 +341,49 @@ jobs:
             gh pr merge --auto --merge "$pr" ||
               echo "::warning::could not arm auto-merge on #$pr — the refresh will wait for a human"
           fi
+
+  # ── Second copy: the rolling `screenshots` release ──────────────────────────
+  # Dual-publish while R2 is phased out (epic #3470). The R2 upload in the
+  # matrix job is unchanged; this job puts the same `-latest` PNGs on the
+  # `screenshots` release as <variant>-<flavor>-latest.png, so the docs site can
+  # switch to https://github.com/<owner>/<repo>/releases/download/screenshots/.
+  # docs/SCREENSHOT-RELEASE.md maps each R2 key to its asset URL.
+  #
+  # A separate job, so the 24 matrix legs stay read-only and only this one holds
+  # contents: write. It runs only for a push, schedule or dispatch on the
+  # default branch, reads no R2 secret, and the token reaches only the publish
+  # step.
+  publish-release:
+    name: Publish desktop screenshots to the screenshots release
+    needs: screenshot
+    if: >-
+      always() && !cancelled() &&
+      github.event.repository.default_branch == github.ref_name &&
+      contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event_name)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Download all screenshot artifacts
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: "*-desktop-screenshot"
+          path: /tmp/shots
+
+      - name: Publish desktop screenshots to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          sources=()
+          for dir in /tmp/shots/*-desktop-screenshot; do
+            [[ -f "$dir/screenshot.png" ]] || continue
+            base="$(basename "$dir")"
+            sources+=("${base%-desktop-screenshot}=${dir}/screenshot.png")
+          done
+          python3 scripts/screenshot-release.py publish \
+            --kind desktop --repo "$GITHUB_REPOSITORY" "${sources[@]}"
