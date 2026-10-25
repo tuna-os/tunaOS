@@ -98,4 +98,4 @@ def test_real_config_and_observation_without_network(monkeypatch, capsys):
     assert cli.main(ARGS + ['--config', str(ROOT / 'tunaos.toml')]) == 0
     output = json.loads(capsys.readouterr().out)
     assert output['cell_coverage_complete'] is True
-    assert output['configuration_observed_at'] == '2026-10-25T08:33:28Z'
+    assert output['configuration_observed_at'] == '2026-10-25T09:41:15Z'
