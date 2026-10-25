@@ -255,3 +255,39 @@ The Marlin GDM override also belongs to `[desktops.tuna-arch]`. Its generated
 adapter has the same precedence as the former tracked YAML. The regression
 fixture at commit `aa9810e9` preserves the complete package and hook contract;
 the other cells of Tuna Desktop keep their existing display manager.
+
+## F5: Fork recipe and conformance gate (#3806)
+
+**Scope**: configuration resolution of a fork that edits only `tunaos.toml` and
+asset files. **Does not include**: image builds, installs or boot qualification
+(#3474).
+
+`tests/test_fork_recipe_conformance.py` forks the real `tunaos.toml` with text
+edits that a person would make: publish destination, project name, homepage,
+package additions for one variant, and one Flatpak. It runs the tools of the
+repository on the result. These are `scripts/config.py validate`, the
+`generate-*` adapter writers and the shell publish-destination resolver. The
+test asserts these points:
+
+1. **Stock does not change**: every committed adapter (`identity.env`,
+   `variant-identity.tsv`, `variant-aliases.tsv`, `image-packages.tsv`,
+   `flatpak-preinstall.tsv`) equals a fresh render of `tunaos.toml`. Stock has no
+   publish table or package additions.
+2. **The fork differs**: destination, identity, package rows and Flatpak list
+   change as edited. Only the variant that declared the packages gets them.
+3. **Undo the edits**: the stock bytes and adapters come back exactly.
+4. **Code is not configuration**: the test rejects a `[hooks]` table, shell
+   metacharacters or URLs in package names, and `remove` lists. It checks each
+   package name against the package manager of its variant.
+5. **Assets travel with the config**: `check-drawn-artwork` reports a new
+   boot-splash theme name as missing until its theme files exist.
+
+Native names in `[defaults.packages]` must be valid for every variant's package
+manager, so the sample scopes them to a dnf variant. The test does not build an
+image, and it is not yet a CI-only gate: it runs with the rest of `tests/`.
+
+### Conformance boundaries
+
+**#3806 owns** the fixture and the resolution assertions above. **#3474 owns**
+image build, install and boot proof for the Yellowfin (RPM) and Grouper (APT)
+reference journeys.

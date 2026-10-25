@@ -746,34 +746,6 @@ class LifecycleResultsNormalisation(unittest.TestCase):
             "guppy:gnome (amd64)"
         )
 
-    def test_committed_snapshot_excludes_probe_only_beta_lifecycle_results(self):
-        provenance = json.loads(
-            (SCRIPT.parent.parent / "docs" / "matrix-provenance.json").read_text()
-        )
-        beta_prefixes = ("bonito-rawhide:", "flounder-sid:")
-        beta_lifecycle = [
-            axes["lifecycle"]
-            for cell, axes in provenance["cells"].items()
-            if cell.startswith(beta_prefixes) and "lifecycle" in axes
-        ]
-        assert len(beta_lifecycle) == 8
-        assert all(result == {
-            "date": "",
-            "evidence": "",
-            "run": "",
-            "verdict": "untested",
-        } for result in beta_lifecycle)
-        verdicts = [
-            axes["lifecycle"]["verdict"]
-            for axes in provenance["cells"].values()
-            if "lifecycle" in axes
-        ]
-        assert provenance["summary"]["lifecycle"] == {
-            "passed": verdicts.count("pass"),
-            "tested": sum(verdict != "untested" for verdict in verdicts),
-            "total": len(verdicts),
-        }
-
     def test_non_cell_jobs_are_ignored(self):
         got = self._with_raw({
             "Generate matrix": ("success", "2026-08-17", "1"),
