@@ -43,7 +43,7 @@ def test_overlay_staging_tags_are_unique_per_run_and_attempt():
     assignment = next(line.strip() for line in step["run"].splitlines() if line.strip().startswith('OUT='))
     tags = set()
     for run, attempt in [("123", "1"), ("124", "1"), ("123", "2")]:
-        env = os.environ | {"VARIANT": "yellowfin", "FLAVOR": "kde", "SAFEPLATFORM": "linux-amd64", "GITHUB_RUN_ID": run, "GITHUB_RUN_ATTEMPT": attempt}
+        env = os.environ | {"VARIANT": "yellowfin", "FLAVOR": "kde", "SAFEPLATFORM": "linux-amd64", "PUBLISH_DEST": "ghcr.io/tuna-os", "GITHUB_RUN_ID": run, "GITHUB_RUN_ATTEMPT": attempt}
         result = subprocess.run(["bash", "-euc", assignment + '\nprintf "%s" "$OUT"'], env=env, text=True, capture_output=True, check=True)
         tags.add(result.stdout)
     assert len(tags) == 3
