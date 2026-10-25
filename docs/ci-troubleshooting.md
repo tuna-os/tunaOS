@@ -1995,13 +1995,13 @@ needs a `codename`; the generator names any variant without one.
 `scripts/lib/tunaos_config.py` and `tests/test_fork_branding.py`.
 
 **Cause:** Both changes add validators at the same locations. The identity
-change removes the old codename table check. The publish change replaces the
+change removes the codename table check. The publish change replaces the
 fixed vendor check with the resolved namespace check.
 
 **Fix:** Keep both sets of validators and the resolved vendor check. Do not
-restore the old codename table assertion. Run
+restore the codename table assertion. Run
 `tests/test_identity_publish_integration.py` with the identity and publish
-suites. It checks one primary config through the real writer and verifier on
+suites. It checks a single config through the real writer and verifier on
 a test filesystem, without a legacy fork manifest. This is not image build,
 registry push, boot or install proof.
 
