@@ -185,9 +185,13 @@ def _validate_retained(payload: dict) -> None:
             raise ValueError("retained assertion is later than its evaluation date")
 
     validate_configuration_identity(context.get("configuration_sha256"))
+    # Same vocabulary the live collectors admit: latest_results() and
+    # _collect_latest_results() keep only conclusive success/failure jobs, so a
+    # skipped/cancelled/empty conclusion here would render as tested-and-failed
+    # while provenance records it untested.
     for axis in ("luks", "lifecycle", "smoke", "contract", "omissions", "parity"):
         for key, hit in payload[axis].items():
-            allowed = {"pass", "fail", "missing", "error", "lost"} if axis == "contract" else {"success", "failure", "cancelled", "skipped", ""}
+            allowed = {"pass", "fail", "missing", "error", "lost"} if axis == "contract" else {"success", "failure"}
             if not isinstance(key, str) or not isinstance(hit, list) or len(hit) != 3 or hit[0] not in allowed:
                 raise ValueError(f"invalid retained {axis} result")
             validate_source(hit[1], hit[2])

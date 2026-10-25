@@ -363,6 +363,22 @@ def test_malformed_retained_input_raises_one_clear_error(tmp_path, monkeypatch, 
         load_retained_inputs(path)
 
 
+@pytest.mark.parametrize("axis", ["luks", "lifecycle", "smoke", "omissions", "parity"])
+@pytest.mark.parametrize("conclusion", ["skipped", "cancelled", ""])
+def test_inconclusive_retained_result_is_rejected(tmp_path, monkeypatch, axis, conclusion):
+    """The live collectors drop inconclusive jobs; replay must not admit them.
+
+    The renderer would count such a cell as tested-and-failed while the
+    provenance records it untested, a pair the snapshot checker rejects.
+    """
+    payload = json.loads(RETAINED.read_text())
+    next(iter(payload[axis].values()))[0] = conclusion
+    path = write_retained_input(tmp_path, payload)
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(ValueError, match=f"invalid retained {axis} result"):
+        load_retained_inputs(path)
+
+
 def test_retained_input_outside_the_checkout_is_rejected_before_reading(tmp_path, monkeypatch):
     path = tmp_path / "inputs.json"
     path.write_text("{")
