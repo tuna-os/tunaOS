@@ -34,6 +34,7 @@ other way to get this wrong.
 from __future__ import annotations
 
 import fnmatch
+import importlib.util
 import re
 from pathlib import Path
 
@@ -48,6 +49,16 @@ PRUNE = WORKFLOWS / "prune-r2.yml"
 # the name around "-latest", not about resolving variant/flavor/arch: any
 # non-empty value produces the same verdict from a glob, and pretending to
 # know the real matrix here would just be a second copy of build-config.yml.
+# Exercise the real naming helper on its supported architecture cases. Do not
+# replace SUFFIX with a bare word: its leading dash is part of the object name.
+_spec = importlib.util.spec_from_file_location("retention_iso_suffix", ROOT / "scripts/iso-latest-suffix.py")
+_suffix = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_suffix)
+_SUFFIX_CONFIG = {"variants": [{"id": "sample", "flavors": [{"id": "sample",
+    "platforms": ["linux/amd64", "linux/amd64/v2", "linux/arm64"]}]}]}
+SUFFIX_VALUES = {_suffix.suffix(_SUFFIX_CONFIG, "sample", "sample", platform)
+                 for platform in ("linux/amd64", "linux/amd64/v2", "linux/arm64")}
+
 PLACEHOLDER = "sample"
 GH_EXPR = re.compile(r"\$\{\{.*?\}\}")
 SHELL_VAR = re.compile(r"\$\{[A-Za-z_][A-Za-z0-9_]*[^{}]*\}|\$[A-Za-z_][A-Za-z0-9_]*")
@@ -74,6 +85,9 @@ def _expand(token: str, latest_values: list[str]) -> list[str]:
         candidates = [
             token.replace("${LATEST}", v).replace("$LATEST", v) for v in latest_values
         ] or candidates
+    candidates = [expanded for candidate in candidates
+                  for expanded in ([candidate.replace("${SUFFIX}", suffix) for suffix in sorted(SUFFIX_VALUES)]
+                                   if "${SUFFIX}" in candidate else [candidate])]
     out = []
     for c in candidates:
         name = SHELL_VAR.sub(PLACEHOLDER, c).rsplit("/", 1)[-1]
@@ -233,3 +247,18 @@ def test_dated_objects_are_still_deleted(name, prefix):
         assert verdict(name, rules) == "delete", (
             f"{step!r} would keep dated object {name!r} forever; rules {rules}"
         )
+
+
+@pytest.mark.parametrize("suffix", ["", "-amd64", "-arm64"])
+def test_helper_suffix_and_sidecars_are_kept_by_real_prune_rules(suffix):
+    producer = (WORKFLOWS / "reusable-build-artifacts.yml").read_text()
+    assert 'SUFFIX="$(python3 scripts/iso-latest-suffix.py "$VARIANT" "$FLAVOR" "$PLATFORM")"' in producer
+    names = pointer_names()
+    pointer = f"sample-sample-latest{suffix}.iso"
+    for name in (pointer, pointer+'.sha256', pointer+'.sigstore.json'):
+        assert name in names
+        for _, _, rules in prune_steps():
+            assert verdict(name, rules) == "keep"
+    if suffix:
+        # The original faulty exclude must still lose the arch pointer.
+        assert verdict(pointer, [("exclude", "*-latest.iso*"), ("include", "*.iso*")]) == "delete"

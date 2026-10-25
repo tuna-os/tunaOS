@@ -8,6 +8,9 @@ not transition from unknown to welcome".
 
 These tests run the real `reset_uefi_vars` and `run_strict_offline_gui`
 functions, extracted from scripts/iso-e2e.sh, with stubbed QEMU legs.
+
+Falsification: removing the reset before each leg makes the LUKS leg read
+the plain leg's dirty bytes instead of the initial NVRAM hash.
 """
 
 import re
@@ -44,6 +47,7 @@ QUAL_EVIDENCE_JSON={out}/qual.json
 STRICT_EVIDENCE_LOG={out}/evidence.log
 TUNAOS_QUAL_OVERLAY_DIGEST=sha256:{"a" * 64}
 TUNAOS_QUAL_ENGINE_DIGEST=sha256:{"b" * 64}
+qemu-img() {{ echo UNEXPECTED_QEMU_IMG_CALL >&2; return 99; }}
 e2e_phase() {{ :; }}
 strict_offline_evidence() {{ :; }}
 strict_require_digest() {{ :; }}
@@ -61,9 +65,11 @@ echo "initial nvram=$(sha256sum "$OVMF_VARS" | cut -c1-12)"
 {_function("run_strict_offline_gui")}
 run_strict_offline_gui
 """
-    return subprocess.run(
-        ["bash", "-c", harness], check=False, capture_output=True, text=True
+    result = subprocess.run(
+        ["bash", "-c", harness], check=False, capture_output=True, text=True, timeout=10
     )
+    assert "UNEXPECTED_QEMU_IMG_CALL" not in result.stderr
+    return result
 
 
 def _nvram_by_leg(stdout: str) -> dict[str, str]:
