@@ -213,7 +213,7 @@ def validate_document(document):
             raise CatalogError('invalid catalog id')
         validate(catalog)
         if catalog['variant'] not in document['variants']:
-            raise CatalogError('catalog refers to unknown variant')
+            raise CatalogError(f"{name}: catalog refers to unknown variant {catalog['variant']!r}; remove this table when you remove that variant")
     # No file, network, current-time or stale-observation check on the build path.
 
 

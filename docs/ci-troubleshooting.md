@@ -234,6 +234,9 @@ each one from scratch.
 | 59 | `python3 scripts/lint_tools.py verify` fails with `shfmt: expected 3.14.1, got 3.14.1` on a host whose shfmt is from Homebrew | The contract's shfmt regex was `^v3\.14\.1$`, copied from the release asset, which prints `v3.14.1`. The Homebrew build of the same version prints `3.14.1` with no `v`; measured on this host, both binaries side by side. The same version was rejected because of the prefix | Regex is `^v?3\.14\.1$`; `tests/test_lint_tools.py::test_homebrew_shfmt_version_format_is_accepted` covers the Homebrew format. Real version drift (just 1.58.0 vs 1.59.0) still fails |
 | 60 | `Unit Tests` fails during artwork validation on a runner reporting `Landlock ABI 10 or later is required to deny all network access; found ABI 7`, followed by `Process completed with exit code 128` | `scripts/branding/make-lettermarks.py` fetched the pinned Baloo 2 font from `raw.githubusercontent.com` on a cache miss; network-restricted runners cannot make that first-run request | Vendor the exact pinned font under `scripts/branding/assets/`, keep its OFL license beside it, and verify its SHA-256 before rendering |
 | 61 | `Unit Tests` fails on the #3668 F3d stack with `tests/test_identity_publish_integration.py::test_primary_identity_and_publish_destination_share_the_consumer_path - ConfigError: defaults.branding: unknown keys []; missing keys ['plymouth']` (run 40069984759) | F3d makes `plymouth` a required `[defaults.branding]` key. The integration test, added lower in the stack, replaced the whole `[defaults.branding]` table with the four URLs, so the fork it built no longer had the required key | Update only the URL keys (`fork["defaults"]["branding"].update(...)`), as `tests/test_identity_config.py` already does. Search the tests for `["defaults"]["branding"] =` when a branding key becomes required |
+| 62 | A fork that removed variants from `tunaos.toml` gets `iso_builder: flavor_metadata must cover exact primary flavor IDs`, then `iso_builder: unknown primary base facet`, then `... unknown primary flavor facet`, then `package_catalogs: catalog refers to unknown variant`, with no hint which entry to delete | Each validator raised a fixed sentence with no value: `flavor_metadata`, the ISO Builder `base`/`desktop`/`edition` facet values, and `[package_catalogs.ID]` all list ids that must still exist in `variants`. Measured by deleting every variant but `yellowfin` and `grouper` (run: `tests/test_fork_friction.py::test_pruning_walks_to_a_valid_file_one_named_table_at_a_time`) | The errors now name the missing and extra ids, the facet and values, and the catalog and variant. The removal checklist is in `docs/ROLL_YOUR_OWN.md`, "Prune". `just check` also fails on a `.github/workflows/build-ID.yml` wrapper whose variant is gone |
+| 63 | `check-drawn-artwork` passes for a fork's new boot splash, but the image boots the TunaOS one (or a blank splash) | `cp -r themes/tunaos themes/acmeos` plus renaming the two files leaves `acmeos.plymouth` with `ImageDir=/usr/share/plymouth/themes/tunaos` and `ScriptFile=.../tunaos/tunaos.script`; the check only tested that the two files exist. Measured on the Acme OS fork walk-through | `check-drawn-artwork` now compares `ImageDir` and `ScriptFile` with the theme's own folder, and checks each wallpaper starts with the JPEG signature. Edit the descriptor after copying a theme |
+| 64 | `python3 scripts/branding/check-artwork.py` ends in `ModuleNotFoundError: No module named 'uharfbuzz'` and a `CalledProcessError`; `--write` with an emoji that has no drawing leaves `system_files/usr/share/tunaos/{logos,lettermarks,fastfetch}` empty | The script ran the generators without checking `requirements-branding.txt`, and `--write` deleted the committed artwork before generating. Measured with system Python 3.15 and no branding requirements | The script names the missing packages and the `pip install -r requirements-branding.txt` command, and `--write` generates into a scratch folder and replaces the committed files only after every generator succeeds |
 
 | Renovate cannot update the Bazaar KRunner source pin (PR #3397) | The git-refs manager treated the commit SHA as a named ref and supplied no full repository URL | Capture the named ref as `currentValue` and the SHA as `currentDigest`; supply a full `packageNameTemplate` URL. `git ls-remote` resolves `v1.3.0` to the existing `dbed96fa…` pin. The build still downloads by commit |
 
@@ -2069,6 +2072,23 @@ including run `40065011718` for #3839.
 **Fix:** PR runs group by `github.ref` and cancel only their own superseded
 runs. Schedule and dispatch runs still serialize in one `publish` group,
 because they force-push `automation/matrix-status`.
+
+### The beta lifecycle snapshot test fails after a nightly refresh (#3932)
+
+**Symptom:** after the 2026-10-25 refresh (#3931), the committed-snapshot
+test for beta lifecycle fails. All eight `bonito-rawhide` and
+`flounder-sid` lifecycle cells read `fail` from run `38713238238`.
+
+**Cause:** these results are not `BETA` probes. In that run, the jobs have no
+prefix and failed in the stable-lane validation step. Before #3720, the beta
+filter in `bootc-lifecycle.yml` had an inverted test, so rawhide and sid cells
+ran the real check. #3720 also made the generator score those old checks. The
+test still expected that each beta cell reads untested. It stayed green until
+the first live refresh merged.
+
+**Fix:** the test now accepts a beta lifecycle verdict only if it reads
+untested or has a date before the lane fix (2026-10-23). Do not edit the
+generated files, and do not add a filter that hides the old failures.
 
 ### Package catalog tests fail with `effective package-source configuration changed; refresh observation`
 

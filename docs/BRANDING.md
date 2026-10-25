@@ -138,7 +138,8 @@ output does not match it; `--write` regenerates them. They need the pinned
 
 No script can make the drawn art from `tunaos.toml`. `scripts/config.py
 check-drawn-artwork` (in `just check`) makes sure each variant has its
-`<variant>.jpg` and its `branding.plymouth` theme.
+`<variant>.jpg` (a real JPEG) and its `branding.plymouth` theme, and that the
+theme's `.plymouth` file names its own folder in `ImageDir` and `ScriptFile`.
 
 ## The rule
 

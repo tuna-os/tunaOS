@@ -65,13 +65,31 @@ build_qcow2 = false
 
 This is an excerpt, not a whole config file. Keep the shared `base` stage and
 all parent stages that the desktops you keep need. Keep existing safety holds
-until tests support a change. If you remove a whole variant, also remove its
-`tuna_rollout` entry. Run `python3 scripts/config.py validate` after edits.
-Use `python3 scripts/config.py show` to inspect the effective matrix.
+until tests support a change. Run `python3 scripts/config.py validate` after
+edits. Use `python3 scripts/config.py show` to inspect the effective matrix.
 
-Packages and brand settings still use the paths below in this first migration
-step. The [single-config plan](PRIMARY-CONFIG-MIGRATION.md) tracks their move
-into the same file.
+To drop a whole variant, delete its `[variants.<id>]` and
+`[[variants.<id>.flavors]]` tables and run `validate`. Each error names the
+next leftover; clear them in this order (measured on a fork that kept only
+`yellowfin` and `grouper`):
+
+| Delete or edit | Why `validate` asks |
+|---|---|
+| `[tuna_rollout.<id>]` | every rollout record needs its variant |
+| `[flavor_metadata.<flavor>]` for each flavor no remaining variant has | the table must cover exactly the flavor ids that remain |
+| The variant under `[[iso_builder.selection.facets.values]]` of the `base` facet, and each `desktop` or `edition` value that no remaining flavor uses | the ISO Builder cannot offer what the matrix lacks |
+| `[package_catalogs.<id>]` whose `variant` is the one you removed (`debian-trixie` names `flounder`) | a catalog needs its variant |
+| `iso_builder.default_selection` and `[[iso_builder.selection.recommendations]]`, if they name it | the default must be a cell that builds |
+
+Two leftovers are not `validate` errors. `[[sibling_images]]` lists TunaOS's own
+sibling projects, so delete it. `.github/workflows/build-<id>.yml` stays behind
+because `just generate-workflows` writes wrappers and never removes one, and
+that file keeps its nightly cron; `just check` fails and names each wrapper
+whose variant is gone. Delete those files.
+
+Packages, identity and brand settings live in the same file; the sections below
+show each. [Still hardcoded in code](#what-a-fork-still-edits-in-code) lists the
+few values a fork has to change outside `tunaos.toml` today.
 
 What to turn off and why:
 
@@ -336,19 +354,25 @@ codename = "Wile E"       # os-release VERSION_CODENAME
 branding = { accent = "#E87D0D", gnome_accent = "orange", base = "AlmaLinux Kitten", homage = "Acme orange", plymouth = "acmeos" }
 ```
 
+Edit every variant you keep, not only one. A variant that you do not edit keeps
+its TunaOS accent, codename and boot splash. For example, `albacore` keeps
+the `tunaos` splash when you change only `[defaults.branding]`.
+
 Then regenerate the files every image build reads, and commit them with
 `tunaos.toml`:
 
 ```bash
-python3 scripts/config.py generate-identity
-python3 scripts/config.py generate-variant-identity
-python3 scripts/config.py generate-variant-aliases
+python3 scripts/config.py generate-all
 ```
 
-`just check` fails if `build_scripts/lib/identity.env`,
-`build_scripts/lib/variant-identity.tsv` or
-`build_scripts/lib/variant-aliases.tsv` disagrees with `tunaos.toml`. Each
-variant's name (Yellowfin, Marlin) comes from its id, or its `publish_name`.
+`generate-all` writes the matrix adapter, `build_scripts/lib/identity.env`,
+`variant-identity.tsv`, `variant-aliases.tsv`, `image-packages.tsv`, the
+Flatpak policy and the two files for the ISO Builder under `docs/`. `just check` runs
+a `check-*` for each of them and fails, naming `generate-all`, when one
+disagrees with `tunaos.toml`. If you change the matrix (variants, flavors or
+platforms), also run `python3 scripts/generate-countme-allowlist.py`; only
+`just test` checks that file. Each variant's name (Yellowfin, Marlin) comes
+from its id, or its `publish_name`.
 
 The variant's mark, lettermark and fastfetch letters follow its `emoji`, name
 and `branding.accent`. After you change those, regenerate the artwork:
@@ -363,15 +387,37 @@ A new emoji needs an image: copy its file from Noto Emoji's `svg/` folder to
 `tunaos.toml`.
 
 You supply the drawn art. Each variant needs a wallpaper at
-`system_files/usr/share/backgrounds/tunaos/<variant>.jpg`. Each variant's
+`system_files/usr/share/backgrounds/tunaos/<variant>.jpg`, and
+`tunaos-default.jpg` beside it, which must be JPEG files. Each variant's
 `branding.plymouth` names its boot splash, a theme folder under
 `system_files/usr/share/plymouth/themes/`. An image name that is not a known
 variant gets the theme in `[defaults.branding] plymouth`. `just check` fails
-and names the file when one of these is missing.
+and names the file when one of these is missing or is not a JPEG.
+
+To start from an existing splash, copy the folder, rename its two files
+and edit the descriptor. The descriptor still names the folder you copied:
+
+```bash
+cd system_files/usr/share/plymouth/themes
+cp -r tunaos acmeos && mv acmeos/tunaos.plymouth acmeos/acmeos.plymouth && mv acmeos/tunaos.script acmeos/acmeos.script
+# In acmeos.plymouth set Name, Description, ImageDir=/usr/share/plymouth/themes/acmeos
+# and ScriptFile=/usr/share/plymouth/themes/acmeos/acmeos.script
+```
+
+`check-drawn-artwork` fails when `ImageDir` or `ScriptFile` points at another
+theme. Before this check, a copied theme passed and the image booted the splash
+of the original theme.
 
 The installer's slides come from `system_files/etc/bootc-installer/recipe.json`.
 Write them with your `[project] name`: the build puts the variant name in its
-place. The installer logo is the variant's mark, made from its `emoji`.
+place. The installer logo is the variant's mark, made from its `emoji`. The
+build does not rewrite `imgref` and `local_imgref` in that file, so set them to
+your own image by hand.
+
+The ISO Builder page and the ISO file names have their own brand keys, in
+`[iso_builder.brand]`, `[iso_builder.presentation]` and `[iso_builder.output]`
+(`name`, `homepage_url`, `headline`, `volume_label`, `filename_prefix`).
+`[project]` does not set them. Set them too, then run `generate-all`.
 
 For GNOME defaults, create a gschema override:
 
@@ -388,6 +434,24 @@ gtk-theme='Adwaita-dark'
 ```
 
 The build system already runs `glib-compile-schemas`.
+
+### What a fork still edits in code
+
+These values name TunaOS but are not read from `tunaos.toml` yet. A fork that
+publishes under its own name changes them in the file shown.
+
+| Value | Where | Effect if you leave it |
+|---|---|---|
+| Installer target image (`imgref`, `local_imgref`) | `system_files/etc/bootc-installer/recipe.json` | the installer installs `ghcr.io/tuna-os/tunaos:latest`, not your image |
+| Usage-report endpoint | `system_files/usr/libexec/tunaos-countme` | an image that keeps a stock variant and flavor id can report as that TunaOS cell to `countme.tunaos.org` |
+| Published image location | `.github/workflows/` (`bootc-lifecycle`, `catalog-facts`, `live-overlay`, `live-initramfs`, `publish-isos`, `publish-iso-groups`, `verify-asahi`, `asahi-hw-nightly`) and `.github/changelogs.py` | they pull or push `ghcr.io/tuna-os/...` instead of your destination |
+| Image labels | `.github/workflows/reusable-build-image.yml` (`org.opencontainers.image.url`, `.documentation`), `Containerfile.final` (`.title`) | labels point at tunaos.org and say "TunaOS" |
+| Nightly schedule per variant | `scripts/generate-workflows.py` (`SCHEDULES`) | a variant you add has no cron |
+| Variant list for manual builds | `.github/workflows/build-flavor.yml` (`matrix.variant`) | dispatches variants you may not have |
+| "Install TunaOS" launchers | `live-iso/common/src/desktop-*.sh`, `live-iso/common/src/customize-live.sh` | the live ISO says "Install TunaOS" |
+| ISO media name | `scripts/build-iso-group.sh` (`MEDIA_NAME`) | the ISO volume says "TunaOS <Variant>" |
+| KDE Global Theme and wallpaper package | `system_files/usr/share/plasma/look-and-feel/org.tunaos*.desktop/`, `system_files/usr/share/wallpapers/TunaOS/` | KDE lists a "TunaOS" theme |
+| Package repository host | `build_scripts/desktop/install-desktop.sh`, `build_scripts/10-base-packages.sh`, `Containerfile.arch` (`repo.tunaos.org`) | the image keeps pulling TunaOS's packages; this is a dependency, not branding |
 
 ### Adding systemd services
 

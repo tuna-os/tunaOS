@@ -5,6 +5,7 @@ Base/shared package and branding ownership remain later migration milestones.
 """
 from __future__ import annotations
 
+import configparser
 import copy
 import hashlib
 import sys
@@ -96,7 +97,8 @@ def table(value, allowed, required, path):
         raise ConfigError(f"{path}: expected table")
     unknown, missing = set(value) - set(allowed), set(required) - set(value)
     if unknown or missing:
-        raise ConfigError(f"{path}: unknown keys {sorted(unknown)}; missing keys {sorted(missing)}")
+        problems = ([f"unknown keys {sorted(unknown)}"] if unknown else []) + ([f"missing keys {sorted(missing)}"] if missing else [])
+        raise ConfigError(f"{path}: {'; '.join(problems)}")
 
 
 def https_url(value):
@@ -591,12 +593,18 @@ def image_packages(config, managers=None):
     for name, delta in deltas.items():
         manager = delta['manager'] = managers[name]
         pattern = PACKAGE_NAMES.get(manager, re.compile(PACKAGE_NAME + r'\Z'))
+        shared = set(defaults.get('add', []) + defaults.get('optional', []))
         for package in delta['add'] + delta['optional']:
             if not pattern.fullmatch(package):
-                raise ConfigError(f'variants.{name}.packages: {package!r} is not a valid package name for {manager}'
-                                  + (' (use category/name)' if manager == 'emerge' else ''))
+                where = 'defaults.packages' if package in shared else f'variants.{name}.packages'
+                hint = (' (use category/name)' if manager == 'emerge' else '') + (
+                    f'; [defaults.packages] reaches every variant, so move {package!r} to the variants whose package manager names it differently'
+                    if package in shared else '')
+                raise ConfigError(f'{where}: {package!r} is not a valid package name for {manager}, which variant {name} builds with{hint}')
         if delta['repositories'] and manager not in ('dnf', 'zypper'):
-            raise ConfigError(f'variants.{name}.packages: repositories are supported on dnf and zypper only, not {manager}')
+            own_repositories = config['variants'][name].get('packages', {}).get('repositories')
+            where = f'variants.{name}.packages' if own_repositories else 'defaults.packages'
+            raise ConfigError(f'{where}: repositories are supported on dnf and zypper only, not {manager}, which variant {name} builds with')
     return deltas
 
 
@@ -610,12 +618,21 @@ def render_image_packages(config, managers=None):
     return IMAGE_PACKAGES_HEADER + ''.join(row + '\n' for row in rows)
 
 
-def missing_drawn_artwork(config, root=ROOT):
+def _file_prefix(path, size):
+    with open(path, 'rb') as handle:
+        return handle.read(size)
+
+
+def drawn_artwork_problems(config, root=ROOT):
     """Drawn art each variant needs, which no generator can make from TOML.
 
     Wallpapers and boot splashes are fork-supplied: select-wallpaper.sh picks
     <variant>.jpg (an optional <variant>-anime.jpg or <variant>-<desktop>.jpg
     wins over it), and plymouth-set-theme.sh installs branding.plymouth.
+    A file that is present can still be wrong in the two ways a fork produces
+    by copying: a wallpaper that is not a JPEG (a renamed PNG, a placeholder),
+    and a copied theme whose .plymouth still names the theme it was copied
+    from, so the image would boot the old splash.
     """
     validate(config)
     root = Path(root)
@@ -629,7 +646,28 @@ def missing_drawn_artwork(config, root=ROOT):
     for theme, owner in splashes.items():
         for suffix in ('plymouth', 'script'):
             wanted[f'{themes.relative_to(root)}/{theme}/{theme}.{suffix} ({owner})'] = themes / theme / f'{theme}.{suffix}'
-    return [label for label, path in wanted.items() if not path.is_file()]
+    problems = [f'{label}: missing' for label, path in wanted.items() if not path.is_file()]
+    for label, path in wanted.items():
+        if path.is_file() and path.suffix == '.jpg' and _file_prefix(path, 3) != b'\xff\xd8\xff':
+            problems.append(f'{label}: not a JPEG (a wallpaper must be a JPEG file, not a renamed PNG or a placeholder)')
+    for theme, owner in splashes.items():
+        descriptor = themes / theme / f'{theme}.plymouth'
+        if not descriptor.is_file():
+            continue
+        # Plymouth reads these two keys from the [script] section, as INI.
+        parser = configparser.ConfigParser(interpolation=None, strict=False)
+        parser.optionxform = str
+        try:
+            parser.read_string(descriptor.read_text(encoding='utf-8', errors='replace'))
+        except configparser.Error:
+            parser = configparser.ConfigParser(interpolation=None)
+        keys = dict(parser['script']) if parser.has_section('script') else {}
+        expected = {'ImageDir': f'/usr/share/plymouth/themes/{theme}', 'ScriptFile': f'/usr/share/plymouth/themes/{theme}/{theme}.script'}
+        for key, value in expected.items():
+            if keys.get(key) != value:
+                problems.append(f'{descriptor.relative_to(root)} ({owner}): {key} is {keys.get(key)!r}, expected {value!r}; '
+                                'a theme copied from another keeps that theme\'s paths until you edit them')
+    return problems
 
 
 def display_names(config):
