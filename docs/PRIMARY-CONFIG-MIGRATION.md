@@ -60,6 +60,10 @@ schema_version = 1
 
 [project]
 name = "TunaOS"
+id = "tunaos"
+cpe_vendor = "jamesreilly"
+
+[build.publish]   # optional; omitted, CI publishes to ghcr.io/<repository owner>
 registry = "ghcr.io"
 namespace = "tuna-os"
 
@@ -67,10 +71,7 @@ namespace = "tuna-os"
 homepage = "https://github.com/tuna-os/tunaos"
 documentation = "https://github.com/tuna-os/tunaos/tree/main/docs"
 support = "https://github.com/tuna-os/tunaos/issues/"
-
-[defaults.packages]
-# Shared additions; native names must be valid for every selected family.
-packages = []
+bug_report = "https://github.com/tuna-os/tunaos/issues/"
 
 [variants.yellowfin]
 emoji = "🐠"
@@ -83,10 +84,6 @@ base_image = "quay.io/almalinuxorg/almalinux-bootc:10-kitten@sha256:fabe22d605a5
 [variants.yellowfin.branding]
 logo = "system_files/usr/share/tunaos/logos/yellowfin.svg"
 wallpaper = "system_files/usr/share/backgrounds/tunaos/yellowfin-anime.jpg"
-
-[variants.yellowfin.packages]
-# Put native RPM additions here rather than applying them to apt/portage cells.
-packages = []
 
 # Package profiles preserve native package names and the current list order.
 [desktops.gnome-debian]

@@ -156,6 +156,8 @@ jobs:
           echo "${GITHUB_TOKEN}" | \
             podman login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
 
+      # The step name is a compatibility key in green-criteria.yml. Its
+      # implementation is container sanity, not installed update/rollback proof.
       - name: Validate bootc image update, rebase, rollback & aliases
         env:
           VARIANT: ${{ matrix.variant }}
@@ -204,8 +206,9 @@ jobs:
             fi
           done
 
-          # 4. Simulate bootc containerized update, rebase & rollback sequence
-          echo "==> Testing bootc containerized update & switch..."
+          # 4. Container sanity only. This does not mutate an installed disk,
+          # reboot a deployment, exercise rollback, or test rebase.
+          echo "==> Testing bootc container sanity..."
           sudo podman pull -q "${REF}"
 
           # Validate bootc install print-configuration inside container
@@ -228,7 +231,7 @@ jobs:
             fi
           fi
 
-          echo "==> Stream ${VARIANT}:${FLAVOR} (${ARCH}) lifecycle validation complete."
+          echo "==> Stream ${VARIANT}:${FLAVOR} (${ARCH}) container sanity validation complete (not installed lifecycle evidence)."
 
   lifecycle-beta:
     name: "BETA ${{ matrix.variant }}:${{ matrix.flavor }} (${{ matrix.arch }})"
