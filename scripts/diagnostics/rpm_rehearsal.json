@@ -5,6 +5,7 @@
   "desktop": "gnome",
   "platform": "linux/amd64",
   "base": "quay.io/centos-bootc/centos-bootc@sha256:ec1bd8cb6479d1f2f61c85372afce319b932b6b1f671648f0887e9da01e48272",
+  "base_sha256": "7acece89000eb885d27c64455efdaaca949df0537fa406c65a84c8043f66c474",
   "policy_sha256": "652a3e4bf5990d8634555641312422ad0613162d036c91eaa80fc1851c4045bd",
   "reference": "ghcr.io/tuna-os/tunaos-packages@sha256:0734d0e81a7aac30f899bf8b0504382747abcba356b30e732444c7bc97da5834",
   "identity": "https://github.com/tuna-os/tunaos-packages/.github/workflows/publish-oci-candidate.yml@refs/heads/main",
