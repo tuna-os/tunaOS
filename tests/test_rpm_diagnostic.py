@@ -120,6 +120,24 @@ def test_workload_mounts_require_readonly_input_and_writable_output():
         runner.verify_workload_inspect(details, 'internal')
 
 
+def test_workload_accepts_docker_normalized_capability_names():
+    details = {'NetworkSettings': {'Networks': {'internal': {}}},
+               'HostConfig': {'Privileged': False, 'NetworkMode': 'internal', 'Dns': ['127.0.0.1'],
+               'SecurityOpt': ['no-new-privileges:true'], 'CapDrop': ['CAP_NET_ADMIN', 'CAP_NET_RAW']},
+               'Mounts': [{'Destination': '/output', 'Type': 'bind', 'RW': True},
+                          {'Destination': '/input', 'Type': 'bind', 'RW': False},
+                          {'Destination': '/run', 'Type': 'tmpfs', 'RW': True}]}
+    runner.verify_workload_inspect(details, 'internal')
+    for drop in (['CAP_NET_RAW'], ['CAP_NET_ADMIN'], []):
+        details['HostConfig']['CapDrop'] = drop
+        with pytest.raises(ValueError, match='reviewed boundary'):
+            runner.verify_workload_inspect(details, 'internal')
+    details['HostConfig']['CapDrop'] = ['CAP_NET_ADMIN', 'CAP_NET_RAW']
+    details['HostConfig']['CapAdd'] = ['CAP_NET_ADMIN']
+    with pytest.raises(ValueError, match='reviewed boundary'):
+        runner.verify_workload_inspect(details, 'internal')
+
+
 def test_cleanup_continues_after_timeout(monkeypatch, tmp_path):
     calls = []
     def run(*args, **_kwargs):
