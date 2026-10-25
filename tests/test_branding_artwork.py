@@ -178,3 +178,63 @@ def test_the_artwork_check_does_not_depend_on_the_locale():
     result = subprocess.run([sys.executable, str(ROOT / "scripts/branding/check-artwork.py")],
                             env=env, text=True, capture_output=True)
     assert result.returncode == 0, result.stderr[-2000:]
+
+
+def test_a_descriptor_with_spaces_around_equals_is_read_correctly(tmp_path):
+    fork = copy.deepcopy(config.load())
+    fork["defaults"]["branding"]["plymouth"] = "acmeos"
+    _, themes = drawn_tree(tmp_path, fork)
+    descriptor = themes / "acmeos" / "acmeos.plymouth"
+    descriptor.write_text(
+        "[Plymouth Theme]\n# a comment = with an equals sign\nModuleName = script\n\n[script]\n"
+        "ImageDir = /usr/share/plymouth/themes/acmeos\n"
+        "ScriptFile = /usr/share/plymouth/themes/acmeos/acmeos.script\n", encoding="utf-8")
+    assert config.drawn_artwork_problems(fork, tmp_path) == []
+
+
+def test_the_jpeg_check_reads_only_the_file_prefix(tmp_path, monkeypatch):
+    fork = copy.deepcopy(config.load())
+    walls, _ = drawn_tree(tmp_path, fork)
+    (walls / "marlin.jpg").write_bytes(b"\xff\xd8\xff" + b"\0" * 1_000_000)
+    original = Path.read_bytes
+
+    def refuse_whole_wallpaper(self):
+        assert self.suffix != ".jpg", "the wallpaper was read in full"
+        return original(self)
+
+    monkeypatch.setattr(Path, "read_bytes", refuse_whole_wallpaper)
+    assert config.drawn_artwork_problems(fork, tmp_path) == []
+
+
+def test_write_leaves_the_committed_artwork_untouched_when_a_copy_fails(tmp_path, monkeypatch):
+    share = tmp_path / "share"
+    for name in checker.SETS:
+        (share / name).mkdir(parents=True)
+        (share / name / "kept.svg").write_text("committed")
+
+    def fake_generate(root):
+        for name in checker.SETS:
+            (root / name).mkdir()
+            for leaf in ("a.svg", "b.svg"):
+                (root / name / leaf).write_text("fresh")
+
+    copies = []
+
+    def failing_copy(source, destination, *args, **kwargs):
+        copies.append(destination)
+        if len(copies) == 4:
+            raise OSError("disk full")
+        return real_copy(source, destination)
+
+    real_copy = shutil.copyfile
+    monkeypatch.setattr(checker, "SHARE", share)
+    monkeypatch.setattr(checker, "REPO", tmp_path)
+    monkeypatch.setattr(checker, "generate", fake_generate)
+    monkeypatch.setattr(checker, "missing_requirements", lambda: [])
+    monkeypatch.setattr(checker.shutil, "copyfile", failing_copy)
+    monkeypatch.setattr(sys, "argv", ["check-artwork.py", "--write"])
+    with pytest.raises(OSError):
+        checker.main()
+    for name in checker.SETS:
+        assert [p.name for p in (share / name).iterdir()] == ["kept.svg"]
+    assert sorted(p.name for p in share.iterdir()) == sorted(checker.SETS)

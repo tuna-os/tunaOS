@@ -14,16 +14,25 @@ def orphan_wrappers(workflows, variant_ids):
 
     This script writes one build-<id>.yml per variant and never removes one, so
     a fork that deletes a variant keeps a scheduled workflow that builds a
-    variant the matrix no longer has. A wrapper is recognised by the literal
-    `variant: '<id>'` it passes to build-variant.yml; build-flavor.yml passes
-    an expression and is not one.
+    variant the matrix no longer has. A wrapper is a job that calls
+    build-variant.yml with a literal variant id (found by parsing the YAML, so
+    quoting and layout do not matter); build-flavor.yml passes an expression
+    and is not one.
     """
     orphans = []
     for path in sorted(Path(workflows).glob('build-*.yml')):
-        text = path.read_text(encoding='utf-8')
-        called = re.search(r"^    uses: \./\.github/workflows/build-variant\.yml\n    with:\n      variant: '([a-z0-9-]+)'$", text, re.M)
-        if called and called.group(1) not in variant_ids:
-            orphans.append(path)
+        try:
+            document = yaml.safe_load(path.read_text(encoding='utf-8'))
+        except yaml.YAMLError:
+            continue
+        for job in ((document or {}).get('jobs') or {}).values():
+            if not isinstance(job, dict) or job.get('uses') != './.github/workflows/build-variant.yml':
+                continue
+            variant = (job.get('with') or {}).get('variant')
+            # A literal id marks a per-variant wrapper; build-flavor.yml passes an expression.
+            if isinstance(variant, str) and re.fullmatch(r'[a-z0-9-]+', variant) and variant not in variant_ids:
+                orphans.append(path)
+                break
     return orphans
 
 
