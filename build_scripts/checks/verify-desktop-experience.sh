@@ -104,6 +104,12 @@ tuna_installed_file_owner() {
 # Exit status is deliberately unchanged: turning the waiver into a hard
 # failure would red-line every hummingbird build, which is a policy call for
 # a human, not a side effect of a logging fix.
+# contract-helpers: begin
+# Everything between this marker and "contract-helpers: end" is function
+# definitions plus the waiver counter, and nothing else. The regression test
+# sources exactly that region, so keep it free of top-level commands. The
+# script is installed into the image as a single file, which is why the
+# helpers are delimited here rather than split into a sourced library.
 TUNAOS_CONTRACT_WAIVED=0
 waive() { TUNAOS_CONTRACT_WAIVED=$((TUNAOS_CONTRACT_WAIVED + 1)); }
 
@@ -276,6 +282,7 @@ require_secret_service() {
 		require_any_executable "$root/usr/bin/gnome-keyring-daemon"
 	fi
 }
+# contract-helpers: end
 
 # xfce's greeter is the one desktop piece NO other gate can see missing.
 # xfce.sh installs its DM stack via install_available: lightdm first, greetd
