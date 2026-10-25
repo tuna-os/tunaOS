@@ -153,6 +153,11 @@ def bind_layout(mounts: list[dict], tmpfs: frozenset[str] = frozenset()) -> dict
     return layout
 
 
+def capability_names(values) -> set[str]:
+    # Docker 25+ stores --cap-drop NET_ADMIN as CAP_NET_ADMIN; ALL is stored bare.
+    return {str(v).upper().removeprefix('CAP_') for v in values or []}
+
+
 def verify_workload_inspect(details: dict, internal: str) -> None:
     host = details['HostConfig']
     if (set(details['NetworkSettings']['Networks']) != {internal}
@@ -161,8 +166,8 @@ def verify_workload_inspect(details: dict, internal: str) -> None:
             or host.get('Dns') != ['127.0.0.1']
             or 'no-new-privileges:true' not in host.get('SecurityOpt', [])
             or host.get('PidMode') == 'host' or host.get('IpcMode') == 'host'
-            or set(host.get('CapAdd') or [])
-            or not {'NET_ADMIN', 'NET_RAW'}.issubset(set(host.get('CapDrop') or []))):
+            or capability_names(host.get('CapAdd'))
+            or not {'NET_ADMIN', 'NET_RAW'}.issubset(capability_names(host.get('CapDrop')))):
         raise ValueError('workload Docker isolation does not match the reviewed boundary')
     if (bind_layout(details.get('Mounts', []), frozenset({'/run'}))
             != {'/input': False, '/output': True}):
@@ -287,8 +292,9 @@ def execute(output: Path) -> None:
                 '--mount', f'type=bind,src={output.resolve()},dst=/output',
                 '--entrypoint', '/usr/bin/python3', config['base'], '-I', '/input/workload.py', '--proxy', address)
             inspection = json.loads(run('docker', 'inspect', workload).stdout)[0]
-            verify_workload_inspect(inspection, internal)
+            # Retain before verifying so a fail-closed refusal stays diagnosable.
             (output / 'workload-inspection.json').write_text(json.dumps(inspection, indent=2))
+            verify_workload_inspect(inspection, internal)
             result = run(
                 'docker', 'start', '--attach', workload, timeout=5400, check=False,
                 output_path=output / 'workload-console.log',
