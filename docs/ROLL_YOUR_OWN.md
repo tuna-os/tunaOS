@@ -87,6 +87,19 @@ because `just generate-workflows` writes wrappers and never removes one, and
 that file keeps its nightly cron; `just check` fails and names each wrapper
 whose variant is gone. Delete those files.
 
+A variant's nightly cron and its place in the manual `build-flavor.yml` sweep are
+keys on the variant, not code. `schedule = "20 3 * * *"` sets the cron of
+`build-<id>.yml` (omit it for a dispatch-only variant; stagger it, because the org
+runs 20 jobs at once and `build-variant.yml` records the slots).
+`flavor_dispatch = false` keeps a variant out of the sweep, which otherwise lists
+every non-experimental variant. `just generate-workflows` writes both.
+
+Workflows and scripts that read or write published images (`bootc-lifecycle`,
+`catalog-facts`, `live-overlay`, `live-initramfs`, `publish-isos`,
+`publish-iso-groups`, `verify-asahi`, `asahi-hw-nightly`, the buildcache name,
+`package-parity.sh`, `build-custom`) take the destination from `[build.publish]`,
+else `ghcr.io/<repository owner>`, through `scripts/publish-destination.sh`.
+
 Packages, identity and brand settings live in the same file; the sections below
 show each. [Still hardcoded in code](#what-a-fork-still-edits-in-code) lists the
 few values a fork has to change outside `tunaos.toml` today.
@@ -105,11 +118,13 @@ What to turn off and why:
 The smaller your matrix, the faster your CI. A single-desktop build takes
 ~15 minutes cold, ~5 minutes warm.
 
-### 3. Edit: customize the desktop manifests
+### 3. Edit: customize the desktop policies
 
-Open `manifests/desktops/gnome.yaml` (or whichever desktop you kept). Add
-and remove packages, change group installs, add COPR repos. See [Common
-Customizations](#common-customizations-edit-in-place) below for recipes.
+Edit the `[desktops.<profile>.packages.<family>]` tables in `tunaos.toml` for
+the desktop you kept. Do not edit `manifests/desktops/*.yaml`. Generation
+writes those files and overwrites your edits. Use the
+[package editor](PACKAGE-AUTHORING.md) to search an index and preview an add.
+See [Common Customizations](#common-customizations-edit-in-place) below.
 
 ### 4. Edit: customize the Containerfile
 
@@ -211,43 +226,24 @@ separate directories — you're changing the source of truth.
 
 ### Changing packages in a desktop
 
-Edit `manifests/desktops/<de>.yaml`. Each desktop manifest has per-OS
-package lists:
+Edit the existing family table in `tunaos.toml`. For example, Ubuntu GNOME
+uses `[desktops.gnome.packages.apt]` and its `required` list. Debian GNOME
+uses the `gnome-debian` profile, and Arch GNOME uses `gnome-arch`. A
+family-specific profile replaces the generic profile. It is not a layer on top.
 
-```yaml
-# manifests/desktops/gnome.yaml — add what you want, remove what you don't
-packages:
-  fedora:
-    packages:
-      - gdm
-      - gnome-shell
-      - gnome-terminal     # ← added
-      - nautilus
-      - gnome-text-editor   # ← added
-      # ... keep the rest ...
+RPM families also have `include` groups, which expand before the local
+`required`, `optional` and `exclude` lists. A shared policy can affect several
+variants. Use the existing table and the
+[field reference](CONFIG-WIRING.md#package-fields-and-limits). Do not copy an
+RPM table into an APT profile.
 
-  el10:
-    packages:
-      - gdm
-      - gnome-shell
-      - gnome-terminal     # ← added
-      - nautilus
-      # ... keep the rest ...
+```bash
+python3 scripts/config.py validate
+python3 scripts/config.py generate
 ```
 
-To remove a package, delete its line or comment it out. The installer
-reads the manifest as the canonical list — whatever's there gets
-installed.
-
-> **Which OS key do I edit?** The installer auto-detects:
-> - `el10` — AlmaLinux, CentOS Stream, RHEL
-> - `fedora` — Fedora, Rawhide
-> - `apt` — Ubuntu, Debian
-> - `pacman` — Arch Linux, CachyOS
-> - `zypper` — openSUSE
-> - `emerge` — Gentoo
->
-> Edit the key for the variant you kept. Unused keys are skipped.
+These commands check and write the adapters. They do not install packages or
+show that a package transaction works.
 
 ### System-wide packages and config
 
@@ -292,7 +288,9 @@ These are copied into every image by `build_scripts/00-copy-files.sh` (step
 
 ### COPR repos, PPAs, and version locks
 
-These go in the desktop manifest under the relevant OS key:
+COPR and PPA records belong in the family table of `tunaos.toml`; see the
+[repository records](CONFIG-WIRING.md#package-fields-and-limits). The YAML
+below shows the generated adapter, which you must not edit by hand:
 
 ```yaml
 # manifests/desktops/gnome.yaml
@@ -338,6 +336,13 @@ Your project's name, links and codenames live in `tunaos.toml`:
 name = "Acme OS"          # fastfetch and the KDE About page: "part of Acme OS"
 id = "acmeos"             # lowercase; project-id suffix in the CPE product
 cpe_vendor = "acme"       # the vendor part of CPE_NAME
+website = "https://acme.example"       # OCI `url` label, SBOM namespace (<website>/spdxdocs/)
+docs_url = "https://acme.example/docs" # release notes; OCI `documentation` label is <docs_url>/intro
+# Weekly adoption reports. Empty sends none. Validation rejects TunaOS's own
+# endpoint once name or id differ from TunaOS, so a fork cannot report as a
+# TunaOS cell by leaving it in place. Leave both out to send nothing.
+countme_endpoint = ""
+# countme_metrics_url = "https://acme.example/metrics"   # only with an endpoint
 
 [defaults.branding]       # os-release HOME_URL, DOCUMENTATION_URL, SUPPORT_URL, BUG_REPORT_URL
 homepage = "https://acme.example/os"
@@ -408,11 +413,19 @@ cp -r tunaos acmeos && mv acmeos/tunaos.plymouth acmeos/acmeos.plymouth && mv ac
 theme. Before this check, a copied theme passed and the image booted the splash
 of the original theme.
 
-The installer's slides come from `system_files/etc/bootc-installer/recipe.json`.
-Write them with your `[project] name`: the build puts the variant name in its
-place. The installer logo is the variant's mark, made from its `emoji`. The
-build does not rewrite `imgref` and `local_imgref` in that file, so set them to
-your own image by hand.
+The installer's slides come from `system_files/etc/bootc-installer/recipe.json`,
+and the build puts the variant name where they name the project. The installer
+logo is the variant's mark, made from its `emoji`. The build sets `imgref` and
+`local_imgref` to `<registry>/<namespace>/<project id>:latest`, from the
+destination this build publishes to and `[project] id`. For TunaOS that is
+`ghcr.io/tuna-os/tunaos:latest`; for the Acme tree it is
+`quay.io/acme/acmeos:latest`. Publish an image under that name, or the
+installer has nothing to install.
+
+`[flatpak_preinstall] remote_url` sets the Flatpak remote of Tuna Desktop and
+of the live ISO. It is the URL of a `.flatpakrepo` file. The image registers
+the remote as `tuna-os`, and the installer apps of the live ISO come from it.
+An empty value registers no remote.
 
 The ISO Builder page and the ISO file names have their own brand keys, in
 `[iso_builder.brand]`, `[iso_builder.presentation]` and `[iso_builder.output]`
@@ -438,19 +451,20 @@ The build system already runs `glib-compile-schemas`.
 ### What a fork still edits in code
 
 These values name TunaOS but are not read from `tunaos.toml` yet. A fork that
-publishes under its own name changes them in the file shown.
+publishes under its own name changes them in the file shown. These items are
+not in this list now. They come from `[project]`, `[defaults.branding]` and
+`[flatpak_preinstall]` (above). These are the installer image, the
+usage-report endpoint, image labels and release notes. They are also the SBOM
+identity, live-ISO launchers, ISO media names, KDE theme names and Flatpak
+remote.
 
 | Value | Where | Effect if you leave it |
 |---|---|---|
-| Installer target image (`imgref`, `local_imgref`) | `system_files/etc/bootc-installer/recipe.json` | the installer installs `ghcr.io/tuna-os/tunaos:latest`, not your image |
-| Usage-report endpoint | `system_files/usr/libexec/tunaos-countme` | an image that keeps a stock variant and flavor id can report as that TunaOS cell to `countme.tunaos.org` |
-| Published image location | `.github/workflows/` (`bootc-lifecycle`, `catalog-facts`, `live-overlay`, `live-initramfs`, `publish-isos`, `publish-iso-groups`, `verify-asahi`, `asahi-hw-nightly`) and `.github/changelogs.py` | they pull or push `ghcr.io/tuna-os/...` instead of your destination |
-| Image labels | `.github/workflows/reusable-build-image.yml` (`org.opencontainers.image.url`, `.documentation`), `Containerfile.final` (`.title`) | labels point at tunaos.org and say "TunaOS" |
+| Builder VM clone URL | `tunaos-builder.yaml` | the VM template clones `tuna-os/tunaos`; `scripts/corral-build.sh` re-points it to `CORRAL_REPO` or `GITHUB_REPOSITORY`, `limactl start` alone does not |
 | Nightly schedule per variant | `scripts/generate-workflows.py` (`SCHEDULES`) | a variant you add has no cron |
 | Variant list for manual builds | `.github/workflows/build-flavor.yml` (`matrix.variant`) | dispatches variants you may not have |
-| "Install TunaOS" launchers | `live-iso/common/src/desktop-*.sh`, `live-iso/common/src/customize-live.sh` | the live ISO says "Install TunaOS" |
-| ISO media name | `scripts/build-iso-group.sh` (`MEDIA_NAME`) | the ISO volume says "TunaOS <Variant>" |
-| KDE Global Theme and wallpaper package | `system_files/usr/share/plasma/look-and-feel/org.tunaos*.desktop/`, `system_files/usr/share/wallpapers/TunaOS/` | KDE lists a "TunaOS" theme |
+| Plasma theme and wallpaper package ids and paths | `system_files/usr/share/plasma/look-and-feel/org.tunaos*.desktop/` (`Id`), `system_files/usr/share/wallpapers/TunaOS/` (the folder), `system_files/etc/xdg/kscreenlockerrc` | internal identifiers, not shown: KDE lists the variant's name, the project name and your URLs come from `tunaos.toml`, but the package ids and the folder keep their TunaOS spelling |
+| Installer Flatpak ids (`org.tunaos.Installer*`) and the `tuna-os` remote name | `live-iso/common/src/customize-live.sh`, `live-iso/common/src/desktop-*.sh` | the live ISO installs these apps from the remote `[flatpak_preinstall] remote_url` names; your remote must carry them under these ids |
 | Package repository host | `build_scripts/desktop/install-desktop.sh`, `build_scripts/10-base-packages.sh`, `Containerfile.arch` (`repo.tunaos.org`) | the image keeps pulling TunaOS's packages; this is a dependency, not branding |
 
 ### Adding systemd services
@@ -557,7 +571,8 @@ To add a desktop environment that isn't already in the repo:
 
 ### 1. Create the manifest
 
-Create `manifests/desktops/<name>.yaml`:
+A new desktop is a new `[desktops.<name>]` profile in `tunaos.toml`. The YAML
+below is the shape of the generated file. Do not create it by hand:
 
 ```yaml
 # manifests/desktops/myde.yaml
@@ -675,7 +690,7 @@ package_target = "myos"
 reason = "Tuna Desktop packages for this base need tests."
 ```
 
-### 4. Add package sections to desktop manifests
+### 4. Add package sections to the desktop profiles
 
 ```yaml
 # manifests/desktops/gnome.yaml — add at the bottom of packages:

@@ -43,6 +43,7 @@ from collections import defaultdict
 # Tests load this file by path, so its directory is not always on sys.path.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from lib.gh import gh_json as _gh_json  # noqa: E402
+from lib.publish_destination import registry_and_namespace  # noqa: E402
 import matrix_evaluator  # noqa: E402
 from matrix_snapshot import (  # noqa: E402
     CONFIGURATION_FILES, configuration_digest, historical_notice, load_retained_inputs, snapshot_identity,
@@ -54,7 +55,9 @@ criterion_scope_allows = matrix_evaluator.criterion_scope_allows
 green_axes_without_evidence = matrix_evaluator.green_axes_without_evidence
 is_stale = matrix_evaluator.is_stale
 
-REPO = "tuna-os/tunaOS"
+# The repository whose Actions history is read: the one running this (Actions
+# sets GITHUB_REPOSITORY); the stock repository outside Actions.
+REPO = os.environ.get("GITHUB_REPOSITORY") or "tuna-os/tunaOS"
 DOC = Path("docs/MATRIX-STATUS.md")
 PROV = Path("docs/matrix-provenance.json")
 CONFIG = Path(".github/build-config.yml")
@@ -488,14 +491,27 @@ def latest_results(workflow: str, name_re: str) -> dict[str, tuple[str, str, str
 
 
 def overlay_tags() -> set[str]:
-    """Published live-overlay tags, digest tags excluded."""
+    """Published live-overlay tags, digest tags excluded.
+
+    live-overlay.yml pushes <publish destination>/live-overlay. Only GHCR's
+    token and tag-list API is spoken here, so another registry reads as no
+    overlays (with a warning) rather than a failed run.
+    """
+    registry, namespace = registry_and_namespace()
+    if registry != "ghcr.io":
+        print(
+            f"warning: live-overlay tags are listed through GHCR's API; "
+            f"{registry}/{namespace}/live-overlay is not read",
+            file=sys.stderr,
+        )
+        return set()
     token_url = (
-        "https://ghcr.io/token?scope=repository:tuna-os/live-overlay:pull"
+        f"https://ghcr.io/token?scope=repository:{namespace}/live-overlay:pull"
     )
     with urllib.request.urlopen(token_url, timeout=30) as resp:
         token = json.load(resp)["token"]
     req = urllib.request.Request(
-        "https://ghcr.io/v2/tuna-os/live-overlay/tags/list",
+        f"https://ghcr.io/v2/{namespace}/live-overlay/tags/list",
         headers={"Authorization": f"Bearer {token}"},
     )
     with urllib.request.urlopen(req, timeout=30) as resp:

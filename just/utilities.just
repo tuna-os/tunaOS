@@ -72,7 +72,8 @@ check: _ensure_check_deps ste
     echo "Checking workflow drift..."
     python3 {{ justfile_directory() }}/scripts/generate-workflows.py
     python3 {{ justfile_directory() }}/scripts/gen-ci-lanes.py --check
-    # Check only generated per-variant wrappers; build-variant.yml is shared workflow source.
+    # Check only generated per-variant wrappers and build-flavor.yml's sweep list;
+    # build-variant.yml is shared workflow source.
     generated_workflows=()
     while IFS= read -r variant; do
         generated_workflows+=(".github/workflows/build-${variant}.yml")
@@ -81,6 +82,7 @@ check: _ensure_check_deps ste
         echo "::error::No generated build workflows were found; refusing an empty drift comparison." >&2
         exit 1
     fi
+    generated_workflows+=(".github/workflows/build-flavor.yml")
     if ! git diff --exit-code -- "${generated_workflows[@]}"; then
         echo "::error::Generated workflow files are stale. Run 'just generate-workflows' and commit the changes." >&2
         exit 1

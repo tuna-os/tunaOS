@@ -28,7 +28,7 @@
     "completed": {
       "image": "/run/host/usr/share/bootc-installer/images/tunaos-install.png",
       "title": "Installation Finished",
-      "description": "Reboot your machine to enter your new TunaOS workstation environment!"
+      "description": "Reboot your machine to enter your new @TUNAOS_PROJECT_NAME@ workstation environment!"
     }
   },
   "steps": {

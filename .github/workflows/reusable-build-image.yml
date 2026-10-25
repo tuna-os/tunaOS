@@ -285,7 +285,9 @@ jobs:
           # build, so the layer cache is read-only for that mode.
           PUBLISH_MODE: ${{ steps.publish_credential.outputs.mode }}
         run: |
-          CACHE_REPO="${IMAGE_REGISTRY}/tunaos-buildcache"
+          # Cache repo name follows [project] id in tunaos.toml, as the registry does.
+          source build_scripts/lib/identity.env
+          CACHE_REPO="${IMAGE_REGISTRY}/${TUNAOS_PROJECT_ID:?}-buildcache"
           FLAGS="--layers --cache-from ${CACHE_REPO}"
           # Only non-PR runs may write cache entries, and not when a non-owner credential is in use.
           if [ "$IS_PR" != "true" ] && [ "$PUBLISH_MODE" != "registry-secret" ]; then
@@ -782,8 +784,14 @@ jobs:
             exit 1
           fi
 
+          # The document names its organization and namespace from tunaos.toml
+          # [project] (name, website), through the generated identity adapter.
+          # shellcheck source=build_scripts/lib/identity.env
+          source build_scripts/lib/identity.env
           python3 scripts/packages_to_spdx.py \
-            --manifest "$MANIFEST" --output "$OUT" --image "$IMAGE"
+            --manifest "$MANIFEST" --output "$OUT" --image "$IMAGE" \
+            --organization "${TUNAOS_PROJECT_NAME}" \
+            --namespace-base "${TUNAOS_WEBSITE}/spdxdocs"
 
           # Same two checks the scan path is held to: a consumer cannot tell
           # which path produced the file, so neither can ship a weaker one.
@@ -1123,6 +1131,20 @@ jobs:
           numbers_only=$(echo "${MAJOR_VERSION}" | tr -cd '0-9')
           echo "MAJOR_VERSION_NUMBER=${numbers_only}" >> "${GITHUB_ENV}"
 
+      # OCI labels name the project's site and docs: tunaos.toml [project]
+      # website and docs_url, through the generated identity adapter.
+      - name: Project identity
+        id: identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          source build_scripts/lib/identity.env
+          {
+            echo "website=${TUNAOS_WEBSITE}"
+            echo "documentation=${TUNAOS_DOCS_URL}/intro"
+            echo "keyword=${TUNAOS_PROJECT_ID}"
+          } >> "${GITHUB_OUTPUT}"
+
       - name: Image Metadata
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         id: metadata
@@ -1136,14 +1158,14 @@ jobs:
             io.artifacthub.package.readme-url=${{ env.README_URL }}
             org.opencontainers.image.created=${{ steps.date.outputs.date }}
             org.opencontainers.image.description=${{ env.IMAGE_DESC }}
-            org.opencontainers.image.documentation=https://tunaos.org/docs/intro
+            org.opencontainers.image.documentation=${{ steps.identity.outputs.documentation }}
             org.opencontainers.image.source=${{ env.SOURCE_URL }}
             org.opencontainers.image.title=${{ env.IMAGE_NAME }}
-            org.opencontainers.image.url=https://tunaos.org
+            org.opencontainers.image.url=${{ steps.identity.outputs.website }}
             org.opencontainers.image.vendor=${{ github.repository_owner }}
             org.opencontainers.image.version=${{ env.MAJOR_VERSION }}
             io.artifacthub.package.deprecated=false
-            io.artifacthub.package.keywords=bootc,tunaos
+            io.artifacthub.package.keywords=bootc,${{ steps.identity.outputs.keyword }}
             io.artifacthub.package.license=Apache-2.0
             io.artifacthub.package.logo-url=https://avatars.githubusercontent.com/u/223733964?s=200&v=4
             io.artifacthub.package.maintainers=[{\"name\":\"${{ vars.MAINTAINER_NAME || github.repository_owner }}\",\"email\":\"${{ vars.MAINTAINER_EMAIL }}\"}]

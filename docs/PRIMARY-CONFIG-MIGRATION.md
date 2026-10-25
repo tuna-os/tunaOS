@@ -90,6 +90,10 @@ schema_version = 1
 name = "TunaOS"
 id = "tunaos"
 cpe_vendor = "jamesreilly"
+website = "https://tunaos.org"
+docs_url = "https://tunaos.org/docs"
+countme_endpoint = "https://countme.tunaos.org/v1/report"   # "" sends no reports
+countme_metrics_url = "https://tunaos.org/metrics"
 
 [build.publish]   # optional; omitted, CI publishes to ghcr.io/<repository owner>
 registry = "ghcr.io"

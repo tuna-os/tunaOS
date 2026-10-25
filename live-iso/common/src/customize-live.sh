@@ -69,6 +69,20 @@ if [[ "${TUNA_DETECT_ONLY:-0}" == "1" ]]; then
 	exit 0
 fi
 
+# ── 1a. Project identity ─────────────────────────────────────────────────────
+# The image carries the identity adapter generated from tunaos.toml
+# (build_scripts/90-image-info.sh persists it); the project name, documentation
+# and Flatpak remote below come from it, so this script names no project of its
+# own. No fallback: an image without it was not built by this tree.
+_identity_env="${_SR}/usr/share/tunaos/identity-config.env"
+if [[ ! -r "${_identity_env}" ]]; then
+	echo "ERROR: ${_identity_env} is missing; the image predates the identity adapter" >&2
+	exit 1
+fi
+# shellcheck source=/dev/null
+source "${_identity_env}"
+: "${TUNAOS_PROJECT_NAME:?identity-config.env does not define TUNAOS_PROJECT_NAME}"
+
 # ── 1b. Live user ────────────────────────────────────────────────────────────
 # No TunaOS image ships livesys-scripts, so nothing creates the account the
 # desktop adapters autologin to — bake it into the squash instead (pattern:
@@ -779,10 +793,13 @@ if [[ -n "${INSTALLER_APP}" ]]; then
 		if [ -f /etc/flatpak/remotes.d/tuna-os.flatpakrepo ]; then
 			flatpak remote-add --system --if-not-exists tuna-os \
 				/etc/flatpak/remotes.d/tuna-os.flatpakrepo || true
-		else
+		elif [ -n "${TUNAOS_FLATPAK_REMOTE_URL:-}" ]; then
+			# [flatpak_preinstall] remote_url in tunaos.toml, via identity-config.env.
 			timeout 120 flatpak remote-add --system --if-not-exists tuna-os \
-				https://tunaos.org/flatpak/tuna-os.flatpakrepo ||
+				"${TUNAOS_FLATPAK_REMOTE_URL}" ||
 				echo "WARN: could not add tuna-os remote (network?); continuing"
+		else
+			echo "WARN: no tuna-os remote: the image ships none and tunaos.toml [flatpak_preinstall] remote_url is empty"
 		fi
 		# timeout: flatpak has no network deadline of its own, and a stalled
 		# fetch here is indistinguishable from progress in the build log,
@@ -836,14 +853,14 @@ fi
 # Policy override (allow_active=yes) + JS rule for liveuser, covering both the
 # custom action and generic pkexec (dakota-iso #25 belt-and-suspenders).
 mkdir -p /usr/share/polkit-1/actions
-cat >/usr/share/polkit-1/actions/org.tunaos.Installer.policy <<'POLICYEOF'
+cat >/usr/share/polkit-1/actions/org.tunaos.Installer.policy <<POLICYEOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE policyconfig PUBLIC
   "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
   "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
 <policyconfig>
   <action id="org.tunaos.Installer.install">
-    <description>Install TunaOS to a disk</description>
+    <description>Install ${TUNAOS_PROJECT_NAME} to a disk</description>
     <message>Authentication is required to install an operating system</message>
     <icon_name>drive-harddisk</icon_name>
     <defaults>
