@@ -93,6 +93,16 @@ def test_identity_cannot_be_generated_with_a_gap(remove):
         config.render_identity(source)
 
 
+def test_generate_identity_reports_an_unwritable_target_without_a_traceback(tmp_path):
+    result = subprocess.run(
+        [sys.executable, str(ROOT / "scripts/config.py"), "generate-identity",
+         "--output", str(tmp_path / "missing-dir/identity.env")],
+        text=True, capture_output=True)
+    assert result.returncode == 1
+    assert "Traceback" not in result.stderr
+    assert str(tmp_path / "missing-dir/identity.env") in result.stderr
+
+
 @pytest.mark.parametrize("path,value", [
     (("defaults", "branding", "homepage"), "http://insecure.example"),
     (("defaults", "branding", "support"), 'https://x.example/"quoted"'),

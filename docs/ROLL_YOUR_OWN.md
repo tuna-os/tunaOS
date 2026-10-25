@@ -42,8 +42,8 @@ This is the primary path. Fork, prune, edit, build.
 ### 1. Fork and clone
 
 ```bash
-gh repo fork tuna-os/tunaos --clone
-cd tunaos
+gh repo fork tuna-os/tunaOS --clone
+cd tunaOS
 ```
 
 ### 2. Prune: turn off what you don't want
@@ -326,7 +326,7 @@ python3 -m pip install -r requirements-branding.txt
 python3 scripts/branding/check-artwork.py --write
 ```
 
-A new emoji needs its drawing: copy its file from Noto Emoji's `svg/` folder to
+A new emoji needs its artwork file: copy its file from Noto Emoji's `svg/` folder to
 `scripts/branding/emoji/`. CI fails if the committed artwork does not match
 `tunaos.toml`.
 
@@ -710,8 +710,11 @@ tunaos/
 
 ```bash
 # ── Setup ──────────────────────────────────────────────────────
-brew install just podman shellcheck shfmt yq
-gh repo fork tuna-os/tunaos --clone && cd tunaos
+brew install podman
+gh repo fork tuna-os/tunaOS --clone && cd tunaOS
+python3 scripts/lint_tools.py install --bin-dir "$HOME/.local/bin"
+export PATH="$HOME/.local/bin:$PATH"
+just setup
 
 # ── Local builds ───────────────────────────────────────────────
 just build yellowfin gnome           # build one image
