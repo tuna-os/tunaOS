@@ -28,8 +28,6 @@ on:
       - 'schemas/**'
       # Signed package-search observations and public trust fixtures.
       - 'config/**'
-      # The fork-config contract suite initializes the stock/fork templates.
-      - 'examples/**'
       - 'experiences/**'
       - 'build_scripts/**'
       # One entry rather than six. .github/scripts/**, changelogs.py,
