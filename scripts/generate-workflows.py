@@ -6,6 +6,26 @@ from lib import tunaos_config
 
 import yaml
 import os
+import re
+
+
+def orphan_wrappers(workflows, variant_ids):
+    """Per-variant wrappers whose variant is not in tunaos.toml.
+
+    This script writes one build-<id>.yml per variant and never removes one, so
+    a fork that deletes a variant keeps a scheduled workflow that builds a
+    variant the matrix no longer has. A wrapper is recognised by the literal
+    `variant: '<id>'` it passes to build-variant.yml; build-flavor.yml passes
+    an expression and is not one.
+    """
+    orphans = []
+    for path in sorted(Path(workflows).glob('build-*.yml')):
+        text = path.read_text(encoding='utf-8')
+        called = re.search(r"^    uses: \./\.github/workflows/build-variant\.yml\n    with:\n      variant: '([a-z0-9-]+)'$", text, re.M)
+        if called and called.group(1) not in variant_ids:
+            orphans.append(path)
+    return orphans
+
 
 def main():
     config = tunaos_config.matrix(tunaos_config.load())
@@ -129,6 +149,12 @@ jobs:
         with open(file_path, 'w') as f:
             f.write(workflow_content)
         print(f"Generated {file_path}")
+
+    orphans = orphan_wrappers('.github/workflows', {variant.get('id') for variant in config.get('variants', [])})
+    if orphans:
+        for path in orphans:
+            print(f"::error::{path} builds a variant that is not in tunaos.toml. Delete the file, or restore the variant.", file=sys.stderr)
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()

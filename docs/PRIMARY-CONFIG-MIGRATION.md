@@ -53,7 +53,10 @@ configuration that looks supported.
 
 The example below is a schema sketch with current values, not a complete build
 configuration. The complete file must contain every existing cell and policy.
-Omitted variant flavors here are not a proposal to disable them.
+Omitted variant flavors here are not a proposal to disable them. A variant's
+`branding` is one inline table (accent, GNOME accent, base label, homage and
+boot splash). Wallpapers and logos are not keys: they are files at fixed paths
+under `system_files/`.
 
 ```toml
 schema_version = 1
@@ -81,13 +84,10 @@ bug_report = "https://github.com/tuna-os/tunaos/issues/"
 emoji = "🐠"
 description = "Based on AlmaLinux Kitten 10"
 codename = "Thunnus albacares"
+branding = { accent = "#FFC702", gnome_accent = "yellow", base = "AlmaLinux Kitten", homage = "the yellow petal of the AlmaLinux flower", plymouth = "tropical-fish" }
 aliases = ["almalinux-kitten"]
 platforms = ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
 base_image = "quay.io/almalinuxorg/almalinux-bootc:10-kitten@sha256:fabe22d605a5638cb1fbf2df38d6d9b9ace35f15cb1c10c7db87d475a039d58a"
-
-[variants.yellowfin.branding]
-logo = "system_files/usr/share/tunaos/logos/yellowfin.svg"
-wallpaper = "system_files/usr/share/backgrounds/tunaos/yellowfin-anime.jpg"
 
 [variants.yellowfin.packages]
 # Put native RPM additions here rather than applying them to apt/portage cells.

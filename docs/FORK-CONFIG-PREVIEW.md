@@ -1,5 +1,12 @@
 # Local fork-config consumer preview
 
+> **Not the current fork route.** This page describes the YAML preview
+> (`examples/fork/*.yaml`, `scripts/resolve-fork-config.py`). A fork now edits
+> `tunaos.toml` directly: its name, publish destination, branding, packages and
+> Flatpaks are keys in that file, and `python3 scripts/config.py generate-all`
+> writes the files builds read. Follow
+> [Roll Your Own TunaOS](ROLL_YOUR_OWN.md#the-fork-edit-build-workflow).
+
 This is an opt-in, experimental continuation of [RFC 013](rfc/rfc013-single-fork-config.md).
 Normal builds still use the existing catalog, manifests and brand defaults.
 Nothing here publishes images, changes admission, or qualifies a desktop for release.

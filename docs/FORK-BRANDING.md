@@ -1,5 +1,10 @@
 # Opt-in fork brand consumers
 
+> **Not the current fork route.** This page describes the YAML preview
+> (`scripts/resolve-fork-config.py`), which refuses `name` and `logo`. A fork
+> now sets its name, URLs, codenames and accents in `tunaos.toml`; follow
+> [Roll Your Own TunaOS](ROLL_YOUR_OWN.md#changing-branding-wallpapers-defaults).
+
 This preview applies a deliberately small part of [RFC 013](rfc/rfc013-single-fork-config.md).
 It does not qualify a new brand, desktop, boot splash or installer. Stock builds
 never create or read a fork configuration unless the prepared context explicitly
