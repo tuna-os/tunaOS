@@ -158,3 +158,11 @@ def test_a_fork_edits_only_tunaos_toml_for_its_schedule_and_sweep(tmp_path):
     sweep = yaml.safe_load((tmp_path / ".github/workflows/build-flavor.yml").read_text(encoding="utf-8"))
     listed = sweep["jobs"]["build"]["strategy"]["matrix"]["variant"]
     assert {"gurnard", "hummingbird"} <= set(listed) and "wahoo" not in listed
+
+
+def test_sweep_rewrite_tolerates_indentation_and_spacing():
+    for source, expected in (
+        ("a: 1\n  variant:   [x, y]  \nb: 2\n", "a: 1\n  variant:   [p, q]\nb: 2\n"),
+        ("a: 1\n\t\tvariant: [x,y]\nb: 2\n", "a: 1\n\t\tvariant: [p, q]\nb: 2\n"),
+    ):
+        assert generator.with_flavor_sweep(source, ["p", "q"]) == expected

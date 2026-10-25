@@ -38,7 +38,7 @@ def orphan_wrappers(workflows, variant_ids):
 
 # build-flavor.yml is hand-written except for this one line, which lists the
 # variants its manual sweep fans out to.
-FLAVOR_MATRIX = re.compile(r'^(        variant: )\[[^\]\n]*\]$', re.M)
+FLAVOR_MATRIX = re.compile(r'^([ \t]+variant:[ \t]*)\[[^\]\n]*\][ \t]*$', re.M)
 
 
 def flavor_sweep(variants):
