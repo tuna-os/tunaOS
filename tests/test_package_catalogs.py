@@ -328,6 +328,19 @@ def test_target_configuration_accepts_reordered_catalog_flavors():
     assert set(observation['flavors']) == set(catalog['flavors'])
 
 
+@pytest.mark.parametrize('helper', ['build_scripts/10-base-packages.sh', 'build_scripts/lib.sh'])
+def test_target_configuration_rejects_changed_invoked_or_sourced_helper(tmp_path, helper):
+    # Containerfile.debian runs 10-base-packages.sh after sourcing lib.sh, so a
+    # source-writing change in either must force an observation refresh.
+    _copy_target_configuration(tmp_path)
+    path = tmp_path / helper
+    path.write_text(path.read_text() + "\necho 'deb https://example.invalid stable main' > /etc/apt/sources.list.d/x.list\n")
+    document = __import__('lib.tunaos_config', fromlist=['load']).load()
+    catalog = document['package_catalogs']['debian-trixie']
+    with pytest.raises(CatalogError, match='configuration changed; refresh observation'):
+        package_catalogs.bind_target_configuration(catalog, document, tmp_path, 'base')
+
+
 def test_target_configuration_rejects_changed_source_logic(tmp_path):
     import shutil
     shutil.copytree(ROOT / 'config', tmp_path / 'config')

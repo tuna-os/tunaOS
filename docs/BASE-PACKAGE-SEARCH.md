@@ -27,7 +27,8 @@ search. There is no add or write option.
 
 `configuration_observed_at` identifies the reviewed extraction that binds the
 collector to the effective target. The observation pins
-`Containerfile.debian`, `build_scripts/20-packages.sh`,
+`Containerfile.debian`, the invoked `build_scripts/10-base-packages.sh`, the
+sourced `build_scripts/lib.sh`, `build_scripts/20-packages.sh`,
 `build_scripts/desktop/install-desktop.sh`, `scripts/build-image-inner.sh`, and
 `image-versions.yaml`; inventories copied APT source/trust files under
 `system_files`; and records the resolved digest-pinned common image whose

@@ -444,7 +444,8 @@ def bind_target_configuration(catalog, document, config_directory, flavor):
     if observed_at.tzinfo is None:
         raise CatalogError('target observation timestamp needs timezone')
     files = observation['configuration_files']
-    expected_files = {'Containerfile.debian', 'build_scripts/20-packages.sh',
+    expected_files = {'Containerfile.debian', 'build_scripts/10-base-packages.sh',
+                      'build_scripts/lib.sh', 'build_scripts/20-packages.sh',
                       'build_scripts/desktop/install-desktop.sh',
                       'scripts/build-image-inner.sh', 'image-versions.yaml'}
     if not isinstance(files, dict) or set(files) != expected_files:
