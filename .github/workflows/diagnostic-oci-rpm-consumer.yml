@@ -1,0 +1,48 @@
+name: Diagnostic OCI RPM consumer
+
+on:
+  workflow_dispatch:
+    inputs:
+      acknowledge_scope:
+        description: 'Run one disposable native-solver diagnostic; no publication or full desktop qualification'
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: diagnostic-oci-rpm-consumer
+  cancel-in-progress: false
+
+jobs:
+  diagnostic:
+    if: github.repository == 'tuna-os/tunaOS' && inputs.acknowledge_scope == true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - name: One-cell diagnostic with enforced network preflight
+        env:
+          DIAGNOSTIC_OUTPUT: ${{ runner.temp }}/oci-rpm-diagnostic
+        run: |
+          set -euo pipefail
+          python3 scripts/diagnostics/run_rpm_rehearsal.py plan
+          python3 scripts/diagnostics/run_rpm_rehearsal.py run --output "$DIAGNOSTIC_OUTPUT"
+      # Diagnostic namespace only: no production gate, image, package, ISO or
+      # promotion receipt. Absence/failure cannot be interpreted as green release.
+      - name: Retain diagnostic evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: diagnostic-only-oci-rpm-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/oci-rpm-diagnostic/
+          retention-days: 7
+          if-no-files-found: warn
