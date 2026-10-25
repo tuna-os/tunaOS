@@ -849,3 +849,88 @@ def test_default_retained_collection_requires_a_reviewed_r2_signer():
         "retained_signer_required",
         "retained_policy",
     )
+
+def _deadline_pair(total):
+    class Deadline(CALLER._DeadlineSocketMixin, socket.socket):
+        pass
+
+    server, raw = socket.socketpair()
+    budget = CALLER._Budget(network_policy(total_timeout_seconds=total), time.monotonic)
+    Deadline._budget = budget
+    client = Deadline(raw.family, raw.type, raw.proto, fileno=raw.detach())
+    client.settimeout(5)
+    return server, client, budget
+
+
+def _drip(server, stop, prefix, tail):
+    def run():
+        try:
+            server.sendall(prefix)
+            for byte in tail:
+                if stop.wait(0.05):
+                    return
+                server.sendall(bytes([byte]))
+        except OSError:
+            pass
+
+    thread = threading.Thread(target=run, daemon=True)
+    thread.start()
+    return thread
+
+
+@pytest.mark.parametrize(
+    "prefix, tail, reader",
+    [
+        # Slow status line and headers: response establishment.
+        (b"", b"HTTP/1.1 200 OK\r\n" + b"X-Pad: y\r\n" * 200 + b"\r\n", "begin"),
+        # Slow chunk extension in the chunk-size line.
+        (
+            b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n",
+            b"1;" + b"e" * 400 + b"\r\nx\r\n0\r\n\r\n",
+            "read1",
+        ),
+        # Slow trailer after the last chunk.
+        (
+            b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n1\r\nx\r\n0\r\n",
+            b"X-Trailer: " + b"t" * 400 + b"\r\n\r\n",
+            "drain",
+        ),
+    ],
+)
+def test_framing_reads_cannot_outlast_the_total_deadline(prefix, tail, reader):
+    server, client, _budget = _deadline_pair(0.4)
+    stop = threading.Event()
+    thread = _drip(server, stop, prefix, tail)
+    response = http.client.HTTPResponse(client, method="GET")
+    started = time.monotonic()
+    try:
+        with pytest.raises(CALLER.AuthoritativeTransportError, match="total_timeout"):
+            response.begin()
+            if reader == "read1":
+                response.read1(10)
+            elif reader == "drain":
+                while response.read1(10):
+                    pass
+        elapsed = time.monotonic() - started
+    finally:
+        stop.set()
+        response.close()
+        server.close()
+        client.close()
+        thread.join(5)
+
+    # Each dripped byte arrives every 50 ms and the framing is 200+ bytes, so an
+    # unclamped read would take 10 s or more.
+    assert elapsed < 2
+
+
+def test_default_openers_install_the_deadline_socket_class():
+    case = CASE
+    transport = CALLER.AuthoritativeTransport(
+        reviewed(case), selected(case), network_policy(), TOKEN
+    )
+    handler = next(
+        h for h in transport._archive_opener.handlers
+        if isinstance(h, urllib.request.HTTPSHandler)
+    )
+    assert issubclass(handler._context.sslsocket_class, CALLER._DeadlineSocketMixin)

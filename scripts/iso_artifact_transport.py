@@ -210,7 +210,7 @@ MAX_CHUNK_BYTES = 64 * 1024 * 1024
 MAX_CHUNKS = 160
 
 
-def retained_candidate_prefix(run_id, attempt):
+def retained_candidate_prefix(run_id: int, attempt: int) -> str:
     """Return RFC014's retained-candidate R2 key namespace for one browser run.
 
     The ``yellowfin-gnome/s1`` segments are the only retained target/stream the

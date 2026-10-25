@@ -10,6 +10,7 @@ from dataclasses import dataclass
 import json
 import re
 import socket
+import ssl
 import time
 import urllib.error
 import urllib.parse
@@ -68,6 +69,45 @@ class _Budget:
         if self.remaining_bytes < 0:
             raise AuthoritativeTransportError("total_byte_limit", "transport")
         self.remaining_seconds()
+
+
+class _DeadlineSocketMixin:
+    """Clamp every receive to the shared absolute deadline.
+
+    http.client and urllib bound each socket wait, not the whole exchange, so a
+    peer dripping a status line, header, chunk extension or trailer can hold a
+    single call far past the total budget. Clamping the wait at the receive
+    itself bounds all of those framing reads, which no caller-side check can.
+    """
+
+    _budget = None
+    _base_timeout = None
+
+    def settimeout(self, value):
+        self._base_timeout = value
+        super().settimeout(value)
+
+    def recv_into(self, buffer, nbytes=0, flags=0):
+        remaining = self._budget.remaining_seconds()
+        base = self._base_timeout
+        bound = base is None or remaining <= base
+        super().settimeout(remaining if bound else base)
+        try:
+            return super().recv_into(buffer, nbytes, flags)
+        except (socket.timeout, TimeoutError) as exc:
+            if bound:
+                raise AuthoritativeTransportError("total_timeout", "transport") from exc
+            raise
+
+
+def _deadline_opener_handler(budget):
+    context = ssl.create_default_context()
+    context.sslsocket_class = type(
+        "_DeadlineSSLSocket",
+        (_DeadlineSocketMixin, ssl.SSLSocket),
+        {"_budget": budget},
+    )
+    return urllib.request.HTTPSHandler(context=context)
 
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -233,9 +273,12 @@ class AuthoritativeTransport:
                 # The R2 S3 API needs SigV4 with a read-only credential: a new
                 # secret and permission this caller does not add (RFC014).
                 _fail("retained_signer_required", "retained_policy")
-            self._api_opener = urllib.request.build_opener(_NoRedirect())
+            self._api_opener = urllib.request.build_opener(
+                _NoRedirect(), _deadline_opener_handler(self._budget)
+            )
             self._archive_opener = urllib.request.build_opener(
-                _ArtifactRedirect(network_policy.artifact_redirect_origins)
+                _ArtifactRedirect(network_policy.artifact_redirect_origins),
+                _deadline_opener_handler(self._budget),
             )
             self._object_opener = None
         else:
