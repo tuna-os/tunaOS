@@ -9,7 +9,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
-import secrets
+import secrets as guest_random
 import subprocess
 import sys
 from lib.xfce_candidate import TARGET, COMMIT
@@ -54,8 +54,8 @@ def run(args, execute=subprocess.run):
                 raise ValueError('immutable input digest malformed')
         env.update(VARIANT=TARGET[0],FLAVOR=TARGET[1],TUNAOS_QUAL_PLATFORM=TARGET[2],
             TUNAOS_XFCE_CANDIDATE='1',TUNAOS_QUAL_EXECUTION_KIND='native-qemu',STRICT_PUBLISHED_MEDIA='1',
-            TUNAOS_XFCE_USER='tuna'+''.join(secrets.choice('abcdefhkmnprstuvwxyz') for _ in range(12)),TUNAOS_XFCE_PASSWORD=secrets.token_hex(16),
-            TUNAOS_WALKTHROUGH_LUKS_PASS=secrets.token_hex(16))
+            TUNAOS_XFCE_USER='tuna'+''.join(guest_random.choice('abcdefhkmnprstuvwxyz') for _ in range(12)),TUNAOS_XFCE_PASSWORD=guest_random.token_hex(16),
+            TUNAOS_WALKTHROUGH_LUKS_PASS=guest_random.token_hex(16))
         report['phase']='install-and-boot'
         command=['bash',str(ROOT/'scripts/iso-e2e.sh'),str(args.iso.resolve()),
             '--strict-offline-gui','--output',str(output),'--memory','8192']

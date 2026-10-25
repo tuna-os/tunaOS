@@ -2597,3 +2597,17 @@ Do not guess the stock reference.
 The native producer also checks the overlay receipt before ISO customization.
 It rejects malformed digests and references that name a different target.
 These checks do not supply qualification evidence.
+
+
+### XFCE candidate fails credential, publication or capture tests
+
+Run `40240590000`, job `121312582507`, exposed failures in three tests.
+The credential scanner mistook Python's `secrets` module for GitHub credentials.
+The candidate imports that module as `guest_random`. It still uses secure
+`choice` and `token_hex`; the scanner and its credential rules stay intact.
+
+The producer and live probe each held a stock image reference.
+Both now use the publication resolver, and the media descriptor takes that
+exact target. Source digests and same-run identity checks still apply.
+The capture test now executes the real screenshot function with inert callbacks.
+It covers GNOME and XFCE strict paths and the VNC fallback without a guest.

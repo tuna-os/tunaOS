@@ -16,7 +16,7 @@ from contracts.iso_qualification import DESKTOPS, validate_session
 from lib.guest_console import Console
 from lib.visual_console import VisualConsole
 import tempfile
-from lib.xfce_candidate import LIVE_PROBE, validate_frontend
+from lib.xfce_candidate import LIVE_PROBE, validate_frontend, published_ref
 from lib.xfce_installer_driver import Screen
 from lib.gnome_installer_driver import click_unix
 from lib.qemu_monitor import command as monitor
@@ -82,9 +82,10 @@ def collect(args, console_factory=Console, capture=screenshot, sleep=time.sleep)
             result=console.execute(LIVE_PROBE,sudo=False)
             validate_frontend(result)
             media=result.get('media_input',{})
+            expected_ref=published_ref()
             if (media.get('schemaVersion')!=1 or media.get('platform')!='linux/amd64'
-                or media.get('targetImgref')!='ghcr.io/tuna-os/bonito:xfce'
-                or media.get('image')!='ghcr.io/tuna-os/bonito:xfce'
+                or media.get('targetImgref')!=expected_ref
+                or media.get('image')!=expected_ref
                 or media.get('ociLayoutPath')!='/usr/lib/tunaos/xfce-candidate-oci'
                 or media.get('platformManifestDigest')!=os.environ['TUNAOS_QUAL_SOURCE_DIGEST']):
                 raise ValueError('live media source descriptor mismatch')

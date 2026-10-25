@@ -10,7 +10,6 @@ LAYOUT = '/usr/lib/tunaos/xfce-candidate-oci'
 PAYLOAD_LIMIT = 4 * 1024**3
 ISO_LIMIT = 10 * 1024**3
 
-TARGET = 'ghcr.io/tuna-os/bonito:xfce'
 
 
 def check_budget(path, kind):
@@ -47,7 +46,9 @@ def source_budget(path, expected):
     return report
 
 
-def descriptor(layout, expected):
+def descriptor(layout, expected, target):
+    if not isinstance(target, str) or not re.fullmatch(r"[a-z0-9]+(?:[.-][a-z0-9]+)*(?::[0-9]+)?/(?:[a-z0-9]+(?:[._-][a-z0-9]+)*/)*[a-z0-9]+(?:[._-][a-z0-9]+)*:[a-zA-Z0-9_][a-zA-Z0-9._-]{0,127}", target):
+        raise ValueError("invalid tracking target")
     check_budget(layout, 'payload')
     if not re.fullmatch(r'sha256:[0-9a-f]{64}', expected):
         raise ValueError('invalid source digest')
@@ -92,9 +93,9 @@ def descriptor(layout, expected):
     actual={str(item.relative_to(layout)) for item in layout.rglob('*') if item.is_file()}
     if actual != allowed:
         raise ValueError('unexpected files in candidate OCI payload')
-    return dict(schemaVersion=1, kind='tacklebox-live', image=TARGET,
+    return dict(schemaVersion=1, kind='tacklebox-live', image=target,
                 platformManifestDigest=expected, configDigest=manifest['config']['digest'],
-                ociLayoutPath=LAYOUT, targetImgref=TARGET, platform='linux/amd64')
+                ociLayoutPath=LAYOUT, targetImgref=target, platform='linux/amd64')
 
 
 if __name__ == '__main__':
@@ -104,4 +105,4 @@ if __name__ == '__main__':
     if sys.argv[1] == '--source-budget':
         source_budget(Path(sys.argv[2]), sys.argv[3])
         raise SystemExit(0)
-    Path(sys.argv[3]).write_text(json.dumps(descriptor(Path(sys.argv[1]), sys.argv[2]), indent=2)+'\n')
+    Path(sys.argv[3]).write_text(json.dumps(descriptor(Path(sys.argv[1]), sys.argv[2], sys.argv[4]), indent=2)+'\n')

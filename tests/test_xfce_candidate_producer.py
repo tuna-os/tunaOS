@@ -285,8 +285,9 @@ def test_hmp_waits_for_fragmented_completion_and_late_error(monkeypatch,failed):
     assert wire.parts==[] and wire.read>=5
 
 
+@pytest.mark.parametrize('target',['ghcr.io/tuna-os/bonito:xfce','quay.io/review-fixture/bonito:xfce'])
 @pytest.mark.parametrize('fault',[None,'digest','layer','architecture','missing','index_arch','empty_layers','size','media_type','schema','source_leak'])
-def test_native_payload_descriptor_checks_actual_bytes(tmp_path,fault):
+def test_native_payload_descriptor_checks_actual_bytes(tmp_path,fault,target):
     adapter=module('live-iso/common/src/xfce-media-input.py','media_adapter')
     layout=tmp_path/'oci'; blobs=layout/'blobs/sha256';blobs.mkdir(parents=True)
     def put(data):
@@ -307,11 +308,11 @@ def test_native_payload_descriptor_checks_actual_bytes(tmp_path,fault):
     if fault=='missing':(blobs/layer['digest'][7:]).unlink()
     expected='sha256:'+'0'*64 if fault=='digest' else manifest['digest']
     if fault:
-        with pytest.raises(ValueError):adapter.descriptor(layout,expected)
+        with pytest.raises(ValueError):adapter.descriptor(layout,expected,target)
     else:
-        descriptor=adapter.descriptor(layout,expected)
+        descriptor=adapter.descriptor(layout,expected,target)
         assert descriptor['platformManifestDigest']==expected
-        assert descriptor['targetImgref']=='ghcr.io/tuna-os/bonito:xfce'
+        assert descriptor['targetImgref']==target and descriptor['image']==target
         assert descriptor['ociLayoutPath']==adapter.LAYOUT
         assert 'composeFsBackend' not in descriptor
 
@@ -483,3 +484,68 @@ def test_gui_password_keys_release_before_next_character(monkeypatch):
     monkeypatch.setattr(PHASE.time,'sleep',lambda delay:events.append(delay))
     PHASE.type_text('monitor','a1')
     assert events==['sendkey a 10',.05,'sendkey 1 10',.05]
+
+
+def test_guest_credentials_still_use_python_secure_random():
+    import ast
+    tree=ast.parse((ROOT/'scripts/run-xfce-candidate.py').read_text())
+    assert any(isinstance(n,ast.Import) and any(a.name=='secrets' and a.asname=='guest_random' for a in n.names) for n in tree.body)
+    calls=[n for n in ast.walk(tree) if isinstance(n,ast.Call) and isinstance(n.func,ast.Attribute)
+           and isinstance(n.func.value,ast.Name) and n.func.value.id=='guest_random']
+    assert sum(n.func.attr=='token_hex' and len(n.args)==1 and isinstance(n.args[0],ast.Constant) and n.args[0].value==16 for n in calls)==2
+    assert any(n.func.attr=='choice' for n in calls)
+
+
+def test_candidate_tracking_ref_uses_publication_config(monkeypatch):
+    from lib.xfce_candidate import published_ref
+    from lib.publish_destination import publish_destination
+    monkeypatch.setenv('IMAGE_REGISTRY','quay.io/review-fixture')
+    publish_destination.cache_clear()
+    try:
+        assert published_ref()=='quay.io/review-fixture/bonito:xfce'
+    finally:
+        publish_destination.cache_clear()
+
+
+def test_live_probe_uses_resolved_tracking_ref_and_rejects_stock_substitution(tmp_path,monkeypatch):
+    monkeypatch.setenv('TUNAOS_QUAL_SOURCE_DIGEST','sha256:'+'a'*64)
+    monkeypatch.setattr(PHASE,'published_ref',lambda:'quay.io/review-fixture/bonito:xfce')
+    value=frontend()
+    class Guest:
+        def __init__(self,*args):pass
+        def execute(self,*args,**kwargs):return value
+        def close(self):pass
+    args=SimpleNamespace(action='live',console='unused',directory=tmp_path,output=tmp_path/'probe.json',mode='plain',phase='cold')
+    with pytest.raises(ValueError,match='source descriptor'): PHASE.collect(args,console_factory=Guest)
+    value['media_input'].update(image='quay.io/review-fixture/bonito:xfce',targetImgref='quay.io/review-fixture/bonito:xfce')
+    result=PHASE.collect(args,console_factory=Guest)
+    assert result['media_input']['image']=='quay.io/review-fixture/bonito:xfce'
+
+
+@pytest.mark.parametrize('target',['','unqualified','https://registry/repo:tag','registry/repo:tag@sha256:bad','registry/repo:tag\n','registry//repo:tag','registry:wrong/repo:tag'])
+def test_media_adapter_rejects_malformed_tracking_ref(tmp_path,target):
+    adapter=module('live-iso/common/src/xfce-media-input.py','bad_tracking_adapter')
+    with pytest.raises(ValueError,match='tracking target'):
+        adapter.descriptor(tmp_path,'sha256:'+'a'*64,target)
+
+
+@pytest.mark.parametrize('destination',['ghcr.io/tuna-os','quay.io/review-fixture'])
+@pytest.mark.parametrize('wrong',[False,True])
+def test_real_candidate_source_gate_uses_configured_ref(destination,wrong):
+    import os
+    source=(ROOT/'scripts/build-iso-tacklebox.sh').read_text()
+    start=source.index('\t[[ "$VARIANT:$FLAVOR:$PLATFORM" == bonito:xfce:linux/amd64 ]]')
+    body=source[start:source.index('\t# Preserve the exact base manifest',start)]
+    digest='sha256:'+'a'*64
+    target=destination+'/bonito:xfce'
+    payload=('registry.invalid/wrong:xfce' if wrong else target)+'@'+digest
+    env=dict(os.environ,IMAGE_REGISTRY=destination,REPO_ORGANIZATION=destination.split('/',1)[1],
+        VARIANT='bonito',FLAVOR='xfce',PLATFORM='linux/amd64',TUNA_LIVE_BASE_DIGEST=digest,TUNA_LIVE_PAYLOAD_REF=payload)
+    result=subprocess.run(['bash','-eu','-c',body],cwd=ROOT,env=env,capture_output=True,text=True)
+    assert (result.returncode==0) is (not wrong),result.stderr
+    custom=(ROOT/'live-iso/common/src/customize-live.sh').read_text()
+    start=custom.index('\t[[ "$INSTALLER_APP" == org.tunaos.InstallerXfce')
+    body=custom[start:custom.index('\t# XFCE reads',start)]
+    env.update(INSTALLER_APP=APP,TUNA_LIVE_PLATFORM='linux/amd64',TUNA_LIVE_INSTALL_TARGET=target)
+    result=subprocess.run(['bash','-eu','-c',body],env=env,capture_output=True,text=True)
+    assert (result.returncode==0) is (not wrong),result.stderr

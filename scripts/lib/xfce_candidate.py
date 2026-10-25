@@ -12,6 +12,14 @@ TRANSITIONS = ['welcome', 'source', 'destination', 'setup', 'identity', 'confirm
 TARGET = ('bonito', 'xfce', 'linux/amd64')
 
 
+def published_ref():
+    """Use the same validated target manifest as receipt validation."""
+    from contracts.iso_qualification import manifest
+    row = next(row for row in manifest()['targets']
+               if tuple(row['target'][key] for key in ('variant', 'flavor', 'platform')) == TARGET)
+    return row['publication']['repository'] + ':' + row['publication']['tag']
+
+
 def validate_frontend(value):
     expected = {'app': APP, 'commit': COMMIT, 'receipt_app': APP,
                 'receipt_revision': COMMIT, 'receipt_digest': COMMIT,
