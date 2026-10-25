@@ -113,39 +113,40 @@ names_upstream() {
 
 # ---------------------------------------------------------------- identity --
 
-# The fish codename is the whole point of the case statement in
-# 90-image-info.sh. If VERSION_CODENAME is a dinosaur, the script's output was
-# overwritten by a later step or never applied.
-# Keys are QUOTED, and the hyphenated ones must stay that way. Unquoted,
-# shfmt reads `[bonito-rawhide]` as an arithmetic subscript and reformats it to
-# `[bonito - rawhide]` — which bash then stores as a key containing spaces, so
-# the lookup for the real variant id silently misses:
-#
-#   FAIL: no fish codename defined for variant 'flounder-sid'
-#        — add it here and in 90-image-info.sh
-#
-# flounder-sid:gnome, LUKS run 31093350820, with all thirteen other branding
-# assertions passing. bonito-rawhide carried the identical corruption and had
-# simply never been run. 90-image-info.sh was unaffected because it spells the
-# same thing as a `case` pattern, which shfmt leaves alone — so the two sources
-# of the codename disagreed with no diff between them to see.
-declare -A FISH=(
-	["yellowfin"]="Thunnus albacares" ["albacore"]="Thunnus alalunga"
-	["skipjack"]="Katsuwonus pelamis" ["bonito"]="Sarda sarda"
-	["bonito-rawhide"]="Sarda sarda" ["sailfin"]="Istiophorus platypterus"
-	["guppy"]="Poecilia reticulata" ["grouper"]="Epinephelus marginatus"
-	["marlin"]="Makaira nigricans" ["flounder"]="Platichthys flesus"
-	["flounder-sid"]="Platichthys flesus" ["gurnard"]="Chelidonichthys lucerna"
-	# Not a fish, and the only one: hummingbird is named for the bird, so the
-	# codename is the family. 90-image-info.sh has always WRITTEN Trochilidae;
-	# this table never had it to CHECK, so every hummingbird build would fail
-	# the branding contract the moment one ran. All four of its declared
-	# flavours are untested, which is the only reason it has not.
-	["hummingbird"]="Trochilidae"
-	# Wahoo (Fedora ELN): a mackerel, and the fastest bony fish in the
-	# Atlantic — the lane exists to run ahead of EL11.
-	["wahoo"]="Acanthocybium solandri"
-)
+# The codename 90-image-info.sh wrote must survive to the finished image. If
+# VERSION_CODENAME is a dinosaur, a later step overwrote it or it never ran.
+# Expected values come from the same generated adapter the writer used, so a
+# fork's own codenames pass and there is no second table to drift out of step
+# (two copies once disagreed for flounder-sid, LUKS run 31093350820). Build mode
+# reads the generated build-context adapter; 90-image-info.sh installs that same
+# adapter at /usr/share/tunaos/identity-config.env for the runtime checker.
+identity_env=""
+local_identity="$(dirname "${BASH_SOURCE[0]}")/../lib/identity.env"
+identity_override=""
+if [[ -f "$local_identity" && -n "${TUNAOS_IDENTITY_ENV:-}" && "${TUNAOS_IDENTITY_TEST_OVERRIDE:-}" != 1 ]]; then
+	echo "ERROR: TUNAOS_IDENTITY_ENV is test-only; branding verification must use ${local_identity}" >&2
+	exit 1
+fi
+# Only the source-tree checker accepts an override. The installed verifier must
+# read the root-owned adapter shipped in the image, never a caller-controlled path.
+if [[ -f "$local_identity" ]]; then
+	identity_override="${TUNAOS_IDENTITY_ENV:-}"
+fi
+for candidate in "$identity_override" "$local_identity" /usr/share/tunaos/identity-config.env; do
+	if [[ -n "$candidate" && -f "$candidate" && -r "$candidate" ]]; then
+		identity_env="$candidate"
+		break
+	fi
+done
+declare -A TUNAOS_CODENAMES=()
+identity_source_failed=false
+if [[ -n "$identity_env" ]]; then
+	# shellcheck source=../lib/identity.env
+	if ! source "$identity_env"; then
+		fail "identity adapter could not be sourced: ${identity_env}"
+		identity_source_failed=true
+	fi
+fi
 
 echo "== identity =="
 if [[ -z "$os_release_file" ]]; then
@@ -153,10 +154,14 @@ if [[ -z "$os_release_file" ]]; then
 else
 	pass "os-release=${os_release_file}"
 fi
-want_codename="${FISH[$variant]:-}"
+want_codename="${TUNAOS_CODENAMES[$variant]:-}"
 got_codename="$(osr VERSION_CODENAME)"
-if [[ -z "$want_codename" ]]; then
-	fail "no fish codename defined for variant '${variant}' — add it here and in 90-image-info.sh"
+if [[ -z "$identity_env" ]]; then
+	fail "no identity adapter readable (build_scripts/lib/identity.env or /usr/share/tunaos/identity-config.env)"
+elif [[ "$identity_source_failed" == true ]]; then
+	: # The source failure above is the authoritative adapter diagnostic.
+elif [[ -z "$want_codename" ]]; then
+	fail "no codename defined in tunaos.toml for variant '${variant}'"
 elif [[ "$got_codename" != "$want_codename" ]]; then
 	fail "VERSION_CODENAME is '${got_codename}', want '${want_codename}' (upstream codename survived)"
 else
@@ -172,15 +177,31 @@ else
 	pass "PRETTY_NAME=${got_pretty}"
 fi
 
-# Every URL must point at us. help.ubuntu.com sends our users to a project
-# that cannot help them with our image.
+# Every URL must point at the project. help.ubuntu.com sends our users to a
+# project that cannot help them with our image.
 #
 # All four, not two. This loop read SUPPORT_URL and BUG_REPORT_URL alone, and
 # the two it skipped were wrong on every single variant — HOME_URL and
 # DOCUMENTATION_URL named projectbluefin.io, inherited from the upstream script
 # (docs/BRANDING.md). A field no check reads is a field nobody notices.
+#
+# Each field is compared with the value generated from tunaos.toml that
+# 90-image-info.sh wrote. A substring test for tuna-os/tunaos failed every fork
+# that names its own project, and passed any URL that merely contained it.
 for field in HOME_URL DOCUMENTATION_URL SUPPORT_URL BUG_REPORT_URL; do
+	want_var=""
 	v="$(osr "$field")"
+	case "$field" in
+	HOME_URL) want_var=TUNAOS_HOME_URL ;;
+	DOCUMENTATION_URL) want_var=TUNAOS_DOCUMENTATION_URL ;;
+	SUPPORT_URL) want_var=TUNAOS_SUPPORT_URL ;;
+	BUG_REPORT_URL) want_var=TUNAOS_BUG_REPORT_URL ;;
+	*)
+		fail "unsupported identity URL field: ${field}"
+		continue
+		;;
+	esac
+	want_url="${!want_var:-}"
 	fork_url=""
 	if [[ "$fork_branding_valid" == true ]]; then
 		fork_url="$(tunaos_fork_branding_url "$fork_manifest" "$field")"
@@ -188,10 +209,12 @@ for field in HOME_URL DOCUMENTATION_URL SUPPORT_URL BUG_REPORT_URL; do
 	if [[ -n "$fork_url" ]]; then
 		# The helper compared the exact escaped value in both os-release files.
 		pass "${field}=${fork_url} (validated fork override)"
-	elif [[ "$v" == *tuna-os* || "$v" == *tunaos* ]]; then
+	elif [[ -z "$want_url" ]]; then
+		fail "${field}: no expected URL (${want_var} is unset; identity adapter unreadable)"
+	elif [[ "$v" == "$want_url" ]]; then
 		pass "${field}=${v}"
 	else
-		fail "${field} is '${v}' — points away from TunaOS"
+		fail "${field} is '${v}', want '${want_url}'"
 	fi
 done
 
