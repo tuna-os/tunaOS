@@ -55,6 +55,26 @@ def with_flavor_sweep(text, ids):
     return rewritten
 
 
+# The Asahi sweeps are hand-written except for their one `flavor: [...]` matrix
+# line each: the variants whose gnome-asahi image they test.
+ASAHI_SWEEPS = (('.github/workflows/verify-asahi.yml', 'asahi_verify'),
+                ('.github/workflows/asahi-hw-nightly.yml', 'asahi_hardware'))
+ASAHI_MATRIX = re.compile(r'^([ \t]+flavor:[ \t]*)\[[^\]\n]*\][ \t]*$', re.M)
+
+
+def asahi_sweep(variants, key):
+    """Ids of the variants that set `key` (asahi_verify or asahi_hardware) to true."""
+    return [name for name, variant in variants.items() if variant.get(key, False)]
+
+
+def with_asahi_sweep(text, ids):
+    """Asahi sweep workflow source with its `matrix.flavor` list set to `ids`."""
+    rewritten, count = ASAHI_MATRIX.subn(lambda m: m.group(1) + '[' + ', '.join(ids) + ']', text)
+    if count != 1:
+        raise ValueError(f'expected one `flavor: [...]` matrix line in the Asahi sweep, found {count}')
+    return rewritten
+
+
 def main():
     primary = tunaos_config.load()
     config = tunaos_config.matrix(primary)
@@ -177,6 +197,15 @@ jobs:
         with open(sweep_path, 'w', encoding='utf-8') as f:
             f.write(sweep)
         print(f"Generated {sweep_path}")
+
+    for sweep_path, key in ASAHI_SWEEPS:
+        with open(sweep_path, encoding='utf-8') as f:
+            sweep_source = f.read()
+        sweep = with_asahi_sweep(sweep_source, asahi_sweep(options, key))
+        if sweep != sweep_source:
+            with open(sweep_path, 'w', encoding='utf-8') as f:
+                f.write(sweep)
+            print(f"Generated {sweep_path}")
 
     orphans = orphan_wrappers('.github/workflows', {variant.get('id') for variant in config.get('variants', [])})
     if orphans:
