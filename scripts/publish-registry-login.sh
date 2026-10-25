@@ -5,8 +5,8 @@
 #
 # Step environment:
 #   TUNAOS_PUBLISH_MODE      must be registry-secret (from scripts/publish-credential.py)
-#   TUNAOS_PUBLISH_USERNAME  secrets.TUNAOS_PUBLISH_USERNAME
-#   TUNAOS_PUBLISH_PASSWORD  secrets.TUNAOS_PUBLISH_PASSWORD
+#   TUNAOS_PUBLISH_USERNAME  the publish username secret, passed in by the step
+#   TUNAOS_PUBLISH_PASSWORD  the publish password secret, passed in by the step
 #
 # The owner path (ghcr.io/<owner>) keeps its existing GITHUB_TOKEN steps and
 # never calls this script. The password reaches the tool on stdin only, never
