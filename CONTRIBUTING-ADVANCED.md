@@ -4,6 +4,22 @@ Start with [CONTRIBUTING.md](CONTRIBUTING.md) for the fork workflow and
 required checks. This guide helps you choose a repository, ask for a mentor,
 and progress from a first contribution to helping other contributors.
 
+## Git terms
+
+These terms describe the [fork workflow](CONTRIBUTING.md#fork--pr-loop)
+for this project.
+
+| Term | Meaning in this project |
+|---|---|
+| Fork | A fork is your copy of `tuna-os/tunaos` on GitHub, where you can push changes. |
+| Clone | A clone is a local copy of a repository and its Git history, such as the copy of your fork on your computer. |
+| Origin | `origin` is the remote name for your contributor fork in the local clone. |
+| Upstream | `upstream` is the remote name for the source repository, `tuna-os/tunaos`, in the local clone. |
+| Branch | A branch is a named line of work, such as `docs/my-first-change`, that keeps your commits separate from `main`. |
+| Commit | A commit is a saved snapshot of the files Git tracks, with an author and a message that describes the change. |
+| Pull request (PR) | A pull request asks maintainers to merge changes from your fork's branch into `tuna-os/tunaos:main`, the PR base branch. |
+| Review | A review is feedback on a pull request to check its changes and decide whether it is ready to merge. |
+
 ## Find the right repository
 
 Follow the change through its producer and consumer before opening a PR.
@@ -119,3 +135,68 @@ accept. For retention measurement, use linked claims and PR timestamps for
 time to first response, completed pairings, and repeat contributors; see
 [adoption metrics](ADOPTION-METRICS.md). Do not publish a mentor roster or
 attendance information without each person's consent.
+
+### Worked example: respond to review feedback
+
+This fictional exchange continues a documentation PR on your fork's
+`docs/my-first-change` branch. The reviewer has asked for a clearer link in
+`docs/CONTRIBUTOR-FIRST-PR.md`:
+
+> **Reviewer:** Please link the local-check step to the prose-check instructions.
+>
+> **Contributor:** Should I add only that link and keep the current check commands?
+>
+> **Reviewer:** Yes. Add the prose-check link; keep the commands as they are.
+
+Return to the PR branch before you edit:
+
+```bash
+git switch docs/my-first-change
+git status
+```
+
+Add a link to [the prose checks](CONTRIBUTING.md#prose-checks-ste) in that
+step. The correction gives readers a place to find the STE rules without
+changing which checks they run. If a request is unclear, agree on the scope
+in the review thread before you edit.
+
+After the edit, rerun the checks and inspect the diff:
+
+```bash
+just fix && just check && just ste && git diff --check
+git diff
+```
+
+If a check fails, fix the cause and rerun it. If setup prevents a check,
+post its command and error on the PR and ask for help. Do not report it as
+passed. Read the diff before staging so you include only the agreed correction.
+Once the checks pass, make a new signed-off commit and push to the same
+branch on your fork:
+
+```bash
+git var GIT_AUTHOR_IDENT
+git add docs/CONTRIBUTOR-FIRST-PR.md
+git commit -s -m "docs: link prose checks from the first PR guide"
+git log -1 --format=full
+git push origin docs/my-first-change
+```
+
+Check that the sign-off name and email match the commit author; see
+[DCO sign-off](CONTRIBUTING.md#dco-sign-off). This push adds the commit to
+the existing PR. Keep the correction in that PR for the reviewer to check.
+
+Post the check commands and their output in a PR comment, inside a fenced
+`text` block. Copy the URLs of that comment and the new commit from GitHub.
+Replace `COMMIT_URL` and `CHECK_OUTPUT_COMMENT_URL` in this fictional reply
+with those links, then respond in the original review thread:
+
+```markdown
+Added the prose-check link in [the follow-up commit](COMMIT_URL).
+The check commands are unchanged. I reran `just fix`, `just check`,
+`just ste`, and `git diff --check`; all passed.
+See the [commands and check output](CHECK_OUTPUT_COMMENT_URL).
+This is ready for another review.
+```
+
+Use the results you measured in your reply. A maintainer decides merge
+readiness and handles the merge; contributors do not merge their own PRs.

@@ -28,8 +28,6 @@ on:
       - 'schemas/**'
       # Signed package-search observations and public trust fixtures.
       - 'config/**'
-      # The fork-config contract suite initializes the stock/fork templates.
-      - 'examples/**'
       - 'experiences/**'
       - 'build_scripts/**'
       # One entry rather than six. .github/scripts/**, changelogs.py,
@@ -54,6 +52,7 @@ on:
       - 'tunaos.toml'
       - 'requirements-config.txt'
       - 'requirements-package-authoring.txt'
+      - 'requirements-branding.txt'
       - 'image-versions.yaml'
       - 'registry-map.yaml'
       - 'renovate.json'
@@ -137,7 +136,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup TunaOS Build Environment
-        uses: projectbluefin/actions/bootc-build/setup-runner@b541b99e9d798cd818987004405f205891e65de1 # v1 as of 2026-07-02
+        uses: projectbluefin/actions/bootc-build/setup-runner@d18642a8b4b325c2551eabd9a65c1ad12b4ebb30 # v1 as of 2026-07-02
         with:
           storage-backend: ""
           update-podman: "false"
@@ -161,6 +160,7 @@ jobs:
           pip3 install pytest pytest-cov -r requirements-config.txt --break-system-packages 2>/dev/null || pip3 install pytest pytest-cov -r requirements-config.txt --user
 
           python3 -m pip install -r requirements-package-authoring.txt --break-system-packages || python3 -m pip install -r requirements-package-authoring.txt --user
+          python3 -m pip install -r requirements-branding.txt --break-system-packages || python3 -m pip install -r requirements-branding.txt --user
 
           # Independent schema oracle, pinned with the other external tools.
           schema_version=$(yq -r '.downloads.jsonschema // ""' image-versions.yaml)
@@ -169,6 +169,11 @@ jobs:
 
           # Pillow + requests for desktop-verify.py tests
           pip3 install pillow requests --break-system-packages 2>/dev/null || pip3 install pillow requests --user
+
+      # Marks, lettermarks and fastfetch letters follow each variant's emoji,
+      # name and accent in tunaos.toml; a fork's edits must regenerate them.
+      - name: Check generated artwork
+        run: python3 scripts/branding/check-artwork.py
 
       - name: Prepare test diagnostics
         id: test_diagnostics

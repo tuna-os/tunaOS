@@ -1,4 +1,6 @@
+import sys
 from itertools import product
+from pathlib import Path
 import subprocess
 import json
 import time
@@ -6,7 +8,11 @@ from typing import Any
 import re
 from collections import defaultdict
 
-REGISTRY = "docker://ghcr.io/tuna-os/"
+# The destination images publish to comes from the one resolver
+# (scripts/publish-destination.sh), not a registry written in this file.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+from lib.publish_destination import publish_destination  # noqa: E402
+
 
 IMAGE_MATRIX = {
     "experience": ["base", "dx", "gdx"],
@@ -67,10 +73,10 @@ For current users, type the following to rebase to this version:
 IMAGE_NAME=$(jq -r '.["image-name"]' < /usr/share/ublue-os/image-info.json)
 
 # For this Stream
-sudo bootc switch --enforce-container-sigpolicy ghcr.io/tuna-os/$IMAGE_NAME:{target}
+sudo bootc switch --enforce-container-sigpolicy {registry}/$IMAGE_NAME:{target}
 
 # For this Specific Image:
-sudo bootc switch --enforce-container-sigpolicy ghcr.io/tuna-os/$IMAGE_NAME:{curr}
+sudo bootc switch --enforce-container-sigpolicy {registry}/$IMAGE_NAME:{curr}
 ```
 
 ### Documentation
@@ -122,7 +128,7 @@ def get_manifests(target: str):
         for i in range(RETRIES):
             try:
                 output = subprocess.run(
-                    ["skopeo", "inspect", REGISTRY + img + ":" + target],
+                    ["skopeo", "inspect", f"docker://{publish_destination()}/{img}:{target}"],
                     check=True,
                     stdout=subprocess.PIPE,
                 ).stdout
@@ -386,6 +392,7 @@ def generate_changelog(
 
     changelog = (
         changelog.replace("{handwritten}", handwritten if handwritten else HANDWRITTEN_PLACEHOLDER)
+        .replace("{registry}", publish_destination())
         .replace("{target}", target)
         .replace("{prev}", prev)
         .replace("{curr}", curr)

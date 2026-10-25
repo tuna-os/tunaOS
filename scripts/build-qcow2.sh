@@ -33,7 +33,7 @@ else
 	fi
 	[[ -z "$TAG" ]] && TAG="$FLAVOR"
 	if [ "$REPO" = "ghcr" ]; then
-		IMG_REF="ghcr.io/${repo_organization:-tuna-os}/${VARIANT}:${TAG}"
+		IMG_REF="$("$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/publish-destination.sh")/${VARIANT}:${TAG}"
 	elif [ "$REPO" = "local" ]; then
 		IMG_REF="localhost/${VARIANT}:${TAG}"
 	else

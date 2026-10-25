@@ -8,6 +8,11 @@ prepared material from outreach that was sent, on purpose. We list no organizati
 as a TunaOS adopter without consent-confirmed public evidence in
 [ADOPTERS.md](../ADOPTERS.md).
 
+For the proposed contacts and follow-up dates in #3146, use the
+[sprint for production prospects](outreach/Q4-PRODUCTION-PROSPECTS.md).
+After each contact, add its evidence here. The shortlist does not record
+completed outreach.
+
 | Channel | Prepared material | Sent? | Evidence / next action |
 |---|---|---|---|
 | DistroWatch | [Submission draft](DISTROWATCH-SUBMISSION.md), tracked by [#3238](https://github.com/tuna-os/tunaOS/issues/3238) | No — draft only | Maintainer review and external submission are still required; record the submission URL, date, and first referral snapshot here. |

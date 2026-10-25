@@ -60,17 +60,47 @@ points and the manual `build-flavor.yml` dispatcher.
   - Pull request: the repository's PR workflows select the affected build and
     validation lanes; PR candidates are never promoted
 - **Process**:
-  1. **Matrix Generation** (`generate_matrix`): reads `.github/build-config.yml` via `yq` + `jq`, emits one matrix per stage (S1–S4). Only flavors with `build_image: true` enter the matrix. This filter turns the 144 declared flavors into the 135 published cells
+  1. **Matrix Generation** (`generate_matrix`): reads `.github/build-config.yml` via `yq` + `jq`, emits one matrix per stage (S1–S4). Only flavors with `build_image: true` enter the matrix. Current counts come from that source file; the generated [Matrix Status](MATRIX-STATUS.md) page is the current per-cell view.
   2. **Stage 1** (`build_base`): builds `{variant}:base` for every variant in parallel
   3. **Stage 2** (`build_stage2`): builds `base-hwe`, `base-nvidia`, and all desktop flavors (gnome, kde, niri, cosmic) — runs after all stage 1 complete
   4. **Stage 3** (`build_stage3`): builds `<de>-hwe` and `<de>-nvidia` — runs after all stage 2 complete
   5. **Stage 4** (`build_stage4`): builds `gnome-nvidia-hwe` — runs after all stage 3 complete
-  6. **Artifacts** (`build_artifacts_s2`, `build_artifacts_s3`, `build_artifacts_s4`): per-stage artifact jobs build ISOs (via `just iso-tacklebox`) and QCOW2s for combo cells where `build_iso: true` / `build_qcow2: true`. Each stage's artifacts depend only on that stage's image builds.
+  6. **Artifacts** (`build_artifacts_s2`, `build_artifacts_s3`, `build_artifacts_s4`): per-stage artifact jobs build ISOs through the Tacklebox adapter (`scripts/build-iso-tacklebox.sh`; the local `just iso` recipe calls the same path) and QCOW2s for combo cells where `build_iso: true` / `build_qcow2: true`. Each stage's artifacts depend only on that stage's image builds.
 - **Key Features**:
   - **DAG enforcement**: jobs use `needs` to enforce stage ordering; within a stage, `fail-fast: false`
   - **Multi-platform artifacts**: `linux/amd64` and `linux/arm64` ISO/QCOW2 matrices per stage for multi-arch variants (#1378)
   - **Cosign signing + SBOM** with transient error retry and deadline backoff for all published images (#1377)
   - Pull-request builds do not promote user-facing tags
+
+#### ISO delivery cutover
+
+`iso_delivery` in the authoritative `tunaos.toml` (and its generated
+`.github/build-config.yml` adapter) is the reviewed switch between
+browser-first delivery and routine publication of prebuilt ISOs to R2. Each
+`cutover_targets` entry uses an exact `variant` / `flavor` / `platform`
+identity. Each entry also needs `browser-qualified` status, a date, and an
+evidence reference. If no entry matches, scheduled and explicit publication
+continue through the prebuilt path.
+
+The workflow closes R2 publication for a group only if every buildable flavor
+in its offline store has an exact cutover entry. Partial qualification keeps
+the group open. `scripts/iso-delivery-policy.py` evaluates both matrix forms.
+This keeps the two workflows in sync.
+
+Before you add a cutover target, record every existing versioned and `-latest`
+ISO basename in `retained_r2_isos`. Keep this list after a rollback. If you
+remove a target, publication resumes and retains those objects.
+
+When a requested versioned or latest name is in `retained_r2_isos`, the shared
+uploader writes a fresh ISO and unchanged signed sidecars under a
+`-snapshot-sha256-<prefix>` name. It also updates
+`<variant>-<flavor>-latest[...].json` (`TunaOSIsoResolution/v1`) with the
+current signed download. After rollback, download surfaces use this resolver,
+not historical `-latest.iso` objects. The retention workflow protects each
+resolver target, every explicit retained ISO, and each sidecar. Superseded
+snapshots age out after 14 days. Policy validation rejects a published target
+or fully covered group without a retained latest pointer and a retained
+versioned ISO.
 
 ### 2. Pull Request Checks
 
@@ -93,7 +123,7 @@ The pipeline relies on several helper scripts in the `scripts/` directory and Ju
   manifest assembly, signing, SBOM generation, candidate verification, and
   promotion.
 - **`generate_matrix`** (in `build-variant.yml`): `yq` + `jq` pipeline that reads `build-config.yml`, keeps the flavors marked `build_image: true`, and emits per-stage JSON matrices.
-- **`build-iso-tacklebox.sh`** + `just iso-tacklebox`: Go-based bootc→ISO builder using `ghcr.io/tuna-os/tacklebox`. Replaces the legacy anaconda-based ISO path.
+- **`build-iso-tacklebox.sh`** + `just iso`: Tacklebox-backed bootc→ISO builder using `ghcr.io/tuna-os/tacklebox`. CI may invoke the adapter directly; the `iso` recipe is the local entry point. This replaces the legacy anaconda-based ISO path.
 - **`iso-e2e.sh`**: QEMU+OVMF+KVM end-to-end harness for ISO and installed-disk
   checks; it captures screenshots and serial logs and validates readiness. The
   PR image gate builds a QCOW2 and uses this harness. QEMU sets the marker
