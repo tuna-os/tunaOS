@@ -2,7 +2,7 @@
 
 > **Not the current fork route.** This page describes the YAML preview
 > (`examples/fork/*.yaml`, `scripts/resolve-fork-config.py`). A fork now edits
-> `tunaos.toml` directly: its name, publish destination, branding, packages and
+> `tunaos.toml` directly: its name, publish destination, brand data, packages and
 > Flatpaks are keys in that file, and `python3 scripts/config.py generate-all`
 > writes the files builds read. Follow
 > [Roll Your Own TunaOS](ROLL_YOUR_OWN.md#the-fork-edit-build-workflow).

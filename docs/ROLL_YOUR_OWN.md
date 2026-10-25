@@ -322,9 +322,9 @@ codename = "Wile E"       # os-release VERSION_CODENAME
 branding = { accent = "#E87D0D", gnome_accent = "orange", base = "AlmaLinux Kitten", homage = "Acme orange", plymouth = "acmeos" }
 ```
 
-Edit every variant you keep, not only one: a variant you leave alone keeps
-its TunaOS accent, codename and boot splash (`albacore`, for example, keeps
-the `tunaos` splash when only `[defaults.branding]` changes).
+Edit every variant you keep, not only one. A variant that you do not edit keeps
+its TunaOS accent, codename and boot splash. For example, `albacore` keeps
+the `tunaos` splash when you change only `[defaults.branding]`.
 
 Then regenerate the files every image build reads, and commit them with
 `tunaos.toml`:
@@ -335,7 +335,7 @@ python3 scripts/config.py generate-all
 
 `generate-all` writes the matrix adapter, `build_scripts/lib/identity.env`,
 `variant-identity.tsv`, `variant-aliases.tsv`, `image-packages.tsv`, the
-Flatpak policy and the two ISO Builder files under `docs/`. `just check` runs
+Flatpak policy and the two files for the ISO Builder under `docs/`. `just check` runs
 a `check-*` for each of them and fails, naming `generate-all`, when one
 disagrees with `tunaos.toml`. If you change the matrix (variants, flavors or
 platforms), also run `python3 scripts/generate-countme-allowlist.py`; only
@@ -350,7 +350,7 @@ python3 -m pip install -r requirements-branding.txt
 python3 scripts/branding/check-artwork.py --write
 ```
 
-A new emoji needs its drawing: copy its file from Noto Emoji's `svg/` folder to
+A new emoji needs an image: copy its file from Noto Emoji's `svg/` folder to
 `scripts/branding/emoji/`. CI fails if the committed artwork does not match
 `tunaos.toml`.
 
@@ -362,8 +362,8 @@ You supply the drawn art. Each variant needs a wallpaper at
 variant gets the theme in `[defaults.branding] plymouth`. `just check` fails
 and names the file when one of these is missing or is not a JPEG.
 
-To start a splash from an existing one, copy the folder, rename its two files
-and edit the descriptor, which still names the folder you copied:
+To start from an existing splash, copy the folder, rename its two files
+and edit the descriptor. The descriptor still names the folder you copied:
 
 ```bash
 cd system_files/usr/share/plymouth/themes
@@ -373,8 +373,8 @@ cp -r tunaos acmeos && mv acmeos/tunaos.plymouth acmeos/acmeos.plymouth && mv ac
 ```
 
 `check-drawn-artwork` fails when `ImageDir` or `ScriptFile` points at another
-theme. Before it did, a copied theme passed and the image booted the splash it
-was copied from.
+theme. Before this check, a copied theme passed and the image booted the splash
+of the original theme.
 
 The installer's slides come from `system_files/etc/bootc-installer/recipe.json`.
 Write them with your `[project] name`: the build puts the variant name in its
@@ -384,8 +384,8 @@ your own image by hand.
 
 The ISO Builder page and the ISO file names have their own brand keys, in
 `[iso_builder.brand]`, `[iso_builder.presentation]` and `[iso_builder.output]`
-(`name`, `homepage_url`, `headline`, `volume_label`, `filename_prefix`). They
-are not derived from `[project]`; set them too, then run `generate-all`.
+(`name`, `homepage_url`, `headline`, `volume_label`, `filename_prefix`).
+`[project]` does not set them. Set them too, then run `generate-all`.
 
 For GNOME defaults, create a gschema override:
 
