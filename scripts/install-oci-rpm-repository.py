@@ -239,7 +239,8 @@ def main() -> int:
     try:
         print(json.dumps(install(args), sort_keys=True))
     except (ValueError, OSError, configparser.Error, subprocess.CalledProcessError) as error:
-        print(f'OCI repository install refused: {error}', file=sys.stderr)
+        detail = (getattr(error, 'stderr', None) or '').strip()[-500:]
+        print(f'OCI repository install refused: {error}' + (f': {detail}' if detail else ''), file=sys.stderr)
         return 1
     return 0
 
