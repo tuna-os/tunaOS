@@ -107,7 +107,7 @@ def test_receipt_hash_must_match():
 
 
 @pytest.mark.parametrize('source', ['native-artifact','build','r2-latest',''])
-def test_source_specific_dependency_step_executes_without_snap_for_native(tmp_path, source):
+def test_source_specific_dependency_step_executes_without_a_browser(tmp_path, source):
     workflow = yaml.safe_load((ROOT/'.github/workflows/iso-e2e.yml').read_text())
     step = next(s for s in workflow['jobs']['e2e']['steps'] if s.get('name') == 'Install QEMU and helpers')
     binpath=tmp_path/'bin';binpath.mkdir();log=tmp_path/'calls';out=tmp_path/'env'
@@ -122,11 +122,12 @@ def test_source_specific_dependency_step_executes_without_snap_for_native(tmp_pa
     calls=log.read_text(); exported=out.read_text()
     for needed in ('qemu-utils','swtpm','imagemagick','tesseract-ocr','xorriso','squashfs-tools'):
         assert needed in calls
+    # No source runs a browser: Chromium's Snap download failed with HTTP 408
+    # (run 39634319715) and nothing consumes the browser it would provide.
+    assert 'chromium' not in calls and 'BROWSER_' not in exported
     if source == 'native-artifact':
-        assert 'chromium' not in calls and 'BROWSER_' not in exported
         assert 'TUNAOS_QUAL_EXECUTION_KIND=native-qemu' in exported
     else:
-        assert 'chromium-called' in calls and 'TUNAOS_QUAL_BROWSER_NAME=chromium' in exported
         assert 'EXECUTION_KIND=native-qemu' not in exported
 
 
