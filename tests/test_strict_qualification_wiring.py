@@ -84,7 +84,7 @@ def test_the_default_path_does_not_pay_the_strict_budget():
     job = load("iso-e2e.yml")["jobs"]["e2e"]
     timeout = normalized(job["timeout-minutes"])
     assert "inputs.source == 'native-artifact' && 160" in timeout
-    assert timeout.endswith("&& 90 || 30) }}")
+    assert timeout.endswith("&& 90 || 30)) }}")
 
 
 def test_the_verdict_step_runs_after_a_failed_leg():

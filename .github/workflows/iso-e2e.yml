@@ -24,6 +24,12 @@ name: ISO E2E Smoke
 # GitHub runner (measured, run 32768030728) and the ISO is deleted with the
 # runner, so a sweep costs runner minutes and nothing else.
 #
+# iso-builder-artifact takes a browser-built ISO that tuna-os/iso-builder retained
+# as chunked GitHub artifact, reassembles it, checks every hash, and boots those
+# exact bytes through the same strict harness. The browser catalog gate refuses
+# these targets, so every output is labelled `diagnostic-unqualified` and nothing
+# here qualifies a target. Dispatch only; see scripts/iso-builder-artifact-inputs.py.
+#
 # native-artifact verifies and consumes the exact output of Live ISOs.
 # The reusable same-run call is gated by the successful native build job.
 # A separately selected historical artifact gets diagnostic GUI smoke first;
@@ -56,6 +62,27 @@ on:
       native_archive_digest:
         type: string
         required: true
+      # Declared so conditions can name them. Only a dispatch can select the
+      # iso-builder-artifact source: tests/test_strict_qualification_wiring.py
+      # allows no caller to pass anything but native-artifact.
+      iso_builder_run_id:
+        type: string
+        required: false
+      iso_builder_artifact:
+        type: string
+        required: false
+      iso_builder_evidence_artifact:
+        type: string
+        required: false
+      iso_builder_sha:
+        type: string
+        required: false
+      iso_expected_sha256:
+        type: string
+        required: false
+      qual_installer_digest:
+        type: string
+        required: false
   workflow_dispatch:
     inputs:
       variant:
@@ -87,6 +114,7 @@ on:
           - r2-latest      # Download the latest published ISO from Cloudflare R2.
           - build          # Build the ISO on the runner and test it in place.
           - native-artifact # Verify and test an exact previous native build.
+          - iso-builder-artifact # Strict diagnostic run of a browser-built ISO retained by tuna-os/iso-builder (diagnostic-unqualified).
       native_run_id:
         description: 'Exact successful Live ISOs producer run (native-artifact only)'
         type: string
@@ -102,6 +130,24 @@ on:
         type: string
       native_archive_digest:
         description: 'Expected sha256 archive digest from GitHub (native-artifact only)'
+        type: string
+      iso_builder_run_id:
+        description: 'tuna-os/iso-builder run that built and retained the ISO (iso-builder-artifact only)'
+        type: string
+      iso_builder_artifact:
+        description: 'Chunk artifact name, e.g. iso-skipjack-gnome-run<id>-a1 (iso-builder-artifact only)'
+        type: string
+      iso_builder_evidence_artifact:
+        description: 'Browser evidence artifact name, e.g. browser-evidence-skipjack-gnome-run<id>-a1 (iso-builder-artifact only)'
+        type: string
+      iso_builder_sha:
+        description: 'Full producer commit SHA; pins scripts/retain-iso-artifact.py (iso-builder-artifact only)'
+        type: string
+      iso_expected_sha256:
+        description: 'Expected ISO sha256 from the browser measurement, sha256:<hex> (iso-builder-artifact only)'
+        type: string
+      qual_installer_digest:
+        description: 'Optional operator-supplied installer digest, recorded as such (iso-builder-artifact only)'
         type: string
   # PR trigger only when the harness itself changes. Building a per-PR ISO
   # to test arbitrary Containerfile/build_scripts changes would take ~40 min
@@ -243,7 +289,7 @@ jobs:
     # smoke adds 20, strict plain+LUKS (including detached cold/warm boots)
     # keeps its full 60, extraction allows ten, and setup/API/hash/evidence
     # get ten more: 160 total.
-    timeout-minutes: ${{ inputs.source == 'native-artifact' && 160 || ((github.event_name == 'workflow_dispatch' && inputs.source == 'build') && 90 || 30) }}
+    timeout-minutes: ${{ inputs.source == 'native-artifact' && 160 || (inputs.source == 'iso-builder-artifact' && 160 || ((github.event_name == 'workflow_dispatch' && inputs.source == 'build') && 90 || 30)) }}
     strategy:
       # Don't cancel the other leg if one fails — we want to see both signals.
       fail-fast: false
@@ -702,6 +748,107 @@ jobs:
             echo "VARIANT=${VARIANT}"
             echo "FLAVOR=${FLAVOR}"
           } >> "$GITHUB_ENV"
+      # A browser-built ISO from tuna-os/iso-builder. Order matters and is pinned
+      # by tests/test_iso_builder_artifact_source.py: inputs are checked before
+      # any download, the ISO is reassembled and every hash verified before the
+      # strict step, and the evidence file that supplies the overlay identity is
+      # read from the real retained artifact (no defaults, no ISO-hash stand-ins).
+      - name: Check iso-builder artifact inputs (diagnostic-unqualified)
+        if: steps.filter.outputs.skip != 'true' && inputs.source == 'iso-builder-artifact'
+        env:
+          RUN_ID: ${{ inputs.iso_builder_run_id }}
+          ARTIFACT: ${{ inputs.iso_builder_artifact }}
+          EVIDENCE_ARTIFACT: ${{ inputs.iso_builder_evidence_artifact }}
+          PRODUCER_SHA: ${{ inputs.iso_builder_sha }}
+          EXPECTED_SHA256: ${{ inputs.iso_expected_sha256 }}
+          INSTALLER_DIGEST: ${{ inputs.qual_installer_digest }}
+        run: |
+          set -euo pipefail
+          python3 scripts/iso-builder-artifact-inputs.py check-inputs \
+            --run-id "$RUN_ID" --artifact "$ARTIFACT" --evidence-artifact "$EVIDENCE_ARTIFACT" \
+            --producer-sha "$PRODUCER_SHA" --expected-sha256 "$EXPECTED_SHA256" \
+            --installer-digest "$INSTALLER_DIGEST"
+
+      - name: Download iso-builder ISO chunks (diagnostic-unqualified)
+        if: steps.filter.outputs.skip != 'true' && inputs.source == 'iso-builder-artifact'
+        timeout-minutes: 40
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          repository: tuna-os/iso-builder
+          run-id: ${{ inputs.iso_builder_run_id }}
+          name: ${{ inputs.iso_builder_artifact }}
+          path: iso-builder-chunks
+          github-token: ${{ github.token }}
+
+      - name: Download iso-builder browser evidence (diagnostic-unqualified)
+        if: steps.filter.outputs.skip != 'true' && inputs.source == 'iso-builder-artifact'
+        timeout-minutes: 5
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          repository: tuna-os/iso-builder
+          run-id: ${{ inputs.iso_builder_run_id }}
+          name: ${{ inputs.iso_builder_evidence_artifact }}
+          path: iso-builder-evidence
+          github-token: ${{ github.token }}
+
+      - name: Verify and reassemble the iso-builder ISO (diagnostic-unqualified)
+        if: steps.filter.outputs.skip != 'true' && inputs.source == 'iso-builder-artifact'
+        timeout-minutes: 20
+        env:
+          RUN_ID: ${{ inputs.iso_builder_run_id }}
+          ARTIFACT: ${{ inputs.iso_builder_artifact }}
+          EVIDENCE_ARTIFACT: ${{ inputs.iso_builder_evidence_artifact }}
+          PRODUCER_SHA: ${{ inputs.iso_builder_sha }}
+          EXPECTED_SHA256: ${{ inputs.iso_expected_sha256 }}
+          INSTALLER_DIGEST: ${{ inputs.qual_installer_digest }}
+          VARIANT: ${{ matrix.variant }}
+          FLAVOR: ${{ matrix.flavor }}
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          set -euo pipefail
+          df -h . /tmp
+          mkdir -p iso-e2e-out iso-builder-input
+          # The reassembly script is fetched at the producer commit, never from
+          # a moving branch, and its hash is recorded.
+          curl -fsSL --retry 3 -o iso-builder-input/retain-iso-artifact.py \
+            "https://raw.githubusercontent.com/tuna-os/iso-builder/${PRODUCER_SHA}/scripts/retain-iso-artifact.py"
+          echo "retain-iso-artifact.py sha256:$(sha256sum iso-builder-input/retain-iso-artifact.py | awk '{print $1}') at ${PRODUCER_SHA}"
+          ISO="${GITHUB_WORKSPACE}/iso-builder-input/${VARIANT}-${FLAVOR}.iso"
+          python3 iso-builder-input/retain-iso-artifact.py verify \
+            --dir iso-builder-chunks --expected-sha256 "$EXPECTED_SHA256" --output "$ISO"
+          cp iso-builder-chunks/manifest.json iso-e2e-out/iso-builder-artifact-manifest.json
+          # Free the chunks before the guests need the disk.
+          rm -rf iso-builder-chunks
+          measurements=(iso-builder-evidence/build-measurements-*.json)
+          [[ ${#measurements[@]} -eq 1 && -f "${measurements[0]}" ]] || {
+            echo "::error::expected exactly one build-measurements-*.json in the evidence artifact, found ${#measurements[@]}"
+            exit 1
+          }
+          cp "${measurements[0]}" iso-e2e-out/iso-builder-build-measurements.json
+          python3 scripts/iso-builder-artifact-inputs.py derive \
+            --run-id "$RUN_ID" --artifact "$ARTIFACT" --evidence-artifact "$EVIDENCE_ARTIFACT" \
+            --producer-sha "$PRODUCER_SHA" --expected-sha256 "$EXPECTED_SHA256" \
+            --installer-digest "$INSTALLER_DIGEST" --iso "$ISO" \
+            --measurements iso-e2e-out/iso-builder-build-measurements.json \
+            --manifest iso-e2e-out/iso-builder-artifact-manifest.json \
+            --variant "$VARIANT" --flavor "$FLAVOR" --platform "$PLATFORM" \
+            --out-env iso-builder-input/qual.env \
+            --out-label iso-e2e-out/diagnostic-unqualified.json
+          printf '%s  %s\n' "${EXPECTED_SHA256#sha256:}" "$ISO" > iso-e2e-out/media.sha256
+          sha256sum --check --strict iso-e2e-out/media.sha256
+          {
+            echo "ISO_PATH=${ISO}"
+            echo "VARIANT=${VARIANT}"
+            echo "FLAVOR=${FLAVOR}"
+            cat iso-builder-input/qual.env
+          } >> "$GITHUB_ENV"
+          {
+            echo "## DIAGNOSTIC, UNQUALIFIED BUILD (iso-builder run ${RUN_ID})"
+            echo ""
+            echo "This ISO was built in a browser for a target the catalog gate refuses to qualify."
+            echo "Nothing in this run qualifies the target. Overlay base annotation matched: \`$(jq -r '.identities.overlay.baseAnnotationMatched' iso-e2e-out/diagnostic-unqualified.json)\`."
+          } >> "$GITHUB_STEP_SUMMARY"
+
       # Strict qualification needs the provenance that only a native build
       # embeds (etc/tunaos/live-source.json). Published and in-place media do
       # not carry it, so this step must not run for them: it would fail every
@@ -861,7 +1008,7 @@ jobs:
       # media can promise: a live boot that reaches the readiness markers.
       - name: Run readiness e2e
         id: e2e
-        if: steps.filter.outputs.skip != 'true' && inputs.source != 'native-artifact'
+        if: steps.filter.outputs.skip != 'true' && inputs.source != 'native-artifact' && inputs.source != 'iso-builder-artifact'
         timeout-minutes: 20
         run: |
           mkdir -p iso-e2e-out
@@ -881,14 +1028,16 @@ jobs:
           # Make the artifact dir readable so upload-artifact can stage it.
           sudo chown -R "$USER:$(id -gn)" iso-e2e-out || true
 
-      # Strict plain and encrypted qualification runs on one input only: the
-      # exact native ISO that Live ISOs built. It is reachable from
-      # workflow_dispatch of that workflow, never from a PR or schedule, and no
-      # green criterion names it as a gate. A failed leg stays a failed job;
+      # Strict plain and encrypted qualification runs on two inputs only: the
+      # exact native ISO that Live ISOs built, and a verified browser-built ISO
+      # from iso-builder (diagnostic-unqualified, dispatch only). Neither is
+      # reachable from a PR or schedule, and no green criterion names it as a
+      # gate. The strict policy is identical for both: no relaxed threshold, no
+      # boot-argument edit, no blind input. A failed leg stays a failed job;
       # the verdict step below reports each leg on its own.
       - name: Run strict offline GUI qualification
         id: strict
-        if: steps.filter.outputs.skip != 'true' && inputs.source == 'native-artifact'
+        if: steps.filter.outputs.skip != 'true' && (inputs.source == 'native-artifact' || inputs.source == 'iso-builder-artifact')
         timeout-minutes: 60
         run: |
           df -h . /tmp
@@ -898,7 +1047,7 @@ jobs:
           KVM_FLAG=""
           [[ -r /dev/kvm && -w /dev/kvm ]] || KVM_FLAG="--no-kvm"
           set +e
-          sudo --preserve-env=GITHUB_REPOSITORY,GITHUB_RUN_ID,GITHUB_RUN_ATTEMPT,TUNAOS_QUAL_EXECUTION_KIND,TUNAOS_NATIVE_BINDING,TUNAOS_NATIVE_ARTIFACT_ID,TUNAOS_NATIVE_ARCHIVE_DIGEST,TUNAOS_NATIVE_SOURCE_SHA,KVM_FLAG,VARIANT,FLAVOR,TUNAOS_QUAL_SOURCE_DIGEST,TUNAOS_QUAL_OVERLAY_DIGEST,TUNAOS_QUAL_INSTALLER_DIGEST,TUNAOS_QUAL_ENGINE_DIGEST,TUNAOS_QUAL_MEDIA_DIGEST,STRICT_PUBLISHED_MEDIA,TUNAOS_QUAL_PLATFORM,TUNAOS_QUAL_CPU_BASELINE,TUNAOS_QUAL_HARDWARE_SCOPE \
+          sudo --preserve-env=GITHUB_REPOSITORY,GITHUB_RUN_ID,GITHUB_RUN_ATTEMPT,TUNAOS_QUAL_EXECUTION_KIND,TUNAOS_NATIVE_BINDING,TUNAOS_NATIVE_ARTIFACT_ID,TUNAOS_NATIVE_ARCHIVE_DIGEST,TUNAOS_NATIVE_SOURCE_SHA,KVM_FLAG,VARIANT,FLAVOR,TUNAOS_QUAL_SOURCE_DIGEST,TUNAOS_QUAL_OVERLAY_DIGEST,TUNAOS_QUAL_INSTALLER_DIGEST,TUNAOS_QUAL_ENGINE_DIGEST,TUNAOS_QUAL_MEDIA_DIGEST,STRICT_PUBLISHED_MEDIA,TUNAOS_QUAL_PLATFORM,TUNAOS_QUAL_CPU_BASELINE,TUNAOS_QUAL_HARDWARE_SCOPE,TUNAOS_QUAL_BROWSER_NAME,TUNAOS_QUAL_BROWSER_VERSION \
             ./scripts/iso-e2e.sh "${ISO_PATH}" \
               --output iso-e2e-out \
               --strict-offline-gui \
@@ -927,6 +1076,17 @@ jobs:
             convert "$ppm" "${ppm%.ppm}.png" || true
           done
 
+      # Nothing a diagnostic run writes may be mistaken for a qualification:
+      # the harness's evidence file is renamed, so a glob for
+      # qualification-evidence.json cannot pick it up.
+      - name: Label outputs diagnostic-unqualified
+        if: always() && steps.filter.outputs.skip != 'true' && inputs.source == 'iso-builder-artifact'
+        run: |
+          if [[ -f iso-e2e-out/qualification-evidence.json ]]; then
+            mv iso-e2e-out/qualification-evidence.json iso-e2e-out/diagnostic-unqualified-evidence.json
+          fi
+          echo "diagnostic-unqualified: the iso-builder ISO is not a qualified build" > iso-e2e-out/DIAGNOSTIC-UNQUALIFIED.txt
+
       - name: Stage bounded strict diagnostics
         if: always() && steps.filter.outputs.skip != 'true'
         run: python3 scripts/collect-iso-diagnostics.py iso-e2e-out
@@ -945,8 +1105,10 @@ jobs:
           fi
           scripts/evidence-bundle.sh \
             "${{ matrix.variant }}:${{ matrix.flavor }}" iso iso-e2e-out
+      # The native validator rejects browser-kind evidence by design, so it
+      # does not run for the diagnostic iso-builder source.
       - name: Validate strict qualification evidence
-        if: steps.filter.outputs.skip != 'true' && steps.strict.outcome == 'success' && steps.strict.outputs.rc == '0'
+        if: steps.filter.outputs.skip != 'true' && inputs.source != 'iso-builder-artifact' && steps.strict.outcome == 'success' && steps.strict.outputs.rc == '0'
         run: |
           python3 scripts/native-iso-qualification.py validate \
             iso-e2e-out/qualification-evidence.json
@@ -955,7 +1117,7 @@ jobs:
       # leg that did not pass says where it stopped; nothing here can mark a
       # leg or the target qualified.
       - name: Report strict leg verdicts
-        if: always() && steps.filter.outputs.skip != 'true' && inputs.source == 'native-artifact'
+        if: always() && steps.filter.outputs.skip != 'true' && (inputs.source == 'native-artifact' || inputs.source == 'iso-builder-artifact')
         run: python3 scripts/summarize-strict-legs.py iso-e2e-out >> "$GITHUB_STEP_SUMMARY"
 
       - name: Job summary
@@ -983,7 +1145,7 @@ jobs:
         if: always() && steps.filter.outputs.skip != 'true'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: iso-e2e-${{ matrix.variant }}-${{ matrix.flavor }}
+          name: iso-e2e-${{ matrix.variant }}-${{ matrix.flavor }}${{ inputs.source == 'iso-builder-artifact' && '-diagnostic-unqualified' || '' }}
           # The PPMs are dropped: the step above converts every one of them
           # to PNG, so uploading both stores each frame twice — once in an
           # UNCOMPRESSED format (a 1280x800 PPM is ~3 MB raw against ~100 KB
@@ -997,6 +1159,11 @@ jobs:
             iso-e2e-out/media-payloads.txt
             iso-e2e-out/*.png
             iso-e2e-out/qualification-evidence.json
+            iso-e2e-out/diagnostic-unqualified-evidence.json
+            iso-e2e-out/diagnostic-unqualified.json
+            iso-e2e-out/DIAGNOSTIC-UNQUALIFIED.txt
+            iso-e2e-out/iso-builder-artifact-manifest.json
+            iso-e2e-out/iso-builder-build-measurements.json
             evidence/${{ matrix.variant }}/${{ matrix.flavor }}/amd64/
           if-no-files-found: warn
           retention-days: 7

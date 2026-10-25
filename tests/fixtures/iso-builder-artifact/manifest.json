@@ -1,0 +1,90 @@
+{
+  "chunkBytes": 2147483648,
+  "chunks": [
+    {
+      "name": "skipjack-gnome.iso.part0000",
+      "offset": 0,
+      "sha256": "sha256:dd260ff9dd8f1bfc3c9035d110b1354c949b0d109eae8f33a015f44d65a156f4",
+      "sizeBytes": 2147483648
+    },
+    {
+      "name": "skipjack-gnome.iso.part0001",
+      "offset": 2147483648,
+      "sha256": "sha256:4926bffc494adad376df7cd6cbf948145495774763c5099c9ffca96894779bbe",
+      "sizeBytes": 2147483648
+    },
+    {
+      "name": "skipjack-gnome.iso.part0002",
+      "offset": 4294967296,
+      "sha256": "sha256:7f7db75845ff2777000156d5367cb3a67532ba82994bb63ec77c54be4f70f56a",
+      "sizeBytes": 2147483648
+    },
+    {
+      "name": "skipjack-gnome.iso.part0003",
+      "offset": 6442450944,
+      "sha256": "sha256:639be0ebe8ba1d1bea6f9f6e38d6c76a0424c65a9e88e7542d1a482641e21dc0",
+      "sizeBytes": 2147483648
+    },
+    {
+      "name": "skipjack-gnome.iso.part0004",
+      "offset": 8589934592,
+      "sha256": "sha256:ed1496bb35353bafcd7239bd031730379dc2cb7c8aec12528e9b276f3f79abb5",
+      "sizeBytes": 847898624
+    }
+  ],
+  "iso": {
+    "sha256": "sha256:dc792ede43f95f33761fdec33277c65adbaf8e43265443562ec64294aa81994c",
+    "sizeBytes": 9437833216
+  },
+  "kind": "candidate-iso-artifact-manifest",
+  "measurements": {
+    "browser": {
+      "product": "HeadlessChrome/156.0.8078.4",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.8078.4 Safari/537.36"
+    },
+    "diagnosticUnqualified": {
+      "catalogPins": {
+        "after": {
+          "configDigest": "sha256:05ddeccc4589f6116624df3b7402a541fa1198af13c06890e4787cf6dfd26902",
+          "indexDigest": "sha256:57a187090bfec03a9f1c2eabce99b8f54ed908775ccbd802345a6abf7c3b3243",
+          "platformManifestDigest": "sha256:5f2ac8b1f6fd33c7314199bc0af4cdf362ea2ed9fefe952c668e0343148c7fa9"
+        },
+        "before": {
+          "configDigest": "sha256:51ed9e6cf6b35fee26b5670c4b9a0e3b3befc1b485abf8ea4b3351a72f702f27",
+          "indexDigest": "sha256:f318dbf25a8bebf63384de761a1f5da4ca72b027a2bc755ec1ff09e88cba3cc8",
+          "platformManifestDigest": "sha256:01ae7e79d4ec2ddbf7388660e10e6405800f70e19a44e5474be7b7943e3c8486"
+        },
+        "catalogSnapshotDigest": "sha256:f11a1e621146510e729032bd9ddbb01ba6787b80aaa7a404b241e2d1d10e785b",
+        "targetKey": "skipjack:gnome:linux/amd64"
+      },
+      "gateReason": "incomplete-qualification-provenance",
+      "image": "tuna-os/skipjack:gnome",
+      "label": "diagnostic, unqualified build",
+      "platform": "linux/amd64"
+    },
+    "iso": {
+      "sha256": "sha256:dc792ede43f95f33761fdec33277c65adbaf8e43265443562ec64294aa81994c",
+      "sizeBytes": 9437833216
+    },
+    "loadedWasm": {
+      "sha256": "sha256:9c047c41d3304ea6d76507cb9c15b223c1649a5ef9acb0b6d1b48c8751fcd606",
+      "sizeBytes": 13807182
+    },
+    "phasesMs": {
+      "build": 1699991.393245,
+      "inspect": 61.412773000000016,
+      "save": 138079.80007200013
+    }
+  },
+  "producer": {
+    "repository": "tuna-os/iso-builder",
+    "runAttempt": "1",
+    "runId": "40241323712",
+    "sha": "d14a830c7f9c0451c68dc82e79ec55df9bc2aac0"
+  },
+  "qualification": "diagnostic-unqualified",
+  "r2": false,
+  "schemaVersion": 1,
+  "slug": "skipjack-gnome",
+  "storage": "github-actions-artifact"
+}

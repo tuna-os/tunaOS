@@ -120,7 +120,7 @@ def test_strict_job_budget_covers_both_input_paths():
     text = _text(ISO_WORKFLOW)
     # Default path keeps main's budget; only the native artifact pays for the
     # strict legs (transfer 60 + smoke 20 + strict 60 + extract 10 + 10).
-    assert "&& 90 || 30) }}" in text
+    assert "&& 90 || 30)) }}" in text
     assert "inputs.source == 'native-artifact' && 160" in text
     assert text.count("timeout-minutes: 60") == 2
 

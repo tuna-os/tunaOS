@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "kind": "diagnostic-build-measurements",
+  "qualification": "diagnostic-unqualified",
+  "diagnosticUnqualified": {
+    "label": "diagnostic, unqualified build",
+    "image": "tuna-os/skipjack:gnome",
+    "platform": "linux/amd64",
+    "gateReason": "incomplete-qualification-provenance",
+    "catalogPins": {
+      "targetKey": "skipjack:gnome:linux/amd64",
+      "catalogSnapshotDigest": "sha256:f11a1e621146510e729032bd9ddbb01ba6787b80aaa7a404b241e2d1d10e785b",
+      "before": {
+        "indexDigest": "sha256:f318dbf25a8bebf63384de761a1f5da4ca72b027a2bc755ec1ff09e88cba3cc8",
+        "platformManifestDigest": "sha256:01ae7e79d4ec2ddbf7388660e10e6405800f70e19a44e5474be7b7943e3c8486",
+        "configDigest": "sha256:51ed9e6cf6b35fee26b5670c4b9a0e3b3befc1b485abf8ea4b3351a72f702f27"
+      },
+      "after": {
+        "indexDigest": "sha256:57a187090bfec03a9f1c2eabce99b8f54ed908775ccbd802345a6abf7c3b3243",
+        "platformManifestDigest": "sha256:5f2ac8b1f6fd33c7314199bc0af4cdf362ea2ed9fefe952c668e0343148c7fa9",
+        "configDigest": "sha256:05ddeccc4589f6116624df3b7402a541fa1198af13c06890e4787cf6dfd26902"
+      }
+    }
+  },
+  "iso": {
+    "sha256": "sha256:dc792ede43f95f33761fdec33277c65adbaf8e43265443562ec64294aa81994c",
+    "sizeBytes": 9437833216
+  },
+  "loadedWasm": {
+    "sha256": "sha256:9c047c41d3304ea6d76507cb9c15b223c1649a5ef9acb0b6d1b48c8751fcd606",
+    "sizeBytes": 13807182
+  },
+  "engineBuildResult": {
+    "bytesWritten": 9437833216,
+    "observedInputs": {
+      "schemaVersion": 1,
+      "source": {
+        "manifestDigest": "sha256:5f2ac8b1f6fd33c7314199bc0af4cdf362ea2ed9fefe952c668e0343148c7fa9",
+        "indexDigest": "sha256:57a187090bfec03a9f1c2eabce99b8f54ed908775ccbd802345a6abf7c3b3243",
+        "platformDescriptor": {
+          "architecture": "amd64"
+        },
+        "config": {
+          "descriptor": {
+            "digest": "sha256:05ddeccc4589f6116624df3b7402a541fa1198af13c06890e4787cf6dfd26902",
+            "size": 30521,
+            "mediaType": "application/vnd.oci.image.config.v1+json"
+          },
+          "bytesVerified": true
+        }
+      },
+      "overlay": {
+        "status": "applied",
+        "manifestDigest": "sha256:c86293fb3e9d65a91261cf52fe34bde9e9f0aa684046eaf03e022eb3688fd328",
+        "layersApplied": true,
+        "baseAnnotationMatched": false
+      }
+    }
+  },
+  "missingIdentity": [
+    "producer",
+    "frontend"
+  ],
+  "browser": {
+    "product": "HeadlessChrome/156.0.8078.4",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.8078.4 Safari/537.36"
+  },
+  "phasesMs": {
+    "inspect": 61.412773000000016,
+    "build": 1699991.393245,
+    "save": 138079.80007200013
+  },
+  "timingNote": "Existing stage durations exclude navigation and include observer overhead where it overlaps; no performance qualification."
+}
