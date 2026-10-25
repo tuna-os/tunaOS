@@ -18,8 +18,11 @@ Never post account credentials or API keys in issues or pull requests.
 ## Quick Start
 
 ```bash
-brew install just podman shellcheck shfmt yq
+brew install podman
 git clone https://github.com/tuna-os/tunaOS.git && cd tunaOS
+python3 scripts/lint_tools.py install --bin-dir "$HOME/.local/bin"
+export PATH="$HOME/.local/bin:$PATH"
+just setup
 just fix && just check
 ```
 
@@ -227,6 +230,10 @@ just fix     # format shell scripts and Justfile
 just check   # shellcheck, yamllint, actionlint
 ```
 
+The configuration-sensitive binaries and their release-asset checksums are
+repository-pinned. Follow the [lint tool contract](docs/LINTING.md) and do not
+install the current Homebrew versions.
+
 `just ci` runs what the PR gate runs — `check`, the CI contract, and every
 unit suite. A green `just ci` locally is a green PR, minus the
 scheduled build matrix. The rest of the contributor contract:
@@ -281,7 +288,7 @@ and technical accuracy in all content; an STE opt-out only changes prose checks.
 A bug that let an unusable or wrongly-promoted image ship stays open until a
 test proves the old failure mode can never recur in silence. Put that test in
 [`tests/regressions/`](tests/regressions/README.md), named after the issue
-(`test_issue_<number>_<what_must_not_recur>.py`), with a docstring that cites
+(`test_issue_<number>_<what_must_not_recur>.py`), with a description that cites
 the issue and the run or log that measured the failure. The seed example is
 #858 (marlin:kde shipped with no Wayland session). The regression test runs
 the desktop contract's own check against a filesystem with no session file,
@@ -392,14 +399,18 @@ just verify-disk image.qcow2  # QEMU boot verification
 
 ### Primary config
 
-Edit `tunaos.toml` for matrix changes. Run `python3 scripts/config.py validate`
-to check it, or `python3 scripts/config.py show` to view the build input.
-`python3 scripts/config.py generate` writes the ignored compatibility file.
-Build setup runs this step too. Do not edit that generated file.
+Edit `tunaos.toml` for matrix, identity, package and desktop policy changes.
+Run `python3 scripts/config.py validate` to check it, or
+`python3 scripts/config.py show` to view the build input.
+`python3 scripts/config.py generate` writes the matrix and desktop adapters.
+Build setup runs this step too. Do not edit those generated files.
+See [configuration wiring](docs/CONFIG-WIRING.md) for each field and
+[the package editor](docs/PACKAGE-AUTHORING.md) to preview additions.
 
 Python 3.10+ uses Tomli from this repository. The source has a fixed version.
 Config reads need no parser installation and never download code.
 See [parser updates](docs/VENDORED-PARSER.md) before a version change.
 This parser runs on the build host;
-it is not an image package choice. Packages and brand settings still
-follow the staged [migration plan](docs/PRIMARY-CONFIG-MIGRATION.md).
+it is not an image package choice. The
+[migration plan](docs/PRIMARY-CONFIG-MIGRATION.md) is design history, not the
+current schema.

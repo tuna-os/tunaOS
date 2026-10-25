@@ -1,7 +1,7 @@
 # Live-overlay parity artifacts (tunaOS#673): run the production
 # live_customize (installer flatpak preseed, autologin, polkit, ready
 # marker) in a container of each published flavor image and publish the
-# result as ghcr.io/tuna-os/live-overlay:<variant>-<flavor>.
+# result as <publish destination>/live-overlay:<variant>-<flavor>.
 #
 # The pushed image's layers ABOVE the base image are exactly the
 # customize delta — the browser ISO builder applies those extra layers
@@ -36,12 +36,20 @@ jobs:
     outputs:
       matrix: ${{ steps.gen.outputs.matrix }}
       count: ${{ steps.gen.outputs.count }}
+      destination: ${{ steps.dest.outputs.destination }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Setup yq
         uses: ./.github/actions/setup-yq
+      # "<registry>/<namespace>" the images publish to: [build.publish] in
+      # tunaos.toml, else ghcr.io/<owner> (scripts/publish-destination.sh).
+      - name: Resolve publish destination
+        id: dest
+        env:
+          IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY }}
+        run: echo "destination=$(bash scripts/publish-destination.sh)" >> "$GITHUB_OUTPUT"
       - id: gen
         env:
           WANT_VARIANT: ${{ inputs.variant || 'all' }}
@@ -147,12 +155,13 @@ jobs:
           SAFEPLATFORM: ${{ matrix.safeplatform }}
           TACKLEBOX_BIN: ${{ steps.tbx.outputs.bin }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PUBLISH_DEST: ${{ needs.generate-matrix.outputs.destination }}
         run: |
           set -euo pipefail
           source scripts/lib/platform-digest.sh
-          IMG="ghcr.io/tuna-os/${VARIANT}:${FLAVOR}"
+          IMG="${PUBLISH_DEST:?}/${VARIANT}:${FLAVOR}"
           # Each attempt owns its staging tag through annotation and digest capture.
-          OUT="ghcr.io/tuna-os/live-overlay:${VARIANT}-${FLAVOR}-${SAFEPLATFORM}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          OUT="${PUBLISH_DEST}/live-overlay:${VARIANT}-${FLAVOR}-${SAFEPLATFORM}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
 
           for i in 1 2 3; do sudo podman pull --platform "$PLATFORM" "$IMG" && break; sleep $((i*15)); done
 
@@ -356,6 +365,7 @@ jobs:
       packages: write
     env:
       MATRIX: ${{ needs.generate-matrix.outputs.matrix }}
+      PUBLISH_DEST: ${{ needs.generate-matrix.outputs.destination }}
     steps:
       - name: Log in to GHCR
         env:
@@ -394,7 +404,7 @@ jobs:
               continue
             fi
 
-            index="ghcr.io/tuna-os/live-overlay:${variant}-${flavor}"
+            index="${PUBLISH_DEST:?}/live-overlay:${variant}-${flavor}"
             podman manifest rm "$index" >/dev/null 2>&1 || true
             podman manifest create "$index"
             while IFS=$'\t' read -r repository digest base_digest; do

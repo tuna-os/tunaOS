@@ -154,7 +154,6 @@ jobs:
       - name: Build live ISO (from published GHCR image)
         timeout-minutes: 70
         env:
-          GITHUB_REPOSITORY_OWNER: tuna-os
           TACKLEBOX_FROM_SOURCE: "1"
         run: |
           # Root, not bare. tacklebox's post-customize `podman commit` is

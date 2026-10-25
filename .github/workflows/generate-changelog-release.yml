@@ -307,6 +307,24 @@ jobs:
           fi
           echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
 
+      # The release card names the project and links its docs: tunaos.toml
+      # [project] name and docs_url through the generated identity adapter.
+      # The signing identity is this repository's own workflows (the literal
+      # was tuna-os/tunaOS, which is what github.repository is for TunaOS).
+      - name: Project identity
+        id: identity
+        if: steps.check.outputs.skip == 'false'
+        env:
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          source build_scripts/lib/identity.env
+          {
+            echo "name=${TUNAOS_PROJECT_NAME}"
+            echo "docs-url=${TUNAOS_DOCS_URL}"
+            echo "cert-identity-regexp=^https://github\\.com/${REPOSITORY//./\\.}/\\.github/workflows/"
+          } >> "$GITHUB_OUTPUT"
+
       # ── Create GitHub Release with SBOM diff + release card ──────────────
       - name: Create Release
         id: release
@@ -319,16 +337,15 @@ jobs:
         with:
           sbom-path:          ${{ steps.sbom.outputs.path }}
           tag:                ${{ steps.vars.outputs.tag }}
-          title:              "TunaOS ${{ steps.vars.outputs.stream }} (${{ steps.vars.outputs.date }})"
+          title:              "${{ steps.identity.outputs.name }} ${{ steps.vars.outputs.stream }} (${{ steps.vars.outputs.date }})"
           image:              ${{ steps.vars.outputs.image }}
           digest:             ${{ steps.digest.outputs.digest }}
           repo:               ${{ github.repository }}
-          project-name:       "TunaOS"
+          project-name:       "${{ steps.identity.outputs.name }}"
           accent-color:       "#0ea5e9"
           badge-label:        "${{ steps.vars.outputs.stream }}"
-          docs-url:           "https://tunaos.org/docs"
-          cert-identity-regexp: >-
-            ^https://github\.com/tuna-os/tunaOS/\.github/workflows/
+          docs-url:           "${{ steps.identity.outputs.docs-url }}"
+          cert-identity-regexp: ${{ steps.identity.outputs.cert-identity-regexp }}
           notable-packages: >-
             [
               {"sbom_name": "kernel",        "label": "Kernel"},

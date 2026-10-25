@@ -112,8 +112,11 @@ required Red Hat credentials make it local-build only; see [`rhel-setup.md`](rhe
 ## Setup
 
 ```bash
-brew install just podman shellcheck shfmt yq
+brew install podman
 git clone https://github.com/tuna-os/tunaOS.git && cd tunaOS
+python3 scripts/lint_tools.py install --bin-dir "$HOME/.local/bin"
+export PATH="$HOME/.local/bin:$PATH"
+just setup
 just fix && just check   # validate everything
 just --list              # see all commands
 ```
@@ -131,6 +134,8 @@ just build yellowfin kde linux/amd64  # specific platform
 ```bash
 just fix && just check
 ```
+
+See [`LINTING.md`](LINTING.md) for the pinned source, checksum and gate policy.
 
 ## Testing
 

@@ -60,9 +60,31 @@ jobs:
             } >> "$GITHUB_STEP_SUMMARY"
           fi
 
+  # "<registry>/<namespace>" the images publish to: [build.publish] in
+  # tunaos.toml, else ghcr.io/<owner> (scripts/publish-destination.sh). The
+  # sweep's `with:` is evaluated before any step runs, so it needs this as a
+  # job output. Skipped, like the sweep, until a rental is configured.
+  destination:
+    needs: configured
+    if: needs.configured.outputs.ready == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      destination: ${{ steps.dest.outputs.destination }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup yq
+        uses: ./.github/actions/setup-yq
+      - name: Resolve publish destination
+        id: dest
+        env:
+          IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY }}
+        run: echo "destination=$(bash scripts/publish-destination.sh)" >> "$GITHUB_OUTPUT"
+
   # Sweep mode: every flavor this tier trusts with real rental time.
   sweep:
-    needs: configured
+    needs: [configured, destination]
     if: needs.configured.outputs.ready == 'true' && (github.event_name == 'schedule' || inputs.image == '')
     strategy:
       fail-fast: false
@@ -76,7 +98,7 @@ jobs:
         flavor: [bonito, grouper]
     uses: ./.github/workflows/asahi-hw-nightly-one.yml
     with:
-      image: ghcr.io/tuna-os/${{ matrix.flavor }}:gnome-asahi
+      image: ${{ needs.destination.outputs.destination }}/${{ matrix.flavor }}:gnome-asahi
     secrets:
       ASAHI_HW_TIER2_SSH_KEY: ${{ secrets.ASAHI_HW_TIER2_SSH_KEY }}
       ASAHI_HW_TIER2_HOST: ${{ secrets.ASAHI_HW_TIER2_HOST }}

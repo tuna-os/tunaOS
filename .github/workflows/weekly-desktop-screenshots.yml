@@ -162,7 +162,6 @@ jobs:
         if: steps.filter.outputs.skip != 'true'
         timeout-minutes: 70
         env:
-          GITHUB_REPOSITORY_OWNER: tuna-os
           TACKLEBOX_FROM_SOURCE: "1"
           TBOX_CUSTOMIZE_NETWORK: host
         run: |

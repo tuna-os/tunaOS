@@ -16,19 +16,44 @@ The name `tunaos.toml` alone would not make those deltas meet the new requiremen
 
 ## Source ownership
 
-| Editable data in tunaos.toml | Current owner to retire | Consumer or generated adapter |
+Status is for this stack. It includes the open F3 and F4 pull requests that the
+text names, and it assumes they merge first. A value counts as owned by `tunaos.toml` only
+when a validator, a generated adapter and a consumer exist for it.
+
+| Fork-facing value | Status | TOML owner | Consumer or generated adapter |
+|---|---|---|---|
+| Publish registry and namespace | Implemented (F1 #3736) | `[build.publish]` | `scripts/lib/publish-destination.sh`; image-info records the destination |
+| Image names: aliases, publish name, tag suffix | Implemented | `variants.<id>` `aliases`, `publish_name`, `tag_suffix` | Generated matrix `.github/build-config.yml` |
+| Variant IDs, emoji, bases, platforms, flavor order and holds | Implemented | `variants`, `[[variants.<id>.flavors]]`, `base_image` | Generated matrix; `scripts/get-base-image.sh` |
+| ISO groups, sibling images and Tuna Desktop admission records | Implemented | `iso_groups`, `sibling_images`, `tuna_rollout` | The same generated matrix, with all metadata retained |
+| Desktop package profiles, family overrides, optional/excluded sets and repository policy | Implemented | `package_groups`, `desktops` | Generated `manifests/desktops/*.yaml` consumed by `install-desktop.sh` |
+| Default Flatpak applications | Implemented (F2 #3553) | `[flatpak_preinstall]` | Generated `build_scripts/desktop/flatpak-preinstall.tsv` |
+| ISO Builder presentation and defaults | Implemented | `[iso_builder]`, `flavor_metadata` | Generated `docs/iso-builder.*.json` |
+| Project name, ID, CPE vendor, URLs, variant codenames | Implemented (F3a #3681) | `[project]`, `[defaults.branding]`, `variants.<id>.codename` | Generated `build_scripts/lib/identity.env`; `90-image-info.sh` |
+| Variant accent, GNOME accent, base label, splash theme name | Implemented (F3b #3700, F3d #3705) | `variants.<id>.branding` | Generated `variant-identity.tsv` |
+| Marks, lettermarks and fastfetch letters | Implemented (F3c #3701) | derived from `emoji`, project name and `branding.accent` | Committed outputs of `scripts/branding/*.py`, checked in CI |
+| Installer name | Implemented (F3e #3708) | `[project]` `name`; the logo is the variant mark | `90-image-info.sh` recipe and slide text |
+| Image-wide package additions over inherited base lists | Implemented (F4 #3739) | `[defaults.packages]`, `variants.<id>.packages` (`add`, `optional`, `repositories`) | Generated `image-packages.tsv`; `build_scripts/lib/image-packages.sh` |
+| Image-wide package removals | Rejected by the validator (F4b #3803) | none | No protected-removal design yet |
+
+### Still owned outside `tunaos.toml`
+
+A bounded search found these fork-facing values outside the file. The search
+does not prove completeness. Each value needs more work or an explicit decision.
+None of them has migrated.
+
+| Where | What | Why it is outside |
 |---|---|---|
-| Project registry, namespace and image names | build-image-inner.sh defaults and variant publication rules | Resolved build environment and image-info data |
-| Variant IDs, aliases, emoji, bases, platforms, flavor order and holds | .github/build-config.yml | Generated matrix at the existing path |
-| ISO groups, sibling images and Tuna Desktop admission records | .github/build-config.yml | The same generated matrix, with all metadata retained |
-| Desktop package profiles, family overrides, optional/excluded sets and repository policy | manifests/desktops/*.yaml | Generated desktop manifests consumed by install-desktop.sh |
-| Shared and base-family package policy | 10-base-packages.sh, 20-packages.sh and package-bearing helpers | Ordered typed package plans; scripts retain mechanisms |
-| Image and download versions, digest pins and package ceilings | image-versions.yaml | Generated version adapter; Renovate edits TOML inputs |
-| Registry mirrors | registry-map.yaml | Generated mirror adapter |
-| Names, species codenames, URLs and logo assets | 90-image-info.sh and identity/brand source files | Resolved identity, os-release, Plymouth and desktop adapters |
-| Wallpaper assets and desktop/variant precedence | select-wallpaper.sh and asset naming conventions | Explicit resolved artwork selection with existing stock precedence |
-| Installer name, logos and shared presentation settings | installer customization/projection sources | One versioned frontend-neutral brand payload for all frontends |
-| Flatpak remotes and selected application sets | desktop helper scripts | Typed generated policy consumed by existing installers |
+| `system_files/etc/bootc-installer/recipe.json:7-8` | Installer `imgref` / `local_imgref` default to `ghcr.io/tuna-os/tunaos:latest` | Not derived from `[build.publish]`: `90-image-info.sh:267-272` rewrites display text only and leaves `imgref` alone. ISO group builds write their own recipe with resolved image refs (`scripts/build-iso-group.sh:149-172`), so this default matters to the installer inside an installed image; no other rewrite was found |
+| `system_files/etc/bootc-installer/recipe.json:26` | Installer help text names `repo.tunaos.org` | Literal text |
+| `system_files/usr/libexec/tunaos-countme:19` | Adoption-count endpoint `countme.tunaos.org` | Hard-coded in the installed client |
+| `system_files/etc/xdg/kscreenlockerrc:4` | KDE lock-screen wallpaper directory `TunaOS` | Literal path |
+| `build_scripts/desktop/select-wallpaper.sh:24` | Wallpapers are chosen by file name (`<variant>-<desktop>.jpg`) | An asset convention with no TOML key. The retired preview's single shared-wallpaper override has no replacement |
+| `build_scripts/10-base-packages.sh:28` and `20-packages.sh` | The inherited base package lists | Framework code (#3667): a fork adds over them, it does not replace or remove them |
+| `image-versions.yaml:1`, `registry-map.yaml:1` | Tool and download pins, package ceilings, registry mirrors | Framework inputs; Renovate edits them |
+| `build_scripts/desktop/tuna-flatpak-remote.sh:32` | Flathub remote setup | Framework mechanism; only the application set is in TOML |
+| `scripts/build-image-inner.sh:148` | Layer-cache key hashes `build_scripts/**/*.sh` only | The generated `.env`/`.tsv` adapters are not in it, so a TOML-only edit may reuse a stale layer on a warm cache. The retired preview avoided this with `--no-cache`; the primary path never had that protection. Needs a maintainer decision because widening the key invalidates every warm cache once |
+| `just/custom-overlay.just:7`, `custom/` | Personal overlay on a published image, with package removals and hooks | Kept deliberately: it is the only path for removals and hooks, which `tunaos.toml` refuses. It is not a fork-config interface |
 
 Execution scripts, Containerfiles and checks remain code. Credentials are not
 configuration data. Do not put shell commands, remote includes or secret values in TOML. Existing trusted post-install steps become named, validated operations;
@@ -53,13 +78,24 @@ configuration that looks supported.
 
 The example below is a schema sketch with current values, not a complete build
 configuration. The complete file must contain every existing cell and policy.
-Omitted variant flavors here are not a proposal to disable them.
+Omitted variant flavors here are not a proposal to disable them. A variant's
+`branding` is one inline table (accent, GNOME accent, base label, homage and
+boot splash). Wallpapers and logos are not keys: they are files at fixed paths
+under `system_files/`.
 
 ```toml
 schema_version = 1
 
 [project]
 name = "TunaOS"
+id = "tunaos"
+cpe_vendor = "jamesreilly"
+website = "https://tunaos.org"
+docs_url = "https://tunaos.org/docs"
+countme_endpoint = "https://countme.tunaos.org/v1/report"   # "" sends no reports
+countme_metrics_url = "https://tunaos.org/metrics"
+
+[build.publish]   # optional; omitted, CI publishes to ghcr.io/<repository owner>
 registry = "ghcr.io"
 namespace = "tuna-os"
 
@@ -67,27 +103,24 @@ namespace = "tuna-os"
 homepage = "https://github.com/tuna-os/tunaos"
 documentation = "https://github.com/tuna-os/tunaos/tree/main/docs"
 support = "https://github.com/tuna-os/tunaos/issues/"
+bug_report = "https://github.com/tuna-os/tunaos/issues/"
 
 [defaults.packages]
-# Shared additions; native names must be valid for every selected family.
-packages = []
-
+# Shared additions (implemented, #3668 F4): add, optional, repositories.
+# Native names must be valid for every variant's package manager.
+# add = ["htop"]
 [variants.yellowfin]
 emoji = "🐠"
 description = "Based on AlmaLinux Kitten 10"
 codename = "Thunnus albacares"
+branding = { accent = "#FFC702", gnome_accent = "yellow", base = "AlmaLinux Kitten", homage = "the yellow petal of the AlmaLinux flower", plymouth = "tropical-fish" }
 aliases = ["almalinux-kitten"]
 platforms = ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
 base_image = "quay.io/almalinuxorg/almalinux-bootc:10-kitten@sha256:fabe22d605a5638cb1fbf2df38d6d9b9ace35f15cb1c10c7db87d475a039d58a"
 
-[variants.yellowfin.branding]
-logo = "system_files/usr/share/tunaos/logos/yellowfin.svg"
-wallpaper = "system_files/usr/share/backgrounds/tunaos/yellowfin-anime.jpg"
-
 [variants.yellowfin.packages]
 # Put native RPM additions here rather than applying them to apt/portage cells.
-packages = []
-
+# add = ["tree"]
 # Package profiles preserve native package names and the current list order.
 [desktops.gnome-debian]
 display_manager = "gdm3"
@@ -106,6 +139,23 @@ must have explicit replace/add/remove semantics; do not silently reinterpret
 an existing ordered package list as a set. Family-specific package names stay
 family-specific. Selection never enables a held or unsupported cell.
 
+## Protected package removal
+
+Image-wide additions may move through the primary package resolver, but
+removals remain rejected. A removal can cascade through boot, init, package
+manager, desktop/session, networking or update/recovery dependencies. No static
+list of denied packages can cover those packages across native families.
+
+The [F4b specification for protected removal](../.spektacular/specs/20261024100000-protected-native-package-removal.md)
+defines the approval boundary and the protected set from the contract. It also
+defines qualification of native transactions per family, adversarial fixtures
+and per-cell evidence. All of these must exist before a removal can be enabled.
+The tool derives the protected set from the effective package and runtime
+contracts in the exact build root, and no second package catalog holds it. The
+gate fails closed on missing or stale evidence. Proof of image build, boot,
+install, update and recovery stays separate from source tests and solver
+dry-runs.
+
 ## Ordered migration
 
 1. Record the ownership map and schema in the RFC/spec/plan. Inventory every
@@ -121,7 +171,8 @@ family-specific. Selection never enables a held or unsupported cell.
    values pass through the same compiler and consumers as customized values.
    Reuse the reviewed mechanisms in consumers and check final writers. No stock-only bypass remains.
 5. Replace preview-only commands with the primary config interface. Preserve an explicit command to migrate legacy config and clear errors for incompatible inputs.
-   Retire the obsolete source files and fork-only documentation.
+   Retire the obsolete source files and fork-only documentation. #3807 did this;
+   see the steps to convert a [legacy fork config](#migrating-a-legacy-fork-config).
 6. Qualify representative built images, installer frontends and real installs.
    Keep failures and absent proof visible for each artifact. Only then mark delivery done.
 
@@ -233,4 +284,89 @@ image identity, artwork or installer appearance into primary configuration.
 The Marlin GDM override also belongs to `[desktops.tuna-arch]`. Its generated
 adapter has the same precedence as the former tracked YAML. The regression
 fixture at commit `aa9810e9` preserves the complete package and hook contract;
-other Tuna Desktop cells retain their existing display manager.
+the other cells of Tuna Desktop keep their existing display manager.
+
+## Migrating a legacy fork config
+
+The YAML preview (`resolve-fork-config.py`, `prepare-fork-config.py`, the
+`examples/fork` templates, `manifests/fork-config.json` and the
+`fork-branding.sh` / `fork-packages.sh` consumers) no longer exists. Nothing
+reads its files. A legacy file (`schema_version: 1`, `catalog.sha256`, `image`,
+`targets`, `global`, `overrides`) converts with one command:
+
+```sh
+python3 scripts/config.py migrate-fork-config --legacy OLD.yaml           # print the diff
+python3 scripts/config.py migrate-fork-config --legacy OLD.yaml --write   # replace tunaos.toml
+```
+
+It needs PyYAML, reads `tunaos.toml` from the checkout (`--root` selects another),
+applies the legacy delta to it and prints a unified diff. The primary file has no
+catalog beneath it, so the migration edits the file itself.
+
+| Legacy field | Becomes |
+|---|---|
+| `image.registry`, `image.namespace` | `[build.publish]` |
+| `global.branding.homepage`, `documentation`, `support` | the same keys in `[defaults.branding]` |
+| `global.packages.add`, `optional`, `repositories` | `[defaults.packages]` |
+| `overrides.variants.<id>.packages` | `[variants.<id>.packages]` |
+| `catalog.sha256` | dropped after a shape check; **not** verified against the checkout |
+
+The command refuses everything else. It prints an `ERROR:` that names the field,
+exits non-zero and changes no file. It refuses `targets` (the build filter of the
+preview; prune with `build_image = false`, see
+[ROLL_YOUR_OWN.md](ROLL_YOUR_OWN.md)), `branding.name`, `logo` and `wallpaper`.
+It refuses brand data below the global layer, package layers for one desktop or
+one exact cell, and every non-empty `remove` list. Unknown keys, wrong types,
+duplicate YAML keys, a wrong `schema_version` and a missing `catalog` fail the
+same way.
+
+The primary validator parses the result. It checks each package name against
+the package manager of its variant. A legacy global `add = ["htop"]` that the
+Gentoo variant cannot install fails, and the command does not write it.
+
+The output is deterministic. It keeps every comment and the layout of the rest of
+the file. The command inserts new tables after the keys they extend and replaces
+URL lines in place. The edited text must parse to exactly the original document
+plus the legacy fields. If it does not, the command writes nothing.
+
+Limits: the command drops an inline comment on a replaced value line. It refuses
+a package table that already exists with different contents and does not merge
+it. `bug_report` has no legacy field and keeps its value. The conversion changes
+configuration only. It is no evidence that an image builds, boots or installs
+(#3474).
+
+## F5: Fork recipe and conformance gate (#3806)
+
+**Scope**: configuration resolution of a fork that edits only `tunaos.toml` and
+asset files. **Does not include**: image builds, installs or boot qualification
+(#3474).
+
+`tests/test_fork_recipe_conformance.py` forks the real `tunaos.toml` with text
+edits that a person would make: publish destination, project name, homepage,
+package additions for one variant, and one Flatpak. It runs the tools of the
+repository on the result. These are `scripts/config.py validate`, the
+`generate-*` adapter writers and the shell publish-destination resolver. The
+test asserts these points:
+
+1. **Stock does not change**: every committed adapter (`identity.env`,
+   `variant-identity.tsv`, `variant-aliases.tsv`, `image-packages.tsv`,
+   `flatpak-preinstall.tsv`) equals a fresh render of `tunaos.toml`. Stock has no
+   publish table or package additions.
+2. **The fork differs**: destination, identity, package rows and Flatpak list
+   change as edited. Only the variant that declared the packages gets them.
+3. **Undo the edits**: the stock bytes and adapters come back exactly.
+4. **Code is not configuration**: the test rejects a `[hooks]` table, shell
+   metacharacters or URLs in package names, and `remove` lists. It checks each
+   package name against the package manager of its variant.
+5. **Assets travel with the config**: `check-drawn-artwork` reports a new
+   boot-splash theme name as missing until its theme files exist.
+
+Native names in `[defaults.packages]` must be valid for every variant's package
+manager, so the sample scopes them to a dnf variant. The test does not build an
+image, and it is not yet a CI-only gate: it runs with the rest of `tests/`.
+
+### Conformance boundaries
+
+**#3806 owns** the fixture and the resolution assertions above. **#3474 owns**
+image build, install and boot proof for the Yellowfin (RPM) and Grouper (APT)
+reference journeys.

@@ -37,6 +37,9 @@ fi
 
 # shellcheck source=lib/common.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
+# The volume label starts with the project id (tunaos.toml [project] id).
+# shellcheck source=../build_scripts/lib/identity.env
+. "$(dirname "${BASH_SOURCE[0]}")/../build_scripts/lib/identity.env"
 # shellcheck source=lib/squashfs-compat.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/squashfs-compat.sh"
 # shellcheck source=lib/platform-digest.sh
@@ -210,7 +213,7 @@ gnome* | *) DESKTOP="gnome" ;;
 esac
 
 # Capped at the ISO 9660 32-character volume ID; see tunaos_iso_media_name.
-MEDIA_NAME="$(tunaos_iso_media_name "tunaos-${VARIANT}-${FLAVOR}")"
+MEDIA_NAME="$(tunaos_iso_media_name "${TUNAOS_PROJECT_ID}-${VARIANT}-${FLAVOR}")"
 
 cat >"$RECIPE_FILE" <<EOF
 {
