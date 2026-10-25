@@ -263,3 +263,36 @@ def test_control_failure_precedes_native_mutation(monkeypatch, tmp_path):
     with pytest.raises(ValueError, match='preflight denied'):
         workload.execute('172.30.0.2')
     assert (output / 'control-events.jsonl').exists()
+
+
+def fake_dnf(tmp_path, log_dir):
+    """Reproduces the measured centos-bootc behaviour: version on stdout, but
+    exit 1 with the hawkey.log warning when /var/log is absent."""
+    script = tmp_path / 'dnf'
+    script.write_text(f'#!/bin/sh\necho 4.20.0\n[ -d "{log_dir}" ] || {{ echo "Failed to open log file: {log_dir}/hawkey.log" >&2; exit 1; }}\n')
+    script.chmod(0o755)
+    return str(script)
+
+
+def test_checked_fails_closed_and_keeps_bounded_stderr(tmp_path, monkeypatch):
+    monkeypatch.setattr(workload, 'OUTPUT', tmp_path)
+    command = fake_dnf(tmp_path, tmp_path / 'absent')
+    with pytest.raises(ValueError, match='hawkey.log'):
+        workload.checked([command, '--version'])
+    record = json.loads((tmp_path / 'command-failures.log').read_text())
+    assert record['returncode'] == 1 and 'hawkey.log' in record['stderr_tail']
+    assert len(record['stderr_tail']) <= 2000
+    present = tmp_path / 'present'
+    present.mkdir()
+    assert workload.checked([fake_dnf(tmp_path, present), '--version']).stdout.startswith('4.')
+
+
+def test_missing_system_log_is_created_so_dnf_exits_zero(tmp_path, monkeypatch):
+    log_dir = tmp_path / 'var-log'
+    monkeypatch.setattr(workload, 'OUTPUT', tmp_path)
+    monkeypatch.setattr(workload, 'SYSTEM_LOG', log_dir)
+    command = fake_dnf(tmp_path, log_dir)
+    with pytest.raises(ValueError):
+        workload.checked([command, '--version'])
+    workload.ensure_system_log()
+    assert workload.checked([command, '--version']).stdout.startswith('4.')
