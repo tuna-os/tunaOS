@@ -233,9 +233,25 @@ installed.
 
 ### System-wide packages and config
 
-Desktop manifests only cover what goes into the DE layer. For packages
-that should be in *every* image (base layer), edit
-`build_scripts/20-packages.sh`.
+Desktop manifests only cover what goes into the DE layer. To add packages to
+*every* image of a variant, base flavors included, use `tunaos.toml`:
+
+```toml
+[defaults.packages]            # every variant
+add = ["htop"]
+
+[variants.yellowfin.packages]  # one variant, after the defaults
+add = ["tree"]
+optional = ["btop"]            # installed when available
+repositories = [{ id = "acme", url = "https://repo.acme.example/el10", key_url = "https://repo.acme.example/key.asc" }]
+```
+
+Use the native package name of each variant's package manager. Gentoo needs
+`category/name`, so put names that differ by distribution under the variant.
+Repositories work on dnf and zypper only, and each needs a GPG key. Removals
+are not supported yet. Run `python3 scripts/config.py generate-image-packages`;
+`just check` fails if a name does not suit a variant's package manager. The
+list of base packages stays in `build_scripts/20-packages.sh`.
 
 For system-wide config files, add them to `system_files/`:
 
@@ -310,12 +326,14 @@ homepage = "https://acme.example/os"
 documentation = "https://acme.example/os/docs"
 support = "https://acme.example/os/support"
 bug_report = "https://acme.example/os/issues"
+plymouth = "acmeos"        # boot splash for an image name that is no known variant
 
 [variants.yellowfin]
 codename = "Wile E"       # os-release VERSION_CODENAME
 # Accent colour (ANSI_COLOR, /etc/issue, fastfetch, KDE, wallpapers), the
-# nearest GNOME accent name, the base label and a short colour note.
-branding = { accent = "#E87D0D", gnome_accent = "orange", base = "AlmaLinux Kitten", homage = "Acme orange" }
+# nearest GNOME accent name, the base label, a short colour note and the
+# boot splash theme.
+branding = { accent = "#E87D0D", gnome_accent = "orange", base = "AlmaLinux Kitten", homage = "Acme orange", plymouth = "acmeos" }
 ```
 
 Then regenerate the files every image build reads, and commit them with
@@ -324,13 +342,36 @@ Then regenerate the files every image build reads, and commit them with
 ```bash
 python3 scripts/config.py generate-identity
 python3 scripts/config.py generate-variant-identity
+python3 scripts/config.py generate-variant-aliases
 ```
 
-`just check` fails if `build_scripts/lib/identity.env` or
-`build_scripts/lib/variant-identity.tsv` disagrees with `tunaos.toml`. Each
-variant's name (Yellowfin, Marlin) comes from its id in `tunaos.toml`. Logos,
-wallpapers, the boot splash and the installer's own name still come from the
-image files under `system_files/` (#3668).
+`just check` fails if `build_scripts/lib/identity.env`,
+`build_scripts/lib/variant-identity.tsv` or
+`build_scripts/lib/variant-aliases.tsv` disagrees with `tunaos.toml`. Each
+variant's name (Yellowfin, Marlin) comes from its id, or its `publish_name`.
+
+The variant's mark, lettermark and fastfetch letters follow its `emoji`, name
+and `branding.accent`. After you change those, regenerate the artwork:
+
+```bash
+python3 -m pip install -r requirements-branding.txt
+python3 scripts/branding/check-artwork.py --write
+```
+
+A new emoji needs its artwork file: copy its file from Noto Emoji's `svg/` folder to
+`scripts/branding/emoji/`. CI fails if the committed artwork does not match
+`tunaos.toml`.
+
+You supply the drawn art. Each variant needs a wallpaper at
+`system_files/usr/share/backgrounds/tunaos/<variant>.jpg`. Each variant's
+`branding.plymouth` names its boot splash, a theme folder under
+`system_files/usr/share/plymouth/themes/`. An image name that is not a known
+variant gets the theme in `[defaults.branding] plymouth`. `just check` fails
+and names the file when one of these is missing.
+
+The installer's slides come from `system_files/etc/bootc-installer/recipe.json`.
+Write them with your `[project] name`: the build puts the variant name in its
+place. The installer logo is the variant's mark, made from its `emoji`.
 
 For GNOME defaults, create a gschema override:
 

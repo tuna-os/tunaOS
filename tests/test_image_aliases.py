@@ -57,27 +57,3 @@ def test_aliases_are_lowercase_registry_safe():
             assert alias == alias.lower() and " " not in alias, (
                 f"{variant['id']}: alias {alias!r} is not a valid image name"
             )
-
-
-IMAGE_INFO = Path(__file__).resolve().parents[1] / "build_scripts" / "90-image-info.sh"
-
-
-def test_every_alias_folds_back_onto_its_variant():
-    """90-image-info.sh must recognise every alias, not just the canonical ids.
-
-    IMAGE_NAME is not always the variant id: lib.sh derives it from the detected
-    base image when the Containerfile does not pin one, which hands back the
-    distro alias (`opensuse` for sailfin, `gentoo` for guppy). An alias the
-    script's canonical_variant() does not know falls through to the codename
-    table's default branch and aborts the build for a perfectly known variant.
-    """
-    script = IMAGE_INFO.read_text()
-    body = script.split("canonical_variant() {", 1)[1].split("\nesac", 1)[0]
-    for variant in _config()["variants"]:
-        for alias in variant.get("aliases", []) or []:
-            assert alias in body, (
-                f"{variant['id']} declares alias {alias!r}, which "
-                f"build_scripts/90-image-info.sh does not fold back onto a "
-                f"canonical variant id, so a build tagged with that alias would "
-                f"abort in the codename lookup."
-            )

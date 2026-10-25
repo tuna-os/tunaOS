@@ -588,3 +588,163 @@ def test_primary_catalog_reference_must_exist():
         tunaos_config.validate(document)
     document['package_catalogs'] = {}
     assert tunaos_config.validate(document) is document
+
+
+def _write_image_package_rows(root, *rows):
+    path = root / 'build_scripts/lib/image-packages.tsv'
+    path.write_text(path.read_text() + ''.join('\t'.join(row) + '\n' for row in rows))
+
+
+def test_image_package_name_rule_matches_the_generator():
+    from lib import tunaos_config
+    assert package_catalogs._APT_IMAGE_PACKAGE_NAME.pattern == tunaos_config.PACKAGE_NAMES['apt'].pattern
+
+
+def test_image_wide_package_names_keep_observation(tmp_path):
+    # F4 (#3668): a fork adds names that install from the authenticated
+    # repositories; no source, key or pin changes. Other variants may add
+    # repositories of their own without touching this target.
+    _copy_target_configuration(tmp_path)
+    _write_image_package_rows(
+        tmp_path,
+        ('flounder', 'apt', 'add', 'htop'), ('flounder', 'apt', 'optional', 'g++-14'),
+        ('yellowfin', 'dnf', 'repository', 'extra', 'https://example.test/r', 'https://example.test/k'))
+    _bind_copied_target(tmp_path)
+
+
+@pytest.mark.parametrize('row', [
+    ('flounder', 'apt', 'repository', 'extra', 'https://example.test/r', 'https://example.test/k'),
+    ('flounder', 'apt', 'add', '-oDir::Etc::sourcelist=/tmp/x'),
+    ('flounder', 'apt', 'add', 'htop/trixie-backports'),
+    ('flounder', 'apt', 'add', 'htop=1.0'),
+    ('flounder', 'apt', 'add', './local.deb'),
+    ('flounder', 'apt', 'add', 'Htop'),
+    ('flounder', 'apt', 'unknown-kind', 'htop'),
+    ('flounder', 'apt', 'add'),
+    ('flounder', 'apt', 'add', 'htop', 'extra-field'),
+], ids=['repository', 'option', 'suite', 'version', 'path', 'uppercase', 'kind', 'short', 'long'])
+def test_image_wide_row_that_could_change_sources_invalidates_observation(tmp_path, row):
+    _copy_target_configuration(tmp_path)
+    _write_image_package_rows(tmp_path, row)
+    with pytest.raises(CatalogError, match='image-wide package additions can change package sources'):
+        _bind_copied_target(tmp_path)
+
+
+def test_image_wide_rows_follow_the_alias_fold_of_the_shell_lookup(tmp_path):
+    # tunaos_image_package_rows folds an alias onto its variant first.
+    _copy_target_configuration(tmp_path)
+    aliases = tmp_path / 'build_scripts/lib/variant-aliases.tsv'
+    aliases.write_text(aliases.read_text() + 'flounder\tsailfin\n')
+    _write_image_package_rows(
+        tmp_path, ('sailfin', 'zypper', 'repository', 'extra', 'https://example.test/r', 'https://example.test/k'))
+    with pytest.raises(CatalogError, match='image-wide package additions'):
+        _bind_copied_target(tmp_path)
+
+
+@pytest.mark.parametrize('path', ['build_scripts/30-image-packages.sh', 'build_scripts/lib/image-packages.sh'])
+def test_image_package_installer_edit_invalidates_observation(tmp_path, path):
+    # Containerfile.debian runs 30-image-packages.sh in the 20-packages.sh step.
+    _copy_target_configuration(tmp_path)
+    (tmp_path / path).write_text((tmp_path / path).read_text() + '\n# changed\n')
+    with pytest.raises(CatalogError, match='configuration changed; refresh observation'):
+        _bind_copied_target(tmp_path)
+
+
+def test_containerfile_runs_every_pinned_package_script():
+    containerfile = (ROOT / 'Containerfile.debian').read_text()
+    assert 'build_scripts/30-image-packages.sh' in containerfile
+    assert set(package_catalogs.TARGET_CONFIGURATION_FILES) >= {
+        'build_scripts/30-image-packages.sh', 'build_scripts/lib/image-packages.sh'}
+
+
+def _refresh_cli():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        'refresh_package_observation', ROOT / 'scripts/refresh-package-observation.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _refresh_tree(tmp_path):
+    import shutil
+    _copy_target_configuration(tmp_path)
+    shutil.copy(ROOT / 'tunaos.toml', tmp_path / 'tunaos.toml')
+    return tmp_path / 'tunaos.toml'
+
+
+def _bind_refreshed(tmp_path, flavor='base'):
+    from lib import tunaos_config
+    document = tunaos_config.validate(tunaos_config.parse(
+        (tmp_path / 'tunaos.toml').read_bytes(), path=str(tmp_path / 'tunaos.toml')))
+    return package_catalogs.bind_target_configuration(
+        document['package_catalogs']['debian-trixie'], document, tmp_path, flavor)
+
+
+def test_refresh_on_current_tree_changes_nothing(tmp_path, capsys):
+    config = _refresh_tree(tmp_path)
+    before = {path: path.read_bytes() for path in (config, tmp_path / 'config/package-observations/flounder-target-amd64.json')}
+    assert _refresh_cli().main(['--config', str(config), '--catalog', 'debian-trixie', '--write']) == 0
+    assert 'nothing to do' in capsys.readouterr().out
+    assert {path: path.read_bytes() for path in before} == before
+    _bind_refreshed(tmp_path)
+
+
+def test_refresh_reports_without_writing_then_writes_one_pin(tmp_path, capsys):
+    import json
+    config = _refresh_tree(tmp_path)
+    observation_path = tmp_path / 'config/package-observations/flounder-target-amd64.json'
+    original_config, original_observation = config.read_bytes(), observation_path.read_bytes()
+    containerfile = tmp_path / 'Containerfile.debian'
+    containerfile.write_text(containerfile.read_text() + '\n# reviewed change\n')
+    with pytest.raises(CatalogError, match='configuration changed; refresh observation'):
+        _bind_refreshed(tmp_path)
+
+    cli = _refresh_cli()
+    assert cli.main(['--config', str(config), '--catalog', 'debian-trixie']) == 0
+    report = capsys.readouterr().out
+    assert 'configuration_files: Containerfile.debian:' in report and 'dry run' in report
+    assert config.read_bytes() == original_config and observation_path.read_bytes() == original_observation
+
+    assert cli.main(['--config', str(config), '--catalog', 'debian-trixie', '--write']) == 0
+    assert _bind_refreshed(tmp_path, 'kde')['configuration_files']['Containerfile.debian']['size'] == len(containerfile.read_bytes())
+    old, new = json.loads(original_observation), json.loads(observation_path.read_text())
+    assert {key for key in new if new[key] != old[key]} == {'configuration_files', 'observed_at'}
+    changed = [(a, b) for a, b in zip(original_config.decode().splitlines(), config.read_text().splitlines()) if a != b]
+    assert len(changed) == 1 and changed[0][0].startswith('target_observation_sha256 = ')
+    assert cli.main(['--config', str(config), '--catalog', 'debian-trixie']) == 0
+    assert 'nothing to do' in capsys.readouterr().out
+
+
+def test_refresh_ignores_renovate_style_bump(tmp_path, capsys):
+    config = _refresh_tree(tmp_path)
+    _edit_text(tmp_path / 'image-versions.yaml', lambda text: text.replace('uupd: "v1.5.1"', 'uupd: "v9.9.9"'))
+    assert _refresh_cli().main(['--config', str(config), '--catalog', 'debian-trixie']) == 0
+    assert 'nothing to do' in capsys.readouterr().out
+
+
+def test_refresh_refuses_a_tree_that_could_change_package_sources(tmp_path, capsys):
+    config = _refresh_tree(tmp_path)
+    _write_image_package_rows(
+        tmp_path, ('flounder', 'apt', 'repository', 'extra', 'https://example.test/r', 'https://example.test/k'))
+    before = config.read_bytes()
+    assert _refresh_cli().main(['--config', str(config), '--catalog', 'debian-trixie', '--write']) == 1
+    assert 'image-wide package additions' in capsys.readouterr().err
+    assert config.read_bytes() == before
+
+
+def test_refresh_refuses_unknown_catalog(tmp_path, capsys):
+    config = _refresh_tree(tmp_path)
+    assert _refresh_cli().main(['--config', str(config), '--catalog', 'missing']) == 1
+    assert 'unknown package catalog' in capsys.readouterr().err
+
+
+def test_refresh_pin_replacement_is_scoped_to_the_named_table():
+    cli = _refresh_cli()
+    source = ('[package_catalogs.a]\ntarget_observation_sha256 = "' + '1' * 64 + '"\n'
+              '[package_catalogs.b]\ntarget_observation_sha256 = "' + '2' * 64 + '"\n')
+    assert cli._replace_pin(source, 'b', '3' * 64) == source.replace('2' * 64, '3' * 64)
+    with pytest.raises(CatalogError, match='no \\[package_catalogs.c\\]'):
+        cli._replace_pin(source, 'c', '3' * 64)
+    with pytest.raises(CatalogError, match='missing or ambiguous'):
+        cli._replace_pin('[package_catalogs.a]\nkey = 1\n', 'a', '3' * 64)

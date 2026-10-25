@@ -73,6 +73,10 @@ documentation = "https://github.com/tuna-os/tunaos/tree/main/docs"
 support = "https://github.com/tuna-os/tunaos/issues/"
 bug_report = "https://github.com/tuna-os/tunaos/issues/"
 
+[defaults.packages]
+# Shared additions (implemented, #3668 F4): add, optional, repositories.
+# Native names must be valid for every variant's package manager.
+# add = ["htop"]
 [variants.yellowfin]
 emoji = "🐠"
 description = "Based on AlmaLinux Kitten 10"
@@ -85,6 +89,9 @@ base_image = "quay.io/almalinuxorg/almalinux-bootc:10-kitten@sha256:fabe22d605a5
 logo = "system_files/usr/share/tunaos/logos/yellowfin.svg"
 wallpaper = "system_files/usr/share/backgrounds/tunaos/yellowfin-anime.jpg"
 
+[variants.yellowfin.packages]
+# Put native RPM additions here rather than applying them to apt/portage cells.
+# add = ["tree"]
 # Package profiles preserve native package names and the current list order.
 [desktops.gnome-debian]
 display_manager = "gdm3"

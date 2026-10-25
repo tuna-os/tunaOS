@@ -16,6 +16,7 @@ import os
 from pathlib import Path
 import re
 import shlex
+import subprocess
 import tempfile
 from urllib.parse import urlsplit
 
@@ -52,9 +53,24 @@ LABEL_TEXT = re.compile(r"[A-Za-z0-9][A-Za-z0-9 .,()+_'-]*\Z")
 ACCENT = re.compile(r"#[0-9A-F]{6}\Z")
 # GNOME takes only these fixed accent names, not an arbitrary colour.
 GNOME_ACCENTS = {'blue', 'teal', 'green', 'yellow', 'orange', 'red', 'pink', 'purple', 'slate'}
-VARIANT_BRANDING = ('accent', 'gnome_accent', 'base', 'homage')
-# Identity-only variant keys: they have their own adapters, not the matrix.
-IDENTITY_KEYS = ('codename', 'branding')
+# A theme directory under system_files/usr/share/plymouth/themes/.
+PLYMOUTH_THEME = re.compile(r"[a-z0-9][a-z0-9-]*\Z")
+DEFAULT_BRANDING = BRANDING_URLS + ('plymouth',)
+VARIANT_BRANDING = ('accent', 'gnome_accent', 'base', 'homage', 'plymouth')
+# Variant keys with their own adapters under build_scripts/lib/, not the matrix.
+IDENTITY_KEYS = ('codename', 'branding', 'packages')
+# Image-wide package additions ([defaults.packages], variants.<v>.packages).
+# Plain native names only: no options, URLs, local archives or expressions.
+PACKAGE_DELTA_KEYS = ('add', 'optional', 'repositories')
+PACKAGE_NAME = r"[A-Za-z0-9][A-Za-z0-9+_.-]*"
+PACKAGE_NAMES = {'apt': re.compile(r"[a-z0-9][a-z0-9+.-]*\Z"),
+                 'emerge': re.compile(PACKAGE_NAME + '/' + PACKAGE_NAME + r'\Z')}
+PACKAGE_ARCHIVE = re.compile(r"\.(rpm|deb|udeb|ebuild|tbz2|gpkg\.tar|pkg\.tar(\.[a-z0-9]+)?)\Z", re.I)
+REPOSITORY_ID = re.compile(r"[a-z0-9][a-z0-9_-]*\Z")
+REPOSITORY_URL = re.compile(r"https://[A-Za-z0-9][A-Za-z0-9.-]*(?::[0-9]{1,5})?(?:/[A-Za-z0-9._~%+,:=@/-]*)?\Z")
+# The Containerfile a variant builds with decides its package manager.
+ROUTE_MANAGERS = {'Containerfile.el10': 'dnf', 'Containerfile.ubuntu': 'apt', 'Containerfile.debian': 'apt',
+                  'Containerfile.arch': 'pacman', 'Containerfile.opensuse': 'zypper', 'Containerfile.gentoo': 'emerge'}
 # OCI distribution grammar: a registry host with an optional port, and
 # lowercase repository path components separated by "/".
 REGISTRY = re.compile(r"(?:localhost|[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+)(?::[0-9]{1,5})?\Z")
@@ -119,6 +135,37 @@ def identifier(value, path):
         raise ConfigError(f"{path}: expected lowercase identifier")
 
 
+def plymouth_theme(value, path):
+    if not isinstance(value, str) or not PLYMOUTH_THEME.fullmatch(value):
+        raise ConfigError(f"{path}: expected a theme directory name (lowercase letters, digits, -)")
+
+
+def package_delta(value, path):
+    """Shape of [defaults.packages] / variants.<v>.packages; names are checked
+    against the variant's package manager when the adapter is rendered."""
+    if isinstance(value, dict) and 'remove' in value:
+        raise ConfigError(f'{path}.remove: package removals are not supported; a removal can take out '
+                          'packages the base or desktop needs, and no protected removal exists yet (#3668)')
+    table(value, PACKAGE_DELTA_KEYS, (), path)
+    for key in ('add', 'optional'):
+        if key in value:
+            strings(value[key], f'{path}.{key}')
+            for name in value[key]:
+                if not re.fullmatch(PACKAGE_NAME + f'(?:/{PACKAGE_NAME})?', name) or PACKAGE_ARCHIVE.search(name):
+                    raise ConfigError(f'{path}.{key}: {name!r} is not a plain native package name')
+    repositories = value.get('repositories', [])
+    if not isinstance(repositories, list) or (not repositories and 'repositories' in value):
+        raise ConfigError(f'{path}.repositories: expected nonempty list of tables')
+    for index, repo in enumerate(repositories):
+        where = f'{path}.repositories[{index}]'
+        table(repo, ('id', 'url', 'key_url'), ('id', 'url', 'key_url'), where)
+        if not isinstance(repo['id'], str) or not REPOSITORY_ID.fullmatch(repo['id']):
+            raise ConfigError(f'{where}.id: expected a lowercase filename-safe token')
+        for key in ('url', 'key_url'):
+            if not isinstance(repo[key], str) or not REPOSITORY_URL.fullmatch(repo[key]):
+                raise ConfigError(f'{where}.{key}: expected a literal https:// URL without query, fragment or credentials')
+
+
 @lru_cache(maxsize=1)
 def package_policy():
     spec = importlib.util.spec_from_file_location('tunaos_package_policy', Path(__file__).with_name('tunaos_packages.py'))
@@ -166,12 +213,15 @@ def validate(config):
             raise ConfigError('project.cpe_vendor: expected a lowercase CPE vendor such as acme '
                               '(letters, digits and ._-)')
     if 'defaults' in config:
-        table(config['defaults'], ('branding',), ('branding',), 'defaults')
-        table(config['defaults']['branding'], BRANDING_URLS, BRANDING_URLS, 'defaults.branding')
+        table(config['defaults'], ('branding', 'packages'), ('branding',), 'defaults')
+        if 'packages' in config['defaults']:
+            package_delta(config['defaults']['packages'], 'defaults.packages')
+        table(config['defaults']['branding'], DEFAULT_BRANDING, DEFAULT_BRANDING, 'defaults.branding')
         for key in BRANDING_URLS:
             value = config['defaults']['branding'][key]
             if not https_url(value):
                 raise ConfigError(f'defaults.branding.{key}: expected an https:// URL')
+        plymouth_theme(config['defaults']['branding']['plymouth'], 'defaults.branding.plymouth')
     if 'publish' in config['build']:
         # Optional: a fork's own destination. Omitted, CI publishes to the
         # repository owner's namespace, so the stock file stays fork-neutral.
@@ -188,7 +238,8 @@ def validate(config):
         where = f'variants.{name}'
         identifier(name, where)
         table(variant, ('emoji', 'description', 'base_image', 'aliases', 'platforms', 'flavors',
-                        'upstream_track', 'experimental', 'akmods', 'publish_name', 'tag_suffix', 'codename', 'branding'),
+                        'upstream_track', 'experimental', 'akmods', 'publish_name', 'tag_suffix', 'codename', 'branding',
+                        'packages'),
               ('emoji', 'description', 'base_image', 'platforms', 'flavors'), where)
         for key in ('emoji', 'description', 'base_image', 'upstream_track', 'akmods', 'publish_name', 'tag_suffix'):
             if key in variant:
@@ -205,6 +256,9 @@ def validate(config):
             for key in ('base', 'homage'):
                 if not isinstance(branding[key], str) or not LABEL_TEXT.fullmatch(branding[key]):
                     raise ConfigError(f"{where}.branding.{key}: expected plain words (letters, digits, spaces, .,()+_'-)")
+            plymouth_theme(branding['plymouth'], where + '.branding.plymouth')
+        if 'packages' in variant:
+            package_delta(variant['packages'], where + '.packages')
         if 'experimental' in variant and type(variant['experimental']) is not bool:
             raise ConfigError(f'{where}.experimental: expected boolean')
         strings(variant['platforms'], where + '.platforms', platform=True)
@@ -412,6 +466,8 @@ def render_identity(config):
              f"TUNAOS_DOCUMENTATION_URL={shlex.quote(urls['documentation'])}",
              f"TUNAOS_SUPPORT_URL={shlex.quote(urls['support'])}",
              f"TUNAOS_BUG_REPORT_URL={shlex.quote(urls['bug_report'])}",
+             # Boot splash for a variant that has no branding row.
+             f"TUNAOS_PLYMOUTH_THEME={shlex.quote(urls['plymouth'])}",
              # -g: stays global even when a caller sources this inside a function.
              'declare -gA TUNAOS_CODENAMES=(']
     # Double-quote every key even when its characters happen to be shell-safe:
@@ -433,13 +489,14 @@ VARIANT_IDENTITY_HEADER = """\
 # distro it is built on, as a nod to that project: Arch blue for marlin,
 # Ubuntu orange for grouper, openSUSE green for sailfin, and so on.
 #
-# Read by build_scripts/90-image-info.sh and the desktop branding hooks at
-# build time, and by the scripts/branding/ generators when artwork is redrawn.
+# Read by build_scripts/90-image-info.sh, plymouth-set-theme.sh and the
+# desktop branding hooks at build time.
 #
 # gnome_accent is the nearest of GNOME's fixed accent names (blue teal green
 # yellow orange red pink purple slate); GNOME cannot take an arbitrary colour.
+# plymouth is the boot splash, a theme under system_files/usr/share/plymouth/themes/.
 #
-# id\taccent\tgnome_accent\tbase\thomage
+# id\taccent\tgnome_accent\tbase\thomage\tplymouth
 """
 
 
@@ -452,6 +509,139 @@ def render_variant_identity(config):
     rows = ['\t'.join([name] + [variant['branding'][key] for key in VARIANT_BRANDING])
             for name, variant in config['variants'].items()]
     return VARIANT_IDENTITY_HEADER + '\n'.join(rows) + '\n'
+
+
+VARIANT_ALIASES_HEADER = """\
+# Friendly alias tags and the variant each belongs to. Generated from each
+# variant's `aliases` in tunaos.toml by `scripts/config.py
+# generate-variant-aliases`; do not edit. `just check` fails when this file
+# and tunaos.toml disagree.
+#
+# An alias is a second tag for the same digest, so it never becomes the
+# image's identity. Builds that derive IMAGE_NAME from the base distro arrive
+# as the alias (sailfin as "opensuse"); 90-image-info.sh and
+# plymouth-set-theme.sh fold it back with this table. When two variants share
+# an alias (bonito and bonito-rawhide both publish "fedora"), the first in
+# tunaos.toml owns it.
+#
+# alias\tvariant
+"""
+
+
+def render_variant_aliases(config):
+    """build_scripts/lib/variant-aliases.tsv: alias -> canonical variant."""
+    validate(config)
+    owners = {}
+    for name, variant in config['variants'].items():
+        for alias in variant.get('aliases', []):
+            owners.setdefault(alias, name)
+    return VARIANT_ALIASES_HEADER + ''.join(f'{alias}\t{name}\n' for alias, name in owners.items())
+
+
+IMAGE_PACKAGES_HEADER = """\
+# Image-wide package additions per variant. Generated from [defaults.packages]
+# and each variant's `packages` in tunaos.toml by `scripts/config.py
+# generate-image-packages`; do not edit. `just check` fails when this file and
+# tunaos.toml disagree.
+#
+# build_scripts/30-image-packages.sh installs a variant's rows in the base
+# stage of every Containerfile, so every flavor has them. A variant with no
+# rows builds exactly as before. Removals are not supported.
+#
+# variant\tmanager\tadd|optional\tname
+# variant\tmanager\trepository\tid\turl\tkey_url
+"""
+
+
+def variant_managers(config, names, root=ROOT):
+    """The package manager each variant builds with, from its Containerfile route."""
+    managers = {}
+    for name in names:
+        found = set()
+        for flavor in config['variants'][name]['flavors']:
+            output = subprocess.run(['bash', str(Path(root) / 'scripts/resolve-flavor.sh'), name, flavor['id']],
+                                    capture_output=True, text=True, check=True).stdout
+            routing = {key: json.loads(value) for key, value in (line.split('=', 1) for line in output.splitlines())}
+            if routing['CONTAINERFILE'] in ROUTE_MANAGERS:
+                found.add(ROUTE_MANAGERS[routing['CONTAINERFILE']])
+        if len(found) != 1:
+            raise ConfigError(f'variants.{name}: expected one package manager route, found {sorted(found)}')
+        managers[name] = found.pop()
+    return managers
+
+
+def image_packages(config, managers=None):
+    """Effective additions per variant: [defaults.packages] first, then its own."""
+    validate(config)
+    defaults = config.get('defaults', {}).get('packages', {})
+    deltas = {}
+    for name, variant in config['variants'].items():
+        own = variant.get('packages', {})
+        add = list(dict.fromkeys(defaults.get('add', []) + own.get('add', [])))
+        optional = list(dict.fromkeys(defaults.get('optional', []) + own.get('optional', [])))
+        if set(add) & set(optional):
+            raise ConfigError(f'variants.{name}.packages: both required and optional: {sorted(set(add) & set(optional))}')
+        repositories = {}
+        for repo in defaults.get('repositories', []) + own.get('repositories', []):
+            if repositories.setdefault(repo['id'], repo) != repo:
+                raise ConfigError(f"variants.{name}.packages: repository {repo['id']!r} is defined twice, differently")
+        if add or optional or repositories:
+            deltas[name] = {'add': add, 'optional': optional, 'repositories': list(repositories.values())}
+    managers = managers or variant_managers(config, deltas)
+    for name, delta in deltas.items():
+        manager = delta['manager'] = managers[name]
+        pattern = PACKAGE_NAMES.get(manager, re.compile(PACKAGE_NAME + r'\Z'))
+        for package in delta['add'] + delta['optional']:
+            if not pattern.fullmatch(package):
+                raise ConfigError(f'variants.{name}.packages: {package!r} is not a valid package name for {manager}'
+                                  + (' (use category/name)' if manager == 'emerge' else ''))
+        if delta['repositories'] and manager not in ('dnf', 'zypper'):
+            raise ConfigError(f'variants.{name}.packages: repositories are supported on dnf and zypper only, not {manager}')
+    return deltas
+
+
+def render_image_packages(config, managers=None):
+    """build_scripts/lib/image-packages.tsv, read by 30-image-packages.sh."""
+    rows = []
+    for name, delta in image_packages(config, managers).items():
+        rows += [f"{name}\t{delta['manager']}\t{kind}\t{package}" for kind in ('add', 'optional') for package in delta[kind]]
+        rows += [f"{name}\t{delta['manager']}\trepository\t{repo['id']}\t{repo['url']}\t{repo['key_url']}"
+                 for repo in delta['repositories']]
+    return IMAGE_PACKAGES_HEADER + ''.join(row + '\n' for row in rows)
+
+
+def missing_drawn_artwork(config, root=ROOT):
+    """Drawn art each variant needs, which no generator can make from TOML.
+
+    Wallpapers and boot splashes are fork-supplied: select-wallpaper.sh picks
+    <variant>.jpg (an optional <variant>-anime.jpg or <variant>-<desktop>.jpg
+    wins over it), and plymouth-set-theme.sh installs branding.plymouth.
+    """
+    validate(config)
+    root = Path(root)
+    backgrounds = root / 'system_files/usr/share/backgrounds/tunaos'
+    themes = root / 'system_files/usr/share/plymouth/themes'
+    wanted = {f'{backgrounds.relative_to(root)}/tunaos-default.jpg (the generic wallpaper)': backgrounds / 'tunaos-default.jpg'}
+    splashes = {config['defaults']['branding']['plymouth']: 'defaults.branding.plymouth'}
+    for name, variant in config['variants'].items():
+        wanted[f'{backgrounds.relative_to(root)}/{name}.jpg (variants.{name})'] = backgrounds / f'{name}.jpg'
+        splashes.setdefault(variant['branding']['plymouth'], f'variants.{name}.branding.plymouth')
+    for theme, owner in splashes.items():
+        for suffix in ('plymouth', 'script'):
+            wanted[f'{themes.relative_to(root)}/{theme}/{theme}.{suffix} ({owner})'] = themes / theme / f'{theme}.{suffix}'
+    return [label for label, path in wanted.items() if not path.is_file()]
+
+
+def display_names(config):
+    """The name each variant shows: os-release PRETTY_NAME and its artwork.
+
+    90-image-info.sh sets PRETTY_NAME to ${IMAGE_NAME^} where IMAGE_NAME is the
+    publish name (bonito-rawhide publishes as bonito), so only the first
+    character is uppercased. The artwork generators use the same rule.
+    """
+    validate(config)
+    publish_names = {name: variant.get('publish_name') or name for name, variant in config['variants'].items()}
+    return {name: published[:1].upper() + published[1:] for name, published in publish_names.items()}
 
 
 def prepare(root=ROOT):
