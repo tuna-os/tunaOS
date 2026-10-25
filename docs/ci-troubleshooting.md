@@ -14,6 +14,7 @@ that touched 36 files across `.github/`, `build_scripts/`, `live-iso/`,
 |---|---|---|
 | ARM64 build passes but Snapdragon laptop support is unclear (#3116) | #3368 records postmarketOS observations and open TunaOS boot/install/update/rollback gates; an architecture manifest does not test board firmware or DTB selection. | Use [SNAPDRAGON.md](SNAPDRAGON.md) and report the exact device, image digest and hardware results. |
 | Bonito build succeeds despite bootc lint findings (#3001) | `99-cleanup.sh` calls `lint_image`; `lib.sh` returns success after findings unless `BOOTC_LINT_FATAL=1`. | Read the grouped output and step summary. Re-run lint against the candidate digest; apply the [Fedora readiness review](FEDORA-OUTREACH-READINESS.md) before outreach. |
+| Fork's scheduled `Prune R2`, `Audit NVIDIA release assets` or a grouped ISO upload fails with `s3.auto.amazonaws.com` / empty credentials | The four `R2_*` secrets are TunaOS's own bucket and are empty in a fork; empty creds make rclone fall back to an AWS endpoint. `tests/test_r2_optional_for_forks.py` lists every R2 step and its guard. | Fixed: those steps are skipped unless all four secrets are set (`env.R2_CONFIGURED`). A fork needs no R2 secrets; to publish to your own bucket set all four. Reproduce the table with `python tests/test_r2_optional_for_forks.py`. |
 
 ### Adoption report shows downloads while ISO use is unknown
 

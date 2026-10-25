@@ -46,11 +46,18 @@ jobs:
   prune:
     name: Prune R2
     runs-on: ubuntu-latest
+    # `secrets` cannot be read in an `if:`, so the availability check is
+    # exported as env and every step keys off it. A fork has no R2 bucket;
+    # without this the daily job spun up a runner just to print "skipping".
+    env:
+      R2_CONFIGURED: ${{ secrets.R2_ACCESS_KEY_ID != '' && secrets.R2_SECRET_ACCESS_KEY != '' && secrets.R2_ENDPOINT != '' && secrets.R2_BUCKET != '' }}
     steps:
       - name: Install rclone
+        if: env.R2_CONFIGURED == 'true'
         run: sudo apt-get install -y rclone
 
       - name: Prune dated ISOs older than 14 days (live-isos/)
+        if: env.R2_CONFIGURED == 'true'
         env:
           RCLONE_CONFIG_R2_TYPE: s3
           RCLONE_CONFIG_R2_PROVIDER: Cloudflare
@@ -94,6 +101,7 @@ jobs:
           rclone delete "${FLAGS[@]}" "R2:${{ secrets.R2_BUCKET }}/live-isos/"
 
       - name: Prune dated screenshots older than 60 days
+        if: env.R2_CONFIGURED == 'true'
         env:
           RCLONE_CONFIG_R2_TYPE: s3
           RCLONE_CONFIG_R2_PROVIDER: Cloudflare
@@ -135,7 +143,7 @@ jobs:
           rclone delete "${FLAGS[@]}" "R2:${{ secrets.R2_BUCKET }}/screenshots/"
 
       - name: Report R2 inventory
-        if: always()
+        if: always() && env.R2_CONFIGURED == 'true'
         env:
           RCLONE_CONFIG_R2_TYPE: s3
           RCLONE_CONFIG_R2_PROVIDER: Cloudflare

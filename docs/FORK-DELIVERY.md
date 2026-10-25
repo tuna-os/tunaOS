@@ -12,6 +12,10 @@ reference scope, not a support claim for other cells. Keep the existing catalog,
 platform limits and admission holds. A green source test does not prove that an
 image boots or installs.
 
+R2 secrets (`R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_ENDPOINT`, `R2_BUCKET`) are
+TunaOS's own bucket and are not required for a fork. Every R2 upload, prune and
+audit step skips when they are empty (`tests/test_r2_optional_for_forks.py`).
+
 ## Deliver in this order
 
 1. **One config and an explanation.** [RFC 013](rfc/rfc013-single-fork-config.md)
