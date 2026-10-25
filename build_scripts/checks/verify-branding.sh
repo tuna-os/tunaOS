@@ -53,25 +53,6 @@ fail() {
 }
 pass() { echo "  ok: $*"; }
 
-# A generated fork input changes only its explicitly supplied URL expectations.
-# Validate the persisted contract and applied asset hashes first. Every other
-# stock check below still runs, including fish identity, vendor and Plymouth.
-fork_manifest=/usr/share/tunaos/fork/fork-config.json
-fork_branding_valid=false
-if [[ -e "$fork_manifest" || -L "$fork_manifest" ]]; then
-	if [[ -f /usr/libexec/tunaos/fork-branding.sh ]]; then
-		# shellcheck source=/dev/null
-		source /usr/libexec/tunaos/fork-branding.sh
-		if tunaos_verify_fork_branding; then
-			fork_branding_valid=true
-		else
-			fail "fork branding manifest or applied values do not match"
-		fi
-	else
-		fail "fork branding manifest exists but its runtime verifier is missing"
-	fi
-fi
-
 # /etc/os-release is conventionally a symlink to /usr/lib/os-release, but the
 # latter is the canonical file: an image can ship it without the /etc link.
 # Reading only /etc/os-release there would report *every* field as unset and
@@ -202,14 +183,7 @@ for field in HOME_URL DOCUMENTATION_URL SUPPORT_URL BUG_REPORT_URL; do
 		;;
 	esac
 	want_url="${!want_var:-}"
-	fork_url=""
-	if [[ "$fork_branding_valid" == true ]]; then
-		fork_url="$(tunaos_fork_branding_url "$fork_manifest" "$field")"
-	fi
-	if [[ -n "$fork_url" ]]; then
-		# The helper compared the exact escaped value in both os-release files.
-		pass "${field}=${fork_url} (validated fork override)"
-	elif [[ -z "$want_url" ]]; then
+	if [[ -z "$want_url" ]]; then
 		fail "${field}: no expected URL (${want_var} is unset; identity adapter unreadable)"
 	elif [[ "$v" == "$want_url" ]]; then
 		pass "${field}=${v}"
@@ -262,28 +236,22 @@ else
 	[[ "$jname" == "$variant" ]] && pass "image-name=${jname}" ||
 		fail "image-name is '${jname}', want '${variant}'"
 	jvendor="$(python3 -c "import json;print(json.load(open('${info}')).get('image-vendor',''))" 2>/dev/null || echo)"
-	if [[ "$fork_branding_valid" == true ]]; then
-		# The validated fork receipt also checked registry, canonical image
-		# name and exact image-ref; a namespace alone cannot prove identity.
-		pass "image-vendor=${jvendor} (validated fork namespace)"
+	# The expected namespace is the one 90-image-info.sh resolved from the
+	# same publish configuration and persisted. A fork that publishes to
+	# its own namespace is stamped with it, so a fixed 'tuna-os' here
+	# failed every zero-config fork desktop build. Build time also holds
+	# the resolved IMAGE_VENDOR; it must agree with the persisted value.
+	vendor_file=/usr/share/tunaos/image-vendor
+	want_vendor=""
+	[[ -r "$vendor_file" ]] && want_vendor="$(head -n 1 "$vendor_file")"
+	if [[ -z "$want_vendor" ]]; then
+		fail "no persisted publish namespace at ${vendor_file} (90-image-info.sh did not run)"
+	elif [[ -n "${IMAGE_VENDOR:-}" && "${IMAGE_VENDOR}" != "$want_vendor" ]]; then
+		fail "persisted namespace '${want_vendor}' disagrees with build IMAGE_VENDOR '${IMAGE_VENDOR}'"
+	elif [[ "$jvendor" == "$want_vendor" ]]; then
+		pass "image-vendor=${jvendor}"
 	else
-		# The expected namespace is the one 90-image-info.sh resolved from the
-		# same publish configuration and persisted. A fork that publishes to
-		# its own namespace is stamped with it, so a fixed 'tuna-os' here
-		# failed every zero-config fork desktop build. Build time also holds
-		# the resolved IMAGE_VENDOR; it must agree with the persisted value.
-		vendor_file=/usr/share/tunaos/image-vendor
-		want_vendor=""
-		[[ -r "$vendor_file" ]] && want_vendor="$(head -n 1 "$vendor_file")"
-		if [[ -z "$want_vendor" ]]; then
-			fail "no persisted publish namespace at ${vendor_file} (90-image-info.sh did not run)"
-		elif [[ -n "${IMAGE_VENDOR:-}" && "${IMAGE_VENDOR}" != "$want_vendor" ]]; then
-			fail "persisted namespace '${want_vendor}' disagrees with build IMAGE_VENDOR '${IMAGE_VENDOR}'"
-		elif [[ "$jvendor" == "$want_vendor" ]]; then
-			pass "image-vendor=${jvendor}"
-		else
-			fail "image-vendor is '${jvendor}', want '${want_vendor}'"
-		fi
+		fail "image-vendor is '${jvendor}', want '${want_vendor}'"
 	fi
 fi
 
