@@ -259,8 +259,16 @@ def test_config_only_project_name_uses_unmodified_shipped_display_assets(tmp_pat
     stock_config = (ROOT / 'tunaos.toml').read_text(encoding='utf-8')
     original = '[project]\nname = "TunaOS"'
     assert stock_config.count(original) == 1
-    (config_root / 'tunaos.toml').write_text(
-        stock_config.replace(original, f'[project]\nname = "{project}"'), encoding='utf-8')
+    forked = stock_config.replace(original, f'[project]\nname = "{project}"')
+    if project != 'TunaOS':
+        # A renamed project cannot keep TunaOS's own usage-report endpoint.
+        endpoint = 'countme_endpoint = "https://countme.tunaos.org/v1/report"'
+        assert forked.count(endpoint) == 1
+        forked = forked.replace(endpoint, 'countme_endpoint = ""')
+        metrics = 'countme_metrics_url = "https://tunaos.org/metrics"'
+        assert forked.count(metrics) == 1
+        forked = forked.replace(metrics, 'countme_metrics_url = ""')
+    (config_root / 'tunaos.toml').write_text(forked, encoding='utf-8')
     subprocess.run([sys.executable, str(ROOT / 'scripts/config.py'), 'generate-identity',
                     '--root', str(config_root), '--output',
                     str(image.context / 'build_scripts/lib/identity.env')], check=True)
