@@ -7,20 +7,32 @@ import re
 from pathlib import Path
 import subprocess
 
+import copy
+import sys
+
 import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(Path(__file__).parent))
+from test_identity_config import ACME_PROJECT, config  # noqa: E402
 CONFIG = yaml.safe_load((ROOT / ".github/build-config.yml").read_text())
 CELLS = [(v["id"], f["id"]) for v in CONFIG["variants"] for f in v.get("flavors", []) if f.get("build_image", True)]
 INHERITED = [f"{name}.{kind}" for name in ("bluefin-countme", "dakota-countme", "bluefin-lts-countme") for kind in ("service", "timer")]
 
 
-def install(tmp_path, variant="bonito-rawhide", flavor="gnome-nvidia-hwe"):
+def install(tmp_path, variant="bonito-rawhide", flavor="gnome-nvidia-hwe", identity=None):
+    """Run the real installer; `identity` is the text of a fork's identity.env."""
     context = tmp_path / "context"
-    context.mkdir(exist_ok=True)
+    (context / "build_scripts/lib").mkdir(parents=True, exist_ok=True)
     if not (context / "files").exists():
         (context / "files").symlink_to(ROOT / "system_files", target_is_directory=True)
+    adapter = context / "build_scripts/lib/identity.env"
+    adapter.unlink(missing_ok=True)
+    if identity is None:
+        adapter.symlink_to(ROOT / "build_scripts/lib/identity.env")
+    else:
+        adapter.write_text(identity)
     image = tmp_path / "image"
     env = {**os.environ, "TUNAOS_COUNTME_CONTEXT": str(context), "TUNAOS_COUNTME_ROOT": str(image), "IMAGE_NAME_VARIANT": variant, "TUNAOS_IMAGE_FLAVOR": flavor}
     proc = subprocess.run(["bash", str(ROOT / "build_scripts/install-countme.sh")], env=env, capture_output=True, text=True)
@@ -33,6 +45,9 @@ def test_every_matrix_identity_survives_effective_installer_output(tmp_path, var
     assert proc.returncode == 0, proc.stderr
     metadata = json.loads((image / "usr/share/tunaos/countme.json").read_text())
     assert metadata == {"schema": 1, "variant": variant, "flavor": flavor}
+    # Stock: the endpoint tunaos.toml [project] declares, and nowhere else.
+    assert json.loads((image / "usr/share/tunaos/countme-service.json").read_text()) == {
+        "endpoint": "https://countme.tunaos.org/v1/report", "metrics_url": "https://tunaos.org/metrics"}
     assert (image / "usr/share/tunaos/countme-allowlist.json").read_text() == (ROOT / "services/countme/src/allowlist.json").read_text()
     assert not (image / "var/lib/tunaos-countme").exists()
     assert not (image / "etc/tunaos/countme/enabled").exists()
@@ -134,3 +149,66 @@ def test_automated_vm_boot_paths_explicitly_exclude_telemetry():
     assert launches
     for launch in launches:
         assert "-smbios type=1,product=tunaos-countme-disabled" in e2e[launch.start():launch.start() + 250]
+
+
+def fork_identity(**project):
+    """identity.env text of a fork that renamed itself and set only these [project] keys."""
+    fork = copy.deepcopy(config.load())
+    for key in ("countme_endpoint", "countme_metrics_url"):
+        fork["project"].pop(key, None)
+    fork["project"].update({**ACME_PROJECT, **project})
+    return config.render_identity(fork)
+
+
+def units(image):
+    return {u: (image / "usr/lib/systemd/system" / u).read_text() for u in ("tunaos-countme.service", "tunaos-countme.timer")}
+
+
+def test_stock_units_render_to_the_text_they_always_had(tmp_path):
+    image, proc = install(tmp_path)
+    assert proc.returncode == 0, proc.stderr
+    service, timer = units(image)["tunaos-countme.service"], units(image)["tunaos-countme.timer"]
+    assert "Description=Anonymous weekly TunaOS adoption estimate\n" in service
+    assert "Documentation=https://tunaos.org/metrics\n" in service
+    assert "Description=Check eligibility for a weekly TunaOS adoption report\n" in timer
+    assert "Documentation=https://tunaos.org/metrics\n" in timer
+    assert (image / "usr/lib/systemd/system/timers.target.wants/tunaos-countme.timer").is_symlink()
+    assert "enable tunaos-countme.timer" in (image / "usr/lib/systemd/system-preset/00-tunaos-countme.preset").read_text()
+    assert not any("@TUNAOS" in text for text in units(image).values())
+
+
+def test_a_fork_with_its_own_endpoint_reports_there_and_names_itself(tmp_path):
+    identity = fork_identity(countme_endpoint="https://stats.acme.example/v1/report",
+                             countme_metrics_url="https://acme.example/metrics")
+    image, proc = install(tmp_path, identity=identity)
+    assert proc.returncode == 0, proc.stderr
+    assert json.loads((image / "usr/share/tunaos/countme-service.json").read_text()) == {
+        "endpoint": "https://stats.acme.example/v1/report", "metrics_url": "https://acme.example/metrics"}
+    for text in units(image).values():
+        assert "Acme OS adoption" in text and "Documentation=https://acme.example/metrics\n" in text
+        assert "TunaOS" not in text and "tunaos.org" not in text
+
+
+def test_a_fork_with_no_endpoint_ships_an_image_that_never_reports(tmp_path):
+    """A fork that keeps stock variant and flavor ids must not count as a TunaOS cell:
+    no endpoint means no timer, a preset that disables the units, and a client that refuses."""
+    image, proc = install(tmp_path, "yellowfin", "gnome", identity=fork_identity())
+    assert proc.returncode == 0, proc.stderr
+    assert json.loads((image / "usr/share/tunaos/countme-service.json").read_text()) == {"endpoint": "", "metrics_url": ""}
+    assert not (image / "usr/lib/systemd/system/timers.target.wants/tunaos-countme.timer").exists()
+    preset = (image / "usr/lib/systemd/system-preset/00-tunaos-countme.preset").read_text()
+    assert "disable tunaos-countme.*" in preset and "enable tunaos-countme.timer" not in preset
+    for text in units(image).values():
+        assert "Documentation=" not in text and "tunaos.org" not in text and "TunaOS" not in text
+    assert (image / "usr/share/tunaos/countme.json").exists()   # identity still recorded; only the sink is gone
+
+
+def test_installing_countme_without_the_identity_adapter_fails_loudly(tmp_path):
+    context = tmp_path / "context"
+    context.mkdir()
+    (context / "files").symlink_to(ROOT / "system_files", target_is_directory=True)
+    proc = subprocess.run(["bash", str(ROOT / "build_scripts/install-countme.sh")], capture_output=True, text=True,
+                          env={**os.environ, "TUNAOS_COUNTME_CONTEXT": str(context), "TUNAOS_COUNTME_ROOT": str(tmp_path / "image"),
+                               "IMAGE_NAME_VARIANT": "yellowfin", "TUNAOS_IMAGE_FLAVOR": "gnome"})
+    assert proc.returncode != 0 and "identity.env is missing" in proc.stderr
+    assert not (tmp_path / "image/usr/share/tunaos/countme-service.json").exists()
