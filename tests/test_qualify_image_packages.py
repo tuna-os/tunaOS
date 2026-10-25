@@ -508,3 +508,14 @@ def test_one_failed_route_is_reported_without_hiding_other_families(tmp_path, mo
     assert failed["manager"] == ROUTE_MANAGERS["ubuntu"]
     assert failed["package"] == ubuntu_cell["package"]
     assert failed["baseImage"] == ubuntu_cell["baseImage"]
+
+
+def test_failed_source_validation_leaves_no_evidence_directory(tmp_path, monkeypatch):
+    def broken(*_args):
+        raise MODULE.QualificationError("source: broken")
+
+    monkeypatch.setattr(MODULE, "validate_source", broken)
+    output = tmp_path / "evidence"
+    with pytest.raises(MODULE.QualificationError):
+        MODULE.qualify({"cells": []}, tmp_path, output)
+    assert not output.exists()

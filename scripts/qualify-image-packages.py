@@ -18,6 +18,7 @@ import os
 from pathlib import Path
 import re
 import shlex
+import shutil
 import signal
 import subprocess
 import threading
@@ -617,49 +618,54 @@ def qualify(plan: dict, root: Path, output: Path) -> tuple[dict, bool]:
         "output: refusing to replace existing evidence",
     )
     output.mkdir(parents=True)
-    with CommandLog(output / "source.log") as source_log:
-        source = validate_source(plan, root, source_log)
-    source_log_digest = sha256((output / "source.log").read_bytes())
+    # A run that cannot finish must not leave evidence that blocks the next run.
+    try:
+        with CommandLog(output / "source.log") as source_log:
+            source = validate_source(plan, root, source_log)
+        source_log_digest = sha256((output / "source.log").read_bytes())
 
-    results = []
-    for cell in plan["cells"]:
-        # Every route keeps the same keys, whatever its status.
-        identity = {
-            "route": cell["route"],
-            "variant": cell["variant"],
-            "manager": source["managers"].get(cell["variant"]),
-            "package": cell["package"],
-            "baseImage": cell["baseImage"],
+        results = []
+        for cell in plan["cells"]:
+            # Every route keeps the same keys, whatever its status.
+            identity = {
+                "route": cell["route"],
+                "variant": cell["variant"],
+                "manager": source["managers"].get(cell["variant"]),
+                "package": cell["package"],
+                "baseImage": cell["baseImage"],
+            }
+            log_path = output / f"{cell['route']}.log"
+            with CommandLog(log_path) as log:
+                try:
+                    result = {**identity, **verify_cell(plan, cell, root, source, log)}
+                except CellError as exc:
+                    result = {**identity, "status": "failed", "reason": str(exc),
+                              "images": exc.images}
+                except (QualificationError, OSError) as exc:
+                    result = {**identity, "status": "failed", "reason": str(exc), "images": []}
+            result["logSha256"] = sha256(log_path.read_bytes())
+            results.append(result)
+
+        counts = {status: sum(item["status"] == status for item in results)
+                  for status in ("passed", "failed", "not-run")}
+        generated_at = datetime.now(timezone.utc).replace(microsecond=0)
+        report = {
+            "schemaVersion": 1,
+            "generatedAt": generated_at.isoformat().replace("+00:00", "Z"),
+            "platform": plan["platform"],
+            "source": {key: value for key, value in source.items() if key != "managers"},
+            "sourceLogSha256": source_log_digest,
+            "routes": results,
+            "summary": counts,
+            "releasePass": counts == {"passed": len(ROUTES), "failed": 0, "not-run": 0},
         }
-        log_path = output / f"{cell['route']}.log"
-        with CommandLog(log_path) as log:
-            try:
-                result = {**identity, **verify_cell(plan, cell, root, source, log)}
-            except CellError as exc:
-                result = {**identity, "status": "failed", "reason": str(exc),
-                          "images": exc.images}
-            except (QualificationError, OSError) as exc:
-                result = {**identity, "status": "failed", "reason": str(exc), "images": []}
-        result["logSha256"] = sha256(log_path.read_bytes())
-        results.append(result)
-
-    counts = {status: sum(item["status"] == status for item in results)
-              for status in ("passed", "failed", "not-run")}
-    generated_at = datetime.now(timezone.utc).replace(microsecond=0)
-    report = {
-        "schemaVersion": 1,
-        "generatedAt": generated_at.isoformat().replace("+00:00", "Z"),
-        "platform": plan["platform"],
-        "source": {key: value for key, value in source.items() if key != "managers"},
-        "sourceLogSha256": source_log_digest,
-        "routes": results,
-        "summary": counts,
-        "releasePass": counts == {"passed": len(ROUTES), "failed": 0, "not-run": 0},
-    }
-    encoded = (json.dumps(report, indent=2, sort_keys=True) + "\n").encode()
-    require(len(encoded) <= 256 * 1024, "report: exceeds 256 KiB")
-    (output / "report.json").write_bytes(encoded)
-    return report, report["releasePass"]
+        encoded = (json.dumps(report, indent=2, sort_keys=True) + "\n").encode()
+        require(len(encoded) <= 256 * 1024, "report: exceeds 256 KiB")
+        (output / "report.json").write_bytes(encoded)
+        return report, report["releasePass"]
+    except BaseException:
+        shutil.rmtree(output, ignore_errors=True)
+        raise
 
 
 def main() -> int:
