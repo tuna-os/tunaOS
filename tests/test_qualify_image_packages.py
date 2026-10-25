@@ -304,7 +304,12 @@ class FakeLog:
         if args[:3] == ["skopeo", "inspect", "--raw"]:
             ref = args[3]
             if ref.startswith("docker://"):
-                route = ref.split("registry.example/", 1)[1].split(":", 1)[0]
+                name, _, pinned = ref.removeprefix("docker://").partition("@")
+                if pinned and ":" in name.rsplit("/", 1)[-1]:
+                    # Real skopeo: "Docker references with both a tag and digest
+                    # are currently not supported".
+                    return subprocess.CompletedProcess(args, 1, b"", b"tag and digest")
+                route = name.split("registry.example/", 1)[1]
                 output = f"base-{route}".encode()
             else:
                 output = f"manifest-{ref}".encode()
@@ -517,3 +522,14 @@ def test_failed_source_validation_leaves_no_evidence_directory(tmp_path, monkeyp
     with pytest.raises(MODULE.QualificationError):
         MODULE.qualify({"cells": []}, tmp_path, output)
     assert not output.exists()
+
+
+@pytest.mark.parametrize(("reference", "expected"), [
+    ("quay.io/almalinuxorg/almalinux-bootc:10-kitten@sha256:" + "a" * 64,
+     "quay.io/almalinuxorg/almalinux-bootc@sha256:" + "a" * 64),
+    ("localhost:5000/team/base:tag@sha256:" + "b" * 64, "localhost:5000/team/base@sha256:" + "b" * 64),
+    ("docker.io/library/ubuntu@sha256:" + "c" * 64, "docker.io/library/ubuntu@sha256:" + "c" * 64),
+])
+def test_registry_inspection_never_sends_a_tag_with_a_digest(reference, expected):
+    """skopeo exits 1 on `name:tag@digest`, which is how tunaos.toml pins five of six bases."""
+    assert MODULE.registry_digest_reference(reference) == expected

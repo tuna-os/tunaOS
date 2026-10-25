@@ -78,6 +78,7 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 | `prune-r2.yml` | post-merge + scheduled | Prune R2 retention | `30 12 * * *`, manual | — |
 | `publish-iso-groups.yml` | post-merge + scheduled | Publish Grouped Dedup ISOs to R2 | `0 23 * * 0`, manual | — |
 | `publish-isos.yml` | post-merge | Publish Live ISOs to R2 | manual | — |
+| `qualify-image-packages.yml` | post-merge | Qualify image packages | manual | — |
 | `randomized-tests.yml` | post-merge + scheduled | Randomized Tests | `30 3 * * *`, manual | — |
 | `rerun-infra-failures.yml` | post-merge | Re-run infra failures | workflow completion, manual | — |
 | `rerun-startup-failures.yml` | post-merge + scheduled | Re-run startup failures | `0 */3 * * *`, manual | — |

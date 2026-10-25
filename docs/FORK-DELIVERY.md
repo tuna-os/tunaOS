@@ -196,6 +196,35 @@ These cases remain source-level failures:
 Run their primary F4 suite on the same source commit and retain that log beside
 this image evidence.
 
+### Running the harness in CI
+
+`.github/workflows/qualify-image-packages.yml` is manual only. It has no
+schedule and no other trigger, `contents: read`, no secret and no publish step.
+It runs one matrix leg for each route, and each leg has its own runner. A leg
+uses `just build` for the stock base, the modified base and the `gnome` desktop.
+On EL10 it also builds the `gnome-hwe` overlay.
+
+`scripts/package-qualification.py prepare` makes the commit pair in the job
+workspace and never pushes it. The stock commit pins any mutable `base_image` to
+its current digest. The modified commit adds `tree` (`app-text/tree` on Gentoo)
+to the packages of each variant and regenerates the adapter. The packages come
+from `tests/fixtures/package-qualification-cells.json`.
+
+The harness then runs as root over the images of that route. The other five
+cells are `not-run` in the report of that leg, so `releasePass` is `false` in
+every leg. A leg passes when `package-qualification.py gate` finds its own route
+`passed`. The six legs together are the six-route result. Each leg uploads
+`package-qualification-<route>` with `report.json`, the route logs, the build
+logs and the plan.
+
+```sh
+gh workflow run qualify-image-packages.yml --ref <branch>
+gh workflow run qualify-image-packages.yml --ref <branch> -f routes='["ubuntu"]'
+```
+
+A fork keeps its own `tunaos.toml`. A route fails fast if the fork already
+defines `[variants.<variant>.packages]` for a fixture variant.
+
 ## Dependency and review boundaries
 
 The compatibility foundation is [#3434](https://github.com/tuna-os/tunaOS/pull/3434)

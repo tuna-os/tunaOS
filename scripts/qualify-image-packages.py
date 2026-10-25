@@ -491,8 +491,15 @@ def verify_modified_receipt(
     return sha256(data)
 
 
+def registry_digest_reference(reference: str) -> str:
+    """Drop the tag from `name:tag@digest`: skopeo rejects a tag with a digest."""
+    name, digest = reference.rsplit("@", 1)
+    head, slash, last = name.rpartition("/")
+    return f"{head}{slash}{last.partition(':')[0]}@{digest}"
+
+
 def verify_base_source(log: CommandLog, reference: str) -> str:
-    raw = checked(log, ["skopeo", "inspect", "--raw", f"docker://{reference}"],
+    raw = checked(log, ["skopeo", "inspect", "--raw", f"docker://{registry_digest_reference(reference)}"],
                   what=f"base source {reference}")
     expected = reference.rsplit("@", 1)[1]
     require(
