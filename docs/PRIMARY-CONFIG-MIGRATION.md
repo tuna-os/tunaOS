@@ -60,6 +60,10 @@ schema_version = 1
 
 [project]
 name = "TunaOS"
+id = "tunaos"
+cpe_vendor = "jamesreilly"
+
+[build.publish]   # optional; omitted, CI publishes to ghcr.io/<repository owner>
 registry = "ghcr.io"
 namespace = "tuna-os"
 
@@ -67,10 +71,7 @@ namespace = "tuna-os"
 homepage = "https://github.com/tuna-os/tunaos"
 documentation = "https://github.com/tuna-os/tunaos/tree/main/docs"
 support = "https://github.com/tuna-os/tunaos/issues/"
-
-[defaults.packages]
-# Shared additions; native names must be valid for every selected family.
-packages = []
+bug_report = "https://github.com/tuna-os/tunaos/issues/"
 
 [variants.yellowfin]
 emoji = "🐠"
@@ -83,10 +84,6 @@ base_image = "quay.io/almalinuxorg/almalinux-bootc:10-kitten@sha256:fabe22d605a5
 [variants.yellowfin.branding]
 logo = "system_files/usr/share/tunaos/logos/yellowfin.svg"
 wallpaper = "system_files/usr/share/backgrounds/tunaos/yellowfin-anime.jpg"
-
-[variants.yellowfin.packages]
-# Put native RPM additions here rather than applying them to apt/portage cells.
-packages = []
 
 # Package profiles preserve native package names and the current list order.
 [desktops.gnome-debian]
@@ -105,6 +102,23 @@ override declared fields. Scalar values replace more general values. Lists
 must have explicit replace/add/remove semantics; do not silently reinterpret
 an existing ordered package list as a set. Family-specific package names stay
 family-specific. Selection never enables a held or unsupported cell.
+
+## Protected package removal
+
+Image-wide additions may move through the primary package resolver, but
+removals remain rejected. A removal can cascade through boot, init, package
+manager, desktop/session, networking or update/recovery dependencies. No static
+list of denied packages can cover those packages across native families.
+
+The [F4b specification for protected removal](../.spektacular/specs/20261024100000-protected-native-package-removal.md)
+defines the approval boundary and the protected set from the contract. It also
+defines qualification of native transactions per family, adversarial fixtures
+and per-cell evidence. All of these must exist before a removal can be enabled.
+The tool derives the protected set from the effective package and runtime
+contracts in the exact build root, and no second package catalog holds it. The
+gate fails closed on missing or stale evidence. Proof of image build, boot,
+install, update and recovery stays separate from source tests and solver
+dry-runs.
 
 ## Ordered migration
 
@@ -233,4 +247,4 @@ image identity, artwork or installer appearance into primary configuration.
 The Marlin GDM override also belongs to `[desktops.tuna-arch]`. Its generated
 adapter has the same precedence as the former tracked YAML. The regression
 fixture at commit `aa9810e9` preserves the complete package and hook contract;
-other Tuna Desktop cells retain their existing display manager.
+the other cells of Tuna Desktop keep their existing display manager.

@@ -1,6 +1,6 @@
 # RFC 014: ISO media provenance
 
-- Status: contract stage merged; read-only adapter under review
+- Status: contract stage merged; bounded read-only caller under review
 - Owner: hanthor
 - Branch: rfc014-iso-media-provenance
 - Tracks: [#3381](https://github.com/tuna-os/tunaOS/issues/3381), [#3470](https://github.com/tuna-os/tunaOS/issues/3470), [iso-builder#270](https://github.com/tuna-os/iso-builder/issues/270)
@@ -21,8 +21,9 @@ Define a v2 contract with separate browser and native roles. Add an offline
 checker and common test vectors first. Keep v1 records readable as diagnostics.
 The v2 contract rejects missing, unknown and old versions.
 
-The first stage has no production caller. A valid document or consistent pair
-is not enough to qualify a target. Keep downloads and publication policy unchanged until all gates pass.
+The initial contract stage had no network caller. A valid document, consistent
+pair or successful HTTP exchange is not enough to qualify a target. Keep
+downloads and publication policy unchanged until all gates pass.
 Those gates must check authenticated evidence and proof from tests in a real system.
 
 ## Identity and order
@@ -120,9 +121,48 @@ It checks artifact identity, size and expiration again after the hash.
 
 The result is not a v2 pair of transport records.
 It does not fabricate a native producer, interpret a receipt or qualify media.
-The caller must provide fresh, authenticated transport and reviewed configuration.
-That future caller must also enforce safe redirects and timeouts.
-This phase has no network client or production caller.
+
+`scripts/iso_authoritative_transport.py` supplies the bounded read-only caller.
+It accepts the reviewed policy and selected IDs as separate arguments.
+It accepts only the exact run, `run_attempt` 1, artifact and archive paths that
+the existing validators construct. It never lists runs, selects the latest
+success, accepts a candidate URL, or infers a `run_attempt` from timestamps.
+
+The caller sends the GitHub bearer credential only to `https://api.github.com`.
+An artifact download may redirect once to an exact origin in reviewed network
+policy; the redirected request has no credential. Retained-object requests use
+only the configured R2 endpoint, bucket and exact candidate namespace. They
+never receive the GitHub credential and cannot redirect.
+
+R2 needs a SigV4 signature from an R2 key on each S3 API request.
+A read-only R2 key is a new secret and permission, so this change does not add
+one. Without a signer that a reviewer approves, the caller stops the collection
+of retained media with `retained_signer_required` before it sends a request.
+Retained-media collection is therefore deferred to that review.
+
+Reviewed limits apply to connect time, idle time, total elapsed time, each JSON
+response, each archive or object response, and aggregate response bytes. The
+existing validators still enforce the expected sizes and digests exactly. The
+caller closes every response after success or failure. Each read does one socket
+receive at most,
+with a timeout no longer than the remaining total time. Thus, a read cannot
+continue past the total limit when the body arrives slowly. Tests exercise
+these limits and origin rules with a synthetic HTTP server, without a credential
+or production request.
+
+This caller does not make the REST and R2 observations atomic. GitHub exposes
+no `run_attempt` identity for an artifact upload, so `run_attempt` 1 only
+remains mandatory.
+The validators compare metadata before and after all byte reads and reject a
+visible change. An API cannot prove that no transient change occurred
+between sequential requests.
+
+Endpoint authentication does not attest the separately reviewed policy or
+qualify browser/native evidence. Successful results therefore remain
+`authentication: not_authenticated` and contain no admission decision.
+There is no production call site, workflow permission change or catalog wiring.
+The exact-media receipt handoff and runtime integration/qualification gates
+remain separate work under #3796, #3797 and #3381.
 
 Fixtures record the reviewed source and use synthetic run and artifact IDs.
 They cannot prove a browser build. The existing producer emits records in v1,
@@ -136,45 +176,48 @@ receipt bytes only. Every returned candidate has `qualification: not-assessed`;
 it creates no producer context, archive identity, admission result, publication,
 or storage write.
 
-The browser interface accepts distinct observations for the source platform
-manifest and CPU baseline, overlay and base, deployed frontend commit and
-optional bundle, loaded WASM/source/shim, browser resources, request/config
-digests, and producer run. It has no catalog or request fallback. The selected
-operation must still be the completed operation. The adapter then calls the
-media sink's `finish()` itself and rejects any return value other than `None`
-as a failed or ambiguous save. Only after
-that save and close succeeds does it take a stability token, reopen the closed
-bytes, stream their exact hash and size, close the reader, and confirm that the
-token did not change. An incomplete build, stale selection, failed write/close,
-byte-count mismatch, or changed saved object emits no receipt.
+The browser flow must receive separate observations for the source platform
+manifest and CPU baseline, and for overlay and base. It also accepts the
+deployed frontend commit and optional bundle, the loaded WASM/source/shim,
+browser resources, request/config digests, and the producer run. It has no
+catalog or request fallback. The selected operation must still be the completed
+operation. The adapter then calls the `finish()` of the media sink itself. It
+rejects any return value other than `None` as a failed or ambiguous save.
 
-The returned browser candidate contains the exact canonical receipt bytes,
-their external hash, the measured media identity, and the completed
-operation's `selection_id`. A native candidate instead carries
+Only after that save and close succeeds does the adapter take a stability token.
+Then it reopens the closed bytes, streams their exact hash and size, closes the
+reader, and confirms that the token did not change. The adapter emits no receipt
+after an incomplete build, stale selection, failed write/close, byte-count
+mismatch, or changed saved object.
+
+The returned browser candidate contains the canonical receipt in exact bytes,
+their external hash, the measured media identity, and the `selection_id` of the
+completed operation. A native candidate instead carries
 `bound_browser_receipt_sha256`; the two handoff keys never share one field.
 A retention caller may persist that diagnostic candidate immediately, before a
-guest harness runs. Retention therefore does not depend on a failing guest
-harness becoming successful. This interface does not add a retention backend or
+guest harness runs. Retention therefore works even when the guest harness
+fails. This interface does not add a retention backend or
 enable publication.
 
-The native interface accepts the raw browser receipt bytes, the browser receipt
-hash and run actually observed by the harness, the media identity measured
-before boot, the separate native harness/run identity, and explicit plain and
-encrypted results. It re-parses the raw browser bytes with duplicate-key
+The native interface accepts the raw bytes of the browser receipt. It also
+accepts the hash of that receipt and the run that the harness observed. It takes
+the media identity measured before boot, the separate native harness/run
+identity, and explicit plain and encrypted results.
+
+It re-parses the raw browser bytes with duplicate-key
 rejection, checks the browser role/run/hash, and remeasures the exact supplied
 media. Each mode's source digest must equal the source digest in the bound
-browser receipt. Each mode must also report a completed offline GUI install,
-matching installed identity, target-only completed boot, and a passing desktop
-contract. Backend,
-partial, skipped, online, installation-media, and fixture results fail closed.
-Only then does it emit native v2 receipt bytes that name the exact raw browser
-receipt hash.
+browser receipt. Each mode must also report a completed offline GUI install and
+a matching installed identity. It must report a completed boot of the target
+only, and a desktop contract that passes. Results from a backend, partial,
+skipped, online, installation-media or fixture run fail closed. Then it emits
+the bytes of a native v2 receipt that names the hash of the raw browser receipt.
 
 The native media size comes from the bound browser receipt. The adapter rejects
 a missing or changed media identity before it reads any media byte.
 
 These candidates feed the existing schema and `check_consistency` boundary.
 They remain diagnostics until the authoritative caller in #3795 supplies
-independently trusted transport/context and real same-media gates pass. Actual
+independently trusted transport/context and the real gates for the same media pass. Actual
 browser integration, native execution, authentication, qualification, and
 cutover remain separate work.

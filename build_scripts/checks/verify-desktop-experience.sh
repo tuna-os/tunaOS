@@ -104,6 +104,12 @@ tuna_installed_file_owner() {
 # Exit status is deliberately unchanged: turning the waiver into a hard
 # failure would red-line every hummingbird build, which is a policy call for
 # a human, not a side effect of a logging fix.
+# contract-helpers: begin
+# Everything between this marker and "contract-helpers: end" is function
+# definitions plus the waiver counter, and nothing else. The regression test
+# sources exactly that region, so keep it free of top-level commands. The
+# script is installed into the image as a single file, which is why the
+# helpers are delimited here rather than split into a sourced library.
 TUNAOS_CONTRACT_WAIVED=0
 waive() { TUNAOS_CONTRACT_WAIVED=$((TUNAOS_CONTRACT_WAIVED + 1)); }
 
@@ -171,58 +177,46 @@ require_any_unit() {
 	fi
 	exit 1
 }
-# Session availability may be wayland or x11 depending on DE/distro.
-require_any_glob() {
-	local g
+# require_any_glob, require_any_file and require_any_executable differ only in
+# what counts as a match; the expansion loop, the message shape, the
+# hummingbird bootstrap waiver and the exit are identical. One copy of that
+# shape is why require_any_executable regained the waiver it was first written
+# without (tunaOS#3810) -- three copies drift.
+# $1 names the failure, $2 completes the sentence, $3 is the predicate run
+# against each expanded path, the rest are the globs to try.
+require_any_matching() {
+	local label="$1" sentence="$2" accepts="$3" g path
+	local -a matches
+	shift 3
 	for g in "$@"; do
-		compgen -G "$g" >/dev/null && return 0
+		mapfile -t matches < <(compgen -G "$g" || true)
+		for path in "${matches[@]}"; do
+			"$accepts" "$path" && return 0
+		done
 	done
-	echo "missing required path: none of [$*] exist" >&2
+	echo "$label: none of [$*] $sentence" >&2
 	if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${desktop:-}" != cosmic ]]; then
 		waive
 		return 0
 	fi
 	exit 1
 }
-
+# Any filesystem entry the glob produced: a session .desktop file, a portal
+# binary, a directory.
+accepts_any_path() { :; }
 # Shared libraries and PAM modules must be regular files, not merely matching
 # directory entries.
-require_any_file() {
-	local g path
-	local -a matches
-	for g in "$@"; do
-		mapfile -t matches < <(compgen -G "$g" || true)
-		for path in "${matches[@]}"; do
-			[[ -f "$path" ]] && return 0
-		done
-	done
-	echo "missing required file: none of [$*] exists" >&2
-	if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${desktop:-}" != cosmic ]]; then
-		waive
-		return 0
-	fi
-	exit 1
-}
+accepts_regular_file() { [[ -f "$1" ]]; }
+# A command named by a fixed filesystem location must be runnable; -x alone is
+# also true of searchable directories.
+accepts_executable_file() { [[ -f "$1" && -x "$1" ]]; }
 
-# Commands represented by fixed filesystem locations must still be executable.
-# This is separate from require_command so regression tests can inspect an
-# alternate image root without changing the test process's PATH.
-require_any_executable() {
-	local g path
-	local -a matches
-	for g in "$@"; do
-		mapfile -t matches < <(compgen -G "$g" || true)
-		for path in "${matches[@]}"; do
-			[[ -f "$path" && -x "$path" ]] && return 0
-		done
-	done
-	echo "missing executable: none of [$*] exists and is executable" >&2
-	if [[ "${IS_HUMMINGBIRD:-false}" == "true" && "${desktop:-}" != cosmic ]]; then
-		waive
-		return 0
-	fi
-	exit 1
-}
+# Session availability may be wayland or x11 depending on DE/distro.
+require_any_glob() { require_any_matching 'missing required path' exist accepts_any_path "$@"; }
+require_any_file() { require_any_matching 'missing required file' exist accepts_regular_file "$@"; }
+# require_any_executable is separate from require_command so regression tests
+# can inspect an alternate image root without changing the test process's PATH.
+require_any_executable() { require_any_matching 'missing executable' 'exist and are executable' accepts_executable_file "$@"; }
 
 # User systemd units (session services like pipewire, wireplumber, portals).
 # Checked via systemctl --user list-unit-files or filesystem unit file globs.
@@ -288,6 +282,7 @@ require_secret_service() {
 		require_any_executable "$root/usr/bin/gnome-keyring-daemon"
 	fi
 }
+# contract-helpers: end
 
 # xfce's greeter is the one desktop piece NO other gate can see missing.
 # xfce.sh installs its DM stack via install_available: lightdm first, greetd
