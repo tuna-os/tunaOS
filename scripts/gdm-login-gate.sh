@@ -8,6 +8,8 @@ TEST_USER="${3:?usage: $0 <vm-name> <output-dir> <test-user>}"
 TEST_PASSWORD="${TUNAOS_GDM_TEST_PASSWORD:?test password must be set in the environment}"
 CORRAL="${CORRAL:-corral}"
 RESULT="${OUT}/corral/result.json"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+EVIDENCE_SCRIPT="${SCRIPT_DIR}/greeter-graphics-evidence.sh"
 
 SSH_HOST="$(jq -er '.ssh.host | select(length > 0)' "$RESULT")"
 SSH_PORT="$(jq -er '.ssh.port | select(. > 0)' "$RESULT")"
@@ -24,6 +26,12 @@ guest() {
 	# Only fixed commands and the validated test-user/session id reach the guest shell.
 	# shellcheck disable=SC2029
 	ssh "${SSH_OPTS[@]}" "${SSH_USER}@${SSH_HOST}" "$@"
+}
+
+collect_greeter_evidence() {
+	# $1 = once|sample, $2 = polls, $3 = artifact name (tunaOS#3969). Evidence
+	# only: nothing in here may change the verdict, so it never fails the gate.
+	guest bash -s -- "$1" "$2" <"$EVIDENCE_SCRIPT" >"${OUT}/$3" 2>&1 || true
 }
 
 wait_for_paint() {
@@ -92,6 +100,9 @@ systemctl status gdm.service --no-pager || true
 echo "==> recent greeter, shell, lock and PAM journal (guest SSH sessions excluded)"
 journalctl -b --no-pager | grep -Ei 'gdm|gnome-shell|gnome-session|mutter|LockHint|lock-screen|pam.*(fail|authentication)|session opened|session closed' | grep -Ev 'sshd-session|sshd\[' | tail -n 200 || true
 GDM_DIAGNOSTICS
+	# The filtered journal above keeps only lines that name gdm or mutter, so a
+	# crash shows one frame of its trace. This keeps the whole report.
+	collect_greeter_evidence once 0 greeter-graphics-evidence-after-failure.txt
 }
 
 echo "==> waiting for Corral SSH to inspect the GDM greeter"
@@ -137,6 +148,10 @@ if loginctl list-sessions --no-legend | awk -v user="$user" '$3 == user { found=
 	exit 1
 fi
 CHECK_GREETER
+# Record the greeter's graphics inputs while it is (re)starting: its renderer
+# environment, the DRM devices, the software-GL decision, any core dump.
+# Ten seconds of polling, no effect on what the gate decides.
+collect_greeter_evidence sample 40 greeter-graphics-evidence.txt
 wait_for_paint "${OUT}/gdm-greeter.png" 30
 
 # Corral creates exactly one regular, non-sudo user in a disposable image

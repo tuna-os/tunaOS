@@ -142,3 +142,35 @@ CORRAL
 	DISK_CONTRACT=bogus run bash "$GATE_SCRIPT" img "$OUT"
 	[ "$status" -eq 1 ]
 }
+
+@test "a pass and a failure both keep what the VM was and what it ran on (tunaOS#3969)" {
+	cat >"${STUB_BIN}/pgrep" <<'PGREP'
+#!/usr/bin/env bash
+echo "4242 qemu-system-x86_64 -name stub-vm -m 4G -cpu host -machine q35,accel=kvm -vga virtio -display none"
+PGREP
+	chmod +x "${STUB_BIN}/pgrep"
+	export GUEST_CONSOLE='TUNAOS_BASE_CONTRACT_OK\nTUNAOS_DESKTOP_CONTRACT_OK\n'
+	GATE_NAME=stub-vm run bash "$GATE_SCRIPT" img "$OUT" 600
+	[ "$status" -eq 0 ]
+	grep -q -- '-vga virtio -display none' "$OUT/vm-host-evidence.txt"
+	grep -q '^host cpu: ' "$OUT/vm-host-evidence.txt"
+	grep -q '^kvm: ' "$OUT/vm-host-evidence.txt"
+
+	rm -rf "$OUT"
+	export GUEST_CONSOLE='TUNAOS_DESKTOP_CONTRACT_FAIL missing\n'
+	GATE_NAME=stub-vm VMTEST_RC=1 run bash "$GATE_SCRIPT" img "$OUT" 600
+	[ "$status" -eq 1 ]
+	grep -q -- '-vga virtio -display none' "$OUT/vm-host-evidence.txt"
+}
+
+@test "collecting VM evidence cannot change a gate's verdict" {
+	cat >"${STUB_BIN}/pgrep" <<'PGREP'
+#!/usr/bin/env bash
+exit 2
+PGREP
+	chmod +x "${STUB_BIN}/pgrep"
+	export GUEST_CONSOLE='TUNAOS_BASE_CONTRACT_OK\nTUNAOS_DESKTOP_CONTRACT_OK\n'
+	run bash "$GATE_SCRIPT" img "$OUT" 600
+	[ "$status" -eq 0 ]
+	grep -q 'no qemu process' "$OUT/vm-host-evidence.txt"
+}

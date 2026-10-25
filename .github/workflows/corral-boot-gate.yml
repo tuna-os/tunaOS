@@ -114,6 +114,8 @@ jobs:
             verify-out/serial.log
             verify-out/*.png
             verify-out/timelapse.webm
+            verify-out/greeter-graphics-evidence*.txt
+            verify-out/vm-host-evidence.txt
             verify-out/corral/result.json
             verify-out/corral/diagnostics/
           if-no-files-found: warn
