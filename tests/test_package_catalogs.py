@@ -113,7 +113,9 @@ def test_complete_set_and_known_schema(change):
 def test_absent_configured_source_names_missing_id(absent):
     data = fixture()
     data['sources'] = [source for source in data['sources'] if source['id'] != absent]
-    with pytest.raises(CatalogError, match=f'missing source ids: {absent}$'):
+    with pytest.raises(
+            CatalogError,
+            match=f'missing source ids: {absent}; unexpected source ids: none$'):
         validate(data)
 
 
@@ -267,6 +269,16 @@ def test_copied_source_inventory_rejects_symlinked_directories_before_descent(tm
         package_catalogs._copied_package_source_files(tmp_path)
 
 
+def test_copied_source_inventory_rejects_symlinked_ancestor(tmp_path):
+    external = tmp_path / 'external/etc/apt'
+    external.mkdir(parents=True)
+    (external / 'source.list').write_text('deb https://example.invalid stable main\n')
+    (tmp_path / 'system_files').symlink_to(tmp_path / 'external', target_is_directory=True)
+
+    with pytest.raises(CatalogError, match='must not contain symlinks'):
+        package_catalogs._copied_package_source_files(tmp_path)
+
+
 @pytest.mark.parametrize('field,value', [
     ('files', []), ('files', None), ('manifest_sha256', 42),
     ('source_text', []), ('image_index', None), ('schema_version', True),
@@ -302,6 +314,31 @@ def test_target_configuration_binds_build_and_desktop_sources():
         observation = package_catalogs.bind_target_configuration(
             catalog, document, ROOT, flavor)
         assert observation['build_sources'][0]['id'] == 'tailscale'
+
+
+def test_target_configuration_accepts_reordered_catalog_flavors():
+    from lib import tunaos_config
+    document = tunaos_config.load()
+    original = document['package_catalogs']['debian-trixie']
+    catalog = {**original, 'flavors': list(reversed(original['flavors']))}
+
+    observation = package_catalogs.bind_target_configuration(
+        catalog, document, ROOT, 'base')
+
+    assert set(observation['flavors']) == set(catalog['flavors'])
+
+
+@pytest.mark.parametrize('helper', ['build_scripts/10-base-packages.sh', 'build_scripts/lib.sh'])
+def test_target_configuration_rejects_changed_invoked_or_sourced_helper(tmp_path, helper):
+    # Containerfile.debian runs 10-base-packages.sh after sourcing lib.sh, so a
+    # source-writing change in either must force an observation refresh.
+    _copy_target_configuration(tmp_path)
+    path = tmp_path / helper
+    path.write_text(path.read_text() + "\necho 'deb https://example.invalid stable main' > /etc/apt/sources.list.d/x.list\n")
+    document = __import__('lib.tunaos_config', fromlist=['load']).load()
+    catalog = document['package_catalogs']['debian-trixie']
+    with pytest.raises(CatalogError, match='configuration changed; refresh observation'):
+        package_catalogs.bind_target_configuration(catalog, document, tmp_path, 'base')
 
 
 def test_target_configuration_rejects_changed_source_logic(tmp_path):

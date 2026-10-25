@@ -8,11 +8,19 @@
   ],
   "platform": "linux/amd64",
   "base_image": "docker.io/library/debian:trixie@sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308",
-  "observed_at": "2026-10-24T02:30:03Z",
+  "observed_at": "2026-10-25T08:33:28Z",
   "configuration_files": {
     "Containerfile.debian": {
       "sha256": "66cc16aacc5e69a9fbe6692fc1a1e28322dce6ed72de7ce6c51d19c50b071022",
       "size": 18383
+    },
+    "build_scripts/10-base-packages.sh": {
+      "sha256": "f614082e7a6738c9af99bef509e62be9eb078410d66cd5c590fbe0be5937c994",
+      "size": 25952
+    },
+    "build_scripts/lib.sh": {
+      "sha256": "be8985d9ba56dcaac9eb9c11a8e223d14db58e71334bb467498b0e4494b6dbba",
+      "size": 50494
     },
     "build_scripts/20-packages.sh": {
       "sha256": "76dfeec44ef4d8b489e511af3cbadd6535578213086e828074317a5b84d3a149",
@@ -27,7 +35,7 @@
       "size": 20911
     },
     "image-versions.yaml": {
-      "sha256": "bf2b2593316fd1377e8fac1a7e684e18bd9da3b409c97bb701d560020b03420c",
+      "sha256": "4f5f3c9fc99f8cd7729254e61272328caa72a9e0f0b5c5d46923954dc0b51d08",
       "size": 12701
     }
   },

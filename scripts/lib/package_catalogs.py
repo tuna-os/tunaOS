@@ -132,8 +132,10 @@ def validate(catalog):
             raise CatalogError('invalid clock-skew bound')
     if ids != expected:
         missing = ', '.join(sorted(expected - ids)) or 'none'
+        unexpected = ', '.join(sorted(ids - expected)) or 'none'
         raise CatalogError(
-            f'incomplete configured target source set; missing source ids: {missing}')
+            'configured target source set differs from the exact reviewed set; '
+            f'missing source ids: {missing}; unexpected source ids: {unexpected}')
     return catalog
 
 
@@ -184,6 +186,8 @@ def index_path(source, release, *, architecture, component):
 def index_specs(source, release, *, architecture, component):
     if architecture != 'amd64' or component != 'main':
         raise CatalogError('unsupported architecture/component')
+    # deb.debian.org/debian-security declares `Components: updates/main ...` while its
+    # index paths stay under `main/`; the configured component names the path namespace.
     native_component = 'updates/main' if source['id'] == 'trixie-security' else 'main'
     if (release.get('Origin') != source['origin']
             or release.get('Codename') != source['codename']
@@ -364,25 +368,27 @@ def bind_observation(catalog, config_directory):
 
 
 def _copied_package_source_files(config_directory):
-    """Identity every local source/trust file copied into the target."""
+    """Identify every local source/trust file copied into the target."""
     import hashlib
     from pathlib import Path
     root = Path(config_directory)
     inventory = {}
     for relative_root in ('system_files/etc/apt', 'system_files/usr/share/keyrings'):
-        directory = root / relative_root
-        if directory.is_symlink():
-            raise CatalogError('copied package-source paths must not contain symlinks')
+        directory = root
+        for part in relative_root.split('/'):
+            directory = directory / part
+            if directory.is_symlink():
+                raise CatalogError('copied package-source paths must not contain symlinks')
         if not directory.exists():
             continue
         if not directory.is_dir():
             raise CatalogError('copied package-source inventory root is not a directory')
         for current, dirnames, filenames in os.walk(directory, followlinks=False):
             current_path = Path(current)
-            for name in sorted(dirnames):
+            dirnames.sort()
+            for name in dirnames:
                 if (current_path / name).is_symlink():
                     raise CatalogError('copied package-source paths must not contain symlinks')
-            dirnames.sort()
             for name in sorted(filenames):
                 candidate = current_path / name
                 relative = candidate.relative_to(root).as_posix()
@@ -425,7 +431,9 @@ def bind_target_configuration(catalog, document, config_directory, flavor):
           'target observation')
     if (type(observation['schema_version']) is not int or observation['schema_version'] != 1
             or observation['variant'] != catalog['variant']
-            or observation['flavors'] != catalog['flavors']
+            or not isinstance(observation['flavors'], list)
+            or not all(isinstance(item, str) for item in observation['flavors'])
+            or sorted(observation['flavors']) != sorted(catalog['flavors'])
             or observation['platform'] != 'linux/amd64'
             or observation['base_image'] != catalog['observed_base_image']):
         raise CatalogError('target observation does not match selected target')
@@ -436,7 +444,8 @@ def bind_target_configuration(catalog, document, config_directory, flavor):
     if observed_at.tzinfo is None:
         raise CatalogError('target observation timestamp needs timezone')
     files = observation['configuration_files']
-    expected_files = {'Containerfile.debian', 'build_scripts/20-packages.sh',
+    expected_files = {'Containerfile.debian', 'build_scripts/10-base-packages.sh',
+                      'build_scripts/lib.sh', 'build_scripts/20-packages.sh',
                       'build_scripts/desktop/install-desktop.sh',
                       'scripts/build-image-inner.sh', 'image-versions.yaml'}
     if not isinstance(files, dict) or set(files) != expected_files:

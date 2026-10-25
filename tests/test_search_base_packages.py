@@ -90,11 +90,12 @@ def test_real_config_and_observation_without_network(monkeypatch, capsys):
     # Keep the actual parser, schema, target matching and both observation bindings.
     def checked(catalog, keyring_for, now):
         assert catalog['coverage'] == 'configured-target'
-        assert [len(keyring_for(source)) for source in catalog['sources']] == [
-            55918, 55918, 55918, 2288]
+        assert {source['id']: len(keyring_for(source)) for source in catalog['sources']} == {
+            'trixie': 55918, 'trixie-updates': 55918, 'trixie-security': 55918,
+            'tailscale': 2288}
         return []
     monkeypatch.setattr(cli.signed_apt, 'acquire_catalog', checked)
     assert cli.main(ARGS + ['--config', str(ROOT / 'tunaos.toml')]) == 0
     output = json.loads(capsys.readouterr().out)
     assert output['cell_coverage_complete'] is True
-    assert output['configuration_observed_at'] == '2026-10-24T02:30:03Z'
+    assert output['configuration_observed_at'] == '2026-10-25T08:33:28Z'

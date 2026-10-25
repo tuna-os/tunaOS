@@ -19,7 +19,9 @@ source URL configured in `build_scripts/20-packages.sh`:
 the allowed primary fingerprint is
 `2596A99EAAB33821893C0A79458CA832957F5868`. The reviewed target observation
 binds that source claim to the source-configuration files. The key remains
-lookup-only and is never installed or fetched by the collector.
+lookup-only and is never installed or imported. The collector fetches the
+declared URL only to require byte identity with these reviewed bytes before
+trusting metadata.
 
 The Tailscale InRelease fixture under `tests/fixtures/package-catalog` was
 retrieved from
