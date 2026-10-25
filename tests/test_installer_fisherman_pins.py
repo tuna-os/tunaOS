@@ -14,7 +14,10 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import urllib.error
 from pathlib import Path
+import pytest
+import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "check-installer-fisherman-pins.py"
@@ -43,18 +46,6 @@ def test_a_pinned_commit_on_the_dead_repo_is_still_rejected() -> None:
     assert len(problems) == 1
 
 
-def test_the_live_repo_passes() -> None:
-    assert mod.audit({"kde": {"url": LIVE, "commit": "027fa25c"}}) == []
-
-
-def test_an_old_revision_of_the_live_repo_is_allowed() -> None:
-    """Deliberately about the REPO, not the revision.
-
-    Pinning an older revision of a live repo is a visible, reviewable choice;
-    sourcing a repo that stopped moving is the silent one. Failing on revision
-    age here would make the check noisy and it would get switched off.
-    """
-    assert mod.audit({"kde": {"url": LIVE, "commit": "6092be78"}}) == []
 
 
 def test_a_missing_source_fails_loudly() -> None:
@@ -100,6 +91,53 @@ def test_the_gitmodules_parser_reads_the_right_submodule() -> None:
     assert got == {"url": DEAD, "branch": "dev"}
     assert mod.audit({"gnome": got})
 
+
+def test_collect_uses_production_gitlink_not_tracking_branch(monkeypatch):
+    committed = "f" * 40
+    gitmodules = f"""
+[submodule "fisherman"]
+\tpath = fisherman
+\turl = {LIVE}
+\tbranch = main
+"""
+    manifest = json.dumps(
+        {
+            "modules": [
+                {
+                    "name": "fisherman",
+                    "sources": [
+                        {
+                            "type": "git",
+                            "url": LIVE,
+                            "commit": mod.FLOOR_COMMIT,
+                        }
+                    ],
+                }
+            ],
+        }
+    )
+    fetched_refs = []
+
+    def fake_fetch(_repo, path, ref):
+        fetched_refs.append(ref)
+        return gitmodules if path == ".gitmodules" else manifest
+
+    monkeypatch.setattr(mod, "fetch", fake_fetch)
+
+    def fake_api(url):
+        if "/contents/fisherman?ref=prod" in url:
+            return {"sha": committed}
+        if "/compare/" in url:
+            return {"status": "ahead"}
+        raise AssertionError(url)
+
+    monkeypatch.setattr(mod, "api_json", fake_api)
+    sources = mod.collect()
+    source = sources["gnome"]
+    assert source["commit"] == committed
+    assert source["resolved"] == committed
+    assert "branch" not in source
+    assert fetched_refs == [mod.INSTALLER_REF] * 5
 
 def test_the_manifest_parser_finds_the_fisherman_module() -> None:
     manifest = json.dumps(
@@ -161,23 +199,18 @@ def test_audit_fails_a_below_floor_sha() -> None:
     assert len(problems) == 1
     assert "floor" in problems[0]
 
+def test_audit_fails_a_canonical_source_without_a_revision() -> None:
+    for source in ({"url": LIVE}, {"url": LIVE, "at_or_after_floor": None}):
+        problems = mod.audit({"kde": source})
+        assert len(problems) == 1
+        assert "no revision pin" in problems[0]
+
 
 def test_audit_passes_the_floor_sha_and_newer() -> None:
     floor = {"url": LIVE, "resolved": mod.FLOOR_COMMIT, "at_or_after_floor": True}
     newer = {"url": LIVE, "resolved": "f" * 40, "at_or_after_floor": True}
     assert mod.audit({"kde": floor}) == []
     assert mod.audit({"kde": newer}) == []
-
-
-def test_floor_is_the_landed_squash_merge_not_the_pr_branch_commit() -> None:
-    """Run 40057457412: fisherman#340 was squash-merged as 02ac7097 on `dev`.
-
-    Its PR-branch commit d349c31e is never an ancestor of `dev`, so a floor
-    naming it made every frontend pinned at the landed change "diverged" and
-    red. The floor must be the commit that is on the default branch.
-    """
-    assert mod.FLOOR_COMMIT == "02ac7097abb07a206479ea84a559c41db12bf629"
-    assert not mod.FLOOR_COMMIT.startswith("d349c31e")
 
 
 def test_unresolvable_pins_warn_dont_fail() -> None:
@@ -187,60 +220,131 @@ def test_unresolvable_pins_warn_dont_fail() -> None:
     assert mod.audit({"kde": unknown}) == []
 
 
-def test_floor_ancestry_fast_path_needs_no_dates(monkeypatch) -> None:
-    """An ancestor pin passes on the compare call alone (one API call)."""
-    calls = []
+def test_invalid_production_gitlink_fails_closed(monkeypatch) -> None:
+    monkeypatch.setattr(
+        mod,
+        "INSTALLERS",
+        {
+            "gnome": {
+                "repo": "tuna-os/bootc-installer",
+                "submodule": "fisherman",
+            }
+        },
+    )
+    monkeypatch.setattr(
+        mod,
+        "fetch",
+        lambda *_args: (
+            '[submodule "fisherman"]\n'
+            "\tpath = fisherman\n"
+            f"\turl = {LIVE}\n"
+        ),
+    )
+    monkeypatch.setattr(
+        mod,
+        "submodule_sha",
+        lambda *_args: (_ for _ in ()).throw(KeyError("invalid gitlink")),
+    )
 
-    def fake_api(url: str) -> dict:
-        calls.append(url)
-        return {"status": "ahead"}
+    sources = mod.collect()
 
-    monkeypatch.setattr(mod, "api_json", fake_api)
-    assert mod.floor_is_ancestor("tuna-os/fisherman", "f" * 40) is True
-    assert len(calls) == 1
-
-
-def test_floor_divergence_fails_closed_even_with_newer_timestamp(monkeypatch) -> None:
-    """A newer commit date cannot prove a divergent pin contains the floor."""
-    def fake_api(url: str) -> dict:
-        if "/compare/" in url:
-            return {"status": "diverged"}
-        if url.endswith(mod.FLOOR_COMMIT):
-            return {"commit": {"committer": {"date": "2026-10-17T00:00:00Z"}}}
-        return {"commit": {"committer": {"date": "2026-10-18T00:00:00Z"}}}
-
-    monkeypatch.setattr(mod, "api_json", fake_api)
-    assert mod.floor_is_ancestor("tuna-os/fisherman", "a" * 40) is False
-
-
-def test_floor_behind_fails_closed(monkeypatch) -> None:
-    def fake_api(url: str) -> dict:
-        assert "/compare/" in url
-        return {"status": "behind"}
-
-    monkeypatch.setattr(mod, "api_json", fake_api)
-    assert mod.floor_is_ancestor("tuna-os/fisherman", "0" * 40) is False
+    assert "source_error" in sources["gnome"]
+    assert "invalid gitlink" in mod.audit(sources)[0]
 
 
-def test_submodule_sha_uses_exact_gitlink_revision(monkeypatch) -> None:
-    calls = []
-
-    def fake_api(url: str) -> dict:
-        calls.append(url)
-        return {"sha": "b" * 40}
-
-    monkeypatch.setattr(mod, "api_json", fake_api)
-    assert mod.submodule_sha("tuna-os/bootc-installer", "fisherman") == "b" * 40
-    assert calls == [
-        "https://api.github.com/repos/tuna-os/bootc-installer/contents/fisherman"
-    ]
+def test_non_object_gitlink_response_fails_closed(monkeypatch) -> None:
+    monkeypatch.setattr(mod, "api_json", lambda _url: [])
+    with pytest.raises(KeyError, match="non-object"):
+        mod.submodule_sha("tuna-os/bootc-installer", "fisherman")
 
 
-def test_floor_unknown_warns_instead_of_failing(monkeypatch) -> None:
-    def fake_api(url: str) -> dict:
-        if "/compare/" in url:
-            return {"status": "unknown"}
-        raise TimeoutError("offline")
+def test_missing_fisherman_revision_fails_closed(monkeypatch) -> None:
+    monkeypatch.setattr(
+        mod,
+        "INSTALLERS",
+        {
+            "kde": {
+                "repo": "tuna-os/bootc-installer",
+                "manifest": "frontend.json",
+            }
+        },
+    )
+    manifest = json.dumps(
+        {
+            "modules": [
+                {
+                    "name": "fisherman",
+                    "sources": [{"type": "git", "url": LIVE, "branch": "missing"}],
+                }
+            ]
+        }
+    )
+    monkeypatch.setattr(mod, "fetch", lambda *_args: manifest)
+    missing = urllib.error.HTTPError("", 404, "Not Found", {}, None)
+    monkeypatch.setattr(
+        mod,
+        "resolve_sha",
+        lambda *_args: (_ for _ in ()).throw(missing),
+    )
 
-    monkeypatch.setattr(mod, "api_json", fake_api)
-    assert mod.floor_is_ancestor("tuna-os/fisherman", "a" * 40) is None
+    sources = mod.collect()
+
+    assert "does not exist" in mod.audit(sources)[0]
+
+
+def test_missing_production_manifest_fails_through_main(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(
+        mod,
+        "INSTALLERS",
+        {
+            "kde": {
+                "repo": "tuna-os/bootc-installer",
+                "manifest": "frontends/kde/flatpak/org.tunaos.InstallerKde.json",
+            }
+        },
+    )
+    missing = urllib.error.HTTPError("", 404, "Not Found", {}, None)
+    monkeypatch.setattr(mod, "fetch", lambda *_args: (_ for _ in ()).throw(missing))
+    monkeypatch.setattr(sys, "argv", ["check-installer-fisherman-pins.py"])
+
+    assert mod.main() == 1
+    assert "production manifest" in capsys.readouterr().out
+
+
+def test_invalid_json_response_fails_closed(monkeypatch) -> None:
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return b"not-json"
+
+    monkeypatch.setattr(mod.urllib.request, "urlopen", lambda *_args, **_kwargs: Response())
+    with pytest.raises(KeyError, match="invalid JSON"):
+        mod.api_json("https://api.example.test/resource")
+
+
+def test_floor_is_the_dev_squash_commit_not_the_pr_branch_commit() -> None:
+    # d349c31e is a fisherman#340 branch commit; compare says "diverged" for
+    # anything on dev, so it would fail every correctly promoted pin.
+    assert mod.FLOOR_COMMIT == "02ac7097abb07a206479ea84a559c41db12bf629"
+
+
+def test_floor_ancestry_follows_the_compare_status(monkeypatch) -> None:
+    seen = []
+
+    def status_for(status):
+        def fake_api(url):
+            seen.append(url)
+            return {"status": status}
+
+        return fake_api
+
+    expected = {"identical": True, "ahead": True, "behind": False, "diverged": False}
+    for status, want in expected.items():
+        monkeypatch.setattr(mod, "api_json", status_for(status))
+        assert mod.floor_is_ancestor("tuna-os/fisherman", "f" * 40) is want, status
+    assert all(f"/compare/{mod.FLOOR_COMMIT}...{'f' * 40}" in u for u in seen)

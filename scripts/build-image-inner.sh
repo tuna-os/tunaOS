@@ -42,6 +42,9 @@ BUILD_CONFIG="$(tunaos_build_config)"
 # shellcheck source=lib/publish-destination.sh
 source scripts/lib/publish-destination.sh
 read -r IMAGE_REGISTRY REPO_ORGANIZATION < <(tunaos_publish_destination "$BUILD_CONFIG")
+# The project name for the final image's title label (tunaos.toml [project] name).
+# shellcheck source=../build_scripts/lib/identity.env
+source build_scripts/lib/identity.env
 
 # ── Resolve image refs from image-versions.yaml ───────────────────────────────
 common_image="${COMMON_IMAGE:-ghcr.io/projectbluefin/common}"
@@ -144,22 +147,14 @@ if [[ "${CONTAINERFILE}" == "Containerfile.debian" && "${TUNAOS_IMAGE_FLAVOR}" =
 	BUILD_CONTAINERFILE="${BUILD_CONTEXT}/${CONTAINERFILE}"
 fi
 
-# Build scripts hash for cache invalidation
-build_scripts_hash=$(cd "${BUILD_CONTEXT}" && find build_scripts -type f -name '*.sh' -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -c1-16)
+# Build scripts hash for cache invalidation. The generated identity adapter is
+# bind-mounted build context that 90-image-info.sh and the KDE hook source, so
+# its bytes belong in the key: regenerating it changes no *.sh file, and a
+# dirty checkout always reports SHA_HEAD_SHORT=dirty, so without it a
+# cached layer would keep the previous identity.
+build_scripts_hash=$(cd "${BUILD_CONTEXT}" && find build_scripts -type f \( -name '*.sh' -o -path build_scripts/lib/identity.env \) -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -c1-16)
 if [[ -f "${BUILD_CONTEXT}/desktop-context-receipt.json" ]]; then
 	build_scripts_hash="${build_scripts_hash}-$($YQ -r '.sha256' "${BUILD_CONTEXT}/desktop-context-receipt.json")"
-fi
-# Generated fork payloads are bind-mounted context too. Their content must enter
-# the cache key, or a prior stock/other fork layer can be reused unchanged.
-if [[ -f manifests/fork-config.json ]]; then
-	# Some legacy stages declare the cache ARG after their base hooks, and
-	# Gentoo desktop-build branches before that declaration. Preview builds
-	# disable layer reuse until every stage has real cache-invalidation evidence.
-	BUILD_ARGS+=("--no-cache")
-	fork_payload_paths=(manifests/fork-config.json)
-	if [[ -d manifests/fork-assets ]]; then fork_payload_paths+=(manifests/fork-assets); fi
-	fork_payload_hash=$(find "${fork_payload_paths[@]}" -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -c1-16)
-	build_scripts_hash="${build_scripts_hash}-${fork_payload_hash}"
 fi
 BUILD_ARGS+=("--build-arg" "BUILD_SCRIPTS_HASH=${build_scripts_hash}")
 
@@ -436,6 +431,7 @@ ${BUILDER} build \
 	--dns=8.8.8.8 \
 	"${BUILD_ARGS[@]}" \
 	--build-arg "RECHUNKED_BASE=${RECHUNKED_REF}" \
+	--build-arg "TUNAOS_PROJECT_NAME=${TUNAOS_PROJECT_NAME}" \
 	--tag "${IMAGE_TAG}" \
 	--file "Containerfile.final" \
 	.

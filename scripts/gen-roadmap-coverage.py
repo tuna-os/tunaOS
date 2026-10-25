@@ -59,12 +59,15 @@ import argparse
 import datetime
 import difflib
 import json
+import os
 import re
 import subprocess
 import sys
 from pathlib import Path
 
-ORG = "tuna-os"
+# The org whose repos are measured: this repository's owner (Actions sets
+# GITHUB_REPOSITORY_OWNER); the stock org outside Actions.
+ORG = os.environ.get("GITHUB_REPOSITORY_OWNER") or "tuna-os"
 DOC = Path(__file__).resolve().parents[1] / "ROADMAP.md"
 BEGIN = "<!-- BEGIN GENERATED — scripts/gen-roadmap-coverage.py -->"
 END = "<!-- END GENERATED -->"
@@ -168,7 +171,7 @@ def build(repos: list[dict], today: str | None = None) -> str:
         f"- {glyph} **Per-repo ROADMAP coverage — {len(planned)} of {total} "
         + f"active repos ({pct}%)**, measured {stamp} by "
         + "[`scripts/gen-roadmap-coverage.py`](./scripts/gen-roadmap-coverage.py).",
-        "  Scope is every non-archived, non-private repo in the `tuna-os` org; "
+        f"  Scope is every non-archived, non-private repo in the `{ORG}` org; "
         + "a repo counts as",
         "  planned when `ROADMAP.md` is at the root of its **default branch**. "
         + "Archived repos are out",

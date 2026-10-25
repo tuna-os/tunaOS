@@ -10,7 +10,7 @@ images:
   - name: brew
     image: ghcr.io/ublue-os/brew
     tag: latest
-    digest: sha256:393b567da078f0f0638450c388e229011dae06f94a90017cb7525b57d9faa46e
+    digest: sha256:c201bc801e4828849e8e36c4adcb5c0f38d35ac3ff9546a0ecab0fd2beabf51f
 
   # RFC 010: pre-built Zirconium image for DMS/Niri system files
   # on grouper (Ubuntu) — not available from Ubuntu apt.
@@ -31,7 +31,7 @@ images:
   - name: utah-packages
     image: ghcr.io/projectbluefin/utah-packages
     tag: latest
-    digest: sha256:194f1001db50a50f398705c97d399033568885d8b53790da6a16a420e007cbe7
+    digest: sha256:ae342d032d65230be63a32078bda98a30e430fd519cae084905ce2a9f782b7b9
 
   # tunaOS' own GNOME 50 for EL10, from the gnome50-el10-x86_64 build chain in
   # tuna-os/tunaos-packages: a createrepo_c repository shipped as an OCI image
@@ -78,20 +78,6 @@ downloads:
   uupd: "v1.5.1"
   # renovate: datasource=github-releases depName=ledif/kcm_ublue
   kcm_ublue: "v0.6.1"
-  # renovate: datasource=github-releases depName=mvdan/sh
-  #
-  # shfmt is a FORMATTER, so its version is part of the repo's formatting.
-  # `just fix` runs it over every shell script and `just check` fails on drift,
-  # which means two contributors on different shfmt versions produce different
-  # trees and each sees the other's as unformatted.
-  #
-  # This is not hypothetical: `just fix` once rewrote 145 files and 12,277
-  # lines on a clean main because .editorconfig disagreed with the code
-  # (fixed separately). An unpinned formatter is the same failure waiting on a
-  # release rather than on a config edit -- and AGENTS.md makes
-  # `just fix && just check` mandatory before every commit, so everyone hits
-  # it at once.
-  shfmt: "v3.14.1"
   # renovate: datasource=github-releases depName=hivecommons/spektacular
   # The spec, plan and build workflows (RFC 011, ADR 0010). Its version must
   # match `written_by` in .spektacular/config.yaml; `spektacular version check`
@@ -136,10 +122,9 @@ downloads:
   # '/run/rootfsbase'`. Proven both ways by named runs: broken at
   # tacklebox 30629145076, booting to login at 30630284339.
   tacklebox: "d3070b525bf1b812b81c22d32c8d51199eaa2e53"
-  # At d3070b5 (pushed on origin feat/browser-parity-engine): carries
-  # BuildRequest, the exact platform, the stall repair, and offline layout
-  # embedding -- everything the browser-parity engine path needs. tacklebox
-  # PR #381 will advance this pin on merge.
+  # d3070b5 is the merge head of tacklebox PR #381. It carries BuildRequest,
+  # exact-platform selection, stalled-read repair, and offline-layout
+  # embedding -- the complete browser-parity engine contract.
   # ae93e9b (tuna-os/tacklebox#300) makes the post-customize commit deadline
   # settable with TBOX_CUSTOMIZE_COMMIT_TIMEOUT; before it, a literal 600s
   # killed multi-GB desktop commits on CI (tunaOS#1893), and

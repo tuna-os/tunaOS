@@ -39,8 +39,13 @@ fi
 
 # shellcheck source=lib/common.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
+# The volume label starts with the project id (tunaos.toml [project] id).
+# shellcheck source=../build_scripts/lib/identity.env
+. "$(dirname "${BASH_SOURCE[0]}")/../build_scripts/lib/identity.env"
 # shellcheck source=lib/squashfs-compat.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/squashfs-compat.sh"
+# shellcheck source=lib/platform-digest.sh
+. "$(dirname "${BASH_SOURCE[0]}")/lib/platform-digest.sh"
 
 # Source registry resolution for TUNA_REGISTRY mirror overrides.
 # Falls back to hardcoded ref if _registry.sh is unavailable.
@@ -120,10 +125,25 @@ SOURCE_IMAGE_REF=$(tunaos_image_ref "$VARIANT" "$FLAVOR" "$REPO" "$TAG")
 # from it when supplied, while keeping the installed/offline payload pinned to
 # the original promoted image.
 IMAGE_REF="${TUNA_LIVE_OVERLAY_REF:-$SOURCE_IMAGE_REF}"
-PAYLOAD_REF="${TUNA_LIVE_PAYLOAD_REF:-$SOURCE_IMAGE_REF}"
+# Keep the name embedded in the offline store independent of how this ISO was
+# built.  A developer can build from localhost/, but the installed system and
+# bootc's direct live-ISO path must resolve the published image reference.
+# Tacklebox copies the source image into the store under this canonical ref;
+# it does not pull a second image or require a local podman tag. A caller that
+# pins the payload (native qualification) supplies the immutable ref itself.
+PAYLOAD_REF="${TUNA_LIVE_PAYLOAD_REF:-$(tunaos_image_ref "$VARIANT" "$FLAVOR" ghcr "$TAG")}"
+case "$(uname -m)" in
+x86_64 | amd64) SOURCE_PLATFORM="linux/amd64" ;;
+aarch64 | arm64) SOURCE_PLATFORM="linux/arm64" ;;
+*)
+	echo "ERROR: unsupported ISO build architecture: $(uname -m)" >&2
+	exit 1
+	;;
+esac
 if [[ "$REPO" == "local" ]]; then
 	tunaos_import_to_root_storage "$IMAGE_REF"
 else
+	podman pull --platform "$SOURCE_PLATFORM" "$IMAGE_REF"
 	# Registry image: tacklebox's Pull() lands it in root's store, but the live
 	# squash mounts it via `sudo -u $SUDO_USER podman unshare`, which reads the
 	# *invoking user's* rootless store (see tacklebox internal/install/{bootc,
@@ -134,8 +154,19 @@ else
 	REAL_USER="${SUDO_USER:-}"
 	if [[ -n "$REAL_USER" && "$REAL_USER" != "root" ]]; then
 		echo "==> Pre-pulling ${IMAGE_REF} into ${REAL_USER}'s rootless store (for live squash)..."
-		sudo -u "$REAL_USER" -H podman pull "$IMAGE_REF"
+		sudo -u "$REAL_USER" -H podman pull --platform "$SOURCE_PLATFORM" "$IMAGE_REF"
 	fi
+fi
+# The recorded base digest names the SOURCE manifest the offline payload
+# installs. A caller that supplies an overlay must also supply that digest: the
+# overlay's own manifest is not the source it was built from.
+if [[ -n "${TUNA_LIVE_BASE_DIGEST:-}" ]]; then
+	BASE_DIGEST="$TUNA_LIVE_BASE_DIGEST"
+elif [[ "$IMAGE_REF" == "$SOURCE_IMAGE_REF" ]]; then
+	BASE_DIGEST="$(platform_manifest_digest "$IMAGE_REF" "$SOURCE_PLATFORM")"
+else
+	echo "ERROR: TUNA_LIVE_OVERLAY_REF requires TUNA_LIVE_BASE_DIGEST (the source manifest digest)" >&2
+	exit 1
 fi
 
 # ponytail: tacklebox runner delegated to common.sh tunaos_run_tacklebox
@@ -175,16 +206,19 @@ mkdir -p "$CUSTOMIZE_DIR"
 cp -a "${REPO_ROOT}/live-iso/common/src/." "$CUSTOMIZE_DIR/"
 if [[ "$SOURCE_IMAGE_REF" == *@sha256:* ]]; then
 	BASE_IMAGE="${SOURCE_IMAGE_REF%@*}"
-	BASE_DIGEST="${SOURCE_IMAGE_REF##*@}"
 else
 	BASE_IMAGE="$SOURCE_IMAGE_REF"
-	BASE_DIGEST="unknown"
 fi
 BASE_IMAGE="${TUNA_LIVE_BASE_IMAGE:-$BASE_IMAGE}"
-BASE_DIGEST="${TUNA_LIVE_BASE_DIGEST:-$BASE_DIGEST}"
+cp "${REPO_ROOT}/image-versions.yaml" "$CUSTOMIZE_DIR/"
+mv "${CUSTOMIZE_DIR}/customize-live.sh" "${CUSTOMIZE_DIR}/customize-live-real.sh"
+chmod 0755 "${CUSTOMIZE_DIR}/customize-live-real.sh"
 {
+	echo '#!/usr/bin/env bash'
+	echo 'export TUNA_SESSION_ROOT=/'
 	printf 'export TUNA_LIVE_BASE_IMAGE=%q\n' "$BASE_IMAGE"
 	printf 'export TUNA_LIVE_BASE_DIGEST=%q\n' "$BASE_DIGEST"
+	printf 'export TUNA_LIVE_PLATFORM=%q\n' "${PLATFORM:-$SOURCE_PLATFORM}"
 	if [[ -n "${TUNA_LIVE_PAYLOAD_REF+x}" ]]; then
 		printf 'export TUNA_LIVE_PAYLOAD_REF=%q\n' "$TUNA_LIVE_PAYLOAD_REF"
 		install_target="$(GITHUB_REPOSITORY_OWNER=tuna-os bash scripts/published-image-ref.sh "$VARIANT" "$FLAVOR" ghcr)"
@@ -192,11 +226,9 @@ BASE_DIGEST="${TUNA_LIVE_BASE_DIGEST:-$BASE_DIGEST}"
 	fi
 	printf 'export TUNA_LIVE_OVERLAY_DIGEST=%q\n' "${TUNA_LIVE_OVERLAY_DIGEST:-unknown}"
 	printf 'export TUNA_LIVE_ENGINE_DIGEST=%q\n' "${TUNA_LIVE_ENGINE_DIGEST:-unknown}"
-	printf 'export TUNA_LIVE_PLATFORM=%q\n' "${PLATFORM:-unknown}"
-	cat "${REPO_ROOT}/live-iso/common/src/customize-live.sh"
+	echo 'exec bash "$(dirname "${BASH_SOURCE[0]}")/customize-live-real.sh" "$@"'
 } >"${CUSTOMIZE_DIR}/customize-live.sh"
-chmod +x "${CUSTOMIZE_DIR}/customize-live.sh"
-cp "${REPO_ROOT}/image-versions.yaml" "$CUSTOMIZE_DIR/"
+chmod 0755 "${CUSTOMIZE_DIR}/customize-live.sh"
 if [[ "$DEV" == "1" ]]; then
 	touch "${CUSTOMIZE_DIR}/.enable-sshd"
 fi
@@ -213,7 +245,7 @@ gnome* | *) DESKTOP="gnome" ;;
 esac
 
 # Capped at the ISO 9660 32-character volume ID; see tunaos_iso_media_name.
-MEDIA_NAME="$(tunaos_iso_media_name "tunaos-${VARIANT}-${FLAVOR}")"
+MEDIA_NAME="$(tunaos_iso_media_name "${TUNAOS_PROJECT_ID}-${VARIANT}-${FLAVOR}")"
 
 cat >"$RECIPE_FILE" <<EOF
 {

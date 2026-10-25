@@ -1,7 +1,6 @@
 name: Publish Live ISOs to R2
 
 permissions:
-  actions: read
   contents: read
 
 on:
@@ -49,44 +48,22 @@ jobs:
     outputs:
       matrix: ${{ steps.build.outputs.matrix }}
       count: ${{ steps.build.outputs.count }}
+      destination: ${{ steps.dest.outputs.destination }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Download current catalog snapshot
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          snapshot_dir="$RUNNER_TEMP/catalog-facts"
-          mkdir -p "$snapshot_dir"
-          run_id="$(gh run list --repo "$GITHUB_REPOSITORY" \
-            --workflow catalog-facts.yml --branch main --status success --limit 1 \
-            --json databaseId --jq '.[0].databaseId // empty' 2>/dev/null || true)"
-          if [[ -n "$run_id" ]] && gh run download "$run_id" \
-              --repo "$GITHUB_REPOSITORY" --name catalog-facts --dir "$snapshot_dir"; then
-            echo "CATALOG_SNAPSHOT=$snapshot_dir/catalog-snapshot.json" >> "$GITHUB_ENV"
-          fi
-      - name: Install delivery input probe
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends python3-yaml skopeo
-
-      - name: Collect current delivery inputs
-        env:
-          CURRENT_INPUTS: ${{ runner.temp }}/current-delivery-inputs.json
-        run: |
-          set -euo pipefail
-          if python3 scripts/collect-current-inputs.py --output "$CURRENT_INPUTS"; then
-            echo "CURRENT_INPUTS=$CURRENT_INPUTS" >> "$GITHUB_ENV"
-          else
-            echo "::warning::current delivery inputs were unavailable; cutover annotations will remain false"
-          fi
-
-
 
       - name: Setup yq
         uses: ./.github/actions/setup-yq
+
+      # "<registry>/<namespace>" the images publish to: [build.publish] in
+      # tunaos.toml, else ghcr.io/<owner> (scripts/publish-destination.sh).
+      - name: Resolve publish destination
+        id: dest
+        env:
+          IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY }}
+        run: echo "destination=$(bash scripts/publish-destination.sh)" >> "$GITHUB_OUTPUT"
 
       - name: Build matrix from build-config.yml
         id: build
@@ -94,7 +71,9 @@ jobs:
           WANT_VARIANT: ${{ inputs.variant || 'all' }}
           WANT_FLAVOR: ${{ inputs.flavor || 'all' }}
         run: |
-          MATRIX=$(yq -o json .github/build-config.yml | jq -c \
+          CONFIG_JSON="${RUNNER_TEMP}/build-config.json"
+          yq -o=json '.' .github/build-config.yml > "$CONFIG_JSON"
+          MATRIX=$(jq -c \
             --arg v "$WANT_VARIANT" --arg f "$WANT_FLAVOR" '{
               include: [
                 .variants[] | . as $var |
@@ -102,33 +81,15 @@ jobs:
                 select(.build_iso == true) |
                 select($v == "all" or $var.id == $v) |
                 select($f == "all" or .id == $f) |
-                {
-                  variant: $var.id,
-                  flavor: .id,
-                  platform: (
-                    if ($var.id == "yellowfin" or $var.id == "albacore")
-                       and ((.platforms // $var.platforms // []) | index("linux/amd64/v2"))
-                    then "linux/amd64/v2"
-                    else "linux/amd64"
-                    end
-                  )
-                }
-                | . + {safeplatform: (.platform | gsub("/"; "-"))}
+                {variant: $var.id, flavor: .id, platform: "linux/amd64"}
               ]
-            }')
-          # Delivery cutover must use the same canonical platform identity as
-          # the catalog. In particular, ordinary Alma targets are AMD64/v2,
-          # not the generic AMD64 alias.
-          SNAPSHOT_ARGS=()
-          if [[ -s "${CATALOG_SNAPSHOT:-}" && -s "${CURRENT_INPUTS:-}" ]]; then
-            SNAPSHOT_ARGS=(--snapshot "$CATALOG_SNAPSHOT" --current-inputs "$CURRENT_INPUTS")
-          elif [[ -s "${CATALOG_SNAPSHOT:-}" ]]; then
-            SNAPSHOT_ARGS=(--snapshot "$CATALOG_SNAPSHOT")
-          fi
-          MATRIX=$(echo "$MATRIX" | python3 scripts/delivery-cutover.py --annotate-matrix --default-platform linux/amd64 "${SNAPSHOT_ARGS[@]}")
+            }' "$CONFIG_JSON" | python3 scripts/iso-delivery-policy.py \
+              --config-json "$CONFIG_JSON" annotate-target-matrix)
           COUNT=$(echo "$MATRIX" | jq '.include | length')
           echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
           echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+          echo "Building $COUNT ISO(s):"
+          echo "$MATRIX" | jq -r '.include[] | "  \(.variant):\(.flavor)"'
 
   build-and-publish:
     name: ${{ matrix.variant }}:${{ matrix.flavor }}
@@ -141,19 +102,14 @@ jobs:
       contents: read
       packages: read
       id-token: write
-      actions: read
-    # Builds the ISO from the platform-qualified promoted image, boot-gates it
-    # in QEMU, and only publishes to R2 if the gate passes. The reusable
-    # workflow resolves this promoted tag to its immutable platform digest.
+    # Builds the ISO from the promoted :<flavor> image, boot-gates it in
+    # QEMU, and only publishes to R2 if the gate passes.
     uses: ./.github/workflows/reusable-build-artifacts.yml
     with:
       variant: ${{ matrix.variant }}
       flavor: ${{ matrix.flavor }}
-      platform: ${{ matrix.platform }}
-      safeplatform: ${{ matrix.safeplatform }}
       image-tag: ${{ matrix.flavor }}
-      upload-r2: ${{ inputs.skip_upload != true }}
-
+      upload-r2: ${{ inputs.skip_upload != true && !matrix.r2_cutover }}
     secrets:
       R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
       R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -174,7 +130,7 @@ jobs:
       - name: Download signed ISO
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: iso-${{ matrix.variant }}-${{ matrix.flavor }}-${{ matrix.safeplatform }}
+          name: iso-${{ matrix.variant }}-${{ matrix.flavor }}-linux-amd64
           path: release-assets
 
       - name: Attach ISO to GitHub Release
@@ -182,6 +138,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VARIANT: ${{ matrix.variant }}
           FLAVOR: ${{ matrix.flavor }}
+          PUBLISH_DEST: ${{ needs.generate-matrix.outputs.destination }}
         run: |
           DATE=$(date +%Y%m%d)
           TAG="${FLAVOR}-${DATE}"
@@ -203,7 +160,7 @@ jobs:
             gh release create "$TAG" \
               --repo "${GITHUB_REPOSITORY}" \
               --title "TunaOS ${FLAVOR} (${DATE})" \
-              --notes "Live ISO for ${VARIANT}:${FLAVOR}. Built from ghcr.io/tuna-os/${VARIANT}:${FLAVOR}."
+              --notes "Live ISO for ${VARIANT}:${FLAVOR}. Built from ${PUBLISH_DEST:?}/${VARIANT}:${FLAVOR}."
           fi
           # Delete existing assets explicitly: gh release upload --clobber can
           # return HTTP 422 for an asset uploaded in the same API session.

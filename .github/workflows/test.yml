@@ -28,8 +28,6 @@ on:
       - 'schemas/**'
       # Signed package-search observations and public trust fixtures.
       - 'config/**'
-      # The fork-config contract suite initializes the stock/fork templates.
-      - 'examples/**'
       - 'experiences/**'
       - 'build_scripts/**'
       # One entry rather than six. .github/scripts/**, changelogs.py,
@@ -54,6 +52,7 @@ on:
       - 'tunaos.toml'
       - 'requirements-config.txt'
       - 'requirements-package-authoring.txt'
+      - 'requirements-branding.txt'
       - 'image-versions.yaml'
       - 'registry-map.yaml'
       - 'renovate.json'
@@ -183,6 +182,7 @@ jobs:
           pip3 install pytest pytest-cov -r requirements-config.txt --break-system-packages 2>/dev/null || pip3 install pytest pytest-cov -r requirements-config.txt --user
 
           python3 -m pip install -r requirements-package-authoring.txt --break-system-packages || python3 -m pip install -r requirements-package-authoring.txt --user
+          python3 -m pip install -r requirements-branding.txt --break-system-packages || python3 -m pip install -r requirements-branding.txt --user
 
           # Independent schema oracle, pinned with the other external tools.
           schema_version=$(yq -r '.downloads.jsonschema // ""' image-versions.yaml)
@@ -191,6 +191,11 @@ jobs:
 
           # Pillow + requests for desktop-verify.py tests
           pip3 install pillow requests --break-system-packages 2>/dev/null || pip3 install pillow requests --user
+
+      # Marks, lettermarks and fastfetch letters follow each variant's emoji,
+      # name and accent in tunaos.toml; a fork's edits must regenerate them.
+      - name: Check generated artwork
+        run: python3 scripts/branding/check-artwork.py
 
       - name: Prepare test diagnostics
         id: test_diagnostics
@@ -401,7 +406,6 @@ jobs:
     # The reusable image jobs declare publishing scopes. Their PR path disables
     # publish/SBOM and does not receive the R2 secrets passed by manual builds.
     permissions:
-      actions: read
       contents: read
       packages: write
       id-token: write

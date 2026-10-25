@@ -20,6 +20,8 @@ client = importlib.util.module_from_spec(spec)
 sys.modules[loader.name] = client
 loader.exec_module(client)
 NOW = int(dt.datetime(2026, 9, 21, tzinfo=dt.timezone.utc).timestamp())
+# What build_scripts/install-countme.sh writes for TunaOS from tunaos.toml.
+ENDPOINT = "https://countme.tunaos.org/v1/report"
 
 
 @pytest.fixture
@@ -32,6 +34,7 @@ def host(tmp_path):
     paths.metadata.parent.mkdir(parents=True, exist_ok=True)
     paths.path("/usr/share/tunaos/countme-allowlist.json").write_text((ROOT / "services/countme/src/allowlist.json").read_text())
     paths.metadata.write_text(json.dumps({"schema": 1, "variant": "bonito-rawhide", "flavor": "gnome-nvidia"}))
+    paths.service.write_text(json.dumps({"endpoint": ENDPOINT, "metrics_url": "https://tunaos.org/metrics"}))
     with patch.object(client, "container_runtime", return_value=False), patch.object(client.platform, "machine", return_value="x86_64"):
         yield paths
 
@@ -182,10 +185,10 @@ def test_http_transport_is_post_bounded_fixed_identity_and_refuses_redirects():
     opener = Mock()
     opener.open.return_value = response
     with patch.object(client.urllib.request, "build_opener", return_value=opener) as build:
-        assert client.send({"schema": 1})
+        assert client.send({"schema": 1}, ENDPOINT)
     request = opener.open.call_args.args[0]
     assert request.method == "POST"
-    assert request.full_url == client.ENDPOINT
+    assert request.full_url == ENDPOINT
     assert request.get_header("User-agent") == "tunaos-countme/1"
     assert opener.open.call_args.kwargs["timeout"] == 15
     assert build.call_args.args[0].proxies == {}
@@ -259,3 +262,35 @@ def test_unknown_official_category_or_unsupported_tuple_never_contacts_collector
     assert result not in {"reported", "request-failed"}
     sender.assert_not_called()
     assert not host.state.exists()
+
+
+def test_the_sender_posts_to_the_image_declared_endpoint(host):
+    host.service.write_text(json.dumps({"endpoint": "https://stats.acme.example/v1/report", "metrics_url": ""}))
+    with patch.object(client, "send", return_value=True) as send:
+        assert client.run(host, NOW) == "reported"
+    assert send.call_args.args[1] == "https://stats.acme.example/v1/report"
+
+
+@pytest.mark.parametrize("service", [None, {"endpoint": "", "metrics_url": ""}])
+def test_an_image_with_no_endpoint_never_reports_or_records_an_attempt(host, service):
+    """No built-in endpoint: a fork image that keeps stock variant and flavor ids is silent."""
+    host.service.unlink()
+    if service is not None:
+        host.service.write_text(json.dumps(service))
+    sender = Mock(return_value=True)
+    assert client.run(host, NOW, sender) == "no-endpoint"
+    sender.assert_not_called()
+    assert not (host.state / "state.json").exists()
+
+
+@pytest.mark.parametrize("service", [
+    {"endpoint": "http://countme.example/v1", "metrics_url": ""},
+    {"endpoint": "https://user:secret@countme.example/v1", "metrics_url": ""},
+    {"endpoint": "https://countme.example/v1", "metrics_url": "", "extra": 1},
+    {"endpoint": 5, "metrics_url": ""},
+])
+def test_an_invalid_service_declaration_never_sends(host, service):
+    host.service.write_text(json.dumps(service))
+    sender = Mock(return_value=True)
+    assert client.run(host, NOW, sender) == "invalid-state-or-metadata"
+    sender.assert_not_called()

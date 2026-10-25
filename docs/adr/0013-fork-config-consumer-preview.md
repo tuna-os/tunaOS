@@ -1,6 +1,6 @@
 # ADR 0013: Opt-in fork config consumer preview
 
-- Status: accepted for the bounded experimental preview
+- Status: superseded; preview retired by #3807
 - Approval: [maintainer approach approval](https://github.com/tuna-os/tunaOS/pull/3439#issuecomment-6275714577)
 - Date: 2026-10-19
 - Issue: [#3433](https://github.com/tuna-os/tunaOS/issues/3433)
@@ -40,3 +40,13 @@ cache behavior has separate evidence.
 - Build, boot, login, install, target-only reboot, update and recovery evidence
   remain required for the delivery milestone. This ADR does not imply status.
 - Rollback uses the unchanged stock build path. The broader RFC remains open.
+
+## Superseded
+
+[#3807](https://github.com/tuna-os/tunaOS/issues/3807) under
+[#3668](https://github.com/tuna-os/tunaOS/issues/3668) retired the YAML review contract and its consumers. A fork now edits the primary
+`tunaos.toml`, which TunaOS itself uses. `python3 scripts/config.py
+migrate-fork-config --legacy OLD.yaml` converts an old config and refuses what
+has no primary equivalent
+([migration](../PRIMARY-CONFIG-MIGRATION.md#migrating-a-legacy-fork-config)).
+This record is kept as history; its decision no longer describes the code.
