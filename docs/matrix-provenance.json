@@ -4342,7 +4342,7 @@
  },
  "snapshot": {
   "board_sha256": "82e6e3f6af6ccf6978bf12402a1755b5d440e2bd362f921ee794821b8ad4e28c",
-  "provenance_sha256": "65bea334e965479b1d2a063bb99fac5dc4f4a256150445993277920d18a2009f",
+  "provenance_sha256": "674138bd6755003589ee88d148ced192deffa2ea6dc8e2460eb59413b3501063",
   "schema_version": 1
  },
  "snapshot_context": {
@@ -4525,6 +4525,11 @@
    "tested": 41,
    "total": 52
   },
-  "never_tested": 32
+  "never_tested": 32,
+  "parity": {
+   "passed": 43,
+   "tested": 49,
+   "total": 52
+  }
  }
 }

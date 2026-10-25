@@ -510,6 +510,8 @@ class FactoryHealthSummary(unittest.TestCase):
         self.assertEqual(got["install"], {"passed": 1, "tested": 1, "total": 2})
         self.assertEqual(got["lifecycle"], {"passed": 1, "tested": 2, "total": 2})
         self.assertEqual(got["iso"], {"passed": 0, "tested": 2, "total": 2})
+        # The board states a Package parity headline, so the summary carries it.
+        self.assertEqual(got["parity"], {"passed": 0, "tested": 0, "total": 0})
         self.assertEqual(got["builds"], {"passed": 1, "tested": 2, "total": 2})
         self.assertEqual(got["boots"], {"passed": 0, "tested": 0, "total": 0})
         self.assertEqual(got["desktop"], {"passed": 0, "tested": 0, "total": 0})

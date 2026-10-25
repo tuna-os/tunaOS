@@ -62,8 +62,10 @@ def validate_snapshot(document: str, payload: dict, root: Path | None = None) ->
             raise ValueError("historical snapshot disclosure is missing or changed")
     if root is not None:
         validate_context(context, root)
+    # Every axis whose headline the board states must also be in the summary,
+    # so a summary that silently drops one cannot pass.
     required_summaries = {"factory_health", "install", "desktop",
-                          "lifecycle", "iso"}
+                          "lifecycle", "parity", "iso"}
     missing_summaries = sorted(required_summaries - set(summary))
     if missing_summaries:
         raise ValueError(

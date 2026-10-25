@@ -1177,6 +1177,7 @@ def factory_health_summary(
         "install": axis_tally("install"),
         "iso": axis_tally("iso"),
         "lifecycle": axis_tally("lifecycle"),
+        "parity": axis_tally("parity"),
         "never_tested": never_tested,
         "known_regressions": regressions,
         "last_full_sweep": max((date for date in full_sweep_dates if date), default=""),

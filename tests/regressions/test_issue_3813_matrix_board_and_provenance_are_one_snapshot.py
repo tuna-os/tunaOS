@@ -164,7 +164,8 @@ def test_composite_summary_must_match_board_even_when_resealed():
     with pytest.raises(ValueError, match="composite headline"):
         validate_snapshot(document, payload)
 
-@pytest.mark.parametrize("axis", ["install", "desktop", "lifecycle", "iso"])
+
+@pytest.mark.parametrize("axis", ["install", "desktop", "lifecycle", "parity", "iso"])
 def test_required_summary_axis_cannot_be_dropped_and_resealed(axis):
     document, payload = pair()
     del payload["summary"][axis]
