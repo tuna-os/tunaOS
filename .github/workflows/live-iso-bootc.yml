@@ -72,7 +72,7 @@ concurrency:
 
 jobs:
   diagnostic-preflight:
-    if: inputs.installed_boot_diagnostic
+    if: github.event_name == 'workflow_dispatch' && inputs.installed_boot_diagnostic
     runs-on: ubuntu-24.04
     timeout-minutes: 3
     permissions: {}
@@ -173,17 +173,19 @@ jobs:
           done
           hash -r
 
-      - name: Check existing diagnostic build access
-        if: inputs.installed_boot_diagnostic
-        run: |
-          grep -q "^${USER}:" /etc/subuid
-          grep -q "^${USER}:" /etc/subgid
-          podman unshare true
-
       - name: Setup rootless podman (subuid/subgid + userns for runner)
-        if: ${{ !inputs.installed_boot_diagnostic }}
+        env:
+          DIAGNOSTIC_MODE: ${{ inputs.installed_boot_diagnostic }}
         run: |
           set -euo pipefail
+          # Diagnostic reproduction must use existing access, never repair
+          # host security settings. Validate before any rootless build work.
+          if [[ "${DIAGNOSTIC_MODE:-false}" == true ]]; then
+            grep -q "^${USER}:" /etc/subuid
+            grep -q "^${USER}:" /etc/subgid
+            podman unshare true
+            exit 0
+          fi
           # tacklebox runs 'sudo -u runner podman unshare' for the squashfs;
           # 'podman unshare' only works rootless and needs subuid/subgid
           # entries for the unprivileged user ("please use unshare with

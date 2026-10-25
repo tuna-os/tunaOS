@@ -170,3 +170,24 @@ Artifact transfer has a 20-minute cap in diagnostic mode. The media hash has a
 5-minute cap. The 120-minute job limit includes setup, transfer and collection;
 phase limits do not extend that shared limit. Slow setup can still prevent
 collection. A timeout or absent artifact must remain a failed diagnostic.
+
+### Workflow contract integration
+
+Test run `40228536871` found four failures in the workflow contracts.
+The timeout expression now uses nested branches with literal bounds.
+The check of budgets treats each route on its own.
+It checks both truthiness values and rejects unknown budgets.
+
+The KVM preflight has an explicit guard for manual dispatch.
+It cannot run on a PR. The diagnostic still needs KVM; it has no TCG fallback.
+The runner check accepts only the three declared choices.
+
+Rootless setup checks existing access before any build command.
+In diagnostic mode it exits before any change to host security.
+Absent mappings or a failed namespace probe still cause failure.
+Strict mode retains its setup behavior.
+
+Albacore run `40228536828` failed before boot.
+Its published ISO lacked `etc/tunaos/live-source.json`.
+No installed-disk diagnostic ran. Do not relax provenance to accept that media.
+Use a fresh producer with the exact artifact identity.

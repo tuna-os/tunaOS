@@ -481,3 +481,31 @@ def test_the_step_survives_a_missing_step_summary(tmp_path):
     proc = subprocess.run(["bash", str(step)], capture_output=True, text=True, env=env)
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert "unbound variable" not in proc.stderr, proc.stderr
+
+
+@pytest.mark.parametrize('missing,probe_rc,expected', [('', 0, 0), ('subuid', 0, 1), ('subgid', 0, 1), ('', 125, 125)])
+def test_diagnostic_rootless_setup_checks_existing_access_only(tmp_path, missing, probe_rc, expected):
+    import subprocess
+    import yaml
+
+    producer = yaml.safe_load((ROOT / '.github/workflows/live-iso-bootc.yml').read_text())
+    steps = producer['jobs']['build']['steps']
+    setup = next(s for s in steps if s.get('name', '').startswith('Setup rootless podman'))
+    assert 'if' not in setup  # setup/validation must run on both routes
+    assert setup['env']['DIAGNOSTIC_MODE'] == '${{ inputs.installed_boot_diagnostic }}'
+    # Shell functions intercept every command reachable in the diagnostic arm.
+    # No real namespace, settings read/write, or container operation occurs.
+    script = '''
+    grep() { [[ "$*" != *"$MISSING"* || -z "$MISSING" ]]; }
+    podman() { [[ "$*" == 'unshare true' ]] || return 99; echo PROBE; return "$PROBE_RC"; }
+    sudo() { echo FORBIDDEN; return 99; }
+    sysctl() { echo FORBIDDEN; return 99; }
+    tee() { echo FORBIDDEN; return 99; }
+    ''' + setup['run']
+    proc = subprocess.run(['bash', '-c', script], text=True, capture_output=True,
+                          env={'PATH': '/usr/bin:/bin', 'USER': 'fixture',
+                               'DIAGNOSTIC_MODE': 'true', 'MISSING': missing,
+                               'PROBE_RC': str(probe_rc)}, timeout=5)
+    assert proc.returncode == expected, proc.stdout + proc.stderr
+    assert 'FORBIDDEN' not in proc.stdout + proc.stderr
+    assert ('PROBE' in proc.stdout) == (not missing)

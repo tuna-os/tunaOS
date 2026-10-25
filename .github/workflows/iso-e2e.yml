@@ -246,7 +246,7 @@ jobs:
     # smoke adds 20, strict plain+LUKS (including detached cold/warm boots)
     # keeps its full 60, extraction allows ten, and setup/API/hash/evidence
     # get ten more: 160 total.
-    timeout-minutes: ${{ inputs.installed_boot_diagnostic && 120 || inputs.source == 'native-artifact' && 160 || ((github.event_name == 'workflow_dispatch' && inputs.source == 'build') && 130 || 70) }}
+    timeout-minutes: ${{ inputs.installed_boot_diagnostic && 120 || (inputs.source == 'native-artifact' && 160 || ((github.event_name == 'workflow_dispatch' && inputs.source == 'build') && 130 || 70)) }}
     strategy:
       # Don't cancel the other leg if one fails — we want to see both signals.
       fail-fast: false
@@ -524,7 +524,7 @@ jobs:
       # provenance; still observe their actual GUI before strict admission fails.
       - name: Native artifact live boot and installer GUI smoke (not qualification)
         id: native_smoke
-        if: inputs.source == 'native-artifact' && inputs.native_run_id != format('{0}', github.run_id)
+        if: ${{ !inputs.installed_boot_diagnostic && inputs.source == 'native-artifact' && inputs.native_run_id != format('{0}', github.run_id) }}
         continue-on-error: true
         timeout-minutes: 20
         env:
@@ -548,7 +548,7 @@ jobs:
       - name: Build the ISO on this runner
         if: >-
           steps.filter.outputs.skip != 'true' &&
-          github.event_name == 'workflow_dispatch' && inputs.source == 'build'
+          !inputs.installed_boot_diagnostic && github.event_name == 'workflow_dispatch' && inputs.source == 'build'
         timeout-minutes: 60
         env:
           VARIANT: ${{ matrix.variant }}
