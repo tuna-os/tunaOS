@@ -115,6 +115,9 @@ def inputs(destination: Path, config: dict) -> None:
     (destination / 'hashes.json').write_text(json.dumps(hashes, sort_keys=True))
 
 
+INTERNAL_SUBNET = '172.30.0.0/29'  # Docker allows --ip only on user-configured subnets.
+
+
 def internal_address(network: dict) -> str:
     if (not network['Internal'] or network.get('EnableIPv6') or network['Driver'] != 'bridge'
             or network.get('Options', {}).get('com.docker.network.bridge.gateway_mode_ipv4') != 'isolated'):
@@ -123,6 +126,8 @@ def internal_address(network: dict) -> str:
     if len(subnets) != 1:
         raise ValueError('unexpected network IPAM layout')
     subnet = ipaddress.IPv4Network(subnets[0]['Subnet'])
+    if str(subnet) != INTERNAL_SUBNET:
+        raise ValueError('internal network lost its configured subnet')
     if not subnet.is_private or subnet.num_addresses < 8:
         raise ValueError('expected a private Docker network')
     address = subnet.network_address + 2
@@ -247,7 +252,7 @@ def execute(output: Path) -> None:
         shutil.copyfile(source / 'hashes.json', output / 'input-hashes.json')
         run('docker', 'pull', '--platform', 'linux/amd64', config['base'], timeout=900)
         try:
-            for name, flags in ((internal, ['--internal', '--opt', 'com.docker.network.bridge.gateway_mode_ipv4=isolated']), (egress, [])):
+            for name, flags in ((internal, ['--internal', '--subnet', INTERNAL_SUBNET, '--opt', 'com.docker.network.bridge.gateway_mode_ipv4=isolated']), (egress, [])):
                 networks.append(name)  # Reconcile uncertain create outcomes too.
                 run('docker', 'network', 'create', '--driver', 'bridge', *flags, name)
             network = json.loads(run('docker', 'network', 'inspect', internal).stdout)[0]

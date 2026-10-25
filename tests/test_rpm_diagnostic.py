@@ -79,13 +79,17 @@ def test_plan_actual_scope():
 
 def test_internal_requires_host_isolated_gateway():
     network = {'Internal': True, 'EnableIPv6': False, 'Driver': 'bridge',
-               'IPAM': {'Config': [{'Subnet': '172.30.0.0/24'}]}, 'Options': {}}
+               'IPAM': {'Config': [{'Subnet': runner.INTERNAL_SUBNET}]}, 'Options': {}}
     with pytest.raises(ValueError):
         runner.internal_address(network)
     network['Options']['com.docker.network.bridge.gateway_mode_ipv4'] = 'isolated'
     assert runner.internal_address(network) == '172.30.0.2'
     network['EnableIPv6'] = True
     with pytest.raises(ValueError):
+        runner.internal_address(network)
+    network['EnableIPv6'] = False
+    network['IPAM']['Config'][0]['Subnet'] = '172.30.0.0/24'  # auto-allocated, --ip would fail
+    with pytest.raises(ValueError, match='configured subnet'):
         runner.internal_address(network)
 
 
