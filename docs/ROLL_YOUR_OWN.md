@@ -392,10 +392,10 @@ destination this build publishes to and `[project] id`. For TunaOS that is
 `quay.io/acme/acmeos:latest`. Publish an image under that name, or the
 installer has nothing to install.
 
-Your Tuna Desktop and live-ISO Flatpak remote is `[flatpak_preinstall]
-remote_url`, the URL of a `.flatpakrepo` file; the remote is registered as
-`tuna-os`, and the installer apps live ISOs install come from it. Empty
-registers no remote.
+`[flatpak_preinstall] remote_url` sets the Flatpak remote of Tuna Desktop and
+of the live ISO. It is the URL of a `.flatpakrepo` file. The image registers
+the remote as `tuna-os`, and the installer apps of the live ISO come from it.
+An empty value registers no remote.
 
 The ISO Builder page and the ISO file names have their own brand keys, in
 `[iso_builder.brand]`, `[iso_builder.presentation]` and `[iso_builder.output]`
@@ -421,11 +421,12 @@ The build system already runs `glib-compile-schemas`.
 ### What a fork still edits in code
 
 These values name TunaOS but are not read from `tunaos.toml` yet. A fork that
-publishes under its own name changes them in the file shown. The installer
-image, the usage-report endpoint, image labels, release notes, SBOM identity,
-live-ISO launchers, ISO media names, KDE theme names and the Flatpak remote are
-no longer in this list: they come from `[project]`, `[defaults.branding]` and
-`[flatpak_preinstall]` (above).
+publishes under its own name changes them in the file shown. These items are
+not in this list now. They come from `[project]`, `[defaults.branding]` and
+`[flatpak_preinstall]` (above). These are the installer image, the
+usage-report endpoint, image labels and release notes. They are also the SBOM
+identity, live-ISO launchers, ISO media names, KDE theme names and Flatpak
+remote.
 
 | Value | Where | Effect if you leave it |
 |---|---|---|
