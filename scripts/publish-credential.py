@@ -15,8 +15,8 @@ without the secret values:
 
 Output is mode, registry, namespace and scope lines on stdout. Workflow callers
 append those lines to ``$GITHUB_OUTPUT``; this program does not write that file
-directly. A refusal prints one ``::error::`` line and exits 1. No workflow calls
-this until the maintainer approves RFC 016.
+directly. A refusal prints one ``::error::`` line and exits 1. The resolver steps in
+reusable-build-image.yml, build-variant.yml and attest-sbom.yml call it.
 """
 import os
 import sys

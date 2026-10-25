@@ -13,8 +13,8 @@
 # in argv or output. podman and skopeo store the entry under
 # <registry>/<namespace> (containers-auth.json(5) namespace keys), so a ghcr.io
 # GITHUB_TOKEN entry for upstream pulls stays usable. docker (read by oras) and
-# cosign store entries per registry host. No workflow calls this script until
-# RFC 016 is approved.
+# cosign store entries per registry host. The non-owner login steps in
+# reusable-build-image.yml and attest-sbom.yml call it.
 set -euo pipefail
 
 tool="${1:-}"

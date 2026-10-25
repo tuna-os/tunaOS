@@ -4,7 +4,8 @@ The owner path (ghcr.io/<owner>) keeps the repository GITHUB_TOKEN. Any other
 destination needs TUNAOS_PUBLISH_USERNAME, TUNAOS_PUBLISH_PASSWORD and a
 TUNAOS_PUBLISH_SCOPE variable equal to that destination. Missing, partial or
 mismatched credentials fail; nothing falls back to ghcr.io/<owner>. All tools
-here are credential-free command stubs, and no workflow is wired yet.
+here are credential-free command stubs; the workflow wiring tests below read
+the real workflow files.
 """
 from __future__ import annotations
 
@@ -634,3 +635,11 @@ def test_attest_refuses_what_the_resolver_refuses(attest, kwargs, code):
 def test_attest_refuses_outputs_that_span_destinations(attest):
     result, out = attest(["quay.io/acme/yellowfin" + DIGEST, "ghcr.io/hanthor/albacore" + DIGEST], scope="quay.io/acme")
     assert result.returncode == 1 and out == [] and "more than one publish destination" in result.stdout
+
+
+@pytest.mark.parametrize('path', [
+    'scripts/publish-credential.py', 'scripts/publish-registry-login.sh', 'tests/test_publish_credentials.py'])
+def test_no_file_claims_the_workflows_are_unwired(path):
+    text = (ROOT / path).read_text(encoding='utf-8')
+    for stale in ('No workflow ' + 'calls', 'no workflow is ' + 'wired'):
+        assert stale not in text, (path, stale)
