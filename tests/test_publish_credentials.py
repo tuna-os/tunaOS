@@ -643,3 +643,29 @@ def test_no_file_claims_the_workflows_are_unwired(path):
     text = (ROOT / path).read_text(encoding='utf-8')
     for stale in ('No workflow ' + 'calls', 'no workflow is ' + 'wired'):
         assert stale not in text, (path, stale)
+
+
+def _events(document):
+    triggers = document.get(True, document.get('on'))
+    return set(triggers) if isinstance(triggers, dict) else set(triggers if isinstance(triggers, list) else [triggers])
+
+
+def _reaches_resolver(path, document):
+    text = path.read_text(encoding='utf-8')
+    return path.name in ('build-variant.yml', 'reusable-build-image.yml', 'attest-sbom.yml') or any(
+        called in text for called in ('./.github/workflows/build-variant.yml', './.github/workflows/reusable-build-image.yml'))
+
+
+def test_every_workflow_that_reaches_a_resolver_runs_only_on_trusted_events_or_pull_request():
+    """The resolver refuses publishing on other events (merge_group, comments, ...).
+
+    No workflow may reach it on one of those, or a run that published before would fail.
+    """
+    allowed = {'push', 'schedule', 'workflow_dispatch', 'pull_request', 'workflow_call', 'workflow_run'}
+    seen = []
+    for path in sorted(WORKFLOWS.glob('*.yml')):
+        document = yaml.safe_load(path.read_text(encoding='utf-8'))
+        if _reaches_resolver(path, document):
+            seen.append(path.name)
+            assert _events(document) <= allowed, (path.name, sorted(_events(document) - allowed))
+    assert 'build-yellowfin.yml' in seen and 'test.yml' in seen and 'attest-sbom.yml' in seen

@@ -287,7 +287,7 @@ jobs:
         run: |
           CACHE_REPO="${IMAGE_REGISTRY}/tunaos-buildcache"
           FLAGS="--layers --cache-from ${CACHE_REPO}"
-          # Only trusted (non-PR) runs with the owner token may write cache entries.
+          # Only non-PR runs may write cache entries, and not when a non-owner credential is in use.
           if [ "$IS_PR" != "true" ] && [ "$PUBLISH_MODE" != "registry-secret" ]; then
             FLAGS="$FLAGS --cache-to ${CACHE_REPO}"
           fi
