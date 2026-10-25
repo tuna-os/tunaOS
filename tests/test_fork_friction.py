@@ -186,7 +186,7 @@ def test_pruning_walks_to_a_valid_file_one_named_table_at_a_time():
         facets[facet]["values"] = [v for v in facets[facet]["values"] if v["id"] in used]
     with pytest.raises(config.ConfigError) as error:
         config.validate(document)
-    assert "package_catalogs.debian-trixie: catalog refers to unknown variant 'flounder'" in str(error.value)
+    assert "package_catalogs: debian-trixie: catalog refers to unknown variant 'flounder'" in str(error.value)
     document["package_catalogs"] = {}
     config.validate(document)
 
@@ -327,3 +327,9 @@ def test_wrapper_detection_does_not_depend_on_yaml_formatting(tmp_path):
         "      variant: ${{ inputs.variant }}\n", encoding="utf-8")
     assert [p.name for p in workflows.orphan_wrappers(tmp_path, {"yellowfin"})] == ["build-guppy.yml"]
     assert workflows.orphan_wrappers(tmp_path, {"yellowfin", "guppy"}) == []
+
+
+def test_a_wrapper_that_is_not_valid_yaml_is_reported_not_skipped(tmp_path):
+    (tmp_path / "build-guppy.yml").write_text("jobs: [unclosed\n", encoding="utf-8")
+    with pytest.raises(SystemExit, match="build-guppy.yml: not valid YAML"):
+        workflows.orphan_wrappers(tmp_path, {"yellowfin"})

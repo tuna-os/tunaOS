@@ -5,6 +5,7 @@ Base/shared package and branding ownership remain later migration milestones.
 """
 from __future__ import annotations
 
+import configparser
 import copy
 import hashlib
 import sys
@@ -689,9 +690,14 @@ def drawn_artwork_problems(config, root=ROOT):
         descriptor = themes / theme / f'{theme}.plymouth'
         if not descriptor.is_file():
             continue
-        keys = {key.strip(): value.strip() for key, value in (
-            line.split('=', 1) for line in descriptor.read_text(encoding='utf-8', errors='replace').splitlines()
-            if '=' in line and not line.lstrip().startswith(('#', ';')))}
+        # Plymouth reads these two keys from the [script] section, as INI.
+        parser = configparser.ConfigParser(interpolation=None, strict=False)
+        parser.optionxform = str
+        try:
+            parser.read_string(descriptor.read_text(encoding='utf-8', errors='replace'))
+        except configparser.Error:
+            parser = configparser.ConfigParser(interpolation=None)
+        keys = dict(parser['script']) if parser.has_section('script') else {}
         expected = {'ImageDir': f'/usr/share/plymouth/themes/{theme}', 'ScriptFile': f'/usr/share/plymouth/themes/{theme}/{theme}.script'}
         for key, value in expected.items():
             if keys.get(key) != value:
