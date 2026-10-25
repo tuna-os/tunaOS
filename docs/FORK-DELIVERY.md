@@ -13,8 +13,9 @@ platform limits and admission holds. A green source test does not prove that an
 image boots or installs.
 
 R2 secrets (`R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_ENDPOINT`, `R2_BUCKET`) are
-TunaOS's own bucket and are not required for a fork. Every R2 upload, prune and
-audit step skips when they are empty (`tests/test_r2_optional_for_forks.py`).
+TunaOS's own bucket and are not required for a fork. When they are empty, an R2
+upload, prune or audit step does not call R2. The step does not run, or it stops
+before the first R2 call (`tests/test_r2_optional_for_forks.py`).
 
 ## Deliver in this order
 

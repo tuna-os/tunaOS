@@ -40,9 +40,11 @@ WORKFLOWS = ROOT / ".github" / "workflows"
 
 R2_SECRETS = ("R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_ENDPOINT", "R2_BUCKET")
 R2_SECRET_REF = re.compile(r"secrets\.R2_[A-Z_]+")
-RCLONE_CMD = re.compile(r"(?m)^\s*(?:[A-Za-z_]+=\S+\s+)*rclone\s+(?:\S+\s+)*?(?:copy|copyto|delete|lsf|size|sync|ls|lsd|cat)\b")
+# Any rclone invocation counts as R2 use, whatever its subcommand: a new subcommand
+# must not slip past the guard check. (`apt-get install rclone` does not start a line.)
+RCLONE_CMD = re.compile(r"(?m)^\s*(?:[A-Za-z_]+=\S+\s+)*(?:sudo\s+(?:-\S+\s+)*)?rclone\s+\S")
 ENV_GUARD = "env.R2_CONFIGURED == 'true'"
-EMPTY_CHECK = re.compile(r'\[\[\s+-z\s+"\$\{?(RCLONE_CONFIG_R2_ACCESS_KEY_ID|R2_BUCKET)(?::-)?\}?"\s+\]\]')
+EMPTY_CHECK = re.compile(r'\[\[\s+-z\s+"\$\{?(RCLONE_CONFIG_R2_ACCESS_KEY_ID|R2_BUCKET)(?::?-)?\}?"\s+\]\]')
 
 # Scheduled jobs whose only purpose is R2: every step must be env-guarded.
 R2_ONLY_JOBS = {
@@ -56,12 +58,13 @@ def _load(path: Path) -> dict:
 
 
 def _conjuncts(cond: str) -> list[str]:
-    return [c.strip() for c in re.sub(r"^\$\{\{|\}\}$", "", cond.strip()).split("&&")]
+    parts = (c.strip() for c in re.sub(r"^\$\{\{|\}\}$", "", cond.strip()).split("&&"))
+    return [c for c in parts if c]
 
 
 def _env_flag_requires_all_secrets(job: dict) -> bool:
     expr = str((job.get("env") or {}).get("R2_CONFIGURED", ""))
-    return all(f"secrets.{n} != ''" in expr for n in R2_SECRETS)
+    return all(re.search(rf"secrets\.{n}\s*!=\s*(?:''|\"\")", expr) for n in R2_SECRETS)
 
 
 def _uses_r2(step: dict) -> bool:
@@ -183,12 +186,33 @@ def test_the_detector_flags_an_unguarded_rclone_step():
     assert not _uses_r2({"name": "i", "run": "sudo apt-get install -y rclone"})
 
 
+def _names_host_outside_comment(line: str) -> bool:
+    """True when the host appears before any YAML comment (full-line or inline)."""
+    return "download.tunaos.org" in re.split(r"(?:^|\s)#", line, maxsplit=1)[0]
+
+
+def test_comment_stripping_keeps_real_uses_and_drops_comments():
+    assert not _names_host_outside_comment("  # download.tunaos.org")
+    assert not _names_host_outside_comment("key: value  # download.tunaos.org")
+    assert _names_host_outside_comment("run: curl https://download.tunaos.org/x")
+
+
+def test_the_detector_accepts_empty_check_and_expression_variants():
+    assert _conjuncts("") == [] and _conjuncts("  ") == []
+    for form in ("${R2_BUCKET}", "${R2_BUCKET-}", "${R2_BUCKET:-}"):
+        assert EMPTY_CHECK.search(f'[[ -z "{form}" ]]'), form
+    quoted = "${{ " + " && ".join(f'secrets.{n}  !=  ""' for n in R2_SECRETS) + " }}"
+    assert _env_flag_requires_all_secrets({"env": {"R2_CONFIGURED": quoted}})
+    assert _uses_r2({"run": "rclone moveto a R2:b"})
+    assert _uses_r2({"run": "sudo rclone --config x purge R2:b"})
+
+
 def test_no_workflow_step_calls_the_public_download_host():
     """download.tunaos.org is TunaOS's bucket; only comments may name it."""
     bad = []
     for path in WORKFLOWS.glob("*.y*ml"):
         for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-            if "download.tunaos.org" in line and not line.lstrip().startswith("#"):
+            if _names_host_outside_comment(line):
                 bad.append(f"{path.name}:{n}")
     assert not bad, bad
 
