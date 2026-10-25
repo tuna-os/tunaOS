@@ -16,7 +16,7 @@ JOB = WORKFLOW['jobs']['bootc-candidate-compile']
 COMMAND = JOB['steps'][-1]['run']
 
 
-def run_job(family, directory=ROOT, docker_status=0):
+def run_job(family, directory=ROOT, docker_status=0, command=COMMAND):
     stub = f'''timeout() {{
       [ "$1" = 3000 ] || return 98
       shift
@@ -25,9 +25,20 @@ def run_job(family, directory=ROOT, docker_status=0):
       return {docker_status}
     }}
     '''
-    return subprocess.run(['/bin/bash', '-c', stub + COMMAND], cwd=directory,
+    return subprocess.run(['/bin/bash', '-c', stub + command], cwd=directory,
                           env=dict(os.environ, CANDIDATE_FAMILY=family),
                           capture_output=True, text=True)
+
+
+def assert_supporting_pins(args, family):
+    # Independent YAML oracle; the workflow uses its own restricted text parser.
+    downloads = yaml.safe_load((ROOT / 'image-versions.yaml').read_text())['downloads']
+    names = ['bootupd'] + (['ostree', 'composefs'] if family == 'debian' else [])
+    for name in names:
+        prefix = f'{name.upper()}_VERSION='
+        observed = [args[i + 1] for i, arg in enumerate(args[:-1])
+                    if arg == '--build-arg' and args[i + 1].startswith(prefix)]
+        assert observed == [prefix + downloads[name]], f'{name}: {observed}'
 
 
 def test_job_scope_permissions_and_bounds():
@@ -66,16 +77,29 @@ def test_actual_job_command_selects_candidate_and_pinned_base(family, file, targ
     assert args[args.index('--file') + 1] == file
     assert args[args.index('--target') + 1] == target
     assert 'TUNAOS_BOOTC_CANDIDATE=1' in args
-    assert 'BOOTUPD_VERSION=v0.3.2' in args
+    assert_supporting_pins(args, family)
     assert args[-3:] == ['--tag', f'localhost/bootc-candidate:{family}', '.']
     assert not any(arg.startswith('BASE_IMAGE=') for arg in args)
     source = (ROOT / file).read_text()
     assert re.search(r'^ARG BASE_IMAGE=.*@sha256:[0-9a-f]{64}', source, re.M)
     if family == 'debian':
         assert 'BUILD_OSTREE=1' in args
-        assert 'OSTREE_VERSION=v2026.5' in args
-        assert 'COMPOSEFS_VERSION=v1.0.8' in args
     assert run_job(family, docker_status=7).returncode == 7
+
+
+@pytest.mark.parametrize('name', ['bootupd', 'ostree', 'composefs'])
+def test_supporting_pin_oracle_rejects_incorrect_propagation(name):
+    # Mutate the emitted build argument, not the manifest or the oracle.
+    # A syntactically valid but wrong version must not pass the command contract.
+    declared = yaml.safe_load((ROOT / 'image-versions.yaml').read_text())['downloads'][name]
+    wrong = 'v999.0.0' if declared != 'v999.0.0' else 'v998.0.0'
+    original = f'{name.upper()}_VERSION=${name}'
+    assert original in COMMAND
+    command = COMMAND.replace(original, f'{name.upper()}_VERSION={wrong}')
+    result = run_job('debian', command=command)
+    assert result.returncode == 0, result.stderr
+    with pytest.raises(AssertionError, match=name):
+        assert_supporting_pins(result.stdout.splitlines(), 'debian')
 
 
 def test_unknown_family_and_bad_pin_stop_before_docker():
