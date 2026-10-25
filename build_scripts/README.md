@@ -13,6 +13,7 @@ build_scripts/
 ├── lib.sh                     # shared library — sourced by everything as
 │                              #   /run/context/build_scripts/lib.sh
 ├── lib/                       # side-effect-free modules exposed by lib.sh
+│   ├── custom_packages.py     # parse and validate custom/packages.yaml
 │   └── service-policy.sh      # unit, display-manager, and login policy
 │
 │   # ── base-image phases (run in numeric order) ─────────────────────

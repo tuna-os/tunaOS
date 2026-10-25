@@ -375,7 +375,18 @@ dnf:
   - btop
   - syncthing
   - "-gnome-tour"     # remove packages with a minus prefix
+# Supported keys: apt, dnf, zypper, pacman, and emerge.
+# Optional packages use `optional`; Fedora COPR repositories use `copr`.
+# Flathub app IDs use `flatpak`; `custom/flatpaks.list` is additive.
 ```
+
+The authoritative input file for packages is `custom/packages.yaml`, validated
+by `just check-custom` and applied during build by `build_scripts/apply-custom.sh`.
+Supported mapping keys are distro package managers (`apt`, `dnf`, `zypper`,
+`pacman`, `emerge`), `optional` for best-effort packages, `copr` for Fedora/EPEL
+COPR repositories, and `flatpak` for Flathub application IDs. If present,
+`custom/flatpaks.list` is also supported as an additive list of Flatpak
+application IDs (one per line, `#` comments allowed).
 
 Also available: `custom/files/` (config file overlay), `custom/systemd/`
 (units to enable), `custom/build.pre.sh` / `custom/build.post.sh` (hook

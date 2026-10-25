@@ -54,9 +54,7 @@ check-custom:
     cd {{ justfile_directory() }}
     echo "==> Validating custom/ overlay configuration..."
     if [[ -f custom/packages.yaml ]]; then
-        if INVALID=$(grep -nvE '^[[:space:]]*(#.*)?$|^[a-zA-Z0-9_-]+[[:space:]]*:|^[[:space:]]*-[[:space:]]*' custom/packages.yaml); then
-            printf 'Warning: custom/packages.yaml lines that are neither a mapping key nor a list item:\n%s\n' "$INVALID"
-        fi
+        python3 build_scripts/lib/custom_packages.py --validate custom/packages.yaml
         echo "✓ custom/packages.yaml parsed successfully"
     fi
     for hook in custom/build.pre.sh custom/build.post.sh; do
