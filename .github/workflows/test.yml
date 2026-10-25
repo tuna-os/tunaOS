@@ -58,6 +58,10 @@ on:
       - 'renovate.json'
       - 'Justfile'
       - 'just/**'
+      # Read by tests/test_r2_build_dependency_inventory.py: the R2 dependency
+      # table must match the URLs the build inputs read, so an edit to either
+      # side re-runs it. The STE linter skips tables, so `ste` cannot gate it.
+      - 'PACKAGE-SOURCING.md'
       # Read by tests/bats/test_niri_dms_payload.bats: zirconium's factory
       # profile.d scripts, which install-zirconium.sh copies whole. A snapshot
       # refresh that adds a script calling a tool we do not ship must fail here.
