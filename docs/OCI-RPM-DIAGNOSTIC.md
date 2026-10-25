@@ -15,9 +15,16 @@ native public-key checksum, ORAS 1.3.4 and Cosign checksums.
 It pins the current base for Skipjack (CentOS Stream 10) by immutable reference.
 The diagnostic uses no unpublished input or sibling worktree.
 
-The read-only `plan` command checks the configured base and hash of the full EL10 policy.
+The read-only `plan` command checks the pinned base against its review hash.
+It also checks the hash of the full EL10 policy.
 It derives the 28 required package names and adds `gnome50-el10-compat`.
 Drift in policy needs review; it never silently changes the diagnostic.
+
+The production base moves with Renovate, and the diagnostic does not follow it.
+The plan and the result receipt record both digests and `configured_base_matches_pinned`.
+
+When that field is false, the run says nothing about the newer base.
+Re-run it before you trust that base.
 
 Official dependencies come only from explicit CentOS Stream 10 x86_64 paths:
 BaseOS, AppStream and CRB at `mirror.stream.centos.org`.
