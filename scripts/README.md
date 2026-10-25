@@ -18,6 +18,7 @@ Invoked by:
 | `resolve-image.sh` | Resolves image references (base, common, brew, akmods) |
 | `build-image-inner.sh` | The build engine (env-var driven) |
 | `evidence-bundle.sh` | Normalizes a gate's logs and verdicts under `evidence/<variant>/<flavor>/<arch>/` |
+| `qualify-image-packages.py` | Verifies stock/addition base, desktop and overlay images for all six native package routes and emits retained per-route evidence |
 | `gen-ci-lanes.py` | Generates the PR/post-merge/scheduled workflow inventory in `docs/CI_SPEC.md` |
 | `fork-simulation.py` | Classifies PR workflows and generates synthetic fork events for the weekly `act` simulation |
 | `run-fork-simulation.sh` | Executes the classified workflows under `act` for the requested contributor personas |
