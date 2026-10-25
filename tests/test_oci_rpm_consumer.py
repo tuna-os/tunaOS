@@ -45,6 +45,7 @@ def fixture(tmp_path, monkeypatch):
             (repo / 'fixture.rpm').write_text('rpm')
         elif command[0] == 'dnf':
             root = workdirs[-1]
+            assert 'best=1\n' in (root / 'dnf.conf').read_text()  # no silent older-package fallback
             config = (root / 'repos/tunaos-oci.repo').read_text()
             for required in ('gpgcheck=1\n', 'repo_gpgcheck=1\n', 'gpgkey=file://', 'baseurl=file://'):
                 assert required in config
@@ -464,3 +465,76 @@ def test_other_repository_cannot_disable_metadata_signatures(fixture):
     with pytest.raises(ValueError, match='signatures'):
         consumer.install(args)
     assert calls == []
+
+
+@pytest.mark.parametrize('entry', ['unsigned.rpm', 'UNSIGNED.RPM', 'gdm.rpm', 'a.b.rpm', './unsigned.rpm',
+                                   '/tmp/unsigned.rpm', '@gnome-desktop', '-y', '*', 'a b', 'gdm;x',
+                                   'https://h/x.rpm', '$(id)', 'a\tb'])
+def test_inventory_admits_repository_package_names_only(fixture, entry):
+    args, calls, _, _ = fixture
+    args.packages.write_text(f'gdm\n{entry}\n')
+    with pytest.raises(ValueError, match='explicit package name'):
+        consumer.install(args)
+    assert calls == []
+
+
+def test_a_local_rpm_never_reaches_dnf_even_when_present_in_the_working_directory(fixture, tmp_path, monkeypatch):
+    args, calls, _, _ = fixture
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / 'unsigned.rpm').write_bytes(b'unsigned')
+    args.packages.write_text('unsigned.rpm\n')
+    with pytest.raises(ValueError):
+        consumer.install(args)
+    assert not any('unsigned.rpm' in str(command) for command in calls)
+
+
+def test_symlink_text_is_walked_in_traversal_order(el10_layout):
+    """yum/vars -> ../dnf/redirect/../vars with dnf/redirect -> an outside dir reaches <outside>/vars."""
+    args, calls, etc = el10_layout
+    outside = etc.parent / 'outside' / 'subdir'
+    outside.mkdir(parents=True)
+    (outside.parent / 'vars').mkdir()
+    (outside.parent / 'vars/infra').write_text('https://repo.tunaos.org/x\n')
+    (etc / 'dnf/redirect').symlink_to(outside)
+    (etc / 'yum/vars').unlink()
+    (etc / 'yum/vars').symlink_to('../dnf/redirect/../vars')
+    assert os.path.realpath(etc / 'yum/vars') == str(outside.parent / 'vars')  # what the kernel reaches
+    with pytest.raises(ValueError, match='not a plain root-owned path'):
+        consumer.install(args)
+    with pytest.raises(ValueError, match='not a plain root-owned path'):
+        consumer.check_runtime_configs(etc)
+    assert calls == []
+
+
+def test_file_link_through_a_symlinked_component_is_refused(el10_layout):
+    args, calls, etc = el10_layout
+    outside = etc.parent / 'outside' / 'subdir'
+    outside.mkdir(parents=True)
+    (outside.parent / 'dnf.conf').write_text('[main]\nreposdir=/evil\n')
+    (etc / 'dnf/redirect').symlink_to(outside)
+    (etc / 'yum.conf').unlink()
+    (etc / 'yum.conf').symlink_to('dnf/redirect/../dnf.conf')
+    with pytest.raises(ValueError, match='not a plain root-owned path'):
+        consumer.install(args)
+    assert calls == []
+
+
+@pytest.mark.parametrize('text,message', [
+    ('../../etc/dnf/vars', 'leaves the reviewed tree'),
+    ('../..', 'leaves the reviewed tree'),
+    ('..', 'leaves the reviewed tree'),
+    ('../yum', 'leaves the reviewed tree'),
+    ('../dnf/vars/../../yum', 'leaves the reviewed tree'),
+    ('../dnf/../dnf/vars', None),
+    ('../dnf/./vars', None),
+    ('..//dnf//vars', None),
+])
+def test_dot_dot_and_empty_components_never_widen_the_tree(el10_layout, text, message):
+    args, _, etc = el10_layout
+    (etc / 'yum/vars').unlink()
+    (etc / 'yum/vars').symlink_to(text)
+    if message is None:
+        consumer.check_runtime_configs(etc)
+    else:
+        with pytest.raises(ValueError, match=message):
+            consumer.check_runtime_configs(etc)
