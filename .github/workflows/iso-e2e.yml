@@ -148,6 +148,7 @@ concurrency:
 jobs:
   generate-matrix:
     name: Generate ISO E2E matrix
+    timeout-minutes: ${{ inputs.installed_boot_diagnostic && 5 || 360 }}
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.gen.outputs.matrix }}

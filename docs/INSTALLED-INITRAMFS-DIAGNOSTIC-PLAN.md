@@ -47,10 +47,22 @@ Missing kernel config means unknown, not disabled or absent.
 
 ## Budgets and outputs
 
-Proposed producer cap: 120 minutes, one cell, no retry. Proposed cap for diagnosis: 120 minutes, separate from the producer. A read-only access check has a 3-minute cap before the build. Total ceiling: 243 minutes.
+Each job in the diagnostic route has an explicit time limit.
+The reusable caller has no runner of its own; its jobs appear below.
 
-These are limits, not measured durations. The opt-in path replaces strict qualification with one diagnosis.
-Default automatic runs keep strict qualification.
+| Job | Minutes |
+|---|---:|
+| live-iso-bootc.yml/diagnostic-preflight | 3 |
+| live-iso-bootc.yml/build | 120 |
+| iso-e2e.yml/generate-matrix | 5 |
+| iso-e2e.yml/e2e | 120 |
+
+Total job budget: **248 minutes**. This excludes queue time.
+This sum covers one Skipjack/GNOME cell and one run, with no retry.
+It is a limit, not a measured duration.
+
+Normal matrix generation keeps its prior 360-minute default as an explicit value.
+The opt-in path runs one diagnosis. Normal readiness and strict routes do not change.
 
 The supervisor allows 45 minutes for the strict run. Collection has 10 minutes. QEMU uses 4 CPUs/4096 MiB; the later appliance uses 2 CPUs/1024 MiB.
 The disk is at most 64 GiB virtual/65 GiB actual. File reads have a 256 MiB
