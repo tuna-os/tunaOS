@@ -2049,3 +2049,24 @@ including run `40065011718` for #3839.
 **Fix:** PR runs group by `github.ref` and cancel only their own superseded
 runs. Schedule and dispatch runs still serialize in one `publish` group,
 because they force-push `automation/matrix-status`.
+
+### Package catalog tests fail with `effective package-source configuration changed; refresh observation`
+
+**Symptom:** six tests in `tests/test_package_catalogs.py` and
+`tests/test_search_base_packages.py` fail on `main`. Every test that reads the
+real `tunaos.toml` fails the same way, including `tests/test_portable_add.py`
+in #3856.
+
+**Cause:** `config/package-observations/flounder-target-amd64.json` pinned the
+SHA-256 of all of `image-versions.yaml` and `scripts/build-image-inner.sh`. On
+2026-10-25 `build-image-inner.sh` differed from the pin by one cache-key line
+(7a0a3898). `image-versions.yaml` differed by a removed `shfmt` pin, and Renovate
+had edited it 197 times since 2026-09-01. Neither change touches an apt source.
+A whole-file hash on a Renovate file turns the check red on every merge.
+
+**Fix:** the observation (schema 2) pins the `common` image entry of
+`image-versions.yaml` and the part of `build-image-inner.sh` before its rechunk
+pass. A test fails when a new file reads `image-versions.yaml`.
+A Renovate bump of an unrelated key now passes. A bump of the `common` digest
+still fails, which is correct, because that image supplies files that the build
+copies into the target.
