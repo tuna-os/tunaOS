@@ -23,8 +23,8 @@ def orphan_wrappers(workflows, variant_ids):
     for path in sorted(Path(workflows).glob('build-*.yml')):
         try:
             document = yaml.safe_load(path.read_text(encoding='utf-8'))
-        except yaml.YAMLError:
-            continue
+        except yaml.YAMLError as exc:
+            raise SystemExit(f'{path}: not valid YAML, so it cannot be checked for a removed variant: {exc}') from exc
         for job in ((document or {}).get('jobs') or {}).values():
             if not isinstance(job, dict) or job.get('uses') != './.github/workflows/build-variant.yml':
                 continue

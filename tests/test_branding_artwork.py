@@ -196,14 +196,43 @@ def test_the_jpeg_check_reads_only_the_file_prefix(tmp_path, monkeypatch):
     fork = copy.deepcopy(config.load())
     walls, _ = drawn_tree(tmp_path, fork)
     (walls / "marlin.jpg").write_bytes(b"\xff\xd8\xff" + b"\0" * 1_000_000)
+    reads = []
+    real_open = open
+
+    class Spy:
+        def __init__(self, handle):
+            self.handle = handle
+
+        def read(self, size=-1):
+            reads.append(size)
+            return self.handle.read(size)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            self.handle.close()
+
+    def spying_open(file, mode="r", *args, **kwargs):
+        handle = real_open(file, mode, *args, **kwargs)
+        return Spy(handle) if str(file).endswith(".jpg") else handle
+
+    monkeypatch.setattr("builtins.open", spying_open)
     original = Path.read_bytes
-
-    def refuse_whole_wallpaper(self):
-        assert self.suffix != ".jpg", "the wallpaper was read in full"
-        return original(self)
-
-    monkeypatch.setattr(Path, "read_bytes", refuse_whole_wallpaper)
+    monkeypatch.setattr(Path, "read_bytes", lambda self: pytest.fail("a wallpaper was read whole") if self.suffix == ".jpg" else original(self))
     assert config.drawn_artwork_problems(fork, tmp_path) == []
+    assert reads and all(0 < size <= 16 for size in reads), reads
+
+
+def test_plymouth_keys_are_read_from_the_script_section_only(tmp_path):
+    fork = copy.deepcopy(config.load())
+    fork["defaults"]["branding"]["plymouth"] = "acmeos"
+    _, themes = drawn_tree(tmp_path, fork)
+    (themes / "acmeos" / "acmeos.plymouth").write_text(
+        "[Plymouth Theme]\nImageDir=/usr/share/plymouth/themes/acmeos\nScriptFile=/usr/share/plymouth/themes/acmeos/acmeos.script\n\n"
+        "[script]\nImageDir=/usr/share/plymouth/themes/tunaos\n", encoding="utf-8")
+    problems = config.drawn_artwork_problems(fork, tmp_path)
+    assert [p.split(": ")[1].split(" ")[0] for p in problems] == ["ImageDir", "ScriptFile"]
 
 
 def test_write_leaves_the_committed_artwork_untouched_when_a_copy_fails(tmp_path, monkeypatch):
