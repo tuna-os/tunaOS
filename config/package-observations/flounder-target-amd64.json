@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "variant": "flounder",
   "flavors": [
     "base",
@@ -8,7 +8,7 @@
   ],
   "platform": "linux/amd64",
   "base_image": "docker.io/library/debian:trixie@sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308",
-  "observed_at": "2026-10-25T08:33:28Z",
+  "observed_at": "2026-10-25T09:42:40Z",
   "configuration_files": {
     "Containerfile.debian": {
       "sha256": "66cc16aacc5e69a9fbe6692fc1a1e28322dce6ed72de7ce6c51d19c50b071022",
@@ -29,14 +29,18 @@
     "build_scripts/desktop/install-desktop.sh": {
       "sha256": "2d4a2d92ac4b21890f7ec0f9a33d4b8ef702442084ab243dc9600fec8d9a3d44",
       "size": 61254
-    },
+    }
+  },
+  "configuration_extracts": {
     "scripts/build-image-inner.sh": {
-      "sha256": "3f3fcafccaf9ad92b04cfe0f910efa4f2f14a31110b588d0a31e1a279b826411",
-      "size": 20911
+      "extract": "primary-build-section",
+      "sha256": "abb420da316e2e9d0f1fcb2b9267a327cad0930d255ac2255b334c619ae5ce9c",
+      "size": 12591
     },
     "image-versions.yaml": {
-      "sha256": "4f5f3c9fc99f8cd7729254e61272328caa72a9e0f0b5c5d46923954dc0b51d08",
-      "size": 12701
+      "extract": "common-image-pin",
+      "sha256": "4bde9d8be4523d9760191f4f0f2690ce6d238bd42348ab752fe9e1050d37a936",
+      "size": 157
     }
   },
   "copied_package_source_files": {},

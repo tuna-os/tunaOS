@@ -139,15 +139,16 @@ or cutover.
 ## Follow-on: bounded authoritative transport caller
 
 The caller in `scripts/iso_authoritative_transport.py` closes the injected
-transport gap without activating a collector. It accepts reviewer-supplied
+transport gap and does not activate a collector. It accepts reviewer-supplied
 policy, explicit run/artifact selection and bounded network policy. It exposes
 only the exact endpoints consumed by the existing snapshot validators.
 
-GitHub metadata calls cannot redirect. The artifact archive can redirect once
-from the GitHub API to an exact reviewed HTTPS origin, with the bearer
-credential removed. R2 reads use the configured endpoint, bucket and candidate
-namespace without that credential or redirects. Connect, idle and total
-elapsed-time limits combine with per-response and aggregate-byte limits. Each
+A call that reads GitHub metadata never follows a redirect. The artifact archive can redirect once
+from the GitHub API to a reviewed HTTPS origin with an exact match, with the
+bearer credential removed. R2 reads use the configured endpoint, bucket and
+candidate namespace without that credential or redirects. The limits for connect
+time, idle time and total elapsed time apply together with the limits for each
+response and for aggregate bytes. Each
 read does one socket receive at most, within the remaining total time.
 
 R2 reads need a SigV4 signature from a read-only R2 key. That key is a new
@@ -155,11 +156,11 @@ secret and permission, which this change does not add. Until a reviewer
 approves a signer, the caller stops the collection of retained media with
 `retained_signer_required`. It sends no request.
 
-The validator reads current run, attempt and artifact metadata before bytes,
-then rechecks artifact and run metadata afterward. These sequential REST and
-R2 requests are not a transaction. A visible change rejects, but the APIs
+The validator reads current run, `run_attempt` and artifact metadata before
+bytes, then rechecks artifact and run metadata afterward. These sequential REST
+and R2 requests are not a transaction. A visible change rejects, but the APIs
 cannot establish an atomic snapshot or identify which rerun uploaded an
-artifact. The first-attempt-only restriction remains.
+artifact. The restriction to `run_attempt` 1 remains.
 
 This boundary has no production call site, new permission, admission decision
 or catalog effect. A successful HTTPS exchange does not authenticate the
