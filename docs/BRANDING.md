@@ -85,7 +85,9 @@ Do not add "TunaOS" to a login screen, a splash, a wallpaper or the installer.
 ## Each variant has its own look
 
 A variant is TunaOS first. It also shows the distro it is built on.
-`build_scripts/lib/variant-identity.tsv` gives each variant an accent colour.
+Each variant's `branding` in `tunaos.toml` gives it an accent colour, which
+`scripts/config.py generate-variant-identity` writes to
+`build_scripts/lib/variant-identity.tsv` for the build and the art generators.
 The colour comes from that distro: Arch blue for marlin, Ubuntu orange for
 grouper, openSUSE green for sailfin. The mark is the variant's Noto Emoji.
 

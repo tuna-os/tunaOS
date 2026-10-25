@@ -42,8 +42,8 @@ This is the primary path. Fork, prune, edit, build.
 ### 1. Fork and clone
 
 ```bash
-gh repo fork tuna-os/tunaos --clone
-cd tunaos
+gh repo fork tuna-os/tunaOS --clone
+cd tunaOS
 ```
 
 ### 2. Prune: turn off what you don't want
@@ -281,18 +281,24 @@ bug_report = "https://acme.example/os/issues"
 
 [variants.yellowfin]
 codename = "Wile E"       # os-release VERSION_CODENAME
+# Accent colour (ANSI_COLOR, /etc/issue, fastfetch, KDE, wallpapers), the
+# nearest GNOME accent name, the base label and a short colour note.
+branding = { accent = "#E87D0D", gnome_accent = "orange", base = "AlmaLinux Kitten", homage = "Acme orange" }
 ```
 
-Then regenerate the file every image build reads, and commit both:
+Then regenerate the files every image build reads, and commit them with
+`tunaos.toml`:
 
 ```bash
 python3 scripts/config.py generate-identity
+python3 scripts/config.py generate-variant-identity
 ```
 
-`just check` fails if `build_scripts/lib/identity.env` and `tunaos.toml`
-disagree. Each variant's name (Yellowfin, Marlin) comes from its id in
-`tunaos.toml`. Logos, wallpapers, the boot splash and the installer's own
-name still come from the image files under `system_files/` (#3668).
+`just check` fails if `build_scripts/lib/identity.env` or
+`build_scripts/lib/variant-identity.tsv` disagrees with `tunaos.toml`. Each
+variant's name (Yellowfin, Marlin) comes from its id in `tunaos.toml`. Logos,
+wallpapers, the boot splash and the installer's own name still come from the
+image files under `system_files/` (#3668).
 
 For GNOME defaults, create a gschema override:
 
@@ -663,8 +669,11 @@ tunaos/
 
 ```bash
 # ── Setup ──────────────────────────────────────────────────────
-brew install just podman shellcheck shfmt yq
-gh repo fork tuna-os/tunaos --clone && cd tunaos
+brew install podman
+gh repo fork tuna-os/tunaOS --clone && cd tunaOS
+python3 scripts/lint_tools.py install --bin-dir "$HOME/.local/bin"
+export PATH="$HOME/.local/bin:$PATH"
+just setup
 
 # ── Local builds ───────────────────────────────────────────────
 just build yellowfin gnome           # build one image
