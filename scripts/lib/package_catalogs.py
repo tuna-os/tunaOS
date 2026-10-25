@@ -402,20 +402,73 @@ def _copied_package_source_files(config_directory):
     return inventory
 
 
-def _common_image_reference(image_versions):
+def _utf8(content, label):
     try:
-        text = image_versions.decode('utf-8')
+        return content.decode('utf-8')
     except UnicodeError as exc:
-        raise CatalogError('image version input is not UTF-8') from exc
-    matches = re.findall(
+        raise CatalogError(f'{label} is not UTF-8') from exc
+
+
+def _common_image_entry(image_versions):
+    """Return (image@digest, exact bytes of the one `common` entry)."""
+    matches = list(re.finditer(
         r'(?m)^  - name: common\n    image: ([^\s]+)\n'
         r'    tag: [^\s]+\n    digest: (sha256:[0-9a-f]{64})$',
-        text,
-    )
+        _utf8(image_versions, 'image version input'),
+    ))
     if len(matches) != 1:
         raise CatalogError('common image pin is missing or ambiguous')
-    image, image_digest = matches[0]
-    return f'{image}@{image_digest}'
+    match = matches[0]
+    return f'{match.group(1)}@{match.group(2)}', match.group(0).encode()
+
+
+def _common_image_reference(image_versions):
+    return _common_image_entry(image_versions)[0]
+
+
+# Everything in scripts/build-image-inner.sh from the top of the file through
+# the primary `build` retry loop resolves the build inputs and runs the one
+# `podman|buildah build` of the target Containerfile. Everything after this
+# marker (chunkah rechunk, label-only Containerfile.final) re-packages the
+# finished image: it runs no package manager and writes no apt source.
+_BUILD_ENGINE_PRIMARY_END = '# \u2500\u2500 Skip rechunk for PR builds'
+
+
+def _build_engine_primary_section(content):
+    text = _utf8(content, 'build engine')
+    marker = '\n' + _BUILD_ENGINE_PRIMARY_END
+    if text.count(marker) != 1:
+        raise CatalogError('build engine primary-build section marker is missing or ambiguous')
+    return text[:text.index(marker) + 1].encode()
+
+
+# Whole-file hashes over-bind these two files. Renovate edits image-versions.yaml
+# several times a day (utah-packages, brew, uupd, ... none read by
+# Containerfile.debian's flounder stages), and the build engine's rechunk tail
+# changes independently of what the build installs. The recorded identity is the
+# part of each file that feeds the target's package sources; see
+# tests/test_package_catalogs.py::test_image_versions_readers_are_classified.
+_CONFIGURATION_EXTRACTS = {
+    'scripts/build-image-inner.sh': ('primary-build-section', _build_engine_primary_section),
+    'image-versions.yaml': ('common-image-pin', lambda content: _common_image_entry(content)[1]),
+}
+
+
+def _bind_configuration_extracts(extracts, config_directory):
+    import hashlib
+    if not isinstance(extracts, dict) or set(extracts) != set(_CONFIGURATION_EXTRACTS):
+        raise CatalogError('target observation lacks complete configuration extracts')
+    for path, identity in extracts.items():
+        exact(identity, ('extract', 'sha256', 'size'), 'configuration extract identity')
+        name, extract = _CONFIGURATION_EXTRACTS[path]
+        if identity['extract'] != name:
+            raise CatalogError('configuration extract selector is not the reviewed one')
+        digest(identity['sha256'])
+        if type(identity['size']) is not int or identity['size'] <= 0:
+            raise CatalogError('configuration extract size is invalid')
+        content = extract(_public_file(config_directory, path, limit=8 * 1024 * 1024))
+        if len(content) != identity['size'] or hashlib.sha256(content).hexdigest() != identity['sha256']:
+            raise CatalogError('effective package-source configuration changed; refresh observation')
 
 
 def bind_target_configuration(catalog, document, config_directory, flavor):
@@ -426,10 +479,10 @@ def bind_target_configuration(catalog, document, config_directory, flavor):
         raise CatalogError('target source observation differs from reviewed pin')
     observation = _json(raw)
     exact(observation, ('schema_version', 'variant', 'flavors', 'platform', 'base_image',
-                       'observed_at', 'configuration_files', 'copied_package_source_files',
-                       'common_image', 'build_sources'),
+                       'observed_at', 'configuration_files', 'configuration_extracts',
+                       'copied_package_source_files', 'common_image', 'build_sources'),
           'target observation')
-    if (type(observation['schema_version']) is not int or observation['schema_version'] != 1
+    if (type(observation['schema_version']) is not int or observation['schema_version'] != 2
             or observation['variant'] != catalog['variant']
             or not isinstance(observation['flavors'], list)
             or not all(isinstance(item, str) for item in observation['flavors'])
@@ -446,11 +499,9 @@ def bind_target_configuration(catalog, document, config_directory, flavor):
     files = observation['configuration_files']
     expected_files = {'Containerfile.debian', 'build_scripts/10-base-packages.sh',
                       'build_scripts/lib.sh', 'build_scripts/20-packages.sh',
-                      'build_scripts/desktop/install-desktop.sh',
-                      'scripts/build-image-inner.sh', 'image-versions.yaml'}
+                      'build_scripts/desktop/install-desktop.sh'}
     if not isinstance(files, dict) or set(files) != expected_files:
         raise CatalogError('target observation lacks complete configuration files')
-    configuration_bytes = {}
     for path, identity in files.items():
         exact(identity, ('sha256', 'size'), 'configuration file identity')
         digest(identity['sha256'])
@@ -459,11 +510,12 @@ def bind_target_configuration(catalog, document, config_directory, flavor):
         content = _public_file(config_directory, path, limit=8 * 1024 * 1024)
         if len(content) != identity['size'] or hashlib.sha256(content).hexdigest() != identity['sha256']:
             raise CatalogError('effective package-source configuration changed; refresh observation')
-        configuration_bytes[path] = content
+    _bind_configuration_extracts(observation['configuration_extracts'], config_directory)
     copied_sources = _copied_package_source_files(config_directory)
     if observation['copied_package_source_files'] != copied_sources:
         raise CatalogError('copied package-source inventory changed; refresh observation')
-    common_image = _common_image_reference(configuration_bytes['image-versions.yaml'])
+    common_image = _common_image_reference(
+        _public_file(config_directory, 'image-versions.yaml', limit=8 * 1024 * 1024))
     if observation['common_image'] != common_image:
         raise CatalogError('resolved common image differs from reviewed observation')
     build_sources = [{
