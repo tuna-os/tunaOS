@@ -25,13 +25,13 @@ build-custom base="" tag="": _ensure-deps
             # image of the first variant in tunaos.toml that builds one, at the
             # destination this repository publishes to.
             # shellcheck source=scripts/lib/build-config.sh
-            source scripts/lib/build-config.sh
+            source {{ justfile_directory() }}/scripts/lib/build-config.sh
             BASE_VARIANT=$({{ yq }} -r '[.variants[] | select(.flavors[] | select(.id == "gnome" and .build_image == true)) | .id][0] // ""' "$(tunaos_build_config)")
             if [[ -z "${BASE_VARIANT}" ]]; then
                 echo "ERROR: no variant in tunaos.toml builds a gnome image; set base in custom/image.yaml" >&2
                 exit 1
             fi
-            BASE_IMAGE=$(bash scripts/published-image-ref.sh "${BASE_VARIANT}" gnome ghcr)
+            BASE_IMAGE=$(bash {{ justfile_directory() }}/scripts/published-image-ref.sh "${BASE_VARIANT}" gnome ghcr)
         fi
     fi
     TARGET_TAG="{{ tag }}"

@@ -60,6 +60,9 @@ ALLOWED = {
         "same tunaos-packages default as build-image-inner.sh, resolved for CI",
     ("scripts/get-base-image.sh", "ghcr.io/tuna-os/archlinuxarm:latest"):
         "the Arch Linux ARM base image TunaOS builds and publishes; a base, not the fork's output",
+    ("scripts/installed-lifecycle-pilot.py", "ghcr.io/tuna-os/skipjack@sha256"):
+        "error text of the installed-lifecycle pilot, which is pinned by IMAGE_RE to TunaOS's own "
+        "skipjack digests (a qualification harness for TunaOS images, not a fork build path)",
     ("scripts/inspect-published-image.py", "ghcr.io/tuna-os/skipjack:gnome"):
         "usage example in the module docstring; the script takes the ref as an argument",
 }
