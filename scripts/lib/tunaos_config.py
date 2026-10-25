@@ -653,6 +653,11 @@ def render_image_packages(config, managers=None):
     return IMAGE_PACKAGES_HEADER + ''.join(row + '\n' for row in rows)
 
 
+def _file_prefix(path, size):
+    with open(path, 'rb') as handle:
+        return handle.read(size)
+
+
 def drawn_artwork_problems(config, root=ROOT):
     """Drawn art each variant needs, which no generator can make from TOML.
 
@@ -678,13 +683,15 @@ def drawn_artwork_problems(config, root=ROOT):
             wanted[f'{themes.relative_to(root)}/{theme}/{theme}.{suffix} ({owner})'] = themes / theme / f'{theme}.{suffix}'
     problems = [f'{label}: missing' for label, path in wanted.items() if not path.is_file()]
     for label, path in wanted.items():
-        if path.is_file() and path.suffix == '.jpg' and path.read_bytes()[:3] != b'\xff\xd8\xff':
+        if path.is_file() and path.suffix == '.jpg' and _file_prefix(path, 3) != b'\xff\xd8\xff':
             problems.append(f'{label}: not a JPEG (a wallpaper must be a JPEG file, not a renamed PNG or a placeholder)')
     for theme, owner in splashes.items():
         descriptor = themes / theme / f'{theme}.plymouth'
         if not descriptor.is_file():
             continue
-        keys = dict(line.split('=', 1) for line in descriptor.read_text(encoding='utf-8', errors='replace').splitlines() if '=' in line)
+        keys = {key.strip(): value.strip() for key, value in (
+            line.split('=', 1) for line in descriptor.read_text(encoding='utf-8', errors='replace').splitlines()
+            if '=' in line and not line.lstrip().startswith(('#', ';')))}
         expected = {'ImageDir': f'/usr/share/plymouth/themes/{theme}', 'ScriptFile': f'/usr/share/plymouth/themes/{theme}/{theme}.script'}
         for key, value in expected.items():
             if keys.get(key) != value:

@@ -314,3 +314,15 @@ def test_a_wrapper_for_a_removed_variant_is_reported_and_shared_workflows_are_no
         shutil.copyfile(ROOT / ".github/workflows" / name, tmp_path / name)
     ids = {variant["id"] for variant in config.matrix(config.load())["variants"]} - {"guppy"}
     assert [p.name for p in workflows.orphan_wrappers(tmp_path, ids)] == ["build-guppy.yml"]
+
+
+def test_wrapper_detection_does_not_depend_on_yaml_formatting(tmp_path):
+    """Double quotes, key order and extra keys must not hide a wrapper for a removed variant."""
+    (tmp_path / "build-guppy.yml").write_text(
+        'name: Build guppy\njobs:\n  build:\n    with:\n      variant: "guppy"\n      extra: 1\n'
+        '    uses: ./.github/workflows/build-variant.yml\n    secrets: inherit\n', encoding="utf-8")
+    (tmp_path / "build-flavor.yml").write_text(
+        "jobs:\n  build:\n    uses: ./.github/workflows/build-variant.yml\n    with:\n"
+        "      variant: ${{ inputs.variant }}\n", encoding="utf-8")
+    assert [p.name for p in workflows.orphan_wrappers(tmp_path, {"yellowfin"})] == ["build-guppy.yml"]
+    assert workflows.orphan_wrappers(tmp_path, {"yellowfin", "guppy"}) == []

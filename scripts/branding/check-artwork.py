@@ -77,12 +77,27 @@ def main() -> int:
             print(f"{Path(error.cmd[1]).name} failed (see above); committed artwork is unchanged.", file=sys.stderr)
             return 1
         if args.write:
+            # Copy every set next to its destination first; only then swap each in by
+            # rename, so a copy that fails leaves the committed files untouched.
+            staged = {}
+            try:
+                for name in SETS:
+                    staged[name] = SHARE / f".{name}.new"
+                    shutil.rmtree(staged[name], ignore_errors=True)
+                    staged[name].mkdir(parents=True)
+                    for fresh in (Path(scratch) / name).iterdir():
+                        shutil.copyfile(fresh, staged[name] / fresh.name)
+            except BaseException:
+                for path in staged.values():
+                    shutil.rmtree(path, ignore_errors=True)
+                raise
             for name in SETS:
-                for stale in (SHARE / name).glob("*"):
-                    stale.unlink()
-                (SHARE / name).mkdir(parents=True, exist_ok=True)
-                for fresh in (Path(scratch) / name).iterdir():
-                    shutil.copyfile(fresh, SHARE / name / fresh.name)
+                old = SHARE / f".{name}.old"
+                shutil.rmtree(old, ignore_errors=True)
+                if (SHARE / name).exists():
+                    (SHARE / name).rename(old)
+                staged[name].rename(SHARE / name)
+                shutil.rmtree(old, ignore_errors=True)
             print("Regenerated " + ", ".join(f"{SHARE.relative_to(REPO)}/{name}" for name in SETS))
             return 0
         problems = [p for name in SETS for p in differences(Path(scratch) / name, SHARE / name)]
