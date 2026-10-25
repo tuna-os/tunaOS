@@ -399,7 +399,7 @@ def index(workflow, job, name):
     return [step.get("name") for step in steps(workflow, job)].index(name)
 
 
-# (workflow file, job, expected `environment`, resolver destination)
+# (workflow file, job, expected `environment`)
 CREDENTIAL_JOBS = [
     ("reusable-build-image.yml", "build_push", ENVIRONMENT % "inputs.publish"),
     ("reusable-build-image.yml", "manifest", ENVIRONMENT % "inputs.publish"),
