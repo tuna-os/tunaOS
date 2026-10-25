@@ -8,6 +8,8 @@ compatibility; bind-mount `rw` and every other byte stay intact.
 Run 40064779947 then reached that fallback after ONE silent pinned pull and
 died on a quay.io 503 inside it. The pinned pull is retried before the
 mutable source fallback is used.
+
+Falsification: behavioral — unchanged cache rw flags fail the exact output assertion; unknown bytes must fail before output, and a stubbed failed pull must retry before fallback.
 """
 
 import importlib.util

@@ -34,6 +34,7 @@ other way to get this wrong.
 from __future__ import annotations
 
 import fnmatch
+import importlib.util
 import re
 from pathlib import Path
 
@@ -62,7 +63,7 @@ LATEST_ASSIGN = re.compile(r'LATEST="([^"\n]+)"')
 ARTIFACT_SUFFIXES = (".iso", ".png", ".sha256", ".sigstore.json")
 
 
-def _expand(token: str, latest_values: list[str]) -> list[str]:
+def _expand(token: str, latest_values: list[str], suffix_variables=()) -> list[str]:
     """One shell token -> the concrete object name(s) it can produce."""
     token = GH_EXPR.sub(PLACEHOLDER, token)
     candidates = [token]
@@ -74,12 +75,28 @@ def _expand(token: str, latest_values: list[str]) -> list[str]:
         candidates = [
             token.replace("${LATEST}", v).replace("$LATEST", v) for v in latest_values
         ] or candidates
+    for variable in suffix_variables:
+        reference = re.compile(r'\$(?:\{' + re.escape(variable) + r'\}|' + re.escape(variable) + r'(?![A-Za-z0-9_]))')
+        candidates = [reference.sub(suffix, candidate) if reference.search(candidate) else candidate
+                      for candidate in candidates
+                      for suffix in (canonical_suffixes() if reference.search(candidate) else [''])]
     out = []
     for c in candidates:
         name = SHELL_VAR.sub(PLACEHOLDER, c).rsplit("/", 1)[-1]
         if "-latest" in name and name.endswith(ARTIFACT_SUFFIXES):
             out.append(name)
-    return out
+    return sorted(set(out))
+
+
+def canonical_suffixes():
+    # Import the actual pure naming helper; do not guess what a suffix contains.
+    spec = importlib.util.spec_from_file_location('retention_suffix', ROOT/'scripts/iso-latest-suffix.py')
+    helper = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(helper)
+    config = helper.tunaos_config.matrix(helper.tunaos_config.load())
+    return {helper.suffix(config, variant['id'], flavor['id'], platform)
+            for variant in config['variants'] for flavor in variant['flavors'] if flavor.get('build_iso')
+            for platform in flavor.get('platforms',variant['platforms'])}
 
 
 def pointer_names() -> set[str]:
@@ -89,13 +106,14 @@ def pointer_names() -> set[str]:
         if wf.name == PRUNE.name:
             continue
         text = wf.read_text(encoding="utf-8")
+        suffix_variables = re.findall(r'(\w+)="\$\(python3 scripts/iso-latest-suffix\.py ' , text)
         latest_values = [
             v
             for raw in LATEST_ASSIGN.findall(text)
-            for v in _expand(raw, [])
+            for v in _expand(raw, [], suffix_variables)
         ]
         for token in LATEST_TOKEN.findall(text):
-            found.update(_expand(token, latest_values))
+            found.update(_expand(token, latest_values, suffix_variables))
         found.update(latest_values)
     return found
 
@@ -233,3 +251,17 @@ def test_dated_objects_are_still_deleted(name, prefix):
         assert verdict(name, rules) == "delete", (
             f"{step!r} would keep dated object {name!r} forever; rules {rules}"
         )
+
+
+def test_suffix_expansion_keeps_bare_and_arch_pointers_and_sidecars():
+    names=set(_expand('sample-latest${SUFFIX}.iso.sha256', [], ['SUFFIX']))
+    assert 'sample-latest.iso.sha256' in names
+    assert 'sample-latest-arm64.iso.sha256' in names
+    assert 'sample-latest-amd64.iso.sha256' in names
+    assert verdict('sample-latest-arm64.iso.sha256',[('exclude','*-latest.iso*'),('include','*.iso*')])=='delete'
+    # Unknown shell variables stay placeholders, never receive guessed values.
+    assert set(_expand('sample-latest${UNKNOWN}.iso',[],['SUFFIX']))=={'sample-latestsample.iso'}
+
+
+def test_suffix_variable_prefix_does_not_rewrite_an_unknown_variable():
+    assert _expand('sample-latest$SUFFIX_OTHER.iso', [], ['SUFFIX'])==['sample-latestsample.iso']

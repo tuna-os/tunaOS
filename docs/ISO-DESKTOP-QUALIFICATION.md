@@ -156,6 +156,9 @@ It extracts only pure recipe functions from the exact source revision.
 It tests live self-install and account creation for both modes, without GTK, disks or a guest.
 It does not reuse the frontend's no-user canary as account coverage.
 Local tests substitute the command boundary of the harness and its console transport.
+
+Workflow fixtures also exercise candidate selection and strict exit status.
+They check that the runner receives the exported KVM/TCG choice through sudo.
 They drive the eight-page contract through emission and validation, with negative controls.
 
 The actual ISO campaign remains unrun.

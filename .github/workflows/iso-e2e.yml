@@ -885,7 +885,7 @@ jobs:
           mkdir -p iso-e2e-out
           # Free runners get KVM via /dev/kvm permissions; if it's not
           # readable we fall back to TCG (slower but functional).
-          KVM_FLAG=""
+          export KVM_FLAG=""
           [[ -r /dev/kvm && -w /dev/kvm ]] || KVM_FLAG="--no-kvm"
           command=(./scripts/iso-e2e.sh "$ISO_PATH" --output iso-e2e-out --strict-offline-gui --timeout 600)
           [[ -z "$KVM_FLAG" ]] || command+=("$KVM_FLAG")
