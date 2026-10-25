@@ -11,6 +11,7 @@ It does not build, boot or install an image. That evidence belongs to #3474.
 from __future__ import annotations
 
 import hashlib
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -191,14 +192,17 @@ class TestAssetsComeWithTheConfig:
                 if path.is_file():
                     target = root / path.relative_to(ROOT)
                     target.parent.mkdir(parents=True, exist_ok=True)
-                    target.write_bytes(b"")
-        assert config.missing_drawn_artwork(stock, root) == []
-        missing = config.missing_drawn_artwork(fork, root)
+                    shutil.copyfile(path, target)
+        assert config.drawn_artwork_problems(stock, root) == []
+        missing = config.drawn_artwork_problems(fork, root)
         assert missing and all("acme-splash" in label for label in missing)
         theme = root / "system_files/usr/share/plymouth/themes/acme-splash"
         theme.mkdir(parents=True)
-        for suffix in ("plymouth", "script"):
-            (theme / f"acme-splash.{suffix}").write_text("")
-        assert config.missing_drawn_artwork(fork, root) == []
+        (theme / "acme-splash.script").write_text("")
+        (theme / "acme-splash.plymouth").write_text(
+            "[Plymouth Theme]\nModuleName=script\n\n[script]\n"
+            "ImageDir=/usr/share/plymouth/themes/acme-splash\n"
+            "ScriptFile=/usr/share/plymouth/themes/acme-splash/acme-splash.script\n")
+        assert config.drawn_artwork_problems(fork, root) == []
         result = run_config("check-drawn-artwork", root)
         assert result.returncode == 0, result.stderr

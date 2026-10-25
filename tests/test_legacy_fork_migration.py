@@ -216,7 +216,7 @@ def test_harbors_global_package_is_refused_where_a_variant_cannot_install_it(for
     path.write_text(yaml.safe_dump(harbor, sort_keys=False))
     result = migrate(fork, path)
     assert result.returncode == 1
-    assert "variants.guppy.packages: 'htop' is not a valid package name for emerge" in result.stderr
+    assert "defaults.packages: 'htop' is not a valid package name for emerge, which variant guppy builds with" in result.stderr
 
 
 @pytest.mark.parametrize("text,message", [
