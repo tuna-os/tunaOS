@@ -4,8 +4,8 @@ The specification derives the protected set from contracts that exist. It must
 not turn into a second catalog: every repository file it names must exist, every
 package family that build_scripts/lib.sh can detect must have an adapter row,
 and every failure code the text uses must be in the failure table. Removals stay
-rejected; the rejection tests live in test_fork_config_consumers and
-test_fork_package_consumer and are not repeated here.
+rejected; the rejection tests live in test_image_packages and
+test_legacy_fork_migration and are not repeated here.
 """
 from __future__ import annotations
 
@@ -17,8 +17,8 @@ ROOT = Path(__file__).resolve().parents[1]
 SPEC = ROOT / ".spektacular/specs/20261024100000-protected-native-package-removal.md"
 PLAN = ROOT / ".spektacular/plans/20261024100000-protected-native-package-removal/plan.md"
 REJECTION_TESTS = {
-    "tests/test_fork_config_consumers.py": "def test_package_supported_names_and_rejected_removals",
-    "tests/test_fork_package_consumer.py": "def test_all_removals_fail_before_transaction_or_file_write",
+    "tests/test_image_packages.py": "def test_removals_are_rejected_with_the_reason",
+    "tests/test_legacy_fork_migration.py": "def test_unconvertible_legacy_input_fails_loudly_and_changes_nothing",
 }
 
 

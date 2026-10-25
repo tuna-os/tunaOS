@@ -10,8 +10,8 @@ without the secret values:
   TUNAOS_PUBLISH_EVENT          event that decides trust: github.event_name, or the
                                 triggering run's event for a workflow_run job
   TUNAOS_PUBLISH_SCOPE          vars.TUNAOS_PUBLISH_SCOPE, may be empty
-  TUNAOS_HAS_PUBLISH_USERNAME   "true" or "false": secrets.TUNAOS_PUBLISH_USERNAME != ''
-  TUNAOS_HAS_PUBLISH_PASSWORD   "true" or "false": secrets.TUNAOS_PUBLISH_PASSWORD != ''
+  TUNAOS_HAS_PUBLISH_USERNAME   "true" or "false": the publish username secret is non-empty
+  TUNAOS_HAS_PUBLISH_PASSWORD   "true" or "false": the publish password secret is non-empty
 
 Output is mode, registry, namespace and scope lines on stdout. Workflow callers
 append those lines to ``$GITHUB_OUTPUT``; this program does not write that file
