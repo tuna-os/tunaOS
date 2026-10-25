@@ -12,14 +12,22 @@ platform_manifest_digest() {
 
 	local -a override=(--override-os "$os" --override-arch "$arch")
 	[[ -z "${variant:-}" ]] || override+=(--override-variant "$variant")
-	local inspect_output
+	# stdout carries the digest; podman/containers-storage log lines
+	# (e.g. level=info "Not using native diff for overlay") go to stderr and
+	# must not be mixed into it, or the digest check below rejects a good answer.
+	local inspect_output inspect_error errfile
+	errfile="$(mktemp)"
 	if inspect_output="$(skopeo inspect "${override[@]}" --format '{{.Digest}}' \
-		"containers-storage:${image}" 2>&1)" &&
+		"containers-storage:${image}" 2>"$errfile")" &&
 		[[ "$inspect_output" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+		rm -f "$errfile"
 		digest="$inspect_output"
 		printf '%s\n' "$digest"
 		return 0
 	fi
+	inspect_error="$(<"$errfile")"
+	rm -f "$errfile"
+	inspect_output="${inspect_error:-$inspect_output}"
 
 	local reason="${inspect_output//$'\n'/ }"
 	if ((${#reason} > 240)); then

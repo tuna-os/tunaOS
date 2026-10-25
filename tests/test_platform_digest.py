@@ -83,3 +83,26 @@ def test_reports_skopeo_failure_cause(tmp_path: Path) -> None:
     )
     assert result.returncode != 0
     assert "cannot resolve linux/amd64" in result.stderr
+
+
+def test_stderr_log_lines_do_not_corrupt_a_good_digest(tmp_path: Path) -> None:
+    """CI run 40198008729: containers-storage logged level=info on stderr."""
+    digest = "sha256:" + "b" * 64
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    (bin_dir / "skopeo").write_text(
+        "#!/usr/bin/env bash\n"
+        "echo 'time=\"2026-10-25T13:41:03Z\" level=info msg=\"Not using native diff for overlay\"' >&2\n"
+        f"printf '%s\\n' '{digest}'\n",
+        encoding="utf-8",
+    )
+    (bin_dir / "skopeo").chmod(0o755)
+    env = os.environ | {"PATH": f"{bin_dir}:{os.environ['PATH']}"}
+    result = subprocess.run(
+        ["bash", "-euc", 'source "$1"; platform_manifest_digest "$2" "$3"', "t", str(HELPER), "localhost/skipjack:gnome", "linux/amd64"],
+        env=env,
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    assert result.stdout.strip() == digest
