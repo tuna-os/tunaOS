@@ -2920,6 +2920,8 @@ baseurl = "file:///run/utah-packages"
 priority = 4
 unsigned = true
 
+# ELN uses oo7 for Secret Service and PAM; see tunaOS#3810 and
+# docs/ci-troubleshooting.md. Other targets keep gnome-keyring.
 [desktops.gnome.packages.eln]
 required = [
   "ModemManager",
@@ -2938,8 +2940,8 @@ required = [
   "gnome-control-center",
   "gnome-disk-utility",
   "gnome-initial-setup",
-  "gnome-keyring",
-  "gnome-keyring-pam",
+  "oo7-daemon",
+  "pam_oo7",
   "gnome-remote-desktop",
   "gnome-session-wayland-session",
   "gnome-settings-daemon",
@@ -3930,6 +3932,8 @@ name = "tunaos-fedora"
 baseurl = "https://repo.tunaos.org/xfce/44-x86_64/"
 priority = 100
 
+# ELN's Secret Service provider is oo7, not gnome-keyring (tunaOS#3810; see
+# desktops.gnome.packages.eln).
 [desktops.tuna.packages.eln]
 display_manager = "gdm"
 required = [
@@ -3942,7 +3946,8 @@ required = [
   "gnome-shell",
   "gnome-settings-daemon",
   "gnome-control-center",
-  "gnome-keyring",
+  "oo7-daemon",
+  "pam_oo7",
   "evolution-data-server",
   "xdg-desktop-portal-gnome",
   "xdg-desktop-portal-gtk",
