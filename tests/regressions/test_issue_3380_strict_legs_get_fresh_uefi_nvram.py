@@ -9,8 +9,11 @@ not transition from unknown to welcome".
 These tests run the real `reset_uefi_vars` and `run_strict_offline_gui`
 functions, extracted from scripts/iso-e2e.sh, with stubbed QEMU legs.
 
-Falsification: removing the reset before each leg makes the LUKS leg read
-the plain leg's dirty bytes instead of the initial NVRAM hash.
+Falsification: behavioural. Remove the `reset_uefi_vars` call from the per-leg
+loop in `run_strict_offline_gui` (or move it before the loop) and the stubbed
+installer's "Boot000A CentOS Stream" entry survives into the second leg, so
+the LUKS leg's NVRAM hash differs from the initial hash and the equality
+assertions in both tests fail.
 """
 
 import re
@@ -47,8 +50,11 @@ QUAL_EVIDENCE_JSON={out}/qual.json
 STRICT_EVIDENCE_LOG={out}/evidence.log
 TUNAOS_QUAL_OVERLAY_DIGEST=sha256:{"a" * 64}
 TUNAOS_QUAL_ENGINE_DIGEST=sha256:{"b" * 64}
-qemu-img() {{ echo UNEXPECTED_QEMU_IMG_CALL >&2; return 99; }}
 e2e_phase() {{ :; }}
+# run_strict_offline_gui refuses to start without qemu-img (exit 77). No leg
+# here creates a disk, so a stub keeps the test independent of the host: the
+# Unit Tests runner has no qemu-utils.
+qemu-img() {{ echo UNEXPECTED_QEMU_IMG_CALL >&2; return 99; }}
 strict_offline_evidence() {{ :; }}
 strict_require_digest() {{ :; }}
 start_swtpm() {{ :; }}
@@ -68,7 +74,7 @@ run_strict_offline_gui
     result = subprocess.run(
         ["bash", "-c", harness], check=False, capture_output=True, text=True, timeout=10
     )
-    assert "UNEXPECTED_QEMU_IMG_CALL" not in result.stderr
+    assert "UNEXPECTED_QEMU_IMG_CALL" not in result.stdout + result.stderr
     return result
 
 

@@ -1,6 +1,6 @@
 # Installed boot diagnostic candidate
 
-Base: `3e61b0e07457e6dbedef3c5a8a5c40827f02d94e` (#3431).
+Integrated base: `cf04a15e5e2bb59556f209e7bdca891a5878e9ae` (#3431).
 Branch: `codex/installed-initramfs-diagnostic`.
 This candidate has source tests only. No ISO, VM or disk inspection has run.
 Publication and dispatch need parent review.
@@ -130,7 +130,13 @@ registration on main. The existing reusable `iso-e2e.yml` consumes the exact
 artifact from the current run and `run_attempt` after build success. Its existing media checks
 run before diagnosis. The input defaults to false. No schedule enables it.
 
-The branch base remains the pinned #3431 source; this change preserves product inputs.
+The owner merged main into the feature base at `cf04a15e` after `3e61b0e`.
+The next diagnostic uses that new source, not byte-identical inputs from the old run.
+TOML adapters, package policy and transport contracts changed in that merge.
+
+The Brew and Utah OCI digests also changed. The tacklebox pin stayed at `d3070b5`.
+Record the new producer commit, media receipts and installed file hashes.
+This is a fresh diagnostic reproduction, not an inspection of the old disk.
 
 QEMU, harness and inspector helpers run in separate system services at the
 runner UID. These services do not delegate cgroup control.

@@ -63,7 +63,6 @@ build_scripts/
 │                              #   harvested by scripts/iso-e2e.sh
 │
 ├── bootc/                     # Ubuntu/Debian bootcification (finalize, …)
-├── scripts/                   # in-image utilities (image-info-set)
 └── apply-custom.sh            # Containerfile.custom entry point
 ```
 

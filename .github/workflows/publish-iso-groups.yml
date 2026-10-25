@@ -9,8 +9,8 @@ name: Publish Grouped Dedup ISOs to R2
 # can be compared before the old one is retired.
 
 permissions:
-  actions: read
   contents: read
+
 on:
   workflow_dispatch:
     inputs:
@@ -76,17 +76,24 @@ jobs:
         env:
           WANT_VARIANT: ${{ inputs.variant || 'all' }}
           WANT_GROUP: ${{ inputs.group || 'all' }}
+          IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY }}
         run: |
+          # "<registry>/<namespace>": [build.publish] in tunaos.toml, else
+          # ghcr.io/<owner> (scripts/publish-destination.sh).
+          PUBLISH_DEST="$(bash scripts/publish-destination.sh)"
           # Emit one matrix entry per (variant, group) whose intersection of
           # group flavors with the variant's build_image flavors is non-empty.
           # "default"/'' is the flagship group; its ISO has no suffix.
-          MATRIX=$(yq -o=json .github/build-config.yml | jq -c \
-            --arg wv "$WANT_VARIANT" --arg wg "$WANT_GROUP" '
+          CONFIG_JSON="${RUNNER_TEMP}/build-config.json"
+          yq -o=json '.' .github/build-config.yml > "$CONFIG_JSON"
+          MATRIX=$(jq -c --arg wv "$WANT_VARIANT" --arg wg "$WANT_GROUP" '
             [ .variants[] as $var
               | ($var.flavors | map(select(.build_image == true) | .id)) as $vf
               | .iso_groups[] as $g
               | ($g.suffix // "") as $suffix
               | ($g.flavors | map(select(. as $f | $vf | index($f)))) as $sel
+              | ($g.offline_flavors // $g.flavors
+                 | map(select(. as $f | $vf | index($f)))) as $offline
               | select(($sel | length) > 0)
               | select($wv == "all" or $var.id == $wv)
               | select($wg == "all"
@@ -96,13 +103,17 @@ jobs:
               # UNLESS the dispatch names that exact suffix.
               | select(($g.publish != false) or ($wg == $suffix))
               | {
-                  variant:  $var.id,
-                  group:    (if $suffix == "" then "default" else $suffix end),
-                  suffix:   $suffix,
-                  basename: (if $suffix == "" then $var.id else "\($var.id)-\($suffix)" end),
-                  flavors:  $sel
+                  variant:         $var.id,
+                  group:           (if $suffix == "" then "default" else $suffix end),
+                  suffix:          $suffix,
+                  basename:        (if $suffix == "" then $var.id else "\($var.id)-\($suffix)" end),
+                  flavors:         $sel,
+                  required_flavors: $offline,
+                  platform:        "linux/amd64"
                 }
-            ] | { include: . }')
+            ] | { include: . }' "$CONFIG_JSON" \
+            | python3 scripts/iso-delivery-policy.py \
+              --config-json "$CONFIG_JSON" annotate-group-matrix)
           # Probe every image the selected group will consume. A variant whose
           # flagship image was never published is skipped, as is a group with
           # a missing flavor (for example, a failed gnome-nvidia build). Do
@@ -118,7 +129,7 @@ jobs:
             for flavor in $(echo "$entry" | jq -r '.flavors[]'); do
               probe_tag="$flavor"
               if [ -n "$tagsuffix" ]; then probe_tag="${probe_tag}-${tagsuffix}"; fi
-              image="ghcr.io/tuna-os/${pubname}:${probe_tag}"
+              image="${PUBLISH_DEST}/${pubname}:${probe_tag}"
               if ! skopeo inspect --retry-times 3 --no-tags "docker://${image}" >/dev/null 2>&1; then
                 missing="${missing}${missing:+, }${image}"
               fi
@@ -147,10 +158,13 @@ jobs:
     # measured shape with room: ~14m build, 25m boot gate, 30m signing.
     timeout-minutes: 120
     permissions:
-      actions: read
       contents: write
       packages: read
       id-token: write
+    # A fork has no R2 bucket: skip the upload instead of letting rclone
+    # resolve an AWS endpoint from empty credentials and fail the cell.
+    env:
+      R2_CONFIGURED: ${{ secrets.R2_ACCESS_KEY_ID != '' && secrets.R2_SECRET_ACCESS_KEY != '' && secrets.R2_ENDPOINT != '' && secrets.R2_BUCKET != '' }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
@@ -179,7 +193,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y just podman jq rclone golang-go git python3-yaml systemd-boot-efi xorriso mtools squashfs-tools dosfstools gdisk
+          sudo apt-get install -y just podman jq rclone golang-go git systemd-boot-efi xorriso mtools squashfs-tools dosfstools gdisk
 
       # The runner image ships podman 5.8.4, which wedges committing a
       # live-customized rootfs (#1893). installer-smoke.yml builds ISOs on
@@ -210,7 +224,6 @@ jobs:
 
       - name: Build combined dedup ISO (from published GHCR images)
         env:
-          GITHUB_REPOSITORY_OWNER: tuna-os
           # The low-disk offline-store implementation must be reproducible and
           # available before the release-container workflow finishes publishing.
           TACKLEBOX_FROM_SOURCE: '1'
@@ -328,63 +341,11 @@ jobs:
           ls -l "$CHECKSUM" "$BUNDLE"
           cat "$CHECKSUM"
 
-      # Delivery cutover (delivery-cutover.json): a grouped ISO publishes
-      # only while at least one member target is NOT cut over. Closure needs
-      # every LIVE + OFFLINE member target qualified — the matrix above only
-      # records live flavors, so membership is re-resolved here from
-      # iso_groups (the same intersection scripts/build-iso-group.sh uses).
-      # Build, boot gate and signing above always run; only the R2 upload is
-      # gated. With the empty initial policy every group evaluates to false
-      # (current behavior).
-      - name: Download current catalog snapshot
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          snapshot_dir="$RUNNER_TEMP/catalog-facts"
-          mkdir -p "$snapshot_dir"
-          run_id="$(gh run list --repo "$GITHUB_REPOSITORY" \
-            --workflow catalog-facts.yml --branch main --status success --limit 1 \
-            --json databaseId --jq '.[0].databaseId // empty' 2>/dev/null || true)"
-          if [[ -n "$run_id" ]] && gh run download "$run_id" \
-              --repo "$GITHUB_REPOSITORY" --name catalog-facts --dir "$snapshot_dir"; then
-            echo "CATALOG_SNAPSHOT=$snapshot_dir/catalog-snapshot.json" >> "$GITHUB_ENV"
-          fi
-      - name: Collect current delivery inputs
-        env:
-          CURRENT_INPUTS: ${{ runner.temp }}/current-delivery-inputs.json
-          CURRENT_VARIANT: ${{ matrix.variant }}
-        run: |
-          set -euo pipefail
-          if python3 scripts/collect-current-inputs.py \
-              --variant "$CURRENT_VARIANT" --output "$CURRENT_INPUTS"; then
-            echo "CURRENT_INPUTS=$CURRENT_INPUTS" >> "$GITHUB_ENV"
-          else
-            echo "::warning::current delivery inputs were unavailable; cutover will remain disabled"
-          fi
-
-
-      - name: Check delivery cutover for this group
-        id: cutover
-        run: |
-          SNAPSHOT_ARGS=()
-          if [[ -s "${CATALOG_SNAPSHOT:-}" && -s "${CURRENT_INPUTS:-}" ]]; then
-            SNAPSHOT_ARGS=(--snapshot "$CATALOG_SNAPSHOT" --current-inputs "$CURRENT_INPUTS")
-          elif [[ -s "${CATALOG_SNAPSHOT:-}" ]]; then
-            # Historical evidence without independent observations cannot suppress an upload.
-            SNAPSHOT_ARGS=(--snapshot "$CATALOG_SNAPSHOT")
-          fi
-          if python3 scripts/delivery-cutover.py --check \
-              --variant "${{ matrix.variant }}" --group "${{ matrix.group }}" \
-              "${SNAPSHOT_ARGS[@]}"; then
-            echo "cutover=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "cutover=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      # Only reached if the boot gate passed.
+      # Only reached if the boot gate passed. A group closes R2 publication
+      # only when every buildable offline flavor is in the reviewed cutover;
+      # partial coverage keeps the established prebuilt path.
       - name: Upload ISO to Cloudflare R2
-        if: ${{ inputs.skip_upload != true && steps.cutover.outputs.cutover != 'true' }}
+        if: ${{ inputs.skip_upload != true && env.R2_CONFIGURED == 'true' && !matrix.r2_cutover }}
         env:
           RCLONE_CONFIG_R2_TYPE: s3
           RCLONE_CONFIG_R2_PROVIDER: Cloudflare
@@ -398,37 +359,20 @@ jobs:
             echo "ERROR: No ISO found for ${{ matrix.basename }}"
             exit 1
           fi
-          CHECKSUM="${ISO}.sha256"
-          BUNDLE="${ISO}.sigstore.json"
-          echo "==> Uploading $ISO to R2..."
-          for artifact in "$ISO" "$CHECKSUM" "$BUNDLE"; do
-            rclone copy --log-level INFO --checksum --s3-no-check-bucket \
-              "$artifact" R2:${{ secrets.R2_BUCKET }}/live-isos/
-          done
-          LATEST="${{ matrix.basename }}-latest.iso"
-          rclone copyto --log-level INFO --s3-no-check-bucket \
-            "$ISO" "R2:${{ secrets.R2_BUCKET }}/live-isos/${LATEST}"
-          DIGEST=$(sha256sum "$ISO" | awk '{print $1}')
-          printf '%s  %s\n' "$DIGEST" "$LATEST" > "${LATEST}.sha256"
-          rclone copyto --log-level INFO --s3-no-check-bucket \
-            "${LATEST}.sha256" "R2:${{ secrets.R2_BUCKET }}/live-isos/${LATEST}.sha256"
-          rclone copyto --log-level INFO --s3-no-check-bucket \
-            "$BUNDLE" "R2:${{ secrets.R2_BUCKET }}/live-isos/${LATEST}.sigstore.json"
-          echo "==> Upload complete: $(basename "$ISO") (latest → ${LATEST}) with signed sidecars"
+          CONFIG_JSON="${RUNNER_TEMP}/build-config.json"
+          yq -o=json '.' .github/build-config.yml > "$CONFIG_JSON"
+          scripts/publish-iso-r2.sh \
+            "$ISO" "${{ matrix.basename }}-latest.iso" "$CONFIG_JSON" \
+            "R2:${{ secrets.R2_BUCKET }}/live-isos"
 
       - name: Upload ISO as artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ matrix.basename }}-iso
-          # The ISO itself is deliberately NOT uploaded. This job's whole
-          # purpose is to put it in R2, so an Actions artifact of the same
-          # bytes is a second copy of the deliverable — at 90 days by
-          # default, across every grouped cell, against 0.5 GB of included
-          # storage. The checksum and signature stay: they are kilobytes,
-          # and they are what a reviewer actually wants to see from a run.
-          #
-          # Recovering the ISO means downloading it from R2, which is the
-          # thing being published and therefore the copy worth testing.
+          # The ISO itself is deliberately NOT uploaded. For non-cutover
+          # groups, R2 is the durable copy. For cutover groups, the browser
+          # builder is the delivery path and this run retains only the signed
+          # checksum evidence needed for review.
           path: |
             ${{ matrix.basename }}-*.iso.sha256
             ${{ matrix.basename }}-*.iso.sigstore.json

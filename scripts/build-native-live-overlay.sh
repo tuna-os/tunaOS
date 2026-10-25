@@ -35,6 +35,7 @@ esac
 wrapper="$work/native-customize.sh"
 {
 	printf '#!/usr/bin/env bash\n'
+	printf 'export TUNA_SESSION_ROOT=/\n'
 	printf 'export TUNA_INSTALLER_ARCH=%q\n' x86_64
 	printf 'export TUNA_INSTALLER_APP=%q\n' "$installer_app"
 	printf 'export TUNA_LIVE_BASE_IMAGE=%q\n' "$source_image"

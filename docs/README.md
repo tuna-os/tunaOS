@@ -10,6 +10,20 @@ The old in-repo mdBook (`docs/book/`) was removed once tunaos.org went live — 
 duplicated the same user-facing content. (Its GitHub Pages deploy workflow was
 already retired separately.)
 
+## Customize a fork: start here
+
+1. [Roll your own](ROLL_YOUR_OWN.md) gives the edit and build path.
+2. [Primary configuration wiring](CONFIG-WIRING.md) lists the editable inputs,
+   the generated adapters, defaults and unsupported operations.
+3. [The package editor](PACKAGE-AUTHORING.md) shows how to search and preview
+   package additions. [Flatpak declarations](FLATPAK-DECLARATIONS.md) cover
+   the separate application policy.
+4. [Fork delivery](FORK-DELIVERY.md) defines the branded install, update and
+   recovery journey. That journey is not yet complete.
+
+The [migration plan](PRIMARY-CONFIG-MIGRATION.md) is design history. It is not
+the current schema.
+
 ## What's in this folder
 
 These are **developer/maintainer references** that aren't part of the
@@ -52,6 +66,7 @@ user-facing site:
 | [VERIFY-ARTIFACTS.md](VERIFY-ARTIFACTS.md) | Verify TunaOS artifacts — signatures and SBOM attestations |
 | [INSTALLER-FRONTENDS.md](INSTALLER-FRONTENDS.md) | Installer frontends (cosmic/kde/niri/xfce): verification & parity |
 | [SCREENSHOTS.md](SCREENSHOTS.md) | TunaOS screenshot gallery |
+| [SCREENSHOT-RELEASE.md](SCREENSHOT-RELEASE.md) | Screenshot URLs on the rolling `screenshots` release, mapped from the R2 keys (#3470) |
 | [IMAGE-FACTORY-GATE.md](IMAGE-FACTORY-GATE.md) | Image factory completion gate & definition of done (#1283) |
 | [IMAGE-FACTORY-LIFECYCLE-GATE.md](IMAGE-FACTORY-LIFECYCLE-GATE.md) | Image factory lifecycle coverage & required gate (#1278) |
 | [../VARIANT-LIFECYCLE.md](../VARIANT-LIFECYCLE.md) | Variant/flavor admission, capacity, promotion, and deprecation policy (#1196, #1175) |
@@ -68,6 +83,7 @@ user-facing site:
 | [FEDORA45-RELEASE-OUTREACH.md](FEDORA45-RELEASE-OUTREACH.md) | Fedora release-window positioning, shared adopter call, showcase evidence, and media notes (#3089) |
 | [FEDORA-OUTREACH-READINESS.md](FEDORA-OUTREACH-READINESS.md) | Bonito completeness evidence and fedora-desktop outreach handoff (#3001) |
 | [ADOPTION-OUTREACH-STATUS.md](ADOPTION-OUTREACH-STATUS.md) | Evidence ledger for DistroWatch, CNCF, and adopter outreach |
+| [adoption-metrics/README.md](adoption-metrics/README.md) | Adoption snapshot runbook, monthly collector workflow, and signal definitions (#2819) |
 | [outreach/Q4-PRODUCTION-PROSPECTS.md](outreach/Q4-PRODUCTION-PROSPECTS.md) | Five proposed contacts, evaluation requests, and follow-up dates for #3146 |
 | [PANTHEON-FEEDBACK-LOOP.md](PANTHEON-FEEDBACK-LOOP.md) | How Gurnard's Pantheon packaging findings get back to elementary (#1469) |
 | [SNAPDRAGON.md](SNAPDRAGON.md) | Copilot-PC support boundary, boot prerequisites, NPU evidence, test reports and prepared Discussion #93 reply |

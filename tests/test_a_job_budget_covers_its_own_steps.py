@@ -256,7 +256,7 @@ def test_github_default_job_timeout_is_finite():
 def test_diagnostic_and_strict_budgets_are_disjoint_and_bounded():
     doc = yaml.safe_load((WORKFLOWS[0].parent / "iso-e2e.yml").read_text())
     job = doc["jobs"]["e2e"]
-    assert _budgets(job["timeout-minutes"]) == [120, 160, 130, 70]
+    assert _budgets(job["timeout-minutes"]) == [120, 160, 90, 30]
     assert _step_total(job["steps"]) <= 160
     diagnostic_steps = [s for s in job["steps"]
                         if _selector_constraints(s.get("if")).get(

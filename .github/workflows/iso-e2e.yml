@@ -239,14 +239,14 @@ jobs:
     # 00:18:40. `cancelled` reads like infrastructure flake, so a sweep of
     # six cells reported nothing usable about any of them.
     #
-    # Strict plain+encrypted GUI qualification declares 60 minutes. The
-    # build path adds another 60; allow ten minutes for setup/artifact upload
-    # on each path so the job cannot preempt its own strict phase.
+    # Only the build path needs the larger budget; sourcing from R2 is a
+    # download plus a 20-minute boot and 30 is right for it.
+    #
     # Native archive transfer is hard-capped at 60 minutes; historical GUI
     # smoke adds 20, strict plain+LUKS (including detached cold/warm boots)
     # keeps its full 60, extraction allows ten, and setup/API/hash/evidence
     # get ten more: 160 total.
-    timeout-minutes: ${{ inputs.installed_boot_diagnostic && 120 || (inputs.source == 'native-artifact' && 160 || ((github.event_name == 'workflow_dispatch' && inputs.source == 'build') && 130 || 70)) }}
+    timeout-minutes: ${{ inputs.installed_boot_diagnostic && 120 || (inputs.source == 'native-artifact' && 160 || ((github.event_name == 'workflow_dispatch' && inputs.source == 'build') && 90 || 30)) }}
     strategy:
       # Don't cancel the other leg if one fails — we want to see both signals.
       fail-fast: false
@@ -374,17 +374,14 @@ jobs:
           NATIVE_SOURCE_SHA: ${{ inputs.native_source_sha }}
         run: |
           set -euo pipefail
-          # Native QEMU qualification never executes a browser. Ubuntu Chromium
-          # pulls Snap assertions, which failed with HTTP408 in run39634319715.
-          browser_packages=()
-          if [[ "$ISO_SOURCE" != "native-artifact" ]]; then
-            browser_packages+=(chromium)
-          fi
+          # No source here executes a browser, so none is installed: Ubuntu
+          # Chromium pulls Snap assertions, which failed with HTTP408 in
+          # run39634319715.
           sudo apt-get update -qq
           if [[ "$PLATFORM" == "linux/arm64" ]]; then
             sudo apt-get install -y --no-install-recommends \
               qemu-system-arm qemu-efi-aarch64 qemu-utils socat swtpm \
-              rclone sshpass skopeo python3-yaml "${browser_packages[@]}" imagemagick \
+              rclone sshpass skopeo python3-yaml imagemagick \
               tesseract-ocr xorriso squashfs-tools
             QEMU_BIN="$(command -v qemu-system-aarch64)"
           else
@@ -392,7 +389,7 @@ jobs:
             [[ "${DIAGNOSTIC_MODE:-false}" != true ]] || qemu_package=qemu-system-x86=1:8.2.2+ds-0ubuntu1.16
             sudo apt-get install -y --no-install-recommends \
               "$qemu_package" qemu-utils ovmf socat swtpm \
-              rclone sshpass skopeo python3-yaml "${browser_packages[@]}" imagemagick \
+              rclone sshpass skopeo python3-yaml imagemagick \
               tesseract-ocr xorriso squashfs-tools
             QEMU_BIN="$(command -v qemu-system-x86_64)"
           fi
@@ -404,9 +401,6 @@ jobs:
               echo "TUNAOS_NATIVE_ARCHIVE_DIGEST=$NATIVE_ARCHIVE_DIGEST"
               echo "TUNAOS_NATIVE_SOURCE_SHA=$NATIVE_SOURCE_SHA"
               echo "TUNAOS_NATIVE_BINDING=${GITHUB_WORKSPACE}/native-iso-input/artifact-binding.json"
-            else
-              echo "TUNAOS_QUAL_BROWSER_NAME=chromium"
-              echo "TUNAOS_QUAL_BROWSER_VERSION=$(chromium --version | awk '{print $2}')"
             fi
           } >> "$GITHUB_ENV"
 
@@ -429,7 +423,6 @@ jobs:
           # Use matrix.* directly — that's what the job name displays.
           VARIANT="${{ matrix.variant }}"
           FLAVOR="${{ matrix.flavor }}"
-          PLATFORM="${{ matrix.platform }}"
           # `publish-isos.yml` writes the canonical name as
           # `<variant>-<flavor>-latest.iso` (search for `LATEST=` in that
           # workflow). Match that exact name so we don't accidentally pick
@@ -456,38 +449,107 @@ jobs:
           # turned E2E yellowfin:gnome green: the object would have landed
           # under a key nothing looks up.
           #
-          # Try the per-flavor name first, since that is what is in the
-          # bucket today, then the group name. A flavor maps to its group by
-          # its desktop prefix -- gnome-hwe and gnome-nvidia all ride inside
-          # the gnome group's offline store, so they resolve to the same ISO.
+          # Resolve every resolver name before attempting any stable object.
+          # Grouped GNOME is preferred when both generations are present; an
+          # existing malformed resolver is always a hard failure.
           DESKTOP="${FLAVOR%%-*}"
-          # Same helper the producer uses: generic AMD64 gets `-amd64` only
-          # when the flavor also has a v2 sibling, else the bare name.
-          PLATFORM_SUFFIX="$(python3 scripts/iso-latest-suffix.py "$VARIANT" "$FLAVOR" "$PLATFORM")"
           if [[ "$DESKTOP" == "gnome" ]]; then
-            GROUP_OBJECT="${VARIANT}-latest${PLATFORM_SUFFIX}.iso"
+            GROUP_OBJECT="${VARIANT}-latest.iso"
           else
-            GROUP_OBJECT="${VARIANT}-${DESKTOP}-latest${PLATFORM_SUFFIX}.iso"
+            GROUP_OBJECT="${VARIANT}-${DESKTOP}-latest.iso"
           fi
-          OBJECT="${VARIANT}-${FLAVOR}-latest${PLATFORM_SUFFIX}.iso"
-          FOUND=""
-          for candidate in "${OBJECT}" "${GROUP_OBJECT}"; do
-            echo "==> Trying ${candidate} from R2..."
-            rm -f "${candidate}" "${candidate}.sha256"
-            rclone copy --log-level INFO --s3-no-check-bucket \
-              "R2:${{ secrets.R2_BUCKET }}/live-isos/${candidate}" . || true
-            rclone copy --log-level INFO --s3-no-check-bucket \
-              "R2:${{ secrets.R2_BUCKET }}/live-isos/${candidate}.sha256" . || true
-            if [[ -f "${candidate}" && -f "${candidate}.sha256" ]] &&
-                sha256sum --check --strict "${candidate}.sha256"; then
-              FOUND="${candidate}"
-              break
+          OBJECT="${VARIANT}-${FLAVOR}-latest.iso"
+          RESOLVER_ORDER=("${GROUP_OBJECT}" "${OBJECT}")
+          declare -A SEEN_RESOLVERS HAS_RESOLVER RESOLVED DIGEST
+          for requested in "${RESOLVER_ORDER[@]}"; do
+            [[ -z "${SEEN_RESOLVERS[$requested]:-}" ]] || continue
+            SEEN_RESOLVERS["$requested"]=1
+            resolver="${requested%.iso}.json"
+            HAS_RESOLVER["$requested"]=false
+            if ! resolver_listing="$(rclone lsf --s3-no-check-bucket \
+              --files-only --include "/${resolver}" \
+              "R2:${{ secrets.R2_BUCKET }}/live-isos/")"; then
+              echo "::error::Cannot list resolver ${resolver}; refusing frozen stable fallback" >&2
+              exit 1
             fi
-            echo "::warning::${candidate} was missing or failed its published checksum"
-            rm -f "${candidate}" "${candidate}.sha256"
+            [[ -n "$resolver_listing" ]] || continue
+            if [[ "$resolver_listing" != "$resolver" ]]; then
+              echo "::error::Unexpected resolver listing for ${resolver}; refusing frozen stable fallback" >&2
+              exit 1
+            fi
+            if ! payload="$(rclone cat --s3-no-check-bucket \
+              "R2:${{ secrets.R2_BUCKET }}/live-isos/${resolver}")"; then
+              echo "::error::Cannot read resolver ${resolver}; refusing frozen stable fallback" >&2
+              exit 1
+            fi
+            if [[ -z "$payload" ]]; then
+              echo "::error::Empty resolver ${resolver}; refusing frozen stable fallback" >&2
+              exit 1
+            fi
+            if ! resolved_fields="$(jq -er -s '
+              if length != 1 then error("resolver must be one JSON document") else .[0] end |
+              select(.schema == "TunaOSIsoResolution/v1") |
+              select(.iso | type == "string" and endswith(".iso") and
+                     (contains("/") | not)) |
+              select(.sha256 == (.iso + ".sha256")) |
+              select(.sigstore == (.iso + ".sigstore.json")) |
+              select(.checksum_subject | type == "string" and
+                     length > 0 and (contains("/") | not)) |
+              select(.digest | type == "string" and
+                     test("^sha256:[0-9a-f]{64}$")) |
+              [.iso, .digest] | @tsv
+            ' <<<"$payload")"; then
+              echo "::error::Invalid resolver ${resolver}; refusing frozen stable fallback" >&2
+              exit 1
+            fi
+            IFS=$'\t' read -r resolved expected_digest <<<"$resolved_fields"
+            HAS_RESOLVER["$requested"]=true
+            RESOLVED["$requested"]="$resolved"
+            DIGEST["$requested"]="$expected_digest"
           done
+
+          FOUND=""
+          for requested in "${RESOLVER_ORDER[@]}"; do
+            [[ "${HAS_RESOLVER[$requested]:-false}" == true ]] || continue
+            candidate="${RESOLVED[$requested]}"
+            expected_digest="${DIGEST[$requested]}"
+            echo "==> ${requested} resolves to ${candidate}"
+            if ! rclone copyto --log-level INFO --s3-no-check-bucket \
+              "R2:${{ secrets.R2_BUCKET }}/live-isos/${candidate}" "$candidate"; then
+              echo "::error::Resolver target ${candidate} is unavailable; refusing stable fallback" >&2
+              exit 1
+            fi
+            if [[ ! -f "$candidate" ]]; then
+              echo "::error::Resolver target ${candidate} was not downloaded; refusing stable fallback" >&2
+              exit 1
+            fi
+            actual="sha256:$(sha256sum "$candidate" | awk '{print $1}')"
+            if [[ "$actual" != "$expected_digest" ]]; then
+              echo "::error::Resolver digest mismatch for ${candidate}" >&2
+              exit 1
+            fi
+            FOUND="${candidate}"
+            break
+          done
+
+          # No resolver exists for either name: retain the legacy direct
+          # lookup, but only after both resolver listings were checked.
           if [[ -z "${FOUND}" ]]; then
-            echo "::error::No ISO in R2 under either name: live-isos/${OBJECT} (per-flavor) or live-isos/${GROUP_OBJECT} (grouped)"
+            declare -A SEEN_FALLBACK
+            for candidate in "$OBJECT" "$GROUP_OBJECT"; do
+              [[ -z "${SEEN_FALLBACK[$candidate]:-}" ]] || continue
+              SEEN_FALLBACK["$candidate"]=1
+              echo "==> No resolver; trying stable object ${candidate}"
+              if rclone copyto --log-level INFO --s3-no-check-bucket \
+                "R2:${{ secrets.R2_BUCKET }}/live-isos/${candidate}" "$candidate" &&
+                [[ -f "$candidate" ]]; then
+                FOUND="${candidate}"
+                break
+              fi
+            done
+          fi
+          if [[ -z "${FOUND}" ]]; then
+            echo "::error::No resolvable ISO in R2 for ${OBJECT} or ${GROUP_OBJECT}"
             exit 1
           fi
           OBJECT="${FOUND}"
@@ -496,7 +558,6 @@ jobs:
             echo "ISO_PATH=$(realpath "${OBJECT}")"
             echo "VARIANT=${VARIANT}"
             echo "FLAVOR=${FLAVOR}"
-            echo "PLATFORM=${PLATFORM}"
           } >> "$GITHUB_ENV"
 
       - name: Fetch exact native ISO artifact
@@ -558,7 +619,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y just podman jq skopeo golang-go git systemd-boot-efi \
+          sudo apt-get install -y just podman jq golang-go git systemd-boot-efi \
             xorriso mtools squashfs-tools dosfstools gdisk e2fsprogs btrfs-progs
           # Both runner images ship a podman that cannot run/commit these
           # containers (tunaOS#1893); same Kubic install as every other
@@ -636,40 +697,7 @@ jobs:
           # is what one bare-invocation failure looked like. Root storage also
           # makes the save|load hop unnecessary: the image is already where
           # tacklebox will look for it.
-          case "$PLATFORM" in
-            linux/amd64)  SKOPEO_PLATFORM=(--override-arch amd64) ;;
-            linux/amd64/v2) SKOPEO_PLATFORM=(--override-arch amd64 --override-variant v2) ;;
-            linux/arm64)   SKOPEO_PLATFORM=(--override-arch arm64) ;;
-            *) echo "unsupported canonical platform: ${PLATFORM}" >&2; exit 1 ;;
-          esac
-          SAFE_PLATFORM="${PLATFORM//\//-}"
-          OVERLAY_REF="ghcr.io/tuna-os/live-overlay:${VARIANT}-${FLAVOR}-${SAFE_PLATFORM}"
-          TUNA_LIVE_OVERLAY_DIGEST="$(skopeo inspect "${SKOPEO_PLATFORM[@]}" \
-            --format '{{.Digest}}' "docker://${OVERLAY_REF}")"
-          [[ "$TUNA_LIVE_OVERLAY_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || {
-            echo "::error::invalid live overlay digest: ${TUNA_LIVE_OVERLAY_DIGEST}"
-            exit 1
-          }
-          TACKLEBOX_PIN="$(awk -F'"' '/^[[:space:]]*tacklebox:/ { print $2; exit }' image-versions.yaml)"
-          [[ "$TACKLEBOX_PIN" =~ ^[0-9a-f]{40}$ ]] || {
-            echo "::error::invalid tacklebox pin: ${TACKLEBOX_PIN}"
-            exit 1
-          }
-          TUNA_LIVE_ENGINE_DIGEST="sha256:$(printf 'tacklebox:%s' "$TACKLEBOX_PIN" | sha256sum | awk '{print $1}')"
-          export TUNA_LIVE_OVERLAY_REF="${OVERLAY_REF}@${TUNA_LIVE_OVERLAY_DIGEST}"
-          export TUNA_LIVE_OVERLAY_DIGEST TUNA_LIVE_ENGINE_DIGEST
-
           sudo just build "$VARIANT" "$FLAVOR" "$PLATFORM" 1 "$FLAVOR"
-          TUNA_LIVE_BASE_IMAGE="localhost/${VARIANT}:${FLAVOR}"
-          TUNA_LIVE_BASE_DIGEST="$(sudo podman image inspect \
-            --format '{{.Digest}}' "${VARIANT}:${FLAVOR}")"
-          [[ "$TUNA_LIVE_BASE_DIGEST" =~ ^sha256:[0-9a-fA-F]{64}$ ]] || {
-            echo "::error::invalid locally built source manifest digest: ${TUNA_LIVE_BASE_DIGEST}"
-            exit 1
-          }
-          export TUNA_LIVE_BASE_IMAGE TUNA_LIVE_BASE_DIGEST
-          export TUNA_LIVE_PAYLOAD_REF="${TUNA_LIVE_BASE_IMAGE}@${TUNA_LIVE_BASE_DIGEST}"
-
           sudo -E env "PATH=$PATH" just iso "$VARIANT" "$FLAVOR" local "$FLAVOR" 0 "$PLATFORM"
           ISO="$(find . -maxdepth 3 -name '*.iso' -newermt '-2 hours' -print -quit)"
           if [[ -z "$ISO" ]]; then
@@ -681,8 +709,12 @@ jobs:
             echo "VARIANT=${VARIANT}"
             echo "FLAVOR=${FLAVOR}"
           } >> "$GITHUB_ENV"
+      # Strict qualification needs the provenance that only a native build
+      # embeds (etc/tunaos/live-source.json). Published and in-place media do
+      # not carry it, so this step must not run for them: it would fail every
+      # readiness run on a missing identity that nothing there promises.
       - name: Resolve immutable ISO qualification inputs
-        if: steps.filter.outputs.skip != 'true'
+        if: steps.filter.outputs.skip != 'true' && inputs.source == 'native-artifact'
         env:
           VARIANT: ${{ matrix.variant }}
           FLAVOR: ${{ matrix.flavor }}
@@ -864,9 +896,39 @@ jobs:
           if-no-files-found: error
           retention-days: 3
 
-      - name: Run strict offline GUI qualification
+      # The readiness smoke is the default path (R2 media, in-place builds, the
+      # weekly schedule and the harness PR trigger). It asserts only what that
+      # media can promise: a live boot that reaches the readiness markers.
+      - name: Run readiness e2e
         id: e2e
-        if: '!inputs.installed_boot_diagnostic && steps.filter.outputs.skip != ''true'''
+        if: ${{ !inputs.installed_boot_diagnostic && steps.filter.outputs.skip != 'true' && inputs.source != 'native-artifact' }}
+        timeout-minutes: 20
+        run: |
+          mkdir -p iso-e2e-out
+          # Free runners get KVM via /dev/kvm permissions; if it's not
+          # readable we fall back to TCG (slower but functional).
+          KVM_FLAG=""
+          [[ -r /dev/kvm && -w /dev/kvm ]] || KVM_FLAG="--no-kvm"
+          set +e
+          sudo --preserve-env=KVM_FLAG,VARIANT,FLAVOR \
+            ./scripts/iso-e2e.sh "${ISO_PATH}" \
+              --output iso-e2e-out \
+              --timeout 600 \
+              ${KVM_FLAG}
+          rc=$?
+          set -e
+          echo "rc=${rc}" >> "$GITHUB_OUTPUT"
+          # Make the artifact dir readable so upload-artifact can stage it.
+          sudo chown -R "$USER:$(id -gn)" iso-e2e-out || true
+
+      # Strict plain and encrypted qualification runs on one input only: the
+      # exact native ISO that Live ISOs built. It is reachable from
+      # workflow_dispatch of that workflow, never from a PR or schedule, and no
+      # green criterion names it as a gate. A failed leg stays a failed job;
+      # the verdict step below reports each leg on its own.
+      - name: Run strict offline GUI qualification
+        id: strict
+        if: ${{ !inputs.installed_boot_diagnostic && steps.filter.outputs.skip != 'true' && inputs.source == 'native-artifact' }}
         timeout-minutes: 60
         run: |
           df -h . /tmp
@@ -876,7 +938,7 @@ jobs:
           KVM_FLAG=""
           [[ -r /dev/kvm && -w /dev/kvm ]] || KVM_FLAG="--no-kvm"
           set +e
-          sudo --preserve-env=GITHUB_REPOSITORY,GITHUB_RUN_ID,GITHUB_RUN_ATTEMPT,TUNAOS_QUAL_EXECUTION_KIND,TUNAOS_NATIVE_BINDING,TUNAOS_NATIVE_ARTIFACT_ID,TUNAOS_NATIVE_ARCHIVE_DIGEST,TUNAOS_NATIVE_SOURCE_SHA,KVM_FLAG,VARIANT,FLAVOR,TUNAOS_QUAL_SOURCE_DIGEST,TUNAOS_QUAL_OVERLAY_DIGEST,TUNAOS_QUAL_INSTALLER_DIGEST,TUNAOS_QUAL_ENGINE_DIGEST,TUNAOS_QUAL_MEDIA_DIGEST,STRICT_PUBLISHED_MEDIA,TUNAOS_QUAL_PLATFORM,TUNAOS_QUAL_CPU_BASELINE,TUNAOS_QUAL_HARDWARE_SCOPE,TUNAOS_QUAL_BROWSER_NAME,TUNAOS_QUAL_BROWSER_VERSION,TUNAOS_QUAL_BROWSER_MEMORY_GIB,TUNAOS_QUAL_BROWSER_FREE_DISK_GIB \
+          sudo --preserve-env=GITHUB_REPOSITORY,GITHUB_RUN_ID,GITHUB_RUN_ATTEMPT,TUNAOS_QUAL_EXECUTION_KIND,TUNAOS_NATIVE_BINDING,TUNAOS_NATIVE_ARTIFACT_ID,TUNAOS_NATIVE_ARCHIVE_DIGEST,TUNAOS_NATIVE_SOURCE_SHA,KVM_FLAG,VARIANT,FLAVOR,TUNAOS_QUAL_SOURCE_DIGEST,TUNAOS_QUAL_OVERLAY_DIGEST,TUNAOS_QUAL_INSTALLER_DIGEST,TUNAOS_QUAL_ENGINE_DIGEST,TUNAOS_QUAL_MEDIA_DIGEST,STRICT_PUBLISHED_MEDIA,TUNAOS_QUAL_PLATFORM,TUNAOS_QUAL_CPU_BASELINE,TUNAOS_QUAL_HARDWARE_SCOPE \
             ./scripts/iso-e2e.sh "${ISO_PATH}" \
               --output iso-e2e-out \
               --strict-offline-gui \
@@ -896,7 +958,6 @@ jobs:
             exit "$rc"
           fi
 
-
       - name: Convert screenshots to PNG
         if: ${{ !inputs.installed_boot_diagnostic && always() && steps.filter.outputs.skip != 'true' }}
         continue-on-error: true
@@ -914,8 +975,8 @@ jobs:
         if: ${{ !inputs.installed_boot_diagnostic && always() && steps.filter.outputs.skip != 'true' }}
         env:
           EVIDENCE_ARCH: amd64
-          E2E_OUTCOME: ${{ steps.e2e.outcome }}
-          E2E_RC: ${{ steps.e2e.outputs.rc }}
+          E2E_OUTCOME: ${{ steps.strict.outcome != 'skipped' && steps.strict.outcome || steps.e2e.outcome }}
+          E2E_RC: ${{ steps.strict.outputs.rc || steps.e2e.outputs.rc }}
         run: |
           # Missing outputs must not compare equal to zero in Actions expressions.
           export EVIDENCE_STATUS=failure
@@ -925,19 +986,17 @@ jobs:
           scripts/evidence-bundle.sh \
             "${{ matrix.variant }}:${{ matrix.flavor }}" iso iso-e2e-out
       - name: Validate strict qualification evidence
-        if: ${{ !inputs.installed_boot_diagnostic && steps.filter.outputs.skip != 'true' && steps.e2e.outcome == 'success' && steps.e2e.outputs.rc == '0' }}
-        env:
-          ISO_SOURCE: ${{ inputs.source }}
+        if: ${{ !inputs.installed_boot_diagnostic && steps.filter.outputs.skip != 'true' && steps.strict.outcome == 'success' && steps.strict.outputs.rc == '0' }}
         run: |
-          set -euo pipefail
-          if [[ "$ISO_SOURCE" == "native-artifact" ]]; then
-            python3 scripts/native-iso-qualification.py validate \
-              iso-e2e-out/qualification-evidence.json
-          else
-            python3 scripts/verify-experience-manifest.py \
-              iso-e2e-out/qualification-evidence.json
-          fi
+          python3 scripts/native-iso-qualification.py validate \
+            iso-e2e-out/qualification-evidence.json
 
+      # One verdict per leg, read from the files the harness itself wrote. A
+      # leg that did not pass says where it stopped; nothing here can mark a
+      # leg or the target qualified.
+      - name: Report strict leg verdicts
+        if: ${{ !inputs.installed_boot_diagnostic && always() && steps.filter.outputs.skip != 'true' && inputs.source == 'native-artifact' }}
+        run: python3 scripts/summarize-strict-legs.py iso-e2e-out >> "$GITHUB_STEP_SUMMARY"
 
       - name: Job summary
         if: ${{ !inputs.installed_boot_diagnostic && always() && steps.filter.outputs.skip != 'true' }}
@@ -949,7 +1008,7 @@ jobs:
             echo "|---|---|"
             echo "| ISO | \`${ISO_PATH:-not set}\` |"
             echo "| Native GUI smoke (not install/reboot qualification) | ${{ steps.native_smoke.outcome || 'not run' }} |"
-            echo "| Exit code | ${{ steps.e2e.outputs.rc || 'n/a' }} |"
+            echo "| Exit code | ${{ steps.strict.outputs.rc || steps.e2e.outputs.rc || 'n/a' }} |"
             echo ""
             if [[ -f iso-e2e-out/serial.log ]]; then
               echo "### Serial log tail (last 50 lines)"
@@ -986,7 +1045,7 @@ jobs:
       # When the filter step skipped the job, steps.e2e.outputs.rc is empty,
       # which would otherwise compare unequal to '0' and falsely fail.
       - name: Fail on e2e error
-        if: ${{ !inputs.installed_boot_diagnostic && steps.filter.outputs.skip != 'true' && steps.e2e.outputs.rc != '0' }}
+        if: ${{ !inputs.installed_boot_diagnostic && steps.filter.outputs.skip != 'true' && (steps.strict.outputs.rc || steps.e2e.outputs.rc) != '0' }}
         run: |
-          echo "::error::iso-e2e.sh exited ${{ steps.e2e.outputs.rc }} (see serial.log artifact)"
+          echo "::error::iso-e2e.sh exited ${{ steps.strict.outputs.rc || steps.e2e.outputs.rc }} (see serial.log artifact)"
           exit 1

@@ -1,7 +1,9 @@
 """Static strict-offline-GUI qualification checks (no VMs, no KVM).
 
-Asserts source-text properties of the harness, walkthrough, and parity
-workflow plus argument-parsing behavior only. Never boots QEMU.
+Asserts source-text properties of the harness, walkthrough, and the native
+ISO E2E workflow plus argument-parsing behavior only. Never boots QEMU. The
+browser/CI parity workflow is not covered here: its strict-mode wiring is not
+part of this change.
 """
 
 import re
@@ -17,10 +19,7 @@ from pathlib import Path
 ROOT = Path(__file__).parents[1]
 E2E = ROOT / "scripts" / "iso-e2e.sh"
 WALKTHROUGH = ROOT / "scripts" / "installer-walkthrough.py"
-WORKFLOW = ROOT / ".github" / "workflows" / "iso-builder-parity.yml"
 ISO_WORKFLOW = ROOT / ".github" / "workflows" / "iso-e2e.yml"
-
-HEAVY_SUFFIXES = (".qcow2", ".iso", ".ppm")
 
 
 def _text(path):
@@ -75,12 +74,6 @@ def test_walkthrough_strict_sequence_covers_install():
         assert f'"{screen}"' in text
 
 
-def test_parity_workflow_runs_strict_mode_for_both_sources():
-    text = _text(WORKFLOW)
-    assert text.count("--strict-offline-gui") >= 2
-    assert "qualification-evidence.json" in text
-    assert "verify-experience-manifest.py" in text
-
 def test_iso_e2e_strict_failure_cannot_become_green():
     text = _text(ISO_WORKFLOW)
     strict_step = text.split("name: Run strict offline GUI qualification", 1)[1]
@@ -123,26 +116,14 @@ def test_published_media_has_bounded_display_and_serial_identity_fallback():
     assert "TUNAOS_QUAL_BROWSER_NAME=native" not in workflow
     assert "TUNAOS_QUAL_EXECUTION_KIND=native-qemu" in workflow
 
-def test_parity_workflow_upload_has_no_disk_suffixed_paths():
-    text = _text(WORKFLOW)
-    upload = text.split("Upload parity evidence", 1)[1]
-    path_block = upload.split("path: |", 1)[1].split("if-no-files-found", 1)[0]
-    for line in path_block.splitlines():
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#"):
-            continue
-        assert not stripped.endswith(HEAVY_SUFFIXES), f"heavy upload path: {stripped}"
-
-
-def test_parity_workflow_sets_retention_and_compression():
-    text = _text(WORKFLOW)
-    assert "retention-days: 1" in text
-    assert "compression-level: 0" in text
-
-
 def test_strict_job_budget_covers_both_input_paths():
     text = _text(ISO_WORKFLOW)
-    assert "&& 130 || 70) }}" in text
+    # Default path keeps main's budget; only the native artifact pays for the
+    # strict legs (transfer 60 + smoke 20 + strict 60 + extract 10 + 10).
+    from tests.test_a_job_budget_covers_its_own_steps import _budgets
+    timeout = yaml.safe_load(text)["jobs"]["e2e"]["timeout-minutes"]
+    assert _budgets(timeout) == [120, 160, 90, 30]
+    assert "&& 90 || 30)) }}" in text
     assert "inputs.source == 'native-artifact' && 160" in text
     assert text.count("timeout-minutes: 60") == 2
 
@@ -174,8 +155,10 @@ def test_iso_evidence_status_requires_completed_success(tmp_path, outcome, rc, e
     document = yaml.safe_load(ISO_WORKFLOW.read_text())
     step = next(step for job in document["jobs"].values()
                 for step in job.get("steps", []) if step.get("name") == "Collect evidence")
-    assert step["env"]["E2E_OUTCOME"] == "${{ steps.e2e.outcome }}"
-    assert step["env"]["E2E_RC"] == "${{ steps.e2e.outputs.rc }}"
+    # Either the readiness step or the strict step ran; never both.
+    assert step["env"]["E2E_OUTCOME"] == (
+        "${{ steps.strict.outcome != 'skipped' && steps.strict.outcome || steps.e2e.outcome }}")
+    assert step["env"]["E2E_RC"] == "${{ steps.strict.outputs.rc || steps.e2e.outputs.rc }}"
     script = step["run"].replace("${{ matrix.variant }}", "albacore").replace(
         "${{ matrix.flavor }}", "gnome")
     (tmp_path / "scripts").mkdir()

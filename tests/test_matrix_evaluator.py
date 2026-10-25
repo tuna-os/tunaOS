@@ -156,7 +156,9 @@ def test_a_green_cell_links_runtime_evidence_first() -> None:
 
 
 def test_composite_section_renders_what_the_evaluator_decides() -> None:
-    expected = me.evaluate_composite(CRITERIA, MATRICES, EVIDENCE, REPO, TODAY)
+    # composite_section links the repository gen-matrix-status reads: GITHUB_REPOSITORY,
+    # which another test module sets at import, so compare against the module's own REPO.
+    expected = me.evaluate_composite(CRITERIA, MATRICES, EVIDENCE, gms.REPO, TODAY)
 
     def matrix(key: str, desktops_only: bool) -> dict[str, set[str]]:
         return MATRICES.desktops if desktops_only else MATRICES.published

@@ -15,9 +15,9 @@ on:
   workflow_dispatch:
     inputs:
       image:
-        description: "Image to build the base qcow2 from"
+        description: "Image to build the base qcow2 from (empty: <publish destination>/yellowfin:gnome)"
         required: false
-        default: "ghcr.io/tuna-os/yellowfin:gnome"
+        default: ""
       timeout:
         description: "Per-config timeout in seconds"
         required: false
@@ -35,6 +35,9 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Setup yq
+        uses: ./.github/actions/setup-yq
+
       - uses: ublue-os/container-storage-action@dc1f4c8f17b672069e921f001132f7cf98a423a6 # main as of 2026-02-11
 
       - name: Install dependencies
@@ -49,8 +52,12 @@ jobs:
 
       - name: Build base qcow2
         env:
-          IMAGE: ${{ inputs.image || 'ghcr.io/tuna-os/yellowfin:gnome' }}
+          INPUT_IMAGE: ${{ inputs.image }}
+          IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY }}
         run: |
+          # Default: the flagship image at "<registry>/<namespace>" from
+          # tunaos.toml [build.publish], else ghcr.io/<owner>.
+          IMAGE="${INPUT_IMAGE:-$(bash scripts/publish-destination.sh)/yellowfin:gnome}"
           just qcow2 "${IMAGE}" ghcr
           QCOW2=$(find . -maxdepth 1 -name "*.qcow2" | head -1)
           [[ -n "$QCOW2" ]] || { echo "::error::no qcow2 produced"; exit 1; }
