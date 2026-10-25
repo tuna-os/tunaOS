@@ -4,19 +4,19 @@
         "Authors": [
             {
                 "Email": "",
-                "Name": "TunaOS Contributors"
+                "Name": "@TUNAOS_PROJECT_NAME@ Contributors"
             }
         ],
         "Category": "",
-        "Description": "TunaOS - Theme variant of KDE BreezeDark",
+        "Description": "@TUNAOS_PROJECT_NAME@ - Theme variant of KDE BreezeDark",
         "Id": "org.tunaos.desktop",
         "License": "GPLv2+",
-        "Name": "TunaOS",
+        "Name": "@TUNAOS_PROJECT_NAME@",
         "ServiceTypes": [
             "Plasma/LookAndFeel"
         ],
         "Version": "0.01",
-        "Website": "https://github.com/tuna-os/tunaos"
+        "Website": "@TUNAOS_HOME_URL@"
     },
     "X-KDE-ParentApp": "",
     "X-Plasma-RootContainmentLayout": "org.kde.plasma.desktop-layout.js",

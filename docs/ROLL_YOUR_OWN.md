@@ -351,6 +351,13 @@ Your project's name, links and codenames live in `tunaos.toml`:
 name = "Acme OS"          # fastfetch and the KDE About page: "part of Acme OS"
 id = "acmeos"             # lowercase; project-id suffix in the CPE product
 cpe_vendor = "acme"       # the vendor part of CPE_NAME
+website = "https://acme.example"       # OCI `url` label, SBOM namespace (<website>/spdxdocs/)
+docs_url = "https://acme.example/docs" # release notes; OCI `documentation` label is <docs_url>/intro
+# Weekly adoption reports. Empty sends none. Validation rejects TunaOS's own
+# endpoint once name or id differ from TunaOS, so a fork cannot report as a
+# TunaOS cell by leaving it in place. Leave both out to send nothing.
+countme_endpoint = ""
+# countme_metrics_url = "https://acme.example/metrics"   # only with an endpoint
 
 [defaults.branding]       # os-release HOME_URL, DOCUMENTATION_URL, SUPPORT_URL, BUG_REPORT_URL
 homepage = "https://acme.example/os"
@@ -421,11 +428,19 @@ cp -r tunaos acmeos && mv acmeos/tunaos.plymouth acmeos/acmeos.plymouth && mv ac
 theme. Before this check, a copied theme passed and the image booted the splash
 of the original theme.
 
-The installer's slides come from `system_files/etc/bootc-installer/recipe.json`.
-Write them with your `[project] name`: the build puts the variant name in its
-place. The installer logo is the variant's mark, made from its `emoji`. The
-build does not rewrite `imgref` and `local_imgref` in that file, so set them to
-your own image by hand.
+The installer's slides come from `system_files/etc/bootc-installer/recipe.json`,
+and the build puts the variant name where they name the project. The installer
+logo is the variant's mark, made from its `emoji`. The build sets `imgref` and
+`local_imgref` to `<registry>/<namespace>/<project id>:latest`, from the
+destination this build publishes to and `[project] id`. For TunaOS that is
+`ghcr.io/tuna-os/tunaos:latest`; for the Acme tree it is
+`quay.io/acme/acmeos:latest`. Publish an image under that name, or the
+installer has nothing to install.
+
+`[flatpak_preinstall] remote_url` sets the Flatpak remote of Tuna Desktop and
+of the live ISO. It is the URL of a `.flatpakrepo` file. The image registers
+the remote as `tuna-os`, and the installer apps of the live ISO come from it.
+An empty value registers no remote.
 
 The ISO Builder page and the ISO file names have their own brand keys, in
 `[iso_builder.brand]`, `[iso_builder.presentation]` and `[iso_builder.output]`
@@ -451,17 +466,20 @@ The build system already runs `glib-compile-schemas`.
 ### What a fork still edits in code
 
 These values name TunaOS but are not read from `tunaos.toml` yet. A fork that
-publishes under its own name changes them in the file shown.
+publishes under its own name changes them in the file shown. These items are
+not in this list now. They come from `[project]`, `[defaults.branding]` and
+`[flatpak_preinstall]` (above). These are the installer image, the
+usage-report endpoint, image labels and release notes. They are also the SBOM
+identity, live-ISO launchers, ISO media names, KDE theme names and Flatpak
+remote.
 
 | Value | Where | Effect if you leave it |
 |---|---|---|
-| Installer target image (`imgref`, `local_imgref`) | `system_files/etc/bootc-installer/recipe.json` | the installer installs `ghcr.io/tuna-os/tunaos:latest`, not your image |
-| Usage-report endpoint | `system_files/usr/libexec/tunaos-countme` | an image that keeps a stock variant and flavor id can report as that TunaOS cell to `countme.tunaos.org` |
 | Builder VM clone URL | `tunaos-builder.yaml` | the VM template clones `tuna-os/tunaos`; `scripts/corral-build.sh` re-points it to `CORRAL_REPO` or `GITHUB_REPOSITORY`, `limactl start` alone does not |
-| Image labels | `.github/workflows/reusable-build-image.yml` (`org.opencontainers.image.url`, `.documentation`), `Containerfile.final` (`.title`) | labels point at tunaos.org and say "TunaOS" |
-| "Install TunaOS" launchers | `live-iso/common/src/desktop-*.sh`, `live-iso/common/src/customize-live.sh` | the live ISO says "Install TunaOS" |
-| ISO media name | `scripts/build-iso-group.sh` (`MEDIA_NAME`) | the ISO volume says "TunaOS <Variant>" |
-| KDE Global Theme and wallpaper package | `system_files/usr/share/plasma/look-and-feel/org.tunaos*.desktop/`, `system_files/usr/share/wallpapers/TunaOS/` | KDE lists a "TunaOS" theme |
+| Nightly schedule per variant | `scripts/generate-workflows.py` (`SCHEDULES`) | a variant you add has no cron |
+| Variant list for manual builds | `.github/workflows/build-flavor.yml` (`matrix.variant`) | dispatches variants you may not have |
+| Plasma theme and wallpaper package ids and paths | `system_files/usr/share/plasma/look-and-feel/org.tunaos*.desktop/` (`Id`), `system_files/usr/share/wallpapers/TunaOS/` (the folder), `system_files/etc/xdg/kscreenlockerrc` | internal identifiers, not shown: KDE lists the variant's name, the project name and your URLs come from `tunaos.toml`, but the package ids and the folder keep their TunaOS spelling |
+| Installer Flatpak ids (`org.tunaos.Installer*`) and the `tuna-os` remote name | `live-iso/common/src/customize-live.sh`, `live-iso/common/src/desktop-*.sh` | the live ISO installs these apps from the remote `[flatpak_preinstall] remote_url` names; your remote must carry them under these ids |
 | Package repository host | `build_scripts/desktop/install-desktop.sh`, `build_scripts/10-base-packages.sh`, `Containerfile.arch` (`repo.tunaos.org`) | the image keeps pulling TunaOS's packages; this is a dependency, not branding |
 
 ### Adding systemd services

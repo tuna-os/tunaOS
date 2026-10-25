@@ -38,6 +38,9 @@ ACME_EDITS = [
     ('name = "TunaOS"\nid = "tunaos"\ncpe_vendor = "jamesreilly"\n',
      'name = "Acme OS"\nid = "acmeos"\ncpe_vendor = "acme"\n'),
     ('homepage = "https://github.com/tuna-os/tunaos"\n', 'homepage = "https://acme.example.org"\n'),
+    # A renamed fork cannot keep TunaOS's own usage-report service.
+    ('countme_endpoint = "https://countme.tunaos.org/v1/report"\ncountme_metrics_url = "https://tunaos.org/metrics"\n',
+     'countme_endpoint = ""\ncountme_metrics_url = ""\n'),
     ('platforms = ["linux/amd64", "linux/amd64/v2", "linux/arm64"]\n\n[[variants.yellowfin.flavors]]',
      'platforms = ["linux/amd64", "linux/amd64/v2", "linux/arm64"]\n\n'
      '[variants.yellowfin.packages]\nadd = ["htop", "git"]\noptional = ["fastfetch"]\n\n'

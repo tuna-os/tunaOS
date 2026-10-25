@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import copy
 import importlib.util
+import json
 import os
 from pathlib import Path
 import shutil
@@ -40,7 +41,17 @@ STOCK = {
     "TUNAOS_DOCUMENTATION_URL": "https://github.com/tuna-os/tunaos/tree/main/docs",
     "TUNAOS_SUPPORT_URL": "https://github.com/tuna-os/tunaos/issues/",
     "TUNAOS_BUG_REPORT_URL": "https://github.com/tuna-os/tunaos/issues/",
+    "TUNAOS_WEBSITE": "https://tunaos.org", "TUNAOS_DOCS_URL": "https://tunaos.org/docs",
+    "TUNAOS_COUNTME_ENDPOINT": "https://countme.tunaos.org/v1/report",
+    "TUNAOS_COUNTME_METRICS_URL": "https://tunaos.org/metrics",
+    "TUNAOS_FLATPAK_REMOTE_URL": "https://tunaos.org/flatpak/tuna-os.flatpakrepo",
 }
+
+
+# A fork that renamed itself and changed every [project] value a rename touches.
+# countme_endpoint is left out on purpose: absent means the image never reports.
+ACME_PROJECT = {"name": "Acme OS", "id": "acmeos", "cpe_vendor": "acme",
+                "website": "https://acme.example", "docs_url": "https://acme.example/docs"}
 
 
 def sourced(adapter_text, tmp_path):
@@ -69,7 +80,7 @@ def test_committed_adapter_matches_the_toml():
 
 def test_a_fork_changes_identity_only_in_toml(tmp_path):
     fork = copy.deepcopy(config.load())
-    fork["project"] = {"name": "Acme OS", "id": "acmeos", "cpe_vendor": "acme"}
+    fork["project"] = dict(ACME_PROJECT)
     fork["defaults"]["branding"] = {**{key: f"https://acme.example/{key}" for key in config.BRANDING_URLS},
                                     "plymouth": "acme"}
     fork["variants"]["yellowfin"]["codename"] = "Wile E"
@@ -80,7 +91,8 @@ def test_a_fork_changes_identity_only_in_toml(tmp_path):
     assert codenames["yellowfin"] == "Wile E"
 
 
-@pytest.mark.parametrize("remove", [("project",), ("defaults",), ("variants", "grouper", "codename")])
+@pytest.mark.parametrize("remove", [("project",), ("defaults",), ("variants", "grouper", "codename"),
+                                    ("project", "website"), ("project", "docs_url")])
 def test_identity_cannot_be_generated_with_a_gap(remove):
     # A missing value would otherwise surface as an image with no codename or
     # URL, or one that silently kept TunaOS's.
@@ -113,6 +125,14 @@ def test_generate_identity_reports_an_unwritable_target_without_a_traceback(tmp_
     (("project", "name"), "Acme\nOS"),
     (("project", "id"), "Acme"),
     (("project", "cpe_vendor"), "Acme Corp"),
+    (("project", "website"), "http://acme.example"),
+    (("project", "website"), "https://acme.example/"),
+    (("project", "docs_url"), "https://acme.example/docs?x=1"),
+    (("project", "docs_url"), "https://acme.example/docs#top"),
+    (("project", "countme_endpoint"), "http://countme.acme.example/v1/report"),
+    (("project", "countme_metrics_url"), "https://acme.example/m|x"),
+    (("flatpak_preinstall", "remote_url"), "https://acme.example/flatpak/remote.txt"),
+    (("flatpak_preinstall", "remote_url"), "http://acme.example/flatpak/acme.flatpakrepo"),
     (("variants", "yellowfin", "codename"), "Thunnus $(id)"),
 ])
 def test_values_that_would_corrupt_os_release_are_rejected(path, value):
@@ -132,7 +152,7 @@ def test_identity_stays_out_of_the_build_matrix():
 
 def test_kde_about_page_shows_the_configured_project(tmp_path):
     fork = copy.deepcopy(config.load())
-    fork["project"]["name"] = "Acme OS"
+    fork["project"] = dict(ACME_PROJECT)
     fork["defaults"]["branding"]["homepage"] = "https://acme.example/os"
     adapter = tmp_path / "identity.env"
     adapter.write_text(config.render_identity(fork), encoding="utf-8")
@@ -355,7 +375,7 @@ FORK_URLS = {
 
 def fork_identity():
     fork = copy.deepcopy(config.load())
-    fork["project"] = {"name": "Acme OS", "id": "acmeos", "cpe_vendor": "acme"}
+    fork["project"] = dict(ACME_PROJECT)
     # Change only the URLs: the table carries other required keys (plymouth).
     fork["defaults"]["branding"].update(homepage=FORK_URLS["HOME_URL"], documentation=FORK_URLS["DOCUMENTATION_URL"],
                                         support=FORK_URLS["SUPPORT_URL"], bug_report=FORK_URLS["BUG_REPORT_URL"])
@@ -442,6 +462,206 @@ def test_cpe_name_comes_from_the_adapter_and_the_image_name(tmp_path, variant, i
     for path in ("usr/lib/os-release", "etc/os-release"):
         lines = (image.root / path).read_text().splitlines()
         assert [line for line in lines if line.startswith("CPE_NAME=")] == [f'CPE_NAME="{expected}"']
+
+
+def project_of(**changes):
+    source = copy.deepcopy(config.load())
+    source["project"].update(changes)
+    for key, value in list(source["project"].items()):
+        if value is None:
+            del source["project"][key]
+    return source
+
+
+def test_a_missing_site_key_is_named():
+    source = copy.deepcopy(config.load())
+    del source["project"]["website"]
+    with pytest.raises(config.ConfigError, match=r"project: missing keys \['website'\]"):
+        config.validate(source)
+
+
+def test_a_fork_cannot_keep_the_stock_usage_report_endpoint():
+    """The service counts TunaOS's variant and flavor ids. A renamed fork that kept the
+    endpoint would report its images as those cells, so validation names the key."""
+    source = project_of(name="Acme OS", id="acmeos", cpe_vendor="acme")
+    with pytest.raises(config.ConfigError, match=r"project\.countme_endpoint: .*countme\.tunaos\.org.*'Acme OS'/'acmeos'.*\"\""):
+        config.validate(source)
+    renamed_only = project_of(name="Acme OS")
+    with pytest.raises(config.ConfigError, match="project.countme_endpoint"):
+        config.validate(renamed_only)
+
+
+@pytest.mark.parametrize("endpoint", ["", "https://stats.acme.example/v1/report"])
+def test_a_fork_may_empty_or_replace_the_usage_report_endpoint(endpoint, tmp_path):
+    source = project_of(name="Acme OS", id="acmeos", cpe_vendor="acme", countme_endpoint=endpoint,
+                        countme_metrics_url=None)
+    config.validate(source)
+    values, _ = sourced(config.render_identity(source), tmp_path)
+    assert values["TUNAOS_COUNTME_ENDPOINT"] == endpoint
+    assert values["TUNAOS_COUNTME_METRICS_URL"] == ""
+
+
+def test_an_absent_endpoint_is_disabled_not_the_stock_one(tmp_path):
+    source = project_of(countme_endpoint=None, countme_metrics_url=None)
+    values, _ = sourced(config.render_identity(source), tmp_path)
+    assert values["TUNAOS_COUNTME_ENDPOINT"] == "" and values["TUNAOS_COUNTME_METRICS_URL"] == ""
+
+
+def test_a_metrics_page_without_an_endpoint_is_rejected():
+    with pytest.raises(config.ConfigError, match="project.countme_metrics_url: set without project.countme_endpoint"):
+        config.validate(project_of(countme_endpoint=""))
+
+
+def test_a_fork_flatpak_remote_reaches_the_adapter_and_empty_registers_none(tmp_path):
+    source = copy.deepcopy(config.load())
+    source["flatpak_preinstall"]["remote_url"] = "https://acme.example/flatpak/acme.flatpakrepo"
+    values, _ = sourced(config.render_identity(source), tmp_path)
+    assert values["TUNAOS_FLATPAK_REMOTE_URL"] == "https://acme.example/flatpak/acme.flatpakrepo"
+    del source["flatpak_preinstall"]["remote_url"]
+    values, _ = sourced(config.render_identity(source), tmp_path)
+    assert values["TUNAOS_FLATPAK_REMOTE_URL"] == ""
+
+
+# ── Live ISO, ISO media and Flatpak remote: the name comes from the adapter ─────
+
+LIVE_SRC = ROOT / "live-iso/common/src"
+
+
+def heredocs(path, tags):
+    """(tag, quoted, body) for each heredoc of `path` whose tag is in `tags`, from the script text."""
+    import re
+    lines = path.read_text(encoding="utf-8").split("\n")
+    found, i = [], 0
+    while i < len(lines):
+        match = re.search(r"<<-?(['\"]?)([A-Z_]+)\1\s*$", lines[i])
+        if match and match.group(2) in tags:
+            j = i + 1
+            while lines[j] != match.group(2):
+                j += 1
+            found.append((match.group(2), bool(match.group(1)), "\n".join(lines[i + 1:j]) + "\n"))
+            i = j
+        i += 1
+    return found
+
+
+def rendered_heredocs(path, tags, project_name):
+    """What the script writes, as bash expands it with TUNAOS_PROJECT_NAME set."""
+    out = []
+    for tag, quoted, body in heredocs(path, tags):
+        if quoted:
+            out.append(body)
+            continue
+        out.append(subprocess.run(["bash", "-c", f"TUNAOS_PROJECT_NAME={project_name!r}\ncat <<{tag}\n{body}{tag}\n"],
+                                  text=True, capture_output=True, check=True).stdout)
+    return out
+
+
+@pytest.mark.parametrize("desktop", ["kde", "cosmic", "xfce", "pantheon", "gnome"])
+def test_live_iso_launcher_names_the_configured_project(desktop):
+    script = LIVE_SRC / f"desktop-{desktop}.sh"
+    stock = rendered_heredocs(script, {"DESKEOF"}, "TunaOS")
+    assert len(stock) == 1 and "Name=Install TunaOS\n" in stock[0]       # byte for byte what shipped
+    fork = rendered_heredocs(script, {"DESKEOF"}, "Acme OS")[0]
+    assert "Name=Install Acme OS\n" in fork and "TunaOS" not in fork
+
+
+def test_live_iso_gnome_extension_and_polkit_action_name_the_configured_project():
+    stock = rendered_heredocs(LIVE_SRC / "desktop-gnome.sh", {"METADATAEOF"}, "TunaOS")[0]
+    assert json.loads(stock)["name"] == "TunaOS Live Installer"
+    assert json.loads(rendered_heredocs(LIVE_SRC / "desktop-gnome.sh", {"METADATAEOF"}, "Acme OS")[0])["name"] == "Acme OS Live Installer"
+    policy = rendered_heredocs(LIVE_SRC / "customize-live.sh", {"POLICYEOF"}, "TunaOS")[0]
+    assert "<description>Install TunaOS to a disk</description>" in policy
+    assert "<description>Install Acme OS to a disk</description>" in rendered_heredocs(
+        LIVE_SRC / "customize-live.sh", {"POLICYEOF"}, "Acme OS")[0]
+
+
+def test_customize_live_reads_the_adapter_before_any_adapter_runs_and_has_no_remote_literal():
+    text = (LIVE_SRC / "customize-live.sh").read_text(encoding="utf-8")
+    detect_only = text.index("TUNA_DETECT_ONLY")
+    assert detect_only < text.index("identity-config.env") < text.index('source "${SCRIPT_DIR}/desktop-${DESKTOP}.sh"')
+    assert "tunaos.org/flatpak" not in text and "TUNAOS_FLATPAK_REMOTE_URL" in text
+    for script in sorted(LIVE_SRC.glob("desktop-*.sh")):
+        assert "Install TunaOS" not in script.read_text(encoding="utf-8"), script.name
+
+
+def test_customize_live_refuses_an_image_without_the_identity_adapter(tmp_path):
+    root = tmp_path / "root"
+    (root / "usr/share/wayland-sessions").mkdir(parents=True)
+    result = subprocess.run(["bash", str(LIVE_SRC / "customize-live.sh")], capture_output=True, text=True,
+                            env={**os.environ, "TUNA_SESSION_ROOT": str(root)})
+    assert result.returncode != 0 and "identity-config.env is missing" in result.stderr
+
+
+def media_names(identity_text, tmp_path, variant="yellowfin", suffix="kde", flavor="kde-nvidia"):
+    """Evaluate the real MEDIA_NAME lines of both ISO builders under a given adapter."""
+    adapter = tmp_path / "identity.env"
+    adapter.write_text(identity_text, encoding="utf-8")
+    group = (ROOT / "scripts/build-iso-group.sh").read_text(encoding="utf-8")
+    names = group[group.index("# ── Names"):group.index('echo "==> Building grouped ISO')]
+    tacklebox = [line for line in (ROOT / "scripts/build-iso-tacklebox.sh").read_text(encoding="utf-8").splitlines()
+                 if line.startswith("MEDIA_NAME=")]
+    assert len(tacklebox) == 1
+    script = (f'. "{ROOT}/scripts/lib/common.sh" >/dev/null 2>&1; . "{adapter}"\n'
+              f'VARIANT={variant}; FLAVOR={flavor}\n'
+              f'GROUP_SUFFIX={suffix}\n{names}\nprintf "%s\\n" "$MEDIA_NAME"\n'
+              f'GROUP_SUFFIX=\n{names}\nprintf "%s\\n" "$MEDIA_NAME"\n{tacklebox[0]}\nprintf "%s\\n" "$MEDIA_NAME"\n')
+    return subprocess.run(["bash", "-c", script], text=True, capture_output=True, check=True).stdout.splitlines()
+
+
+def test_iso_media_names_keep_their_stock_text_and_follow_a_fork(tmp_path):
+    assert media_names((ROOT / "build_scripts/lib/identity.env").read_text(encoding="utf-8"), tmp_path) == [
+        "TunaOS Yellowfin Kde", "TunaOS Yellowfin", "tunaos-yellowfin-kde-nvidia"]
+    fork = copy.deepcopy(config.load())
+    fork["project"] = dict(ACME_PROJECT)
+    assert media_names(config.render_identity(fork), tmp_path) == [
+        "Acme OS Yellowfin Kde", "Acme OS Yellowfin", "acmeos-yellowfin-kde-nvidia"]
+
+
+def flatpak_remote(tmp_path, identity_text):
+    """Run the real tuna-flatpak-remote.sh with /etc redirected and curl recorded, not fetched."""
+    tree = tmp_path / "tree"
+    (tree / "build_scripts/desktop").mkdir(parents=True)
+    (tree / "build_scripts/lib").mkdir(parents=True)
+    (tree / "build_scripts/lib/identity.env").write_text(identity_text, encoding="utf-8")
+    source = (ROOT / "build_scripts/desktop/tuna-flatpak-remote.sh").read_text(encoding="utf-8")
+    (tree / "build_scripts/desktop/tuna-flatpak-remote.sh").write_text(source.replace("/etc/flatpak", f"{tree}/etc/flatpak"))
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    curl = bin_dir / "curl"
+    curl.write_text('#!/bin/sh\nwhile [ $# -gt 0 ]; do case "$1" in -o) out="$2"; shift;; http*) url="$1";; esac; shift; done\n'
+                    f'echo "$url" >> "{tmp_path}/curl.log"; echo "[Flatpak Repo]" > "$out"\n')
+    curl.chmod(0o755)
+    result = subprocess.run(["bash", "-c", 'source "$1"', "_", str(tree / "build_scripts/desktop/tuna-flatpak-remote.sh")],
+                            text=True, capture_output=True, env={**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}"})
+    log = (tmp_path / "curl.log").read_text().split() if (tmp_path / "curl.log").exists() else []
+    return result, log, tree / "etc/flatpak/remotes.d"
+
+
+def test_tuna_flatpak_remote_follows_the_configured_url(tmp_path):
+    stock = (ROOT / "build_scripts/lib/identity.env").read_text(encoding="utf-8")
+    result, log, remotes = flatpak_remote(tmp_path / "stock", stock)
+    assert result.returncode == 0, result.stderr
+    assert log == ["https://tunaos.org/flatpak/tuna-os.flatpakrepo", "https://dl.flathub.org/repo/flathub.flatpakrepo"]
+    assert (remotes / "tuna-os.flatpakrepo").exists()
+
+    fork = copy.deepcopy(config.load())
+    fork["flatpak_preinstall"]["remote_url"] = "https://acme.example/flatpak/acme.flatpakrepo"
+    result, log, _ = flatpak_remote(tmp_path / "fork", config.render_identity(fork))
+    assert result.returncode == 0, result.stderr
+    assert log[0] == "https://acme.example/flatpak/acme.flatpakrepo"
+
+    del fork["flatpak_preinstall"]["remote_url"]
+    result, log, remotes = flatpak_remote(tmp_path / "none", config.render_identity(fork))
+    assert result.returncode == 0, result.stderr
+    assert log == ["https://dl.flathub.org/repo/flathub.flatpakrepo"] and not (remotes / "tuna-os.flatpakrepo").exists()
+
+
+def test_tuna_flatpak_remote_without_the_adapter_fails_loudly(tmp_path):
+    result, log, _ = flatpak_remote(tmp_path, "")
+    (tmp_path / "tree/build_scripts/lib/identity.env").unlink()
+    again = subprocess.run(["bash", "-c", 'source "$1"', "_", str(tmp_path / "tree/build_scripts/desktop/tuna-flatpak-remote.sh")],
+                           text=True, capture_output=True)
+    assert again.returncode != 0 and "identity.env is missing" in again.stderr
 
 
 def test_regenerating_the_identity_adapter_changes_the_layer_cache_key(tmp_path):

@@ -6,9 +6,9 @@ class PolicyError(ValueError):
     """Invalid primary Flatpak declaration policy."""
 
 
-def _keys(value, required):
-    if not isinstance(value, dict) or set(value) != set(required):
-        raise PolicyError(f'expected only fields {required}')
+def _keys(value, required, optional=()):
+    if not isinstance(value, dict) or not set(required) <= set(value) or set(value) - set(required) - set(optional):
+        raise PolicyError(f'expected fields {required}' + (f' and optionally {optional}' if optional else ''))
 
 
 def _apps(value, scope='common'):
@@ -31,7 +31,9 @@ def _apps(value, scope='common'):
 
 def validate(primary):
     policy = primary['flatpak_preinstall']
-    _keys(policy, ('schema_version', 'common', 'desktop_additions'))
+    # remote_url is the project's Flatpak remote, not an app declaration; the
+    # URL itself is validated by tunaos_config (it owns the https grammar).
+    _keys(policy, ('schema_version', 'common', 'desktop_additions'), ('remote_url',))
     if type(policy['schema_version']) is not int or policy['schema_version'] != 1:
         raise PolicyError('flatpak_preinstall schema_version must be 1')
     common = _apps(policy['common'])

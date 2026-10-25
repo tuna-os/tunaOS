@@ -78,9 +78,13 @@ detect() {
   fi
 }
 
-@test "customize-live.sh: installs from the tuna-os flatpak remote" {
-  run grep 'tunaos.org/flatpak/tuna-os.flatpakrepo' "${SCRIPT}"
+@test "customize-live.sh: installs from the tuna-os flatpak remote tunaos.toml configures" {
+  # The remote URL is [flatpak_preinstall] remote_url, read from the image's
+  # identity adapter; no URL is written in this script.
+  run grep 'remote-add .*tuna-os' "${SCRIPT}"
   [ "$status" -eq 0 ]
+  grep -q 'TUNAOS_FLATPAK_REMOTE_URL' "${SCRIPT}"
+  ! grep -q 'tunaos.org/flatpak' "${SCRIPT}"
 }
 
 @test "customize-live.sh: gives headless Flatpak an explicit session bus" {
@@ -245,9 +249,9 @@ detect() {
 	# Fold backslash continuations first: the remote-add command and its URL
 	# live on separate source lines, so a per-line grep can never see both.
 	body="$(sed ':a;/\\$/{N;s/\\\n//;ba}' "$SCRIPT" | grep -v '^[[:space:]]*#')"
-	# The tunaos.org remote-add fetches over the network; the file-based one
+	# The configured-URL remote-add fetches over the network; the file-based one
 	# two lines up needs no bound and must not be forced to carry one.
-	grep -qE 'timeout [0-9]+ flatpak remote-add.*tunaos\.org' <<<"$body"
+	grep -qE 'timeout [0-9]+ flatpak remote-add.*TUNAOS_FLATPAK_REMOTE_URL' <<<"$body"
 	# Every curl in the script must bound the transfer, not just retry it:
 	# --retry without --max-time retries only failures, not stalls.
 	local unbounded
