@@ -148,9 +148,41 @@ Local builds, CI, ISOs and the boot gate all use this destination, and each
 image records it. The repository variable `IMAGE_REGISTRY` (for example
 `quay.io/acme`) still overrides it for one repository.
 
-CI signs in with the repository's own `GITHUB_TOKEN`. That token can push only
-to `ghcr.io` under the repository owner. CI cannot yet push to another
-registry or namespace; issue #3668 tracks the credentials for that case.
+CI signs in to `ghcr.io/<repository owner>` with the repository `GITHUB_TOKEN`.
+That token cannot write anywhere else. For any other destination, CI uses the
+credential that [RFC 016](rfc/rfc016-publish-credentials.md) defines. It never
+falls back to `ghcr.io/<repository owner>`.
+
+| What | Name | Where |
+|---|---|---|
+| Registry user or robot account | `TUNAOS_PUBLISH_USERNAME` | secret in the `publish` environment |
+| Registry token for that account | `TUNAOS_PUBLISH_PASSWORD` | secret in the `publish` environment |
+| The one approved destination, for example `quay.io/acme` | `TUNAOS_PUBLISH_SCOPE` | repository variable |
+
+Set it up once:
+
+1. Create the environment `publish`. Restrict its deployment branches to
+   `main`. Put both secrets in the environment, not in the repository.
+2. Set the variable `TUNAOS_PUBLISH_SCOPE` to the exact destination.
+3. Use a robot or deploy token that can write that one namespace. Do not use an
+   account or organization admin token.
+4. Make the published packages public. Users run `bootc upgrade` with no
+   registry login, and the boot, ISO and lifecycle jobs pull with none.
+
+`tunaos.toml` never holds a credential or a scope. A job refuses to start when:
+
+- the run is not a `push`, `schedule` or `workflow_dispatch` run;
+- one secret is set and the other is not;
+- the variable is not set, or is not equal to the destination. A prefix does
+  not match: `quay.io/acme` does not allow `quay.io/acme-evil`.
+
+The error names the missing input. `scripts/publish-credential.py` makes this
+choice and sees only whether each secret is set, never its value. The password
+goes to each tool on standard input. The build steps never have it: login runs
+after **Build Image**, so the layer cache in a non-owner registry is read-only.
+A fork with a second destination must wait for a later extension: one
+repository has one scope. For `ghcr.io/<other-org>`, docker and cosign keep one
+`ghcr.io` entry, so they hold this token for all of `ghcr.io` in those jobs.
 
 ---
 

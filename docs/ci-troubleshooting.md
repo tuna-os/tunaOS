@@ -1961,6 +1961,25 @@ used the correct owner.
 namespace. `tests/test_publish_destination.py` checks the precedence and the
 split.
 
+### A publish job fails with `publish credential: <code>`
+
+**Symptom:** A fork with `[build.publish]` or `vars.IMAGE_REGISTRY` set to
+something other than `ghcr.io/<owner>` fails in `Resolve publish credential`
+with `missing-credentials`, `partial-credentials`, `missing-scope`,
+`scope-mismatch` or `untrusted-event`.
+
+**Cause:** `GITHUB_TOKEN` can write only `ghcr.io/<owner>`. Any other
+destination needs the `TUNAOS_PUBLISH_USERNAME` and `TUNAOS_PUBLISH_PASSWORD`
+secrets of the `publish` environment, and a repository variable
+`TUNAOS_PUBLISH_SCOPE` that is exactly the destination. CI never falls back to
+`ghcr.io/<owner>`.
+
+**Fix:** Make the three values agree with the destination that
+`scripts/publish-destination.sh` prints. `untrusted-event` means a pull
+request, merge queue or comment run tried to publish; such runs never do.
+`tests/test_publish_credentials.py` runs every code against stubs. See
+[RFC 016](rfc/rfc016-publish-credentials.md).
+
 ## Content PR fails with `STE budget exceeded` (#2912)
 
 **Symptom:** a CFP abstract or design contribution adds Markdown and the
