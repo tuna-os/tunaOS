@@ -345,6 +345,16 @@ jobs:
           }
           echo "native source and copied offline payload: $payload_digest"
 
+      - name: Enforce candidate ISO byte budget before upload
+        if: inputs.candidate_xfce
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          media=( *.iso )
+          [[ "${#media[@]}" == 1 ]] || { echo "::error::candidate needs exactly one ISO"; exit 1; }
+          python3 live-iso/common/src/xfce-media-input.py --iso-budget "${media[0]}" | tee "$RUNNER_TEMP/xfce-iso-size.json"
+          cat "$RUNNER_TEMP/xfce-iso-size.json" >> "$GITHUB_STEP_SUMMARY"
+
       # RETENTION IS NOT OPTIONAL ON A MULTI-GIGABYTE ARTIFACT.
       #
       # This had no `retention-days`, so every run — including every PR run —

@@ -285,7 +285,7 @@ def test_hmp_waits_for_fragmented_completion_and_late_error(monkeypatch,failed):
     assert wire.parts==[] and wire.read>=5
 
 
-@pytest.mark.parametrize('fault',[None,'digest','layer','architecture','missing','index_arch','empty_layers','size','media_type','schema'])
+@pytest.mark.parametrize('fault',[None,'digest','layer','architecture','missing','index_arch','empty_layers','size','media_type','schema','source_leak'])
 def test_native_payload_descriptor_checks_actual_bytes(tmp_path,fault):
     adapter=module('live-iso/common/src/xfce-media-input.py','media_adapter')
     layout=tmp_path/'oci'; blobs=layout/'blobs/sha256';blobs.mkdir(parents=True)
@@ -302,6 +302,7 @@ def test_native_payload_descriptor_checks_actual_bytes(tmp_path,fault):
     if fault=='size':manifest['size']=True
     (layout/'oci-layout').write_text(json.dumps(dict(imageLayoutVersion='1.0.0')))
     (layout/'index.json').write_text(json.dumps(dict(schemaVersion=1 if fault=='schema' else 2,manifests=[manifest])))
+    if fault=='source_leak':(layout/'repository.py').write_text('unrelated source')
     if fault=='layer':(blobs/layer['digest'][7:]).write_bytes(b'corrupt')
     if fault=='missing':(blobs/layer['digest'][7:]).unlink()
     expected='sha256:'+'0'*64 if fault=='digest' else manifest['digest']
@@ -350,3 +351,135 @@ def test_stale_host_fisherman_is_rejected():
     with pytest.raises(ValueError):validate_frontend(result)
     probe=__import__('lib.xfce_candidate',fromlist=['LIVE_PROBE']).LIVE_PROBE
     assert "'--show-location'" in probe and 'assert host == bundled' in probe
+
+
+@pytest.mark.parametrize('kind,limit_name',[('payload','PAYLOAD_LIMIT'),('iso','ISO_LIMIT')])
+def test_candidate_size_budget_is_fail_closed(tmp_path,monkeypatch,kind,limit_name):
+    adapter=module('live-iso/common/src/xfce-media-input.py','size_adapter')
+    monkeypatch.setattr(adapter,limit_name,16)
+    path=tmp_path/'item'
+    if kind=='payload':path.mkdir();data=path/'blob'
+    else:data=path
+    data.write_bytes(b'x'*16)
+    assert adapter.check_budget(path,kind)['bytes']==16
+    data.write_bytes(b'x'*17)
+    with pytest.raises(ValueError,match='size budget'):adapter.check_budget(path,kind)
+
+
+def test_oversized_source_fails_before_export(tmp_path,monkeypatch):
+    adapter=module('live-iso/common/src/xfce-media-input.py','source_size_adapter')
+    monkeypatch.setattr(adapter,'PAYLOAD_LIMIT',64)
+    path=tmp_path/'manifest';path.write_text(json.dumps(dict(config={'size':1},layers=[{'size':65}])))
+    digest='sha256:'+hashlib.sha256(path.read_bytes()).hexdigest()
+    with pytest.raises(ValueError,match='budget'):adapter.source_budget(path,digest)
+    script=(ROOT/'scripts/build-iso-tacklebox.sh').read_text()
+    assert script.index('--source-budget') < script.index('skopeo copy --preserve-digests')
+    workflow=(ROOT/'.github/workflows/live-iso-bootc.yml').read_text()
+    step=workflow[workflow.index('- name: Enforce candidate ISO'):workflow.index('# RETENTION IS NOT OPTIONAL')]
+    assert 'if: inputs.candidate_xfce' in step and '--iso-budget' in step
+    assert workflow.index('--iso-budget') < workflow.index('- name: Upload Artifact')
+
+
+@pytest.mark.parametrize('fault',[None,'no_login','no_password','no_sudo','interrupted'])
+def test_visual_console_authentication_boundaries(monkeypatch,fault):
+    from lib import visual_console as vc
+    monkeypatch.setattr(vc.secrets,'token_hex',lambda count:'a'*(count*2))
+    state={'stage':0,'clock':0,'keys':[],'captures':[],'line':[]}
+    password='secret123'
+    def key(value):
+        state['keys'].append(value)
+        if value=='ret':
+            if state['stage']==2 and state['line'][:4]==['shift-t','shift-u','shift-n','shift-a']:
+                pass
+            else:state['stage']+=1
+            state['line']=[]
+        elif value!='ctrl-alt-f3':state['line'].append(value)
+    def capture():
+        stage=state['stage'];state['captures'].append(stage)
+        if fault=='no_login':return 'no console'
+        if stage==0:return 'hostname login:'
+        if stage==1:return 'Password:' if fault!='no_password' else 'no prompt'
+        if stage==2:return 'user $'
+        if stage==3:return 'AUTH'+'a'*16 if fault!='no_sudo' else 'sudo unavailable'
+        raise AssertionError('capture after secret submission')
+    def serial():
+        if state['stage']==4 and fault!='interrupted':
+            return 'BEGIN_'+'a'*32+'\n{"active":true}\nEND_'+'a'*32+'\n'
+        return ''
+    def clock():state['clock']+=20;return state['clock']
+    console=vc.VisualConsole('tunauser',password,key,capture,serial,sleep=lambda _:None,clock=clock)
+    if fault:
+        with pytest.raises(ValueError):console.execute("print('{}')")
+    else:
+        assert console.execute("print('{}')")=={'active':True}
+        assert state['keys'][0]=='ctrl-alt-f3'
+        assert state['captures'][:3]==[0,1,2] and state['captures'][-1]==3
+        assert all(stage==2 for stage in state['captures'][3:-1])
+
+
+@pytest.mark.parametrize('fault',[None,'sudo','session','vt','restore','inactive'])
+def test_visual_observer_verifies_bytes_and_restores_graphical_vt(monkeypatch,fault):
+    import builtins
+    import io
+    import os
+    from lib.visual_console import envelope
+    state={'active':False,'writes':''}
+    monkeypatch.setenv('SUDO_USER','other' if fault=='sudo' else 'tunauser')
+    def command(args,**kwargs):
+        if args==['fixture-active']:return 'yes' if state['active'] else 'no'
+        assert args[0]=='loginctl'
+        if args[1]=='list-sessions':return '' if fault=='session' else '2 1000 tunauser seat0 tty2\n'
+        return 'Name=tunauser\nClass=user\nRemote=no\nType=x11\nVTNr='+('99' if fault=='vt' else '2')+'\n'
+    def run(args,**kwargs):
+        assert args==['chvt','2']
+        if fault=='restore':raise ValueError('restore failed')
+        state['active']=fault!='inactive'
+    class Channel(io.StringIO):
+        def close(self):state['writes']=self.getvalue();super().close()
+    monkeypatch.setattr(subprocess,'check_output',command)
+    monkeypatch.setattr(subprocess,'run',run)
+    monkeypatch.setattr(builtins,'open',lambda path,mode:Channel() if path=='/dev/ttyS0' and mode=='w' else pytest.fail('unexpected file write'))
+    # Inert source checks the restored-state fixture; no guest command executes.
+    monkeypatch.setattr(__import__('time'),'sleep',lambda _:None)
+    source="import json,subprocess; assert subprocess.check_output(['fixture-active'])=='yes'; print(json.dumps({'active':True}))"
+    launcher=envelope(source,'tunauser','a'*32)
+    exec(launcher,{})
+    if fault:
+        assert '"error"' in state['writes'] and '"active"' not in state['writes']
+    else:
+        assert state['active'] and '"active": true' in state['writes']
+    assert state['writes'].startswith('BEGIN_'+'a'*32)
+    state['active']=False
+    # Alter expected checksum: execution must stop before chvt or observation.
+    import re
+    altered=re.sub(r"hexdigest\(\)=='[a-f0-9]{64}'", "hexdigest()=='"+'0'*64+"'",launcher)
+    with pytest.raises(AssertionError):exec(altered,{})
+    assert state['active'] is False
+
+
+def test_visual_transfer_has_bounded_lines_and_no_guest_file():
+    from lib.visual_console import envelope
+    encoded,launcher=envelope('print("large fixed observer")\n'*1000,'tunauser','a'*32,argument=True)
+    assert 'sha256' in launcher and 'argv[1]' in launcher
+    assert all(len(encoded[offset:offset+1500])<=1500 for offset in range(0,len(encoded),1500))
+    assert 'password' not in launcher
+    source=(ROOT/'scripts/lib/visual_console.py').read_text()
+    assert "ctrl-alt-f3" in source and "['chvt',vt]" in source
+    assert 'serial-getty' not in source and 'console=ttyS0' not in source
+
+
+def test_observer_real_source_fits_bounded_transfer(tmp_path,monkeypatch):
+    from lib.visual_console import envelope
+    monkeypatch.setenv('TUNAOS_XFCE_USER','tunaabcdefhkmnpr')
+    log=tmp_path/'boot';log.write_text('TUNAOS_DESKTOP_CONTRACT_OK desktop=xfce experience=tunaos/xfce\n')
+    source=PHASE.observer_source(SimpleNamespace(boot_log=log,mode='plain',phase='cold'))
+    encoded,launcher=envelope(source,'tunaabcdefhkmnpr','a'*32,argument=True)
+    assert len(encoded)<16384 and len(launcher)<1500
+
+
+def test_gui_password_keys_release_before_next_character(monkeypatch):
+    events=[]
+    monkeypatch.setattr(PHASE,'monitor',lambda path,value:events.append(value))
+    monkeypatch.setattr(PHASE.time,'sleep',lambda delay:events.append(delay))
+    PHASE.type_text('monitor','a1')
+    assert events==['sendkey a 10',.05,'sendkey 1 10',.05]

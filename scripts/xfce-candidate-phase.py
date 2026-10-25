@@ -14,6 +14,8 @@ import time
 
 from contracts.iso_qualification import DESKTOPS, validate_session
 from lib.guest_console import Console
+from lib.visual_console import VisualConsole
+import tempfile
 from lib.xfce_candidate import LIVE_PROBE, validate_frontend
 from lib.xfce_installer_driver import Screen
 from lib.gnome_installer_driver import click_unix
@@ -25,7 +27,7 @@ def type_text(path, value):
     if not re.fullmatch(r'[a-z0-9]+', value):
         raise ValueError('unsupported credential characters')
     for char in value:
-        monitor(path,'sendkey '+char)
+        monitor(path,'sendkey '+char+' 10')
         time.sleep(.05)
 
 
@@ -61,7 +63,20 @@ def observer_source(args):
 def collect(args, console_factory=Console, capture=screenshot, sleep=time.sleep):
     user='liveuser' if args.action=='live' else os.environ['TUNAOS_XFCE_USER']
     password='' if args.action=='live' else os.environ['TUNAOS_XFCE_PASSWORD']
-    console=console_factory(args.console,user,password)
+    if args.action=='live' or console_factory is not Console:
+        console=console_factory(args.console,user,password)
+    else:
+        def capture_vt():
+            # Authentication screens are transient and never retained in artifacts.
+            with tempfile.TemporaryDirectory(dir=args.directory) as directory:
+                temporary=argparse.Namespace(**vars(args));temporary.directory=Path(directory)
+                return '\n'.join(capture(temporary,'authentication').lines)
+        def serial_tail():
+            with args.boot_log.open('rb') as stream:
+                stream.seek(max(0,args.boot_log.stat().st_size-131072))
+                return stream.read(131072).decode(errors='replace')
+        console=VisualConsole(user,password,lambda key:monitor(args.monitor,'sendkey '+key+' 10'),capture_vt,serial_tail)
+
     try:
         if args.action=='live':
             result=console.execute(LIVE_PROBE,sudo=False)
@@ -90,7 +105,7 @@ def collect(args, console_factory=Console, capture=screenshot, sleep=time.sleep)
             # explicitly pending until the bounded deadline.
             guarded="try:\n"+'\n'.join('    '+line for line in source.splitlines())+"\nexcept Exception:\n    print(json.dumps({'pending':True}))"
             for _ in range(36):
-                result=console.execute(guarded,sudo=False)
+                result=console.execute(guarded,sudo=isinstance(console,VisualConsole))
                 if result.get('pending') is not True:
                     break
                 sleep(5)

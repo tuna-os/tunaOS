@@ -99,11 +99,28 @@ The GNOME recipe is not a source of this proof.
 
 ## Authenticated observation and receipts
 
-The transport uses a Unix socket for the harness-owned QEMU UART.
-It authenticates `liveuser` only for the live probe.
-Installed observation authenticates the account created through the GUI.
-It does not use SSH, disable host-key verification, use sudo, or inject a guest file.
-Responses have fresh nonce frames. Echo from the terminal cannot impersonate a result.
+The live probe authenticates `liveuser` over the live ISO's UART.
+The ISO already boots with `console=ttyS0`; this does not establish an installed login.
+No repository configuration establishes a QEMU guest agent or serial getty.
+
+After GDM login, the installed observer switches to VT3.
+It needs visible login, password and shell prompts before each input.
+It authenticates the account that the GUI created, then asks sudo for authorization.
+The sudo prompt has a fresh token that does not appear in command echo.
+The password goes only through keyboard events after that prompt appears.
+Authentication screenshots exist only in a temporary directory.
+
+The fixed observer travels as compressed data in a bounded shell variable.
+Python checks its SHA-256 before execution; no guest script file is necessary.
+It checks `SUDO_USER`, finds that user's existing graphical session and its VT,
+restores that VT with `chvt`, and waits for the graphical session to become active.
+Only then can the observation pass. Serial carries a bounded JSON response with
+fresh nonce frames; the installed guest needs no serial login.
+The text session exits after the observer completes.
+
+The run fails if the VT login or serial output is absent, sudo denies access,
+or the graphical session does not become active. The harness never creates a getty, account or session
+through a headless installer. It does not change installed boot arguments.
 
 The driver logs in through GDM after each detached boot.
 The observer checks the active graphical session, account UID, desktop process and its session scope.
@@ -149,7 +166,7 @@ Its source fixture `TestCreateUserSkipsMissingGroups` covers both behaviors.
 The recipe is supported by that source; actual account creation remains runtime proof.
 
 No headless account workaround changes that behavior.
-The runtime run must also prove serial login, unprivileged bootc status, GDM input geometry,
+The runtime run must also prove live serial login, installed VT/sudo access, GDM input geometry,
 XFCE session scope and unchanged LUKS boot arguments.
 Any failure remains a failure report; none counts as cutover proof.
 
@@ -188,7 +205,17 @@ The native producer flow is:
 Pinned native Tacklebox `d3070b5` builds the store but does not write MediaInput;
 its separate pure builder does. The source for XFCE needs this descriptor for every cell. This adapter uses the existing Fisherman contract and
 leaves browser/storage owners untouched. It duplicates payload storage as OCI
-plus the original store; runner capacity and final ISO size remain unmeasured.
+plus the original store.
+ Candidate-only ceilings are 4 GiB for the extra OCI
+payload and 10 GiB for the final ISO. These limits do not assert that media fits.
+
+The adapter measures the source blobs before export and the actual files before
+it embeds them. It rejects unexpected files as well as size overruns.
+The workflow checks the final ISO before upload. Each gate reports measured bytes
+and its limit; an oversize result fails. Production defaults stay unchanged.
+
+The added content consists only of OCI metadata and referenced image blobs, not
+repository source. Runner capacity and actual final size remain unmeasured.
 
 The proxy blocked access to
 `git.sr.ht/~kennylevinsen/gtkgreet` (CONNECT 403). No retry or alternate route followed. Bonito's GDM

@@ -7,10 +7,48 @@ import re
 import sys
 
 LAYOUT = '/usr/lib/tunaos/xfce-candidate-oci'
+PAYLOAD_LIMIT = 4 * 1024**3
+ISO_LIMIT = 10 * 1024**3
+
 TARGET = 'ghcr.io/tuna-os/bonito:xfce'
 
 
+def check_budget(path, kind):
+    limit = PAYLOAD_LIMIT if kind == 'payload' else ISO_LIMIT
+    paths = list(path.rglob('*')) if kind == 'payload' else [path]
+    total = 0
+    for item in paths:
+        if item.is_symlink():
+            raise ValueError('size budget refuses symlink')
+        if item.is_file():
+            total += item.stat().st_size
+        elif not item.is_dir():
+            raise ValueError('size budget needs regular files')
+    report = dict(kind=kind, bytes=total, limit_bytes=limit, within_budget=0 < total <= limit)
+    print(json.dumps(report), flush=True)
+    if not report['within_budget']:
+        raise ValueError('candidate size budget exceeded or empty')
+    return report
+
+
+def source_budget(path, expected):
+    raw = path.read_bytes()
+    if 'sha256:'+hashlib.sha256(raw).hexdigest() != expected:
+        raise ValueError('source manifest digest mismatch')
+    manifest = json.loads(raw)
+    sizes = [item['size'] for item in [manifest['config'], *manifest['layers']]]
+    if any(type(size) is not int or size < 0 for size in sizes):
+        raise ValueError('invalid source descriptor size')
+    total = sum(sizes)+len(raw)
+    report = dict(kind='source-payload-estimate', bytes=total, limit_bytes=PAYLOAD_LIMIT, within_budget=0 < total <= PAYLOAD_LIMIT)
+    print(json.dumps(report), flush=True)
+    if not report['within_budget']:
+        raise ValueError('source payload exceeds candidate budget')
+    return report
+
+
 def descriptor(layout, expected):
+    check_budget(layout, 'payload')
     if not re.fullmatch(r'sha256:[0-9a-f]{64}', expected):
         raise ValueError('invalid source digest')
     def blob(desc):
@@ -50,10 +88,20 @@ def descriptor(layout, expected):
         raise ValueError('wrong payload architecture')
     for layer in manifest['layers']:
         blob(layer)
+    allowed={'oci-layout','index.json'} | {'blobs/sha256/'+entry['digest'][7:] for entry in [entries[0],manifest['config'],*manifest['layers']]}
+    actual={str(item.relative_to(layout)) for item in layout.rglob('*') if item.is_file()}
+    if actual != allowed:
+        raise ValueError('unexpected files in candidate OCI payload')
     return dict(schemaVersion=1, kind='tacklebox-live', image=TARGET,
                 platformManifestDigest=expected, configDigest=manifest['config']['digest'],
                 ociLayoutPath=LAYOUT, targetImgref=TARGET, platform='linux/amd64')
 
 
 if __name__ == '__main__':
+    if sys.argv[1] == '--iso-budget':
+        check_budget(Path(sys.argv[2]), 'iso')
+        raise SystemExit(0)
+    if sys.argv[1] == '--source-budget':
+        source_budget(Path(sys.argv[2]), sys.argv[3])
+        raise SystemExit(0)
     Path(sys.argv[3]).write_text(json.dumps(descriptor(Path(sys.argv[1]), sys.argv[2]), indent=2)+'\n')
