@@ -12,6 +12,7 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 import re
+import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
 RFC = ROOT / "docs/rfc/rfc017-protected-package-removal.md"
@@ -34,6 +35,15 @@ def section(title):
     return match.group(1)
 
 
+def tracked_by_name():
+    """Index tracked files by basename with one `git ls-files`, in sorted order."""
+    listing = subprocess.run(["git", "ls-files", "-z"], cwd=ROOT, check=True, capture_output=True, text=True).stdout
+    index = {}
+    for path in sorted(filter(None, listing.split("\0"))):
+        index.setdefault(path.rsplit("/", 1)[-1], []).append(path)
+    return index
+
+
 def test_cited_files_exist():
     cited = set()
     for title in ("Current state", "One design"):
@@ -43,9 +53,10 @@ def test_cited_files_exist():
                 if "/" in path:
                     cited.add(path)
                 else:
-                    matches = [candidate for candidate in ROOT.rglob(path) if candidate.is_file()]
+                    matches = tracked_by_name().get(path, [])
                     assert matches, f"missing bare RFC reference: {path}"
-                    cited.add(matches[0].relative_to(ROOT).as_posix())
+                    assert len(matches) == 1, f"ambiguous bare RFC reference {path}: {matches}"
+                    cited.add(matches[0])
     # Paths that only exist in the open #3739 branch are named as such in the text.
     pending = {"tests/test_image_packages.py"}
     missing = sorted(p for p in cited - pending if not (ROOT / p).is_file())
