@@ -74,6 +74,10 @@ def problems(document: dict, text: str) -> list[str]:
         flag in harness[0]["run"] for flag in ('--plan "$PLAN"', '--source "$PWD"', '--output "$EVIDENCE"')
     ):
         found.append("the harness must run once with --plan, --source and --output")
+    if harness and (
+        "always()" not in harness[0].get("if", "") or "steps.prepare.outcome" not in harness[0].get("if", "")
+    ):
+        found.append("the harness must also run after a failed build, once the plan exists")
     gates = [s for s in steps if "package-qualification.py gate" in s.get("run", "")]
     gated_after_harness = (
         len(gates) == 1 and len(harness) == 1 and steps.index(gates[0]) > steps.index(harness[0])
@@ -131,6 +135,14 @@ def test_write_permissions_secrets_and_a_dropped_upload_are_violations():
     for step in document["jobs"]["qualify"]["steps"]:
         step["run"] = step.get("run", "").replace('--output "$EVIDENCE"', "")
     assert any("--output" in item for item in problems(document, WORKFLOW.read_text()))
+
+
+def test_a_harness_step_skipped_by_a_failed_build_is_a_violation():
+    document = workflow_document()
+    for step in document["jobs"]["qualify"]["steps"]:
+        if "qualify-image-packages.py" in step.get("run", ""):
+            del step["if"]
+    assert any("after a failed build" in item for item in problems(document, WORKFLOW.read_text()))
 
 
 def test_the_fixture_names_each_harness_route_once_with_a_variant_that_resolves_there():

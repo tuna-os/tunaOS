@@ -63,6 +63,7 @@ jobs:
         uses: ./.github/actions/setup-yq
 
       - name: Prepare the stock and modified commits
+        id: prepare
         run: |
           set -euo pipefail
           # Kept outside the checkout: the harness demands a clean source tree and
@@ -96,7 +97,11 @@ jobs:
             echo "::endgroup::"
           done < "$RUNNER_TEMP/builds.tsv"
 
+      # Also after a failed build, so the report keeps the immutable identities of
+      # the images that did build and names the missing one. The build step stays
+      # fatal: the job is red either way.
       - name: Run the qualification harness
+        if: always() && steps.prepare.outcome == 'success'
         run: |
           set -euo pipefail
           modified="$(jq -r .modifiedCommit "$RUNNER_TEMP/builds.json")"
