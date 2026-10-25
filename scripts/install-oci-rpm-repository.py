@@ -13,6 +13,7 @@ import io
 import json
 import os
 import re
+import stat
 import subprocess
 import sys
 import tempfile
@@ -67,31 +68,49 @@ def strict_link_target(path: Path, root: Path) -> Path:
     """Resolve one reviewed symlink hop, or refuse.
 
     EL10 images link /etc/yum/vars to ../dnf/vars and /etc/yum.conf to
-    dnf/dnf.conf. A link is admitted only when it is root-owned and its target is
-    inside <root>/dnf or <root>/yum.repos.d, on the same filesystem, reached
-    through no other symlink, owned by root and not group/world writable. An
-    escaping, dangling, chained or writable link stays a refusal, because it
-    could redirect persistent repository config outside the checked tree.
+    dnf/dnf.conf. A link is admitted only when it is root-owned and relative, and
+    its target is inside <root>/dnf or <root>/yum.repos.d, on the same filesystem,
+    reached through no other symlink, owned by root and not group/world writable.
+    The link text is walked component by component in kernel order: every
+    component is checked before the next `..` is applied, so a symlinked
+    intermediate cannot be hidden by lexical `..` collapsing. An escaping,
+    dangling, chained or writable link stays a refusal, because it could redirect
+    persistent repository config outside the checked tree.
     """
-    allowed = [root / 'dnf', root / 'yum.repos.d']
     link = path.lstat()
     if link.st_uid != TRUSTED_UID:
         raise ValueError(f'runtime config symlink is not owned by the trusted user: {path}')
-    target = Path(os.path.normpath(path.parent / os.readlink(path)))
-    if not any(target == base or base in target.parents for base in allowed):
+    text = os.readlink(path)
+    if not text or text.startswith('/') or '\0' in text:
         raise ValueError(f'runtime config symlink leaves the reviewed tree: {path}')
     device = root.lstat().st_dev
-    current = root
-    for part in target.relative_to(root).parts:
-        current = current / part
+
+    def plain(parts: list[str]) -> None:
+        current = root.joinpath(*parts)
         try:
             status = current.lstat()
         except OSError as error:
             raise ValueError(f'runtime config symlink is dangling: {path}') from error
-        if (current.is_symlink() or status.st_dev != device or status.st_uid != TRUSTED_UID
-                or status.st_mode & 0o022):
+        if (stat.S_ISLNK(status.st_mode) or status.st_dev != device
+                or status.st_uid != TRUSTED_UID or status.st_mode & 0o022):
             raise ValueError(f'runtime config symlink target is not a plain root-owned path: {path}')
-    return target
+
+    parts = list(path.parent.relative_to(root).parts)
+    for component in text.split('/'):
+        if component in ('', '.'):
+            continue
+        if component == '..':
+            if not parts:
+                raise ValueError(f'runtime config symlink leaves the reviewed tree: {path}')
+            parts.pop()  # parts is a verified chain of plain directories, so this is the real parent
+            continue
+        parts.append(component)
+        plain(parts)
+    if not parts or parts[0] not in ('dnf', 'yum.repos.d'):
+        raise ValueError(f'runtime config symlink leaves the reviewed tree: {path}')
+    for end in range(1, len(parts) + 1):
+        plain(parts[:end])
+    return root.joinpath(*parts)
 
 
 def runtime_path(path: Path, root: Path) -> Path:
@@ -206,7 +225,10 @@ def install(args) -> dict:
             or args.packages.stat().st_size > 64 * 1024):
         raise ValueError('package inventory must be a bounded regular, non-symlink file')
     packages = args.packages.read_text().splitlines()
-    if not packages or any(not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9+_.:~-]*', p) for p in packages):
+    if not packages or any(not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9+_.:~-]*', p)
+                           or p.lower().endswith('.rpm') for p in packages):
+        # DNF installs a *.rpm argument as a local file, and gpgcheck=1 does not
+        # enable localpkg_gpgcheck, so only repository package names are admitted.
         raise ValueError('package inventory must contain one explicit package name per line')
     if args.upstream_repos.is_symlink() or not args.upstream_repos.is_dir():
         raise ValueError('upstream repository directory must exist and not be a symlink')

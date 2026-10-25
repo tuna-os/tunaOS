@@ -1,4 +1,5 @@
 """Offline diagnostic boundary tests: no Docker, DNS, or native transactions."""
+import errno
 import importlib.util
 import json
 import socket
@@ -152,6 +153,36 @@ def test_cleanup_continues_after_timeout(monkeypatch, tmp_path):
     assert ('docker', 'rm', '--force', 'workload') in calls
     assert ('docker', 'network', 'rm', 'internal') in calls
     assert len(json.loads((tmp_path / 'cleanup.json').read_text())) == 6
+
+
+def test_evidence_write_failure_does_not_stop_removals(monkeypatch, tmp_path):
+    calls = []
+    def run(*args, output_path=None, **_kwargs):
+        calls.append(args)
+        if output_path is not None:
+            output_path.write_text('log')
+        return SimpleNamespace(returncode=0, stdout='', stderr='')
+    real_write = Path.write_text
+    def full_disk(self, *args, **kwargs):
+        if self.name == 'cleanup.json':
+            raise OSError(errno.ENOSPC, 'No space left on device')
+        return real_write(self, *args, **kwargs)
+    monkeypatch.setattr(runner, 'run', run)
+    monkeypatch.setattr(Path, 'write_text', full_disk)
+    assert runner.cleanup(tmp_path, ['proxy', 'workload'], ['internal', 'egress']) is False
+    for removal in (('docker', 'rm', '--force', 'workload'), ('docker', 'rm', '--force', 'proxy'),
+                    ('docker', 'network', 'rm', 'egress'), ('docker', 'network', 'rm', 'internal')):
+        assert removal in calls
+
+
+def test_log_and_removal_output_write_failures_do_not_stop_removals(monkeypatch, tmp_path):
+    calls = []
+    def run(*args, **_kwargs):
+        calls.append(args)
+        raise OSError(errno.ENOSPC, 'No space left on device')
+    monkeypatch.setattr(runner, 'run', run)
+    assert runner.cleanup(tmp_path, ['proxy', 'workload'], ['internal']) is False
+    assert len(calls) == 5
 
 
 def test_controls_fail_on_generic_proxy_error(monkeypatch):
