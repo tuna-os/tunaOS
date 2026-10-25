@@ -94,7 +94,7 @@ def test_htop_resolves_on_every_covered_target_with_separate_evidence_layers():
         assert record['transaction'] == {'status': 'not-run'}
         assert record['installed_image'] == {'status': 'not-run'}
         assert record['base_image'].startswith('docker.io/library/debian:trixie@sha256:')
-        assert record['configuration_observed_at'] == '2026-10-24T02:30:03Z'
+        assert record['configuration_observed_at'] == '2026-10-25T08:33:28Z'
     json.dumps(report)  # Evidence is serializable; no sets leak into the plan.
 
 
