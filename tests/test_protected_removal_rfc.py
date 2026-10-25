@@ -4,7 +4,7 @@ The specification is normative (.spektacular, from #3855). The RFC must link it,
 must cite only repository files that exist, and must keep the one table that the
 specification does not carry: why the stock `pkg_remove` is unsafe for each
 package family that build_scripts/lib.sh can detect. Removals stay rejected; the
-rejection tests live in test_fork_config_consumers and test_fork_package_consumer
+rejection tests live in test_image_packages and test_legacy_fork_migration
 and are not repeated here.
 """
 from __future__ import annotations
@@ -70,9 +70,7 @@ def test_cited_files_exist():
                     assert matches, f"missing bare RFC reference: {path}"
                     assert len(matches) == 1, f"ambiguous bare RFC reference {path}: {matches}"
                     cited.add(matches[0])
-    # Paths that only exist in the open #3739 branch are named as such in the text.
-    pending = {"tests/test_image_packages.py"}
-    missing = sorted(p for p in cited - pending if not (ROOT / p).is_file())
+    missing = sorted(p for p in cited if not (ROOT / p).is_file())
     assert cited and not missing, missing
 
 
