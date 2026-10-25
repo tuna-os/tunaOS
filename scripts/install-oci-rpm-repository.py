@@ -221,7 +221,9 @@ def install(args) -> dict:
         repos.mkdir()
         (root / 'vars').mkdir()
         config = root / 'dnf.conf'
-        config.write_text('[main]\ngpgcheck=1\nplugins=0\n')
+        # DNF4 defaults best=False, and then an uninstallable newest package is
+        # silently replaced by an older one from a lower-priority repo. Fail instead.
+        config.write_text('[main]\ngpgcheck=1\nplugins=0\nbest=1\n')
         dnf = ['dnf', '--config', str(config), '--noplugins',
                f'--setopt=reposdir={repos}', f'--setopt=varsdir={root / "vars"}',
                f'--setopt=cachedir={root / "cache"}', f'--setopt=persistdir={root / "persist"}',
