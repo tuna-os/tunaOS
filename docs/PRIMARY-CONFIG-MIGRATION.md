@@ -16,8 +16,8 @@ The name `tunaos.toml` alone would not make those deltas meet the new requiremen
 
 ## Source ownership
 
-Status is for this stack: it includes the open F3 and F4 pull requests named below
-and assumes they merge first. A value is listed as owned by `tunaos.toml` only
+Status is for this stack. It includes the open F3 and F4 pull requests that the
+text names, and it assumes they merge first. A value counts as owned by `tunaos.toml` only
 when a validator, a generated adapter and a consumer exist for it.
 
 | Fork-facing value | Status | TOML owner | Consumer or generated adapter |
@@ -38,9 +38,9 @@ when a validator, a generated adapter and a consumer exist for it.
 
 ### Still owned outside `tunaos.toml`
 
-These are the fork-facing values found outside the file by a bounded search
-(not a proof of completeness). Each is open work or an explicit decision; none is
-claimed as migrated.
+A bounded search found these fork-facing values outside the file. The search
+does not prove completeness. Each value needs more work or an explicit decision.
+None of them has migrated.
 
 | Where | What | Why it is outside |
 |---|---|---|
@@ -150,8 +150,8 @@ family-specific. Selection never enables a held or unsupported cell.
    values pass through the same compiler and consumers as customized values.
    Reuse the reviewed mechanisms in consumers and check final writers. No stock-only bypass remains.
 5. Replace preview-only commands with the primary config interface. Preserve an explicit command to migrate legacy config and clear errors for incompatible inputs.
-   Retire the obsolete source files and fork-only documentation. Done in #3807:
-   see [Migrating a legacy fork config](#migrating-a-legacy-fork-config).
+   Retire the obsolete source files and fork-only documentation. #3807 did this;
+   see the steps to convert a [legacy fork config](#migrating-a-legacy-fork-config).
 6. Qualify representative built images, installer frontends and real installs.
    Keep failures and absent proof visible for each artifact. Only then mark delivery done.
 
@@ -269,8 +269,8 @@ other Tuna Desktop cells retain their existing display manager.
 
 The YAML preview (`resolve-fork-config.py`, `prepare-fork-config.py`, the
 `examples/fork` templates, `manifests/fork-config.json` and the
-`fork-branding.sh` / `fork-packages.sh` consumers) is retired. Nothing reads its
-files now. A legacy file (`schema_version: 1`, `catalog.sha256`, `image`,
+`fork-branding.sh` / `fork-packages.sh` consumers) no longer exists. Nothing
+reads its files. A legacy file (`schema_version: 1`, `catalog.sha256`, `image`,
 `targets`, `global`, `overrides`) converts with one command:
 
 ```sh
@@ -290,25 +290,29 @@ catalog beneath it, so the migration edits the file itself.
 | `overrides.variants.<id>.packages` | `[variants.<id>.packages]` |
 | `catalog.sha256` | dropped after a shape check; **not** verified against the checkout |
 
-Everything else is refused with an `ERROR:` naming the field, a non-zero exit and
-no change to any file: `targets` (the preview's build filter; prune with
-`build_image = false`, see [ROLL_YOUR_OWN.md](ROLL_YOUR_OWN.md)), `branding.name`,
-`logo` and `wallpaper`, branding below the global layer, package layers scoped to a
-desktop or an exact cell, and every non-empty `remove` list. Unknown keys, wrong
-types, duplicate YAML keys, a wrong `schema_version` or a missing `catalog` fail
-the same way. The result is parsed and validated by the primary validator, and each
-package name is checked against its variant's package manager, so a legacy
-global `add = ["htop"]` that the Gentoo variant cannot install is rejected
-rather than written.
+The command refuses everything else. It prints an `ERROR:` that names the field,
+exits non-zero and changes no file. It refuses `targets` (the build filter of the
+preview; prune with `build_image = false`, see
+[ROLL_YOUR_OWN.md](ROLL_YOUR_OWN.md)), `branding.name`, `logo` and `wallpaper`.
+It refuses brand data below the global layer, package layers for one desktop or
+one exact cell, and every non-empty `remove` list. Unknown keys, wrong types,
+duplicate YAML keys, a wrong `schema_version` and a missing `catalog` fail the
+same way.
 
-Output is deterministic and keeps every comment and the layout of the rest of the
-file: new tables are inserted after the keys they extend and URL lines are replaced
-in place. The edited text must parse to exactly the original document plus the
-legacy fields, or nothing is produced. Limits: an inline comment on a replaced
-value line is dropped; a package table that already exists with different
-contents is refused, not merged; `bug_report` has no legacy field and keeps its
-value. Converting is configuration only. It is not evidence that an image builds,
-boots or installs (#3474).
+The primary validator parses the result. It checks each package name against
+the package manager of its variant. A legacy global `add = ["htop"]` that the
+Gentoo variant cannot install fails, and the command does not write it.
+
+The output is deterministic. It keeps every comment and the layout of the rest of
+the file. The command inserts new tables after the keys they extend and replaces
+URL lines in place. The edited text must parse to exactly the original document
+plus the legacy fields. If it does not, the command writes nothing.
+
+Limits: the command drops an inline comment on a replaced value line. It refuses
+a package table that already exists with different contents and does not merge
+it. `bug_report` has no legacy field and keeps its value. The conversion changes
+configuration only. It is no evidence that an image builds, boots or installs
+(#3474).
 
 ## F5: Fork recipe and conformance gate (#3806)
 
@@ -316,24 +320,25 @@ boots or installs (#3474).
 asset files. **Does not include**: image builds, installs or boot qualification
 (#3474).
 
-`tests/test_fork_recipe_conformance.py` forks the real `tunaos.toml` by text edits
-a person would make (publish destination, project name, homepage, a variant's
-package additions, one Flatpak) and runs the repository's own tools on the result:
-`scripts/config.py validate` and the `generate-*` adapter writers, and the shell
-publish-destination resolver. It asserts:
+`tests/test_fork_recipe_conformance.py` forks the real `tunaos.toml` with text
+edits that a person would make: publish destination, project name, homepage,
+package additions for one variant, and one Flatpak. It runs the tools of the
+repository on the result. These are `scripts/config.py validate`, the
+`generate-*` adapter writers and the shell publish-destination resolver. The
+test asserts these points:
 
-1. **Stock is unchanged**: every committed adapter (`identity.env`,
+1. **Stock does not change**: every committed adapter (`identity.env`,
    `variant-identity.tsv`, `variant-aliases.tsv`, `image-packages.tsv`,
-   `flatpak-preinstall.tsv`) equals a fresh render of `tunaos.toml`; stock has no
+   `flatpak-preinstall.tsv`) equals a fresh render of `tunaos.toml`. Stock has no
    publish table or package additions.
-2. **The fork differs**: destination, identity, package rows and Flatpak list change
-   as edited, and only for the variant that declared the packages.
-3. **Reverting the edits** returns the exact stock bytes and adapters.
-4. **Code is not configuration**: a `[hooks]` table, shell metacharacters or URLs
-   in package names, and `remove` lists are rejected; a package name is checked
-   against each variant's package manager.
-5. **Assets travel with the config**: a new boot-splash theme name is reported
-   missing by `check-drawn-artwork` until its theme files exist.
+2. **The fork differs**: destination, identity, package rows and Flatpak list
+   change as edited. Only the variant that declared the packages gets them.
+3. **Undo the edits**: the stock bytes and adapters come back exactly.
+4. **Code is not configuration**: the test rejects a `[hooks]` table, shell
+   metacharacters or URLs in package names, and `remove` lists. It checks each
+   package name against the package manager of its variant.
+5. **Assets travel with the config**: `check-drawn-artwork` reports a new
+   boot-splash theme name as missing until its theme files exist.
 
 Native names in `[defaults.packages]` must be valid for every variant's package
 manager, so the sample scopes them to a dnf variant. The test does not build an

@@ -11,8 +11,8 @@ passed.
 
 A fork sets its own name, URLs, codenames, accents and splash theme in
 `tunaos.toml`, the same file and compiler TunaOS uses. Its wallpapers are files
-named by the convention in [Wallpapers](#wallpapers). The former YAML fork
-preview and its single shared-wallpaper override are retired; convert an old
+named by the convention in [Wallpapers](#wallpapers). The earlier fork preview in YAML
+and its single shared-wallpaper override no longer exist. Convert an old
 file with `python3 scripts/config.py migrate-fork-config --legacy OLD.yaml`
 ([migration](PRIMARY-CONFIG-MIGRATION.md#migrating-a-legacy-fork-config)).
 Tests of source files do not prove what an image displays.

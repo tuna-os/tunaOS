@@ -200,8 +200,8 @@ Reconcile the shared catalog with [#3431](https://github.com/tuna-os/tunaOS/pull
 and its parent [#3143](https://github.com/tuna-os/tunaOS/pull/3143), and do not add another catalog. Keep one active change per shared contract surface.
 
 The YAML preview interface (`resolve-fork-config.py`, `prepare-fork-config.py`,
-`examples/fork/*.template.yaml` and its prepared-context consumers) was retired in
-[#3807](https://github.com/tuna-os/tunaOS/issues/3807). A fork edits `tunaos.toml`
+`examples/fork/*.template.yaml` and its prepared-context consumers) no longer
+exists since [#3807](https://github.com/tuna-os/tunaOS/issues/3807). A fork edits `tunaos.toml`
 and asset files only. An old config converts with
 `python3 scripts/config.py migrate-fork-config --legacy OLD.yaml`; see
 [PRIMARY-CONFIG-MIGRATION.md](PRIMARY-CONFIG-MIGRATION.md#migrating-a-legacy-fork-config).

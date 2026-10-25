@@ -43,9 +43,8 @@ cache behavior has separate evidence.
 
 ## Superseded
 
-The YAML review contract and its consumers were retired in
 [#3807](https://github.com/tuna-os/tunaOS/issues/3807) under
-[#3668](https://github.com/tuna-os/tunaOS/issues/3668): a fork now edits the primary
+[#3668](https://github.com/tuna-os/tunaOS/issues/3668) retired the YAML review contract and its consumers. A fork now edits the primary
 `tunaos.toml`, which TunaOS itself uses. `python3 scripts/config.py
 migrate-fork-config --legacy OLD.yaml` converts an old config and refuses what
 has no primary equivalent

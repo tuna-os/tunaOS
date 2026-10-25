@@ -31,8 +31,8 @@ STOCK_ADAPTERS = {
 # Each edit is (anchor in the stock file, replacement). They are what a person
 # types into tunaos.toml, so the test applies them as text.
 ACME_EDITS = [
-    ('[build]\nglobal_platforms = ["linux/amd64", "linux/arm64"]\n',
-     '[build]\nglobal_platforms = ["linux/amd64", "linux/arm64"]\n\n'
+    ('global_platforms = ["linux/amd64", "linux/arm64"]\n',
+     'global_platforms = ["linux/amd64", "linux/arm64"]\n\n'
      '[build.publish]\nregistry = "localhost"\nnamespace = "acme-preview"\n'),
     ('name = "TunaOS"\nid = "tunaos"\ncpe_vendor = "jamesreilly"\n',
      'name = "Acme OS"\nid = "acmeos"\ncpe_vendor = "acme"\n'),
