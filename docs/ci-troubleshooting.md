@@ -2073,6 +2073,23 @@ including run `40065011718` for #3839.
 runs. Schedule and dispatch runs still serialize in one `publish` group,
 because they force-push `automation/matrix-status`.
 
+### The beta lifecycle snapshot test fails after a nightly refresh (#3932)
+
+**Symptom:** after the 2026-10-25 refresh (#3931), the committed-snapshot
+test for beta lifecycle fails. All eight `bonito-rawhide` and
+`flounder-sid` lifecycle cells read `fail` from run `38713238238`.
+
+**Cause:** these results are not `BETA` probes. In that run, the jobs have no
+prefix and failed in the stable-lane validation step. Before #3720, the beta
+filter in `bootc-lifecycle.yml` had an inverted test, so rawhide and sid cells
+ran the real check. #3720 also made the generator score those old checks. The
+test still expected that each beta cell reads untested. It stayed green until
+the first live refresh merged.
+
+**Fix:** the test now accepts a beta lifecycle verdict only if it reads
+untested or has a date before the lane fix (2026-10-23). Do not edit the
+generated files, and do not add a filter that hides the old failures.
+
 ### Package catalog tests fail with `effective package-source configuration changed; refresh observation`
 
 **Symptom:** six tests in `tests/test_package_catalogs.py` and
