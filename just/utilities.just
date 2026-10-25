@@ -65,6 +65,7 @@ check: _ensure_check_deps ste
     python3 "{{ justfile_directory() }}/scripts/config.py" generate >/dev/null || exit 1
     python3 "{{ justfile_directory() }}/scripts/config.py" check-builder-config >/dev/null || exit 1
     python3 "{{ justfile_directory() }}/scripts/config.py" check-flatpak-policy >/dev/null || exit 1
+    python3 "{{ justfile_directory() }}/scripts/config.py" check-identity >/dev/null || exit 1
     python3 "{{ justfile_directory() }}/scripts/config.py" check-builder-flavors >/dev/null || exit 1
     echo "Checking syntax of shell scripts..."
     find . -not -path './.git/*' -not -path './system_files/usr/share/gnome-shell/extensions/*' -not -path './packages-repo/*' -not -path './.build/*' -iname "*.sh" -type f -exec shellcheck --exclude=SC1091 "{}" ";"

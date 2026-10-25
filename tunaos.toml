@@ -28,6 +28,22 @@ global_platforms = ["linux/amd64", "linux/arm64"]
 # not authentication: CI credentials/permissions must also allow that destination.
 # It does not configure ISO hosting, installed branding or registry mirrors.
 
+# ── Identity ──────────────────────────────────────────────────────────────────
+# What every image calls itself. A fork changes these to become a new
+# distribution; build_scripts/lib/identity.env is generated from them
+# (`python3 scripts/config.py generate-identity`) and 90-image-info.sh reads
+# only that file. `just check` fails if the two drift apart.
+[project]
+name = "TunaOS"
+id = "tunaos"
+cpe_vendor = "jamesreilly"
+
+[defaults.branding]
+homepage = "https://github.com/tuna-os/tunaos"
+documentation = "https://github.com/tuna-os/tunaos/tree/main/docs"
+support = "https://github.com/tuna-os/tunaos/issues/"
+bug_report = "https://github.com/tuna-os/tunaos/issues/"
+
 # ── Grouped dedup ISOs (issue #455) ───────────────────────────────────────────
 # Per-desktop-per-flavor ISOs are wasteful: all desktops on a variant share the
 # same Enterprise-Linux base, so tacklebox `shared_store.dedup` packs several
@@ -234,6 +250,7 @@ reason = "unsupported until package target gentoo publishes tuna-desktop (tunaos
 
 [variants.yellowfin]
 emoji = "🐠"
+codename = "Thunnus albacares"
 description = "Based on AlmaLinux Kitten 10"
 base_image = "quay.io/almalinuxorg/almalinux-bootc:10-kitten@sha256:fabe22d605a5638cb1fbf2df38d6d9b9ace35f15cb1c10c7db87d475a039d58a"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
@@ -506,6 +523,7 @@ platforms = ["linux/amd64"]
 
 [variants.albacore]
 emoji = "🐟"
+codename = "Thunnus alalunga"
 description = "Based on AlmaLinux 10"
 base_image = "quay.io/almalinuxorg/almalinux-bootc:10@sha256:2fc27d12a9f62fcf11d0ec034fc40d5df6602d383d035c57206220eda95db6b2"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
@@ -778,6 +796,7 @@ platforms = ["linux/amd64"]
 
 [variants.skipjack]
 emoji = "🍣"
+codename = "Katsuwonus pelamis"
 description = "Based on CentOS Stream 10"
 base_image = "quay.io/centos-bootc/centos-bootc:stream10@sha256:ec1bd8cb6479d1f2f61c85372afce319b932b6b1f671648f0887e9da01e48272"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
@@ -1069,10 +1088,11 @@ build_qcow2 = false
 # Promotion to a cron lane needs the capacity note the gate asks for.
 [variants.wahoo]
 emoji = "🎏"
+codename = "Acanthocybium solandri"
 upstream_track = "experimental"
 description = "Based on Fedora ELN (EL11 preview, rolling)"
 experimental = true
-base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:7de9aba85a0dfa5b6c2f5c0ee02141e1728e57ffd3e0b1f54ece61ab86aa4671"
+base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:dfb167fd389b1bb0eda2c509762ca52be25c508d078441cf7c3339b912a79144"
 # No alias: `eln` is Fedora's identifier for a moving development target,
 # and an alias tag is a stability promise this lane deliberately does not
 # make. Revisit if/when ELN gains a versioned publish.
@@ -1146,6 +1166,7 @@ luks_e2e = false
 
 [variants.bonito]
 emoji = "🎣"
+codename = "Sarda sarda"
 description = "Based on Fedora 44"
 # Unpinned 2026-09-17. The note this replaces named the condition itself:
 # "If quay GCs this one inside a day as well, that is the second strike and
@@ -1368,6 +1389,7 @@ build_qcow2 = false
 # (Konflux hermetic build model, CKI ARK kernel).
 [variants.hummingbird]
 emoji = "🐦"
+codename = "Trochilidae"
 upstream_track = "experimental"
 # Rolling, security-hardened fork tracking Fedora RAWHIDE -- not Fedora 43,
 # whatever the .fc43 dist tags suggest -- and shipping NO desktop upstream.
@@ -1375,7 +1397,7 @@ upstream_track = "experimental"
 # not a rebuild of an existing one. Read docs/HUMMINGBIRD.md before
 # reasoning about what its package set should contain.
 description = "Fedora Hummingbird (hardened rolling Rawhide fork, bootc)"
-base_image = "quay.io/hummingbird-community/bootc-os:latest@sha256:d247ff418406c84cd9a22744eb380671c533a1d87c00f1ddc47c67f1dcce7e39"
+base_image = "quay.io/hummingbird-community/bootc-os:latest@sha256:599e2c21e4c3eb4ea5ddafe4712a5728640a01db24d36bfa94fd48579174d521"
 # amd64 only, because aarch64 has nothing to build FROM yet: the base
 # stage's mandatory xfsprogs guard (build_scripts/10-base-packages.sh) has
 # no repository that can satisfy it on arm64, so every hummingbird arm64
@@ -1473,6 +1495,7 @@ build_iso = true
 # Sailfin Tumbleweed: rolling-release, zypper-based.
 [variants.sailfin]
 emoji = "⛵"
+codename = "Istiophorus platypterus"
 upstream_track = "rolling"
 description = "Based on openSUSE Tumbleweed (rolling)"
 # NOT digest-pinned, for the same reason as bonito-rawhide below.
@@ -1596,6 +1619,7 @@ luks_e2e = false
 # Guppy: source-based, emerge/portage. Compiles everything from source.
 [variants.guppy]
 emoji = "🌈"
+codename = "Poecilia reticulata"
 upstream_track = "rolling"
 description = "Based on Gentoo Linux (source-based)"
 # Digest-pinned to match Containerfile.gentoo's FROM exactly. This value
@@ -1660,6 +1684,7 @@ build_image = true
 publish_name = "bonito"
 tag_suffix = "rawhide"
 emoji = "🐉"
+codename = "Sarda sarda"
 upstream_track = "rolling"
 description = "Based on Fedora Rawhide (rolling)"
 # NOT digest-pinned, and this is the only base image here that is not.
@@ -1870,6 +1895,7 @@ build_qcow2 = false
 # Revisit collapsing this into grouper when elementary publishes for 26.04.
 [variants.gurnard]
 emoji = "🤖"
+codename = "Chelidonichthys lucerna"
 description = "Based on Ubuntu 24.04 Noble Numbat with the Pantheon desktop"
 base_image = "docker.io/library/ubuntu:noble@sha256:68ee22004a9109b44973313b02ff7b1de250f1de0f5ecb628d73f579aaff33ac"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
@@ -1889,6 +1915,7 @@ build_iso = true
 
 [variants.grouper]
 emoji = "🪸"
+codename = "Epinephelus marginatus"
 description = "Based on Ubuntu 26.04 Resolute Raccoon"
 base_image = "docker.io/library/ubuntu:resolute@sha256:c098726dd9b9733f3e885f8de0ef375206a311b0a317eadc40d347b1115fb944"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
@@ -2011,9 +2038,10 @@ build_iso = true
 # up the ostree/composefs filesystem layout.
 [variants.marlin]
 emoji = "🚀"
+codename = "Makaira nigricans"
 upstream_track = "rolling"
 description = "Based on Arch Linux (rolling)"
-base_image = "docker.io/archlinux/archlinux:latest@sha256:ef1b2d7b71ac9f1f5fe78b5ae66c3b3fa8f6f2a4486620233b7ed31b1d0c3aaf"
+base_image = "docker.io/archlinux/archlinux:latest@sha256:bdb2935325a8d6a930d4f09da38eafc47abfaa483d78e1b0210029c98de05330"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["arch", "archlinux"]
 # arm64 legs use ghcr.io/tuna-os/archlinuxarm instead (docker.io/archlinux
@@ -2172,6 +2200,7 @@ build_qcow2 = false
 # Flounder: Debian Trixie (13) stable. Uses Containerfile.debian.
 [variants.flounder]
 emoji = "🐡"
+codename = "Platichthys flesus"
 description = "Based on Debian 13 Trixie (stable)"
 base_image = "docker.io/library/debian:trixie@sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
@@ -2330,6 +2359,7 @@ build_qcow2 = false
 publish_name = "flounder"
 tag_suffix = "sid"
 emoji = "☢️"
+codename = "Platichthys flesus"
 upstream_track = "rolling"
 description = "Based on Debian Sid (unstable, rolling)"
 base_image = "docker.io/library/debian:sid@sha256:92d7265e51d67d3a2094c1aad9faa88c74cf9d52e6c354200e429cd60237cc55"
@@ -2999,6 +3029,8 @@ baseurl = "file:///run/utah-packages"
 priority = 4
 unsigned = true
 
+# ELN uses oo7 for Secret Service and PAM; see tunaOS#3810 and
+# docs/ci-troubleshooting.md. Other targets keep gnome-keyring.
 [desktops.gnome.packages.eln]
 required = [
   "ModemManager",
@@ -3017,8 +3049,8 @@ required = [
   "gnome-control-center",
   "gnome-disk-utility",
   "gnome-initial-setup",
-  "gnome-keyring",
-  "gnome-keyring-pam",
+  "oo7-daemon",
+  "pam_oo7",
   "gnome-remote-desktop",
   "gnome-session-wayland-session",
   "gnome-settings-daemon",
@@ -4009,6 +4041,8 @@ name = "tunaos-fedora"
 baseurl = "https://repo.tunaos.org/xfce/44-x86_64/"
 priority = 100
 
+# ELN's Secret Service provider is oo7, not gnome-keyring (tunaOS#3810; see
+# desktops.gnome.packages.eln).
 [desktops.tuna.packages.eln]
 display_manager = "gdm"
 required = [
@@ -4021,7 +4055,8 @@ required = [
   "gnome-shell",
   "gnome-settings-daemon",
   "gnome-control-center",
-  "gnome-keyring",
+  "oo7-daemon",
+  "pam_oo7",
   "evolution-data-server",
   "xdg-desktop-portal-gnome",
   "xdg-desktop-portal-gtk",
