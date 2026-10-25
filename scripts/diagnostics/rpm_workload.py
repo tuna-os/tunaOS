@@ -46,7 +46,7 @@ def controls(proxy: str, config: dict, record=lambda _event: None) -> dict:
         if status != 403:
             raise ValueError(f'negative control did not receive policy denial: {host} ({status})')
         results['proxy_denials'].append(host)
-    for host in ('mirror.stream.centos.org', 'ghcr.io'):
+    for host in ('mirror.stream.centos.org', 'dl.fedoraproject.org', 'ghcr.io'):
         status, headers = tunnel(proxy, host)
         address = headers.get('x-diagnostic-upstream-ip', '')
         record({'control': 'proxy-positive', 'target': host, 'status': status, 'address': address})
@@ -101,6 +101,19 @@ def ensure_system_log() -> None:
     # libdnf writes hawkey.log under /var/log whatever logdir says, and the
     # centos-bootc base ships no /var/log, so a harmless --version exits 1.
     SYSTEM_LOG.mkdir(exist_ok=True)
+
+
+def add_epel(config: dict, repos: Path) -> None:
+    """Add EPEL after bootstrap, so only the native solver run sees it.
+
+    EPEL publishes no signed repomd (repomd.xml.asc is 404), so repo_gpgcheck=0 is
+    the one reviewed exception; every package signature is still checked.
+    """
+    epel = config['epel']
+    (repos / 'epel.repo').write_text(
+        f'[{epel["id"]}]\nname=EPEL 10 (package signatures only)\nbaseurl={epel["baseurl"]}\n'
+        f'gpgkey=file:///input/epel.gpg\nenabled=1\ngpgcheck=1\nrepo_gpgcheck=0\n'
+        f'priority={epel["priority"]}\nsslverify=1\nskip_if_unavailable=False\n')
 
 
 def prepare_fixture(config: dict) -> list[str]:
@@ -179,6 +192,7 @@ def execute(proxy: str) -> None:
     (OUTPUT / 'baseline-rpms.txt').write_text(subprocess.run(
         ['rpm', '-qa', '--qf', '%{NAME}\t%{VERSION}-%{RELEASE}\t%{ARCH}\n'],
         check=True, capture_output=True, text=True).stdout)
+    add_epel(config, WORK / 'repos')
     with (OUTPUT / 'native-install.log').open('w') as log:
         completed = subprocess.run([
             sys.executable, '-I', '/input/consumer.py', '--transport', '/input/transport.py',

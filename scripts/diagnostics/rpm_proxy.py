@@ -16,7 +16,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 ALLOWED = frozenset({
     'ghcr.io', 'pkg-containers.githubusercontent.com',
     'tuf-repo-cdn.sigstore.dev', 'rekor.sigstore.dev', 'fulcio.sigstore.dev',
-    'mirror.stream.centos.org',
+    'mirror.stream.centos.org', 'dl.fedoraproject.org',
 })
 LIMIT = threading.BoundedSemaphore(12)
 

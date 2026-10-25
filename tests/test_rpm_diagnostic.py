@@ -29,7 +29,9 @@ workload = module('rpm_workload')
 
 
 @pytest.mark.parametrize('authority', ['repo.tunaos.org:443', 'ghcr.io:80', 'GHCR.IO:443',
-    'ghcr.io.:443', 'user:SECRET@ghcr.io:443', '127.0.0.1:443', 'ghcr%2eio:443'])
+    'ghcr.io.:443', 'user:SECRET@ghcr.io:443', '127.0.0.1:443', 'ghcr%2eio:443',
+    'mirrors.fedoraproject.org:443', 'download.fedoraproject.org:443', 'fedoraproject.org:443',
+    'dl.fedoraproject.org.evil.example:443', 'dl.fedoraproject.org:80'])
 def test_exact_proxy_allowlist(authority):
     with pytest.raises(ValueError):
         proxy.authority(authority)
@@ -241,7 +243,7 @@ def test_successful_controls_keep_concrete_failure_evidence(monkeypatch):
     events = []
     result = workload.controls('172.30.0.2', {'denied_controls': ['repo.tunaos.org']}, events.append)
     assert result['passed']
-    assert result['positive_hosts'] == ['mirror.stream.centos.org', 'ghcr.io']
+    assert result['positive_hosts'] == ['mirror.stream.centos.org', 'dl.fedoraproject.org', 'ghcr.io']
     assert all(event['errno'] == 101 and 'seconds' in event for event in events if event['control'] == 'direct-deny')
 
 
@@ -296,3 +298,73 @@ def test_missing_system_log_is_created_so_dnf_exits_zero(tmp_path, monkeypatch):
         workload.checked([command, '--version'])
     workload.ensure_system_log()
     assert workload.checked([command, '--version']).stdout.startswith('4.')
+
+
+def test_proxy_admits_exactly_the_epel_host():
+    assert proxy.authority('dl.fedoraproject.org:443') == 'dl.fedoraproject.org'
+
+
+def test_sibling_fedora_host_is_a_committed_negative_control():
+    config = json.loads((ROOT / 'scripts/diagnostics/rpm_rehearsal.json').read_text())
+    assert 'mirrors.fedoraproject.org' in config['denied_controls']
+    assert 'mirrors.fedoraproject.org' not in proxy.ALLOWED
+
+
+def test_committed_epel_entry_is_admitted_by_plan():
+    value = runner.plan()
+    assert value['epel']['key_sha256'] == 'de390fc168eae5ab2852e9e93d34a0b9ddf05cf9ce90ee28d97de26a4b1f6b93'
+    assert value['epel']['priority'] > value['priority']
+
+
+def epel_config(**changes):
+    config = json.loads((ROOT / 'scripts/diagnostics/rpm_rehearsal.json').read_text())
+    config['epel'].update(changes)
+    return config
+
+
+@pytest.mark.parametrize('changes', [
+    {'baseurl': 'http://dl.fedoraproject.org/pub/epel/10/Everything/x86_64/'},
+    {'baseurl': 'https://mirrors.fedoraproject.org/pub/epel/10/Everything/x86_64/'},
+    {'baseurl': 'https://dl.fedoraproject.org.evil.example/pub/epel/10/Everything/x86_64/'},
+    {'baseurl': 'https://dl.fedoraproject.org/pub/epel/10/Everything/x86_64/?x=1'},
+    {'baseurl': 'https://dl.fedoraproject.org/pub/epel/9/Everything/x86_64/'},
+    {'baseurl': 'https://user:SECRET@dl.fedoraproject.org/pub/epel/10/Everything/x86_64/'},
+    {'key_url': 'http://dl.fedoraproject.org/pub/epel/RPM-GPG-KEY-EPEL-10'},
+    {'key_url': 'https://github.com/pub/epel/RPM-GPG-KEY-EPEL-10'},
+    {'key_sha256': 'de390fc1'},
+    {'key_sha256': 'DE390FC168EAE5AB2852E9E93D34A0B9DDF05CF9CE90EE28D97DE26A4B1F6B93'},
+    {'host': 'mirrors.fedoraproject.org'},
+    {'id': 'epel-other'},
+    {'priority': 1},
+    {'priority': 0},
+    {'priority': 100},
+    {'extra': 'x'},
+])
+def test_epel_entry_rejects_unreviewed_values(changes):
+    with pytest.raises(ValueError, match='EPEL entry'):
+        runner.check_epel(epel_config(**changes))
+
+
+def test_epel_key_is_fetched_by_hash_from_the_exact_host():
+    runner.check_download_url('https://dl.fedoraproject.org/pub/epel/RPM-GPG-KEY-EPEL-10')
+    for url in ('http://dl.fedoraproject.org/pub/epel/RPM-GPG-KEY-EPEL-10',
+                'https://mirrors.fedoraproject.org/x', 'https://fedoraproject.org/x'):
+        with pytest.raises(ValueError):
+            runner.check_download_url(url)
+
+
+def test_epel_repo_is_added_after_bootstrap_and_passes_the_consumer_check(tmp_path):
+    consumer = importlib.util.spec_from_file_location('consumer', ROOT / 'scripts/install-oci-rpm-repository.py')
+    consumer_module = importlib.util.module_from_spec(consumer)
+    consumer.loader.exec_module(consumer_module)
+    config = json.loads((ROOT / 'scripts/diagnostics/rpm_rehearsal.json').read_text())
+    workload.add_epel(config, tmp_path)
+    text = (tmp_path / 'epel.repo').read_text()
+    assert 'gpgcheck=1\n' in text and 'repo_gpgcheck=0\n' in text and 'priority=99\n' in text
+    key = tmp_path / 'epel.gpg'  # the workload mounts the hashed key at /input/epel.gpg
+    key.write_text('key')
+    (tmp_path / 'epel.repo').write_text(text.replace('file:///input/epel.gpg', key.as_uri()))
+    ((name, _, keys),) = consumer_module.upstream_configs(tmp_path)
+    assert name == 'epel.repo' and list(keys) == [key.as_uri()]
+    assert 'file:///input/epel.gpg' in text
+    assert 'epel.gpg' in (HERE / 'run_rpm_rehearsal.py').read_text()  # key is part of hashed inputs

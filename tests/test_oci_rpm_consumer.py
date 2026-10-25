@@ -428,3 +428,39 @@ def test_file_symlink_escaping_the_tree_is_refused(el10_layout):
     with pytest.raises(ValueError, match='leaves the reviewed tree'):
         consumer.install(args)
     assert calls == []
+
+
+EPEL = ('[epel]\nbaseurl=https://dl.fedoraproject.org/pub/epel/10/Everything/x86_64/\nenabled=1\n'
+        'gpgcheck=1\nrepo_gpgcheck=0\npriority=99\ngpgkey=KEY\n')
+
+
+def test_only_the_reviewed_epel_repo_may_skip_metadata_signatures(fixture):
+    args, _, _, _ = fixture
+    key = args.key.as_uri()
+    (args.upstream_repos / 'epel.repo').write_text(EPEL.replace('KEY', key))
+    assert [n for n, _, _ in consumer.upstream_configs(args.upstream_repos)] == ['distro.repo', 'epel.repo']
+
+
+@pytest.mark.parametrize('change', [
+    ('[epel]', '[centos]'),
+    ('dl.fedoraproject.org', 'mirrors.fedoraproject.org'),
+    ('dl.fedoraproject.org', 'dl.fedoraproject.org.evil.example'),
+    ('gpgcheck=1', 'gpgcheck=0'),
+    ('repo_gpgcheck=0', 'repo_gpgcheck=false'),
+    ('enabled=1', 'enabled=0'),
+])
+def test_metadata_signature_exception_is_exactly_epel(fixture, change):
+    args, calls, _, _ = fixture
+    (args.upstream_repos / 'distro.repo').write_text(EPEL.replace('KEY', args.key.as_uri()).replace(*change))
+    with pytest.raises(ValueError, match='signatures'):
+        consumer.install(args)
+    assert calls == []
+
+
+def test_other_repository_cannot_disable_metadata_signatures(fixture):
+    args, calls, _, _ = fixture
+    (args.upstream_repos / 'distro.repo').write_text(
+        '[distro]\nbaseurl=https://distro.example/repo\nenabled=1\ngpgcheck=1\nrepo_gpgcheck=0\ngpgkey=' + args.key.as_uri() + '\n')
+    with pytest.raises(ValueError, match='signatures'):
+        consumer.install(args)
+    assert calls == []

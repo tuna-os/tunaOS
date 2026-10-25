@@ -36,6 +36,23 @@ def run(*args, timeout=120, check=True, output_path: Path | None = None):
     return subprocess.run(args, check=check, capture_output=True, text=True, timeout=timeout)
 
 
+def check_epel(config: dict) -> None:
+    """EPEL 10 is the one reviewed non-CentOS source: highway is only there."""
+    epel = config['epel']
+    base, key = urlsplit(epel['baseurl']), urlsplit(epel['key_url'])
+    if (set(epel) != {'id', 'host', 'baseurl', 'key_url', 'key_sha256', 'priority'}
+            or epel['id'] != 'epel' or epel['host'] != 'dl.fedoraproject.org'
+            or (base.scheme, base.netloc) != ('https', epel['host'])
+            or (key.scheme, key.netloc) != ('https', epel['host'])
+            or not re.fullmatch(r'/pub/epel/10/Everything/x86_64/', base.path)
+            or not re.fullmatch(r'/pub/epel/RPM-GPG-KEY-EPEL-10', key.path)
+            or base.query or base.fragment or key.query or key.fragment
+            or not re.fullmatch(r'[0-9a-f]{64}', epel['key_sha256'])
+            or not config['priority'] < epel['priority'] <= 99
+            or epel['host'] not in FETCH_HOSTS):
+        raise ValueError('EPEL entry does not match the reviewed repository, key or priority')
+
+
 def plan(root=ROOT) -> dict:
     config = json.loads((root / 'scripts/diagnostics/rpm_rehearsal.json').read_text())
     source = tomllib.loads((root / 'tunaos.toml').read_text())
@@ -45,6 +62,7 @@ def plan(root=ROOT) -> dict:
     base = source['variants']['skipjack']['base_image']
     if base.split('@')[1] != config['base'].split('@')[1]:
         raise ValueError('configured Skipjack base changed; review the immutable test cell')
+    check_epel(config)
     required = policy['required']
     if len(required) != 28 or len(set(required)) != 28:
         raise ValueError('expected the reviewed 28-name required inventory')
@@ -52,7 +70,7 @@ def plan(root=ROOT) -> dict:
             'untested_full_desktop_policy': policy, 'production_eligible': False}
 
 
-FETCH_HOSTS = frozenset({'raw.githubusercontent.com', 'www.centos.org', 'github.com',
+FETCH_HOSTS = frozenset({'raw.githubusercontent.com', 'www.centos.org', 'dl.fedoraproject.org', 'github.com',
                          'release-assets.githubusercontent.com', 'objects.githubusercontent.com'})
 
 
@@ -92,6 +110,7 @@ def inputs(destination: Path, config: dict) -> None:
     sources = {
         'transport.py': (f'{raw}/scripts/oras_distribution.py', config['transport_sha256']),
         'public.gpg': (f'{raw}/public.gpg', config['key_sha256']),
+        'epel.gpg': (config['epel']['key_url'], config['epel']['key_sha256']),
         'centos.gpg': ('https://www.centos.org/keys/RPM-GPG-KEY-CentOS-Official-SHA256', config['centos_key_sha256']),
         'bin/cosign': (f'https://github.com/sigstore/cosign/releases/download/v{config["cosign_version"]}/cosign-linux-amd64', config['cosign_sha256']),
     }
