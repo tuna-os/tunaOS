@@ -27,6 +27,13 @@
 
 set -euxo pipefail
 
+# Identity staging is deliberately non-buildable until all visible consumers
+# and boot qualification exist. Do not bypass the preparation command's gate.
+if [[ -e manifests/fork-identity.json || -L manifests/fork-identity.json ]]; then
+	echo "ERROR: fork identity staging cannot build: installer/Plymouth/boot qualification incomplete" >&2
+	exit 2
+fi
+
 # ── Defaults ──────────────────────────────────────────────────────────────────
 IS_CI="${IS_CI:-0}"
 USE_CACHE="${USE_CACHE:-0}"

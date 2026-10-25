@@ -1,0 +1,12 @@
+# Staging only: --identity-staging is required; image builds remain blocked.
+# Supply your own single-frame PNG beside the initialized config as logo.png.
+schema_version: 1
+targets:
+  variants: [yellowfin, grouper, flounder]
+  flavors: [gnome]
+  platforms: [linux/amd64]
+global:
+  branding:
+    name: Harbor
+    logo: logo.png
+    homepage: https://example.org/harbor
