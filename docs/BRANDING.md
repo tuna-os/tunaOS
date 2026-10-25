@@ -7,13 +7,14 @@ for free, and which parts each desktop owns.
 It exists because `marlin:gnome` looked unbranded, and every check we had still
 passed.
 
-## Opt-in fork preview
+## Fork branding
 
-A prepared fork context can change the support, documentation and home URLs.
-It can also replace the shared JPEG wallpaper. See the [contract for fork
-consumers](FORK-BRANDING.md) for the inputs, desktop hooks and runtime checks.
-The preview rejects a custom name or logo. Those changes need coordinated
-support for the installer, boot splash and desktop assets.
+A fork sets its own name, URLs, codenames, accents and splash theme in
+`tunaos.toml`, the same file and compiler TunaOS uses. Its wallpapers are files
+named by the convention in [Wallpapers](#wallpapers). The former YAML fork
+preview and its single shared-wallpaper override are retired; convert an old
+file with `python3 scripts/config.py migrate-fork-config --legacy OLD.yaml`
+([migration](PRIMARY-CONFIG-MIGRATION.md#migrating-a-legacy-fork-config)).
 Tests of source files do not prove what an image displays.
 
 ## The three layers

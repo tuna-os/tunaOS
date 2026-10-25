@@ -1,13 +1,15 @@
-# Template only: initialize to a NEW pinned file before preparation.
-# Native package names are scoped to package families. No publish occurs.
 schema_version: 1
 image:
   registry: localhost
   namespace: harbor-preview
 targets:
-  variants: [yellowfin, grouper]
-  flavors: [gnome]
-  platforms: [linux/amd64]
+  variants:
+  - yellowfin
+  - grouper
+  flavors:
+  - gnome
+  platforms:
+  - linux/amd64
 global:
   branding:
     wallpaper: assets/harbor-wallpaper.jpg
@@ -15,9 +17,13 @@ global:
     documentation: https://example.org/harbor/docs
     support: https://example.org/harbor/support
   packages:
-    add: [htop]
+    add:
+    - htop
 overrides:
   variants:
     yellowfin:
       packages:
-        optional: [fastfetch]
+        optional:
+        - fastfetch
+catalog:
+  sha256: 46841c62f73c140c4a48a524915dd3bcb2508d49285f3b3098118815cef21abb

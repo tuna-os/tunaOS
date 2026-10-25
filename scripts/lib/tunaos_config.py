@@ -757,30 +757,6 @@ def prepare_debian_build_context(root, output, variant, desktop, platforms):
     tracked = subprocess.check_output(['git', '-C', str(root), 'ls-files', '-z'], text=True).split('\0')
     snapshot = {}
     inputs = set(filter(None, tracked))
-    # Prepared preview contexts carry a validated manifest and content-addressed
-    # assets outside their Git index. Preserve only those explicit inputs.
-    payload = root / 'manifests/fork-config.json'
-    if payload.exists() or payload.is_symlink():
-        if payload.is_symlink() or not payload.is_file():
-            raise ConfigError('prepared customization manifest must be a regular file')
-        manifest = json.loads(payload.read_text())
-        inputs.add('manifests/fork-config.json')
-        assets = manifest.get('assets', {})
-        if not isinstance(assets, dict):
-            raise ConfigError('prepared customization assets must be a mapping')
-        for asset in assets.values():
-            if not isinstance(asset, dict) or set(asset) != {'path', 'sha256'}:
-                raise ConfigError('prepared customization asset requires path and sha256')
-            digest = asset['sha256']
-            if not isinstance(digest, str) or not re.fullmatch(r'[0-9a-f]{64}', digest):
-                raise ConfigError('prepared customization asset digest is invalid')
-            if asset['path'] != f'fork-assets/{digest}.jpg':
-                raise ConfigError('prepared customization asset path is invalid')
-            relative = 'manifests/' + asset['path']
-            path = root / relative
-            if path.is_symlink() or not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != digest:
-                raise ConfigError('prepared customization asset is missing or has changed')
-            inputs.add(relative)
     for relative in sorted(inputs):
         # Derived files can exist in an old checkout index during migration;
         # they are never authorities and must not enter the source snapshot.

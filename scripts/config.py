@@ -31,15 +31,39 @@ IDENTITY_ADAPTERS = {
 }
 
 
+def migrate_fork_config(target, legacy, write):
+    # PyYAML and the package edit layer are needed here only; validate/generate stay dependency-free.
+    try:
+        from lib import legacy_fork_config, package_authoring
+    except ModuleNotFoundError as exc:
+        raise tunaos_config.ConfigError(f'migrate-fork-config needs {exc.name}: python3 -m pip install PyYAML') from exc
+    try:
+        source = package_authoring.read_config(target)
+        result = legacy_fork_config.convert(source, legacy_fork_config.load_legacy(package_authoring.read_file(legacy, 1 << 20)))
+    except package_authoring.AuthoringError as exc:
+        raise tunaos_config.ConfigError(str(exc)) from exc
+    print('note: catalog.sha256 is not verified against this checkout; review the diff below.', file=sys.stderr)
+    print(package_authoring.diff(source, result, target), end='')
+    if write:
+        try:
+            package_authoring.atomic_write(target, source, result)
+        except package_authoring.AuthoringError as exc:
+            raise tunaos_config.ConfigError(str(exc)) from exc
+        print(f'wrote {target}', file=sys.stderr)
+    return 0
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=('validate', 'generate', 'show', 'generate-builder-config', 'check-builder-config', 'generate-builder-flavors', 'check-builder-flavors', 'generate-flatpak-policy', 'check-flatpak-policy', *(f'{verb}-{name}' for name in IDENTITY_ADAPTERS for verb in ('generate', 'check')), 'check-drawn-artwork', 'generate-debian-contract', 'prepare-debian-context', 'verify-debian-image'))
+    parser.add_argument('command', choices=('validate', 'generate', 'show', 'generate-builder-config', 'check-builder-config', 'generate-builder-flavors', 'check-builder-flavors', 'generate-flatpak-policy', 'check-flatpak-policy', *(f'{verb}-{name}' for name in IDENTITY_ADAPTERS for verb in ('generate', 'check')), 'check-drawn-artwork', 'generate-debian-contract', 'prepare-debian-context', 'verify-debian-image', 'migrate-fork-config'))
     parser.add_argument('--root', type=Path, default=tunaos_config.ROOT)
     parser.add_argument('--output', type=Path)
     parser.add_argument('--image')
     parser.add_argument('--variant')
     parser.add_argument('--desktop')
     parser.add_argument('--platform')
+    parser.add_argument('--legacy', type=Path, help='legacy fork-config YAML/JSON for migrate-fork-config')
+    parser.add_argument('--write', action='store_true', help='replace tunaos.toml; without it migrate-fork-config only prints the diff')
     args = parser.parse_args()
     try:
         verb, _, adapter = args.command.partition('-')
@@ -84,6 +108,10 @@ def main():
                 target.write_text(content, encoding='utf-8')
             print(target)
             return 0
+        elif args.command == 'migrate-fork-config':
+            if args.legacy is None:
+                parser.error('migrate-fork-config requires --legacy')
+            return migrate_fork_config(args.root / 'tunaos.toml', args.legacy, args.write)
         elif args.command == 'verify-debian-image':
             if not all((args.image, args.variant, args.desktop, args.platform)):
                 parser.error('verify-debian-image requires --image, --variant, --desktop and --platform')
