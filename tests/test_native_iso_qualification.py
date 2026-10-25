@@ -167,12 +167,16 @@ def test_harness_native_branch_does_not_reach_browser_emitter():
     assert 'TUNAOS_QUAL_EXECUTION_KIND' not in parity
 
 
-@pytest.mark.parametrize('source', ['native-artifact', 'build', 'r2-latest', ''])
 @pytest.mark.parametrize('kind', ['native', 'browser'])
-def test_final_workflow_validator_selects_source_contract(tmp_path, source, kind):
+def test_final_workflow_validator_accepts_native_evidence_only(tmp_path, kind):
+    """The strict step runs for native artifacts only, so only its contract applies.
+
+    Browser evidence is a different contract (QualificationEvidence/v1); the
+    native job must reject it rather than validate it under another schema.
+    """
     workflow = yaml.safe_load((ROOT/'.github/workflows/iso-e2e.yml').read_text())
     step = next(s for s in workflow['jobs']['e2e']['steps'] if s.get('name') == 'Validate strict qualification evidence')
-    assert step['env']['ISO_SOURCE'] == '${{ inputs.source }}'
+    assert 'steps.strict.outcome' in step['if']
     scripts = tmp_path/'scripts'; scripts.mkdir()
     for name in ('native-iso-qualification.py', 'verify-experience-manifest.py'):
         (scripts/name).symlink_to(ROOT/'scripts'/name)
@@ -180,8 +184,8 @@ def test_final_workflow_validator_selects_source_contract(tmp_path, source, kind
     data = evidence() if kind == 'native' else BROWSER_TEST.manifest()
     (output/'qualification-evidence.json').write_text(json.dumps(data))
     result = subprocess.run(['bash', '-c', step['run']], cwd=tmp_path,
-        env=dict(os.environ, ISO_SOURCE=source), capture_output=True, text=True)
-    assert (result.returncode == 0) is ((source == 'native-artifact') == (kind == 'native')), result.stderr
+        env=dict(os.environ), capture_output=True, text=True)
+    assert (result.returncode == 0) is (kind == 'native'), result.stderr
 
 
 @pytest.mark.parametrize('mode', ['plain', 'luks'])

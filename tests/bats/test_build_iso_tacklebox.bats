@@ -172,7 +172,7 @@ teardown() {
 @test "offline payload stays pinned to the promoted source image" {
 	SCRIPT_PATH="${REPO_ROOT:-$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)}/scripts/build-iso-tacklebox.sh"
   grep -q 'SOURCE_IMAGE_REF=$(tunaos_image_ref "$VARIANT" "$FLAVOR" "$REPO" "$TAG")' "$SCRIPT_PATH"
-  grep -q 'PAYLOAD_REF="${TUNA_LIVE_PAYLOAD_REF:-$SOURCE_IMAGE_REF}"' "$SCRIPT_PATH"
+  grep -qF 'PAYLOAD_REF="${TUNA_LIVE_PAYLOAD_REF:-$(tunaos_image_ref "$VARIANT" "$FLAVOR" ghcr "$TAG")}"' "$SCRIPT_PATH"
   grep -q '"source": "${SOURCE_IMAGE_REF}"' "$SCRIPT_PATH"
   grep -q '"ref": "${PAYLOAD_REF}"' "$SCRIPT_PATH"
   grep -q 'cp -a "${REPO_ROOT}/live-iso/common/src/." "$CUSTOMIZE_DIR/"' "$SCRIPT_PATH"
@@ -181,6 +181,46 @@ teardown() {
   run jq -r '.offline_payloads[0].source + " -> " + .offline_payloads[0].ref' <<<"$recipe"
   [ "$status" -eq 0 ]
   [ "$output" = "${source_ref} -> ${source_ref}" ]
+}
+
+@test "offline payload ref defaults to the canonical GHCR name and honours a pin" {
+	# A default local build copies localhost/<variant>:<flavor> into the store.
+	# The installed system and bootc's direct live-ISO path resolve the
+	# canonical GHCR name, so the embedded ref must not follow the build source
+	# (review thread on #3431: the default had become the localhost alias).
+	# Run the script's own assignment, with the ref helper stubbed to show
+	# which repo it is asked for.
+	SCRIPT_PATH="${REPO_ROOT}/scripts/build-iso-tacklebox.sh"
+	line="$(grep -E '^PAYLOAD_REF=' "$SCRIPT_PATH")"
+	[ -n "$line" ]
+	tunaos_image_ref() { echo "${3}/${1}:${4}"; }
+	VARIANT=yellowfin FLAVOR=gnome TAG=gnome REPO=local
+	unset TUNA_LIVE_PAYLOAD_REF
+	eval "$line"
+	[ "$PAYLOAD_REF" = "ghcr/yellowfin:gnome" ]
+	TUNA_LIVE_PAYLOAD_REF="ghcr.io/tuna-os/yellowfin:gnome@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	eval "$line"
+	[ "$PAYLOAD_REF" = "$TUNA_LIVE_PAYLOAD_REF" ]
+}
+
+@test "an overlay without its source digest is refused before any build work" {
+	SCRIPT_PATH="${REPO_ROOT}/scripts/build-iso-tacklebox.sh"
+	grep -qF 'ERROR: TUNA_LIVE_OVERLAY_REF requires TUNA_LIVE_BASE_DIGEST' "$SCRIPT_PATH"
+	# The refusal sits before the recipe is written, so no ISO work starts.
+	refusal="$(grep -nF 'TUNA_LIVE_OVERLAY_REF requires TUNA_LIVE_BASE_DIGEST' "$SCRIPT_PATH" | cut -d: -f1)"
+	recipe="$(grep -nF 'cat >"$RECIPE_FILE"' "$SCRIPT_PATH" | cut -d: -f1)"
+	[ "$refusal" -lt "$recipe" ]
+}
+
+@test "the live wrapper carries the pinned identity into customization" {
+	SCRIPT_PATH="${REPO_ROOT}/scripts/build-iso-tacklebox.sh"
+	for name in TUNA_LIVE_BASE_IMAGE TUNA_LIVE_BASE_DIGEST TUNA_LIVE_PLATFORM \
+		TUNA_LIVE_OVERLAY_DIGEST TUNA_LIVE_ENGINE_DIGEST; do
+		[ "$(grep -c "export ${name}=" "$SCRIPT_PATH")" -eq 1 ]
+	done
+	# The wrapper must not also embed the customization body: the real script
+	# stays a sibling file so a single copy runs (no second concatenated copy).
+	! grep -q 'cat "${REPO_ROOT}/live-iso/common/src/customize-live.sh"' "$SCRIPT_PATH"
 }
 
 @test "image source override does not replace canonical offline payload ref" {

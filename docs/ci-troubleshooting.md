@@ -2403,13 +2403,14 @@ runs the copy commands and rejects an absent pin file before customization.
 
 ### Chunkah source build rejects duplicate writable mount options
 
-Run `40025622951` built the OS image but stopped before ISO creation. The image pull failed for Chunkah; the log suppressed its error, so the cause is unknown.
-The source fallback failed with `rw, shared, rw, bind` on Podman 4.9.3.
+Run `40025622951` built the OS image but stopped before ISO creation. The pull of the Chunkah image failed, and the log hid the error.
+The source fallback then failed with `rw, shared, rw, bind` on Podman 4.9.3.
 
-That cache parser adds explicit `rw` and its default `rw` twice. For that measured
-version, use a temporary Containerfile with only the known cache `rw` removed.
-Keep writable bind mounts and all read-only options. Reject a Containerfile whose bytes differ from the reviewed file.
-Record source and file hashes; these observations do not make mutable source a pin.
+Podman 4.9.3 adds `rw` twice to a cache mount. For that version, the build uses a temporary Containerfile without the extra cache `rw`.
+It keeps writable bind mounts and all read-only options.
+It rejects a Containerfile that differs from the reviewed file.
+
+It records the source hash and the file hashes. These hashes do not make mutable source a pin.
 Regression: `tests/regressions/test_issue_3809_chunkah_cache_mounts.py` (#3809).
 Run [40064779947](https://github.com/tuna-os/tunaOS/actions/runs/40064779947) ran the fallback with build file SHA256 `8f744160…`.
 Three of the four cache mounts (dnf, cargo, target) passed, and cargo finished the release build.
@@ -2417,63 +2418,59 @@ The run then failed on a quay.io HTTP 503 in a later `FROM` (see below).
 
 ### Native artifact transfer resets before qualification
 
-Run [40039204976](https://github.com/tuna-os/tunaOS/actions/runs/40039204976),
-job 120743179663, failed on 2026-10-24 at 02:39 UTC with a connection reset
-at 3,886,055,424 of 6,158,287,146 archive bytes after 341.888 seconds. The
-size-derived deadline was 3,057 seconds; increasing that deadline would not
-fix this observed failure. GUI install and detached-boot qualification did
-not run.
+Run [40039204976](https://github.com/tuna-os/tunaOS/actions/runs/40039204976), job 120743179663, failed on 2026-10-24 at 02:39 UTC.
+The connection reset at 3,886,055,424 of 6,158,287,146 archive bytes, after 341.888 seconds.
+The size-derived deadline was 3,057 seconds, so a longer deadline would not fix this failure.
+GUI install and detached-boot qualification did not run.
 
-The local recovery candidate restarts the entire archive through the same
-GitHub CLI API endpoint, up to three total attempts under one transfer deadline
-and one last-stdout-progress idle clock. It does not request ranges or retain
-signed download URLs. Only classified connection-reset, unexpected-EOF,
-I/O-timeout and TLS-timeout failures with complete bounded stderr are eligible.
-HTTP responses, cancellation, deadline exhaustion, short successful responses,
-oversize content and integrity failures remain terminal. The file is truncated
-before each retry and complete size/SHA validation still precedes extraction.
+The fetcher now restarts the whole archive download through the same GitHub CLI endpoint.
+It makes at most three tries under one transfer deadline and one idle clock for the last stdout progress.
+It does not request ranges and does not keep signed download URLs.
+Only these failures get a retry: connection reset, unexpected EOF, I/O timeout and TLS timeout.
+The failure must also carry complete and bounded stderr.
 
-GitHub documents a one-minute-lived artifact download redirect, not a stable
-Range/ETag resume contract:
+HTTP responses, cancellation, deadline exhaustion, short successful responses, oversize content and integrity failures end the run.
+The fetcher empties the file before each retry. Size and SHA validation still run before extraction.
+
+GitHub documents a download redirect that lives one minute. It does not document a stable Range or ETag resume contract:
 https://docs.github.com/en/rest/actions/artifacts#download-an-artifact
 
-This is preventive transport hardening, not permission to qualify an artifact
-from a failed aggregate producer. Existing source, run, attempt, successful
-producer/build, expiry and digest admission rules remain unchanged. A rerun
-increments attempt and does not turn attempt-1 artifacts into attempt-2 media.
+This change only makes the transfer stronger. It does not let a failed producer run qualify an artifact.
+The checks for source, run, try number, producer build, expiry and digest stay the same.
+A rerun raises the try number. It does not turn the media of try 1 into the media of try 2.
 
 ### Installer fisherman floor names an unmerged branch commit
 
 **Symptom:** Run [40057457412](https://github.com/tuna-os/tunaOS/actions/runs/40057457412)
 failed `Installers build fisherman from tuna-os/fisherman`. All five frontends
-pinned `02ac7097`, and each was reported older than the floor `d349c31e`.
+pinned `02ac7097`, and the check called each one older than the floor `d349c31e`.
 
 **Measured cause:** `d349c31e` is a commit on the branch of fisherman#340.
-That PR was squash-merged into `dev` as `02ac7097`. The compare API returns
+GitHub squash-merged that PR into `dev` as `02ac7097`. The compare API returns
 `diverged` (ahead 4, behind 1), so the floor is never an ancestor of `dev`.
-The landed files are identical to the PR head; for example, `mediainput.go`
+The landed files match the PR head; for example, `mediainput.go`
 has the same blob SHA in both commits.
 
 **Fix:** Set the floor to the landed commit `02ac7097` on `dev`. Keep the
-ancestry check fail-closed. A timestamp is not proof of content.
+ancestry check fail-closed. A timestamp does not prove content.
 
 ### quay.io returns HTTP 503 during the native ISO build
 
 **Symptom:** Run [40057457477](https://github.com/tuna-os/tunaOS/actions/runs/40057457477)
-failed `Build OS image` after three buildah attempts within 45 seconds.
-Each attempt reported `fetching blob: received unexpected HTTP status: 503`
+failed `Build OS image` after three buildah tries within 45 seconds.
+Each try reported `fetching blob: received unexpected HTTP status: 503`
 for `quay.io/centos-bootc/centos-bootc`. Run
 [40064779947](https://github.com/tuna-os/tunaOS/actions/runs/40064779947)
-built the image, made one pinned Chunkah pull, and used the source fallback
-2.8 seconds later. The fallback then failed with HTTP 503 on
+built the image and made a single pull of the pinned Chunkah image.
+It used the source fallback 2.8 seconds later. The fallback then failed with HTTP 503 on
 `quay.io/centos/centos:stream10`.
 
 **Measured cause:** quay.io returned HTTP 503 for some blob requests. An anonymous range request for the
-first three blobs returned HTTP 206 about 30 minutes later. The pinned Chunkah
-pull had one attempt and discarded stderr, so its error is not known.
+first blobs gave HTTP 206 about 30 minutes later. The pinned Chunkah
+pull had one try and discarded stderr, so its error is not known.
 
 **Fix:** Do not change the base image pin. Run the job again. The pinned Chunkah pull now has three
-attempts with a 10 s and a 20 s delay, and its stderr is visible. The mutable
+tries, with a 10 s and a 20 s delay, and its stderr is visible. The mutable
 source fallback runs only after the third failure.
 
 ### Strict LUKS leg stops at `Shell>` after a passed plain leg
@@ -2482,7 +2479,7 @@ source fallback runs only after the third failure.
 passed the plain GUI install and its detached cold and warm boots. The LUKS
 walkthrough then reported `GUI did not transition from unknown to welcome`.
 
-**Measured cause:** Both legs used one OVMF NVRAM file. The plain install put
+**Measured cause:** Both legs used the same OVMF NVRAM file. The plain install put
 `Boot000A "CentOS Stream"` first in the boot order. The LUKS live boot tried
 that shim on the new blank disk, and then started `EFI Internal Shell`. The
 firmware did not try the CD. See `strict-luks-live-serial.log`.
@@ -2495,48 +2492,88 @@ Regression: `tests/regressions/test_issue_3380_strict_legs_get_fresh_uefi_nvram.
 **Symptom:** Run [40074592548](https://github.com/tuna-os/tunaOS/actions/runs/40074592548)
 passed the LUKS GUI install with a LUKS header present. The detached cold boot
 then failed after 15 minutes with `passphrase prompt never appeared`. The
-framebuffer showed one kernel line.
+screen showed a single kernel line.
 
 **Observed limit:** The serial helper saw no prompt and did not type a
-passphrase. A Plymouth or console routing issue is a hypothesis, not proof
+passphrase. A fault in Plymouth or console output is a hypothesis. It does not prove
 that the shipped graphical prompt works.
 
-**Diagnostic path, not strict qualification:** `luks-first-boot.py` retains
+**Diagnostic path, not strict qualification:** `luks-first-boot.py` keeps
 its opt-in `TUNAOS_LUKS_GRUB_APPEND` support. It can open the GRUB entry editor
-and append serial/text-prompt arguments for that boot only. It does not write
-the installed disk, but it changes the runtime boot path. Such a result is a
-diagnostic result, not unchanged shipped-media qualification. Strict mode
-rejects these overrides and explicitly leaves this option empty.
-The helper's GRUB layout checks and tests remain in place.
+and append serial or text-prompt arguments for that boot only. It does not write
+the installed disk, but it changes the runtime boot path. Such a pass is a
+diagnostic result. It is not proof for shipped media with unchanged arguments.
+
+Strict mode refuses these overrides and leaves this option empty.
+The helper keeps its GRUB layout checks and tests.
 
 ### Strict encrypted installed boot has no serial unlock prompt
 
 Run [40074592548](https://github.com/tuna-os/tunaOS/actions/runs/40074592548)
 completed both GUI installs. Plain cold and warm boots passed. The encrypted
-installed boot reached GRUB, then the serial unlock helper saw no prompt.
-The final image showed only a TDX warning. This does not prove that a password
-was rejected or that a working prompt was hidden.
+installed boot reached GRUB, then the unlock helper on serial saw no prompt.
+The final image showed only a TDX warning. This does not prove that the guest
+rejected a password or that it hid a prompt that works.
 
 Strict encrypted cold and warm boots now collect passive frames during the
 existing unlock wait. See `strict-luks-{cold,warm}-observation/observations.json`
-and its frame files in the diagnostic artifact. The observer uses the existing
-local VNC socket, never HMP, keys or pointer events. It does not change the
-installed image or kernel arguments. It stops after 120 seconds, six frames,
-or 30 seconds without a changed frame. Each frame is bounded to 8 MiB;
-the diagnostic collection limit remains 128 MiB. Raw OCR text is not logged.
+and its frame files in the diagnostic artifact.
+The observer uses the existing local VNC socket. It sends no HMP, key or pointer input.
+It does not change the installed image or the kernel arguments.
+It stops after 120 seconds, six frames, or 30 seconds without a changed frame.
 
-Observer reports always say `qualified: false`. Failure to collect a frame
-must not change the boot verdict. This adds evidence, not an unlock fix.
-The strict gate separately requires the actual desktop contract and matching
-installed image identity on both cold and warm boots. A helper exit status
-alone cannot prove either requirement. No VM disk or password config is added
-to the diagnostic artifact.
+It limits each frame to 8 MiB. The diagnostic collection limit stays 128 MiB.
+It writes no raw OCR text to the log.
 
+Observer reports always say `qualified: false`. If the observer cannot collect a frame,
+the boot verdict stays the same. This adds evidence, not an unlock fix.
+The strict gate also needs the real desktop contract and a matching
+installed image identity on both cold and warm boots.
+The helper exit status is not proof of either.
+The diagnostic artifact holds no VM disk and no password config.
 
-Native qualification v2 requires the `unmodified-installed` boot policy and
-explicit unchanged-argument proof from both strict boot fragments. The harness
-rejects GRUB edit traces before it writes those fragments. Legacy v1 receipts,
-including the green edited-boot receipt from run 40085763938, remain useful raw
-diagnostic evidence but are not accepted as current unchanged-boot proof.
-Do not relabel or promote old receipts. Native evidence is still separate from
+Native qualification v2 needs the `unmodified-installed` boot policy and an
+explicit proof of unchanged arguments in both strict boot fragments.
+The harness refuses traces of GRUB edits before it writes those fragments.
+
+Legacy v1 receipts stay as raw diagnostic evidence. This includes the green edited-boot receipt from run 40085763938.
+The gate does not accept them as proof of an unchanged boot.
+Do not relabel or promote old receipts. Native evidence stays separate from
 browser parity and cutover evidence.
+
+### The strict job fails and the log hides which leg failed (#3380)
+
+**Symptom:** The job `Qualify exact native ISO` fails with one exit code.
+The log does not say which leg stopped.
+
+**Measured cause:** Run [40093907774](https://github.com/tuna-os/tunaOS/actions/runs/40093907774)
+(head `3e61b0e0`) passed the plain install and its cold boot (11 s) and warm boot (11 s).
+The LUKS install passed too. Its unmodified installed cold boot then showed no passphrase prompt
+on serial or on screen for 15 minutes. The harness runs the second leg after the first fails.
+The job gives one exit code for both.
+
+**Fix:** The job summary now has one row per leg, from the step `Report strict leg verdicts`.
+The script `scripts/summarize-strict-legs.py` reads only files that the harness wrote.
+The LUKS row says `failed: unresolved prompt visibility (#3380)` only if the helper log has
+its own line `passphrase prompt never appeared` after a finished GUI install.
+Any other failure keeps a plain label.
+
+The job stays red until the image shows the prompt.
+The edited-GRUB pass in run 40085763938 is diagnosis. It never qualifies a target.
+`tests/test_summarize_strict_legs.py` runs the script on the retained files of run 40093907774.
+
+### The strict job never runs on a pull request or a schedule
+
+**Symptom:** A pull request that changes `live-iso/` builds an ISO but does not run the
+strict install check. The weekly smoke test of `iso-e2e.yml` runs the readiness check only.
+
+**Cause:** A check that every run fails on the same leg cannot report a regression.
+The encrypted leg fails by policy until the image shows the prompt (#3380).
+A trigger on every pull request would add a red mark that nobody can act on.
+
+**Fix:** `qualify-native-iso` runs only from a manual dispatch with flavor `gnome`.
+In `iso-e2e.yml` the strict step runs only for `source: native-artifact`.
+Every other source keeps `Run readiness e2e`.
+No green criterion names the strict job as a gate. Add it to a criterion only after
+both legs pass in a dispatched run and a schedule exists to renew that evidence.
+`tests/test_strict_qualification_wiring.py` pins this wiring.

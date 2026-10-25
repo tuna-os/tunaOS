@@ -316,3 +316,40 @@ def test_main_invalid_manifest_returns_error(tmp_path, monkeypatch, capsys):
     assert MODULE.main() == 1
     captured = capsys.readouterr()
     assert "error:" in captured.err
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        None,
+        "",
+        "   ",
+        123,
+        "not-a-date",
+        "2026-10-19T00:00:00",  # no timezone: ambiguous instant
+        "2099-01-01T00:00:00Z",  # in the future
+        "2026-13-45T00:00:00Z",
+    ],
+)
+def test_rejects_an_unusable_qualified_at(bad):
+    """A receipt whose digest was recomputed must still carry a real time.
+
+    Missing, unparsable, timezone-less and future values all passed before:
+    the checksum binds the bytes, not their meaning.
+    """
+    data = manifest(qualifiedAt=bad)
+    with pytest.raises(ValueError, match="qualifiedAt"):
+        MODULE.validate(data, "test")
+
+
+def test_rejects_a_missing_qualified_at_key():
+    data = manifest()
+    del data["qualifiedAt"]
+    data["receiptDigest"] = MODULE._receipt_digest(data)
+    with pytest.raises(ValueError, match="qualifiedAt"):
+        MODULE.validate(data, "test")
+
+
+@pytest.mark.parametrize("good", ["2026-10-19T00:00:00Z", "2026-10-19T02:00:00+02:00"])
+def test_accepts_a_zoned_past_qualified_at(good):
+    MODULE.validate(manifest(qualifiedAt=good), "test")

@@ -369,9 +369,9 @@ def download_step() -> dict:
 
 def test_the_lookup_tries_both_naming_schemes():
     run = download_step()["run"]
-    assert '${VARIANT}-${FLAVOR}-latest${PLATFORM_SUFFIX}.iso' in run, run[-800:]
-    assert '${VARIANT}-latest${PLATFORM_SUFFIX}.iso' in run, run[-800:]
-    assert '${VARIANT}-${DESKTOP}-latest${PLATFORM_SUFFIX}.iso' in run, run[-800:]
+    assert '${VARIANT}-${FLAVOR}-latest.iso' in run, run[-800:]
+    assert '${VARIANT}-latest.iso' in run, run[-800:]
+    assert '${VARIANT}-${DESKTOP}-latest.iso' in run, run[-800:]
 
 
 def test_gnome_maps_to_the_bare_variant_name():
@@ -381,7 +381,7 @@ def test_gnome_maps_to_the_bare_variant_name():
     assert 'DESKTOP="${FLAVOR%%-*}"' in run, run[-800:]
     gnome_branch = run[run.index('if [[ "$DESKTOP" == "gnome" ]]'):]
     head = gnome_branch[:gnome_branch.index("else")]
-    assert '${VARIANT}-latest${PLATFORM_SUFFIX}.iso' in head, head
+    assert '${VARIANT}-latest.iso' in head, head
     assert "${DESKTOP}" not in head, head
 
 
