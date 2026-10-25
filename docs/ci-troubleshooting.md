@@ -14,6 +14,7 @@ that touched 36 files across `.github/`, `build_scripts/`, `live-iso/`,
 |---|---|---|
 | ARM64 build passes but Snapdragon laptop support is unclear (#3116) | #3368 records postmarketOS observations and open TunaOS boot/install/update/rollback gates; an architecture manifest does not test board firmware or DTB selection. | Use [SNAPDRAGON.md](SNAPDRAGON.md) and report the exact device, image digest and hardware results. |
 | Bonito build succeeds despite bootc lint findings (#3001) | `99-cleanup.sh` calls `lint_image`; `lib.sh` returns success after findings unless `BOOTC_LINT_FATAL=1`. | Read the grouped output and step summary. Re-run lint against the candidate digest; apply the [Fedora readiness review](FEDORA-OUTREACH-READINESS.md) before outreach. |
+| Fork's scheduled `Prune R2`, `Audit NVIDIA release assets` or a grouped ISO upload fails with `s3.auto.amazonaws.com` / empty credentials | The four `R2_*` secrets are TunaOS's own bucket and are empty in a fork; empty creds make rclone fall back to an AWS endpoint. `tests/test_r2_optional_for_forks.py` lists every R2 step and its guard. | Fixed: those steps are skipped unless all four secrets are set (`env.R2_CONFIGURED`). A fork needs no R2 secrets; to publish to your own bucket set all four. Reproduce the table with `python tests/test_r2_optional_for_forks.py`. |
 | `wahoo:tuna` Build Image: `No match for argument: gnome-keyring` (#3810, run 39989009540) | Fedora ELN dropped `gnome-keyring` for oo7. On 2026-10-24 no `dl.fedoraproject.org/pub/eln/1` repo published `gnome-keyring` or `gnome-keyring-pam`. `oo7-daemon` obsoletes `gnome-keyring < 51`, `pam_oo7` obsoletes `gnome-keyring-pam < 51`, and ELN's gdm requires `pam_oo7`. Rawhide still ships `gnome-keyring` 51.1. | The ELN sections in `tunaos.toml` name `oo7-daemon` and `pam_oo7`. `require_secret_service` in the desktop contract treats either `ID=eln` or `VARIANT_ID=eln` in os-release as ELN and requires oo7 there, and `gnome-keyring-daemon` everywhere else. |
 
 ### Adoption report shows downloads while ISO use is unknown
@@ -2049,3 +2050,24 @@ including run `40065011718` for #3839.
 **Fix:** PR runs group by `github.ref` and cancel only their own superseded
 runs. Schedule and dispatch runs still serialize in one `publish` group,
 because they force-push `automation/matrix-status`.
+
+### Package catalog tests fail with `effective package-source configuration changed; refresh observation`
+
+**Symptom:** six tests in `tests/test_package_catalogs.py` and
+`tests/test_search_base_packages.py` fail on `main`. Every test that reads the
+real `tunaos.toml` fails the same way, including `tests/test_portable_add.py`
+in #3856.
+
+**Cause:** `config/package-observations/flounder-target-amd64.json` pinned the
+SHA-256 of all of `image-versions.yaml` and `scripts/build-image-inner.sh`. On
+2026-10-25 `build-image-inner.sh` differed from the pin by one cache-key line
+(7a0a3898). `image-versions.yaml` differed by a removed `shfmt` pin, and Renovate
+had edited it 197 times since 2026-09-01. Neither change touches an apt source.
+A whole-file hash on a Renovate file turns the check red on every merge.
+
+**Fix:** the observation (schema 2) pins the `common` image entry of
+`image-versions.yaml` and the part of `build-image-inner.sh` before its rechunk
+pass. A test fails when a new file reads `image-versions.yaml`.
+A Renovate bump of an unrelated key now passes. A bump of the `common` digest
+still fails, which is correct, because that image supplies files that the build
+copies into the target.
