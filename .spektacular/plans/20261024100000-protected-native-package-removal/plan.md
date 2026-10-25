@@ -17,6 +17,9 @@ not authorize implementation or enablement.
   do not create a fork-only schema or generated catalog.
 - Resolve native identities and file/unit owners from the effective package,
   base, desktop and runtime contracts in the disposable build root.
+- Add the missing base-contract checks first (kernel and initramfs, boot-loader
+  update tool, package-manager command, network unit, image store tools), so
+  the projection follows a contract and not a private list (spec `PR-3`).
 - Emit a content-addressed protected-set receipt with source, config, images,
   repositories, inventory, tools and reason provenance.
 - Fail closed when a contract cannot be projected completely.
@@ -29,8 +32,9 @@ rejections. Removal remains disabled.
 
 - Implement one adapter at a time for dnf/libdnf, apt/dpkg, pacman and
   zypper/libzypp. Keep Portage and unknown managers rejected.
-- Capture the complete native solver closure, reject protected or unrelated
-  actions, and execute the candidate in a disposable private root.
+- Capture the complete native solver closure, reject every plan that is not
+  exactly the requested identities, and execute the candidate in a disposable
+  private root.
 - Compare complete before/after inventories and contract results. Discard every
   qualification root. Adopt relevant isolated fixtures from #3444/#3449 rather
   than duplicating their helper or inventory concepts.
@@ -43,9 +47,10 @@ zero required skips and no production caller.
 
 - Re-resolve the transaction immediately before mutation and require the
   approved fingerprint.
-- Apply removal before required and optional additions only in a disposable
-  image build. Write the success receipt after final inventory and contract
-  checks.
+- Apply removal as the last package transaction of the last package stage, after
+  that stage's additions, and repeat it for each derived stage, only in a
+  disposable image build (spec `PR-5` step 7). Write the success receipt after
+  final inventory and contract checks.
 - Gate later image stages and publication on that receipt when removal intent is
   present. The admission map starts empty.
 

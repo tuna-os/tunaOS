@@ -56,11 +56,11 @@ resolved inputs and checks that define a usable TunaOS image:
 
 | Capability that cannot be removed blindly | Existing authority | Protected projection |
 |---|---|---|
-| Boot, kernel and initramfs | Selected base image and ordered base/overlay package operations; `verify-base-contract.sh`; applicable kernel/driver checks | Exact installed owners of required boot artifacts, kernel/module tree, initramfs generator and boot units, plus required base/overlay package identities |
+| Boot, kernel and initramfs | Selected base image and ordered base/overlay package operations. `verify-base-contract.sh` asserts none of this today (see the gaps below) | Exact installed owners of the kernel image and module tree under `/usr/lib/modules/<version>/`, the initramfs and its generator, the boot-loader update tool that `bootc install` uses for the family and boot units, plus required base/overlay package identities |
 | Init and system bus | `verify-base-contract.sh` system-state and bus assertions | Installed owners of PID 1, the default target, system bus unit/binary and contract-required policy files |
 | Native package manager | Containerfile route from `resolve-flavor.sh` and `lib.sh` package-manager selection | Installed owners of the selected manager, database/query tools, configuration and trust-store providers |
 | Desktop, display manager and session | `tunaos_packages.py` resolved desktop policy and installed contract; `verify-desktop-experience.sh` | Required native package identities and installed owners of the selected display-manager unit, session registration, shell/compositor, portals, keyring, audio and contract-required commands/files |
-| Networking and name resolution | Base/runtime contracts, including the active manager and service/unit checks | Installed owners of the selected network manager, address tool, resolver and required service units |
+| Networking and name resolution | `e2e-runtime-checks.sh` asserts `NetworkManager` or `systemd-networkd` is active on a booted system; no build-time check names the unit (see the gaps below) | Installed owners of the selected network manager, address tool, resolver and required service units |
 | Update, rollback and recovery | `verify-base-contract.sh` bootc status contract and applicable boot/update helpers | Installed owners of bootc, ostree/deployment tooling, bootloader/update payloads and recovery units/scripts |
 
 The projection MUST use the effective primary configuration and current build
@@ -77,6 +77,16 @@ No configuration scope may subtract a reason, replace this set or declare an
 exception. If a required contract input is missing, stale, waived without a
 qualified replacement, not uniquely attributable where ownership is required,
 or unsupported by the projection, removal for that cell MUST fail closed.
+
+The current checks do not cover every row. Measured on `main`:
+`build_scripts/checks/verify-base-contract.sh` asserts `bootc`, system state and
+the system bus unit only. No build-time check names the kernel, the initramfs,
+the boot-loader update tool, the native package manager command, the network
+unit or the image store tools (`ostree` or composefs). Phase 1 of the plan MUST
+add those checks to the base contract, so the projection follows a contract and
+not a private list. Until a check exists for a row, removal for every cell
+fails closed under the paragraph above, and a native owner that cannot be
+resolved from the contract fails with `contract-unowned`.
 
 Each protected-set receipt MUST bind:
 
@@ -96,11 +106,14 @@ origin; trusted build stages MUST produce and pass the receipt.
 ## Resolution, inheritance and conflicts (`PR-4`)
 
 Removal intent MUST be parsed and explained by the primary configuration
-resolver. It follows the scopes that schema supports at implementation time;
-for F4 that is defaults followed by variant. If desktop or exact-cell package
-deltas are later admitted, they append in the existing general-to-specific
-order. Lists use stable exact-value deduplication. Empty lists are no-ops, not
-clears.
+resolver. A removal is accepted only at variant scope, so one list names one
+native family: a package name does not mean the same package in every family,
+so `[defaults]` removal intent stays rejected even after additions at
+`[defaults]` are admitted. Additions follow the scopes that the schema
+supports at implementation time; for F4 that is defaults followed by variant.
+If desktop or exact-cell package deltas are later admitted, they append in the
+existing general-to-specific order. Lists use stable exact-value deduplication.
+Empty lists are no-ops, not clears.
 
 More specific scopes MUST NOT cancel inherited additions, optional additions or
 removals. The same native input in more than one operation class is an error
@@ -113,26 +126,37 @@ cross-family names are rejected when zero or multiple installed owners match.
 The authoring tool may report candidates, but MUST NOT guess, partially edit the
 file or treat metadata availability as transaction solvability.
 
+A requested value MUST be one exact package name of the selected family. Globs,
+versions, architecture or epoch selectors, paths, URLs, option-like values
+(a leading `-`), whitespace, control characters and, for Portage, names without
+a category are rejected by the primary validator with code `schema`, before any
+package manager runs.
+
 ## Transaction protocol (`PR-5`)
 
 One serialized package operation owns a disposable build root. The protocol is:
 
 1. Validate the primary configuration and resolve the exact matrix route,
    inherited package intent and package-manager family.
-2. Authenticate and refresh every enabled configured repository. Bind the
-   exact snapshot and freshness result. Unavailable, expired, signature-invalid
-   or identity-mismatched metadata fails before removal simulation, even when
-   the local package database could answer the request.
+2. Authenticate and refresh every enabled configured repository in this
+   explicit step. Bind the exact snapshot and freshness result. Unavailable,
+   expired, signature-invalid or identity-mismatched metadata fails before
+   removal simulation, even when the local package database could answer the
+   request. No later step refreshes: a simulation or transaction that needs
+   metadata the bound snapshot lacks fails with `solver-unavailable`.
 3. Capture the complete installed native inventory and compile the protected
    set under `PR-3`. Resolve requested names under `PR-4`.
 4. Ask the native solver for the complete removal closure without mutation.
    The adapter MUST expose exact native identities, not infer the closure from a
    summary count or grep human prose. A backend that cannot provide a complete,
    machine-checkable plan is unsupported.
-5. Reject a plan that removes, obsoletes or replaces any protected identity;
-   contains an implicit add, upgrade or downgrade; omits a requested identity;
-   uses force/no-dependency/cascade/orphan-cleanup semantics; or differs from
-   the operation order resolved from primary configuration.
+5. Reject a plan whose removal closure is not exactly the requested
+   identities. Any extra removal, obsolete or replacement is rejected
+   (`dependency-induced`), whether the extra identity is protected or not.
+   Also reject a plan that contains an implicit add, upgrade or downgrade;
+   omits a requested identity; uses force/no-dependency/cascade/orphan-cleanup
+   semantics; or differs from the operation order resolved from primary
+   configuration. The caller must name every package to remove.
 6. Execute the proposed removal with normal package scripts in a fresh copy of
    the same disposable root. Capture the complete after-inventory and require it
    to equal the before-inventory minus the approved removal closure. Run all
@@ -140,8 +164,14 @@ One serialized package operation owns a disposable build root. The protocol is:
    is discarded, including on success.
 7. Immediately before the real image-build mutation, repeat repository,
    inventory, protected-set and solver resolution. Its transaction fingerprint
-   MUST equal the qualified fingerprint. Apply the removal, then required adds
-   and optional adds in the existing order. Any failure discards the build root.
+   MUST equal the qualified fingerprint. Removal is the last package
+   transaction of the last package stage of the image, after the required and
+   optional additions of that stage in the existing order, and before the
+   image-info and cleanup steps. A derived stage starts from its parent image,
+   so it repeats steps 3 to 7 for the same removals after its own additions:
+   a removed package that a later addition pulls back in makes the removal
+   plan non-exact and fails with `dependency-induced`. Any failure discards the
+   build root.
 8. Recompute the final inventory, rerun applicable image contracts and write an
    atomic success receipt only after every check passes. A later image layer or
    publication step MUST require that receipt for a configuration containing
@@ -168,6 +198,12 @@ installation route.
 
 If a tool version loses the required machine interface or changes plan semantics,
 qualification for affected cells expires automatically.
+
+The stock `pkg_remove` in `build_scripts/lib.sh` is not an adapter and MUST NOT
+be reused for fork removal: it uses `pacman -Rns` and discards the error,
+`emerge --deselect`, and `zypper rm`, `dnf remove` and `apt-get purge` without a
+closure check. Stock framework removals in `build_scripts/` are not fork
+removals, and this design does not change them.
 
 ## Adversarial fixtures (`PR-7`)
 
@@ -199,6 +235,19 @@ and absence of a success receipt.
 9. **Script/postflight failure**: make a native package script fail or create an
    unexpected inventory delta. The disposable root is discarded and no success
    receipt exists.
+10. **Option injection and pattern names**: submit `-y`, `--nodeps`, a name with
+    a space or a newline, a glob, `pkg-1.2`, `pkg.x86_64`, `pkg:amd64` and a
+    Gentoo name without a category. The primary validator rejects each with
+    `schema` before any package manager runs.
+11. **Not installed**: name a package that exists only in a repository. The
+    request fails with `not-installed`.
+12. **Reverse-dependency and orphan widening**: request a package that apt or
+    zypper would remove together with its dependents, and a leaf whose removal
+    lets dnf or pacman remove its now-unneeded dependencies. The plan is not
+    exact, so the request fails with `dependency-induced` and the inventory is
+    unchanged.
+13. **Unowned contract item**: delete the owner of a base-contract file or
+    unit. Projection fails with `contract-unowned`.
 
 The direct and induced fixtures MUST include boot/update, init/bus, package
 manager, desktop/session and network reasons. Testing one hard-coded name is not
@@ -232,7 +281,30 @@ cell; unqualified cells and every unsupported family continue to reject removal
 intent. The first implementation MUST ship disabled and require explicit,
 reviewed admission data rather than infer readiness from a family name.
 
-## Non-goals (`PR-9`)
+## Failure surface (`PR-9`)
+
+Every refusal is one named code, in one `::error::` line that names the input
+and its source path. Codes marked "source" run in `just check` and the primary
+validator, with no image. Codes marked "build" run in the disposable build root.
+While no cell is admitted, every removal intent fails in the source stage, so
+`just check` keeps rejecting removals exactly as it does today.
+
+| Code | Stage | Meaning |
+|---|---|---|
+| `schema` | source | Wrong scope, repeated name, or a name that is not one exact package name (`PR-4`) |
+| `conflict` | source | The same native input in more than one operation class after inheritance |
+| `unsupported-family` | source | The family or cell is not admitted, including Portage and unknown managers |
+| `not-installed`, `ambiguous-name` | build | No installed owner, or more than one, for the requested name |
+| `contract-unowned` | build | A protected contract item has no unique native owner |
+| `protected` | build | A requested identity is in the protected set |
+| `solver-unavailable` | build | The solver or its machine interface is absent, or needs metadata the bound snapshot lacks |
+| `repository-stale` | build | A repository is expired, unreachable, changed or not authenticated |
+| `dependency-induced` | build | The closure is not exactly the requested identities |
+| `plan-drift` | build | The fingerprint differs between qualification and application |
+| `transaction-failed`, `inventory-drift` | build | A package script failed, or the after-inventory is not the before-inventory minus the request |
+| `receipt-missing` | build | A later stage or publication step found no success receipt for a configuration with removal intent |
+
+## Non-goals (`PR-10`)
 
 - Removing stock package policy or converting build-framework mechanisms into
   configuration.
