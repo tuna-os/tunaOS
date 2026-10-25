@@ -243,7 +243,7 @@
     "recoveryStage": { "allOf": [{ "$ref": "#/$defs/stageBase" }, { "$ref": "#/$defs/bootProof" }, { "properties": { "id": { "const": "recovery_boot_a" } } }] },
     "cleanupStage": { "allOf": [{ "$ref": "#/$defs/stageBase" }, { "properties": { "id": { "const": "cleanup" } } }] },
     "bootProof": {
-      "$comment": "A passed boot stage must carry the booted installed deployment and runtime desktop contract; container or registry inspection cannot satisfy it.",
+      "$comment": "Values are bound to inputs A and B by validate_passing_semantics in the pilot, which JSON Schema cannot express. A passed boot stage must carry the booted installed deployment and runtime desktop contract; container or registry inspection cannot satisfy it.",
       "if": { "properties": { "outcome": { "const": "passed" } } },
       "then": {
         "properties": {
@@ -253,11 +253,37 @@
             "properties": {
               "reference": { "$ref": "#/$defs/imageReference" },
               "transport": { "const": "registry" },
-              "booted_deployment": { "type": "object", "minProperties": 1 },
+              "booted_deployment": {
+                "type": "object",
+                "required": ["image"],
+                "properties": {
+                  "image": {
+                    "type": "object",
+                    "required": ["image"],
+                    "properties": {
+                      "image": {
+                        "type": "object",
+                        "required": ["image", "transport"],
+                        "properties": {
+                          "image": { "$ref": "#/$defs/imageReference" },
+                          "transport": { "const": "registry" }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
               "desktop_contract": {
                 "type": "object",
-                "required": ["outcome"],
-                "properties": { "outcome": { "const": "passed" } }
+                "required": ["outcome", "stdout"],
+                "properties": {
+                  "outcome": { "const": "passed" },
+                  "stdout": {
+                    "type": "string",
+                    "pattern": "(^|\\n)TUNAOS_DESKTOP_CONTRACT_OK desktop=gnome( |\\n|$)",
+                    "not": { "pattern": "(^|\\n)TUNAOS_DESKTOP_CONTRACT_FAIL" }
+                  }
+                }
               }
             }
           }

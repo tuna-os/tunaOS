@@ -450,8 +450,20 @@ class LocalQemuBackend:
             disk_info = json.loads(disk_info_result.stdout)
         except json.JSONDecodeError as error:
             raise PilotFailure("unsafe_disk", f"invalid qemu-img output: {error}") from error
-        if disk_info.get("format") != "qcow2":
+        if not isinstance(disk_info, dict) or disk_info.get("format") != "qcow2":
             raise PilotFailure("unsafe_disk", "source disk is not qcow2")
+        # Only the top-level file is hashed, so QEMU must not read anything else.
+        specific = disk_info.get("format-specific")
+        specific_data = specific.get("data") if isinstance(specific, dict) else None
+        if (
+            disk_info.get("backing-filename") is not None
+            or disk_info.get("full-backing-filename") is not None
+            or (isinstance(specific_data, dict) and specific_data.get("data-file") is not None)
+        ):
+            raise PilotFailure(
+                "unsafe_disk",
+                "source disk must be self-contained: backing files and external data files are rejected",
+            )
 
         self._binary("ssh")
         self.qemu_bin = next(
@@ -702,6 +714,23 @@ class LocalQemuBackend:
             raise PilotFailure("missing_identity", "bootc status staged identity is not textual")
         return reference, transport
 
+    @staticmethod
+    def _rollback_reference(status: dict[str, Any]) -> tuple[str, str]:
+        """Return the queued rollback deployment; ``bootc rollback`` stages nothing."""
+        try:
+            bootc_status = status["status"]
+            queued = bootc_status["rollbackQueued"]
+            image = bootc_status["rollback"]["image"]["image"]
+            reference = image["image"]
+            transport = image["transport"]
+        except (KeyError, TypeError) as error:
+            raise PilotFailure("missing_identity", "bootc status lacks queued rollback identity") from error
+        if queued is not True:
+            raise PilotFailure("wrong_deployment", "bootc rollback did not queue the rollback deployment")
+        if not isinstance(reference, str) or not isinstance(transport, str):
+            raise PilotFailure("missing_identity", "bootc status rollback identity is not textual")
+        return reference, transport
+
     def verify_boot(self, expected_reference: str) -> dict[str, Any]:
         status = self._status()
         reference, transport, booted = self._booted_reference(status)
@@ -732,6 +761,16 @@ class LocalQemuBackend:
             "/usr/libexec/tunaos/verify-desktop-experience gnome --runtime",
             event_name="desktop_contract",
         )
+        # The verifier can exit zero after printing a FAIL marker, so success
+        # needs the explicit GNOME OK marker and no FAIL marker.
+        marker_lines = contract.stdout.splitlines()
+        if any(line.startswith("TUNAOS_DESKTOP_CONTRACT_FAIL") for line in marker_lines) or not any(
+            line.split()[:2] == ["TUNAOS_DESKTOP_CONTRACT_OK", "desktop=gnome"] for line in marker_lines
+        ):
+            raise PilotFailure(
+                "desktop_contract_failed",
+                "runtime desktop contract did not report TUNAOS_DESKTOP_CONTRACT_OK for gnome",
+            )
         return {
             "reference": reference,
             "transport": transport,
@@ -764,11 +803,11 @@ class LocalQemuBackend:
     def stage_rollback(self) -> dict[str, Any]:
         self.guest("bootc rollback", event_name="bootc_rollback_a")
         status = self._status()
-        reference, transport = self._staged_reference(status)
+        reference, transport = self._rollback_reference(status)
         if reference != self.config.image_a or transport != "registry":
             raise PilotFailure(
                 "wrong_deployment",
-                f"bootc staged {transport}:{reference}, expected registry:{self.config.image_a}",
+                f"bootc queued {transport}:{reference} for rollback, expected registry:{self.config.image_a}",
             )
         return {"command": "bootc rollback", "staged_reference": self.config.image_a}
 
@@ -892,6 +931,40 @@ def require_staged(details: Any, expected_reference: str) -> dict[str, Any]:
 
 
 
+def validate_passing_semantics(evidence: dict[str, Any]) -> None:
+    """Bind each boot stage to the exact input image; the schema cannot compare values.
+
+    Cold and recovery must boot input A, warm must boot the distinct input B,
+    and each deployment must name the same registry image it reports.
+    """
+    inputs = evidence["inputs"]
+    image_a, image_b = inputs["image_a"], inputs["image_b"]
+    if image_a == image_b:
+        raise PilotFailure("identical_images", "image A and B must differ for a passing update")
+    stages = {stage["id"]: stage for stage in evidence["stages"]}
+    for stage_id, expected in (
+        ("cold_boot_a", image_a),
+        ("warm_boot_b", image_b),
+        ("recovery_boot_a", image_a),
+    ):
+        details = stages[stage_id].get("details")
+        try:
+            deployed = details["booted_deployment"]["image"]["image"]
+            matches = (
+                details["reference"] == expected
+                and details["transport"] == "registry"
+                and deployed["image"] == expected
+                and deployed["transport"] == "registry"
+            )
+        except (KeyError, TypeError):
+            matches = False
+        if not matches:
+            raise PilotFailure(
+                "wrong_deployment",
+                f"{stage_id} did not boot registry deployment {expected}",
+            )
+
+
 def execute_pilot(
     config: PilotConfig,
     backend_factory: Callable[[PilotConfig, list[dict[str, Any]]], Any] = LocalQemuBackend,
@@ -901,13 +974,28 @@ def execute_pilot(
     stages = {stage["id"]: stage for stage in evidence["stages"]}
     backend: Any = None
     first_failure: dict[str, str] | None = None
+    checkpoint_error: str | None = None
+
+    def checkpoint() -> None:
+        """Persist progress without letting a failing writer block cleanup.
+
+        The first writer failure is kept, further checkpoints are abandoned, and
+        the run can no longer pass because its evidence was not durably recorded.
+        """
+        nonlocal progress, checkpoint_error
+        if progress is None:
+            return
+        try:
+            progress(evidence)
+        except Exception as error:
+            checkpoint_error = error_message(error)
+            progress = None
 
     def run_stage(stage_id: str, action: Callable[[], dict[str, Any]]) -> bool:
         nonlocal first_failure
         stage = stages[stage_id]
         stage["started_at"] = utc_now()
-        if progress is not None:
-            progress(evidence)
+        checkpoint()
         try:
             stage["details"] = action()
             stage["outcome"] = "passed"
@@ -936,9 +1024,7 @@ def execute_pilot(
             return False
         finally:
             stage["finished_at"] = utc_now()
-
-            if progress is not None:
-                progress(evidence)
+            checkpoint()
 
     def preflight() -> dict[str, Any]:
         nonlocal backend
@@ -1002,14 +1088,30 @@ def execute_pilot(
     passed = [stage["id"] for stage in evidence["stages"]] == list(STAGE_IDS) and all(
         stage["outcome"] == "passed" for stage in evidence["stages"]
     )
+    if passed:
+        try:
+            validate_passing_semantics(evidence)
+        except PilotFailure as error:
+            passed = False
+            first_failure = {
+                "stage": "cleanup",
+                "category": error.category,
+                "message": error_message(error),
+            }
+    if checkpoint_error is not None and first_failure is None:
+        passed = False
+        first_failure = {
+            "stage": "cleanup",
+            "category": "evidence_write_failed",
+            "message": f"incremental evidence write failed: {checkpoint_error}",
+        }
     evidence["result"] = {
         "verdict": "passed" if passed else "failed",
         "runtime_acceptance": "passed" if passed else "failed",
         "first_failure": first_failure,
     }
     evidence["finished_at"] = utc_now()
-    if progress is not None:
-        progress(evidence)
+    checkpoint()
     return evidence, passed
 
 

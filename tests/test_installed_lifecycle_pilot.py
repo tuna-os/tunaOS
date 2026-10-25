@@ -29,6 +29,7 @@ SPEC.loader.exec_module(MODULE)
 
 A = "ghcr.io/tuna-os/skipjack@sha256:" + "a" * 64
 B = "ghcr.io/tuna-os/skipjack@sha256:" + "b" * 64
+DESKTOP_OK = "TUNAOS_DESKTOP_CONTRACT_OK desktop=gnome experience=gnome\n"
 HEAD = "1" * 40
 HARNESS = "2" * 40
 
@@ -93,8 +94,10 @@ class FakeBackend:
         return {
             "reference": expected,
             "transport": "registry",
-            "booted_deployment": {"image": {"image": {"image": expected}}},
-            "desktop_contract": {"outcome": "passed"},
+            "booted_deployment": {
+                "image": {"image": {"image": expected, "transport": "registry"}}
+            },
+            "desktop_contract": {"outcome": "passed", "stdout": DESKTOP_OK},
         }
 
     def stage_update(self):
@@ -439,7 +442,13 @@ def test_real_backend_uses_documented_switch_then_rollback_commands(tmp_path, mo
     commands = []
     statuses = [
         {"status": {"staged": {"image": {"image": {"image": B, "transport": "registry"}}}}},
-        {"status": {"staged": {"image": {"image": {"image": A, "transport": "registry"}}}}},
+        {
+            "status": {
+                "staged": None,
+                "rollbackQueued": True,
+                "rollback": {"image": {"image": {"image": A, "transport": "registry"}}},
+            }
+        },
     ]
 
     def guest(command, **_kwargs):
@@ -652,3 +661,182 @@ def test_cleanup_reports_a_qemu_log_drain_that_did_not_stop(tmp_path):
 
     assert error.value.category == "cleanup_failed"
     assert "log drain" in str(error.value)
+
+
+def test_rollback_requires_the_queued_rollback_deployment_not_a_staged_one(tmp_path, monkeypatch):
+    backend = MODULE.LocalQemuBackend(config(tmp_path), [])
+    monkeypatch.setattr(backend, "guest", lambda *_a, **_k: MODULE.CommandResult(0, "", ""))
+    rollback = {"image": {"image": {"image": A, "transport": "registry"}}}
+    for status, category in (
+        ({"status": {"staged": None, "rollbackQueued": False, "rollback": rollback}}, "wrong_deployment"),
+        ({"status": {"staged": None, "rollbackQueued": True}}, "missing_identity"),
+        (
+            {"status": {"staged": None, "rollbackQueued": True,
+                        "rollback": {"image": {"image": {"image": B, "transport": "registry"}}}}},
+            "wrong_deployment",
+        ),
+    ):
+        monkeypatch.setattr(backend, "_status", lambda status=status: status)
+        with pytest.raises(MODULE.PilotFailure) as error:
+            backend.stage_rollback()
+        assert error.value.category == category
+
+
+@pytest.mark.parametrize(
+    "stdout",
+    [
+        "TUNAOS_DESKTOP_CONTRACT_FAIL reason=dm_inactive desktop=gnome\n",
+        "TUNAOS_DESKTOP_CONTRACT_OK desktop=gnome experience=gnome\n"
+        "TUNAOS_DESKTOP_CONTRACT_FAIL desktop=gnome\n",
+        "",
+        "TUNAOS_DESKTOP_CONTRACT_OK desktop=kde experience=kde\n",
+    ],
+)
+def test_runtime_verifier_exiting_zero_without_the_gnome_ok_marker_fails(
+    tmp_path, monkeypatch, stdout
+):
+    backend = MODULE.LocalQemuBackend(config(tmp_path), [])
+    deployment = {"image": {"image": {"image": A, "transport": "registry"}}}
+    monkeypatch.setattr(
+        backend, "_status", lambda: {"status": {"booted": {"image": deployment["image"]}}}
+    )
+
+    def guest(command, **_kwargs):
+        if command == "uname -m":
+            return MODULE.CommandResult(0, "x86_64\n", "")
+        if "os-release" in command:
+            return MODULE.CommandResult(0, "skipjack\nskipjack\ngnome-1\n", "")
+        return MODULE.CommandResult(0, stdout, "")
+
+    monkeypatch.setattr(backend, "guest", guest)
+    with pytest.raises(MODULE.PilotFailure) as error:
+        backend.verify_boot(A)
+    assert error.value.category == "desktop_contract_failed"
+
+
+def test_runtime_verifier_with_the_gnome_ok_marker_passes(tmp_path, monkeypatch):
+    backend = MODULE.LocalQemuBackend(config(tmp_path), [])
+    monkeypatch.setattr(
+        backend,
+        "_status",
+        lambda: {"status": {"booted": {"image": {"image": {"image": A, "transport": "registry"}}}}},
+    )
+
+    def guest(command, **_kwargs):
+        if command == "uname -m":
+            return MODULE.CommandResult(0, "x86_64\n", "")
+        if "os-release" in command:
+            return MODULE.CommandResult(0, "skipjack\nskipjack\ngnome-1\n", "")
+        return MODULE.CommandResult(0, DESKTOP_OK, "")
+
+    monkeypatch.setattr(backend, "guest", guest)
+    assert backend.verify_boot(A)["desktop_contract"]["stdout"] == DESKTOP_OK
+
+
+@pytest.mark.parametrize(
+    "info",
+    [
+        {"format": "qcow2", "backing-filename": "/etc/other.qcow2"},
+        {"format": "qcow2", "full-backing-filename": "/dev/sda"},
+        {"format": "qcow2", "format-specific": {"type": "qcow2", "data": {"data-file": "/dev/sdb"}}},
+    ],
+)
+def test_source_disk_with_backing_or_external_data_file_is_rejected(tmp_path, monkeypatch, info):
+    import hashlib
+
+    disk = tmp_path / "installed-a.qcow2"
+    disk.write_bytes(b"disk")
+    key = tmp_path / "id_ed25519"
+    key.write_text("key")
+    backend = MODULE.LocalQemuBackend(
+        config(tmp_path, disk_sha256=hashlib.sha256(b"disk").hexdigest()), []
+    )
+    monkeypatch.setattr(backend, "_binary", lambda name: name)
+    monkeypatch.setattr(
+        backend.runner,
+        "run",
+        lambda *_a, **_k: MODULE.CommandResult(0, json.dumps(info), ""),
+    )
+    with pytest.raises(MODULE.PilotFailure) as error:
+        backend.preflight()
+    assert error.value.category == "unsafe_disk"
+    assert "self-contained" in str(error.value)
+
+
+def test_failing_checkpoint_writer_cannot_block_cleanup_or_hide_the_first_failure(tmp_path):
+    started = []
+
+    def progress(_evidence):
+        if started:
+            raise OSError("disk full")
+
+    class Backend(FakeBackend):
+        def start_vm(self):
+            started.append(True)
+            raise MODULE.PilotFailure("timeout", "boot failed")
+
+    evidence, passed = MODULE.execute_pilot(config(tmp_path), Backend, progress=progress)
+
+    assert not passed
+    assert Backend.instances[-1].calls[-1] == "cleanup"
+    assert stage_map(evidence)["cleanup"]["outcome"] == "passed"
+    assert evidence["result"]["first_failure"]["category"] == "timeout"
+    Draft202012Validator(SCHEMA).validate(evidence)
+
+
+def test_checkpoint_failure_alone_prevents_a_passing_verdict(tmp_path):
+    def progress(_evidence):
+        raise OSError("disk full")
+
+    evidence, passed = MODULE.execute_pilot(config(tmp_path), FakeBackend, progress=progress)
+
+    assert not passed
+    assert FakeBackend.instances[-1].calls[-1] == "cleanup"
+    assert evidence["result"]["first_failure"]["category"] == "evidence_write_failed"
+    Draft202012Validator(SCHEMA).validate(evidence)
+
+
+@pytest.mark.parametrize("stage_id", ["cold_boot_a", "warm_boot_b", "recovery_boot_a"])
+def test_schema_rejects_unrelated_booted_deployment_proof(tmp_path, stage_id):
+    evidence = passing_evidence(tmp_path)
+    stage_map(evidence)[stage_id]["details"]["booted_deployment"] = {"unrelated": True}
+
+    assert schema_errors(evidence)
+
+
+@pytest.mark.parametrize("stage_id", ["cold_boot_a", "warm_boot_b", "recovery_boot_a"])
+@pytest.mark.parametrize("stdout", ["", "TUNAOS_DESKTOP_CONTRACT_FAIL desktop=gnome\n"])
+def test_schema_rejects_a_passed_desktop_contract_without_the_ok_marker(tmp_path, stage_id, stdout):
+    evidence = passing_evidence(tmp_path)
+    stage_map(evidence)[stage_id]["details"]["desktop_contract"]["stdout"] = stdout
+
+    assert schema_errors(evidence)
+
+
+@pytest.mark.parametrize(
+    ("stage_id", "wrong"),
+    [
+        ("warm_boot_b", A),  # no-op update: warm still on A
+        ("cold_boot_a", B),
+        ("recovery_boot_a", B),
+    ],
+)
+def test_semantic_validation_binds_boot_stages_to_inputs_a_and_b(tmp_path, stage_id, wrong):
+    evidence = passing_evidence(tmp_path)
+    MODULE.validate_passing_semantics(evidence)
+    details = stage_map(evidence)[stage_id]["details"]
+    details["reference"] = wrong
+    details["booted_deployment"]["image"]["image"]["image"] = wrong
+
+    with pytest.raises(MODULE.PilotFailure) as error:
+        MODULE.validate_passing_semantics(evidence)
+    assert error.value.category == "wrong_deployment"
+
+
+def test_semantic_validation_rejects_identical_inputs(tmp_path):
+    evidence = passing_evidence(tmp_path)
+    evidence["inputs"]["image_b"] = evidence["inputs"]["image_a"]
+
+    with pytest.raises(MODULE.PilotFailure) as error:
+        MODULE.validate_passing_semantics(evidence)
+    assert error.value.category == "identical_images"
