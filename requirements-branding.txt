@@ -6,4 +6,4 @@
 -r requirements-config.txt
 fonttools==4.67.0
 pyfiglet==1.0.4
-uharfbuzz==0.56.4
+uharfbuzz==0.57.0
