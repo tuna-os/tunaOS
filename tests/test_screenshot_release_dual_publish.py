@@ -404,6 +404,35 @@ def test_it_creates_the_release_then_uploads_renamed_assets_with_clobber(gh, tmp
     assert "https://github.com/tuna-os/tunaos/releases/download/screenshots/installer__cosmic_01_welcome-latest.png" in r.stdout
 
 
+def _publish_step_script(name: str) -> tuple[dict, str]:
+    (_, _, step), = _publish_steps(_load(name))
+    return step, step["run"]
+
+
+def test_the_installer_step_finds_pngs_in_the_nested_artifact_layout(gh, tmp_path):
+    """The walkthrough artifact downloads as installer-shots/staged/*.png.
+
+    upload-artifact roots a multi-path upload at the workspace, so a flat
+    `installer-shots/*.png` glob matches nothing (runs 38250603341 and
+    34832292351 both logged `Staged 0 screenshot(s)` after a good capture).
+    """
+    step, script = _publish_step_script("installer-screenshots.yml")
+    assert "staged" not in _norm(step.get("if")), "the release step must not depend on the flat-glob staging counter"
+    shots = tmp_path / "installer-shots"
+    (shots / "staged").mkdir(parents=True)
+    (shots / "staged" / "cosmic_01_welcome.png").write_bytes(b"cosmic")
+    (shots / "staged" / "01_welcome.png").write_bytes(b"gnome")
+    (shots / "walkthrough-out").mkdir()
+    (shots / "walkthrough-out" / "walkthrough-gnome.json").write_text("{}")
+    script = script.replace("/tmp/installer-shots", str(shots)).replace("scripts/screenshot-release.py", str(SCRIPT))
+    r = subprocess.run(["bash", "-c", script], capture_output=True, text=True,
+                       env={**os.environ, "GITHUB_REPOSITORY": "tuna-os/tunaos"})
+    assert r.returncode == 0, r.stderr
+    assert (gh / "uploaded-installer__cosmic_01_welcome-latest.png").read_bytes() == b"cosmic"
+    assert (gh / "uploaded-installer__01_welcome-latest.png").read_bytes() == b"gnome"
+    assert not list(gh.glob("uploaded-*json*"))
+
+
 def test_an_existing_release_is_not_recreated(gh, tmp_path):
     (gh / "exists").touch()
     r = _run("publish", "--kind", "desktop", "--repo", "tuna-os/tunaos", _png(tmp_path, "yellowfin-gnome", b"x"))
