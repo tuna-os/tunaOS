@@ -1,9 +1,11 @@
-"""Bounded, signed Debian base-image repository search acquisition.
+"""Bounded, signed APT repository search for reviewed configured targets.
 
 GnuPG is an explicit existing native dependency, never installed by this module.
-No keys are installed, imported, fetched or added to the user's trust database.
+Remote trust bytes are fetched only to compare them with the reviewed keyring;
+no keys are installed, imported or added to the user's trust database.
 """
 import hashlib
+import zlib
 import lzma
 from pathlib import Path
 import re
@@ -15,23 +17,28 @@ import tempfile
 import time
 import urllib.request
 from urllib.parse import urlsplit
-from .package_catalogs import CatalogError, validate, check_authenticated_dates, index_path
+from .package_catalogs import (CatalogError, validate, check_authenticated_dates,
+                               index_specs, signed_timestamp)
 
 MAX_RELEASE = 1024 * 1024
 MAX_INDEX = 128 * 1024 * 1024
+MAX_DECLARATION = 64 * 1024
+MAX_KEYRING = 1024 * 1024
 
 
 class SameHostRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         before, after = urlsplit(req.full_url), urlsplit(newurl)
-        if after.scheme != 'https' or after.netloc != before.netloc or after.username or after.password:
+        if (after.scheme != 'https' or after.netloc != before.netloc
+                or after.username or after.password or after.query or after.fragment):
             raise CatalogError('cross-host or insecure metadata redirect refused')
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
 def fetch_https(url, limit, timeout=30):
     parsed = urlsplit(url)
-    if parsed.scheme != 'https' or parsed.netloc != 'deb.debian.org' or parsed.query or parsed.fragment:
+    if (parsed.scheme != 'https' or parsed.netloc not in {
+            'deb.debian.org', 'pkgs.tailscale.com'} or parsed.query or parsed.fragment):
         raise CatalogError('unsupported metadata URL')
     request = urllib.request.Request(url, headers={'Accept-Encoding': 'identity'})
     started = time.monotonic()
@@ -80,7 +87,7 @@ def valid_signers(status, allowed):
 def verify_inrelease(envelope, keyring, source, verifier=None):
     if len(envelope) > MAX_RELEASE or not envelope.startswith(b'-----BEGIN PGP SIGNED MESSAGE-----\n'):
         raise CatalogError('expected bounded clear-signed InRelease')
-    if len(keyring) > MAX_RELEASE or hashlib.sha256(keyring).hexdigest() != source['keyring_sha256']:
+    if len(keyring) > MAX_KEYRING or hashlib.sha256(keyring).hexdigest() != source['keyring_sha256']:
         raise CatalogError('keyring bytes do not match reviewed trust pin')
     executable = verifier or shutil.which('gpg')
     if not executable:
@@ -125,7 +132,8 @@ def verify_inrelease(envelope, keyring, source, verifier=None):
                     raise CatalogError('native signature verification failed')
         except (OSError, subprocess.TimeoutExpired) as exc:
             raise CatalogError('native signature verification unavailable or timed out') from exc
-        signers = valid_signers(status.decode('utf-8'), source['primary_fingerprints'])
+        signers = valid_signers(
+            status.decode('utf-8', errors='replace'), source['primary_fingerprints'])
         payload_path = root/'Release'
         if not payload_path.is_file() or payload_path.stat().st_size > MAX_RELEASE:
             raise CatalogError('authenticated payload exceeds size bound')
@@ -136,7 +144,13 @@ def parse_release(payload):
     if len(payload) > MAX_RELEASE:
         raise CatalogError('Release exceeds size bound')
     fields, checksums, current = {}, {}, None
-    for line in payload.decode('utf-8').splitlines():
+    try:
+        text = payload.decode('utf-8')
+    except UnicodeError as exc:
+        raise CatalogError('Release has invalid UTF-8 encoding') from exc
+    for line in text.splitlines():
+        if not line:
+            continue
         if line.startswith(' '):
             if current != 'SHA256':
                 continue  # Other native checksum tables are not trusted for acquisition.
@@ -160,14 +174,20 @@ def parse_release(payload):
     return fields, checksums
 
 
-def index_names(data):
+def index_names(data, compression='xz'):
     if len(data) > MAX_INDEX:
         raise CatalogError('compressed index too large')
-    decoder = lzma.LZMADecompressor(memlimit=MAX_INDEX)
     try:
-        decoded = decoder.decompress(data, max_length=MAX_INDEX + 1)
-    except lzma.LZMAError as exc:
-        raise CatalogError('invalid xz index') from exc
+        if compression == 'xz':
+            decoder = lzma.LZMADecompressor(memlimit=MAX_INDEX)
+            decoded = decoder.decompress(data, max_length=MAX_INDEX + 1)
+        elif compression == 'gzip':
+            decoder = zlib.decompressobj(16 + zlib.MAX_WBITS)
+            decoded = decoder.decompress(data, MAX_INDEX + 1)
+        else:
+            raise CatalogError('unsupported index compression')
+    except (lzma.LZMAError, zlib.error) as exc:
+        raise CatalogError('invalid compressed index') from exc
     if len(decoded) > MAX_INDEX or not decoder.eof or decoder.unused_data:
         raise CatalogError('expanded, incomplete or trailing index data')
     names = set()
@@ -189,30 +209,76 @@ def index_names(data):
             raise CatalogError('invalid native package name')
         if fields['Architecture'] in ('amd64', 'all'):
             names.add(name)
-    return names  # Authenticated empty update indexes are valid, not missing sources.
+    return names
 
 
 def acquire_catalog(catalog, keyring_for, now, fetch=fetch_https, verify=verify_inrelease):
-    """Caller must bind the reviewed observation for the explicit base-image scope."""
+    """Authenticate every configured source before returning any target result."""
     validate(catalog)
     complete = []
     for source in catalog['sources']:
+        source_keyring = keyring_for(source)
+        declaration_hash = None
+        remote_keyring_hash = None
+        if source['role'] == 'build':
+            declaration = fetch(source['declaration_url'], MAX_DECLARATION)
+            declaration_hash = hashlib.sha256(declaration).hexdigest()
+            remote_keyring = fetch(source['keyring_url'], MAX_KEYRING)
+            remote_keyring_hash = hashlib.sha256(remote_keyring).hexdigest()
+            if declaration_hash != source['declaration_sha256']:
+                raise CatalogError('build source declaration differs from reviewed bytes')
+            if (remote_keyring_hash != source['keyring_sha256']
+                    or remote_keyring != source_keyring):
+                raise CatalogError('build source trust key differs from reviewed bytes')
         root = source['uri'] + 'dists/' + source['suite'] + '/'
-        envelope = fetch(root+'InRelease', MAX_RELEASE)
-        payload, signers = verify(envelope, keyring_for(source), source)
+        metadata_url = root + 'InRelease'
+        envelope = fetch(metadata_url, MAX_RELEASE)
+        payload, signers = verify(envelope, source_keyring, source)
         fields, checksums = parse_release(payload)
         envelope_hash = hashlib.sha256(envelope).hexdigest()
         expiry = check_authenticated_dates(source, fields, now, envelope_hash)
-        path = index_path(source, fields, architecture='amd64', component='main')
-        if fields.get('Acquire-By-Hash') != 'yes' or path not in checksums:
+        specs = index_specs(source, fields, architecture='amd64', component='main')
+        if any(spec['by_hash'] for spec in specs) and fields.get('Acquire-By-Hash') != 'yes':
             raise CatalogError('required by-hash index is unavailable')
-        sha, size = checksums[path]
-        if not 0 < size <= MAX_INDEX:
-            raise CatalogError('index size outside bound')
-        data = fetch(root+'main/binary-amd64/by-hash/SHA256/'+sha, size)
-        if len(data) != size or hashlib.sha256(data).hexdigest() != sha:
-            raise CatalogError('index hash or size differs from signed Release')
-        complete.append({'source': source['id'], 'names': index_names(data),
-                         'inrelease_sha256': envelope_hash, 'index_sha256': sha,
-                         'signers': signers, 'expires': expiry})
-    return complete  # No partial result is returned after any source failure.
+        names = set()
+        indexes = []
+        for spec in specs:
+            path = spec['path']
+            if path not in checksums:
+                raise CatalogError('required signed package index is unavailable')
+            sha, size = checksums[path]
+            if not 0 < size <= MAX_INDEX:
+                raise CatalogError('index size outside bound')
+            if spec['by_hash']:
+                directory = path.rsplit('/', 1)[0]
+                url = root + directory + '/by-hash/SHA256/' + sha
+            else:
+                url = root + path
+            data = fetch(url, size)
+            if len(data) != size or hashlib.sha256(data).hexdigest() != sha:
+                raise CatalogError('index hash or size differs from signed Release')
+            names.update(index_names(data, spec['compression']))
+            indexes.append({'url': url, 'sha256': sha, 'size': size})
+        result = {
+            'source': source['id'],
+            'role': source['role'],
+            'source_url': metadata_url,
+            'release': fields['Codename'],
+            'architecture': 'amd64',
+            'signed_at': signed_timestamp(fields).isoformat(),
+            'retrieved_at': now.isoformat(),
+            'inrelease_sha256': envelope_hash,
+            'keyring_sha256': source['keyring_sha256'],
+            'indexes': indexes,
+            'names': names,
+            'signers': signers,
+            'freshness': {
+                'mode': source['freshness']['mode'],
+                'expires': expiry.isoformat() if expiry else None,
+            },
+        }
+        if source['role'] == 'build':
+            result['declaration_sha256'] = declaration_hash
+            result['remote_keyring_sha256'] = remote_keyring_hash
+        complete.append(result)
+    return complete
