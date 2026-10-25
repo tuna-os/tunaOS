@@ -33,6 +33,9 @@ GIT_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 RUN_ID_RE = re.compile(r"^[0-9]+(?:/[1-9][0-9]*)?$")
 SSH_USER_RE = re.compile(r"^[a-z_][a-z0-9_-]{0,31}$")
 MAX_LOG_BYTES = 32 * 1024
+# Machine-readable command output (JSON, markers) is parsed from the full stream
+# up to this limit; only the retained evidence sample is bounded by MAX_LOG_BYTES.
+MAX_PARSE_BYTES = 16 * 1024 * 1024
 STAGE_IDS = (
     "preflight",
     "prepare_disk",
@@ -273,6 +276,8 @@ class CommandRunner:
                 timed_out = False
                 launch_error = error
             stdout_file.seek(0)
+            parse_raw = stdout_file.read(MAX_PARSE_BYTES + 1)
+            stdout_file.seek(0)
             stderr_file.seek(0)
             stdout, stdout_truncated = bounded_file_text(stdout_file)
             stderr, stderr_truncated = bounded_file_text(stderr_file)
@@ -305,7 +310,11 @@ class CommandRunner:
         if check and returncode != 0:
             detail = stderr.strip() or stdout.strip() or f"exit {returncode}"
             raise PilotFailure("command_failed", f"{event['name']} failed: {detail}")
-        return CommandResult(returncode, stdout, stderr)
+        if len(parse_raw) > MAX_PARSE_BYTES:
+            raise PilotFailure(
+                "command_failed", f"{event['name']} output exceeds the {MAX_PARSE_BYTES}-byte parser limit"
+            )
+        return CommandResult(returncode, parse_raw.decode("utf-8", errors="replace"), stderr)
 
 
 class LocalQemuBackend:
@@ -367,6 +376,7 @@ class LocalQemuBackend:
             [
                 self._binary("skopeo"),
                 "inspect",
+                "--no-tags",
                 "--override-os",
                 "linux",
                 "--override-arch",
@@ -431,7 +441,7 @@ class LocalQemuBackend:
         if has_symlink_component(configured_key) or not key.is_file():
             raise PilotFailure("missing_identity", "SSH key and its parents must be regular, non-symlink paths")
         for output_path in (self.overlay, self.uefi_vars):
-            if output_path.exists():
+            if output_path.exists() or output_path.is_symlink():
                 raise PilotFailure(
                     "unsafe_disk",
                     f"refusing to overwrite existing pilot state: {output_path}",
@@ -731,6 +741,30 @@ class LocalQemuBackend:
             raise PilotFailure("missing_identity", "bootc status rollback identity is not textual")
         return reference, transport
 
+    def _wait_desktop_ready(self) -> None:
+        """Wait for the units the contract service orders itself after.
+
+        tunaos-desktop-contract.service runs After display-manager.service and
+        dconf-update.service; a direct invocation must not judge a healthy boot
+        before them. Only readiness is waited for: the contract itself is run
+        once, unchanged, afterwards.
+        """
+        probe = (
+            "systemctl is-active --quiet display-manager.service && "
+            '[ "$(systemctl show -P ActiveState dconf-update.service)" != activating ]'
+        )
+        deadline = time.monotonic() + self.config.boot_timeout
+        while True:
+            result = self.guest(probe, check=False, timeout=30, event_name="desktop_ready_probe")
+            if result.returncode == 0:
+                return
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                # Fall through to the contract so the failure carries its own
+                # diagnosis (dm_inactive and the DM journal), not a bare timeout.
+                return
+            time.sleep(min(5.0, remaining))
+
     def verify_boot(self, expected_reference: str) -> dict[str, Any]:
         status = self._status()
         reference, transport, booted = self._booted_reference(status)
@@ -757,6 +791,7 @@ class LocalQemuBackend:
             )
         if not image_version.startswith("gnome-"):
             raise PilotFailure("wrong_target", f"guest flavor identity is {image_version!r}")
+        self._wait_desktop_ready()
         contract = self.guest(
             "/usr/libexec/tunaos/verify-desktop-experience gnome --runtime",
             event_name="desktop_contract",
@@ -782,7 +817,7 @@ class LocalQemuBackend:
             "desktop_contract": {
                 "command": "/usr/libexec/tunaos/verify-desktop-experience gnome --runtime",
                 "outcome": "passed",
-                "stdout": contract.stdout,
+                "stdout": bounded_text(contract.stdout.encode("utf-8"))[0],
             },
         }
 

@@ -840,3 +840,105 @@ def test_semantic_validation_rejects_identical_inputs(tmp_path):
     with pytest.raises(MODULE.PilotFailure) as error:
         MODULE.validate_passing_semantics(evidence)
     assert error.value.category == "identical_images"
+
+
+def _boot_backend(tmp_path, monkeypatch, probe_results):
+    backend = MODULE.LocalQemuBackend(config(tmp_path), [])
+    monkeypatch.setattr(
+        backend,
+        "_status",
+        lambda: {"status": {"booted": {"image": {"image": {"image": A, "transport": "registry"}}}}},
+    )
+    commands = []
+
+    def guest(command, **_kwargs):
+        commands.append(command)
+        if command == "uname -m":
+            return MODULE.CommandResult(0, "x86_64\n", "")
+        if "os-release" in command:
+            return MODULE.CommandResult(0, "skipjack\nskipjack\ngnome-1\n", "")
+        if "display-manager.service" in command and "verify" not in command:
+            return MODULE.CommandResult(probe_results.pop(0), "", "")
+        return MODULE.CommandResult(0, DESKTOP_OK, "")
+
+    monkeypatch.setattr(backend, "guest", guest)
+    monkeypatch.setattr(MODULE.time, "sleep", lambda _s: None)
+    return backend, commands
+
+
+def test_delayed_display_manager_readiness_is_waited_for_before_the_contract(tmp_path, monkeypatch):
+    backend, commands = _boot_backend(tmp_path, monkeypatch, [3, 3, 0])
+
+    assert backend.verify_boot(A)["desktop_contract"]["outcome"] == "passed"
+    contract_index = next(i for i, c in enumerate(commands) if "verify-desktop-experience" in c)
+    assert sum("display-manager.service" in c for c in commands[:contract_index]) == 3
+    assert sum("verify-desktop-experience" in c for c in commands) == 1
+
+
+def test_never_ready_display_manager_still_runs_the_unweakened_contract(tmp_path, monkeypatch):
+    backend, _commands = _boot_backend(tmp_path, monkeypatch, [3] * 1000)
+    backend.config = MODULE.PilotConfig(**{**backend.config.__dict__, "boot_timeout": 0})
+    monkeypatch.setattr(
+        backend,
+        "guest",
+        lambda command, **_k: (
+            MODULE.CommandResult(3, "", "") if "display-manager.service" in command
+            and "verify" not in command
+            else MODULE.CommandResult(0, "x86_64\n", "") if command == "uname -m"
+            else MODULE.CommandResult(0, "skipjack\nskipjack\ngnome-1\n", "") if "os-release" in command
+            else MODULE.CommandResult(
+                0, "TUNAOS_DESKTOP_CONTRACT_FAIL reason=dm_inactive desktop=gnome\n", "")
+        ),
+    )
+    with pytest.raises(MODULE.PilotFailure) as error:
+        backend.verify_boot(A)
+    assert error.value.category == "desktop_contract_failed"
+
+
+def test_large_json_output_is_parsed_whole_while_evidence_stays_bounded(tmp_path):
+    events = []
+    runner = MODULE.CommandRunner(events)
+    payload = json.dumps({"RepoTags": ["t" * 20] * 5000, "Digest": "sha256:" + "a" * 64})
+    assert len(payload) > 2 * MODULE.MAX_LOG_BYTES
+
+    result = runner.run(
+        [sys.executable, "-c", "import sys; sys.stdout.write(sys.argv[1])", payload],
+        timeout=30,
+    )
+
+    assert json.loads(result.stdout)["Digest"] == "sha256:" + "a" * 64
+    assert events[-1]["stdout_truncated"] is True
+    assert len(events[-1]["stdout"]) < len(payload)
+
+
+def test_skopeo_inspect_suppresses_tags(tmp_path, monkeypatch):
+    backend = MODULE.LocalQemuBackend(config(tmp_path), [])
+    seen = []
+    monkeypatch.setattr(backend, "_binary", lambda name: name)
+
+    def run(argv, **_kwargs):
+        seen.append(argv)
+        raise MODULE.PilotFailure("command_failed", "stop")
+
+    monkeypatch.setattr(backend.runner, "run", run)
+    with pytest.raises(MODULE.PilotFailure):
+        backend._inspect_image(A)
+    assert "--no-tags" in seen[0]
+
+
+def test_dangling_symlink_pilot_state_is_rejected_by_preflight(tmp_path, monkeypatch):
+    import hashlib
+
+    pilot_config = config(tmp_path, disk_sha256=hashlib.sha256(b"disk").hexdigest())
+    (tmp_path / "installed-a.qcow2").write_bytes(b"disk")
+    (tmp_path / "id_ed25519").write_text("key")
+    pilot_config.output_dir.mkdir()
+    outside = tmp_path / "outside.fd"
+    (pilot_config.output_dir / "UEFI_VARS.fd").symlink_to(outside)
+    backend = MODULE.LocalQemuBackend(pilot_config, [])
+    monkeypatch.setattr(backend, "_binary", lambda name: name)
+
+    with pytest.raises(MODULE.PilotFailure) as error:
+        backend.preflight()
+    assert error.value.category == "unsafe_disk"
+    assert not outside.exists()
