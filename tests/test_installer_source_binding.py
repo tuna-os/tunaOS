@@ -85,7 +85,13 @@ def test_final_wrapper_passes_exact_payload_and_separate_tracking_target(tmp_pat
     BINDING.bind_recipe(path, payload, DIGEST, target)
     assert json.loads(path.read_text()) == {"imgref": target, "local_imgref": "containers-storage:" + payload}
     assert '"ref": "${PAYLOAD_REF}"' in source
-    assert 'PAYLOAD_REF="${TUNA_LIVE_PAYLOAD_REF:-$SOURCE_IMAGE_REF}"' in source
+    assignment = next(line for line in source.splitlines() if line.startswith('PAYLOAD_REF='))
+    resolved = subprocess.run(['bash', '-eu', '-c',
+        'tunaos_image_ref() { echo unexpected-resolver >&2; return 99; }; '
+        + assignment + '; printf "%s" "$PAYLOAD_REF"'],
+        env={'TUNA_LIVE_PAYLOAD_REF': payload}, text=True, capture_output=True, timeout=5)
+    assert resolved.returncode == 0 and resolved.stdout == payload
+    assert 'unexpected-resolver' not in resolved.stderr
     customize = (ROOT / "live-iso/common/src/customize-live.sh").read_text()
     assert '"${SCRIPT_DIR}/installer-source-binding.py" "$RECIPE_FILE"' in customize
     assert '"$TUNA_LIVE_PAYLOAD_REF" "${TUNA_LIVE_BASE_DIGEST:-}"' in customize

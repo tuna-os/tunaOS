@@ -193,3 +193,25 @@ def test_unmodified_boot_attestation_requires_readable_log(tmp_path, kind):
         ["bash", "-c", body, "test", str(log)], capture_output=True, check=False, timeout=5
     )
     assert result.returncode == 2
+
+
+@pytest.mark.parametrize('resolver_body', ['exit 1', 'exit 0'])
+def test_unresolved_tracking_identity_stops_before_any_boot(tmp_path, resolver_body):
+    (tmp_path / 'strict-luks-disk.qcow2').write_bytes(b'ordinary fixture')
+    resolver = tmp_path / 'published-image-ref.sh'
+    resolver.write_text('#!/bin/sh\n' + resolver_body + '\n')
+    resolver.chmod(0o700)
+    harness = function('verify_strict_installed_boot') + '''
+start_swtpm() { echo FORBIDDEN_BOOT; exit 99; }
+strict_launch_installed() { echo FORBIDDEN_BOOT; exit 99; }
+strict_start_boot_observer() { echo FORBIDDEN_BOOT; exit 99; }
+verify_strict_installed_boot luks
+'''
+    result = subprocess.run(['bash', '-c', harness],
+        env={'PATH': '/usr/bin:/bin', 'OUTPUT_DIR': str(tmp_path),
+             'SCRIPT_DIR': str(tmp_path), 'VARIANT': 'skipjack', 'FLAVOR': 'gnome'},
+        text=True, capture_output=True, timeout=5)
+    assert result.returncode == 1
+    assert 'refusing strict installed boot' in result.stderr
+    assert 'FORBIDDEN_BOOT' not in result.stdout + result.stderr
+    assert not (tmp_path / 'strict-qual-luks.json').exists()

@@ -624,7 +624,7 @@ def test_native_job_reserves_transfer_smoke_and_full_strict_gui_budget():
     job = workflow['jobs']['e2e']
     # 60 hard transfer ceiling + 20 historical smoke + 60 strict GUI + 10 extraction + 10 overhead.
     assert "inputs.source == 'native-artifact' && 160 ||" in job['timeout-minutes']
-    strict = next(step for step in job['steps'] if step.get('id') == 'e2e')
+    strict = next(step for step in job['steps'] if step.get('id') == 'strict')
     assert strict['timeout-minutes'] == 60
     assert '--strict-offline-gui' in strict['run']
     smoke = next(step for step in job['steps'] if step.get('id') == 'native_smoke')

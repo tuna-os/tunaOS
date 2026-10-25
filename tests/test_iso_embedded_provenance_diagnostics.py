@@ -5,6 +5,7 @@ an unexported overlay digest; each must fail before qualification or lose the
 exact child environment that the positive case requires.
 """
 import copy
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -17,7 +18,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / '.github/workflows/iso-e2e.yml'
 DIGEST = 'sha256:' + 'a' * 64
-BASE = 'sha256:' + 'b' * 64
+BASE = 'sha256:' + hashlib.sha256(b'base-manifest').hexdigest()
 FIELDS = ('base_image', 'base_digest', 'overlay_digest', 'engine_digest', 'platform')
 SOURCE = {'base_image': 'ghcr.io/tuna-os/yellowfin:gnome', 'base_digest': BASE,
           'overlay_digest': DIGEST, 'engine_digest': 'sha256:' + 'c' * 64,
@@ -166,47 +167,57 @@ def test_existing_platform_and_installer_gates_remain_closed(tmp_path, case):
     assert output == ''
 
 
-def run_local_build_identity(tmp_path, overlay_digest):
+def run_local_build_identity(tmp_path, overlay_digest, *, wrong_ref=False):
     """Run the source/export/customization segment, with external command stubs.
 
     The sudo stub is a real child process preserving only inherited environment;
     unexported shell variables cannot leak into the separate customization child.
     """
-    body = step('Build the ISO on this runner')
-    start = body.index('case "$PLATFORM" in')
-    end = body.index('ISO="$(find ', start)
+    workflow = yaml.safe_load((ROOT / '.github/workflows/live-iso-bootc.yml').read_text())
+    body = next(s['run'] for s in workflow['jobs']['build']['steps'] if s.get('name') == 'Build Live ISO')
+    start = body.index('TUNA_LIVE_BASE_IMAGE=')
+    end = body.index("# The source's raw manifest", start)
     body = 'set -euo pipefail\n' + body[start:end]
     bin_dir = tmp_path / 'bin'
     bin_dir.mkdir()
-    executable(bin_dir / 'skopeo', 'import os\nprint(os.environ["FAKE_OVERLAY_DIGEST"])\n')
-    executable(bin_dir / 'podman', 'import os\nprint(os.environ["FAKE_BASE_DIGEST"])\n')
-    executable(bin_dir / 'sudo', '''import os, sys
+    (tmp_path / 'scripts').symlink_to(ROOT / 'scripts', target_is_directory=True)
+    (tmp_path / 'tunaos.toml').write_bytes((ROOT / 'tunaos.toml').read_bytes())
+    executable(bin_dir / 'skopeo', 'import sys\nassert sys.argv[1:]==["inspect","--raw","containers-storage:localhost/yellowfin:gnome"]\nsys.stdout.write("base-manifest")\n')
+    executable(bin_dir / 'sudo', """import os, sys, json, shlex
 args = sys.argv[1:]
-if args[0] == '-E':
-    args = args[1:]
-os.execvp(args[0], args)
-''')
-    executable(bin_dir / 'just', '''import json, os, sys
-if sys.argv[1] == 'iso':
-    with open(os.environ['CUSTOMIZE_ENV'], 'w') as output:
-        json.dump({key: value for key, value in os.environ.items() if key.startswith('TUNA_LIVE_')}, output)
-''')
-    (tmp_path / 'image-versions.yaml').write_text('tacklebox: "' + '1' * 40 + '"\n')
+if 'scripts/build-native-live-overlay.sh' in args:
+    i=args.index('scripts/build-native-live-overlay.sh')
+    assert args[i+1:i+5]==['yellowfin','gnome','linux/amd64/v2','localhost/yellowfin:gnome']
+    assert args[i+5]==os.environ['FAKE_BASE_DIGEST']
+    digest=os.environ['FAKE_OVERLAY_DIGEST']
+    with open(args[i+6], 'w') as f:
+        f.write('TUNA_LIVE_OVERLAY_REF='+shlex.quote(('localhost/wrong:gnome@' if os.environ['WRONG_REF']=='1' else 'localhost/native-live-overlay:yellowfin-gnome@')+digest)+'\\n')
+        f.write('TUNA_LIVE_OVERLAY_DIGEST='+shlex.quote(digest)+'\\n')
+else:
+    if args[0]=='-E': args=args[1:]
+    assert args[0] in ('skopeo','env'), args
+    os.execvp(args[0], args)
+""")
+    executable(bin_dir / 'just', """import json, os, sys
+assert sys.argv[1:] == ['iso','yellowfin','gnome','local','gnome','0','linux/amd64/v2']
+with open(os.environ['CUSTOMIZE_ENV'], 'w') as output:
+    json.dump({key:value for key,value in os.environ.items() if key.startswith('TUNA_LIVE_')},output)
+""")
     result_path = tmp_path / 'customization-env.json'
-    env = {key: value for key, value in os.environ.items() if not key.startswith('TUNA_LIVE_')}
-    env.update(PATH=str(bin_dir) + os.pathsep + os.environ['PATH'], VARIANT='yellowfin', FLAVOR='gnome',
-               PLATFORM='linux/amd64/v2', FAKE_OVERLAY_DIGEST=overlay_digest,
-               FAKE_BASE_DIGEST=BASE, CUSTOMIZE_ENV=str(result_path))
-    result = subprocess.run(['/bin/bash', '-c', body], cwd=tmp_path, env=env,
-                            text=True, capture_output=True, timeout=15)
-    return result, json.loads(result_path.read_text()) if result_path.exists() else None
+    env = {key:value for key,value in os.environ.items() if not key.startswith('TUNA_LIVE_')}
+    env.update(PATH=str(bin_dir)+os.pathsep+os.environ['PATH'], VARIANT='yellowfin', FLAVOR='gnome',
+               PLATFORM='linux/amd64/v2', RUNNER_TEMP=str(tmp_path), FAKE_OVERLAY_DIGEST=overlay_digest,
+               FAKE_BASE_DIGEST=BASE, CUSTOMIZE_ENV=str(result_path), WRONG_REF='1' if wrong_ref else '0')
+    result = subprocess.run(['/bin/bash','-c',body],cwd=tmp_path,env=env,
+                            text=True,capture_output=True,timeout=15)
+    return result,json.loads(result_path.read_text()) if result_path.exists() else None
 
 
 def test_customization_child_receives_exact_verified_overlay_digest(tmp_path):
     result, child_env = run_local_build_identity(tmp_path, DIGEST)
     assert result.returncode == 0, result.stdout + result.stderr
     assert child_env['TUNA_LIVE_OVERLAY_DIGEST'] == DIGEST
-    assert child_env['TUNA_LIVE_OVERLAY_REF'] == 'ghcr.io/tuna-os/live-overlay:yellowfin-gnome-linux-amd64-v2@' + DIGEST
+    assert child_env['TUNA_LIVE_OVERLAY_REF'] == 'localhost/native-live-overlay:yellowfin-gnome@' + DIGEST
     assert child_env['TUNA_LIVE_BASE_DIGEST'] == BASE
     assert child_env['TUNA_LIVE_OVERLAY_DIGEST'] != child_env['TUNA_LIVE_BASE_DIGEST']
 
@@ -216,4 +227,11 @@ def test_missing_or_invalid_overlay_digest_never_reaches_customization(tmp_path,
     result, child_env = run_local_build_identity(tmp_path, digest)
     assert result.returncode != 0
     assert 'invalid live overlay digest' in result.stdout
+    assert child_env is None
+
+
+def test_native_overlay_reference_must_match_digest_and_target(tmp_path):
+    result, child_env = run_local_build_identity(tmp_path, DIGEST, wrong_ref=True)
+    assert result.returncode != 0
+    assert 'native overlay reference does not match' in result.stdout
     assert child_env is None
