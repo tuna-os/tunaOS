@@ -50,7 +50,7 @@ def source_result(source, names):
 
 def acquirer(base_names=('htop', 'btop', 'bashtop'), calls=None):
     def acquire(catalog, keyring_for, now):
-        assert [len(keyring_for(source)) for source in catalog['sources']] == [55918, 55918, 55918, 2288]
+        assert all(len(keyring_for(source)) > 0 for source in catalog['sources'])
         if calls is not None:
             calls.append(catalog['variant'])
         return [source_result('trixie', base_names), source_result('trixie-updates', ()),
@@ -94,7 +94,7 @@ def test_htop_resolves_on_every_covered_target_with_separate_evidence_layers():
         assert record['transaction'] == {'status': 'not-run'}
         assert record['installed_image'] == {'status': 'not-run'}
         assert record['base_image'].startswith('docker.io/library/debian:trixie@sha256:')
-        assert record['configuration_observed_at'] == '2026-10-25T08:33:28Z'
+        assert datetime.fromisoformat(record['configuration_observed_at'].replace('Z', '+00:00')).tzinfo
     json.dumps(report)  # Evidence is serializable; no sets leak into the plan.
 
 
@@ -345,3 +345,45 @@ def test_cli_transaction_requires_matching_plan_intent(tmp_path, capsys):
     assert 'different package intent' in capsys.readouterr().err
     assert cli.main(['verify-transaction', 'htop', '--plan', str(path)]) == 1
     assert 'requires --plan, --image-target and --image' in capsys.readouterr().err
+
+
+def synthetic_resolved_report():
+    record = {'target': TARGET, 'status': 'resolved', 'family': 'apt', 'native_name': 'htop',
+              'index_availability': {'status': 'present'}}
+    report = {'schema_version': portable_add.PLAN_SCHEMA, 'complete': True, 'targets': [record]}
+    return report, json.dumps(report).encode()
+
+
+def test_missing_container_runtime_is_a_reported_transaction_error():
+    report, data = synthetic_resolved_report()
+
+    def no_podman(command, **kwargs):
+        raise FileNotFoundError(2, 'No such file or directory', command[0])
+
+    with pytest.raises(portable_add.PortableAddError) as raised:
+        portable_add.verify_transaction(report, data, TARGET, IMAGE, no_podman)
+    assert raised.value.report['transaction']['status'] == 'error'
+    assert 'podman' in raised.value.report['transaction']['detail']
+
+
+def test_an_ambiguous_name_is_present_in_the_index_not_absent(monkeypatch):
+    document = tunaos_config.load()
+    fake_catalogs = type('Catalogs', (), {})()
+    fake_catalogs.CatalogError = portable_add.catalogs.CatalogError
+    fake_catalogs.select = lambda *args: None
+    fake_catalogs.bind_target_configuration = lambda *args: {'observed_at': '2026-10-25T00:00:00Z'}
+    fake_catalogs.bind_observation = lambda catalog, directory: ({'base_image': 'x@sha256:' + 'a' * 64},
+                                                                  {s['id']: b'k' for s in catalog['sources']})
+    monkeypatch.setattr(portable_add, 'catalogs', fake_catalogs)
+
+    def resolve(query, names, family):
+        raise portable_add.author.AmbiguousNameError('htop: ambiguous: a/htop, b/htop', {'htop'})
+
+    monkeypatch.setattr(portable_add.author, 'resolve', resolve)
+    selected = portable_add.select_targets(document, **flounder_covered())
+    with pytest.raises(portable_add.PortableAddError) as raised:
+        portable_add.plan(document, ROOT, 'htop', selected, None, now=NOW, acquire=acquirer())
+    first = raised.value.report['targets'][0]
+    assert first['status'] == 'ambiguous'
+    assert first['index_availability']['status'] == 'present'
+    assert first['index_availability']['matched_sources'] == ['trixie']

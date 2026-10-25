@@ -126,11 +126,18 @@ def plan(document, config_directory, query, selected, native=None, *, now, acqui
                       configuration_observed_at=target['observed_at'])
         try:
             resolved = author.resolve(record['requested'], names, catalog['family'])
+        except author.AmbiguousNameError as exc:
+            # Present in the authenticated index, but the query names more than one package.
+            record['index_availability'] = {
+                'status': 'present',
+                'matched_sources': [result['source'] for result in results if exc.matches & result['names']],
+                'sources': _source_evidence(results)}
+            record.update(status='ambiguous', reason=str(exc))
+            continue
         except author.AuthoringError as exc:
             record['index_availability'] = {'status': 'absent',
                                             'sources': _source_evidence(results)}
-            record.update(status='ambiguous' if 'ambiguous' in str(exc) else 'missing',
-                          reason=str(exc))
+            record.update(status='missing', reason=str(exc))
             continue
         matched = [result['source'] for result in results if resolved in result['names']]
         record['index_availability'] = {'status': 'present', 'matched_sources': matched,
@@ -245,7 +252,12 @@ def verify_transaction(report, plan_bytes, target, image, run):
         raise PortableAddError(f'{target}: transaction verification unsupported', result)
     command = ['podman', 'run', '--rm', '--pull=never', '--entrypoint', 'sh', image,
                '-c', APT_SIMULATION, 'sh', name]
-    completed = run(command, text=True, capture_output=True)
+    try:
+        completed = run(command, text=True, capture_output=True)
+    except OSError as exc:
+        result['transaction'] = {'status': 'error', 'command': command,
+                                 'detail': f'could not run {command[0]}: {exc}'}
+        raise PortableAddError(f'{target}: transaction error', result) from exc
     result['transaction'] = classify_apt(name, completed)
     result['transaction']['command'] = command
     if result['transaction']['status'] not in {'solvable', 'already-installed'}:
