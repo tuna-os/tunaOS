@@ -65,6 +65,9 @@ ALLOWED = {
         "skipjack digests (a qualification harness for TunaOS images, not a fork build path)",
     ("scripts/inspect-published-image.py", "ghcr.io/tuna-os/skipjack:gnome"):
         "usage example in the module docstring; the script takes the ref as an argument",
+    ("scripts/diagnostics/rpm_rehearsal.json", "ghcr.io/tuna-os/tunaos-packages@sha256"):
+        "digest-pinned TunaOS package repository that the signed-OCI consumer diagnostic "
+        "rehearses against; an immutable upstream input, not the fork's destination",
 }
 LITERAL = re.compile(r"ghcr\.io/tuna-os\b")
 
