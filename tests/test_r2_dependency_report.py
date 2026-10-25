@@ -58,7 +58,7 @@ def test_measure_prefix_follows_repomd_to_primary_and_expands_the_arch():
         return gzip.compress(PRIMARY)
 
     got = report.measure_prefix("hummingbird/20251124-$basearch/", get)
-    assert got == {"kind": "rpm", "packages": 2, "bytes": 1234}
+    assert (got["kind"], got["packages"], got["bytes"]) == ("rpm", 2, 1234)
     assert asked[0] == "https://repo.tunaos.org/hummingbird/20251124-x86_64/repodata/repomd.xml"
     assert asked[1].endswith("/repodata/abc-primary.xml.gz")
 
@@ -69,8 +69,8 @@ def test_measure_prefix_kinds():
     assert report.kind("tideforge/ubuntu/") == "apt"
     assert report.kind("pacman/arch/$arch") == "pacman"
     assert report.kind("xfce/44-x86_64/") == "rpm"
-    assert report.measure_prefix("public.gpg", lambda url: b"12345") == {
-        "kind": "key", "packages": None, "bytes": 5}
+    key = report.measure_prefix("public.gpg", lambda url: b"12345")
+    assert (key["kind"], key["packages"], key["bytes"]) == ("key", None, 5)
 
 
 def test_a_failed_measurement_is_a_visible_row_not_a_silent_gap():
@@ -134,3 +134,56 @@ def test_unsupported_compression_is_an_error_not_garbage(name):
     else:
         import lzma
         assert report.decompress("p.xml.xz", lzma.compress(b"ok")) == b"ok"
+
+
+def test_same_count_and_bytes_with_different_packages_have_different_content():
+    one = PRIMARY
+    other = PRIMARY.replace(b'<name>a</name>', b'<name>a</name><checksum type="sha256" pkgid="YES">aa</checksum>')
+    assert report.rpm_totals(one) == report.rpm_totals(other)
+    assert report.fingerprint(report.rpm_checksums(one)) != report.fingerprint(report.rpm_checksums(other))
+    # Order does not matter, membership does.
+    assert report.fingerprint(["b", "a"]) == report.fingerprint(["a", "b"])
+    assert report.fingerprint(["a", "b"]) != report.fingerprint(["a", "c"])
+    assert report.fingerprint([]) != report.fingerprint(["aa"])
+
+
+def test_measure_prefix_reports_the_content_fingerprint_of_each_kind():
+    primary = PRIMARY.replace(b'<name>a</name>', b'<name>a</name><checksum type="sha256" pkgid="YES">aa</checksum>')
+
+    def get(url):
+        return REPOMD if url.endswith("repomd.xml") else gzip.compress(primary)
+
+    assert report.measure_prefix("xfce/44-x86_64/", get)["content"] == report.fingerprint(["aa"])
+    text = "Package: a\nSize: 1\nSHA256: " + "1" * 64 + "\n"
+    got = report.measure_prefix("tideforge/ubuntu/", lambda url: gzip.compress(text.encode()))
+    assert got["content"] == report.fingerprint(["1" * 64])
+
+
+def test_an_oci_image_index_is_resolved_to_the_layers_of_its_children():
+    def get_json(url, token, accept=""):
+        if url.endswith("tags/list?n=1000"):
+            return {"tags": ["multi", "single"]}
+        if url.endswith("/manifests/multi"):
+            return {"manifests": [
+                {"digest": "sha256:" + "a" * 64, "platform": {"os": "linux", "architecture": "amd64"}},
+                {"digest": "sha256:" + "b" * 64, "platform": {"os": "linux", "architecture": "arm64"}}]}
+        if url.endswith("a" * 64):
+            return {"layers": [{"size": 11}, {"size": 22}]}
+        if url.endswith("b" * 64):
+            return {"layers": [{"size": 33}]}
+        return {"layers": [{"size": 44}]}
+
+    rows = report.oci_family_tags(get_json, lambda: "t")
+    assert rows == [
+        {"tag": "multi [linux/amd64]", "layers": [11, 22]},
+        {"tag": "multi [linux/arm64]", "layers": [33]},
+        {"tag": "single", "layers": [44]},
+    ]
+
+
+def test_an_unrecognised_oci_manifest_is_an_error_not_zero_layers():
+    def get_json(url, token, accept=""):
+        return {"tags": ["odd"]} if url.endswith("tags/list?n=1000") else {"config": {}}
+
+    with pytest.raises(ValueError, match="neither an image manifest nor an image index"):
+        report.oci_family_tags(get_json, lambda: "t")

@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import gzip
+import hashlib
 import io
 import json
 import lzma
@@ -128,23 +129,53 @@ def pacman_totals(database: bytes) -> tuple[int, int]:
     return count, total
 
 
+def rpm_checksums(primary_xml: bytes) -> list[str]:
+    root = ET.fromstring(primary_xml)
+    return [e.text for e in root.iter('{%s}checksum' % RPM_NS['c'])]
+
+
+def pacman_checksums(database: bytes) -> list[str]:
+    found = []
+    with tarfile.open(fileobj=io.BytesIO(database)) as archive:
+        for member in archive.getmembers():
+            if member.name.endswith('/desc'):
+                match = re.search(r'%SHA256SUM%\n([0-9a-f]{64})', archive.extractfile(member).read().decode())
+                found.append(match.group(1) if match else '')
+    return found
+
+
+def fingerprint(checksums: list[str]) -> str:
+    """Identity of a package set: the hash of its sorted package checksums.
+
+    Two sets with the same count and bytes can still differ; this cannot.
+    """
+    return hashlib.sha256('\n'.join(sorted(checksums)).encode()).hexdigest()[:16]
+
+
 def measure_prefix(prefix: str, get=fetch) -> dict:
     base = HOST + expand(prefix)
     what = kind(prefix)
     if what == 'key':
-        return {'kind': what, 'packages': None, 'bytes': len(get(base))}
+        data = get(base)
+        return {'kind': what, 'packages': None, 'bytes': len(data),
+                'content': fingerprint([hashlib.sha256(data).hexdigest()])}
     if what == 'apt':
         text = decompress('Packages.gz', get(base + 'Packages.gz')).decode(errors='replace')
         count, total = apt_totals(text)
+        checksums = re.findall(r'^SHA256: ([0-9a-f]{64})', text, re.MULTILINE)
     elif what == 'pacman':
-        count, total = pacman_totals(decompress('tunaos.db', get(base.rstrip('/') + '/tunaos.db')))
+        database = decompress('tunaos.db', get(base.rstrip('/') + '/tunaos.db'))
+        count, total = pacman_totals(database)
+        checksums = pacman_checksums(database)
     else:
         repomd = get(base + 'repodata/repomd.xml').decode()
         href = re.search(r'href="([^"]*primary\.xml[^"]*)"', repomd)
         if not href:
             raise ValueError(f'{prefix}: repomd.xml names no primary.xml')
-        count, total = rpm_totals(decompress(href.group(1), get(base + href.group(1))))
-    return {'kind': what, 'packages': count, 'bytes': total}
+        primary = decompress(href.group(1), get(base + href.group(1)))
+        count, total = rpm_totals(primary)
+        checksums = rpm_checksums(primary)
+    return {'kind': what, 'packages': count, 'bytes': total, 'content': fingerprint(checksums)}
 
 
 def oci_manifest(token: str, reference: str, get_json) -> dict:
@@ -169,8 +200,17 @@ def oci_family_tags(get_json=registry_json, get_token=None) -> list[dict]:
     rows = []
     for tag in sorted(t for t in tags if not SIGNATURE_TAG.search(t)):
         manifest = oci_manifest(token, tag, get_json)
-        layers = [layer['size'] for layer in manifest.get('layers', [])]
-        rows.append({'tag': tag, 'layers': layers})
+        if 'manifests' in manifest:  # an image index: size the layers of each child
+            for child in manifest['manifests']:
+                platform = child.get('platform') or {}
+                label = '/'.join(filter(None, (platform.get('os'), platform.get('architecture'))))
+                inner = oci_manifest(token, child['digest'], get_json)
+                rows.append({'tag': f"{tag} [{label or child['digest'][:19]}]",
+                             'layers': [layer['size'] for layer in inner.get('layers', [])]})
+            continue
+        if 'layers' not in manifest:
+            raise ValueError(f'tag {tag} is neither an image manifest nor an image index')
+        rows.append({'tag': tag, 'layers': [layer['size'] for layer in manifest['layers']]})
     return rows
 
 
@@ -191,10 +231,10 @@ def render_measurements(found: dict[str, list[str]], get=fetch) -> str:
         try:
             m = measure_prefix(prefix, get)
             rows.append([f'`{prefix}`', m['kind'], '' if m['packages'] is None else m['packages'],
-                         f"{m['bytes']:,}"])
+                         f"{m['bytes']:,}", f"`{m['content']}`"])
         except Exception as error:  # a failed measurement is a row, never a silent gap
-            rows.append([f'`{prefix}`', kind(prefix), 'ERROR', str(error)[:80]])
-    return table(['Prefix', 'Kind', 'Packages', 'Bytes (x86_64)'], rows)
+            rows.append([f'`{prefix}`', kind(prefix), 'ERROR', str(error)[:80], ''])
+    return table(['Prefix', 'Kind', 'Packages', 'Bytes (x86_64)', 'Content (checksum set)'], rows)
 
 
 def render_oci(rows: list[dict]) -> str:
