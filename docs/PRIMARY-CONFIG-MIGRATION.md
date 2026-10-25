@@ -258,90 +258,36 @@ the other cells of Tuna Desktop keep their existing display manager.
 
 ## F5: Fork recipe and conformance gate (#3806)
 
-**Scope**: Configuration resolution validation and documented recipe.  
-**Blocked by**: F1–F4 delivery.  
-**Does NOT include**: Image builds, installs, or boot qualification (see #3474).
+**Scope**: configuration resolution of a fork that edits only `tunaos.toml` and
+asset files. **Does not include**: image builds, installs or boot qualification
+(#3474).
 
-### What this validates
+`tests/test_fork_recipe_conformance.py` forks the real `tunaos.toml` with text
+edits that a person would make: publish destination, project name, homepage,
+package additions for one variant, and one Flatpak. It runs the tools of the
+repository on the result. These are `scripts/config.py validate`, the
+`generate-*` adapter writers and the shell publish-destination resolver. The
+test asserts these points:
 
-The conformance test for the fork recipe proves that a sample fork changes
-**only** `tunaos.toml` and asset files, and that the fork produces:
+1. **Stock does not change**: every committed adapter (`identity.env`,
+   `variant-identity.tsv`, `variant-aliases.tsv`, `image-packages.tsv`,
+   `flatpak-preinstall.tsv`) equals a fresh render of `tunaos.toml`. Stock has no
+   publish table or package additions.
+2. **The fork differs**: destination, identity, package rows and Flatpak list
+   change as edited. Only the variant that declared the packages gets them.
+3. **Undo the edits**: the stock bytes and adapters come back exactly.
+4. **Code is not configuration**: the test rejects a `[hooks]` table, shell
+   metacharacters or URLs in package names, and `remove` lists. It checks each
+   package name against the package manager of its variant.
+5. **Assets travel with the config**: `check-drawn-artwork` reports a new
+   boot-splash theme name as missing until its theme files exist.
 
-- Different resolved destination (registry/namespace), identity, packages,
-  and Flatpak selections compared to stock.
-- Stock TunaOS resolution that does not change (determinism).
-- Rejection of any fork that tries to embed code (scripts, Containerfiles,
-  build hooks) into TOML.
-
-### Test structure
-
-`tests/test_fork_recipe_conformance.py` validates configuration resolution
-in four test classes:
-
-1. **Stock configuration determinism**: Stock TunaOS resolves to the same
-   output on repeated runs; plan has required structure.
-2. **Fork config-only edits**: A minimal "Acme OS" fork changes tunaos.toml
-   (registry, namespace, brand URLs, packages) and assets. Its resolved
-   output differs from stock.
-3. **Fork reversion**: When you remove the fork edits, the resolution is
-   byte-identical to stock.
-4. **Code rejection**: Asserts that Containerfiles, build scripts, and
-   structured script paths are code (not configuration).
-
-The test uses actual resolvers (`scripts/resolve-fork-config.py`) with no
-mocked builds, gates, or installs. It does not assert that the resolved
-configuration successfully builds an image or boots. That is #3474's proof.
-
-### Expected CI check shape
-
-After #3474 lands with install proof, the conformance gate will run in CI as:
-
-```bash
-just check  # includes pytest /tests/test_fork_recipe_conformance.py::*
-```
-
-For now, the test is local-only. Document the intended CI shape here;
-do not wire it until #3474 delivers install qualification.
-
-### Sample fork: Acme OS
-
-The test creates a minimal fork that demonstrates the recipe:
-
-```toml
-# acme.yaml (tunaos.toml fork)
-[build.publish]
-registry = "localhost"
-namespace = "acme-preview"
-
-[global.branding]
-homepage = "https://acme.example.org"
-wallpaper = "assets/acme-wallpaper.svg"
-
-[global.packages]
-add = ["htop", "git"]
-```
-
-Assets: `assets/acme-wallpaper.svg` (SVG in local assets/).
-
-Expected outcome: the images of Acme OS resolve under `localhost/acme-preview`,
-include `htop` and `git` globally, and use the homepage of Acme.
+Native names in `[defaults.packages]` must be valid for every variant's package
+manager, so the sample scopes them to a dnf variant. The test does not build an
+image, and it is not yet a CI-only gate: it runs with the rest of `tests/`.
 
 ### Conformance boundaries
 
-**This issue owns**:
-- Fixture: minimal fork config with only tunaos.toml and assets changed.
-- Test: validation of the resolved output (destination, identity and
-  packages differ from stock; stock does not change).
-- Documentation: step-by-step recipe in `docs/FORK-RECIPE.md`.
-- Documented CI shape (no wiring).
-
-**#3474 owns**:
-- Image build proof: resolved config → built, signed, published image.
-- Install proof: image boots, provisions correctly, survives reboot.
-- Reference journeys: Yellowfin (RPM/Fedora) and Grouper (APT/Debian) forks.
-
-### Acceptance
-
-All 15 tests in `test_fork_recipe_conformance.py` pass. Documentation exists.
-`just check` and `just fix` both succeed. No config edits needed at the code
-level; fork users only edit `tunaos.toml` and `assets/`.
+**#3806 owns** the fixture and the resolution assertions above. **#3474 owns**
+image build, install and boot proof for the Yellowfin (RPM) and Grouper (APT)
+reference journeys.
