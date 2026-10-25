@@ -25,14 +25,19 @@ The brand lands partly, and the part that lands fools a spot check. We wrote
 ### 1. Identity — what the system calls itself
 
 `/usr/lib/os-release` and `/usr/share/ublue-os/image-info.json`.
-`build_scripts/90-image-info.sh` writes both, and every base runs it.
+`build_scripts/90-image-info.sh` writes both, and every base runs it. The name,
+URLs, CPE and codenames come from `[project]`, `[defaults.branding]` and each
+variant's `codename` in `tunaos.toml`, through the generated
+`build_scripts/lib/identity.env`. `verify-branding.sh` checks against the same
+file, so a fork's values pass the contract.
 
 | field | value |
 |---|---|
 | `PRETTY_NAME`, `NAME` | the variant, never the upstream distro |
-| `VERSION_CODENAME` | the variant's fish, e.g. `Makaira nigricans` |
+| `VERSION_CODENAME` | the variant's `codename`, e.g. `Makaira nigricans` |
 | `LOGO` | `tunaos` |
-| `HOME_URL`, `DOCUMENTATION_URL`, `SUPPORT_URL`, `BUG_REPORT_URL` | ours |
+| `HOME_URL`, `DOCUMENTATION_URL`, `SUPPORT_URL`, `BUG_REPORT_URL` | `[defaults.branding]` |
+| `CPE_NAME` | `cpe:/o:<cpe_vendor>:<image name>-<project id>`; the image name is the publish name (`bonito` for `bonito-rawhide`) |
 | `VARIANT`, `VARIANT_ID`, `IMAGE_ID`, `IMAGE_VERSION`, `DEFAULT_HOSTNAME` | set |
 
 One variant's identity must never name another project. Until 2026-09-17 every
@@ -80,7 +85,9 @@ Do not add "TunaOS" to a login screen, a splash, a wallpaper or the installer.
 ## Each variant has its own look
 
 A variant is TunaOS first. It also shows the distro it is built on.
-`build_scripts/lib/variant-identity.tsv` gives each variant an accent colour.
+Each variant's `branding` in `tunaos.toml` gives it an accent colour, which
+`scripts/config.py generate-variant-identity` writes to
+`build_scripts/lib/variant-identity.tsv` for the build and the art generators.
 The colour comes from that distro: Arch blue for marlin, Ubuntu orange for
 grouper, openSUSE green for sailfin. The mark is the variant's Noto Emoji.
 

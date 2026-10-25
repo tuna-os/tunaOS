@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "variant": "flounder",
+  "flavors": [
+    "base",
+    "kde",
+    "xfce"
+  ],
+  "platform": "linux/amd64",
+  "base_image": "docker.io/library/debian:trixie@sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308",
+  "observed_at": "2026-10-25T08:33:28Z",
+  "configuration_files": {
+    "Containerfile.debian": {
+      "sha256": "66cc16aacc5e69a9fbe6692fc1a1e28322dce6ed72de7ce6c51d19c50b071022",
+      "size": 18383
+    },
+    "build_scripts/10-base-packages.sh": {
+      "sha256": "f614082e7a6738c9af99bef509e62be9eb078410d66cd5c590fbe0be5937c994",
+      "size": 25952
+    },
+    "build_scripts/lib.sh": {
+      "sha256": "be8985d9ba56dcaac9eb9c11a8e223d14db58e71334bb467498b0e4494b6dbba",
+      "size": 50494
+    },
+    "build_scripts/20-packages.sh": {
+      "sha256": "76dfeec44ef4d8b489e511af3cbadd6535578213086e828074317a5b84d3a149",
+      "size": 7585
+    },
+    "build_scripts/desktop/install-desktop.sh": {
+      "sha256": "2d4a2d92ac4b21890f7ec0f9a33d4b8ef702442084ab243dc9600fec8d9a3d44",
+      "size": 61254
+    },
+    "scripts/build-image-inner.sh": {
+      "sha256": "3f3fcafccaf9ad92b04cfe0f910efa4f2f14a31110b588d0a31e1a279b826411",
+      "size": 20911
+    },
+    "image-versions.yaml": {
+      "sha256": "4f5f3c9fc99f8cd7729254e61272328caa72a9e0f0b5c5d46923954dc0b51d08",
+      "size": 12701
+    }
+  },
+  "copied_package_source_files": {},
+  "common_image": "ghcr.io/projectbluefin/common@sha256:f7934f263b4357cba6ad253e7a3ce8d667cd478798a137be8f3a18c04806cbee",
+  "build_sources": [
+    {
+      "id": "tailscale",
+      "uri": "https://pkgs.tailscale.com/stable/debian/",
+      "suite": "trixie",
+      "components": [
+        "main"
+      ],
+      "declaration_url": "https://pkgs.tailscale.com/stable/debian/trixie.tailscale-keyring.list",
+      "declaration_sha256": "5a1b21b30892bf22fb5d7c4f52fefe9b65efda2100e82abba2e0849da2a2264b",
+      "keyring_sha256": "3e03dacf222698c60b8e2f990b809ca1b3e104de127767864284e6c228f1fb39",
+      "keyring_url": "https://pkgs.tailscale.com/stable/debian/trixie.noarmor.gpg"
+    }
+  ]
+}

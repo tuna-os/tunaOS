@@ -81,19 +81,3 @@ def test_every_alias_folds_back_onto_its_variant():
                 f"canonical variant id, so a build tagged with that alias would "
                 f"abort in the codename lookup."
             )
-
-
-def test_every_variant_has_a_codename():
-    """Every variant id must hit a codename branch, never the abort default."""
-    script = IMAGE_INFO.read_text()
-    table = script.split("VARIANT_KEY=", 1)[1].split("\nesac", 1)[0]
-    labels = set()
-    for line in table.splitlines():
-        label, _, rest = line.partition(") CODE_NAME=")
-        if rest:
-            labels.update(part.strip() for part in label.split("|"))
-    for variant in _config()["variants"]:
-        assert variant["id"] in labels, (
-            f"{variant['id']} has no scientific fish codename in "
-            f"build_scripts/90-image-info.sh; every build of it would abort."
-        )

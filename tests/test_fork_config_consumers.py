@@ -190,6 +190,12 @@ def test_real_build_engine_receives_fork_cell_and_cache_identity(fork, tmp_path)
     stock = execute()
     assert len(stock.split("=", 1)[1]) == 16
     assert stock != initial
+    # The generated identity adapter is bind-mounted context too: changing its
+    # bytes (and nothing else) must change the layer-cache key.
+    adapter = context / "build_scripts/lib/identity.env"
+    assert adapter.is_file()
+    adapter.write_text(adapter.read_text() + "# regenerated\n")
+    assert execute() != stock
 
 
 def test_full_direct_desktop_fanout_is_derived_from_catalog(fork):
