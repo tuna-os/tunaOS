@@ -18,7 +18,6 @@ import re
 from pathlib import Path
 from typing import Any
 
-import yaml
 
 PLATFORMS = {
     "linux/amd64": ("linux", "amd64", None, "x86-64"),
@@ -1340,6 +1339,7 @@ def downgrade_stale_targets(
 
 
 def main() -> None:
+    import yaml  # Only the legacy YAML CLI needs this optional dependency.
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, default=Path(".github/build-config.yml"))
     parser.add_argument("--output", type=Path)

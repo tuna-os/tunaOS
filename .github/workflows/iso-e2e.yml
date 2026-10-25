@@ -32,6 +32,15 @@ name: ISO E2E Smoke
 on:
   workflow_call:
     inputs:
+      platform:
+        description: 'Explicit platform for native artifact qualification'
+        type: string
+        required: false
+      max_parallel:
+        description: 'Maximum concurrent cells (1 or 2)'
+        type: number
+        default: 1
+        required: false
       variant:
         type: string
         required: true
@@ -58,6 +67,15 @@ on:
         required: true
   workflow_dispatch:
     inputs:
+      platform:
+        description: 'Explicit platform for native artifact qualification'
+        type: string
+        required: false
+      max_parallel:
+        description: 'Maximum concurrent cells (1 or 2)'
+        type: number
+        default: 1
+        required: false
       variant:
         # Free-form, not a choice list. The list here offered yellowfin and
         # albacore while build-config.yml declares build_iso: true for ten
@@ -148,6 +166,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.gen.outputs.matrix }}
+      max_parallel: ${{ steps.gen.outputs.max_parallel }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -181,10 +200,23 @@ jobs:
       - name: Build the cell list
         id: gen
         env:
+          REQUESTED_PLATFORM: ${{ inputs.platform }}
+          MAX_PARALLEL: ${{ inputs.max_parallel }}
+          ISO_SOURCE: ${{ inputs.source }}
           DISPATCH_VARIANT: ${{ inputs.variant }}
           DISPATCH_FLAVORS: ${{ inputs.flavors }}
         run: |
           set -euo pipefail
+          MAX_PARALLEL="${MAX_PARALLEL:-1}"
+          [[ "$MAX_PARALLEL" == 1 || "$MAX_PARALLEL" == 2 ]] || { echo 'max_parallel must be 1 or 2' >&2; exit 1; }
+          echo "max_parallel=$MAX_PARALLEL" >> "$GITHUB_OUTPUT"
+          if [[ "${ISO_SOURCE:-}" == native-artifact ]]; then
+            # One artifact cannot stand in for several desktop/architecture targets.
+            python3 scripts/plan-iso-qualification.py --target "$DISPATCH_VARIANT:$DISPATCH_FLAVORS:$REQUESTED_PLATFORM" --max-parallel "$MAX_PARALLEL"
+            M="$(jq -cn --arg v "$DISPATCH_VARIANT" --arg f "$DISPATCH_FLAVORS" --arg p "$REQUESTED_PLATFORM" '{include:[{variant:$v,flavor:$f,platform:$p}]}')"
+            echo "matrix=$M" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           BUILD_CONFIG_JSON="$(python3 scripts/config.py show)"
           canonical_platform() {
             jq -r --arg variant "$1" --arg flavor "$2" '
@@ -221,6 +253,7 @@ jobs:
             echo "::error::no cells to test — variant='${DISPATCH_VARIANT:-}' flavors='${DISPATCH_FLAVORS:-}' produced an empty matrix"
             exit 1
           fi
+          [[ "$(jq '.include | length' <<<"$M")" -le 4 ]] || { echo 'select at most four cells' >&2; exit 1; }
           echo "matrix=$M" >> "$GITHUB_OUTPUT"
           echo "$M" | jq -r '.include[] | "  \(.variant):\(.flavor)"'
 
@@ -245,6 +278,7 @@ jobs:
     # get ten more: 160 total.
     timeout-minutes: ${{ inputs.source == 'native-artifact' && 160 || ((github.event_name == 'workflow_dispatch' && inputs.source == 'build') && 130 || 70) }}
     strategy:
+      max-parallel: ${{ fromJson(needs.generate-matrix.outputs.max_parallel) }}
       # Don't cancel the other leg if one fails — we want to see both signals.
       fail-fast: false
       matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}

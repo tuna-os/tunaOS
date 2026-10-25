@@ -98,9 +98,9 @@ def test_a_dispatch_reaches_a_cell_that_was_previously_unaddressable(tmp_path):
 
 @needs_jq
 def test_a_dispatch_sweeps_several_flavors_at_once(tmp_path):
-    m = run_generator("albacore", "gnome,kde,cosmic,niri,xfce", tmp_path)
+    m = run_generator("albacore", "gnome,kde,cosmic,xfce", tmp_path)
     assert [c["flavor"] for c in m["include"]] == [
-        "gnome", "kde", "cosmic", "niri", "xfce"], m
+        "gnome", "kde", "cosmic", "xfce"], m
     assert {c["variant"] for c in m["include"]} == {"albacore"}, m
     assert all(c["platform"] for c in m["include"]), m
 
@@ -366,3 +366,10 @@ def test_the_rclone_failure_does_not_abort_before_the_fallback():
     assert copy_lines, run[-800:]
     idx = run.index("for candidate in")
     assert "|| true" in run[idx:], run[idx:idx + 600]
+
+
+@needs_jq
+def test_more_than_four_cells_is_rejected(tmp_path):
+    result = run_generator("albacore", "gnome,kde,cosmic,niri,xfce", tmp_path, expect_fail=True)
+    assert result.returncode != 0
+    assert "at most four cells" in result.stderr

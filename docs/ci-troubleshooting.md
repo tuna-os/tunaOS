@@ -2336,3 +2336,14 @@ including the green edited-boot receipt from run 40085763938, remain useful raw
 diagnostic evidence but are not accepted as current unchanged-boot proof.
 Do not relabel or promote old receipts. Native evidence is still separate from
 browser parity and cutover evidence.
+
+### Strict preflight refuses a configured ISO target
+
+`scripts/plan-iso-qualification.py` retains configured rows and required obligations.
+Alma ordinary AMD64 and skipjack GNOME/v2 conflict with CPU policy.
+Missing required ARM64 rows do not count as passes.
+Resolve the TOML and support policy with their owner; do not omit those rows.
+
+KDE and XFCE need producers for their actual installer frontends.
+A session contract is not proof of installation through the GUI.
+See [bounded desktop qualification](ISO-DESKTOP-QUALIFICATION.md).

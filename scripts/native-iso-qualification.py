@@ -12,7 +12,12 @@ import shutil
 import subprocess
 import sys
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from contracts.iso_qualification import DESKTOPS, manifest, validate_session
+from contracts.targets import cpu_baseline
+
 SCHEMA = 'NativeISOQualification/v2'
+DESKTOP_SCHEMA = 'NativeISOQualificationCandidate/v3'
 DIGEST = re.compile(r'sha256:[0-9a-f]{64}')
 SHA = re.compile(r'[0-9a-f]{40}')
 TRANSITIONS = ['welcome', 'encryption', 'summary', 'progress', 'done']
@@ -59,14 +64,19 @@ def number(value, positive=False):
 
 
 def validate(evidence):
-    require(evidence.get('schema') == SCHEMA, 'not native ISO qualification evidence')
+    extended = evidence.get('schema') == DESKTOP_SCHEMA
+    require(evidence.get('schema') in (SCHEMA, DESKTOP_SCHEMA), 'not native ISO qualification evidence')
     require(evidence.get('boot_policy') == 'unmodified-installed', 'unknown or modified installed boot policy')
     require('browser' not in evidence, 'native evidence must not claim a browser profile')
     require(evidence.get('execution_kind') == 'native-qemu', 'native execution kind required')
     for field in ('variant', 'flavor', 'platform', 'cpu_baseline', 'hardware_scope'):
         require(text(evidence.get(field)), f'missing {field}')
-    require(evidence['platform'] in BASELINES and evidence['cpu_baseline'] == BASELINES[evidence['platform']], 'platform/CPU baseline mismatch')
-    require(evidence['hardware_scope'] == 'qemu' and evidence['flavor'] == 'gnome', 'unsupported native GUI scope')
+    if extended:
+        validate_desktop_identity(evidence)
+    else:
+        require(evidence['platform'] in BASELINES and evidence['cpu_baseline'] == cpu_baseline(evidence['variant'], evidence['platform']), 'platform/CPU baseline mismatch')
+        require(evidence['hardware_scope'] == 'qemu' and evidence['flavor'] == 'gnome', 'unsupported native GUI scope')
+    require(evidence.get('storage_backend', 'ostree') == 'ostree', 'native-composefs requires separate proof')
     require(evidence.get('offline_network_disabled') is True, 'guest egress must be disabled')
     inputs = evidence.get('resolved_inputs', {})
     require(isinstance(inputs, dict) and all(sha(inputs.get(k)) for k in INPUTS), 'missing immutable input digest')
@@ -114,6 +124,59 @@ def validate(evidence):
     require(evidence.get('receiptDigest') == canonical({k:v for k,v in evidence.items() if k != 'receiptDigest'}), 'native receipt digest mismatch')
 
 
+
+def validate_desktop_identity(evidence):
+    """v3 is a validation contract; producer admission still requires a driver.
+
+    Never upgrade v2 by relabeling it. v3 requires independent cold/warm
+    logged-in session observations and full target/source/frontend identity.
+    """
+    doc = manifest()
+    require(evidence.get('manifest_digest') == doc['manifestDigest'], 'target manifest mismatch')
+    matches = [row for row in doc['targets'] if all(row['target'][key] == evidence.get(key)
+               for key in ('variant', 'flavor', 'platform'))]
+    require(len(matches) == 1, 'target not configured')
+    row = matches[0]
+    require(row['required'] and row['configured'], 'target policy conflict or unscheduled')
+    require(evidence.get('cpu_baseline') == row['target']['cpuBaseline'], 'platform/CPU baseline mismatch')
+    require(evidence.get('storage_backend') == 'ostree', 'backend is not OSTree; native-composefs requires separate proof')
+    require(evidence.get('hardware_scope') == 'qemu', 'unsupported hardware scope')
+    require('nvidia' not in evidence['flavor'].split('-'), 'physical GPU evidence required')
+    require(evidence['platform'] != 'linux/arm64', 'architecture producer not implemented')
+    desktop = row['desktop']
+    require(desktop in ('gnome', 'kde', 'xfce'), 'desktop qualification contract not implemented')
+    inputs = evidence.get('resolved_inputs', {})
+    binding = evidence.get('artifact_binding', {})
+    for field in ('variant', 'flavor', 'platform'):
+        require(binding.get(field) == evidence[field], 'producer target identity mismatch')
+    require(binding.get('source_digest') == inputs.get('source') and sha(binding.get('source_digest')), 'producer source mismatch')
+    require(binding.get('storage_backend') == 'ostree', 'producer backend mismatch')
+    all_boot_ids = []
+    for mode in ('plain', 'luks'):
+        observed = evidence.get('observed', {}).get(mode, {})
+        expected_ref = row['publication']['repository'] + ':' + row['publication']['tag']
+        require(observed.get('target_imgref') == expected_ref, 'installed publication/full flavor mismatch')
+        require(observed.get('fresh_install') is True, 'fresh install not proven')
+        require(observed.get('storage_backend') == 'ostree', 'installed backend mismatch')
+        require(observed.get('flavor') == evidence['flavor'], 'installed full flavor mismatch')
+        require(observed.get('platform') == evidence['platform'], 'installed platform mismatch')
+        sessions = observed.get('sessions', {})
+        boot_ids = []
+        for phase in ('cold', 'warm'):
+            session = sessions.get(phase)
+            validate_session(session, desktop, evidence['platform'])
+            require(isinstance(session.get('boot_id'), str) and re.fullmatch(r'[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}', session['boot_id']), 'session boot identity missing')
+            require(session.get('source_digest') == inputs['source'], 'session booted source mismatch')
+            require(session.get('phase') == phase and session.get('mode') == mode, 'session phase/mode mismatch')
+            boot_ids.append(session['boot_id'])
+        require(len(set(boot_ids)) == 2, 'cold/warm session observations must be distinct boots')
+        all_boot_ids.extend(boot_ids)
+        gui = observed.get('gui', {})
+        require(gui.get('desktop') == desktop and gui.get('frontend') == DESKTOPS[desktop][0], 'installer desktop/frontend mismatch')
+        require(gui.get('mode') == mode, 'GUI mode mismatch')
+    require(len(set(all_boot_ids)) == 4, 'plain/LUKS session observations must be four distinct boots')
+
+
 def emit(args):
     require(not os.environ.get('TUNAOS_LUKS_GRUB_APPEND', '')
             and not os.environ.get('STRICT_LUKS_GRUB_APPEND', ''),
@@ -140,7 +203,8 @@ def emit(args):
     result = {'schema': SCHEMA, 'execution_kind': 'native-qemu',
               'boot_policy': 'unmodified-installed',
               'variant': args.variant, 'flavor': args.flavor, 'platform': args.platform,
-              'cpu_baseline': BASELINES[args.platform], 'hardware_scope': 'qemu',
+              'cpu_baseline': cpu_baseline(args.variant, args.platform), 'hardware_scope': 'qemu',
+              'storage_backend': 'ostree',
               'resolved_inputs': {key:getattr(args,key) for key in INPUTS},
               'artifact_binding': binding, 'artifact_binding_digest': canonical(binding),
               'qemu': {'digest': digest(qemu), 'cpu_model': args.cpu_model, 'version': subprocess.check_output([qemu,'--version'],text=True,timeout=10).splitlines()[0]},
@@ -157,6 +221,8 @@ def main():
     sub = parser.add_subparsers(dest='command', required=True)
     check = sub.add_parser('validate')
     check.add_argument('receipt', type=Path)
+    candidate = sub.add_parser('validate-candidate')
+    candidate.add_argument('receipt', type=Path)
     create = sub.add_parser('emit')
     for key in ('binding', 'directory', 'output'):
         create.add_argument('--'+key, type=Path, required=True)
@@ -166,14 +232,20 @@ def main():
         create.add_argument('--'+key, type=int, required=True)
     args = parser.parse_args()
     try:
-        if args.command == 'validate':
-            validate(load(args.receipt))
+        if args.command in ('validate', 'validate-candidate'):
+            receipt = load(args.receipt)
+            expected = DESKTOP_SCHEMA if args.command == 'validate-candidate' else SCHEMA
+            require(receipt.get('schema') == expected, 'candidate evidence is not admitted native qualification')
+            validate(receipt)
         else:
             emit(args)
     except (ValueError, OSError, subprocess.SubprocessError, KeyError, TypeError) as exc:
         print(f'error: {exc}', file=sys.stderr)
         return 1
-    print('ok - native ISO qualification evidence (not browser qualification)')
+    if args.command == 'validate-candidate':
+        print('ok - candidate contract only; not admitted native qualification')
+    else:
+        print('ok - native ISO qualification evidence (not browser qualification)')
     return 0
 
 

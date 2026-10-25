@@ -7,12 +7,12 @@ on:
         description: 'Variant to build'
         required: true
         default: 'skipjack'
-        type: choice
-        options:
-          - yellowfin
-          - albacore
-          - bonito
-          - skipjack
+        type: string
+      platform:
+        description: 'Explicit configured platform (strict preflight rejects unsupported targets)'
+        required: true
+        default: 'linux/amd64'
+        type: string
       flavor:
         description: 'Flavor to build'
         required: true
@@ -67,7 +67,24 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Validate explicit target before building
+        env:
+          VARIANT: ${{ inputs.variant || 'skipjack' }}
+          FLAVOR: ${{ inputs.flavor || 'gnome' }}
+          PLATFORM: ${{ inputs.platform || 'linux/amd64' }}
+        run: python3 scripts/plan-iso-qualification.py --target "$VARIANT:$FLAVOR:$PLATFORM" --max-parallel 1
+
   build:
+    needs: preflight
     outputs:
       artifact_id: ${{ steps.native_iso.outputs.artifact-id }}
       archive_digest: sha256:${{ steps.native_iso.outputs.artifact-digest }}
@@ -243,19 +260,12 @@ jobs:
           } >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
 
       - name: Resolve canonical native platform
+        env:
+          REQUESTED_PLATFORM: ${{ inputs.platform || 'linux/amd64' }}
         run: |
           set -euo pipefail
-          BUILD_CONFIG_JSON="$(python3 scripts/config.py show)"
-          platform="$(jq -r --arg v "$VARIANT" --arg f "$FLAVOR" '
-            .variants[] | select(.id == $v) as $variant |
-            ($variant.flavors[] | select(.id == $f)) as $flavor |
-            ($flavor.platforms // $variant.platforms // ["linux/amd64"]) |
-            if index("linux/amd64/v2") != null then "linux/amd64/v2"
-            elif index("linux/amd64") != null then "linux/amd64"
-            else error("native builder requires an amd64 target") end
-          ' <<<"$BUILD_CONFIG_JSON")"
-          [[ "$platform" == linux/amd64 || "$platform" == linux/amd64/v2 ]]
-          echo "PLATFORM=$platform" >> "$GITHUB_ENV"
+          python3 scripts/plan-iso-qualification.py --target "$VARIANT:$FLAVOR:$REQUESTED_PLATFORM" --max-parallel 1
+          echo "PLATFORM=$REQUESTED_PLATFORM" >> "$GITHUB_ENV"
 
       - name: Build OS image
         run: |
@@ -354,6 +364,8 @@ jobs:
     with:
       variant: ${{ github.event.inputs.variant || 'skipjack' }}
       flavors: ${{ github.event.inputs.flavor || 'gnome' }}
+      platform: ${{ inputs.platform || 'linux/amd64' }}
+      max_parallel: 1
       source: native-artifact
       native_run_id: ${{ format('{0}', github.run_id) }}
       native_artifact_id: ${{ needs.build.outputs.artifact_id }}
