@@ -56,8 +56,8 @@ CHECKS = ("check-identity", "check-variant-identity", "check-variant-aliases", "
 # The Acme OS edits from the walk-through: its own name, destination, accents,
 # a Flatpak, and added packages for one RPM and one APT variant.
 ACME_EDITS = (
-    ('[build]\nglobal_platforms = ["linux/amd64", "linux/arm64"]\n',
-     '[build]\nglobal_platforms = ["linux/amd64", "linux/arm64"]\n\n[build.publish]\nregistry = "quay.io"\nnamespace = "acme"\n'),
+    ('global_platforms = ["linux/amd64", "linux/arm64"]\n',
+     'global_platforms = ["linux/amd64", "linux/arm64"]\n\n[build.publish]\nregistry = "quay.io"\nnamespace = "acme"\n'),
     ('name = "TunaOS"\nid = "tunaos"\ncpe_vendor = "jamesreilly"', 'name = "Acme OS"\nid = "acmeos"\ncpe_vendor = "acme"'),
     ('homepage = "https://github.com/tuna-os/tunaos"\n', 'homepage = "https://acme.example/os"\n'),
     ('website = "https://tunaos.org"\ndocs_url = "https://tunaos.org/docs"\n',
