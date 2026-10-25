@@ -14,6 +14,16 @@ that touched 36 files across `.github/`, `build_scripts/`, `live-iso/`,
 |---|---|---|
 | ARM64 build passes but Snapdragon laptop support is unclear (#3116) | #3368 records postmarketOS observations and open TunaOS boot/install/update/rollback gates; an architecture manifest does not test board firmware or DTB selection. | Use [SNAPDRAGON.md](SNAPDRAGON.md) and report the exact device, image digest and hardware results. |
 | Bonito build succeeds despite bootc lint findings (#3001) | `99-cleanup.sh` calls `lint_image`; `lib.sh` returns success after findings unless `BOOTC_LINT_FATAL=1`. | Read the grouped output and step summary. Re-run lint against the candidate digest; apply the [Fedora readiness review](FEDORA-OUTREACH-READINESS.md) before outreach. |
+| `wahoo:tuna` Build Image: `No match for argument: gnome-keyring` (#3810, run 39989009540) | Fedora ELN dropped gnome-keyring for oo7. On 2026-10-24 no `dl.fedoraproject.org/pub/eln/1` repo published gnome-keyring or gnome-keyring-pam. `oo7-daemon` obsoletes `gnome-keyring < 51`, `pam_oo7` obsoletes `gnome-keyring-pam < 51`, and ELN's gdm requires `pam_oo7`. Rawhide still ships gnome-keyring 51.1. | The ELN sections in `tunaos.toml` name `oo7-daemon` and `pam_oo7`. `require_secret_service` in the desktop contract treats either `ID=eln` or `VARIANT_ID=eln` in os-release as ELN and requires oo7 there, and `gnome-keyring-daemon` everywhere else. |
+
+### Adoption report shows downloads while ISO use is unknown
+
+**Symptom:** A count of downloads from GitHub looks like adoption of ISOs.
+**Cause:** The 2026-10-22 API baseline includes release cards, SBOMs and other
+non-ISO assets; R2 downloads are outside the Releases API.
+**Fix:** Run `scripts/adoption-snapshot.py` and keep the ISO and non-ISO
+counters separate. Use the dated JSON receipt to check asset IDs and source
+URLs. Request an export from R2 before you rank variants or claim usage.
 
 ### 1. `flatpak: command not found` in live ISO customization
 
@@ -1994,3 +2004,42 @@ restore the old codename table assertion. Run
 suites. It checks one primary config through the real writer and verifier on
 a test filesystem, without a legacy fork manifest. This is not image build,
 registry push, boot or install proof.
+
+## Matrix board and provenance disagree after a merge (#3813)
+
+**Symptom:** the committed-snapshot test reports 124 versus 120 green cells.
+
+**Cause:** merge `4912d39d` retained the newer board but an older summary.
+Identity PR #3681, Test run `40042245544`, failed only this pytest assertion
+(5,234 passed). The per-cell evidence included seven newer desktop failures;
+restoring the older matching pair would hide those failures.
+
+**Fix:** replay the reviewed [retained assertions](matrix-snapshots/README.md)
+and check the board/provenance identity before publication. Preserve the
+historical date and unknown overlay/full-sweep inputs. Do not hand-edit counts,
+roll back newer failures, or label the reconciliation as a fresh health run.
+
+**Symptom:** `check-matrix-snapshot.py` reports `snapshot configuration
+changed: tunaos.toml` on a PR that edits only a `tunaos.toml` description.
+
+**Cause:** an early #3839 draft compared the committed pair's recorded
+configuration hash with the checkout. One edited `description` string made
+the check exit 1 on otherwise valid files. On 2026-10-24, 16 open PRs touched
+`tunaos.toml`.
+
+**Fix:** the recorded hashes stay sealed in the snapshot identity. Only
+`--inputs` replay compares them with the checkout. `--check-structure`
+catches board-shape drift from configuration.
+
+**Symptom:** the Matrix Status PR check ends `cancelled` with no jobs, even
+though no newer push was made to that PR.
+
+**Cause:** `matrix-status.yml` used one concurrency group, `matrix-status`,
+for every event. GitHub keeps only the newest pending run in a group, so a push
+to any PR cancelled every other pending PR run and could cancel a queued daily
+refresh. 41 of the last 98 `pull_request` runs ended cancelled on 2026-10-24,
+including run `40065011718` for #3839.
+
+**Fix:** PR runs group by `github.ref` and cancel only their own superseded
+runs. Schedule and dispatch runs still serialize in one `publish` group,
+because they force-push `automation/matrix-status`.
