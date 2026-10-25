@@ -207,6 +207,7 @@ def verify_proxy_inspect(details: dict, internal: str, egress: str) -> None:
 
 def cleanup(output: Path, containers: list[str], networks: list[str]) -> bool:
     events = []
+    evidence_ok = True
     for kind, names in (('container', containers), ('network', networks)):
         for name in reversed(names):
             commands = ([['docker', 'logs', name], ['docker', 'rm', '--force', name]]
@@ -226,8 +227,12 @@ def cleanup(output: Path, containers: list[str], networks: list[str]) -> bool:
                 except (OSError, subprocess.SubprocessError) as error:
                     event['error'] = type(error).__name__
                 events.append(event)
-                (output / 'cleanup.json').write_text(json.dumps(events, indent=2))
-    return all(event['ok'] for event in events)
+                try:
+                    (output / 'cleanup.json').write_text(json.dumps(events, indent=2))
+                except OSError:
+                    # A full evidence disk must not stop the removals that follow.
+                    evidence_ok = False
+    return evidence_ok and all(event['ok'] for event in events)
 
 
 def summarize_proxy(log: str, controls: dict) -> dict:
