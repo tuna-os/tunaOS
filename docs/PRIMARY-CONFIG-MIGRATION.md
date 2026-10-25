@@ -107,17 +107,18 @@ family-specific. Selection never enables a held or unsupported cell.
 
 Image-wide additions may move through the primary package resolver, but
 removals remain rejected. A removal can cascade through boot, init, package
-manager, desktop/session, networking or update/recovery dependencies; a static
-denylist cannot describe those packages across native families.
+manager, desktop/session, networking or update/recovery dependencies. No static
+list of denied packages can cover those packages across native families.
 
-The [F4b protected-removal specification](../.spektacular/specs/20261024100000-protected-native-package-removal.md)
-defines the approval boundary, contract-derived protected set, family-native
-transaction qualification, adversarial fixtures and per-cell evidence required
-before any removal can be enabled. The protected set is projected from the
-effective package and runtime contracts in the exact build root, not maintained
-as a second package catalog. Missing or stale evidence fails closed. Source
-tests and solver dry-runs are kept separate from image build, boot, install,
-update and recovery proof.
+The [F4b specification for protected removal](../.spektacular/specs/20261024100000-protected-native-package-removal.md)
+defines the approval boundary and the protected set from the contract. It also
+defines qualification of native transactions per family, adversarial fixtures
+and per-cell evidence. All of these must exist before a removal can be enabled.
+The tool derives the protected set from the effective package and runtime
+contracts in the exact build root, and no second package catalog holds it. The
+gate fails closed on missing or stale evidence. Proof of image build, boot,
+install, update and recovery stays separate from source tests and solver
+dry-runs.
 
 ## Ordered migration
 
@@ -246,4 +247,4 @@ image identity, artwork or installer appearance into primary configuration.
 The Marlin GDM override also belongs to `[desktops.tuna-arch]`. Its generated
 adapter has the same precedence as the former tracked YAML. The regression
 fixture at commit `aa9810e9` preserves the complete package and hook contract;
-other Tuna Desktop cells retain their existing display manager.
+the other cells of Tuna Desktop keep their existing display manager.
