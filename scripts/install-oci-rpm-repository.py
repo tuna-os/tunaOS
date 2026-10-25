@@ -27,6 +27,9 @@ TRANSPORT_SHA256 = '7e37d1ff61153d5419cdfca54ea6f9a0256c65cb53972da9f6235c2081cc
 REF = re.compile(r'ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}\Z')
 IDENTITY = re.compile(r'https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/'
                       r'\.github/workflows/[A-Za-z0-9_.-]+\.ya?ml@refs/heads/[A-Za-z0-9_./-]+\Z')
+# EPEL publishes no signed repomd, so this one reviewed repository (by ID and exact
+# host) may set repo_gpgcheck=0. Its package signatures are still required.
+UNSIGNED_METADATA = {'epel': 'dl.fedoraproject.org'}
 CONTROLLED = re.compile(r'(?:repo|download)\.tunaos\.org|(?:[a-z0-9-]+\.)?r2\.cloudflarestorage\.com|[a-z0-9-]+\.r2\.dev', re.IGNORECASE)
 
 
@@ -57,15 +60,57 @@ def config_text(path: Path) -> str:
     return text
 
 
+TRUSTED_UID = 0  # Owner required for any symlink or directory a symlink may reach.
+
+
+def strict_link_target(path: Path, root: Path) -> Path:
+    """Resolve one reviewed symlink hop, or refuse.
+
+    EL10 images link /etc/yum/vars to ../dnf/vars and /etc/yum.conf to
+    dnf/dnf.conf. A link is admitted only when it is root-owned and its target is
+    inside <root>/dnf or <root>/yum.repos.d, on the same filesystem, reached
+    through no other symlink, owned by root and not group/world writable. An
+    escaping, dangling, chained or writable link stays a refusal, because it
+    could redirect persistent repository config outside the checked tree.
+    """
+    allowed = [root / 'dnf', root / 'yum.repos.d']
+    link = path.lstat()
+    if link.st_uid != TRUSTED_UID:
+        raise ValueError(f'runtime config symlink is not owned by the trusted user: {path}')
+    target = Path(os.path.normpath(path.parent / os.readlink(path)))
+    if not any(target == base or base in target.parents for base in allowed):
+        raise ValueError(f'runtime config symlink leaves the reviewed tree: {path}')
+    device = root.lstat().st_dev
+    current = root
+    for part in target.relative_to(root).parts:
+        current = current / part
+        try:
+            status = current.lstat()
+        except OSError as error:
+            raise ValueError(f'runtime config symlink is dangling: {path}') from error
+        if (current.is_symlink() or status.st_dev != device or status.st_uid != TRUSTED_UID
+                or status.st_mode & 0o022):
+            raise ValueError(f'runtime config symlink target is not a plain root-owned path: {path}')
+    return target
+
+
+def runtime_path(path: Path, root: Path) -> Path:
+    """Return the path to inspect: itself, or the strictly contained target of a link."""
+    current = root
+    for part in path.relative_to(root).parts[:-1]:
+        current = current / part
+        if current.is_symlink():
+            raise ValueError(f'runtime config parent is a symlink: {current}')
+    return strict_link_target(path, root) if path.is_symlink() else path
+
+
 def check_runtime_configs(root: Path) -> None:
     """Reject literal R2 and indirect RPM configuration sources, fail closed."""
     if root.is_symlink() or not root.is_dir():
         raise ValueError('runtime config root must exist and not be a symlink')
-    paths = [root / 'dnf/dnf.conf', root / 'yum.conf']
+    paths = [runtime_path(root / name, root) for name in ('dnf/dnf.conf', 'yum.conf')]
     for relative in ('yum.repos.d', 'dnf/repos.d', 'dnf/vars', 'yum/vars'):
-        directory = root / relative
-        if directory.is_symlink():
-            raise ValueError(f'runtime repository directory is a symlink: {directory}')
+        directory = runtime_path(root / relative, root)
         paths.extend(directory.glob('*'))
     for path in paths:
         if path.exists() or path.is_symlink():
@@ -91,7 +136,10 @@ def upstream_configs(directory: Path) -> list[tuple[str, bytes, dict[str, bytes]
             seen.add(name)
             if set(values) - allowed:
                 raise ValueError('unsupported upstream repository setting')
-            if any(values.get(k) != '1' for k in ('enabled', 'gpgcheck', 'repo_gpgcheck')):
+            unsigned = (UNSIGNED_METADATA.get(name) == urlsplit(values.get('baseurl', '')).hostname
+                        and values.get('repo_gpgcheck') == '0')
+            if any(values.get(k) != '1' for k in ('enabled', 'gpgcheck')) or (
+                    values.get('repo_gpgcheck') != '1' and not unsigned):
                 raise ValueError('upstream repositories must enable package and metadata signatures')
             if values.get('sslverify', '1') != '1':
                 raise ValueError('upstream TLS verification cannot be disabled')
@@ -239,7 +287,8 @@ def main() -> int:
     try:
         print(json.dumps(install(args), sort_keys=True))
     except (ValueError, OSError, configparser.Error, subprocess.CalledProcessError) as error:
-        print(f'OCI repository install refused: {error}', file=sys.stderr)
+        detail = (getattr(error, 'stderr', None) or '').strip()[-500:]
+        print(f'OCI repository install refused: {error}' + (f': {detail}' if detail else ''), file=sys.stderr)
         return 1
     return 0
 

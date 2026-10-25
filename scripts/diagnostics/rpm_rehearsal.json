@@ -19,6 +19,14 @@
   "oras_archive_sha256": "f27adb935022d94df8dc77719c322dda592c78a0d57a6f7dcdd8d900b248c454",
   "cosign_version": "3.1.4",
   "cosign_sha256": "424e2c97d0b45fd7a6b608a87f090f35633f4c23ece5f092d48bba11aaf4bbfa",
-  "denied_controls": ["repo.tunaos.org", "download.tunaos.org", "negative-control.r2.dev", "negative-control.r2.cloudflarestorage.com"],
-  "official_repos": ["BaseOS", "AppStream", "CRB"]
+  "denied_controls": ["repo.tunaos.org", "download.tunaos.org", "negative-control.r2.dev", "negative-control.r2.cloudflarestorage.com", "mirrors.fedoraproject.org"],
+  "official_repos": ["BaseOS", "AppStream", "CRB"],
+  "epel": {
+    "id": "epel",
+    "host": "dl.fedoraproject.org",
+    "baseurl": "https://dl.fedoraproject.org/pub/epel/10/Everything/x86_64/",
+    "key_url": "https://dl.fedoraproject.org/pub/epel/RPM-GPG-KEY-EPEL-10",
+    "key_sha256": "de390fc168eae5ab2852e9e93d34a0b9ddf05cf9ce90ee28d97de26a4b1f6b93",
+    "priority": 99
+  }
 }

@@ -78,6 +78,15 @@ verification remain enabled. Before DNF runs, it refuses packages without signat
 The script checks configuration for persistent RPM sources before and after the transaction:
 `/etc/yum.repos.d`, `/etc/dnf/repos.d`, `/etc/dnf/dnf.conf` and `/etc/yum.conf`.
 It fails on controlled R2 domains, even in disabled repos.
+The script refuses a symlink in that tree. It makes one exception for the EL10 layout.
+The base image links `/etc/yum/vars` to `../dnf/vars` and `/etc/yum.conf` to `dnf/dnf.conf`.
+
+The script follows such a link one step only. Root must own the link.
+The target must lie inside `/etc/dnf` or `/etc/yum.repos.d` on the same filesystem.
+Root must own the target, and group and world must not write to it.
+
+No other link may lie on the path. The script refuses a link that leaves the tree,
+a link to a missing target and a chain of links. It still scans the target content.
 It also rejects indirect sources of variables or configuration.
 Private DNF variables and a filtered environment prevent ambient `DNF_VAR_*`
 values from any effect on the transaction.

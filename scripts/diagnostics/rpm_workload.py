@@ -18,6 +18,7 @@ from pathlib import Path
 INPUT = Path('/input')
 OUTPUT = Path('/output')
 WORK = Path('/run/rpm-diagnostic')
+SYSTEM_LOG = Path('/var/log')
 
 
 def tunnel(proxy: str, target: str) -> tuple[int, dict[str, str]]:
@@ -45,7 +46,7 @@ def controls(proxy: str, config: dict, record=lambda _event: None) -> dict:
         if status != 403:
             raise ValueError(f'negative control did not receive policy denial: {host} ({status})')
         results['proxy_denials'].append(host)
-    for host in ('mirror.stream.centos.org', 'ghcr.io'):
+    for host in ('mirror.stream.centos.org', 'dl.fedoraproject.org', 'ghcr.io'):
         status, headers = tunnel(proxy, host)
         address = headers.get('x-diagnostic-upstream-ip', '')
         record({'control': 'proxy-positive', 'target': host, 'status': status, 'address': address})
@@ -84,7 +85,39 @@ def controls(proxy: str, config: dict, record=lambda _event: None) -> dict:
     return results
 
 
+def checked(command: list[str], **options) -> subprocess.CompletedProcess:
+    """Run a command; on failure keep bounded stderr as evidence, then fail closed."""
+    result = subprocess.run(command, capture_output=True, text=True, **options)
+    if result.returncode:
+        tail = (result.stderr or '').strip()[-2000:]
+        with (OUTPUT / 'command-failures.log').open('a') as log:
+            log.write(json.dumps({'command': command[:1] + command[-1:], 'returncode': result.returncode,
+                                  'stderr_tail': tail}, sort_keys=True) + '\n')
+        raise ValueError(f'{command[0]} exited {result.returncode}: {tail[-300:]}')
+    return result
+
+
+def ensure_system_log() -> None:
+    # libdnf writes hawkey.log under /var/log whatever logdir says, and the
+    # centos-bootc base ships no /var/log, so a harmless --version exits 1.
+    SYSTEM_LOG.mkdir(exist_ok=True)
+
+
+def add_epel(config: dict, repos: Path) -> None:
+    """Add EPEL after bootstrap, so only the native solver run sees it.
+
+    EPEL publishes no signed repomd (repomd.xml.asc is 404), so repo_gpgcheck=0 is
+    the one reviewed exception; every package signature is still checked.
+    """
+    epel = config['epel']
+    (repos / 'epel.repo').write_text(
+        f'[{epel["id"]}]\nname=EPEL 10 (package signatures only)\nbaseurl={epel["baseurl"]}\n'
+        f'gpgkey=file:///input/epel.gpg\nenabled=1\ngpgcheck=1\nrepo_gpgcheck=0\n'
+        f'priority={epel["priority"]}\nsslverify=1\nskip_if_unavailable=False\n')
+
+
 def prepare_fixture(config: dict) -> list[str]:
+    ensure_system_log()
     # Only the disposable container's stock config is changed. Record it before
     # removing it; a published/deployed image is never an input to this script.
     saved = OUTPUT / 'stock-rpm-config'
@@ -147,11 +180,10 @@ def execute(proxy: str) -> None:
     (OUTPUT / 'network-controls.json').write_text(json.dumps(result, sort_keys=True))
     # Nothing above this point executes RPM/DNF or changes repository settings.
     dnf = prepare_fixture(config)
-    version = subprocess.run([*dnf, '--version'], check=True, capture_output=True, text=True).stdout
+    version = checked([*dnf, '--version']).stdout
     if not version.startswith('4.'):
         raise ValueError('immutable base does not provide DNF4')
-    arch = subprocess.run(['rpm', '--eval', '%{_arch}'], check=True,
-                          capture_output=True, text=True).stdout.strip()
+    arch = checked(['rpm', '--eval', '%{_arch}']).stdout.strip()
     if arch != 'x86_64':
         raise ValueError('immutable base is not native x86_64')
     with (OUTPUT / 'bootstrap.log').open('w') as log:
@@ -160,6 +192,7 @@ def execute(proxy: str) -> None:
     (OUTPUT / 'baseline-rpms.txt').write_text(subprocess.run(
         ['rpm', '-qa', '--qf', '%{NAME}\t%{VERSION}-%{RELEASE}\t%{ARCH}\n'],
         check=True, capture_output=True, text=True).stdout)
+    add_epel(config, WORK / 'repos')
     with (OUTPUT / 'native-install.log').open('w') as log:
         completed = subprocess.run([
             sys.executable, '-I', '/input/consumer.py', '--transport', '/input/transport.py',
