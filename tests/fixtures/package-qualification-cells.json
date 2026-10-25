@@ -2,7 +2,7 @@
   "cells": [
     {"route": "el10", "variant": "yellowfin", "package": "tree", "desktop": "gnome", "overlay": "gnome-hwe"},
     {"route": "ubuntu", "variant": "grouper", "package": "tree", "desktop": "gnome", "overlay": null},
-    {"route": "debian", "variant": "flounder", "package": "tree", "desktop": "gnome", "overlay": null},
+    {"route": "debian", "variant": "flounder", "package": "tree", "desktop": "xfce", "overlay": null},
     {"route": "arch", "variant": "marlin", "package": "tree", "desktop": "gnome", "overlay": null},
     {"route": "opensuse", "variant": "sailfin", "package": "tree", "desktop": "gnome", "overlay": null},
     {"route": "gentoo", "variant": "guppy", "package": "app-text/tree", "desktop": "gnome", "overlay": null}

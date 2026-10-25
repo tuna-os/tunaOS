@@ -557,6 +557,11 @@ def verify_cell(plan: dict, cell: dict, root: Path, source: dict, log: CommandLo
         reference = record["ref"]
         routing = routes[role]
         target = routing.get("DESKTOP_FLAVOR")
+        if role == "modifiedOverlay":
+            # The overlay resolves DESKTOP_FLAVOR to the placeholder "desktop";
+            # the image it builds records the parent's flavor (the DESKTOP_FLAVOR
+            # build arg inherited from the desktop stage).
+            target = routing.get("PARENT_FLAVOR")
         try:
             require(isinstance(target, str) and target, f"{route}.{role}: resolver omitted target")
             local = local_image(log, reference)

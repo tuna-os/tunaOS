@@ -16,6 +16,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import tomllib
 
 import pytest
 import yaml
@@ -184,6 +185,23 @@ def test_the_fixture_names_each_harness_route_once_with_a_variant_that_resolves_
                 cwd=ROOT, capture_output=True, check=True,
             ).stdout)
             assert overlay["PARENT_FLAVOR"] == cell["desktop"]
+
+
+def test_every_qualified_desktop_and_overlay_is_a_flavor_the_repository_ships():
+    """Qualifying an image the product refuses to build proves nothing.
+
+    Run 40223961920 built flounder:gnome, which tunaos.toml turns off
+    (build_image = false: Debian 13 ships GNOME 48 under a GNOME 50 floor), so
+    the debian leg died in verify-desktop-experience.sh after 26 minutes.
+    """
+    variants = tomllib.loads((ROOT / "tunaos.toml").read_text())["variants"]
+    for cell in LANE.load_cells(FIXTURE):
+        flavors = {flavor["id"]: flavor for flavor in variants[cell["variant"]]["flavors"]}
+        for key in ("desktop", "overlay"):
+            if cell[key]:
+                assert flavors.get(cell[key], {}).get("build_image") is True, (
+                    f"{cell['route']}: {cell['variant']}:{cell[key]} is not a shipped flavor"
+                )
 
 
 def test_a_fixture_missing_a_route_is_rejected(tmp_path):
