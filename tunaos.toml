@@ -1047,7 +1047,7 @@ branding = { accent = "#294172", gnome_accent = "blue", base = "Fedora ELN", hom
 upstream_track = "experimental"
 description = "Based on Fedora ELN (EL11 preview, rolling)"
 experimental = true
-base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:7de9aba85a0dfa5b6c2f5c0ee02141e1728e57ffd3e0b1f54ece61ab86aa4671"
+base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:dfb167fd389b1bb0eda2c509762ca52be25c508d078441cf7c3339b912a79144"
 # No alias: `eln` is Fedora's identifier for a moving development target,
 # and an alias tag is a stability promise this lane deliberately does not
 # make. Revisit if/when ELN gains a versioned publish.
@@ -1354,7 +1354,7 @@ upstream_track = "experimental"
 # not a rebuild of an existing one. Read docs/HUMMINGBIRD.md before
 # reasoning about what its package set should contain.
 description = "Fedora Hummingbird (hardened rolling Rawhide fork, bootc)"
-base_image = "quay.io/hummingbird-community/bootc-os:latest@sha256:d247ff418406c84cd9a22744eb380671c533a1d87c00f1ddc47c67f1dcce7e39"
+base_image = "quay.io/hummingbird-community/bootc-os:latest@sha256:599e2c21e4c3eb4ea5ddafe4712a5728640a01db24d36bfa94fd48579174d521"
 # amd64 only, because aarch64 has nothing to build FROM yet: the base
 # stage's mandatory xfsprogs guard (build_scripts/10-base-packages.sh) has
 # no repository that can satisfy it on arm64, so every hummingbird arm64
@@ -2004,7 +2004,7 @@ codename = "Makaira nigricans"
 branding = { accent = "#1793D1", gnome_accent = "blue", base = "Arch Linux", homage = "Arch blue" }
 upstream_track = "rolling"
 description = "Based on Arch Linux (rolling)"
-base_image = "docker.io/archlinux/archlinux:latest@sha256:ef1b2d7b71ac9f1f5fe78b5ae66c3b3fa8f6f2a4486620233b7ed31b1d0c3aaf"
+base_image = "docker.io/archlinux/archlinux:latest@sha256:bdb2935325a8d6a930d4f09da38eafc47abfaa483d78e1b0210029c98de05330"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["arch", "archlinux"]
 # arm64 legs use ghcr.io/tuna-os/archlinuxarm instead (docker.io/archlinux
@@ -2964,6 +2964,8 @@ baseurl = "file:///run/utah-packages"
 priority = 4
 unsigned = true
 
+# ELN uses oo7 for Secret Service and PAM; see tunaOS#3810 and
+# docs/ci-troubleshooting.md. Other targets keep gnome-keyring.
 [desktops.gnome.packages.eln]
 required = [
   "ModemManager",
@@ -2982,8 +2984,8 @@ required = [
   "gnome-control-center",
   "gnome-disk-utility",
   "gnome-initial-setup",
-  "gnome-keyring",
-  "gnome-keyring-pam",
+  "oo7-daemon",
+  "pam_oo7",
   "gnome-remote-desktop",
   "gnome-session-wayland-session",
   "gnome-settings-daemon",
@@ -3974,6 +3976,8 @@ name = "tunaos-fedora"
 baseurl = "https://repo.tunaos.org/xfce/44-x86_64/"
 priority = 100
 
+# ELN's Secret Service provider is oo7, not gnome-keyring (tunaOS#3810; see
+# desktops.gnome.packages.eln).
 [desktops.tuna.packages.eln]
 display_manager = "gdm"
 required = [
@@ -3986,7 +3990,8 @@ required = [
   "gnome-shell",
   "gnome-settings-daemon",
   "gnome-control-center",
-  "gnome-keyring",
+  "oo7-daemon",
+  "pam_oo7",
   "evolution-data-server",
   "xdg-desktop-portal-gnome",
   "xdg-desktop-portal-gtk",
@@ -4838,24 +4843,30 @@ required = [
   "ttf-liberation",
 ]
 
-# Optional base-image search sources; these do not change build repositories.
+# Optional read-only search sources for reviewed complete targets; these do not
+# change image builds or installer trust.
 [package_catalogs.debian-trixie]
-schema_version = 1
-coverage = "base-image-only"
+schema_version = 2
+coverage = "configured-target"
 variant = "flounder"
 family = "apt"
 os_id = "debian"
 release = "trixie"
 platforms = ["linux/amd64"]
+flavors = ["base", "kde", "xfce"]
 observed_base_image = "docker.io/library/debian:trixie@sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308"
 source_observation = "config/package-observations/flounder-amd64.json"
 source_observation_sha256 = "1b4857d081dc460381e537a1fb5f3a72407a7883313b78fb0301db6627b075b6"
+target_observation = "config/package-observations/flounder-target-amd64.json"
+target_observation_sha256 = "76f4d6df271b5fae58b0d170bca62de17805c2a601f1ad8221450b79f1eb4fde"
 
 [[package_catalogs.debian-trixie.sources]]
 id = "trixie"
+role = "base"
 uri = "https://deb.debian.org/debian/"
 suite = "trixie"
 origin = "Debian"
+label = "Debian"
 codename = "trixie"
 components = ["main"]
 keyring = "config/package-keys/debian-trixie.pgp"
@@ -4866,9 +4877,11 @@ freshness = { mode = "pinned-release", inrelease_sha256 = "0584fba32e13e0ab8285f
 
 [[package_catalogs.debian-trixie.sources]]
 id = "trixie-updates"
+role = "base"
 uri = "https://deb.debian.org/debian/"
 suite = "trixie-updates"
 origin = "Debian"
+label = "Debian"
 codename = "trixie-updates"
 components = ["main"]
 keyring = "config/package-keys/debian-trixie.pgp"
@@ -4879,9 +4892,11 @@ freshness = { mode = "signed-valid-until", max_age_seconds = 604800 }
 
 [[package_catalogs.debian-trixie.sources]]
 id = "trixie-security"
+role = "base"
 uri = "https://deb.debian.org/debian-security/"
 suite = "trixie-security"
 origin = "Debian"
+label = "Debian-Security"
 codename = "trixie-security"
 components = ["main"]
 keyring = "config/package-keys/debian-trixie.pgp"
@@ -4889,3 +4904,21 @@ keyring_sha256 = "506b815cbb32d9b6066b4a2aa524071e071761e7e7f68c3ac74f3061ba8520
 primary_fingerprints = ["5E04A1E3223A19A20706E20F9904613D4CCE68C6"]
 clock_skew_seconds = 10
 freshness = { mode = "signed-valid-until", max_age_seconds = 604800 }
+
+[[package_catalogs.debian-trixie.sources]]
+id = "tailscale"
+role = "build"
+uri = "https://pkgs.tailscale.com/stable/debian/"
+suite = "trixie"
+origin = "Tailscale"
+label = "Tailscale"
+codename = "trixie"
+components = ["main"]
+declaration_url = "https://pkgs.tailscale.com/stable/debian/trixie.tailscale-keyring.list"
+declaration_sha256 = "5a1b21b30892bf22fb5d7c4f52fefe9b65efda2100e82abba2e0849da2a2264b"
+keyring_url = "https://pkgs.tailscale.com/stable/debian/trixie.noarmor.gpg"
+keyring = "config/package-keys/tailscale-trixie.gpg"
+keyring_sha256 = "3e03dacf222698c60b8e2f990b809ca1b3e104de127767864284e6c228f1fb39"
+primary_fingerprints = ["2596A99EAAB33821893C0A79458CA832957F5868"]
+clock_skew_seconds = 10
+freshness = { mode = "signed-date", max_age_seconds = 604800 }

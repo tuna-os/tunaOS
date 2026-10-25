@@ -108,6 +108,10 @@ def main():
             if args.command == 'show':
                 print(tunaos_config.render(config), end='')
             else:
+                # Identity is build-critical and has no stock fallback, so a
+                # config only counts as valid if generate-identity can compile
+                # it (project, defaults and a codename per variant).
+                tunaos_config.render_identity(config)
                 print('Primary TunaOS configuration is valid.')
     except (tunaos_config.ConfigError, iso_builder_config.ConfigError, OSError) as exc:
         print(f'ERROR: {exc}', file=sys.stderr)
