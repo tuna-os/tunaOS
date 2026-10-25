@@ -118,11 +118,13 @@ What to turn off and why:
 The smaller your matrix, the faster your CI. A single-desktop build takes
 ~15 minutes cold, ~5 minutes warm.
 
-### 3. Edit: customize the desktop manifests
+### 3. Edit: customize the desktop policies
 
-Open `manifests/desktops/gnome.yaml` (or whichever desktop you kept). Add
-and remove packages, change group installs, add COPR repos. See [Common
-Customizations](#common-customizations-edit-in-place) below for recipes.
+Edit the `[desktops.<profile>.packages.<family>]` tables in `tunaos.toml` for
+the desktop you kept. Do not edit `manifests/desktops/*.yaml`. Generation
+writes those files and overwrites your edits. Use the
+[package editor](PACKAGE-AUTHORING.md) to search an index and preview an add.
+See [Common Customizations](#common-customizations-edit-in-place) below.
 
 ### 4. Edit: customize the Containerfile
 
@@ -224,43 +226,24 @@ separate directories — you're changing the source of truth.
 
 ### Changing packages in a desktop
 
-Edit `manifests/desktops/<de>.yaml`. Each desktop manifest has per-OS
-package lists:
+Edit the existing family table in `tunaos.toml`. For example, Ubuntu GNOME
+uses `[desktops.gnome.packages.apt]` and its `required` list. Debian GNOME
+uses the `gnome-debian` profile, and Arch GNOME uses `gnome-arch`. A
+family-specific profile replaces the generic profile. It is not a layer on top.
 
-```yaml
-# manifests/desktops/gnome.yaml — add what you want, remove what you don't
-packages:
-  fedora:
-    packages:
-      - gdm
-      - gnome-shell
-      - gnome-terminal     # ← added
-      - nautilus
-      - gnome-text-editor   # ← added
-      # ... keep the rest ...
+RPM families also have `include` groups, which expand before the local
+`required`, `optional` and `exclude` lists. A shared policy can affect several
+variants. Use the existing table and the
+[field reference](CONFIG-WIRING.md#package-fields-and-limits). Do not copy an
+RPM table into an APT profile.
 
-  el10:
-    packages:
-      - gdm
-      - gnome-shell
-      - gnome-terminal     # ← added
-      - nautilus
-      # ... keep the rest ...
+```bash
+python3 scripts/config.py validate
+python3 scripts/config.py generate
 ```
 
-To remove a package, delete its line or comment it out. The installer
-reads the manifest as the canonical list — whatever's there gets
-installed.
-
-> **Which OS key do I edit?** The installer auto-detects:
-> - `el10` — AlmaLinux, CentOS Stream, RHEL
-> - `fedora` — Fedora, Rawhide
-> - `apt` — Ubuntu, Debian
-> - `pacman` — Arch Linux, CachyOS
-> - `zypper` — openSUSE
-> - `emerge` — Gentoo
->
-> Edit the key for the variant you kept. Unused keys are skipped.
+These commands check and write the adapters. They do not install packages or
+show that a package transaction works.
 
 ### System-wide packages and config
 
@@ -305,7 +288,9 @@ These are copied into every image by `build_scripts/00-copy-files.sh` (step
 
 ### COPR repos, PPAs, and version locks
 
-These go in the desktop manifest under the relevant OS key:
+COPR and PPA records belong in the family table of `tunaos.toml`; see the
+[repository records](CONFIG-WIRING.md#package-fields-and-limits). The YAML
+below shows the generated adapter, which you must not edit by hand:
 
 ```yaml
 # manifests/desktops/gnome.yaml
@@ -586,7 +571,8 @@ To add a desktop environment that isn't already in the repo:
 
 ### 1. Create the manifest
 
-Create `manifests/desktops/<name>.yaml`:
+A new desktop is a new `[desktops.<name>]` profile in `tunaos.toml`. The YAML
+below is the shape of the generated file. Do not create it by hand:
 
 ```yaml
 # manifests/desktops/myde.yaml
@@ -704,7 +690,7 @@ package_target = "myos"
 reason = "Tuna Desktop packages for this base need tests."
 ```
 
-### 4. Add package sections to desktop manifests
+### 4. Add package sections to the desktop profiles
 
 ```yaml
 # manifests/desktops/gnome.yaml — add at the bottom of packages:
