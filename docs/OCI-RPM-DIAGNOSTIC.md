@@ -24,6 +24,20 @@ BaseOS, AppStream and CRB at `mirror.stream.centos.org`.
 Preparation verified their detached repomd signatures with the official SHA256 key.
 **Every run must verify them again.** Both `gpgcheck=1` and `repo_gpgcheck=1` remain mandatory.
 Before DNF, the helper verifies packages from the factory and repomd against isolated reviewed keys.
+
+EPEL 10 is the one other reviewed source, because the candidate needs `highway`, which only EPEL ships.
+The workload adds it after bootstrap, at priority 99 behind the factory at 1.
+The run pins its key by SHA-256. The key and the packages come from `dl.fedoraproject.org`. That is the only new host.
+
+EPEL publishes no signed repomd, so that one repository sets `repo_gpgcheck=0`.
+`gpgcheck=1` still verifies each EPEL package.
+The consumer allows this exception for the ID `epel` on that host only.
+
+A negative control checks that `mirrors.fedoraproject.org` stays denied.
+The proxy tunnels HTTPS, so the repository path limit is the `baseurl` in the repo file.
+The diagnostic skips the `before_install` steps of the build.
+A local solve gave the same result with and without them.
+
 The base's bootstrap trust and installed software remain trusted inputs.
 This work does not protect against a compromised kernel, Docker daemon or base image.
 
