@@ -335,18 +335,16 @@ class FakeLog:
                     for cell in self.qualification_plan["cells"]
                     if cell["route"] == route
                 )
-                parent_ref = next(
-                    cell["images"]["modifiedDesktop"]["ref"]
-                    for cell in self.qualification_plan["cells"]
-                    if cell["route"] == route
-                )
+                # 90-image-info.sh sources lib.sh, which restores the upstream
+                # base-image from the desktop stage's inherited image-info.json,
+                # so every role (overlay included) records the pinned base.
                 if reference == self.wrong_overlay_base_ref:
-                    parent_ref = "localhost/unqualified:gnome"
+                    base = "localhost/unqualified:gnome"
                 info = {
                     "image-name": variant,
                     "image-flavor": target,
                     "sha": ("22222222" if modified else "11111111"),
-                    "base-image": parent_ref if flavor == "gnome-hwe" else base,
+                    "base-image": base,
                 }
                 return subprocess.CompletedProcess(args, 0, json.dumps(info).encode(), b"")
             if entrypoint == "/usr/bin/cat":

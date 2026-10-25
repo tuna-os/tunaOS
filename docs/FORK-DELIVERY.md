@@ -163,10 +163,14 @@ then binds each result to the registry bytes of the pinned base, local image
 manifest/config digests and `/usr/share/ublue-os/image-info.json`. The stock
 image must have neither the package nor a package-addition receipt. Every
 modified base, desktop and overlay image must contain the native package and an
-exact `/usr/share/tunaos/image-packages.tsv` receipt. The direct roles record
-the pinned base as their `base-image`; the overlay records the qualified
-modified desktop reference it was built from, because a rechunked or
-multi-instruction build leaves no usable Podman storage parent.
+exact `/usr/share/tunaos/image-packages.tsv` receipt. Every role, the overlay
+included, must record the pinned base as its `base-image`: the overlay's
+`90-image-info.sh` sources `lib.sh`, which restores that field from the desktop
+stage's inherited `image-info.json`. The overlay's modified desktop parent is
+therefore not provable from image metadata (and a rechunked or
+multi-instruction build leaves no usable Podman storage parent); it is bound
+only by building the overlay from the plan's `modifiedDesktop` reference, which
+the retained build logs must show.
 
 Retain the output directory with the build logs. `report.json` records each
 family as `passed`, `failed` or `not-run`; each route log and the source log

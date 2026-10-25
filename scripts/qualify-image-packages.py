@@ -572,12 +572,12 @@ def verify_cell(plan: dict, cell: dict, root: Path, source: dict, log: CommandLo
             info = read_image_info(log, image_id)
             short_commit = (source["stockShortCommit"] if role == "stockBase"
                             else source["modifiedShortCommit"])
-            # The overlay's retained build input names its parent: Podman's
-            # Parent is empty for a loaded rechunked image and points at a
-            # cached intermediate for a multi-instruction build, so it is
-            # evidence only. The direct roles keep the pinned upstream base.
-            direct_base = (images["modifiedDesktop"]["ref"] if role == "modifiedOverlay"
-                           else cell["baseImage"])
+            # Every role records the pinned upstream base: the overlay's
+            # 90-image-info.sh sources lib.sh, which restores base-image from
+            # the desktop stage's inherited image-info.json instead of keeping
+            # the immediate parent. The overlay's parent is therefore bound by
+            # the plan's build recipe, not by this metadata.
+            direct_base = cell["baseImage"]
             verify_info(info, variant=variant, target=target, short_commit=short_commit,
                         base_image=direct_base, where=f"{route}.{role}")
             query = package_query(log, manager, image_id, cell["package"])
