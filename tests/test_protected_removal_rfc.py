@@ -35,11 +35,23 @@ def section(title):
     return match.group(1)
 
 
+def repository_files():
+    """Repository file paths: `git ls-files`, or a directory walk without git or a .git."""
+    try:
+        listing = subprocess.run(["git", "ls-files", "-z"], cwd=ROOT, check=True, capture_output=True, text=True).stdout
+        return sorted(filter(None, listing.split("\0")))
+    except (OSError, subprocess.CalledProcessError):
+        return sorted(
+            path.relative_to(ROOT).as_posix()
+            for path in ROOT.rglob("*")
+            if path.is_file() and ".git" not in path.relative_to(ROOT).parts
+        )
+
+
 def tracked_by_name():
-    """Index tracked files by basename with one `git ls-files`, in sorted order."""
-    listing = subprocess.run(["git", "ls-files", "-z"], cwd=ROOT, check=True, capture_output=True, text=True).stdout
+    """Index repository files by basename, in sorted order."""
     index = {}
-    for path in sorted(filter(None, listing.split("\0"))):
+    for path in repository_files():
         index.setdefault(path.rsplit("/", 1)[-1], []).append(path)
     return index
 
@@ -92,3 +104,12 @@ def test_decisions_are_numbered_and_removal_stays_off():
     assert decisions == [str(number) for number in range(1, len(decisions) + 1)] and len(decisions) >= 8
     assert "Every removal stays rejected" in rfc_text()
     assert "does not enable a removal" in rfc_text()
+
+
+def test_repository_files_falls_back_to_a_walk_without_git(monkeypatch):
+    def no_git(*args, **kwargs):
+        raise FileNotFoundError("git")
+
+    monkeypatch.setattr(subprocess, "run", no_git)
+    names = repository_files()
+    assert "build_scripts/lib.sh" in names and not any(name.startswith(".git/") for name in names)
