@@ -142,7 +142,7 @@ Delete a row in the same change that removes its URL.
 
 These builds already read no R2 package URL:
 
-- `gnome` on `yellowfin`, `albacore` and `skipjack`. It uses `gnome50-el10-packages`, pinned by digest in `image-versions.yaml`. The package set is 345 packages, 521 MB.
+- `gnome` on `yellowfin`, `albacore` and `skipjack`. It uses `gnome50-el10-packages`, pinned by digest in `image-versions.yaml`. The package set is 345 packages, 521 MB. The set does not hold `highway`, which `glycin-loaders` needs. The build takes it from EPEL 10, because `10-base-packages.sh` enables EPEL and CRB. A check of this set must enable EPEL too.
 - `gnome` on `hummingbird`. It uses `utah-packages`, pinned by digest, but the `hummingbird` base stage still reads the first row.
 
 Three limits apply to every row:
