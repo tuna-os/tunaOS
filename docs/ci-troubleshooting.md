@@ -16,6 +16,15 @@ that touched 36 files across `.github/`, `build_scripts/`, `live-iso/`,
 | Bonito build succeeds despite bootc lint findings (#3001) | `99-cleanup.sh` calls `lint_image`; `lib.sh` returns success after findings unless `BOOTC_LINT_FATAL=1`. | Read the grouped output and step summary. Re-run lint against the candidate digest; apply the [Fedora readiness review](FEDORA-OUTREACH-READINESS.md) before outreach. |
 | `wahoo:tuna` Build Image: `No match for argument: gnome-keyring` (#3810, run 39989009540) | Fedora ELN dropped gnome-keyring for oo7. On 2026-10-24 no `dl.fedoraproject.org/pub/eln/1` repo published gnome-keyring or gnome-keyring-pam. `oo7-daemon` obsoletes `gnome-keyring < 51`, `pam_oo7` obsoletes `gnome-keyring-pam < 51`, and ELN's gdm requires `pam_oo7`. Rawhide still ships gnome-keyring 51.1. | The ELN sections in `tunaos.toml` name `oo7-daemon` and `pam_oo7`. `require_secret_service` in the desktop contract treats either `ID=eln` or `VARIANT_ID=eln` in os-release as ELN and requires oo7 there, and `gnome-keyring-daemon` everywhere else. |
 
+### Adoption report shows downloads while ISO use is unknown
+
+**Symptom:** A count of downloads from GitHub looks like adoption of ISOs.
+**Cause:** The 2026-10-22 API baseline includes release cards, SBOMs and other
+non-ISO assets; R2 downloads are outside the Releases API.
+**Fix:** Run `scripts/adoption-snapshot.py` and keep the ISO and non-ISO
+counters separate. Use the dated JSON receipt to check asset IDs and source
+URLs. Request an export from R2 before you rank variants or claim usage.
+
 ### 1. `flatpak: command not found` in live ISO customization
 
 **Affected workflows:** `LUKS E2E` (yellowfin:kde), any live ISO build for EL10
