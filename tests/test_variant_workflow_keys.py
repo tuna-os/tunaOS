@@ -145,7 +145,8 @@ def test_a_fork_edits_only_tunaos_toml_for_its_schedule_and_sweep(tmp_path):
     """Run the real generator over a copy of the repository with an edited tunaos.toml."""
     shutil.copytree(ROOT / "scripts", tmp_path / "scripts", ignore=shutil.ignore_patterns("__pycache__"))
     (tmp_path / ".github/workflows").mkdir(parents=True)
-    shutil.copy(ROOT / ".github/workflows/build-flavor.yml", tmp_path / ".github/workflows/build-flavor.yml")
+    for name in ("build-flavor.yml", "verify-asahi.yml", "asahi-hw-nightly.yml"):
+        shutil.copy(ROOT / ".github/workflows" / name, tmp_path / ".github/workflows" / name)
     source = (ROOT / "tunaos.toml").read_text(encoding="utf-8")
     # Move yellowfin's nightly, and take hummingbird (opted out) and gurnard (opted out) into the sweep.
     edited = source.replace('schedule = "20 0 * * *"', 'schedule = "7 7 * * *"', 1)

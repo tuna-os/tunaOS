@@ -277,10 +277,16 @@ reason = "unsupported until package target gentoo publishes tuna-desktop (tunaos
 #                   top of build-variant.yml records why. Not allowed with experimental.
 #   flavor_dispatch whether build-flavor.yml's manual sweep builds this variant.
 #                   Defaults to true, false for an experimental variant.
+#   asahi_verify    whether verify-asahi.yml's daily sweep boots this variant's
+#                   gnome-asahi image. Defaults to false.
+#   asahi_hardware  whether asahi-hw-nightly.yml's sweep rents Apple Silicon time
+#                   for this variant's gnome-asahi image. Defaults to false; set it
+#                   only once the variant's asahi_verify leg is green.
 [variants]
 
 [variants.yellowfin]
 emoji = "🐠"
+asahi_verify = true
 schedule = "20 0 * * *"
 codename = "Thunnus albacares"
 branding = { accent = "#FFC702", gnome_accent = "yellow", base = "AlmaLinux Kitten", homage = "the yellow petal of the AlmaLinux flower", plymouth = "tropical-fish" }
@@ -556,6 +562,7 @@ platforms = ["linux/amd64"]
 
 [variants.albacore]
 emoji = "🐟"
+asahi_verify = true
 schedule = "20 2 * * *"
 codename = "Thunnus alalunga"
 branding = { accent = "#0069DA", gnome_accent = "blue", base = "AlmaLinux", homage = "the blue petal of the AlmaLinux flower", plymouth = "tunaos" }
@@ -831,6 +838,7 @@ platforms = ["linux/amd64"]
 
 [variants.skipjack]
 emoji = "🍣"
+asahi_verify = true
 schedule = "20 9 * * *"
 codename = "Katsuwonus pelamis"
 branding = { accent = "#932279", gnome_accent = "purple", base = "CentOS Stream", homage = "CentOS purple", plymouth = "sushi" }
@@ -1204,6 +1212,8 @@ luks_e2e = false
 
 [variants.bonito]
 emoji = "🎣"
+asahi_verify = true
+asahi_hardware = true
 schedule = "20 11 * * *"
 codename = "Sarda sarda"
 branding = { accent = "#51A2DA", gnome_accent = "blue", base = "Fedora", homage = "Fedora's light blue", plymouth = "fishing-pole" }
@@ -1540,6 +1550,7 @@ build_iso = true
 # Sailfin Tumbleweed: rolling-release, zypper-based.
 [variants.sailfin]
 emoji = "⛵"
+asahi_verify = true
 schedule = "20 19 * * *"
 codename = "Istiophorus platypterus"
 branding = { accent = "#73BA25", gnome_accent = "green", base = "openSUSE Tumbleweed", homage = "openSUSE green", plymouth = "sailboat" }
@@ -1971,6 +1982,8 @@ build_iso = true
 
 [variants.grouper]
 emoji = "🪸"
+asahi_verify = true
+asahi_hardware = true
 schedule = "20 17 * * *"
 codename = "Epinephelus marginatus"
 branding = { accent = "#E95420", gnome_accent = "orange", base = "Ubuntu", homage = "Ubuntu orange", plymouth = "coral" }

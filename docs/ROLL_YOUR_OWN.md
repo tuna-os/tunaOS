@@ -92,7 +92,17 @@ keys on the variant, not code. `schedule = "20 3 * * *"` sets the cron of
 `build-<id>.yml` (omit it for a dispatch-only variant; stagger it, because the org
 runs 20 jobs at once and `build-variant.yml` records the slots).
 `flavor_dispatch = false` keeps a variant out of the sweep, which otherwise lists
-every non-experimental variant. `just generate-workflows` writes both.
+every non-experimental variant.
+
+`asahi_verify = true` adds a variant to the daily
+sweep of `verify-asahi.yml`. `asahi_hardware = true` adds it to the sweep of
+`asahi-hw-nightly.yml`. Both default to false. `just generate-workflows` writes
+all of them.
+
+`tunaos-builder.yaml` is a static VM file. Lima and corral do not expand
+environment variables in it. A fork that uses lima alone edits the `tunaos`
+clone URL. Corral builds set `origin` to `GITHUB_REPOSITORY` first. The sample
+arguments in the `Justfile` name TunaOS variants. Pass your own.
 
 Workflows and scripts that read or write published images (`bootc-lifecycle`,
 `catalog-facts`, `live-overlay`, `live-initramfs`, `publish-isos`,

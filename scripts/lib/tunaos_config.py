@@ -68,8 +68,9 @@ VARIANT_BRANDING = ('accent', 'gnome_accent', 'base', 'homage', 'plymouth')
 IDENTITY_KEYS = ('codename', 'branding', 'packages')
 # Variant keys that shape the generated GitHub workflows, not the build matrix
 # (scripts/generate-workflows.py reads them from tunaos.toml): the nightly cron
-# and whether the manual build-flavor.yml sweep dispatches the variant.
-WORKFLOW_KEYS = ('schedule', 'flavor_dispatch')
+# whether the manual build-flavor.yml sweep dispatches the variant, and which
+# variants the two Asahi sweeps (verify-asahi.yml, asahi-hw-nightly.yml) cover.
+WORKFLOW_KEYS = ('schedule', 'flavor_dispatch', 'asahi_verify', 'asahi_hardware')
 # Five cron fields of digits and the */,- operators: it is written into a
 # double-quoted YAML scalar, so nothing else may reach it.
 CRON = re.compile(r"[0-9*/,-]+(?: [0-9*/,-]+){4}\Z")
@@ -332,8 +333,9 @@ def validate(config):
                 raise ConfigError(f'{where}.schedule: expected five cron fields such as "20 0 * * *"')
             if variant.get('experimental'):
                 raise ConfigError(f'{where}.schedule: an experimental variant is dispatch-only and has no nightly')
-        if 'flavor_dispatch' in variant and type(variant['flavor_dispatch']) is not bool:
-            raise ConfigError(f'{where}.flavor_dispatch: expected boolean')
+        for key in ('flavor_dispatch', 'asahi_verify', 'asahi_hardware'):
+            if key in variant and type(variant[key]) is not bool:
+                raise ConfigError(f'{where}.{key}: expected boolean')
         strings(variant['platforms'], where + '.platforms', platform=True)
         if 'aliases' in variant:
             strings(variant['aliases'], where + '.aliases')

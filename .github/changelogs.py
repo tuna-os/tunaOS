@@ -1,3 +1,4 @@
+import os
 import sys
 from itertools import product
 from pathlib import Path
@@ -40,7 +41,10 @@ OTHER_NAMES = {
 }
 
 COMMITS_FORMAT = "### Commits\n| Hash | Subject |\n| --- | --- |{commits}\n\n"
-COMMIT_FORMAT = "\n| **[{short}](https://github.com/tuna-os/albacore-lts/commit/{githash})** | {subject} |"
+# Commits are links into the repository being released: GITHUB_REPOSITORY in CI.
+# Unset (a local run) keeps the link the stock changelog has always carried.
+STOCK_COMMIT_REPOSITORY = "tuna-os/albacore-lts"
+COMMIT_FORMAT = "\n| **[{short}](https://github.com/{repository}/commit/{githash})** | {subject} |"
 
 CHANGELOG_TITLE = "{tag}: {pretty}"
 CHANGELOG_FORMAT = """\
@@ -321,7 +325,8 @@ def get_commits(prev_manifests, manifests, workdir: str):
                 continue
 
             out += (
-                COMMIT_FORMAT.replace("{short}", short)
+                COMMIT_FORMAT.replace("{repository}", os.environ.get("GITHUB_REPOSITORY") or STOCK_COMMIT_REPOSITORY)
+                .replace("{short}", short)
                 .replace("{subject}", subject)
                 .replace("{githash}", githash)
             )
