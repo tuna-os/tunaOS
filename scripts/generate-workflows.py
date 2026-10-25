@@ -6,6 +6,35 @@ from lib import tunaos_config
 
 import yaml
 import os
+import re
+
+
+def orphan_wrappers(workflows, variant_ids):
+    """Per-variant wrappers whose variant is not in tunaos.toml.
+
+    This script writes one build-<id>.yml per variant and never removes one, so
+    a fork that deletes a variant keeps a scheduled workflow that builds a
+    variant the matrix no longer has. A wrapper is a job that calls
+    build-variant.yml with a literal variant id (found by parsing the YAML, so
+    quoting and layout do not matter); build-flavor.yml passes an expression
+    and is not one.
+    """
+    orphans = []
+    for path in sorted(Path(workflows).glob('build-*.yml')):
+        try:
+            document = yaml.safe_load(path.read_text(encoding='utf-8'))
+        except yaml.YAMLError as exc:
+            raise SystemExit(f'{path}: not valid YAML, so it cannot be checked for a removed variant: {exc}') from exc
+        for job in ((document or {}).get('jobs') or {}).values():
+            if not isinstance(job, dict) or job.get('uses') != './.github/workflows/build-variant.yml':
+                continue
+            variant = (job.get('with') or {}).get('variant')
+            # A literal id marks a per-variant wrapper; build-flavor.yml passes an expression.
+            if isinstance(variant, str) and re.fullmatch(r'[a-z0-9-]+', variant) and variant not in variant_ids:
+                orphans.append(path)
+                break
+    return orphans
+
 
 def main():
     config = tunaos_config.matrix(tunaos_config.load())
@@ -133,6 +162,12 @@ jobs:
         with open(file_path, 'w') as f:
             f.write(workflow_content)
         print(f"Generated {file_path}")
+
+    orphans = orphan_wrappers('.github/workflows', {variant.get('id') for variant in config.get('variants', [])})
+    if orphans:
+        for path in orphans:
+            print(f"::error::{path} builds a variant that is not in tunaos.toml. Delete the file, or restore the variant.", file=sys.stderr)
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
