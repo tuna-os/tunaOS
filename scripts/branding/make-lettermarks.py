@@ -52,8 +52,11 @@ _spec.loader.exec_module(tunaos_config)
 
 def font_bytes():
     data = FONT_PATH.read_bytes()
-    if hashlib.sha256(data).hexdigest() != FONT_SHA256:
-        raise SystemExit(f"Vendored Baloo 2 font does not match the pinned SHA-256: {FONT_PATH}")
+    actual = hashlib.sha256(data).hexdigest()
+    if actual != FONT_SHA256:
+        raise SystemExit(
+            f"Vendored Baloo 2 font does not match the pinned SHA-256: {FONT_PATH}\n"
+            f"  expected {FONT_SHA256}\n  actual   {actual}")
     tt = TTFont(io.BytesIO(data))
     inst = instantiateVariableFont(tt, {"wght": WEIGHT})
     buf = io.BytesIO()
@@ -87,7 +90,7 @@ def text_path(data, text):
 
 
 def emoji_body(vid, logos):
-    raw = (logos / f"{vid}.svg").read_text()
+    raw = (logos / f"{vid}.svg").read_text(encoding="utf-8")
     raw = re.sub(r"<\?xml[^>]*>|<!--[\s\S]*?-->", "", raw)
     vb = re.search(r'viewBox="([^"]+)"', raw).group(1)
     body = re.sub(r"^[\s\S]*?<svg\b[^>]*>", "", raw, count=1)
@@ -133,8 +136,10 @@ def main():
     args.output.mkdir(parents=True, exist_ok=True)
     for vid, variant in config["variants"].items():
         accent = variant["branding"]["accent"]
-        (args.output / f"{vid}.svg").write_text(lettermark(data, vid, names[vid], accent, LIGHT, args.logos))
-        (args.output / f"{vid}-dark.svg").write_text(lettermark(data, vid, names[vid], accent, DARK, args.logos))
+        (args.output / f"{vid}.svg").write_text(
+            lettermark(data, vid, names[vid], accent, LIGHT, args.logos), encoding="utf-8")
+        (args.output / f"{vid}-dark.svg").write_text(
+            lettermark(data, vid, names[vid], accent, DARK, args.logos), encoding="utf-8")
         print(f"{vid}")
 
 

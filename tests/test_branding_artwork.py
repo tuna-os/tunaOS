@@ -8,7 +8,9 @@ these tests cover the parts that need no rendering libraries.
 from __future__ import annotations
 
 import copy
+import hashlib
 import importlib.util
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -78,3 +80,24 @@ def test_logo_generator_writes_one_mark_per_variant(tmp_path):
     subprocess.run([sys.executable, str(ROOT / "scripts/branding/make-logos.py"), "--output", str(tmp_path)],
                    check=True, capture_output=True)
     assert {p.stem for p in tmp_path.iterdir()} == set(config.load()["variants"])
+
+
+def test_a_font_that_misses_its_pin_reports_both_digests(monkeypatch):
+    pytest.importorskip("uharfbuzz")
+    lettermarks = load("artwork_lettermarks_under_test", "scripts/branding/make-lettermarks.py")
+    monkeypatch.setattr(lettermarks, "FONT_SHA256", "0" * 64)
+    actual = hashlib.sha256(lettermarks.FONT_PATH.read_bytes()).hexdigest()
+    with pytest.raises(SystemExit) as raised:
+        lettermarks.font_bytes()
+    message = str(raised.value)
+    assert "0" * 64 in message and actual in message
+
+
+def test_the_artwork_check_does_not_depend_on_the_locale():
+    # Fastfetch letters use box-drawing characters and the SVGs are UTF-8; a
+    # runner whose locale encoding is ASCII must still reproduce the committed bytes.
+    pytest.importorskip("uharfbuzz")
+    env = {**os.environ, "LC_ALL": "C", "LANG": "C", "PYTHONUTF8": "0", "PYTHONCOERCECLOCALE": "0"}
+    result = subprocess.run([sys.executable, str(ROOT / "scripts/branding/check-artwork.py")],
+                            env=env, text=True, capture_output=True)
+    assert result.returncode == 0, result.stderr[-2000:]
