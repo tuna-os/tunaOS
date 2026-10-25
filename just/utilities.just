@@ -78,9 +78,13 @@ check: _ensure_check_deps ste
     while IFS= read -r variant; do
         generated_workflows+=(".github/workflows/build-${variant}.yml")
     done < <(yq -r '.variants[].id' .github/build-config.yml)
+    if ((${#generated_workflows[@]} == 0)); then
+        echo "::error::No generated build workflows were found; refusing an empty drift comparison." >&2
+        exit 1
+    fi
     generated_workflows+=(".github/workflows/build-flavor.yml")
     if ! git diff --exit-code -- "${generated_workflows[@]}"; then
-        echo "::error::Generated workflow files are stale. Run 'just generate-workflows' and commit the changes."
+        echo "::error::Generated workflow files are stale. Run 'just generate-workflows' and commit the changes." >&2
         exit 1
     fi
 

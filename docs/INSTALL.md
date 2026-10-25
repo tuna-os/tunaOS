@@ -79,13 +79,15 @@ cosign verify-blob tunaos-example.iso.sha256 \
   --certificate-oidc-issuer \
     "https://token.actions.githubusercontent.com"
 
-sha256sum --check --strict tunaos-example.iso.sha256
+expected="$(awk 'NR == 1 {print $1}' tunaos-example.iso.sha256)"
+printf '%s  %s\n' "$expected" tunaos-example.iso | sha256sum --check --strict -
 ```
 
-The order matters. The bundle signs the **checksum file**, not the ISO. So the
-first command proves the checksum came from our pipeline. The second binds the
-ISO to that checksum. In the other order, a checksum of unknown origin decides
-the answer.
+The order matters. The bundle signs the **checksum file**, not the ISO.
+The first command proves the checksum came from our pipeline. The second checks
+the downloaded ISO against the digest in that file. It does not use the ISO
+filename. Rollback snapshots keep signed checksum bytes and use checksum-based
+ISO names.
 
 The payload is the checksum because `cosign sign-blob` reads what it signs into
 memory, and an ISO above roughly 7 GiB exhausts the runner. Fedora, Debian and

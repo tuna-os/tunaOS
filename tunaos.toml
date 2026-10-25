@@ -16,6 +16,13 @@ schema_version = 1
 # Supported: linux/amd64, linux/amd64/v2, linux/amd64/v3, linux/arm64.
 # scripts/gen-platform-coverage.py reads this from the primary matrix projection.
 global_platforms = ["linux/amd64", "linux/arm64"]
+[iso_delivery]
+# Cutover entries remain empty until qualification supplies a current catalog
+# and matching receipts. Keep the retained inventory here, not in generated
+# .github/build-config.yml, so setup-yq cannot discard rollback protection.
+cutover_targets = []
+retained_r2_isos = []
+
 
 # Optional publishing section (intentionally omitted for owner-neutral forks):
 # [build.publish]

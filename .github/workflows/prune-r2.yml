@@ -53,6 +53,15 @@ jobs:
     env:
       R2_CONFIGURED: ${{ secrets.R2_ACCESS_KEY_ID != '' && secrets.R2_SECRET_ACCESS_KEY != '' && secrets.R2_ENDPOINT != '' && secrets.R2_BUCKET != '' }}
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: env.R2_CONFIGURED == 'true'
+        with:
+          persist-credentials: false
+
+      - name: Setup yq
+        if: env.R2_CONFIGURED == 'true'
+        uses: ./.github/actions/setup-yq
+
       - name: Install rclone
         if: env.R2_CONFIGURED == 'true'
         run: sudo apt-get install -y rclone
@@ -68,37 +77,58 @@ jobs:
           RCLONE_CONFIG_R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
           DRY_RUN: ${{ inputs.dry_run || 'false' }}
         run: |
+          set -euo pipefail
           if [[ -z "${RCLONE_CONFIG_R2_ACCESS_KEY_ID:-}" ]]; then
             echo "::notice::R2 credentials not configured; skipping prune."
             exit 0
           fi
-          # "*-latest*", NOT "*-latest.iso*". Non-amd64 ISOs publish an
-          # arch-suffixed pointer -- reusable-build-artifacts.yml writes
-          # <variant>-<flavor>-latest-<arch>.iso (plus .sha256/.sigstore.json)
-          # for every platform that isn't linux/amd64 (#1378), so the bare
-          # <variant>-<flavor>-latest.iso name stays the documented amd64
-          # download. "*-latest.iso*" needs the literal "-latest.iso" and an
-          # arch-suffixed pointer does not contain it: bonito-gnome-latest-
-          # arm64.iso never matched the exclude, matched --include "*.iso",
-          # and was therefore deletable the moment its mtime passed 14d --
-          # i.e. the first time an arm64 leg went two weeks without a
-          # successful build, which is exactly when a stable pointer has to
-          # survive. Match the CLASS of pointer instead: no dated artifact
-          # name contains "-latest" (they are <name>-<YYYYMMDD>.iso), so the
-          # broader pattern keeps every pointer and still prunes every date.
-          # Use one ordered filter list. rclone explicitly warns that mixing
-          # --include and --exclude makes rule order indeterminate; retention
-          # must not depend on whichever order a particular rclone release
-          # chooses. The final rule also keeps unrelated live-isos objects out
-          # of this extension-scoped deletion.
+          # One ordered filter file protects immutable stable pointers, exact
+          # reviewed inventory, and each resolver's current checksum snapshot.
+          # Superseded snapshots remain included and age out after 14 days.
+          CONFIG_JSON="${RUNNER_TEMP}/build-config.json"
+          FILTERS="${RUNNER_TEMP}/live-isos-retention.filter"
+          STATIC_FILTERS="${RUNNER_TEMP}/live-isos-static-retention.filter"
+          REMOTE_OBJECTS="${RUNNER_TEMP}/live-isos-objects.txt"
+          REMOTE="R2:${{ secrets.R2_BUCKET }}/live-isos/"
+          yq -o=json '.' .github/build-config.yml > "$CONFIG_JSON"
+          python3 scripts/iso-delivery-policy.py \
+            --config-json "$CONFIG_JSON" retention-filters > "$STATIC_FILTERS"
+          if ! rclone lsf --s3-no-check-bucket --files-only "$REMOTE" > "$REMOTE_OBJECTS"; then
+            echo "::error::Could not list live-isos resolvers; refusing to prune"
+            exit 1
+          fi
+          : > "$FILTERS"
+          while IFS= read -r resolver; do
+            case "$resolver" in
+              *.iso.sigstore.json) continue ;;
+              *-latest.json|*-latest-*.json) ;;
+              *) continue ;;
+            esac
+            if ! payload="$(rclone cat --s3-no-check-bucket "${REMOTE}${resolver}")"; then
+              echo "::error::Could not read resolver ${resolver}; refusing to prune"
+              exit 1
+            fi
+            if ! current="$(jq -er -s '
+              if length != 1 then error("resolver must contain one JSON document")
+              else .[0]
+              end
+              | select(.schema == "TunaOSIsoResolution/v1") | .iso |
+              select(type == "string" and
+                     test("\\A[A-Za-z0-9][A-Za-z0-9._+~-]*\\.iso\\z"))
+            ' <<<"$payload")"; then
+              echo "::error::Invalid resolver ${resolver}; refusing to prune"
+              exit 1
+            fi
+            printf '%s\n' \
+              "- /${current}" \
+              "- /${current}.sha256" \
+              "- /${current}.sigstore.json" >> "$FILTERS"
+          done < "$REMOTE_OBJECTS"
+          cat "$STATIC_FILTERS" >> "$FILTERS"
           FLAGS=(--log-level INFO --s3-no-check-bucket --min-age 14d \
-            --filter "- *-latest*" \
-            --filter "+ *.iso" \
-            --filter "+ *.iso.sha256" \
-            --filter "+ *.iso.sigstore.json" \
-            --filter "- *")
+            --filter-from "$FILTERS")
           [[ "$DRY_RUN" == "true" ]] && FLAGS+=(--dry-run)
-          echo "==> Pruning live-isos/ (>14d, excluding *-latest*)..."
+          echo "==> Pruning live-isos/ (>14d, preserving stable, retained, and resolved objects)..."
           rclone delete "${FLAGS[@]}" "R2:${{ secrets.R2_BUCKET }}/live-isos/"
 
       - name: Prune dated screenshots older than 60 days
@@ -186,7 +216,7 @@ jobs:
               prefix="${dir%/}"
               [[ -n "$prefix" ]] || continue
               case "$prefix" in
-                live-isos)   retention="dated objects >14d pruned above" ;;
+                live-isos)   retention="dated objects >14d pruned; cutover inventory retained" ;;
                 screenshots) retention="dated objects >60d pruned above" ;;
                 # Not "unused". Every other prefix in this bucket belongs to
                 # some other repo (tromso, xfce-linux, tacklebox,
