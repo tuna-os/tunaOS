@@ -24,6 +24,7 @@ import time
 
 serial_path, monitor_path, passphrase = sys.argv[1], sys.argv[2], sys.argv[3]
 timeout = int(sys.argv[4]) if len(sys.argv) > 4 else 900
+diagnostic_observe = os.environ.get("TUNAOS_INSTALLED_BOOT_DIAGNOSTIC") == "1"
 
 
 def connect(path, tries=60):
@@ -76,6 +77,9 @@ emergency_seen = False
 
 
 def harvest_emergency(ser):
+    if diagnostic_observe:
+        print("DIAGNOSTIC_EMERGENCY_OBSERVED", flush=True)
+        return
     print("\n>>> emergency shell detected; harvesting rdsosreport", flush=True)
     ser.sendall(b"\n")
     time.sleep(3)
@@ -105,6 +109,8 @@ def harvest_emergency(ser):
 # GRUB's EFI console, and GRUB maps control bytes from a serial terminal to
 # Ctrl-<key>.
 grub_append = os.environ.get("TUNAOS_LUKS_GRUB_APPEND", "").strip()
+if diagnostic_observe and grub_append:
+    sys.exit(5)
 grub_edited = not grub_append
 ANSI_RE = re.compile(r"\x1b\[[0-9;:?=]*[A-Za-z]")
 # blscfg (Fedora/CentOS grub2) generates every BLS menu entry as exactly
@@ -157,8 +163,11 @@ while time.time() < deadline:
         d = ser.recv(4096)
         if d:
             buf += d
-            sys.stdout.buffer.write(d)
-            sys.stdout.flush()
+            if diagnostic_observe:
+                buf = buf[-1024*1024:]
+            else:
+                sys.stdout.buffer.write(d)
+                sys.stdout.flush()
     except socket.timeout:
         pass
 
@@ -171,6 +180,9 @@ while time.time() < deadline:
         continue
 
     if not sent and "passphrase for disk root" in text.lower():
+        if diagnostic_observe:
+            print("DIAGNOSTIC_PROMPT_OBSERVED_NO_UNLOCK", flush=True)
+            sys.exit(77)
         print("\n>>> injecting LUKS passphrase", flush=True)
         ser.sendall(passphrase.encode() + b"\n")
         sent = True

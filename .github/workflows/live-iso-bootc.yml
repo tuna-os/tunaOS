@@ -3,6 +3,10 @@ permissions: {}
 on:
   workflow_dispatch:
     inputs:
+      installed_boot_diagnostic:
+        description: 'One fresh Skipjack LUKS diagnostic; never qualification'
+        type: boolean
+        default: false
       variant:
         description: 'Variant to build'
         required: true
@@ -67,7 +71,23 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  diagnostic-preflight:
+    if: inputs.installed_boot_diagnostic
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    permissions: {}
+    steps:
+      - name: Require existing runner access before the producer
+        run: |
+          test -r /dev/kvm && test -w /dev/kvm
+          test -r /sys/fs/cgroup/cgroup.controllers
+          sudo -n true
+          systemctl --version
+
   build:
+    needs: diagnostic-preflight
+    if: ${{ !cancelled() && (!inputs.installed_boot_diagnostic || needs.diagnostic-preflight.result == 'success') }}
+    timeout-minutes: ${{ inputs.installed_boot_diagnostic && 120 || 360 }}
     outputs:
       artifact_id: ${{ steps.native_iso.outputs.artifact-id }}
       archive_digest: sha256:${{ steps.native_iso.outputs.artifact-digest }}
@@ -96,7 +116,7 @@ jobs:
     # GitHub-hosted. The `== 'github'` form sent every input-less trigger to
     # RunsOn, which is how the PR trigger came to bill an EC2 ISO build on
     # every push.
-    runs-on: ${{ inputs.build_runner != 'runs-on'
+    runs-on: ${{ inputs.installed_boot_diagnostic && 'ubuntu-24.04' || inputs.build_runner != 'runs-on'
       && 'ubuntu-latest'
       || format('runs-on={0}/runner=build-amd64', github.run_id) }}
     # A GitHub-hosted runner is slower per-core than the c6a this used to
@@ -111,6 +131,14 @@ jobs:
       VARIANT: ${{ github.event.inputs.variant || 'skipjack' }}
       FLAVOR: ${{ github.event.inputs.flavor || 'gnome' }}
     steps:
+      - name: Validate diagnostic scope
+        if: inputs.installed_boot_diagnostic
+        env:
+          DIAGNOSTIC_VARIANT: ${{ inputs.variant }}
+          DIAGNOSTIC_FLAVOR: ${{ inputs.flavor }}
+          DIAGNOSTIC_RUNNER: ${{ inputs.build_runner }}
+        run: |
+          [[ "$DIAGNOSTIC_VARIANT" == skipjack && "$DIAGNOSTIC_FLAVOR" == gnome && "$DIAGNOSTIC_RUNNER" == github ]]
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -145,7 +173,15 @@ jobs:
           done
           hash -r
 
+      - name: Check existing diagnostic build access
+        if: inputs.installed_boot_diagnostic
+        run: |
+          grep -q "^${USER}:" /etc/subuid
+          grep -q "^${USER}:" /etc/subgid
+          podman unshare true
+
       - name: Setup rootless podman (subuid/subgid + userns for runner)
+        if: ${{ !inputs.installed_boot_diagnostic }}
         run: |
           set -euo pipefail
           # tacklebox runs 'sudo -u runner podman unshare' for the squashfs;
@@ -352,6 +388,7 @@ jobs:
       actions: read
     uses: ./.github/workflows/iso-e2e.yml
     with:
+      installed_boot_diagnostic: ${{ inputs.installed_boot_diagnostic || false }}
       variant: ${{ github.event.inputs.variant || 'skipjack' }}
       flavors: ${{ github.event.inputs.flavor || 'gnome' }}
       source: native-artifact

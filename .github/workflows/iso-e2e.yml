@@ -32,6 +32,9 @@ name: ISO E2E Smoke
 on:
   workflow_call:
     inputs:
+      installed_boot_diagnostic:
+        type: boolean
+        default: false
       variant:
         type: string
         required: true
@@ -243,7 +246,7 @@ jobs:
     # smoke adds 20, strict plain+LUKS (including detached cold/warm boots)
     # keeps its full 60, extraction allows ten, and setup/API/hash/evidence
     # get ten more: 160 total.
-    timeout-minutes: ${{ inputs.source == 'native-artifact' && 160 || ((github.event_name == 'workflow_dispatch' && inputs.source == 'build') && 130 || 70) }}
+    timeout-minutes: ${{ inputs.installed_boot_diagnostic && 120 || inputs.source == 'native-artifact' && 160 || ((github.event_name == 'workflow_dispatch' && inputs.source == 'build') && 130 || 70) }}
     strategy:
       # Don't cancel the other leg if one fails — we want to see both signals.
       fail-fast: false
@@ -352,7 +355,7 @@ jobs:
       # crashes with #UD (Invalid Opcode) in TCG mode because qemu64 lacks the
       # CPU extensions the bootloader requires.
       - name: Enable KVM group permissions
-        if: steps.filter.outputs.skip != 'true'
+        if: ${{ !inputs.installed_boot_diagnostic && steps.filter.outputs.skip != 'true' }}
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | \
             sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -364,6 +367,7 @@ jobs:
         if: steps.filter.outputs.skip != 'true'
         env:
           PLATFORM: ${{ matrix.platform }}
+          DIAGNOSTIC_MODE: ${{ inputs.installed_boot_diagnostic }}
           ISO_SOURCE: ${{ inputs.source }}
           NATIVE_ARTIFACT_ID: ${{ inputs.native_artifact_id }}
           NATIVE_ARCHIVE_DIGEST: ${{ inputs.native_archive_digest }}
@@ -384,8 +388,10 @@ jobs:
               tesseract-ocr xorriso squashfs-tools
             QEMU_BIN="$(command -v qemu-system-aarch64)"
           else
+            qemu_package=qemu-system-x86
+            [[ "${DIAGNOSTIC_MODE:-false}" != true ]] || qemu_package=qemu-system-x86=1:8.2.2+ds-0ubuntu1.16
             sudo apt-get install -y --no-install-recommends \
-              qemu-system-x86 qemu-utils ovmf socat swtpm \
+              "$qemu_package" qemu-utils ovmf socat swtpm \
               rclone sshpass skopeo python3-yaml "${browser_packages[@]}" imagemagick \
               tesseract-ocr xorriso squashfs-tools
             QEMU_BIN="$(command -v qemu-system-x86_64)"
@@ -494,6 +500,7 @@ jobs:
           } >> "$GITHUB_ENV"
 
       - name: Fetch exact native ISO artifact
+        timeout-minutes: ${{ inputs.installed_boot_diagnostic && 20 || 60 }}
         if: inputs.source == 'native-artifact'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -824,9 +831,42 @@ jobs:
           echo "strict qualification builder: ${ENGINE_DIGEST}"
           echo "strict qualification media: ${MEDIA_DIGEST}"
 
+      - name: Check existing diagnostic KVM access
+        if: inputs.installed_boot_diagnostic
+        run: test -r /dev/kvm && test -w /dev/kvm
+
+      - name: Install pinned diagnostic decoder and inspector
+        if: inputs.installed_boot_diagnostic && steps.filter.outputs.skip != 'true'
+        run: |
+          sudo apt-get install -y --no-install-recommends python3-venv python3-guestfs=1:1.52.0-5ubuntu3 qemu-system-x86=1:8.2.2+ds-0ubuntu1.16
+          python3 -m venv --system-site-packages "$RUNNER_TEMP/iso-diagnostic-venv"
+          "$RUNNER_TEMP/iso-diagnostic-venv/bin/pip" install -r requirements-iso-diagnostic.txt
+
+      - name: Fresh installed LUKS diagnostic only
+        if: inputs.installed_boot_diagnostic && steps.filter.outputs.skip != 'true'
+        timeout-minutes: 80
+        run: |
+          "$RUNNER_TEMP/iso-diagnostic-venv/bin/python" scripts/prepare-installed-boot-diagnostic.py
+          "$RUNNER_TEMP/iso-diagnostic-venv/bin/python" scripts/diagnose-installed-luks.py \
+            --iso "$ISO_PATH" --binding native-iso-input/artifact-binding.json \
+            --provenance "$RUNNER_TEMP/installed-boot-provenance.json" \
+            --tool-lock "$RUNNER_TEMP/installed-boot-tools.json" \
+            --output "$RUNNER_TEMP/installed-boot-run"
+
+      - name: Upload bounded installed boot diagnostic
+        if: always() && inputs.installed_boot_diagnostic
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: installed-boot-diagnostic
+          path: |
+            ${{ runner.temp }}/installed-boot-run/installed-boot-diagnostic/report.json
+            ${{ runner.temp }}/installed-boot-run/installed-boot-diagnostic/manifest.json
+          if-no-files-found: error
+          retention-days: 3
+
       - name: Run strict offline GUI qualification
         id: e2e
-        if: steps.filter.outputs.skip != 'true'
+        if: '!inputs.installed_boot_diagnostic && steps.filter.outputs.skip != ''true'''
         timeout-minutes: 60
         run: |
           df -h . /tmp
@@ -858,7 +898,7 @@ jobs:
 
 
       - name: Convert screenshots to PNG
-        if: always() && steps.filter.outputs.skip != 'true'
+        if: ${{ !inputs.installed_boot_diagnostic && always() && steps.filter.outputs.skip != 'true' }}
         continue-on-error: true
         run: |
           for ppm in iso-e2e-out/*.ppm; do
@@ -867,11 +907,11 @@ jobs:
           done
 
       - name: Stage bounded strict diagnostics
-        if: always() && steps.filter.outputs.skip != 'true'
+        if: ${{ !inputs.installed_boot_diagnostic && always() && steps.filter.outputs.skip != 'true' }}
         run: python3 scripts/collect-iso-diagnostics.py iso-e2e-out
 
       - name: Collect evidence
-        if: always() && steps.filter.outputs.skip != 'true'
+        if: ${{ !inputs.installed_boot_diagnostic && always() && steps.filter.outputs.skip != 'true' }}
         env:
           EVIDENCE_ARCH: amd64
           E2E_OUTCOME: ${{ steps.e2e.outcome }}
@@ -885,7 +925,7 @@ jobs:
           scripts/evidence-bundle.sh \
             "${{ matrix.variant }}:${{ matrix.flavor }}" iso iso-e2e-out
       - name: Validate strict qualification evidence
-        if: steps.filter.outputs.skip != 'true' && steps.e2e.outcome == 'success' && steps.e2e.outputs.rc == '0'
+        if: ${{ !inputs.installed_boot_diagnostic && steps.filter.outputs.skip != 'true' && steps.e2e.outcome == 'success' && steps.e2e.outputs.rc == '0' }}
         env:
           ISO_SOURCE: ${{ inputs.source }}
         run: |
@@ -900,7 +940,7 @@ jobs:
 
 
       - name: Job summary
-        if: always() && steps.filter.outputs.skip != 'true'
+        if: ${{ !inputs.installed_boot_diagnostic && always() && steps.filter.outputs.skip != 'true' }}
         run: |
           {
             echo "## ISO E2E — ${VARIANT:-?}:${FLAVOR:-?}"
@@ -921,7 +961,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload artifacts
-        if: always() && steps.filter.outputs.skip != 'true'
+        if: ${{ !inputs.installed_boot_diagnostic && always() && steps.filter.outputs.skip != 'true' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: iso-e2e-${{ matrix.variant }}-${{ matrix.flavor }}
@@ -946,7 +986,7 @@ jobs:
       # When the filter step skipped the job, steps.e2e.outputs.rc is empty,
       # which would otherwise compare unequal to '0' and falsely fail.
       - name: Fail on e2e error
-        if: steps.filter.outputs.skip != 'true' && steps.e2e.outputs.rc != '0'
+        if: ${{ !inputs.installed_boot_diagnostic && steps.filter.outputs.skip != 'true' && steps.e2e.outputs.rc != '0' }}
         run: |
           echo "::error::iso-e2e.sh exited ${{ steps.e2e.outputs.rc }} (see serial.log artifact)"
           exit 1
