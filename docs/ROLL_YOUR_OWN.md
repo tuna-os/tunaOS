@@ -278,12 +278,14 @@ homepage = "https://acme.example/os"
 documentation = "https://acme.example/os/docs"
 support = "https://acme.example/os/support"
 bug_report = "https://acme.example/os/issues"
+plymouth = "acmeos"        # boot splash for an image name that is no known variant
 
 [variants.yellowfin]
 codename = "Wile E"       # os-release VERSION_CODENAME
 # Accent colour (ANSI_COLOR, /etc/issue, fastfetch, KDE, wallpapers), the
-# nearest GNOME accent name, the base label and a short colour note.
-branding = { accent = "#E87D0D", gnome_accent = "orange", base = "AlmaLinux Kitten", homage = "Acme orange" }
+# nearest GNOME accent name, the base label, a short colour note and the
+# boot splash theme.
+branding = { accent = "#E87D0D", gnome_accent = "orange", base = "AlmaLinux Kitten", homage = "Acme orange", plymouth = "acmeos" }
 ```
 
 Then regenerate the files every image build reads, and commit them with
@@ -292,10 +294,12 @@ Then regenerate the files every image build reads, and commit them with
 ```bash
 python3 scripts/config.py generate-identity
 python3 scripts/config.py generate-variant-identity
+python3 scripts/config.py generate-variant-aliases
 ```
 
-`just check` fails if `build_scripts/lib/identity.env` or
-`build_scripts/lib/variant-identity.tsv` disagrees with `tunaos.toml`. Each
+`just check` fails if `build_scripts/lib/identity.env`,
+`build_scripts/lib/variant-identity.tsv` or
+`build_scripts/lib/variant-aliases.tsv` disagrees with `tunaos.toml`. Each
 variant's name (Yellowfin, Marlin) comes from its id, or its `publish_name`.
 
 The variant's mark, lettermark and fastfetch letters follow its `emoji`, name
@@ -308,8 +312,15 @@ python3 scripts/branding/check-artwork.py --write
 
 A new emoji needs its artwork file: copy its file from Noto Emoji's `svg/` folder to
 `scripts/branding/emoji/`. CI fails if the committed artwork does not match
-`tunaos.toml`. Wallpapers, the boot splash and the installer's own name still
-come from the image files under `system_files/` (#3668).
+`tunaos.toml`.
+
+You supply the drawn art. Each variant needs a wallpaper at
+`system_files/usr/share/backgrounds/tunaos/<variant>.jpg`. Each variant's
+`branding.plymouth` names its boot splash, a theme folder under
+`system_files/usr/share/plymouth/themes/`. An image name that is not a known
+variant gets the theme in `[defaults.branding] plymouth`. `just check` fails
+and names the file when one of these is missing. The installer's own name
+still comes from the image files under `system_files/` (#3668).
 
 For GNOME defaults, create a gschema override:
 
