@@ -5,6 +5,26 @@ printf "::group:: === 90 Image Info ===\n"
 
 source /run/context/build_scripts/lib.sh
 
+# Name, URLs, codenames and CPE come from tunaos.toml through this generated
+# adapter (scripts/config.py generate-identity), for TunaOS and forks alike.
+# There is deliberately no built-in fallback: a missing file is a broken
+# build context, not a reason to stamp stock TunaOS identity on a fork.
+DEFAULT_IDENTITY_ENV=/run/context/build_scripts/lib/identity.env
+if [[ -n "${TUNAOS_IDENTITY_ENV:-}" && "${TUNAOS_IDENTITY_TEST_OVERRIDE:-}" != 1 ]]; then
+	echo "ERROR: TUNAOS_IDENTITY_ENV is test-only; build identity must use ${DEFAULT_IDENTITY_ENV}" >&2
+	exit 1
+fi
+IDENTITY_ENV="${TUNAOS_IDENTITY_ENV:-${DEFAULT_IDENTITY_ENV}}"
+if [[ ! -f "${IDENTITY_ENV}" || ! -r "${IDENTITY_ENV}" ]]; then
+	echo "ERROR: ${IDENTITY_ENV} is missing or unreadable; run scripts/config.py generate-identity" >&2
+	exit 1
+fi
+# shellcheck source=lib/identity.env
+if ! source "${IDENTITY_ENV}"; then
+	echo "ERROR: ${IDENTITY_ENV} could not be sourced; run scripts/config.py generate-identity" >&2
+	exit 1
+fi
+
 # Fold a friendly alias tag onto the canonical variant id it belongs to.
 #
 # Mirrors the `aliases:` lists in .github/build-config.yml. An alias is only a
@@ -60,6 +80,11 @@ EOF
 # expects the same namespace instead of a hardcoded tuna-os.
 install -d /usr/share/tunaos
 printf '%s\n' "${IMAGE_VENDOR}" >/usr/share/tunaos/image-vendor
+# The installed verifier runs after the build context is gone. Persist the
+# generated identity policy beside the runtime image identity on every path
+# that invokes this shared writer, including manifest-driven desktops and
+# overlays.
+install -Dm0644 "${IDENTITY_ENV}" /usr/share/tunaos/identity-config.env
 
 # Every variant shipped these two pointing at projectbluefin.io, inherited
 # verbatim from the bluefin-lts script this one started as, while SUPPORT_URL
@@ -67,14 +92,14 @@ printf '%s\n' "${IMAGE_VENDOR}" >/usr/share/tunaos/image-vendor
 # info-overview` on any TunaOS image was sent to another project's front page.
 # The contract missed it because it only asserted the two URLs that were
 # already correct; verify-branding.sh now checks all four.
-HOME_URL="https://github.com/tuna-os/tunaos"
-DOCUMENTATION_URL="https://github.com/tuna-os/tunaos/tree/main/docs"
-SUPPORT_URL="https://github.com/tuna-os/tunaos/issues/"
-BUG_SUPPORT_URL="https://github.com/tuna-os/tunaos/issues/"
+HOME_URL="${TUNAOS_HOME_URL}"
+DOCUMENTATION_URL="${TUNAOS_DOCUMENTATION_URL}"
+SUPPORT_URL="${TUNAOS_SUPPORT_URL}"
+BUG_REPORT_URL="${TUNAOS_BUG_REPORT_URL}"
 
 # TunaOS variants are named for fish. Keep VERSION_CODENAME tied to that
 # identity instead of inheriting the unrelated legacy dinosaur codename.
-# Generic common names use one stable representative species.
+# Each variant's codename is declared in tunaos.toml.
 #
 # Keyed on the canonical variant id, not on IMAGE_NAME: IMAGE_NAME carries the
 # *publish* name (`bonito` for bonito-rawhide, `flounder` for flounder-sid) and,
@@ -82,25 +107,12 @@ BUG_SUPPORT_URL="https://github.com/tuna-os/tunaos/issues/"
 # the base image. IMAGE_NAME_VARIANT is the variant id build-image-inner.sh
 # passes verbatim, so prefer it and fall back to the canonicalized IMAGE_NAME.
 VARIANT_KEY="$(canonical_variant "${IMAGE_NAME_VARIANT:-${IMAGE_NAME}}")"
-case "${VARIANT_KEY}" in
-yellowfin) CODE_NAME="Thunnus albacares" ;;
-albacore) CODE_NAME="Thunnus alalunga" ;;
-skipjack) CODE_NAME="Katsuwonus pelamis" ;;
-bonito | bonito-rawhide) CODE_NAME="Sarda sarda" ;;
-sailfin) CODE_NAME="Istiophorus platypterus" ;;
-guppy) CODE_NAME="Poecilia reticulata" ;;
-grouper) CODE_NAME="Epinephelus marginatus" ;;
-marlin) CODE_NAME="Makaira nigricans" ;;
-hummingbird) CODE_NAME="Trochilidae" ;;
-wahoo) CODE_NAME="Acanthocybium solandri" ;;
-gurnard) CODE_NAME="Chelidonichthys lucerna" ;;
-flounder | flounder-sid) CODE_NAME="Platichthys flesus" ;;
-*)
-	echo "ERROR: no scientific fish codename defined for variant: ${VARIANT_KEY}" \
+CODE_NAME="${TUNAOS_CODENAMES["${VARIANT_KEY}"]:-}"
+if [[ -z "${CODE_NAME}" ]]; then
+	echo "ERROR: no codename defined in tunaos.toml for variant: ${VARIANT_KEY}" \
 		"(IMAGE_NAME_VARIANT=${IMAGE_NAME_VARIANT:-unset}, IMAGE_NAME=${IMAGE_NAME})" >&2
 	exit 1
-	;;
-esac
+fi
 
 chmod 644 $IMAGE_INFO
 
@@ -159,11 +171,16 @@ fi
 # albacore (#1007) or marlin (#1015) — the substitution matched no line and
 # exited 0.
 osr_set() {
-	local key="$1" value="$2" file
+	local key="$1" value="$2" file replacement
+	# The value is a sed REPLACEMENT: `&` there means "the matched text", and
+	# `\` and the `|` delimiter end or alter it. A configured URL such as
+	# https://x.example/?a=1&b=2 is valid, so escape all three; unescaped, the
+	# `&` pasted the old KEY=... line into the field.
+	replacement="$(printf '%s' "$value" | sed 's/[\\&|]/\\&/g')"
 	for file in "${OS_RELEASE_FILES[@]}"; do
 		if grep -q "^${key}=" "$file"; then
 			# `|` delimiter rather than `/`: values may contain slashes (URLs).
-			sed -i "s|^${key}=.*|${key}=\"${value}\"|" "$file"
+			sed -i "s|^${key}=.*|${key}=\"${replacement}\"|" "$file"
 		else
 			echo "${key}=\"${value}\"" >>"$file"
 		fi
@@ -176,8 +193,10 @@ osr_set VERSION_CODENAME "${CODE_NAME}"
 osr_set VARIANT_ID "${IMAGE_NAME}"
 osr_set PRETTY_NAME "${IMAGE_PRETTY_NAME}"
 osr_set HOME_URL "${HOME_URL}"
-osr_set BUG_REPORT_URL "${BUG_SUPPORT_URL}"
-osr_set CPE_NAME "cpe:/o:jamesreilly:${IMAGE_NAME}-tunaos"
+osr_set BUG_REPORT_URL "${BUG_REPORT_URL}"
+# The product part is IMAGE_NAME, the publish name (bonito for bonito-rawhide),
+# as TunaOS has always written it; VERSION_CODENAME carries the variant key.
+osr_set CPE_NAME "cpe:/o:${TUNAOS_CPE_VENDOR}:${IMAGE_NAME}-${TUNAOS_PROJECT_ID}"
 
 # Dynamically interpolate the specific variant name and logo path in the installer recipe.json
 RECIPE_FILE="/etc/bootc-installer/recipe.json"
@@ -417,7 +436,7 @@ EOF
   "modules": [
     "title",
     "separator",
-    { "type": "os", "key": "system  ", "format": "{pretty-name}  ·  part of TunaOS, built on ${BASE_LABEL}" },
+    { "type": "os", "key": "system  ", "format": "{pretty-name}  ·  part of ${TUNAOS_PROJECT_NAME}, built on ${BASE_LABEL}" },
     { "type": "command", "key": "image   ", "text": "/usr/libexec/tunaos/fetch-image", "shell": "/bin/sh" },
     { "type": "custom", "key": "forged  ", "format": "${BUILD_DATE}" },
     { "type": "kernel", "key": "kernel  ", "format": "{release}" },

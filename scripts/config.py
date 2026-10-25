@@ -22,9 +22,16 @@ def builder_target(root, output, relative):
     return target
 
 
+# Image identity adapters: committed build inputs generated from tunaos.toml.
+IDENTITY_ADAPTERS = {
+    'identity': (tunaos_config.render_identity, 'build_scripts/lib/identity.env'),
+    'variant-identity': (tunaos_config.render_variant_identity, 'build_scripts/lib/variant-identity.tsv'),
+}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=('validate', 'generate', 'show', 'generate-builder-config', 'check-builder-config', 'generate-builder-flavors', 'check-builder-flavors', 'generate-flatpak-policy', 'check-flatpak-policy', 'generate-debian-contract', 'prepare-debian-context', 'verify-debian-image'))
+    parser.add_argument('command', choices=('validate', 'generate', 'show', 'generate-builder-config', 'check-builder-config', 'generate-builder-flavors', 'check-builder-flavors', 'generate-flatpak-policy', 'check-flatpak-policy', *(f'{verb}-{name}' for name in IDENTITY_ADAPTERS for verb in ('generate', 'check')), 'generate-debian-contract', 'prepare-debian-context', 'verify-debian-image'))
     parser.add_argument('--root', type=Path, default=tunaos_config.ROOT)
     parser.add_argument('--output', type=Path)
     parser.add_argument('--image')
@@ -33,7 +40,20 @@ def main():
     parser.add_argument('--platform')
     args = parser.parse_args()
     try:
-        if args.command in ('generate-flatpak-policy', 'check-flatpak-policy'):
+        verb, _, adapter = args.command.partition('-')
+        if verb in ('generate', 'check') and adapter in IDENTITY_ADAPTERS:
+            render, relative = IDENTITY_ADAPTERS[adapter]
+            content = render(tunaos_config.load(args.root / 'tunaos.toml'))
+            target = args.output or args.root / relative
+            if target.is_symlink() or any(parent.is_symlink() for parent in target.parents):
+                raise tunaos_config.ConfigError(f'generated {adapter} path must not be a symlink')
+            if args.command.startswith('check-'):
+                if not target.is_file() or target.read_text(encoding='utf-8') != content:
+                    raise tunaos_config.ConfigError(f'generated {adapter} drift; run generate-{adapter}')
+            else:
+                target.write_text(content, encoding='utf-8')
+            print(target)
+        elif args.command in ('generate-flatpak-policy', 'check-flatpak-policy'):
             content = tunaos_config.flatpak_policy().render(tunaos_config.load(args.root / 'tunaos.toml'))
             target = args.output or args.root / 'build_scripts/desktop/flatpak-preinstall.tsv'
             if target.is_symlink() or any(parent.is_symlink() for parent in target.parents):
@@ -88,6 +108,10 @@ def main():
             if args.command == 'show':
                 print(tunaos_config.render(config), end='')
             else:
+                # Identity is build-critical and has no stock fallback, so a
+                # config only counts as valid if generate-identity can compile
+                # it (project, defaults and a codename per variant).
+                tunaos_config.render_identity(config)
                 print('Primary TunaOS configuration is valid.')
     except (tunaos_config.ConfigError, iso_builder_config.ConfigError, OSError) as exc:
         print(f'ERROR: {exc}', file=sys.stderr)
