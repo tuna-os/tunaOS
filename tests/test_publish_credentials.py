@@ -37,7 +37,7 @@ config = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(config)
 
 SECRET_USER = "acme+ci-robot"
-SECRET_PASS = "s3cr3t-Value-0123456789"
+SECRET_PASS = "not-a-real-secret-0123456789"
 
 
 def pick(destination, *, owner="tuna-os", event="schedule", publish=True, scope="",
@@ -456,9 +456,19 @@ def test_secret_values_reach_only_the_login_helper_steps():
         assert not any(f"secrets.{name}" in str(workflow.get("env", "")) for name in SECRET_NAMES), path.name
 
 
+def triggers(document):
+    """The `on:` section; YAML 1.1 reads an unquoted `on` as True, a quoted one stays 'on'."""
+    return document.get(True, document.get("on"))
+
+
+def test_triggers_reads_both_spellings_of_on():
+    assert triggers({True: {"push": None}}) == {"push": None}
+    assert triggers({"on": {"push": None}}) == {"push": None}
+
+
 def test_declared_workflow_call_secrets_are_optional():
     for name in ("reusable-build-image.yml", "build-variant.yml"):
-        secrets = load(name)[True]["workflow_call"]["secrets"]
+        secrets = triggers(load(name))["workflow_call"]["secrets"]
         for secret in SECRET_NAMES:
             assert secrets[secret].get("required") is False, (name, secret)
 
@@ -466,10 +476,11 @@ def test_declared_workflow_call_secrets_are_optional():
 def test_every_caller_of_build_variant_passes_the_credential_by_name():
     callers = 0
     for path in sorted(WORKFLOWS.glob("*.yml")):
-        for job_id, job in yaml.safe_load(path.read_text(encoding="utf-8")).get("jobs", {}).items():
+        document = yaml.safe_load(path.read_text(encoding="utf-8"))
+        for job_id, job in document.get("jobs", {}).items():
             if job.get("uses") != "./.github/workflows/build-variant.yml":
                 continue
-            if "pull_request" in yaml.safe_load(path.read_text(encoding="utf-8"))[True]:
+            if "pull_request" in triggers(document):
                 continue  # pull requests never publish; they get no credential
             callers += 1
             for secret in SECRET_NAMES:
@@ -646,8 +657,8 @@ def test_no_file_claims_the_workflows_are_unwired(path):
 
 
 def _events(document):
-    triggers = document.get(True, document.get('on'))
-    return set(triggers) if isinstance(triggers, dict) else set(triggers if isinstance(triggers, list) else [triggers])
+    section = triggers(document)
+    return set(section) if isinstance(section, dict) else set(section if isinstance(section, list) else [section])
 
 
 def _reaches_resolver(path, document):
