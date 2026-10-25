@@ -98,6 +98,8 @@ jobs:
       R2_SECRET_ACCESS_KEY: ${{{{ secrets.R2_SECRET_ACCESS_KEY }}}}
       R2_ENDPOINT: ${{{{ secrets.R2_ENDPOINT }}}}
       R2_BUCKET: ${{{{ secrets.R2_BUCKET }}}}
+      TUNAOS_PUBLISH_USERNAME: ${{{{ secrets.TUNAOS_PUBLISH_USERNAME }}}}
+      TUNAOS_PUBLISH_PASSWORD: ${{{{ secrets.TUNAOS_PUBLISH_PASSWORD }}}}
 """
 
     # Experimental variants: manual dispatch only — no cron schedule.
@@ -126,6 +128,8 @@ jobs:
       R2_SECRET_ACCESS_KEY: ${{{{ secrets.R2_SECRET_ACCESS_KEY }}}}
       R2_ENDPOINT: ${{{{ secrets.R2_ENDPOINT }}}}
       R2_BUCKET: ${{{{ secrets.R2_BUCKET }}}}
+      TUNAOS_PUBLISH_USERNAME: ${{{{ secrets.TUNAOS_PUBLISH_USERNAME }}}}
+      TUNAOS_PUBLISH_PASSWORD: ${{{{ secrets.TUNAOS_PUBLISH_PASSWORD }}}}
 """
 
 
