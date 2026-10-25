@@ -23,11 +23,11 @@ does not enable a removal, and it does not repeat the specification.
 
 | Path | Where removals stop | Pinned by |
 |---|---|---|
-| Primary TOML (`[defaults.packages]`, `variants.<v>.packages`) | `scripts/lib/tunaos_config.py` in #3739 (not on `main` yet): "package removals are not supported" | `tests/test_image_packages.py::test_removals_are_rejected_with_the_reason` in #3739 |
-| Preview fork config, source check | `scripts/prepare-fork-config.py` | `tests/test_fork_config_consumers.py::test_package_supported_names_and_rejected_removals` |
-| Preview fork config, build | `build_scripts/lib/fork-packages.sh` | `tests/test_fork_package_consumer.py::test_all_removals_fail_before_transaction_or_file_write` |
+| Primary TOML (`[defaults.packages]`, `variants.<v>.packages`) | `scripts/lib/tunaos_config.py`: "package removals are not supported" | `tests/test_image_packages.py::test_removals_are_rejected_with_the_reason` |
+| Legacy fork-config migration | `scripts/lib/legacy_fork_config.py`: "package removals are not supported in tunaos.toml" | `tests/test_legacy_fork_migration.py::test_unconvertible_legacy_input_fails_loudly_and_changes_nothing` (the `removal` and `variant removal` cases) |
 
-This RFC keeps all three rejections and their tests.
+This RFC keeps both rejections and their tests. The preview fork-config
+interface (#3915) no longer exists, so its two rejections went with it.
 
 `pkg_remove` in `build_scripts/lib.sh` is not safe for this purpose:
 
