@@ -80,21 +80,42 @@ jobs:
           jq . "$RUNNER_TEMP/builds.json"
 
       - name: Build the images
+        env:
+          # One budget for every build in this leg, 60 minutes under the job cap
+          # (360), so the harness and the artifact upload always get to run.
+          BUILD_BUDGET_MINUTES: 300
         run: |
           set -euo pipefail
           just="$(command -v just)"
           jq -r '.builds[] | [.role, .commit, .variant, .flavor, .isCi, .tag, .chain] | @tsv' \
             "$RUNNER_TEMP/builds.json" > "$RUNNER_TEMP/builds.tsv"
+          deadline=$(( $(date +%s) + BUILD_BUDGET_MINUTES * 60 ))
           while IFS=$'\t' read -r role commit variant flavor is_ci tag chain; do
             echo "::group::${role}: ${variant}:${flavor} at ${commit}"
             git checkout --quiet --detach "$commit"
+            remaining=$(( deadline - $(date +%s) ))
+            if [ "$remaining" -le 0 ]; then
+              echo "::error::the ${BUILD_BUDGET_MINUTES}-minute build budget ended before ${role}" >&2
+              exit 1
+            fi
             # Skip the rechunk pass (as PR builds do): it does not change package
             # state. The submodules are already checked out above. The build must
             # not read the loop's stdin.
-            sudo env SKIP_RECHUNK=1 SKIP_SUBMODULES=1 \
+            #
+            # `timeout` runs under sudo, as in reusable-build-image.yml: it signals
+            # the whole process group, and only root can kill root's buildah.
+            # pipefail makes the pipeline's status the build's, not tee's.
+            rc=0
+            sudo timeout --kill-after=60s "${remaining}s" \
+              env SKIP_RECHUNK=1 SKIP_SUBMODULES=1 \
               "$just" build "$variant" "$flavor" linux/amd64 "$is_ci" "$tag" "$chain" \
-              < /dev/null 2>&1 | tee "$BUILD_LOGS/${role}.log"
+              < /dev/null 2>&1 | tee "$BUILD_LOGS/${role}.log" || rc=$?
             echo "::endgroup::"
+            if [ "$rc" -eq 124 ] || [ "$rc" -eq 137 ]; then
+              echo "::error::${role} was still building when the ${BUILD_BUDGET_MINUTES}-minute budget ended" >&2
+              exit 1
+            fi
+            [ "$rc" -eq 0 ] || exit "$rc"
           done < "$RUNNER_TEMP/builds.tsv"
 
       # Also after a failed build, so the report keeps the immutable identities of

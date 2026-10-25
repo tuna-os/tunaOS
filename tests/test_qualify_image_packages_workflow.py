@@ -78,6 +78,14 @@ def problems(document: dict, text: str) -> list[str]:
         "always()" not in harness[0].get("if", "") or "steps.prepare.outcome" not in harness[0].get("if", "")
     ):
         found.append("the harness must also run after a failed build, once the plan exists")
+    builds = [s for s in steps if s.get("name") == "Build the images"]
+    budget = int(builds[0].get("env", {}).get("BUILD_BUDGET_MINUTES", 0)) if builds else 0
+    # Hosted jobs are cancelled at timeout-minutes, before the harness and upload could
+    # run; only root can kill root's buildah, so the bound must be a `sudo timeout`.
+    if not 0 < budget < document["jobs"]["qualify"]["timeout-minutes"] or not all(
+        text in builds[0]["run"] for text in ('sudo timeout --kill-after=60s "${remaining}s"', "deadline=")
+    ):
+        found.append("the whole build phase needs a root-owned cumulative budget under the job timeout")
     gates = [s for s in steps if "package-qualification.py gate" in s.get("run", "")]
     gated_after_harness = (
         len(gates) == 1 and len(harness) == 1 and steps.index(gates[0]) > steps.index(harness[0])
@@ -145,6 +153,18 @@ def test_a_harness_step_skipped_by_a_failed_build_is_a_violation():
     assert any("after a failed build" in item for item in problems(document, WORKFLOW.read_text()))
 
 
+def test_a_build_phase_that_can_outlive_the_job_is_a_violation():
+    document = workflow_document()
+    document["jobs"]["qualify"]["timeout-minutes"] = 200
+    assert any("cumulative budget" in item for item in problems(document, WORKFLOW.read_text()))
+
+    document = workflow_document()
+    for step in document["jobs"]["qualify"]["steps"]:
+        if step.get("name") == "Build the images":
+            step["run"] = step["run"].replace("sudo timeout --kill-after=60s", "sudo")
+    assert any("cumulative budget" in item for item in problems(document, WORKFLOW.read_text()))
+
+
 def test_the_fixture_names_each_harness_route_once_with_a_variant_that_resolves_there():
     cells = LANE.load_cells(FIXTURE)
     assert [cell["route"] for cell in cells] == ROUTES
@@ -180,18 +200,21 @@ def checkout(tmp_path_factory):
     """A real clone of this repository's committed tree with a fake `skopeo` on PATH."""
     root = tmp_path_factory.mktemp("qualify") / "source"
     subprocess.run(["git", "clone", "-q", "--no-hardlinks", str(ROOT), str(root)], check=True)
+    # A PR checkout is a detached HEAD, so the clone has no origin/HEAD: record the
+    # starting commit instead of naming a ref.
+    base = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
     bin_dir = root.parent / "bin"
     bin_dir.mkdir()
     skopeo = bin_dir / "skopeo"
     skopeo.write_text('#!/bin/sh\nprintf "manifest-of-%s" "$3"\n')
     skopeo.chmod(0o755)
-    return root, bin_dir
+    return root, bin_dir, base
 
 
 def run_prepare(checkout, route, tmp_path, monkeypatch):
-    root, bin_dir = checkout
+    root, bin_dir, base = checkout
     monkeypatch.setenv("PATH", f"{bin_dir}:{__import__('os').environ['PATH']}")
-    subprocess.run(["git", "reset", "-q", "--hard", "origin/HEAD"], cwd=root, check=True)
+    subprocess.run(["git", "reset", "-q", "--hard", base], cwd=root, check=True)
     plan = tmp_path / "plan.json"
     result = LANE.prepare(root, LANE.load_cells(FIXTURE), route, plan)
     return root, result, json.loads(plan.read_text())
@@ -235,7 +258,7 @@ def test_prepare_pins_only_the_mutable_base_and_the_overlay_builds_on_the_local_
         assert LANE.PINNED.search(cell["baseImage"]), cell
     git = lambda *args: subprocess.check_output(["git", *args], cwd=root, text=True)  # noqa: E731
     # The stock commit may differ from the checkout only by digest-pinned base_image rows.
-    changed = [line for line in git("diff", "-U0", "origin/HEAD", result["stockCommit"], "--", "tunaos.toml").splitlines()
+    changed = [line for line in git("diff", "-U0", checkout[2], result["stockCommit"], "--", "tunaos.toml").splitlines()
                if line[:1] in "+-" and line[:3] not in ("+++", "---")]
     removed = [line for line in changed if line[0] == "-"]
     added = [line for line in changed if line[0] == "+"]
@@ -248,7 +271,7 @@ def test_prepare_pins_only_the_mutable_base_and_the_overlay_builds_on_the_local_
 
 
 def test_prepare_refuses_a_dirty_checkout_and_existing_package_tables(checkout, tmp_path, monkeypatch):
-    root, _bin = checkout
+    root = checkout[0]
     run_prepare(checkout, "ubuntu", tmp_path, monkeypatch)
     (root / "stray").write_text("x\n")
     with pytest.raises(LANE.PrepareError, match="must be clean"):
