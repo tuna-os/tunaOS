@@ -51,16 +51,16 @@ PYEOF
 
 installer_flatpak_arch_for_arch() {
 	case "${1,,}" in
-		x86_64|amd64|linux/amd64|linux/amd64/v2)
-			printf '%s\n' "x86_64"
-			;;
-		aarch64|arm64|linux/arm64)
-			printf '%s\n' "aarch64"
-			;;
-		*)
-			echo "customize-live: unsupported installer architecture: $1" >&2
-			return 2
-			;;
+	x86_64 | amd64 | linux/amd64 | linux/amd64/v2)
+		printf '%s\n' "x86_64"
+		;;
+	aarch64 | arm64 | linux/arm64)
+		printf '%s\n' "aarch64"
+		;;
+	*)
+		echo "customize-live: unsupported installer architecture: $1" >&2
+		return 2
+		;;
 	esac
 }
 
@@ -68,15 +68,14 @@ installer_asset_for_arch() {
 	local _flatpak_arch
 	_flatpak_arch="$(installer_flatpak_arch_for_arch "$1")" || return $?
 	case "${_flatpak_arch}" in
-		x86_64)
-			printf '%s\n' "org.bootcinstaller.Installer.flatpak"
-			;;
-		aarch64)
-			printf '%s\n' "org.bootcinstaller.Installer-aarch64.flatpak"
-			;;
+	x86_64)
+		printf '%s\n' "org.bootcinstaller.Installer.flatpak"
+		;;
+	aarch64)
+		printf '%s\n' "org.bootcinstaller.Installer-aarch64.flatpak"
+		;;
 	esac
 }
-
 
 # Behavior probe for the architecture-specific release asset. Unlike the
 # metadata-only mode below, this performs no filesystem mutation.
