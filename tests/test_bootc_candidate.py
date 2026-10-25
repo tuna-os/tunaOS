@@ -131,7 +131,7 @@ class CandidateTests(unittest.TestCase):
     def run_arch_branch(self, value, failed_tool=""):
         text = (ROOT / "Containerfile.arch").read_text()
         branch = text.split('RUN if [ "${TUNAOS_BOOTC_CANDIDATE}"', 1)[1].split('\nRUN ', 1)[0]
-        branch = 'if [ "${TUNAOS_BOOTC_CANDIDATE}"' + branch.replace('\\\n', '\n')
+        branch = 'if [ "${TUNAOS_BOOTC_CANDIDATE}"' + branch.replace('\\\n', ' ')
         # Execute the actual RUN control flow with only inert shell functions.
         # No clone, package operation, filesystem write or build can occur.
         stubs = []

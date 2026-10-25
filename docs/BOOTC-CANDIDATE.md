@@ -58,11 +58,41 @@ For a later authorized toolchain-only build, use `Containerfile.arch` with
 `BOOTUPD_VERSION` argument. No image or container build ran in this task.
 Do not use this argument for a production image until the gates below pass.
 
-Debian's minimal next integration is the same explicit argument in
-`toolchain/Containerfile.debian`. Stage bootc separately, then copy its output
-into `/output`, which already holds the optional libostree tree. Preserve the
-normal branch and each consumer's ABI. Gentoo needs its own explicit override
-of `BOOTC_COMMIT`. Neither route changes in this prerequisite.
+The Debian toolchain also accepts the same argument. It adds the SELinux,
+systemd and clang development packages, then calls the helper with the Debian
+profile. It stages bootc separately before a copy into `/output`, which already
+holds the optional libostree tree. Default builds retain their existing route.
+Gentoo still needs its own explicit override of `BOOTC_COMMIT`.
+
+## Bounded CI compile job
+
+The existing `Test` workflow now has a `bootc-candidate-compile` job. Its exact
+scope is a PR with head branch `candidate/composefs-bootstrap`, or a manual run
+whose ref is `refs/heads/candidate/composefs-bootstrap`. Other branches and push
+events skip this job. It has no dispatch inputs. The fixed matrix is:
+
+| Family | Existing target | Candidate inputs |
+| --- | --- | --- |
+| Arch | `Containerfile.arch`, `bootc-builder` | `TUNAOS_BOOTC_CANDIDATE=1`; bootupd pin from YAML |
+| Debian | `toolchain/Containerfile.debian`, `builder` | Same opt-in; `BUILD_OSTREE=1`; bootupd, OSTree and composefs pins from YAML |
+
+Both bases use their existing digest pins. The helper verifies the candidate
+commit. Debian keeps SELinux; Arch uses the documented reduced feature set.
+The job holds only `contents: read`, and checkout does not persist credentials.
+It does not log in, push images, upload artifacts or mount host paths.
+
+Images stay under `localhost/bootc-candidate` on the runner. Each job has a
+60-minute limit and a 3000-second build timeout. The matrix runs one job at a
+time; the workflow cancels older runs on the same ref.
+
+This uses the existing PR/manual workflow filename to avoid registration of a
+new workflow on the default branch. A later authorized run still needs the
+candidate commit on the remote branch and a hosted runner with Docker.
+A new manual workflow file would need default-branch registration first.
+
+No PR, dispatch or container build ran in this task. These jobs define commands. They do not prove a successful compile. Native libraries remain absent in
+the local environment. Both actual CI builds must pass before the compile gap
+can close; a compile pass alone does not qualify boot or storage behavior.
 
 ## Read-only backend contract
 
