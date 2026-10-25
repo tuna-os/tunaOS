@@ -662,3 +662,50 @@ def test_tuna_flatpak_remote_without_the_adapter_fails_loudly(tmp_path):
     again = subprocess.run(["bash", "-c", 'source "$1"', "_", str(tmp_path / "tree/build_scripts/desktop/tuna-flatpak-remote.sh")],
                            text=True, capture_output=True)
     assert again.returncode != 0 and "identity.env is missing" in again.stderr
+
+
+def test_regenerating_the_identity_adapter_changes_the_layer_cache_key(tmp_path):
+    """The generated adapter is bind-mounted context that changes no *.sh file.
+
+    Run the real build engine against a copy of the tracked sources, with a stub
+    `podman` that only records its arguments, and compare the BUILD_SCRIPTS_HASH
+    build argument before and after the adapter's bytes change.
+    """
+    context = tmp_path / "context"
+    tracked = subprocess.check_output(["git", "-C", str(ROOT), "ls-files", "-z"], text=True).split("\0")
+    for relative in filter(None, tracked):
+        if relative.split("/", 1)[0] in {"docs", "tests", "_upstream-snapshots", "system_files", "live-iso", ".spektacular"}:
+            continue
+        source = ROOT / relative
+        if source.is_dir():
+            continue
+        (context / relative).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, context / relative, follow_symlinks=False)
+    subprocess.run(["git", "init", "-q", str(context)], check=True)
+    subprocess.run(["git", "-C", str(context), "add", "--all"], check=True)
+    binaries = tmp_path / "bin"
+    binaries.mkdir()
+    log = tmp_path / "builder.log"
+    (binaries / "podman").write_text('#!/bin/bash\nprintf "%s\\n" "$@" >>"$BUILDER_LOG"\n')
+    (binaries / "podman").chmod(0o755)
+    env = {**os.environ, "BUILDER_LOG": str(log), "PATH": f"{binaries}{os.pathsep}{os.environ['PATH']}",
+           "IMAGE_TAG": "localhost/acme/yellowfin:gnome", "VARIANT": "yellowfin", "PUBLIC_IMAGE_NAME": "yellowfin",
+           "CONTAINERFILE": "Containerfile.el10", "BASE_IMAGE": "localhost/base:1", "PLATFORM": "linux/amd64",
+           "DESKTOP_FLAVOR": "gnome", "TUNAOS_IMAGE_FLAVOR": "gnome", "ENABLE_HWE": "0", "ENABLE_NVIDIA": "0",
+           "ENABLE_ASAHI": "0", "ENABLE_SSHD": "0", "IMAGE_REGISTRY": "localhost", "REPO_ORGANIZATION": "acme",
+           "USE_CACHE": "0", "IS_CI": "0", "SKIP_RECHUNK": "1", "SKIP_SUBMODULES": "1"}
+    env.pop("TUNAOS_BUILD_CONFIG", None)
+
+    def cache_key():
+        log.write_text("")
+        result = subprocess.run(["bash", "scripts/build-image-inner.sh"], cwd=context, env=env,
+                                text=True, capture_output=True)
+        assert result.returncode == 0, result.stderr
+        return next(arg for arg in log.read_text().splitlines() if arg.startswith("BUILD_SCRIPTS_HASH="))
+
+    first = cache_key()
+    assert len(first.split("=", 1)[1]) == 16
+    assert cache_key() == first
+    adapter = context / "build_scripts/lib/identity.env"
+    adapter.write_text(adapter.read_text(encoding="utf-8") + "# regenerated\n", encoding="utf-8")
+    assert cache_key() != first
