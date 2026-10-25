@@ -48,6 +48,7 @@ def repository_files():
         )
 
 
+@lru_cache(maxsize=1)
 def tracked_by_name():
     """Index repository files by basename, in sorted order."""
     index = {}
