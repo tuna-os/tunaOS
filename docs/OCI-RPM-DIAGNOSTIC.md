@@ -103,8 +103,11 @@ The workflow uploads only seven-day `diagnostic-only-*` artifacts. It does not p
 
 This diagnostic does **not** exercise the full image's three before-operations or eight groups.
 It omits options for group solvers (`--nobest --allowerasing`), exclusions, the libselinux
-ceiling and kernel versionlocks. It also omits EPEL/negativo17 setup and other build pipeline operations.
+ceiling and kernel versionlocks. It also omits negativo17 setup and other build pipeline operations.
 The plan retains the complete excluded policy.
+
+The consumer's DNF config sets `best=1`, as the base's stock config does.
+Without it, DNF4 swaps an uninstallable newest package for an older one from another repository.
 Full real-pipeline build parity, a final audit of image repositories and boot tests remain separate required gates.
 GNOME 50 transport validation is not GNOME 51 acceptance.
 

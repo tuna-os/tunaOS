@@ -45,6 +45,7 @@ def fixture(tmp_path, monkeypatch):
             (repo / 'fixture.rpm').write_text('rpm')
         elif command[0] == 'dnf':
             root = workdirs[-1]
+            assert 'best=1\n' in (root / 'dnf.conf').read_text()  # no silent older-package fallback
             config = (root / 'repos/tunaos-oci.repo').read_text()
             for required in ('gpgcheck=1\n', 'repo_gpgcheck=1\n', 'gpgkey=file://', 'baseurl=file://'):
                 assert required in config
