@@ -396,6 +396,153 @@ def test_target_configuration_binds_resolved_common_image(tmp_path):
             catalog, document, tmp_path, 'base')
 
 
+
+def _bind_copied_target(root, flavor='base'):
+    document = __import__('lib.tunaos_config', fromlist=['load']).load()
+    return package_catalogs.bind_target_configuration(
+        document['package_catalogs']['debian-trixie'], document, root, flavor)
+
+
+def _edit_text(path, change):
+    before = path.read_text()
+    after = change(before)
+    assert after != before, f'fixture edit changed nothing in {path}'
+    path.write_text(after)
+
+
+@pytest.mark.parametrize('flavor', ['base', 'kde', 'xfce'])
+def test_renovate_style_bump_of_unrelated_image_versions_keys_keeps_observation(tmp_path, flavor):
+    # Renovate rewrites non-common digests and tool versions several times a
+    # day. None of them is read by Containerfile.debian's flounder stages.
+    import re
+    _copy_target_configuration(tmp_path)
+    _edit_text(tmp_path / 'image-versions.yaml', lambda text: re.sub(
+        r'(  - name: (?!common\n)[\w-]+\n    image: \S+\n    tag: \S+\n    digest: sha256:)[0-9a-f]{64}',
+        lambda match: match.group(1) + 'a' * 64, text))
+    _edit_text(tmp_path / 'image-versions.yaml', lambda text: text.replace(
+        'uupd: "v1.5.1"', 'uupd: "v9.9.9"').replace('jsonschema: "4.26.0"', 'jsonschema: "9.9.9"'))
+    assert _bind_copied_target(tmp_path, flavor)['common_image'].startswith('ghcr.io/projectbluefin/common@sha256:')
+
+
+def test_edit_after_the_primary_build_keeps_observation(tmp_path):
+    # Rechunk and relabel run after the one package-installing build.
+    _copy_target_configuration(tmp_path)
+    _edit_text(tmp_path / 'scripts/build-image-inner.sh',
+               lambda text: text + '\necho "chunkah follow-up"\n')
+    _edit_text(tmp_path / 'scripts/build-image-inner.sh',
+               lambda text: text.replace('--dns=8.8.8.8 \\\n\t"${BUILD_ARGS[@]}" \\\n\t--build-arg "RECHUNKED_BASE',
+                                         '--dns=1.1.1.1 \\\n\t"${BUILD_ARGS[@]}" \\\n\t--build-arg "RECHUNKED_BASE'))
+    _bind_copied_target(tmp_path)
+
+
+@pytest.mark.parametrize('change', [
+    lambda text: text.replace('digest: sha256:f7934f26', 'digest: sha256:00000000', 1),
+    lambda text: text.replace('    tag: latest\n    digest: sha256:f7934f26', '    tag: pinned\n    digest: sha256:f7934f26', 1),
+    lambda text: text.replace('ghcr.io/projectbluefin/common\n', 'ghcr.io/example/common\n', 1),
+], ids=['digest', 'tag', 'image'])
+def test_common_image_pin_edit_invalidates_observation(tmp_path, change):
+    _copy_target_configuration(tmp_path)
+    _edit_text(tmp_path / 'image-versions.yaml', change)
+    with pytest.raises(CatalogError, match='configuration changed; refresh observation'):
+        _bind_copied_target(tmp_path)
+
+
+@pytest.mark.parametrize('change', [
+    lambda text: text.replace('"BASE_IMAGE=${BASE_IMAGE}"', '"BASE_IMAGE=docker.io/library/debian:forky"'),
+    lambda text: text.replace('"COMMON_IMAGE_REF=${common_image_ref}"', '"COMMON_IMAGE_REF=ghcr.io/example/common:latest"'),
+    lambda text: text.replace('--target="${DESKTOP_FLAVOR}"', '--target=base'),
+    lambda text: text.replace('\nset -euxo pipefail\n', '\nset -euxo pipefail\nBASE_IMAGE=elsewhere\n'),
+    lambda text: text.replace('# Build scripts hash for cache invalidation.', '# Cache key.'),
+], ids=['base-image', 'common-ref', 'target-stage', 'new-assignment', 'comment-in-section'])
+def test_primary_build_section_edit_invalidates_observation(tmp_path, change):
+    _copy_target_configuration(tmp_path)
+    _edit_text(tmp_path / 'scripts/build-image-inner.sh', change)
+    with pytest.raises(CatalogError, match='configuration changed; refresh observation'):
+        _bind_copied_target(tmp_path)
+
+
+@pytest.mark.parametrize('replacement', ['', '\n# ── Skip rechunk for PR builds\n# ── Skip rechunk for PR builds\n'])
+def test_build_engine_marker_must_be_present_exactly_once(tmp_path, replacement):
+    _copy_target_configuration(tmp_path)
+    _edit_text(tmp_path / 'scripts/build-image-inner.sh', lambda text: text.replace(
+        '\n# ── Skip rechunk for PR builds', replacement, 1))
+    with pytest.raises(CatalogError, match='marker is missing or ambiguous'):
+        _bind_copied_target(tmp_path)
+
+
+def test_duplicate_common_pin_is_rejected(tmp_path):
+    _copy_target_configuration(tmp_path)
+    _edit_text(tmp_path / 'image-versions.yaml', lambda text: text + (
+        '  - name: common\n    image: ghcr.io/example/common\n    tag: latest\n'
+        '    digest: sha256:' + 'b' * 64 + '\n'))
+    with pytest.raises(CatalogError, match='missing or ambiguous'):
+        _bind_copied_target(tmp_path)
+
+
+@pytest.mark.parametrize('mutate', [
+    lambda extracts: extracts.pop('image-versions.yaml'),
+    lambda extracts: extracts.update({'Containerfile.debian': dict(extracts['image-versions.yaml'])}),
+    lambda extracts: extracts['image-versions.yaml'].update(extract='whole-file'),
+    lambda extracts: extracts['scripts/build-image-inner.sh'].update(size=1),
+], ids=['missing', 'unreviewed-path', 'selector', 'size'])
+def test_observation_extract_identity_is_exact(tmp_path, mutate):
+    import hashlib
+    import json
+    _copy_target_configuration(tmp_path)
+    document = __import__('lib.tunaos_config', fromlist=['load']).load()
+    catalog = deepcopy(document['package_catalogs']['debian-trixie'])
+    path = tmp_path / catalog['target_observation']
+    observation = json.loads(path.read_text())
+    mutate(observation['configuration_extracts'])
+    raw = (json.dumps(observation, indent=2) + '\n').encode()
+    path.write_bytes(raw)
+    catalog['target_observation_sha256'] = hashlib.sha256(raw).hexdigest()
+    with pytest.raises(CatalogError):
+        package_catalogs.bind_target_configuration(catalog, document, tmp_path, 'base')
+
+
+# The proof that narrowing image-versions.yaml to the `common` pin is safe: every
+# file that reads that file for a Containerfile.debian build, and why none of
+# its keys can add an apt source. A new reader fails this test until it is
+# classified here and, if it reaches the flounder stages, bound by the observation.
+IMAGE_VERSIONS_READERS = {
+    'Containerfile.debian': 'COPYs the file into the context; its only *_REF ARG is COMMON_IMAGE_REF',
+    'Containerfile.arch': 'other family',
+    'Containerfile.el10': 'other family',
+    'Containerfile.ubuntu': 'other family',
+    'build_scripts/10-base-packages.sh': 'whole-file bound; apt path reads only uupd (a GitHub release binary), libselinux is the yellowfin/skipjack dnf branch',
+    'build_scripts/install-uupd.sh': 'downloads the uupd release binary and units; adds no repository or key',
+    'build_scripts/desktop/kcm-ublue.sh': 'returns before reading when dnf is absent (apt images)',
+    'build_scripts/desktop/install-desktop.sh': 'whole-file bound; comment-only mention',
+    'build_scripts/desktop/niri.sh': 'niri desktop only; not a flounder flavor of this catalog',
+    'build_scripts/install-zirconium.sh': 'niri desktop only; not a flounder flavor of this catalog',
+    'build_scripts/install-dms-qml-fallback.sh': 'niri desktop only; not a flounder flavor of this catalog',
+    'build_scripts/bootc/build-libostree.sh': 'invoked by Containerfile.ubuntu only',
+}
+
+
+def test_image_versions_readers_are_classified():
+    import re
+    paths = [*ROOT.glob('Containerfile*'), *(ROOT / 'build_scripts').rglob('*')]
+    readers = {path.relative_to(ROOT).as_posix() for path in paths
+               if path.is_file() and b'image-versions' in path.read_bytes()}
+    assert readers == set(IMAGE_VERSIONS_READERS)
+
+    debian = (ROOT / 'Containerfile.debian').read_text()
+    assert re.findall(r'(?m)^ARG (\w+_REF)\b', debian) == ['COMMON_IMAGE_REF']
+    assert 'build-libostree' not in debian and 'install-zirconium' not in debian
+
+    kcm = (ROOT / 'build_scripts/desktop/kcm-ublue.sh').read_text()
+    assert kcm.index('command -v dnf') < kcm.index('/run/context/image-versions.yaml')
+
+    base = (ROOT / 'build_scripts/10-base-packages.sh').read_text()
+    pin = base.index('el10_rolling_libselinux:')
+    assert base.rindex('if [[ "$IMAGE_NAME" == "yellowfin" || "$IMAGE_NAME" == "skipjack" ]]', 0, pin) > base.rindex('\nfi\n', 0, pin)
+
+    from lib import tunaos_config
+    flavors = tunaos_config.load()['package_catalogs']['debian-trixie']['flavors']
+    assert 'niri' not in flavors
+
 def test_target_configuration_rejects_uncovered_desktop_repository():
     from lib import tunaos_config
     document = tunaos_config.load()
