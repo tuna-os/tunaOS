@@ -1,6 +1,7 @@
 """Offline consumer contract; fake native tools, no registry or image claims."""
 import hashlib
 import importlib.util
+import os
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
@@ -323,3 +324,107 @@ def test_overlapping_key_paths_rewritten_per_section(fixture, monkeypatch):
 
     monkeypatch.setattr(consumer.subprocess, 'run', check)
     consumer.install(args)
+
+
+@pytest.fixture
+def el10_layout(fixture, monkeypatch):
+    """Mirror the pinned centos-bootc c10s /etc: yum/vars -> ../dnf/vars, yum.conf -> dnf/dnf.conf."""
+    args, calls, _, _ = fixture
+    etc = args.runtime_config_root
+    monkeypatch.setattr(consumer, 'TRUSTED_UID', os.getuid())
+    (etc / 'dnf/vars').mkdir(parents=True)
+    (etc / 'dnf/vars/stream').write_text('10-stream\n')
+    (etc / 'dnf/dnf.conf').write_text('[main]\ngpgcheck=1\ninstallonly_limit=3\n')
+    (etc / 'yum.repos.d').mkdir()
+    (etc / 'yum').mkdir()
+    (etc / 'yum/vars').symlink_to('../dnf/vars')
+    (etc / 'yum.conf').symlink_to('dnf/dnf.conf')
+    for path in (etc / 'dnf', etc / 'dnf/vars', etc / 'yum.repos.d', etc / 'yum'):
+        path.chmod(0o755)
+    (etc / 'dnf/dnf.conf').chmod(0o644)
+    (etc / 'dnf/vars/stream').chmod(0o644)
+    return args, calls, etc
+
+
+def test_observed_el10_symlink_layout_is_admitted(el10_layout):
+    args, calls, _ = el10_layout
+    consumer.check_runtime_configs(args.runtime_config_root)
+    consumer.install(args)
+    assert any(command[0] == 'dnf' and 'install' in command for command in calls)
+
+
+def test_symlinked_config_content_is_still_scanned(el10_layout):
+    args, _, etc = el10_layout
+    (etc / 'dnf/vars/infra').write_text('https://repo.tunaos.org/x\n')
+    with pytest.raises(ValueError, match='controlled R2'):
+        consumer.check_runtime_configs(etc)
+    (etc / 'dnf/vars/infra').unlink()
+    (etc / 'dnf/dnf.conf').write_text('[main]\nreposdir=/elsewhere\n')
+    with pytest.raises(ValueError, match='alternate config'):
+        consumer.check_runtime_configs(etc)
+
+
+def escape_outside(etc):
+    outside = etc.parent / 'outside-vars'
+    outside.mkdir()
+    (etc / 'yum/vars').unlink()
+    (etc / 'yum/vars').symlink_to(outside)
+
+
+def dangling(etc):
+    (etc / 'yum/vars').unlink()
+    (etc / 'yum/vars').symlink_to('../dnf/missing')
+
+
+def chained(etc):
+    (etc / 'dnf/real-vars').mkdir()
+    (etc / 'dnf/vars/stream').unlink()
+    (etc / 'dnf/vars').rmdir()
+    (etc / 'dnf/vars').symlink_to('real-vars')
+
+
+def world_writable_target(etc):
+    (etc / 'dnf/vars').chmod(0o777)
+
+
+def group_writable_parent(etc):
+    (etc / 'dnf').chmod(0o775)
+
+
+def foreign_owner(etc):
+    consumer.TRUSTED_UID = os.getuid() + 1
+
+
+@pytest.mark.parametrize('mutate,message', [
+    (escape_outside, 'leaves the reviewed tree'),
+    (dangling, 'dangling'),
+    (chained, 'not a plain root-owned path'),
+    (world_writable_target, 'not a plain root-owned path'),
+    (group_writable_parent, 'not a plain root-owned path'),
+    (foreign_owner, 'not owned by the trusted user'),
+])
+def test_unsafe_runtime_symlinks_are_refused_before_dnf(el10_layout, mutate, message):
+    args, calls, etc = el10_layout
+    mutate(etc)
+    with pytest.raises(ValueError, match=message):
+        consumer.install(args)
+    assert calls == []
+
+
+def test_symlinked_parent_directory_is_refused(el10_layout):
+    args, calls, etc = el10_layout
+    (etc / 'yum/vars').unlink()
+    (etc / 'yum').rmdir()
+    (etc / 'yum').symlink_to('dnf')
+    with pytest.raises(ValueError, match='parent is a symlink'):
+        consumer.install(args)
+    assert calls == []
+
+
+def test_file_symlink_escaping_the_tree_is_refused(el10_layout):
+    args, calls, etc = el10_layout
+    (etc / 'yum.conf').unlink()
+    (etc / 'yum.conf').symlink_to('../outside.conf')
+    with pytest.raises(ValueError, match='leaves the reviewed tree'):
+        consumer.install(args)
+    assert calls == []
