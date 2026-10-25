@@ -47,8 +47,9 @@ jobs:
     name: Prune R2
     runs-on: ubuntu-latest
     # `secrets` cannot be read in an `if:`, so the availability check is
-    # exported as env and every step keys off it. A fork has no R2 bucket;
-    # without this the daily job spun up a runner just to print "skipping".
+    # exported as env and every step keys off it. A fork has no R2 bucket, so
+    # every step is skipped and the job succeeds. The job still gets a runner
+    # (step `if:` runs after allocation).
     env:
       R2_CONFIGURED: ${{ secrets.R2_ACCESS_KEY_ID != '' && secrets.R2_SECRET_ACCESS_KEY != '' && secrets.R2_ENDPOINT != '' && secrets.R2_BUCKET != '' }}
     steps:

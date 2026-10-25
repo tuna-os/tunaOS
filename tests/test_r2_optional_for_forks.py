@@ -2,7 +2,7 @@
 
 Epic #3668 says a fork works by editing tunaos.toml and assets alone. R2 is
 TunaOS's own bucket (epic #3470), so no workflow may fail, hit an anonymous
-endpoint, or burn a scheduled runner when the four R2_* secrets are empty
+endpoint, or fail when the four R2_* secrets are empty
 (#1129: empty secrets make rclone resolve s3.auto.amazonaws.com and retry for
 minutes before failing).
 
@@ -18,8 +18,10 @@ runs rclone. A step is "guarded" when one of these is true with empty secrets:
   script     the step body exits 0 on an empty credential BEFORE its first
              rclone command (the job still runs; the step reports success).
 
-R2-only scheduled jobs must additionally be `env`-guarded on every step, so a
-fork does not spend a runner on a job whose only purpose is R2.
+R2-only scheduled jobs must additionally be `env`-guarded on every step, so on
+a fork every step is skipped and the job reports success. The job itself still
+gets a runner: step-level `if:` runs after allocation and `secrets` is not
+readable in a job-level `if:`, so this test does not claim runner avoidance.
 
 Print the reproducible table:  python tests/test_r2_optional_for_forks.py
 """
@@ -121,7 +123,7 @@ def audit() -> list[dict]:
 
 def _outcome(row: dict) -> str:
     if row["guard"] is None:
-        return "FAILS/hits AWS endpoint with empty creds"
+        return "UNVERIFIED: no recognized guard (runtime outcome not inspected)"
     if row["r2_only_job"] and row["guard"] != "env":
         return "runner spent, step skips late"
     return {"env": "skipped", "probe": "emptiness probe, no R2 call", "preflight": "skipped (preflight)", "script": "no-op exit 0"}[row["guard"]]
@@ -150,15 +152,16 @@ def test_the_scan_finds_the_known_r2_steps():
 def test_every_r2_step_is_guarded_when_the_secrets_are_empty(row):
     assert row["guard"], (
         f"{row['workflow']} job {row['job']!r} step {row['step']!r} uses R2 with no guard "
-        f"(if: {row['if']}). In a fork the secrets are empty and rclone fails. Add "
+        f"(if: {row['if']}). No recognized guard, so it may run with empty secrets in a fork "
+        f"(rclone then resolves an AWS endpoint). Add "
         f"`if: env.R2_CONFIGURED == 'true'` with the job env R2_CONFIGURED from the four secrets."
     )
 
 
 @pytest.mark.parametrize("wf,job", sorted(R2_ONLY_JOBS))
-def test_scheduled_r2_only_jobs_skip_entirely_on_forks(wf, job):
+def test_scheduled_r2_only_jobs_skip_every_step_on_forks(wf, job):
     bad = [r["step"] for r in ROWS if (r["workflow"], r["job"]) == (wf, job) and r["guard"] != "env"]
-    assert not bad, f"{wf}::{job} spends a runner on forks; env-guard steps: {bad}"
+    assert not bad, f"{wf}::{job} has steps that are not env-guarded, so they run on forks: {bad}"
     assert any((r["workflow"], r["job"]) == (wf, job) for r in ROWS)
 
 
