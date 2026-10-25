@@ -48,6 +48,10 @@ def source_result(source, names):
             'freshness': {'mode': 'signed-valid-until', 'expires': None}}
 
 
+OBSERVED_AT = json.loads(
+    (ROOT / 'config/package-observations/flounder-target-amd64.json').read_text(encoding='utf-8'))['observed_at']
+
+
 def acquirer(base_names=('htop', 'btop', 'bashtop'), calls=None):
     def acquire(catalog, keyring_for, now):
         assert all(len(keyring_for(source)) > 0 for source in catalog['sources'])
@@ -94,7 +98,7 @@ def test_htop_resolves_on_every_covered_target_with_separate_evidence_layers():
         assert record['transaction'] == {'status': 'not-run'}
         assert record['installed_image'] == {'status': 'not-run'}
         assert record['base_image'].startswith('docker.io/library/debian:trixie@sha256:')
-        assert datetime.fromisoformat(record['configuration_observed_at'].replace('Z', '+00:00')).tzinfo
+        assert record['configuration_observed_at'] == OBSERVED_AT
     json.dumps(report)  # Evidence is serializable; no sets leak into the plan.
 
 
