@@ -27,6 +27,9 @@ TRANSPORT_SHA256 = '7e37d1ff61153d5419cdfca54ea6f9a0256c65cb53972da9f6235c2081cc
 REF = re.compile(r'ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}\Z')
 IDENTITY = re.compile(r'https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/'
                       r'\.github/workflows/[A-Za-z0-9_.-]+\.ya?ml@refs/heads/[A-Za-z0-9_./-]+\Z')
+# EPEL publishes no signed repomd, so this one reviewed repository (by ID and exact
+# host) may set repo_gpgcheck=0. Its package signatures are still required.
+UNSIGNED_METADATA = {'epel': 'dl.fedoraproject.org'}
 CONTROLLED = re.compile(r'(?:repo|download)\.tunaos\.org|(?:[a-z0-9-]+\.)?r2\.cloudflarestorage\.com|[a-z0-9-]+\.r2\.dev', re.IGNORECASE)
 
 
@@ -133,7 +136,10 @@ def upstream_configs(directory: Path) -> list[tuple[str, bytes, dict[str, bytes]
             seen.add(name)
             if set(values) - allowed:
                 raise ValueError('unsupported upstream repository setting')
-            if any(values.get(k) != '1' for k in ('enabled', 'gpgcheck', 'repo_gpgcheck')):
+            unsigned = (UNSIGNED_METADATA.get(name) == urlsplit(values.get('baseurl', '')).hostname
+                        and values.get('repo_gpgcheck') == '0')
+            if any(values.get(k) != '1' for k in ('enabled', 'gpgcheck')) or (
+                    values.get('repo_gpgcheck') != '1' and not unsigned):
                 raise ValueError('upstream repositories must enable package and metadata signatures')
             if values.get('sslverify', '1') != '1':
                 raise ValueError('upstream TLS verification cannot be disabled')
