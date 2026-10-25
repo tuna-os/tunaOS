@@ -365,6 +365,7 @@ jobs:
           ls -la /dev/kvm 2>/dev/null && echo "KVM available" || echo "Warning: /dev/kvm not present — QEMU will use TCG"
 
       - name: Install QEMU and helpers
+        id: diagnostic-host-tools
         if: steps.filter.outputs.skip != 'true'
         env:
           PLATFORM: ${{ matrix.platform }}
@@ -386,10 +387,12 @@ jobs:
               tesseract-ocr xorriso squashfs-tools
             QEMU_BIN="$(command -v qemu-system-aarch64)"
           else
-            qemu_package=qemu-system-x86
-            [[ "${DIAGNOSTIC_MODE:-false}" != true ]] || qemu_package=qemu-system-x86=1:8.2.2+ds-0ubuntu1.16
+            qemu_packages=(qemu-system-x86 qemu-utils)
+            if [[ "${DIAGNOSTIC_MODE:-false}" == true ]]; then
+              mapfile -t qemu_packages < requirements-iso-diagnostic-apt.txt
+            fi
             sudo apt-get install -y --no-install-recommends \
-              "$qemu_package" qemu-utils ovmf socat swtpm \
+              "${qemu_packages[@]}" ovmf socat swtpm \
               rclone sshpass skopeo python3-yaml imagemagick \
               tesseract-ocr xorriso squashfs-tools
             QEMU_BIN="$(command -v qemu-system-x86_64)"
@@ -869,13 +872,16 @@ jobs:
         run: test -r /dev/kvm && test -w /dev/kvm
 
       - name: Install pinned diagnostic decoder and inspector
+        id: diagnostic-inspector
         if: inputs.installed_boot_diagnostic && steps.filter.outputs.skip != 'true'
         run: |
-          sudo apt-get install -y --no-install-recommends python3-venv python3-guestfs=1:1.52.0-5ubuntu3 qemu-system-x86=1:8.2.2+ds-0ubuntu1.16
+          mapfile -t qemu_packages < requirements-iso-diagnostic-apt.txt
+          sudo apt-get install -y --no-install-recommends python3-venv python3-guestfs=1:1.52.0-5ubuntu3 "${qemu_packages[@]}"
           python3 -m venv --system-site-packages "$RUNNER_TEMP/iso-diagnostic-venv"
           "$RUNNER_TEMP/iso-diagnostic-venv/bin/pip" install -r requirements-iso-diagnostic.txt
 
       - name: Fresh installed LUKS diagnostic only
+        id: diagnostic-run
         if: inputs.installed_boot_diagnostic && steps.filter.outputs.skip != 'true'
         timeout-minutes: 80
         run: |
@@ -885,6 +891,17 @@ jobs:
             --provenance "$RUNNER_TEMP/installed-boot-provenance.json" \
             --tool-lock "$RUNNER_TEMP/installed-boot-tools.json" \
             --output "$RUNNER_TEMP/installed-boot-run"
+
+      - name: Record missing diagnostic evidence
+        if: always() && inputs.installed_boot_diagnostic
+        env:
+          HOST_TOOLS_OUTCOME: ${{ steps.diagnostic-host-tools.outcome }}
+          INSPECTOR_OUTCOME: ${{ steps.diagnostic-inspector.outcome }}
+          DIAGNOSTIC_OUTCOME: ${{ steps.diagnostic-run.outcome }}
+          INPUT_PRODUCER_SHA: ${{ inputs.native_source_sha }}
+          INPUT_ARTIFACT_ID: ${{ inputs.native_artifact_id }}
+          INPUT_ARCHIVE_DIGEST: ${{ inputs.native_archive_digest }}
+        run: python3 scripts/record-diagnostic-setup-failure.py
 
       - name: Upload bounded installed boot diagnostic
         if: always() && inputs.installed_boot_diagnostic

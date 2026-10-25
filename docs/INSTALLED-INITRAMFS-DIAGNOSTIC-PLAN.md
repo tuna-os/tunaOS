@@ -85,7 +85,8 @@ Preserve the default harness path and NativeISOQualification/v2.
 
 The proposed setup for Ubuntu 24.04 uses signed packages from Ubuntu:
 `python3-guestfs=1:1.52.0-5ubuntu3` and
-`qemu-system-x86=1:8.2.2+ds-0ubuntu1.16`. Check availability before publication. Do not substitute versions. See the official
+`requirements-iso-diagnostic-apt.txt`. It pins QEMU x86, common, data and utils
+to `1:8.2.2+ds-0ubuntu1.18` at both install steps. Do not substitute versions. See the official
 [guestfs package](https://packages.ubuntu.com/noble/python3-guestfs) and
 [QEMU package](https://packages.ubuntu.com/noble/qemu-system-x86).
 Record the QEMU path/hash and guestfs version in the tool lock: `1.52.0`.
@@ -209,3 +210,22 @@ Albacore run `40228536828` failed before boot.
 Its published ISO lacked `etc/tunaos/live-source.json`.
 No installed-disk diagnostic ran. Do not relax provenance to accept that media.
 Use a fresh producer with the exact artifact identity.
+
+### Setup failure evidence
+
+Run 40244509229 failed before ISO fetch: `qemu-system-x86=.16` needed `qemu-system-common=.16`, but APT selected `.18`. The Noble index lists all four QEMU packages at `.18`. Both install steps now use the same lock file. APT
+still checks signatures on repository metadata; missing pins fail the job. This is
+a host tool change, not a product image change.
+
+An always-run step uses only Python's standard library to write a failure
+report if the collector wrote none. It records step outcomes and declared
+input IDs as unverified, not boot or stop evidence. It copies no logs or
+error text. The report limit is 4 KiB, with the same two-file upload and
+three-day retention. Existing evidence is kept; incomplete evidence fails.
+
+A job timeout or lost runner can still prevent upload. No report means no
+evidence. The job and campaign time limits stay unchanged.
+
+Inputs must name the same producer run, `run_attempt` and source.
+A retry with this repair needs a fresh whole run. Reuse of an older ISO
+needs a separate input contract for diagnostics; this change does not add one.

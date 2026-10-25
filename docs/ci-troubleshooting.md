@@ -2585,3 +2585,11 @@ Do not guess the stock reference.
 The native producer also checks the overlay receipt before ISO customization.
 It rejects malformed digests and references that name a different target.
 These checks do not supply qualification evidence.
+
+### Installed diagnostic fails during QEMU setup
+
+Run 40244509229 failed with APT exit 100 before ISO fetch. `qemu-system-x86=.16`
+needed `qemu-system-common=.16`, while APT selected `.18`. Pin x86, common, data and
+utils together at both install steps. The failure report uses only the
+standard library, so missing decoder packages do not block that report.
+It records missing evidence and cannot make the failed job pass.
