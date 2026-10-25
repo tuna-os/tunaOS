@@ -1,103 +1,116 @@
 """PACKAGE-SOURCING.md lists every R2 URL that an image build reads.
 
 The R2 inventory section of PACKAGE-SOURCING.md says which builds still depend
-on https://repo.tunaos.org (epic #3470). A status table that nobody checks is
-stale the day it merges (AGENTS.md, PR quality contract rule 3), so this test
-derives the set of URLs from the build inputs and compares it with the first
-column of the table in both directions:
+on https://repo.tunaos.org (epic #3470). A table that nobody checks is stale
+the day it merges (AGENTS.md, PR quality contract rule 3), so this test derives
+the URLs and the config tables that read them with scripts/r2-dependency-report.py
+and compares them with the first two columns of the table, in both directions:
 
 - a URL with no row means a new R2 dependency entered without a decision;
-- a row with no URL means a cutover landed and the table still claims R2.
+- a row with no URL means a cutover landed and the table still claims R2;
+- a reader that differs means a config moved and the row names the old one.
 
-Comment lines are skipped: they name prefixes without reading them.
+Rows match their URL EXACTLY. A keyring URL has its own row, so retiring a
+package repository cannot be hidden by the keyring that sits below it.
+
+Measured state (counts, sizes, OCI tags) is not in the table at all: the report
+script emits it, tests/test_r2_dependency_report.py runs that script's parsers.
 """
 
 from __future__ import annotations
 
+import importlib.util
 import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DOC = ROOT / "PACKAGE-SOURCING.md"
-URL = re.compile(r"https://repo\.tunaos\.org/([^\s\"'`)>,]+)")
+SPEC = importlib.util.spec_from_file_location(
+    "r2_report", ROOT / "scripts" / "r2-dependency-report.py"
+)
+report = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(report)
+
 SECTION = re.compile(
     r"<!-- r2-inventory:start -->\n(?P<table>.*?)<!-- r2-inventory:end -->", re.S
 )
 
 
-def build_input_files() -> list[Path]:
-    files = [ROOT / "tunaos.toml", ROOT / "image-versions.yaml"]
-    files += sorted(ROOT.glob("Containerfile*"))
-    files += sorted(p for p in (ROOT / "build_scripts").rglob("*") if p.is_file())
-    return [p for p in files if p.is_file()]
+def reader_names(readers: list[str]) -> set[str]:
+    """`tunaos.toml [desktops.x.packages.el10.repos]` -> `desktops.x.packages.el10`."""
+    names = set()
+    for reader in readers:
+        match = re.fullmatch(r"tunaos\.toml \[(.+?)(?:\.repos)?\]", reader)
+        names.add(match.group(1) if match else reader)
+    return names
 
 
-def urls_read_by_builds() -> dict[str, list[str]]:
-    found: dict[str, list[str]] = {}
-    for path in build_input_files():
-        try:
-            lines = path.read_text().splitlines()
-        except UnicodeDecodeError:
-            continue
-        for number, line in enumerate(lines, 1):
-            if line.lstrip().startswith("#"):
-                continue
-            for match in URL.finditer(line):
-                # printf-style escapes end the URL in Containerfile.arch.
-                prefix = match.group(1).removesuffix("\\n")
-                found.setdefault(prefix, []).append(f"{path.name}:{number}")
-    return found
-
-
-def documented_prefixes() -> list[str]:
-    match = SECTION.search(DOC.read_text())
+def documented_rows(text: str | None = None) -> dict[str, set[str]]:
+    match = SECTION.search(DOC.read_text() if text is None else text)
     assert match, "PACKAGE-SOURCING.md lost its r2-inventory markers"
-    prefixes: list[str] = []
+    rows: dict[str, set[str]] = {}
     for row in match.group("table").splitlines():
         if not row.startswith("| `"):
             continue
-        first_cell = row.split("|")[1]
-        prefixes += re.findall(r"`([^`]+)`", first_cell)
-    assert prefixes, "the r2-inventory table has no rows"
-    return prefixes
+        cells = row.split("|")
+        prefixes = re.findall(r"`([^`]+)`", cells[1])
+        assert len(prefixes) == 1, f"one prefix per row, got {prefixes}"
+        rows[prefixes[0]] = set(re.findall(r"`([^`]+)`", cells[2]))
+    assert rows, "the r2-inventory table has no rows"
+    return rows
 
 
-def covers(documented: str, url_path: str) -> bool:
-    """A row covers its own prefix and any file below it (a keyring)."""
-    return url_path == documented or (
-        documented.endswith("/") and url_path.startswith(documented)
-    )
+def problems(found: dict[str, list[str]], rows: dict[str, set[str]]) -> list[str]:
+    result = [f"URL without a row: {p}" for p in sorted(set(found) - set(rows))]
+    result += [f"row without a URL: {p}" for p in sorted(set(rows) - set(found))]
+    for prefix in sorted(set(found) & set(rows)):
+        derived = reader_names(found[prefix])
+        if derived != rows[prefix]:
+            result.append(
+                f"readers of {prefix} are {sorted(derived)}, the row says {sorted(rows[prefix])}"
+            )
+    return result
 
 
-def test_every_r2_url_a_build_reads_has_a_row():
-    rows = documented_prefixes()
-    missing = {
-        path: where
-        for path, where in urls_read_by_builds().items()
-        if not any(covers(row, path) for row in rows)
-    }
-    assert not missing, (
-        "These repo.tunaos.org URLs are read by a build and have no row in the "
-        f"R2 build dependency inventory of PACKAGE-SOURCING.md: {missing}"
-    )
+def test_the_table_matches_what_the_builds_read():
+    assert problems(report.scan(ROOT), documented_rows()) == []
 
 
-def test_every_row_still_has_a_url():
-    urls = urls_read_by_builds()
-    stale = [
-        row
-        for row in documented_prefixes()
-        if not any(covers(row, path) for path in urls)
-    ]
-    assert not stale, (
-        "These rows of the R2 build dependency inventory no longer match any "
-        f"URL in the build inputs; delete them with the cutover: {stale}"
-    )
+def test_a_keyring_cannot_keep_a_retired_repository_row_alive():
+    found = report.scan(ROOT)
+    del found["tideforge/ubuntu/"]  # the package repository moved to OCI
+    assert found["tideforge/ubuntu/tideforge.gpg"], "the keyring is still read"
+    assert "row without a URL: tideforge/ubuntu/" in problems(found, documented_rows())
+
+
+def test_a_new_url_a_missing_row_and_a_moved_reader_are_each_reported():
+    found = report.scan(ROOT)
+    found["new/prefix/"] = ["tunaos.toml [desktops.x.packages.el10.repos]"]
+    del found["xfce/44-x86_64/"]
+    found["rpm/eln/x86_64/"] = ["tunaos.toml [desktops.tuna.packages.el10.repos]"]
+    reported = problems(found, documented_rows())
+    assert "URL without a row: new/prefix/" in reported
+    assert "row without a URL: xfce/44-x86_64/" in reported
+    assert any(line.startswith("readers of rpm/eln/x86_64/") for line in reported)
 
 
 def test_the_scan_sees_the_known_dependencies():
-    """Guard the guard: an empty scan would pass both tests above."""
-    urls = urls_read_by_builds()
+    """Guard the guard: an empty scan would pass the tests above."""
+    urls = report.scan(ROOT)
     assert "public.gpg" in urls
     assert "hummingbird/20251124-$basearch/" in urls
     assert any(path.startswith("tideforge/") for path in urls)
+    assert "tunaos.toml [desktops.gnome.packages.hummingbird.repos]" in urls[
+        "hummingbird/20251124-$basearch/"
+    ]
+
+
+def test_the_table_carries_no_hand_kept_measurement():
+    """Counts, sizes and OCI state come from the report, not from this table."""
+    match = SECTION.search(DOC.read_text())
+    header = match.group("table").splitlines()[0]
+    assert [c.strip() for c in header.strip("|").split("|")] == [
+        "Prefix",
+        "Read by",
+        "Smallest next step",
+    ]
