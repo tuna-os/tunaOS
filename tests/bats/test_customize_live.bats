@@ -3,8 +3,9 @@
 # entrypoint) and its wiring in scripts/build-iso-tacklebox.sh.
 #
 # Detection tests run the real script against a fake session root
-# (TUNA_SESSION_ROOT) with TUNA_DETECT_ONLY=1, which exits before any
-# system mutation.
+# (TUNA_SESSION_ROOT) with TUNA_DETECT_ONLY=1. The mode exits before the
+# desktop adapter and remaining live-system setup, after writing the live
+# media markers that are part of its detection contract.
 
 REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
 SCRIPT="${REPO_ROOT}/live-iso/common/src/customize-live.sh"
@@ -62,8 +63,50 @@ detect() {
   [ "$output" = "DETECTED kde org.tunaos.InstallerKde" ]
 }
 
-@test "detect-only mode exits 0 and mutates nothing" {
+@test "detect-only mode exits 0 and writes live-media sentinels" {
   TUNA_SESSION_ROOT="${FAKE_ROOT}" TUNA_DETECT_ONLY=1 run bash "${SCRIPT}"
+  [ "$status" -eq 0 ]
+  [ -f "${FAKE_ROOT}/etc/bootc-installer/live-iso-mode" ]
+  [ -f "${FAKE_ROOT}/etc/tunaos/live-session" ]
+}
+
+@test "missing session root fails before writing live markers" {
+  run env TUNA_SESSION_ROOT= TUNA_DETECT_ONLY=1 bash "${SCRIPT}"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"TUNA_SESSION_ROOT is required"* ]]
+}
+
+@test "metadata-only mode writes an exact live source receipt" {
+  local digest="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  run env \
+    TUNA_SESSION_ROOT="${FAKE_ROOT}" \
+    TUNA_METADATA_ONLY=1 \
+    TUNA_INSTALLER_APP="org.tunaos.InstallerKde" \
+    TUNA_INSTALLER_REVISION="flatpak-commit-123" \
+    TUNA_INSTALLER_BUNDLE_SHA256="bundle-sha-456" \
+    TUNA_LIVE_BASE_IMAGE="ghcr.io/tuna-os/yellowfin:kde" \
+    TUNA_LIVE_BASE_DIGEST="${digest}" \
+    TUNA_LIVE_PLATFORM="linux/amd64" \
+    bash "${SCRIPT}"
+  [ "$status" -eq 0 ]
+
+  [ ! -e "${FAKE_ROOT}/etc/bootc-installer/live-iso-mode" ]
+  grep -Fxq "INSTALLER_APP=org.tunaos.InstallerKde" \
+    "${FAKE_ROOT}/etc/tunaos/live-installer-info"
+  grep -Fxq "INSTALLER_REVISION=flatpak-commit-123" \
+    "${FAKE_ROOT}/etc/tunaos/live-installer-info"
+  grep -Fxq "INSTALLER_BUNDLE_SHA256=bundle-sha-456" \
+    "${FAKE_ROOT}/etc/tunaos/live-installer-info"
+
+  run jq -e \
+    --arg digest "${digest}" \
+    '.base_image == "ghcr.io/tuna-os/yellowfin:kde"
+      and .base_digest == $digest
+      and .platform == "linux/amd64"
+      and .installer_app_id == "org.tunaos.InstallerKde"
+      and .installer_revision == "flatpak-commit-123"
+      and .installer_bundle_sha256 == "bundle-sha-456"' \
+    "${FAKE_ROOT}/etc/tunaos/live-source.json"
   [ "$status" -eq 0 ]
 }
 
