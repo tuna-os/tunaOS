@@ -66,7 +66,7 @@ def main():
             lines = [l for part in STACK[vid] for l in render(part)]
         else:
             lines = render(word)
-        (args.output / f"{vid}.txt").write_text("\n".join(two_tone(l) for l in lines) + "\n")
+        (args.output / f"{vid}.txt").write_text("\n".join(two_tone(l) for l in lines) + "\n", encoding="utf-8")
         print(f"{vid}: {word} ({max(len(l) for l in lines)} cols)")
 
 

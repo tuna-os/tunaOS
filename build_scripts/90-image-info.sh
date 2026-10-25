@@ -271,9 +271,22 @@ recipe['tour'] = new_tour
 # named like one of them (tunaos) must not rewrite them. The name also stays
 # whole inside a longer word, path or domain (repo.tunaos.org).
 import re
-project = re.compile(r'(?<![A-Za-z0-9_@/.:-])' + re.escape('${TUNAOS_PROJECT_NAME}') + r'(?![.]?[A-Za-z0-9_@/-])')
+# Unmodified shipped slides still use the template project token. A fork may
+# also supply slides using its configured name. Match either in display text
+# only; never make a fork pre-edit recipe data to activate its TOML identity.
+project_names = sorted({'TunaOS', '${TUNAOS_PROJECT_NAME}'}, key=len, reverse=True)
+project = re.compile(r'(?<![A-Za-z0-9_@/.:-])(?:' + '|'.join(re.escape(name) for name in project_names) + r')(?![.]?[A-Za-z0-9_@/-])')
+# A project token in a URL query or fragment is still data. Preserve full
+# URI spans, Markdown destinations and HTML markup before applying display-name
+# boundaries to the remaining visible text.
+uri = re.compile(r'<[^>]*>|(?<=\]\()[^)\s]+|(?:[A-Za-z][A-Za-z0-9+.-]*://|mailto:|(?<![A-Za-z0-9])(?:/|\./|\.\./))[^\s<>' + chr(34) + chr(39) + r']+')
 def rename(text):
-    return project.sub(lambda _: '${IMAGE_PRETTY_NAME}', text)
+    result, start = [], 0
+    for match in uri.finditer(text):
+        result.extend((project.sub(lambda _: '${IMAGE_PRETTY_NAME}', text[start:match.start()]), match.group()))
+        start = match.end()
+    result.append(project.sub(lambda _: '${IMAGE_PRETTY_NAME}', text[start:]))
+    return ''.join(result)
 for slide in recipe['tour'].values():
     for key in ('title', 'description'):
         if isinstance(slide.get(key), str):
@@ -372,18 +385,29 @@ EOF
 		done
 	fi
 
-	# Names people can see in settings: the Plasma global theme and wallpaper
-	# are called after the variant, not the project. tunaos.toml allows only
-	# . ( ) + of the extended-regex specials in the name; escape those.
-	PROJECT_NAME_RE="${TUNAOS_PROJECT_NAME//'.'/'\.'}"
-	PROJECT_NAME_RE="${PROJECT_NAME_RE//'('/'\('}"
-	PROJECT_NAME_RE="${PROJECT_NAME_RE//')'/'\)'}"
-	PROJECT_NAME_RE="${PROJECT_NAME_RE//'+'/'\+'}"
+	# Only the plugin's display name is ours to specialize. Authors, URLs,
+	# IDs and custom labels are data, not project-name substitution targets.
+	# Accept unmodified shipped templates as well as fork-authored names.
 	for meta in /usr/share/plasma/look-and-feel/org.tunaos.desktop/metadata.json \
 		/usr/share/plasma/look-and-feel/org.tunaos.light.desktop/metadata.json \
 		/usr/share/wallpapers/TunaOS/metadata.json; do
 		[[ -f "${meta}" ]] || continue
-		sed -i -E "s/(\"Name\": *\")${PROJECT_NAME_RE}( Light)?\"/\\1${IMAGE_PRETTY_NAME}\\2\"/" "${meta}"
+		python3 - "${meta}" "${TUNAOS_PROJECT_NAME}" "${IMAGE_PRETTY_NAME}" <<'METADATA'
+import json
+from pathlib import Path
+import sys
+
+path, project, variant = Path(sys.argv[1]), sys.argv[2], sys.argv[3]
+original = path.read_text(encoding='utf-8')
+metadata = json.loads(original)
+plugin = metadata.get('KPlugin', {})
+name = plugin.get('Name')
+replacements = {base + suffix: variant + suffix
+                for base in ('TunaOS', project) for suffix in ('', ' Light')}
+if isinstance(name, str) and name in replacements and name != replacements[name]:
+    plugin['Name'] = replacements[name]
+    path.write_text(json.dumps(metadata, indent=4, ensure_ascii=False) + '\n', encoding='utf-8')
+METADATA
 	done
 
 	# Console login banner. Upstream's names the upstream distro ("Ubuntu
