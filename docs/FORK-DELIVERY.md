@@ -12,6 +12,11 @@ reference scope, not a support claim for other cells. Keep the existing catalog,
 platform limits and admission holds. A green source test does not prove that an
 image boots or installs.
 
+R2 secrets (`R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_ENDPOINT`, `R2_BUCKET`) are
+TunaOS's own bucket and are not required for a fork. When they are empty, an R2
+upload, prune or audit step does not call R2. The step does not run, or it stops
+before the first R2 call (`tests/test_r2_optional_for_forks.py`).
+
 ## Deliver in this order
 
 1. **One config and an explanation.** [RFC 013](rfc/rfc013-single-fork-config.md)
@@ -67,6 +72,7 @@ qualification adapters. `schemas/qualification-reuse-v1.schema.json` defines
 producer receipts, current inputs and reuse decisions. A producer names the
 exact manifest and config digests, source and config receipts, consumed build
 inputs, platform, tool versions, workflow run and artifact. Run and artifact URLs must agree with their numeric GitHub IDs.
+
 Tags and partial receipts cause a rebuild. Changed build inputs, identities or platforms also cause a rebuild.
 After review, refresh the source receipt in the same push as a change to build source.
 Never edit the digest alone.
@@ -120,6 +126,76 @@ The tool marks a bad event stream with a bounded `harness` /
 The tool limits each report to 256 KiB. Any failed, skipped or not-run
 assertion keeps `releasePass` false.
 
+## Six-route package-addition evidence
+
+Issue [#3802](https://github.com/tuna-os/tunaOS/issues/3802) needs built-image
+proof for the EL10, Ubuntu, Debian, Arch, openSUSE and Gentoo Containerfile
+routes. Source tests and package-manager containers do not satisfy that gate.
+After the integration of the primary image-package consumer, use
+`scripts/qualify-image-packages.py` against local images built from one exact
+pair of commits:
+
+- The stock commit has an empty generated
+  `build_scripts/lib/image-packages.tsv`.
+- Its single-child modified commit changes only `tunaos.toml` and that generated
+  adapter. The adapter contains one required, family-native addition for each
+  selected variant.
+- Every plan cell names a digest-pinned `baseImage`. Build that exact reference,
+  including a resolved digest for upstream sources that are normally tags.
+- Every route supplies images for the stock base, the modified base and the modified desktop.
+  EL10 also supplies a modified overlay image. These roles specifically prove
+  Gentoo's separate `system` and `desktop-build` placements, openSUSE's base
+  placement, desktop inheritance and overlay inheritance.
+
+The plan is a JSON object with `schemaVersion`, `platform`, full
+`stockCommit`/`modifiedCommit` values and exactly six `cells`. Each cell names
+`route`, `variant`, `package`, `baseImage` and `images`. An `images` value of
+`null` records that family as `not-run`; it never passes the gate. Image records
+contain the local `ref` and requested `flavor`.
+
+The verifier needs a clean checkout, including untracked files. Keep both
+the plan and the evidence directory out of the source tree: use the ignored
+`output/` directory, or any path outside the checkout.
+
+```sh
+python3 scripts/qualify-image-packages.py \
+  --plan output/package-qualification-plan.json \
+  --source "$PWD" \
+  --output output/package-qualification-evidence
+```
+
+The verifier reruns the primary generated-adapter check and route resolver. It
+then binds each result to the registry bytes of the pinned base, local image
+manifest/config digests and `/usr/share/ublue-os/image-info.json`. The stock
+image must have neither the package nor a package-addition receipt. Every
+modified base, desktop and overlay image must contain the native package and an
+exact `/usr/share/tunaos/image-packages.tsv` receipt.
+
+Every role, including the overlay, must record the pinned base as its
+`base-image`. The overlay's `90-image-info.sh` sources `lib.sh`, which restores
+that field from the inherited `image-info.json` of the desktop stage. The
+metadata of an image cannot prove the modified desktop parent of the overlay. A rechunked or
+multi-instruction build leaves no parent that Podman storage can use. The build
+of the overlay from the `modifiedDesktop` reference of the plan binds the
+parent, and the retained build logs must show that build.
+
+Retain the output directory with the build logs. `report.json` records each
+family as `passed`, `failed` or `not-run`. Each route log and the source log
+have SHA-256 values in the report. A failed family does not hide the results of
+later families.
+
+These cases remain source-level failures:
+
+- a required install that fails;
+- an optional package that is missing;
+- a manager mismatch;
+- a signed repository;
+- an existing repository that the tool refuses;
+- apt no-removal and removal rejection.
+
+Run their primary F4 suite on the same source commit and retain that log beside
+this image evidence.
+
 ## Dependency and review boundaries
 
 The compatibility foundation is [#3434](https://github.com/tuna-os/tunaOS/pull/3434)
@@ -139,11 +215,13 @@ Do not merge the stack as a unit on the strength of a source-test pass.
 Reconcile the shared catalog with [#3431](https://github.com/tuna-os/tunaOS/pull/3431)
 and its parent [#3143](https://github.com/tuna-os/tunaOS/pull/3143), and do not add another catalog. Keep one active change per shared contract surface.
 
-The opt-in preview uses `examples/fork/stock.template.yaml`. Initialize a new
-strictly pinned config with `--init-template` before you resolve or build it.
-Existing configs retain their reviewed pins and fail when source inputs change.
-Initialization never refreshes an existing config. See
-[FORK-CONFIG-PREVIEW.md](FORK-CONFIG-PREVIEW.md) for commands and supported intent.
+The YAML preview interface (`resolve-fork-config.py`, `prepare-fork-config.py`,
+`examples/fork/*.template.yaml` and its prepared-context consumers) no longer
+exists since [#3807](https://github.com/tuna-os/tunaOS/issues/3807). A fork edits `tunaos.toml`
+and asset files only. An old config converts with
+`python3 scripts/config.py migrate-fork-config --legacy OLD.yaml`; see
+[PRIMARY-CONFIG-MIGRATION.md](PRIMARY-CONFIG-MIGRATION.md#migrating-a-legacy-fork-config).
+Receipts from the retired preview do not qualify a primary-TOML build.
 
 ## What completes the milestone
 

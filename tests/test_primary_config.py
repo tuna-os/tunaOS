@@ -181,6 +181,18 @@ def test_generation_refuses_target_or_parent_symlinks(source_root, tmp_path, sym
     assert victim.read_text() == "do not touch"
 
 
+def test_cli_validate_rejects_a_config_that_cannot_build_identity(source_root):
+    # `validate` must not succeed for a config generate-identity (and every
+    # build) would reject: the historical matrix fixture has no identity.
+    document = (source_root / "tunaos.toml").read_text(encoding="utf-8")
+    start = document.index("[project]")
+    end = document.index("[defaults.branding]")
+    (source_root / "tunaos.toml").write_text(document[:start] + document[end:], encoding="utf-8")
+    result = cli(source_root, "validate")
+    assert result.returncode == 1
+    assert "identity needs sections: project" in result.stderr
+
+
 def test_generation_refuses_directory_target(source_root):
     (source_root / ".github/build-config.yml").mkdir(parents=True)
     with pytest.raises(config.ConfigError, match="regular file"):

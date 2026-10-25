@@ -113,7 +113,16 @@ def has_dated_iso(
     return any(pattern.fullmatch(name) for name in retained)
 
 
-def active_targets(config: dict[str, Any]) -> frozenset[tuple[str, str, str]]:
+def active_targets(
+    config: dict[str, Any], *, receipts_validated: bool = False
+) -> frozenset[tuple[str, str, str]]:
+    """Validate the policy and return the exact cut-over targets.
+
+    A non-empty policy is refused unless the caller states that qualification
+    receipts were validated (#3381). The command line never does, so a hand
+    edited tunaos.toml fails loudly instead of closing R2 delivery on an
+    unreviewed evidence string. The empty policy returns an empty set.
+    """
     policy = policy_for(config)
     targets = policy.get("cutover_targets", [])
     if not isinstance(targets, list):
@@ -181,7 +190,7 @@ def active_targets(config: dict[str, Any]) -> frozenset[tuple[str, str, str]]:
                 )
 
     validate_group_retention(config, active, retained)
-    if active:
+    if active and not receipts_validated:
         raise PolicyError(
             "non-empty cutover_targets are disabled until #3381 supplies a "
             "current qualification catalog and matching receipt validation"
@@ -326,16 +335,11 @@ def print_retention_filters(config: dict[str, Any]) -> None:
         print(f"- /{iso}")
         print(f"- /{iso}.sha256")
         print(f"- /{iso}.sigstore.json")
-    # Stable pointers and their resolver stay immutable. Checksum snapshots use
-    # "-snapshot-", so they remain eligible for age pruning.
-    print("- *-latest.iso")
-    print("- *-latest-*.iso")
-    print("- *-latest.iso.sha256")
-    print("- *-latest-*.iso.sha256")
-    print("- *-latest.iso.sigstore.json")
-    print("- *-latest-*.iso.sigstore.json")
-    print("- *-latest.json")
-    print("- *-latest-*.json")
+    # One class rule, identical to the pre-policy prune: no dated artifact name
+    # contains "-latest", so this keeps every stable pointer and its sidecars
+    # (and resolver JSON, which the "- *" tail also excludes). Checksum
+    # snapshots use "-snapshot-", so they stay eligible for age pruning.
+    print("- *-latest*")
     print("+ *.iso")
     print("+ *.iso.sha256")
     print("+ *.iso.sigstore.json")

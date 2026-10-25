@@ -157,6 +157,10 @@ jobs:
       contents: write
       packages: read
       id-token: write
+    # A fork has no R2 bucket: skip the upload instead of letting rclone
+    # resolve an AWS endpoint from empty credentials and fail the cell.
+    env:
+      R2_CONFIGURED: ${{ secrets.R2_ACCESS_KEY_ID != '' && secrets.R2_SECRET_ACCESS_KEY != '' && secrets.R2_ENDPOINT != '' && secrets.R2_BUCKET != '' }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
@@ -338,7 +342,7 @@ jobs:
       # only when every buildable offline flavor is in the reviewed cutover;
       # partial coverage keeps the established prebuilt path.
       - name: Upload ISO to Cloudflare R2
-        if: ${{ inputs.skip_upload != true && !matrix.r2_cutover }}
+        if: ${{ inputs.skip_upload != true && env.R2_CONFIGURED == 'true' && !matrix.r2_cutover }}
         env:
           RCLONE_CONFIG_R2_TYPE: s3
           RCLONE_CONFIG_R2_PROVIDER: Cloudflare

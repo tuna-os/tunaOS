@@ -10,7 +10,7 @@ images:
   - name: brew
     image: ghcr.io/ublue-os/brew
     tag: latest
-    digest: sha256:393b567da078f0f0638450c388e229011dae06f94a90017cb7525b57d9faa46e
+    digest: sha256:c201bc801e4828849e8e36c4adcb5c0f38d35ac3ff9546a0ecab0fd2beabf51f
 
   # RFC 010: pre-built Zirconium image for DMS/Niri system files
   # on grouper (Ubuntu) — not available from Ubuntu apt.
@@ -31,7 +31,7 @@ images:
   - name: utah-packages
     image: ghcr.io/projectbluefin/utah-packages
     tag: latest
-    digest: sha256:5f09530b87086bfee0f009cf3b72190ef5d274238e157f09b741bafe50b7ee9e
+    digest: sha256:828b2bf5458f137afc5ed19184fb62cbb28bbd7f80906770c733cc6807aab83d
 
   # tunaOS' own GNOME 50 for EL10, from the gnome50-el10-x86_64 build chain in
   # tuna-os/tunaos-packages: a createrepo_c repository shipped as an OCI image
@@ -78,20 +78,6 @@ downloads:
   uupd: "v1.5.1"
   # renovate: datasource=github-releases depName=ledif/kcm_ublue
   kcm_ublue: "v0.6.1"
-  # renovate: datasource=github-releases depName=mvdan/sh
-  #
-  # shfmt is a FORMATTER, so its version is part of the repo's formatting.
-  # `just fix` runs it over every shell script and `just check` fails on drift,
-  # which means two contributors on different shfmt versions produce different
-  # trees and each sees the other's as unformatted.
-  #
-  # This is not hypothetical: `just fix` once rewrote 145 files and 12,277
-  # lines on a clean main because .editorconfig disagreed with the code
-  # (fixed separately). An unpinned formatter is the same failure waiting on a
-  # release rather than on a config edit -- and AGENTS.md makes
-  # `just fix && just check` mandatory before every commit, so everyone hits
-  # it at once.
-  shfmt: "v3.14.1"
   # renovate: datasource=github-releases depName=hivecommons/spektacular
   # The spec, plan and build workflows (RFC 011, ADR 0010). Its version must
   # match `written_by` in .spektacular/config.yaml; `spektacular version check`

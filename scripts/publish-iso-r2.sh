@@ -113,7 +113,6 @@ publication_name() {
 	esac
 }
 
-
 publish_iso_as() {
 	local object=$1
 	if [[ "$object" == *-snapshot-*.iso ]]; then

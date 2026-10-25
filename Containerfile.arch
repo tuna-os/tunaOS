@@ -7,7 +7,7 @@
 #   buildah build --target=base-no-de --file Containerfile.arch .
 #   buildah build --target=kde --file Containerfile.arch .
 
-ARG BASE_IMAGE="docker.io/archlinux/archlinux:latest@sha256:ef1b2d7b71ac9f1f5fe78b5ae66c3b3fa8f6f2a4486620233b7ed31b1d0c3aaf"
+ARG BASE_IMAGE="docker.io/archlinux/archlinux:latest@sha256:bdb2935325a8d6a930d4f09da38eafc47abfaa483d78e1b0210029c98de05330"
 ARG COMMON_IMAGE_REF="ghcr.io/projectbluefin/common:unpinned-must-override"
 
 ARG DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
@@ -327,8 +327,10 @@ RUN --mount=type=bind,from=context,source=/,target=/run/context \
 # which reads as a broken desktop when the desktop booted fine — grouper gnome,
 # kde, xfce and gnome-zfs all died this way in run 30692866756. The binary is
 # static Go, so there is nothing distro-specific to guard.
+# Then the image-wide additions from tunaos.toml (build_scripts/30-image-packages.sh).
 RUN --mount=type=bind,from=context,source=/,target=/run/context \
-    /run/context/build_scripts/install-remora.sh
+    /run/context/build_scripts/install-remora.sh && \
+    /run/context/build_scripts/30-image-packages.sh
 
 # The numbered base scripts (40-services, 90-image-info, 99-cleanup) that
 # other Containerfiles run are NOT wired into this base. 90-image-info.sh is

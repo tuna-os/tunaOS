@@ -18,8 +18,11 @@ Never post account credentials or API keys in issues or pull requests.
 ## Quick Start
 
 ```bash
-brew install just podman shellcheck shfmt yq
+brew install podman
 git clone https://github.com/tuna-os/tunaOS.git && cd tunaOS
+python3 scripts/lint_tools.py install --bin-dir "$HOME/.local/bin"
+export PATH="$HOME/.local/bin:$PATH"
+just setup
 just fix && just check
 ```
 
@@ -227,6 +230,10 @@ just fix     # format shell scripts and Justfile
 just check   # shellcheck, yamllint, actionlint
 ```
 
+The configuration-sensitive binaries and their release-asset checksums are
+repository-pinned. Follow the [lint tool contract](docs/LINTING.md) and do not
+install the current Homebrew versions.
+
 `just ci` runs what the PR gate runs — `check`, the CI contract, and every
 unit suite. A green `just ci` locally is a green PR, minus the
 scheduled build matrix. The rest of the contributor contract:
@@ -281,7 +288,7 @@ and technical accuracy in all content; an STE opt-out only changes prose checks.
 A bug that let an unusable or wrongly-promoted image ship stays open until a
 test proves the old failure mode can never recur in silence. Put that test in
 [`tests/regressions/`](tests/regressions/README.md), named after the issue
-(`test_issue_<number>_<what_must_not_recur>.py`), with a docstring that cites
+(`test_issue_<number>_<what_must_not_recur>.py`), with a description that cites
 the issue and the run or log that measured the failure. The seed example is
 #858 (marlin:kde shipped with no Wayland session). The regression test runs
 the desktop contract's own check against a filesystem with no session file,
