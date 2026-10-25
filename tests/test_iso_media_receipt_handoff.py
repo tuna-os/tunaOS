@@ -4,6 +4,7 @@ Falsification: fail or change the closed browser save, replay another browser
 run, alter exact media, or report partial/backend/fixture native progress. The
 adapter must reject without turning the observation into qualification.
 """
+import hashlib
 import copy
 from dataclasses import replace
 import importlib.util
@@ -547,3 +548,17 @@ def test_native_installed_harness_and_producer_identities_keep_their_meaning(cha
         HANDOFF.finalize_native_receipt(
             observed, CASES["browserReceiptUtf8"].encode(), media)
     assert media.events == []
+
+
+def test_native_rejects_observation_mutated_during_media_io():
+    altered = bytes([MEDIA[0] ^ 1]) + MEDIA[1:]
+    observed = native_observation()
+
+    class Mutating(MediaSource):
+        def open(self):
+            observed.media["sha256"] = "sha256:" + hashlib.sha256(altered).hexdigest()
+            return super().open()
+
+    with pytest.raises(HANDOFF.ReceiptHandoffError, match="media"):
+        HANDOFF.finalize_native_receipt(
+            observed, CASES["browserReceiptUtf8"].encode(), Mutating(altered))

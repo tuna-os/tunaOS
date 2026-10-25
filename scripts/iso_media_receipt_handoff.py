@@ -372,7 +372,9 @@ def finalize_native_receipt(observed, browser_receipt_bytes, supplied_media):
     expected_size = browser["media"]["sizeBytes"]
     _size(expected_size, "browserReceipt.media.sizeBytes")
     measured = _measure_media(supplied_media, expected_size, finish=False)
-    _same(measured, observed.media, "media")
+    # Compare with the validated copy the receipt bytes are built from, not the
+    # caller-owned dict, which can change while the media is opened and read.
+    _same(measured, document["media"], "media")
     receipt = _encode(document)
     run = document["run"]
     return ReceiptCandidate(
