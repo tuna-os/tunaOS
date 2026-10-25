@@ -53,9 +53,13 @@ def migrate_fork_config(target, legacy, write):
     return 0
 
 
-def main():
+# Every generated file a fork commits next to tunaos.toml, in dependency order.
+GENERATE_ALL = ('generate', *(f'generate-{name}' for name in IDENTITY_ADAPTERS), 'generate-flatpak-policy', 'generate-builder-config', 'generate-builder-flavors')
+
+
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=('validate', 'generate', 'show', 'generate-builder-config', 'check-builder-config', 'generate-builder-flavors', 'check-builder-flavors', 'generate-flatpak-policy', 'check-flatpak-policy', *(f'{verb}-{name}' for name in IDENTITY_ADAPTERS for verb in ('generate', 'check')), 'check-drawn-artwork', 'generate-debian-contract', 'prepare-debian-context', 'verify-debian-image', 'migrate-fork-config'))
+    parser.add_argument('command', choices=('validate', 'generate-all', *GENERATE_ALL, 'show', 'check-builder-config', 'check-builder-flavors', 'check-flatpak-policy', *(f'check-{name}' for name in IDENTITY_ADAPTERS), 'check-drawn-artwork', 'generate-debian-contract', 'prepare-debian-context', 'verify-debian-image', 'migrate-fork-config'))
     parser.add_argument('--root', type=Path, default=tunaos_config.ROOT)
     parser.add_argument('--output', type=Path)
     parser.add_argument('--image')
@@ -64,8 +68,16 @@ def main():
     parser.add_argument('--platform')
     parser.add_argument('--legacy', type=Path, help='legacy fork-config YAML/JSON for migrate-fork-config')
     parser.add_argument('--write', action='store_true', help='replace tunaos.toml; without it migrate-fork-config only prints the diff')
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     try:
+        if args.command == 'generate-all':
+            if args.output:
+                parser.error('generate-all writes every generated file in place; --output is not supported')
+            for command in GENERATE_ALL:
+                status = main([command, '--root', str(args.root)])
+                if status:
+                    return status
+            return 0
         verb, _, adapter = args.command.partition('-')
         if verb in ('generate', 'check') and adapter in IDENTITY_ADAPTERS:
             render, relative = IDENTITY_ADAPTERS[adapter]
@@ -75,14 +87,14 @@ def main():
                 raise tunaos_config.ConfigError(f'generated {adapter} path must not be a symlink')
             if args.command.startswith('check-'):
                 if not target.is_file() or target.read_text(encoding='utf-8') != content:
-                    raise tunaos_config.ConfigError(f'generated {adapter} drift; run generate-{adapter}')
+                    raise tunaos_config.ConfigError(f'generated {adapter} drift; run python3 scripts/config.py generate-all, then commit the changed files')
             else:
                 target.write_text(content, encoding='utf-8')
             print(target)
         elif args.command == 'check-drawn-artwork':
-            missing = tunaos_config.missing_drawn_artwork(tunaos_config.load(args.root / 'tunaos.toml'), args.root)
-            if missing:
-                raise tunaos_config.ConfigError('drawn artwork missing for tunaos.toml:\n  ' + '\n  '.join(missing))
+            problems = tunaos_config.drawn_artwork_problems(tunaos_config.load(args.root / 'tunaos.toml'), args.root)
+            if problems:
+                raise tunaos_config.ConfigError('drawn artwork for tunaos.toml is missing or wrong:\n  ' + '\n  '.join(problems))
             print('Every variant has its wallpaper and boot splash.')
         elif args.command in ('generate-flatpak-policy', 'check-flatpak-policy'):
             content = tunaos_config.flatpak_policy().render(tunaos_config.load(args.root / 'tunaos.toml'))
@@ -91,7 +103,7 @@ def main():
                 raise tunaos_config.ConfigError('generated Flatpak policy path must not be a symlink')
             if args.command.startswith('check-'):
                 if not target.is_file() or target.read_text(encoding='utf-8') != content:
-                    raise tunaos_config.ConfigError('generated Flatpak policy drift; run generate-flatpak-policy')
+                    raise tunaos_config.ConfigError('generated Flatpak policy drift; run python3 scripts/config.py generate-all, then commit the changed files')
             else:
                 target.write_text(content, encoding='utf-8')
             print(target)
@@ -103,7 +115,7 @@ def main():
             if args.command.startswith('check-'):
                 if not target.is_file() or target.read_text(encoding='utf-8') != content:
                     command = 'generate-builder-flavors' if flavors else 'generate-builder-config'
-                    raise tunaos_config.ConfigError(f'{target}: generated builder config drift; run {command} with the same --root and --output arguments')
+                    raise tunaos_config.ConfigError(f'{target}: generated builder config drift; run python3 scripts/config.py {command} with the same --root and --output arguments')
             else:
                 target.write_text(content, encoding='utf-8')
             print(target)

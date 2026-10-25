@@ -17,6 +17,8 @@ from __future__ import annotations
 
 import argparse
 import filecmp
+import importlib.util
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -26,6 +28,12 @@ REPO = Path(__file__).resolve().parents[2]
 SHARE = REPO / "system_files/usr/share/tunaos"
 BRANDING = REPO / "scripts/branding"
 SETS = ("logos", "lettermarks", "fastfetch")
+# importable module -> the pinned package in requirements-branding.txt
+REQUIREMENTS = {"fontTools": "fonttools", "pyfiglet": "pyfiglet", "uharfbuzz": "uharfbuzz"}
+
+
+def missing_requirements() -> list[str]:
+    return sorted(package for module, package in REQUIREMENTS.items() if importlib.util.find_spec(module) is None)
 
 
 def generate(root: Path) -> None:
@@ -55,15 +63,28 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--write", action="store_true", help="regenerate the committed files")
     args = parser.parse_args()
-    if args.write:
-        for name in SETS:
-            for stale in (SHARE / name).glob("*"):
-                stale.unlink()
-        generate(SHARE)
-        print("Regenerated " + ", ".join(f"{SHARE.relative_to(REPO)}/{name}" for name in SETS))
-        return 0
+    missing = missing_requirements()
+    if missing:
+        print(f"Artwork generation needs {', '.join(missing)}. Install the pinned set with:\n"
+              f"  {Path(sys.executable).name} -m pip install -r requirements-branding.txt", file=sys.stderr)
+        return 1
     with tempfile.TemporaryDirectory(prefix="tunaos-artwork-") as scratch:
-        generate(Path(scratch))
+        try:
+            generate(Path(scratch))
+        except subprocess.CalledProcessError as error:
+            # A generator names its own problem on stderr (for example an emoji
+            # with no drawing); nothing committed has been touched yet.
+            print(f"{Path(error.cmd[1]).name} failed (see above); committed artwork is unchanged.", file=sys.stderr)
+            return 1
+        if args.write:
+            for name in SETS:
+                for stale in (SHARE / name).glob("*"):
+                    stale.unlink()
+                (SHARE / name).mkdir(parents=True, exist_ok=True)
+                for fresh in (Path(scratch) / name).iterdir():
+                    shutil.copyfile(fresh, SHARE / name / fresh.name)
+            print("Regenerated " + ", ".join(f"{SHARE.relative_to(REPO)}/{name}" for name in SETS))
+            return 0
         problems = [p for name in SETS for p in differences(Path(scratch) / name, SHARE / name)]
     if problems:
         print("Artwork drifted from tunaos.toml:", *problems, sep="\n  ", file=sys.stderr)
