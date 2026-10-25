@@ -28,8 +28,16 @@ search. There is no add or write option.
 `configuration_observed_at` names the reviewed extraction that binds the
 collector to the effective target. The observation pins
 `Containerfile.debian`, the invoked `build_scripts/10-base-packages.sh`, the
-sourced `build_scripts/lib.sh`, `build_scripts/20-packages.sh` and
+sourced `build_scripts/lib.sh`, `build_scripts/20-packages.sh`,
+`build_scripts/30-image-packages.sh`, `build_scripts/lib/image-packages.sh` and
 `build_scripts/desktop/install-desktop.sh` by file hash.
+
+The observation has no hash for image-wide package additions
+(`[defaults.packages]` and `[variants.<v>.packages]` in `tunaos.toml`). On apt
+they install plain names from the repositories above, so adding a name needs no
+refresh. Binding fails, and
+refresh refuses, when `build_scripts/lib/image-packages.tsv` gives the target a
+repository row, or a name that apt could read as an option, suite or file.
 
 It pins two more inputs by extract hash, not file hash. The extract of
 `scripts/build-image-inner.sh` is everything before its rechunk pass. The
@@ -125,10 +133,18 @@ record the new identities. A source or key change needs separate review. A
 failed signature never triggers key retrieval. The collector has no write or
 automatic trust-refresh path.
 
-A Renovate bump of any other `image-versions.yaml` key, or an edit to the
-rechunk pass of `scripts/build-image-inner.sh`, needs no refresh. A bump of
-the `common` digest, or an edit to the build-input part of that script,
-needs a refresh. Compute the extract hashes with the `_CONFIGURATION_EXTRACTS`
-functions in `scripts/lib/package_catalogs.py`, update `observed_at` and the
-`target_observation_sha256` pin in `tunaos.toml`, and run
+A Renovate bump of any other `image-versions.yaml` key, an edit to the
+rechunk pass of `scripts/build-image-inner.sh`, and a new image-wide package
+name need no refresh. Any edit to a pinned file, a `common` digest bump, or an
+edit to the build-input part of that script needs one. After you review the
+change, run the refresh command:
+
+```sh
+python3 scripts/refresh-package-observation.py --catalog debian-trixie
+python3 scripts/refresh-package-observation.py --catalog debian-trixie --write
+```
+
+The first command lists each changed input and writes nothing. The second
+replaces the observation file and the `target_observation_sha256` pin in
+`tunaos.toml`. It needs no network. Read `git diff`, then run
 `python3 -m pytest tests/test_package_catalogs.py tests/test_search_base_packages.py`.
