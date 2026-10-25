@@ -60,11 +60,16 @@ CANONICAL = "tuna-os/fisherman"
 # Task 9 promotes dev to this branch before overlays may be rebuilt.
 INSTALLER_REF = "prod"
 
-# Minimum fisherman revision every frontend must be at or after: the
-# MediaInput v1 commit. Full SHAs are compared (branches resolved to their
+# Minimum fisherman revision every frontend must be at or after: the commit
+# that landed MediaInput v1 on fisherman dev. This is the squash commit of
+# fisherman#340 (PR head dc9920c6, whose branch commit d349c31e first carried
+# MediaInput v1). The squash is NOT a descendant of d349c31e, so the branch
+# commit cannot serve as a floor: compare reports "diverged" for every pin on
+# dev. The squash tree contains all of d349c31e's files (live.go since moved on
+# to PR head dc9920c6). Full SHAs are compared (branches resolved to their
 # head SHA at fetch time); a source pinning anything older fails the floor
 # check below.
-FLOOR_COMMIT = "d349c31e47b1c05ef82d67811d5f4f9e77a62e2a"
+FLOOR_COMMIT = "02ac7097abb07a206479ea84a559c41db12bf629"
 
 # Where each desktop's installer declares its fisherman source. `manifest` is
 # a Flatpak manifest with a `fisherman` module; `submodule` is a .gitmodules

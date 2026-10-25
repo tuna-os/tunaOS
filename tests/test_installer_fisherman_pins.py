@@ -325,3 +325,26 @@ def test_invalid_json_response_fails_closed(monkeypatch) -> None:
     monkeypatch.setattr(mod.urllib.request, "urlopen", lambda *_args, **_kwargs: Response())
     with pytest.raises(KeyError, match="invalid JSON"):
         mod.api_json("https://api.example.test/resource")
+
+
+def test_floor_is_the_dev_squash_commit_not_the_pr_branch_commit() -> None:
+    # d349c31e is a fisherman#340 branch commit; compare says "diverged" for
+    # anything on dev, so it would fail every correctly promoted pin.
+    assert mod.FLOOR_COMMIT == "02ac7097abb07a206479ea84a559c41db12bf629"
+
+
+def test_floor_ancestry_follows_the_compare_status(monkeypatch) -> None:
+    seen = []
+
+    def status_for(status):
+        def fake_api(url):
+            seen.append(url)
+            return {"status": status}
+
+        return fake_api
+
+    expected = {"identical": True, "ahead": True, "behind": False, "diverged": False}
+    for status, want in expected.items():
+        monkeypatch.setattr(mod, "api_json", status_for(status))
+        assert mod.floor_is_ancestor("tuna-os/fisherman", "f" * 40) is want, status
+    assert all(f"/compare/{mod.FLOOR_COMMIT}...{'f' * 40}" in u for u in seen)
