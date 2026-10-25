@@ -14,7 +14,7 @@ that touched 36 files across `.github/`, `build_scripts/`, `live-iso/`,
 |---|---|---|
 | ARM64 build passes but Snapdragon laptop support is unclear (#3116) | #3368 records postmarketOS observations and open TunaOS boot/install/update/rollback gates; an architecture manifest does not test board firmware or DTB selection. | Use [SNAPDRAGON.md](SNAPDRAGON.md) and report the exact device, image digest and hardware results. |
 | Bonito build succeeds despite bootc lint findings (#3001) | `99-cleanup.sh` calls `lint_image`; `lib.sh` returns success after findings unless `BOOTC_LINT_FATAL=1`. | Read the grouped output and step summary. Re-run lint against the candidate digest; apply the [Fedora readiness review](FEDORA-OUTREACH-READINESS.md) before outreach. |
-| `wahoo:tuna` Build Image: `No match for argument: gnome-keyring` (#3810, run 39989009540) | Fedora ELN dropped gnome-keyring for oo7. On 2026-10-24 no `dl.fedoraproject.org/pub/eln/1` repo published gnome-keyring or gnome-keyring-pam. `oo7-daemon` obsoletes `gnome-keyring < 51`, `pam_oo7` obsoletes `gnome-keyring-pam < 51`, and ELN's gdm requires `pam_oo7`. Rawhide still ships gnome-keyring 51.1. | The ELN sections in `tunaos.toml` name `oo7-daemon` and `pam_oo7`. `require_secret_service` in the desktop contract treats either `ID=eln` or `VARIANT_ID=eln` in os-release as ELN and requires oo7 there, and `gnome-keyring-daemon` everywhere else. |
+| `wahoo:tuna` Build Image: `No match for argument: gnome-keyring` (#3810, run 39989009540) | Fedora ELN dropped `gnome-keyring` for oo7. On 2026-10-24 no `dl.fedoraproject.org/pub/eln/1` repo published `gnome-keyring` or `gnome-keyring-pam`. `oo7-daemon` obsoletes `gnome-keyring < 51`, `pam_oo7` obsoletes `gnome-keyring-pam < 51`, and ELN's gdm requires `pam_oo7`. Rawhide still ships `gnome-keyring` 51.1. | The ELN sections in `tunaos.toml` name `oo7-daemon` and `pam_oo7`. `require_secret_service` in the desktop contract treats either `ID=eln` or `VARIANT_ID=eln` in os-release as ELN and requires oo7 there, and `gnome-keyring-daemon` everywhere else. |
 
 ### Adoption report shows downloads while ISO use is unknown
 
@@ -2034,8 +2034,8 @@ registry push, boot or install proof.
 
 **Cause:** merge `4912d39d` retained the newer board but an older summary.
 Identity PR #3681, Test run `40042245544`, failed only this pytest assertion
-(5,234 passed). The per-cell evidence included seven newer desktop failures;
-restoring the older matching pair would hide those failures.
+(5,234 passed). The per-cell evidence had seven newer desktop failures; a restore
+of the older matching pair would hide those failures.
 
 **Fix:** replay the reviewed [retained assertions](matrix-snapshots/README.md)
 and check the board/provenance identity before publication. Preserve the
@@ -2054,12 +2054,12 @@ the check exit 1 on otherwise valid files. On 2026-10-24, 16 open PRs touched
 `--inputs` replay compares them with the checkout. `--check-structure`
 catches board-shape drift from configuration.
 
-**Symptom:** the Matrix Status PR check ends `cancelled` with no jobs, even
+**Symptom:** the check of Matrix Status on a PR ends `cancelled` with no jobs, even
 though no newer push was made to that PR.
 
 **Cause:** `matrix-status.yml` used one concurrency group, `matrix-status`,
-for every event. GitHub keeps only the newest pending run in a group, so a push
-to any PR cancelled every other pending PR run and could cancel a queued daily
+for every event. GitHub keeps only the newest queued run in a group. A push
+to any PR cancelled every other queued PR run, and could cancel a queued daily
 refresh. 41 of the last 98 `pull_request` runs ended cancelled on 2026-10-24,
 including run `40065011718` for #3839.
 
