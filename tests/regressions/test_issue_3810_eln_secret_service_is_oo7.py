@@ -12,15 +12,20 @@ rejects an ELN image without oo7 and a non-ELN image without gnome-keyring.
 """
 from functools import cache
 from pathlib import Path
+import importlib.util
 import re
 import subprocess
-import sys
 
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "scripts"))
-from lib import tunaos_config  # noqa: E402
+# Load the config module by path: it has no sibling imports, and putting
+# scripts/ on sys.path would leak into every test that runs after this one.
+_spec = importlib.util.spec_from_file_location(
+    "tunaos_config_3810", ROOT / "scripts/lib/tunaos_config.py"
+)
+tunaos_config = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(tunaos_config)
 
 CHECK = ROOT / "build_scripts/checks/verify-desktop-experience.sh"
 OO7 = {"oo7-daemon", "pam_oo7"}
@@ -62,21 +67,16 @@ def test_oo7_is_confined_to_eln():
 
 
 def contract_functions():
-    source = CHECK.read_text()
-    bodies = ["TUNAOS_CONTRACT_WAIVED=0"]
-    for name in (
-        "waive", "require_any_glob", "require_any_file", "require_any_executable",
-        "require_secret_service",
-    ):
-        match = re.search(
-            rf"^(?:function[ \t]+)?{name}[ \t]*(?:\(\))?[ \t]*\{{"
-            rf"(?:[^\n]*\}}|.*?^[ \t]*\}})",
-            source,
-            re.M | re.S,
-        )
-        assert match, f"the desktop contract has no {name}"
-        bodies.append(match.group(0))
-    return "\n".join(bodies)
+    """The helper region the contract delimits with begin/end markers.
+
+    It holds only function definitions and the waiver counter, so sourcing it
+    runs nothing; no shell parsing is needed to find a function boundary.
+    """
+    lines = CHECK.read_text().splitlines()
+    begin = lines.index("# contract-helpers: begin")
+    end = lines.index("# contract-helpers: end")
+    assert begin < end, "the contract-helpers markers are out of order"
+    return "\n".join(lines[begin + 1 : end])
 
 
 def image(
