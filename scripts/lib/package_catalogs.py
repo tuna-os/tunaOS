@@ -385,10 +385,10 @@ def _copied_package_source_files(config_directory):
             raise CatalogError('copied package-source inventory root is not a directory')
         for current, dirnames, filenames in os.walk(directory, followlinks=False):
             current_path = Path(current)
-            for name in sorted(dirnames):
+            dirnames.sort()
+            for name in dirnames:
                 if (current_path / name).is_symlink():
                     raise CatalogError('copied package-source paths must not contain symlinks')
-            dirnames.sort()
             for name in sorted(filenames):
                 candidate = current_path / name
                 relative = candidate.relative_to(root).as_posix()
