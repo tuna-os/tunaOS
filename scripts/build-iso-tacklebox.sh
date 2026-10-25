@@ -180,9 +180,17 @@ else
 	BASE_IMAGE="$SOURCE_IMAGE_REF"
 	BASE_DIGEST="unknown"
 fi
+if [[ "${TUNAOS_XFCE_CANDIDATE:-0}" == 1 ]]; then
+	[[ "$VARIANT:$FLAVOR:$PLATFORM" == bonito:xfce:linux/amd64 ]] || exit 2
+	[[ "${TUNA_LIVE_PAYLOAD_REF:-}" == "ghcr.io/tuna-os/bonito:xfce@${TUNA_LIVE_BASE_DIGEST:?}" ]] || exit 2
+	# Preserve the exact base manifest, independently of the live overlay.
+	skopeo copy --preserve-digests "containers-storage:${SOURCE_IMAGE_REF}@${TUNA_LIVE_BASE_DIGEST}" "oci:${CUSTOMIZE_DIR}/xfce-candidate-oci:payload"
+	python3 "${CUSTOMIZE_DIR}/xfce-media-input.py" "${CUSTOMIZE_DIR}/xfce-candidate-oci" "$TUNA_LIVE_BASE_DIGEST" "${CUSTOMIZE_DIR}/xfce-media-input.json"
+fi
 BASE_IMAGE="${TUNA_LIVE_BASE_IMAGE:-$BASE_IMAGE}"
 BASE_DIGEST="${TUNA_LIVE_BASE_DIGEST:-$BASE_DIGEST}"
 {
+	printf 'export TUNAOS_XFCE_CANDIDATE=%q\n' "${TUNAOS_XFCE_CANDIDATE:-0}"
 	printf 'export TUNA_LIVE_BASE_IMAGE=%q\n' "$BASE_IMAGE"
 	printf 'export TUNA_LIVE_BASE_DIGEST=%q\n' "$BASE_DIGEST"
 	if [[ -n "${TUNA_LIVE_PAYLOAD_REF+x}" ]]; then

@@ -1,7 +1,7 @@
 # Bounded ISO desktop qualification candidate
 
 This candidate extends `feat/iso-parity-cutover` at `3e61b0e0`.
-It adds an opt-in path for `grouper:xfce:linux/amd64`.
+It adds an opt-in path for `bonito:xfce:linux/amd64`.
 It does not admit XFCE into production qualification or activate a schedule.
 The evidence names OSTree; it cannot prove native-composefs or physical GPU support.
 
@@ -12,7 +12,7 @@ The inventory reads validated TOML and the required platform policy:
 ```sh
 python3 scripts/plan-iso-qualification.py | jq .
 python3 scripts/plan-iso-qualification.py \
-  --target grouper:xfce:linux/amd64 --max-parallel 1 --candidate-xfce
+  --target bonito:xfce:linux/amd64 --max-parallel 1 --candidate-xfce
 ```
 
 It retains configured rows and required obligations as separate fields.
@@ -28,7 +28,7 @@ TunaOS#3200 owns admission of `hummingbird:tuna`; package prerequisite #832 has 
 Do not repeat that package work or count tuna as runnable.
 
 Ordinary campaigns select at most four targets, with concurrency one or two.
-The XFCE candidate accepts only Grouper on AMD64.
+The XFCE candidate accepts only Bonito on AMD64.
 A native artifact can serve only its exact target.
 All inventory results remain `unrun` until a runtime run produces evidence.
 
@@ -50,8 +50,10 @@ Before GUI input, the live probe reads `flatpak info --show-commit`, `flatpak ps
 and `/etc/tunaos/live-installer-info`. All must match the reviewed application and commit.
 A later update from the remote fails this check; it cannot silently change the wizard.
 
-The GUI invokes the host's `/usr/local/bin/fisherman`, not the bundled executable.
-The probe records the host executable's SHA-256 separately.
+The GUI invokes the host's `/usr/local/bin/fisherman`.
+`customize-live.sh` links this path to the installed frontend's bundled binary.
+The probe checks that its resolved path equals the binary under the exact deployed
+`flatpak info --show-location` directory, then records the executable's SHA-256.
 Both install modes must observe the same digest.
 Do not infer its source revision from the Flatpak manifest.
 
@@ -63,7 +65,7 @@ No retry or credential change followed. The verified source in the unified repos
 The future bounded campaign uses these Live ISO workflow inputs:
 
 ```yaml
-variant: grouper
+variant: bonito
 flavor: xfce
 platform: linux/amd64
 candidate_xfce: true
@@ -103,7 +105,7 @@ Installed observation authenticates the account created through the GUI.
 It does not use SSH, disable host-key verification, use sudo, or inject a guest file.
 Responses have fresh nonce frames. Echo from the terminal cannot impersonate a result.
 
-The driver logs in through LightDM after each detached boot.
+The driver logs in through GDM after each detached boot.
 The observer checks the active graphical session, account UID, desktop process and its session scope.
 It also reads the boot ID, source digest, publication reference and OSTree kernel argument.
 The fresh boot's serial log supplies the matching XFCE desktop-contract result.
@@ -140,14 +142,57 @@ Local tests substitute the command boundary of the harness and its console trans
 They drive the eight-page contract through emission and validation, with negative controls.
 
 The actual ISO campaign remains unrun.
-The pinned GUI requests the `wheel` group; Grouper must prove account creation under its real group policy.
+The pinned GUI requests `wheel`. Fisherman `02ac7097` checks each group
+against the target's `etc/group`, then invokes the target's `useradd` through chroot
+for OSTree. It retains each existing group and warns for each absent group.
+Its source fixture `TestCreateUserSkipsMissingGroups` covers both behaviors.
+The recipe is supported by that source; actual account creation remains runtime proof.
+
 No headless account workaround changes that behavior.
-The runtime run must also prove serial login, unprivileged bootc status, LightDM input geometry,
+The runtime run must also prove serial login, unprivileged bootc status, GDM input geometry,
 XFCE session scope and unchanged LUKS boot arguments.
 Any failure remains a failure report; none counts as cutover proof.
 
 KDE, COSMIC, Niri, Pantheon, ARM64 and physical GPU qualification remain separate gaps.
 Preserve the existing diagnostic and storage owners and their branches.
+
+## Producer compatibility correction
+
+The earlier Grouper proposal was incorrect: its Ubuntu backend is outside this
+producer's OSTree contract. The candidate now selects only Bonito/XFCE/AMD64.
+`resolve-flavor.sh` maps it to `Containerfile.el10`, which disables composefs in its prepare-root configuration. The Fedora XFCE manifest selects GDM; EL10 Albacore/Yellowfin
+override it with greetd, a greeter outside this candidate.
+The validator accepts X11 and Wayland for XFCE with the same UID/process/scope checks.
+
+The native producer flow is:
+
+1. `just build bonito xfce linux/amd64 1 xfce` creates `localhost/bonito:xfce`.
+2. The workflow measures its raw manifest and builds the pinned live overlay.
+3. Only the final customization receives `TUNAOS_XFCE_CANDIDATE=1`.
+   The first overlay stage disables the adapter.
+4. `build-iso-tacklebox.sh` exports the base by digest using
+   `skopeo copy --preserve-digests`. `xfce-media-input.py` verifies blob sizes and
+   hashes, exact manifest and Linux/AMD64 config, then writes Fisherman's existing
+   MediaInput v1. Final customization embeds the OCI layout at
+   `/usr/lib/tunaos/xfce-candidate-oci` and verifies it again.
+5. The separate OSTree store still must preserve the original manifest digest.
+   The candidate retains that gate and the exact artifact admission.
+6. The XFCE GUI emits its empty-image recipe and account. Fisherman
+   `02ac7097` resolves the host descriptor and checks the layout before it partitions the disk.
+   It passes the OCI source and `ghcr.io/tuna-os/bonito:xfce` update ref to bootc.
+   OCI transport does not enable composefs.
+7. Same-run artifact ID, archive digest and source SHA reach the reusable test.
+   The candidate runner checks its ISO hash binding. Live descriptor and
+   installed session source must match the measured base digest.
+
+Pinned native Tacklebox `d3070b5` builds the store but does not write MediaInput;
+its separate pure builder does. The source for XFCE needs this descriptor for every cell. This adapter uses the existing Fisherman contract and
+leaves browser/storage owners untouched. It duplicates payload storage as OCI
+plus the original store; runner capacity and final ISO size remain unmeasured.
+
+The proxy blocked access to
+`git.sr.ht/~kennylevinsen/gtkgreet` (CONNECT 403). No retry or alternate route followed. Bonito's GDM
+path does not depend on it. EL10 greeter work remains separate.
 
 ## Browser coverage gap
 

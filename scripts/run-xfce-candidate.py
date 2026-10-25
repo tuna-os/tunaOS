@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run one exact native Grouper/XFCE artifact through the opt-in candidate path.
+"""Run one exact native Bonito/XFCE artifact through the opt-in candidate path.
 
 This entry point executes VMs only when explicitly invoked on an authorized
 runner. Local tests substitute the harness command boundary, never a guest.

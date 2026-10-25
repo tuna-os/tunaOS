@@ -30,7 +30,7 @@ PHASE=module('scripts/xfce-candidate-phase.py','candidate_phase')
 def frontend():
     return dict(app=APP,commit=COMMIT,receipt_app=APP,receipt_revision=COMMIT,
                 receipt_digest=COMMIT,architecture='x86_64',running_app=APP,
-                host_fisherman_digest='sha256:'+'d'*64)
+                host_fisherman_matches_deployment=True,host_fisherman_digest='sha256:'+'d'*64,media_input=dict(schemaVersion=1,platform='linux/amd64',image='ghcr.io/tuna-os/bonito:xfce',targetImgref='ghcr.io/tuna-os/bonito:xfce',platformManifestDigest='sha256:'+'a'*64,ociLayoutPath='/usr/lib/tunaos/xfce-candidate-oci'))
 
 
 class Wizard:
@@ -122,7 +122,7 @@ def test_actual_frontend_identity_required(field,value):
 @pytest.mark.parametrize('failure',[None,'source','backend','desktop','uid','boot_missing','boot_replay','account','frontend','interrupted'])
 def test_producer_to_validator_at_harness_boundary(tmp_path,monkeypatch,failure):
     data=FIXTURE.evidence('xfce')
-    iso=tmp_path/'grouper-xfce.iso';iso.write_bytes(b'inert ISO fixture; never booted')
+    iso=tmp_path/'bonito-xfce.iso';iso.write_bytes(b'inert ISO fixture; never booted')
     media=NATIVE.digest(iso)
     head=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip()
     binding=copy.deepcopy(data['artifact_binding'])
@@ -133,7 +133,7 @@ def test_producer_to_validator_at_harness_boundary(tmp_path,monkeypatch,failure)
     for key,value in {'GITHUB_REPOSITORY':'tuna-os/tunaOS','GITHUB_RUN_ID':'123',
         'GITHUB_RUN_ATTEMPT':'1','TUNAOS_NATIVE_BINDING':str(binding_file),
         'TUNAOS_NATIVE_ARTIFACT_ID':'789','TUNAOS_NATIVE_ARCHIVE_DIGEST':binding['archive_digest'],
-        'TUNAOS_NATIVE_SOURCE_SHA':head,'VARIANT':'grouper','FLAVOR':'xfce','TUNAOS_QUAL_PLATFORM':'linux/amd64',
+        'TUNAOS_NATIVE_SOURCE_SHA':head,'VARIANT':'bonito','FLAVOR':'xfce','TUNAOS_QUAL_PLATFORM':'linux/amd64',
         **{'TUNAOS_QUAL_'+key.upper()+'_DIGEST':value for key,value in inputs.items()}}.items():
         monkeypatch.setenv(key,value)
     qemu=tmp_path/'qemu';qemu.write_bytes(b'inert executable identity')
@@ -150,10 +150,11 @@ def test_producer_to_validator_at_harness_boundary(tmp_path,monkeypatch,failure)
         for mode in ('plain','luks'):
             frag=copy.deepcopy(data['observed'][mode])
             for key in ('gui','sessions','frontend_identity'):frag.pop(key,None)
-            frag['target_imgref']='ghcr.io/tuna-os/grouper:xfce'
+            frag['target_imgref']='ghcr.io/tuna-os/bonito:xfce'
             (output/f'strict-qual-{mode}.json').write_text(json.dumps(frag))
             gui(output/f'walkthrough-{mode}',mode,env['TUNAOS_XFCE_USER'],env['TUNAOS_XFCE_PASSWORD'],env['TUNAOS_WALKTHROUGH_LUKS_PASS'])
             actual_frontend=frontend()
+            actual_frontend['media_input']['platformManifestDigest']=inputs['source']
             if failure=='frontend':actual_frontend['commit']='0'*64
             (output/f'frontend-{mode}.json').write_text(json.dumps(actual_frontend))
             for phase in ('cold','warm'):
@@ -171,7 +172,7 @@ def test_producer_to_validator_at_harness_boundary(tmp_path,monkeypatch,failure)
         args=SimpleNamespace(command='emit-candidate',binding=binding_file,directory=output,
             output=output/'qualification-evidence.json',repository='tuna-os/tunaOS',run_id=123,attempt=1,
             artifact_id=789,archive_digest=binding['archive_digest'],source_sha=head,qemu=str(qemu),
-            variant='grouper',flavor='xfce',platform='linux/amd64',cpu_model='host',**inputs)
+            variant='bonito',flavor='xfce',platform='linux/amd64',cpu_model='host',**inputs)
         NATIVE.emit(args)
         return SimpleNamespace(returncode=0)
     if failure:
@@ -185,13 +186,14 @@ def test_producer_to_validator_at_harness_boundary(tmp_path,monkeypatch,failure)
         assert json.loads((output/'candidate-report.json').read_text())['qualified'] is False
 
 
-def test_live_probe_is_unprivileged(tmp_path):
+def test_live_probe_is_unprivileged(tmp_path,monkeypatch):
     class Guest:
         def __init__(self,*args):assert args[1:]==('liveuser','')
         def execute(self,source,sudo):
             assert sudo is False and 'runuser' not in source
             return frontend()
         def close(self):pass
+    monkeypatch.setenv('TUNAOS_QUAL_SOURCE_DIGEST','sha256:'+'a'*64)
     result=PHASE.collect(SimpleNamespace(action='live',console=tmp_path/'owned.sock'),console_factory=Guest)
     assert result['commit']==COMMIT
 
@@ -199,8 +201,8 @@ def test_live_probe_is_unprivileged(tmp_path):
 def test_candidate_preflight_cannot_claim_nvidia_or_all_cells():
     from contracts.iso_qualification import manifest,select
     doc=manifest()
-    assert select(doc,['grouper:xfce:linux/amd64'],1,True)['result']=='unrun'
-    for targets in (['grouper:xfce-nvidia:linux/amd64'],['grouper:xfce:linux/amd64','skipjack:gnome:linux/amd64']):
+    assert select(doc,['bonito:xfce:linux/amd64'],1,True)['result']=='unrun'
+    for targets in (['grouper:xfce:linux/amd64'],['albacore:xfce:linux/amd64'],['bonito:xfce-nvidia:linux/amd64'],['bonito:xfce:linux/amd64','skipjack:gnome:linux/amd64']):
         with pytest.raises(ValueError):select(doc,targets,1,True)
 
 
@@ -281,3 +283,70 @@ def test_hmp_waits_for_fragmented_completion_and_late_error(monkeypatch,failed):
     else:
         qemu_monitor.command('fixture.sock','screendump fixture.ppm')
     assert wire.parts==[] and wire.read>=5
+
+
+@pytest.mark.parametrize('fault',[None,'digest','layer','architecture','missing','index_arch','empty_layers','size','media_type','schema'])
+def test_native_payload_descriptor_checks_actual_bytes(tmp_path,fault):
+    adapter=module('live-iso/common/src/xfce-media-input.py','media_adapter')
+    layout=tmp_path/'oci'; blobs=layout/'blobs/sha256';blobs.mkdir(parents=True)
+    def put(data):
+        value=data if isinstance(data,bytes) else json.dumps(data).encode()
+        digest='sha256:'+hashlib.sha256(value).hexdigest()
+        (blobs/digest[7:]).write_bytes(value)
+        return dict(digest=digest,size=len(value))
+    config=put(dict(architecture='arm64' if fault=='architecture' else 'amd64',os='linux'))
+    layer=put(b'fixture layer, no image or guest execution')
+    manifest=put(dict(schemaVersion=2,config=config,layers=[] if fault=='empty_layers' else [layer]))
+    manifest['mediaType']='invalid' if fault=='media_type' else 'application/vnd.oci.image.manifest.v1+json'
+    if fault=='index_arch':manifest['platform']=dict(os='linux',architecture='arm64')
+    if fault=='size':manifest['size']=True
+    (layout/'oci-layout').write_text(json.dumps(dict(imageLayoutVersion='1.0.0')))
+    (layout/'index.json').write_text(json.dumps(dict(schemaVersion=1 if fault=='schema' else 2,manifests=[manifest])))
+    if fault=='layer':(blobs/layer['digest'][7:]).write_bytes(b'corrupt')
+    if fault=='missing':(blobs/layer['digest'][7:]).unlink()
+    expected='sha256:'+'0'*64 if fault=='digest' else manifest['digest']
+    if fault:
+        with pytest.raises(ValueError):adapter.descriptor(layout,expected)
+    else:
+        descriptor=adapter.descriptor(layout,expected)
+        assert descriptor['platformManifestDigest']==expected
+        assert descriptor['targetImgref']=='ghcr.io/tuna-os/bonito:xfce'
+        assert descriptor['ociLayoutPath']==adapter.LAYOUT
+        assert 'composeFsBackend' not in descriptor
+
+
+def test_candidate_producer_retains_ostree_gate_and_isolates_overlay():
+    producer=(ROOT/'.github/workflows/live-iso-bootc.yml').read_text()
+    adapter=(ROOT/'scripts/build-iso-tacklebox.sh').read_text()
+    overlay=(ROOT/'scripts/build-native-live-overlay.sh').read_text()
+    custom=(ROOT/'live-iso/common/src/customize-live.sh').read_text()
+    assert 'native qualification needs the OSTree offline store' in producer
+    assert '"$payload_digest" == "$TUNA_LIVE_BASE_DIGEST"' in producer
+    assert "inputs.candidate_xfce && '1' || '0'" in producer
+    assert 'export TUNAOS_XFCE_CANDIDATE=0' in overlay
+    assert 'bonito:xfce:linux/amd64' in adapter
+    assert 'skopeo copy --preserve-digests' in adapter
+    assert 'containers-storage:${SOURCE_IMAGE_REF}@${TUNA_LIVE_BASE_DIGEST}' in adapter
+    assert adapter.index('skopeo copy --preserve-digests') < adapter.index('export TUNAOS_XFCE_CANDIDATE')
+    assert 'xfce-media-input.py' in adapter and 'xfce-media-input.py' in custom
+    assert '/etc/bootc-installer/media-input.json' in custom
+
+
+@pytest.mark.parametrize('field,value',[('platformManifestDigest','sha256:'+'0'*64),
+    ('targetImgref','ghcr.io/tuna-os/grouper:xfce'),('ociLayoutPath','/tmp/unbound'),('platform','linux/arm64')])
+def test_live_source_descriptor_mismatch_fails(tmp_path,monkeypatch,field,value):
+    monkeypatch.setenv('TUNAOS_QUAL_SOURCE_DIGEST','sha256:'+'a'*64)
+    class Guest:
+        def __init__(self,*args):pass
+        def execute(self,*args,**kwargs):
+            result=frontend();result['media_input'][field]=value;return result
+        def close(self):pass
+    with pytest.raises(ValueError,match='source descriptor'):
+        PHASE.collect(SimpleNamespace(action='live',console=tmp_path/'owned.sock'),console_factory=Guest)
+
+
+def test_stale_host_fisherman_is_rejected():
+    result=frontend();result['host_fisherman_matches_deployment']=False
+    with pytest.raises(ValueError):validate_frontend(result)
+    probe=__import__('lib.xfce_candidate',fromlist=['LIVE_PROBE']).LIVE_PROBE
+    assert "'--show-location'" in probe and 'assert host == bundled' in probe

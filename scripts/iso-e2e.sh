@@ -848,7 +848,7 @@ E2E_SERIAL_ARGS=(
 # Candidate UART is a local control channel owned by this QEMU invocation.
 # QEMU records boot output even before the authenticated client attaches.
 if [[ "${TUNAOS_XFCE_CANDIDATE:-0}" == 1 ]]; then
-	[[ "${VARIANT:-}:${FLAVOR:-}:${TUNAOS_QUAL_PLATFORM:-}" == grouper:xfce:linux/amd64 ]] || exit 2
+	[[ "${VARIANT:-}:${FLAVOR:-}:${TUNAOS_QUAL_PLATFORM:-}" == bonito:xfce:linux/amd64 ]] || exit 2
 	CANDIDATE_CONSOLE="${OUTPUT_DIR}/candidate-console.sock"
 	rm -f "$CANDIDATE_CONSOLE"
 	E2E_SERIAL_ARGS=(-chardev "socket,id=e2eserial,path=${CANDIDATE_CONSOLE},server=on,wait=off,logfile=${SERIAL_LOG},logappend=on" -serial chardev:e2eserial)

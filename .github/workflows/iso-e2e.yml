@@ -33,7 +33,7 @@ on:
   workflow_call:
     inputs:
       candidate_xfce:
-        description: 'Opt-in Grouper/XFCE AMD64 candidate; no production admission'
+        description: 'Opt-in Bonito/XFCE AMD64 candidate; no production admission'
         type: boolean
         default: false
         required: false
@@ -73,7 +73,7 @@ on:
   workflow_dispatch:
     inputs:
       candidate_xfce:
-        description: 'Opt-in Grouper/XFCE AMD64 candidate; no production admission'
+        description: 'Opt-in Bonito/XFCE AMD64 candidate; no production admission'
         type: boolean
         default: false
         required: false

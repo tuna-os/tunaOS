@@ -14,12 +14,13 @@ from contracts.targets import cpu_baseline, resolve_required_targets, validate_t
 DESKTOPS = {
     'gnome': ('org.bootcinstaller.Installer', 'gnome-shell', ('gnome',), ('wayland', 'x11')),
     'kde': ('org.tunaos.InstallerKde', 'plasmashell', ('KDE',), ('wayland', 'x11')),
-    'xfce': ('org.tunaos.InstallerXfce', 'xfce4-session', ('XFCE', 'xfce'), ('x11',)),
+    'xfce': ('org.tunaos.InstallerXfce', 'xfce4-session', ('XFCE', 'xfce'), ('x11', 'wayland')),
     'cosmic': ('org.tunaos.InstallerCosmic', 'cosmic-comp', ('COSMIC',), ('wayland',)),
     'niri': ('org.tunaos.InstallerNiri', 'niri', ('niri',), ('wayland',)),
     'pantheon': ('org.bootcinstaller.Installer', 'gala', ('Pantheon',), ('x11', 'wayland')),
 }
 # This is driver availability, not a declaration that any image passed.
+NATIVE_OSTREE_VARIANTS = {'yellowfin', 'albacore', 'bonito', 'skipjack'}
 STRICT_DRIVERS = {'gnome': 'gnome-9f582fe0'}
 
 
@@ -58,10 +59,12 @@ def manifest(path=None):
             gaps.append('physical NVIDIA GPU qualification required')
         if platform == 'linux/arm64':
             gaps.append('native producer architecture not implemented')
+        if variant not in NATIVE_OSTREE_VARIANTS:
+            gaps.append('native OSTree producer backend not admitted')
         if desktop not in STRICT_DRIVERS:
             gaps.append('production qualification driver not admitted for this frontend')
         row = dict(target=target, required=key in required, configured=key in configured,
-                   desktop=desktop, backend='ostree', result='unrun', gaps=gaps,
+                   desktop=desktop, backend='ostree' if variant in NATIVE_OSTREE_VARIANTS else None, result='unrun', gaps=gaps,
                    runnable=not gaps, publication=required.get(key, {}).get('publication'), installer=DESKTOPS.get(desktop, (None,))[0])
         rows.append(row)
     doc = dict(schema='ISOQualificationTargets/v1', targets=rows,
@@ -83,9 +86,9 @@ def select(doc, keys, max_parallel=1, candidate_xfce=False):
     selected = []
     for key in keys:
         row = index.get(key)
-        candidate = candidate_xfce and key == 'grouper:xfce:linux/amd64' and row is not None and row['gaps'] == ['production qualification driver not admitted for this frontend']
+        candidate = candidate_xfce and key == 'bonito:xfce:linux/amd64' and row is not None and row['gaps'] == ['production qualification driver not admitted for this frontend']
         if candidate_xfce and (len(keys)!=1 or not candidate):
-            raise ValueError('candidate permits only Grouper XFCE AMD64')
+            raise ValueError('candidate permits only Bonito XFCE AMD64')
         if row is None or (not row['runnable'] and not candidate):
             raise ValueError(f'{key}: ' + '; '.join(row['gaps'] if row else ['target not configured']))
         selected.append(row)

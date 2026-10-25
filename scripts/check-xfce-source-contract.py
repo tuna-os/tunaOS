@@ -63,7 +63,7 @@ def check(root):
     assert summary.summary('Encryption')=='No encryption'
     print('PASS: OCR/control geometry on the exact source retained captures')
     print('PASS: pinned GUI widgets produce live-self-install and user recipes for plain/LUKS; no guest execution')
-    print('Runtime caveat: source requests wheel; Grouper account creation/group policy must pass the real GUI run')
+    print('Runtime proof still required: GUI-created account and graphical login on Bonito')
 
 
 if __name__=='__main__':

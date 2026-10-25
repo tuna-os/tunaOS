@@ -66,8 +66,15 @@ def collect(args, console_factory=Console, capture=screenshot, sleep=time.sleep)
         if args.action=='live':
             result=console.execute(LIVE_PROBE,sudo=False)
             validate_frontend(result)
+            media=result.get('media_input',{})
+            if (media.get('schemaVersion')!=1 or media.get('platform')!='linux/amd64'
+                or media.get('targetImgref')!='ghcr.io/tuna-os/bonito:xfce'
+                or media.get('image')!='ghcr.io/tuna-os/bonito:xfce'
+                or media.get('ociLayoutPath')!='/usr/lib/tunaos/xfce-candidate-oci'
+                or media.get('platformManifestDigest')!=os.environ['TUNAOS_QUAL_SOURCE_DIGEST']):
+                raise ValueError('live media source descriptor mismatch')
         else:
-            # LightDM must visibly offer the account created through the wizard.
+            # GDM must visibly offer the account created through the wizard.
             screen=capture(args,'login-'+args.phase)
             box=screen.box(user)
             click_unix(str(args.vnc),(box[0]+box[2])//2,(box[1]+box[3])//2)

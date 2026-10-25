@@ -144,6 +144,7 @@ def validate_desktop_identity(evidence):
     row = matches[0]
     require(row['required'] and row['configured'], 'target policy conflict or unscheduled')
     require(evidence.get('cpu_baseline') == row['target']['cpuBaseline'], 'platform/CPU baseline mismatch')
+    require(row['backend'] == 'ostree', 'native producer backend not admitted')
     require(evidence.get('storage_backend') == 'ostree', 'backend is not OSTree; native-composefs requires separate proof')
     require(evidence.get('hardware_scope') == 'qemu', 'unsupported hardware scope')
     require('nvidia' not in evidence['flavor'].split('-'), 'physical GPU evidence required')
@@ -182,6 +183,11 @@ def validate_desktop_identity(evidence):
         require(gui.get('mode') == mode, 'GUI mode mismatch')
         if desktop == 'xfce':
             validate_frontend(observed.get('frontend_identity'))
+            media=observed['frontend_identity'].get('media_input',{})
+            require(media.get('schemaVersion')==1 and media.get('platform')==evidence['platform']
+                    and media.get('image')==expected_ref and media.get('targetImgref')==expected_ref
+                    and media.get('platformManifestDigest')==inputs['source']
+                    and media.get('ociLayoutPath')=='/usr/lib/tunaos/xfce-candidate-oci', 'XFCE media input/source mismatch')
             host_backends.append(observed['frontend_identity']['host_fisherman_digest'])
             require(sessions['cold']['uid']==sessions['warm']['uid'], 'installed account UID changed between boots')
             require(inputs['installer'] == 'sha256:'+XFCE_COMMIT, 'XFCE installer digest mismatch')
@@ -201,7 +207,7 @@ def emit(args):
             'diagnostic GRUB overrides cannot emit native qualification')
     candidate = getattr(args, 'command', '') == 'emit-candidate'
     if candidate:
-        require((args.variant,args.flavor,args.platform)==('grouper','xfce','linux/amd64'), 'candidate target outside bounded XFCE scope')
+        require((args.variant,args.flavor,args.platform)==('bonito','xfce','linux/amd64'), 'candidate target outside bounded XFCE scope')
     binding = load(args.binding)
     harness = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True, timeout=10).strip()
     require(binding.get('repository') == args.repository, 'binding repository differs from current job')

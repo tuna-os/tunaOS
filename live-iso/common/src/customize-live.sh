@@ -985,6 +985,16 @@ STORESEOF
 # Same probe as scripts/lib/common.sh TUNAOS_BACKEND_PROBE_SH, and the order is
 # load-bearing for the same reason documented there: bootupd payload first, so
 # a SEALED image that still ships bootupd stays on the ostree path.
+if [[ "${TUNAOS_XFCE_CANDIDATE:-0}" == 1 ]]; then
+	[[ "$INSTALLER_APP" == org.tunaos.InstallerXfce && "$TUNA_LIVE_PLATFORM" == linux/amd64 ]] || exit 2
+	[[ "$TUNA_LIVE_PAYLOAD_REF" == "ghcr.io/tuna-os/bonito:xfce@${TUNA_LIVE_BASE_DIGEST}" ]] || exit 2
+	# XFCE reads Fisherman's host MediaInput, never GNOME's recipe file.
+	# The separate OSTree offline store and producer digest check remain required.
+	mkdir -p /usr/lib/tunaos /etc/bootc-installer
+	[[ ! -e /usr/lib/tunaos/xfce-candidate-oci ]] || exit 2
+	cp -a "${SCRIPT_DIR}/xfce-candidate-oci" /usr/lib/tunaos/xfce-candidate-oci
+	python3 "${SCRIPT_DIR}/xfce-media-input.py" /usr/lib/tunaos/xfce-candidate-oci "$TUNA_LIVE_BASE_DIGEST" /etc/bootc-installer/media-input.json
+fi
 RECIPE_FILE="/etc/bootc-installer/recipe.json"
 if [[ -n "${TUNA_LIVE_PAYLOAD_REF+x}" ]]; then
 	# The final native media stage knows the canonical alias and measured

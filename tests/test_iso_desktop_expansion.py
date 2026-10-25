@@ -45,7 +45,8 @@ def evidence(desktop='xfce'):
         from lib.xfce_candidate import APP, COMMIT, TRANSITIONS
         data['resolved_inputs']['installer']='sha256:'+COMMIT
         for row in data['observed'].values():
-            row['frontend_identity']=dict(app=APP,commit=COMMIT,receipt_app=APP,receipt_revision=COMMIT,receipt_digest=COMMIT,architecture='x86_64',running_app=APP,host_fisherman_digest='sha256:'+'d'*64)
+            row['frontend_identity']=dict(app=APP,commit=COMMIT,receipt_app=APP,receipt_revision=COMMIT,receipt_digest=COMMIT,architecture='x86_64',running_app=APP,host_fisherman_matches_deployment=True,host_fisherman_digest='sha256:'+'d'*64)
+            row['frontend_identity']['media_input']=dict(schemaVersion=1,platform=data['platform'],image=row['target_imgref'],targetImgref=row['target_imgref'],platformManifestDigest=data['resolved_inputs']['source'],ociLayoutPath='/usr/lib/tunaos/xfce-candidate-oci')
             row['gui'].update(installer_digest='sha256:'+COMMIT,transitions=TRANSITIONS,account_digest='sha256:'+hashlib.sha256(b'tuna12345678').hexdigest(),source_selection='live-self-install')
             for value in row['sessions'].values():
                 value.update(account_digest='sha256:'+hashlib.sha256(b'tuna12345678').hexdigest(),storage_backend='ostree')
@@ -162,7 +163,7 @@ def test_guest_session_observer_uses_real_session_and_process(tmp_path):
         return responses[args[0]]
     observed = observer.observe('xfce','linux/amd64','plain','cold',command,proc)
     assert observed['uid']==1000 and observed['process']=='xfce4-session'
-    for wrong in ['Class=greeter', 'Remote=yes', 'Active=no', 'Desktop=GNOME', 'Type=wayland']:
+    for wrong in ['Class=greeter', 'Remote=yes', 'Active=no', 'Desktop=GNOME', 'Type=tty']:
         key = wrong.split('=')[0]
         before = properties
         properties = '\n'.join(wrong if line.startswith(key+'=') else line for line in properties.splitlines())

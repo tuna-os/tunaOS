@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       candidate_xfce:
-        description: 'Opt-in Grouper/XFCE AMD64 candidate; not production qualification'
+        description: 'Opt-in Bonito/XFCE AMD64 candidate; not production qualification'
         required: false
         default: false
         type: boolean
@@ -293,6 +293,7 @@ jobs:
         # (tests/test_fork_safe_workflows.py).
         env:
           TACKLEBOX_FROM_SOURCE: "1"
+          TUNAOS_XFCE_CANDIDATE: ${{ inputs.candidate_xfce && '1' || '0' }}
         run: |
           # Root, and no rootless hop before it.
           #
