@@ -1,7 +1,8 @@
 name: GHCR Partial-Pull Compatibility Canary
 
-# All TunaOS images publish with --compression-format=zstd:chunked
-# (reusable-build-image.yml). Partial (chunked) pulls fetch blob segments
+# Production uses plain zstd (reusable-build-image.yml). This advisory
+# range probe is not proof of partial pulls: a candidate needs verified OCI
+# chunk metadata and measured client transfers. Partial pulls fetch segments
 # with multi-range HTTP GETs, and GHCR's blob CDN answers those with
 # `501 Unsupported client range` instead of a normal 206 — confirmed with:
 #

@@ -25,11 +25,23 @@ ARG IMAGE_NAME_VARIANT
 FROM ${BASE_IMAGE} AS bootc-builder
 ARG BOOTC_VERSION
 ARG BOOTUPD_VERSION
+# Explicit local qualification only; production does not set this argument.
+ARG TUNAOS_BOOTC_CANDIDATE=0
+COPY scripts/bootc-candidate.py /tmp/tunaos-bootc-candidate.py
 RUN pacman -Syu --noconfirm make git rust go-md2man ostree glibc pkgconf
-RUN git clone --depth 1 --branch "${BOOTC_VERSION}" https://github.com/bootc-dev/bootc.git /tmp/bootc && \
-    cd /tmp/bootc && \
-    make bin && \
-    make install-all DESTDIR=/output
+RUN if [ "${TUNAOS_BOOTC_CANDIDATE}" = "1" ]; then \
+      pacman -S --noconfirm python && \
+      git clone --depth 1 --branch v1.17.1 https://github.com/bootc-dev/bootc.git /tmp/bootc && \
+      mkdir /output && \
+      python /tmp/tunaos-bootc-candidate.py bootstrap --source /tmp/bootc --destination /output --family arch; \
+    elif [ "${TUNAOS_BOOTC_CANDIDATE}" = "0" ]; then \
+      git clone --depth 1 --branch "${BOOTC_VERSION}" https://github.com/bootc-dev/bootc.git /tmp/bootc && \
+      cd /tmp/bootc && \
+      make bin && \
+      make install-all DESTDIR=/output; \
+    else \
+      echo "Invalid TUNAOS_BOOTC_CANDIDATE: expected 0 or 1" >&2; exit 1; \
+    fi
 RUN git clone --depth 1 --branch "${BOOTUPD_VERSION}" https://github.com/coreos/bootupd.git /tmp/bootupd && \
     cd /tmp/bootupd && \
     make && \
