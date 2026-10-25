@@ -28,11 +28,20 @@ search. There is no add or write option.
 `configuration_observed_at` names the reviewed extraction that binds the
 collector to the effective target. The observation pins
 `Containerfile.debian`, the invoked `build_scripts/10-base-packages.sh`, the
-sourced `build_scripts/lib.sh`, `build_scripts/20-packages.sh`,
-`build_scripts/desktop/install-desktop.sh`, `scripts/build-image-inner.sh`, and
-`image-versions.yaml`. It lists the APT source and trust files under
-`system_files`. It records the common image, pinned by digest, whose
-`/system_files/shared` tree the build copies into the target.
+sourced `build_scripts/lib.sh`, `build_scripts/20-packages.sh` and
+`build_scripts/desktop/install-desktop.sh` by file hash.
+
+It pins two more inputs by extract hash, not file hash. The extract of
+`scripts/build-image-inner.sh` is everything before its rechunk pass. The
+extract of `image-versions.yaml` is the `common` image entry. Renovate edits the
+other keys of that file daily, and no flounder stage uses them to set a package
+source. `tests/test_package_catalogs.py` lists every reader of the file and
+fails when a new one appears.
+
+The observation lists
+the APT source and trust files under `system_files`. It records the common image,
+pinned by digest, whose `/system_files/shared` tree the build copies into the
+target.
 
 The collector also
 reads the selected desktop policy from the same parsed `tunaos.toml`. If a
@@ -115,3 +124,11 @@ source inventory, check the public trust material, authenticate all metadata, an
 record the new identities. A source or key change needs separate review. A
 failed signature never triggers key retrieval. The collector has no write or
 automatic trust-refresh path.
+
+A Renovate bump of any other `image-versions.yaml` key, or an edit to the
+rechunk pass of `scripts/build-image-inner.sh`, needs no refresh. A bump of
+the `common` digest, or an edit to the build-input part of that script,
+needs a refresh. Compute the extract hashes with the `_CONFIGURATION_EXTRACTS`
+functions in `scripts/lib/package_catalogs.py`, update `observed_at` and the
+`target_observation_sha256` pin in `tunaos.toml`, and run
+`python3 -m pytest tests/test_package_catalogs.py tests/test_search_base_packages.py`.
