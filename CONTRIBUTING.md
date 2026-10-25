@@ -231,8 +231,8 @@ just check   # shellcheck, yamllint, actionlint
 ```
 
 The configuration-sensitive binaries and their release-asset checksums are
-repository-pinned. Follow the [lint tool contract](docs/LINTING.md) instead of
-installing current Homebrew versions.
+repository-pinned. Follow the [lint tool contract](docs/LINTING.md) and do not
+install the current Homebrew versions.
 
 `just ci` runs what the PR gate runs — `check`, the CI contract, and every
 unit suite. A green `just ci` locally is a green PR, minus the
@@ -288,7 +288,7 @@ and technical accuracy in all content; an STE opt-out only changes prose checks.
 A bug that let an unusable or wrongly-promoted image ship stays open until a
 test proves the old failure mode can never recur in silence. Put that test in
 [`tests/regressions/`](tests/regressions/README.md), named after the issue
-(`test_issue_<number>_<what_must_not_recur>.py`), with a docstring that cites
+(`test_issue_<number>_<what_must_not_recur>.py`), with a description that cites
 the issue and the run or log that measured the failure. The seed example is
 #858 (marlin:kde shipped with no Wayland session). The regression test runs
 the desktop contract's own check against a filesystem with no session file,
