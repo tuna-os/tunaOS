@@ -42,7 +42,12 @@ R2_SECRETS = ("R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_ENDPOINT", "R2_BUC
 R2_SECRET_REF = re.compile(r"secrets\.R2_[A-Z_]+")
 # Any rclone invocation counts as R2 use, whatever its subcommand: a new subcommand
 # must not slip past the guard check. (`apt-get install rclone` does not start a line.)
-RCLONE_CMD = re.compile(r"(?m)^\s*(?:[A-Za-z_]+=\S+\s+)*(?:sudo\s+(?:-\S+\s+)*)?rclone\s+\S")
+# scripts/publish-iso-r2.sh is the shared uploader (#3382): it runs rclone for the
+# caller, so invoking it is R2 use exactly like invoking rclone directly, and the
+# empty-credential check must come before it.
+RCLONE_CMD = re.compile(
+    r"(?m)^\s*(?:[A-Za-z_]+=\S+\s+)*"
+    r"(?:(?:sudo\s+(?:-\S+\s+)*)?rclone|(?:bash\s+)?(?:\./)?scripts/publish-iso-r2\.sh)\s+\S")
 ENV_GUARD = "env.R2_CONFIGURED == 'true'"
 EMPTY_CHECK = re.compile(r'\[\[\s+-z\s+"\$\{?(RCLONE_CONFIG_R2_ACCESS_KEY_ID|R2_BUCKET)(?::?-)?\}?"\s+\]\]')
 
@@ -184,6 +189,28 @@ def test_the_detector_flags_an_unguarded_rclone_step():
     job = {"env": {"R2_CONFIGURED": "${{ " + " && ".join(f"secrets.{n} != ''" for n in R2_SECRETS) + " }}"}}
     assert _guard(0, [guarded], job) == "env"
     assert not _uses_r2({"name": "i", "run": "sudo apt-get install -y rclone"})
+
+
+def _script_step(body: str) -> dict:
+    return {"name": "u", "env": {"R2_BUCKET": "${{ secrets.R2_BUCKET }}"}, "run": body}
+
+
+def test_the_shared_uploader_counts_as_r2_and_needs_the_empty_check_first():
+    """Mutations: a step that only calls publish-iso-r2.sh must not be waved through."""
+    call = 'scripts/publish-iso-r2.sh \\\n  "$ISO" "$LATEST" cfg.json "R2:${R2_BUCKET}/live-isos"\n'
+    check = 'if [[ -z "${R2_BUCKET}" ]]; then\n  echo skip\n  exit 0\nfi\n'
+    assert RCLONE_CMD.search(call)
+    assert not RCLONE_CMD.search("# scripts/publish-iso-r2.sh x")
+    assert _guard(0, [_script_step(check + call)], {}) == "script"
+    # No empty-credential guard at all: the secret reference alone must not pass.
+    assert _guard(0, [_script_step(call)], {}) is None
+    # The check runs only after the upload has started: too late.
+    assert _guard(0, [_script_step(call + check)], {}) is None
+    # A check that does not exit 0 does not skip the upload.
+    assert _guard(0, [_script_step(check.replace("exit 0", "true") + call)], {}) is None
+    # The guard must test an R2 secret, not an unbound variable.
+    unbound = dict(_script_step(check + call), env={"R2_BUCKET": "literal"})
+    assert _guard(0, [unbound], {}) is None
 
 
 def _names_host_outside_comment(line: str) -> bool:
