@@ -9,7 +9,13 @@ Run 40064779947 then reached that fallback after ONE silent pinned pull and
 died on a quay.io 503 inside it. The pinned pull is retried before the
 mutable source fallback is used.
 
-Falsification: behavioral — unchanged cache rw flags fail the exact output assertion; unknown bytes must fail before output, and a stubbed failed pull must retry before fallback.
+Falsification: behavioural. The compat tests run the real helper and the real
+`scripts/build-chunkah.sh` on the reviewed Containerfile: removing a bind-mount
+`rw`, or leaving a cache `rw`, changes the output bytes and fails the exact
+comparison; unknown bytes must fail before any output exists. The pull tests
+run the pull block extracted from `scripts/build-image-inner.sh`: restoring the
+single-attempt pull makes the one- and two-failure cases fall to the source
+fallback and fail.
 """
 
 import importlib.util

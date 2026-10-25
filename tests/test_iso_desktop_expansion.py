@@ -55,9 +55,14 @@ def evidence(desktop='xfce'):
 
 def test_inventory_reconciles_all_rows_without_claims():
     doc = manifest()
-    assert doc['counts'] == dict(flavor_pairs=62, configured=92, required=97,
-                                configured_not_required=11, required_unscheduled=16)
-    assert len(doc['targets']) == 108
+    assert doc['counts'] == dict(flavor_pairs=62, configured=92, image_supported=92)
+    assert len(doc['targets']) == 92
+    assert all('required' not in row for row in doc['targets'])
+    from lib.tunaos_config import load, matrix
+    config = matrix(load())
+    expected = {(v['id'], f['id'], p) for v in config['variants'] for f in v['flavors']
+                if f.get('build_iso') for p in f.get('platforms', v['platforms'])}
+    assert {tuple(r['target'][k] for k in ('variant', 'flavor', 'platform')) for r in doc['targets']} == expected
     assert all(r['result'] == 'unrun' for r in doc['targets'])
     assert {'gnome','kde','xfce','cosmic','niri','pantheon','base'} <= {r['desktop'] for r in doc['targets']}
     hummingbird = [r for r in doc['targets'] if r['target']['variant'] == 'hummingbird' and r['configured']]
@@ -193,3 +198,46 @@ def test_v2_native_baseline_uses_variant_policy():
     NATIVE.validate(fixtures.seal(receipt))
     receipt['cpu_baseline']='x86-64'
     with pytest.raises(ValueError, match='baseline'): NATIVE.validate(fixtures.seal(receipt))
+
+
+def test_current_toml_support_does_not_invent_missing_architectures(monkeypatch):
+    import contracts.iso_qualification as inventory
+    from lib.tunaos_config import load
+    config = load()
+    flavor = next(f for f in config['variants']['bonito']['flavors'] if f['id']=='xfce')
+    flavor['platforms'] = ['linux/amd64/v3']
+    flavor['build_image'] = False
+    monkeypatch.setattr(inventory, 'load', lambda path=None: config)
+    doc = inventory.manifest()
+    rows = [r for r in doc['targets'] if r['target']['variant']=='bonito' and r['target']['flavor']=='xfce']
+    assert len(rows)==1
+    assert rows[0]['target']['platform']=='linux/amd64/v3'
+    assert rows[0]['target']['cpuBaseline']=='x86-64-v3'
+    assert not rows[0]['image_supported'] and not rows[0]['runnable']
+    assert 'source image build disabled' in rows[0]['gaps']
+    with pytest.raises(ValueError): inventory.select(doc,['bonito:xfce:linux/amd64'],candidate_xfce=True)
+
+
+def test_current_publication_identity_matches_shared_shell_resolver():
+    import os
+    import subprocess
+    rows=manifest()['targets']
+    for variant in ('bonito','albacore'):
+        row=next(r for r in rows if r['target']['variant']==variant and r['target']['flavor']=='xfce')
+        expected=subprocess.check_output(['bash','scripts/published-image-ref.sh',variant,'xfce','ghcr'],
+            cwd=ROOT,env=os.environ,text=True).strip()
+        assert row['publication']['repository']+':'+row['publication']['tag']==expected
+
+
+def test_configured_cpu_conflict_cannot_pass_candidate_receipt():
+    data=evidence('gnome')
+    data.update(platform='linux/amd64/v2',cpu_baseline='x86-64-v2')
+    with pytest.raises(ValueError,match='support or hardware gaps'):
+        NATIVE.validate(fixtures.seal(data))
+
+
+def test_bare_alma_and_v2_keep_distinct_native_baselines():
+    rows=[r for r in manifest()['targets'] if r['target']['variant']=='albacore' and r['target']['flavor']=='gnome']
+    baselines={r['target']['platform']:r['target']['cpuBaseline'] for r in rows}
+    assert baselines['linux/amd64']=='x86-64-v3'
+    assert baselines['linux/amd64/v2']=='x86-64-v2'

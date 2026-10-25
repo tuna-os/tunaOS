@@ -5,25 +5,41 @@ printf "::group:: === 90 Image Info ===\n"
 
 source /run/context/build_scripts/lib.sh
 
+# Name, URLs, codenames and CPE come from tunaos.toml through this generated
+# adapter (scripts/config.py generate-identity), for TunaOS and forks alike.
+# There is deliberately no built-in fallback: a missing file is a broken
+# build context, not a reason to stamp stock TunaOS identity on a fork.
+DEFAULT_IDENTITY_ENV=/run/context/build_scripts/lib/identity.env
+if [[ -n "${TUNAOS_IDENTITY_ENV:-}" && "${TUNAOS_IDENTITY_TEST_OVERRIDE:-}" != 1 ]]; then
+	echo "ERROR: TUNAOS_IDENTITY_ENV is test-only; build identity must use ${DEFAULT_IDENTITY_ENV}" >&2
+	exit 1
+fi
+IDENTITY_ENV="${TUNAOS_IDENTITY_ENV:-${DEFAULT_IDENTITY_ENV}}"
+if [[ ! -f "${IDENTITY_ENV}" || ! -r "${IDENTITY_ENV}" ]]; then
+	echo "ERROR: ${IDENTITY_ENV} is missing or unreadable; run scripts/config.py generate-identity" >&2
+	exit 1
+fi
+# shellcheck source=lib/identity.env
+if ! source "${IDENTITY_ENV}"; then
+	echo "ERROR: ${IDENTITY_ENV} could not be sourced; run scripts/config.py generate-identity" >&2
+	exit 1
+fi
+
 # Fold a friendly alias tag onto the canonical variant id it belongs to.
 #
-# Mirrors the `aliases:` lists in .github/build-config.yml. An alias is only a
-# second tag for the same digest, so it must never become the image's identity
+# The table is generated from each variant's `aliases` in tunaos.toml
+# (scripts/config.py generate-variant-aliases). An alias is only a second tag
+# for the same digest, so it must never become the image's identity
 # (VARIANT_ID/hostname) and it is not a valid key for the codename table below.
+VARIANT_ALIASES="${TUNAOS_VARIANT_ALIASES:-/run/context/build_scripts/lib/variant-aliases.tsv}"
+if [[ ! -f "${VARIANT_ALIASES}" ]]; then
+	echo "ERROR: ${VARIANT_ALIASES} is missing; run scripts/config.py generate-variant-aliases" >&2
+	exit 1
+fi
 canonical_variant() {
-	case "$1" in
-	almalinux-kitten) echo yellowfin ;;
-	almalinux) echo albacore ;;
-	centos) echo skipjack ;;
-	fedora) echo bonito ;;
-	opensuse | tumbleweed) echo sailfin ;;
-	gentoo) echo guppy ;;
-	elementary) echo gurnard ;;
-	ubuntu) echo grouper ;;
-	arch | archlinux) echo marlin ;;
-	debian) echo flounder ;;
-	*) echo "$1" ;;
-	esac
+	local owner
+	owner="$(awk -F'\t' -v alias="$1" '$1 == alias { print $2 }' "${VARIANT_ALIASES}")"
+	echo "${owner:-$1}"
 }
 
 # lib.sh derives IMAGE_NAME from the detected base whenever the Containerfile
@@ -60,6 +76,11 @@ EOF
 # expects the same namespace instead of a hardcoded tuna-os.
 install -d /usr/share/tunaos
 printf '%s\n' "${IMAGE_VENDOR}" >/usr/share/tunaos/image-vendor
+# The installed verifier runs after the build context is gone. Persist the
+# generated identity policy beside the runtime image identity on every path
+# that invokes this shared writer, including manifest-driven desktops and
+# overlays.
+install -Dm0644 "${IDENTITY_ENV}" /usr/share/tunaos/identity-config.env
 
 # Every variant shipped these two pointing at projectbluefin.io, inherited
 # verbatim from the bluefin-lts script this one started as, while SUPPORT_URL
@@ -67,14 +88,43 @@ printf '%s\n' "${IMAGE_VENDOR}" >/usr/share/tunaos/image-vendor
 # info-overview` on any TunaOS image was sent to another project's front page.
 # The contract missed it because it only asserted the two URLs that were
 # already correct; verify-branding.sh now checks all four.
-HOME_URL="https://github.com/tuna-os/tunaos"
-DOCUMENTATION_URL="https://github.com/tuna-os/tunaos/tree/main/docs"
-SUPPORT_URL="https://github.com/tuna-os/tunaos/issues/"
-BUG_SUPPORT_URL="https://github.com/tuna-os/tunaos/issues/"
+HOME_URL="${TUNAOS_HOME_URL}"
+DOCUMENTATION_URL="${TUNAOS_DOCUMENTATION_URL}"
+SUPPORT_URL="${TUNAOS_SUPPORT_URL}"
+BUG_REPORT_URL="${TUNAOS_BUG_REPORT_URL}"
+
+# Files in system_files that name the project write @TUNAOS_<NAME>@ where the
+# value belongs, <NAME> being a variable of the identity adapter sourced above
+# (tunaos.toml [project] and [defaults.branding]). Render them here, in every
+# build path that runs this script, so a fork never edits a TunaOS literal and
+# the stock project name and URLs land byte for byte where they always did.
+# Idempotent: an overlay re-copies system_files and runs this script again.
+# The values are validated plain words and https URLs; only sed's `&`, `\` and
+# the `|` delimiter need escaping.
+tunaos_render_tokens() {
+	local file name value replacement
+	for file in "$@"; do
+		[[ -f "${file}" ]] || continue
+		for name in TUNAOS_PROJECT_NAME TUNAOS_HOME_URL TUNAOS_COUNTME_METRICS_URL; do
+			value="${!name}"
+			replacement="$(printf '%s' "${value}" | sed 's/[\\&|]/\\&/g')"
+			sed -i "s|@${name}@|${replacement}|g" "${file}"
+		done
+		if grep -q '@TUNAOS_[A-Z_]*@' "${file}"; then
+			echo "ERROR: ${file} still has an identity token no adapter value fills: $(grep -o '@TUNAOS_[A-Z_]*@' "${file}" | sort -u | tr '\n' ' ')" >&2
+			exit 1
+		fi
+	done
+}
+tunaos_render_tokens \
+	/usr/share/plasma/look-and-feel/org.tunaos.desktop/metadata.json \
+	/usr/share/plasma/look-and-feel/org.tunaos.light.desktop/metadata.json \
+	/usr/share/wallpapers/TunaOS/metadata.json \
+	/usr/lib/systemd/system/tunaos-live-ready.service
 
 # TunaOS variants are named for fish. Keep VERSION_CODENAME tied to that
 # identity instead of inheriting the unrelated legacy dinosaur codename.
-# Generic common names use one stable representative species.
+# Each variant's codename is declared in tunaos.toml.
 #
 # Keyed on the canonical variant id, not on IMAGE_NAME: IMAGE_NAME carries the
 # *publish* name (`bonito` for bonito-rawhide, `flounder` for flounder-sid) and,
@@ -82,25 +132,12 @@ BUG_SUPPORT_URL="https://github.com/tuna-os/tunaos/issues/"
 # the base image. IMAGE_NAME_VARIANT is the variant id build-image-inner.sh
 # passes verbatim, so prefer it and fall back to the canonicalized IMAGE_NAME.
 VARIANT_KEY="$(canonical_variant "${IMAGE_NAME_VARIANT:-${IMAGE_NAME}}")"
-case "${VARIANT_KEY}" in
-yellowfin) CODE_NAME="Thunnus albacares" ;;
-albacore) CODE_NAME="Thunnus alalunga" ;;
-skipjack) CODE_NAME="Katsuwonus pelamis" ;;
-bonito | bonito-rawhide) CODE_NAME="Sarda sarda" ;;
-sailfin) CODE_NAME="Istiophorus platypterus" ;;
-guppy) CODE_NAME="Poecilia reticulata" ;;
-grouper) CODE_NAME="Epinephelus marginatus" ;;
-marlin) CODE_NAME="Makaira nigricans" ;;
-hummingbird) CODE_NAME="Trochilidae" ;;
-wahoo) CODE_NAME="Acanthocybium solandri" ;;
-gurnard) CODE_NAME="Chelidonichthys lucerna" ;;
-flounder | flounder-sid) CODE_NAME="Platichthys flesus" ;;
-*)
-	echo "ERROR: no scientific fish codename defined for variant: ${VARIANT_KEY}" \
+CODE_NAME="${TUNAOS_CODENAMES["${VARIANT_KEY}"]:-}"
+if [[ -z "${CODE_NAME}" ]]; then
+	echo "ERROR: no codename defined in tunaos.toml for variant: ${VARIANT_KEY}" \
 		"(IMAGE_NAME_VARIANT=${IMAGE_NAME_VARIANT:-unset}, IMAGE_NAME=${IMAGE_NAME})" >&2
 	exit 1
-	;;
-esac
+fi
 
 chmod 644 $IMAGE_INFO
 
@@ -159,11 +196,16 @@ fi
 # albacore (#1007) or marlin (#1015) — the substitution matched no line and
 # exited 0.
 osr_set() {
-	local key="$1" value="$2" file
+	local key="$1" value="$2" file replacement
+	# The value is a sed REPLACEMENT: `&` there means "the matched text", and
+	# `\` and the `|` delimiter end or alter it. A configured URL such as
+	# https://x.example/?a=1&b=2 is valid, so escape all three; unescaped, the
+	# `&` pasted the old KEY=... line into the field.
+	replacement="$(printf '%s' "$value" | sed 's/[\\&|]/\\&/g')"
 	for file in "${OS_RELEASE_FILES[@]}"; do
 		if grep -q "^${key}=" "$file"; then
 			# `|` delimiter rather than `/`: values may contain slashes (URLs).
-			sed -i "s|^${key}=.*|${key}=\"${value}\"|" "$file"
+			sed -i "s|^${key}=.*|${key}=\"${replacement}\"|" "$file"
 		else
 			echo "${key}=\"${value}\"" >>"$file"
 		fi
@@ -176,8 +218,10 @@ osr_set VERSION_CODENAME "${CODE_NAME}"
 osr_set VARIANT_ID "${IMAGE_NAME}"
 osr_set PRETTY_NAME "${IMAGE_PRETTY_NAME}"
 osr_set HOME_URL "${HOME_URL}"
-osr_set BUG_REPORT_URL "${BUG_SUPPORT_URL}"
-osr_set CPE_NAME "cpe:/o:jamesreilly:${IMAGE_NAME}-tunaos"
+osr_set BUG_REPORT_URL "${BUG_REPORT_URL}"
+# The product part is IMAGE_NAME, the publish name (bonito for bonito-rawhide),
+# as TunaOS has always written it; VERSION_CODENAME carries the variant key.
+osr_set CPE_NAME "cpe:/o:${TUNAOS_CPE_VENDOR}:${IMAGE_NAME}-${TUNAOS_PROJECT_ID}"
 
 # Dynamically interpolate the specific variant name and logo path in the installer recipe.json
 RECIPE_FILE="/etc/bootc-installer/recipe.json"
@@ -202,29 +246,23 @@ if [[ -f "${RECIPE_FILE}" ]]; then
 	if [[ "${IMAGE_FLAVOR}" == "xfce" || "${IMAGE_FLAVOR}" == *"xfce"* ]]; then DESKTOP_PRETTY_NAME="XFCE"; fi
 	if [[ "${IMAGE_FLAVOR}" == "pantheon" || "${IMAGE_FLAVOR}" == *"pantheon"* ]]; then DESKTOP_PRETTY_NAME="Pantheon"; fi
 
-	# Pick the variant mark that ACTUALLY EXISTS in the installer's GResource.
-	#
-	# This line used to build 'images/${IMAGE_NAME}.png' unconditionally. Every
-	# TunaOS mark in that bundle is an .svg — only bluefin, bluefin-lts and
-	# dakota are .png — so the path never resolved. bootc-installer's
-	# apply_icon() catches the failure and logs a warning, so the welcome
-	# screen silently showed GTK's broken-image placeholder above a correctly
-	# branded "Welcome to Skipjack". Seen on the live-ISO screenshot for
-	# tuna-os/tunaOS#1056.
-	#
-	# The set below is upstream's, from bootc_installer/bootc-installer.gresource.xml:
-	#   images/tunaos.svg  bonito.svg  skipjack.svg  albacore.svg  yellowfin.svg
-	# grouper, marlin, redfin and sailfin have no mark of their own, and would
-	# hit exactly the same broken placeholder — they fall back to the TunaOS
-	# mark, which is branding rather than breakage.
-	case "${IMAGE_NAME}" in
-	tunaos | bonito | skipjack | albacore | yellowfin)
-		DISTRO_LOGO_RES="resource:///org/bootcinstaller/Installer/images/${IMAGE_NAME}.svg"
-		;;
-	*)
-		DISTRO_LOGO_RES="resource:///org/bootcinstaller/Installer/images/tunaos.svg"
-		;;
-	esac
+	# The installer shows the mark this image already carries: the variant's
+	# emoji from tunaos.toml (scripts/branding/make-logos.py), installed as
+	# /usr/share/pixmaps/tunaos.svg below, or the generic mark for a name with
+	# none. bootc-installer reads an absolute path as a file and maps /usr/
+	# to /run/host/usr/ in its Flatpak, so every variant and every fork gets
+	# its own mark. The installer's bundled GResource held marks for only five
+	# TunaOS names (tunaos, bonito, skipjack, albacore, yellowfin); the rest
+	# showed the TunaOS fish (tuna-os/tunaOS#1056, #3668).
+	DISTRO_LOGO_RES="/usr/share/pixmaps/tunaos.svg"
+
+	# The installer installs the project's own umbrella image, <registry>/
+	# <namespace>/<project id>:latest: the destination this build publishes to
+	# (the same IMAGE_REGISTRY/IMAGE_VENDOR the image-ref above is built from,
+	# resolved from [build.publish], the operator override or the repository
+	# owner) and the id from tunaos.toml [project]. recipe.json used to name
+	# ghcr.io/tuna-os/tunaos:latest, so a fork's installer installed TunaOS.
+	RECIPE_IMGREF="${IMAGE_REGISTRY:-ghcr.io}/${IMAGE_VENDOR}/${TUNAOS_PROJECT_ID}:latest"
 
 	python3 -c "
 import json
@@ -263,22 +301,46 @@ if 'completed' in tour:
 
 recipe['tour'] = new_tour
 
-# The variant is the name people see; the installer's stock slides say
-# TunaOS (e.g. your new TunaOS workstation). Swap it in every text value,
-# leaving image references alone.
-def rename(v):
-    if isinstance(v, dict):
-        return {k: (x if k in ('imgref', 'image', 'distro_logo') else rename(x)) for k, x in v.items()}
-    if isinstance(v, list):
-        return [rename(x) for x in v]
-    if isinstance(v, str):
-        return v.replace('TunaOS', '${IMAGE_PRETTY_NAME}')
-    return v
-recipe = rename(recipe)
+recipe['imgref'] = '${RECIPE_IMGREF}'
+recipe['local_imgref'] = 'containers-storage:${RECIPE_IMGREF}'
+
+# The variant is the name people see; the installer's stock slides name the
+# project (tunaos.toml [project] name, e.g. your new TunaOS workstation). Swap
+# it in display text only: each slide's title and description. Paths, image
+# references (imgref, local_imgref) and step names are data, and a project
+# named like one of them (tunaos) must not rewrite them. The name also stays
+# whole inside a longer word, path or domain (repo.tunaos.org).
+import re
+# Unmodified shipped slides still use the template project token. A fork may
+# also supply slides using its configured name. Match either in display text
+# only; never make a fork pre-edit recipe data to activate its TOML identity.
+project_names = sorted({'TunaOS', '${TUNAOS_PROJECT_NAME}'}, key=len, reverse=True)
+project = re.compile(r'(?<![A-Za-z0-9_@/.:-])(?:' + '|'.join(re.escape(name) for name in project_names) + r')(?![.]?[A-Za-z0-9_@/-])')
+# A project token in a URL query or fragment is still data. Preserve full
+# URI spans, Markdown destinations and HTML markup before applying display-name
+# boundaries to the remaining visible text.
+uri = re.compile(r'<[^>]*>|(?<=\]\()[^)\s]+|(?:[A-Za-z][A-Za-z0-9+.-]*://|mailto:|(?<![A-Za-z0-9])(?:/|\./|\.\./))[^\s<>' + chr(34) + chr(39) + r']+')
+def rename(text):
+    result, start = [], 0
+    for match in uri.finditer(text):
+        result.extend((project.sub(lambda _: '${IMAGE_PRETTY_NAME}', text[start:match.start()]), match.group()))
+        start = match.end()
+    result.append(project.sub(lambda _: '${IMAGE_PRETTY_NAME}', text[start:]))
+    return ''.join(result)
+for slide in recipe['tour'].values():
+    for key in ('title', 'description'):
+        if isinstance(slide.get(key), str):
+            # The shipped slides write @TUNAOS_PROJECT_NAME@ where they name the
+            # project, so a fork's name never has to match a TunaOS literal.
+            slide[key] = rename(slide[key].replace('@TUNAOS_PROJECT_NAME@', '${IMAGE_PRETTY_NAME}'))
 
 with open('${RECIPE_FILE}', 'w') as f:
     json.dump(recipe, f, indent=2)
 " || true
+	if ! grep -qF "\"imgref\": \"${RECIPE_IMGREF}\"" "${RECIPE_FILE}"; then
+		echo "ERROR: ${RECIPE_FILE} does not name ${RECIPE_IMGREF}; the installer would install another image" >&2
+		exit 1
+	fi
 fi
 
 osr_set DOCUMENTATION_URL "${DOCUMENTATION_URL}"
@@ -332,7 +394,7 @@ if [[ -f "${IDENTITY_TSV}" ]]; then
 	IDENTITY_ROW="$(awk -F'\t' -v id="${VARIANT_KEY}" '$1 == id' "${IDENTITY_TSV}")"
 fi
 if [[ -n "${IDENTITY_ROW}" ]]; then
-	IFS=$'\t' read -r _ ACCENT GNOME_ACCENT BASE_LABEL HOMAGE <<<"${IDENTITY_ROW}"
+	IFS=$'\t' read -r _ ACCENT GNOME_ACCENT BASE_LABEL HOMAGE _ <<<"${IDENTITY_ROW}"
 	ACCENT_HEX="${ACCENT#\#}"
 	ACCENT_R=$((16#${ACCENT_HEX:0:2}))
 	ACCENT_G=$((16#${ACCENT_HEX:2:2}))
@@ -369,13 +431,29 @@ EOF
 		done
 	fi
 
-	# Names people can see in settings: the Plasma global theme and wallpaper
-	# are called after the variant, not "TunaOS".
+	# Only the plugin's display name is ours to specialize. Authors, URLs,
+	# IDs and custom labels are data, not project-name substitution targets.
+	# Accept unmodified shipped templates as well as fork-authored names.
 	for meta in /usr/share/plasma/look-and-feel/org.tunaos.desktop/metadata.json \
 		/usr/share/plasma/look-and-feel/org.tunaos.light.desktop/metadata.json \
 		/usr/share/wallpapers/TunaOS/metadata.json; do
 		[[ -f "${meta}" ]] || continue
-		sed -i -E "s/(\"Name\": *\")TunaOS( Light)?\"/\\1${IMAGE_PRETTY_NAME}\\2\"/" "${meta}"
+		python3 - "${meta}" "${TUNAOS_PROJECT_NAME}" "${IMAGE_PRETTY_NAME}" <<'METADATA'
+import json
+from pathlib import Path
+import sys
+
+path, project, variant = Path(sys.argv[1]), sys.argv[2], sys.argv[3]
+original = path.read_text(encoding='utf-8')
+metadata = json.loads(original)
+plugin = metadata.get('KPlugin', {})
+name = plugin.get('Name')
+replacements = {base + suffix: variant + suffix
+                for base in ('TunaOS', project) for suffix in ('', ' Light')}
+if isinstance(name, str) and name in replacements and name != replacements[name]:
+    plugin['Name'] = replacements[name]
+    path.write_text(json.dumps(metadata, indent=4, ensure_ascii=False) + '\n', encoding='utf-8')
+METADATA
 	done
 
 	# Console login banner. Upstream's names the upstream distro ("Ubuntu
@@ -417,7 +495,7 @@ EOF
   "modules": [
     "title",
     "separator",
-    { "type": "os", "key": "system  ", "format": "{pretty-name}  ·  part of TunaOS, built on ${BASE_LABEL}" },
+    { "type": "os", "key": "system  ", "format": "{pretty-name}  ·  part of ${TUNAOS_PROJECT_NAME}, built on ${BASE_LABEL}" },
     { "type": "command", "key": "image   ", "text": "/usr/libexec/tunaos/fetch-image", "shell": "/bin/sh" },
     { "type": "custom", "key": "forged  ", "format": "${BUILD_DATE}" },
     { "type": "kernel", "key": "kernel  ", "format": "{release}" },
@@ -443,14 +521,6 @@ EOF
 	echo "Variant identity: ${VARIANT_KEY} accent=${ACCENT} (${HOMAGE})"
 else
 	echo "No identity row for ${VARIANT_KEY} in variant-identity.tsv; generic TunaOS look"
-fi
-
-# Explicit generated input only. Apply last: the stock identity writer above
-# runs again in some desktop stages and would otherwise restore stock URLs/art.
-if [[ -e /run/context/manifests/fork-config.json || -L /run/context/manifests/fork-config.json ]]; then
-	# shellcheck source=/dev/null
-	source /run/context/build_scripts/lib/fork-branding.sh
-	tunaos_apply_fork_branding /run/context
 fi
 
 IMAGE_NAME_VARIANT="${VARIANT_KEY}" /run/context/build_scripts/install-countme.sh

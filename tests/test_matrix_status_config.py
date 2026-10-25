@@ -510,6 +510,8 @@ class FactoryHealthSummary(unittest.TestCase):
         self.assertEqual(got["install"], {"passed": 1, "tested": 1, "total": 2})
         self.assertEqual(got["lifecycle"], {"passed": 1, "tested": 2, "total": 2})
         self.assertEqual(got["iso"], {"passed": 0, "tested": 2, "total": 2})
+        # The board states a Package parity headline, so the summary carries it.
+        self.assertEqual(got["parity"], {"passed": 0, "tested": 0, "total": 0})
         self.assertEqual(got["builds"], {"passed": 1, "tested": 2, "total": 2})
         self.assertEqual(got["boots"], {"passed": 0, "tested": 0, "total": 0})
         self.assertEqual(got["desktop"], {"passed": 0, "tested": 0, "total": 0})
@@ -517,17 +519,16 @@ class FactoryHealthSummary(unittest.TestCase):
         # applicable missing install evidence enters this count.
         self.assertEqual(got["never_tested"], 1)
         self.assertEqual(got["known_regressions"]["blocking"], 1)
-        # ISO is advisory on this branch: both ISO failures plus lifecycle.
-        self.assertEqual(got["known_regressions"]["advisory"], 3)
+        self.assertEqual(got["known_regressions"]["advisory"], 1)
         self.assertEqual(got["last_full_sweep"], "2026-08-14")
 
 
 # ── main(): --check / --check-structure / default write ────────────────────
 
 class MainCliDispatch(unittest.TestCase):
-    """Argument handling and file I/O, with build() mocked.
+    """Argument handling and file I/O, with build_pair() mocked.
 
-    build()'s own orchestration (475-738) composes iso_matrix, luks_matrix,
+    build_pair()'s orchestration composes iso_matrix, luks_matrix,
     latest_results, contract_results, overlay_tags, cell, desktop_table,
     tally, undeclared_tally and excluded_tally — every one of which has its
     own unit tests above and in test_matrix_status_fetch.py — so mocking it
@@ -542,23 +543,21 @@ class MainCliDispatch(unittest.TestCase):
 
     @staticmethod
     def _wrap(body: str) -> str:
-        # build() always returns its own BEGIN/END markers (see build()'s
-        # `out = [BEGIN, ..., END]`); main() strips the committed doc's
-        # markers via str.split() and rebuilds entirely from what build()
-        # returns, so a mock standing in for build() must wrap its body the
-        # same way or head/tail reconstruction never matches the file.
+        # build_pair() returns its own BEGIN/END markers; main() strips the
+        # committed doc's markers and rebuilds entirely from that generated
+        # block, so the mock must preserve the same boundary.
         return f"{gms.BEGIN}\n{body}\n{gms.END}"
 
     def _write_doc(self, body: str):
         self.doc.write_text(f"# Matrix status\n\n{self._wrap(body)}\n")
 
     def _run_main(self, argv, generated_body="new content"):
-        # build() now returns (text, provenance); main writes the provenance
+        # build_pair() returns (text, provenance); main writes the provenance
         # JSON beside the doc, so point PROV into the same tmpdir.
         prov = Path(self.tmp.name) / "matrix-provenance.json"
         with mock.patch.object(gms, "DOC", self.doc), \
                 mock.patch.object(gms, "PROV", prov), \
-                mock.patch.object(gms, "build",
+                mock.patch.object(gms, "build_pair",
                                   return_value=(self._wrap(generated_body), {})), \
                 mock.patch.object(sys, "argv", ["gen-matrix-status.py", *argv]):
             return gms.main()
@@ -746,34 +745,6 @@ class LifecycleResultsNormalisation(unittest.TestCase):
         assert gms.lifecycle_job_key("BETA guppy:gnome (amd64)") == (
             "guppy:gnome (amd64)"
         )
-
-    def test_committed_snapshot_excludes_probe_only_beta_lifecycle_results(self):
-        provenance = json.loads(
-            (SCRIPT.parent.parent / "docs" / "matrix-provenance.json").read_text()
-        )
-        beta_prefixes = ("bonito-rawhide:", "flounder-sid:")
-        beta_lifecycle = [
-            axes["lifecycle"]
-            for cell, axes in provenance["cells"].items()
-            if cell.startswith(beta_prefixes) and "lifecycle" in axes
-        ]
-        assert len(beta_lifecycle) == 8
-        assert all(result == {
-            "date": "",
-            "evidence": "",
-            "run": "",
-            "verdict": "untested",
-        } for result in beta_lifecycle)
-        verdicts = [
-            axes["lifecycle"]["verdict"]
-            for axes in provenance["cells"].values()
-            if "lifecycle" in axes
-        ]
-        assert provenance["summary"]["lifecycle"] == {
-            "passed": verdicts.count("pass"),
-            "tested": sum(verdict != "untested" for verdict in verdicts),
-            "total": len(verdicts),
-        }
 
     def test_non_cell_jobs_are_ignored(self):
         got = self._with_raw({

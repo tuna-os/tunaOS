@@ -37,6 +37,7 @@ wrapper="$work/native-customize.sh"
 	printf '#!/usr/bin/env bash\n'
 	# The payload adapter runs only in final media customization.
 	printf 'export TUNAOS_XFCE_CANDIDATE=0\n'
+	printf 'export TUNA_SESSION_ROOT=/\n'
 	printf 'export TUNA_INSTALLER_ARCH=%q\n' x86_64
 	printf 'export TUNA_INSTALLER_APP=%q\n' "$installer_app"
 	printf 'export TUNA_LIVE_BASE_IMAGE=%q\n' "$source_image"

@@ -30,9 +30,9 @@ name: GHCR Partial-Pull Compatibility Canary
   workflow_dispatch:
     inputs:
       image:
-        description: "Image ref to test (must be zstd:chunked on GHCR)"
+        description: "Image ref to test (must be zstd:chunked on GHCR; empty: <publish destination>/yellowfin:gnome)"
         required: false
-        default: "ghcr.io/tuna-os/yellowfin:gnome"
+        default: ""
 
 permissions:
   contents: read
@@ -42,8 +42,22 @@ jobs:
   canary:
     runs-on: ubuntu-24.04
     env:
-      IMAGE: ${{ inputs.image || 'ghcr.io/tuna-os/yellowfin:gnome' }}
+      INPUT_IMAGE: ${{ inputs.image }}
+      IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY }}
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup yq
+        uses: ./.github/actions/setup-yq
+
+      - name: Resolve image
+        run: |
+          # Default: the flagship image at "<registry>/<namespace>" from
+          # tunaos.toml [build.publish], else ghcr.io/<owner>.
+          echo "IMAGE=${INPUT_IMAGE:-$(bash scripts/publish-destination.sh)/yellowfin:gnome}" >> "$GITHUB_ENV"
+
       - name: Raw HTTP range-request check
         # Reproduces the exact repro from #579 against the image's own
         # blobs, so the underlying GHCR CDN behavior (not just one podman
@@ -51,6 +65,10 @@ jobs:
         # serves public blob layers without auth.
         run: |
           set -x
+          if [[ "$IMAGE" != ghcr.io/* ]]; then
+            echo "::notice::${IMAGE} is not on ghcr.io; this canary only measures GHCR blob range handling."
+            exit 0
+          fi
           NAMETAG="${IMAGE#ghcr.io/}"     # tuna-os/yellowfin:gnome
           REPO="${NAMETAG%%:*}"           # tuna-os/yellowfin
           TAG="${NAMETAG##*:}"            # gnome

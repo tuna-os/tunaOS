@@ -6,30 +6,34 @@ class PolicyError(ValueError):
     """Invalid primary Flatpak declaration policy."""
 
 
-def _keys(value, required):
-    if not isinstance(value, dict) or set(value) != set(required):
-        raise PolicyError(f'expected only fields {required}')
+def _keys(value, required, optional=()):
+    if not isinstance(value, dict) or not set(required) <= set(value) or set(value) - set(required) - set(optional):
+        raise PolicyError(f'expected fields {required}' + (f' and optionally {optional}' if optional else ''))
 
 
-def _apps(value):
+def _apps(value, scope='common'):
+    where = f'flatpak_preinstall.{scope}'
     if not isinstance(value, list) or len(value) > 128:
-        raise PolicyError('apps must be a bounded list')
+        raise PolicyError(f'{where}: apps must be a bounded list')
     seen = set()
-    for app in value:
+    for index, app in enumerate(value):
         _keys(app, ('id', 'branch'))
+        label = f'{where}[{index}] ({app["id"]!r})' if isinstance(app['id'], str) else f'{where}[{index}]'
         if not isinstance(app['id'], str) or not re.fullmatch(r'(?:[A-Za-z_][A-Za-z0-9_]*\.){2,}[A-Za-z_-][A-Za-z0-9_-]*', app['id']) or len(app['id']) > 255:
-            raise PolicyError('invalid Flatpak app ID')
+            raise PolicyError(f'{label}: invalid Flatpak app ID; use the reverse-DNS ID from the app page, such as org.gnome.Calculator')
         if app['branch'] != 'stable':
-            raise PolicyError('only stable declarations are supported by the current builder projection')
+            raise PolicyError(f'{label}: branch {app["branch"]!r} is not supported; only stable declarations are supported by the current builder projection')
         if app['id'] in seen:
-            raise PolicyError('duplicate app declaration')
+            raise PolicyError(f'{label}: duplicate app declaration')
         seen.add(app['id'])
     return seen
 
 
 def validate(primary):
     policy = primary['flatpak_preinstall']
-    _keys(policy, ('schema_version', 'common', 'desktop_additions'))
+    # remote_url is the project's Flatpak remote, not an app declaration; the
+    # URL itself is validated by tunaos_config (it owns the https grammar).
+    _keys(policy, ('schema_version', 'common', 'desktop_additions'), ('remote_url',))
     if type(policy['schema_version']) is not int or policy['schema_version'] != 1:
         raise PolicyError('flatpak_preinstall schema_version must be 1')
     common = _apps(policy['common'])
@@ -42,9 +46,10 @@ def validate(primary):
     logical_desktops = {item['desktop'] for item in metadata.values()}
     for desktop, apps in additions.items():
         if desktop not in logical_desktops or desktop not in primary.get('desktops', {}) or not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,63}', desktop):
-            raise PolicyError('unknown desktop in Flatpak policy')
-        if common & _apps(apps):
-            raise PolicyError('desktop declaration duplicates common app')
+            raise PolicyError(f'flatpak_preinstall.desktop_additions.{desktop}: unknown desktop; use a desktop id from [flavor_metadata.*] that also has a [desktops.*] policy')
+        duplicated = common & _apps(apps, f'desktop_additions.{desktop}')
+        if duplicated:
+            raise PolicyError(f'flatpak_preinstall.desktop_additions.{desktop}: duplicates an app already in flatpak_preinstall.common: {sorted(duplicated)}')
     return policy
 
 

@@ -50,19 +50,25 @@ import os
 import re
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 
 # The repository fisherman actually lives in now.
 CANONICAL = "tuna-os/fisherman"
 
+# Audit the production installer sources, not the default development branch.
+# Task 9 promotes dev to this branch before overlays may be rebuilt.
+INSTALLER_REF = "prod"
+
 # Minimum fisherman revision every frontend must be at or after: the commit
-# that LANDED MediaInput v1 on fisherman's default branch (`dev`), i.e.
-# 02ac7097, the squash merge of tuna-os/fisherman#340. Not d349c31e, the
-# PR-branch commit: a squash merge never makes the branch commit an ancestor
-# of `dev`, so every frontend pinned at the landed change compared "diverged"
-# against it and failed (run 40057457412). Full SHAs are compared (branches
-# resolved to their head SHA at fetch time); a source pinning anything older
-# fails the floor check below.
+# that landed MediaInput v1 on fisherman dev. This is the squash commit of
+# fisherman#340 (PR head dc9920c6, whose branch commit d349c31e first carried
+# MediaInput v1). The squash is NOT a descendant of d349c31e, so the branch
+# commit cannot serve as a floor: compare reports "diverged" for every pin on
+# dev. The squash tree contains all of d349c31e's files (live.go since moved on
+# to PR head dc9920c6). Full SHAs are compared (branches resolved to their
+# head SHA at fetch time); a source pinning anything older fails the floor
+# check below.
 FLOOR_COMMIT = "02ac7097abb07a206479ea84a559c41db12bf629"
 
 # Where each desktop's installer declares its fisherman source. `manifest` is
@@ -126,6 +132,10 @@ def audit(sources: dict, floor: str = FLOOR_COMMIT) -> list[str]:
     """Pure: {desktop: source_dict} -> list of problems. No network."""
     problems = []
     for desktop, source in sorted(sources.items()):
+        source_error = source.get("source_error")
+        if source_error:
+            problems.append(f"{desktop}: {source_error}")
+            continue
         url = source.get("url")
         if not url:
             problems.append(
@@ -143,20 +153,27 @@ def audit(sources: dict, floor: str = FLOOR_COMMIT) -> list[str]:
                 f"Flatpak keeps rebuilding, so nothing looks wrong."
             )
             continue
+        pin = source.get("resolved") or source.get("commit") or source.get("branch")
+        if not pin:
+            problems.append(
+                f"{desktop}: canonical fisherman source has no revision pin. "
+                f"Pin a commit or branch at or after {floor[:12]}."
+            )
+            continue
         # Full SHAs were resolved at fetch time (branches to their head SHA),
         # so this compares exact revisions against the MediaInput v1 floor.
         if source.get("at_or_after_floor") is False:
             problems.append(
-                f"{desktop}: pins fisherman at "
-                f"{(source.get('resolved') or source.get('commit') or source.get('branch') or '?')[:12]}, "
-                f"older than the floor {floor[:12]} (MediaInput v1). "
+                f"{desktop}: pins fisherman at {(pin or '?')[:12]}, older than "
+                f"or unrelated to the floor {floor[:12]} (MediaInput v1). "
                 f"Advance the pin to a revision at or after the floor."
             )
     return problems
 
 
-def fetch(repo: str, path: str) -> str:
-    url = f"https://api.github.com/repos/{repo}/contents/{path}"
+def fetch(repo: str, path: str, ref: str = INSTALLER_REF) -> str:
+    query = urllib.parse.urlencode({"ref": ref})
+    url = f"https://api.github.com/repos/{repo}/contents/{path}?{query}"
     request = urllib.request.Request(
         url, headers={"Accept": "application/vnd.github.raw"}
     )
@@ -175,55 +192,103 @@ def api_json(url: str) -> dict:
     if token:
         request.add_header("Authorization", f"Bearer {token}")
     with urllib.request.urlopen(request, timeout=30) as response:
-        return json.loads(response.read().decode())
+        try:
+            value = json.loads(response.read().decode())
+        except json.JSONDecodeError as exc:
+            raise KeyError(f"{url} returned invalid JSON") from exc
+    if not isinstance(value, dict):
+        raise KeyError(f"{url} returned non-object JSON")
+    return value
 
 
 def resolve_sha(repo: str, ref: str) -> str:
-    """A branch (or short SHA) in repo -> its full 40-char HEAD SHA."""
-    return api_json(f"https://api.github.com/repos/{repo}/commits/{ref}")["sha"]
+    """A branch (or short SHA) in repo -> its full 40-character HEAD SHA."""
+    sha = api_json(f"https://api.github.com/repos/{repo}/commits/{ref}").get("sha")
+    if not isinstance(sha, str) or re.fullmatch(r"[0-9a-f]{40}", sha) is None:
+        raise KeyError(f"{repo}@{ref} did not resolve to a full commit SHA")
+    return sha
 
+
+def submodule_sha(repo: str, path: str, ref: str = INSTALLER_REF) -> str:
+    """Return the exact gitlink committed by the installer production ref."""
+    query = urllib.parse.urlencode({"ref": ref})
+    value = api_json(
+        f"https://api.github.com/repos/{repo}/contents/{path}?{query}"
+    )
+    if not isinstance(value, dict):
+        raise KeyError(f"{repo}:{path}@{ref} returned non-object JSON")
+    sha = value.get("sha")
+    if not isinstance(sha, str) or re.fullmatch(r"[0-9a-f]{40}", sha) is None:
+        raise KeyError(f"{repo}:{path}@{ref} has no valid committed submodule SHA")
+    return sha
 
 
 def floor_is_ancestor(repo: str, sha: str, floor: str = FLOOR_COMMIT) -> bool | None:
-    """Return whether the floor is proven to be an ancestor of ``sha``.
-
-    A newer timestamp or a divergent commit is not content proof. A
-    non-ancestor pin therefore fails closed; callers only receive ``None``
-    when the compare API cannot answer.
-    """
+    """Is `floor` an ancestor of (or identical to) `sha`? None if unknowable."""
     try:
         status = api_json(
             f"https://api.github.com/repos/{repo}/compare/{floor}...{sha}"
         )["status"]
-    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, KeyError):
+    except urllib.error.HTTPError as exc:
+        # A missing commit is deterministic source drift, not a network blip.
+        return False if exc.code == 404 else None
+    except (urllib.error.URLError, TimeoutError, KeyError):
         return None
-    if status in ("ahead", "identical"):
-        return True
-    if status in ("behind", "diverged"):
-        return False
-    return None
-
-def submodule_sha(repo: str, path: str) -> str:
-    """Read the exact gitlink SHA recorded for a submodule path."""
-    payload = api_json(f"https://api.github.com/repos/{repo}/contents/{path}")
-    sha = payload.get("sha") if isinstance(payload, dict) else None
-    if not isinstance(sha, str) or not re.fullmatch(r"[0-9a-f]{40}", sha):
-        raise ValueError(f"{repo}:{path} did not return a 40-character gitlink SHA")
-    return sha
+    # "ahead": sha descends from the floor; "identical": pinned exactly on it.
+    # "behind"/"diverged": the pin predates the floor (or left its line).
+    return status in ("ahead", "identical")
 
 
 def collect() -> dict:
     sources = {}
     for desktop, where in INSTALLERS.items():
         if "manifest" in where:
-            sources[desktop] = source_from_manifest(
-                fetch(where["repo"], where["manifest"])
-            )
+            try:
+                manifest = fetch(where["repo"], where["manifest"], INSTALLER_REF)
+            except urllib.error.HTTPError as exc:
+                if exc.code != 404:
+                    raise
+                sources[desktop] = {
+                    "source_error": (
+                        f"production manifest {where['manifest']} is missing at "
+                        f"{where['repo']}@{INSTALLER_REF}"
+                    )
+                }
+                continue
+            sources[desktop] = source_from_manifest(manifest)
         else:
-            source = source_from_gitmodules(
-                fetch(where["repo"], ".gitmodules"), where["submodule"]
-            )
-            source["commit"] = submodule_sha(where["repo"], where["submodule"])
+            try:
+                gitmodules = fetch(where["repo"], ".gitmodules", INSTALLER_REF)
+            except urllib.error.HTTPError as exc:
+                if exc.code != 404:
+                    raise
+                sources[desktop] = {
+                    "source_error": (
+                        f"production .gitmodules is missing at "
+                        f"{where['repo']}@{INSTALLER_REF}"
+                    )
+                }
+                continue
+            source = source_from_gitmodules(gitmodules, where["submodule"])
+            # A tracking branch is not the source used by the build. Git checks
+            # out the production ref's committed gitlink, so audit that SHA.
+            source.pop("branch", None)
+            try:
+                source["commit"] = submodule_sha(
+                    where["repo"], where["submodule"], INSTALLER_REF
+                )
+            except urllib.error.HTTPError as exc:
+                if exc.code == 404:
+                    source["source_error"] = (
+                        f"production gitlink {where['submodule']} is missing at "
+                        f"{where['repo']}@{INSTALLER_REF}"
+                    )
+                else:
+                    source["at_or_after_floor"] = None
+            except KeyError as exc:
+                source["source_error"] = str(exc)
+            except (urllib.error.URLError, TimeoutError):
+                source["at_or_after_floor"] = None
             sources[desktop] = source
     # Resolve every canonical-repo pin to a full SHA (branches to their head)
     # so the floor check compares exact revisions, then record whether the
@@ -237,8 +302,19 @@ def collect() -> dict:
         if not ref:
             continue
         try:
-            sha = ref if len(ref) == 40 else resolve_sha(CANONICAL, ref)
-        except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, KeyError):
+            sha = ref if re.fullmatch(r"[0-9a-f]{40}", ref) else resolve_sha(CANONICAL, ref)
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                source["source_error"] = (
+                    f"fisherman revision {ref!r} does not exist in {CANONICAL}"
+                )
+            else:
+                source["at_or_after_floor"] = None
+            continue
+        except KeyError as exc:
+            source["source_error"] = str(exc)
+            continue
+        except (urllib.error.URLError, TimeoutError):
             source["at_or_after_floor"] = None
             continue
         source["resolved"] = sha
@@ -260,9 +336,7 @@ def main() -> int:
         # drift over months, not against a flaky minute.
         print(f"::warning::could not read installer manifests: {exc}")
         return 0
-    except ValueError as exc:
-        print(f"::error::{exc}")
-        return 1
+
     if args.json:
         print(json.dumps(sources, indent=2, sort_keys=True))
 

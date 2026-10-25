@@ -1,0 +1,25 @@
+# Friendly alias tags and the variant each belongs to. Generated from each
+# variant's `aliases` in tunaos.toml by `scripts/config.py
+# generate-variant-aliases`; do not edit. `just check` fails when this file
+# and tunaos.toml disagree.
+#
+# An alias is a second tag for the same digest, so it never becomes the
+# image's identity. Builds that derive IMAGE_NAME from the base distro arrive
+# as the alias (sailfin as "opensuse"); 90-image-info.sh and
+# plymouth-set-theme.sh fold it back with this table. When two variants share
+# an alias (bonito and bonito-rawhide both publish "fedora"), the first in
+# tunaos.toml owns it.
+#
+# alias	variant
+almalinux-kitten	yellowfin
+almalinux	albacore
+centos	skipjack
+fedora	bonito
+opensuse	sailfin
+tumbleweed	sailfin
+gentoo	guppy
+elementary	gurnard
+ubuntu	grouper
+arch	marlin
+archlinux	marlin
+debian	flounder

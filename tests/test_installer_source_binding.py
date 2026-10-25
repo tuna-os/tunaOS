@@ -85,7 +85,7 @@ def test_final_wrapper_passes_exact_payload_and_separate_tracking_target(tmp_pat
     BINDING.bind_recipe(path, payload, DIGEST, target)
     assert json.loads(path.read_text()) == {"imgref": target, "local_imgref": "containers-storage:" + payload}
     assert '"ref": "${PAYLOAD_REF}"' in source
-    assert 'PAYLOAD_REF="${TUNA_LIVE_PAYLOAD_REF:-$SOURCE_IMAGE_REF}"' in source
+    assert 'PAYLOAD_REF="${TUNA_LIVE_PAYLOAD_REF:-$(tunaos_image_ref "$VARIANT" "$FLAVOR" ghcr "$TAG")}"' in source
     customize = (ROOT / "live-iso/common/src/customize-live.sh").read_text()
     assert '"${SCRIPT_DIR}/installer-source-binding.py" "$RECIPE_FILE"' in customize
     assert '"$TUNA_LIVE_PAYLOAD_REF" "${TUNA_LIVE_BASE_DIGEST:-}"' in customize

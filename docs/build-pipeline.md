@@ -72,6 +72,36 @@ points and the manual `build-flavor.yml` dispatcher.
   - **Cosign signing + SBOM** with transient error retry and deadline backoff for all published images (#1377)
   - Pull-request builds do not promote user-facing tags
 
+#### ISO delivery cutover
+
+`iso_delivery` in the authoritative `tunaos.toml` (and its generated
+`.github/build-config.yml` adapter) is the reviewed switch between
+browser-first delivery and routine publication of prebuilt ISOs to R2. Each
+`cutover_targets` entry uses an exact `variant` / `flavor` / `platform`
+identity. Each entry also needs `browser-qualified` status, a date, and an
+evidence reference. If no entry matches, scheduled and explicit publication
+continue through the prebuilt path.
+
+The workflow closes R2 publication for a group only if every buildable flavor
+in its offline store has an exact cutover entry. Partial qualification keeps
+the group open. `scripts/iso-delivery-policy.py` evaluates both matrix forms.
+This keeps the two workflows in sync.
+
+Before you add a cutover target, record every existing versioned and `-latest`
+ISO basename in `retained_r2_isos`. Keep this list after a rollback. If you
+remove a target, publication resumes and retains those objects.
+
+When a requested versioned or latest name is in `retained_r2_isos`, the shared
+uploader writes a fresh ISO and unchanged signed sidecars under a
+`-snapshot-sha256-<prefix>` name. It also updates
+`<variant>-<flavor>-latest[...].json` (`TunaOSIsoResolution/v1`) with the
+current signed download. After rollback, download surfaces use this resolver,
+not historical `-latest.iso` objects. The retention workflow protects each
+resolver target, every explicit retained ISO, and each sidecar. Superseded
+snapshots age out after 14 days. Policy validation rejects a published target
+or fully covered group without a retained latest pointer and a retained
+versioned ISO.
+
 ### 2. Pull Request Checks
 
 Pull requests run the repository's validation workflows and any selected image

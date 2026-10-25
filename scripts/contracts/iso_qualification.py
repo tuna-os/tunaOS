@@ -9,7 +9,8 @@ import json
 import re
 
 from lib.tunaos_config import load, matrix
-from contracts.targets import cpu_baseline, resolve_required_targets, validate_target
+from lib.publish_destination import publish_destination
+from lib.tunaos_config import PLATFORMS
 
 DESKTOPS = {
     'gnome': ('org.bootcinstaller.Installer', 'gnome-shell', ('gnome',), ('wayland', 'x11')),
@@ -28,49 +29,70 @@ def digest(value):
     return 'sha256:' + hashlib.sha256(json.dumps(value, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
 
 
-def manifest(path=None):
-    config = matrix(load(path))
-    pairs = {(v['id'], f['id']) for v in config['variants'] for f in v['flavors'] if f.get('build_iso')}
-    required = {tuple(r['target'][k] for k in ('variant', 'flavor', 'platform')): r
-                for r in resolve_required_targets(config)
-                if (r['target']['variant'], r['target']['flavor']) in pairs}
-    configured = {(v['id'], f['id'], p) for v in config['variants'] for f in v['flavors']
-                  if f.get('build_iso') for p in f.get('platforms', v['platforms'])}
+def cpu_baseline(variant, platform):
+    """Preserve explicit OCI baseline and the native Stream/ELN requirement.
+
+    Bare Alma amd64 is a configured native target, not an alias for its v2
+    build. Do not rewrite configured platform identities to preview policy.
+    """
+    if platform not in PLATFORMS:
+        raise ValueError('unsupported platform')
+    if platform == 'linux/arm64':
+        return 'armv8-a'
+    if platform.endswith('/v2'):
+        return 'x86-64-v2'
+    if platform.endswith('/v3') or variant in {'skipjack', 'wahoo', 'albacore', 'yellowfin'}:
+        return 'x86-64-v3'
+    return 'x86-64'
+
+
+def manifest():
+    config = matrix(load())
+    destination = publish_destination()
     rows = []
-    for key in sorted(set(required) | configured):
-        variant, flavor, platform = key
-        desktop = flavor.split('-')[0]
-        target = dict(variant=variant, flavor=flavor, platform=platform,
-                      cpuBaseline=cpu_baseline(variant, platform), hardwareScope='generic')
-        gaps = []
-        try:
-            validate_target(target)
-        except ValueError as exc:
-            gaps.append('configured-policy-conflict: ' + str(exc))
-        if key not in configured:
-            gaps.append('unscheduled')
-        if key not in required:
-            gaps.append('configured-not-required: explicit policy review required')
-        if desktop == 'base':
-            gaps.append('headless: GUI qualification inapplicable')
-        elif desktop not in DESKTOPS:
-            gaps.append('unknown desktop contract')
-        if 'nvidia' in flavor.split('-'):
-            gaps.append('physical NVIDIA GPU qualification required')
-        if platform == 'linux/arm64':
-            gaps.append('native producer architecture not implemented')
-        if variant not in NATIVE_OSTREE_VARIANTS:
-            gaps.append('native OSTree producer backend not admitted')
-        if desktop not in STRICT_DRIVERS:
-            gaps.append('production qualification driver not admitted for this frontend')
-        row = dict(target=target, required=key in required, configured=key in configured,
-                   desktop=desktop, backend='ostree' if variant in NATIVE_OSTREE_VARIANTS else None, result='unrun', gaps=gaps,
-                   runnable=not gaps, publication=required.get(key, {}).get('publication'), installer=DESKTOPS.get(desktop, (None,))[0])
-        rows.append(row)
-    doc = dict(schema='ISOQualificationTargets/v1', targets=rows,
-               counts=dict(flavor_pairs=len(pairs), configured=len(configured), required=len(required),
-                           configured_not_required=len(configured-set(required)),
-                           required_unscheduled=len(set(required)-configured)),
+    pairs = set()
+    for variant in config['variants']:
+        for flavor in variant['flavors']:
+            if not flavor.get('build_iso'):
+                continue
+            pairs.add((variant['id'], flavor['id']))
+            for platform in flavor.get('platforms', variant['platforms']):
+                name = flavor['id']
+                desktop = name.split('-')[0]
+                scope = 'apple-silicon' if 'asahi' in name.split('-') else 'apple-t2' if 't2' in name.split('-') else 'generic'
+                target = dict(variant=variant['id'], flavor=name, platform=platform,
+                              cpuBaseline=cpu_baseline(variant['id'], platform), hardwareScope=scope)
+                gaps = []
+                if not flavor.get('build_image'):
+                    gaps.append('source image build disabled')
+                if desktop == 'base':
+                    gaps.append('headless: GUI qualification inapplicable')
+                elif desktop not in DESKTOPS:
+                    gaps.append('unknown desktop contract')
+                if 'nvidia' in name.split('-'):
+                    gaps.append('physical NVIDIA GPU qualification required')
+                if scope != 'generic':
+                    gaps.append('physical hardware qualification required')
+                if platform == 'linux/arm64':
+                    gaps.append('native producer architecture not implemented')
+                if platform.endswith('/v2') and variant['id'] not in {'yellowfin', 'albacore'}:
+                    gaps.append('configured CPU baseline conflicts with native producer support')
+                if variant['id'] not in NATIVE_OSTREE_VARIANTS:
+                    gaps.append('native OSTree producer backend not admitted')
+                if desktop not in STRICT_DRIVERS:
+                    gaps.append('production qualification driver not admitted for this frontend')
+                suffix = variant.get('tag_suffix', '')
+                tag = name if not suffix or name.endswith('-'+suffix) or '-'+suffix+'-' in name else name+'-'+suffix
+                publication = dict(repository=destination+'/'+variant.get('publish_name', variant['id']), tag=tag)
+                rows.append(dict(target=target, configured=True, image_supported=bool(flavor.get('build_image')),
+                    desktop=desktop, backend='ostree' if variant['id'] in NATIVE_OSTREE_VARIANTS else None,
+                    result='unrun', gaps=gaps, runnable=not gaps, publication=publication,
+                    installer=DESKTOPS.get(desktop, (None,))[0]))
+    rows.sort(key=lambda r: tuple(r['target'][k] for k in ('variant', 'flavor', 'platform')))
+    doc = dict(schema='ISOQualificationTargets/v2', targets=rows,
+               support_contract='tunaos.toml: build_iso selection; build_image and flavor/variant platforms',
+               counts=dict(flavor_pairs=len(pairs), configured=len(rows),
+                           image_supported=sum(r['image_supported'] for r in rows)),
                unsupported=[dict(variant='hummingbird', flavor='tuna',
                                  reason='not admitted; tunaOS#3200 (package prerequisite #832 closed)')])
     doc['manifestDigest'] = digest(doc)

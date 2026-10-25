@@ -1,0 +1,170 @@
+name: Qualify image packages
+
+# Native six-Containerfile proof for image-wide package additions (#3802).
+# One leg per route builds, on its own runner, the stock base, the modified base,
+# the modified desktop (and for EL10 the HWE overlay) from `just build`, then runs
+# scripts/qualify-image-packages.py over those local images and uploads the
+# harness evidence directory. A leg passes only when its own route is `passed`.
+#
+# Manual only, by design: a gentoo leg compiles for hours. There is no schedule
+# and no workflow_run trigger. Nothing is pushed, signed or published: the job
+# has read-only repository access, no secret is referenced, images stay in the
+# runner's local storage, and the package additions exist only in two local
+# commits made inside the job workspace (scripts/package-qualification.py), never
+# pushed. A fork runs this on its own runners with its own tunaos.toml.
+#
+# First run:  gh workflow run qualify-image-packages.yml --ref <branch>
+# One route:  gh workflow run qualify-image-packages.yml --ref <branch> -f routes='["ubuntu"]'
+on:
+  workflow_dispatch:
+    inputs:
+      routes:
+        description: JSON list of routes to qualify (el10, ubuntu, debian, arch, opensuse, gentoo)
+        type: string
+        default: '["el10","ubuntu","debian","arch","opensuse","gentoo"]'
+
+permissions:
+  contents: read
+
+jobs:
+  qualify:
+    name: ${{ matrix.route }}
+    runs-on: ubuntu-latest
+    # The 360-minute hosted-runner maximum. Guppy's desktop stage still compiles
+    # from source whenever the Gentoo binhost lags (reusable-build-image.yml).
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        route: ${{ fromJson(inputs.routes) }}
+    env:
+      ROUTE: ${{ matrix.route }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Setup runner
+        uses: projectbluefin/actions/bootc-build/setup-runner@d18642a8b4b325c2551eabd9a65c1ad12b4ebb30 # v1 as of 2026-07-02
+        with:
+          storage-backend: btrfs
+          update-podman: "true"
+          install-tools: '[]'
+
+      - name: Setup Homebrew
+        uses: Homebrew/actions/setup-homebrew@f830e99d47c69efee99f1ddbf18a8e3144d1b93e
+
+      - name: Install just
+        run: brew install just
+
+      - name: Setup yq
+        uses: ./.github/actions/setup-yq
+
+      - name: Prepare the stock and modified commits
+        id: prepare
+        run: |
+          set -euo pipefail
+          # Kept outside the checkout: the harness demands a clean source tree and
+          # refuses to write evidence into an existing directory.
+          {
+            echo "PLAN=$RUNNER_TEMP/package-qualification-plan.json"
+            echo "EVIDENCE=$RUNNER_TEMP/package-qualification-evidence"
+            echo "BUILD_LOGS=$RUNNER_TEMP/package-qualification-build-logs"
+          } >> "$GITHUB_ENV"
+          export PLAN="$RUNNER_TEMP/package-qualification-plan.json"
+          mkdir -p "$RUNNER_TEMP/package-qualification-build-logs"
+          python3 scripts/package-qualification.py prepare \
+            --route "$ROUTE" --plan "$PLAN" > "$RUNNER_TEMP/builds.json"
+          jq . "$RUNNER_TEMP/builds.json"
+
+      - name: Build the images
+        env:
+          # One budget for every build in this leg, 60 minutes under the job cap
+          # (360), so the harness and the artifact upload always get to run.
+          BUILD_BUDGET_MINUTES: 300
+        run: |
+          set -euo pipefail
+          just="$(command -v just)"
+          jq -r '.builds[] | [.role, .commit, .variant, .flavor, .isCi, .tag, .chain] | @tsv' \
+            "$RUNNER_TEMP/builds.json" > "$RUNNER_TEMP/builds.tsv"
+          deadline=$(( $(date +%s) + BUILD_BUDGET_MINUTES * 60 ))
+          while IFS=$'\t' read -r role commit variant flavor is_ci tag chain; do
+            echo "::group::${role}: ${variant}:${flavor} at ${commit}"
+            git checkout --quiet --detach "$commit"
+            remaining=$(( deadline - $(date +%s) ))
+            if [ "$remaining" -le 0 ]; then
+              echo "::error::the ${BUILD_BUDGET_MINUTES}-minute build budget ended before ${role}" >&2
+              exit 1
+            fi
+            # Skip the rechunk pass (as PR builds do): it does not change package
+            # state. The submodules are already checked out above. The build must
+            # not read the loop's stdin.
+            #
+            # `timeout` runs under sudo, as in reusable-build-image.yml: it signals
+            # the whole process group, and only root can kill root's buildah.
+            # pipefail makes the pipeline's status the build's, not tee's.
+            rc=0
+            sudo timeout --kill-after=60s "${remaining}s" \
+              env SKIP_RECHUNK=1 SKIP_SUBMODULES=1 \
+              "$just" build "$variant" "$flavor" linux/amd64 "$is_ci" "$tag" "$chain" \
+              < /dev/null 2>&1 | tee "$BUILD_LOGS/${role}.log" || rc=$?
+            echo "::endgroup::"
+            if [ "$rc" -eq 124 ] || [ "$rc" -eq 137 ]; then
+              echo "::error::${role} was still building when the ${BUILD_BUDGET_MINUTES}-minute budget ended" >&2
+              exit 1
+            fi
+            [ "$rc" -eq 0 ] || exit "$rc"
+          done < "$RUNNER_TEMP/builds.tsv"
+
+      # Also after a failed build, so the report keeps the immutable identities of
+      # the images that did build and names the missing one. The build step stays
+      # fatal: the job is red either way.
+      - name: Run the qualification harness
+        if: always() && steps.prepare.outcome == 'success'
+        run: |
+          set -euo pipefail
+          modified="$(jq -r .modifiedCommit "$RUNNER_TEMP/builds.json")"
+          git checkout --quiet --detach "$modified"
+          # The harness reads root's container storage, where the builds above ran.
+          # A route that fails writes a report and exits 1; a harness error exits
+          # 2 and writes none. The gate step below decides, from the report.
+          rc=0
+          sudo env "PATH=$PATH" python3 scripts/qualify-image-packages.py \
+            --plan "$PLAN" --source "$PWD" --output "$EVIDENCE" || rc=$?
+          if [ "$rc" -gt 1 ]; then
+            echo "::error::qualification harness exited $rc without a report" >&2
+            exit "$rc"
+          fi
+          sudo chown -R "$(id -u):$(id -g)" "$EVIDENCE"
+
+      - name: Gate on this route
+        run: python3 scripts/package-qualification.py gate --route "$ROUTE" --report "$EVIDENCE/report.json"
+
+      - name: Summarize
+        if: always()
+        run: |
+          {
+            echo "### Package qualification: ${ROUTE}"
+            echo
+            if [ -f "$EVIDENCE/report.json" ]; then
+              echo '```json'
+              jq '{source, summary, route: (.routes[] | select(.route == env.ROUTE) | {route, variant, package, status, reason, images})}' "$EVIDENCE/report.json"
+              echo '```'
+            else
+              echo "The harness wrote no report; see the build and harness steps."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: package-qualification-${{ matrix.route }}
+          path: |
+            ${{ runner.temp }}/package-qualification-evidence
+            ${{ runner.temp }}/package-qualification-build-logs
+            ${{ runner.temp }}/package-qualification-plan.json
+          if-no-files-found: warn
+          retention-days: 30

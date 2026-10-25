@@ -19,6 +19,7 @@ import json
 import math
 import re
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 
@@ -87,6 +88,31 @@ def _receipt_digest(manifest: dict) -> str:
         payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True
     ).encode("utf-8")
     return "sha256:" + hashlib.sha256(canonical).hexdigest()
+
+# A receipt written on one runner and read on another may disagree by clock
+# skew; anything further ahead than this is not a measurement time.
+QUALIFIED_AT_SKEW = timedelta(minutes=5)
+
+
+def _require_qualified_at(manifest: dict, label: str) -> None:
+    """qualifiedAt is an ISO 8601 instant with a zone, and not in the future.
+
+    The receipt digest binds bytes, not meaning: a receipt with a missing,
+    unparsable, zone-less or year-2099 time passes the digest check once the
+    digest is recomputed, and downstream freshness logic would trust it.
+    """
+    value = manifest.get("qualifiedAt")
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{label}: qualifiedAt must be a non-empty ISO 8601 time")
+    try:
+        when = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+    except ValueError:
+        raise ValueError(f"{label}: qualifiedAt {value!r} is not an ISO 8601 time") from None
+    if when.tzinfo is None:
+        raise ValueError(f"{label}: qualifiedAt {value!r} has no timezone")
+    if when > datetime.now(timezone.utc) + QUALIFIED_AT_SKEW:
+        raise ValueError(f"{label}: qualifiedAt {value!r} is in the future")
+
 
 def _require_number(value, where: str, label: str) -> None:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
@@ -194,6 +220,7 @@ def validate(manifest: dict, label: str) -> None:
             raise ValueError(f"{label}: measurements.{block}.duration_s is missing")
         _require_number(entry["duration_s"],
                         f"measurements.{block}.duration_s", label)
+    _require_qualified_at(manifest, label)
     _require_digest(manifest.get("receiptDigest"), "receiptDigest", label)
     if manifest["receiptDigest"].lower() != _receipt_digest(manifest):
         raise ValueError(f"{label}: receiptDigest does not match canonical evidence")

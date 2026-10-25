@@ -1,13 +1,16 @@
 # Bounded ISO desktop qualification candidate
 
-This candidate extends `feat/iso-parity-cutover` at `3e61b0e0`.
+This candidate merges `feat/iso-parity-cutover` at `cf04a15e` and retains its original `3e61b0e0` ancestry.
 It adds an opt-in path for `bonito:xfce:linux/amd64`.
 It does not admit XFCE into production qualification or activate a schedule.
 The evidence names OSTree; it cannot prove native-composefs or physical GPU support.
 
 ## Inventory and preflight
 
-The inventory reads validated TOML and the required platform policy:
+The inventory reads validated `tunaos.toml` through `lib.tunaos_config`.
+A flavor platform list replaces the variant list. `build_image` declares source
+image support; `build_iso` selects the ISO inventory. Global platforms do not
+create missing architecture obligations:
 
 ```sh
 python3 scripts/plan-iso-qualification.py | jq .
@@ -15,12 +18,16 @@ python3 scripts/plan-iso-qualification.py \
   --target bonito:xfce:linux/amd64 --max-parallel 1 --candidate-xfce
 ```
 
-It retains configured rows and required obligations as separate fields.
-A missing architecture remains an obligation.
-A conflict with CPU policy blocks the target.
-Skipjack GNOME/v2 conflicts with the Stream 10 baseline.
-The ordinary AMD64 rows for Alma conflict with its v2 policy.
-The configuration owner must resolve these conflicts; the planner does not omit them.
+The current inventory has 62 flavor pairs and 92 configured platform rows.
+The removed preview policy had inferred 97 obligations and a 108-row union.
+That proposal does not define the current support contract. The merged
+base removes that policy; this candidate does not restore it or invent ARM64
+rows.
+
+A future wider commitment needs an explicit owner-approved contract.
+All configured rows remain visible, including disabled source images and CPU
+baseline conflicts. Bare Alma AMD64 and its v2 builds keep distinct identities.
+Skipjack GNOME/v2 remains configured but blocked by the native baseline check.
 
 Each flavor retains its full name and NVIDIA suffix.
 NVIDIA needs physical GPU evidence. A headless image has no GUI to test.
@@ -31,6 +38,12 @@ Ordinary campaigns select at most four targets, with concurrency one or two.
 The XFCE candidate accepts only Bonito on AMD64.
 A native artifact can serve only its exact target.
 All inventory results remain `unrun` until a runtime run produces evidence.
+
+The merged workflow keeps the owner’s readiness check for PRs and schedules.
+Strict qualification runs only for a native artifact. The producer calls it
+only on manual dispatch: GNOME, or the explicit Bonito/XFCE/AMD64 candidate.
+The owner’s summary reads each candidate leg from the XFCE output directory.
+It does not turn that report into production qualification.
 
 ## Immutable frontend mapping
 

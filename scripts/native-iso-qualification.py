@@ -14,7 +14,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from contracts.iso_qualification import DESKTOPS, manifest, validate_session
-from contracts.targets import cpu_baseline
+from contracts.iso_qualification import cpu_baseline
 from lib.xfce_candidate import TRANSITIONS as XFCE_TRANSITIONS, validate_frontend, COMMIT as XFCE_COMMIT
 
 SCHEMA = 'NativeISOQualification/v2'
@@ -142,7 +142,9 @@ def validate_desktop_identity(evidence):
                for key in ('variant', 'flavor', 'platform'))]
     require(len(matches) == 1, 'target not configured')
     row = matches[0]
-    require(row['required'] and row['configured'], 'target policy conflict or unscheduled')
+    require(row['image_supported'] and row['configured'], 'target policy conflict or unscheduled')
+    require(not [gap for gap in row['gaps'] if gap != 'production qualification driver not admitted for this frontend'],
+            'target has unresolved support or hardware gaps')
     require(evidence.get('cpu_baseline') == row['target']['cpuBaseline'], 'platform/CPU baseline mismatch')
     require(row['backend'] == 'ostree', 'native producer backend not admitted')
     require(evidence.get('storage_backend') == 'ostree', 'backend is not OSTree; native-composefs requires separate proof')

@@ -84,8 +84,42 @@ def test_candidate_has_no_implicit_trigger_and_preserves_strict_gates():
     call=LIVE['jobs']['qualify-native-iso']['with']
     assert call['source']=='native-artifact' and call['max_parallel']==1
     assert call['candidate_xfce']=='${{ inputs.candidate_xfce || false }}'
-    assert step('Run strict offline GUI qualification')['if']=="steps.filter.outputs.skip != 'true'"
+    assert step('Run strict offline GUI qualification')['if']=="steps.filter.outputs.skip != 'true' && inputs.source == 'native-artifact'"
     from tests.test_a_job_budget_covers_its_own_steps import _budgets,_step_total
     job=E2E['jobs']['e2e']
     assert max(_budgets(job['timeout-minutes']))>=_step_total(job['steps'])
     with pytest.raises(AssertionError):_budgets('${{ inputs.unreviewed_timeout }}')
+
+
+@pytest.mark.parametrize('event,variant,flavor,platform,candidate,allowed',[
+    ('workflow_dispatch','bonito','xfce','linux/amd64',True,True),
+    ('workflow_dispatch','bonito','xfce','linux/amd64',False,False),
+    ('pull_request','bonito','xfce','linux/amd64',True,False),
+    ('schedule','bonito','xfce','linux/amd64',True,False),
+    ('workflow_dispatch','grouper','xfce','linux/amd64',True,False),
+    ('workflow_dispatch','bonito','xfce','linux/arm64',True,False),
+    ('workflow_dispatch','bonito','kde','linux/amd64',True,False),
+    ('workflow_dispatch','skipjack','gnome','linux/amd64',False,True),
+    ('pull_request','skipjack','gnome','linux/amd64',False,False),
+])
+def test_merged_caller_condition_is_bounded(event,variant,flavor,platform,candidate,allowed):
+    # Evaluate only this exact, reviewed boolean expression grammar.
+    expression=LIVE['jobs']['qualify-native-iso']['if']
+    expected="github.event_name == 'workflow_dispatch' && ((github.event.inputs.flavor || 'gnome') == 'gnome' || (inputs.candidate_xfce && inputs.variant == 'bonito' && inputs.flavor == 'xfce' && inputs.platform == 'linux/amd64'))"
+    assert expression==expected
+    replacements={'github.event.inputs.flavor':flavor,'github.event_name':event,
+        'inputs.candidate_xfce':candidate,'inputs.variant':variant,'inputs.flavor':flavor,'inputs.platform':platform}
+    for name,value in replacements.items(): expression=expression.replace(name,repr(value))
+    assert bool(eval(expression.replace('&&',' and ').replace('||',' or '),{'__builtins__':{}})) is allowed
+
+
+def test_candidate_summary_reads_candidate_fragments(tmp_path):
+    script=step('Report strict leg verdicts')['run']
+    fake=tmp_path/'bin';fake.mkdir()
+    python=fake/'python3';python.write_text('#!/bin/sh\nprintf "%s\\n" "$*"\n');python.chmod(0o755)
+    for candidate,path in [('true','iso-e2e-out/xfce-candidate xfce'),('false','iso-e2e-out')]:
+        summary=tmp_path/candidate
+        result=subprocess.run(['bash','-eu','-c',script],cwd=tmp_path,capture_output=True,text=True,
+            env=dict(os.environ,PATH=str(fake)+':'+os.environ['PATH'],CANDIDATE_XFCE=candidate,GITHUB_STEP_SUMMARY=str(summary)))
+        assert result.returncode==0
+        assert summary.read_text().strip()=='scripts/summarize-strict-legs.py '+path

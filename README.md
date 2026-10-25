@@ -182,6 +182,8 @@ Start here:
 - [Roadmap](ROADMAP.md) — project direction and feature status
 - [Vision](VISION.md) — project philosophy
 
+To customize a fork, start at
+[Customize a fork](docs/README.md#customize-a-fork-start-here).
 The full index of every guide, policy, and project plan is at
 [docs/README.md](docs/README.md).
 
