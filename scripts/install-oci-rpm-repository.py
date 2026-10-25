@@ -57,15 +57,57 @@ def config_text(path: Path) -> str:
     return text
 
 
+TRUSTED_UID = 0  # Owner required for any symlink or directory a symlink may reach.
+
+
+def strict_link_target(path: Path, root: Path) -> Path:
+    """Resolve one reviewed symlink hop, or refuse.
+
+    EL10 images link /etc/yum/vars to ../dnf/vars and /etc/yum.conf to
+    dnf/dnf.conf. A link is admitted only when it is root-owned and its target is
+    inside <root>/dnf or <root>/yum.repos.d, on the same filesystem, reached
+    through no other symlink, owned by root and not group/world writable. An
+    escaping, dangling, chained or writable link stays a refusal, because it
+    could redirect persistent repository config outside the checked tree.
+    """
+    allowed = [root / 'dnf', root / 'yum.repos.d']
+    link = path.lstat()
+    if link.st_uid != TRUSTED_UID:
+        raise ValueError(f'runtime config symlink is not owned by the trusted user: {path}')
+    target = Path(os.path.normpath(path.parent / os.readlink(path)))
+    if not any(target == base or base in target.parents for base in allowed):
+        raise ValueError(f'runtime config symlink leaves the reviewed tree: {path}')
+    device = root.lstat().st_dev
+    current = root
+    for part in target.relative_to(root).parts:
+        current = current / part
+        try:
+            status = current.lstat()
+        except OSError as error:
+            raise ValueError(f'runtime config symlink is dangling: {path}') from error
+        if (current.is_symlink() or status.st_dev != device or status.st_uid != TRUSTED_UID
+                or status.st_mode & 0o022):
+            raise ValueError(f'runtime config symlink target is not a plain root-owned path: {path}')
+    return target
+
+
+def runtime_path(path: Path, root: Path) -> Path:
+    """Return the path to inspect: itself, or the strictly contained target of a link."""
+    current = root
+    for part in path.relative_to(root).parts[:-1]:
+        current = current / part
+        if current.is_symlink():
+            raise ValueError(f'runtime config parent is a symlink: {current}')
+    return strict_link_target(path, root) if path.is_symlink() else path
+
+
 def check_runtime_configs(root: Path) -> None:
     """Reject literal R2 and indirect RPM configuration sources, fail closed."""
     if root.is_symlink() or not root.is_dir():
         raise ValueError('runtime config root must exist and not be a symlink')
-    paths = [root / 'dnf/dnf.conf', root / 'yum.conf']
+    paths = [runtime_path(root / name, root) for name in ('dnf/dnf.conf', 'yum.conf')]
     for relative in ('yum.repos.d', 'dnf/repos.d', 'dnf/vars', 'yum/vars'):
-        directory = root / relative
-        if directory.is_symlink():
-            raise ValueError(f'runtime repository directory is a symlink: {directory}')
+        directory = runtime_path(root / relative, root)
         paths.extend(directory.glob('*'))
     for path in paths:
         if path.exists() or path.is_symlink():
