@@ -326,7 +326,7 @@ python3 -m pip install -r requirements-branding.txt
 python3 scripts/branding/check-artwork.py --write
 ```
 
-A new emoji needs its drawing: copy its file from Noto Emoji's `svg/` folder to
+A new emoji needs an image: copy its file from Noto Emoji's `svg/` folder to
 `scripts/branding/emoji/`. CI fails if the committed artwork does not match
 `tunaos.toml`.
 
