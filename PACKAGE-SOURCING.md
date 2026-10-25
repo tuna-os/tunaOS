@@ -105,6 +105,73 @@ published package path beyond the scoped repositories listed here. These are
 classifications, not admissions: each candidate still needs maintainer/security
 sign-off or migration to Tideforge before it is treated as approved.
 
+## R2 build dependency inventory (`repo.tunaos.org`)
+
+This section lists each `https://repo.tunaos.org/` URL that an image build reads.
+It supports epic [#3470](https://github.com/tuna-os/tunaOS/issues/3470): ISO delivery without Cloudflare R2.
+A build that needs no row below has no R2 package dependency.
+
+Measured on 2026-10-25. Each size is the sum of `<size package=…>` in the public `primary.xml` of the prefix.
+For apt it is `Size:` in `Packages.gz`. For pacman it is `%CSIZE%` in the database.
+The "OCI today" column comes from the anonymous tag list of `ghcr.io/tuna-os/tunaos-packages`, which holds two family tags: `gnome50-el10-x86_64` and `hummingbird-aarch64`.
+"Cell" is a `tunaos-packages` planner id (`scripts/plan-package-factory.py`).
+
+`tests/test_r2_build_dependency_inventory.py` compares the first column with the URLs in
+`tunaos.toml`, `build_scripts/`, `Containerfile*` and `image-versions.yaml`.
+It fails when a URL has no row, and when a row has no URL.
+Delete a row in the same change that removes its URL.
+
+<!-- r2-inventory:start -->
+| Prefix | Read by | Builds | Package set and channel | OCI today | Smallest next step |
+|---|---|---|---|---|---|
+| `hummingbird/20251124-$basearch/` | `build_scripts/10-base-packages.sh` (base stage); `desktops.gnome` and `desktops.cosmic` `packages.hummingbird` | `hummingbird` base, gnome, cosmic (amd64 only) | x86_64: 14,353 packages, 32.27 GB. aarch64: 8,344 packages, 19.65 GB (not built by tunaOS). Frozen datestamp snapshot of a rolling base | No. Cell `hummingbird-x86_64` has no tag. Tag `hummingbird-aarch64` holds a 19.5 GB layer. GNOME 51 already comes from `utah-packages` by digest | Record which packages one `hummingbird` build installs from the snapshot. Publish only that set as an OCI repository and pin its digest. The full prefix is 3.6 times the 9 GB ORAS ceiling in tunaos-packages#937 |
+| `repo/10-stream-x86_64/` | `desktops.cosmic.packages.el10` (`tunaos-cosmic`, priority 10) | `cosmic` on `yellowfin`, `albacore`, `skipjack` (and their `-hwe` and `-nvidia` flavors) | 385 packages, 1.77 GB. Rolling. Written by the Tideforge RPM publisher | No. The ORAS lane covers build-chain cells only | Add Tideforge RPM cells to the OCI publisher (tunaos-packages `docs/R2-GHCR-MIGRATION.md` lists this as a follow-on). The set fits the layer ceiling |
+| `repo/10/x86_64/` | `desktops.tuna.packages.el10` (`tunaos-el10`, priority 100) | `tuna` on `yellowfin`, `albacore`, `skipjack` | 385 packages, 1.77 GB. Same count and bytes as `repo/10-stream-x86_64/` on the measure date | No | Same step as the row above. Pin one digest for both rows |
+| `xfce/10-stream-x86_64/` | `desktops.xfce.packages.el10` (priority 10); `desktops.tuna.packages.el10` (`tunaos-xfce`) | `xfce` and `tuna` on `yellowfin`, `albacore`, `skipjack` | 114 packages, 38 MB. Rolling | No. Cell `xfce-el10-x86_64` publishes this prefix and has no tag | Publish the family tag for `xfce-el10-x86_64`. Mount it in `Containerfile.el10` next to `gnome50-el10-packages` and pin the digest in `image-versions.yaml` |
+| `xfce/44-x86_64/` | `desktops.tuna.packages.fedora` (`tunaos-fedora`) | `tuna` on `bonito` | 11 packages, 18 MB. Rolling | No. Cell `xfce-fedora-x86_64` and the Tideforge cell `tuna-desktop-fedora` write this prefix. Neither has a tag | Publish the family tag. Mount and pin it as for the EL10 xfce row. A Fedora Containerfile mount does not exist yet |
+| `rpm/eln/x86_64/` | `desktops.tuna.packages.eln` (`tunaos-eln`) | `tuna` on `wahoo` | 4 packages, 13 MB. Rolling | No. Tideforge cell only | Needs the Tideforge OCI lane. Smallest set of all |
+| `rpm/rawhide/x86_64/` | `desktops.tuna.packages.rawhide` (`tunaos-rawhide`) | `tuna` on `bonito-rawhide` | 1 package, 10 MB. Rolling | No. Tideforge cell only | Needs the Tideforge OCI lane |
+| `rpm/opensuse-tumbleweed/x86_64/` | `desktops.tuna.packages.zypper` (`tunaos-opensuse`) | `tuna` on `sailfin` | 22 packages, 165 MB. Rolling | No. Tideforge cell only | Needs the Tideforge OCI lane. Then prove that `zypper` accepts a bind-mounted `file:` repository with `pkg_gpgcheck=1` |
+| `tideforge/ubuntu/` | `desktops.cosmic` and `desktops.tuna` `packages.apt.repos` (`condition = "ubuntu"`) | `cosmic` and `tuna` on `grouper` | 12 packages, 41 MB. Rolling signed apt index | No. APT is not an OCI client | Mount an OCI-hosted flat repository as a `file:` apt source and run the build against it. Not tested |
+| `tideforge/debian-sid/` | `desktops.tuna.packages.apt.repos` (`condition = "debian-sid"`) | `tuna` on `flounder-sid` | 20 packages, 49 MB. Rolling signed apt index | No | Same step as `tideforge/ubuntu/` |
+| `tideforge/debian-trixie/` | `desktops.tuna.packages.apt.repos` (`condition = "debian-trixie"`) | `tuna` on `flounder` | 4 packages, 24 MB. Rolling signed apt index | No | Same step as `tideforge/ubuntu/` |
+| `pacman/arch/$arch` | `Containerfile.arch` (`tuna` stage, `[tunaos]` section) | `tuna` on `marlin` | 4 packages, 36 MB. Rolling | No. Pacman is not an OCI client | Mount an OCI-hosted `file:` repository in the `tuna` stage. Not tested |
+| `public.gpg` | `build_scripts/desktop/install-desktop.sh` (zypper key import; `gpgkey=` in each signed `.repo` file) | Every build that uses a signed `https` rpm repository above | One public key | No | Commit the key with a pinned SHA-256 and import that file. Installed systems still read the URL from the `.repo` files that ship in the image |
+| `tideforge/ubuntu/tideforge.gpg`, `tideforge/debian-sid/tideforge.gpg`, `tideforge/debian-trixie/tideforge.gpg` | `keyring_url` in the apt rows above | Same builds as the apt rows | Three public keyrings | No | Commit the keyrings with pinned SHA-256 values and read them from the repository |
+<!-- r2-inventory:end -->
+
+These builds already read no R2 package URL:
+
+- `gnome` on `yellowfin`, `albacore` and `skipjack`. It uses `gnome50-el10-packages`, pinned by digest in `image-versions.yaml`. The package set is 345 packages, 521 MB.
+- `gnome` on `hummingbird`. It uses `utah-packages`, pinned by digest, but the `hummingbird` base stage still reads the first row.
+
+Three limits apply to every row:
+
+1. **Installed systems.** `install-desktop.sh` writes each `https` repository into `/etc/yum.repos.d` and the file stays in the image.
+   It removes only `file://` repositories ([`tests/test_a_build_only_repo_does_not_ship.py`](tests/test_a_build_only_repo_does_not_ship.py)).
+   A cutover to a bind mount ends the build dependency. It does not end the runtime dependency.
+   Booted systems read R2 for updates until a signed HTTP path replaces it.
+2. **Layer ceiling.** The ORAS lane in `tunaos-packages` has no layer limit today.
+   Pull request [#937](https://github.com/tuna-os/tunaos-packages/pull/937) would reject a layer above 9,000,000,000 bytes.
+   Only the first row is larger.
+   GHCR holds a 19.5 GB layer, so that ceiling is a policy and not a measured registry limit.
+3. **Signatures.** An `https` repository must stay signed.
+   A digest-pinned bind mount may use `unsigned: true` because the digest is the pin.
+   Do not move a row to an unsigned mount without a digest.
+
+Regenerate the evidence with these commands.
+They need no credentials.
+
+```bash
+# Package count and bytes for one rpm prefix
+curl -s "https://repo.tunaos.org/${PREFIX}/repodata/repomd.xml"
+# GHCR tags and layer sizes
+TOKEN=$(curl -s "https://ghcr.io/token?scope=repository:tuna-os/tunaos-packages:pull" | jq -r .token)
+curl -s -H "Authorization: Bearer $TOKEN" https://ghcr.io/v2/tuna-os/tunaos-packages/tags/list
+# Build cells and their R2 paths (in a tunaos-packages checkout)
+python3 scripts/plan-package-factory.py --selector engine=build-chain
+```
+
 ## Audit & transition plan
 
 1. **Audit** — **done 2026-08-13, with the follow-up inventory added
