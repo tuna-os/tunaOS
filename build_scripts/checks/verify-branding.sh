@@ -139,7 +139,7 @@ want_codename="${TUNAOS_CODENAMES[$variant]:-}"
 got_codename="$(osr VERSION_CODENAME)"
 if [[ -z "$identity_env" ]]; then
 	fail "no identity adapter readable (build_scripts/lib/identity.env or /usr/share/tunaos/identity-config.env)"
-elif "$identity_source_failed"; then
+elif [[ "$identity_source_failed" == true ]]; then
 	: # The source failure above is the authoritative adapter diagnostic.
 elif [[ -z "$want_codename" ]]; then
 	fail "no codename defined in tunaos.toml for variant '${variant}'"
