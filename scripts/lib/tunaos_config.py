@@ -454,6 +454,18 @@ def render_variant_identity(config):
     return VARIANT_IDENTITY_HEADER + '\n'.join(rows) + '\n'
 
 
+def display_names(config):
+    """The name each variant shows: os-release PRETTY_NAME and its artwork.
+
+    90-image-info.sh sets PRETTY_NAME to ${IMAGE_NAME^} where IMAGE_NAME is the
+    publish name (bonito-rawhide publishes as bonito), so only the first
+    character is uppercased. The artwork generators use the same rule.
+    """
+    validate(config)
+    publish_names = {name: variant.get('publish_name') or name for name, variant in config['variants'].items()}
+    return {name: published[:1].upper() + published[1:] for name, published in publish_names.items()}
+
+
 def prepare(root=ROOT):
     """Atomically refresh ignored legacy adapter from the primary source."""
     root = Path(root)
