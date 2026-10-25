@@ -35,11 +35,32 @@ permissions:
   packages: read
 
 jobs:
+  # "<registry>/<namespace>" the images publish to: [build.publish] in
+  # tunaos.toml, else ghcr.io/<owner> (scripts/publish-destination.sh). The
+  # sweep's `with:` is evaluated before any step runs, so it needs this as a
+  # job output.
+  destination:
+    runs-on: ubuntu-latest
+    outputs:
+      destination: ${{ steps.dest.outputs.destination }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup yq
+        uses: ./.github/actions/setup-yq
+      - name: Resolve publish destination
+        id: dest
+        env:
+          IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY }}
+        run: echo "destination=$(bash scripts/publish-destination.sh)" >> "$GITHUB_OUTPUT"
+
   # Sweep mode: every flavor that declares and publishes a :gnome-asahi tag.
   # marlin and flounder are excluded as their gnome-asahi flavors are not declared in
   # build-config.yml until complete distro Asahi stacks are available (tunaOS#911, #1738).
   # guppy is absent as its asahi overlay is stubbed, not broken.
   sweep:
+    needs: destination
     # Explicit on the schedule path: a `schedule` event has no `inputs` context
     # at all, and relying on null == '' to pick the sweep is exactly how you get
     # a daily run where BOTH jobs skip and the workflow reports success with
@@ -57,7 +78,7 @@ jobs:
           - skipjack
     uses: ./.github/workflows/verify-asahi-one.yml
     with:
-      image: ghcr.io/tuna-os/${{ matrix.flavor }}:gnome-asahi
+      image: ${{ needs.destination.outputs.destination }}/${{ matrix.flavor }}:gnome-asahi
 
   # Triage mode: one explicit ref.
   single:

@@ -87,6 +87,19 @@ because `just generate-workflows` writes wrappers and never removes one, and
 that file keeps its nightly cron; `just check` fails and names each wrapper
 whose variant is gone. Delete those files.
 
+A variant's nightly cron and its place in the manual `build-flavor.yml` sweep are
+keys on the variant, not code. `schedule = "20 3 * * *"` sets the cron of
+`build-<id>.yml` (omit it for a dispatch-only variant; stagger it, because the org
+runs 20 jobs at once and `build-variant.yml` records the slots).
+`flavor_dispatch = false` keeps a variant out of the sweep, which otherwise lists
+every non-experimental variant. `just generate-workflows` writes both.
+
+Workflows and scripts that read or write published images (`bootc-lifecycle`,
+`catalog-facts`, `live-overlay`, `live-initramfs`, `publish-isos`,
+`publish-iso-groups`, `verify-asahi`, `asahi-hw-nightly`, the buildcache name,
+`package-parity.sh`, `build-custom`) take the destination from `[build.publish]`,
+else `ghcr.io/<repository owner>`, through `scripts/publish-destination.sh`.
+
 Packages, identity and brand settings live in the same file; the sections below
 show each. [Still hardcoded in code](#what-a-fork-still-edits-in-code) lists the
 few values a fork has to change outside `tunaos.toml` today.
@@ -462,7 +475,7 @@ remote.
 
 | Value | Where | Effect if you leave it |
 |---|---|---|
-| Published image location | `.github/workflows/` (`bootc-lifecycle`, `catalog-facts`, `live-overlay`, `live-initramfs`, `publish-isos`, `publish-iso-groups`, `verify-asahi`, `asahi-hw-nightly`) and `.github/changelogs.py` | they pull or push `ghcr.io/tuna-os/...` instead of your destination |
+| Builder VM clone URL | `tunaos-builder.yaml` | the VM template clones `tuna-os/tunaos`; `scripts/corral-build.sh` re-points it to `CORRAL_REPO` or `GITHUB_REPOSITORY`, `limactl start` alone does not |
 | Nightly schedule per variant | `scripts/generate-workflows.py` (`SCHEDULES`) | a variant you add has no cron |
 | Variant list for manual builds | `.github/workflows/build-flavor.yml` (`matrix.variant`) | dispatches variants you may not have |
 | Plasma theme and wallpaper package ids and paths | `system_files/usr/share/plasma/look-and-feel/org.tunaos*.desktop/` (`Id`), `system_files/usr/share/wallpapers/TunaOS/` (the folder), `system_files/etc/xdg/kscreenlockerrc` | internal identifiers, not shown: KDE lists the variant's name, the project name and your URLs come from `tunaos.toml`, but the package ids and the folder keep their TunaOS spelling |

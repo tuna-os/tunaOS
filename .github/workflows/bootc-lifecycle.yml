@@ -37,6 +37,7 @@ jobs:
     outputs:
       matrix: ${{ steps.gen.outputs.matrix }}
       beta_matrix: ${{ steps.gen.outputs.beta_matrix }}
+      destination: ${{ steps.dest.outputs.destination }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -45,6 +46,14 @@ jobs:
 
       - name: Setup yq
         uses: ./.github/actions/setup-yq
+
+      # "<registry>/<namespace>" the images publish to: [build.publish] in
+      # tunaos.toml, else ghcr.io/<owner> (scripts/publish-destination.sh).
+      - name: Resolve publish destination
+        id: dest
+        env:
+          IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY }}
+        run: echo "destination=$(bash scripts/publish-destination.sh)" >> "$GITHUB_OUTPUT"
 
       - name: Generate matrix from build-config.yml
         id: gen
@@ -164,9 +173,10 @@ jobs:
           FLAVOR: ${{ matrix.flavor }}
           ARCH: ${{ matrix.arch }}
           ALIASES_JSON: ${{ toJson(matrix.aliases) }}
+          PUBLISH_DEST: ${{ needs.generate-matrix.outputs.destination }}
         run: |
           set -euo pipefail
-          REF="ghcr.io/tuna-os/${VARIANT}:${FLAVOR}"
+          REF="${PUBLISH_DEST:?}/${VARIANT}:${FLAVOR}"
           echo "==> Inspecting published stream ${REF} for ${ARCH}..."
 
           # 1. Inspect manifest & tags
@@ -196,7 +206,7 @@ jobs:
           # 3. Validate aliases resolve to intended target & architecture
           for ALIAS in $(echo "$ALIASES_JSON" | jq -r '.[]'); do
             if [[ -n "$ALIAS" ]]; then
-              ALIAS_REF="ghcr.io/tuna-os/${ALIAS}:${FLAVOR}"
+              ALIAS_REF="${PUBLISH_DEST}/${ALIAS}:${FLAVOR}"
               echo "==> Checking alias ${ALIAS_REF}..."
               if ALIAS_DIGEST=$(skopeo inspect --format '{{.Digest}}' "docker://${ALIAS_REF}" 2>/dev/null); then
                 echo "  ✓ Alias ${ALIAS_REF} resolves to ${ALIAS_DIGEST}"
@@ -286,8 +296,9 @@ jobs:
           VARIANT: ${{ matrix.variant }}
           FLAVOR: ${{ matrix.flavor }}
           ARCH: ${{ matrix.arch }}
+          PUBLISH_DEST: ${{ needs.generate-matrix.outputs.destination }}
         run: |
-          REF="ghcr.io/tuna-os/${VARIANT}:${FLAVOR}"
+          REF="${PUBLISH_DEST:?}/${VARIANT}:${FLAVOR}"
           echo "==> Beta/experimental stream probe for ${REF} (${ARCH})"
           if skopeo inspect "docker://${REF}" >/dev/null 2>&1; then
             echo "  ✓ Beta stream ${REF} exists"

@@ -48,6 +48,7 @@ jobs:
     outputs:
       matrix: ${{ steps.build.outputs.matrix }}
       count: ${{ steps.build.outputs.count }}
+      destination: ${{ steps.dest.outputs.destination }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -55,6 +56,14 @@ jobs:
 
       - name: Setup yq
         uses: ./.github/actions/setup-yq
+
+      # "<registry>/<namespace>" the images publish to: [build.publish] in
+      # tunaos.toml, else ghcr.io/<owner> (scripts/publish-destination.sh).
+      - name: Resolve publish destination
+        id: dest
+        env:
+          IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY }}
+        run: echo "destination=$(bash scripts/publish-destination.sh)" >> "$GITHUB_OUTPUT"
 
       - name: Build matrix from build-config.yml
         id: build
@@ -126,6 +135,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VARIANT: ${{ matrix.variant }}
           FLAVOR: ${{ matrix.flavor }}
+          PUBLISH_DEST: ${{ needs.generate-matrix.outputs.destination }}
         run: |
           DATE=$(date +%Y%m%d)
           TAG="${FLAVOR}-${DATE}"
@@ -147,7 +157,7 @@ jobs:
             gh release create "$TAG" \
               --repo "${GITHUB_REPOSITORY}" \
               --title "TunaOS ${FLAVOR} (${DATE})" \
-              --notes "Live ISO for ${VARIANT}:${FLAVOR}. Built from ghcr.io/tuna-os/${VARIANT}:${FLAVOR}."
+              --notes "Live ISO for ${VARIANT}:${FLAVOR}. Built from ${PUBLISH_DEST:?}/${VARIANT}:${FLAVOR}."
           fi
           # Delete existing assets explicitly: gh release upload --clobber can
           # return HTTP 422 for an asset uploaded in the same API session.
