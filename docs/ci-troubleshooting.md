@@ -1763,9 +1763,9 @@ capture first, then sends the graceful powerdown itself before the kill.
 
 | # | Symptom | Root cause | Fix |
 |---|---|---|---|
-| 60 | `layer_fetch` stalls at byte 12582912 with zero progress and no error | The layer reader issued one range request for the whole remainder past the 12 MiB chunk cap and never resumed it | Fetch in capped chunks, resume from the last committed byte, account progress per chunk |
-| 61 | Browser-built ISO is truncated against its manifest size while every phase reported success | Async JS sink backpressure: the writer closed with chunks still queued, so acknowledgments outran the flush | Await the sink ready/close handshake (drain before close) and verify output size against the manifest |
-| 62 | `scripts/iso-e2e.sh --strict-offline-gui` cannot bind its offline source on a flattened live root | The embedded payload store was never mounted nor listed in `additionalimagestores`, so the offline installer path had no source (same shape as §4 row 21) | Loop-mount the embedded store (`LiveOS/store.squashfs.img`) and point `/etc/containers/storage.conf` `additionalimagestores` at the mount point |
+| 70 | `layer_fetch` stalls at byte 12582912 with zero progress and no error | The layer reader issued one range request for the whole remainder past the 12 MiB chunk cap and never resumed it | Fetch in capped chunks, resume from the last committed byte, account progress per chunk |
+| 71 | Browser-built ISO is truncated against its manifest size while every phase reported success | Async JS sink backpressure: the writer closed with chunks still queued, so acknowledgments outran the flush | Await the sink ready/close handshake (drain before close) and verify output size against the manifest |
+| 72 | `scripts/iso-e2e.sh --strict-offline-gui` cannot bind its offline source on a flattened live root | The embedded payload store was never mounted nor listed in `additionalimagestores`, so the offline installer path had no source (same shape as §4 row 21) | Loop-mount the embedded store (`LiveOS/store.squashfs.img`) and point `/etc/containers/storage.conf` `additionalimagestores` at the mount point |
 ### STE fails on matrix prose
 
 **Symptom:** STE reports 1610 findings with a budget of 1609.
@@ -2589,3 +2589,11 @@ Every other source keeps `Run readiness e2e`.
 No green criterion names the strict job as a gate. Add it to a criterion only after
 both legs pass in a dispatched run and a schedule exists to renew that evidence.
 `tests/test_strict_qualification_wiring.py` pins this wiring.
+
+### Strict boot cannot resolve the tracking reference
+
+The strict boot gate rejects a failed resolver or an empty reference before boot.
+Do not guess the stock reference.
+The native producer also checks the overlay receipt before ISO customization.
+It rejects malformed digests and references that name a different target.
+These checks do not supply qualification evidence.

@@ -4013,17 +4013,15 @@ verify_strict_installed_boot() {
 		return 1
 	}
 	# Expected image ref: the same resolver run_install uses, so there is
-	# one definition of the mapping. Unresolvable falls back to the plain
-	# guess and then only requires targetImgref to be non-empty (warned).
+	# one definition of the mapping. Unresolvable identity must fail before boot.
 	local expected_ref="" ref_strict=1
 	if expected_ref="$(
 		"${SCRIPT_DIR}/published-image-ref.sh" "${VARIANT:-}" "${FLAVOR:-}" ghcr 2>/dev/null
 	)" && [[ -n "$expected_ref" ]]; then
 		:
 	else
-		expected_ref="ghcr.io/tuna-os/${VARIANT:-}:${FLAVOR:-}"
-		ref_strict=0
-		echo "WARNING: published-image-ref.sh failed; requiring a non-empty targetImgref instead of equality with ${expected_ref}" >&2
+		echo "ERROR: published-image-ref.sh failed or returned an empty target; refusing strict installed boot" >&2
+		return 1
 	fi
 	# swtpm dies with its QEMU, so the luks leg restarts it with preserved
 	# state before every installed boot (same lifecycle as --luks).

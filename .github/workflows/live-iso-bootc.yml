@@ -323,6 +323,14 @@ jobs:
             bash scripts/build-native-live-overlay.sh "$VARIANT" "$FLAVOR" "$PLATFORM" \
             "$TUNA_LIVE_BASE_IMAGE" "$TUNA_LIVE_BASE_DIGEST" "$RUNNER_TEMP/native-overlay.env"
           source "$RUNNER_TEMP/native-overlay.env"
+          [[ "${TUNA_LIVE_OVERLAY_DIGEST:-}" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+            echo "::error::invalid live overlay digest"
+            exit 1
+          }
+          [[ "${TUNA_LIVE_OVERLAY_REF:-}" == "localhost/native-live-overlay:${VARIANT}-${FLAVOR}@${TUNA_LIVE_OVERLAY_DIGEST}" ]] || {
+            echo "::error::native overlay reference does not match its digest and target"
+            exit 1
+          }
           export TUNA_LIVE_OVERLAY_REF TUNA_LIVE_OVERLAY_DIGEST
           install_target="$(GITHUB_REPOSITORY_OWNER=tuna-os bash scripts/published-image-ref.sh "$VARIANT" "$FLAVOR" ghcr)"
           export TUNA_LIVE_PAYLOAD_REF="${install_target}@${TUNA_LIVE_BASE_DIGEST}"
