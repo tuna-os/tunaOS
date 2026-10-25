@@ -93,6 +93,35 @@ DOCUMENTATION_URL="${TUNAOS_DOCUMENTATION_URL}"
 SUPPORT_URL="${TUNAOS_SUPPORT_URL}"
 BUG_REPORT_URL="${TUNAOS_BUG_REPORT_URL}"
 
+# Files in system_files that name the project write @TUNAOS_<NAME>@ where the
+# value belongs, <NAME> being a variable of the identity adapter sourced above
+# (tunaos.toml [project] and [defaults.branding]). Render them here, in every
+# build path that runs this script, so a fork never edits a TunaOS literal and
+# the stock project name and URLs land byte for byte where they always did.
+# Idempotent: an overlay re-copies system_files and runs this script again.
+# The values are validated plain words and https URLs; only sed's `&`, `\` and
+# the `|` delimiter need escaping.
+tunaos_render_tokens() {
+	local file name value replacement
+	for file in "$@"; do
+		[[ -f "${file}" ]] || continue
+		for name in TUNAOS_PROJECT_NAME TUNAOS_HOME_URL TUNAOS_COUNTME_METRICS_URL; do
+			value="${!name}"
+			replacement="$(printf '%s' "${value}" | sed 's/[\\&|]/\\&/g')"
+			sed -i "s|@${name}@|${replacement}|g" "${file}"
+		done
+		if grep -q '@TUNAOS_[A-Z_]*@' "${file}"; then
+			echo "ERROR: ${file} still has an identity token no adapter value fills: $(grep -o '@TUNAOS_[A-Z_]*@' "${file}" | sort -u | tr '\n' ' ')" >&2
+			exit 1
+		fi
+	done
+}
+tunaos_render_tokens \
+	/usr/share/plasma/look-and-feel/org.tunaos.desktop/metadata.json \
+	/usr/share/plasma/look-and-feel/org.tunaos.light.desktop/metadata.json \
+	/usr/share/wallpapers/TunaOS/metadata.json \
+	/usr/lib/systemd/system/tunaos-live-ready.service
+
 # TunaOS variants are named for fish. Keep VERSION_CODENAME tied to that
 # identity instead of inheriting the unrelated legacy dinosaur codename.
 # Each variant's codename is declared in tunaos.toml.
@@ -227,6 +256,14 @@ if [[ -f "${RECIPE_FILE}" ]]; then
 	# showed the TunaOS fish (tuna-os/tunaOS#1056, #3668).
 	DISTRO_LOGO_RES="/usr/share/pixmaps/tunaos.svg"
 
+	# The installer installs the project's own umbrella image, <registry>/
+	# <namespace>/<project id>:latest: the destination this build publishes to
+	# (the same IMAGE_REGISTRY/IMAGE_VENDOR the image-ref above is built from,
+	# resolved from [build.publish], the operator override or the repository
+	# owner) and the id from tunaos.toml [project]. recipe.json used to name
+	# ghcr.io/tuna-os/tunaos:latest, so a fork's installer installed TunaOS.
+	RECIPE_IMGREF="${IMAGE_REGISTRY:-ghcr.io}/${IMAGE_VENDOR}/${TUNAOS_PROJECT_ID}:latest"
+
 	python3 -c "
 import json
 with open('${RECIPE_FILE}', 'r') as f:
@@ -264,6 +301,9 @@ if 'completed' in tour:
 
 recipe['tour'] = new_tour
 
+recipe['imgref'] = '${RECIPE_IMGREF}'
+recipe['local_imgref'] = 'containers-storage:${RECIPE_IMGREF}'
+
 # The variant is the name people see; the installer's stock slides name the
 # project (tunaos.toml [project] name, e.g. your new TunaOS workstation). Swap
 # it in display text only: each slide's title and description. Paths, image
@@ -277,11 +317,17 @@ def rename(text):
 for slide in recipe['tour'].values():
     for key in ('title', 'description'):
         if isinstance(slide.get(key), str):
-            slide[key] = rename(slide[key])
+            # The shipped slides write @TUNAOS_PROJECT_NAME@ where they name the
+            # project, so a fork's name never has to match a TunaOS literal.
+            slide[key] = rename(slide[key].replace('@TUNAOS_PROJECT_NAME@', '${IMAGE_PRETTY_NAME}'))
 
 with open('${RECIPE_FILE}', 'w') as f:
     json.dump(recipe, f, indent=2)
 " || true
+	if ! grep -qF "\"imgref\": \"${RECIPE_IMGREF}\"" "${RECIPE_FILE}"; then
+		echo "ERROR: ${RECIPE_FILE} does not name ${RECIPE_IMGREF}; the installer would install another image" >&2
+		exit 1
+	fi
 fi
 
 osr_set DOCUMENTATION_URL "${DOCUMENTATION_URL}"

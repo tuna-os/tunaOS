@@ -40,6 +40,19 @@ file, so a fork's values pass the contract.
 | `CPE_NAME` | `cpe:/o:<cpe_vendor>:<image name>-<project id>`; the image name is the publish name (`bonito` for `bonito-rawhide`) |
 | `VARIANT`, `VARIANT_ID`, `IMAGE_ID`, `IMAGE_VERSION`, `DEFAULT_HOSTNAME` | set |
 
+Beyond os-release, the same adapter fills the other places an image names its
+project, so a fork edits `tunaos.toml` and nothing else:
+
+| where | value | from |
+|---|---|---|
+| installer `recipe.json` `imgref`, `local_imgref` | `<registry>/<namespace>/<project id>:latest` | `[build.publish]` or the repository owner, `[project] id` |
+| OCI labels `url`, `documentation`, artifacthub keyword; final-image `title` | `website`, `<docs_url>/intro`, project id; `<name> <image> (<flavor>)` | `[project]` |
+| SBOM `Organization` and namespace | `name`, `<website>/spdxdocs` | `[project]` |
+| release notes title, project name, docs URL, signing identity | `name`, `docs_url`, the repository | `[project]`, `github.repository` |
+| KDE theme and wallpaper metadata (`Description`, `Authors`, `Website`), live-ready unit | `@TUNAOS_*@` tokens in `system_files`, filled by `90-image-info.sh` | `[project]`, `[defaults.branding]` |
+| live-ISO launchers, polkit action text, ISO media names | `Install <name>`, `<name> <Variant>`, `<id>-<variant>-<flavor>` | `[project]` |
+| usage-report endpoint and page; Flatpak remote | `countme_endpoint`, `countme_metrics_url`; `[flatpak_preinstall] remote_url` | `tunaos.toml` |
+
 One variant's identity must never name another project. Until 2026-09-17 every
 variant pointed `HOME_URL` at `projectbluefin.io`, and the contract did not look
 at that field.

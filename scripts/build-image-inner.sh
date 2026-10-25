@@ -42,6 +42,9 @@ BUILD_CONFIG="$(tunaos_build_config)"
 # shellcheck source=lib/publish-destination.sh
 source scripts/lib/publish-destination.sh
 read -r IMAGE_REGISTRY REPO_ORGANIZATION < <(tunaos_publish_destination "$BUILD_CONFIG")
+# The project name for the final image's title label (tunaos.toml [project] name).
+# shellcheck source=../build_scripts/lib/identity.env
+source build_scripts/lib/identity.env
 
 # ── Resolve image refs from image-versions.yaml ───────────────────────────────
 common_image="${COMMON_IMAGE:-ghcr.io/projectbluefin/common}"
@@ -423,6 +426,7 @@ ${BUILDER} build \
 	--dns=8.8.8.8 \
 	"${BUILD_ARGS[@]}" \
 	--build-arg "RECHUNKED_BASE=${RECHUNKED_REF}" \
+	--build-arg "TUNAOS_PROJECT_NAME=${TUNAOS_PROJECT_NAME}" \
 	--tag "${IMAGE_TAG}" \
 	--file "Containerfile.final" \
 	.

@@ -28,6 +28,10 @@ set -euo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
 # shellcheck source=lib/build-config.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/build-config.sh"
+# The media label names the project: tunaos.toml [project] name, through the
+# generated identity adapter.
+# shellcheck source=../build_scripts/lib/identity.env
+. "$(dirname "${BASH_SOURCE[0]}")/../build_scripts/lib/identity.env"
 
 VARIANT="${1:?usage: $0 <variant> <group> [repo]}"
 # "default"/"flagship"/"" all select the empty-suffix flagship group.
@@ -124,11 +128,11 @@ fi
 # ── Names ───────────────────────────────────────────────────────────────────
 if [[ -n "$GROUP_SUFFIX" ]]; then
 	ISO_BASENAME="${VARIANT}-${GROUP_SUFFIX}"
-	MEDIA_NAME="TunaOS ${VARIANT^} ${GROUP_SUFFIX^}"
+	MEDIA_NAME="${TUNAOS_PROJECT_NAME} ${VARIANT^} ${GROUP_SUFFIX^}"
 	MEDIA_NAME="$(tunaos_iso_media_name "$MEDIA_NAME")"
 else
 	ISO_BASENAME="${VARIANT}"
-	MEDIA_NAME="TunaOS ${VARIANT^}"
+	MEDIA_NAME="${TUNAOS_PROJECT_NAME} ${VARIANT^}"
 	MEDIA_NAME="$(tunaos_iso_media_name "$MEDIA_NAME")"
 fi
 

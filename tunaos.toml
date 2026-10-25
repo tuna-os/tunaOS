@@ -16,6 +16,21 @@ global_platforms = ["linux/amd64", "linux/arm64"]
 name = "TunaOS"
 id = "tunaos"
 cpe_vendor = "jamesreilly"
+# The project's own site and its documentation root. Read by the OCI image
+# labels (`url`; `documentation` is <docs_url>/intro), the release notes and
+# the SBOM document namespace (<website>/spdxdocs/). No trailing slash.
+website = "https://tunaos.org"
+docs_url = "https://tunaos.org/docs"
+# Weekly adoption reports (`tunaos-countme`). Images POST their variant, flavor
+# and architecture here, and nowhere else. Empty disables reporting in every
+# image this file builds; leaving the key out does the same. A fork MUST replace
+# or empty countme_endpoint: validation rejects the stock endpoint once name or
+# id differ from TunaOS's, because a fork image that keeps a stock variant and
+# flavor id would otherwise count as that TunaOS cell. countme_metrics_url is
+# the public page the status text and the systemd units link to (only with an
+# endpoint).
+countme_endpoint = "https://countme.tunaos.org/v1/report"
+countme_metrics_url = "https://tunaos.org/metrics"
 
 [defaults.branding]
 homepage = "https://github.com/tuna-os/tunaos"
@@ -4789,6 +4804,9 @@ desktop = "none"
 # Image preinstall declarations, not proof of installed apps or remote identity.
 [flatpak_preinstall]
 schema_version = 1
+# .flatpakrepo of the project's own Flatpak remote, registered as `tuna-os` in
+# images that ship Tuna Desktop and in live ISOs. Empty registers no remote.
+remote_url = "https://tunaos.org/flatpak/tuna-os.flatpakrepo"
 common = [
   { id = "io.github.kolunmi.Bazaar", branch = "stable" },
   { id = "org.mozilla.firefox", branch = "stable" },

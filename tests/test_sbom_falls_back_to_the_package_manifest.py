@@ -45,7 +45,12 @@ def step(build_push, name):
     return next(s for s in build_push["steps"] if s.get("name") == name)
 
 
-def run_generator(tmp_path, manifest_text, *, image="ghcr.io/tuna-os/guppy:latest-linux-amd64"):
+STOCK_ORGANIZATION = "TunaOS"
+STOCK_NAMESPACE_BASE = "https://tunaos.org/spdxdocs"
+
+
+def run_generator(tmp_path, manifest_text, *, image="ghcr.io/tuna-os/guppy:latest-linux-amd64",
+                  organization=STOCK_ORGANIZATION, namespace_base=STOCK_NAMESPACE_BASE):
     manifest = tmp_path / "packages.txt"
     manifest.write_text(manifest_text, encoding="utf-8")
     out = tmp_path / "sbom.spdx.json"
@@ -55,6 +60,8 @@ def run_generator(tmp_path, manifest_text, *, image="ghcr.io/tuna-os/guppy:lates
             "--manifest", str(manifest),
             "--output", str(out),
             "--image", image,
+            "--organization", organization,
+            "--namespace-base", namespace_base,
             "--created", "2026-08-16T13:00:00Z",
         ],
         capture_output=True,
@@ -167,6 +174,8 @@ def test_a_missing_manifest_is_an_error_not_a_silent_success(tmp_path):
             "--manifest", str(tmp_path / "nope.txt"),
             "--output", str(tmp_path / "sbom.json"),
             "--image", "img",
+            "--organization", STOCK_ORGANIZATION,
+            "--namespace-base", STOCK_NAMESPACE_BASE,
         ],
         capture_output=True,
         text=True,
@@ -223,3 +232,42 @@ def test_both_producers_agree_on_the_filename(build_push):
     name = 'OUT="sbom-${IMAGE_NAME}-${DEFAULT_TAG}-${SAFE_PLATFORM}.spdx.json"'
     assert name in scan
     assert name in fallback
+
+
+# ── identity: the document claims the project tunaos.toml declares ────────
+
+
+def test_stock_document_keeps_its_namespace_and_organization(tmp_path):
+    proc, out = run_generator(tmp_path, "bash\t5.2.26\n")
+    assert proc.returncode == 0, proc.stderr
+    doc = json.loads(out.read_text())
+    assert doc["documentNamespace"].startswith("https://tunaos.org/spdxdocs/ghcr.io/tuna-os/guppy:latest-linux-amd64-")
+    assert "Organization: TunaOS" in doc["creationInfo"]["creators"]
+
+
+def test_a_fork_document_claims_the_fork(tmp_path):
+    proc, out = run_generator(tmp_path, "bash\t5.2.26\n", image="quay.io/acme/guppy:latest-linux-amd64",
+                              organization="Acme OS", namespace_base="https://acme.example/spdxdocs")
+    assert proc.returncode == 0, proc.stderr
+    doc = json.loads(out.read_text())
+    assert doc["documentNamespace"].startswith("https://acme.example/spdxdocs/quay.io/acme/guppy:")
+    assert "Organization: Acme OS" in doc["creationInfo"]["creators"]
+    assert "TunaOS" not in json.dumps(doc) and "tunaos.org" not in json.dumps(doc)
+
+
+def test_the_generator_has_no_built_in_identity(tmp_path):
+    """Omitting the identity must fail, not quietly claim TunaOS."""
+    manifest = tmp_path / "packages.txt"
+    manifest.write_text("bash\t5.2.26\n")
+    proc = subprocess.run([sys.executable, str(GENERATOR), "--manifest", str(manifest),
+                           "--output", str(tmp_path / "out.json"), "--image", "img"], capture_output=True, text=True)
+    assert proc.returncode != 0 and "--organization" in proc.stderr
+    assert not (tmp_path / "out.json").exists()
+
+
+def test_the_fallback_step_takes_its_identity_from_the_adapter(build_push):
+    """The workflow passes what tunaos.toml [project] says, resolved by the adapter."""
+    run = step(build_push, "Synthesize SBOM from the package manifest")["run"]
+    assert "source build_scripts/lib/identity.env" in run
+    assert '--organization "${TUNAOS_PROJECT_NAME}"' in run
+    assert '--namespace-base "${TUNAOS_WEBSITE}/spdxdocs"' in run

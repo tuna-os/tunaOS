@@ -248,6 +248,32 @@ if [[ -n "$logo" ]]; then
 	fi
 fi
 
+# ---------------------------------------------------------- identity tokens --
+
+# system_files writes @TUNAOS_<NAME>@ where a file names the project, and
+# 90-image-info.sh fills them from the identity adapter. A token that survives
+# means that script ran before the file was copied (or not at all), and the
+# image would show "@TUNAOS_PROJECT_NAME@" in KDE settings or systemctl.
+echo "== identity tokens =="
+leftover=""
+for tokenized in /usr/share/plasma/look-and-feel/org.tunaos.desktop/metadata.json \
+	/usr/share/plasma/look-and-feel/org.tunaos.light.desktop/metadata.json \
+	/usr/share/wallpapers/TunaOS/metadata.json \
+	/usr/lib/systemd/system/tunaos-live-ready.service \
+	/usr/lib/systemd/system/tunaos-countme.service \
+	/usr/lib/systemd/system/tunaos-countme.timer \
+	/etc/bootc-installer/recipe.json; do
+	[[ -f "$tokenized" ]] || continue
+	if grep -q '@TUNAOS_[A-Z_]*@' "$tokenized"; then
+		leftover+=" ${tokenized}"
+	fi
+done
+if [[ -n "$leftover" ]]; then
+	fail "unrendered @TUNAOS_*@ identity token in:${leftover}"
+else
+	pass "no unrendered identity tokens"
+fi
+
 # ---------------------------------------------------------------- manifest --
 
 echo "== image-info.json =="

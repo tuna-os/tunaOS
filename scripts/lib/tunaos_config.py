@@ -47,6 +47,12 @@ DISPLAY_TEXT = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9 .,()+_-]*[A-Za-z0-9.,()+_-]
 FORBIDDEN_URL_CHARACTER = re.compile(r"[\s\"'\\|`$]")
 CPE_PART = re.compile(r"[a-z0-9][a-z0-9._-]*\Z")
 BRANDING_URLS = ('homepage', 'documentation', 'support', 'bug_report')
+# The stock usage-report service answers only for TunaOS's own variant and
+# flavor ids. An image that carries other project identity must not report to it.
+STOCK_PROJECT = ('TunaOS', 'tunaos')
+STOCK_COUNTME_HOST = 'countme.tunaos.org'
+PROJECT_REQUIRED = ('name', 'id', 'cpe_vendor', 'website', 'docs_url')
+PROJECT_OPTIONAL = ('countme_endpoint', 'countme_metrics_url')
 # Labels such as "Fedora's deep blue" reach /etc/issue and a JSON heredoc:
 # apostrophes are fine there, double quotes and shell metacharacters are not.
 LABEL_TEXT = re.compile(r"[A-Za-z0-9][A-Za-z0-9 .,()+_'-]*\Z")
@@ -114,6 +120,12 @@ def https_url(value):
         and parsed.username is None
         and parsed.password is None
     )
+
+def site_url(value, path):
+    """A site root or docs root: https, no query or fragment, no trailing slash."""
+    if not https_url(value) or value.endswith('/') or '?' in value or '#' in value:
+        raise ConfigError(f'{path}: expected an https:// URL without a trailing slash, query or fragment, such as https://acme.example')
+
 
 def text(value, path, empty=False):
     if not isinstance(value, str) or (not empty and not value.strip()) or any(ord(c) < 32 for c in value):
@@ -206,13 +218,27 @@ def validate(config):
     table(config['build'], ('global_platforms', 'publish'), ('global_platforms',), 'build')
     strings(config['build']['global_platforms'], 'build.global_platforms', platform=True)
     if 'project' in config:
-        table(config['project'], ('name', 'id', 'cpe_vendor'), ('name', 'id', 'cpe_vendor'), 'project')
+        table(config['project'], PROJECT_REQUIRED + PROJECT_OPTIONAL, PROJECT_REQUIRED, 'project')
         if not isinstance(config['project']['name'], str) or not DISPLAY_TEXT.fullmatch(config['project']['name']):
             raise ConfigError('project.name: expected plain words (letters, digits, spaces, .,()+_-)')
         identifier(config['project']['id'], 'project.id')
         if not isinstance(config['project']['cpe_vendor'], str) or not CPE_PART.fullmatch(config['project']['cpe_vendor']):
             raise ConfigError('project.cpe_vendor: expected a lowercase CPE vendor such as acme '
                               '(letters, digits and ._-)')
+        project = config['project']
+        for key in ('website', 'docs_url'):
+            site_url(project[key], f'project.{key}')
+        endpoint = project.get('countme_endpoint', '')
+        metrics = project.get('countme_metrics_url', '')
+        for key, value in (('countme_endpoint', endpoint), ('countme_metrics_url', metrics)):
+            if value != '' and not https_url(value):
+                raise ConfigError(f'project.{key}: expected an https:// URL, or "" to disable usage reports')
+        if endpoint and urlsplit(endpoint).hostname == STOCK_COUNTME_HOST and (project['name'], project['id']) != STOCK_PROJECT:
+            raise ConfigError(f"project.countme_endpoint: {endpoint!r} is TunaOS's own usage-report service, but project.name/id "
+                              f"are {project['name']!r}/{project['id']!r}; set your own endpoint, or \"\" to send no reports")
+        if metrics and not endpoint:
+            raise ConfigError('project.countme_metrics_url: set without project.countme_endpoint; usage reports are disabled, '
+                              'so there is no public page to link')
     if 'defaults' in config:
         table(config['defaults'], ('branding', 'packages'), ('branding',), 'defaults')
         if 'packages' in config['defaults']:
@@ -372,6 +398,10 @@ def validate(config):
             flatpak_policy().validate(config)
         except flatpak_policy().PolicyError as exc:
             raise ConfigError(str(exc)) from exc
+        remote_url = config['flatpak_preinstall'].get('remote_url', '')
+        if remote_url != '' and (not https_url(remote_url) or not urlsplit(remote_url).path.endswith('.flatpakrepo')):
+            raise ConfigError('flatpak_preinstall.remote_url: expected an https:// URL of a .flatpakrepo file, '
+                              'or "" to register no tuna-os remote')
     if 'iso_builder' in config or 'flavor_metadata' in config:
         module_path = Path(__file__).with_name('iso_builder_config.py')
         spec = importlib.util.spec_from_file_location('iso_builder_config', module_path)
@@ -469,6 +499,12 @@ def render_identity(config):
              f"TUNAOS_BUG_REPORT_URL={shlex.quote(urls['bug_report'])}",
              # Boot splash for a variant that has no branding row.
              f"TUNAOS_PLYMOUTH_THEME={shlex.quote(urls['plymouth'])}",
+             f"TUNAOS_WEBSITE={shlex.quote(project['website'])}",
+             f"TUNAOS_DOCS_URL={shlex.quote(project['docs_url'])}",
+             # Empty means the image sends no usage reports / registers no remote.
+             f"TUNAOS_COUNTME_ENDPOINT={shlex.quote(project.get('countme_endpoint', ''))}",
+             f"TUNAOS_COUNTME_METRICS_URL={shlex.quote(project.get('countme_metrics_url', ''))}",
+             f"TUNAOS_FLATPAK_REMOTE_URL={shlex.quote(config.get('flatpak_preinstall', {}).get('remote_url', ''))}",
              # -g: stays global even when a caller sources this inside a function.
              'declare -gA TUNAOS_CODENAMES=(']
     # Double-quote every key even when its characters happen to be shell-safe:
