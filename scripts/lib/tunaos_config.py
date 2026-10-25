@@ -59,6 +59,13 @@ DEFAULT_BRANDING = BRANDING_URLS + ('plymouth',)
 VARIANT_BRANDING = ('accent', 'gnome_accent', 'base', 'homage', 'plymouth')
 # Variant keys with their own adapters under build_scripts/lib/, not the matrix.
 IDENTITY_KEYS = ('codename', 'branding', 'packages')
+# Variant keys that shape the generated GitHub workflows, not the build matrix
+# (scripts/generate-workflows.py reads them from tunaos.toml): the nightly cron
+# and whether the manual build-flavor.yml sweep dispatches the variant.
+WORKFLOW_KEYS = ('schedule', 'flavor_dispatch')
+# Five cron fields of digits and the */,- operators: it is written into a
+# double-quoted YAML scalar, so nothing else may reach it.
+CRON = re.compile(r"[0-9*/,-]+(?: [0-9*/,-]+){4}\Z")
 # Image-wide package additions ([defaults.packages], variants.<v>.packages).
 # Plain native names only: no options, URLs, local archives or expressions.
 PACKAGE_DELTA_KEYS = ('add', 'optional', 'repositories')
@@ -240,7 +247,7 @@ def validate(config):
         identifier(name, where)
         table(variant, ('emoji', 'description', 'base_image', 'aliases', 'platforms', 'flavors',
                         'upstream_track', 'experimental', 'akmods', 'publish_name', 'tag_suffix', 'codename', 'branding',
-                        'packages'),
+                        'packages', *WORKFLOW_KEYS),
               ('emoji', 'description', 'base_image', 'platforms', 'flavors'), where)
         for key in ('emoji', 'description', 'base_image', 'upstream_track', 'akmods', 'publish_name', 'tag_suffix'):
             if key in variant:
@@ -262,6 +269,13 @@ def validate(config):
             package_delta(variant['packages'], where + '.packages')
         if 'experimental' in variant and type(variant['experimental']) is not bool:
             raise ConfigError(f'{where}.experimental: expected boolean')
+        if 'schedule' in variant:
+            if not isinstance(variant['schedule'], str) or not CRON.fullmatch(variant['schedule']):
+                raise ConfigError(f'{where}.schedule: expected five cron fields such as "20 0 * * *"')
+            if variant.get('experimental'):
+                raise ConfigError(f'{where}.schedule: an experimental variant is dispatch-only and has no nightly')
+        if 'flavor_dispatch' in variant and type(variant['flavor_dispatch']) is not bool:
+            raise ConfigError(f'{where}.flavor_dispatch: expected boolean')
         strings(variant['platforms'], where + '.platforms', platform=True)
         if 'aliases' in variant:
             strings(variant['aliases'], where + '.aliases')
@@ -427,12 +441,13 @@ def load(path=None):
 def matrix(config):
     """Project the old consumer shape without inventing defaults or losing flags."""
     validate(config)
-    # Identity (codename, branding) has its own adapters; keep it out of the
-    # build matrix so every jq/yq consumer of build-config.yml sees the
-    # unchanged shape.
+    # Identity (codename, branding) has its own adapters, and the workflow
+    # keys (schedule, flavor_dispatch) are read from tunaos.toml by
+    # scripts/generate-workflows.py; keep both out of the build matrix so
+    # every jq/yq consumer of build-config.yml sees the unchanged shape.
     return copy.deepcopy({'config': config['build'], 'iso_groups': config['iso_groups'],
                           'sibling_images': config['sibling_images'], 'tuna_rollout': config['tuna_rollout'],
-                          'variants': [{'id': name, **{k: v for k, v in value.items() if k not in IDENTITY_KEYS}}
+                          'variants': [{'id': name, **{k: v for k, v in value.items() if k not in IDENTITY_KEYS + WORKFLOW_KEYS}}
                                        for name, value in config['variants'].items()]})
 
 

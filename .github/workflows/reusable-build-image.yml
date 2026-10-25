@@ -258,7 +258,9 @@ jobs:
         env:
           IS_PR: ${{ github.event_name == 'pull_request' }}
         run: |
-          CACHE_REPO="${IMAGE_REGISTRY}/tunaos-buildcache"
+          # Cache repo name follows [project] id in tunaos.toml, as the registry does.
+          source build_scripts/lib/identity.env
+          CACHE_REPO="${IMAGE_REGISTRY}/${TUNAOS_PROJECT_ID:?}-buildcache"
           FLAGS="--layers --cache-from ${CACHE_REPO}"
           # Only trusted (non-PR) runs may write cache entries.
           if [ "$IS_PR" != "true" ]; then

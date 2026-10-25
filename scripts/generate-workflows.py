@@ -27,30 +27,36 @@ def orphan_wrappers(workflows, variant_ids):
     return orphans
 
 
-def main():
-    config = tunaos_config.matrix(tunaos_config.load())
+# build-flavor.yml is hand-written except for this one line, which lists the
+# variants its manual sweep fans out to.
+FLAVOR_MATRIX = re.compile(r'^(        variant: )\[[^\]\n]*\]$', re.M)
 
-    # Nightly schedule registry: keep this in lockstep with the
-    # "Nightly schedule registry" comment block at the top of
+
+def flavor_sweep(variants):
+    """Ids build-flavor.yml dispatches: every variant but an experimental one or a flavor_dispatch = false."""
+    return [name for name, variant in variants.items()
+            if variant.get('flavor_dispatch', not variant.get('experimental', False))]
+
+
+def with_flavor_sweep(text, ids):
+    """build-flavor.yml source with its `matrix.variant` list set to `ids`."""
+    rewritten, count = FLAVOR_MATRIX.subn(lambda m: m.group(1) + '[' + ', '.join(ids) + ']', text)
+    if count != 1:
+        raise ValueError(f'expected one `variant: [...]` matrix line in build-flavor.yml, found {count}')
+    return rewritten
+
+
+def main():
+    primary = tunaos_config.load()
+    config = tunaos_config.matrix(primary)
+    options = primary['variants']
+
+    # Nightly schedule: variants.<id>.schedule in tunaos.toml. Keep it in
+    # lockstep with the "Nightly schedule registry" comment block at the top of
     # .github/workflows/build-variant.yml. The ~2h stagger exists because the
     # org has a 20-concurrent-job ceiling; un-staggered crons queue against
     # each other (and the proving workflows) and starve everything. If you
     # add a variant or move a cron, update both places.
-    SCHEDULES = {
-        "yellowfin": "20 0 * * *",
-        "albacore": "20 2 * * *",
-        "gurnard": "20 4 * * *",
-        "guppy": "20 6 * * *",
-        "skipjack": "20 9 * * *",
-        "bonito": "20 11 * * *",
-        "marlin": "20 13 * * *",
-        "bonito-rawhide": "20 15 * * *",
-        "grouper": "20 17 * * *",
-        "sailfin": "20 19 * * *",
-        "flounder": "20 21 * * *",
-        "hummingbird": "20 22 * * *",
-        "flounder-sid": "20 23 * * *",
-    }
 
     schedule_block = """  schedule:
     - cron: "{cron}"
@@ -135,7 +141,7 @@ jobs:
                 permissions=permissions_block
             )
         else:
-            cron = SCHEDULES.get(name)
+            cron = options[name].get('schedule')
             schedule = schedule_block.format(cron=cron) if cron else ""
             workflow_content = template.format(
                 name=name,
@@ -149,6 +155,15 @@ jobs:
         with open(file_path, 'w') as f:
             f.write(workflow_content)
         print(f"Generated {file_path}")
+
+    sweep_path = '.github/workflows/build-flavor.yml'
+    with open(sweep_path, encoding='utf-8') as f:
+        sweep_source = f.read()
+    sweep = with_flavor_sweep(sweep_source, flavor_sweep(options))
+    if sweep != sweep_source:
+        with open(sweep_path, 'w', encoding='utf-8') as f:
+            f.write(sweep)
+        print(f"Generated {sweep_path}")
 
     orphans = orphan_wrappers('.github/workflows', {variant.get('id') for variant in config.get('variants', [])})
     if orphans:

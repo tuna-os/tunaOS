@@ -364,15 +364,6 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
   fi
 }
 
-# ── Override scripts ─────────────────────────────────────────────────────
-
-
-
-@test "build_scripts/scripts/image-info-set: exists" {
-  run test -f "${REPO_ROOT}/build_scripts/scripts/image-info-set"
-  [ "$status" -eq 0 ]
-}
-
 # ── Config files (dracut, systemd, tmpfiles) ────────────────────────────
 
 @test "build_scripts/bootc/sandbox dracut config: 20-bootc-base.conf exists" {

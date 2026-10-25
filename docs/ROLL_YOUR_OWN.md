@@ -87,6 +87,19 @@ because `just generate-workflows` writes wrappers and never removes one, and
 that file keeps its nightly cron; `just check` fails and names each wrapper
 whose variant is gone. Delete those files.
 
+A variant's nightly cron and its place in the manual `build-flavor.yml` sweep are
+keys on the variant, not code. `schedule = "20 3 * * *"` sets the cron of
+`build-<id>.yml` (omit it for a dispatch-only variant; stagger it, because the org
+runs 20 jobs at once and `build-variant.yml` records the slots).
+`flavor_dispatch = false` keeps a variant out of the sweep, which otherwise lists
+every non-experimental variant. `just generate-workflows` writes both.
+
+Workflows and scripts that read or write published images (`bootc-lifecycle`,
+`catalog-facts`, `live-overlay`, `live-initramfs`, `publish-isos`,
+`publish-iso-groups`, `verify-asahi`, `asahi-hw-nightly`, the buildcache name,
+`package-parity.sh`, `build-custom`) take the destination from `[build.publish]`,
+else `ghcr.io/<repository owner>`, through `scripts/publish-destination.sh`.
+
 Packages, identity and brand settings live in the same file; the sections below
 show each. [Still hardcoded in code](#what-a-fork-still-edits-in-code) lists the
 few values a fork has to change outside `tunaos.toml` today.
@@ -412,10 +425,8 @@ publishes under its own name changes them in the file shown.
 |---|---|---|
 | Installer target image (`imgref`, `local_imgref`) | `system_files/etc/bootc-installer/recipe.json` | the installer installs `ghcr.io/tuna-os/tunaos:latest`, not your image |
 | Usage-report endpoint | `system_files/usr/libexec/tunaos-countme` | an image that keeps a stock variant and flavor id can report as that TunaOS cell to `countme.tunaos.org` |
-| Published image location | `.github/workflows/` (`bootc-lifecycle`, `catalog-facts`, `live-overlay`, `live-initramfs`, `publish-isos`, `publish-iso-groups`, `verify-asahi`, `asahi-hw-nightly`) and `.github/changelogs.py` | they pull or push `ghcr.io/tuna-os/...` instead of your destination |
+| Builder VM clone URL | `tunaos-builder.yaml` | the VM template clones `tuna-os/tunaos`; `scripts/corral-build.sh` re-points it to `CORRAL_REPO` or `GITHUB_REPOSITORY`, `limactl start` alone does not |
 | Image labels | `.github/workflows/reusable-build-image.yml` (`org.opencontainers.image.url`, `.documentation`), `Containerfile.final` (`.title`) | labels point at tunaos.org and say "TunaOS" |
-| Nightly schedule per variant | `scripts/generate-workflows.py` (`SCHEDULES`) | a variant you add has no cron |
-| Variant list for manual builds | `.github/workflows/build-flavor.yml` (`matrix.variant`) | dispatches variants you may not have |
 | "Install TunaOS" launchers | `live-iso/common/src/desktop-*.sh`, `live-iso/common/src/customize-live.sh` | the live ISO says "Install TunaOS" |
 | ISO media name | `scripts/build-iso-group.sh` (`MEDIA_NAME`) | the ISO volume says "TunaOS <Variant>" |
 | KDE Global Theme and wallpaper package | `system_files/usr/share/plasma/look-and-feel/org.tunaos*.desktop/`, `system_files/usr/share/wallpapers/TunaOS/` | KDE lists a "TunaOS" theme |
