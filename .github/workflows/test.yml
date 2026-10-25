@@ -54,6 +54,7 @@ on:
       - 'tunaos.toml'
       - 'requirements-config.txt'
       - 'requirements-package-authoring.txt'
+      - 'requirements-iso-diagnostic.txt'
       - 'image-versions.yaml'
       - 'registry-map.yaml'
       - 'renovate.json'
@@ -183,6 +184,7 @@ jobs:
           pip3 install pytest pytest-cov -r requirements-config.txt --break-system-packages 2>/dev/null || pip3 install pytest pytest-cov -r requirements-config.txt --user
 
           python3 -m pip install -r requirements-package-authoring.txt --break-system-packages || python3 -m pip install -r requirements-package-authoring.txt --user
+          python3 -m pip install -r requirements-iso-diagnostic.txt --break-system-packages || python3 -m pip install -r requirements-iso-diagnostic.txt --user
 
           # Independent schema oracle, pinned with the other external tools.
           schema_version=$(yq -r '.downloads.jsonschema // ""' image-versions.yaml)
