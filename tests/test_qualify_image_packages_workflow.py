@@ -228,7 +228,7 @@ def test_prepare_pins_only_the_mutable_base_and_the_overlay_builds_on_the_local_
     removed = [line for line in changed if line[0] == "-"]
     added = [line for line in changed if line[0] == "+"]
     assert len(removed) == len(added) and all(line.startswith(("-base_image", "+base_image")) for line in changed)
-    assert all(LANE.PINNED.search(line) for line in added)
+    assert all(LANE.PINNED.search(line.rstrip("\"")) for line in added)
     overlay = next(b for b in result["builds"] if b["role"] == "modifiedOverlay")
     desktop = next(b for b in result["builds"] if b["role"] == "modifiedDesktop")
     assert overlay["chain"] == f"localhost/{desktop['variant']}:{desktop['tag']}" and overlay["isCi"] == "0"
