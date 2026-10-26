@@ -87,6 +87,8 @@ def problems(document: dict, text: str) -> list[str]:
         text in builds[0]["run"] for text in ('sudo timeout --kill-after=60s "${remaining}s"', "deadline=")
     ):
         found.append("the whole build phase needs a root-owned cumulative budget under the job timeout")
+    if not builds or "BUILDAH_CACHE_FLAGS=--layers" not in builds[0]["run"] or "cache-from" in builds[0]["run"]:
+        found.append("the builds must share Buildah layers locally so the base stage is compiled once")
     gates = [s for s in steps if "package-qualification.py gate" in s.get("run", "")]
     gated_after_harness = (
         len(gates) == 1 and len(harness) == 1 and steps.index(gates[0]) > steps.index(harness[0])
@@ -152,6 +154,23 @@ def test_a_harness_step_skipped_by_a_failed_build_is_a_violation():
         if "qualify-image-packages.py" in step.get("run", ""):
             del step["if"]
     assert any("after a failed build" in item for item in problems(document, WORKFLOW.read_text()))
+
+
+def test_builds_without_a_shared_layer_cache_are_a_violation():
+    """Run 40223961920: gentoo recompiled its base stage in all three builds and
+    ran out of the 300-minute budget during the third."""
+    assert not any("share Buildah layers" in item for item in problems(workflow_document(), WORKFLOW.read_text()))
+    document = workflow_document()
+    for step in document["jobs"]["qualify"]["steps"]:
+        if step.get("name") == "Build the images":
+            step["run"] = step["run"].replace("BUILDAH_CACHE_FLAGS=--layers", "")
+    assert any("share Buildah layers" in item for item in problems(document, WORKFLOW.read_text()))
+
+
+def test_the_layer_cache_flag_reaches_the_buildah_invocation():
+    """The flag is only useful if build-image-inner.sh forwards it to `buildah build`."""
+    inner = (ROOT / "scripts/build-image-inner.sh").read_text()
+    assert "${BUILDAH_CACHE_FLAGS:-}" in inner
 
 
 def test_a_build_phase_that_can_outlive_the_job_is_a_violation():
