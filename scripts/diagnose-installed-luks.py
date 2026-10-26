@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import select
 import signal
@@ -22,6 +23,19 @@ from lib import installed_boot_diagnostic as d
 
 ROOT = Path(__file__).resolve().parents[1]
 OWNED_SERVICES = []
+
+
+def systemd_usec(value):
+    if value.isdigit():
+        return int(value)
+    factors = {'us':1, 'ms':1000, 's':1000000, 'min':60000000, 'h':3600000000}
+    total = 0
+    for token in value.split():
+        match = re.fullmatch(r'([0-9]+)(us|ms|s|min|h)', token)
+        if not match:
+            return None
+        total += int(match.group(1)) * factors[match.group(2)]
+    return total or None
 
 
 def file_digest(path, deadline=None):
@@ -106,7 +120,7 @@ class OwnedQemu:
                     'services':[child.proof() for child in self.children]}
 
 
-def no_open_disk(path, deadline, *, proc_root=None):
+def no_open_disk(path, deadline, output=None, *, proc_root=None):
     """Fail closed with one bounded, numeric observation; never inspect foreign FDs."""
     identity = path.stat()
     uid = os.getuid()
@@ -151,9 +165,117 @@ def no_open_disk(path, deadline, *, proc_root=None):
                            'counts': counts.copy()}
             if fd_number is not None:
                 observation['fd'] = fd_number
+            if previous_uid == uid and output is not None:
+                retry_denied_descriptor_scan(path, deadline, output, observation)
+                return
             raise d.Refused('open_descriptor_scan_denied',
                             {'descriptor_denials': [observation]}) from None
+def scan_open_descriptors(path, deadline, proc_root=Path('/proc'), same_uid=None):
+    identity = path.stat()
+    counts = {'processes': 0, 'fds': 0}
+    try:
+        for proc in proc_root.iterdir():
+            if time.monotonic() >= deadline:
+                return 'timeout'
+            if not proc.name.isascii() or not proc.name.isdigit():
+                continue
+            counts['processes'] += 1
+            if counts['processes'] > 100000:
+                return 'limit'
+            try:
+                if same_uid is not None and proc.stat().st_uid != same_uid:
+                    continue
+                for fd in (proc / 'fd').iterdir():
+                    counts['fds'] += 1
+                    if counts['fds'] > 100000:
+                        return 'limit'
+                    if time.monotonic() >= deadline:
+                        return 'timeout'
+                    try:
+                        opened = fd.stat()
+                    except FileNotFoundError:
+                        continue
+                    if (opened.st_dev, opened.st_ino) == (identity.st_dev, identity.st_ino):
+                        return 'open'
+            except FileNotFoundError:
+                continue
+            except PermissionError:
+                return 'denied'
+    except (FileNotFoundError, PermissionError):
+        return 'denied'
+    return 'clear'
 
+
+def root_descriptor_scan(disk, result, owner_uid, seconds):
+    d.require(os.geteuid() == 0, 'descriptor_scan_not_root')
+    d.require(owner_uid.isdigit() and 0 < int(owner_uid) < 2**31, 'descriptor_scan_owner')
+    d.require(seconds.isdigit() and 1 <= int(seconds) <= 600, 'descriptor_scan_budget')
+    disk = Path(disk).absolute()
+    d.require(not any(parent.is_symlink() for parent in (disk, *disk.parents)), 'descriptor_disk_link')
+    disk_stat = disk.stat()
+    d.require(stat.S_ISREG(disk_stat.st_mode) and disk_stat.st_nlink == 1 and
+              disk_stat.st_uid == int(owner_uid), 'descriptor_disk_file')
+    status = scan_open_descriptors(disk, time.monotonic() + int(seconds))
+    target = Path(result).absolute()
+    parent_stat = target.parent.stat()
+    d.require(stat.S_ISDIR(parent_stat.st_mode) and parent_stat.st_uid == int(owner_uid) and
+              stat.S_IMODE(parent_stat.st_mode) & 0o077 == 0, 'descriptor_result_directory')
+    before = target.stat()
+    d.require(stat.S_ISREG(before.st_mode) and before.st_nlink == 1 and
+              before.st_uid == int(owner_uid) and before.st_size == 0 and
+              stat.S_IMODE(before.st_mode) == 0o602, 'descriptor_result_file')
+    result_fd = os.open(target, os.O_WRONLY | os.O_TRUNC | os.O_NOFOLLOW | os.O_NONBLOCK)
+    try:
+        actual = os.fstat(result_fd)
+        d.require((actual.st_dev, actual.st_ino, actual.st_uid) ==
+                  (before.st_dev, before.st_ino, int(owner_uid)), 'descriptor_result_changed')
+        data = (status + chr(10)).encode('ascii')
+        d.require(os.write(result_fd, data) == len(data), 'descriptor_result_write')
+    finally:
+        os.close(result_fd)
+    return 0
+
+
+def retry_denied_descriptor_scan(path, deadline, output, observation):
+    output_stat = output.stat()
+    d.require(stat.S_ISDIR(output_stat.st_mode) and output_stat.st_uid == os.getuid() and
+              stat.S_IMODE(output_stat.st_mode) & 0o077 == 0, 'descriptor_output_private')
+    result = output / 'descriptor-scan.result'
+    fd = os.open(result, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o602)
+    os.fchmod(fd, 0o602)
+    os.close(fd)
+    service_count = len(OWNED_SERVICES)
+    try:
+        remaining = max(1, min(600, int(deadline - time.monotonic())))
+        service = ContainedProcess(
+            [sys.executable, str(Path(__file__).resolve()), 'scan-open-disk',
+             str(path), str(result), str(os.getuid()), str(remaining)],
+            memory_max=256 * 1024**2, service_user=0, runtime_max_sec=remaining + 5,
+            read_write_paths=(result,), capability_bounding_set=('CAP_DAC_READ_SEARCH', 'CAP_SYS_PTRACE'),
+            protect_system='strict', private_network=True)
+        try:
+            code = service.wait(timeout=remaining + 5)
+        except subprocess.TimeoutExpired:
+            d.require(service.stop(), 'descriptor_scan_stop_unproven')
+            raise d.Refused('descriptor_scan_timeout') from None
+        d.require(service.stop(), 'descriptor_scan_stop_unproven')
+        d.require(code == 0, 'descriptor_scan_failed')
+        d.regular(result, output)
+        d.require(result.stat().st_size <= 16, 'descriptor_result_limit')
+        status = result.read_text().strip()
+        d.require(status in ('clear', 'open', 'denied', 'timeout', 'limit'), 'descriptor_scan_status')
+        if status == 'open':
+            raise d.Refused('disk_still_open')
+        if status == 'timeout':
+            raise d.Refused('descriptor_scan_timeout')
+        if status == 'limit':
+            raise d.Refused('descriptor_scan_limit')
+        if status == 'denied':
+            raise d.Refused('open_descriptor_scan_denied', {'descriptor_denials': [observation]})
+        d.require(status == 'clear', 'open_descriptor_scan_denied')
+    finally:
+        if all(item.stopped for item in OWNED_SERVICES[service_count:]):
+            result.unlink(missing_ok=True)
 
 def worker(disk, target, version):
     # Separate process deadline bounds libguestfs calls and parsing as a whole.
@@ -212,9 +334,12 @@ class ContainedProcess:
     """Non-delegated transient service; retain it until explicit stop."""
     properties = ('InvocationID','ControlGroup','User','Delegate','KillMode','RemainAfterExit',
                   'Restart','ActiveState','SubState','MainPID','ExecMainCode','ExecMainStatus','LoadState',
-                  'SupplementaryGroups')
+                  'SupplementaryGroups','NoNewPrivileges','RuntimeMaxUSec','ReadWritePaths',
+                  'CapabilityBoundingSet','ProtectSystem','PrivateNetwork')
 
-    def __init__(self, command, env=None, memory_max=None, supplementary_groups=()):
+    def __init__(self, command, env=None, memory_max=None, supplementary_groups=(),
+                 service_user=None, runtime_max_sec=3700, read_write_paths=(),
+                 capability_bounding_set=(), protect_system=None, private_network=False):
         self.unit = 'tunaos-diag-' + uuid.uuid4().hex + '.service'
         self.invocation = None
         self.cgroup = None
@@ -223,25 +348,60 @@ class ContainedProcess:
         self.stop_attempted = False
         self.memory_max = memory_max
         self.supplementary_groups = tuple(supplementary_groups)
+        self.service_user = os.getuid() if service_user is None else service_user
+        self.runtime_max_sec = runtime_max_sec
+        self.read_write_paths = tuple(Path(path).absolute() for path in read_write_paths)
+        self.capability_bounding_set = tuple(capability_bounding_set)
+        self.protect_system = protect_system
+        self.private_network = private_network
+        d.require(type(self.service_user) is int and self.service_user >= 0 and
+                  type(runtime_max_sec) is int and 1 <= runtime_max_sec <= 3700, 'service_limits')
+        if self.service_user == 0:
+            d.require(self.read_write_paths and self.capability_bounding_set ==
+                      ('CAP_DAC_READ_SEARCH', 'CAP_SYS_PTRACE') and protect_system == 'strict'
+                      and private_network and not self.supplementary_groups, 'root_service_policy')
+            d.require(all(path.is_absolute() and not any(parent.is_symlink()
+                      for parent in (path, *path.parents)) for path in self.read_write_paths),
+                      'root_service_write_path')
+        else:
+            d.require(self.service_user == os.getuid() and not self.read_write_paths and
+                      not self.capability_bounding_set and protect_system is None and
+                      not private_network, 'service_user_policy')
         OWNED_SERVICES.append(self)
         settings = [f'--setenv={key}={value}' for key,value in (env or {}).items()]
         memory_setting = ['--property=MemoryMax='+str(memory_max)] if memory_max is not None else []
         group_setting = ['--property=SupplementaryGroups='+','.join(self.supplementary_groups)] if self.supplementary_groups else []
+        root_settings = []
+        if self.read_write_paths:
+            root_settings.append('--property=ReadWritePaths='+' '.join(map(str, self.read_write_paths)))
+        if self.capability_bounding_set:
+            root_settings.append('--property=CapabilityBoundingSet='+' '.join(self.capability_bounding_set))
+        if self.protect_system:
+            root_settings.append('--property=ProtectSystem='+self.protect_system)
+        if self.private_network:
+            root_settings.append('--property=PrivateNetwork=yes')
         command = ['sudo','-n','systemd-run','--quiet','--remain-after-exit',
-            '--service-type=exec','--unit='+self.unit,'--property=User='+str(os.getuid()),
+            '--service-type=exec','--unit='+self.unit,'--property=User='+str(self.service_user),
             '--property=NoNewPrivileges=yes','--property=Delegate=no','--property=Restart=no',
             '--property=KillMode=control-group','--property=TimeoutStopSec=20',
-            '--property=RuntimeMaxSec=3700','--property=StandardOutput=null','--property=StandardError=null',
-            *memory_setting,*group_setting,'--working-directory='+str(ROOT),'--expand-environment=no',*settings,'--',*command]
+            '--property=RuntimeMaxSec='+str(runtime_max_sec),'--property=StandardOutput=null',
+            '--property=StandardError=null',*memory_setting,*group_setting,*root_settings,
+            '--working-directory='+str(ROOT),'--expand-environment=no',*settings,'--',*command]
         try:
             result = subprocess.run(command,capture_output=True,timeout=35,check=False)
             d.require(result.returncode == 0, 'service_start_failed')
             info = self.info(check_identity=False)
-            d.require(info.get('User') == str(os.getuid()) and info.get('Delegate') == 'no'
-                      and info.get('KillMode') == 'control-group' and info.get('Restart') == 'no'
-                      and info.get('RemainAfterExit') == 'yes'
-                      and set(info.get('SupplementaryGroups','').split()) == set(self.supplementary_groups),
+            d.require(info.get('User') == str(self.service_user) and info.get('NoNewPrivileges') == 'yes'
+                      and info.get('Delegate') == 'no' and info.get('KillMode') == 'control-group'
+                      and info.get('Restart') == 'no' and info.get('RemainAfterExit') == 'yes'
+                      and set(info.get('SupplementaryGroups','').split()) == set(self.supplementary_groups)
+                      and systemd_usec(info.get('RuntimeMaxUSec','')) == runtime_max_sec * 1000000,
                       'service_policy')
+            if self.service_user == 0:
+                d.require(set(info.get('ReadWritePaths','').split()) == set(map(str, self.read_write_paths))
+                          and set(info.get('CapabilityBoundingSet','').upper().split()) ==
+                          set(self.capability_bounding_set) and info.get('ProtectSystem') == 'strict'
+                          and info.get('PrivateNetwork') == 'yes', 'root_service_sandbox')
             d.require(len(info.get('InvocationID','')) == 32 and
                       all(c in '0123456789abcdef' for c in info['InvocationID']), 'service_invocation')
             path = info.get('ControlGroup','')
@@ -310,7 +470,7 @@ class ContainedProcess:
 
     def proof(self):
         return {'invocation':self.invocation, 'cgroup':str(self.cgroup),
-                'user':os.getuid(), 'delegated':False, 'stopped':self.stopped}
+                'user':self.service_user, 'delegated':False, 'stopped':self.stopped}
 
     def stop(self):
         if self.stopped:
@@ -506,7 +666,7 @@ def run(args):
         before = d.regular(disk, output)
         d.require(before[2] <= 65*1024**3, 'disk_file_limit')
         d.qcow_header(disk)
-        no_open_disk(disk, deadline)
+        no_open_disk(disk, deadline, output)
         disk_hash = file_digest(disk, deadline)
         target = output / 'private-inspection.json'
         process = ContainedProcess([sys.executable, str(Path(__file__).resolve()), 'inspect',
@@ -574,6 +734,9 @@ def interrupted(signum, frame):
 def main():
     signal.signal(signal.SIGTERM, interrupted)
     signal.signal(signal.SIGINT, interrupted)
+    if len(sys.argv) > 1 and sys.argv[1] == 'scan-open-disk':
+        d.require(len(sys.argv) == 6, 'descriptor_scan_arguments')
+        return root_descriptor_scan(*sys.argv[2:])
     if len(sys.argv) > 1 and sys.argv[1] in ('proxy', 'signal'):
         return proxy()
     if len(sys.argv) > 1 and sys.argv[1] == 'inspect':

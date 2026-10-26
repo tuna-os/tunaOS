@@ -47,7 +47,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup runner
-        uses: projectbluefin/actions/bootc-build/setup-runner@d18642a8b4b325c2551eabd9a65c1ad12b4ebb30 # v1 as of 2026-07-02
+        uses: projectbluefin/actions/bootc-build/setup-runner@209517dda44829f126e25da28f11245c34458ac3 # v1 as of 2026-07-02
         with:
           storage-backend: btrfs
           update-podman: "true"
@@ -102,12 +102,18 @@ jobs:
             # state. The submodules are already checked out above. The build must
             # not read the loop's stdin.
             #
+            # --layers is the local layer cache reusable-build-image.yml also asks for,
+            # without its registry cache source (this workflow holds no registry
+            # access). Without it the stock, modified and desktop builds each
+            # recompile the Gentoo base stage from scratch (run 40223961920: three
+            # ~105-minute emerges, the desktop one killed by the budget).
+            #
             # `timeout` runs under sudo, as in reusable-build-image.yml: it signals
             # the whole process group, and only root can kill root's buildah.
             # pipefail makes the pipeline's status the build's, not tee's.
             rc=0
             sudo timeout --kill-after=60s "${remaining}s" \
-              env SKIP_RECHUNK=1 SKIP_SUBMODULES=1 \
+              env SKIP_RECHUNK=1 SKIP_SUBMODULES=1 BUILDAH_CACHE_FLAGS=--layers \
               "$just" build "$variant" "$flavor" linux/amd64 "$is_ci" "$tag" "$chain" \
               < /dev/null 2>&1 | tee "$BUILD_LOGS/${role}.log" || rc=$?
             echo "::endgroup::"

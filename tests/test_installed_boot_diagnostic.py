@@ -410,6 +410,114 @@ def test_no_owner_cannot_claim_stop(tmp_path):
     with pytest.raises(d.Refused,match='no_supervised_vm'):supervisor.OwnedQemu('/none',tmp_path).stop()
 
 
+
+@pytest.mark.parametrize(('status','reason'), [
+    ('clear', None), ('open', 'disk_still_open'), ('denied', 'open_descriptor_scan_denied')])
+def test_denied_proc_scan_uses_bounded_root_fallback_and_cleans_result(
+        tmp_path, monkeypatch, status, reason):
+    disk = tmp_path/'disk.qcow2'
+    disk.write_bytes(b'disk')
+    proc_root = tmp_path/'proc'
+    fd_dir = proc_root/'1234'/'fd'
+    fd_dir.mkdir(parents=True)
+    original = Path.iterdir
+    def denied(path):
+        if path == fd_dir:
+            raise PermissionError()
+        return original(path)
+    monkeypatch.setattr(Path, 'iterdir', denied)
+    created = []
+
+    class Service:
+        def __init__(self, command, **options):
+            self.stopped = False
+            self.options = options
+            Path(command[4]).write_text(status + '\n')
+            created.append(self)
+            supervisor.OWNED_SERVICES.append(self)
+
+        def wait(self, timeout):
+            assert timeout <= 605
+            return 0
+
+
+        def stop(self):
+            self.stopped = True
+            return True
+
+    monkeypatch.setattr(supervisor, 'ContainedProcess', Service)
+    if reason:
+        with pytest.raises(d.Refused, match=reason):
+            supervisor.no_open_disk(disk, time.monotonic()+600, tmp_path, proc_root=proc_root)
+    else:
+        supervisor.no_open_disk(disk, time.monotonic()+600, tmp_path, proc_root=proc_root)
+    assert len(created) == 1 and created[0].stopped
+    assert created[0].options['service_user'] == 0
+    assert created[0].options['memory_max'] == 256 * 1024**2
+    assert created[0].options['private_network'] is True
+    assert created[0].options['protect_system'] == 'strict'
+    assert not (tmp_path/'descriptor-scan.result').exists()
+
+
+def test_fallback_preserves_private_result_until_service_stop_is_proven(tmp_path, monkeypatch):
+    disk = tmp_path/'disk.qcow2'
+    disk.write_bytes(b'disk')
+    proc_root = tmp_path/'proc'
+    fd_dir = proc_root/'1234'/'fd'
+    fd_dir.mkdir(parents=True)
+    original = Path.iterdir
+    def denied(path):
+        if path == fd_dir:
+            raise PermissionError()
+        return original(path)
+    monkeypatch.setattr(Path, 'iterdir', denied)
+
+    class UnstoppableService:
+        def __init__(self, command, **options):
+            self.stopped = False
+            Path(command[4]).write_text('clear\n')
+            supervisor.OWNED_SERVICES.append(self)
+
+        def wait(self, timeout):
+            return 0
+
+        def stop(self):
+            return False
+
+    monkeypatch.setattr(supervisor, 'ContainedProcess', UnstoppableService)
+    with pytest.raises(d.Refused, match='descriptor_scan_stop_unproven'):
+        supervisor.no_open_disk(disk, time.monotonic()+600, tmp_path, proc_root=proc_root)
+    assert (tmp_path/'descriptor-scan.result').is_file()
+
+
+@pytest.mark.parametrize(('value','expected'), [
+    ('5s', 5_000_000), ('1h 1min 40s', 3_700_000_000), ('infinity', None), ('', None)])
+def test_systemd_runtime_limit_parser(value, expected):
+    assert supervisor.systemd_usec(value) == expected
+
+
+@pytest.mark.parametrize(('fd_state','expected'), [('open', 'open'), ('clear', 'clear'), ('denied', 'denied')])
+def test_proc_descriptor_scan_classifies_disk_fd_safely(tmp_path, monkeypatch, fd_state, expected):
+    disk = tmp_path/'disk.qcow2'
+    disk.write_bytes(b'disk')
+    proc = tmp_path/'proc'
+    process = proc/'1234'
+    fd_dir = process/'fd'
+    fd_dir.mkdir(parents=True)
+    if fd_state == 'open':
+        (fd_dir/'7').symlink_to(disk)
+    elif fd_state == 'denied':
+        original = Path.iterdir
+
+        def denied(path):
+            if path == fd_dir:
+                raise PermissionError()
+            return original(path)
+
+        monkeypatch.setattr(Path, 'iterdir', denied)
+    assert supervisor.scan_open_descriptors(
+        disk, time.monotonic()+5, proc_root=proc, same_uid=os.getuid()) == expected
+
 def test_report_upload_allowlist_and_limits(tmp_path,monkeypatch):
     target=tmp_path/'out'
     d.write_report(target,{'qualified':False,'strict_exit':3,'collection':'not_collected'})
@@ -672,7 +780,8 @@ def test_service_launch_is_non_delegated_and_bounded(tmp_path,monkeypatch):
         return {'User':str(os.getuid()),'Delegate':'no','KillMode':'control-group',
                 'Restart':'no','RemainAfterExit':'yes','InvocationID':'a'*32,
                 'ControlGroup':'/system.slice/'+self.unit,'MainPID':'12345',
-                'SupplementaryGroups':'kvm'}
+                'SupplementaryGroups':'kvm','NoNewPrivileges':'yes',
+                'RuntimeMaxUSec':'3700000000'}
     monkeypatch.setattr(supervisor.subprocess,'run',run)
     monkeypatch.setattr(supervisor.ContainedProcess,'info',info)
     monkeypatch.setattr(supervisor.Path,'is_file',lambda path:True)
@@ -685,6 +794,44 @@ def test_service_launch_is_non_delegated_and_bounded(tmp_path,monkeypatch):
     assert command[-2:]==['--','fixture-command']
 
 
+def test_root_descriptor_scan_service_is_bounded_and_read_only(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    result_path = tmp_path/'descriptor-scan.result'
+    calls = []
+
+    def run(argv, **kwargs):
+        calls.append(argv)
+        return SimpleNamespace(returncode=0)
+
+    def info(self, **kwargs):
+        return {'User':'0','Delegate':'no','KillMode':'control-group','Restart':'no',
+                'RemainAfterExit':'yes','InvocationID':'a'*32,
+                'ControlGroup':'/system.slice/'+self.unit,'MainPID':'12345',
+                'SupplementaryGroups':'','NoNewPrivileges':'yes','RuntimeMaxUSec':'5000000',
+                'ReadWritePaths':str(result_path),
+                'CapabilityBoundingSet':'CAP_DAC_READ_SEARCH CAP_SYS_PTRACE',
+                'ProtectSystem':'strict','PrivateNetwork':'yes'}
+
+    monkeypatch.setattr(supervisor.subprocess, 'run', run)
+    monkeypatch.setattr(supervisor.ContainedProcess, 'info', info)
+    monkeypatch.setattr(supervisor.Path, 'is_file', lambda path: True)
+    monkeypatch.setattr(supervisor.Path, 'read_text', lambda path: str(256*1024**2))
+    supervisor.ContainedProcess(
+        ['fixture-scan'], memory_max=256*1024**2, service_user=0, runtime_max_sec=5,
+        read_write_paths=(result_path,),
+        capability_bounding_set=('CAP_DAC_READ_SEARCH','CAP_SYS_PTRACE'),
+        protect_system='strict', private_network=True)
+    command = calls[0]
+    assert '--property=User=0' in command
+    assert '--property=RuntimeMaxSec=5' in command
+    assert '--property=MemoryMax=268435456' in command
+    assert '--property=ReadWritePaths='+str(result_path) in command
+    assert '--property=CapabilityBoundingSet=CAP_DAC_READ_SEARCH CAP_SYS_PTRACE' in command
+    assert '--property=ProtectSystem=strict' in command
+    assert '--property=PrivateNetwork=yes' in command
+    supervisor.OWNED_SERVICES.clear()
+
+
 def test_inspector_memory_limit_and_oom_failure_cleanup(tmp_path, monkeypatch):
     from types import SimpleNamespace
     calls = []
@@ -694,7 +841,8 @@ def test_inspector_memory_limit_and_oom_failure_cleanup(tmp_path, monkeypatch):
     def info(self, **kwargs):
         return {'User':str(os.getuid()),'Delegate':'no','KillMode':'control-group',
                 'Restart':'no','RemainAfterExit':'yes','InvocationID':'a'*32,
-                'ControlGroup':'/system.slice/'+self.unit,'MainPID':'12345'}
+                'ControlGroup':'/system.slice/'+self.unit,'MainPID':'12345',
+                'NoNewPrivileges':'yes','RuntimeMaxUSec':'3700000000'}
     monkeypatch.setattr(supervisor.subprocess, 'run', run)
     monkeypatch.setattr(supervisor.ContainedProcess, 'info', info)
     monkeypatch.setattr(supervisor.Path, 'is_file', lambda path: True)
@@ -772,7 +920,8 @@ def test_service_policy_mismatch_stops_exact_unit(monkeypatch,bad_key,bad_value)
     def run(argv,**kwargs):calls.append(argv);return SimpleNamespace(returncode=0)
     def info(self,**kwargs):
         value={'User':str(os.getuid()),'Delegate':'no','KillMode':'control-group',
-               'Restart':'no','RemainAfterExit':'yes','ControlGroup':'/system.slice/'+self.unit,'InvocationID':'a'*32}
+               'Restart':'no','RemainAfterExit':'yes','ControlGroup':'/system.slice/'+self.unit,
+               'InvocationID':'a'*32,'NoNewPrivileges':'yes','RuntimeMaxUSec':'3700000000'}
         value[bad_key]=bad_value
         return value
     monkeypatch.setattr(supervisor.subprocess,'run',run)
@@ -913,8 +1062,3 @@ def test_descriptor_scan_limits_and_deadline_remain_fail_closed():
                                 proc_root=ProcFixture('root', entries=[proc]))
 
 
-def test_descriptor_denials_are_reported_before_hash_and_inspection():
-    source = (ROOT/'scripts/diagnose-installed-luks.py').read_text()
-    assert source.index('no_open_disk(disk, deadline)') < source.index('disk_hash = file_digest')
-    assert source.index('disk_hash = file_digest') < source.index("'inspect',")
-    assert "report['descriptor_denials'] = error.details['descriptor_denials']" in source

@@ -15,9 +15,16 @@ native public-key checksum, ORAS 1.3.4 and Cosign checksums.
 It pins the current base for Skipjack (CentOS Stream 10) by immutable reference.
 The diagnostic uses no unpublished input or sibling worktree.
 
-The read-only `plan` command checks the configured base and hash of the full EL10 policy.
+The read-only `plan` command checks the pinned base against its review hash.
+It also checks the hash of the full EL10 policy.
 It derives the 28 required package names and adds `gnome50-el10-compat`.
 Drift in policy needs review; it never silently changes the diagnostic.
+
+The production base moves with Renovate, and the diagnostic does not follow it.
+The plan and the result receipt record both digests and `configured_base_matches_pinned`.
+
+When that field is false, the run says nothing about the newer base.
+Re-run it before you trust that base.
 
 Official dependencies come only from explicit CentOS Stream 10 x86_64 paths:
 BaseOS, AppStream and CRB at `mirror.stream.centos.org`.
@@ -103,8 +110,11 @@ The workflow uploads only seven-day `diagnostic-only-*` artifacts. It does not p
 
 This diagnostic does **not** exercise the full image's three before-operations or eight groups.
 It omits options for group solvers (`--nobest --allowerasing`), exclusions, the libselinux
-ceiling and kernel versionlocks. It also omits EPEL/negativo17 setup and other build pipeline operations.
+ceiling and kernel versionlocks. It also omits negativo17 setup and other build pipeline operations.
 The plan retains the complete excluded policy.
+
+The consumer's DNF config sets `best=1`, as the base's stock config does.
+Without it, DNF4 swaps an uninstallable newest package for an older one from another repository.
 Full real-pipeline build parity, a final audit of image repositories and boot tests remain separate required gates.
 GNOME 50 transport validation is not GNOME 51 acceptance.
 

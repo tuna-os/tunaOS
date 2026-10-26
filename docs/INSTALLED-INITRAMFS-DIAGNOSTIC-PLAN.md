@@ -3,8 +3,17 @@
 Integrated base: `40ae2f46cde617cd03b6c85fcf024949f1cb32e1` (#3965),
 which retains `cf04a15e5e2bb59556f209e7bdca891a5878e9ae` (#3431).
 Branch: `codex/installed-initramfs-diagnostic`.
-This candidate has source tests only. No ISO, VM or disk inspection has run.
-Publication and dispatch need parent review.
+Run 40265940225 built a fresh ISO and completed the installer path. The check
+then refused `/proc` access (`open_descriptor_scan_denied`). It collected no
+initramfs data and did not qualify the boot. PR #3956 remains open.
+
+## Integration review status
+
+This merge retains commits `2d075cb6`, `927f8e7f` and base `824fa08c`.
+It does not change the root descriptor fallback. Its safety and permission
+review remains open. Tests of rootless guards and inert fixtures do not approve
+that privilege boundary or authorize execution. This review did not run the
+root scan or inspect live procfs.
 
 ## Entry point
 
@@ -32,9 +41,8 @@ The consumer rejects an embedded platform that differs from that target.
 Source, overlay, media and run identity checks remain in force. Checks on
 `producer_attempt` and `attempt` also remain in force.
 
-The old ISO artifact 12560149748 is absent. Run 40093907774 did not retain its
-installed disk. The next run therefore needs one fresh producer and one fresh
-installation. Inspect the installed disk, not the live media.
+Run 40265940225 installed a fresh system but collected no disk data. A repeat
+needs a new image and install. Inspect the installed disk, not live media.
 
 The existing workflow verifies the new ISO's embedded receipts. The report
 records the identity of media inputs. It does not prove the identity of installed root.
@@ -44,10 +52,15 @@ records the identity of media inputs. It does not prove the identity of installe
 The supervisor owns each QEMU through a unique systemd invocation.
 The proxy removes `-daemonize`. It preserves boot arguments.
 
-The collector closes launch requests and checks same-user open descriptors.
-The new private directory excludes other users; this trusts the CI host root.
-It needs process exit. A pidfile does not prove ownership. Stop failures block inspection.
-TERM/INT and timeouts stop owned processes before the result.
+The collector checks open FDs after all QEMU and harness units stop.
+On `/proc` denial, it starts a systemd unit that runs as root.
+
+- Limits: 256 MiB and the scan deadline.
+- Access: `CAP_DAC_READ_SEARCH` and `CAP_SYS_PTRACE`; no network.
+- Files: read-only, except one 0602 token file in the private 0700 output dir.
+- Output: fixed status only; no PIDs or paths.
+- Stop the unit and prove its cgroup is empty. Any denial blocks collection.
+The runner must trust the host's root account.
 
 Read only the new qcow2 file. Refuse links, parent images, external data and unknown qcow features. Before/after hashes must agree.
 
@@ -108,14 +121,14 @@ SHA-256 plus guestfs `1.52.0`. The consumer checks KVM and supermin kernel
 readability. See the official [guestfs package](https://packages.ubuntu.com/noble/python3-guestfs)
 and [QEMU package](https://packages.ubuntu.com/noble/qemu-system-x86).
 
-The ISO harness needs OVMF, swtpm, OCR and shell tools.
-No local runtime tools were installed or probed by execution.
+The ISO harness needs OVMF, swtpm, OCR and shell tools. The GitHub-hosted run
+installed and checked runtime dependencies; no local QEMU/guestfs runtime was
+installed.
 
-The fixture suite uses temporary ordinary files and mock process/guest APIs.
-It rejects runtime launches.
-
-Real CI must check tools, resources, boot layout and process cleanup.
-No run has occurred. Review must precede publication and dispatch.
+The fixture suite uses temporary files and mock process/guest APIs. It rejects
+VM and disk-inspection launches. The bounded run stopped before disk
+inspection. A repeat must test the root-only descriptor scan and collect
+initramfs metadata.
 
 ## Compression and layout review
 

@@ -127,10 +127,10 @@ for more details.
 
 ### Troubleshooting: `501 Unsupported client range` on pull
 
-TunaOS images publish as `zstd:chunked` for faster delta pulls, but GHCR's
-blob CDN doesn't support the multi-range HTTP requests that chunked pulls
-use. Most `podman`/`bootc` builds fall back to a normal full-blob pull
-automatically, but some do not and hard-fail with:
+The production publisher in `reusable-build-image.yml` uses plain `zstd`
+to avoid failures from GHCR multi-range requests. Older or separately produced
+`zstd:chunked` images can still fail on clients without a full-blob fallback:
+GHCR has returned `501` for their multi-range HTTP requests. The failure is:
 
 ```
 Error: copying system image from manifest list: partial pull of blob sha256:...:

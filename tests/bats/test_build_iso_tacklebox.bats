@@ -172,7 +172,7 @@ teardown() {
 @test "offline payload stays pinned to the promoted source image" {
 	SCRIPT_PATH="${REPO_ROOT:-$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)}/scripts/build-iso-tacklebox.sh"
   grep -q 'SOURCE_IMAGE_REF=$(tunaos_image_ref "$VARIANT" "$FLAVOR" "$REPO" "$TAG")' "$SCRIPT_PATH"
-  grep -qF 'PAYLOAD_REF="${TUNA_LIVE_PAYLOAD_REF:-$(tunaos_image_ref "$VARIANT" "$FLAVOR" ghcr "$TAG")}"' "$SCRIPT_PATH"
+  grep -qF 'PAYLOAD_REF="${TUNA_LIVE_PAYLOAD_REF:-$(tunaos_image_ref "$VARIANT" "$FLAVOR" ghcr "$TAG" 0)}"' "$SCRIPT_PATH"
   grep -q '"source": "${SOURCE_IMAGE_REF}"' "$SCRIPT_PATH"
   grep -q '"ref": "${PAYLOAD_REF}"' "$SCRIPT_PATH"
   grep -q 'cp -a "${REPO_ROOT}/live-iso/common/src/." "$CUSTOMIZE_DIR/"' "$SCRIPT_PATH"

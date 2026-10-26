@@ -116,3 +116,44 @@ def test_customization_executes_binding_and_propagates_failure(tmp_path, payload
     assert result.returncode == expected_rc
     actual = json.loads(path.read_text())
     assert actual["local_imgref"] == ("containers-storage:" + PAYLOAD if not expected_rc else "stale")
+
+
+@pytest.mark.parametrize("repo", ["local", "ghcr"])
+@pytest.mark.parametrize("exact_payload", [False, True])
+def test_iso_source_override_cannot_replace_canonical_payload_destination(tmp_path, repo, exact_payload):
+    """#3431 r4372453161; preserve #3427's tracking/payload separation."""
+    adapter = (ROOT / "scripts/build-iso-tacklebox.sh").read_text()
+    assignments = "\n".join(
+        line for line in adapter.splitlines()
+        if line.startswith(("SOURCE_IMAGE_REF=", "PAYLOAD_REF="))
+    )
+    # Execute the real recipe writer, not a second hand-written recipe.
+    recipe_writer = 'cat >"$RECIPE_FILE" <<EOF' + adapter.split(
+        'cat >"$RECIPE_FILE" <<EOF', 1
+    )[1].split('\nEOF', 1)[0] + '\nEOF\n'
+    config = tmp_path / "config.json"
+    config.write_text(json.dumps({"variants": [{"id": "bonito-rawhide", "publish_name": "bonito", "tag_suffix": "rawhide"}]}))
+    canonical = "registry.example:5000/acme/team/bonito:gnome-rawhide-linux-amd64"
+    tracking = "registry.example:5000/acme/team/bonito:gnome-rawhide"
+    override = "registry.example:5000/staging/test:source@" + DIGEST
+    payload = canonical + "@" + DIGEST if exact_payload else canonical
+    env = dict(os.environ, TUNAOS_BUILD_CONFIG=str(config),
+               IMAGE_REGISTRY="registry.example:5000", REPO_ORGANIZATION="acme/team",
+               TUNAOS_IMAGE_REF=override, VARIANT="bonito-rawhide", FLAVOR="gnome",
+               TAG="gnome-rawhide-linux-amd64", REPO=repo,
+               RECIPE_FILE=str(tmp_path / "recipe.json"), MEDIA_NAME="fixture",
+               DESKTOP="gnome", CUSTOMIZE_DIR=str(tmp_path))
+    env.pop("TUNA_LIVE_PAYLOAD_REF", None)
+    if exact_payload:
+        env["TUNA_LIVE_PAYLOAD_REF"] = payload
+    result = subprocess.run(["bash", "-eu", "-c",
+        'source scripts/lib/image.sh\n' + assignments +
+        '\nIMAGE_REF=$SOURCE_IMAGE_REF\n' + recipe_writer +
+        '\nbash scripts/published-image-ref.sh "$VARIANT" "$FLAVOR" ghcr'],
+        cwd=ROOT, env=env, text=True, capture_output=True, timeout=10)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == tracking
+    source = override if repo == "ghcr" else "localhost/bonito-rawhide:gnome-rawhide-linux-amd64"
+    recipe = json.loads((tmp_path / "recipe.json").read_text())
+    assert recipe["offline_payloads"] == [{"source": source, "ref": payload}]
+    assert recipe["bootable_environments"][0]["image"] == source

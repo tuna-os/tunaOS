@@ -71,6 +71,29 @@ if [[ ! -d "scripts" ]]; then
 	exit 1
 fi
 
+case "$(uname -m)" in
+x86_64 | amd64) SOURCE_PLATFORM="linux/amd64" ;;
+aarch64 | arm64) SOURCE_PLATFORM="linux/arm64" ;;
+*)
+	echo "ERROR: unsupported ISO build architecture: $(uname -m)" >&2
+	exit 1
+	;;
+esac
+# Tacklebox executes the source natively. Validate before pulling/importing;
+# the requested platform must also select the manifest we measure and record.
+case "$PLATFORM" in
+"" | linux/amd64 | linux/amd64/v2 | linux/arm64) ;;
+*)
+	echo "ERROR: unsupported canonical platform: ${PLATFORM}" >&2
+	exit 1
+	;;
+esac
+if [[ -n "$PLATFORM" && "${PLATFORM%/v2}" != "$SOURCE_PLATFORM" ]]; then
+	echo "ERROR: ISO platform ${PLATFORM} is incompatible with native ${SOURCE_PLATFORM}" >&2
+	exit 1
+fi
+SOURCE_PLATFORM="${PLATFORM:-$SOURCE_PLATFORM}"
+
 # Store the project root for later use when copying ISOs
 REPO_ROOT="$(pwd)"
 
@@ -131,15 +154,7 @@ IMAGE_REF="${TUNA_LIVE_OVERLAY_REF:-$SOURCE_IMAGE_REF}"
 # Tacklebox copies the source image into the store under this canonical ref;
 # it does not pull a second image or require a local podman tag. A caller that
 # pins the payload (native qualification) supplies the immutable ref itself.
-PAYLOAD_REF="${TUNA_LIVE_PAYLOAD_REF:-$(tunaos_image_ref "$VARIANT" "$FLAVOR" ghcr "$TAG")}"
-case "$(uname -m)" in
-x86_64 | amd64) SOURCE_PLATFORM="linux/amd64" ;;
-aarch64 | arm64) SOURCE_PLATFORM="linux/arm64" ;;
-*)
-	echo "ERROR: unsupported ISO build architecture: $(uname -m)" >&2
-	exit 1
-	;;
-esac
+PAYLOAD_REF="${TUNA_LIVE_PAYLOAD_REF:-$(tunaos_image_ref "$VARIANT" "$FLAVOR" ghcr "$TAG" 0)}"
 if [[ "$REPO" == "local" ]]; then
 	tunaos_import_to_root_storage "$IMAGE_REF"
 else
@@ -334,13 +349,6 @@ VERSION_ID=$(podman run --rm --log-driver=k8s-file --security-opt label=disable 
 ARCH=$(podman run --rm --log-driver=k8s-file --security-opt label=disable \
 	--entrypoint /usr/bin/uname "$IMAGE_REF" -m)
 if [[ -n "$PLATFORM" ]]; then
-	case "$PLATFORM" in
-	linux/amd64 | linux/amd64/v2 | linux/arm64) ;;
-	*)
-		echo "ERROR: unsupported canonical platform: ${PLATFORM}" >&2
-		exit 1
-		;;
-	esac
 	FILENAME_PLATFORM="${PLATFORM//\//-}"
 else
 	FILENAME_PLATFORM="$ARCH"
