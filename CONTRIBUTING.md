@@ -52,7 +52,7 @@ For definitions of the terms below, see the
 1. Fork `tuna-os/tunaos` on GitHub and clone your fork.
 2. Create a focused branch: `git switch -c docs/short-description`.
 3. Make the smallest change that satisfies the issue's acceptance criteria.
-4. Run the checks listed below, then commit with `git commit -s` and push the branch to your fork. See [DCO sign-off](#dco-sign-off).
+4. Run the checks listed below, then commit with `git commit` and push the branch to your fork. See [Commit identity](#commit-identity).
 5. Open a PR against `tuna-os/tunaos:main`, link the issue with `Fixes #NNN`, and include the checks you ran.
 6. Keep the branch available while review is in progress; you can push follow-up fixes to the same PR.
 
@@ -102,21 +102,25 @@ to the repository to follow along.
    List the checks you ran and their actual results, including any setup
    errors. Link the issue as the fork workflow describes.
 
-### DCO sign-off
+### Commit identity
 
-Every commit needs a `Signed-off-by` trailer for the Developer Certificate of
-Origin (DCO) check. Before you commit, check your author identity:
+Developer Certificate of Origin (DCO) sign-off and `Signed-off-by` trailers
+are optional for all TunaOS commits, including automatic merge commits.
+Existing trailers remain valid and optional; do not rewrite old commits or
+add attestations on behalf of another contributor.
+
+Before you commit, check your author identity:
 
 ```bash
 git var GIT_AUTHOR_IDENT
-git commit -s -m "docs: describe the change"
+git commit -m "docs: describe the change"
 git log -1 --format=full
 ```
 
-The sign-off name and email must match the commit author. `-s` adds the
-trailer; you do not need a cryptographic key. If your latest unpublished commit
-has no sign-off, add one with `git commit --amend --no-edit -s`, then check
-the log again. Sign off every commit in a PR.
+DCO sign-off is separate from cryptographic commit signatures. This policy does
+not change signature rules, the [Apache 2.0 license](LICENSE), copyright and
+authorship attribution, security rules, code review, or the merge queue.
+Keep license notices and attribution when you contribute code.
 
 ### Curate a starter task
 
