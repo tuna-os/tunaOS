@@ -3,6 +3,7 @@
 Falsification: positional passphrases, missing deadlines/resources, raw exports,
 and daemon children surviving a timeout must fail these tests.
 """
+import ctypes
 import hashlib
 import importlib.util
 from io import BytesIO
@@ -10,6 +11,8 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import signal
+import time
 import sys
 
 import pytest
@@ -115,21 +118,117 @@ def test_shared_deadline_clamps_all_phase_budgets():
     assert "'--cpus','4','--timeout','180'" in runner
 
 
-@pytest.mark.parametrize('timeout',[True,False])
-def test_supervisor_reaps_double_fork_and_setsid_daemon(tmp_path,timeout):
+def supervisor_code(tmp_path):
+    # Discovery is restricted to PIDs recorded by this fixture, including its
+    # daemon. Read only those /proc stat files, never enumerate host PIDs.
+    return f"""import sys,os,signal
+sys.path.insert(0,{str(ROOT/'scripts')!r})
+from pathlib import Path
+from lib import xfce_launch
+owned=[]
+original_popen=xfce_launch.subprocess.Popen
+class FixturePopen(original_popen):
+    def __init__(self,*args,**kwargs):
+        super().__init__(*args,**kwargs)
+        owned.append(self.pid)
+xfce_launch.subprocess.Popen=FixturePopen
+def fixture_children():
+    known=set(owned)
+    for path in Path({str(tmp_path)!r}).glob('*.pid'):
+        value=path.read_text()
+        if value:known.add(int(value))
+    children=[]
+    for pid in known:
+        try:
+            fields=Path('/proc',str(pid),'stat').read_text().rsplit(')',1)[1].split()
+            if int(fields[1])==os.getpid():children.append(pid)
+        except FileNotFoundError:pass
+    return children
+xfce_launch.direct_children=fixture_children
+from lib.xfce_launch import supervised
+"""
+
+
+@pytest.mark.parametrize('mode',['timeout','success','sigterm'])
+def test_supervisor_reaps_owned_child_and_setsid_daemon(tmp_path,mode):
     # Only inert Python sleepers, in a separate supervisor process so no pytest
     # process can accidentally be adopted/reaped by the implementation.
     child=tmp_path/'child.py';pidfile=tmp_path/'owned.pid'
-    child.write_text("import os,time,sys\n"+
+    childpid=tmp_path/'child.pid'
+    child.write_text("import os,time,sys,signal\n"+
+        f"open({str(childpid)!r},'w').write(str(os.getpid()))\n"+
+        "signal.signal(signal.SIGTERM,signal.SIG_IGN)\n"+
         "if os.fork()==0:\n os.setsid()\n"+
         f" open({str(pidfile)!r},'w').write(str(os.getpid()))\n time.sleep(30)\n os._exit(0)\n"+
-        ('time.sleep(30)\n' if timeout else 'time.sleep(.2)\n'))
-    code=f"import sys,os;sys.path.insert(0,{str(ROOT/'scripts')!r});from lib.xfce_launch import supervised; r=supervised([sys.executable,{str(child)!r}],env=dict(os.environ),cwd={str(tmp_path)!r},seconds=.5,grace=.5);print(r.returncode)"
-    result=subprocess.run([sys.executable,'-c',code],capture_output=True,text=True,timeout=5)
+        ('time.sleep(.2)\n' if mode=='success' else 'time.sleep(30)\n'))
+    seconds=.5 if mode=='timeout' else 30
+    code=supervisor_code(tmp_path)+(
+        "previous=signal.getsignal(signal.SIGTERM);"
+        f"r=supervised([sys.executable,{str(child)!r}],env=dict(os.environ),cwd={str(tmp_path)!r},seconds={seconds},grace=.3);"
+        "assert signal.getsignal(signal.SIGTERM) is previous;print(r.returncode)")
+    # Adopt only for failure teardown: baseline SIGTERM exits without reaping.
+    # pidfds retain exact identities, and waitpid below targets recorded PIDs.
+    libc=ctypes.CDLL(None,use_errno=True)
+    prior=ctypes.c_int()
+    assert libc.prctl(37,ctypes.byref(prior),0,0,0)==0
+    assert libc.prctl(36,1,0,0,0)==0
+    handles={}
+    try:
+        # A sibling is owned by this test, not the supervisor, and must survive.
+        with subprocess.Popen([sys.executable,'-c','import time;time.sleep(30)']) as sibling:
+            with subprocess.Popen([sys.executable,'-c',code],stdout=subprocess.PIPE,
+                                  stderr=subprocess.PIPE,text=True) as process:
+                try:
+                    deadline=time.monotonic()+3
+                    while len(handles)<2:
+                        for path in (childpid,pidfile):
+                            if path.exists() and path.read_text():
+                                pid=int(path.read_text())
+                                if pid not in handles:handles[pid]=os.pidfd_open(pid)
+                        assert process.poll() is None
+                        assert time.monotonic()<deadline,'fixture did not become ready'
+                        if len(handles)<2:time.sleep(.01)
+                    if mode=='sigterm':
+                        process.send_signal(signal.SIGTERM)
+                        # Repeated cancellation during TERM grace cannot bypass
+                        # cleanup of the TERM-resistant owned children.
+                        time.sleep(.05)
+                        process.send_signal(signal.SIGTERM)
+                    stdout,stderr=process.communicate(timeout=5)
+                    assert process.returncode==0,stderr
+                    assert stdout.strip()=={'timeout':'124','success':'0','sigterm':'143'}[mode]
+                    assert sibling.poll() is None
+                    for pid in handles:
+                        assert not Path('/proc',str(pid)).exists()
+                finally:
+                    if process.poll() is None:process.kill()
+                    process.wait(timeout=2)
+                    for fd in handles.values():
+                        try:signal.pidfd_send_signal(fd,signal.SIGKILL)
+                        except ProcessLookupError:pass
+                    for pid in handles:
+                        try:os.waitpid(pid,0)
+                        except ChildProcessError:pass
+                        assert not Path('/proc',str(pid)).exists(),'owned fixture was not reaped'
+                    sibling.terminate()
+                    sibling.wait(timeout=2)
+    finally:
+        for fd in handles.values():os.close(fd)
+        assert libc.prctl(36,prior.value,0,0,0)==0
+
+
+def test_supervisor_restores_sigterm_handler_when_launch_fails(tmp_path):
+    code=supervisor_code(tmp_path)+"""
+signal.signal(signal.SIGTERM,signal.SIG_IGN)
+try:
+    supervised(['/nonexistent/fixture-command'],env=dict(os.environ),cwd='.',seconds=.1,grace=.1)
+except FileNotFoundError:
+    assert signal.getsignal(signal.SIGTERM) is signal.SIG_IGN
+else:
+    raise AssertionError('missing command succeeded')
+"""
+    result=subprocess.run([sys.executable,'-c',code],capture_output=True,text=True,timeout=3)
     assert result.returncode==0,result.stderr
-    assert result.stdout.strip()==('124' if timeout else '0')
-    assert pidfile.exists()
-    assert not Path('/proc/'+pidfile.read_text()).exists()
 
 
 def test_candidate_retention_redacts_and_rejects_private_paths(tmp_path):
@@ -187,7 +286,7 @@ def test_all_candidate_jobs_bounded_and_exports_sanitized():
 
 
 def test_supervisor_private_log_is_bounded_and_not_console_output(tmp_path):
-    code=f"import sys,os;sys.path.insert(0,{str(ROOT/'scripts')!r});from lib.xfce_launch import supervised; r=supervised([sys.executable,'-c',\"print('X'*(17*1024*1024))\"],env=dict(os.environ,TUNAOS_XFCE_OUTPUT={str(tmp_path)!r}),cwd={str(tmp_path)!r},seconds=3,grace=1);print(r.returncode)"
+    code=supervisor_code(tmp_path)+f"r=supervised([sys.executable,'-c',\"print('X'*(17*1024*1024))\"],env=dict(os.environ,TUNAOS_XFCE_OUTPUT={str(tmp_path)!r}),cwd={str(tmp_path)!r},seconds=3,grace=1);print(r.returncode)"
     result=subprocess.run([sys.executable,'-c',code],capture_output=True,text=True,timeout=8)
     assert result.returncode==0,result.stderr
     assert result.stdout.strip()=='0'

@@ -2665,3 +2665,18 @@ Candidates now skip that setup. Both producer calls explicitly select root
 context after sudo; ordinary modes keep their existing setup and context.
 Tests inject a contradictory user context and remove each override to verify the
 boundary. No host settings changed during those inert checks.
+
+### ISO follow-up: platform, cache, cancellation and payload identity
+
+| Symptom | Cause | Fix and regression evidence |
+|---|---|---|
+| An ARM64 ISO request on an x86 host records ARM64 after pulling an AMD64 source | The adapter selected the source from the host and validated the caller's platform only after the build | Reject unsupported or incompatible platforms before image work. Use the accepted platform for both the pull and manifest measurement. `tests/test_tacklebox_native_inputs.py` covers both native architectures and AMD64 v2. |
+| A source build with a relative `TACKLEBOX_CACHE` fails at `mktemp` on a cache miss | After changing into the cache, the temporary binary path repeated the relative prefix | Resolve the cache to an absolute path before use. The local Git fixture with an inert compiler in `tests/test_tacklebox_native_inputs.py` checks a cache miss, reuse and revision rejection. A separate fixture replaces the shared cache and verifies that the private executable snapshot retains the measured hash. |
+| Sending SIGTERM to an XFCE candidate runner leaves its harness or daemon alive | Default SIGTERM handling exits Python without the supervisor's `finally` cleanup | Defer cancellation to the supervisor, then apply the bounded child cleanup and return 143. Owned-process fixtures in `tests/test_xfce_launch_readiness.py` cover SIGTERM, timeout and an unrelated process that must survive. |
+| A source override replaces the canonical offline payload destination | The destination called `tunaos_image_ref` with source overrides enabled | Pass the existing helper's `0` flag for the destination. `tests/test_installer_source_binding.py` executes the assignments and recipe writer with separate source, tracking and exact payload refs. Explicit payload pins retain their existing validation. |
+
+The payload correction follows the separate reference design in the related
+owner work, [PR #3427](https://github.com/tuna-os/tunaOS/pull/3427), inspected at
+`f7adc3aa3ebcfad0d113aa651232e1890918be2a`. This follow-up preserves that
+design. These tests check the scripts locally. They do not qualify an image,
+guest boot or production cutover.
