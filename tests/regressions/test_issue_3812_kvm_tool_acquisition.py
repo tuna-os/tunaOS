@@ -185,3 +185,31 @@ def test_only_pr_tool_command_changes():
     assert 'sudo udevadm control --reload-rules' in step['run']
     assert 'sudo udevadm trigger --name-match=kvm || true' in step['run']
     assert 'sudo apt-get install' not in step['run']
+
+
+@pytest.mark.parametrize('finished_at', [599.0, 600.0, 601.0])
+def test_final_cache_verification_obeys_deadline(fake_runner, monkeypatch, finished_at):
+    root, calls, state = fake_runner
+    clock = [0.0]
+    checks = [0]
+    original_verify = kvm.apt.verify_cache
+
+    def slow_verify(cache, entries):
+        valid = original_verify(cache, entries)
+        checks[0] += 1
+        if checks[0] == 2:
+            clock[0] = finished_at
+        return valid
+
+    monkeypatch.setattr(kvm.time, 'monotonic', lambda: clock[0])
+    monkeypatch.setattr(kvm.apt, 'verify_cache', slow_verify)
+    if finished_at >= 600:
+        with pytest.raises(TimeoutError, match='deadline exhausted'):
+            kvm.install(root)
+        assert not any('--no-download' in args for args, _ in calls)
+        assert not (root / 'etc/needrestart/conf.d').exists()
+    else:
+        kvm.install(root)
+        assert sum('--no-download' in args for args, _ in calls) == 1
+    assert checks[0] == 2
+    assert not state['temporary'].exists()
