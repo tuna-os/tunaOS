@@ -400,6 +400,9 @@ ENV BUILD_SCRIPTS_HASH=${BUILD_SCRIPTS_HASH}
 # (Matches the main Containerfile's base stage: label it bootable, no lint —
 # the lint gate lives on the desktop stages.)
 FROM system AS base-no-de
+RUN --mount=type=tmpfs,dst=/tmp \
+    --mount=type=bind,from=context,source=/,target=/run/context \
+    /run/context/build_scripts/90-image-info.sh
 LABEL containers.bootc=1 ostree.bootable=1
 
 # Desktop stage — manifest-driven; the DESKTOP_FLAVOR build-arg selects the DE.
@@ -415,8 +418,8 @@ ENV DESKTOP_FLAVOR=${DESKTOP_FLAVOR}
 # Containerfile satisfies it the same way: the base stage runs the numbered
 # scripts — 90-image-info.sh among them — and the desktop stages build on top
 # of an already-branded image. This branch does not. It goes
-# builder -> desktop-build, while 90-image-info.sh lives in `system`, which is
-# a sibling. So the contract ran against stock Gentoo and reported fourteen
+# builder -> desktop-build, while the base-no-de metadata is a sibling.
+# The contract ran against stock Gentoo and reported fourteen
 # failures at once:
 #
 #   FAIL: no fish codename defined for variant 'xfce'

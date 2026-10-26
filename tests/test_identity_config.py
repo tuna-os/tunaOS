@@ -664,8 +664,9 @@ def test_tuna_flatpak_remote_without_the_adapter_fails_loudly(tmp_path):
     assert again.returncode != 0 and "identity.env is missing" in again.stderr
 
 
-def test_regenerating_the_identity_adapter_changes_the_layer_cache_key(tmp_path):
-    """The generated adapter is bind-mounted context that changes no *.sh file.
+@pytest.mark.parametrize("adapter_name", ["identity.env", "image-packages.tsv"])
+def test_regenerating_an_adapter_changes_the_layer_cache_key(tmp_path, adapter_name):
+    """Generated adapters are bind-mounted context that changes no *.sh file.
 
     Run the real build engine against a copy of the tracked sources, with a stub
     `podman` that only records its arguments, and compare the BUILD_SCRIPTS_HASH
@@ -706,6 +707,6 @@ def test_regenerating_the_identity_adapter_changes_the_layer_cache_key(tmp_path)
     first = cache_key()
     assert len(first.split("=", 1)[1]) == 16
     assert cache_key() == first
-    adapter = context / "build_scripts/lib/identity.env"
+    adapter = context / "build_scripts/lib" / adapter_name
     adapter.write_text(adapter.read_text(encoding="utf-8") + "# regenerated\n", encoding="utf-8")
     assert cache_key() != first

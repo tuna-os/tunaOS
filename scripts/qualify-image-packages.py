@@ -557,6 +557,11 @@ def verify_cell(plan: dict, cell: dict, root: Path, source: dict, log: CommandLo
         reference = record["ref"]
         routing = routes[role]
         target = routing.get("DESKTOP_FLAVOR")
+        if role == "modifiedOverlay":
+            # The inherited desktop ENV wins over ARG interpolation in the
+            # overlay. Run 40223961920 passed DESKTOP_FLAVOR=desktop, but its
+            # 90-image-info.sh recorded gnome (the qualified parent's flavor).
+            target = desktop.get("DESKTOP_FLAVOR")
         try:
             require(isinstance(target, str) and target, f"{route}.{role}: resolver omitted target")
             local = local_image(log, reference)
