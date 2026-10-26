@@ -213,3 +213,129 @@ def test_final_cache_verification_obeys_deadline(fake_runner, monkeypatch, finis
         assert sum('--no-download' in args for args, _ in calls) == 1
     assert checks[0] == 2
     assert not state['temporary'].exists()
+
+
+RUNNER_MIRRORS = (
+    'http://azure.archive.ubuntu.com/ubuntu/\tpriority:1\n'
+    'https://archive.ubuntu.com/ubuntu/\tpriority:2\n'
+    'https://security.ubuntu.com/ubuntu/\tpriority:3\n'
+)
+RUNNER_SOURCES = [
+    'Types: deb\nURIs: mirror+file:/etc/apt/apt-mirrors.txt\n'
+    'Suites: noble noble-updates noble-backports\n'
+    'Components: main restricted universe multiverse\n'
+    'Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg\n',
+    'deb [arch=amd64 signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg] '
+    'mirror+file:/etc/apt/apt-mirrors.txt noble main restricted universe multiverse\n',
+    'Types: deb deb-src\nURIs:\n mirror+file:/etc/apt/apt-mirrors.txt\n'
+    'Suites: resolute resolute-security\nComponents: main universe\n'
+    'Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg\n',
+]
+
+
+def write_mirrors(root, text=RUNNER_MIRRORS):
+    path = root / 'etc/apt/apt-mirrors.txt'
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text)
+    return path
+
+
+@pytest.mark.parametrize('source', RUNNER_SOURCES)
+def test_runner_mirror_sources_keep_suite_components_and_trust(tmp_path, source):
+    path = write_mirrors(tmp_path)
+    assert kvm.source_text(source, tmp_path) == source.replace(
+        'mirror+file:/etc/apt/apt-mirrors.txt', 'https://archive.ubuntu.com/ubuntu')
+    assert path.read_text() == RUNNER_MIRRORS
+
+
+@pytest.mark.parametrize('uri', [
+    'mirror:', 'mirror+file:', 'mirror+https:',
+    'mirror+file:/tmp/apt-mirrors.txt', 'mirror+file:/etc/apt/../apt/apt-mirrors.txt',
+    'mirror+file:///etc/apt/apt-mirrors.txt', 'mirror+file:/etc/apt/apt-mirrors.txt?x=1',
+    'mirror+file:/etc/apt/apt-mirrors.txt/extra', 'mirror+https://example.com/mirrors',
+    'mirror://example.com/mirrors', 'mirror+file:/etc/apt/apt-mirrors.txt#fragment',
+])
+def test_unknown_mirror_forms_refused(tmp_path, uri):
+    write_mirrors(tmp_path)
+    with pytest.raises(ValueError, match='Unsupported APT mirror source'):
+        kvm.source_text(f'deb {uri} noble main\n', tmp_path)
+
+
+@pytest.mark.parametrize('contents', [
+    '', '# empty\n', 'https://evil.example/ubuntu\n',
+    RUNNER_MIRRORS + 'https://archive.ubuntu.com.evil/ubuntu\n',
+    'https://user@archive.ubuntu.com/ubuntu\n',
+    'https://archive.ubuntu.com/ubuntu-other\n',
+    'https://archive.ubuntu.com/ubuntu\tpriority:1 arch:arm64\n',
+    'https://archive.ubuntu.com/ubuntu\ttrusted:yes\n',
+    'file:/srv/ubuntu\n', 'mirror+file:/etc/apt/other.txt\n',
+    'https://archive.ubuntu.com/ubuntu\tpriority:bad\n',
+])
+def test_unknown_or_empty_mirror_list_refused(tmp_path, contents):
+    write_mirrors(tmp_path, contents)
+    with pytest.raises(ValueError):
+        kvm.source_text(RUNNER_SOURCES[0], tmp_path)
+
+
+def test_missing_symlinked_and_oversized_mirror_list_refused(tmp_path):
+    with pytest.raises(ValueError):
+        kvm.source_text(RUNNER_SOURCES[0], tmp_path)
+    path = write_mirrors(tmp_path)
+    other = tmp_path / 'other'
+    other.write_text(RUNNER_MIRRORS)
+    path.unlink()
+    path.symlink_to(other)
+    with pytest.raises(ValueError):
+        kvm.source_text(RUNNER_SOURCES[0], tmp_path)
+    path.unlink()
+    path.write_text('#' * 16385)
+    with pytest.raises(ValueError):
+        kvm.source_text(RUNNER_SOURCES[0], tmp_path)
+
+
+def test_comments_and_unrelated_sources_are_unchanged(tmp_path):
+    text = ('# deb mirror+file:/unrelated noble main\n'
+            'deb https://packages.microsoft.com/ubuntu/24.04/prod noble main '
+            '# mirror+https://unrelated\n')
+    assert kvm.source_text(text, tmp_path) == text
+
+
+def test_install_normalizes_private_mirror_sources_only(fake_runner, monkeypatch):
+    root, _, _ = fake_runner
+    mirrors = write_mirrors(root)
+    source_dir = root / 'etc/apt/sources.list.d'
+    source = source_dir / 'ubuntu.sources'
+    source.write_text(RUNNER_SOURCES[0])
+    main = root / 'etc/apt/sources.list'
+    main.write_text(RUNNER_SOURCES[1])
+    snapshots = {p: p.read_bytes() for p in (mirrors, source, main)}
+    original_run = kvm.apt.run
+    observed = []
+
+    def inspect(args, timeout=None):
+        if args[0] == 'apt-get':
+            parts = Path(next(a.split('=', 1)[1] for a in args if a.startswith('Dir::Etc::sourceparts=')))
+            observed.append(parts.parent)
+            assert (parts / 'ubuntu.sources').read_text() == RUNNER_SOURCES[0].replace(
+                kvm.RUNNER_MIRROR, 'https://archive.ubuntu.com/ubuntu')
+            assert (parts.parent / 'sources.list').read_text() == RUNNER_SOURCES[1].replace(
+                kvm.RUNNER_MIRROR, 'https://archive.ubuntu.com/ubuntu')
+            assert all(p.read_bytes() == data for p, data in snapshots.items())
+            # Stop before acquisition; the source plumbing is the subject here.
+            raise subprocess.CalledProcessError(100, args, 'signature refusal fixture')
+        return original_run(args, timeout)
+
+    monkeypatch.setattr(kvm.apt, 'run', inspect)
+    with pytest.raises(subprocess.CalledProcessError):
+        kvm.install(root)
+    assert observed and not observed[0].exists()
+    assert all(p.read_bytes() == data for p, data in snapshots.items())
+
+
+def test_unknown_mirror_fails_before_apt(fake_runner):
+    root, calls, _ = fake_runner
+    write_mirrors(root, RUNNER_MIRRORS + 'https://evil.example/ubuntu\n')
+    (root / 'etc/apt/sources.list.d/ubuntu.sources').write_text(RUNNER_SOURCES[0])
+    with pytest.raises(ValueError):
+        kvm.install(root)
+    assert calls == [(['dpkg', '--print-architecture'], None)]

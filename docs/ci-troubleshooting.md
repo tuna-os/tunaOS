@@ -2205,6 +2205,28 @@ The helper verifies versions after installation and cleans its restart override.
 It does not change KVM rules, boot gates, or evidence collection.
 SIGKILL and the outer job timeout remain outside its cleanup guarantees.
 
+### Runner mirror-list indirection still selects Azure (#3812)
+
+**Symptom:** At #3999 head `ac0c2bbc`, run 40404587905 jobs 121861626115
+and 121861640934 reached the 600-second acquisition limit before installation.
+Logs showed `file:/etc/apt/apt-mirrors.txt Mirrorlist` and Azure HTTP requests.
+
+**Cause:** The [runner image configuration](https://github.com/actions/runner-images/blob/main/images/ubuntu/scripts/build/configure-apt-sources.sh)
+uses `mirror+file:/etc/apt/apt-mirrors.txt` in Ubuntu sources. Azure has first priority in that list. A direct-URL replacement does not affect this indirection.
+[APT’s mirror transport](https://manpages.ubuntu.com/manpages/jammy/man1/apt-transport-mirror.1.html)
+selects the endpoint from that list, so the private source still reached Azure.
+
+**Fix:** The KVM helper recognizes only that URI for the local mirror list.
+It validates the file against the runner’s official Ubuntu endpoints and optional
+priorities, then uses the HTTPS archive in private sources.
+Unknown mirror forms, unknown entries, unsupported metadata, and missing, empty,
+symlinked or oversized lists fail before APT. The helper preserves suites,
+components, Signed-By, comments and unrelated direct sources. Host files remain
+unchanged. The 600-second limit still applies; no trust override is necessary.
+
+The Albacore job on the same head installed its tools, then reached the
+separate GDM/Mutter 49.4 crash in #3969. That crash is not a mirror parser failure.
+
 ### Runner package acquisition limits (#3812)
 
 The helper uses [Ubuntu’s documented archive](https://ubuntu.com/server/docs/how-to/software/package-management/)

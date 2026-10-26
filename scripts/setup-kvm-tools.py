@@ -16,11 +16,50 @@ SPEC.loader.exec_module(apt)
 PACKAGES = ('qemu-system-x86', 'qemu-utils', 'ovmf', 'ffmpeg')
 
 
-def source_text(text):
-    # Change only exact Ubuntu archive URI tokens, including deb822 URIs.
-    # Suites, components, Signed-By and unrelated sources remain byte-identical.
-    return re.sub(r'(?<!\S)https?://(?:azure\.)?archive\.ubuntu\.com/ubuntu/?(?=\s|$)',
-                  apt.official_uri('https://archive.ubuntu.com/ubuntu'), text)
+RUNNER_MIRROR = 'mirror+file:/etc/apt/apt-mirrors.txt'
+
+
+def runner_archive(root):
+    # runner-images/configure-apt-sources.sh creates this local list. Refuse
+    # unknown content instead of treating an arbitrary mirror as Ubuntu.
+    path = root / 'etc/apt/apt-mirrors.txt'
+    if (path.is_symlink() or not path.is_file()
+            or not path.resolve().is_relative_to(root.resolve())
+            or path.stat().st_size > 16384):
+        raise ValueError('Expected a regular runner Ubuntu mirror list')
+    allowed = {'http://azure.archive.ubuntu.com/ubuntu',
+               'https://archive.ubuntu.com/ubuntu',
+               'https://security.ubuntu.com/ubuntu'}
+    entries = 0
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith('#'):
+            continue
+        fields = line.split()
+        if (fields[0].removesuffix('/') not in allowed or len(fields) > 2
+                or (len(fields) == 2 and not re.fullmatch(r'priority:[0-9]+', fields[1]))):
+            raise ValueError('Unsupported runner Ubuntu mirror entry')
+        entries += 1
+    if not entries:
+        raise ValueError('Empty runner Ubuntu mirror list')
+    return apt.official_uri('https://archive.ubuntu.com/ubuntu')
+
+
+def source_text(text, root=Path('/')):
+    def mirror(match):
+        if match[0] != RUNNER_MIRROR:
+            raise ValueError(f'Unsupported APT mirror source: {match[0]}')
+        return runner_archive(root)
+
+    result = []
+    for line in text.splitlines(keepends=True):
+        # Leave comments intact in both one-line and deb822 source files.
+        parts = re.split(r'(?<!\S)(?=#)', line, maxsplit=1)
+        active = re.sub(r'(?<!\S)mirror(?:\+[^:\s]+)?:\S*', mirror, parts[0])
+        active = re.sub(r'(?<!\S)https?://(?:azure\.)?archive\.ubuntu\.com/ubuntu/?(?=\s|$)',
+                        apt.official_uri('https://archive.ubuntu.com/ubuntu'), active)
+        result.append(active + ''.join(parts[1:]))
+    return ''.join(result)
 
 
 def install(root=Path('/'), budget=apt.BUDGET):
@@ -40,12 +79,12 @@ def install(root=Path('/'), budget=apt.BUDGET):
         for path in sources.iterdir():
             if path.suffix in ('.list', '.sources'):
                 # Replace symlinks in the private copy, never follow a link when writing.
-                text = source_text(path.read_text())
+                text = source_text(path.read_text(), root)
                 path.unlink()
                 path.write_text(text)
         main = work / 'sources.list'
         original = root / 'etc/apt/sources.list'
-        main.write_text(source_text(original.read_text()) if original.exists() else '')
+        main.write_text(source_text(original.read_text(), root) if original.exists() else '')
         lists = work / 'lists'
         lists.mkdir()
         empty = work / 'empty'
