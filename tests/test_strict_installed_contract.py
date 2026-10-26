@@ -139,6 +139,13 @@ strict_offline_evidence() { :; }
 strict_start_boot_observer() { :; }
 strict_stop_boot_observer() { :; }
 screenshot() { :; }
+env() {
+    # The real helper boundary removes these variables; preserve the inert
+    # shell-function double after checking the exact sanitizing invocation.
+    [[ "$1 $2 $3 $4 $5 $6" == '-u TUNAOS_XFCE_PASSWORD -u TUNAOS_WALKTHROUGH_LUKS_PASS -u E2E_LUKS_PASS' ]] || return 99
+    shift 6
+    "$@"
+}
 python3() {
     if [[ "$1" == "-" ]]; then
         cat >/dev/null

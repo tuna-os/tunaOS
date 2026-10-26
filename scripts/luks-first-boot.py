@@ -9,7 +9,7 @@ run (login reached + a grace period), then powers the guest off via the
 monitor socket. The SECOND boot (driven by iso-e2e.sh) then proves TPM
 auto-unlock: no passphrase prompt.
 
-Usage: luks-first-boot.py <serial.sock> <monitor.sock> <passphrase> [timeout]
+Usage: luks-first-boot.py <serial.sock> <monitor.sock> --passphrase-stdin [timeout]
 Exit 0 on success (passphrase accepted + userspace reached), non-zero else.
 
 TUNAOS_LUKS_GRUB_APPEND="<kargs>" types <kargs> onto the kernel line in GRUB's
@@ -22,7 +22,17 @@ import socket
 import sys
 import time
 
-serial_path, monitor_path, passphrase = sys.argv[1], sys.argv[2], sys.argv[3]
+serial_path, monitor_path = sys.argv[1], sys.argv[2]
+if len(sys.argv)<4 or sys.argv[3] != '--passphrase-stdin':
+    raise SystemExit('use --passphrase-stdin; positional credentials are refused')
+from lib.luks_secret import read_passphrase
+try:
+    passphrase = read_passphrase()
+except (ValueError, OSError):
+    raise SystemExit('protected passphrase input unavailable or invalid') from None
+from lib.luks_secret import RedactedSerial
+serial_output = RedactedSerial(passphrase, sys.stdout.buffer)
+
 timeout = int(sys.argv[4]) if len(sys.argv) > 4 else 900
 
 
@@ -88,7 +98,7 @@ def harvest_emergency(ser):
         try:
             d = ser.recv(4096)
             if d:
-                sys.stdout.buffer.write(d)
+                serial_output.write(d)
                 sys.stdout.flush()
         except socket.timeout:
             # Expected: the guest is simply quiet right now. Keep polling until
@@ -124,7 +134,7 @@ def edit_grub_entry(ser, extra):
             d = b""
         if d:
             screen += d
-            sys.stdout.buffer.write(d)
+            serial_output.write(d)
             sys.stdout.flush()
         plain = ANSI_RE.sub("\n", screen.decode("utf-8", "replace"))
         # The menu never shows command text, so a linux and an initrd line
@@ -157,7 +167,7 @@ while time.time() < deadline:
         d = ser.recv(4096)
         if d:
             buf += d
-            sys.stdout.buffer.write(d)
+            serial_output.write(d)
             sys.stdout.flush()
     except socket.timeout:
         pass

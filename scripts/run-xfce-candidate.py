@@ -12,19 +12,23 @@ from pathlib import Path
 import secrets as guest_random
 import subprocess
 import sys
+import time
 from lib.xfce_candidate import TARGET, COMMIT
+from lib.xfce_launch import supervised, preflight
 
 ROOT=Path(__file__).resolve().parents[1]
 
 
-def run(args, execute=subprocess.run):
+def run(args, execute=supervised, check_resources=preflight):
     output=args.output.resolve()
     if output.exists() and any(output.iterdir()):
         raise ValueError('candidate output directory must be fresh and empty')
     output.mkdir(mode=0o700,parents=True,exist_ok=True)
     output.chmod(0o700)
     report={'schema':'XFCECandidateRun/v1','target':list(TARGET),'status':'failed','phase':'preflight','qualified':False}
+    secret_values=[]
     try:
+        check_resources(output,'vm')
         spec=importlib.util.spec_from_file_location('native',ROOT/'scripts/native-iso-qualification.py')
         native=importlib.util.module_from_spec(spec);spec.loader.exec_module(native)
         env=dict(os.environ)
@@ -56,9 +60,12 @@ def run(args, execute=subprocess.run):
             TUNAOS_XFCE_CANDIDATE='1',TUNAOS_QUAL_EXECUTION_KIND='native-qemu',STRICT_PUBLISHED_MEDIA='1',
             TUNAOS_XFCE_USER='tuna'+''.join(guest_random.choice('abcdefhkmnprstuvwxyz') for _ in range(12)),TUNAOS_XFCE_PASSWORD=guest_random.token_hex(16),
             TUNAOS_WALKTHROUGH_LUKS_PASS=guest_random.token_hex(16))
+        secret_values=[env['TUNAOS_XFCE_USER'],env['TUNAOS_XFCE_PASSWORD'],env['TUNAOS_WALKTHROUGH_LUKS_PASS']]
+        env.update(E2E_WALL_CLOCK_LIMIT='3240',TUNAOS_XFCE_GUI_TIMEOUT='600',
+                   TUNAOS_XFCE_DEADLINE=str(int(time.time())+3240),TUNAOS_XFCE_OUTPUT=str(output))
         report['phase']='install-and-boot'
         command=['bash',str(ROOT/'scripts/iso-e2e.sh'),str(args.iso.resolve()),
-            '--strict-offline-gui','--output',str(output),'--memory','8192']
+            '--strict-offline-gui','--output',str(output),'--memory','8192','--cpus','4','--timeout','180']
         if env.get('KVM_FLAG')=='--no-kvm':
             command.append('--no-kvm')
         result=execute(command,env=env,cwd=ROOT,check=False)
@@ -73,6 +80,9 @@ def run(args, execute=subprocess.run):
         return 0
     finally:
         (output/'candidate-report.json').write_text(json.dumps(report,indent=2)+'\n')
+        spec=importlib.util.spec_from_file_location('diagnostics',ROOT/'scripts/collect-iso-diagnostics.py')
+        diagnostics=importlib.util.module_from_spec(spec);spec.loader.exec_module(diagnostics)
+        diagnostics.collect(output,candidate_secrets=secret_values)
 
 
 def main():

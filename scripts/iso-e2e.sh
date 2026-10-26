@@ -3242,9 +3242,10 @@ EOF
 		# phase below needs the live guest too. This function sends the
 		# graceful powerdown itself once both are done.
 		TUNAOS_LUKS_NO_POWEROFF=1 \
+			env -u TUNAOS_XFCE_PASSWORD -u TUNAOS_WALKTHROUGH_LUKS_PASS -u E2E_LUKS_PASS \
 			python3 "$(dirname "${BASH_SOURCE[0]}")/luks-first-boot.py" \
-			"$FB_SERIAL" "$MONITOR_SOCK" "$E2E_LUKS_PASS" 900 300 \
-			2>&1 | tee "${OUTPUT_DIR}/installed-serial.log" || {
+			"$FB_SERIAL" "$MONITOR_SOCK" --passphrase-stdin 900 300 \
+			<<<"$E2E_LUKS_PASS" 2>&1 | tee "${OUTPUT_DIR}/installed-serial.log" || {
 			echo "ERROR: encrypted disk did not unlock with the passphrase / reach login"
 			# Photograph the failure before killing the guest. "Unlock failed"
 			# and "unlock failed, and the screen was sitting at a cryptsetup
@@ -3738,7 +3739,9 @@ run_strict_gui_install() {
 			# live SSH, which published media deliberately lacks; the
 			# walkthrough below IS the GUI verification on this path.
 			e2e_phase "Strict GUI install (${mode}): driving the bundled installer..."
-			python3 "$walkthrough" "$MONITOR_SOCK" "$wt_out" \
+			local -a walkthrough_bound=()
+			[[ "${TUNAOS_XFCE_CANDIDATE:-0}" == 1 ]] && walkthrough_bound=(python3 "${SCRIPT_DIR}/candidate-bounded.py" 610)
+			"${walkthrough_bound[@]}" python3 "$walkthrough" "$MONITOR_SOCK" "$wt_out" \
 				"${TUNAOS_STRICT_WALKTHROUGH_STEPS:-12}" "${FLAVOR:-de}" \
 				--strict "--mode=${mode}" "--vnc=${OUTPUT_DIR}/vnc.sock" 2>&1 | tee -a "${SERIAL_LOG}" || rc=$?
 			if [[ "$rc" -ne 0 ]]; then
@@ -3777,7 +3780,7 @@ candidate_observe() {
 	local action="$1" mode="$2" phase="${3:-cold}" output
 	output="${OUTPUT_DIR}/session-${mode}-${phase}.json"
 	[[ "$action" == live ]] && output="${OUTPUT_DIR}/frontend-${mode}.json"
-	python3 "${SCRIPT_DIR}/xfce-candidate-phase.py" "$action" \
+	python3 "${SCRIPT_DIR}/candidate-bounded.py" 300 python3 "${SCRIPT_DIR}/xfce-candidate-phase.py" "$action" \
 		--console "$CANDIDATE_CONSOLE" --monitor "$MONITOR_SOCK" \
 		--vnc "${OUTPUT_DIR}/vnc.sock" --directory "$OUTPUT_DIR" --output "$output" \
 		--mode "$mode" --phase "$phase" --boot-log "$SERIAL_LOG"
@@ -4038,6 +4041,8 @@ verify_strict_installed_boot() {
 	mv -f "$SERIAL_LOG" "${OUTPUT_DIR}/strict-${mode}-live-serial.log" 2>/dev/null || true
 	: >"$SERIAL_LOG"
 	# ── Cold boot ────────────────────────────────────────────────────
+	local -a unlock_bound=()
+	[[ "${TUNAOS_XFCE_CANDIDATE:-0}" == 1 ]] && unlock_bound=(python3 "${SCRIPT_DIR}/candidate-bounded.py" 240)
 	local cold0 cold1 cold_s
 	cold0=$(date +%s)
 	if [[ "$mode" == "luks" ]]; then
@@ -4047,9 +4052,10 @@ verify_strict_installed_boot() {
 		local cold_unlock_rc=0
 		TUNAOS_LUKS_NO_POWEROFF=1 \
 			TUNAOS_LUKS_GRUB_APPEND="" \
-			python3 "${SCRIPT_DIR}/luks-first-boot.py" \
-			"$fb_serial" "$MONITOR_SOCK" "${E2E_LUKS_PASS:-tunaos-e2e-luks}" 900 300 \
-			2>&1 | tee "$installed_log" || cold_unlock_rc=$?
+			env -u TUNAOS_XFCE_PASSWORD -u TUNAOS_WALKTHROUGH_LUKS_PASS -u E2E_LUKS_PASS \
+			"${unlock_bound[@]}" python3 "${SCRIPT_DIR}/luks-first-boot.py" \
+			"$fb_serial" "$MONITOR_SOCK" --passphrase-stdin 900 300 \
+			<<<"${E2E_LUKS_PASS:-tunaos-e2e-luks}" 2>&1 | tee "$installed_log" || cold_unlock_rc=$?
 		strict_stop_boot_observer
 		if [[ "$cold_unlock_rc" -ne 0 ]]; then
 			echo "ERROR: strict encrypted disk did not unlock with the passphrase / reach login" >&2
@@ -4139,9 +4145,10 @@ verify_strict_installed_boot() {
 		local warm_unlock_rc=0
 		TUNAOS_LUKS_NO_POWEROFF=1 \
 			TUNAOS_LUKS_GRUB_APPEND="" \
-			python3 "${SCRIPT_DIR}/luks-first-boot.py" \
-			"$fb_serial2" "$MONITOR_SOCK" "${E2E_LUKS_PASS:-tunaos-e2e-luks}" 900 300 \
-			2>&1 | tee "${OUTPUT_DIR}/strict-${mode}-warm-serial.log" || warm_unlock_rc=$?
+			env -u TUNAOS_XFCE_PASSWORD -u TUNAOS_WALKTHROUGH_LUKS_PASS -u E2E_LUKS_PASS \
+			"${unlock_bound[@]}" python3 "${SCRIPT_DIR}/luks-first-boot.py" \
+			"$fb_serial2" "$MONITOR_SOCK" --passphrase-stdin 900 300 \
+			<<<"${E2E_LUKS_PASS:-tunaos-e2e-luks}" 2>&1 | tee "${OUTPUT_DIR}/strict-${mode}-warm-serial.log" || warm_unlock_rc=$?
 		strict_stop_boot_observer
 		if [[ "$warm_unlock_rc" -ne 0 ]]; then
 			echo "ERROR: strict warm boot (${mode}) failed" >&2

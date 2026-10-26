@@ -167,12 +167,13 @@ concurrency:
   # workflow_dispatch gets a per-run group so a deliberate multi-cell sweep
   # never cancels its own siblings — the repo's plain `<name>-${{ github.ref }}`
   # form would, since every cell of a sweep shares one branch.
-  group: iso-e2e-${{ inputs.source }}-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.event_name }}
-  cancel-in-progress: true
+  group: iso-e2e-${{ inputs.source }}-${{ inputs.candidate_xfce && 'xfce-candidate' || github.ref }}-${{ inputs.candidate_xfce && 'single' || (github.event_name == 'workflow_dispatch' && github.run_id || github.event_name) }}
+  cancel-in-progress: ${{ !inputs.candidate_xfce }}
 
 jobs:
   generate-matrix:
     name: Generate ISO E2E matrix
+    timeout-minutes: 5
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.gen.outputs.matrix }}
@@ -183,6 +184,9 @@ jobs:
           ref: ${{ inputs.source == 'native-artifact' && inputs.native_run_id == format('{0}', github.run_id) && inputs.native_source_sha || github.sha }}
           persist-credentials: false
       - uses: ./.github/actions/setup-yq
+      - name: Check candidate planner tools
+        if: inputs.candidate_xfce
+        run: python3 scripts/preflight-xfce-candidate.py tools
 
       # A dispatch tests exactly the cells asked for. Anything else -- the
       # pull_request harness trigger and the Monday schedule -- runs a fixed
@@ -305,6 +309,12 @@ jobs:
         with:
           ref: ${{ inputs.source == 'native-artifact' && inputs.native_run_id == format('{0}', github.run_id) && inputs.native_source_sha || github.sha }}
           persist-credentials: false
+
+      - uses: ./.github/actions/setup-yq
+        if: inputs.candidate_xfce
+      - name: Check candidate consumer resources
+        if: inputs.candidate_xfce
+        run: python3 scripts/preflight-xfce-candidate.py consumer
 
       # Two preflight gates, both meaning "this cell must not go on", and
       # both of which have to be evaluated in a step rather than a
@@ -981,7 +991,7 @@ jobs:
           done
 
       - name: Stage bounded strict diagnostics
-        if: always() && steps.filter.outputs.skip != 'true'
+        if: always() && steps.filter.outputs.skip != 'true' && !inputs.candidate_xfce
         run: python3 scripts/collect-iso-diagnostics.py iso-e2e-out
 
       - name: Collect evidence
@@ -1065,8 +1075,7 @@ jobs:
             iso-e2e-out/media-payloads.txt
             iso-e2e-out/*.png
             iso-e2e-out/qualification-evidence.json
-            iso-e2e-out/xfce-candidate/*.json
-            iso-e2e-out/xfce-candidate/walkthrough-*/*.json
+            iso-e2e-out/xfce-candidate/strict-diagnostics/
             evidence/${{ matrix.variant }}/${{ matrix.flavor }}/amd64/
           if-no-files-found: warn
           retention-days: 7

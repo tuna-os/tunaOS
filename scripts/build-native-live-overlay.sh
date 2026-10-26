@@ -54,7 +54,9 @@ TBOX_CUSTOMIZE_COMMIT_TIMEOUT="${TBOX_CUSTOMIZE_COMMIT_TIMEOUT:-1800}"
 [[ "$TBOX_CUSTOMIZE_COMMIT_TIMEOUT" =~ ^(0|[1-9][0-9]*)$ ]] || exit 2
 export TBOX_CUSTOMIZE_COMMIT_TIMEOUT
 # This runs baseline + customization via the same command as live-overlay.yml.
-timeout --foreground --kill-after=120 3600 "$work/tacklebox" customize-live \
+overlay_timeout=3600
+[[ "${TUNAOS_XFCE_CANDIDATE:-0}" == 1 ]] && overlay_timeout=1800
+timeout --foreground --kill-after=120 "$overlay_timeout" "$work/tacklebox" customize-live \
 	--image "${source_image}@${source_digest}" --script "$wrapper" --tag "$image" \
 	--label "org.tunaos.live-overlay.base=${source_image}" \
 	--label "org.tunaos.live-overlay.base-digest=${source_digest}" \

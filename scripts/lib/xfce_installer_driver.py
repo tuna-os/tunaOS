@@ -4,6 +4,8 @@ Source: frontends/xfce/tuna_installer_xfce/{app,pages}.py. Never invokes
 fisherman or writes a recipe. GUI fields alone select live self-install and user.
 """
 import json
+import os
+import shutil
 import hashlib
 from pathlib import Path
 import re
@@ -102,7 +104,7 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
                   mode=mode, installer_digest=installer_digest, transitions=[],
                   frontmost=False, submitted=False, accepted=False, completed=False,
                   account_digest='sha256:'+hashlib.sha256(user.encode()).hexdigest(), source_selection='live-self-install')
-    deadline = clock()+1800
+    deadline = clock()+min(1800,int(os.environ.get('TUNAOS_XFCE_GUI_TIMEOUT','1800')))
     counter = 0
 
     def observe():
@@ -140,6 +142,9 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
 
     try:
         screen=wait('Get started'); screen.box('Get started')
+        # Capture only before any credential input; later frames stay private.
+        if isinstance(screen,Screen):
+            shutil.copyfile(screen.path,outdir/'safe-welcome.png')
         result['frontmost']=True; result['transitions'].append('welcome')
         advance(screen,'Get started')
         screen=wait('What do you want to install?')

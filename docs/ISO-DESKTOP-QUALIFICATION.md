@@ -147,9 +147,14 @@ There is no advisory success or substituted readiness result.
 
 Account names use a digest in exported receipts.
 Passwords stay in process memory and GUI input; recipes go through the real frontend's stdin path.
-The candidate does not export raw logs from the console or screenshots as workflow artifacts.
-It exports the bounded JSON observations and candidate report.
-Raw captures remain in the private runner output for that run.
+The candidate exports only its bounded directory for diagnostics.
+It includes JSON receipts, the harness log, serial logs with known credentials removed, and welcome
+screenshots copied before any credential input. The collector removes terminal
+control codes before it removes known account names and passwords.
+Other screenshots and raw captures stay in the private runner directory.
+
+The harness stdout is private; it cannot print output from guests into Actions logs.
+Helpers for LUKS receive passwords through stdin, after removal of passwords from the environment. Their serial output removes a password even across successive reads.
 
 `NativeISOQualificationCandidate/v3` has separate `emit-candidate` and `validate-candidate` commands.
 Normal `validate` rejects these receipts. Production GNOME v2 keeps its guard.
@@ -249,3 +254,60 @@ Its frontend drops fields for identity and uses harness `e89bf562`.
 Preserve its existing owner and probe.
 The pinned tacklebox already has `ObservedBuildResult`; do not duplicate it.
 Browser bootstrap diagnostics are not strict native qualification.
+
+## Launch limits after the pre-launch review
+
+The maintainer selects the inputs above on `codex/iso-desktop-expansion`.
+Candidate runs use the same key for the queue and do not cancel an active candidate.
+The reusable consumer uses a separate queue key to avoid a caller deadlock.
+The matrix has one cell and `max_parallel: 1`.
+
+| Job | Limit | Internal limits |
+|---|---|---|
+| Producer preflight | 5 minutes | Install pinned yq, then validate the one target |
+| Producer build | 160 minutes | OS build 50; Live ISO 85; 25 left for setup and upload |
+| Consumer matrix | 5 minutes | Install pinned yq before the planner |
+| Consumer test | 160 minutes | Artifact download/extract at most 70; strict step 60; 30 left for setup and export |
+
+The step for Live ISO limits customization of the overlay at 30 minutes and ISO engine work
+at 40 minutes. Each has a two-minute kill grace. The step has nine minutes left
+for other work and two minutes for forced termination. These limits apply only to the candidate.
+The consumer uses QEMU packages from apt. The conflict between `.16` and `.18` pins in the diagnostic branch does not apply to this path.
+
+The strict supervisor has a 3300-second deadline. Its Linux child subreaper
+also owns children of detached daemons. Cleanup and private log drain have at most four 15-second waits;
+diagnostic collection has 120 seconds. This fits the 3600-second step.
+
+The harness has a shared 3240-second deadline. GUI input, observation and LUKS unlock each use the lesser of their phase cap and the time left.
+Each reserves five seconds for forced termination.
+
+The caps are 610, 300 and 240 seconds; they are not separate time reservations.
+Readiness waits are 180 seconds. All plain/LUKS cold/warm legs remain required.
+An exhausted budget fails the campaign; it cannot count a skipped leg as success.
+
+No measurement yet proves that these caps fit an actual installation.
+
+Preflight needs yq before publication resolution. The build and consumer need
+at least 12 GiB available RAM and four available CPUs.
+The VM stays at 8 GiB and four vCPUs, with 4 GiB for QEMU and OCR on the host.
+
+The producer needs 40 GiB free disk: three 4 GiB payload copies, two 10 GiB ISO
+copies and 8 GiB scratch. The consumer needs 56 GiB before download: a 12 GiB
+archive, 10 GiB ISO, 10 GiB extraction, 16 GiB installed writes and 8 GiB scratch.
+It checks for 24 GiB free again before the VM sequence.
+
+These are admission floors, not measured consumption or a guarantee against disk
+exhaustion. The two 64 GiB virtual disks are sparse; preflight does not reserve
+their full logical capacity.
+
+A stock hosted runner may not meet these floors. If it fails, choose enough
+runner capacity through a reviewed change before launch; do not remove the check.
+The consumer now uses `ubuntu-24.04`.
+
+Diagnostics retain at most 256 files, 16 MiB per file and 128 MiB total for seven
+days. The collector omits and counts oversize files. ISO and OCI ceilings stay at
+10 GiB and 4 GiB; measured sizes remain required before upload.
+Inert tests exercise the calls to both helpers, malformed or absent stdin, and
+serial echo split across reads. They also check secret removal, shared deadlines,
+cleanup of detached processes, resource floors and paths for retained files.
+No VM, host package install or workflow dispatch was used for these checks.

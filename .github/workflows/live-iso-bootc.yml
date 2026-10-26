@@ -68,12 +68,13 @@ concurrency:
   # workflow_dispatch gets a per-run group so a deliberate multi-cell sweep
   # never cancels its own siblings — the repo's plain `<name>-${{ github.ref }}`
   # form would, since every cell of a sweep shares one branch.
-  group: live-iso-bootc-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.event_name }}
-  cancel-in-progress: true
+  group: live-iso-bootc-${{ inputs.candidate_xfce && 'xfce-candidate' || github.ref }}-${{ inputs.candidate_xfce && 'single' || (github.event_name == 'workflow_dispatch' && github.run_id || github.event_name) }}
+  cancel-in-progress: ${{ !inputs.candidate_xfce }}
 
 jobs:
   preflight:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       contents: read
     steps:
@@ -81,6 +82,10 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
+      - uses: ./.github/actions/setup-yq
+      - name: Check candidate tools
+        if: inputs.candidate_xfce
+        run: python3 scripts/preflight-xfce-candidate.py tools
       - name: Validate explicit target before building
         env:
           VARIANT: ${{ inputs.variant || 'skipjack' }}
@@ -125,9 +130,7 @@ jobs:
     runs-on: ${{ inputs.build_runner != 'runs-on'
       && 'ubuntu-latest'
       || format('runs-on={0}/runner=build-amd64', github.run_id) }}
-    # A GitHub-hosted runner is slower per-core than the c6a this used to
-    # take, and there is no job timeout here to inherit -- the Actions
-    # default is 360 minutes, well clear of a ~40-minute build.
+    timeout-minutes: ${{ inputs.candidate_xfce && 160 || 360 }}
 
     permissions:
       contents: read
@@ -144,6 +147,10 @@ jobs:
           persist-credentials: false
           submodules: recursive
 
+      - uses: ./.github/actions/setup-yq
+      - name: Check candidate build resources
+        if: inputs.candidate_xfce
+        run: python3 scripts/preflight-xfce-candidate.py build
       - name: Install dependencies
         run: |
           sudo apt-get update
@@ -280,8 +287,12 @@ jobs:
           echo "PLATFORM=$REQUESTED_PLATFORM" >> "$GITHUB_ENV"
 
       - name: Build OS image
+        env:
+          TUNAOS_XFCE_CANDIDATE: ${{ inputs.candidate_xfce && '1' || '0' }}
         run: |
-          sudo just build "$VARIANT" "$FLAVOR" "$PLATFORM" 1 "$FLAVOR"
+          bound=()
+          [[ "$TUNAOS_XFCE_CANDIDATE" == 1 ]] && bound=(timeout --signal=TERM --kill-after=120 2880)
+          "${bound[@]}" sudo just build "$VARIANT" "$FLAVOR" "$PLATFORM" 1 "$FLAVOR"
 
       - name: Build Live ISO
         # No R2 credentials here on purpose. This step used to export the
@@ -293,6 +304,7 @@ jobs:
         # (tests/test_fork_safe_workflows.py).
         env:
           TACKLEBOX_FROM_SOURCE: "1"
+          TUNAOS_TACKLEBOX_TIMEOUT_SECONDS: ${{ inputs.candidate_xfce && '2400' || '4800' }}
           TUNAOS_XFCE_CANDIDATE: ${{ inputs.candidate_xfce && '1' || '0' }}
         run: |
           # Root, and no rootless hop before it.
@@ -310,6 +322,12 @@ jobs:
           # the ISO built as root too the save|load hop is not just
           # unnecessary, it was the thing that forced the slow path.
           set -euo pipefail
+          # Re-enter this Actions script once under a candidate-only bound.
+          # 83 minutes + two minutes to kill fits the 85-minute allocation.
+          if [[ "$TUNAOS_XFCE_CANDIDATE" == 1 && "${TUNAOS_XFCE_BUILD_BOUNDED:-0}" != 1 ]]; then
+            export TUNAOS_XFCE_BUILD_BOUNDED=1
+            exec timeout --signal=TERM --kill-after=120 4980 bash -e "$0"
+          fi
           # Resolve operation inputs once. Never invent an overlay identity or
           # substitute the local image ID for its OCI manifest digest.
           TUNA_LIVE_BASE_IMAGE="localhost/${VARIANT}:${FLAVOR}"

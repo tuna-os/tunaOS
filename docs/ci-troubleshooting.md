@@ -2611,3 +2611,17 @@ Both now use the publication resolver, and the media descriptor takes that
 exact target. Source digests and same-run identity checks still apply.
 The capture test now executes the real screenshot function with inert callbacks.
 It covers GNOME and XFCE strict paths and the VNC fallback without a guest.
+
+
+### XFCE candidate stops before launch or loses failure artifacts
+
+The review before launch of #3965 found passwords in positional arguments for LUKS.
+It also found implicit limits on jobs, missing yq setup, and logs outside the upload paths.
+The candidate now checks tools and host resources before expensive work.
+A deadline shared by all phases bounds the required boot sequence. LUKS input uses stdin.
+
+The collector uses fixed paths and removes known credentials.
+It omits frames from private login screens.
+Check `strict-diagnostics/collection.json` for omitted large files.
+`tests/test_xfce_launch_readiness.py` exercises these boundaries without guests.
+A resource or timeout failure is not qualification evidence.
