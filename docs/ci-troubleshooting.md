@@ -2167,3 +2167,25 @@ or `:`.
 Binding also refuses any repository row or unsafe name for the target, so a
 later fork edit of the generated `image-packages.tsv` cannot add a source
 unnoticed. Adding a plain package name needs no refresh.
+
+### Gentoo desktop fails branding with unrendered identity tokens (#3980)
+
+**Symptom:** the package proof for modified GNOME stops after install with
+`unrendered @TUNAOS_*@ identity token` and `TUNAOS_BRANDING_FAIL`.
+Both base proofs pass, with stock and modified configurations (run `40251865603`, `861a871f`).
+
+**Cause:** `desktop-build` ran `90-image-info.sh` before the two asset copies.
+Absent files receive no tokens from the renderer. The copies then left tokens
+in seven paths: Plasma and wallpaper metadata, the live-ready unit, both Count
+Me units and the installer recipe. A later copy can restore those tokens too.
+
+**Fix:** copy the assets before the identity writer and `verify-branding.sh`.
+Render all seven paths. Run the writer again after the final copy.
+The #3980 regression fixture runs the full writer and verifier with redirected
+paths for stock and fork TOML, including empty metrics settings.
+It checks each late-copy failure and `install-countme.sh`, which must preserve
+`/etc` opt-outs. Keep `verify-branding.sh` enabled.
+
+These source tests do not
+qualify an image. After source delivery, repeat acceptance for fresh Gentoo
+images and packages (#3802).
