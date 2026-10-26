@@ -109,7 +109,7 @@ def observer_note(root: Path) -> str:
     return note
 
 
-def judge(root: Path, mode: str) -> tuple[str, str]:
+def judge(root: Path, mode: str, desktop: str = "gnome") -> tuple[str, str]:
     """Return (verdict, detail) for one leg."""
     fragment_path = find(root, f"strict-qual-{mode}.json")
     if fragment_path is not None:
@@ -135,7 +135,7 @@ def judge(root: Path, mode: str) -> tuple[str, str]:
             "boot times logged after both installed boots verified; the leg fragment is not in this directory",
         )
 
-    report_path = find(root, f"walkthrough-{mode}/walkthrough-gnome.json")
+    report_path = find(root, f"walkthrough-{mode}/walkthrough-{desktop}.json")
     started = find(root, f"strict-{mode}-started.txt", f"strict-{mode}-live-serial.log") or (
         find(root, "strict-offline-evidence.log")
         if log_contains(find(root, "strict-offline-evidence.log"), f"phase=live-{mode} ")
@@ -174,8 +174,8 @@ def judge(root: Path, mode: str) -> tuple[str, str]:
     return "failed: installed boot did not verify", f"{gui}; no passing leg fragment was written"
 
 
-def summarize(root: Path) -> str:
-    rows = [(mode, *judge(root, mode)) for mode in MODES]
+def summarize(root: Path, desktop: str = "gnome") -> str:
+    rows = [(mode, *judge(root, mode, desktop)) for mode in MODES]
     lines = [
         "## Strict offline GUI qualification: per-leg verdicts",
         "",
@@ -206,14 +206,14 @@ def summarize(root: Path) -> str:
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) != 2:
-        print("usage: summarize-strict-legs.py <iso-e2e output dir>", file=sys.stderr)
+    if len(argv) not in (2, 3) or (len(argv) == 3 and argv[2] != "xfce"):
+        print("usage: summarize-strict-legs.py <iso-e2e output dir> [xfce]", file=sys.stderr)
         return 2
     root = Path(argv[1])
     if not root.is_dir():
         print(f"summarize-strict-legs: {root} is not a directory", file=sys.stderr)
         return 2
-    sys.stdout.write(summarize(root))
+    sys.stdout.write(summarize(root, argv[2] if len(argv) == 3 else "gnome"))
     return 0
 
 

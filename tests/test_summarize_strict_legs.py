@@ -191,3 +191,18 @@ def test_cli_prints_markdown_and_rejects_a_bad_directory(out, tmp_path):
     assert bad.returncode == 2
     usage = subprocess.run([sys.executable, str(SCRIPT)], capture_output=True, text=True)
     assert usage.returncode == 2
+
+
+def test_xfce_summary_uses_only_the_selected_frontend_report(tmp_path):
+    walk=tmp_path/'walkthrough-plain';walk.mkdir()
+    gui={'submitted':True,'accepted':True,'completed':True,'transitions':['welcome','done']}
+    (walk/'walkthrough-xfce.json').write_text(json.dumps(gui))
+    assert mod.judge(tmp_path,'plain','xfce')[0]=='failed: installed boot did not verify'
+    assert mod.judge(tmp_path,'plain')[0]=='not run'
+    gui['completed']=False
+    (walk/'walkthrough-xfce.json').write_text(json.dumps(gui))
+    assert mod.judge(tmp_path,'plain','xfce')[0]=='failed: installer GUI did not complete'
+    result=subprocess.run([sys.executable,str(SCRIPT),str(tmp_path),'xfce'],capture_output=True,text=True)
+    assert result.returncode==0 and 'installer GUI did not complete' in result.stdout
+    bad=subprocess.run([sys.executable,str(SCRIPT),str(tmp_path),'unknown'],capture_output=True,text=True)
+    assert bad.returncode==2

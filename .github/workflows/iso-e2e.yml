@@ -32,6 +32,20 @@ name: ISO E2E Smoke
 on:
   workflow_call:
     inputs:
+      candidate_xfce:
+        description: 'Opt-in Bonito/XFCE AMD64 candidate; no production admission'
+        type: boolean
+        default: false
+        required: false
+      platform:
+        description: 'Explicit platform for native artifact qualification'
+        type: string
+        required: false
+      max_parallel:
+        description: 'Maximum concurrent cells (1 or 2)'
+        type: number
+        default: 1
+        required: false
       variant:
         type: string
         required: true
@@ -58,6 +72,20 @@ on:
         required: true
   workflow_dispatch:
     inputs:
+      candidate_xfce:
+        description: 'Opt-in Bonito/XFCE AMD64 candidate; no production admission'
+        type: boolean
+        default: false
+        required: false
+      platform:
+        description: 'Explicit platform for native artifact qualification'
+        type: string
+        required: false
+      max_parallel:
+        description: 'Maximum concurrent cells (1 or 2)'
+        type: number
+        default: 1
+        required: false
       variant:
         # Free-form, not a choice list. The list here offered yellowfin and
         # albacore while build-config.yml declares build_iso: true for ten
@@ -139,21 +167,26 @@ concurrency:
   # workflow_dispatch gets a per-run group so a deliberate multi-cell sweep
   # never cancels its own siblings — the repo's plain `<name>-${{ github.ref }}`
   # form would, since every cell of a sweep shares one branch.
-  group: iso-e2e-${{ inputs.source }}-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.event_name }}
-  cancel-in-progress: true
+  group: iso-e2e-${{ inputs.source }}-${{ inputs.candidate_xfce && 'xfce-candidate' || github.ref }}-${{ inputs.candidate_xfce && 'single' || (github.event_name == 'workflow_dispatch' && github.run_id || github.event_name) }}
+  cancel-in-progress: ${{ !inputs.candidate_xfce }}
 
 jobs:
   generate-matrix:
     name: Generate ISO E2E matrix
+    timeout-minutes: 5
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.gen.outputs.matrix }}
+      max_parallel: ${{ steps.gen.outputs.max_parallel }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.source == 'native-artifact' && inputs.native_run_id == format('{0}', github.run_id) && inputs.native_source_sha || github.sha }}
           persist-credentials: false
       - uses: ./.github/actions/setup-yq
+      - name: Check candidate planner tools
+        if: inputs.candidate_xfce
+        run: python3 scripts/preflight-xfce-candidate.py tools
 
       # A dispatch tests exactly the cells asked for. Anything else -- the
       # pull_request harness trigger and the Monday schedule -- runs a fixed
@@ -181,10 +214,29 @@ jobs:
       - name: Build the cell list
         id: gen
         env:
+          CANDIDATE_XFCE: ${{ inputs.candidate_xfce }}
+          REQUESTED_PLATFORM: ${{ inputs.platform }}
+          MAX_PARALLEL: ${{ inputs.max_parallel }}
+          ISO_SOURCE: ${{ inputs.source }}
           DISPATCH_VARIANT: ${{ inputs.variant }}
           DISPATCH_FLAVORS: ${{ inputs.flavors }}
         run: |
           set -euo pipefail
+          MAX_PARALLEL="${MAX_PARALLEL:-1}"
+          [[ "$MAX_PARALLEL" == 1 || "$MAX_PARALLEL" == 2 ]] || { echo 'max_parallel must be 1 or 2' >&2; exit 1; }
+          echo "max_parallel=$MAX_PARALLEL" >> "$GITHUB_OUTPUT"
+          candidate_flags=()
+          if [[ "${CANDIDATE_XFCE:-false}" == true ]]; then
+            [[ "${ISO_SOURCE:-}" == native-artifact ]] || exit 1
+            candidate_flags+=(--candidate-xfce)
+          fi
+          if [[ "${ISO_SOURCE:-}" == native-artifact ]]; then
+            # One artifact cannot stand in for several desktop/architecture targets.
+            python3 scripts/plan-iso-qualification.py --target "$DISPATCH_VARIANT:$DISPATCH_FLAVORS:$REQUESTED_PLATFORM" --max-parallel "$MAX_PARALLEL" "${candidate_flags[@]}"
+            M="$(jq -cn --arg v "$DISPATCH_VARIANT" --arg f "$DISPATCH_FLAVORS" --arg p "$REQUESTED_PLATFORM" '{include:[{variant:$v,flavor:$f,platform:$p}]}')"
+            echo "matrix=$M" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           BUILD_CONFIG_JSON="$(python3 scripts/config.py show)"
           canonical_platform() {
             jq -r --arg variant "$1" --arg flavor "$2" '
@@ -221,6 +273,7 @@ jobs:
             echo "::error::no cells to test — variant='${DISPATCH_VARIANT:-}' flavors='${DISPATCH_FLAVORS:-}' produced an empty matrix"
             exit 1
           fi
+          [[ "$(jq '.include | length' <<<"$M")" -le 4 ]] || { echo 'select at most four cells' >&2; exit 1; }
           echo "matrix=$M" >> "$GITHUB_OUTPUT"
           echo "$M" | jq -r '.include[] | "  \(.variant):\(.flavor)"'
 
@@ -245,6 +298,7 @@ jobs:
     # get ten more: 160 total.
     timeout-minutes: ${{ inputs.source == 'native-artifact' && 160 || ((github.event_name == 'workflow_dispatch' && inputs.source == 'build') && 90 || 30) }}
     strategy:
+      max-parallel: ${{ fromJson(needs.generate-matrix.outputs.max_parallel) }}
       # Don't cancel the other leg if one fails — we want to see both signals.
       fail-fast: false
       matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
@@ -255,6 +309,12 @@ jobs:
         with:
           ref: ${{ inputs.source == 'native-artifact' && inputs.native_run_id == format('{0}', github.run_id) && inputs.native_source_sha || github.sha }}
           persist-credentials: false
+
+      - uses: ./.github/actions/setup-yq
+        if: inputs.candidate_xfce
+      - name: Check candidate consumer resources
+        if: inputs.candidate_xfce
+        run: python3 scripts/preflight-xfce-candidate.py consumer
 
       # Two preflight gates, both meaning "this cell must not go on", and
       # both of which have to be evaluated in a step rather than a
@@ -351,8 +411,12 @@ jobs:
       # open the device. Without this, yellowfin's newer AlmaLinux Kitten shim
       # crashes with #UD (Invalid Opcode) in TCG mode because qemu64 lacks the
       # CPU extensions the bootloader requires.
+      - name: Check candidate direct KVM access
+        if: steps.filter.outputs.skip != 'true' && inputs.candidate_xfce
+        run: sudo python3 scripts/preflight-xfce-candidate.py kvm
+
       - name: Enable KVM group permissions
-        if: steps.filter.outputs.skip != 'true'
+        if: steps.filter.outputs.skip != 'true' && !inputs.candidate_xfce
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | \
             sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -578,7 +642,7 @@ jobs:
       # provenance; still observe their actual GUI before strict admission fails.
       - name: Native artifact live boot and installer GUI smoke (not qualification)
         id: native_smoke
-        if: inputs.source == 'native-artifact' && inputs.native_run_id != format('{0}', github.run_id)
+        if: inputs.source == 'native-artifact' && inputs.native_run_id != format('{0}', github.run_id) && !inputs.candidate_xfce
         continue-on-error: true
         timeout-minutes: 20
         env:
@@ -888,6 +952,8 @@ jobs:
       # the verdict step below reports each leg on its own.
       - name: Run strict offline GUI qualification
         id: strict
+        env:
+          CANDIDATE_XFCE: ${{ inputs.candidate_xfce }}
         if: steps.filter.outputs.skip != 'true' && inputs.source == 'native-artifact'
         timeout-minutes: 60
         run: |
@@ -895,15 +961,18 @@ jobs:
           mkdir -p iso-e2e-out
           # Free runners get KVM via /dev/kvm permissions; if it's not
           # readable we fall back to TCG (slower but functional).
-          KVM_FLAG=""
-          [[ -r /dev/kvm && -w /dev/kvm ]] || KVM_FLAG="--no-kvm"
+          export KVM_FLAG=""
+          if [[ "$CANDIDATE_XFCE" != true ]]; then
+            [[ -r /dev/kvm && -w /dev/kvm ]] || KVM_FLAG="--no-kvm"
+          fi
+          command=(./scripts/iso-e2e.sh "$ISO_PATH" --output iso-e2e-out --strict-offline-gui --timeout 600)
+          [[ -z "$KVM_FLAG" ]] || command+=("$KVM_FLAG")
+          if [[ "$CANDIDATE_XFCE" == true ]]; then
+            command=(python3 scripts/run-xfce-candidate.py --iso "$ISO_PATH" --output iso-e2e-out/xfce-candidate)
+          fi
           set +e
           sudo --preserve-env=GITHUB_REPOSITORY,GITHUB_RUN_ID,GITHUB_RUN_ATTEMPT,TUNAOS_QUAL_EXECUTION_KIND,TUNAOS_NATIVE_BINDING,TUNAOS_NATIVE_ARTIFACT_ID,TUNAOS_NATIVE_ARCHIVE_DIGEST,TUNAOS_NATIVE_SOURCE_SHA,KVM_FLAG,VARIANT,FLAVOR,TUNAOS_QUAL_SOURCE_DIGEST,TUNAOS_QUAL_OVERLAY_DIGEST,TUNAOS_QUAL_INSTALLER_DIGEST,TUNAOS_QUAL_ENGINE_DIGEST,TUNAOS_QUAL_MEDIA_DIGEST,STRICT_PUBLISHED_MEDIA,TUNAOS_QUAL_PLATFORM,TUNAOS_QUAL_CPU_BASELINE,TUNAOS_QUAL_HARDWARE_SCOPE \
-            ./scripts/iso-e2e.sh "${ISO_PATH}" \
-              --output iso-e2e-out \
-              --strict-offline-gui \
-              --timeout 600 \
-              ${KVM_FLAG}
+            "${command[@]}"
 
           rc=$?
           set -e
@@ -928,11 +997,11 @@ jobs:
           done
 
       - name: Stage bounded strict diagnostics
-        if: always() && steps.filter.outputs.skip != 'true'
+        if: always() && steps.filter.outputs.skip != 'true' && !inputs.candidate_xfce
         run: python3 scripts/collect-iso-diagnostics.py iso-e2e-out
 
       - name: Collect evidence
-        if: always() && steps.filter.outputs.skip != 'true'
+        if: always() && steps.filter.outputs.skip != 'true' && !inputs.candidate_xfce
         env:
           EVIDENCE_ARCH: amd64
           E2E_OUTCOME: ${{ steps.strict.outcome != 'skipped' && steps.strict.outcome || steps.e2e.outcome }}
@@ -947,16 +1016,31 @@ jobs:
             "${{ matrix.variant }}:${{ matrix.flavor }}" iso iso-e2e-out
       - name: Validate strict qualification evidence
         if: steps.filter.outputs.skip != 'true' && steps.strict.outcome == 'success' && steps.strict.outputs.rc == '0'
+        env:
+          CANDIDATE_XFCE: ${{ inputs.candidate_xfce }}
         run: |
-          python3 scripts/native-iso-qualification.py validate \
-            iso-e2e-out/qualification-evidence.json
+          set -euo pipefail
+          if [[ "${CANDIDATE_XFCE:-false}" == true ]]; then
+            python3 scripts/native-iso-qualification.py validate-candidate \
+              iso-e2e-out/xfce-candidate/qualification-evidence.json
+          else
+            python3 scripts/native-iso-qualification.py validate \
+              iso-e2e-out/qualification-evidence.json
+          fi
 
       # One verdict per leg, read from the files the harness itself wrote. A
       # leg that did not pass says where it stopped; nothing here can mark a
       # leg or the target qualified.
       - name: Report strict leg verdicts
         if: always() && steps.filter.outputs.skip != 'true' && inputs.source == 'native-artifact'
-        run: python3 scripts/summarize-strict-legs.py iso-e2e-out >> "$GITHUB_STEP_SUMMARY"
+        env:
+          CANDIDATE_XFCE: ${{ inputs.candidate_xfce }}
+        run: |
+          if [[ "${CANDIDATE_XFCE:-false}" == true ]]; then
+            python3 scripts/summarize-strict-legs.py iso-e2e-out/xfce-candidate xfce >> "$GITHUB_STEP_SUMMARY"
+          else
+            python3 scripts/summarize-strict-legs.py iso-e2e-out >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Job summary
         if: always() && steps.filter.outputs.skip != 'true'
@@ -997,6 +1081,7 @@ jobs:
             iso-e2e-out/media-payloads.txt
             iso-e2e-out/*.png
             iso-e2e-out/qualification-evidence.json
+            iso-e2e-out/xfce-candidate/strict-diagnostics/
             evidence/${{ matrix.variant }}/${{ matrix.flavor }}/amd64/
           if-no-files-found: warn
           retention-days: 7

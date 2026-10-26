@@ -108,6 +108,9 @@ def note(msg):
 
 def hmp(cmd):
     """Send one HMP command over the monitor socket, return the reply."""
+    if os.environ.get("TUNAOS_XFCE_CANDIDATE") == "1":
+        from lib.qemu_monitor import command
+        return command(mon_path, cmd).decode("utf-8", "replace")
     s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     s.connect(mon_path)
     s.settimeout(5)
@@ -226,7 +229,7 @@ def shot(idx, label):
     # VNC first: on the virgl path it is the only thing that works, and on the
     # non-GL path there is no vnc.sock so this costs one os.path.exists().
     # The strict GNOME contract uses software rendering and no TCP bridge.
-    if not (mode_explicit and flavor == "gnome") and vnc_capture(png):
+    if not (mode_explicit and (flavor == "gnome" or os.environ.get("TUNAOS_XFCE_CANDIDATE") == "1")) and vnc_capture(png):
         print(f"captured step {idx}: {label} -> {png} (vnc)", flush=True)
         return png
 
@@ -495,6 +498,13 @@ def maybe_configure_encryption(png):
     else:
         note("plain mode: leaving the encryption default (none) selected")
     return True
+
+# Opt-in XFCE path uses its own pinned wizard, including the identity page.
+if mode_explicit and flavor == "xfce" and os.environ.get("TUNAOS_XFCE_CANDIDATE") == "1":
+    from lib.xfce_installer_driver import drive
+    sys.exit(drive(outdir, walk_mode, vnc_sock, shot, send_keys, _type_text,
+                   os.environ["TUNAOS_QUAL_INSTALLER_DIGEST"], WALK_LUKS_PASS,
+                   os.environ["TUNAOS_XFCE_USER"], os.environ["TUNAOS_XFCE_PASSWORD"]))
 
 # Explicit GNOME qualification has a measured, ordered GUI contract. Keep the
 # legacy multi-frontend click-through path separate from strict evidence.

@@ -225,7 +225,7 @@ def test_strict_harness_capacity_and_unix_pointer():
     assert 'QEMU_GPU_ARGS+=(-device qemu-xhci -device usb-tablet)' in text
     walkthrough = (ROOT/'scripts/installer-walkthrough.py').read_text()
     assert 'TCP-LISTEN:{vnc_port},bind=127.0.0.1,reuseaddr,fork' in walkthrough
-    assert 'if not (mode_explicit and flavor == "gnome") and vnc_capture(png):' in walkthrough
+    # Capture routing is exercised below for both strict GUI drivers.
 
 
 def test_postaccepted_overview_never_sends_input(tmp_path):
@@ -795,3 +795,32 @@ def test_completion_never_bypasses_same_frame_guards(monkeypatch, mutation, init
     monkeypatch.setattr(driver.subprocess, 'run', lambda *a, **kw: pytest.fail('invalid completion reached OCR'))
     screen.verify_completion_panel()
     assert screen.state == 'unknown'
+
+
+@pytest.mark.parametrize('flavor,explicit,candidate,vnc_ok,route',[
+    ('gnome',True,False,True,'hmp'), ('xfce',True,True,True,'hmp'),
+    ('gnome',False,False,True,'vnc'), ('xfce',False,True,True,'vnc'),
+    ('xfce',True,False,True,'vnc'), ('kde',True,False,True,'vnc'),
+    ('kde',True,False,False,'hmp'),
+])
+def test_actual_walkthrough_capture_route(tmp_path,flavor,explicit,candidate,vnc_ok,route):
+    import ast
+    import types
+    import os
+    source=ROOT/'scripts/installer-walkthrough.py'
+    shot=next(n for n in ast.parse(source.read_text()).body if isinstance(n,ast.FunctionDef) and n.name=='shot')
+    events=[]
+    def capture(path):
+        events.append('vnc');return vnc_ok
+    def hmp(command):
+        events.append('hmp')
+        assert command.startswith('screendump ')
+        Path(command.removeprefix('screendump ')).write_bytes(b'inert ppm')
+    env={'TUNAOS_XFCE_CANDIDATE':'1'} if candidate else {}
+    namespace=dict(os=types.SimpleNamespace(path=os.path,remove=os.remove,environ=env),
+        time=types.SimpleNamespace(sleep=lambda _:None),mode_explicit=explicit,flavor=flavor,
+        outdir=str(tmp_path),vnc_capture=capture,hmp=hmp,
+        _ppm_to_png=lambda ppm,png:Path(png).write_bytes(b'inert png'),vnc_sock='unused')
+    exec(compile(ast.Module(body=[shot],type_ignores=[]),str(source),'exec'),namespace)
+    assert namespace['shot'](0,'inert').endswith('.png')
+    assert events==(['vnc'] if route=='vnc' else ['hmp'] if explicit and (flavor=='gnome' or candidate) else ['vnc','hmp'])

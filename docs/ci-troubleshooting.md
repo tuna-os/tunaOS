@@ -1763,9 +1763,9 @@ capture first, then sends the graceful powerdown itself before the kill.
 
 | # | Symptom | Root cause | Fix |
 |---|---|---|---|
-| 60 | `layer_fetch` stalls at byte 12582912 with zero progress and no error | The layer reader issued one range request for the whole remainder past the 12 MiB chunk cap and never resumed it | Fetch in capped chunks, resume from the last committed byte, account progress per chunk |
-| 61 | Browser-built ISO is truncated against its manifest size while every phase reported success | Async JS sink backpressure: the writer closed with chunks still queued, so acknowledgments outran the flush | Await the sink ready/close handshake (drain before close) and verify output size against the manifest |
-| 62 | `scripts/iso-e2e.sh --strict-offline-gui` cannot bind its offline source on a flattened live root | The embedded payload store was never mounted nor listed in `additionalimagestores`, so the offline installer path had no source (same shape as §4 row 21) | Loop-mount the embedded store (`LiveOS/store.squashfs.img`) and point `/etc/containers/storage.conf` `additionalimagestores` at the mount point |
+| 70 | `layer_fetch` stalls at byte 12582912 with zero progress and no error | The layer reader issued one range request for the whole remainder past the 12 MiB chunk cap and never resumed it | Fetch in capped chunks, resume from the last committed byte, account progress per chunk |
+| 71 | Browser-built ISO is truncated against its manifest size while every phase reported success | Async JS sink backpressure: the writer closed with chunks still queued, so acknowledgments outran the flush | Await the sink ready/close handshake (drain before close) and verify output size against the manifest |
+| 72 | `scripts/iso-e2e.sh --strict-offline-gui` cannot bind its offline source on a flattened live root | The embedded payload store was never mounted nor listed in `additionalimagestores`, so the offline installer path had no source (same shape as §4 row 21) | Loop-mount the embedded store (`LiveOS/store.squashfs.img`) and point `/etc/containers/storage.conf` `additionalimagestores` at the mount point |
 ### STE fails on matrix prose
 
 **Symptom:** STE reports 1610 findings with a budget of 1609.
@@ -2541,6 +2541,17 @@ The gate does not accept them as proof of an unchanged boot.
 Do not relabel or promote old receipts. Native evidence stays separate from
 browser parity and cutover evidence.
 
+### Strict preflight refuses a configured ISO target
+
+`scripts/plan-iso-qualification.py` retains each ISO row from TOML.
+The merged base removes the preview required-platform policy; its inferred
+ARM64 obligations no longer define coverage. Skipjack GNOME/v2 remains a
+configured CPU conflict. Native preflight rejects it. Resolve that row
+with the configuration owner; do not omit it.
+
+KDE still needs its frontend producer. XFCE has an explicit Bonito candidate.
+A session contract is not proof of installation through the GUI.
+See [bounded desktop qualification](ISO-DESKTOP-QUALIFICATION.md).
 ### The strict job fails and the log hides which leg failed (#3380)
 
 **Symptom:** The job `Qualify exact native ISO` fails with one exit code.
@@ -2571,9 +2582,86 @@ strict install check. The weekly smoke test of `iso-e2e.yml` runs the readiness 
 The encrypted leg fails by policy until the image shows the prompt (#3380).
 A trigger on every pull request would add a red mark that nobody can act on.
 
-**Fix:** `qualify-native-iso` runs only from a manual dispatch with flavor `gnome`.
+**Fix:** `qualify-native-iso` runs only from a manual dispatch with flavor `gnome`
+or the explicit Bonito/XFCE/AMD64 candidate.
 In `iso-e2e.yml` the strict step runs only for `source: native-artifact`.
 Every other source keeps `Run readiness e2e`.
 No green criterion names the strict job as a gate. Add it to a criterion only after
 both legs pass in a dispatched run and a schedule exists to renew that evidence.
 `tests/test_strict_qualification_wiring.py` pins this wiring.
+
+### Strict boot cannot resolve the tracking reference
+
+The strict boot gate rejects a failed resolver or an empty reference before boot.
+Do not guess the stock reference.
+The native producer also checks the overlay receipt before ISO customization.
+It rejects malformed digests and references that name a different target.
+These checks do not supply qualification evidence.
+
+
+### XFCE candidate fails credential, publication or capture tests
+
+Run `40240590000`, job `121312582507`, exposed failures in three tests.
+The credential scanner mistook Python's `secrets` module for GitHub credentials.
+The candidate imports that module as `guest_random`. It still uses secure
+`choice` and `token_hex`; the scanner and its credential rules stay intact.
+
+The producer and live probe each held a stock image reference.
+Both now use the publication resolver, and the media descriptor takes that
+exact target. Source digests and same-run identity checks still apply.
+The capture test now executes the real screenshot function with inert callbacks.
+It covers GNOME and XFCE strict paths and the VNC fallback without a guest.
+
+
+### XFCE candidate stops before launch or loses failure artifacts
+
+The review before launch of #3965 found passwords in positional arguments for LUKS.
+It also found implicit limits on jobs, missing yq setup, and logs outside the upload paths.
+The candidate now checks tools and host resources before expensive work.
+A deadline shared by all phases bounds the required boot sequence. LUKS input uses stdin.
+
+The collector uses fixed paths and removes known credentials.
+It omits frames from private login screens.
+Check `strict-diagnostics/collection.json` for omitted large files.
+`tests/test_xfce_launch_readiness.py` exercises these boundaries without guests.
+A resource or timeout failure is not qualification evidence.
+
+
+### Candidate concurrency fails four static assertions
+
+Run `40251533084`, job `121344308454`, failed four assertions about concurrency.
+The tests required literal `true` for cancellation and one fixed expression
+for the group. They could not evaluate the explicit XFCE exception.
+
+The contract now evaluates declared events and inputs through a small parser.
+PR pushes still share a group and cancel superseded runs. Ordinary dispatches
+keep a group per run. Explicit candidates share a separate group without
+cancellation of an active run. Caller and consumer use distinct groups.
+
+Negative controls reject a reversed policy and unknown expression syntax.
+The workflow definitions did not change.
+
+
+### XFCE candidate carries inherited guest access credentials
+
+The #3965 source audit found an unconditional call to vsock setup. It generated
+an SSH key and passed access credentials through SMBIOS, even on the candidate.
+The candidate now skips that setup and rejects its arguments at both launchers.
+Its shutdown path uses ACPI. Ordinary modes retain the existing fallback.
+
+The same audit found a KVM udev rule with mode `0666` on the consumer.
+The candidate skips that rule and checks the existing device as root instead.
+Access failures remain failures. `tests/test_xfce_no_injected_access.py` exercises
+these boundaries with inert callbacks and records no runtime qualification.
+
+
+### Root candidate still changes subordinate IDs or AppArmor policy
+
+The #3965 audit found the shared rootless setup before a root-only candidate
+build. Pinned Tacklebox defaults to root at EUID zero and runs its mount scripts
+directly. The local-image path does not need a pull into the user's store.
+
+Candidates now skip that setup. Both producer calls explicitly select root
+context after sudo; ordinary modes keep their existing setup and context.
+Tests inject a contradictory user context and remove each override to verify the
+boundary. No host settings changed during those inert checks.

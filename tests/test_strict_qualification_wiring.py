@@ -44,12 +44,13 @@ def normalized(expression: str) -> str:
     return " ".join(str(expression).split())
 
 
-def test_the_qualify_job_is_dispatch_only_and_gnome_only():
+def test_the_qualify_job_is_dispatch_only_with_explicit_xfce_candidate():
     bootc = load("live-iso-bootc.yml")
     condition = normalized(bootc["jobs"]["qualify-native-iso"]["if"])
     assert "github.event_name == 'workflow_dispatch'" in condition
-    # The evidence validator accepts flavor gnome only.
+    # Production qualification remains GNOME; the explicit candidate is separate.
     assert "(github.event.inputs.flavor || 'gnome') == 'gnome'" in condition
+    assert "inputs.candidate_xfce && inputs.variant == 'bonito' && inputs.flavor == 'xfce' && inputs.platform == 'linux/amd64'" in condition
     assert "pull_request" not in condition
     # The caller supplies no schedule of its own.
     assert "schedule" not in bootc.get(True, bootc.get("on", {}))

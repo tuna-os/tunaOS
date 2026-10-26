@@ -21,6 +21,7 @@ Related issue: https://github.com/tuna-os/tunaOS/issues/1395
 """
 
 import importlib.util
+import os
 import sys
 from io import BytesIO
 from pathlib import Path
@@ -28,6 +29,8 @@ from pathlib import Path
 import pytest
 
 SCRIPT = Path(__file__).resolve().parent.parent / "scripts" / "luks-first-boot.py"
+# importlib execution needs the same library path as direct script execution.
+sys.path.insert(0, str(SCRIPT.parent))
 
 
 # ── Fakes ────────────────────────────────────────────────────────────────────
@@ -161,6 +164,11 @@ def _run(argv, serial_chunks=(), monitor_chunks=(), advance=10.0,
     stdout = FakeStdout()
     exit_codes = []
 
+    from lib import luks_secret
+    original_reader=luks_secret.read_passphrase
+    r,w=os.pipe()
+    os.write(w,argv.passphrase.encode()+b'\n');os.close(w)
+    luks_secret.read_passphrase=lambda:original_reader(r)
     saved = (sys.argv, sys.exit, sys.stdout)
     orig_modules = {name: sys.modules.get(name) for name in fake_modules}
     try:
@@ -179,6 +187,8 @@ def _run(argv, serial_chunks=(), monitor_chunks=(), advance=10.0,
         except SystemExit as e:  # connect() raises SystemExit directly
             exit_codes.append(e.code if isinstance(e.code, int) else 1)
     finally:
+        luks_secret.read_passphrase=original_reader
+        os.close(r)
         sys.argv, sys.exit, sys.stdout = saved
         for name, fake in fake_modules.items():
             if sys.modules.get(name) is fake:
@@ -196,7 +206,10 @@ def _run(argv, serial_chunks=(), monitor_chunks=(), advance=10.0,
 
 
 def _argv(timeout="120", contract_wait=None, passphrase="testpass"):
-    argv = ["luks-first-boot.py", "/tmp/serial.sock", "/tmp/monitor.sock", passphrase, timeout]
+    class ProtectedArgs(list):
+        pass
+    argv = ProtectedArgs(["luks-first-boot.py", "/tmp/serial.sock", "/tmp/monitor.sock", '--passphrase-stdin', timeout])
+    argv.passphrase=passphrase
     if contract_wait is not None:
         argv.append(contract_wait)
     return argv
