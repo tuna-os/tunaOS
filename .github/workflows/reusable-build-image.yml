@@ -435,7 +435,7 @@ jobs:
           # evidence-upload step below already runs under `if: always()`, so
           # dropping the swallow doesn't lose any diagnostics — it just makes
           # the check red when the boot actually failed.
-          sudo --preserve-env=TUNAOS_QCOW2_FILESYSTEM,TUNAOS_GDM_LOGIN_CHECK \
+          sudo --preserve-env=TUNAOS_QCOW2_FILESYSTEM,TUNAOS_GDM_LOGIN_CHECK,ImageOS,ImageVersion \
             ./scripts/corral-boot-gate.sh "$IMAGE" verify-out 300
 
       - name: Normalize PR verification evidence ownership
@@ -1698,7 +1698,7 @@ jobs:
           TUNAOS_GDM_LOGIN_CHECK: ${{ inputs.flavor == 'tuna' && '1' || '0' }}
         run: |
           mkdir -p verify-out
-          sudo --preserve-env=TUNAOS_QCOW2_FILESYSTEM,TUNAOS_GDM_LOGIN_CHECK \
+          sudo --preserve-env=TUNAOS_QCOW2_FILESYSTEM,TUNAOS_GDM_LOGIN_CHECK,ImageOS,ImageVersion \
             ./scripts/corral-boot-gate.sh "$TEST_IMAGE" verify-out 900
 
       - name: Build qcow2 from testing image (virgl)

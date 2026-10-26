@@ -98,7 +98,7 @@ report_software_gl() {
 
 report_managers() {
 	section "system manager environment"
-	systemctl show-environment 2>&1 || true
+	systemctl show-environment 2>&1 | grep -E "$ENV_RE" || true
 	section "user managers and sessions"
 	systemctl list-units --all --no-pager --no-legend 'user@*' 'user-runtime-dir@*' 2>&1 || true
 	loginctl list-sessions --no-legend 2>&1 || true
@@ -157,11 +157,11 @@ report_coredumps() {
 		coredumpctl list --no-pager 2>&1 | tail -n 30 || true
 		# `coredumpctl info` carries the whole stack trace the gate's journal
 		# filter used to cut down to the lines that matched `mutter`.
-		coredumpctl info --no-pager -1 /usr/bin/gnome-shell 2>&1 | head -n 200 || true
+		coredumpctl info --no-pager -1 /usr/bin/gnome-shell 2>&1 || true
 	fi
 	section "environment systemd-coredump recorded for the last gnome-shell crash"
 	# fc2e22bc...: the MESSAGE_ID systemd-coredump logs every dump under.
-	journalctl -b --no-pager -o json -n 1 \
+	journalctl -b --all --no-pager -o json -n 1 \
 		MESSAGE_ID=fc2e22bc6ee647b6b90729ab34a250b1 COREDUMP_EXE=/usr/bin/gnome-shell 2>/dev/null |
 		ENV_RE="$ENV_RE" python3 -c '
 import json, os, re, sys

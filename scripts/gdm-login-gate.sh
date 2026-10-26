@@ -152,7 +152,11 @@ CHECK_GREETER
 # environment, the DRM devices, the software-GL decision, any core dump.
 # Ten seconds of polling, no effect on what the gate decides.
 collect_greeter_evidence sample 40 greeter-graphics-evidence.txt
-wait_for_paint "${OUT}/gdm-greeter.png" 30
+if ! wait_for_paint "${OUT}/gdm-greeter.png" 30; then
+	echo "GDM greeter did not paint; collecting after-failure diagnostics" >&2
+	guest_gdm_diagnostics "$TEST_USER"
+	exit 1
+fi
 
 # Corral creates exactly one regular, non-sudo user in a disposable image
 # layer. Slower greeters may still be assigning keyboard focus when the first

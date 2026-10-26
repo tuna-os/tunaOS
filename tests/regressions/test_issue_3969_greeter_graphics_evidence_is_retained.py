@@ -120,7 +120,7 @@ def build_guest(tmp_path: Path, *, greeter_env, dmesg_lines):
         "systemctl",
         f'echo "systemctl $*" >>"{calls}"\n'
         'case "$1" in\n'
-        '  show-environment) echo "LANG=C.UTF-8" ;;\n'
+        '  show-environment) printf "%s\\n" "LANG=C.UTF-8" "AWS_SECRET_ACCESS_KEY=manager-hunter2" "LIBGL_ALWAYS_SOFTWARE=1" ;;\n'
         '  status) echo "tunaos-software-gl-detect.service - Detect whether TunaOS sessions need software rendering" ;;\n'
         "esac\n",
     )
@@ -140,7 +140,8 @@ def build_guest(tmp_path: Path, *, greeter_env, dmesg_lines):
         f'echo "coredumpctl $*" >>"{calls}"\n'
         'echo "           PID: 2709 (gnome-shell)"\n'
         'echo "#6  0x1 meta_render_device_egl_stream_create_egl_display (libmutter-17.so.0 + 0x153c84)"\n'
-        'echo "#13 0x2 meta_backend_native_init_basic (libmutter-17.so.0 + 0x1b35ee)"\n',
+        'echo "#13 0x2 meta_backend_native_init_basic (libmutter-17.so.0 + 0x1b35ee)"\n'
+        'for i in $(seq 1 250); do echo "module metadata frame $i"; done\n',
     )
 
     env = dict(os.environ)
@@ -175,6 +176,8 @@ def test_report_does_not_print_variables_it_has_no_reason_to_print(tmp_path):
     result, _ = report(tmp_path)
     assert "hunter2" not in result.stdout
     assert "SECRET_TOKEN" not in result.stdout
+    assert "AWS_SECRET_ACCESS_KEY" not in result.stdout
+    assert "manager-hunter2" not in result.stdout
 
 
 def test_report_ignores_other_users_processes(tmp_path):
@@ -210,6 +213,12 @@ def test_report_records_the_core_dump_environment_and_the_full_trace(tmp_path):
     assert "SECRET_TOKEN" not in after_dump
     assert "meta_render_device_egl_stream_create_egl_display" in result.stdout
     assert "meta_backend_native_init_basic" in result.stdout
+    assert "module metadata frame 250" in result.stdout
+
+
+def test_coredump_environment_journal_request_preserves_large_fields(tmp_path):
+    _, calls = report(tmp_path)
+    assert "--all" in calls.read_text()
 
 
 def test_detector_replay_shows_a_long_kernel_log_defeating_the_detector(tmp_path):
@@ -295,7 +304,7 @@ def run_failing_login(tmp_path, gate=GATE):
     shim(bindir, "id", 'exec /usr/bin/id "$@"\n')
     shim(bindir, "busctl", "exit 1\n")
     shim(bindir, "loginctl", "exit 0\n")
-    shim(bindir, "systemctl", 'if [[ "${1:-}" == is-active ]]; then exit 0; fi\nexit 0\n')
+    shim(bindir, "systemctl", 'if [[ "${1:-}" == show-environment ]]; then echo "AWS_SECRET_ACCESS_KEY=manager-hunter2"; fi\nif [[ "${1:-}" == is-active ]]; then exit 0; fi\nexit 0\n')
     env.update(
         CORRAL=str(bindir / "corral"),
         TUNAOS_GDM_TEST_PASSWORD="test-password",
@@ -322,6 +331,38 @@ def test_a_failed_login_keeps_the_greeter_report_from_before_and_after(tmp_path)
     assert "mode=sample samples=40" in before.read_text()
     assert "--- pid 100 comm=gnome-shell uid=42" in before.read_text()
     assert "mode=once samples=0" in after.read_text()
+    assert "manager-hunter2" not in after.read_text()
+
+def test_paint_failure_collects_after_failure_report(tmp_path):
+    out = tmp_path / "out"
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "corral").mkdir()
+    (out / "corral" / "result.json").write_text(
+        json.dumps({"ssh": {"host": "127.0.0.1", "port": 2222, "user": "root", "identityFile": "/tmp/id"}})
+    )
+    env, _ = build_guest(tmp_path, greeter_env=CRASH_ENV, dmesg_lines=1)
+    bindir = Path(env["PATH"].split(":", 1)[0])
+    shim(bindir, "corral", 'if [[ "$1" == screenshot ]]; then echo "blank frame"; return 0; fi\n')
+    shim(
+        bindir,
+        "ssh",
+        'while [[ $# -gt 0 ]]; do\n  case "$1" in\n    *@*) shift; break ;;\n    -F|-i|-p|-o) shift 2 ;;\n    -*) shift ;;\n    *) break ;;\n  esac\ndone\nexec "$@"\n',
+    )
+    shim(bindir, "id", 'exec /usr/bin/id "$@"\n')
+    shim(bindir, "busctl", "exit 1\n")
+    shim(bindir, "loginctl", "exit 0\n")
+    shim(bindir, "systemctl", 'if [[ "${1:-}" == is-active ]]; then exit 0; fi\nexit 0\n')
+    env.update(CORRAL=str(bindir / "corral"), TUNAOS_GDM_TEST_PASSWORD="test-password", TUNAOS_GDM_ACCOUNTS_DIR=str(tmp_path / "accts"))
+    result = subprocess.run(
+        ["bash", str(GATE), "testvm", str(out), "tuna-ci-login"],
+        env=env, capture_output=True, text=True, check=False,
+    )
+    assert result.returncode == 1
+    assert "no painted frame appeared" in result.stderr
+    after = out / "greeter-graphics-evidence-after-failure.txt"
+    assert after.is_file()
+    assert "mode=once samples=0" in after.read_text()
+
 
 
 def test_evidence_collection_cannot_fail_the_gate(tmp_path):
