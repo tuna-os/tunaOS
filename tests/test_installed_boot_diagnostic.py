@@ -73,7 +73,7 @@ def test_el10_initramfs_evidence_scales_with_realistic_archive():
         cpio('usr/share/plymouth/plymouthd.defaults', b'[Daemon]\nTheme=other\n'),
         cpio('usr/share/plymouth/themes/spinner/spinner.plymouth',
              b'[Plymouth Theme]\nModuleName=script\nScriptFile=/usr/share/plymouth/themes/spinner/spinner.script\n'),
-        cpio('usr/share/plymouth/themes/spinner/spinner.script', b'Image.Text(\"password\")\n'),
+        cpio('usr/share/plymouth/themes/spinner/spinner.script', b'Image.Text("password")\n'),
         cpio('usr/lib64/plymouth/script.so'), cpio('usr/lib64/plymouth/label.so'),
         cpio('usr/share/fonts/dejavu/DejaVuSans.ttf'),
         cpio('usr/lib/systemd/system/systemd-ask-password-plymouth.path'),
@@ -94,7 +94,6 @@ def test_el10_initramfs_evidence_scales_with_realistic_archive():
     assert result['theme_selection'] == 'spinner'
     assert all(result['theme_evidence'].values())
 
-
     assert set(result['components']) >= {
         'password_agent', 'ask_password_plymouth_path', 'ask_password_plymouth_service'}
 
@@ -102,6 +101,44 @@ def test_el10_initramfs_evidence_scales_with_realistic_archive():
     entries = b''.join(cpio(f'usr/share/empty/{index:04d}.dat') for index in range(3095))
     assert len(d.archive_metadata(entries, deadline=time.monotonic() + 8)['components']) == 0
     assert time.monotonic() - started < 8
+
+
+def test_wrong_basename_theme_definition_is_not_selected():
+    entries = [
+        cpio('etc/plymouth/plymouthd.conf', b'[Daemon]\nTheme=spinner\n'),
+        cpio('usr/share/plymouth/themes/spinner/other.plymouth',
+             b'[Plymouth Theme]\nModuleName=script\nScriptFile=/usr/share/plymouth/themes/spinner/spinner.script\n'),
+        cpio('usr/share/plymouth/themes/spinner/spinner.script'),
+        cpio('usr/lib64/plymouth/script.so'),
+    ]
+    result = d.archive_metadata(b''.join(entries))
+    assert result['theme_selection'] == 'spinner'
+    assert not result['theme_evidence']['theme_file']
+    assert not result['theme_evidence']['script_plugin']
+    assert not result['theme_evidence']['script_file']
+
+
+@pytest.mark.parametrize('token', [
+    'rd.luks.uuid=luks-01234567-89ab-cdef-0123-456789abcdef',
+    'rd.luks.name=luks-01234567-89ab-cdef-0123-456789abcdef=cryptroot',
+    'rd.luks.options=luks-01234567-89ab-cdef-0123-456789abcdef=discard,no-read-workqueue',
+])
+def test_supported_luks_options_redact_their_values(token):
+    result = d.safe_options(token)
+    assert result['safe'] == [token.split('=')[0] + '=<redacted>']
+    assert result['redacted_count'] == 0
+    assert '01234567' not in json.dumps(result) and 'cryptroot' not in json.dumps(result)
+
+
+def test_unknown_and_malformed_luks_options_are_redacted():
+    result = d.safe_options(
+        'rd.luks.SECRET rd.luks.SECRET=value rd.luks.name rd.luks.uuid=SECRET '
+        'rd.luks.key=SECRET rd.luks=2')
+    assert result['safe'] == []
+    assert result['redacted_count'] == 6
+    assert 'SECRET' not in json.dumps(result) and 'rd.luks.SECRET' not in json.dumps(result)
+
+
 @pytest.mark.parametrize('member', [
     'usr/share/plymouth/themes/other/spinner.script',
     'usr/share/plymouth/themes/spinner/spinner.script',
@@ -174,18 +211,19 @@ def test_builtin_absent_and_module_are_distinct():
 def test_argument_value_redaction():
     result = d.safe_options(
         'rhgb quiet console=ttyS1,115200n8 console=tty0 console=SECRET drm.debug=0x1e '
-        'rd.luks.key=SECRET rd.luks.name=UUID=secret systemd.show_status=1 '
+        'rd.luks.key=SECRET rd.luks.name=luks-01234567-89ab-cdef-0123-456789abcdef=cryptroot '
+        'rd.luks.SECRET rd.luks.SECRET=value systemd.show_status=1 '
         'plymouth.enable=0 rd.plymouth=0 rd.driver.blacklist=nouveau '
         'rd.driver.blacklist=SECRET video=HDMI-A-1:1920x1080 video=SECRET:1920x1080 '
         'vt.global_cursor_default=0 fbcon=nodefer nomodeset splash root=/dev/disk/by-uuid/SECRET')
     assert result['safe'] == [
         'rhgb', 'quiet', 'console=ttyS1,115200n8', 'console=tty0', 'drm.debug=0x1e',
-        'rd.luks.key=<redacted>', 'rd.luks.name=<redacted>', 'systemd.show_status=1',
+        'rd.luks.name=<redacted>', 'systemd.show_status=1',
         'plymouth.enable=0', 'rd.plymouth=0', 'rd.driver.blacklist=nouveau',
         'video=HDMI-A-1:1920x1080', 'vt.global_cursor_default=0', 'fbcon=nodefer',
         'nomodeset', 'splash', 'root=<redacted>']
-    assert result['redacted_count'] == 3
-    assert 'SECRET' not in json.dumps(result) and 'UUID=secret' not in json.dumps(result)
+    assert result['redacted_count'] == 6
+    assert 'SECRET' not in json.dumps(result) and 'cryptroot' not in json.dumps(result)
 
 
 class Guest:
@@ -229,15 +267,16 @@ def test_secret_argument_and_partition_label_are_redacted_in_report():
     guest.files['/loader/entries/test.conf'] = (
         b'linux /vmlinuz-6.12.0-278.el10.x86_64\n'
         b'initrd /initramfs-6.12.0-278.el10.x86_64\n'
-        b'options quiet console=SECRET root=SECRET\n')
+        b'options quiet console=SECRET root=SECRET rd.luks.SECRET rd.luks.SECRET=value\n')
     guest.labels['/dev/sda3'] = 'TOKEN_SECRET'
 
     result = d.inspect_boot(guest)
     serialized = json.dumps(result)
 
     assert 'SECRET' not in serialized
+    assert 'rd.luks.SECRET' not in serialized
     assert result['candidates'][0]['options']['safe'] == ['quiet', 'root=<redacted>']
-    assert result['candidates'][0]['options']['redacted_count'] == 1
+    assert result['candidates'][0]['options']['redacted_count'] == 3
 
 
 def test_refusal_report_redacts_untrusted_partition_label(tmp_path, monkeypatch):

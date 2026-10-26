@@ -79,6 +79,10 @@ def qcow_header(path):
         require(len(header) >= 104 and struct.unpack_from('>Q', header, 72)[0] == 0,
                 'unsupported_qcow_features')
 
+LUKS_ID = r'(?:luks-)?[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}'
+LUKS_NAME = r'[A-Za-z0-9_.+-]{1,64}'
+LUKS_OPTION = r'(?:discard|no-read-workqueue|no-write-workqueue|same-cpu-crypt|submit-from-crypt-cpus)'
+
 
 def safe_options(raw):
     require(len(raw) <= 16384, 'options_limit')
@@ -89,14 +93,19 @@ def safe_options(raw):
             safe.append(token)
         elif re.fullmatch(r'drm\.debug=0x[0-9a-fA-F]{1,2}', token):
             safe.append(token)
-        elif token.startswith('root=') or token.startswith('rd.luks.'):
+        elif token.startswith('root='):
             name, separator, _ = token.partition('=')
-            if token.startswith('rd.luks.') and not separator:
-                safe.append(name)
-            elif separator:
-                safe.append(name + '=<redacted>')
-            else:
-                safe.append(name)
+            safe.append(name + '=<redacted>' if separator else name)
+        elif token == 'rd.luks.allow-discards' or re.fullmatch(r'rd\.luks(?:=|\.crypttab=)[01]', token):
+            safe.append(token)
+        elif re.fullmatch(rf'rd\.luks\.uuid={LUKS_ID}', token):
+            safe.append('rd.luks.uuid=<redacted>')
+        elif re.fullmatch(rf'rd\.luks\.name={LUKS_ID}={LUKS_NAME}', token):
+            safe.append('rd.luks.name=<redacted>')
+        elif re.fullmatch(rf'rd\.luks\.options={LUKS_ID}={LUKS_OPTION}(?:,{LUKS_OPTION})*', token):
+            safe.append('rd.luks.options=<redacted>')
+        elif token.startswith('rd.luks.'):
+            redacted += 1
         elif re.fullmatch(r'console=(?:tty\d{1,2}|ttyS\d{1,2}|ttyAMA\d{1,2}|ttyUSB\d{1,2}|hvc\d{1,2}|xvc\d{1,2})(?:,\d{4,7}[neo][0-9]?)?', token):
             safe.append(token)
         elif re.fullmatch(r'plymouth\.(?:enable|debug)=[01]|plymouth\.ignore-serial-consoles', token):
@@ -199,8 +208,8 @@ def archive_metadata(blob, *, deadline=None):
     pos = 0
     builtin, dependencies, module_files = set(), set(), set()
     module_metadata_seen = False
-    theme_files, theme_definitions = set(), {}
     theme_member_paths = set()
+    theme_definitions = {}
     theme_settings = {path: set() for path in THEME_CONF}
     plugins, fonts = set(), False
     while pos < len(pending):
@@ -279,11 +288,9 @@ def archive_metadata(blob, *, deadline=None):
             match = THEME_PATH.fullmatch(name)
             if match:
                 report['theme_files'] += 1
-                theme_files.add((match.group(1), match.group(2), match.group(3)))
                 theme_member_paths.add(name)
                 if match.group(3) == 'plymouth' and size <= 65536:
-                    theme_definitions.setdefault(match.group(1), []).append(
-                        bytes(content).decode('utf-8', errors='replace'))
+                    theme_definitions[name] = bytes(content).decode('utf-8', errors='replace')
             if name in THEME_CONF and size <= 65536:
                 theme_settings[name].update(re.findall(
                     r'^Theme\s*=\s*([A-Za-z0-9_-]+)\s*$', bytes(content).decode('utf-8', errors='replace'), re.M))
@@ -308,14 +315,12 @@ def archive_metadata(blob, *, deadline=None):
     theme_values = theme_settings[THEME_CONF[0]] or theme_settings[THEME_CONF[1]]
     if len(theme_values) == 1:
         selected_theme = next(iter(theme_values))
-        definitions = theme_definitions.get(selected_theme, [])
-        module_names, script_files = set(), set()
-        for text in definitions:
-            module_names.update(re.findall(r'^ModuleName\s*=\s*([A-Za-z0-9_-]+)\s*$', text, re.M))
-            script_files.update(re.findall(r'^ScriptFile\s*=\s*([A-Za-z0-9_./-]+)\s*$', text, re.M))
+        definition_path = f'usr/share/plymouth/themes/{selected_theme}/{selected_theme}.plymouth'
+        text = theme_definitions.get(definition_path)
+        module_names = set(re.findall(r'^ModuleName\s*=\s*([A-Za-z0-9_-]+)\s*$', text, re.M)) if text else set()
+        script_files = set(re.findall(r'^ScriptFile\s*=\s*([A-Za-z0-9_./-]+)\s*$', text, re.M)) if text else set()
         report['theme_selection'] = selected_theme
-        report['theme_evidence']['theme_file'] = any(theme == selected_theme and ext == 'plymouth'
-                                                       for theme, _, ext in theme_files)
+        report['theme_evidence']['theme_file'] = definition_path in theme_definitions
         report['theme_evidence']['script_plugin'] = 'script' in module_names and 'script' in plugins
         report['theme_evidence']['script_file'] = len(script_files) == 1 and (
             _script_member_path(next(iter(script_files)), selected_theme) in theme_member_paths)

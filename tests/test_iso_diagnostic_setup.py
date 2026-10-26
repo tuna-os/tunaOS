@@ -114,6 +114,56 @@ def test_host_access_refuses_when_acl_tools_are_missing(tmp_path):
     assert result.returncode == 77
     assert 'ACL tools are unavailable' in result.stderr
 
+def test_unreadable_module_acl_is_granted_and_removed(tmp_path):
+    modules = tmp_path/'modules'
+    module = modules/'kernel/drivers/gpu/virtio-gpu.ko.xz'
+    module.parent.mkdir(parents=True)
+    module.write_bytes(b'module')
+    module.chmod(0)
+    state = tmp_path/'state'
+    state.mkdir()
+    log = tmp_path/'acl.log'
+    script = ROOT/'scripts/diagnostic-host-access.sh'
+    command = f'''
+source "{script}"
+runner_uid=23456
+modules="{modules}"
+state="{state}"
+find() {{
+    if [[ " $* " == *" -readable "* ]]; then
+        printf '%s\\\\n' "$MODULE_FILE"
+    else
+        command find "$@"
+    fi
+}}
+grant_applied=0
+sudo() {{
+    case "$2" in
+        getfacl)
+            if ((grant_applied)); then printf 'user:%s:r-x\\\\n' "$runner_uid"; fi
+            ;;
+        setfacl)
+            printf '%s\\\\n' "$*" >> "$ACL_LOG"
+            if [[ "$*" == *" -m "* ]]; then grant_applied=1; fi
+            return 0
+            ;;
+        *) return 0 ;;
+    esac
+}}
+grant_module_acl
+[[ -f "$state/modules" ]]
+cleanup
+[[ ! -e "$state" ]]
+'''
+    result = subprocess.run(
+        ['/bin/bash', '-c', command],
+        env={**os.environ, 'MODULE_FILE': str(module), 'ACL_LOG': str(log)},
+        capture_output=True, text=True, timeout=5)
+    assert result.returncode == 0, result.stderr
+    actions = log.read_text()
+    assert '-m u:23456:rX' in actions
+    assert '-x u:23456' in actions
+
 
 @pytest.mark.parametrize('mode,rc', [('true', 0), ('false', 0), ('true', 100)])
 def test_actual_host_setup_passes_package_selection_and_propagates_apt_failure(tmp_path, mode, rc):

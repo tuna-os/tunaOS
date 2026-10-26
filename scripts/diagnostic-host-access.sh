@@ -36,45 +36,58 @@ cleanup() {
 	return "$failed"
 }
 
-case "${1:-}" in
-prepare)
-	[[ "$runner_uid" != 0 ]] || refuse 'must run as the non-root runner'
-	command -v setfacl >/dev/null && command -v getfacl >/dev/null || refuse 'ACL tools are unavailable'
-	sudo -n true || refuse 'non-interactive sudo is unavailable'
-	[[ -c /dev/kvm ]] || refuse '/dev/kvm is unavailable'
-	getent group kvm >/dev/null || refuse 'kvm group is unavailable'
-	[[ "$(stat -c '%G' /dev/kvm)" == kvm ]] || refuse '/dev/kvm is not owned by the kvm group'
-	kvm_mode="$(stat -c '%a' /dev/kvm)"
-	(((8#$kvm_mode & 0060) == 0060)) || refuse '/dev/kvm does not grant group read/write; no device-mode change is allowed'
-	[[ -r /sys/fs/cgroup/cgroup.controllers ]] || refuse 'cgroup v2 is unavailable'
-	systemctl --version >/dev/null || refuse 'systemd is unavailable'
-	[[ -f "$kernel" && -d "$modules" ]] || refuse 'the exact host kernel or module tree is unavailable'
-	[[ ! -e "$state" ]] || refuse 'stale temporary ACL state exists'
-	umask 077
-	mkdir "$state"
-	trap 'status=$?; if ((status)); then trap - EXIT; cleanup || echo "::error::Temporary supermin ACL cleanup failed" >&2; fi; exit "$status"' EXIT
-	if [[ ! -r "$kernel" ]]; then
-		acl="$(sudo -n getfacl -cp -- "$kernel")" || refuse 'cannot inspect the exact supermin kernel ACL'
-		[[ "$acl" != *"user:${runner_uid}:"* ]] || refuse 'pre-existing runner ACL on the supermin kernel prevents safe cleanup'
-		: >"$state/kernel"
-		sudo -n setfacl -m "u:${runner_uid}:r" -- "$kernel" || refuse 'cannot grant runner-only access to the exact supermin kernel'
-	fi
-	if find "$modules" -type f -name '*.ko*' ! -readable -print -quit | read -r unreadable && [[ -n "${unreadable:-}" ]]; then
-		acl="$(sudo -n getfacl -R -cp -- "$modules")" || refuse 'cannot inspect the exact supermin module-tree ACLs'
-		[[ "$acl" != *"user:${runner_uid}:"* ]] || refuse 'pre-existing runner ACLs in the supermin module tree prevent safe cleanup'
-		: >"$state/modules"
-		sudo -n setfacl -n -R -m "u:${runner_uid}:rX" -- "$modules" || refuse 'cannot grant runner-only read/traverse access to the exact supermin module tree'
-	fi
-	[[ -r "$kernel" && -r "$modules" && -x "$modules" ]] || refuse 'supermin inputs remain unreadable to the runner'
-	unreadable="$(find "$modules" -type f -name '*.ko*' ! -readable -print -quit)" || refuse 'cannot validate module-tree readability'
-	[[ -z "$unreadable" ]] || refuse 'some exact supermin modules remain unreadable to the runner'
-	trap - EXIT
-	;;
-cleanup)
-	[[ -d "$state" ]] || exit 0
-	cleanup || refuse 'temporary supermin ACL cleanup failed'
-	;;
-*)
-	refuse 'expected prepare or cleanup'
-	;;
-esac
+grant_module_acl() {
+	local unreadable acl
+	unreadable="$(find "$modules" -type f -name '*.ko*' ! -readable -print -quit)" ||
+		refuse 'cannot inspect exact supermin modules'
+	[[ -n "$unreadable" ]] || return 0
+	acl="$(sudo -n getfacl -R -cp -- "$modules")" || refuse 'cannot inspect the exact supermin module-tree ACLs'
+	[[ "$acl" != *"user:${runner_uid}:"* ]] || refuse 'pre-existing runner ACLs in the supermin module tree prevent safe cleanup'
+	: >"$state/modules"
+	sudo -n setfacl -n -R -m "u:${runner_uid}:rX" -- "$modules" ||
+		refuse 'cannot grant runner-only read/traverse access to the exact supermin module tree'
+}
+
+main() {
+	case "${1:-}" in
+	prepare)
+		[[ "$runner_uid" != 0 ]] || refuse 'must run as the non-root runner'
+		command -v setfacl >/dev/null && command -v getfacl >/dev/null || refuse 'ACL tools are unavailable'
+		sudo -n true || refuse 'non-interactive sudo is unavailable'
+		[[ -c /dev/kvm ]] || refuse '/dev/kvm is unavailable'
+		getent group kvm >/dev/null || refuse 'kvm group is unavailable'
+		[[ "$(stat -c '%G' /dev/kvm)" == kvm ]] || refuse '/dev/kvm is not owned by the kvm group'
+		kvm_mode="$(stat -c '%a' /dev/kvm)"
+		(((8#$kvm_mode & 0060) == 0060)) || refuse '/dev/kvm does not grant group read/write; no device-mode change is allowed'
+		[[ -r /sys/fs/cgroup/cgroup.controllers ]] || refuse 'cgroup v2 is unavailable'
+		systemctl --version >/dev/null || refuse 'systemd is unavailable'
+		[[ -f "$kernel" && -d "$modules" ]] || refuse 'the exact host kernel or module tree is unavailable'
+		[[ ! -e "$state" ]] || refuse 'stale temporary ACL state exists'
+		umask 077
+		mkdir "$state"
+		trap 'status=$?; if ((status)); then trap - EXIT; cleanup || echo "::error::Temporary supermin ACL cleanup failed" >&2; fi; exit "$status"' EXIT
+		if [[ ! -r "$kernel" ]]; then
+			acl="$(sudo -n getfacl -cp -- "$kernel")" || refuse 'cannot inspect the exact supermin kernel ACL'
+			[[ "$acl" != *"user:${runner_uid}:"* ]] || refuse 'pre-existing runner ACL on the supermin kernel prevents safe cleanup'
+			: >"$state/kernel"
+			sudo -n setfacl -m "u:${runner_uid}:r" -- "$kernel" || refuse 'cannot grant runner-only access to the exact supermin kernel'
+		fi
+		grant_module_acl
+		[[ -r "$kernel" && -r "$modules" && -x "$modules" ]] || refuse 'supermin inputs remain unreadable to the runner'
+		unreadable="$(find "$modules" -type f -name '*.ko*' ! -readable -print -quit)" || refuse 'cannot validate module-tree readability'
+		[[ -z "$unreadable" ]] || refuse 'some exact supermin modules remain unreadable to the runner'
+		trap - EXIT
+		;;
+	cleanup)
+		[[ -d "$state" ]] || exit 0
+		cleanup || refuse 'temporary supermin ACL cleanup failed'
+		;;
+	*)
+		refuse 'expected prepare or cleanup'
+		;;
+	esac
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+	main "$@"
+fi
