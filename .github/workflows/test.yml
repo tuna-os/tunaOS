@@ -47,6 +47,7 @@ on:
       - 'custom/**'
       - 'files/**'
       - 'Containerfile*'
+      - 'toolchain/**'
       - '.containerignore'
       - '.dockerignore'
       - 'tunaos.toml'
@@ -58,6 +59,10 @@ on:
       - 'renovate.json'
       - 'Justfile'
       - 'just/**'
+      # Read by tests/test_r2_build_dependency_inventory.py: the R2 dependency
+      # table must match the URLs the build inputs read, so an edit to either
+      # side re-runs it. The STE linter skips tables, so `ste` cannot gate it.
+      - 'PACKAGE-SOURCING.md'
       # Read by tests/bats/test_niri_dms_payload.bats: zirconium's factory
       # profile.d scripts, which install-zirconium.sh copies whole. A snapshot
       # refresh that adds a script calling a tool we do not ship must fail here.
@@ -86,6 +91,64 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  bootc-candidate-compile:
+    name: bootc candidate compile (${{ matrix.family }})
+    # Fixed branch scope opts into this existing PR/manual workflow.
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/candidate/composefs-bootstrap') ||
+      (github.event_name == 'pull_request' && github.head_ref == 'candidate/composefs-bootstrap')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        family: [arch, debian]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build candidate source toolchain only
+        env:
+          CANDIDATE_FAMILY: ${{ matrix.family }}
+        run: |
+          set -euo pipefail
+          # Containerfile defaults pin both bases by digest. No registry login,
+          # export, artifact upload, host mounts or privilege/security overrides.
+          read_pin() {
+            python3 - "$1" <<'PYVERSION'
+          import pathlib, re, sys
+          text = pathlib.Path('image-versions.yaml').read_text()
+          values = re.findall(r'^  ' + re.escape(sys.argv[1]) + r': "(v[0-9]+(?:\.[0-9]+){1,2})"$', text, re.M)
+          if len(values) != 1:
+              raise SystemExit('expected one reviewed version pin')
+          print(values[0])
+          PYVERSION
+          }
+          bootupd=$(read_pin bootupd)
+          args=(--build-arg TUNAOS_BOOTC_CANDIDATE=1
+                --build-arg "BOOTUPD_VERSION=$bootupd")
+          case "$CANDIDATE_FAMILY" in
+            arch)
+              file=Containerfile.arch
+              target=bootc-builder
+              ;;
+            debian)
+              file=toolchain/Containerfile.debian
+              target=builder
+              ostree=$(read_pin ostree)
+              composefs=$(read_pin composefs)
+              args+=(--build-arg BUILD_OSTREE=1
+                     --build-arg "OSTREE_VERSION=$ostree"
+                     --build-arg "COMPOSEFS_VERSION=$composefs")
+              ;;
+            *) echo "Unsupported candidate family" >&2; exit 1 ;;
+          esac
+          timeout 3000 docker build --file "$file" --target "$target" \
+            "${args[@]}" --tag "localhost/bootc-candidate:${CANDIDATE_FAMILY}" .
+
   primary-config-python310:
     name: Primary config (Python 3.10)
     runs-on: ubuntu-latest
@@ -158,7 +221,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup TunaOS Build Environment
-        uses: projectbluefin/actions/bootc-build/setup-runner@d18642a8b4b325c2551eabd9a65c1ad12b4ebb30 # v1 as of 2026-07-02
+        uses: projectbluefin/actions/bootc-build/setup-runner@209517dda44829f126e25da28f11245c34458ac3 # v1 as of 2026-07-02
         with:
           storage-backend: ""
           update-podman: "false"

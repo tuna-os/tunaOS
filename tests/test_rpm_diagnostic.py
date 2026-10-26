@@ -1,9 +1,12 @@
 """Offline diagnostic boundary tests: no Docker, DNS, or native transactions."""
+import errno
+import hashlib
 import importlib.util
 import json
 import socket
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -152,6 +155,36 @@ def test_cleanup_continues_after_timeout(monkeypatch, tmp_path):
     assert ('docker', 'rm', '--force', 'workload') in calls
     assert ('docker', 'network', 'rm', 'internal') in calls
     assert len(json.loads((tmp_path / 'cleanup.json').read_text())) == 6
+
+
+def test_evidence_write_failure_does_not_stop_removals(monkeypatch, tmp_path):
+    calls = []
+    def run(*args, output_path=None, **_kwargs):
+        calls.append(args)
+        if output_path is not None:
+            output_path.write_text('log')
+        return SimpleNamespace(returncode=0, stdout='', stderr='')
+    real_write = Path.write_text
+    def full_disk(self, *args, **kwargs):
+        if self.name == 'cleanup.json':
+            raise OSError(errno.ENOSPC, 'No space left on device')
+        return real_write(self, *args, **kwargs)
+    monkeypatch.setattr(runner, 'run', run)
+    monkeypatch.setattr(Path, 'write_text', full_disk)
+    assert runner.cleanup(tmp_path, ['proxy', 'workload'], ['internal', 'egress']) is False
+    for removal in (('docker', 'rm', '--force', 'workload'), ('docker', 'rm', '--force', 'proxy'),
+                    ('docker', 'network', 'rm', 'egress'), ('docker', 'network', 'rm', 'internal')):
+        assert removal in calls
+
+
+def test_log_and_removal_output_write_failures_do_not_stop_removals(monkeypatch, tmp_path):
+    calls = []
+    def run(*args, **_kwargs):
+        calls.append(args)
+        raise OSError(errno.ENOSPC, 'No space left on device')
+    monkeypatch.setattr(runner, 'run', run)
+    assert runner.cleanup(tmp_path, ['proxy', 'workload'], ['internal']) is False
+    assert len(calls) == 5
 
 
 def test_controls_fail_on_generic_proxy_error(monkeypatch):
@@ -368,3 +401,69 @@ def test_epel_repo_is_added_after_bootstrap_and_passes_the_consumer_check(tmp_pa
     assert name == 'epel.repo' and list(keys) == [key.as_uri()]
     assert 'file:///input/epel.gpg' in text
     assert 'epel.gpg' in (HERE / 'run_rpm_rehearsal.py').read_text()  # key is part of hashed inputs
+
+
+def reviewed_root(tmp_path, configured=None, pinned=None):
+    """A copy of the two plan inputs; optionally move the configured or the pinned base."""
+    (tmp_path / 'scripts/diagnostics').mkdir(parents=True)
+    config = json.loads((ROOT / 'scripts/diagnostics/rpm_rehearsal.json').read_text())
+    source = (ROOT / 'tunaos.toml').read_text()
+    if configured is not None:
+        current = tomllib.loads(source)['variants']['skipjack']['base_image']
+        source = source.replace(current, f'quay.io/centos-bootc/centos-bootc:stream10@sha256:{configured}', 1)
+    if pinned is not None:
+        config['base'] = f'quay.io/centos-bootc/centos-bootc@sha256:{pinned}'
+    (tmp_path / 'tunaos.toml').write_text(source)
+    (tmp_path / 'scripts/diagnostics/rpm_rehearsal.json').write_text(json.dumps(config))
+    return tmp_path
+
+
+def test_plan_records_a_renovate_bump_of_the_configured_base(tmp_path):
+    root = reviewed_root(tmp_path, configured='a' * 64)
+    value = runner.plan(root)
+    assert value['configured_base_matches_pinned'] is False
+    assert value['configured_base_digest'] == 'sha256:' + 'a' * 64
+    assert value['pinned_base_digest'] == value['base'].split('@')[1]
+    assert value['base'].endswith('ec1bd8cb6479d1f2f61c85372afce319b932b6b1f671648f0887e9da01e48272')
+
+
+def test_plan_reports_a_match_when_production_is_on_the_pinned_base(tmp_path):
+    pinned = json.loads((ROOT / 'scripts/diagnostics/rpm_rehearsal.json').read_text())['base'].split('@sha256:')[1]
+    value = runner.plan(reviewed_root(tmp_path, configured=pinned))
+    assert value['configured_base_matches_pinned'] is True
+
+
+@pytest.mark.parametrize('pinned', ['b' * 64, 'B' * 64, 'b' * 63, ''])
+def test_changing_the_pinned_base_without_its_review_hash_still_fails(tmp_path, pinned):
+    with pytest.raises(ValueError, match='pinned diagnostic base'):
+        runner.plan(reviewed_root(tmp_path, pinned=pinned))
+
+
+def test_a_new_pinned_base_needs_its_hash_updated_together(tmp_path):
+    root = reviewed_root(tmp_path, pinned='c' * 64)
+    path = root / 'scripts/diagnostics/rpm_rehearsal.json'
+    config = json.loads(path.read_text())
+    config['base_sha256'] = hashlib.sha256(config['base'].encode()).hexdigest()
+    path.write_text(json.dumps(config))
+    assert runner.plan(root)['pinned_base_digest'] == 'sha256:' + 'c' * 64
+
+
+def test_pinned_base_must_be_a_digest_of_the_reviewed_image(tmp_path):
+    root = reviewed_root(tmp_path)
+    path = root / 'scripts/diagnostics/rpm_rehearsal.json'
+    config = json.loads(path.read_text())
+    for bad in ('quay.io/centos-bootc/centos-bootc:stream10', 'quay.io/evil/image@sha256:' + 'a' * 64):
+        config['base'] = bad
+        config['base_sha256'] = hashlib.sha256(bad.encode()).hexdigest()
+        path.write_text(json.dumps(config))
+        with pytest.raises(ValueError, match='pinned diagnostic base'):
+            runner.plan(root)
+
+
+def test_policy_drift_still_fails_the_plan(tmp_path):
+    root = reviewed_root(tmp_path)
+    text = (root / 'tunaos.toml').read_text()
+    (root / 'tunaos.toml').write_text(text.replace('[desktops.gnome.packages.el10]\n',
+                                                   '[desktops.gnome.packages.el10]\nextra_probe = true\n', 1))
+    with pytest.raises(ValueError, match='EL10 desktop policy changed'):
+        runner.plan(root)

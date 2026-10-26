@@ -59,15 +59,23 @@ def plan(root=ROOT) -> dict:
     policy = source['desktops']['gnome']['packages']['el10']
     if hashlib.sha256(json.dumps(policy, sort_keys=True, separators=(',', ':')).encode()).hexdigest() != config['policy_sha256']:
         raise ValueError('EL10 desktop policy changed; review this diagnostic inventory again')
-    base = source['variants']['skipjack']['base_image']
-    if base.split('@')[1] != config['base'].split('@')[1]:
-        raise ValueError('configured Skipjack base changed; review the immutable test cell')
+    # The tested base is a reviewed, immutable cell: it never follows production.
+    # Renovate bumps of the configured base must not turn this gate red, so the
+    # difference is recorded in every run's evidence instead of failing the plan.
+    if (not re.fullmatch(r'quay\.io/centos-bootc/centos-bootc@sha256:[0-9a-f]{64}', config['base'])
+            or hashlib.sha256(config['base'].encode()).hexdigest() != config['base_sha256']):
+        raise ValueError('pinned diagnostic base does not match its reviewed hash; review the immutable test cell')
+    configured = source['variants']['skipjack']['base_image']
+    configured_digest = configured.split('@')[1] if '@' in configured else ''
+    pinned_digest = config['base'].split('@')[1]
     check_epel(config)
     required = policy['required']
     if len(required) != 28 or len(set(required)) != 28:
         raise ValueError('expected the reviewed 28-name required inventory')
     return {**config, 'packages': [*required, 'gnome50-el10-compat'],
-            'untested_full_desktop_policy': policy, 'production_eligible': False}
+            'untested_full_desktop_policy': policy, 'production_eligible': False,
+            'configured_base_matches_pinned': configured_digest == pinned_digest,
+            'configured_base_digest': configured_digest, 'pinned_base_digest': pinned_digest}
 
 
 FETCH_HOSTS = frozenset({'raw.githubusercontent.com', 'www.centos.org', 'dl.fedoraproject.org', 'github.com',
@@ -207,6 +215,7 @@ def verify_proxy_inspect(details: dict, internal: str, egress: str) -> None:
 
 def cleanup(output: Path, containers: list[str], networks: list[str]) -> bool:
     events = []
+    evidence_ok = True
     for kind, names in (('container', containers), ('network', networks)):
         for name in reversed(names):
             commands = ([['docker', 'logs', name], ['docker', 'rm', '--force', name]]
@@ -226,8 +235,12 @@ def cleanup(output: Path, containers: list[str], networks: list[str]) -> bool:
                 except (OSError, subprocess.SubprocessError) as error:
                     event['error'] = type(error).__name__
                 events.append(event)
-                (output / 'cleanup.json').write_text(json.dumps(events, indent=2))
-    return all(event['ok'] for event in events)
+                try:
+                    (output / 'cleanup.json').write_text(json.dumps(events, indent=2))
+                except OSError:
+                    # A full evidence disk must not stop the removals that follow.
+                    evidence_ok = False
+    return evidence_ok and all(event['ok'] for event in events)
 
 
 def summarize_proxy(log: str, controls: dict) -> dict:
@@ -332,6 +345,9 @@ def execute(output: Path) -> None:
             (output / 'diagnostic-result.json').write_text(json.dumps({
                 'state': 'native-passed-cleanup-pending', 'scope': config['scope'], 'production_eligible': False,
                 'proxy': summary, 'reference': config['reference'],
+                'configured_base_matches_pinned': config['configured_base_matches_pinned'],
+                'configured_base_digest': config['configured_base_digest'],
+                'pinned_base_digest': config['pinned_base_digest'],
             }, indent=2))
         finally:
             # Remove only UUID-named resources created by this invocation; never
