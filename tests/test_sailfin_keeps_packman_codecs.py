@@ -102,24 +102,3 @@ def test_the_ffmpeg_cli_is_pinned_to_the_stream_packman_ships() -> None:
     assert not re.search(r"^\s+ffmpeg \\\\$", BASE, re.M)
     # the ownership check covers the CLI glob alongside the sonames
     assert "'ffmpeg-[0-9]'" in SCRIPT
-
-
-def test_dup_keeps_opensuse_vlc_core_out_of_unsatisfiable_packman_builds() -> None:
-    """Qualification run 40223961920 (sailfin:gnome, all three attempts):
-
-        nothing provides 'libmad.so.0' needed by vlc-noX-3.0.24-1699.9.pm.3
-        nothing provides 'libliveMedia.so.120()(64bit)' ...
-
-    Packman Essentials republished vlc-noX needing libraries only its other
-    repositories carry. Reproduced in a Tumbleweed container with the same repo
-    configuration: the dup exits 4 unless vlc-noX, libvlc5 and libvlccore9 are
-    locked, and exits 0 ("Nothing to do") with them locked. vlc-codecs is still
-    Packman-owned afterwards."""
-    lock = 'addlock "${_td_vlc_core[@]}"'
-    unlock = 'removelock "${_td_vlc_core[@]}"'
-    assert "_td_vlc_core=(vlc-noX libvlc5 libvlccore9)" in SCRIPT
-    assert SCRIPT.index(lock) < SCRIPT.index("dup --from packman-essentials") \
-        < SCRIPT.index(unlock)
-    # The lock must not outlive the dup, or the forced vlc-codecs install and
-    # the vendor re-check below it would run under it.
-    assert SCRIPT.index(unlock) < SCRIPT.index("rpm -q --qf '%{VENDOR}")

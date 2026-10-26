@@ -275,14 +275,6 @@ if [[ "${_TD_OS}" == "zypper" ]]; then
 	# idempotent, and the codec baseline in verify-desktop-experience.sh
 	# remains the assertion that it worked.
 	if zypper --non-interactive repos packman-essentials >/dev/null 2>&1; then
-		# Packman Essentials' vlc-noX requires libliveMedia and libmad, which
-		# only Packman's other repositories provide (measured 2026-10-25: the
-		# index republished that morning with vlc-noX 1699.9.pm.3 broke the dup
-		# on every sailfin desktop, "nothing provides 'libmad.so.0'"). vlc-codecs
-		# is the only VLC piece the codec invariant needs from Packman, and it is
-		# forced below, so keep openSUSE's VLC core out of the dup.
-		_td_vlc_core=(vlc-noX libvlc5 libvlccore9)
-		zypper --non-interactive addlock "${_td_vlc_core[@]}"
 		attempt=0
 		until zypper --non-interactive dup --from packman-essentials --allow-vendor-change; do
 			attempt=$((attempt + 1))
@@ -293,7 +285,6 @@ if [[ "${_TD_OS}" == "zypper" ]]; then
 			zypper --non-interactive --gpg-auto-import-keys refresh --force || true
 			sleep $((attempt * 5))
 		done
-		zypper --non-interactive removelock "${_td_vlc_core[@]}"
 
 		# The dup is VERSION-driven, and that is not enough — but the first
 		# forced-install attempt (run 32047331620 follow-up, 32052422745)
