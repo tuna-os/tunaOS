@@ -179,6 +179,7 @@ jobs:
           hash -r
 
       - name: Setup rootless podman (subuid/subgid + userns for runner)
+        if: ${{ !inputs.candidate_xfce }}
         run: |
           set -euo pipefail
           # tacklebox runs 'sudo -u runner podman unshare' for the squashfs;
@@ -331,13 +332,15 @@ jobs:
           # Resolve operation inputs once. Never invent an overlay identity or
           # substitute the local image ID for its OCI manifest digest.
           TUNA_LIVE_BASE_IMAGE="localhost/${VARIANT}:${FLAVOR}"
+          context_env=()
+          [[ "${TUNAOS_XFCE_CANDIDATE:-0}" == 1 ]] && context_env=(TACKLEBOX_CONTEXT=root)
           source_manifest="$(mktemp)"
           trap 'rm -f "$source_manifest"' EXIT
           sudo skopeo inspect --raw "containers-storage:${TUNA_LIVE_BASE_IMAGE}" | tee "$source_manifest" >/dev/null
           TUNA_LIVE_BASE_DIGEST="sha256:$(sha256sum "$source_manifest" | awk '{print $1}')"
           [[ "$TUNA_LIVE_BASE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || exit 1
           export TUNA_LIVE_BASE_IMAGE TUNA_LIVE_BASE_DIGEST
-          sudo -E env -u XDG_DATA_HOME -u XDG_CONFIG_HOME HOME=/root \
+          sudo -E env -u XDG_DATA_HOME -u XDG_CONFIG_HOME HOME=/root "${context_env[@]}" \
             bash scripts/build-native-live-overlay.sh "$VARIANT" "$FLAVOR" "$PLATFORM" \
             "$TUNA_LIVE_BASE_IMAGE" "$TUNA_LIVE_BASE_DIGEST" "$RUNNER_TEMP/native-overlay.env"
           source "$RUNNER_TEMP/native-overlay.env"
@@ -354,7 +357,7 @@ jobs:
           export TUNA_LIVE_PAYLOAD_REF="${install_target}@${TUNA_LIVE_BASE_DIGEST}"
           # lib/tacklebox.sh measures the executed binary after acquisition and
           # places that digest into the staged customization wrapper.
-          sudo -E env "PATH=$PATH" just iso "$VARIANT" "$FLAVOR" local "$FLAVOR" 0 "$PLATFORM"
+          sudo -E env "PATH=$PATH" "${context_env[@]}" just iso "$VARIANT" "$FLAVOR" local "$FLAVOR" 0 "$PLATFORM"
           # The source's raw manifest and the manifest in the copied offline
           # store are distinct observations. Require exact preservation for
           # this OSTree qualification path; do not relabel a transformed image.

@@ -328,16 +328,18 @@ The candidate refuses overrides for TCG and does not change ACLs, groups or devi
 
 The ordinary jobs keep their existing behavior. Package signature checks do not change.
 
-The producer's rootless setup remains unchanged until separate review.
+The producer skips the inherited subordinate-ID and AppArmor setup for candidates.
 At pinned Tacklebox `d3070b5`, `rootContext()` defaults to root when EUID is zero.
 `RunUnshare` then runs a shell directly; it does not call `podman unshare`.
 This campaign builds as root and selects `repo=local`, so it also skips the
 registry path's pull into the original user's store.
-The existing step for setup still needs rootless operation through its
-`podman unshare true` check. Its subordinate-ID and AppArmor edits are not a
-source requirement of this candidate's root engine path.
 
-The proposed minimal change is to skip that setup step only for the candidate
-and explicitly set `TACKLEBOX_CONTEXT=root` on its overlay and ISO calls.
-This change leaves the proposal for separate review. It needs review before launch; do not
-infer that the current producer no longer changes namespace policy on the host.
+Both candidate calls set `TACKLEBOX_CONTEXT=root` after the sudo boundary,
+through `env`: overlay customization and ISO production.
+The nested `just iso` recipe retains its existing `sudo -E` call.
+Ordinary modes still run the original setup and retain their context selection.
+
+Fixtures exercise both boundaries with a contradictory inherited `user` context
+and with context removed by the sudo stub. Neither can select rootless work
+for the candidate. Negative controls remove each override and reject the result.
+No package source, signature check or source/account gate changes.

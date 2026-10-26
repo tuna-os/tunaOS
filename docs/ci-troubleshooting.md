@@ -2653,3 +2653,15 @@ The same audit found a KVM udev rule with mode `0666` on the consumer.
 The candidate skips that rule and checks the existing device as root instead.
 Access failures remain failures. `tests/test_xfce_no_injected_access.py` exercises
 these boundaries with inert callbacks and records no runtime qualification.
+
+
+### Root candidate still changes subordinate IDs or AppArmor policy
+
+The #3965 audit found the shared rootless setup before a root-only candidate
+build. Pinned Tacklebox defaults to root at EUID zero and runs its mount scripts
+directly. The local-image path does not need a pull into the user's store.
+
+Candidates now skip that setup. Both producer calls explicitly select root
+context after sudo; ordinary modes keep their existing setup and context.
+Tests inject a contradictory user context and remove each override to verify the
+boundary. No host settings changed during those inert checks.
