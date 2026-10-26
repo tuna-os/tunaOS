@@ -123,6 +123,45 @@ class RunnerAptTests(unittest.TestCase):
                 apt.upgrade(root)
         self.assertEqual(len(calls), 1)
 
+    def test_final_cache_verification_must_finish_before_deadline(self):
+        root, calls, state = self.runner
+        clock = [0.0]
+        original_verify = apt.verify_cache
+        checks = [0]
+
+        def slow_verify(cache, entries):
+            valid = original_verify(cache, entries)
+            checks[0] += 1
+            if checks[0] == 2:
+                clock[0] = 600.0  # Download succeeded; final hash check used the budget.
+            return valid
+
+        with patch.object(apt.time, 'monotonic', side_effect=lambda: clock[0]):
+            with patch.object(apt, 'verify_cache', side_effect=slow_verify):
+                with self.assertRaisesRegex(TimeoutError, 'deadline exhausted'):
+                    apt.upgrade(root)
+        self.assertEqual(checks[0], 2)
+        self.assertFalse(any('--no-download' in args for args, _ in calls))
+        self.assertFalse(state['temporary_sources'].exists())
+        self.assertFalse((root / 'etc/needrestart/conf.d').exists())
+
+    def test_installation_can_finish_after_acquisition_budget(self):
+        root, calls, _ = self.runner
+        clock = [0.0]
+        original_run = apt.run
+
+        def install_past_budget(args, timeout=None):
+            if '--no-download' in args:
+                self.assertIsNone(timeout)
+                clock[0] = 601.0
+            return original_run(args, timeout=timeout)
+
+        with patch.object(apt.time, 'monotonic', side_effect=lambda: clock[0]):
+            with patch.object(apt, 'run', side_effect=install_past_budget):
+                apt.upgrade(root)
+        self.assertEqual(sum('--no-download' in args for args, _ in calls), 1)
+        self.assertFalse(list((root / 'etc/needrestart/conf.d').glob('99-tunaos-*.conf')))
+
     def test_signature_refusal_never_downloads(self):
         root, calls, state = self.runner
         state['metadata_error'] = True
