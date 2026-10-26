@@ -351,3 +351,11 @@ def test_the_gate_requires_the_selected_route_to_pass_and_the_rest_to_be_not_run
 
     with pytest.raises(LANE.PrepareError, match="unreadable report"):
         LANE.gate(tmp_path / "missing.json", "arch")
+
+
+def test_gentoo_base_target_writes_the_metadata_the_harness_reads():
+    # Run 40223961920 also exposed a missing image-info.json in stockBase:
+    # Gentoo's desktop branding is on a sibling branch, not the base target.
+    containerfile = (ROOT / "Containerfile.gentoo").read_text()
+    stage = containerfile.split("FROM system AS base-no-de\n", 1)[1].split("\nFROM ", 1)[0]
+    assert "/run/context/build_scripts/90-image-info.sh" in stage
