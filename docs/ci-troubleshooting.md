@@ -2184,6 +2184,27 @@ conflicts. Its inert tests cover all eight marker combinations and always refuse
 runtime admission. Update the layout, dracut and installer consumers together
 before a runtime trial. One marker change is not a complete fix.
 
+### KVM tools cannot download after the image build (#3812)
+
+**Symptom:** #3431 job 121823081846 built grouper, then `Enable KVM` failed
+with APT exit 100. QEMU, OVMF and dependencies could not connect to
+`azure.archive.ubuntu.com:80`. Boot verification did not run. This failure
+provides no evidence about GDM or the guest image.
+
+**Cause:** The PR verification step used a separate, unbounded APT install
+through the default source on the runner. The earlier Podman setup in #3998
+does not own this later acquisition.
+
+**Fix:** `setup-kvm-tools.py` keeps `qemu-system-x86 qemu-utils ovmf ffmpeg`.
+It replaces exact Azure/archive URI tokens with the official HTTPS archive
+in temporary source files. It preserves suites, components and trust settings.
+It uses #3998’s APT primitives: a 600-second budget, up to three tries
+for downloads, SHA256 checks, and installation with downloads disabled.
+The helper verifies versions after installation and cleans its restart override.
+
+It does not change KVM rules, boot gates, or evidence collection.
+SIGKILL and the outer job timeout remain outside its cleanup guarantees.
+
 ### Runner package acquisition limits (#3812)
 
 The helper uses [Ubuntu’s documented archive](https://ubuntu.com/server/docs/how-to/software/package-management/)

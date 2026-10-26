@@ -428,7 +428,7 @@ jobs:
             sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm || true
-          sudo apt-get install -y qemu-system-x86 qemu-utils ovmf ffmpeg
+          sudo python3 scripts/setup-kvm-tools.py
 
       - name: Set up Go for corral (PR gate)
         if: github.event_name == 'pull_request' && contains(matrix.platform, 'amd64')

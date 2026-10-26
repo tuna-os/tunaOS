@@ -1,0 +1,100 @@
+#!/usr/bin/env python3
+"""Install only the PR verification tools; stacked on #3998's APT primitives."""
+
+import importlib.util
+from pathlib import Path
+import re
+import shutil
+import signal
+import subprocess
+import tempfile
+import time
+
+SPEC = importlib.util.spec_from_file_location('runner_apt', Path(__file__).with_name('setup-runner-podman.py'))
+apt = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(apt)
+PACKAGES = ('qemu-system-x86', 'qemu-utils', 'ovmf', 'ffmpeg')
+
+
+def source_text(text):
+    # Change only exact Ubuntu archive URI tokens, including deb822 URIs.
+    # Suites, components, Signed-By and unrelated sources remain byte-identical.
+    return re.sub(r'(?<!\S)https?://(?:azure\.)?archive\.ubuntu\.com/ubuntu/?(?=\s|$)',
+                  apt.official_uri('https://archive.ubuntu.com/ubuntu'), text)
+
+
+def install(root=Path('/'), budget=apt.BUDGET):
+    release = dict(line.split('=', 1) for line in (root / 'usr/lib/os-release').read_text().splitlines() if '=' in line)
+    version = (release.get('ID', '').strip('"'), release.get('VERSION_ID', '').strip('"'))
+    if version not in (('ubuntu', '24.04'), ('ubuntu', '26.04')):
+        raise ValueError(f'Unsupported runner: {version}')
+    if apt.run(['dpkg', '--print-architecture']).strip() != 'amd64':
+        raise ValueError('The PR KVM tool caller requires amd64')
+    started = time.monotonic()
+    deadline = started + budget
+    with tempfile.TemporaryDirectory(prefix='tunaos-kvm-apt-') as directory:
+        work = Path(directory)
+        work.chmod(0o755)
+        sources = work / 'sources.list.d'
+        shutil.copytree(root / 'etc/apt/sources.list.d', sources)
+        for path in sources.iterdir():
+            if path.suffix in ('.list', '.sources'):
+                # Replace symlinks in the private copy, never follow a link when writing.
+                text = source_text(path.read_text())
+                path.unlink()
+                path.write_text(text)
+        main = work / 'sources.list'
+        original = root / 'etc/apt/sources.list'
+        main.write_text(source_text(original.read_text()) if original.exists() else '')
+        lists = work / 'lists'
+        lists.mkdir()
+        empty = work / 'empty'
+        empty.mkdir()
+        cache = root / 'var/cache/apt/archives'
+        cache.mkdir(parents=True, exist_ok=True)
+        command = ['apt-get', '-o', f'Dir::Etc::sourcelist={main}',
+                   '-o', f'Dir::Etc::sourceparts={sources}', '-o', f'Dir::State::lists={lists}',
+                   '-o', f'Dir::Cache::archives={cache}', '-o', 'APT::Update::Error-Mode=any',
+                   '-o', 'Acquire::Retries=2', '-o', 'Acquire::http::Timeout=30',
+                   '-o', 'Acquire::https::Timeout=30', '-o', 'Acquire::ForceHash=SHA256']
+        try:
+            apt.run([*command, 'update'], timeout=apt.remaining(deadline))
+            transaction = [*command, 'install', '-y', *PACKAGES]
+            plan = apt.run([*transaction, '--simulate'], timeout=apt.remaining(deadline))
+            expected = dict(re.findall(r'^Inst (\S+)(?: \[[^\]]+\])? \((\S+)', plan, re.MULTILINE))
+            entries = apt.manifest(apt.run([*transaction, '--download-only', '--print-uris',
+                                           '-o', f'Dir::Cache::archives={empty}'], timeout=apt.remaining(deadline)))
+            if expected and not entries:
+                raise RuntimeError('APT planned changes without a package hash manifest')
+            for attempt in range(apt.ATTEMPTS):
+                apt.verify_cache(cache, entries)
+                try:
+                    apt.run([*transaction, '--download-only'], timeout=min(200, apt.remaining(deadline)))
+                    if apt.verify_cache(cache, entries):
+                        apt.remaining(deadline)
+                        break
+                except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+                    if attempt == apt.ATTEMPTS - 1:
+                        raise
+            else:
+                raise RuntimeError('APT cache verification failed')
+        finally:
+            print(f'KVM tools acquisition duration: {time.monotonic() - started:.1f}s', flush=True)
+        started = time.monotonic()
+        try:
+            with apt.defer_termination(), apt.suppress_restarts(root / 'etc/needrestart/conf.d'):
+                apt.run([*transaction, '--no-download'])
+            for package, expected_version in expected.items():
+                actual = apt.run(['dpkg-query', '-W', '-f=${Version}', package]).strip()
+                if actual != expected_version:
+                    raise RuntimeError(f'{package}: expected {expected_version}, installed {actual}')
+            for package in PACKAGES:
+                if apt.run(['dpkg-query', '-W', '-f=${db:Status-Status}', package]).strip() != 'installed':
+                    raise RuntimeError(f'{package} is not installed')
+        finally:
+            print(f'KVM tools installation duration: {time.monotonic() - started:.1f}s', flush=True)
+
+
+if __name__ == '__main__':
+    signal.signal(signal.SIGTERM, apt.terminate)
+    install()
