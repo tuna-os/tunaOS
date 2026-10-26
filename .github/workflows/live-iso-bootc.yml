@@ -7,16 +7,21 @@ on:
         description: 'One fresh Skipjack LUKS diagnostic; never qualification'
         type: boolean
         default: false
+      candidate_xfce:
+        description: 'Opt-in Bonito/XFCE AMD64 candidate; not production qualification'
+        required: false
+        default: false
+        type: boolean
       variant:
         description: 'Variant to build'
         required: true
         default: 'skipjack'
-        type: choice
-        options:
-          - yellowfin
-          - albacore
-          - bonito
-          - skipjack
+        type: string
+      platform:
+        description: 'Explicit configured platform (strict preflight rejects unsupported targets)'
+        required: true
+        default: 'linux/amd64'
+        type: string
       flavor:
         description: 'Flavor to build'
         required: true
@@ -67,8 +72,8 @@ concurrency:
   # workflow_dispatch gets a per-run group so a deliberate multi-cell sweep
   # never cancels its own siblings — the repo's plain `<name>-${{ github.ref }}`
   # form would, since every cell of a sweep shares one branch.
-  group: live-iso-bootc-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.event_name }}
-  cancel-in-progress: true
+  group: live-iso-bootc-${{ inputs.candidate_xfce && 'xfce-candidate' || github.ref }}-${{ inputs.candidate_xfce && 'single' || (github.event_name == 'workflow_dispatch' && github.run_id || github.event_name) }}
+  cancel-in-progress: ${{ !inputs.candidate_xfce }}
 
 jobs:
   diagnostic-preflight:
@@ -78,7 +83,10 @@ jobs:
     permissions: {}
     steps:
       - name: Check scoped KVM and supermin prerequisites
+        env:
+          CANDIDATE_XFCE: ${{ inputs.candidate_xfce }}
         run: |
+          [[ "${CANDIDATE_XFCE:-false}" != true ]] || exit 1
           test -c /dev/kvm
           getent group kvm
           [[ "$(stat -c '%G' /dev/kvm)" == kvm ]]
@@ -92,10 +100,35 @@ jobs:
           sudo -n true
           systemctl --version
 
+  preflight:
+    if: ${{ !inputs.installed_boot_diagnostic }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/setup-yq
+      - name: Check candidate tools
+        if: inputs.candidate_xfce
+        run: python3 scripts/preflight-xfce-candidate.py tools
+      - name: Validate explicit target before building
+        env:
+          VARIANT: ${{ inputs.variant || 'skipjack' }}
+          FLAVOR: ${{ inputs.flavor || 'gnome' }}
+          PLATFORM: ${{ inputs.platform || 'linux/amd64' }}
+          CANDIDATE_XFCE: ${{ inputs.candidate_xfce }}
+        run: |
+          flags=()
+          [[ "$CANDIDATE_XFCE" == true ]] && flags+=(--candidate-xfce)
+          python3 scripts/plan-iso-qualification.py --target "$VARIANT:$FLAVOR:$PLATFORM" --max-parallel 1 "${flags[@]}"
+
   build:
-    needs: diagnostic-preflight
-    if: ${{ !cancelled() && (!inputs.installed_boot_diagnostic || needs.diagnostic-preflight.result == 'success') }}
-    timeout-minutes: ${{ inputs.installed_boot_diagnostic && 120 || 360 }}
+    needs: [diagnostic-preflight, preflight]
+    if: ${{ !cancelled() && ((inputs.installed_boot_diagnostic && needs.diagnostic-preflight.result == 'success') || (!inputs.installed_boot_diagnostic && needs.preflight.result == 'success')) }}
     outputs:
       artifact_id: ${{ steps.native_iso.outputs.artifact-id }}
       archive_digest: sha256:${{ steps.native_iso.outputs.artifact-digest }}
@@ -127,9 +160,7 @@ jobs:
     runs-on: ${{ inputs.installed_boot_diagnostic && 'ubuntu-24.04' || inputs.build_runner != 'runs-on'
       && 'ubuntu-latest'
       || format('runs-on={0}/runner=build-amd64', github.run_id) }}
-    # A GitHub-hosted runner is slower per-core than the c6a this used to
-    # take, and there is no job timeout here to inherit -- the Actions
-    # default is 360 minutes, well clear of a ~40-minute build.
+    timeout-minutes: ${{ inputs.installed_boot_diagnostic && 120 || (inputs.candidate_xfce && 160 || 360) }}
 
     permissions:
       contents: read
@@ -154,6 +185,10 @@ jobs:
           persist-credentials: false
           submodules: recursive
 
+      - uses: ./.github/actions/setup-yq
+      - name: Check candidate build resources
+        if: inputs.candidate_xfce
+        run: python3 scripts/preflight-xfce-candidate.py build
       - name: Install dependencies
         run: |
           sudo apt-get update
@@ -182,6 +217,7 @@ jobs:
           hash -r
 
       - name: Setup rootless podman (subuid/subgid + userns for runner)
+        if: ${{ !inputs.candidate_xfce }}
         env:
           DIAGNOSTIC_MODE: ${{ inputs.installed_boot_diagnostic }}
         run: |
@@ -289,23 +325,23 @@ jobs:
           } >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
 
       - name: Resolve canonical native platform
+        env:
+          REQUESTED_PLATFORM: ${{ inputs.platform || 'linux/amd64' }}
+          CANDIDATE_XFCE: ${{ inputs.candidate_xfce }}
         run: |
           set -euo pipefail
-          BUILD_CONFIG_JSON="$(python3 scripts/config.py show)"
-          platform="$(jq -r --arg v "$VARIANT" --arg f "$FLAVOR" '
-            .variants[] | select(.id == $v) as $variant |
-            ($variant.flavors[] | select(.id == $f)) as $flavor |
-            ($flavor.platforms // $variant.platforms // ["linux/amd64"]) |
-            if index("linux/amd64/v2") != null then "linux/amd64/v2"
-            elif index("linux/amd64") != null then "linux/amd64"
-            else error("native builder requires an amd64 target") end
-          ' <<<"$BUILD_CONFIG_JSON")"
-          [[ "$platform" == linux/amd64 || "$platform" == linux/amd64/v2 ]]
-          echo "PLATFORM=$platform" >> "$GITHUB_ENV"
+          flags=()
+          [[ "$CANDIDATE_XFCE" == true ]] && flags+=(--candidate-xfce)
+          python3 scripts/plan-iso-qualification.py --target "$VARIANT:$FLAVOR:$REQUESTED_PLATFORM" --max-parallel 1 "${flags[@]}"
+          echo "PLATFORM=$REQUESTED_PLATFORM" >> "$GITHUB_ENV"
 
       - name: Build OS image
+        env:
+          TUNAOS_XFCE_CANDIDATE: ${{ inputs.candidate_xfce && '1' || '0' }}
         run: |
-          sudo just build "$VARIANT" "$FLAVOR" "$PLATFORM" 1 "$FLAVOR"
+          bound=()
+          [[ "$TUNAOS_XFCE_CANDIDATE" == 1 ]] && bound=(timeout --signal=TERM --kill-after=120 2880)
+          "${bound[@]}" sudo just build "$VARIANT" "$FLAVOR" "$PLATFORM" 1 "$FLAVOR"
 
       - name: Build Live ISO
         # No R2 credentials here on purpose. This step used to export the
@@ -317,6 +353,8 @@ jobs:
         # (tests/test_fork_safe_workflows.py).
         env:
           TACKLEBOX_FROM_SOURCE: "1"
+          TUNAOS_TACKLEBOX_TIMEOUT_SECONDS: ${{ inputs.candidate_xfce && '2400' || '4800' }}
+          TUNAOS_XFCE_CANDIDATE: ${{ inputs.candidate_xfce && '1' || '0' }}
         run: |
           # Root, and no rootless hop before it.
           #
@@ -333,16 +371,24 @@ jobs:
           # the ISO built as root too the save|load hop is not just
           # unnecessary, it was the thing that forced the slow path.
           set -euo pipefail
+          # Re-enter this Actions script once under a candidate-only bound.
+          # 83 minutes + two minutes to kill fits the 85-minute allocation.
+          if [[ "$TUNAOS_XFCE_CANDIDATE" == 1 && "${TUNAOS_XFCE_BUILD_BOUNDED:-0}" != 1 ]]; then
+            export TUNAOS_XFCE_BUILD_BOUNDED=1
+            exec timeout --signal=TERM --kill-after=120 4980 bash -e "$0"
+          fi
           # Resolve operation inputs once. Never invent an overlay identity or
           # substitute the local image ID for its OCI manifest digest.
           TUNA_LIVE_BASE_IMAGE="localhost/${VARIANT}:${FLAVOR}"
+          context_env=()
+          [[ "${TUNAOS_XFCE_CANDIDATE:-0}" == 1 ]] && context_env=(TACKLEBOX_CONTEXT=root)
           source_manifest="$(mktemp)"
           trap 'rm -f "$source_manifest"' EXIT
           sudo skopeo inspect --raw "containers-storage:${TUNA_LIVE_BASE_IMAGE}" | tee "$source_manifest" >/dev/null
           TUNA_LIVE_BASE_DIGEST="sha256:$(sha256sum "$source_manifest" | awk '{print $1}')"
           [[ "$TUNA_LIVE_BASE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || exit 1
           export TUNA_LIVE_BASE_IMAGE TUNA_LIVE_BASE_DIGEST
-          sudo -E env -u XDG_DATA_HOME -u XDG_CONFIG_HOME HOME=/root \
+          sudo -E env -u XDG_DATA_HOME -u XDG_CONFIG_HOME HOME=/root "${context_env[@]}" \
             bash scripts/build-native-live-overlay.sh "$VARIANT" "$FLAVOR" "$PLATFORM" \
             "$TUNA_LIVE_BASE_IMAGE" "$TUNA_LIVE_BASE_DIGEST" "$RUNNER_TEMP/native-overlay.env"
           source "$RUNNER_TEMP/native-overlay.env"
@@ -359,7 +405,7 @@ jobs:
           export TUNA_LIVE_PAYLOAD_REF="${install_target}@${TUNA_LIVE_BASE_DIGEST}"
           # lib/tacklebox.sh measures the executed binary after acquisition and
           # places that digest into the staged customization wrapper.
-          sudo -E env "PATH=$PATH" just iso "$VARIANT" "$FLAVOR" local "$FLAVOR" 0 "$PLATFORM"
+          sudo -E env "PATH=$PATH" "${context_env[@]}" just iso "$VARIANT" "$FLAVOR" local "$FLAVOR" 0 "$PLATFORM"
           # The source's raw manifest and the manifest in the copied offline
           # store are distinct observations. Require exact preservation for
           # this OSTree qualification path; do not relabel a transformed image.
@@ -375,6 +421,16 @@ jobs:
             exit 1
           }
           echo "native source and copied offline payload: $payload_digest"
+
+      - name: Enforce candidate ISO byte budget before upload
+        if: inputs.candidate_xfce
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          media=( *.iso )
+          [[ "${#media[@]}" == 1 ]] || { echo "::error::candidate needs exactly one ISO"; exit 1; }
+          python3 live-iso/common/src/xfce-media-input.py --iso-budget "${media[0]}" | tee "$RUNNER_TEMP/xfce-iso-size.json"
+          cat "$RUNNER_TEMP/xfce-iso-size.json" >> "$GITHUB_STEP_SUMMARY"
 
       # RETENTION IS NOT OPTIONAL ON A MULTI-GIGABYTE ARTIFACT.
       #
@@ -400,7 +456,8 @@ jobs:
 
   # Strict plain+LUKS qualification of the exact ISO the build job produced.
   #
-  # Reachable only from a deliberate workflow_dispatch of the GNOME flavor, and
+  # Reachable only from a deliberate workflow_dispatch for GNOME or the bounded
+  # XFCE candidate, and
   # never from the pull_request trigger above or any schedule. Two reasons:
   #
   # - The encrypted leg currently fails by policy: the unmodified installed
@@ -409,14 +466,14 @@ jobs:
   #   thing cannot report a regression; it is a dead gate. A dispatched run
   #   reports each leg on its own ("Report strict leg verdicts" in the job
   #   summary) and stays red until that boot is fixed. Nothing weakens it.
-  # - The evidence validator accepts flavor `gnome` only
+  # - Production validation accepts GNOME; XFCE uses the separate candidate contract
   #   (scripts/native-iso-qualification.py), so any other flavor would build
   #   an ISO and then fail admission by construction.
   #
   # No green criterion names this job as a gate (tests/test_strict_qualification_wiring.py).
   qualify-native-iso:
     name: Qualify exact native ISO
-    if: github.event_name == 'workflow_dispatch' && (github.event.inputs.flavor || 'gnome') == 'gnome'
+    if: github.event_name == 'workflow_dispatch' && ((github.event.inputs.flavor || 'gnome') == 'gnome' || (inputs.candidate_xfce && inputs.variant == 'bonito' && inputs.flavor == 'xfce' && inputs.platform == 'linux/amd64'))
     needs: build
     permissions:
       contents: read
@@ -426,6 +483,9 @@ jobs:
       installed_boot_diagnostic: ${{ inputs.installed_boot_diagnostic || false }}
       variant: ${{ github.event.inputs.variant || 'skipjack' }}
       flavors: ${{ github.event.inputs.flavor || 'gnome' }}
+      platform: ${{ inputs.platform || 'linux/amd64' }}
+      max_parallel: 1
+      candidate_xfce: ${{ inputs.candidate_xfce || false }}
       source: native-artifact
       native_run_id: ${{ format('{0}', github.run_id) }}
       native_artifact_id: ${{ needs.build.outputs.artifact_id }}

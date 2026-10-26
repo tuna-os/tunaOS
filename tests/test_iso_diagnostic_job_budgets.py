@@ -23,6 +23,10 @@ def campaign(workflows):
         assert name not in seen, 'cyclic or duplicate reusable workflow'
         seen.add(name)
         for key, job in workflows[name]['jobs'].items():
+            if job.get('if') == '${{ !inputs.installed_boot_diagnostic }}':
+                assert key == 'preflight' and name == 'live-iso-bootc.yml'
+                assert job['timeout-minutes'] == 5
+                continue
             if 'uses' in job:
                 assert job['uses'].startswith('./.github/workflows/')
                 assert job['with']['installed_boot_diagnostic'] == '${{ inputs.installed_boot_diagnostic || false }}'
@@ -53,7 +57,7 @@ def test_every_diagnostic_job_has_a_bound_matching_documented_sum():
     assert rows == expected
     total = re.search(r'Total job budget: \*\*(\d+) minutes\*\*\. This excludes queue time\.', text)
     assert total and int(total[1]) == sum(expected.values()) == 248
-    assert _budgets(workflows['iso-e2e.yml']['jobs']['generate-matrix']['timeout-minutes']) == [5, 360]
+    assert _budgets(workflows['iso-e2e.yml']['jobs']['generate-matrix']['timeout-minutes']) == [5]
 
 
 @pytest.mark.parametrize('value', [None, '${{ inputs.timeout }}', '${{ inputs.installed_boot_diagnostic && 0 || 360 }}'])
@@ -89,7 +93,34 @@ def test_budgeted_dispatch_generates_exactly_one_consumer_cell(tmp_path):
     output = tmp_path / 'output'
     subprocess.run(['bash', '-c', body], cwd=ROOT, check=True,
                    env={**os.environ, 'DISPATCH_VARIANT': 'skipjack',
-                        'DISPATCH_FLAVORS': 'gnome', 'GITHUB_OUTPUT': str(output)},
+                        'DISPATCH_FLAVORS': 'gnome', 'GITHUB_OUTPUT': str(output),
+                        'INSTALLED_BOOT_DIAGNOSTIC': 'true', 'CANDIDATE_XFCE': 'false',
+                        'ISO_SOURCE': 'native-artifact', 'REQUESTED_PLATFORM': 'linux/amd64', 'MAX_PARALLEL': '1'},
                    capture_output=True, timeout=10)
-    assert json.loads(output.read_text().removeprefix('matrix=')) == {
-        'include': [{'variant': 'skipjack', 'flavor': 'gnome', 'platform': 'linux/amd64/v2'}]}
+    assert json.loads(dict(line.split('=', 1) for line in output.read_text().splitlines())['matrix']) == {
+        'include': [{'variant': 'skipjack', 'flavor': 'gnome', 'platform': 'linux/amd64'}]}
+
+
+def test_candidate_preflight_must_stay_outside_diagnostic_budget():
+    workflows = documents()
+    assert workflows['live-iso-bootc.yml']['jobs']['build']['needs'] == ['diagnostic-preflight', 'preflight']
+    workflows['live-iso-bootc.yml']['jobs']['preflight'].pop('if')
+    assert sum(campaign(workflows).values()) == 253
+
+
+@pytest.mark.parametrize('candidate,platform,parallel', [
+    ('true', 'linux/amd64', '1'), ('false', 'linux/amd64/v2', '1'),
+    ('false', 'linux/amd64', '2'),
+])
+def test_diagnostic_matrix_refuses_mixed_or_obsolete_targets(tmp_path, candidate, platform, parallel):
+    import os
+    import subprocess
+    steps = documents()['iso-e2e.yml']['jobs']['generate-matrix']['steps']
+    body = next(step['run'] for step in steps if step.get('id') == 'gen')
+    result = subprocess.run(['bash', '-c', body], cwd=ROOT,
+        env={**os.environ, 'INSTALLED_BOOT_DIAGNOSTIC': 'true', 'CANDIDATE_XFCE': candidate,
+             'DISPATCH_VARIANT': 'skipjack', 'DISPATCH_FLAVORS': 'gnome',
+             'REQUESTED_PLATFORM': platform, 'MAX_PARALLEL': parallel,
+             'ISO_SOURCE': 'native-artifact', 'GITHUB_OUTPUT': str(tmp_path/'output')},
+        capture_output=True, timeout=10)
+    assert result.returncode != 0

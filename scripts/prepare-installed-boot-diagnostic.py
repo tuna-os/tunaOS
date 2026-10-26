@@ -9,7 +9,7 @@ from lib import installed_boot_diagnostic as d
 
 def prepare(env, binding, sha, qemu_digest, qemu_version):
     d.require(env.get('VARIANT') == 'skipjack' and env.get('FLAVOR') == 'gnome'
-              and env.get('TUNAOS_QUAL_PLATFORM') == 'linux/amd64/v2', 'diagnostic_target')
+              and env.get('TUNAOS_QUAL_PLATFORM') == 'linux/amd64', 'diagnostic_target')
     p = {'repository': env['GITHUB_REPOSITORY'], 'collector_sha': sha,
          'producer_sha': binding['producer_sha'], 'producer_run': binding['producer_run'],
          'producer_attempt': binding['producer_attempt'], 'artifact_id': binding['artifact_id'],

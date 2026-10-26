@@ -11,7 +11,7 @@ Publication and dispatch need parent review.
 `--tool-lock` and `--output`. Output must be a new private directory.
 The binding must come from the existing native artifact fetcher. The source
 must be clean and match the collector commit in the input. Run identity
-must match the current GitHub job. The only target is Skipjack/GNOME amd64/v2.
+must match the current GitHub job. The only target is Skipjack/GNOME linux/amd64 (configured x86-64-v3 baseline).
 
 The old ISO artifact 12560149748 is absent. Run 40093907774 did not retain its
 installed disk. The next run therefore needs one fresh producer and one fresh

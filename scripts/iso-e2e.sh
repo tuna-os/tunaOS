@@ -756,6 +756,10 @@ ACCEL="tcg"
 if [[ "$NO_KVM" -eq 0 ]] && [[ -r /dev/kvm ]] && [[ -w /dev/kvm ]]; then
 	ACCEL="kvm"
 fi
+if [[ "${TUNAOS_XFCE_CANDIDATE:-0}" == 1 && "$ACCEL" != kvm ]]; then
+	echo "ERROR: candidate requires direct KVM access; permissions remain unchanged" >&2
+	exit 77
+fi
 CPU_ARG="max"
 if [[ "$ACCEL" == "kvm" ]]; then
 	CPU_ARG="host"
@@ -876,6 +880,15 @@ E2E_SERIAL_ARGS=(
 	-serial chardev:e2eserial
 )
 
+# Candidate UART is a local control channel owned by this QEMU invocation.
+# QEMU records boot output even before the authenticated client attaches.
+if [[ "${TUNAOS_XFCE_CANDIDATE:-0}" == 1 ]]; then
+	[[ "${VARIANT:-}:${FLAVOR:-}:${TUNAOS_QUAL_PLATFORM:-}" == bonito:xfce:linux/amd64 ]] || exit 2
+	CANDIDATE_CONSOLE="${OUTPUT_DIR}/candidate-console.sock"
+	rm -f "$CANDIDATE_CONSOLE"
+	E2E_SERIAL_ARGS=(-chardev "socket,id=e2eserial,path=${CANDIDATE_CONSOLE},server=on,wait=off,logfile=${SERIAL_LOG},logappend=on" -serial chardev:e2eserial)
+fi
+
 # See the egl-headless block above: it renders GL but presents nothing, so
 # screendump has no surface and every screenshot in this repo silently fails.
 # (VNC alone does not fix screendump under GL scanout — see screenshot().)
@@ -958,6 +971,10 @@ use_tcp_transport
 # and the harness behaves exactly as before the fallback existed.
 setup_vsock() {
 	[[ "${TUNAOS_INSTALLED_BOOT_DIAGNOSTIC:-0}" != 1 ]] || return 0
+	if [[ "${TUNAOS_XFCE_CANDIDATE:-0}" == 1 ]]; then
+		VSOCK_ARGS=()
+		return 0
+	fi
 	if [[ ! -e /dev/vhost-vsock ]]; then
 		modprobe vhost_vsock 2>/dev/null || sudo -n modprobe vhost_vsock 2>/dev/null || true
 	fi
@@ -1404,7 +1421,16 @@ fi
 
 # ── Boot the live ISO ───────────────────────────────────────────────────────
 
+candidate_require_no_injected_access() {
+	[[ "${TUNAOS_XFCE_CANDIDATE:-0}" != 1 ]] && return 0
+	if [[ ${#VSOCK_ARGS[@]} -ne 0 ]]; then
+		echo "ERROR: candidate refuses injected guest access arguments" >&2
+		return 77
+	fi
+}
+
 boot_live_iso() {
+	candidate_require_no_injected_access || return $?
 	# qemu-img lives in the qemu-utils Debian/Ubuntu package, which the
 	# `qemu-system-x86` package depends on only as Recommends. If the
 	# workflow's apt install line forgets it, every diagnostic ends up
@@ -1574,7 +1600,7 @@ wait_for_ready() {
 		# Fallback: if SSH is available (dev ISOs), check whether the guest
 		# is at least alive and whether tunaos-live-ready.service exists.
 		# Use same timeout/pattern as check_ssh but don't block the loop.
-		if command -v sshpass &>/dev/null; then
+		if [[ "${TUNAOS_XFCE_CANDIDATE:-0}" != 1 ]] && command -v sshpass &>/dev/null; then
 			local ssh_opts="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=3"
 			if sshpass -p live ssh $ssh_opts liveuser@127.0.0.1 -p "$SSH_PORT" true 2>/dev/null; then
 				echo "    [ssh: guest is alive — checking why marker hasn't fired]"
@@ -1604,7 +1630,7 @@ wait_for_ready() {
 	echo "--- last 50 lines of serial log ---" >&2
 	tail -50 "$SERIAL_LOG" 2>/dev/null >&2 || true
 	# Last-resort diagnostic: try SSH to see if guest is alive but marker-less.
-	if command -v sshpass &>/dev/null; then
+	if [[ "${TUNAOS_XFCE_CANDIDATE:-0}" != 1 ]] && command -v sshpass &>/dev/null; then
 		echo "--- SSH diagnostic (last resort) ---" >&2
 		local ssh_opts="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5"
 		sshpass -p live ssh $ssh_opts liveuser@127.0.0.1 -p "$SSH_PORT" \
@@ -2212,7 +2238,9 @@ wait_pid_gone() {
 POWEROFF_WAIT_SECS="${TUNAOS_E2E_POWEROFF_WAIT:-180}"
 
 poweroff_and_wait_vm() {
-	if ! "${GUEST_SSH[@]}" "sudo systemctl poweroff" 2>/dev/null; then
+	if [[ "${TUNAOS_XFCE_CANDIDATE:-0}" == 1 ]]; then
+		printf 'system_powerdown\n' | socat - "UNIX-CONNECT:${MONITOR_SOCK}" 2>/dev/null || true
+	elif ! "${GUEST_SSH[@]}" "sudo systemctl poweroff" 2>/dev/null; then
 		# Not fatal: the guest may be going down already (sshd dies mid-command
 		# often enough), and ACPI below is a second way in. But it changes what
 		# a long wait MEANS, so it must not be silent.
@@ -3265,9 +3293,10 @@ EOF
 		# phase below needs the live guest too. This function sends the
 		# graceful powerdown itself once both are done.
 		TUNAOS_LUKS_NO_POWEROFF=1 \
+			env -u TUNAOS_XFCE_PASSWORD -u TUNAOS_WALKTHROUGH_LUKS_PASS -u E2E_LUKS_PASS \
 			python3 "$(dirname "${BASH_SOURCE[0]}")/luks-first-boot.py" \
-			"$FB_SERIAL" "$MONITOR_SOCK" "$E2E_LUKS_PASS" 900 300 \
-			2>&1 | tee "${OUTPUT_DIR}/installed-serial.log" || {
+			"$FB_SERIAL" "$MONITOR_SOCK" --passphrase-stdin 900 300 \
+			<<<"$E2E_LUKS_PASS" 2>&1 | tee "${OUTPUT_DIR}/installed-serial.log" || {
 			echo "ERROR: encrypted disk did not unlock with the passphrase / reach login"
 			# Photograph the failure before killing the guest. "Unlock failed"
 			# and "unlock failed, and the screen was sitting at a cryptsetup
@@ -3678,6 +3707,12 @@ wait_for_strict_live_ready() {
 }
 
 strict_capture_live_inputs() {
+	if [[ "${TUNAOS_XFCE_CANDIDATE:-0}" == 1 ]]; then
+		# Candidate immutable inputs come only from same-run media admission.
+		strict_require_digest "$STRICT_SOURCE_DIGEST" source || return 1
+		strict_require_digest "$STRICT_INSTALLER_DIGEST" installer || return 1
+		return 0
+	fi
 	# Resolve the immutable inputs the harness can measure. Explicit env
 	# wins; the live guest (over SSH — dev media only) fills the rest.
 	# Anything still unknown fails the run at emission time.
@@ -3724,6 +3759,10 @@ run_strict_gui_install() {
 		INSTALL_DISK="$saved_disk"
 		return "$rc"
 	}
+	if [[ "${TUNAOS_XFCE_CANDIDATE:-0}" == 1 ]]; then
+		CANDIDATE_CONSOLE="${OUTPUT_DIR}/candidate-console.sock"
+		rm -f "$CANDIDATE_CONSOLE"
+	fi
 	boot_live_iso || rc=$?
 	if [[ "$rc" -eq 0 ]]; then
 		strict_offline_verify_netdev "live-${mode}" || rc=$?
@@ -3736,7 +3775,10 @@ run_strict_gui_install() {
 		fi
 	fi
 	if [[ "$rc" -eq 0 ]]; then
-		strict_capture_live_inputs
+		strict_capture_live_inputs || rc=$?
+		if [[ "$rc" -eq 0 && "${TUNAOS_XFCE_CANDIDATE:-0}" == 1 ]]; then
+			candidate_observe live "$mode" || rc=$?
+		fi
 	fi
 	if [[ "$rc" -eq 0 ]]; then
 		local walkthrough="${SCRIPT_DIR}/installer-walkthrough.py"
@@ -3748,7 +3790,9 @@ run_strict_gui_install() {
 			# live SSH, which published media deliberately lacks; the
 			# walkthrough below IS the GUI verification on this path.
 			e2e_phase "Strict GUI install (${mode}): driving the bundled installer..."
-			python3 "$walkthrough" "$MONITOR_SOCK" "$wt_out" \
+			local -a walkthrough_bound=()
+			[[ "${TUNAOS_XFCE_CANDIDATE:-0}" == 1 ]] && walkthrough_bound=(python3 "${SCRIPT_DIR}/candidate-bounded.py" 610)
+			"${walkthrough_bound[@]}" python3 "$walkthrough" "$MONITOR_SOCK" "$wt_out" \
 				"${TUNAOS_STRICT_WALKTHROUGH_STEPS:-12}" "${FLAVOR:-de}" \
 				--strict "--mode=${mode}" "--vnc=${OUTPUT_DIR}/vnc.sock" 2>&1 | tee -a "${SERIAL_LOG}" || rc=$?
 			if [[ "$rc" -ne 0 ]]; then
@@ -3756,7 +3800,7 @@ run_strict_gui_install() {
 			fi
 		fi
 	fi
-	if [[ "$rc" -eq 0 ]] && check_ssh 2>/dev/null; then
+	if [[ "$rc" -eq 0 && "${TUNAOS_XFCE_CANDIDATE:-0}" != 1 ]] && check_ssh 2>/dev/null; then
 		# Opportunistic corroboration only: the mandatory encryption proof
 		# is the cryptsetup-prompt observation on the installed boot below,
 		# which needs no SSH. A live guest without SSH skips this, not the run.
@@ -3783,14 +3827,29 @@ run_strict_gui_install() {
 	return "$rc"
 }
 
+candidate_observe() {
+	local action="$1" mode="$2" phase="${3:-cold}" output
+	output="${OUTPUT_DIR}/session-${mode}-${phase}.json"
+	[[ "$action" == live ]] && output="${OUTPUT_DIR}/frontend-${mode}.json"
+	python3 "${SCRIPT_DIR}/candidate-bounded.py" 300 python3 "${SCRIPT_DIR}/xfce-candidate-phase.py" "$action" \
+		--console "$CANDIDATE_CONSOLE" --monitor "$MONITOR_SOCK" \
+		--vnc "${OUTPUT_DIR}/vnc.sock" --directory "$OUTPUT_DIR" --output "$output" \
+		--mode "$mode" --phase "$phase" --boot-log "$SERIAL_LOG"
+}
+
 strict_launch_installed() {
+	candidate_require_no_injected_access || return $?
 	# $1 = disk, $2 = serial socket path or empty (luks uses a socket for
 	# passphrase injection; plain reuses the file chardev), $3 = phase label.
 	# No cdrom/ISO drive: the install media is detached by construction.
 	local disk="$1" serial_target="$2" label="$3"
 	reset_qemu_sockets
 	local -a serial_args
-	if [[ -n "$serial_target" ]]; then
+	if [[ "${TUNAOS_XFCE_CANDIDATE:-0}" == 1 ]]; then
+		CANDIDATE_CONSOLE="${serial_target:-${OUTPUT_DIR}/candidate-console.sock}"
+		rm -f "$CANDIDATE_CONSOLE"
+		serial_args=(-chardev "socket,id=e2eserial,path=${CANDIDATE_CONSOLE},server=on,wait=off,logfile=${SERIAL_LOG},logappend=on" -serial chardev:e2eserial)
+	elif [[ -n "$serial_target" ]]; then
 		rm -f "$serial_target"
 		serial_args=(-serial "unix:${serial_target},server,nowait")
 	else
@@ -3904,6 +3963,21 @@ strict_require_desktop_contract() {
 
 strict_verify_installed_identity() {
 	local mode="$1" installed_log="$2" expected_ref="$3" ref_strict="$4" phase="$5"
+	if [[ "${TUNAOS_XFCE_CANDIDATE:-0}" == 1 ]]; then
+		candidate_observe session "$mode" "$phase" || return 7
+		local identity
+		identity="$(
+			python3 - "${OUTPUT_DIR}/session-${mode}-${phase}.json" <<'PYEOF'
+import json,sys
+value=json.load(open(sys.argv[1]))
+print(value['source_digest']+'|'+value['target_imgref'])
+PYEOF
+		)" || return 1
+		STRICT_VERIFIED_BOOTED_DIGEST="${identity%%|*}"
+		STRICT_VERIFIED_BOOTED_REF="${identity#*|}"
+		[[ "$STRICT_VERIFIED_BOOTED_DIGEST" == "$STRICT_SOURCE_DIGEST" && "$STRICT_VERIFIED_BOOTED_REF" == "$expected_ref" ]] || return 1
+		return 0
+	fi
 	# ── Installed-system identity (SSH or serial, fail closed) ─────
 	# Published media deliberately may not ship SSH. The installed runtime
 	# check emits TUNAOS_IMAGE_IDENTITY on serial for that case; dev media
@@ -4019,6 +4093,8 @@ verify_strict_installed_boot() {
 	mv -f "$SERIAL_LOG" "${OUTPUT_DIR}/strict-${mode}-live-serial.log" 2>/dev/null || true
 	: >"$SERIAL_LOG"
 	# ── Cold boot ────────────────────────────────────────────────────
+	local -a unlock_bound=()
+	[[ "${TUNAOS_XFCE_CANDIDATE:-0}" == 1 ]] && unlock_bound=(python3 "${SCRIPT_DIR}/candidate-bounded.py" 240)
 	local cold0 cold1 cold_s
 	cold0=$(date +%s)
 	if [[ "$mode" == "luks" ]]; then
@@ -4028,9 +4104,10 @@ verify_strict_installed_boot() {
 		local cold_unlock_rc=0
 		TUNAOS_LUKS_NO_POWEROFF=1 \
 			TUNAOS_LUKS_GRUB_APPEND="" \
-			python3 "${SCRIPT_DIR}/luks-first-boot.py" \
-			"$fb_serial" "$MONITOR_SOCK" "${E2E_LUKS_PASS:-tunaos-e2e-luks}" 900 300 \
-			2>&1 | tee "$installed_log" || cold_unlock_rc=$?
+			env -u TUNAOS_XFCE_PASSWORD -u TUNAOS_WALKTHROUGH_LUKS_PASS -u E2E_LUKS_PASS \
+			"${unlock_bound[@]}" python3 "${SCRIPT_DIR}/luks-first-boot.py" \
+			"$fb_serial" "$MONITOR_SOCK" --passphrase-stdin 900 300 \
+			<<<"${E2E_LUKS_PASS:-tunaos-e2e-luks}" 2>&1 | tee "$installed_log" || cold_unlock_rc=$?
 		strict_stop_boot_observer
 		if [[ "$cold_unlock_rc" -ne 0 ]]; then
 			echo "ERROR: strict encrypted disk did not unlock with the passphrase / reach login" >&2
@@ -4120,9 +4197,10 @@ verify_strict_installed_boot() {
 		local warm_unlock_rc=0
 		TUNAOS_LUKS_NO_POWEROFF=1 \
 			TUNAOS_LUKS_GRUB_APPEND="" \
-			python3 "${SCRIPT_DIR}/luks-first-boot.py" \
-			"$fb_serial2" "$MONITOR_SOCK" "${E2E_LUKS_PASS:-tunaos-e2e-luks}" 900 300 \
-			2>&1 | tee "${OUTPUT_DIR}/strict-${mode}-warm-serial.log" || warm_unlock_rc=$?
+			env -u TUNAOS_XFCE_PASSWORD -u TUNAOS_WALKTHROUGH_LUKS_PASS -u E2E_LUKS_PASS \
+			"${unlock_bound[@]}" python3 "${SCRIPT_DIR}/luks-first-boot.py" \
+			"$fb_serial2" "$MONITOR_SOCK" --passphrase-stdin 900 300 \
+			<<<"${E2E_LUKS_PASS:-tunaos-e2e-luks}" 2>&1 | tee "${OUTPUT_DIR}/strict-${mode}-warm-serial.log" || warm_unlock_rc=$?
 		strict_stop_boot_observer
 		if [[ "$warm_unlock_rc" -ne 0 ]]; then
 			echo "ERROR: strict warm boot (${mode}) failed" >&2
@@ -4203,7 +4281,9 @@ PYEOF
 
 emit_qualification_evidence() {
 	if [[ "${TUNAOS_QUAL_EXECUTION_KIND:-browser}" == "native-qemu" ]]; then
-		python3 "${SCRIPT_DIR}/native-iso-qualification.py" emit \
+		local emit_command=emit
+		[[ "${TUNAOS_XFCE_CANDIDATE:-0}" == 1 ]] && emit_command=emit-candidate
+		python3 "${SCRIPT_DIR}/native-iso-qualification.py" "$emit_command" \
 			--directory "$OUTPUT_DIR" --output "$QUAL_EVIDENCE_JSON" \
 			--binding "${TUNAOS_NATIVE_BINDING:?native artifact binding is required}" \
 			--repository "${GITHUB_REPOSITORY:?}" --run-id "${GITHUB_RUN_ID:?}" \
@@ -4367,6 +4447,7 @@ run_strict_offline_gui() {
 	# never combine with a fresh plain leg (or the reverse).
 	local _reset_mode
 	for _reset_mode in plain luks; do
+		rm -f "${OUTPUT_DIR}/session-${_reset_mode}-cold.json" "${OUTPUT_DIR}/session-${_reset_mode}-warm.json" "${OUTPUT_DIR}/frontend-${_reset_mode}.json" "${OUTPUT_DIR}/walkthrough-${_reset_mode}/walkthrough-xfce.json"
 		rm -f "${OUTPUT_DIR}/strict-qual-${_reset_mode}.json" "${OUTPUT_DIR}/walkthrough-${_reset_mode}/walkthrough-gnome.json"
 	done
 	local rc=0 mrc

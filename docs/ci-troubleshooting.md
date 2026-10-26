@@ -2541,6 +2541,17 @@ The gate does not accept them as proof of an unchanged boot.
 Do not relabel or promote old receipts. Native evidence stays separate from
 browser parity and cutover evidence.
 
+### Strict preflight refuses a configured ISO target
+
+`scripts/plan-iso-qualification.py` retains each ISO row from TOML.
+The merged base removes the preview required-platform policy; its inferred
+ARM64 obligations no longer define coverage. Skipjack GNOME/v2 remains a
+configured CPU conflict. Native preflight rejects it. Resolve that row
+with the configuration owner; do not omit it.
+
+KDE still needs its frontend producer. XFCE has an explicit Bonito candidate.
+A session contract is not proof of installation through the GUI.
+See [bounded desktop qualification](ISO-DESKTOP-QUALIFICATION.md).
 ### The strict job fails and the log hides which leg failed (#3380)
 
 **Symptom:** The job `Qualify exact native ISO` fails with one exit code.
@@ -2571,7 +2582,8 @@ strict install check. The weekly smoke test of `iso-e2e.yml` runs the readiness 
 The encrypted leg fails by policy until the image shows the prompt (#3380).
 A trigger on every pull request would add a red mark that nobody can act on.
 
-**Fix:** `qualify-native-iso` runs only from a manual dispatch with flavor `gnome`.
+**Fix:** `qualify-native-iso` runs only from a manual dispatch with flavor `gnome`
+or the explicit Bonito/XFCE/AMD64 candidate.
 In `iso-e2e.yml` the strict step runs only for `source: native-artifact`.
 Every other source keeps `Run readiness e2e`.
 No green criterion names the strict job as a gate. Add it to a criterion only after
@@ -2611,3 +2623,85 @@ paths and retry cleanup; do not remove recovery state to make preparation pass.
 For old text snapshots, use the old helper, not the JSON reader.
 Tests use temporary files and inert proc fixtures only. They do not prove
 host cleanup, proc visibility or successful initramfs collection.
+
+
+### XFCE candidate fails credential, publication or capture tests
+
+Run `40240590000`, job `121312582507`, exposed failures in three tests.
+The credential scanner mistook Python's `secrets` module for GitHub credentials.
+The candidate imports that module as `guest_random`. It still uses secure
+`choice` and `token_hex`; the scanner and its credential rules stay intact.
+
+The producer and live probe each held a stock image reference.
+Both now use the publication resolver, and the media descriptor takes that
+exact target. Source digests and same-run identity checks still apply.
+The capture test now executes the real screenshot function with inert callbacks.
+It covers GNOME and XFCE strict paths and the VNC fallback without a guest.
+
+
+### XFCE candidate stops before launch or loses failure artifacts
+
+The review before launch of #3965 found passwords in positional arguments for LUKS.
+It also found implicit limits on jobs, missing yq setup, and logs outside the upload paths.
+The candidate now checks tools and host resources before expensive work.
+A deadline shared by all phases bounds the required boot sequence. LUKS input uses stdin.
+
+The collector uses fixed paths and removes known credentials.
+It omits frames from private login screens.
+Check `strict-diagnostics/collection.json` for omitted large files.
+`tests/test_xfce_launch_readiness.py` exercises these boundaries without guests.
+A resource or timeout failure is not qualification evidence.
+
+
+### Candidate concurrency fails four static assertions
+
+Run `40251533084`, job `121344308454`, failed four assertions about concurrency.
+The tests required literal `true` for cancellation and one fixed expression
+for the group. They could not evaluate the explicit XFCE exception.
+
+The contract now evaluates declared events and inputs through a small parser.
+PR pushes still share a group and cancel superseded runs. Ordinary dispatches
+keep a group per run. Explicit candidates share a separate group without
+cancellation of an active run. Caller and consumer use distinct groups.
+
+Negative controls reject a reversed policy and unknown expression syntax.
+The workflow definitions did not change.
+
+
+### XFCE candidate carries inherited guest access credentials
+
+The #3965 source audit found an unconditional call to vsock setup. It generated
+an SSH key and passed access credentials through SMBIOS, even on the candidate.
+The candidate now skips that setup and rejects its arguments at both launchers.
+Its shutdown path uses ACPI. Ordinary modes retain the existing fallback.
+
+The same audit found a KVM udev rule with mode `0666` on the consumer.
+The candidate skips that rule and checks the existing device as root instead.
+Access failures remain failures. `tests/test_xfce_no_injected_access.py` exercises
+these boundaries with inert callbacks and records no runtime qualification.
+
+
+### Root candidate still changes subordinate IDs or AppArmor policy
+
+The #3965 audit found the shared rootless setup before a root-only candidate
+build. Pinned Tacklebox defaults to root at EUID zero and runs its mount scripts
+directly. The local-image path does not need a pull into the user's store.
+
+Candidates now skip that setup. Both producer calls explicitly select root
+context after sudo; ordinary modes keep their existing setup and context.
+Tests inject a contradictory user context and remove each override to verify the
+boundary. No host settings changed during those inert checks.
+
+### Diagnostic branch conflicts with the XFCE candidate base
+
+The merge of base `40ae2f46` into diagnostic head `809ca56d` conflicts in six files.
+Both modes now keep their own exclusions for host setup, credentials and evidence.
+The preflight for candidates skips the diagnostic, so its total job budget stays
+at 248 minutes. The matrix rejects a request for both modes.
+
+The base planner rejects the old `linux/amd64/v2` diagnostic target.
+The diagnostic now uses configured Skipjack/GNOME `linux/amd64`, with its
+`x86-64-v3` baseline. The strict and provenance fixtures from the new base stay intact.
+The unlock helper takes the passphrase on stdin. Diagnostic mode keeps serial
+output suppressed; ordinary output uses the base redactor. These source and
+fixture checks supply no runtime or qualification evidence.

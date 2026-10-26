@@ -45,6 +45,7 @@ OVMF_VARS={out}/UEFI_VARS.fd
 UEFI_VARS_SRC={src if template else ""}
 ISO_PATH={iso}
 QEMU=/bin/true
+qemu-img() {{ echo "unexpected image command" >&2; return 99; }}
 STRICT_OFFLINE_GUI_MODES=plain,luks
 QUAL_EVIDENCE_JSON={out}/qual.json
 STRICT_EVIDENCE_LOG={out}/evidence.log

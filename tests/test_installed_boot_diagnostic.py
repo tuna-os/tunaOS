@@ -739,7 +739,7 @@ def test_prepare_rejects_cross_attempt_and_wrong_target():
     module_spec=importlib.util.spec_from_file_location('prepare_diagnostic',ROOT/'scripts/prepare-installed-boot-diagnostic.py')
     module=importlib.util.module_from_spec(module_spec);module_spec.loader.exec_module(module)
     sha='a'*40; digest='sha256:'+'b'*64
-    env={'VARIANT':'skipjack','FLAVOR':'gnome','TUNAOS_QUAL_PLATFORM':'linux/amd64/v2',
+    env={'VARIANT':'skipjack','FLAVOR':'gnome','TUNAOS_QUAL_PLATFORM':'linux/amd64',
          'GITHUB_REPOSITORY':'tuna-os/tunaOS','GITHUB_RUN_ID':'123','GITHUB_RUN_ATTEMPT':'1'}
     for key in ('source','overlay','installer','engine','media'):
         env['TUNAOS_QUAL_'+key.upper()+'_DIGEST']=digest
@@ -835,7 +835,9 @@ def test_diagnostic_serial_observer_never_writes_to_guest(monkeypatch,serial_tex
     monkeypatch.setattr(time,'sleep',lambda _:None)
     monkeypatch.setenv('TUNAOS_INSTALLED_BOOT_DIAGNOSTIC','1')
     monkeypatch.setenv('TUNAOS_LUKS_GRUB_APPEND','')
-    monkeypatch.setattr(sys,'argv',['luks-first-boot.py','fixture-serial','fixture-monitor','NEVER-SENT','1'])
+    monkeypatch.setattr(sys,'argv',['luks-first-boot.py','fixture-serial','fixture-monitor','--passphrase-stdin','1'])
+    from lib import luks_secret
+    monkeypatch.setattr(luks_secret, 'read_passphrase', lambda: 'NEVER-SENT')
     with pytest.raises(SystemExit) as result:runpy.run_path(str(ROOT/'scripts/luks-first-boot.py'),run_name='__main__')
     assert result.value.code==expected
 

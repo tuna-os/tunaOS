@@ -266,9 +266,9 @@ def test_native_platform_resolution_from_clean_checkout(tmp_path):
     envfile = tmp_path / 'github-env'
     result = subprocess.run(['bash', '-euc', script], cwd=tmp_path, capture_output=True,
                             text=True, env={**os.environ, 'VARIANT': 'skipjack',
-                                            'FLAVOR': 'gnome', 'GITHUB_ENV': str(envfile)})
+                                            'FLAVOR': 'gnome', 'CANDIDATE_XFCE': 'false', 'REQUESTED_PLATFORM': 'linux/amd64', 'GITHUB_ENV': str(envfile)})
     assert result.returncode == 0, result.stderr
-    assert envfile.read_text() == 'PLATFORM=linux/amd64/v2\n'
+    assert envfile.read_text() == 'PLATFORM=linux/amd64\n'
     e2e = yaml.safe_load((ROOT / '.github/workflows/iso-e2e.yml').read_text())
     matrix = next(step['run'] for step in e2e['jobs']['generate-matrix']['steps']
                   if step.get('id') == 'gen')

@@ -452,7 +452,7 @@ def run(args):
     env.update(QEMU=str(wrapper), TUNAOS_DIAGNOSTIC_SOCKET=str(endpoint),
                TUNAOS_INSTALLED_BOOT_DIAGNOSTIC='1', TBOX_E2E_GPU='plain',
                TUNAOS_QUAL_EXECUTION_KIND='native-qemu', STRICT_PUBLISHED_MEDIA='1',
-               VARIANT='skipjack', FLAVOR='gnome', TUNAOS_QUAL_PLATFORM='linux/amd64/v2')
+               VARIANT='skipjack', FLAVOR='gnome', TUNAOS_QUAL_PLATFORM='linux/amd64')
     for key in ('source', 'overlay', 'installer', 'engine', 'media'):
         env['TUNAOS_QUAL_' + key.upper() + '_DIGEST'] = p[key]
     report = {'schema': 'InstalledBootDiagnostic/v1', 'fresh_install': True,
@@ -460,7 +460,7 @@ def run(args):
               'reference_run': 40093907774,
               'qualified': False, 'provenance': p, 'collection': 'not_collected',
               'input_digest_status': 'verified_media_inputs_not_installed_identity',
-              'expected_target': {'variant':'skipjack','flavor':'gnome','platform':'linux/amd64/v2'},
+              'expected_target': {'variant':'skipjack','flavor':'gnome','platform':'linux/amd64'},
               'tools': {'qemu_sha256':lock['qemu']['sha256'], 'qemu_version':qemu_version,
                         'guestfs_version':lock['guestfs_version'], 'zstandard_version':'0.25.0'},
               'gpu_policy':'plain', 'runtime_initialization':'not_observed'}

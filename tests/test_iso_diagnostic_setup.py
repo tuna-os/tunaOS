@@ -178,7 +178,7 @@ def test_actual_host_setup_passes_package_selection_and_propagates_apt_failure(t
     calls = tmp_path / 'calls'
     result = subprocess.run(['bash', '-euo', 'pipefail', '-c', body], cwd=ROOT,
         env={**os.environ, 'PATH': str(bin_dir)+':'+os.environ['PATH'], 'CALLS': str(calls),
-             'APT_RC': str(rc), 'PLATFORM': 'linux/amd64/v2', 'DIAGNOSTIC_MODE': mode},
+             'APT_RC': str(rc), 'PLATFORM': 'linux/amd64', 'DIAGNOSTIC_MODE': mode},
         capture_output=True, text=True, timeout=5)
     assert result.returncode == rc, result.stderr
     commands = calls.read_text()

@@ -167,7 +167,7 @@ def test_existing_platform_and_installer_gates_remain_closed(tmp_path, case):
     assert output == ''
 
 
-def run_local_build_identity(tmp_path, overlay_digest, *, wrong_ref=False):
+def run_local_build_identity(tmp_path, overlay_digest, *, wrong_ref=False, candidate=False, clear_context=False, remove_context_from=None):
     """Run the source/export/customization segment, with external command stubs.
 
     The sudo stub is a real child process preserving only inherited environment;
@@ -178,20 +178,36 @@ def run_local_build_identity(tmp_path, overlay_digest, *, wrong_ref=False):
     start = body.index('TUNA_LIVE_BASE_IMAGE=')
     end = body.index("# The source's raw manifest", start)
     body = 'set -euo pipefail\n' + body[start:end]
+    if remove_context_from=='overlay':
+        body=body.replace('HOME=/root \"${context_env[@]}\"','HOME=/root')
+    elif remove_context_from=='iso':
+        body=body.replace('\"PATH=$PATH\" \"${context_env[@]}\"','\"PATH=$PATH\"')
     bin_dir = tmp_path / 'bin'
     bin_dir.mkdir()
     (tmp_path / 'scripts').symlink_to(ROOT / 'scripts', target_is_directory=True)
     (tmp_path / 'tunaos.toml').write_bytes((ROOT / 'tunaos.toml').read_bytes())
-    executable(bin_dir / 'skopeo', 'import sys\nassert sys.argv[1:]==["inspect","--raw","containers-storage:localhost/yellowfin:gnome"]\nsys.stdout.write("base-manifest")\n')
+    executable(bin_dir / 'skopeo', 'import os,sys\nassert sys.argv[1:]==["inspect","--raw","containers-storage:localhost/"+os.environ["VARIANT"]+":"+os.environ["FLAVOR"]]\nsys.stdout.write("base-manifest")\n')
     executable(bin_dir / 'sudo', """import os, sys, json, shlex
 args = sys.argv[1:]
+if os.environ.get('CLEAR_CONTEXT')=='1':os.environ.pop('TACKLEBOX_CONTEXT',None)
 if 'scripts/build-native-live-overlay.sh' in args:
+    child_env=dict(os.environ)
+    j=args.index('env')+1
+    while j<len(args):
+        if args[j]=='-u':child_env.pop(args[j+1],None);j+=2
+        elif '=' in args[j]:
+            key,value=args[j].split('=',1);child_env[key]=value;j+=1
+        else:break
+    assert args[j]=='bash'
+    if os.environ.get('TUNAOS_XFCE_CANDIDATE')=='1':assert child_env.get('TACKLEBOX_CONTEXT')=='root'
+    with open(os.environ['CONTEXT_TRACE'],'w') as f:json.dump(child_env.get('TACKLEBOX_CONTEXT'),f)
+
     i=args.index('scripts/build-native-live-overlay.sh')
-    assert args[i+1:i+5]==['yellowfin','gnome','linux/amd64/v2','localhost/yellowfin:gnome']
+    assert args[i+1:i+5]==[os.environ['VARIANT'],os.environ['FLAVOR'],os.environ['PLATFORM'],'localhost/'+os.environ['VARIANT']+':'+os.environ['FLAVOR']]
     assert args[i+5]==os.environ['FAKE_BASE_DIGEST']
     digest=os.environ['FAKE_OVERLAY_DIGEST']
     with open(args[i+6], 'w') as f:
-        f.write('TUNA_LIVE_OVERLAY_REF='+shlex.quote(('localhost/wrong:gnome@' if os.environ['WRONG_REF']=='1' else 'localhost/native-live-overlay:yellowfin-gnome@')+digest)+'\\n')
+        f.write('TUNA_LIVE_OVERLAY_REF='+shlex.quote(('localhost/wrong:gnome@' if os.environ['WRONG_REF']=='1' else 'localhost/native-live-overlay:'+os.environ['VARIANT']+'-'+os.environ['FLAVOR']+'@')+digest)+'\\n')
         f.write('TUNA_LIVE_OVERLAY_DIGEST='+shlex.quote(digest)+'\\n')
 else:
     if args[0]=='-E': args=args[1:]
@@ -199,39 +215,65 @@ else:
     os.execvp(args[0], args)
 """)
     executable(bin_dir / 'just', """import json, os, sys
-assert sys.argv[1:] == ['iso','yellowfin','gnome','local','gnome','0','linux/amd64/v2']
+if os.environ.get('TUNAOS_XFCE_CANDIDATE')=='1':assert os.environ.get('TACKLEBOX_CONTEXT')=='root'
+assert sys.argv[1:] == ['iso',os.environ['VARIANT'],os.environ['FLAVOR'],'local',os.environ['FLAVOR'],'0',os.environ['PLATFORM']]
 with open(os.environ['CUSTOMIZE_ENV'], 'w') as output:
-    json.dump({key:value for key,value in os.environ.items() if key.startswith('TUNA_LIVE_')},output)
+    json.dump({key:value for key,value in os.environ.items() if key.startswith('TUNA_LIVE_') or key=='TACKLEBOX_CONTEXT'},output)
 """)
     result_path = tmp_path / 'customization-env.json'
     env = {key:value for key,value in os.environ.items() if not key.startswith('TUNA_LIVE_')}
     env.update(PATH=str(bin_dir)+os.pathsep+os.environ['PATH'], VARIANT='yellowfin', FLAVOR='gnome',
                PLATFORM='linux/amd64/v2', RUNNER_TEMP=str(tmp_path), FAKE_OVERLAY_DIGEST=overlay_digest,
-               FAKE_BASE_DIGEST=BASE, CUSTOMIZE_ENV=str(result_path), WRONG_REF='1' if wrong_ref else '0')
+               FAKE_BASE_DIGEST=BASE, CUSTOMIZE_ENV=str(result_path), WRONG_REF='1' if wrong_ref else '0',
+               TACKLEBOX_CONTEXT='user',CLEAR_CONTEXT='1' if clear_context else '0',CONTEXT_TRACE=str(tmp_path/'overlay-context.json'))
+    if candidate:
+        env.update(VARIANT='bonito',FLAVOR='xfce',PLATFORM='linux/amd64',TUNAOS_XFCE_CANDIDATE='1')
     result = subprocess.run(['/bin/bash','-c',body],cwd=tmp_path,env=env,
                             text=True,capture_output=True,timeout=15)
     return result,json.loads(result_path.read_text()) if result_path.exists() else None
 
 
-def test_customization_child_receives_exact_verified_overlay_digest(tmp_path):
-    result, child_env = run_local_build_identity(tmp_path, DIGEST)
+@pytest.mark.parametrize('candidate',[False,True])
+def test_customization_child_receives_exact_verified_overlay_digest(tmp_path,candidate):
+    result, child_env = run_local_build_identity(tmp_path, DIGEST,candidate=candidate)
     assert result.returncode == 0, result.stdout + result.stderr
     assert child_env['TUNA_LIVE_OVERLAY_DIGEST'] == DIGEST
-    assert child_env['TUNA_LIVE_OVERLAY_REF'] == 'localhost/native-live-overlay:yellowfin-gnome@' + DIGEST
+    assert child_env['TUNA_LIVE_OVERLAY_REF'] == 'localhost/native-live-overlay:'+('bonito-xfce' if candidate else 'yellowfin-gnome')+'@'+DIGEST
     assert child_env['TUNA_LIVE_BASE_DIGEST'] == BASE
     assert child_env['TUNA_LIVE_OVERLAY_DIGEST'] != child_env['TUNA_LIVE_BASE_DIGEST']
 
 
+@pytest.mark.parametrize('candidate',[False,True])
 @pytest.mark.parametrize('digest', ['', 'unknown', 'sha256:bad', 'sha256:' + 'A' * 64])
-def test_missing_or_invalid_overlay_digest_never_reaches_customization(tmp_path, digest):
-    result, child_env = run_local_build_identity(tmp_path, digest)
+def test_missing_or_invalid_overlay_digest_never_reaches_customization(tmp_path, digest,candidate):
+    result, child_env = run_local_build_identity(tmp_path, digest,candidate=candidate)
     assert result.returncode != 0
     assert 'invalid live overlay digest' in result.stdout
     assert child_env is None
 
 
-def test_native_overlay_reference_must_match_digest_and_target(tmp_path):
-    result, child_env = run_local_build_identity(tmp_path, DIGEST, wrong_ref=True)
+@pytest.mark.parametrize('candidate',[False,True])
+def test_native_overlay_reference_must_match_digest_and_target(tmp_path,candidate):
+    result, child_env = run_local_build_identity(tmp_path, DIGEST, wrong_ref=True,candidate=candidate)
     assert result.returncode != 0
     assert 'native overlay reference does not match' in result.stdout
     assert child_env is None
+
+
+@pytest.mark.parametrize('candidate',[False,True])
+@pytest.mark.parametrize('clear_context',[False,True])
+def test_context_crosses_both_sudo_boundaries(tmp_path,candidate,clear_context):
+    result,child=run_local_build_identity(tmp_path,DIGEST,candidate=candidate,clear_context=clear_context)
+    assert result.returncode==0,result.stderr
+    expected='root' if candidate else None if clear_context else 'user'
+    assert json.loads((tmp_path/'overlay-context.json').read_text())==expected
+    assert child.get('TACKLEBOX_CONTEXT')==expected
+
+
+@pytest.mark.parametrize('boundary',['overlay','iso'])
+@pytest.mark.parametrize('clear_context',[False,True])
+def test_candidate_context_override_cannot_be_lost_at_either_boundary(tmp_path,boundary,clear_context):
+    result,child=run_local_build_identity(tmp_path,DIGEST,candidate=True,
+        clear_context=clear_context,remove_context_from=boundary)
+    assert result.returncode!=0
+    assert child is None
