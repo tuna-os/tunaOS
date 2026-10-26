@@ -93,6 +93,8 @@ def test_el10_initramfs_evidence_scales_with_realistic_archive():
     assert result['dracut_build_parameters_sha256'] == d.digest(b'--zstd\n')
     assert result['theme_selection'] == 'spinner'
     assert all(result['theme_evidence'].values())
+
+
     assert set(result['components']) >= {
         'password_agent', 'ask_password_plymouth_path', 'ask_password_plymouth_service'}
 
@@ -100,6 +102,24 @@ def test_el10_initramfs_evidence_scales_with_realistic_archive():
     entries = b''.join(cpio(f'usr/share/empty/{index:04d}.dat') for index in range(3095))
     assert len(d.archive_metadata(entries, deadline=time.monotonic() + 8)['components']) == 0
     assert time.monotonic() - started < 8
+@pytest.mark.parametrize('member', [
+    'usr/share/plymouth/themes/other/spinner.script',
+    'usr/share/plymouth/themes/spinner/spinner.script',
+])
+def test_theme_script_evidence_requires_exact_regular_member_path(member):
+    entries = [
+        cpio('etc/plymouth/plymouthd.conf', b'[Daemon]\nTheme=spinner\n'),
+        cpio('usr/share/plymouth/themes/spinner/spinner.plymouth',
+             b'[Plymouth Theme]\nModuleName=script\nScriptFile=/usr/share/plymouth/themes/spinner/spinner.script\n'),
+    ]
+    if member.endswith('/spinner.script') and '/other/' in member:
+        entries.append(cpio(member, b'not the referenced path'))
+    else:
+        entries.append(cpio(member, b'../other/spinner.script', stat.S_IFLNK | 0o777))
+    result = d.archive_metadata(b''.join(entries))
+    assert result['theme_selection'] == 'spinner'
+    assert result['theme_evidence']['theme_file']
+    assert not result['theme_evidence']['script_file']
 
 
 def test_driver_absence_is_only_reported_when_module_metadata_exists():
@@ -111,6 +131,18 @@ def test_driver_absence_is_only_reported_when_module_metadata_exists():
     assert result['drivers'] == {
         'virtio_gpu': 'module_not_in_initramfs',
         'simpledrm': 'builtin',
+        'drm': 'module_not_in_initramfs'}
+
+
+def test_modules_dep_entry_without_cpio_module_is_index_only():
+    root = 'usr/lib/modules/6.12.0-278.el10.x86_64/'
+    archive = cpio(root + 'modules.dep',
+                   b'kernel/drivers/gpu/drm/virtio/virtio-gpu.ko.xz: '
+                   b'kernel/drivers/virtio/virtio_dma_buf.ko.xz\n')
+
+    assert d.archive_metadata(archive)['drivers'] == {
+        'virtio_gpu': 'index_only',
+        'simpledrm': 'module_not_in_initramfs',
         'drm': 'module_not_in_initramfs'}
 
 
@@ -141,23 +173,27 @@ def test_builtin_absent_and_module_are_distinct():
 
 def test_argument_value_redaction():
     result = d.safe_options(
-        'rhgb quiet console=ttyS1,115200n8 console=tty0 drm.debug=0x1e '
+        'rhgb quiet console=ttyS1,115200n8 console=tty0 console=SECRET drm.debug=0x1e '
         'rd.luks.key=SECRET rd.luks.name=UUID=secret systemd.show_status=1 '
         'plymouth.enable=0 rd.plymouth=0 rd.driver.blacklist=nouveau '
-        'video=HDMI-A-1:1920x1080 vt.global_cursor_default=0 fbcon=nodefer '
-        'nomodeset splash root=/dev/disk/by-uuid/SECRET')
+        'rd.driver.blacklist=SECRET video=HDMI-A-1:1920x1080 video=SECRET:1920x1080 '
+        'vt.global_cursor_default=0 fbcon=nodefer nomodeset splash root=/dev/disk/by-uuid/SECRET')
     assert result['safe'] == [
         'rhgb', 'quiet', 'console=ttyS1,115200n8', 'console=tty0', 'drm.debug=0x1e',
         'rd.luks.key=<redacted>', 'rd.luks.name=<redacted>', 'systemd.show_status=1',
         'plymouth.enable=0', 'rd.plymouth=0', 'rd.driver.blacklist=nouveau',
         'video=HDMI-A-1:1920x1080', 'vt.global_cursor_default=0', 'fbcon=nodefer',
         'nomodeset', 'splash', 'root=<redacted>']
-    assert result['redacted_count'] == 0 and 'SECRET' not in json.dumps(result) and 'UUID=secret' not in json.dumps(result)
+    assert result['redacted_count'] == 3
+    assert 'SECRET' not in json.dumps(result) and 'UUID=secret' not in json.dumps(result)
 
 
 class Guest:
     def __init__(self, fs='ext4', guid='bc13c2ff-59e6-4262-a352-b275fd6f7172'):
         self.fs, self.guid, self.calls, self.links = fs, guid, [], set()
+        self.link_targets = {}
+        self.directories = {'/loader', '/loader/entries'}
+        self.labels = {'/dev/sda1': 'EFI', '/dev/sda3': 'boot'}
         self.files = {'/loader/entries/test.conf': b'linux /vmlinuz-6.12.0-278.el10.x86_64\ninitrd /initramfs-6.12.0-278.el10.x86_64\noptions quiet secret=HIDDEN\n',
                       '/vmlinuz-6.12.0-278.el10.x86_64': b'kernel',
                       '/initramfs-6.12.0-278.el10.x86_64': cpio('usr/sbin/plymouthd'),
@@ -165,13 +201,14 @@ class Guest:
     def list_filesystems(self): return {'/dev/sda1':'vfat', '/dev/sda2':'crypto_LUKS', '/dev/sda3':self.fs}
     def part_get_gpt_type(self, device, number):
         return 'c12a7328-f81f-11d2-ba4b-00a0c93ec93b' if number==1 else (self.guid if number==3 else 'unknown-root-guid')
-    def vfs_label(self, device): return "boot"
+    def vfs_label(self, device): return self.labels.get(device)
     def mount_options(self, options, device, root):
         self.device = device
         self.calls.append((options, device, root))
     def umount_all(self): self.calls.append('umount')
-    def is_symlink(self, path): return path in self.links
-    def is_dir(self, path, **kwargs): return self.device=='/dev/sda3' and path=='/loader/entries'
+    def is_symlink(self, path): return getattr(self,'device',None)=='/dev/sda3' and path in self.links
+    def readlink(self, path): return self.link_targets.get(path)
+    def is_dir(self, path, **kwargs): return self.device=='/dev/sda3' and path in self.directories
     def ls(self, path): return ['test.conf']
     def is_file(self, path, **kwargs): return path in self.files
     def filesize(self, path): return len(self.files[path])
@@ -185,6 +222,73 @@ def test_discovery_skips_empty_esp_and_reads_only_boot_candidate():
     assert result['candidates'][0]['kernel_config']['CONFIG_DRM']=='y'
     assert guest.calls == [('ro','/dev/sda1','/'),'umount',('ro,noload','/dev/sda3','/'),'umount']
     assert 'HIDDEN' not in json.dumps(result)
+
+
+def test_secret_argument_and_partition_label_are_redacted_in_report():
+    guest = Guest()
+    guest.files['/loader/entries/test.conf'] = (
+        b'linux /vmlinuz-6.12.0-278.el10.x86_64\n'
+        b'initrd /initramfs-6.12.0-278.el10.x86_64\n'
+        b'options quiet console=SECRET root=SECRET\n')
+    guest.labels['/dev/sda3'] = 'TOKEN_SECRET'
+
+    result = d.inspect_boot(guest)
+    serialized = json.dumps(result)
+
+    assert 'SECRET' not in serialized
+    assert result['candidates'][0]['options']['safe'] == ['quiet', 'root=<redacted>']
+    assert result['candidates'][0]['options']['redacted_count'] == 1
+
+
+def test_refusal_report_redacts_untrusted_partition_label(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    import resource
+
+    guest = Guest(fs='xfs')
+    guest.labels['/dev/sda3'] = 'TOKEN_SECRET'
+    guest.version = lambda: {'major': 1, 'minor': 52, 'release': 0}
+    guest.set_backend = lambda *args: None
+    guest.set_network = lambda *args: None
+    guest.set_memsize = lambda *args: None
+    guest.set_smp = lambda *args: None
+    guest.add_drive_opts = lambda *args, **kwargs: None
+    guest.launch = lambda: None
+    guest.close = lambda: None
+    monkeypatch.setitem(sys.modules, 'guestfs', SimpleNamespace(GuestFS=lambda **kwargs: guest))
+    monkeypatch.setattr(resource, 'setrlimit', lambda *args: None)
+    target = tmp_path/'report.json'
+    with pytest.raises(d.Refused, match='encrypted_or_unsupported_boot'):
+        supervisor.worker(tmp_path/'disk.qcow2', target, '1.52.0')
+
+    report = json.loads(target.read_text())
+    assert 'TOKEN_SECRET' not in json.dumps(report)
+    assert report['partitions'][-1]['label'] == '<redacted>'
+
+
+def test_ostree_loader_symlink_reads_only_validated_slot_directory():
+    guest = Guest()
+    guest.links.add('/loader')
+    guest.link_targets['/loader'] = 'loader.0'
+    guest.directories = {'/loader.0', '/loader.0/entries'}
+    entry = guest.files.pop('/loader/entries/test.conf')
+    guest.files['/loader.0/loader.conf'] = b'default test\n'
+    guest.files['/loader.0/entries/test.conf'] = entry
+
+    result = d.inspect_boot(guest)
+
+    assert result['selection'] == 'configured_default_not_runtime_observed'
+    assert result['boot_metadata'][0]['kind'] == 'loader_config'
+    assert result['selected_entry_sha256'] == d.digest(entry)
+    assert guest.calls == [('ro','/dev/sda1','/'),'umount',('ro,noload','/dev/sda3','/'),'umount']
+
+
+@pytest.mark.parametrize('target', ['loader.2', '../loader.0', '/loader.0', 'loader.0/entries'])
+def test_loader_symlink_rejects_any_noncanonical_target(target):
+    guest = Guest()
+    guest.links.add('/loader')
+    guest.link_targets['/loader'] = target
+    with pytest.raises(d.Refused, match='guest_symlink'):
+        d.inspect_boot(guest)
 
 
 @pytest.mark.parametrize('fs,guid', [('crypto_LUKS','bc13c2ff-59e6-4262-a352-b275fd6f7172'),
@@ -528,16 +632,50 @@ def test_service_launch_is_non_delegated_and_bounded(tmp_path,monkeypatch):
     def info(self,**kwargs):
         return {'User':str(os.getuid()),'Delegate':'no','KillMode':'control-group',
                 'Restart':'no','RemainAfterExit':'yes','InvocationID':'a'*32,
-                'ControlGroup':'/system.slice/'+self.unit,'MainPID':'12345'}
+                'ControlGroup':'/system.slice/'+self.unit,'MainPID':'12345',
+                'SupplementaryGroups':'kvm'}
     monkeypatch.setattr(supervisor.subprocess,'run',run)
     monkeypatch.setattr(supervisor.ContainedProcess,'info',info)
     monkeypatch.setattr(supervisor.Path,'is_file',lambda path:True)
-    supervisor.ContainedProcess(['fixture-command'],env={'LANG':'C'})
+    supervisor.ContainedProcess(['fixture-command'],env={'LANG':'C'},supplementary_groups=('kvm',))
     command=calls[0]
     assert '--property=KillMode=control-group' in command
     assert '--property=RuntimeMaxSec=3700' in command and '--remain-after-exit' in command
     assert '--property=Delegate=no' in command and '--property=NoNewPrivileges=yes' in command
+    assert '--property=SupplementaryGroups=kvm' in command
     assert command[-2:]==['--','fixture-command']
+
+
+def test_inspector_memory_limit_and_oom_failure_cleanup(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    calls = []
+    def run(argv, **kwargs):
+        calls.append(argv)
+        return SimpleNamespace(returncode=0)
+    def info(self, **kwargs):
+        return {'User':str(os.getuid()),'Delegate':'no','KillMode':'control-group',
+                'Restart':'no','RemainAfterExit':'yes','InvocationID':'a'*32,
+                'ControlGroup':'/system.slice/'+self.unit,'MainPID':'12345'}
+    monkeypatch.setattr(supervisor.subprocess, 'run', run)
+    monkeypatch.setattr(supervisor.ContainedProcess, 'info', info)
+    monkeypatch.setattr(supervisor.Path, 'is_file', lambda path: True)
+    monkeypatch.setattr(supervisor.Path, 'read_text', lambda path: str(4*1024**3))
+    supervisor.ContainedProcess(['fixture'], memory_max=4*1024**3)
+    assert '--property=MemoryMax=4294967296' in calls[0]
+    supervisor.OWNED_SERVICES.clear()
+    monkeypatch.undo()
+
+    cgroup = tmp_path/'service'
+    cgroup.mkdir()
+    (cgroup/'memory.events').write_text('low 0\nhigh 0\nmax 0\noom 1\noom_kill 1\noom_group_kill 0\n')
+    item = supervisor.ContainedProcess.__new__(supervisor.ContainedProcess)
+    item.memory_max = 4*1024**3
+    item.cgroup = cgroup
+    stopped = []
+    item.stop = lambda: stopped.append(True) or True
+    with pytest.raises(d.Refused, match='inspector_memory_limit'):
+        item.require_memory_ok()
+    assert stopped == [True]
 
 
 def test_diagnostic_registered_workflow_is_opt_in_and_bounded():

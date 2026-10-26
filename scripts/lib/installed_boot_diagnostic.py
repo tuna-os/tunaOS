@@ -84,8 +84,6 @@ def safe_options(raw):
     require(len(raw) <= 16384, 'options_limit')
     safe = []
     redacted = 0
-    prefixes = ('console=', 'plymouth.', 'rd.plymouth', 'rd.driver.', 'video=', 'vt.',
-                'fbcon', 'systemd.show_status')
     for token in raw.split():
         if token in ('rhgb', 'quiet', 'splash', 'nomodeset'):
             safe.append(token)
@@ -99,11 +97,32 @@ def safe_options(raw):
                 safe.append(name + '=<redacted>')
             else:
                 safe.append(name)
-        elif any(token.startswith(prefix) for prefix in prefixes):
+        elif re.fullmatch(r'console=(?:tty\d{1,2}|ttyS\d{1,2}|ttyAMA\d{1,2}|ttyUSB\d{1,2}|hvc\d{1,2}|xvc\d{1,2})(?:,\d{4,7}[neo][0-9]?)?', token):
+            safe.append(token)
+        elif re.fullmatch(r'plymouth\.(?:enable|debug)=[01]|plymouth\.ignore-serial-consoles', token):
+            safe.append(token)
+        elif re.fullmatch(r'rd\.plymouth=[01]', token):
+            safe.append(token)
+        elif re.fullmatch(r'rd\.driver\.(?:blacklist|whitelist)=(?:nouveau|nvidia(?:_drm|_modeset|_uvm)?|virtio_gpu|bochs|simpledrm|drm)(?:,(?:nouveau|nvidia(?:_drm|_modeset|_uvm)?|virtio_gpu|bochs|simpledrm|drm))*', token):
+            safe.append(token)
+        elif re.fullmatch(r'video=(?:HDMI-(?:[A-C]-\d{1,2}|\d{1,2})|DP-\d{1,2}|DVI-[A-I]-\d{1,2}|VGA-\d{1,2}|eDP-\d{1,2}|LVDS-\d{1,2}|DSI-\d{1,2}):\d{3,5}x\d{3,5}(?:@\d{2,3})?', token):
+            safe.append(token)
+        elif re.fullmatch(r'vt\.(?:global_cursor_default|default_redraw)=[01]', token):
+            safe.append(token)
+        elif re.fullmatch(r'fbcon=(?:nodefer|map:\d{1,2}|rotate:[0-3])', token):
+            safe.append(token)
+        elif re.fullmatch(r'systemd\.show_status=(?:0|1|auto|true|false)', token):
             safe.append(token)
         else:
             redacted += 1
     return {'safe': safe, 'redacted_count': redacted, 'sha256': digest(raw.encode())}
+
+
+def safe_partition_label(value):
+    if not isinstance(value, str):
+        return None
+    known = {'boot': 'boot', 'efi': 'EFI', 'esp': 'ESP', 'xbootldr': 'XBOOTLDR'}
+    return known.get(value.casefold(), '<redacted>') if len(value) <= 64 else '<redacted>'
 
 
 def kernel_config(raw):
@@ -181,6 +200,7 @@ def archive_metadata(blob, *, deadline=None):
     builtin, dependencies, module_files = set(), set(), set()
     module_metadata_seen = False
     theme_files, theme_definitions = set(), {}
+    theme_member_paths = set()
     theme_settings = {path: set() for path in THEME_CONF}
     plugins, fonts = set(), False
     while pos < len(pending):
@@ -260,6 +280,7 @@ def archive_metadata(blob, *, deadline=None):
             if match:
                 report['theme_files'] += 1
                 theme_files.add((match.group(1), match.group(2), match.group(3)))
+                theme_member_paths.add(name)
                 if match.group(3) == 'plymouth' and size <= 65536:
                     theme_definitions.setdefault(match.group(1), []).append(
                         bytes(content).decode('utf-8', errors='replace'))
@@ -277,8 +298,10 @@ def archive_metadata(blob, *, deadline=None):
     for driver, module in DRIVER_MODULES.items():
         if module in builtin:
             report['drivers'][driver] = 'builtin'
-        elif module in dependencies or module in module_files:
+        elif module in module_files:
             report['drivers'][driver] = 'module_in_initramfs'
+        elif module in dependencies:
+            report['drivers'][driver] = 'index_only'
         elif module_metadata_present:
             report['drivers'][driver] = 'module_not_in_initramfs'
     # The local daemon config overrides the packaged defaults when it names a theme.
@@ -294,9 +317,8 @@ def archive_metadata(blob, *, deadline=None):
         report['theme_evidence']['theme_file'] = any(theme == selected_theme and ext == 'plymouth'
                                                        for theme, _, ext in theme_files)
         report['theme_evidence']['script_plugin'] = 'script' in module_names and 'script' in plugins
-        report['theme_evidence']['script_file'] = len(script_files) == 1 and any(
-            filename + '.' + ext == PurePosixPath(next(iter(script_files))).name and theme == selected_theme
-            for theme, filename, ext in theme_files)
+        report['theme_evidence']['script_file'] = len(script_files) == 1 and (
+            _script_member_path(next(iter(script_files)), selected_theme) in theme_member_paths)
     report['theme_evidence']['label_plugin'] = 'label' in plugins
     report['theme_evidence']['font'] = fonts
     return report
@@ -306,6 +328,18 @@ def _module_name(path):
     name = PurePosixPath(path).name
     name = re.sub(r'\.ko(?:\.(?:xz|gz|zst))?$', '', name)
     return name.replace('-', '_')
+def _script_member_path(value, theme):
+    """Normalize a Plymouth ScriptFile reference without resolving archive symlinks."""
+    if value.startswith('//'):
+        return None
+    if value.startswith('/'):
+        value = value[1:]
+    else:
+        value = f'usr/share/plymouth/themes/{theme}/{value}'
+    path = PurePosixPath(value)
+    if not value or path.is_absolute() or '..' in path.parts:
+        return None
+    return path.as_posix()
 
 
 def guest_regular(g, path, limit, budget=None):
@@ -350,7 +384,7 @@ def inspect_boot(g):
         except Exception:
             label = None
         partition_summary.append({'index': number, 'gpt_type_guid': guid,
-                                  'filesystem': fs, 'label': label})
+                                  'filesystem': fs, 'label': safe_partition_label(label)})
         labelled_boot = guid == '0fc63daf-8483-4772-8e79-3d69d8477de4' and label == 'boot'
         if guid in roles or labelled_boot:
             if fs not in ('vfat', 'ext4'):
@@ -365,25 +399,36 @@ def inspect_boot(g):
         try:
             default_entry = None
             require(not any(g.is_dir(path, followsymlinks=False) for path in ('/etc', '/root', '/home')), 'root_layout_refused')
-            for name in ('/loader/loader.conf', '/grub2/grubenv', '/EFI/BOOT/BOOTX64.EFI'):
-                if g.is_file(name, followsymlinks=False):
+            loader_root = None
+            if g.is_symlink('/loader'):
+                target = g.readlink('/loader')
+                require(target in ('loader.0', 'loader.1'), 'guest_symlink')
+                loader_root = '/' + target
+                require(g.is_dir(loader_root, followsymlinks=False), 'guest_symlink')
+            elif g.is_dir('/loader', followsymlinks=False):
+                loader_root = '/loader'
+            loader_config = loader_root + '/loader.conf' if loader_root else None
+            entry_dir = loader_root + '/entries' if loader_root else None
+            if entry_dir:
+                require(not g.is_symlink(entry_dir), 'guest_symlink')
+            for name in (loader_config, '/grub2/grubenv', '/EFI/BOOT/BOOTX64.EFI'):
+                if name and g.is_file(name, followsymlinks=False):
                     data = read(name, 8*MIB if name.endswith('.EFI') else 65536)
-                    if name in ('/loader/loader.conf','/grub2/grubenv'):
-                        pattern = r'^default[ \t]+([A-Za-z0-9_.-]+)$' if name.endswith('loader.conf') else r'^saved_entry=([A-Za-z0-9_.-]+)$'
+                    if name in (loader_config, '/grub2/grubenv'):
+                        pattern = r'^default[ \t]+([A-Za-z0-9_.-]+)$' if name == loader_config else r'^saved_entry=([A-Za-z0-9_.-]+)$'
                         matches = re.findall(pattern, data.decode('ascii', errors='replace'), re.M)
                         if len(matches) == 1:
                             default_entry = matches[0]
-                    boot_metadata.append({'kind': {'/loader/loader.conf':'loader_config',
-                        '/grub2/grubenv':'grub_environment', '/EFI/BOOT/BOOTX64.EFI':'efi_fallback'}[name],
+                    boot_metadata.append({'kind': 'loader_config' if name == loader_config else
+                        'grub_environment' if name == '/grub2/grubenv' else 'efi_fallback',
                         'sha256':digest(data), 'bytes':len(data)})
             entries = []
-            if g.is_dir('/loader/entries', followsymlinks=False):
-                require(not g.is_symlink('/loader'), 'guest_symlink')
-                names = g.ls('/loader/entries')
+            if entry_dir and g.is_dir(entry_dir, followsymlinks=False):
+                names = g.ls(entry_dir)
                 require(len(names) <= 16, 'boot_entry_limit')
                 for name in sorted(names):
                     require(re.fullmatch(r'[A-Za-z0-9_.-]+\.conf', name) is not None, 'unknown_entry_name')
-                    raw = read('/loader/entries/' + name, 65536)
+                    raw = read(entry_dir + '/' + name, 65536)
                     fields = {}
                     for line in raw.decode('utf-8').splitlines():
                         key, _, value = line.partition(' ')

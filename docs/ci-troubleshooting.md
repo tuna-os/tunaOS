@@ -2586,10 +2586,3 @@ The native producer also checks the overlay receipt before ISO customization.
 It rejects malformed digests and references that name a different target.
 These checks do not supply qualification evidence.
 
-### Installed diagnostic fails during QEMU setup
-
-Run 40244509229 failed (APT exit 100): it could not install retired
-`qemu-system-x86=.16` with `.18` dependencies. Install QEMU unpinned from signed
-Noble archives and report its resolved version/hash. Check KVM access and ensure
-supermin can read the kernel. The stdlib failure report records missing evidence.
-It cannot pass the job.

@@ -168,20 +168,20 @@ saved-entry or loader default matches. It does not claim runtime selection.
 If that mapping is absent or ambiguous, selection remains unresolved. This is
 an explicit evidence limit, not a successful BLS-selected boot claim.
 
-The diagnostic path skips the existing KVM udev and rootless security setup.
-It needs existing KVM access, user mappings and user-namespace access. Missing
-access stops the run; the workflow does not change those settings.
+| Control | Diagnostic policy |
+| --- | --- |
+| KVM | Existing `kvm` group; no device-mode or udev change. |
+| Host inputs | Runner ACL read access to supermin's exact kernel and module tree; helper removes ACL. Missing tools or access stop the job. Producer preflight checks; consumer repeats and grants its own ACL. |
+| Memory | Inspector cgroup limit: 4 GiB. QEMU: 1 GiB. Parser address-space cap: 2 GiB. OOM stops inspection. Service stops; cgroup is empty on every exit. |
 
 The diagnostic serial observer sends no input. A visible password prompt stops
 observation before unlock; an emergency shell receives no commands. The default
-strict path keeps its normal behavior. A prompt-only stop is diagnostic evidence,
-not a successful cold boot. All failed starts remain in the service registry.
-The collector blocks inspection until all services have proof of closure.
+strict path keeps its normal boot behavior. A prompt-only stop is diagnostic
+evidence, not a successful cold boot. All failed starts remain in the service
+registry. The collector blocks inspection until all services have proof of closure.
 
-The preflight job checks existing KVM access before the costly producer. The
-consumer repeats that check. The two jobs use separate Ubuntu 24.04 runners;
-one successful preflight does not prove access on the next machine. A missing
-capability fails without a permission change or fallback run.
+Preflight checks KVM, cgroup v2, systemd, ACL tools and supermin paths. Missing
+items stop the job without device-mode or udev changes.
 
 Artifact transfer has a 20-minute cap in diagnostic mode. The media hash has a
 5-minute cap. The 120-minute job limit includes setup, transfer and collection;
@@ -199,10 +199,11 @@ The KVM preflight has an explicit guard for manual dispatch.
 It cannot run on a PR. The diagnostic still needs KVM; it has no TCG fallback.
 The runner check accepts only the three declared choices.
 
-Rootless setup checks existing access before any build command.
-In diagnostic mode it exits before any change to host security.
-Absent mappings or a failed namespace probe still cause failure.
-Strict mode retains its setup behavior.
+The rootless check runs before any build; diagnostic mode keeps rootless
+settings and refuses missing mappings or a failed namespace test.
+Another step gives the runner read access to the exact kernel and module inputs
+for supermin. It removes those ACLs after use. It does not change KVM mode or
+udev rules. Strict mode keeps its setup.
 
 Albacore run `40228536828` failed before boot.
 Its published ISO lacked `etc/tunaos/live-source.json`.
@@ -211,11 +212,11 @@ Use a fresh producer with the exact artifact identity.
 
 ### Setup failure evidence
 
-Run 40244509229 failed before ISO fetch: `qemu-system-x86=.16` was no longer
-installable with the QEMU dependencies resolved from Noble at `.18`. The diagnostic
-now installs QEMU packages from the signed Noble archive without a revision pin.
-It records the resolved executable version and SHA-256. This is a host tool change,
-not a product image change.
+Run 40244509229 failed before ISO fetch: Noble did not have the `.16` QEMU
+version. Diagnostic installs use the reviewed `.18` four-package set.
+Pre-install checks: signed apt metadata and full dependency simulation.
+APT checks signatures as usual. Installs verify package versions. The collector
+saves QEMU's version and hash.
 
 An always-run step uses only Python's standard library to write a failure
 report if the collector wrote none. It records step outcomes and declared

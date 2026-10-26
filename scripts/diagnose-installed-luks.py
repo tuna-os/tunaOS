@@ -57,7 +57,8 @@ class OwnedQemu:
             d.require(args.count('-daemonize') == 1 and args.count('-pidfile') == 1, 'launch_shape')
             pidfile = Path(args[args.index('-pidfile') + 1])
             d.require(pidfile == self.output/'qemu.pid', 'pidfile_not_owned')
-            child = ContainedProcess([self.executable, *[arg for arg in args if arg != '-daemonize']])
+            child = ContainedProcess([self.executable, *[arg for arg in args if arg != '-daemonize']],
+                                     supplementary_groups=('kvm',))
             self.children.append(child)
             d.require(child.pid > 0 and sum(c.pid == child.pid for c in self.children) == 1, 'ambiguous_qemu_pid')
             deadline = time.monotonic()+30
@@ -187,30 +188,37 @@ def validate_run(p, environment):
 class ContainedProcess:
     """Non-delegated transient service; retain it until explicit stop."""
     properties = ('InvocationID','ControlGroup','User','Delegate','KillMode','RemainAfterExit',
-                  'Restart','ActiveState','SubState','MainPID','ExecMainCode','ExecMainStatus','LoadState')
+                  'Restart','ActiveState','SubState','MainPID','ExecMainCode','ExecMainStatus','LoadState',
+                  'SupplementaryGroups')
 
-    def __init__(self, command, env=None):
+    def __init__(self, command, env=None, memory_max=None, supplementary_groups=()):
         self.unit = 'tunaos-diag-' + uuid.uuid4().hex + '.service'
         self.invocation = None
         self.cgroup = None
         self.returncode = None
         self.stopped = False
         self.stop_attempted = False
+        self.memory_max = memory_max
+        self.supplementary_groups = tuple(supplementary_groups)
         OWNED_SERVICES.append(self)
         settings = [f'--setenv={key}={value}' for key,value in (env or {}).items()]
+        memory_setting = ['--property=MemoryMax='+str(memory_max)] if memory_max is not None else []
+        group_setting = ['--property=SupplementaryGroups='+','.join(self.supplementary_groups)] if self.supplementary_groups else []
         command = ['sudo','-n','systemd-run','--quiet','--remain-after-exit',
             '--service-type=exec','--unit='+self.unit,'--property=User='+str(os.getuid()),
             '--property=NoNewPrivileges=yes','--property=Delegate=no','--property=Restart=no',
             '--property=KillMode=control-group','--property=TimeoutStopSec=20',
             '--property=RuntimeMaxSec=3700','--property=StandardOutput=null','--property=StandardError=null',
-            '--working-directory='+str(ROOT),'--expand-environment=no',*settings,'--',*command]
+            *memory_setting,*group_setting,'--working-directory='+str(ROOT),'--expand-environment=no',*settings,'--',*command]
         try:
             result = subprocess.run(command,capture_output=True,timeout=35,check=False)
             d.require(result.returncode == 0, 'service_start_failed')
             info = self.info(check_identity=False)
             d.require(info.get('User') == str(os.getuid()) and info.get('Delegate') == 'no'
                       and info.get('KillMode') == 'control-group' and info.get('Restart') == 'no'
-                      and info.get('RemainAfterExit') == 'yes', 'service_policy')
+                      and info.get('RemainAfterExit') == 'yes'
+                      and set(info.get('SupplementaryGroups','').split()) == set(self.supplementary_groups),
+                      'service_policy')
             d.require(len(info.get('InvocationID','')) == 32 and
                       all(c in '0123456789abcdef' for c in info['InvocationID']), 'service_invocation')
             path = info.get('ControlGroup','')
@@ -218,6 +226,9 @@ class ContainedProcess:
             self.invocation = info['InvocationID']
             self.cgroup = Path('/sys/fs/cgroup')/path.lstrip('/')
             d.require((self.cgroup/'cgroup.events').is_file(), 'cgroup_v2_required')
+            if memory_max is not None:
+                d.require((self.cgroup/'memory.max').read_text().strip() == str(memory_max)
+                          and (self.cgroup/'memory.events').is_file(), 'service_memory_limit')
             self.pid = int(info['MainPID'])
         except BaseException:
             self.stop()
@@ -231,6 +242,25 @@ class ContainedProcess:
         if check_identity:
             d.require(info.get('InvocationID') == self.invocation, 'service_identity_changed')
         return info
+
+    def require_memory_ok(self):
+        if self.memory_max is None:
+            return
+        events_path = self.cgroup/'memory.events'
+        d.require(events_path.is_file(), 'service_memory_events')
+        data = events_path.read_text()
+        d.require(len(data) <= 4096, 'service_memory_events')
+        events = {}
+        for line in data.splitlines():
+            fields = line.split()
+            d.require(len(fields) == 2 and fields[1].isdigit() and fields[0] not in events,
+                      'service_memory_events')
+            events[fields[0]] = int(fields[1])
+        d.require(all(key in events for key in ('oom', 'oom_kill', 'oom_group_kill')),
+                  'service_memory_events')
+        if any(events[key] for key in ('oom', 'oom_kill', 'oom_group_kill')):
+            d.require(self.stop(), 'inspector_stop_unproven')
+            raise d.Refused('inspector_memory_limit')
 
     def poll(self):
         if self.returncode is not None:
@@ -418,7 +448,7 @@ def run(args):
         harness = ContainedProcess(['bash', str(ROOT / 'scripts/iso-e2e.sh'), str(args.iso.resolve()),
                                     '--strict-offline-gui=luks', '--output', str(output),
                                     '--timeout', '600', '--memory', '4096', '--cpus', '4'],
-                                   env=env)
+                                   env=env, supplementary_groups=('kvm',))
         try:
             until = time.monotonic()+2700
             while harness.poll() is None:
@@ -457,12 +487,15 @@ def run(args):
         disk_hash = file_digest(disk, deadline)
         target = output / 'private-inspection.json'
         process = ContainedProcess([sys.executable, str(Path(__file__).resolve()), 'inspect',
-                                    str(disk), str(target), lock['guestfs_version']], env={k:v for k,v in env.items() if k in ('PATH','HOME','LANG')})
+                                    str(disk), str(target), lock['guestfs_version']],
+                                   env={k:v for k,v in env.items() if k in ('PATH','HOME','LANG')},
+                                   memory_max=4*1024**3, supplementary_groups=('kvm',))
         try:
             code = process.wait(timeout=max(1, deadline-time.monotonic()))
         except subprocess.TimeoutExpired:
             d.require(process.stop(), 'inspector_stop_unproven')
             raise d.Refused('inspection_timeout') from None
+        process.require_memory_ok()
         d.require(stop_group(process), 'inspector_group_stop_unproven')
         if code != 0 and target.is_file() and target.stat().st_size <= d.MAX_REPORT:
             inspection = json.loads(target.read_bytes())

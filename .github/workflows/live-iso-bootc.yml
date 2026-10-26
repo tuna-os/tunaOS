@@ -77,13 +77,17 @@ jobs:
     timeout-minutes: 3
     permissions: {}
     steps:
-      - name: Enable ephemeral runner KVM and require diagnostic prerequisites
+      - name: Check scoped KVM and supermin prerequisites
         run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | \
-            sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-          test -r /dev/kvm && test -w /dev/kvm
+          test -c /dev/kvm
+          getent group kvm
+          [[ "$(stat -c '%G' /dev/kvm)" == kvm ]]
+          kvm_mode="$(stat -c '%a' /dev/kvm)"
+          (( (8#$kvm_mode & 0060) == 0060 ))
+          kernel="/boot/vmlinuz-$(uname -r)"
+          modules="/usr/lib/modules/$(uname -r)"
+          test -f "$kernel" && test -d "$modules"
+          command -v setfacl && command -v getfacl
           test -r /sys/fs/cgroup/cgroup.controllers
           sudo -n true
           systemctl --version
