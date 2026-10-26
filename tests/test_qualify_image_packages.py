@@ -331,8 +331,7 @@ class FakeLog:
             flavor = reference.rsplit(":", 1)[1]
             image_info = ["/usr/share/ublue-os/image-info.json"]
             if entrypoint == "/usr/bin/cat" and command_args == image_info:
-                # The real overlay records its parent desktop's flavor, not the
-                # resolver's "desktop" placeholder (run 40223961920, el10).
+                # Match the real overlay metadata from run 40223961920.
                 target = "gnome" if flavor == "gnome-hwe" else (
                     "base" if route == "ubuntu" and flavor == "base" else
                     "base-no-de" if flavor == "base" else flavor
