@@ -1,6 +1,7 @@
 # Installed boot diagnostic candidate
 
-Integrated base: `cf04a15e5e2bb59556f209e7bdca891a5878e9ae` (#3431).
+Integrated base: `40ae2f46cde617cd03b6c85fcf024949f1cb32e1` (#3965),
+which retains `cf04a15e5e2bb59556f209e7bdca891a5878e9ae` (#3431).
 Branch: `codex/installed-initramfs-diagnostic`.
 This candidate has source tests only. No ISO, VM or disk inspection has run.
 Publication and dispatch need parent review.
@@ -12,6 +13,24 @@ Publication and dispatch need parent review.
 The binding must come from the existing native artifact fetcher. The source
 must be clean and match the collector commit in the input. Run identity
 must match the current GitHub job. The only target is Skipjack/GNOME linux/amd64 (configured x86-64-v3 baseline).
+
+Changed input after the base merge: `linux/amd64` replaces the prior diagnostic
+request for `linux/amd64/v2`. [Skipjack configuration](../tunaos.toml) omits `/v2`
+at variant level, but its GNOME flavor adds it. The native planner rejects that
+configured row: its CPU baseline conflicts with native producer support.
+The [CPU policy](../scripts/contracts/iso_qualification.py) assigns `x86-64-v3`
+to Skipjack `linux/amd64`, while an explicit `/v2` means `x86-64-v2`.
+This changes both the requested build platform and declared CPU contract.
+
+The integration does not change the base-image pin or compiler flags. No new
+image has run, and the earlier `/v2` label does not prove its actual CPU baseline.
+A future run uses changed inputs. It cannot establish equivalence to, or a fix
+for, the earlier `/v2` failure. Keep that earlier failure separate from new results.
+
+The producer and consumer both validate the explicit configured target.
+The consumer rejects an embedded platform that differs from that target.
+Source, overlay, media and run identity checks remain in force. Checks on
+`producer_attempt` and `attempt` also remain in force.
 
 The old ISO artifact 12560149748 is absent. Run 40093907774 did not retain its
 installed disk. The next run therefore needs one fresh producer and one fresh
