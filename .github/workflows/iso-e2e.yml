@@ -93,6 +93,14 @@ on:
       # dispatch-only iso-builder-artifact source.
       ISO_BUILDER_ARTIFACT_TOKEN:
         required: false
+      R2_ACCESS_KEY_ID:
+        required: false
+      R2_SECRET_ACCESS_KEY:
+        required: false
+      R2_ENDPOINT:
+        required: false
+      R2_BUCKET:
+        required: false
   workflow_dispatch:
     inputs:
       variant:

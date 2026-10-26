@@ -123,6 +123,10 @@ def test_downloads_are_cross_repo_with_an_explicit_actions_read_secret_and_pinne
     assert metadata["id"] == "iso_builder_metadata"
     assert metadata["env"]["GH_TOKEN"] == "${{ secrets.ISO_BUILDER_ARTIFACT_TOKEN }}"
     assert metadata["env"]["ARTIFACT_TOKEN"] == "${{ secrets.ISO_BUILDER_ARTIFACT_TOKEN }}"
+    call_secrets = ON["workflow_call"]["secrets"]
+    for secret in ("ISO_BUILDER_ARTIFACT_TOKEN", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_ENDPOINT", "R2_BUCKET"):
+        assert call_secrets[secret]["required"] is False, secret
+    assert not any(name.startswith("R2_") for name in metadata["env"])
     assert metadata["run"].index("ISO_BUILDER_ARTIFACT_TOKEN is required") < metadata["run"].index("gh api")
     assert metadata["run"].index("gh api") < metadata["run"].index("verify-metadata")
     assert "attempts/${ATTEMPT}/jobs" in metadata["run"]
