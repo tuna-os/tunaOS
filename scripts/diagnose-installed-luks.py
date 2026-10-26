@@ -166,14 +166,66 @@ def no_open_disk(path, deadline, output=None, *, proc_root=None):
             if fd_number is not None:
                 observation['fd'] = fd_number
             if previous_uid == uid and output is not None:
-                retry_denied_descriptor_scan(path, deadline, output, observation)
-                return
+                return retry_denied_descriptor_scan(path, deadline, output, observation,
+                                                    (identity.st_dev, identity.st_ino))
             raise d.Refused('open_descriptor_scan_denied',
                             {'descriptor_denials': [observation]}) from None
-def scan_open_descriptors(path, deadline, proc_root=Path('/proc'), same_uid=None):
-    identity = path.stat()
+class ScanObject:
+    """Hold every physical ancestor and the object; never act through a relookup."""
+    def __init__(self, path, *, write=False, metadata=False):
+        self.path = Path(path).absolute()
+        self.fds = []
+        self.names = self.path.parts[1:]
+        try:
+            self.fds.append(os.open('/', os.O_RDONLY | os.O_DIRECTORY))
+            for index, name in enumerate(self.names):
+                flags = os.O_NOFOLLOW | os.O_NONBLOCK
+                flags |= (os.O_PATH if metadata else os.O_RDWR if write else os.O_RDONLY) if index == len(self.names)-1 else os.O_RDONLY | os.O_DIRECTORY
+                self.fds.append(os.open(name, flags, dir_fd=self.fds[-1]))
+            self.identities = self.snapshot()
+            self.validate()
+        except BaseException:
+            self.close()
+            raise
+
+    @property
+    def fd(self):
+        return self.fds[-1]
+
+    def snapshot(self):
+        values = []
+        for index, fd in enumerate(self.fds):
+            info = os.fstat(fd)
+            values.append([info.st_dev, info.st_ino, info.st_ctime_ns if index < len(self.fds)-1 else 0])
+        return values
+
+    def validate(self):
+        d.require(self.snapshot() == self.identities, 'descriptor_ancestor_changed')
+        for index, name in enumerate(self.names):
+            info = os.stat(name, dir_fd=self.fds[index], follow_symlinks=False)
+            d.require([info.st_dev, info.st_ino] == self.identities[index+1][:2]
+                      and not stat.S_ISLNK(info.st_mode), 'descriptor_object_changed')
+        info = os.fstat(self.fd)
+        d.require(stat.S_ISREG(info.st_mode) and info.st_nlink == 1, 'descriptor_object_type')
+        return info
+
+    def close(self):
+        fds, self.fds = self.fds, []
+        failed = False
+        for fd in reversed(fds):
+            try:
+                os.close(fd)
+            except OSError:
+                failed = True
+        d.require(not failed, 'descriptor_handle_close_failed')
+
+
+def scan_open_descriptors(identity, deadline, proc_root=Path('/proc'), same_uid=None, metadata_handle=None):
+    """Compare inode metadata only. Root mode enumerates all users' descriptors."""
     counts = {'processes': 0, 'fds': 0}
     try:
+        if time.monotonic() >= deadline:
+            return 'timeout'
         for proc in proc_root.iterdir():
             if time.monotonic() >= deadline:
                 return 'timeout'
@@ -186,6 +238,8 @@ def scan_open_descriptors(path, deadline, proc_root=Path('/proc'), same_uid=None
                 if same_uid is not None and proc.stat().st_uid != same_uid:
                     continue
                 for fd in (proc / 'fd').iterdir():
+                    if metadata_handle == (int(proc.name), int(fd.name)):
+                        continue
                     counts['fds'] += 1
                     if counts['fds'] > 100000:
                         return 'limit'
@@ -195,7 +249,7 @@ def scan_open_descriptors(path, deadline, proc_root=Path('/proc'), same_uid=None
                         opened = fd.stat()
                     except FileNotFoundError:
                         continue
-                    if (opened.st_dev, opened.st_ino) == (identity.st_dev, identity.st_ino):
+                    if (opened.st_dev, opened.st_ino) == tuple(identity):
                         return 'open'
             except FileNotFoundError:
                 continue
@@ -203,79 +257,141 @@ def scan_open_descriptors(path, deadline, proc_root=Path('/proc'), same_uid=None
                 return 'denied'
     except (FileNotFoundError, PermissionError):
         return 'denied'
-    return 'clear'
+    return 'timeout' if time.monotonic() >= deadline else 'clear'
 
 
-def root_descriptor_scan(disk, result, owner_uid, seconds):
+def root_descriptor_scan(identity_json, result, owner_uid, deadline_text, result_identity_json, metadata_handle_json):
     d.require(os.geteuid() == 0, 'descriptor_scan_not_root')
     d.require(owner_uid.isdigit() and 0 < int(owner_uid) < 2**31, 'descriptor_scan_owner')
-    d.require(seconds.isdigit() and 1 <= int(seconds) <= 600, 'descriptor_scan_budget')
-    disk = Path(disk).absolute()
-    d.require(not any(parent.is_symlink() for parent in (disk, *disk.parents)), 'descriptor_disk_link')
-    disk_stat = disk.stat()
-    d.require(stat.S_ISREG(disk_stat.st_mode) and disk_stat.st_nlink == 1 and
-              disk_stat.st_uid == int(owner_uid), 'descriptor_disk_file')
-    status = scan_open_descriptors(disk, time.monotonic() + int(seconds))
-    target = Path(result).absolute()
-    parent_stat = target.parent.stat()
-    d.require(stat.S_ISDIR(parent_stat.st_mode) and parent_stat.st_uid == int(owner_uid) and
-              stat.S_IMODE(parent_stat.st_mode) & 0o077 == 0, 'descriptor_result_directory')
-    before = target.stat()
-    d.require(stat.S_ISREG(before.st_mode) and before.st_nlink == 1 and
-              before.st_uid == int(owner_uid) and before.st_size == 0 and
-              stat.S_IMODE(before.st_mode) == 0o602, 'descriptor_result_file')
-    result_fd = os.open(target, os.O_WRONLY | os.O_TRUNC | os.O_NOFOLLOW | os.O_NONBLOCK)
+    d.require(re.fullmatch(r'[0-9]+(?:\.[0-9]+)?', deadline_text), 'descriptor_scan_budget')
+    deadline = float(deadline_text)
+    d.require(0 < deadline-time.monotonic() <= 600, 'descriptor_scan_timeout')
+    identity = json.loads(identity_json)
+    d.require(isinstance(identity, list) and len(identity) == 2 and
+              all(type(v) is int and v >= 0 for v in identity), 'descriptor_disk_identity')
+    target = ScanObject(result, write=True)
     try:
-        actual = os.fstat(result_fd)
-        d.require((actual.st_dev, actual.st_ino, actual.st_uid) ==
-                  (before.st_dev, before.st_ino, int(owner_uid)), 'descriptor_result_changed')
+        d.require(target.identities == json.loads(result_identity_json), 'descriptor_result_changed')
+        parent = os.fstat(target.fds[-2])
+        before = target.validate()
+        d.require(parent.st_uid == int(owner_uid) and stat.S_IMODE(parent.st_mode) == 0o700,
+                  'descriptor_result_directory')
+        d.require(before.st_uid == int(owner_uid) and before.st_size == 0 and
+                  stat.S_IMODE(before.st_mode) == 0o602, 'descriptor_result_file')
+        metadata_handle = json.loads(metadata_handle_json)
+        d.require(isinstance(metadata_handle, list) and len(metadata_handle) == 2 and
+                  all(type(v) is int and v >= 0 for v in metadata_handle), 'descriptor_metadata_handle')
+        status = scan_open_descriptors(identity, deadline, metadata_handle=tuple(metadata_handle))
+        target.validate()
+        # No truncate: only the validated, held original result receives bytes.
         data = (status + chr(10)).encode('ascii')
-        d.require(os.write(result_fd, data) == len(data), 'descriptor_result_write')
+        d.require(os.pwrite(target.fd, data, 0) == len(data), 'descriptor_result_write')
+        target.validate()
     finally:
-        os.close(result_fd)
+        target.close()
     return 0
 
 
-def retry_denied_descriptor_scan(path, deadline, output, observation):
-    output_stat = output.stat()
-    d.require(stat.S_ISDIR(output_stat.st_mode) and output_stat.st_uid == os.getuid() and
-              stat.S_IMODE(output_stat.st_mode) & 0o077 == 0, 'descriptor_output_private')
-    result = output / 'descriptor-scan.result'
-    fd = os.open(result, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o602)
-    os.fchmod(fd, 0o602)
-    os.close(fd)
+def retry_denied_descriptor_scan(path, deadline, output, observation, identity):
+    evidence = {'descriptor_denials': [observation],
+                'descriptor_fallback': {'outcome': 'setup_failed', 'cleanup': 'not_started'}}
+    outcome = evidence['descriptor_fallback']
+    disk = target = None
     service_count = len(OWNED_SERVICES)
     try:
-        remaining = max(1, min(600, int(deadline - time.monotonic())))
+        d.require(deadline-time.monotonic() > 36, 'descriptor_scan_timeout')
+        output_stat = output.stat()
+        d.require(stat.S_ISDIR(output_stat.st_mode) and output_stat.st_uid == os.getuid() and
+                  stat.S_IMODE(output_stat.st_mode) == 0o700, 'descriptor_output_private')
+        # Open the disk first to reject symlinked ancestors before result creation.
+        disk = ScanObject(path, metadata=True)
+        d.require(disk.identities[-1][:2] == list(identity), 'descriptor_disk_changed')
+        result = output / 'descriptor-scan.result'
+        d.require(output == path.parent, 'descriptor_output_mismatch')
+        fd = os.open(result.name, os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                     0o602, dir_fd=disk.fds[-2])
+        try:
+            os.fchmod(fd, 0o602)
+            created = os.fstat(fd)
+            target = ScanObject(result, write=True)
+            d.require(target.identities[-1][:2] == [created.st_dev, created.st_ino],
+                      'descriptor_result_changed')
+        finally:
+            os.close(fd)
+        # Creation changes the parent ctime. Start the immutable chain snapshot now.
+        disk.identities = disk.snapshot()
+        disk.validate()
+        remaining = deadline-time.monotonic()
+        d.require(36 < remaining <= 600, 'descriptor_scan_timeout')
+        outcome['outcome'] = 'start_failed'
         service = ContainedProcess(
             [sys.executable, str(Path(__file__).resolve()), 'scan-open-disk',
-             str(path), str(result), str(os.getuid()), str(remaining)],
-            memory_max=256 * 1024**2, service_user=0, runtime_max_sec=remaining + 5,
+             json.dumps(list(identity)), str(result), str(os.getuid()), str(deadline),
+             json.dumps(target.identities), json.dumps([os.getpid(), disk.fd])],
+            memory_max=256 * 1024**2, service_user=0, runtime_max_sec=int(remaining),
             read_write_paths=(result,), capability_bounding_set=('CAP_DAC_READ_SEARCH', 'CAP_SYS_PTRACE'),
             protect_system='strict', private_network=True)
+        outcome['outcome'] = 'wait_failed'
+        remaining = deadline-time.monotonic()
+        d.require(remaining > 0, 'descriptor_scan_timeout')
         try:
-            code = service.wait(timeout=remaining + 5)
+            code = service.wait(timeout=remaining)
         except subprocess.TimeoutExpired:
-            d.require(service.stop(), 'descriptor_scan_stop_unproven')
             raise d.Refused('descriptor_scan_timeout') from None
-        d.require(service.stop(), 'descriptor_scan_stop_unproven')
+        d.require(time.monotonic() < deadline, 'descriptor_scan_timeout')
+        outcome['outcome'] = 'service_failed'
         d.require(code == 0, 'descriptor_scan_failed')
-        d.regular(result, output)
-        d.require(result.stat().st_size <= 16, 'descriptor_result_limit')
-        status = result.read_text().strip()
+        disk.validate()
+        target.validate()
+        d.require(os.fstat(target.fd).st_size <= 16, 'descriptor_result_limit')
+        status = os.pread(target.fd, 17, 0).decode('ascii').strip()
         d.require(status in ('clear', 'open', 'denied', 'timeout', 'limit'), 'descriptor_scan_status')
-        if status == 'open':
-            raise d.Refused('disk_still_open')
-        if status == 'timeout':
-            raise d.Refused('descriptor_scan_timeout')
-        if status == 'limit':
-            raise d.Refused('descriptor_scan_limit')
-        if status == 'denied':
-            raise d.Refused('open_descriptor_scan_denied', {'descriptor_denials': [observation]})
-        d.require(status == 'clear', 'open_descriptor_scan_denied')
+        outcome['outcome'] = status
+        reasons = {'open':'disk_still_open', 'timeout':'descriptor_scan_timeout',
+                   'limit':'descriptor_scan_limit', 'denied':'open_descriptor_scan_denied'}
+        if status != 'clear':
+            raise d.Refused(reasons[status])
+    except Exception as error:
+        if outcome['outcome'] not in ('clear', 'open', 'timeout', 'limit', 'denied'):
+            outcome['outcome'] = 'timeout' if isinstance(error, d.Refused) and str(error) == 'descriptor_scan_timeout' else outcome['outcome']
+        reason = str(error) if isinstance(error, d.Refused) else 'descriptor_fallback_failed'
+        raise d.Refused(reason, evidence) from None
     finally:
-        if all(item.stopped for item in OWNED_SERVICES[service_count:]):
-            result.unlink(missing_ok=True)
+        # Cleanup has its own bounded service-stop grace; never grants scan time.
+        stopped = True
+        for item in OWNED_SERVICES[service_count:]:
+            try:
+                stopped = item.stop() and stopped
+            except Exception:
+                stopped = False
+        outcome['cleanup'] = 'stopped_result_retained' if stopped else 'stop_failed_result_retained'
+        # Retain the token even on success. Pathname unlink cannot atomically check
+        # inode identity; a concurrent replacement must never be removed.
+        final_refusal = None
+        if outcome['outcome'] == 'clear' and stopped:
+            try:
+                disk.validate()
+                target.validate()
+                d.require(time.monotonic() < deadline, 'descriptor_scan_timeout')
+            except Exception as error:
+                final_refusal = str(error) if isinstance(error, d.Refused) else 'descriptor_object_changed'
+        close_failed = False
+        for held in (target, disk):
+            if held is not None:
+                try:
+                    held.close()
+                except Exception:
+                    close_failed = True
+        if close_failed:
+            outcome['handles'] = 'close_failed'
+        if not stopped:
+            raise d.Refused('descriptor_scan_stop_unproven', evidence) from None
+        if close_failed:
+            raise d.Refused('descriptor_handle_close_failed', evidence) from None
+        if final_refusal:
+            outcome['post_cleanup'] = final_refusal
+            raise d.Refused(final_refusal, evidence) from None
+    return evidence
 
 def worker(disk, target, version):
     # Separate process deadline bounds libguestfs calls and parsing as a whole.
@@ -542,6 +658,41 @@ def final_status(primary, collected):
     return primary if primary else (0 if collected else 1)
 
 
+def inspect_stopped_disk(disk, output, deadline, lock, env, report):
+    before = d.regular(disk, output)
+    d.require(before[2] <= 65*1024**3, 'disk_file_limit')
+    d.qcow_header(disk)
+    report.update(no_open_disk(disk, deadline, output) or {})
+    d.require(time.monotonic() < deadline, 'descriptor_scan_timeout')
+    d.require(before == d.regular(disk, output), 'disk_changed')
+    disk_hash = file_digest(disk, deadline)
+    d.require(time.monotonic() < deadline, 'inspection_timeout')
+    target = output / 'private-inspection.json'
+    process = ContainedProcess([sys.executable, str(Path(__file__).resolve()), 'inspect',
+                                str(disk), str(target), lock['guestfs_version']],
+                               env={k:v for k,v in env.items() if k in ('PATH','HOME','LANG')},
+                               memory_max=4*1024**3, supplementary_groups=('kvm',))
+    try:
+        code = process.wait(timeout=max(1, deadline-time.monotonic()))
+    except subprocess.TimeoutExpired:
+        d.require(process.stop(), 'inspector_stop_unproven')
+        raise d.Refused('inspection_timeout') from None
+    process.require_memory_ok()
+    d.require(stop_group(process), 'inspector_group_stop_unproven')
+    if code != 0 and target.is_file() and target.stat().st_size <= d.MAX_REPORT:
+        inspection = json.loads(target.read_bytes())
+        refusal = inspection.get('inspection_refusal')
+        if isinstance(inspection.get('partitions'), list) and len(inspection['partitions']) <= 32:
+            report['layout_partitions'] = inspection['partitions']
+        if isinstance(refusal, str) and refusal.replace('_','').isalnum():
+            raise d.Refused(refusal)
+    d.require(code == 0 and target.is_file() and target.stat().st_size <= d.MAX_REPORT, 'inspection_failed')
+    d.require(before == d.regular(disk, output) and disk_hash == file_digest(disk, deadline), 'disk_changed')
+    report.update(collection='collected', disk_sha256=disk_hash, disk_bytes=before[2],
+                  metadata=json.loads(target.read_bytes()))
+    target.unlink()
+
+
 def run(args):
     p = d.provenance(read_json(args.provenance))
     validate_run(p, os.environ)
@@ -663,39 +814,13 @@ def run(args):
             else 'emergency_seen_no_commands' if 'DIAGNOSTIC_EMERGENCY_OBSERVED' in observed
             else 'prompt_not_observed')
         deadline = time.monotonic()+600
-        before = d.regular(disk, output)
-        d.require(before[2] <= 65*1024**3, 'disk_file_limit')
-        d.qcow_header(disk)
-        no_open_disk(disk, deadline, output)
-        disk_hash = file_digest(disk, deadline)
-        target = output / 'private-inspection.json'
-        process = ContainedProcess([sys.executable, str(Path(__file__).resolve()), 'inspect',
-                                    str(disk), str(target), lock['guestfs_version']],
-                                   env={k:v for k,v in env.items() if k in ('PATH','HOME','LANG')},
-                                   memory_max=4*1024**3, supplementary_groups=('kvm',))
-        try:
-            code = process.wait(timeout=max(1, deadline-time.monotonic()))
-        except subprocess.TimeoutExpired:
-            d.require(process.stop(), 'inspector_stop_unproven')
-            raise d.Refused('inspection_timeout') from None
-        process.require_memory_ok()
-        d.require(stop_group(process), 'inspector_group_stop_unproven')
-        if code != 0 and target.is_file() and target.stat().st_size <= d.MAX_REPORT:
-            inspection = json.loads(target.read_bytes())
-            refusal = inspection.get('inspection_refusal')
-            if isinstance(inspection.get('partitions'), list) and len(inspection['partitions']) <= 32:
-                report['layout_partitions'] = inspection['partitions']
-            if isinstance(refusal, str) and refusal.replace('_','').isalnum():
-                raise d.Refused(refusal)
-        d.require(code == 0 and target.is_file() and target.stat().st_size <= d.MAX_REPORT, 'inspection_failed')
-        d.require(before == d.regular(disk, output) and disk_hash == file_digest(disk, deadline), 'disk_changed')
-        report.update(collection='collected', disk_sha256=disk_hash, disk_bytes=before[2],
-                      metadata=json.loads(target.read_bytes()))
-        target.unlink()
+        inspect_stopped_disk(disk, output, deadline, lock, env, report)
     except Exception as error:
         report['reason'] = str(error) if isinstance(error, d.Refused) else 'diagnostic_internal_failure'
-        if isinstance(error, d.Refused) and str(error) == 'open_descriptor_scan_denied':
-            report['descriptor_denials'] = error.details['descriptor_denials']
+        if isinstance(error, d.Refused):
+            for key in ('descriptor_denials', 'descriptor_fallback'):
+                if key in error.details:
+                    report[key] = error.details[key]
     finally:
         signal.signal(signal.SIGTERM, signal.SIG_IGN)
         signal.signal(signal.SIGINT, signal.SIG_IGN)
@@ -735,7 +860,7 @@ def main():
     signal.signal(signal.SIGTERM, interrupted)
     signal.signal(signal.SIGINT, interrupted)
     if len(sys.argv) > 1 and sys.argv[1] == 'scan-open-disk':
-        d.require(len(sys.argv) == 6, 'descriptor_scan_arguments')
+        d.require(len(sys.argv) == 8, 'descriptor_scan_arguments')
         return root_descriptor_scan(*sys.argv[2:])
     if len(sys.argv) > 1 and sys.argv[1] in ('proxy', 'signal'):
         return proxy()

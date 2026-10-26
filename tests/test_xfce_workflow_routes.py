@@ -103,14 +103,16 @@ def test_candidate_has_no_implicit_trigger_and_preserves_strict_gates():
     ('pull_request','skipjack','gnome','linux/amd64',False,False),
 ])
 def test_merged_caller_condition_is_bounded(event,variant,flavor,platform,candidate,allowed):
-    # Evaluate only this exact, reviewed boolean expression grammar.
+    from tests.test_iso_diagnostic_consumer_graph import enabled, completed
+    # Preserve the exact route predicate, while modeling the status wrapper and
+    # transitive skipped diagnostic preflight with the bounded graph evaluator.
     expression=LIVE['jobs']['qualify-native-iso']['if']
     expected="github.event_name == 'workflow_dispatch' && ((github.event.inputs.flavor || 'gnome') == 'gnome' || (inputs.candidate_xfce && inputs.variant == 'bonito' && inputs.flavor == 'xfce' && inputs.platform == 'linux/amd64'))"
-    assert expression==expected
-    replacements={'github.event.inputs.flavor':flavor,'github.event_name':event,
-        'inputs.candidate_xfce':candidate,'inputs.variant':variant,'inputs.flavor':flavor,'inputs.platform':platform}
-    for name,value in replacements.items(): expression=expression.replace(name,repr(value))
-    assert bool(eval(expression.replace('&&',' and ').replace('||',' or '),{'__builtins__':{}})) is allowed
+    assert expression.endswith(expected+" }}")
+    values={'github.event.inputs.flavor':flavor,'github.event_name':event,
+        'inputs.installed_boot_diagnostic':False,'inputs.candidate_xfce':candidate,
+        'inputs.variant':variant,'inputs.flavor':flavor,'inputs.platform':platform}
+    assert enabled(LIVE['jobs'],'qualify-native-iso',values,completed('ordinary')) is allowed
 
 
 def test_candidate_summary_reads_candidate_fragments(tmp_path):

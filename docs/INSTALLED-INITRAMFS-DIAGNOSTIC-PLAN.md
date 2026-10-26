@@ -9,11 +9,24 @@ initramfs data and did not qualify the boot. PR #3956 remains open.
 
 ## Integration review status
 
-This merge retains commits `2d075cb6`, `927f8e7f` and base `824fa08c`.
-It does not change the root descriptor fallback. Its safety and permission
-review remains open. Tests of rootless guards and inert fixtures do not approve
-that privilege boundary or authorize execution. This review did not run the
-root scan or inspect live procfs.
+Integration `04a81cd2` retains commits `2d075cb6`, `927f8e7f` and base `824fa08c`.
+This follow-up binds the root fallback to held objects and the original deadline.
+Tests use synthetic proc trees, temporary files and mock systemd calls only.
+They do not authorize runtime use or prove host compatibility. Runtime permission
+remains a separate parent decision.
+
+## Build-only run after the fallback change
+
+Run `40392612254` at `2d075cb6` built artifact `12685383470`.
+The diagnostic preflight and build passed. The ordinary preflight skipped as
+intended, but the consumer also skipped due to its implicit `success()` check.
+Thus the diagnostic was **not-run**, not collected. The green workflow result
+does not prove a diagnostic run. No consumer or root fallback ran.
+
+The consumer now needs an uncancelled workflow, a successful build and the
+correct preflight. It retains the predicate for dispatch routes and excludes PR
+qualification. Graph tests account for skips in all ancestors. The change
+does not authorize another dispatch or privileged execution.
 
 ## Entry point
 
@@ -55,12 +68,29 @@ The proxy removes `-daemonize`. It preserves boot arguments.
 The collector checks open FDs after all QEMU and harness units stop.
 On `/proc` denial, it starts a systemd unit that runs as root.
 
-- Limits: 256 MiB and the scan deadline.
-- Access: `CAP_DAC_READ_SEARCH` and `CAP_SYS_PTRACE`; no network.
-- Files: read-only, except one 0602 token file in the private 0700 output dir.
-- Output: fixed status only; no PIDs or paths.
-- Stop the unit and prove its cgroup is empty. Any denial blocks collection.
-The runner must trust the host's root account.
+- Limits: 256 MiB, 100000 processes and 100000 FDs, and the original deadline on
+  the monotonic clock. Setup and startup consume that budget. A separate bounded
+  stop grace grants no extra scan time.
+- Access: `CAP_DAC_READ_SEARCH` and `CAP_SYS_PTRACE`; no network. This is an
+  explicit privilege expansion: the fallback enumerates FDs across all users.
+  It compares device/inode metadata, not descriptor contents. `CAP_SYS_PTRACE`
+  is broader than this operation. It is not a read-only capability.
+- Identity: the parent holds the original disk with `O_PATH`. Only that exact
+  parent PID/FD pair is exempt; other FDs in the same process still block use.
+  The root helper compares the supplied original device/inode, not a new disk
+  path lookup. Held ancestor descriptors and directory change times detect
+  replacement. Unrelated ancestor changes can also cause conservative refusal.
+- Result: the helper validates the original token and its ancestor chain before
+  a descriptor write. It never truncates a path. The parent reads the held token,
+  proves service stop, then checks identities and time again before the hash.
+  The 0602 token stays inside the private 0700 directory on success or failure.
+  No automatic unlink can remove a replacement. The token is not an upload.
+- Evidence: retain the bounded denial record and the fallback outcome.
+  Outcomes include clear, open, timeout, limit, start failure and cleanup failure.
+  Never export raw exceptions, command lines, environments or FD target paths.
+
+The host and other processes with the runner UID remain trusted. These controls
+do not prove that systemd containment works on a particular host. Refusal blocks hash and guestfs.
 
 Read only the new qcow2 file. Refuse links, parent images, external data and unknown qcow features. Before/after hashes must agree.
 

@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       installed_boot_diagnostic:
-        description: 'One fresh Skipjack LUKS diagnostic; never qualification'
+        description: 'Skipjack LUKS diagnostic; root all-user inode scan on denial (DAC_READ_SEARCH/SYS_PTRACE); never qualification'
         type: boolean
         default: false
       candidate_xfce:
@@ -473,8 +473,14 @@ jobs:
   # No green criterion names this job as a gate (tests/test_strict_qualification_wiring.py).
   qualify-native-iso:
     name: Qualify exact native ISO
-    if: github.event_name == 'workflow_dispatch' && ((github.event.inputs.flavor || 'gnome') == 'gnome' || (inputs.candidate_xfce && inputs.variant == 'bonito' && inputs.flavor == 'xfce' && inputs.platform == 'linux/amd64'))
-    needs: build
+    # The other mode's preflight is intentionally skipped. Override implicit
+    # success(), but still require this mode's preflight and exact build.
+    if: >-
+      ${{ !cancelled() && needs.build.result == 'success' &&
+      ((inputs.installed_boot_diagnostic && needs.diagnostic-preflight.result == 'success') ||
+      (!inputs.installed_boot_diagnostic && needs.preflight.result == 'success')) &&
+      github.event_name == 'workflow_dispatch' && ((github.event.inputs.flavor || 'gnome') == 'gnome' || (inputs.candidate_xfce && inputs.variant == 'bonito' && inputs.flavor == 'xfce' && inputs.platform == 'linux/amd64')) }}
+    needs: [build, diagnostic-preflight, preflight]
     permissions:
       contents: read
       actions: read

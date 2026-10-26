@@ -413,7 +413,7 @@ def test_no_owner_cannot_claim_stop(tmp_path):
 
 @pytest.mark.parametrize(('status','reason'), [
     ('clear', None), ('open', 'disk_still_open'), ('denied', 'open_descriptor_scan_denied')])
-def test_denied_proc_scan_uses_bounded_root_fallback_and_cleans_result(
+def test_denied_proc_scan_uses_bounded_root_fallback_and_retains_result(
         tmp_path, monkeypatch, status, reason):
     disk = tmp_path/'disk.qcow2'
     disk.write_bytes(b'disk')
@@ -456,7 +456,7 @@ def test_denied_proc_scan_uses_bounded_root_fallback_and_cleans_result(
     assert created[0].options['memory_max'] == 256 * 1024**2
     assert created[0].options['private_network'] is True
     assert created[0].options['protect_system'] == 'strict'
-    assert not (tmp_path/'descriptor-scan.result').exists()
+    assert (tmp_path/'descriptor-scan.result').is_file()
 
 
 def test_fallback_preserves_private_result_until_service_stop_is_proven(tmp_path, monkeypatch):
@@ -516,7 +516,7 @@ def test_proc_descriptor_scan_classifies_disk_fd_safely(tmp_path, monkeypatch, f
 
         monkeypatch.setattr(Path, 'iterdir', denied)
     assert supervisor.scan_open_descriptors(
-        disk, time.monotonic()+5, proc_root=proc, same_uid=os.getuid()) == expected
+        (disk.stat().st_dev, disk.stat().st_ino), time.monotonic()+5, proc_root=proc, same_uid=os.getuid()) == expected
 
 def test_report_upload_allowlist_and_limits(tmp_path,monkeypatch):
     target=tmp_path/'out'
@@ -1062,3 +1062,311 @@ def test_descriptor_scan_limits_and_deadline_remain_fail_closed():
                                 proc_root=ProcFixture('root', entries=[proc]))
 
 
+
+
+def denial_fixture(tmp_path, monkeypatch, status='clear', failure=None, mutate=None):
+    disk = tmp_path/'disk.qcow2'
+    disk.write_bytes(qcow())
+    proc_root = tmp_path/'proc'
+    fd_dir = proc_root/'1234'/'fd'
+    fd_dir.mkdir(parents=True)
+    original = Path.iterdir
+    def denied(path):
+        if path == fd_dir:
+            raise PermissionError(13, 'SECRET /outside')
+        return original(path)
+    monkeypatch.setattr(Path, 'iterdir', denied)
+    calls = []
+    class Service:
+        def __init__(self, command, **options):
+            assert command[2] == 'scan-open-disk', 'guestfs must not launch'
+            self.stopped = False
+            calls.append((command, options))
+            supervisor.OWNED_SERVICES.append(self)
+            if failure == 'start':
+                raise OSError('SECRET startup')
+            Path(command[4]).write_text(status+'\n')
+            if mutate:
+                mutate(Path(command[4]), disk)
+        def wait(self, timeout):
+            assert timeout <= float(calls[-1][0][6])-time.monotonic()+.1
+            if failure == 'wait':
+                raise supervisor.subprocess.TimeoutExpired('SECRET', timeout)
+            return 0
+        def stop(self):
+            if failure == 'stop':
+                return False
+            self.stopped = True
+            return True
+    monkeypatch.setattr(supervisor, 'ContainedProcess', Service)
+    original_scan = supervisor.no_open_disk
+    monkeypatch.setattr(supervisor, 'no_open_disk',
+        lambda path, deadline, output: original_scan(path, deadline, output, proc_root=proc_root))
+    return disk, calls
+
+
+@pytest.mark.parametrize('status,failure', [
+    ('open',None), ('denied',None), ('timeout',None), ('limit',None),
+    ('clear','start'), ('clear','wait'), ('clear','stop'), ('SECRET','invalid')])
+def test_full_inspection_pipeline_refuses_before_hash_or_guestfs(tmp_path, monkeypatch, status, failure):
+    disk, calls = denial_fixture(tmp_path, monkeypatch, status, failure)
+    monkeypatch.setattr(supervisor, 'file_digest', lambda *a: pytest.fail('hash after refusal'))
+    report = {}
+    with pytest.raises(d.Refused) as caught:
+        supervisor.inspect_stopped_disk(disk, tmp_path, time.monotonic()+100,
+                                        {'guestfs_version':'1.52.0'}, {}, report)
+    facts = caught.value.details
+    assert facts['descriptor_denials'][0]['errno'] == 13
+    assert facts['descriptor_fallback']['outcome'] in {
+        'open','denied','timeout','limit','start_failed','service_failed','clear'}
+    assert 'SECRET' not in json.dumps(facts) and str(tmp_path) not in json.dumps(facts)
+    assert len(calls) == 1
+    assert (tmp_path/'descriptor-scan.result').exists()
+
+
+@pytest.mark.parametrize('remaining', [-1, 0, .5, 36])
+def test_expired_or_insufficient_budget_refuses_before_spawn(tmp_path, monkeypatch, remaining):
+    disk, calls = denial_fixture(tmp_path, monkeypatch)
+    observation = {'stage':'fd_stat','pid':1234,'errno':13}
+    with pytest.raises(d.Refused, match='descriptor_scan_timeout') as caught:
+        supervisor.retry_denied_descriptor_scan(disk, time.monotonic()+remaining,
+            tmp_path, observation, (disk.stat().st_dev,disk.stat().st_ino))
+    assert not calls
+    assert caught.value.details['descriptor_denials'] == [observation]
+    assert caught.value.details['descriptor_fallback']['outcome'] == 'timeout'
+
+
+@pytest.mark.parametrize('replacement', ['disk', 'result', 'disk_aba', 'ancestor_aba'])
+def test_replacement_cannot_authorize_hash_or_remove_sentinel(tmp_path, monkeypatch, replacement):
+    outside = tmp_path/'sentinel'
+    outside.write_text('OUTSIDE')
+    def mutate(result, disk):
+        if replacement == 'result':
+            result.rename(tmp_path/'saved-result')
+            result.symlink_to(outside)
+        elif replacement == 'ancestor_aba':
+            moved = tmp_path.with_name(tmp_path.name+'-moved')
+            tmp_path.rename(moved)
+            moved.rename(tmp_path)
+        else:
+            disk.rename(tmp_path/'saved-disk')
+            disk.write_bytes(qcow())
+            if replacement == 'disk_aba':
+                disk.unlink()
+                (tmp_path/'saved-disk').rename(disk)
+    disk, calls = denial_fixture(tmp_path, monkeypatch, mutate=mutate)
+    monkeypatch.setattr(supervisor, 'file_digest', lambda *a: pytest.fail('replacement reached hash'))
+    with pytest.raises(d.Refused) as caught:
+        supervisor.inspect_stopped_disk(disk, tmp_path, time.monotonic()+100, {}, {}, {})
+    assert caught.value.details['descriptor_denials']
+    assert outside.read_text() == 'OUTSIDE'
+    assert (tmp_path/'descriptor-scan.result').exists()
+
+
+def test_root_writer_refuses_replacement_before_any_write(tmp_path, monkeypatch):
+    result = tmp_path/'result'
+    result.touch(mode=0o602)
+    result.chmod(0o602)
+    held = supervisor.ScanObject(result, write=True)
+    identities = held.identities
+    sentinel = tmp_path/'outside'
+    sentinel.write_text('OUTSIDE')
+    result.unlink()
+    result.symlink_to(sentinel)
+    monkeypatch.setattr(supervisor.os, 'geteuid', lambda: 0)
+    monkeypatch.setattr(supervisor, 'scan_open_descriptors', lambda *a, **kw: pytest.fail('scan after replacement'))
+    try:
+        with pytest.raises((d.Refused, OSError)):
+            supervisor.root_descriptor_scan('[1,2]', str(result), str(os.getuid()),
+                str(time.monotonic()+100), json.dumps(identities), '[123,4]')
+        assert sentinel.read_text() == 'OUTSIDE'
+    finally:
+        held.close()
+
+
+def test_root_scan_uses_original_identity_and_absolute_deadline(tmp_path, monkeypatch):
+    result = tmp_path/'result'
+    result.touch(mode=0o602)
+    result.chmod(0o602)
+    held = supervisor.ScanObject(result, write=True)
+    deadline = time.monotonic()+100
+    seen = []
+    def scan(identity, until, **kwargs):
+        seen.append((identity, until, kwargs))
+        return 'clear'
+    monkeypatch.setattr(supervisor.os, 'geteuid', lambda: 0)
+    monkeypatch.setattr(supervisor, 'scan_open_descriptors', scan)
+    try:
+        supervisor.root_descriptor_scan('[11,22]', str(result), str(os.getuid()),
+            str(deadline), json.dumps(held.identities), '[123,4]')
+        assert seen == [([11,22], deadline, {'metadata_handle':(123,4)})]
+        assert os.pread(held.fd, 16, 0) == b'clear\n'
+    finally:
+        held.close()
+
+
+def test_only_exact_metadata_handle_is_exempt(tmp_path):
+    disk = tmp_path/'disk'
+    disk.touch()
+    fds = tmp_path/'proc'/'123'/'fd'
+    fds.mkdir(parents=True)
+    (fds/'4').symlink_to(disk)
+    identity = (disk.stat().st_dev,disk.stat().st_ino)
+    assert supervisor.scan_open_descriptors(identity,time.monotonic()+5,
+        proc_root=tmp_path/'proc',metadata_handle=(123,4)) == 'clear'
+    (fds/'5').symlink_to(disk)
+    assert supervisor.scan_open_descriptors(identity,time.monotonic()+5,
+        proc_root=tmp_path/'proc',metadata_handle=(123,4)) == 'open'
+
+
+def test_close_failure_preserves_denial_and_attempts_all_handles(tmp_path, monkeypatch):
+    disk, _ = denial_fixture(tmp_path, monkeypatch)
+    original = supervisor.ScanObject.close
+    closed = []
+    def failed(held):
+        original(held)
+        closed.append(held.path)
+        raise OSError('SECRET close error')
+    monkeypatch.setattr(supervisor.ScanObject, 'close', failed)
+    with pytest.raises(d.Refused, match='descriptor_handle_close_failed') as caught:
+        supervisor.no_open_disk(disk, time.monotonic()+100, tmp_path)
+    assert len(closed) == 2
+    assert caught.value.details['descriptor_fallback']['handles'] == 'close_failed'
+    assert caught.value.details['descriptor_denials']
+    assert 'SECRET' not in json.dumps(caught.value.details)
+
+
+@pytest.mark.parametrize('phase', ['start','stop'])
+def test_shared_deadline_cannot_restart_or_expire_in_cleanup(tmp_path, monkeypatch, phase):
+    disk, calls = denial_fixture(tmp_path, monkeypatch)
+    now = [100.0]
+    monkeypatch.setattr(supervisor.time, 'monotonic', lambda: now[0])
+    base = supervisor.ContainedProcess
+    class Delayed(base):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            if phase == 'start':
+                now[0] = 201.0
+        def stop(self):
+            if phase == 'stop':
+                now[0] = 201.0
+            return super().stop()
+    monkeypatch.setattr(supervisor, 'ContainedProcess', Delayed)
+    monkeypatch.setattr(supervisor, 'file_digest', lambda *a: pytest.fail('expired scan reached hash'))
+    with pytest.raises(d.Refused, match='descriptor_scan_timeout') as caught:
+        supervisor.inspect_stopped_disk(disk,tmp_path,200.0,{}, {}, {})
+    assert calls[0][0][6] == '200.0'
+    assert caught.value.details['descriptor_denials']
+    assert caught.value.details['descriptor_fallback']['cleanup'] == 'stopped_result_retained'
+
+
+@pytest.mark.parametrize('replacement', ['regular','symlink','parent'])
+def test_root_writer_holds_original_and_never_writes_outside(tmp_path, monkeypatch, replacement):
+    private = tmp_path/'private'
+    private.mkdir(mode=0o700)
+    result = private/'result'
+    result.touch(mode=0o602)
+    result.chmod(0o602)
+    outside = tmp_path/'outside'
+    outside.write_text('SENTINEL')
+    held = supervisor.ScanObject(result, write=True)
+    def scan(*args, **kwargs):
+        if replacement == 'parent':
+            private.rename(tmp_path/'moved')
+            private.symlink_to(tmp_path/'moved', target_is_directory=True)
+        else:
+            result.rename(private/'saved')
+            if replacement == 'symlink':
+                result.symlink_to(outside)
+            else:
+                result.write_text('REPLACEMENT')
+        return 'clear'
+    monkeypatch.setattr(supervisor.os, 'geteuid', lambda: 0)
+    monkeypatch.setattr(supervisor, 'scan_open_descriptors', scan)
+    try:
+        with pytest.raises(d.Refused):
+            supervisor.root_descriptor_scan('[1,2]',str(result),str(os.getuid()),
+                str(time.monotonic()+100),json.dumps(held.identities),'[123,4]')
+        assert outside.read_text() == 'SENTINEL'
+        assert os.pread(held.fd,16,0) == b''
+        if replacement == 'regular':
+            assert result.read_text() == 'REPLACEMENT'
+    finally:
+        held.close()
+
+
+def test_clear_observation_survives_later_inspection_refusal(tmp_path, monkeypatch):
+    disk, _ = denial_fixture(tmp_path, monkeypatch)
+    monkeypatch.setattr(supervisor, 'file_digest', lambda *a: (_ for _ in ()).throw(d.Refused('hash_timeout')))
+    report = {}
+    with pytest.raises(d.Refused, match='hash_timeout'):
+        supervisor.inspect_stopped_disk(disk,tmp_path,time.monotonic()+100,{}, {},report)
+    assert report['descriptor_denials'][0]['errno'] == 13
+    assert report['descriptor_fallback']['outcome'] == 'clear'
+    assert 'SECRET' not in json.dumps(report)
+
+
+def test_replacement_during_stop_blocks_pipeline(tmp_path, monkeypatch):
+    disk, _ = denial_fixture(tmp_path, monkeypatch)
+    base = supervisor.ContainedProcess
+    class Replacing(base):
+        def stop(self):
+            disk.rename(tmp_path/'original')
+            disk.write_bytes(qcow())
+            return super().stop()
+    monkeypatch.setattr(supervisor, 'ContainedProcess', Replacing)
+    monkeypatch.setattr(supervisor, 'file_digest', lambda *a: pytest.fail('stop replacement reached hash'))
+    with pytest.raises(d.Refused) as caught:
+        supervisor.inspect_stopped_disk(disk,tmp_path,time.monotonic()+100,{}, {}, {})
+    assert caught.value.details['descriptor_fallback']['outcome'] == 'clear'
+    assert caught.value.details['descriptor_fallback']['post_cleanup'] == 'descriptor_ancestor_changed'
+    assert (tmp_path/'descriptor-scan.result').exists()
+
+
+def test_full_pipeline_order_and_safe_evidence_export():
+    source = (ROOT/'scripts/diagnose-installed-luks.py').read_text()
+    pipeline = source.split('def inspect_stopped_disk(',1)[1].split('def run(',1)[0]
+    assert pipeline.index('no_open_disk(') < pipeline.index('file_digest(') < pipeline.index("'inspect',")
+    assert "for key in ('descriptor_denials', 'descriptor_fallback')" in source
+    assert 'report[key] = error.details[key]' in source
+
+
+@pytest.mark.parametrize('opened', [True, False])
+def test_synthetic_root_scan_drives_real_pipeline_gate(tmp_path, monkeypatch, opened):
+    disk, _ = denial_fixture(tmp_path, monkeypatch)
+    root_proc = tmp_path/'root-proc'
+    fd_dir = root_proc/'9876'/'fd'
+    fd_dir.mkdir(parents=True)
+    if opened:
+        (fd_dir/'9').symlink_to(disk)
+    scan = supervisor.scan_open_descriptors
+    monkeypatch.setattr(supervisor, 'scan_open_descriptors',
+        lambda identity, deadline, **kwargs: scan(identity, deadline, proc_root=root_proc, **kwargs))
+    class SyntheticService:
+        def __init__(self, command, **options):
+            assert command[2] == 'scan-open-disk'
+            self.stopped = False
+            supervisor.OWNED_SERVICES.append(self)
+            # No root identity or service is acquired; only the entry guard is
+            # simulated. Every proc operation targets the temporary fixture.
+            with monkeypatch.context() as patch:
+                patch.setattr(supervisor.os, 'geteuid', lambda: 0)
+                self.code = supervisor.root_descriptor_scan(*command[3:])
+        def wait(self, timeout):
+            return self.code
+        def stop(self):
+            self.stopped = True
+            return True
+    monkeypatch.setattr(supervisor, 'ContainedProcess', SyntheticService)
+    hashes = []
+    def digest(*args):
+        hashes.append(True)
+        raise d.Refused('fixture_hash_boundary')
+    monkeypatch.setattr(supervisor, 'file_digest', digest)
+    report = {}
+    with pytest.raises(d.Refused, match='disk_still_open' if opened else 'fixture_hash_boundary') as caught:
+        supervisor.inspect_stopped_disk(disk,tmp_path,time.monotonic()+100,{}, {},report)
+    facts = caught.value.details if opened else report
+    assert facts['descriptor_fallback']['outcome'] == ('open' if opened else 'clear')
+    assert facts['descriptor_denials']
+    assert bool(hashes) is (not opened)

@@ -2743,3 +2743,19 @@ use older bootloader/config heuristics; those do not prove this contract.
 conflicts. Its inert tests cover all eight marker combinations and always refuse
 runtime admission. Update the layout, dracut and installer consumers together
 before a runtime trial. One marker change is not a complete fix.
+
+### Root descriptor fallback can outlive its budget or lose refusal evidence
+
+Source review of `2d075cb6` found a new scan budget after startup and result
+truncation before identity checks. The follow-up uses the original absolute
+deadline, held objects and numeric refusal evidence. Tests use temporary trees. They cover
+replacement, cleanup failure and refusal before hash or guestfs. The token
+stays private for recovery. No live proc scan or root service ran in these tests.
+
+### Green diagnostic build has no consumer result
+
+Run `40392612254` built artifact `12685383470` but skipped the diagnostic
+consumer. Its input-only condition implied `success()` across a preflight ancestor
+that skipped as intended. The consumer now checks cancellation, build success
+and the selected preflight explicitly. The run remains **not-run** for the
+diagnostic; it supplied no evidence of a root scan or collected metadata.
