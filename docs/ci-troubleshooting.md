@@ -2705,3 +2705,12 @@ The diagnostic now uses configured Skipjack/GNOME `linux/amd64`, with its
 The unlock helper takes the passphrase on stdin. Diagnostic mode keeps serial
 output suppressed; ordinary output uses the base redactor. These source and
 fixture checks supply no runtime or qualification evidence.
+
+### Diagnostic rootless tests fail after the candidate merge
+
+Run `40379281186`, job `121771836181`, failed four cases at the assertion that
+rootless setup has no step condition. The XFCE candidate must skip that step.
+The tests now evaluate its condition for each mode. Command stubs check that
+the diagnostic validates existing access, ordinary setup retains its behavior,
+and mixed modes fail before host work. The workflow and permission checks stay
+unchanged. These fixtures do not execute host setup.
