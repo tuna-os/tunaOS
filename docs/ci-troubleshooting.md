@@ -2625,3 +2625,18 @@ It omits frames from private login screens.
 Check `strict-diagnostics/collection.json` for omitted large files.
 `tests/test_xfce_launch_readiness.py` exercises these boundaries without guests.
 A resource or timeout failure is not qualification evidence.
+
+
+### Candidate concurrency fails four static assertions
+
+Run `40251533084`, job `121344308454`, failed four assertions about concurrency.
+The tests required literal `true` for cancellation and one fixed expression
+for the group. They could not evaluate the explicit XFCE exception.
+
+The contract now evaluates declared events and inputs through a small parser.
+PR pushes still share a group and cancel superseded runs. Ordinary dispatches
+keep a group per run. Explicit candidates share a separate group without
+cancellation of an active run. Caller and consumer use distinct groups.
+
+Negative controls reject a reversed policy and unknown expression syntax.
+The workflow definitions did not change.
