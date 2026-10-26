@@ -160,6 +160,7 @@ def upgrade(root=Path('/'), budget=BUDGET):
                 try:
                     run([*install, '--download-only'], timeout=min(200, remaining(deadline)))
                     if verify_cache(cache, entries):
+                        remaining(deadline)
                         break
                 except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
                     if attempt == ATTEMPTS - 1:
