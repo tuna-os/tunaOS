@@ -725,6 +725,10 @@ ACCEL="tcg"
 if [[ "$NO_KVM" -eq 0 ]] && [[ -r /dev/kvm ]] && [[ -w /dev/kvm ]]; then
 	ACCEL="kvm"
 fi
+if [[ "${TUNAOS_XFCE_CANDIDATE:-0}" == 1 && "$ACCEL" != kvm ]]; then
+	echo "ERROR: candidate requires direct KVM access; permissions remain unchanged" >&2
+	exit 77
+fi
 CPU_ARG="max"
 if [[ "$ACCEL" == "kvm" ]]; then
 	CPU_ARG="host"
@@ -935,6 +939,10 @@ use_tcp_transport
 # of them just leaves VSOCK_ARGS empty: the QEMU command line is unchanged
 # and the harness behaves exactly as before the fallback existed.
 setup_vsock() {
+	if [[ "${TUNAOS_XFCE_CANDIDATE:-0}" == 1 ]]; then
+		VSOCK_ARGS=()
+		return 0
+	fi
 	if [[ ! -e /dev/vhost-vsock ]]; then
 		modprobe vhost_vsock 2>/dev/null || sudo -n modprobe vhost_vsock 2>/dev/null || true
 	fi
@@ -1381,7 +1389,16 @@ fi
 
 # ── Boot the live ISO ───────────────────────────────────────────────────────
 
+candidate_require_no_injected_access() {
+	[[ "${TUNAOS_XFCE_CANDIDATE:-0}" != 1 ]] && return 0
+	if [[ ${#VSOCK_ARGS[@]} -ne 0 ]]; then
+		echo "ERROR: candidate refuses injected guest access arguments" >&2
+		return 77
+	fi
+}
+
 boot_live_iso() {
+	candidate_require_no_injected_access || return $?
 	# qemu-img lives in the qemu-utils Debian/Ubuntu package, which the
 	# `qemu-system-x86` package depends on only as Recommends. If the
 	# workflow's apt install line forgets it, every diagnostic ends up
@@ -1551,7 +1568,7 @@ wait_for_ready() {
 		# Fallback: if SSH is available (dev ISOs), check whether the guest
 		# is at least alive and whether tunaos-live-ready.service exists.
 		# Use same timeout/pattern as check_ssh but don't block the loop.
-		if command -v sshpass &>/dev/null; then
+		if [[ "${TUNAOS_XFCE_CANDIDATE:-0}" != 1 ]] && command -v sshpass &>/dev/null; then
 			local ssh_opts="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=3"
 			if sshpass -p live ssh $ssh_opts liveuser@127.0.0.1 -p "$SSH_PORT" true 2>/dev/null; then
 				echo "    [ssh: guest is alive — checking why marker hasn't fired]"
@@ -1581,7 +1598,7 @@ wait_for_ready() {
 	echo "--- last 50 lines of serial log ---" >&2
 	tail -50 "$SERIAL_LOG" 2>/dev/null >&2 || true
 	# Last-resort diagnostic: try SSH to see if guest is alive but marker-less.
-	if command -v sshpass &>/dev/null; then
+	if [[ "${TUNAOS_XFCE_CANDIDATE:-0}" != 1 ]] && command -v sshpass &>/dev/null; then
 		echo "--- SSH diagnostic (last resort) ---" >&2
 		local ssh_opts="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5"
 		sshpass -p live ssh $ssh_opts liveuser@127.0.0.1 -p "$SSH_PORT" \
@@ -2189,7 +2206,9 @@ wait_pid_gone() {
 POWEROFF_WAIT_SECS="${TUNAOS_E2E_POWEROFF_WAIT:-180}"
 
 poweroff_and_wait_vm() {
-	if ! "${GUEST_SSH[@]}" "sudo systemctl poweroff" 2>/dev/null; then
+	if [[ "${TUNAOS_XFCE_CANDIDATE:-0}" == 1 ]]; then
+		printf 'system_powerdown\n' | socat - "UNIX-CONNECT:${MONITOR_SOCK}" 2>/dev/null || true
+	elif ! "${GUEST_SSH[@]}" "sudo systemctl poweroff" 2>/dev/null; then
 		# Not fatal: the guest may be going down already (sshd dies mid-command
 		# often enough), and ACPI below is a second way in. But it changes what
 		# a long wait MEANS, so it must not be silent.
@@ -3787,6 +3806,7 @@ candidate_observe() {
 }
 
 strict_launch_installed() {
+	candidate_require_no_injected_access || return $?
 	# $1 = disk, $2 = serial socket path or empty (luks uses a socket for
 	# passphrase injection; plain reuses the file chardev), $3 = phase label.
 	# No cdrom/ISO drive: the install media is detached by construction.

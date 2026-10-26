@@ -45,7 +45,7 @@ raise SystemExit(int(os.environ['STATUS']))
             GITHUB_OUTPUT=str(tmp_path/'output'),USER='inert'))
     observed=json.loads(capture.read_text())
     assert result.returncode==status
-    assert observed['kvm']==('' if kvm else '--no-kvm')
+    assert observed['kvm']==('' if candidate or kvm else '--no-kvm')
     command=observed['args'][1:]
     if candidate:
         assert command[:2]==['python3','scripts/run-xfce-candidate.py']

@@ -176,10 +176,10 @@ def test_producer_to_validator_at_harness_boundary(tmp_path,monkeypatch,failure)
         NATIVE.emit(args)
         return SimpleNamespace(returncode=0)
     if failure:
-        with pytest.raises(ValueError):RUNNER.run(SimpleNamespace(iso=iso,output=output),execute,check_resources=lambda *args:None)
+        with pytest.raises(ValueError):RUNNER.run(SimpleNamespace(iso=iso,output=output),execute,check_resources=lambda *args:None,check_acceleration=lambda:None)
         assert json.loads((output/'candidate-report.json').read_text())['status']=='failed'
     else:
-        assert RUNNER.run(SimpleNamespace(iso=iso,output=output),execute,check_resources=lambda *args:None)==0
+        assert RUNNER.run(SimpleNamespace(iso=iso,output=output),execute,check_resources=lambda *args:None,check_acceleration=lambda:None)==0
         receipt=NATIVE.load(output/'qualification-evidence.json')
         NATIVE.validate(receipt)
         assert receipt['artifact_binding']==binding

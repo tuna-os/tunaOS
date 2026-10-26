@@ -14,12 +14,12 @@ import subprocess
 import sys
 import time
 from lib.xfce_candidate import TARGET, COMMIT
-from lib.xfce_launch import supervised, preflight
+from lib.xfce_launch import supervised, preflight, check_kvm
 
 ROOT=Path(__file__).resolve().parents[1]
 
 
-def run(args, execute=supervised, check_resources=preflight):
+def run(args, execute=supervised, check_resources=preflight, check_acceleration=check_kvm):
     output=args.output.resolve()
     if output.exists() and any(output.iterdir()):
         raise ValueError('candidate output directory must be fresh and empty')
@@ -29,6 +29,9 @@ def run(args, execute=supervised, check_resources=preflight):
     secret_values=[]
     try:
         check_resources(output,'vm')
+        check_acceleration()
+        if os.environ.get('KVM_FLAG'):
+            raise ValueError('candidate forbids an acceleration fallback override')
         spec=importlib.util.spec_from_file_location('native',ROOT/'scripts/native-iso-qualification.py')
         native=importlib.util.module_from_spec(spec);spec.loader.exec_module(native)
         env=dict(os.environ)
@@ -66,8 +69,6 @@ def run(args, execute=supervised, check_resources=preflight):
         report['phase']='install-and-boot'
         command=['bash',str(ROOT/'scripts/iso-e2e.sh'),str(args.iso.resolve()),
             '--strict-offline-gui','--output',str(output),'--memory','8192','--cpus','4','--timeout','180']
-        if env.get('KVM_FLAG')=='--no-kvm':
-            command.append('--no-kvm')
         result=execute(command,env=env,cwd=ROOT,check=False)
         report['harness_exit_code']=result.returncode
         if result.returncode:

@@ -176,7 +176,8 @@ It does not reuse the frontend's no-user canary as account coverage.
 Local tests substitute the command boundary of the harness and its console transport.
 
 Workflow fixtures also exercise candidate selection and strict exit status.
-They check that the runner receives the exported KVM/TCG choice through sudo.
+They check access to KVM as root for the candidate. Ordinary modes retain
+their KVM/TCG choice through sudo.
 They drive the eight-page contract through emission and validation, with negative controls.
 
 The actual ISO campaign remains unrun.
@@ -311,3 +312,32 @@ Inert tests exercise the calls to both helpers, malformed or absent stdin, and
 serial echo split across reads. They also check secret removal, shared deadlines,
 cleanup of detached processes, resource floors and paths for retained files.
 No VM, host package install or workflow dispatch was used for these checks.
+
+## Candidate access isolation
+
+The candidate skips the inherited vsock setup before it loads a module or creates a key. Both launch paths fail if arguments for vsock are nonempty.
+They cannot pass the fallback's SSH credentials through SMBIOS.
+Shutdown uses the monitor's ACPI command instead of SSH.
+GUI account creation and the authenticated VT observer remain mandatory.
+
+The consumer skips the inherited udev rule for world-writable KVM for this candidate.
+It opens the existing `/dev/kvm` as root and checks API version 12, before package
+setup and again before the harness. This check does not create a VM.
+Missing access, a non-device path or an unexpected API fails the run.
+The candidate refuses overrides for TCG and does not change ACLs, groups or device modes.
+
+The ordinary jobs keep their existing behavior. Package signature checks do not change.
+
+The producer's rootless setup remains unchanged until separate review.
+At pinned Tacklebox `d3070b5`, `rootContext()` defaults to root when EUID is zero.
+`RunUnshare` then runs a shell directly; it does not call `podman unshare`.
+This campaign builds as root and selects `repo=local`, so it also skips the
+registry path's pull into the original user's store.
+The existing step for setup still needs rootless operation through its
+`podman unshare true` check. Its subordinate-ID and AppArmor edits are not a
+source requirement of this candidate's root engine path.
+
+The proposed minimal change is to skip that setup step only for the candidate
+and explicitly set `TACKLEBOX_CONTEXT=root` on its overlay and ISO calls.
+This change leaves the proposal for separate review. It needs review before launch; do not
+infer that the current producer no longer changes namespace policy on the host.

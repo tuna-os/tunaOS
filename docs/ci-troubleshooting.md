@@ -2640,3 +2640,16 @@ cancellation of an active run. Caller and consumer use distinct groups.
 
 Negative controls reject a reversed policy and unknown expression syntax.
 The workflow definitions did not change.
+
+
+### XFCE candidate carries inherited guest access credentials
+
+The #3965 source audit found an unconditional call to vsock setup. It generated
+an SSH key and passed access credentials through SMBIOS, even on the candidate.
+The candidate now skips that setup and rejects its arguments at both launchers.
+Its shutdown path uses ACPI. Ordinary modes retain the existing fallback.
+
+The same audit found a KVM udev rule with mode `0666` on the consumer.
+The candidate skips that rule and checks the existing device as root instead.
+Access failures remain failures. `tests/test_xfce_no_injected_access.py` exercises
+these boundaries with inert callbacks and records no runtime qualification.

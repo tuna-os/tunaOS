@@ -1,5 +1,7 @@
 """Candidate launch limits; checks are read-only and never resize a VM."""
 import ctypes
+import fcntl
+import stat
 import os
 from pathlib import Path
 import shutil
@@ -19,6 +21,22 @@ MIN_CPUS=4
 BUILD_DISK=40*GIB
 # Consumer: archive12 + ISO10 + extracted payload10 + installed writes16 + scratch8.
 CONSUMER_DISK=56*GIB
+
+
+def check_kvm(*, geteuid=os.geteuid, opener=os.open, fstat=os.fstat,
+              ioctl=fcntl.ioctl, close=os.close):
+    """Open the existing device as the same root user that will run QEMU.
+
+    GET_API_VERSION does not create a VM. No chmod, ACL or group changes.
+    """
+    if geteuid()!=0:
+        raise ValueError('candidate KVM check must run as the QEMU root user')
+    fd=opener('/dev/kvm',os.O_RDWR|os.O_CLOEXEC)
+    try:
+        if not stat.S_ISCHR(fstat(fd).st_mode) or ioctl(fd,0xAE00,0)!=12:
+            raise ValueError('candidate requires an accessible KVM API version 12 device')
+    finally:
+        close(fd)
 
 
 def preflight(path, kind, *, which=shutil.which, memory=None, cpus=None, free=None):
