@@ -2588,8 +2588,8 @@ These checks do not supply qualification evidence.
 
 ### Installed diagnostic fails during QEMU setup
 
-Run 40244509229 failed with APT exit 100 before ISO fetch. `qemu-system-x86=.16`
-needed `qemu-system-common=.16`, while APT selected `.18`. Pin x86, common, data and
-utils together at both install steps. The failure report uses only the
-standard library, so missing decoder packages do not block that report.
-It records missing evidence and cannot make the failed job pass.
+Run 40244509229 failed (APT exit 100): it could not install retired
+`qemu-system-x86=.16` with `.18` dependencies. Install QEMU unpinned from signed
+Noble archives and report its resolved version/hash. Check KVM access and ensure
+supermin can read the kernel. The stdlib failure report records missing evidence.
+It cannot pass the job.

@@ -133,8 +133,6 @@ def no_open_disk(path, deadline):
 
 def worker(disk, target, version):
     # Separate process deadline bounds libguestfs calls and parsing as a whole.
-    import resource
-    resource.setrlimit(resource.RLIMIT_AS, (2 * 1024**3, 2 * 1024**3))
     import guestfs
     g = guestfs.GuestFS(python_return_dict=True)
     try:
@@ -147,12 +145,15 @@ def worker(disk, target, version):
         g.set_smp(2)
         g.add_drive_opts(str(disk), readonly=True, format='qcow2')
         g.launch()
+        # Bound parsing after QEMU has allocated its guest memory.
+        import resource
+        resource.setrlimit(resource.RLIMIT_AS, (2 * 1024**3, 2 * 1024**3))
         result = d.inspect_boot(g)
         raw = json.dumps(result).encode()
         d.require(len(raw) <= d.MAX_REPORT, 'report_limit')
         target.write_bytes(raw)
     except d.Refused as error:
-        target.write_text(json.dumps({'inspection_refusal':str(error)}))
+        target.write_text(json.dumps({'inspection_refusal':str(error), **error.details}))
         raise
     finally:
         g.close()
@@ -351,10 +352,12 @@ def run(args):
     # Exact approved tool bytes are supplied by a reviewed lock, never discovered
     # from PATH. Dependency acquisition belongs to the reviewed CI setup.
     lock = read_json(args.tool_lock)
-    d.require(set(lock) == {'qemu', 'guestfs_version'} and set(lock['qemu']) == {'path', 'sha256'}, 'tool_lock_schema')
+    d.require(set(lock) == {'qemu', 'guestfs_version'} and set(lock['qemu']) == {'path', 'sha256', 'version'}, 'tool_lock_schema')
     qemu = Path(lock['qemu']['path'])
     d.require(qemu.is_absolute() and qemu.is_file() and not qemu.is_symlink(), 'qemu_path')
-    d.require(file_digest(qemu) == lock['qemu']['sha256'], 'qemu_pin')
+    d.require(file_digest(qemu) == lock['qemu']['sha256'], 'qemu_identity')
+    qemu_version = subprocess.check_output([str(qemu), '--version'], text=True, timeout=10).splitlines()[0]
+    d.require(qemu_version == lock['qemu']['version'] and len(qemu_version) <= 256, 'qemu_version_mismatch')
     d.require(lock['guestfs_version'] == '1.52.0', 'guestfs_pin')
     actual_sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
     d.require(actual_sha == p['collector_sha'], 'collector_source_mismatch')
@@ -400,10 +403,13 @@ def run(args):
     for key in ('source', 'overlay', 'installer', 'engine', 'media'):
         env['TUNAOS_QUAL_' + key.upper() + '_DIGEST'] = p[key]
     report = {'schema': 'InstalledBootDiagnostic/v1', 'fresh_install': True,
+              'label': 'fresh reproduction, not the disk from run 40093907774',
+              'reference_run': 40093907774,
               'qualified': False, 'provenance': p, 'collection': 'not_collected',
               'input_digest_status': 'verified_media_inputs_not_installed_identity',
               'expected_target': {'variant':'skipjack','flavor':'gnome','platform':'linux/amd64/v2'},
-              'tools': {'qemu_sha256':lock['qemu']['sha256'], 'guestfs_version':lock['guestfs_version'], 'zstandard_version':'0.25.0'},
+              'tools': {'qemu_sha256':lock['qemu']['sha256'], 'qemu_version':qemu_version,
+                        'guestfs_version':lock['guestfs_version'], 'zstandard_version':'0.25.0'},
               'gpu_policy':'plain', 'runtime_initialization':'not_observed'}
     rc = 77
     harness = None
@@ -459,7 +465,10 @@ def run(args):
             raise d.Refused('inspection_timeout') from None
         d.require(stop_group(process), 'inspector_group_stop_unproven')
         if code != 0 and target.is_file() and target.stat().st_size <= d.MAX_REPORT:
-            refusal = json.loads(target.read_bytes()).get('inspection_refusal')
+            inspection = json.loads(target.read_bytes())
+            refusal = inspection.get('inspection_refusal')
+            if isinstance(inspection.get('partitions'), list) and len(inspection['partitions']) <= 32:
+                report['layout_partitions'] = inspection['partitions']
             if isinstance(refusal, str) and refusal.replace('_','').isalnum():
                 raise d.Refused(refusal)
         d.require(code == 0 and target.is_file() and target.stat().st_size <= d.MAX_REPORT, 'inspection_failed')

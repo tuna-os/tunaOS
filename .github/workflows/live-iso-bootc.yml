@@ -77,8 +77,12 @@ jobs:
     timeout-minutes: 3
     permissions: {}
     steps:
-      - name: Require existing runner access before the producer
+      - name: Enable ephemeral runner KVM and require diagnostic prerequisites
         run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | \
+            sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
           test -r /dev/kvm && test -w /dev/kvm
           test -r /sys/fs/cgroup/cgroup.controllers
           sudo -n true

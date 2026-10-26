@@ -7,7 +7,7 @@ import subprocess
 from lib import installed_boot_diagnostic as d
 
 
-def prepare(env, binding, sha, qemu_digest):
+def prepare(env, binding, sha, qemu_digest, qemu_version):
     d.require(env.get('VARIANT') == 'skipjack' and env.get('FLAVOR') == 'gnome'
               and env.get('TUNAOS_QUAL_PLATFORM') == 'linux/amd64/v2', 'diagnostic_target')
     p = {'repository': env['GITHUB_REPOSITORY'], 'collector_sha': sha,
@@ -20,15 +20,18 @@ def prepare(env, binding, sha, qemu_digest):
     p = d.provenance(p)
     d.require(p['producer_sha'] == sha and p['producer_run'] == p['run'] and
               p['producer_attempt'] == p['attempt'] and p['media'] == binding['media_digest'], 'same_attempt_inputs')
-    return p, {'qemu': {'path':'/usr/bin/qemu-system-x86_64', 'sha256':qemu_digest}, 'guestfs_version':'1.52.0'}
+    return p, {'qemu': {'path':'/usr/bin/qemu-system-x86_64', 'sha256':qemu_digest,
+                        'version':qemu_version}, 'guestfs_version':'1.52.0'}
 
 
 def main():
     import hashlib
     binding = json.loads(Path('native-iso-input/artifact-binding.json').read_text())
     sha = subprocess.check_output(['git','rev-parse','HEAD'], text=True).strip()
-    qemu_digest = 'sha256:'+hashlib.sha256(Path('/usr/bin/qemu-system-x86_64').read_bytes()).hexdigest()
-    p, lock = prepare(os.environ, binding, sha, qemu_digest)
+    qemu = '/usr/bin/qemu-system-x86_64'
+    qemu_digest = 'sha256:'+hashlib.sha256(Path(qemu).read_bytes()).hexdigest()
+    qemu_version = subprocess.check_output([qemu, '--version'], text=True, timeout=10).splitlines()[0]
+    p, lock = prepare(os.environ, binding, sha, qemu_digest, qemu_version)
     for name, value in (('provenance',p), ('tools',lock)):
         path = Path(os.environ['RUNNER_TEMP']) / ('installed-boot-'+name+'.json')
         with path.open('x') as stream:

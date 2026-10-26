@@ -1,4 +1,2 @@
-qemu-system-x86=1:8.2.2+ds-0ubuntu1.18
-qemu-system-common=1:8.2.2+ds-0ubuntu1.18
-qemu-system-data=1:8.2.2+ds-0ubuntu1.18
-qemu-utils=1:8.2.2+ds-0ubuntu1.18
+qemu-system-x86
+qemu-utils

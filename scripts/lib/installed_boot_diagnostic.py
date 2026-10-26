@@ -24,17 +24,25 @@ CONFIG_KEYS = ('CONFIG_DRM', 'CONFIG_DRM_VIRTIO_GPU', 'CONFIG_DRM_SIMPLEDRM',
 COMPONENTS = {
     'plymouthd': r'(?:usr/)?sbin/plymouthd',
     'plymouth': r'(?:usr/)?bin/plymouth',
-    'password_agent': r'(?:usr/)?lib/systemd/systemd-ask-password-plymouth',
+    'password_agent': r'usr/bin/systemd-tty-ask-password-agent',
+    'ask_password_plymouth_path': r'usr/lib/systemd/system/systemd-ask-password-plymouth\.path',
+    'ask_password_plymouth_service': r'usr/lib/systemd/system/systemd-ask-password-plymouth\.service',
     'cryptsetup': r'(?:usr/)?(?:sbin|bin)/cryptsetup',
-    'virtio_gpu': r'(?:usr/)?lib/modules/[^/]+/kernel/drivers/gpu/drm/virtio/virtio_gpu\.ko(?:\.(?:xz|gz|zst))?',
-    'simpledrm': r'(?:usr/)?lib/modules/[^/]+/kernel/drivers/gpu/drm/tiny/simpledrm\.ko(?:\.(?:xz|gz|zst))?',
     'plymouth_drm_plugin': r'(?:usr/)?lib(?:64)?/plymouth/renderers/drm\.so',
-    'drm': r'(?:usr/)?lib/modules/[^/]+/kernel/drivers/gpu/drm/drm\.ko(?:\.(?:xz|gz|zst))?',
 }
+DRIVER_MODULES = {'virtio_gpu': 'virtio_gpu', 'simpledrm': 'simpledrm', 'drm': 'drm'}
+MODULE_FILES = re.compile(r'(?:usr/)?lib/modules/[^/]+/modules\.(?:builtin|dep)$')
+THEME_CONF = ('etc/plymouth/plymouthd.conf', 'usr/share/plymouth/plymouthd.defaults')
+THEME_PATH = re.compile(r'usr/share/plymouth/themes/([A-Za-z0-9_-]+)/([A-Za-z0-9_.-]+)\.(plymouth|script|png)$')
+PLUGIN_PATH = re.compile(r'(?:usr/)?lib(?:64)?/plymouth/([A-Za-z0-9_-]+)\.so$')
+FONT_PATH = re.compile(r'usr/share/fonts/[A-Za-z0-9_./-]+\.(?:ttf|otf|pfb|pfm|pf2)$')
 
 
 class Refused(ValueError):
-    """Fixed machine-readable reason, never guest text."""
+    """Fixed machine-readable reason plus explicitly safe diagnostic facts."""
+    def __init__(self, reason, details=None):
+        self.details = details or {}
+        super().__init__(reason)
 
 
 def require(test, reason):
@@ -76,8 +84,22 @@ def safe_options(raw):
     require(len(raw) <= 16384, 'options_limit')
     safe = []
     redacted = 0
+    prefixes = ('console=', 'plymouth.', 'rd.plymouth', 'rd.driver.', 'video=', 'vt.',
+                'fbcon', 'systemd.show_status')
     for token in raw.split():
-        if token in ('rhgb', 'quiet', 'console=tty0', 'console=ttyS0,115200n8') or re.fullmatch(r'drm.debug=0x[0-9a-fA-F]{1,2}', token):
+        if token in ('rhgb', 'quiet', 'splash', 'nomodeset'):
+            safe.append(token)
+        elif re.fullmatch(r'drm\.debug=0x[0-9a-fA-F]{1,2}', token):
+            safe.append(token)
+        elif token.startswith('root=') or token.startswith('rd.luks.'):
+            name, separator, _ = token.partition('=')
+            if token.startswith('rd.luks.') and not separator:
+                safe.append(name)
+            elif separator:
+                safe.append(name + '=<redacted>')
+            else:
+                safe.append(name)
+        elif any(token.startswith(prefix) for prefix in prefixes):
             safe.append(token)
         else:
             redacted += 1
@@ -143,50 +165,63 @@ def decode_zstd(blob, limit, deadline):
 
 
 def archive_metadata(blob, *, deadline=None):
-    """Parse newc/gzip/XZ/ZSTD segments without extraction, links or guest execution.
-
-    UKI is unsupported. Each compressed member and decoded byte is bounded.
-    Raw names/content never appear in output. Key entries are never fingerprinted.
-    """
+    """Parse newc/gzip/XZ/ZSTD segments linearly without extracting them."""
     require(len(blob) <= MAX_BINARY, 'initramfs_limit')
     report = {'components': {}, 'theme_files': 0, 'password_units': 0,
-              'module_initialization': 'not_observed', 'dracut_modules': [], 'theme_selection': 'unresolved'}
+              'module_initialization': 'not_observed', 'dracut_modules': [],
+              'dracut_build_parameters_sha256': None, 'theme_selection': 'unresolved',
+              'theme_evidence': {'theme_file': False, 'script_file': False,
+                                 'script_plugin': False, 'label_plugin': False, 'font': False},
+              'drivers': {name: 'unknown' for name in DRIVER_MODULES}}
     deadline = time.monotonic()+30 if deadline is None else deadline
-    members = 0
+    members = entries = 0
     expanded = len(blob)
-    entries = 0
-    pending = blob
-    while pending:
+    pending = memoryview(blob)
+    pos = 0
+    builtin, dependencies, module_files = set(), set(), set()
+    module_metadata_seen = False
+    theme_files, theme_definitions = set(), {}
+    theme_settings = {path: set() for path in THEME_CONF}
+    plugins, fonts = set(), False
+    while pos < len(pending):
         require(time.monotonic() < deadline, 'archive_timeout')
-        pending = pending.lstrip(b'\0')
-        if not pending:
+        while pos < len(pending) and pending[pos] == 0:
+            pos += 1
+        if pos == len(pending):
             break
-        if pending.startswith((b'\x1f\x8b', b'\xfd7zXZ\x00', b'\x28\xb5\x2f\xfd')):
+        rest = pending[pos:]
+        if rest[:4] == b'\x28\xb5\x2f\xfd':
             members += 1
             require(members <= 64, 'compression_member_limit')
-        if pending.startswith(b'\x28\xb5\x2f\xfd'):
-            decoded, remaining = decode_zstd(pending, MAX_EXPANDED-expanded, deadline)
+            decoded, remaining = decode_zstd(rest.tobytes(), MAX_EXPANDED-expanded, deadline)
             expanded += len(decoded)
-            pending = decoded + remaining
+            pending = memoryview(decoded + remaining)
+            pos = 0
             continue
-        if pending.startswith(b'\x1f\x8b'):
+        if rest[:2] == b'\x1f\x8b':
+            members += 1
+            require(members <= 64, 'compression_member_limit')
             decoder = zlib.decompressobj(16 + zlib.MAX_WBITS)
-            decoded = decoder.decompress(pending, MAX_EXPANDED - expanded + 1)
+            decoded = decoder.decompress(rest, MAX_EXPANDED-expanded+1)
             expanded += len(decoded)
             require(expanded <= MAX_EXPANDED and decoder.eof, 'expanded_or_truncated_archive')
-            pending = decoded + decoder.unused_data
+            pending = memoryview(decoded + decoder.unused_data)
+            pos = 0
             continue
-        if pending.startswith(b'\xfd7zXZ\x00'):
-            decoder = lzma.LZMADecompressor(memlimit=64 * MIB)
-            decoded = decoder.decompress(pending, max_length=MAX_EXPANDED - expanded + 1)
+        if rest[:6] == b'\xfd7zXZ\x00':
+            members += 1
+            require(members <= 64, 'compression_member_limit')
+            decoder = lzma.LZMADecompressor(memlimit=64*MIB)
+            decoded = decoder.decompress(rest, max_length=MAX_EXPANDED-expanded+1)
             expanded += len(decoded)
             require(expanded <= MAX_EXPANDED and decoder.eof, 'expanded_or_truncated_archive')
-            pending = decoded + decoder.unused_data
+            pending = memoryview(decoded + decoder.unused_data)
+            pos = 0
             continue
-        require(pending.startswith(b'070701'), 'unsupported_archive_format')
-        require(len(pending) >= 110, 'truncated_cpio')
+        require(rest[:6] == b'070701', 'unsupported_archive_format')
+        require(len(rest) >= 110, 'truncated_cpio')
         try:
-            fields = [int(pending[6+i*8:14+i*8], 16) for i in range(13)]
+            fields = [int(rest[6+i*8:14+i*8].tobytes(), 16) for i in range(13)]
         except ValueError:
             raise Refused('invalid_cpio') from None
         mode, size, namesize = fields[1], fields[6], fields[11]
@@ -194,27 +229,83 @@ def archive_metadata(blob, *, deadline=None):
         end_name = 110 + namesize
         start = (end_name + 3) & ~3
         end = start + size
-        require(end <= len(pending) and pending[end_name-1:end_name] == b'\0', 'truncated_cpio')
-        name = pending[110:end_name-1].decode('utf-8', errors='strict')
-        name = name.removeprefix('./')
+        require(end <= len(rest) and rest[end_name-1:end_name] == b'\0', 'truncated_cpio')
+        name = rest[110:end_name-1].tobytes().decode('utf-8', errors='strict').removeprefix('./')
         require(not name.startswith('/') and '..' not in PurePosixPath(name).parts, 'archive_traversal')
         entries += 1
         require(entries <= MAX_ENTRIES, 'entry_limit')
-        content = memoryview(pending)[start:end]
+        content = rest[start:end]
         if stat.S_ISREG(mode):
             for label, pattern in COMPONENTS.items():
                 if re.fullmatch(pattern, name):
                     require(label not in report['components'], 'ambiguous_component')
                     report['components'][label] = {'sha256': digest(content), 'bytes': size}
-            if name == 'lib/dracut/modules.txt' and size <= 65536:
-                report['dracut_modules'] = sorted(set(bytes(content).decode('ascii', errors='replace').split()) & {'plymouth', 'crypt', 'dm', 'kernel-modules', 'drm'})
-            if re.fullmatch(r'usr/share/plymouth/themes/[A-Za-z0-9_-]+/[A-Za-z0-9_.-]+\.(?:plymouth|script|png)', name):
+            if name == 'usr/lib/dracut/modules.txt' and size <= 65536:
+                report['dracut_modules'] = sorted(set(bytes(content).decode('ascii', errors='replace').split()) & {'plymouth', 'crypt', 'dm', 'kernel-modules', 'drm', 'simpledrm', 'ostree', 'virtio_gpu', 'virtio-gpu'})
+            if name == 'usr/lib/dracut/build-parameter.txt':
+                report['dracut_build_parameters_sha256'] = digest(content)
+            if MODULE_FILES.fullmatch(name) and size <= 16*MIB:
+                module_metadata_seen = True
+                lines = bytes(content).decode('ascii', errors='replace').splitlines()
+                if name.endswith('modules.builtin'):
+                    builtin.update(_module_name(line.strip().split(' ', 1)[0]) for line in lines if line.strip())
+                else:
+                    for line in lines:
+                        module = line.partition(':')[0].strip()
+                        if module:
+                            dependencies.add(_module_name(module))
+            if '/lib/modules/' in name and re.search(r'\.ko(?:\.(?:xz|gz|zst))?$', name):
+                module_files.add(_module_name(name))
+            match = THEME_PATH.fullmatch(name)
+            if match:
                 report['theme_files'] += 1
-            if re.fullmatch(r'(?:usr/)?lib/systemd/system/(?:plymouth|systemd-ask-password)[A-Za-z0-9_.@-]*\.(?:service|path)', name):
+                theme_files.add((match.group(1), match.group(2), match.group(3)))
+                if match.group(3) == 'plymouth' and size <= 65536:
+                    theme_definitions.setdefault(match.group(1), []).append(
+                        bytes(content).decode('utf-8', errors='replace'))
+            if name in THEME_CONF and size <= 65536:
+                theme_settings[name].update(re.findall(
+                    r'^Theme\s*=\s*([A-Za-z0-9_-]+)\s*$', bytes(content).decode('utf-8', errors='replace'), re.M))
+            plugin = PLUGIN_PATH.fullmatch(name)
+            if plugin:
+                plugins.add(plugin.group(1))
+            fonts = fonts or bool(FONT_PATH.fullmatch(name))
+            if re.fullmatch(r'usr/lib/systemd/system/systemd-ask-password-(?:plymouth|console)\.(?:service|path)', name):
                 report['password_units'] += 1
-        # Symlinks/devices are ignored, never followed or created.
-        pending = pending[(end + 3) & ~3:]
+        pos += (end + 3) & ~3
+    module_metadata_present = module_metadata_seen or bool(module_files)
+    for driver, module in DRIVER_MODULES.items():
+        if module in builtin:
+            report['drivers'][driver] = 'builtin'
+        elif module in dependencies or module in module_files:
+            report['drivers'][driver] = 'module_in_initramfs'
+        elif module_metadata_present:
+            report['drivers'][driver] = 'module_not_in_initramfs'
+    # The local daemon config overrides the packaged defaults when it names a theme.
+    theme_values = theme_settings[THEME_CONF[0]] or theme_settings[THEME_CONF[1]]
+    if len(theme_values) == 1:
+        selected_theme = next(iter(theme_values))
+        definitions = theme_definitions.get(selected_theme, [])
+        module_names, script_files = set(), set()
+        for text in definitions:
+            module_names.update(re.findall(r'^ModuleName\s*=\s*([A-Za-z0-9_-]+)\s*$', text, re.M))
+            script_files.update(re.findall(r'^ScriptFile\s*=\s*([A-Za-z0-9_./-]+)\s*$', text, re.M))
+        report['theme_selection'] = selected_theme
+        report['theme_evidence']['theme_file'] = any(theme == selected_theme and ext == 'plymouth'
+                                                       for theme, _, ext in theme_files)
+        report['theme_evidence']['script_plugin'] = 'script' in module_names and 'script' in plugins
+        report['theme_evidence']['script_file'] = len(script_files) == 1 and any(
+            filename + '.' + ext == PurePosixPath(next(iter(script_files))).name and theme == selected_theme
+            for theme, filename, ext in theme_files)
+    report['theme_evidence']['label_plugin'] = 'label' in plugins
+    report['theme_evidence']['font'] = fonts
     return report
+
+
+def _module_name(path):
+    name = PurePosixPath(path).name
+    name = re.sub(r'\.ko(?:\.(?:xz|gz|zst))?$', '', name)
+    return name.replace('-', '_')
 
 
 def guest_regular(g, path, limit, budget=None):
@@ -246,6 +337,7 @@ def inspect_boot(g):
     require(any(fs == 'crypto_LUKS' for fs in filesystems.values()), 'luks_not_observed')
     candidates = []
     boot_metadata = []
+    partition_summary = []
     # Only EFI System Partition or XBOOTLDR GPT GUIDs. Generic Linux FS is
     # ambiguous (possibly root), so do not mount it to guess its role.
     roles = {'c12a7328-f81f-11d2-ba4b-00a0c93ec93b', 'bc13c2ff-59e6-4262-a352-b275fd6f7172'}
@@ -253,11 +345,19 @@ def inspect_boot(g):
         require(re.fullmatch(r'/dev/sda[0-9]+', device) is not None, 'unknown_partition_layout')
         number = int(device.removeprefix('/dev/sda'))
         guid = g.part_get_gpt_type('/dev/sda', number).lower()
-        labelled_boot = guid == '0fc63daf-8483-4772-8e79-3d69d8477de4' and g.vfs_label(device) == 'boot'
+        try:
+            label = g.vfs_label(device)
+        except Exception:
+            label = None
+        partition_summary.append({'index': number, 'gpt_type_guid': guid,
+                                  'filesystem': fs, 'label': label})
+        labelled_boot = guid == '0fc63daf-8483-4772-8e79-3d69d8477de4' and label == 'boot'
         if guid in roles or labelled_boot:
-            require(fs in ('vfat', 'ext4'), 'encrypted_or_unsupported_boot')
+            if fs not in ('vfat', 'ext4'):
+                raise Refused('encrypted_or_unsupported_boot', {'partitions': partition_summary})
             candidates.append((device, fs))
-    require(candidates, 'boot_role_unproven')
+    if not candidates:
+        raise Refused('boot_role_unproven', {'partitions': partition_summary})
     reports = []
     selected = []
     for device, fs in candidates:
@@ -294,10 +394,10 @@ def inspect_boot(g):
                     kernel = read(fields['linux'], MAX_BINARY)
                     initrd = read(fields['initrd'], MAX_BINARY)
                     config = {key: 'unknown' for key in CONFIG_KEYS}
-                    # Exact kernel basename mapping only; never search encrypted root.
+                    # Exact EL10 kernel release mapping only; never search encrypted root.
                     base = PurePosixPath(fields['linux']).name
                     if base.startswith('vmlinuz-'):
-                        config_path = str(PurePosixPath(fields['linux']).parent / ('config-' + base[8:]))
+                        config_path = '/usr/lib/modules/' + base[8:] + '/config'
                         if g.is_file(config_path, followsymlinks=False):
                             config = kernel_config(read(config_path, MIB))
                     if default_entry in (name, name.removesuffix('.conf')):

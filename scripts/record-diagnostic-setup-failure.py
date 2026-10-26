@@ -37,6 +37,8 @@ def record(directory, env):
         value = env.get(key, '')
         inputs[key.lower()] = value if re.fullmatch(pattern, value) else None
     report = {'schema': 'InstalledBootDiagnosticFailure/v1', 'qualified': False,
+              'label': 'fresh reproduction, not the disk from run 40093907774',
+              'reference_run': 40093907774,
               'status': 'evidence_unavailable', 'step_outcomes': outcomes,
               'declared_inputs_unverified': inputs,
               'runtime_evidence': 'not_available', 'stop_proof': 'not_established'}

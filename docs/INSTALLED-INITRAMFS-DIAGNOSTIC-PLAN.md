@@ -83,15 +83,13 @@ Preserve the default harness path and NativeISOQualification/v2.
 
 ## CI tools and remaining checks
 
-The proposed setup for Ubuntu 24.04 uses signed packages from Ubuntu:
-`python3-guestfs=1:1.52.0-5ubuntu3` and
-`requirements-iso-diagnostic-apt.txt`. It pins QEMU x86, common, data and utils
-to `1:8.2.2+ds-0ubuntu1.18` at both install steps. Do not substitute versions. See the official
-[guestfs package](https://packages.ubuntu.com/noble/python3-guestfs) and
-[QEMU package](https://packages.ubuntu.com/noble/qemu-system-x86).
-Record the QEMU path/hash and guestfs version in the tool lock: `1.52.0`.
+Ubuntu 24.04 pins `python3-guestfs=1:1.52.0-5ubuntu3`. QEMU installs unpinned
+from signed Noble archives. The tool lock/report records QEMU version and
+SHA-256 plus guestfs `1.52.0`. The consumer checks KVM and supermin kernel
+readability. See the official [guestfs package](https://packages.ubuntu.com/noble/python3-guestfs)
+and [QEMU package](https://packages.ubuntu.com/noble/qemu-system-x86).
 
-The normal ISO harness also needs its existing OVMF, swtpm, OCR and shell tools.
+The ISO harness needs OVMF, swtpm, OCR and shell tools.
 No local runtime tools were installed or probed by execution.
 
 The fixture suite uses temporary ordinary files and mock process/guest APIs.
@@ -213,9 +211,11 @@ Use a fresh producer with the exact artifact identity.
 
 ### Setup failure evidence
 
-Run 40244509229 failed before ISO fetch: `qemu-system-x86=.16` needed `qemu-system-common=.16`, but APT selected `.18`. The Noble index lists all four QEMU packages at `.18`. Both install steps now use the same lock file. APT
-still checks signatures on repository metadata; missing pins fail the job. This is
-a host tool change, not a product image change.
+Run 40244509229 failed before ISO fetch: `qemu-system-x86=.16` was no longer
+installable with the QEMU dependencies resolved from Noble at `.18`. The diagnostic
+now installs QEMU packages from the signed Noble archive without a revision pin.
+It records the resolved executable version and SHA-256. This is a host tool change,
+not a product image change.
 
 An always-run step uses only Python's standard library to write a failure
 report if the collector wrote none. It records step outcomes and declared

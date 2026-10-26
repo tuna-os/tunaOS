@@ -9,6 +9,7 @@ import signal
 import stat
 import struct
 import sys
+import time
 
 import pytest
 
@@ -28,8 +29,8 @@ def no_runtime(monkeypatch):
     monkeypatch.setattr(supervisor.subprocess, 'Popen', forbidden)
     monkeypatch.setattr(supervisor.subprocess, 'run', forbidden)
     monkeypatch.setattr(supervisor.os, 'killpg', forbidden)
-    monkeypatch.setattr(supervisor.signal, 'pidfd_send_signal', forbidden)
-    monkeypatch.setattr(supervisor.os, 'pidfd_open', forbidden)
+    monkeypatch.setattr(supervisor.signal, 'pidfd_send_signal', forbidden, raising=False)
+    monkeypatch.setattr(supervisor.os, 'pidfd_open', forbidden, raising=False)
 
 
 def cpio(name, content=b'fixture', mode=stat.S_IFREG | 0o644):
@@ -50,8 +51,68 @@ def test_multisegment_archive_only_reports_public_components(compress):
     result = d.archive_metadata(early + compress(source))
     assert result['components']['plymouthd']['sha256'] == d.digest(b'fixture')
     assert result['theme_files'] == 1
+    assert result['theme_selection'] == 'unresolved'
+    assert result['theme_evidence'] == {
+        'theme_file': False, 'script_file': False, 'script_plugin': False,
+        'label_plugin': False, 'font': False}
     assert result['module_initialization'] == 'not_observed'
     assert 'SECRET' not in json.dumps(result) and 'secret.key' not in json.dumps(result)
+
+
+def test_el10_initramfs_evidence_scales_with_realistic_archive():
+    module_root = 'usr/lib/modules/6.12.0-278.el10.x86_64/'
+    entries = [
+        cpio(module_root + 'modules.builtin',
+             b'kernel/drivers/gpu/drm/sysfb/simpledrm.ko\nkernel/drivers/gpu/drm/drm.ko\n'),
+        cpio(module_root + 'modules.dep',
+             b'kernel/drivers/gpu/drm/virtio/virtio-gpu.ko.xz: kernel/drivers/virtio/virtio_dma_buf.ko.xz\n'),
+        cpio(module_root + 'kernel/drivers/gpu/drm/virtio/virtio-gpu.ko.xz'),
+        cpio('usr/lib/dracut/modules.txt', b'plymouth crypt drm ostree\n'),
+        cpio('usr/lib/dracut/build-parameter.txt', b'--zstd\n'),
+        cpio('etc/plymouth/plymouthd.conf', b'[Daemon]\nTheme=spinner\n'),
+        cpio('usr/share/plymouth/plymouthd.defaults', b'[Daemon]\nTheme=other\n'),
+        cpio('usr/share/plymouth/themes/spinner/spinner.plymouth',
+             b'[Plymouth Theme]\nModuleName=script\nScriptFile=/usr/share/plymouth/themes/spinner/spinner.script\n'),
+        cpio('usr/share/plymouth/themes/spinner/spinner.script', b'Image.Text(\"password\")\n'),
+        cpio('usr/lib64/plymouth/script.so'), cpio('usr/lib64/plymouth/label.so'),
+        cpio('usr/share/fonts/dejavu/DejaVuSans.ttf'),
+        cpio('usr/lib/systemd/system/systemd-ask-password-plymouth.path'),
+        cpio('usr/lib/systemd/system/systemd-ask-password-plymouth.service'),
+        cpio('usr/bin/systemd-tty-ask-password-agent'),
+    ]
+    entries.extend(cpio(f'usr/share/empty/{index:04d}.dat', bytes([index % 251]) * 8192)
+                   for index in range(3081))
+    decoded = b''.join(entries)
+    assert len(decoded) > 24 * d.MIB
+    import zstandard
+    archive = zstandard.ZstdCompressor(write_checksum=True).compress(decoded)
+    result = d.archive_metadata(archive, deadline=time.monotonic() + 8)
+    assert result['drivers'] == {
+        'virtio_gpu': 'module_in_initramfs', 'simpledrm': 'builtin', 'drm': 'builtin'}
+    assert result['dracut_modules'] == ['crypt', 'drm', 'ostree', 'plymouth']
+    assert result['dracut_build_parameters_sha256'] == d.digest(b'--zstd\n')
+    assert result['theme_selection'] == 'spinner'
+    assert all(result['theme_evidence'].values())
+    assert set(result['components']) >= {
+        'password_agent', 'ask_password_plymouth_path', 'ask_password_plymouth_service'}
+
+    started = time.monotonic()
+    entries = b''.join(cpio(f'usr/share/empty/{index:04d}.dat') for index in range(3095))
+    assert len(d.archive_metadata(entries, deadline=time.monotonic() + 8)['components']) == 0
+    assert time.monotonic() - started < 8
+
+
+def test_driver_absence_is_only_reported_when_module_metadata_exists():
+    root = 'usr/lib/modules/6.12.0-278.el10.x86_64/'
+    archive = cpio(root + 'modules.builtin',
+                   b'kernel/drivers/gpu/drm/sysfb/simpledrm.ko\n')
+    archive += cpio(root + 'modules.dep', b'kernel/drivers/misc/example.ko:\n')
+    result = d.archive_metadata(archive)
+    assert result['drivers'] == {
+        'virtio_gpu': 'module_not_in_initramfs',
+        'simpledrm': 'builtin',
+        'drm': 'module_not_in_initramfs'}
+
 
 
 @pytest.mark.parametrize('blob,reason', [(cpio('../escape'), 'archive_traversal'),
@@ -79,17 +140,28 @@ def test_builtin_absent_and_module_are_distinct():
 
 
 def test_argument_value_redaction():
-    result = d.safe_options('rhgb quiet console=SECRET console=tty0 drm.debug=0x1e rd.luks.key=SECRET')
-    assert result['safe'] == ['rhgb', 'quiet', 'console=tty0', 'drm.debug=0x1e']
-    assert result['redacted_count'] == 2 and 'SECRET' not in json.dumps(result)
+    result = d.safe_options(
+        'rhgb quiet console=ttyS1,115200n8 console=tty0 drm.debug=0x1e '
+        'rd.luks.key=SECRET rd.luks.name=UUID=secret systemd.show_status=1 '
+        'plymouth.enable=0 rd.plymouth=0 rd.driver.blacklist=nouveau '
+        'video=HDMI-A-1:1920x1080 vt.global_cursor_default=0 fbcon=nodefer '
+        'nomodeset splash root=/dev/disk/by-uuid/SECRET')
+    assert result['safe'] == [
+        'rhgb', 'quiet', 'console=ttyS1,115200n8', 'console=tty0', 'drm.debug=0x1e',
+        'rd.luks.key=<redacted>', 'rd.luks.name=<redacted>', 'systemd.show_status=1',
+        'plymouth.enable=0', 'rd.plymouth=0', 'rd.driver.blacklist=nouveau',
+        'video=HDMI-A-1:1920x1080', 'vt.global_cursor_default=0', 'fbcon=nodefer',
+        'nomodeset', 'splash', 'root=<redacted>']
+    assert result['redacted_count'] == 0 and 'SECRET' not in json.dumps(result) and 'UUID=secret' not in json.dumps(result)
 
 
 class Guest:
     def __init__(self, fs='ext4', guid='bc13c2ff-59e6-4262-a352-b275fd6f7172'):
         self.fs, self.guid, self.calls, self.links = fs, guid, [], set()
-        self.files = {'/loader/entries/test.conf': b'linux /vmlinuz-1\ninitrd /initramfs-1\noptions quiet secret=HIDDEN\n',
-                      '/vmlinuz-1': b'kernel', '/initramfs-1': cpio('usr/sbin/plymouthd'),
-                      '/config-1': b'CONFIG_DRM=y\n'}
+        self.files = {'/loader/entries/test.conf': b'linux /vmlinuz-6.12.0-278.el10.x86_64\ninitrd /initramfs-6.12.0-278.el10.x86_64\noptions quiet secret=HIDDEN\n',
+                      '/vmlinuz-6.12.0-278.el10.x86_64': b'kernel',
+                      '/initramfs-6.12.0-278.el10.x86_64': cpio('usr/sbin/plymouthd'),
+                      '/usr/lib/modules/6.12.0-278.el10.x86_64/config': b'CONFIG_DRM=y\n'}
     def list_filesystems(self): return {'/dev/sda1':'vfat', '/dev/sda2':'crypto_LUKS', '/dev/sda3':self.fs}
     def part_get_gpt_type(self, device, number):
         return 'c12a7328-f81f-11d2-ba4b-00a0c93ec93b' if number==1 else (self.guid if number==3 else 'unknown-root-guid')
@@ -123,7 +195,16 @@ def test_encrypted_unknown_and_root_layouts_fail_closed(fs,guid):
     assert not any(isinstance(c,tuple) and c[1]=='/dev/sda3' for c in guest.calls)
 
 
-@pytest.mark.parametrize('path', ['/loader','/loader/entries/test.conf','/initramfs-1'])
+def test_unsupported_layout_refusal_keeps_partition_only_facts():
+    with pytest.raises(d.Refused, match='encrypted_or_unsupported_boot') as error:
+        d.inspect_boot(Guest(fs='xfs'))
+    assert error.value.details['partitions'][-1] == {
+        'index': 3, 'gpt_type_guid': 'bc13c2ff-59e6-4262-a352-b275fd6f7172',
+        'filesystem': 'xfs', 'label': 'boot'}
+
+
+@pytest.mark.parametrize('path', ['/loader','/loader/entries/test.conf',
+    '/initramfs-6.12.0-278.el10.x86_64'])
 def test_guest_links_never_followed(path):
     guest=Guest(); guest.links.add(path)
     with pytest.raises(d.Refused,match='guest_symlink'): d.inspect_boot(guest)
@@ -487,12 +568,14 @@ def test_prepare_rejects_cross_attempt_and_wrong_target():
         env['TUNAOS_QUAL_'+key.upper()+'_DIGEST']=digest
     binding={'producer_sha':sha,'producer_run':123,'producer_attempt':1,
              'artifact_id':456,'archive_digest':digest,'media_digest':digest}
-    p,lock=module.prepare(env,binding,sha,digest)
+    version = 'QEMU emulator version 8.2.2 (Debian 1:8.2.2+ds-0ubuntu1.18)'
+    p,lock=module.prepare(env,binding,sha,digest,version)
     assert p['producer_run']==p['run'] and lock['guestfs_version']=='1.52.0'
+    assert lock['qemu']['version']==version
     with pytest.raises(d.Refused,match='same_attempt_inputs'):
-        module.prepare(env,{**binding,'producer_attempt':2},sha,digest)
+        module.prepare(env,{**binding,'producer_attempt':2},sha,digest,version)
     with pytest.raises(d.Refused,match='diagnostic_target'):
-        module.prepare({**env,'VARIANT':'yellowfin'},binding,sha,digest)
+        module.prepare({**env,'VARIANT':'yellowfin'},binding,sha,digest,version)
 
 
 def test_service_refuses_failed_stop(tmp_path,monkeypatch):

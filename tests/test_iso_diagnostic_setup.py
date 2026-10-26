@@ -21,17 +21,26 @@ def step(name):
     return next(item for item in STEPS if item.get('id') == name)
 
 
-def test_qemu_family_is_pinned_together():
-    pins = dict(line.split('=', 1) for line in LOCK.read_text().splitlines())
-    assert set(pins) == {'qemu-system-x86', 'qemu-system-common', 'qemu-system-data', 'qemu-utils'}
-    assert set(pins.values()) == {'1:8.2.2+ds-0ubuntu1.18'}
+def test_qemu_install_uses_current_signed_archive_packages():
+    packages = LOCK.read_text().splitlines()
+    assert packages == ['qemu-system-x86', 'qemu-utils']
     for name in ('diagnostic-host-tools', 'diagnostic-inspector'):
         assert 'mapfile -t qemu_packages < requirements-iso-diagnostic-apt.txt' in step(name)['run']
         assert '"${qemu_packages[@]}"' in step(name)['run']
+    assert "'--version'" in (ROOT / 'scripts/prepare-installed-boot-diagnostic.py').read_text()
+
+
+def test_diagnostic_preflights_ephemeral_kvm_and_supermin_kernel_access():
+    live = yaml.safe_load((ROOT / '.github/workflows/live-iso-bootc.yml').read_text())
+    preflight = live['jobs']['diagnostic-preflight']['steps'][0]['run']
+    assert 'MODE="0666"' in preflight and 'test -r /dev/kvm && test -w /dev/kvm' in preflight
+    consumer = next(item for item in STEPS if item.get('name') == 'Check diagnostic KVM and libguestfs prerequisites')
+    assert 'test -r /dev/kvm && test -w /dev/kvm' in consumer['run']
+    assert 'chmod a+r "$kernel"' in consumer['run'] and 'test -r "$kernel"' in consumer['run']
 
 
 @pytest.mark.parametrize('mode,rc', [('true', 0), ('false', 0), ('true', 100)])
-def test_actual_host_setup_passes_pins_and_propagates_apt_failure(tmp_path, mode, rc):
+def test_actual_host_setup_passes_package_selection_and_propagates_apt_failure(tmp_path, mode, rc):
     # Execute only the setup prefix, before hashing the QEMU executable. Every
     # privileged command is intercepted; the fake QEMU file is never executed.
     body = step('diagnostic-host-tools')['run'].split('          {')[0]
@@ -49,11 +58,11 @@ def test_actual_host_setup_passes_pins_and_propagates_apt_failure(tmp_path, mode
     assert result.returncode == rc, result.stderr
     commands = calls.read_text()
     if rc == 0 and mode == 'true':
-        assert all(pin in commands for pin in LOCK.read_text().splitlines())
+        assert all(package in commands for package in LOCK.read_text().splitlines())
     elif rc == 0:
         assert 'qemu-system-x86 qemu-utils ovmf' in commands and '=1:' not in commands
     else:
-        assert 'install' in commands and all(pin in commands for pin in LOCK.read_text().splitlines())
+        assert 'install' in commands and all(package in commands for package in LOCK.read_text().splitlines())
 
 
 @pytest.mark.parametrize('outcome', ['failure', 'cancelled', 'skipped', '', 'success'])
@@ -65,6 +74,8 @@ def test_missing_evidence_never_becomes_success(tmp_path, outcome):
     raw = (target / 'report.json').read_bytes(); report = json.loads(raw)
     assert len(raw) <= 4096 and b'do-not-copy' not in raw
     assert report['qualified'] is False and report['status'] == 'evidence_unavailable'
+    assert report['label'] == 'fresh reproduction, not the disk from run 40093907774'
+    assert report['reference_run'] == 40093907774
     assert report['stop_proof'] == 'not_established'
     assert report['declared_inputs_unverified']['input_artifact_id'] == '12617774015'
     manifest = json.loads((target / 'manifest.json').read_text())
