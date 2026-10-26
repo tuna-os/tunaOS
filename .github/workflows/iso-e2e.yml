@@ -70,6 +70,9 @@ on:
       iso_builder_run_id:
         type: string
         required: false
+      iso_builder_attempt:
+        type: string
+        required: false
       iso_builder_artifact:
         type: string
         required: false

@@ -66,10 +66,12 @@ def test_source_choice_and_inputs_are_dispatch_only_and_optional_by_default():
                  "iso_builder_attempt", "iso_builder_sha", "iso_expected_sha256", "qual_installer_digest"):
         assert inputs[name]["type"] == "string", name
         assert "iso-builder-artifact only" in inputs[name]["description"], name
+    assert inputs["iso_builder_attempt"]["default"] == "1"
     # Declared for workflow_call only so conditions can name them (and optional); no caller may select the
     # source, which test_strict_qualification_wiring pins, and a PR or the schedule passes no inputs.
     for name in ("iso_builder_run_id", "iso_builder_artifact", "iso_builder_evidence_artifact",
-                 "iso_builder_sha", "iso_expected_sha256", "qual_installer_digest"):
+                 "iso_builder_attempt", "iso_builder_sha", "iso_expected_sha256", "qual_installer_digest"):
+        assert ON["workflow_call"]["inputs"][name]["type"] == "string", name
         assert ON["workflow_call"]["inputs"][name]["required"] is False, name
     assert "pull_request" in ON and "inputs" not in ON["pull_request"]
     # No overlay or engine override exists: those come only from the retained evidence.
