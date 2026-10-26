@@ -16,7 +16,6 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
-import tomllib
 
 import pytest
 import yaml
@@ -34,6 +33,7 @@ def load(name: str, path: str):
     return module
 
 
+CONFIG = load("tunaos_config_for_qualification", "scripts/lib/tunaos_config.py")
 HARNESS = load("qualify_image_packages", "scripts/qualify-image-packages.py")
 LANE = load("package_qualification", "scripts/package-qualification.py")
 ROUTES = list(HARNESS.ROUTES)
@@ -213,7 +213,7 @@ def test_every_qualified_desktop_and_overlay_is_a_flavor_the_repository_ships():
     (build_image = false: Debian 13 ships GNOME 48 under a GNOME 50 floor), so
     the debian leg died in verify-desktop-experience.sh after 26 minutes.
     """
-    variants = tomllib.loads((ROOT / "tunaos.toml").read_text())["variants"]
+    variants = CONFIG.load(ROOT / "tunaos.toml")["variants"]
     for cell in LANE.load_cells(FIXTURE):
         flavors = {flavor["id"]: flavor for flavor in variants[cell["variant"]]["flavors"]}
         for key in ("desktop", "overlay"):
