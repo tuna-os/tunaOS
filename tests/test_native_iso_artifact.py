@@ -266,9 +266,9 @@ def test_native_platform_resolution_from_clean_checkout(tmp_path):
     envfile = tmp_path / 'github-env'
     result = subprocess.run(['bash', '-euc', script], cwd=tmp_path, capture_output=True,
                             text=True, env={**os.environ, 'VARIANT': 'skipjack',
-                                            'FLAVOR': 'gnome', 'GITHUB_ENV': str(envfile)})
+                                            'FLAVOR': 'gnome', 'CANDIDATE_XFCE': 'false', 'REQUESTED_PLATFORM': 'linux/amd64', 'GITHUB_ENV': str(envfile)})
     assert result.returncode == 0, result.stderr
-    assert envfile.read_text() == 'PLATFORM=linux/amd64/v2\n'
+    assert envfile.read_text() == 'PLATFORM=linux/amd64\n'
     e2e = yaml.safe_load((ROOT / '.github/workflows/iso-e2e.yml').read_text())
     matrix = next(step['run'] for step in e2e['jobs']['generate-matrix']['steps']
                   if step.get('id') == 'gen')
@@ -624,7 +624,7 @@ def test_native_job_reserves_transfer_smoke_and_full_strict_gui_budget():
     job = workflow['jobs']['e2e']
     # 60 hard transfer ceiling + 20 historical smoke + 60 strict GUI + 10 extraction + 10 overhead.
     assert "inputs.source == 'native-artifact' && 160 ||" in job['timeout-minutes']
-    strict = next(step for step in job['steps'] if step.get('id') == 'e2e')
+    strict = next(step for step in job['steps'] if step.get('id') == 'strict')
     assert strict['timeout-minutes'] == 60
     assert '--strict-offline-gui' in strict['run']
     smoke = next(step for step in job['steps'] if step.get('id') == 'native_smoke')

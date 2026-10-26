@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """Stage bounded, allowlisted ISO diagnostics without VM disks or media."""
 import json
+import re
 import fnmatch
 import os
 from pathlib import Path
 import stat
 import sys
+import time
 
 MAX_FILE = 16 * 1024 * 1024
 MAX_TOTAL = 128 * 1024 * 1024
@@ -91,9 +93,9 @@ def walkthrough_summary(root, mode):
         return result
 
 
-def candidates(root, report):
+def candidates(root, report, directories=None):
     # Bound enumeration itself, even when a directory contains unrelated files.
-    for directory, patterns in DIRECTORIES.items():
+    for directory, patterns in (DIRECTORIES if directories is None else directories).items():
         parent = root / directory
         if not parent.is_dir() or parent.is_symlink():
             continue
@@ -108,7 +110,22 @@ def candidates(root, report):
 
 
 
-def collect(root):
+def collect(root, candidate_secrets=None):
+    deadline=time.monotonic()+120
+    candidate=candidate_secrets is not None
+    directories=None
+    if candidate:
+        # Fixed names only: never export private GUI/login captures or OCR.
+        directories={'': ('candidate-harness.log','serial.log','strict-plain-live-serial.log','strict-luks-live-serial.log',
+            'strict-plain-cold-serial.log','strict-plain-warm-serial.log',
+            'strict-luks-cold-serial.log','strict-luks-warm-serial.log',
+            'candidate-report.json','qualification-evidence.json','current-phase.txt',
+            'strict-qual-plain.json','strict-qual-luks.json',
+            'frontend-plain.json','frontend-luks.json',
+            'session-plain-cold.json','session-plain-warm.json',
+            'session-luks-cold.json','session-luks-warm.json'),
+            'walkthrough-plain':('safe-welcome.png','walkthrough-xfce.json'),
+            'walkthrough-luks':('safe-welcome.png','walkthrough-xfce.json')}
     root = Path(root)
     root.mkdir(exist_ok=True)
     if root.is_symlink():
@@ -121,7 +138,9 @@ def collect(root):
     skipped = []
     report = dict(enumerated=0, enumeration_truncated=False, skipped_count=0,
                   skipped_report_truncated=False)
-    for path in candidates(root, report):
+    for path in candidates(root, report, directories):
+        if time.monotonic()>deadline:
+            raise ValueError("diagnostic collection exceeded deadline")
         relative = path.relative_to(root)
         size = path.lstat().st_size
         if (len(str(relative)) > MAX_NAME
@@ -136,6 +155,21 @@ def collect(root):
             continue
         target = dest / relative
         target.parent.mkdir(parents=True, exist_ok=True)
+        if candidate:
+            with path.open('rb') as source:
+                data=source.read(MAX_FILE+1)
+            if len(data)>MAX_FILE or total+len(data)>MAX_TOTAL:
+                raise ValueError('diagnostic grew beyond byte budget')
+            if path.suffix!='.png':
+                # Normalize terminal controls before matching split echoes.
+                data=re.sub(rb'\x1b\[[0-?]*[ -/]*[@-~]',b'',data)
+                data=re.sub(rb'[\x00-\x09\x0b-\x1f\x7f]',b'',data)
+                for secret in candidate_secrets:
+                    pattern=b'\n*'.join(re.escape(bytes([char])) for char in secret.encode())
+                    data=re.sub(pattern,b'[REDACTED]',data)
+            target.write_bytes(data)
+            total+=len(data); count+=1
+            continue
         # The producer job has finished writing these files before staging.
         with path.open('rb') as source, target.open('xb') as output:
             remaining = min(MAX_FILE, MAX_TOTAL - total)
@@ -149,7 +183,7 @@ def collect(root):
     (dest / 'collection.json').write_text(json.dumps(dict(files=count, bytes=total, skipped=skipped, **report), indent=2))
 
     # Read staged files only; this output does not change the strict verdict.
-    for mode in ('plain', 'luks'):
+    for mode in (() if candidate else ('plain', 'luks')):
         print('GNOME diagnostic: ' + json.dumps(walkthrough_summary(dest, mode), sort_keys=True))
 
 

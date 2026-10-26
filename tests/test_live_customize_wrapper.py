@@ -23,14 +23,14 @@ def test_wrapper_runs_nonexecutable_customizer_and_forwards_arguments(tmp_path):
     real.chmod(0o644)
     env = os.environ | {
         "CUSTOMIZE_DIR": str(directory),
-        "IMAGE_REF": "ghcr.io/tuna-os/yellowfin:kde",
+        "BASE_IMAGE": "ghcr.io/tuna-os/yellowfin:kde",
         "BASE_DIGEST": "sha256:" + "a" * 64,
         "SOURCE_PLATFORM": "linux/amd64",
     }
     subprocess.run(["bash", "-euc", source[start:end]], env=env, check=True)
     result = subprocess.run([str(directory / "customize-live.sh"), "argument with spaces"], text=True, capture_output=True)
     assert result.returncode == 17, result.stderr
-    assert result.stdout.splitlines() == ["/", env["IMAGE_REF"], env["BASE_DIGEST"], env["SOURCE_PLATFORM"], "argument with spaces"]
+    assert result.stdout.splitlines() == ["/", env["BASE_IMAGE"], env["BASE_DIGEST"], env["SOURCE_PLATFORM"], "argument with spaces"]
 
 
 def test_overlay_staging_tags_are_unique_per_run_and_attempt():
