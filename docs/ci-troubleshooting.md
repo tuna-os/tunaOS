@@ -12,6 +12,7 @@ that touched 36 files across `.github/`, `build_scripts/`, `live-iso/`,
 
 | Symptom | Measured cause | Fix |
 |---|---|---|
+| Runner setup spends 31–33 minutes downloading podman/buildah, then reports `Remote end closed connection` ([#3812](https://github.com/tuna-os/tunaOS/issues/3812)) | #3983 jobs 121768105381 and 121768378530 transferred resolute packages at about 15 kB/s through the pinned setup-runner action’s AMD64 Azure HTTP endpoint. Metadata was fast and other retries passed; this was a transfer failure. This action caller is separate from #3812’s older KVM-tool caller. | `setup-runner-podman.py` retains the four resolute selectors and existing trust keys, uses official Ubuntu HTTPS archive/ports endpoints, bounds acquisition to 600 seconds and three download attempts, verifies cached SHA256 hashes, then installs with downloads disabled. Storage remains in the pinned action. KVM, boot and evidence checks are unchanged. |
 | `qualify-image-packages.py` fails `base source <name>:<tag>@sha256:…: command failed (1)` on every route | `skopeo inspect docker://name:tag@digest` exits 1 with `Docker references with both a tag and digest are currently not supported`. Five of the six `tunaos.toml` base images are pinned that way, and the harness fixtures used a fake `skopeo` that accepted it. | `verify_base_source` inspects `name@digest`. The build and `image-info.json` keep the full `name:tag@digest` string. |
 | ARM64 build passes but Snapdragon laptop support is unclear (#3116) | #3368 records postmarketOS observations and open TunaOS boot/install/update/rollback gates; an architecture manifest does not test board firmware or DTB selection. | Use [SNAPDRAGON.md](SNAPDRAGON.md) and report the exact device, image digest and hardware results. |
 | Bonito build succeeds despite bootc lint findings (#3001) | `99-cleanup.sh` calls `lint_image`; `lib.sh` returns success after findings unless `BOOTC_LINT_FATAL=1`. | Read the grouped output and step summary. Re-run lint against the candidate digest; apply the [Fedora readiness review](FEDORA-OUTREACH-READINESS.md) before outreach. |
@@ -2182,3 +2183,28 @@ use older bootloader/config heuristics; those do not prove this contract.
 conflicts. Its inert tests cover all eight marker combinations and always refuse
 runtime admission. Update the layout, dracut and installer consumers together
 before a runtime trial. One marker change is not a complete fix.
+
+### Runner package acquisition limits (#3812)
+
+The helper uses [Ubuntu’s documented archive](https://ubuntu.com/server/docs/how-to/software/package-management/)
+and the [official ports archive](https://ports.ubuntu.com/ubuntu-ports/) over HTTPS.
+It adds `resolute universe main` to a temporary copy of the source directory.
+Host source files and trust keys stay intact. Temporary metadata lists prevent
+use of stale indexes after a signature failure. Existing sources supply dependencies
+under their existing trust policy.
+
+The budget is 600 seconds for metadata, resolution and downloads.
+Each of three download tries gets at most 200 seconds from that budget.
+APT can retry each request twice, with a 30-second socket timeout.
+There is no mirror fallback or suite change. After installation, the helper verifies each version in the transaction. All four packages must be installed, with Podman 5 or newer.
+
+Ubuntu 26.04 only checks Podman, as the pinned action does.
+For each cached package, the helper verifies its authenticated SHA256 value.
+It removes corrupt entries and downloads them again. The workflow keeps the
+original keys for the weekly cache, separated by architecture, and pinned restore/save actions.
+The cache contains only package archives. Each run authenticates fresh metadata.
+
+Installation has no helper timeout and no downloads.
+The helper defers SIGINT/SIGTERM until dpkg and needrestart cleanup finish.
+It cannot defer SIGKILL or the outer job timeout. Logs show separate durations
+for acquisition and installation, on success or failure.
