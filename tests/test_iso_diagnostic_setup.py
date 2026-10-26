@@ -82,9 +82,9 @@ def test_diagnostic_host_grants_are_runner_scoped_and_refuse_without_acl_support
     assert '!inputs.installed_boot_diagnostic' in strict_kvm['if']
     assert 'MODE="0666"' in strict_kvm['run']
     helper = (ROOT / 'scripts/diagnostic-host-access.sh').read_text()
-    assert 'u:${runner_uid}:r' in helper and 'u:${runner_uid}:rX' in helper
-    assert 'no device-mode change is allowed' in helper
-    assert 'sudo -n setfacl' in helper and 'sudo chmod' not in helper
+    assert 'diagnostic-acl.py' in helper
+    assert '--sudo grant' in helper and '--sudo restore' in helper
+    assert 'sudo chmod' not in helper
     assert 'Revoke temporary supermin ACLs' in (ROOT / '.github/workflows/iso-e2e.yml').read_text()
 
 
@@ -114,7 +114,7 @@ def test_host_access_refuses_when_acl_tools_are_missing(tmp_path):
     assert result.returncode == 77
     assert 'ACL tools are unavailable' in result.stderr
 
-def test_unreadable_module_acl_is_granted_and_removed(tmp_path):
+def test_unreadable_module_acl_path_is_captured_and_cleaned(tmp_path):
     modules = tmp_path/'modules'
     module = modules/'kernel/drivers/gpu/virtio-gpu.ko.xz'
     module.parent.mkdir(parents=True)
@@ -136,22 +136,13 @@ find() {{
         command find "$@"
     fi
 }}
-grant_applied=0
-sudo() {{
-    case "$2" in
-        getfacl)
-            if ((grant_applied)); then printf 'user:%s:r-x\\\\n' "$runner_uid"; fi
-            ;;
-        setfacl)
-            printf '%s\\\\n' "$*" >> "$ACL_LOG"
-            if [[ "$*" == *" -m "* ]]; then grant_applied=1; fi
-            return 0
-            ;;
-        *) return 0 ;;
-    esac
+python3() {{
+    printf '%s\\\\n' "$*" >> "$ACL_LOG"
+    if [[ "$*" == *" grant "* ]]; then : > "$state/modules.acl"; fi
+    if [[ "$*" == *" restore "* ]]; then rm -f "$state/modules.acl"; fi
 }}
 grant_module_acl
-[[ -f "$state/modules" ]]
+[[ -f "$state/modules.acl" ]]
 cleanup
 [[ ! -e "$state" ]]
 '''
@@ -161,8 +152,7 @@ cleanup
         capture_output=True, text=True, timeout=5)
     assert result.returncode == 0, result.stderr
     actions = log.read_text()
-    assert '-m u:23456:rX' in actions
-    assert '-x u:23456' in actions
+    assert ' grant ' in actions and ' restore ' in actions
 
 
 @pytest.mark.parametrize('mode,rc', [('true', 0), ('false', 0), ('true', 100)])

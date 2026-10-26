@@ -171,7 +171,7 @@ an explicit evidence limit, not a successful BLS-selected boot claim.
 | Control | Diagnostic policy |
 | --- | --- |
 | KVM | Existing `kvm` group; no device-mode or udev change. |
-| Host inputs | Runner ACL read access to supermin's exact kernel and module tree; helper removes ACL. Missing tools or access stop the job. Producer preflight checks; consumer repeats and grants its own ACL. |
+| Host inputs | Runner read ACLs only on exact supermin kernel/module paths. Save and restore exact ACLs; other effective rights stay unchanged. Missing access stops. Producer checks; consumer repeats. |
 | Memory | Inspector cgroup limit: 4 GiB. QEMU: 1 GiB. Parser address-space cap: 2 GiB. OOM stops inspection. Service stops; cgroup is empty on every exit. |
 
 The diagnostic serial observer sends no input. A visible password prompt stops
