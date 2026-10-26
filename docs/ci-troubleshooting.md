@@ -2167,3 +2167,18 @@ or `:`.
 Binding also refuses any repository row or unsafe name for the target, so a
 later fork edit of the generated `image-packages.tsv` cannot add a source
 unnoticed. Adding a plain package name needs no refresh.
+
+### Native backend candidate selected from a bootloader heuristic
+
+**Symptom:** A proposed v1.17.1 image is called native because it contains
+systemd-boot or enables composefs in OSTree's `prepare-root.conf`.
+
+**Cause:** v1.17.1 `crates/lib/src/bootc_composefs/image.rs` selects the native
+default from `usr/lib/composefs/setup-root-conf.toml` only when OSTree configuration is absent
+from both the vendor directory and `/etc`. The existing TunaOS probes
+use older bootloader/config heuristics; those do not prove this contract.
+
+**Next step:** Use the read-only [candidate contract](BOOTC-CANDIDATE.md) to expose
+conflicts. Its inert tests cover all eight marker combinations and always refuse
+runtime admission. Update the layout, dracut and installer consumers together
+before a runtime trial. One marker change is not a complete fix.
