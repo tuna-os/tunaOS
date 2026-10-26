@@ -47,6 +47,7 @@ on:
       - 'custom/**'
       - 'files/**'
       - 'Containerfile*'
+      - 'toolchain/**'
       - '.containerignore'
       - '.dockerignore'
       - 'tunaos.toml'
@@ -90,6 +91,64 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  bootc-candidate-compile:
+    name: bootc candidate compile (${{ matrix.family }})
+    # Fixed branch scope opts into this existing PR/manual workflow.
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/candidate/composefs-bootstrap') ||
+      (github.event_name == 'pull_request' && github.head_ref == 'candidate/composefs-bootstrap')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        family: [arch, debian]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build candidate source toolchain only
+        env:
+          CANDIDATE_FAMILY: ${{ matrix.family }}
+        run: |
+          set -euo pipefail
+          # Containerfile defaults pin both bases by digest. No registry login,
+          # export, artifact upload, host mounts or privilege/security overrides.
+          read_pin() {
+            python3 - "$1" <<'PYVERSION'
+          import pathlib, re, sys
+          text = pathlib.Path('image-versions.yaml').read_text()
+          values = re.findall(r'^  ' + re.escape(sys.argv[1]) + r': "(v[0-9]+(?:\.[0-9]+){1,2})"$', text, re.M)
+          if len(values) != 1:
+              raise SystemExit('expected one reviewed version pin')
+          print(values[0])
+          PYVERSION
+          }
+          bootupd=$(read_pin bootupd)
+          args=(--build-arg TUNAOS_BOOTC_CANDIDATE=1
+                --build-arg "BOOTUPD_VERSION=$bootupd")
+          case "$CANDIDATE_FAMILY" in
+            arch)
+              file=Containerfile.arch
+              target=bootc-builder
+              ;;
+            debian)
+              file=toolchain/Containerfile.debian
+              target=builder
+              ostree=$(read_pin ostree)
+              composefs=$(read_pin composefs)
+              args+=(--build-arg BUILD_OSTREE=1
+                     --build-arg "OSTREE_VERSION=$ostree"
+                     --build-arg "COMPOSEFS_VERSION=$composefs")
+              ;;
+            *) echo "Unsupported candidate family" >&2; exit 1 ;;
+          esac
+          timeout 3000 docker build --file "$file" --target "$target" \
+            "${args[@]}" --tag "localhost/bootc-candidate:${CANDIDATE_FAMILY}" .
+
   primary-config-python310:
     name: Primary config (Python 3.10)
     runs-on: ubuntu-latest

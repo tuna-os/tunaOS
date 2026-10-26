@@ -1138,7 +1138,7 @@ branding = { accent = "#294172", gnome_accent = "blue", base = "Fedora ELN", hom
 upstream_track = "experimental"
 description = "Based on Fedora ELN (EL11 preview, rolling)"
 experimental = true
-base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:ed9eebfafd1fb708b58424f599eb8d08c7b3d8eff76f84b3d966e3a7f64da68d"
+base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:cbca9d21eed236f14dcf63ac14ab40601816b94dac9e653ced8eaecfa6c2520b"
 # No alias: `eln` is Fedora's identifier for a moving development target,
 # and an alias tag is a stability promise this lane deliberately does not
 # make. Revisit if/when ELN gains a versioned publish.
@@ -2114,7 +2114,7 @@ codename = "Makaira nigricans"
 branding = { accent = "#1793D1", gnome_accent = "blue", base = "Arch Linux", homage = "Arch blue", plymouth = "rocket" }
 upstream_track = "rolling"
 description = "Based on Arch Linux (rolling)"
-base_image = "docker.io/archlinux/archlinux:latest@sha256:c012199d5d54760078f77b62bf2b7ed15334c873e27cc9d45b13d1e8f6e1ee5c"
+base_image = "docker.io/archlinux/archlinux:latest@sha256:6139c2e5e7e5affec0369bf125af7546c12cca174fd85a038f548af4fdb6df47"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["arch", "archlinux"]
 # arm64 legs use ghcr.io/tuna-os/archlinuxarm instead (docker.io/archlinux

@@ -217,6 +217,14 @@ Six more, each measured while fixing the live-ISO and install path
   wrong answer. When a default exists, test the unrecognised case
   explicitly.
 
+## Contribution policy
+
+Follow [commit identity](CONTRIBUTING.md#commit-identity). DCO sign-off is
+optional for all commits, including automatic merges. Do not manufacture
+attestations, add another contributor's sign-off, or block work on a missing
+`Signed-off-by` trailer. Preserve existing trailers and commit history.
+License, attribution, security, review, and merge queue rules still apply.
+
 ## Agent Skills
 
 - A parser import is a grammar choice. Use the reviewed parser on every host;
