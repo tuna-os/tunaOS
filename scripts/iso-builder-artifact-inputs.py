@@ -82,7 +82,63 @@ def check_inputs(args: argparse.Namespace) -> None:
     digest(args.expected_sha256, "iso_expected_sha256")
     if args.installer_digest:
         digest(args.installer_digest, "qual_installer_digest")
+    if not RUN_ID.fullmatch(args.attempt or ""):
+        fail("iso_builder_attempt must be a numeric run attempt")
     print("iso-builder artifact inputs are well formed")
+def verify_metadata(args: argparse.Namespace) -> None:
+    run = load_json(args.run_metadata, "producer run metadata")
+    artifacts = load_json(args.artifacts_metadata, "producer artifact metadata")
+    if str(run.get("id")) != args.run_id:
+        fail("GitHub run metadata id differs from the selected producer run")
+    if (run.get("repository") or {}).get("full_name") != PRODUCER_REPOSITORY:
+        fail("GitHub producer repository differs from " + PRODUCER_REPOSITORY)
+    if (run.get("head_repository") or {}).get("full_name") != PRODUCER_REPOSITORY:
+        fail("GitHub producer head repository differs from " + PRODUCER_REPOSITORY)
+    if run.get("path") != ".github/workflows/ci.yml":
+        fail("GitHub producer workflow is not .github/workflows/ci.yml")
+    if run.get("head_sha") != args.producer_sha:
+        fail("GitHub producer head SHA differs from the selected producer SHA")
+    if run.get("status") != "completed":
+        fail("GitHub producer run has not completed")
+    run_repository = run.get("repository") or {}
+    run_head_repository = run.get("head_repository") or {}
+    if str(run.get("run_attempt")) != args.attempt:
+        fail("GitHub producer attempt differs from the selected attempt")
+    values = artifacts.get("artifacts")
+    if not isinstance(values, list):
+        fail("GitHub artifact metadata has no artifact list")
+    selected = []
+    for name in (args.artifact, args.evidence_artifact):
+        matches = [item for item in values if isinstance(item, dict) and item.get("name") == name]
+        if len(matches) != 1:
+            fail(f"expected exactly one GitHub artifact named {name!r}")
+        artifact = matches[0]
+        workflow_run = artifact.get("workflow_run") or {}
+        if str(workflow_run.get("id")) != args.run_id:
+            fail(f"artifact {name!r} belongs to a different GitHub run")
+        if workflow_run.get("repository_id") != run_repository.get("id"):
+            fail(f"artifact {name!r} belongs to a different repository")
+        if workflow_run.get("head_repository_id") != run_head_repository.get("id"):
+            fail(f"artifact {name!r} belongs to a different head repository")
+        if workflow_run.get("head_sha") != args.producer_sha:
+            fail(f"artifact {name!r} belongs to a different producer SHA")
+        # GitHub's artifact workflow_run metadata omits run_attempt; the unique
+        # attempt suffix in each artifact name binds it to the selected run.
+        expected_suffix = f"-run{args.run_id}-a{args.attempt}"
+        if not name.endswith(expected_suffix):
+            fail(f"artifact {name!r} does not identify the selected run attempt")
+        if artifact.get("expired") is not False or not isinstance(artifact.get("id"), int) or artifact["id"] < 1:
+            fail(f"artifact {name!r} lacks a live GitHub artifact id")
+        artifact_digest = digest(artifact.get("digest"), f"artifact {name!r} GitHub digest")
+        selected.append({"id": artifact["id"], "name": name, "digest": artifact_digest})
+    selected_json = json.dumps(selected, separators=(",", ":"))
+    Path(args.out).write_text(json.dumps({
+        "runId": args.run_id, "runAttempt": int(args.attempt), "headSha": args.producer_sha,
+        "artifacts": selected,
+    }, indent=2, sort_keys=True) + "\n")
+    Path(args.output).write_text(f"artifacts={selected_json}\n")
+
+
 
 
 def derive(args: argparse.Namespace) -> None:
@@ -146,7 +202,7 @@ def derive(args: argparse.Namespace) -> None:
         fail(f"browser product {product!r} is not a Chromium product string")
     browser_name, browser_version = m.group(1), m.group(2)
 
-    installer = digest(args.installer_digest, "qual_installer_digest") if args.installer_digest else None
+    installer_expectation = digest(args.installer_digest, "qual_installer_digest") if args.installer_digest else None
 
     env = {
         "TUNAOS_QUAL_MEDIA_DIGEST": expected,
@@ -159,8 +215,6 @@ def derive(args: argparse.Namespace) -> None:
         "STRICT_PUBLISHED_MEDIA": "1",
         "TUNAOS_QUAL_DIAGNOSTIC": LABEL,
     }
-    if installer:
-        env["TUNAOS_QUAL_INSTALLER_DIGEST"] = installer
     Path(args.out_env).write_text("".join(f"{k}={v}\n" for k, v in env.items()))
 
     label = {
@@ -180,10 +234,11 @@ def derive(args: argparse.Namespace) -> None:
                 "baseAnnotationMatched": overlay_block.get("baseAnnotationMatched"),
             },
             "engine": {"value": engine, "origin": "sha256 of the WASM response the page instantiated"},
-            "installer": (
-                {"value": installer, "origin": "operator supplied; not a frontend identity, not read from the media"}
-                if installer
-                else {"value": None, "origin": "not supplied; evidence emission will fail closed"}
+            "installer": {"value": None, "origin": "not established from a media-bound frontend receipt; evidence emission will fail closed"},
+            "installerExpectation": (
+                {"value": installer_expectation, "origin": "operator supplied; expectation only, not measured identity"}
+                if installer_expectation
+                else {"value": None, "origin": "not supplied"}
             ),
             "browser": {"name": browser_name, "version": browser_version, "origin": "Browser.getVersion of the measuring Chromium"},
         },
@@ -196,8 +251,22 @@ def derive(args: argparse.Namespace) -> None:
 def main(argv=None) -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="cmd", required=True)
+    p = sub.add_parser("verify-metadata")
+    p.add_argument("--run-id", required=True)
+    p.add_argument("--attempt", required=True)
+    p.add_argument("--artifact", required=True)
+    p.add_argument("--evidence-artifact", required=True)
+    p.add_argument("--producer-sha", required=True)
+    p.add_argument("--run-metadata", required=True)
+    p.add_argument("--artifacts-metadata", required=True)
+    p.add_argument("--out", required=True)
+    p.add_argument("--output", required=True)
+    p.set_defaults(fn=verify_metadata)
+
     for name in ("check-inputs", "derive"):
         p = sub.add_parser(name)
+        if name == "check-inputs":
+            p.add_argument("--attempt", required=True)
         p.add_argument("--run-id", required=True)
         p.add_argument("--artifact", required=True)
         p.add_argument("--evidence-artifact", required=True)

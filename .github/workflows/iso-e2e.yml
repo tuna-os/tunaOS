@@ -140,6 +140,10 @@ on:
       iso_builder_evidence_artifact:
         description: 'Browser evidence artifact name, e.g. browser-evidence-skipjack-gnome-run<id>-a1 (iso-builder-artifact only)'
         type: string
+      iso_builder_attempt:
+        description: 'Exact producer attempt that uploaded both artifacts (iso-builder-artifact only)'
+        type: string
+        default: '1'
       iso_builder_sha:
         description: 'Full producer commit SHA; pins scripts/retain-iso-artifact.py (iso-builder-artifact only)'
         type: string
@@ -753,7 +757,8 @@ jobs:
       # any download, the ISO is reassembled and every hash verified before the
       # strict step, and the evidence file that supplies the overlay identity is
       # read from the real retained artifact (no defaults, no ISO-hash stand-ins).
-      - name: Check iso-builder artifact inputs (diagnostic-unqualified)
+      - name: Check iso-builder run and artifact metadata (diagnostic-unqualified)
+        id: iso_builder_metadata
         if: steps.filter.outputs.skip != 'true' && inputs.source == 'iso-builder-artifact'
         env:
           RUN_ID: ${{ inputs.iso_builder_run_id }}
@@ -762,13 +767,21 @@ jobs:
           PRODUCER_SHA: ${{ inputs.iso_builder_sha }}
           EXPECTED_SHA256: ${{ inputs.iso_expected_sha256 }}
           INSTALLER_DIGEST: ${{ inputs.qual_installer_digest }}
+          ATTEMPT: ${{ inputs.iso_builder_attempt }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           python3 scripts/iso-builder-artifact-inputs.py check-inputs \
             --run-id "$RUN_ID" --artifact "$ARTIFACT" --evidence-artifact "$EVIDENCE_ARTIFACT" \
             --producer-sha "$PRODUCER_SHA" --expected-sha256 "$EXPECTED_SHA256" \
-            --installer-digest "$INSTALLER_DIGEST"
-
+            --installer-digest "$INSTALLER_DIGEST" --attempt "$ATTEMPT"
+          gh api "repos/tuna-os/iso-builder/actions/runs/${RUN_ID}" > run.json
+          gh api "repos/tuna-os/iso-builder/actions/runs/${RUN_ID}/artifacts?per_page=100" > artifacts.json
+          python3 scripts/iso-builder-artifact-inputs.py verify-metadata \
+            --run-id "$RUN_ID" --attempt "$ATTEMPT" --artifact "$ARTIFACT" \
+            --evidence-artifact "$EVIDENCE_ARTIFACT" --producer-sha "$PRODUCER_SHA" \
+            --run-metadata run.json --artifacts-metadata artifacts.json --out verified-artifacts.json \
+            --output "$GITHUB_OUTPUT"
       - name: Download iso-builder ISO chunks (diagnostic-unqualified)
         if: steps.filter.outputs.skip != 'true' && inputs.source == 'iso-builder-artifact'
         timeout-minutes: 40
@@ -776,7 +789,7 @@ jobs:
         with:
           repository: tuna-os/iso-builder
           run-id: ${{ inputs.iso_builder_run_id }}
-          name: ${{ inputs.iso_builder_artifact }}
+          artifact-ids: ${{ fromJSON(steps.iso_builder_metadata.outputs.artifacts)[0].id }}
           path: iso-builder-chunks
           github-token: ${{ github.token }}
 
@@ -787,7 +800,7 @@ jobs:
         with:
           repository: tuna-os/iso-builder
           run-id: ${{ inputs.iso_builder_run_id }}
-          name: ${{ inputs.iso_builder_evidence_artifact }}
+          artifact-ids: ${{ fromJSON(steps.iso_builder_metadata.outputs.artifacts)[1].id }}
           path: iso-builder-evidence
           github-token: ${{ github.token }}
 

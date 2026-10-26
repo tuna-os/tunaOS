@@ -63,7 +63,7 @@ def test_source_choice_and_inputs_are_dispatch_only_and_optional_by_default():
     assert SOURCE in inputs["source"]["options"] or any(o.startswith(SOURCE) for o in inputs["source"]["options"])
     assert inputs["source"]["default"] == "r2-latest"
     for name in ("iso_builder_run_id", "iso_builder_artifact", "iso_builder_evidence_artifact",
-                 "iso_builder_sha", "iso_expected_sha256", "qual_installer_digest"):
+                 "iso_builder_attempt", "iso_builder_sha", "iso_expected_sha256", "qual_installer_digest"):
         assert inputs[name]["type"] == "string", name
         assert "iso-builder-artifact only" in inputs[name]["description"], name
     # Declared for workflow_call only so conditions can name them (and optional); no caller may select the
@@ -77,7 +77,7 @@ def test_source_choice_and_inputs_are_dispatch_only_and_optional_by_default():
 
 
 def test_every_source_step_is_gated_on_the_source_and_the_filter():
-    for prefix in ("Check iso-builder artifact inputs", "Download iso-builder ISO chunks",
+    for prefix in ("Check iso-builder run and artifact metadata", "Download iso-builder ISO chunks",
                    "Download iso-builder browser evidence", "Verify and reassemble the iso-builder ISO"):
         cond = norm(step(prefix)["if"])
         assert "inputs.source == 'iso-builder-artifact'" in cond, prefix
@@ -88,7 +88,7 @@ def test_every_source_step_is_gated_on_the_source_and_the_filter():
 def test_order_inputs_then_downloads_then_verify_then_strict_then_label_then_collect():
     names = [s.get("name", "") for s in STEPS]
     order = [
-        "Check iso-builder artifact inputs",
+        "Check iso-builder run and artifact metadata",
         "Download iso-builder ISO chunks",
         "Download iso-builder browser evidence",
         "Verify and reassemble the iso-builder ISO",
@@ -111,11 +111,18 @@ def test_downloads_are_cross_repo_with_the_default_token_and_pinned_action():
         w = s["with"]
         assert w["repository"] == "tuna-os/iso-builder"
         assert w["run-id"] == "${{ inputs.iso_builder_run_id }}"
-        assert w["name"] == "${{ inputs.%s }}" % name_input
+        assert w["artifact-ids"] == "${{ fromJSON(steps.iso_builder_metadata.outputs.artifacts)[%d].id }}" % (
+            0 if name_input == "iso_builder_artifact" else 1
+        )
         assert w["path"] == path
         assert w["github-token"] == "${{ github.token }}"
         assert "secrets." not in yaml.safe_dump(s)
     assert WORKFLOW["permissions"]["actions"] == "read"
+    metadata = step("Check iso-builder run and artifact metadata")
+    assert metadata["id"] == "iso_builder_metadata"
+    assert metadata["env"]["GH_TOKEN"] == "${{ github.token }}"
+    assert "--run-metadata run.json" in metadata["run"]
+    assert "--artifacts-metadata artifacts.json" in metadata["run"]
 
 
 def test_verify_step_pins_the_helper_checks_the_hash_and_frees_the_chunks_before_the_guests():
@@ -234,7 +241,7 @@ def test_real_run_yields_the_measured_identities_and_never_the_iso_hash(case):
         "TUNAOS_QUAL_BROWSER_VERSION": "156.0.8078.4",
         "STRICT_PUBLISHED_MEDIA": "1",
         "TUNAOS_QUAL_DIAGNOSTIC": "diagnostic-unqualified",
-        "TUNAOS_QUAL_INSTALLER_DIGEST": INSTALLER,
+        "TUNAOS_QUAL_DIAGNOSTIC": "diagnostic-unqualified",
     }
     for key in ("TUNAOS_QUAL_OVERLAY_DIGEST", "TUNAOS_QUAL_ENGINE_DIGEST", "TUNAOS_QUAL_SOURCE_DIGEST"):
         assert env[key] != EXPECTED
@@ -250,7 +257,9 @@ def test_label_file_says_diagnostic_unqualified_and_records_where_each_identity_
     ids = label["identities"]
     assert ids["overlay"]["origin"] == "engineBuildResult.observedInputs.overlay.manifestDigest"
     assert ids["overlay"]["baseAnnotationMatched"] is False  # the real run reported false; surfaced, not hidden
-    assert "operator supplied" in ids["installer"]["origin"]
+    assert ids["installer"]["value"] is None
+    assert ids["installerExpectation"]["value"] == INSTALLER
+    assert "operator supplied" in ids["installerExpectation"]["origin"]
     assert "not the browser's" in label["browserResourceProfile"]
 
 
@@ -337,7 +346,7 @@ def test_a_reassembled_file_of_another_size_or_a_different_expected_hash_is_refu
 
 def check(**over):
     args = {"run-id": RUN_ID, "artifact": "a", "evidence-artifact": "b", "producer-sha": PRODUCER_SHA,
-            "expected-sha256": EXPECTED, "installer-digest": ""}
+            "expected-sha256": EXPECTED, "installer-digest": "", "attempt": "1"}
     args.update({k.replace("_", "-"): v for k, v in over.items()})
     cmd = [sys.executable, str(SCRIPT), "check-inputs"]
     for k, v in args.items():
@@ -353,3 +362,77 @@ def test_dispatch_inputs_are_validated_before_any_download():
                 dict(installer_digest="sha256:short")):
         assert check(**bad).returncode != 0, bad
     assert check(installer_digest=INSTALLER).returncode == 0
+def verify_metadata(tmp_path, run=None, artifacts=None):
+    names = [f"iso-skipjack-gnome-run{RUN_ID}-a1",
+             f"browser-evidence-skipjack-gnome-run{RUN_ID}-a1"]
+    run = run or {"id": int(RUN_ID), "repository": {"id": 1, "full_name": "tuna-os/iso-builder"},
+                  "head_repository": {"id": 1, "full_name": "tuna-os/iso-builder"},
+                  "path": ".github/workflows/ci.yml", "head_sha": PRODUCER_SHA, "run_attempt": 1,
+                  "status": "completed", "conclusion": "failure"}
+    artifacts = artifacts or {"artifacts": [
+        {"id": 10, "name": names[0], "digest": "sha256:" + "a" * 64, "expired": False,
+         "workflow_run": {"id": int(RUN_ID), "repository_id": 1, "head_repository_id": 1, "head_sha": PRODUCER_SHA}},
+        {"id": 11, "name": names[1], "digest": "sha256:" + "b" * 64, "expired": False,
+         "workflow_run": {"id": int(RUN_ID), "repository_id": 1, "head_repository_id": 1, "head_sha": PRODUCER_SHA}},
+    ]}
+    (tmp_path / "run.json").write_text(json.dumps(run))
+    (tmp_path / "artifacts.json").write_text(json.dumps(artifacts))
+    cmd = [sys.executable, str(SCRIPT), "verify-metadata", "--run-id", RUN_ID, "--attempt", "1",
+           "--artifact", names[0], "--evidence-artifact", names[1], "--producer-sha", PRODUCER_SHA,
+           "--run-metadata", str(tmp_path / "run.json"), "--artifacts-metadata", str(tmp_path / "artifacts.json"),
+           "--out", str(tmp_path / "verified.json"), "--output", str(tmp_path / "output")]
+    return subprocess.run(cmd, text=True, capture_output=True)
+
+
+def test_actual_metadata_accepts_same_run_attempt_even_when_guest_run_failed(tmp_path):
+    assert verify_metadata(tmp_path).returncode == 0
+    data = json.loads((tmp_path / "verified.json").read_text())
+    assert [a["id"] for a in data["artifacts"]] == [10, 11]
+
+
+@pytest.mark.parametrize("field,value", [
+    ("repository", {"full_name": "attacker/repo"}),
+    ("head_repository", {"full_name": "attacker/repo"}),
+    ("path", ".github/workflows/other.yml"),
+    ("head_sha", "0" * 40),
+    ("run_attempt", 2),
+    ("status", "in_progress"),
+])
+def test_wrong_producer_run_metadata_fails_before_artifact_use(tmp_path, field, value):
+    run = {"id": int(RUN_ID), "repository": {"id": 1, "full_name": "tuna-os/iso-builder"},
+           "head_repository": {"id": 1, "full_name": "tuna-os/iso-builder"},
+           "path": ".github/workflows/ci.yml", "head_sha": PRODUCER_SHA, "run_attempt": 1, "status": "completed"}
+    run[field] = value
+    assert verify_metadata(tmp_path, run=run).returncode != 0
+    assert not (tmp_path / "verified.json").exists()
+
+
+@pytest.mark.parametrize("field,value", [
+    ("head_sha", "0" * 40), ("name", f"iso-skipjack-gnome-run{RUN_ID}-a2"),
+    ("workflow_run_id", 99), ("repository_id", 99), ("head_repository_id", 99),
+])
+def test_wrong_artifact_metadata_fails_before_artifact_use(tmp_path, field, value):
+    artifacts = {"artifacts": [
+        {"id": 10, "name": f"iso-skipjack-gnome-run{RUN_ID}-a1", "digest": "sha256:" + "a" * 64,
+         "expired": False, "workflow_run": {"id": int(RUN_ID), "repository_id": 1, "head_repository_id": 1, "head_sha": PRODUCER_SHA}},
+        {"id": 11, "name": f"browser-evidence-skipjack-gnome-run{RUN_ID}-a1", "digest": "sha256:" + "b" * 64,
+         "expired": False, "workflow_run": {"id": int(RUN_ID), "repository_id": 1, "head_repository_id": 1, "head_sha": PRODUCER_SHA}},
+    ]}
+    if field == "name":
+        artifacts["artifacts"][0]["name"] = value
+    elif field == "head_sha":
+        artifacts["artifacts"][0]["workflow_run"][field] = value
+    else:
+        artifacts["artifacts"][0]["workflow_run"][{"workflow_run_id": "id"}.get(field, field)] = value
+    assert verify_metadata(tmp_path, artifacts=artifacts).returncode != 0
+    assert not (tmp_path / "verified.json").exists()
+
+
+def test_operator_installer_expectation_never_satisfies_frontend_identity(case):
+    tmp_path, iso, m, mf = case
+    assert derive(tmp_path, iso, m, mf, installer_digest=INSTALLER).returncode == 0
+    env = (tmp_path / "env").read_text()
+    label = json.loads((tmp_path / "label.json").read_text())["identities"]
+    assert "TUNAOS_QUAL_INSTALLER_DIGEST" not in env
+    assert label["installer"]["value"] is None
+    assert label["installerExpectation"]["value"] == INSTALLER
