@@ -838,3 +838,81 @@ def test_diagnostic_serial_observer_never_writes_to_guest(monkeypatch,serial_tex
     monkeypatch.setattr(sys,'argv',['luks-first-boot.py','fixture-serial','fixture-monitor','NEVER-SENT','1'])
     with pytest.raises(SystemExit) as result:runpy.run_path(str(ROOT/'scripts/luks-first-boot.py'),run_name='__main__')
     assert result.value.code==expected
+
+
+class ProcFixture:
+    """No method here accesses procfs, commands, environments, or link targets."""
+    def __init__(self, name, *, uid=None, denied=None, entries=(), disk=False):
+        self.name = name
+        self.uid = os.getuid() if uid is None else uid
+        self.denied = denied
+        self.entries = entries
+        self.disk = disk
+        self.enumerated = False
+
+    def stat(self):
+        from types import SimpleNamespace
+        if self.denied in ('proc_stat', 'fd_stat'):
+            raise PermissionError(13, 'SECRET /private/path executable environment cmdline')
+        return SimpleNamespace(st_uid=self.uid, st_dev=1, st_ino=1 if self.disk else 2)
+
+    def __truediv__(self, name):
+        assert name == 'fd'
+        assert self.uid == os.getuid(), 'other-user FDs must never be enumerated'
+        return self
+
+    def iterdir(self):
+        self.enumerated = True
+        if self.denied == 'fd_enumeration':
+            raise PermissionError(13, 'SECRET /private/target')
+        yield from self.entries
+
+
+@pytest.mark.parametrize('stage', ['proc_stat', 'fd_enumeration', 'fd_stat'])
+def test_descriptor_denial_observations_are_numeric_bounded_and_redacted(stage):
+    fd = ProcFixture('7', denied='fd_stat' if stage == 'fd_stat' else None)
+    proc = ProcFixture('123', denied=stage if stage != 'fd_stat' else None, entries=[fd])
+    root = ProcFixture('root', entries=[proc])
+    with pytest.raises(d.Refused, match='open_descriptor_scan_denied') as caught:
+        supervisor.no_open_disk(ProcFixture('disk', disk=True), time.monotonic()+10, proc_root=root)
+    facts = caught.value.details['descriptor_denials']
+    assert len(facts) == 1
+    fact = facts[0]
+    assert fact['stage'] == stage and fact['pid'] == 123 and fact['errno'] == 13
+    assert fact['previous_uid'] == (None if stage == 'proc_stat' else os.getuid())
+    assert fact['ownership'] == ('unknown' if stage == 'proc_stat' else 'same_uid_observed')
+    assert ('fd' in fact) == (stage == 'fd_stat')
+    if stage == 'fd_stat':
+        assert fact['fd'] == 7
+    assert fact['counts']['processes'] == 1
+    assert fact['counts']['fds'] == (1 if stage == 'fd_stat' else 0)
+    assert set(fact) <= {'stage', 'pid', 'errno', 'previous_uid', 'ownership', 'counts', 'fd'}
+    assert len(json.dumps(facts)) < 512 and 'SECRET' not in json.dumps(facts)
+
+
+def test_descriptor_scan_skips_foreign_processes_and_refuses_open_disk():
+    foreign = ProcFixture('1', uid=os.getuid()+1, entries=[ProcFixture('8', disk=True)])
+    root = ProcFixture('root', entries=[foreign])
+    supervisor.no_open_disk(ProcFixture('disk', disk=True), time.monotonic()+10, proc_root=root)
+    assert not foreign.enumerated
+    own = ProcFixture('2', entries=[ProcFixture('7', disk=True)])
+    with pytest.raises(d.Refused, match='disk_still_open'):
+        supervisor.no_open_disk(ProcFixture('disk', disk=True), time.monotonic()+10,
+                                proc_root=ProcFixture('root', entries=[foreign, own]))
+
+
+def test_descriptor_scan_limits_and_deadline_remain_fail_closed():
+    with pytest.raises(d.Refused, match='descriptor_scan_timeout'):
+        supervisor.no_open_disk(ProcFixture('disk'), 0,
+                                proc_root=ProcFixture('root', entries=[ProcFixture('1')]))
+    proc = ProcFixture('1', entries=(ProcFixture(str(i)) for i in range(100001)))
+    with pytest.raises(d.Refused, match='descriptor_scan_limit'):
+        supervisor.no_open_disk(ProcFixture('disk', disk=True), time.monotonic()+30,
+                                proc_root=ProcFixture('root', entries=[proc]))
+
+
+def test_descriptor_denials_are_reported_before_hash_and_inspection():
+    source = (ROOT/'scripts/diagnose-installed-luks.py').read_text()
+    assert source.index('no_open_disk(disk, deadline)') < source.index('disk_hash = file_digest')
+    assert source.index('disk_hash = file_digest') < source.index("'inspect',")
+    assert "report['descriptor_denials'] = error.details['descriptor_denials']" in source

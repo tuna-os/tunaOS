@@ -2586,3 +2586,28 @@ The native producer also checks the overlay receipt before ISO customization.
 It rejects malformed digests and references that name a different target.
 These checks do not supply qualification evidence.
 
+### Installed diagnostic stops at the descriptor scan
+
+Run `40265940225` stopped with `open_descriptor_scan_denied` after the install
+and owned-service stop guards. It did not collect initramfs metadata.
+The report now records one denial with a stage (`proc_stat`, `fd_enumeration`,
+or `fd_stat`), numeric PID, optional FD, errno, prior UID and scan counts.
+`same_uid_observed` describes an earlier UID check, not proof of service ownership.
+The report omits commands, environments, executable paths, FD targets and raw errors.
+
+The scan still refuses before the disk hash and guestfs launch. It does not
+inspect another user's FDs or qualify the installed system.
+
+ACL recovery uses descriptors for the original objects. It rejects symlink
+ancestors, hardlinked files and changed object identities. The helper runs under
+sudo so libacl can use those descriptors. The privileged CLI accepts only the
+current kernel file or module root.
+
+The JSON file holds ACLs as numbers, plus the identities of ancestors. Creation is
+exclusive, with access for its owner only. Default ACLs stay
+unchanged. Keep that file after any failed grant or restore. Restore the original
+paths and retry cleanup; do not remove recovery state to make preparation pass.
+
+For old text snapshots, use the old helper, not the JSON reader.
+Tests use temporary files and inert proc fixtures only. They do not prove
+host cleanup, proc visibility or successful initramfs collection.

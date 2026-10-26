@@ -106,30 +106,53 @@ class OwnedQemu:
                     'services':[child.proof() for child in self.children]}
 
 
-def no_open_disk(path, deadline):
-    """Refuse an open disk in any same-UID process; private directory excludes other users."""
+def no_open_disk(path, deadline, *, proc_root=None):
+    """Fail closed with one bounded, numeric observation; never inspect foreign FDs."""
     identity = path.stat()
-    count = 0
-    for proc in Path('/proc').iterdir():
+    uid = os.getuid()
+    counts = {'processes': 0, 'same_uid': 0, 'other_uid': 0, 'fds': 0}
+    for proc in (proc_root if proc_root is not None else Path('/proc')).iterdir():
         d.require(time.monotonic() < deadline, 'descriptor_scan_timeout')
-        if not proc.name.isdigit():
+        if not proc.name.isascii() or not proc.name.isdigit():
             continue
+        counts['processes'] += 1
+        d.require(counts['processes'] <= 100000, 'descriptor_scan_limit')
+        previous_uid = None
+        stage = 'proc_stat'
+        fd_number = None
         try:
-            if proc.stat().st_uid != os.getuid():
+            previous_uid = proc.stat().st_uid
+            if previous_uid != uid:
+                counts['other_uid'] += 1
                 continue
-            fds = (proc / 'fd').iterdir()
-            for fd in fds:
-                count += 1
-                d.require(count <= 100000 and time.monotonic() < deadline, 'descriptor_scan_limit')
+            counts['same_uid'] += 1
+            stage = 'fd_enumeration'
+            for fd in (proc / 'fd').iterdir():
+                counts['fds'] += 1
+                d.require(counts['fds'] <= 100000 and time.monotonic() < deadline, 'descriptor_scan_limit')
+                d.require(fd.name.isascii() and fd.name.isdigit(), 'descriptor_entry_invalid')
+                fd_number = int(fd.name)
+                stage = 'fd_stat'
                 try:
                     st = fd.stat()
                 except FileNotFoundError:
+                    stage = 'fd_enumeration'
+                    fd_number = None
                     continue
                 d.require((st.st_dev, st.st_ino) != (identity.st_dev, identity.st_ino), 'disk_still_open')
+                stage = 'fd_enumeration'
+                fd_number = None
         except FileNotFoundError:
             continue
-        except PermissionError:
-            raise d.Refused('open_descriptor_scan_denied') from None
+        except PermissionError as error:
+            observation = {'stage': stage, 'pid': int(proc.name), 'errno': error.errno,
+                           'previous_uid': previous_uid,
+                           'ownership': 'same_uid_observed' if previous_uid == uid else 'unknown',
+                           'counts': counts.copy()}
+            if fd_number is not None:
+                observation['fd'] = fd_number
+            raise d.Refused('open_descriptor_scan_denied',
+                            {'descriptor_denials': [observation]}) from None
 
 
 def worker(disk, target, version):
@@ -511,6 +534,8 @@ def run(args):
         target.unlink()
     except Exception as error:
         report['reason'] = str(error) if isinstance(error, d.Refused) else 'diagnostic_internal_failure'
+        if isinstance(error, d.Refused) and str(error) == 'open_descriptor_scan_denied':
+            report['descriptor_denials'] = error.details['descriptor_denials']
     finally:
         signal.signal(signal.SIGTERM, signal.SIG_IGN)
         signal.signal(signal.SIGINT, signal.SIG_IGN)
