@@ -103,7 +103,7 @@ def test_order_inputs_then_downloads_then_verify_then_strict_then_label_then_col
     assert len(set(positions)) == len(positions)
 
 
-def test_downloads_are_cross_repo_with_the_default_token_and_pinned_action():
+def test_downloads_are_cross_repo_with_an_explicit_actions_read_secret_and_pinned_action():
     for prefix, name_input, path in (("Download iso-builder ISO chunks", "iso_builder_artifact", "iso-builder-chunks"),
                                      ("Download iso-builder browser evidence", "iso_builder_evidence_artifact", "iso-builder-evidence")):
         s = step(prefix)
@@ -115,14 +115,21 @@ def test_downloads_are_cross_repo_with_the_default_token_and_pinned_action():
             0 if name_input == "iso_builder_artifact" else 1
         )
         assert w["path"] == path
-        assert w["github-token"] == "${{ github.token }}"
-        assert "secrets." not in yaml.safe_dump(s)
+        assert w["github-token"] == "${{ secrets.ISO_BUILDER_ARTIFACT_TOKEN }}"
     assert WORKFLOW["permissions"]["actions"] == "read"
     metadata = step("Check iso-builder run and artifact metadata")
     assert metadata["id"] == "iso_builder_metadata"
-    assert metadata["env"]["GH_TOKEN"] == "${{ github.token }}"
-    assert "--run-metadata run.json" in metadata["run"]
-    assert "--artifacts-metadata artifacts.json" in metadata["run"]
+    assert metadata["env"]["GH_TOKEN"] == "${{ secrets.ISO_BUILDER_ARTIFACT_TOKEN }}"
+    assert metadata["env"]["ARTIFACT_TOKEN"] == "${{ secrets.ISO_BUILDER_ARTIFACT_TOKEN }}"
+    assert metadata["run"].index("ISO_BUILDER_ARTIFACT_TOKEN is required") < metadata["run"].index("gh api")
+    assert metadata["run"].index("gh api") < metadata["run"].index("verify-metadata")
+    assert "attempts/${ATTEMPT}/jobs" in metadata["run"]
+    assert "--jobs-metadata jobs.json" in metadata["run"]
+    token_guard = metadata["run"].split("python3 scripts/iso-builder-artifact-inputs.py check-inputs", 1)[0]
+    result = subprocess.run(["bash", "-c", token_guard], env={"ARTIFACT_TOKEN": ""}, text=True,
+                            capture_output=True)
+    assert result.returncode != 0
+    assert "ISO_BUILDER_ARTIFACT_TOKEN is required" in result.stdout
 
 
 def test_verify_step_pins_the_helper_checks_the_hash_and_frees_the_chunks_before_the_guests():
@@ -362,7 +369,31 @@ def test_dispatch_inputs_are_validated_before_any_download():
                 dict(installer_digest="sha256:short")):
         assert check(**bad).returncode != 0, bad
     assert check(installer_digest=INSTALLER).returncode == 0
-def verify_metadata(tmp_path, run=None, artifacts=None):
+def valid_jobs(guest_conclusion="failure"):
+    slug = "skipjack-gnome"
+    steps = [
+        {"name": "build skipjack:gnome (CentOS Stream 10)", "status": "completed", "conclusion": "success"},
+        {"name": "verify guest under QEMU (skipjack-gnome)", "status": "completed", "conclusion": guest_conclusion},
+        {"name": "retain ISO as GitHub artifact (chunked, sha256-verified)", "status": "completed", "conclusion": "success"},
+        {"name": "upload ISO chunks", "status": "completed", "conclusion": "success"},
+        {"name": "upload ISO manifest (small, fetch without the ISO)", "status": "completed", "conclusion": "success"},
+        {"name": "download ISO artifact again", "status": "completed", "conclusion": "success"},
+        {"name": "verify ISO artifact round trip", "status": "completed", "conclusion": "success"},
+        {"name": "upload browser evidence (survives guest failure)", "status": "completed", "conclusion": "success"},
+        {"name": "upload diagnostics", "status": "completed", "conclusion": "success"},
+    ]
+    conclusion = "failure" if guest_conclusion == "failure" else "success"
+    target = {"name": "full-matrix (skipjack:gnome, skipjack-gnome, CentOS Stream 10, linux/amd64, true)",
+              "status": "completed", "conclusion": conclusion, "steps": steps}
+    return {"jobs": [
+        {"name": "wasm", "status": "completed", "conclusion": "success"},
+        {"name": "full-plan", "status": "completed", "conclusion": "success"},
+        target,
+        {"name": "native-windows", "status": "completed", "conclusion": "skipped"},
+    ]}
+
+
+def verify_metadata(tmp_path, run=None, artifacts=None, jobs=None):
     names = [f"iso-skipjack-gnome-run{RUN_ID}-a1",
              f"browser-evidence-skipjack-gnome-run{RUN_ID}-a1"]
     run = run or {"id": int(RUN_ID), "repository": {"id": 1, "full_name": "tuna-os/iso-builder"},
@@ -375,11 +406,15 @@ def verify_metadata(tmp_path, run=None, artifacts=None):
         {"id": 11, "name": names[1], "digest": "sha256:" + "b" * 64, "expired": False,
          "workflow_run": {"id": int(RUN_ID), "repository_id": 1, "head_repository_id": 1, "head_sha": PRODUCER_SHA}},
     ]}
+    jobs = jobs or valid_jobs()
     (tmp_path / "run.json").write_text(json.dumps(run))
     (tmp_path / "artifacts.json").write_text(json.dumps(artifacts))
+    (tmp_path / "jobs.json").write_text(json.dumps(jobs))
     cmd = [sys.executable, str(SCRIPT), "verify-metadata", "--run-id", RUN_ID, "--attempt", "1",
            "--artifact", names[0], "--evidence-artifact", names[1], "--producer-sha", PRODUCER_SHA,
-           "--run-metadata", str(tmp_path / "run.json"), "--artifacts-metadata", str(tmp_path / "artifacts.json"),
+           "--run-metadata", str(tmp_path / "run.json"), "--jobs-metadata", str(tmp_path / "jobs.json"),
+           "--artifacts-metadata", str(tmp_path / "artifacts.json"), "--variant", "skipjack",
+           "--flavor", "gnome", "--platform", "linux/amd64",
            "--out", str(tmp_path / "verified.json"), "--output", str(tmp_path / "output")]
     return subprocess.run(cmd, text=True, capture_output=True)
 
@@ -388,6 +423,42 @@ def test_actual_metadata_accepts_same_run_attempt_even_when_guest_run_failed(tmp
     assert verify_metadata(tmp_path).returncode == 0
     data = json.loads((tmp_path / "verified.json").read_text())
     assert [a["id"] for a in data["artifacts"]] == [10, 11]
+def test_successful_guest_run_is_also_admitted_when_all_producer_integrity_steps_succeeded(tmp_path):
+    run = {"id": int(RUN_ID), "repository": {"id": 1, "full_name": "tuna-os/iso-builder"},
+           "head_repository": {"id": 1, "full_name": "tuna-os/iso-builder"},
+           "path": ".github/workflows/ci.yml", "head_sha": PRODUCER_SHA, "run_attempt": 1,
+           "status": "completed", "conclusion": "success"}
+    assert verify_metadata(tmp_path, run=run, jobs=valid_jobs("success")).returncode == 0
+
+
+@pytest.mark.parametrize("step_name,status,conclusion", [
+    ("build skipjack:gnome (CentOS Stream 10)", "completed", "failure"),
+    ("retain ISO as GitHub artifact (chunked, sha256-verified)", "completed", "skipped"),
+    ("upload ISO chunks", "completed", "cancelled"),
+    ("download ISO artifact again", "completed", "timed_out"),
+    ("verify ISO artifact round trip", "in_progress", "success"),
+    ("upload browser evidence (survives guest failure)", "completed", "failure"),
+    ("verify guest under QEMU (skipjack-gnome)", "completed", "cancelled"),
+    ("verify guest under QEMU (skipjack-gnome)", "completed", "timed_out"),
+])
+def test_producer_step_failure_skip_cancel_and_timeout_fail_closed(tmp_path, step_name, status, conclusion):
+    jobs = valid_jobs()
+    target = next(job for job in jobs["jobs"] if job["name"].startswith("full-matrix"))
+    item = next(step for step in target["steps"] if step["name"] == step_name)
+    item["status"], item["conclusion"] = status, conclusion
+    assert verify_metadata(tmp_path, jobs=jobs).returncode != 0
+    assert not (tmp_path / "verified.json").exists()
+
+
+def test_other_job_failure_and_wrong_target_matrix_job_fail_closed(tmp_path):
+    jobs = valid_jobs()
+    jobs["jobs"][0]["conclusion"] = "failure"
+    assert verify_metadata(tmp_path, jobs=jobs).returncode != 0
+    jobs = valid_jobs()
+    target = next(job for job in jobs["jobs"] if job["name"].startswith("full-matrix"))
+    target["name"] = target["name"].replace("linux/amd64", "linux/arm64")
+    assert verify_metadata(tmp_path, jobs=jobs).returncode != 0
+    assert not (tmp_path / "verified.json").exists()
 
 
 @pytest.mark.parametrize("field,value", [
@@ -397,11 +468,13 @@ def test_actual_metadata_accepts_same_run_attempt_even_when_guest_run_failed(tmp
     ("head_sha", "0" * 40),
     ("run_attempt", 2),
     ("status", "in_progress"),
+    ("conclusion", "cancelled"),
 ])
 def test_wrong_producer_run_metadata_fails_before_artifact_use(tmp_path, field, value):
     run = {"id": int(RUN_ID), "repository": {"id": 1, "full_name": "tuna-os/iso-builder"},
            "head_repository": {"id": 1, "full_name": "tuna-os/iso-builder"},
-           "path": ".github/workflows/ci.yml", "head_sha": PRODUCER_SHA, "run_attempt": 1, "status": "completed"}
+           "path": ".github/workflows/ci.yml", "head_sha": PRODUCER_SHA, "run_attempt": 1,
+           "status": "completed", "conclusion": "failure"}
     run[field] = value
     assert verify_metadata(tmp_path, run=run).returncode != 0
     assert not (tmp_path / "verified.json").exists()

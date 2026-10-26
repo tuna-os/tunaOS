@@ -29,6 +29,8 @@ name: ISO E2E Smoke
 # exact bytes through the same strict harness. The browser catalog gate refuses
 # these targets, so every output is labelled `diagnostic-unqualified` and nothing
 # here qualifies a target. Dispatch only; see scripts/iso-builder-artifact-inputs.py.
+# This dispatch path requires ISO_BUILDER_ARTIFACT_TOKEN with actions:read on
+# tuna-os/iso-builder; it fails closed if the repository secret is absent.
 #
 # native-artifact verifies and consumes the exact output of Live ISOs.
 # The reusable same-run call is gated by the successful native build job.
@@ -82,6 +84,11 @@ on:
         required: false
       qual_installer_digest:
         type: string
+        required: false
+    secrets:
+      # Cross-repository actions:read token; required at runtime only for the
+      # dispatch-only iso-builder-artifact source.
+      ISO_BUILDER_ARTIFACT_TOKEN:
         required: false
   workflow_dispatch:
     inputs:
@@ -768,20 +775,30 @@ jobs:
           EXPECTED_SHA256: ${{ inputs.iso_expected_sha256 }}
           INSTALLER_DIGEST: ${{ inputs.qual_installer_digest }}
           ATTEMPT: ${{ inputs.iso_builder_attempt }}
-          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_TOKEN: ${{ secrets.ISO_BUILDER_ARTIFACT_TOKEN }}
+          GH_TOKEN: ${{ secrets.ISO_BUILDER_ARTIFACT_TOKEN }}
+          VARIANT: ${{ matrix.variant }}
+          FLAVOR: ${{ matrix.flavor }}
+          PLATFORM: ${{ matrix.platform }}
         run: |
           set -euo pipefail
+          [[ -n "$ARTIFACT_TOKEN" ]] || {
+            echo "::error::ISO_BUILDER_ARTIFACT_TOKEN is required with actions:read on tuna-os/iso-builder"
+            exit 1
+          }
           python3 scripts/iso-builder-artifact-inputs.py check-inputs \
             --run-id "$RUN_ID" --artifact "$ARTIFACT" --evidence-artifact "$EVIDENCE_ARTIFACT" \
             --producer-sha "$PRODUCER_SHA" --expected-sha256 "$EXPECTED_SHA256" \
             --installer-digest "$INSTALLER_DIGEST" --attempt "$ATTEMPT"
           gh api "repos/tuna-os/iso-builder/actions/runs/${RUN_ID}" > run.json
+          gh api "repos/tuna-os/iso-builder/actions/runs/${RUN_ID}/attempts/${ATTEMPT}/jobs?per_page=100" > jobs.json
           gh api "repos/tuna-os/iso-builder/actions/runs/${RUN_ID}/artifacts?per_page=100" > artifacts.json
           python3 scripts/iso-builder-artifact-inputs.py verify-metadata \
             --run-id "$RUN_ID" --attempt "$ATTEMPT" --artifact "$ARTIFACT" \
             --evidence-artifact "$EVIDENCE_ARTIFACT" --producer-sha "$PRODUCER_SHA" \
-            --run-metadata run.json --artifacts-metadata artifacts.json --out verified-artifacts.json \
-            --output "$GITHUB_OUTPUT"
+            --run-metadata run.json --jobs-metadata jobs.json --artifacts-metadata artifacts.json \
+            --variant "$VARIANT" --flavor "$FLAVOR" --platform "$PLATFORM" \
+            --out verified-artifacts.json --output "$GITHUB_OUTPUT"
       - name: Download iso-builder ISO chunks (diagnostic-unqualified)
         if: steps.filter.outputs.skip != 'true' && inputs.source == 'iso-builder-artifact'
         timeout-minutes: 40
@@ -791,7 +808,7 @@ jobs:
           run-id: ${{ inputs.iso_builder_run_id }}
           artifact-ids: ${{ fromJSON(steps.iso_builder_metadata.outputs.artifacts)[0].id }}
           path: iso-builder-chunks
-          github-token: ${{ github.token }}
+          github-token: ${{ secrets.ISO_BUILDER_ARTIFACT_TOKEN }}
 
       - name: Download iso-builder browser evidence (diagnostic-unqualified)
         if: steps.filter.outputs.skip != 'true' && inputs.source == 'iso-builder-artifact'
@@ -802,7 +819,7 @@ jobs:
           run-id: ${{ inputs.iso_builder_run_id }}
           artifact-ids: ${{ fromJSON(steps.iso_builder_metadata.outputs.artifacts)[1].id }}
           path: iso-builder-evidence
-          github-token: ${{ github.token }}
+          github-token: ${{ secrets.ISO_BUILDER_ARTIFACT_TOKEN }}
 
       - name: Verify and reassemble the iso-builder ISO (diagnostic-unqualified)
         if: steps.filter.outputs.skip != 'true' && inputs.source == 'iso-builder-artifact'

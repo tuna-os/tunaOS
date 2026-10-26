@@ -104,6 +104,74 @@ def verify_metadata(args: argparse.Namespace) -> None:
     run_head_repository = run.get("head_repository") or {}
     if str(run.get("run_attempt")) != args.attempt:
         fail("GitHub producer attempt differs from the selected attempt")
+    if run.get("conclusion") not in ("success", "failure"):
+        fail(f"GitHub producer run concluded {run.get('conclusion')!r}")
+    jobs = load_json(args.jobs_metadata, "producer attempt job metadata")
+    jobs_list = jobs.get("jobs")
+    if not isinstance(jobs_list, list):
+        fail("GitHub producer attempt metadata has no jobs list")
+    slug = f"{args.variant}-{args.flavor}"
+    if any(not isinstance(other, dict) for other in jobs_list):
+        fail("GitHub producer attempt metadata contains an invalid job")
+    expected_prefix = f"full-matrix ({args.variant}:{args.flavor}, {slug}, "
+    expected_chunk_name = f"iso-{slug}-run{args.run_id}-a{args.attempt}"
+    expected_evidence_name = f"browser-evidence-{slug}-run{args.run_id}-a{args.attempt}"
+    if args.artifact != expected_chunk_name or args.evidence_artifact != expected_evidence_name:
+        fail("selected GitHub artifact names do not match the producer matrix target and attempt")
+    expected_suffix = f", {args.platform}, true)"
+    matches = [job for job in jobs_list if isinstance(job, dict)
+               and isinstance(job.get("name"), str)
+               and job["name"].startswith(expected_prefix) and job["name"].endswith(expected_suffix)]
+    if len(matches) != 1:
+        fail("GitHub producer attempt does not have exactly one matching full-matrix target job")
+    job = matches[0]
+    for other in jobs_list:
+        if other is job:
+            continue
+        if other.get("status") != "completed":
+            fail(f"GitHub producer job {other.get('name')!r} did not complete")
+        if other.get("conclusion") not in ("success", "skipped"):
+            fail(f"GitHub producer job {other.get('name')!r} concluded {other.get('conclusion')!r}")
+    if job.get("status") != "completed" or job.get("conclusion") not in ("success", "failure"):
+        fail("GitHub producer target job did not complete normally")
+    steps = job.get("steps")
+    if not isinstance(steps, list):
+        fail("GitHub producer target job has no step metadata")
+    steps_by_name = {step.get("name"): step for step in steps if isinstance(step, dict)}
+    required = {
+        f"build {args.variant}:{args.flavor} (": "success",
+        "retain ISO as GitHub artifact (chunked, sha256-verified)": "success",
+        "upload ISO chunks": "success",
+        "download ISO artifact again": "success",
+        "verify ISO artifact round trip": "success",
+        "upload browser evidence (survives guest failure)": "success",
+    }
+    build_names = [name for name in steps_by_name if name.startswith(f"build {args.variant}:{args.flavor} (")]
+    if len(build_names) != 1:
+        fail("GitHub producer target job does not have exactly one matching ISO build step")
+    for name, expected_conclusion in required.items():
+        actual_name = build_names[0] if name.endswith(" (") else name
+        step = steps_by_name.get(actual_name)
+        if not step or step.get("status") != "completed" or step.get("conclusion") != expected_conclusion:
+            fail(f"GitHub producer integrity step {actual_name!r} did not succeed")
+    guest_name = f"verify guest under QEMU ({slug})"
+    guest = steps_by_name.get(guest_name)
+    if not guest or guest.get("status") != "completed" or guest.get("conclusion") not in ("success", "failure"):
+        fail("GitHub producer guest verification did not complete normally")
+    for step_name, step in steps_by_name.items():
+        conclusion = step.get("conclusion")
+        if step.get("status") != "completed":
+            fail(f"GitHub producer step {step_name!r} did not complete")
+        if conclusion in ("cancelled", "timed_out", "action_required", "stale"):
+            fail(f"GitHub producer step {step_name!r} was {conclusion}")
+        if conclusion == "failure" and step_name != guest_name:
+            fail(f"GitHub producer step {step_name!r} failed outside guest verification")
+    if (job.get("conclusion") == "success") != (guest.get("conclusion") == "success"):
+        fail("GitHub producer job conclusion is not explained solely by guest verification")
+    if run.get("conclusion") not in ("success", "failure"):
+        fail(f"GitHub producer run concluded {run.get('conclusion')!r}")
+    if (run.get("conclusion") == "success") != (job.get("conclusion") == "success"):
+        fail("GitHub producer run conclusion is not explained solely by guest verification")
     values = artifacts.get("artifacts")
     if not isinstance(values, list):
         fail("GitHub artifact metadata has no artifact list")
@@ -261,6 +329,10 @@ def main(argv=None) -> None:
     p.add_argument("--artifacts-metadata", required=True)
     p.add_argument("--out", required=True)
     p.add_argument("--output", required=True)
+    p.add_argument("--jobs-metadata", required=True)
+    p.add_argument("--variant", required=True)
+    p.add_argument("--flavor", required=True)
+    p.add_argument("--platform", required=True)
     p.set_defaults(fn=verify_metadata)
 
     for name in ("check-inputs", "derive"):
