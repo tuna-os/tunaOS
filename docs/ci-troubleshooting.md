@@ -2344,3 +2344,21 @@ returns one failure and 212 passes.
 **Fix:** use parameterized pytest functions with the same behavioral assertions.
 Run `tests/test_regression_convention.py` with both affected regression suites.
 The focused tests and `just check` alone do not cover this convention.
+
+
+### Failed-login diagnostics can create a user session (#3969)
+
+**Symptom:** a diagnostic probe contacts the user bus even when login failed.
+
+**Cause:** at `adfdf2d4`, the ScreenSaver probe checks only the account UID.
+The inert fixture proves that a failed login still calls the user-bus proxy.
+That proxy can activate a user manager and affect later evidence.
+
+**Fix:** snapshot sessions before probes. User-bus diagnostics need an existing
+active Wayland session on seat0 and an active user manager. A stale session ID
+is not proof. The gate keeps its original acceptance checks and failure status.
+
+GDM/PAM and IBus queries have separate limits of 200 and 50 events.
+Each event has a fixed label and numeric metadata.
+This preserves chronology when input errors repeat and avoids credential text.
+Fixtures verify these rules; real guest behavior remains unvalidated.

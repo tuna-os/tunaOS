@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[2]
 GATE = ROOT / "scripts/gdm-login-gate.sh"
 
 
-def run_gate(failing_shot="", evidence_status=0, login=True, diagnostics_status=0):
+def run_gate(failing_shot="", evidence_status=0, login=True, diagnostics_status=0, diagnostics_scripts=None):
     with tempfile.TemporaryDirectory() as directory:
         root = Path(directory)
         bindir = root / "bin"
@@ -54,6 +54,10 @@ if [[ "$1" == bash ]]; then
         [[ "$LOGIN" == 1 && -f "$STATE/password" ]] || exit 1
         echo 41
     elif [[ "$body" == *'==> loginctl sessions'* ]]; then
+        if [[ "$EXECUTE_DIAGNOSTICS" == 1 ]]; then
+            printf '%s\n' "$body" | /bin/bash -s -- "$4" "${5:-}"
+            exit $?
+        fi
         echo fixture-diagnostics
         exit "$DIAGNOSTICS_STATUS"
     elif [[ "$body" != *'test account already has a session'* ]]; then
@@ -84,6 +88,8 @@ key)
 *) exit 95;;
 esac""",
         }
+        if diagnostics_scripts:
+            scripts.update(diagnostics_scripts)
         for name, body in scripts.items():
             path = bindir / name
             path.write_text("#!/bin/bash\nset -eu\n" + body + "\n")
@@ -97,6 +103,7 @@ esac""",
             EVIDENCE_STATUS=str(evidence_status),
             LOGIN=str(int(login)),
             DIAGNOSTICS_STATUS=str(diagnostics_status),
+            EXECUTE_DIAGNOSTICS=str(int(diagnostics_scripts is not None)),
             TUNAOS_GDM_TEST_PASSWORD="test-password",
         )
         result = subprocess.run(

@@ -60,25 +60,37 @@ guest_gdm_diagnostics() {
 set -u
 user="$1"
 session="${2:-}"
-echo "==> loginctl sessions"
-loginctl list-sessions --no-legend || true
-if [[ -n "$session" ]]; then
-	echo "==> session $session"
-	loginctl show-session "$session" -p Name -p Type -p Seat -p Active -p State -p Service -p LockedHint -p IdleHint || true
-	uid="$(id -u "$user" 2>/dev/null || true)"
-	if [[ -n "$uid" && -d "/run/user/$uid" ]]; then
-		echo "==> user manager state for $user (uid $uid)"
-		sudo -u "#$uid" XDG_RUNTIME_DIR="/run/user/$uid" systemctl --user is-system-running 2>&1 || true
-		sudo -u "#$uid" XDG_RUNTIME_DIR="/run/user/$uid" systemctl --user list-units --type=target --no-legend 2>&1 | head -n 20 || true
-		echo "==> failed user units for $user (uid $uid)"
-		sudo -u "#$uid" XDG_RUNTIME_DIR="/run/user/$uid" systemctl --user list-units --state=failed --no-legend 2>&1 | head -n 20 || true
+# Capture the pre-probe state once. A user-bus proxy can create a user manager,
+# so neither a supplied session id nor a runtime directory proves a desktop.
+echo "==> loginctl sessions (before user-bus diagnostics)"
+session_snapshot="$(loginctl list-sessions --no-legend 2>/dev/null || true)"
+printf '%s\n' "$session_snapshot"
+diagnostic_session=""
+while read -r id _ name _; do
+	[[ "$name" == "$user" ]] || continue
+	properties="$(loginctl show-session "$id" -p Name -p Type -p Seat -p Active -p State -p Service -p LockedHint -p IdleHint 2>/dev/null)" || continue
+	echo "==> session $id (snapshot)"
+	printf '%s\n' "$properties"
+	if [[ -z "$diagnostic_session" && ( -z "$session" || "$session" == "$id" ) ]] &&
+		grep -Fqx "Name=$user" <<<"$properties" &&
+		grep -qx 'Type=wayland' <<<"$properties" &&
+		grep -qx 'Seat=seat0' <<<"$properties" &&
+		grep -qx 'Active=yes' <<<"$properties"; then
+		diagnostic_session="$id"
+	fi
+done <<<"$session_snapshot"
+uid="$(id -u "$user" 2>/dev/null || true)"
+user_manager_active=0
+if [[ -n "$diagnostic_session" && "$uid" =~ ^[0-9]+$ ]] &&
+	systemctl is-active --quiet "user@${uid}.service"; then
+	user_manager_active=1
 fi
-else
-	while read -r id _ name _; do
-		[[ "$name" == "$user" ]] || continue
-		echo "==> session $id"
-		loginctl show-session "$id" -p Name -p Type -p Seat -p Active -p State -p Service -p LockedHint -p IdleHint || true
-	done < <(loginctl list-sessions --no-legend)
+if [[ "$user_manager_active" == 1 && -d "/run/user/$uid" ]]; then
+	echo "==> user manager state for $user (uid $uid)"
+	sudo -u "#$uid" XDG_RUNTIME_DIR="/run/user/$uid" systemctl --user is-system-running 2>&1 || true
+	sudo -u "#$uid" XDG_RUNTIME_DIR="/run/user/$uid" systemctl --user list-units --type=target --no-legend 2>&1 | head -n 20 || true
+	echo "==> failed user units for $user (uid $uid)"
+	sudo -u "#$uid" XDG_RUNTIME_DIR="/run/user/$uid" systemctl --user list-units --state=failed --no-legend 2>&1 | head -n 20 || true
 fi
 echo "==> AccountsService selection for $user"
 cat "/var/lib/AccountsService/users/$user" 2>/dev/null || echo "(no AccountsService file)"
@@ -87,8 +99,10 @@ if [[ -n "$_diag_uid" ]]; then
 	busctl get-property org.freedesktop.Accounts "/org/freedesktop/Accounts/User${_diag_uid}" org.freedesktop.Accounts.User Session 2>&1 || true
 fi
 echo "==> ScreenSaver state for $user"
-if [[ -n "$_diag_uid" ]]; then
-	busctl --machine="${user}@.host" --user call org.gnome.ScreenSaver /org/gnome/ScreenSaver org.gnome.ScreenSaver GetActive 2>&1 || true
+if [[ "$user_manager_active" == 1 ]]; then
+	busctl --auto-start=no --machine="${user}@.host" --user call org.gnome.ScreenSaver /org/gnome/ScreenSaver org.gnome.ScreenSaver GetActive 2>&1 || true
+else
+	echo "(skipped: no existing active Wayland session on seat0 with an active user manager)"
 fi
 echo "==> session definitions GDM can choose from"
 ls -l /usr/share/wayland-sessions /usr/share/xsessions 2>&1 || true
@@ -97,8 +111,51 @@ echo "==> session directories compiled into GDM"
 grep -a -o '/usr/share/[A-Za-z0-9/_-]*sessions[A-Za-z0-9/_-]*' /usr/sbin/gdm3 /usr/sbin/gdm /usr/libexec/gdm-* 2>/dev/null | sort -u || true
 echo "==> GDM service"
 systemctl status gdm.service --no-pager || true
-echo "==> recent greeter, shell, lock and PAM journal (guest SSH sessions excluded)"
-journalctl -b --no-pager | grep -Ei 'gdm|gnome-shell|gnome-session|mutter|LockHint|lock-screen|pam.*(fail|authentication)|session opened|session closed' | grep -Ev 'sshd-session|sshd\[' | tail -n 200 || true
+# Keep authentication chronology separate from noisy input-method errors.
+# Emit fixed event labels and numeric metadata, never free-form log messages
+# that might contain typed text, passwords or tokens.
+journal_summary() {
+	local kind="$1" limit="$2" pattern="$3"
+	journalctl -b --all --no-pager -o json -n "$limit" --grep="$pattern" 2>/dev/null |
+		python3 -c '
+import collections, json, re, sys
+kind, limit = sys.argv[1], int(sys.argv[2])
+events = collections.deque(maxlen=limit)
+for line in sys.stdin:
+    try:
+        entry = json.loads(line)
+        message = entry.get("MESSAGE", "")
+        if not isinstance(message, str):
+            continue
+        text = message.lower()
+        if kind == "ibus":
+            if "ibus" not in text:
+                continue
+            event = "IBus diagnostic"
+        else:
+            if "ibus" in text or "sshd" in text or "ssh" in str(entry.get("SYSLOG_IDENTIFIER", "")).lower():
+                continue
+            if not re.search(r"gdm|pam|session opened|session closed", text):
+                continue
+            event = "GDM/PAM diagnostic"
+            for phrase in ("authentication failure", "authentication failed", "session opened", "session closed"):
+                if phrase in text:
+                    event = phrase
+                    break
+        def number(key):
+            value = entry.get(key, "")
+            return value if isinstance(value, str) and value.isdecimal() else "unknown"
+        events.append("time_us=" + number("__REALTIME_TIMESTAMP") + " pid=" + number("_PID") + " event=" + event)
+    except (ValueError, TypeError, AttributeError):
+        continue
+print("\n".join(events) if events else "(no matching events)")
+' "$kind" "$limit" || true
+}
+echo "==> GDM/PAM chronology (up to 200 events; message text omitted)"
+journal_summary auth 200 '(?i)^(?!.*(?:ibus|sshd)).*(gdm|pam|session opened|session closed)'
+echo "==> IBus diagnostics (up to 50 events; message text omitted)"
+journal_summary ibus 50 '(?i)ibus'
+
 GDM_DIAGNOSTICS
 }
 
