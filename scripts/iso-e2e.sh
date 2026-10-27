@@ -1119,22 +1119,24 @@ strict_observer_starttime() {
 }
 
 strict_observer_identity_matches() {
-	local pid="$1" current_start
-	[[ -n "${STRICT_OBSERVER_STARTTIME:-}" ]] || return 1
-	if [[ -e "/proc/${pid}/stat" ]]; then
-		if current_start="$(strict_observer_starttime "$pid")"; then
-			[[ "$current_start" == "$STRICT_OBSERVER_STARTTIME" ]] || return 1
-		fi
+	local pid="$1" current_start proc_entry
+	[[ "$pid" =~ ^[1-9][0-9]*$ && -n "${STRICT_OBSERVER_STARTTIME:-}" ]] || return 1
+	proc_entry="/proc/${pid}"
+	# A missing proc entry confirms leader exit; its process group may still own children.
+	[[ -d "$proc_entry" ]] || return 0
+	if ! current_start="$(strict_observer_starttime "$pid")"; then
+		# A failed stat read is safe only if the leader disappeared during the read.
+		[[ ! -d "$proc_entry" ]] && return 0
+		return 1
 	fi
-	return 0
+	[[ "$current_start" == "$STRICT_OBSERVER_STARTTIME" ]]
 }
 
 strict_stop_boot_observer() {
 	local pid="${STRICT_OBSERVER_PID:-}" rc=0 forced=0
 	[[ -n "$pid" ]] || return 0
 	if ! strict_observer_identity_matches "$pid"; then
-		# The original leader has gone and this numeric PID was reused. Do not
-		# send any signal to the replacement process or its process group.
+		# Do not signal when start ticks changed or a still-present stat was unreadable.
 		printf 'observer_cleanup identity_unavailable_or_changed qualified=false\n' >>"${STRICT_OBSERVER_LOG:-/dev/null}" || true
 		STRICT_OBSERVER_PID=""
 		STRICT_OBSERVER_STARTTIME=""

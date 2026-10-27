@@ -13,7 +13,7 @@ import subprocess
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from contracts.iso_qualification import DESKTOPS, manifest, validate_session
+from contracts.iso_qualification import DESKTOPS, NATIVE_OSTREE_VARIANTS, manifest, validate_session
 from contracts.iso_qualification import cpu_baseline
 from lib.xfce_candidate import TRANSITIONS as XFCE_TRANSITIONS, validate_frontend, COMMIT as XFCE_COMMIT
 
@@ -95,7 +95,12 @@ def validate(evidence):
     if extended:
         validate_desktop_identity(evidence)
     else:
-        require(evidence['platform'] in NATIVE_PLATFORMS and evidence['cpu_baseline'] == cpu_baseline(evidence['variant'], evidence['platform']), 'platform/CPU baseline mismatch')
+        require(evidence['variant'] in NATIVE_OSTREE_VARIANTS, 'native target is not admitted')
+        require(
+            evidence['platform'] in NATIVE_PLATFORMS
+            and evidence['cpu_baseline'] == cpu_baseline(evidence['variant'], evidence['platform']),
+            'platform/CPU baseline mismatch',
+        )
         require(evidence['hardware_scope'] == 'qemu' and evidence['flavor'] == 'gnome', 'unsupported native GUI scope')
     require(evidence.get('storage_backend', 'ostree') == 'ostree', 'native-composefs requires separate proof')
     require(evidence.get('offline_network_disabled') is True, 'guest egress must be disabled')

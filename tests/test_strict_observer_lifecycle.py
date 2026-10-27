@@ -39,7 +39,12 @@ if os.environ['MODE'] == 'orphan_child':
         raise SystemExit(0)
     Path(os.environ['READY'] + '-child').write_text(str(child))
 Path(os.environ['READY']).write_text(str(os.getpid()))
-if os.environ['MODE'] in ('already_exited', 'orphan_child'):
+if os.environ['MODE'] == 'orphan_child':
+    release = Path(os.environ['RELEASE'])
+    while not release.exists():
+        time.sleep(0.01)
+    raise SystemExit(7)
+if os.environ['MODE'] == 'already_exited':
     raise SystemExit(7)
 time.sleep(30)
 """)
@@ -65,6 +70,19 @@ case "$MODE" in
     term_during_stop) trap cleanup_vm EXIT; trap 'exit 143' TERM; (sleep 0.15; kill -TERM $$) & strict_stop_boot_observer; exit 99 ;;
     exit_trap) trap cleanup_vm EXIT; exit 42 ;;
     term_trap) trap cleanup_vm EXIT; trap 'exit 143' TERM; kill -TERM $$ ;;
+    orphan_child)
+        # The file gate holds the leader until the harness verifies launch identity.
+        [[ -n "$STRICT_OBSERVER_STARTTIME" ]] || exit 96
+        : >"$RELEASE"
+        wait "$STRICT_OBSERVER_PID" 2>/dev/null || true
+        [[ ! -e "/proc/${STRICT_OBSERVER_PID}" ]] || exit 98
+        child="$(<"${READY}-child")"
+        child_stat="$(<"/proc/${child}/stat")" || exit 97
+        child_pgid="$(awk '{print $3}' <<<"${child_stat##*) }")"
+        [[ "$child_pgid" == "$STRICT_OBSERVER_PID" ]] || exit 97
+        strict_stop_boot_observer
+        exit 42
+        ;;
     *) strict_stop_boot_observer; strict_stop_boot_observer; exit 42 ;;
 esac
 """
@@ -75,6 +93,7 @@ esac
         "SCRIPT_DIR": str(tmp_path),
         "MODE": mode,
         "READY": str(tmp_path / "ready"),
+        "RELEASE": str(tmp_path / "release"),
         "KEEP_VM": "1",
         "MONITOR_SOCK": str(tmp_path / "never-open-monitor.sock"),
     }
@@ -154,6 +173,75 @@ strict_stop_boot_observer
     assert result.returncode == 0
     assert not (tmp_path / "trace").exists()
     assert "identity_unavailable_or_changed" in (tmp_path / "observer.log").read_text()
+
+
+@pytest.mark.parametrize(
+    "read_failure",
+    [True, False],
+    ids=["unreadable-stat", "changed-starttime"],
+)
+def test_live_observer_identity_races_never_signal(tmp_path, read_failure):
+    body = (
+        "\n".join(
+            function(name)
+            for name in (
+                "strict_observer_starttime",
+                "strict_observer_identity_matches",
+                "strict_stop_boot_observer",
+            )
+        )
+        + """
+observer_pid=$$
+STRICT_OBSERVER_PID="$observer_pid"
+STRICT_OBSERVER_STARTTIME="$(strict_observer_starttime "$observer_pid")"
+[[ -n "$STRICT_OBSERVER_STARTTIME" ]]
+if [[ "$READ_FAILURE" == "1" ]]; then
+    cat() { return 1; }
+else
+    STRICT_OBSERVER_STARTTIME="$((STRICT_OBSERVER_STARTTIME + 1))"
+fi
+kill() { printf 'kill %s\\n' "$*" >>"$TRACE"; return 0; }
+wait() { printf 'wait %s\\n' "$*" >>"$TRACE"; return 0; }
+strict_stop_boot_observer
+[[ -e "/proc/${observer_pid}/stat" ]]
+[[ -z "$STRICT_OBSERVER_PID" && -z "$STRICT_OBSERVER_STARTTIME" ]]
+"""
+    )
+    trace = tmp_path / "signals"
+    result = subprocess.run(
+        ["bash", "-c", body],
+        capture_output=True,
+        check=False,
+        timeout=5,
+        env={
+            **os.environ,
+            "READ_FAILURE": "1" if read_failure else "0",
+            "TRACE": str(trace),
+            "STRICT_OBSERVER_LOG": str(tmp_path / "observer.log"),
+        },
+    )
+    assert result.returncode == 0, result.stderr
+    assert not trace.exists(), (
+        "ambiguous or changed identity must not signal any PID/PGID"
+    )
+
+
+def test_confirmed_observer_leader_disappearance_remains_owned():
+    pid_max = int(Path("/proc/sys/kernel/pid_max").read_text())
+    missing_pid = pid_max + 1
+    assert not Path(f"/proc/{missing_pid}").exists()
+    body = (
+        function("strict_observer_starttime")
+        + function("strict_observer_identity_matches")
+        + (
+            f"\nSTRICT_OBSERVER_STARTTIME=1\n"
+            f"strict_observer_identity_matches {missing_pid}\n"
+        )
+    )
+    result = subprocess.run(
+        ["bash", "-c", body], capture_output=True, check=False, timeout=5
+    )
+    assert result.returncode == 0, result.stderr
 
 
 @pytest.mark.parametrize("identity", ["", "different"])

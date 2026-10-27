@@ -243,6 +243,47 @@ def test_overlay_wrapper_stages_xfce_candidate_payload(tmp_path):
     assert not fetch_log.exists()
 
 
+def test_overlay_wrapper_rejects_malformed_xfce_candidate_before_media_and_ssh(tmp_path):
+    env, fetch_log = _fetch_stubs(tmp_path)
+    variant, flavor = "bonito", "xfce"
+    target = _published_target(variant, flavor)
+    session_root = tmp_path / "malformed xfce session root"
+    receipt = session_root / "etc/tunaos/live-installer-info"
+    receipt.parent.mkdir(parents=True)
+    receipt.write_text(
+        "INSTALLER_APP=org.tunaos.InstallerXfce\n"
+        f"INSTALLER_REVISION={'e' * 64}\n"
+        "INSTALLER_BUNDLE_SHA256=remote\n"
+    )
+
+    fixture = tmp_path / "malformed candidate fixture"
+    digest = _write_minimal_oci_layout(fixture)
+    wrapper = _generate_customizer_wrapper(
+        tmp_path / "malformed xfce customize dir",
+        session_root,
+        env,
+        variant=variant,
+        flavor=flavor,
+        digest=digest,
+        payload_ref=f"{target}@{digest}",
+        candidate="1",
+    )
+    candidate = wrapper.parent / "xfce-candidate-oci"
+    shutil.copytree(fixture, candidate)
+    (candidate / "index.json").write_text(json.dumps({"schemaVersion": 1, "manifests": []}) + "\n")
+    (wrapper.parent / ".enable-sshd").touch()
+    (session_root / "usr/lib/systemd/system").mkdir(parents=True)
+    (session_root / "usr/lib/systemd/system/sshd.service").write_text("")
+
+    result = subprocess.run([str(wrapper)], cwd=ROOT, env=env, text=True, capture_output=True)
+    assert result.returncode != 0
+    assert "invalid index schema" in result.stderr
+    assert not (session_root / "etc/bootc-installer/media-input.json").exists()
+    assert not (session_root / "etc/ssh/sshd_config.d/90-tunaos-live-e2e.conf").exists()
+    assert not (session_root / "usr/lib/systemd/system/tunaos-live-ssh-credentials.service").exists()
+    assert not fetch_log.exists()
+
+
 def test_overlay_staging_tags_are_unique_per_run_and_attempt():
     import yaml
 

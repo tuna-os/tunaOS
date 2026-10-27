@@ -86,6 +86,19 @@ def test_skipjack_amd64_native_receipt_accepts_variant_baseline():
     stale['cpu_baseline'] = 'x86-64'
     with pytest.raises(ValueError):
         NATIVE.validate(seal(stale))
+
+
+def test_wahoo_amd64_native_receipt_is_rejected():
+    data = evidence()
+    data['variant'] = 'wahoo'
+    data['platform'] = 'linux/amd64'
+    data['cpu_baseline'] = NATIVE.cpu_baseline('wahoo', 'linux/amd64')
+    for observed in data['observed'].values():
+        observed['target_imgref'] = 'ghcr.io/tuna-os/wahoo:gnome'
+    with pytest.raises(ValueError, match='native target is not admitted'):
+        NATIVE.validate(seal(data))
+
+
 @pytest.mark.parametrize('path,value', [
     (('schema',),'QualificationEvidence/v1'), (('browser',),{'name':'chromium','version':'100'}),
     (('execution_kind',),'browser'), (('offline_network_disabled',),False),
