@@ -334,6 +334,7 @@ def test_candidate_producer_retains_ostree_gate_and_isolates_overlay():
     assert adapter.index('skopeo copy --preserve-digests') < adapter.index('export TUNAOS_XFCE_CANDIDATE')
     assert 'xfce-media-input.py' in adapter and 'xfce-media-input.py' in custom
     assert '/etc/bootc-installer/media-input.json' in custom
+    assert 'TUNAOS_XFCE_CANDIDATE:-0}" != 1' in custom
 
 
 @pytest.mark.parametrize('field,value',[('platformManifestDigest','sha256:'+'0'*64),

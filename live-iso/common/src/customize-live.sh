@@ -1092,15 +1092,15 @@ if [[ "${TUNAOS_XFCE_CANDIDATE:-0}" == 1 ]]; then
 	cp -a "${SCRIPT_DIR}/xfce-candidate-oci" /usr/lib/tunaos/xfce-candidate-oci
 	python3 "${SCRIPT_DIR}/xfce-media-input.py" /usr/lib/tunaos/xfce-candidate-oci "$TUNA_LIVE_BASE_DIGEST" /etc/bootc-installer/media-input.json "$TUNA_LIVE_INSTALL_TARGET"
 fi
-RECIPE_FILE="/etc/bootc-installer/recipe.json"
-if [[ -n "${TUNA_LIVE_PAYLOAD_REF+x}" ]]; then
+RECIPE_FILE="${RECIPE_FILE:-/etc/bootc-installer/recipe.json}"
+if [[ -n "${TUNA_LIVE_PAYLOAD_REF+x}" && "${TUNAOS_XFCE_CANDIDATE:-0}" != 1 ]]; then
 	# The final native media stage knows the canonical alias and measured
 	# digest of its offline store. Never keep the stock tunaos:latest source.
 	python3 "${SCRIPT_DIR}/installer-source-binding.py" "$RECIPE_FILE" \
 		"$TUNA_LIVE_PAYLOAD_REF" "${TUNA_LIVE_BASE_DIGEST:-}" \
 		"${TUNA_LIVE_INSTALL_TARGET:-}"
 fi
-if [[ -f "$RECIPE_FILE" ]]; then
+if [[ -f "$RECIPE_FILE" && "${TUNAOS_XFCE_CANDIDATE:-0}" != 1 ]]; then
 	# Fatal on failure, deliberately. An image we cannot classify must not get
 	# a guessed recipe: 10 seconds of ISO build is a better place to learn this
 	# than hour three of a matrix cell, the same rule the sudo and podman
