@@ -4003,6 +4003,17 @@ PYEOF
 	else
 		local identity_line
 		identity_line="$(grep -aE 'TUNAOS_IMAGE_IDENTITY digest=sha256:[0-9a-fA-F]{64} targetImgref=[^[:space:]]+' "$installed_log" | tail -1 || true)"
+		if [[ -z "$identity_line" && -n "${SERIAL_LOG:-}" && -f "$SERIAL_LOG" ]]; then
+			local id_deadline=$(($(date +%s) + 60))
+			while (($(date +%s) < id_deadline)); do
+				identity_line="$(grep -aE 'TUNAOS_IMAGE_IDENTITY digest=sha256:[0-9a-fA-F]{64} targetImgref=[^[:space:]]+' "$SERIAL_LOG" | tail -1 || true)"
+				if [[ -n "$identity_line" ]]; then
+					cp -f "$SERIAL_LOG" "$installed_log" 2>/dev/null || true
+					break
+				fi
+				sleep 2
+			done
+		fi
 		if [[ -z "$identity_line" ]]; then
 			echo "ERROR: --strict-offline-gui (${mode}): installed identity unavailable over SSH and serial" >&2
 			echo "       published media must emit TUNAOS_IMAGE_IDENTITY from its installed runtime checks" >&2

@@ -78,6 +78,34 @@ strict_verify_installed_identity luks "$1" ghcr.io/tuna-os/skipjack:gnome 1 "$2"
         timeout=5,
     )
     assert result.returncode == expected
+def test_identity_gate_serial_fallback_waits_for_live_serial_log(tmp_path):
+    installed_log = tmp_path / "installed.log"
+    installed_log.write_text("contract ok without identity line\n")
+    live_log = tmp_path / "live.log"
+    live_log.write_text(
+        "contract ok without identity line\n"
+        f"TUNAOS_IMAGE_IDENTITY digest=sha256:{'a' * 64} targetImgref=ghcr.io/tuna-os/skipjack:gnome\n"
+    )
+    harness = (
+        function("strict_verify_installed_identity")
+        + """
+check_ssh() { return 1; }
+sleep() { :; }
+strict_poweroff_installed() { :; }
+strict_offline_evidence() { :; }
+SERIAL_LOG="$3" strict_verify_installed_identity luks "$1" ghcr.io/tuna-os/skipjack:gnome 1 "$2"
+"""
+    )
+    result = subprocess.run(
+        ["bash", "-c", harness, "test", str(installed_log), "cold", str(live_log)],
+        env={**os.environ, "STRICT_SOURCE_DIGEST": "sha256:" + "a" * 64},
+        capture_output=True,
+        check=False,
+        timeout=5,
+    )
+    assert result.returncode == 0
+    assert "TUNAOS_IMAGE_IDENTITY" in installed_log.read_text()
+
 
 
 def test_cold_and_warm_gates_precede_success_evidence():
