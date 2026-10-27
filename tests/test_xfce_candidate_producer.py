@@ -548,7 +548,7 @@ def test_real_candidate_source_gate_uses_configured_ref(destination,wrong):
     assert (result.returncode==0) is (not wrong),result.stderr
     custom=(ROOT/'live-iso/common/src/customize-live.sh').read_text()
     start=custom.index('\t[[ "$INSTALLER_APP" == org.tunaos.InstallerXfce')
-    body=custom[start:custom.index('\t# XFCE reads',start)]
+    body=custom[start:custom.index('\t\tmkdir -p "${root}/usr/lib/tunaos"',start)]
     env.update(INSTALLER_APP=APP,TUNA_LIVE_PLATFORM='linux/amd64',TUNA_LIVE_INSTALL_TARGET=target)
     result=subprocess.run(['bash','-eu','-c',body],env=env,capture_output=True,text=True)
     assert (result.returncode==0) is (not wrong),result.stderr

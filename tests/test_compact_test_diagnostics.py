@@ -467,6 +467,14 @@ def test_recursive_source_ast_cannot_break_summary(tmp_path, monkeypatch):
     (source / 'tests').mkdir(parents=True)
     (source / 'tests/sample.py').write_text('def test_failure(): pass\nx=' + '1+' * 10000 + '1\n')
     monkeypatch.setattr(module, 'SOURCE_ROOT', source)
+    original_parse = module.ast.parse
+
+    def recursive_parse(text, *args, **kwargs):
+        if text.startswith('def test_failure'):
+            raise RecursionError('synthetic source AST depth overflow')
+        return original_parse(text, *args, **kwargs)
+
+    monkeypatch.setattr(module.ast, 'parse', recursive_parse)
     (root / 'pytest-static.json').write_text(json.dumps(direct_document()))
     result = module.summarize(root, direct=True)
     assert 'invalid-direct-source-id' in result['pytest']['issues']

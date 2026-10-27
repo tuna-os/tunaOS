@@ -12,14 +12,18 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def _published_target(variant, flavor):
+def _published_target(variant, flavor, env=None):
+    command_env = os.environ.copy() if env is None else env.copy()
+    command_env["GITHUB_REPOSITORY_OWNER"] = "tuna-os"
     result = subprocess.run(
         ["bash", "scripts/published-image-ref.sh", variant, flavor, "ghcr"],
         cwd=ROOT,
-        env=os.environ | {"GITHUB_REPOSITORY_OWNER": "tuna-os"},
+        env=command_env,
         text=True,
         capture_output=True,
         check=True,
@@ -299,3 +303,107 @@ def test_overlay_staging_tags_are_unique_per_run_and_attempt():
         tags.add(result.stdout)
     assert len(tags) == 3
     assert all(tag.startswith("ghcr.io/tuna-os/live-overlay:yellowfin-kde-linux-amd64-") for tag in tags)
+
+
+def test_overlay_wrapper_rejects_mismatched_gnome_payload_before_writes(tmp_path):
+    env, fetch_log = _fetch_stubs(tmp_path)
+    variant, flavor = "yellowfin", "kde"
+    digest = "sha256:" + "a" * 64
+    target = _published_target(variant, flavor)
+    session_root = tmp_path / "mismatched payload session root"
+    receipt = session_root / "etc/tunaos/live-installer-info"
+    receipt.parent.mkdir(parents=True)
+    receipt.write_text(
+        "INSTALLER_APP=org.tunaos.InstallerKde\n"
+        f"INSTALLER_REVISION={'d' * 64}\n"
+        "INSTALLER_BUNDLE_SHA256=remote\n"
+    )
+    recipe = session_root / "etc/bootc-installer/recipe.json"
+    recipe.parent.mkdir(parents=True)
+    original_recipe = {"keep": "value", "imgref": "stale", "local_imgref": "stale"}
+    recipe.write_text(json.dumps(original_recipe))
+
+    wrapper = _generate_customizer_wrapper(
+        tmp_path / "mismatched payload customize dir",
+        session_root,
+        env,
+        variant=variant,
+        flavor=flavor,
+        digest=digest,
+        payload_ref=f"{target}@sha256:{'b' * 64}",
+    )
+    result = subprocess.run([str(wrapper)], cwd=ROOT, env=env, text=True, capture_output=True)
+    assert result.returncode != 0
+    assert "offline payload does not match target and measured source" in result.stderr
+    assert json.loads(recipe.read_text()) == original_recipe
+    assert not (receipt.parent / "live-source.json").exists()
+    assert not fetch_log.exists()
+
+
+@pytest.mark.parametrize("destination", [
+    "ghcr.io/tuna-os",
+    "quay.io/review-fixture",
+    "registry.example:5000/acme/team",
+    "localhost:5000/dev",
+    "registry.gitlab.com/group/sub-group/os",
+    "ghcr.io/my_org",
+])
+@pytest.mark.parametrize("flavor", ["kde", "xfce"])
+def test_configured_destination_reaches_full_customization(tmp_path, destination, flavor):
+    env, fetch_log = _fetch_stubs(tmp_path)
+    registry, namespace = destination.split("/", 1)
+    env.update(IMAGE_REGISTRY=registry, REPO_ORGANIZATION=namespace)
+    variant = "bonito"
+    target = _published_target(variant, flavor, env)
+    session_root = tmp_path / f"{flavor} session root"
+    receipt = session_root / "etc/tunaos/live-installer-info"
+    receipt.parent.mkdir(parents=True)
+    app_id = "org.tunaos.InstallerXfce" if flavor == "xfce" else "org.tunaos.InstallerKde"
+    original_receipt = (
+        f"INSTALLER_APP={app_id}\n"
+        f"INSTALLER_REVISION={'e' * 64}\n"
+        "INSTALLER_BUNDLE_SHA256=remote\n"
+    )
+    receipt.write_text(original_receipt)
+
+    fixture = None
+    candidate = "0"
+    if flavor == "xfce":
+        fixture = tmp_path / "configured destination candidate"
+        digest = _write_minimal_oci_layout(fixture)
+        candidate = "1"
+    else:
+        digest = "sha256:" + "a" * 64
+    recipe = session_root / "etc/bootc-installer/recipe.json"
+    if flavor == "kde":
+        recipe.parent.mkdir(parents=True)
+        recipe.write_text(json.dumps({"keep": "value"}))
+
+    wrapper = _generate_customizer_wrapper(
+        tmp_path / f"{flavor} configured customize dir",
+        session_root,
+        env,
+        variant=variant,
+        flavor=flavor,
+        digest=digest,
+        payload_ref=f"{target}@{digest}",
+        candidate=candidate,
+    )
+    if fixture is not None:
+        shutil.copytree(fixture, wrapper.parent / "xfce-candidate-oci")
+    result = subprocess.run([str(wrapper)], cwd=ROOT, env=env, text=True, capture_output=True)
+    assert result.returncode == 0, result.stderr
+    assert receipt.read_text() == original_receipt
+
+    if flavor == "kde":
+        bound_recipe = json.loads(recipe.read_text())
+        assert bound_recipe["keep"] == "value"
+        assert bound_recipe["imgref"] == target
+        assert bound_recipe["local_imgref"] == f"containers-storage:{target}@{digest}"
+    else:
+        media_input = json.loads((receipt.parent.parent / "bootc-installer/media-input.json").read_text())
+        assert media_input["image"] == target
+        assert media_input["targetImgref"] == target
+        assert media_input["platformManifestDigest"] == digest
+        assert not recipe.exists()
+    assert not fetch_log.exists()

@@ -102,22 +102,6 @@ def test_final_wrapper_passes_exact_payload_and_separate_tracking_target(tmp_pat
     assert '[[ "$payload_digest" == "$TUNA_LIVE_BASE_DIGEST" ]]' in workflow
 
 
-@pytest.mark.parametrize("payload,expected_rc", [(PAYLOAD, 0), ("", 1), (TARGET, 1)])
-def test_customization_executes_binding_and_propagates_failure(tmp_path, payload, expected_rc):
-    path = tmp_path / "recipe.json"
-    path.write_text('{"imgref":"stale","local_imgref":"stale"}')
-    source = (ROOT / "live-iso/common/src/customize-live.sh").read_text()
-    block = source.split('if [[ -n "${TUNA_LIVE_PAYLOAD_REF+x}"', 1)[1].split('\nfi', 1)[0]
-    script = 'if [[ -n "${TUNA_LIVE_PAYLOAD_REF+x}"' + block + '\nfi'
-    result = subprocess.run(["bash", "-e", "-c", script], env={
-        "PATH": "/usr/bin:/bin", "SCRIPT_DIR": str(SCRIPT.parent),
-        "RECIPE_FILE": str(path), "TUNA_LIVE_PAYLOAD_REF": payload,
-        "TUNA_LIVE_BASE_DIGEST": DIGEST, "TUNA_LIVE_INSTALL_TARGET": TARGET,
-        "TUNAOS_XFCE_CANDIDATE": "0",
-    }, text=True, capture_output=True)
-    assert result.returncode == expected_rc
-    actual = json.loads(path.read_text())
-    assert actual["local_imgref"] == ("containers-storage:" + PAYLOAD if not expected_rc else "stale")
 
 @pytest.mark.parametrize("repo", ["local", "ghcr"])
 @pytest.mark.parametrize("exact_payload", [False, True])
@@ -160,35 +144,6 @@ def test_iso_source_override_cannot_replace_canonical_payload_destination(tmp_pa
     assert recipe["bootable_environments"][0]["image"] == source
 
 
-@pytest.mark.parametrize('destination', ['ghcr.io/tuna-os', 'quay.io/review-fixture', 'registry.example:5000/acme/team',
-    'localhost:5000/dev', 'registry.gitlab.com/group/sub-group/os', 'ghcr.io/my_org'])
-@pytest.mark.parametrize('flavor', ['gnome', 'xfce'])
-def test_configured_destination_reaches_actual_customization_binding(tmp_path, destination, flavor):
-    """#3431 r4383963978: resolver output must survive the last writer."""
-    registry, namespace = destination.split('/', 1)
-    env = dict(os.environ, IMAGE_REGISTRY=registry, REPO_ORGANIZATION=namespace)
-    result = subprocess.run(['bash', 'scripts/published-image-ref.sh', 'bonito', flavor, 'ghcr'],
-                            cwd=ROOT, env=env, text=True, capture_output=True, check=True)
-    target = result.stdout.strip()
-    assert target == destination + '/bonito:' + flavor
-    path = tmp_path / 'recipe.json'
-    path.write_text('{"keep":"value"}')
-    source = (ROOT / 'live-iso/common/src/customize-live.sh').read_text()
-    block = source.split('if [[ -n "${TUNA_LIVE_PAYLOAD_REF+x}"', 1)[1].split('\nfi', 1)[0]
-    script = 'if [[ -n "${TUNA_LIVE_PAYLOAD_REF+x}"' + block + '\nfi'
-    candidate = '1' if flavor == 'xfce' else '0'
-    run = subprocess.run(['bash', '-eu', '-c', script], env=dict(env,
-        SCRIPT_DIR=str(SCRIPT.parent), RECIPE_FILE=str(path),
-        TUNAOS_XFCE_CANDIDATE=candidate,
-        TUNA_LIVE_PAYLOAD_REF=target + '@' + DIGEST, TUNA_LIVE_BASE_DIGEST=DIGEST,
-        TUNA_LIVE_INSTALL_TARGET=target), text=True, capture_output=True)
-    assert run.returncode == 0, run.stderr
-    if flavor == 'xfce':
-        # XFCE candidate skips GNOME recipe binding!
-        assert json.loads(path.read_text()) == {'keep': 'value'}
-    else:
-        assert json.loads(path.read_text()) == dict(keep='value', imgref=target,
-            local_imgref='containers-storage:' + target + '@' + DIGEST)
 @pytest.mark.parametrize('target', ['https://quay.io/a/bonito:gnome', 'quay.io/a/../bonito:gnome',
     'quay.io/a/bonito:gnome\n', 'quay.io/a/bonito:gnome;false', 'quay.io/a/bonito',
     'quay.io/a/bonito:gnome@'+DIGEST])

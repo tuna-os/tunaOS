@@ -134,18 +134,44 @@ def test_child_termination_not_retried(tmp_path):
 def test_wrong_content_never_extracts_or_emits_binding(tmp_path, monkeypatch):
     import argparse
     import hashlib
-    args = argparse.Namespace(repository='tuna-os/tunaOS', run_id=1, artifact_id=2, attempt=0,
-                              source_sha='a'*40, archive_digest='sha256:'+hashlib.sha256(b'complete').hexdigest(),
-                              variant='skipjack', flavor='gnome', output=tmp_path/'out')
-    run = dict(id=1, status='completed', conclusion='success', head_sha=args.source_sha,
-               path='.github/workflows/live-iso-bootc.yml', repository=dict(full_name=args.repository),
-               head_repository=dict(full_name=args.repository))
-    artifact = dict(id=2, expired=False, name='skipjack-gnome-live-iso', digest=args.archive_digest,
-                    workflow_run=dict(id=1, head_sha=args.source_sha), size_in_bytes=8)
+
+    args = argparse.Namespace(
+        repository='tuna-os/tunaOS', run_id=1, artifact_id=2, attempt=0,
+        source_sha='a' * 40,
+        archive_digest='sha256:' + hashlib.sha256(b'complete').hexdigest(),
+        variant='skipjack', flavor='gnome', output=tmp_path / 'out',
+    )
+    run = dict(
+        id=1, run_attempt=1, status='completed', conclusion='success',
+        head_sha=args.source_sha, path='.github/workflows/live-iso-bootc.yml',
+        run_started_at='2026-10-21T12:00:00Z',
+        repository=dict(full_name=args.repository),
+        head_repository=dict(full_name=args.repository),
+    )
+    artifact = dict(
+        id=2, expired=False, name='skipjack-gnome-live-iso',
+        created_at='2026-10-21T12:01:00Z', digest=args.archive_digest,
+        workflow_run=dict(id=1, run_attempt=1, head_sha=args.source_sha),
+        size_in_bytes=8,
+    )
+    jobs = dict(total_count=1, jobs=[dict(
+        id=3, name='build', run_id=1, run_attempt=1, head_sha=args.source_sha,
+        status='completed', conclusion='success',
+        started_at='2026-10-21T12:00:10Z', completed_at='2026-10-21T12:02:00Z',
+    )])
+    monkeypatch.delenv('NATIVE_SAME_RUN', raising=False)
     monkeypatch.setattr(m.argparse.ArgumentParser, 'parse_args', lambda _: args)
-    monkeypatch.setattr(m, 'api', lambda repo, suffix: run if '/runs/' in suffix else artifact)
+
+    def api(repo, suffix):
+        if suffix.endswith('/jobs?per_page=100'):
+            return jobs
+        return run if '/runs/' in suffix else artifact
+
+    monkeypatch.setattr(m, 'api', api)
+
     def download(command, target, *rest):
         target.write(b'changed!')
+
     monkeypatch.setattr(m, 'download_archive', download)
     monkeypatch.setattr(m, 'extract', lambda *a: pytest.fail('must not extract wrong content'))
     with pytest.raises(ValueError, match='does not match producer artifact'):

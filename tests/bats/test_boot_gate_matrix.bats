@@ -8,17 +8,11 @@
 # input) without a live cluster or a real corral binary. No behavior change
 # to the script is made here — only tests.
 #
-# Two dependency boundaries are stubbed:
-#  - `corral` on PATH: the matrix script only probes `command -v corral`
-#    before doing anything else, so a no-op stub is enough to satisfy it.
-#  - `scripts/boot-gate.sh`: the matrix invokes this as a *relative* path
-#    from the repo root it cd's into (`cd "$(dirname BASH_SOURCE)/.."`), so
-#    to control it we stage a throwaway copy of the repo with
-#    boot-gate-matrix.sh alongside a stub boot-gate.sh. The stub records
-#    each invocation (target, node, env) and tracks in-flight concurrency
-#    via a flock-guarded counter, standing in for what would otherwise be
-#    real corral/SSH calls (model: test_boot_gate_resume.bats, which stubs
-#    corral directly one layer down).
+# Three dependency boundaries are stubbed:
+#  - `corral` is a no-op on PATH; the matrix checks only that it exists.
+#  - `kubectl` returns no nodes, so tests never query a host cluster.
+#  - `scripts/boot-gate.sh` is staged beside the matrix and records each
+#    invocation while tracking in-flight concurrency through a flock counter.
 
 REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
 MATRIX_SRC="${REPO_ROOT}/scripts/boot-gate-matrix.sh"
@@ -39,6 +33,11 @@ setup() {
 exit 0
 CORRAL
 	chmod +x "${STUB_BIN}/corral"
+	cat >"${STUB_BIN}/kubectl" <<'KUBECTL'
+#!/bin/sh
+exit 0
+KUBECTL
+	chmod +x "${STUB_BIN}/kubectl"
 
 	# Stage a throwaway copy of the matrix script so it cd's into $STAGE
 	# (dirname of BASH_SOURCE/..) and calls our stub ./scripts/boot-gate.sh
@@ -220,11 +219,8 @@ peak_concurrency() { cat "${STUB_LOGDIR}/max" 2>/dev/null || echo 0; }
 	[ "$(calls | grep -c 'node=only-node')" -eq 3 ]
 }
 
-@test "matrix: with no GATE_NODES and no kubectl, gates run with no node pin" {
-	# PATH only contains our stub-bin (plus system PATH via setup, which may
-	# still have kubectl); force the auto-detect branch to see an empty pool
-	# by asserting on an explicitly empty GATE_NODES instead, which takes
-	# the same code path as "no nodes discovered".
+@test "matrix: empty kubectl discovery leaves the node unpinned" {
+	# The setup stub returns no nodes without querying the host cluster.
 	GATE_NODES="" run bash "${MATRIX}" yellowfin:gnome yellowfin:kde
 	[ "$status" -eq 0 ]
 	calls | grep "^yellowfin:gnome " | grep -q "node= "
@@ -273,7 +269,11 @@ peak_concurrency() { cat "${STUB_LOGDIR}/max" 2>/dev/null || echo 0; }
 
 @test "matrix: exits 77 when corral is not installed" {
 	rm -f "${STUB_BIN}/corral"
-	run bash "${MATRIX}" yellowfin:gnome
+	# Keep host-installed corral out of command lookup, while retaining dirname.
+	local shell_path
+	shell_path="$(command -v bash)"
+	ln -s "$(command -v dirname)" "${STUB_BIN}/dirname"
+	run /usr/bin/env PATH="${STUB_BIN}" "${shell_path}" "${MATRIX}" yellowfin:gnome
 	[ "$status" -eq 77 ]
 	[[ "$output" == *"corral not installed"* ]]
 }
