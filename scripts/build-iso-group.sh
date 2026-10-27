@@ -40,7 +40,7 @@ REPO="${3:-ghcr}"
 
 CONFIG="$(tunaos_build_config)"
 
-if [[ "$EUID" -ne 0 ]]; then
+if [[ "$EUID" -ne 0 && "${TUNAOS_ALLOW_UNPRIVILEGED:-0}" != "1" ]]; then
 	echo "ERROR: tacklebox needs root for sgdisk / mkfs / mount" >&2
 	echo "Run: sudo $0 $*" >&2
 	exit 1
@@ -247,7 +247,7 @@ VERSION_ID=$(podman run --rm --log-driver=k8s-file --security-opt label=disable 
 	sh -c '. /usr/lib/os-release && echo "${VERSION_ID}"')
 ARCH=$(podman run --rm --log-driver=k8s-file --security-opt label=disable "$FIRST_REF" uname -m)
 
-FINAL_ISO="${REPO_ROOT}/${ISO_BASENAME}-${VERSION_ID}-${ARCH}.iso"
+FINAL_ISO="${TUNAOS_FINAL_ISO:-${REPO_ROOT}/${ISO_BASENAME}-${VERSION_ID}-${ARCH}.iso}"
 mv "$ISO_OUT" "$FINAL_ISO"
 chown_back "$FINAL_ISO"
 
