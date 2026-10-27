@@ -100,10 +100,19 @@ systemctl status gdm.service --no-pager || true
 echo "==> recent greeter, shell, lock and PAM journal (guest SSH sessions excluded)"
 journalctl -b --no-pager | grep -Ei 'gdm|gnome-shell|gnome-session|mutter|LockHint|lock-screen|pam.*(fail|authentication)|session opened|session closed' | grep -Ev 'sshd-session|sshd\[' | tail -n 200 || true
 GDM_DIAGNOSTICS
-	# The filtered journal above keeps only lines that name gdm or mutter, so a
-	# crash shows one frame of its trace. This keeps the whole report.
-	collect_greeter_evidence once 0 greeter-graphics-evidence-after-failure.txt
 }
+
+collect_failure_on_exit() {
+	local status=$?
+	trap - EXIT
+	if [[ "$status" -ne 0 ]]; then
+		# Required screenshots can exit under errexit before diagnostics run.
+		# Centralize collection here so explicit failures also collect only once.
+		collect_greeter_evidence once 0 greeter-graphics-evidence-after-failure.txt || true
+	fi
+	exit "$status"
+}
+trap collect_failure_on_exit EXIT
 
 echo "==> waiting for Corral SSH to inspect the GDM greeter"
 for _ in $(seq 1 60); do
@@ -154,7 +163,7 @@ CHECK_GREETER
 collect_greeter_evidence sample 40 greeter-graphics-evidence.txt
 if ! wait_for_paint "${OUT}/gdm-greeter.png" 30; then
 	echo "GDM greeter did not paint; collecting after-failure diagnostics" >&2
-	guest_gdm_diagnostics "$TEST_USER"
+	guest_gdm_diagnostics "$TEST_USER" || true
 	exit 1
 fi
 

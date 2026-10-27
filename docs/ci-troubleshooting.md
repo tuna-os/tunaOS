@@ -2168,3 +2168,23 @@ or `:`.
 Binding also refuses any repository row or unsafe name for the target, so a
 later fork edit of the generated `image-packages.tsv` cannot add a source
 unnoticed. Adding a plain package name needs no refresh.
+
+
+### GDM gate loses evidence after a late screenshot error (#3969)
+
+**Symptom:** the greeter paints, but a later screenshot fails. Only
+`greeter-graphics-evidence.txt` remains.
+
+**Cause:** at collector head `c6d025b4`, required screenshots execute under
+`set -e` outside the explicit diagnostics branches. The isolated fixture in
+`tests/regressions/test_issue_3969_late_screenshot_evidence.py` reproduces exit
+37 without a report after failure. It covers screenshots before password
+entry, after login, after lock, and after unlock.
+
+**Fix:** collect once from an EXIT handler on nonzero exit. Preserve the status
+of the failed command even if collection fails. Explicit diagnostics no longer
+collect a second report.
+
+The fixture tests failures in collection and login, and failure of the greeter
+to paint. It also tests successful login, lock, and unlock. The fixture
+intercepts all guest commands. These tests do not prove behavior in a real VM.
