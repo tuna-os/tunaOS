@@ -62,7 +62,23 @@ class Image:
                                 env=self.env, capture_output=True, text=True)
         assert result.returncode == 0, result.stderr
 
+    def resolve_published_ref(self):
+        env = {
+            **self.env,
+            "IMAGE_REGISTRY": self.env.get("IMAGE_REGISTRY", "ghcr.io"),
+            "REPO_ORGANIZATION": self.env.get("IMAGE_VENDOR", "tuna-os"),
+        }
+        variant = self.env.get("IMAGE_NAME_VARIANT", self.env.get("IMAGE_NAME", "yellowfin"))
+        flavor = self.env.get("TUNAOS_IMAGE_FLAVOR", self.env.get("DESKTOP_FLAVOR", "gnome"))
+        res = subprocess.run(
+            ["bash", str(ROOT / "scripts/published-image-ref.sh"), variant, flavor, "ghcr"],
+            cwd=ROOT, env=env, text=True, capture_output=True, check=True
+        )
+        return res.stdout.strip()
+
     def info(self):
+        if "TUNAOS_PUBLISHED_IMAGE_REF" not in self.env:
+            self.env["TUNAOS_PUBLISHED_IMAGE_REF"] = self.resolve_published_ref()
         self.run("build_scripts/90-image-info.sh")
 
     def desktop(self):
@@ -123,7 +139,7 @@ def test_a_forks_installer_and_plasma_names_follow_tunaos_toml(tmp_path):
     assert written["tour"]["completed"]["description"] == \
         "Reboot your machine to enter your new Marlin workstation environment!"
     assert written["tour"]["distro"]["title"] == "Built on Arch Linux"
-    assert written["imgref"] == json.loads(stock)["imgref"]
+    assert written["imgref"] == image.env["TUNAOS_PUBLISHED_IMAGE_REF"]
     assert project not in json.dumps({k: v for k, v in written.items() if k not in ("imgref", "local_imgref")})
     plugin = json.loads(meta.read_text())["KPlugin"]
     assert plugin["Name"] == "Marlin" and plugin["Authors"][0]["Name"] == f"{project} Contributors"
@@ -156,9 +172,10 @@ def test_a_project_name_that_collides_with_recipe_data_only_renames_display_text
         "Reboot your machine to enter your new Marlin workstation environment!"
     assert written["tour"]["welcome"]["title"] == "Welcome to Marlin"
     # Data keeps its value: references, paths and step names.
-    for key in ("log_file", "credits_data", "imgref", "local_imgref", "steps", "bootloader", "filesystem"):
+    for key in ("log_file", "credits_data", "steps", "bootloader", "filesystem"):
         assert written[key] == original[key], key
-    assert written["local_imgref"] == "containers-storage:ghcr.io/tuna-os/tunaos:latest"
+    assert written["imgref"] == image.env["TUNAOS_PUBLISHED_IMAGE_REF"]
+    assert written["local_imgref"] == f"containers-storage:{image.env['TUNAOS_PUBLISHED_IMAGE_REF']}"
     # A domain in a slide is not the project name.
     assert written["tour"]["community"]["description"] == original["tour"]["community"]["description"]
     assert written["tour"]["welcome"]["image"] == original["tour"]["welcome"]["image"]
@@ -262,8 +279,10 @@ def test_project_display_rewrite_preserves_custom_labels_and_data(tmp_path, proj
         '[Marlin](/docs?brand=TunaOS) <a href="/docs#TunaOS">Marlin</a>')
     assert result['tour']['features']['image'] == recipe['tour']['features']['image']
     assert result['tour']['features']['custom'] == 'TunaOS'
-    for key in ('imgref', 'local_imgref', 'log_file', 'credits_data', 'steps', 'bootloader', 'filesystem'):
+    for key in ('log_file', 'credits_data', 'steps', 'bootloader', 'filesystem'):
         assert result[key] == recipe[key]
+    assert result['imgref'] == image.env['TUNAOS_PUBLISHED_IMAGE_REF']
+    assert result['local_imgref'] == f"containers-storage:{image.env['TUNAOS_PUBLISHED_IMAGE_REF']}"
     for path, original, expected in zip(meta_paths, metadata, ('Marlin', 'Marlin Light', 'My Custom TunaOS Light Theme')):
         actual = json.loads(path.read_text())
         assert actual['KPlugin']['Name'] == expected

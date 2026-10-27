@@ -513,7 +513,7 @@ def test_observation_extract_identity_is_exact(tmp_path, mutate):
 # its keys can add an apt source. A new reader fails this test until it is
 # classified here and, if it reaches the flounder stages, bound by the observation.
 IMAGE_VERSIONS_READERS = {
-    'Containerfile.debian': 'COPYs the file into the context; its only *_REF ARG is COMMON_IMAGE_REF',
+    'Containerfile.debian': 'COPYs the file into the context; its only *_REF ARGs are COMMON_IMAGE_REF and TUNAOS_PUBLISHED_IMAGE_REF (installer destination metadata)',
     'Containerfile.arch': 'other family',
     'Containerfile.el10': 'other family',
     'Containerfile.ubuntu': 'other family',
@@ -536,7 +536,7 @@ def test_image_versions_readers_are_classified():
     assert readers == set(IMAGE_VERSIONS_READERS)
 
     debian = (ROOT / 'Containerfile.debian').read_text()
-    assert re.findall(r'(?m)^ARG (\w+_REF)\b', debian) == ['COMMON_IMAGE_REF']
+    assert re.findall(r'(?m)^ARG (\w+_REF)\b', debian) == ['COMMON_IMAGE_REF', 'TUNAOS_PUBLISHED_IMAGE_REF']
     assert 'build-libostree' not in debian and 'install-zirconium' not in debian
 
     kcm = (ROOT / 'build_scripts/desktop/kcm-ublue.sh').read_text()
