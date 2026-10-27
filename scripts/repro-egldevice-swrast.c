@@ -12,6 +12,8 @@
  * Run inside the affected AlmaLinux guest, under QEMU `-vga virtio` without
  * virgl, as root and with GDM stopped so the reproducer can own the DRM master:
  *
+ * Install gcc, mesa-libEGL-devel, libdrm-devel, and pkgconf-pkg-config in the
+ * ephemeral test guest before this experiment; do not modify the TunaOS image.
  *   cc -O0 -g -Wall -Wextra -Werror repro-egldevice-swrast.c \
  *      -o repro-egldevice-swrast $(pkg-config --cflags --libs egl)
  *   systemctl stop gdm.service
