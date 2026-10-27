@@ -169,6 +169,13 @@ int main(int argc, char **argv)
             break;
         }
     }
+    /* Preserve device selection evidence even if eglInitialize crashes. */
+    if (fflush(stdout) == EOF) {
+        perror("fflush EGL device enumeration");
+        free(devices);
+        dlclose(handle);
+        return 9;
+    }
     free(devices);
     if (selected == EGL_NO_DEVICE_EXT) {
         fprintf(stderr, "no EGLDeviceEXT matches requested KMS device %s\n",

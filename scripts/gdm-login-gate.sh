@@ -88,8 +88,8 @@ ulimit -c 0
 	}
 echo '=== controls: same image, DRM node, and EGLDevice display attributes ==='
 run_case clean env -u LIBGL_ALWAYS_SOFTWARE -u MESA_LOADER_DRIVER_OVERRIDE
-run_case software env LIBGL_ALWAYS_SOFTWARE=1
-run_case override env MESA_LOADER_DRIVER_OVERRIDE=swrast
+run_case software env -u MESA_LOADER_DRIVER_OVERRIDE LIBGL_ALWAYS_SOFTWARE=1
+run_case override env -u LIBGL_ALWAYS_SOFTWARE MESA_LOADER_DRIVER_OVERRIDE=swrast
 run_case combined env LIBGL_ALWAYS_SOFTWARE=1 MESA_LOADER_DRIVER_OVERRIDE=swrast
 EGL_DEVICE_REPRO
 }

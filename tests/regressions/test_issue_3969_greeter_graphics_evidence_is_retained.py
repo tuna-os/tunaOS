@@ -33,6 +33,7 @@ two `collect_greeter_evidence` calls in the gate, and the tests fail.
 
 import json
 import os
+import shlex
 import subprocess
 import sys
 import threading
@@ -615,6 +616,49 @@ def test_evidence_collection_cannot_fail_the_gate(tmp_path):
     assert result.returncode == 1
     assert "GDM did not start an active Wayland session for tuna-ci-login" in result.stdout + result.stderr
     assert not (out / "greeter-graphics-evidence.txt").exists()
+
+
+def test_egl_environment_matrix_isolates_each_override(tmp_path):
+    probe = tmp_path / "print-egl-environment"
+    probe.write_text(
+        "#!/usr/bin/env python3\n"
+        "import json, os\n"
+        "keys = ('LIBGL_ALWAYS_SOFTWARE', 'MESA_LOADER_DRIVER_OVERRIDE')\n"
+        "print(json.dumps({key: os.environ.get(key) for key in keys}))\n"
+    )
+    probe.chmod(0o755)
+
+    # Model both overrides leaking in from the guest SSH environment. Each
+    # single-variable control must explicitly clear its companion before the
+    # real reproducer runs.
+    inherited = os.environ.copy()
+    inherited.update(
+        LIBGL_ALWAYS_SOFTWARE="ambient-software",
+        MESA_LOADER_DRIVER_OVERRIDE="ambient-driver",
+    )
+    commands = {}
+    for line in GATE.read_text().splitlines():
+        if not line.startswith("run_case "):
+            continue
+        fields = shlex.split(line)
+        commands[fields[1]] = fields[2:]
+
+    expected = {
+        "clean": {"LIBGL_ALWAYS_SOFTWARE": None, "MESA_LOADER_DRIVER_OVERRIDE": None},
+        "software": {"LIBGL_ALWAYS_SOFTWARE": "1", "MESA_LOADER_DRIVER_OVERRIDE": None},
+        "override": {"LIBGL_ALWAYS_SOFTWARE": None, "MESA_LOADER_DRIVER_OVERRIDE": "swrast"},
+        "combined": {"LIBGL_ALWAYS_SOFTWARE": "1", "MESA_LOADER_DRIVER_OVERRIDE": "swrast"},
+    }
+    assert set(commands) == set(expected)
+    for label, wanted in expected.items():
+        result = subprocess.run(
+            [*commands[label], str(probe), "/dev/dri/card0"],
+            env=inherited,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        assert json.loads(result.stdout) == wanted
 
 
 @pytest.mark.parametrize("path", [EVIDENCE])
