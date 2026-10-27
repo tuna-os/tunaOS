@@ -181,7 +181,41 @@ _select() {
   [ "$count" -eq 19 ]
 }
 
-# ── Recipe JSON ─────────────────────────────────────────────────────────────
+# ── Recipe JSON & Live-Customize Wrappers ───────────────────────────────────
+
+_run_inert_group() {
+  local variant="$1" group="$2" repo="${3:-ghcr}"
+  local tmp_dir="${BATS_TEST_TMPDIR}/group-${variant}-${group:-default}-${repo}"
+  mkdir -p "${tmp_dir}/bin" "${tmp_dir}/out"
+  cat >"${tmp_dir}/bin/podman" <<'EOF'
+#!/bin/sh
+if [ "$1" = "image" ] && [ "$2" = "exists" ]; then exit 0; fi
+if [ "$1" = "pull" ]; then exit 0; fi
+case "$*" in
+  *"build"*"--iso"*)
+    for arg in "$@"; do
+      if [ "$prev" = "--iso" ]; then
+        mkdir -p "$(dirname "$arg")"
+        touch "$arg"
+      fi
+      prev="$arg"
+    done
+    exit 0
+    ;;
+  *"VERSION_ID"*) echo "10.0"; exit 0 ;;
+  *"uname -m"*) echo "x86_64"; exit 0 ;;
+esac
+exit 0
+EOF
+  chmod +x "${tmp_dir}/bin/podman"
+  local out_iso="${tmp_dir}/test.iso"
+
+  PATH="${tmp_dir}/bin:${PATH}" \
+  TUNAOS_ISO_OUT_BASE="${tmp_dir}/out" \
+  TUNAOS_ALLOW_UNPRIVILEGED=1 \
+  TUNAOS_FINAL_ISO="${out_iso}" \
+  "${REPO_ROOT}/scripts/build-iso-group.sh" "$variant" "$group" "$repo"
+}
 
 @test "recipe: combined recipe is valid dedup JSON with one env per flavor" {
   local envs="[]" ref
@@ -199,4 +233,114 @@ _select() {
   [ "$(echo "$recipe" | jq -r '.bootable_environments | length')" = "2" ]
   [ "$(echo "$recipe" | jq -r '.bootable_environments[0].title')" = "GNOME (NVIDIA)" ]
   [ "$(echo "$recipe" | jq -r '.bootable_environments[1].image')" = "ghcr.io/tuna-os/yellowfin:gnome-nvidia-hwe" ]
+}
+
+@test "grouped packaging builds dedup recipe with live_customize wrappers and matching store refs (ghcr)" {
+  run _run_inert_group yellowfin default ghcr
+  [ "$status" -eq 0 ]
+  local recipe="${BATS_TEST_TMPDIR}/group-yellowfin-default-ghcr/out/yellowfin/recipe.json"
+  [ -f "$recipe" ]
+  [ "$(jq -r '.shared_store.dedup' "$recipe")" = "true" ]
+  [ "$(jq -r '.shared_store.prune_source_images' "$recipe")" = "true" ]
+
+  local env_count
+  env_count="$(jq '.bootable_environments | length' "$recipe")"
+  [ "$env_count" -ge 1 ]
+
+  for ((i = 0; i < env_count; i++)); do
+    local img wrapper
+    img="$(jq -r ".bootable_environments[$i].image" "$recipe")"
+    wrapper="$(jq -r ".bootable_environments[$i].live_customize[0]" "$recipe")"
+
+    [ -f "$wrapper" ]
+    [ -x "$wrapper" ]
+    grep -qF "echo 'export TUNA_SESSION_ROOT=/'" "${REPO_ROOT}/scripts/build-iso-group.sh"
+    grep -q "export TUNA_SESSION_ROOT=/" "$wrapper"
+    grep -q "export TUNA_LIVE_PAYLOAD_REF=${img}" "$wrapper"
+    grep -q "customize-live-real.sh" "$wrapper"
+
+    # Assert store correspondence: the wrapper payload ref exists in offline_payloads
+    run jq -e --arg img "$img" '.offline_payloads | index($img) != null' "$recipe"
+    [ "$status" -eq 0 ]
+  done
+}
+
+@test "grouped packaging preserves local source refs across wrapper and recipe (local)" {
+  run _run_inert_group yellowfin default local
+  [ "$status" -eq 0 ]
+  local recipe="${BATS_TEST_TMPDIR}/group-yellowfin-default-local/out/yellowfin/recipe.json"
+  [ -f "$recipe" ]
+
+  local env_count
+  env_count="$(jq '.bootable_environments | length' "$recipe")"
+  [ "$env_count" -ge 1 ]
+
+  for ((i = 0; i < env_count; i++)); do
+    local img wrapper
+    img="$(jq -r ".bootable_environments[$i].image" "$recipe")"
+    wrapper="$(jq -r ".bootable_environments[$i].live_customize[0]" "$recipe")"
+
+    [[ "$img" == localhost/* ]]
+    [ -f "$wrapper" ]
+    [ -x "$wrapper" ]
+    grep -q "export TUNA_LIVE_PAYLOAD_REF=${img}" "$wrapper"
+
+    # Assert store correspondence: local image ref matches offline_payloads exactly
+    run jq -e --arg img "$img" '.offline_payloads | index($img) != null' "$recipe"
+    [ "$status" -eq 0 ]
+  done
+}
+
+@test "grouped wrapper executes directly and propagates store identity and environment at invocation boundary" {
+  run _run_inert_group yellowfin default ghcr
+  [ "$status" -eq 0 ]
+  local recipe_dir="${BATS_TEST_TMPDIR}/group-yellowfin-default-ghcr/out/yellowfin"
+  local wrapper="${recipe_dir}/live-customize/gnome-nvidia/customize-live.sh"
+  local real_script="${recipe_dir}/live-customize/gnome-nvidia/customize-live-real.sh"
+  [ -x "$wrapper" ]
+
+  # Instrument the downstream customize-live-real boundary to record invocation state
+  local probe_log="${BATS_TEST_TMPDIR}/wrapper-boundary.log"
+  local test_recipe="${BATS_TEST_TMPDIR}/test-rewrite-recipe.json"
+  printf '{"imgref":"ghcr.io/tuna-os/yellowfin:gnome-nvidia"}\n' >"$test_recipe"
+
+  cat >"$real_script" <<'SPYEOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf "SESSION_ROOT=%s\nPAYLOAD_REF=%s\nARGS=%s\n" \
+  "${TUNA_SESSION_ROOT:-unset}" \
+  "${TUNA_LIVE_PAYLOAD_REF:-unset}" \
+  "$*" >>"${PROBE_LOG}"
+if [[ -n "${TEST_RECIPE:-}" && -f "${TEST_RECIPE}" ]]; then
+  python3 - "${TEST_RECIPE}" "${TUNA_LIVE_PAYLOAD_REF}" <<'PYEOF'
+import json, sys
+path, payload_ref = sys.argv[1:3]
+with open(path) as f:
+    recipe = json.load(f)
+recipe["local_imgref"] = f"containers-storage:{payload_ref}"
+with open(path, "w") as f:
+    json.dump(recipe, f, indent=2)
+PYEOF
+fi
+exit 0
+SPYEOF
+  chmod +x "$real_script"
+
+  # Invoke the generated wrapper script itself under the test harness
+  run env PROBE_LOG="$probe_log" TEST_RECIPE="$test_recipe" \
+    "$wrapper" --install --offline-mode
+  [ "$status" -eq 0 ]
+
+  # Assert environment and argument propagation across the wrapper boundary
+  run cat "$probe_log"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"SESSION_ROOT=/"* ]]
+  [[ "$output" == *"PAYLOAD_REF=ghcr.io/tuna-os/yellowfin:gnome-nvidia"* ]]
+  [[ "$output" == *"ARGS=--install --offline-mode"* ]]
+
+  # Assert the store identity propagated by the wrapper bound local_imgref in the recipe
+  run jq -r '.imgref, .local_imgref' "$test_recipe"
+  [ "$output" = $'ghcr.io/tuna-os/yellowfin:gnome-nvidia\ncontainers-storage:ghcr.io/tuna-os/yellowfin:gnome-nvidia' ]
+  run jq -e '.local_imgref == "containers-storage:ghcr.io/tuna-os/yellowfin:gnome-nvidia"' "$test_recipe"
+  [ "$status" -eq 0 ]
 }
