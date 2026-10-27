@@ -188,7 +188,7 @@ def test_workflow_bounds_and_explicit_native_platform():
     assert '--target "$DISPATCH_VARIANT:$DISPATCH_FLAVORS:$REQUESTED_PLATFORM"' in step['run']
     assert '-le 4' in step['run']
     producer=yaml.safe_load((ROOT/'.github/workflows/live-iso-bootc.yml').read_text())
-    assert producer['jobs']['build']['needs']=='preflight'
+    assert producer['jobs']['build']['needs']==['diagnostic-preflight','preflight']
     assert producer['jobs']['qualify-native-iso']['with']['platform']=="${{ inputs.platform || 'linux/amd64' }}"
 
 

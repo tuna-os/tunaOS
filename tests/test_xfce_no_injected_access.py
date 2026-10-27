@@ -100,10 +100,10 @@ def test_workflow_candidate_skips_world_writable_kvm_and_checks_root_access():
     doc=yaml.safe_load((ROOT/'.github/workflows/iso-e2e.yml').read_text())
     steps=doc['jobs']['e2e']['steps']
     rule=next(s for s in steps if s.get('name')=='Enable KVM group permissions')
-    assert rule['if']=="steps.filter.outputs.skip != 'true' && !inputs.candidate_xfce"
+    assert rule['if']=="${{ !inputs.installed_boot_diagnostic && steps.filter.outputs.skip != 'true' && !inputs.candidate_xfce }}"
     assert 'MODE="0666"' in rule['run'] # ordinary-job policy is unchanged
     check=next(s for s in steps if s.get('name')=='Check candidate direct KVM access')
-    assert check['if']=="steps.filter.outputs.skip != 'true' && inputs.candidate_xfce"
+    assert check['if']=="${{ !inputs.installed_boot_diagnostic && steps.filter.outputs.skip != 'true' && inputs.candidate_xfce }}"
     assert check['run']=='sudo python3 scripts/preflight-xfce-candidate.py kvm'
     assert steps.index(check)<next(i for i,s in enumerate(steps) if s.get('name')=='Install QEMU and helpers')
     runner=(ROOT/'scripts/run-xfce-candidate.py').read_text()
@@ -166,4 +166,4 @@ wait_for_ready
 def test_candidate_cannot_run_historical_smoke_with_inherited_ssh():
     doc=yaml.safe_load((ROOT/'.github/workflows/iso-e2e.yml').read_text())
     smoke=next(s for s in doc['jobs']['e2e']['steps'] if s.get('id')=='native_smoke')
-    assert smoke['if']=="inputs.source == 'native-artifact' && inputs.native_run_id != format('{0}', github.run_id) && !inputs.candidate_xfce"
+    assert smoke['if']=="${{ !inputs.installed_boot_diagnostic && inputs.source == 'native-artifact' && inputs.native_run_id != format('{0}', github.run_id) && !inputs.candidate_xfce }}"

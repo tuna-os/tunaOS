@@ -85,14 +85,17 @@ def test_the_default_path_does_not_pay_the_strict_budget():
     job = load("iso-e2e.yml")["jobs"]["e2e"]
     timeout = normalized(job["timeout-minutes"])
     assert "inputs.source == 'native-artifact' && 160" in timeout
-    assert timeout.endswith("&& 90 || 30) }}")
+    from tests.test_a_job_budget_covers_its_own_steps import _budgets
+    assert _budgets(timeout) == [120, 160, 90, 30]
+    assert timeout.endswith("&& 90 || 30)) }}")
 
 
 def test_the_verdict_step_runs_after_a_failed_leg():
     e2e = steps(load("iso-e2e.yml")["jobs"]["e2e"])
     verdict = e2e["Report strict leg verdicts"]
     condition = normalized(verdict["if"])
-    assert condition.startswith("always()")
+    assert condition == ("${{ !inputs.installed_boot_diagnostic && always() && "
+                         "steps.filter.outputs.skip != 'true' && inputs.source == 'native-artifact' }}")
     assert "inputs.source == 'native-artifact'" in condition
     assert "summarize-strict-legs.py iso-e2e-out" in verdict["run"]
     assert "GITHUB_STEP_SUMMARY" in verdict["run"]

@@ -2598,6 +2598,32 @@ The native producer also checks the overlay receipt before ISO customization.
 It rejects malformed digests and references that name a different target.
 These checks do not supply qualification evidence.
 
+### Installed diagnostic stops at the descriptor scan
+
+Run `40265940225` stopped with `open_descriptor_scan_denied` after the install
+and owned-service stop guards. It did not collect initramfs metadata.
+The report now records one denial with a stage (`proc_stat`, `fd_enumeration`,
+or `fd_stat`), numeric PID, optional FD, errno, prior UID and scan counts.
+`same_uid_observed` describes an earlier UID check, not proof of service ownership.
+The report omits commands, environments, executable paths, FD targets and raw errors.
+
+The scan still refuses before the disk hash and guestfs launch. It does not
+inspect another user's FDs or qualify the installed system.
+
+ACL recovery uses descriptors for the original objects. It rejects symlink
+ancestors, hardlinked files and changed object identities. The helper runs under
+sudo so libacl can use those descriptors. The privileged CLI accepts only the
+current kernel file or module root.
+
+The JSON file holds ACLs as numbers, plus the identities of ancestors. Creation is
+exclusive, with access for its owner only. Default ACLs stay
+unchanged. Keep that file after any failed grant or restore. Restore the original
+paths and retry cleanup; do not remove recovery state to make preparation pass.
+
+For old text snapshots, use the old helper, not the JSON reader.
+Tests use temporary files and inert proc fixtures only. They do not prove
+host cleanup, proc visibility or successful initramfs collection.
+
 
 ### XFCE candidate fails credential, publication or capture tests
 
@@ -2666,6 +2692,28 @@ context after sudo; ordinary modes keep their existing setup and context.
 Tests inject a contradictory user context and remove each override to verify the
 boundary. No host settings changed during those inert checks.
 
+### Diagnostic branch conflicts with the XFCE candidate base
+
+The merge of base `40ae2f46` into diagnostic head `809ca56d` conflicts in six files.
+Both modes now keep their own exclusions for host setup, credentials and evidence.
+The preflight for candidates skips the diagnostic, so its total job budget stays
+at 248 minutes. The matrix rejects a request for both modes.
+
+The base planner rejects the old `linux/amd64/v2` diagnostic target.
+The diagnostic now uses configured Skipjack/GNOME `linux/amd64`, with its
+`x86-64-v3` baseline. The strict and provenance fixtures from the new base stay intact.
+The unlock helper takes the passphrase on stdin. Diagnostic mode keeps serial
+output suppressed; ordinary output uses the base redactor. These source and
+fixture checks supply no runtime or qualification evidence.
+
+### Diagnostic rootless tests fail after the candidate merge
+
+Run `40379281186`, job `121771836181`, failed four cases at the assertion that
+rootless setup has no step condition. The XFCE candidate must skip that step.
+The tests now evaluate its condition for each mode. Command stubs check that
+the diagnostic validates existing access, ordinary setup retains its behavior,
+and mixed modes fail before host work. The workflow and permission checks stay
+unchanged. These fixtures do not execute host setup.
 ### ISO follow-up: platform, cache, cancellation and payload identity
 
 | Symptom | Cause | Fix and regression evidence |
@@ -2695,3 +2743,19 @@ use older bootloader/config heuristics; those do not prove this contract.
 conflicts. Its inert tests cover all eight marker combinations and always refuse
 runtime admission. Update the layout, dracut and installer consumers together
 before a runtime trial. One marker change is not a complete fix.
+
+### Root descriptor fallback can outlive its budget or lose refusal evidence
+
+Source review of `2d075cb6` found a new scan budget after startup and result
+truncation before identity checks. The follow-up uses the original absolute
+deadline, held objects and numeric refusal evidence. Tests use temporary trees. They cover
+replacement, cleanup failure and refusal before hash or guestfs. The token
+stays private for recovery. No live proc scan or root service ran in these tests.
+
+### Green diagnostic build has no consumer result
+
+Run `40392612254` built artifact `12685383470` but skipped the diagnostic
+consumer. Its input-only condition implied `success()` across a preflight ancestor
+that skipped as intended. The consumer now checks cancellation, build success
+and the selected preflight explicitly. The run remains **not-run** for the
+diagnostic; it supplied no evidence of a root scan or collected metadata.

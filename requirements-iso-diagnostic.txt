@@ -1,0 +1,2 @@
+# Bounded installed-initramfs decoder; PyPI release, no runtime guest tools.
+zstandard==0.25.0

@@ -32,6 +32,9 @@ name: ISO E2E Smoke
 on:
   workflow_call:
     inputs:
+      installed_boot_diagnostic:
+        type: boolean
+        default: false
       candidate_xfce:
         description: 'Opt-in Bonito/XFCE AMD64 candidate; no production admission'
         type: boolean
@@ -214,6 +217,7 @@ jobs:
       - name: Build the cell list
         id: gen
         env:
+          INSTALLED_BOOT_DIAGNOSTIC: ${{ inputs.installed_boot_diagnostic }}
           CANDIDATE_XFCE: ${{ inputs.candidate_xfce }}
           REQUESTED_PLATFORM: ${{ inputs.platform }}
           MAX_PARALLEL: ${{ inputs.max_parallel }}
@@ -225,6 +229,10 @@ jobs:
           MAX_PARALLEL="${MAX_PARALLEL:-1}"
           [[ "$MAX_PARALLEL" == 1 || "$MAX_PARALLEL" == 2 ]] || { echo 'max_parallel must be 1 or 2' >&2; exit 1; }
           echo "max_parallel=$MAX_PARALLEL" >> "$GITHUB_OUTPUT"
+          if [[ "${INSTALLED_BOOT_DIAGNOSTIC:-false}" == true ]]; then
+            [[ "${CANDIDATE_XFCE:-false}" != true && "$MAX_PARALLEL" == 1 && "${ISO_SOURCE:-}" == native-artifact ]] || exit 1
+            [[ "$DISPATCH_VARIANT:$DISPATCH_FLAVORS:$REQUESTED_PLATFORM" == skipjack:gnome:linux/amd64 ]] || exit 1
+          fi
           candidate_flags=()
           if [[ "${CANDIDATE_XFCE:-false}" == true ]]; then
             [[ "${ISO_SOURCE:-}" == native-artifact ]] || exit 1
@@ -296,7 +304,7 @@ jobs:
     # smoke adds 20, strict plain+LUKS (including detached cold/warm boots)
     # keeps its full 60, extraction allows ten, and setup/API/hash/evidence
     # get ten more: 160 total.
-    timeout-minutes: ${{ inputs.source == 'native-artifact' && 160 || ((github.event_name == 'workflow_dispatch' && inputs.source == 'build') && 90 || 30) }}
+    timeout-minutes: ${{ inputs.installed_boot_diagnostic && 120 || (inputs.source == 'native-artifact' && 160 || ((github.event_name == 'workflow_dispatch' && inputs.source == 'build') && 90 || 30)) }}
     strategy:
       max-parallel: ${{ fromJson(needs.generate-matrix.outputs.max_parallel) }}
       # Don't cancel the other leg if one fails — we want to see both signals.
@@ -404,19 +412,12 @@ jobs:
             echo "manually, where the secrets are available."
           } >> "$GITHUB_STEP_SUMMARY"
 
-      # GitHub-hosted ubuntu-24.04 runners expose /dev/kvm but with mode 0660
-      # owned by root:kvm. The runner user is not in the kvm group, so the
-      # KVM check in iso-e2e.sh falls back to TCG. This udev rule widens the
-      # permissions to 0666 so any user (and thus the QEMU child process) can
-      # open the device. Without this, yellowfin's newer AlmaLinux Kitten shim
-      # crashes with #UD (Invalid Opcode) in TCG mode because qemu64 lacks the
-      # CPU extensions the bootloader requires.
       - name: Check candidate direct KVM access
-        if: steps.filter.outputs.skip != 'true' && inputs.candidate_xfce
+        if: ${{ !inputs.installed_boot_diagnostic && steps.filter.outputs.skip != 'true' && inputs.candidate_xfce }}
         run: sudo python3 scripts/preflight-xfce-candidate.py kvm
 
       - name: Enable KVM group permissions
-        if: steps.filter.outputs.skip != 'true' && !inputs.candidate_xfce
+        if: ${{ !inputs.installed_boot_diagnostic && steps.filter.outputs.skip != 'true' && !inputs.candidate_xfce }}
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | \
             sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -425,9 +426,11 @@ jobs:
           ls -la /dev/kvm 2>/dev/null && echo "KVM available" || echo "Warning: /dev/kvm not present — QEMU will use TCG"
 
       - name: Install QEMU and helpers
+        id: diagnostic-host-tools
         if: steps.filter.outputs.skip != 'true'
         env:
           PLATFORM: ${{ matrix.platform }}
+          DIAGNOSTIC_MODE: ${{ inputs.installed_boot_diagnostic }}
           ISO_SOURCE: ${{ inputs.source }}
           NATIVE_ARTIFACT_ID: ${{ inputs.native_artifact_id }}
           NATIVE_ARCHIVE_DIGEST: ${{ inputs.native_archive_digest }}
@@ -445,10 +448,26 @@ jobs:
               tesseract-ocr xorriso squashfs-tools
             QEMU_BIN="$(command -v qemu-system-aarch64)"
           else
+            qemu_packages=(qemu-system-x86 qemu-utils)
+            if [[ "${DIAGNOSTIC_MODE:-false}" == true ]]; then
+              mapfile -t qemu_packages < requirements-iso-diagnostic-apt.txt
+              python3 scripts/verify-diagnostic-qemu-closure.py
+            fi
             sudo apt-get install -y --no-install-recommends \
-              qemu-system-x86 qemu-utils ovmf socat swtpm \
+              "${qemu_packages[@]}" ovmf socat swtpm \
               rclone sshpass skopeo python3-yaml imagemagick \
               tesseract-ocr xorriso squashfs-tools
+            if [[ "${DIAGNOSTIC_MODE:-false}" == true ]]; then
+              for package in "${qemu_packages[@]}"; do
+                name="${package%%=*}"
+                expected="${package#*=}"
+                actual="$(dpkg-query -W -f='${Version}' "$name")"
+                [[ "$actual" == "$expected" ]] || {
+                  echo "::error::Installed $name=$actual; expected $expected"
+                  exit 1
+                }
+              done
+            fi
             QEMU_BIN="$(command -v qemu-system-x86_64)"
           fi
           {
@@ -619,6 +638,7 @@ jobs:
           } >> "$GITHUB_ENV"
 
       - name: Fetch exact native ISO artifact
+        timeout-minutes: ${{ inputs.installed_boot_diagnostic && 20 || 60 }}
         if: inputs.source == 'native-artifact'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -642,7 +662,7 @@ jobs:
       # provenance; still observe their actual GUI before strict admission fails.
       - name: Native artifact live boot and installer GUI smoke (not qualification)
         id: native_smoke
-        if: inputs.source == 'native-artifact' && inputs.native_run_id != format('{0}', github.run_id) && !inputs.candidate_xfce
+        if: ${{ !inputs.installed_boot_diagnostic && inputs.source == 'native-artifact' && inputs.native_run_id != format('{0}', github.run_id) && !inputs.candidate_xfce }}
         continue-on-error: true
         timeout-minutes: 20
         env:
@@ -666,7 +686,7 @@ jobs:
       - name: Build the ISO on this runner
         if: >-
           steps.filter.outputs.skip != 'true' &&
-          github.event_name == 'workflow_dispatch' && inputs.source == 'build'
+          !inputs.installed_boot_diagnostic && github.event_name == 'workflow_dispatch' && inputs.source == 'build'
         timeout-minutes: 60
         env:
           VARIANT: ${{ matrix.variant }}
@@ -920,12 +940,74 @@ jobs:
           echo "strict qualification builder: ${ENGINE_DIGEST}"
           echo "strict qualification media: ${MEDIA_DIGEST}"
 
+      - name: Grant exact supermin inputs to diagnostic runner
+        if: inputs.installed_boot_diagnostic
+        run: bash scripts/diagnostic-host-access.sh prepare
+
+      - name: Install pinned diagnostic decoder and inspector
+        id: diagnostic-inspector
+        if: inputs.installed_boot_diagnostic && steps.filter.outputs.skip != 'true'
+        run: |
+          sudo apt-get update -qq
+          mapfile -t qemu_packages < requirements-iso-diagnostic-apt.txt
+          python3 scripts/verify-diagnostic-qemu-closure.py
+          sudo apt-get install -y --no-install-recommends python3-venv python3-guestfs=1:1.52.0-5ubuntu3 "${qemu_packages[@]}"
+          for package in "${qemu_packages[@]}"; do
+            name="${package%%=*}"
+            expected="${package#*=}"
+            actual="$(dpkg-query -W -f='${Version}' "$name")"
+            [[ "$actual" == "$expected" ]] || {
+              echo "::error::Installed $name=$actual; expected $expected"
+              exit 1
+            }
+          done
+          python3 -m venv --system-site-packages "$RUNNER_TEMP/iso-diagnostic-venv"
+          "$RUNNER_TEMP/iso-diagnostic-venv/bin/pip" install -r requirements-iso-diagnostic.txt
+
+
+      - name: Fresh installed LUKS diagnostic only
+        id: diagnostic-run
+        if: inputs.installed_boot_diagnostic && steps.filter.outputs.skip != 'true'
+        timeout-minutes: 80
+        run: |
+          "$RUNNER_TEMP/iso-diagnostic-venv/bin/python" scripts/prepare-installed-boot-diagnostic.py
+          "$RUNNER_TEMP/iso-diagnostic-venv/bin/python" scripts/diagnose-installed-luks.py \
+            --iso "$ISO_PATH" --binding native-iso-input/artifact-binding.json \
+            --provenance "$RUNNER_TEMP/installed-boot-provenance.json" \
+            --tool-lock "$RUNNER_TEMP/installed-boot-tools.json" \
+            --output "$RUNNER_TEMP/installed-boot-run"
+      - name: Revoke temporary supermin ACLs
+        if: always() && inputs.installed_boot_diagnostic
+        run: bash scripts/diagnostic-host-access.sh cleanup
+
+      - name: Record missing diagnostic evidence
+        if: always() && inputs.installed_boot_diagnostic
+        env:
+          HOST_TOOLS_OUTCOME: ${{ steps.diagnostic-host-tools.outcome }}
+          INSPECTOR_OUTCOME: ${{ steps.diagnostic-inspector.outcome }}
+          DIAGNOSTIC_OUTCOME: ${{ steps.diagnostic-run.outcome }}
+          INPUT_PRODUCER_SHA: ${{ inputs.native_source_sha }}
+          INPUT_ARTIFACT_ID: ${{ inputs.native_artifact_id }}
+          INPUT_ARCHIVE_DIGEST: ${{ inputs.native_archive_digest }}
+        run: python3 scripts/record-diagnostic-setup-failure.py
+
+      - name: Upload bounded installed boot diagnostic
+        if: always() && inputs.installed_boot_diagnostic
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: installed-boot-diagnostic
+          path: |
+            ${{ runner.temp }}/installed-boot-run/installed-boot-diagnostic/report.json
+            ${{ runner.temp }}/installed-boot-run/installed-boot-diagnostic/manifest.json
+          if-no-files-found: error
+          retention-days: 3
+
       # The readiness smoke is the default path (R2 media, in-place builds, the
       # weekly schedule and the harness PR trigger). It asserts only what that
       # media can promise: a live boot that reaches the readiness markers.
       - name: Run readiness e2e
         id: e2e
-        if: steps.filter.outputs.skip != 'true' && inputs.source != 'native-artifact'
+        if: ${{ !inputs.installed_boot_diagnostic && steps.filter.outputs.skip != 'true' && inputs.source != 'native-artifact' }}
         timeout-minutes: 20
         run: |
           mkdir -p iso-e2e-out
@@ -954,7 +1036,7 @@ jobs:
         id: strict
         env:
           CANDIDATE_XFCE: ${{ inputs.candidate_xfce }}
-        if: steps.filter.outputs.skip != 'true' && inputs.source == 'native-artifact'
+        if: ${{ !inputs.installed_boot_diagnostic && steps.filter.outputs.skip != 'true' && inputs.source == 'native-artifact' }}
         timeout-minutes: 60
         run: |
           df -h . /tmp
@@ -988,7 +1070,7 @@ jobs:
           fi
 
       - name: Convert screenshots to PNG
-        if: always() && steps.filter.outputs.skip != 'true'
+        if: ${{ !inputs.installed_boot_diagnostic && always() && steps.filter.outputs.skip != 'true' }}
         continue-on-error: true
         run: |
           for ppm in iso-e2e-out/*.ppm; do
@@ -997,11 +1079,11 @@ jobs:
           done
 
       - name: Stage bounded strict diagnostics
-        if: always() && steps.filter.outputs.skip != 'true' && !inputs.candidate_xfce
+        if: ${{ !inputs.installed_boot_diagnostic && always() && steps.filter.outputs.skip != 'true' && !inputs.candidate_xfce }}
         run: python3 scripts/collect-iso-diagnostics.py iso-e2e-out
 
       - name: Collect evidence
-        if: always() && steps.filter.outputs.skip != 'true' && !inputs.candidate_xfce
+        if: ${{ !inputs.installed_boot_diagnostic && always() && steps.filter.outputs.skip != 'true' && !inputs.candidate_xfce }}
         env:
           EVIDENCE_ARCH: amd64
           E2E_OUTCOME: ${{ steps.strict.outcome != 'skipped' && steps.strict.outcome || steps.e2e.outcome }}
@@ -1015,7 +1097,7 @@ jobs:
           scripts/evidence-bundle.sh \
             "${{ matrix.variant }}:${{ matrix.flavor }}" iso iso-e2e-out
       - name: Validate strict qualification evidence
-        if: steps.filter.outputs.skip != 'true' && steps.strict.outcome == 'success' && steps.strict.outputs.rc == '0'
+        if: ${{ !inputs.installed_boot_diagnostic && steps.filter.outputs.skip != 'true' && steps.strict.outcome == 'success' && steps.strict.outputs.rc == '0' }}
         env:
           CANDIDATE_XFCE: ${{ inputs.candidate_xfce }}
         run: |
@@ -1032,7 +1114,7 @@ jobs:
       # leg that did not pass says where it stopped; nothing here can mark a
       # leg or the target qualified.
       - name: Report strict leg verdicts
-        if: always() && steps.filter.outputs.skip != 'true' && inputs.source == 'native-artifact'
+        if: ${{ !inputs.installed_boot_diagnostic && always() && steps.filter.outputs.skip != 'true' && inputs.source == 'native-artifact' }}
         env:
           CANDIDATE_XFCE: ${{ inputs.candidate_xfce }}
         run: |
@@ -1043,7 +1125,7 @@ jobs:
           fi
 
       - name: Job summary
-        if: always() && steps.filter.outputs.skip != 'true'
+        if: ${{ !inputs.installed_boot_diagnostic && always() && steps.filter.outputs.skip != 'true' }}
         run: |
           {
             echo "## ISO E2E — ${VARIANT:-?}:${FLAVOR:-?}"
@@ -1064,7 +1146,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload artifacts
-        if: always() && steps.filter.outputs.skip != 'true'
+        if: ${{ !inputs.installed_boot_diagnostic && always() && steps.filter.outputs.skip != 'true' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: iso-e2e-${{ matrix.variant }}-${{ matrix.flavor }}
@@ -1090,7 +1172,7 @@ jobs:
       # When the filter step skipped the job, steps.e2e.outputs.rc is empty,
       # which would otherwise compare unequal to '0' and falsely fail.
       - name: Fail on e2e error
-        if: steps.filter.outputs.skip != 'true' && (steps.strict.outputs.rc || steps.e2e.outputs.rc) != '0'
+        if: ${{ !inputs.installed_boot_diagnostic && steps.filter.outputs.skip != 'true' && (steps.strict.outputs.rc || steps.e2e.outputs.rc) != '0' }}
         run: |
           echo "::error::iso-e2e.sh exited ${{ steps.strict.outputs.rc || steps.e2e.outputs.rc }} (see serial.log artifact)"
           exit 1
