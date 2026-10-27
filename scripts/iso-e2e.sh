@@ -1122,8 +1122,9 @@ strict_observer_identity_matches() {
 	local pid="$1" current_start
 	[[ -n "${STRICT_OBSERVER_STARTTIME:-}" ]] || return 1
 	if [[ -e "/proc/${pid}/stat" ]]; then
-		current_start="$(strict_observer_starttime "$pid")" || return 1
-		[[ "$current_start" == "$STRICT_OBSERVER_STARTTIME" ]] || return 1
+		if current_start="$(strict_observer_starttime "$pid")"; then
+			[[ "$current_start" == "$STRICT_OBSERVER_STARTTIME" ]] || return 1
+		fi
 	fi
 	return 0
 }
