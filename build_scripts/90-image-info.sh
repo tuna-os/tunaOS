@@ -120,7 +120,10 @@ tunaos_render_tokens \
 	/usr/share/plasma/look-and-feel/org.tunaos.desktop/metadata.json \
 	/usr/share/plasma/look-and-feel/org.tunaos.light.desktop/metadata.json \
 	/usr/share/wallpapers/TunaOS/metadata.json \
-	/usr/lib/systemd/system/tunaos-live-ready.service
+	/usr/lib/systemd/system/tunaos-live-ready.service \
+	/usr/lib/systemd/system/tunaos-countme.service \
+	/usr/lib/systemd/system/tunaos-countme.timer \
+	/etc/bootc-installer/recipe.json
 
 # TunaOS variants are named for fish. Keep VERSION_CODENAME tied to that
 # identity instead of inheriting the unrelated legacy dinosaur codename.
