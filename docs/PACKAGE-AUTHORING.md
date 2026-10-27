@@ -190,9 +190,27 @@ variant. Thus a variant scope needs every enabled target of that variant.
 The `defaults` scope needs every enabled target. A subset never gets a
 `ready` emission.
 
-The plan reads the configuration and never writes it. The primary config has
-no image-wide `add` field yet. That field, and its lossless write, come from
-the native additions contract in #3739.
+The plan reads the configuration and never writes it. Portable plan emission
+with `scripts/config-packages.py --write` is not supported. The offline
+`add --target PROFILE:FAMILY --write` command above edits desktop policies;
+it does not write image-wide additions.
+
+Image-wide additions are supported in `tunaos.toml` through
+`[defaults.packages]` and `[variants.<id>.packages]` (implemented in #3739).
+Edit those tables manually: `add` declares the required packages by native name, `optional` lists
+best-effort additions, and `repositories` declares signed dnf/zypper sources.
+Defaults apply before variant additions. Names must suit the native
+package manager of each affected variant; Gentoo needs `category/name`. Removals remain unsupported.
+
+Run `python3 scripts/config.py generate-image-packages` to compile those tables
+into `build_scripts/lib/image-packages.tsv` (also included in `generate-all`).
+`build_scripts/30-image-packages.sh` calls `build_scripts/lib/image-packages.sh`
+in the base stage to consume that adapter. Do not edit the generated TSV.
+For desktop policy, run `python3 scripts/config.py generate` to write
+`manifests/desktops/<profile>.yaml`, consumed by
+`build_scripts/desktop/install-desktop.sh`. See [CONFIG-WIRING.md](CONFIG-WIRING.md)
+for field ownership and consumer details. Generation and source checks do not
+prove a built image or installer works.
 
 The apt schema has no `exclude` field. Thus the validator rejects an exclusion
 that conflicts with an apt addition before the plan starts.
