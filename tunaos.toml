@@ -843,7 +843,7 @@ schedule = "20 9 * * *"
 codename = "Katsuwonus pelamis"
 branding = { accent = "#932279", gnome_accent = "purple", base = "CentOS Stream", homage = "CentOS purple", plymouth = "sushi" }
 description = "Based on CentOS Stream 10"
-base_image = "quay.io/centos-bootc/centos-bootc:stream10@sha256:6ef15ff8b9b47348487dd8730c92cde4bf1773392fa25ab5ab34889805f0b871"
+base_image = "quay.io/centos-bootc/centos-bootc:stream10@sha256:474b191aea04598f3a58ffbd08a1324e9b7638ff8cf2a9fe07a3b2131cb37418"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["centos"]
 # Note: linux/amd64/v2 intentionally omitted — verify builder support before adding.
@@ -1138,7 +1138,7 @@ branding = { accent = "#294172", gnome_accent = "blue", base = "Fedora ELN", hom
 upstream_track = "experimental"
 description = "Based on Fedora ELN (EL11 preview, rolling)"
 experimental = true
-base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:ed9eebfafd1fb708b58424f599eb8d08c7b3d8eff76f84b3d966e3a7f64da68d"
+base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:cbca9d21eed236f14dcf63ac14ab40601816b94dac9e653ced8eaecfa6c2520b"
 # No alias: `eln` is Fedora's identifier for a moving development target,
 # and an alias tag is a stability promise this lane deliberately does not
 # make. Revisit if/when ELN gains a versioned publish.
@@ -1452,7 +1452,7 @@ upstream_track = "experimental"
 # not a rebuild of an existing one. Read docs/HUMMINGBIRD.md before
 # reasoning about what its package set should contain.
 description = "Fedora Hummingbird (hardened rolling Rawhide fork, bootc)"
-base_image = "quay.io/hummingbird-community/bootc-os:latest@sha256:599e2c21e4c3eb4ea5ddafe4712a5728640a01db24d36bfa94fd48579174d521"
+base_image = "quay.io/hummingbird-community/bootc-os:latest@sha256:240daa2b35a8a2a4d3ab90135912936ecdd0d6760a7a13a0071bff70fd4fec81"
 # amd64 only, because aarch64 has nothing to build FROM yet: the base
 # stage's mandatory xfsprogs guard (build_scripts/10-base-packages.sh) has
 # no repository that can satisfy it on arm64, so every hummingbird arm64
@@ -1689,7 +1689,7 @@ description = "Based on Gentoo Linux (source-based)"
 # while the Containerfile built from the pinned digest, so the pre-pull
 # fetched an image the build never used and the workaround silently did
 # nothing for guppy. Keep the two in lockstep when bumping.
-base_image = "docker.io/gentoo/stage3:latest@sha256:916dc4d8cf38d316da9a838c2e20f32f16b7d4f21ef137b4682b66d68874c2c5"
+base_image = "docker.io/gentoo/stage3:latest@sha256:1ca7647d1ce968d02c2858ee4201e2173675fd3fc0754a8acd583d9288b75478"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["gentoo"]
 platforms = ["linux/amd64"]
@@ -2114,7 +2114,7 @@ codename = "Makaira nigricans"
 branding = { accent = "#1793D1", gnome_accent = "blue", base = "Arch Linux", homage = "Arch blue", plymouth = "rocket" }
 upstream_track = "rolling"
 description = "Based on Arch Linux (rolling)"
-base_image = "docker.io/archlinux/archlinux:latest@sha256:c012199d5d54760078f77b62bf2b7ed15334c873e27cc9d45b13d1e8f6e1ee5c"
+base_image = "docker.io/archlinux/archlinux:latest@sha256:6139c2e5e7e5affec0369bf125af7546c12cca174fd85a038f548af4fdb6df47"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["arch", "archlinux"]
 # arm64 legs use ghcr.io/tuna-os/archlinuxarm instead (docker.io/archlinux
@@ -5036,7 +5036,7 @@ observed_base_image = "docker.io/library/debian:trixie@sha256:4c25275446ca371766
 source_observation = "config/package-observations/flounder-amd64.json"
 source_observation_sha256 = "1b4857d081dc460381e537a1fb5f3a72407a7883313b78fb0301db6627b075b6"
 target_observation = "config/package-observations/flounder-target-amd64.json"
-target_observation_sha256 = "2dd5621d4bed22e8b04a87cc0ac388cec7d8e56c29a93541c2361c26dce0fdfb"
+target_observation_sha256 = "20b6f1e3bbc846188b4efea7819265ec85a21a5c29096f767f6354e4a5ac06fa"
 
 [[package_catalogs.debian-trixie.sources]]
 id = "trixie"

@@ -12,6 +12,7 @@ that touched 36 files across `.github/`, `build_scripts/`, `live-iso/`,
 
 | Symptom | Measured cause | Fix |
 |---|---|---|
+| Runner setup spends 31–33 minutes downloading podman/buildah, then reports `Remote end closed connection` ([#3812](https://github.com/tuna-os/tunaOS/issues/3812)) | #3983 jobs 121768105381 and 121768378530 transferred resolute packages at about 15 kB/s through the pinned setup-runner action’s AMD64 Azure HTTP endpoint. Metadata was fast and other retries passed; this was a transfer failure. This action caller is separate from #3812’s older KVM-tool caller. | `setup-runner-podman.py` retains the four resolute selectors and existing trust keys, uses official Ubuntu HTTPS archive/ports endpoints, bounds acquisition to 600 seconds and three download attempts, verifies cached SHA256 hashes, then installs with downloads disabled. Storage remains in the pinned action. KVM, boot and evidence checks are unchanged. |
 | `qualify-image-packages.py` fails `base source <name>:<tag>@sha256:…: command failed (1)` on every route | `skopeo inspect docker://name:tag@digest` exits 1 with `Docker references with both a tag and digest are currently not supported`. Five of the six `tunaos.toml` base images are pinned that way, and the harness fixtures used a fake `skopeo` that accepted it. | `verify_base_source` inspects `name@digest`. The build and `image-info.json` keep the full `name:tag@digest` string. |
 | ARM64 build passes but Snapdragon laptop support is unclear (#3116) | #3368 records postmarketOS observations and open TunaOS boot/install/update/rollback gates; an architecture manifest does not test board firmware or DTB selection. | Use [SNAPDRAGON.md](SNAPDRAGON.md) and report the exact device, image digest and hardware results. |
 | Bonito build succeeds despite bootc lint findings (#3001) | `99-cleanup.sh` calls `lint_image`; `lib.sh` returns success after findings unless `BOOTC_LINT_FATAL=1`. | Read the grouped output and step summary. Re-run lint against the candidate digest; apply the [Fedora readiness review](FEDORA-OUTREACH-READINESS.md) before outreach. |
@@ -2188,3 +2189,108 @@ collect a second report.
 The fixture tests failures in collection and login, and failure of the greeter
 to paint. It also tests successful login, lock, and unlock. The fixture
 intercepts all guest commands. These tests do not prove behavior in a real VM.
+
+### Gentoo desktop fails branding with unrendered identity tokens (#3980)
+
+**Symptom:** the package proof for modified GNOME stops after install with
+`unrendered @TUNAOS_*@ identity token` and `TUNAOS_BRANDING_FAIL`.
+Both base proofs pass, with stock and modified configurations (run `40251865603`, `861a871f`).
+
+**Cause:** `desktop-build` ran `90-image-info.sh` before the two asset copies.
+Absent files receive no tokens from the renderer. The copies then left tokens
+in seven paths: Plasma and wallpaper metadata, the live-ready unit, both Count
+Me units and the installer recipe. A later copy can restore those tokens too.
+
+**Fix:** copy the assets before the identity writer and `verify-branding.sh`.
+Render all seven paths. Run the writer again after the final copy.
+The #3980 regression fixture runs the full writer and verifier with redirected
+paths for stock and fork TOML, including empty metrics settings.
+It checks each late-copy failure and `install-countme.sh`, which must preserve
+`/etc` opt-outs. Keep `verify-branding.sh` enabled.
+
+These source tests do not
+qualify an image. After source delivery, repeat acceptance for fresh Gentoo
+images and packages (#3802).
+
+### Native backend candidate selected from a bootloader heuristic
+
+**Symptom:** A proposed v1.17.1 image is called native because it contains
+systemd-boot or enables composefs in OSTree's `prepare-root.conf`.
+
+**Cause:** v1.17.1 `crates/lib/src/bootc_composefs/image.rs` selects the native
+default from `usr/lib/composefs/setup-root-conf.toml` only when OSTree configuration is absent
+from both the vendor directory and `/etc`. The existing TunaOS probes
+use older bootloader/config heuristics; those do not prove this contract.
+
+**Next step:** Use the read-only [candidate contract](BOOTC-CANDIDATE.md) to expose
+conflicts. Its inert tests cover all eight marker combinations and always refuse
+runtime admission. Update the layout, dracut and installer consumers together
+before a runtime trial. One marker change is not a complete fix.
+
+### KVM tools cannot download after the image build (#3812)
+
+**Symptom:** #3431 job 121823081846 built grouper, then `Enable KVM` failed
+with APT exit 100. QEMU, OVMF and dependencies could not connect to
+`azure.archive.ubuntu.com:80`. Boot verification did not run. This failure
+provides no evidence about GDM or the guest image.
+
+**Cause:** The PR verification step used a separate, unbounded APT install
+through the default source on the runner. The earlier Podman setup in #3998
+does not own this later acquisition.
+
+**Fix:** `setup-kvm-tools.py` keeps `qemu-system-x86 qemu-utils ovmf ffmpeg`.
+It replaces exact Azure/archive URI tokens with the official HTTPS archive
+in temporary source files. It preserves suites, components and trust settings.
+It uses #3998’s APT primitives: a 600-second budget, up to three tries
+for downloads, SHA256 checks, and installation with downloads disabled.
+The helper verifies versions after installation and cleans its restart override.
+
+It does not change KVM rules, boot gates, or evidence collection.
+SIGKILL and the outer job timeout remain outside its cleanup guarantees.
+
+### Runner mirror-list indirection still selects Azure (#3812)
+
+**Symptom:** At #3999 head `ac0c2bbc`, run 40404587905 jobs 121861626115
+and 121861640934 reached the 600-second acquisition limit before installation.
+Logs showed `file:/etc/apt/apt-mirrors.txt Mirrorlist` and Azure HTTP requests.
+
+**Cause:** The [runner image configuration](https://github.com/actions/runner-images/blob/main/images/ubuntu/scripts/build/configure-apt-sources.sh)
+uses `mirror+file:/etc/apt/apt-mirrors.txt` in Ubuntu sources. Azure has first priority in that list. A direct-URL replacement does not affect this indirection.
+[APT’s mirror transport](https://manpages.ubuntu.com/manpages/jammy/man1/apt-transport-mirror.1.html)
+selects the endpoint from that list, so the private source still reached Azure.
+
+**Fix:** The KVM helper recognizes only that URI for the local mirror list.
+It validates the file against the runner’s official Ubuntu endpoints and optional
+priorities, then uses the HTTPS archive in private sources.
+Unknown mirror forms, unknown entries, unsupported metadata, and missing, empty,
+symlinked or oversized lists fail before APT. The helper preserves suites,
+components, Signed-By, comments and unrelated direct sources. Host files remain
+unchanged. The 600-second limit still applies; no trust override is necessary.
+
+The Albacore job on the same head installed its tools, then reached the
+separate GDM/Mutter 49.4 crash in #3969. That crash is not a mirror parser failure.
+
+### Runner package acquisition limits (#3812)
+
+The helper uses [Ubuntu’s documented archive](https://ubuntu.com/server/docs/how-to/software/package-management/)
+and the [official ports archive](https://ports.ubuntu.com/ubuntu-ports/) over HTTPS.
+It adds `resolute universe main` to a temporary copy of the source directory.
+Host source files and trust keys stay intact. Temporary metadata lists prevent
+use of stale indexes after a signature failure. Existing sources supply dependencies
+under their existing trust policy.
+
+The budget is 600 seconds for metadata, resolution and downloads.
+Each of three download tries gets at most 200 seconds from that budget.
+APT can retry each request twice, with a 30-second socket timeout.
+There is no mirror fallback or suite change. After installation, the helper verifies each version in the transaction. All four packages must be installed, with Podman 5 or newer.
+
+Ubuntu 26.04 only checks Podman, as the pinned action does.
+For each cached package, the helper verifies its authenticated SHA256 value.
+It removes corrupt entries and downloads them again. The workflow keeps the
+original keys for the weekly cache, separated by architecture, and pinned restore/save actions.
+The cache contains only package archives. Each run authenticates fresh metadata.
+
+Installation has no helper timeout and no downloads.
+The helper defers SIGINT/SIGTERM until dpkg and needrestart cleanup finish.
+It cannot defer SIGKILL or the outer job timeout. Logs show separate durations
+for acquisition and installation, on success or failure.

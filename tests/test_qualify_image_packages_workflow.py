@@ -33,6 +33,7 @@ def load(name: str, path: str):
     return module
 
 
+CONFIG = load("tunaos_config_for_qualification", "scripts/lib/tunaos_config.py")
 HARNESS = load("qualify_image_packages", "scripts/qualify-image-packages.py")
 LANE = load("package_qualification", "scripts/package-qualification.py")
 ROUTES = list(HARNESS.ROUTES)
@@ -86,6 +87,8 @@ def problems(document: dict, text: str) -> list[str]:
         text in builds[0]["run"] for text in ('sudo timeout --kill-after=60s "${remaining}s"', "deadline=")
     ):
         found.append("the whole build phase needs a root-owned cumulative budget under the job timeout")
+    if not builds or "BUILDAH_CACHE_FLAGS=--layers" not in builds[0]["run"] or "cache-from" in builds[0]["run"]:
+        found.append("the builds must share Buildah layers locally so the base stage is compiled once")
     gates = [s for s in steps if "package-qualification.py gate" in s.get("run", "")]
     gated_after_harness = (
         len(gates) == 1 and len(harness) == 1 and steps.index(gates[0]) > steps.index(harness[0])
@@ -153,6 +156,23 @@ def test_a_harness_step_skipped_by_a_failed_build_is_a_violation():
     assert any("after a failed build" in item for item in problems(document, WORKFLOW.read_text()))
 
 
+def test_builds_without_a_shared_layer_cache_are_a_violation():
+    """Run 40223961920: gentoo recompiled its base stage in all three builds and
+    ran out of the 300-minute budget during the third."""
+    assert not any("share Buildah layers" in item for item in problems(workflow_document(), WORKFLOW.read_text()))
+    document = workflow_document()
+    for step in document["jobs"]["qualify"]["steps"]:
+        if step.get("name") == "Build the images":
+            step["run"] = step["run"].replace("BUILDAH_CACHE_FLAGS=--layers", "")
+    assert any("share Buildah layers" in item for item in problems(document, WORKFLOW.read_text()))
+
+
+def test_the_layer_cache_flag_reaches_the_buildah_invocation():
+    """The flag is only useful if build-image-inner.sh forwards it to `buildah build`."""
+    inner = (ROOT / "scripts/build-image-inner.sh").read_text()
+    assert "${BUILDAH_CACHE_FLAGS:-}" in inner
+
+
 def test_a_build_phase_that_can_outlive_the_job_is_a_violation():
     document = workflow_document()
     document["jobs"]["qualify"]["timeout-minutes"] = 200
@@ -184,6 +204,23 @@ def test_the_fixture_names_each_harness_route_once_with_a_variant_that_resolves_
                 cwd=ROOT, capture_output=True, check=True,
             ).stdout)
             assert overlay["PARENT_FLAVOR"] == cell["desktop"]
+
+
+def test_every_qualified_desktop_and_overlay_is_a_flavor_the_repository_ships():
+    """Qualifying an image the product refuses to build proves nothing.
+
+    Run 40223961920 built flounder:gnome, which tunaos.toml turns off
+    (build_image = false: Debian 13 ships GNOME 48 under a GNOME 50 floor), so
+    the debian leg died in verify-desktop-experience.sh after 26 minutes.
+    """
+    variants = CONFIG.load(ROOT / "tunaos.toml")["variants"]
+    for cell in LANE.load_cells(FIXTURE):
+        flavors = {flavor["id"]: flavor for flavor in variants[cell["variant"]]["flavors"]}
+        for key in ("desktop", "overlay"):
+            if cell[key]:
+                assert flavors.get(cell[key], {}).get("build_image") is True, (
+                    f"{cell['route']}: {cell['variant']}:{cell[key]} is not a shipped flavor"
+                )
 
 
 def test_a_fixture_missing_a_route_is_rejected(tmp_path):
@@ -314,3 +351,11 @@ def test_the_gate_requires_the_selected_route_to_pass_and_the_rest_to_be_not_run
 
     with pytest.raises(LANE.PrepareError, match="unreadable report"):
         LANE.gate(tmp_path / "missing.json", "arch")
+
+
+def test_gentoo_base_target_writes_the_metadata_the_harness_reads():
+    # Run 40223961920 also exposed a missing image-info.json in stockBase:
+    # Gentoo's desktop branding is on a sibling branch, not the base target.
+    containerfile = (ROOT / "Containerfile.gentoo").read_text()
+    stage = containerfile.split("FROM system AS base-no-de\n", 1)[1].split("\nFROM ", 1)[0]
+    assert "/run/context/build_scripts/90-image-info.sh" in stage
