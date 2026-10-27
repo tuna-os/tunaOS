@@ -1,4 +1,10 @@
-"""Keep EGLDevice enumeration visible when initialization crashes."""
+"""tunaOS#3969: Preserve EGLDevice diagnostic evidence on virtio-vga.
+
+Falsification: The fake EGL test raises SIGSEGV from `eglInitialize`; removing
+the flush drops the device path from captured output. The guest-script fixture
+also fails if it stops selecting PCI device 1af4:1050 or isolates the controls
+incorrectly.
+"""
 
 import os
 import shutil
