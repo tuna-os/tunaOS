@@ -19,18 +19,19 @@ def test_wrapper_runs_nonexecutable_customizer_and_forwards_arguments(tmp_path):
     directory = tmp_path / "customize dir"
     directory.mkdir()
     real = directory / "customize-live-real.sh"
-    real.write_text('printf "%s\n" "$TUNA_SESSION_ROOT" "$TUNA_LIVE_BASE_IMAGE" "$TUNA_LIVE_BASE_DIGEST" "$TUNA_LIVE_PLATFORM" "$@"\nexit 17\n')
+    real.write_text('printf "%s\n" "$TUNA_SESSION_ROOT" "$TUNA_LIVE_BASE_IMAGE" "$TUNA_LIVE_BASE_DIGEST" "$TUNA_LIVE_PLATFORM" "$TUNA_LIVE_PAYLOAD_REF" "$@"\nexit 17\n')
     real.chmod(0o644)
     env = os.environ | {
         "CUSTOMIZE_DIR": str(directory),
         "IMAGE_REF": "ghcr.io/tuna-os/yellowfin:kde",
         "BASE_DIGEST": "sha256:" + "a" * 64,
         "SOURCE_PLATFORM": "linux/amd64",
+        "PAYLOAD_REF": "ghcr.io/tuna-os/yellowfin:kde-linux-amd64",
     }
     subprocess.run(["bash", "-euc", source[start:end]], env=env, check=True)
     result = subprocess.run([str(directory / "customize-live.sh"), "argument with spaces"], text=True, capture_output=True)
     assert result.returncode == 17, result.stderr
-    assert result.stdout.splitlines() == ["/", env["IMAGE_REF"], env["BASE_DIGEST"], env["SOURCE_PLATFORM"], "argument with spaces"]
+    assert result.stdout.splitlines() == ["/", env["IMAGE_REF"], env["BASE_DIGEST"], env["SOURCE_PLATFORM"], env["PAYLOAD_REF"], "argument with spaces"]
 
 
 def test_overlay_staging_tags_are_unique_per_run_and_attempt():
