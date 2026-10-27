@@ -567,7 +567,7 @@ schedule = "20 2 * * *"
 codename = "Thunnus alalunga"
 branding = { accent = "#0069DA", gnome_accent = "blue", base = "AlmaLinux", homage = "the blue petal of the AlmaLinux flower", plymouth = "tunaos" }
 description = "Based on AlmaLinux 10"
-base_image = "quay.io/almalinuxorg/almalinux-bootc:10@sha256:2fc27d12a9f62fcf11d0ec034fc40d5df6602d383d035c57206220eda95db6b2"
+base_image = "quay.io/almalinuxorg/almalinux-bootc:10@sha256:5f35f25a97714d2047f2c989995c7001044569150b60527a876ba58ba46657cb"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["almalinux"]
 platforms = ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
@@ -1138,7 +1138,7 @@ branding = { accent = "#294172", gnome_accent = "blue", base = "Fedora ELN", hom
 upstream_track = "experimental"
 description = "Based on Fedora ELN (EL11 preview, rolling)"
 experimental = true
-base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:cbca9d21eed236f14dcf63ac14ab40601816b94dac9e653ced8eaecfa6c2520b"
+base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:b545c4a5351ba16819c3e94af5a9c35de84c9abe6cef022c6a8905894f1e901d"
 # No alias: `eln` is Fedora's identifier for a moving development target,
 # and an alias tag is a stability promise this lane deliberately does not
 # make. Revisit if/when ELN gains a versioned publish.
@@ -1964,7 +1964,7 @@ flavor_dispatch = false
 codename = "Chelidonichthys lucerna"
 branding = { accent = "#3689E6", gnome_accent = "blue", base = "Ubuntu + Pantheon", homage = "elementary's blueberry", plymouth = "robot" }
 description = "Based on Ubuntu 24.04 Noble Numbat with the Pantheon desktop"
-base_image = "docker.io/library/ubuntu:noble@sha256:68ee22004a9109b44973313b02ff7b1de250f1de0f5ecb628d73f579aaff33ac"
+base_image = "docker.io/library/ubuntu:noble@sha256:24737cef17f4e22b1977df7d9a05e77c4e28b7da5b8911f8d8ccda136bf3573c"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["elementary"]
 platforms = ["linux/amd64", "linux/arm64"]
@@ -1988,7 +1988,7 @@ schedule = "20 17 * * *"
 codename = "Epinephelus marginatus"
 branding = { accent = "#E95420", gnome_accent = "orange", base = "Ubuntu", homage = "Ubuntu orange", plymouth = "coral" }
 description = "Based on Ubuntu 26.04 Resolute Raccoon"
-base_image = "docker.io/library/ubuntu:resolute@sha256:c098726dd9b9733f3e885f8de0ef375206a311b0a317eadc40d347b1115fb944"
+base_image = "docker.io/library/ubuntu:resolute@sha256:19fcd1bf268f02b60aca3bd30bd8a6d9a11759a430e32921833e65f16d87348a"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["ubuntu"]
 # Built directly from stock Ubuntu and bootcified in Containerfile.ubuntu
@@ -2114,7 +2114,7 @@ codename = "Makaira nigricans"
 branding = { accent = "#1793D1", gnome_accent = "blue", base = "Arch Linux", homage = "Arch blue", plymouth = "rocket" }
 upstream_track = "rolling"
 description = "Based on Arch Linux (rolling)"
-base_image = "docker.io/archlinux/archlinux:latest@sha256:6139c2e5e7e5affec0369bf125af7546c12cca174fd85a038f548af4fdb6df47"
+base_image = "docker.io/archlinux/archlinux:latest@sha256:66c8a74c16ae3d1056c434833ba43c9b937463a3837b07856077e22196b36202"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["arch", "archlinux"]
 # arm64 legs use ghcr.io/tuna-os/archlinuxarm instead (docker.io/archlinux
