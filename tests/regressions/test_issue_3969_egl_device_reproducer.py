@@ -12,6 +12,8 @@ ROOT = Path(__file__).resolve().parents[2]
 REPRODUCER = ROOT / "scripts/repro-egldevice-swrast.c"
 CC = shutil.which("cc")
 
+GATE = ROOT / "scripts/gdm-login-gate.sh"
+
 
 @pytest.mark.skipif(CC is None, reason="C compiler is required for the reproducer")
 def test_device_enumeration_is_flushed_before_egl_initialize_crashes(tmp_path):
@@ -129,3 +131,66 @@ EGLint eglGetError(void)
     )
     assert result.returncode == -signal.SIGSEGV
     assert "egl_device[0]=/dev/null" in result.stdout
+
+def test_guest_probe_selects_qemu_virtio_pci_graphics_device(tmp_path):
+    source = GATE.read_text()
+    marker = "<<'EGL_DEVICE_REPRO' || true\n"
+    guest_script = source.split(marker, 1)[1].split("\nEGL_DEVICE_REPRO", 1)[0]
+
+    dri_dir = tmp_path / "dri"
+    sysfs_root = tmp_path / "sys"
+    fake_bin = tmp_path / "bin"
+    dri_dir.mkdir()
+    fake_bin.mkdir()
+    for name in ("rpm", "systemctl", "journalctl"):
+        command = fake_bin / name
+        command.write_text("#!/bin/sh\nexit 0\n")
+        command.chmod(0o755)
+
+    pci_driver = sysfs_root / "bus/pci/drivers/virtio-pci"
+    pci_driver.mkdir(parents=True)
+    for card, pci_device in (("card0", "0x1040"), ("card1", "0x1050")):
+        (dri_dir / card).symlink_to("/dev/null")
+        pci = sysfs_root / f"devices/{card}"
+        pci.mkdir(parents=True)
+        (pci / "vendor").write_text("0x1af4\n")
+        (pci / "device").write_text(f"{pci_device}\n")
+        (pci / "driver").symlink_to(pci_driver, target_is_directory=True)
+        class_device = sysfs_root / f"class/drm/{card}/device"
+        class_device.parent.mkdir(parents=True)
+        class_device.symlink_to(pci, target_is_directory=True)
+
+    probe = tmp_path / "probe"
+    probe.write_text(
+        "#!/bin/sh\n"
+        "printf 'probe device=%s LIBGL=%s MESA=%s\\n' \"$1\" "
+        "\"${LIBGL_ALWAYS_SOFTWARE:-unset}\" "
+        "\"${MESA_LOADER_DRIVER_OVERRIDE:-unset}\"\n"
+    )
+    probe.chmod(0o755)
+    env = os.environ.copy()
+    env.update(
+        PATH=f"{fake_bin}:{env['PATH']}",
+        LIBGL_ALWAYS_SOFTWARE="ambient-software",
+        MESA_LOADER_DRIVER_OVERRIDE="ambient-driver",
+    )
+    result = subprocess.run(
+        ["bash", "-s", "--", str(probe), str(dri_dir), str(sysfs_root)],
+        input=guest_script,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert f"drm_node={dri_dir}/card1 driver=virtio-pci vendor=0x1af4 device=0x1050" in result.stdout
+    assert f"selected_device={dri_dir}/card1" in result.stdout
+    assert f"selected_device={dri_dir}/card0" not in result.stdout
+    assert "status=not-run" not in result.stdout
+    for expected in (
+        "probe device=" + str(dri_dir / "card1") + " LIBGL=unset MESA=unset",
+        "probe device=" + str(dri_dir / "card1") + " LIBGL=1 MESA=unset",
+        "probe device=" + str(dri_dir / "card1") + " LIBGL=unset MESA=swrast",
+        "probe device=" + str(dri_dir / "card1") + " LIBGL=1 MESA=swrast",
+    ):
+        assert expected in result.stdout

@@ -49,17 +49,26 @@ collect_egldevice_reproducer() {
 		printf 'status=not-run reason=failed-to-mark-probe-executable\n' >"${OUT}/egl-device-reproducer.txt"
 		return 0
 	}
-	guest bash -s -- "$remote" >"${OUT}/egl-device-reproducer.txt" 2>&1 <<'EGL_DEVICE_REPRO' || true
+	guest bash -s -- "$remote" /dev/dri /sys >"${OUT}/egl-device-reproducer.txt" 2>&1 <<'EGL_DEVICE_REPRO' || true
 set -u
 binary="$1"
+dri_dir="$2"
+sysfs_root="$3"
 device=""
-for node in /dev/dri/card[0-9]*; do
+for node in "$dri_dir"/card[0-9]*; do
 	[[ -c "$node" ]] || continue
 	name="${node##*/}"
-	driver_path="$(readlink -f "/sys/class/drm/${name}/device/driver" 2>/dev/null || true)"
+	device_sysfs="${sysfs_root}/class/drm/${name}/device"
+	driver_path="$(readlink -f "${device_sysfs}/driver" 2>/dev/null || true)"
 	driver="${driver_path##*/}"
-	echo "drm_node=${node} driver=${driver:-unknown}"
-	if [[ "$driver" == virtio_gpu ]]; then device="$node"; fi
+	vendor="$(cat "${device_sysfs}/vendor" 2>/dev/null || true)"
+	device_id="$(cat "${device_sysfs}/device" 2>/dev/null || true)"
+	echo "drm_node=${node} driver=${driver:-unknown} vendor=${vendor:-unknown} device=${device_id:-unknown}"
+	# QEMU's virtio-vga node uses the PCI bus driver, not a driver named virtio_gpu.
+	if [[ "$driver" == virtio_gpu ]] ||
+		[[ "$driver" == virtio-pci && "$vendor" == 0x1af4 && "$device_id" == 0x1050 ]]; then
+		device="$node"
+	fi
 done
 if [[ -z "$device" ]]; then
 	echo 'status=not-run reason=no-virtio-gpu-primary-node'
