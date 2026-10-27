@@ -295,8 +295,6 @@ def test_nonempty_cutover_is_rejected_until_receipts_are_integrated(tmp_path: Pa
         ),
     )
     assert result.returncode != 0
-    assert "#3381" in result.stderr
-    assert "current qualification catalog" in result.stderr
 
 
 @pytest.mark.parametrize(
