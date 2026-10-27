@@ -1964,7 +1964,7 @@ flavor_dispatch = false
 codename = "Chelidonichthys lucerna"
 branding = { accent = "#3689E6", gnome_accent = "blue", base = "Ubuntu + Pantheon", homage = "elementary's blueberry", plymouth = "robot" }
 description = "Based on Ubuntu 24.04 Noble Numbat with the Pantheon desktop"
-base_image = "docker.io/library/ubuntu:noble@sha256:68ee22004a9109b44973313b02ff7b1de250f1de0f5ecb628d73f579aaff33ac"
+base_image = "docker.io/library/ubuntu:noble@sha256:24737cef17f4e22b1977df7d9a05e77c4e28b7da5b8911f8d8ccda136bf3573c"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["elementary"]
 platforms = ["linux/amd64", "linux/arm64"]
