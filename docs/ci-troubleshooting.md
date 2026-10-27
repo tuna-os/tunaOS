@@ -2330,3 +2330,17 @@ Select a trace with the exact boot ID, PID, timestamp, UID and executable.
 Do not list unrelated cores. The fixtures test a newer crash from another
 user and records with missing identity fields. They do not prove behavior
 in a real VM.
+
+
+### Behavioral regression passes but the convention gate fails (#3969)
+
+**Symptom:** the late-screenshot fixtures pass, but the convention suite reports
+`no test functions` for the same file.
+
+**Cause:** at `3a153548`, those tests are methods in a unittest class.
+The convention checks for top-level `def test_` functions. Local reproduction
+returns one failure and 212 passes.
+
+**Fix:** use parameterized pytest functions with the same behavioral assertions.
+Run `tests/test_regression_convention.py` with both affected regression suites.
+The focused tests and `just check` alone do not cover this convention.
