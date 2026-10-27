@@ -263,6 +263,7 @@ jobs:
             printf 'export TUNA_LIVE_BASE_IMAGE=%q\n' "$IMG"
             printf 'export TUNA_LIVE_BASE_DIGEST=%q\n' "$BASE_DIGEST"
             printf 'export TUNA_LIVE_PLATFORM=%q\n' "$PLATFORM"
+            echo 'export TUNA_LIVE_DEFER_LOCAL_IMGREF=1'
             tail -n +2 "$PWD/live-iso/common/src/customize-live.sh"
           } > "$CUSTOMIZE_SCRIPT"
           chmod 0755 "$CUSTOMIZE_SCRIPT"

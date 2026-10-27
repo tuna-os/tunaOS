@@ -259,89 +259,87 @@ if [[ -f "${RECIPE_FILE}" ]]; then
 	# showed the TunaOS fish (tuna-os/tunaOS#1056, #3668).
 	DISTRO_LOGO_RES="/usr/share/pixmaps/tunaos.svg"
 
-	# The installer installs the project's own umbrella image, <registry>/
-	# <namespace>/<project id>:latest: the destination this build publishes to
-	# (the same IMAGE_REGISTRY/IMAGE_VENDOR the image-ref above is built from,
-	# resolved from [build.publish], the operator override or the repository
-	# owner) and the id from tunaos.toml [project]. recipe.json used to name
-	# ghcr.io/tuna-os/tunaos:latest, so a fork's installer installed TunaOS.
-	RECIPE_IMGREF="${IMAGE_REGISTRY:-ghcr.io}/${IMAGE_VENDOR}/${TUNAOS_PROJECT_ID}:latest"
+	# The build engine resolves the canonical TOML published ref in the host
+	# context and passes that exact value through TUNAOS_PUBLISHED_IMAGE_REF.
+	RECIPE_IMGREF="${TUNAOS_PUBLISHED_IMAGE_REF:?missing canonical published image ref}"
 
-	python3 -c "
+	python3 - "${RECIPE_FILE}" "${IMAGE_PRETTY_NAME}" "${DISTRO_LOGO_RES}" "${BASE_OS_NAME}" "${DESKTOP_PRETTY_NAME}" "${RECIPE_IMGREF}" "${TUNAOS_PROJECT_NAME}" <<'PYEOF'
 import json
-with open('${RECIPE_FILE}', 'r') as f:
+import sys
+
+path, pretty_name, distro_logo, base_os, desktop_name, imgref, project_name = sys.argv[1:8]
+with open(path, "r") as f:
     recipe = json.load(f)
-recipe['distro_name'] = '${IMAGE_PRETTY_NAME}'
-recipe['welcome_title'] = 'Welcome to ${IMAGE_PRETTY_NAME}'
-recipe['distro_logo'] = '${DISTRO_LOGO_RES}'
-recipe['tour']['welcome']['title'] = 'Welcome to ${IMAGE_PRETTY_NAME}'
-recipe['tour']['welcome']['description'] = '${IMAGE_PRETTY_NAME} is an immutable, container-native Linux operating system built for enterprise workstations and developers.'
 
-# Insert custom distro and desktop slides in order
-tour = recipe.get('tour', {})
+recipe["distro_name"] = pretty_name
+recipe["welcome_title"] = f"Welcome to {pretty_name}"
+recipe["distro_logo"] = distro_logo
+if "tour" in recipe and "welcome" in recipe["tour"]:
+    recipe["tour"]["welcome"]["title"] = f"Welcome to {pretty_name}"
+    recipe["tour"]["welcome"]["description"] = (
+        f"{pretty_name} is an immutable, container-native Linux operating system "
+        "built for enterprise workstations and developers."
+    )
+
+tour = recipe.get("tour", {})
 new_tour = {}
-if 'welcome' in tour:
-    new_tour['welcome'] = tour['welcome']
-if 'features' in tour:
-    new_tour['features'] = tour['features']
+if "welcome" in tour:
+    new_tour["welcome"] = tour["welcome"]
+if "features" in tour:
+    new_tour["features"] = tour["features"]
 
-new_tour['distro'] = {
-    'image': '/run/host/usr/share/bootc-installer/images/tunaos-install.png',
-    'title': 'Built on ${BASE_OS_NAME}',
-    'description': '${IMAGE_PRETTY_NAME} leverages the solid foundation of stable ${BASE_OS_NAME} packages to ensure maximum compatibility and package availability.'
+new_tour["distro"] = {
+    "image": "/run/host/usr/share/bootc-installer/images/tunaos-install.png",
+    "title": f"Built on {base_os}",
+    "description": (
+        f"{pretty_name} leverages the solid foundation of stable {base_os} packages "
+        "to ensure maximum compatibility and package availability."
+    ),
 }
 
-new_tour['desktop'] = {
-    'image': '/run/host/usr/share/bootc-installer/images/tunaos-install.png',
-    'title': '${DESKTOP_PRETTY_NAME} Desktop',
-    'description': 'Enjoy a custom-integrated, modern ${DESKTOP_PRETTY_NAME} workspace configured for performance, accessibility, and style.'
+new_tour["desktop"] = {
+    "image": "/run/host/usr/share/bootc-installer/images/tunaos-install.png",
+    "title": f"{desktop_name} Desktop",
+    "description": (
+        f"Enjoy a custom-integrated, modern {desktop_name} workspace configured for "
+        "performance, accessibility, and style."
+    ),
 }
 
-if 'community' in tour:
-    new_tour['community'] = tour['community']
-if 'completed' in tour:
-    new_tour['completed'] = tour['completed']
+if "community" in tour:
+    new_tour["community"] = tour["community"]
+if "completed" in tour:
+    new_tour["completed"] = tour["completed"]
 
-recipe['tour'] = new_tour
+recipe["tour"] = new_tour
 
-recipe['imgref'] = '${RECIPE_IMGREF}'
-recipe['local_imgref'] = 'containers-storage:${RECIPE_IMGREF}'
+recipe["imgref"] = imgref
+recipe["local_imgref"] = f"containers-storage:{imgref}"
 
-# The variant is the name people see; the installer's stock slides name the
-# project (tunaos.toml [project] name, e.g. your new TunaOS workstation). Swap
-# it in display text only: each slide's title and description. Paths, image
-# references (imgref, local_imgref) and step names are data, and a project
-# named like one of them (tunaos) must not rewrite them. The name also stays
-# whole inside a longer word, path or domain (repo.tunaos.org).
 import re
-# Unmodified shipped slides still use the template project token. A fork may
-# also supply slides using its configured name. Match either in display text
-# only; never make a fork pre-edit recipe data to activate its TOML identity.
-project_names = sorted({'TunaOS', '${TUNAOS_PROJECT_NAME}'}, key=len, reverse=True)
+# Unmodified shipped slides use the template project token. A fork may also
+# supply slides using its configured name. Rename display text only; preserve
+# paths, URI data and image refs verbatim.
+project_names = sorted({'TunaOS', '@TUNAOS_PROJECT_NAME@', project_name}, key=len, reverse=True)
 project = re.compile(r'(?<![A-Za-z0-9_@/.:-])(?:' + '|'.join(re.escape(name) for name in project_names) + r')(?![.]?[A-Za-z0-9_@/-])')
-# A project token in a URL query or fragment is still data. Preserve full
-# URI spans, Markdown destinations and HTML markup before applying display-name
-# boundaries to the remaining visible text.
 uri = re.compile(r'<[^>]*>|(?<=\]\()[^)\s]+|(?:[A-Za-z][A-Za-z0-9+.-]*://|mailto:|(?<![A-Za-z0-9])(?:/|\./|\.\./))[^\s<>' + chr(34) + chr(39) + r']+')
 def rename(text):
     result, start = [], 0
     for match in uri.finditer(text):
-        result.extend((project.sub(lambda _: '${IMAGE_PRETTY_NAME}', text[start:match.start()]), match.group()))
+        result.extend((project.sub(lambda _: pretty_name, text[start:match.start()]), match.group()))
         start = match.end()
-    result.append(project.sub(lambda _: '${IMAGE_PRETTY_NAME}', text[start:]))
+    result.append(project.sub(lambda _: pretty_name, text[start:]))
     return ''.join(result)
-for slide in recipe['tour'].values():
+for slide in recipe.get('tour', {}).values():
     for key in ('title', 'description'):
         if isinstance(slide.get(key), str):
-            # The shipped slides write @TUNAOS_PROJECT_NAME@ where they name the
-            # project, so a fork's name never has to match a TunaOS literal.
-            slide[key] = rename(slide[key].replace('@TUNAOS_PROJECT_NAME@', '${IMAGE_PRETTY_NAME}'))
+            slide[key] = rename(slide[key])
 
-with open('${RECIPE_FILE}', 'w') as f:
+with open(path, "w") as f:
     json.dump(recipe, f, indent=2)
-" || true
+PYEOF
 	if ! grep -qF "\"imgref\": \"${RECIPE_IMGREF}\"" "${RECIPE_FILE}"; then
-		echo "ERROR: ${RECIPE_FILE} does not name ${RECIPE_IMGREF}; the installer would install another image" >&2
+		echo "ERROR: ${RECIPE_FILE} does not name ${RECIPE_IMGREF}; installer target ref is inconsistent" >&2
 		exit 1
 	fi
 fi

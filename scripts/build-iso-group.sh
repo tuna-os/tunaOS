@@ -158,16 +158,33 @@ FIRST_REF=""
 for flavor in "${SELECTED[@]}"; do
 	ref="$(tunaos_image_ref "$VARIANT" "$flavor" "$REPO" "$flavor")"
 	[[ -z "$FIRST_REF" ]] && FIRST_REF="$ref"
-	# Pull local images into root storage so tacklebox can read them.
 	if [[ "$REPO" == "local" ]]; then
 		tunaos_import_to_root_storage "$ref"
 	fi
+
+	# Each environment must pair the published tracking ref in its image
+	# recipe with the exact source ref tacklebox embeds for this ISO.
+	customize_dir="${OUT_DIR}/live-customize/${flavor}"
+	mkdir -p "$customize_dir"
+	cp -a "${REPO_ROOT}/live-iso/common/src/." "$customize_dir/"
+	cp "${REPO_ROOT}/image-versions.yaml" "$customize_dir/"
+	mv "${customize_dir}/customize-live.sh" "${customize_dir}/customize-live-real.sh"
+	chmod 0755 "${customize_dir}/customize-live-real.sh"
+	{
+		echo '#!/usr/bin/env bash'
+		echo 'export TUNA_SESSION_ROOT=/'
+		printf 'export TUNA_LIVE_PAYLOAD_REF=%q\n' "$ref"
+		echo 'exec bash "$(dirname "${BASH_SOURCE[0]}")/customize-live-real.sh" "$@"'
+	} >"${customize_dir}/customize-live.sh"
+	chmod 0755 "${customize_dir}/customize-live.sh"
+
 	ENVS_JSON="$(jq -c \
 		--arg id "${VARIANT}-${flavor}" \
 		--arg image "$ref" \
 		--arg title "$(tunaos_flavor_title "$flavor")" \
 		--arg desktop "$(tunaos_flavor_desktop "$flavor")" \
-		'. + [{id: $id, image: $image, title: $title, desktop: $desktop, modes: ["live"]}]' \
+		--arg customize "${customize_dir}/customize-live.sh" \
+		'. + [{id: $id, image: $image, title: $title, desktop: $desktop, live_customize: [$customize], modes: ["live"]}]' \
 		<<<"$ENVS_JSON")"
 done
 
