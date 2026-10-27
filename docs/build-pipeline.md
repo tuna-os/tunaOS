@@ -49,6 +49,18 @@ stage 3. NVIDIA images (`<de>-nvidia`) do the same. Both paths use
 
 ## 🔄 Workflows
 
+### Image package checks
+
+Run `qualify-image-packages.yml` by hand to check all six base routes. It does
+not publish images. Each route builds a stock base, a base with one added
+package, and a desktop with that package. EL10 also builds an HWE image.
+
+The cells in `tests/fixtures/package-qualification-cells.json` must use flavors
+with `build_image = true`. Debian uses `flounder:xfce`; `flounder:gnome` is off.
+The builds share local layers through Buildah's `--layers` flag. The cache key
+includes `build_scripts/lib/image-packages.tsv`, so a package change cannot
+reuse the stock package layer. Each job keeps its plan, report and build logs.
+
 ### 1. Unified Build (`build-variant.yml`)
 
 The shared orchestrator called by the per-variant `build-<variant>.yml` entry

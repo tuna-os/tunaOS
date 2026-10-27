@@ -20,7 +20,8 @@ Identities are taken only from what the producer run measured:
   overlay   observedInputs.overlay.manifestDigest, status must be `applied`
   engine    sha256 of the WASM response the page instantiated
   browser   the Chromium product string of the measuring browser
-  installer an operator-supplied digest, optional, labelled as such
+  installer not established without a media-bound frontend receipt; an optional
+            operator digest is an expectation, never measured identity
 
 The overlay and engine are never defaulted. A missing or malformed value stops
 the run before any guest boots. The ISO hash is never reused as an identity.
@@ -110,6 +111,8 @@ def verify_metadata(args: argparse.Namespace) -> None:
     jobs_list = jobs.get("jobs")
     if not isinstance(jobs_list, list):
         fail("GitHub producer attempt metadata has no jobs list")
+    if type(jobs.get("total_count")) is not int or jobs["total_count"] != len(jobs_list):
+        fail("GitHub producer job list is incomplete or has an invalid total_count")
     slug = f"{args.variant}-{args.flavor}"
     if any(not isinstance(other, dict) for other in jobs_list):
         fail("GitHub producer attempt metadata contains an invalid job")
@@ -175,6 +178,8 @@ def verify_metadata(args: argparse.Namespace) -> None:
     values = artifacts.get("artifacts")
     if not isinstance(values, list):
         fail("GitHub artifact metadata has no artifact list")
+    if type(artifacts.get("total_count")) is not int or artifacts["total_count"] != len(values):
+        fail("GitHub artifact list is incomplete or has an invalid total_count")
     selected = []
     for name in (args.artifact, args.evidence_artifact):
         matches = [item for item in values if isinstance(item, dict) and item.get("name") == name]
@@ -210,6 +215,7 @@ def verify_metadata(args: argparse.Namespace) -> None:
 
 
 def derive(args: argparse.Namespace) -> None:
+    check_inputs(args)
     expected = digest(args.expected_sha256, "iso_expected_sha256")
     iso = Path(args.iso)
     if not iso.is_file():
@@ -228,6 +234,8 @@ def derive(args: argparse.Namespace) -> None:
         fail("artifact manifest was not produced by " + PRODUCER_REPOSITORY)
     if producer.get("runId") != args.run_id or producer.get("sha") != args.producer_sha:
         fail("artifact manifest producer run or commit differs from the dispatch inputs")
+    if producer.get("runAttempt") != args.attempt:
+        fail("artifact manifest producer attempt differs from the selected attempt")
     if (manifest.get("iso") or {}).get("sha256") != expected or (manifest.get("iso") or {}).get("sizeBytes") != iso_size:
         fail("artifact manifest ISO identity differs from the expected hash or the reassembled file")
 
@@ -337,8 +345,7 @@ def main(argv=None) -> None:
 
     for name in ("check-inputs", "derive"):
         p = sub.add_parser(name)
-        if name == "check-inputs":
-            p.add_argument("--attempt", required=True)
+        p.add_argument("--attempt", required=True)
         p.add_argument("--run-id", required=True)
         p.add_argument("--artifact", required=True)
         p.add_argument("--evidence-artifact", required=True)

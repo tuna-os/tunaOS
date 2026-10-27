@@ -11,7 +11,8 @@ def bind_recipe(path, payload, digest, target):
     """Keep update tracking remote while requiring the measured local source."""
     if not re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
         raise ValueError("invalid measured source digest")
-    if not re.fullmatch(r"ghcr\.io/tuna-os/[a-z0-9-]+:[a-z0-9-]+", target):
+    # Match the tracking-reference syntax accepted by xfce-media-input.py.
+    if not re.fullmatch(r"[a-z0-9]+(?:[.-][a-z0-9]+)*(?::[0-9]+)?/(?:[a-z0-9]+(?:[._-][a-z0-9]+)*/)*[a-z0-9]+(?:[._-][a-z0-9]+)*:[a-zA-Z0-9_][a-zA-Z0-9._-]{0,127}", target):
         raise ValueError("invalid native target reference")
     if payload != f"{target}@{digest}":
         raise ValueError("offline payload does not match target and measured source")

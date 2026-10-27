@@ -17,7 +17,8 @@ The check is deliberately weak in one direction: a job timeout written as
 an expression (`${{ ... && 90 || 30 }}`) passes if ANY branch covers the
 steps, because which branch applies depends on inputs this test cannot
 evaluate. It still catches the case where no branch does. Step budgets are summed on
-compatible routes: only necessary, immutable selector equalities prove that
+compatible routes: necessary immutable selector equalities or complementary
+truthiness guards prove that
 two steps cannot run together; unknown conditions retain their full budget.
 """
 
@@ -36,7 +37,7 @@ from tests.workflow_contracts import (
 WORKFLOWS = sorted((Path(__file__).resolve().parents[1] / ".github" / "workflows").glob("*.yml"))
 
 
-def _budgets(value):
+def _budgets(value, assignment=None):
     """Only literal minute budgets, never digits harvested from a condition."""
     if value is None:
         return []
@@ -46,6 +47,13 @@ def _budgets(value):
         if isinstance(value, str):
             raw = value.strip()
             parts = tokens(expression_body(raw) if raw.startswith("${{") else raw)
+            alternatives = split_top_level(unparenthesized(parts), "||")
+            if assignment and len(alternatives) == 2:
+                selected = split_top_level(unparenthesized(alternatives[0]), "&&")
+                if len(selected) == 2:
+                    key = "truthy:" + "".join(unparenthesized(selected[0]))
+                    if key in assignment:
+                        parts = selected[1] if assignment[key] else alternatives[1]
             choices = literal_choices(parts)
             if all(type(choice) is int for choice in choices):
                 return choices
@@ -57,8 +65,9 @@ def _budgets(value):
 def _selector_constraints(condition):
     """Necessary equalities on immutable selectors; unknown syntax costs time.
 
-    Only conjunctions with nonnumeric ASCII string comparisons get credit.
-    In particular, OR, negation and numeric-looking strings cannot establish
+    Conjunctions with nonnumeric ASCII string comparisons and bare selector
+    truthiness (including its direct negation) get credit. OR, compound
+    negation and numeric-looking strings cannot establish
     exclusivity (GitHub's loose equality can equate '01' and '1' to a number).
     Strings compare case-insensitively. No condition is evaluated here.
     """
@@ -83,6 +92,9 @@ def _selector_constraints(condition):
                         return {}  # contradictory/unknown condition: count it
                     result[key] = value
             return result
+        truthy = re.fullmatch(r"(!?)((?:inputs|matrix)\.[A-Za-z_][A-Za-z0-9_-]*)", "".join(parts))
+        if truthy:
+            return {"truthy:" + truthy[2]: not bool(truthy[1])}
         match = re.fullmatch(
             r"((?:inputs|matrix)\.[A-Za-z_][A-Za-z0-9_-]*|github\.event_name)"
             r"=='([A-Za-z][A-Za-z0-9_-]*)'", "".join(parts),
@@ -97,22 +109,22 @@ def _selector_constraints(condition):
 
 def _step_total(steps):
     timed = [
-        (max(_budgets(step.get("timeout-minutes")), default=0),
+        (step.get("timeout-minutes"),
          _selector_constraints(step.get("if")))
         for step in steps if isinstance(step, dict)
     ]
     selectors = {}
     for _, constraints in timed:
         for key, value in constraints.items():
-            selectors.setdefault(key, set()).add(value)
+            selectors.setdefault(key, set()).update({True, False} if key.startswith("truthy:") else {value})
     # Unrecognised or excessively large selector sets conservatively retain
     # the original sum. The contract must stay cheap on arbitrary workflows.
     if math.prod(len(values) for values in selectors.values()) > 4096:
-        return sum(budget for budget, _ in timed)
+        return sum(max(_budgets(budget), default=0) for budget, _ in timed)
     # An unlisted selector value only disables constrained steps, so it cannot
     # exceed a listed assignment. Unconditional/opaque steps count on all paths.
     return max((
-        sum(budget for budget, constraints in timed
+        sum(max(_budgets(budget, assignment), default=0) for budget, constraints in timed
             if all(assignment[key] == value for key, value in constraints.items()))
         for values in itertools.product(*selectors.values())
         for assignment in [dict(zip(selectors, values))]
@@ -239,3 +251,32 @@ def test_github_default_job_timeout_is_finite():
     test_a_job_budget_covers_its_own_steps("fixture.yml", "test", None, 360)
     with pytest.raises(AssertionError, match="steps declare 361"):
         test_a_job_budget_covers_its_own_steps("fixture.yml", "test", None, 361)
+
+
+def test_diagnostic_and_strict_budgets_are_disjoint_and_bounded():
+    doc = yaml.safe_load((WORKFLOWS[0].parent / "iso-e2e.yml").read_text())
+    job = doc["jobs"]["e2e"]
+    assert _budgets(job["timeout-minutes"]) == [120, 160, 160, 90, 30]
+    assert _step_total(job["steps"]) <= 160
+    diagnostic_steps = [s for s in job["steps"]
+                        if _selector_constraints(s.get("if")).get(
+                            "truthy:inputs.installed_boot_diagnostic") is not False]
+    # Force the declared diagnostic truthiness assignment, including dynamic
+    # download budgets, without discounting opaque source conditions.
+    diagnostic_steps = [dict(s, **{"timeout-minutes": max(_budgets(
+        s.get("timeout-minutes"), {"truthy:inputs.installed_boot_diagnostic": True}), default=0) or None})
+        for s in diagnostic_steps]
+    assert _step_total(diagnostic_steps) <= 120
+    assert _step_total([_timed(80, "inputs.mode"), _timed(60, "!inputs.mode")]) == 80
+    assert _step_total([_timed(80, "inputs.mode"), _timed(60, "inputs.mode")]) == 140
+    with pytest.raises(AssertionError):
+        _budgets("${{ inputs.mode && inputs.unbounded || 60 }}",
+                 {"truthy:inputs.mode": True})
+
+
+def test_budget_reduction_enumerates_both_truthiness_values():
+    assert _step_total([_timed(1, "inputs.mode"),
+                        _timed("${{ inputs.mode && 1 || 100 }}")]) == 100
+    assert _step_total([_timed(1, "!inputs.mode"),
+                        _timed("${{ inputs.mode && 100 || 1 }}")]) == 100
+    assert _step_total([_timed("${{ inputs.mode && 1 || 100 }}")]) == 100

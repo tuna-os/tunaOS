@@ -3,6 +3,10 @@ permissions: {}
 on:
   workflow_dispatch:
     inputs:
+      installed_boot_diagnostic:
+        description: 'Skipjack LUKS diagnostic; root all-user inode scan on denial (DAC_READ_SEARCH/SYS_PTRACE); never qualification'
+        type: boolean
+        default: false
       candidate_xfce:
         description: 'Opt-in Bonito/XFCE AMD64 candidate; not production qualification'
         required: false
@@ -72,7 +76,32 @@ concurrency:
   cancel-in-progress: ${{ !inputs.candidate_xfce }}
 
 jobs:
+  diagnostic-preflight:
+    if: github.event_name == 'workflow_dispatch' && inputs.installed_boot_diagnostic
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    permissions: {}
+    steps:
+      - name: Check scoped KVM and supermin prerequisites
+        env:
+          CANDIDATE_XFCE: ${{ inputs.candidate_xfce }}
+        run: |
+          [[ "${CANDIDATE_XFCE:-false}" != true ]] || exit 1
+          test -c /dev/kvm
+          getent group kvm
+          [[ "$(stat -c '%G' /dev/kvm)" == kvm ]]
+          kvm_mode="$(stat -c '%a' /dev/kvm)"
+          (( (8#$kvm_mode & 0060) == 0060 ))
+          kernel="/boot/vmlinuz-$(uname -r)"
+          modules="/usr/lib/modules/$(uname -r)"
+          test -f "$kernel" && test -d "$modules"
+          command -v setfacl && command -v getfacl
+          test -r /sys/fs/cgroup/cgroup.controllers
+          sudo -n true
+          systemctl --version
+
   preflight:
+    if: ${{ !inputs.installed_boot_diagnostic }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -95,10 +124,11 @@ jobs:
         run: |
           flags=()
           [[ "$CANDIDATE_XFCE" == true ]] && flags+=(--candidate-xfce)
-          python3 scripts/plan-iso-qualification.py --target "$VARIANT:$FLAVOR:$PLATFORM" --max-parallel 1 "${flags[@]}"
+          python3 scripts/plan-iso-qualification.py --build-only --target "$VARIANT:$FLAVOR:$PLATFORM" --max-parallel 1 "${flags[@]}"
 
   build:
-    needs: preflight
+    needs: [diagnostic-preflight, preflight]
+    if: ${{ !cancelled() && ((inputs.installed_boot_diagnostic && needs.diagnostic-preflight.result == 'success') || (!inputs.installed_boot_diagnostic && needs.preflight.result == 'success')) }}
     outputs:
       artifact_id: ${{ steps.native_iso.outputs.artifact-id }}
       archive_digest: sha256:${{ steps.native_iso.outputs.artifact-digest }}
@@ -127,10 +157,10 @@ jobs:
     # GitHub-hosted. The `== 'github'` form sent every input-less trigger to
     # RunsOn, which is how the PR trigger came to bill an EC2 ISO build on
     # every push.
-    runs-on: ${{ inputs.build_runner != 'runs-on'
+    runs-on: ${{ inputs.installed_boot_diagnostic && 'ubuntu-24.04' || inputs.build_runner != 'runs-on'
       && 'ubuntu-latest'
       || format('runs-on={0}/runner=build-amd64', github.run_id) }}
-    timeout-minutes: ${{ inputs.candidate_xfce && 160 || 360 }}
+    timeout-minutes: ${{ inputs.installed_boot_diagnostic && 120 || (inputs.candidate_xfce && 160 || 360) }}
 
     permissions:
       contents: read
@@ -140,6 +170,14 @@ jobs:
       VARIANT: ${{ github.event.inputs.variant || 'skipjack' }}
       FLAVOR: ${{ github.event.inputs.flavor || 'gnome' }}
     steps:
+      - name: Validate diagnostic scope
+        if: inputs.installed_boot_diagnostic
+        env:
+          DIAGNOSTIC_VARIANT: ${{ inputs.variant }}
+          DIAGNOSTIC_FLAVOR: ${{ inputs.flavor }}
+          DIAGNOSTIC_RUNNER: ${{ inputs.build_runner }}
+        run: |
+          [[ "$DIAGNOSTIC_VARIANT" == skipjack && "$DIAGNOSTIC_FLAVOR" == gnome && "$DIAGNOSTIC_RUNNER" == github ]]
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -180,8 +218,18 @@ jobs:
 
       - name: Setup rootless podman (subuid/subgid + userns for runner)
         if: ${{ !inputs.candidate_xfce }}
+        env:
+          DIAGNOSTIC_MODE: ${{ inputs.installed_boot_diagnostic }}
         run: |
           set -euo pipefail
+          # Diagnostic reproduction must use existing access, never repair
+          # host security settings. Validate before any rootless build work.
+          if [[ "${DIAGNOSTIC_MODE:-false}" == true ]]; then
+            grep -q "^${USER}:" /etc/subuid
+            grep -q "^${USER}:" /etc/subgid
+            podman unshare true
+            exit 0
+          fi
           # tacklebox runs 'sudo -u runner podman unshare' for the squashfs;
           # 'podman unshare' only works rootless and needs subuid/subgid
           # entries for the unprivileged user ("please use unshare with
@@ -284,7 +332,7 @@ jobs:
           set -euo pipefail
           flags=()
           [[ "$CANDIDATE_XFCE" == true ]] && flags+=(--candidate-xfce)
-          python3 scripts/plan-iso-qualification.py --target "$VARIANT:$FLAVOR:$REQUESTED_PLATFORM" --max-parallel 1 "${flags[@]}"
+          python3 scripts/plan-iso-qualification.py --build-only --target "$VARIANT:$FLAVOR:$REQUESTED_PLATFORM" --max-parallel 1 "${flags[@]}"
           echo "PLATFORM=$REQUESTED_PLATFORM" >> "$GITHUB_ENV"
 
       - name: Build OS image
@@ -425,13 +473,20 @@ jobs:
   # No green criterion names this job as a gate (tests/test_strict_qualification_wiring.py).
   qualify-native-iso:
     name: Qualify exact native ISO
-    if: github.event_name == 'workflow_dispatch' && ((github.event.inputs.flavor || 'gnome') == 'gnome' || (inputs.candidate_xfce && inputs.variant == 'bonito' && inputs.flavor == 'xfce' && inputs.platform == 'linux/amd64'))
-    needs: build
+    # The other mode's preflight is intentionally skipped. Override implicit
+    # success(), but still require this mode's preflight and exact build.
+    if: >-
+      ${{ !cancelled() && needs.build.result == 'success' &&
+      ((inputs.installed_boot_diagnostic && needs.diagnostic-preflight.result == 'success') ||
+      (!inputs.installed_boot_diagnostic && needs.preflight.result == 'success')) &&
+      github.event_name == 'workflow_dispatch' && ((github.event.inputs.flavor || 'gnome') == 'gnome' || (inputs.candidate_xfce && inputs.variant == 'bonito' && inputs.flavor == 'xfce' && inputs.platform == 'linux/amd64')) }}
+    needs: [build, diagnostic-preflight, preflight]
     permissions:
       contents: read
       actions: read
     uses: ./.github/workflows/iso-e2e.yml
     with:
+      installed_boot_diagnostic: ${{ inputs.installed_boot_diagnostic || false }}
       variant: ${{ github.event.inputs.variant || 'skipjack' }}
       flavors: ${{ github.event.inputs.flavor || 'gnome' }}
       platform: ${{ inputs.platform || 'linux/amd64' }}

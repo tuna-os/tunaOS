@@ -55,7 +55,7 @@ e2e_phase() {{ :; }}
 # run_strict_offline_gui refuses to start without qemu-img (exit 77). No leg
 # here creates a disk, so a stub keeps the test independent of the host: the
 # Unit Tests runner has no qemu-utils.
-qemu-img() {{ :; }}
+qemu-img() {{ echo UNEXPECTED_QEMU_IMG_CALL >&2; return 99; }}
 strict_offline_evidence() {{ :; }}
 strict_require_digest() {{ :; }}
 start_swtpm() {{ :; }}
@@ -72,9 +72,11 @@ echo "initial nvram=$(sha256sum "$OVMF_VARS" | cut -c1-12)"
 {_function("run_strict_offline_gui")}
 run_strict_offline_gui
 """
-    return subprocess.run(
-        ["bash", "-c", harness], check=False, capture_output=True, text=True
+    result = subprocess.run(
+        ["bash", "-c", harness], check=False, capture_output=True, text=True, timeout=10
     )
+    assert "UNEXPECTED_QEMU_IMG_CALL" not in result.stdout + result.stderr
+    return result
 
 
 def _nvram_by_leg(stdout: str) -> dict[str, str]:

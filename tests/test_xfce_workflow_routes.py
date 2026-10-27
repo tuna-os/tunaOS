@@ -85,7 +85,7 @@ def test_candidate_has_no_implicit_trigger_and_preserves_strict_gates():
     call=LIVE['jobs']['qualify-native-iso']['with']
     assert call['source']=='native-artifact' and call['max_parallel']==1
     assert call['candidate_xfce']=='${{ inputs.candidate_xfce || false }}'
-    assert step('Run strict offline GUI qualification')['if']=="steps.filter.outputs.skip != 'true' && (inputs.source == 'native-artifact' || inputs.source == 'iso-builder-artifact')"
+    assert step('Run strict offline GUI qualification')['if']=="${{ !inputs.installed_boot_diagnostic && steps.filter.outputs.skip != 'true' && (inputs.source == 'native-artifact' || inputs.source == 'iso-builder-artifact') }}"
     from tests.test_a_job_budget_covers_its_own_steps import _budgets,_step_total
     job=E2E['jobs']['e2e']
     assert max(_budgets(job['timeout-minutes']))>=_step_total(job['steps'])
@@ -104,14 +104,16 @@ def test_candidate_has_no_implicit_trigger_and_preserves_strict_gates():
     ('pull_request','skipjack','gnome','linux/amd64',False,False),
 ])
 def test_merged_caller_condition_is_bounded(event,variant,flavor,platform,candidate,allowed):
-    # Evaluate only this exact, reviewed boolean expression grammar.
+    from tests.test_iso_diagnostic_consumer_graph import enabled, completed
+    # Preserve the exact route predicate, while modeling the status wrapper and
+    # transitive skipped diagnostic preflight with the bounded graph evaluator.
     expression=LIVE['jobs']['qualify-native-iso']['if']
     expected="github.event_name == 'workflow_dispatch' && ((github.event.inputs.flavor || 'gnome') == 'gnome' || (inputs.candidate_xfce && inputs.variant == 'bonito' && inputs.flavor == 'xfce' && inputs.platform == 'linux/amd64'))"
-    assert expression==expected
-    replacements={'github.event.inputs.flavor':flavor,'github.event_name':event,
-        'inputs.candidate_xfce':candidate,'inputs.variant':variant,'inputs.flavor':flavor,'inputs.platform':platform}
-    for name,value in replacements.items(): expression=expression.replace(name,repr(value))
-    assert bool(eval(expression.replace('&&',' and ').replace('||',' or '),{'__builtins__':{}})) is allowed
+    assert expression.endswith(expected+" }}")
+    values={'github.event.inputs.flavor':flavor,'github.event_name':event,
+        'inputs.installed_boot_diagnostic':False,'inputs.candidate_xfce':candidate,
+        'inputs.variant':variant,'inputs.flavor':flavor,'inputs.platform':platform}
+    assert enabled(LIVE['jobs'],'qualify-native-iso',values,completed('ordinary')) is allowed
 
 
 def test_candidate_summary_reads_candidate_fragments(tmp_path):

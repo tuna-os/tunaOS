@@ -147,12 +147,10 @@ if [[ "${CONTAINERFILE}" == "Containerfile.debian" && "${TUNAOS_IMAGE_FLAVOR}" =
 	BUILD_CONTAINERFILE="${BUILD_CONTEXT}/${CONTAINERFILE}"
 fi
 
-# Build scripts hash for cache invalidation. The generated identity adapter is
-# bind-mounted build context that 90-image-info.sh and the KDE hook source, so
-# its bytes belong in the key: regenerating it changes no *.sh file, and a
-# dirty checkout always reports SHA_HEAD_SHORT=dirty, so without it a
-# cached layer would keep the previous identity.
-build_scripts_hash=$(cd "${BUILD_CONTEXT}" && find build_scripts -type f \( -name '*.sh' -o -path build_scripts/lib/identity.env \) -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -c1-16)
+# Build scripts hash for cache invalidation. Include generated adapters too:
+# Regenerating an adapter changes no *.sh file; without its bytes a cached
+# layer could retain the previous identity or skip new image-wide packages.
+build_scripts_hash=$(cd "${BUILD_CONTEXT}" && find build_scripts -type f \( -name '*.sh' -o -path build_scripts/lib/identity.env -o -path build_scripts/lib/image-packages.tsv \) -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -c1-16)
 if [[ -f "${BUILD_CONTEXT}/desktop-context-receipt.json" ]]; then
 	build_scripts_hash="${build_scripts_hash}-$($YQ -r '.sha256' "${BUILD_CONTEXT}/desktop-context-receipt.json")"
 fi

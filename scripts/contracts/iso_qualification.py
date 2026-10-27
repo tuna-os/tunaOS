@@ -118,6 +118,33 @@ def select(doc, keys, max_parallel=1, candidate_xfce=False):
                 include=[dict(r['target'], backend=r['backend']) for r in selected], result='unrun')
 
 
+def select_build(doc, keys, max_parallel=1, candidate_xfce=False):
+    """Admit native producer inputs without claiming GUI qualification.
+
+    The workflow uses AMD64 and verifies an OSTree offline store. Keep those
+    producer limits while leaving desktop-driver and hardware qualification
+    gaps to select(), which remains the qualification admission boundary.
+    """
+    if candidate_xfce:
+        return select(doc, keys, max_parallel, candidate_xfce=True)
+    if type(max_parallel) is not int or not 1 <= max_parallel <= 2:
+        raise ValueError('max_parallel must be an integer from 1 to 2')
+    if not 1 <= len(keys) <= 4 or len(set(keys)) != len(keys):
+        raise ValueError('select 1 to 4 distinct explicit targets; no all-cell wave')
+    index = {':'.join(r['target'][k] for k in ('variant', 'flavor', 'platform')): r for r in doc['targets']}
+    selected = []
+    for key in keys:
+        row = index.get(key)
+        if (row is None or not row['image_supported'] or row['backend'] != 'ostree'
+                or row['target']['platform'] not in {'linux/amd64', 'linux/amd64/v2'}
+                or (row['target']['platform'].endswith('/v2')
+                    and row['target']['variant'] not in {'yellowfin', 'albacore'})):
+            raise ValueError(f'{key}: target not supported by the native AMD64 OSTree producer')
+        selected.append(row)
+    return dict(manifestDigest=doc['manifestDigest'], max_parallel=max_parallel,
+                include=[dict(r['target'], backend=r['backend']) for r in selected], result='unrun')
+
+
 def validate_session(session, desktop, platform):
     """A DM/greeter alone cannot satisfy a logged-in desktop contract."""
     if desktop not in DESKTOPS or not isinstance(session, dict):

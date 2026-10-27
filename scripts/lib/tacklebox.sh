@@ -13,11 +13,12 @@ tunaos_tacklebox_source_binary() {
 	sha="${sha:-3b4598273efb2f71d17515947e442f0e6b26a6c5}"
 	[[ "$sha" =~ ^[0-9a-f]{40}$ ]] || return 1
 	cache="${TACKLEBOX_CACHE:-/var/cache/tunaos/tacklebox}"
+	mkdir -p "$cache" || return 1
+	cache="$(cd "$cache" && pwd -P)" || return 1
 	bin="${cache}/tacklebox"
 
 	if [[ ! -x "$bin" ]] || [[ "$("$bin" version 2>/dev/null || echo)" != *"$sha"* ]]; then
 		echo "==> Building tacklebox @ ${sha}..." >&2
-		mkdir -p "$cache" || return 1
 		(
 			cd "$cache" || exit 1
 			if [[ ! -d .git ]]; then

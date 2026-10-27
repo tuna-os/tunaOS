@@ -228,15 +228,7 @@ def test_an_input_less_trigger_gets_the_github_default():
     expr = " ".join(str(live_iso_build_job()["runs-on"]).split())
 
     def resolve(build_runner):
-        m = re.search(
-            r"\$\{\{ inputs\.build_runner (!=|==) '([\w-]+)' "
-            r"&& '([^']+)' \|\| (.+?) \}\}$",
-            expr,
-        )
-        assert m, f"unrecognised runs-on expression: {expr!r}"
-        op, operand, true_arm, false_arm = m.groups()
-        hit = (build_runner != operand) if op == "!=" else (build_runner == operand)
-        return true_arm if hit else false_arm.strip()
+        return _resolve_live_runner(expr, build_runner, False)
 
     assert resolve("") == "ubuntu-latest", (
         "an input-less trigger (pull_request, schedule) does not get the "
@@ -244,3 +236,29 @@ def test_an_input_less_trigger_gets_the_github_default():
     )
     assert resolve("github") == "ubuntu-latest", "explicit github must be GitHub-hosted"
     assert "runner=build-amd64" in resolve("runs-on"), "the opt-out must still reach RunsOn"
+
+
+def _resolve_live_runner(expr, build_runner, diagnostic):
+    # Accept only the actual three bounded choices, not arbitrary expressions
+    # or a format() substring which might hide an untrusted runner arm.
+    expr = " ".join(expr.split())
+    m = re.fullmatch(
+        r"\$\{\{ inputs\.installed_boot_diagnostic && '([^']+)' \|\| "
+        r"inputs\.build_runner != 'runs-on' && '([^']+)' \|\| "
+        r"format\('runs-on=\{0\}/runner=build-amd64', github\.run_id\) \}\}", expr)
+    assert m, f"unrecognised runs-on expression: {expr!r}"
+    assert m.groups() == ("ubuntu-24.04", "ubuntu-latest")
+    return m[1] if diagnostic else m[2] if build_runner != "runs-on" else "runner=build-amd64"
+
+
+def test_diagnostic_runner_and_unknown_expressions():
+    import pytest
+    expr = str(live_iso_build_job()["runs-on"])
+    for requested in ("", "github", "runs-on"):
+        assert _resolve_live_runner(expr, requested, True) == "ubuntu-24.04"
+    for broken in (expr.replace("ubuntu-24.04", "self-hosted"),
+                   expr.replace("!=", "=="),
+                   expr.replace("'ubuntu-latest'", "inputs.runner"),
+                   expr.replace("github.run_id", "inputs.runner")):
+        with pytest.raises(AssertionError):
+            _resolve_live_runner(broken, "github", False)

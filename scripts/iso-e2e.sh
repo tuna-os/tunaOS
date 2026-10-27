@@ -485,6 +485,37 @@ E2E_SSH_OPTS=(
 )
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Only the isolated diagnostic supervisor owns QEMU signals through service identities.
+# Ordinary harness invocations keep the builtin kill behavior.
+if [[ "${TUNAOS_INSTALLED_BOOT_DIAGNOSTIC:-0}" == 1 ]]; then
+	[[ -n "${TUNAOS_DIAGNOSTIC_SOCKET:-}" ]] || exit 77
+	kill() {
+		local number=15 pid="" status
+		case "$#:$1" in
+		1:*) pid="$1" ;;
+		2:-0)
+			number=0
+			pid="$2"
+			;;
+		2:-TERM)
+			number=15
+			pid="$2"
+			;;
+		2:-KILL)
+			number=9
+			pid="$2"
+			;;
+		esac
+		if [[ "$pid" =~ ^[1-9][0-9]*$ ]]; then
+			status=0
+			python3 "${SCRIPT_DIR}/diagnose-installed-luks.py" signal "$number" "$pid" || status=$?
+			[[ "$status" == 64 ]] || return "$status"
+		fi
+		builtin kill "$@"
+	}
+fi
+
 # shellcheck source=lib/common.sh
 . "${SCRIPT_DIR}/lib/common.sh"
 # shellcheck source=lib/pixel-gate.sh
@@ -939,6 +970,7 @@ use_tcp_transport
 # of them just leaves VSOCK_ARGS empty: the QEMU command line is unchanged
 # and the harness behaves exactly as before the fallback existed.
 setup_vsock() {
+	[[ "${TUNAOS_INSTALLED_BOOT_DIAGNOSTIC:-0}" != 1 ]] || return 0
 	if [[ "${TUNAOS_XFCE_CANDIDATE:-0}" == 1 ]]; then
 		VSOCK_ARGS=()
 		return 0
@@ -4448,6 +4480,11 @@ run_strict_offline_gui() {
 	done
 	if [[ "$rc" -ne 0 ]]; then
 		echo "ERROR: strict offline GUI qualification failed (see ${OUTPUT_DIR})" >&2
+		return "$rc"
+	fi
+	# Explicit supervised reproduction never emits full native qualification.
+	if [[ "${TUNAOS_INSTALLED_BOOT_DIAGNOSTIC:-0}" == 1 ]]; then
+		[[ "$STRICT_OFFLINE_GUI_MODES" == luks ]] || return 2
 		return "$rc"
 	fi
 	[[ "sha256:$(sha256sum "$ISO_PATH" | awk '{print $1}')" == "$STRICT_MEDIA_DIGEST" ]] || {

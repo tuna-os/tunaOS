@@ -80,8 +80,6 @@ def supervised(command, *, env, cwd, check=False, seconds=HARNESS_SECONDS, grace
     if direct_children():
         raise ValueError('candidate supervisor requires exclusive child ownership')
     libc=ctypes.CDLL(None,use_errno=True)
-    if libc.prctl(36,1,0,0,0)!=0:  # PR_SET_CHILD_SUBREAPER
-        raise OSError('candidate requires Linux child subreaper')
     process=None
     reader=None
     log_errors=[]
@@ -106,41 +104,61 @@ def supervised(command, *, env, cwd, check=False, seconds=HARNESS_SECONDS, grace
                 if len(chunk)>remaining:truncated=True
                 remaining=max(0,remaining-len(chunk))
             if truncated:output.write(b'\n[candidate harness log truncated at byte limit]\n')
+    cancelled=False
+    def cancel(signum, frame):
+        # Defer cancellation until Popen has assigned ownership. Repeated TERM
+        # during cleanup must not interrupt reaping or bypass its deadlines.
+        nonlocal cancelled
+        cancelled=True
+
+    previous_term=signal.signal(signal.SIGTERM,cancel)
     try:
+        if libc.prctl(36,1,0,0,0)!=0:  # PR_SET_CHILD_SUBREAPER
+            raise OSError('candidate requires Linux child subreaper')
         process=subprocess.Popen(command,env=env,cwd=cwd,start_new_session=True,
                                  stdout=subprocess.PIPE if log_path else subprocess.DEVNULL,stderr=subprocess.STDOUT)
         if log_path:
             reader=threading.Thread(target=drain,args=(process.stdout,),daemon=True)
             reader.start()
-        try:
-            code=process.wait(timeout=seconds)
-        except subprocess.TimeoutExpired:
-            pass
-    finally:
-        if process is not None:
-            try: os.killpg(process.pid,signal.SIGTERM)
-            except ProcessLookupError: pass
-            # Allow the shell's EXIT trap to flush and reap its owned VM.
-            try: process.wait(timeout=grace)
+        deadline=time.monotonic()+seconds
+        while not cancelled:
+            remaining=deadline-time.monotonic()
+            if remaining<=0:break
+            try:
+                code=process.wait(timeout=min(.1,remaining))
+                break
             except subprocess.TimeoutExpired:
-                os.killpg(process.pid,signal.SIGKILL)
-                process.wait(timeout=grace)
-        # setsid/double-fork daemons get adopted here; reap each generation.
-        deadline=time.monotonic()+grace
-        while direct_children():
-            for child in direct_children():
-                try: os.kill(int(child),signal.SIGKILL)
+                pass
+    finally:
+        try:
+            if process is not None:
+                try: os.killpg(process.pid,signal.SIGTERM)
                 except ProcessLookupError: pass
-            while True:
-                try: pid,_=os.waitpid(-1,os.WNOHANG)
-                except ChildProcessError: break
-                if pid==0: break
-            if time.monotonic()>=deadline:
-                raise ValueError('candidate child cleanup exceeded deadline')
-            time.sleep(.01)
-        if reader is not None:
-            reader.join(timeout=grace)
-            if reader.is_alive():raise ValueError('candidate log drain exceeded deadline')
-            if log_errors:raise ValueError('candidate private log retention failed')
-        libc.prctl(36,0,0,0,0)
+                # Allow the shell's EXIT trap to flush and reap its owned VM.
+                try: process.wait(timeout=grace)
+                except subprocess.TimeoutExpired:
+                    try: os.killpg(process.pid,signal.SIGKILL)
+                    except ProcessLookupError: pass
+                    process.wait(timeout=grace)
+            # setsid/double-fork daemons get adopted here; reap each generation.
+            deadline=time.monotonic()+grace
+            while direct_children():
+                for child in direct_children():
+                    try: os.kill(int(child),signal.SIGKILL)
+                    except ProcessLookupError: pass
+                while True:
+                    try: pid,_=os.waitpid(-1,os.WNOHANG)
+                    except ChildProcessError: break
+                    if pid==0: break
+                if time.monotonic()>=deadline:
+                    raise ValueError('candidate child cleanup exceeded deadline')
+                time.sleep(.01)
+            if reader is not None:
+                reader.join(timeout=grace)
+                if reader.is_alive():raise ValueError('candidate log drain exceeded deadline')
+                if log_errors:raise ValueError('candidate private log retention failed')
+        finally:
+            libc.prctl(36,0,0,0,0)
+            signal.signal(signal.SIGTERM,previous_term)
+    if cancelled:code=128+signal.SIGTERM
     return subprocess.CompletedProcess(command,code)

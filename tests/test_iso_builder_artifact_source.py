@@ -175,7 +175,7 @@ def test_strict_policy_steps_are_unchanged_by_the_new_source():
 def test_the_per_leg_verdict_reporter_runs_for_the_source_even_after_a_failed_leg():
     verdict = step("Report strict leg verdicts")
     cond = norm(verdict["if"])
-    assert cond.startswith("always()") and "inputs.source == 'iso-builder-artifact'" in cond
+    assert cond.removeprefix("${{ ").startswith("always()") and "inputs.source == 'iso-builder-artifact'" in cond
     assert "summarize-strict-legs.py iso-e2e-out" in verdict["run"]
     # A failed leg still fails the job.
     assert "steps.strict.outputs.rc || steps.e2e.outputs.rc" in norm(step("Fail on e2e error")["if"])
@@ -198,7 +198,7 @@ def test_outputs_are_labelled_and_the_evidence_file_cannot_be_read_as_a_qualific
 def test_the_job_budget_covers_downloads_verification_and_the_strict_step():
     timeout = norm(WORKFLOWS_JOB()["timeout-minutes"])
     assert "inputs.source == 'iso-builder-artifact' && 160" in timeout
-    assert timeout.endswith("&& 90 || 30)) }}")  # the default path keeps its budget
+    assert timeout.endswith("&& 90 || 30))) }}")  # the default path keeps its budget
     budget = sum(step(p)["timeout-minutes"] for p in (
         "Download iso-builder ISO chunks", "Download iso-builder browser evidence",
         "Verify and reassemble", "Run strict offline GUI qualification"))
@@ -226,7 +226,7 @@ def derive(tmp_path, iso, measurements, manifest, **over):
     (tmp_path / "m.json").write_text(json.dumps(measurements))
     (tmp_path / "manifest.json").write_text(json.dumps(manifest))
     args = {
-        "run-id": RUN_ID, "artifact": f"iso-skipjack-gnome-run{RUN_ID}-a1",
+        "run-id": RUN_ID, "attempt": "1", "artifact": f"iso-skipjack-gnome-run{RUN_ID}-a1",
         "evidence-artifact": f"browser-evidence-skipjack-gnome-run{RUN_ID}-a1",
         "producer-sha": PRODUCER_SHA, "expected-sha256": EXPECTED, "installer-digest": INSTALLER,
         "variant": "skipjack", "flavor": "gnome", "platform": "linux/amd64",
@@ -391,7 +391,7 @@ def valid_jobs(guest_conclusion="failure"):
     conclusion = "failure" if guest_conclusion == "failure" else "success"
     target = {"name": "full-matrix (skipjack:gnome, skipjack-gnome, CentOS Stream 10, linux/amd64, true)",
               "status": "completed", "conclusion": conclusion, "steps": steps}
-    return {"jobs": [
+    return {"total_count": 4, "jobs": [
         {"name": "wasm", "status": "completed", "conclusion": "success"},
         {"name": "full-plan", "status": "completed", "conclusion": "success"},
         target,
@@ -406,7 +406,7 @@ def verify_metadata(tmp_path, run=None, artifacts=None, jobs=None):
                   "head_repository": {"id": 1, "full_name": "tuna-os/iso-builder"},
                   "path": ".github/workflows/ci.yml", "head_sha": PRODUCER_SHA, "run_attempt": 1,
                   "status": "completed", "conclusion": "failure"}
-    artifacts = artifacts or {"artifacts": [
+    artifacts = artifacts or {"total_count": 2, "artifacts": [
         {"id": 10, "name": names[0], "digest": "sha256:" + "a" * 64, "expired": False,
          "workflow_run": {"id": int(RUN_ID), "repository_id": 1, "head_repository_id": 1, "head_sha": PRODUCER_SHA}},
         {"id": 11, "name": names[1], "digest": "sha256:" + "b" * 64, "expired": False,
@@ -491,7 +491,7 @@ def test_wrong_producer_run_metadata_fails_before_artifact_use(tmp_path, field, 
     ("workflow_run_id", 99), ("repository_id", 99), ("head_repository_id", 99),
 ])
 def test_wrong_artifact_metadata_fails_before_artifact_use(tmp_path, field, value):
-    artifacts = {"artifacts": [
+    artifacts = {"total_count": 2, "artifacts": [
         {"id": 10, "name": f"iso-skipjack-gnome-run{RUN_ID}-a1", "digest": "sha256:" + "a" * 64,
          "expired": False, "workflow_run": {"id": int(RUN_ID), "repository_id": 1, "head_repository_id": 1, "head_sha": PRODUCER_SHA}},
         {"id": 11, "name": f"browser-evidence-skipjack-gnome-run{RUN_ID}-a1", "digest": "sha256:" + "b" * 64,
@@ -515,3 +515,80 @@ def test_operator_installer_expectation_never_satisfies_frontend_identity(case):
     assert "TUNAOS_QUAL_INSTALLER_DIGEST" not in env
     assert label["installer"]["value"] is None
     assert label["installerExpectation"]["value"] == INSTALLER
+
+
+@pytest.mark.parametrize('attempt', [None, '', '999', 1, True, '01'])
+def test_manifest_attempt_must_match_selected_attempt(case, attempt):
+    tmp_path, iso, measurements, manifest = case
+    manifest['producer']['runAttempt'] = attempt
+    result = derive(tmp_path, iso, measurements, manifest)
+    assert result.returncode != 0
+    assert not (tmp_path / 'env').exists()
+    assert not (tmp_path / 'label.json').exists()
+
+
+@pytest.mark.parametrize('total', [None, True, '4', 3, 101])
+def test_incomplete_job_listing_fails_before_artifact_outputs(tmp_path, total):
+    jobs = valid_jobs()
+    jobs['total_count'] = total
+    result = verify_metadata(tmp_path, jobs=jobs)
+    assert result.returncode != 0
+    assert not (tmp_path / 'verified.json').exists()
+    assert not (tmp_path / 'output').exists()
+
+
+@pytest.mark.parametrize('has_receipt', [False, True])
+def test_diagnostic_finalization_runs_after_early_failure_or_written_receipt(tmp_path, has_receipt):
+    output = tmp_path / 'iso-e2e-out'
+    receipt = '{"qualification":"qualified"}\n'
+    if has_receipt:
+        output.mkdir()
+        (output / 'qualification-evidence.json').write_text(receipt)
+    result = subprocess.run(['bash', '-eu', '-c', step('Label outputs diagnostic-unqualified')['run']],
+                            cwd=tmp_path, text=True, capture_output=True, timeout=5)
+    assert result.returncode == 0, result.stderr
+    assert (output / 'DIAGNOSTIC-UNQUALIFIED.txt').is_file()
+    assert not (output / 'qualification-evidence.json').exists()
+    if has_receipt:
+        assert (output / 'diagnostic-unqualified-evidence.json').read_text() == receipt
+
+
+@pytest.mark.parametrize('total', [None, True, '2', 1, 101])
+def test_incomplete_artifact_listing_fails_before_outputs(tmp_path, total):
+    assert verify_metadata(tmp_path).returncode == 0
+    artifacts = json.loads((tmp_path / 'artifacts.json').read_text())
+    artifacts['total_count'] = total
+    for name in ('verified.json', 'output'):
+        (tmp_path / name).unlink()
+    result = verify_metadata(tmp_path, artifacts=artifacts)
+    assert result.returncode != 0
+    assert 'artifact list is incomplete' in result.stderr
+    assert not (tmp_path / 'verified.json').exists()
+    assert not (tmp_path / 'output').exists()
+
+
+@pytest.mark.parametrize('diagnostic', [False, True])
+@pytest.mark.parametrize('prefix', ['Check iso-builder run', 'Download iso-builder ISO chunks',
+                                    'Download iso-builder browser evidence', 'Verify and reassemble',
+                                    'Run strict offline GUI qualification'])
+def test_browser_steps_exclude_installed_boot_diagnostic(prefix, diagnostic):
+    from tests.test_iso_diagnostic_consumer_graph import enabled
+    context = {'inputs.source': SOURCE, 'inputs.installed_boot_diagnostic': diagnostic,
+               'steps.filter.outputs.skip': 'false'}
+    assert enabled({'subject': step(prefix)}, 'subject', context, {}) is (not diagnostic)
+
+
+@pytest.mark.parametrize('prior_result', ['success', 'failure', 'skipped'])
+@pytest.mark.parametrize('cancelled', [False, True])
+def test_diagnostic_label_is_enabled_after_any_prior_step_result(prior_result, cancelled):
+    from tests.test_iso_diagnostic_consumer_graph import enabled
+    graph = {'prior': {}, 'subject': dict(step('Label outputs diagnostic-unqualified'), needs=['prior'])}
+    context = {'inputs.source': SOURCE, 'steps.filter.outputs.skip': 'false'}
+    assert enabled(graph, 'subject', context, {'prior': prior_result}, cancelled=cancelled)
+
+
+def test_selected_attempt_reaches_derivation_from_workflow():
+    selected = step('Verify and reassemble')
+    assert selected['env']['ATTEMPT'] == '${{ inputs.iso_builder_attempt }}'
+    derive_command = selected['run'].split('iso-builder-artifact-inputs.py derive', 1)[1]
+    assert '--attempt "$ATTEMPT"' in derive_command

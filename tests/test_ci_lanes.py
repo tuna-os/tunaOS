@@ -52,17 +52,26 @@ def test_every_green_gate_has_independent_trusted_revalidation() -> None:
     assert not violations, "\n".join(violations)
 
 
+def _pr_run_code(document):
+    # Only an exact necessary event equality proves a job cannot run on PRs.
+    # Unknown guards remain in the scan; no workflow-name exemptions.
+    from tests.test_a_job_budget_covers_its_own_steps import _selector_constraints
+    return "\n".join(
+        str(step.get("run", ""))
+        for job in (document.get("jobs") or {}).values()
+        if _selector_constraints((job or {}).get("if")).get("github.event_name")
+        not in {"workflow_dispatch", "schedule", "push"}
+        for step in (job or {}).get("steps", [])
+    )
+
+
 def test_pr_kvm_checks_have_a_hosted_fallback() -> None:
     """A PR job may use KVM, but lack of KVM cannot strand fork feedback."""
     violations = []
     for name, document in WORKFLOWS.items():
         if "PR-deterministic" not in generator.workflow_lanes(name, WORKFLOWS):
             continue
-        run_code = "\n".join(
-            str(step.get("run", ""))
-            for job in (document.get("jobs") or {}).values()
-            for step in (job or {}).get("steps", [])
-        )
+        run_code = _pr_run_code(document)
         if "/dev/kvm" in run_code and "--no-kvm" not in run_code:
             violations.append(f"{name} touches /dev/kvm without a TCG fallback")
     assert not violations, "\n".join(violations)
@@ -105,3 +114,15 @@ def test_pr_lane_remains_fork_safe() -> None:
             for job in (document.get("jobs") or {}).values()
         )
     assert not problems, "\n".join(problems)
+
+
+def test_only_proven_non_pr_guards_exclude_kvm_from_pr_scan():
+    for guard, excluded in [
+        ("github.event_name == 'workflow_dispatch' && inputs.diagnostic", True),
+        ("inputs.diagnostic", False),
+        ("github.event_name == 'workflow_dispatch' || always()", False),
+        ("github.event_name != 'pull_request'", False),
+        (None, False),
+    ]:
+        doc = {"jobs": {"probe": {"if": guard, "steps": [{"run": "test -r /dev/kvm"}]}}}
+        assert ("/dev/kvm" not in _pr_run_code(doc)) == excluded

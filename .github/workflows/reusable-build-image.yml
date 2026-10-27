@@ -201,11 +201,41 @@ jobs:
         uses: ./.github/actions/prepare-config
 
       - name: Setup runner
-        uses: projectbluefin/actions/bootc-build/setup-runner@d18642a8b4b325c2551eabd9a65c1ad12b4ebb30 # v1 as of 2026-07-02
+        uses: projectbluefin/actions/bootc-build/setup-runner@209517dda44829f126e25da28f11245c34458ac3 # v1 as of 2026-07-02
         with:
           storage-backend: btrfs
-          update-podman: "true"
+          update-podman: "false"
           install-tools: '[]'
+
+      - name: Select runner apt cache
+        id: runner_apt_cache
+        run: |
+          . /usr/lib/os-release
+          if [[ "${ID}-${VERSION_ID}" == "ubuntu-24.04" ]]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "week=$(date +%Y-W%V)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Restore runner apt cache
+        if: steps.runner_apt_cache.outputs.enabled == 'true'
+        id: runner_apt_restore
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: /var/cache/apt/archives
+          key: apt-resolute-podman-${{ runner.os }}-${{ runner.arch }}-${{ steps.runner_apt_cache.outputs.week }}
+          restore-keys: |
+            apt-resolute-podman-${{ runner.os }}-${{ runner.arch }}-
+
+      # #3812: bound acquisition separately from the dpkg transaction.
+      - name: Upgrade runner podman stack
+        run: sudo python3 scripts/setup-runner-podman.py
+
+      - name: Save runner apt cache
+        if: steps.runner_apt_cache.outputs.enabled == 'true' && steps.runner_apt_restore.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: /var/cache/apt/archives
+          key: ${{ steps.runner_apt_restore.outputs.cache-primary-key }}
 
       - name: Install just and yq
         run: |
@@ -398,7 +428,7 @@ jobs:
             sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm || true
-          sudo apt-get install -y qemu-system-x86 qemu-utils ovmf ffmpeg
+          sudo python3 scripts/setup-kvm-tools.py
 
       - name: Set up Go for corral (PR gate)
         if: github.event_name == 'pull_request' && contains(matrix.platform, 'amd64')
@@ -963,7 +993,7 @@ jobs:
     needs:
       - build_push
     container:
-      image: cgr.dev/chainguard/wolfi-base@sha256:8e250f5e2803785bba2f4cbc3ce71e85679bd489cab1b3768cb2f8f0e7ecd1c2  # :latest linux/amd64 as of 2026-06-13
+      image: cgr.dev/chainguard/wolfi-base@sha256:1460aa3f8ef8e968f128eb304437d04469ef85d30ceb77dabc12cc731a1566d5  # :latest linux/amd64 as of 2026-06-13
       # This job only performs registry/API operations (podman login and
       # manifest create/add/annotate/push). It does not run or build a
       # container or mount a host filesystem -- but podman itself needs

@@ -12,6 +12,7 @@ that touched 36 files across `.github/`, `build_scripts/`, `live-iso/`,
 
 | Symptom | Measured cause | Fix |
 |---|---|---|
+| Runner setup spends 31–33 minutes downloading podman/buildah, then reports `Remote end closed connection` ([#3812](https://github.com/tuna-os/tunaOS/issues/3812)) | #3983 jobs 121768105381 and 121768378530 transferred resolute packages at about 15 kB/s through the pinned setup-runner action’s AMD64 Azure HTTP endpoint. Metadata was fast and other retries passed; this was a transfer failure. This action caller is separate from #3812’s older KVM-tool caller. | `setup-runner-podman.py` retains the four resolute selectors and existing trust keys, uses official Ubuntu HTTPS archive/ports endpoints, bounds acquisition to 600 seconds and three download attempts, verifies cached SHA256 hashes, then installs with downloads disabled. Storage remains in the pinned action. KVM, boot and evidence checks are unchanged. |
 | `qualify-image-packages.py` fails `base source <name>:<tag>@sha256:…: command failed (1)` on every route | `skopeo inspect docker://name:tag@digest` exits 1 with `Docker references with both a tag and digest are currently not supported`. Five of the six `tunaos.toml` base images are pinned that way, and the harness fixtures used a fake `skopeo` that accepted it. | `verify_base_source` inspects `name@digest`. The build and `image-info.json` keep the full `name:tag@digest` string. |
 | ARM64 build passes but Snapdragon laptop support is unclear (#3116) | #3368 records postmarketOS observations and open TunaOS boot/install/update/rollback gates; an architecture manifest does not test board firmware or DTB selection. | Use [SNAPDRAGON.md](SNAPDRAGON.md) and report the exact device, image digest and hardware results. |
 | Bonito build succeeds despite bootc lint findings (#3001) | `99-cleanup.sh` calls `lint_image`; `lib.sh` returns success after findings unless `BOOTC_LINT_FATAL=1`. | Read the grouped output and step summary. Re-run lint against the candidate digest; apply the [Fedora readiness review](FEDORA-OUTREACH-READINESS.md) before outreach. |
@@ -2598,6 +2599,32 @@ The native producer also checks the overlay receipt before ISO customization.
 It rejects malformed digests and references that name a different target.
 These checks do not supply qualification evidence.
 
+### Installed diagnostic stops at the descriptor scan
+
+Run `40265940225` stopped with `open_descriptor_scan_denied` after the install
+and owned-service stop guards. It did not collect initramfs metadata.
+The report now records one denial with a stage (`proc_stat`, `fd_enumeration`,
+or `fd_stat`), numeric PID, optional FD, errno, prior UID and scan counts.
+`same_uid_observed` describes an earlier UID check, not proof of service ownership.
+The report omits commands, environments, executable paths, FD targets and raw errors.
+
+The scan still refuses before the disk hash and guestfs launch. It does not
+inspect another user's FDs or qualify the installed system.
+
+ACL recovery uses descriptors for the original objects. It rejects symlink
+ancestors, hardlinked files and changed object identities. The helper runs under
+sudo so libacl can use those descriptors. The privileged CLI accepts only the
+current kernel file or module root.
+
+The JSON file holds ACLs as numbers, plus the identities of ancestors. Creation is
+exclusive, with access for its owner only. Default ACLs stay
+unchanged. Keep that file after any failed grant or restore. Restore the original
+paths and retry cleanup; do not remove recovery state to make preparation pass.
+
+For old text snapshots, use the old helper, not the JSON reader.
+Tests use temporary files and inert proc fixtures only. They do not prove
+host cleanup, proc visibility or successful initramfs collection.
+
 
 ### XFCE candidate fails credential, publication or capture tests
 
@@ -2665,3 +2692,197 @@ Candidates now skip that setup. Both producer calls explicitly select root
 context after sudo; ordinary modes keep their existing setup and context.
 Tests inject a contradictory user context and remove each override to verify the
 boundary. No host settings changed during those inert checks.
+
+### Diagnostic branch conflicts with the XFCE candidate base
+
+The merge of base `40ae2f46` into diagnostic head `809ca56d` conflicts in six files.
+Both modes now keep their own exclusions for host setup, credentials and evidence.
+The preflight for candidates skips the diagnostic, so its total job budget stays
+at 248 minutes. The matrix rejects a request for both modes.
+
+The base planner rejects the old `linux/amd64/v2` diagnostic target.
+The diagnostic now uses configured Skipjack/GNOME `linux/amd64`, with its
+`x86-64-v3` baseline. The strict and provenance fixtures from the new base stay intact.
+The unlock helper takes the passphrase on stdin. Diagnostic mode keeps serial
+output suppressed; ordinary output uses the base redactor. These source and
+fixture checks supply no runtime or qualification evidence.
+
+### Diagnostic rootless tests fail after the candidate merge
+
+Run `40379281186`, job `121771836181`, failed four cases at the assertion that
+rootless setup has no step condition. The XFCE candidate must skip that step.
+The tests now evaluate its condition for each mode. Command stubs check that
+the diagnostic validates existing access, ordinary setup retains its behavior,
+and mixed modes fail before host work. The workflow and permission checks stay
+unchanged. These fixtures do not execute host setup.
+### ISO follow-up: platform, cache, cancellation and payload identity
+
+| Symptom | Cause | Fix and regression evidence |
+|---|---|---|
+| An ARM64 ISO request on an x86 host records ARM64 after pulling an AMD64 source | The adapter selected the source from the host and validated the caller's platform only after the build | Reject unsupported or incompatible platforms before image work. Use the accepted platform for both the pull and manifest measurement. `tests/test_tacklebox_native_inputs.py` covers both native architectures and AMD64 v2. |
+| A source build with a relative `TACKLEBOX_CACHE` fails at `mktemp` on a cache miss | After changing into the cache, the temporary binary path repeated the relative prefix | Resolve the cache to an absolute path before use. The local Git fixture with an inert compiler in `tests/test_tacklebox_native_inputs.py` checks a cache miss, reuse and revision rejection. A separate fixture replaces the shared cache and verifies that the private executable snapshot retains the measured hash. |
+| Sending SIGTERM to an XFCE candidate runner leaves its harness or daemon alive | Default SIGTERM handling exits Python without the supervisor's `finally` cleanup | Defer cancellation to the supervisor, then apply the bounded child cleanup and return 143. Owned-process fixtures in `tests/test_xfce_launch_readiness.py` cover SIGTERM, timeout and an unrelated process that must survive. |
+| A source override replaces the canonical offline payload destination | The destination called `tunaos_image_ref` with source overrides enabled | Pass the existing helper's `0` flag for the destination. `tests/test_installer_source_binding.py` executes the assignments and recipe writer with separate source, tracking and exact payload refs. Explicit payload pins retain their existing validation. |
+
+The payload correction follows the separate reference design in the related
+owner work, [PR #3427](https://github.com/tuna-os/tunaOS/pull/3427), inspected at
+`f7adc3aa3ebcfad0d113aa651232e1890918be2a`. This follow-up preserves that
+design. These tests check the scripts locally. They do not qualify an image,
+guest boot or production cutover.
+
+### ISO source review: build admission and test interfaces (#3431)
+
+Local regression tests reproduced these failures on `bb878744`.
+The tests use temporary files, protocol bytes and owned sockets. They do not
+prove a fresh install or authorize a diagnostic run.
+
+| Symptom | Cause | Fix and regression evidence |
+|---|---|---|
+| A configured KDE native build stops before image work | Build preflight required a strict GUI qualification driver | Use build admission for the producer. Keep strict qualification admission separate. `tests/test_native_build_admission.py` executes the workflow preflight for ordinary desktops and checks the candidate, architecture and backend limits. |
+| A fork's exact payload fails with `invalid native target reference` | Recipe binding accepted only the stock registry and namespace | Accept registry references with ports and nested namespaces. Keep exact target, payload and digest equality. `tests/test_installer_source_binding.py` runs the publication resolver through the customization binding. |
+| A diagnostic APT lock change runs no Test workflow | The PR path filter omitted the lock read by the tests | Include `requirements-iso-diagnostic-apt.txt`. `tests/test_the_test_filter_covers_what_the_tests_read.py` checks this input. |
+| An XFCE click raises `TypeError` before input reaches the guest | Callers omitted the width and height required by the pointer function | Pass the captured frame dimensions. `tests/test_xfce_real_transport.py` uses the real pointer function with inert RFB bytes and rejects a server geometry mismatch before any click. |
+| A visual observer fails to decode after several transfer chunks | The next chunk's letters extended an unquoted shell variable name | Quote the previous variable value. `tests/test_xfce_real_transport.py` sends the actual observer envelope through shell assignments and checks the exact bytes. |
+| A GRUB helper edits a command other than `linux` | Ordered substring checks accepted extra commands before fixed cursor movement | Require the exact three-line preamble. `tests/test_luks_first_boot.py` checks refusal before cursor movement or argument input. Strict qualification still forbids boot edits. |
+| The manual LUKS fixture exits before it reads its socket | Its caller still passed the secret as an argument | Send the fixture secret through stdin. `tests/test_luks_first_boot.py` runs the shell invocation and real helper against an owned socket, without a boot wait. |
+
+### Gentoo desktop fails branding with unrendered identity tokens (#3980)
+
+**Symptom:** the package proof for modified GNOME stops after install with
+`unrendered @TUNAOS_*@ identity token` and `TUNAOS_BRANDING_FAIL`.
+Both base proofs pass, with stock and modified configurations (run `40251865603`, `861a871f`).
+
+**Cause:** `desktop-build` ran `90-image-info.sh` before the two asset copies.
+Absent files receive no tokens from the renderer. The copies then left tokens
+in seven paths: Plasma and wallpaper metadata, the live-ready unit, both Count
+Me units and the installer recipe. A later copy can restore those tokens too.
+
+**Fix:** copy the assets before the identity writer and `verify-branding.sh`.
+Render all seven paths. Run the writer again after the final copy.
+The #3980 regression fixture runs the full writer and verifier with redirected
+paths for stock and fork TOML, including empty metrics settings.
+It checks each late-copy failure and `install-countme.sh`, which must preserve
+`/etc` opt-outs. Keep `verify-branding.sh` enabled.
+
+These source tests do not
+qualify an image. After source delivery, repeat acceptance for fresh Gentoo
+images and packages (#3802).
+
+### Native backend candidate selected from a bootloader heuristic
+
+**Symptom:** A proposed v1.17.1 image is called native because it contains
+systemd-boot or enables composefs in OSTree's `prepare-root.conf`.
+
+**Cause:** v1.17.1 `crates/lib/src/bootc_composefs/image.rs` selects the native
+default from `usr/lib/composefs/setup-root-conf.toml` only when OSTree configuration is absent
+from both the vendor directory and `/etc`. The existing TunaOS probes
+use older bootloader/config heuristics; those do not prove this contract.
+
+**Next step:** Use the read-only [candidate contract](BOOTC-CANDIDATE.md) to expose
+conflicts. Its inert tests cover all eight marker combinations and always refuse
+runtime admission. Update the layout, dracut and installer consumers together
+before a runtime trial. One marker change is not a complete fix.
+
+### Root descriptor fallback can outlive its budget or lose refusal evidence
+
+Source review of `2d075cb6` found a new scan budget after startup and result
+truncation before identity checks. The follow-up uses the original absolute
+deadline, held objects and numeric refusal evidence. Tests use temporary trees. They cover
+replacement, cleanup failure and refusal before hash or guestfs. The token
+stays private for recovery. No live proc scan or root service ran in these tests.
+
+### Green diagnostic build has no consumer result
+
+Run `40392612254` built artifact `12685383470` but skipped the diagnostic
+consumer. Its input-only condition implied `success()` across a preflight ancestor
+that skipped as intended. The consumer now checks cancellation, build success
+and the selected preflight explicitly. The run remains **not-run** for the
+diagnostic; it supplied no evidence of a root scan or collected metadata.
+
+### KVM tools cannot download after the image build (#3812)
+
+**Symptom:** #3431 job 121823081846 built grouper, then `Enable KVM` failed
+with APT exit 100. QEMU, OVMF and dependencies could not connect to
+`azure.archive.ubuntu.com:80`. Boot verification did not run. This failure
+provides no evidence about GDM or the guest image.
+
+**Cause:** The PR verification step used a separate, unbounded APT install
+through the default source on the runner. The earlier Podman setup in #3998
+does not own this later acquisition.
+
+**Fix:** `setup-kvm-tools.py` keeps `qemu-system-x86 qemu-utils ovmf ffmpeg`.
+It replaces exact Azure/archive URI tokens with the official HTTPS archive
+in temporary source files. It preserves suites, components and trust settings.
+It uses #3998’s APT primitives: a 600-second budget, up to three tries
+for downloads, SHA256 checks, and installation with downloads disabled.
+The helper verifies versions after installation and cleans its restart override.
+
+It does not change KVM rules, boot gates, or evidence collection.
+SIGKILL and the outer job timeout remain outside its cleanup guarantees.
+
+### Runner mirror-list indirection still selects Azure (#3812)
+
+**Symptom:** At #3999 head `ac0c2bbc`, run 40404587905 jobs 121861626115
+and 121861640934 reached the 600-second acquisition limit before installation.
+Logs showed `file:/etc/apt/apt-mirrors.txt Mirrorlist` and Azure HTTP requests.
+
+**Cause:** The [runner image configuration](https://github.com/actions/runner-images/blob/main/images/ubuntu/scripts/build/configure-apt-sources.sh)
+uses `mirror+file:/etc/apt/apt-mirrors.txt` in Ubuntu sources. Azure has first priority in that list. A direct-URL replacement does not affect this indirection.
+[APT’s mirror transport](https://manpages.ubuntu.com/manpages/jammy/man1/apt-transport-mirror.1.html)
+selects the endpoint from that list, so the private source still reached Azure.
+
+**Fix:** The KVM helper recognizes only that URI for the local mirror list.
+It validates the file against the runner’s official Ubuntu endpoints and optional
+priorities, then uses the HTTPS archive in private sources.
+Unknown mirror forms, unknown entries, unsupported metadata, and missing, empty,
+symlinked or oversized lists fail before APT. The helper preserves suites,
+components, Signed-By, comments and unrelated direct sources. Host files remain
+unchanged. The 600-second limit still applies; no trust override is necessary.
+
+The Albacore job on the same head installed its tools, then reached the
+separate GDM/Mutter 49.4 crash in #3969. That crash is not a mirror parser failure.
+
+### Runner package acquisition limits (#3812)
+
+The helper uses [Ubuntu’s documented archive](https://ubuntu.com/server/docs/how-to/software/package-management/)
+and the [official ports archive](https://ports.ubuntu.com/ubuntu-ports/) over HTTPS.
+It adds `resolute universe main` to a temporary copy of the source directory.
+Host source files and trust keys stay intact. Temporary metadata lists prevent
+use of stale indexes after a signature failure. Existing sources supply dependencies
+under their existing trust policy.
+
+The budget is 600 seconds for metadata, resolution and downloads.
+Each of three download tries gets at most 200 seconds from that budget.
+APT can retry each request twice, with a 30-second socket timeout.
+There is no mirror fallback or suite change. After installation, the helper verifies each version in the transaction. All four packages must be installed, with Podman 5 or newer.
+
+Ubuntu 26.04 only checks Podman, as the pinned action does.
+For each cached package, the helper verifies its authenticated SHA256 value.
+It removes corrupt entries and downloads them again. The workflow keeps the
+original keys for the weekly cache, separated by architecture, and pinned restore/save actions.
+The cache contains only package archives. Each run authenticates fresh metadata.
+
+Installation has no helper timeout and no downloads.
+The helper defers SIGINT/SIGTERM until dpkg and needrestart cleanup finish.
+It cannot defer SIGKILL or the outer job timeout. Logs show separate durations
+for acquisition and installation, on success or failure.
+
+### Browser diagnostic input checks (#3972)
+
+**Symptom:** A fixture accepted `runAttempt=999` when the input selected `1`.
+**Cause:** Derivation did not compare `runAttempt`.
+**Fix:** Pass `iso_builder_attempt` to derivation and reject a mismatch.
+
+A list of four jobs passed with `total_count=101`. Metadata checks read only one page.
+Reject an incomplete list of jobs or artifacts before output. Do not infer absent jobs.
+
+An early setup failure can leave no output directory. The always-run label step
+now creates it before the receipt rename and diagnostic marker.
+Tests run that step with and without a receipt. They also check failure and cancellation.
+Browser steps exclude the installed-boot diagnostic route. Its budget stays at 120 minutes;
+the native and browser strict routes each keep 160 minutes.
+
+This cross-repository route still needs its dedicated artifact access.
+A same-repository route has a separate access contract.
+An operator digest is an expectation. It does not identify the installed frontend.
+Diagnostics do not supply qualification evidence.

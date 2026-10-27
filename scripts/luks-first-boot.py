@@ -34,6 +34,7 @@ from lib.luks_secret import RedactedSerial
 serial_output = RedactedSerial(passphrase, sys.stdout.buffer)
 
 timeout = int(sys.argv[4]) if len(sys.argv) > 4 else 900
+diagnostic_observe = os.environ.get("TUNAOS_INSTALLED_BOOT_DIAGNOSTIC") == "1"
 
 
 def connect(path, tries=60):
@@ -86,6 +87,9 @@ emergency_seen = False
 
 
 def harvest_emergency(ser):
+    if diagnostic_observe:
+        print("DIAGNOSTIC_EMERGENCY_OBSERVED", flush=True)
+        return
     print("\n>>> emergency shell detected; harvesting rdsosreport", flush=True)
     ser.sendall(b"\n")
     time.sleep(3)
@@ -115,6 +119,8 @@ def harvest_emergency(ser):
 # GRUB's EFI console, and GRUB maps control bytes from a serial terminal to
 # Ctrl-<key>.
 grub_append = os.environ.get("TUNAOS_LUKS_GRUB_APPEND", "").strip()
+if diagnostic_observe and grub_append:
+    sys.exit(5)
 grub_edited = not grub_append
 ANSI_RE = re.compile(r"\x1b\[[0-9;:?=]*[A-Za-z]")
 # blscfg (Fedora/CentOS grub2) generates every BLS menu entry as exactly
@@ -139,16 +145,24 @@ def edit_grub_entry(ser, extra):
         plain = ANSI_RE.sub("\n", screen.decode("utf-8", "replace"))
         # The menu never shows command text, so a linux and an initrd line
         # mean the editor is open and drawn through the end of the entry.
-        if re.search(r"(?m)^\s*linux\s[\s\S]*\binitrd\s", plain):
+        if re.search(r"(?m)^[ \t]*linux[ \t][\s\S]*\binitrd\s", plain):
             break
-    plain = ANSI_RE.sub("\n", screen.decode("utf-8", "replace"))
-    linux = re.search(r"(?m)^\s*linux\s", plain)
+    display = screen.decode("utf-8", "replace")
+    # Only remove the measured initial editor cursor position. A literal
+    # leading newline is a blank command, not terminal positioning.
+    display = re.sub(r"\A\x1b\[0*2;0*3H", "", display, count=1)
+    plain = ANSI_RE.sub("\n", display)
+    linux = re.search(r"(?m)^[ \t]*linux[ \t]", plain)
     if not linux:
         print("\n!!! GRUB entry editor did not open with a linux line", flush=True)
         return False
     head = plain[: linux.start()]
-    positions = [head.find(cmd) for cmd in BLS_PREAMBLE]
-    if -1 in positions or positions != sorted(positions) or "setparams" in head:
+    # Cursor movement below assumes exactly three logical commands. Substring
+    # matches would accept extra commands and append arguments to the wrong line.
+    lines = head.splitlines()
+    # Keep all blank lines: each changes the Ctrl-N count too.
+    commands = tuple(line.strip() for line in lines)
+    if commands != BLS_PREAMBLE:
         print("\n!!! GRUB entry is not the blscfg layout; refusing to guess the linux line", flush=True)
         return False
     ser.sendall(b"\x0e" * len(BLS_PREAMBLE))  # Ctrl-N: down to the linux line
@@ -167,8 +181,11 @@ while time.time() < deadline:
         d = ser.recv(4096)
         if d:
             buf += d
-            serial_output.write(d)
-            sys.stdout.flush()
+            if diagnostic_observe:
+                buf = buf[-1024*1024:]
+            else:
+                serial_output.write(d)
+                sys.stdout.flush()
     except socket.timeout:
         pass
 
@@ -181,6 +198,9 @@ while time.time() < deadline:
         continue
 
     if not sent and "passphrase for disk root" in text.lower():
+        if diagnostic_observe:
+            print("DIAGNOSTIC_PROMPT_OBSERVED_NO_UNLOCK", flush=True)
+            sys.exit(77)
         print("\n>>> injecting LUKS passphrase", flush=True)
         ser.sendall(passphrase.encode() + b"\n")
         sent = True

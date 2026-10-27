@@ -36,6 +36,7 @@ def frontend():
 class Wizard:
     """The exact eight-page source order, driven only by pointer/key callbacks."""
     def __init__(self,user,mode,missing_identity=False):
+        self.width=1280;self.height=800
         self.page=0;self.field=None;self.fields={};self.user=user;self.mode=mode
         self.controls={};self.missing_identity=missing_identity;self.progress_seen=False
         self.selected='none';self.keys_seen=[]
@@ -60,7 +61,8 @@ class Wizard:
         self.controls[(100,y)]=label
         self.controls[(150,y)]=label
         return (100,y)
-    def pointer(self,path,x,y):
+    def pointer(self,path,x,y,width,height):
+        assert (width,height)==(1280,800)
         label=self.controls.get((x,y))
         if label in ('Get started','Next','Install'):
             self.page+=1
@@ -255,7 +257,7 @@ def test_interrupted_gui_login_never_yields_session_receipt(tmp_path,monkeypatch
         def __init__(self,*args):pass
         def execute(self,source,sudo):assert sudo is False;return {'pending':True}
         def close(self):pass
-    screen=SimpleNamespace(box=lambda _: (0,0,10,10))
+    screen=SimpleNamespace(width=1280,height=800,box=lambda _: (0,0,10,10))
     monkeypatch.setattr(PHASE,'click_unix',lambda *args:None)
     monkeypatch.setattr(PHASE,'type_text',lambda *args:None)
     monkeypatch.setattr(PHASE,'monitor',lambda *args:None)
