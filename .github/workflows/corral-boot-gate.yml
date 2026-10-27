@@ -115,6 +115,7 @@ jobs:
             verify-out/*.png
             verify-out/timelapse.webm
             verify-out/greeter-graphics-evidence*.txt
+            verify-out/egl-device-reproducer.txt
             verify-out/vm-host-evidence.txt
             verify-out/corral/result.json
             verify-out/corral/diagnostics/

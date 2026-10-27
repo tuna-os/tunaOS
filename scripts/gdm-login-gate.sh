@@ -34,6 +34,66 @@ collect_greeter_evidence() {
 	guest bash -s -- "$1" "$2" <"$EVIDENCE_SCRIPT" >"${OUT}/$3" 2>&1 || true
 }
 
+collect_egldevice_reproducer() {
+	local binary="${TUNAOS_EGL_REPRO_BIN:-}" remote="/run/tunaos-egldevice-reproducer"
+	[[ -n "$binary" ]] || return 0
+	if [[ ! -f "$binary" ]]; then
+		printf 'status=not-run reason=host-reproducer-not-built\n' >"${OUT}/egl-device-reproducer.txt"
+		return 0
+	fi
+	if ! cat "$binary" | guest tee "$remote" >/dev/null; then
+		printf 'status=not-run reason=failed-to-stage-probe\n' >"${OUT}/egl-device-reproducer.txt"
+		return 0
+	fi
+	guest chmod 0755 "$remote" || {
+		printf 'status=not-run reason=failed-to-mark-probe-executable\n' >"${OUT}/egl-device-reproducer.txt"
+		return 0
+	}
+	guest bash -s -- "$remote" >"${OUT}/egl-device-reproducer.txt" 2>&1 <<'EGL_DEVICE_REPRO' || true
+set -u
+binary="$1"
+device=""
+for node in /dev/dri/card[0-9]*; do
+	[[ -c "$node" ]] || continue
+	name="${node##*/}"
+	driver_path="$(readlink -f "/sys/class/drm/${name}/device/driver" 2>/dev/null || true)"
+	driver="${driver_path##*/}"
+	echo "drm_node=${node} driver=${driver:-unknown}"
+	if [[ "$driver" == virtio_gpu ]]; then device="$node"; fi
+done
+if [[ -z "$device" ]]; then
+	echo 'status=not-run reason=no-virtio-gpu-primary-node'
+	exit 0
+fi
+echo "selected_device=${device}"
+echo "kernel=$(uname -r)"
+rpm -q mesa-libEGL libglvnd mutter gnome-shell 2>&1 || true
+if ! systemctl stop gdm.service; then
+	echo 'status=not-run reason=could-not-stop-gdm-for-drm-master'
+	exit 0
+fi
+trap 'systemctl start gdm.service >/dev/null 2>&1 || true' EXIT
+ulimit -c 0
+	run_case() {
+		label="$1"
+		shift
+		started="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+		set +e
+		timeout --kill-after=5 20 "$@" "$binary" "$device"
+		rc=$?
+		set -e
+		printf 'case=%s exit=%s\n' "$label" "$rc"
+		journalctl -k -b --since="$started" --no-pager 2>/dev/null |
+			grep -Ei 'segfault|repro-egldevice-swrast|libgallium' || true
+	}
+echo '=== controls: same image, DRM node, and EGLDevice display attributes ==='
+run_case clean env -u LIBGL_ALWAYS_SOFTWARE -u MESA_LOADER_DRIVER_OVERRIDE
+run_case software env LIBGL_ALWAYS_SOFTWARE=1
+run_case override env MESA_LOADER_DRIVER_OVERRIDE=swrast
+run_case combined env LIBGL_ALWAYS_SOFTWARE=1 MESA_LOADER_DRIVER_OVERRIDE=swrast
+EGL_DEVICE_REPRO
+}
+
 wait_for_paint() {
 	# GDM can take minutes to first-paint on software rendering, and a
 	# restarted greeter always starts blank. Poll for a painted frame
@@ -197,6 +257,11 @@ printf '[User]\nSession=tuna\nXSession=tuna\n' | guest tee "$guest_accts_dir/$TE
 # bus property reads ""), so GDM falls back to GNOME. Restart it so the
 # selection above is what GDM reads.
 guest systemctl restart accounts-daemon.service || true
+
+# The optional Albacore PR probe temporarily stops GDM, tests the exact EGLDevice
+# call under four environment controls, and restarts GDM before this gate resumes.
+# It is evidence-only: missing probe tooling/device data never changes the verdict.
+collect_egldevice_reproducer
 guest systemctl restart gdm.service
 for _ in $(seq 1 60); do
 	if guest systemctl is-active --quiet display-manager.service; then

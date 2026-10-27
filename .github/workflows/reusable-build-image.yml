@@ -430,6 +430,21 @@ jobs:
           sudo udevadm trigger --name-match=kvm || true
           sudo python3 scripts/setup-kvm-tools.py
 
+      - name: Build controlled EGLDevice reproducer
+        if: github.event_name == 'pull_request' && inputs.image-variant == 'albacore' && inputs.flavor == 'tuna' && contains(matrix.platform, 'amd64')
+        id: egl-repro
+        run: |
+          set -euo pipefail
+          binary="$RUNNER_TEMP/repro-egldevice-swrast"
+          if ! command -v cc >/dev/null 2>&1 || ! cc -O0 -g -Wall -Wextra -Werror \
+            scripts/repro-egldevice-swrast.c -o "$binary" -ldl; then
+            echo "::warning::EGLDevice diagnostic tool could not be built; GDM boot verdict is unchanged"
+            echo "bin=not-built" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          sha256sum "$binary"
+          echo "bin=$binary" >> "$GITHUB_OUTPUT"
+
       - name: Set up Go for corral (PR gate)
         if: github.event_name == 'pull_request' && contains(matrix.platform, 'amd64')
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
@@ -454,18 +469,19 @@ jobs:
           # xfs, which its GRUB cannot read.
           TUNAOS_QCOW2_FILESYSTEM: ${{ inputs.image-variant == 'hummingbird' && 'ext4' || '' }}
           TUNAOS_GDM_LOGIN_CHECK: ${{ inputs.flavor == 'tuna' && '1' || '0' }}
+          TUNAOS_EGL_REPRO_BIN: ${{ steps.egl-repro.outputs.bin }}
         run: |
           mkdir -p verify-out
           IMAGE="localhost/${IMAGE_VARIANT}:${DEFAULT_TAG}"
           # The same harness as the release gate: Corral installs the image
-          # from root podman storage and puts tunaos.countme=0 in the boot
+          # from root podman storage and puts tunaos.countme=0 into the boot
           # entry before the first boot.
           # No `|| true` here (tuna-os/tunaos#1533): a PR whose image fails to
           # boot must fail the PR gate, not just warn on missing evidence. The
           # evidence-upload step below already runs under `if: always()`, so
           # dropping the swallow doesn't lose any diagnostics — it just makes
           # the check red when the boot actually failed.
-          sudo --preserve-env=TUNAOS_QCOW2_FILESYSTEM,TUNAOS_GDM_LOGIN_CHECK,ImageOS,ImageVersion \
+          sudo --preserve-env=TUNAOS_QCOW2_FILESYSTEM,TUNAOS_GDM_LOGIN_CHECK,TUNAOS_EGL_REPRO_BIN,ImageOS,ImageVersion \
             ./scripts/corral-boot-gate.sh "$IMAGE" verify-out 300
 
       - name: Normalize PR verification evidence ownership
@@ -485,6 +501,7 @@ jobs:
             verify-out/*.png
             verify-out/timelapse.webm
             verify-out/greeter-graphics-evidence*.txt
+            verify-out/egl-device-reproducer.txt
             verify-out/vm-host-evidence.txt
             verify-out/corral/result.json
             verify-out/corral/diagnostics/
@@ -1841,6 +1858,7 @@ jobs:
             verify-out/*.png
             verify-out/timelapse.webm
             verify-out/greeter-graphics-evidence*.txt
+            verify-out/egl-device-reproducer.txt
             verify-out/vm-host-evidence.txt
             verify-out/corral/result.json
             verify-out/corral/diagnostics/
