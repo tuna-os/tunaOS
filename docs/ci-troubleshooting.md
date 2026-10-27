@@ -2294,3 +2294,24 @@ Installation has no helper timeout and no downloads.
 The helper defers SIGINT/SIGTERM until dpkg and needrestart cleanup finish.
 It cannot defer SIGKILL or the outer job timeout. Logs show separate durations
 for acquisition and installation, on success or failure.
+
+
+### Greeter evidence includes another user’s desktop (#3969)
+
+**Symptom:** after login, the report labels an ordinary user’s shell or session
+as a greeter process.
+
+**Cause:** the collector at `2e9fadda` checks ownership only for `dbus-daemon`.
+A negative fixture reproduces this defect with another user’s `gnome-shell`
+and `gnome-session-b`.
+
+**Fix:** identify the GDM greeter on seat0 through logind. Check its owner and
+scope for user processes. Specific user units for GDM are also eligible. Include
+root workers only in that scope or in the parent chain of a verified member.
+Unknown membership excludes a process.
+
+Keep a handle to each process directory and recheck identity around the read.
+Discard the record if the process identity changes.
+The fixture tests other users, root workers, other scopes, and UID changes.
+The environment filter stays unchanged. These tests do not prove behavior in
+a real VM.

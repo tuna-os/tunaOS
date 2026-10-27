@@ -104,34 +104,151 @@ report_managers() {
 	loginctl list-sessions --no-legend 2>&1 || true
 }
 
-# print_process_environment PIDDIR — one greeter process and its renderer env.
-print_process_environment() {
-	local dir="$1" comm uid
-	comm="$(cat "$dir/comm" 2>/dev/null)"
-	uid="$(awk '/^Uid:/ { print $2 }' "$dir/status" 2>/dev/null)"
-	printf -- '--- pid %s comm=%s uid=%s\n' "${dir##*/}" "$comm" "$uid"
-	tr '\0' '\n' <"$dir/environ" 2>/dev/null | grep -E "$ENV_RE" || echo "(no renderer or session variables)"
+# Resolve membership on each poll: sessions and workers can disappear/restart.
+# Names alone cannot distinguish a user's desktop from the GDM greeter.
+greeter_process_records() {
+	PROC="$PROC" PROCESSES="$PROCESSES" ENV_RE="$ENV_RE" python3 -c '
+import base64, os, pathlib, re, subprocess, time
+
+proc = pathlib.Path(os.environ["PROC"])
+names = set(os.environ["PROCESSES"].split())
+workers = {"gdm-session-wor", "gdm-wayland-ses"}
+# User services leave the login scope. Admit only these explicit GDM units.
+user_units = {"gnome-shell": {"org.gnome.Shell@gdm.service"},
+              "dbus-daemon": {"dbus.service"}}
+deadline = time.monotonic() + 0.25
+rx = re.compile(os.environ["ENV_RE"])
+
+
+def loginctl(*args):
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise subprocess.TimeoutExpired("loginctl", 0.25)
+    result = subprocess.run(["loginctl", *args], capture_output=True, text=True, timeout=remaining)
+    if result.returncode:
+        raise ValueError("session query failed")
+    return result.stdout
+
+try:
+    sessions = loginctl("list-sessions", "--no-legend").splitlines()
+except (OSError, ValueError, subprocess.TimeoutExpired):
+    sessions = []
+scopes = {}
+for row in sessions:
+    if time.monotonic() >= deadline:
+        break
+    fields = row.split()
+    if not fields or not re.fullmatch(r"[A-Za-z0-9_-]+", fields[0]):
+        continue
+    try:
+        properties = dict(line.split("=", 1) for line in loginctl(
+            "show-session", fields[0], "-p", "Class", "-p", "Service",
+            "-p", "Seat", "-p", "User", "-p", "Scope").splitlines() if "=" in line)
+        scope = properties.get("Scope", "")
+        uid = int(properties.get("User", ""))
+        if (properties.get("Class") == "greeter"
+                and properties.get("Service") == "gdm-launch-environment"
+                and properties.get("Seat") == "seat0" and uid > 0
+                and re.fullmatch(r"session-[A-Za-z0-9_-]+\.scope", scope)):
+            scopes[scope] = uid
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        continue
+
+def read_at(fd, name):
+    with os.fdopen(os.open(name, os.O_RDONLY, dir_fd=fd), "rb") as stream:
+        return stream.read()
+
+def identity(fd):
+    comm = read_at(fd, "comm").decode().strip()
+    status = dict(line.split(":", 1) for line in read_at(fd, "status").decode().splitlines() if ":" in line)
+    uids = tuple(int(value) for value in status["Uid"].split())
+    if len(uids) != 4 or len(set(uids)) != 1:
+        raise ValueError("credentials changed")
+    parent = int(status["PPid"])
+    # Field 22 follows the final parenthesis around comm in /proc/PID/stat.
+    started = read_at(fd, "stat").decode().rsplit(")", 1)[1].split()[19]
+    groups = frozenset(part for line in read_at(fd, "cgroup").decode().splitlines()
+                       for part in line.split(":", 2)[-1].split("/"))
+    return comm, uids[0], parent, groups, started
+
+candidates = {}
+handles = {}
+for path in proc.glob("[0-9]*"):
+    fd = None
+    try:
+        # Holding this directory ties later reads to this process, not to a
+        # replacement process that reuses its numeric PID.
+        fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY)
+        if read_at(fd, "comm").decode().strip() not in names:
+            continue
+        record = identity(fd)
+        pid = int(path.name)
+        candidates[pid] = record
+        handles[pid] = fd
+        fd = None
+    except (OSError, ValueError, KeyError, IndexError):
+        continue
+    finally:
+        if fd is not None:
+            os.close(fd)
+
+selected = set()
+for pid, (comm, uid, parent, groups, started) in candidates.items():
+    # Root is admitted only for GDM workers in a verified greeter scope.
+    if any(scope in groups and (uid == owner or (uid == 0 and comm in workers))
+           for scope, owner in scopes.items()):
+        selected.add(pid)
+    elif (uid in scopes.values() and f"user@{uid}.service" in groups
+          and groups.intersection(user_units.get(comm, set()))):
+        selected.add(pid)
+
+# A root worker may still be in gdm.service. Retain it only when it is
+# an ancestor in the known process chain of a verified greeter member.
+for pid in list(selected):
+    owner = candidates[pid][1]
+    visited = {pid}
+    parent = candidates[pid][2]
+    while parent in candidates and parent not in visited:
+        visited.add(parent)
+        comm, uid, next_parent, groups, started = candidates[parent]
+        if uid == 0 and comm in workers:
+            selected.add(parent)
+        elif uid != owner or uid == 0:
+            break
+        parent = next_parent
+for pid in sorted(selected):
+    fd = handles[pid]
+    try:
+        record = candidates[pid]
+        if identity(fd) != record:
+            continue
+        environ = read_at(fd, "environ").decode("utf-8", "replace")
+        if identity(fd) != record:
+            continue
+        comm, uid, parent, groups, started = record
+        lines = [line for line in environ.replace("\0", "\n").splitlines() if rx.match(line)]
+        report = f"--- pid {pid} comm={comm} uid={uid}\n"
+        report += "\n".join(lines) if lines else "(no renderer or session variables)"
+        payload = base64.b64encode((report + "\n").encode()).decode()
+        print(f"{pid}:{started}:{comm} {payload}")
+    except (OSError, ValueError, KeyError, IndexError):
+        continue
+for fd in handles.values():
+    os.close(fd)
+' 2>/dev/null || true
 }
 
-# scan_greeter_processes — print each greeter-chain process once.
+# scan_greeter_processes — print each verified greeter-chain process once.
 declare -A SEEN=()
 scan_greeter_processes() {
-	local dir comm key found=0
-	for dir in "$PROC"/[0-9]*; do
-		# `read` is a builtin: this loop visits every process, forty times, and
-		# must not fork once per process.
-		read -r comm <"$dir/comm" 2>/dev/null || continue
-		case " $PROCESSES " in *" $comm "*) ;; *) continue ;; esac
-		# dbus-daemon runs for every user; only the greeter's (uid 42) matters.
-		if [[ "$comm" == dbus-daemon ]] && ! grep -q '^Uid:[[:space:]]*42[[:space:]]' "$dir/status" 2>/dev/null; then
-			continue
-		fi
-		key="${dir##*/}:${comm}"
+	local key payload found=0
+	while read -r key payload; do
+		[[ -n "$key" && -n "$payload" ]] || continue
 		[[ -n "${SEEN[$key]:-}" ]] && continue
 		SEEN[$key]=1
 		found=1
-		print_process_environment "$dir"
-	done
+		printf '%s' "$payload" | base64 --decode
+	done < <(greeter_process_records)
 	return $((1 - found))
 }
 
@@ -148,7 +265,7 @@ report_greeter_processes() {
 	else
 		scan_greeter_processes && seen_any=1
 	fi
-	[[ "$seen_any" == 1 ]] || echo "(no greeter process was running)"
+	[[ "$seen_any" == 1 ]] || echo "(no verified greeter process was found)"
 }
 
 report_coredumps() {

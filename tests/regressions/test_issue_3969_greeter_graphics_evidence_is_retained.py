@@ -34,6 +34,8 @@ two `collect_greeter_evidence` calls in the gate, and the tests fail.
 import json
 import os
 import subprocess
+import sys
+import threading
 from pathlib import Path
 
 import pytest
@@ -67,6 +69,15 @@ def build_guest(tmp_path: Path, *, greeter_env, dmesg_lines):
     for pid, comm, uid, env in (
         (100, "gnome-shell", 42, greeter_env),
         (101, "gdm-wayland-ses", 0, ["HOME=/root"]),
+        (102, "gdm-session-wor", 0, ["HOME=/root"]),
+        (103, "gnome-session-b", 42, greeter_env),
+        (104, "dbus-daemon", 42, greeter_env),
+        # Even the greeter UID is insufficient without session membership.
+        (105, "gnome-shell", 42, ["HOME=/unrelated-gdm-session"]),
+        (201, "gnome-shell", 1000, ["HOME=/home/other"]),
+        (202, "gnome-session-b", 1000, ["HOME=/home/other"]),
+        (401, "gdm-wayland-ses", 0, ["HOME=/unrelated-root-worker"]),
+        (402, "gdm-session-wor", 0, ["HOME=/unrelated-root-worker"]),
         # A user's own bus daemon must not be reported as the greeter's.
         (200, "dbus-daemon", 1000, ["LIBGL_ALWAYS_SOFTWARE=1", "HOME=/home/other"]),
         (300, "sleep", 1000, ["LIBGL_ALWAYS_SOFTWARE=1"]),
@@ -74,7 +85,13 @@ def build_guest(tmp_path: Path, *, greeter_env, dmesg_lines):
         entry = proc / str(pid)
         entry.mkdir(parents=True)
         (entry / "comm").write_text(comm + "\n")
-        (entry / "status").write_text(f"Name:\t{comm}\nUid:\t{uid}\t{uid}\t{uid}\t{uid}\n")
+        parent = {100: 103, 103: 101, 101: 102}.get(pid, 1)
+        (entry / "status").write_text(
+            f"Name:\t{comm}\nUid:\t{uid}\t{uid}\t{uid}\t{uid}\nPPid:\t{parent}\n"
+        )
+        scope = "session-c12.scope" if pid in (100, 103, 104) else "other.scope"
+        (entry / "cgroup").write_text(f"0::/user.slice/{scope}\n")
+        (entry / "stat").write_text(f"{pid} ({comm}) S " + "0 " * 18 + f"{pid} 0\n")
         (entry / "environ").write_bytes("\0".join(env).encode() + b"\0")
     (proc / "cmdline").write_bytes(b"root=UUID=x\0rw\0")
 
@@ -124,7 +141,13 @@ def build_guest(tmp_path: Path, *, greeter_env, dmesg_lines):
         '  status) echo "tunaos-software-gl-detect.service - Detect whether TunaOS sessions need software rendering" ;;\n'
         "esac\n",
     )
-    shim(bindir, "loginctl", f'echo "loginctl $*" >>"{calls}"\n')
+    shim(
+        bindir, "loginctl", f'echo "loginctl $*" >>"{calls}"\n'
+        'case "$1" in\n'
+        'list-sessions) echo "c12 42 gdm seat0" ;;\n'
+        'show-session) printf "%s\\n" "Class=greeter" "Service=gdm-launch-environment" "Seat=seat0" "User=42" "Scope=session-c12.scope" ;;\n'
+        "esac\n",
+    )
     entry = {
         "MESSAGE_ID": "fc2e22bc6ee647b6b90729ab34a250b1",
         "COREDUMP_EXE": "/usr/bin/gnome-shell",
@@ -183,9 +206,140 @@ def test_report_does_not_print_variables_it_has_no_reason_to_print(tmp_path):
 def test_report_ignores_other_users_processes(tmp_path):
     result, _ = report(tmp_path)
     assert "pid 200" not in result.stdout
-    assert "pid 300" not in result.stdout
+    for pid in (105, 201, 202, 300, 401, 402):
+        assert f"pid {pid} " not in result.stdout
     assert "/home/other" not in result.stdout
+    assert "/unrelated-gdm-session" not in result.stdout
+    assert "/unrelated-root-worker" not in result.stdout
 
+
+
+def test_greeter_membership_retains_root_ancestors_and_owned_chain(tmp_path):
+    result, _ = report(tmp_path, dmesg_lines=1)
+    for pid in (100, 101, 102, 103, 104):
+        assert f"--- pid {pid} " in result.stdout
+
+
+@pytest.mark.parametrize("properties", [
+    "", "Class=user\nService=gdm-password\nSeat=seat0\nUser=42\nScope=session-c12.scope",
+    "Class=greeter\nService=other\nSeat=seat0\nUser=42\nScope=session-c12.scope",
+    "Class=greeter\nService=gdm-launch-environment\nSeat=seat1\nUser=42\nScope=session-c12.scope",
+])
+def test_unverified_greeter_session_does_not_collect_process_environments(tmp_path, properties):
+    env, _ = build_guest(tmp_path, greeter_env=CRASH_ENV, dmesg_lines=1)
+    bindir = Path(env["PATH"].split(":", 1)[0])
+    shim(bindir, "loginctl", 'if [[ "$1" == list-sessions ]]; then echo "c12 42 gdm seat0"; else cat <<"PROPERTIES"\n' + properties + "\nPROPERTIES\nfi\n")
+    result = subprocess.run(
+        ["bash", str(EVIDENCE), "once", "0"], env=env,
+        capture_output=True, text=True, check=False,
+    )
+    assert result.returncode == 0
+    assert "--- pid " not in result.stdout
+    assert "(no verified greeter process was found)" in result.stdout
+
+
+def test_root_worker_in_greeter_scope_needs_no_live_descendant(tmp_path):
+    env, _ = build_guest(tmp_path, greeter_env=CRASH_ENV, dmesg_lines=1)
+    proc = Path(env["TUNAOS_EVIDENCE_PROC"])
+    (proc / "401/cgroup").write_text("0::/user.slice/session-c12.scope\n")
+    result = subprocess.run(
+        ["bash", str(EVIDENCE), "once", "0"], env=env,
+        capture_output=True, text=True, check=False,
+    )
+    assert "--- pid 401 comm=gdm-wayland-ses uid=0" in result.stdout
+    assert "--- pid 402 " not in result.stdout
+
+
+@pytest.mark.parametrize("pid", [201, 202, 105])
+def test_wrong_owner_or_scope_cannot_borrow_greeter_membership(tmp_path, pid):
+    env, _ = build_guest(tmp_path, greeter_env=CRASH_ENV, dmesg_lines=1)
+    proc = Path(env["TUNAOS_EVIDENCE_PROC"])
+    # Cross-user candidates remain excluded even inside the greeter scope.
+    # A same-UID candidate in a similar-looking scope is not a member either.
+    scope = "session-c12.scope" if pid != 105 else "session-c12.scope-extra"
+    (proc / str(pid) / "cgroup").write_text(f"0::/user.slice/{scope}\n")
+    result = subprocess.run(
+        ["bash", str(EVIDENCE), "once", "0"], env=env,
+        capture_output=True, text=True, check=False,
+    )
+    assert f"--- pid {pid} " not in result.stdout
+
+
+def test_greeter_owner_is_resolved_instead_of_assuming_uid_42(tmp_path):
+    env, _ = build_guest(tmp_path, greeter_env=CRASH_ENV, dmesg_lines=1)
+    proc = Path(env["TUNAOS_EVIDENCE_PROC"])
+    bindir = Path(env["PATH"].split(":", 1)[0])
+    loginctl = bindir / "loginctl"
+    loginctl.write_text(loginctl.read_text().replace("42", "121"))
+    for pid in (100, 103, 104):
+        status = proc / str(pid) / "status"
+        status.write_text(status.read_text().replace("42", "121"))
+    result = subprocess.run(
+        ["bash", str(EVIDENCE), "once", "0"], env=env,
+        capture_output=True, text=True, check=False,
+    )
+    assert "--- pid 100 comm=gnome-shell uid=121" in result.stdout
+    assert "--- pid 101 comm=gdm-wayland-ses uid=0" in result.stdout
+    assert "--- pid 105 " not in result.stdout
+
+
+@pytest.mark.parametrize("pid,unit,expected", [
+    (100, "org.gnome.Shell@gdm.service", True),
+    (104, "dbus.service", True),
+    (100, "org.gnome.Shell@wayland.service", False),
+    (103, "unrelated.service", False),
+    (201, "org.gnome.Shell@gdm.service", False),
+])
+def test_only_explicit_gdm_user_units_are_members(tmp_path, pid, unit, expected):
+    env, _ = build_guest(tmp_path, greeter_env=CRASH_ENV, dmesg_lines=1)
+    proc = Path(env["TUNAOS_EVIDENCE_PROC"])
+    (proc / str(pid) / "cgroup").write_text(f"0::/user.slice/user-42.slice/user@42.service/session.slice/{unit}\n")
+    result = subprocess.run(
+        ["bash", str(EVIDENCE), "once", "0"], env=env,
+        capture_output=True, text=True, check=False,
+    )
+    assert (f"--- pid {pid} " in result.stdout) is expected
+
+
+def test_process_replacement_after_selection_does_not_reopen_environment(tmp_path):
+    env, _ = build_guest(tmp_path, greeter_env=CRASH_ENV, dmesg_lines=1)
+    bindir = Path(env["PATH"].split(":", 1)[0])
+    # Replace the synthetic process after Python has selected and collected it,
+    # but before the shell consumes its output. No real process is inspected.
+    shim(bindir, "python3", f'"{sys.executable}" "$@" >"{tmp_path}/python-output"\n'
+         'if [[ -n "${PROCESSES:-}" ]]; then\n'
+         'printf "Name: gnome-shell\\nUid: 1000 1000 1000 1000\\nPPid: 1\\n" >"$TUNAOS_EVIDENCE_PROC/100/status"\n'
+         'printf "HOME=/home/unrelated-reused-pid\\0" >"$TUNAOS_EVIDENCE_PROC/100/environ"\n'
+         'fi\n' + f'cat "{tmp_path}/python-output"\n')
+    result = subprocess.run(
+        ["bash", str(EVIDENCE), "once", "0"], env=env,
+        capture_output=True, text=True, check=False,
+    )
+    assert "--- pid 100 comm=gnome-shell uid=42" in result.stdout
+    assert "unrelated-reused-pid" not in result.stdout
+
+
+def test_identity_change_during_environment_read_discards_record(tmp_path):
+    env, _ = build_guest(tmp_path, greeter_env=CRASH_ENV, dmesg_lines=1)
+    process = Path(env["TUNAOS_EVIDENCE_PROC"]) / "100"
+    (process / "environ").unlink()
+    os.mkfifo(process / "environ")
+
+    def replace_while_reading():
+        with (process / "environ").open("wb") as stream:
+            (process / "status").write_text("Name: gnome-shell\nUid: 1000 1000 1000 1000\nPPid: 1\n")
+            stream.write(b"HOME=/home/unrelated-during-read\0")
+
+    writer = threading.Thread(target=replace_while_reading, daemon=True)
+    writer.start()
+    result = subprocess.run(
+        ["bash", str(EVIDENCE), "once", "0"], env=env,
+        capture_output=True, text=True, check=False, timeout=20,
+    )
+    writer.join(timeout=1)
+    assert not writer.is_alive()
+    assert "--- pid 100 " not in result.stdout
+    assert "unrelated-during-read" not in result.stdout
 
 def test_a_greeter_without_forced_software_rendering_is_reported_without_it(tmp_path):
     # Negative control: the report must not invent the variable.
@@ -303,7 +457,6 @@ def run_failing_login(tmp_path, gate=GATE):
     )
     shim(bindir, "id", 'exec /usr/bin/id "$@"\n')
     shim(bindir, "busctl", "exit 1\n")
-    shim(bindir, "loginctl", "exit 0\n")
     shim(bindir, "systemctl", 'if [[ "${1:-}" == show-environment ]]; then echo "AWS_SECRET_ACCESS_KEY=manager-hunter2"; fi\nif [[ "${1:-}" == is-active ]]; then exit 0; fi\nexit 0\n')
     env.update(
         CORRAL=str(bindir / "corral"),

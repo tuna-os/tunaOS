@@ -159,7 +159,8 @@ fi
 CHECK_GREETER
 # Record the greeter's graphics inputs while it is (re)starting: its renderer
 # environment, the DRM devices, the software-GL decision, any core dump.
-# Ten seconds of polling, no effect on what the gate decides.
+# Forty polls at 250 ms intervals; bounded membership queries add time.
+# Evidence collection has no effect on what the gate decides.
 collect_greeter_evidence sample 40 greeter-graphics-evidence.txt
 if ! wait_for_paint "${OUT}/gdm-greeter.png" 30; then
 	echo "GDM greeter did not paint; collecting after-failure diagnostics" >&2
