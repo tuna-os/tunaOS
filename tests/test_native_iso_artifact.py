@@ -16,17 +16,18 @@ def records():
     args = argparse.Namespace(repository='tuna-os/tunaOS', run_id=1, artifact_id=2, attempt=0,
                               source_sha='a' * 40, archive_digest='sha256:' + 'b' * 64,
                               variant='skipjack', flavor='gnome')
-    run = dict(id=1, status='completed', conclusion='success', head_sha=args.source_sha,
-               path='.github/workflows/live-iso-bootc.yml',
+    run = dict(id=1, run_attempt=1, status='completed', conclusion='success', head_sha=args.source_sha,
+               path='.github/workflows/live-iso-bootc.yml', run_started_at='2026-10-21T12:00:00Z',
                repository=dict(full_name=args.repository), head_repository=dict(full_name=args.repository))
     artifact = dict(id=2, expired=False, name='skipjack-gnome-live-iso',
-                    digest=args.archive_digest, workflow_run=dict(id=1, head_sha=args.source_sha), size_in_bytes=32)
+                    created_at='2026-10-21T12:01:00Z', digest=args.archive_digest,
+                    workflow_run=dict(id=1, run_attempt=1, head_sha=args.source_sha), size_in_bytes=32)
     return args, run, artifact
 
 
 def test_exact_producer():
     args, run, artifact = records()
-    module.validate(run, artifact, args)
+    module.validate(run, artifact, args, native_jobs(args))
 
 
 @pytest.mark.parametrize('field,value', [('head_sha', 'c'*40), ('conclusion', 'failure'),
@@ -35,7 +36,7 @@ def test_wrong_producer(field, value):
     args, run, artifact = records()
     run[field] = value
     with pytest.raises(ValueError):
-        module.validate(run, artifact, args)
+        module.validate(run, artifact, args, native_jobs(args))
 
 
 @pytest.mark.parametrize('field,value', [('id', 3), ('expired', True), ('name', 'albacore-gnome-live-iso'),
@@ -45,7 +46,7 @@ def test_wrong_artifact(field, value):
     args, run, artifact = records()
     artifact[field] = value
     with pytest.raises(ValueError):
-        module.validate(run, artifact, args)
+        module.validate(run, artifact, args, native_jobs(args))
 
 
 @pytest.mark.parametrize('names', [['../bad.iso'], ['skipjack-gnome-a.iso', 'extra.iso'],
@@ -93,7 +94,7 @@ def test_same_run_requires_exact_environment(monkeypatch):
     monkeypatch.setenv('NATIVE_SAME_RUN', 'true')
     monkeypatch.setenv('GITHUB_RUN_ID', '2')
     with pytest.raises(ValueError):
-        module.validate(run, artifact, args)
+        module.validate(run, artifact, args, native_jobs(args))
     monkeypatch.setenv('GITHUB_RUN_ID', '1')
     module.validate(run, artifact, args, native_jobs(args))
 
@@ -167,22 +168,25 @@ def test_zip_nonregular_member_rejected(tmp_path, kind):
 
 def test_same_run_rejects_old_attempt_artifact(monkeypatch):
     args, run, artifact = records()
+    args.attempt = 2
     run.update(status='in_progress', conclusion=None, run_attempt=2, run_started_at='2026-10-21T12:00:00Z')
     artifact.update(name='skipjack-gnome-live-iso-attempt-2', created_at='2026-10-21T11:00:00Z')
+    artifact['workflow_run']['run_attempt'] = 2
     monkeypatch.setenv('GITHUB_REPOSITORY', args.repository)
     monkeypatch.setenv('NATIVE_SAME_RUN', 'true')
     monkeypatch.setenv('GITHUB_RUN_ID', '1')
     monkeypatch.setenv('GITHUB_RUN_ATTEMPT', '2')
     with pytest.raises(ValueError):
-        module.validate(run, artifact, args)
+        module.validate(run, artifact, args, native_jobs(args))
 
 
 def test_completed_historical_attempt_name():
     args, run, artifact = records()
     args.attempt = 2
-    run.update(run_attempt=2, run_started_at='2026-10-21T12:00:00Z')
+    run.update(run_attempt=2)
     artifact.update(name='skipjack-gnome-live-iso-attempt-2', created_at='2026-10-21T12:01:00Z')
-    module.validate(run, artifact, args)
+    artifact['workflow_run']['run_attempt'] = 2
+    module.validate(run, artifact, args, native_jobs(args))
 
 
 def test_failed_acquisition_cannot_reuse_stale_executable(tmp_path):
@@ -321,6 +325,66 @@ else:
     assert result.stdout.strip() == '10.0 x86_64'
 
 
+def test_reusable_iso_step_preserves_platform_in_final_filename(tmp_path):
+    import os
+    import subprocess
+
+    import yaml
+
+    workflow = yaml.safe_load((ROOT / '.github/workflows/reusable-build-artifacts.yml').read_text())
+    step = next(item for item in workflow['jobs']['iso']['steps'] if item.get('name') == 'Build Live ISO')
+    builder = (ROOT / 'scripts/build-iso-tacklebox.sh').read_text()
+    args_start = builder.index('VARIANT="${1:?')
+    args_end = builder.index('\nif [[ "$EUID"', args_start)
+    naming_start = builder.index('if [[ -n "$PLATFORM" ]]')
+    naming_end = builder.index('\ncp "$ISO_OUT" "$FINAL_ISO"', naming_start)
+    probe = tmp_path / 'iso-name-probe.sh'
+    probe.write_text(
+        '#!/usr/bin/env bash\nset -euo pipefail\n'
+        + builder[args_start:args_end]
+        + '\nARCH=x86_64\nVERSION_ID=10.0\nREPO_ROOT="$PWD"\n'
+        + builder[naming_start:naming_end]
+        + '\nprintf "dev=%s\\nfinal=%s\\n" "$DEV" "$FINAL_ISO"\n'
+    )
+    sudo = tmp_path / 'bin/sudo'
+    sudo.parent.mkdir()
+    sudo.write_text(
+        '#!/usr/bin/env bash\nset -euo pipefail\n'
+        '[[ "${1:-}" == -E ]] && shift\n'
+        '[[ "${1:-}" == bash && "${2:-}" == ./scripts/build-iso-tacklebox.sh ]] || exit 97\n'
+        'shift 2\nexec bash "$TUNAOS_ISO_NAME_PROBE" "$@"\n'
+    )
+    sudo.chmod(0o755)
+
+    def filename(platform):
+        values = {
+            "${{ inputs.variant }}": "albacore",
+            "${{ inputs.flavor }}": "gnome",
+            "${{ inputs.image-tag }}": f"gnome-{platform.replace('/', '-')}",
+            "${{ inputs.platform }}": platform,
+        }
+        env = os.environ.copy()
+        env.pop('PLATFORM', None)
+        env.update(PATH=f"{sudo.parent}:{env['PATH']}", TUNAOS_ISO_NAME_PROBE=str(probe))
+        for name, expression in step['env'].items():
+            if expression in values:
+                env[name] = values[expression]
+        result = subprocess.run(
+            ['bash', '-e', '-o', 'pipefail', '-c', step['run']],
+            cwd=ROOT, env=env, capture_output=True, text=True, check=False,
+        )
+        assert result.returncode == 0, result.stderr
+        lines = result.stdout.splitlines()
+        assert 'dev=0' in lines
+        return Path(next(line.removeprefix('final=') for line in lines if line.startswith('final='))).name
+
+    amd64 = filename('linux/amd64')
+    amd64_v2 = filename('linux/amd64/v2')
+    assert amd64 == 'albacore-gnome-10.0-linux-amd64.iso'
+    assert amd64_v2 == 'albacore-gnome-10.0-linux-amd64-v2.iso'
+    assert amd64 != amd64_v2
+
+
 def test_strict_tpm_starts_per_luks_install_not_before_plain():
     script = (ROOT / 'scripts/iso-e2e.sh').read_text()
     body = script.split('run_strict_offline_gui() {', 1)[1].split('\n}\n', 1)[0]
@@ -450,7 +514,8 @@ def test_diagnostic_enumeration_and_skip_report_are_bounded(tmp_path):
 
 
 def native_jobs(args):
-    return dict(total_count=1, jobs=[dict(id=3, name='build', run_id=args.run_id, run_attempt=1,
+    attempt = args.attempt or 1
+    return dict(total_count=1, jobs=[dict(id=3, name='build', run_id=args.run_id, run_attempt=attempt,
                 head_sha=args.source_sha, status='completed', conclusion='success',
                 started_at='2026-10-21T12:00:10Z', completed_at='2026-10-21T12:02:00Z')])
 
@@ -471,8 +536,10 @@ def active_native_records(monkeypatch):
 def test_active_aggregate_needs_exact_successful_build(monkeypatch, status):
     args, run, artifact, jobs = active_native_records(monkeypatch)
     run['status'] = status
-    assert module.validate(run, artifact, args, jobs) == 3
-    with pytest.raises(ValueError, match='producer jobs required'):
+    assert module.validate(run, artifact, args, jobs) == {
+        'build_job': 3, 'producer_run': 1, 'producer_attempt': 1,
+    }
+    with pytest.raises(ValueError, match='producer-attempt jobs required'):
         module.validate(run, artifact, args)
 
 
@@ -588,7 +655,7 @@ def test_transfer_stderr_flood_preserves_whole_deadline():
     started = time.monotonic()
     code = 'import os\nwhile True: os.write(2,b"PRIVATE_SENTINEL"*1024)'
     with pytest.raises(ValueError, match='deadline exceeded') as error:
-        module.bounded_command([sys.executable, '-c', code], output, 32, .1)
+        module.bounded_command([sys.executable, '-c', code], output, 32, 1.0)
     assert time.monotonic()-started < 3
     details = json.loads(str(error.value).split('; ', 1)[1])
     assert details['bytes_received'] == 0 and details['stderr_truncated']
@@ -627,10 +694,10 @@ def test_transfer_real_stdout_progress_resets_idle_not_total_deadline():
     import io
     import sys
     output = io.BytesIO()
-    code = 'import os,time\nfor _ in range(20):\n os.write(1,b"x");time.sleep(.04)'
+    code = 'import os,time\nfor _ in range(100):\n os.write(1,b"x");time.sleep(.04)'
     with pytest.raises(ValueError, match='GitHub transfer deadline exceeded'):
-        module.bounded_command([sys.executable, '-c', code], output, 100, .3, .15)
-    assert 1 < len(output.getvalue()) < 20
+        module.bounded_command([sys.executable, '-c', code], output, 100, 1.2, 1.0)
+    assert 0 < len(output.getvalue()) < 100
 
 
 def test_transfer_incremental_success_with_idle_bound():

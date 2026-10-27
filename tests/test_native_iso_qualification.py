@@ -69,6 +69,23 @@ def test_valid_native_and_browser_are_separate():
     with pytest.raises(ValueError): NATIVE.validate(seal(browser))
 
 
+
+@pytest.mark.parametrize('variant,expected', [('skipjack', 'x86-64-v3'), ('wahoo', 'x86-64-v3')])
+def test_amd64_cpu_baseline_uses_variant_policy(variant, expected):
+    # Wahoo is intentionally not admitted for native OSTree ISO qualification;
+    # this covers the shared baseline resolver without inventing a receipt.
+    assert NATIVE.cpu_baseline(variant, 'linux/amd64') == expected
+
+
+def test_skipjack_amd64_native_receipt_accepts_variant_baseline():
+    data = evidence()
+    data['platform'] = 'linux/amd64'
+    data['cpu_baseline'] = NATIVE.cpu_baseline(data['variant'], data['platform'])
+    NATIVE.validate(seal(data))
+    stale = copy.deepcopy(data)
+    stale['cpu_baseline'] = 'x86-64'
+    with pytest.raises(ValueError):
+        NATIVE.validate(seal(stale))
 @pytest.mark.parametrize('path,value', [
     (('schema',),'QualificationEvidence/v1'), (('browser',),{'name':'chromium','version':'100'}),
     (('execution_kind',),'browser'), (('offline_network_disabled',),False),

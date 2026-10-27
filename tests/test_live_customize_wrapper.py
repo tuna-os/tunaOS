@@ -47,6 +47,9 @@ def _fetch_stubs(tmp_path):
 
 def _generate_customizer_wrapper(directory, session_root, env, *, variant, flavor, digest, payload_ref, candidate="0"):
     shutil.copytree(ROOT / "live-iso/common/src", directory)
+    real = directory / "customize-live-real.sh"
+    os.replace(directory / "customize-live.sh", real)
+    real.chmod(0o755)
     source = (ROOT / "scripts/build-iso-tacklebox.sh").read_text()
     start = source.index("{\n\techo '#!/usr/bin/env bash'", source.index("CUSTOMIZE_DIR="))
     end = source.index('\nif [[ "$DEV"', start)

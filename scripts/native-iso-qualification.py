@@ -23,7 +23,7 @@ DIGEST = re.compile(r'sha256:[0-9a-f]{64}')
 SHA = re.compile(r'[0-9a-f]{40}')
 TRANSITIONS = ['welcome', 'encryption', 'summary', 'progress', 'done']
 INPUTS = ('source', 'overlay', 'installer', 'engine', 'media')
-BASELINES = {'linux/amd64':'x86-64', 'linux/amd64/v2':'x86-64-v2', 'linux/arm64':'aarch64'}
+NATIVE_PLATFORMS = frozenset({'linux/amd64', 'linux/amd64/v2', 'linux/arm64'})
 
 
 def require(condition, message):
@@ -95,7 +95,7 @@ def validate(evidence):
     if extended:
         validate_desktop_identity(evidence)
     else:
-        require(evidence['platform'] in BASELINES and evidence['cpu_baseline'] == cpu_baseline(evidence['variant'], evidence['platform']), 'platform/CPU baseline mismatch')
+        require(evidence['platform'] in NATIVE_PLATFORMS and evidence['cpu_baseline'] == cpu_baseline(evidence['variant'], evidence['platform']), 'platform/CPU baseline mismatch')
         require(evidence['hardware_scope'] == 'qemu' and evidence['flavor'] == 'gnome', 'unsupported native GUI scope')
     require(evidence.get('storage_backend', 'ostree') == 'ostree', 'native-composefs requires separate proof')
     require(evidence.get('offline_network_disabled') is True, 'guest egress must be disabled')

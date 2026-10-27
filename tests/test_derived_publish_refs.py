@@ -20,6 +20,7 @@ import re
 import shutil
 import subprocess
 import sys
+import types
 from pathlib import Path
 
 import pytest

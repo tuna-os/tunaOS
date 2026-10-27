@@ -295,7 +295,6 @@ touch "${TUNA_SESSION_ROOT:-}/etc/tunaos/live-session"
 mkdir -p "${TUNA_SESSION_ROOT:-}/etc/bootc-installer"
 touch "${TUNA_SESSION_ROOT:-}/etc/bootc-installer/live-iso-mode"
 
-
 # ── 1. Desktop detection ──────────────────────────────────────────────────────
 # TUNA_SESSION_ROOT lets the bats tests point detection at a fake root.
 _SR="${TUNA_SESSION_ROOT:-}"

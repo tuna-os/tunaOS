@@ -708,13 +708,13 @@ FAKE
 	local build="${repo}/scripts/build-iso-tacklebox.sh"
 	local wf="${repo}/.github/workflows/live-overlay.yml"
 	local build_export wf_export
-	build_export="$(grep -nF "echo 'export TUNA_SESSION_ROOT=/'" "$build" | cut -d: -f1)"
+	build_export="$(grep -nF 'TUNA_SESSION_ROOT' "$build" | grep -F 'printf' | cut -d: -f1)"
 	wf_export="$(grep -nF "echo 'export TUNA_SESSION_ROOT=/'" "$wf" | cut -d: -f1)"
 	[ -n "$build_export" ]
 	[ -n "$wf_export" ]
+	grep -qF 'TUNA_SESSION_ROOT:-/' "$build"
 	# The export must be emitted into each generated wrapper, not merely set in
 	# the host shell that invokes Tacklebox.
-	grep -qF "echo 'export TUNA_SESSION_ROOT=/'" "$build"
 	grep -qF "echo 'export TUNA_SESSION_ROOT=/'" "$wf"
 	# Options BEFORE assignments: GNU env stops parsing options at the first
 	# NAME=VALUE, so `env HOME=/root -u XDG_DATA_HOME` runs `-u` as the command
