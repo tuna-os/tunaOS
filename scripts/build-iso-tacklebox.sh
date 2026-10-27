@@ -241,7 +241,12 @@ chmod 0755 "${CUSTOMIZE_DIR}/customize-live-real.sh"
 {
 	echo '#!/usr/bin/env bash'
 	printf 'export TUNAOS_XFCE_CANDIDATE=%q\n' "${TUNAOS_XFCE_CANDIDATE:-0}"
-	echo 'export TUNA_SESSION_ROOT=/'
+	printf 'export TUNA_SESSION_ROOT=%q\n' "${TUNA_SESSION_ROOT:-/}"
+	if [[ -n "${TUNA_LIVE_OVERLAY_REF:-}" ]]; then
+		echo 'export TUNA_METADATA_ONLY=1'
+	else
+		echo 'unset TUNA_METADATA_ONLY'
+	fi
 	printf 'export TUNA_LIVE_BASE_IMAGE=%q\n' "$BASE_IMAGE"
 	printf 'export TUNA_LIVE_BASE_DIGEST=%q\n' "$BASE_DIGEST"
 	printf 'export TUNA_LIVE_PLATFORM=%q\n' "${PLATFORM:-$SOURCE_PLATFORM}"

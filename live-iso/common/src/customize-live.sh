@@ -16,17 +16,10 @@
 
 set -exo pipefail
 
-write_live_source_metadata() {
+write_live_source_json() {
 	local root="${TUNA_SESSION_ROOT:-}"
 	local metadata_dir="${root}/etc/tunaos"
 	mkdir -p "${metadata_dir}"
-	cat >"${metadata_dir}/live-installer-info" <<INFOEOF
-# Written by tunaOS customize-live.sh: the installer payload in this squash.
-INSTALLER_APP=${INSTALLER_APP}
-INSTALLER_REVISION=${INSTALLER_REVISION}
-INSTALLER_BUNDLE_SHA256=${INSTALLER_BUNDLE_SHA256}
-INFOEOF
-
 	python3 - "${metadata_dir}/live-source.json" "${INSTALLER_APP}" "${INSTALLER_REVISION}" "${INSTALLER_BUNDLE_SHA256}" <<'PYEOF'
 import json
 import os
@@ -47,8 +40,21 @@ with open(path, "w") as metadata_file:
     json.dump(metadata, metadata_file, indent=2)
     metadata_file.write("\n")
 PYEOF
-	echo "customize-live: installer ${INSTALLER_APP}@${INSTALLER_REVISION} (bundle ${INSTALLER_BUNDLE_SHA256})"
 	echo "customize-live: source metadata written to ${metadata_dir}/live-source.json"
+}
+
+write_live_source_metadata() {
+	local root="${TUNA_SESSION_ROOT:-}"
+	local metadata_dir="${root}/etc/tunaos"
+	mkdir -p "${metadata_dir}"
+	cat >"${metadata_dir}/live-installer-info" <<INFOEOF
+# Written by tunaOS customize-live.sh: the installer payload in this squash.
+INSTALLER_APP=${INSTALLER_APP}
+INSTALLER_REVISION=${INSTALLER_REVISION}
+INSTALLER_BUNDLE_SHA256=${INSTALLER_BUNDLE_SHA256}
+INFOEOF
+	write_live_source_json
+	echo "customize-live: installer ${INSTALLER_APP}@${INSTALLER_REVISION} (bundle ${INSTALLER_BUNDLE_SHA256})"
 }
 
 installer_flatpak_arch_for_arch() {
@@ -79,6 +85,178 @@ installer_asset_for_arch() {
 	esac
 }
 
+read_installer_receipt() {
+	local root="${TUNA_SESSION_ROOT:-}"
+	local receipt="${root}/etc/tunaos/live-installer-info"
+	local receipt_app="" receipt_revision="" receipt_bundle="" line field value
+	if [[ -f "$receipt" ]]; then
+		while IFS= read -r line || [[ -n "$line" ]]; do
+			case "$line" in
+			INSTALLER_APP=*) receipt_app="${line#*=}" ;;
+			INSTALLER_REVISION=*) receipt_revision="${line#*=}" ;;
+			INSTALLER_BUNDLE_SHA256=*) receipt_bundle="${line#*=}" ;;
+			esac
+		done <"$receipt"
+	fi
+	if [[ -n "${TUNA_INSTALLER_APP+x}" ]]; then INSTALLER_APP="$TUNA_INSTALLER_APP"; else INSTALLER_APP="$receipt_app"; fi
+	if [[ -n "${TUNA_INSTALLER_REVISION+x}" ]]; then INSTALLER_REVISION="$TUNA_INSTALLER_REVISION"; else INSTALLER_REVISION="$receipt_revision"; fi
+	if [[ -n "${TUNA_INSTALLER_BUNDLE_SHA256+x}" ]]; then INSTALLER_BUNDLE_SHA256="$TUNA_INSTALLER_BUNDLE_SHA256"; else INSTALLER_BUNDLE_SHA256="$receipt_bundle"; fi
+	for field in INSTALLER_APP INSTALLER_REVISION INSTALLER_BUNDLE_SHA256; do
+		value="${!field}"
+		if [[ -z "$value" || "${value,,}" == unknown ]]; then
+			echo "customize-live: metadata-only mode requires a known ${field} identity" >&2
+			return 1
+		fi
+	done
+}
+
+stage_final_media_bindings() {
+	local root="${TUNA_SESSION_ROOT:-}"
+	local candidate_root="${root}/usr/lib/tunaos/xfce-candidate-oci"
+	RECIPE_FILE="${RECIPE_FILE:-${root}/etc/bootc-installer/recipe.json}"
+	if [[ "${TUNAOS_XFCE_CANDIDATE:-0}" == 1 ]]; then
+		[[ "$INSTALLER_APP" == org.tunaos.InstallerXfce && "${TUNA_LIVE_PLATFORM:-}" == linux/amd64 ]] || exit 2
+		[[ -n "${TUNA_LIVE_INSTALL_TARGET:-}" && "${TUNA_LIVE_PAYLOAD_REF:-}" == "${TUNA_LIVE_INSTALL_TARGET}@${TUNA_LIVE_BASE_DIGEST:-}" ]] || exit 2
+		mkdir -p "${root}/usr/lib/tunaos" "${root}/etc/bootc-installer"
+		[[ ! -e "$candidate_root" ]] || exit 2
+		cp -a "${SCRIPT_DIR}/xfce-candidate-oci" "$candidate_root"
+		python3 "${SCRIPT_DIR}/xfce-media-input.py" "$candidate_root" "$TUNA_LIVE_BASE_DIGEST" "${root}/etc/bootc-installer/media-input.json" "$TUNA_LIVE_INSTALL_TARGET"
+	elif [[ -n "${TUNA_LIVE_PAYLOAD_REF+x}" ]]; then
+		python3 "${SCRIPT_DIR}/installer-source-binding.py" "$RECIPE_FILE" \
+			"$TUNA_LIVE_PAYLOAD_REF" "${TUNA_LIVE_BASE_DIGEST:-}" \
+			"${TUNA_LIVE_INSTALL_TARGET:-}"
+	fi
+}
+
+stage_live_ssh_credentials() {
+	local root="${TUNA_SESSION_ROOT:-}"
+	local ssh_unit=""
+	if [[ -f "${root}/usr/lib/systemd/system/sshd.service" && ! -L "${root}/usr/lib/systemd/system/sshd.service" ]]; then
+		ssh_unit="sshd.service"
+	fi
+	if [[ -z "$ssh_unit" && -f "${root}/usr/lib/systemd/system/ssh.service" ]]; then
+		ssh_unit="ssh.service"
+	fi
+	if [[ -z "$ssh_unit" ]]; then
+		echo "ERROR: dev ISO requested but no SSH service is installed" >&2
+		exit 1
+	fi
+	mkdir -p "${root}/etc/ssh/sshd_config.d" "${root}/usr/lib/systemd/system" \
+		"${root}/etc/systemd/system/tunaos-live-ready.service.d" "${root}/usr/libexec" \
+		"${root}/etc/sudoers.d"
+	cat >"${root}/etc/ssh/sshd_config.d/90-tunaos-live-e2e.conf" <<'EOF'
+PasswordAuthentication yes
+PermitEmptyPasswords no
+EOF
+	cat >"${root}/usr/lib/systemd/system/tunaos-live-ssh-credentials.service" <<EOF
+[Unit]
+Description=Configure temporary TunaOS live E2E SSH credentials
+After=livesys.service
+Before=${ssh_unit}
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -euxc 'getent passwd liveuser >/dev/null || useradd --create-home --user-group --shell /bin/bash liveuser; echo liveuser:live | chpasswd'
+RemainAfterExit=yes
+StandardOutput=journal+console
+StandardError=journal+console
+
+[Install]
+WantedBy=${ssh_unit}
+EOF
+	cat >"${root}/etc/systemd/system/tunaos-live-ready.service.d/10-ssh-credentials.conf" <<'EOF'
+[Unit]
+Requires=tunaos-live-ssh-credentials.service
+After=tunaos-live-ssh-credentials.service
+EOF
+	systemctl --root="${root:-/}" enable tunaos-live-ssh-credentials.service "$ssh_unit"
+
+	# Dev-ISO diagnostics dump: the guest reports display-manager and SSH
+	# failures directly to the serial log captured by the E2E harness.
+	cat >"${root}/usr/libexec/tunaos-live-debug" <<'DBGEOF'
+#!/usr/bin/env bash
+# Dump live-session diagnostics to the console (dev/E2E ISOs only).
+# Not set -e: a missing unit or command must not stop the remaining sections.
+set -u
+
+section() {
+	echo "TUNAOS_LIVE_DEBUG_BEGIN $1"
+	shift
+	"$@" 2>&1 | sed 's/^/| /'
+	echo "TUNAOS_LIVE_DEBUG_END"
+}
+
+echo "TUNAOS_LIVE_DEBUG_START uptime=$(cut -d. -f1 /proc/uptime)"
+DMS=(sddm plasmalogin gdm gdm3 greetd lightdm cosmic-greeter display-manager)
+section targets systemctl is-active graphical.target multi-user.target display-manager.service
+section failed-units systemctl list-units --failed --no-pager --no-legend
+section pending-jobs systemctl list-jobs --no-pager --no-legend
+section sessions loginctl list-sessions --no-legend
+for dm in "${DMS[@]}"; do
+	systemctl list-unit-files "${dm}.service" --no-legend 2>/dev/null | grep -q . || continue
+	section "dm-status-${dm}" systemctl status --no-pager --full "${dm}.service"
+	section "dm-journal-${dm}" journalctl -b --no-pager -n 60 -u "${dm}.service"
+done
+for unit in sshd ssh sshd@ systemd-ssh-generator; do
+	systemctl list-unit-files "${unit}*" --no-legend 2>/dev/null | grep -q . || continue
+	section "ssh-journal-${unit}" journalctl -b --no-pager -n 40 -u "${unit}*"
+done
+section ssh-listeners ss -lntp
+section ssh-config sshd -T
+section ssh-hostkeys ls -l /etc/ssh/
+section autologin-conf sh -c 'cat /etc/sddm.conf.d/*.conf /etc/plasmalogin.conf.d/*.conf 2>/dev/null'
+section sessions-available sh -c 'ls /usr/share/wayland-sessions/ /usr/share/xsessions/ 2>/dev/null'
+section drm sh -c 'ls -l /dev/dri 2>&1; journalctl -b --no-pager -n 20 -k -g "drm|virtio"'
+section compositors sh -c 'pgrep -a "kwin_wayland|plasmashell|gnome-shell|cosmic-comp|niri|xfwl4|Xorg" || echo "no compositor process"'
+section installer sh -c 'pgrep -a flatpak || echo "no flatpak process"'
+echo "TUNAOS_LIVE_DEBUG_DONE"
+DBGEOF
+	chmod 0755 "${root}/usr/libexec/tunaos-live-debug"
+
+	cat >"${root}/usr/lib/systemd/system/tunaos-live-debug.service" <<'DBGUNITEOF'
+[Unit]
+Description=Dump live-session diagnostics to the console (dev/E2E ISOs only)
+# This unit is deliberately independent of the readiness marker so failures
+# in graphical startup still produce the diagnostic serial log.
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/tunaos-live-debug
+StandardOutput=tty
+TTYPath=/dev/ttyS0
+StandardError=tty
+RemainAfterExit=yes
+TimeoutStartSec=300
+DBGUNITEOF
+	cat >"${root}/usr/lib/systemd/system/tunaos-live-debug.timer" <<'DBGTIMEREOF'
+[Unit]
+Description=Dump live-session diagnostics shortly after boot (dev/E2E ISOs only)
+
+[Timer]
+OnBootSec=40s
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target
+DBGTIMEREOF
+	systemctl --root="${root:-/}" enable tunaos-live-debug.timer
+
+	# fisherman uses sudo over non-interactive SSH; both binaries are required
+	# by the dev-media path, so fail here instead of during an E2E install.
+	if ! command -v sudo >/dev/null 2>&1; then
+		echo "ERROR: ENABLE_SSHD=1 grants liveuser NOPASSWD sudo, but this image has no sudo." >&2
+		exit 1
+	fi
+	echo 'liveuser ALL=(ALL) NOPASSWD: ALL' >"${root}/etc/sudoers.d/90-tunaos-live-e2e"
+	chmod 0440 "${root}/etc/sudoers.d/90-tunaos-live-e2e"
+	if ! command -v podman >/dev/null 2>&1; then
+		echo "ERROR: this image has no podman, but the offline image store is configured for one" >&2
+		exit 1
+	fi
+}
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # Behavior probe for the architecture-specific release asset. Unlike the
 # metadata-only mode below, this performs no filesystem mutation.
 if [[ "${TUNA_ASSET_NAME_ONLY:-0}" == "1" ]]; then
@@ -86,14 +264,18 @@ if [[ "${TUNA_ASSET_NAME_ONLY:-0}" == "1" ]]; then
 	exit 0
 fi
 
-# Test hook: exercise metadata output without mutating a host image or
-# requiring flatpak/podman. TUNA_SESSION_ROOT must point at a disposable root.
+# Overlay-backed ISO builds inherit the installer's baked receipt. Refresh only
+# source metadata and final-media bindings; never fetch or reinstall Flatpaks or
+# rewrite the receipt that records what the overlay actually contains.
 if [[ "${TUNA_METADATA_ONLY:-0}" == "1" ]]; then
 	: "${TUNA_SESSION_ROOT:?TUNA_SESSION_ROOT is required in metadata-only mode}"
-	INSTALLER_APP="${TUNA_INSTALLER_APP:?TUNA_INSTALLER_APP is required in metadata-only mode}"
-	INSTALLER_REVISION="${TUNA_INSTALLER_REVISION:-unknown}"
-	INSTALLER_BUNDLE_SHA256="${TUNA_INSTALLER_BUNDLE_SHA256:-unknown}"
-	write_live_source_metadata
+	_SR="$TUNA_SESSION_ROOT"
+	read_installer_receipt
+	stage_final_media_bindings
+	if [[ -f "${SCRIPT_DIR}/.enable-sshd" ]]; then
+		stage_live_ssh_credentials
+	fi
+	write_live_source_json
 	exit 0
 fi
 # Every live customization must target the image root supplied by tacklebox.
@@ -113,7 +295,6 @@ touch "${TUNA_SESSION_ROOT:-}/etc/tunaos/live-session"
 mkdir -p "${TUNA_SESSION_ROOT:-}/etc/bootc-installer"
 touch "${TUNA_SESSION_ROOT:-}/etc/bootc-installer/live-iso-mode"
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # ── 1. Desktop detection ──────────────────────────────────────────────────────
 # TUNA_SESSION_ROOT lets the bats tests point detection at a fake root.
@@ -373,213 +554,7 @@ DROPEOF
 # tacklebox creates liveuser during boot, so install a oneshot that sets its
 # temporary test password after livesys and before the SSH daemon starts.
 if [[ -f "${SCRIPT_DIR}/.enable-sshd" ]]; then
-	SSH_UNIT=""
-	# systemctl enable refuses to operate on a "linked unit file" (a symlink
-	# under /usr/lib/systemd/system/, as opposed to an Alias= in [Install]).
-	# Debian/Ubuntu's openssh-server ships sshd.service as exactly that kind
-	# of compat symlink to the real ssh.service unit — require a real
-	# (non-symlink) file so that case falls through to ssh.service below.
-	[[ -f /usr/lib/systemd/system/sshd.service && ! -L /usr/lib/systemd/system/sshd.service ]] && SSH_UNIT="sshd.service"
-	[[ -z "$SSH_UNIT" && -f /usr/lib/systemd/system/ssh.service ]] && SSH_UNIT="ssh.service"
-	if [[ -z "$SSH_UNIT" ]]; then
-		echo "ERROR: dev ISO requested but no SSH service is installed" >&2
-		exit 1
-	fi
-	mkdir -p /etc/ssh/sshd_config.d /usr/lib/systemd/system \
-		/etc/systemd/system/tunaos-live-ready.service.d
-	cat >/etc/ssh/sshd_config.d/90-tunaos-live-e2e.conf <<'EOF'
-PasswordAuthentication yes
-PermitEmptyPasswords no
-EOF
-	cat >/usr/lib/systemd/system/tunaos-live-ssh-credentials.service <<EOF
-[Unit]
-Description=Configure temporary TunaOS live E2E SSH credentials
-After=livesys.service
-Before=${SSH_UNIT}
-
-[Service]
-Type=oneshot
-ExecStart=/bin/sh -euxc 'getent passwd liveuser >/dev/null || useradd --create-home --user-group --shell /bin/bash liveuser; echo liveuser:live | chpasswd'
-RemainAfterExit=yes
-StandardOutput=journal+console
-StandardError=journal+console
-
-[Install]
-WantedBy=${SSH_UNIT}
-EOF
-	cat >/etc/systemd/system/tunaos-live-ready.service.d/10-ssh-credentials.conf <<'EOF'
-[Unit]
-Requires=tunaos-live-ssh-credentials.service
-After=tunaos-live-ssh-credentials.service
-EOF
-	systemctl enable tunaos-live-ssh-credentials.service "$SSH_UNIT"
-
-	# ── Dev-ISO diagnostics dump ──────────────────────────────────────────
-	#
-	# Everything the harness learns about a live session today it learns from
-	# serial markers and a screenshot. When the session simply never starts —
-	# marlin:kde: graphical.target inactive, framebuffer stddev exactly 0, a
-	# text login on ttyS0 — those say THAT it failed and nothing about why, and
-	# the one artifact that would (`journalctl -u sddm`) needs a shell in the
-	# guest. On marlin that shell does not exist: sshd accepts and immediately
-	# closes over both TCP and vsock, and the harness attaches the serial as a
-	# write-only file, so the text login cannot be answered either.
-	#
-	# So the guest reports on itself. This dumps the display-manager and sshd
-	# journals, the failed units, the pending jobs and the autologin config
-	# straight to /dev/console — which IS the serial log the harness already
-	# captures and uploads as an artifact. Dev/E2E media only, and it runs
-	# AFTER the readiness marker, so it can neither gate nor slow a run.
-	#
-	# Sections are fenced with greppable markers so a failing cell can be
-	# triaged from the artifact without booting anything.
-	cat >/usr/libexec/tunaos-live-debug <<'DBGEOF'
-#!/usr/bin/env bash
-# Dump live-session diagnostics to the console (dev/E2E ISOs only).
-# Not set -e: a missing unit or command must not stop the remaining sections.
-set -u
-
-section() {
-	echo "TUNAOS_LIVE_DEBUG_BEGIN $1"
-	shift
-	"$@" 2>&1 | sed 's/^/| /'
-	echo "TUNAOS_LIVE_DEBUG_END"
-}
-
-echo "TUNAOS_LIVE_DEBUG_START uptime=$(cut -d. -f1 /proc/uptime)"
-
-# Whichever DM this desktop installed — the unit name differs per desktop
-# (sddm / plasmalogin / gdm / greetd / lightdm / cosmic-greeter), and asking
-# for all of them is cheaper than detecting.
-DMS=(sddm plasmalogin gdm gdm3 greetd lightdm cosmic-greeter display-manager)
-
-section targets systemctl is-active graphical.target multi-user.target display-manager.service
-section failed-units systemctl list-units --failed --no-pager --no-legend
-section pending-jobs systemctl list-jobs --no-pager --no-legend
-section sessions loginctl list-sessions --no-legend
-
-for dm in "${DMS[@]}"; do
-	systemctl list-unit-files "${dm}.service" --no-legend 2>/dev/null | grep -q . || continue
-	section "dm-status-${dm}" systemctl status --no-pager --full "${dm}.service"
-	section "dm-journal-${dm}" journalctl -b --no-pager -n 60 -u "${dm}.service"
-done
-
-# sshd: the harness's own way into the guest, and on marlin it accepts and
-# then closes every connection. Both unit names, same reason as above.
-for unit in sshd ssh sshd@ systemd-ssh-generator; do
-	systemctl list-unit-files "${unit}*" --no-legend 2>/dev/null | grep -q . || continue
-	section "ssh-journal-${unit}" journalctl -b --no-pager -n 40 -u "${unit}*"
-done
-section ssh-listeners ss -lntp
-section ssh-config sshd -T
-section ssh-hostkeys ls -l /etc/ssh/
-
-section autologin-conf sh -c 'cat /etc/sddm.conf.d/*.conf /etc/plasmalogin.conf.d/*.conf 2>/dev/null'
-section sessions-available sh -c 'ls /usr/share/wayland-sessions/ /usr/share/xsessions/ 2>/dev/null'
-section drm sh -c 'ls -l /dev/dri 2>&1; journalctl -b --no-pager -n 20 -k -g "drm|virtio"'
-section compositors sh -c 'pgrep -a "kwin_wayland|plasmashell|gnome-shell|cosmic-comp|niri|xfwl4|Xorg" || echo "no compositor process"'
-section installer sh -c 'pgrep -a flatpak || echo "no flatpak process"'
-
-echo "TUNAOS_LIVE_DEBUG_DONE"
-DBGEOF
-	chmod 0755 /usr/libexec/tunaos-live-debug
-
-	cat >/usr/lib/systemd/system/tunaos-live-debug.service <<'DBGUNITEOF'
-[Unit]
-Description=Dump live-session diagnostics to the console (dev/E2E ISOs only)
-# No ordering on tunaos-live-ready.service, deliberately, and this is the
-# whole design. That unit is After=NetworkManager-wait-online.service (90s
-# default timeout) and on a marlin:kde boot where the live session never
-# starts it had not emitted its marker minutes in — so a diagnostic ordered
-# behind it stays silent in exactly the failure it exists to explain. Same
-# rule tunaos-live-ready.service states about itself: "it must speak loudest
-# when the rest of the boot is failing."
-#
-# Driven by tunaos-live-debug.timer instead of any target, so nothing in the
-# boot can gate it.
-
-[Service]
-Type=oneshot
-ExecStart=/usr/libexec/tunaos-live-debug
-# StandardOutput=tty + TTYPath, not journal+console: in headless QEMU
-# (-display none) /dev/console is NOT the serial port, which is why
-# tunaos-live-ready.service writes to /dev/ttyS0 directly. A console-routed
-# dump would never reach the serial log the harness captures.
-StandardOutput=tty
-TTYPath=/dev/ttyS0
-StandardError=tty
-RemainAfterExit=yes
-TimeoutStartSec=300
-DBGUNITEOF
-
-	cat >/usr/lib/systemd/system/tunaos-live-debug.timer <<'DBGTIMEREOF'
-[Unit]
-Description=Dump live-session diagnostics shortly after boot (dev/E2E ISOs only)
-
-[Timer]
-# 40s in: late enough that the display manager has tried and logged, early
-# enough that the harness is still running (it gives up on paint at 120s).
-OnBootSec=40s
-AccuracySec=1s
-
-[Install]
-WantedBy=timers.target
-DBGTIMEREOF
-	systemctl enable tunaos-live-debug.timer
-
-	# fisherman (the LUKS/TPM install backend) runs as root over a
-	# non-interactive SSH command, so sudo has no TTY to prompt on. Grant
-	# liveuser NOPASSWD sudo — dev/E2E media only, matching
-	# projectbluefin/dakota-iso's debug=1 live-env setup (liveuser has
-	# NOPASSWD sudo there too). Production images never enable sshd, so
-	# liveuser never gets a login there.
-	#
-	# The drop-in authorises a binary that has to BE there. The Fedora and EL
-	# bases ship sudo; the openSUSE, Ubuntu and Debian ones do not, and a
-	# sudoers file granting rights to a missing binary is completely silent —
-	# the ISO builds, the live image boots, and every `sudo` iso-e2e.sh runs in
-	# the guest fails with
-	#
-	#   bash: line 1: sudo: command not found
-	#
-	# killing the run at `sudo podman load` with no clue where it came from.
-	# That was defect 3 of tunaOS#953 on sailfin, fixed by naming sudo in
-	# Containerfile.opensuse — and it came back on grouper because the apt
-	# bases never got the same line. Assert it here instead, where the
-	# assumption is actually made, so the next base to omit sudo fails the ISO
-	# build rather than a 20-minute E2E cell.
-	if ! command -v sudo >/dev/null 2>&1; then
-		echo "ERROR: ENABLE_SSHD=1 grants liveuser NOPASSWD sudo, but this image has no sudo." >&2
-		echo "       Add it to this variant's Containerfile base package list." >&2
-		exit 1
-	fi
-	mkdir -p /etc/sudoers.d
-	echo 'liveuser ALL=(ALL) NOPASSWD: ALL' >/etc/sudoers.d/90-tunaos-live-e2e
-	chmod 0440 /etc/sudoers.d/90-tunaos-live-e2e
-
-	# Same shape, one binary over. The storage.conf and drop-in written above
-	# exist so that the live root's PODMAN can see the offline store, and a
-	# composefs image cannot be installed without one at all: fisherman's
-	# bootcDirect shortcut is unavailable there, so bootc runs inside a
-	# container podman starts.
-	#
-	# guppy had skopeo (bootc's containers-image-proxy) and no podman, which
-	# looks close enough to be missed. It is not: every store probe answered
-	# `sudo: podman: command not found`, the harness read a store that holds the
-	# image as empty, and the cell died 2h30m in on the SSH image transfer that
-	# is its last resort. guppy:gnome, LUKS run 31134373523.
-	#
-	# Fatal here rather than a warning, and only on ENABLE_SSHD media, for the
-	# same reason as sudo above: this is the dev/E2E ISO, the assumption is made
-	# right here, and 10 seconds of ISO build is a better place to learn it than
-	# hour three of a matrix cell.
-	if ! command -v podman >/dev/null 2>&1; then
-		echo "ERROR: this image has no podman, but the offline image store above" >&2
-		echo "       is configured for one and the composefs install path runs" >&2
-		echo "       bootc inside a container." >&2
-		echo "       Add it to this variant's Containerfile base package list." >&2
-		exit 1
-	fi
+	stage_live_ssh_credentials
 fi
 
 # ── 3. Pre-install the installer Flatpak into the live squash ────────────────
@@ -1082,24 +1057,7 @@ STORESEOF
 # Same probe as scripts/lib/common.sh TUNAOS_BACKEND_PROBE_SH, and the order is
 # load-bearing for the same reason documented there: bootupd payload first, so
 # a SEALED image that still ships bootupd stays on the ostree path.
-if [[ "${TUNAOS_XFCE_CANDIDATE:-0}" == 1 ]]; then
-	[[ "$INSTALLER_APP" == org.tunaos.InstallerXfce && "$TUNA_LIVE_PLATFORM" == linux/amd64 ]] || exit 2
-	[[ -n "${TUNA_LIVE_INSTALL_TARGET:-}" && "$TUNA_LIVE_PAYLOAD_REF" == "${TUNA_LIVE_INSTALL_TARGET}@${TUNA_LIVE_BASE_DIGEST}" ]] || exit 2
-	# XFCE reads Fisherman's host MediaInput, never GNOME's recipe file.
-	# The separate OSTree offline store and producer digest check remain required.
-	mkdir -p /usr/lib/tunaos /etc/bootc-installer
-	[[ ! -e /usr/lib/tunaos/xfce-candidate-oci ]] || exit 2
-	cp -a "${SCRIPT_DIR}/xfce-candidate-oci" /usr/lib/tunaos/xfce-candidate-oci
-	python3 "${SCRIPT_DIR}/xfce-media-input.py" /usr/lib/tunaos/xfce-candidate-oci "$TUNA_LIVE_BASE_DIGEST" /etc/bootc-installer/media-input.json "$TUNA_LIVE_INSTALL_TARGET"
-fi
-RECIPE_FILE="${RECIPE_FILE:-/etc/bootc-installer/recipe.json}"
-if [[ -n "${TUNA_LIVE_PAYLOAD_REF+x}" && "${TUNAOS_XFCE_CANDIDATE:-0}" != 1 ]]; then
-	# The final native media stage knows the canonical alias and measured
-	# digest of its offline store. Never keep the stock tunaos:latest source.
-	python3 "${SCRIPT_DIR}/installer-source-binding.py" "$RECIPE_FILE" \
-		"$TUNA_LIVE_PAYLOAD_REF" "${TUNA_LIVE_BASE_DIGEST:-}" \
-		"${TUNA_LIVE_INSTALL_TARGET:-}"
-fi
+stage_final_media_bindings
 if [[ -f "$RECIPE_FILE" && "${TUNAOS_XFCE_CANDIDATE:-0}" != 1 ]]; then
 	# Fatal on failure, deliberately. An image we cannot classify must not get
 	# a guessed recipe: 10 seconds of ISO build is a better place to learn this
