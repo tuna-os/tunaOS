@@ -269,41 +269,93 @@ report_greeter_processes() {
 }
 
 report_coredumps() {
-	section "gnome-shell core dumps"
-	if command -v coredumpctl >/dev/null 2>&1; then
-		coredumpctl list --no-pager 2>&1 | tail -n 30 || true
-		# `coredumpctl info` carries the whole stack trace the gate's journal
-		# filter used to cut down to the lines that matched `mutter`.
-		coredumpctl info --no-pager -1 /usr/bin/gnome-shell 2>&1 || true
-	fi
-	section "environment systemd-coredump recorded for the last gnome-shell crash"
-	# fc2e22bc...: the MESSAGE_ID systemd-coredump logs every dump under.
-	journalctl -b --all --no-pager -o json -n 1 \
-		MESSAGE_ID=fc2e22bc6ee647b6b90729ab34a250b1 COREDUMP_EXE=/usr/bin/gnome-shell 2>/dev/null |
-		ENV_RE="$ENV_RE" python3 -c '
-import json, os, re, sys
+	section "gnome-shell core dumps (verified GDM greeter only)"
+	ENV_RE="$ENV_RE" python3 -c '
+import json, os, re, subprocess
+
 rx = re.compile(os.environ["ENV_RE"])
-found = False
-for line in sys.stdin:
-    entry = json.loads(line)
-    found = True
-    for key in ("COREDUMP_PID", "COREDUMP_UNIT", "COREDUMP_SESSION", "COREDUMP_CGROUP", "COREDUMP_SIGNAL_NAME", "COREDUMP_CMDLINE"):
-        value = entry.get(key)
-        if isinstance(value, list):
-            value = bytes(value).decode("utf-8", "replace")
-        print(f"{key}={value}")
-    environ = entry.get("COREDUMP_ENVIRON")
-    if isinstance(environ, list):
-        environ = bytes(environ).decode("utf-8", "replace")
-    if environ is None:
-        print("COREDUMP_ENVIRON is not in this journal entry")
-    else:
-        lines = [part for part in re.split(r"[\n\0]", environ) if rx.match(part)]
-        print("COREDUMP_ENVIRON renderer and session variables:")
-        print("\n".join(lines) if lines else "(none)")
-if not found:
-    print("(no gnome-shell core dump in this boot)")
-' 2>&1 || echo "(could not read the journal entry)"
+uids = set()
+for account in ("gdm", "Debian-gdm"):
+    try:
+        result = subprocess.run(["getent", "passwd", account], capture_output=True, text=True, timeout=5)
+        if result.returncode:
+            continue
+        fields = result.stdout.strip().split(":")
+        if len(fields) == 7 and fields[0] == account and fields[2].isdigit() and int(fields[2]) > 0:
+            uids.add(str(int(fields[2])))
+    except (OSError, subprocess.TimeoutExpired):
+        continue
+
+def value(entry, key):
+    item = entry.get(key)
+    if isinstance(item, list):
+        # Journal binary fields are byte arrays, not arbitrary string lists.
+        if not all(type(byte) is int and 0 <= byte <= 255 for byte in item):
+            return ""
+        return bytes(item).decode("utf-8", "replace")
+    return item if isinstance(item, str) else ""
+
+verified = []
+for uid in sorted(uids):
+    try:
+        result = subprocess.run([
+            "journalctl", "-b", "--all", "--no-pager", "-o", "json", "-n", "32",
+            "MESSAGE_ID=fc2e22bc6ee647b6b90729ab34a250b1",
+            "COREDUMP_EXE=/usr/bin/gnome-shell", f"COREDUMP_UID={uid}"],
+            capture_output=True, text=True, timeout=5)
+        if result.returncode:
+            continue
+        for line in result.stdout.splitlines():
+            try:
+                entry = json.loads(line)
+                if not isinstance(entry, dict):
+                    continue
+                environ = value(entry, "COREDUMP_ENVIRON")
+                env = re.split(r"[\n\0]", environ)
+                session = value(entry, "COREDUMP_SESSION")
+                groups = set(value(entry, "COREDUMP_CGROUP").split("/"))
+                session_scope = (re.fullmatch(r"[A-Za-z0-9_-]+", session)
+                                 and f"session-{session}.scope" in groups)
+                user_unit = (f"user@{uid}.service" in groups
+                             and "org.gnome.Shell@gdm.service" in groups)
+                if (value(entry, "COREDUMP_UID") != uid
+                        or value(entry, "COREDUMP_EXE") != "/usr/bin/gnome-shell"
+                        or "GNOME_SHELL_SESSION_MODE=gdm" not in env
+                        or not (session_scope or user_unit)):
+                    continue
+                # Exact identity is mandatory before a separate trace lookup.
+                if (not re.fullmatch(r"[0-9a-f]{32}", value(entry, "_BOOT_ID"))
+                        or not re.fullmatch(r"[1-9][0-9]*", value(entry, "COREDUMP_PID"))
+                        or not re.fullmatch(r"[1-9][0-9]*", value(entry, "COREDUMP_TIMESTAMP"))):
+                    continue
+                verified.append(entry)
+            except (ValueError, TypeError):
+                continue
+    except (OSError, subprocess.TimeoutExpired):
+        continue
+
+if not verified:
+    print("(no verified GDM gnome-shell core dump in this boot)")
+else:
+    entry = max(verified, key=lambda item: int(value(item, "COREDUMP_TIMESTAMP")))
+    print("==> environment systemd-coredump recorded for the verified GDM crash")
+    for key in ("COREDUMP_PID", "COREDUMP_UID", "COREDUMP_UNIT", "COREDUMP_SESSION", "COREDUMP_CGROUP", "COREDUMP_SIGNAL_NAME", "COREDUMP_CMDLINE"):
+        print(f"{key}={value(entry, key)}")
+    lines = [part for part in re.split(r"[\n\0]", value(entry, "COREDUMP_ENVIRON")) if rx.match(part)]
+    print("COREDUMP_ENVIRON renderer and session variables:")
+    print("\n".join(lines) if lines else "(none)")
+    matches = [f"{key}={value(entry, key)}" for key in
+               ("_BOOT_ID", "COREDUMP_PID", "COREDUMP_TIMESTAMP", "COREDUMP_UID", "COREDUMP_EXE")]
+    try:
+        trace = subprocess.run(["coredumpctl", "info", "--no-pager", "-1", *matches],
+                               capture_output=True, text=True, timeout=5)
+        if trace.returncode == 0:
+            print(trace.stdout, end="")
+        else:
+            print("(could not read the verified GDM trace)")
+    except (OSError, subprocess.TimeoutExpired):
+        print("(could not read the verified GDM trace)")
+' 2>/dev/null || echo "(could not verify GDM core attribution)"
 }
 
 main() {

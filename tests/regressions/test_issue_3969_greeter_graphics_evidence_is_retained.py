@@ -48,6 +48,7 @@ CRASH_ENV = [
     "LANG=C.UTF-8",
     "HOME=/var/lib/gdm",
     "XDG_SESSION_TYPE=wayland",
+    "GNOME_SHELL_SESSION_MODE=gdm",
     "LIBGL_ALWAYS_SOFTWARE=1",
     "SECRET_TOKEN=hunter2",
 ]
@@ -148,7 +149,14 @@ def build_guest(tmp_path: Path, *, greeter_env, dmesg_lines):
         'show-session) printf "%s\\n" "Class=greeter" "Service=gdm-launch-environment" "Seat=seat0" "User=42" "Scope=session-c12.scope" ;;\n'
         "esac\n",
     )
+    shim(bindir, "getent", 'if [[ "$*" == "passwd gdm" ]]; then echo "gdm:x:42:42:GDM:/var/lib/gdm:/sbin/nologin"; else exit 2; fi\n')
     entry = {
+        "_BOOT_ID": "a" * 32,
+        "COREDUMP_PID": "2709",
+        "COREDUMP_TIMESTAMP": "1000000",
+        "COREDUMP_UID": "42",
+        "COREDUMP_SESSION": "c12",
+        "COREDUMP_CGROUP": "/user.slice/user-42.slice/session-c12.scope",
         "MESSAGE_ID": "fc2e22bc6ee647b6b90729ab34a250b1",
         "COREDUMP_EXE": "/usr/bin/gnome-shell",
         "COREDUMP_UNIT": "gdm.service",
@@ -156,7 +164,9 @@ def build_guest(tmp_path: Path, *, greeter_env, dmesg_lines):
         "COREDUMP_CMDLINE": "/usr/bin/gnome-shell",
         "COREDUMP_ENVIRON": list("\n".join(greeter_env).encode()),
     }
-    shim(bindir, "journalctl", f'echo "journalctl $*" >>"{calls}"\ncat <<\'JSON\'\n{json.dumps(entry)}\nJSON\n')
+    records = tmp_path / "core-records.jsonl"
+    records.write_text(json.dumps(entry) + "\n")
+    shim(bindir, "journalctl", f'echo "journalctl $*" >>"{calls}"\ncat "{records}"\n')
     shim(
         bindir,
         "coredumpctl",
@@ -369,6 +379,81 @@ def test_report_records_the_core_dump_environment_and_the_full_trace(tmp_path):
     assert "meta_backend_native_init_basic" in result.stdout
     assert "module metadata frame 250" in result.stdout
 
+
+
+def core_report(tmp_path, mutate):
+    env, calls = build_guest(tmp_path, greeter_env=CRASH_ENV, dmesg_lines=1)
+    records = tmp_path / "core-records.jsonl"
+    original = json.loads(records.read_text())
+    records.write_text("\n".join(json.dumps(entry) for entry in mutate(original)) + "\n")
+    result = subprocess.run(
+        ["bash", str(EVIDENCE), "once", "0"], env=env,
+        capture_output=True, text=True, check=False,
+    )
+    return result, calls
+
+
+def test_newer_other_user_core_cannot_replace_verified_greeter(tmp_path):
+    def records(greeter):
+        other = dict(greeter, COREDUMP_UID="1000", COREDUMP_PID="9999",
+                     COREDUMP_TIMESTAMP="2000000", COREDUMP_CMDLINE="unrelated-user-core",
+                     COREDUMP_ENVIRON="GNOME_SHELL_SESSION_MODE=gdm\nHOME=/home/unrelated-core")
+        return [greeter, other]
+
+    result, calls = core_report(tmp_path, records)
+    assert result.returncode == 0
+    assert "COREDUMP_PID=2709" in result.stdout
+    assert "unrelated-user-core" not in result.stdout
+    assert "/home/unrelated-core" not in result.stdout
+    trace_calls = [line for line in calls.read_text().splitlines() if line.startswith("coredumpctl ")]
+    assert len(trace_calls) == 1
+    for match in ("_BOOT_ID=" + "a" * 32, "COREDUMP_PID=2709", "COREDUMP_TIMESTAMP=1000000",
+                  "COREDUMP_UID=42", "COREDUMP_EXE=/usr/bin/gnome-shell"):
+        assert match in trace_calls[0]
+    assert "coredumpctl list" not in calls.read_text()
+
+
+@pytest.mark.parametrize("field,value", [
+    ("COREDUMP_UID", "1000"), ("COREDUMP_UID", None),
+    ("COREDUMP_ENVIRON", "GNOME_SHELL_SESSION_MODE=user\nHOME=/home/unrelated-core"),
+    ("COREDUMP_ENVIRON", None), ("COREDUMP_CGROUP", "/unrelated.scope"),
+    ("COREDUMP_SESSION", "c99"), ("COREDUMP_PID", None),
+    ("COREDUMP_TIMESTAMP", None), ("_BOOT_ID", None),
+])
+def test_unattributed_core_never_reads_a_trace_or_prints_its_environment(tmp_path, field, value):
+    def records(entry):
+        entry["COREDUMP_CMDLINE"] = "unattributed-core"
+        entry[field] = value
+        return [entry]
+
+    result, calls = core_report(tmp_path, records)
+    assert "no verified GDM gnome-shell core dump" in result.stdout
+    assert "unattributed-core" not in result.stdout
+    assert "/home/unrelated-core" not in result.stdout
+    assert "coredumpctl " not in calls.read_text()
+
+
+def test_gdm_core_in_explicit_user_unit_can_be_attributed_without_session_scope(tmp_path):
+    def records(entry):
+        entry.pop("COREDUMP_SESSION")
+        entry["COREDUMP_CGROUP"] = "/user.slice/user-42.slice/user@42.service/session.slice/org.gnome.Shell@gdm.service"
+        return [entry]
+
+    result, calls = core_report(tmp_path, records)
+    assert "COREDUMP_PID=2709" in result.stdout
+    assert "coredumpctl info" in calls.read_text()
+
+
+def test_missing_gdm_account_fails_closed_for_core_attribution(tmp_path):
+    env, calls = build_guest(tmp_path, greeter_env=CRASH_ENV, dmesg_lines=1)
+    bindir = Path(env["PATH"].split(":", 1)[0])
+    shim(bindir, "getent", "exit 2\n")
+    result = subprocess.run(
+        ["bash", str(EVIDENCE), "once", "0"], env=env,
+        capture_output=True, text=True, check=False,
+    )
+    assert "no verified GDM gnome-shell core dump" in result.stdout
+    assert "coredumpctl " not in calls.read_text()
 
 def test_coredump_environment_journal_request_preserves_large_fields(tmp_path):
     _, calls = report(tmp_path)

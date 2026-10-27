@@ -2315,3 +2315,18 @@ Discard the record if the process identity changes.
 The fixture tests other users, root workers, other scopes, and UID changes.
 The environment filter stays unchanged. These tests do not prove behavior in
 a real VM.
+
+
+### Greeter report selects another user’s core dump (#3969)
+
+**Symptom:** a report for GDM contains a crash from an ordinary user’s shell.
+
+**Cause:** at `af1ad92b`, core selection uses only the executable name.
+A synthetic record from a different UID reproduces the defect.
+
+**Fix:** resolve the GDM account UID and verify the recorded GDM session mode
+and scope or explicit user unit. Unknown attribution excludes the record.
+Select a trace with the exact boot ID, PID, timestamp, UID and executable.
+Do not list unrelated cores. The fixtures test a newer crash from another
+user and records with missing identity fields. They do not prove behavior
+in a real VM.
