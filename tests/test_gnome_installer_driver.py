@@ -1,10 +1,13 @@
 """Measured OCR/control fixtures and ordered GUI transaction tests, no VM claims."""
 import importlib.util
 import json
-from pathlib import Path
+import os
 import socket
 import struct
+import subprocess
+import textwrap
 import threading
+from pathlib import Path
 
 import pytest
 
@@ -611,16 +614,84 @@ def test_summary_ocr_uncertain_word_is_not_silently_dropped():
         captured_rows([word])
 
 
-def test_retained_image_regression_is_explicit_ci_job():
+def run_ocr_install_step(tmp_path, versions=None):
+    workflow = (ROOT / '.github/workflows/test.yml').read_text()
+    job = workflow.split('  gnome-summary-ocr:', 1)[1].split('  unit-tests:', 1)[0]
+    step = job.split('      - name: Install measured OCR dependencies\n', 1)[1]
+    body = step.split('        run: |\n', 1)[1].split('      - name:', 1)[0]
+    script = textwrap.dedent(body)
+
+    bin_dir = tmp_path / 'bin'
+    bin_dir.mkdir(parents=True)
+    (bin_dir / 'sudo').write_text('#!/bin/sh\nexec "$@"\n')
+    (bin_dir / 'apt-get').write_text(
+        '#!/bin/sh\nprintf \'%s\\n\' "$*" >> "$APT_GET_LOG"\n')
+    (bin_dir / 'dpkg-query').write_text('''#!/bin/sh
+printf '%s\\n' "$@" > "$DPKG_QUERY_LOG"
+[ "$1" = '-W' ] || exit 2
+shift 2
+for package do
+  case "$package" in
+    imagemagick|imagemagick-6.q16) version="$IMAGEMAGICK_VERSION" ;;
+    tesseract-ocr|libtesseract5) version="$TESSERACT_VERSION" ;;
+    tesseract-ocr-eng|tesseract-ocr-osd) version="$LANGUAGE_DATA_VERSION" ;;
+    *) exit 2 ;;
+  esac
+  printf '%s\\t%s\\n' "$package" "$version"
+done
+''')
+    for stub in bin_dir.iterdir():
+        stub.chmod(0o755)
+
+    versions = {
+        'IMAGEMAGICK_VERSION': '8:6.9.12.98+dfsg1-99ubuntu1',
+        'TESSERACT_VERSION': '5.3.4-99build99',
+        'LANGUAGE_DATA_VERSION': '1:4.1.0-99',
+    } | (versions or {})
+    env = {
+        **os.environ,
+        'PATH': f'{bin_dir}:{os.environ["PATH"]}',
+        'APT_GET_LOG': str(tmp_path / 'apt-get.log'),
+        'DPKG_QUERY_LOG': str(tmp_path / 'dpkg-query.log'),
+        **versions,
+    }
+    result = subprocess.run(
+        ['/bin/bash', '-euo', 'pipefail', '-c', script],
+        cwd=ROOT, env=env, text=True, capture_output=True, check=False)
+    return result, tmp_path
+
+
+def test_retained_image_regression_is_explicit_ci_job(tmp_path):
     workflow = (ROOT / '.github/workflows/test.yml').read_text()
     job = workflow.split('  gnome-summary-ocr:', 1)[1].split('  unit-tests:', 1)[0]
     assert 'ubuntu-24.04' in job
-    assert 'tesseract-ocr=5.3.4-1build5' in job
-    assert 'imagemagick=8:6.9.12.98+dfsg1-5.2build2' in job
     assert 'python3 -m pytest -q tests/ocr/gnome_summary_capture.py' in job
     assert 'continue-on-error' not in job
     assert 'if:' not in job
 
+    result, output_dir = run_ocr_install_step(tmp_path / 'later-revision')
+    assert result.returncode == 0, result.stderr
+    assert (output_dir / 'apt-get.log').read_text().splitlines() == [
+        'update -qq',
+        'install -y --no-install-recommends python3-pytest imagemagick '
+        'imagemagick-6.q16 tesseract-ocr libtesseract5 tesseract-ocr-eng '
+        'tesseract-ocr-osd',
+    ]
+    assert all('=' not in package for package in
+               (output_dir / 'apt-get.log').read_text().splitlines()[1].split()[3:])
+    assert (output_dir / 'dpkg-query.log').read_text().splitlines()[2:] == [
+        'imagemagick', 'imagemagick-6.q16', 'tesseract-ocr', 'libtesseract5',
+        'tesseract-ocr-eng', 'tesseract-ocr-osd',
+    ]
+
+    for name, wrong_versions in [
+        ('imagemagick', {'IMAGEMAGICK_VERSION': '8:6.9.12.97+dfsg1-99ubuntu1'}),
+        ('tesseract', {'TESSERACT_VERSION': '5.3.40-99build99'}),
+        ('language-data', {'LANGUAGE_DATA_VERSION': '1:4.1.01-99'}),
+    ]:
+        wrong_version, _ = run_ocr_install_step(tmp_path / f'wrong-{name}', wrong_versions)
+        assert wrong_version.returncode != 0
+        assert 'does not match upstream' in wrong_version.stderr
 
 BUTTON = json.loads((ROOT / 'tests/fixtures/gnome-installer/button39897665901.json').read_text())
 

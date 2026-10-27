@@ -203,13 +203,26 @@ jobs:
           persist-credentials: false
       - name: Install measured OCR dependencies
         run: |
+          set -euo pipefail
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
-            python3-pytest imagemagick=8:6.9.12.98+dfsg1-5.2build2 \
-            imagemagick-6.q16=8:6.9.12.98+dfsg1-5.2build2 \
-            tesseract-ocr=5.3.4-1build5 libtesseract5=5.3.4-1build5 \
-            tesseract-ocr-eng=1:4.1.0-2 tesseract-ocr-osd=1:4.1.0-2
-          dpkg-query -W imagemagick imagemagick-6.q16 tesseract-ocr libtesseract5 tesseract-ocr-eng tesseract-ocr-osd
+            python3-pytest imagemagick imagemagick-6.q16 \
+            tesseract-ocr libtesseract5 tesseract-ocr-eng tesseract-ocr-osd
+          versions=$(dpkg-query -W -f='${Package}\t${Version}\n' \
+            imagemagick imagemagick-6.q16 tesseract-ocr libtesseract5 \
+            tesseract-ocr-eng tesseract-ocr-osd)
+          while IFS=$'\t' read -r package version; do
+            case "$package" in
+              imagemagick|imagemagick-6.q16) expected='8:6.9.12.98' ;;
+              tesseract-ocr|libtesseract5) expected='5.3.4' ;;
+              tesseract-ocr-eng|tesseract-ocr-osd) expected='1:4.1.0' ;;
+              *) echo "Unexpected OCR package from dpkg-query: $package" >&2; exit 1 ;;
+            esac
+            if [[ "$version" != "$expected" && "$version" != "$expected"-* ]]; then
+              echo "$package version $version does not match upstream $expected" >&2
+              exit 1
+            fi
+          done <<< "$versions"
       - name: Verify retained summary pixels without optional skips
         run: python3 -m pytest -q tests/ocr/gnome_summary_capture.py
 
