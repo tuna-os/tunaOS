@@ -218,10 +218,10 @@ jobs:
               tesseract-ocr-eng|tesseract-ocr-osd) expected='1:4.1.0' ;;
               *) echo "Unexpected OCR package from dpkg-query: $package" >&2; exit 1 ;;
             esac
-            if [[ "$version" != "$expected" && "$version" != "$expected"-* ]]; then
-              echo "$package version $version does not match upstream $expected" >&2
-              exit 1
-            fi
+            case "$version" in
+              "$expected"|"$expected"+*|"$expected"-*|"$expected"~*) ;;
+              *) echo "$package version $version does not match upstream $expected" >&2; exit 1 ;;
+            esac
           done <<< "$versions"
       - name: Verify retained summary pixels without optional skips
         run: python3 -m pytest -q tests/ocr/gnome_summary_capture.py
