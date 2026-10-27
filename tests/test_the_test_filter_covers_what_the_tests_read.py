@@ -159,3 +159,8 @@ def test_a_path_the_suite_reads_also_triggers_the_suite(name: str):
 def test_builder_contract_only_changes_run_validation(path):
     """An export-only or schema-only PR must execute its contract tests."""
     assert _is_covered(path, _filter_paths())
+
+
+def test_diagnostic_apt_lock_only_change_runs_its_consumers():
+    """#3431 r4383963942: exact QEMU closure pins are executable test inputs."""
+    assert _is_covered('requirements-iso-diagnostic-apt.txt', _filter_paths())

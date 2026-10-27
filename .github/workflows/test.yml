@@ -54,6 +54,7 @@ on:
       - 'requirements-config.txt'
       - 'requirements-package-authoring.txt'
       - 'requirements-iso-diagnostic.txt'
+      - 'requirements-iso-diagnostic-apt.txt'
       - 'requirements-branding.txt'
       - 'image-versions.yaml'
       - 'registry-map.yaml'

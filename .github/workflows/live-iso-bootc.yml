@@ -124,7 +124,7 @@ jobs:
         run: |
           flags=()
           [[ "$CANDIDATE_XFCE" == true ]] && flags+=(--candidate-xfce)
-          python3 scripts/plan-iso-qualification.py --target "$VARIANT:$FLAVOR:$PLATFORM" --max-parallel 1 "${flags[@]}"
+          python3 scripts/plan-iso-qualification.py --build-only --target "$VARIANT:$FLAVOR:$PLATFORM" --max-parallel 1 "${flags[@]}"
 
   build:
     needs: [diagnostic-preflight, preflight]
@@ -332,7 +332,7 @@ jobs:
           set -euo pipefail
           flags=()
           [[ "$CANDIDATE_XFCE" == true ]] && flags+=(--candidate-xfce)
-          python3 scripts/plan-iso-qualification.py --target "$VARIANT:$FLAVOR:$REQUESTED_PLATFORM" --max-parallel 1 "${flags[@]}"
+          python3 scripts/plan-iso-qualification.py --build-only --target "$VARIANT:$FLAVOR:$REQUESTED_PLATFORM" --max-parallel 1 "${flags[@]}"
           echo "PLATFORM=$REQUESTED_PLATFORM" >> "$GITHUB_ENV"
 
       - name: Build OS image

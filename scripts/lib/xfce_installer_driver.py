@@ -10,6 +10,7 @@ import hashlib
 from pathlib import Path
 import re
 import subprocess
+import struct
 import time
 import tempfile
 from lib.gnome_installer_driver import Unverified, normal, ocr_rows, click_unix
@@ -19,6 +20,13 @@ from lib.xfce_candidate import TRANSITIONS
 class Screen:
     def __init__(self, path):
         self.path = Path(path)
+        with self.path.open('rb') as source:
+            header = source.read(24)
+        if len(header) != 24 or header[:8] != b'\x89PNG\r\n\x1a\n' or header[12:16] != b'IHDR':
+            raise Unverified('capture is not PNG')
+        self.width, self.height = struct.unpack('!II', header[16:24])
+        if not (640 <= self.width <= 1920 and 480 <= self.height <= 1200):
+            raise Unverified('unsupported framebuffer dimensions')
         with tempfile.NamedTemporaryFile(suffix='.png') as enlarged:
             subprocess.run(['convert', str(path), '-resize', '300%', enlarged.name],
                            capture_output=True, check=True, timeout=20)
@@ -128,11 +136,11 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
 
     def click(screen, label):
         x1,y1,x2,y2=screen.box(label)
-        pointer(vnc,(x1+x2)//2,(y1+y2)//2)
+        pointer(vnc,(x1+x2)//2,(y1+y2)//2,screen.width,screen.height)
 
     def field(screen, label, labels, value):
         x,y=screen.entry(label, labels)
-        pointer(vnc,x,y)
+        pointer(vnc,x,y,screen.width,screen.height)
         keys('ctrl-a')
         type_text(value)
 
@@ -166,7 +174,7 @@ def drive(outdir, mode, vnc, capture, keys, type_text, installer_digest, passwor
             # Passphrase occurs twice; Confirm uniquely anchors the second entry.
             x,y=screen.entry('Confirm',['Confirm'])
             x += 50
-            pointer(vnc,x,y); type_text(password)
+            pointer(vnc,x,y,screen.width,screen.height); type_text(password)
             keys('shift-tab'); type_text(password)
         result['transitions'].append('setup'); advance(observe())
         screen=wait('Name this computer')

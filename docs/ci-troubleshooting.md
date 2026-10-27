@@ -2730,6 +2730,22 @@ owner work, [PR #3427](https://github.com/tuna-os/tunaOS/pull/3427), inspected a
 design. These tests check the scripts locally. They do not qualify an image,
 guest boot or production cutover.
 
+### ISO source review: build admission and test interfaces (#3431)
+
+Local regression tests reproduced these failures on `bb878744`.
+The tests use temporary files, protocol bytes and owned sockets. They do not
+prove a fresh install or authorize a diagnostic run.
+
+| Symptom | Cause | Fix and regression evidence |
+|---|---|---|
+| A configured KDE native build stops before image work | Build preflight required a strict GUI qualification driver | Use build admission for the producer. Keep strict qualification admission separate. `tests/test_native_build_admission.py` executes the workflow preflight for ordinary desktops and checks the candidate, architecture and backend limits. |
+| A fork's exact payload fails with `invalid native target reference` | Recipe binding accepted only the stock registry and namespace | Accept registry references with ports and nested namespaces. Keep exact target, payload and digest equality. `tests/test_installer_source_binding.py` runs the publication resolver through the customization binding. |
+| A diagnostic APT lock change runs no Test workflow | The PR path filter omitted the lock read by the tests | Include `requirements-iso-diagnostic-apt.txt`. `tests/test_the_test_filter_covers_what_the_tests_read.py` checks this input. |
+| An XFCE click raises `TypeError` before input reaches the guest | Callers omitted the width and height required by the pointer function | Pass the captured frame dimensions. `tests/test_xfce_real_transport.py` uses the real pointer function with inert RFB bytes and rejects a server geometry mismatch before any click. |
+| A visual observer fails to decode after several transfer chunks | The next chunk's letters extended an unquoted shell variable name | Quote the previous variable value. `tests/test_xfce_real_transport.py` sends the actual observer envelope through shell assignments and checks the exact bytes. |
+| A GRUB helper edits a command other than `linux` | Ordered substring checks accepted extra commands before fixed cursor movement | Require the exact three-line preamble. `tests/test_luks_first_boot.py` checks refusal before cursor movement or argument input. Strict qualification still forbids boot edits. |
+| The manual LUKS fixture exits before it reads its socket | Its caller still passed the secret as an argument | Send the fixture secret through stdin. `tests/test_luks_first_boot.py` runs the shell invocation and real helper against an owned socket, without a boot wait. |
+
 ### Gentoo desktop fails branding with unrendered identity tokens (#3980)
 
 **Symptom:** the package proof for modified GNOME stops after install with

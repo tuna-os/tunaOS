@@ -157,3 +157,38 @@ def test_iso_source_override_cannot_replace_canonical_payload_destination(tmp_pa
     recipe = json.loads((tmp_path / "recipe.json").read_text())
     assert recipe["offline_payloads"] == [{"source": source, "ref": payload}]
     assert recipe["bootable_environments"][0]["image"] == source
+
+
+@pytest.mark.parametrize('destination', ['ghcr.io/tuna-os', 'quay.io/review-fixture', 'registry.example:5000/acme/team',
+    'localhost:5000/dev', 'registry.gitlab.com/group/sub-group/os', 'ghcr.io/my_org'])
+@pytest.mark.parametrize('flavor', ['gnome', 'xfce'])
+def test_configured_destination_reaches_actual_customization_binding(tmp_path, destination, flavor):
+    """#3431 r4383963978: resolver output must survive the last writer."""
+    registry, namespace = destination.split('/', 1)
+    env = dict(os.environ, IMAGE_REGISTRY=registry, REPO_ORGANIZATION=namespace)
+    result = subprocess.run(['bash', 'scripts/published-image-ref.sh', 'bonito', flavor, 'ghcr'],
+                            cwd=ROOT, env=env, text=True, capture_output=True, check=True)
+    target = result.stdout.strip()
+    assert target == destination + '/bonito:' + flavor
+    path = tmp_path/'recipe.json'
+    path.write_text('{"keep":"value"}')
+    source = (ROOT/'live-iso/common/src/customize-live.sh').read_text()
+    block = source.split('if [[ -n "${TUNA_LIVE_PAYLOAD_REF+x}" ]]; then', 1)[1].split('\nfi', 1)[0]
+    run = subprocess.run(['bash', '-eu', '-c', block], env=dict(env,
+        SCRIPT_DIR=str(SCRIPT.parent), RECIPE_FILE=str(path),
+        TUNA_LIVE_PAYLOAD_REF=target+'@'+DIGEST, TUNA_LIVE_BASE_DIGEST=DIGEST,
+        TUNA_LIVE_INSTALL_TARGET=target), text=True, capture_output=True)
+    assert run.returncode == 0, run.stderr
+    assert json.loads(path.read_text()) == dict(keep='value', imgref=target,
+        local_imgref='containers-storage:'+target+'@'+DIGEST)
+
+
+@pytest.mark.parametrize('target', ['https://quay.io/a/bonito:gnome', 'quay.io/a/../bonito:gnome',
+    'quay.io/a/bonito:gnome\n', 'quay.io/a/bonito:gnome;false', 'quay.io/a/bonito',
+    'quay.io/a/bonito:gnome@'+DIGEST])
+def test_configured_binding_rejects_malformed_targets_before_writing(tmp_path, target):
+    path = tmp_path/'recipe.json'
+    path.write_text('{}')
+    with pytest.raises(ValueError):
+        BINDING.bind_recipe(path, target+'@'+DIGEST, DIGEST, target)
+    assert path.read_text() == '{}'

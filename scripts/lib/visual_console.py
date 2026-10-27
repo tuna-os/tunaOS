@@ -104,7 +104,7 @@ class VisualConsole:
         if len(encoded)>16384:
             raise ValueError('observer transfer exceeds bound')
         for offset in range(0,len(encoded),1500):
-            assignment='TUNA_OBSERVER_DATA='+('' if offset==0 else '$TUNA_OBSERVER_DATA')+shlex.quote(encoded[offset:offset+1500])
+            assignment='TUNA_OBSERVER_DATA='+('' if offset==0 else '"$TUNA_OBSERVER_DATA"')+shlex.quote(encoded[offset:offset+1500])
             self.type(assignment);self.key('ret')
             self.prompt(r'[$]\s*$')
         command='sudo -k -p "$(printf \''+prompt+'\')" python3 -c '+shlex.quote(launcher)+' "$TUNA_OBSERVER_DATA"; unset TUNA_OBSERVER_DATA; exit'

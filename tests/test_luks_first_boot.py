@@ -409,3 +409,46 @@ class TestGrubAppend:
         )
         assert res["exit_code"] == 0
         assert res["serial_sent"] == "testpass\n"
+
+
+@pytest.mark.parametrize('preamble', [
+    b'\nload_video\nset gfxpayload=keep\ninsmod gzio\n',
+    b'\x1b[02;03H\nload_video\nset gfxpayload=keep\ninsmod gzio\n',
+    b'load_video\nset gfxpayload=keep\ninsmod gzio\nsearch --fs-uuid --set=root deadbeef\n',
+    b'search --fs-uuid --set=root deadbeef\nload_video\nset gfxpayload=keep\ninsmod gzio\n',
+    b'load_video\ninsmod gzio\nset gfxpayload=keep\n',
+    b'load_video; reboot\nset gfxpayload=keep\ninsmod gzio\n',
+    b'load_video\nset gfxpayload=keep\n\ninsmod gzio\n',
+    b'load_video\nset gfxpayload=keep\ninsmod gzio\n\n',
+])
+def test_grub_refuses_nonexact_preamble_before_cursor_or_argument_input(monkeypatch, preamble):
+    monkeypatch.setenv('TUNAOS_LUKS_GRUB_APPEND', GRUB_APPEND)
+    editor = preamble + b'linux /vmlinuz root=UUID=1\ninitrd /initramfs.img\n'
+    result = _run(_argv(), serial_chunks=[GRUB_MENU, editor])
+    assert result['exit_code'] == 5
+    assert result['serial_sent'] == 'e'
+
+
+def test_manual_fixture_invocation_reaches_real_driver_with_stdin_secret():
+    """Execute its real shell command and Python entry point, with zero boot wait."""
+    import socket
+    import subprocess
+    import tempfile
+
+    root = SCRIPT.parents[1]
+    manual = (root / 'tests/manual/luks-first-boot-contract.sh').read_text()
+    invocation = next(line.strip() for line in manual.splitlines() if line.strip().startswith('out=$('))
+    # Only the observation duration changes. Parsing, pipe, argv and stdin are real.
+    invocation = invocation.replace('180 20', '0 0')
+    with tempfile.TemporaryDirectory(prefix='luks-contract-', dir='/tmp') as directory:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as serial:
+            serial.bind(directory + '/ser.sock')
+            serial.listen(1)
+            result = subprocess.run(
+                ['bash', '-c', invocation + '\nrc=$?; printf "%s" "$out"; exit "$rc"'],
+                cwd=root, env={**os.environ, 'd': directory}, capture_output=True,
+                text=True, timeout=5,
+            )
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert 'passphrase prompt never appeared' in result.stdout
+    assert 'testpass' not in result.stdout + result.stderr
