@@ -107,6 +107,92 @@ SERIAL_LOG="$3" strict_verify_installed_identity luks "$1" ghcr.io/tuna-os/skipj
     assert "TUNAOS_IMAGE_IDENTITY" in installed_log.read_text()
 
 
+@pytest.mark.parametrize("phase", ["cold", "warm"])
+@pytest.mark.parametrize("late_event", ["identity", "failure"])
+def test_plain_boot_waits_for_identity_before_snapshot(tmp_path, phase, late_event):
+    (tmp_path / "strict-plain-disk.qcow2").touch()
+    scripts = tmp_path / "scripts"
+    scripts.mkdir()
+    resolver = scripts / "published-image-ref.sh"
+    resolver.write_text("#!/bin/sh\necho ghcr.io/tuna-os/skipjack:gnome\n")
+    resolver.chmod(0o700)
+    harness = (
+        "set -o pipefail\n"
+        + "\n".join(
+            function(name)
+            for name in (
+                "strict_require_unmodified_boot",
+                "strict_require_desktop_contract",
+                "verify_strict_installed_boot",
+            )
+        )
+        + r'''
+OUTPUT_DIR="$1"
+SCRIPT_DIR="$2"
+SERIAL_LOG="$OUTPUT_DIR/serial.log"
+QEMU_PIDFILE="$OUTPUT_DIR/qemu.pid"
+TIMEOUT=120
+VARIANT=skipjack
+FLAVOR=gnome
+LATE_PHASE="$3"
+LATE_EVENT="$4"
+BOOT_PHASE=cold
+EVENT_POLLS=0
+IDENTITY="TUNAOS_IMAGE_IDENTITY digest=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa targetImgref=ghcr.io/tuna-os/skipjack:gnome"
+strict_launch_installed() {
+    if [[ "$3" == installed-plain-cold ]]; then
+        BOOT_PHASE=cold
+    else
+        BOOT_PHASE=warm
+    fi
+    printf '%s\n' TUNAOS_DESKTOP_CONTRACT_OK >>"$SERIAL_LOG"
+    if [[ "$BOOT_PHASE" != "$LATE_PHASE" ]]; then
+        printf '%s\n' "$IDENTITY" >>"$SERIAL_LOG"
+    fi
+}
+sleep() {
+    if [[ "$BOOT_PHASE" == "$LATE_PHASE" && "$EVENT_POLLS" == 0 ]]; then
+        EVENT_POLLS=1
+        if [[ "$LATE_EVENT" == identity ]]; then
+            printf '%s\n' "$IDENTITY" >>"$SERIAL_LOG"
+        else
+            printf '%s\n' TUNAOS_DESKTOP_CONTRACT_FAIL >>"$SERIAL_LOG"
+        fi
+    fi
+}
+boot_failed_on_serial() { return 1; }
+strict_poweroff_installed() { :; }
+screenshot() { :; }
+strict_offline_evidence() { printf '%s\n' "$*" >>"$OUTPUT_DIR/evidence.log"; }
+strict_verify_installed_identity() {
+    grep -aEq 'TUNAOS_IMAGE_IDENTITY digest=sha256:[0-9a-fA-F]{64} targetImgref=[^[:space:]]+' "$2" || return 1
+    STRICT_VERIFIED_BOOTED_DIGEST=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    STRICT_VERIFIED_BOOTED_REF="$3"
+}
+verify_strict_installed_boot plain
+'''
+    )
+    result = subprocess.run(
+        ["bash", "-c", harness, "test", str(tmp_path), str(scripts), phase, late_event],
+        env={**os.environ, "STRICT_SOURCE_DIGEST": "sha256:" + "a" * 64},
+        capture_output=True,
+        check=False,
+        timeout=5,
+    )
+    installed_log = tmp_path / "strict-plain-installed-serial.log"
+    warm_log = tmp_path / "strict-plain-warm-serial.log"
+    expected = 0 if late_event == "identity" else 7
+    assert result.returncode == expected, result.stderr.decode()
+    assert installed_log.exists() == (late_event == "identity" or phase == "warm")
+    assert warm_log.exists() == (late_event == "identity")
+    if late_event == "identity":
+        assert "TUNAOS_IMAGE_IDENTITY" in installed_log.read_text()
+        assert "TUNAOS_IMAGE_IDENTITY" in warm_log.read_text()
+        assert "installed_plain_boot_times" in (tmp_path / "evidence.log").read_text()
+        assert (tmp_path / "strict-qual-plain.json").exists()
+    else:
+        assert not (tmp_path / "strict-qual-plain.json").exists()
+
 
 def test_cold_and_warm_gates_precede_success_evidence():
     body = function("verify_strict_installed_boot")

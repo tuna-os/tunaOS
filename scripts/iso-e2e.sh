@@ -4136,10 +4136,6 @@ verify_strict_installed_boot() {
 				contract="fail"
 				break
 			fi
-			if grep -q "TUNAOS_DESKTOP_CONTRACT_OK" "$SERIAL_LOG" 2>/dev/null; then
-				contract="ok"
-				break
-			fi
 			if [[ -f "$QEMU_PIDFILE" ]] && ! kill -0 "$(cat "$QEMU_PIDFILE")" 2>/dev/null; then
 				echo "ERROR: strict installed VM (${mode}) exited during boot" >&2
 				return 4
@@ -4148,15 +4144,69 @@ verify_strict_installed_boot() {
 				echo "ERROR: strict installed system (${mode}) entered an emergency shell" >&2
 				return 4
 			fi
+			if grep -q "TUNAOS_DESKTOP_CONTRACT_OK" "$SERIAL_LOG" 2>/dev/null; then
+				contract="ok"
+				break
+			fi
 			sleep 5
 		done
-		cp -f "$SERIAL_LOG" "$installed_log"
+		local identity="absent"
+		local boot_failure=0
+		if [[ "$contract" == "ok" ]]; then
+			# The runtime can print contract success before its identity record.
+			# Keep serial attached for at most 60 seconds beyond the boot deadline.
+			local identity_deadline=$((deadline + 60))
+			local identity_wait_now identity_wait_sleep identity_wait_remaining
+			while true; do
+				if grep -q "TUNAOS_DESKTOP_CONTRACT_FAIL" "$SERIAL_LOG" 2>/dev/null; then
+					contract="fail"
+					break
+				fi
+				if [[ -f "$QEMU_PIDFILE" ]] && ! kill -0 "$(cat "$QEMU_PIDFILE")" 2>/dev/null; then
+					echo "ERROR: strict installed VM (${mode}) exited during boot" >&2
+					boot_failure=1
+					break
+				fi
+				if boot_failed_on_serial; then
+					echo "ERROR: strict installed system (${mode}) entered an emergency shell" >&2
+					boot_failure=1
+					break
+				fi
+				if grep -aEq 'TUNAOS_IMAGE_IDENTITY digest=sha256:[0-9a-fA-F]{64} targetImgref=[^[:space:]]+' "$SERIAL_LOG" 2>/dev/null; then
+					identity="ok"
+					break
+				fi
+				identity_wait_now=$(date +%s)
+				if ((identity_wait_now >= identity_deadline)); then
+					break
+				fi
+				identity_wait_remaining=$((identity_deadline - identity_wait_now))
+				identity_wait_sleep=5
+				((identity_wait_remaining < identity_wait_sleep)) && identity_wait_sleep=$identity_wait_remaining
+				sleep "$identity_wait_sleep"
+			done
+		fi
+		if [[ "$identity" != "ok" ]] && grep -aEq 'TUNAOS_IMAGE_IDENTITY digest=sha256:[0-9a-fA-F]{64} targetImgref=[^[:space:]]+' "$SERIAL_LOG" 2>/dev/null; then
+			identity="ok"
+		fi
+		if [[ "$identity" == "ok" ]]; then
+			cp -f "$SERIAL_LOG" "$installed_log"
+		fi
+		if [[ "$boot_failure" -ne 0 ]]; then
+			return 4
+		fi
 		if [[ "$contract" != "ok" ]]; then
 			echo "ERROR: desktop contract ${contract} on the strict installed system (${mode})" >&2
 			grep -a "TUNAOS_DESKTOP_CONTRACT_FAIL" "$installed_log" 2>/dev/null | tr -d '\r' >&2 || true
 			screenshot "strict-${mode}-installed-failed" || true
 			strict_poweroff_installed
 			return 7
+		fi
+		if [[ "$identity" != "ok" ]]; then
+			echo "ERROR: strict installed system (${mode}) identity absent from serial" >&2
+			screenshot "strict-${mode}-installed-failed" || true
+			strict_poweroff_installed
+			return 1
 		fi
 	fi
 	strict_require_unmodified_boot "$installed_log" || {
@@ -4224,10 +4274,6 @@ verify_strict_installed_boot() {
 		local wdeadline=$(($(date +%s) + TIMEOUT))
 		local wcontract="absent"
 		while (($(date +%s) < wdeadline)); do
-			if grep -q "TUNAOS_DESKTOP_CONTRACT_OK" "$SERIAL_LOG" 2>/dev/null; then
-				wcontract="ok"
-				break
-			fi
 			if grep -q "TUNAOS_DESKTOP_CONTRACT_FAIL" "$SERIAL_LOG" 2>/dev/null || boot_failed_on_serial; then
 				wcontract="fail"
 				break
@@ -4236,13 +4282,56 @@ verify_strict_installed_boot() {
 				wcontract="fail"
 				break
 			fi
+			if grep -q "TUNAOS_DESKTOP_CONTRACT_OK" "$SERIAL_LOG" 2>/dev/null; then
+				wcontract="ok"
+				break
+			fi
 			sleep 5
 		done
-		cp -f "$SERIAL_LOG" "${OUTPUT_DIR}/strict-${mode}-warm-serial.log"
+		local widentity="absent"
+		if [[ "$wcontract" == "ok" ]]; then
+			# The runtime can print contract success before its identity record.
+			# Keep serial attached for at most 60 seconds beyond the boot deadline.
+			local widentity_deadline=$((wdeadline + 60))
+			local widentity_wait_now widentity_wait_sleep widentity_wait_remaining
+			while true; do
+				if grep -q "TUNAOS_DESKTOP_CONTRACT_FAIL" "$SERIAL_LOG" 2>/dev/null || boot_failed_on_serial; then
+					wcontract="fail"
+					break
+				fi
+				if [[ -f "$QEMU_PIDFILE" ]] && ! kill -0 "$(cat "$QEMU_PIDFILE")" 2>/dev/null; then
+					wcontract="fail"
+					break
+				fi
+				if grep -aEq 'TUNAOS_IMAGE_IDENTITY digest=sha256:[0-9a-fA-F]{64} targetImgref=[^[:space:]]+' "$SERIAL_LOG" 2>/dev/null; then
+					widentity="ok"
+					break
+				fi
+				widentity_wait_now=$(date +%s)
+				if ((widentity_wait_now >= widentity_deadline)); then
+					break
+				fi
+				widentity_wait_remaining=$((widentity_deadline - widentity_wait_now))
+				widentity_wait_sleep=5
+				((widentity_wait_remaining < widentity_wait_sleep)) && widentity_wait_sleep=$widentity_wait_remaining
+				sleep "$widentity_wait_sleep"
+			done
+		fi
+		if [[ "$widentity" != "ok" ]] && grep -aEq 'TUNAOS_IMAGE_IDENTITY digest=sha256:[0-9a-fA-F]{64} targetImgref=[^[:space:]]+' "$SERIAL_LOG" 2>/dev/null; then
+			widentity="ok"
+		fi
+		if [[ "$widentity" == "ok" ]]; then
+			cp -f "$SERIAL_LOG" "${OUTPUT_DIR}/strict-${mode}-warm-serial.log"
+		fi
 		if [[ "$wcontract" != "ok" ]]; then
 			echo "ERROR: strict warm boot (${mode}): desktop contract ${wcontract}" >&2
 			strict_poweroff_installed
 			return 7
+		fi
+		if [[ "$widentity" != "ok" ]]; then
+			echo "ERROR: strict warm boot (${mode}): installed identity absent from serial" >&2
+			strict_poweroff_installed
+			return 1
 		fi
 	fi
 	local warm_log="${OUTPUT_DIR}/strict-${mode}-warm-serial.log"
