@@ -1,6 +1,7 @@
 name: Unified Build
 permissions:
   contents: read
+  actions: read
 # ── Nightly schedule registry ────────────────────────────────────────────────
 # The org has a 20-concurrent-job ceiling. One variant's full build alone
 # demands more than that, so the per-variant nightlies (in build-<variant>.yml)
@@ -234,8 +235,9 @@ jobs:
           # without the fix landing. platforms_json (built above, per entry)
           # already carries every {platform, safeplatform} pair the image
           # matrix published; expand each artifact-eligible entry into one
-          # row per amd64/arm64 platform instead of one fixed amd64 row.
-          # /v2 (a CPU-feature variant, not a real target arch) is excluded.
+          # exact supported platform row. linux/amd64/v2 is a distinct
+          # canonical qualification and ISO target even though its OCI
+          # architecture is amd64, so preserve that identity too.
           make_artifact_matrix() {
             local STAGE=$1
             echo "$FULL_MATRIX" | jq -c --argjson stage "$STAGE" '{
@@ -243,7 +245,7 @@ jobs:
                 select(.stage == $stage and (.build_iso == true or .build_qcow2 == true))
                 | . as $e
                 | ($e.platforms_json | fromjson)[]
-                | select(.platform == "linux/amd64" or .platform == "linux/arm64")
+                | select(.platform == "linux/amd64" or .platform == "linux/amd64/v2" or .platform == "linux/arm64")
                 | {
                     variant:       $e.variant,
                     image_name:    $e.image_name,
@@ -469,6 +471,7 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJson(needs.generate_matrix.outputs.artifact_s2_matrix) }}
     permissions:
+      actions: read
       contents: read
       packages: read
       id-token: write
@@ -509,6 +512,7 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJson(needs.generate_matrix.outputs.artifact_s3_matrix) }}
     permissions:
+      actions: read
       contents: read
       packages: read
       id-token: write
@@ -545,6 +549,7 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJson(needs.generate_matrix.outputs.artifact_s4_matrix) }}
     permissions:
+      actions: read
       contents: read
       packages: read
       id-token: write

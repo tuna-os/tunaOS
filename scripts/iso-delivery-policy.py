@@ -17,7 +17,13 @@ from pathlib import Path
 from typing import Any
 
 QUALIFIED = "browser-qualified"
-PLATFORM_ARCH = {
+PLATFORM_FILENAME_SUFFIX = {
+    "linux/amd64": "linux-amd64",
+    "linux/amd64/v2": "linux-amd64-v2",
+    "linux/arm64": "linux-arm64",
+}
+# Older releases used package architecture names in dated ISO basenames.
+LEGACY_PLATFORM_FILENAME_SUFFIX = {
     "linux/amd64": "x86_64",
     "linux/arm64": "aarch64",
 }
@@ -105,23 +111,24 @@ def latest_name(variant: str, flavor: str, platform: str) -> str:
 def has_dated_iso(
     retained: tuple[str, ...], variant: str, flavor: str, platform: str
 ) -> bool:
-    arch = PLATFORM_ARCH[platform]
+    suffixes = [PLATFORM_FILENAME_SUFFIX[platform]]
+    legacy_suffix = LEGACY_PLATFORM_FILENAME_SUFFIX.get(platform)
+    if legacy_suffix is not None:
+        suffixes.append(legacy_suffix)
     pattern = re.compile(
         rf"^{re.escape(variant)}-{re.escape(flavor)}-"
-        rf"{VERSION_COMPONENT}-{re.escape(arch)}\.iso$"
+        rf"{VERSION_COMPONENT}-(?:{'|'.join(map(re.escape, suffixes))})\.iso$"
     )
     return any(pattern.fullmatch(name) for name in retained)
 
 
-def active_targets(
-    config: dict[str, Any], *, receipts_validated: bool = False
-) -> frozenset[tuple[str, str, str]]:
-    """Validate the policy and return the exact cut-over targets.
+def active_targets(config: dict[str, Any]) -> frozenset[tuple[str, str, str]]:
+    """Validate policy and fail closed until authoritative receipt validation exists.
 
-    A non-empty policy is refused unless the caller states that qualification
-    receipts were validated (#3381). The command line never does, so a hand
-    edited tunaos.toml fails loudly instead of closing R2 delivery on an
-    unreviewed evidence string. The empty policy returns an empty set.
+    The command line never has an authoritative qualification snapshot or
+    current resolved-input comparison. A caller-provided boolean is not proof;
+    therefore non-empty cutover policies remain disabled until #3381 supplies
+    validated receipts and matching current inputs.
     """
     policy = policy_for(config)
     targets = policy.get("cutover_targets", [])
@@ -170,7 +177,7 @@ def active_targets(
         if flavor.get("build_image") is not True:
             raise PolicyError(f"cutover target {variant_id}:{flavor_id} is not built")
         platforms = flavor.get("platforms", variant.get("platforms", []))
-        if platform not in platforms or platform not in PLATFORM_ARCH:
+        if platform not in platforms or platform not in PLATFORM_FILENAME_SUFFIX:
             raise PolicyError(
                 f"cutover target {variant_id}:{flavor_id} does not build {platform}"
             )
@@ -190,10 +197,10 @@ def active_targets(
                 )
 
     validate_group_retention(config, active, retained)
-    if active and not receipts_validated:
+    if active:
         raise PolicyError(
             "non-empty cutover_targets are disabled until #3381 supplies a "
-            "current qualification catalog and matching receipt validation"
+            "current validated qualification snapshot and matching receipt/input checks"
         )
     return frozenset(active)
 
@@ -272,7 +279,7 @@ def annotate_targets(
                 raise PolicyError(
                     f"target matrix include[{index}].{field} must be a non-empty string"
                 )
-        if row["platform"] not in PLATFORM_ARCH:
+        if row["platform"] not in PLATFORM_FILENAME_SUFFIX:
             raise PolicyError(
                 f"target matrix include[{index}].platform {row['platform']!r} is unsupported"
             )
@@ -295,7 +302,7 @@ def annotate_groups(
             raise PolicyError(
                 f"group matrix include[{index}].variant must be a non-empty string"
             )
-        if not isinstance(platform, str) or platform not in PLATFORM_ARCH:
+        if not isinstance(platform, str) or platform not in PLATFORM_FILENAME_SUFFIX:
             raise PolicyError(
                 f"group matrix include[{index}].platform must be a supported platform"
             )

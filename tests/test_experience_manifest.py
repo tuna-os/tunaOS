@@ -176,6 +176,7 @@ def test_rejects_receipt_digest_for_changed_content():
 def test_rejects_observed_source_digest_mismatch(mode):
     data = manifest()
     data["observed"][mode]["source_digest"] = _digest("e")
+    data["observed"][mode]["booted_digest"] = _digest("e")
     with pytest.raises(ValueError, match="source_digest.*does not match"):
         MODULE.validate(data, "test")
 
@@ -256,6 +257,18 @@ def test_compare_ignores_timing_only_drift():
     right["observed"]["plain"]["duration_s"] += 42.0
     right["measurements"]["cold"]["duration_s"] += 10.0
     assert MODULE.compare(left, right) == []
+
+
+def test_timing_drift_does_not_hide_resolved_input_drift():
+    left = manifest()
+    right = copy.deepcopy(left)
+    for mode in MODULE.OBSERVED_MODES:
+        for field in ("duration_s", "install_duration_s", "cold_boot_s", "warm_boot_s"):
+            right["observed"][mode][field] = 999.0
+    for block in MODULE.MEASUREMENT_BLOCKS:
+        right["measurements"][block]["duration_s"] = 999.0
+    right["resolved_inputs"]["source"] = _digest("f")
+    assert MODULE.compare(left, right) == ["resolved_inputs"]
 
 
 def test_compare_flags_missing_observed_mode():

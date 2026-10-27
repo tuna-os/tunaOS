@@ -472,6 +472,7 @@ jobs:
     # The reusable image jobs declare publishing scopes. Their PR path disables
     # publish/SBOM and does not receive the R2 secrets passed by manual builds.
     permissions:
+      actions: read
       contents: read
       packages: write
       id-token: write
