@@ -2358,6 +2358,13 @@ That proxy can activate a user manager and affect later evidence.
 active Wayland session on seat0 and an active user manager. A stale session ID
 is not proof. The gate keeps its original acceptance checks and failure status.
 
+A snapshot alone cannot prevent a later manager exit. Diagnostics query PID 1
+for manager state and connect directly to an existing Unix bus socket.
+`busctl --address=unix:path=... --auto-start=no --timeout=5s` disables service
+autostart. Local `busctl --help` confirms these options. No machine proxy,
+PAM helper or fallback can recreate the manager. If the socket disappears or
+the bus rejects access, the optional probe fails without a retry through a proxy.
+
 GDM/PAM and IBus queries have separate limits of 200 and 50 events.
 Each event has a fixed label and numeric metadata.
 This preserves chronology when input errors repeat and avoids credential text.

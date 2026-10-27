@@ -85,24 +85,26 @@ if [[ -n "$diagnostic_session" && "$uid" =~ ^[0-9]+$ ]] &&
 	systemctl is-active --quiet "user@${uid}.service"; then
 	user_manager_active=1
 fi
-if [[ "$user_manager_active" == 1 && -d "/run/user/$uid" ]]; then
+if [[ -n "$diagnostic_session" && "$uid" =~ ^[0-9]+$ ]]; then
 	echo "==> user manager state for $user (uid $uid)"
-	sudo -u "#$uid" XDG_RUNTIME_DIR="/run/user/$uid" systemctl --user is-system-running 2>&1 || true
-	sudo -u "#$uid" XDG_RUNTIME_DIR="/run/user/$uid" systemctl --user list-units --type=target --no-legend 2>&1 | head -n 20 || true
-	echo "==> failed user units for $user (uid $uid)"
-	sudo -u "#$uid" XDG_RUNTIME_DIR="/run/user/$uid" systemctl --user list-units --state=failed --no-legend 2>&1 | head -n 20 || true
+	# Query PID 1 directly. Do not open a PAM session through sudo/runuser.
+	systemctl show "user@${uid}.service" -p ActiveState -p SubState -p Result --no-pager 2>&1 || true
 fi
 echo "==> AccountsService selection for $user"
 cat "/var/lib/AccountsService/users/$user" 2>/dev/null || echo "(no AccountsService file)"
 _diag_uid="$(id -u "$user" 2>/dev/null || true)"
 if [[ -n "$_diag_uid" ]]; then
-	busctl get-property org.freedesktop.Accounts "/org/freedesktop/Accounts/User${_diag_uid}" org.freedesktop.Accounts.User Session 2>&1 || true
+	busctl --auto-start=no get-property org.freedesktop.Accounts "/org/freedesktop/Accounts/User${_diag_uid}" org.freedesktop.Accounts.User Session 2>&1 || true
 fi
 echo "==> ScreenSaver state for $user"
-if [[ "$user_manager_active" == 1 ]]; then
-	busctl --auto-start=no --machine="${user}@.host" --user call org.gnome.ScreenSaver /org/gnome/ScreenSaver org.gnome.ScreenSaver GetActive 2>&1 || true
+if [[ "$user_manager_active" == 1 && -S "/run/user/$uid/bus" ]]; then
+	# --address connects directly to this Unix socket; no machine proxy or PAM
+	# helper can recreate a departed user manager. Disable destination-service
+	# activation and never fall back if the socket vanishes or access is denied.
+	busctl --address="unix:path=/run/user/$uid/bus" --auto-start=no --timeout=5s \
+		call org.gnome.ScreenSaver /org/gnome/ScreenSaver org.gnome.ScreenSaver GetActive 2>&1 || true
 else
-	echo "(skipped: no existing active Wayland session on seat0 with an active user manager)"
+	echo "(skipped: no existing active Wayland session on seat0 with an active user manager and bus socket)"
 fi
 echo "==> session definitions GDM can choose from"
 ls -l /usr/share/wayland-sessions /usr/share/xsessions 2>&1 || true

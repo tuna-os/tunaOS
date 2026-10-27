@@ -55,6 +55,8 @@ if [[ "$1" == bash ]]; then
         echo 41
     elif [[ "$body" == *'==> loginctl sessions'* ]]; then
         if [[ "$EXECUTE_DIAGNOSTICS" == 1 ]]; then
+            runtime_prefix=/run/user/
+            body="${body//$runtime_prefix/$STATE/run/user/}"
             printf '%s\n' "$body" | /bin/bash -s -- "$4" "${5:-}"
             exit $?
         fi
