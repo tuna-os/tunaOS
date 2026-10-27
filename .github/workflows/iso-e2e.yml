@@ -25,9 +25,9 @@ name: ISO E2E Smoke
 # runner, so a sweep costs runner minutes and nothing else.
 #
 # native-artifact verifies and consumes the exact output of Live ISOs.
-# The reusable same-run call is gated by the successful native build job.
-# A separately selected historical artifact gets diagnostic GUI smoke first;
-# missing provenance still prevents strict qualification.
+# Same-run and historical artifacts both require the exact successful build
+# job for the producer attempt. Qualification binds to that producer run and
+# attempt; historical checkout uses the producer SHA as trusted code.
 
 on:
   workflow_call:
@@ -184,7 +184,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.source == 'native-artifact' && inputs.native_run_id == format('{0}', github.run_id) && inputs.native_source_sha || github.sha }}
+          ref: ${{ inputs.source == 'native-artifact' && inputs.native_source_sha || github.sha }}
           persist-credentials: false
       - uses: ./.github/actions/setup-yq
       - name: Check candidate planner tools
@@ -315,7 +315,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.source == 'native-artifact' && inputs.native_run_id == format('{0}', github.run_id) && inputs.native_source_sha || github.sha }}
+          ref: ${{ inputs.source == 'native-artifact' && inputs.native_source_sha || github.sha }}
           persist-credentials: false
 
       - uses: ./.github/actions/setup-yq
@@ -1053,7 +1053,7 @@ jobs:
             command=(python3 scripts/run-xfce-candidate.py --iso "$ISO_PATH" --output iso-e2e-out/xfce-candidate)
           fi
           set +e
-          sudo --preserve-env=GITHUB_REPOSITORY,GITHUB_RUN_ID,GITHUB_RUN_ATTEMPT,TUNAOS_QUAL_EXECUTION_KIND,TUNAOS_NATIVE_BINDING,TUNAOS_NATIVE_ARTIFACT_ID,TUNAOS_NATIVE_ARCHIVE_DIGEST,TUNAOS_NATIVE_SOURCE_SHA,KVM_FLAG,VARIANT,FLAVOR,TUNAOS_QUAL_SOURCE_DIGEST,TUNAOS_QUAL_OVERLAY_DIGEST,TUNAOS_QUAL_INSTALLER_DIGEST,TUNAOS_QUAL_ENGINE_DIGEST,TUNAOS_QUAL_MEDIA_DIGEST,STRICT_PUBLISHED_MEDIA,TUNAOS_QUAL_PLATFORM,TUNAOS_QUAL_CPU_BASELINE,TUNAOS_QUAL_HARDWARE_SCOPE \
+          sudo --preserve-env=GITHUB_REPOSITORY,GITHUB_RUN_ID,GITHUB_RUN_ATTEMPT,TUNAOS_QUAL_EXECUTION_KIND,TUNAOS_NATIVE_BINDING,TUNAOS_NATIVE_ARTIFACT_ID,TUNAOS_NATIVE_ARCHIVE_DIGEST,TUNAOS_NATIVE_SOURCE_SHA,TUNAOS_NATIVE_PRODUCER_RUN_ID,TUNAOS_NATIVE_PRODUCER_ATTEMPT,KVM_FLAG,VARIANT,FLAVOR,TUNAOS_QUAL_SOURCE_DIGEST,TUNAOS_QUAL_OVERLAY_DIGEST,TUNAOS_QUAL_INSTALLER_DIGEST,TUNAOS_QUAL_ENGINE_DIGEST,TUNAOS_QUAL_MEDIA_DIGEST,STRICT_PUBLISHED_MEDIA,TUNAOS_QUAL_PLATFORM,TUNAOS_QUAL_CPU_BASELINE,TUNAOS_QUAL_HARDWARE_SCOPE \
             "${command[@]}"
 
           rc=$?

@@ -4298,8 +4298,8 @@ emit_qualification_evidence() {
 		python3 "${SCRIPT_DIR}/native-iso-qualification.py" "$emit_command" \
 			--directory "$OUTPUT_DIR" --output "$QUAL_EVIDENCE_JSON" \
 			--binding "${TUNAOS_NATIVE_BINDING:?native artifact binding is required}" \
-			--repository "${GITHUB_REPOSITORY:?}" --run-id "${GITHUB_RUN_ID:?}" \
-			--attempt "${GITHUB_RUN_ATTEMPT:?}" --qemu "$QEMU" \
+			--repository "${GITHUB_REPOSITORY:?}" --run-id "${TUNAOS_NATIVE_PRODUCER_RUN_ID:?validated producer run is required}" \
+			--attempt "${TUNAOS_NATIVE_PRODUCER_ATTEMPT:?validated producer attempt is required}" --qemu "$QEMU" \
 			--artifact-id "${TUNAOS_NATIVE_ARTIFACT_ID:?}" --archive-digest "${TUNAOS_NATIVE_ARCHIVE_DIGEST:?}" \
 			--source-sha "${TUNAOS_NATIVE_SOURCE_SHA:?}" \
 			--variant "$VARIANT" --flavor "$FLAVOR" --platform "$TUNAOS_QUAL_PLATFORM" \

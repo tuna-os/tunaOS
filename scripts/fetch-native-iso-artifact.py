@@ -182,11 +182,19 @@ def validate(run, artifact, args, jobs=None):
         raise ValueError("source SHA must be a full commit")
     if not re.fullmatch(r"sha256:[0-9a-f]{64}", args.archive_digest):
         raise ValueError("archive digest must be sha256:<64 lowercase hex>")
+    if (type(args.run_id) is not int or args.run_id <= 0
+            or type(args.artifact_id) is not int or args.artifact_id <= 0):
+        raise ValueError("producer run and artifact IDs must be positive integers")
+    if type(args.attempt) is not int or args.attempt < 0:
+        raise ValueError("producer attempt must be a nonnegative integer")
     same_run = (os.environ.get("NATIVE_SAME_RUN") == "true"
                 and str(args.run_id) == os.environ.get("GITHUB_RUN_ID"))
     if same_run and args.repository != os.environ.get("GITHUB_REPOSITORY"):
         raise ValueError("same-run producer must belong to the current repository")
-    if same_run and str(run.get("run_attempt")) != os.environ.get("GITHUB_RUN_ATTEMPT"):
+    attempt = args.attempt or run.get("run_attempt")
+    if type(attempt) is not int or attempt <= 0 or run.get("run_attempt") != attempt:
+        raise ValueError("producer attempt does not match the requested run attempt")
+    if same_run and str(attempt) != os.environ.get("GITHUB_RUN_ATTEMPT"):
         raise ValueError("same-run artifact must belong to the current producer attempt")
     completed = run.get("status") == "completed" and run.get("conclusion") == "success"
     active = (same_run and run.get("status") in ("queued", "in_progress")
@@ -196,46 +204,47 @@ def validate(run, artifact, args, jobs=None):
                          f"status={run.get('status')} conclusion={run.get('conclusion')} same_run={same_run}")
     if run.get("head_sha") != args.source_sha or run.get("path") != ".github/workflows/live-iso-bootc.yml":
         raise ValueError("producer source SHA or workflow mismatch")
-    if run.get("repository", {}).get("full_name") != args.repository or run.get("head_repository", {}).get("full_name") != args.repository:
+    repository = run.get("repository", {})
+    head_repository = run.get("head_repository", {})
+    if repository.get("full_name") != args.repository or head_repository.get("full_name") != args.repository:
         raise ValueError("producer must originate in this repository")
     if artifact.get("id") != args.artifact_id or artifact.get("expired") is not False:
         raise ValueError("artifact is wrong or expired")
     expected_name = f"{args.variant}-{args.flavor}-live-iso"
-    attempt = args.attempt or (run.get("run_attempt") if same_run else 0)
-    if attempt:
-        if attempt != run.get("run_attempt"):
-            raise ValueError("artifact attempt must match the verified producer attempt")
+    legacy_unsuffixed = not same_run and args.attempt == 0
+    if not legacy_unsuffixed:
         expected_name += f"-attempt-{attempt}"
-        created = datetime.fromisoformat(artifact["created_at"].replace("Z", "+00:00"))
-        started = datetime.fromisoformat(run["run_started_at"].replace("Z", "+00:00"))
-        if created < started:
-            raise ValueError("artifact predates this producer attempt")
     if artifact.get("name") != expected_name:
         raise ValueError("artifact target or attempt mismatch")
+    created = datetime.fromisoformat(artifact["created_at"].replace("Z", "+00:00"))
+    started = datetime.fromisoformat(run["run_started_at"].replace("Z", "+00:00"))
+    if created < started:
+        raise ValueError("artifact predates this producer attempt")
     if artifact.get("digest") != args.archive_digest:
         raise ValueError("artifact archive digest mismatch")
     producer = artifact.get("workflow_run", {})
-    if producer.get("id") != args.run_id or producer.get("head_sha") != args.source_sha:
+    if (producer.get("id") != args.run_id or producer.get("head_sha") != args.source_sha
+            or producer.get("run_attempt", attempt) != attempt):
         raise ValueError("artifact producer mismatch")
     if not 0 < artifact.get("size_in_bytes", 0) <= MAX_BYTES:
         raise ValueError("artifact size out of bounds")
-    if same_run:
-        if not isinstance(jobs, dict) or jobs.get("total_count") != len(jobs.get("jobs", [])):
-            raise ValueError("complete bounded same-attempt producer jobs required")
-        builders = [job for job in jobs["jobs"] if job.get("name") == "build"]
-        if len(builders) != 1:
-            raise ValueError("exactly one native build job required")
-        builder = builders[0]
-        if (builder.get("run_id") != args.run_id or builder.get("run_attempt") != attempt
-                or builder.get("head_sha") != args.source_sha
-                or builder.get("status") != "completed" or builder.get("conclusion") != "success"):
-            raise ValueError("native build job must succeed on this exact run, attempt and source")
-        built_start = datetime.fromisoformat(builder["started_at"].replace("Z", "+00:00"))
-        built_end = datetime.fromisoformat(builder["completed_at"].replace("Z", "+00:00"))
-        if not built_start <= created <= built_end:
-            raise ValueError("artifact was not created during the successful native build")
-        return builder["id"]
-    return None
+    if (not isinstance(jobs, dict) or not isinstance(jobs.get("jobs"), list)
+            or type(jobs.get("total_count")) is not int or jobs["total_count"] != len(jobs["jobs"])):
+        raise ValueError("complete bounded producer-attempt jobs required")
+    builders = [job for job in jobs["jobs"] if isinstance(job, dict) and job.get("name") == "build"]
+    if len(builders) != 1:
+        raise ValueError("exactly one native build job required")
+    builder = builders[0]
+    if (type(builder.get("id")) is not int or builder["id"] <= 0
+            or builder.get("run_id") != args.run_id or builder.get("run_attempt") != attempt
+            or builder.get("head_sha") != args.source_sha
+            or builder.get("status") != "completed" or builder.get("conclusion") != "success"):
+        raise ValueError("native build job must succeed on this exact run, attempt and source")
+    built_start = datetime.fromisoformat(builder["started_at"].replace("Z", "+00:00"))
+    built_end = datetime.fromisoformat(builder["completed_at"].replace("Z", "+00:00"))
+    if not built_start <= created <= built_end:
+        raise ValueError("artifact was not created during the successful native build")
+    return {"build_job": builder["id"], "producer_run": args.run_id, "producer_attempt": attempt}
 
 
 def digest(path):
@@ -334,16 +343,18 @@ def main():
     for value in (args.variant, args.flavor):
         if not re.fullmatch(r"[a-z0-9][a-z0-9-]*", value):
             parser.error("invalid target")
-    run = api(args.repository, f"actions/runs/{args.run_id}")
+    if args.attempt:
+        run = api(args.repository, f"actions/runs/{args.run_id}/attempts/{args.attempt}")
+    else:
+        run = api(args.repository, f"actions/runs/{args.run_id}")
     artifact = api(args.repository, f"actions/artifacts/{args.artifact_id}")
+    attempt = args.attempt or run.get("run_attempt")
     print(json.dumps({"producer_run": run.get("id"), "status": run.get("status"),
-                      "conclusion": run.get("conclusion"), "attempt": run.get("run_attempt"),
+                      "conclusion": run.get("conclusion"), "attempt": attempt,
                       "head_sha": run.get("head_sha")}), flush=True)
-    jobs = None
-    if os.environ.get("NATIVE_SAME_RUN") == "true" and str(args.run_id) == os.environ.get("GITHUB_RUN_ID"):
-        # Query the requested attempt, never the API's mutable latest-attempt view.
-        jobs = api(args.repository, f"actions/runs/{args.run_id}/attempts/{args.attempt or run.get('run_attempt')}/jobs?per_page=100")
-    builder_id = validate(run, artifact, args, jobs)
+    jobs = api(args.repository, f"actions/runs/{args.run_id}/attempts/{attempt}/jobs?per_page=100")
+    proof = validate(run, artifact, args, jobs)
+    builder_id = proof["build_job"]
     args.output.mkdir(parents=True, exist_ok=False)
     archive = args.output / "native-iso.zip"
     with archive.open("xb") as target:
@@ -363,10 +374,10 @@ def main():
     if not re.fullmatch(r"[0-9a-f]{40}", harness_sha):
         raise ValueError("invalid checked-out harness SHA")
     receipt = {"repository": args.repository, "producer_workflow": run.get("path"),
-               "producer_build_conclusion": "success" if builder_id is not None else None,
+               "producer_build_conclusion": "success",
                "producer_build_job": builder_id, "producer_status": run.get("status"),
-               "producer_conclusion": run.get("conclusion"), "producer_attempt": run.get("run_attempt"),
-               "harness_sha": harness_sha, "producer_run": args.run_id, "producer_sha": args.source_sha,
+               "producer_conclusion": run.get("conclusion"), "producer_attempt": proof["producer_attempt"],
+               "harness_sha": harness_sha, "producer_run": proof["producer_run"], "producer_sha": args.source_sha,
                "artifact_id": args.artifact_id, "archive_digest": args.archive_digest,
                "media_digest": media_digest, "media_size": iso.stat().st_size,
                "media_filename": iso.name, "status": "download_verified_not_boot_tested"}
@@ -374,6 +385,8 @@ def main():
     archive.unlink()
     with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env:
         env.write(f"ISO_PATH={iso}\nVARIANT={args.variant}\nFLAVOR={args.flavor}\nNATIVE_MEDIA_DIGEST={media_digest}\n")
+        env.write(f"TUNAOS_NATIVE_PRODUCER_RUN_ID={proof['producer_run']}\n")
+        env.write(f"TUNAOS_NATIVE_PRODUCER_ATTEMPT={proof['producer_attempt']}\n")
     print(json.dumps(receipt, indent=2))
 
 

@@ -212,9 +212,11 @@ def emit(args):
         require((args.variant,args.flavor,args.platform)==('bonito','xfce','linux/amd64'), 'candidate target outside bounded XFCE scope')
     binding = load(args.binding)
     harness = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True, timeout=10).strip()
+    require(type(args.run_id) is int and args.run_id > 0 and type(args.attempt) is int and args.attempt > 0,
+            'validated producer run and attempt are required')
     require(binding.get('repository') == args.repository, 'binding repository differs from current job')
     require(binding.get('producer_run') == args.run_id and binding.get('producer_attempt') == args.attempt,
-            'binding is not from this run and attempt')
+            'binding does not match the validated producer run and attempt')
     require(binding.get('harness_sha') == harness, 'binding harness differs from checked-out code')
     require(binding.get('media_digest') == args.media, 'binding differs from admitted ISO digest')
     require(binding.get('artifact_id') == args.artifact_id and binding.get('archive_digest') == args.archive_digest
