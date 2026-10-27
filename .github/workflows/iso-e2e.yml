@@ -1069,6 +1069,13 @@ jobs:
             exit "$rc"
           fi
 
+      - name: Normalize iso-e2e-out ownership
+        if: ${{ !inputs.installed_boot_diagnostic && always() && steps.filter.outputs.skip != 'true' }}
+        run: |
+          if [[ -d iso-e2e-out ]]; then
+            sudo chown -R "$USER:$(id -gn)" iso-e2e-out 2>/dev/null || true
+          fi
+
       - name: Convert screenshots to PNG
         if: ${{ !inputs.installed_boot_diagnostic && always() && steps.filter.outputs.skip != 'true' }}
         continue-on-error: true

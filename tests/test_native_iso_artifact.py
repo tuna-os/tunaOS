@@ -355,6 +355,30 @@ def test_bounded_strict_diagnostics_excludes_heavy_and_symlink_inputs(tmp_path):
     assert report['files'] == 2
     assert len(report['skipped']) == 2
 
+def test_bounded_strict_diagnostics_handles_unreadable_inputs_gracefully(tmp_path, monkeypatch):
+    diag_spec = importlib.util.spec_from_file_location('iso_diagnostics_unreadable', ROOT / 'scripts/collect-iso-diagnostics.py')
+    diag = importlib.util.module_from_spec(diag_spec)
+    diag_spec.loader.exec_module(diag)
+    (tmp_path / 'serial.log').write_text('readable serial log')
+    (tmp_path / 'strict-plain.log').write_text('locked content')
+    real_open = Path.open
+
+    def mock_open(self, *args, **kwargs):
+        if self.name == 'strict-plain.log':
+            raise PermissionError('Simulated root permission denied')
+        return real_open(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, 'open', mock_open)
+    diag.collect(tmp_path)
+    staged = tmp_path / 'strict-diagnostics'
+    import json
+    report = json.loads((staged / 'collection.json').read_text())
+    assert (staged / 'serial.log').read_text() == 'readable serial log'
+    assert not (staged / 'strict-plain.log').exists()
+    assert report['files'] == 1
+    assert report['unreadable_count'] == 1
+    assert any('strict-plain.log' in item for item in report['skipped'])
+
 
 @pytest.mark.parametrize("modes", ["plain,luks", "plain"])
 def test_failed_plain_leg_cannot_consume_luks_tpm(tmp_path, modes):

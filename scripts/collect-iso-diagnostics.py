@@ -137,49 +137,58 @@ def collect(root, candidate_secrets=None):
     total = count = 0
     skipped = []
     report = dict(enumerated=0, enumeration_truncated=False, skipped_count=0,
-                  skipped_report_truncated=False)
+                  skipped_report_truncated=False, unreadable_count=0)
     for path in candidates(root, report, directories):
         if time.monotonic()>deadline:
             raise ValueError("diagnostic collection exceeded deadline")
         relative = path.relative_to(root)
-        size = path.lstat().st_size
-        if (len(str(relative)) > MAX_NAME
-                or any(p.is_symlink() for p in (path, *path.parents) if p != root.parent)
-                or not stat.S_ISREG(path.lstat().st_mode)
-                or size > MAX_FILE or total + size > MAX_TOTAL or count >= MAX_FILES):
-            report['skipped_count'] += 1
+        try:
+            stat_res = path.lstat()
+            size = stat_res.st_size
+            if (len(str(relative)) > MAX_NAME
+                    or any(p.is_symlink() for p in (path, *path.parents) if p != root.parent)
+                    or not stat.S_ISREG(stat_res.st_mode)
+                    or size > MAX_FILE or total + size > MAX_TOTAL or count >= MAX_FILES):
+                report['skipped_count'] += 1
+                if len(skipped) < MAX_SKIPPED:
+                    skipped.append(str(relative)[:MAX_NAME])
+                else:
+                    report['skipped_report_truncated'] = True
+                continue
+            target = dest / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if candidate:
+                with path.open('rb') as source:
+                    data=source.read(MAX_FILE+1)
+                if len(data)>MAX_FILE or total+len(data)>MAX_TOTAL:
+                    raise ValueError('diagnostic grew beyond byte budget')
+                if path.suffix!='.png':
+                    # Normalize terminal controls before matching split echoes.
+                    data=re.sub(rb'\x1b\[[0-?]*[ -/]*[@-~]',b'',data)
+                    data=re.sub(rb'[\x00-\x09\x0b-\x1f\x7f]',b'',data)
+                    for secret in candidate_secrets:
+                        pattern=b'\n*'.join(re.escape(bytes([char])) for char in secret.encode())
+                        data=re.sub(pattern,b'[REDACTED]',data)
+                target.write_bytes(data)
+                total+=len(data); count+=1
+                continue
+            # The producer job has finished writing these files before staging.
+            with path.open('rb') as source, target.open('xb') as output:
+                remaining = min(MAX_FILE, MAX_TOTAL - total)
+                while chunk := source.read(min(1024 * 1024, remaining + 1)):
+                    if len(chunk) > remaining:
+                        raise ValueError('diagnostic grew beyond byte budget')
+                    output.write(chunk)
+                    total += len(chunk)
+                    remaining -= len(chunk)
+            count += 1
+        except (OSError, PermissionError):
+            report['unreadable_count'] += 1
             if len(skipped) < MAX_SKIPPED:
                 skipped.append(str(relative)[:MAX_NAME])
             else:
                 report['skipped_report_truncated'] = True
             continue
-        target = dest / relative
-        target.parent.mkdir(parents=True, exist_ok=True)
-        if candidate:
-            with path.open('rb') as source:
-                data=source.read(MAX_FILE+1)
-            if len(data)>MAX_FILE or total+len(data)>MAX_TOTAL:
-                raise ValueError('diagnostic grew beyond byte budget')
-            if path.suffix!='.png':
-                # Normalize terminal controls before matching split echoes.
-                data=re.sub(rb'\x1b\[[0-?]*[ -/]*[@-~]',b'',data)
-                data=re.sub(rb'[\x00-\x09\x0b-\x1f\x7f]',b'',data)
-                for secret in candidate_secrets:
-                    pattern=b'\n*'.join(re.escape(bytes([char])) for char in secret.encode())
-                    data=re.sub(pattern,b'[REDACTED]',data)
-            target.write_bytes(data)
-            total+=len(data); count+=1
-            continue
-        # The producer job has finished writing these files before staging.
-        with path.open('rb') as source, target.open('xb') as output:
-            remaining = min(MAX_FILE, MAX_TOTAL - total)
-            while chunk := source.read(min(1024 * 1024, remaining + 1)):
-                if len(chunk) > remaining:
-                    raise ValueError('diagnostic grew beyond byte budget')
-                output.write(chunk)
-                total += len(chunk)
-                remaining -= len(chunk)
-        count += 1
     (dest / 'collection.json').write_text(json.dumps(dict(files=count, bytes=total, skipped=skipped, **report), indent=2))
 
     # Read staged files only; this output does not change the strict verdict.
