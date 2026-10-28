@@ -1064,7 +1064,7 @@ def test_descriptor_scan_limits_and_deadline_remain_fail_closed():
 
 
 
-def denial_fixture(tmp_path, monkeypatch, status='clear', failure=None, mutate=None):
+def denial_fixture(tmp_path, monkeypatch, status='clear', failure=None, mutate=None, exit_status=0):
     disk = tmp_path/'disk.qcow2'
     disk.write_bytes(qcow())
     proc_root = tmp_path/'proc'
@@ -1092,7 +1092,7 @@ def denial_fixture(tmp_path, monkeypatch, status='clear', failure=None, mutate=N
             assert timeout <= float(calls[-1][0][6])-time.monotonic()+.1
             if failure == 'wait':
                 raise supervisor.subprocess.TimeoutExpired('SECRET', timeout)
-            return 0
+            return exit_status
         def stop(self):
             if failure == 'stop':
                 return False
@@ -1122,6 +1122,36 @@ def test_full_inspection_pipeline_refuses_before_hash_or_guestfs(tmp_path, monke
     assert 'SECRET' not in json.dumps(facts) and str(tmp_path) not in json.dumps(facts)
     assert len(calls) == 1
     assert (tmp_path/'descriptor-scan.result').exists()
+
+
+@pytest.mark.parametrize('exit_status', [1, 137, 218])
+def test_root_service_failure_retains_exit_status_and_stops_before_disk_inspection(tmp_path, monkeypatch, exit_status):
+    disk, calls = denial_fixture(tmp_path, monkeypatch, exit_status=exit_status)
+    monkeypatch.setattr(supervisor, 'file_digest', lambda *_: pytest.fail('must not inspect after failed root scan'))
+    with pytest.raises(d.Refused, match='descriptor_scan_failed') as caught:
+        supervisor.inspect_stopped_disk(disk, tmp_path, time.monotonic()+100,
+                                        {'guestfs_version':'1.52.0'}, {}, {})
+    fallback = caught.value.details['descriptor_fallback']
+    assert fallback['outcome'] == 'service_failed'
+    assert fallback['service_exit_status'] == exit_status
+    assert fallback['cleanup'] == 'stopped_result_retained'
+    assert len(calls) == 1
+    assert 'SECRET' not in json.dumps(caught.value.details)
+    assert str(tmp_path) not in json.dumps(caught.value.details)
+
+
+@pytest.mark.parametrize('exit_status', ['SECRET /outside', -1, 256, True])
+def test_invalid_root_service_status_never_enters_retained_evidence(tmp_path, monkeypatch, exit_status):
+    disk, _ = denial_fixture(tmp_path, monkeypatch, exit_status=exit_status)
+    monkeypatch.setattr(supervisor, 'file_digest', lambda *_: pytest.fail('must not inspect after invalid root scan'))
+    with pytest.raises(d.Refused, match='descriptor_scan_status') as caught:
+        supervisor.inspect_stopped_disk(disk, tmp_path, time.monotonic()+100,
+                                        {'guestfs_version':'1.52.0'}, {}, {})
+    fallback = caught.value.details['descriptor_fallback']
+    assert fallback['outcome'] == 'service_failed'
+    assert 'service_exit_status' not in fallback
+    assert fallback['cleanup'] == 'stopped_result_retained'
+    assert 'SECRET' not in json.dumps(caught.value.details)
 
 
 @pytest.mark.parametrize('remaining', [-1, 0, .5, 36])
