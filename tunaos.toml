@@ -1988,7 +1988,7 @@ schedule = "20 17 * * *"
 codename = "Epinephelus marginatus"
 branding = { accent = "#E95420", gnome_accent = "orange", base = "Ubuntu", homage = "Ubuntu orange", plymouth = "coral" }
 description = "Based on Ubuntu 26.04 Resolute Raccoon"
-base_image = "docker.io/library/ubuntu:resolute@sha256:19fcd1bf268f02b60aca3bd30bd8a6d9a11759a430e32921833e65f16d87348a"
+base_image = "docker.io/library/ubuntu:resolute@sha256:0e73b71479e7bc5f006bca872e25c3cd680dc052a0116f90d63ae363537db0dd"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["ubuntu"]
 # Built directly from stock Ubuntu and bootcified in Containerfile.ubuntu
