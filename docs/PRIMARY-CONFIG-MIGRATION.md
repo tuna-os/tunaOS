@@ -337,9 +337,10 @@ configuration only. It is no evidence that an image builds, boots or installs
 
 ## F5: Fork recipe and conformance gate (#3806)
 
-**Scope**: configuration resolution of a fork that edits only `tunaos.toml` and
-asset files. **Does not include**: image builds, installs or boot qualification
-(#3474).
+**Scope**: test a fork that edits only `tunaos.toml` and its own assets. Build
+representative Yellowfin/RPM and Grouper/APT images in a manual local workflow.
+This test does not cover install, update, recovery or boot. Issue #3474 owns
+those journeys.
 
 `tests/test_fork_recipe_conformance.py` forks the real `tunaos.toml` with text
 edits that a person would make: publish destination, project name, homepage,
@@ -362,11 +363,46 @@ test asserts these points:
    boot-splash theme name as missing until its theme files exist.
 
 Native names in `[defaults.packages]` must be valid for every variant's package
-manager, so the sample scopes them to a dnf variant. The test does not build an
-image, and it is not yet a CI-only gate: it runs with the rest of `tests/`.
+manager, so the sample scopes them to a dnf variant. This automated conformance
+test does not build images; the manual image-only workflow is separate.
+
+### Manual image-only qualification
+
+`.github/workflows/qualify-config-only-images.yml` is `workflow_dispatch` only
+with `contents: read`. It constructs a fixed Acme example from the stock TOML,
+regenerates the compiler outputs with `scripts/config.py generate-all`, and
+creates local stock and customized commits. It builds stock and customized
+base+GNOME images for Yellowfin and Grouper through `just build`. After each
+commit checkout, `just build` uses `build-config.sh` to regenerate the ignored
+`.github/build-config.yml` projection from that commit's TOML; the projection is
+never staged or committed. The local commits are never pushed.
+
+Before each build, `prepare-build` runs `config.py generate-all` on the checked-out commit.
+It also updates each desktop's generated YAML file.
+This keeps stock and fork builds from using each other's projections.
+
+The helper allows changes to the main TOML file, generated outputs, and two theme files.
+It checks each output and asset hash before it accepts image evidence.
+
+GitHub keeps the evidence for 30 days. The report lists both source commits and both TOML hashes.
+It also records the pinned base digest and each local image, manifest, and config digest.
+The report stores the generated package receipt and its hash for each modified image. It lists package data for the stock and customized desktops.
+RPM and APT each get a result: `passed`, `failed`, or `not-run`.
+
+The gate fails if an image or receipt is missing or stale. It also fails on a source, base, or image identity mismatch, package loss, or missing brand marker.
+The Actions run log keeps build output.
+
+The artifact contains only the plan and report. It contains no image or ISO bytes.
+A successful result means only that the images built and passed these checks.
+It does not prove install, boot, recovery, update, initramfs contents, publication, or production use.
+The workflow does not log in, publish images, use R2, or change production state.
+
+The workflow uses one fixed example. It takes no user settings for a fork.
+Automated tests check the source and report rules. They do not build images.
+The manual workflow runs the image checks.
 
 ### Conformance boundaries
 
-**#3806 owns** the fixture and the resolution assertions above. **#3474 owns**
-image build, install and boot proof for the Yellowfin (RPM) and Grouper (APT)
-reference journeys.
+**#3806 owns** the fixture, resolution assertions and manual image-build-only
+proof above. **#3474 owns** install, update, recovery and boot qualification for
+the Yellowfin (RPM) and Grouper (APT) reference journeys.
