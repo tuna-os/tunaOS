@@ -147,6 +147,17 @@ def test_required_then_optional_with_misses_recorded(tmp_path):
                                         "optional-missing\tmissing-thing"]
 
 
+def test_required_package_failure_stops_without_a_success_receipt(tmp_path):
+    result, calls, receipt = consumer(
+        tmp_path, ["yellowfin\tdnf\tadd\tmissing-required"], "yellowfin", "dnf",
+    )
+
+    assert result.returncode != 0
+    assert "required packages failed to install: missing-required" in result.stderr
+    assert calls == ["refresh", "install-failed missing-required"]
+    assert receipt is None
+
+
 def test_apt_additions_may_not_remove_packages_and_aliases_fold(tmp_path):
     result, calls, receipt = consumer(tmp_path, ["grouper\tapt\tadd\tjq"], "ubuntu", "apt")
     assert result.returncode == 0, result.stderr
