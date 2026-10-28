@@ -518,6 +518,54 @@ def test_gate_accepts_only_complete_matching_rpm_and_apt_evidence(tmp_path):
     QUALIFICATION.gate(plan_path, report_path)
 
 
+
+def test_family_qualification_and_gate_preserve_multi_version_rpm_rows(tmp_path, monkeypatch):
+    value = plan()
+    cell = value["families"][0]
+    stock_rows = [
+        {"name": "existing-package", "version": "1"},
+        {"name": "gpg-pubkey", "version": "key-a"},
+        {"name": "gpg-pubkey", "version": "key-b"},
+    ]
+    custom_rows = [*stock_rows, {"name": cell["package"], "version": "1"}]
+
+    def inventory(rows):
+        document = {
+            "image": cell["variant"], "flavor": "gnome", "pkg_manager": "dnf",
+            "count": len(rows), "packages": rows,
+        }
+        raw = json.dumps(document).encode("utf-8")
+        return (QUALIFICATION._inventory_from_receipt(raw, cell["family"], cell["variant"]),
+                digest(raw), raw.decode("utf-8"))
+
+    stock, custom = inventory(stock_rows), inventory(custom_rows)
+
+    def image_record(_plan, _cell, role, _root, _log):
+        brand = None if role.startswith("stock") else {
+            "status": "passed", "plymouth": {"reason": None},
+        }
+        return {"role": role, "imageId": role, "branding": brand}
+
+    def package_manifest(_log, image_id, _family, _variant):
+        return stock if image_id == "stockDesktop" else custom
+
+    monkeypatch.setattr(QUALIFICATION, "_image_record", image_record)
+    monkeypatch.setattr(QUALIFICATION, "_package_manifest", package_manifest)
+    family_report = QUALIFICATION._qualify_family(
+        value, cell, tmp_path, cell["baseImage"].rsplit("@", 1)[1],
+    )
+    assert family_report["status"] == "passed"
+    assert family_report["stockParity"]["stockPackageCount"] == 3
+    assert family_report["stockParity"]["customPackageCount"] == 4
+    assert family_report["stockParity"]["added"] == [cell["package"]]
+
+    report = passed_report(value)
+    family_report["images"] = report["families"][0]["images"]
+    report["families"][0] = family_report
+    plan_path, report_path = write_pair(tmp_path, value, report)
+    QUALIFICATION.gate(plan_path, report_path)
+
+ 
 @pytest.mark.parametrize("mutation", [
     "stale-plan",
     "source-commit",
@@ -526,6 +574,7 @@ def test_gate_accepts_only_complete_matching_rpm_and_apt_evidence(tmp_path):
     "package-receipt-hash",
     "package-inventory-hash",
     "package-inventory-payload",
+    "empty-stock-inventory",
     "adapter-digest",
     "package-receipt-content",
     "brand-marker",
@@ -554,6 +603,15 @@ def test_gate_fails_closed_for_stale_mismatched_or_not_run_evidence(tmp_path, mu
         report["families"][0]["stockParity"]["stockInventorySha256"] = "sha256:" + "f" * 64
     elif mutation == "package-inventory-payload":
         report["families"][1]["stockParity"]["customInventoryReceipt"] = "{}"
+    elif mutation == "empty-stock-inventory":
+        parity = report["families"][0]["stockParity"]
+        stock = json.loads(parity["stockInventoryReceipt"])
+        stock["packages"] = []
+        stock["count"] = 0
+        raw = json.dumps(stock).encode()
+        parity["stockInventoryReceipt"] = raw.decode()
+        parity["stockInventorySha256"] = digest(raw)
+        parity["stockPackageCount"] = 0
     elif mutation == "adapter-digest":
         report["sourceGate"]["evidence"]["modifiedAdapterSha256"] = "sha256:" + "f" * 64
     elif mutation == "brand-marker":

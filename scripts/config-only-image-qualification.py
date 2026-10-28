@@ -11,6 +11,7 @@ qualification (#3474).
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 import configparser
 from datetime import datetime, timezone
 import hashlib
@@ -467,7 +468,7 @@ def _os_release_values(raw: bytes, where: str) -> dict[str, str]:
     return result
 
 
-def _inventory_from_receipt(raw: bytes, family: str, variant: str) -> dict[str, str]:
+def _inventory_from_receipt(raw: bytes, family: str, variant: str) -> Counter[tuple[str, str]]:
     try:
         document = json.loads(raw, object_pairs_hook=_HARNESS.unique_object)
     except (UnicodeError, json.JSONDecodeError) as exc:
@@ -478,19 +479,26 @@ def _inventory_from_receipt(raw: bytes, family: str, variant: str) -> dict[str, 
          and document["pkg_manager"] == ("dnf" if family == "rpm" else "apt"),
          f"{family}: package inventory receipt identity mismatch")
     packages = document["packages"]
-    need(isinstance(packages, list) and document["count"] == len(packages),
-         f"{family}: package inventory count mismatch")
-    inventory = {}
+    need(isinstance(packages, list) and packages and document["count"] == len(packages),
+         f"{family}: package inventory is empty or its count does not match")
+    inventory: Counter[tuple[str, str]] = Counter()
     for item in packages:
         need(isinstance(item, dict) and set(item) == {"name", "version"}
              and isinstance(item["name"], str) and item["name"]
              and isinstance(item["version"], str), f"{family}: invalid package inventory row")
-        need(item["name"] not in inventory, f"{family}: duplicate package inventory name")
-        inventory[item["name"]] = item["version"]
+        inventory[(item["name"], item["version"])] += 1
     return inventory
 
 
-def _package_manifest(log, image_id: str, family: str, variant: str) -> tuple[dict[str, str], str, str]:
+def _package_delta(stock: Counter[tuple[str, str]], custom: Counter[tuple[str, str]]) \
+        -> tuple[list[str], list[str], int, int]:
+    missing = sorted({name for name, _version in (stock - custom)})
+    added = sorted({name for name, _version in (custom - stock)})
+    return missing, added, sum(stock.values()), sum(custom.values())
+
+
+def _package_manifest(log, image_id: str, family: str, variant: str) \
+        -> tuple[Counter[tuple[str, str]], str, str]:
     result = _HARNESS.podman(log, image_id, "/usr/bin/cat", "/usr/share/tunaos/packages.json")
     need(result.returncode == 0, f"{family}: desktop package inventory receipt is missing")
     inventory = _inventory_from_receipt(result.stdout, family, variant)
@@ -633,14 +641,13 @@ def _qualify_family(plan: dict, cell: dict, root: Path, base_source_digest: str)
                                                                  cell["variant"])
             custom, custom_hash, custom_receipt = _package_manifest(log, images[3]["imageId"], family,
                                                                    cell["variant"])
-            missing = sorted(name for name, version in stock.items() if custom.get(name) != version)
-            added = sorted(set(custom) - set(stock))
+            missing, added, stock_count, custom_count = _package_delta(stock, custom)
             need(not missing, f"{family}: customized desktop lost or changed stock packages: {missing[:20]}")
             need(cell["package"] in added, f"{family}: package parity did not observe the declared addition")
             parity = {"status": "passed", "stockInventorySha256": stock_hash,
                       "customInventorySha256": custom_hash, "stockInventoryReceipt": stock_receipt,
-                      "customInventoryReceipt": custom_receipt, "stockPackageCount": len(stock),
-                      "customPackageCount": len(custom), "missingOrChanged": missing, "added": added}
+                      "customInventoryReceipt": custom_receipt, "stockPackageCount": stock_count,
+                      "customPackageCount": custom_count, "missingOrChanged": missing, "added": added}
         return {"family": family, "status": "passed", "reason": None,
                 "baseDigest": base_source_digest, "stockParity": parity, "images": images,
                 "logSha256": sha256(log_path.read_bytes())}
@@ -778,11 +785,10 @@ def _valid_passed_family(report_family: object, plan_cell: dict, plan: dict) -> 
         return False
     stock_inventory = _inventory_from_receipt(stock_bytes, plan_cell["family"], plan_cell["variant"])
     custom_inventory = _inventory_from_receipt(custom_bytes, plan_cell["family"], plan_cell["variant"])
-    missing = sorted(name for name, version in stock_inventory.items() if custom_inventory.get(name) != version)
-    added = sorted(set(custom_inventory) - set(stock_inventory))
+    missing, added, stock_count, custom_count = _package_delta(stock_inventory, custom_inventory)
     if (missing or parity.get("missingOrChanged") != missing or parity.get("added") != added
-            or parity.get("stockPackageCount") != len(stock_inventory)
-            or parity.get("customPackageCount") != len(custom_inventory)
+            or parity.get("stockPackageCount") != stock_count
+            or parity.get("customPackageCount") != custom_count
             or plan_cell["package"] not in added):
         return False
     return True
