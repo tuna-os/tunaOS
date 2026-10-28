@@ -17,7 +17,7 @@
 #   BOOTC_VERSION    e.g. v1.16.3
 #   BOOTUPD_VERSION  e.g. v0.2.35
 #   OSTREE_VERSION   e.g. v2026.2   (only used when BUILD_OSTREE=1)
-ARG BASE_IMAGE=docker.io/library/debian:trixie@sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308
+ARG BASE_IMAGE=docker.io/library/debian:trixie@sha256:8c4733a92aacd0bcff3779eadc35a4a5147f36cb20a5fcb56504cbc740212259
 
 FROM ${BASE_IMAGE} AS builder
 ARG BUILD_OSTREE=0

@@ -2277,7 +2277,7 @@ schedule = "20 21 * * *"
 codename = "Platichthys flesus"
 branding = { accent = "#D70751", gnome_accent = "red", base = "Debian", homage = "the Debian swirl", plymouth = "pufferfish" }
 description = "Based on Debian 13 Trixie (stable)"
-base_image = "docker.io/library/debian:trixie@sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308"
+base_image = "docker.io/library/debian:trixie@sha256:8c4733a92aacd0bcff3779eadc35a4a5147f36cb20a5fcb56504cbc740212259"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["debian"]
 platforms = ["linux/amd64"]
