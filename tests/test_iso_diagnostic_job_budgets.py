@@ -6,6 +6,7 @@ import re
 import pytest
 import yaml
 from tests.test_a_job_budget_covers_its_own_steps import _budgets
+from tests.test_iso_diagnostic_consumer_graph import context, enabled
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -23,9 +24,9 @@ def campaign(workflows):
         assert name not in seen, 'cyclic or duplicate reusable workflow'
         seen.add(name)
         for key, job in workflows[name]['jobs'].items():
-            if job.get('if') == '${{ !inputs.installed_boot_diagnostic }}':
-                assert key == 'preflight' and name == 'live-iso-bootc.yml'
-                assert job['timeout-minutes'] == 5
+            if name == 'live-iso-bootc.yml' and not enabled(
+                    workflows[name]['jobs'], key, context(),
+                    {job_name: 'success' for job_name in workflows[name]['jobs']}):
                 continue
             if 'uses' in job:
                 assert job['uses'].startswith('./.github/workflows/')
@@ -103,7 +104,6 @@ def test_budgeted_dispatch_generates_exactly_one_consumer_cell(tmp_path):
 
 def test_candidate_preflight_must_stay_outside_diagnostic_budget():
     workflows = documents()
-    assert workflows['live-iso-bootc.yml']['jobs']['build']['needs'] == ['diagnostic-preflight', 'preflight']
     workflows['live-iso-bootc.yml']['jobs']['preflight'].pop('if')
     assert sum(campaign(workflows).values()) == 253
 

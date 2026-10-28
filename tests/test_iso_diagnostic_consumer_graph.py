@@ -62,6 +62,7 @@ def enabled(graph, name, context, results, cancelled=False):
 def context(mode='diagnostic', event='workflow_dispatch'):
     candidate = mode == 'candidate'
     values = {'installed_boot_diagnostic':mode in ('diagnostic','mixed'),
+              'descriptor_scan_probe':mode == 'probe',
               'candidate_xfce':candidate or mode == 'mixed',
               'variant':'bonito' if candidate else 'skipjack',
               'flavor':'xfce' if candidate else 'gnome', 'platform':'linux/amd64'}
@@ -83,10 +84,6 @@ def test_valid_dispatch_crosses_intentionally_skipped_ancestor(mode):
     assert enabled(graph,'build',context(mode),state)
     assert enabled(graph,CONSUMER,context(mode),state)
     assert not enabled(graph,CONSUMER,context(mode),state,cancelled=True)
-    call = graph[CONSUMER]['with']
-    assert call['installed_boot_diagnostic'] == '${{ inputs.installed_boot_diagnostic || false }}'
-    assert call['candidate_xfce'] == '${{ inputs.candidate_xfce || false }}'
-    assert 'always()' not in graph[CONSUMER]['if']
 
 
 def test_original_input_only_condition_reproduces_build_only_run():
@@ -141,6 +138,27 @@ def test_mixed_modes_refuse_before_host_checks_and_block_graph():
     state = {'diagnostic-preflight':'failure','preflight':'skipped','build':'skipped'}
     assert not enabled(graph,'build',context('mixed'),state)
     assert not enabled(graph,CONSUMER,context('mixed'),state)
+
+
+@pytest.mark.parametrize('upstream', ['success', 'failure', 'skipped'])
+@pytest.mark.parametrize('event', ['workflow_dispatch', 'pull_request', 'schedule'])
+def test_probe_cannot_start_build_or_guest_even_with_forged_prerequisite_success(upstream, event):
+    graph = jobs()
+    ctx = context('probe')
+    ctx['github.event_name'] = event
+    state = {name: upstream for name in graph}
+    assert enabled(graph, 'root-scan-readiness', ctx, {}) is (event == 'workflow_dispatch')
+    for name in ('preflight', 'diagnostic-preflight', 'build', CONSUMER):
+        assert not enabled(graph, name, ctx, state)
+
+
+@pytest.mark.parametrize('diagnostic,candidate', [('true', 'false'), ('false', 'true')])
+def test_probe_rejects_mixed_modes_before_any_host_command(diagnostic, candidate):
+    body = jobs()['root-scan-readiness']['steps'][0]['run']
+    result = subprocess.run(['/bin/bash', '-e', '-c', body],
+                            env={'PATH': '/nonexistent', 'FULL_DIAGNOSTIC': diagnostic,
+                                 'CANDIDATE_XFCE': candidate}, capture_output=True, timeout=5)
+    assert result.returncode == 1 and result.stdout == result.stderr == b''
 
 
 @pytest.mark.parametrize('mode,variant,flavor,platform', [

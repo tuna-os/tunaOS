@@ -23,6 +23,87 @@ from lib import installed_boot_diagnostic as d
 
 ROOT = Path(__file__).resolve().parents[1]
 OWNED_SERVICES = []
+# Root stderr stays disabled. Only these fixed refusals cross the service boundary.
+ROOT_SCAN_REFUSALS = {
+    'descriptor_scan_not_root': 80, 'descriptor_scan_owner': 81,
+    'descriptor_scan_budget': 82, 'descriptor_scan_timeout': 83,
+    'descriptor_disk_identity': 84, 'descriptor_result_changed': 85,
+    'descriptor_result_directory': 86, 'descriptor_result_file': 87,
+    'descriptor_metadata_handle': 88, 'descriptor_result_write': 89,
+    'descriptor_ancestor_changed': 90, 'descriptor_object_changed': 91,
+    'descriptor_object_type': 92, 'descriptor_handle_close_failed': 93,
+    'descriptor_scan_arguments': 94, 'permission_denied': 95,
+    'file_not_found': 96, 'os_error': 97, 'invalid_argument': 98,
+}
+
+
+def probe_descriptor_scan(output):
+    """Two disposable inode controls; never build, boot, or inspect an image."""
+    d.require(os.getuid() > 0 and os.geteuid() == os.getuid(), 'probe_runner_identity')
+    output = Path(output).absolute()
+    d.require(not any(p.is_symlink() for p in (output, *output.parents)), 'probe_output_symlink')
+    output.mkdir(mode=0o700)
+    report = {'schema': 'DescriptorScanReadiness/v1', 'qualification': False,
+              'cases': [], 'passed': False}
+    controls = []
+    for name in ('closed', 'open'):
+        directory = output / name
+        directory.mkdir(mode=0o700)
+        disk = directory / 'disposable-file'
+        fd = os.open(disk, os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW, 0o600)
+        os.close(fd)
+        controls.append((name, directory, disk))
+    try:
+        for name, directory, disk in controls:
+            expected = 'clear' if name == 'closed' else 'open'
+            row = {'control': name, 'expected': expected, 'observed': 'unavailable',
+                   'cleanup': 'not_started', 'passed': False}
+            report['cases'].append(row)
+            fd = os.open(disk, os.O_RDONLY | os.O_NOFOLLOW) if name == 'open' else None
+            service_count = len(OWNED_SERVICES)
+            evidence = {}
+            reason = None
+            try:
+                identity = disk.stat()
+                # Direct root readiness control, not a claimed permission denial.
+                evidence = retry_denied_descriptor_scan(
+                    disk, time.monotonic()+60, directory, {'stage': 'readiness_control'},
+                    (identity.st_dev, identity.st_ino))
+            except d.Refused as error:
+                evidence, reason = error.details, str(error)
+            except Exception:
+                reason = 'probe_internal_failure'
+            finally:
+                if fd is not None:
+                    os.close(fd)
+            fallback = evidence.get('descriptor_fallback', {})
+            row['observed'] = fallback.get('outcome', 'unavailable')
+            row['cleanup'] = fallback.get('cleanup', 'not_started')
+            code = fallback.get('service_exit_status')
+            if type(code) is int and 0 <= code <= 255:
+                row['service_exit_status'] = code
+                if code:
+                    row['service_refusal'] = next(
+                        (key for key, value in ROOT_SCAN_REFUSALS.items() if value == code),
+                        'unclassified')
+            services = OWNED_SERVICES[service_count:]
+            row['services_stopped'] = bool(services) and all(item.stopped for item in services)
+            row['passed'] = (len(services) == 1 and row['services_stopped'] and
+                             row['cleanup'] == 'stopped_result_retained' and
+                             row['observed'] == expected and
+                             reason == (None if name == 'closed' else 'disk_still_open'))
+            if not row['services_stopped']:
+                break
+        report['passed'] = len(report['cases']) == 2 and all(row['passed'] for row in report['cases'])
+    finally:
+        stopped = True
+        for service in OWNED_SERVICES:
+            stopped = service.stop() and stopped
+        report['services_stopped'] = stopped
+        report['passed'] = report['passed'] and stopped
+        # Upload this file only: no result tokens, paths, commands or raw errors.
+        (output / 'report.json').write_text(json.dumps(report, sort_keys=True)+'\n')
+    return 0 if report['passed'] else 77
 
 
 def systemd_usec(value):
@@ -861,9 +942,26 @@ def interrupted(signum, frame):
 def main():
     signal.signal(signal.SIGTERM, interrupted)
     signal.signal(signal.SIGINT, interrupted)
+    if len(sys.argv) > 1 and sys.argv[1] == 'probe-descriptor-scan':
+        signal.signal(signal.SIGTERM, lambda *args: sys.exit(124))
+        signal.signal(signal.SIGINT, lambda *args: sys.exit(124))
+        parser = argparse.ArgumentParser(description='Disposable root-scan readiness; never qualification')
+        parser.add_argument('--output', type=Path, required=True)
+        return probe_descriptor_scan(parser.parse_args(sys.argv[2:]).output)
     if len(sys.argv) > 1 and sys.argv[1] == 'scan-open-disk':
-        d.require(len(sys.argv) == 8, 'descriptor_scan_arguments')
-        return root_descriptor_scan(*sys.argv[2:])
+        try:
+            d.require(len(sys.argv) == 8, 'descriptor_scan_arguments')
+            return root_descriptor_scan(*sys.argv[2:])
+        except d.Refused as error:
+            return ROOT_SCAN_REFUSALS.get(str(error), 77)
+        except PermissionError:
+            return ROOT_SCAN_REFUSALS['permission_denied']
+        except FileNotFoundError:
+            return ROOT_SCAN_REFUSALS['file_not_found']
+        except OSError:
+            return ROOT_SCAN_REFUSALS['os_error']
+        except (ValueError, TypeError):
+            return ROOT_SCAN_REFUSALS['invalid_argument']
     if len(sys.argv) > 1 and sys.argv[1] in ('proxy', 'signal'):
         return proxy()
     if len(sys.argv) > 1 and sys.argv[1] == 'inspect':

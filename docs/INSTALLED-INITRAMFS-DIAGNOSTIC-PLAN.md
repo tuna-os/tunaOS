@@ -293,3 +293,32 @@ evidence. The job and campaign time limits stay unchanged.
 Inputs must name the same producer run, `run_attempt` and source.
 A retry with this repair needs a fresh whole run. Reuse of an older ISO
 needs a separate input contract for diagnostics; this change does not add one.
+
+## Root scan control probe
+
+The `descriptor_scan_probe` input selects a separate five-minute job on
+`ubuntu-24.04`. All build and guest jobs are off in this mode. It rejects
+the full diagnostic and XFCE inputs. It has no schedule and needs no package
+install, image pull, KVM, guest, installed disk, or credential read.
+
+The owner approved one run with two empty files in private directories.
+The closed-file control must return `clear`. The open-file control must
+refuse with `disk_still_open`. Each control calls the real root fallback
+once, with a 60-second scan limit. The command has a 180-second limit and
+45 seconds to stop after a signal. There is no retry.
+
+The root user, two capabilities, network isolation, memory limit, inode
+guards, and owned-service stop checks stay the same. Root stdout and stderr
+stay off. Fixed root refusals become exit statuses 80 to 98; unknown refusals
+stay at 77. The report maps known statuses back to fixed reason labels.
+It includes no command text, error text, environment values, target paths,
+or FD contents.
+
+The job uploads only `report.json` and keeps it for one day.
+The tokens stay private. The job does not remove them by path.
+
+Local CLI proof: a non-root helper returned 80 with empty stdout and stderr,
+before file access or service start. Tests check refusals but emit no error
+text. Neither result proves the hosted root
+service works. A control pass is not installed-boot or unlock-prompt evidence.
+Another privileged run needs a separate owner decision.

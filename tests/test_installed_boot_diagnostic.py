@@ -1400,3 +1400,20 @@ def test_synthetic_root_scan_drives_real_pipeline_gate(tmp_path, monkeypatch, op
     assert facts['descriptor_fallback']['outcome'] == ('open' if opened else 'clear')
     assert facts['descriptor_denials']
     assert bool(hashes) is (not opened)
+
+
+@pytest.mark.parametrize(('error', 'status'), [
+    (d.Refused('descriptor_ancestor_changed'), 90),
+    (d.Refused('SECRET /outside'), 77),
+    (PermissionError('SECRET /outside'), 95),
+    (FileNotFoundError('SECRET /outside'), 96),
+])
+def test_root_entry_retains_only_bounded_refusal_status(monkeypatch, capsys, error, status):
+    def refused(*args):
+        raise error
+    monkeypatch.setattr(supervisor, 'root_descriptor_scan', refused)
+    monkeypatch.setattr(sys, 'argv', ['diagnose-installed-luks.py', 'scan-open-disk',
+                                    '[]', '/none', '1000', '0', '[]', '[]'])
+    assert supervisor.main() == status
+    captured = capsys.readouterr()
+    assert captured.out == captured.err == ''
