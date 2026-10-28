@@ -394,6 +394,8 @@ The gate fails if an image or receipt is missing or stale. It also fails on a so
 The Actions run log keeps build output.
 
 The artifact contains only the plan and report. It contains no image or ISO bytes.
+The summary has verdicts, hashes and counts. It does not contain the full inventories. The artifact keeps them.
+
 A successful result means only that the images built and passed these checks.
 It does not prove install, boot, recovery, update, initramfs contents, publication, or production use.
 The workflow does not log in, publish images, use R2, or change production state.

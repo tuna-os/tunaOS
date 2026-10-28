@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -539,6 +540,21 @@ def test_gate_accepts_four_complete_desktop_inventories_over_one_mib(tmp_path):
     plan_path, report_path = write_pair(tmp_path, value, report)
     assert 1024 * 1024 < report_path.stat().st_size < 8 * 1024 * 1024
     QUALIFICATION.gate(plan_path, report_path)
+    workflow = yaml.safe_load((ROOT / ".github/workflows/qualify-config-only-images.yml").read_text())
+    step = next(item for item in workflow["jobs"]["qualify"]["steps"]
+                if item.get("name") == "Retain evidence in the run summary")
+    summary_path = tmp_path / "summary.md"
+    subprocess.run(["bash", "-euo", "pipefail", "-c", step["run"]], cwd=ROOT, check=True,
+                   env={**os.environ, "EVIDENCE": str(tmp_path), "GITHUB_STEP_SUMMARY": str(summary_path)})
+    summary_bytes = summary_path.read_bytes()
+    assert len(summary_bytes) < 64 * 1024
+    summary = json.loads(summary_bytes.decode().split("```json\n", 1)[1].split("```", 1)[0])
+    assert summary["summary"] == report["summary"]
+    assert summary["qualificationPass"] is True
+    assert [image["manifestDigest"] for family in summary["families"] for image in family["images"]] == [
+        image["manifestDigest"] for family in report["families"] for image in family["images"]
+    ]
+    assert json.loads(report_path.read_text()) == report
 
 
 @pytest.mark.parametrize("document,limit", [("plan", 1024 * 1024), ("report", 8 * 1024 * 1024)])

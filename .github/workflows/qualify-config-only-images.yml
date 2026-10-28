@@ -140,7 +140,19 @@ jobs:
             echo
             if [ -f "$EVIDENCE/report.json" ]; then
               echo '```json'
-              cat "$EVIDENCE/report.json"
+              jq '{
+                planSha256, summary, qualificationPass,
+                sourceGate: {status: .sourceGate.status, reason: ((.sourceGate.reason // "")[:1000])},
+                families: [.families[] | {
+                  family, status, reason: ((.reason // "")[:1000]), baseDigest,
+                  images: [.images[]? | {
+                    role, sourceCommit, configSha256, imageId, manifestDigest, configDigest, platform
+                  }],
+                  stockParity: (.stockParity | {
+                    status, stockInventorySha256, customInventorySha256, stockPackageCount, customPackageCount
+                  })
+                }]
+              }' "$EVIDENCE/report.json"
               echo '```'
             else
               echo 'No qualification report was produced; inspect preparation/build logs. This is not a pass.'
