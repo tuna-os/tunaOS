@@ -201,7 +201,7 @@ jobs:
         uses: ./.github/actions/prepare-config
 
       - name: Setup runner
-        uses: projectbluefin/actions/bootc-build/setup-runner@209517dda44829f126e25da28f11245c34458ac3 # v1 as of 2026-07-02
+        uses: projectbluefin/actions/bootc-build/setup-runner@ab3980490e9461a7c7c6f1836eb9c49e90da93ad # v1 as of 2026-07-02
         with:
           storage-backend: btrfs
           update-podman: "false"
@@ -993,7 +993,7 @@ jobs:
     needs:
       - build_push
     container:
-      image: cgr.dev/chainguard/wolfi-base@sha256:451c3f38ca642dd68693aea6ff8f10f27829ab7bb8fb8e6b82d628eb8b6c5363  # :latest linux/amd64 as of 2026-06-13
+      image: cgr.dev/chainguard/wolfi-base@sha256:a4abb5a1584fcb160ab5d0d65948ccf401b3a41d958e0e74d928d3738522fd86  # :latest linux/amd64 as of 2026-06-13
       # This job only performs registry/API operations (podman login and
       # manifest create/add/annotate/push). It does not run or build a
       # container or mount a host filesystem -- but podman itself needs
