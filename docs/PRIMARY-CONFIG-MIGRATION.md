@@ -388,6 +388,7 @@ GitHub keeps the evidence for 30 days. The report lists both source commits and 
 It also records the pinned base digest and each local image, manifest, and config digest.
 The report stores the generated package receipt and its hash for each modified image. It lists package data for the stock and customized desktops.
 RPM and APT each get a result: `passed`, `failed`, or `not-run`.
+The gate reads at most 1 MiB for the plan and 8 MiB for the report with all four desktop inventories.
 
 The gate fails if an image or receipt is missing or stale. It also fails on a source, base, or image identity mismatch, package loss, or missing brand marker.
 The Actions run log keeps build output.

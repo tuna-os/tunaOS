@@ -84,10 +84,11 @@ def sha256(data: bytes) -> str:
     return "sha256:" + hashlib.sha256(data).hexdigest()
 
 
-def read_json(path: Path) -> object:
+def read_json(path: Path, *, max_bytes: int = 1024 * 1024) -> object:
     try:
-        data = path.read_bytes()
-        need(0 < len(data) <= 1024 * 1024, f"{path}: expected 1..1048576 bytes")
+        with path.open("rb") as stream:
+            data = stream.read(max_bytes + 1)
+        need(0 < len(data) <= max_bytes, f"{path}: expected 1..{max_bytes} bytes")
         return json.loads(data, object_pairs_hook=_HARNESS.unique_object)
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         raise QualificationError(f"{path}: invalid JSON: {exc}") from exc
@@ -796,7 +797,7 @@ def _valid_passed_family(report_family: object, plan_cell: dict, plan: dict) -> 
 
 def gate(plan_path: Path, report_path: Path) -> None:
     plan = validate_plan(read_json(plan_path))
-    report = read_json(report_path)
+    report = read_json(report_path, max_bytes=8 * 1024 * 1024)
     required = {"schemaVersion", "generatedAt", "planSha256", "sourceGate", "families", "summary",
                 "qualificationPass", "scope"}
     need(isinstance(report, dict) and set(report) == required, "report: invalid fields")

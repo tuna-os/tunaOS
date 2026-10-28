@@ -519,6 +519,39 @@ def test_gate_accepts_only_complete_matching_rpm_and_apt_evidence(tmp_path):
 
 
 
+def test_gate_accepts_four_complete_desktop_inventories_over_one_mib(tmp_path):
+    value = plan()
+    report = passed_report(value)
+    rows = [
+        {"name": f"package-{index:05}-" + "n" * 60, "version": "1." + "v" * 40}
+        for index in range(3000)
+    ]
+    for family in report["families"]:
+        parity = family["stockParity"]
+        for prefix in ("stock", "custom"):
+            document = json.loads(parity[prefix + "InventoryReceipt"])
+            document["packages"] = rows if prefix == "stock" else [*rows, {"name": "tree", "version": "1"}]
+            document["count"] = len(document["packages"])
+            raw = json.dumps(document).encode()
+            parity[prefix + "InventoryReceipt"] = raw.decode()
+            parity[prefix + "InventorySha256"] = digest(raw)
+            parity[prefix + "PackageCount"] = document["count"]
+    plan_path, report_path = write_pair(tmp_path, value, report)
+    assert 1024 * 1024 < report_path.stat().st_size < 8 * 1024 * 1024
+    QUALIFICATION.gate(plan_path, report_path)
+
+
+@pytest.mark.parametrize("document,limit", [("plan", 1024 * 1024), ("report", 8 * 1024 * 1024)])
+def test_gate_rejects_documents_over_their_separate_byte_limits(tmp_path, document, limit):
+    value = plan()
+    plan_path, report_path = write_pair(tmp_path, value, passed_report(value))
+    path = plan_path if document == "plan" else report_path
+    with path.open("wb") as stream:
+        stream.truncate(limit + 1)
+    with pytest.raises(QUALIFICATION.QualificationError, match=f"expected 1..{limit} bytes"):
+        QUALIFICATION.gate(plan_path, report_path)
+
+
 def test_family_qualification_and_gate_preserve_multi_version_rpm_rows(tmp_path, monkeypatch):
     value = plan()
     cell = value["families"][0]
