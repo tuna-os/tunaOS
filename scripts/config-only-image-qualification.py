@@ -231,9 +231,10 @@ def _check_source_delta(root: Path, stock: str, modified: str, expected_assets: 
 
 
 def prepare(root: Path, plan_path: Path) -> dict:
+    need(not root.is_symlink(), "source: expected a real checkout")
     root = root.resolve()
     plan_path = plan_path.resolve()
-    need(not root.is_symlink() and root.is_dir(), "source: expected a real checkout")
+    need(root.is_dir(), "source: expected a real checkout")
     need(not plan_path.is_relative_to(root), "plan: must be outside the source checkout")
     need(not git(root, "status", "--porcelain", "--untracked-files=all"),
          "source: checkout must be clean before preparing the local fork")
@@ -321,8 +322,9 @@ def prepare(root: Path, plan_path: Path) -> dict:
 
 
 def prepare_build(root: Path, expected_commit: str) -> str:
+    need(not root.is_symlink(), "build source: expected a real checkout")
     root = root.resolve()
-    need(not root.is_symlink() and root.is_dir(), "build source: expected a real checkout")
+    need(root.is_dir(), "build source: expected a real checkout")
     need(isinstance(expected_commit, str) and COMMIT.fullmatch(expected_commit),
          "build source: expected a full commit")
     need(git(root, "rev-parse", "HEAD") == expected_commit,
@@ -659,7 +661,11 @@ def qualify(plan_path: Path, source: Path, output: Path) -> tuple[dict, bool]:
     source_reason = None
     families = []
     try:
-        source_record = _source_record(plan, source.resolve(), output / "source.log")
+        source_root = Path(source)
+        need(not source_root.is_symlink() and source_root.is_dir(),
+             "source: expected a real checkout")
+        source_root = source_root.resolve()
+        source_record = _source_record(plan, source_root, output / "source.log")
         source_status = "passed"
     except (QualificationError, _HARNESS.QualificationError, OSError) as exc:
         source_reason = str(exc)
@@ -672,7 +678,7 @@ def qualify(plan_path: Path, source: Path, output: Path) -> tuple[dict, bool]:
                     base_digest = _HARNESS.verify_base_source(log, cell["baseImage"])
                 need(base_digest == cell["baseImage"].rsplit("@", 1)[1],
                      f"{cell['family']}: base source digest mismatch")
-                families.append(_qualify_family(plan, cell, source.resolve(), base_digest))
+                families.append(_qualify_family(plan, cell, source_root, base_digest))
             except (QualificationError, _HARNESS.QualificationError, OSError) as exc:
                 families.append({"family": cell["family"], "status": "failed", "reason": str(exc),
                                  "baseDigest": base_digest, "stockParity": {"status": "not-run"},

@@ -370,17 +370,18 @@ def test_harness_source_error_emits_failed_source_and_not_run_families(tmp_path,
 
 def test_harness_base_probe_error_emits_failed_family(tmp_path, monkeypatch):
     value, plan_path = _write_plan(tmp_path)
+    source = tmp_path / "source"
+    source.mkdir()
     monkeypatch.setattr(QUALIFICATION, "_source_record", lambda *_: _source_evidence(value))
 
     def fail_base(*_args):
         raise QUALIFICATION._HARNESS.QualificationError("base probe failed")
 
     monkeypatch.setattr(QUALIFICATION._HARNESS, "verify_base_source", fail_base)
-    report, passed = QUALIFICATION.qualify(plan_path, tmp_path / "source", tmp_path / "evidence")
+    report, passed = QUALIFICATION.qualify(plan_path, source, tmp_path / "evidence")
     assert not passed
     assert report["families"][0]["status"] == "failed"
     assert "base probe failed" in report["families"][0]["reason"]
-
 
 def test_harness_cell_error_emits_failed_family(tmp_path, monkeypatch):
     value, plan_path = _write_plan(tmp_path)
@@ -400,6 +401,35 @@ def test_harness_cell_error_emits_failed_family(tmp_path, monkeypatch):
     assert "image missing" in report["families"][0]["reason"]
     assert report["families"][0]["baseDigest"] == value["families"][0]["baseImage"].rsplit("@", 1)[1]
 
+
+def test_prepare_entrypoints_reject_symlinked_checkouts(tmp_path):
+    target = tmp_path / "checkout"
+    target.mkdir()
+    source = tmp_path / "checkout-link"
+    source.symlink_to(target, target_is_directory=True)
+    plan_path = tmp_path / "plan.json"
+
+    with pytest.raises(QUALIFICATION.QualificationError, match="real checkout"):
+        QUALIFICATION.prepare(source, plan_path)
+    with pytest.raises(QUALIFICATION.QualificationError, match="real checkout"):
+        QUALIFICATION.prepare_build(source, "1" * 40)
+    assert not plan_path.exists()
+
+
+def test_qualify_fails_source_gate_for_symlinked_checkout(tmp_path):
+    value, plan_path = _write_plan(tmp_path)
+    target = tmp_path / "checkout"
+    target.mkdir()
+    source = tmp_path / "checkout-link"
+    source.symlink_to(target, target_is_directory=True)
+
+    report, passed = QUALIFICATION.qualify(plan_path, source, tmp_path / "evidence")
+    assert not passed
+    assert report["sourceGate"]["status"] == "failed"
+    assert "real checkout" in report["sourceGate"]["reason"]
+    assert [item["status"] for item in report["families"]] == ["not-run", "not-run"]
+
+ 
 def test_plan_rejects_code_change_even_when_all_image_evidence_is_present():
     value = plan()
     value["changedPaths"].append("scripts/build-image-inner.sh")
