@@ -244,6 +244,7 @@ each one from scratch.
 | 67 | A browser ISO has no live overlay for its CPU, or its installer version differs from the release | The workflow made one overlay for each flavor. Its tag and data did not name the CPU. The source check read four old desktop repos and allowed old Fisherman commits. | Build `amd64` and `arm64` overlays on native runners. Publish one multi-platform tag for each flavor. Record the base digest, platform, app, Flatpak commit, and bundle digest. Check all five `bootc-installer:prod` sources at Fisherman `d349c31e` or newer. |
 | 68 | Live ISO customization fails with `customize-live-real.sh: Permission denied` and exit 126 (PR #3407, run 39096138132) | The copied script keeps mode 0644; only its wrapper is executable | Run the copied script through Bash. The wrapper regression runs a non-executable script and checks arguments, source data, and exit status. Metadata-only mode writes the source receipt; detection-only mode tests live-media markers. Overlay staging tags include the run and attempt so concurrent publishers cannot mix receipts |
 | 69 | Renovate cannot update the Bazaar KRunner source pin (PR #3397) | The git-refs manager treated the commit SHA as a named ref and supplied no full repository URL | Capture the named ref as `currentValue` and the SHA as `currentDigest`; supply a full `packageNameTemplate` URL. `git ls-remote` resolves `v1.3.0` to the existing `dbed96fa…` pin. The build still downloads by commit |
+| 70 | `albacore:tuna` boot gate fails with `GDM did not start an active Wayland session for tuna-ci-login`. The greeter's gnome-shell dies of SIGSEGV on every start of that boot (#3969, runs 40224370305, 40224544514, 40229895267, 40236971341). Other runs of the same job pass. | The crash is in `drisw_init_screen` (libgallium 25.2.7 + 0x35d6f), reached from `eglInitialize` through `dri2_initialize_device`, kernel line `segfault at 8 ... error 4`. Mutter opens an EGLDevice display when its GBM device is software-only. Mesa 25.2.7 then reads a NULL swrast loader if the process forces software rendering. The exact base image under QEMU `-vga virtio` without virgl reproduces the same crash with `LIBGL_ALWAYS_SOFTWARE=1` or `MESA_LOADER_DRIVER_OVERRIDE=swrast`, and does not crash with neither. Failed and passed runs share the base digest, every package version, QEMU 10.2.1, the runner image and the VM arguments. **Not measured:** which variable the crashing greeter has, where it comes from, and why only some boots have it. | The gate keeps `greeter-graphics-evidence.txt`, `greeter-graphics-evidence-after-failure.txt` and `vm-host-evidence.txt` in the evidence artifact, for passed and failed boots. Compare the `greeter process environment` and `software-GL decision` sections of a failed and a passed boot before you change the image. Do not retry the job or raise a timeout: the crash repeats on every greeter start of a bad boot. |
 
 **Pattern to notice (bugs #1-14):** almost every bug here was a live-squash-specific
 environment gap (missing package, missing locale, missing remote, wrong
@@ -2169,6 +2170,26 @@ Binding also refuses any repository row or unsafe name for the target, so a
 later fork edit of the generated `image-packages.tsv` cannot add a source
 unnoticed. Adding a plain package name needs no refresh.
 
+
+### GDM gate loses evidence after a late screenshot error (#3969)
+
+**Symptom:** the greeter paints, but a later screenshot fails. Only
+`greeter-graphics-evidence.txt` remains.
+
+**Cause:** at collector head `c6d025b4`, required screenshots execute under
+`set -e` outside the explicit diagnostics branches. The isolated fixture in
+`tests/regressions/test_issue_3969_late_screenshot_evidence.py` reproduces exit
+37 without a report after failure. It covers screenshots before password
+entry, after login, after lock, and after unlock.
+
+**Fix:** collect once from an EXIT handler on nonzero exit. Preserve the status
+of the failed command even if collection fails. Explicit diagnostics no longer
+collect a second report.
+
+The fixture tests failures in collection and login, and failure of the greeter
+to paint. It also tests successful login, lock, and unlock. The fixture
+intercepts all guest commands. These tests do not prove behavior in a real VM.
+
 ### Gentoo desktop fails branding with unrendered identity tokens (#3980)
 
 **Symptom:** the package proof for modified GNOME stops after install with
@@ -2273,3 +2294,78 @@ Installation has no helper timeout and no downloads.
 The helper defers SIGINT/SIGTERM until dpkg and needrestart cleanup finish.
 It cannot defer SIGKILL or the outer job timeout. Logs show separate durations
 for acquisition and installation, on success or failure.
+
+
+### Greeter evidence includes another user’s desktop (#3969)
+
+**Symptom:** after login, the report labels an ordinary user’s shell or session
+as a greeter process.
+
+**Cause:** the collector at `2e9fadda` checks ownership only for `dbus-daemon`.
+A negative fixture reproduces this defect with another user’s `gnome-shell`
+and `gnome-session-b`.
+
+**Fix:** identify the GDM greeter on seat0 through logind. Check its owner and
+scope for user processes. Specific user units for GDM are also eligible. Include
+root workers only in that scope or in the parent chain of a verified member.
+Unknown membership excludes a process.
+
+Keep a handle to each process directory and recheck identity around the read.
+Discard the record if the process identity changes.
+The fixture tests other users, root workers, other scopes, and UID changes.
+The environment filter stays unchanged. These tests do not prove behavior in
+a real VM.
+
+
+### Greeter report selects another user’s core dump (#3969)
+
+**Symptom:** a report for GDM contains a crash from an ordinary user’s shell.
+
+**Cause:** at `af1ad92b`, core selection uses only the executable name.
+A synthetic record from a different UID reproduces the defect.
+
+**Fix:** resolve the GDM account UID and verify the recorded GDM session mode
+and scope or explicit user unit. Unknown attribution excludes the record.
+Select a trace with the exact boot ID, PID, timestamp, UID and executable.
+Do not list unrelated cores. The fixtures test a newer crash from another
+user and records with missing identity fields. They do not prove behavior
+in a real VM.
+
+
+### Behavioral regression passes but the convention gate fails (#3969)
+
+**Symptom:** the late-screenshot fixtures pass, but the convention suite reports
+`no test functions` for the same file.
+
+**Cause:** at `3a153548`, those tests are methods in a unittest class.
+The convention checks for top-level `def test_` functions. Local reproduction
+returns one failure and 212 passes.
+
+**Fix:** use parameterized pytest functions with the same behavioral assertions.
+Run `tests/test_regression_convention.py` with both affected regression suites.
+The focused tests and `just check` alone do not cover this convention.
+
+
+### Failed-login diagnostics can create a user session (#3969)
+
+**Symptom:** a diagnostic probe contacts the user bus even when login failed.
+
+**Cause:** at `adfdf2d4`, the ScreenSaver probe checks only the account UID.
+The inert fixture proves that a failed login still calls the user-bus proxy.
+That proxy can activate a user manager and affect later evidence.
+
+**Fix:** snapshot sessions before probes. User-bus diagnostics need an existing
+active Wayland session on seat0 and an active user manager. A stale session ID
+is not proof. The gate keeps its original acceptance checks and failure status.
+
+A snapshot alone cannot prevent a later manager exit. Diagnostics query PID 1
+for manager state and connect directly to an existing Unix bus socket.
+`busctl --address=unix:path=... --auto-start=no --timeout=5s` disables service
+autostart. Local `busctl --help` confirms these options. No machine proxy,
+PAM helper or fallback can recreate the manager. If the socket disappears or
+the bus rejects access, the optional probe fails without a retry through a proxy.
+
+GDM/PAM and IBus queries have separate limits of 200 and 50 events.
+Each event has a fixed label and numeric metadata.
+This preserves chronology when input errors repeat and avoids credential text.
+Fixtures verify these rules; real guest behavior remains unvalidated.

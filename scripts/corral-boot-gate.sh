@@ -127,6 +127,32 @@ if [[ "$GDM_LOGIN_CHECK" == 1 ]]; then
 fi
 "$CORRAL" "${VMTEST_ARGS[@]}" || rc=$?
 
+# What the VM was and what it ran on (tunaOS#3969). A greeter that crashes on
+# some boots and not on others can only be explained by comparing those boots,
+# and nothing kept the QEMU command line, the host CPU or the runner image.
+# Evidence only: nothing here may change the verdict.
+collect_vm_host_evidence() {
+	local vm_dir="${HOME}/.local/share/corral/vms/${NAME}" qemu
+	{
+		echo "recorded: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+		echo "runner image: ${ImageOS:-unknown} ${ImageVersion:-unknown}"
+		echo "host kernel: $(uname -r)"
+		echo "host cpu: $(grep -m1 'model name' /proc/cpuinfo 2>/dev/null || echo unknown)"
+		echo "kvm: $(ls -l /dev/kvm 2>&1)"
+		for qemu in qemu-system-x86_64 qemu-system-aarch64; do
+			command -v "$qemu" >/dev/null 2>&1 && echo "qemu: $("$qemu" --version 2>&1 | head -n 1)"
+		done
+		echo "corral: $("$CORRAL" version 2>&1 | head -n 1)"
+		echo "qemu command line of ${NAME} (the VM Corral started):"
+		pgrep -af "qemu-system.*-name ${NAME}" 2>&1 || echo "(no qemu process; the VM had already stopped)"
+		echo "vm directory ${vm_dir}:"
+		ls -la "$vm_dir" 2>&1
+		echo "qemu.log, first 40 lines:"
+		head -n 40 "${vm_dir}/qemu.log" 2>&1
+	} >"${OUT}/vm-host-evidence.txt" 2>&1 || true
+}
+collect_vm_host_evidence
+
 # The live console, which keeps growing after the copy in the artifacts. Corral
 # keeps its VMs under the invoking user's home, which is root's here.
 SERIAL="${HOME}/.local/share/corral/vms/${NAME}/serial.log"

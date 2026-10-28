@@ -99,7 +99,7 @@ jobs:
           REF="$(bash ./scripts/published-image-ref.sh "$VARIANT" "$DESKTOP" ghcr)"
           echo "==> ${VARIANT}:${DESKTOP} resolves to ${REF}"
           mkdir -p verify-out
-          sudo ./scripts/corral-boot-gate.sh "$REF" verify-out 900
+          sudo --preserve-env=ImageOS,ImageVersion ./scripts/corral-boot-gate.sh "$REF" verify-out 900
 
       - name: Normalize verify-out ownership
         if: always()
@@ -114,6 +114,9 @@ jobs:
             verify-out/serial.log
             verify-out/*.png
             verify-out/timelapse.webm
+            verify-out/greeter-graphics-evidence*.txt
+            verify-out/egl-device-reproducer.txt
+            verify-out/vm-host-evidence.txt
             verify-out/corral/result.json
             verify-out/corral/diagnostics/
           if-no-files-found: warn

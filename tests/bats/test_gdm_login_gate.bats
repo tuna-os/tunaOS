@@ -222,6 +222,11 @@ run_gate() {
   [ -f "${OUT}/gdm-logged-in.png" ]
   [ -f "${OUT}/gdm-locked.png" ]
   [ -f "${OUT}/gdm-unlocked.png" ]
+  # tunaOS#3969: a passing boot keeps the greeter's graphics report too, so a
+  # crashing boot has something to be compared with.
+  [ -f "${OUT}/greeter-graphics-evidence.txt" ]
+  grep -Fq 'greeter graphics evidence, mode=sample samples=40' "${OUT}/greeter-graphics-evidence.txt"
+  [ ! -e "${OUT}/greeter-graphics-evidence-after-failure.txt" ]
 }
 
 @test "login falls back to type-ahead selection when Tab does not work" {
@@ -244,6 +249,8 @@ run_gate() {
   [ -f "${OUT}/gdm-attempt-1.png" ]
   [ -f "${OUT}/gdm-attempt-2.png" ]
   [ -f "${OUT}/gdm-attempt-3.png" ]
+  [ -f "${OUT}/greeter-graphics-evidence-after-failure.txt" ]
+  grep -Fq 'mode=once samples=0' "${OUT}/greeter-graphics-evidence-after-failure.txt"
 }
 
 @test "lock reports the session state when the hint never flips" {
