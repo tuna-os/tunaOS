@@ -70,12 +70,17 @@ def covering_catalog(document, variant, flavor, platform):
 
 
 def _source_evidence(results):
-    return [{key: result[key] for key in ('source', 'role', 'source_url', 'release',
-                                          'architecture', 'signed_at', 'retrieved_at',
-                                          'inrelease_sha256', 'keyring_sha256', 'indexes',
-                                          'declaration_sha256', 'remote_keyring_sha256',
-                                          'freshness')}
-            for result in results]
+    fields = ('source', 'role', 'source_url', 'release', 'architecture',
+              'signed_at', 'retrieved_at', 'inrelease_sha256', 'keyring_sha256',
+              'indexes', 'freshness')
+    evidence = []
+    for result in results:
+        source = {key: result[key] for key in fields}
+        if result['role'] == 'build':
+            source.update({key: result[key] for key in
+                           ('declaration_sha256', 'remote_keyring_sha256')})
+        evidence.append(source)
+    return evidence
 
 
 def plan(document, config_directory, query, selected, native=None, *, now, acquire=None):

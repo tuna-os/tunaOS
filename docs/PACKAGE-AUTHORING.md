@@ -165,6 +165,8 @@ receipts. Each covered target binds the base image and source configuration
 before network access. Each collector authenticates its sources one time per
 invocation. The plan resolves every selected target before it shows a result.
 
+Base sources retain the signed archive and index hashes. Build sources also retain hashes of their declaration and remote trust key. A base source has no such declaration.
+
 A match is an exact native name. For a rename, use
 `--native VARIANT:FLAVOR:PLATFORM=NAME`. The name must be in the authenticated
 index of that target. The command never makes a match from a similar name. It

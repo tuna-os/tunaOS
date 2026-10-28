@@ -37,15 +37,16 @@ def target_tree(root):
 
 def source_result(source, names):
     build = source == 'tailscale'
-    return {'source': source, 'role': 'build' if build else 'base',
-            'source_url': f'https://example.invalid/{source}/InRelease', 'release': 'trixie',
-            'architecture': 'amd64', 'signed_at': '2026-10-23T00:00:00+00:00',
-            'retrieved_at': NOW.isoformat(), 'inrelease_sha256': 'a' * 64,
-            'keyring_sha256': 'b' * 64, 'indexes': [{'url': 'u', 'sha256': 'c' * 64, 'size': 1}],
-            'declaration_sha256': 'd' * 64 if build else None,
-            'remote_keyring_sha256': 'b' * 64 if build else None,
-            'names': set(names), 'signers': ['A' * 40],
-            'freshness': {'mode': 'signed-valid-until', 'expires': None}}
+    result = {'source': source, 'role': 'build' if build else 'base',
+              'source_url': f'https://example.invalid/{source}/InRelease', 'release': 'trixie',
+              'architecture': 'amd64', 'signed_at': '2026-10-23T00:00:00+00:00',
+              'retrieved_at': NOW.isoformat(), 'inrelease_sha256': 'a' * 64,
+              'keyring_sha256': 'b' * 64, 'indexes': [{'url': 'u', 'sha256': 'c' * 64, 'size': 1}],
+              'names': set(names), 'signers': ['A' * 40],
+              'freshness': {'mode': 'signed-valid-until', 'expires': None}}
+    if build:
+        result.update(declaration_sha256='d' * 64, remote_keyring_sha256='b' * 64)
+    return result
 
 
 OBSERVED_AT = json.loads(
@@ -100,6 +101,28 @@ def test_htop_resolves_on_every_covered_target_with_separate_evidence_layers():
         assert record['base_image'].startswith('docker.io/library/debian:trixie@sha256:')
         assert record['configuration_observed_at'] == OBSERVED_AT
     json.dumps(report)  # Evidence is serializable; no sets leak into the plan.
+
+
+def test_native_acquisition_results_resolve_the_supported_plan_without_authorizing_a_write():
+    from tests.test_signed_apt import fake_catalog
+
+    catalog, fetch, verify, *_ = fake_catalog()
+    acquired = portable_add.signed_apt.acquire_catalog(
+        catalog, lambda _: b'key', datetime(2026, 10, 21, tzinfo=timezone.utc), fetch, verify,
+    )
+    report = plan(acquire=lambda *_: acquired, **flounder_covered())
+    assert report['complete'] is True
+    assert {row['native_name'] for row in report['targets']} == {'htop'}
+    assert report['emission']['status'] == 'blocked'
+    sources = report['targets'][0]['index_availability']['sources']
+    for source in sources:
+        if source['role'] == 'base':
+            assert 'declaration_sha256' not in source
+            assert 'remote_keyring_sha256' not in source
+        else:
+            expected = next(item for item in catalog['sources'] if item['id'] == source['source'])
+            assert source['declaration_sha256'] == expected['declaration_sha256']
+            assert source['remote_keyring_sha256'] == expected['keyring_sha256']
 
 
 def test_subset_never_claims_variant_or_all_base_emission():
