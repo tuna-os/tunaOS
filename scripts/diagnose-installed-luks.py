@@ -253,7 +253,7 @@ def no_open_disk(path, deadline, output=None, *, proc_root=None):
                             {'descriptor_denials': [observation]}) from None
 class ScanObject:
     """Hold every physical ancestor and the object; never act through a relookup."""
-    def __init__(self, path, *, write=False, metadata=False):
+    def __init__(self, path, *, access=os.O_RDONLY):
         self.path = Path(path).absolute()
         self.fds = []
         self.names = self.path.parts[1:]
@@ -261,7 +261,7 @@ class ScanObject:
             self.fds.append(os.open('/', os.O_RDONLY | os.O_DIRECTORY))
             for index, name in enumerate(self.names):
                 flags = os.O_NOFOLLOW | os.O_NONBLOCK
-                flags |= (os.O_PATH if metadata else os.O_RDWR if write else os.O_RDONLY) if index == len(self.names)-1 else os.O_RDONLY | os.O_DIRECTORY
+                flags |= access if index == len(self.names)-1 else os.O_RDONLY | os.O_DIRECTORY
                 self.fds.append(os.open(name, flags, dir_fd=self.fds[-1]))
             self.identities = self.snapshot()
             self.validate()
@@ -350,7 +350,9 @@ def root_descriptor_scan(identity_json, result, owner_uid, deadline_text, result
     identity = json.loads(identity_json)
     d.require(isinstance(identity, list) and len(identity) == 2 and
               all(type(v) is int and v >= 0 for v in identity), 'descriptor_disk_identity')
-    target = ScanObject(result, write=True)
+    # Mode 0602 grants this non-owner writer no DAC read access. READ_SEARCH
+    # does not override a combined read/write request; the helper only pwrite()s.
+    target = ScanObject(result, access=os.O_WRONLY)
     try:
         d.require(target.identities == json.loads(result_identity_json), 'descriptor_result_changed')
         parent = os.fstat(target.fds[-2])
@@ -385,7 +387,7 @@ def retry_denied_descriptor_scan(path, deadline, output, observation, identity):
         d.require(stat.S_ISDIR(output_stat.st_mode) and output_stat.st_uid == os.getuid() and
                   stat.S_IMODE(output_stat.st_mode) == 0o700, 'descriptor_output_private')
         # Open the disk first to reject symlinked ancestors before result creation.
-        disk = ScanObject(path, metadata=True)
+        disk = ScanObject(path, access=os.O_PATH)
         d.require(disk.identities[-1][:2] == list(identity), 'descriptor_disk_changed')
         result = output / 'descriptor-scan.result'
         d.require(output == path.parent, 'descriptor_output_mismatch')
@@ -394,7 +396,7 @@ def retry_denied_descriptor_scan(path, deadline, output, observation, identity):
         try:
             os.fchmod(fd, 0o602)
             created = os.fstat(fd)
-            target = ScanObject(result, write=True)
+            target = ScanObject(result, access=os.O_RDWR)
             d.require(target.identities[-1][:2] == [created.st_dev, created.st_ino],
                       'descriptor_result_changed')
         finally:

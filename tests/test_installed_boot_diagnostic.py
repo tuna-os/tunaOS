@@ -1,4 +1,5 @@
 """Inert metadata/process fixtures only: never launch a VM or inspect a disk."""
+import errno
 import gzip
 import importlib.util
 import json
@@ -1197,7 +1198,7 @@ def test_root_writer_refuses_replacement_before_any_write(tmp_path, monkeypatch)
     result = tmp_path/'result'
     result.touch(mode=0o602)
     result.chmod(0o602)
-    held = supervisor.ScanObject(result, write=True)
+    held = supervisor.ScanObject(result, access=os.O_RDWR)
     identities = held.identities
     sentinel = tmp_path/'outside'
     sentinel.write_text('OUTSIDE')
@@ -1218,7 +1219,7 @@ def test_root_scan_uses_original_identity_and_absolute_deadline(tmp_path, monkey
     result = tmp_path/'result'
     result.touch(mode=0o602)
     result.chmod(0o602)
-    held = supervisor.ScanObject(result, write=True)
+    held = supervisor.ScanObject(result, access=os.O_RDWR)
     deadline = time.monotonic()+100
     seen = []
     def scan(identity, until, **kwargs):
@@ -1299,7 +1300,7 @@ def test_root_writer_holds_original_and_never_writes_outside(tmp_path, monkeypat
     result.chmod(0o602)
     outside = tmp_path/'outside'
     outside.write_text('SENTINEL')
-    held = supervisor.ScanObject(result, write=True)
+    held = supervisor.ScanObject(result, access=os.O_RDWR)
     def scan(*args, **kwargs):
         if replacement == 'parent':
             private.rename(tmp_path/'moved')
@@ -1417,3 +1418,25 @@ def test_root_entry_retains_only_bounded_refusal_status(monkeypatch, capsys, err
     assert supervisor.main() == status
     captured = capsys.readouterr()
     assert captured.out == captured.err == ''
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason='DAC refusal requires an unprivileged owner')
+def test_write_only_token_does_not_require_or_grant_read_access(tmp_path):
+    token = tmp_path/'result'
+    token.touch(mode=0o200)
+    try:
+        with pytest.raises(PermissionError):
+            supervisor.ScanObject(token, access=os.O_RDWR)
+        held = supervisor.ScanObject(token, access=os.O_WRONLY)
+        try:
+            held.validate()
+            assert os.pwrite(held.fd, b'clear\n', 0) == 6
+            with pytest.raises(OSError) as caught:
+                os.pread(held.fd, 6, 0)
+            assert caught.value.errno == errno.EBADF
+            held.validate()
+        finally:
+            held.close()
+    finally:
+        token.chmod(0o600)
+    assert token.read_bytes() == b'clear\n'

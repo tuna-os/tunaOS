@@ -322,3 +322,28 @@ before file access or service start. Tests check refusals but emit no error
 text. Neither result proves the hosted root
 service works. A control pass is not installed-boot or unlock-prompt evidence.
 Another privileged run needs a separate owner decision.
+
+### Retained probe result
+
+The single approved run [40697928180](https://github.com/tuna-os/tunaOS/actions/runs/40697928180)
+used source `234d6aa246ecc25401373e758acea60c417ad12d`, `run_attempt=1`.
+Both controls failed with status 95, `permission_denied`. Both services
+stopped. All build and guest jobs stayed off. This is not boot evidence.
+
+Artifact `12820096900` has verified archive digest
+`sha256:cea6145eab9e9308fffe250b46e90231e5b82d6022bd0ea070d750c083c87722`.
+It contains only `report.json`. The report does not name the call that failed.
+It contains no initramfs data and cannot explain the absent unlock prompt.
+
+The root helper opens the runner's `0602` token with `O_RDWR`, but its
+non-owner access is write-only. Linux grants the `CAP_DAC_READ_SEARCH`
+override only for a read-only request, not a combined read/write request
+([kernel rule](https://github.com/torvalds/linux/blob/master/fs/namei.c)).
+The root writer now uses `O_WRONLY`; the runner keeps `O_RDWR` and the disk
+handle keeps `O_PATH`. No mode, capability, or inode guard changes.
+
+Local non-root proof: the old handle fails on a write-only file. The new
+handle accepts `pwrite` and rejects `pread` with `EBADF`. This proves the
+access-mode repair, not the exact call that failed on the runner. The revised
+root path still has no hosted proof. The one-run approval is spent; no retry
+or full ISO/install run occurred.
