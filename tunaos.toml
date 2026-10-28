@@ -2439,7 +2439,7 @@ codename = "Platichthys flesus"
 branding = { accent = "#A80030", gnome_accent = "red", base = "Debian Sid", homage = "Debian's darker red", plymouth = "radioactive" }
 upstream_track = "rolling"
 description = "Based on Debian Sid (unstable, rolling)"
-base_image = "docker.io/library/debian:sid@sha256:6ba7b75b36b5f074c82e088b90575cfde79409d3eedc53ec30441e8027a14ecd"
+base_image = "docker.io/library/debian:sid@sha256:46e441d513e81eb6c04119061b4abe68a5bae6fa55fd42bf39147e7d2a548bf5"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["debian"]
 platforms = ["linux/amd64"]
