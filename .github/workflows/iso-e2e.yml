@@ -1161,10 +1161,12 @@ jobs:
           # to PNG, so uploading both stores each frame twice — once in an
           # UNCOMPRESSED format (a 1280x800 PPM is ~3 MB raw against ~100 KB
           # as PNG). Same evidence, a fraction of the bytes.
+          # Keep diagnostic evidence but never retain the per-run private vsock key.
           path: |
             iso-e2e-out/serial.log
             native-iso-input/artifact-binding.json
             iso-e2e-out/native-smoke/
+            !iso-e2e-out/native-smoke/vsock-ssh-key
             iso-e2e-out/strict-diagnostics/
             iso-e2e-out/media.sha256
             iso-e2e-out/media-payloads.txt
