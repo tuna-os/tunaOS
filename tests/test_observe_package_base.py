@@ -8,6 +8,7 @@ from pathlib import Path
 import shutil
 import sys
 import tarfile
+import types
 
 import pytest
 
@@ -149,6 +150,69 @@ def test_extra_apt_source_is_recorded_and_refused_by_binding(monkeypatch, tmp_pa
     assert (tmp_path / 'config/package-observations/flounder-amd64.json').read_bytes() == \
         (ROOT / 'config/package-observations/flounder-amd64.json').read_bytes()
     assert 'observed_base_image = "' + base_image not in config.read_text()
+
+
+@pytest.mark.parametrize('alias', ['././etc/apt/sources.list.d/extra.list',
+                                   'etc//apt/./sources.list.d/extra.list'])
+def test_aliased_apt_source_path_is_still_inventoried(monkeypatch, alias):
+    tool = _tool()
+    committed = _committed_observation()
+    files = {
+        'etc/apt/sources.list.d/debian.sources': committed['source_text'].encode(),
+        alias: b'deb http://example.invalid/ trixie main\n',
+        'usr/lib/os-release': committed['os_release_text'].encode(),
+        'usr/share/keyrings/debian-archive-keyring.pgp': (ROOT / 'config/package-keys/debian-trixie.pgp').read_bytes(),
+    }
+    observation = json.loads(tool.observe(_registry(monkeypatch, tool, files=files), 'd' * 64, NOW))
+    assert [m['path'] for m in observation['apt_source_members']] == [
+        'etc/apt/sources.list.d/debian.sources', 'etc/apt/sources.list.d/extra.list']
+
+
+@pytest.mark.parametrize('name', ['/etc/apt/sources.list.d/extra.list',
+                                  'usr/../etc/apt/sources.list.d/extra.list'])
+def test_absolute_or_escaping_layer_paths_fail_closed(monkeypatch, name):
+    tool = _tool()
+    committed = _committed_observation()
+    files = {
+        'etc/apt/sources.list.d/debian.sources': committed['source_text'].encode(),
+        name: b'deb http://example.invalid/ trixie main\n',
+        'usr/lib/os-release': committed['os_release_text'].encode(),
+        'usr/share/keyrings/debian-archive-keyring.pgp': (ROOT / 'config/package-keys/debian-trixie.pgp').read_bytes(),
+    }
+    with pytest.raises(CatalogError, match='absolute path|parent-traversal'):
+        tool.observe(_registry(monkeypatch, tool, files=files), 'd' * 64, NOW)
+
+
+def test_unrewritable_pins_leave_the_observation_untouched(monkeypatch, tmp_path):
+    tool = _tool()
+    base_image = _registry(monkeypatch, tool)
+    config = _tree(tmp_path, base_image)
+    source = config.read_text()
+    line = next(item for item in source.splitlines() if item.startswith('source_observation_sha256 = "'))
+    config.write_text(source.replace(line, line + '  # reviewed'))
+    before = config.read_text()
+    assert tool.main(['--config', str(config), '--catalog', 'debian-trixie', '--write']) == 1
+    assert (tmp_path / 'config/package-observations/flounder-amd64.json').read_bytes() == \
+        (ROOT / 'config/package-observations/flounder-amd64.json').read_bytes()
+    assert config.read_text() == before
+
+
+def test_failed_config_write_restores_the_observation(monkeypatch, tmp_path):
+    tool = _tool()
+    base_image = _registry(monkeypatch, tool)
+    config = _tree(tmp_path, base_image)
+    before = config.read_text()
+    write = tool._load_refresh_tool()._atomic_write
+
+    def atomic_write(path, data):
+        if Path(path) == config:
+            raise OSError('disk full')
+        write(path, data)
+    monkeypatch.setattr(tool, '_load_refresh_tool', lambda: types.SimpleNamespace(_atomic_write=atomic_write))
+    assert tool.main(['--config', str(config), '--catalog', 'debian-trixie', '--write']) == 1
+    assert (tmp_path / 'config/package-observations/flounder-amd64.json').read_bytes() == \
+        (ROOT / 'config/package-observations/flounder-amd64.json').read_bytes()
+    assert config.read_text() == before
 
 
 def test_write_moves_only_the_two_base_pins(monkeypatch, tmp_path, capsys):

@@ -52,6 +52,16 @@ def _registry_get(repository, path, token, accept=None, limit=8 * 1024 * 1024):
     return data
 
 
+def _member_path(name):
+    """Canonical relative path of a layer member; refuse absolute and escaping names."""
+    if name.startswith('/'):
+        raise catalogs.CatalogError(f'observed base layer has an absolute path: {name}')
+    parts = [part for part in name.split('/') if part not in ('', '.')]
+    if '..' in parts:
+        raise catalogs.CatalogError(f'observed base layer has a parent-traversal path: {name}')
+    return '/'.join(parts)
+
+
 def observe(base_image, inrelease_sha256, now):
     """Return source-observation bytes for an exact docker.io library digest."""
     match = re.fullmatch(r'docker\.io/(library/[a-z0-9._-]+):([A-Za-z0-9._-]+)@(sha256:[0-9a-f]{64})', base_image)
@@ -84,7 +94,7 @@ def observe(base_image, inrelease_sha256, now):
     contents, apt_members = {}, []
     with tarfile.open(fileobj=io.BytesIO(blob), mode='r:*') as archive:
         for member in archive:
-            name = member.name[2:] if member.name.startswith('./') else member.name
+            name = _member_path(member.name)
             if name == 'etc/apt/sources.list' or (name.startswith('etc/apt/sources.list.d/')
                                                   and not member.isdir()):
                 apt_members.append({'path': name, 'type': member.type.decode(),
@@ -136,12 +146,17 @@ def _replace_pins(source, catalog_name, base_image, digest):
     return source[:header.end()] + table + source[end:]
 
 
-def main(argv=None):
+def _load_refresh_tool():
     import importlib.util
     spec = importlib.util.spec_from_file_location(
         'refresh_package_observation', Path(__file__).with_name('refresh-package-observation.py'))
-    refresh_tool = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(refresh_tool)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def main(argv=None):
+    refresh_tool = _load_refresh_tool()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--config', type=Path, default=tunaos_config.ROOT / 'tunaos.toml')
     parser.add_argument('--catalog', required=True)
@@ -173,14 +188,14 @@ def main(argv=None):
         if not args.write:
             print('dry run: review the changes above, then repeat with --write')
             return 0
+        updated = _replace_pins(source.decode('utf-8'), args.catalog, base_image, digest)
         refresh_tool._atomic_write(observation_path, raw)
         try:
             catalogs.bind_observation(candidate, root)
-        except catalogs.CatalogError:
+            refresh_tool._atomic_write(args.config, updated.encode())
+        except BaseException:
             refresh_tool._atomic_write(observation_path, old_raw)
             raise
-        updated = _replace_pins(source.decode('utf-8'), args.catalog, base_image, digest)
-        refresh_tool._atomic_write(args.config, updated.encode())
         print(f'source_observation_sha256: {catalog["source_observation_sha256"][:12]} -> {digest[:12]}')
         print('written: now run scripts/refresh-package-observation.py --catalog '
               f'{args.catalog} --write, review `git diff`, then run the package catalog tests')
