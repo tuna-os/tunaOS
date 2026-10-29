@@ -4355,8 +4355,8 @@
   }
  },
  "snapshot": {
-  "board_sha256": "5b93e25a7d80daf4bc6e6442931f77b0b79e5ba9e2814dae8127d43375f6e8d6",
-  "provenance_sha256": "f447c7ab2423bd584d9754c65534d04043e12b61d0f988c78d4184576b27598a",
+  "board_sha256": "31380be31a53913021def01d2a806ff8b247d2d1f54ee4093eb6558e5f010b66",
+  "provenance_sha256": "68f1a8b7acf607cb3cdeb7ebcf312303354dd9d55d68d262a8a93ae110d5db54",
   "schema_version": 1
  },
  "snapshot_context": {
@@ -4384,7 +4384,7 @@
   },
   "factory_health": {
    "green": 120,
-   "total": 147
+   "total": 148
   },
   "install": {
    "passed": 29,

@@ -490,8 +490,8 @@ EOF
 	_TD_EMERGE_ANCHOR="${_TD_EMERGE_PKGS[0]}"
 	while [[ -n "${_TD_EMERGE_ANCHOR}" ]]; do
 		case "${_TD_EMERGE_ANCHOR:0:1}" in
-			'!'|'<'|'>'|'='|'~') _TD_EMERGE_ANCHOR="${_TD_EMERGE_ANCHOR:1}" ;;
-			*) break ;;
+		'!' | '<' | '>' | '=' | '~') _TD_EMERGE_ANCHOR="${_TD_EMERGE_ANCHOR:1}" ;;
+		*) break ;;
 		esac
 	done
 	"${_TD_CTX}/build_scripts/desktop/gentoo-binhost-version-lock.sh" \
