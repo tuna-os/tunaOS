@@ -85,8 +85,8 @@ Ruleset 10437561 (`main`, active) now has a `required_status_checks` rule.
 It names exactly `Lint` and `Unit Tests` (GitHub Actions, integration 15368).
 The deletion, non-fast-forward, merge-queue and Copilot review rules stay.
 Before this change, #4073 made both checks report on every pull request and
-every `merge_group` entry. A job that its `if:` skips reports Skipped, and
-Skipped satisfies the rule.
+every `merge_group` entry. When a job's `if:` condition skips it, the job
+reports Skipped, and Skipped satisfies the rule.
 
 The bypass actors stay: OrganizationAdmin, the repository roles 2 and 5, and
 deploy keys. With one maintainer, an emergency fix must not wait on a red
