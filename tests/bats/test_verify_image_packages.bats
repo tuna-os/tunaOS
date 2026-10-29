@@ -8,6 +8,9 @@ setup() {
   repo="${BATS_TEST_TMPDIR}/repo"
   mkdir -p "${repo}/bin" "${repo}/manifests/desktops" "${repo}/scripts"
   cp "${REPO_ROOT}/scripts/verify-image-packages.sh" "${repo}/scripts/"
+  # The verifier regenerates manifests from tunaos.toml first; these cases
+  # supply their own manifests, so the copied tree gets a no-op generator.
+  printf 'raise SystemExit(0)\n' >"${repo}/scripts/config.py"
 
   cat >"${repo}/bin/podman" <<'EOF'
 #!/usr/bin/env bash
@@ -29,6 +32,24 @@ EOF
   chmod +x "${repo}/bin/podman"
   export PATH="${repo}/bin:${PATH}"
   export PODMAN_LOG="${repo}/podman.log"
+
+  TEST_ROOT="${BATS_TEST_DIRNAME}/test_root_tmp"
+  mkdir -p "${TEST_ROOT}/bin" "${TEST_ROOT}/manifests/desktops"
+  export PATH="${TEST_ROOT}/bin:${PATH}"
+  cat >"${TEST_ROOT}/manifests/desktops/testflavor.yaml" <<'YAML'
+packages:
+  apt:
+    - debian-pkg1
+    - debian-pkg2
+  fedora:
+    packages:
+      - fedora-pkg1
+  el10:
+    packages:
+      - el-pkg1
+  emerge:
+    - category/gentoo-pkg1
+YAML
 }
 
 run_verifier() {
@@ -77,7 +98,7 @@ EOF
 }
 
 teardown() {
-  rm -rf "${repo}"
+  rm -rf "${repo}" "${TEST_ROOT}"
 }
 
 # ── Argument Validation ───────────────────────────────────────────────────

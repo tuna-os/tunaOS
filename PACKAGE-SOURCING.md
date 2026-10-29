@@ -142,6 +142,7 @@ The "Cell" names are `tunaos-packages` planner ids (`scripts/plan-package-factor
 | `tideforge/debian-sid/` | `desktops.tuna.packages.apt` | Same step as `tideforge/ubuntu/` |
 | `tideforge/debian-trixie/` | `desktops.tuna.packages.apt` | Same step as `tideforge/ubuntu/` |
 | `pacman/arch/$arch` | `Containerfile.arch` | Pacman is not an OCI client. Test an OCI-hosted `file:` repository in the `tuna` stage |
+| `gentoo/binpkgs/amd64` | `desktops.tuna.packages.emerge` | Portage is not an OCI client. Test an OCI-hosted signed gpkg `file:` binrepo in the `tuna` stage |
 | `public.gpg` | `install-desktop.sh` | Commit the key with a pinned SHA-256 and import that file. People who keep the HTTP `.repo` files still need the URL |
 | `tideforge/ubuntu/tideforge.gpg` | `desktops.cosmic.packages.apt`, `desktops.tuna.packages.apt` | Commit the keyring with a pinned SHA-256 and read it from the repository |
 | `tideforge/debian-sid/tideforge.gpg` | `desktops.tuna.packages.apt` | Same step as the Ubuntu keyring |

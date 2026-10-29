@@ -7,7 +7,7 @@ set -euo pipefail
 if [[ "${PKG_MGR:-}" == emerge ]]; then
 	command -v systemctl >/dev/null 2>&1 || {
 		echo "Gentoo PipeWire user-service setup requires systemctl" >&2
-		exit 1
+		return 1 2>/dev/null || exit 1
 	}
 	systemctl --global enable pipewire.socket pipewire-pulse.socket wireplumber.service
 fi

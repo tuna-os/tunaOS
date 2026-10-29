@@ -424,7 +424,7 @@ if [[ "${_TD_OS}" == "emerge" ]]; then
 				echo "ERROR: invalid emerge binrepo name: ${_TD_EB_NAME}" >&2
 				exit 1
 			}
-			[[ "${_TD_EB_URI}" == https://repo.tunaos.org/* ]] || {
+			[[ "${_TD_EB_URI}" == "https://repo.tunaos.org/"* ]] || {
 				echo "ERROR: emerge binrepo ${_TD_EB_NAME} is not a TunaOS HTTPS source: ${_TD_EB_URI}" >&2
 				exit 1
 			}
