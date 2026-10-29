@@ -254,6 +254,8 @@ These task checkboxes attest the implemented source contracts, behavioral safety
 **Files changed**:
 - `tunaos: docs/TESTING.md`
 - `tunaos: docs/ci-troubleshooting.md`
+- `tunaos: .spektacular/plans/20261029021133-a6425a90-mesa-3969-isolated-comparison/test-plan.md`
+- `tunaos: .spektacular/specs/20261029021133-a6425a90-mesa-3969-isolated-comparison.md`
 - `tunaos: .spektacular/plans/20261029021133-a6425a90-mesa-3969-isolated-comparison/context.md`
 - `tunaos: .spektacular/changelog/20261029021133-a6425a90-mesa-3969-isolated-comparison.md`
 - `tunaos: .spektacular/changelog/tunaos/20261029021133-a6425a90-mesa-3969-isolated-comparison.md`
