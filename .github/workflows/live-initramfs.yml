@@ -2,7 +2,7 @@
 # flavor image's boot initramfs with tacklebox's tbox-live/tbox-root dracut
 # modules — the same rebuild `tacklebox build --iso` performs for every
 # CI-built ISO — and publish it as
-# ghcr.io/tuna-os/live-initramfs:<variant>-<flavor>.
+# <publish destination>/live-initramfs:<variant>-<flavor>.
 #
 # This is the second of #673's parity artifacts, pairing with
 # live-overlay.yml (the customize-content delta). Together they let the
@@ -142,6 +142,7 @@ jobs:
         env:
           VARIANT: ${{ matrix.variant }}
           FLAVOR: ${{ matrix.flavor }}
+          IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY }}
         run: |
           export TACKLEBOX_FROM_SOURCE=1
           sudo -E bash ./scripts/build-iso-tacklebox.sh \
@@ -152,6 +153,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VARIANT: ${{ matrix.variant }}
           FLAVOR: ${{ matrix.flavor }}
+          IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY }}
         run: |
           set -euo pipefail
 
@@ -161,7 +163,7 @@ jobs:
           # this workflow inspect a different image than the one that was
           # actually rebuilt.
           IMG="$(bash ./scripts/published-image-ref.sh "$VARIANT" "${FLAVOR}-linux-amd64" ghcr)"
-          OUT="ghcr.io/tuna-os/live-initramfs:${VARIANT}-${FLAVOR}"
+          OUT="$(bash ./scripts/publish-destination.sh)/live-initramfs:${VARIANT}-${FLAVOR}"
 
           # tacklebox keys its initramfs cache by image ID + dracut module
           # set + embedded-module digest (internal/install/initramfs.go), so

@@ -1,0 +1,8 @@
+name: Valid actionlint fixture
+on: push
+permissions: {}
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - run: printf '%s\n' "$GITHUB_SHA"
