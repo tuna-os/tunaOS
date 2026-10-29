@@ -133,18 +133,19 @@ flat 100%-violated SLA no longer does.
 
 ### 6. Agent-filed direction needs human sign-off
 
-A Hive agent's `[architect]`, `[strategist]` or `[outreach]` issue is a
-proposal, not work. It becomes implementable only when a maintainer from
-`MAINTAINERS.md` applies `approved-direction` or assigns a human to it; an
-accepted RFC (see `RFC-PROCESS.md`) is the route for anything larger. This
-closes the loop where one agent files a direction and another implements it
-with nobody deciding (tunaos-packages#581 → #583, kubestellar/hive#5117).
+A Hive agent's `[strategist]` or `[outreach]` issue is a proposal, not work.
+It becomes implementable only when a maintainer from `MAINTAINERS.md`
+applies `approved-direction` or assigns a human to it; an accepted RFC (see
+`RFC-PROCESS.md`) is the route for anything larger. This stops one agent
+from doing what another agent proposed when no person agreed to it
+(tunaos-packages#581 → #583, kubestellar/hive#5117). An
+`[architect]` issue is engineering work at ACMM L6 and needs no approval.
 
-School enforces part of this rule. Its `project.issue_filter.agent_proposal`
-gate holds a hive-filed issue with the label `agent/architect`,
-`agent/strategist` or `agent/outreach` (or the matching title prefix). The
-gate releases the issue when one of those signals is present. It does not
-hold human-filed issues, or hive-filed bug, CI and security reports.
+School and Reef enforce this rule. Their `project.issue_filter.agent_proposal`
+gate holds a hive-filed issue with the label `agent/strategist` or
+`agent/outreach` (or the matching title prefix). The gate releases the
+issue when one of those signals is present. It does not hold human-filed
+issues, or hive-filed architect, bug, CI and security reports.
 
 The gate checks that a signal is present, not who set it. Any account that
 can label issues, including the Hive App, can admit a proposal. The issue
