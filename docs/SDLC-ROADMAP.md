@@ -56,13 +56,14 @@ Config backups are in `/srv/hives/backups/`.
    Exit: one week of Reef with no merged PR whose only rationale is an
    unacknowledged proposal.
 3. **Merge guard for tunaOS (TUNA-4). Done 2026-10-29.** School runs at
-   ACMM L6, so Hive merges on green checks. Only the trust anchors need a
-   person: `auto_merge.human_merge_paths` lists `cosign.pub`,
-   `files/usr/bin/tunaos-luks-tpm2-enroll` and
-   `files/usr/share/ublue-os/just/60-tunaos-luks.just`. Use exact paths:
-   Hive's matcher does not match patterns like `**/*luks*`
-   (hivecommons/hive#15386). `tunaos.toml`, `registry-map.yaml` and
-   `.github/green-criteria.yml` merge on green checks.
+   ACMM L6, so Hive merges on green checks. Three files need a person:
+   `auto_merge.human_merge_paths` lists `cosign.pub`, the trust anchor for
+   image signatures, and two LUKS controls, `files/usr/bin/tunaos-luks-tpm2-enroll`
+   and `files/usr/share/ublue-os/just/60-tunaos-luks.just`. A bad change to a
+   LUKS control is hard to recover on installed machines. The fleet's build
+   has the glob fix (hivecommons/hive#15387), so patterns like `**/*luks*`
+   now match; the list keeps exact paths. `tunaos.toml`, `registry-map.yaml`
+   and `.github/green-criteria.yml` merge on green checks.
 4. **Close #1167. Done 2026-10-29.** The `main` ruleset needs `Lint` and
    `Unit Tests`. The merge queue waits up to 180 minutes for them, because
    hosted runners queue behind image builds. Copilot reviews every push, but
