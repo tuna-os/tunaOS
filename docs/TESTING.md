@@ -34,40 +34,41 @@ TunaOS uses a QEMU-based end-to-end test harness to verify ISO images boot corre
 
 ## Manual Mesa comparison
 
-The Mesa #3969 lab separates source safety from graphics qualification.
+The Mesa #3969 lab can check code safety. Graphics need separate proof.
 The existing Test workflow discovers the new pytest cases, including
-`tests/manual/test_mesa_3969_source_smoke.py`. That smoke exercises real CLI
-refusals, archive integrity and owned cleanup using synthetic data. It blocks
+`tests/manual/test_mesa_3969_source_smoke.py`. The smoke can check CLI
+refusals, archive integrity and cleanup with synthetic data. It blocks
 build tools and does not verify signatures, load an image or start a guest.
 Run these checks in CI, not as a local build or test campaign.
 
 `mesa-3969-compare.yml` is a separate, manual-only experiment. Do not dispatch
 it for a source check. A later run needs owner approval of the exact source
 head, the matching `MESA_3969_APPROVED_HEAD` repository variable,
-`reviewed_head`, and confirmation `RUN_MESA_3969_ONCE`. No variable or secret
-is created by this workflow. Admission rejects forks, automatic events,
-head mismatches, repeat attempts and a head used by a prior lab run.
-Configure approval before the first dispatch; a failed attempt is not a
+`reviewed_head`, and confirmation `RUN_MESA_3969_ONCE`.
+This workflow does not create variables or secrets. Admission rejects forks,
+automatic events, head mismatches, repeated runs and a head used by a prior lab run.
+Configure approval before the first dispatch; a failed run is not a
 license to retry the same head.
 
 The lab builds both complete Mesa sets from one frozen buildroot and one
 baseline. It uses the unchanged native Containerfile once, not the normal
-wrapper's retry/global-cleanup loop. RPM replacement is restricted to the
-run-bound lab container; never use it to change a host package database.
+wrapper's retry/global-cleanup loop. Only the run-bound lab container may
+replace RPMs. Never change a host package database.
+
 The pinned probe runs before GDM. The existing real login, lock, unlock and
-VM cleanup stay in use. Reports must bind actual software-renderer output
+VM cleanup stay in use. Reports must link observed output from the software renderer
 to the observed compositor and session. Exit 3 or 4 means an unexercised
 device path, not successful EGL initialization.
 
 Limits are 8 CPU, 80 GB and 180 minutes for preparation, then 60 minutes for
-sequential KVM control/candidate guests. Input transport is capped at
-24 GiB archived and 32 GiB unpacked. Separate safe evidence is capped at
-32 MiB; retention is one day. Private keys, raw SSH state, VM disks and ISOs
-must not be uploaded. No R2 or production publication is part of this lab.
+sequential KVM control/candidate guests. The lab accepts archives up to
+24 GiB and extracts up to 32 GiB. The evidence limit is 32 MiB, with one day
+of retention. Never upload private keys, raw SSH state, VM disks or ISOs.
+No R2 or production publication is part of this lab.
 
-Source CI does not prove that Mesa, GDM, encrypted installation or either
-configuration/ISO epic is qualified. A real run and review of its retained
-evidence remain separate acceptance.
+Source CI does not qualify Mesa, GDM, encrypted installation or either
+configuration/ISO epic. A real run and review of its retained evidence
+remain separate acceptance.
 
 
 ## Publish Gating
