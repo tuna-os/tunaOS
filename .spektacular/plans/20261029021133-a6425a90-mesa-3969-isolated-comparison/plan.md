@@ -84,7 +84,7 @@ Owner exact-head approval and review of real probe/software/UI evidence are **Ma
 
 **Validation point**: Source safety and package-identity behavior passes; no build/key is executed.
 
-#### - [ ] Task: Refuse unapproved runs and unsafe inputs
+#### - [x] Task: Refuse unapproved runs and unsafe inputs
 **Id:** 9a44b032-4109-4213-b652-cfa68254d1fa
 **Repo:** tunaos
 **Depends on:** none
@@ -95,10 +95,10 @@ Reject unapproved work and unsafe inputs before cost. Keep cleanup limited to ow
 *Technical detail:* [context.md#task-refuse-unapproved-runs-and-unsafe-inputs](./context.md#task-refuse-unapproved-runs-and-unsafe-inputs)
 
 **Acceptance criteria**:
-- [ ] Exact-head/manual/first-attempt authority fails closed.
-- [ ] Substituted artifacts, unsafe paths and secret evidence refuse.
+- [x] Exact-head/manual/first-attempt authority fails closed.
+- [x] Substituted artifacts, unsafe paths and secret evidence refuse.
 
-#### - [ ] Task: Prepare the coherent signed Mesa pair
+#### - [x] Task: Prepare the coherent signed Mesa pair
 **Id:** 38701040-c8b0-4779-b7d5-fd52065d11c8
 **Repo:** tunaos
 **Depends on:** none
@@ -109,8 +109,8 @@ Prepare complete original/patched Mesa sets from one frozen root and baseline. U
 *Technical detail:* [context.md#task-prepare-the-coherent-signed-mesa-pair](./context.md#task-prepare-the-coherent-signed-mesa-pair)
 
 **Acceptance criteria**:
-- [ ] Fixed sources and complete coherent sets share the same root and baseline.
-- [ ] Wrong-arm headers and unrelated package drift refuse; no build/key runs now.
+- [x] Fixed sources and complete coherent sets share the same root and baseline.
+- [x] Wrong-arm headers and unrelated package drift refuse; no build/key runs now.
 
 ### Milestone 2: Truthful repair evidence
 
@@ -118,7 +118,7 @@ Prepare complete original/patched Mesa sets from one frozen root and baseline. U
 
 **Validation point**: Evidence/verdict boundaries pass; one-VM-per-arm helper lifecycle is preserved, not exercised now.
 
-#### - [ ] Task: Compare real software-rendered desktop behavior
+#### - [x] Task: Compare real software-rendered desktop behavior
 **Id:** 2e43e5d7-60cf-4bf3-bf0d-e5d81044e63a
 **Repo:** tunaos
 **Depends on:** none
@@ -129,8 +129,8 @@ Preserve all four probe outcomes even when GDM crashes. Require actual software-
 *Technical detail:* [context.md#task-compare-real-software-rendered-desktop-behavior](./context.md#task-compare-real-software-rendered-desktop-behavior)
 
 **Acceptance criteria**:
-- [ ] One bounded VM per arm preserves pinned helpers and deadlines.
-- [ ] Crashes, stale evidence and missing transitions cannot become repair.
+- [x] One bounded VM per arm preserves pinned helpers and deadlines.
+- [x] Crashes, stale evidence and missing transitions cannot become repair.
 
 ### Milestone 3: Review without automatic cost
 
@@ -138,7 +138,7 @@ Preserve all four probe outcomes even when GDM crashes. Require actual software-
 
 **Validation point**: Source smokes/checks and ordinary hosted CI pass; no automatic image/guest job is admitted.
 
-#### - [ ] Task: Offer one bounded manual workflow
+#### - [x] Task: Offer one bounded manual workflow
 **Id:** c7735ebf-0881-4c23-a6d2-c15bfa1b0760
 **Repo:** tunaos
 **Depends on:** none
@@ -149,10 +149,10 @@ Offer one manual experiment without automatic cost. Require exact-head activatio
 *Technical detail:* [context.md#task-offer-one-bounded-manual-workflow](./context.md#task-offer-one-bounded-manual-workflow)
 
 **Acceptance criteria**:
-- [ ] Missing approval fails visibly; no settings or production changes.
-- [ ] Read-only permissions, fixed caps and exact same-run inputs are enforced.
+- [x] Missing approval fails visibly; no settings or production changes.
+- [x] Read-only permissions, fixed caps and exact same-run inputs are enforced.
 
-#### - [ ] Task: Verify and publish the source-only candidate
+#### - [x] Task: Verify and publish the source-only candidate
 **Id:** 7e193f50-79f9-4f1a-8e43-f26994c7b189
 **Repo:** tunaos
 **Depends on:**
@@ -167,8 +167,8 @@ Exercise safety without running the experiment. Publish exact hosted-CI source p
 *Technical detail:* [context.md#task-verify-and-publish-the-source-only-candidate](./context.md#task-verify-and-publish-the-source-only-candidate)
 
 **Acceptance criteria**:
-- [ ] Source smokes/checks pass with zero builds, keys, guests or dispatch.
-- [ ] Published source CI admits no automatic runtime and docs preserve epic holds.
+- [x] Source smokes/checks pass with zero builds, keys, guests or dispatch.
+- [x] Published source CI admits no automatic runtime and docs preserve epic holds.
 
 ## Open Questions
 
@@ -186,3 +186,7 @@ No unresolved source implementation questions. Runtime sizes, duration, binary l
 
 These exclusions do not remove the broader ISO/configuration objective.
 
+
+## Source verification record
+
+These task checkboxes attest the implemented source contracts, behavioral safety and reviewed structure, not an executed native experiment. Hosted Test40845773673 tested source3c610a7aa01ccedb3d560dd3281de1074a0ba98f as merge316b0f15cd30489e9787afe5873eed58b12a9114 against94bd7d4ee6ec3753ff6717ffb98163c1760b33ea:6831passed,16skipped,129passing subtests, including364 new Mesa cases and the real CLI smoke. Primary Python3.10/3.15, lint, Just Fix and prose passed; image/bootc jobs were skipped. Upstream #4067 supplied the old fixture repair; no frozen test or gate was edited in this candidate. Metric3 and owner exact-head approval remain unexecuted manual obligations. No lab keys, native builds, guests, activation, dispatch, merge, production publication or R2 mutation.
