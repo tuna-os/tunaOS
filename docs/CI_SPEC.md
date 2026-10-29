@@ -50,6 +50,7 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 | `daily-verify.yml` | post-merge + scheduled | Daily Image Verification | `0 4 * * *`, manual | — |
 | `dead-gate-report.yml` | post-merge + scheduled | Dead gate report | `17 6 * * 1`, manual | — |
 | `desktop-contract-sweep.yml` | post-merge + scheduled | `desktop`, `no_silent_omissions` | `0 8 * * *`, manual | `desktop`: 2d, `no_silent_omissions`: 2d |
+| `diagnostic-oci-rpm-consumer.yml` | post-merge | Diagnostic OCI RPM consumer | manual | — |
 | `drop-bot-review-requests.yml` | PR-deterministic | Drop bot review requests | each PR | — |
 | `fork-simulation.yml` | post-merge + scheduled | Fork PR simulation | `17 8 * * 1`, manual | — |
 | `frontend-parity.yml` | post-merge + scheduled | frontend parity | `30 6 * * *`, manual | — |
@@ -77,6 +78,8 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 | `prune-r2.yml` | post-merge + scheduled | Prune R2 retention | `30 12 * * *`, manual | — |
 | `publish-iso-groups.yml` | post-merge + scheduled | Publish Grouped Dedup ISOs to R2 | `0 23 * * 0`, manual | — |
 | `publish-isos.yml` | post-merge | Publish Live ISOs to R2 | manual | — |
+| `qualify-image-packages.yml` | post-merge | Qualify image packages | manual | — |
+| `r2-dependency-report.yml` | post-merge + scheduled | R2 dependency report | `41 6 * * 1`, manual | — |
 | `randomized-tests.yml` | post-merge + scheduled | Randomized Tests | `30 3 * * *`, manual | — |
 | `rerun-infra-failures.yml` | post-merge | Re-run infra failures | workflow completion, manual | — |
 | `rerun-startup-failures.yml` | post-merge + scheduled | Re-run startup failures | `0 */3 * * *`, manual | — |

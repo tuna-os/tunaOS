@@ -29,25 +29,15 @@ if [[ -z "$variant" && -r /usr/lib/os-release ]]; then
 	variant="$(sed -n 's/^VARIANT_ID=//p' /usr/lib/os-release | tr -d '"')"
 fi
 
-# Keep in step with the variant's emoji in .github/build-config.yml;
-# tests/bats/test_plymouth_themes.bats checks both.
-case "$variant" in
-yellowfin | almalinux-kitten) theme=tropical-fish ;; # 🐠
-albacore | almalinux) theme=tunaos ;;                # 🐟
-skipjack | centos) theme=sushi ;;                    # 🍣
-wahoo) theme=carp-streamer ;;                        # 🎏
-bonito | fedora) theme=fishing-pole ;;               # 🎣
-hummingbird) theme=bird ;;                           # 🐦
-sailfin | opensuse | tumbleweed) theme=sailboat ;;   # ⛵
-guppy | gentoo) theme=rainbow ;;                     # 🌈
-bonito-rawhide) theme=dragon ;;                      # 🐉
-gurnard | elementary) theme=robot ;;                 # 🤖
-grouper | ubuntu) theme=coral ;;                     # 🪸
-marlin | arch | archlinux) theme=rocket ;;           # 🚀
-flounder | debian) theme=pufferfish ;;               # 🐡
-flounder-sid) theme=radioactive ;;                   # ☢️
-*) theme=tunaos ;;
-esac
+# The theme is each variant's branding.plymouth in tunaos.toml, through the
+# generated adapters beside this script. Base-derived names ("opensuse") fold
+# onto their variant first; anything else gets the project default.
+lib="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib"
+# shellcheck source=lib/identity.env
+source "${lib}/identity.env"
+canonical="$(awk -F'\t' -v alias="$variant" '$1 == alias { print $2 }' "${lib}/variant-aliases.tsv")"
+theme="$(awk -F'\t' -v id="${canonical:-$variant}" '$1 == id { print $6 }' "${lib}/variant-identity.tsv")"
+theme="${theme:-${TUNAOS_PLYMOUTH_THEME}}"
 if $print_only; then
 	echo "$theme"
 	exit 0

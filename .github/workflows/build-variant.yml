@@ -46,6 +46,10 @@ on:
         required: false
       R2_BUCKET:
         required: false
+      TUNAOS_PUBLISH_USERNAME:
+        required: false
+      TUNAOS_PUBLISH_PASSWORD:
+        required: false
 
 jobs:
   # ── Matrix Generation ───────────────────────────────────────────────────────
@@ -54,6 +58,11 @@ jobs:
   # which lets the workflow enforce the dependency chain via `needs`.
   generate_matrix:
     runs-on: ubuntu-latest
+    # RFC 016 decision 3: the publish credential lives in the `publish`
+    # environment, which only main may deploy. The environment is attached only
+    # when a fork opted in with TUNAOS_PUBLISH_SCOPE and the run can publish, so
+    # the stock owner path and every pull request run are unchanged.
+    environment: ${{ github.event_name != 'pull_request' && vars.TUNAOS_PUBLISH_SCOPE != '' && 'publish' || '' }}
     outputs:
       stage1_matrix: ${{ steps.set-matrix.outputs.stage1_matrix }}
       stage2_matrix: ${{ steps.set-matrix.outputs.stage2_matrix }}
@@ -83,6 +92,18 @@ jobs:
           registry="$(yq -r '.config.publish.registry // ""' .github/build-config.yml)"
           namespace="$(yq -r '.config.publish.namespace // ""' .github/build-config.yml)"
           echo "image_registry=${registry:+${registry}/${namespace}}" >> "$GITHUB_OUTPUT"
+
+      # RFC 016: refuse before any build minute is spent when the destination
+      # has no usable credential. The resolver gets presence flags, never values.
+      - name: Resolve publish credential
+        env:
+          TUNAOS_PUBLISH_DESTINATION: ${{ vars.IMAGE_REGISTRY || steps.publish.outputs.image_registry || format('ghcr.io/{0}', github.repository_owner) }}
+          TUNAOS_PUBLISH: ${{ github.event_name != 'pull_request' }}
+          TUNAOS_PUBLISH_EVENT: ${{ github.event_name }}
+          TUNAOS_PUBLISH_SCOPE: ${{ vars.TUNAOS_PUBLISH_SCOPE }}
+          TUNAOS_HAS_PUBLISH_USERNAME: ${{ secrets.TUNAOS_PUBLISH_USERNAME != '' }}
+          TUNAOS_HAS_PUBLISH_PASSWORD: ${{ secrets.TUNAOS_PUBLISH_PASSWORD != '' }}
+        run: python3 scripts/publish-credential.py
 
       - name: Validate Inputs
         env:
@@ -146,7 +167,9 @@ jobs:
           # runners and colouring runs red.
           # All inputs are in env vars — no direct interpolation of workflow
           # inputs into the script body, to prevent shell injection.
-          FULL_MATRIX=$(yq -o=json '.' .github/build-config.yml | jq -c --arg event "${EVENT_NAME}" '
+          CONFIG_JSON="${RUNNER_TEMP}/build-config.json"
+          yq -o=json '.' .github/build-config.yml > "$CONFIG_JSON"
+          FULL_MATRIX=$(jq -c --arg event "${EVENT_NAME}" '
             .variants[]
             | select(env.FILTER_VARIANT == "all" or .id == env.FILTER_VARIANT)
             | . as $v
@@ -170,7 +193,7 @@ jobs:
                 build_iso:     (.build_iso  // false),
                 build_qcow2:   (.build_qcow2 // false)
               }
-          ' | jq -c -s '.')
+          ' "$CONFIG_JSON" | jq -c -s '.')
 
           # Helper: emit an image matrix for a given stage number.
           make_image_matrix() {
@@ -234,7 +257,8 @@ jobs:
                     safeplatform:  .safeplatform
                   }
               )
-            }'
+            }' | python3 scripts/iso-delivery-policy.py \
+              --config-json "$CONFIG_JSON" annotate-target-matrix
           }
 
           # Per-stage artifact matrices
@@ -275,6 +299,9 @@ jobs:
       default-tag: ${{ matrix.published_tag }}
       publish: ${{ github.event_name != 'pull_request' }}
       sbom: ${{ github.event_name != 'pull_request' }}
+    secrets:
+      TUNAOS_PUBLISH_USERNAME: ${{ secrets.TUNAOS_PUBLISH_USERNAME }}
+      TUNAOS_PUBLISH_PASSWORD: ${{ secrets.TUNAOS_PUBLISH_PASSWORD }}
 
   # ── Stage 2: base-hwe, base-nvidia, and desktop base flavors ──────────────────
   # Runs only after ALL stage-1 jobs pass. Includes:
@@ -328,6 +355,9 @@ jobs:
       default-tag: ${{ matrix.published_tag }}
       publish: true
       sbom: true
+    secrets:
+      TUNAOS_PUBLISH_USERNAME: ${{ secrets.TUNAOS_PUBLISH_USERNAME }}
+      TUNAOS_PUBLISH_PASSWORD: ${{ secrets.TUNAOS_PUBLISH_PASSWORD }}
 
   # ── Stage 3: Desktop HWE and nvidia flavors ───────────────────────────────────
   # Layers on stage-2 images:
@@ -368,6 +398,9 @@ jobs:
       default-tag: ${{ matrix.published_tag }}
       publish: true
       sbom: true
+    secrets:
+      TUNAOS_PUBLISH_USERNAME: ${{ secrets.TUNAOS_PUBLISH_USERNAME }}
+      TUNAOS_PUBLISH_PASSWORD: ${{ secrets.TUNAOS_PUBLISH_PASSWORD }}
 
   # ── Stage 4: Combined nvidia+HWE flavors ──────────────────────────────────────
   # Layers on stage-3 images:
@@ -402,6 +435,9 @@ jobs:
       default-tag: ${{ matrix.published_tag }}
       publish: true
       sbom: true
+    secrets:
+      TUNAOS_PUBLISH_USERNAME: ${{ secrets.TUNAOS_PUBLISH_USERNAME }}
+      TUNAOS_PUBLISH_PASSWORD: ${{ secrets.TUNAOS_PUBLISH_PASSWORD }}
 
   # ── Artifact builds per stage (ISO + QCOW2) ───────────────────────────────
   # Each stage's artifacts depend only on that stage's image builds.
@@ -444,19 +480,11 @@ jobs:
       safeplatform: ${{ matrix.safeplatform }}
       image-tag: ${{ matrix.published_tag }}-${{ matrix.safeplatform }}
       build-iso: ${{ matrix.build_iso }}
-      # Each published cell writes its ISO to R2 TWICE -- a dated object and
-      # the -latest pointer -- so a full dispatch of one variant costs tens of
-      # GB of writes for artifacts nobody downloads. upload-r2 defaults to
-      # true in reusable-build-artifacts.yml and nothing here overrode it, so
-      # every test build paid that. The boot gate runs BEFORE the upload, so
-      # gating an ISO never needed one: a dispatch still builds, boots and
-      # uploads the workflow artifact, it just does not publish.
-      #
-      # Nightly runs still publish, which is what keeps the documented
-      # download URLs current and the NVIDIA download audit honest. Deliberate
-      # manual publishing has its own workflow (publish-isos.yml), and
-      # publish-isos above forces it here.
-      upload-r2: ${{ github.event_name == 'schedule' || inputs.publish-isos }}
+      # Scheduled and explicit manual publication remain enabled for every
+      # target outside the reviewed browser-builder cutover. The generated
+      # matrix sets r2_cutover only for an exact variant/flavor/platform match;
+      # an absent policy row therefore restores the prebuilt path.
+      upload-r2: ${{ (github.event_name == 'schedule' || inputs.publish-isos) && !matrix.r2_cutover }}
       # Names the artifact this cell's OWN image leg uploads after a
       # successful push. Its existence is what makes the relaxed gate above
       # safe; see the provenance gate in reusable-build-artifacts.yml.
@@ -492,19 +520,9 @@ jobs:
       safeplatform: ${{ matrix.safeplatform }}
       image-tag: ${{ matrix.published_tag }}-${{ matrix.safeplatform }}
       build-iso: ${{ matrix.build_iso }}
-      # Each published cell writes its ISO to R2 TWICE -- a dated object and
-      # the -latest pointer -- so a full dispatch of one variant costs tens of
-      # GB of writes for artifacts nobody downloads. upload-r2 defaults to
-      # true in reusable-build-artifacts.yml and nothing here overrode it, so
-      # every test build paid that. The boot gate runs BEFORE the upload, so
-      # gating an ISO never needed one: a dispatch still builds, boots and
-      # uploads the workflow artifact, it just does not publish.
-      #
-      # Nightly runs still publish, which is what keeps the documented
-      # download URLs current and the NVIDIA download audit honest. Deliberate
-      # manual publishing has its own workflow (publish-isos.yml), and
-      # publish-isos above forces it here.
-      upload-r2: ${{ github.event_name == 'schedule' || inputs.publish-isos }}
+      # Exact-target cutover prevents scheduled and manual publication from
+      # overwriting the retained R2 ISO and sidecars.
+      upload-r2: ${{ (github.event_name == 'schedule' || inputs.publish-isos) && !matrix.r2_cutover }}
       # Names the artifact this cell's OWN image leg uploads after a
       # successful push. Its existence is what makes the relaxed gate above
       # safe; see the provenance gate in reusable-build-artifacts.yml.
@@ -538,19 +556,9 @@ jobs:
       safeplatform: ${{ matrix.safeplatform }}
       image-tag: ${{ matrix.published_tag }}-${{ matrix.safeplatform }}
       build-iso: ${{ matrix.build_iso }}
-      # Each published cell writes its ISO to R2 TWICE -- a dated object and
-      # the -latest pointer -- so a full dispatch of one variant costs tens of
-      # GB of writes for artifacts nobody downloads. upload-r2 defaults to
-      # true in reusable-build-artifacts.yml and nothing here overrode it, so
-      # every test build paid that. The boot gate runs BEFORE the upload, so
-      # gating an ISO never needed one: a dispatch still builds, boots and
-      # uploads the workflow artifact, it just does not publish.
-      #
-      # Nightly runs still publish, which is what keeps the documented
-      # download URLs current and the NVIDIA download audit honest. Deliberate
-      # manual publishing has its own workflow (publish-isos.yml), and
-      # publish-isos above forces it here.
-      upload-r2: ${{ github.event_name == 'schedule' || inputs.publish-isos }}
+      # Exact-target cutover prevents scheduled and manual publication from
+      # overwriting the retained R2 ISO and sidecars.
+      upload-r2: ${{ (github.event_name == 'schedule' || inputs.publish-isos) && !matrix.r2_cutover }}
       # Names the artifact this cell's OWN image leg uploads after a
       # successful push. Its existence is what makes the relaxed gate above
       # safe; see the provenance gate in reusable-build-artifacts.yml.

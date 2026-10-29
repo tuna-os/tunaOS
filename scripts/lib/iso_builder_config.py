@@ -26,7 +26,8 @@ def table(value, required, optional=(), *, path="$"):
     unknown = set(value) - set(required) - set(optional)
     missing = set(required) - set(value)
     if unknown or missing:
-        raise ConfigError(f'{path}: unknown keys {sorted(unknown)}; missing keys {sorted(missing)}')
+        problems = ([f'unknown keys {sorted(unknown)}'] if unknown else []) + ([f'missing keys {sorted(missing)}'] if missing else [])
+        raise ConfigError(f'{path}: {"; ".join(problems)}')
 
 
 def text(value, path="$"):
@@ -288,7 +289,8 @@ def flavor_metadata(primary):
         raise ConfigError('flavor_metadata must be a nonempty table')
     expected = {f['id'] for v in primary['variants'].values() for f in v['flavors']}
     if set(metadata) != expected:
-        raise ConfigError('flavor_metadata must cover exact primary flavor IDs')
+        raise ConfigError('flavor_metadata must cover exact primary flavor IDs (one [flavor_metadata.<id>] table per flavor id in any variant): '
+                          f'missing {sorted(expected - set(metadata))}; remove {sorted(set(metadata) - expected)}')
     for key, value in metadata.items():
         pattern(key, r'[a-z0-9][a-z0-9-]{0,63}', f'flavor_metadata.{key}')
         table(value, ('desktop', 'edition'))
@@ -306,12 +308,14 @@ def render_flavors(primary):
 def validate_primary_selection(primary, document):
     flavor_metadata(primary)
     values = {f['id']: {v['id'] for v in f['values']} for f in document['selection']['facets']}
-    if values.get('base', set()) - set(primary['variants']):
-        raise ConfigError('unknown primary base facet')
+    unknown_bases = values.get('base', set()) - set(primary['variants'])
+    if unknown_bases:
+        raise ConfigError(f"iso_builder.selection.facets 'base' lists {sorted(unknown_bases)}, which are not variants in tunaos.toml; remove those values or restore the variants")
     metadata = primary['flavor_metadata']
     for key in ('desktop', 'edition'):
-        if values.get(key, set()) - {v[key] for v in metadata.values()}:
-            raise ConfigError('unknown primary flavor facet')
+        unknown_values = values.get(key, set()) - {v[key] for v in metadata.values()}
+        if unknown_values:
+            raise ConfigError(f"iso_builder.selection.facets {key!r} lists {sorted(unknown_values)}, which no [flavor_metadata.<id>] {key} uses; remove those values or restore the flavors")
     cells = {}
     for variant_id, variant in primary['variants'].items():
         for flavor in variant['flavors']:
@@ -323,8 +327,11 @@ def validate_primary_selection(primary, document):
         references.append(document['default_selection']['leaf_id'])
     for reference in references:
         if reference not in cells:
-            raise ConfigError('default/recommendation must reference a build-enabled primary cell')
+            raise ConfigError(f'{reference!r} (iso_builder default_selection or recommendations) must name a build-enabled primary cell as <variant>:<flavor>:<platform>; '
+                              f'keep a variant, flavor and platform whose build_image is true, or change that leaf_id')
         base, flavor, platform = cells[reference]
         facets = {'base': base, 'platform': platform, **metadata[flavor]}
-        if any(key in values and value not in values[key] for key, value in facets.items()):
-            raise ConfigError('default/recommendation excluded by configured facets')
+        excluded = sorted(f'{key}={value}' for key, value in facets.items() if key in values and value not in values[key])
+        if excluded:
+            raise ConfigError(f'{reference!r} (iso_builder default_selection or recommendations) is excluded by selection.facets, which do not list {excluded}; '
+                              'add those values to their facets or choose another leaf_id')

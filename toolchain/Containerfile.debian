@@ -17,7 +17,7 @@
 #   BOOTC_VERSION    e.g. v1.16.3
 #   BOOTUPD_VERSION  e.g. v0.2.35
 #   OSTREE_VERSION   e.g. v2026.2   (only used when BUILD_OSTREE=1)
-ARG BASE_IMAGE=docker.io/library/debian:trixie@sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308
+ARG BASE_IMAGE=docker.io/library/debian:trixie@sha256:2dc419c6d7fe3dad0a2f9fd469c34cc90b0f9ba642d8fde837fe3d7d34a0e7f1
 
 FROM ${BASE_IMAGE} AS builder
 ARG BUILD_OSTREE=0
@@ -25,6 +25,8 @@ ARG BOOTC_VERSION
 ARG BOOTUPD_VERSION
 ARG OSTREE_VERSION
 ARG COMPOSEFS_VERSION
+ARG TUNAOS_BOOTC_CANDIDATE=0
+COPY scripts/bootc-candidate.py /tmp/tunaos-bootc-candidate.py
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV CARGO_HOME=/tmp/rust
@@ -112,11 +114,23 @@ RUN if [ "${BUILD_OSTREE}" = "1" ]; then set -eux; \
 
 # ── bootc from source ────────────────────────────────────────────────────────
 RUN set -eux; . "${RUSTUP_HOME}/env"; \
-    git clone --depth 1 --branch "${BOOTC_VERSION}" \
-      https://github.com/bootc-dev/bootc.git /src/bootc; \
-    cd /src/bootc; \
-    make bin; \
-    make install-all DESTDIR=/output
+    if [ "${TUNAOS_BOOTC_CANDIDATE}" = "1" ]; then \
+      apt-get update; \
+      apt-get install -y --no-install-recommends libselinux1-dev libsystemd-dev libclang-dev; \
+      git clone --depth 1 --branch v1.17.1 https://github.com/bootc-dev/bootc.git /src/bootc; \
+      mkdir /bootc-candidate-output; \
+      python3 /tmp/tunaos-bootc-candidate.py bootstrap --source /src/bootc --destination /bootc-candidate-output --family debian; \
+      mkdir -p /output; \
+      cp -a /bootc-candidate-output/. /output/; \
+    elif [ "${TUNAOS_BOOTC_CANDIDATE}" = "0" ]; then \
+      git clone --depth 1 --branch "${BOOTC_VERSION}" \
+        https://github.com/bootc-dev/bootc.git /src/bootc; \
+      cd /src/bootc; \
+      make bin; \
+      make install-all DESTDIR=/output; \
+    else \
+      echo "Invalid TUNAOS_BOOTC_CANDIDATE: expected 0 or 1" >&2; exit 1; \
+    fi
 
 # ── bootupd from source ──────────────────────────────────────────────────────
 RUN set -eux; . "${RUSTUP_HOME}/env"; \
@@ -127,7 +141,8 @@ RUN set -eux; . "${RUSTUP_HOME}/env"; \
     make install DESTDIR=/output
 
 # Record what we built for provenance/debugging.
-RUN printf 'bootc=%s\nbootupd=%s\nostree=%s\nbuild_ostree=%s\nrustup=%s\n' \
+RUN if [ "${TUNAOS_BOOTC_CANDIDATE}" = "1" ]; then BOOTC_VERSION=v1.17.1; fi; \
+    printf 'bootc=%s\nbootupd=%s\nostree=%s\nbuild_ostree=%s\nrustup=%s\n' \
       "${BOOTC_VERSION}" "${BOOTUPD_VERSION}" "${OSTREE_VERSION}" "${BUILD_OSTREE}" "${RUSTUP_VERSION}" \
       > /output/.toolchain-versions
 

@@ -1,6 +1,6 @@
 [Unit]
-Description=Anonymous weekly TunaOS adoption estimate
-Documentation=https://tunaos.org/metrics
+Description=Anonymous weekly @TUNAOS_PROJECT_NAME@ adoption estimate
+Documentation=@TUNAOS_COUNTME_METRICS_URL@
 After=network-online.target time-sync.target
 Wants=network-online.target
 ConditionPathExists=/run/ostree-booted

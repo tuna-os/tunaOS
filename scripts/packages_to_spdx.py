@@ -93,6 +93,8 @@ def build_document(
     image: str,
     namespace_seed: str,
     created: str,
+    organization: str,
+    namespace_base: str,
 ) -> dict:
     doc_packages = []
     relationships = []
@@ -129,12 +131,12 @@ def build_document(
         "dataLicense": "CC0-1.0",
         "SPDXID": "SPDXRef-DOCUMENT",
         "name": image,
-        "documentNamespace": f"https://tunaos.org/spdxdocs/{image}-{digest}",
+        "documentNamespace": f"{namespace_base}/{image}-{digest}",
         "creationInfo": {
             "created": created,
             "creators": [
                 "Tool: tunaos-packages-to-spdx",
-                "Organization: TunaOS",
+                f"Organization: {organization}",
             ],
             # Say plainly what this document is and is not, so a consumer
             # never mistakes a package-level fallback for a full syft scan.
@@ -154,6 +156,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--manifest", required=True, type=Path)
     ap.add_argument("--output", required=True, type=Path)
     ap.add_argument("--image", required=True, help="image ref this describes")
+    # No defaults: the document claims an organization and a namespace, and a
+    # fork must not inherit TunaOS's. The workflow passes TUNAOS_PROJECT_NAME
+    # and <TUNAOS_WEBSITE>/spdxdocs from build_scripts/lib/identity.env.
+    ap.add_argument("--organization", required=True, help="SPDX creator Organization (tunaos.toml [project] name)")
+    ap.add_argument("--namespace-base", required=True, help="documentNamespace prefix, no trailing slash")
     ap.add_argument(
         "--created",
         default=None,
@@ -179,6 +186,8 @@ def main(argv: list[str] | None = None) -> int:
         image=args.image,
         namespace_seed=f"{args.image}\n{len(packages)}\n{created}",
         created=created,
+        organization=args.organization,
+        namespace_base=args.namespace_base,
     )
     args.output.write_text(json.dumps(doc, indent=2) + "\n", encoding="utf-8")
     print(f"wrote {args.output} with {len(packages)} packages from {args.manifest}")
