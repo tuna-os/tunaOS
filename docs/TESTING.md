@@ -32,6 +32,44 @@ and VM checks to verify a built system.
 
 TunaOS uses a QEMU-based end-to-end test harness to verify ISO images boot correctly and reach the live desktop environment.
 
+## Manual Mesa comparison
+
+The Mesa #3969 lab separates source safety from graphics qualification.
+The existing Test workflow runs its new pytest cases. The
+`Mesa 3969 source safety` workflow runs real CLI refusal, archive-integrity
+and owned-cleanup scenarios. That smoke uses synthetic data, blocks build
+tools, and does not verify signatures, load an image or start a guest.
+Run these checks in CI, not as a local build or test campaign.
+
+`mesa-3969-compare.yml` is a separate, manual-only experiment. Do not dispatch
+it for a source check. A later run needs owner approval of the exact source
+head, the matching `MESA_3969_APPROVED_HEAD` repository variable,
+`reviewed_head`, and confirmation `RUN_MESA_3969_ONCE`. No variable or secret
+is created by this workflow. Admission rejects forks, automatic events,
+head mismatches, repeat attempts and a head used by a prior lab run.
+Configure approval before the first dispatch; a failed attempt is not a
+license to retry the same head.
+
+The lab builds both complete Mesa sets from one frozen buildroot and one
+baseline. It uses the unchanged native Containerfile once, not the normal
+wrapper's retry/global-cleanup loop. RPM replacement is restricted to the
+run-bound lab container; never use it to change a host package database.
+The pinned probe runs before GDM. The existing real login, lock, unlock and
+VM cleanup stay in use. Reports must bind actual software-renderer output
+to the observed compositor and session. Exit 3 or 4 means an unexercised
+device path, not successful EGL initialization.
+
+Limits are 8 CPU, 80 GB and 180 minutes for preparation, then 60 minutes for
+sequential KVM control/candidate guests. Input transport is capped at
+24 GiB archived and 32 GiB unpacked. Separate safe evidence is capped at
+32 MiB; retention is one day. Private keys, raw SSH state, VM disks and ISOs
+must not be uploaded. No R2 or production publication is part of this lab.
+
+Source CI does not prove that Mesa, GDM, encrypted installation or either
+configuration/ISO epic is qualified. A real run and review of its retained
+evidence remain separate acceptance.
+
+
 ## Publish Gating
 
 Nothing user-facing is published without a boot check. The pipeline follows
