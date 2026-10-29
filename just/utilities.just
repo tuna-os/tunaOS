@@ -69,6 +69,8 @@ check: _ensure_check_deps ste
     ./scripts/run-config-lint.sh actionlint
     echo "Checking Justfile formatting..."
     ./scripts/run-config-lint.sh just
+    echo "Checking workflow permissions..."
+    python3 "{{ justfile_directory() }}/scripts/check-workflow-permissions.py" >/dev/null || exit 1
     echo "Checking workflow drift..."
     python3 {{ justfile_directory() }}/scripts/generate-workflows.py
     python3 {{ justfile_directory() }}/scripts/gen-ci-lanes.py --check
