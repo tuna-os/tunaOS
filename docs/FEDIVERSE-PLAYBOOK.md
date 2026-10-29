@@ -37,7 +37,7 @@ This playbook makes Fediverse posting a copy-paste operation, like the
 |---|---|---|
 | Q3 checkpoint recap | 08-22 | Milestones, variants, GFI pool, honest numbers |
 | GNOME 51 release week | ~09-12 | GNOME 51 on EL10 before upstream |
-| Hacktoberfest | 10-01 | Curated starter-task pool, DCO-signed |
+| Hacktoberfest | 10-01 | Curated starter-task pool, reviewed PRs |
 | Fedora 45 | ~10-20 | Bonito on Fedora 45, bootc desktop story |
 | Gurnard / ARM follow-ups | as blog posts publish | Every blog publish → RSS→toot pattern |
 
@@ -99,7 +99,7 @@ Alt: <image description> (when attaching a screenshot)
 >
 > 1. Pick a task from the good-first-issue pool
 > 2. Comment to claim it
-> 3. Open a PR, DCO-signed (git commit -s)
+> 3. Open a PR with your local check results
 > 4. Maintainers review quickly; merged PRs count toward your goal
 >
 > Pool: https://github.com/tuna-os/tunaOS/labels/good%20first%20issue

@@ -20,9 +20,14 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/build-config.sh
 source "${SCRIPT_DIR}/lib/build-config.sh"
+# shellcheck source=lib/publish-destination.sh
+source "${SCRIPT_DIR}/lib/publish-destination.sh"
 BUILD_CONFIG="$(tunaos_build_config)"
 
-REGISTRY="${TUNA_REGISTRY:-ghcr.io/tuna-os}"
+# TUNA_REGISTRY overrides; otherwise the destination this repository publishes
+# to ([build.publish] in tunaos.toml, else ghcr.io/<owner>).
+read -r _registry _namespace < <(tunaos_publish_destination "$BUILD_CONFIG")
+REGISTRY="${TUNA_REGISTRY:-${_registry}/${_namespace}}"
 CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/tuna-parity"
 mkdir -p "$CACHE"
 

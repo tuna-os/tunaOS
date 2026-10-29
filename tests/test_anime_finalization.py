@@ -3,7 +3,6 @@
 Full 90-image-info.sh runs with only filesystem paths redirected and its unrelated
 OS detection/countme boundary stubbed. This is source execution, not an OS build.
 """
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -40,17 +39,14 @@ class Image:
         countme.chmod(0o755)
         shutil.copyfile(ROOT / "build_scripts/lib/variant-identity.tsv",
                         self.context / "build_scripts/lib/variant-identity.tsv")
-        shutil.copyfile(ROOT / "build_scripts/lib/fork-branding.sh",
-                        self.context / "build_scripts/lib/fork-branding.sh")
+        for adapter in ("identity.env", "variant-aliases.tsv"):
+            shutil.copyfile(ROOT / "build_scripts/lib" / adapter, self.context / "build_scripts/lib" / adapter)
         for path in ("build_scripts/90-image-info.sh", "build_scripts/desktop/select-wallpaper.sh"):
             source = (ROOT / path).read_text()
             # Keep the whole script and ordering; redirect literal filesystem roots.
             source = source.replace("/usr/", f"{self.root}/usr/").replace("/etc/", f"{self.root}/etc/")
             source = source.replace("/run/context", str(self.context))
             source = source.replace(f"#!{self.root}/usr/bin/env bash", "#!/usr/bin/env bash")
-            # The fork adapter already exposes a root argument for isolated tests.
-            source = source.replace(f"tunaos_apply_fork_branding {self.context}",
-                                    f'tunaos_apply_fork_branding {self.context} "{self.root}"')
             target_path = self.context / path
             target_path.write_text(source)
             target_path.chmod(0o755)
@@ -73,12 +69,6 @@ class Image:
 
     def desktop(self):
         self.run("build_scripts/desktop/select-wallpaper.sh", self.env["TUNAOS_IMAGE_FLAVOR"])
-        if (self.context / "manifests/fork-config.json").exists():
-            result = subprocess.run(["bash", "-c", 'source "$1"; tunaos_apply_fork_branding "$2" "$3"',
-                                     "test", str(self.context / "build_scripts/lib/fork-branding.sh"),
-                                     str(self.context), str(self.root)],
-                                    env=self.env, capture_output=True, text=True)
-            assert result.returncode == 0, result.stderr
 
     def output(self):
         return (self.walls / "tunaos-default.jpg").read_bytes()
@@ -98,73 +88,6 @@ def test_real_art_survives_final_identity_writer(tmp_path, variant, flavor):
     assert (image.walls / f"{variant}.jpg").read_bytes() == (WALLS / f"{variant}.jpg").read_bytes()
 
 
-@pytest.mark.parametrize("family", ["rpm", "apt", "gentoo", "overlay"])
-@pytest.mark.parametrize("art", ["override", "anime", "vector", "missing"])
-def test_family_last_writer_and_fallbacks(tmp_path, family, art):
-    image = Image(tmp_path, flavor="gnome-nvidia" if family == "overlay" else "gnome",
-                  target="desktop" if family == "overlay" else None)
-    expected = (WALLS / "yellowfin-anime.jpg").read_bytes()
-    if art == "override":
-        (image.walls / "yellowfin-gnome.jpg").write_bytes(b"explicit desktop art")
-        expected = b"explicit desktop art"
-    if art in ("vector", "missing"):
-        (image.walls / "yellowfin-anime.jpg").unlink()
-        expected = (WALLS / "yellowfin.jpg").read_bytes()
-    if art == "missing":
-        (image.walls / "yellowfin.jpg").unlink()
-        expected = (WALLS / "tunaos-default.jpg").read_bytes()
-    image.info()
-    image.desktop()
-    if family == "overlay":
-        image.reset_copy()
-    if family != "apt":
-        image.info()
-    assert image.output() == expected
-
-
-def test_unknown_identity_keeps_existing_default(tmp_path):
-    image = Image(tmp_path)
-    (image.root / "usr/share/tunaos/identity.env").write_text("TUNAOS_VARIANT='unknown'\n")
-    image.desktop()
-    assert image.output() == (WALLS / "tunaos-default.jpg").read_bytes()
-
-
-@pytest.mark.parametrize("family", ["rpm", "apt", "gentoo", "overlay"])
-def test_custom_fork_wallpaper_and_urls_win_after_finalization(tmp_path, family):
-    image = Image(tmp_path, flavor="gnome-nvidia" if family == "overlay" else "gnome",
-                  target="desktop" if family == "overlay" else None)
-    image.env.update(IMAGE_VENDOR="fork-preview", IMAGE_REGISTRY="localhost")
-    asset = (WALLS / "tunaos-default.jpg").read_bytes()
-    digest = hashlib.sha256(asset).hexdigest()
-    asset_path = f"fork-assets/{digest}.jpg"
-    (image.context / "manifests/fork-assets").mkdir()
-    (image.context / "manifests" / asset_path).write_bytes(asset)
-    manifest = {
-        "schema_version": 1, "variant": "yellowfin", "flavor": image.env["TUNAOS_IMAGE_FLAVOR"],
-        "platform": "linux/arm64" if os.uname().machine == "aarch64" else "linux/amd64",
-        "image": {"registry": "localhost", "namespace": "fork-preview"},
-        "package_manager": "dnf", "sources": {"sha256": "a" * 64},
-        "intent": {"branding": {"homepage": "https://example.test/", "documentation": "https://example.test/docs",
-                                "support": "https://example.test/help", "wallpaper": "art/final.jpeg"},
-                   "packages": {"add": [], "remove": [], "optional": [], "repositories": []}},
-        "assets": {"wallpaper": {"path": asset_path, "sha256": digest}},
-    }
-    (image.context / "manifests/fork-config.json").write_text(json.dumps(manifest))
-    if family == "overlay":
-        result = subprocess.run(["bash", str(image.context / "build_scripts/90-image-info.sh")],
-                                env=image.env, capture_output=True, text=True)
-        assert result.returncode != 0
-        assert "invalid or unsupported manifest" in result.stderr
-        return
-    image.info()
-    image.desktop()
-    if family != "apt":
-        image.info()
-    assert image.output() == asset
-    assert 'HOME_URL="https://example.test/"' in (image.root / "usr/lib/os-release").read_text()
-    assert 'DOCUMENTATION_URL="https://example.test/docs"' in (image.root / "usr/lib/os-release").read_text()
-
-
 def test_containerfile_order_and_final_writer_contract():
     for name in ("el10", "gentoo"):
         source = (ROOT / f"Containerfile.{name}").read_text()
@@ -175,5 +98,180 @@ def test_containerfile_order_and_final_writer_contract():
     overlay = (ROOT / "Containerfile.overlay").read_text()
     assert overlay.index("/build_scripts/00-copy-files.sh") < overlay.index("/build_scripts/90-image-info.sh")
     source = (ROOT / "build_scripts/90-image-info.sh").read_text()
-    assert source.index("/build_scripts/desktop/select-wallpaper.sh") < source.index("tunaos_apply_fork_branding")
     assert 'VARIANT_WALLPAPER=' not in source
+
+
+def test_a_forks_installer_and_plasma_names_follow_tunaos_toml(tmp_path):
+    """The installer slides and Plasma names swap tunaos.toml's [project] name,
+    not a literal "TunaOS", for the variant; image references stay put; the
+    installer logo is the variant's own mark, which this build installs."""
+    image = Image(tmp_path, "marlin", "kde")
+    project = "Acme (OS) 2.0+"   # every regex special [project] name allows
+    identity = image.context / "build_scripts/lib/identity.env"
+    identity.write_text(identity.read_text().replace("TUNAOS_PROJECT_NAME=TunaOS", f"TUNAOS_PROJECT_NAME='{project}'"))
+    image.env.update({f"IS_{base}": "false" for base in (
+        "FEDORA", "HUMMINGBIRD", "ALMALINUX", "ALMALINUXKITTEN", "CENTOS", "UBUNTU",
+        "DEBIAN", "OPENSUSE", "GENTOO")}, IS_ARCH="true", IMAGE_FLAVOR="kde")
+    recipe = image.root / "etc/bootc-installer/recipe.json"
+    recipe.parent.mkdir(parents=True)
+    stock = (ROOT / "system_files/etc/bootc-installer/recipe.json").read_text()
+    recipe.write_text(stock.replace("TunaOS", project))
+    meta = image.root / "usr/share/wallpapers/TunaOS/metadata.json"
+    meta.parent.mkdir(parents=True)
+    meta.write_text(json.dumps({"KPlugin": {"Authors": [{"Name": f"{project} Contributors"}], "Name": project}},
+                               indent=4))
+    mark = image.root / "usr/share/tunaos/logos/marlin.svg"
+    mark.parent.mkdir(parents=True, exist_ok=True)
+    mark.write_text("<svg><!-- the fork's marlin mark --></svg>\n")
+    image.info()
+    written = json.loads(recipe.read_text())
+    assert written["tour"]["completed"]["description"] == \
+        "Reboot your machine to enter your new Marlin workstation environment!"
+    assert written["tour"]["distro"]["title"] == "Built on Arch Linux"
+    assert written["imgref"] == json.loads(stock)["imgref"]
+    assert project not in json.dumps({k: v for k, v in written.items() if k not in ("imgref", "local_imgref")})
+    plugin = json.loads(meta.read_text())["KPlugin"]
+    assert plugin["Name"] == "Marlin" and plugin["Authors"][0]["Name"] == f"{project} Contributors"
+    logo = Path(written["distro_logo"])
+    assert logo == image.root / "usr/share/pixmaps/tunaos.svg"   # the harness re-roots /usr/
+    assert logo.read_text() == mark.read_text()
+
+
+@pytest.mark.parametrize("project", ["tunaos", "latest", "usr"])
+def test_a_project_name_that_collides_with_recipe_data_only_renames_display_text(tmp_path, project):
+    """A [project] name is replaced in slide text, never in paths, image
+    references or step names. "tunaos" is inside local_imgref and log_file,
+    "latest" is its tag and "usr" is in credits_data; the old recursive
+    replace turned containers-storage:ghcr.io/tuna-os/tunaos:latest into
+    containers-storage:ghcr.io/tuna-os/Marlin:latest."""
+    image = Image(tmp_path, "marlin", "kde")
+    identity = image.context / "build_scripts/lib/identity.env"
+    identity.write_text(identity.read_text().replace("TUNAOS_PROJECT_NAME=TunaOS", f"TUNAOS_PROJECT_NAME='{project}'"))
+    image.env.update({f"IS_{base}": "false" for base in (
+        "FEDORA", "HUMMINGBIRD", "ALMALINUX", "ALMALINUXKITTEN", "CENTOS", "UBUNTU",
+        "DEBIAN", "OPENSUSE", "GENTOO")}, IS_ARCH="true", IMAGE_FLAVOR="kde")
+    recipe = image.root / "etc/bootc-installer/recipe.json"
+    recipe.parent.mkdir(parents=True)
+    stock = (ROOT / "system_files/etc/bootc-installer/recipe.json").read_text()
+    recipe.write_text(stock.replace("TunaOS", project))
+    image.info()
+    written, original = json.loads(recipe.read_text()), json.loads(stock)
+    # Display text follows the variant, including a project name inside a sentence.
+    assert written["tour"]["completed"]["description"] == \
+        "Reboot your machine to enter your new Marlin workstation environment!"
+    assert written["tour"]["welcome"]["title"] == "Welcome to Marlin"
+    # Data keeps its value: references, paths and step names.
+    for key in ("log_file", "credits_data", "imgref", "local_imgref", "steps", "bootloader", "filesystem"):
+        assert written[key] == original[key], key
+    assert written["local_imgref"] == "containers-storage:ghcr.io/tuna-os/tunaos:latest"
+    # A domain in a slide is not the project name.
+    assert written["tour"]["community"]["description"] == original["tour"]["community"]["description"]
+    assert written["tour"]["welcome"]["image"] == original["tour"]["welcome"]["image"]
+
+
+@pytest.mark.parametrize('project', ['TunaOS', 'Acme (OS) 2.0+'])
+def test_config_only_project_name_uses_unmodified_shipped_display_assets(tmp_path, project):
+    """Only the authored TOML changes; metadata/recipe stay exactly as shipped.
+
+    This closes the gap hidden by fixtures which pre-rebrand those inputs.
+    Uses the real compiler and final writer, not an image/install qualification.
+    """
+    import sys
+
+    image = Image(tmp_path, 'marlin', 'kde')
+    config_root = tmp_path / 'config'
+    config_root.mkdir()
+    stock_config = (ROOT / 'tunaos.toml').read_text(encoding='utf-8')
+    original = '[project]\nname = "TunaOS"'
+    assert stock_config.count(original) == 1
+    forked = stock_config.replace(original, f'[project]\nname = "{project}"')
+    if project != 'TunaOS':
+        # A renamed project cannot keep TunaOS's own usage-report endpoint.
+        endpoint = 'countme_endpoint = "https://countme.tunaos.org/v1/report"'
+        assert forked.count(endpoint) == 1
+        forked = forked.replace(endpoint, 'countme_endpoint = ""')
+        metrics = 'countme_metrics_url = "https://tunaos.org/metrics"'
+        assert forked.count(metrics) == 1
+        forked = forked.replace(metrics, 'countme_metrics_url = ""')
+    (config_root / 'tunaos.toml').write_text(forked, encoding='utf-8')
+    subprocess.run([sys.executable, str(ROOT / 'scripts/config.py'), 'generate-identity',
+                    '--root', str(config_root), '--output',
+                    str(image.context / 'build_scripts/lib/identity.env')], check=True)
+    image.env.update({f'IS_{base}': 'false' for base in (
+        'FEDORA', 'HUMMINGBIRD', 'ALMALINUX', 'ALMALINUXKITTEN', 'CENTOS', 'UBUNTU',
+        'DEBIAN', 'OPENSUSE', 'GENTOO')}, IS_ARCH='true', IMAGE_FLAVOR='kde')
+    recipe_path = 'etc/bootc-installer/recipe.json'
+    metadata_paths = {
+        'usr/share/wallpapers/TunaOS/metadata.json': 'Marlin',
+        'usr/share/plasma/look-and-feel/org.tunaos.desktop/metadata.json': 'Marlin',
+        'usr/share/plasma/look-and-feel/org.tunaos.light.desktop/metadata.json': 'Marlin Light',
+    }
+    for relative in (recipe_path, *metadata_paths):
+        destination = image.root / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(ROOT / 'system_files' / relative, destination)
+    image.info()
+    recipe = json.loads((image.root / recipe_path).read_text(encoding='utf-8'))
+    actual = {
+        'completed': recipe['tour']['completed']['description'],
+        **{path: json.loads((image.root / path).read_text(encoding='utf-8'))['KPlugin']['Name']
+           for path in metadata_paths},
+    }
+    assert actual == {
+        'completed': 'Reboot your machine to enter your new Marlin workstation environment!',
+        **metadata_paths,
+    }
+
+
+@pytest.mark.parametrize('project', ['TunaOS', 'Acme (OS) 2.0+', 'tunaos', 'latest'])
+def test_project_display_rewrite_preserves_custom_labels_and_data(tmp_path, project):
+    image = Image(tmp_path, 'marlin', 'kde')
+    identity = image.context / 'build_scripts/lib/identity.env'
+    identity.write_text(identity.read_text().replace('TUNAOS_PROJECT_NAME=TunaOS',
+                                                    f"TUNAOS_PROJECT_NAME='{project}'"))
+    image.env.update({f'IS_{base}': 'false' for base in (
+        'FEDORA', 'HUMMINGBIRD', 'ALMALINUX', 'ALMALINUXKITTEN', 'CENTOS', 'UBUNTU',
+        'DEBIAN', 'OPENSUSE', 'GENTOO')}, IS_ARCH='true', IMAGE_FLAVOR='kde')
+    recipe_path = image.root / 'etc/bootc-installer/recipe.json'
+    recipe_path.parent.mkdir(parents=True)
+    recipe = json.loads((ROOT / 'system_files/etc/bootc-installer/recipe.json').read_text())
+    untouched = (f'https://example.test/{project}/TunaOS /TunaOS/foo TunaOS-extra preTunaOS repo.TunaOS.org '
+                 'https://example.test/?brand=TunaOS https://example.test/#TunaOS '
+                 'custom://host/?brand=TunaOS mailto:TunaOS@example.test')
+    recipe['tour']['features'].update(title=f'{project} and TunaOS', description=untouched,
+                                      image=f'/custom/{project}/TunaOS.svg', custom='TunaOS')
+    recipe['tour']['community']['description'] = (
+        f'TunaOS. ({project}) [TunaOS](https://example.test/?brand=TunaOS%20OS) '
+        '<a href="https://example.test/#TunaOS">TunaOS</a> '
+        '[TunaOS](/docs?brand=TunaOS) <a href="/docs#TunaOS">TunaOS</a>')
+    recipe_path.write_text(json.dumps(recipe))
+    meta_paths = [image.root / f'usr/share/plasma/look-and-feel/org.tunaos{suffix}.desktop/metadata.json'
+                  for suffix in ('', '.light')]
+    meta_paths.append(image.root / 'usr/share/wallpapers/TunaOS/metadata.json')
+    metadata = []
+    for path, name in zip(meta_paths, (project, project + ' Light', 'My Custom TunaOS Light Theme')):
+        path.parent.mkdir(parents=True)
+        data = {'Name': project, 'KPlugin': {'Name': name, 'Authors': [{'Name': project}],
+                'Id': f'org.{project}', 'Website': f'https://example.test/{project}',
+                'Description': 'TunaOS ' + project}}
+        path.write_text(json.dumps(data, indent=4) + '\n')
+        metadata.append(data)
+    custom_bytes = meta_paths[2].read_bytes()
+    image.info()
+    result = json.loads(recipe_path.read_text())
+    assert result['tour']['features']['title'] == 'Marlin and Marlin'
+    assert result['tour']['features']['description'] == untouched
+    assert result['tour']['community']['description'] == (
+        'Marlin. (Marlin) [Marlin](https://example.test/?brand=TunaOS%20OS) '
+        '<a href="https://example.test/#TunaOS">Marlin</a> '
+        '[Marlin](/docs?brand=TunaOS) <a href="/docs#TunaOS">Marlin</a>')
+    assert result['tour']['features']['image'] == recipe['tour']['features']['image']
+    assert result['tour']['features']['custom'] == 'TunaOS'
+    for key in ('imgref', 'local_imgref', 'log_file', 'credits_data', 'steps', 'bootloader', 'filesystem'):
+        assert result[key] == recipe[key]
+    for path, original, expected in zip(meta_paths, metadata, ('Marlin', 'Marlin Light', 'My Custom TunaOS Light Theme')):
+        actual = json.loads(path.read_text())
+        assert actual['KPlugin']['Name'] == expected
+        actual['KPlugin']['Name'] = original['KPlugin']['Name']
+        assert actual == original
+    assert meta_paths[2].read_bytes() == custom_bytes

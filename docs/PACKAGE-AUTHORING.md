@@ -111,10 +111,9 @@ All native-format readers have synthetic fixture tests, including category
 ambiguity, wrong architecture, malformed sources and atomic failure. These tests
 are not live repository or built-image qualification. In particular, a match in
 Fedora says nothing about Hummingbird or EL10; each needs its own measured index.
-Automatic configured-repository collection, multi-repository coverage, per-cell
-release/platform binding, portable intent mappings and transaction checks remain
-future work. This command deliberately makes no claim that all configured bases
-can install an added package.
+These receipt commands make no claim that all configured bases can install an
+added package. For trusted collection over complete image targets, see
+[Portable plan and transaction check](#portable-plan-and-transaction-check).
 
 ## Write safety
 
@@ -144,3 +143,87 @@ The command refuses symlink and hard-linked config targets.
 An error can occur after rename if the filesystem cannot guarantee a durable write.
 The error then states `file replaced; durability unconfirmed`.
 Inspect the config before you retry.
+
+## Portable plan and transaction check
+
+`plan` maps the intent for one package to image targets. A target is a variant,
+flavor and platform from `tunaos.toml`. The default selection is every enabled
+image target. `--variant`, `--flavor` and `--platform` make the selection
+smaller.
+
+```sh
+python3 scripts/config-packages.py plan htop --variant flounder \
+  --flavor base --flavor kde --flavor xfce --platform linux/amd64 > plan.json
+python3 scripts/config-packages.py verify-transaction htop --plan plan.json \
+  --image-target flounder:kde:linux/amd64 \
+  --image ghcr.io/tuna-os/flounder@sha256:DIGEST
+```
+
+The plan gets names only from the trusted collector in
+[BASE-PACKAGE-SEARCH.md](BASE-PACKAGE-SEARCH.md). It does not use operator
+receipts. Each covered target binds the base image and source configuration
+before network access. Each collector authenticates its sources one time per
+invocation. The plan resolves every selected target before it shows a result.
+
+A match is an exact native name. For a rename, use
+`--native VARIANT:FLAVOR:PLATFORM=NAME`. The name must be in the authenticated
+index of that target. The command never makes a match from a similar name. It
+never makes a Gentoo atom without index evidence.
+
+Each target has three separate records:
+
+- `index_availability`: the name is `present` or `absent` in the authenticated
+  indexes, or `not-collected`.
+- `transaction`: `not-run` in the plan.
+- `installed_image`: `not-run`. No command in this file gives installed-image
+  evidence.
+
+If one target is `unsupported`, `missing`, `ambiguous` or a `source-error`, the
+command prints the full report and exits with status 1. A target without a
+collector is `unsupported`. Today the collector covers only flounder `base`,
+`kde` and `xfce` on `linux/amd64`. Thus the default selection fails and names
+every other target.
+
+`emission` shows the smallest addition scope that agrees with the resolved
+targets. An image-wide addition applies to all flavors and platforms of a
+variant. Thus a variant scope needs every enabled target of that variant.
+The `defaults` scope needs every enabled target. A subset never gets a
+`ready` emission.
+
+The plan reads the configuration and never writes it. Portable plan emission
+with `scripts/config-packages.py --write` is not supported. The offline
+`add --target PROFILE:FAMILY --write` command above edits desktop policies;
+it does not write image-wide additions.
+
+Image-wide additions are supported in `tunaos.toml` through
+`[defaults.packages]` and `[variants.<id>.packages]` (implemented in #3739).
+Edit those tables manually: `add` declares the required packages by native name, `optional` lists
+best-effort additions, and `repositories` declares signed dnf/zypper sources.
+Defaults apply before variant additions. Names must suit the native
+package manager of each affected variant; Gentoo needs `category/name`. Removals remain unsupported.
+
+Run `python3 scripts/config.py generate-image-packages` to compile those tables
+into `build_scripts/lib/image-packages.tsv` (also included in `generate-all`).
+`build_scripts/30-image-packages.sh` calls `build_scripts/lib/image-packages.sh`
+in the base stage to consume that adapter. Do not edit the generated TSV.
+For desktop policy, run `python3 scripts/config.py generate` to write
+`manifests/desktops/<profile>.yaml`, consumed by
+`build_scripts/desktop/install-desktop.sh`. See [CONFIG-WIRING.md](CONFIG-WIRING.md)
+for field ownership and consumer details. Generation and source checks do not
+prove a built image or installer works.
+
+The apt schema has no `exclude` field. Thus the validator rejects an exclusion
+that conflicts with an apt addition before the plan starts.
+
+`verify-transaction` reads a complete plan and one resolved target. It runs
+`apt-get --simulate --no-remove` for that native name in a local image with a
+`@sha256` pin. The container is temporary, and `--pull=never` prevents an image
+download. The command refreshes the image's own package lists in that container
+and does not commit a package.
+
+The result is `solvable`, `already-installed`, `missing`, `solver-gap`,
+`protected-removal`, `source-error` or `error`. Each result other than the
+first two exits with status 1. The operator supplies the image reference, so
+the result marks the image binding as not authenticated. Other native families
+report `unsupported`. Each family needs a reviewed adapter that does not install
+packages.

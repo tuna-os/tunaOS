@@ -42,6 +42,14 @@ class AuthoringError(ValueError):
     pass
 
 
+class AmbiguousNameError(AuthoringError):
+    """The query matches more than one native name; `matches` holds them."""
+
+    def __init__(self, message, matches):
+        super().__init__(message)
+        self.matches = frozenset(matches)
+
+
 def checked_name(name, gentoo=False):
     if not isinstance(name, str) or not (ATOM if gentoo else NAME).fullmatch(name):
         raise AuthoringError(f'invalid native package name: {name!r}')
@@ -215,7 +223,10 @@ def resolve(query, names, family):
         matches = {name for name in names if name.split('/')[1] == query}
     if len(matches) != 1:
         reason = 'unavailable' if not matches else 'ambiguous: ' + ', '.join(sorted(matches))
-        raise AuthoringError(f'{query}: {reason}; search the index and pass an exact native name')
+        message = f'{query}: {reason}; search the index and pass an exact native name'
+        if matches:
+            raise AmbiguousNameError(message, matches)
+        raise AuthoringError(message)
     return matches.pop()
 
 

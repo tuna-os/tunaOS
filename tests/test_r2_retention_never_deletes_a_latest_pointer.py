@@ -34,8 +34,13 @@ other way to get this wrong.
 from __future__ import annotations
 
 import fnmatch
+import json
+import os
 import re
+import sys
+import subprocess
 from pathlib import Path
+import tempfile
 
 import pytest
 import yaml
@@ -43,6 +48,8 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOWS = ROOT / ".github" / "workflows"
 PRUNE = WORKFLOWS / "prune-r2.yml"
+POLICY = ROOT / "scripts" / "iso-delivery-policy.py"
+CONFIG = ROOT / ".github" / "build-config.yml"
 
 # Every expansion collapses to one placeholder. The test is about the SHAPE of
 # the name around "-latest", not about resolving variant/flavor/arch: any
@@ -97,6 +104,12 @@ def pointer_names() -> set[str]:
         for token in LATEST_TOKEN.findall(text):
             found.update(_expand(token, latest_values))
         found.update(latest_values)
+    # The shared uploader derives verification sidecars from every ISO
+    # destination after the workflows choose the pointer name.
+    for name in tuple(found):
+        if name.endswith(".iso"):
+            found.add(f"{name}.sha256")
+            found.add(f"{name}.sigstore.json")
     return found
 
 
@@ -130,6 +143,31 @@ def prune_steps() -> list[tuple[str, str, list[tuple[str, str]]]]:
                 kind = "include" if sign == "+" else "exclude"
                 pattern = filter_pattern
             rules.append((kind, pattern))
+        if "--filter-from" in code:
+            with tempfile.TemporaryDirectory() as directory:
+                config_json = Path(directory) / "build-config.json"
+                config_json.write_text(
+                    json.dumps(yaml.safe_load(CONFIG.read_text(encoding="utf-8"))),
+                    encoding="utf-8",
+                )
+                generated = subprocess.run(
+                    [
+                        sys.executable,
+                        str(POLICY),
+                        "--config-json",
+                        str(config_json),
+                        "retention-filters",
+                    ],
+                    text=True,
+                    capture_output=True,
+                    check=True,
+                ).stdout
+            rules.extend(
+                ("include" if sign == "+" else "exclude", pattern)
+                for sign, pattern in (
+                    line.split(" ", 1) for line in generated.splitlines() if line
+                )
+            )
         steps.append((step.get("name", "?"), prefix.group(1) if prefix else "?", rules))
     return steps
 
@@ -149,7 +187,8 @@ def verdict(name: str, rules: list[tuple[str, str]]) -> str:
     single-segment patterns this workflow uses.
     """
     for kind, pattern in rules:
-        if fnmatch.fnmatch(name, pattern):
+        candidate = f"/{name}" if pattern.startswith("/") else name
+        if fnmatch.fnmatch(candidate, pattern):
             return "keep" if kind == "exclude" else "delete"
     return "keep" if any(kind == "include" for kind, _ in rules) else "delete"
 
@@ -196,7 +235,7 @@ def test_prune_rules_have_deterministic_order():
         )
         assert "--include " not in code
         assert "--exclude " not in code
-        assert "--filter " in code
+        assert ("--filter " in code) != ("--filter-from " in code)
 
 
 @pytest.mark.parametrize("name", sorted(pointer_names()))
@@ -209,12 +248,29 @@ def test_no_prune_step_deletes_a_latest_pointer(name):
 
 
 @pytest.mark.parametrize(
+    "name",
+    [
+        "yellowfin-gnome-latest.json",
+        "yellowfin-gnome-latest-arm64.json",
+    ],
+)
+def test_prune_keeps_stable_resolvers(name):
+    steps = [s for s in prune_steps() if s[1] == "live-isos/"]
+    assert steps
+    assert all(verdict(name, rules) == "keep" for _, _, rules in steps)
+
+
+@pytest.mark.parametrize(
     "name,prefix",
     [
         # Dated ISO and its sidecars: the whole point of the 14-day window.
         ("bonito-gnome-20260914.iso", "live-isos/"),
         ("bonito-gnome-20260914.iso.sha256", "live-isos/"),
         ("bonito-gnome-20260914.iso.sigstore.json", "live-isos/"),
+        # Superseded rollback snapshots are not stable pointers.
+        ("bonito-gnome-snapshot-sha256-deadbeef.iso", "live-isos/"),
+        ("bonito-gnome-snapshot-sha256-deadbeef.iso.sha256", "live-isos/"),
+        ("bonito-gnome-snapshot-sha256-deadbeef.iso.sigstore.json", "live-isos/"),
         # Arch-suffixed DATED ISOs are ordinary builds, not pointers.
         ("bonito-gnome-20260914-arm64.iso", "live-isos/"),
         ("yellowfin-gnome-20260914.png", "screenshots/"),
@@ -233,3 +289,128 @@ def test_dated_objects_are_still_deleted(name, prefix):
         assert verdict(name, rules) == "delete", (
             f"{step!r} would keep dated object {name!r} forever; rules {rules}"
         )
+
+
+def run_iso_prune_with_stubbed_rclone(tmp_path, mode):
+    document = yaml.safe_load(PRUNE.read_text(encoding="utf-8"))
+    step = next(
+        item
+        for item in document["jobs"]["prune"]["steps"]
+        if item.get("name", "").startswith("Prune dated ISOs")
+    )
+    script = GH_EXPR.sub("test-bucket", step["run"])
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    (bin_dir / "yq").write_text("#!/bin/sh\necho '{}'\n", encoding="utf-8")
+    (bin_dir / "python3").write_text(
+        "#!/bin/sh\n"
+        "printf '%s\\n' '- /policy-retained.iso' '+ *.iso' '- *'\n",
+        encoding="utf-8",
+    )
+    marker = tmp_path / "delete-called"
+    filter_capture = tmp_path / "delete-filter"
+    (bin_dir / "rclone").write_text(
+        """#!/bin/sh
+case "$1:$RCLONE_MODE" in
+  lsf:list-fails) exit 23 ;;
+  lsf:*) printf '%s\n' "${RCLONE_LISTING:-}" ;;
+  cat:read-fails) exit 24 ;;
+  cat:malformed) echo '{}' ;;
+  cat:unsafe) printf '%s\\n' '{"schema":"TunaOSIsoResolution/v1","iso":"bait.iso\\n+ *"}' ;;
+  cat:*) echo '{"schema":"TunaOSIsoResolution/v1","iso":"snapshot.iso"}' ;;
+  delete:*)
+    touch "$RCLONE_DELETE_MARKER"
+    if [ -n "${RCLONE_DELETE_FILTER:-}" ]; then
+      previous=""
+      for argument in "$@"; do
+        if [ "$previous" = "--filter-from" ]; then
+          cat "$argument" > "$RCLONE_DELETE_FILTER"
+        fi
+        previous="$argument"
+      done
+    fi
+    ;;
+esac
+""",
+        encoding="utf-8",
+    )
+    (bin_dir / "jq").write_text(
+        f"#!{sys.executable}\n"
+        "import json, re, sys\n"
+        "try:\n"
+        "    document = json.load(sys.stdin)\n"
+        "    value = document['iso']\n"
+        "    valid = document.get('schema') == 'TunaOSIsoResolution/v1'\n"
+        "    valid = valid and isinstance(value, str)\n"
+        "    valid = valid and re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._+~-]*[.]iso', value)\n"
+        "    if not valid:\n"
+        "        raise ValueError\n"
+        "except (KeyError, ValueError, json.JSONDecodeError):\n"
+        "    raise SystemExit(1)\n"
+        "print(value)\n",
+        encoding="utf-8",
+    )
+    for command in ("jq", "yq", "python3", "rclone"):
+        (bin_dir / command).chmod(0o755)
+    env = os.environ.copy()
+    env.update({
+        "PATH": f"{bin_dir}:{env['PATH']}",
+        "RCLONE_CONFIG_R2_ACCESS_KEY_ID": "configured",
+        "RUNNER_TEMP": str(tmp_path),
+        "DRY_RUN": "false",
+        "RCLONE_MODE": mode,
+        "RCLONE_DELETE_MARKER": str(marker),
+        "RCLONE_DELETE_FILTER": str(filter_capture),
+        "RCLONE_LISTING": (
+            "fish-latest.iso.sigstore.json"
+            if mode == "sidecar-only"
+            else "fish-latest.json"
+        ),
+    })
+    result = subprocess.run(
+        ["bash", "-c", script],
+        cwd=ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return result, marker
+
+
+@pytest.mark.parametrize("mode", ["list-fails", "read-fails", "malformed", "unsafe"])
+def test_iso_prune_fails_closed_before_delete(tmp_path, mode):
+    result, marker = run_iso_prune_with_stubbed_rclone(tmp_path, mode)
+    assert result.returncode != 0
+    assert "refusing to prune" in result.stdout
+    assert not marker.exists()
+
+
+def test_iso_prune_does_not_parse_sigstore_sidecars_as_resolvers(tmp_path):
+    result, marker = run_iso_prune_with_stubbed_rclone(tmp_path, "sidecar-only")
+    assert result.returncode == 0, result.stderr
+    assert marker.exists()
+
+def test_iso_prune_protects_resolved_snapshot_and_sidecars(tmp_path):
+    result, marker = run_iso_prune_with_stubbed_rclone(tmp_path, "valid")
+    assert result.returncode == 0, result.stderr
+    assert marker.exists()
+    filter_lines = (tmp_path / "delete-filter").read_text(encoding="utf-8").splitlines()
+    protected = [
+        "- /snapshot.iso",
+        "- /snapshot.iso.sha256",
+        "- /snapshot.iso.sigstore.json",
+    ]
+    positions = [filter_lines.index(rule) for rule in protected]
+    first_include = filter_lines.index("+ *.iso")
+    assert max(positions) < first_include
+    rules = [
+        ("include" if line.startswith("+ ") else "exclude", line[2:])
+        for line in filter_lines
+        if line.startswith(("+ ", "- "))
+    ]
+    assert verdict("snapshot.iso", rules) == "keep"
+    assert verdict("snapshot.iso.sha256", rules) == "keep"
+    assert verdict("snapshot.iso.sigstore.json", rules) == "keep"
+    assert verdict("superseded-snapshot.iso", rules) == "delete"
+    assert "- *" in filter_lines
