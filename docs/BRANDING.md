@@ -7,13 +7,14 @@ for free, and which parts each desktop owns.
 It exists because `marlin:gnome` looked unbranded, and every check we had still
 passed.
 
-## Opt-in fork preview
+## Fork branding
 
-A prepared fork context can change the support, documentation and home URLs.
-It can also replace the shared JPEG wallpaper. See the [contract for fork
-consumers](FORK-BRANDING.md) for the inputs, desktop hooks and runtime checks.
-The preview rejects a custom name or logo. Those changes need coordinated
-support for the installer, boot splash and desktop assets.
+A fork sets its own name, URLs, codenames, accents and splash theme in
+`tunaos.toml`, the same file and compiler TunaOS uses. Its wallpapers are files
+named by the convention in [Wallpapers](#wallpapers). The earlier fork preview in YAML
+and its single shared-wallpaper override no longer exist. Convert an old
+file with `python3 scripts/config.py migrate-fork-config --legacy OLD.yaml`
+([migration](PRIMARY-CONFIG-MIGRATION.md#migrating-a-legacy-fork-config)).
 Tests of source files do not prove what an image displays.
 
 ## The three layers
@@ -25,15 +26,33 @@ The brand lands partly, and the part that lands fools a spot check. We wrote
 ### 1. Identity — what the system calls itself
 
 `/usr/lib/os-release` and `/usr/share/ublue-os/image-info.json`.
-`build_scripts/90-image-info.sh` writes both, and every base runs it.
+`build_scripts/90-image-info.sh` writes both, and every base runs it. The name,
+URLs, CPE and codenames come from `[project]`, `[defaults.branding]` and each
+variant's `codename` in `tunaos.toml`, through the generated
+`build_scripts/lib/identity.env`. `verify-branding.sh` checks against the same
+file, so a fork's values pass the contract.
 
 | field | value |
 |---|---|
 | `PRETTY_NAME`, `NAME` | the variant, never the upstream distro |
-| `VERSION_CODENAME` | the variant's fish, e.g. `Makaira nigricans` |
+| `VERSION_CODENAME` | the variant's `codename`, e.g. `Makaira nigricans` |
 | `LOGO` | `tunaos` |
-| `HOME_URL`, `DOCUMENTATION_URL`, `SUPPORT_URL`, `BUG_REPORT_URL` | ours |
+| `HOME_URL`, `DOCUMENTATION_URL`, `SUPPORT_URL`, `BUG_REPORT_URL` | `[defaults.branding]` |
+| `CPE_NAME` | `cpe:/o:<cpe_vendor>:<image name>-<project id>`; the image name is the publish name (`bonito` for `bonito-rawhide`) |
 | `VARIANT`, `VARIANT_ID`, `IMAGE_ID`, `IMAGE_VERSION`, `DEFAULT_HOSTNAME` | set |
+
+Beyond os-release, the same adapter fills the other places an image names its
+project, so a fork edits `tunaos.toml` and nothing else:
+
+| where | value | from |
+|---|---|---|
+| installer `recipe.json` `imgref`, `local_imgref` | `<registry>/<namespace>/<project id>:latest` | `[build.publish]` or the repository owner, `[project] id` |
+| OCI labels `url`, `documentation`, artifacthub keyword; final-image `title` | `website`, `<docs_url>/intro`, project id; `<name> <image> (<flavor>)` | `[project]` |
+| SBOM `Organization` and namespace | `name`, `<website>/spdxdocs` | `[project]` |
+| release notes title, project name, docs URL, signing identity | `name`, `docs_url`, the repository | `[project]`, `github.repository` |
+| KDE theme and wallpaper metadata (`Description`, `Authors`, `Website`), live-ready unit | `@TUNAOS_*@` tokens in `system_files`, filled by `90-image-info.sh` | `[project]`, `[defaults.branding]` |
+| live-ISO launchers, polkit action text, ISO media names | `Install <name>`, `<name> <Variant>`, `<id>-<variant>-<flavor>` | `[project]` |
+| usage-report endpoint and page; Flatpak remote | `countme_endpoint`, `countme_metrics_url`; `[flatpak_preinstall] remote_url` | `tunaos.toml` |
 
 One variant's identity must never name another project. Until 2026-09-17 every
 variant pointed `HOME_URL` at `projectbluefin.io`, and the contract did not look
@@ -80,7 +99,9 @@ Do not add "TunaOS" to a login screen, a splash, a wallpaper or the installer.
 ## Each variant has its own look
 
 A variant is TunaOS first. It also shows the distro it is built on.
-`build_scripts/lib/variant-identity.tsv` gives each variant an accent colour.
+Each variant's `branding` in `tunaos.toml` gives it an accent colour, which
+`scripts/config.py generate-variant-identity` writes to
+`build_scripts/lib/variant-identity.tsv` for the build and the art generators.
 The colour comes from that distro: Arch blue for marlin, Ubuntu orange for
 grouper, openSUSE green for sailfin. The mark is the variant's Noto Emoji.
 
@@ -116,14 +137,23 @@ colour of the base and the style of the desktop.
 ### Generated assets
 
 These scripts make files that are in the repository. The build does not run
-them.
+them. The first three read `tunaos.toml`, and
+`scripts/branding/check-artwork.py` (run in CI) fails if their committed
+output does not match it; `--write` regenerates them. They need the pinned
+`requirements-branding.txt`.
 
-| script | output |
-|---|---|
-| `scripts/branding/make-lettermarks.py` | `/usr/share/tunaos/lettermarks/` |
-| `scripts/branding/make-fastfetch-logos.py` | `/usr/share/tunaos/fastfetch/` |
-| `scripts/branding/make-plymouth-theme.py` | `/usr/share/plymouth/themes/<theme>/` |
-| `scripts/branding/render-wallpapers.mjs` | `/usr/share/backgrounds/tunaos/` |
+| script | output | from |
+|---|---|---|
+| `scripts/branding/make-logos.py` | `/usr/share/tunaos/logos/` | each variant's `emoji` |
+| `scripts/branding/make-lettermarks.py` | `/usr/share/tunaos/lettermarks/` | mark, name, `branding.accent` |
+| `scripts/branding/make-fastfetch-logos.py` | `/usr/share/tunaos/fastfetch/` | name |
+| `scripts/branding/make-plymouth-theme.py` | `/usr/share/plymouth/themes/<theme>/` | drawn; `branding.plymouth` picks it |
+| `scripts/branding/render-wallpapers.mjs` | `/usr/share/backgrounds/tunaos/` | drawn |
+
+No script can make the drawn art from `tunaos.toml`. `scripts/config.py
+check-drawn-artwork` (in `just check`) makes sure each variant has its
+`<variant>.jpg` (a real JPEG) and its `branding.plymouth` theme, and that the
+theme's `.plymouth` file names its own folder in `ImageDir` and `ScriptFile`.
 
 ## The rule
 

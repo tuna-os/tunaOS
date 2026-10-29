@@ -9,7 +9,7 @@ body:
         and `help wanted`. This form does not apply those labels.
 
         First PR? Follow [CONTRIBUTING.md](https://github.com/tuna-os/tunaos/blob/main/CONTRIBUTING.md)
-        for the fork workflow, local checks, and `git commit -s` DCO sign-off.
+        for the fork workflow, local checks, and commit identity.
         Ask questions on the issue or in [Matrix](https://matrix.to/#/%23tunaos:reilly.asia).
   - type: textarea
     id: problem

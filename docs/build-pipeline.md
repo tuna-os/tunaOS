@@ -49,6 +49,18 @@ stage 3. NVIDIA images (`<de>-nvidia`) do the same. Both paths use
 
 ## 🔄 Workflows
 
+### Image package checks
+
+Run `qualify-image-packages.yml` by hand to check all six base routes. It does
+not publish images. Each route builds a stock base, a base with one added
+package, and a desktop with that package. EL10 also builds an HWE image.
+
+The cells in `tests/fixtures/package-qualification-cells.json` must use flavors
+with `build_image = true`. Debian uses `flounder:xfce`; `flounder:gnome` is off.
+The builds share local layers through Buildah's `--layers` flag. The cache key
+includes `build_scripts/lib/image-packages.tsv`, so a package change cannot
+reuse the stock package layer. Each job keeps its plan, report and build logs.
+
 ### 1. Unified Build (`build-variant.yml`)
 
 The shared orchestrator called by the per-variant `build-<variant>.yml` entry
@@ -71,6 +83,36 @@ points and the manual `build-flavor.yml` dispatcher.
   - **Multi-platform artifacts**: `linux/amd64` and `linux/arm64` ISO/QCOW2 matrices per stage for multi-arch variants (#1378)
   - **Cosign signing + SBOM** with transient error retry and deadline backoff for all published images (#1377)
   - Pull-request builds do not promote user-facing tags
+
+#### ISO delivery cutover
+
+`iso_delivery` in the authoritative `tunaos.toml` (and its generated
+`.github/build-config.yml` adapter) is the reviewed switch between
+browser-first delivery and routine publication of prebuilt ISOs to R2. Each
+`cutover_targets` entry uses an exact `variant` / `flavor` / `platform`
+identity. Each entry also needs `browser-qualified` status, a date, and an
+evidence reference. If no entry matches, scheduled and explicit publication
+continue through the prebuilt path.
+
+The workflow closes R2 publication for a group only if every buildable flavor
+in its offline store has an exact cutover entry. Partial qualification keeps
+the group open. `scripts/iso-delivery-policy.py` evaluates both matrix forms.
+This keeps the two workflows in sync.
+
+Before you add a cutover target, record every existing versioned and `-latest`
+ISO basename in `retained_r2_isos`. Keep this list after a rollback. If you
+remove a target, publication resumes and retains those objects.
+
+When a requested versioned or latest name is in `retained_r2_isos`, the shared
+uploader writes a fresh ISO and unchanged signed sidecars under a
+`-snapshot-sha256-<prefix>` name. It also updates
+`<variant>-<flavor>-latest[...].json` (`TunaOSIsoResolution/v1`) with the
+current signed download. After rollback, download surfaces use this resolver,
+not historical `-latest.iso` objects. The retention workflow protects each
+resolver target, every explicit retained ISO, and each sidecar. Superseded
+snapshots age out after 14 days. Policy validation rejects a published target
+or fully covered group without a retained latest pointer and a retained
+versioned ISO.
 
 ### 2. Pull Request Checks
 

@@ -3,7 +3,6 @@
 Falsification: removing the Arch override breaks its historical package set;
 removing the shared profile migration breaks GDM on the other admitted bases.
 """
-import importlib.util
 import json
 from pathlib import Path
 import subprocess
@@ -69,18 +68,12 @@ def test_native_resolution_selects_gdm_for_every_tuna_base_family():
     assert 'tuna-hide-other-sessions' in resolved['after_install']
 
 
-def test_adapter_is_regenerated_and_source_receipt_excludes_it(tmp_path):
+def test_adapter_is_regenerated_and_not_tracked(tmp_path):
     (tmp_path / 'tunaos.toml').write_bytes((ROOT / 'tunaos.toml').read_bytes())
     tunaos_config.prepare(tmp_path)
     target = tmp_path / 'manifests/desktops/tuna-arch.yaml'
     assert json.loads(target.read_text()) == expected_with_theme()
     tracked = subprocess.check_output(['git', '-C', str(ROOT), 'ls-files', '--', 'manifests/desktops'], text=True)
     assert tracked == ''
-    spec = importlib.util.spec_from_file_location('source_receipt_3438', ROOT / 'scripts/resolve-fork-config.py')
-    compiler = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(compiler)
-    receipt = compiler.source_receipt(ROOT)
-    assert 'tunaos.toml' in receipt['files']
-    assert not any(path.startswith('manifests/desktops/') for path in receipt['files'])
 
 

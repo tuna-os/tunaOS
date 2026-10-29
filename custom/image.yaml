@@ -1,4 +1,5 @@
 # Custom image configuration
-base: ghcr.io/tuna-os/yellowfin:gnome
+# base: <image ref>   # unset: the published gnome image of the first variant in
+#                     # tunaos.toml that builds one, at your publish destination
 tag: my-custom-os
 publish: false
