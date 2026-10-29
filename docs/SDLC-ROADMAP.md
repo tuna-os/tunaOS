@@ -114,7 +114,7 @@ implementation runs on a Tuna OS spoke, and the RFC cites its numbers.
 
 | RFC | Spec item | Why we need it | Reference spoke |
 |---|---|---|---|
-| Admission-side #5117 for hive-filed proposals | HIVE-1 | Shipped in Phase 0 | school |
+| Admission-side #5117 for hive-filed proposals ([hivecommons/hive#15329](https://github.com/hivecommons/hive/issues/15329)) | HIVE-1 | Shipped in Phase 0; filed upstream 2026-10-29 | school |
 | Lane freeze windows (scheduled per-lane pause) | HIVE-7 / TUNA-6 | Biweekly ISO stabilisation: pause architect/strategist/outreach on days 11–14, keep ci-maintainer and quality. Repo pause exists but is all-or-nothing. | school |
 | Soak-gated promotion | HIVE-6 / TUNA-3 | Only if the two-ring LTS proposal passes `RFC-PROCESS.md` first; which variants form the LTS ring is a product decision. | — |
 | Post-merge revert sheriff | HIVE-8 / TUNA-4 | After Phase 2 gives tunaOS required checks to bisect against; the image-digest rollback stays a runbook (`runbooks/rollback-a-bad-image-promotion.md`) until then. | school |
