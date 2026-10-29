@@ -459,6 +459,39 @@ gdm_autologin_enabled() {
 		END { exit !found }
 	' "$config"
 }
+
+# GDM starts an account's AccountsService session first (GDM 47-51
+# daemon/gdm-session-settings.c), and AccountsService gives an account with no
+# record the first user-templates/<type> in /etc then the data dirs (src/user.c
+# user_update_from_template), so that template must name Tuna. An account
+# whose record names no session gets GDM's fallback: [daemon] FallbackSession
+# on GDM 51, else "gnome". GDM has no DefaultSession key. Arguments: the GDM
+# config, then an optional root prefix for the template lookup.
+tuna_fresh_account_session_contract() {
+	local config="$1" root="${2:-}" template_type template_dir template
+	for template_type in standard administrator; do
+		template=""
+		for template_dir in /etc /usr/local/share /usr/share; do
+			if [[ -f "${root}${template_dir}/accountsservice/user-templates/${template_type}" ]]; then
+				template="${root}${template_dir}/accountsservice/user-templates/${template_type}"
+				break
+			fi
+		done
+		awk '/^\[/ { in_user = ($0 == "[User]"); next } in_user && $0 == "Session=tuna" { found = 1 } END { exit !found }' \
+			"${template:-/dev/null}" || {
+			echo "AccountsService ${template_type} template does not start new accounts in the Tuna session: ${template:-missing}" >&2
+			return 1
+		}
+	done
+	grep -qx 'FallbackSession=tuna' "$config" || {
+		echo "GDM does not fall back to the Tuna session in $config" >&2
+		return 1
+	}
+	if grep -q '^DefaultSession=' "$config"; then
+		echo "GDM has no DefaultSession key; $config must use FallbackSession" >&2
+		return 1
+	fi
+}
 case "$desktop" in
 gnome)
 	experience="projectbluefin/bluefin-lts"
@@ -698,35 +731,7 @@ tuna)
 		echo "GDM automatic login is enabled; the login screen is bypassed" >&2
 		exit 1
 	fi
-	# GDM starts an account's AccountsService session first (GDM 47-51
-	# daemon/gdm-session-settings.c), and AccountsService gives an account
-	# with no record the first user-templates/<type> in /etc then the data
-	# dirs (src/user.c user_update_from_template), so that template must name
-	# Tuna. An account whose record names no session gets GDM's fallback:
-	# [daemon] FallbackSession on GDM 51, else "gnome". GDM has no
-	# DefaultSession key.
-	for tuna_template_type in standard administrator; do
-		tuna_template=""
-		for tuna_template_dir in /etc /usr/local/share /usr/share; do
-			if [[ -f "${tuna_template_dir}/accountsservice/user-templates/${tuna_template_type}" ]]; then
-				tuna_template="${tuna_template_dir}/accountsservice/user-templates/${tuna_template_type}"
-				break
-			fi
-		done
-		awk '/^\[/ { in_user = ($0 == "[User]"); next } in_user && $0 == "Session=tuna" { found = 1 } END { exit !found }' \
-			"${tuna_template:-/dev/null}" || {
-			echo "AccountsService ${tuna_template_type} template does not start new accounts in the Tuna session: ${tuna_template:-missing}" >&2
-			exit 1
-		}
-	done
-	grep -qx 'FallbackSession=tuna' "$tuna_gdm_config" || {
-		echo "GDM does not fall back to the Tuna session in $tuna_gdm_config" >&2
-		exit 1
-	}
-	if grep -q '^DefaultSession=' "$tuna_gdm_config"; then
-		echo "GDM has no DefaultSession key; $tuna_gdm_config must use FallbackSession" >&2
-		exit 1
-	fi
+	tuna_fresh_account_session_contract "$tuna_gdm_config" || exit 1
 	require_unit "$tuna_gdm_unit"
 	# GDM offers every visible Wayland session and falls back to its own
 	# default when nothing is pre-selected, so only Tuna may be offered.
