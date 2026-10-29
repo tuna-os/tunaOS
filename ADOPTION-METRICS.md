@@ -1,11 +1,15 @@
 # TunaOS Adoption Metrics Plan
 
-**Last updated**: 2026-08-14 | **Owner**: strategist (snapshot), ci-maintainer (R2/Releases data), guide (publishing)
-**Tracking**: [tunaos#1174](https://github.com/tuna-os/tunaos/issues/1174)
+**Last updated**: 2026-10-22 | **Owner**: strategist (snapshot), ci-maintainer (R2/Releases data), guide (publishing)
+**Tracking**: [tunaos#1174](https://github.com/tuna-os/tunaos/issues/1174), [tunaos#1348](https://github.com/tuna-os/tunaos/issues/1348), [tunaos#3305](https://github.com/tuna-os/tunaos/issues/3305)
 
 ---
 
 ## Why
+
+The following motivation and baseline table record the August planning context.
+For measured October signals and remaining gaps, use the dated report linked
+under [Cadence & publication](#cadence--publication).
 
 tunaOS ships 179+ downloadable ISOs across 9+ variants × 5 desktops, yet has
 **zero usage telemetry**. Roadmap themes (Q3 "Expand", Q4 "Mature") are executed
@@ -31,7 +35,7 @@ publish, and *how* the snapshot feeds roadmap decisions.
 | Install | Installs / successful boots | opt-in telemetry or boot-report gating | **not measured** | Q4 design decision (#577 GUI gate, #763) |
 | Community | Merged PRs from external human contributors | GitHub API | **3 merged contributions from 3 verified humans** (docs#234, docs#239 on 08-14; one bootc-migrate contribution on 08-05) | ≥5 merged PRs from ≥3 humans, including one repeat contributor |
 | Community | Discussion posts, `good first issue` pickups | GitHub API | 0 starter issues (dead label, #1308) | ≥5 starter issues picked up |
-| Community | **External** public adopters (production or evaluation), [ADOPTERS.md](./ADOPTERS.md) — excludes the maintainer and TunaOS's own infrastructure | Manual — PR from the adopting org, or outreach asking permission to list | 0 external entries (#1348) | ≥2–3 external evaluator/production entries |
+| Community | **External** public adopters (production or evaluation), [ADOPTERS.md](./ADOPTERS.md) — excludes the maintainer and TunaOS's own infrastructure | Manual — PR from the adopting org, or outreach asking permission to list | 0 external entries ([#1348](https://github.com/tuna-os/tunaos/issues/1348), [#3305](https://github.com/tuna-os/tunaos/issues/3305)) | ≥2–3 external evaluator/production entries (≥1 external production adopter required before Mature claim) |
 | Community | Adoption-call conversion | GitHub Discussion + follow-up PRs | **not measured** | Record responses, consent-confirmed named entries, anonymous reports, and ADOPTERS.md PRs |
 
 **Instrumentation order** (cheapest first):
@@ -51,6 +55,16 @@ publish, and *how* the snapshot feeds roadmap decisions.
 
 ## Cadence & publication
 
+- **Preliminary baseline captured**: [2026-10-22 report](docs/adoption-metrics/snapshots/2026-10-22.md)
+  ([JSON receipt](docs/adoption-metrics/snapshots/2026-10-22.json)). This is not
+  the November checkpoint. The historical baseline column above remains dated.
+- **Monthly collection**: `.github/workflows/adoption-metrics.yml` collects
+  public GitHub counters on the first day at 09:00 UTC. See the
+  [collection and publication runbook](docs/adoption-metrics/README.md).
+  R2 downloads, pageviews, the human contribution census and adoption-call
+  conversion remain unavailable until their owners supply reviewed inputs.
+  The separate [countme service](services/countme/README.md) now exists;
+  its weekly report estimates must not be read as unique monthly users.
 - **Monthly snapshot**, published in the ROADMAP **Community** section (first:
   **2026-11-01**, covering October — aligns with Q4 "Mature" opening).
 - Snapshot format: downloads by variant × desktop (top 10), stars/forks,

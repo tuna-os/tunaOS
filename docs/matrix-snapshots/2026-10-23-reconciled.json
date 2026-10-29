@@ -1,0 +1,4158 @@
+{
+ "context": {
+  "configuration_sha256": {
+   ".github/green-criteria.yml": "5c8bd0307019fdca10d44eddfa983b02f6d511d905c9028fb12f4aad8d751133",
+   "tunaos.toml": "1e38ad4f557dbd9fcbede03a7d9c7954e613c2eb93d5dad85e8285b96d354325"
+  },
+  "evaluation_date": "2026-10-23",
+  "full_sweep_dates": "unknown; original collector inputs were not retained; no full-sweep freshness claim",
+  "kind": "historical-reconciliation",
+  "overlay_inventory": "unverified; verbatim historical board section from 94092878, not recollected",
+  "retained_legacy_full_sweep_summary": "2026-09-01 (from 76a68ca5; not reasserted)",
+  "source_commit": "a6fcff42d2cf766bb30009e0d2ed0721516b3a88",
+  "source_configuration_sha256": {
+   ".github/green-criteria.yml": "410f6a56eac0b63d1aedbd8d2ec72d9535d7722b9b04483143eb6051a4f6264a",
+   "tunaos.toml": "f46a05832afb81637a7889b5db2b3e82820fcc2e900b0422765db97231f16e66"
+  },
+  "sources": [
+   {
+    "path": "jobs-31585741267.json",
+    "sha256": "58ec88feb93e0b86a97d6c455e4e332534811350740baf5b9124630db5bec6e9"
+   },
+   {
+    "path": "jobs-32238167029.json",
+    "sha256": "d40452a6cceec72a92f014c10999a58707983a1c0a499d8cd0db526e2634e0d8"
+   },
+   {
+    "path": "jobs-33506738063.json",
+    "sha256": "4471b4cb8f13159985f87ef07fb5258c3fea182cf0ea0c80a24107890def75ca"
+   },
+   {
+    "path": "jobs-34487443208.json",
+    "sha256": "c05343b7996acd4ec93d5fcf594b24356e6bb136c93b52f47810e54f8c94ceb6"
+   },
+   {
+    "path": "jobs-36047128286.json",
+    "sha256": "67efeee2afc18e191d4eb88615ffbe5dfe78733bf2421a467ed62881cf3d1c7d"
+   },
+   {
+    "path": "jobs-36873532817.json",
+    "sha256": "41f2eaef67ddb38d0af002aaf9711459eaec2701ab6bd10d996256540c4115d1"
+   },
+   {
+    "path": "jobs-36875090451.json",
+    "sha256": "5abe3b2b924ff4a99134e9e62e63da8b19b0050c79048203c43024522e364757"
+   },
+   {
+    "path": "jobs-38660870261.json",
+    "sha256": "ff1d54e61b2ef5bc1fb707858dd45fc6ee8415f63b1f2592abd33126a8336049"
+   },
+   {
+    "path": "jobs-38713238238.json",
+    "sha256": "30411770842d22b9c714e1344d79797ec08c3dc95f5e2a3ce427a656cc328841"
+   },
+   {
+    "path": "jobs-38906627617.json",
+    "sha256": "fdd44f608c18e547d1cc6bac19eb190e8f3a48dd6ce3db62530d594711bf51fa"
+   },
+   {
+    "path": "jobs-39417171639.json",
+    "sha256": "4545a343610781eb53935665cad17a242a0b683a784b2e9fa1a069dcaff3885b"
+   },
+   {
+    "path": "jobs-39482644710.json",
+    "sha256": "e590a21c72f0fc068bf70085d9e613d5a432526b632843f4cbb666cbd9dc90a6"
+   },
+   {
+    "path": "jobs-39546481120.json",
+    "sha256": "6f2c546ad09cf270c6341adc11c9bbc0282c24ca79f55866acd025e4a1006ce7"
+   },
+   {
+    "path": "jobs-39630438457.json",
+    "sha256": "c387cc819f5c71b1601b70d60e14d60f1990f9d18c7e48b5f8d21d24ab61d480"
+   },
+   {
+    "path": "jobs-39649763850.json",
+    "sha256": "805321204f8eb0308f9634b47d0bad0893406a2e417d81acc6333e85954543bf"
+   },
+   {
+    "path": "jobs-39660761990.json",
+    "sha256": "b2dca2fff6d6f77575ac4bad9df0e52924086e917746fda1f5edd346d3ee4dc6"
+   },
+   {
+    "path": "jobs-39724851741.json",
+    "sha256": "1213242b546c56050237126850a3fdcf69bd822a25b360dc37511f2e8b8b14db"
+   },
+   {
+    "path": "jobs-39742606903.json",
+    "sha256": "5cb994c720ecbbaa1c26f232fb1fb555258ac586f3f33698cf7459a0122362ce"
+   },
+   {
+    "path": "jobs-39755734047.json",
+    "sha256": "fb587b0397a9a6ca469c9103725d019f938fbbba594d1611e7bd7c3531320bbf"
+   },
+   {
+    "path": "jobs-39774703501.json",
+    "sha256": "a76441ef29a53dd93b3a2eaaa65d965aa6d31dcc9a6f2f16f20e70d29e84b19e"
+   },
+   {
+    "path": "jobs-39796515417.json",
+    "sha256": "0c1105153847f23e0216908faeeb1bda4a2fe54108c60925c5b06fcfadb52c7b"
+   },
+   {
+    "path": "jobs-39827814045.json",
+    "sha256": "d34b79f7799be088b558040c8711a71ab1bd4396b1ea751b2d1f7f24813ea82a"
+   },
+   {
+    "path": "jobs-39838360929.json",
+    "sha256": "04f7a655291d31a8c610973e51b8a7bdca4f9392dc8fe82d3cd5827c87621232"
+   },
+   {
+    "path": "jobs-39849977660.json",
+    "sha256": "7664bb409224de8b229189e3a1a2edfdfe6d76f45bac0cf2990c0e9d87aee9b2"
+   },
+   {
+    "path": "jobs-39865052345.json",
+    "sha256": "7097ed6f2f43fa272fab68a8f1f2b6380b7e1146ff07662585b555ec50f58ed2"
+   },
+   {
+    "path": "jobs-39875388237.json",
+    "sha256": "beb95c1098e85f4ae9cef5e24f80f212c315f2ffc9b6f027c62f57d7cff666d2"
+   },
+   {
+    "path": "jobs-39884547800.json",
+    "sha256": "bd0c2f30a8cc63c629d55f34e055e781a8ce6212a73a56d9cbf87d96c9d32aa5"
+   },
+   {
+    "artifact_id": 12429643657,
+    "member": "all.json",
+    "run_id": "39786083762",
+    "zip_sha256": "d998256aa4af1bb7512f49b4dbcab6189f0a291ba36f64655a9ac88bf8e73d47"
+   },
+   {
+    "artifact_id": 12431872510,
+    "member": "parity.json",
+    "run_id": "39792320470",
+    "zip_sha256": "df0f2077e1c2d7988d7397f35cbf09689dc951fba6bf4d6bce9fb1fc11d5b79c"
+   }
+  ]
+ },
+ "contract": {
+  "albacore:cosmic": [
+   "pass",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "albacore:gnome": [
+   "pass",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "albacore:kde": [
+   "pass",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "albacore:niri": [
+   "pass",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "albacore:xfce": [
+   "pass",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "bonito-rawhide:cosmic": [
+   "pass",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "bonito-rawhide:gnome": [
+   "fail",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "bonito-rawhide:kde": [
+   "pass",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "bonito-rawhide:niri": [
+   "pass",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "bonito-rawhide:xfce": [
+   "pass",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "bonito:cosmic": [
+   "pass",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "bonito:gnome": [
+   "pass",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "bonito:kde": [
+   "pass",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "bonito:niri": [
+   "pass",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "bonito:xfce": [
+   "pass",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "flounder-sid:gnome": [
+   "pass",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "flounder-sid:kde": [
+   "pass",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "flounder-sid:xfce": [
+   "pass",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "flounder:kde": [
+   "pass",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "flounder:xfce": [
+   "pass",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "grouper:cosmic": [
+   "pass",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "grouper:gnome": [
+   "pass",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "grouper:kde": [
+   "pass",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "grouper:xfce": [
+   "pass",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "guppy:gnome": [
+   "fail",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "guppy:kde": [
+   "fail",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "guppy:xfce": [
+   "fail",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "hummingbird:cosmic": [
+   "fail",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "hummingbird:gnome": [
+   "pass",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "marlin:cosmic": [
+   "pass",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "marlin:gnome": [
+   "pass",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "marlin:kde": [
+   "pass",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "marlin:niri": [
+   "pass",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "marlin:xfce": [
+   "pass",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "sailfin:cosmic": [
+   "pass",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "sailfin:gnome": [
+   "fail",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "sailfin:kde": [
+   "pass",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "sailfin:niri": [
+   "pass",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "sailfin:xfce": [
+   "pass",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "skipjack:cosmic": [
+   "pass",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "skipjack:gnome": [
+   "pass",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "skipjack:kde": [
+   "pass",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "skipjack:niri": [
+   "pass",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "skipjack:xfce": [
+   "pass",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "wahoo:cosmic": [
+   "fail",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "wahoo:gnome": [
+   "fail",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "wahoo:kde": [
+   "fail",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "yellowfin:cosmic": [
+   "pass",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "yellowfin:gnome": [
+   "pass",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "yellowfin:kde": [
+   "pass",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "yellowfin:niri": [
+   "pass",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "yellowfin:xfce": [
+   "pass",
+   "2026-10-22",
+   "39786083762"
+  ]
+ },
+ "evaluation_date": "2026-10-23",
+ "lifecycle": {
+  "albacore:cosmic": [
+   "success",
+   "2026-10-15",
+   "38713238238"
+  ],
+  "albacore:gnome": [
+   "success",
+   "2026-10-15",
+   "38713238238"
+  ],
+  "albacore:kde": [
+   "success",
+   "2026-10-15",
+   "38713238238"
+  ],
+  "albacore:niri": [
+   "success",
+   "2026-10-15",
+   "38713238238"
+  ],
+  "albacore:xfce": [
+   "success",
+   "2026-10-15",
+   "38713238238"
+  ],
+  "bonito:cosmic": [
+   "success",
+   "2026-10-15",
+   "38713238238"
+  ],
+  "bonito:gnome": [
+   "success",
+   "2026-10-15",
+   "38713238238"
+  ],
+  "bonito:kde": [
+   "success",
+   "2026-10-15",
+   "38713238238"
+  ],
+  "bonito:niri": [
+   "success",
+   "2026-10-15",
+   "38713238238"
+  ],
+  "bonito:xfce": [
+   "success",
+   "2026-10-15",
+   "38713238238"
+  ],
+  "flounder:kde": [
+   "success",
+   "2026-10-15",
+   "38713238238"
+  ],
+  "flounder:xfce": [
+   "success",
+   "2026-10-15",
+   "38713238238"
+  ],
+  "grouper:cosmic": [
+   "success",
+   "2026-10-15",
+   "38713238238"
+  ],
+  "grouper:gnome": [
+   "success",
+   "2026-10-15",
+   "38713238238"
+  ],
+  "grouper:kde": [
+   "success",
+   "2026-10-15",
+   "38713238238"
+  ],
+  "grouper:xfce": [
+   "success",
+   "2026-10-15",
+   "38713238238"
+  ],
+  "hummingbird:cosmic": [
+   "failure",
+   "2026-10-15",
+   "38713238238"
+  ],
+  "hummingbird:gnome": [
+   "failure",
+   "2026-10-15",
+   "38713238238"
+  ],
+  "marlin:cosmic": [
+   "success",
+   "2026-10-15",
+   "38713238238"
+  ],
+  "marlin:gnome": [
+   "success",
+   "2026-10-15",
+   "38713238238"
+  ],
+  "marlin:kde": [
+   "success",
+   "2026-10-15",
+   "38713238238"
+  ],
+  "marlin:niri": [
+   "success",
+   "2026-10-15",
+   "38713238238"
+  ],
+  "marlin:xfce": [
+   "success",
+   "2026-10-15",
+   "38713238238"
+  ],
+  "sailfin:cosmic": [
+   "success",
+   "2026-10-15",
+   "38713238238"
+  ],
+  "sailfin:gnome": [
+   "success",
+   "2026-10-15",
+   "38713238238"
+  ],
+  "sailfin:kde": [
+   "success",
+   "2026-10-15",
+   "38713238238"
+  ],
+  "sailfin:niri": [
+   "success",
+   "2026-10-15",
+   "38713238238"
+  ],
+  "sailfin:xfce": [
+   "success",
+   "2026-10-15",
+   "38713238238"
+  ],
+  "skipjack:cosmic": [
+   "success",
+   "2026-10-15",
+   "38713238238"
+  ],
+  "skipjack:gnome": [
+   "success",
+   "2026-10-15",
+   "38713238238"
+  ],
+  "skipjack:kde": [
+   "success",
+   "2026-10-15",
+   "38713238238"
+  ],
+  "skipjack:niri": [
+   "success",
+   "2026-10-15",
+   "38713238238"
+  ],
+  "skipjack:xfce": [
+   "success",
+   "2026-10-15",
+   "38713238238"
+  ],
+  "wahoo:cosmic": [
+   "failure",
+   "2026-10-15",
+   "38713238238"
+  ],
+  "wahoo:gnome": [
+   "failure",
+   "2026-10-15",
+   "38713238238"
+  ],
+  "wahoo:kde": [
+   "failure",
+   "2026-10-15",
+   "38713238238"
+  ],
+  "yellowfin:cosmic": [
+   "success",
+   "2026-10-15",
+   "38713238238"
+  ],
+  "yellowfin:gnome": [
+   "success",
+   "2026-10-15",
+   "38713238238"
+  ],
+  "yellowfin:kde": [
+   "success",
+   "2026-10-15",
+   "38713238238"
+  ],
+  "yellowfin:niri": [
+   "success",
+   "2026-10-15",
+   "38713238238"
+  ],
+  "yellowfin:xfce": [
+   "success",
+   "2026-10-15",
+   "38713238238"
+  ]
+ },
+ "luks": {
+  "LUKS albacore:base-hwe": [
+   "failure",
+   "2026-09-01",
+   "33506738063"
+  ],
+  "LUKS albacore:base-nvidia": [
+   "failure",
+   "2026-09-01",
+   "33506738063"
+  ],
+  "LUKS albacore:cosmic": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS albacore:cosmic-hwe": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS albacore:cosmic-nvidia": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS albacore:gnome": [
+   "failure",
+   "2026-10-01",
+   "36875090451"
+  ],
+  "LUKS albacore:gnome-hwe": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS albacore:gnome-nvidia": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS albacore:gnome-nvidia-hwe": [
+   "failure",
+   "2026-09-01",
+   "33506738063"
+  ],
+  "LUKS albacore:kde": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS albacore:kde-hwe": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS albacore:kde-nvidia": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS albacore:niri": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS albacore:niri-hwe": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS albacore:niri-nvidia": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS albacore:xfce": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS albacore:xfce-hwe": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS albacore:xfce-nvidia": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS bonito-rawhide:base-hwe": [
+   "failure",
+   "2026-09-01",
+   "33506738063"
+  ],
+  "LUKS bonito-rawhide:base-nvidia": [
+   "failure",
+   "2026-09-01",
+   "33506738063"
+  ],
+  "LUKS bonito-rawhide:cosmic": [
+   "success",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS bonito-rawhide:cosmic-nvidia": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS bonito-rawhide:gnome": [
+   "failure",
+   "2026-10-01",
+   "36875090451"
+  ],
+  "LUKS bonito-rawhide:gnome-hwe": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS bonito-rawhide:gnome-nvidia": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS bonito-rawhide:kde": [
+   "success",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS bonito-rawhide:kde-nvidia": [
+   "success",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS bonito-rawhide:niri": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS bonito-rawhide:niri-nvidia": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS bonito-rawhide:xfce": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS bonito-rawhide:xfce-nvidia": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS bonito:base-hwe": [
+   "failure",
+   "2026-09-01",
+   "33506738063"
+  ],
+  "LUKS bonito:base-nvidia": [
+   "failure",
+   "2026-09-01",
+   "33506738063"
+  ],
+  "LUKS bonito:cosmic": [
+   "success",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS bonito:cosmic-nvidia": [
+   "success",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS bonito:gnome": [
+   "failure",
+   "2026-10-01",
+   "36875090451"
+  ],
+  "LUKS bonito:gnome-hwe": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS bonito:gnome-nvidia": [
+   "success",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS bonito:gnome-t2": [
+   "success",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS bonito:kde": [
+   "success",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS bonito:kde-nvidia": [
+   "success",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS bonito:niri": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS bonito:niri-nvidia": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS bonito:xfce": [
+   "success",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS bonito:xfce-nvidia": [
+   "success",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS flounder-sid:gnome": [
+   "failure",
+   "2026-10-01",
+   "36875090451"
+  ],
+  "LUKS flounder-sid:gnome-nvidia": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS flounder-sid:kde": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS flounder-sid:kde-nvidia": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS flounder-sid:xfce": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS flounder-sid:xfce-nvidia": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS flounder:gnome": [
+   "failure",
+   "2026-09-01",
+   "33506738063"
+  ],
+  "LUKS flounder:gnome-nvidia": [
+   "failure",
+   "2026-09-01",
+   "33506738063"
+  ],
+  "LUKS flounder:kde": [
+   "failure",
+   "2026-10-01",
+   "36875090451"
+  ],
+  "LUKS flounder:kde-nvidia": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS flounder:xfce": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS flounder:xfce-nvidia": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS grouper:cosmic": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS grouper:gnome": [
+   "failure",
+   "2026-10-01",
+   "36875090451"
+  ],
+  "LUKS grouper:gnome-zfs": [
+   "success",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS grouper:kde": [
+   "success",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS grouper:xfce": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS guppy:gnome": [
+   "failure",
+   "2026-09-01",
+   "33506738063"
+  ],
+  "LUKS guppy:kde": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS guppy:xfce": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS gurnard:pantheon": [
+   "failure",
+   "2026-10-01",
+   "36875090451"
+  ],
+  "LUKS hummingbird:cosmic": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS hummingbird:gnome": [
+   "failure",
+   "2026-10-01",
+   "36875090451"
+  ],
+  "LUKS marlin:cosmic": [
+   "success",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS marlin:cosmic-cachyos": [
+   "success",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS marlin:cosmic-nvidia": [
+   "success",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS marlin:gnome": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS marlin:gnome-cachyos": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS marlin:gnome-nvidia": [
+   "success",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS marlin:kde": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS marlin:kde-cachyos": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS marlin:kde-nvidia": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS marlin:niri": [
+   "success",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS marlin:niri-cachyos": [
+   "success",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS marlin:niri-nvidia": [
+   "success",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS marlin:xfce": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS marlin:xfce-cachyos": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS marlin:xfce-nvidia": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS sailfin:cosmic": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS sailfin:gnome": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS sailfin:kde": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS sailfin:niri": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS sailfin:xfce": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS skipjack:base-hwe": [
+   "failure",
+   "2026-09-01",
+   "33506738063"
+  ],
+  "LUKS skipjack:base-nvidia": [
+   "failure",
+   "2026-09-01",
+   "33506738063"
+  ],
+  "LUKS skipjack:cosmic": [
+   "success",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS skipjack:cosmic-hwe": [
+   "success",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS skipjack:cosmic-nvidia": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS skipjack:gnome": [
+   "failure",
+   "2026-10-01",
+   "36875090451"
+  ],
+  "LUKS skipjack:gnome-hwe": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS skipjack:gnome-nvidia": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS skipjack:gnome-nvidia-hwe": [
+   "failure",
+   "2026-09-01",
+   "33506738063"
+  ],
+  "LUKS skipjack:kde": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS skipjack:kde-hwe": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS skipjack:kde-nvidia": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS skipjack:niri": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS skipjack:niri-hwe": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS skipjack:niri-nvidia": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS skipjack:xfce": [
+   "success",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS wahoo:cosmic": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS wahoo:gnome": [
+   "failure",
+   "2026-10-01",
+   "36875090451"
+  ],
+  "LUKS wahoo:kde": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS yellowfin:base-hwe": [
+   "failure",
+   "2026-09-01",
+   "33506738063"
+  ],
+  "LUKS yellowfin:base-nvidia": [
+   "failure",
+   "2026-09-01",
+   "33506738063"
+  ],
+  "LUKS yellowfin:cosmic": [
+   "success",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS yellowfin:cosmic-hwe": [
+   "success",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS yellowfin:cosmic-nvidia": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS yellowfin:gnome": [
+   "failure",
+   "2026-10-01",
+   "36875090451"
+  ],
+  "LUKS yellowfin:gnome-hwe": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS yellowfin:gnome-nvidia": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS yellowfin:gnome-nvidia-hwe": [
+   "failure",
+   "2026-09-01",
+   "33506738063"
+  ],
+  "LUKS yellowfin:kde": [
+   "success",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS yellowfin:kde-hwe": [
+   "success",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS yellowfin:kde-nvidia": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS yellowfin:niri": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS yellowfin:niri-hwe": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS yellowfin:niri-nvidia": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS yellowfin:xfce": [
+   "success",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS yellowfin:xfce-hwe": [
+   "success",
+   "2026-10-01",
+   "36873532817"
+  ],
+  "LUKS yellowfin:xfce-nvidia": [
+   "failure",
+   "2026-10-01",
+   "36873532817"
+  ]
+ },
+ "omissions": {
+  "albacore:cosmic": [
+   "success",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "albacore:gnome": [
+   "success",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "albacore:kde": [
+   "success",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "albacore:niri": [
+   "success",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "albacore:xfce": [
+   "success",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "bonito-rawhide:cosmic": [
+   "success",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "bonito-rawhide:gnome": [
+   "success",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "bonito-rawhide:kde": [
+   "success",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "bonito-rawhide:niri": [
+   "success",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "bonito-rawhide:xfce": [
+   "success",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "bonito:cosmic": [
+   "success",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "bonito:gnome": [
+   "success",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "bonito:kde": [
+   "success",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "bonito:niri": [
+   "success",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "bonito:xfce": [
+   "success",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "flounder-sid:gnome": [
+   "success",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "flounder-sid:kde": [
+   "success",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "flounder-sid:xfce": [
+   "success",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "flounder:kde": [
+   "success",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "flounder:xfce": [
+   "success",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "grouper:cosmic": [
+   "success",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "grouper:gnome": [
+   "success",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "grouper:kde": [
+   "success",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "grouper:xfce": [
+   "success",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "guppy:gnome": [
+   "success",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "guppy:kde": [
+   "success",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "guppy:xfce": [
+   "success",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "hummingbird:cosmic": [
+   "success",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "hummingbird:gnome": [
+   "success",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "marlin:cosmic": [
+   "success",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "marlin:gnome": [
+   "success",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "marlin:kde": [
+   "success",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "marlin:niri": [
+   "success",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "marlin:xfce": [
+   "success",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "sailfin:cosmic": [
+   "success",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "sailfin:gnome": [
+   "success",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "sailfin:kde": [
+   "success",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "sailfin:niri": [
+   "success",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "sailfin:xfce": [
+   "success",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "skipjack:cosmic": [
+   "success",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "skipjack:gnome": [
+   "success",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "skipjack:kde": [
+   "success",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "skipjack:niri": [
+   "success",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "skipjack:xfce": [
+   "success",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "wahoo:cosmic": [
+   "success",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "wahoo:gnome": [
+   "success",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "wahoo:kde": [
+   "success",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "yellowfin:cosmic": [
+   "success",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "yellowfin:gnome": [
+   "success",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "yellowfin:kde": [
+   "success",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "yellowfin:niri": [
+   "success",
+   "2026-10-22",
+   "39786083762"
+  ],
+  "yellowfin:xfce": [
+   "success",
+   "2026-10-22",
+   "39786083762"
+  ]
+ },
+ "overlay_section": "## Live overlay\n\n**53** tags published.\n\nMissing for 4 ISO cell(s): `gurnard-pantheon`, `hummingbird-base`, `hummingbird-cosmic`, `hummingbird-gnome`\n",
+ "parity": {
+  "albacore:cosmic": [
+   "success",
+   "2026-10-22",
+   "39792320470"
+  ],
+  "albacore:gnome": [
+   "success",
+   "2026-10-22",
+   "39792320470"
+  ],
+  "albacore:kde": [
+   "success",
+   "2026-10-22",
+   "39792320470"
+  ],
+  "albacore:niri": [
+   "success",
+   "2026-10-22",
+   "39792320470"
+  ],
+  "albacore:xfce": [
+   "success",
+   "2026-10-22",
+   "39792320470"
+  ],
+  "bonito-rawhide:cosmic": [
+   "success",
+   "2026-10-22",
+   "39792320470"
+  ],
+  "bonito-rawhide:gnome": [
+   "success",
+   "2026-10-22",
+   "39792320470"
+  ],
+  "bonito-rawhide:kde": [
+   "success",
+   "2026-10-22",
+   "39792320470"
+  ],
+  "bonito-rawhide:niri": [
+   "success",
+   "2026-10-22",
+   "39792320470"
+  ],
+  "bonito-rawhide:xfce": [
+   "success",
+   "2026-10-22",
+   "39792320470"
+  ],
+  "bonito:cosmic": [
+   "success",
+   "2026-10-22",
+   "39792320470"
+  ],
+  "bonito:gnome": [
+   "success",
+   "2026-10-22",
+   "39792320470"
+  ],
+  "bonito:kde": [
+   "success",
+   "2026-10-22",
+   "39792320470"
+  ],
+  "bonito:niri": [
+   "success",
+   "2026-10-22",
+   "39792320470"
+  ],
+  "bonito:xfce": [
+   "success",
+   "2026-10-22",
+   "39792320470"
+  ],
+  "flounder:gnome": [
+   "failure",
+   "2026-10-22",
+   "39792320470"
+  ],
+  "flounder:kde": [
+   "failure",
+   "2026-10-22",
+   "39792320470"
+  ],
+  "flounder:xfce": [
+   "failure",
+   "2026-10-22",
+   "39792320470"
+  ],
+  "grouper:cosmic": [
+   "failure",
+   "2026-10-22",
+   "39792320470"
+  ],
+  "grouper:gnome": [
+   "failure",
+   "2026-10-22",
+   "39792320470"
+  ],
+  "grouper:kde": [
+   "failure",
+   "2026-10-22",
+   "39792320470"
+  ],
+  "grouper:xfce": [
+   "failure",
+   "2026-10-22",
+   "39792320470"
+  ],
+  "guppy:gnome": [
+   "success",
+   "2026-10-22",
+   "39792320470"
+  ],
+  "guppy:kde": [
+   "success",
+   "2026-10-22",
+   "39792320470"
+  ],
+  "guppy:xfce": [
+   "success",
+   "2026-10-22",
+   "39792320470"
+  ],
+  "hummingbird:cosmic": [
+   "success",
+   "2026-10-22",
+   "39792320470"
+  ],
+  "hummingbird:gnome": [
+   "success",
+   "2026-10-22",
+   "39792320470"
+  ],
+  "hummingbird:kde": [
+   "failure",
+   "2026-10-22",
+   "39792320470"
+  ],
+  "hummingbird:niri": [
+   "failure",
+   "2026-10-22",
+   "39792320470"
+  ],
+  "marlin:cosmic": [
+   "success",
+   "2026-10-22",
+   "39792320470"
+  ],
+  "marlin:gnome": [
+   "success",
+   "2026-10-22",
+   "39792320470"
+  ],
+  "marlin:kde": [
+   "success",
+   "2026-10-22",
+   "39792320470"
+  ],
+  "marlin:niri": [
+   "success",
+   "2026-10-22",
+   "39792320470"
+  ],
+  "marlin:xfce": [
+   "success",
+   "2026-10-22",
+   "39792320470"
+  ],
+  "sailfin:cosmic": [
+   "success",
+   "2026-10-22",
+   "39792320470"
+  ],
+  "sailfin:gnome": [
+   "success",
+   "2026-10-22",
+   "39792320470"
+  ],
+  "sailfin:kde": [
+   "success",
+   "2026-10-22",
+   "39792320470"
+  ],
+  "sailfin:niri": [
+   "success",
+   "2026-10-22",
+   "39792320470"
+  ],
+  "sailfin:xfce": [
+   "success",
+   "2026-10-22",
+   "39792320470"
+  ],
+  "skipjack:cosmic": [
+   "success",
+   "2026-10-22",
+   "39792320470"
+  ],
+  "skipjack:gnome": [
+   "success",
+   "2026-10-22",
+   "39792320470"
+  ],
+  "skipjack:kde": [
+   "success",
+   "2026-10-22",
+   "39792320470"
+  ],
+  "skipjack:niri": [
+   "success",
+   "2026-10-22",
+   "39792320470"
+  ],
+  "skipjack:xfce": [
+   "success",
+   "2026-10-22",
+   "39792320470"
+  ],
+  "wahoo:cosmic": [
+   "success",
+   "2026-10-22",
+   "39792320470"
+  ],
+  "wahoo:gnome": [
+   "success",
+   "2026-10-22",
+   "39792320470"
+  ],
+  "wahoo:kde": [
+   "success",
+   "2026-10-22",
+   "39792320470"
+  ],
+  "yellowfin:cosmic": [
+   "success",
+   "2026-10-22",
+   "39792320470"
+  ],
+  "yellowfin:gnome": [
+   "success",
+   "2026-10-22",
+   "39792320470"
+  ],
+  "yellowfin:kde": [
+   "success",
+   "2026-10-22",
+   "39792320470"
+  ],
+  "yellowfin:niri": [
+   "success",
+   "2026-10-22",
+   "39792320470"
+  ],
+  "yellowfin:xfce": [
+   "success",
+   "2026-10-22",
+   "39792320470"
+  ]
+ },
+ "schema_version": 1,
+ "smoke": {
+  "albacore:cosmic": [
+   "failure",
+   "2026-08-19",
+   "32238167029"
+  ],
+  "albacore:cosmic-nvidia": [
+   "failure",
+   "2026-08-12",
+   "31585741267"
+  ],
+  "albacore:gnome": [
+   "failure",
+   "2026-08-12",
+   "31585741267"
+  ],
+  "albacore:gnome-nvidia": [
+   "failure",
+   "2026-08-19",
+   "32238167029"
+  ],
+  "albacore:kde": [
+   "failure",
+   "2026-08-12",
+   "31585741267"
+  ],
+  "albacore:kde-nvidia": [
+   "failure",
+   "2026-08-19",
+   "32238167029"
+  ],
+  "albacore:niri": [
+   "failure",
+   "2026-08-12",
+   "31585741267"
+  ],
+  "albacore:niri-nvidia": [
+   "failure",
+   "2026-08-19",
+   "32238167029"
+  ],
+  "albacore:xfce": [
+   "failure",
+   "2026-08-12",
+   "31585741267"
+  ],
+  "albacore:xfce-nvidia": [
+   "failure",
+   "2026-08-19",
+   "32238167029"
+  ],
+  "bonito-rawhide:cosmic": [
+   "failure",
+   "2026-08-19",
+   "32238167029"
+  ],
+  "bonito-rawhide:cosmic-nvidia": [
+   "failure",
+   "2026-08-12",
+   "31585741267"
+  ],
+  "bonito-rawhide:gnome": [
+   "failure",
+   "2026-08-19",
+   "32238167029"
+  ],
+  "bonito-rawhide:gnome-nvidia": [
+   "failure",
+   "2026-08-19",
+   "32238167029"
+  ],
+  "bonito-rawhide:kde": [
+   "failure",
+   "2026-08-19",
+   "32238167029"
+  ],
+  "bonito-rawhide:kde-nvidia": [
+   "failure",
+   "2026-08-19",
+   "32238167029"
+  ],
+  "bonito-rawhide:niri": [
+   "failure",
+   "2026-08-19",
+   "32238167029"
+  ],
+  "bonito-rawhide:niri-nvidia": [
+   "failure",
+   "2026-08-19",
+   "32238167029"
+  ],
+  "bonito-rawhide:xfce": [
+   "failure",
+   "2026-08-19",
+   "32238167029"
+  ],
+  "bonito-rawhide:xfce-nvidia": [
+   "failure",
+   "2026-08-19",
+   "32238167029"
+  ],
+  "bonito:cosmic": [
+   "failure",
+   "2026-08-19",
+   "32238167029"
+  ],
+  "bonito:cosmic-nvidia": [
+   "failure",
+   "2026-08-19",
+   "32238167029"
+  ],
+  "bonito:gnome": [
+   "failure",
+   "2026-08-19",
+   "32238167029"
+  ],
+  "bonito:gnome-nvidia": [
+   "failure",
+   "2026-08-19",
+   "32238167029"
+  ],
+  "bonito:kde": [
+   "failure",
+   "2026-08-19",
+   "32238167029"
+  ],
+  "bonito:kde-nvidia": [
+   "failure",
+   "2026-08-19",
+   "32238167029"
+  ],
+  "bonito:niri": [
+   "failure",
+   "2026-08-19",
+   "32238167029"
+  ],
+  "bonito:niri-nvidia": [
+   "failure",
+   "2026-08-19",
+   "32238167029"
+  ],
+  "bonito:xfce": [
+   "failure",
+   "2026-08-19",
+   "32238167029"
+  ],
+  "bonito:xfce-nvidia": [
+   "failure",
+   "2026-08-19",
+   "32238167029"
+  ],
+  "flounder:gnome": [
+   "failure",
+   "2026-08-19",
+   "32238167029"
+  ],
+  "flounder:gnome-nvidia": [
+   "failure",
+   "2026-08-12",
+   "31585741267"
+  ],
+  "flounder:kde-nvidia": [
+   "failure",
+   "2026-08-12",
+   "31585741267"
+  ],
+  "grouper:gnome": [
+   "failure",
+   "2026-08-12",
+   "31585741267"
+  ],
+  "gurnard:pantheon": [
+   "failure",
+   "2026-08-12",
+   "31585741267"
+  ],
+  "hummingbird:base": [
+   "failure",
+   "2026-08-12",
+   "31585741267"
+  ],
+  "hummingbird:cosmic": [
+   "failure",
+   "2026-08-12",
+   "31585741267"
+  ],
+  "hummingbird:gnome": [
+   "failure",
+   "2026-08-12",
+   "31585741267"
+  ],
+  "hummingbird:kde": [
+   "failure",
+   "2026-08-19",
+   "32238167029"
+  ],
+  "hummingbird:niri": [
+   "failure",
+   "2026-08-19",
+   "32238167029"
+  ],
+  "marlin:gnome": [
+   "failure",
+   "2026-08-12",
+   "31585741267"
+  ],
+  "marlin:kde-nvidia": [
+   "failure",
+   "2026-08-12",
+   "31585741267"
+  ],
+  "skipjack:cosmic": [
+   "failure",
+   "2026-08-19",
+   "32238167029"
+  ],
+  "skipjack:cosmic-nvidia": [
+   "failure",
+   "2026-08-19",
+   "32238167029"
+  ],
+  "skipjack:gnome": [
+   "failure",
+   "2026-08-19",
+   "32238167029"
+  ],
+  "skipjack:gnome-nvidia": [
+   "failure",
+   "2026-08-19",
+   "32238167029"
+  ],
+  "skipjack:kde": [
+   "failure",
+   "2026-08-12",
+   "31585741267"
+  ],
+  "skipjack:kde-nvidia": [
+   "failure",
+   "2026-08-19",
+   "32238167029"
+  ],
+  "skipjack:niri": [
+   "failure",
+   "2026-08-12",
+   "31585741267"
+  ],
+  "skipjack:niri-nvidia": [
+   "failure",
+   "2026-08-19",
+   "32238167029"
+  ],
+  "skipjack:xfce": [
+   "failure",
+   "2026-08-12",
+   "31585741267"
+  ],
+  "yellowfin:cosmic": [
+   "failure",
+   "2026-09-10",
+   "34487443208"
+  ],
+  "yellowfin:cosmic-nvidia": [
+   "failure",
+   "2026-08-19",
+   "32238167029"
+  ],
+  "yellowfin:gnome": [
+   "failure",
+   "2026-09-10",
+   "34487443208"
+  ],
+  "yellowfin:gnome-nvidia": [
+   "failure",
+   "2026-08-19",
+   "32238167029"
+  ],
+  "yellowfin:kde": [
+   "failure",
+   "2026-09-10",
+   "34487443208"
+  ],
+  "yellowfin:kde-nvidia": [
+   "failure",
+   "2026-08-19",
+   "32238167029"
+  ],
+  "yellowfin:niri": [
+   "failure",
+   "2026-09-10",
+   "34487443208"
+  ],
+  "yellowfin:niri-nvidia": [
+   "failure",
+   "2026-08-19",
+   "32238167029"
+  ],
+  "yellowfin:xfce": [
+   "failure",
+   "2026-09-10",
+   "34487443208"
+  ],
+  "yellowfin:xfce-nvidia": [
+   "failure",
+   "2026-08-19",
+   "32238167029"
+  ]
+ },
+ "stage": {
+  "albacore": {
+   "cell_run": {
+    "base": [
+     "2026-10-22",
+     "39742606903"
+    ],
+    "base-hwe": [
+     "2026-10-22",
+     "39742606903"
+    ],
+    "base-nvidia": [
+     "2026-10-22",
+     "39742606903"
+    ],
+    "cosmic": [
+     "2026-10-22",
+     "39742606903"
+    ],
+    "cosmic-hwe": [
+     "2026-10-22",
+     "39742606903"
+    ],
+    "cosmic-nvidia": [
+     "2026-10-22",
+     "39742606903"
+    ],
+    "gnome": [
+     "2026-10-22",
+     "39742606903"
+    ],
+    "gnome-hwe": [
+     "2026-10-22",
+     "39742606903"
+    ],
+    "gnome-nvidia": [
+     "2026-10-22",
+     "39742606903"
+    ],
+    "kde": [
+     "2026-10-22",
+     "39742606903"
+    ],
+    "kde-hwe": [
+     "2026-10-22",
+     "39742606903"
+    ],
+    "kde-nvidia": [
+     "2026-10-22",
+     "39742606903"
+    ],
+    "niri": [
+     "2026-10-22",
+     "39742606903"
+    ],
+    "niri-hwe": [
+     "2026-10-22",
+     "39742606903"
+    ],
+    "niri-nvidia": [
+     "2026-10-22",
+     "39742606903"
+    ],
+    "tuna": [
+     "2026-10-22",
+     "39742606903"
+    ],
+    "xfce": [
+     "2026-10-22",
+     "39742606903"
+    ],
+    "xfce-hwe": [
+     "2026-10-22",
+     "39742606903"
+    ],
+    "xfce-nvidia": [
+     "2026-10-22",
+     "39742606903"
+    ]
+   },
+   "date": "",
+   "jobs": [
+    [
+     "base",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "base",
+     "Promote",
+     "success"
+    ],
+    [
+     "base-hwe",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "base-hwe",
+     "Promote",
+     "success"
+    ],
+    [
+     "base-nvidia",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "base-nvidia",
+     "Promote",
+     "success"
+    ],
+    [
+     "cosmic",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "cosmic",
+     "Promote",
+     "success"
+    ],
+    [
+     "cosmic-hwe",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "cosmic-hwe",
+     "Promote",
+     "success"
+    ],
+    [
+     "cosmic-nvidia",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "cosmic-nvidia",
+     "Promote",
+     "success"
+    ],
+    [
+     "gnome",
+     "Gate",
+     "success"
+    ],
+    [
+     "gnome",
+     "Promote",
+     "success"
+    ],
+    [
+     "gnome-hwe",
+     "Gate",
+     "success"
+    ],
+    [
+     "gnome-hwe",
+     "Promote",
+     "success"
+    ],
+    [
+     "gnome-nvidia",
+     "Gate",
+     "success"
+    ],
+    [
+     "gnome-nvidia",
+     "Promote",
+     "success"
+    ],
+    [
+     "kde",
+     "Gate",
+     "success"
+    ],
+    [
+     "kde",
+     "Promote",
+     "success"
+    ],
+    [
+     "kde-hwe",
+     "Gate",
+     "success"
+    ],
+    [
+     "kde-hwe",
+     "Promote",
+     "success"
+    ],
+    [
+     "kde-nvidia",
+     "Gate",
+     "success"
+    ],
+    [
+     "kde-nvidia",
+     "Promote",
+     "success"
+    ],
+    [
+     "niri",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "niri",
+     "Promote",
+     "success"
+    ],
+    [
+     "niri-hwe",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "niri-hwe",
+     "Promote",
+     "success"
+    ],
+    [
+     "niri-nvidia",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "niri-nvidia",
+     "Promote",
+     "success"
+    ],
+    [
+     "tuna",
+     "Gate",
+     "success"
+    ],
+    [
+     "tuna",
+     "Promote",
+     "success"
+    ],
+    [
+     "xfce",
+     "Gate",
+     "success"
+    ],
+    [
+     "xfce",
+     "Promote",
+     "success"
+    ],
+    [
+     "xfce-hwe",
+     "Gate",
+     "success"
+    ],
+    [
+     "xfce-hwe",
+     "Promote",
+     "success"
+    ],
+    [
+     "xfce-nvidia",
+     "Gate",
+     "success"
+    ],
+    [
+     "xfce-nvidia",
+     "Promote",
+     "success"
+    ]
+   ],
+   "run_id": ""
+  },
+  "bonito": {
+   "cell_run": {
+    "base": [
+     "2026-10-21",
+     "39630438457"
+    ],
+    "base-hwe": [
+     "2026-10-21",
+     "39630438457"
+    ],
+    "base-nvidia": [
+     "2026-10-21",
+     "39630438457"
+    ],
+    "cosmic": [
+     "2026-10-21",
+     "39630438457"
+    ],
+    "cosmic-nvidia": [
+     "2026-10-21",
+     "39630438457"
+    ],
+    "gnome": [
+     "2026-10-21",
+     "39630438457"
+    ],
+    "gnome-asahi": [
+     "2026-10-21",
+     "39630438457"
+    ],
+    "gnome-hwe": [
+     "2026-10-21",
+     "39630438457"
+    ],
+    "gnome-nvidia": [
+     "2026-10-21",
+     "39630438457"
+    ],
+    "gnome-t2": [
+     "2026-10-21",
+     "39630438457"
+    ],
+    "kde": [
+     "2026-10-21",
+     "39630438457"
+    ],
+    "kde-nvidia": [
+     "2026-10-21",
+     "39630438457"
+    ],
+    "niri": [
+     "2026-10-21",
+     "39630438457"
+    ],
+    "niri-nvidia": [
+     "2026-10-21",
+     "39630438457"
+    ],
+    "tuna": [
+     "2026-10-21",
+     "39630438457"
+    ],
+    "xfce": [
+     "2026-10-21",
+     "39630438457"
+    ],
+    "xfce-nvidia": [
+     "2026-10-21",
+     "39630438457"
+    ]
+   },
+   "date": "",
+   "jobs": [
+    [
+     "base",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "base",
+     "Promote",
+     "success"
+    ],
+    [
+     "base-hwe",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "base-hwe",
+     "Promote",
+     "success"
+    ],
+    [
+     "base-nvidia",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "base-nvidia",
+     "Promote",
+     "success"
+    ],
+    [
+     "cosmic",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "cosmic",
+     "Promote",
+     "success"
+    ],
+    [
+     "cosmic-nvidia",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "cosmic-nvidia",
+     "Promote",
+     "success"
+    ],
+    [
+     "gnome",
+     "Gate",
+     "success"
+    ],
+    [
+     "gnome",
+     "Promote",
+     "success"
+    ],
+    [
+     "gnome-asahi",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "gnome-asahi",
+     "Promote",
+     "success"
+    ],
+    [
+     "gnome-hwe",
+     "Gate",
+     "success"
+    ],
+    [
+     "gnome-hwe",
+     "Promote",
+     "success"
+    ],
+    [
+     "gnome-nvidia",
+     "Gate",
+     "success"
+    ],
+    [
+     "gnome-nvidia",
+     "Promote",
+     "success"
+    ],
+    [
+     "gnome-t2",
+     "Gate",
+     "success"
+    ],
+    [
+     "gnome-t2",
+     "Promote",
+     "success"
+    ],
+    [
+     "kde",
+     "Gate",
+     "success"
+    ],
+    [
+     "kde",
+     "Promote",
+     "success"
+    ],
+    [
+     "kde-nvidia",
+     "Gate",
+     "success"
+    ],
+    [
+     "kde-nvidia",
+     "Promote",
+     "success"
+    ],
+    [
+     "niri",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "niri",
+     "Promote",
+     "success"
+    ],
+    [
+     "niri-nvidia",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "niri-nvidia",
+     "Promote",
+     "success"
+    ],
+    [
+     "tuna",
+     "Gate",
+     "success"
+    ],
+    [
+     "tuna",
+     "Promote",
+     "success"
+    ],
+    [
+     "xfce",
+     "Gate",
+     "success"
+    ],
+    [
+     "xfce",
+     "Promote",
+     "success"
+    ],
+    [
+     "xfce-nvidia",
+     "Gate",
+     "success"
+    ],
+    [
+     "xfce-nvidia",
+     "Promote",
+     "success"
+    ]
+   ],
+   "run_id": ""
+  },
+  "bonito-rawhide": {
+   "cell_run": {
+    "base": [
+     "2026-10-21",
+     "39660761990"
+    ],
+    "base-hwe": [
+     "2026-10-21",
+     "39660761990"
+    ],
+    "base-nvidia": [
+     "2026-10-21",
+     "39660761990"
+    ],
+    "cosmic": [
+     "2026-10-22",
+     "39838360929"
+    ],
+    "cosmic-nvidia": [
+     "2026-10-22",
+     "39838360929"
+    ],
+    "gnome-hwe": [
+     "2026-10-20",
+     "39482644710"
+    ],
+    "gnome-nvidia": [
+     "2026-10-20",
+     "39482644710"
+    ],
+    "kde": [
+     "2026-10-22",
+     "39838360929"
+    ],
+    "kde-nvidia": [
+     "2026-10-22",
+     "39838360929"
+    ],
+    "niri": [
+     "2026-10-21",
+     "39660761990"
+    ],
+    "niri-nvidia": [
+     "2026-10-21",
+     "39660761990"
+    ],
+    "tuna": [
+     "2026-10-22",
+     "39838360929"
+    ],
+    "xfce": [
+     "2026-10-22",
+     "39838360929"
+    ],
+    "xfce-nvidia": [
+     "2026-10-22",
+     "39838360929"
+    ]
+   },
+   "date": "",
+   "jobs": [
+    [
+     "base",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "base",
+     "Promote",
+     "success"
+    ],
+    [
+     "base-hwe",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "base-hwe",
+     "Promote",
+     "success"
+    ],
+    [
+     "base-nvidia",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "base-nvidia",
+     "Promote",
+     "success"
+    ],
+    [
+     "cosmic",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "cosmic",
+     "Promote",
+     "success"
+    ],
+    [
+     "cosmic-nvidia",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "cosmic-nvidia",
+     "Promote",
+     "success"
+    ],
+    [
+     "gnome-hwe",
+     "Gate",
+     "success"
+    ],
+    [
+     "gnome-hwe",
+     "Promote",
+     "success"
+    ],
+    [
+     "gnome-nvidia",
+     "Gate",
+     "success"
+    ],
+    [
+     "gnome-nvidia",
+     "Promote",
+     "success"
+    ],
+    [
+     "kde",
+     "Gate",
+     "success"
+    ],
+    [
+     "kde",
+     "Promote",
+     "success"
+    ],
+    [
+     "kde-nvidia",
+     "Gate",
+     "success"
+    ],
+    [
+     "kde-nvidia",
+     "Promote",
+     "success"
+    ],
+    [
+     "niri",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "niri",
+     "Promote",
+     "success"
+    ],
+    [
+     "niri-nvidia",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "niri-nvidia",
+     "Promote",
+     "success"
+    ],
+    [
+     "tuna",
+     "Gate",
+     "success"
+    ],
+    [
+     "tuna",
+     "Promote",
+     "success"
+    ],
+    [
+     "xfce",
+     "Gate",
+     "success"
+    ],
+    [
+     "xfce",
+     "Promote",
+     "success"
+    ],
+    [
+     "xfce-nvidia",
+     "Gate",
+     "success"
+    ],
+    [
+     "xfce-nvidia",
+     "Promote",
+     "success"
+    ]
+   ],
+   "run_id": ""
+  },
+  "flounder": {
+   "cell_run": {
+    "base": [
+     "2026-10-23",
+     "39875388237"
+    ],
+    "kde": [
+     "2026-10-23",
+     "39875388237"
+    ],
+    "kde-nvidia": [
+     "2026-10-23",
+     "39875388237"
+    ],
+    "tuna": [
+     "2026-10-23",
+     "39875388237"
+    ],
+    "xfce": [
+     "2026-10-23",
+     "39875388237"
+    ],
+    "xfce-nvidia": [
+     "2026-10-23",
+     "39875388237"
+    ]
+   },
+   "date": "",
+   "jobs": [
+    [
+     "base",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "base",
+     "Promote",
+     "success"
+    ],
+    [
+     "kde",
+     "Gate",
+     "success"
+    ],
+    [
+     "kde",
+     "Promote",
+     "success"
+    ],
+    [
+     "kde-nvidia",
+     "Gate",
+     "success"
+    ],
+    [
+     "kde-nvidia",
+     "Promote",
+     "success"
+    ],
+    [
+     "tuna",
+     "Gate",
+     "success"
+    ],
+    [
+     "tuna",
+     "Promote",
+     "success"
+    ],
+    [
+     "xfce",
+     "Gate",
+     "success"
+    ],
+    [
+     "xfce",
+     "Promote",
+     "success"
+    ],
+    [
+     "xfce-nvidia",
+     "Gate",
+     "success"
+    ],
+    [
+     "xfce-nvidia",
+     "Promote",
+     "success"
+    ]
+   ],
+   "run_id": ""
+  },
+  "flounder-sid": {
+   "cell_run": {
+    "base": [
+     "2026-10-23",
+     "39884547800"
+    ],
+    "gnome": [
+     "2026-10-23",
+     "39884547800"
+    ],
+    "kde": [
+     "2026-10-23",
+     "39884547800"
+    ],
+    "tuna": [
+     "2026-10-23",
+     "39884547800"
+    ],
+    "xfce": [
+     "2026-10-23",
+     "39884547800"
+    ]
+   },
+   "date": "",
+   "jobs": [
+    [
+     "base",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "base",
+     "Promote",
+     "success"
+    ],
+    [
+     "gnome",
+     "Gate",
+     "success"
+    ],
+    [
+     "gnome",
+     "Promote",
+     "success"
+    ],
+    [
+     "kde",
+     "Gate",
+     "success"
+    ],
+    [
+     "kde",
+     "Promote",
+     "success"
+    ],
+    [
+     "tuna",
+     "Gate",
+     "success"
+    ],
+    [
+     "tuna",
+     "Promote",
+     "success"
+    ],
+    [
+     "xfce",
+     "Gate",
+     "success"
+    ],
+    [
+     "xfce",
+     "Promote",
+     "success"
+    ]
+   ],
+   "run_id": ""
+  },
+  "grouper": {
+   "cell_run": {
+    "base": [
+     "2026-10-22",
+     "39849977660"
+    ],
+    "cosmic": [
+     "2026-10-22",
+     "39849977660"
+    ],
+    "gnome": [
+     "2026-10-22",
+     "39849977660"
+    ],
+    "gnome-asahi": [
+     "2026-10-22",
+     "39849977660"
+    ],
+    "gnome-zfs": [
+     "2026-10-22",
+     "39849977660"
+    ],
+    "kde": [
+     "2026-10-22",
+     "39849977660"
+    ],
+    "tuna": [
+     "2026-10-22",
+     "39849977660"
+    ],
+    "xfce": [
+     "2026-10-22",
+     "39849977660"
+    ]
+   },
+   "date": "",
+   "jobs": [
+    [
+     "base",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "base",
+     "Promote",
+     "success"
+    ],
+    [
+     "cosmic",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "cosmic",
+     "Promote",
+     "success"
+    ],
+    [
+     "gnome",
+     "Gate",
+     "success"
+    ],
+    [
+     "gnome",
+     "Promote",
+     "success"
+    ],
+    [
+     "gnome-asahi",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "gnome-asahi",
+     "Promote",
+     "success"
+    ],
+    [
+     "gnome-zfs",
+     "Gate",
+     "success"
+    ],
+    [
+     "gnome-zfs",
+     "Promote",
+     "success"
+    ],
+    [
+     "kde",
+     "Gate",
+     "success"
+    ],
+    [
+     "kde",
+     "Promote",
+     "success"
+    ],
+    [
+     "tuna",
+     "Gate",
+     "success"
+    ],
+    [
+     "tuna",
+     "Promote",
+     "success"
+    ],
+    [
+     "xfce",
+     "Gate",
+     "success"
+    ],
+    [
+     "xfce",
+     "Promote",
+     "success"
+    ]
+   ],
+   "run_id": ""
+  },
+  "guppy": {
+   "cell_run": {
+    "base": [
+     "2026-10-22",
+     "39774703501"
+    ],
+    "kde": [
+     "2026-10-20",
+     "39417171639"
+    ],
+    "xfce": [
+     "2026-10-20",
+     "39417171639"
+    ]
+   },
+   "date": "",
+   "jobs": [
+    [
+     "base",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "base",
+     "Promote",
+     "success"
+    ],
+    [
+     "kde",
+     "Gate",
+     "success"
+    ],
+    [
+     "kde",
+     "Promote",
+     "success"
+    ],
+    [
+     "xfce",
+     "Gate",
+     "success"
+    ],
+    [
+     "xfce",
+     "Promote",
+     "success"
+    ]
+   ],
+   "run_id": ""
+  },
+  "gurnard": {
+   "cell_run": {
+    "base": [
+     "2026-10-22",
+     "39755734047"
+    ],
+    "pantheon": [
+     "2026-10-22",
+     "39755734047"
+    ]
+   },
+   "date": "",
+   "jobs": [
+    [
+     "base",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "base",
+     "Promote",
+     "success"
+    ],
+    [
+     "pantheon",
+     "Gate",
+     "success"
+    ],
+    [
+     "pantheon",
+     "Promote",
+     "success"
+    ]
+   ],
+   "run_id": ""
+  },
+  "hummingbird": {
+   "cell_run": {
+    "base": [
+     "2026-10-15",
+     "38660870261"
+    ],
+    "gnome": [
+     "2026-10-15",
+     "38660870261"
+    ]
+   },
+   "date": "",
+   "jobs": [
+    [
+     "base",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "base",
+     "Promote",
+     "success"
+    ],
+    [
+     "gnome",
+     "Gate",
+     "failure"
+    ],
+    [
+     "gnome",
+     "Promote",
+     "skipped"
+    ]
+   ],
+   "run_id": ""
+  },
+  "marlin": {
+   "cell_run": {
+    "base": [
+     "2026-10-22",
+     "39827814045"
+    ],
+    "cosmic": [
+     "2026-10-22",
+     "39827814045"
+    ],
+    "cosmic-cachyos": [
+     "2026-10-22",
+     "39827814045"
+    ],
+    "cosmic-nvidia": [
+     "2026-10-22",
+     "39827814045"
+    ],
+    "gnome": [
+     "2026-10-22",
+     "39827814045"
+    ],
+    "gnome-cachyos": [
+     "2026-10-22",
+     "39827814045"
+    ],
+    "gnome-nvidia": [
+     "2026-10-22",
+     "39827814045"
+    ],
+    "kde": [
+     "2026-10-21",
+     "39649763850"
+    ],
+    "kde-cachyos": [
+     "2026-10-22",
+     "39827814045"
+    ],
+    "kde-nvidia": [
+     "2026-10-22",
+     "39827814045"
+    ],
+    "niri": [
+     "2026-10-21",
+     "39649763850"
+    ],
+    "niri-cachyos": [
+     "2026-10-22",
+     "39827814045"
+    ],
+    "niri-nvidia": [
+     "2026-10-22",
+     "39827814045"
+    ],
+    "tuna": [
+     "2026-10-21",
+     "39649763850"
+    ],
+    "xfce": [
+     "2026-10-21",
+     "39649763850"
+    ],
+    "xfce-cachyos": [
+     "2026-10-22",
+     "39827814045"
+    ],
+    "xfce-nvidia": [
+     "2026-10-22",
+     "39827814045"
+    ]
+   },
+   "date": "",
+   "jobs": [
+    [
+     "base",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "base",
+     "Promote",
+     "success"
+    ],
+    [
+     "cosmic",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "cosmic",
+     "Promote",
+     "success"
+    ],
+    [
+     "cosmic-cachyos",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "cosmic-cachyos",
+     "Promote",
+     "success"
+    ],
+    [
+     "cosmic-nvidia",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "cosmic-nvidia",
+     "Promote",
+     "success"
+    ],
+    [
+     "gnome",
+     "Gate",
+     "success"
+    ],
+    [
+     "gnome",
+     "Promote",
+     "success"
+    ],
+    [
+     "gnome-cachyos",
+     "Gate",
+     "success"
+    ],
+    [
+     "gnome-cachyos",
+     "Promote",
+     "success"
+    ],
+    [
+     "gnome-nvidia",
+     "Gate",
+     "success"
+    ],
+    [
+     "gnome-nvidia",
+     "Promote",
+     "success"
+    ],
+    [
+     "kde",
+     "Gate",
+     "success"
+    ],
+    [
+     "kde",
+     "Promote",
+     "success"
+    ],
+    [
+     "kde-cachyos",
+     "Gate",
+     "success"
+    ],
+    [
+     "kde-cachyos",
+     "Promote",
+     "success"
+    ],
+    [
+     "kde-nvidia",
+     "Gate",
+     "success"
+    ],
+    [
+     "kde-nvidia",
+     "Promote",
+     "success"
+    ],
+    [
+     "niri",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "niri",
+     "Promote",
+     "success"
+    ],
+    [
+     "niri-cachyos",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "niri-cachyos",
+     "Promote",
+     "success"
+    ],
+    [
+     "niri-nvidia",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "niri-nvidia",
+     "Promote",
+     "success"
+    ],
+    [
+     "tuna",
+     "Gate",
+     "success"
+    ],
+    [
+     "tuna",
+     "Promote",
+     "success"
+    ],
+    [
+     "xfce",
+     "Gate",
+     "success"
+    ],
+    [
+     "xfce",
+     "Promote",
+     "success"
+    ],
+    [
+     "xfce-cachyos",
+     "Gate",
+     "success"
+    ],
+    [
+     "xfce-cachyos",
+     "Promote",
+     "success"
+    ],
+    [
+     "xfce-nvidia",
+     "Gate",
+     "success"
+    ],
+    [
+     "xfce-nvidia",
+     "Promote",
+     "success"
+    ]
+   ],
+   "run_id": ""
+  },
+  "sailfin": {
+   "cell_run": {
+    "base": [
+     "2026-10-22",
+     "39865052345"
+    ],
+    "cosmic": [
+     "2026-10-22",
+     "39865052345"
+    ],
+    "gnome": [
+     "2026-10-22",
+     "39865052345"
+    ],
+    "kde": [
+     "2026-10-22",
+     "39865052345"
+    ],
+    "niri": [
+     "2026-10-22",
+     "39865052345"
+    ],
+    "tuna": [
+     "2026-10-22",
+     "39865052345"
+    ],
+    "xfce": [
+     "2026-10-22",
+     "39865052345"
+    ]
+   },
+   "date": "",
+   "jobs": [
+    [
+     "base",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "base",
+     "Promote",
+     "success"
+    ],
+    [
+     "cosmic",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "cosmic",
+     "Promote",
+     "success"
+    ],
+    [
+     "gnome",
+     "Gate",
+     "success"
+    ],
+    [
+     "gnome",
+     "Promote",
+     "success"
+    ],
+    [
+     "kde",
+     "Gate",
+     "success"
+    ],
+    [
+     "kde",
+     "Promote",
+     "success"
+    ],
+    [
+     "niri",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "niri",
+     "Promote",
+     "success"
+    ],
+    [
+     "tuna",
+     "Gate",
+     "success"
+    ],
+    [
+     "tuna",
+     "Promote",
+     "success"
+    ],
+    [
+     "xfce",
+     "Gate",
+     "success"
+    ],
+    [
+     "xfce",
+     "Promote",
+     "success"
+    ]
+   ],
+   "run_id": ""
+  },
+  "skipjack": {
+   "cell_run": {
+    "base": [
+     "2026-10-22",
+     "39796515417"
+    ],
+    "base-hwe": [
+     "2026-10-22",
+     "39796515417"
+    ],
+    "base-nvidia": [
+     "2026-10-22",
+     "39796515417"
+    ],
+    "cosmic": [
+     "2026-10-22",
+     "39796515417"
+    ],
+    "cosmic-hwe": [
+     "2026-10-22",
+     "39796515417"
+    ],
+    "cosmic-nvidia": [
+     "2026-10-22",
+     "39796515417"
+    ],
+    "gnome": [
+     "2026-10-22",
+     "39796515417"
+    ],
+    "gnome-hwe": [
+     "2026-10-22",
+     "39796515417"
+    ],
+    "gnome-nvidia": [
+     "2026-10-22",
+     "39796515417"
+    ],
+    "kde": [
+     "2026-10-22",
+     "39796515417"
+    ],
+    "kde-hwe": [
+     "2026-10-22",
+     "39796515417"
+    ],
+    "kde-nvidia": [
+     "2026-10-22",
+     "39796515417"
+    ],
+    "niri": [
+     "2026-10-22",
+     "39796515417"
+    ],
+    "niri-hwe": [
+     "2026-10-22",
+     "39796515417"
+    ],
+    "niri-nvidia": [
+     "2026-10-22",
+     "39796515417"
+    ],
+    "tuna": [
+     "2026-10-22",
+     "39796515417"
+    ],
+    "xfce": [
+     "2026-10-22",
+     "39796515417"
+    ]
+   },
+   "date": "",
+   "jobs": [
+    [
+     "base",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "base",
+     "Promote",
+     "success"
+    ],
+    [
+     "base-hwe",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "base-hwe",
+     "Promote",
+     "success"
+    ],
+    [
+     "base-nvidia",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "base-nvidia",
+     "Promote",
+     "success"
+    ],
+    [
+     "cosmic",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "cosmic",
+     "Promote",
+     "success"
+    ],
+    [
+     "cosmic-hwe",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "cosmic-hwe",
+     "Promote",
+     "success"
+    ],
+    [
+     "cosmic-nvidia",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "cosmic-nvidia",
+     "Promote",
+     "success"
+    ],
+    [
+     "gnome",
+     "Gate",
+     "success"
+    ],
+    [
+     "gnome",
+     "Promote",
+     "success"
+    ],
+    [
+     "gnome-hwe",
+     "Gate",
+     "success"
+    ],
+    [
+     "gnome-hwe",
+     "Promote",
+     "success"
+    ],
+    [
+     "gnome-nvidia",
+     "Gate",
+     "success"
+    ],
+    [
+     "gnome-nvidia",
+     "Promote",
+     "success"
+    ],
+    [
+     "kde",
+     "Gate",
+     "success"
+    ],
+    [
+     "kde",
+     "Promote",
+     "success"
+    ],
+    [
+     "kde-hwe",
+     "Gate",
+     "success"
+    ],
+    [
+     "kde-hwe",
+     "Promote",
+     "success"
+    ],
+    [
+     "kde-nvidia",
+     "Gate",
+     "success"
+    ],
+    [
+     "kde-nvidia",
+     "Promote",
+     "success"
+    ],
+    [
+     "niri",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "niri",
+     "Promote",
+     "success"
+    ],
+    [
+     "niri-hwe",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "niri-hwe",
+     "Promote",
+     "success"
+    ],
+    [
+     "niri-nvidia",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "niri-nvidia",
+     "Promote",
+     "success"
+    ],
+    [
+     "tuna",
+     "Gate",
+     "success"
+    ],
+    [
+     "tuna",
+     "Promote",
+     "success"
+    ],
+    [
+     "xfce",
+     "Gate",
+     "success"
+    ],
+    [
+     "xfce",
+     "Promote",
+     "success"
+    ]
+   ],
+   "run_id": ""
+  },
+  "wahoo": {
+   "cell_run": {
+    "base": [
+     "2026-09-24",
+     "36047128286"
+    ],
+    "cosmic": [
+     "2026-09-24",
+     "36047128286"
+    ],
+    "gnome": [
+     "2026-09-24",
+     "36047128286"
+    ],
+    "kde": [
+     "2026-09-24",
+     "36047128286"
+    ],
+    "tuna": [
+     "2026-10-16",
+     "38906627617"
+    ]
+   },
+   "date": "",
+   "jobs": [
+    [
+     "base",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "base",
+     "Promote",
+     "success"
+    ],
+    [
+     "cosmic",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "cosmic",
+     "Promote",
+     "success"
+    ],
+    [
+     "gnome",
+     "Gate",
+     "success"
+    ],
+    [
+     "gnome",
+     "Promote",
+     "success"
+    ],
+    [
+     "kde",
+     "Gate",
+     "success"
+    ],
+    [
+     "kde",
+     "Promote",
+     "success"
+    ],
+    [
+     "tuna",
+     "Gate",
+     "failure"
+    ],
+    [
+     "tuna",
+     "Promote",
+     "skipped"
+    ]
+   ],
+   "run_id": ""
+  },
+  "yellowfin": {
+   "cell_run": {
+    "base": [
+     "2026-10-22",
+     "39724851741"
+    ],
+    "base-hwe": [
+     "2026-10-22",
+     "39724851741"
+    ],
+    "base-nvidia": [
+     "2026-10-21",
+     "39546481120"
+    ],
+    "cosmic": [
+     "2026-10-22",
+     "39724851741"
+    ],
+    "cosmic-hwe": [
+     "2026-10-22",
+     "39724851741"
+    ],
+    "cosmic-nvidia": [
+     "2026-10-22",
+     "39724851741"
+    ],
+    "gnome": [
+     "2026-10-22",
+     "39724851741"
+    ],
+    "gnome-hwe": [
+     "2026-10-22",
+     "39724851741"
+    ],
+    "gnome-nvidia": [
+     "2026-10-22",
+     "39724851741"
+    ],
+    "kde": [
+     "2026-10-22",
+     "39724851741"
+    ],
+    "kde-hwe": [
+     "2026-10-22",
+     "39724851741"
+    ],
+    "kde-nvidia": [
+     "2026-10-22",
+     "39724851741"
+    ],
+    "niri": [
+     "2026-10-22",
+     "39724851741"
+    ],
+    "niri-hwe": [
+     "2026-10-22",
+     "39724851741"
+    ],
+    "niri-nvidia": [
+     "2026-10-22",
+     "39724851741"
+    ],
+    "tuna": [
+     "2026-10-22",
+     "39724851741"
+    ],
+    "xfce": [
+     "2026-10-22",
+     "39724851741"
+    ],
+    "xfce-hwe": [
+     "2026-10-22",
+     "39724851741"
+    ],
+    "xfce-nvidia": [
+     "2026-10-22",
+     "39724851741"
+    ]
+   },
+   "date": "",
+   "jobs": [
+    [
+     "base",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "base",
+     "Promote",
+     "success"
+    ],
+    [
+     "base-hwe",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "base-hwe",
+     "Promote",
+     "success"
+    ],
+    [
+     "base-nvidia",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "base-nvidia",
+     "Promote",
+     "success"
+    ],
+    [
+     "cosmic",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "cosmic",
+     "Promote",
+     "success"
+    ],
+    [
+     "cosmic-hwe",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "cosmic-hwe",
+     "Promote",
+     "success"
+    ],
+    [
+     "cosmic-nvidia",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "cosmic-nvidia",
+     "Promote",
+     "success"
+    ],
+    [
+     "gnome",
+     "Gate",
+     "success"
+    ],
+    [
+     "gnome",
+     "Promote",
+     "success"
+    ],
+    [
+     "gnome-hwe",
+     "Gate",
+     "success"
+    ],
+    [
+     "gnome-hwe",
+     "Promote",
+     "success"
+    ],
+    [
+     "gnome-nvidia",
+     "Gate",
+     "success"
+    ],
+    [
+     "gnome-nvidia",
+     "Promote",
+     "success"
+    ],
+    [
+     "kde",
+     "Gate",
+     "success"
+    ],
+    [
+     "kde",
+     "Promote",
+     "success"
+    ],
+    [
+     "kde-hwe",
+     "Gate",
+     "success"
+    ],
+    [
+     "kde-hwe",
+     "Promote",
+     "success"
+    ],
+    [
+     "kde-nvidia",
+     "Gate",
+     "success"
+    ],
+    [
+     "kde-nvidia",
+     "Promote",
+     "success"
+    ],
+    [
+     "niri",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "niri",
+     "Promote",
+     "success"
+    ],
+    [
+     "niri-hwe",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "niri-hwe",
+     "Promote",
+     "success"
+    ],
+    [
+     "niri-nvidia",
+     "Gate",
+     "skipped"
+    ],
+    [
+     "niri-nvidia",
+     "Promote",
+     "success"
+    ],
+    [
+     "tuna",
+     "Gate",
+     "success"
+    ],
+    [
+     "tuna",
+     "Promote",
+     "success"
+    ],
+    [
+     "xfce",
+     "Gate",
+     "success"
+    ],
+    [
+     "xfce",
+     "Promote",
+     "success"
+    ],
+    [
+     "xfce-hwe",
+     "Gate",
+     "success"
+    ],
+    [
+     "xfce-hwe",
+     "Promote",
+     "success"
+    ],
+    [
+     "xfce-nvidia",
+     "Gate",
+     "success"
+    ],
+    [
+     "xfce-nvidia",
+     "Promote",
+     "success"
+    ]
+   ],
+   "run_id": ""
+  }
+ }
+}

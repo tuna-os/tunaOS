@@ -3,6 +3,7 @@ ARG IMAGE_VENDOR
 ARG DESKTOP_FLAVOR
 ARG TUNAOS_IMAGE_FLAVOR
 ARG SHA_HEAD_SHORT
+ARG TUNAOS_PROJECT_NAME
 ARG RECHUNKED_BASE
 
 # Produced by external chunkah run and loaded into podman storage via skopeo
@@ -13,8 +14,9 @@ ARG IMAGE_VENDOR
 ARG DESKTOP_FLAVOR
 ARG TUNAOS_IMAGE_FLAVOR
 ARG SHA_HEAD_SHORT
+ARG TUNAOS_PROJECT_NAME
 
-LABEL org.opencontainers.image.title="TunaOS ${IMAGE_NAME} (${DESKTOP_FLAVOR})"
+LABEL org.opencontainers.image.title="${TUNAOS_PROJECT_NAME} ${IMAGE_NAME} (${DESKTOP_FLAVOR})"
 LABEL org.opencontainers.image.vendor="${IMAGE_VENDOR}"
 LABEL org.opencontainers.image.version="${SHA_HEAD_SHORT}"
 LABEL io.bootc=1

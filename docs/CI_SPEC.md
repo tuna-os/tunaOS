@@ -17,6 +17,7 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 | Workflow | Lane | Assertion | Cadence | Freshness SLA |
 |---|---|---|---|---|
 | `add-help-wanted.yml` | post-merge | Add Help Wanted | issues | — |
+| `adoption-metrics.yml` | post-merge + scheduled | Adoption metrics snapshot | `0 9 1 * *`, manual | — |
 | `arm64-ulimit-probe.yml` | PR-deterministic + post-merge | arm64 ulimit probe (diagnostic) | each PR, manual | — |
 | `asahi-hw-nightly-one.yml` | post-merge + scheduled | Asahi hardware smoke (one) | caller cadence | — |
 | `asahi-hw-nightly.yml` | post-merge + scheduled | Asahi hardware smoke (Tier 2 rental) | `0 6 * * *`, manual | — |
@@ -49,6 +50,7 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 | `daily-verify.yml` | post-merge + scheduled | Daily Image Verification | `0 4 * * *`, manual | — |
 | `dead-gate-report.yml` | post-merge + scheduled | Dead gate report | `17 6 * * 1`, manual | — |
 | `desktop-contract-sweep.yml` | post-merge + scheduled | `desktop`, `no_silent_omissions` | `0 8 * * *`, manual | `desktop`: 2d, `no_silent_omissions`: 2d |
+| `diagnostic-oci-rpm-consumer.yml` | post-merge | Diagnostic OCI RPM consumer | manual | — |
 | `drop-bot-review-requests.yml` | PR-deterministic | Drop bot review requests | each PR | — |
 | `fork-simulation.yml` | post-merge + scheduled | Fork PR simulation | `17 8 * * 1`, manual | — |
 | `frontend-parity.yml` | post-merge + scheduled | frontend parity | `30 6 * * *`, manual | — |
@@ -63,7 +65,7 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 | `iso-e2e.yml` | PR-deterministic + post-merge + scheduled | `iso` | each PR, `0 6 * * 1`, manual | `iso`: 8d |
 | `issue-intake-check.yml` | post-merge | Issue intake check | issues | — |
 | `just-fix.yml` | PR-deterministic + post-merge | Just Fix | each PR, push | — |
-| `lint.yml` | PR-deterministic + post-merge | Lint and Check | each PR, push | — |
+| `lint.yml` | PR-deterministic + post-merge | Lint and Check | each PR, merge queue, push | — |
 | `live-initramfs.yml` | post-merge | Live Initramfs Artifacts | manual | — |
 | `live-iso-bootc.yml` | PR-deterministic + post-merge | Live ISOs (Tacklebox) | each PR, manual | — |
 | `live-overlay.yml` | post-merge + scheduled | Live Overlay Artifacts | `30 9 * * 3`, manual | — |
@@ -76,6 +78,8 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 | `prune-r2.yml` | post-merge + scheduled | Prune R2 retention | `30 12 * * *`, manual | — |
 | `publish-iso-groups.yml` | post-merge + scheduled | Publish Grouped Dedup ISOs to R2 | `0 23 * * 0`, manual | — |
 | `publish-isos.yml` | post-merge | Publish Live ISOs to R2 | manual | — |
+| `qualify-image-packages.yml` | post-merge | Qualify image packages | manual | — |
+| `r2-dependency-report.yml` | post-merge + scheduled | R2 dependency report | `41 6 * * 1`, manual | — |
 | `randomized-tests.yml` | post-merge + scheduled | Randomized Tests | `30 3 * * *`, manual | — |
 | `rerun-infra-failures.yml` | post-merge | Re-run infra failures | workflow completion, manual | — |
 | `rerun-startup-failures.yml` | post-merge + scheduled | Re-run startup failures | `0 */3 * * *`, manual | — |
@@ -84,7 +88,8 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 | `scorecard.yml` | post-merge + scheduled | Scorecard supply-chain security | push, `38 0 * * 4`, branch_protection_rule | — |
 | `snapshot-upstreams.yml` | post-merge + scheduled | Snapshot upstreams | `0 9 * * 1`, manual | — |
 | `ste.yml` | PR-deterministic + post-merge | Prose | each PR, push, manual | — |
-| `test.yml` | PR-deterministic + post-merge | `builds` | each PR, push, manual | `builds`: 2d |
+| `test.yml` | PR-deterministic + post-merge | `builds` | each PR, merge queue, push, manual | `builds`: 2d |
+| `tuna-pr-images.yml` | PR-deterministic | Tuna PR images | each PR | — |
 | `update-build-status.yml` | post-merge + scheduled | Update README build status | `30 13 * * *`, manual | — |
 | `validate-renovate.yaml` | PR-deterministic + post-merge | Validate Renovate Config | each PR, push | — |
 | `verify-asahi-one.yml` | PR-deterministic + post-merge + scheduled | Verify Asahi image (one) | caller cadence | — |

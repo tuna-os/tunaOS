@@ -19,12 +19,16 @@ name: Lint and Check
 #
 # See quality agent finding: https://github.com/tuna-os/tunaOS/issues/150
 
+# `Lint` is a required status check on main (tunaOS#1167), so on pull requests
+# and merge-queue entries the workflow always runs: a workflow-level
+# `paths-ignore` would leave a prose-only PR with a required check that never
+# reports, which blocks it forever. The `changes` job makes that decision
+# instead, and a job skipped by `if:` reports Skipped, which satisfies a
+# required check. Merge-queue entries always lint in full.
 on:
   pull_request:
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
-      - 'LICENSE'
+  merge_group:
+    types: [checks_requested]
   push:
     branches: [main]
     paths-ignore:
@@ -40,8 +44,36 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Detect lint inputs
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      relevant: ${{ steps.filter.outputs.relevant }}
+    steps:
+      # Pull requests only; every other event leaves `relevant` empty and the
+      # lint job runs. A failed detection also leaves it empty, which lints
+      # rather than skipping. A file is relevant unless it is prose. These are
+      # the push trigger's paths-ignore exclusions; '**/*.md' here and '**.md'
+      # there both match every Markdown file at any depth in their matchers.
+      - name: Detect changed lint inputs
+        id: filter
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          predicate-quantifier: every
+          filters: |
+            relevant:
+              - '!**/*.md'
+              - '!docs/**'
+              - '!LICENSE'
+
   lint:
     name: Lint
+    needs: changes
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.relevant != 'false') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -58,80 +90,36 @@ jobs:
       - name: Setup Homebrew
         uses: Homebrew/actions/setup-homebrew@2ebcf16054461267868620b1414507f3ccc765c1 # main as of 2026-06-09
 
-      - name: Install tools
+      - name: Install verified tools
         id: tools
         run: |
-          # Install all lint tools; brew is idempotent for already-installed
-          brew install just shellcheck shfmt yamllint jq actionlint 2>/dev/null || true
-          # shfmt is a FORMATTER, so its version is part of this repo's
-          # formatting: a different one reformats the whole tree and `just
-          # check` then fails on files nobody touched. brew installs whatever
-          # is current, so install the PINNED version over the top of it and
-          # let it win on PATH. See image-versions.yaml and just/utilities.just
-          # (_check_shfmt_version), which fails locally on the same mismatch.
-          want="$(sed -n 's/^  shfmt: "v\{0,1\}\([^"]*\)"$/\1/p' image-versions.yaml | head -1)"
-          if [ -n "$want" ]; then
-            echo "Pinned shfmt: v${want}"
-            GOBIN=/usr/local/bin go install "mvdan.cc/sh/v3/cmd/shfmt@v${want}" \
-              || echo "::warning::could not install pinned shfmt v${want}; using $(shfmt --version)"
-          fi
-          # Verify installations
-          shfmt --version
-          shellcheck --version
-          yamllint --version
-          jq --version
-          actionlint -version
-          just --version
+          set -euo pipefail
+          brew install yamllint jq
+          bin_dir="$RUNNER_TEMP/lint-tools"
+          python3 scripts/lint_tools.py install --bin-dir "$bin_dir"
+          export PATH="$bin_dir:$PATH"
+          python3 scripts/lint_tools.py verify
+          echo "$bin_dir" >> "$GITHUB_PATH"
 
       - name: Run shellcheck
         if: ${{ !cancelled() && steps.tools.outcome == 'success' }}
-        run: |
-          echo "==> Running shellcheck on all .sh files..."
-          # Exclude third-party extensions and build artifacts
-          /usr/bin/find . \
-            -not -path './system_files/usr/share/gnome-shell/extensions/*' \
-            -not -path './packages-repo/*' \
-            -not -path './.build/*' \
-            -not -path './_upstream-snapshots/*' \
-            -iname "*.sh" -type f \
-            -exec shellcheck --severity=error --exclude=SC1091,SC2114 --format=tty {} +
+        run: ./scripts/run-config-lint.sh shellcheck
+
+      - name: Check shell formatting
+        if: ${{ !cancelled() && steps.tools.outcome == 'success' }}
+        run: ./scripts/run-config-lint.sh shfmt
 
       - name: Run yamllint
         if: ${{ !cancelled() && steps.tools.outcome == 'success' }}
-        run: |
-          echo "==> Running yamllint on all YAML files..."
-          find . \
-            -not -path './system_files/usr/share/gnome-shell/extensions/*' \
-            -not -path './packages-repo/*' \
-            -not -path './.build/*' \
-            -not -path './_upstream-snapshots/*' \
-            \( -name "*.yaml" -o -name "*.yml" \) -type f \
-            -exec yamllint -c ./.yamllint.yml {} +
+        run: ./scripts/run-config-lint.sh yaml
 
       - name: Validate JSON files
         if: ${{ !cancelled() && steps.tools.outcome == 'success' }}
-        run: |
-          echo "==> Validating JSON syntax..."
-          find . \
-            -not -path './system_files/usr/share/gnome-shell/extensions/*' \
-            -not -path './packages-repo/*' \
-            -not -path './.build/*' \
-            -name "*.json" -type f \
-            -exec sh -c 'jq . "$1" > /dev/null || { echo "ERROR: invalid JSON in $1"; exit 1; }' _ {} \;
+        run: ./scripts/run-config-lint.sh json
 
       - name: Run actionlint
         if: ${{ !cancelled() && steps.tools.outcome == 'success' }}
-        continue-on-error: true  # actionlint is informative, not blocking
-        run: |
-          echo "==> Running actionlint on workflows..."
-          actionlint \
-            -ignore 'permission "id-token" is unknown' \
-            -ignore "SC2086" -ignore "SC2129" -ignore "SC2001" \
-            -ignore "SC2034" -ignore "SC2015" -ignore "SC1001" \
-            -ignore "SC2295" -ignore "SC2016" \
-            -ignore "save-always" \
-            -ignore "cannot be filtered" \
-            .github/workflows/*.yml .github/workflows/*.yaml
+        run: ./scripts/run-config-lint.sh actionlint
 
       - name: Check action pins
         if: ${{ !cancelled() }}
@@ -139,15 +127,7 @@ jobs:
 
       - name: Check Justfile formatting
         if: ${{ !cancelled() && steps.tools.outcome == 'success' }}
-        run: |
-          echo "==> Checking Justfile format..."
-          just --unstable --fmt --check -f Justfile
-          find . \
-            -not -path './system_files/usr/share/gnome-shell/extensions/*' \
-            -not -path './packages-repo/*' \
-            -not -path './.build/*' \
-            -name "*.just" -type f \
-            -exec just --unstable --fmt --check -f {} \;
+        run: ./scripts/run-config-lint.sh just
 
       - name: Install YAML parser
         id: pyyaml
@@ -157,5 +137,5 @@ jobs:
       - name: Package source policy
         if: ${{ !cancelled() && steps.pyyaml.outcome == 'success' }}
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
         run: python3 scripts/check-package-sources.py --base "$BASE_SHA"

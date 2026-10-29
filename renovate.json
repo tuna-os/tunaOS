@@ -57,10 +57,11 @@
     },
     {
       "customType": "regex",
-      "description": "Update font/binary version pins in build scripts",
+      "description": "Update font/binary version pins in build scripts and toolchain",
       "managerFilePatterns": [
         "/^build_scripts/.+\\.sh$/",
-        "/^scripts/.+\\.sh$/"
+        "/^scripts/.+\\.sh$/",
+        "/^toolchain/Containerfile\\.debian$/"
       ],
       "matchStrings": [
         "#\\s*renovate:\\s*datasource=(?<datasource>[^\\s]+)\\s+depName=(?<depName>[^\\s]+)\\n.*?(?<currentValue>v?\\d+\\.\\d+[^\\s/\"]*)"
@@ -74,6 +75,17 @@
       ],
       "matchStrings": [
         "#\\s*renovate:\\s*datasource=(?<datasource>[^\\s]+)\\s+depName=(?<depName>[^\\s]+)\\s+ref=(?<currentValue>[^\\s]+)\\n\\s*KRUNNER_BAZAAR_REF=\"(?<currentDigest>[0-9a-f]{40})\""
+      ],
+      "packageNameTemplate": "https://github.com/{{{depName}}}"
+    },
+    {
+      "customType": "regex",
+      "description": "Update pinned GitHub source commits in image-versions.yaml",
+      "managerFilePatterns": [
+        "/^image-versions\\.yaml$/"
+      ],
+      "matchStrings": [
+        "#\\s*renovate:\\s*datasource=(?<datasource>[^\\s]+)\\s+depName=(?<depName>[^\\s]+)\\s+ref=(?<currentValue>[^\\s]+)\\n\\s*[\\w-]+:\\s*\"(?<currentDigest>[0-9a-f]{40})\""
       ],
       "packageNameTemplate": "https://github.com/{{{depName}}}"
     },
@@ -122,7 +134,8 @@
         "twpayne/chezmoi",
         "AvengeMedia/DankMaterialShell",
         "tuna-os/bootc-installer",
-        "ublue-os/uupd"
+        "ublue-os/uupd",
+        "rust-lang/rustup"
       ],
       "automerge": false
     },

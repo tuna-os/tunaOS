@@ -17,7 +17,7 @@
 #   BOOTC_VERSION    e.g. v1.16.3
 #   BOOTUPD_VERSION  e.g. v0.2.35
 #   OSTREE_VERSION   e.g. v2026.2   (only used when BUILD_OSTREE=1)
-ARG BASE_IMAGE=docker.io/library/debian:trixie@sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308
+ARG BASE_IMAGE=docker.io/library/debian:trixie@sha256:2dc419c6d7fe3dad0a2f9fd469c34cc90b0f9ba642d8fde837fe3d7d34a0e7f1
 
 FROM ${BASE_IMAGE} AS builder
 ARG BUILD_OSTREE=0
@@ -25,6 +25,8 @@ ARG BOOTC_VERSION
 ARG BOOTUPD_VERSION
 ARG OSTREE_VERSION
 ARG COMPOSEFS_VERSION
+ARG TUNAOS_BOOTC_CANDIDATE=0
+COPY scripts/bootc-candidate.py /tmp/tunaos-bootc-candidate.py
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV CARGO_HOME=/tmp/rust
@@ -60,8 +62,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Rust toolchain (minimal) for the bootc and bootupd cargo builds.
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
-        sh -s -- --profile minimal -y
+# renovate: datasource=github-tags depName=rust-lang/rustup
+ARG RUSTUP_VERSION=1.28.2
+ARG TARGETARCH
+RUN set -eux; \
+    case "${TARGETARCH}" in \
+      amd64) RUSTUP_ARCH=x86_64-unknown-linux-gnu; RUSTUP_SHA256=20a06e644b0d9bd2fbdbfd52d42540bdde820ea7df86e92e533c073da0cdd43c ;; \
+      arm64) RUSTUP_ARCH=aarch64-unknown-linux-gnu; RUSTUP_SHA256=e3853c5a252fca15252d07cb23a1bdd9377a8c6f3efa01531109281ae47f841c ;; \
+      *) echo "Unsupported Rustup architecture: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac; \
+    curl --fail --silent --show-error --location \
+      "https://static.rust-lang.org/rustup/archive/${RUSTUP_VERSION}/${RUSTUP_ARCH}/rustup-init" \
+      -o /tmp/rustup-init; \
+    echo "${RUSTUP_SHA256}  /tmp/rustup-init" | sha256sum --check --strict; \
+    chmod +x /tmp/rustup-init; \
+    /tmp/rustup-init -y --profile minimal; \
+    rm -f /tmp/rustup-init
 
 # ── composefs + libostree from source (trixie only) ──────────────────────────
 # ostree's configure finds composefs via pkg-config (not the git submodule), so
@@ -98,11 +114,23 @@ RUN if [ "${BUILD_OSTREE}" = "1" ]; then set -eux; \
 
 # ── bootc from source ────────────────────────────────────────────────────────
 RUN set -eux; . "${RUSTUP_HOME}/env"; \
-    git clone --depth 1 --branch "${BOOTC_VERSION}" \
-      https://github.com/bootc-dev/bootc.git /src/bootc; \
-    cd /src/bootc; \
-    make bin; \
-    make install-all DESTDIR=/output
+    if [ "${TUNAOS_BOOTC_CANDIDATE}" = "1" ]; then \
+      apt-get update; \
+      apt-get install -y --no-install-recommends libselinux1-dev libsystemd-dev libclang-dev; \
+      git clone --depth 1 --branch v1.17.1 https://github.com/bootc-dev/bootc.git /src/bootc; \
+      mkdir /bootc-candidate-output; \
+      python3 /tmp/tunaos-bootc-candidate.py bootstrap --source /src/bootc --destination /bootc-candidate-output --family debian; \
+      mkdir -p /output; \
+      cp -a /bootc-candidate-output/. /output/; \
+    elif [ "${TUNAOS_BOOTC_CANDIDATE}" = "0" ]; then \
+      git clone --depth 1 --branch "${BOOTC_VERSION}" \
+        https://github.com/bootc-dev/bootc.git /src/bootc; \
+      cd /src/bootc; \
+      make bin; \
+      make install-all DESTDIR=/output; \
+    else \
+      echo "Invalid TUNAOS_BOOTC_CANDIDATE: expected 0 or 1" >&2; exit 1; \
+    fi
 
 # ── bootupd from source ──────────────────────────────────────────────────────
 RUN set -eux; . "${RUSTUP_HOME}/env"; \
@@ -113,8 +141,9 @@ RUN set -eux; . "${RUSTUP_HOME}/env"; \
     make install DESTDIR=/output
 
 # Record what we built for provenance/debugging.
-RUN printf 'bootc=%s\nbootupd=%s\nostree=%s\nbuild_ostree=%s\n' \
-      "${BOOTC_VERSION}" "${BOOTUPD_VERSION}" "${OSTREE_VERSION}" "${BUILD_OSTREE}" \
+RUN if [ "${TUNAOS_BOOTC_CANDIDATE}" = "1" ]; then BOOTC_VERSION=v1.17.1; fi; \
+    printf 'bootc=%s\nbootupd=%s\nostree=%s\nbuild_ostree=%s\nrustup=%s\n' \
+      "${BOOTC_VERSION}" "${BOOTUPD_VERSION}" "${OSTREE_VERSION}" "${BUILD_OSTREE}" "${RUSTUP_VERSION}" \
       > /output/.toolchain-versions
 
 # ── Export stage: rootfs == the install tree, for `podman export` → oras ──────

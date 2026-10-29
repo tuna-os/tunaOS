@@ -1,0 +1,23 @@
+schema_version: 1
+image:
+  registry: localhost
+  namespace: harbor-preview
+global:
+  branding:
+    homepage: https://example.org/harbor
+    documentation: https://example.org/harbor/docs
+    support: https://example.org/harbor/support
+overrides:
+  variants:
+    yellowfin:
+      packages:
+        add:
+        - htop
+        optional:
+        - fastfetch
+    grouper:
+      packages:
+        add:
+        - htop
+catalog:
+  sha256: 46841c62f73c140c4a48a524915dd3bcb2508d49285f3b3098118815cef21abb

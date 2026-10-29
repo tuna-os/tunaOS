@@ -77,12 +77,14 @@ def test_pull_requests_build_every_admitted_tuna_image_in_ci():
         for variant in config["variants"]
         if config["tuna_rollout"][variant["id"]]["status"] == "admitted"
     }
-    workflow = yaml.safe_load((ROOT / ".github/workflows/test.yml").read_text())
+    workflow = yaml.safe_load((ROOT / ".github/workflows/tuna-pr-images.yml").read_text())
     event = workflow.get("on", workflow.get(True))
-    assert "pull_request" in event
-    assert {".github/**", "build_scripts/**", "system_files_overrides/**", "tunaos.toml"} <= set(
-        event["pull_request"]["paths"]
-    )
+    # Pull requests only, and nothing else: these jobs reach the publish
+    # credential resolver, which refuses merge_group. No workflow-level path
+    # filter: the detector below sees every PR, so .github/**, build_scripts/**,
+    # system_files_overrides/** and tunaos.toml all reach it.
+    assert set(event) == {"pull_request"}
+    assert not {"paths", "paths-ignore"} & set(event["pull_request"] or {})
     assert workflow["permissions"]["contents"] == "read"
     detector = workflow["jobs"]["tuna_build_inputs"]
     assert detector["if"] == "github.event_name == 'pull_request'"
@@ -140,7 +142,11 @@ def test_rpm_cells_install_the_pinned_beta_from_signed_factory_repositories():
         section = manifest["packages"][target]
         assert section["display_manager"] == "gdm"
         assert nevr in section["packages"]
-        for package in ("gdm", "xdg-desktop-portal-gnome", "xdg-desktop-portal-gtk", "gnome-keyring"):
+        for package in ("gdm", "xdg-desktop-portal-gnome", "xdg-desktop-portal-gtk"):
+            assert package in section["packages"], (target, package)
+        # ELN publishes no gnome-keyring; oo7 is its Secret Service (tunaOS#3810).
+        secret_service = ("oo7-daemon", "pam_oo7") if target == "eln" else ("gnome-keyring",)
+        for package in secret_service:
             assert package in section["packages"], (target, package)
         assert {"greetd", "greetd-gtkgreet", "gtkgreet", "cage"}.isdisjoint(section["packages"]), target
         # tuned-ppd, as each base's GNOME flavor ships, conflicts with
