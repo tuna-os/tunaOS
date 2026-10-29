@@ -1,6 +1,6 @@
 # Branch Protection & Required CI (main)
 
-**Status**: Current-state audit + proposal
+**Status**: Applied 2026-10-29: `Lint` and `Unit Tests` are required on `main`
 **Tracks**: #1167 (Q4 goal — branch protection + required CI, untracked enforcement)
 
 ## Why this doc exists
@@ -78,6 +78,24 @@ ruleset is `Lint` and `Unit Tests`. Broader coverage
 (ISO E2E, Matrix Status) should be phased in only if their triggers are
 widened to run unconditionally, or added as a separate, narrower ruleset
 scoped to the paths they already filter on.
+
+## Applied state (2026-10-29)
+
+Ruleset 10437561 (`main`, active) now has a `required_status_checks` rule.
+It names exactly `Lint` and `Unit Tests` (GitHub Actions, integration 15368).
+The deletion, non-fast-forward, merge-queue and Copilot review rules stay.
+Before this change, #4073 made both checks report on every pull request and
+every `merge_group` entry. When a job's `if:` condition skips it, the job
+reports Skipped, and Skipped satisfies the rule.
+
+The bypass actors stay: OrganizationAdmin, the repository roles 2 and 5, and
+deploy keys. With one maintainer, an emergency fix must not wait on a red
+check that has no relation to it. The rule-suite history of the ruleset
+records each bypass, so an admin merge is visible.
+
+The PR that adds this section is the enforcement test (step 4). It changes
+only documentation, so both checks report Skipped on the PR. The merge queue
+runs them in full before it merges.
 
 ## Maintainer action and verification checklist
 
