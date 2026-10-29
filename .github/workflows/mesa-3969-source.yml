@@ -1,0 +1,33 @@
+name: Mesa 3969 source safety
+
+on:
+  pull_request:
+    paths:
+      - 'tests/manual/mesa*'
+      - 'tests/test_mesa_3969_*.py'
+      - '.github/workflows/mesa-3969-*.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'tests/manual/mesa*'
+      - 'tests/test_mesa_3969_*.py'
+      - '.github/workflows/mesa-3969-*.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mesa3969-source-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-smoke:
+    name: Source-only CLI safety smoke
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Exercise real refusals, integrity and owned cleanup without runtime
+        run: python3 tests/manual/mesa_3969_source_smoke.py
