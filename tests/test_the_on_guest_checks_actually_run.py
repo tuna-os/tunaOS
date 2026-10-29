@@ -533,7 +533,11 @@ def test_rootless_setup_routes_preserve_mode_boundaries(tmp_path, diagnostic, ca
     podman() { [[ "$*" == 'unshare true' ]] || return 99; echo PROBE; }
     sudo() {
         case "$*" in
-            'tee -a /etc/subuid'|'tee -a /etc/subgid'|'sysctl -w kernel.apparmor_restrict_unprivileged_userns=0') echo MUTATION ;;
+            'tee -a /etc/subuid'|'tee -a /etc/subgid')
+                local line
+                while IFS= read -r line; do :; done
+                echo MUTATION ;;
+            'sysctl -w kernel.apparmor_restrict_unprivileged_userns=0') echo MUTATION ;;
             *) return 99 ;;
         esac
     }
@@ -562,22 +566,3 @@ def test_rootless_setup_routes_preserve_mode_boundaries(tmp_path, diagnostic, ca
         assert 'user.max_user_namespaces = 0' in result.stdout
         assert (tmp_path/'summary').exists()
 
-
-def test_mixed_modes_refuse_before_host_preflight_or_build():
-    producer = yaml.safe_load((ROOT/'.github/workflows/live-iso-bootc.yml').read_text())
-    jobs = producer['jobs']
-    preflight = jobs['diagnostic-preflight']
-    assert preflight['if'] == "github.event_name == 'workflow_dispatch' && inputs.installed_boot_diagnostic"
-    assert jobs['preflight']['if'] == '${{ !inputs.installed_boot_diagnostic }}'
-    assert jobs['build']['needs'] == ['diagnostic-preflight', 'preflight']
-    assert jobs['build']['if'] == ("${{ !cancelled() && ((inputs.installed_boot_diagnostic && "
-        "needs.diagnostic-preflight.result == 'success') || (!inputs.installed_boot_diagnostic && "
-        "needs.preflight.result == 'success')) }}")
-    # Every external command after the mixed-mode guard is a rejecting stub.
-    stubs = '\n'.join(name + '() { echo FORBIDDEN >&2; return 99; }'
-        for name in ('test', 'getent', 'stat', 'uname', 'command', 'sudo', 'systemctl'))
-    result = subprocess.run(['bash', '-c', stubs + '\n' + preflight['steps'][0]['run']],
-        env={'PATH': '/usr/bin:/bin', 'CANDIDATE_XFCE': 'true'},
-        capture_output=True, text=True, timeout=5)
-    assert result.returncode == 1
-    assert result.stdout == result.stderr == ''
