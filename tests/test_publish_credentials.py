@@ -679,4 +679,7 @@ def test_every_workflow_that_reaches_a_resolver_runs_only_on_trusted_events_or_p
         if _reaches_resolver(path, document):
             seen.append(path.name)
             assert _events(document) <= allowed, (path.name, sorted(_events(document) - allowed))
-    assert 'build-yellowfin.yml' in seen and 'test.yml' in seen and 'attest-sbom.yml' in seen
+    assert 'build-yellowfin.yml' in seen and 'tuna-pr-images.yml' in seen and 'attest-sbom.yml' in seen
+    # test.yml runs on merge_group (Unit Tests is a required check), so the
+    # Tuna PR image builds that reach the resolver moved out of it.
+    assert 'test.yml' not in seen

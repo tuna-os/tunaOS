@@ -77,12 +77,14 @@ def test_pull_requests_build_every_admitted_tuna_image_in_ci():
         for variant in config["variants"]
         if config["tuna_rollout"][variant["id"]]["status"] == "admitted"
     }
-    workflow = yaml.safe_load((ROOT / ".github/workflows/test.yml").read_text())
+    workflow = yaml.safe_load((ROOT / ".github/workflows/tuna-pr-images.yml").read_text())
     event = workflow.get("on", workflow.get(True))
-    assert "pull_request" in event
-    assert {".github/**", "build_scripts/**", "system_files_overrides/**", "tunaos.toml"} <= set(
-        event["pull_request"]["paths"]
-    )
+    # Pull requests only, and nothing else: these jobs reach the publish
+    # credential resolver, which refuses merge_group. No workflow-level path
+    # filter: the detector below sees every PR, so .github/**, build_scripts/**,
+    # system_files_overrides/** and tunaos.toml all reach it.
+    assert set(event) == {"pull_request"}
+    assert not {"paths", "paths-ignore"} & set(event["pull_request"] or {})
     assert workflow["permissions"]["contents"] == "read"
     detector = workflow["jobs"]["tuna_build_inputs"]
     assert detector["if"] == "github.event_name == 'pull_request'"

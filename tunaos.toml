@@ -291,7 +291,7 @@ schedule = "20 0 * * *"
 codename = "Thunnus albacares"
 branding = { accent = "#FFC702", gnome_accent = "yellow", base = "AlmaLinux Kitten", homage = "the yellow petal of the AlmaLinux flower", plymouth = "tropical-fish" }
 description = "Based on AlmaLinux Kitten 10"
-base_image = "quay.io/almalinuxorg/almalinux-bootc:10-kitten@sha256:fabe22d605a5638cb1fbf2df38d6d9b9ace35f15cb1c10c7db87d475a039d58a"
+base_image = "quay.io/almalinuxorg/almalinux-bootc:10-kitten@sha256:484488a758f4388f6fa681355c52739ef16d54022a43cc121f6130ed509886ad"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["almalinux-kitten"]
 platforms = ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
@@ -567,7 +567,7 @@ schedule = "20 2 * * *"
 codename = "Thunnus alalunga"
 branding = { accent = "#0069DA", gnome_accent = "blue", base = "AlmaLinux", homage = "the blue petal of the AlmaLinux flower", plymouth = "tunaos" }
 description = "Based on AlmaLinux 10"
-base_image = "quay.io/almalinuxorg/almalinux-bootc:10@sha256:5f35f25a97714d2047f2c989995c7001044569150b60527a876ba58ba46657cb"
+base_image = "quay.io/almalinuxorg/almalinux-bootc:10@sha256:1ecc1270127bab2e18bc8a27a91b011284833fc1de8d8ee78203adeefbca2880"
 # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
 aliases = ["almalinux"]
 platforms = ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
@@ -1138,7 +1138,7 @@ branding = { accent = "#294172", gnome_accent = "blue", base = "Fedora ELN", hom
 upstream_track = "experimental"
 description = "Based on Fedora ELN (EL11 preview, rolling)"
 experimental = true
-base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:fa021258efc5896d6c4a541d39b3e5d16e9364cfe3cdbda5cdaf9037b205be9e"
+base_image = "registry.fedoraproject.org/eln-bootc:latest@sha256:bed67f75ec050e8c00b24fd283e0670a74c582f42e87841fb41ffb3a53a08796"
 # No alias: `eln` is Fedora's identifier for a moving development target,
 # and an alias tag is a stability promise this lane deliberately does not
 # make. Revisit if/when ELN gains a versioned publish.
@@ -1452,7 +1452,7 @@ upstream_track = "experimental"
 # not a rebuild of an existing one. Read docs/HUMMINGBIRD.md before
 # reasoning about what its package set should contain.
 description = "Fedora Hummingbird (hardened rolling Rawhide fork, bootc)"
-base_image = "quay.io/hummingbird-community/bootc-os:latest@sha256:4b91cf6404991f1efa38fef0c5b1f00241edea3674b5bbd6c6d30293c8618c71"
+base_image = "quay.io/hummingbird-community/bootc-os:latest@sha256:2add6f102372b2f934d301941f05575d32114f4779d301efbf820107ec0747f0"
 # amd64 only, because aarch64 has nothing to build FROM yet: the base
 # stage's mandatory xfsprogs guard (build_scripts/10-base-packages.sh) has
 # no repository that can satisfy it on arm64, so every hummingbird arm64

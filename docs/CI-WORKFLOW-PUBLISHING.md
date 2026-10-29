@@ -95,3 +95,52 @@ permission.
 
 This runbook documents the access-recovery path; it does not claim that a
 repository commit can grant an App permission.
+
+## Organization permissions baseline (#2916)
+
+Apply this baseline to every tuna-os repository, including reusable workflow
+callers. Jobs may inherit an explicit workflow baseline; a separate map on
+an unprivileged job is optional. Use `permissions: {}` when no job
+needs the token, or `contents: read` for checkout. Keep write grants on the
+job that needs them. Existing `read-all` declarations pass the presence
+check, but new workflows should enumerate their read grants.
+
+A composite action cannot set its caller's token permissions. A reusable
+workflow can only reduce the caller's grants, so callers must grant the
+permissions needed by the called jobs. Check the whole call chain before
+you reduce a build caller's map. See GitHub's
+[permission inheritance reference](https://docs.github.com/en/actions/reference/workflows-and-actions/reusing-workflow-configurations).
+Do not change organization settings or token scopes as part of a YAML fix.
+
+Run the local check with Python and PyYAML:
+
+```bash
+python3 scripts/check-workflow-permissions.py
+```
+
+`just check` runs this command. `tests/test_workflow_permissions.py` also
+checks every workflow in the existing CI job for unit tests. It rejects missing
+workflow baselines, null declarations, and `write-all` at workflow or job
+scope. It allows jobs to inherit explicit baselines. Actionlint still checks
+permission names and workflow syntax. This check does not prove that every
+existing grant is necessary.
+
+For the organization audit, use `gh` authenticated with `GH_TOKEN`:
+
+```bash
+python3 scripts/check-workflow-permissions.py --org tuna-os --markdown > docs/WORKFLOW-PERMISSIONS-AUDIT.md
+```
+
+The command enumerates all visible repositories with pagination and reads
+workflows from each recorded default-branch commit. It returns a nonzero
+status for findings or incomplete API reads. Keep those errors visible; a
+partial scan is not a clean audit.
+The [audit table](WORKFLOW-PERMISSIONS-AUDIT.md) has a commit link for each result.
+Regenerate it before the next batch; do not update counts by hand.
+
+Install PyYAML to use the same checker in other repositories, and
+adopt the local baseline example above for new workflows. An organization
+workflow template can copy that declaration, but cannot enforce it in
+existing workflows. Roll out fixes by repository with the audit findings,
+a review of the affected jobs' API operations, and that repository's checks.
+Keep #2916 open until the cross-repository fixes and checks have landed.

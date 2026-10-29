@@ -131,6 +131,30 @@ aspirational given the current 89-issue backlog and single-maintainer bus
 factor; it exists to make violation *visible and countable* again, which a
 flat 100%-violated SLA no longer does.
 
+### 6. Agent-filed direction needs human sign-off
+
+A Hive agent's `[strategist]` or `[outreach]` issue is a proposal, not work.
+It becomes implementable only when a maintainer from `MAINTAINERS.md`
+applies `approved-direction` or assigns a human to it; an accepted RFC (see
+`RFC-PROCESS.md`) is the route for anything larger. This stops one agent
+from doing what another agent proposed when no person agreed to it
+(tunaos-packages#581 → #583, kubestellar/hive#5117). An
+`[architect]` issue is engineering work at ACMM L6 and needs no approval.
+
+School and Reef enforce this rule. Their `project.issue_filter.agent_proposal`
+gate holds a hive-filed issue with the label `agent/strategist` or
+`agent/outreach` (or the matching title prefix). The gate releases the
+issue when one of those signals is present. It does not hold human-filed
+issues, or hive-filed architect, bug, CI and security reports.
+
+The gate checks that a signal is present, not who set it. Any account that
+can label issues, including the Hive App, can admit a proposal. The issue
+timeline shows who applied the label, and a maintainer must check it.
+
+Issues labelled `good first issue`, `hacktoberfest` or `starter` are
+reserved for human newcomers (see `docs/HACKTOBERFEST-2026.md`). School
+lists them in `governor.labels.exempt`, so agents do not claim them.
+
 ## What this policy does not do
 
 It does not authorize automated closure. No workflow in this repo
