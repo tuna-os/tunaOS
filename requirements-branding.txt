@@ -4,6 +4,6 @@
 # rendering shows up as a drift to regenerate, never as silent churn.
 # Explicit installation only; image builds never need these.
 -r requirements-config.txt
-fonttools==4.67.0
+fonttools==4.68.0
 pyfiglet==1.0.4
 uharfbuzz==0.57.0
