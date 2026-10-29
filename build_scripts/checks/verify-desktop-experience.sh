@@ -605,7 +605,9 @@ tuna)
 		echo "the old roost package is installed beside tuna-desktop" >&2
 		exit 1
 	fi
-	for binary in tuna-compositor tuna-session tuna-shell-host tuna-shell-gtk tuna-ibus-bridge tuna-greeter; do
+	# tuna-desktop is GDM-only: it no longer builds a greeter (tuna-desktop
+	# refactor/remove-greetd), so no tuna-greeter binary or link is required.
+	for binary in tuna-compositor tuna-session tuna-shell-host tuna-shell-gtk tuna-ibus-bridge; do
 		require_command "$binary"
 		"$binary" --version
 		[[ "$(tuna_installed_file_owner "$tuna_backend" "/usr/bin/$binary")" == tuna-desktop ]] || {
@@ -621,7 +623,7 @@ tuna)
 	# Upgrades from the roost flavor: the old binary names, the hidden session
 	# entry display managers remember, and the PAM service a session started
 	# before the upgrade still asks for.
-	for name in compositor session shell-host shell-gtk ibus-bridge greeter; do
+	for name in compositor session shell-host shell-gtk ibus-bridge; do
 		compat_link="/usr/bin/roost-$name"
 		require_glob "$compat_link"
 		# require_glob permits the documented Hummingbird waiver. Only inspect

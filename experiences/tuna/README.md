@@ -13,7 +13,7 @@ New accounts start Tuna on every GDM version the flavors ship (47 to 51). The `/
 
 Upgrades from the `roost` flavor: the `tuna-desktop` package `provides` `roost` and ships, for one release, `roost-*` links to the `tuna-*` binaries, a hidden `roost.desktop` (`NoDisplay=true`, `Exec=tuna-session`) so a display manager that remembers the "roost" session still starts Tuna Desktop, and a `roost-lock` PAM service for a session started before the upgrade. Nothing in the image installs or requires a package named `roost`.
 
-The desktop contract checks six executable versions, their `roost-*` compatibility links, both session entries, both PAM services, the user session target, the GDM login screen with autologin disabled, calendar server, IBus, portal backends, keyring, WirePlumber and greeter. Image and runtime contract results are still required before publication; source checks do not establish boot readiness.
+The desktop contract checks five executable versions, their `roost-*` compatibility links, both session entries, both PAM services, the user session target, the GDM login screen with autologin disabled, calendar server, IBus, portal backends, keyring, WirePlumber and greeter. Tuna Desktop is GDM-only and no longer ships `tuna-greeter`, so the contract does not require it (older packages that still ship it pass too). Image and runtime contract results are still required before publication; source checks do not establish boot readiness.
 
 ## Other variants
 
