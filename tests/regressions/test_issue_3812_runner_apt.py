@@ -231,13 +231,27 @@ class RunnerAptTests(unittest.TestCase):
                 self.assertTrue(list(directory.glob('99-tunaos-*.conf')))
         self.assertFalse(list(directory.glob('99-tunaos-*.conf')))
 
+    @staticmethod
+    def _step(workflow, name):
+        """The text of one `- name:` step of the build job, up to the next step."""
+        start = workflow.index(f'      - name: {name}\n')
+        end = workflow.find('\n      - name: ', start + 1)
+        return workflow[start:end if end != -1 else len(workflow)]
+
     def test_workflow_boundary(self):
+        import re
         workflow = (ROOT / '.github/workflows/reusable-build-image.yml').read_text()
-        self.assertIn('setup-runner@209517dda44829f126e25da28f11245c34458ac3', workflow)
-        self.assertIn('update-podman: "false"', workflow)
-        self.assertIn('sudo python3 scripts/setup-runner-podman.py', workflow)
-        self.assertIn('actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9', workflow)
-        self.assertIn('actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9', workflow)
+        # The pinned action never upgrades podman itself: its apt path stays off,
+        # whichever reviewed revision Renovate pins (209517d..ab39804 changed only
+        # its just/ORAS installers). The pin must stay a full commit SHA.
+        setup = self._step(workflow, 'Setup runner')
+        self.assertRegex(setup, r'uses: projectbluefin/actions/bootc-build/setup-runner@[0-9a-f]{40} ')
+        self.assertIn('update-podman: "false"', setup)
+        self.assertEqual(len(re.findall(r'bootc-build/setup-runner@', workflow)), 1)
+        self.assertIn('sudo python3 scripts/setup-runner-podman.py',
+                      self._step(workflow, 'Upgrade runner podman stack'))
+        for name, action in (('Restore runner apt cache', 'restore'), ('Save runner apt cache', 'save')):
+            self.assertRegex(self._step(workflow, name), rf'uses: actions/cache/{action}@[0-9a-f]{{40}} ')
         self.assertIn('apt-resolute-podman-${{ runner.os }}-${{ runner.arch }}-', workflow)
         self.assertLess(workflow.index('Restore runner apt cache'), workflow.index('Upgrade runner podman stack'))
         self.assertLess(workflow.index('Upgrade runner podman stack'), workflow.index('Save runner apt cache'))
