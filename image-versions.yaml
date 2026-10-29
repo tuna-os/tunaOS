@@ -75,7 +75,7 @@ downloads:
   # renovate: datasource=pypi depName=jsonschema
   jsonschema: "4.26.0"
   # renovate: datasource=github-releases depName=ublue-os/uupd
-  uupd: "v1.5.1"
+  uupd: "v1.5.5"
   # renovate: datasource=github-releases depName=ledif/kcm_ublue
   kcm_ublue: "v0.6.1"
   # renovate: datasource=github-releases depName=hivecommons/spektacular
