@@ -32,7 +32,7 @@ open issues. Hive filed 171 of the issues. No maintainer had acknowledged
 
 | Change | Where | Verification |
 |---|---|---|
-| Fix the `SendKick` double-unlock crash | `tuna-os/hive` `fix/shared-pool-kick-relock` (6ad4ed4), on reef | Regression test fails before and passes after. The `crux/agent` suite has the same 4 failures as the deployed commit. At 06:09Z, reef had 0 restarts in 49 min (before: 78 in two days). |
+| Fix the `SendKick` double-unlock crash | `tuna-os/hive` `fix/shared-pool-kick-relock` (6ad4ed4), on reef; school runs it inside 911e5c0 | Regression test fails before and passes after. The `crux/agent` suite has the same 4 failures as the deployed commit. At 12:31Z, reef had 0 restarts in 7 h 11 min and school 0 in 7 h 02 min (before: 78 and 36 in two days). |
 | Admission-side #5117: hold unacknowledged hive-filed proposals | `tuna-os/hive` `feat/agent-proposal-gate` (911e5c0, with the fix), on school with `project.issue_filter.agent_proposal` | Unit tests cover the batch and webhook paths. Live: school holds 189 proposals in 11 repos, 62 of them in tunaOS. That is the dry-run count: 127 proposals, less 65 that earlier filters (decision, hold) already catch. |
 | Agents leave newcomer issues alone | School `governor.labels.exempt` += `good first issue`, `hacktoberfest`, `starter` | Parsed by the deployed config loader. |
 | `approved-direction` exists where maintainers need it | Label created on all 11 School repos | — |
