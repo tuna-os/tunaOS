@@ -55,8 +55,9 @@ jobs:
     steps:
       # Pull requests only; every other event leaves `relevant` empty and the
       # lint job runs. A failed detection also leaves it empty, which lints
-      # rather than skipping. A file is relevant unless it is prose: the same
-      # exclusions as the push trigger's paths-ignore ('**.md' there).
+      # rather than skipping. A file is relevant unless it is prose. These are
+      # the push trigger's paths-ignore exclusions; '**/*.md' here and '**.md'
+      # there both match every Markdown file at any depth in their matchers.
       - name: Detect changed lint inputs
         id: filter
         if: github.event_name == 'pull_request'

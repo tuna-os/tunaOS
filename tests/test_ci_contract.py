@@ -267,7 +267,8 @@ def test_a_required_check_reports_on_every_pr_and_merge_queue_entry(workflow):
     # The skip decision is the job-level `if:`: Skipped satisfies a required
     # check. It may skip only on a pull request the filter judged irrelevant,
     # never on a merge-queue entry, and a failed detection must not skip.
-    assert job["needs"] == "changes"
+    needs = job["needs"]
+    assert "changes" in ([needs] if isinstance(needs, str) else needs)
     assert job["if"] == GATED_IF
     detect = [s for s in doc["jobs"]["changes"]["steps"]
               if str(s.get("uses", "")).startswith("dorny/paths-filter@")]

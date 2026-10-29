@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = yaml.safe_load((ROOT / '.github/workflows/test.yml').read_text())
 JOB = WORKFLOW['jobs']['bootc-candidate-compile']
 _spec = importlib.util.spec_from_file_location('check_ci_contract', ROOT / 'scripts/check-ci-contract.py')
+assert _spec and _spec.loader
 CONTRACT = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(CONTRACT)
 COMMAND = JOB['steps'][-1]['run']
