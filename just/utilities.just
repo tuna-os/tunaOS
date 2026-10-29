@@ -189,6 +189,18 @@ test-cell variant='yellowfin' flavor='gnome':
         -v "$PWD/build_scripts:/run/context/build_scripts:ro,z" \
         "$ref" bash /run/context/build_scripts/checks/verify-desktop-experience.sh "$desktop"
 
+# Desktop contract on the published image of one cell per base family (EL10, Fedora, Arch, Debian); a post-publish canary, not a PR gate
+test-canary-cells:
+    #!/usr/bin/env bash
+    set -uo pipefail
+    cd {{ justfile_directory() }}
+    FAILED=()
+    for cell in albacore:gnome bonito:kde marlin:cosmic flounder:xfce; do
+        {{ just_executable() }} --justfile {{ justfile() }} test-cell "${cell%%:*}" "${cell#*:}" || FAILED+=("$cell")
+    done
+    if [[ ${#FAILED[@]} -ne 0 ]]; then echo "==> canary FAILED: ${FAILED[*]}"; exit 1; fi
+    echo "==> all 4 canary cells passed"
+
 # Boot an ISO under QEMU and assert the live environment reaches readiness (green criterion `iso`); build one with `just iso`
 test-e2e iso:
     #!/usr/bin/env bash
