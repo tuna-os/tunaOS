@@ -55,19 +55,18 @@ Config backups are in `/srv/hives/backups/`.
 2. **Agent-proposal gate on Reef.** Same `issue_filter.agent_proposal` block.
    Exit: one week of Reef with no merged PR whose only rationale is an
    unacknowledged proposal.
-3. **Merge guard for tunaOS (TUNA-4). Done 2026-10-29.** School's
-   `auto_merge.human_merge_paths` lists `cosign.pub`, `registry-map.yaml`,
-   `.github/green-criteria.yml`, `tunaos.toml`,
+3. **Merge guard for tunaOS (TUNA-4). Done 2026-10-29.** School runs at
+   ACMM L6, so Hive merges on green checks. Only the trust anchors need a
+   person: `auto_merge.human_merge_paths` lists `cosign.pub`,
    `files/usr/bin/tunaos-luks-tpm2-enroll` and
-   `files/usr/share/ublue-os/just/60-tunaos-luks.just`. Hive holds a PR that
-   changes one of them, for every author, and a person must merge it. Use
-   exact paths: Hive's matcher does not match patterns like `**/*luks*`
-   (hivecommons/hive#15386). The build makes `.github/build-config.yml`
-   from `tunaos.toml`, and Git ignores it, so a PR cannot change it. Guard
-   the source.
-4. **Close #1167.** Add the `required_status_checks` rule from
-   `docs/BRANCH-PROTECTION.md` to the `main` ruleset. The merge queue runs
-   today with no required check.
+   `files/usr/share/ublue-os/just/60-tunaos-luks.just`. Use exact paths:
+   Hive's matcher does not match patterns like `**/*luks*`
+   (hivecommons/hive#15386). `tunaos.toml`, `registry-map.yaml` and
+   `.github/green-criteria.yml` merge on green checks.
+4. **Close #1167. Done 2026-10-29.** The `main` ruleset requires `Lint` and
+   `Unit Tests`; the merge queue waits up to 180 minutes for them, because
+   hosted runners queue behind image builds. Copilot reviews every push, but
+   its comments do not block a merge: conversation resolution is off.
 5. **Drain the adoption pairs.** Review the 19 App PRs that supersede a
    contributor PR. Each original closes when its App PR merges.
 6. **Decide the held proposals.** Approve, close, or fold each into an RFC.
@@ -93,9 +92,9 @@ Measured 2026-10-29 across the 43 active repos:
 Order by blast radius:
 
 1. **Tier A, installers and boot** (`bootc-migrate`, `wootc`,
-   `bootc-installer`, `fisherman`, `bootsahi`): ruleset with required
-   checks, required human review, and sentinel paths for the whole repo. Hive
-   never auto-merges here.
+   `bootc-installer`, `fisherman`, `bootsahi`): a ruleset with required
+   checks. There is no required review, so Hive merges on green, as on the
+   other tiers.
 2. **Tier B, image and build core** (`tunaOS`, `tunaos-packages`, `corral`,
    `tacklebox`, `iso-builder`): required checks. For tunaOS, add a PR check
    for the blast-radius split (TUNA-2). It builds four canary cells from the
